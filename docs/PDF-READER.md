@@ -557,13 +557,24 @@ each piece. They stay in the source language, counted, and the failure is kept (
 ### 11.1 The page
 
 - `src/entrypoints/pdf-reader/` (`index.html`, `main.tsx`, `App.tsx`), built by WXT with React and TypeScript.
-  `pdf.content.ts` opens it in its frame with `?paper=<id>`; `web_accessible_resources` names it.
+  `pdf.content.ts` opens it in its frame with `?paper=<id>`; `web_accessible_resources` names it, at the browser session's
+  dynamic address (`use_dynamic_url`, DESIGN §4.0c).
 - It frames nothing: the translation is the layer's, drawn in the page (§11.7–§11.9); the compile page it framed until
   Stage 5 is parked (`parked/README.md`).
 - **The reader's address is not trusted.** The reader is a page that arXiv's pages may frame, so its URL is not its own to
   trust: a page that frames it must not point its requests anywhere else. It fetches the paper from arXiv and its layer
   from our server, or either from a server on this machine when a probe says so; the build, never a paper, a service or a
   framing page, chooses which server it reads the layer from (`src/pdf-reader/addresses.ts` `READER_API`).
+- **Framed, the reader acts only for the content script that made its frame** (`shared/frame-owner.ts`, DESIGN §4.0c):
+  with no such content script to vouch for it, it draws nothing and does nothing — no paper fetched, no run started, no
+  setting written, whatever its address asks (`ask=translate` included). **Nor does a release build's reader that is no
+  frame**: the PDF page only ever frames it, while an arXiv page that learnt its address could send its own tab there
+  (Chrome 153 lets that navigation through; Chrome 131 refuses it: measured 2026-10-24), and there the settings alone
+  would start a run (`?paper=` and a translated display). A development build, and the
+  harness's copy of a release build (the manifest key `axt_top_level_reader`, which `scripts/check-output.mjs` holds no
+  build carries; `tests/e2e/lib/extension.mjs`), open it as its address says, for the browser checks and the probes.
+- **`?paper=` is an arXiv id or none** (`core/paper-id.ts`, read once by `addresses.ts` `paperOf`): anything else is an
+  address with no paper, its card shown, and never a request or a link.
 - The demo papers stay reachable by address for the probes and the e2e checks (`?paper=<id>` without `live=1`, the
   probes' form since the prototype), never from the interface.
 

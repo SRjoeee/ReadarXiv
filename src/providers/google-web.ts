@@ -6,7 +6,7 @@
 import { toBcp47 } from '@/config/languages'
 import { kindOfStatus } from './http-errors'
 import { attachRequestErrorMeta } from './request/retry-policy'
-import { ProviderError, type TranslateRequest, type TranslateResult, type TranslationProvider } from './types'
+import { malformedReply, ProviderError, type TranslateRequest, type TranslateResult, type TranslationProvider } from './types'
 import { WIRE_FORMATS } from './wire-formats'
 
 const ENDPOINT = 'https://translate-pa.googleapis.com/v1/translateHtml'
@@ -50,15 +50,17 @@ async function translateHtml(items: string[], from: string, to: string, deps: Go
     payload = await response.json()
   } catch (error) {
     // The whole response is not JSON: a smaller batch would come back the same (§8.3)
-    throw new ProviderError('invalid-response', 'translateHtml did not return JSON', { cause: error, isolatable: false })
+    throw malformedReply('translateHtml did not return JSON', error)
   }
 
+  // Not the array asked for, or not as many items as were sent: the endpoint answers item for item, so a count that
+  // does not match is its own doing, and a 100-item batch split would have cost 104 requests (issue #78)
   const translated = Array.isArray(payload) ? payload[0] : undefined
   if (!Array.isArray(translated) || translated.some(item => typeof item !== 'string')) {
-    throw new ProviderError('invalid-response', `unexpected translateHtml response shape: ${JSON.stringify(payload).slice(0, 200)}`, { isolatable: false })
+    throw malformedReply(`unexpected translateHtml response shape: ${JSON.stringify(payload).slice(0, 200)}`)
   }
   if (translated.length !== items.length) {
-    throw new ProviderError('invalid-response', `translateHtml returned ${translated.length} items, expected ${items.length}`)
+    throw malformedReply(`translateHtml returned ${translated.length} items, expected ${items.length}`)
   }
   return translated as string[]
 }

@@ -152,7 +152,8 @@ const guard = await routeTable(context, [
 console.log(`route table: ${guard.hosts.join(', ')}`)
 console.log(`echo endpoint at ${echo.baseURL}; the layer API's bundle key ${VTAG}`)
 // (the extension writes its default settings when its worker first runs: the echo service is added to them once they are there)
-for (let tries = 0; tries < 50 && !(await worker.evaluate(() => chrome.storage.local.get('config').then(r => !!r.config))); tries++) await sleep(200)
+// (polled until the worker's extension bindings are there: Chrome 131 binds them a moment after the worker starts)
+for (let tries = 0; tries < 50 && !(await worker.evaluate(() => chrome.storage.local.get('config').then(r => !!r.config)).catch(() => false)); tries++) await sleep(200)
 // (a service's id is `svc-` and eight of [a-z0-9], or the stored settings cannot be read and the extension runs on its defaults)
 await seedService(worker, { id: 'svc-e2eecho0', name: 'echo', baseURL: echo.baseURL, model: 'local-echo' })
 // the layer's target: German, whose text the stand-in's one Latin face holds (a CJK target would leave every unit the original's)
@@ -394,8 +395,18 @@ try {
     const original = readerUrl({ live: '1', paper: PAPER, mode: 'original' })
     const loaded = await loadsOf(original)
     check('the original display finishes loading though nothing is translated', loaded.ok, loaded.detail)
-    const framed = await framedLoadOf(original)
-    check('framed by arXiv\'s page, as its PDF page frames it, its frame fires load', framed.ok, framed.detail)
+    // (the frame the PDF page's content script makes: the reader is at the session's dynamic address and acts only in a frame
+    // of ours, shared/frame-owner.ts; a page's own frame of it is tests/e2e/framing.mjs's)
+    const framed = await (async (timeout = 15_000) => {
+      const host = track(await context.newPage())
+      try {
+        await host.goto(`https://arxiv.org/pdf/${PAPER}`)
+        const frame = await (await host.waitForSelector('iframe[data-axt-pdf-reader]', { timeout }).catch(() => null))?.contentFrame()
+        const loaded = frame ? await frame.waitForFunction(() => document.readyState === 'complete' && !!window.__reader, null, { timeout }).then(() => true, () => false) : false
+        return { ok: loaded, detail: loaded ? 'its document complete, the reader acting' : 'not complete' }
+      } finally { await host.close() }
+    })()
+    check('framed by arXiv\'s PDF page, as it frames it, its frame fires load', framed.ok, framed.detail)
     const never = [await loadsOf('https://example.invalid/never', 2500), await framedLoadOf('https://example.invalid/never', 2500)]
     control('a document that never comes does not finish loading, nor does its frame fire load', { ok: never.some(r => r.ok), detail: never.map(r => r.detail).join('; ') })
 
@@ -449,6 +460,25 @@ try {
     check('in the original display the reader says the same in its state, and the retry mends it (the sample was not open before)', goneSays.ok && !goneBefore && (await paperOpened(gone.page, 15_000)), goneSays.detail)
     if (!gone.visible) note('the original display shows nothing of a PDF that could not be fetched: its failure card is in the translation\'s pane, which that display hides (the pane stays blank, with the toolbar); the other displays show it')
     await gone.page.close()
+  }
+
+  // ----------------------------------------------------------------------------------------------- an address's paper
+  section('a ?paper= that is no arXiv id')
+  {
+    // (any request for such a path would be one the route table names no answer for: a violation)
+    const violationsBefore = guard.violations.length, errorsBefore = pageErrors.length
+    const bad = track(await context.newPage())
+    for (const paper of ['xv3', '../list/cs.AI/new']) {
+      await bad.goto(readerUrl({ live: '1', paper, ask: 'translate' }))
+      await bad.waitForFunction(() => !!window.__reader?.controller, null, { timeout: 15_000 }).catch(() => undefined)
+      await sleep(1500)
+    }
+    const state = await bad.evaluate(() => { const s = window.__reader?.controller?.getState(); return s ? { noPaper: s.noPaper, id: s.paper.id } : null })
+    const card = await bad.locator('div.card').count()
+    check('a ?paper= that is no arXiv id (xv3, ../list/cs.AI/new): an address with no paper, its card shown, nothing thrown, nothing asked of arXiv or anyone',
+      state?.noPaper === true && state.id === '' && card > 0 && pageErrors.length === errorsBefore && guard.violations.length === violationsBefore,
+      `${JSON.stringify(state)}, ${card} card(s); ${pageErrors.length - errorsBefore} error(s), ${guard.violations.length - violationsBefore} refused`)
+    await bad.close()
   }
 
   // ----------------------------------------------------------------------------------------------------- reader settings

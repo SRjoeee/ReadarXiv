@@ -22,7 +22,7 @@ import { firstReadTime } from '@/ui/first-read'
 import { localeStale } from '@/ui/locale-stale'
 import { R } from '@/ui/strings'
 import { createReaderView, type DocumentTask, type ReaderView, type ViewPrefs } from '../engine/view.mjs'
-import { READER_API, readerAddresses } from '../addresses'
+import { paperOf, READER_API, readerAddresses } from '../addresses'
 import { fromView, type Session } from '../controller'
 import { ASSETS, EventBus, LinkTarget, PDFLinkService, PDFPageView, PDFViewer, pdfjsLib } from '../pdfjs'
 import { displayOf, firstConfig, followOf, withDisplay } from '../settings'
@@ -78,7 +78,7 @@ export interface ReaderIo {
  * `host.reading`, the page's own first read of the settings, is started on at once (settings.ts firstConfig)
  */
 export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<Session> {
-  const params = host.params, paper = params.get('paper') ?? ''
+  const params = host.params, paper = paperOf(params)
   const addresses = readerAddresses(params, paper, io.api ?? READER_API)
   const abstract = abstractPage(paper, io.fetch)
 

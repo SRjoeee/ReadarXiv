@@ -387,6 +387,8 @@ describe('createController', () => {
     expect(none).toMatchObject({ noPaper: true, phase: 'ready', available: false, paper: { id: '', title: '' } })
     // an empty id is no paper either, with or without the live run asked for
     for (const query of ['paper=', 'live=1', 'live=1&paper=']) expect(createController({ open: async () => fakeSession(), params: new URLSearchParams(query) }).getState().noPaper, query).toBe(true)
+    // and so is a value that is no arXiv id: neither the toolbar nor a link names it (PDF-READER §11.1)
+    for (const query of ['paper=../list/cs.AI/new', 'paper=javascript:alert(1)', 'live=1&paper=1706.03762/../../x']) expect(createController({ open: async () => fakeSession(), params: new URLSearchParams(query) }).getState(), query).toMatchObject({ noPaper: true, paper: { id: '' } })
     // a paper named: the reader loads it as before
     expect(createController({ open: async () => fakeSession(), params: new URLSearchParams('paper=2608.02163') }).getState()).toMatchObject({ noPaper: false, phase: 'loading', available: true })
     expect(INITIAL.noPaper).toBe(false)
