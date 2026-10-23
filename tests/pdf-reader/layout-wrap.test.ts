@@ -77,11 +77,11 @@ describe('the wrap on hand-written pages (S1, S6, S9–S12; G1, G2)', () => {
     const r = ok(await wrapped(bytes, { units: [{ src: 'Order the' }] }))
     expect(pixelsApart(await renderPage(r.bytes, 2, { off: off(/^axt:u0$/) }), await renderPage((await markedSample({ pages: [2], edit: only('') })).bytes, 2))).toBe(0)
   })
-  it('wraps a unit\'s painted rule with it (S11)', async () => {
+  it('leaves a painted rule in a unit\'s range standing with the unit hidden (S11; a footnote\'s rule, the pixel tier)', async () => {
     const text = `/axt-0s ri ${run(72, 700, '(Order)')}q 72 690 100 0.5 re f Q /axt-0e ri\nq 72 600 100 0.5 re f Q\n`
     const { bytes } = await markedSample({ pages: [2], edit: only(text) })
     const r = ok(await wrapped(bytes, { units: [{ src: 'Order' }] }))
-    const without = (await markedSample({ pages: [2], edit: only('q 72 600 100 0.5 re f Q\n') })).bytes
+    const without = (await markedSample({ pages: [2], edit: only('q 72 690 100 0.5 re f Q\nq 72 600 100 0.5 re f Q\n') })).bytes
     expect(pixelsApart(await renderPage(r.bytes, 2, { off: off(/^axt:u0$/) }), await renderPage(without, 2))).toBe(0)
   })
   it('refuses a page with an owned run in a clipping text mode, writing nothing of ours on it (S9)', async () => {

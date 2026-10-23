@@ -209,3 +209,22 @@ describe('re-review S1, S2, S3: the wrap\'s inputs and the delta\'s pages', () =
     expect((await prove(whole.replaced)).ok).toBe(true)
   })
 })
+
+// ---- owner 2's pixel tier (1810.04805v2 p7 and p4)
+describe('the pixel tier: a cell that opens with an unmarked macro, a footnote\'s rule', () => {
+  it('leaves a cell whose macro is set before its start mark, with no mark of its own, the original\'s (counted in leaks)', async () => {
+    const row = `/axt-t0s ri ${run(72, 700, '(Ours)')} /axt-t0e ri ${run(160, 700, '(80.8)')}${run(240, 700, '(BERTLARGE)')}/axt-t1s ri ${run(320, 700, '(\\(Single\\))')} /axt-t1e ri\n`
+    const { bytes } = await markedSample({ pages: [2], edit: only(row) })
+    const units = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Ours' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\bertlarge' }, { t: 'text', s: ' (Single)' }] }]
+    const r = ok(await wrapped(bytes, { units }))
+    expect(r.unhidden).toEqual([[1, 'marks']])
+    expect(r.own.leaks).toEqual({ count: 1, units: [1] })
+  })
+  it('leaves a footnote\'s rule standing when the footnote is hidden', async () => {
+    const note = (text: boolean) => `/axt-0s ri q 72 120 144 0.4 re f Q ${text ? run(72, 100, '(note)') : ''}/axt-0e ri\n`
+    const { bytes } = await markedSample({ pages: [2], edit: only(note(true)) })
+    const r = ok(await wrapped(bytes, { units: [{ src: 'note' }] }))
+    const want = (await markedSample({ pages: [2], edit: only(note(false)) })).bytes
+    expect(pixelsApart(await renderPage(r.bytes, 2, { off: n => n === 'axt:u0' }), await renderPage(want, 2))).toBe(0)
+  })
+})
