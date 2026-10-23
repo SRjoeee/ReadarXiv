@@ -49,7 +49,7 @@ export interface LayerOptions {
     delta?: { bytes: Uint8Array; sha256: string; replaced: [from: number, to: number][]; stats: import('../layout/delta.mjs').DeltaStats } | { refused: string; why?: string } | null
     /** our pages wrapped by optional content (layout/wrap.mjs wrapFinal's stats, unhidden and labelKept, `doc`, `bytes`, `sha256`
      *  and `xref` the wrapped bytes'): written into the head's base of either kind */
-    wrap?: { stats: import('../layout/delta-wire.mjs').WrapStats; unhidden: [unit: number, why: import('../layout/delta-wire.mjs').Unhidden][]; labelKept: number[] } | null
+    wrap?: { stats: import('../layout/delta-wire.mjs').WrapStats; unhidden: [unit: number, why: import('../layout/delta-wire.mjs').Unhidden][]; labelKept: number[]; pages?: [from: number, to: number][] } | null
   } | { refused: string; why?: string } | null
   /** the TeX Live year our compile was made on ('2025'), else the marked original's log's (its banner) */
   tree?: string | null
