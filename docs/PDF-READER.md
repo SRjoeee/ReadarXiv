@@ -1998,10 +1998,15 @@ staging). BUNDLE stays 8 and LAYOUT 16: the layout file does not change; the bas
   baseline between the previous unit's end mark and the start, the placeholders' and names' ranges passed over. Babel name
   `n<occ>`: between `n<occ>.<key>.s` and `.e`. A glyph is one group's: a placeholder's or a name's over the text's, the
   text's over a label's, the first text's over a later. Images and forms are no unit's (a form whose ink is all one group's
-  is wrapped whole). A title's range (an end mark alone) takes its glyphs and no rule (a class's rule above it is no title's).
+  is wrapped whole). A unit's text takes its glyphs alone, never a rule: a rule in its range (a footnote's separator, a
+  class's rule above a title, an underline) is the page's and stays; a placeholder's rules are its `.p`.
   A table cell (`t<id>s`) takes no label (what stands before it on its line is another cell's). Marks absent, twice or out of
-  order, a unit the paper's units lack, or a placeholder whose ink cannot be told apart (its range lost: hidden with the text,
-  it could not be kept in place, and the spell check reads no symbol): `marks`. The ownership visits at most `OWN_WORK`
+  order, a unit the paper's units lack, a placeholder whose ink cannot be told apart (its range lost: hidden with the text,
+  it could not be kept in place, and the spell check reads no symbol), or a unit that opens with a placeholder of no mark of
+  its own whose ink stands, in no group, on its start's line before its start mark (a paper's macro first in a table's cell,
+  `\bertlarge`: TeX sets it before the cell's start mark; the reader would draw it over that ink; owning it as the unit's
+  lead is not exact, the number cells before it on the row being unmarked too): `marks`, each listed in the record's
+  `own.leaks` (14 cells on the pack: 1810.04805v2's model names, 1512.03385v1's `\#` columns). The ownership visits at most `OWN_WORK`
   20 million glyphs and boxes (real ranges cost the ink once), over every loop (text, labels, placeholders, names); past it a
   unit is `marks`.
 - **The spell check** (what makes "a unit that cannot be delimited shows the original" exact): a unit's `u` glyphs must spell
@@ -2053,7 +2058,8 @@ staging). BUNDLE stays 8 and LAYOUT 16: the layout file does not change; the bas
   wrapped bytes), bytes, sha256, xref, delta, wrap: { stats, unhidden, labelKept, pages } } })` (a delta that leaves a wrapped
   page arXiv's is refused there, `delta-shape`, beside deltaOf's and the proof's own check on the bytes: a unit's group on it
   could not be hidden); the record notes `own` (`{ units, unhidden: { marks, across, spell, page,
-  bounds }, spell: [ids, at most 64], labelKept }`). `units` (required) are the paper's SOURCE units, an array each entry of
+  bounds }, spell: [ids, at most 64], labelKept, leaks: { count, units: [ids, at most 64] } }`: `leaks` the units left the
+  original's because ink of theirs lies outside every group, so that the next such case shows without pixels). `units` (required) are the paper's SOURCE units, an array each entry of
   which has a source text or pieces (missing, a hole or an entry with neither a TypeError; `null` said asks for no spell check,
   the lab's alone); `deflate` and `inflate` are required (the written bytes are read back); `pages` is required beside the
   lists, the wrapped pages as ranges within our pages and as many as `stats.wrapped` (`pipeline/live.mjs openPaper`'s,
@@ -2069,8 +2075,8 @@ staging). BUNDLE stays 8 and LAYOUT 16: the layout file does not change; the bas
   list. A head without them is an unwrapped base. The cell rules the add-on manifest carried are each part's `rules` now (§11.8).
 - **Measured** (2026-10-23, the gate pack's 7 papers in Chinese and 2602.23285v2, the sources' units): every page wrapped
   (290/290, 0 refused, the proof passing on all); `spell` 1 unit of 1,806 (2608.04322v1 u0: its journal header over-taken),
-  `marks` 24 (the title block's authors and `\thanks` notes the marker does not mark: the engine lane's item), `across` 0,
-  labels kept 9; ownership equal to today's geometric ownership on 1,732 of 1,806 units (95.9 %: the rest the marks' own over
+  `marks` 38 (24 the title block's authors and `\thanks` notes the marker does not mark, the engine lane's item; 14 cells that
+  open with an unmarked macro), `across` 0, labels kept 9; ownership equal to today's geometric ownership on 1,732 of 1,806 units (95.9 %: the rest the marks' own over
   today's residue, a table's row header today calls a cell's label, a babel name, the unmarked authors); 54 shows split; 230 to
   981 groups a paper. The wrap 0.4 to 1.9 s a paper in Node with PDF.js's lite worker (the 147-page thesis 1.9 s), +165 MB
   at most beside what the maker holds (the 46 MB pair); the wrapped base 0.4 % to 23 % larger (the thesis 3.08 to 3.79 MB);

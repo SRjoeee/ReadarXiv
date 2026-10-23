@@ -91,10 +91,10 @@ describe('placeholders, labels and names (MR 4–6)', () => {
     const pages = [page([{ pt: '0s' }, { pt: 'n2.proof.s' }, 'Proof', { pt: 'n2.proof.e' }, 'Easy', { pt: '0e' }])]
     expect(groupsOf(ownOf(pages, { units: units('Easy') }), pages)).toEqual({ n2: 'Proof', u0: 'Easy' })
   })
-  it('gives a unit\'s rules its group, and the rules of its placeholders theirs', () => {
+  it('leaves a rule in a unit\'s text range the page\'s, and gives its placeholders\' rules theirs', () => {
     const pages = [page([{ pt: '0s' }, 'ab', { rule: [10, 600, 60, 600.4] }, { pt: 'p0.1a' }, { rule: [10, 590, 60, 590.4] }, { pt: 'p0.1b' }, { pt: '0e' }, { rule: [10, 580, 60, 580.4] }])]
     const r = ownOf(pages, { units: units('ab') })
-    expect(r.boxes[0]).toEqual(['u0', 'u0.p', null])
+    expect(r.boxes[0]).toEqual([null, 'u0.p', null])
   })
 })
 

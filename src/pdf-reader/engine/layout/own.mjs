@@ -33,6 +33,7 @@
 // An original module (no port statement).
 import { plainSource } from '../translate/mt.mjs'
 import { UNHIDDEN } from './delta-wire.mjs'
+import { classOf } from './marks.mjs'
 import { OWNED, ownedOf, regionsOf } from './stream.mjs'
 
 export { UNHIDDEN }
@@ -157,7 +158,9 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
       list = { glyphs: list.glyphs, boxes: [] }
     }
     textOf.set(id, { s, e })
-    claim(list, `u${id}`, 'u')
+    // (a unit's text takes its glyphs alone: a rule in its range — a footnote's separator, an underline — is the page's, left
+    // standing; a placeholder's rules are its own, `.p`)
+    claim({ glyphs: list.glyphs, boxes: [] }, `u${id}`, 'u')
   }
   function takeToEnd(A, r) {
     const pg = pages[A[0] - 1], R = regions[A[0] - 1], glyphs = [], boxes = []
@@ -256,12 +259,38 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
     }
     for (const g of bOwn[p - 1]) { if (g === null || g[0] !== 'u') continue; const dot = g.indexOf('.'), id = Number(dot < 0 ? g.slice(1) : g.slice(1, dot)); unit(id).groups.add(g); unit(id).pages.add(p) }
   }
-  const spell = []
+  const spell = [], leaks = []
   let labelKept = 0
+  /** whether a unit's pieces open (before any text but white space) with a placeholder that has no mark of its own, and ink in
+   *  no group stands on its start's line before its start mark, back to the point before it: that placeholder's, set before the
+   *  mark (an inkless one — \\hline, \\fontsize, \\boldmath — leaves none there, and a label's is its unit's `.l`) */
+  function leadUnmarked(u, id) {
+    if (!Array.isArray(u?.pieces)) return false
+    let unmarked = false
+    for (let k = 0; k < u.pieces.length && !unmarked; k++) {
+      const piece = u.pieces[k]
+      if (piece?.t === 'text') { if (/\S/.test(typeof piece.s === 'string' ? piece.s : '')) break; continue }
+      const c = classOf(piece)
+      if (c && c !== 'footnote' && !where.has(`p${id}.${k}a`) && !where.has(`p${id}.${k}b`)) unmarked = true
+    }
+    const t = textOf.get(id)
+    if (!unmarked || !t?.s) return false
+    const [p, q] = t.s, pg = pages[p - 1], S = pt(t.s), R = regions[p - 1], r = at(t.s)
+    if (S.glyph >= pg.glyphs.length) return false
+    const F = pg.glyphs[S.glyph], from = q > 0 ? pg.points[q - 1].glyph : 0
+    for (let g = S.glyph - 1; g >= from; g--) {
+      const G = pg.glyphs[g]
+      if (R.glyph[g] === r && gOwn[p - 1][g] === null && /\S/.test(G.u ?? '') && Math.abs(G.y - F.y) < 0.5 * Math.max(G.size, F.size)) return true
+    }
+    return false
+  }
   for (const [id, u] of unitOf) {
     if (u.unhidden) continue
     // (a unit the marks name and the units do not: no source to spell it against, so the original's)
     if (units && !units[id]) { u.unhidden = 'marks'; continue }
+    // (a unit that opens with a placeholder of ink the marker set no mark for — a paper's macro first in a cell, \bertlarge —
+    // has that ink before its start mark, in no group, and its placeholder drawn over it: the original's)
+    if (units && leadUnmarked(units[id], id)) { u.unhidden = 'marks'; leaks.push(id); continue }
     const src = units ? sourceOf(units[id]) : null
     if (src !== null && spellOf(text.get(id)?.join('') ?? '') !== spellOf(src)) { u.unhidden = 'spell'; spell.push(id); continue }
     const lead = label.get(id)
@@ -293,7 +322,8 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
   const unhidden = Object.fromEntries(UNHIDDEN.map(k => [k, 0]))
   for (const u of unitOf.values()) if (u.unhidden) unhidden[u.unhidden]++
   spell.sort((a, b) => a - b)
-  return { glyphs: gOwn, boxes: bOwn, units: unitOf, stats: { units: unitOf.size, unhidden, spell: spell.slice(0, SPELL_LIST_MAX), labelKept } }
+  leaks.sort((a, b) => a - b)
+  return { glyphs: gOwn, boxes: bOwn, units: unitOf, stats: { units: unitOf.size, unhidden, spell: spell.slice(0, SPELL_LIST_MAX), labelKept, leaks: { count: leaks.length, units: leaks.slice(0, SPELL_LIST_MAX) } } }
 }
 
 /** a unit's source text for the spell check: its `src` where it has one, else its pieces' (placeholders dropped) */
