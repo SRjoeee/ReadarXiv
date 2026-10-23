@@ -207,6 +207,7 @@ export function baseRecordOf(dir) {
       const pin = (() => { try { return compileImagesOf().images[b.tree]?.texlive ?? null } catch { return null } })()
       if (typeof r.image !== 'string' || !IMAGE_REF.test(r.image) || r.image !== pin) throw new Error(`base.json's image is not the pinned image of TeX Live ${b.tree} (compile-images.json)`)
     }
+    if (r.texts !== undefined && !(Array.isArray(r.texts) && r.texts.length % 2 === 0 && r.texts.length <= 20000 && r.texts.every(t => typeof t === 'string' && t.length <= 4096))) throw new Error('base.json\'s texts are not [macro source, text, …] pairs of strings')
     if (!existsSync(pdf)) throw new Error('base.json names our base page, and there is no base.pdf')
     if (!isFile(pdf, b)) throw new Error('base.pdf is not the page base.json names (sha256, bytes)')
     if (r.layout !== null && !(existsSync(layout) && isFile(layout, file('layout', r.layout)))) throw new Error('layout.json is not the layout base.json names, made over base.pdf')
@@ -228,11 +229,13 @@ export function baseRecordOf(dir) {
  * bytes of the layout file the fixture holds after the make (the one made over our page; where our page was refused, the one
  * kept in its place, keptLayoutOf; null where there is none), `image` the compile image our page was made on
  */
-export function baseRecordOfMade({ made, layout, image = null }) {
+export function baseRecordOfMade({ made, layout, image = null, texts = null }) {
   const file = layout ? { sha256: sha256(layout), bytes: layout.length } : null
   if (made?.source === 'ours') {
     const { source, ...base } = made.head
-    return { schema: BASE_RECORD_SCHEMA, source, base, ...(image ? { image } : {}), layout: file }
+    // (`texts`: the marks' `marking.texts` the base page was marked with, flat [macro source, text, …]: what the gate's wrap is
+    // given, as the maker child gives production's (layout/wrap.mjs wrapFinal), for a cell's lead macro)
+    return { schema: BASE_RECORD_SCHEMA, source, base, ...(image ? { image } : {}), layout: file, ...(texts ? { texts: [...texts] } : {}) }
   }
   return { schema: BASE_RECORD_SCHEMA, source: 'arxiv', why: made?.why, ...(made?.detail ? { detail: made.detail } : {}), layout: file }
 }

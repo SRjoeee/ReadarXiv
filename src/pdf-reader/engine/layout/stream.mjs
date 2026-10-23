@@ -114,9 +114,15 @@ export function regionsOf(page) {
  *   opening point, since TeX sets none on the empty list it resumes the paragraph with (a whatsit there would keep the
  *   empty paragraph between two displays a line). The first owns the whole group's ink, to the text after the last
  *   ('open, with the displays after it'); each later one is 'in the display before it'. Their split is not TeX's to give.
- * A name set twice owns nothing, nor where the work is past its bound
+ * A name set twice owns nothing, nor where the work is past its bound.
+ * `erasure` (own.mjs's, the per-unit erasure's reading; the maker's is without it, its layouts unchanged): a piece is found
+ * where its ink is told exactly though the maker leaves it LOST — the text after it compared with TeX's quotes as one (`"`
+ * set as ” by OT1); nothing before the text after it but rules, those rules its own (\\_ before \\allowbreak); an opening
+ * alone followed by placeholders with no mark of their own and nothing else up to the next marked piece's opening
+ * (`through`, marks.mjs followsOf), what stands between the two its own and theirs; and a later unit's opening next, as a
+ * later unit's start mark is (that unit's label on its line left out). The sweep of 2026-10-24
  */
-export function ownedOf(pages, { follows, dropped = [] }) {
+export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
   const twice = new Set(dropped)
   const regions = pages.map(regionsOf)
   // every point by its name, in stream order: [page, index]; the mark points in stream order (brackets and names apart)
@@ -203,8 +209,12 @@ export function ownedOf(pages, { follows, dropped = [] }) {
       if (jumps(glyphs)) return none(HOW['across a column, unbracketed'])
       if (!glyphs.length && !boxes.length) return { how: HOW[f.want ? 'open, to the text after it' : "open, to its unit's next mark"], glyphs, boxes }
       if (!f.want) {
-        const later = START.exec(N.name)
-        if (f.blocked) return none(HOW['open, an unmarked piece follows'])
+        // (the erasure's: a later unit's opening as its start mark only where that unit's start mark follows it on the page — the
+        // opening is its lead placeholder's, on its first line; an end-only unit's opening may stand lines into it)
+        const opening = erasure ? OPENING.exec(N.name) : null
+        const startsAfter = id => [`${id}s`, `h${id}s`, `t${id}s`].some(n => (where.get(n) ?? []).some(([p, q]) => p === pa && q > next[1]))
+        const later = START.exec(N.name) ?? (opening && startsAfter(opening[2]) ? [N.name, opening[2]] : null)
+        if (f.blocked) return erasure && f.through && N.name === f.through ? { how: HOW["open, to its unit's next mark"], glyphs, boxes } : none(HOW['open, an unmarked piece follows'])
         if (f.ends.includes(N.name)) return { how: HOW["open, to its unit's next mark"], glyphs, boxes }
         if (later && Number(later[1]) > Number(m[2])) {
           // the next unit's label: the glyphs on its start mark's line before it, the boxes after the first of them
@@ -216,9 +226,18 @@ export function ownedOf(pages, { follows, dropped = [] }) {
         }
         return none(HOW["open, the next mark not its unit's"])
       }
-      const end = textAt(pages, glyphs, f.want)
+      const end = textAt(pages, glyphs, f.want, erasure)
       if (end < 0) return none(HOW['open, the text after it not found'])
-      if (end === 0) return none(HOW['open, nothing before the text after it'])
+      if (end === 0) {
+        // (the erasure's: rules alone before the text after it are the piece's ink — a glyph set there would be one, and
+        // REVTeX's swapped punctuation sets none)
+        // (a rule under or over the text after it — ulem's \\uline, soul's \\hl paint theirs before the word — is that text's, not
+        // the piece's: none where a rule reaches past the first glyph of the text after it on its line)
+        const [p0, g0] = glyphs[0], P0 = pages[p0 - 1], ruled = boxes.filter(([q, b]) => q < p0 || (q === p0 && b < P0.boxAt[g0]))
+        const under = ([q, b]) => q === p0 && P0.boxes[4 * b + 2] > P0.glyphs.x0[g0] + 0.1 * P0.glyphs.size[g0] && P0.boxes[4 * b + 1] < P0.glyphs.y[g0] + P0.glyphs.size[g0] && P0.boxes[4 * b + 3] > P0.glyphs.y[g0] - 0.5 * P0.glyphs.size[g0]
+        if (erasure && ruled.length && !ruled.some(under)) return { how: HOW['open, to the text after it'], glyphs: [], boxes: ruled }
+        return none(HOW['open, nothing before the text after it'])
+      }
       return cut(HOW['open, to the text after it'], glyphs, boxes, end)
     }
     /** an opening point alone in a column's body, its next mark past that body's end, or null where it is not so */
@@ -236,7 +255,7 @@ export function ownedOf(pages, { follows, dropped = [] }) {
       if (!E) return null
       if (f.want) {
         const { glyphs, boxes } = takeTo(stop)
-        const end = textAt(pages, glyphs, f.want)
+        const end = textAt(pages, glyphs, f.want, erasure)
         return end > 0 ? cut(HOW["open, past its column's end"], glyphs, boxes, end) : null
       }
       if (f.blocked) return null
@@ -360,8 +379,11 @@ export function ownedPages({ follows, dropped = [], closing = () => null }) {
  *  which their characters spell it (a hyphen the text has not passed over, white space never compared, the last glyph's
  *  characters past its end: a ligature), or from which they spell the start of it up to the last glyph (the text runs
  *  to the next point); -1 where it is nowhere */
-function textAt(pages, glyphs, want) {
-  const chars = glyphs.map(([p, g]) => charOf(pages[p - 1].glyphs.u[g]))
+function textAt(pages, glyphs, want, quotes = false) {
+  // (`quotes`: TeX's quotes as one, a straight one set as a curly one by OT1 and the source's '' read as ”)
+  const fold = c => (quotes ? c.replace(/[\u201c\u201d\u201e\u201f\u2033"]/g, '"').replace(/[\u2018\u2019\u201a\u201b\u2032']/g, "'") : c)
+  want = fold(want)
+  const chars = glyphs.map(([p, g]) => fold(charOf(pages[p - 1].glyphs.u[g])))
   for (let e = 0; e < chars.length; e++) {
     if (!chars[e]) continue
     let w = 0, h = e

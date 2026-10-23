@@ -168,11 +168,18 @@ export function wholeness(side, run, outputs) {
  * different instrument, a run that is not whole (`wholeness`), an output missing or failed), and a regression fails it unless
  * one of the `rulings` covers its target and its measure.
  */
+/** why an output did not run, where it is the engine's own module that did not load in the page (a path of the repository's,
+ *  names alone: never a paper's text), else null: `the engine's layer-proto/run.mjs did not load` */
+export function loadFailureOf(why) {
+  const m = /^(?:[a-z0-9_./-]+\.mjs: )?Failed to fetch dynamically imported module: https?:\/\/127\.0\.0\.1:\d+\/engine\/([a-z0-9_-]+(?:\/[a-z0-9_.-]+)*\.mjs)$/.exec(typeof why === 'string' ? why : '')
+  return m ? `the engine's ${m[1]} did not load` : null
+}
+
 export function judge(base, head, { rulings = [], outputs = null } = {}) {
   const problems = []
   for (const [side, run] of [['base', base], ['head', head]]) {
     if (run.tier !== 'model') problems.push(`the ${side} run is not the model tier`)
-    for (const f of run.failed ?? []) problems.push(typeof f?.name === 'string' && FIXTURE.test(f.name) ? `${f.name} did not run in the ${side} run` : `an output did not run in the ${side} run`)
+    for (const f of run.failed ?? []) { const cause = loadFailureOf(f?.why); problems.push(`${typeof f?.name === 'string' && FIXTURE.test(f.name) ? f.name : 'an output'} did not run in the ${side} run${cause ? `: ${cause}` : ''}`) }
     problems.push(...wholeness(side, run, outputs))
   }
   for (const k of INSTRUMENT) {
@@ -404,7 +411,7 @@ const LINKS_LINE = new RegExp(`^  ${NAME}: (?:links wrong at|links kept \\d+(?:\
 export function publicLine(line) {
   if (OK_LINE.test(line) || TIER_LINE.test(line) || COMPLETE_LINE.test(line) || INK_LINE.test(line) || LINKS_LINE.test(line)) return line
   const fail = FAIL_LINE.exec(line)
-  if (fail) return `FAIL ${fail[1]}`
+  if (fail) { const cause = loadFailureOf(line.slice(`FAIL ${fail[1]}: `.length).replace(/ \(\d+(?:\.\d+)? s\)$/, '')); return `FAIL ${fail[1]}${cause ? `: ${cause}` : ''}` }
   if (line.startsWith('FAIL requests that would have left the machine')) return 'FAIL requests that would have left the machine'
   return null
 }
