@@ -1116,7 +1116,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
      */
     const linkedInk = piece => {
       const kind = classOf(piece) === 'cite' ? linkKindOf(piece) : null
-      if (kind?.kind !== 'cite' || !kind.keys.length) return null
+      // (one with a note, \\cite[p.~3]{a}: its link holds the number alone, and the note's extent is not known)
+      if (kind?.kind !== 'cite' || !kind.keys.length || /^\\[A-Za-z@]+\*?\s*\[/.test(piece.src)) return null
       const want = new Set(kind.keys.map(key => `cite.${key}`))
       if (!one.links) {
         one.links = []
@@ -1175,8 +1176,14 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         }
         return best
       }
-      const glyphs = []
       const open = bracket(took[0], true), close = bracket(took.at(-1), false)
+      // only the whole citation, else none (LOST, as before): every key its own link or inside a range (a dash between two
+      // links: cite.sty's 1\u20133 links its ends), and a bracket on both sides or on neither. A list TeX broke over lines
+      // (its next link on the next line), or one whose closing bracket is not against its last link (a note after it), is not
+      // known whole
+      const ranged = gaps.some(g => g.some(x => /^[\u2013\u2014-]$/.test(ink[took[0].page].u[x])))
+      if ((took.length < kind.keys.length && !ranged) || (open >= 0) !== (close >= 0)) return null
+      const glyphs = []
       if (open >= 0) glyphs.push([took[0].page, open])
       took.forEach((L, q) => {
         for (const g of L.gs) glyphs.push([L.page, g])

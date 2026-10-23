@@ -2100,6 +2100,24 @@ describe('makeLayout, a citation whose marks give it no ink: found by its link a
     expect(phOf(file, 0, 1).slice(5, 8)).toEqual([xAt(run, 13), 700, xAt(run, 16)])
     expect(phOf(file, 0, 3).slice(5, 8)).toEqual([182, 700, 192.5])
   })
+  it('none where its links cannot be shown to be the whole citation: a note (\\cite[p. 5]{a}), a list TeX broke over two lines', async () => {
+    const one: Run = { s: 'Our work 91.5[1, p. 5]. More', x: 72, y: 700 }
+    const a = await made({
+      pages: [{ runs: [one], annots: [{ rect: [xAt(one, 14) - 0.5, 699, xAt(one, 15) + 0.5, 708], dest: 'cite.a' }] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(one), 700]],
+      units: [unit('para', [text('Our work 91.5'), ph('\\cite[p. 5]{a}'), text('. More')])],
+      switches: { '\\cite': '22220000' },
+    })
+    expect((phOf(a.file, 0, 1)[3] ?? 0) & PH_FLAG.LOST).toBe(PH_FLAG.LOST)
+    const l1: Run = { s: 'Our work and more 91.5[1,', x: 72, y: 700 }, l2: Run = { s: '2]. More text', x: 72, y: 688 }
+    const b = await made({
+      pages: [{ runs: [l1, l2], annots: [{ rect: [xAt(l1, 23) - 0.5, 699, xAt(l1, 24) + 0.5, 708], dest: 'cite.a' }, { rect: [71.5, 687, 77.5, 696], dest: 'cite.b' }] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(l2), 688]],
+      units: [unit('para', [text('Our work and more 91.5'), ph('\\cite{a,b}'), text('. More text')])],
+      switches: { '\\cite': '22220000' },
+    })
+    expect((phOf(b.file, 0, 1)[3] ?? 0) & PH_FLAG.LOST).toBe(PH_FLAG.LOST)
+  })
   it('none where the page has no link of its keys, nor one whose glyphs are on no line of the unit\'s: LOST, as before', async () => {
     const { file } = await made(world([{ rect: box(117, 1), dest: 'cite.z' }, { rect: [167, 500, 180, 510], dest: 'cite.b' }]))
     expect([(phOf(file, 0, 1)[3] ?? 0) & PH_FLAG.LOST, (phOf(file, 0, 3)[3] ?? 0) & PH_FLAG.LOST]).toEqual([PH_FLAG.LOST, PH_FLAG.LOST])
