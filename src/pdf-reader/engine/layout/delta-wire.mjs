@@ -3,7 +3,8 @@
 // the delta (D) and the remover's tails; the delta is ONE incremental-update section of the original's kind (layout/section.mjs)
 // whose /Prev is the original's startxref and whose offsets are the composed document's. Its head (layer-proto/format.mjs:
 // `base.kind` 'delta') names the pages it replaces as page ranges and counts what it reused and wrote. Imports the tail's
-// startxref alone: the head's reader (a browser's), the page pass and the box read it alike.
+// largest object number alone: the head's reader (a browser's), the page pass and the box read it alike.
+import { OBJECT_MAX } from './tail.mjs'
 
 /** a head's base of ours is a delta over arXiv's PDF or a whole PDF of ours (`full`: no `kind` on the wire) */
 export const BASE_KINDS = Object.freeze(['delta', 'full'])
@@ -14,6 +15,9 @@ export const DELTA_MAX_BYTES = 24 * 2 ** 20
 export const DELTA_MAX_SHARE = 0.35
 /** the objects at most: of either document read, and of the delta written */
 export const DELTA_OBJECTS_MAX = 200_000
+/** the object numbers a delta leaves free below OBJECT_MAX at least, for the remover's tails (its /Size plus this at most
+ *  OBJECT_MAX + 1; a part's tail holds far fewer than 2^20 objects: TAIL_CAP's 1 MiB of at least a byte each) */
+export const DELTA_TAIL_ROOM = 2 ** 20
 /** the replaced pages' ranges a head names at most */
 export const REPLACED_MAX = 4096
 /** why a paper's base of ours is whole (`full`) where a delta was asked: the delta's builder or its proof refused it. `parse`
@@ -128,6 +132,7 @@ export function deltaSection(delta, orig) {
     if (7 * r !== L) return no('a cross-reference stream longer than its /Index')
   }
   if (prev !== orig.xref) return no(`its /Prev ${prev} is not the original's startxref ${orig.xref}`)
+  if (size + DELTA_TAIL_ROOM > OBJECT_MAX + 1) return no(`its /Size ${size} leaves the remover's tails fewer than ${DELTA_TAIL_ROOM} object numbers`)
   const numbers = new Set()
   for (const [n, g, off] of rows) {
     if (numbers.has(n)) return no(`object ${n} twice`)

@@ -10,7 +10,8 @@ import { alignOf, removerOf } from '@/pdf-reader/engine/layout/remove.mjs'
 import { startxrefOf, tailLinks } from '@/pdf-reader/engine/layout/tail.mjs'
 import { openObjects } from '@/pdf-reader/engine/layout/xref.mjs'
 import { PDFJS } from '@/pdf-reader/engine/pipeline/versions.mjs'
-import { concat, ORIG_PACKED, origObjects, oursObjects, pdfOf } from './helpers/delta-pdfs'
+import { appendSection } from '@/pdf-reader/engine/layout/section.mjs'
+import { concat, ORIG_PACKED, type Obj, origObjects, oursObjects, pdfOf } from './helpers/delta-pdfs'
 
 // Our base as an incremental update over arXiv's PDF (layout/delta.mjs; the delta contract's §2 to §4 and §14): the builder on
 // synthetic documents of both cross-reference kinds, its determinism and its reuse, the structural proof and the mutations it
@@ -208,3 +209,132 @@ describe('the remover over the composed document (arXiv\'s bytes, then the delta
   })
 })
 
+
+// ---- the adversarial review's findings (scratchpad route/delta/review), each a case the builder or the proof must meet
+const HELV = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>'
+const line = (s: string, y = 100, font = 'F1') => `BT /${font} 12 Tf 20 ${y} Td (${s}) Tj ET\n`
+const stream = (s: string) => ({ dict: '', data: enc(s) })
+/** a two-page original and our final pass (page 1 ours, page 2 the same words), each given more objects or other resources */
+function pairOf({ origExtra = [], oursExtra = [], origRes = '<< /Font << /F1 10 0 R >> >>', oursRes = '<< /Font << /F7 20 0 R >> >>', oursBody = line('Our one', 100, 'F7') }: { origExtra?: [number, Obj][]; oursExtra?: [number, Obj][]; origRes?: string; oursRes?: string; oursBody?: string } = {}) {
+  const o = new Map<number, Obj>([
+    [1, { text: '<< /Type /Catalog /Pages 2 0 R >>' }],
+    [2, { text: '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 /MediaBox [0 0 200 200] >>' }],
+    [3, { text: `<< /Type /Page /Parent 2 0 R /Resources ${origRes} /Contents 7 0 R >>` }],
+    [4, { text: '<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 10 0 R >> >> /Contents 8 0 R >>' }],
+    [7, stream(line('Original one'))], [8, stream(line('Page two'))], [10, { text: HELV }], ...origExtra,
+  ])
+  const u = new Map<number, Obj>([
+    [1, { text: '<< /Type /Catalog /Pages 2 0 R >>' }],
+    [2, { text: '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 /MediaBox [0 0 200 200] >>' }],
+    [3, { text: `<< /Type /Page /Parent 2 0 R /Resources ${oursRes} /Contents 22 0 R >>` }],
+    [4, { text: '<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 20 0 R >> >> /Contents 23 0 R >>' }],
+    [20, { text: HELV }], [22, stream(oursBody)], [23, stream(line('Page two'))], ...oursExtra,
+  ])
+  // (a photograph both share, so that the delta is a small share of our base page)
+  const photo = { dict: ' /Type /XObject /Subtype /Image /Width 64 /Height 64 /ColorSpace /DeviceGray /BitsPerComponent 8', data: Uint8Array.from({ length: 4096 }, (_, i) => (i * 2654435761) >>> 24) }
+  o.set(90, photo)
+  u.set(90, photo)
+  return { orig: pdfOf(o, { root: 1 }), ours: pdfOf(u, { root: 1 }) }
+}
+/** the delta's objects as written (each from its offset to the next), to write another section of them */
+function objectsOf(delta: Uint8Array, orig: Uint8Array) {
+  const sect = deltaSection(delta, { bytes: orig.length, xref: startxrefOf(orig)! })
+  if (sect.why !== undefined) throw new Error(sect.why)
+  const rows = [...sect.rows].sort((a, b) => a[2] - b[2])
+  const xrefAt = sect.startxref - orig.length
+  return rows.filter(r => r[2] !== sect.startxref).map((r, i, all): [number, number, Uint8Array] => [r[0], r[1], delta.slice(r[2] - orig.length, i + 1 < all.length ? all[i + 1]![2] - orig.length : xrefAt)])
+}
+
+describe('the review\'s findings', () => {
+  it('B1: a back-link key with a DIRECT value is data: our optional content (/P /AllOff) is not the original\'s (/P /AnyOn)', async () => {
+    const { orig, ours } = pairOf({
+      origExtra: [[15, { text: '<< /Type /OCG /Name (Layer) >>' }], [16, { text: '<< /Type /OCMD /OCGs 15 0 R /P /AnyOn >>' }]],
+      oursExtra: [[25, { text: '<< /Type /OCG /Name (Layer) >>' }], [26, { text: '<< /Type /OCMD /OCGs 25 0 R /P /AllOff >>' }]],
+      oursRes: '<< /Font << /F7 20 0 R >> /Properties << /oc1 26 0 R >> >>',
+      oursBody: `${line('Our one', 100, 'F7')}/OC /oc1 BDC ${line('hidden in ours', 60, 'F7')}EMC\n`,
+    })
+    const r = await built(orig, ours)
+    expect(latin(r.delta)).not.toMatch(/\/oc1 16 0 R/)
+    expect(latin(r.delta)).toContain('/P /AllOff')
+    expect(await prove(orig, r.delta, ours, r.replaced)).toMatchObject({ ok: true })
+    // (a delta that names the original's policy instead is refused by the proof)
+    const forged = enc(latin(r.delta).replace('/P /AllOff', '/P /AnyOn '))
+    expect(await prove(orig, forged, ours, r.replaced)).toMatchObject({ ok: false, why: /graph is not ours/ })
+  })
+
+  it('B2: an entry type PDF.js does not know is refused; an original PDF.js recovers by its own scan is no base (`delta-xref`)', async () => {
+    const xs = latin(ORIG_STREAM)
+    // (rewrite one row of the cross-reference stream: decompress, set a free row's type to 3, compress again)
+    const m = /(\d+) 0 obj\n<< \/Type \/XRef ([^\n]*?)\/Length (\d+) >>\nstream\n/.exec(xs)!
+    const at = m.index + m[0].length, L = Number(m[3])
+    const { inflateSync } = await import('node:zlib')
+    const rows = new Uint8Array(inflateSync(ORIG_STREAM.subarray(at, at + L)))
+    rows[0] = 2
+    rows[1] = (rows[1]! + 3) & 255
+    const data = deflateSync(rows)
+    const bad = concat([ORIG_STREAM.subarray(0, m.index), enc(`${m[1]} 0 obj\n<< /Type /XRef ${m[2]}/Length ${data.length} >>\nstream\n`), data, enc(`\nendstream\nendobj\nstartxref\n${m.index}\n%%EOF\n`)])
+    expect(() => openObjects(bad, { PL, objectsMax: 1000, decodedMax: 1 << 20 })).toThrow(/entry of type 3/)
+    expect(await deltaOf(bad, OURS, { PL })).toMatchObject({ refused: 'delta-xref' })
+    // (PDF.js's recovery of the original alone, its own message: the proof refuses, whatever the composed document says)
+    const r = await built(ORIG_TABLE)
+    const loud = ((o: Record<string, unknown>) => { const data = o.data as Uint8Array; if (data.length === ORIG_TABLE.length) console.log('Warning: Indexing all PDF objects'); return getDocument(o as never) }) as never
+    expect(await proveDelta(ORIG_TABLE, r.delta, OURS, { PL, getDocument: loud, replaced: r.replaced })).toMatchObject({ ok: false, code: 'delta-xref' })
+  })
+
+  it('should-fix 1 and 5: a delta that overrides the catalog, or writes a page it does not name, fails the proof', async () => {
+    const r = await built(ORIG_TABLE)
+    const objects = objectsOf(r.delta, ORIG_TABLE)
+    const withCatalog = appendSection({ end: ORIG_TABLE.length, objects: [...objects, [1, 0, enc('1 0 obj\n<< /Type /Catalog /Pages 2 0 R /PageMode /FullScreen >>\nendobj\n')]], kind: 'table', prev: startxrefOf(ORIG_TABLE)!, size: r.size, trailer: { root: '1 0 R' } }).bytes
+    expect(await prove(ORIG_TABLE, withCatalog, OURS, r.replaced)).toMatchObject({ ok: false, why: /overrides the original's object 1 0/ })
+    expect(await prove(ORIG_TABLE, r.delta, OURS, [[1, 2]])).toMatchObject({ ok: false })
+  })
+
+  it('should-fix 2: two direct values met against one reference are each compared (a wrong ExtGState fails)', async () => {
+    const { orig, ours } = pairOf({ oursRes: '<< /Font << /F7 20 0 R >> /ExtGState << /G1 << /CA 0.5 >> /G2 << /CA 0.1 /BM /Difference >> >> >>' })
+    const body = line('Our one', 100, 'F7')
+    const objs: [number, number, Uint8Array][] = [
+      [3, 0, enc('3 0 obj\n<< /Type /Page /Parent 2 0 R /Resources << /Font << /F7 10 0 R >> /ExtGState << /G1 30 0 R /G2 30 0 R >> >> /Contents 31 0 R >>\nendobj\n')],
+      [30, 0, enc('30 0 obj\n<< /CA 0.5 >>\nendobj\n')],
+      [31, 0, enc(`31 0 obj\n<< /Length ${body.length} >>\nstream\n${body}\nendstream\nendobj\n`)],
+    ]
+    const d = appendSection({ end: orig.length, objects: objs, kind: 'table', prev: startxrefOf(orig)!, size: 32, trailer: { root: '1 0 R' } }).bytes
+    expect(await prove(orig, d, ours, [[1, 1]])).toMatchObject({ ok: false, why: /graph is not ours/ })
+  })
+
+  it('should-fix 3: the stream index is keyed by a secret seed, and the whole build has a work budget', async () => {
+    // (FNV-1a multicollisions: 2^10 streams of one FNV value, which made the index quadratic, 2.9 s)
+    const fnv = (h: number, b: ArrayLike<number>) => { for (let i = 0; i < b.length; i++) h = Math.imul(h ^ b[i]!, 0x01000193) >>> 0; return h }
+    let seed = 1
+    const rand = () => { seed = (Math.imul(seed, 1103515245) + 12345) >>> 0; return seed >>> 24 }
+    const PREFIX = 1024
+    let h = fnv(0x811c9dc5, new Uint8Array(PREFIX))
+    const blocks: number[][][] = []
+    for (let s = 0; s < 10; s++) {
+      const seen = new Map<number, number[]>()
+      for (;;) {
+        const b = [rand(), rand(), rand(), rand()], k = fnv(h, b), prev = seen.get(k)
+        if (prev && prev.some((x, j) => x !== b[j])) { blocks.push([prev, b]); h = k; break }
+        seen.set(k, b)
+      }
+    }
+    const extra: [number, Obj][] = []
+    for (let m = 0; m < 1024; m++) {
+      const d = new Uint8Array(PREFIX + 40)
+      d.set(blocks.flatMap((bl, s) => bl[(m >> s) & 1]!), PREFIX)
+      extra.push([100 + m, { dict: ' /Type /XObject /Subtype /Form /BBox [0 0 1 1]', data: d }])
+    }
+    const { orig, ours } = pairOf({ origExtra: extra })
+    const t0 = performance.now()
+    const r = await deltaOf(orig, ours, { PL })
+    expect(performance.now() - t0).toBeLessThan(1000)
+    expect(r).not.toHaveProperty('refused')
+    expect(await deltaOf(orig, ours, { PL, workMax: 10_000 })).toMatchObject({ refused: 'delta-bound', why: /work/ })
+  }, 30_000)
+
+  it('should-fix 4: a delta whose /Size leaves the remover\'s tails too few object numbers is refused, and read back refused', async () => {
+    const big = pdfOf(origObjects(), { root: 1, size: 8_000_000 })
+    expect(await deltaOf(big, OURS, { PL })).toMatchObject({ refused: 'delta-bound', why: /tails/ })
+    const d = appendSection({ end: ORIG_TABLE.length, objects: [[8_000_000, 0, enc('8000000 0 obj\nnull\nendobj\n')]], kind: 'table', prev: startxrefOf(ORIG_TABLE)!, size: 8_000_001, trailer: { root: '1 0 R' } }).bytes
+    expect(deltaSection(d, { bytes: ORIG_TABLE.length, xref: startxrefOf(ORIG_TABLE)! }).why).toMatch(/tails/)
+  })
+})

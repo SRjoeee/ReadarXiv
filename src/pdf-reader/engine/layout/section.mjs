@@ -35,6 +35,8 @@ export function appendSection({ end, objects, kind, prev, size, trailer, runs = 
   let at = end + 1
   const offsets = []
   for (const [n, g, b] of objects) { offsets.push([n, g, at]); chunks.push(b); at += b.length }
+  // (a stream section's offsets are 4 bytes wide: past them it would wrap)
+  if (kind === 'stream' && at >= 2 ** 32) throw new RangeError('an offset past 4 GiB: a stream section\'s offsets are 4 bytes')
   offsets.sort((a, b) => a[0] - b[0])
   const tr = [`/Root ${trailer.root}`, trailer.info ? `/Info ${trailer.info}` : '', trailer.id ? `/ID ${trailer.id}` : '', `/Prev ${prev}`].filter(Boolean).join(' ')
   const xrefAt = at

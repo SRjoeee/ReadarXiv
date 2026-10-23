@@ -14,8 +14,8 @@ export const concat = (parts: Uint8Array[]) => { const out = new Uint8Array(part
 /** an object: its dict or value text, and a stream's data (its /Length written by `length`: the number, or a ref text) */
 export type Obj = { text: string } | { dict: string; data: Uint8Array; length?: string }
 /** a PDF of `objects` (number -> object), the catalog `root`; `kind` its cross-reference; `packed` the numbers written into
- *  one object stream (stream kind alone) */
-export function pdfOf(objects: Map<number, Obj>, { root, kind = 'table', packed = [] }: { root: number; kind?: 'table' | 'stream'; packed?: number[] }): Uint8Array {
+ *  one object stream (stream kind alone); `size` the trailer's /Size where it says another */
+export function pdfOf(objects: Map<number, Obj>, { root, kind = 'table', packed = [], size: trailerSize }: { root: number; kind?: 'table' | 'stream'; packed?: number[]; size?: number }): Uint8Array {
   const parts: Uint8Array[] = [enc('%PDF-1.5\n%\xe2\xe3\xcf\xd3\n')]
   let at = parts[0]!.length
   const rows = new Map<number, [number, number, number]>()
@@ -39,7 +39,7 @@ export function pdfOf(objects: Map<number, Obj>, { root, kind = 'table', packed 
   if (kind === 'table') {
     const lines = [`xref\n0 ${size}\n`, '0000000000 65535 f\r\n']
     for (let n = 1; n < size; n++) { const r = rows.get(n); lines.push(r ? `${String(r[1]).padStart(10, '0')} 00000 n\r\n` : '0000000000 00000 f\r\n') }
-    parts.push(enc(`${lines.join('')}trailer\n<< /Size ${size} /Root ${root} 0 R /ID [<0011aabb> <0011aabb>] >>\nstartxref\n${at}\n%%EOF\n`))
+    parts.push(enc(`${lines.join('')}trailer\n<< /Size ${trailerSize ?? size} /Root ${root} 0 R /ID [<0011aabb> <0011aabb>] >>\nstartxref\n${at}\n%%EOF\n`))
   } else {
     const xs = size++
     rows.set(xs, [1, at, 0])

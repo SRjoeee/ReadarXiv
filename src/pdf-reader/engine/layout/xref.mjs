@@ -154,11 +154,14 @@ export function openObjects(bytes, { PL, objectsMax, decodedMax }) {
         const save = at
         const t = token()
         if (t === 'trailer') { at = save; break }
-        const first = Number(t), count = Number(token())
+        let first = Number(t)
+        const count = Number(token())
         if (!/^\d{1,10}$/.test(t) || !Number.isSafeInteger(count) || count < 0 || count > objectsMax) throw new XrefRefusal('delta-xref', `a cross-reference subsection at ${save} that does not read`)
         for (let i = 0; i < count; i++) {
           const off = token(), gen = token(), type = token()
           if (!/^\d{1,10}$/.test(off) || !/^\d{1,5}$/.test(gen) || (type !== 'n' && type !== 'f')) throw new XrefRefusal('delta-xref', `a cross-reference entry in the table at ${o} that does not read`)
+          // (PDF.js's own reading: a subsection from 1 whose first entry is free is read from 0)
+          if (i === 0 && type === 'f' && first === 1) first = 0
           set(first + i, type === 'n' ? { t: 1, off: Number(off), g: Number(gen) } : { t: 0 })
         }
       }
@@ -188,6 +191,8 @@ export function openObjects(bytes, { PL, objectsMax, decodedMax }) {
           const at = r * rw
           if (at + rw > data.length) throw new XrefRefusal('delta-xref', `a cross-reference stream at ${o} shorter than its /Index`)
           const t = field(at, w[0], 1), f2 = field(at + w[0], w[1], 0), f3 = field(at + w[0] + w[1], w[2], 0)
+          // (an entry type PDF.js does not know makes it read the whole file again, by its own scan: refused)
+          if (t > 2) throw new XrefRefusal('delta-xref', `a cross-reference entry of type ${t}`)
           set(idx[j] + i, t === 1 ? { t: 1, off: f2, g: f3 } : t === 2 ? { t: 2, stm: f2, i: f3, g: 0 } : { t: 0 })
         }
       }
@@ -195,6 +200,8 @@ export function openObjects(bytes, { PL, objectsMax, decodedMax }) {
     }
   }
   if (trailer.root === undefined) throw new XrefRefusal('delta-xref', 'no /Root')
+  // (PDF.js reads the whole file again where object 0 is in use)
+  if (entries.has(0) && entries.get(0).t !== 0) throw new XrefRefusal('delta-xref', 'object 0 in use')
 
   // ---- the objects, parsed once each where their entries say
   const memo = new Map(), dataOf = new Map(), stms = new Map(), busy = new Set()

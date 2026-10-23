@@ -27,17 +27,25 @@
 // An original module (no port statement). It imports the object layer's reading (xref.mjs), the section writer, the delta's
 // wire and the memory-class test; @cantoo/pdf-lib (MIT) and PDF.js are given.
 import { isMemoryError } from '../pipeline/memory.mjs'
-import { DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_OBJECTS_MAX, deltaSection, pagesOf, rangesOf } from './delta-wire.mjs'
+import { DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_OBJECTS_MAX, DELTA_TAIL_ROOM, deltaSection, pagesOf, rangesOf } from './delta-wire.mjs'
 import { appendSection } from './section.mjs'
-import { startxrefOf } from './tail.mjs'
+import { OBJECT_MAX, startxrefOf } from './tail.mjs'
 import { openObjects, XrefRefusal } from './xref.mjs'
 
 /** the canonical forms' text the builder holds at most (each distinct form once), and the bytes its object and cross-reference
  *  streams decode to at most, per document (as the remover's HELD_MAX and BYTES_MAX bound its walk) */
 export const DELTA_HELD_MAX = 64 * 2 ** 20, DELTA_DECODED_MAX = 48 * 2 ** 20
+/** the builder's work at most, in bytes hashed or compared and objects read (each counted as 16): past it the delta is refused
+ *  (`delta-bound`), so that no input makes the build run long (the 46 MB pair spends about 150 million) */
+export const DELTA_WORK_MAX = 2 ** 31
+/** a work budget: spend(n) past `max` refuses */
+const budget = max => { let spent = 0; return { spend: n => { spent += n; if (spent > max) throw new XrefRefusal('delta-bound', `more than ${max} of work`) }, spent: () => spent } }
 /** a reference chain deeper than this is not followed for the canonical form: the object stays unmatched */
 const DEPTH_MAX = 256
-/** the keys cut from the canonical form: back links (reference cycles) */
+/** a copied closure deeper than this is refused (`delta-bound`) before the stack is */
+const COPY_DEPTH_MAX = 1024
+/** the keys cut from the canonical form where their value is a reference: back links (reference cycles); a direct value under
+ *  one of them is data (an optional-content membership's /P policy), kept */
 const CUT = new Set(['/Parent', '/P', '/Prev', '/Next', '/First', '/Last'])
 /** the page tree's own objects: a resource closure never copies them (a back link into the tree is written null) */
 const TREE = new Set(['/Page', '/Pages', '/Catalog'])
@@ -46,8 +54,17 @@ const hexOf = b => { let s = ''; for (let i = 0; i < b.length; i++) s += HEX[b[i
 const enc = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 255; return b }
 const concat = parts => { let n = 0; for (const p of parts) n += p.length; const out = new Uint8Array(n); let o = 0; for (const p of parts) { out.set(p, o); o += p.length } return out }
 const equalBytes = (a, b) => { if (a.length !== b.length) return false; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true }
-/** FNV-1a of the bytes: a bucket's key alone, equality is the bytes' */
-const fnv = b => { let h = 0x811c9dc5; for (let i = 0; i < b.length; i++) { h ^= b[i]; h = Math.imul(h, 0x01000193) } return h >>> 0 }
+/** two lanes of a multiplicative hash of the bytes from secret random seeds (a bucket's key alone: equality is the bytes'): an
+ *  input cannot be made of streams that share one key, as it could against a fixed FNV (4,096 colliding streams, 47 s) */
+function keyedHash() {
+  const seed = new Uint32Array(2)
+  globalThis.crypto.getRandomValues(seed)
+  return b => {
+    let h1 = seed[0] ^ 0x811c9dc5, h2 = seed[1] ^ 0x9e3779b9
+    for (let i = 0; i < b.length; i++) { h1 = Math.imul(h1 ^ b[i], 0x01000193); h2 = Math.imul(h2 ^ b[i], 0x5bd1e995) ^ (h2 >>> 15) }
+    return `${h1 >>> 0}.${h2 >>> 0}`
+  }
+}
 
 async function sha256Of(bytes) {
   const d = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes))
@@ -55,9 +72,9 @@ async function sha256Of(bytes) {
 }
 
 /** the canonical forms, interned across the documents read: `of(doc)` gives a document's { ofRef, ser } */
-function canonical(PL, heldMax) {
+function canonical(PL, heldMax, work) {
   const { PDFRef, PDFDict, PDFArray, PDFRawStream, PDFName, PDFNumber, PDFString, PDFHexString, PDFBool, PDFNull } = PL
-  const texts = new Map(), buckets = new Map()
+  const texts = new Map(), buckets = new Map(), hash = keyedHash()
   let held = 0
   const intern = s => {
     let id = texts.get(s)
@@ -70,10 +87,11 @@ function canonical(PL, heldMax) {
     return id
   }
   const dataId = data => {
-    const key = `${data.length}:${fnv(data)}`
+    work.spend(data.length)
+    const key = `${data.length}:${hash(data)}`
     let list = buckets.get(key)
     if (!list) buckets.set(key, (list = []))
-    for (const [d, id] of list) if (equalBytes(d, data)) return id
+    for (const [d, id] of list) { work.spend(data.length); if (equalBytes(d, data)) return id }
     const id = intern(`D${key}#${list.length}`)
     list.push([data, id])
     return id
@@ -96,13 +114,14 @@ function canonical(PL, heldMax) {
       return token
     }
     const serDict = (d, isStream, depth, drop = null) => {
-      const entries = d.entries().map(([k, v]) => [k.asString(), v]).filter(([k]) => !CUT.has(k) && !(isStream && k === '/Length') && !drop?.has(k)).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+      const entries = d.entries().map(([k, v]) => [k.asString(), v]).filter(([k, v]) => !(CUT.has(k) && v instanceof PDFRef) && !(isStream && k === '/Length') && !drop?.has(k)).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
       const parts = []
       for (const [k, v] of entries) { const s = ser(v, depth); if (s === null) return null; parts.push(`${k} ${s}`) }
       return `<<${parts.join(' ')}>>`
     }
     const token = text => (text === null ? null : `@${intern(text)}`)
     function ser(v, depth = 0, drop = null) {
+      work.spend(16)
       if (v instanceof PDFRef) return ofRef(v, depth)
       if (v instanceof PDFRawStream) { const d = serDict(v.dict, true, depth); return d === null ? null : token(`S${d}#${dataId(v.contents)}`) }
       if (v instanceof PDFDict) return token(serDict(v, false, depth, drop))
@@ -166,13 +185,13 @@ const refusalOf = e => {
  * (the next free number: the remover's first tail's) — or a refusal { refused, why } (DELTA_WHYS), for the host to keep the
  * whole base (`full`). Never throws but a failed allocation
  */
-export async function deltaOf(origBytes, finalBytes, { PL, replacedPages = null, heldMax = DELTA_HELD_MAX, decodedMax = DELTA_DECODED_MAX, objectsMax = DELTA_OBJECTS_MAX }) {
+export async function deltaOf(origBytes, finalBytes, { PL, replacedPages = null, heldMax = DELTA_HELD_MAX, decodedMax = DELTA_DECODED_MAX, objectsMax = DELTA_OBJECTS_MAX, workMax = DELTA_WORK_MAX }) {
   if (!(origBytes instanceof Uint8Array) || !(finalBytes instanceof Uint8Array)) throw new TypeError('origBytes, finalBytes: the two PDFs\' bytes')
   try {
     const { PDFRef, PDFDict, PDFRawStream, PDFName } = PL
     const O = openObjects(origBytes, { PL, objectsMax, decodedMax })
     const U = openObjects(finalBytes, { PL, objectsMax, decodedMax })
-    const C = canonical(PL, heldMax), OC = C.of(O), UC = C.of(U)
+    const C = canonical(PL, heldMax, budget(workMax)), OC = C.of(O), UC = C.of(U)
     const lit = litOf(PL)
     const oPages = O.pages(), uPages = U.pages()
     const N = oPages.length, M = uPages.length
@@ -204,7 +223,8 @@ export async function deltaOf(origBytes, finalBytes, { PL, replacedPages = null,
       return sameRef(or)
     }
     // (our object `r`, or the original's of its form: copied with its closure, each object once, under the next number)
-    const copyRef = (r, cat, top) => {
+    const copyRef = (r, cat, top, depth = 0) => {
+      if (depth > COPY_DEPTH_MAX) throw new XrefRefusal('delta-bound', `a resource closure deeper than ${COPY_DEPTH_MAX}`)
       const id = UC.ofRef(r)
       if (id !== null && index.has(id)) return reuse(index.get(id), cat, top)
       const key = `${r.objectNumber} ${r.generationNumber}`
@@ -216,7 +236,7 @@ export async function deltaOf(origBytes, finalBytes, { PL, replacedPages = null,
       const n = next++
       const s = `${n} 0 R`
       mapped.set(key, s)
-      const sub = x => copyRef(x, cat, false)
+      const sub = x => copyRef(x, cat, false, depth + 1)
       let bytes
       if (o instanceof PDFRawStream) {
         const entries = o.dict.entries().filter(([k]) => k.asString() !== '/Length').map(([k, x]) => ` ${k.toString()} ${lit(x, sub)}`).join('')
@@ -269,6 +289,7 @@ export async function deltaOf(origBytes, finalBytes, { PL, replacedPages = null,
     if (all.length > objectsMax) return refusal('delta-bound', `${all.length} objects, past ${objectsMax}`)
     const written = appendSection({ end: origBytes.length, objects: all, kind: O.kind, prev: O.startxref, size: next, trailer: { root: O.trailer.root, info: O.trailer.info, id: O.trailer.id } })
     const delta = written.bytes
+    if (written.size + DELTA_TAIL_ROOM > OBJECT_MAX + 1) return refusal('delta-bound', `its /Size ${written.size} leaves the remover's tails fewer than ${DELTA_TAIL_ROOM} object numbers`)
     if (delta.length > DELTA_MAX_BYTES) return refusal('delta-bound', `${delta.length} bytes, past ${DELTA_MAX_BYTES}`)
     if (delta.length > DELTA_MAX_SHARE * finalBytes.length) return refusal('delta-bound', `${delta.length} bytes, past ${DELTA_MAX_SHARE} of our base page's ${finalBytes.length}`)
     let included = 0
@@ -284,17 +305,21 @@ export async function deltaOf(origBytes, finalBytes, { PL, replacedPages = null,
  * Whether two values of two documents are one graph (the proof's second reading): a reference and the value it names alike,
  * streams by their dicts less /Length and their exact bytes, dicts by their keys (less the back links and `drop`), arrays by
  * their items, the rest by their text; a pair of references met again is taken as equal (so a cycle compares as the graphs it
- * makes, where the canonical form gives none)
+ * makes, where the canonical form gives none), each side by its reference or its direct value's identity
  */
 function sameGraph(PL) {
   const { PDFRef, PDFDict, PDFArray, PDFRawStream, PDFName, PDFNumber, PDFString, PDFHexString } = PL
   return (A, a0, B, b0, drop0 = null) => {
-    const met = new Set()
+    // (a pair met again is taken as equal: each side named by its reference, or by the identity of its direct value, so that two
+    // direct values met against one reference are each compared)
+    const met = new Set(), ids = new WeakMap()
+    let nextId = 0
+    const idOf = v => (v instanceof PDFRef ? `R${v.objectNumber} ${v.generationNumber}` : v !== null && typeof v === 'object' ? `o${ids.get(v) ?? (ids.set(v, ++nextId), nextId)}` : `v${String(v)}`)
     const leaf = v => (v instanceof PDFName ? v.asString() : v instanceof PDFNumber ? `n${v.asNumber()}` : v instanceof PDFString || v instanceof PDFHexString ? `x${hexOf(v.asBytes())}` : v === undefined ? 'null' : String(v))
     const eq = (a, b, drop = null, depth = 0) => {
       if (depth > 4 * DEPTH_MAX) return false
       if (a instanceof PDFRef || b instanceof PDFRef) {
-        const key = `${a instanceof PDFRef ? a.toString() : '-'}|${b instanceof PDFRef ? b.toString() : '-'}`
+        const key = `${idOf(a)}|${idOf(b)}`
         if (met.has(key)) return true
         met.add(key)
         return eq(a instanceof PDFRef ? A.lookup(a) : a, b instanceof PDFRef ? B.lookup(b) : b, drop, depth + 1)
@@ -302,7 +327,7 @@ function sameGraph(PL) {
       if (a instanceof PDFRawStream || b instanceof PDFRawStream) return a instanceof PDFRawStream && b instanceof PDFRawStream && equalBytes(a.contents, b.contents) && eq(a.dict, b.dict, new Set(['/Length']), depth + 1)
       if (a instanceof PDFDict || b instanceof PDFDict) {
         if (!(a instanceof PDFDict && b instanceof PDFDict)) return false
-        const entries = d => new Map(d.entries().map(([k, v]) => [k.asString(), v]).filter(([k]) => !CUT.has(k) && !drop?.has(k)))
+        const entries = d => new Map(d.entries().map(([k, v]) => [k.asString(), v]).filter(([k, v]) => !(CUT.has(k) && v instanceof PDFRef) && !drop?.has(k)))
         const ea = entries(a), eb = entries(b)
         return ea.size === eb.size && [...ea].every(([k, v]) => eb.has(k) && eq(v, eb.get(k), null, depth + 1))
       }
@@ -314,6 +339,8 @@ function sameGraph(PL) {
 }
 
 const near = (a, b) => Math.abs(a - b) <= 0.01
+/** PDF.js's messages of a cross-reference it does not read as written (it then indexes the whole file, or skips a section) */
+const RECOVERY = /Indexing all PDF objects|XRef|xref|startxref|trailer/
 /** the first difference between two pages' text items (PDF.js's getTextContent, strings alone), within 0.01 */
 function textDiffers(a, b) {
   if (a.length !== b.length) return `${a.length} text items, not ${b.length}`
@@ -335,11 +362,13 @@ function textDiffers(a, b) {
  * the object layer, canonically ours on replaced pages (the page dict's other keys the original's) and the original's elsewhere;
  * (a, d, e) PDF.js opens the composed bytes with no message that neither source alone gives (its console captured, each
  * document read in turn), the original's page count, every page's box and text (strings, places within 0.01) ours on replaced
- * pages and the original's elsewhere. { ok: true, pages, replaced, rows } or { ok: false, why }. Never throws but a failed
- * allocation
+ * pages and the original's elsewhere. What the delta overrides of the original is bounded: the replaced pages' objects exactly
+ * (no catalog, no other page), its /Size not below the original's. An original PDF.js recovers by its own scan (any message
+ * of its cross-reference on the original alone) is refused (`delta-xref`). { ok: true, pages, replaced } or { ok: false, code
+ * ('delta-proof' or 'delta-xref'), why }. Never throws but a failed allocation
  */
 export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDocument, documentOptions = {}, replaced, objectsMax = DELTA_OBJECTS_MAX, decodedMax = DELTA_DECODED_MAX, heldMax = DELTA_HELD_MAX }) {
-  const no = why => ({ ok: false, why: String(why).slice(0, 300) })
+  const no = (why, code = 'delta-proof') => ({ ok: false, code, why: String(why).slice(0, 300) })
   const composed = concat([origBytes, deltaBytes])
   const rep = new Set(pagesOf(replaced ?? []))
   let N, M
@@ -356,6 +385,18 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
     M = uP.length
     if (xP.length !== N) return no(`the composed document has ${xP.length} pages, arXiv's PDF ${N}`)
     if ([...rep].some(p => p > M)) return no('a replaced page past ours')
+    // (what the delta overrides of the original: the replaced pages' objects, exactly, and nothing else of the original's numbers
+    // — no catalog, no other page — and its /Size not below the original's)
+    if (sect.size < O.size) return no(`its /Size ${sect.size} is below the original's ${O.size}`)
+    const pageRefs = new Map(oP.map((o, i) => [o.ref.objectNumber, i + 1]))
+    const over = new Set()
+    for (const [n, g] of sect.rows) {
+      if (n >= O.size) continue
+      const p = pageRefs.get(n)
+      if (p === undefined || !rep.has(p) || oP[p - 1].ref.generationNumber !== g) return no(`it overrides the original's object ${n} ${g}, no replaced page's`)
+      over.add(p)
+    }
+    if (over.size !== rep.size) return no(`it writes ${over.size} of the ${rep.size} pages it says it replaces`)
     const drop = new Set(['/Contents', '/Resources'])
     const contents = (doc, page) => contentsOf(PL, doc, page.node)
     for (let p = 1; p <= N; p++) {
@@ -379,7 +420,7 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
     console.log = keep
     console.warn = keep
     console.error = keep
-    const task = getDocument({ ...documentOptions, data: bytes.slice(), verbosity: 1 })
+    const task = getDocument({ ...documentOptions, data: bytes, verbosity: 1 })
     try {
       const doc = await task.promise
       const pages = []
@@ -397,15 +438,20 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
       await task.destroy?.()
     }
   }
+  // (one copy of a source document at a time, for PDF.js to own; the composed bytes are the proof's own, read last)
   let orig, ours, comp
   try {
-    orig = await read(origBytes, 'orig')
-    ours = await read(finalBytes, 'ours')
+    orig = await read(origBytes.slice(), 'orig')
+    ours = await read(finalBytes.slice(), 'ours')
     comp = await read(composed, 'composed')
   } catch (e) {
     if (isMemoryError(e)) throw e
     return no(`PDF.js: ${String(e?.message ?? e)}`)
   }
+  // (an original PDF.js reads by its own scan of the file is no base: its unreplaced pages there may be other objects than the
+  // cross-reference's, and its own message would hide the composed document's)
+  const recovered = [...said.orig].find(m => RECOVERY.test(m))
+  if (recovered) return no(`PDF.js recovers the original's cross-reference alone: ${recovered}`, 'delta-xref')
   const novel = [...said.composed].filter(m => !said.orig.has(m) && !said.ours.has(m))
   if (novel.length) return no(`PDF.js says of the composed document alone: ${novel[0]}`)
   if (comp.length !== orig.length) return no(`PDF.js reads ${comp.length} pages of the composed document, ${orig.length} of arXiv's`)

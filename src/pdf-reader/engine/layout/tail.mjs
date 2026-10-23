@@ -60,7 +60,7 @@ export function tailLinks(tail) {
 }
 
 /** an object number at most (ISO 32000-1, annex C: 8,388,607) */
-const OBJECT_MAX = 8_388_607
+export const OBJECT_MAX = 8_388_607
 
 /**
  * The least, the second least and the greatest object number of `ranges` ([first, count] each), in one pass over the ranges
