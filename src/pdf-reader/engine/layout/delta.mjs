@@ -595,8 +595,6 @@ async function consoleHeld(fn) {
     return await fn()
   } finally { release() }
 }
-/** whether a reader's entry is a page's text record (layout/page-text.mjs textRecordOf's shape) */
-const isTextRecord = r => !!r && typeof r === 'object' && Array.isArray(r.view) && r.view.every(v => typeof v === 'number') && typeof r.rotate === 'number' && typeof r.userUnit === 'number' && Number.isInteger(r.count) && typeof r.items === 'string'
 /** PDF.js's messages of a cross-reference it does not read as written (it then indexes the whole file, or skips a section) */
 const RECOVERY = /Indexing all PDF objects|XRef|xref|startxref|trailer/
 
@@ -611,18 +609,23 @@ const RECOVERY = /Indexing all PDF objects|XRef|xref|startxref|trailer/
  * document read in turn), the original's page count, every page's box and text items (layout/page-text.mjs textRecordDiffers:
  * the box within 0.01, the items exactly) ours on replaced pages and the original's elsewhere. `readers` { orig?, ours? }: the
  * host's own readings of arXiv's PDF and of our final pass, each { options, own?, read(doc) } in place of the proof's own reading
- * of that document: in the same turn and under the same capture of the console, the proof opens the document itself, of its own
- * bytes (ours given up to PDF.js where `own`), at PDF.js's verbosity 1, with the reader's options over `documentOptions`, and
- * gives it to `read`, which reads every page's text record (arxiv.mjs readArxivText `pageTexts`) and keeps the document (the
- * host's, never destroyed here). A reader that throws, or leaves a page of its document unread, is a PDF.js failure as the proof's
- * own reading's is. What the delta overrides of the original is
+ * of that document: in the same turn and under the same capture of the console, the proof opens the document itself, of a copy of
+ * its own bytes (ours of the bytes themselves where `own`), at PDF.js's verbosity 1, with the reader's options over
+ * `documentOptions`, and gives it to `read`, which reads every page's text (readArxivText) while the proof makes each page's record
+ * of the text content its page gave the reader; every document it opened is the host's, handed back in the result (`documents` {
+ * orig, ours }, each null where not opened), whatever the verdict. A reader that throws, or leaves a page unread or read with other
+ * options, is a PDF.js failure as the proof's own reading's is. What the delta overrides of the original is
  * bounded: the replaced pages' objects exactly (no other page; the catalog only to carry our /OCProperties, every other key of it
  * the original's), its /Size not below the original's. An original PDF.js recovers by its own scan (any message of its
  * cross-reference on the original alone) is refused (`delta-xref`). { ok: true, pages, replaced } or { ok: false, code
- * ('delta-proof' or 'delta-xref'), why }. Never throws but a failed allocation
+ * ('delta-proof' or 'delta-xref'), why }, with `documents` where readers are given. Never throws but a failed allocation (the
+ * documents handed so far then destroyed)
  */
 export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDocument, documentOptions = {}, replaced, readers = null, objectsMax = DELTA_OBJECTS_MAX, decodedMax = DELTA_DECODED_MAX, heldMax = DELTA_HELD_MAX }) {
-  const no = (why, code = 'delta-proof') => ({ ok: false, code, why: String(why).slice(0, 300) })
+  /** the documents the readers read, handed to the host with the result whatever it is (`documents`), the host's to keep and destroy */
+  const handed = { orig: null, ours: null }
+  const withDocuments = r => (readers ? { ...r, documents: { ...handed } } : r)
+  const no = (why, code = 'delta-proof') => withDocuments({ ok: false, code, why: String(why).slice(0, 300) })
   // (the proof's own bytes, let go once PDF.js has read them: never held while a reader's document is open)
   let composed = concat([origBytes, deltaBytes])
   const rep = new Set(pagesOf(replaced ?? []))
@@ -717,9 +720,11 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
       console.error = err0
     }
   }
+  /** `task` destroyed; a destroy that throws is the failure only where nothing failed before it (`failed`), never in its place */
+  const destroyed = async (task, failed) => { try { await task?.destroy?.() } catch (d) { if (!failed) throw d } }
   /** a document's text records, each page's, read here */
   const read = (bytes, tag) => heard(tag, async () => {
-    let task = null
+    let task = null, failed = false
     try {
       task = getDocument({ ...documentOptions, data: bytes, verbosity: 1 })
       const doc = await task.promise
@@ -730,28 +735,46 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
         page.cleanup()
       }
       return pages
-    } finally { await task?.destroy?.() }
+    } catch (e) { failed = true; throw e } finally { await destroyed(task, failed) }
   })
-  /** a document opened here for the host's reader, with the reader's options (its own, for the document it keeps), and read by it:
-   *  its text records, each page's, the document the reader's from the moment it is given (never destroyed here). Every page of
-   *  it must be read, compared or not, as the proof's own reading reads every page */
+  /**
+   * A document opened here for the host's reader (the reader's options over the proof's, for the document the host keeps), and the
+   * host's from the moment it opens (`handed`, the result's `documents`, whatever the verdict: the host keeps it or destroys it), read
+   * by the reader: its text records made here, of each text content its pages give the reader (asked with the defaults, as the
+   * proof's own reading asks), before the reader sees it, so that what is compared is what this document gave. Every page must be
+   * read so, compared or not, as the proof's own reading reads every page; a reader that throws, or leaves a page unread or read
+   * otherwise, refuses the delta (its document still the host's). `own`: the bytes themselves given to PDF.js, no copy made — an
+   * opening that fails then leaves them given up too (PDF.js 6.3.289 detaches them at once), which the host reads by their length
+   */
   const given = (bytes, tag, reader) => heard(tag, async () => {
-    const task = getDocument({ ...documentOptions, ...(reader.options ?? {}), data: bytes, verbosity: 1 })
-    let doc
-    try { doc = await task.promise } catch (e) {
-      try { await task?.destroy?.() } catch {}
+    let task = null, doc
+    try {
+      task = getDocument({ ...documentOptions, ...(reader.options ?? {}), data: bytes, verbosity: 1 })
+      doc = await task.promise
+    } catch (e) {
+      await destroyed(task, true)
       throw e
     }
-    const pages = await reader.read(doc)
-    if (!Array.isArray(pages)) throw new TypeError(`the ${tag} reader gave no pages`)
-    const n = doc.numPages
-    if (pages.length !== n) throw new TypeError(`the ${tag} reader gave ${pages.length} pages of ${n}`)
-    const unread = pages.findIndex(r => !isTextRecord(r))
+    handed[tag] = doc
+    const n = doc.numPages, records = new Array(n).fill(null), otherwise = new Set()
+    let reading = true
+    const own = (t, k) => { const v = Reflect.get(t, k); return typeof v === 'function' ? v.bind(t) : v }
+    const pageOf = (page, p) => new Proxy(page, {
+      get: (t, k) => (k !== 'getTextContent' ? own(t, k) : async (...a) => {
+        const content = await t.getTextContent(...a)
+        if (reading && Number.isInteger(p) && p >= 1 && p <= n) { if (a.length) otherwise.add(p); else records[p - 1] = await textRecordOf(t, content) }
+        return content
+      }),
+    })
+    try { await reader.read(new Proxy(doc, { get: (t, k) => (k !== 'getPage' ? own(t, k) : async p => pageOf(await t.getPage(p), p)) })) } finally { reading = false }
+    const other = [...otherwise].sort((a, b) => a - b)[0]
+    if (other !== undefined) throw new TypeError(`page ${other} of the ${tag} document was read with other options than the proof's`)
+    const unread = records.indexOf(null)
     if (unread >= 0) throw new TypeError(`page ${unread + 1} of the ${tag} document was not read`)
-    return pages
+    return records
   })
   const reads = r => !!r && typeof r === 'object' && typeof r.read === 'function'
-  // (one copy of a source document at a time, for PDF.js to own, but ours where its reader owns it (`own`); the composed bytes are
+  // (one copy of a source document at a time, for PDF.js to own, but ours itself where its reader says `own`; the composed bytes are
   // the proof's own, read whole first, and let go)
   let orig, ours, comp
   try {
@@ -765,7 +788,11 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
       ]
     })
   } catch (e) {
-    if (isMemoryError(e)) throw e
+    if (isMemoryError(e)) {
+      // (no result reaches the host: what it was handed is let go here)
+      for (const d of Object.values(handed)) await d?.loadingTask?.destroy?.().catch?.(() => {})
+      throw e
+    }
     return no(`PDF.js: ${String(e?.message ?? e)}`)
   }
   // (an original PDF.js reads by its own scan of the file is no base: its unreplaced pages there may be other objects than the
@@ -782,5 +809,5 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
     if (d === 'its box differs') return no(`page ${p}'s box is not ${whose}`)
     if (d !== null) return no(`page ${p}'s text is not ${whose}: ${d}`)
   }
-  return { ok: true, pages: [M, N], replaced: rep.size }
+  return withDocuments({ ok: true, pages: [M, N], replaced: rep.size })
 }

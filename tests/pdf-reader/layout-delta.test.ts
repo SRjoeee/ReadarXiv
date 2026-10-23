@@ -5,8 +5,8 @@ import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { encodeAsk, readEntries } from '@/pdf-reader/engine/layout/chain-wire.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
+import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
 import { deltaOf, proveDelta } from '@/pdf-reader/engine/layout/delta.mjs'
-import type { TextRecord } from '@/pdf-reader/engine/layout/page-text.mjs'
 import { deltaSection, pagesOf, rangesOf, replacedWhy } from '@/pdf-reader/engine/layout/delta-wire.mjs'
 import { alignOf, removerOf } from '@/pdf-reader/engine/layout/remove.mjs'
 import { startxrefOf, tailLinks } from '@/pdf-reader/engine/layout/tail.mjs'
@@ -436,29 +436,37 @@ describe('an unreplaced page is the original\'s in the proof (CodeRabbit on #439
   })
 })
 
-// ---- the proof's readers (PDF-READER §19.8, the box-time change of 2026-10-24): the host's own readings of arXiv's PDF and of our
-// base page (readArxivText's `pageTexts`, documents the host keeps) stand in for the proof's, inside the proof's capture of the
-// console, so that the box reads each document's text once; the comparison is of exact text items, with readers or without
+// ---- the proof's readers (PDF-READER §19.8, the box-time change of 2026-10-24, its two reviews): the proof opens arXiv's PDF and
+// ours itself, of copies of its own bytes, at verbosity 1, inside its capture of the console, and hands each to the host's reader,
+// which reads it (readArxivText); the proof makes each page's record of the text content the page gave the reader, and hands the
+// documents back in its result. The comparison is of exact text items, with readers or without
 /** the next float64 above x (one unit in the last place) */
 const ulpUp = (x: number) => { const f = new Float64Array([x]), u = new BigInt64Array(f.buffer); u[0]! += x >= 0 ? 1n : -1n; return f[0]! }
-type Doc = { numPages: number; getPage(n: number): Promise<{ getTextContent(): Promise<{ items: { transform?: number[] }[] }> }> }
-/** PDF.js's getDocument, but for the document of `length` bytes: each page's first text item one ulp right, and `say` logged as
- *  its pages are read (a message of PDF.js's own on that document) */
-function oddOne(length: number, { ulp = true, say = null }: { ulp?: boolean; say?: string | null } = {}) {
+type Doc = { numPages: number; getPage(n: number): Promise<{ getTextContent(o?: unknown): Promise<{ items: { str?: string; transform?: number[] }[] }> }> }
+type Task = { promise: Promise<Doc>; destroy(): Promise<void>; destroyed?: boolean }
+/** PDF.js's getDocument, but for the openings `which` picks: each page's first text item one ulp right (`ulp`), `say` logged as its
+ *  pages are read (a message of PDF.js's own on that document), its task's destroy throwing (`destroyThrows`), its getPage throwing
+ *  a failed allocation (`memory`), its opening failing (`fail`) */
+function oddOne(which: (o: Record<string, unknown>) => boolean, { ulp = true, say = null, destroyThrows = false, memory = false, fail = false }: { ulp?: boolean; say?: string | null; destroyThrows?: boolean; memory?: boolean; fail?: boolean } = {}) {
   return ((o: Record<string, unknown>) => {
-    const task = getDocument(o as never)
-    if ((o.data as Uint8Array).length !== length) return task
-    const promise = (task.promise as unknown as Promise<Doc>).then(doc => new Proxy(doc, {
+    if (!which(o)) return getDocument(o as never)
+    if (fail) {
+      const t = getDocument({ ...o, data: enc('not a PDF') } as never) as unknown as Task
+      return { promise: t.promise, destroy: async () => { await t.destroy(); if (destroyThrows) throw new Error('destroy threw') } }
+    }
+    const task = getDocument(o as never) as unknown as Task
+    const promise = task.promise.then(doc => new Proxy(doc, {
       get(d, k) {
-        if (k !== 'getPage') return Reflect.get(d, k)
+        if (k !== 'getPage') { const v = Reflect.get(d, k); return typeof v === 'function' ? v.bind(d) : v }
         return async (n: number) => {
+          if (memory) throw new RangeError(ALLOCATION_FAILED)
           const pg = await d.getPage(n)
           return new Proxy(pg, {
             get(p, j) {
               if (j !== 'getTextContent') { const v = Reflect.get(p, j); return typeof v === 'function' ? v.bind(p) : v }
-              return async () => {
+              return async (...a: unknown[]) => {
                 if (say) console.log(say)
-                const tc = await p.getTextContent()
+                const tc = await p.getTextContent(...(a as []))
                 const first = tc.items.find(i => Array.isArray(i.transform))
                 if (ulp && first) first.transform = first.transform!.map((v, i) => (i === 4 ? ulpUp(v) : v))
                 return tc
@@ -468,145 +476,185 @@ function oddOne(length: number, { ulp = true, say = null }: { ulp?: boolean; say
         }
       },
     }))
-    return { promise, destroy: () => task.destroy() }
+    return { promise, destroy: async () => { await task.destroy(); if (destroyThrows) throw new Error('destroy threw') } }
   }) as never
 }
-/** the host's readers (proveDelta `readers`): each reads the document the proof opened and gives it, with readArxivText, and keeps
- *  it (`docs`, for the caller to destroy); `say` logged by the named one as it reads, `pages` a change of ours' records, `fail` the
- *  one that throws */
-function readersOf(o: { say?: [('orig' | 'ours'), string]; pages?: (p: (TextRecord | null)[]) => (TextRecord | null)[]; origPages?: (p: (TextRecord | null)[]) => (TextRecord | null)[]; fail?: 'orig' | 'ours'; own?: boolean } = {}) {
-  const docs: { numPages: number; loadingTask: { destroy(): Promise<void> } }[] = [], calls: string[] = []
-  const reader = (name: 'orig' | 'ours') => ({
+const isComposed = (orig: Uint8Array, delta: Uint8Array) => (o: Record<string, unknown>) => (o.data as Uint8Array).length === orig.length + delta.length
+/** the reader's openings: the proof's of a source with the reader's options (the font properties the draw asks) */
+const isReaders = (length: number) => (o: Record<string, unknown>) => (o.data as Uint8Array).length === length && o.fontExtraProperties === true
+type Reading = 'orig' | 'ours'
+/** the host's readers (proveDelta `readers`): each reads the document the proof gives it with readArxivText, as the box does; `say`
+ *  logged by the named one as it reads, `fail` the one that throws (`memory`: a failed allocation), `skip` a page it does not read,
+ *  `other` a page it reads with other options, `elsewhere` the one that reads another document of the same bytes instead, `touch` the
+ *  one that changes the text content it is given after the proof's record */
+function readersOf(o: { say?: [Reading, string]; fail?: Reading; memory?: Reading; skip?: [Reading, number]; other?: [Reading, number]; elsewhere?: [Reading, Uint8Array]; touch?: Reading; own?: boolean } = {}) {
+  const calls: Reading[] = [], seen: Record<string, { loadingTask: Task }> = {}
+  const reader = (name: Reading) => ({
     options: { useSystemFonts: false, fontExtraProperties: true },
     read: async (doc: unknown) => {
       calls.push(name)
-      docs.push(doc as never)
+      seen[name] = doc as never
+      if (o.memory === name) throw new RangeError(ALLOCATION_FAILED)
       if (o.fail === name) throw new Error(`the ${name} reader failed`)
-      const text = await readArxivText(doc as never, { draw: true, pageTexts: true })
+      const d = doc as Doc
+      if (o.elsewhere?.[0] === name) {
+        const t = getDocument({ data: o.elsewhere[1].slice(), verbosity: 0 })
+        await readArxivText(await t.promise as never)
+        await t.destroy()
+      } else if (o.skip?.[0] === name || o.other?.[0] === name || o.touch === name) {
+        for (let p = 1; p <= d.numPages; p++) {
+          if (o.skip?.[0] === name && o.skip[1] === p) continue
+          const pg = await d.getPage(p)
+          const tc = await (o.other?.[0] === name && o.other[1] === p ? pg.getTextContent({ includeMarkedContent: true }) : pg.getTextContent())
+          if (o.touch === name) for (const it of tc.items) if (Array.isArray(it.transform)) it.transform = it.transform.map(v => v + 1)
+        }
+      } else await readArxivText(doc as never, { draw: true })
       if (o.say?.[0] === name) console.log(o.say[1])
-      const pages = text.pageTexts!
-      return name === 'ours' && o.pages ? o.pages(pages) : name === 'orig' && o.origPages ? o.origPages(pages) : pages
     },
   })
-  return { readers: { orig: reader('orig'), ours: { ...reader('ours'), ...(o.own ? { own: true } : {}) } }, docs, calls, close: () => Promise.all(docs.map(d => d.loadingTask.destroy())) }
+  return { readers: { orig: reader('orig'), ours: { ...reader('ours'), ...(o.own ? { own: true } : {}) } }, calls, seen }
 }
-const proveWith = (orig: Uint8Array, delta: Uint8Array, final: Uint8Array, replaced: [number, number][], o: { getDocument?: never; readers?: unknown } = {}) =>
+type Proved = Awaited<ReturnType<typeof proveDelta>>
+/** the documents a proof handed back, destroyed */
+const closeOf = async (r: Proved) => { for (const d of Object.values(r.documents ?? {})) await (d as { loadingTask?: Task } | null)?.loadingTask?.destroy() }
+const proveWith = async (orig: Uint8Array, delta: Uint8Array, final: Uint8Array, replaced: [number, number][], o: { getDocument?: never; readers?: unknown } = {}) =>
   proveDelta(orig, delta, final, { PL, getDocument: o.getDocument ?? (getDocument as never), documentOptions: { useSystemFonts: false }, replaced, ...(o.readers ? { readers: o.readers as never } : {}) })
 
-describe('the proof\'s readers: one reading of each document, the same verdicts', () => {
-  it('passes as its own reading passes, each reader called once, arXiv\'s first, inside the proof; the documents left open', async () => {
+describe('the proof\'s readers: each document read once, by the host, the same verdicts', () => {
+  it('passes as its own reading passes, each reader called once, arXiv\'s first; both documents handed back, open', async () => {
     for (const orig of [ORIG_TABLE, ORIG_STREAM]) {
       const r = await built(orig)
       const h = readersOf()
+      const got = await proveWith(orig, r.delta, OURS, r.replaced, { readers: h.readers })
       try {
-        expect(await proveWith(orig, r.delta, OURS, r.replaced, { readers: h.readers })).toEqual({ ok: true, pages: [3, 3], replaced: 3 })
+        expect(got).toMatchObject({ ok: true, pages: [3, 3], replaced: 3 })
         expect(h.calls).toEqual(['orig', 'ours'])
-        expect(h.docs.map(d => d.numPages)).toEqual([3, 3])
-      } finally { await h.close() }
+        const docs = got.documents as { orig: Doc; ours: Doc }
+        expect([docs.orig.numPages, docs.ours.numPages]).toEqual([3, 3])
+        expect(((await (await docs.ours.getPage(1)).getTextContent()).items.map(i => i.str ?? '')).join('')).toBe('Our page one')
+      } finally { await closeOf(got) }
+      // (without readers the result names no documents)
+      expect(await proveWith(orig, r.delta, OURS, r.replaced)).not.toHaveProperty('documents')
     }
+  })
+
+  it('opens each source of a copy of its own bytes, with the reader\'s options at verbosity 1, the reader inside the proof\'s capture', async () => {
+    const r = await built(ORIG_TABLE)
+    const asked: [number, unknown, unknown][] = []
+    const spy = ((o: Record<string, unknown>) => { asked.push([(o.data as Uint8Array).length, o.verbosity, o.fontExtraProperties]); return getDocument(o as never) }) as never
+    const h = readersOf()
+    const logs: boolean[] = []
+    const original = console.log
+    const read = h.readers.orig.read
+    h.readers.orig.read = async (doc: unknown) => { logs.push(console.log === original); return read(doc) }
+    const final = OURS.slice()
+    const got = await proveWith(ORIG_TABLE, r.delta, final, r.replaced, { getDocument: spy, readers: h.readers })
+    try {
+      expect(got).toMatchObject({ ok: true })
+      expect(asked).toEqual([[ORIG_TABLE.length + r.delta.length, 1, undefined], [ORIG_TABLE.length, 1, true], [OURS.length, 1, true]])
+      expect(logs).toEqual([false])
+      // (a copy given to PDF.js: the host's bytes its own after the proof)
+      expect(final.length).toBe(OURS.length)
+    } finally { await closeOf(got) }
   })
 
   it('one composed text item one ulp off is another page: delta-proof, with the readers and without them', async () => {
     const r = await built(ORIG_TABLE)
-    const odd = oddOne(ORIG_TABLE.length + r.delta.length)
+    const odd = oddOne(isComposed(ORIG_TABLE, r.delta))
     expect(await proveWith(ORIG_TABLE, r.delta, OURS, r.replaced, { getDocument: odd })).toMatchObject({ ok: false, code: 'delta-proof', why: /page 1's text is not ours: its text items differ/ })
-    const h = readersOf()
+    const got = await proveWith(ORIG_TABLE, r.delta, OURS, r.replaced, { getDocument: odd, readers: readersOf().readers })
+    try { expect(got).toMatchObject({ ok: false, code: 'delta-proof', why: /page 1's text is not ours: its text items differ/ }) } finally { await closeOf(got) }
+    // (and the original's own page one ulp off, on a page the delta does not replace: not the original's)
+    const r2 = await built(ORIG_TABLE, OURS, { replacedPages: [1, 3] })
+    const origOdd = oddOne(isReaders(ORIG_TABLE.length))
+    const got2 = await proveWith(ORIG_TABLE, r2.delta, OURS, r2.replaced, { getDocument: origOdd, readers: readersOf().readers })
+    try { expect(got2).toMatchObject({ ok: false, code: 'delta-proof', why: /page 2's text is not the original's: its text items differ/ }) } finally { await closeOf(got2) }
+  })
+
+  it('the record is of what the page gave, taken before the reader sees it: a reader that changes its text content changes nothing', async () => {
+    const r = await built(ORIG_TABLE)
+    const got = await proveWith(ORIG_TABLE, r.delta, OURS, r.replaced, { readers: readersOf({ touch: 'ours' }).readers })
+    try { expect(got).toMatchObject({ ok: true }) } finally { await closeOf(got) }
+  })
+
+  it('a reader that reads another document of the same bytes, skips a page, reads one with other options or throws: refused, its document still handed back, open', async () => {
+    const r = await built(ORIG_TABLE)
+    for (const [o, why, which] of [
+      [{ elsewhere: ['orig', ORIG_TABLE] }, /page 1 of the orig document was not read/, 'orig'],
+      [{ skip: ['ours', 2] }, /page 2 of the ours document was not read/, 'ours'],
+      [{ other: ['ours', 1] }, /page 1 of the ours document was read with other options than the proof's/, 'ours'],
+      [{ fail: 'orig' }, /the orig reader failed/, 'orig'],
+    ] as const) {
+      const h = readersOf(o as never)
+      const got = await proveWith(ORIG_TABLE, r.delta, OURS, r.replaced, { readers: h.readers })
+      try {
+        expect(got, String(why)).toMatchObject({ ok: false, code: 'delta-proof', why })
+        const doc = (got.documents as Record<string, Doc | null>)[which]!
+        expect(doc.numPages, String(why)).toBe(3)
+        expect(h.seen[which]!.loadingTask.destroyed, String(why)).toBe(false)
+      } finally { await closeOf(got) }
+    }
+  })
+
+  it('an opening that fails is destroyed, a destroy that throws never in place of its failure; `own` gives our bytes up, and an opening that fails then leaves them given up', async () => {
+    const r = await built(ORIG_TABLE)
+    const loud = oddOne(isReaders(ORIG_TABLE.length), { fail: true, destroyThrows: true })
+    const got = await proveWith(ORIG_TABLE, r.delta, OURS, r.replaced, { getDocument: loud, readers: readersOf().readers })
+    expect(got).toMatchObject({ ok: false, code: 'delta-proof', why: /PDF\.js: / })
+    expect(got.ok === false && got.why).not.toMatch(/destroy threw/)
+    expect(got.documents).toEqual({ orig: null, ours: null })
+    // (a copy, without `own`: a failed opening leaves the host's bytes its own)
+    const kept = OURS.slice()
+    const g2 = await proveWith(ORIG_TABLE, r.delta, kept, r.replaced, { getDocument: oddOne(isReaders(OURS.length), { fail: true }), readers: readersOf().readers })
     try {
-      expect(await proveWith(ORIG_TABLE, r.delta, OURS, r.replaced, { getDocument: odd, readers: h.readers })).toMatchObject({ ok: false, code: 'delta-proof', why: /page 1's text is not ours: its text items differ/ })
-    } finally { await h.close() }
-    // (and our page's own reading one ulp off, the composed document's exact: the same refusal)
-    const k = readersOf({ pages: p => p.map((x, i) => (i === 0 && x ? { ...x, items: `${x.items.slice(0, 63)}${x.items.at(-1) === '0' ? '1' : '0'}` } : x)) })
+      expect(g2).toMatchObject({ ok: false, code: 'delta-proof', why: /PDF\.js: / })
+      expect((g2.documents as { ours: unknown }).ours).toBeNull()
+      expect(kept.length).toBe(OURS.length)
+    } finally { await closeOf(g2) }
+    // (with `own`: the bytes themselves given to PDF.js — gone once it has them, whether the opening holds or fails)
+    const given = OURS.slice()
+    const g3 = await proveWith(ORIG_TABLE, r.delta, given, r.replaced, { readers: readersOf({ own: true }).readers })
     try {
-      expect(await proveWith(ORIG_TABLE, r.delta, OURS, r.replaced, { readers: k.readers })).toMatchObject({ ok: false, code: 'delta-proof', why: /page 1's text is not ours/ })
-    } finally { await k.close() }
+      expect(g3).toMatchObject({ ok: true })
+      expect(given.length).toBe(0)
+      expect((g3.documents as { ours: Doc }).ours.numPages).toBe(3)
+    } finally { await closeOf(g3) }
+    // (an opening of the bytes themselves that PDF.js takes and then fails: our bytes gone, no document — the host reads it by their
+    // length, and does not open them again)
+    const lost = OURS.slice()
+    const takesThenFails = ((o: Record<string, unknown>) => {
+      const t = getDocument(o as never) as unknown as Task
+      return o.data === lost ? { promise: t.promise.then(() => { throw new Error('the opening failed') }), destroy: () => t.destroy() } : t
+    }) as never
+    const g4 = await proveWith(ORIG_TABLE, r.delta, lost, r.replaced, { getDocument: takesThenFails, readers: readersOf({ own: true }).readers })
+    try {
+      expect(g4).toMatchObject({ ok: false, code: 'delta-proof', why: /PDF\.js: the opening failed/ })
+      expect((g4.documents as { ours: unknown }).ours).toBeNull()
+      expect(lost.length).toBe(0)
+    } finally { await closeOf(g4) }
+  })
+
+  it('a failed allocation goes on as itself: from a reader (the documents handed so far destroyed), and from the proof\'s own reading under a destroy that throws', async () => {
+    const r = await built(ORIG_TABLE)
+    const h = readersOf({ memory: 'ours' })
+    await expect(proveWith(ORIG_TABLE, r.delta, OURS, r.replaced, { readers: h.readers })).rejects.toThrow(ALLOCATION_FAILED)
+    expect(h.seen.orig!.loadingTask.destroyed).toBe(true)
+    expect(h.seen.ours!.loadingTask.destroyed).toBe(true)
+    const own = oddOne(isComposed(ORIG_TABLE, r.delta), { memory: true, destroyThrows: true })
+    await expect(proveWith(ORIG_TABLE, r.delta, OURS, r.replaced, { getDocument: own })).rejects.toThrow(ALLOCATION_FAILED)
   })
 
   it('a message a reader\'s document gives is that document\'s: arXiv\'s recovered alone is delta-xref; one only the composed document gives fails', async () => {
     const r = await built(ORIG_TABLE)
     const before = [console.log, console.warn, console.error]
-    const h = readersOf({ say: ['orig', 'Warning: Indexing all PDF objects'] })
-    try {
-      expect(await proveWith(ORIG_TABLE, r.delta, OURS, r.replaced, { readers: h.readers })).toMatchObject({ ok: false, code: 'delta-xref' })
-    } finally { await h.close() }
-    const loud = oddOne(ORIG_TABLE.length + r.delta.length, { ulp: false, say: 'Warning: a message of the composed document' })
-    const quiet = readersOf()
-    try {
-      expect(await proveWith(ORIG_TABLE, r.delta, OURS, r.replaced, { getDocument: loud, readers: quiet.readers })).toMatchObject({ ok: false, code: 'delta-proof', why: /says of the composed document alone: Warning: a message of the composed document/ })
-    } finally { await quiet.close() }
+    const g1 = await proveWith(ORIG_TABLE, r.delta, OURS, r.replaced, { readers: readersOf({ say: ['orig', 'Warning: Indexing all PDF objects'] }).readers })
+    try { expect(g1).toMatchObject({ ok: false, code: 'delta-xref' }) } finally { await closeOf(g1) }
+    const loud = oddOne(isComposed(ORIG_TABLE, r.delta), { ulp: false, say: 'Warning: a message of the composed document' })
+    const g2 = await proveWith(ORIG_TABLE, r.delta, OURS, r.replaced, { getDocument: loud, readers: readersOf().readers })
+    try { expect(g2).toMatchObject({ ok: false, code: 'delta-proof', why: /says of the composed document alone: Warning: a message of the composed document/ }) } finally { await closeOf(g2) }
     // (the same message from our page's own reading: no message of the composed document's alone)
-    const said = readersOf({ say: ['ours', 'Warning: a message of the composed document'] })
-    try {
-      expect(await proveWith(ORIG_TABLE, r.delta, OURS, r.replaced, { getDocument: loud, readers: said.readers })).toMatchObject({ ok: true })
-    } finally { await said.close() }
+    const g3 = await proveWith(ORIG_TABLE, r.delta, OURS, r.replaced, { getDocument: loud, readers: readersOf({ say: ['ours', 'Warning: a message of the composed document'] }).readers })
+    try { expect(g3).toMatchObject({ ok: true }) } finally { await closeOf(g3) }
     expect([console.log, console.warn, console.error]).toEqual(before)
-  })
-
-  it('a reader that fails, a page it did not read, or another page count: refused, the console the original', async () => {
-    const r = await built(ORIG_TABLE)
-    const before = [console.log, console.warn, console.error]
-    for (const [o, why] of [[{ fail: 'orig' }, /the orig reader failed/], [{ fail: 'ours' }, /the ours reader failed/], [{ pages: (p: (TextRecord | null)[]) => [p[0]!, null, p[2]!] }, /page 2 of the ours document was not read/], [{ pages: (p: (TextRecord | null)[]) => p.slice(0, 2) }, /the ours reader gave 2 pages of 3/]] as const) {
-      const h = readersOf(o as never)
-      try {
-        expect(await proveWith(ORIG_TABLE, r.delta, OURS, r.replaced, { readers: h.readers }), String(why)).toMatchObject({ ok: false, code: 'delta-proof', why })
-      } finally { await h.close() }
-      expect([console.log, console.warn, console.error]).toEqual(before)
-    }
-  })
-})
-
-describe('the proof\'s readers: the proof opens each document, of its own bytes, at verbosity 1, inside its capture (the review of 71f73e18)', () => {
-  it('gives the reader a document of its own bytes, opened with the reader\'s options at verbosity 1, while the console is the proof\'s', async () => {
-    const r = await built(ORIG_TABLE)
-    const asked: { bytes: number; verbosity: unknown; fontExtraProperties: unknown }[] = []
-    const spy = ((o: Record<string, unknown>) => { asked.push({ bytes: (o.data as Uint8Array).length, verbosity: o.verbosity, fontExtraProperties: o.fontExtraProperties }); return getDocument(o as never) }) as never
-    const h = readersOf()
-    const logs: unknown[] = []
-    const original = console.log
-    const read = h.readers.orig.read
-    h.readers.orig.read = async (doc: unknown) => { logs.push(console.log === original); return read(doc) }
-    try {
-      expect(await proveWith(ORIG_TABLE, r.delta, OURS, r.replaced, { getDocument: spy, readers: h.readers })).toMatchObject({ ok: true })
-      // (the composed document first, the proof's own options; then arXiv's PDF and ours, each of its own bytes, with the reader's)
-      expect(asked).toEqual([
-        { bytes: ORIG_TABLE.length + r.delta.length, verbosity: 1, fontExtraProperties: undefined },
-        { bytes: ORIG_TABLE.length, verbosity: 1, fontExtraProperties: true },
-        { bytes: OURS.length, verbosity: 1, fontExtraProperties: true },
-      ])
-      // (the reader ran with the console captured: not the console's own log)
-      expect(logs).toEqual([false])
-      expect(h.docs.map(d => d.numPages)).toEqual([3, 3])
-    } finally { await h.close() }
-  })
-
-  it('an unreplaced page that is not the original reader\'s page fails: the original\'s record compared, not ours', async () => {
-    const u = oursObjects()
-    u.set(4, { text: '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Rotate 90 /Resources 23 0 R /Contents 25 0 R >>' })
-    const final = pdfOf(u, { root: 1 })
-    const r = await built(ORIG_TABLE, final, { replacedPages: [1, 3] })
-    const ok = readersOf()
-    try { expect(await proveWith(ORIG_TABLE, r.delta, final, r.replaced, { readers: ok.readers })).toMatchObject({ ok: true }) } finally { await ok.close() }
-    const flip = (x: TextRecord | null) => (x ? { ...x, items: `${x.items.slice(0, 63)}${x.items.at(-1) === '0' ? '1' : '0'}` } : x)
-    const bad = readersOf({ origPages: p => p.map((x, i) => (i === 1 ? flip(x) : x)) })
-    try {
-      expect(await proveWith(ORIG_TABLE, r.delta, final, r.replaced, { readers: bad.readers })).toMatchObject({ ok: false, code: 'delta-proof', why: /page 2's text is not the original's: its text items differ/ })
-    } finally { await bad.close() }
-  })
-
-  it('a page of a reader\'s document it did not read refuses the delta even where no page compares it (as the proof\'s own reading did)', async () => {
-    const r = await built(ORIG_TABLE, OURS, { replacedPages: [1, 3] })
-    // (arXiv's page 1 is replaced: the composed page 1 is ours, arXiv's own never compared; unread, it refuses all the same)
-    const h = readersOf({ origPages: p => [null, ...p.slice(1)] })
-    try {
-      expect(await proveWith(ORIG_TABLE, r.delta, OURS, r.replaced, { readers: h.readers })).toMatchObject({ ok: false, code: 'delta-proof', why: /page 1 of the orig document was not read/ })
-    } finally { await h.close() }
-  })
-
-  it('ours given up to PDF.js where its reader says `own`: the proof reads nothing of it after, and passes', async () => {
-    const r = await built(ORIG_TABLE)
-    const final = OURS.slice()
-    const h = readersOf({ own: true })
-    try {
-      expect(await proveWith(ORIG_TABLE, r.delta, final, r.replaced, { readers: h.readers })).toMatchObject({ ok: true })
-    } finally { await h.close() }
   })
 })

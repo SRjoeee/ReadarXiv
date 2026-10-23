@@ -1,9 +1,17 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
+import { LINK_TEXT_PIXELS, liteWorkerSource, NO_IMAGE_PIXELS } from '@/pdf-reader/engine/layout/pdf-lite.mjs'
 import { textRecordDiffers, textRecordOf, textItemsBytes } from '@/pdf-reader/engine/layout/page-text.mjs'
+
+// the box's worker, made lite (pdf-lite.mjs: no image's pixels decoded), before this file's first document is opened
+{
+  const require = createRequire(import.meta.url)
+  const version = (JSON.parse(readFileSync(require.resolve('pdfjs-dist/package.json'), 'utf8')) as { version: string }).version
+  ;(globalThis as { pdfjsWorker?: unknown }).pdfjsWorker = await import(`data:text/javascript;base64,${Buffer.from(liteWorkerSource(readFileSync(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs'), 'utf8'), { version })).toString('base64')}`)
+}
 
 // A page's text as the delta's proof compares it (layout/page-text.mjs): the page's box and one digest of its text items' exact
 // values, so that a reading made once (readArxivText's `pageTexts`) stands in for the proof's own of the same document. Any bit of
@@ -63,45 +71,20 @@ describe('the canonical bytes and the record of a page\'s text', () => {
   })
 })
 
-describe('readArxivText\'s page texts', () => {
-  it('with `pageTexts` asked, each page\'s record as the proof makes it from the same page: the sample paper', async () => {
-    const bytes = new Uint8Array(readFileSync(new URL('../fixtures/pdf/sample-1/sample-1.pdf', import.meta.url)))
-    const task = getDocument({ data: bytes.slice(), verbosity: 0 })
-    try {
-      const doc = await task.promise
-      const text = await readArxivText(doc, { pageTexts: true })
-      expect(text.pageTexts).toHaveLength(doc.numPages)
-      for (let p = 1; p <= doc.numPages; p++) {
-        const pg = await doc.getPage(p)
-        expect(text.pageTexts![p - 1]).toEqual(await textRecordOf(pg, await pg.getTextContent()))
-      }
-      // (not asked: none, and the rest of the reading as it was)
-      const plain = await readArxivText(doc)
-      expect(plain.pageTexts).toBeNull()
-      expect(plain.tokens.length).toBe(text.tokens.length)
-    } finally { await task.destroy() }
-  })
-
-  it('the box\'s two ways of opening a document (the draw\'s options, the proof\'s) give the same records: the sample paper', async () => {
+describe('the records of one document opened the box\'s two ways (the lite worker: the draw\'s options, the proof\'s)', () => {
+  it('the same records, page for page: the sample paper', async () => {
     const bytes = new Uint8Array(readFileSync(new URL('../fixtures/pdf/sample-1/sample-1.pdf', import.meta.url)))
     const recordsWith = async (o: Record<string, unknown>) => {
       const task = getDocument({ data: bytes.slice(), verbosity: 0, ...o })
-      try { return (await readArxivText(await task.promise, { draw: true, pageTexts: true })).pageTexts } finally { await task.destroy() }
+      try {
+        const doc = await task.promise, out = []
+        for (let p = 1; p <= doc.numPages; p++) { const pg = await doc.getPage(p); out.push(await textRecordOf(pg, await pg.getTextContent())) }
+        return out
+      } finally { await task.destroy() }
     }
     // (the draw's: its links' overlaid text kept, its fonts' properties exported; the proof's: no image's pixels)
-    expect(await recordsWith({ maxImageSize: Number.MAX_SAFE_INTEGER - 1, fontExtraProperties: true })).toEqual(await recordsWith({ maxImageSize: Number.MAX_SAFE_INTEGER }))
-  })
-
-  it('a page that cannot be read has no record', async () => {
-    const items = [item()]
-    const doc = {
-      numPages: 2,
-      getPage: async (n: number) => {
-        if (n === 2) throw new Error('no page')
-        return { ...page, getTextContent: async () => ({ items, styles: {} }) }
-      },
-    }
-    const text = await readArxivText(doc, { pageTexts: true })
-    expect(text.pageTexts).toEqual([await recordOf(items), null])
+    const draw = await recordsWith({ maxImageSize: LINK_TEXT_PIXELS, fontExtraProperties: true }), proof = await recordsWith({ maxImageSize: NO_IMAGE_PIXELS })
+    expect(draw).toHaveLength(4)
+    expect(draw).toEqual(proof)
   })
 })

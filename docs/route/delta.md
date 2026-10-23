@@ -210,9 +210,9 @@ conditional in TeX, the image-heavy papers kept as today, and the final pass as 
 
 **What was done instead: each document's text read once** (PDF-READER §19.8, the proof's `readers`). The proof opens arXiv's
 PDF and our page itself, of its own bytes, at verbosity 1, inside its own capture of the console, and hands each document to the
-host, which reads it once (`readArxivText`'s `pageTexts`, one record a page: its box and a SHA-256 of its text items' exact
-values, a string by its UTF-16 code units) and keeps it for the page pass; the proof reads only the composed document itself, so
-that the box reads three documents' text, not five. A page the host did not read refuses the delta, compared or not, as the
+host, which reads it once (`readArxivText`) and keeps it for the page pass; the proof makes one record a page (its box and a
+SHA-256 of its text items' exact values, a string by its UTF-16 code units) of the text content each page gives the host, before
+the host sees it, and reads only the composed document itself, so that the box reads three documents' text, not five. A page the host did not read refuses the delta, compared or not, as the
 proof's own reading did. The composed bytes and the object layer's three documents are let go before the host's documents open
 (an adversarial review of the first form found both held through the readers: up to the original's size again on the 46 MB
 pair). Its comparison became exact: before, the items' places within 0.01; now
@@ -223,8 +223,9 @@ the composed text items ours or arXiv's exactly on 1,900 pages (711,517 items); 
 (`delta-bound`), as before. A spurious refusal of the exact comparison would cost bytes alone (the whole base served): the random
 50-paper sweep of the next test build counts `delta-proof` refusals, to be read against this. In Node, the proof and the two
 readings together: 0.6 to 1.8 s less CPU a paper (1706.03762v7 2.2 to 1.5 s, 2602.23285v2 2.0 to 1.4, 2608.16117v1 2.1 to 1.5,
-2307.16209v1 5.0 to 3.2), the memory after them the same within 2 MiB; its transient peak is the same once the host collects
-before it opens arXiv's PDF (without that collection, 63 MiB of the proof's garbage were still uncollected on the 147-page
-thesis). No version moves: the proof writes nothing (no cache key, no file, no head field), and the delta's bytes are deltaOf's
+2307.16209v1 5.0 to 3.2), the memory after them the same within 2 MiB, and the peak no higher (on one pinned CPU, heap and
+external sampled every 5 ms: 2608.16117v1 331 to 333 MiB against 336, 2307.16209v1 162 to 166 against 160 to 166), with no
+collection of the host's before its documents open: the first form held the composed bytes and the object layer's documents
+through the readers (63 MiB uncollected on the 147-page thesis), the second lets them go first. No version moves: the proof writes nothing (no cache key, no file, no head field), and the delta's bytes are deltaOf's
 as before. Staging's job records do not say which base a head named, so there is no before-and-after count of deltas from
 staging; the pack's is above.
