@@ -190,7 +190,7 @@ describe('a character in no served slice', () => {
     const paras: [string, string][] = [['Alpha beta gamma', '\u6c49\u5b57\u6c49'], ['Delta epsilon zeta', '\u6c49\u5b57\u8bed LLM'], ['Eta theta iota', '\u5b57\u6c49']]
     const run = await open(paras, { faceSources: hole })
     await run.until(1)
-    expect(run.skipped).toEqual([{ id: 1, kind: 'para', why: 'served', missing: [0x8bed], chars: 6, pages: [1] }])
+    expect(run.skipped).toEqual([{ id: 1, kind: 'para', why: 'served', code: 'served', missing: [0x8bed], chars: 6, pages: [1] }])
     expect(run.stats.map(r => r.id).sort()).toEqual([0, 2])
     const svg = run.svgOf(1).innerHTML
     expect(svg).toContain('data-u="0"')

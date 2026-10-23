@@ -18,7 +18,7 @@ import { sourceUnitsOf, toTranslate, unitOf } from './rows.mjs'
 import { openProto } from './run.mjs'
 import { BUILTIN_RULES, resolveRules } from '../rules/layout.mjs'
 
-export { PDF_OPTIONS } from './run.mjs'
+export { PDF_OPTIONS, SKIP_CODES } from './run.mjs'
 export { BUNDLE, BUNDLE_CAP, BUNDLE_VALUES, BundleRefusal, bundleKey, CTAG, readBundle, VTAG } from './bundle.mjs'
 export { batchesOf, layerRows, rowOf, runRows, toTranslate, unitOf } from './rows.mjs'
 export { ADDON_CAP, ADDON_MANIFEST_CAP, ADDON_MANIFEST_VALUES, parseAddonManifest } from '../layout/addon-manifest.mjs'
@@ -106,6 +106,8 @@ function addShapes(by, units) {
  *   stats(), dispose()   what it has done; the run let go, every ask rejected, its documents told to onRetired once read by
  *                        nothing. After dispose pageOf, leftPageOf, copyOf and pageState throw; stats and unitAt answer
  */
+/** the dropped rows the door names at most (stats `droppedRows`): past it they are counted alone (`dropped`) */
+export const DROPPED_ROWS = 1000
 /** the draws of left parts the door holds for the run at most (their left parts' bytes): past it the oldest go, and the run reads
  *  those pages itself (drawOf null) */
 export const DRAWS_HELD = 16 * 2 ** 20
@@ -168,6 +170,9 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   const facade = four ? layoutFacade(index.head) : null
   // (dead: the error a run could not go on from, which leaves the layer terminal)
   let run = null, disposed = false, dropped = 0, told = null, dead = null
+  // (the rows dropped as no unit of the paper's, by the unit they name: [id, 'rowUnfit'] (run.mjs SKIP_CODES), each id once, at
+  // most DROPPED_ROWS; a row naming no id is counted alone)
+  const droppedRows = new Map()
   // the door's state: each page's asks, the listeners, the left's shapes, streams and refs, the left pages fetched or awaited,
   // the chain told
   const asks = new Map(), listeners = new Set(), shapes = new Map()
@@ -436,8 +441,10 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       const got = new Map()
       for (const row of rows) {
         const u = unitOf(source, row)
-        if (u) got.set(row[0], u)
-        else dropped++
+        if (u) { got.set(row[0], u); droppedRows.delete(row[0]); continue }
+        dropped++
+        const id = Array.isArray(row) ? row[0] : null
+        if (Number.isSafeInteger(id) && id >= 0 && (droppedRows.has(id) || droppedRows.size < DROPPED_ROWS)) droppedRows.set(id, 'rowUnfit')
       }
       const out = run.take(got)
       evaluate()
@@ -553,7 +560,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       }
       let slowestTaskMs = 0
       for (const ms of run.ms.values()) if (ms > slowestTaskMs) slowestTaskMs = ms
-      return { units: expect.length, drawn: run.drawn, pages, slowestTaskMs, pageMs, dropped, links: run.linkStats, rules: { schema: run.rules.schema, version: run.rules.version }, parts: { through: chain.through, told: toldParts.size }, draws: { held: draws.size, bytes: drawsBytes } }
+      return { units: expect.length, drawn: run.drawn, pages, slowestTaskMs, pageMs, dropped, droppedRows: [...droppedRows].sort((a, b) => a[0] - b[0]), links: run.linkStats, rules: { schema: run.rules.schema, version: run.rules.version }, parts: { through: chain.through, told: toldParts.size }, draws: { held: draws.size, bytes: drawsBytes } }
     },
     dispose() {
       if (disposed) return

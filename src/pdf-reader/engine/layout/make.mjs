@@ -251,6 +251,21 @@ const charsOf = s => s.normalize('NFKC').toLowerCase()
 /** a glyph's characters as two PDFs are compared by them: NFKC, no white space, no variation selector (match.mjs's) */
 const NF = s => (typeof s === 'string' ? s.normalize('NFKC').replace(/\s|\p{Variation_Selector}/gu, '') : '')
 
+/** a mark on a turned token's box, within this (PDF units): a turned run's first mark stands at its box's edge, to the marks
+ *  file's hundredth */
+const ON_TURNED = 0.5
+/** whether mark `mk` stands on token `t` and `t` is turned (anchors.mjs uprightToken: its box as high above its `y` as below,
+ *  a run set at an angle): the mark is on a turned line. A token that kept no box is none */
+const turnedAt = (t, mk) => typeof t.top === 'number' && typeof t.bottom === 'number' && !uprightToken(t) && t.page === mk.page
+  && mk.x >= t.x - ON_TURNED && mk.x <= t.x + t.w + ON_TURNED && mk.y >= t.bottom - ON_TURNED && mk.y <= t.top + ON_TURNED
+
+/** whether a line rectangle's glyphs (lineOf's first band: on its baseline's band, within its words' extent) hold one another
+ *  unit or a babel name took (`owner`): what makes a line of unit `unit`'s glyphs none */
+function takenAt(P, r, unit) {
+  const L = r.x0 - 0.5, R = r.x1 + 0.5
+  return band(P, Math.min(r.y0, r.y1), Math.max(r.y0, r.y1)).some(i => mid(P, i) >= L && mid(P, i) <= R && P.owner[i] !== -1 && P.owner[i] !== unit)
+}
+
 /** tokens → line rectangles as anchors.mjs lineRects makes them, each with its tokens */
 function rectsOf(doc, idx) {
   const rects = []
@@ -662,14 +677,18 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   /** the word a unit's start mark reaches where it stands at none (boundsFromMarks `reach`): a unit that opens with a formula, a
    *  dash or a comma has its start mark there, and its first word further on its line. The nearest upright word on the mark's
    *  baseline, in its column, after it, at any distance: its column bounds it, not a measure of points; or null. A turned line
-   *  (a sideways caption) reaches none: its baseline is no horizontal one, and a word at the mark's height there is another
-   *  line's. An end mark needs none: tokenAtMark takes the last word before it on its line at any distance. `byPage`, the base
-   *  page's tokens by page */
+   *  (a sideways caption, a \rotatebox's cell) reaches none: its baseline is no horizontal one, and a word at the mark's height
+   *  there is another line's. Its start mark stands on its turned run (turnedAt: on a turned token's box), and the nearest
+   *  upright word at its height may be any line's: 2602.23285v2's sideways cell "Discrete & Continuous" in a table set beside
+   *  a paragraph, whose mark reached the next cell's "ODEBRAIN" and whose end mark's word was the paragraph's, 30 pt left of
+   *  the table, so that the cell took a line of the paragraph's and the paragraph was laid not at all. An end mark needs none:
+   *  tokenAtMark takes the last word before it on its line at any distance. `byPage`, the base page's tokens by page */
   const reachIn = byPage => mk => {
     let best = null
     const col = colAt(mk)
     for (const k of byPage.get(mk.page) ?? []) {
       const t = doc[k]
+      if (turnedAt(t, mk)) return null
       if (!t.t || !uprightToken(t) || Math.abs(t.y - mk.y) > t.h * 0.4 || columnOf(t.page, t.x, t.x + t.w) !== col) continue
       if (t.x >= mk.x && (best === null || t.x < doc[best].x)) best = k
     }
@@ -710,15 +729,37 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
 
   // ---------------------------------------------------------------- each located unit's lines
   const placed = [], placedById = new Map()
+  /** why each unit not laid stays the original's (file.mjs UNLAID), the first reason a pass gave: the file's `unlaid`. Every
+   *  unit the file does not lay has one (unlaidOf): none is dropped without its reason */
+  const unlaidBy = new Map()
+  const notLaid = (i, code) => { if (!unlaidBy.has(i)) unlaidBy.set(i, code) }
+  /** why a unit with no anchor has none: its own marks unplaced, or no anchor at all */
+  const unanchored = i => notLaid(i, unplaced.has(i) ? 'unplacedMarks' : 'noAnchor')
+  /** the file's `unlaid` rows of units `ids` (rising) the file does not lay (`laid(i)` false): [id, code]; a unit with no
+   *  reason is a defect of the maker's, never a row */
+  const unlaidOf = (ids, laid) => {
+    const out = []
+    for (const i of ids) {
+      if (laid(i)) continue
+      const code = unlaidBy.get(i)
+      if (code === undefined) throw new Error(`unit ${i} is not laid, and no pass said why`)
+      out.push([i, code])
+    }
+    return out
+  }
   /** each unit placed, as it is (the page stream's rule 3 edges, which take its body lines a page at a time) */
   let onPlaced = null
-  /** unit i's lines, of the ink of its anchor's pages, its glyphs taken there (`owner`); none where it has none */
+  /** unit i's lines, of the ink of its anchor's pages, its glyphs taken there (`owner`); none where it has none, and why
+   *  (notLaid) */
   function place(i) {
     const u = units[i], a = anchors.get(i)
     if (a && unplaced.has(i)) stats.units.unplaced++
-    if (!a || unplaced.has(i) || !KIND.has(u.kind) || u.pieces.length > PIECES_MAX) return
+    if (!a || unplaced.has(i)) return unanchored(i)
+    if (!KIND.has(u.kind) || u.pieces.length > PIECES_MAX) return notLaid(i, 'kind')
     const rects = rectsOf(doc, a.tokens)
-    if (!rects.length || rects.length !== a.rects.length || rects.length > LINES_UNIT || rects.some(r => dark.has(r.page) || !inked[r.page])) return
+    if (!rects.length || rects.length !== a.rects.length) return notLaid(i, 'rects')
+    if (rects.length > LINES_UNIT) return notLaid(i, 'linesUnit')
+    if (rects.some(r => dark.has(r.page) || !inked[r.page])) return notLaid(i, 'dark')
     const S = carriedUnit.get(`${i}s`), E = carriedUnit.get(`${i}e`)
     const onRect = (m, r) => m && m.page === r.page && Math.abs(m.y - r.base) < 0.5 * r.h
     const rows = []
@@ -726,10 +767,10 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       const r = rects[j]
       const from = j === 0 && onRect(S, r) ? S.x : null, to = j === rects.length - 1 && onRect(E, r) ? E.x : null
       const row = lineOf(ink[r.page], r, from, to, i)
-      if (!row || !(r2(row.size) > 0 && row.size <= SIZE_MAX)) { rows.length = 0; break }
+      // (a line with no glyph of its own: none there, or another's, which a unit laid before it took)
+      if (!row || !(r2(row.size) > 0 && row.size <= SIZE_MAX)) return notLaid(i, !row && takenAt(ink[r.page], r, i) ? 'lineTaken' : 'noLine')
       rows.push(row)
     }
-    if (!rows.length) return
     // the anchor's rectangles of one line (its tokens out of order: a script before its base, the line's two parts
     // either side of a formula, 1706.03762's note): one line, wherever the second begins
     // again over the merged rows until none is left to merge: a row may match one only once another merge has made it
@@ -1735,7 +1776,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       }
       for (const e of merged) erase.push(j, ...solid(view, e[0], e[1], e[2], e[3]))
     })
-    if (refuse) return
+    if (refuse) return notLaid(i, 'erase')
     // lines (each its font's id; the file's index is admit's)
     const lines = []
     for (const r of rows) {
@@ -1810,9 +1851,10 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
    */
   function admit(one) {
     const { id: i, u, rows, S, E, out } = one
+    // (no rows: rowsOf said why)
     if (!out) return false
-    if (!drawable(one)) { stats.units.undrawn++; return false }
-    if (fonts.length + new Set(rows.map(r => r.font).filter(f => !fontIndex.has(f))).size > FONTS_MAX) return false
+    if (!drawable(one)) { stats.units.undrawn++; notLaid(i, 'undrawn'); return false }
+    if (fonts.length + new Set(rows.map(r => r.font).filter(f => !fontIndex.has(f))).size > FONTS_MAX) { notLaid(i, 'fonts'); return false }
     const { lines, frames, erase } = out
     for (let j = 7; j < lines.length; j += 8) lines[j] = fontOf(lines[j])
     outUnits.push(out.unit)
@@ -1872,6 +1914,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     // each colour piece's run's fill (marks.mjs readColours), of the units it holds: a key only where one has a row
     const outColours = outUnits.flatMap(r => coloursBy.get(r[0]) ?? [])
     if (outColours.length) file.colours = outColours
+    // why each unit it does not hold is the original's: a key only where one is not laid
+    const outUnlaid = unlaidOf(units.map((_, i) => i), i => kept1.has(i))
+    if (outUnlaid.length) file.unlaid = outUnlaid
     for (const r of outUnits) countColours(r[0])
     stats.ph.texts = file.pageText.length
     // the placeholders and labels counted as the file holds them
@@ -2245,7 +2290,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       decided[i] = 1
       decidedCount++
       if (counted[i]) { lowCount[lowOf[i]]--; counted[i] = 0 }
-      if (!a) { settledU[i] = 1; return }
+      if (!a) { unanchored(i); settledU[i] = 1; return }
       const pg = unitPages(i, carriedKnown.get(i))
       carriedKnown.delete(i)
       for (const q of pg) (touching.get(q) ?? touching.set(q, []).get(q)).push(i)
@@ -2344,8 +2389,11 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       stats.names.located++
       if (nm.lead >= 0) stats.names.runIn++
     }
-    /** the rows of units `ids` (rising) and names `rows`, as a layout file holds them (its views and pages the paper's) */
+    /** the rows of units `ids` (rising) and names `rows`, as a layout file holds them (its views and pages the paper's), and
+     *  why each of `ids` the file does not lay is the original's (`unlaid`, units settled alone) */
     const partOf = (ids, rows) => {
+      const unlaid = unlaidOf(ids.filter(i => settledU[i]), i => unitRows.has(i))
+      ids = ids.filter(i => unitRows.has(i))
       const out = { schema: LAYOUT_SCHEMA, layout: LAYOUT, pdfjs, paper: { id: paper.id, version: paper.version, pages }, left, views, fonts: fonts.slice(), lineskip: marks.marking.lineskip ?? null }
       for (const key of ['units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held']) out[key] = []
       for (const i of ids) { const r = unitRows.get(i); for (const key of ['units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held']) out[key].push(...r[key]) }
@@ -2353,6 +2401,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       // (each colour piece's run's fill: a key only where a unit of the part has one)
       const colours = ids.flatMap(i => unitRows.get(i).colours ?? [])
       if (colours.length) out.colours = colours
+      if (unlaid.length) out.unlaid = unlaid
       return out
     }
     // ---- the babel names, each a task on the pages its marks are carried to and those of the unit it would lead (nameAt
@@ -2555,8 +2604,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       carryRefusal: () => (finished ? noneLaid() : null),
       /** the units the file holds so far */
       laid: () => stats.units.located,
-      /** the file's rows of the units settled so far (`ids`, rising: those of them it holds) and the names taken in */
-      layout: (ids = [...unitRows.keys()].sort((x, y) => x - y)) => partOf(ids.filter(i => unitRows.has(i)), [...nameRows.keys()].sort((x, y) => x - y).map(k => nameRows.get(k))),
+      /** the file's rows of the units settled so far (`ids`, rising: those of them it holds, and why each other is the
+       *  original's) and the names taken in */
+      layout: (ids = Array.from({ length: n }, (_, i) => i).filter(i => settledU[i])) => partOf(ids, [...nameRows.keys()].sort((x, y) => x - y).map(k => nameRows.get(k))),
       released: () => releasedTo,
       settled: i => settledU[i] === 1,
       /** units `ids` told by the parts through page `through`: their rows the stubs K reads (stubOf), the names on those pages
