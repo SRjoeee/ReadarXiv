@@ -2,6 +2,11 @@
 
 Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
+## Unreleased
+
+- Fixed: a translation service whose model does not answer in the shape the extension asks for (prose instead of JSON, say) no longer turns one batch of four paragraphs into 40 paid requests: it is asked once more, then the next service on the chain takes over, two requests in all. The free web translators are spared the same way.
+- The PDF reader and the control panel do nothing when a page that is not the extension's own puts them in a frame: no translation is started, no setting is changed, and a click there acts on no tab.
+
 ## 0.5.2 — 2026-10-22
 
 - Fixed: in the PDF reader, a sentence whose words change style (bold, italic, colour) is translated whole. It used to come back in pieces, in one paper Chinese words separated by spaces, and a short label such as "Before" could vanish from the translation.

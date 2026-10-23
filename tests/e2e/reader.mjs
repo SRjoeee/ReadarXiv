@@ -394,8 +394,18 @@ try {
     const original = readerUrl({ live: '1', paper: PAPER, mode: 'original' })
     const loaded = await loadsOf(original)
     check('the original display finishes loading though nothing is translated', loaded.ok, loaded.detail)
-    const framed = await framedLoadOf(original)
-    check('framed by arXiv\'s page, as its PDF page frames it, its frame fires load', framed.ok, framed.detail)
+    // (the frame the PDF page's content script makes: the reader is at the session's dynamic address and acts only in a frame
+    // of ours, shared/frame-owner.ts; a page's own frame of it is tests/e2e/framing.mjs's)
+    const framed = await (async (timeout = 15_000) => {
+      const host = track(await context.newPage())
+      try {
+        await host.goto(`https://arxiv.org/pdf/${PAPER}`)
+        const frame = await (await host.waitForSelector('iframe[data-axt-pdf-reader]', { timeout }).catch(() => null))?.contentFrame()
+        const loaded = frame ? await frame.waitForFunction(() => document.readyState === 'complete' && !!window.__reader, null, { timeout }).then(() => true, () => false) : false
+        return { ok: loaded, detail: loaded ? 'its document complete, the reader acting' : 'not complete' }
+      } finally { await host.close() }
+    })()
+    check('framed by arXiv\'s PDF page, as it frames it, its frame fires load', framed.ok, framed.detail)
     const never = [await loadsOf('https://example.invalid/never', 2500), await framedLoadOf('https://example.invalid/never', 2500)]
     control('a document that never comes does not finish loading, nor does its frame fire load', { ok: never.some(r => r.ok), detail: never.map(r => r.detail).join('; ') })
 

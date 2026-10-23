@@ -117,6 +117,11 @@ export interface FloatingButtonOptions {
    * `axt:panel-close` (Escape inside it, or an action that sends the reader elsewhere)
    */
   panelUrl: string
+  /**
+   * The panel's frame, just made with `panelUrl` and before it loads: the host vouches for it, so that the page in it
+   * acts (shared/frame-owner.ts). Returns what undoes that, called when the panel closes
+   */
+  onPanelFrame?: (frame: HTMLIFrameElement) => () => void
   /** A drag that ended, or the lock toggled: the host saves it */
   onPlacement: (placement: DockPlacement) => void
   onSettings: () => void
@@ -664,6 +669,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   // The control panel: the extension's popup in a frame beside the dock. The frame lives only while the panel is
   // open — a popup polls its page while it is up, and no page should carry one it is not showing
   let frame: HTMLIFrameElement | null = null
+  let unvouch: (() => void) | null = null
   let panelHeight = 0
   const PANEL_MARGIN_PX = 16
   /** Centred on the main button, kept inside the window; it grows out of the point level with that button */
@@ -699,6 +705,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
     if (open) {
       menuOpen = false
       frame = make('iframe', '')
+      unvouch = options.onPanelFrame?.(frame) ?? null
       frame.src = options.panelUrl
       frame.title = strings.panel
       panelBox.dataset.axtReady = 'no'
@@ -709,6 +716,8 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
     } else {
       view.removeEventListener('message', onPanelMessage)
       view.removeEventListener('resize', placePanel)
+      unvouch?.()
+      unvouch = null
       frame = null
       panelBox.replaceChildren()
       panelBox.hidden = true

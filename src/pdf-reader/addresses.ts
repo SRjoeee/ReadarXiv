@@ -3,6 +3,8 @@
 // theirs; a development build's seam alone, never a release's) and, for the paper itself, arXiv. The reader is a page arXiv's pages may frame, so its URL is not the reader's to
 // trust: a page that frames it must not point its requests anywhere else (PDF-READER §11.1).
 
+import { isPaperId } from '@/core/paper-id'
+
 declare const __AXT_READER_API__: string | undefined
 declare const __AXT_LOOPBACK__: boolean | undefined
 /** whether the reader's URL may point it at a server on this machine: a development build's (wxt.config.ts), and the unit
@@ -18,6 +20,15 @@ export const READER_API: string = typeof __AXT_READER_API__ === 'string' && __AX
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]'])
 const parse = (value: string | null) => { try { return value ? new URL(value) : null } catch { return null } }
 const local = (u: URL) => (u.protocol === 'http:' || u.protocol === 'https:') && LOOPBACK.has(u.hostname) && !u.username && !u.password
+
+/**
+ * The paper the address names: an arXiv id (core/paper-id.ts), or '' — an address with no paper — for anything else, so
+ * that no other path of arXiv is fetched or linked by the reader for a page that framed it (PDF-READER §11.1)
+ */
+export function paperOf(params: URLSearchParams): string {
+  const paper = params.get('paper') ?? ''
+  return isPaperId(paper) ? paper : ''
+}
 
 /** { pdf, api }: the paper's PDF (arXiv's, or a server on this machine), and our server's origin (the build's, or a server on
  *  this machine: a probe's stand-in); this machine's only where `loopback` (LOOPBACK_ALLOWED) */

@@ -10,6 +10,9 @@ const NEW_STYLE = /^\d{4}\.\d{4,5}(v\d+)?$/
  */
 const OLD_STYLE = /^[a-z-]+(\.[A-Za-z-]+)?\/\d{7}(v\d+)?$/
 
+/** Whether `id` is a paper's id, new style or old, with or without its version */
+export const isPaperId = (id: string): boolean => NEW_STYLE.test(id) || OLD_STYLE.test(id)
+
 /**
  * The id under `/<section>/…`, or null when the path is not a paper's.
  *
@@ -20,5 +23,5 @@ export function paperIdFrom(pathname: string, section: 'pdf' | 'abs' | 'html'): 
   const prefix = `/${section}/`
   if (!pathname.startsWith(prefix)) return null
   const path = pathname.slice(prefix.length).replace(/\.pdf$/, '').replace(/\/$/, '')
-  return NEW_STYLE.test(path) || OLD_STYLE.test(path) ? path : null
+  return isPaperId(path) ? path : null
 }

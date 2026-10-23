@@ -178,6 +178,12 @@ export interface AxtMessages {
   'axt:ocr': { request: OcrCall; response: OcrMessageResponse }
   /** background → the offscreen document: recognise these bytes (§15.3). Answered by that page alone */
   'axt:ocr-run': { request: { image: string; mime: string }; response: OcrRunResponse }
+  /**
+   * a page of the extension framed in arXiv's → the content script of its tab's top frame (shared/frame-owner.ts):
+   * whether `ticket` is one that script posted to this page's frame, at `address` (the page's path and query). Answered
+   * only by the script that holds the ticket, which spends it
+   */
+  'axt:frame-claim': { request: { ticket: string; address: string }; response: { owned: boolean } }
   /** background → the offscreen document: a figure was given up on, the recogniser's worker is ended (the figure in it
    *  answered as failed) and the next figure starts a new one */
   'axt:ocr-reset': { request: Record<never, never>; response: { reset: true } }
@@ -296,10 +302,11 @@ export class NoActiveTabError extends Error {
 
 /**
  * Send to one tab's content script — the only place a tab is written to, so every reply is decoded: the Promise
- * rejects when the tab has no receiver, and when the page answered with a failure
+ * rejects when the tab has no receiver, and when the page answered with a failure. `frameId`: that frame's alone
  */
-export function sendToTab<R = unknown>(tabId: number, message: { type: string }): Promise<R> {
-  return (browser.tabs.sendMessage(tabId, message) as Promise<R | FailureReply>).then(decodeReply)
+export function sendToTab<R = unknown>(tabId: number, message: { type: string }, frameId?: number): Promise<R> {
+  const sent = frameId === undefined ? browser.tabs.sendMessage(tabId, message) : browser.tabs.sendMessage(tabId, message, { frameId })
+  return (sent as Promise<R | FailureReply>).then(decodeReply)
 }
 
 /** Send to the active tab's content script. Reads no url, so no tabs permission */

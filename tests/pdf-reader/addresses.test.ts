@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { READER_API, readerAddresses } from '@/pdf-reader/addresses'
+import { paperOf, READER_API, readerAddresses } from '@/pdf-reader/addresses'
 
 // Where the reader fetches the paper and its layer (Stage 5 Task 17): arXiv's PDF and our server, or, for the probes,
 // servers on this machine. A page that frames the reader chooses none of them (Devin on #301)
@@ -34,5 +34,20 @@ describe('readerAddresses', () => {
     for (const value of ['https://evil.example/x', 'http://127.0.0.1.evil.example/', 'http://localhost@evil.example/', 'javascript:alert(1)', 'not a url', 'http://arxiv.org/pdf/x', 'https://arxiv.org.evil.example/pdf/x', 'https://readarxiv.com.evil.example/']) {
       expect(of({ pdf: value, api: value }), value).toEqual(DEFAULTS)
     }
+  })
+})
+
+describe('paperOf: the paper an address names is an arXiv id or none (PDF-READER §11.1)', () => {
+  it('takes an id of either style, with or without its version', () => {
+    for (const id of ['1706.03762', '1706.03762v7', '2600.00001', 'hep-th/9711200', 'hep-th/9711200v2', 'math.GT/0309136', 'cond-mat.mes-hall/0601001']) {
+      expect(paperOf(new URLSearchParams({ paper: id })), id).toBe(id)
+    }
+  })
+
+  it('reads anything else as no paper: a path of arXiv\'s, a query, a URL, a script, nothing', () => {
+    for (const value of ['../list/cs.AI/new', '1706.03762/../../list', '1706.03762?x=1', '1706.03762#x', 'https://arxiv.org/abs/1706.03762', 'javascript:alert(1)', ' 1706.03762', 'abs/1706.03762', '1706.037', '']) {
+      expect(paperOf(new URLSearchParams({ paper: value })), value).toBe('')
+    }
+    expect(paperOf(new URLSearchParams())).toBe('')
   })
 })
