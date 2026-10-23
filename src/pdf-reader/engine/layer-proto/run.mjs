@@ -49,7 +49,7 @@
 //   The paper's family is read from its first page's fonts as the engine reads a layout file's (font-roles.mjs
 //   familyOfFonts). faces: 'prototype' draws in the prototype's own system faces and Latin Modern, as the approved
 //   prototype did (its floor's numbers).
-import { cellSpans } from '../translate/groups.mjs'
+import { cellSpans } from './cells.mjs'
 import { checkAll } from './check.mjs'
 import { familyOfFonts } from '../rules/font-roles.mjs'
 import { bodyFaceId, classifyFont, faceOf, fontString, loadWebFaces, OPEN_FAMILY, roleFaceSet, runsOfTokens, styleKey, setRoleFaces } from './fonts.mjs'
@@ -742,7 +742,7 @@ export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
  * `OPS` (PDF.js's operator codes, the host's): a page read live reads its characters' fills off the list PDF.js drew it by
  * (liveFillsOf), as its draw tells them; without it such a page tells none.
  */
-/** whether a table cell's box is other cells' too (translate/groups.mjs cellSpans), of the unit openProto holds: the source
+/** whether a table cell's box is other cells' too (cells.mjs cellSpans), of the unit openProto holds: the source
  *  unit's, which rows.mjs unitOf carries (`spans`, a translated row keeping no piece of its \\multirow), else the unit's own */
 export const unitSpans = u => (typeof u?.spans === 'boolean' ? u.spans : cellSpans(u))
 export { cellSpans }

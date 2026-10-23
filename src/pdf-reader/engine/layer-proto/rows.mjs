@@ -11,7 +11,8 @@
 // per bundle (sourceUnitsOf). Imports no run (live.mjs), remover or layout maker: both readers load it. A bundle that
 // did not go through readBundle is read with the same care a row is: a unit of no shape is a dropped one, a row of no
 // shape is no row, and neither throws.
-import { cellSpans, decideGroups, groupOf } from '../translate/groups.mjs'
+import { decideGroups, groupOf } from '../translate/groups.mjs'
+import { cellSpans } from './cells.mjs'
 import { kOfSource } from '../layer/pieces.mjs'
 import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource, translateUnits, utf8 } from '../translate/mt.mjs'
 import { authorsTranslated } from '../translate/kept.mjs'
