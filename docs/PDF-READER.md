@@ -561,8 +561,11 @@ each piece. They stay in the source language, counted, and the failure is kept (
   framing page, chooses which server it reads the layer from (`src/pdf-reader/addresses.ts` `READER_API`).
 - **Framed, the reader acts only for the content script that made its frame** (`shared/frame-owner.ts`, DESIGN §4.0c):
   with no such content script to vouch for it, it draws nothing and does nothing — no paper fetched, no run started, no
-  setting written, whatever its address asks (`ask=translate` included). A page of its own (not framed) is the reader's
-  own doing and opens as its address says.
+  setting written, whatever its address asks (`ask=translate` included). **Nor does a release build's reader that is no
+  frame**: the PDF page only ever frames it, while an arXiv page that learnt its address could send its own tab there,
+  and there the settings alone would start a run (`?paper=` and a translated display). A development build, and the
+  harness's copy of a release build (the manifest key `axt_top_level_reader`, which `scripts/check-output.mjs` holds no
+  build carries; `tests/e2e/lib/extension.mjs`), open it as its address says, for the browser checks and the probes.
 - **`?paper=` is an arXiv id or none** (`core/paper-id.ts`, read once by `addresses.ts` `paperOf`): anything else is an
   address with no paper, its card shown, and never a request or a link.
 - The demo papers stay reachable by address for the probes and the e2e checks (`?paper=<id>` without `live=1`, the

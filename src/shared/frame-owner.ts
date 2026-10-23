@@ -5,12 +5,14 @@
 //
 //   the page           → its parent window    `axt:frame-ask` by postMessage; nothing in it is secret
 //   the content script → that frame alone     a ticket minted for that ask, posted to the extension's origin only
-//   the page           → its tab's top frame  `axt:frame-claim`, the ticket and its own address (tabs.sendMessage)
-//   the content script → the page             `owned`: a ticket it posted to that frame, at that address; spent once
+//   the page           → its tab's top frame  `axt:frame-claim` with the ticket (tabs.sendMessage)
+//   the content script → the page             `owned`: a ticket it posted to that frame, claimed by an extension page at
+//                                             the address it gave the frame (the sender's URL, as the browser says); spent once
 //
 // A page that frames ours cannot take part: the ticket is posted to our own frame and to the extension's origin, and a
-// claim is answered by the content script, never by a page. The address binds the ticket to what the content script
-// asked the frame to show, so a frame a page script navigated elsewhere is not vouched for either. Every load asks
+// claim is answered by the content script, never by a page. The claimant's own URL binds the ticket to what the content
+// script asked the frame to show: a frame a page script navigated elsewhere is not vouched for, and neither is another
+// extension page that came by the ticket. Every load asks
 // again, so the page's own reload and the tab's back and forward keep working, and nothing of it is in an address or
 // a history entry. Chrome-only, as the extension is: the pages' origin is `chrome-extension://<id>`.
 import { browser } from 'wxt/browser'
@@ -45,12 +47,15 @@ export function vouchFor(frame: HTMLIFrameElement, url: string, view: Window = w
   if (!answering) {
     answering = true
     onMessages({
-      'axt:frame-claim': ({ ticket, address }) => {
+      'axt:frame-claim': ({ ticket }, sender) => {
         const own = tickets.get(ticket)
         // a ticket this script never posted is not answered at all: another script of ours in this frame may hold it
         if (own === undefined) return undefined
         tickets.delete(ticket)
-        return Promise.resolve({ owned: own === address })
+        // the claimant as the browser names it, not as it says: an extension page, at the frame's address (scheme and
+        // host compared, not `origin`, which a URL parser that does not know the extension scheme leaves 'null')
+        const from = sender.url === undefined ? null : URL.parse(sender.url)
+        return Promise.resolve({ owned: from !== null && `${from.protocol}//${from.host}` === extensionOrigin() && from.pathname + from.search === own })
       },
     })
   }
@@ -80,7 +85,6 @@ export type FrameOwner = { framed: false } | { framed: true; tab: number }
  */
 export function frameOwner(view: Window = window): Promise<FrameOwner | null> {
   if (view.parent === view) return Promise.resolve({ framed: false })
-  const address = view.location.pathname + view.location.search
   return new Promise(resolve => {
     let settled = false
     const end = (owner: FrameOwner | null) => {
@@ -94,7 +98,7 @@ export function frameOwner(view: Window = window): Promise<FrameOwner | null> {
     const claim = async (ticket: string) => {
       const tab = (await browser.tabs.getCurrent())?.id
       if (tab === undefined) return
-      const message: AxtMessage<'axt:frame-claim'> = { type: 'axt:frame-claim', ticket, address }
+      const message: AxtMessage<'axt:frame-claim'> = { type: 'axt:frame-claim', ticket }
       const { owned } = await sendToTab<AxtResponse<'axt:frame-claim'>>(tab, message, 0)
       if (owned) end({ framed: true, tab })
     }

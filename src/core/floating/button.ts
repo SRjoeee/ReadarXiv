@@ -618,7 +618,12 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
     draw()
     if (open) (focusFirst ? items[0]! : menu).focus()
   }
-  optionsButton.addEventListener('click', event => {
+  // **Only the reader's own clicks act** (DESIGN §4.0c): the button lives in an open shadow root on arXiv's pages, so a
+  // page script can reach every button and `.click()` it — open the panel and read its frame's address, hide the button,
+  // toggle the translation. A script's click is untrusted, a pointer's, the keyboard's and assistive technology's are not
+  const onClick = (target: HTMLElement, act: (event: MouseEvent) => void) =>
+    target.addEventListener('click', event => { if (event.isTrusted) act(event) })
+  onClick(optionsButton, event => {
     // `detail` is 0 for a click made with the keyboard: then the first item takes focus, as a menu button's should
     setMenu(!menuOpen, event.detail === 0)
   })
@@ -656,15 +661,15 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
     button.remove()
     options.onHide(scope)
   }
-  hideNow.addEventListener('click', () => hide('now'))
-  hideAlways.addEventListener('click', () => hide('always'))
+  onClick(hideNow, () => hide('now'))
+  onClick(hideAlways, () => hide('always'))
 
-  lock.addEventListener('click', () => {
+  onClick(lock, () => {
     placement = { ...placement, locked: !placement.locked }
     draw()
     options.onPlacement(placement)
   })
-  settings.addEventListener('click', () => options.onSettings())
+  onClick(settings, () => options.onSettings())
 
   // The control panel: the extension's popup in a frame beside the dock. The frame lives only while the panel is
   // open — a popup polls its page while it is up, and no page should carry one it is not showing
@@ -725,7 +730,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
     }
     draw()
   }
-  panel.addEventListener('click', () => setPanel(!panelOpen))
+  onClick(panel, () => setPanel(!panelOpen))
 
   // The drag (Read Frog's `handlePointerDown` / `handlePointerMove` / `finishPointerInteraction`)
   const previewOf = (p: Press) => ({
@@ -821,7 +826,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   }
   main.addEventListener('pointerup', finish)
   main.addEventListener('pointercancel', finish)
-  main.addEventListener('click', event => {
+  onClick(main, event => {
     // The press that became a drag is not a click: nothing opens because the reader moved the button
     if (swallowClick) {
       swallowClick = false

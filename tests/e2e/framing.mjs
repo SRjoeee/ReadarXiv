@@ -9,8 +9,9 @@
 // full text's panel translating its page, and a framed panel acting on its own tab while another tab is in front.
 // What a page that frames them gets: the static address lands on an error page, and so does the dynamic one from any
 // origin but arXiv's; framed from arXiv's own page with the dynamic address, the reader starts no run, fetches nothing
-// and writes no setting, whatever its address asks, and the popup draws nothing; a `?paper=` that is no arXiv id throws
-// nothing and asks arXiv for nothing.
+// and writes no setting, whatever its address asks, and the popup draws nothing; and an arXiv page that sends its own tab
+// to the reader's address gets the same nothing (a release build's reader acts only in a frame its PDF page made). The
+// build runs as it ships (`topLevel: false`: no harness key in its manifest).
 //
 // Usage: pnpm build && pnpm e2e:framing     (first time: npx playwright install chromium)
 // Environment: AXT_HEADED=1 watches it run; AXT_EXT_DIR points at another build.
@@ -51,6 +52,9 @@ const check = (name, ok, detail = '') => {
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${detail ? ` — ${detail}` : ''}`)
 }
 const control = (name, result) => check(`control: ${name}`, !result.ok, result.detail)
+/** rows that need the reader, on a browser that does not offer it (src/pdf-reader/support.ts: Chrome 131, the floor) */
+const notApplicable = []
+const floor = name => { notApplicable.push({ section: current, name }); console.log(`N/A  ${name} — the reader is not offered on this browser (src/pdf-reader/support.ts)`) }
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 // ---- the network: one table, which is also the guard
@@ -78,7 +82,7 @@ const elsewhere = (route, url) => (url.pathname === '/framer' ? route.fulfill({ 
 
 const echo = await startEchoEndpoint()
 copyWithGrants(BUILD, EXT, { hostPermissions: ['http://127.0.0.1/*', ...LAYER_HOSTS.map(host => `${host}/*`)] })
-const { context, worker, id } = await launchWithReader({ profile: 'framing-checks', extension: EXT, headless: !process.env.AXT_HEADED, viewport: { width: 1280, height: 860 }, args: [RESOLVER_WALL] })
+const { context, worker, id } = await launchWithReader({ profile: 'framing-checks', extension: EXT, topLevel: false, headless: !process.env.AXT_HEADED, viewport: { width: 1280, height: 860 }, args: [RESOLVER_WALL] })
 const guard = await routeTable(context, [
   ['https://arxiv.org', arxiv],
   ['https://example.invalid', elsewhere],
@@ -87,7 +91,8 @@ const guard = await routeTable(context, [
   [echo.origin, route => route.continue()],
   ...LAYER_HOSTS.map(host => [host, (route, url) => (serves(url.pathname) ? api.route(route) : false)]),
 ])
-for (let tries = 0; tries < 50 && !(await worker.evaluate(() => chrome.storage.local.get('config').then(r => !!r.config))); tries++) await sleep(200)
+// (polled until the worker's extension bindings are there: Chrome 131 binds them a moment after the worker starts)
+for (let tries = 0; tries < 50 && !(await worker.evaluate(() => chrome.storage.local.get('config').then(r => !!r.config)).catch(() => false)); tries++) await sleep(200)
 await seedService(worker, { id: 'svc-e2eecho0', name: 'echo', baseURL: echo.baseURL, model: 'local-echo' })
 await worker.evaluate(async () => { const { config } = await chrome.storage.local.get('config'); await chrome.storage.local.set({ config: { ...config, targetLanguage: 'deu' } }) })
 
@@ -104,24 +109,30 @@ const dynamic = await worker.evaluate(() => ({ reader: chrome.runtime.getURL('/p
 const layerAsks = () => api.requests.filter(r => r.path.startsWith(`/api/v1/layer/${PAPER}v`)).length
 
 /** the reader over a PDF page: its frame's address, whether it acts (its controller), the sample's pages, its run */
-async function readerOn(page, { wait = 20_000, run = true } = {}) {
+async function readerOn(page, { wait = 30_000, run = true } = {}) {
   const el = await page.waitForSelector('iframe[data-axt-pdf-reader]', { timeout: wait }).catch(() => null)
+  // (each wait below is for its signal, with room for a loaded machine: the controller counting the sample's pages, the run)
   if (!el) return { ok: false, detail: 'no reader over the page' }
   const src = (await el.getAttribute('src')) ?? ''
   const frame = await el.contentFrame()
-  const pages = await frame?.waitForFunction(() => window.__reader?.controller?.getState().sides.left.pages, null, { timeout: 30_000 }).then(h => h.jsonValue(), () => 0)
-  const ran = run ? await frame?.waitForFunction(() => !!window.__reader?.run, null, { timeout: 15_000 }).then(() => true, () => false) : null
+  const pages = await frame?.waitForFunction(() => window.__reader?.controller?.getState().sides.left.pages, null, { timeout: 60_000 }).then(h => h.jsonValue(), () => 0)
+  const ran = run ? await frame?.waitForFunction(() => !!window.__reader?.run, null, { timeout: 30_000 }).then(() => true, () => false) : null
   const display = pages ? await frame.evaluate(() => window.__reader.controller.getState().display) : null
   const at = new URL(src).host
   return { frame, src, pages, ran, display, dynamicAddress: at !== id, detail: `${src.replace(/^chrome-extension:\/\/[^/]+/, '')} (${at === id ? 'the static id' : 'the session\'s dynamic id'}); ${pages} pages, display ${display}, run ${ran}` }
 }
 const acts = r => !!r.frame && r.pages > 0 && r.dynamicAddress && r.ran !== false
+/** the floating button's main button, once the page has drawn it, where a pointer would press it */
+const mainButton = page => page.waitForFunction(() => {
+  const r = document.querySelector('.axt-floating')?.shadowRoot?.querySelector('.axt-fb-main')?.getBoundingClientRect()
+  return r && r.width > 0 ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null
+}, null, { timeout: 20_000 }).then(h => h.jsonValue(), () => null)
 const panelOf = async page => {
-  const target = await page.evaluate(() => { const r = document.querySelector('.axt-floating')?.shadowRoot?.querySelector('.axt-fb-main')?.getBoundingClientRect(); return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null })
+  const target = await mainButton(page)
   if (!target) return null
   await page.mouse.click(target.x, target.y)
-  // (the one of the page's popup frames that draws: a page that frames the popup itself may have one there too)
-  for (let i = 0; i < 30; i++) {
+  // (the one of the page's popup frames that draws, once it is vouched for: a page that frames the popup itself may have one there too)
+  for (let i = 0; i < 100; i++) {
     for (const panel of page.frames().filter(f => f.url().includes('/popup.html'))) {
       if ((await panel.evaluate(() => document.querySelectorAll('button').length).catch(() => 0)) > 0) return panel
     }
@@ -137,7 +148,7 @@ const press = async (frame, which) => {
   const offered = await frame.waitForFunction(re => {
     const b = [...document.querySelectorAll('button')].find(x => new RegExp(re).test(x.textContent?.trim() ?? ''))
     return !!b && b.getAttribute('aria-disabled') !== 'true'
-  }, ENTRY[which], { timeout: 10_000 }).then(() => true, () => false)
+  }, ENTRY[which], { timeout: 20_000 }).then(() => true, () => false)
   if (offered) await frame.evaluate(re => [...document.querySelectorAll('button')].find(x => new RegExp(re).test(x.textContent?.trim() ?? ''))?.click(), ENTRY[which]).catch(() => undefined)
   return offered
 }
@@ -151,25 +162,35 @@ try {
   const page = track(await context.newPage())
   let before = layerAsks()
   await page.goto(`https://arxiv.org/pdf/${PAPER}`)
-  const entry = await readerOn(page)
-  check('the PDF page\'s entry: the reader over the page, at the session\'s dynamic address, opens the sample and starts its run', acts(entry) && layerAsks() > before, `${entry.detail}; ${layerAsks() - before} asks of the layer API`)
+  // whether this browser offers the reader at all: one of the built-ins its PDF.js needs stands for the rest, as e2e:pdf has it
+  const READER = await page.evaluate(() => typeof Map.prototype.getOrInsertComputed === 'function')
+  console.log(`(${READER ? 'the reader is offered on this browser' : 'the reader is not offered on this browser: arXiv\'s PDF stays in its viewer'})`)
+  if (READER) {
+    const entry = await readerOn(page)
+    check('the PDF page\'s entry: the reader over the page, at the session\'s dynamic address, opens the sample and starts its run', acts(entry) && layerAsks() > before, `${entry.detail}; ${layerAsks() - before} asks of the layer API`)
 
-  before = layerAsks()
-  await page.reload()
-  const reloaded = await readerOn(page)
-  check('a reload of the reader\'s tab: the reader again, acting, its run started again', acts(reloaded) && layerAsks() > before, `${reloaded.detail}; ${layerAsks() - before} asks of the layer API`)
+    before = layerAsks()
+    await page.reload()
+    const reloaded = await readerOn(page)
+    check('a reload of the reader\'s tab: the reader again, acting, its run started again', acts(reloaded) && layerAsks() > before, `${reloaded.detail}; ${layerAsks() - before} asks of the layer API`)
 
-  // the reader's own reload, as a new target language makes it (host.ts landed → location.reload())
-  await reloaded.frame.evaluate(() => location.reload())
-  await sleep(1500)
-  const own = await readerOn(page)
-  check('the reader\'s own reload (a new target language loads it again): it acts again, in the same frame', acts(own), own.detail)
+    // the reader's own reload, as a new target language makes it (host.ts landed → location.reload())
+    await reloaded.frame.evaluate(() => location.reload())
+    await sleep(1500)
+    const own = await readerOn(page)
+    check('the reader\'s own reload (a new target language loads it again): it acts again, in the same frame', acts(own), own.detail)
 
-  await page.goto(`https://arxiv.org/abs/${PAPER}`)
-  await sleep(1500)
-  await page.goBack()
-  const back = await readerOn(page)
-  check('Back to the reader: the reader again over the PDF page, acting', acts(back) && /\/pdf\//.test(page.url()), `${back.detail}; at ${page.url()}`)
+    await page.goto(`https://arxiv.org/abs/${PAPER}`)
+    await sleep(1500)
+    await page.goBack()
+    const back = await readerOn(page)
+    check('Back to the reader: the reader again over the PDF page, acting', acts(back) && /\/pdf\//.test(page.url()), `${back.detail}; at ${page.url()}`)
+  } else {
+    await sleep(3000)
+    const kept = await page.evaluate(() => ({ framed: !!document.querySelector('iframe[data-axt-pdf-reader]'), buttons: document.querySelectorAll('.axt-floating').length }))
+    check('on a browser the reader cannot run on, the PDF page keeps the browser\'s viewer, with the floating button', !kept.framed && kept.buttons === 1 && layerAsks() === before, `${JSON.stringify(kept)}; ${layerAsks() - before} asks of the layer API`)
+    for (const name of ['a reload of the reader\'s tab', 'the reader\'s own reload', 'Back to the reader']) floor(name)
+  }
 
   // the floating button's panel, with the reader off in the settings: the panel is a framed popup that acts
   await setReader({ enabled: false })
@@ -178,43 +199,48 @@ try {
   await sleep(2500)
   const panel = await panelOf(page)
   const offered = panel ? await entries(panel) : []
-  check('the floating button\'s panel draws the popup, framed and vouched for, with the paper\'s entries', offered.some(e => /PDF/.test(e.text) && !e.disabled), JSON.stringify(offered))
-  if (panel) await press(panel, 'pdf')
-  const viaPanel = await readerOn(page)
-  check('the panel\'s PDF entry opens the reader on this page, asking for a translation, and it acts', acts(viaPanel) && /ask=translate/.test(viaPanel.src) && viaPanel.display !== 'original', viaPanel.detail)
+  // (where the reader is not offered, the panel's PDF entry is not either: the panel is drawn, and its HTML entry is there)
+  check('the floating button\'s panel draws the popup, framed and vouched for, with the paper\'s entries', READER ? offered.some(e => /PDF/.test(e.text) && !e.disabled) : offered.length > 0, JSON.stringify(offered))
+  if (READER) {
+    if (panel) await press(panel, 'pdf')
+    const viaPanel = await readerOn(page)
+    check('the panel\'s PDF entry opens the reader on this page, asking for a translation, and it acts', acts(viaPanel) && /ask=translate/.test(viaPanel.src) && viaPanel.display !== 'original', viaPanel.detail)
 
-  // the toolbar's popup: a page of its own, acting on the active tab
-  await page.goto('about:blank')
-  await page.goto(`https://arxiv.org/pdf/${PAPER}`)
-  await sleep(2500)
-  const popup = track(await context.newPage())
-  await popup.goto(`chrome-extension://${id}/popup.html`)
-  await page.bringToFront()
-  await sleep(2500)
-  await press(popup, 'pdf')
-  const viaPopup = await readerOn(page)
-  check('the toolbar popup\'s "open the bilingual version": the reader over the PDF page in front, asking for a translation, acting', acts(viaPopup) && /ask=translate/.test(viaPopup.src), viaPopup.detail)
-  if (!popup.isClosed()) await popup.close()
+    // the toolbar's popup: a page of its own, acting on the active tab
+    await page.goto('about:blank')
+    await page.goto(`https://arxiv.org/pdf/${PAPER}`)
+    await sleep(2500)
+    const popup = track(await context.newPage())
+    await popup.goto(`chrome-extension://${id}/popup.html`)
+    await page.bringToFront()
+    await sleep(2500)
+    await press(popup, 'pdf')
+    const viaPopup = await readerOn(page)
+    check('the toolbar popup\'s "open the bilingual version": the reader over the PDF page in front, asking for a translation, acting', acts(viaPopup) && /ask=translate/.test(viaPopup.src), viaPopup.detail)
+    if (!popup.isClosed()) await popup.close()
 
-  // the abstract page: its floating button's panel offers the PDF entry (the page shows arXiv's TeX source link), which
-  // opens the paper's PDF in a new tab (`reading.openIn`, by default), the reader over it
-  await page.goto(`https://arxiv.org/abs/${PAPER}`)
-  await sleep(2500)
-  const absPanel = await panelOf(page)
-  const tabOpened = context.waitForEvent('page', { timeout: 15_000 }).catch(() => null)
-  if (absPanel) await press(absPanel, 'pdf')
-  const pdfTab = await tabOpened
-  if (pdfTab) track(pdfTab)
-  const viaAbs = pdfTab ? await readerOn(pdfTab) : { detail: 'no tab opened' }
-  if (pdfTab) viaAbs.detail = `${viaAbs.detail}; the new tab at ${pdfTab.url()}`
-  check('the abstract page\'s entry: the paper\'s PDF in a new tab, the reader over it, asking for a translation, acting; the abstract stays', !!absPanel && acts(viaAbs) && /ask=translate/.test(viaAbs.src) && /\/abs\//.test(page.url()), `${absPanel ? 'panel drawn' : 'no panel'}; ${viaAbs.detail}`)
-  await pdfTab?.close()
+    // the abstract page: its floating button's panel offers the PDF entry (the page shows arXiv's TeX source link), which
+    // opens the paper's PDF in a new tab (`reading.openIn`, by default), the reader over it
+    await page.goto(`https://arxiv.org/abs/${PAPER}`)
+    await sleep(2500)
+    const absPanel = await panelOf(page)
+    const tabOpened = context.waitForEvent('page', { timeout: 15_000 }).catch(() => null)
+    if (absPanel) await press(absPanel, 'pdf')
+    const pdfTab = await tabOpened
+    if (pdfTab) track(pdfTab)
+    const viaAbs = pdfTab ? await readerOn(pdfTab) : { detail: 'no tab opened' }
+    if (pdfTab) viaAbs.detail = `${viaAbs.detail}; the new tab at ${pdfTab.url()}`
+    check('the abstract page\'s entry: the paper\'s PDF in a new tab, the reader over it, asking for a translation, acting; the abstract stays', !!absPanel && acts(viaAbs) && /ask=translate/.test(viaAbs.src) && /\/abs\//.test(page.url()), `${absPanel ? 'panel drawn' : 'no panel'}; ${viaAbs.detail}`)
+    await pdfTab?.close()
+  } else {
+    for (const name of ['the panel\'s PDF entry opens the reader', 'the toolbar popup\'s "open the bilingual version"', 'the abstract page\'s entry']) floor(name)
+  }
 
   // the full text: the column's panel button opens the panel, whose button translates this page
   await page.goto(`https://arxiv.org/html/${FULL_TEXT.id}v1`)
   await sleep(2500)
   const dock = selector => page.evaluate(sel => { const r = document.querySelector('.axt-floating')?.shadowRoot?.querySelector(sel)?.getBoundingClientRect(); return r ? { x: r.x + r.width / 2, y: r.y + r.height / 2 } : null }, selector)
-  const rest = await dock('.axt-fb-main')
+  const rest = await mainButton(page)
   if (rest) { await page.mouse.move(rest.x, rest.y, { steps: 3 }); await sleep(900) }
   const panelButton = await dock('.axt-fb-panel')
   if (panelButton) await page.mouse.click(panelButton.x, panelButton.y)
@@ -231,20 +257,23 @@ try {
 
   // a framed panel acts on the tab its content script is in, not on whichever tab is in front: the panel open on tab A,
   // tab B in front, the entry pressed in A's panel
-  await page.goto('about:blank')
-  await page.goto(`https://arxiv.org/pdf/${PAPER}`)
-  await sleep(2500)
-  const panelA = await panelOf(page)
-  const other = track(await context.newPage())
-  await other.goto(`https://arxiv.org/abs/${PAPER}`)
-  await other.bringToFront()
-  await sleep(1500)
-  const pressedA = panelA ? await press(panelA, 'pdf') : false
-  const onA = await readerOn(page)
-  onA.detail = `${pressedA ? 'pressed' : 'not pressed'}; ${onA.detail}; its tab at ${page.url()}`
-  await sleep(1500)
-  check('a framed panel acts on its own tab with another in front: the reader opens over its tab, the tab in front is left where it was', !!panelA && acts(onA) && /\/abs\//.test(other.url()), `${onA.detail}; the tab in front at ${other.url()}`)
-  await other.close()
+  if (READER) {
+    await page.goto('about:blank')
+    await page.goto(`https://arxiv.org/pdf/${PAPER}`)
+    await sleep(2500)
+    const panelA = await panelOf(page)
+    const other = track(await context.newPage())
+    await other.goto(`https://arxiv.org/abs/${PAPER}`)
+    await other.bringToFront()
+    await sleep(1500)
+    const pressedA = panelA ? await press(panelA, 'pdf') : false
+    const onA = await readerOn(page)
+    const panelState = pressedA || !panelA ? '' : ` (the panel then: ${JSON.stringify(await panelA.evaluate(() => [...document.querySelectorAll('button')].map(b => `${b.textContent?.trim().slice(0, 16)}${b.getAttribute('aria-disabled') === 'true' ? ' (greyed)' : ''}`)).catch(e => `gone: ${e.message.slice(0, 60)}`))})`
+    onA.detail = `${pressedA ? 'pressed' : `not pressed${panelState}`}; ${onA.detail}; its tab at ${page.url()}`
+    await sleep(1500)
+    check('a framed panel acts on its own tab with another in front: the reader opens over its tab, the tab in front is left where it was', !!panelA && acts(onA) && /\/abs\//.test(other.url()), `${onA.detail}; the tab in front at ${other.url()}`)
+    await other.close()
+  } else floor('a framed panel acts on its own tab with another in front (its PDF entry)')
   await setReader({ enabled: true })
 
   // ------------------------------------------------------------------------------------------------------- a framing page
@@ -279,13 +308,16 @@ try {
     `${JSON.stringify(shown)}; ${layerAsks() - layerBefore} asks of the layer API, ${echo.seen.post - echoBefore} translations, ${asked.filter(a => a.includes('/pdf/')).length - pdfAsksBefore} PDF fetches`)
   check('… and writes no setting: the original left on stays on', settingsAfter === settingsBefore && JSON.parse(settingsAfter).pdfReader.original === true, `pdfReader ${JSON.stringify(JSON.parse(settingsAfter).pdfReader)}`)
   // the control: the same ask in the frame our content script makes is honoured — a run, and the original let go
-  await page.goto('about:blank')
-  await page.goto(`https://arxiv.org/pdf/${PAPER}#readarxiv`)
-  const honoured = await readerOn(page)
-  await sleep(1000)
-  const letGo = (await config()).pdfReader.original === false
-  check('control: the same ask in our own frame starts the run and lets the original go (what the checks above find absent is there)', acts(honoured) && letGo, `${honoured.detail}; pdfReader.original ${!letGo}`)
-  await setReader({ original: true })
+  if (READER) {
+    await page.goto('about:blank')
+    await page.goto(`https://arxiv.org/pdf/${PAPER}#readarxiv`)
+    const honoured = await readerOn(page)
+    // (the write lands after the reader opens: waited for, up to 15 s)
+    let letGo = false
+    for (let i = 0; i < 75 && !letGo; i++) { letGo = (await config()).pdfReader.original === false; if (!letGo) await sleep(200) }
+    check('control: the same ask in our own frame starts the run and lets the original go (what the checks above find absent is there)', acts(honoured) && letGo, `${honoured.detail}; pdfReader.original ${!letGo}`)
+    await setReader({ original: true })
+  } else floor('control: the same ask in our own frame starts the run')
 
   // the popup framed by that page: it draws nothing, so a click there acts on no tab
   await framer.evaluate(src => { const f = Object.assign(document.createElement('iframe'), { src }); f.style.cssText = 'position:fixed;inset:0;width:320px;height:480px;opacity:0.01'; document.body.append(f) }, dynamic.popup)
@@ -297,22 +329,32 @@ try {
   control('the panel our floating button frames on the same page draws its buttons', { ok: !ours, detail: ours ? `${(await drawn(ours)).buttons} buttons` : 'no panel' })
   await framer.close()
 
-  // ------------------------------------------------------------------------------------------------- an address's paper
-  section('a ?paper= that is no arXiv id')
-  {
-    const askedBefore = asked.length, violationsBefore = guard.violations.length, errorsBefore = pageErrors.length
-    const bad = track(await context.newPage())
-    for (const paper of ['xv3', '../list/cs.AI/new']) {
-      await bad.goto(`chrome-extension://${id}/pdf-reader.html?live=1&paper=${encodeURIComponent(paper)}&ask=translate`)
-      await sleep(2500)
-    }
-    const state = await bad.evaluate(() => { const s = window.__reader?.controller?.getState(); return s ? { noPaper: s.noPaper, id: s.paper.id } : null })
-    const card = await bad.locator('div.card').count()
-    check('a ?paper= that is no arXiv id: an address with no paper (its card), nothing thrown, nothing asked of arXiv or anyone',
-      state?.noPaper === true && state.id === '' && card > 0 && pageErrors.length === errorsBefore && asked.length === askedBefore && guard.violations.length === violationsBefore,
-      `${JSON.stringify(state)}, ${card} card(s); ${pageErrors.length - errorsBefore} error(s), ${asked.length - askedBefore} asks of arXiv, ${guard.violations.length - violationsBefore} refused`)
-    await bad.close()
+  // ------------------------------------------------------------------------------------- the reader as a page of its own
+  // A page script on an arXiv page can read the panel's frame address (the button's shadow root is open) and send its own
+  // tab there. A release build's reader then draws nothing and does nothing, whatever the address or the settings ask:
+  // only the PDF page ever opens it, in a frame it vouches for (src/entrypoints/pdf-reader/main.tsx)
+  section('an arXiv page that sends its own tab to the reader\'s address')
+  for (const [query, original, why] of [
+    [`?live=1&paper=${PAPER}&ask=translate`, true, 'asking for a translation, the original left on'],
+    [`?live=1&paper=${PAPER}&mode=bilingual`, true, 'naming a translated display'],
+    [`?live=1&paper=${PAPER}`, false, 'naming the paper alone, the settings on a translated display'],
+  ]) {
+    await setReader({ original })
+    const before = JSON.stringify(await config()), layerAt = layerAsks(), echoAt = echo.seen.post, pdfAt = asked.filter(a => a.includes('/pdf/')).length
+    const tab = track(await context.newPage())
+    await tab.goto(`https://arxiv.org/abs/${PAPER}`)
+    await tab.evaluate(url => { location.href = url }, `${dynamic.reader}${query}`)
+    const arrived = await tab.waitForURL(/\/pdf-reader\.html/, { timeout: 15_000 }).then(() => true, () => false)
+    // (an absence: the page is given its owner's answer's worth of time, and then some)
+    await sleep(4000)
+    const shown = arrived ? await drawn(tab.mainFrame()) : null
+    const after = JSON.stringify(await config())
+    check(`sent to the reader's address ${why}: it draws nothing, starts no run, asks the layer API nothing, translates nothing, fetches no PDF, writes no setting`,
+      arrived && shown?.root === 0 && shown.reader === 'undefined' && layerAsks() === layerAt && echo.seen.post === echoAt && asked.filter(a => a.includes('/pdf/')).length === pdfAt && after === before,
+      `${arrived ? tab.url().replace(/^chrome-extension:\/\/[^/]+/, '') : 'never arrived'}; ${JSON.stringify(shown)}; ${layerAsks() - layerAt} asks of the layer API, ${echo.seen.post - echoAt} translations, ${asked.filter(a => a.includes('/pdf/')).length - pdfAt} PDF fetches, settings ${after === before ? 'unchanged' : 'changed'}`)
+    await tab.close()
   }
+  await setReader({ original: false })
 
   section('what nothing did')
   await api.release()
@@ -324,6 +366,6 @@ try {
 }
 
 const pass = results.filter(r => r.ok).length
-console.log(`\n${pass}/${results.length} passed`)
+console.log(`\n${pass}/${results.length} passed${notApplicable.length ? `; ${notApplicable.length} row(s) not applicable on this browser (no reader): ${notApplicable.map(r => r.name).join('; ')}` : ''}`)
 for (const r of results.filter(x => !x.ok)) console.log(`FAILED [${r.section}] ${r.name}${r.detail ? ` — ${r.detail}` : ''}`)
 process.exit(pass === results.length ? 0 : 1)

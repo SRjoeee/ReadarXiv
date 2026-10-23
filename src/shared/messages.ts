@@ -180,10 +180,11 @@ export interface AxtMessages {
   'axt:ocr-run': { request: { image: string; mime: string }; response: OcrRunResponse }
   /**
    * a page of the extension framed in arXiv's → the content script of its tab's top frame (shared/frame-owner.ts):
-   * whether `ticket` is one that script posted to this page's frame, at `address` (the page's path and query). Answered
-   * only by the script that holds the ticket, which spends it
+   * whether `ticket` is one that script posted to this page's frame, the claim coming from an extension page at the address
+   * it gave that frame (the sender's URL, as the browser reports it). Answered only by the script that holds the ticket,
+   * which spends it
    */
-  'axt:frame-claim': { request: { ticket: string; address: string }; response: { owned: boolean } }
+  'axt:frame-claim': { request: { ticket: string }; response: { owned: boolean } }
   /** background → the offscreen document: a figure was given up on, the recogniser's worker is ended (the figure in it
    *  answered as failed) and the next figure starts a new one */
   'axt:ocr-reset': { request: Record<never, never>; response: { reset: true } }
@@ -223,9 +224,13 @@ export function replyWith<T>(promise: Promise<T>, sendResponse: (reply: T | Fail
   promise.then(sendResponse, error => sendResponse(failure(error)))
 }
 
-/** Who sent a message, as far as a handler may know: the tab, when a content script did — an extension page has none */
+/**
+ * Who sent a message, as far as a handler may know: the tab, when a content script did — an extension page has none —
+ * and the sending document's URL as the browser reports it, which no sender can choose
+ */
 export interface MessageSender {
   tabId: number | undefined
+  url?: string
 }
 
 /**
@@ -262,7 +267,7 @@ export function answerMessages(handlers: MessageHandlers) {
     if (!handler) return undefined
     let answer: Promise<unknown> | undefined
     try {
-      answer = handler(message, { tabId: tabOf(sender) })
+      answer = handler(message, { tabId: tabOf(sender), ...(sender.url !== undefined ? { url: sender.url } : {}) })
     } catch (error) {
       answer = Promise.reject(error)
     }
