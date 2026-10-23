@@ -111,7 +111,7 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
   const claim = (list, group, kind) => {
     for (const [p, i] of list.glyphs) {
       const cur = gOwn[p - 1][i]
-      if (kind === 'l' ? cur !== null : kind === 'u' && cur !== null) continue
+      if (kind === 'l' ? cur !== null : kind === 'u' ? cur !== null : kind === 'n' && cur !== null && cur.endsWith('.p')) continue
       gOwn[p - 1][i] = group
     }
     for (const [p, b] of list.boxes ?? []) {
@@ -120,6 +120,18 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
       if (kind === 'u' && cur !== null) continue
       bOwn[p - 1][b] = group
     }
+  }
+
+  /** whether a unit's pieces open (before any text but white space) with a placeholder of ink that has no mark of its own */
+  function opensUnmarked(u, id) {
+    if (!Array.isArray(u?.pieces)) return false
+    for (let k = 0; k < u.pieces.length; k++) {
+      const piece = u.pieces[k]
+      if (piece?.t === 'text') { if (/\S/.test(typeof piece.s === 'string' ? piece.s : '')) return false; continue }
+      const c = classOf(piece)
+      if (c && c !== 'footnote' && !where.has(`p${id}.${k}a`) && !where.has(`p${id}.${k}b`)) return true
+    }
+    return false
   }
 
   // ---- the text of each unit (MR 1–3, 2a)
@@ -199,7 +211,24 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
       if (o) { qq = o[1]; g = Math.min(g, pg.points[qq].glyph - 1) }
     }
     if (qq < 0) for (; g >= 0; g--) glyphAt(g)
-    if (lead.glyphs.length) claim(lead, `u${id}.l`, 'l')
+    if (!lead.glyphs.length) continue
+    // a unit that opens with a placeholder of no mark of its own (a paper's macro first in it: \\bert, \\aidehuman): TeX set
+    // that placeholder's ink before the start mark, after the label if the unit has one. On a unit's first line nothing but its
+    // label and that ink stands between the unit before it and its start (a cell aside: an unmarked number cell may), so the
+    // run is split: its longest opening that is a label's form the label, the rest the placeholder's ink (`.p`)
+    lead.glyphs.reverse()
+    const cell = units?.[id]?.kind === 'cell' || pt(s).name.startsWith('t')
+    if (units && !cell && opensUnmarked(units[id], id)) {
+      let k = 0
+      // (the label ends at a word's end: the next glyph a gap of a fifth of an em or more after it, or none)
+      const G = j => pg.glyphs[lead.glyphs[j][1]]
+      const wordEnd = j => j === lead.glyphs.length || G(j).x0 - G(j - 1).x1 >= 0.2 * Math.max(G(j).size, G(j - 1).size) || !/\S/.test(G(j).u ?? '')
+      for (let j = lead.glyphs.length; j > 0; j--) if (wordEnd(j) && isLabelForm(lead.glyphs.slice(0, j).map(([, i]) => pg.glyphs[i].u ?? '').join(''))) { k = j; break }
+      if (k) claim({ glyphs: lead.glyphs.slice(0, k) }, `u${id}.l`, 'l')
+      if (k < lead.glyphs.length) claim({ glyphs: lead.glyphs.slice(k) }, `u${id}.p`, 'p')
+      continue
+    }
+    claim(lead, `u${id}.l`, 'l')
   }
 
   // ---- the placeholders (MR 4)
@@ -265,16 +294,9 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
    *  no group stands on its start's line before its start mark, back to the point before it: that placeholder's, set before the
    *  mark (an inkless one — \\hline, \\fontsize, \\boldmath — leaves none there, and a label's is its unit's `.l`) */
   function leadUnmarked(u, id) {
-    if (!Array.isArray(u?.pieces)) return false
-    let unmarked = false
-    for (let k = 0; k < u.pieces.length && !unmarked; k++) {
-      const piece = u.pieces[k]
-      if (piece?.t === 'text') { if (/\S/.test(typeof piece.s === 'string' ? piece.s : '')) break; continue }
-      const c = classOf(piece)
-      if (c && c !== 'footnote' && !where.has(`p${id}.${k}a`) && !where.has(`p${id}.${k}b`)) unmarked = true
-    }
+    if (!opensUnmarked(u, id)) return false
     const t = textOf.get(id)
-    if (!unmarked || !t?.s) return false
+    if (!t?.s) return false
     const [p, q] = t.s, pg = pages[p - 1], S = pt(t.s), R = regions[p - 1], r = at(t.s)
     if (S.glyph >= pg.glyphs.length) return false
     const F = pg.glyphs[S.glyph], from = q > 0 ? pg.points[q - 1].glyph : 0
@@ -288,22 +310,24 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
     if (u.unhidden) continue
     // (a unit the marks name and the units do not: no source to spell it against, so the original's)
     if (units && !units[id]) { u.unhidden = 'marks'; continue }
-    // (a unit that opens with a placeholder of ink the marker set no mark for — a paper's macro first in a cell, \bertlarge —
-    // has that ink before its start mark, in no group, and its placeholder drawn over it: the original's)
-    if (units && leadUnmarked(units[id], id)) { u.unhidden = 'marks'; leaks.push(id); continue }
     const src = units ? sourceOf(units[id]) : null
     if (src !== null && spellOf(text.get(id)?.join('') ?? '') !== spellOf(src)) { u.unhidden = 'spell'; spell.push(id); continue }
     const lead = label.get(id)
-    if (!lead) continue
-    const chars = lead.map(([p, i]) => pages[p - 1].glyphs[i].u ?? '').join('')
-    if (isLabelForm(chars)) continue
-    // the label is no label: its ink left the original's where it stands apart from the text's, else the unit the original
-    if (apart(lead, id)) {
-      for (const [p, i] of lead) gOwn[p - 1][i] = null
-      u.groups.delete(`u${id}.l`)
-      u.labelKept = true
-      labelKept++
-    } else { u.unhidden = 'spell'; spell.push(id) }
+    if (lead) {
+      const chars = lead.map(([p, i]) => pages[p - 1].glyphs[i].u ?? '').join('')
+      // the label is no label: its ink left the original's where it stands apart from the text's, else the unit the original
+      if (!isLabelForm(chars)) {
+        if (!apart(lead, id)) { u.unhidden = 'spell'; spell.push(id); continue }
+        for (const [p, i] of lead) gOwn[p - 1][i] = null
+        u.groups.delete(`u${id}.l`)
+        u.labelKept = true
+      }
+    }
+    // (a unit that opens with a placeholder of ink the marker set no mark for, and ink still in no group on its start's line
+    // before its start mark — a cell's, where the label rule does not split it, or one its label was left: the placeholder
+    // would be drawn over that ink: the original's)
+    if (units && leadUnmarked(units[id], id)) { u.unhidden = 'marks'; u.labelKept = false; leaks.push(id); continue }
+    if (u.labelKept) labelKept++
   }
   /** whether a label's glyphs stand apart from the unit's text glyphs on their pages (no two boxes meet) */
   function apart(lead, id) {

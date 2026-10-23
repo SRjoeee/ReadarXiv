@@ -228,3 +228,25 @@ describe('the pixel tier: a cell that opens with an unmarked macro, a footnote\'
     expect(pixelsApart(await renderPage(r.bytes, 2, { off: n => n === 'axt:u0' }), await renderPage(want, 2))).toBe(0)
   })
 })
+
+// ---- the pixel tier, second round: a unit's lead after its label, a name inside a placeholder
+describe('the pixel tier: a lead macro after a label, a babel name inside a \\cref', () => {
+  const groups = (r: { bytes: Uint8Array }, from: number) => new Set([...new TextDecoder('latin1').decode(r.bytes.subarray(from)).matchAll(/\(axt:([^)]+)\)/g)].map(m => m[1]))
+  it('owns a heading\'s lead macro set before its start mark as its placeholder, its number as its label (2609.26457v1 p25)', async () => {
+    const page = `/axt-5e ri BT /F32 10.9091 Tf 1 0 0 1 72 700 Tm [(B.)] TJ 1 0 0 1 92 700 Tm [(AIDE)] TJ 1 0 0 1 120 698 Tm /F32 7 Tf [(human)] TJ /F32 10.9091 Tf 1 0 0 1 150 700 Tm /axt-h0s ri [(is)-300(a)-300(baseline)] TJ ET /axt-h0e ri\n`
+    const { bytes } = await markedSample({ pages: [2], edit: only(page) })
+    const units = [{ kind: 'heading', pieces: [{ t: 'open', src: '\\texorpdfstring{' }, { t: 'ph', src: '\\boldmath' }, { t: 'ph', src: '\\aidehuman{}' }, { t: 'text', s: ' is a baseline' }] }]
+    const r = ok(await wrapped(bytes, { units }))
+    expect(r.unhidden).toEqual([])
+    expect(groups(r, bytes.length)).toEqual(new Set(['u0', 'u0.l', 'u0.p']))
+    // (the text and the macro hidden, the number kept: the page with "B." alone)
+    const want = (await markedSample({ pages: [2], edit: only('BT /F32 10.9091 Tf 1 0 0 1 72 700 Tm [(B.)] TJ ET\n') })).bytes
+    expect(pixelsApart(await renderPage(r.bytes, 2, { off: n => n === 'axt:u0' || n === 'axt:u0.p' }), await renderPage(want, 2))).toBe(0)
+  })
+  it('gives the name cleveref sets inside a \\cref to the placeholder, never the name\'s group (2608.16117v1 p16)', async () => {
+    const page = `/axt-0s ri BT /F32 10.9091 Tf 1 0 0 1 72 700 Tm [(see)] TJ /axt-p0.1a ri /axt-n1.appendix.s ri [(Appendix)] TJ /axt-n1.appendix.e ri [(A)] TJ /axt-p0.1b ri [(.)] TJ ET /axt-0e ri\n`
+    const { bytes } = await markedSample({ pages: [2], edit: only(page) })
+    const r = ok(await wrapped(bytes, { units: [{ pieces: [{ t: 'text', s: 'see ' }, { t: 'ph', src: '\\cref{app}' }, { t: 'text', s: '.' }] }] }))
+    expect(groups(r, bytes.length)).toEqual(new Set(['u0', 'u0.p']))
+  })
+})
