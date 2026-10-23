@@ -1518,11 +1518,12 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   (the whole made first, whatever the rules), and `frame`, `columns` (read under the whole run's rules); `verdicts`
   (default on).
 - **Out, in order.** `onHead(head, chunks)`, then for each part its left parts (`onLeft`) and the part (`onPart(part, note)`),
-  each awaited; `note` is `{ pages, layout: 'kept' | 'none' | { refused, … }, lines: [carried, total] }`. It returns
+  each awaited; `note` is `{ pages, layout: 'kept' | 'none' | { refused, … }, lines: [in place, total] }` (the lines of its
+  pages in place on arXiv's PDF: information). It returns
   `{ through, count, stats }`, or `{ refused: 'anchors', why }` before anything is told.
-- **Per part.** Each part is judged as it is cut (`verdicts`): the carry's share of the lines of its marked pages at least
-  `CARRY_MIN`, and its own reader taking it (`readPart` against the head, the chunks and the parts before); a part refused
-  either way is its pages with no layout (C1.4: drawn from the left), never the paper's refusal. Every bound a part holds is the
+- **Per part.** Each part is judged as it is cut (`verdicts`): its own reader taking it (`readPart` against the head, the
+  chunks and the parts before); a part refused is its pages with no layout (C1.4: drawn from the left), never the paper's
+  refusal. No share of a part's lines judges it: each unit is judged by its own lines (the page and line check, below). Every bound a part holds is the
   part's (`LINES_ALL`, `PAGE_TEXT_ALL`, `NAMES_MAX`, `FONTS_MAX`, the part's caps): an over-bound part is shortened, a first page
   alone past them has no layout, nothing is truncated. A page whose operator list passes `OPS_CAP` operations, whose walk
   passes `STEPS_MAX` steps, `STACK_MAX` levels or `GLYPHS_PAGE` glyphs (one operation's glyphs and placements counted within
@@ -1644,7 +1645,7 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   arXiv's PDF, which the pass counts from the document or the marks it is given (`stats.layout` { refused: 'compile',
   why }), its unit marks dropped with it. 2610.20713 on TL2025 stopped at its hundredth error after 7 of 15 pages, and
   2608.03994 went past 751 errors to 14 of 17, its tables broken; each had carried 95 % and 97 % of its lines, so the carry
-  (`CARRY_MIN`, the marked original's lines found on arXiv's) took both and drew their pages from a layout arXiv never
+  (the share of the marked original's lines found on arXiv's, then) took both and drew their pages from a layout arXiv never
   set. Of 141 compiles counted against arXiv's PDF (the corpus's 113, the TL2025/TL2023 survey's 28) the other 139 have
   arXiv's count and none has more: fewer by any page is refused, more is left to the carry. Such a paper's layer is that
   of a paper with no layout: a part with no layout (its record, below), and the layer draws only from the layout file, so
@@ -1673,9 +1674,9 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   marked original has M pages, arXiv's PDF N" where the host gives the guard no page count, no compile left to tell whose
   fault it is, a compile that threw or ran no TeX), `texlive` (as compile, the paper declaring another TeX Live year than the
   box's), `engine` (a compiler the host does not run, as `engines` or its answer names it) —, ours — `marks` (the marked original is not the paper and the guard could not mend it, or the mark probe, the
-  marks' reading, the maker or a part's own reader failed) —, and `carry` (the marked original's lines found on arXiv's
-  pages under `CARRY_MIN`, the paper's or the part's). The page pass maps every refusal to one (`layoutRecordOf`: the
-  paper's, the page count's, the maker's throw or carry, a verdict's, a part's bound's). A reader reads such a part as one
+  marks' reading, the maker or a part's own reader failed) —, and `carry` (no unit of our compile in place on arXiv's pages,
+  every page it is on not arXiv's page: the paper's alone, `0 of the N units on a page that is arXiv's page`). The page pass maps every
+  refusal to one (`layoutRecordOf`: the paper's, the page count's, the maker's throw or carry, a verdict's, a part's bound's). A reader reads such a part as one
   with no layout: `readPart` gives `layout: null`, as a reader that only tests it takes it, and the record as `noLayout`
   (null where the part has a layout, or where its producer recorded none: 5's bare null, `cutBundle` given none). The parts
   merged (`mergeParts`) stay the whole's reading. The record is data alone: the reader's notice that would say it is the
@@ -1793,11 +1794,25 @@ bytes (REMOVAL 7), and no position is carried from one PDF to another.
   printed as text on our page (`marks`); the final pass the draft's page (`final`); every page box and rotation arXiv's, to
   `BOX_TOL` 0.01 pt (`boxes`: PDF.js's `view`, the CropBox clipped to the MediaBox, not the MediaBox itself: the view is the
   rectangle the reader draws and every coordinate of the layer, the left's and the layout's, is read in, and nothing outside
-  it is shown, so two pages of equal views are one page to the identity map); the TeX Live year known (`final`); and at least `CARRY_MIN` of our lines **in place** on arXiv's
-  PDF (`carry`: `carry.mjs` `lineCheckOf` over the two texts, a line found on its own page within `LINE_PLACE`, 0.5 pt, of any
-  kind; a check that carries no position), the paper's share here and each part's in its verdict. A line found elsewhere is
-  another TeX Live re-breaking the paper, and our page is to be arXiv's: so a paper is compiled on the tree of arXiv's build
-  (the year its 00README declares, which the box hands it over to before any compile).
+  it is shown, so two pages of equal views are one page to the identity map); and the TeX Live year known (`final`). Then the
+  page and line check (`carry.mjs` `lineCheckOf` over the two texts, a check that carries no position) asks two things.
+  **May we draw**, per page: a page is drawable where it is the same paper's page, its words arXiv's page's (`PAGE_SAME`, 0.98:
+  twice the longest common run of the two pages' words in order over their two counts, each word compared once NFKC and the
+  known text-layer substitutes are applied, arXiv's "ǫ" for ε, lower case, its letters and digits alone) and none of its lines
+  found on another page of arXiv's (the carrier's partners). **A unit is laid only where every page it is on is drawable**
+  (`layout/make.mjs` `drawable`, LAYOUT 16; `stats.units.undrawn` the others, left the original's). Over our own page a
+  drawing is right by construction: a page of the same words is drawn whatever its lines' offsets, a line re-broken by a word,
+  moved a point or set with other glue. On the pack and the release sweep's 50 papers it refuses 2307.16209's pages 69 to 76
+  (our TeX Live 2023 compile running behind arXiv's build by up to half a page) and its title page. **Do the panes align**,
+  per line, is information alone: each of our lines in place or not (the median of its matched words' offsets within
+  `LINE_PLACE`, 0.5 pt, on its own page, or a twin of the same words but for a known substitute), the paper's share the head's
+  `carried`; it never decides what is drawn. One fallback stands: a paper none of whose units is laid (no drawable page with a
+  unit on it: `carry`) falls back to arXiv's PDF untranslated; in the page stream the head waits for the first unit laid, so
+  nothing is told before it. A page that is not drawable lays no unit; the reader shows our base page there untranslated
+  (`view/layer-side.mjs` `noLayoutPage` takes a page of a part with a layout as laid), where before the change the part it was
+  in had no layout and showed arXiv's page. A line
+  found elsewhere is another TeX Live re-breaking the paper, and our page is to be arXiv's: so a paper is compiled on the tree
+  of arXiv's build (the year its 00README declares, which the box hands it over to before any compile).
 - **The maker** (`layout/make.mjs`) reads our page as its document: a placeholder's segments are its own glyphs and rules
   between its two marks, looked up on that page exactly (`ownedOn`, within `OWN_TOL` 0.02 pt), with no matching; EMPTY, LOST,
   TEXT, JOINED and OUTSIDE as before. `match.mjs`, `tolerant.mjs`, the link-anchor locator, the text runs and the carry's

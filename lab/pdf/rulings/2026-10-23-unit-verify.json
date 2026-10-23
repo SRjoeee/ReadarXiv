@@ -1,0 +1,419 @@
+{
+  "date": "2026-10-23",
+  "by": "the maintainer",
+  "quote": "\u5982\u679c\u6211\u4eec\u8fc7\u53bb\u672c\u8eab\u6709\u4e00\u4e9b\u505a\u5f97\u4e0d\u591f\u597d\u7684\u5730\u65b9\u88ab\u9519\u8bef\u5730\u5f53\u6210\u4e86\u4eca\u65e5\u6d4b\u8bd5\u6807\u51c6\uff0c\u800c\u5b9e\u9645\u4e0a\u6211\u4eec\u6539\u8fdb\u540e\u7684\u65b0\u7248\u672c\u6bd4\u4e4b\u524d\u7684\u7248\u672c\u66f4\u597d\u3001\u66f4\u63a5\u8fd1\u539f\u7248 PDF\uff0c\u8fd9\u79cd\u60c5\u51b5\u4e0b\u6211\u4eec\u8981\u5927\u80c6\u53bb\u505a\uff0c\u800c\u4e0d\u662f\u4ee5\u65e7\u7684\u3001\u8fd8\u4e0d\u591f\u597d\u7684\u7248\u672c\u4e3a\u6807\u51c6\u3002; 3 \u63a5\u53d7",
+  "english": "The maintainer's standing rule (2026-10-23, relayed by the coordinator): where something we did less well before was wrongly taken as today's test standard, and the new version is in fact better and closer to the original PDF, be bold and do it, rather than take the old, not good enough version as the standard; and decision 3 (\"3 \u63a5\u53d7\", 2026-10-22): what fails the check is shown untranslated. The coordinator told the maintainer of this ruling and its evidence (numbers and side-by-side crops of the pages that move); no further word was needed before merge. Coverage first: every unit of the body translated but formulas and code",
+  "on": "may we draw, decided per page (pull request of feat/unit-verify, LAYOUT 16): a page is drawable where its words are arXiv's page's (0.98 of the two pages' words in common, in order, NFKC and the known text-layer substitutes applied; or the same words in another order; arXiv's stamp no word) and none of its lines is found on another page of arXiv's; a unit is laid only where every page it is on is drawable; the per-line check is information alone; the per-part share (CARRY_MIN 0.9) and the paper's share are gone; a paper of no unit laid falls back to arXiv's PDF",
+  "measures": [
+    "unitsLeft",
+    "framesBlank1",
+    "paraGapTight"
+  ],
+  "targets": [
+    "zh"
+  ],
+  "scope": "zh alone, 2307.16209v1-zh pages 68 to 76: text units left English 9 -> 36, frames with a blank line 21.1 -> 21.5 %, paragraph gaps tighter than the lines beside them 0.174 -> 0.180; the pages where our TeX Live 2023 compile runs behind arXiv's build (up to half a page; lines whose partner is on another page of arXiv's), whose 26 units are left the original's. With those 9 pages left out on both sides every one of these measures is equal, same frames, same aggregation; no other target moves. The delta is this change's alone: next (6c735aab) on its own pack (a) cd14a11e against this branch (5178ac61) on pack (b) c10eafbb, the same marked originals and base pages",
+  "why": "The standard is closeness to the original page, not equality with the last build. The merge base's gate draws each paper's whole layout file, so it counts as drawn units production never drew: production's per-part rule left a part whose lines were under 90 % in place untranslated, whole (1706.03762 page 1, 1810.04805 pages 12-16, 2307.16209 pages 70-139: 328 of the pack's 1,804 units). Against what production shows today the pack draws 302 units more (1,476 -> 1,778: 306 gained, 4 lost), so coverage rises; on the release sweep's 50 papers every one of the 13,554 units drawn today is drawn. A page is drawn where it is arXiv's page, its words the same: over our own page the drawing is right by construction, whatever a line's offset or a re-break by one word. The units left the original's are those of 2307.16209's pages 68 to 76, where our page is not arXiv's page (half a page of other content, set beside arXiv's on the left): drawn there, the translation would stand in a frame the original page does not have. The frame measures move only because the drawn set changes on those pages: with them excluded they are equal",
+  "evidence": {
+    "what": "the rules gate locally, 6c735aab on pack (a) cd14a11e against 5178ac61 on pack (b) c10eafbb (rules-gate.mjs run and compare; model tier, 32 outputs); the recount with pages left out on both sides: layer-gate/score.mjs fixtureTotals and pooled over the same frames",
+    "units": {
+      "pack": {
+        "gateBaseDrawn": 1804,
+        "productionDrawn": 1476,
+        "headDrawn": 1778,
+        "gained": 306,
+        "lost": 4,
+        "undrawn": 26
+      },
+      "releaseSweep": {
+        "papers": 50,
+        "drawnToday": 13554,
+        "headDrawn": 13554,
+        "lost": 0
+      }
+    },
+    "productionRefusedParts": {
+      "1706.03762v7": [
+        [
+          1,
+          1
+        ]
+      ],
+      "1810.04805v2": [
+        [
+          12,
+          16
+        ]
+      ],
+      "2307.16209v1": [
+        [
+          70,
+          139
+        ]
+      ]
+    },
+    "crops": "/Users/cheongzhiyan/Downloads/readarxiv-test/route-unitverify-evidence-2/ (13 pages). Left panel: arXiv's own PDF, its page rendered from the fixture's arxiv.pdf by pdftoppm. Middle: the old build (next 6c735aab, the per-part rule applied: a refused part's units out) drawn over our base page by the layer gate's pixel tier. Right: the new build (5178ac61) drawn over our base page the same way. refused-*: the pages the new rule refuses: 2307.16209 pp. 68-69, which the old build drew, and pp. 70 and 75, in the part the old build refused, English in both builds (our TL2023 compile paginates pp. 69-76 about a third of a page behind arXiv's: arXiv's p. 75 starts at k3 / (3.118) and ends inside Sec. 3.5's third paragraph, ours starts at \"Assuming k_u\" (3.116)); gained-*: a sample of the pages it draws that the old build did not (1706.03762 p. 1, 1810.04805 p. 12, 2307.16209 pp. 80, 90, 100, 120 and 139, 2609.26457 pp. 2 and 5). The first crops (route-unitverify-evidence/) had our base page in their left panel, not arXiv's",
+    "table": [
+      {
+        "target": "de",
+        "pages": "every page",
+        "unitsLeft": [
+          1,
+          1
+        ],
+        "blankLines": [
+          0.061,
+          0.061
+        ],
+        "framesBlank1": [
+          0.026,
+          0.026
+        ],
+        "fullSize": [
+          0.244,
+          0.244
+        ],
+        "paraGapTight": [
+          0.009,
+          0.009
+        ]
+      },
+      {
+        "target": "de",
+        "pages": "the pages of units newly left out excluded",
+        "unitsLeft": [
+          1,
+          1
+        ],
+        "blankLines": [
+          0.061,
+          0.061
+        ],
+        "framesBlank1": [
+          0.026,
+          0.026
+        ],
+        "fullSize": [
+          0.244,
+          0.244
+        ],
+        "paraGapTight": [
+          0.009,
+          0.009
+        ]
+      },
+      {
+        "target": "es",
+        "pages": "every page",
+        "unitsLeft": [
+          1,
+          1
+        ],
+        "blankLines": [
+          0.019,
+          0.019
+        ],
+        "framesBlank1": [
+          0.005,
+          0.005
+        ],
+        "fullSize": [
+          0.259,
+          0.259
+        ],
+        "paraGapTight": [
+          0.014,
+          0.014
+        ]
+      },
+      {
+        "target": "es",
+        "pages": "the pages of units newly left out excluded",
+        "unitsLeft": [
+          1,
+          1
+        ],
+        "blankLines": [
+          0.019,
+          0.019
+        ],
+        "framesBlank1": [
+          0.005,
+          0.005
+        ],
+        "fullSize": [
+          0.259,
+          0.259
+        ],
+        "paraGapTight": [
+          0.014,
+          0.014
+        ]
+      },
+      {
+        "target": "fr",
+        "pages": "every page",
+        "unitsLeft": [
+          1,
+          1
+        ],
+        "blankLines": [
+          0.025,
+          0.025
+        ],
+        "framesBlank1": [
+          0.008,
+          0.008
+        ],
+        "fullSize": [
+          0.237,
+          0.237
+        ],
+        "paraGapTight": [
+          0.014,
+          0.014
+        ]
+      },
+      {
+        "target": "fr",
+        "pages": "the pages of units newly left out excluded",
+        "unitsLeft": [
+          1,
+          1
+        ],
+        "blankLines": [
+          0.025,
+          0.025
+        ],
+        "framesBlank1": [
+          0.008,
+          0.008
+        ],
+        "fullSize": [
+          0.237,
+          0.237
+        ],
+        "paraGapTight": [
+          0.014,
+          0.014
+        ]
+      },
+      {
+        "target": "ja",
+        "pages": "every page",
+        "unitsLeft": [
+          3,
+          3
+        ],
+        "blankLines": [
+          0.106,
+          0.106
+        ],
+        "framesBlank1": [
+          0.022,
+          0.022
+        ],
+        "fullSize": [
+          0.745,
+          0.745
+        ],
+        "paraGapTight": [
+          0.014,
+          0.014
+        ]
+      },
+      {
+        "target": "ja",
+        "pages": "the pages of units newly left out excluded",
+        "unitsLeft": [
+          3,
+          3
+        ],
+        "blankLines": [
+          0.106,
+          0.106
+        ],
+        "framesBlank1": [
+          0.022,
+          0.022
+        ],
+        "fullSize": [
+          0.745,
+          0.745
+        ],
+        "paraGapTight": [
+          0.014,
+          0.014
+        ]
+      },
+      {
+        "target": "ko",
+        "pages": "every page",
+        "unitsLeft": [
+          1,
+          1
+        ],
+        "blankLines": [
+          0.224,
+          0.224
+        ],
+        "framesBlank1": [
+          0.055,
+          0.055
+        ],
+        "fullSize": [
+          0.943,
+          0.943
+        ],
+        "paraGapTight": [
+          0.184,
+          0.184
+        ]
+      },
+      {
+        "target": "ko",
+        "pages": "the pages of units newly left out excluded",
+        "unitsLeft": [
+          1,
+          1
+        ],
+        "blankLines": [
+          0.224,
+          0.224
+        ],
+        "framesBlank1": [
+          0.055,
+          0.055
+        ],
+        "fullSize": [
+          0.943,
+          0.943
+        ],
+        "paraGapTight": [
+          0.184,
+          0.184
+        ]
+      },
+      {
+        "target": "ru",
+        "pages": "every page",
+        "unitsLeft": [
+          1,
+          1
+        ],
+        "blankLines": [
+          0.02,
+          0.02
+        ],
+        "framesBlank1": [
+          0,
+          0
+        ],
+        "fullSize": [
+          0.234,
+          0.234
+        ],
+        "paraGapTight": [
+          0.014,
+          0.014
+        ]
+      },
+      {
+        "target": "ru",
+        "pages": "the pages of units newly left out excluded",
+        "unitsLeft": [
+          1,
+          1
+        ],
+        "blankLines": [
+          0.02,
+          0.02
+        ],
+        "framesBlank1": [
+          0,
+          0
+        ],
+        "fullSize": [
+          0.234,
+          0.234
+        ],
+        "paraGapTight": [
+          0.014,
+          0.014
+        ]
+      },
+      {
+        "target": "zh",
+        "pages": "every page",
+        "unitsLeft": [
+          9,
+          36
+        ],
+        "blankLines": [
+          0.532,
+          0.539
+        ],
+        "framesBlank1": [
+          0.211,
+          0.215
+        ],
+        "fullSize": [
+          0.962,
+          0.962
+        ],
+        "paraGapTight": [
+          0.174,
+          0.18
+        ]
+      },
+      {
+        "target": "zh",
+        "pages": "the pages of units newly left out excluded",
+        "unitsLeft": [
+          6,
+          6
+        ],
+        "blankLines": [
+          0.54,
+          0.54
+        ],
+        "framesBlank1": [
+          0.215,
+          0.215
+        ],
+        "fullSize": [
+          0.961,
+          0.961
+        ],
+        "paraGapTight": [
+          0.181,
+          0.181
+        ]
+      }
+    ],
+    "pagesLeftOut": {
+      "2307.16209v1-zh": [
+        68,
+        69,
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76
+      ]
+    },
+    "pages": {
+      "pack": {
+        "pages": 271,
+        "drawable": 263,
+        "refused": "2307.16209 pages 69-76 (overlap 0.44-0.95, 1-69 lines on another page)"
+      },
+      "releaseSweep": {
+        "pages": 1367,
+        "drawable": 1367
+      }
+    }
+  }
+}
