@@ -395,6 +395,27 @@ const PAGE_CELLS = 25_000_000
 /** a page's word as the page check compares it: NFKC and the known substitutes (`known`), lower case, its letters and digits
  *  alone (punctuation a text layer glues to a word or gives apart is no word's); none where nothing is left */
 const pageWord = t => known(t).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
+/** arXiv's stamp up its first page's margin ("arXiv:2307.16209v1 [hep-th] 30 Jul 2023", "arXiv:hep-th/9901001v1 …"), as
+ *  page words: no word of the paper's, so none of ours has it (2307.16209's title page, 35 words of ours against arXiv's 43) */
+const MONTHS = new Set(['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'])
+function unstamped(ws) {
+  for (let i = 0; i < ws.length; i++) {
+    if (ws[i] !== 'arxiv') continue
+    const id = ws.slice(i + 1, i + 5).findIndex(w => /^\d{4,7}v\d+$/.test(w))
+    if (id < 0) continue
+    // (its category, then the day, the month and the year)
+    for (let j = i + 2 + id; j < Math.min(ws.length, i + 12); j++) if (/^\d{4}$/.test(ws[j]) && MONTHS.has(ws[j - 1])) return [...ws.slice(0, i), ...ws.slice(j + 1)]
+  }
+  return ws
+}
+/** whether two word lists hold the same words, as many of each, in any order */
+function sameBag(a, b) {
+  if (a.length !== b.length) return false
+  const m = new Map()
+  for (const w of a) m.set(w, (m.get(w) ?? 0) + 1)
+  for (const w of b) { const k = m.get(w); if (!k) return false; m.set(w, k - 1) }
+  return true
+}
 /** the longest common run of two word lists, in order; null past PAGE_CELLS */
 function commonCount(a, b) {
   if (a.length * b.length > PAGE_CELLS) return null
@@ -409,7 +430,9 @@ function commonCount(a, b) {
 /**
  * The page-and-line check of our base page's tokens (`ours`) over arXiv's (`arxiv`): what the page pass hands the maker as its
  * `lineCheck`. **May we draw**, per page (`pages`, `undrawable`): a page is drawable where it is the same paper's page, its words
- * arXiv's page's (`overlap`, the share of the two pages' words in common in order, at least PAGE_SAME) and none of its lines
+ * arXiv's page's (`overlap`, the share of the two pages' words in common in order, at least PAGE_SAME; or `sameWords`, every
+ * word as many times in another order: 1810.04805's page 16, its column broken two lines elsewhere; arXiv's stamp no word of
+ * its) and none of its lines
  * found on another page of arXiv's (`elsewhere`, the carrier's partners), its work within PAGE_WORK and PAGE_CELLS; the maker
  * lays a unit only where every page it is on is (make.mjs drawable). A line moved, re-broken by a word or set with other glue
  * on a page of the same words is drawn: over our own page the drawing is right by construction. **Do the panes align**, per
@@ -424,6 +447,7 @@ export function lineCheckOf(ours, arxiv) {
   // each page's words on both sides, in the text layers' order, and our lines found on another page of arXiv's
   const wordsOn = ts => { const by = new Map(); for (const t of ts) { if (!t || !Number.isInteger(t.page) || typeof t.t !== 'string') continue; const w = pageWord(t.t); if (w) (by.get(t.page) ?? by.set(t.page, []).get(t.page)).push(w) } return by }
   const mine = wordsOn(ours), theirs = wordsOn(arxiv)
+  for (const [p, ws] of theirs) theirs.set(p, unstamped(ws))
   const elsewhere = new Map()
   for (const k of ours.keys()) {
     const l = tokenLine[k]
@@ -438,8 +462,10 @@ export function lineCheckOf(ours, arxiv) {
     const n = a.length + b.length, common = n ? commonCount(a, b) : 0
     const overlap = common === null ? null : n ? (2 * common) / n : 1
     const away = elsewhere.get(page)?.size ?? 0
-    const drawable = !over.has(page) && overlap !== null && overlap >= PAGE_SAME && away === 0
-    pages.push({ page, words: [a.length, b.length], overlap: overlap === null ? null : Math.round(overlap * 10000) / 10000, elsewhere: away, drawable })
+    // (the same words in another order are the same page: a column broken two lines elsewhere, its text layer's order another)
+    const same = overlap !== null && overlap < PAGE_SAME && sameBag(a, b)
+    const drawable = !over.has(page) && overlap !== null && (overlap >= PAGE_SAME || same) && away === 0
+    pages.push({ page, words: [a.length, b.length], overlap: overlap === null ? null : Math.round(overlap * 10000) / 10000, ...(same ? { sameWords: true } : {}), elsewhere: away, drawable })
     if (!drawable) undrawable.push(page)
   }
   return { lines: { ...c.lines, placed: c.placed }, pageLines: c.pagePlaced, lineAt: c.lineAt, inPlace: Uint8Array.from(c.inPlace), tokenLine, pages, undrawable, over: [...c.over] }

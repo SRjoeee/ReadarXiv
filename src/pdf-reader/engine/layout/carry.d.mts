@@ -46,7 +46,7 @@ export interface LineCheck {
   tokenLine: Int32Array
   /** may we draw, per page: its words against arXiv's page's (`overlap`, in order; null past the bound), our lines found on
    *  another page (`elsewhere`), drawable or not; and the pages that are not */
-  pages: { page: number; words: [ours: number, arxiv: number]; overlap: number | null; elsewhere: number; drawable: boolean }[]
+  pages: { page: number; words: [ours: number, arxiv: number]; overlap: number | null; sameWords?: true; elsewhere: number; drawable: boolean }[]
   undrawable: number[]
   over: number[]
 }
