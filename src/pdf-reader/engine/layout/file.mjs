@@ -70,12 +70,11 @@ export { LayoutRefusal } from './json.mjs'
  *  equals (latex-front.mjs frontMarks); a page shipped with no column's body bracketed (revtex4-2's ltxgrid makes its columns
  *  without \\@makecol) has its text block bracketed at \\@outputpage (marks.mjs POINTS_TEX); a complete macro's probed call
  *  glued to the placeholder after it is asked about that follower (its `call` code) and gets its closing mark where TeX
- *  answered so; a unit's own marks keep a letter's italic correction as a cell's do (\\emph{…} at a unit's end); and a
- *  citation whose marks give it no ink is found by its link annotations on the base page (make.mjs linkedInk). Over the
- *  release-route sweep's 35 papers with unanchored rows, 92 of the 217 rows (62 units) convert and 95 units in all are placed
- *  better; of their 34 base pages made again, 33 set every word as next's did and 2610.21924 eleven words nearer its own
- *  compile; the gate pack's seven base pages are next's, word for word, its 15 author units and 5 notes all marked (the
- *  file's schema is 5 still; MARKS_SCHEMA 9 still) */
+ *  answered so; and a unit's own marks keep a letter's italic correction as a cell's do (\\emph{…} at a unit's end). Over
+ *  the release-route sweep's 35 papers with unanchored rows, 68 of the 217 rows (43 units) convert, by the measured per-item
+ *  counts (2610.21098's glued calls 32 rows, revtex4-2's body points 36); of their 34 base pages made again, 33 set every word
+ *  as next's did and 2610.21924 eleven words nearer its own compile; the gate pack's seven base pages are next's, word for
+ *  word, its 15 author units and 5 notes all marked (the file's schema is 5 still; MARKS_SCHEMA 9 still) */
 export const LAYOUT = '17'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
