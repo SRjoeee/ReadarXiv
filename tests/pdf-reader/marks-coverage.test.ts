@@ -58,6 +58,14 @@ describe('completeMacros: the paper\'s macros that read nothing past their own a
       '\\newcommand\\it{\\item x}', '\\newcommand\\rd{R\\&D}', '\\newcommand\\pb{\\parbox{1cm}{x}}',
     ].join('\n'))).toEqual([['pb', 0], ['rd', 0]])
   })
+  it('none whose \\def has white space after a parameter, which TeX takes for a delimiter (\\def\\foo#1 #2: the first argument runs to a space)', () => {
+    expect(defs(['\\def\\foo#1 #2{(#1,#2)}', '\\gdef\\zdoit#1 {#1}', '\\def\\nl#1\n  {#1}', '\\def\\ok #1#2{(#1,#2)}'].join('\n'))).toEqual([['ok', 2]])
+    // (and so a call of one gets no closing mark that TeX would read into its argument: \\foo{one}{two} {three})
+    const p = loadProject(inMemory(new Map([['main.tex', new TextEncoder().encode('\\documentclass{article}\\def\\foo#1 #2{(#1,#2)}\\begin{document}\nA \\foo{one}{two} {three} here.\n\\end{document}\n')]])), 'main.tex')
+    expect(p.complete).toEqual([])
+    const marked = marksOf(p.units[0] as SourceUnit, { lines: false, complete: completeCalled(p.units, p.complete), switches: all('\\foo') })
+    expect(Object.entries(marked).filter(([src]) => src.startsWith('\\foo')).map(([, m]) => m)).toEqual(['a'])
+  })
   it('none defined in another way too, nor twice with two arities, nor by a delimited \\def, nor in a comment', () => {
     expect(defs(['\\newcommand\\lt{x}', '\\let\\lt\\relax', '\\newcommand\\two{x}', '\\renewcommand\\two[1]{#1}', '\\def\\dl#1.{#1}', '% \\newcommand\\cm{x}', '\\newcommand\\same{a}', '\\renewcommand\\same{b}'].join('\n'))).toEqual([['same', 0]])
   })
@@ -136,6 +144,17 @@ describe('layoutMarking with the complete macros: a call TeX answered for gets t
     const v = unit([text('A '), ph('\\cls'), ph('\\cite{a}'), text(' B '), ph('\\dprime'), text(' '), ph('\\ref{b}'), text('.')])
     expect(marksOf(v, { lines: false, complete: { cls: 1, dprime: 0 }, switches: all('\\cls', '\\dprime', '\\cite', '\\ref') })).toEqual({ '\\cls': 'a', '\\cite{a}': '', '\\dprime': 'a', '\\ref{b}': '' })
   })
+  it('TeX\'s answer is its probed call\'s: a call with other arguments, or one short of them, has its opening mark alone', () => {
+    // (\\fmt{x}{x}. probed; \\fmt{x}{V}. ends in another glyph, which mathptmx kerns with the full stop)
+    const v = unit([text('A '), ph('\\fmt{x}{x}'), text('. B '), ph('\\fmt{x}{V}'), text('. C '), ph('\\fmt{x}{x}'), text('.')])
+    expect(marksOf(v, { lines: false, complete: { fmt: 2 }, switches: all('\\fmt') })).toEqual({ '\\fmt{x}{x}': 'ab', '\\fmt{x}{V}': 'a' })
+    // (a call of no arguments is its probed call whatever braces it has: \\dprime and \\dprime{} set the same)
+    const z = unit([text('A '), ph('\\dprime'), text(' and '), ph('\\dprime{}'), text('.')])
+    expect(marksOf(z, { lines: false, complete: { dprime: 0 }, switches: all('\\dprime') })).toEqual({ '\\dprime': 'a', '\\dprime{}': 'ab' })
+    // (a call short of its arguments keeps its opening mark though the probed call was answered '2', no mark)
+    const w = unit([text('A '), ph('\\foo{x}'), text(' and '), ph('\\foo'), text('.')])
+    expect(marksOf(w, { lines: false, complete: { foo: 1 }, switches: { '\\foo': '22222222' } })).toEqual({ '\\foo{x}': 'a', '\\foo': 'a' })
+  })
   it('completeCalled: the complete macros the units call, by name', () => {
     expect(completeCalled([u], [['HarnessLimitShare', 0], ['cls', 1], ['unused', 2]])).toEqual({ HarnessLimitShare: 0, cls: 1 })
     expect(completeCalled([u], undefined)).toBeNull()
@@ -170,7 +189,9 @@ describe('the glue rule: a macro glued to the word before is part of it, unless 
     expect(readInkApart(log, ['\\pp', '\\textsuperscript{1}', '\\foo', '\\new{a}', '\\bad', '\\deep', '\\mbox{x}', '\\rule{1pt}{1pt}', '\\hfil'])).toEqual(['\\pp', '\\new{a}', '\\hfil'])
   })
   it('the kernel\'s letters and \\slash are text symbols: drawn as their characters, no mark needed (2610.21037\'s F\\o lner, 2610.21026\'s and\\slash or)', () => {
-    expect(['\\o', '\\O', '\\ss', '\\ae', '\\AE', '\\oe', '\\OE', '\\aa', '\\AA', '\\l', '\\L', '\\i', '\\j', '\\slash'].map(s => symbolText(s))).toEqual(['ø', 'Ø', 'ß', 'æ', 'Æ', 'œ', 'Œ', 'å', 'Å', 'ł', 'Ł', 'ı', 'ȷ', '/'])
+    expect(['\\o', '\\O', '\\ss', '\\ae', '\\AE', '\\oe', '\\OE', '\\aa', '\\AA', '\\l', '\\L', '\\slash'].map(s => symbolText(s))).toEqual(['ø', 'Ø', 'ß', 'æ', 'Æ', 'œ', 'Œ', 'å', 'Å', 'ł', 'Ł', '/'])
+    // (not the dotless \\i and \\j, which a paper's text writes as its own as often as not: 2608.23818's indices)
+    expect(['\\i', '\\j'].map(s => symbolText(s))).toEqual([null, null])
   })
 })
 

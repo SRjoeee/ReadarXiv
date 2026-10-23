@@ -611,7 +611,10 @@ const DOCUMENT_COMMAND = /\\(?:New|Renew|Provide|Declare)DocumentCommand\s*(?:\{
 export function completeMacros(files) {
   const found = new Map(), every = new Map()
   const add = (name, arity) => (found.get(name) ?? found.set(name, []).get(name)).push(arity)
-  const defs = /\\(?:((?:re)?newcommand|providecommand|DeclareRobustCommand)\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[(\d)\])?|(?:[egx]?def)\s*\\([A-Za-z@]+)\s*((?:#\d\s*)*)(?=\{))/g
+  // (a \\def's parameters written against each other and its brace: white space after a parameter is a delimiter TeX
+  // matches, `\\def\\foo#1 #2{…}` whose first argument runs to a space, and a closing mark after a call of it would be read
+  // into that argument; white space after the name is none, TeX skips it)
+  const defs = /\\(?:((?:re)?newcommand|providecommand|DeclareRobustCommand)\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[(\d)\])?|(?:[egx]?def)\s*\\([A-Za-z@]+)\s*((?:#\d)*)(?=\{))/g
   for (const { text: t } of files) {
     for (const m of t.matchAll(ANY_DEFINITION)) if (!inComment(t, m.index) && !inOwnCall(t, m.index, m[1])) every.set(m[1], (every.get(m[1]) ?? 0) + 1)
     // (each definition with its body's range: one inside another's body is that macro's doing, made when it is called, not the

@@ -108,6 +108,17 @@ describe.skipIf(!docker)('the marked original sets every text item where the pap
     const r = await compare(`\\documentclass{article}\n\\usepackage{paralist}\n\\begin{document}\nWith this design we ask four questions.\n\\begin{inparaenum} [(1)]\n  \\item Which pressures reduce verified task success (VTS)?\n  \\item How much of each loss occurs together with a harness limit?\n  \\item Where do failed episodes end, and does the failure record reveal which pressure was assigned?\n\\end{inparaenum}\n\nNext paragraph.\n\\end{document}\n`)
     expect(r.marked).toEqual(r.own)
   }, 900_000)
+  it('a macro whose last glyph is its argument\'s, probed by one call (\\fmt{x}{x}.) and called with another (\\fmt{x}{V}.: mathptmx kerns V with the full stop)', async () => {
+    const r = await compare(doc('\\usepackage{mathptmx}\\newcommand\\fmt[2]{\\textrm{#1#2}}', `First \\fmt{x}{x}. here.\n\n${lines('the \\fmt{x}{V}.')}`))
+    expect(r.marked).toEqual(r.own)
+    expect(r.switches['\\fmt']?.[0]).toBe('0')
+    expect(r.marksOf('\\fmt{x}{V}')).toBe('a')
+  }, 900_000)
+  it('a \\def whose first argument runs to a space (\\def\\foo#1 #2): no closing mark for TeX to read into it', async () => {
+    const r = await compare(doc('\\def\\foo#1 #2{(#1|#2)}', `${lines('\\foo{one}{two} {three}')}`))
+    expect(r.marked).toEqual(r.own)
+    expect(r.marksOf('\\foo{one}{two}')).toBe('a')
+  }, 900_000)
   it('a complete macro whose call is more errors than TeX goes on past, asked about last: the probe\'s other answers stand', async () => {
     // (\\bad's four undefined commands, in each of the punctuation test's 32 boxes, make more than the hundred errors one
     // paragraph may hold, and TeX stops: \\nothing's ink answer, asked before, says it sets none, and it has no mark)

@@ -989,7 +989,11 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
    *  piece after it keeps its marks only past white space where TeX answered that a mark there moves nothing. A call TeX did
    *  not answer for looks ahead as any macro does */
   const closed = completeMap(complete)
-  const answered = p => completeCall(p, closed) && !!switches?.[commandOf(p)]
+  /** the call the probe asked about for each complete macro (probeSamples, over the same units): a call of it with other
+   *  arguments may end in another glyph, which TeX kerns otherwise with what follows (`\\fmt{x}{V}.` under mathptmx, the
+   *  probe's `\\fmt{x}{x}.`), so its answer is that call's, and a call of no arguments's at all */
+  const probed = new Map(switches && closed.size ? probeSamples(units, closed).filter(s => s.own).map(s => [s.command, s.src]) : [])
+  const answered = p => completeCall(p, closed) && !!switches?.[commandOf(p)] && (closed.get(commandOf(p).slice(1)) === 0 || probed.get(commandOf(p)) === p.src)
   const looks = p => LOOKS_AHEAD(p) && !answered(p)
   // (white space after a call that ends in a control word is none: TeX skips it, and the next piece stands against the call's
   // last letter, where its mark's whatsit would let TeX hyphenate the word a citation's box keeps whole: `\\tf \\cite{a}`)
@@ -1040,7 +1044,9 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       // (a complete call keeps its opening mark whatever TeX answered for what follows, as any macro of the paper's has it: the
       // answer is the closing mark's and the next piece's alone. A call that ends in a control word is answered '2' before a word,
       // TeX's tokenizer skipping the space after it where `{}` keeps it, which says nothing of a mark before the call)
-      const raw = answer(p, next), said = raw === '2' && cls === 'macro' && answered(p) ? '1' : raw
+      // (TeX's answer for a paper's macro is its probed call's: a call of it the probe did not ask about, one short of its
+      // arguments or with others, has its opening mark as any macro of the paper's, whatever was answered)
+      const raw = cls === 'macro' && !answered(p) ? undefined : answer(p, next), said = raw === '2' && cls === 'macro' ? '1' : raw
       if (said === '2') return [piece]
       const name = `${cls === 'footnote' ? 'n' : 'p'}${i}.${k}`
       // (an inline formula's opening mark is set on the empty list too: \axtpmm, LAYOUT_TEX)
