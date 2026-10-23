@@ -278,8 +278,9 @@ let shared = new Float64Array(256)
 /** a token whose baseline is within this share of its height of a mark's stands on the mark's own baseline */
 const ON_BASE = 0.1
 /** the token a mark stands at, on the mark's baseline: for a start mark the word whose box is nearest it of those it does not
- *  stand past (a start mark is set before its unit's first glyph), else of those it does; for an end mark the last word that
- *  begins before it (boxes are approximate, see tokenizeDocument), of the words within 0.4 of their height of the mark's
+ *  stand past by more than half a character of the word's (a start mark is set before its unit's first glyph), else of those
+ *  it does; for an end mark, its mirror, the last word that begins before it (a point of slack: boxes are approximate, see
+ *  tokenizeDocument), of the words within 0.4 of their height of the mark's
  *  baseline — those on its own baseline (ON_BASE) first: a figure's label set large 4.7 pt above a heading's baseline begins
  *  after the heading's last word and is no word of its line (1706's "Attention Visualizations" and the "Layer5" beside it).
  *  A start mark past a word's box and short of the next one's is the next word's: the boxes of one text item are its width
@@ -294,7 +295,7 @@ export function tokenAtMark(doc, byPage, mk, start) {
     const t = doc[k], dy = Math.abs(t.y - mk.y)
     if (dy > t.h * 0.4) continue
     let d = 0, past = false
-    if (start) { past = mk.x > t.x + t.w; d = mk.x < t.x ? t.x - mk.x : past ? mk.x - t.x - t.w : 0; if (d >= 8) continue } else if (!(t.x < mk.x + 1)) continue
+    if (start) { past = mk.x > t.x + t.w + t.w / Math.max(1, t.t?.length ?? 1) / 2; d = mk.x < t.x ? t.x - mk.x : mk.x > t.x + t.w ? mk.x - t.x - t.w : 0; if (d >= 8) continue } else if (!(t.x < mk.x + 1)) continue
     if (better(best, k, d, past)) best = { k, d, past }
     if (dy <= ON_BASE * t.h && better(on, k, d, past)) on = { k, d, past }
   }

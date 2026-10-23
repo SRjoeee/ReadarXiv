@@ -32,6 +32,14 @@ export const INK_FREE_WORDS = Object.freeze(['relax', 'nobreak', 'allowbreak', '
  *  call carries its argument, so only a reader of arguments (arg-roles.mjs TEXTLESS) can say a source is one whole */
 export const BREAK_HINTS = Object.freeze(['linebreak', 'nolinebreak', 'pagebreak', 'nopagebreak'])
 
+/** control words that are a prefix of the next token alone and set nothing themselves: LaTeX's `\protect` (`\relax` where text
+ *  is set, `\noexpand\protect\noexpand` in a moving argument, so that the command after it is stored as it is). A mark of the
+ *  piece after one stands before it, never between the two: the pair is one command to TeX (a \thanks's `\protect\url{…}`) */
+export const PREFIX_WORDS = Object.freeze(['protect'])
+const PREFIX = new RegExp(String.raw`^\s*\\(?:${PREFIX_WORDS.join('|')})\s*$`)
+/** whether a placeholder's whole source is one of PREFIX_WORDS (white space round it is none of it) */
+export const prefixWord = src => PREFIX.test(src ?? '')
+
 /** the symbols as a pattern: a control space is a backslash and any white space (a space, a tab or a line's end), and `\@` a
  *  symbol only where no letter follows it (`\@ifnextchar` is a macro of the kernel) */
 const SYMBOL = `@(?![A-Za-z@])|[${INK_FREE_SYMBOLS.map(s => s[1]).filter(c => c !== '@' && c !== ' ').map(c => `\\${c}`).join('')}\\s]`
