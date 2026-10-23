@@ -1805,7 +1805,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
    * partner on its page; a line two units share judges each by its own words), else by the line's verdict (`inPlace`); every
    * rest of a word given in parts on it (a token of no text, on no line) by that rest's own place (`rests`: arXiv's rest within
    * LINE_PLACE), beside its words or alone.
-   * A row the check reads nothing of (a placeholder's run wrapped onto a line of no token: wrapOf) is no evidence either way,
+   * A row the check reads nothing of (a placeholder's run wrapped onto a line of no token: wrapOf), or a held one (heldOf: a
+   * display the unit's source does not hold, never erased), is no evidence either way,
    * and a unit of no row read is not in place (null). A unit on a page past the check's work (`over`) is not. A unit on several
    * pages is read on every one; a line shared with another unit is read for both. True where no line check is given
    */
@@ -1814,7 +1815,10 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     if (!lineCheck) return true
     const { tokenLine, inPlace: placed, rests, lineAt, tokenDx, tokenDy } = lineCheck
     let read = 0
-    for (const r of one.rows) {
+    // (a held row is no line of the unit's: a display its source does not hold, its ink the original's, never erased: unread)
+    const held = new Set(one.held ?? [])
+    for (const [j, r] of one.rows.entries()) {
+      if (held.has(j)) continue
       if (overPages.has(r.page)) return false
       // (the row's words by their line, its rests of words given in parts each)
       const own = new Map()

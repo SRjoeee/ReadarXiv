@@ -510,6 +510,15 @@ describe('makeLayout', () => {
     await expect(makeLayout({ units: w.units, marks: await marksOf(w), arxiv: baseOf(w), lineCheck: { ...(await lineCheckOf(w)), tokenLine: new Int32Array(3) }, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })).rejects.toThrow(TypeError)
   })
 
+  it('a held row (a display the unit does not own, never erased) is not read: the unit around it is laid by its own lines (review of #437)', async () => {
+    const runs: Run[] = [{ s: 'the attention is computed as', x: 72, y: 700 }, { s: 'Z = W X + b', x: 150, y: 680 }, { s: 'where the words go on here', x: 72, y: 660 }]
+    const w: World = { pages: [{ runs: runs.map((r, j) => (j === 1 ? { ...r, x: r.x + 1 } : r)) }], marked: [{ runs }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[2] as Run), 660]], units: [unit('para', [text('the attention is computed as where the words go on here')])] }
+    const { file, stats } = await made(w)
+    expect(file.held).toEqual([[0, [1]]])
+    expect(file.units.map(u => u[0])).toEqual([0])
+    expect(stats.units.unverified).toBe(0)
+  })
+
   it('a unit sharing a baseline with another is read by its own words: the one beside it in place does not carry it (review of #437)', async () => {
     const left: Run = { s: 'scaled dot product attention', x: 72, y: 700 }, right: Run = { s: 'multi head', x: 300, y: 700 }
     const marks: Mark[] = [['0s', 1, 72, 700], ['0e', 1, endOf(left), 700], ['1s', 1, 300, 700], ['1e', 1, endOf(right), 700]]
