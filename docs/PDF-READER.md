@@ -1985,22 +1985,41 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   `DELTA_MAX_SHARE` 0.35 of our whole base page, `DELTA_OBJECTS_MAX` 200,000 objects, `DELTA_HELD_MAX` 64 MiB of forms held,
   `DELTA_DECODED_MAX` 48 MiB of object and cross-reference streams decoded), nothing to replace (`delta-empty`), the proof
   (`delta-proof`), a delta the page pass was given that does not check (`delta-shape`).
-- **The proof** (`proveDelta(origBytes, delta, finalBytes, { PL, getDocument, documentOptions, replaced })`, in the box, the
-  structural one; pixels are the lab's gate): every entry of the section at its `n g obj` (`delta-wire.mjs` `deltaSection`),
-  `/Prev` the original's startxref, the composed startxref the section's; the composed page graphs, read again by the object
-  layer, ours on replaced pages (the page dict's other keys the original's) and the original's elsewhere (a pairwise graph
-  comparison: cycles compare as the graphs they make); PDF.js opening the composed bytes with no message neither source alone
-  gives (its console captured, each document read in turn); the original's page count; every page's box, rotation, user unit and text (strings and
-  places within 0.01) ours on replaced pages and the original's elsewhere. What the delta overrides of the original is bounded:
+- **The proof** (`proveDelta(origBytes, delta, finalBytes, { PL, getDocument, documentOptions, replaced, readers })`, in the
+  box, the structural one; pixels are the lab's gate): every entry of the section at its `n g obj` (`delta-wire.mjs`
+  `deltaSection`), `/Prev` the original's startxref, the composed startxref the section's; the composed page graphs, read again
+  by the object layer, ours on replaced pages (the page dict's other keys the original's) and the original's elsewhere (a
+  pairwise graph comparison: cycles compare as the graphs they make); PDF.js opening the composed bytes with no message neither
+  source alone gives (its console captured, each document read in turn, the composed one first); the original's page count;
+  every page's box (within 0.01), rotation and user unit, and its text items exactly, every field of every item (`page-text.mjs`
+  `textRecordOf`: one SHA-256 of their exact values a page; before 2026-10-24 within 0.01 — the pack's composed pages are ours
+  item for item, 290 pages and 97,702 items, 106,763 wrapped; a string by its UTF-16 code units, so that a lone surrogate is never
+  U+FFFD), ours on replaced pages and the original's elsewhere. `readers` `{ orig, ours }`, where the host gives them: its own
+  readings of arXiv's PDF and of our final pass, each `{ options, own?, read(doc) }`. In its turn and under its capture of the
+  console the proof opens the document itself, of a copy of its own bytes (ours of the bytes themselves where `own`: PDF.js takes
+  them at the opening, so that one that fails leaves them given up, which the host reads by their length), at PDF.js's verbosity
+  1, with the reader's options over `documentOptions`, and gives it to `read`, which reads every page with `readArxivText(doc, {
+  draw: true })`: the proof makes each page's record of the text content that page gives the reader (asked with the defaults),
+  before the reader sees it, so that what is compared is what the proof's document gave, where the proof hears PDF.js. Every
+  document it opened is the host's from then on, handed back in the result (`documents`, whatever the verdict): each text read
+  once in the box, not twice. A reader that throws, or a page it did not read or read otherwise (compared or not, as the proof's
+  own reading reads every page), is a PDF.js failure; a failed opening is destroyed, its failure kept over a destroy's. The
+  composed bytes are let go once read, and the object layer's three documents when its checks return, before a reader's document
+  is opened. What the delta overrides of the original is bounded:
   the replaced pages' objects exactly (no other page; the catalog only to carry our `/OCProperties`, every other key of it the
   original's, that key ours), its `/Size` not below the original's, and its trailer the
   original's `/Root` and `/Info` (as references) and `/ID` (byte for byte), so that no fresh catalog is pointed at. An original whose
   cross-reference PDF.js recovers on its own (any such message on the original alone: it then indexes the whole file, where an
   unreplaced page may be another object than the cross-reference's) is refused (`delta-xref`), and so is a cross-reference
   entry of a type PDF.js does not know. Any other failure is `delta-proof`.
-- **The host's contract.** At the end of the maker child, once the maker let its documents go: `deltaOf(orig, final, { PL,
-  replacedPages })` and `proveDelta(...)`; then `layerOfPaper({ ..., ours: { doc, bytes, sha256, xref, ..., delta: { bytes,
-  sha256, replaced, stats } } })` (or `delta: { refused, why }`). The page pass checks it again (shape, bounds, digest, the
+- **The host's contract.** In the maker child, before it opens a document of its own: `deltaOf(orig, final, { PL,
+  replacedPages })` and `proveDelta(...)` with its `readers`, whose documents (arXiv's PDF and our page, opened by the proof with
+  the draw's options) it reads and keeps (the documents and texts the page pass is given: `arxiv: { doc, text }`, `ours: { doc,
+  ..., text }`, so that `checkOurBase` reads our page's text no more; `ours.text` only where the check reads our page whole, not a
+  partial delta's composed document, which it reads anew — none of the 107 deltas measured is partial), PDF.js's verbosity, which
+  PDF.js 6 holds for the process, set back to 0 after the proof; then `layerOfPaper({ ..., ours: { doc, bytes, sha256, xref, text, ..., delta: { bytes,
+  sha256, replaced, stats } } })` (or `delta: { refused, why }`). The box is one vCPU: a proof beside the page pass, in a thread
+  of its own, would save nothing; a reading not made does. The page pass checks it again (shape, bounds, digest, the
   section over `orig`, the head's reader): the head's base becomes `kind: 'delta'` where it checks, else stays `full` with
   `stats.delta: { kind: 'full', why }` — never a refusal of the paper. The page pass binds `replaced` to the delta's bytes: each
   replaced page's object (arXiv's PDF.js document's page refs) among the section's entries, and no other page's. One rule
@@ -2026,7 +2045,10 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
 - **Measured** (2026-10-23, the gate pack's 7 pairs and 2602.23285v2, this builder against the spike's): 2,078,038 delta
   bytes over 83,666,965 of originals, 2.48 % (the spike 2.48 %); the largest 0.70 MiB (2307.16209v1); per paper 0.30 % to
   30.05 % of the original and at most 28.5 % of our base page; the proof passes on 8 of 8; two builds give the same bytes; the
-  build 15 to 160 ms, the proof 0.2 to 1.4 s (Node).
+  build 15 to 160 ms, the proof 0.2 to 1.4 s (Node). With the readers (2026-10-24, the same 8, wrapped and not): the same
+  verdicts (8 of 8 both ways), the same deltas (2.56 %, 3.06 % wrapped); the box's whole-document text reads 5 to 3, the
+  proof and the two readings together 0.6 to 1.8 s less CPU a paper in Node (the 147-page thesis 1.8 s), the memory after them
+  the same (within 2 MiB). The proof is 85 to 90 % PDF.js's text reads, the object layer 28 to 68 ms (`docs/route/delta.md` §17).
 
 ### 19.9 Our pages wrapped by optional content (per-unit erasure, the file side)
 
@@ -2105,7 +2127,7 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   documentOptions, OPS, units, deflate, inflate })` → `{ bytes, xref, sha256, stats, unhidden, labelKept, pages, own }`
   (`documentOptions` the box's: the lite worker, `maxImageSize: NO_IMAGE_PIXELS`, so that the ownership's read of every
   page decodes no image: a stock read of the 46 MB pair peaks at 3 GB of native memory); then `deltaOf(orig, bytes)` with
-  every page replaced that the wrap wrapped (the default) and `proveDelta`; then `layerOfPaper({ …, ours: { doc (of the
+  every page replaced that the wrap wrapped (the default) and `proveDelta` (its `readers` reading the wrapped bytes' document, §19.8); then `layerOfPaper({ …, ours: { doc (of the
   wrapped bytes), bytes, sha256, xref, delta, wrap: { stats, unhidden, labelKept, pages } } })` (a delta that leaves a wrapped
   page arXiv's is refused there, `delta-shape`, beside deltaOf's and the proof's own check on the bytes: a unit's group on it
   could not be hidden); the record notes `own` (`{ units, unhidden: { marks, across, spell, page,
