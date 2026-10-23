@@ -134,3 +134,15 @@ describe('S7: the bytes written are the bytes proved', () => {
     expect(r.stats.refusedPages).toBe(1)
   })
 })
+
+describe('the proof of a split " show (review debt)', () => {
+  it('splits a " show with its own word and character spacing, and proves it', async () => {
+    const page = `/axt-0s ri BT /F32 10.9091 Tf 1 0 0 1 72 700 Tm 12 TL [(Order)] TJ /axt-p0.1a ri 1.5 0.25 (pointsthe) " ET /axt-0e ri\n`
+    const { bytes } = await markedSample({ pages: [2], edit: only(page) })
+    const follows = (name: string) => (name === 'p0.1a' ? { closing: false, want: 'the', ends: ['0e'], blocked: false, group: [] } : null)
+    const r = ok(await wrapped(bytes, { units: [{ src: 'Order the' }], follows }))
+    expect(r.stats.split).toBe(1)
+    expect(r.stats.wrapped).toBe(1)
+    expect(pixelsApart(await renderPage(bytes, 2), await renderPage(r.bytes, 2))).toBeLessThan(200)
+  })
+})

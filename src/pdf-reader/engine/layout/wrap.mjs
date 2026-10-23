@@ -492,8 +492,13 @@ function sameOps(a, b) {
       // a split: its prefix's operators (T*, and " 's Tw and Tc) and then TJs whose elements join to the show's
       if (o.op === "'" || o.op === '"') {
         if (b[j]?.op === o.op && operand(b[j].args) === operand(o.args)) { j++; continue }
-        const want = o.op === "'" ? ['T*'] : ['Tw', 'Tc', 'T*']
-        for (const w of want) { if (b[j]?.op !== w) return `operator ${i}: a split show's ${w} missing`; j++ }
+        // (" sets the word and character spacing it is given before its T*: a split writes them as Tw and Tc, the same numbers)
+        const want = o.op === "'" ? [['T*', null]] : [['Tw', o.args[0]], ['Tc', o.args[1]], ['T*', null]]
+        for (const [w, v] of want) {
+          if (b[j]?.op !== w) return `operator ${i}: a split show's ${w} missing`
+          if (v !== null && !(typeof v === 'number' && typeof b[j].args[0] === 'number' && Math.abs(b[j].args[0] - v) < 5e-7)) return `operator ${i}: a split show's ${w} not its own`
+          j++
+        }
       } else if (b[j]?.op === o.op && operand(b[j].args) === operand(o.args)) { j++; continue }
       const target = elementsOf(o)
       const got = []
