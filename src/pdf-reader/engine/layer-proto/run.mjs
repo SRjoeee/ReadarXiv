@@ -232,9 +232,9 @@ const SVG_RULES = ['.tl{position:absolute;left:0;top:0;overflow:visible;font-syn
 const r1 = x => Math.round(x * 100) / 100
 /** a run's `still` that never stops it */
 const ALWAYS = () => true
-/** the pages whose rendering state (operator list, decoded images) a run keeps for its next renders (renderAt): the copies near a
- *  view, a page's planes and its crops' sources, without the page parsed again for each */
-export const WARM_PAGES = 4
+/** the pages whose rendering state (operator list, decoded images) the document keeps for the renders after them: every read of a
+ *  page, by any run over the document, one parse of it while it is warm (visibility.mjs) */
+export { WARM_PAGES } from './visibility.mjs'
 const yieldNow = () => (globalThis.scheduler?.yield ? globalThis.scheduler.yield() : new Promise(ok => setTimeout(ok, 0)))
 /** the most of its own work v0 runs in one task, ms: units are laid back to back while their work since the last yield is
  *  under it, then it gives way, so that no task of the engine's approaches a long task (50 ms, the web's budget) but by one
@@ -2325,11 +2325,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       c.width = Math.floor(viewport.width * dpr)
       c.height = Math.floor(viewport.height * dpr)
       let list = null
-      try {
-        await VIS.render(page, { canvas: c, canvasContext: c.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined })
-        // (the list it was drawn by, before the cleanup lets it go: the page's fills, should its draw be refused or late)
-        if (Number.isInteger(OPS?.showText)) list = renderedList(page)
-      } finally { page.cleanup() }
+      // (the page kept warm by the document after it: the copy of the page asked renders from the same parse)
+      await VIS.render(page, { canvas: c, canvasContext: c.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined })
+      // (the list it was drawn by: the page's fills, should its draw be refused or late)
+      if (Number.isInteger(OPS?.showText)) list = renderedList(page)
       // (kept only while it is still the page's reading: not where the page was let go (letGoPage) or the ask it was read for
       // given up before the page was drawn (dropPixels), whose result would be held for good)
       if (!disposed && pixelTasks.get(q) === t) {
@@ -2360,93 +2359,89 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const tGot = performance.now()
     const r = rows[i - 1]
     let x = null
-    try {
-      if (asked) {
-        let timer, late = false
-        const draw = await Promise.race([asked, new Promise(ok => { timer = setTimeout(() => { late = true; ok(null) }, DRAW_WAIT_MS) })])
-        clearTimeout(timer)
-        drawAsks.delete(i)
-        if (late) drawStats.late.push(i)
-        if (draw) x = readDraw(i, draw)
-      }
-      const viewport = page.getViewport({ scale })
-      views[i - 1] = viewport
-      if (!x) {
-        r.left.width = Math.floor(viewport.width * dpr)
-        r.left.height = Math.floor(viewport.height * dpr)
-        if (r.right) { r.right.width = r.left.width; r.right.height = r.left.height }
-      }
-      r.view = page.view
-      let tc, annP, fonts, tRendered, fills = null
-      if (x) {
-        // (from its draw: no text content, annotation or pixel read of PDF.js's; its pixels are read where a step reads its ink)
-        fromData[i] = 1
-        drawStats.data.push(i)
-        tc = x.tc
-        annP = x.raw
-        fonts = x
-        fills = x.fills
-        heldLists.delete(i)
-        tRendered = performance.now()
-      } else {
-        if (DATA) drawStats.live.push(i)
-        // (its render's time from here where its draw was waited for, which is no render's; the page's own start otherwise)
-        const tLive = asked ? performance.now() : tPage
-        const textP = page.getTextContent()
-        // (read for its pixels already, its draw then refused or late: its ink is that reading's, the same pixels at the same size,
-        // their render charged there, pixelsOf)
-        const prefetched = pixelTasks.has(i)
-        if (prefetched) await pixelTasks.get(i)
-        else await VIS.render(page, { canvas: r.left, canvasContext: r.left.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined })
-        tRendered = performance.now()
-        // (the page's links, asked once the render is done so that the worker does not parse them ahead of it: one more round trip,
-        // read before the page is cleaned up)
-        annP = LK.readAnnots(page)
-        // (and its getPage, which an ordinary live reading's time holds too; never the wait for its draw)
-        if (!prefetched) timesOf(i).render += tRendered - tLive + (asked ? tGot - tPage : 0)
-        tc = await textP
-        fonts = FR.live(page, tc.styles)
-        // (its characters' fills as its draw would tell them: its ink off the list PDF.js drew it by, here or in its early pixel read)
-        const tFills = performance.now(), held = heldLists.get(i)
-        heldLists.delete(i)
-        fills = await liveFillsOf(OPS, page, tc.items, workOf(i), held?.doc === d ? held.list : null)
-        timesOf(i).fills += performance.now() - tFills
-      }
-      if (i === 1 && lmP) await lmP
-      const fontOf = fonts.fontOf
-      // the slices of the role table's faces that hold the page's characters, before they are measured in them (layer2.mjs
-      // wDesign measures a character in its font's design, as upright or slanted as the font is)
-      if (FS) {
-        const byFace = new Map()
-        for (const it of tc.items) {
-          const st = it.str ? fontOf(it.fontName) : null
-          if (!st?.known) continue
-          const face = faceOf({ ...st, fam: st.fam === 'math' ? 'serif' : st.fam }, 'latin', 'en'), key = fontString(face, 100)
-          const e = byFace.get(key) ?? byFace.set(key, { face, text: '' }).get(key)
-          e.text += it.str
-        }
-        await Promise.all([...byFace.values()].map(e => FS.ready(e.face, e.text)))
-      }
-      chars2[i - 1] = L2.pageChars2(tc, fontOf, fonts.mapOf, fills)
-      // (and its characters by baseline, which every unit's edges read, made once the page is: edgesOf)
-      rowsByPage[i] = rowsOf(chars2[i - 1])
-      workOf(i).edges += chars2[i - 1].length
-      timesOf(i).text += performance.now() - tRendered
-      // (the Link annotations with the glyph points inside each: the engine's own reading of what PDF.js calls overlaid text)
-      const raw = await annP
-      if (raw === null) { annots[i - 1] = null; linkStats.unread++ } else {
-        const read = LK.annotsOf(raw, LK.pointsOf(tc.items), LK.charPoints(chars2[i - 1]))
-        annots[i - 1] = read.list
-        linkStats.total += read.total
-        linkStats.unsupported += read.unsupported
-      }
-      // (the request's latency from its dispatch to its answer, and the parse)
-      timesOf(i).links += performance.now() - tRendered
-    } finally {
-      // (its pixels and characters read, or the read thrown: nothing reads the proxy's rendering state again (lp item 2), a
-      // view's copy renders the page anew (renderAt), and PDF.js keeps the state of a render still under way to the end)
-      page.cleanup()
+    if (asked) {
+      let timer, late = false
+      const draw = await Promise.race([asked, new Promise(ok => { timer = setTimeout(() => { late = true; ok(null) }, DRAW_WAIT_MS) })])
+      clearTimeout(timer)
+      drawAsks.delete(i)
+      if (late) drawStats.late.push(i)
+      if (draw) x = readDraw(i, draw)
     }
+    const viewport = page.getViewport({ scale })
+    views[i - 1] = viewport
+    if (!x) {
+      r.left.width = Math.floor(viewport.width * dpr)
+      r.left.height = Math.floor(viewport.height * dpr)
+      if (r.right) { r.right.width = r.left.width; r.right.height = r.left.height }
+    }
+    r.view = page.view
+    let tc, annP, fonts, tRendered, fills = null
+    if (x) {
+      // (from its draw: no text content, annotation or pixel read of PDF.js's; its pixels are read where a step reads its ink)
+      fromData[i] = 1
+      drawStats.data.push(i)
+      tc = x.tc
+      annP = x.raw
+      fonts = x
+      fills = x.fills
+      heldLists.delete(i)
+      tRendered = performance.now()
+    } else {
+      if (DATA) drawStats.live.push(i)
+      // (its render's time from here where its draw was waited for, which is no render's; the page's own start otherwise)
+      const tLive = asked ? performance.now() : tPage
+      const textP = page.getTextContent()
+      // (read for its pixels already, its draw then refused or late: its ink is that reading's, the same pixels at the same size,
+      // their render charged there, pixelsOf)
+      const prefetched = pixelTasks.has(i)
+      if (prefetched) await pixelTasks.get(i)
+      else await VIS.render(page, { canvas: r.left, canvasContext: r.left.getContext('2d'), viewport, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined })
+      tRendered = performance.now()
+      // (the page's links, asked once the render is done so that the worker does not parse them ahead of it: one more round trip,
+      // read before the page is cleaned up)
+      annP = LK.readAnnots(page)
+      // (and its getPage, which an ordinary live reading's time holds too; never the wait for its draw)
+      if (!prefetched) timesOf(i).render += tRendered - tLive + (asked ? tGot - tPage : 0)
+      tc = await textP
+      fonts = FR.live(page, tc.styles)
+      // (its characters' fills as its draw would tell them: its ink off the list PDF.js drew it by, here or in its early pixel read)
+      const tFills = performance.now(), held = heldLists.get(i)
+      heldLists.delete(i)
+      fills = await liveFillsOf(OPS, page, tc.items, workOf(i), held?.doc === d ? held.list : null)
+      timesOf(i).fills += performance.now() - tFills
+    }
+    if (i === 1 && lmP) await lmP
+    const fontOf = fonts.fontOf
+    // the slices of the role table's faces that hold the page's characters, before they are measured in them (layer2.mjs
+    // wDesign measures a character in its font's design, as upright or slanted as the font is)
+    if (FS) {
+      const byFace = new Map()
+      for (const it of tc.items) {
+        const st = it.str ? fontOf(it.fontName) : null
+        if (!st?.known) continue
+        const face = faceOf({ ...st, fam: st.fam === 'math' ? 'serif' : st.fam }, 'latin', 'en'), key = fontString(face, 100)
+        const e = byFace.get(key) ?? byFace.set(key, { face, text: '' }).get(key)
+        e.text += it.str
+      }
+      await Promise.all([...byFace.values()].map(e => FS.ready(e.face, e.text)))
+    }
+    chars2[i - 1] = L2.pageChars2(tc, fontOf, fonts.mapOf, fills)
+    // (and its characters by baseline, which every unit's edges read, made once the page is: edgesOf)
+    rowsByPage[i] = rowsOf(chars2[i - 1])
+    workOf(i).edges += chars2[i - 1].length
+    timesOf(i).text += performance.now() - tRendered
+    // (the Link annotations with the glyph points inside each: the engine's own reading of what PDF.js calls overlaid text)
+    const raw = await annP
+    if (raw === null) { annots[i - 1] = null; linkStats.unread++ } else {
+      const read = LK.annotsOf(raw, LK.pointsOf(tc.items), LK.charPoints(chars2[i - 1]))
+      annots[i - 1] = read.list
+      linkStats.total += read.total
+      linkStats.unsupported += read.unsupported
+    }
+    // (the request's latency from its dispatch to its answer, and the parse)
+    timesOf(i).links += performance.now() - tRendered
+    // (its pixels and characters read: its rendering state is the document's, kept warm for the page's copy or let go among the
+    // oldest, visibility.mjs)
     if (shelf) shelf.chars[i - 1] = chars2[i - 1]
     r.base = true
     // (let go while the page was drawn: its canvases are gone, so there is no ink to read, and the roles and faces every run
@@ -2848,16 +2843,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const offOf = (pg, plane) => (plane === 'A' ? [...(rows[pg - 1]?.off ?? [])] : plane === 'B' ? cropSourceOff : [])
   /** page pg's plane drawn by PDF.js at k device pixels a PDF unit, on `canvas` where given (sized by its caller) else on a new one
    *  of the page's size; `annotationMode` PDF.js's, where the host sets it. The page's rendering state (its operator list and
-   *  the images it decoded) is kept for the renders after it, warm: the planes of one copy and the copies again after a zoom are
-   *  one parse of the page, not one each (PDF.js 6.3.289's page.cleanup lets the list and the decoded objects go, and the next
-   *  render asks the worker for both again). At most WARM_PAGES pages are kept warm, the one drawn last kept longest */
-  const warm = []
-  const keepWarm = page => {
-    const at = warm.indexOf(page)
-    if (at >= 0) warm.splice(at, 1)
-    warm.push(page)
-    while (warm.length > WARM_PAGES) warm.shift().cleanup()
-  }
+   *  the images it decoded) is the document's, warm for the renders after it (visibility.mjs WARM_PAGES): the planes of one copy,
+   *  the copies again after a zoom and a later run's copies over the same document are one parse of the page, not one each */
   // (`box`: [x, y, w, h] device pixels of the page at k, the part rendered on a canvas of that size alone: a plane's sources, opsSources)
   const renderAt = (pg, k, plane, canvas = null, annotationMode = undefined, box = null) => using([D], async () => {
     const page = await D.getPage(pg)
@@ -2865,7 +2852,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const c = canvas ?? document.createElement('canvas')
     if (!canvas) { c.width = box ? box[2] : Math.ceil(viewport.width); c.height = box ? box[3] : Math.ceil(viewport.height) }
     const params = { canvas: c, canvasContext: c.getContext('2d'), viewport, ...(box ? { transform: [1, 0, 0, 1, -box[0], -box[1]] } : {}), ...(annotationMode === undefined ? {} : { annotationMode }) }
-    try { await VIS.render(page, params, offOf(pg, plane)) } finally { keepWarm(page) }
+    await VIS.render(page, params, offOf(pg, plane))
     return c
   })
   const needsCopy = () => {
@@ -3136,7 +3123,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     /** the run let go: its sheet removed, every page's canvases released (a page under way when it is called, once it ends),
      *  nothing drawn or laid after; an until under way resolves. Its pages' records stay with whoever holds them */
     dispose() {
-      for (const page of warm.splice(0)) { try { page.cleanup() } catch { /* the document's, gone with it */ } }
+      // (the pages kept warm are the document's, for the next run over it: let go among the oldest, or with the document)
       if (disposed) return
       disposed = true
       sheet.remove()

@@ -69,11 +69,13 @@ function fakeSide(first: ReturnType<typeof headOf> | null = null) {
   let ended = 0, agains = 0, options: Record<string, unknown> | null = null, head = first
   const side = {
     tell: vi.fn((r: unknown) => { told.push(r) }), index: vi.fn(async () => ({ ...m.index, head: head ?? headOf() })), take: vi.fn((rows: Row[]) => { taken.push(...rows) }),
-    end: vi.fn(() => { ended++ }), again: vi.fn(() => { agains++ }), rowsFor: vi.fn(() => [] as number[]), coverage: vi.fn(), probe: vi.fn(() => ({})), dispose: vi.fn(),
+    end: vi.fn(() => { ended++ }), again: vi.fn(() => { agains++ }), retarget: vi.fn(), dropOthers: vi.fn(), rowsFor: vi.fn(() => [] as number[]), coverage: vi.fn(), probe: vi.fn(() => ({})), dispose: vi.fn(),
   }
   return { side, told, taken, setHead: (next: ReturnType<typeof headOf>) => { head = next }, ended: () => ended, agains: () => agains, options: () => options as never as { fetchObject(r: unknown, s: AbortSignal): Promise<Uint8Array>; bind(b: { bytes: number; sha256: string; xref: number }): Promise<boolean>; composed(t: Uint8Array | null, o: object): { promise: Promise<unknown> } }, make: vi.fn((_v: unknown, o: Record<string, unknown>) => { options = o; return side }) }
 }
-const echo = () => ({ lang: 'zh', format: 'markers', translate: vi.fn(async (texts: string[]) => texts.map(t => ({ text: t, by: 'test' }))), close: vi.fn() })
+const echo = (lang = 'zh') => ({ lang, format: 'markers', translate: vi.fn(async (texts: string[]) => texts.map(t => ({ text: t, by: 'test' }))), close: vi.fn() })
+/** an engine of `lang` whose rows say whose they are (`by`) */
+const tagged = (lang: string) => { const e = echo(lang); e.translate.mockImplementation(async (texts: string[]) => texts.map(t => ({ text: t, by: lang }))); return e }
 function view(original = new Uint8Array([1, 2, 3, 4]), loaded: Promise<void> = Promise.resolve()) {
   const data = original
   return {
@@ -696,6 +698,103 @@ describe('the objects: this machine\'s store first, then our server, each kept o
   })
 })
 
+describe('another target language, in place (retarget)', () => {
+  /** the engines the settings name in turn: zh, then each of `then` */
+  const serving = (...then: string[]) => {
+    const made: ReturnType<typeof echo>[] = []
+    const langs = ['zh', ...then]
+    const next = vi.fn(async () => { const e = tagged(langs[Math.min(made.length, langs.length - 1)] as string); made.push(e); return e })
+    return { next, made }
+  }
+  const byOf = (rows: Row[]) => rows.map(r => r[3])
+
+  it('lays the new target over the same side and layer: nothing looked at or made again, the engine before closed, the new target\'s rows taken, the line told at once', async () => {
+    const pool = serving('ja')
+    const a = run({ looks: [() => new Response(catalog)], engine: pool.next })
+    await settle(60)
+    const zh = a.side.taken.length
+    expect(zh).toBe(toTranslate(m.index, 'zh').length)
+    const told = a.events.length
+    a.r.retarget('ja')
+    expect(a.side.side.retarget).toHaveBeenCalledWith('ja')
+    expect(a.events[told]).toEqual({ type: 'translating', got: 0, total: 0, lost: 0 })
+    await settle(60)
+    expect(pool.made[0]?.close).toHaveBeenCalled()
+    expect(a.s.layerLooks()).toBe(1)
+    expect(a.side.make).toHaveBeenCalledTimes(1)
+    expect(a.side.agains()).toBe(0)
+    const after = a.side.taken.slice(zh)
+    expect(after.length).toBe(toTranslate(m.index, 'ja').length)
+    expect(byOf(after).every(b => b === 'ja')).toBe(true)
+    expect(a.events.filter(e => e.type === 'translated').at(-1)).toMatchObject({ total: toTranslate(m.index, 'ja').length, stopped: null })
+    expect(a.r.probe()).toMatchObject({ target: 'ja', rowsState: 'translated' })
+    // (the same target again: nothing)
+    a.r.retarget('ja')
+    expect(a.side.side.retarget).toHaveBeenCalledTimes(1)
+  })
+
+  it('lets the attempt before go at once: none of its rows reaches the side after, however late its batch answers', async () => {
+    const e0 = tagged('zh'), e1 = tagged('ja')
+    let answer = () => {}
+    e0.translate.mockImplementation((t: string[]) => new Promise(r => { answer = () => r(t.map(x => ({ text: x, by: 'zh' }))) }))
+    let opens = 0
+    const a = run({ looks: [() => new Response(catalog)], engine: vi.fn(async () => (opens++ ? e1 : e0)) as never })
+    await settle(60)
+    expect(e0.translate).toHaveBeenCalled()
+    a.r.retarget('ja')
+    answer()
+    await settle(60)
+    expect(byOf(a.side.taken).includes('zh')).toBe(false)
+    expect(byOf(a.side.taken).filter(b => b === 'ja').length).toBe(toTranslate(m.index, 'ja').length)
+  })
+
+  it('the new target\'s service fails to open, or stops short: the pages still showing the target before go to the original (dropOthers), the failure told', async () => {
+    const zh = echo('zh')
+    let opens = 0
+    const a = run({ looks: [() => new Response(catalog)], engine: vi.fn(async () => { if (opens++) throw Object.assign(new Error('no key'), { kind: 'no-key' }); return zh }) as never })
+    await settle(60)
+    a.r.retarget('ja')
+    await settle(60)
+    expect(a.side.side.dropOthers).toHaveBeenCalledTimes(1)
+    expect(a.events.at(-1)).toEqual({ type: 'fail', kind: 'no-key' })
+    const ja = echo('ja')
+    ja.translate.mockImplementation(async () => { throw Object.assign(new Error('down'), { kind: 'network' }) })
+    let n = 0
+    const c = run({ looks: [() => new Response(catalog)], engine: vi.fn(async () => (n++ ? ja : echo('zh'))) as never })
+    await settle(60)
+    c.r.retarget('ja')
+    await settle(60)
+    expect(c.side.side.dropOthers).toHaveBeenCalled()
+    expect(c.events.filter(e => e.type === 'translated').at(-1)).toMatchObject({ stopped: 'network' })
+  })
+
+  it('a language the layer does not set: said so, the side let go; another target after it begins the run again', async () => {
+    const pool = serving('ja')
+    const a = run({ looks: [() => new Response(catalog)], engine: pool.next })
+    await settle(60)
+    a.r.retarget('xx')
+    expect(a.side.side.dispose).toHaveBeenCalled()
+    expect(a.events.at(-1)).toEqual({ type: 'unavailable', why: 'target', retryAt: null })
+    expect(a.r.side).toBeNull()
+    a.r.retarget('ja')
+    await settle(60)
+    expect(a.side.make).toHaveBeenCalledTimes(2)
+    expect(a.r.probe()).toMatchObject({ target: 'ja' })
+  })
+
+  it('a target asked before any side is made (the service still opening) begins the run again, the engine before closed once it comes', async () => {
+    const pool = engines()
+    pool.hold()
+    const a = run({ looks: [() => new Response(catalog)], engine: pool.next })
+    await settle(1)
+    a.r.retarget('ja')
+    pool.release()
+    await settle(60)
+    expect(pool.made[0]?.close).toHaveBeenCalled()
+    expect(a.side.make).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('B6, R2-R4: the translation into rows', () => {
   it('every unit the target translates as a row, taken as the batches come, then the end; the counts told', async () => {
     const a = run({ looks: [() => new Response(catalog)] })
@@ -709,15 +808,28 @@ describe('B6, R2-R4: the translation into rows', () => {
     expect(a.engine.translate).toHaveBeenCalled()
   })
 
-  it('a service that fails midway: the run stops with its kind, the rows so far taken, the end told (the pages complete with what they hold)', async () => {
+  it('a service that fails midway: the run stops with its kind; with no row of the target held, no end is told (nothing to lay: the pages stay the original\'s)', async () => {
     const engine = echo()
     let calls = 0
     engine.translate.mockImplementation(async (texts: string[]) => { if (calls++) throw Object.assign(new Error('down'), { kind: 'network' }); return texts.map(t => ({ text: t, by: 'test' })) })
     const a = run({ looks: [() => new Response(catalog)], engine })
     await settle(60)
     const last = a.events.find(e => e.type === 'translated') as Extract<RunEvent, { type: 'translated' }>
-    expect(last.stopped).toBe('network')
+    expect(last).toMatchObject({ got: 0, stopped: 'network' })
+    expect(a.side.ended()).toBe(0)
+    expect(a.side.side.dropOthers).toHaveBeenCalledTimes(1)
+  })
+
+  it('a stop with rows of the target held tells the end: the pages complete with what they hold (a retry that fails over a translation done)', async () => {
+    const engine = echo()
+    const a = run({ looks: [() => new Response(catalog)], engine })
+    await settle(60)
     expect(a.side.ended()).toBe(1)
+    engine.translate.mockImplementation(async () => { throw Object.assign(new Error('down'), { kind: 'network' }) })
+    a.r.retry()
+    await settle(60)
+    expect(a.events.filter(e => e.type === 'translated').at(-1)).toMatchObject({ stopped: 'network' })
+    expect(a.side.ended()).toBe(2)
   })
 
   it('R4: a retry opens the door again, takes every row held at once, and runs again; the service\'s scope withdrawn at the end (R2)', async () => {

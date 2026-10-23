@@ -6,6 +6,8 @@ export declare function labelGroup(id: number): string
 export declare function nameGroup(occurrence: number): string
 /** render B's hidden groups: every unit's text and label */
 export declare function cropSourceOff(group: string): boolean
+/** how many pages of a document keep their rendering state (PDF.js's operator list and decoded images) after a render */
+export declare const WARM_PAGES: number
 export interface Visibility {
   /** the configuration read (never rejects: a document whose configuration cannot be read holds no group of ours) */
   readonly ready: Promise<void>
@@ -13,6 +15,9 @@ export interface Visibility {
   readonly size: number
   /** the page rendered with the groups `off` names (or tests) hidden and every other group of ours shown, after every render asked
    *  before it */
-  render(page: { render(params: object): { promise: Promise<unknown> } }, params: object, off?: Iterable<string> | ((group: string) => boolean)): Promise<unknown>
+  render(page: { render(params: object): { promise: Promise<unknown> }; cleanup?(): unknown }, params: object, off?: Iterable<string> | ((group: string) => boolean)): Promise<unknown>
+  /** the pages kept warm after their renders (at most WARM_PAGES, the latest last; each the next render's state, the oldest let go
+   *  by its `cleanup()`): a copy */
+  readonly warm: readonly object[]
 }
 export declare function visibilityOf(doc: object): Visibility

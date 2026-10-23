@@ -43,6 +43,14 @@ export interface LayerSide {
   /** a later attempt: the door disposed and opened again over the latest document with every part added, and no row carried
    *  (the host takes its rows again). Pages laid keep their drawing until the new door's page is ready */
   again(): void
+  /** the layer in another language, in place (`to` a target of the rules'; the same target or a refused side: nothing): the door
+   *  laying the one before let go at once, so that nothing it lays or copies is put in place, then the open again as again() does,
+   *  over the same composed document (no document opened or read again). The host takes the new target's rows as they come; a page
+   *  laid keeps the target before until the new one's page commits or fails, or dropOthers */
+  retarget(to: string): void
+  /** every page that still shows another target's layer back to the original's page: the host's word that this target's rows
+   *  will not come (its service failed, or the translation stopped short) */
+  dropOthers(): void
   /** the ids of the units whose rows the open door's page still waits for (the door's rowsFor: its closure's, Need(page)),
    *  for a host that translates as it shows to translate first; [] with no door, out of the paper, or once the page is ready */
   rowsFor(page: number): number[]

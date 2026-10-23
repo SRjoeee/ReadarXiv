@@ -3,6 +3,9 @@
 // side fetches and reads through its feed (feed.mjs), binds the base, waits for the original, opens the composed document and
 // the engine's door over it, adds each later part in page order,
 // takes the rows, ends the parts. A fork of the chain, or a later attempt (again), opens the door again: one open layer a page.
+// Another target (retarget) is a later attempt in another language over the same layer and the same composed document: the left,
+// both documents and what PDF.js keeps of their pages stay; each laid page keeps its drawing until the new target's commits, or the
+// new target's page fails, or the host says its rows will not come (dropOthers): then the original's page.
 //
 // What the right pane shows, page by page, is the best version there is (§2.3): a place shows its pre-layer content (the
 // original's page view, else the skeleton: places.mjs) until the door has laid its page and the place is near the view; then
@@ -116,6 +119,8 @@ export function createLayerSide(view, o) {
   /** 'idle' (nothing read yet), 'opening', 'open', 'refused' */
   let state = 'idle', why = null
   let index = null, bound = null, door = null, doorParts = [], gen = 0, offPage = null
+  /** the language the side lays (retarget sets another), and the one the open door lays */
+  let target = o.target, doorTarget = null
   /** whether the layer is drawn over our own compile (the head's base says `ours`: the layer route, design §3.2; the engine's
    *  layerDraws, format.mjs): the composed document's pages are then OUR base's, whose lines are not arXiv's page's, so a page's copy comes
    *  from the composed document alone and a page laid by no layout is the original's page */
@@ -265,6 +270,8 @@ export function createLayerSide(view, o) {
     if (was) { try { was.dispose() } catch (e) { warn('dispose', e) } }
     leftAc.abort()
     leftAc = new AbortController()
+    // (a copy under way is the door's before: its page is copied again by this one, and its renders hold the document's queue)
+    for (const P of pages.values()) for (const c of P.copyAcs ?? []) c.abort()
     for (const p of leftAsked) if (!left?.has(p)) leftAsked.delete(p)
     // (a fetch this aborts is asked again: the pages wanted spread again on their next want)
     spread.clear()
@@ -282,7 +289,7 @@ export function createLayerSide(view, o) {
     let layer
     try {
       layer = await open({
-        index, doc, parts, target: o.target, faceSources: o.faceSources, hyphUrl: o.hyphUrl, ...(o.rules ? { rules: o.rules } : {}), OPS: V.lib?.OPS ?? null,
+        index, doc, parts, target, faceSources: o.faceSources, hyphUrl: o.hyphUrl, ...(o.rules ? { rules: o.rules } : {}), OPS: V.lib?.OPS ?? null,
         // (the left parts' fetches go with the door's generation: a reopen, a refusal or the dispose aborts them)
         leftPart: (_page, ref) => o.fetchObject(ref, leftAc.signal),
         onRetired: d => retired(d, me),
@@ -291,6 +298,7 @@ export function createLayerSide(view, o) {
     if (disposed || my !== gen) { layer.dispose(); return }
     door = layer
     doorParts = parts
+    doorTarget = target
     held(doc, me)
     counts.opens++
     offPage = door.onPage((p, s) => told(my, p, s))
@@ -418,7 +426,7 @@ export function createLayerSide(view, o) {
     if (holdsFocus(n)) { keptForFocus.add(n); return }
     keptForFocus.delete(n)
     const was = P.content
-    P.content = { wrap: null, svg: null, copy: null, k: 0, gen }
+    P.content = { wrap: null, svg: null, copy: null, k: 0, gen, target: doorTarget }
     if (V.places.swap(n, empty(), { blank: true })) counts.retired++
     else P.content = null
     release(was?.copy)
@@ -457,7 +465,7 @@ export function createLayerSide(view, o) {
     let st
     try { st = door.pageState(n) } catch { P.ask = null; return }
     if (st === 'laying') clockOn(n)
-    door.pageOf(n, { lang: o.target, signal: a.signal }).then(laid => {
+    door.pageOf(n, { lang: doorTarget, signal: a.signal }).then(laid => {
       if (P.ask === a) P.ask = null
       clockOff(n)
       if (disposed || my !== gen) return
@@ -556,7 +564,7 @@ export function createLayerSide(view, o) {
     const was = P.content
     if (!V.places.swap(n, wrap)) { release(got.canvas); return }
     release(was?.copy)
-    P.content = { wrap, svg: laid.svg, copy: got.canvas, k: got.k, gen: my }
+    P.content = { wrap, svg: laid.svg, copy: got.canvas, k: got.k, gen: my, target: doorTarget }
     P.failed = false
     counts.commits++
     ring.push(`${n}@${Math.round(clock.now())}`)
@@ -844,6 +852,38 @@ export function createLayerSide(view, o) {
       rowsEnded = true
       if (door && !rowsTold) { rowsTold = true; door.end() }
     },
+    /**
+     * The layer in another language (`to`, a target of the rules'), in place: the door laying the target before is let go at once
+     * (its generation past, so nothing it lays or copies is put in place, and no page is asked of it in the new language), then
+     * the open again as again() does, over the same composed document (composedFor: the latest, read already). The rows are the
+     * new target's, taken as they come; a laid page shows the target before until the new one's commits (DR7), fails (the
+     * original's page), or the host lets it go (dropOthers)
+     */
+    retarget(to) {
+      if (disposed || state === 'refused' || typeof to !== 'string' || !to || to === target) return
+      target = to
+      gen++
+      offPage?.()
+      offPage = null
+      const was = door
+      door = null
+      doorParts = []
+      try { was?.dispose() } catch (e) { warn('dispose', e) }
+      for (const n of pages.keys()) { abortAsk(n); for (const c of pages.get(n).copyAcs ?? []) c.abort() }
+      side.again()
+    },
+    /** every page that still shows another target's layer back to the original's page: the host's word that this target's rows
+     *  will not come (its service failed, or it stopped short) */
+    dropOthers() {
+      if (disposed) return
+      let hid = false
+      for (const [n, P] of pages) {
+        if (!P.content || P.content.target === target) continue
+        unlay(n)
+        if (right?.hide(n)) hid = true
+      }
+      if (hid) startsFor([...rows.keys()])
+    },
     again() {
       if (disposed || state === 'refused') return
       rows.clear()
@@ -868,7 +908,7 @@ export function createLayerSide(view, o) {
       let laidNow = 0, retiredNow = 0, asking = 0
       for (const P of pages.values()) { if (P.content?.wrap) laidNow++; else if (P.content) retiredNow++; if (P.ask) asking++ }
       return {
-        state, why, gen, index: !!index, bound: bound === true, parts: doorParts.length, read: feed.state().parts.length, ended: partsEnded,
+        state, why, gen, target, index: !!index, bound: bound === true, parts: doorParts.length, read: feed.state().parts.length, ended: partsEnded,
         rows: rows.size, rowsEnded, ready, failed, stalled: stalls, laid: laidNow, retired: retiredNow, asking,
         composed: counts.composed, docs: entries.size, opens: counts.opens, forks: counts.forks, asked: counts.asked, commits: counts.commits, copies: counts.copies, retirements: counts.retired,
         leftParts: counts.leftParts, leftAsked: leftAsked.size, kept: kept.size, commitsRing: ring.join(' '),

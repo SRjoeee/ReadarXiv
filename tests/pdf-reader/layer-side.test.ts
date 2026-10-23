@@ -762,6 +762,100 @@ describe('L15: a fork', () => {
   })
 })
 
+describe('another target over the same layer (retarget)', () => {
+  const svgLang = (s: Setup, n: number) => layerOf(s, n)?.querySelector('svg')?.getAttribute('lang') ?? null
+  /** the side open on its first target (zh), pages 1 and 2 near and laid with its rows */
+  async function laid() {
+    const s = await setup({ door: { rows: 'gate' } })
+    const m = await M()
+    await nearOn(s, [1, 2])
+    s.side.tell(await ALL())
+    s.side.take(m.index.units.map((_, id) => rowOf(id)))
+    s.side.end()
+    await settle(s)
+    return { s, m }
+  }
+
+  it('opens the door again over the same composed document, with nothing read again; each laid page keeps its drawing until the new target\'s commits', async () => {
+    const { s, m } = await laid()
+    expect([svgLang(s, 1), svgLang(s, 2)]).toEqual(['zh', 'zh'])
+    const kept = layerOf(s, 1)?.querySelector('svg'), fetched = s.fetched.length
+    s.side.retarget('ja')
+    await settle(s)
+    expect(s.opens).toBe(2)
+    expect(s.composed.length).toBe(1)
+    expect(s.destroyed).toEqual([])
+    expect(s.side.probe()).toMatchObject({ target: 'ja', composed: 1, docs: 1, rows: 0 })
+    // (the feed's objects are read once: the new door is given the parts read)
+    expect(s.fetched.length).toBe(fetched)
+    // the new target's pages wait for its rows: the target before stays drawn, the new door given none of its rows
+    expect(content(s, 1)).toBe('layer')
+    expect(layerOf(s, 1)?.querySelector('svg')).toBe(kept)
+    expect(s.doors[1]?.taken).toEqual([])
+    s.side.take(m.index.units.map((_, id) => rowOf(id, `ja ${id}`)))
+    s.side.end()
+    await settle(s)
+    expect([content(s, 1), content(s, 2)]).toEqual(['layer', 'layer'])
+    expect([svgLang(s, 1), svgLang(s, 2)]).toEqual(['ja', 'ja'])
+    expect(kept?.isConnected).toBe(false)
+  })
+
+  it('lets the door before go at once: a copy of it under way is aborted and never put in place', async () => {
+    const { s, m } = await laid()
+    // (page 3's copy by the first door held at its render)
+    const doc = (await s.composed[0]!.task.promise) as unknown as { getPage(n: number): Promise<object> }
+    const get = doc.getPage.bind(doc)
+    let release = () => {}
+    const held = new Promise<void>(r => { release = r })
+    doc.getPage = async (n: number) => Object.assign(await get(n), { render: () => ({ promise: held }) })
+    await nearOn(s, [3])
+    await settle(s, 6)
+    const ask = s.doors[0]?.copies.find(c => c[0] === 3)?.[1] as { signal?: AbortSignal } | undefined
+    expect(ask?.signal?.aborted).toBe(false)
+    s.side.retarget('ja')
+    expect(ask?.signal?.aborted).toBe(true)
+    expect(s.doors[0]?.layer.pageState.bind(s.doors[0]?.layer)).toThrow()
+    release()
+    doc.getPage = get
+    await settle(s)
+    expect(content(s, 3)).not.toBe('layer')
+    s.side.take(m.index.units.map((_, id) => rowOf(id, `ja ${id}`)))
+    s.side.end()
+    await settle(s)
+    expect(svgLang(s, 3)).toBe('ja')
+  })
+
+  it('dropOthers: the pages still showing the target before go back to the original\'s page; the new target\'s stay', async () => {
+    const { s, m } = await laid()
+    s.side.retarget('ja')
+    await settle(s)
+    expect(content(s, 1)).toBe('layer')
+    s.side.dropOthers()
+    await flush(4)
+    expect([content(s, 1), content(s, 2)]).toEqual(['original', 'original'])
+    s.side.take(m.index.units.map((_, id) => rowOf(id, `ja ${id}`)))
+    s.side.end()
+    await settle(s)
+    s.side.dropOthers()
+    await flush(4)
+    expect([svgLang(s, 1), svgLang(s, 2)]).toEqual(['ja', 'ja'])
+  })
+
+  it('the same target, or a side that refused its layer: nothing', async () => {
+    const { s } = await laid()
+    s.side.retarget('zh')
+    await settle(s)
+    expect(s.opens).toBe(1)
+    const r = await setup({ bind: async () => false })
+    r.side.tell(await ALL())
+    await settle(r)
+    expect(r.side.probe().state).toBe('refused')
+    r.side.retarget('ja')
+    await settle(r)
+    expect([r.opens, r.side.probe().target]).toEqual([0, 'zh'])
+  })
+})
+
 describe('the parts after their end (the review\'s probe 4)', () => {
   it('an end told short, then a part past it with a later end: the door opened again over every part, the side open, its pages laid', async () => {
     const s = await setup()

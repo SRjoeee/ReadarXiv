@@ -25,12 +25,13 @@ export function segmentsFrom(prompt) {
 }
 
 /**
- * Starts the endpoint on a free port of 127.0.0.1: `{ port, baseURL, origin, seen, close }`. `seen` counts what reached
- * it: `post` (chat requests), `options` (preflights), `models` (model lists), `origins` (the Origin headers, '(none)' for a
- * request without one). `close()` ends its connections and resolves once it is down
+ * Starts the endpoint on a free port of 127.0.0.1: `{ port, baseURL, failingURL, origin, seen, close }`. `seen` counts what
+ * reached it: `post` (chat requests), `options` (preflights), `models` (model lists), `origins` (the Origin headers, '(none)' for
+ * a request without one), `refused` (chat requests to `failingURL`, a service whose key is refused: each answered 401).
+ * `close()` ends its connections and resolves once it is down
  */
 export async function startEchoEndpoint({ mark = '[echo] ' } = {}) {
-  const seen = { post: 0, options: 0, models: 0, origins: new Set() }
+  const seen = { post: 0, options: 0, models: 0, origins: new Set(), refused: 0 }
   const server = createServer((req, res) => {
     seen.origins.add(req.headers.origin ?? '(none)')
     if (req.method === 'OPTIONS') {
@@ -39,7 +40,7 @@ export async function startEchoEndpoint({ mark = '[echo] ' } = {}) {
       return
     }
     // the model list (the redesign's design, §6.3): the settings page's form lists this endpoint's one model
-    if (req.method === 'GET' && req.url === '/v1/models') {
+    if (req.method === 'GET' && (req.url === '/v1/models' || req.url === '/fail/v1/models')) {
       seen.models++
       res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ object: 'list', data: [{ id: 'local-echo', object: 'model' }] }))
       return
@@ -47,6 +48,12 @@ export async function startEchoEndpoint({ mark = '[echo] ' } = {}) {
     let body = ''
     req.on('data', chunk => { body += chunk })
     req.on('end', () => {
+      // (the failing service: its key refused, as an OpenAI-compatible endpoint says it)
+      if (req.url?.startsWith('/fail/')) {
+        seen.refused++
+        res.writeHead(401, { 'content-type': 'application/json' }).end(JSON.stringify({ error: { message: 'Incorrect API key provided', type: 'invalid_request_error', code: 'invalid_api_key' } }))
+        return
+      }
       seen.post++
       let segments = null
       try {
@@ -70,5 +77,5 @@ export async function startEchoEndpoint({ mark = '[echo] ' } = {}) {
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
   const port = server.address().port
   const origin = `http://127.0.0.1:${port}`
-  return { port, baseURL: `${origin}/v1`, origin, seen, close: () => new Promise(done => { server.closeAllConnections(); server.close(() => done()) }) }
+  return { port, baseURL: `${origin}/v1`, failingURL: `${origin}/fail/v1`, origin, seen, close: () => new Promise(done => { server.closeAllConnections(); server.close(() => done()) }) }
 }
