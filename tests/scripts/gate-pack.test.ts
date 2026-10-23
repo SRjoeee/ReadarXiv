@@ -28,7 +28,7 @@ const walk = (dir: string, rel = ''): string[] => readdirSync(dir).sort().flatMa
 /** a tree the way the gate's folders are laid out: two outputs of one paper (one PDF between them) and one of another */
 function inputs() {
   const root = tmp()
-  const o = { fixtures: join(root, 'fixtures'), records: join(root, 'records'), refs: join(root, 'refs'), geometry: join(root, 'geometry'), fontsDir: join(root, 'fonts'), texmf: join(root, 'texmf') }
+  const o = { fixtures: join(root, 'fixtures'), records: join(root, 'records'), refs: join(root, 'refs'), geometry: join(root, 'geometry'), fontsDir: join(root, 'fonts'), texmf: join(root, 'texmf'), sources: join(root, 'sources') }
   for (const [name, pdf] of [['0001.00001v1-zh', 'pdf-one'], ['0001.00001v1-de', 'pdf-one'], ['0002.00002v1-zh', 'pdf-two']] as const) {
     put(join(o.fixtures, name, 'arxiv.pdf'), pdf)
     put(join(o.fixtures, name, 'layout.json'), layoutText(name))
@@ -170,6 +170,9 @@ describe('our base pages the layout files were made over', () => {
   it('packs base.pdf and base.json beside arxiv.pdf where the fixture has them, and none where it has not', () => {
     const i = inputs()
     const record = withBase(i)
+    // (no source for a base of ours: the make names it missing)
+    expect(() => entriesOf(i)).toThrow(/sources\/0001\.00001v1\/source\.gz/)
+    put(join(i.sources, '0001.00001v1', 'source.gz'), 'the source')
     expect(baseRecordOf(join(i.fixtures, n))).toEqual(record)
     // (the image named: its tree's pin, each base page made on the year production compiles its paper on)
     for (const tree of ['2025', '2023']) {
@@ -184,6 +187,8 @@ describe('our base pages the layout files were made over', () => {
     expect(paths).toContain(`fixtures/${n}/base.pdf`)
     expect(paths).toContain(`fixtures/${n}/base.json`)
     expect(paths.filter(p => /\/base\.(?:pdf|json)$/.test(p))).toHaveLength(2)
+    // (a base of ours carries its paper's source, which the gate wraps it from; one a paper; none for a fixture of no base)
+    expect(paths.filter(p => p.startsWith('sources/'))).toEqual(['sources/0001.00001v1/source.gz'])
     const manifest = makePack({ entries: entriesOf(i), out: join(i.root, 'out'), pipeline: '10', layout: LAYOUT_V })
     expect(manifest.files.find(f => f.path === `fixtures/${n}/base.pdf`)).toMatchObject({ sha256: sha256('our base page') })
   })

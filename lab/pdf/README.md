@@ -341,6 +341,13 @@ made over it too), arXiv's PDF where a fixture has none (no marks: never wrapped
 page of ours would keep the layout file the pack held before, made over arXiv's PDF, its `base.json` saying why
 (`source: 'arxiv'`, outside the version check); in the pack of 2026-10-23 (`c10eafbb`, LAYOUT 16: each unit laid only where every page it is on is arXiv's page, the same words) every one of the 7 papers has ours, each made on the tree production compiles it on (`base.json`'s `image`: the year its 00README declares, else that of arXiv's build; 2307.16209, 2608.16117 and 2609.26457 on TeX Live 2023).
 Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
+The wrap reads each base's units from its paper's source, so the pack holds that too: `sources/<paper>/source.gz`, one a paper
+(`gate-pack.mjs make --sources=<dir of <paper>/source.gz>`, `data/corpus` by default; a make with a base of ours and no source
+fails, naming it). The rules gate passes the layer gate `--sources=<pack>/sources`. In the pack of 2026-10-23 (`d65ecd41`) the 7
+papers' sources are the only new objects over `c10eafbb`; the sources are an instrument of their own part (`instrumentOfPack`
+`sources`). An engine from before REMOVAL 8 (the merge base of the pull request that wrapped the page) is drawn over the same
+wrapped page with its own erase and put back, and without cell rules, which it reads only from the add-on this instrument no
+longer makes.
 
 Remaking it, on the machine that holds the data (after the fixtures are made again, a PIPELINE moves, the layout file moves,
 or the faces change; `rules-gate.mjs compare` warns when the engine's PIPELINE is not the pack's). A pull request that moves the
@@ -367,7 +374,7 @@ base's own script. One pack serves both sides while the layout file's schema and
 in both, as before: the base's engine reads the pull request's pack, and any other change of the pack is measured on the one pack.
 Where they differ the pull request that re-makes the pack uploads the new objects before its CI can pass, and the two runs are one
 instrument by what their packs hold, not where they are: `rules-gate.mjs run` stamps each run's `fixtures`, `refs`, `geometry`,
-`data` and `texmf` with the digests of those parts of the listing of the `gate-pack.json` it was given (`--pack-json`, the one
+`data`, `texmf` and `sources` (where the pack has them) with the digests of those parts of the listing of the `gate-pack.json` it was given (`--pack-json`, the one
 `verify` checked the directory against), the made layout files excluded. Another reference, geometry, PDF, translation, face or
 pattern between the two sides is then another instrument and fails; so does a different set of outputs, so a pull request that
 moves the layout file does not also add an output or refresh the references: those go in their own pull request, where the layout

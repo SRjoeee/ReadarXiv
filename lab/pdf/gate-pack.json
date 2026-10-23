@@ -23,8 +23,8 @@
    "fmtutil": "r77314"
   }
  },
- "made": "2026-10-23T05:49:26.127Z",
- "digest": "c10eafbb62f4a1dfff662159102e438750d0cd6320357e1a50cae9a181b00080",
+ "made": "2026-10-23T11:31:44.727Z",
+ "digest": "d65ecd4111f4c38f79f62abaff6e87397923dbf2aab47fe1729bed26ffd915be",
  "bucket": "readarxiv-ci",
  "files": [
   {
@@ -2132,6 +2132,48 @@
    "sha256": "9caf16d23781bde3452c1727c2ac4977502d43d8dae293b592c63ef2f4b12ef2",
    "bytes": 28879,
    "url": "r2://readarxiv-ci/gate-pack/9caf16d23781bde3452c1727c2ac4977502d43d8dae293b592c63ef2f4b12ef2"
+  },
+  {
+   "path": "sources/1512.03385v1/source.gz",
+   "sha256": "a975e8b798fb4c447551bffd4e74a3abf169b151e4435390ab6d16bf88cef880",
+   "bytes": 506177,
+   "url": "r2://readarxiv-ci/gate-pack/a975e8b798fb4c447551bffd4e74a3abf169b151e4435390ab6d16bf88cef880"
+  },
+  {
+   "path": "sources/1706.03762v7/source.gz",
+   "sha256": "2e7a7d9ee2520d22eb23dae0cb148e167be02a30d6cb3f11b1c67723194339c6",
+   "bytes": 1150988,
+   "url": "r2://readarxiv-ci/gate-pack/2e7a7d9ee2520d22eb23dae0cb148e167be02a30d6cb3f11b1c67723194339c6"
+  },
+  {
+   "path": "sources/1810.04805v2/source.gz",
+   "sha256": "3b272da93640a021bf6f207a731e67ebe38c5963c691534311a5d6a2f2847158",
+   "bytes": 316748,
+   "url": "r2://readarxiv-ci/gate-pack/3b272da93640a021bf6f207a731e67ebe38c5963c691534311a5d6a2f2847158"
+  },
+  {
+   "path": "sources/2307.16209v1/source.gz",
+   "sha256": "099b87eb7b91400085ddd5c90c9147a0d9c638858b153afd54a8e9427c283ac4",
+   "bytes": 4167871,
+   "url": "r2://readarxiv-ci/gate-pack/099b87eb7b91400085ddd5c90c9147a0d9c638858b153afd54a8e9427c283ac4"
+  },
+  {
+   "path": "sources/2608.04322v1/source.gz",
+   "sha256": "fb191280f37ea0baeb8d9e789957062544c0f4cc597e5a3682a7c03feccc254d",
+   "bytes": 1202149,
+   "url": "r2://readarxiv-ci/gate-pack/fb191280f37ea0baeb8d9e789957062544c0f4cc597e5a3682a7c03feccc254d"
+  },
+  {
+   "path": "sources/2608.16117v1/source.gz",
+   "sha256": "e89e9693764c1f77a1d75fefb554ad77d6df2ff3457b2b42eaa46bbfda2e9139",
+   "bytes": 33194632,
+   "url": "r2://readarxiv-ci/gate-pack/e89e9693764c1f77a1d75fefb554ad77d6df2ff3457b2b42eaa46bbfda2e9139"
+  },
+  {
+   "path": "sources/2609.26457v1/source.gz",
+   "sha256": "721b390d512a76d135723cd4c3dbcae2927426fc2cd11bbceb6f6a36d6cc8cbe",
+   "bytes": 333360,
+   "url": "r2://readarxiv-ci/gate-pack/721b390d512a76d135723cd4c3dbcae2927426fc2cd11bbceb6f6a36d6cc8cbe"
   },
   {
    "path": "texmf/tex/generic/dehyph/dehyphn.tex",

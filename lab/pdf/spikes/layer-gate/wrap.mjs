@@ -45,7 +45,10 @@ async function made(key, { engine, out, base, bytes, layoutFile, source }) {
   }
   mkdirSync(dir, { recursive: true })
   const E = f => import(join(engine, 'src/pdf-reader/engine', f))
-  const [{ wrapFinal }, { openPaper }, { unpackSource }, { indexLayout, parseLayout }, { pageRules, checkBoxes }, { pageInk }] = await Promise.all(['layout/wrap.mjs', 'pipeline/live.mjs', 'source/tar.mjs', 'layout/file.mjs', 'layout/cell-rules.mjs', 'layout/ink.mjs'].map(E))
+  const [{ wrapFinal }, { openPaper }, { unpackSource }, { indexLayout, parseLayout }, { pageInk }] = await Promise.all(['layout/wrap.mjs', 'pipeline/live.mjs', 'source/tar.mjs', 'layout/file.mjs', 'layout/ink.mjs'].map(E))
+  // (the cell rules by the engine's own module; an engine from before REMOVAL 8 has none and reads its rules from its add-on, which
+  // this instrument no longer makes: the gate's own module then, whose rules such an engine does not read)
+  const { pageRules, checkBoxes } = await E('layout/cell-rules.mjs').catch(() => import('../../../../src/pdf-reader/engine/layout/cell-rules.mjs'))
   const PL = await import('@cantoo/pdf-lib')
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
   const root = new URL('../../../../node_modules/pdfjs-dist/', import.meta.url).pathname
