@@ -270,6 +270,16 @@ LAYER_GEOMETRY=lab/pdf/out/layer-gate/cut-p10-s2608/geometry pnpm exec tsx lab/p
 node lab/pdf/spikes/gate-pack.mjs make --out=lab/pdf/out/gate-pack-s2608
 ```
 
+### The per-unit erasure
+
+Our final pass's pages wrapped by optional content, each unit's ink in groups of its own (`docs/PDF-READER.md` §19.9). The
+synthetic cases and the Node gates run in CI (`tests/pdf-reader/layout-own.test.ts`, `layout-wrap.test.ts`,
+`layout-wrap-cases.test.ts`); the pack's papers in Chromium are the lab's.
+
+| File | When to run it | What it needs |
+|---|---|---|
+| `lab/pdf/spikes/ocg-gate.mjs` | After any change to `layout/own.mjs`, `layout/wrap.mjs`, the marks or what the delta copies, and before a pull request that touches them: per paper the wrap's counts, time and growth, the delta built from the wrapped bytes and its proof; in Chromium (`--canvas=gpu`, the production canvas, and `cpu`) every page's G1 (all groups ON is our page outside split glyphs and image edges) and G2' (text and labels OFF is the remover's cut of the same ownership, image-edge pixels counted on both sides). Reported, not gated; its run is recorded in `records/ocg-gate.md`. | The gate pack's fixtures (`--pack`, `data/fixtures/<id>-zh/arxiv.pdf` and `base.pdf`), each paper's source (`--sources`, `data/corpus/<id>/source.gz`), the heavy pair by `--pair`, Playwright's Chromium. No network, no Docker. |
+
 ### The rules gate in CI
 
 A change to the layout rule set (`src/pdf-reader/engine/rules/layout-rules.json`), or to the drawing code that reads it, is

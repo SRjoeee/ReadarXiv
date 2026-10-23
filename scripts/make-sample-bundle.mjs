@@ -2,7 +2,7 @@
 // stand-in arXiv PDF and the layer bundle the reader's browser checks (tests/e2e/reader.mjs) are served from the stand-in
 // of the layer API (tests/e2e/lib/layer-api.mjs). Nothing here is an arXiv paper's, so both outputs are committed.
 //
-//   pnpm exec tsx scripts/make-sample-bundle.mjs [--out=<dir>] [--check] [--keep-pdf]
+//   pnpm exec tsx scripts/make-sample-bundle.mjs [--out=<dir>] [--check] [--keep-pdf] [--final=<file>]
 //
 // The steps, in the order the server's prepare takes them, each through the engine's modules as they stand:
 //   1. the stand-in arXiv PDF: the sample's source compiled unmarked (sample-1.pdf);
@@ -24,7 +24,7 @@
 // a paper's layout over arXiv's; the next make in Docker makes both again.
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statfsSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -79,7 +79,7 @@ const stem = main.replace(/\.[^.]+$/, '')
 
 /** one compile: the files in a directory of their own, latexmk in Docker, the PDF's bytes and the log's text (the PDF null
  *  where none was made). `once`: one pass, as the mark probe is compiled */
-async function compile(sources, { once = false } = {}) {
+async function compile(sources, { once = false, files = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'sample-bundle-tex-'))
   try {
     for (const [path, bytes] of sources) {
@@ -97,7 +97,9 @@ async function compile(sources, { once = false } = {}) {
       if (e?.code === 125) throw new Error(`docker could not run the compile (exit 125): ${String(e.stderr ?? '').trim().split('\n')[0] || 'no message'}; the image texlive/texlive:latest must be on this machine, and the maker never pulls it`)
     })
     const pdf = join(dir, `${stem}.pdf`), log = join(dir, `${stem}.log`)
-    return existsSync(log) ? { pdf: existsSync(pdf) ? new Uint8Array(readFileSync(pdf)) : null, log: readFileSync(log, 'latin1') } : null
+    // (`files`: every file the compile left, by its path, for the final pass made over them: layout/paper.mjs finalPass)
+    const left = files ? new Map(readdirSync(dir, { recursive: true }).filter(p => statSync(join(dir, p)).isFile()).map(p => [String(p), new Uint8Array(readFileSync(join(dir, p)))])) : null
+    return existsSync(log) ? { pdf: existsSync(pdf) ? new Uint8Array(readFileSync(pdf)) : null, log: readFileSync(log, 'latin1'), ...(left ? { files: left } : {}) } : null
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -170,8 +172,8 @@ let compileFault = null
 const made = await layoutMarksOfPaper(paper, {
   compile: async req => {
     try {
-      const c = await compile(withSource(req.overrides), { once: !req.rerun })
-      return c ? { ok: !!c.pdf?.length, pdf: c.pdf, log: c.log } : { ok: false, error: 'no log' }
+      const c = await compile(withSource(req.overrides), { once: !req.rerun, files: !!req.files })
+      return c ? { ok: !!c.pdf?.length, pdf: c.pdf, log: c.log, ...(c.files ? { files: c.files } : {}) } : { ok: false, error: 'no log' }
     } catch (e) { compileFault = e; throw e }
   },
   open: async bytes => {
@@ -183,6 +185,13 @@ const made = await layoutMarksOfPaper(paper, {
 if (compileFault) throw compileFault
 if (!('marks' in made)) throw new Error(`the layout marks were refused at the ${made.refused}`)
 console.log(`   ${marksFile(made.marks).length} characters of marks`)
+// (`--final=<file>`: our final pass of the marked compile written there too, the base page the per-unit erasure wraps: the
+// sample of tests/fixtures/pdf/ocg/, scripts/make-ocg-sample.mjs)
+if (argOf('final')) {
+  if (!made.base?.pdf) throw new Error(`no final pass of ours: ${made.base?.refused ?? 'none'} ${made.base?.why ?? ''}`)
+  writeFileSync(argOf('final'), made.base.pdf)
+  console.log(`   our final pass: ${made.base.pdf.length} bytes`)
+}
 
 // 5. the layout file
 step(5, 'the layout file')

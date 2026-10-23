@@ -1899,8 +1899,16 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   page object written again under its own number and generation, every key kept but `/Contents` and `/Resources`, which are
   ours; our content streams copied byte for byte as new objects; a `/Resources` dict of our entries, each the original's object
   where the two are canonically equal (the whole sub-graph reused), else copied with its closure from the original's `/Size`
-  up. Names stay ours. Nothing else is written: catalog, page tree, outlines, destinations, annotations and info stay the
-  original's. The section is of the original's cross-reference kind (`layout/section.mjs` `appendSection`, which the
+  up. Names stay ours. Nothing else is written: page tree, outlines, destinations, annotations and info stay the
+  original's, and so does the catalog but for its `/OCProperties` where our pages are wrapped (19.9): the catalog is then
+  written again under its number, every other key the original's, and its `/OCProperties` is the original's with our groups
+  appended to its `/OCGs` and its default's `/ON` (every other key, and the default's `/BaseState`, `/OFF`, `/AS`, the
+  original's). The paper's own layers of our compile are paired with the original's by their place in each `/OCGs` where
+  each pair is one layer (as many, every name unique on each side, each pair of one name, one default state by `/D`'s
+  `/BaseState`, `/ON` and `/OFF`, one `/Intent` and `/Usage`; else the delta is refused, `delta-proof`, and the full base
+  serves: two layers of one name are never paired by their place), so a replaced page names the original's objects and an unreplaced
+  page's layers stay listed with their default state. A page of ours that names a group of ours and is not replaced refuses
+  the delta (`delta-pages`). The section is of the original's cross-reference kind (`layout/section.mjs` `appendSection`, which the
   remover's `makeAddon` writes its tails with too: a table, or a stream of `/W [1 4 2]`, no hybrid), numbers in runs, objects
   uncompressed, `/Prev` the original's startxref, `/Root` `/Info` `/ID` the original's, its startxref in composed offsets.
 - **The canonical form**: a stream is its dict less `/Length` and the exact bytes its **resolved** `/Length` names (an
@@ -1909,7 +1917,14 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   items, a reference the form of what it names (direct or indirect alike); the back links `/Parent` `/P` `/Prev` `/Next`
   `/First` `/Last` cut by the dict's own context, never by the value being a reference: `/Parent` of a page-tree node, `/P`
   and `/Parent` of an annotation, `/P` of a structure element, the outline's chain; never in an optional-content membership
-  (its `/P` policy, direct or by reference, is data) or a dict of no such context; a cycle leaves the object unmatched (copied), never an error. Forms are interned (exact equality); stream
+  (its `/P` policy, direct or by reference, is data) or a dict of no such context; a cycle leaves the object unmatched (copied), never an error.
+  An optional-content group or membership (`/OCG`, `/OCMD`) is matched by its identity alone, never by its content (two
+  layers of equal dicts, one ON and one OFF, are two layers): by reference its form is its document's and object's, so it
+  and everything that names it are copied; the proof checks that ours and the composed document's are one to one over
+  `/OCProperties`' `/OCGs` and every replaced page's `/Properties`, that the composed `/OCProperties` is the original's with
+  ours appended (as above), and that every layer a composed page names (its `/Properties`, its forms' `/OC` and own
+  `/Properties`, its annotations' `/OC`) is listed wherever its source page's (ours replaced, the original's elsewhere) is
+  listed in its own document: PDF.js draws a group it does not know as visible. Forms are interned (exact equality); stream
   bytes are bucketed by a hash of secret random seeds and compared whole, and the whole build spends at most
   `DELTA_WORK_MAX` (2^31 bytes hashed or compared and objects read: the 46 MB pair about 150 million), so no input makes a
   bucket or the build long. Its `/Size` leaves the remover's tails `DELTA_TAIL_ROOM` (2^20) numbers below `OBJECT_MAX`.
@@ -1926,7 +1941,8 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   comparison: cycles compare as the graphs they make); PDF.js opening the composed bytes with no message neither source alone
   gives (its console captured, each document read in turn); the original's page count; every page's box, rotation, user unit and text (strings and
   places within 0.01) ours on replaced pages and the original's elsewhere. What the delta overrides of the original is bounded:
-  the replaced pages' objects exactly (no catalog, no other page), its `/Size` not below the original's, and its trailer the
+  the replaced pages' objects exactly (no other page; the catalog only to carry our `/OCProperties`, every other key of it the
+  original's, that key ours), its `/Size` not below the original's, and its trailer the
   original's `/Root` and `/Info` (as references) and `/ID` (byte for byte), so that no fresh catalog is pointed at. An original whose
   cross-reference PDF.js recovers on its own (any such message on the original alone: it then indexes the whole file, where an
   unreplaced page may be another object than the cross-reference's) is refused (`delta-xref`), and so is a cross-reference
@@ -1963,3 +1979,115 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   bytes over 83,666,965 of originals, 2.48 % (the spike 2.48 %); the largest 0.70 MiB (2307.16209v1); per paper 0.30 % to
   30.05 % of the original and at most 28.5 % of our base page; the proof passes on 8 of 8; two builds give the same bytes; the
   build 15 to 160 ms, the proof 0.2 to 1.4 s (Node).
+
+### 19.9 Our pages wrapped by optional content (per-unit erasure, the file side)
+
+The original's ink under a drawn unit is hidden by that unit's own operators, never by rectangles: each unit's ink in our
+final pass is put in optional-content groups of its own, ON by default, and the reader sets a drawn unit's groups OFF
+(architecture audit item 5; the design note `docs/route/ocg-erasure.md` keeps what is not settled: the reader, the hosts,
+staging). BUNDLE stays 8 and LAYOUT 16: the layout file does not change; the base PDF's bytes do (wrapping adds a section).
+
+- **Ownership by marks** (`layout/own.mjs` `ownOf`, pure): a unit's ink is what TeX shipped between its points in our final
+  pass, in content-stream order (pageInk with `indices`), in its start point's region (in a column's body or not, at a depth of
+  floats: `stream.mjs regionsOf`). Text `u<id>`: from its start mark (`<id>s`, `t<id>s`, `h<id>s`) to its end mark; across
+  pages only inside the bodies, but a range outside them from page p to p + 1 at one depth (a continued footnote) is page p
+  to the next unit's start in that region and page p + 1 from after the last other unit's end (over more pages: `across`); a
+  unit with an end mark alone (a title) from the point before it. Placeholders `u<id>.p`: `stream.mjs ownedOf`'s entry
+  (the marking's `follows`); a footnote call is its unit's `.p` too. Label `u<id>.l`: the glyphs on the start's first glyph's
+  baseline between the previous unit's end mark and the start, the placeholders' and names' ranges passed over. Babel name
+  `n<occ>`: between `n<occ>.<key>.s` and `.e`, but never over a placeholder's ink (cleveref's "Appendix" inside a `\cref` is
+  the reference's). A glyph is one group's: a placeholder's or a name's over the text's, the text's over a label's, the first
+  text's over a later. A unit that opens with a placeholder of no mark of its own (a paper's macro first in it: `\bert`,
+  `\aidehuman`) has that ink before its start mark, after its label: on a unit's first line nothing else stands between the
+  unit before it and its start, so the run there is split, its longest opening that is a label's form and ends a word the
+  label (`.l`), the rest that placeholder's ink (`.p`). Images and forms are no unit's (a form whose ink is all one group's
+  is wrapped whole). A unit's text takes its glyphs alone, never a rule: a rule in its range (a footnote's separator, a
+  class's rule above a title, an underline) is the page's and stays; a placeholder's rules are its `.p`.
+  A table cell (`t<id>s`) takes no label (what stands before it on its line is another cell's). Marks absent, twice or out of
+  order, a unit the paper's units lack, a placeholder whose ink cannot be told apart (its range lost: hidden with the text,
+  it could not be kept in place, and the spell check reads no symbol), or a unit that opens with a placeholder of no mark of
+  its own whose ink still stands, in no group, on its start's line before its start mark (a table's cell, `\bertlarge` first
+  in it: a cell takes no lead, the number cells before it on the row being unmarked too; the reader would draw the
+  placeholder over that ink): `marks`, each listed in the record's
+  `own.leaks` (14 cells on the pack: 1810.04805v2's model names, 1512.03385v1's `\#` columns). The ownership visits at most `OWN_WORK`
+  20 million glyphs and boxes (real ranges cost the ink once), over every loop (text, labels, placeholders, names); past it a
+  unit is `marks`.
+- **The spell check** (what makes "a unit that cannot be delimited shows the original" exact): a unit's `u` glyphs must spell
+  its source text, letters and digits alone (NFKD, marks and case dropped, `ß` as `ss`: TeX's accents, ligatures, hyphenation
+  and punctuation are no evidence), or it is `spell`, its groups still written. Its label must be a label's form (a number
+  or an item's mark, maybe a caption's, a section's or a theorem's name before it, in brackets or with a stop, a dash or a
+  bar after it) or empty; where it is not and its glyphs stand apart from the text's, the label is left the original's ink
+  (`labelKept`: no `.l` group, the body alone drawn; the coordinator's amendment of 2026-10-28), else `spell`.
+- **The wrap** (`layout/wrap.mjs` `wrapOf`): our bytes and ONE incremental section of their cross-reference kind
+  (`appendSection`): each wrapped page's dict again under its number, `/Resources` our page's with `/Properties` mapping
+  `/axt<group>` to its OCG, ONE new content stream (its pieces joined, deflated at a fixed level: the same inputs give the same
+  bytes); `<< /Type /OCG /Name (axt:<group>) >>` per group; the catalog again with `/OCProperties` (`/D << /BaseState /ON /ON
+  [ours] /Order [] >>`, or a foreign one's kept, ours appended to its `/OCGs` and `/ON`). A BDC goes only between whole
+  operators, and each BDC and its EMC share a stream, a q depth, a text-object state and a depth of marked content: a run is
+  one group's operators with only state between them, closed at q, Q, BT, ET, any marked content, an inline image, a shading
+  or ink not its group's; a rule's path object is wrapped from its first construction operator to its painting; the `ri`
+  points stay. A show two groups share is split as the remover's hide mode splits one (E4's variant (a): a number stays with
+  the chunk before it, codes kept): no re-anchoring. Content streams name properties, never OCG objects (the later export
+  re-points names, §3.3 of the note).
+- **Page refusals** (the page left unwrapped, its units `page`): it does not align with PDF.js's reading (remove.mjs
+  `alignPage`), passes the walk's bounds or the wrap's own (`WRAP_DECODED_PAGE` 32 MiB of its content streams decoded,
+  `WRAP_HELD_PAGE` 48 MiB of every operator's heap by remove.mjs COST, about 300,000 operators: each read of the page — the
+  wrap's, the proof's of the new stream, the proof's of the unwrapped page — under these bounds of its own, in turn, so that a
+  plot of millions of path operators is a refused page and never the process), fails its proof (below), or fails in any
+  other way (anything thrown but a failed allocation is the page's, never the paper's),
+  its own `/Properties` already name a group of ours (the page's own entries are kept, never dropped), holds a form partly owned, an owned run in a clipping text mode (Tr 4 to 6: hiding
+  the only clipping run lifts the clip; Tr 7 glyphs are never ink, so never owned), a split in a vertical font or a Type 3 font
+  without widths, or PDF.js read it past its bounds. Past `GROUPS_PAGE` 512 groups or `SEQUENCES_PAGE` 2000 sequences the
+  page's `.p` and `.l` groups are merged into the text's (a unit with a placeholder there `bounds`), and refused if still past;
+  past `GROUPS_DOC` 8000 groups the later pages are refused.
+- **The proof** (in the box, every wrap). Of each page, before it is written (a page that fails is refused, never the
+  paper): its new stream lexed again within the page's bounds, every BDC of ours named by its groups, none inside another and
+  closed at its depth and state, none left open (the page's own marked content need not balance: our runs lie in none of it);
+  its operators, ours taken out and each split show's chunks joined, the unwrapped page's (operators, operands, codes and
+  numbers in order); and the deflated bytes written inflated back to that stream. Of the paper: the section read back
+  (`deltaSection`: each entry at its `n g obj`, `/Prev` our startxref) and the wrapped document read again by the object layer
+  (catalog, page dicts and resources ours but `/OCProperties`, `/Contents` and `/Properties`; each page's own `/Properties`
+  entries kept as they were and ours beside them; every group listed and ON). A failed wrap is the paper's: `wrapFinal` gives `{ refused: 'wrap-parse' |
+  'wrap-proof' | 'wrap-bound', why }`, the host passes `ours: { refused: 'wrap', why }`, the head's base is arXiv's with `why:
+  'wrap'` (a LAYOUT_REFUSED code).
+- **Both forms** are made of the wrapped bytes: the full base IS them (its head's `bytes`, `sha256`, `xref` theirs); the delta
+  copies their streams verbatim and carries their catalog's `/OCProperties` alone (19.8). Every check that judges our compile
+  reads the same pass; wrapping changes no glyph. The page pass numbers glyphs on the wrapped streams (one stream a page).
+- **The host's contract** (the maker child, before any document of its own is open): `wrapFinal(final, { PL, getDocument,
+  documentOptions, OPS, units, deflate, inflate })` → `{ bytes, xref, sha256, stats, unhidden, labelKept, pages, own }`
+  (`documentOptions` the box's: the lite worker, `maxImageSize: NO_IMAGE_PIXELS`, so that the ownership's read of every
+  page decodes no image: a stock read of the 46 MB pair peaks at 3 GB of native memory); then `deltaOf(orig, bytes)` with
+  every page replaced that the wrap wrapped (the default) and `proveDelta`; then `layerOfPaper({ …, ours: { doc (of the
+  wrapped bytes), bytes, sha256, xref, delta, wrap: { stats, unhidden, labelKept, pages } } })` (a delta that leaves a wrapped
+  page arXiv's is refused there, `delta-shape`, beside deltaOf's and the proof's own check on the bytes: a unit's group on it
+  could not be hidden); the record notes `own` (`{ units, unhidden: { marks, across, spell, page,
+  bounds }, spell: [ids, at most 64], labelKept, leaks: { count, units: [ids, at most 64] } }`: `leaks` the units left the
+  original's because ink of theirs lies outside every group, so that the next such case shows without pixels). `units` (required) are the paper's SOURCE units, an array each entry of
+  which has a source text or pieces (missing, a hole or an entry with neither a TypeError; `null` said asks for no spell check,
+  the lab's alone); `deflate` and `inflate` are required (the written bytes are read back); `pages` is required beside the
+  lists, the wrapped pages as ranges within our pages and as many as `stats.wrapped` (`pipeline/live.mjs openPaper`'s,
+  the page pass's `source.units`): a translation's (text pieces `tr`) holds neither the text after a placeholder its ink ends
+  at nor the source the spell check reads, and is refused (TypeError).
+- **The head** (both kinds): `base.stats` gains `{ wrapped, refusedPages, unhidden: { marks, across, spell, page, bounds },
+  split, groups, labelKept }` (a delta's own counts beside them; every unit counted); `base.unhidden` `[[unit id, code], …]`
+  by rising id and `base.labelKept` rising ids, none in both, of the units with a group in the document alone (a unit with
+  none is the original's by construction): so each holds at most `GROUPS_DOC`, `UNHIDDEN_MAX` 8000, and a long paper cut at
+  `GROUPS_DOC` keeps its base, its later pages unwrapped; checked by `delta-wire.mjs wrapWhy` on both sides for their shape and
+  that the counts are at least the lists' (that a unit with a group and no list entry is the reader's to hide is `wrapFinal`'s
+  word: no head reader knows the groups). A page merged for its bounds makes a unit with a placeholder or a label there `bounds`. A unit is the reader's to hide iff the config holds `axt:u<id>` and it is in neither
+  list. A head without them is an unwrapped base. The cell rules the add-on manifest carried are the reader lane's.
+- **Measured** (2026-10-23, the gate pack's 7 papers in Chinese and 2602.23285v2, the sources' units): every page wrapped
+  (290/290, 0 refused, the proof passing on all); `spell` 1 unit of 1,806 (2608.04322v1 u0: its journal header over-taken),
+  `marks` 38 (24 the title block's authors and `\thanks` notes the marker does not mark, the engine lane's item; 14 cells that
+  open with an unmarked macro), `across` 0, labels kept 0 (the earlier 9 were each a label and a lead macro, now split); ownership equal to today's geometric ownership on 1,740 of 1,806 units (96.3 %: the rest the marks' own over
+  today's residue, a table's row header today calls a cell's label, a babel name, the unmarked authors); 54 shows split; 230 to
+  981 groups a paper. The wrap 0.4 to 1.9 s a paper in Node with PDF.js's lite worker (the 147-page thesis 1.9 s), +165 MB
+  at most beside what the maker holds (the 46 MB pair); the wrapped base 0.4 % to 23 % larger (the thesis 3.08 to 3.79 MB);
+  the deltas 2,561,390 bytes over 83,666,965 of originals (3.06 %; 2,139,403 unwrapped, 2.56 %: 1.08x to 1.53x each; layers
+  matched by identity cost 1706.03762v7's figures, whose forms name arXiv's layers, 61 KB either way), the largest 0.87 MB
+  (2307.16209v1), the delta proof passing on 8 of 8. The lab gate (`lab/pdf/spikes/ocg-gate.mjs`, its run in
+  `lab/pdf/records/ocg-gate.md`) in Chromium, GPU and CPU canvases, every page of the 8: all groups ON is our page, 0 px
+  outside split glyphs and image edges, 0 px inside the split glyphs; text and labels OFF equal the remover's cut of the same
+  ownership on 247 pages, 0 px outside image edges, and the image-edge pixels the two change equal (72 on GPU, 31 on CPU).
+  Chromium differs from itself on two pages in earlier runs of one long-lived browser (2608.04322v1 p9 GPU, 2609.26457v1 p2
+  CPU: our unwrapped page against itself), 0 px from fresh documents.

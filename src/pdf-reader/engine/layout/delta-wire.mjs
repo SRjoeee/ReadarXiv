@@ -29,6 +29,54 @@ export const REPLACED_MAX = 4096
  *  refuse it) */
 export const DELTA_WHYS = Object.freeze(['delta-parse', 'delta-encrypted', 'delta-xref', 'delta-stream', 'delta-pages', 'delta-boxes', 'delta-bound', 'delta-empty', 'delta-proof', 'delta-shape'])
 
+/** why a unit's ink stays the original's on our wrapped pages (layout/own.mjs, layout/wrap.mjs; design ocg-erasure §1.4, §2.4,
+ *  §3.2): its marks absent, twice or out of order; a range over more pages than a continued footnote's; its glyphs that do not
+ *  spell it; a page not wrapped; a page past its group bounds */
+export const UNHIDDEN = Object.freeze(['marks', 'across', 'spell', 'page', 'bounds'])
+/** what a head says of our pages' wrap (`base.stats`, beside a delta's own counts): pages wrapped and refused, the units the
+ *  original's by why, the shows split, the groups, the labels left the original's ink */
+export const WRAP_STATS = Object.freeze(['wrapped', 'refusedPages', 'unhidden', 'split', 'groups', 'labelKept'])
+/** the units a head lists as the original's (`base.unhidden`) or with their label kept (`base.labelKept`) at most, each list (as many
+ *  as a document may have groups, GROUPS_DOC: with both full, 32,000 of the head's HEAD_VALUES 64,000); past it the wrap is refused
+ *  (`wrap-bound`) and the base is arXiv's */
+export const UNHIDDEN_MAX = 8000
+
+/**
+ * Why a wrap's head fields (`stats` WRAP_STATS', `unhidden` [[unit id, UNHIDDEN code], …] by rising id, `labelKept` rising ids,
+ * no id in both) do not read, null where they do: the lists within UNHIDDEN_MAX, `stats.unhidden` counting every unit (the
+ * lists hold those with a group in the document alone, so at least as many by each code: that every unit with a group and no
+ * entry is hideable is the producer's word, layout/wrap.mjs wrapFinal's, which no reader of a head can check), `stats.labelKept`
+ * the list's count
+ */
+export function wrapWhy(stats, unhidden, labelKept) {
+  const isCount = v => Number.isSafeInteger(v) && v >= 0
+  if (stats === null || typeof stats !== 'object' || Array.isArray(stats)) return 'stats: not an object'
+  for (const k of WRAP_STATS) if (!Object.hasOwn(stats, k)) return `stats.${k}: missing`
+  for (const k of ['wrapped', 'refusedPages', 'split', 'groups', 'labelKept']) if (!isCount(stats[k])) return `stats.${k}: not an integer 0 or more`
+  const u = stats.unhidden
+  if (u === null || typeof u !== 'object' || Array.isArray(u) || Object.keys(u).length !== UNHIDDEN.length || UNHIDDEN.some(k => !isCount(u[k]))) return `stats.unhidden: not { ${UNHIDDEN.join(', ')} } of counts`
+  if (!Array.isArray(unhidden) || unhidden.length > UNHIDDEN_MAX) return `unhidden: not an array of at most ${UNHIDDEN_MAX}`
+  const counts = Object.fromEntries(UNHIDDEN.map(k => [k, 0])), ids = new Set()
+  let last = -1
+  for (let i = 0; i < unhidden.length; i++) {
+    const r = unhidden[i]
+    if (!Array.isArray(r) || r.length !== 2 || !isCount(r[0]) || r[0] <= last || !UNHIDDEN.includes(r[1])) return `unhidden[${i}]: not [a unit id after the last, a code of ${UNHIDDEN.join(', ')}]`
+    last = r[0]
+    ids.add(r[0])
+    counts[r[1]]++
+  }
+  if (UNHIDDEN.some(k => counts[k] > u[k])) return 'stats.unhidden: fewer than `unhidden` lists'
+  if (!Array.isArray(labelKept) || labelKept.length > UNHIDDEN_MAX) return `labelKept: not an array of at most ${UNHIDDEN_MAX}`
+  last = -1
+  for (let i = 0; i < labelKept.length; i++) {
+    const id = labelKept[i]
+    if (!isCount(id) || id <= last || ids.has(id)) return `labelKept[${i}]: not a unit id after the last, and none of \`unhidden\``
+    last = id
+  }
+  if (stats.labelKept !== labelKept.length) return 'stats.labelKept: not the count of `labelKept`'
+  return null
+}
+
 /** pages (1-based, any order, repeats allowed) as ascending, non-overlapping ranges [[from, to], …], adjacent ones merged */
 export function rangesOf(pages) {
   const s = [...new Set(pages)].sort((a, b) => a - b), out = []
