@@ -261,7 +261,10 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     }
   }
   // (indices: the showing operation's place and the glyph's within it; the painted path's place; inside an annotation, -1)
-  let showAt = -1, pathAt = -1, inAnnotation = 0, curShow = -1, glyphAt = -1
+  // (a soft mask's group, an ExtGState's /SMask PDF.js lists as a group: no content stream the remover walks paints it, so
+  // that its shows and paths are counted as an annotation's are not: remove.mjs alignOf)
+  let showAt = -1, pathAt = -1, inAnnotation = 0, curShow = -1, glyphAt = -1, inMask = 0
+  const maskGroups = []
   const fonts = new Map()
   const fontOf = id => {
     if (!fonts.has(id)) {
@@ -395,7 +398,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
 
   /** showText as the canvas runs it (showText, showType3Text): each glyph's origin, its advance, the line moved on */
   const show = arr => {
-    if (indices) { if (!inAnnotation) showAt++; curShow = inAnnotation ? -1 : showAt; glyphAt = -1 }
+    if (indices) { if (!inAnnotation && !inMask) showAt++; curShow = inAnnotation || inMask ? -1 : showAt; glyphAt = -1 }
     // (in a state not known, its font, size and mode are not either: nothing shown is placed, and the page is capped)
     if (!known()) return
     const f = s.font
@@ -503,8 +506,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
         break
       }
       case FORM_END: pop(); break
-      case GROUP: push(); break
-      case GROUP_END: pop(); break
+      case GROUP: { const m = !!a?.[0]?.smask; maskGroups.push(m); if (m) inMask++; push(); break }
+      case GROUP_END: if (maskGroups.pop()) inMask--; pop(); break
       case ANNOTATION: {
         // [id, rect, transform, matrix, …]: an annotation's appearance in its own space, clipped to its rectangle
         inAnnotation++
@@ -521,11 +524,11 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       case PATH: {
         if (glyphsOnly) { s.pendingClip = false; break }
         const op = a[0], mm = a[2]
-        if (!inAnnotation) pathAt++
+        if (!inAnnotation && !inMask) pathAt++
         const ok = mm && mm.length >= 4 && finite(mm[0], mm[1], mm[2], mm[3]) && mm[2] >= mm[0] && mm[3] >= mm[1]
         if (ok && PAINTS.has(op)) {
           const e = STROKES.has(op) ? s.lw / 2 : 0
-          addBox(s.ctm, mm[0] - e, mm[1] - e, mm[2] + e, mm[3] + e, inAnnotation ? -1 : pathAt)
+          addBox(s.ctm, mm[0] - e, mm[1] - e, mm[2] + e, mm[3] + e, inAnnotation || inMask ? -1 : pathAt)
         }
         // a clip takes effect after the path is painted (the canvas's pendingClip)
         if (s.pendingClip) { if (ok) clipTo(s.ctm, mm[0], mm[1], mm[2], mm[3]); else s.clip = [0, 0, -1, -1]; s.pendingClip = false }

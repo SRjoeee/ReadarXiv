@@ -434,7 +434,7 @@ async function layoutOf(id, paper, dir) {
     out.stats.makerMs = Math.round(performance.now() - tm)
     // GATE_DBG=<dir>: the maker's own diagnostics, where it gives them
     if (out.stats.dbg && process.env.GATE_DBG) writeFileSync(join(process.env.GATE_DBG, `${id}.json`), JSON.stringify({ dbg: out.stats.dbg, u: out.stats.dbgU }))
-    return 'file' in out ? { text: encodeLayout(out.file), stats: out.stats, switched } : { refused: out.refused, stats: out.stats, switched }
+    return 'file' in out ? { text: encodeLayout(out.file), stats: out.stats, switched, texts: marks.marking.texts ?? null } : { refused: out.refused, stats: out.stats, switched }
   }
   try {
     const arxivDoc = await task.promise
@@ -581,7 +581,7 @@ for (const [id, target] of asked) {
     if (layout.base?.source === 'ours') write(join(out, 'base.pdf'), layout.base.pdf)
     if (layout.base) {
       const made = layout.base.source === 'ours' ? { source: 'ours', head: layout.base.head } : layout.base
-      write(join(out, 'base.json'), `${JSON.stringify(baseRecordOfMade({ made, layout: layout.base.source === 'ours' ? (layout.text ? Buffer.from(layout.text) : null) : kept, image: COMPILE_IMAGE }), null, 1)}\n`)
+      write(join(out, 'base.json'), `${JSON.stringify(baseRecordOfMade({ made, layout: layout.base.source === 'ours' ? (layout.text ? Buffer.from(layout.text) : null) : kept, image: COMPILE_IMAGE, texts: layout.base.source === 'ours' ? layout.texts ?? null : null }), null, 1)}\n`)
     }
     // the translation: the record made before, where it is of this cut of the units; else staging's; else Microsoft's
     const recordFile = join(out, 'record.json'), unitsFile = join(out, 'units.json')

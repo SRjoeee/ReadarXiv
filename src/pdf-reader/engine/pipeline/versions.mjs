@@ -183,6 +183,10 @@ export const PDFJS = '6.3.289'
  * REMOVAL, how our page's ink a drawn unit replaces is taken away (the head's `versions.removal`, in the key: VTAG): 1 to 7 the
  * text-removed PDF (an add-on of removed pages appended to the base, swapped in where a unit is drawn; 6 chained over the
  * parts, 7 over our base page); 8 our page's own streams wrapped by optional content, each unit's ink in its own groups, which
- * the reader hides where it draws the unit (layout/wrap.mjs, docs/route/ocg-erasure.md): no add-on, no tail
+ * the reader hides where it draws the unit (layout/wrap.mjs, docs/route/ocg-erasure.md): no add-on, no tail; 9 (the sweep of
+ * 2026-10-24, its units left English though their ink could be owned): a soft mask's content no ink of the page's (remove.mjs
+ * alignOf, ink.mjs indices), a title read back past its own placeholders' points, a mark's name read in lower case, a cell's
+ * lead macro owned where it abuts the cell, the spell check blind to spacing accents and dotless letters, and the
+ * erasure's reading of the placeholders (stream.mjs ownedOf `erasure`): the base's bytes change, the layouts do not
  */
-export const REMOVAL = '8'
+export const REMOVAL = '9'

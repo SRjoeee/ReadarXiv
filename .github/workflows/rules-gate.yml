@@ -38,6 +38,8 @@ on:
       - 'src/pdf-reader/engine/pipeline/versions.mjs'
       - 'src/pdf-reader/engine/pipeline/typeset/tex.mjs'
       - 'src/pdf-reader/engine/source/latex-front.mjs'
+      - 'src/pdf-reader/engine/translate/groups.mjs'
+      - 'src/pdf-reader/engine/translate/kept.mjs'
       - 'src/pdf-reader/engine/translate/mixed.mjs'
       - 'src/pdf-reader/engine/translate/mt.mjs'
       - 'src/pdf-reader/engine/translate/version.mjs'

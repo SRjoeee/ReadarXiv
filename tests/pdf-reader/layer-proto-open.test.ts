@@ -30,6 +30,17 @@ beforeAll(() => {
   g.fetch = async () => ({ ok: false, json: async () => null })
 })
 
+/** the units of a two-cell table as the door gives them: a bundle's cells (cell 1 a \\multirow of `span` rows where span > 1,
+ *  both in column 0's group) made units of translated rows by rows.mjs unitOf, the rows' pieces text alone (no spanning
+ *  command in them) */
+async function rowUnits(srcs: string[], span: number) {
+  const { unitOf } = await import('@/pdf-reader/engine/layer-proto/rows.mjs')
+  // (span 2: a \\multirow cell — a column's group holds it with the cells under it, its box theirs too — whose translated row
+  // keeps no piece of its \\multirow; a \\multicolumn's span is its group's own, groups.mjs groupOf)
+  const bundle = { units: srcs.map((s, i) => ['cell', 0, null, { table: 0, row: i, col: 0, span: 1, head: false }, null, i === 1 && span > 1 ? [[2, 1, `\\multirow{${span}}{*}{`], [0, s], [3, 1, '}']] : [[0, s]]]) }
+  return srcs.map((_, i) => unitOf(bundle as never, [i, ['\u6c49\u5b57'], 'whole'] as never))
+}
+
 /** a page of 300 x 300 PDF units, its text layer the given words (each [text, x, baseline, width], 10 pt) */
 function docOf(words: [string, number, number, number][], groups = true) {
   const H = 300
@@ -157,7 +168,7 @@ describe("a unit whose ink cannot be hidden, the whole run (openProto): shown as
   // docs/route/ocg-erasure.md §4.2: a unit the file could not wrap (no group of its own: an unwrapped page, a paper the wrap
   // refused) or lists as unhidden (its own reason: marks, across, spell, page, bounds) keeps the original's ink and is not drawn;
   // there is no other way of taking a unit's ink away
-  const open = async ({ groups = true, hiding = null as unknown }) => {
+  const open = async ({ groups = true, hiding = null as unknown, group = null as string | null, span = 1, fromRows = false }) => {
     const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
     const cells = [{ id: 0, src: 'Alpha', x0: 10, x1: 40, b: 100 }, { id: 1, src: 'Betas', x0: 60, x1: 90, b: 100 }]
     const layout = {
@@ -173,7 +184,7 @@ describe("a unit whose ink cannot be hidden, the whole run (openProto): shown as
     const run = await openProto({
       doc, target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false,
       geometry: { schema: 1, kinds: cells.map(() => 'cell'), left: { pages: [[0, 0, 300, 300]], units: [] } },
-      units: cells.map(c => ({ kind: 'cell', src: c.src, state: 'whole', pieces: [{ t: 'text', tr: true, s: '\u6c49\u5b57' }] })),
+      units: fromRows ? await rowUnits(cells.map(c => c.src), span) : cells.map(c => ({ kind: 'cell', src: c.src, state: 'whole', ...(group ? { group, cell: { table: 'T', col: c.id, span: c.id === 1 ? span : 1 } } : {}), pieces: [{ t: 'text', tr: true, s: '\u6c49\u5b57' }] })),
       tex: { index, pieces: new Map(cells.map(c => [c.id, [[0]]])), symbols: 'text', extents: 'v0' },
       ...(hiding ? { hiding } : {}),
     } as never)
@@ -185,5 +196,31 @@ describe("a unit whose ink cannot be hidden, the whole run (openProto): shown as
     expect(await open({})).toEqual({ placed: [0, 1], skipped: [], kinds: ['hidden'], off: ['u0', 'u1'] })
     expect(await open({ hiding: { unhidden: (id: number) => (id === 1 ? 'spell' : null) } })).toEqual({ placed: [0], skipped: ['1:unhidden: spell'], kinds: ['hidden'], off: ['u0'] })
     expect(await open({ groups: false })).toEqual({ placed: [], skipped: ['0:unhidden: no group', '1:unhidden: no group'], kinds: [], off: [] })
+  })
+  // (the coordinator's ruling of 2026-10-24, coverage first: a table with one English cell beats an English table)
+  it('draws the rest of a table group one of whose cells cannot be hidden, that cell the original\'s (2610.21098v1 p13)', async () => {
+    const hiding = { unhidden: (id: number) => (id === 1 ? 'marks' : null) }
+    expect(await open({ hiding, group: 'T:c0' })).toEqual({ placed: [0], skipped: ['1:unhidden: marks'], kinds: ['hidden'], off: ['u0'] })
+  })
+  it('keeps a group whole the original\'s where the cell that cannot be hidden spans columns: its geometry the others\' too', async () => {
+    const hiding = { unhidden: (id: number) => (id === 1 ? 'marks' : null) }
+    const r = await open({ hiding, group: 'T:c0', span: 2 })
+    expect(r.placed).toEqual([])
+    expect(r.skipped.sort()).toEqual(['0:group: a cell not drawn', '1:unhidden: marks'])
+  })
+  it('keeps a group whole where the spanning cell\'s \\multirow is the bundle\'s alone, its translated row naming none (unitOf to openProto; Devin on #456)', async () => {
+    const hiding = { unhidden: (id: number) => (id === 1 ? 'marks' : null) }
+    const r = await open({ hiding, fromRows: true, span: 2 })
+    expect(r.placed).toEqual([])
+    expect(r.skipped.sort()).toEqual(['0:group: a cell not drawn', '1:unhidden: marks'])
+    // (the same cells of span 1: the other drawn)
+    expect((await open({ hiding, fromRows: true, span: 1 })).placed).toEqual([0])
+  })
+  it('keeps a group whole the original\'s where the cell fails the spell check (its range may hold a sibling\'s ink) or sets a \\multirow', async () => {
+    const spell = await open({ hiding: { unhidden: (id: number) => (id === 1 ? 'spell' : null) }, group: 'T:c0' })
+    expect(spell.placed).toEqual([])
+    expect(spell.skipped.sort()).toEqual(['0:group: a cell not drawn', '1:unhidden: spell'])
+    const { cellSpans } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    expect([cellSpans({ cell: { span: 2 } }), cellSpans({ pieces: [{ t: 'open', src: '\\multirow{2}{*}{' }] }), cellSpans({ cell: { span: 1 }, pieces: [{ t: 'text', s: 'a' }] }), cellSpans({ pieces: [{ t: 'ph', src: '\\multirowx' }] })]).toEqual([true, true, false, false])
   })
 })

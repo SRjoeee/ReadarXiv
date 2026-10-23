@@ -49,6 +49,7 @@
 //   The paper's family is read from its first page's fonts as the engine reads a layout file's (font-roles.mjs
 //   familyOfFonts). faces: 'prototype' draws in the prototype's own system faces and Latin Modern, as the approved
 //   prototype did (its floor's numbers).
+import { cellSpans } from './cells.mjs'
 import { checkAll } from './check.mjs'
 import { familyOfFonts } from '../rules/font-roles.mjs'
 import { bodyFaceId, classifyFont, faceOf, fontString, loadWebFaces, OPEN_FAMILY, roleFaceSet, runsOfTokens, styleKey, setRoleFaces } from './fonts.mjs'
@@ -741,6 +742,11 @@ export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
  * `OPS` (PDF.js's operator codes, the host's): a page read live reads its characters' fills off the list PDF.js drew it by
  * (liveFillsOf), as its draw tells them; without it such a page tells none.
  */
+/** whether a table cell's box is other cells' too (cells.mjs cellSpans), of the unit openProto holds: the source
+ *  unit's, which rows.mjs unitOf carries (`spans`, a translated row keeping no piece of its \\multirow), else the unit's own */
+export const unitSpans = u => (typeof u?.spans === 'boolean' ? u.spans : cellSpans(u))
+export { cellSpans }
+
 export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, batch = 8, phMode = 'auto', order: orderIn = null, faces = 'roles', faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex, copy = true, hiding = null, labels = null, rules = BUILTIN_RULES, parts: partsMode = false, onRetired = null, onStep = null, onWait = null, free = false, records = true, drawOf = null, drawsComing = false, OPS = null }) {
   if (expect !== null && (!Array.isArray(expect) || !expect.every(id => Number.isSafeInteger(id) && id >= 0))) throw new TypeError(`expect: ids of units or null, not ${kindOf(expect)}`)
   if (drawOf !== null && typeof drawOf !== 'function') throw new TypeError(`drawOf: a function or null, not ${kindOf(drawOf)}`)
@@ -1211,6 +1217,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // a table's consistency group drawn whole or not at all (the table-groups brief, 2026-10-07): the record translates
   // or keeps each group whole (its cells' `group`, cache.mjs unitsOf), and a translated cell that cannot be drawn here —
   // no lines for it, none on the pages shown, a row refused (refusalOf) — keeps every cell of its group the original's.
+  // But a cell whose ink the file cannot hide (`unhidden`) is the original's alone, the rest of its group drawn (the
+  // coordinator's ruling of 2026-10-24: a table with one English cell beats an English table), unless it spans columns.
   // A group's cells may be anywhere in the paper: it is read once its own cells' rows are in where the open is given each
   // unit's group (`groups`), else once every row is (or end()), every row fixed then; the rows it reads are fixed from
   // then on. Given each unit's group, a group's cells are the units given it whose rows are translated, whatever group
@@ -1223,7 +1231,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const readGroup = (g, ids) => {
     read.add(g)
     for (const id of ids) fixed.add(id)
-    const cells = ids.filter(id => translated(U.get(id)))
+    // (a cell whose ink the file cannot hide is the original's alone, the rest of its group drawn: coverage first, the
+    // coordinator's ruling of 2026-10-24 — but one spanning columns or rows (\\multicolumn, \\multirow), whose box is the
+    // others' too, keeps the group whole; and so does one that fails the spell check, whose range may hold a sibling's ink)
+    const kept = id => { const d = candOf.has(id) ? decisionOf(candOf.get(id)) : null; return !!d && !d.p && d.skip?.code === 'unhidden' && d.skip.why !== 'unhidden: spell' && !unitSpans(U.get(id)) }
+    const cells = ids.filter(id => translated(U.get(id)) && !kept(id))
     if (!cells.length) return
     groupCells.set(g, cells)
     if ((tableGroups && ids.some(id => awaited.has(id) && U.get(id) === undefined)) || cells.some(id => !(candOf.has(id) && decisionOf(candOf.get(id)).p))) split.add(g)
