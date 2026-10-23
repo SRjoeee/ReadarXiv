@@ -42,6 +42,10 @@ export interface MarkedCompileOptions {
    *  read: no mark of ours may stand as text on a marked original's pages (design §3.3.2, the guard's 'text'). Absent: not
    *  checked here (the page pass checks the base page's own text) */
   textOf?: ((pdf: Uint8Array) => Promise<string[] | null>) | null
+  /** the compiler arXiv's PDF says made it (guard.mjs compilerOfPdf), asked once before the probe where the package names none
+   *  (`paper.meta.compilerGuessed`): `latex`, `pdflatex`, `xelatex` or `lualatex` becomes the paper's compiler (`meta.compiler`,
+   *  `compilerFrom` 'pdf'); null, another word, or a failure leaves the guess. Absent: the guess stands */
+  compilerOf?: (() => Promise<string | null>) | null
 }
 /** the final pass of the marked original (markedOfPaper `base`): its PDF and its log (lastTexLog), or why there is none
  *  ('final': no files of the compile that stands, no compile left in the budget, a pass that did not run through) */

@@ -31,6 +31,8 @@ import { completeCalled, inkSamples, LAYOUT_CLASSES, probeSamples, readInkApart,
 /** the layout guard's compiles past the marked original's, at most, the unmarked original's among them */
 const GUARD_EXTRA = 2
 
+/** the compilers of arXiv's routes a host may name for a paper (guard.mjs compilerOfPdf) */
+const COMPILERS = new Set(['latex', 'pdflatex', 'xelatex', 'lualatex'])
 /**
  * A paper's marked original (paper.d.mts), the layout marks' stages 1 and 2 without the reading: the marked compile's PDF, its
  * last pass's log and the options readMarked reads it with (`engine`, `classes`, the probe's answers; the units and the
@@ -84,12 +86,21 @@ const GUARD_EXTRA = 2
  * which no mark of ours may stand as text (base.mjs markTextOf; 'text' in the guard's record): a mark printed is out of place
  * as one in an auxiliary file is, its units left unmarked and the paper compiled again within GUARD_EXTRA, else 'marks'
  */
-export async function markedOfPaper(paper, { compile, converge = false, compileBudgetMs = null, filesBound = null, pages = null, engines = null, tried = null, final: wantFinal = true, sourceDate = null, textOf = null }) {
+export async function markedOfPaper(paper, { compile, converge = false, compileBudgetMs = null, filesBound = null, pages = null, engines = null, tried = null, final: wantFinal = true, sourceDate = null, textOf = null, compilerOf = null }) {
   const ms = {}
   /** a stage, timed; null where it fails or throws, but a failed allocation, which goes on as itself (the run's, never the paper's) */
   const stage = async (name, run) => {
     const t0 = performance.now()
     try { return await run() } catch (e) { if (isMemoryError(e)) throw e; return null } finally { ms[name] = Math.round(performance.now() - t0) }
+  }
+  // (a package that names no compiler has one guessed from its files, paper-meta.mjs; arXiv's PDF says how it was made —
+  // compilerOfPdf, the host's `compilerOf` —, and that is the compiler of every compile and of the marks the probe is written
+  // with: the paper's meta is set to it before the first. Any failure of the host's but a failed allocation leaves the guess)
+  if (paper.meta?.compilerGuessed && typeof compilerOf === 'function') {
+    try {
+      const said = await compilerOf()
+      if (COMPILERS.has(said)) Object.assign(paper.meta, { compiler: said, compilerGuessed: false, compilerFrom: 'pdf' })
+    } catch (e) { if (isMemoryError(e)) throw e }
   }
   const { main } = paper.project, engine = paper.meta.compiler
   if (Array.isArray(engines) && !engines.includes(engine)) return { refused: 'engine', why: `the paper is compiled by ${engine ?? 'no named engine'}, which the host does not run`, ms }
@@ -457,8 +468,8 @@ export function handoverOf(own, { declared = null, served = [], last = false } =
  * in `cm`, within `compileBudgetMs` and `filesBound` where the host gives them; `pages` and `engines` the guard's, and `tried`
  * TeX's why's, as markedOfPaper's
  */
-export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge = false, compileBudgetMs = null, filesBound = null, pages = null, engines = null, tried = null, final = true, sourceDate = null, textOf = null }) {
-  const made = await markedOfPaper(paper, { compile, converge, compileBudgetMs, filesBound, pages, engines, tried, final, sourceDate, textOf })
+export async function layoutMarksOfPaper(paper, { compile, open, OPS, converge = false, compileBudgetMs = null, filesBound = null, pages = null, engines = null, tried = null, final = true, sourceDate = null, textOf = null, compilerOf = null }) {
+  const made = await markedOfPaper(paper, { compile, converge, compileBudgetMs, filesBound, pages, engines, tried, final, sourceDate, textOf, compilerOf })
   if (made.refused) return made
   const ms = { ...made.ms }
   /** the result, with CM's record and the guard's where they ran, and the base page where it was asked */

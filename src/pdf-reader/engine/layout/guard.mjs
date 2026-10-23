@@ -210,6 +210,24 @@ export const texLiveOfPdf = async doc => {
   try { banner = (await doc.getMetadata())?.info?.Custom?.get?.('PTEX.Fullbanner') ?? null } catch (e) { if (isMemoryError(e)) throw e; banner = null }
   return typeof banner === 'string' ? /TeX Live (\d{4})/.exec(banner)?.[1] ?? null : null
 }
+/**
+ * The compiler arXiv's PDF says made it, from the Creator and Producer of its Info dictionary (the one PDF.js resolves): `latex`
+ * for a PDF dvips wrote (arXiv's latex route: latex, dvips, Ghostscript), `pdflatex` for pdfTeX's, `xelatex` for XeTeX's driver
+ * (xdvipdfmx), `lualatex` for LuaTeX's; null for a document that does not say or says another tool (a PDF library, a converter).
+ * It is the ground truth of a package that names no compiler (paper-meta.mjs guesses one from the files: a source with no
+ * figure was taken for pdflatex though arXiv built it with latex and dvips, 1007.0072v1). Only a memory-class error is thrown
+ */
+export const compilerOfPdf = async doc => {
+  let info = null
+  try { info = (await doc.getMetadata())?.info ?? null } catch (e) { if (isMemoryError(e)) throw e; info = null }
+  const text = key => (typeof info?.[key] === 'string' ? info[key] : '')
+  const creator = text('Creator'), producer = text('Producer')
+  if (/\bdvips/i.test(creator)) return 'latex'
+  if (/^xdvipdfmx\b|\bXeTeX\b/.test(producer)) return 'xelatex'
+  if (/^LuaTeX\b|^LuaHBTeX\b/.test(producer)) return 'lualatex'
+  if (/^pdfTeX\b/.test(producer)) return 'pdflatex'
+  return null
+}
 /** whether TeX ran at all: its banner in the log (a host that refused the compiler, a jail that ran nothing, has none) */
 export const texRan = log => /^This is \S*TeX\b/m.test(log ?? '')
 /** whether the host says it does not run the compiler asked (the web runner's "unknown engine"): the one answer TeX never ran
