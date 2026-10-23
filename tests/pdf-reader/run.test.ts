@@ -38,7 +38,7 @@ function ranges(file: Uint8Array, init: RequestInit, tag: string) {
   const begin = Number(m[1]), end = Math.min(Number(m[2]) + 1, file.length)
   return new Response(file.slice(begin, end) as BodyInit, { status: 206, headers: { 'content-range': `bytes ${begin}-${end - 1}/${file.length}`, etag: tag } })
 }
-function server(looks: (() => Response)[], o: { prepare?: () => Response; original?: Uint8Array; base?: Uint8Array; objects?: Map<string, Uint8Array>; tag?: string; arxiv?: Uint8Array | 'whole' } = {}) {
+function server(looks: (() => Response)[], o: { prepare?: () => Response; original?: Uint8Array; base?: Uint8Array; objects?: Map<string, Uint8Array>; tag?: string; originalTag?: string; arxiv?: Uint8Array | 'whole' } = {}) {
   const calls: { url: string; init: RequestInit }[] = []
   let i = 0
   const f = vi.fn(async (url: string, init: RequestInit = {}) => {
@@ -48,7 +48,7 @@ function server(looks: (() => Response)[], o: { prepare?: () => Response; origin
     if (url.includes('/o/')) { const b = o.objects?.get(url.slice(-64)); return b ? new Response(b as BodyInit, { headers: o.tag ? { 'x-axt-base-etag': o.tag } : {} }) : new Response('', { status: 404 }) }
     // our base page (the layer route): by ranges, its own tag (the run is bound to its length alone)
     if (url.includes('/api/v1/base/')) return o.base ? ranges(o.base, init, '"base-tag"') : new Response('', { status: 404 })
-    if (url.includes('/original/')) return o.original ? (o.tag ? ranges(o.original, init, o.tag) : new Response(o.original as BodyInit)) : new Response('', { status: 404 })
+    if (url.includes('/original/')) return o.original ? ((o.originalTag ?? o.tag) ? ranges(o.original, init, (o.originalTag ?? o.tag) as string) : new Response(o.original as BodyInit)) : new Response('', { status: 404 })
     return (looks[Math.min(i++, looks.length - 1)] as () => Response)()
   })
   return { f: f as unknown as typeof fetch, calls, layerLooks: () => calls.filter(c => c.url === `${API}/api/v1/layer/${SEG}/${CTAG5}`).length }
@@ -97,7 +97,7 @@ function pdfjs() {
   const getDocument = vi.fn((p: Record<string, unknown>) => { docs.push(p); return { promise: Promise.resolve({ numPages: N }), destroy: async () => {}, onProgress: null } })
   return { lib: { getDocument, PDFDataRangeTransport } as never, docs, given }
 }
-function run(o: { head?: Parameters<typeof headOf>[0]; looks: (() => Response)[]; engine?: ReturnType<typeof echo> | (() => Promise<never>) | (() => Promise<ReturnType<typeof echo>>); store?: LayerStore | null; prepare?: () => Response; original?: Uint8Array; base?: Uint8Array; objects?: Map<string, Uint8Array>; view?: ReturnType<typeof view>; may?: () => boolean; unsent?: () => void; tag?: string; arxiv?: Uint8Array | 'whole'; ranged?: boolean; hidden?: RunHost['hidden'] }) {
+function run(o: { head?: Parameters<typeof headOf>[0]; looks: (() => Response)[]; engine?: ReturnType<typeof echo> | (() => Promise<never>) | (() => Promise<ReturnType<typeof echo>>); store?: LayerStore | null; prepare?: () => Response; original?: Uint8Array; base?: Uint8Array; objects?: Map<string, Uint8Array>; view?: ReturnType<typeof view>; may?: () => boolean; unsent?: () => void; tag?: string; originalTag?: string; arxiv?: Uint8Array | 'whole'; ranged?: boolean; hidden?: RunHost['hidden'] }) {
   const s = server(o.looks, o), side = fakeSide(headOf(o.head)), v = o.view ?? view(), events: RunEvent[] = []
   const engine = o.engine ?? echo()
   const opened: Uint8Array[] = []
@@ -567,6 +567,19 @@ describe('the layer over a delta (the delta route): one byte source, the origina
     expect(baseCalls(a)).toEqual([])
     expect(a.r.probe()).toMatchObject({ basis: 'ranged', ours: false })
     for (const c of a.s.calls) expect([c.init.credentials, c.init.referrerPolicy], c.url).toEqual(['omit', 'no-referrer'])
+  })
+
+  it('the original\'s tag is the one the delta object names: with nothing cached, the delta\'s answer is the first to name it, and the ranges are held to it (another original of the same length is refused)', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const a = run({ looks: [() => new Response(catalog)], view: view(original as Uint8Array<ArrayBuffer>), original, tag: TAGO, originalTag: '"other-tag"', objects: objects(), ranged: true, head: deltaHead() })
+    await settle()
+    expect(await bindOf(a)(cut.index.head.base)).toBe(true)
+    await expect(a.side.options().composed(Uint8Array.from([1]), { x: 1 }).promise).rejects.toBeTruthy()
+    // the same tag on both: composed
+    const b = go()
+    await settle()
+    expect(await bindOf(b)(cut.index.head.base)).toBe(true)
+    await expect(b.side.options().composed(Uint8Array.from([1]), { x: 1 }).promise).resolves.toBeTruthy()
   })
 
   it('a delta that is not the head\'s (other bytes of its length, a length, a section that does not parse) or past the bound is no layer: the original staying, nothing composed', async () => {

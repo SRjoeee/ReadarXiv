@@ -256,7 +256,8 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     const proved = typeof check === 'object' && check !== null && check.boxes === 'equal' && Array.isArray(pages) && pages.length === 2 && Number.isSafeInteger(pages[0]) && Number.isSafeInteger(pages[1]) && (delta ? (pages[0] as number) >= 1 && (pages[0] as number) <= (pages[1] as number) : pages[0] === pages[1])
     const head = await headOf()
     const orig = origOf(head)
-    const bound = delta ? lengthBound(orig?.bytes) && { total: orig?.bytes as number, etag: tag } : lengthBound(base.bytes)
+    // (a delta's bound is made after its object is read: that answer may be the first to name the original's tag)
+    const bound = delta ? lengthBound(orig?.bytes) : lengthBound(base.bytes)
     if (!proved || !bound || !orig || !host.pdfjs || !head) return false
     let next: { bound: Bound; url: string; prefix?: Uint8Array }
     if (delta) {
@@ -272,7 +273,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
       const why = await checkDelta(head, bytes)
       if (why !== null) { console.warn('[reader] the layer\'s delta is refused:', why); return false }
       if (disposed) return false
-      next = { bound, url: originalPath(host.api, paper), prefix: bytes }
+      next = { bound: { total: orig.bytes, etag: tag }, url: originalPath(host.api, paper), prefix: bytes }
     } else {
       let url: string
       try {
