@@ -883,8 +883,10 @@ window.gate = {
    * A done page's costs (--perf): its first drawing (v0's page step, `pageMs`: its original drawn, its units laid and painted;
    * `times`, the engine's own split where it gives one; `work`, its deterministic work counters (layer-proto/work.mjs); then its
    * drawing at the gate's resolution as a view draws it, drawCopy: render A of the wrapped page with the page's groups hidden,
-   * then its crops and pastes, `copy`), its drawing again at a zoom (`zoomK`, twice the gate's device pixels a unit: the page
-   * drawn by PDF.js there alone, `zoomRender`, and drawCopy there, `zoomCopy`), and the canvases its drawing holds
+   * then its crops and pastes, `copy`), its drawing again at a zoom (`zoomK`, twice the gate's device pixels a unit: drawCopy
+   * there, `zoomCopy`, which renders the page itself; an engine from before REMOVAL 8 drew its copy over a canvas of the original
+   * it was handed, which is rendered first for it and timed as `zoomRender`, so that the zoom's cost, the two summed, is the whole
+   * of what each engine does), and the canvases its drawing holds
    */
   async perf(p) {
     const { run, doc } = S
@@ -900,22 +902,31 @@ window.gate = {
     first.height = 0
     const zoomK = 2 * K
     const vp = page.getViewport({ scale: zoomK })
-    const src = document.createElement('canvas'), dst = document.createElement('canvas')
-    for (const c of [src, dst]) { c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height) }
+    const dst = document.createElement('canvas')
+    dst.width = Math.ceil(vp.width)
+    dst.height = Math.ceil(vp.height)
+    // (an engine with copyCanvas, REMOVAL 8 and after, renders its planes itself: no source; an older one is handed the original)
+    const handed = !run.copyCanvas
+    const src = handed ? document.createElement('canvas') : null
+    let zoomRender = null
+    if (src) {
+      src.width = dst.width
+      src.height = dst.height
+      t = performance.now()
+      await page.render({ canvas: src, canvasContext: src.getContext('2d'), viewport: vp }).promise
+      zoomRender = performance.now() - t
+    }
     t = performance.now()
-    await page.render({ canvas: src, canvasContext: src.getContext('2d'), viewport: vp }).promise
-    const zoomRender = performance.now() - t
-    t = performance.now()
-    await run.drawCopy(p, dst.getContext('2d', { alpha: false }), zoomK)
+    await (src ? run.drawCopy(p, dst.getContext('2d', { alpha: false }), src, zoomK) : run.drawCopy(p, dst.getContext('2d', { alpha: false }), zoomK))
     const zoomCopy = performance.now() - t
-    for (const c of [src, dst]) { c.width = 0; c.height = 0 }
+    for (const c of [src, dst]) if (c) { c.width = 0; c.height = 0 }
     let canvasBytes = 0
     const add = c => { if (c) canvasBytes += 4 * c.width * c.height }
     for (const r of run.rows) { add(r.left); add(r.right) }
     const r1 = v => Math.round(v * 10) / 10
     const times = run.pageTimes?.[p] ? Object.fromEntries(Object.entries(run.pageTimes[p]).map(([k, v]) => [k, r1(v)])) : null
     const work = run.pageWork?.[p] ? { ...run.pageWork[p] } : null
-    return { firstDraw: r1((run.pageMs[p] ?? 0) + copyMs), step: r1(run.pageMs[p] ?? 0), copy: r1(copyMs), times, work, zoomRender: r1(zoomRender), zoomCopy: r1(zoomCopy), canvasBytes, heap: performance.memory?.usedJSHeapSize ?? null }
+    return { firstDraw: r1((run.pageMs[p] ?? 0) + copyMs), step: r1(run.pageMs[p] ?? 0), copy: r1(copyMs), times, work, zoomRender: zoomRender === null ? null : r1(zoomRender), zoomCopy: r1(zoomCopy), canvasBytes, heap: performance.memory?.usedJSHeapSize ?? null }
   },
 
   async summary() {

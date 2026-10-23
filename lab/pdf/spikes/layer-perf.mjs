@@ -3,8 +3,9 @@
 // (the hybrid at f267adb9, drawing the old way), beyond noise; a cost that buys a fidelity gain is named, and small.
 // From several runs of each (layer-gate.mjs --perf, one pass a run, run alternately so that the machine's load falls on
 // both alike), the medians:
-//   - browser, per page: the first drawing (v0's page step: the page drawn, the units laid and painted), the drawing again at twice the resolution (the original
-//     drawn there, then drawCopy), the canvases held and the JS heap live (after a collection) at their peak; and where
+//   - browser, per page: the first drawing (v0's page step: the page drawn, the units laid and painted), the drawing again at twice the resolution (drawCopy there,
+//     which from REMOVAL 8 renders its planes itself; an older engine's copy was handed the original drawn there first, which is
+//     summed with it, so that the zoom is the whole of what each engine does: comparable across the change), the canvases held and the JS heap live (after a collection) at their peak; and where
 //     the new path's time goes
 //     (its own split: render, text, ink, lay, operations, compose, SVG);
 //   - server, per paper: the layout maker (its operator lists within it), and the wrap of our page by optional content
@@ -45,7 +46,7 @@ function browser(runs) {
     const m = f => median(list.map(f))
     const split = {}
     for (const k of ['render', 'text', 'ink', 'rp', 'lay', 'ops', 'compose', 'svg']) split[k] = m(x => x.times?.[k])
-    return { name, p, firstDraw: m(x => x.firstDraw), zoom: m(x => x.zoomRender + x.zoomCopy), zoomRender: m(x => x.zoomRender), zoomCopy: m(x => x.zoomCopy), canvasBytes: m(x => x.canvasBytes), jsHeap: m(x => x.jsHeap), split }
+    return { name, p, firstDraw: m(x => x.firstDraw), zoom: m(x => (x.zoomRender ?? 0) + x.zoomCopy), zoomRender: m(x => x.zoomRender ?? 0), zoomCopy: m(x => x.zoomCopy), canvasBytes: m(x => x.canvasBytes), jsHeap: m(x => x.jsHeap), split }
   })
   const fixtures = {}
   for (const pg of pages) (fixtures[pg.name] ??= []).push(pg)
@@ -84,7 +85,7 @@ L.push('## Browser, per page (all fixtures pooled)', '')
 L.push('| item | old path | ' + label + ' | rule |', '|---|---|---|---|')
 const A = old.browser.all, B = now.browser.all
 L.push(`| first drawing, ms (median page) | ${A.firstDraw} | ${B.firstDraw} | ${check('first drawing (all)', A.firstDraw, B.firstDraw, 'time')} |`)
-L.push(`| drawing again at 2× (original + copy), ms | ${A.zoom} (${A.zoomRender} + ${A.zoomCopy}) | ${B.zoom} (${B.zoomRender} + ${B.zoomCopy}) | ${check('zoom (all)', A.zoom, B.zoom, 'time')} |`)
+L.push(`| drawing again at 2× (the original handed to an old engine's copy + the copy; the copy alone from REMOVAL 8, which renders its planes itself), ms | ${A.zoom} (${A.zoomRender} + ${A.zoomCopy}) | ${B.zoom} (${B.zoomRender} + ${B.zoomCopy}) | ${check('zoom (all)', A.zoom, B.zoom, 'time')} |`)
 L.push(`| canvases held at the peak, MB | ${r1(A.canvasPeak / 2 ** 20)} | ${r1(B.canvasPeak / 2 ** 20)} | ${check('canvas peak (all)', A.canvasPeak, B.canvasPeak, 'bytes')} |`)
 L.push(`| JS heap at the peak, MB | ${r1(A.heapPeak / 2 ** 20)} | ${r1(B.heapPeak / 2 ** 20)} | ${check('heap peak (all)', A.heapPeak, B.heapPeak, 'heap')} |`)
 L.push('', `Where ${label}'s first drawing goes (median page, ms): ${Object.entries(B.split).map(([k, v]) => `${k} ${v}`).join(', ')}.${Object.values(A.split).some(v => v !== null) ? ` The old path's: ${Object.entries(A.split).map(([k, v]) => `${k} ${v}`).join(', ')}.` : ' The old path gives no split (its engine has none).'}`, '')
