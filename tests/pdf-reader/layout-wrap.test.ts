@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { markedSample, pixelsApart, renderPage, wrapped } from './helpers/ocg-pdfs'
+import { DOCUMENT_OPTIONS, markedSample, pixelsApart, renderPage, SAMPLE_1, wrapped } from './helpers/ocg-pdfs'
 
 // Our final pass wrapped by optional content (layout/wrap.mjs, layout/own.mjs; design docs/route/ocg-erasure.md §2, §3, §7):
 // sample-1's pages with points written in, wrapped, proved, and rendered by PDF.js in Node
@@ -31,5 +31,129 @@ describe('wrapFinal on sample-1 marked by its shows', () => {
     const a = await wrapped(bytes), b = await wrapped(bytes)
     if ('refused' in a || 'refused' in b) throw new Error('refused')
     expect(a.sha256).toBe(b.sha256)
+  })
+})
+
+// ---- hand-written streams on sample-1's page 2 (its CMR font /F32 and math italic /F35), each run placed by an absolute Tm
+/** a run: its text in /F32 at (x, y), maybe wrapped by points; `hide` written in 3 Tr (the oracle of hiding it) */
+const run = (x: number, y: number, text: string, o: { before?: string; after?: string; hide?: boolean; font?: string } = {}) =>
+  `${o.before ?? ''}BT /${o.font ?? 'F32'} 10.9091 Tf 1 0 0 1 ${x} ${y} Tm ${o.hide ? '3 Tr ' : ''}[${text}] TJ ${o.hide ? '0 Tr ' : ''}ET${o.after ?? ''}\n`
+const unit = (id: number, x: number, y: number, text: string, hide = false) => run(x, y, text, { before: `/axt-${id}s ri `, after: ` /axt-${id}e ri`, hide })
+const S1 = (hide = -1) => [unit(0, 72, 700, '(Order)-290(the)', hide === 0), unit(1, 72, 680, '(points)-290(b)27(y)', hide === 1), run(72, 660, '(and)'), unit(2, 72, 640, '(their)', hide === 2)].join('')
+const only = (text: string) => (_: string, p: number) => (p === 2 ? text : _)
+const S1_UNITS = [{ src: 'Order the' }, { src: 'points by' }, { src: 'their' }]
+const off = (re: RegExp) => (n: string) => re.test(n)
+const ok = <T extends object>(r: T | { refused: string; why: string }): T => { if ('refused' in r) throw new Error(`${r.refused}: ${r.why}`); return r as T }
+
+describe('the wrap on hand-written pages (S1, S6, S9–S12; G1, G2)', () => {
+  it('hides exactly a unit: its group OFF is the page with its runs in 3 Tr (G2), and every group ON our page (G1)', async () => {
+    const { bytes } = await markedSample({ pages: [2], edit: only(S1()) })
+    const r = ok(await wrapped(bytes, { units: S1_UNITS }))
+    expect(r.unhidden).toEqual([])
+    expect(r.stats.groups).toBe(3)
+    expect(pixelsApart(await renderPage(bytes, 2), await renderPage(r.bytes, 2))).toBe(0)
+    for (const u of [0, 1, 2]) {
+      const { bytes: oracle } = await markedSample({ pages: [2], edit: only(S1(u)) })
+      expect(pixelsApart(await renderPage(r.bytes, 2, { off: off(new RegExp(`^axt:u${u}$`)) }), await renderPage(oracle, 2)), `u${u}`).toBe(0)
+    }
+  })
+  it('spells each unit: one whose source differs is the original\'s (spell), listed in the head\'s fields', async () => {
+    const { bytes } = await markedSample({ pages: [2], edit: only(S1()) })
+    const r = ok(await wrapped(bytes, { units: S1_UNITS.map((u, i) => (i === 1 ? { src: 'points' } : u)) }))
+    expect(r.unhidden).toEqual([[1, 'spell']])
+    expect(r.stats.unhidden.spell).toBe(1)
+  })
+  it('closes a run at a foreign marked-content sequence and at q/Q, and keeps the foreign ones (S6, S12)', async () => {
+    const text = [run(72, 700, '(Order)', { before: '/axt-0s ri /Span <</MCID 0>> BDC ', after: ' EMC' }), run(72, 680, '(the)', { before: 'q ', after: ' Q /axt-0e ri' })].join('')
+    const { bytes } = await markedSample({ pages: [2], edit: only(text) })
+    const r = ok(await wrapped(bytes, { units: [{ src: 'Order the' }] }))
+    expect(r.stats.wrapped).toBe(1)
+    expect(pixelsApart(await renderPage(bytes, 2), await renderPage(r.bytes, 2))).toBe(0)
+    expect(pixelsApart(await renderPage(r.bytes, 2, { off: off(/^axt:u0$/) }), await renderPage((await markedSample({ pages: [2], edit: only('') })).bytes, 2))).toBe(0)
+  })
+  it('wraps a page whose /Contents is an array, a unit over its two streams (S12)', async () => {
+    const text = `${run(72, 700, '(Order)', { before: '/axt-0s ri ' })}%SPLIT%${run(72, 680, '(the)', { after: ' /axt-0e ri' })}`
+    const { bytes } = await markedSample({ pages: [2], edit: only(text) })
+    const r = ok(await wrapped(bytes, { units: [{ src: 'Order the' }] }))
+    expect(pixelsApart(await renderPage(r.bytes, 2, { off: off(/^axt:u0$/) }), await renderPage((await markedSample({ pages: [2], edit: only('') })).bytes, 2))).toBe(0)
+  })
+  it('wraps a unit\'s painted rule with it (S11)', async () => {
+    const text = `/axt-0s ri ${run(72, 700, '(Order)')}q 72 690 100 0.5 re f Q /axt-0e ri\nq 72 600 100 0.5 re f Q\n`
+    const { bytes } = await markedSample({ pages: [2], edit: only(text) })
+    const r = ok(await wrapped(bytes, { units: [{ src: 'Order' }] }))
+    const without = (await markedSample({ pages: [2], edit: only('q 72 600 100 0.5 re f Q\n') })).bytes
+    expect(pixelsApart(await renderPage(r.bytes, 2, { off: off(/^axt:u0$/) }), await renderPage(without, 2))).toBe(0)
+  })
+  it('refuses a page with an owned run in a clipping text mode, writing nothing of ours on it (S9)', async () => {
+    const text = `/axt-0s ri BT /F32 10.9091 Tf 1 0 0 1 72 700 Tm 4 Tr [(Order)] TJ ET /axt-0e ri\n0 0 612 792 re f\n`
+    const { bytes } = await markedSample({ pages: [2], edit: only(text) })
+    const r = ok(await wrapped(bytes, { units: [{ src: 'Order' }] }))
+    expect(r.stats.refusedPages).toBe(1)
+    expect(r.unhidden).toEqual([[0, 'page']])
+    expect(r.bytes).toEqual(bytes)
+  })
+  it('keeps a foreign /OCProperties and lists ours ON beside it (S10)', async () => {
+    const text = run(72, 700, '(Order)', { before: '/axt-0s ri /OC /fB BDC ', after: ' EMC /axt-0e ri' }) + unit(1, 72, 680, '(the)')
+    const { bytes } = await markedSample({ pages: [2], edit: only(text), foreignOC: true })
+    const r = ok(await wrapped(bytes, { units: [{ src: 'Order' }, { src: 'the' }] }))
+    expect(pixelsApart(await renderPage(bytes, 2), await renderPage(r.bytes, 2))).toBe(0)
+    // (u0 lies inside the paper's own OFF layer: hiding it changes nothing; u1's hiding is exact)
+    expect(pixelsApart(await renderPage(r.bytes, 2), await renderPage(r.bytes, 2, { off: off(/^axt:u0$/) }))).toBe(0)
+    expect(pixelsApart(await renderPage(r.bytes, 2), await renderPage(r.bytes, 2, { off: off(/^axt:u1$/) }))).toBeGreaterThan(0)
+  })
+  it('splits a show two groups share, as the remover\'s chunks, its glyphs and numbers kept (S7)', async () => {
+    const text = `/axt-0s ri ${run(72, 700, '(Order)-290(points)-290(the)-200(blo)', { before: '/axt-p0.1a ri ' })} /axt-0e ri\n`.replace('/axt-0s ri /axt-p0.1a ri BT /F32 10.9091 Tf 1 0 0 1 72 700 Tm [(Order)', '/axt-0s ri BT /F32 10.9091 Tf 1 0 0 1 72 700 Tm [(Order)] TJ /axt-p0.1a ri [')
+    const { bytes } = await markedSample({ pages: [2], edit: only(text) })
+    const follows = (name: string) => (name === 'p0.1a' ? { closing: false, want: 'the', ends: ['0e'], blocked: false, group: [] } : null)
+    const r = ok(await wrapped(bytes, { units: [{ src: 'Order theblo' }], follows }))
+    expect(r.stats.split).toBe(1)
+    expect(r.unhidden).toEqual([])
+    const a = await renderPage(bytes, 2), b = await renderPage(r.bytes, 2)
+    // (E4 variant (a): 0 px outside the split glyphs, few inside them)
+    expect(pixelsApart(a, b)).toBeLessThan(0.001 * a.width * a.height)
+  })
+  it('climbs the bounds\' ladder: placeholders merged into the text past GROUPS_PAGE, the page refused past it still (S3, S4)', async () => {
+    const text = unit(0, 72, 700, '(Order)').replace('[(Order)] TJ', '[(Order)] TJ /axt-p0.1a ri [(the)] TJ /axt-p0.1b ri') + unit(1, 72, 680, '(points)')
+    const { bytes } = await markedSample({ pages: [2], edit: only(text) })
+    const units = [{ src: 'Order' }, { src: 'points' }]
+    const merged = ok(await wrapped(bytes, { units, bounds: { groupsPage: 2 } }))
+    expect(merged.unhidden).toEqual([[0, 'bounds']])
+    expect(merged.stats.groups).toBe(2)
+    const refused = ok(await wrapped(bytes, { units, bounds: { groupsPage: 1 } }))
+    expect(refused.stats.refusedPages).toBe(1)
+    const two = (await markedSample({ pages: [2, 3] })).bytes
+    const first = ok(await wrapped(two)).stats
+    const doc = ok(await wrapped(two, { bounds: { groupsDoc: first.groups - 1 } }))
+    expect(doc.stats.wrapped).toBe(1)
+    expect(doc.stats.refusedPages).toBe(1)
+    expect(doc.stats.groups).toBeLessThan(first.groups)
+  })
+})
+
+describe('both forms of the base from one wrapped pass (§2.1, T2.5)', () => {
+  it('the delta over the original carries our /OCProperties alone, proves, and renders as the full base with groups OFF', async () => {
+    const PL = await import('@cantoo/pdf-lib')
+    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const { deltaOf, proveDelta } = await import('@/pdf-reader/engine/layout/delta.mjs')
+    const { readFileSync } = await import('node:fs')
+    const orig = new Uint8Array(readFileSync(SAMPLE_1))
+    const { bytes } = await markedSample()
+    const r = ok(await wrapped(bytes))
+    const d = await deltaOf(orig, r.bytes, { PL: PL as never })
+    if ('refused' in d) throw new Error(d.why)
+    const proof = await proveDelta(orig, d.delta, r.bytes, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, replaced: d.replaced })
+    expect(proof.ok).toBe(true)
+    const composed = new Uint8Array(orig.length + d.delta.length)
+    composed.set(orig)
+    composed.set(d.delta, orig.length)
+    for (const p of [1, 2]) {
+      const o = { off: off(/^axt:u[0-9]*[02468]$/) }
+      expect(pixelsApart(await renderPage(composed, p, o), await renderPage(r.bytes, p, o)), `page ${p}`).toBe(0)
+    }
+    // (the proof refuses a delta whose catalog is not the original's but for /OCProperties: a key changed)
+    const text = Array.from(d.delta, c => String.fromCharCode(c)).join('')
+    const forged = Uint8Array.from(text.replace('/OCProperties', '/OCPropertiez'), c => c.charCodeAt(0))
+    const bad = await proveDelta(orig, forged, r.bytes, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, replaced: d.replaced })
+    expect(bad.ok).toBe(false)
   })
 })

@@ -46,7 +46,7 @@ export function markShows(text: string, { every = 3, first = 0 } = {}) {
 }
 
 /** sample-1 with its pages' streams replaced: `edit(text, page)` the page's new content (markShows by default) */
-export async function markedSample({ pages = [1, 2, 3, 4], edit = null as null | ((text: string, page: number) => string), every = 3 } = {}) {
+export async function markedSample({ pages = [1, 2, 3, 4], edit = null as null | ((text: string, page: number) => string), every = 3, foreignOC = false } = {}) {
   const doc = await PL.PDFDocument.load(readFileSync(SAMPLE_1), { updateMetadata: false })
   let first = 0
   for (const p of pages) {
@@ -54,7 +54,18 @@ export async function markedSample({ pages = [1, 2, 3, 4], edit = null as null |
     let out: string
     if (edit) out = edit(text, p)
     else { const m = markShows(text, { every, first }); out = m.text; first += m.units }
-    doc.getPages()[p - 1]!.node.set(PL.PDFName.of('Contents'), doc.context.register(doc.context.flateStream(enc(out))))
+    // (a stream split at `%SPLIT%` is a /Contents array of its pieces)
+    const refs = out.split('%SPLIT%').map(t => doc.context.register(doc.context.flateStream(enc(t))))
+    doc.getPages()[p - 1]!.node.set(PL.PDFName.of('Contents'), refs.length === 1 ? refs[0]! : doc.context.obj(refs))
+  }
+  if (foreignOC) {
+    // a foreign /OCProperties (the paper's own layers): fA ON, fB OFF, named /fA and /fB on every page edited
+    const ctx = doc.context, fA = ctx.register(ctx.obj({ Type: 'OCG', Name: PL.PDFString.of('fA') })), fB = ctx.register(ctx.obj({ Type: 'OCG', Name: PL.PDFString.of('fB') }))
+    doc.catalog.set(PL.PDFName.of('OCProperties'), ctx.obj({ OCGs: [fA, fB], D: ctx.obj({ BaseState: 'OFF', ON: [fA], OFF: [fB], Order: [fA, fB] }) }))
+    for (const p of pages) {
+      const node = doc.getPages()[p - 1]!.node, res = node.Resources()!
+      res.set(PL.PDFName.of('Properties'), ctx.obj({ fA, fB }))
+    }
   }
   return { bytes: new Uint8Array(await doc.save({ useObjectStreams: false })), units: first }
 }
@@ -63,7 +74,7 @@ export const DOCUMENT_OPTIONS = { verbosity: 0, useSystemFonts: false, isEvalSup
 export const deflate = (b: Uint8Array) => new Uint8Array(deflateSync(b, { level: 6 }))
 export const inflate = (b: Uint8Array, limit: number) => new Uint8Array(inflateSync(b, { maxOutputLength: limit + 1 }))
 /** wrapFinal over bytes, the test's way */
-export const wrapped = (bytes: Uint8Array, o: { units?: unknown[] | null; follows?: unknown } = {}) => wrapFinal(bytes, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, OPS, units: (o.units ?? null) as never, ...(o.follows !== undefined ? { follows: o.follows as never } : { follows: null }), deflate, inflate })
+export const wrapped = (bytes: Uint8Array, o: { units?: unknown[] | null; follows?: unknown; bounds?: { groupsPage?: number; sequencesPage?: number; groupsDoc?: number } } = {}) => wrapFinal(bytes, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, OPS, units: (o.units ?? null) as never, ...(o.follows !== undefined ? { follows: o.follows as never } : { follows: null }), deflate, inflate, ...(o.bounds ? { bounds: o.bounds } : {}) } as never)
 
 /** a page rendered by PDF.js in Node at `scale`, groups `off(name)` hidden: its RGBA pixels */
 export async function renderPage(bytes: Uint8Array, p: number, { off = null as null | ((name: string) => boolean), scale = 2 } = {}) {

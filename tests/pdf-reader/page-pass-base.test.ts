@@ -214,3 +214,20 @@ describe('a delta the host gives over more pages of ours than arXiv\'s (CodeRabb
     expect(got.parts.every(p => p.noLayout?.refused === 'boxes')).toBe(true)
   })
 })
+
+describe('layerOfPaper over our base page wrapped by optional content (ours.wrap)', () => {
+  const WRAP = { stats: { wrapped: 3, refusedPages: 0, unhidden: { marks: 0, across: 0, spell: 1, page: 0, bounds: 0 }, split: 0, groups: 3, labelKept: 0 }, unhidden: [[1, 'spell']] as [number, string][], labelKept: [] as number[] }
+  it('writes the wrap\'s counts and lists into the head\'s base, whole or a delta', async () => {
+    const full = await passOf(worldOf(), { orig: ORIG, ours: oursOf(worldOf(), { wrap: WRAP }) })
+    expect(full.head.base).toMatchObject({ source: 'ours', stats: WRAP.stats, unhidden: WRAP.unhidden, labelKept: [] })
+    const d = await deltaOver([1, 2, 3])
+    const delta = await passOf(worldOf(), { orig: ORIG, ours: oursOf(worldOf(), { delta: d, wrap: WRAP }) })
+    expect(delta.head.base).toMatchObject({ kind: 'delta', stats: { ...d.stats, ...WRAP.stats }, unhidden: WRAP.unhidden, labelKept: [] })
+  })
+  it('refuses a host\'s wrap whose counts are not its lists\' (a defect, thrown); a refused wrap is the paper\'s fallback, `wrap`', async () => {
+    await expect(passOf(worldOf(), { orig: ORIG, ours: oursOf(worldOf(), { wrap: { ...WRAP, unhidden: [] } }) })).rejects.toThrow(/ours.wrap/)
+    const got = await passOf(worldOf(), { orig: ORIG, ours: { refused: 'wrap', why: 'wrap-proof: page 2: a group left open' } })
+    expect(got.head.base).toEqual({ source: 'arxiv', ...ORIG, why: 'wrap' })
+    expect(got.parts.map(p => p.noLayout?.refused)).toEqual(['wrap', 'wrap'])
+  })
+})

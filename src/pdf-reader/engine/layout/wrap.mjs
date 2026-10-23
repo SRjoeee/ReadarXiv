@@ -415,10 +415,10 @@ export { UNHIDDEN_MAX }
  * sha256, stats, unhidden, labelKept } — `stats` { wrapped, refusedPages, unhidden: { marks, across, spell, page, bounds }, split,
  * groups, labelKept } (integers, the head's), `unhidden` [[unit id, code of UNHIDDEN], …] ascending, `labelKept` the unit ids
  * whose label is left the original's ink, `own` own.mjs's stats (the record's), `owned` own.mjs's whole result where `keepOwned`
- * (the lab's) — or { refused (WRAP_WHYS), why }: the paper's
+ * (the lab's); `bounds` { groupsPage, sequencesPage, groupsDoc } wrapOf's (tests) — or { refused (WRAP_WHYS), why }: the paper's
  * base is then arXiv's PDF. Never throws but a failed allocation
  */
-export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions = {}, OPS, units = null, follows: given = undefined, deflate, inflate = null, keepOwned = false }) {
+export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions = {}, OPS, units = null, follows: given = undefined, deflate, inflate = null, keepOwned = false, bounds = {} }) {
   // (the paper's SOURCE units: a translation's (a record's units, its text pieces `tr`) holds no text after a placeholder to
   // find its ink's end by, nor the source text the spell check reads)
   if (units !== null && (!Array.isArray(units) || units.some(u => u?.pieces?.some?.(p => p?.tr)))) throw new TypeError('units: the paper\'s source units (live.mjs openPaper\'s, layerOfPaper\'s `source.units`), not a translation\'s')
@@ -445,7 +445,7 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   const own = ownOf(pages, { units, follows })
   const plans = new Map()
   pages.forEach((pg, i) => { if (facts[i] && pg.points.length) plans.set(i + 1, { facts: facts[i], ...planOf(pg.glyphs, own.glyphs[i], pg.paths, own.boxes[i]) }) })
-  const made = await wrapOf(finalBytes, plans, { units: own.units, PL, deflate, inflate })
+  const made = await wrapOf(finalBytes, plans, { units: own.units, PL, deflate, inflate, ...bounds })
   if (made.refused) return made
   // a unit on a page not wrapped, or with a placeholder where the page's groups were merged, is the original's
   for (const u of own.units.values()) {
