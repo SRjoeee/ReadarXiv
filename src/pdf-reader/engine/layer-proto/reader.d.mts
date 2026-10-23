@@ -11,7 +11,9 @@ import type { Row } from './rows.mjs'
 import type { PageWords } from './words.mjs'
 import type { FrozenRuleSet, RULES_SCHEMA } from '../rules/layout.mjs'
 
-export { PDF_OPTIONS } from './run.mjs'
+export { PDF_OPTIONS, SKIP_CODES, type SkipCode } from './run.mjs'
+/** the dropped rows the door names at most (stats `droppedRows`) */
+export declare const DROPPED_ROWS: number
 export { BUNDLE, BUNDLE_CAP, BUNDLE_VALUES, BundleRefusal, bundleKey, CTAG, readBundle, VTAG } from './bundle.mjs'
 export { batchesOf, layerRows, rowOf, runRows, toTranslate, unitOf } from './rows.mjs'
 export { ADDON_CAP, ADDON_MANIFEST_CAP, ADDON_MANIFEST_VALUES, parseAddonManifest } from '../layout/addon-manifest.mjs'
@@ -43,6 +45,9 @@ export interface LayerStats {
   pageMs: Readonly<Record<number, number>>
   /** the rows skipped as no unit of the paper's (unitOf's null) */
   dropped: number
+  /** those rows by the unit they name, ids rising, each once (a later row that fits takes it out), at most DROPPED_ROWS: the
+   *  unit stays the original's for it (run.mjs SKIP_CODES `rowUnfit`) */
+  droppedRows: [id: number, code: 'rowUnfit'][]
   /** the Link annotations of the pages read, by what became of them: `total` the ones a reader can carry, `inPlace` those left
    *  over the original's ink, `moved` those laid over the layer's own drawing, `dropped` the rest by reason (`unmatched`: over
    *  erased text and matched by nothing; `ambiguous`; `unplaced`), `unsupported` those it cannot carry (a named action, a script,
