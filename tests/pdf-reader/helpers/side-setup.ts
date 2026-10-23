@@ -32,20 +32,22 @@ export function installSideFakes() {
 }
 const views: ReaderView[] = []
 
-let paper: Made | null = null, arxivPaper: Made | null = null
+const papers = new Map<string, Made>()
 /** the format test's small paper, written and read back once. Its head is the engine's head of a layer over our own compile (the layer
- *  draws only over one, BUNDLE 8); `ours = false`: its head over arXiv's PDF, which draws nothing (the fallback) */
-export async function M(ours = true): Promise<Made> {
-  if (ours) {
-    paper ??= await made({ ours: true })
-    return paper
+ *  draws only over one, BUNDLE 8); `ours = false`: its head over arXiv's PDF, which draws nothing (the fallback); `delta`: ours held
+ *  as a delta over arXiv's PDF, replacing those page ranges */
+export async function M(ours = true, delta?: [number, number][]): Promise<Made> {
+  const key = delta ? `delta ${JSON.stringify(delta)}` : ours ? 'ours' : 'arxiv'
+  let made_ = papers.get(key)
+  if (!made_) {
+    made_ = await made(delta ? { ours: true, delta } : ours ? { ours: true } : {})
+    papers.set(key, made_)
   }
-  arxivPaper ??= await made()
-  return arxivPaper
+  return made_
 }
 export const macrotask = () => new Promise(r => setTimeout(r, 0))
 export const jobRef = (m: Made, i: number): TellRef => ({ ...(m.parts[i]!.ref as Ref), prev: i ? m.parts[i - 1]!.sha256 : null })
-export const ALL = async (ours = true) => { const m = await M(ours); return { head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(m, i)), end: { through: N } } }
+export const ALL = async (ours = true, delta?: [number, number][]) => { const m = await M(ours, delta); return { head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(m, i)), end: { through: N } } }
 /** a row of each unit: its text as one translated piece; `sentences` where given */
 export const rowOf = (id: number, text = `t${id}`, sentences: Row[4] = null): Row => [id, [text], 'whole', 'test', sentences]
 /** the units with lines on page n, rising */
@@ -72,6 +74,8 @@ export interface Setup {
 export interface Options {
   /** the paper's head the engine's head of a layer over our own compile (format-paper.ts made({ ours: true })) */
   ours?: boolean
+  /** ours held as a delta over arXiv's PDF, replacing these page ranges (format-paper.ts made({ delta })) */
+  delta?: [number, number][]
   door?: FakeDoorOptions
   /** the host's base check, given the head's base as the side read it */
   bind?: (base: Record<string, unknown>) => Promise<boolean>
@@ -97,7 +101,7 @@ export interface Options {
 }
 /** the view over the original (its four pages), its layer side over the door and the paper's objects served by digest */
 export async function setup(o: Options = {}): Promise<Setup> {
-  const m = await M(o.ours)
+  const m = await M(o.ours, o.delta)
   const panes = drawPanes()
   const events: ViewEvent[] = []
   const clock = manualClock()
@@ -189,9 +193,10 @@ export async function setup(o: Options = {}): Promise<Setup> {
   }
 }
 /** a document whose pages draw (on a canvas, nothing: a page's copy drawn from the composed document) */
+export const renders: { page: number; annotationMode: unknown }[] = []
 export function drawable(d: ReturnType<typeof fakeDoc>) {
   const get = d.getPage.bind(d)
-  d.getPage = async (n: number) => Object.assign(await get(n), { render: () => ({ promise: Promise.resolve() }) })
+  d.getPage = async (n: number) => Object.assign(await get(n), { render: (p: { annotationMode?: unknown }) => { renders.push({ page: n, annotationMode: p.annotationMode }); return { promise: Promise.resolve() } } })
   return d
 }
 /** the side's tasks run: the door laying what is queued (the fake's; `lay` false: nothing laid), the feed's digests, the view's

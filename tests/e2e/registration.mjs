@@ -28,7 +28,8 @@
 // on the context PDF.js draws a page view on, so the two copies agree to the pixel where the frame is right: 0 differ.
 //
 // Usage: pnpm build && pnpm e2e:registration     (first time: npx playwright install chromium)
-// Environment: AXT_HEADED=1 watches it run; AXT_EXT_DIR points at another build; AXT_DPR=1.1,1.8 runs those ratios alone.
+// Environment: AXT_HEADED=1 watches it run; AXT_EXT_DIR points at another build; AXT_DPR=1.1,1.8 runs those ratios alone;
+// AXT_BASE=delta cuts the sample as a layer held as a delta over arXiv's PDF.
 // AXT_MEASURE=1 checks nothing and measures the commit's path instead, at the fit and at 100 %: its source and its copy (ms,
 // the median of five) and the long tasks of the browser's own recopy after the zoom, a line a page (PDF-READER.md §11.8).
 import { readFileSync, rmSync } from 'node:fs'
@@ -58,9 +59,14 @@ const DIFFERING_MAX = 0
 /** the residue: ink darker than 240 within 2 px of an erased rectangle; the slack over the aligned zoom's, in device px */
 const RESIDUE_SLACK = 4
 
-const sampleCut = await cutSample(sampleFiles())
+// AXT_BASE=delta: the sample\'s layer held as a delta over arXiv\'s PDF (lib/layer-cut.mjs `base: 'delta'`; pages 1 to 3 replaced, page 4 the
+// original\'s own): a replaced page\'s copy is the composed document\'s, a page the delta does not replace takes the left\'s canvas again
+const DELTA = process.env.AXT_BASE === 'delta'
+const sampleCut = await cutSample(sampleFiles(), DELTA ? { base: 'delta' } : undefined)
+/** where a laid page\'s copy comes from: the composed document, but for the page a delta does not replace (the sample\'s last) */
+const WANT_FROM = page => (DELTA && page === sampleCut.paper.pages ? 'left' : 'doc')
 const LATIN_FACE = readFileSync(fileURLToPath(new URL('../../node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf', import.meta.url)))
-const api = layerApi({ layer4: sampleCut, faces: { ids: Object.keys(FACES), ranges: [32, 126, 160, 255, 0x2010, 0x2027], bytes: new Uint8Array(LATIN_FACE) } })
+const api = layerApi({ layer4: sampleCut, bound: DELTA, faces: { ids: Object.keys(FACES), ranges: [32, 126, 160, 255, 0x2010, 0x2027], bytes: new Uint8Array(LATIN_FACE) } })
 const { sample } = api
 const PAPER = sample.id
 const ABSTRACT_PAGE = `<!doctype html><title>stand-in abstract</title><meta name="citation_title" content="Counting Lattice Paths Around Blocked Cells"><div class="submission-history"><strong>[v${sample.version}]</strong></div>`
@@ -257,18 +263,21 @@ try {
           // over our base (the layer route) the copy is the composed document's page at the place's k, never PDF.js's canvas of the
           // original: it is the page here the left's canvas is compared with, and in this fixture, whose base is arXiv's own bytes,
           // the two are the same page to the pixel
-          check(`DPR ${dpr}, zoom ${s.z}, page ${p.page}: the copy is the composed document's page at the place's k, and the same page as PDF.js's own canvas of the original here`, p.from === 'doc' && p.kSource === p.k && p.compared > 0 && p.differing <= DIFFERING_MAX, `from ${p.from}; ${p.differing} of ${p.compared} px differ by more than ${TOLERANCE} (max ${p.maxDiff}); source k ${p.kSource}, place k ${p.k}`)
+          // (held as a delta: the page the delta does not replace is the original's own bytes in the composed document, and takes PDF.js's
+          // canvas of the original as its copy source again, drawn at the scale it was; the composed document is then not rendered for it)
+          const want = WANT_FROM(p.page)
+          check(`DPR ${dpr}, zoom ${s.z}, page ${p.page}: the copy is ${want === 'doc' ? "the composed document's page at the place's k" : "PDF.js's canvas of the original (a page the delta does not replace)"}, and the same page as the other source here`, p.from === want && (want !== 'doc' || p.kSource === p.k) && p.compared > 0 && p.differing <= DIFFERING_MAX, `from ${p.from}; ${p.differing} of ${p.compared} px differ by more than ${TOLERANCE} (max ${p.maxDiff}); source k ${p.kSource}, place k ${p.k}`)
           const floor = floorOf(p.page)
           const bound = floor === undefined ? null : floor * (s.scale / aligned.scale) ** 2 + RESIDUE_SLACK * dpr
           check(`DPR ${dpr}, zoom ${s.z}, page ${p.page}: the ink left at the erased rectangles is no more than at the aligned zoom`, bound !== null && p.residue <= bound, `${p.residue} px darker than 240 within 2 px of ${p.rects} rects; at 100 %: ${floor ?? 'not measured'} (bound ${bound === null ? '-' : bound.toFixed(1)})`)
           const box = p.frame.box && [Math.round(p.frame.box[0] * dpr), Math.round(p.frame.box[1] * dpr)]
-          check(`DPR ${dpr}, zoom ${s.z}, page ${p.page}: the copy drawn from the document is on the place's box at the pixel ratio, as PDF.js sizes a page view's`, !!box && p.doc?.[0] === box[0] && p.doc?.[1] === box[1] && p.source[0] === box[0] && p.source[1] === box[1], `document ${JSON.stringify(p.doc)}, PDF.js ${JSON.stringify(p.source)}, the box at ${dpr} ${JSON.stringify(box)}`)
+          if (want === 'doc') check(`DPR ${dpr}, zoom ${s.z}, page ${p.page}: the copy drawn from the document is on the place's box at the pixel ratio, as PDF.js sizes a page view's`, !!box && p.doc?.[0] === box[0] && p.doc?.[1] === box[1] && p.source[0] === box[0] && p.source[1] === box[1], `document ${JSON.stringify(p.doc)}, PDF.js ${JSON.stringify(p.source)}, the box at ${dpr} ${JSON.stringify(box)}`)
           const near = (a, b) => !!a && Math.abs(a[0] - b[0]) <= 0.05 && Math.abs(a[1] - b[1]) <= 0.05
           check(`DPR ${dpr}, zoom ${s.z}, page ${p.page}: the SVG and the links are the page's size at its scale, not its floored box`, near(p.frame.svg, p.frame.want) && (!p.frame.links || near(p.frame.links, p.frame.want)), JSON.stringify(p.frame))
         }
       }
       const atAligned = aligned?.pages ?? []
-      check(`DPR ${dpr}: at the aligned zoom (100 %) PDF.js floors nothing and the copy and PDF.js's canvas agree`, atAligned.length > 0 && atAligned.every(p => p.from === 'doc' && Math.abs(p.lost) < 1e-6 && p.compared > 0 && p.differing <= DIFFERING_MAX), atAligned.map(p => `page ${p.page}: lost ${p.lost}, ${p.differing} differ, residue ${p.residue}`).join('; '))
+      check(`DPR ${dpr}: at the aligned zoom (100 %) PDF.js floors nothing and the copy and PDF.js's canvas agree`, atAligned.length > 0 && atAligned.every(p => p.from === WANT_FROM(p.page) && Math.abs(p.lost) < 1e-6 && p.compared > 0 && p.differing <= DIFFERING_MAX), atAligned.map(p => `page ${p.page}: lost ${p.lost}, ${p.differing} differ, residue ${p.residue}`).join('; '))
       check(`DPR ${dpr}: no request left the route table`, guard.violations.length === 0, guard.violations.map(v => `${v.method} ${v.url}`).join('; '))
       check(`DPR ${dpr}: no page of the reader threw`, pageErrors.length === 0, pageErrors.slice(0, 3).join(' | '))
       await page.close()

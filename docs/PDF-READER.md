@@ -716,6 +716,11 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   dropped original stops no later part, no `again()`. A part the door refuses stops the parts added to that door there,
   with one warning; the side stays open. A refusal of the whole side carries a code (`head`, `units`, `index`, `base`,
   `composed`, `open`).
+- **The link layer under a delta.** The delta keeps the original's `/Annots` on a replaced page (about 91 % of its link rectangles
+  match ours); the layer draws its own links from the layout (the door's `links`, one wrapper). The composed document's annotation
+  layer is rendered nowhere: the side draws the copy canvas, the SVG and that wrapper, never a viewer's annotation layer, and the
+  copy is rendered with `AnnotationMode.DISABLE` on a replaced page so that none of the original's appearances are drawn into it.
+  `layer-side.test.ts` L18 pins it: no annotation element on a laid page, each link once, all in the wrapper.
 - **A page of a part with no layout** (over our base: the engine's check refused the part, or its producer recorded none, a
   part's `layout` null) draws nothing and erases nothing, so its pages would show our base page in other line breaks beside
   arXiv's. What TeX's positions do not draw is arXiv's PDF: such a page (some part holds it and every part that holds it has no
@@ -732,7 +737,9 @@ gives it a transport (`fetchObject`, an object by its ref), the base's check (`b
   the page drawn from the composed document, because its pages are our compile's and the erase rectangles, crops and colours
   are in their coordinates, not on arXiv's rendering the left shows: the left's canvas and the place's, which are the
   original's, are never asked, at the commit or at a zoom's recopy; one page render a laid page, 10 to 25 ms on the sample
-  where the canvas was free) and its SVG, put in one task, in place: the place's size and the pane's
+  where the canvas was free; held as a delta over arXiv's PDF (§19.8), a page the delta does not replace (`base.replaced`) IS the
+  original's own bytes in the composed document, so the left's canvas is its copy source again and the composed document is not
+  rendered for it, while a replaced page is drawn from the composed document with annotations off) and its SVG, put in one task, in place: the place's size and the pane's
   scroll unchanged, its page view destroyed first, no viewer document set. A zoom draws the copies again at the new k
   600 ms after it, nothing laid again; a copy is kept while it is at the scale a copy drawn then would be at. A page this
   door laid that leaves the view lets its SVG and its copy go and holds an
@@ -882,7 +889,18 @@ contract §4.3), started by the host once a translated display is shown in a vis
    (S-R-24). What the left shows is kept (`leftShows`: the tab proven to be an orig, or our copy of one) and compared with every
    head's orig, which a retry may change: the same, nothing is fetched; another, the newly named original is shown before the
    layer is used (none to be had: no layer), never the new layer over the old PDF.
-5. **The composed document**: our base page by ranges at `/api/v1/base/<id>v<n>/<sha256>` (`openRanged`, its own address: the
+   **A base held as a delta** (`base.kind` 'delta', §19.8): `bindOurs` fetches the delta object by the head's digest through the
+   layer's object route (`objectBytes`, this machine's store first, `DELTA_MS` for the ask, `DELTA_MAX_BYTES` the bound) and holds it
+   to `checkDelta(head, bytes)` (length, digest, its section over `orig`, its startxref the head's) before it is used; a delta that
+   does not check, or past the bound, is no layer. Pages `check.pages` [M, N] with M at most N (a paper of several toplevel
+   sources) bind; the pages past M are the original's and the layer draws none there. The composed document is then ONE byte
+   source: the ORIGINAL by ranges from our server's copy (`/api/v1/original/<id>v<n>`, bound by `head.orig.bytes` and the tag the
+   layer's objects name, else the first answer's), then `delta ++ the tails` in memory after its last byte (`composedRange`
+   unchanged; `/api/v1/base` is asked for a whole base alone). The composed document IS arXiv's bytes there, so the proof of the
+   tab's PDF against `head.orig` applies exactly as above (`leftShows`, `proveTab`, `showOurs`), also across a retry whose head
+   names another orig. The extension reads the original from our server's copy, not the tab's own source (it holds none by
+   ranges); the left pane and the composed document are two streams of the same bytes there, which the web, one store, is not.
+5. **The composed document** (a whole base): our base page by ranges at `/api/v1/base/<id>v<n>/<sha256>` (`openRanged`, its own address: the
    digest of its bytes, so one object per URL), every answer a 206 of exactly the bytes asked, of the head's length and the tag
    of the first answer (a `Bound` may carry the length alone: no route names a tag beforehand), the tails after its last byte;
    else the source refused (a page it cannot read stays the original's, the side's stall). A read with nothing from our server
@@ -1497,7 +1515,9 @@ tags they ask by (`layer-proto/bundle.mjs`).
   progress, retryAfterMs }`, 404 `{ why }` (`not-prepared`, `no-source`, `no-pdf`, `cannot-prepare`, `unknown-versions`) or 429
   `{ retryAfterMs }`; `POST …/<tag>/prepare` (JSON body `{}`) answers 202, 200 `{ ready: true }`, 404 or 429; `GET
   /api/v1/original/<id>v<n>` is `base.url`, our copy of arXiv's bytes; `GET /api/v1/base/<id>v<n>/<sha256>` (no suffix) is our
-  base page a head of ours names (§19.7), by its digest, by ranges, a strong `ETag`, any origin, immutable. The tag is the engine's `VTAG`, or its contract
+  base page a head of ours names (§19.7), by its digest, by ranges, a strong `ETag`, any origin, immutable; a head held as a delta (§19.8) names no
+  such page: its delta is a bundle object, `GET /api/v1/layer/<id>v<n>/<ctag>/o/<sha256>` as bytes (`application/octet-stream`), and its
+  composed document reads `/api/v1/original` by ranges. The tag is the engine's `VTAG`, or its contract
   tag `CTAG` where the server redirects to the newest bundle made under it (§18.4). The public GETs answer CORS `*`; the prepare
   POST relies on the extension's host permission.
 - **What the reader sends.** A paper's id and version, and the engine's public versions (the tag). Nothing else leaves the machine.
@@ -1926,7 +1946,7 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   integers only: `{ replaced, reused: { fonts, images, forms, other }, included: { bytes, objects } }`. A head without `kind` is
   `full`; a `full` head keeps `check.pages` [N, N]. The catalog's base of a delta: `{ source: 'ours', kind: 'delta', object: {
   key: deltaKey(id, version, sha256), sha256, bytes } }`. `layerDraws` is true for ours of either kind. The extension's run
-  does not bind a delta head yet (no layer, the original staying) until its host reads the composed document.
+  binds a delta head (§11.10 item 4) and the layer side takes its copies by the replaced pages (§11.8).
 - **Several toplevel sources** (2610.20030: arXiv joins 8 + 4 pages, we compile the first): only with a delta may our pages be
   fewer (`checkOurBase` `toplevels` > 1 and `delta`): the base page's document is ours then arXiv's past M (`base.mjs`
   `prefixDoc`), the boxes compared on our M pages, `check.pages` [M, N], `replaced` within 1..M, the pages past M the

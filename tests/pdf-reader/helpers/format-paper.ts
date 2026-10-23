@@ -21,6 +21,16 @@ export const IMAGE = '1'
  *  object the tails continue; and arXiv's, beside it */
 export const OURS = { source: 'ours' as const, ...BASE, pages: N, tree: '2025', check: { pages: [N, N] as [number, number], boxes: 'equal' as const, carried: 1 } }
 export const ORIG = { bytes: 30_000, sha256: 'fedcba9876543210'.repeat(4) }
+/** arXiv's PDF with its startxref, where our base is a delta over it (the section the delta's /Prev names): its bytes and the delta's
+ *  4,000 end where BASE's do, which the parts' tails continue */
+export const ORIG_X = { bytes: BASE.bytes - 4_000, sha256: ORIG.sha256, xref: 5_000 }
+/** the base of ours held as a delta over arXiv's PDF (`kind` 'delta'): the delta's bytes and digest, its startxref in the composed
+ *  document (BASE's, after ORIG_X's bytes), the pages it replaces (`replaced`, ranges) and its counts */
+export const deltaBase = (replaced: [number, number][]) => ({
+  source: 'ours' as const, kind: 'delta' as const, bytes: 4_000, sha256: 'abcdef0123456789'.repeat(4), xref: BASE.xref, pages: N, tree: '2025',
+  check: { pages: [N, N] as [number, number], boxes: 'equal' as const, carried: 1 }, replaced,
+  stats: { replaced: replaced.reduce((n, [a, b]) => n + b - a + 1, 0), reused: { fonts: 3, images: 1, forms: 0, other: 2 }, included: { bytes: 3_200, objects: 8 } },
+})
 
 const H = UNIT_KINDS.indexOf('heading'), P = UNIT_KINDS.indexOf('para'), C = UNIT_KINDS.indexOf('cell'), MATH = PH_KINDS.indexOf('math')
 
@@ -134,10 +144,10 @@ export interface Made {
 /** the paper written, then read back by the readers in the order the service reads it */
 /** `draws`: the draw geometry each page's left part carries (by page), none by default; `draw`: the head says the parts may carry them;
  *  `pairs`: the pairs a page's left part carries, in place of LEFT_OF's (by page); `ours`: the base of the head is ours, over which
- *  the layer draws (else arXiv's: it draws nothing) */
-export async function made(o: { draws?: Record<number, unknown>; draw?: boolean; pairs?: Record<number, [number, number[]][]>; ours?: boolean } = {}): Promise<Made> {
+ *  the layer draws (else arXiv's: it draws nothing); `delta`: ours held as a delta over arXiv's PDF, replacing those pages */
+export async function made(o: { draws?: Record<number, unknown>; draw?: boolean; pairs?: Record<number, [number, number[]][]>; ours?: boolean; delta?: [number, number][] } = {}): Promise<Made> {
   const chunks = await writeUnitChunks({ paper: PAPER, units: UNITS })
-  const head = await writeHead({ paper: { ...PAPER, pages: N }, base: o.ours ? OURS : BASE, ...(o.ours ? { orig: ORIG } : {}), image: IMAGE, units: chunks, lineskip: [1, 0], ...(o.draw ? { draw: true } : {}) })
+  const head = await writeHead({ paper: { ...PAPER, pages: N }, base: o.delta ? deltaBase(o.delta) : o.ours ? OURS : BASE, ...(o.delta ? { orig: ORIG_X } : o.ours ? { orig: ORIG } : {}), image: IMAGE, units: chunks, lineskip: [1, 0], ...(o.draw ? { draw: true } : {}) })
   const rh = await readHead(head.bytes, { ref: head.ref })
   const readChunks: ReadUnitsChunk[] = []
   for (const c of chunks) readChunks.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: readChunks.at(-1) ?? null }))

@@ -26,7 +26,9 @@
 //     bytes not the layer's base (our copy shown).
 //
 // Usage: pnpm build && pnpm e2e:reader     (first time: npx playwright install chromium)
-// Environment: AXT_HEADED=1 watches it run; AXT_EXT_DIR points at another build.
+// Environment: AXT_HEADED=1 watches it run; AXT_EXT_DIR points at another build; AXT_BASE=delta cuts the sample as a layer whose base
+// is a delta over arXiv's PDF (lib/layer-cut.mjs `base: 'delta'`: one byte source, the original's, then the delta object and the tails;
+// no /api/v1/base), else as a layer over our whole base page (`full`, /api/v1/base by ranges): the states section asserts either.
 import { createHash } from 'node:crypto'
 import { mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -49,11 +51,13 @@ const SHOTS = `${HERE}.shots`
 
 // ---- the paper, and the stand-in of the layer API over it
 /** the sample as BUNDLE 4's objects, which the stand-in serves under CTAG5 beside BUNDLE 3's bundle */
-const sampleCut = await cutSample(sampleFiles())
+/** the base of the sample's layer: our whole base page, or a delta over arXiv's PDF (AXT_BASE=delta) */
+const DELTA = process.env.AXT_BASE === 'delta'
+const sampleCut = await cutSample(sampleFiles(), DELTA ? { base: 'delta' } : undefined)
 /** a face for the layer's Latin text, of the PDF.js package this tree holds: the stand-in's faces' table serves every face of
  *  the role table as one slice of it (the reader's target German, whose text it holds) */
 const LATIN_FACE = readFileSync(fileURLToPath(new URL('../../node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf', import.meta.url)))
-const api = layerApi({ layer4: sampleCut, faces: { ids: Object.keys(FACES), ranges: [32, 126, 160, 255, 0x2010, 0x2027], bytes: new Uint8Array(LATIN_FACE) } })
+const api = layerApi({ layer4: sampleCut, bound: DELTA, faces: { ids: Object.keys(FACES), ranges: [32, 126, 160, 255, 0x2010, 0x2027], bytes: new Uint8Array(LATIN_FACE) } })
 const { sample } = api
 const PAPER = sample.id
 const TITLE = 'Counting Lattice Paths Around Blocked Cells'
@@ -962,17 +966,23 @@ try {
     }
     api.set({ layer: mode.ready() })
     await api.release()
-    // The layer's document is our base page (the layer route, design §3.2), read by ranges at /api/v1/base/…, each answer held to its
-    // length and the first answer's tag, whatever the tab's PDF is; the original is fetched only when the tab's PDF is not the one
-    // the head's check ran over (head.orig): then our copy of that PDF is fetched whole (the store's, or the server's, checked
-    // against orig's digest) and shown on the left in its place, and the layer is laid over our base all the same
+    // Whole (the layer route, design §3.2), the layer's document is our base page, read by ranges at /api/v1/base/…, each answer held to
+    // its length and the first answer's tag, whatever the tab's PDF is. As a delta over arXiv's PDF (AXT_BASE=delta), it is the
+    // ORIGINAL's bytes read by ranges from our server's copy (/api/v1/original, bound by head.orig's length and the tag the layer's
+    // answers name), then the delta object (a bundle object, by digest) and the tails in memory: one byte source, and /api/v1/base is
+    // never asked. In both, the original is fetched WHOLE only when the tab's PDF is not the one the head's check ran over (head.orig):
+    // then our copy of it (the store's, or the server's, checked against orig's digest) is shown on the left in its place
     const baseAt = `/api/v1/base/${sample.segment}/`, copyAt = `/api/v1/original/${sample.segment}`
     const readsSince = since => {
       const asked = api.requests.slice(since)
-      return { base: asked.filter(r => r.path.startsWith(baseAt)), copy: asked.filter(r => r.path === copyAt) }
+      const copy = asked.filter(r => r.path === copyAt)
+      return { base: asked.filter(r => r.path.startsWith(baseAt)), copy, whole: copy.filter(r => r.headers.range === undefined), ranged: copy.filter(r => typeof r.headers.range === 'string') }
     }
-    const baseByRanges = reads => reads.base.length > 0 && reads.base.every(r => typeof r.headers.range === 'string' && r.answered === 206)
-    // arXiv's bytes that are not the head's orig: our copy of the orig fetched whole and shown on the left, the layer laid over our base
+    const byRanges = list => list.length > 0 && list.every(r => typeof r.headers.range === 'string' && r.answered === 206)
+    /** the layer\'s document read the way the head\'s base says: a whole base from /api/v1/base by ranges (the original not asked by range),
+     *  a delta from the original by ranges (no /api/v1/base at all) */
+    const composedFrom = reads => (DELTA ? reads.base.length === 0 && byRanges(reads.ranged) : byRanges(reads.base))
+    // arXiv's bytes that are not the head's orig: our copy of the orig fetched whole and shown on the left
     pdfAnswer = 'other'
     const before = api.requests.length
     const other = await openReader({ mode: 'bilingual' })
@@ -981,9 +991,9 @@ try {
     await other.waitForFunction(() => window.__reader.run?.probe().ours === true, null, { timeout: 30_000 }).catch(() => undefined)
     const ran = await other.evaluate(() => window.__reader.run?.probe() ?? null)
     const reads = readsSince(before)
-    check('the tab\'s PDF not the one the head\'s check ran over: our copy of it fetched whole and shown on the left, the layer laid over our base page read by ranges', laidOver && ran?.ours === true && ran?.basis === 'ranged' && baseByRanges(reads) && reads.copy.length === 1 && reads.copy[0]?.answered === 200 && reads.copy[0]?.headers.range === undefined, `laid ${laidOver}, ${JSON.stringify({ ours: ran?.ours, basis: ran?.basis })}, base ${reads.base.length} reads (${reads.base.filter(r => r.answered === 206).length} by range), the original ${reads.copy.length} (${reads.copy.map(r => `${r.answered}${r.headers.range ? ' ranged' : ' whole'}`).join(', ')})`)
+    check(`the tab's PDF not the one the head's check ran over: our copy of it fetched whole and shown on the left, the layer's document read ${DELTA ? 'from the original by ranges, the delta after it (no /api/v1/base)' : 'from our base page by ranges'}`, laidOver && ran?.ours === true && ran?.basis === 'ranged' && composedFrom(reads) && reads.whole.length === 1 && reads.whole[0]?.answered === 200, `laid ${laidOver}, ${JSON.stringify({ ours: ran?.ours, basis: ran?.basis })}, base ${reads.base.length} reads (${reads.base.filter(r => r.answered === 206).length} by range), the original ${reads.copy.length} (${reads.whole.length} whole, ${reads.ranged.length} by range)`)
     await other.close()
-    // the tab's PDF the one the check ran over: nothing fetched of the original, the left stays the tab's own, the layer laid over our base
+    // the tab's PDF the one the check ran over: no whole copy of the original, the left stays the tab's own, the layer laid over the same
     pdfAnswer = 'ok'
     const sameFrom = api.requests.length
     const same = await openReader({ mode: 'bilingual' })
@@ -992,10 +1002,15 @@ try {
     await same.waitForTimeout(1500)
     const sameRun = await same.evaluate(() => window.__reader.run?.probe() ?? null)
     const sameReads = readsSince(sameFrom)
-    const sameOk = sameRun?.ours === false && sameRun?.basis === 'ranged' && baseByRanges(sameReads) && sameReads.copy.length === 0
-    check('the tab\'s PDF the one the check ran over: the left stays the tab\'s own, no copy of the original fetched, the layer laid over our base page read by ranges', sameOk, `${JSON.stringify(sameRun && { ours: sameRun.ours, basis: sameRun.basis })}, base ${sameReads.base.length} reads, the original ${sameReads.copy.length}`)
-    // (the same assertion on the other PDF fails: ours, and a copy fetched)
-    control('the same assertion, on the PDF that is not the head\'s orig', { ok: ran?.ours === false && reads.copy.length === 0, detail: `${JSON.stringify(ran && { ours: ran.ours })}, the original ${reads.copy.length} fetched` })
+    const sameOk = sameRun?.ours === false && sameRun?.basis === 'ranged' && composedFrom(sameReads) && sameReads.whole.length === 0
+    check(`the tab's PDF the one the check ran over: the left stays the tab's own, no whole copy of the original fetched, the layer's document read ${DELTA ? 'from the original by ranges, the delta after it (no /api/v1/base)' : 'from our base page by ranges'}`, sameOk, `${JSON.stringify(sameRun && { ours: sameRun.ours, basis: sameRun.basis })}, base ${sameReads.base.length} reads, the original ${sameReads.copy.length} (${sameReads.whole.length} whole, ${sameReads.ranged.length} by range)`)
+    // (the same assertion on the other PDF fails: ours, and a whole copy fetched)
+    control('the same assertion, on the PDF that is not the head\'s orig', { ok: ran?.ours === false && reads.whole.length === 0, detail: `${JSON.stringify(ran && { ours: ran.ours })}, the original ${reads.whole.length} fetched whole` })
+    // the delta object fetched by its digest at the layer's object route, once a visit, never as a base page
+    if (DELTA) {
+      const asked = api.requests.filter(r => r.path.endsWith(`/o/${sampleCut.delta.sha256}`))
+      check('the delta is a bundle object: fetched by its digest at the layer\'s object route, once for each visit that read it (this machine\'s store keeps it), as bytes', asked.length >= 1 && asked.every(r => r.answered === 200), `${asked.length} asks`)
+    }
     await same.close()
   }
 
@@ -1003,6 +1018,8 @@ try {
   section('what the run did not do')
   await api.release()
   for (const route of held) await route.abort('timedout').catch(() => undefined)
+  const baseRequests = api.requests.filter(r => r.path.startsWith(`/api/v1/base/${sample.segment}/`))
+  check(DELTA ? 'a layer held as a delta never asks /api/v1/base: one byte source, the original\'s' : 'a whole base is read at /api/v1/base by ranges', DELTA ? baseRequests.length === 0 : baseRequests.length > 0, `${baseRequests.length} requests`)
   check('no request left the route table', guard.violations.length === 0, guard.violations.length ? guard.violations.map(v => `${v.method} ${v.url} from ${v.from}`).join('; ') : `${guard.hosts.length} origins named, none else asked`)
   check('no page of the reader or of the extension threw', pageErrors.length === 0, pageErrors.slice(0, 3).join(' | '))
   check('the TeX page was not asked for anything: no display checked here is one it types', asked.tex.length === 0, asked.tex.join(', ') || 'none asked')
