@@ -1116,8 +1116,10 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
      */
     const linkedInk = piece => {
       const kind = classOf(piece) === 'cite' ? linkKindOf(piece) : null
-      // (one with a note, \\cite[p.~3]{a}: its link holds the number alone, and the note's extent is not known)
-      if (kind?.kind !== 'cite' || !kind.keys.length || /^\\[A-Za-z@]+\*?\s*\[/.test(piece.src)) return null
+      // (only LaTeX's own \\cite with its keys alone, which sets numbers alone where it sets numbers: a textual citation,
+      // \\citet's "Smith [1]", \\citeauthor, \\textcite, sets text its links need not hold, and a note, \\cite[p.~3]{a}, text
+      // after them)
+      if (kind?.kind !== 'cite' || !kind.keys.length || !/^\\cite\s*\{/.test(piece.src)) return null
       const want = new Set(kind.keys.map(key => `cite.${key}`))
       if (!one.links) {
         one.links = []
@@ -1183,6 +1185,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       // known whole
       const ranged = gaps.some(g => g.some(x => /^[\u2013\u2014-]$/.test(ink[took[0].page].u[x])))
       if ((took.length < kind.keys.length && !ranged) || (open >= 0) !== (close >= 0)) return null
+      // (and a rendering of numbers alone: an author-year or alphabetic style's \\cite sets letters, "Smith 2020", "[Smi20]")
+      if (!took.every((L, q) => [...L.gs, ...(gaps[q] ?? [])].every(g => /^[\p{N},;\s\u2013\u2014-]$/u.test(ink[L.page].u[g])))) return null
       const glyphs = []
       if (open >= 0) glyphs.push([took[0].page, open])
       took.forEach((L, q) => {

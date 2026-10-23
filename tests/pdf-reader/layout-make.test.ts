@@ -2118,6 +2118,16 @@ describe('makeLayout, a citation whose marks give it no ink: found by its link a
     })
     expect((phOf(b.file, 0, 1)[3] ?? 0) & PH_FLAG.LOST).toBe(PH_FLAG.LOST)
   })
+  it('only LaTeX\'s own \\cite setting numbers alone: none for a textual citation (natbib\'s \\citet, "Smith [1]") nor for a \\cite whose link holds letters ("[Smi20]")', async () => {
+    const run: Run = { s: 'As Smith [1] and [Smi20] show', x: 72, y: 700 }
+    const { file } = await made({
+      pages: [{ runs: [run], annots: [{ rect: [xAt(run, 10) - 0.5, 699, xAt(run, 11) + 0.5, 708], dest: 'cite.a' }, { rect: [xAt(run, 18) - 0.5, 699, xAt(run, 23) + 0.5, 708], dest: 'cite.b' }] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(run), 700]],
+      units: [unit('para', [text('As '), ph('\\citet{a}'), text(' and '), ph('\\cite{b}'), text(' show')])],
+      switches: { '\\citet': '22222222', '\\cite': '22222222' },
+    })
+    expect([(phOf(file, 0, 1)[3] ?? 0) & PH_FLAG.LOST, (phOf(file, 0, 3)[3] ?? 0) & PH_FLAG.LOST]).toEqual([PH_FLAG.LOST, PH_FLAG.LOST])
+  })
   it('none where the page has no link of its keys, nor one whose glyphs are on no line of the unit\'s: LOST, as before', async () => {
     const { file } = await made(world([{ rect: box(117, 1), dest: 'cite.z' }, { rect: [167, 500, 180, 510], dest: 'cite.b' }]))
     expect([(phOf(file, 0, 1)[3] ?? 0) & PH_FLAG.LOST, (phOf(file, 0, 3)[3] ?? 0) & PH_FLAG.LOST]).toEqual([PH_FLAG.LOST, PH_FLAG.LOST])
