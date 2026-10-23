@@ -68,6 +68,8 @@ function paper(specs: Spec[]) {
     frames: held.map(s => [s.id, [1, 0, 0, 1, -1, 0]]),
     erase: held.map(s => [s.id, [0, 20, s.b - 2, 280, s.b + 7]]),
     ph: held.flatMap(s => (s.rows ?? []).map(([k, flags, segs]) => [s.id, k, 0, flags, ...segs])), labels: [], headings: [], pageText: [], held: [], names: [],
+    // (and the maker's reason for each unit it does not lay: file.mjs UNLAID)
+    unlaid: specs.filter(s => !s.file).map(s => [s.id, 'noLine']),
   }
   const index = indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(layout))))
   // (the left's geometry holds every unit, the file all but one)
@@ -104,6 +106,15 @@ describe('a unit is drawn only from the layout file', () => {
     const r = await run()
     expect(r.sources.why).toEqual({ 'unanchored, unlocated': 1, 'unanchored, lost': 1, 'unanchored, no row': 1 })
     expect(r.sources.tex).toEqual([0, 4, 5])
+    // (each skip's code, of the closed set: the unit the file does not hold with the maker's own reason beside it)
+    expect(r.skipped.map(s => [s.id, s.why, s.code, s.unlaid ?? null]).sort((a, b) => Number(a[0]) - Number(b[0]))).toEqual([[1, 'unanchored', 'unlocated', 'noLine'], [2, 'unanchored', 'lost', null], [3, 'unanchored', 'noRow', null]])
+  })
+
+  it('a skip\'s code is one of the closed set: any other is refused', async () => {
+    const { SKIP_CODES, skipCode } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    expect(Object.isFrozen(SKIP_CODES)).toBe(true)
+    for (const c of SKIP_CODES) expect(skipCode(c)).toBe(c)
+    for (const c of ['unanchored', 'Lost', '', null, 7]) expect(() => skipCode(c), String(c)).toThrow(TypeError)
   })
 
   it('a text symbol, a space and a macro that sets no ink need no row: the unit is drawn, each by its class', async () => {

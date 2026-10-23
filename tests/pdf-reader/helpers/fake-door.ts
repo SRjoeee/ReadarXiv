@@ -386,7 +386,7 @@ class FakeLayer implements Layer {
     const ready: number[] = []
     for (let p = 1; p <= this.N; p++) if (this.state[p] === 'ready') ready.push(p)
     return {
-      units: this.o.index.units.filter(u => u !== null).length, drawn: ready.length, pages: ready, slowestTaskMs: 0, pageMs: {}, dropped: 0,
+      units: this.o.index.units.filter(u => u !== null).length, drawn: ready.length, pages: ready, slowestTaskMs: 0, pageMs: {}, dropped: 0, droppedRows: [],
       links: { total: 0, inPlace: 0, moved: 0, dropped: { unmatched: 0, ambiguous: 0, unplaced: 0 }, unsupported: 0, unread: 0 },
       rules: { schema: RULES_SCHEMA, version: (this.o.rules ?? BUILTIN_RULES).version },
       parts: { through: this.through, told: this.parts.length },

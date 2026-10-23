@@ -20,7 +20,8 @@ export const CH = 0.5
  *  string one glyph's Unicode (a character and its variation selector); `fill`: its glyphs' fill as PDF.js reports it
  *  ('#rrggbb', setFillRGBColor; 'pattern', setFillColorN), black again after it; `tr`: its text rendering mode (Tr), 0
  *  again after it */
-export type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number; blank?: boolean; one?: boolean; eol?: boolean; fill?: string; tr?: number }
+/** a run of text: `turn`, set a quarter turn (its baseline up the page from x, y: a \rotatebox{90}'s, a sideways cell's) */
+export type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number; blank?: boolean; one?: boolean; eol?: boolean; fill?: string; tr?: number; turn?: boolean }
 /** a Link annotation as PDF.js reports it (getAnnotations): its rectangle and the destination it names */
 export type Annot = { rect: number[]; dest: string | unknown[]; quadPoints?: number[]; url?: string }
 export type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped' | 'deep' | 'dense' | 'slow'; markedOps?: 'deep'; points?: Record<string, [run: number, char: number]>; order?: number[]; annots?: Annot[] }
@@ -37,7 +38,7 @@ export const adv = (r: Run) => (r.w ?? CH) * size(r)
 /** where a run's character j begins, and where the run ends */
 export const xAt = (r: Run, j: number) => r.x + j * adv(r)
 export const endOf = (r: Run) => xAt(r, r.one ? 1 : r.s.length)
-export const item = (r: Run) => ({ str: r.blank ? ' '.repeat(r.s.length) : r.s, dir: 'ltr', transform: [size(r), 0, 0, size(r), r.x, r.y], width: (r.one ? 1 : r.s.length) * adv(r), height: size(r), fontName: r.font ?? 'F1', hasEOL: !!r.eol })
+export const item = (r: Run) => ({ str: r.blank ? ' '.repeat(r.s.length) : r.s, dir: 'ltr', transform: r.turn ? [0, size(r), -size(r), 0, r.x, r.y] : [size(r), 0, 0, size(r), r.x, r.y], width: (r.one ? 1 : r.s.length) * adv(r), height: size(r), fontName: r.font ?? 'F1', hasEOL: !!r.eol })
 /** where each mark's point stands in a page's stream: [run, character] before which it is shown, in the marks' order */
 export function pointsOf(p: Page, page: number, marks: Mark[]) {
   const out: [name: string, run: number, char: number][] = []
@@ -66,7 +67,7 @@ export function opsOf(p: Page, points: [string, number, number][] = []) {
     const r = p.runs[ri] as Run
     for (const b of p.boxes ?? []) if (b[4] === ri) box(b)
     if (r.fill) ops.push(r.fill === 'pattern' ? [OPS.setFillColorN, ['P0']] : [OPS.setFillRGBColor, [r.fill]])
-    ops.push([OPS.beginText, []], [OPS.setFont, [r.font ?? 'F1', size(r)]], [OPS.setTextMatrix, [[1, 0, 0, 1, r.x, r.y]]])
+    ops.push([OPS.beginText, []], [OPS.setFont, [r.font ?? 'F1', size(r)]], [OPS.setTextMatrix, [r.turn ? [0, 1, -1, 0, r.x, r.y] : [1, 0, 0, 1, r.x, r.y]]])
     if (r.tr !== undefined) ops.push([OPS.setTextRenderingMode, [r.tr]])
     // a space is a move, as TeX's pages show it: no glyph (the ink reader keeps every painted glyph); a point between two
     // characters parts the run's showText

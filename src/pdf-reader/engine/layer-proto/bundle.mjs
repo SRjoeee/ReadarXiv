@@ -260,6 +260,9 @@ export function readBundle(json, caps = {}) {
       if (UNIT_KINDS[kind] !== units[id][0]) throw fail(`layout.units[${i}][1]`, 'not its unit\'s kind')
       if (count !== units[id][5].length) throw fail(`layout.units[${i}][4]`, 'not its unit\'s pieces')
     }
+    // (why each unit it does not lay is the original's: a unit of the bundle)
+    const unlaid = layout.unlaid ?? []
+    for (let i = 0; i < unlaid.length; i++) if (unlaid[i][0] >= units.length) throw fail(`layout.unlaid[${i}][0]`, 'not a unit of the bundle')
   }
 
   let rules = null

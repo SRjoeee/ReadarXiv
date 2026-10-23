@@ -76,6 +76,27 @@ import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
  *  opened without it is refused as the run reads a page's fonts (layer2.mjs fontMappedOf), never read as one whose fonts
  *  have no map */
 export const PDF_OPTIONS = { cMapPacked: true, enableHWA: true, disableStream: true, fontExtraProperties: true }
+/**
+ * Why the layer left a unit the original's (each `skipped` record's `code`, beside its `why`), a closed set, for a reader to
+ * tell and a sweep to count, never to draw by. The file not holding it whole (tex.mjs locatedWhole): `unlocated` (the file
+ * holds no row of it: the maker's own reason beside it, `unlaid`, the file's UNLAID code, null where the file says none),
+ * `pieces` (its row's pieces not the unit's), `noRow` (a visible piece the file has no row for), `lost` (a visible piece the
+ * file holds no ink of: LOST); `offPages` (none of its lines on the pages shown); `author` (the front matter's names, kept
+ * by design); `refused` (its row not of this unit: another kind, another group, a k past its source's); `group` (a table
+ * cell of a group not drawn whole); the drawing's: `unfit` (no step fits it), `unproven` (a piece's ink not proven),
+ * `served` and `face` (a character no served slice holds, a slice that did not load), `error` (its lay threw), `page` (on a
+ * page that failed); the door's `rowUnfit` (its translated row names no unit or piece of the paper's: reader.mjs, a row
+ * dropped before the run sees it); and `unhidden` (the file could not wrap its ink in its groups: `hiding.unhidden`'s reason, or
+ * no group of it in the document, docs/route/ocg-erasure.md §6)
+ */
+export const SKIP_CODES = Object.freeze(['unlocated', 'pieces', 'noRow', 'lost', 'offPages', 'author', 'refused', 'group', 'unfit', 'unproven', 'served', 'face', 'error', 'page', 'rowUnfit', 'unhidden'])
+/** `code` where it is one of SKIP_CODES; a TypeError for any other, a defect of the caller's: no record carries a code outside the set */
+export function skipCode(code) {
+  if (!SKIP_CODES.includes(code)) throw new TypeError(`not a code of SKIP_CODES: ${typeof code === 'string' ? JSON.stringify(code.slice(0, 40)) : typeof code}`)
+  return code
+}
+/** locatedWhole's why (tex.mjs) as the skip's code */
+const JUDGED = Object.freeze({ unlocated: 'unlocated', pieces: 'pieces', 'no row': 'noRow', lost: 'lost' })
 
 /** what an ink read of a page drawn from its draw geometry (openProto `drawOf`) throws while the page's pixels are not read:
  *  `page`, and `why`, the step that reads them. Its catcher reads them and does its step again; no step reads such a page as one
@@ -832,7 +853,16 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     return { id, stream, rects, unit: u, blocks: blocksOf(onPages, geometry.left.pages), pages: [...new Set(onPages.map(r => r[0]))], cut: onPages.length < rects.length, tex: { ...w, lines } }
   }
   const translated = u => !!u?.pieces && (u.state === 'whole' || u.state === 'partial')
-  const unanchoredOf = (id, u) => ({ id, kind: u.kind, why: 'unanchored', chars: trCharsOf(u) })
+  /** the file's own reason for a unit it does not lay (file.mjs UNLAID, its `unlaid`), or null: read from the file the index
+   *  holds now (under parts, the parts told so far) */
+  let unlaidFile = null, unlaidBy = null
+  const makerWhy = id => {
+    const f = tex.index.file
+    if (f !== unlaidFile) { unlaidFile = f; unlaidBy = new Map(f.unlaid ?? []) }
+    return unlaidBy.get(id) ?? null
+  }
+  /** a unit left the original's for want of the file's place (`code` of SKIP_CODES): `unlocated` with the maker's reason */
+  const unanchoredOf = (id, u, code) => ({ id, kind: u.kind, why: 'unanchored', code: skipCode(code), ...(code === 'unlocated' ? { unlaid: makerWhy(id) } : {}), chars: trCharsOf(u) })
   // every unit the layer may place, in the order layGroups takes them (the text's stream): the geometry's, and the units the
   // file locates whole that the geometry does not hold, at their place in the stream after the unit before them, table cells
   // among them (a cell's lines are TeX's, and the text removal takes its glyphs alone, never its table's rules). The
@@ -1121,7 +1151,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (lu && u.pieces.some(q => q.t !== 'text' && q.k !== undefined && !(Number.isInteger(q.k) && q.k >= 0 && q.k < lu.pieces))) return "row: a k not its source's"
     return null
   }
-  const refusedOf = (id, u, why) => ({ id, kind: u.kind, why, chars: shapely(u) ? trCharsOf(u) : 0 })
+  const refusedOf = (id, u, why) => ({ id, kind: u.kind, why, code: 'refused', chars: shapely(u) ? trCharsOf(u) : 0 })
   /**
    * What the layer makes of a unit once its row is in, before its table's group is read: placed (with the pages it is drawn
    * on), or not, and why it is left the original's (`skip`); the file's why it does not locate the unit whole (`missed`).
@@ -1132,16 +1162,16 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (!translated(u)) return { p: null }
     const no = refusalOf(c.id, u)
     if (no) return { p: null, skip: refusedOf(c.id, u, no) }
-    if (u.kind === 'author') return { p: null, skip: c.rects ? { id: c.id, kind: u.kind, why: 'author', chars: trCharsOf(u), pages: [...new Set(c.rects.map(r => r[0]))] } : unanchoredOf(c.id, u) }
+    if (u.kind === 'author') return { p: null, skip: c.rects ? { id: c.id, kind: u.kind, why: 'author', code: 'author', chars: trCharsOf(u), pages: [...new Set(c.rects.map(r => r[0]))] } : unanchoredOf(c.id, u, 'author') }
     // (a unit the left holds wholly past the pages shown is none of the run's)
     if (c.rects?.every(r => r[0] > N)) return { p: null }
     const w = judge(c.id, u)
-    if (!w.lu) return { p: null, skip: unanchoredOf(c.id, u), missed: `unanchored, ${w.why}` }
+    if (!w.lu) return { p: null, skip: unanchoredOf(c.id, u, JUDGED[w.why]), missed: `unanchored, ${w.why}` }
     // (a unit whose ink the file cannot hide is the original's, design §6)
     const no2 = unhiddenOf(c.id)
-    if (no2) return { p: null, skip: { id: c.id, kind: u.kind, why: `unhidden: ${no2}`, chars: trCharsOf(u), pages: [...new Set(texRects(w.lu).rects.map(r => r[0]))] } }
+    if (no2) return { p: null, skip: { id: c.id, kind: u.kind, why: `unhidden: ${no2}`, code: 'unhidden', chars: trCharsOf(u), pages: [...new Set(texRects(w.lu).rects.map(r => r[0]))] } }
     const p = placeByFile(c.id, c.stream, u, w)
-    return { p, skip: p ? null : unanchoredOf(c.id, u) }
+    return { p, skip: p ? null : unanchoredOf(c.id, u, 'offPages') }
   }
   // (each decision kept with the row it was made of: a row taken again before it is fixed is decided again)
   const decisions = new Map()
@@ -2040,7 +2070,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (r >= 0) stats.splice(r, 1)
     if (p.counted) { p.counted = false; drawnUnits-- }
     p.withheld = true
-    skipped.push({ id: p.id, kind: p.unit.kind, why: `group: ${why}`, chars: trCharsOf(p.unit), pages: p.pages })
+    skipped.push({ id: p.id, kind: p.unit.kind, why: `group: ${why}`, code: 'group', chars: trCharsOf(p.unit), pages: p.pages })
   }
   /** group g decided once every cell of it is laid: withheld, or to be painted whole (true) */
   const settleGroup = g => {
@@ -2180,7 +2210,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     dropReads(candOf.get(p.id))
     // (a unit no step fits is the original's: neither erased nor drawn, nor checked; nor one whose characters no served
     // slice holds (`served`) or whose slice did not load (`face`))
-    if (p.refused) skipped.push({ id: p.id, kind: p.unit.kind, why: p.why ?? 'unfit', ...(p.missing ? { missing: p.missing } : {}), chars: trCharsOf(p.unit), pages: p.pages })
+    if (p.refused) skipped.push({ id: p.id, kind: p.unit.kind, why: p.why ?? 'unfit', code: skipCode(p.why ?? 'unfit'), ...(p.missing ? { missing: p.missing } : {}), chars: trCharsOf(p.unit), pages: p.pages })
     const g = p.unit.group && groupCells.has(p.unit.group) ? p.unit.group : null
     // (each list a page's or a group's units laid, in their rank whatever order they were laid in (L3): a pass paints in it)
     if (g) byRank((groupLaid.get(g) ?? groupLaid.set(g, { list: [], done: false }).get(g)).list, p)
@@ -2525,7 +2555,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (p && u.group) {
       if (!tableGroups) freezeAll()
       else if (!read.has(u.group)) readGroup(u.group, membersOf.get(u.group) ?? [])
-      if (split.has(u.group)) { skipped.push({ id: p.id, kind: u.kind, why: 'group: a cell not drawn', chars: trCharsOf(u), pages: p.pages }); p = null }
+      if (split.has(u.group)) { skipped.push({ id: p.id, kind: u.kind, why: 'group: a cell not drawn', code: 'group', chars: trCharsOf(u), pages: p.pages }); p = null }
     }
     if (!p) { dropReads(c); return }
     p.k = c.k
@@ -2585,7 +2615,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  neither holds nor the file alone locates (a unit not told yet is not unanchored) */
   const account = () => {
     for (const c of deferred.splice(0)) { fixed.add(c.id); const d = decisionOf(c); if (d.skip) skipped.push(d.skip) }
-    U.forEach((u, id) => { if (!translated(u) || candOf.has(id)) return; const no = refusalOf(id, u); skipped.push(no ? refusedOf(id, u, no) : unanchoredOf(id, u)) })
+    U.forEach((u, id) => { if (!translated(u) || candOf.has(id)) return; const no = refusalOf(id, u); skipped.push(no ? refusedOf(id, u, no) : unanchoredOf(id, u, 'unlocated')) })
   }
   /** whether laying page p waits for nothing more to come, neither a part nor a row (the 1b-D design §2.1): the parts cover
    *  its closure's bound, or have ended, and every entry it decides is in K and decided or settleable */

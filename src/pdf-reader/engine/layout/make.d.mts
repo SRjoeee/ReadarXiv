@@ -150,7 +150,8 @@ export interface MakerStream {
   /** each page's cell rules, made as the page is let go (null without `cellRules`) */
   cellRules: Map<number, number[]> | null
   rulesFailed(): string | null
-  /** the file's rows of the units settled (those of `ids`), as the whole file's parse holds them, and the names taken in */
+  /** the file's rows of the units settled (those of `ids`, every unit settled where none is given), as the whole file's parse
+   *  holds them, why each of them it does not lay is the original's (`unlaid`), and the names taken in */
   layout(ids?: number[]): Pick<LayoutFile, 'fonts' | 'units' | 'lines' | 'frames' | 'erase' | 'ph' | 'labels' | 'headings' | 'pageText' | 'held' | 'names'> & LayoutFile
   /** the pages from 1 let go */
   released(): number

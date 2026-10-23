@@ -186,6 +186,8 @@ export function wholeFrontier(whole, frontier = needFrontier, grouped = groupsOf
  * schedule's target taken as it is, not extended), `layout` the layout file's rows (a whole file, or one holding at least
  * every row of the units the part may tell and every babel name on its pages, in the file's order) or null. A part tells
  * exactly what cutBundle's tells of the same paper wherever `known` agrees with the whole paper's on what the part reads.
+ * A part's layout holds the rows of the units it tells, and why each of them the file does not lay is the original's (the
+ * file's `unlaid` of its K entries: a unit the left does not hold and the file does not lay is told by no part).
  *
  * `paper` { id, version }, `N` its pages, `head` the head written, `views` every page's view; `leftPages`, `target`, `partPagesMax`:
  * cutBundle's; `rules` the cell rules by page (an object or a Map of page to boxes; null: none), a part with a layout carrying its own
@@ -269,11 +271,13 @@ export function partCutter({ paper, N, head, views, leftPages, rules = null, tar
         const rows = list => list.filter(r => ids.has(r[0]))
         const lines = rows(layout.lines).map(([uid, v]) => [uid, v.map((x, j) => (j % 8 === 7 ? fontAt(x) : x))])
         const named = names.map(r => r.map((x, j) => (j === 9 ? fontAt(x) : x)))
-        // (each colour piece's run's fill of the part's units: a key only where one of them has a row, as the file's)
-        const colours = rows(layout.colours ?? [])
+        // (each colour piece's run's fill of the part's units: a key only where one of them has a row, as the file's; and why each
+        // unit the part tells that the file does not lay is the original's, a key only where one is not laid)
+        const colours = rows(layout.colours ?? []), unlaid = (layout.unlaid ?? []).filter(r => have.has(r[0]))
         part = {
           fonts: table, units: rows(layout.units), lines, frames: rows(layout.frames), erase: rows(layout.erase), ph: rows(layout.ph), labels: rows(layout.labels),
           headings: rows(layout.headings), pageText: rows(layout.pageText), held: rows(layout.held), names: named, ...(colours.length ? { colours } : {}),
+          ...(unlaid.length ? { unlaid } : {}),
         }
       }
       return {

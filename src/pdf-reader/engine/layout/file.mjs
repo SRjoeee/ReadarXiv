@@ -74,11 +74,17 @@ export { LayoutRefusal } from './json.mjs'
  *  the release-route sweep's 35 papers with unanchored rows, 68 of the 217 rows (43 units) convert, by the measured per-item
  *  counts (2610.21098's glued calls 32 rows, revtex4-2's body points 36); of their 34 base pages made again, 33 set every word
  *  as next's did and 2610.21924 eleven words nearer its own compile; the gate pack's seven base pages are next's, word for
- *  word, its 15 author units and 5 notes all marked (the file's schema is 5 still; MARKS_SCHEMA 9 still) */
-export const LAYOUT = '17'
+ *  word, its 15 author units and 5 notes all marked (the file's schema is 5 still; MARKS_SCHEMA 9 still); 18: a start mark
+ *  on a turned run reaches no word (make.mjs reachIn turnedAt): 2602.23285v2's sideways cell in a table set beside a
+ *  paragraph reached the next cell's word, took the paragraph's line and left the paragraph unlaid, as no maker before 14
+ *  did; and why each unit not laid is the original's, a code of UNLAID a unit (`unlaid`, a key held only where a unit is
+ *  not laid, as `colours`: every file of before reads and writes back unchanged; a part holds those of the units it tells),
+ *  so that no unit is left out of the file without its reason (the file's schema is 5 still) */
+export const LAYOUT = '18'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
- *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row */
+ *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,
+ *  why each unit it does not lay is the original's [unit, code], a key held only where a unit is not laid */
 export const LAYOUT_SCHEMA = 5
 /** a placeholder's fill where no one colour holds more than half its glyphs (the row's last number, schema 5) */
 export const MIXED_FILL = -1
@@ -115,10 +121,22 @@ export const NAME_FLAG = Object.freeze({ CENTRED: 1, CAPITALS: 2, RUN_IN: 4 })
 export const PH_FLAG = Object.freeze({ SOURCE_BRACKETS: 1, NUMBERED: 2, RAISED: 4, LOWERED: 8, EMPTY: 16, LOST: 32, TEXT: 64, JOINED: 128, OUTSIDE: 256 })
 
 const KEYS = ['schema', 'layout', 'pdfjs', 'paper', 'left', 'views', 'fonts', 'units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held', 'names', 'lineskip']
-/** a key a file or a part holds only where it has a row: each colour piece's fill (`colours`) */
-const COLOURS = 'colours'
-/** the keys `v` must hold: `keys`, and `colours` where it holds that */
-const withColours = (v, keys) => (isObject(v) && Object.hasOwn(v, COLOURS) ? [...keys, COLOURS] : keys)
+/** the keys a file or a part holds only where it has a row: each colour piece's fill (`colours`), and why each unit the maker
+ *  did not lay stays the original's (`unlaid`: not `refused`, which a part's `layout` holds where it has none, format.mjs
+ *  isLayoutRefusal) */
+const COLOURS = 'colours', UNLAID_KEY = 'unlaid'
+const OPTIONAL = [COLOURS, UNLAID_KEY]
+/** the keys `v` must hold: `keys`, and each optional key it holds */
+const withOptional = (v, keys) => (isObject(v) ? [...keys, ...OPTIONAL.filter(k => Object.hasOwn(v, k))] : keys)
+/** why the maker laid a unit not (layout/make.mjs: the file's `unlaid`, [id, code] by id rising; a unit laid has none, every
+ *  unit not laid one), for a sweep and a reader to tell, never to draw by: `noAnchor` (no anchor on our base page: its text
+ *  not found there, its own marks giving none), `unplacedMarks` (its own marks set, but not carried to our base page's
+ *  words or bounding none there), `kind` (a kind the file lays none of, or more than PIECES_MAX pieces), `rects` (its anchor's
+ *  tokens give no line, or other lines than its anchor's), `linesUnit` (more than LINES_UNIT lines), `dark` (a line on a
+ *  page whose ink is not read whole), `noLine` (a line with no glyph of its own: none there, or no size), `lineTaken` (a line
+ *  whose glyphs another unit laid before it took), `erase` (a line's erase past ERASE_MAX rectangles, merging covering what
+ *  another keeps), `undrawn` (a line on a page not drawable: carry.mjs lineCheckOf), `fonts` (its faces past FONTS_MAX) */
+export const UNLAID = Object.freeze(['noAnchor', 'unplacedMarks', 'kind', 'rects', 'linesUnit', 'dark', 'noLine', 'lineTaken', 'erase', 'undrawn', 'fonts'])
 /** the placeholders the layer may draw as text in the page's face (Task 9's tokens), whose own text the file may hold */
 export const PAGE_TEXT_KINDS = Object.freeze(['cite', 'ref', 'eqref'])
 /** a page text's code units at most, and a file's in all */
@@ -146,6 +164,8 @@ export const VERSION_MAX = 1000
 const PDFJS_MAX = 32, LEFT_MAX = 128, FONTS_MAX = 512, FONT_MAX = 128
 const PIECES_MAX = 10000, DEPTH_MIN = -1, DEPTH_MAX = 5, DEPTH_NONE = 9
 const LINES_UNIT = 2000, LINES_ALL = 200000, SIZE_MAX = 200
+/** a file's or a part's units not laid at most (`unlaid`), as its lines in all */
+export const UNLAID_ALL = LINES_ALL
 const SHARE_MAX = 1000, ERASE_LINE = 16, SEGS_INLINE = 4, SEGS_DISPLAY = 64, LABELS_UNIT = 4, SRC_MAX = 4000
 /** a file's names at most: a heading a babel name sets is a few a paper, a thesis's some tens */
 export const NAMES_MAX = 10_000
@@ -253,7 +273,7 @@ export function parseLayout(bytes, { sized = true } = {}) {
 export function checkLayout(value, { sized = true } = {}) {
   // (its schema first: a file of another names other fields, and is refused for what it is)
   if (isObject(value) && Object.hasOwn(value, 'schema') && value.schema !== LAYOUT_SCHEMA) throw refuse('schema', `not ${LAYOUT_SCHEMA}`)
-  const f = exactKeys(value, withColours(value, KEYS), '')
+  const f = exactKeys(value, withOptional(value, KEYS), '')
   if (f.schema !== LAYOUT_SCHEMA) throw refuse('schema', `not ${LAYOUT_SCHEMA}`)
   if (!isVersionToken(f.layout)) throw refuse('layout', `not a version, 1 to 32 letters, digits or points (${kindOf(f.layout)})`)
   if (!printable(f.pdfjs, 1, PDFJS_MAX)) throw refuse('pdfjs', `not 1 to ${PDFJS_MAX} printable ASCII characters (${kindOf(f.pdfjs)})`)
@@ -296,7 +316,7 @@ export const PART_KEYS = Object.freeze(['fonts', 'units', 'lines', 'frames', 'er
 export function checkLayoutPart(value, { pages, views, lo, hi }) {
   if (!isInteger(lo, 1, pages) || !isInteger(hi, lo, pages)) throw new RangeError(`not pages lo to hi of ${pages}`)
   if (!Array.isArray(views) || views.length !== 4 * (hi - lo + 1)) throw new RangeError(`not the ${4 * (hi - lo + 1)} numbers of the views of pages ${lo} to ${hi}`)
-  const f = exactKeys(value, withColours(value, PART_KEYS), '')
+  const f = exactKeys(value, withOptional(value, PART_KEYS), '')
   return checkRows(f, { views, lo, hi })
 }
 
@@ -550,6 +570,23 @@ function checkRows(f, { views, lo, hi, sized = true }) {
       zeroes(r)
     }
   }
+
+  // unlaid: unit, code (UNLAID); by unit rising, none of them a unit of units, a key held only with a row
+  if (Object.hasOwn(f, UNLAID_KEY)) {
+    const unlaid = array(f.unlaid, UNLAID_KEY)
+    if (unlaid.length === 0) throw refuse(UNLAID_KEY, 'empty: a file holds the key only where it has a row')
+    if (sized && unlaid.length > UNLAID_ALL) throw new LayoutRefusal(UNLAID_KEY, `more than ${UNLAID_ALL} units`, 'rows')
+    last = -1
+    for (let i = 0; i < unlaid.length; i++) {
+      const r = unlaid[i]
+      if (!Array.isArray(r) || r.length !== 2) throw refuse(`unlaid[${i}]`, `not [unit, code] (${kindOf(r)})`)
+      if (!isInteger(r[0], last + 1, ID_MAX)) throw refuse(`unlaid[${i}][0]`, 'not an id above the last')
+      if (slot.has(r[0])) throw refuse(`unlaid[${i}][0]`, 'a unit of units: one the file lays')
+      if (!UNLAID.includes(r[1])) throw refuse(`unlaid[${i}][1]`, `not a code of UNLAID (${typeof r[1] === 'string' ? clip(r[1]) : kindOf(r[1])})`)
+      if (r[0] === 0) r[0] = 0
+      last = r[0]
+    }
+  }
   return f
 }
 
@@ -577,6 +614,8 @@ function rowsOf(file) {
     names: names.map(r => rounded(r, NAME_ROW, NAME_EXACT)),
     // (only where a unit has one: a file with no colour piece is the bytes it was)
     ...(file.colours?.length ? { colours: file.colours } : {}),
+    // (only where a unit is not laid)
+    ...(file.unlaid?.length ? { unlaid: file.unlaid } : {}),
   }
 }
 
@@ -612,7 +651,7 @@ export function encodeLayoutPart(part) {
  * font in no row is left out. The parts are not changed
  */
 export function mergeLayout(parts) {
-  const out = { units: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], colours: [] }
+  const out = { units: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], colours: [], unlaid: [] }
   const lineList = [], nameList = []
   for (const p of parts) {
     for (const key of Object.keys(out)) for (const row of p[key] ?? []) out[key].push(row)
@@ -620,7 +659,7 @@ export function mergeLayout(parts) {
     for (const r of p.names) nameList.push([r, p.fonts])
   }
   const byId = (a, b) => a[0] - b[0]
-  for (const key of ['units', 'frames', 'erase', 'headings', 'held', 'labels']) out[key].sort(byId)
+  for (const key of ['units', 'frames', 'erase', 'headings', 'held', 'labels', 'unlaid']) out[key].sort(byId)
   out.ph.sort((a, b) => a[0] - b[0] || a[1] - b[1])
   out.pageText.sort((a, b) => a[0] - b[0] || a[1] - b[1])
   out.colours.sort((a, b) => a[0] - b[0] || a[1] - b[1])
@@ -643,7 +682,7 @@ export function mergeLayout(parts) {
     out[9] = fontAt(table, r[9])
     return out
   })
-  return { fonts, units: out.units, lines, frames: out.frames, erase: out.erase, ph: out.ph, labels: out.labels, headings: out.headings, pageText: out.pageText, held: out.held, names, ...(out.colours.length ? { colours: out.colours } : {}) }
+  return { fonts, units: out.units, lines, frames: out.frames, erase: out.erase, ph: out.ph, labels: out.labels, headings: out.headings, pageText: out.pageText, held: out.held, names, ...(out.colours.length ? { colours: out.colours } : {}), ...(out.unlaid.length ? { unlaid: out.unlaid } : {}) }
 }
 
 // ---------------------------------------------------------------- the index

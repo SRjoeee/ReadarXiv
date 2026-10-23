@@ -114,13 +114,16 @@ async function checkCut(name: string, whole: Whole, c: Cut, o: { anySplit?: bool
   expect(merged.units, name).toEqual(whole.units)
   expect(merged.left.units, name).toEqual(whole.left.units.map(([id, s, rs]) => [id, s, rs.map(r => [r[0], r3(r[1] as number), r3(r[2] as number), r3(r[3] as number), r3(r[4] as number)])]))
   expect(merged.left.pages, name).toEqual(whole.left.pages)
-  if (whole.layout) {
-    // (a part with its own layout: every part has one here; the merge is the file's rows)
-    expect(encodeLayout({ ...merged.layout!, left: whole.layout.left }), name).toBe(encodeLayout(whole.layout))
-  } else expect(merged.layout, name).toBeNull()
-
   // K, once each: every left unit and every layout unit, in one part
   const K = await oracleK(whole)
+  if (whole.layout) {
+    // (a part with its own layout: every part has one here; the merge is the file's rows, and the file's `unlaid` of the units a
+    // part tells: a unit the left does not hold and the file does not lay is told by no part, cut.mjs)
+    const ids = new Set(K.map(e => e.id)), { unlaid, ...rest } = whole.layout as typeof whole.layout & { unlaid?: [number, string][] }
+    const kept = (unlaid ?? []).filter(r => ids.has(r[0]))
+    expect(encodeLayout({ ...merged.layout!, left: whole.layout.left }), name).toBe(encodeLayout({ ...rest, ...(kept.length ? { unlaid: kept } : {}) } as typeof whole.layout))
+  } else expect(merged.layout, name).toBeNull()
+
   const told = parts.flatMap((p, i) => [...p.left.map(w => [w[0], i] as const), ...p.fileOnly.map(e => [e[0], i] as const)])
   expect(new Set(told.map(t => t[0])).size, name).toBe(told.length)
   expect([...told.map(t => t[0])].sort((x, y) => x - y), name).toEqual(K.map(e => e.id).sort((x, y) => x - y))

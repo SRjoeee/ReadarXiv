@@ -2,7 +2,7 @@
 import type { Audit, CheckResult } from './check.mjs'
 import type { Rect } from './layer1.mjs'
 import type { Block2, Char, DrawOp, DrawSource, Layout, Params, Prepared, Token, Unit as LaidUnit } from './layer2.mjs'
-import type { LayoutIndex, LayoutUnit } from '../layout/file.mjs'
+import type { LayoutIndex, LayoutUnit, UnlaidCode } from '../layout/file.mjs'
 import type { TexLines, Whole } from './tex.mjs'
 import type { FaceSources } from './fonts.mjs'
 import type { FrozenRuleSet, RULES_SCHEMA } from '../rules/layout.mjs'
@@ -67,6 +67,15 @@ export interface Rec {
   [more: string]: unknown
 }
 export declare const PDF_OPTIONS: { cMapPacked: true; enableHWA: true; disableStream: true; fontExtraProperties: true }
+/** why the layer left a unit the original's (a `skipped` record's `code`), a closed set: the file not holding it whole (`unlocated`,
+ *  with the maker's own code beside it, `unlaid`; `pieces`, `noRow`, `lost`), `offPages`, `author`, `refused` (its row not of
+ *  this unit), `group`, the drawing's (`unfit`, `unproven`, `served`, `face`, `error`, `page`) and the door's `rowUnfit` (a row
+ *  naming no unit or piece of the paper's, dropped before the run sees it: the door's stats `droppedRows`), and `unhidden` (its
+ *  ink not wrapped in its groups by the file) */
+export declare const SKIP_CODES: readonly ['unlocated', 'pieces', 'noRow', 'lost', 'offPages', 'author', 'refused', 'group', 'unfit', 'unproven', 'served', 'face', 'error', 'page', 'rowUnfit', 'unhidden']
+export type SkipCode = (typeof SKIP_CODES)[number]
+/** `code` where it is one of SKIP_CODES; throws a TypeError for any other */
+export declare function skipCode(code: unknown): SkipCode
 /** the longest a page's drawing waits for its draw (openProto `drawOf`) once it begins, ms; then the page is read live */
 export declare const DRAW_WAIT_MS: number
 /** the pages a run keeps warm for its next renders (their operator lists and decoded images), the one drawn last kept longest */
@@ -149,10 +158,11 @@ export interface ProtoRun {
   /** each page's row (under parts, null at runtime for a page whose view no part has told yet: none is drawn there) */
   rows: Row[]
   placed: Placed[]
-  /** the units left the original's and why: `unanchored`, `author`, `unfit`, `group: …`, and, in the role table's faces, `served`
+  /** the units left the original's and why (`code`, one of SKIP_CODES; `unlaid`, the file's own code where it holds no row of the
+   *  unit): `unanchored`, `author`, `unfit`, `group: …`, and, in the role table's faces, `served`
    *  (a character in no served slice of its runs' faces and their fallbacks, or a run's own face not served: `missing`, the
    *  first code points) and `face` (a table or a slice that failed) */
-  skipped: { id: number; kind: string; why: string; chars: number; pages?: number[]; missing?: number[] }[]
+  skipped: { id: number; kind: string; why: string; code: SkipCode; unlaid?: UnlaidCode | null; chars: number; pages?: number[]; missing?: number[] }[]
   /** each laid unit's record (with `records`; empty without) */
   stats: Rec[]
   /** the records that could not be made (with `records`), by unit: its drawing is the same, the record the error alone */

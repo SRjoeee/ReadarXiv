@@ -1113,6 +1113,27 @@ describe('a part against the index', () => {
     await refused(1, p => { const l = (p as unknown as { layout: { units: number[][]; lines: number[][]; frames: number[][] } }).layout; l.units[1]![0] = 99; l.lines[1]![0] = 99; l.frames[1]![0] = 99 }, 'layout.units[1][0]')
   })
 
+  it('reads why each unit a part tells is not laid against the paper and the part\'s left: past the units, or no left unit of the part, refused', async () => {
+    type L = { left: number[][]; layout: { units: number[][]; unlaid?: [number, string][] } }
+    // (a left unit of the part the file does not lay, its rows taken out of the layout: taken, its code as it stands)
+    const p0 = parsed(M.parts[0] as { bytes: Uint8Array }) as unknown as L
+    const laid = new Set(p0.layout.units.map(u => u[0])), free = p0.left.map(w => w[0]!).find(id => laid.has(id))
+    expect(free, 'a left unit of part 0').toBeDefined()
+    const unlay = (p: L) => {
+      const l = p.layout as unknown as Record<string, unknown[][]>
+      for (const k of ['units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held', 'colours']) if (l[k]) l[k] = l[k]!.filter(r => r[0] !== free)
+      l.names = (l.names ?? []).filter(r => r[11] !== free)
+      if (!l.colours?.length) delete l.colours
+    }
+    await expect(partWith(0, (p: L) => { unlay(p); p.layout.unlaid = [[free!, 'noLine']] })).resolves.toMatchObject({ layout: { unlaid: [[free, 'noLine']] } })
+    await refused(0, (p: L) => { p.layout.unlaid = [[99, 'noAnchor']] }, 'layout.unlaid[0][0]')
+    // (a unit of the paper that another part tells)
+    const p1 = parsed(M.parts[1] as { bytes: Uint8Array }) as unknown as L
+    const elsewhere = p1.left.map(w => w[0]!).find(id => !p0.left.some(w => w[0] === id))
+    expect(elsewhere, 'a unit part 0 does not tell').toBeDefined()
+    await refused(0, (p: L) => { p.layout.unlaid = [[elsewhere!, 'noAnchor']] }, 'layout.unlaid[0][0]')
+  })
+
   it('refuses a layout unit of another kind or another piece count than its unit\'s, where the unit stands', async () => {
     await refused(0, p => { (p as unknown as { layout: { units: number[][] } }).layout.units[1]![1] = 2 }, 'layout.units[1][1]')
     await refused(0, p => { (p as unknown as { layout: { units: number[][] } }).layout.units[1]![4] = 8 }, 'layout.units[1][4]')

@@ -328,9 +328,15 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     const layer = await openLayer({ bundle, doc: docOf(), target: 'zh', faceSources, hyphUrl })
     const rows = rowsOf(bundle)
     const hostile = [[99, ['x'], 'whole', null, null], [2, ['x'], 'whole', null, null], 'a row', null, [0, [7], 'whole', null, null]] as unknown as Row[]
-    expect(() => layer.take([...hostile, ...rows])).not.toThrow()
+    expect(() => layer.take(hostile)).not.toThrow()
+    // (each dropped row by the unit it names, the run's code `rowUnfit`: unit 0's names its piece 7, past its source's pieces;
+    // a row of no id is counted alone)
+    expect(layer.stats()).toMatchObject({ dropped: 5, droppedRows: [[0, 'rowUnfit'], [2, 'rowUnfit'], [99, 'rowUnfit']] })
+    expect(() => layer.take(rows)).not.toThrow()
     layer.end()
     expect(layer.stats().dropped).toBe(5)
+    // (a later row that fits takes its unit out: unit 0 is laid from its own)
+    expect(layer.stats().droppedRows).toEqual([[2, 'rowUnfit'], [99, 'rowUnfit']])
     await layer.pageOf(2, { lang: 'zh' })
     // (page 2 laid by its closure alone: no unit of it runs on from page 1, so page 1 is drawn first and laid only when asked)
     expect(layer.stats().pages).toEqual([2])
@@ -652,7 +658,7 @@ describe('the door reaches no server-only module', () => {
   it('exports what the hosts take, and not the role table\'s or v0\'s own calls', async () => {
     const door = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     expect(Object.keys(door).sort()).toEqual([
-      'BUNDLE', 'BUNDLE_CAP', 'BUNDLE_VALUES', 'BundleRefusal', 'CTAG', 'DRAWS_HELD', 'FACES', 'LAYOUT', 'LAYOUT_CAP', 'LAYOUT_VALUES', 'LayoutRefusal', 'PDF_OPTIONS', 'VTAG',
+      'BUNDLE', 'BUNDLE_CAP', 'BUNDLE_VALUES', 'BundleRefusal', 'CTAG', 'DRAWS_HELD', 'DROPPED_ROWS', 'FACES', 'LAYOUT', 'LAYOUT_CAP', 'LAYOUT_VALUES', 'LayoutRefusal', 'PDF_OPTIONS', 'SKIP_CODES', 'VTAG',
       'batchesOf', 'bundleKey', 'firstFaceOf', 'indexLayout', 'layerRows', 'openLayer', 'parseLayout', 'readBundle', 'rowOf', 'runRows', 'toTranslate', 'trPiecesOf', 'translateUnits', 'unitOf',
     ].sort())
   })
