@@ -194,7 +194,7 @@ export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'lat
 /** a laid line: its slot, and its items at their places */
 /** a laid line: its slot's fields, its items, and `past`, how many of the unit's kept regions the text passed before its first item
  *  (breakLines: where the page's word table writes a region's kept lines) */
-export interface Line { block: number; page: number; x0: number; x1: number; baseline: number; target: number | null; mode: string; used: number; cap: number; items: { t: Token; x: number; w: number; kern?: number }[]; past?: number; after?: number; [more: string]: unknown }   // an item's w: its own width; kern: the explicit glue after it, an advance apart from w (0 once a line's end drops it)
+export interface Line { block: number; page: number; x0: number; x1: number; baseline: number; target: number | null; mode: string; used: number; cap: number; items: { t: Token; x: number; w: number; kern?: number }[]; past?: number; after?: number; seg?: { f: number; scale: number; state: Layout['state'] }; [more: string]: unknown }   // an item's w: its own width; kern: the explicit glue after it, an advance apart from w (0 once a line's end drops it)
 /** layoutUnit2's answer */
 /** a unit laid: its lines and the state that set them; `opened`, the lines TeX's rule opened (P.lineskip), `unopened` the
  *  lines it would have opened where it has no values (none read: they stay nearer the line before than nothing) */
@@ -340,6 +340,20 @@ export declare const SOLID: number
 /** the unit's leading relative to the original's own pitch: leadBase of a solid line, never closer than the original's */
 export declare function leadOf(blocks: readonly Pick<Block2, 'pitch0'>[], s: number, P: Pick<Params, 'leadBase'>): number
 export declare function layoutUnit2(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params): Layout
+/** a unit's run between its kept regions (a display each): its blocks (those of one `after`, from the unit's block `bi0`) and
+ *  its tokens; with layoutRuns, its parameters and its own layout */
+export interface Run { after: number; bi0: number; blocks: Block2[]; tokens: Token[]; P?: Params; layout?: Layout }
+/** a unit's runs, or null where it is one run, a run with text has no slots of its own or a block no run's text, or the blocks
+ *  are not in their regions' order */
+export declare function runsOf(tokens: readonly Token[], blocks: readonly Block2[]): Run[] | null
+/** a run's parameters: its first block's place in the unit (`blockBase`), the gap under the paragraph and a heading's last
+ *  lines the last run's alone */
+export declare function runParams(P: Params, run: Run, last: boolean): Params
+/** a unit's runs laid each at its own state (the first of the fit's at which its own text fits its own slots), joined as one
+ *  layout (joinRuns); null where the unit is one run or a run does not fit alone */
+export declare function layoutRuns(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params): { layout: Layout & { runs: number }; runs: (Run & { P: Params; layout: Layout })[] } | null
+/** the runs' layouts as one: each line's block its place in the unit's blocks, and its run's size, scale and state (`seg`) */
+export declare function joinRuns(runs: readonly { bi0: number; layout: Layout }[]): Layout & { runs: number }
 /** a run's ink over (a) and under (d) its baseline at 100 px in its face (the measure that gives its width) */
 export declare function ink100(s: string, face: Face): { a: number; d: number }
 /** a laid line's extent over (a) and under (d) its baseline, PDF units: its text's ink and its crops' over their TeX
