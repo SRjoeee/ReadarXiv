@@ -249,10 +249,18 @@ describe('the base record a make of the fixtures writes', () => {
     expect(() => baseRecordOf(join(k.fixtures, n))).toThrow(/no layout file is kept/)
   })
 
-  it('keeps a layout file of an older maker (made over arXiv\'s PDF), never one of the engine\'s own (made over a base page of ours)', () => {
+  it('keeps a layout file of an older maker (made over arXiv\'s PDF, below LAYOUT 12), never one made over a base page of ours (LAYOUT 12 on)', () => {
     const file = (layout: string) => new TextEncoder().encode(JSON.stringify({ schema: 5, layout }))
     expect(keptLayoutOf(file('9'), '12')).toEqual(file('9'))
     expect(keptLayoutOf(file('12'), '12')).toBeNull()
+    // from LAYOUT 12 on a file is written over a base page of ours: after the engine moves on (13) a 12 is still no older maker's
+    // over arXiv's PDF, and drawn over arxiv.pdf its coordinates would be the wrong page's; 11 is the last made over arXiv's
+    expect(keptLayoutOf(file('12'), '13')).toBeNull()
+    expect(keptLayoutOf(file('13'), '13')).toBeNull()
+    expect(keptLayoutOf(file('11'), '13')).toEqual(file('11'))
+    expect(keptLayoutOf(file('9'), '13')).toEqual(file('9'))
+    // a token with no number says nothing of its maker
+    expect(keptLayoutOf(file('x'), '13')).toBeNull()
     expect(keptLayoutOf(null, '12')).toBeNull()
     expect(keptLayoutOf(new TextEncoder().encode('not json'), '12')).toBeNull()
   })

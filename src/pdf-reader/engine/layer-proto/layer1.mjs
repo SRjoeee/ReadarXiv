@@ -85,7 +85,9 @@ export function blocksOf(rects, pageViews, keep = null) {
  *  for), as the layout maker leaves it to TeX (layout/marks.mjs RULE, the same) */
 const RULE = /^\s*\\rule\b/
 const ZERO = /^(?:\\(?:footnotesize|scriptsize|tiny|small|normalsize|large|Large|LARGE|huge|Huge|selectfont|hline|centering|raggedright|par|bf|it|rm|em|sf|tt|sc|bfseries|itshape|rmfamily|mdseries|upshape|protect|toprule|midrule|bottomrule|smallskip|medskip|bigskip|vfill|hfill|null|arraystretch|clearpage|newpage|thanks|xspace|noalign|cr|strut)\b\*?|\\(?:v|h)space\*?\{[^}]*\}|\\fontsize\{[^}]*\}\{[^}]*\}|\\label\{[^}]*\}|\\c?line\{[^}]*\}|\\(?:v|h)skip\s*[-\d.]+\s*[a-z]*|\\setlength\{[^}]*\}\{[^}]*\}|\\arraystretch\{[^}]*\}|\\renewcommand.*|\\addlinespace(?:\[[^\]]*\])?|\\specialrule\{[^}]*\}\{[^}]*\}\{[^}]*\}|\\cmidrule(?:\[[^\]]*\])?(?:\([^)]*\))?\{[^}]*\}|\\rule(?:\[[^\]]*\])?\{0(?:\.0*)?[a-z]*\}\{[^}]*\}|\\arrayrulecolor\{[^}]*\}|\\includegraphics\*?(?:\[[^\]]*\])?\{(?:[^{}]|\{[^{}]*\})*\})$/
-const SPACE = /^(?:~|\\,|\\;|\\:|\\ |\\quad|\\qquad|\\\\(?:\[[^\]]*\])?|\\And|\\and|\\AND|\\enspace|\\thinspace)$/
+// (a control space is a backslash and any white space, a tab or a line's end as well as a space: rules/tex-kernel.mjs counts
+// all three, and \<newline> read as 'zero' drew nothing where the original has a space: "vs.\<newline>answer")
+const SPACE = /^(?:~|\\,|\\;|\\:|\\\s|\\quad|\\qquad|\\\\(?:\[[^\]]*\])?|\\And|\\and|\\AND|\\enspace|\\thinspace)$/
 export const CITE = /^\\(?:cite|citep|citet|citealp|citealt|citeauthor|citeyear|parencite|textcite|autocite)\*?(?:\[[^\]]*\])*\{/
 export const NUM = /^\\(?:ref|eqref|autoref|cref|Cref|pageref|footnotemark)\*?(?:\[[^\]]*\])?\{?/
 // (step 3: the engine's displayed environments, layout/marks.mjs DISPLAY's: v0 knew six, and read a subequations, an
