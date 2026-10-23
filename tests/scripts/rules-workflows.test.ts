@@ -65,7 +65,9 @@ describe('the gate runs when what it loads changes', () => {
     // the page (layer-gate/proto.mjs) imports these from /engine/; layer-gate.mjs imports the others in Node
     // (and the wrap's, layer-gate/wrap.mjs: the base page wrapped by optional content and its cell rules, beside the source
     // units' reading, which is the pipeline's and not the drawing's)
-    const loaded = closure(['layer/check.mjs', 'layout/json.mjs', 'layer-proto/visibility.mjs', 'layer-proto/hide.mjs', 'layout/ink.mjs', 'layer-proto/run.mjs', 'layout/file.mjs', 'rules/layout.mjs', 'layout/wrap.mjs', 'layout/cell-rules.mjs', 'layout/remove.mjs', 'layer-proto/hyph.mjs'].map(E))
+    const loaded = closure(['layer/check.mjs', 'layout/json.mjs', 'layer-proto/visibility.mjs', 'layer-proto/hide.mjs', 'layout/ink.mjs', 'layer-proto/run.mjs', 'layout/file.mjs', 'rules/layout.mjs', 'layout/wrap.mjs', 'layout/cell-rules.mjs', 'layout/remove.mjs', 'layer-proto/hyph.mjs', 'layer-proto/rows.mjs'].map(E))
+    // (and the rows' reading, rows.mjs, whose units openProto takes: their table groups, translate/groups.mjs, and a cell's
+    // span, layer-proto/cells.mjs — Devin on #456)
     expect(loaded.length).toBeGreaterThan(20)
     expect(loaded.filter(f => !covered(patterns, f))).toEqual([])
   })

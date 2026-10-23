@@ -253,9 +253,12 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
   // CELL_ABUT of an em or more from the next, on the start's line, in its region, in no group. Where the text is not known or
   // the glyphs there are not it, the cell is the original's, as before (leadUnmarked); 2610.21098v1 p13
   const cellLead = new Set()
-  /** the text a unit's unmarked lead placeholders set, NFKC with no white space, or null where one is not known */
+  /** the text a unit's unmarked lead placeholders set, NFKC with no white space, and its parts in order (each `symbol` where
+   *  it is a text symbol's), or null where one is not known */
+  const norm = t => t.normalize('NFKC').replace(/\s/gu, '')
   const leadText = (u, id) => {
-    let out = '', symbols = true
+    let out = ''
+    const parts = []
     for (let k = 0; k < (u?.pieces?.length ?? 0); k++) {
       const piece = u.pieces[k]
       if (piece?.t === 'text') { if (/\S/.test(typeof piece.s === 'string' ? piece.s : '')) break; continue }
@@ -264,12 +267,15 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
       if (c === 'footnote' || where.has(`p${id}.${k}a`) || where.has(`p${id}.${k}b`)) break
       const sym = symbolText(piece.src), t = texts?.get(piece.src) ?? sym
       if (typeof t !== 'string') return null
-      if (sym === null) symbols = false
+      if (norm(t)) parts.push({ text: norm(t), symbol: sym !== null })
       out += t
     }
-    out = out.normalize('NFKC').replace(/\s/gu, '')
-    return out ? { text: out, symbols } : null
+    out = norm(out)
+    return out ? { text: out, parts } : null
   }
+  /** the glyphs of the cells' leads that are text symbols' (their text drawn by the layer as characters): no letter of the
+   *  source text the spell check reads, as a placeholder's is none (\\O "Ø", \\ss "ß") */
+  const symbolGlyphs = new Set()
   for (const [id, { s }] of textOf) {
     if (!s || !units || !(units[id]?.kind === 'cell' || pt(s).name.startsWith('t')) || !opensUnmarked(units[id], id)) continue
     if (work > OWN_WORK) { unit(id).unhidden ??= 'marks'; continue }
@@ -291,9 +297,20 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
       right = G
     }
     if (got !== want) continue
-    // (text symbols alone, \\#: the layer draws them as their characters in the translation, so their ink goes with the text,
-    // hidden whenever the cell is drawn; a macro's the maker finds by the same text, a placeholder's crop: `.p`)
-    claim({ glyphs: run.reverse() }, lead.symbols ? `u${id}` : `u${id}.p`, lead.symbols ? 'u' : 'p')
+    // (each part its own: a text symbol's (\\#) with the text — the layer draws it as its character in the translation, never
+    // from a crop, so its ink is hidden whenever the cell is drawn —, a macro's, which the maker finds by the same text and
+    // crops, the placeholder's `.p`: a mixed lead all `.p` would leave the "#" under the drawn one)
+    run.reverse()
+    let w = 0
+    for (const part of lead.parts) {
+      const mine = []
+      let n = 0
+      while (w < run.length && n < part.text.length) { const c = norm(pg.glyphs[run[w][1]].u ?? ''); mine.push(run[w++]); n += c.length }
+      // (the blank glyphs after a part: its own)
+      while (w < run.length && !norm(pg.glyphs[run[w][1]].u ?? '')) mine.push(run[w++])
+      if (part.symbol) { claim({ glyphs: mine }, `u${id}`, 'u'); for (const [pp, g] of mine) symbolGlyphs.add(`${pp}|${g}`) }
+      else claim({ glyphs: mine }, `u${id}.p`, 'p')
+    }
     cellLead.add(id)
   }
 
@@ -350,7 +367,7 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
       const u = unit(id)
       u.groups.add(g)
       u.pages.add(p)
-      if (dot < 0) (text.get(id) ?? text.set(id, []).get(id)).push(glyphs[i].u ?? '')
+      if (dot < 0 && !symbolGlyphs.has(`${p}|${i}`)) (text.get(id) ?? text.set(id, []).get(id)).push(glyphs[i].u ?? '')
       else if (g.endsWith('.l')) (label.get(id) ?? label.set(id, []).get(id)).push([p, i])
     }
     for (const g of bOwn[p - 1]) { if (g === null || g[0] !== 'u') continue; const dot = g.indexOf('.'), id = Number(dot < 0 ? g.slice(1) : g.slice(1, dot)); unit(id).groups.add(g); unit(id).pages.add(p) }

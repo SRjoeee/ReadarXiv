@@ -172,6 +172,21 @@ describe('coverage: what the 2026-10-24 sweep left English', () => {
     // (the macro's text not known: the cell the original's, as before)
     expect(ownOf(pages, { units: cells }).units.get(1)?.unhidden).toBe('marks')
   })
+  it('splits a cell\'s lead of a macro and a text symbol: the symbol with the text, the macro\'s ink its placeholder (Codex on #456)', () => {
+    // \\bert\\# Steps: the layer draws the "#" as its character; the macro's ink is cropped where the maker found it
+    const pages = [page([{ pt: 't0s' }, 'Model', { pt: 't0e' }, { dx: 30 }, 'BERT#', { pt: 't1s' }, 'Steps', { pt: 't1e' }])]
+    const cells = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Model' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\bert' }, { t: 'ph', src: '\\#' }, { t: 'text', s: ' Steps' }] }]
+    const r = ownOf(pages, { units: cells, texts: new Map([['\\bert', 'BERT']]) })
+    expect(groupsOf(r, pages)).toEqual({ u0: 'Model', u1: '#Steps', 'u1.p': 'BERT' })
+    expect(r.units.get(1)?.unhidden).toBe(null)
+  })
+  it('spells a cell whose lead is a letter symbol with the letter it sets (\\O, \\ss: Devin on #456)', () => {
+    const pages = [page([{ pt: 't0s' }, 'Name', { pt: 't0e' }, { dx: 30 }, '\u00d8', { pt: 't1s' }, 'stergaard', { pt: 't1e' }])]
+    const cells = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Name' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\O' }, { t: 'text', s: 'stergaard' }] }]
+    const r = ownOf(pages, { units: cells })
+    expect(groupsOf(r, pages)).toEqual({ u0: 'Name', u1: '\u00d8stergaard' })
+    expect(r.units.get(1)?.unhidden).toBe(null)
+  })
   it('never takes a neighbour cell\'s ink for a cell\'s lead, however close the columns (the neighbour check; the review of b479095e)', () => {
     // an unmarked number cell ("80.8") 0.4 em before the macro's ink (\\tabcolsep 2pt): the macro's text ends the run
     const cells = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Ours' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\bert' }, { t: 'text', s: ' (Single)' }] }]
