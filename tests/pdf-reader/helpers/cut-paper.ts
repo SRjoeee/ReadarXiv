@@ -34,7 +34,7 @@ export const PAPER_ID = { id: '2608.04322', version: 1 }
 export const BASE_OF = { bytes: 10_000, sha256: '0123456789abcdef'.repeat(4), xref: 9_000 }
 export const TOKENS_PER_PAGE = 20
 
-export type Whole = WholePaper & { layout: LayoutFile | null; units: BundleUnit[]; left: { kinds: string[]; pages: [number, number, number, number][]; units: UnitWire[] } }
+export type Whole = WholePaper & { layout: LayoutFile | null; units: BundleUnit[]; left: { kinds: string[]; pages: [number, number, number, number][]; units: UnitWire[] }; rules?: WholePaper['rules'] }
 
 const rowY = (k: number) => 750 - (k % 700)
 

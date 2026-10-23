@@ -4,32 +4,14 @@
 // today's whole-document stages; the page stream replaces it. Pure but for the writers' hashing: the same input gives the same
 // bytes and keys. Imports the format's writers, the door's need rule (need.mjs) and nothing that loads a canvas.
 import { indexLayout, NAME_FLAG } from '../layout/file.mjs'
-import { REMOVAL } from '../layout/addon-manifest.mjs'
 import { BundleRefusal } from './bundle.mjs'
 import { groupsOfUnits, partTarget, writeHead, writeLeftPart, writePart, writeUnitChunks } from './format.mjs'
 import { needBound, needsOf, rowLeadOf } from './need.mjs'
 
 const refuse = (kind, path, why, data) => new BundleRefusal(why, { kind, path, ...(data ? { data } : {}) })
-const SIZE_BOUNDS = ['bytes', 'values', 'content', 'tail', 'rows']
+const SIZE_BOUNDS = ['bytes', 'values', 'content', 'rows']
 /** the most pages a part is extended over (the need bound), and so the most a part holds: the web's bound on a part's pages (M21) */
 export const PART_PAGES_MAX = 5000
-/** a removed page's reason when the whole add-on's manifest is carried without its tail (one incremental update, not cuttable by
- *  bytes): its units are drawn the old way, erased and put back */
-export const TAIL_NOT_CARRIED = 'tail not carried'
-
-/**
- * The entry of one page when the whole add-on's manifest is carried without its tail: a clean planned page (`ok`, no removed
- * page of its own: no `at`, no `dirty` boxes) stays as it is; a removed page, whose bytes are in the tail, is refused; a page
- * the remover refused stays so. With a fixed-place R set (`sets.R`) every page has its removed page in the tail: all refused.
- */
-function carriedEntry(manifest, p) {
-  const e = manifest.page[p]
-  if (e === undefined) return { ok: false, refused: 'not planned' }
-  if (!e.ok) return structuredClone(e)
-  if (Object.hasOwn(e, 'at') || Object.hasOwn(e, 'dirty') || Object.hasOwn(manifest.sets, 'R')) return { ok: false, refused: TAIL_NOT_CARRIED }
-  return structuredClone(e)
-}
-
 /** the pages of a flat rows array: the value at `at` of every `stride` */
 function pagesAt(rows, at, stride, into) {
   // (whole strides alone: a placeholder row's fill, last, is no segment's)
@@ -133,14 +115,8 @@ const empty = { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }
  * `o.target(a, N)`: the last page the part that begins at `a` is cut to, 'a' to N (default partTarget, the doubling
  * schedule); a harness cuts at any split with it. `o.leftPages(page)`: the page's { first, tokens, spans, pairs? } in the left part's input (null: a page with no tokens);
  * called once for each page, in page order, as the parts that cover it are cut. `o.frontier(K, N)`: F as an array indexed by
- * page 0 to N of indices into K (-1 for none), default needFrontier. `o.chainAddon(index, { pages, layout })`: the add-on
- * { manifest, tail } for a candidate range of the part, or null (the part's pages are refused, drawn by erase and restore);
- * the add-on takes part in the part's size, so the hook is called for each candidate range the size search tries (several
- * times for one index) and must have no effect until `o.acceptAddon(index, { pages })`, called once for each part that has a
- * layout, in order, when its range is final (a chained writer keeps its state there). A tail past TAIL_CAP shortens the part like
- * any size refusal; a page whose tail alone passes it ships with no layout. Without the hook, the part carries the whole's add-on manifest (`whole.addon`) without
- * its tail: clean pages as they are, removed pages TAIL_NOT_CARRIED, refused pages refused; with no add-on in the whole, no
- * add-on for any part (`addon: null`, M20: drawn by erase and restore). `o.verdict`, `o.recordOf`: partCutter's; `o.noLayout`
+ * page 0 to N of indices into K (-1 for none), default needFrontier. `whole.rules` (or `o.rules`): the rules near the paper's
+ * table cells by page, which each part with a layout carries for its own pages. `o.verdict`, `o.recordOf`: partCutter's; `o.noLayout`
  * the record a part of a whole with no layout carries (partCutter's `known.noLayout`). Throws BundleRefusal for a
  * whole that cannot be written (a dropped unit, a unit past the chunk caps) and `bound` for a page that no part can hold. The
  * cut is partCutter's, fed the whole paper: a producer that feeds it a part at a time cuts the same parts
@@ -178,7 +154,7 @@ export async function wholeCutter(whole, o) {
   // K and its frontier, then the parts
   const { K, F } = wholeFrontier(whole, frontier)
   const cutter = partCutter({
-    paper, N, head, views: whole.left.pages, leftPages: o.leftPages, addon: whole.addon ?? null, chainAddon: o.chainAddon ?? null, acceptAddon: o.acceptAddon ?? null,
+    paper, N, head, views: whole.left.pages, leftPages: o.leftPages, rules: o.rules ?? whole.rules ?? null,
     target: o.target ?? null, partPagesMax: o.partPagesMax, verdict: o.verdict ?? null, recordOf: o.recordOf ?? null,
   })
   // each page's need bound (need.mjs: the last page whose part laying it reads), over the whole K, once
@@ -211,10 +187,12 @@ export function wholeFrontier(whole, frontier = needFrontier, grouped = groupsOf
  * every row of the units the part may tell and every babel name on its pages, in the file's order) or null. A part tells
  * exactly what cutBundle's tells of the same paper wherever `known` agrees with the whole paper's on what the part reads.
  *
- * `paper` { id, version }, `N` its pages, `head` the head written, `views` every page's view; `leftPages`, `addon` (the whole add-on, or null), `chainAddon`, `acceptAddon`, `target`, `partPagesMax`: cutBundle's.
+ * `paper` { id, version }, `N` its pages, `head` the head written, `views` every page's view; `leftPages`, `target`, `partPagesMax`:
+ * cutBundle's; `rules` the cell rules by page (an object or a Map of page to boxes; null: none), a part with a layout carrying its own
+ * pages'.
  * `verdict({ pages, input, written })`: of the part as cut with its layout, its pages' layout refused ({ refused, ...why }) or
  * kept (null); a part refused is the same pages with no layout (C1.4: its units drawn from the left, a table group's
- * layout-only cells too), its add-on not accepted. With a verdict, a part its writer refuses with its layout for what that
+ * layout-only cells too). With a verdict, a part its writer refuses with its layout for what that
  * holds (not a size: a row its part's check refuses) is the longest run of its pages that fits with none, { refused: 'part',
  * why }, where cutBundle without one throws. Each part's verdict is `verdicts[i]`: null, the hook's refusal, the writer's,
  * or { refused: 'part' } for a first page that alone passes a part's bounds with its layout (a part of one page, with none).
@@ -224,7 +202,7 @@ export function wholeFrontier(whole, frontier = needFrontier, grouped = groupsOf
  * `recordOf(refused)`, the record of a part a verdict or a part's bound refused its layout (`verdicts[i]`); null for either,
  * `layout: null` (no reason recorded: 5's shape)
  */
-export function partCutter({ paper, N, head, views, leftPages, addon = null, chainAddon = null, acceptAddon = null, target: targetOf = null, partPagesMax, verdict = null, retain = true, recordOf = null }) {
+export function partCutter({ paper, N, head, views, leftPages, rules = null, target: targetOf = null, partPagesMax, verdict = null, retain = true, recordOf = null }) {
   if (typeof leftPages !== 'function') throw new TypeError('leftPages: a function of the page')
   const maxPages = partPagesMax === undefined ? PART_PAGES_MAX : partPagesMax
   if (!Number.isSafeInteger(maxPages) || maxPages < 1) throw new RangeError(`partPagesMax: ${String(maxPages)} is not a positive whole number of pages`)
@@ -304,26 +282,20 @@ export function partCutter({ paper, N, head, views, leftPages, addon = null, cha
         fileOnly: lay.filter(e => !e.left).map(e => [e.id, e.after]).sort((x, y) => x[0] - y[0]),
       }
     }
-    const addonOf = (b, withLayout, ad) => {
-      if (!withLayout || !layout) return null
-      if (ad) return ad
-      // (no add-on in the whole and no hook to make one, a producer with no remover: no add-on for the part's pages (M20), drawn by
-      // erase and restore as BUNDLE 3's bundle with none; a hook that answers null still plans them, as not planned)
-      if (!chainAddon && !addon) return null
-      const carry = !chainAddon && addon ? addon.manifest : null
-      const page = {}
-      for (let p = a; p <= b; p++) page[p] = carry ? carriedEntry(carry, p) : { ok: false, refused: 'not planned' }
-      return { manifest: { schema: 1, removal: REMOVAL, pages: N, sets: {}, page, appended: 0, stats: {} }, tail: null }
+    /** the cell rules of pages a to b, where the part carries a layout: null where none of them has any */
+    const rulesOf = (b, withLayout) => {
+      if (!withLayout || !layout || !rules) return null
+      const out = {}
+      for (let p = a; p <= b; p++) { const r = rules instanceof Map ? rules.get(p) : rules[p]; if (r?.length) out[p] = r }
+      return Object.keys(out).length ? out : null
     }
-    // the hook is consulted for each candidate range once (the add-on is part of the part's size), so it must be free of side
-    // effects until `acceptAddon` tells it which range was kept. Without its layout a part tells its left units alone: a
-    // layout-only unit of the range is not told (C1.4: the reader draws the part from the left, a table group's left cells
-    // among them, its layout-only cells not at all); that is the documented price of a part with no layout
+    // without its layout a part tells its left units alone: a layout-only unit of the range is not told (C1.4: the reader draws the
+    // part from the left, a table group's left cells among them, its layout-only cells not at all); that is the documented price of a
+    // part with no layout
     const write = async (b, withLayout) => {
       await leftTo(b)
       const x = input(b, withLayout)
-      const ad = withLayout && layout && chainAddon ? await chainAddon(parts.length, { pages: [a, b], layout: x.part }) : null
-      const w = await writePart({ paper, head: head.sha256, prev, pages: x.pages, views: x.views, left: x.left, fileOnly: x.fileOnly, layout: x.part ?? absent, addon: addonOf(b, withLayout, ad), leftParts: lefts.slice(a - 1, b) })
+      const w = await writePart({ paper, head: head.sha256, prev, pages: x.pages, views: x.views, left: x.left, fileOnly: x.fileOnly, layout: x.part ?? absent, rules: rulesOf(b, withLayout), leftParts: lefts.slice(a - 1, b) })
       return { w, x }
     }
     // a size refusal is the cut's to answer (a shorter part), any other is a defect; but under a verdict, the writer's refusal of
@@ -381,7 +353,6 @@ export function partCutter({ paper, N, head, views, leftPages, addon = null, cha
         if (at === null) throw refuse('part', 'pages', `pages ${a} to ${b} pass the bounds of a part with no layout`, { bound: 'part', page: a })
       }
     }
-    if (withLayout && layout && acceptAddon) await acceptAddon(parts.length, { pages: [a, b] })
     const { w } = at
     const part = Object.assign(w, { leftParts: lefts.slice(a - 1, b) })
     // (`retain` false: the part and its left parts are the caller's alone once given: a stream holds no part told)

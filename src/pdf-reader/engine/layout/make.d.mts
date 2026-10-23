@@ -4,7 +4,6 @@ import type { LayoutFile } from './file.mjs'
 import type { FrameRule } from '../pipeline/anchors.mjs'
 import type { ArxivText } from './arxiv.mjs'
 import type { LayoutMarks, MarkedEvent, MarkedHead, MarkedPage } from './marks.mjs'
-import type { PagePlan } from './addon.mjs'
 
 export interface MakeInput {
   /** the paper's (openPaper(files).units), ids their indices */
@@ -38,8 +37,8 @@ export interface MakeInput {
   /** the columns' text edges the names, the displays' numbers and the centred flag read (`page|column`,
    *  `twoCols|parity|column`, `twoCols|column` to [x0, x1]), given; else made of the placed units' body lines (rules.edges') */
   columnEdges?: ReadonlyMap<string, [number, number]> | null
-  /** the add-on's plans as well (`plans` in the result), of the ink the maker reads: each page's operator list read once */
-  plans?: boolean
+  /** the rules near the table cells as well (`cellRules` in the result), of the ink the maker reads: each page's operator list read once */
+  cellRules?: boolean
   /** the file is cut into parts (layer-proto/cut.mjs partCutter), which hold the bounds a part holds and the carry's share per
    *  part: made whatever share is carried, checked without those bounds; `lines` in the result */
   parts?: boolean
@@ -99,7 +98,7 @@ export interface LayoutStats {
   refusal?: { path: string; why: string }
 }
 /** a paper's layout file, or why none is made */
-export declare function makeLayout(o: MakeInput): Promise<{ file: LayoutFile; stats: LayoutStats; plans?: Map<number, PagePlan> | null; plansFailed?: string; lines?: ReadonlyMap<number, readonly [carried: number, total: number]> } | { refused: 'carry' | 'pages' | 'bounds'; stats: LayoutStats }>
+export declare function makeLayout(o: MakeInput): Promise<{ file: LayoutFile; stats: LayoutStats; cellRules?: Map<number, number[]> | null; rulesFailed?: string; lines?: ReadonlyMap<number, readonly [carried: number, total: number]> } | { refused: 'carry' | 'pages' | 'bounds'; stats: LayoutStats }>
 /** a task of the maker's passes: its key in the whole order (compared element by element), the pages it reads and writes */
 export interface MakerTask { key: number[]; pages: number[]; run(): void }
 /** tasks run in an order the whole order allows: each page's tasks in their order; `pick` the next of those that may run */
@@ -148,9 +147,9 @@ export interface MakerStream {
   /** the units the file holds so far */
   laid(): number
   finish(): void
-  /** each page's plan, made as the page is let go (null without `plans`) */
-  plans: Map<number, PagePlan> | null
-  plansFailed(): string | null
+  /** each page's cell rules, made as the page is let go (null without `cellRules`) */
+  cellRules: Map<number, number[]> | null
+  rulesFailed(): string | null
   /** the file's rows of the units settled (those of `ids`), as the whole file's parse holds them, and the names taken in */
   layout(ids?: number[]): Pick<LayoutFile, 'fonts' | 'units' | 'lines' | 'frames' | 'erase' | 'ph' | 'labels' | 'headings' | 'pageText' | 'held' | 'names'> & LayoutFile
   /** the pages from 1 let go */

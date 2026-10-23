@@ -3,7 +3,7 @@ import { LAB_ON, LAB_PAPERS, labFiles } from './helpers/lab-data'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
-import { type Cut, type CutEntry, cutBundle, type CutOptions, needFrontier, partCutter, TAIL_NOT_CARRIED, wholeFrontier } from '@/pdf-reader/engine/layer-proto/cut.mjs'
+import { type Cut, type CutEntry, cutBundle, type CutOptions, needFrontier, partCutter, wholeFrontier } from '@/pdf-reader/engine/layer-proto/cut.mjs'
 import {
   CONTENT_MAX, indexOf, type LayerIndex, mergeParts, PART_CAP, PART_VALUES, type PartChain, partTarget, type ReadPart, type ReadUnitsChunk, type ReadUnitsChunkLight, readHead, readLeftPart, readPart, readUnitsChunk, writePart,
   type Ref,
@@ -11,10 +11,9 @@ import {
 import { needBound, needsOf, rowLeadOf } from '@/pdf-reader/engine/layer-proto/need.mjs'
 import { NAME_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { groupOf } from '@/pdf-reader/engine/translate/groups.mjs'
-import { REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { encodeLayout, indexLayout } from '@/pdf-reader/engine/layout/file.mjs'
 import { BASE_OF, leftPagesOf, type PaperSpec, TOKENS_PER_PAGE, type Whole, wholeOf } from './helpers/cut-paper'
-import { tailOf, tokenWire } from './helpers/format-paper'
+import { tokenWire } from './helpers/format-paper'
 
 // The cutter (bundle 4 contract C3b, C3c): a paper made whole, cut into the units' chunks, the head, the parts at the doubling
 // schedule closed by page and by the stream's prefix, and the left parts. The properties are the writers' guarantees to the
@@ -204,12 +203,12 @@ describe('the cut of a small paper', () => {
     expect(indexLayout(mergeParts(back.index, back.parts).layout!).unit(6)?.colours).toEqual(new Map([[0, 0x0000ff]]))
   })
 
-  it('without a layout file: left only, no file-only units, every part\'s add-on null', async () => {
+  it('without a layout file: left only, no file-only units, no part\'s cell rules', async () => {
     const whole = wholeOf(SMALL, { layout: false })
     const c = await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF })
     await checkCut('small, no layout', whole, c)
     const back = await readBack(c)
-    for (const p of back.parts) { expect(p.layout).toBeNull(); expect(p.addon).toBeNull(); expect(p.fileOnly).toEqual([]) }
+    for (const p of back.parts) { expect(p.layout).toBeNull(); expect(p.rules).toBeNull(); expect(p.fileOnly).toEqual([]) }
   })
 
   it('carries a float whose cells are set on a later page in the part of the unit before it in the stream', async () => {
@@ -248,114 +247,36 @@ describe('the cut of a small paper', () => {
     expect(keys(z)).toEqual(keys(x))
   })
 
-  it('takes the add-on from the hook, once for each part with a layout, in order', async () => {
+  it('carries the whole\'s cell rules, each part with a layout its own pages\', none where the whole has none', async () => {
     const whole = wholeOf(SMALL)
-    const asked: [number, number[]][] = []
-    const chainAddon: NonNullable<CutOptions['chainAddon']> = (i, { pages }) => { asked.push([i, pages]); return null }
-    const c = await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF, chainAddon })
-    expect(asked).toEqual(fits(c).map((p, i) => [i, p]))
-  })
-
-  it('writes no add-on where the whole has none and no hook makes one (M20): every part with a layout has addon null', async () => {
-    const whole = wholeOf(SMALL)
-    expect(whole.addon ?? null).toBeNull()
-    const c = await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF })
+    const none = await readBack(await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF }))
+    expect(none.parts.some(p => p.layout !== null)).toBe(true)
+    for (const p of none.parts) expect(p.rules).toBeNull()
+    expect(mergeParts(none.index, none.parts).rules).toBeNull()
+    const rules = { 2: [72, 500, 540, 500.4], 4: [72, 300, 200, 300.3], 7: [72, 100, 200, 100.5, 72, 120, 200, 120.5] }
+    const c = await cutPlain({ ...whole, rules } as Whole, { leftPages: leftPagesOf(whole), base: BASE_OF })
     const back = await readBack(c)
-    expect(back.parts.some(p => p.layout !== null)).toBe(true)
-    for (const p of back.parts) { expect(p.addon).toBeNull(); expect(p.chain.r).toBe(0) }
-    // (made whole again: no add-on, as BUNDLE 3's bundle with none)
-    expect(mergeParts(back.index, back.parts).addon).toBeNull()
-    await checkCut('small, no add-on', whole, c)
-    // a hook that answers null still plans the pages as not planned: its pages are drawn by erase and restore
-    const hooked = await readBack(await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF, chainAddon: () => null }))
-    expect(hooked.parts.filter(p => p.layout !== null).every(p => Object.values(p.addon!.manifest.page).every(e => e.ok === false && e.refused === 'not planned'))).toBe(true)
+    for (const p of back.parts) for (const pg of Object.keys(p.rules ?? {}).map(Number)) expect(pg >= p.pages[0] && pg <= p.pages[1], `${pg} in ${p.pages}`).toBe(true)
+    expect(Object.assign({}, ...back.parts.map(p => p.rules ?? {}))).toEqual(rules)
+    expect(mergeParts(back.index, back.parts).rules).toEqual(rules)
+    await checkCut('small, cell rules', whole, c)
+    // (a Map of them alike, as the maker gives them)
+    const m = await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF, rules: new Map(Object.entries(rules).map(([k, v]) => [Number(k), v])) })
+    expect(m.parts.map(p => p.sha256)).toEqual(c.parts.map(p => p.sha256))
   })
 
-  it('carries the whole add-on\'s manifest without its tail: clean pages stay, removed pages and refused pages are refused', async () => {
-    const whole = wholeOf(SMALL)
-    // 8 pages: 1 clean; 2 removed (R page 9, dirty boxes, units); 3 refused by the remover; 4 clean with rules; 5 removed (R page 10);
-    // 6 refused; 7 clean; 8 removed (R page 11)
-    const page = {
-      1: { ok: true }, 2: { ok: true, units: { 3: [72, 640, 300, 660] }, at: { R: 9 }, dirty: [72, 640, 80, 650] }, 3: { ok: false, refused: 'a form painted twice' },
-      4: { ok: true, rules: [72, 500, 540, 500.4] }, 5: { ok: true, at: { R: 10 } }, 6: { ok: false, refused: 'not planned' }, 7: { ok: true }, 8: { ok: true, at: { R: 11 }, units: { 7: [72, 100, 200, 120] } },
-    }
-    const manifest = { schema: 1 as const, removal: REMOVAL, pages: 8, sets: {}, page, appended: 1234, stats: { removed: 3, rules: 1 } }
-    const c = await cutPlain({ ...whole, addon: { manifest } }, { leftPages: leftPagesOf(whole), base: BASE_OF })
-    const back = await readBack(c)
-    const entries = Object.assign({}, ...back.parts.map(p => p.addon!.manifest.page))
-    expect(entries[1]).toEqual({ ok: true })
-    expect(entries[2]).toEqual({ ok: false, refused: TAIL_NOT_CARRIED })
-    expect(entries[3]).toEqual({ ok: false, refused: 'a form painted twice' })
-    expect(entries[4]).toEqual({ ok: true, rules: [72, 500, 540, 500.4] })
-    expect(entries[5]).toEqual({ ok: false, refused: TAIL_NOT_CARRIED })
-    expect(entries[6]).toEqual({ ok: false, refused: 'not planned' })
-    expect(entries[7]).toEqual({ ok: true })
-    expect(entries[8]).toEqual({ ok: false, refused: TAIL_NOT_CARRIED })
-    for (const p of back.parts) { expect(p.addon!.tail).toBeNull(); expect(p.addon!.manifest.appended).toBe(0); expect(p.addon!.r).toBe(0) }
-    await checkCut('small, add-on manifest', whole, c)
-    // with the hook, the hook decides: the whole's manifest is not read
-    const hooked = await cutPlain({ ...whole, addon: { manifest } }, { leftPages: leftPagesOf(whole), base: BASE_OF, chainAddon: () => null })
-    const hookedBack = await readBack(hooked)
-    expect(Object.assign({}, ...hookedBack.parts.map(p => p.addon!.manifest.page))[1]).toEqual({ ok: false, refused: 'not planned' })
-  })
-
-  it('lets the hook\'s add-on take part in the fit: a manifest that overflows [2,3] shortens the part, hook calls counted, acceptAddon once for each final part', async () => {
-    // 3 pages of 550 headings of 4,000 characters (2.2 MB a page): [2,3] fits alone (4.4 MB), not with 2 × 300 KB of manifest boxes
+  it('lets the cell rules take part in the fit: rules that overflow [2,3] shorten the part', async () => {
+    // 3 pages of 550 headings of 4,000 characters (2.2 MB a page): [2,3] fits alone (4.4 MB), not with 2 × 600 KB of rules
     const units: PaperSpec['units'] = []
     for (let p = 1; p <= 3; p++) for (let k = 0; k < 550; k++) units.push({ stream: null, lines: [p], heading: 'x'.repeat(4000) })
     const whole = wholeOf({ pages: 3, units })
-    const heavy = (pages: number[]) => {
-      const page: Record<number, unknown> = {}
-      for (const p of pages) page[p] = { ok: true, rules: Array.from({ length: 15_000 }, () => [72, 500, 540, 500.4]).flat() }
-      return { manifest: { schema: 1 as const, removal: REMOVAL, pages: 3, sets: {}, page, appended: 0, stats: {} }, tail: null }
-    }
-    const asked: [number, number[]][] = [], accepted: [number, number[]][] = []
-    const chainAddon: NonNullable<CutOptions['chainAddon']> = (i, { pages }) => {
-      asked.push([i, pages])
-      return heavy(Array.from({ length: pages[1] - pages[0] + 1 }, (_, k) => pages[0] + k)) as never
-    }
-    const c = await cutPlain(whole, { leftPages: () => null, base: BASE_OF, chainAddon, acceptAddon: (i, { pages }) => { accepted.push([i, pages]) } })
+    const rules = Object.fromEntries([1, 2, 3].map(p => [p, Array.from({ length: 30_000 }, () => [72, 500, 540, 500.4]).flat()]))
+    const c = await cutPlain(whole, { leftPages: () => null, base: BASE_OF, rules })
     expect(fits(c)).toEqual([[1, 1], [2, 2], [3, 3]])
-    expect(asked).toEqual([[0, [1, 1]], [1, [2, 3]], [1, [2, 2]], [2, [3, 3]]])
-    expect(accepted).toEqual([[0, [1, 1]], [1, [2, 2]], [2, [3, 3]]])
-    // (the add-on the hook gave is in the part that was written, and the parts read)
     const back = await readBack(c)
-    expect(Object.keys(back.parts[1]!.addon!.manifest.page)).toEqual(['2'])
-    expect((back.parts[1]!.addon!.manifest.page[2] as { rules: number[] }).rules.length).toBe(60_000)
+    expect(back.parts.map(p => Object.keys(p.rules ?? {}))).toEqual([['1'], ['2'], ['3']])
+    expect(back.parts[1]!.rules![2]!.length).toBe(120_000)
   }, 120_000)
-
-  it('shortens a part whose tail passes TAIL_CAP: two 600 KiB per-page tails give one part a page, and a page whose tail alone passes it ships no layout', async () => {
-    const whole = wholeOf({ pages: 3, units: [1, 2, 3].map(p => ({ stream: p, rects: [p], lines: [p] })) })
-    const hook = (kib: number) => {
-      const asked: [number, number[]][] = [], accepted: [number, number[]][] = []
-      let removed = 0
-      const chainAddon: NonNullable<CutOptions['chainAddon']> = (i, { pages }) => {
-        asked.push([i, pages])
-        const count = pages[1] - pages[0] + 1
-        // (the tail of `count` removed pages: filler, then a classic cross-reference section)
-        const filler = new Uint8Array(kib * 1024 * count).fill(0x25)
-        const section = tailOf(10_000 + filler.length, 9_000, 12, 100 + removed, count)
-        const tail = new Uint8Array(filler.length + section.tail.length)
-        tail.set(filler)
-        tail.set(section.tail, filler.length)
-        const page: Record<number, unknown> = {}
-        for (let k = 0; k < count; k++) page[pages[0] + k] = { ok: true, at: { R: 3 + removed + 1 + k } }
-        return { manifest: { schema: 1 as const, removal: REMOVAL, pages: 3, sets: {}, page, appended: tail.length, stats: {} }, tail } as never
-      }
-      return { asked, accepted, chainAddon, acceptAddon: ((i: number, { pages }: { pages: [number, number] }) => { accepted.push([i, pages]); removed += pages[1] - pages[0] + 1 }) as never }
-    }
-    const h = hook(600)
-    const c = await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF, chainAddon: h.chainAddon, acceptAddon: h.acceptAddon })
-    expect(fits(c)).toEqual([[1, 1], [2, 2], [3, 3]])
-    expect(h.asked).toEqual([[0, [1, 1]], [1, [2, 3]], [1, [2, 2]], [2, [3, 3]]])
-    expect(h.accepted).toEqual([[0, [1, 1]], [1, [2, 2]], [2, [3, 3]]])
-    // a page whose tail alone is past TAIL_CAP: the existing fallback, the page ships with no layout, no add-on, no accept
-    const big = hook(1100)
-    const d = await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF, chainAddon: big.chainAddon, acceptAddon: big.acceptAddon })
-    expect(fits(d)).toEqual([[1, 1], [2, 2], [3, 3]])
-    expect(big.accepted).toEqual([])
-    expect((await readBack(d)).parts.every(p => p.layout === null && p.addon === null)).toBe(true)
-  }, 60_000)
 
   it('shortens a part whose layout passes a per-part bound (here 10,000 names)', async () => {
     const whole = wholeOf({ pages: 3, units: [], names: [1, 2, 3].flatMap(page => Array.from({ length: 6000 }, () => ({ page }))) })
@@ -364,22 +285,6 @@ describe('the cut of a small paper', () => {
     const back = await readBack(c)
     expect(back.parts.map(p => p.layout!.names.length)).toEqual([6000, 6000, 6000])
   }, 60_000)
-
-  it('takes a hook that returns null as the default add-on, and calls acceptAddon for it', async () => {
-    const whole = wholeOf(SMALL)
-    const accepted: [number, number[]][] = []
-    const c = await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF, chainAddon: () => null, acceptAddon: (i, { pages }) => { accepted.push([i, pages]) } })
-    expect(accepted).toEqual(fits(c).map((p, i) => [i, p]))
-    await checkCut('small, null hook', whole, c)
-  })
-
-  it('does not call the hook for a part with no layout, nor accept one', async () => {
-    const whole = wholeOf(SMALL, { layout: false })
-    const asked: number[] = [], accepted: number[] = []
-    await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF, chainAddon: i => { asked.push(i); return null }, acceptAddon: i => { accepted.push(i) } })
-    expect(asked).toEqual([])
-    expect(accepted).toEqual([])
-  })
 
   it('cuts at any split the target hook gives, and refuses one that is no page of the part', async () => {
     const whole = wholeOf(SMALL)
@@ -437,28 +342,27 @@ describe('partCutter: the cut a part at a time', () => {
     expect(cutter.verdicts).toEqual(ref.parts.map(() => null))
   })
 
-  it('a part the verdict refuses is the same pages with no layout, its add-on not accepted; the parts after it read on', async () => {
+  it('a part the verdict refuses is the same pages with no layout and no cell rules; the parts after it read on', async () => {
     const whole = wholeOf(SMALL)
-    const accepted: number[] = [], seen: [number, number][] = []
+    const seen: [number, number][] = []
     const verdict: NonNullable<CutOptions['verdict']> = ({ pages, input, written }) => {
       seen.push(pages)
       expect(input.part).not.toBeNull()
       expect(written.bytes.length).toBeGreaterThan(0)
       return pages[0] <= 2 && pages[1] >= 2 ? { refused: 'carry', lines: [1, 10] } : null
     }
-    const c = await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF, chainAddon: () => null, acceptAddon: i => { accepted.push(i) }, verdict })
+    const c = await cutPlain({ ...whole, rules: { 2: [72, 500, 540, 500.4] } } as Whole, { leftPages: leftPagesOf(whole), base: BASE_OF, verdict })
     expect(fits(c)).toEqual([[1, 1], [2, 3], [4, 7], [8, 8]])
     expect(seen).toEqual(fits(c))
-    expect(accepted).toEqual([0, 2, 3])
     const back = await readBack(c)
     expect(back.parts.map(p => p.layout === null)).toEqual([false, true, false, false])
-    expect(back.parts[1]!.addon).toBeNull()
+    expect(back.parts[1]!.rules).toBeNull()
     // the refused part tells its left units alone (unit 2, layout-only, is not told); the others as without a verdict
     expect(back.parts[1]!.fileOnly).toEqual([])
     const plain = await readBack(await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF }))
     expect(back.parts[1]!.left).toEqual(plain.parts[1]!.left)
     // and the cutter's record of it, beside cutBundle's
-    const { cutter, K, F } = await cutterOf(whole, { verdict, chainAddon: () => null })
+    const { cutter, K, F } = await cutterOf({ ...whole, rules: { 2: [72, 500, 540, 500.4] } } as Whole, { verdict, rules: { 2: [72, 500, 540, 500.4] } })
     for (;;) if ((await cutter.next({ K, F, layout: whole.layout })) === null) break
     expect(cutter.verdicts).toEqual([null, { refused: 'carry', lines: [1, 10] }, null, null])
     expect(keys(cutter.parts)).toEqual(keys(c.parts))
@@ -579,8 +483,8 @@ describe('table groups', () => {
     const paper = whole.paper
     const views = (a: number, b: number) => whole.left.pages.slice(a - 1, b).flat()
     // the column split as the pre-closure cut had it: cell 1 in the first part, cells 2 and 3 in the second
-    const first = await writePart({ paper, head: c.head.sha256, prev: null, pages: [1, 1], views: views(1, 1), left: [wire(0), wire(1)], fileOnly: [], layout: null, addon: null, leftParts: [c.left[0]!] })
-    const second = await writePart({ paper, head: c.head.sha256, prev: first.sha256, pages: [2, 3], views: views(2, 3), left: [wire(2), wire(3), wire(4), wire(5)], fileOnly: [], layout: null, addon: null, leftParts: [c.left[1]!, c.left[2]!] })
+    const first = await writePart({ paper, head: c.head.sha256, prev: null, pages: [1, 1], views: views(1, 1), left: [wire(0), wire(1)], fileOnly: [], layout: null, rules: null, leftParts: [c.left[0]!] })
+    const second = await writePart({ paper, head: c.head.sha256, prev: first.sha256, pages: [2, 3], views: views(2, 3), left: [wire(2), wire(3), wire(4), wire(5)], fileOnly: [], layout: null, rules: null, leftParts: [c.left[1]!, c.left[2]!] })
     const one = await readPart(first.bytes, { ref: first.ref, index: back.index, chain: null })
     const refused = await readPart(second.bytes, { ref: second.ref, index: back.index, chain: one.chain }).catch(e => e)
     expect(refused).toBeInstanceOf(BundleRefusal)
@@ -833,7 +737,7 @@ describe('a dense paper', () => {
     expect(fits(c)).toEqual([[1, 1], [2, 3]])
     const back = await readBack(c)
     expect(back.parts[0]!.layout).toBeNull()
-    expect(back.parts[0]!.addon).toBeNull()
+    expect(back.parts[0]!.rules).toBeNull()
     expect(back.parts[0]!.fileOnly).toEqual([])
     expect(back.parts[0]!.left.length).toBe(1300)
     expect(back.parts[1]!.layout).not.toBeNull()
@@ -853,19 +757,13 @@ describe('a dense paper', () => {
 
 // ---------------------------------------------------------------- the repository's own bundle
 describe('the sample paper\'s bundle (tests/fixtures/pdf/sample-1)', () => {
-  it('cuts and reads back, carrying its add-on manifest without the tail', async () => {
+  it('cuts and reads back, carrying its cell rules', async () => {
     const { readBundle } = await import('@/pdf-reader/engine/layer-proto/bundle.mjs')
     const whole = readBundle(new Uint8Array(readFileSync('tests/fixtures/pdf/sample-1/bundle.json'))) as unknown as Whole
     const c = await cutPlain(whole, { leftPages: () => null, base: { ...BASE_OF, bytes: whole.base.bytes, sha256: whole.base.sha256 } })
     await checkCut('sample-1', whole, c)
     const back = await readBack(c)
-    const was = (whole.addon as unknown as { manifest: { page: Record<string, { ok: boolean; at?: unknown }> } }).manifest.page
-    const now = Object.assign({}, ...back.parts.map(p => p.addon!.manifest.page)) as Record<string, { ok: boolean; refused?: string }>
-    for (const [k, e] of Object.entries(was)) {
-      if (!e.ok) expect(now[k]!.ok).toBe(false)
-      else if (e.at === undefined) expect(now[k]!.ok).toBe(true)
-      else expect(now[k]).toEqual({ ok: false, refused: TAIL_NOT_CARRIED })
-    }
+    expect(Object.assign({}, ...back.parts.map(p => p.rules ?? {}))).toEqual((whole as unknown as { rules: unknown }).rules ?? {})
   })
 })
 

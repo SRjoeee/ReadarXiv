@@ -235,7 +235,7 @@ describe('layerOfPaper: the page pass', () => {
     const w = worldOf()
     const got = await passOf(w, { marks: { refused: 'probe' } as never })
     expect(got.notes).toEqual([{ pages: [1, 1], layout: 'none', lines: [0, 0] }, { pages: [2, 3], layout: 'none', lines: [0, 0] }])
-    expect(got.r).toMatchObject({ count: 2, stats: { layout: { refused: 'probe' }, plans: null, addon: null } })
+    expect(got.r).toMatchObject({ count: 2, stats: { layout: { refused: 'probe' }, plans: null, rules: null } })
   })
 
   it('with TeX\'s refusal, the record keeps the unmarked original\'s verdict; each part\'s says why alone', async () => {
@@ -388,7 +388,7 @@ describe('layerOfPaper: a marked original of fewer pages than arXiv\'s PDF', () 
     for (const input of [{}, { whole: true }, { marks: null, marked: markedIn(w) }, { marks: null, marked: markedIn(w), whole: true }]) {
       const got = await passOf(w, input as never)
       const at = JSON.stringify(input)
-      expect(got.r, at).toMatchObject({ count: 2, stats: { layout: { refused: 'compile', why: 'the marked original has 2 pages, arXiv\'s PDF 3' }, plans: null, addon: null } })
+      expect(got.r, at).toMatchObject({ count: 2, stats: { layout: { refused: 'compile', why: 'the marked original has 2 pages, arXiv\'s PDF 3' }, plans: null, rules: null } })
       expect(got.notes, at).toEqual(none.notes)
       // (the left by the units' text alone, as with the compile refused: no unit mark of the short original bounds it)
       expect(got.told, at).toEqual(none.told)
