@@ -27,7 +27,7 @@ pnpm exec tsx lab/pdf/spikes/ocg-gate.mjs --pack=<pack>/fixtures --sources=<dir 
 | 2608.16117v1 | 40 | 40 | 0 | 5 | 0 | 0 | 0 | 273 | 441 | 46,002,255 → 46,174,044 | 139,397 → 171,785 | ok |
 | 2609.26457v1 | 28 | 28 | 0 | 6 | 0 | 4 | 6 | 230 | 499 | 778,565 → 935,395 | 221,649 → 246,937 | ok |
 | 2602.23285v2 | 19 | 19 | 0 | 0 | 0 | 0 | 0 | 286 | 448 | 28,100,694 → 28,213,099 | 451,755 → 488,592 | ok |
-| **All** | **290** | **290** | **0** | **38** | **1** | **9** | **54** | | | | **2,139,403 → 2,561,390** | **8/8** |
+| **All** | **290** | **290** | **0** | **38** | **1** | **9 (0 at `6eabd4bd`)** | **54** | | | | **2,139,403 → 2,561,390** | **8/8** |
 
 - `across`, `page` and `bounds` were 0 on every paper. Of the 38 `marks`, 24 are the title block's authors and `\thanks` notes,
   which the marker does not mark (the engine lane's item), and 14 table cells that open with a macro the marker sets no mark
@@ -39,7 +39,9 @@ pnpm exec tsx lab/pdf/spikes/ocg-gate.mjs --pack=<pack>/fixtures --sources=<dir 
   process holds; a page past WRAP_DECODED_PAGE or WRAP_HELD_PAGE is refused (a 2-million-operator plot: refused, heap peak 404
   MB, under a 768 MiB limit).
 - Against today's geometric ownership (the design's measure, `pagePlan` over the layout file; measured before this
-  spike, not by it): 1,732 of 1,806 units own the same glyphs (95.9 %; rules no longer counted in a unit's text).
+  spike, not by it): 1,732 of 1,806 units own the same glyphs (95.9 %; rules no longer counted in a unit's text). At
+  `6eabd4bd` (a lead macro after a label split from it as `.p`, a babel name never over a placeholder's ink): 1,740 of 1,806
+  (96.3 %), labels kept 0, `marks` 38 (the 14 cells unchanged), deltas 2,561,558 bytes; the Chromium tier not run again.
 
 ## Chromium
 
