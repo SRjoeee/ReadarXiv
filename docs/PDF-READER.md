@@ -2108,7 +2108,9 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   pages only inside the bodies, but a range outside them from page p to p + 1 at one depth (a continued footnote) is page p
   to the next unit's start in that region and page p + 1 from after the last other unit's end (over more pages: `across`); a
   unit with an end mark alone (a title) from the point before it that is not one of its own placeholders' (a title's
-  `$-$` or `:` sets points inside it: 2610.20848v1's title was read from its last one). A point's name is read in lower case:
+  `$-$` or `:` sets points inside it: 2610.20848v1's title was read from its last one); where that range opens with ink TeX
+  set before the title on lines of its own (amsart's date, a journal's header) and its last glyphs spell the title's source
+  exactly, those lines are left the page's (no group) and the title is the rest (none trimmed on a line of the title's own). A point's name is read in lower case:
   a class that sets a title or a heading by `\uppercase` (spconf's `\section`, amsart's `\title`) sets its marks' names in
   capitals with it (`/axt-H0E ri`). Placeholders `u<id>.p`: `stream.mjs ownedOf`'s entry (the marking's `follows`) read with
   `erasure`, which finds exactly what the maker's reading leaves LOST (the maker's layouts unchanged): the text after a piece

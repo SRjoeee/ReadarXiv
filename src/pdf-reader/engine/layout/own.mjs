@@ -351,7 +351,7 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
     // (a unit the marks name and the units do not: no source to spell it against, so the original's)
     if (units && !units[id]) { u.unhidden = 'marks'; continue }
     const src = units ? sourceOf(units[id]) : null
-    if (src !== null && spellOf(text.get(id)?.join('') ?? '') !== spellOf(src)) { u.unhidden = 'spell'; spell.push(id); continue }
+    if (src !== null && spellOf(text.get(id)?.join('') ?? '') !== spellOf(src) && !(textOf.get(id) && !textOf.get(id).s && trimLead(id, spellOf(src)))) { u.unhidden = 'spell'; spell.push(id); continue }
     const lead = label.get(id)
     if (lead) {
       const chars = lead.map(([p, i]) => pages[p - 1].glyphs[i].u ?? '').join('')
@@ -368,6 +368,26 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
     // would be drawn over that ink: the original's)
     if (units && !cellLead.has(id) && leadUnmarked(units[id], id)) { u.unhidden = 'marks'; u.labelKept = false; leaks.push(id); continue }
     if (u.labelKept) labelKept++
+  }
+  /** a unit with an end mark alone (a title) whose range, read from the point before it, opens with ink TeX set before it on
+   *  lines of its own (amsart's date before its title, a journal's header): where the range's last glyphs spell its source
+   *  exactly and every glyph before them stands on no line of theirs, those glyphs are left the page's (no group) and the
+   *  title is the rest. Ink on a line of the title's own cannot be told from it: none is trimmed there (2610.20581v1 p1u0) */
+  function trimLead(id, want) {
+    const mine = `u${id}`, list = []
+    for (let p = 1; p <= P; p++) gOwn[p - 1].forEach((g, i) => { if (g === mine) list.push([p, i]) })
+    const G = ([p, i]) => pages[p - 1].glyphs[i]
+    let acc = '', k = list.length
+    while (k > 0 && acc.length < want.length) { k--; acc = spellOf(G(list[k]).u ?? '') + acc }
+    if (acc !== want || k === 0) return false
+    const lead = list.slice(0, k), rest = list.slice(k)
+    for (const a of lead) {
+      if (!/\S/.test(G(a).u ?? '')) continue
+      if (rest.some(b => b[0] === a[0] && Math.abs(G(b).y - G(a).y) < 0.5 * Math.max(G(b).size, G(a).size))) return false
+    }
+    for (const [p, i] of lead) gOwn[p - 1][i] = null
+    text.set(id, rest.map(a => G(a).u ?? ''))
+    return true
   }
   /** whether a label's glyphs stand apart from the unit's text glyphs on their pages (no two boxes meet) */
   function apart(lead, id) {

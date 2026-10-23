@@ -131,6 +131,16 @@ describe('coverage: what the 2026-10-24 sweep left English', () => {
     expect(groupsOf(r, pages)).toEqual({ u0: 'Jose', u1: 'Study J17441134Towards', 'u1.p': '-:' })
     expect(r.units.get(1)?.unhidden).toBe(null)
   })
+  it('leaves what TeX set before a title on lines of its own the page\'s, where the title\'s source ends its range (2610.20581v1 p1u0)', () => {
+    // amsart sets the date before the title in the stream; the title's end mark alone, read from the column's start
+    const pages = [page([{ pt: 'bs2' }, 'October 15, 2026\n', 'ALL SERRIN BANDS', { pt: '0e' }])]
+    const r = ownOf(pages, { units: [{ kind: 'heading', src: 'All Serrin bands' }] })
+    expect(groupsOf(r, pages)).toEqual({ u0: 'ALL SERRIN BANDS' })
+    expect(r.units.get(0)?.unhidden).toBe(null)
+    // (on the title's own line: what stands before it cannot be told from it, the title the original's)
+    const one = [page([{ pt: 'bs2' }, 'JOUR ALL SERRIN BANDS', { pt: '0e' }])]
+    expect(ownOf(one, { units: [{ kind: 'heading', src: 'All Serrin bands' }] }).units.get(0)?.unhidden).toBe('spell')
+  })
   it('spells a spacing accent and a dotless i as the letters they set (2610.20595v1 p13u114, 2610.20581v1 p1u4)', () => {
     expect(spellOf('Ciˆencia e Tecnologia')).toBe(spellOf('Ciência e Tecnologia'))
     expect(spellOf('Estad´ısticas')).toBe(spellOf('Estadísticas'))
