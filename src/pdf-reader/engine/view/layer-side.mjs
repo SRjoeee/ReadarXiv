@@ -77,7 +77,8 @@ const linesOn = (layout, n) => (layout.lines ?? []).some(([, rows]) => { for (le
  *  holds a page by its pages, and also by its reach (`reach`: the last page its views and its layout run to) where its layout has
  *  lines there: a unit that runs on from a page of one part onto the next page is drawn there by the first part's layout, whose pages
  *  end before it, so such a part makes the page a laid one whatever the part that owns it records (a part whose views reach a page
- *  its layout draws nothing on does not). `layout` null: the engine's check refused the part, or its producer recorded none. A page
+ *  its layout draws nothing on does not; nor does the part that owns it, where its layout has no lines there: a page whose words
+ *  are not arXiv's page's lays no unit, and shows arXiv's page). `layout` null: the engine's check refused the part, or its producer recorded none. A page
  *  no part owns yet (its part not told) is not this, the door waits for it: a part that only reaches it does not make it the
  *  original's, since the part that owns it may come with a layout. The parts are in page order, so every part that can reach a page
  *  is read before the one that owns it */
@@ -86,7 +87,7 @@ export function noLayoutPage(parts, n) {
   for (const p of parts) {
     if (n < p.pages[0] || n > Math.max(p.pages[1], p.reach ?? 0)) continue
     const own = n <= p.pages[1]
-    if (p.layout !== null && (own || linesOn(p.layout, n))) return false
+    if (p.layout !== null && linesOn(p.layout, n)) return false
     if (own) owned = true
   }
   return owned

@@ -20,10 +20,11 @@ export interface MakeInput {
   pdfjs: string
   /** the base page's text as layout/arxiv.mjs readArxivText read it from `arxiv` (step T), else read by the maker */
   text?: ArxivText | null
-  /** the line check: our base page's lines in place on arXiv's PDF (carry.mjs lineCheckOf of the base page's tokens over
-   *  arXiv's: `placed`, else every line found), the file's share (`stats.lines`, CARRY_MIN) and each page's (`lines`,
-   *  `pageLines()`); none: no line checked */
-  lineCheck?: { lines: { total: number; same: number; moved: number; respaced: number; fuzzy: number; placed?: number }; pageLines: ReadonlyMap<number, readonly [number, number]> } | null
+  /** the line check (carry.mjs lineCheckOf of the base page's own tokens, `text`'s, over arXiv's). A unit is laid only where
+   *  every page it is on is drawable (`undrawable`; `stats.units.undrawn` the others), the file refused ('carry') where none is;
+   *  its line counts information (`stats.lines`, each page's in `lines` and `pageLines()`); none: no line checked, every unit
+   *  placed laid */
+  lineCheck?: import('./carry.mjs').LineCheck | null
   /** anchors.mjs floatMatches of `text`'s tokens and the units' texts, else searched by the maker */
   floatMatch?: Map<number, number[] | null> | null
   /** the pages' frame's rule the maker's anchors are placed under, given (a whole run's); else the rule set's: frameOfTokens
@@ -52,7 +53,8 @@ export interface LayoutStats {
   lines: { carried: number; total: number; held: number }
   /** `unplaced`: the units the text would place whose own marks stand on no page with ink, or not on their words (they stay
    *  the original's) */
-  units: { located: number; total: number; byKind: Record<string, [located: number, total: number]>; unplaced: number }
+  /** `undrawn`: the units placed on a page that is not drawable (the line check's), left the original's */
+  units: { located: number; total: number; byKind: Record<string, [located: number, total: number]>; unplaced: number; undrawn: number }
   /** `marked`: the placeholders of the located units the marked original marks (an opening mark at least), by kind
    *  found among them; `unmarked`: those it gives no mark (LOST, beside them); `symbols`: the text symbols it gives no
    *  mark drawn as their character (PH_FLAG.TEXT, beside them); `inferred`: those found whose end is
@@ -114,9 +116,8 @@ export declare function makerOf(o: MakeInput & { check?: boolean }): Promise<
   | {
     refused?: undefined; pages: number; stats: LayoutStats; readPage(p: number): Promise<void>; whole(): Promise<Made>; byTasks(pick?: (ready: readonly MakerTask[]) => number): Promise<Made>
     edges(): Map<string, [number, number]> | null
-    /** the marks as they stand and the line check's share (whole()'s first step): null, or 'carry' (too few lines found, or none
-     *  checked for parts) */
-    carrying(): 'carry' | null
+    /** the marks as they stand (whole()'s first step) */
+    carrying(): void
     /** whether the draws are read (the `draw` option): the head of the layer made says so */
     draw: boolean
     /** page p's draw geometry (the `draw` option), once: the held text is let go with it; null for none (not read, failed, a font a host
@@ -126,13 +127,13 @@ export declare function makerOf(o: MakeInput & { check?: boolean }): Promise<
     drawJsonOf(p: number): string | null
     /** the draw reads: pages kept, pages with none and by why, the encoded bytes, the ms */
     drawStats: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number; /** the draws' fills: the items and glyphs read, the items told one fill, those told in runs (layout/fills.mjs) */ fills: { items: number; glyphs: number; told: number; runs: number } }
-    /** each page's lines [found, total], the line check's (none where none is given) */
+    /** each page's lines [in place, total], the line check's (none where none is given): information */
     pageLines(): ReadonlyMap<number, readonly [carried: number, total: number]>
     /** the maker a page at a time (after carrying(), the columns' edges and the whole document's frame rule given); with `marked` (markedPages' head, the marks
      *  marksOfHead's), the marked original's pages given a page at a time too (`markedPage`, `markedEnd`), carrying() not run */
     stream(o?: { marked?: MarkedHead | null }): MakerStream
     /** carrying() (or the marked original's pages beside arXiv's, `marked`: its head and the events after it), then stream()
-     *  over every page read here, finished */
+     *  over every page read here, finished; or the line check's refusal ('carry': no unit laid, none in place) */
     byStream(marked?: { head: MarkedHead; events: AsyncIterable<MarkedEvent> } | null): Promise<MakerStream | { refused: 'carry'; stats: LayoutStats }>
   }
 >
@@ -142,8 +143,10 @@ export interface MakerStream {
   /** the marked original's page (markedPages' page event's), pages in order; its end after its last */
   markedPage(page: MarkedPage): void
   markedEnd(end: Extract<MarkedEvent, { end: unknown }>['end']): void
-  /** the line check's refusal, known from the start */
+  /** the line check's refusal ('carry': no unit laid), once finished; null before */
   carryRefusal(): 'carry' | null
+  /** the units the file holds so far */
+  laid(): number
   finish(): void
   /** each page's plan, made as the page is let go (null without `plans`) */
   plans: Map<number, PagePlan> | null
@@ -168,8 +171,6 @@ export declare const DEFAULT_RULES: Readonly<PageStreamRules>
 export declare const WHOLE_RULES: Readonly<PageStreamRules>
 /** a rule set checked, each rule DEFAULT_RULES' where it is not given; a TypeError for a rule or a value that is none */
 export declare function rulesOf(rules?: Partial<PageStreamRules> | null): PageStreamRules
-/** the share of the marked original's lines that must be carried, else no file */
-export declare const CARRY_MIN: number
 /** a page's operator list waited for at most, ms */
 export declare const OPS_MS: number
 /** a font's PostScript name as the file holds it: 1 to 128 printable ASCII characters */
