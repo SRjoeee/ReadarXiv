@@ -527,18 +527,23 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
  * What alignPage reads of PDF.js's operator list of a page (OPS, opList), its alignment facts: `codes`, for each
  * text-showing operation (showText, showSpacedText) outside an annotation's appearance, in order, its glyph objects'
  * character codes (`originalCharCode`; null for a glyph with none, which is not compared; -1 for one that is not a code,
- * which no code equals); `paths`, the number of constructPath operations outside an annotation. The facts are what a
+ * which no code equals); `paths`, the number of constructPath operations outside an annotation and a soft mask's group. The facts are what a
  * remover with no PDF.js aligns a page by: the page is aligned by them exactly as by the list. Pure
  */
 export function alignOf(OPS, opList) {
   const { fnArray, argsArray } = opList
   const codes = []
-  let paths = 0, inAnnot = 0
+  let paths = 0, inAnnot = 0, inMask = 0
+  // (a soft mask's group: PDF.js lists the content of an ExtGState's /SMask in a group of its own, which no content stream
+  // the walk reads paints: not the page's, as an annotation's appearance is not; 2610.19159v1 p3)
+  const groups = []
   for (let j = 0; j < fnArray.length; j++) {
     const fn = fnArray[j]
     if (fn === OPS.beginAnnotation) inAnnot++
     else if (fn === OPS.endAnnotation) inAnnot = Math.max(0, inAnnot - 1)
-    else if (inAnnot) continue
+    else if (fn === OPS.beginGroup) { const m = !!argsArray[j]?.[0]?.smask; groups.push(m); if (m) inMask++ }
+    else if (fn === OPS.endGroup) { if (groups.pop()) inMask-- }
+    else if (inAnnot || inMask) continue
     else if (fn === OPS.showText || fn === OPS.showSpacedText) {
       const gl = (argsArray[j]?.[0] ?? []).filter(g => g && typeof g === 'object')
       const row = new Array(gl.length)

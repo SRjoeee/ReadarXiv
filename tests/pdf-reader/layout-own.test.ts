@@ -5,9 +5,9 @@ import { isLabelForm, ownOf, spellOf } from '@/pdf-reader/engine/layout/own.mjs'
 // Each unit's own ink by its marks in stream order (layout/own.mjs; design docs/route/ocg-erasure.md §1): the rules MR 1–6 on
 // pages written as a stream of points and glyphs, the spell check and the label kept
 
-type Item = string | { pt: string } | { rule: [number, number, number, number] }
+type Item = string | { pt: string } | { rule: [number, number, number, number] } | { dx: number }
 /** a page of a stream: a string a glyph a character (on the baseline `y`, one unit wide, from x), `{ pt }` a point, `{ rule }` a
- *  painted path's box; `\n` moves to the next line */
+ *  painted path's box, `{ dx }` a gap of dx before the next glyph; `\n` moves to the next line */
 function page(items: Item[]) {
   const glyphs: { n: number; k: number; u: string; x0: number; x1: number; y: number; size: number; top: number; bottom: number }[] = []
   const points: { name: string; glyph: number; box: number }[] = [], boxes: number[] = [], paths: number[] = [], boxAt: number[] = []
@@ -21,7 +21,8 @@ function page(items: Item[]) {
         n++
         x += 5
       }
-    } else if ('pt' in it) points.push({ name: it.pt, glyph: glyphs.length, box: boxes.length / 4 })
+    } else if ('dx' in it) x += it.dx
+    else if ('pt' in it) points.push({ name: it.pt, glyph: glyphs.length, box: boxes.length / 4 })
     else { boxes.push(...it.rule); paths.push(paths.length) }
   }
   return { glyphs, points, boxes, paths, boxAt, view: [0, 0, 612, 792] }
@@ -116,5 +117,48 @@ describe('the spell check (§1.3)', () => {
   it('knows a label\'s forms', () => {
     for (const t of ['1', '3.2.', '(a)', 'Figure 1.1 –', 'Table 10:', 'iv.', '•', 'Remark.', '']) expect(isLabelForm(t), t).toBe(true)
     for (const t of ['BERT', '2 1 1 ×', 'JOUR', 'LOC']) expect(isLabelForm(t), t).toBe(false)
+  })
+})
+
+// ---- the sweep of 2026-10-24 (staging 5fb92292, pin dd56fcc5): units left English whose ink could be owned
+describe('coverage: what the 2026-10-24 sweep left English', () => {
+  it('reads a title with an end mark alone back past its own placeholders\' points, never past another unit\'s (2610.20848v1 p1u1)', () => {
+    // "Study of pulse jitter characteristics of PSR J1744{−}1134{:} Towards …": the point before the end mark is the title's own
+    // placeholder's closing point; the author before it (u0) keeps its own ink
+    const pages = [page([{ pt: '0s' }, 'Jose', { pt: '0e' }, { pt: 'bs1' }, 'Study J1744', { pt: 'p1.1a' }, '-', { pt: 'p1.1b' }, '1134', { pt: 'p1.3a' }, ':', { pt: 'p1.3b' }, 'Towards', { pt: 'h1e' }])]
+    const title = { kind: 'heading', pieces: [{ t: 'text', s: 'Study J1744' }, { t: 'ph', src: '$-$' }, { t: 'text', s: '1134' }, { t: 'ph', src: '$:$' }, { t: 'text', s: ' Towards' }] }
+    const r = ownOf(pages, { units: [{ src: 'Jose' }, title] })
+    expect(groupsOf(r, pages)).toEqual({ u0: 'Jose', u1: 'Study J17441134Towards', 'u1.p': '-:' })
+    expect(r.units.get(1)?.unhidden).toBe(null)
+  })
+  it('spells a spacing accent and a dotless i as the letters they set (2610.20595v1 p13u114, 2610.20581v1 p1u4)', () => {
+    expect(spellOf('Ciˆencia e Tecnologia')).toBe(spellOf('Ciência e Tecnologia'))
+    expect(spellOf('Estad´ısticas')).toBe(spellOf('Estadísticas'))
+    expect(spellOf('Jo˜ao')).toBe(spellOf('João'))
+    // (a letter still differs)
+    expect(spellOf('Ciencia')).not.toBe(spellOf('Ciancia'))
+  })
+  it('owns a cell\'s lead macro set before its start mark, abutting its text, as its placeholder (2610.21098v1 p13u136)', () => {
+    // "Completion cap | \\CompletionTokenCap{} tokens per request": TeX set the macro's "1,024" after the cell before's end and
+    // before this cell's start mark
+    const pages = [page([{ pt: 't0s' }, 'Completion cap', { pt: 't0e' }, { dx: 30 }, '1,024 ', { pt: 't1s' }, 'tokens per request', { pt: 't1e' }])]
+    const cells = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Completion cap' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\CompletionTokenCap{}' }, { t: 'text', s: ' tokens per request ' }] }]
+    const r = ownOf(pages, { units: cells })
+    expect(groupsOf(r, pages)).toEqual({ u0: 'Completion cap', u1: 'tokens per request', 'u1.p': '1,024 ' })
+    expect([r.units.get(0)?.unhidden, r.units.get(1)?.unhidden]).toEqual([null, null])
+    expect(r.stats.leaks).toEqual({ count: 0, units: [] })
+  })
+  it('never takes a neighbour cell\'s ink across a column\'s gap for a cell\'s lead: that cell the original\'s (the neighbour check)', () => {
+    // an unmarked number cell ("80.8") a column's gap before the macro's ink: the run stops at the gap, and what stands apart
+    // from the start is not the macro's for certain
+    const pages = [page([{ pt: 't0s' }, 'Ours', { pt: 't0e' }, { dx: 20 }, '80.8', { dx: 20 }, 'BERT', { dx: 20 }, { pt: 't1s' }, '(Single)', { pt: 't1e' }])]
+    const cells = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Ours' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\bert' }, { t: 'text', s: ' (Single)' }] }]
+    const r = ownOf(pages, { units: cells })
+    expect(r.units.get(1)?.unhidden).toBe('marks')
+    expect(groupsOf(r, pages)).toEqual({ u0: 'Ours', u1: '(Single)' })
+    const near = [page([{ pt: 't0s' }, 'Ours', { pt: 't0e' }, { dx: 20 }, '80.8', { dx: 20 }, 'BERT ', { pt: 't1s' }, '(Single)', { pt: 't1e' }])]
+    const n = ownOf(near, { units: cells })
+    expect(groupsOf(n, near)).toEqual({ u0: 'Ours', u1: '(Single)', 'u1.p': 'BERT ' })
+    expect(n.units.get(1)?.unhidden).toBe(null)
   })
 })

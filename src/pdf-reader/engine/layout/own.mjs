@@ -44,6 +44,9 @@ export const SPELL_LIST_MAX = 64
 
 const START = /^([th]?)(\d+)s$/
 const END = /^([th]?)(\d+)e$/
+/** a cell's lead macro's ink abuts its start: each gap under this share of an em (a word's space is a third; two \\tabcolsep
+ *  between columns are more than one) */
+const CELL_ABUT = 0.6
 const OPENING = /^([pn])(\d+)\.(\d+)a$/
 const CLOSING = /^([pn])(\d+)\.(\d+)b$/
 const NAME_START = /^n(\d+)\.([a-z]{1,16})\.s$/
@@ -51,7 +54,9 @@ const NAME_END = /^n(\d+)\.([a-z]{1,16})\.e$/
 const BRACKET = /^[bf][se]\d+$/
 
 /** a text's evidence for the spell check: its letters and digits, without their accents, lower case */
-export const spellOf = s => s.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/ß/g, 'ss').replace(/[^\p{L}\p{N}]/gu, '')
+// (a spacing accent — OT1's \\^ sets ˆ beside its letter, a modifier letter to Unicode — is no letter, and a dotless ı or ȷ under an
+// accent is its letter: 2610.20595v1 "Ciˆencia", 2610.20581v1 "Estad´ısticas")
+export const spellOf = s => s.normalize('NFKD').replace(/[\p{M}\p{Lm}\p{Sk}]/gu, '').toLowerCase().replace(/ß/g, 'ss').replace(/ı/g, 'i').replace(/ȷ/g, 'j').replace(/[^\p{L}\p{N}]/gu, '')
 /** a label's form (§1.3): a number or an item's mark, maybe a caption's or a section's name before it, in brackets or with a
  *  stop after it — of its characters, NFKC, lower case, no white space */
 const LABEL_NAME = '(?:figure|fig\\.?|table|tab\\.?|algorithm|alg\\.?|listing|section|sec\\.?|chapter|appendix|part|step|case|example|definition|lemma|theorem|proposition|corollary|remark|claim|note|assumption|exercise|problem|equation|eq\\.?|proof|keywords?|index ?terms)'
@@ -165,7 +170,13 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
     } else {
       // MR 3: from the point before the end mark on its page (or the page's start); its glyphs alone, no rule: what stands
       // above a title (a class's rule over it) is no title's, and the spell check reads no rule
-      const prev = e[1] > 0 ? [e[0], e[1] - 1] : null
+      // (the point before it not its own placeholder's: a title's placeholder — a dash, a colon in math — sets points in it,
+      // 2610.20848v1 p1u1)
+      const P1 = pages[e[0] - 1].points
+      let q0 = e[1] - 1
+      for (; q0 >= 0; q0--) { const m = OPENING.exec(P1[q0].name) ?? CLOSING.exec(P1[q0].name); if (!m || Number(m[2]) !== id) break }
+      work += e[1] - q0
+      const prev = q0 >= 0 ? [e[0], q0] : null
       list = prev ? take(prev, e, at(e)) : takeFromStart(e, at(e))
       list = { glyphs: list.glyphs, boxes: [] }
     }
@@ -231,8 +242,37 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
     claim(lead, `u${id}.l`, 'l')
   }
 
+  // ---- a cell's lead macro (MR 5b): a cell that opens with a placeholder of no mark of its own (\\CompletionTokenCap{}, \\#,
+  // \\bertbase) has that ink set before its start mark, on its line, after the point before it. A cell takes no label, and what
+  // stands before it on its line may be an unmarked cell's (a number): so the placeholder's ink is only the run that abuts the
+  // start — each glyph less than CELL_ABUT of an em from the next — never across a column's gap (\\tabcolsep on each side):
+  // ink in no group past that gap is another cell's, left standing. A cell with no such run (its macro's ink apart from its
+  // start) is the original's, as before (leadUnmarked); 2610.21098v1 p13
+  const cellLead = new Set()
+  for (const [id, { s }] of textOf) {
+    if (!s || !units || !(units[id]?.kind === 'cell' || pt(s).name.startsWith('t')) || !opensUnmarked(units[id], id)) continue
+    if (work > OWN_WORK) { unit(id).unhidden ??= 'marks'; continue }
+    const [p, q] = s, pg = pages[p - 1], S = pt(s), r = at(s), R = regions[p - 1]
+    if (S.glyph >= pg.glyphs.length) continue
+    const F = pg.glyphs[S.glyph], from = q > 0 ? pg.points[q - 1].glyph : 0
+    const run = []
+    let right = F
+    work += S.glyph - from
+    for (let g = S.glyph - 1; g >= from; g--) {
+      const G = pg.glyphs[g]
+      if (R.glyph[g] !== r || gOwn[p - 1][g] !== null || Math.abs(G.y - F.y) >= 0.5 * Math.max(G.size, F.size)) break
+      if (right.x0 - G.x1 >= CELL_ABUT * Math.max(G.size, right.size)) break
+      run.push([p, g])
+      right = G
+    }
+    if (!run.some(([, g]) => /\S/.test(pg.glyphs[g].u ?? ''))) continue
+    claim({ glyphs: run.reverse() }, `u${id}.p`, 'p')
+    cellLead.add(id)
+  }
+
   // ---- the placeholders (MR 4)
-  const owned = follows ? ownedOf(pages.map((pg, i) => streamPage(pg, i)), { follows }) : null
+  // (the erasure's reading: stream.mjs ownedOf `erasure`, a piece's ink found exactly where the maker's reading leaves it LOST)
+  const owned = follows ? ownedOf(pages.map((pg, i) => streamPage(pg, i)), { follows, erasure: true }) : null
   for (const [name, list] of where) {
     const m = OPENING.exec(name)
     if (!m) continue
@@ -326,7 +366,7 @@ export function ownOf(pages, { units = null, follows = null } = {}) {
     // (a unit that opens with a placeholder of ink the marker set no mark for, and ink still in no group on its start's line
     // before its start mark — a cell's, where the label rule does not split it, or one its label was left: the placeholder
     // would be drawn over that ink: the original's)
-    if (units && leadUnmarked(units[id], id)) { u.unhidden = 'marks'; u.labelKept = false; leaks.push(id); continue }
+    if (units && !cellLead.has(id) && leadUnmarked(units[id], id)) { u.unhidden = 'marks'; u.labelKept = false; leaks.push(id); continue }
     if (u.labelKept) labelKept++
   }
   /** whether a label's glyphs stand apart from the unit's text glyphs on their pages (no two boxes meet) */

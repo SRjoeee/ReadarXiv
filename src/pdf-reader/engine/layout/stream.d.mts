@@ -16,13 +16,14 @@ export interface StreamPage { glyphs: StreamGlyphs; boxes: number[]; points: Ink
 /** what the marking says of a piece with an opening point: `closing`, it has a closing mark; `want`, the first WANT
  *  characters of the text after it in its unit (NFKC, lower case, no white space), '' for none; `ends`, the names of
  *  its unit's next marks (the next marked piece's opening mark, the unit's end marks); `blocked`, a visible piece with no
- *  mark follows it with no text between; `group`, a display's display group: the opening marks' names of the displays
+ *  mark follows it with no text between; `through` (the erasure's), past such pieces with nothing but white space between,
+ *  the next marked piece's opening mark, else null; `group`, a display's display group: the opening marks' names of the displays
  *  right after it with nothing visible between that have no opening point (the text after it and its next piece then
  *  the last one's) */
-export interface Follow { closing: boolean; want: string; ends: string[]; blocked: boolean; group?: string[] }
+export interface Follow { closing: boolean; want: string; ends: string[]; blocked: boolean; through?: string | null; group?: string[] }
 export interface Owned { how: number; glyphs: [page: number, index: number][]; boxes: [page: number, index: number][] }
 /** each piece's own glyphs and rules in the marked compile, by its opening point's name */
-export declare function ownedOf(pages: readonly StreamPage[], o: { follows: (name: string) => Follow | null; dropped?: readonly string[] }): Map<string, Owned>
+export declare function ownedOf(pages: readonly StreamPage[], o: { follows: (name: string) => Follow | null; dropped?: readonly string[]; erasure?: boolean }): Map<string, Owned>
 /** ownedOf a page at a time: the pages added in order (`add`), each piece found once every page it may read is in (`take`,
  *  over the window held: `pages[p - 1]` page p), the rest at `end`; `twice()` the point names read more than once (the
  *  caller's 'a mark set twice'). `closing(name)`: the page of an opening point's piece's closing destination, or null */
