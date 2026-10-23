@@ -4,6 +4,8 @@ import type { SourceUnit } from '../source/latex-front.mjs'
 /** the share of a column's cells that must come back as they went for the column to be kept as names */
 export declare const NAMES_SHARE: number
 /** a cell's consistency group, or null for a unit outside a table read by its structure */
+/** whether a table cell's box is other cells' too: it spans columns or rows (\\multirow, \\multicolumn among its pieces) */
+export declare function cellSpans(u: { cell?: { span?: number } | null; pieces?: readonly { t?: string; s?: string; src?: unknown }[] } | null | undefined): boolean
 export declare function groupOf(u: SourceUnit | null | undefined): string | null
 /** whether a translation is its source but for white space and the case of single letters */
 export declare function unchanged(src: string, tr: string): boolean

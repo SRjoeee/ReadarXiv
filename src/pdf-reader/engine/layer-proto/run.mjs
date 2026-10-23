@@ -49,6 +49,7 @@
 //   The paper's family is read from its first page's fonts as the engine reads a layout file's (font-roles.mjs
 //   familyOfFonts). faces: 'prototype' draws in the prototype's own system faces and Latin Modern, as the approved
 //   prototype did (its floor's numbers).
+import { cellSpans } from '../translate/groups.mjs'
 import { checkAll } from './check.mjs'
 import { familyOfFonts } from '../rules/font-roles.mjs'
 import { bodyFaceId, classifyFont, faceOf, fontString, loadWebFaces, OPEN_FAMILY, roleFaceSet, runsOfTokens, styleKey, setRoleFaces } from './fonts.mjs'
@@ -741,9 +742,10 @@ export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
  * `OPS` (PDF.js's operator codes, the host's): a page read live reads its characters' fills off the list PDF.js drew it by
  * (liveFillsOf), as its draw tells them; without it such a page tells none.
  */
-/** whether a table cell's box is other cells' too: it spans columns (its `cell.span`) or rows (a \\multirow, or a
- *  \\multicolumn its span does not tell, among its pieces) */
-export const cellSpans = u => (u?.cell?.span ?? 1) > 1 || (Array.isArray(u?.pieces) ? u.pieces : []).some(p => /\\multi(?:row|column)(?![A-Za-z])/.test(typeof p?.src === 'string' ? p.src : ''))
+/** whether a table cell's box is other cells' too (translate/groups.mjs cellSpans), of the unit openProto holds: the source
+ *  unit's, which rows.mjs unitOf carries (`spans`, a translated row keeping no piece of its \\multirow), else the unit's own */
+export const unitSpans = u => (typeof u?.spans === 'boolean' ? u.spans : cellSpans(u))
+export { cellSpans }
 
 export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, batch = 8, phMode = 'auto', order: orderIn = null, faces = 'roles', faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex, copy = true, hiding = null, labels = null, rules = BUILTIN_RULES, parts: partsMode = false, onRetired = null, onStep = null, onWait = null, free = false, records = true, drawOf = null, drawsComing = false, OPS = null }) {
   if (expect !== null && (!Array.isArray(expect) || !expect.every(id => Number.isSafeInteger(id) && id >= 0))) throw new TypeError(`expect: ids of units or null, not ${kindOf(expect)}`)
@@ -1232,7 +1234,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (a cell whose ink the file cannot hide is the original's alone, the rest of its group drawn: coverage first, the
     // coordinator's ruling of 2026-10-24 — but one spanning columns or rows (\\multicolumn, \\multirow), whose box is the
     // others' too, keeps the group whole; and so does one that fails the spell check, whose range may hold a sibling's ink)
-    const kept = id => { const d = candOf.has(id) ? decisionOf(candOf.get(id)) : null; return !!d && !d.p && d.skip?.code === 'unhidden' && d.skip.why !== 'unhidden: spell' && !cellSpans(U.get(id)) }
+    const kept = id => { const d = candOf.has(id) ? decisionOf(candOf.get(id)) : null; return !!d && !d.p && d.skip?.code === 'unhidden' && d.skip.why !== 'unhidden: spell' && !unitSpans(U.get(id)) }
     const cells = ids.filter(id => translated(U.get(id)) && !kept(id))
     if (!cells.length) return
     groupCells.set(g, cells)

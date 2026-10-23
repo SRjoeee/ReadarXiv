@@ -36,6 +36,10 @@ export const NAMES_SHARE = 0.4
 
 /** a cell's group: `<table>:h` for the header's cells, `<table>:c<col>` for a column's, `<table>:c<col>+<span>` for the
  *  cells spanning the same columns; null for a unit outside a table read by its structure */
+/** whether a table cell's box is other cells' too: it spans columns (its `cell.span`) or rows (a \\multirow, or a
+ *  \\multicolumn its span does not tell, among its source pieces) */
+export const cellSpans = u => (u?.cell?.span ?? 1) > 1 || (Array.isArray(u?.pieces) ? u.pieces : []).some(p => /\\multi(?:row|column)(?![A-Za-z])/.test(typeof p?.src === 'string' ? p.src : ''))
+
 export function groupOf(u) {
   const c = u?.cell
   if (!c) return null

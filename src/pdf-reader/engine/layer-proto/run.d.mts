@@ -288,6 +288,8 @@ export interface HidingOptions {
 }
 /** whether a table cell's box is other cells' too: it spans columns or rows (\\multirow, \\multicolumn) */
 export declare function cellSpans(u: { cell?: { span?: number } | null; pieces?: readonly { t?: string; s?: string; src?: unknown }[] } | null | undefined): boolean
+/** whether a cell openProto holds spans others' boxes: the source unit's (rows.mjs unitOf `spans`), else cellSpans of its own */
+export declare function unitSpans(u: { spans?: boolean; cell?: { span?: number } | null; pieces?: readonly { t?: string; s?: string; src?: unknown }[] } | null | undefined): boolean
 export declare function openProto(o: {
   doc: { numPages: number; getPage(n: number): Promise<unknown> }
   geometry: Geometry
