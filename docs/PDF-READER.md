@@ -1987,16 +1987,20 @@ staging). BUNDLE stays 8 and LAYOUT 16: the layout file does not change; the bas
   unit with an end mark alone (a title) from the point before it. Placeholders `u<id>.p`: `stream.mjs ownedOf`'s entry
   (the marking's `follows`); a footnote call is its unit's `.p` too. Label `u<id>.l`: the glyphs on the start's first glyph's
   baseline between the previous unit's end mark and the start, the placeholders' and names' ranges passed over. Babel name
-  `n<occ>`: between `n<occ>.<key>.s` and `.e`. A glyph is one group's: a placeholder's or a name's over the text's, the
-  text's over a label's, the first text's over a later. Images and forms are no unit's (a form whose ink is all one group's
+  `n<occ>`: between `n<occ>.<key>.s` and `.e`, but never over a placeholder's ink (cleveref's "Appendix" inside a `\cref` is
+  the reference's). A glyph is one group's: a placeholder's or a name's over the text's, the text's over a label's, the first
+  text's over a later. A unit that opens with a placeholder of no mark of its own (a paper's macro first in it: `\bert`,
+  `\aidehuman`) has that ink before its start mark, after its label: on a unit's first line nothing else stands between the
+  unit before it and its start, so the run there is split, its longest opening that is a label's form and ends a word the
+  label (`.l`), the rest that placeholder's ink (`.p`). Images and forms are no unit's (a form whose ink is all one group's
   is wrapped whole). A unit's text takes its glyphs alone, never a rule: a rule in its range (a footnote's separator, a
   class's rule above a title, an underline) is the page's and stays; a placeholder's rules are its `.p`.
   A table cell (`t<id>s`) takes no label (what stands before it on its line is another cell's). Marks absent, twice or out of
   order, a unit the paper's units lack, a placeholder whose ink cannot be told apart (its range lost: hidden with the text,
   it could not be kept in place, and the spell check reads no symbol), or a unit that opens with a placeholder of no mark of
-  its own whose ink stands, in no group, on its start's line before its start mark (a paper's macro first in a table's cell,
-  `\bertlarge`: TeX sets it before the cell's start mark; the reader would draw it over that ink; owning it as the unit's
-  lead is not exact, the number cells before it on the row being unmarked too): `marks`, each listed in the record's
+  its own whose ink still stands, in no group, on its start's line before its start mark (a table's cell, `\bertlarge` first
+  in it: a cell takes no lead, the number cells before it on the row being unmarked too; the reader would draw the
+  placeholder over that ink): `marks`, each listed in the record's
   `own.leaks` (14 cells on the pack: 1810.04805v2's model names, 1512.03385v1's `\#` columns). The ownership visits at most `OWN_WORK`
   20 million glyphs and boxes (real ranges cost the ink once), over every loop (text, labels, placeholders, names); past it a
   unit is `marks`.
@@ -2067,7 +2071,7 @@ staging). BUNDLE stays 8 and LAYOUT 16: the layout file does not change; the bas
 - **Measured** (2026-10-23, the gate pack's 7 papers in Chinese and 2602.23285v2, the sources' units): every page wrapped
   (290/290, 0 refused, the proof passing on all); `spell` 1 unit of 1,806 (2608.04322v1 u0: its journal header over-taken),
   `marks` 38 (24 the title block's authors and `\thanks` notes the marker does not mark, the engine lane's item; 14 cells that
-  open with an unmarked macro), `across` 0, labels kept 9; ownership equal to today's geometric ownership on 1,732 of 1,806 units (95.9 %: the rest the marks' own over
+  open with an unmarked macro), `across` 0, labels kept 0 (the earlier 9 were each a label and a lead macro, now split); ownership equal to today's geometric ownership on 1,740 of 1,806 units (96.3 %: the rest the marks' own over
   today's residue, a table's row header today calls a cell's label, a babel name, the unmarked authors); 54 shows split; 230 to
   981 groups a paper. The wrap 0.4 to 1.9 s a paper in Node with PDF.js's lite worker (the 147-page thesis 1.9 s), +165 MB
   at most beside what the maker holds (the 46 MB pair); the wrapped base 0.4 % to 23 % larger (the thesis 3.08 to 3.79 MB);
