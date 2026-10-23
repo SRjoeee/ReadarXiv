@@ -89,28 +89,34 @@ describe('layerOfPaper over our base page (BUNDLE 8)', () => {
     expect(noTree.head.base).toMatchObject({ source: 'arxiv', why: 'final' })
   })
 
-  it('a base of ours re-broken from page 2 on (another TeX Live): the unit in place laid, the others left the original\'s; none in place, it falls back, `carry`', async () => {
-    // (every line of arXiv's pages 2 and 3 a line lower than ours: found, moved whole, 12 pt off; page 1 in place, 10 of 30)
+  it('a base of ours whose pages 2 and 3 are not arXiv\'s (their lines on the other page): page 1\'s unit laid, the others left the original\'s; no page arXiv\'s, it falls back, `carry`', async () => {
+    // (arXiv's pages 2 and 3 hold our pages 3 and 2: every line found, on another page; page 1 in place, 10 of 30)
     const w = worldOf()
-    const lower = { ...w, pages: (w.pages as Page[]).map((p, i) => (i === 0 ? p : { runs: p.runs.map(r => ({ ...r, y: r.y - 12 })) })) }
+    const at = (order: number[]) => order.map(i => (w.pages as Page[])[i] as Page)
+    const lower = { ...w, pages: at([0, 2, 1]) }
     const units = (got: Awaited<ReturnType<typeof passOf>>) => got.parts.map(p => p.layout?.units.map(u => u[0]) ?? null)
     for (const whole of [false, true]) {
       const got = await passOf(lower, { orig: ORIG, ours: oursOf(lower), whole })
       expect(got.head.base, String(whole)).toMatchObject({ source: 'ours', check: { carried: 0.3333 } })
       expect(units(got)).toEqual([[0], []])
       expect(got.notes.map(n => (n as { lines: unknown }).lines)).toEqual([[10, 10], [0, 20]])
-      expect(got.r).toMatchObject({ stats: { layout: { stats: { units: { located: 1, unverified: 2 } } } } })
+      expect(got.r).toMatchObject({ stats: { layout: { stats: { units: { located: 1, undrawn: 2 } } } } })
     }
-    // (every page a line lower: no unit laid, arXiv's PDF the base, every part with no layout, in the stream as made whole)
-    const all = { ...w, pages: (w.pages as Page[]).map(p => ({ runs: p.runs.map(r => ({ ...r, y: r.y - 12 })) })) }
-    const why = '0 of the 3 units verified in place on arXiv\'s PDF'
+    // (no page arXiv's: no unit laid, arXiv's PDF the base, every part with no layout, in the stream as made whole)
+    const all = { ...w, pages: at([1, 2, 0]) }
+    const why = '0 of the 3 units on a page that is arXiv\'s page'
     for (const whole of [false, true]) {
       const got = await passOf(all, { orig: ORIG, ours: oursOf(all), whole })
       expect(got.head.base, String(whole)).toEqual({ source: 'arxiv', ...ORIG, why: 'carry' })
       expect(got.head.orig).toBeNull()
       expect(got.parts.map(p => p.noLayout)).toEqual([{ refused: 'carry', why }, { refused: 'carry', why }])
-      expect(got.r).toMatchObject({ stats: { layout: { refused: 'carry', stats: { units: { located: 0, unverified: 3 } } } } })
+      expect(got.r).toMatchObject({ stats: { layout: { refused: 'carry', stats: { units: { located: 0, undrawn: 3 } } } } })
     }
+    // (every line a line lower, the same words on each page: every page drawable, every unit laid, no line in place)
+    const lowered = { ...w, pages: (w.pages as Page[]).map(p => ({ runs: p.runs.map(r => ({ ...r, y: r.y - 12 })) })) }
+    const drawn = await passOf(lowered, { orig: ORIG, ours: oursOf(lowered) })
+    expect(drawn.head.base).toMatchObject({ source: 'ours', check: { carried: 0 } })
+    expect(units(drawn)).toEqual([[0], [1, 2]])
     // (half a point off is still in place)
     const near = { ...w, pages: (w.pages as Page[]).map(p => ({ runs: p.runs.map(r => ({ ...r, y: r.y - 0.4 })) })) }
     expect((await passOf(near, { orig: ORIG, ours: oursOf(near) })).head.base).toMatchObject({ source: 'ours', check: { carried: 1 } })

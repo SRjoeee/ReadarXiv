@@ -610,10 +610,15 @@ describe('L17: a layer over our own compile (the layer route, design §3.2): its
     expect(noLayoutPage([part(1, 1, null, 2)], 2)).toBe(false)
     expect(noLayoutPage([part(1, 1, rows(1, 2), 2)], 2)).toBe(false)
     // (a unit running on from the page before can put one page in two parts\' ranges)
-    expect(noLayoutPage([part(1, 2, rows), part(2, 3, null)], 2)).toBe(false)
+    expect(noLayoutPage([part(1, 2, rows(1, 2)), part(2, 3, null)], 2)).toBe(false)
     expect(noLayoutPage([part(1, 2, null), part(2, 3, null)], 2)).toBe(true)
-    expect(noLayoutPage([part(1, 2, null), part(2, 3, rows)], 3)).toBe(false)
-    expect(noLayoutPage([part(1, 2, null), part(3, 4, rows)], 2)).toBe(true)
+    expect(noLayoutPage([part(1, 2, null), part(2, 3, rows(3))], 3)).toBe(false)
+    expect(noLayoutPage([part(1, 2, null), part(3, 4, rows(3, 4))], 2)).toBe(true)
+    // (a part with a layout that lays nothing on a page it owns: that page is the original's, as a layoutless part's; the pages
+    // with its rows are laid)
+    expect(noLayoutPage([part(1, 3, rows(1, 2))], 3)).toBe(true)
+    expect(noLayoutPage([part(1, 3, rows(1, 2))], 2)).toBe(false)
+    expect(noLayoutPage([part(1, 3, rows(1, 2)), part(4, 4, rows(4))], 3)).toBe(true)
     // no part holds the page yet (its part not told): not the original\'s by this rule, the door waits for it
     expect(noLayoutPage([part(1, 2, null)], 3)).toBe(false)
     expect(noLayoutPage([], 1)).toBe(false)

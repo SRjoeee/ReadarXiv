@@ -1675,7 +1675,7 @@ remover (`chainedAddon`) and the cut (`partCutter`, `cutBundle`'s own).
   fault it is, a compile that threw or ran no TeX), `texlive` (as compile, the paper declaring another TeX Live year than the
   box's), `engine` (a compiler the host does not run, as `engines` or its answer names it) —, ours — `marks` (the marked original is not the paper and the guard could not mend it, or the mark probe, the
   marks' reading, the maker or a part's own reader failed) —, and `carry` (no unit of our compile in place on arXiv's pages,
-  every line it owns: the paper's alone, `0 of the N units verified in place on arXiv's PDF`). The page pass maps every
+  every page it is on not arXiv's page: the paper's alone, `0 of the N units on a page that is arXiv's page`). The page pass maps every
   refusal to one (`layoutRecordOf`: the paper's, the page count's, the maker's throw or carry, a verdict's, a part's bound's). A reader reads such a part as one
   with no layout: `readPart` gives `layout: null`, as a reader that only tests it takes it, and the record as `noLayout`
   (null where the part has a layout, or where its producer recorded none: 5's bare null, `cutBundle` given none). The parts
@@ -1795,20 +1795,22 @@ bytes (REMOVAL 7), and no position is carried from one PDF to another.
   `BOX_TOL` 0.01 pt (`boxes`: PDF.js's `view`, the CropBox clipped to the MediaBox, not the MediaBox itself: the view is the
   rectangle the reader draws and every coordinate of the layer, the left's and the layout's, is read in, and nothing outside
   it is shown, so two pages of equal views are one page to the identity map); and the TeX Live year known (`final`). Then the
-  line check (`carry.mjs` `lineCheckOf` over the two texts, a check that carries no position): each of our lines **in place**
-  on arXiv's PDF or not, found on its own page with the median of its matched words' offsets within `LINE_PLACE`, 0.5 pt, of
-  any kind (the median: a list's label set apart alone is no line moved, a line whose words drift across it is one), or,
-  with no partner of the same words, standing where its twin stands (an arXiv line of the same words but for their
-  characters outside ASCII, its baseline and both ends within 0.5 pt: a glyph each text layer maps to another character,
-  arXiv's "ǫ" for ε; a line re-broken keeps its ends but its words shift by one). **A unit is laid only where every line it
-  owns is in place** (`layout/make.mjs` `inPlace`, LAYOUT 16): its rows read by their own tokens' lines (`tokenLine`, not the
-  baseline a row's ink gives), a row holding only the rest of a word given in parts by that rest's place against arXiv's
-  rest, a row the check reads nothing of no evidence either way, a unit of no row read not laid, a unit on a page past the
-  check's work not laid; a unit over several pages is read on every one. The others are left the original's
-  (`stats.units.unverified`, `unread`), and the layer draws only from the file. One fallback stands: a paper none of whose
-  units is laid (`carry`) falls back to arXiv's PDF untranslated; in the page stream the head waits for the first unit laid
-  (on 1706.03762 the marks given 35 ms later, the marked original read by the pass not later at all; the first part as
-  before), so nothing is told before it. The share of our lines in place is information alone, the head's `carried`. A line
+  page and line check (`carry.mjs` `lineCheckOf` over the two texts, a check that carries no position) asks two things.
+  **May we draw**, per page: a page is drawable where it is the same paper's page, its words arXiv's page's (`PAGE_SAME`, 0.98:
+  twice the longest common run of the two pages' words in order over their two counts, each word compared once NFKC and the
+  known text-layer substitutes are applied, arXiv's "ǫ" for ε, lower case, its letters and digits alone) and none of its lines
+  found on another page of arXiv's (the carrier's partners). **A unit is laid only where every page it is on is drawable**
+  (`layout/make.mjs` `drawable`, LAYOUT 16; `stats.units.undrawn` the others, left the original's). Over our own page a
+  drawing is right by construction: a page of the same words is drawn whatever its lines' offsets, a line re-broken by a word,
+  moved a point or set with other glue. On the pack and the release sweep's 50 papers it refuses 2307.16209's pages 69 to 76
+  (our TeX Live 2023 compile running behind arXiv's build by up to half a page) and its title page. **Do the panes align**,
+  per line, is information alone: each of our lines in place or not (the median of its matched words' offsets within
+  `LINE_PLACE`, 0.5 pt, on its own page, or a twin of the same words but for a known substitute), the paper's share the head's
+  `carried`; it never decides what is drawn. One fallback stands: a paper none of whose units is laid (no drawable page with a
+  unit on it: `carry`) falls back to arXiv's PDF untranslated; in the page stream the head waits for the first unit laid, so
+  nothing is told before it. A page that is not drawable lays no unit; the reader shows our base page there untranslated
+  (`view/layer-side.mjs` `noLayoutPage` takes a page of a part with a layout as laid), where before the change the part it was
+  in had no layout and showed arXiv's page. A line
   found elsewhere is another TeX Live re-breaking the paper, and our page is to be arXiv's: so a paper is compiled on the tree
   of arXiv's build (the year its 00README declares, which the box hands it over to before any compile).
 - **The maker** (`layout/make.mjs`) reads our page as its document: a placeholder's segments are its own glyphs and rules
