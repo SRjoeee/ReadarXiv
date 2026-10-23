@@ -67,6 +67,18 @@ describe('S1 under review (#457, Codex): an address, a formula, a Latin-1 macros
   })
 })
 
+describe('S1 under review, round 5: a macro inside its own expansion never takes the reader down', () => {
+  it('a recursive call in a branch TeX never takes: the paper loads, the call one placeholder', () => {
+    const p = project(doc('An \\example{important result} here.', '\\newcommand{\\example}[1]{Word #1\\ifnum0=1\\relax\\example{}\\fi.}'))
+    expect(units(p)[0]!.pieces.filter(x => x.t === 'ph').map(x => x.src)).toEqual(['\\example{important result}'])
+  })
+  it('mutual recursion, \\a calling \\b calling \\a: the paper loads, the call one placeholder', () => {
+    const pre = '\\newcommand{\\aa}[1]{Alpha #1 \\bb{x}}\n\\newcommand{\\bb}[1]{Beta #1 \\aa{y}}'
+    const p = project(doc('Some \\aa{words} here.', pre))
+    expect(units(p)[0]!.pieces.filter(x => x.t === 'ph').map(x => x.src)).toEqual(['\\aa{words}'])
+  })
+})
+
 describe('S2: a file that is not UTF-8 is read in the encoding it declares, latin1 where it declares none', () => {
   const LATIN1 = '\\documentclass{article}\n\\usepackage[latin1]{inputenc}\n\\begin{document}\nUniversit\xe9 Gustave Eiffel and Meeks-P\xe9rez-Ros wrote it.\n\\end{document}\n'
   it('\\usepackage[latin1]{inputenc}: each byte its Latin-1 letter, none a U+FFFD (2610.20581); the file written back is its own bytes', () => {
@@ -137,6 +149,13 @@ describe('S4: one branch of a conditional is the translator\'s, never both', () 
       expect(texts(p).join(' ')).not.toMatch(/Hidden/)
       expect(texts(p)).toContain('After words.')
     }
+  })
+
+  it('\\unless before a test: not taken, neither branch is text (#457 review)', () => {
+    const tex = doc('Before words.\n\n\\unless\\iftrue Hidden branch words. \\else Visible branch words. \\fi\n\nAfter words.')
+    const p = project(tex)
+    expect(texts(p).join(' ')).not.toMatch(/Hidden|Visible/)
+    expect(new TextDecoder().decode(untranslated(p))).toBe(tex)
   })
 
   it('a conditional whose branches set no words is left as it was read: its pieces, and its units\' hashes, as before', () => {

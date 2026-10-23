@@ -715,6 +715,8 @@ function readsOn(body) {
  *  group or a single token; null when the call runs past `to` */
 /** the pieces the walk reads a macro's body as, with `args` in place of its parameters (none: each parameter empty), in a
  *  walk of its own that changes nothing of the paper's: null where the body ends or starts a unit */
+/** how many macro expansions may nest (S1): past it the call is one placeholder */
+const EXPANSION_DEPTH = 3
 function bodyPieces(macro, args, file, ctx) {
   // (each part in the engine's text by its own file's encoding: the body by the file that defines it, the arguments by the
   // caller's, so that a Latin-1 macros.tex's letter is not read as UTF-8 under a UTF-8 main file; walked as no file's)
@@ -1212,7 +1214,8 @@ function walk(s, from, to, b, ctx) {
       // (one whose span holds what TeX reads otherwise than as tokens there — \\verb, inline code, a verbatim environment, a
       // definition's body — may have its \\else where TeX has none: its value is not taken, neither branch is text)
       const c = conditionalAt(s, end, to, ctx.ifs)
-      const value = c && !consumes(s, end, c.end) ? conditionalValue(name, s, end) : null
+      // (\\unless inverts the test: not taken, neither branch is text)
+      const value = c && !consumes(s, end, c.end) && !/\\unless\s*$/.test(s.slice(Math.max(0, i - 12), i)) ? conditionalValue(name, s, end) : null
       if (c) c.thenFrom = Math.min(testEnd(name, s, end), c.thenTo)
       if (c && (value !== null || (wordsIn(s, c.thenFrom, c.thenTo) && c.elseFrom >= 0 && wordsIn(s, c.elseFrom, c.elseTo)))) {
         const [from, upto] = value === true ? [c.thenFrom, c.thenTo] : value === false ? (c.elseFrom >= 0 ? [c.elseFrom, c.elseTo] : [c.thenTo, c.thenTo]) : [-1, -1]
@@ -1403,7 +1406,13 @@ function walk(s, from, to, b, ctx) {
       // call one placeholder. As a pair around its argument, the translator was sent "(4--6)" for "(Notebook 4--Notebook
       // 6)" (2610.21547's eleven units, S1 of 2026-10-24)
       if (arg && !macro.then && setsWords(macro)) {
-        const text = !macro.opt && expandedText(macro, call.reqs.map(r => s.slice(r.group ? r.start + 1 : r.start, r.group ? r.end - 1 : r.end)), b.file, ctx)
+        // (a macro inside its own expansion, or expansions nested past a few levels — a recursive call in a branch TeX never
+        // takes, \\a calling \\b calling \\a —, and any failure of the expansion leave the call one placeholder)
+        const expanding = ctx.expanding ?? new Set()
+        let text = null
+        if (!macro.opt && !expanding.has(name) && expanding.size < EXPANSION_DEPTH) {
+          try { text = expandedText(macro, call.reqs.map(r => s.slice(r.group ? r.start + 1 : r.start, r.group ? r.end - 1 : r.end)), b.file, { ...ctx, expanding: new Set([...expanding, name]) }) } catch { text = null }
+        }
         // (the pair's id spent as the pair's was: the pairs after it keep theirs, and their units their hashes)
         endText(); b.pairId++
         if (text) b.letter(text, s.slice(i, call.end), i, call.end)
