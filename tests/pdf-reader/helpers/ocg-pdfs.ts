@@ -46,7 +46,7 @@ export function markShows(text: string, { every = 3, first = 0 } = {}) {
 }
 
 /** sample-1 with its pages' streams replaced: `edit(text, page)` the page's new content (markShows by default) */
-export async function markedSample({ pages = [1, 2, 3, 4], edit = null as null | ((text: string, page: number) => string), every = 3, foreignOC = false } = {}) {
+export async function markedSample({ pages = [1, 2, 3, 4], edit = null as null | ((text: string, page: number) => string), every = 3, foreignOC = false, form = null as string | null, type3 = false as boolean | 'noWidths', fonts = null as null | ((ctx: PL.PDFContext) => Record<string, PL.PDFRef>) } = {}) {
   const doc = await PL.PDFDocument.load(readFileSync(SAMPLE_1), { updateMetadata: false })
   let first = 0
   for (const p of pages) {
@@ -56,7 +56,19 @@ export async function markedSample({ pages = [1, 2, 3, 4], edit = null as null |
     else { const m = markShows(text, { every, first }); out = m.text; first += m.units }
     // (a stream split at `%SPLIT%` is a /Contents array of its pieces)
     const refs = out.split('%SPLIT%').map(t => doc.context.register(doc.context.flateStream(enc(t))))
-    doc.getPages()[p - 1]!.node.set(PL.PDFName.of('Contents'), refs.length === 1 ? refs[0]! : doc.context.obj(refs))
+    const node = doc.getPages()[p - 1]!.node
+    node.set(PL.PDFName.of('Contents'), refs.length === 1 ? refs[0]! : doc.context.obj(refs))
+    // (a form XObject /Fx1 of `form`'s content, the page's fonts its resources; a Type 3 font /T3 of rectangle glyphs a..f)
+    if (form !== null || type3 || fonts) {
+      const ctx = doc.context, res = node.Resources()!
+      const fontDict = res.lookup(PL.PDFName.of('Font'), PL.PDFDict)
+      if (type3) fontDict.set(PL.PDFName.of('T3'), type3Font(ctx, type3 === 'noWidths'))
+      if (fonts) for (const [k, v] of Object.entries(fonts(ctx))) fontDict.set(PL.PDFName.of(k), v)
+      if (form !== null) {
+        const fx = ctx.register(ctx.flateStream(enc(form), { Type: 'XObject', Subtype: 'Form', BBox: [0, 0, 612, 792], Resources: ctx.obj({ Font: fontDict }) }))
+        res.set(PL.PDFName.of('XObject'), ctx.obj({ Fx1: fx }))
+      }
+    }
   }
   if (foreignOC) {
     // a foreign /OCProperties (the paper's own layers): fA ON, fB OFF, named /fA and /fB on every page edited
@@ -73,8 +85,8 @@ export async function markedSample({ pages = [1, 2, 3, 4], edit = null as null |
 export const DOCUMENT_OPTIONS = { verbosity: 0, useSystemFonts: false, isEvalSupported: false, fontExtraProperties: true }
 export const deflate = (b: Uint8Array) => new Uint8Array(deflateSync(b, { level: 6 }))
 export const inflate = (b: Uint8Array, limit: number) => new Uint8Array(inflateSync(b, { maxOutputLength: limit + 1 }))
-/** wrapFinal over bytes, the test's way */
-export const wrapped = (bytes: Uint8Array, o: { units?: unknown[] | null; follows?: unknown; bounds?: { groupsPage?: number; sequencesPage?: number; groupsDoc?: number } } = {}) => wrapFinal(bytes, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, OPS, units: (o.units ?? null) as never, ...(o.follows !== undefined ? { follows: o.follows as never } : { follows: null }), deflate, inflate, ...(o.bounds ? { bounds: o.bounds } : {}) } as never)
+/** wrapFinal over bytes, the test's way: no marking's `follows` unless given (`follows: undefined` asks wrapFinal to make it of the units) */
+export const wrapped = (bytes: Uint8Array, o: { units?: unknown[] | null; follows?: unknown; bounds?: { groupsPage?: number; sequencesPage?: number; groupsDoc?: number } } = {}) => wrapFinal(bytes, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, OPS, units: (o.units ?? null) as never, ...('follows' in o ? { follows: o.follows as never } : { follows: null }), deflate, inflate, ...(o.bounds ? { bounds: o.bounds } : {}) } as never)
 
 /** a page rendered by PDF.js in Node at `scale`, groups `off(name)` hidden: its RGBA pixels */
 export async function renderPage(bytes: Uint8Array, p: number, { off = null as null | ((name: string) => boolean), scale = 2 } = {}) {
@@ -95,4 +107,13 @@ export function pixelsApart(a: { data: Uint8ClampedArray }, b: { data: Uint8Clam
   let n = 0
   for (let i = 0; i < a.data.length; i += 4) if (a.data[i] !== b.data[i] || a.data[i + 1] !== b.data[i + 1] || a.data[i + 2] !== b.data[i + 2] || a.data[i + 3] !== b.data[i + 3]) n++
   return n
+}
+
+/** a Type 3 font of rectangle glyphs: codes a to e (d1), f (d0, its own colour), 600 wide */
+function type3Font(ctx: PL.PDFContext, noWidths = false) {
+  const procs = ctx.obj({})
+  const shapes: Record<string, string> = { a: '50 0 400 700 re f', b: '50 0 200 500 re f 300 0 200 700 re f', c: '0 0 500 300 re f', d: '100 100 300 300 re f', e: '0 600 550 80 re f 0 0 80 680 re f' }
+  for (const [n, sh] of Object.entries(shapes)) procs.set(PL.PDFName.of(n), ctx.register(ctx.stream(`600 0 0 0 600 700 d1 ${sh}`)))
+  procs.set(PL.PDFName.of('f'), ctx.register(ctx.stream('600 0 d0 0.8 0 0 rg 50 0 400 700 re f')))
+  return ctx.register(ctx.obj({ Type: 'Font', Subtype: 'Type3', FontBBox: [0, 0, 600, 700], FontMatrix: [0.001, 0, 0, 0.001, 0, 0], CharProcs: procs, Encoding: ctx.obj({ Type: 'Encoding', Differences: [97, 'a', 'b', 'c', 'd', 'e', 'f'] }), ...(noWidths ? {} : { FirstChar: 97, LastChar: 102, Widths: [600, 600, 600, 600, 600, 600] }), Resources: ctx.obj({}) }))
 }
