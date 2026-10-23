@@ -557,11 +557,14 @@ export { UNHIDDEN_MAX }
  *  `/axt-H0E ri` (2610.20967v1, 2610.20581v1), the same mark at the same place */
 const lowerPoint = x => (/[A-Z]/.test(x.name) ? { ...x, name: x.name.toLowerCase() } : x)
 
-export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions = {}, OPS, units, follows: given = undefined, texts = null, deflate, inflate, keepOwned = false, bounds = {} }) {
+export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions = {}, OPS, units, follows: given = undefined, texts, deflate, inflate, keepOwned = false, bounds = {} }) {
   // (units required: null alone, said, asks for no spell check, the lab's pair whose source is not read; deflate and inflate
   // required, the written bytes read back)
   if (units === undefined) throw new TypeError('units: the paper\'s source units, or null said for no spell check')
   if (typeof deflate !== 'function' || typeof inflate !== 'function') throw new TypeError('deflate, inflate: functions of bytes (inflate(bytes, limit))')
+  // (texts required, as units are: the marks file's `marking.texts` where the caller holds the marks, null said where it does not —
+  // a caller that drops them where it has them would leave every cell's lead macro the original's, unseen)
+  if (texts === undefined) throw new TypeError('texts: the marks file\'s marking.texts (flat [source, text, …] or a Map), or null said where the marks are not in hand')
   // (the paper's SOURCE units: a translation's (a record's units, its text pieces `tr`) holds no text after a placeholder to
   // find its ink's end by, nor the source text the spell check reads)
   if (units !== null && (!Array.isArray(units) || units.some(u => u?.pieces?.some?.(p => p?.tr)))) throw new TypeError('units: the paper\'s source units (live.mjs openPaper\'s, layerOfPaper\'s `source.units`), not a translation\'s')

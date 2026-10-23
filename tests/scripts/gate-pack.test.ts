@@ -167,6 +167,20 @@ describe('our base pages the layout files were made over', () => {
   }
   const message = (i: ReturnType<typeof inputs>) => { try { entriesOf(i); return '' } catch (e) { return (e as Error).message } }
 
+  it('keeps the marking\'s texts in base.json, which the gate\'s wrap is given (a pack that drops them leaves a cell\'s lead macro the original\'s)', async () => {
+    const made = { source: 'ours' as const, head: { source: 'ours', bytes: 3, sha256: sha256('our'), xref: 1, pages: 1, tree: '2025', check: {} } }
+    expect(baseRecordOfMade({ made, layout: Buffer.from('l'), texts: ['\\bert', 'BERT'] })).toMatchObject({ texts: ['\\bert', 'BERT'] })
+    expect('texts' in baseRecordOfMade({ made, layout: Buffer.from('l') })).toBe(false)
+    const i = inputs()
+    put(join(i.sources, '0001.00001v1', 'source.gz'), 'the source')
+    withBase(i, 'our base page', { texts: ['\\bert', 'BERT'] })
+    expect(baseRecordOf(join(i.fixtures, n))).toMatchObject({ texts: ['\\bert', 'BERT'] })
+    const { textsOf } = await import('../../lab/pdf/spikes/layer-gate/wrap.mjs')
+    expect(textsOf(join(i.fixtures, n, 'base.pdf'))).toEqual(['\\bert', 'BERT'])
+    // (texts not pairs of strings: refused)
+    withBase(i, 'our base page', { texts: ['\\bert'] })
+    expect(() => baseRecordOf(join(i.fixtures, n))).toThrow(/texts/)
+  })
   it('packs base.pdf and base.json beside arxiv.pdf where the fixture has them, and none where it has not', () => {
     const i = inputs()
     const record = withBase(i)
