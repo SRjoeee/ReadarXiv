@@ -1110,7 +1110,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
      * base page, the rectangle a hyperref citation's number is linked by (`cite.<key>`, one of its keys). The unit's citation
      * links are taken in reading order (its lines', then left to right), each once: the first after the last one an earlier
      * piece took whose destination is one of the piece's keys, then each next one whose destination is another of its keys
-     * (a list's numbers, \cite{a,b}), with the glyphs between two of them on one line (the comma, a range's dash). A link's
+     * (a list's numbers, \cite{a,b}), with the glyphs between two of them on one line (the comma). A link's
      * glyphs are those whose advance centre and baseline lie inside its rectangle, on a line of the unit's, none another
      * unit's or taken. { glyphs, boxes } as ownedOn gives them, taken, or null
      */
@@ -1146,7 +1146,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       for (const key of kind.keys) left.set(`cite.${key}`, (left.get(`cite.${key}`) ?? 0) + 1)
       const free1 = (P, g) => !P.taken[g] && (P.owner[g] === -1 || P.owner[g] === i) && /\S/u.test(P.u[g])
       /** the glyphs between two links on one line at their height, where they are one citation's: no letter or digit among
-       *  them (prose parts two citations: "[1] and [2]") and the gap within twice the links' height (a comma, a range's dash);
+       *  them (prose parts two citations: "[1] and [2]") and the gap within twice the links' height (a comma);
        *  null where not */
       const between = (L, N) => {
         if (N.page !== L.page || N.row !== L.row || N.x0 - L.x1 > 2 * Math.max(L.y1 - L.y0, N.y1 - N.y0)) return null
@@ -1179,14 +1179,14 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         return best
       }
       const open = bracket(took[0], true), close = bracket(took.at(-1), false)
-      // only the whole citation, else none (LOST, as before): every key its own link or inside a range (a dash between two
-      // links: cite.sty's 1\u20133 links its ends), and a bracket on both sides or on neither. A list TeX broke over lines
-      // (its next link on the next line), or one whose closing bracket is not against its last link (a note after it), is not
-      // known whole
-      const ranged = gaps.some(g => g.some(x => /^[\u2013\u2014-]$/.test(ink[took[0].page].u[x])))
-      if ((took.length < kind.keys.length && !ranged) || (open >= 0) !== (close >= 0)) return null
-      // (and a rendering of numbers alone: an author-year or alphabetic style's \\cite sets letters, "Smith 2020", "[Smi20]")
-      if (!took.every((L, q) => [...L.gs, ...(gaps[q] ?? [])].every(g => /^[\p{N},;\s\u2013\u2014-]$/u.test(ink[L.page].u[g])))) return null
+      // only the whole citation, else none (LOST, as before): every key its own link, and a bracket on both sides or on
+      // neither. A list TeX broke over lines (its next link on the next line), one with a key no link stands for (cite.sty's
+      // compressed 1\u20133 links its ends alone; an undefined key's "?"), or one whose closing bracket is not against its
+      // last link (a note after it), is not known whole
+      if (took.length !== kind.keys.length || (open >= 0) !== (close >= 0)) return null
+      // (and a rendering of numbers and commas alone: an author-year or alphabetic style's \\cite sets letters, "Smith 2020",
+      // "[Smi20]")
+      if (!took.every((L, q) => [...L.gs, ...(gaps[q] ?? [])].every(g => /^[\p{N},;\s]$/u.test(ink[L.page].u[g])))) return null
       const glyphs = []
       if (open >= 0) glyphs.push([took[0].page, open])
       took.forEach((L, q) => {
