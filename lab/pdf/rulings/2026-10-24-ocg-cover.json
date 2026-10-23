@@ -1,0 +1,24 @@
+{
+ "date": "2026-10-24",
+ "by": "the coordinator, relayed by the pipeline lane's controller, under the maintainer's standing rule",
+ "quote": "a table is no longer all-or-nothing: a cell that cannot be hidden keeps its original ink, the rest of the table is translated (coverage first; a table with one English cell beats an English table); \u5982\u679c\u6211\u4eec\u8fc7\u53bb\u672c\u8eab\u6709\u4e00\u4e9b\u505a\u5f97\u4e0d\u591f\u597d\u7684\u5730\u65b9\u88ab\u9519\u8bef\u5730\u5f53\u6210\u4e86\u4eca\u65e5\u6d4b\u8bd5\u6807\u51c6\uff0c\u800c\u5b9e\u9645\u4e0a\u6211\u4eec\u6539\u8fdb\u540e\u7684\u65b0\u7248\u672c\u6bd4\u4e4b\u524d\u7684\u7248\u672c\u66f4\u597d\u3001\u66f4\u63a5\u8fd1\u539f\u7248 PDF\uff0c\u8fd9\u79cd\u60c5\u51b5\u4e0b\u6211\u4eec\u8981\u5927\u80c6\u53bb\u505a\uff0c\u800c\u4e0d\u662f\u4ee5\u65e7\u7684\u3001\u8fd8\u4e0d\u591f\u597d\u7684\u7248\u672c\u4e3a\u6807\u51c6\u3002; 3 \u63a5\u53d7",
+ "english": "The coordinator's ruling of 2026-10-24 (relayed): a table is no longer all-or-nothing: a cell that cannot be hidden keeps its original ink, the rest of the table is translated (coverage first; a table with one English cell beats an English table); whole-table only where the cells' geometry is genuinely shared (spanning cells). Under the maintainer's standing rule of 2026-10-23: where something we did less well before was wrongly taken as today's test standard, and the new version is better and closer to the original PDF, be bold and do it; and decision 3 (2026-10-22): what fails the check is shown untranslated",
+ "on": "the coverage round of the per-unit erasure (feat/ocg-cover, REMOVAL 9): a table cell the head lists unhidden (its ink cannot be hidden glyph for glyph) is the original's alone and the other cells of its table group are drawn (layer-proto/run.mjs readGroup); a cell that fails the spell check, or spans columns or rows (cellSpans: \\multicolumn, \\multirow), keeps its group whole the original's as before. The layer gate's `table groups drawn partly` no longer counts a group for such a cell (layer-gate/proto.mjs consistencyOf)",
+ "measures": [
+  "groupsSplit"
+ ],
+ "targets": [
+  "de",
+  "es",
+  "fr",
+  "ja",
+  "ko",
+  "ru",
+  "zh"
+ ],
+ "scope": "the rules gate's model tier (next 695190d2 against feat/ocg-cover, both on pack 26ebc7f4, before the marking's texts reached the gate): table groups drawn partly 0 -> 2 on 1810.04805v2 p7 alone (es, ja, ko, ru, zh), the table whose model-name cells open with \\bertbase and \\bertlarge; with it cells left English down (1512.03385v1 p7, 1810.04805v2 p7: zh 31 -> 17) and 2608.04322v1 p1's title drawn again (text units left English zh 37 -> 36). The instrument's count follows the rule from this pull request on; a partly drawn group for any other reason still counts",
+ "why": "The standard is closeness to the original page and coverage first. A cell whose ink cannot be hidden is shown as the original, untranslated (decision 3); before this ruling its whole table was shown English with it. A table with one English cell is closer to a translated page than an English table, and no ink is lost or doubled: the cell kept is the page's own ink, its siblings are hidden by their own groups. A cell whose range fails the spell check, or whose box other cells share, keeps the old rule, its range or box being no proof of its siblings' ink",
+ "evidence": {
+  "what": "the rules gate locally (rules-gate.mjs run and compare, model tier) on the controller's run: next 695190d2 against feat/ocg-cover a199e682 on pack 26ebc7f4; the crops of 1810.04805v2 p7, arXiv's own page left (its sha256 in the label), the old build and the new, follow once the pack carries the marking's texts"
+ }
+}

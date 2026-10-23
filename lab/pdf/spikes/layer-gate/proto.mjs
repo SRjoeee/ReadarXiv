@@ -82,7 +82,8 @@ const relabelledOf = recs => new Set(recs.filter(r => S.byId.get(r.id)?.prep?.la
 /**
  * What the consistency measures read of a fixture (the table-groups brief, 2026-10-07): its table groups, each the
  * record's translated cells of one `group` (cache.mjs unitsOf; spikes/table-groups.mjs writes the fixtures so), and a
- * group drawn partly where some of its cells are drawn and some are not, at the first page one is drawn on; and whether
+ * group drawn partly where some of its cells are drawn and some are not (a cell left the original's alone as its ink cannot
+ * be hidden aside), at the first page one is drawn on; and whether
  * a drawn unit's float label stands in the source language where the final names it in the target's — the record's
  * `captions` (live.mjs captionsOf: `target` for figures or tables) and the target's names (`names`, the layout rules' labels,
  * the gate's own) differing from the label's own word, and the unit drawing no label of its own (`prep.label.drawn`)
@@ -91,10 +92,15 @@ function consistencyOf(record, S, names) {
   const members = new Map()
   for (const [id, u] of (record.units ?? []).entries()) if (u?.group && u.pieces && (u.state === 'whole' || u.state === 'partial') && S.translated.has(id)) (members.get(u.group) ?? members.set(u.group, []).get(u.group)).push(id)
   // (drawn: laid and recorded, run.stats — a unit placed may still be let go with its group, run.mjs settleGroup)
+  // (a cell whose ink the file cannot hide is the original's alone, the rest of its group drawn: the coordinator's ruling of
+  // 2026-10-24, lab/pdf/rulings/2026-10-24-ocg-cover.json, run.mjs readGroup: no group is drawn partly for it. One that
+  // fails the spell check keeps its group whole, and stays counted)
   const splitOn = p => {
     const drawn = new Map(S.run.stats.map(r => [r.id, r]))
+    const alone = new Set((S.run.skipped ?? []).filter(x => /^unhidden: (?!spell$)/.test(x.why ?? '')).map(x => x.id))
     const out = []
-    for (const ids of members.values()) {
+    for (const all of members.values()) {
+      const ids = all.filter(id => !alone.has(id))
       const here = ids.filter(id => drawn.has(id))
       if (here.length && here.length < ids.length && Math.min(...here.map(id => drawn.get(id).pages[0])) === p) out.push({ ids })
     }
