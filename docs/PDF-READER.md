@@ -803,7 +803,10 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
     kept where it stands (drawn as a crop, or as text in the translation), its kept ones and its displays then pasted from B
     through their segments; its label group where the reading draws the label in the target's form; a babel name that leads
     it (RUN_IN) with it. A unit the head lists as `unhidden` (marks, across, spell, page, bounds) or whose text group the
-    document does not hold (an unwrapped page; a base that was not wrapped) is the original's and is not drawn; one the
+    document does not hold (an unwrapped page; a base that was not wrapped) is the original's and is not drawn — a table's
+    cell so alone, the rest of its group drawn (the coordinator's ruling of 2026-10-24, coverage first: a table with one
+    English cell beats an English table), but for one spanning columns, whose box the others share, which keeps the group
+    the original's as any cell that cannot be drawn does; one the
     head lists as `labelKept` draws its body alone and never hides a label. A table rule near a CJK cell (`cellBands`) is
     read from the part's `rules` (each page's, made by the maker over our page's ink: `layout/cell-rules.mjs`), the one fact
     of the add-on's manifest a reader kept.

@@ -157,7 +157,7 @@ describe("a unit whose ink cannot be hidden, the whole run (openProto): shown as
   // docs/route/ocg-erasure.md §4.2: a unit the file could not wrap (no group of its own: an unwrapped page, a paper the wrap
   // refused) or lists as unhidden (its own reason: marks, across, spell, page, bounds) keeps the original's ink and is not drawn;
   // there is no other way of taking a unit's ink away
-  const open = async ({ groups = true, hiding = null as unknown }) => {
+  const open = async ({ groups = true, hiding = null as unknown, group = null as string | null, span = 1 }) => {
     const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
     const cells = [{ id: 0, src: 'Alpha', x0: 10, x1: 40, b: 100 }, { id: 1, src: 'Betas', x0: 60, x1: 90, b: 100 }]
     const layout = {
@@ -173,7 +173,7 @@ describe("a unit whose ink cannot be hidden, the whole run (openProto): shown as
     const run = await openProto({
       doc, target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false,
       geometry: { schema: 1, kinds: cells.map(() => 'cell'), left: { pages: [[0, 0, 300, 300]], units: [] } },
-      units: cells.map(c => ({ kind: 'cell', src: c.src, state: 'whole', pieces: [{ t: 'text', tr: true, s: '\u6c49\u5b57' }] })),
+      units: cells.map(c => ({ kind: 'cell', src: c.src, state: 'whole', ...(group ? { group, cell: { table: 'T', col: c.id, span: c.id === 1 ? span : 1 } } : {}), pieces: [{ t: 'text', tr: true, s: '\u6c49\u5b57' }] })),
       tex: { index, pieces: new Map(cells.map(c => [c.id, [[0]]])), symbols: 'text', extents: 'v0' },
       ...(hiding ? { hiding } : {}),
     } as never)
@@ -185,5 +185,16 @@ describe("a unit whose ink cannot be hidden, the whole run (openProto): shown as
     expect(await open({})).toEqual({ placed: [0, 1], skipped: [], kinds: ['hidden'], off: ['u0', 'u1'] })
     expect(await open({ hiding: { unhidden: (id: number) => (id === 1 ? 'spell' : null) } })).toEqual({ placed: [0], skipped: ['1:unhidden: spell'], kinds: ['hidden'], off: ['u0'] })
     expect(await open({ groups: false })).toEqual({ placed: [], skipped: ['0:unhidden: no group', '1:unhidden: no group'], kinds: [], off: [] })
+  })
+  // (the coordinator's ruling of 2026-10-24, coverage first: a table with one English cell beats an English table)
+  it('draws the rest of a table group one of whose cells cannot be hidden, that cell the original\'s (2610.21098v1 p13)', async () => {
+    const hiding = { unhidden: (id: number) => (id === 1 ? 'marks' : null) }
+    expect(await open({ hiding, group: 'T:c0' })).toEqual({ placed: [0], skipped: ['1:unhidden: marks'], kinds: ['hidden'], off: ['u0'] })
+  })
+  it('keeps a group whole the original\'s where the cell that cannot be hidden spans columns: its geometry the others\' too', async () => {
+    const hiding = { unhidden: (id: number) => (id === 1 ? 'marks' : null) }
+    const r = await open({ hiding, group: 'T:c0', span: 2 })
+    expect(r.placed).toEqual([])
+    expect(r.skipped.sort()).toEqual(['0:group: a cell not drawn', '1:unhidden: marks'])
   })
 })

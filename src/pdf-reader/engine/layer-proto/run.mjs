@@ -1211,6 +1211,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // a table's consistency group drawn whole or not at all (the table-groups brief, 2026-10-07): the record translates
   // or keeps each group whole (its cells' `group`, cache.mjs unitsOf), and a translated cell that cannot be drawn here —
   // no lines for it, none on the pages shown, a row refused (refusalOf) — keeps every cell of its group the original's.
+  // But a cell whose ink the file cannot hide (`unhidden`) is the original's alone, the rest of its group drawn (the
+  // coordinator's ruling of 2026-10-24: a table with one English cell beats an English table), unless it spans columns.
   // A group's cells may be anywhere in the paper: it is read once its own cells' rows are in where the open is given each
   // unit's group (`groups`), else once every row is (or end()), every row fixed then; the rows it reads are fixed from
   // then on. Given each unit's group, a group's cells are the units given it whose rows are translated, whatever group
@@ -1223,7 +1225,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const readGroup = (g, ids) => {
     read.add(g)
     for (const id of ids) fixed.add(id)
-    const cells = ids.filter(id => translated(U.get(id)))
+    // (a cell whose ink the file cannot hide is the original's alone, the rest of its group drawn: coverage first, the
+    // coordinator's ruling of 2026-10-24 — but one spanning columns, whose box is the others' too, keeps the group whole)
+    const kept = id => { const d = candOf.has(id) ? decisionOf(candOf.get(id)) : null; return !!d && !d.p && d.skip?.code === 'unhidden' && !((U.get(id)?.cell?.span ?? 1) > 1) }
+    const cells = ids.filter(id => translated(U.get(id)) && !kept(id))
     if (!cells.length) return
     groupCells.set(g, cells)
     if ((tableGroups && ids.some(id => awaited.has(id) && U.get(id) === undefined)) || cells.some(id => !(candOf.has(id) && decisionOf(candOf.get(id)).p))) split.add(g)
