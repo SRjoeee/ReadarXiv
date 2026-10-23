@@ -406,3 +406,19 @@ describe('overlapping proofs in one process (CodeRabbit on #439)', () => {
     expect([console.log, console.warn, console.error]).toEqual(before)
   })
 })
+
+describe('the page geometry a replaced page keeps (Codex on #439)', () => {
+  it('a page of ours of another /UserUnit, /Rotate or box than arXiv\'s is no delta (`delta-boxes`), and a delta over it fails the proof', async () => {
+    const withPage = (dict: string) => { const u = oursObjects(); u.set(3, { text: dict }); return pdfOf(u, { root: 1 }) }
+    const page1 = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources << /Font << /F7 20 0 R >> /XObject << /X9 21 0 R /X10 29 0 R >> /ProcSet [/PDF /Text] >> /Contents 22 0 R'
+    for (const [what, extra] of [['UserUnit', ' /UserUnit 2'], ['Rotate', ' /Rotate 90'], ['CropBox', ' /CropBox [0 0 100 200]']] as const) {
+      const other = withPage(`${page1}${extra} >>`)
+      expect(await deltaOf(ORIG_TABLE, other, { PL }), what).toMatchObject({ refused: 'delta-boxes' })
+      // (the delta of the page as arXiv's has it, proved against ours of another geometry: refused)
+      const r = await built(ORIG_TABLE)
+      expect(await prove(ORIG_TABLE, r.delta, other, r.replaced), what).toMatchObject({ ok: false, why: /box is not ours/ })
+    }
+    // (the same geometry written otherwise: a CropBox equal to the MediaBox, Rotate 360, UserUnit 1)
+    expect(await deltaOf(ORIG_TABLE, withPage(`${page1} /CropBox [0 0 200 200] /Rotate 360 /UserUnit 1 >>`), { PL })).not.toHaveProperty('refused')
+  })
+})

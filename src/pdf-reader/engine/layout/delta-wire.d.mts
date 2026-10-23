@@ -13,7 +13,7 @@ export declare const DELTA_TAIL_ROOM: number
 /** the replaced pages' ranges a head names at most */
 export declare const REPLACED_MAX: number
 /** why a base of ours is whole where a delta was asked (the builder's, the proof's, or the page pass's of a delta it was given) */
-export declare const DELTA_WHYS: readonly ['delta-parse', 'delta-encrypted', 'delta-xref', 'delta-stream', 'delta-pages', 'delta-bound', 'delta-empty', 'delta-proof', 'delta-shape']
+export declare const DELTA_WHYS: readonly ['delta-parse', 'delta-encrypted', 'delta-xref', 'delta-stream', 'delta-pages', 'delta-boxes', 'delta-bound', 'delta-empty', 'delta-proof', 'delta-shape']
 export type DeltaWhy = (typeof DELTA_WHYS)[number]
 /** 1-based inclusive page ranges, ascending, non-overlapping, adjacent ones merged */
 export type PageRanges = [from: number, to: number][]

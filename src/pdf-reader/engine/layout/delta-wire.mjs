@@ -23,11 +23,11 @@ export const REPLACED_MAX = 4096
 /** why a paper's base of ours is whole (`full`) where a delta was asked: the delta's builder or its proof refused it. `parse`
  *  a document it cannot read (the object layer, the page tree), `encrypted`, `xref` a cross-reference it will not read safely
  *  (hybrid, an entry not at its object, a section that does not parse), `stream` a stream whose /Length does not end at
- *  `endstream`, `pages` our pages more than arXiv's or a replaced page past ours, `bound` a bound of the builder's or of the
+ *  `endstream`, `pages` our pages more than arXiv's or a replaced page past ours, `boxes` a replaced page of ours whose box, rotation or user unit is not arXiv's page's (the delta keeps the original's page dict but its contents and resources), `bound` a bound of the builder's or of the
  *  delta (DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_OBJECTS_MAX, the held and decoded bytes), `empty` no page replaced, `proof`
  *  the structural proof failed, `shape` a delta the page pass was given that does not check (layer-proto's head reader would
  *  refuse it) */
-export const DELTA_WHYS = Object.freeze(['delta-parse', 'delta-encrypted', 'delta-xref', 'delta-stream', 'delta-pages', 'delta-bound', 'delta-empty', 'delta-proof', 'delta-shape'])
+export const DELTA_WHYS = Object.freeze(['delta-parse', 'delta-encrypted', 'delta-xref', 'delta-stream', 'delta-pages', 'delta-boxes', 'delta-bound', 'delta-empty', 'delta-proof', 'delta-shape'])
 
 /** pages (1-based, any order, repeats allowed) as ascending, non-overlapping ranges [[from, to], …], adjacent ones merged */
 export function rangesOf(pages) {
