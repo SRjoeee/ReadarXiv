@@ -251,6 +251,14 @@ const charsOf = s => s.normalize('NFKC').toLowerCase()
 /** a glyph's characters as two PDFs are compared by them: NFKC, no white space, no variation selector (match.mjs's) */
 const NF = s => (typeof s === 'string' ? s.normalize('NFKC').replace(/\s|\p{Variation_Selector}/gu, '') : '')
 
+/** a mark on a turned token's box, within this (PDF units): a turned run's first mark stands at its box's edge, to the marks
+ *  file's hundredth */
+const ON_TURNED = 0.5
+/** whether mark `mk` stands on token `t` and `t` is turned (anchors.mjs uprightToken: its box as high above its `y` as below,
+ *  a run set at an angle): the mark is on a turned line. A token that kept no box is none */
+const turnedAt = (t, mk) => typeof t.top === 'number' && typeof t.bottom === 'number' && !uprightToken(t) && t.page === mk.page
+  && mk.x >= t.x - ON_TURNED && mk.x <= t.x + t.w + ON_TURNED && mk.y >= t.bottom - ON_TURNED && mk.y <= t.top + ON_TURNED
+
 /** tokens → line rectangles as anchors.mjs lineRects makes them, each with its tokens */
 function rectsOf(doc, idx) {
   const rects = []
@@ -662,14 +670,18 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   /** the word a unit's start mark reaches where it stands at none (boundsFromMarks `reach`): a unit that opens with a formula, a
    *  dash or a comma has its start mark there, and its first word further on its line. The nearest upright word on the mark's
    *  baseline, in its column, after it, at any distance: its column bounds it, not a measure of points; or null. A turned line
-   *  (a sideways caption) reaches none: its baseline is no horizontal one, and a word at the mark's height there is another
-   *  line's. An end mark needs none: tokenAtMark takes the last word before it on its line at any distance. `byPage`, the base
-   *  page's tokens by page */
+   *  (a sideways caption, a \rotatebox's cell) reaches none: its baseline is no horizontal one, and a word at the mark's height
+   *  there is another line's. Its start mark stands on its turned run (turnedAt: on a turned token's box), and the nearest
+   *  upright word at its height may be any line's: 2602.23285v2's sideways cell "Discrete & Continuous" in a table set beside
+   *  a paragraph, whose mark reached the next cell's "ODEBRAIN" and whose end mark's word was the paragraph's, 30 pt left of
+   *  the table, so that the cell took a line of the paragraph's and the paragraph was laid not at all. An end mark needs none:
+   *  tokenAtMark takes the last word before it on its line at any distance. `byPage`, the base page's tokens by page */
   const reachIn = byPage => mk => {
     let best = null
     const col = colAt(mk)
     for (const k of byPage.get(mk.page) ?? []) {
       const t = doc[k]
+      if (turnedAt(t, mk)) return null
       if (!t.t || !uprightToken(t) || Math.abs(t.y - mk.y) > t.h * 0.4 || columnOf(t.page, t.x, t.x + t.w) !== col) continue
       if (t.x >= mk.x && (best === null || t.x < doc[best].x)) best = k
     }

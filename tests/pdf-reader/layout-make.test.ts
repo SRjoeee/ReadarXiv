@@ -2055,4 +2055,26 @@ describe('makeLayout, the marking the marks file records: the complete macros, t
     expect(file.lines.map(([u]) => u)).toEqual([1])
     expect(await make({ ...w, pages: [{ runs }], marks: w.marks.slice(0, 5), units: w.units.slice(0, 1) })).toMatchObject({ refused: 'carry', stats: { units: { unplaced: 1, located: 0 } } })
   })
+  it('nor a sideways cell\'s: its start mark on a turned word reaches none, and the paragraph beside its table keeps every line (2602.23285v2)', async () => {
+    // (a \rotatebox{90} cell of a table set beside a paragraph, on a page of one column: its marks stand one above the other on
+    // its turned run, its start mark at no upright word; the nearest upright word on that baseline is the next cell's, and the
+    // last word before its end mark on the end's baseline the paragraph's, which the text layer gives after the table's. The
+    // paragraph's second line ends in a word TeX broke at a hyphen, the rest of which opens the third, before the table: the
+    // cell bounded from the next cell's word to the paragraph's took the third line's words and their glyphs, the rest's too,
+    // and the paragraph, left that rest alone for its third line, found no glyph of its own there and was laid not at all)
+    const name: Run = { s: 'ODEBRAIN', x: 345, y: 645 }, turned: Run = { s: 'Discrete Continuous', x: 330, y: 645, turn: true }
+    const runs: Run[] = [
+      { s: words(0, 5), x: 72, y: 764 }, { s: `${words(5, 4)} com-`, x: 72, y: 752, eol: true }, { s: 'pare', x: 72, y: 740 },
+      name, turned, { s: words(10, 4), x: 97, y: 740 }, { s: words(15, 3), x: 72, y: 728 },
+    ]
+    const last = runs[6] as Run
+    const { file } = await made({
+      pages: [{ runs }],
+      marks: [['0s', 1, 330, 645], ['0e', 1, 330, 645 + endOf(turned) - turned.x], ['1s', 1, 72, 764], ['1e', 1, endOf(last), 728]],
+      units: [unit('cell', [text('Discrete Continuous')]), unit('para', [text(`${words(0, 9)} compare ${words(10, 4)} ${words(15, 3)}`)])],
+    })
+    // (the paragraph's lines, each from its first word to its last: the third from the rest to the last word after the table)
+    expect(chunk(rowsOf(file, 1, 'lines'), 8).map(r => [r[3], r[1], r[2]])).toEqual([[764, 72, endOf(runs[0] as Run)], [752, 72, endOf(runs[1] as Run)], [740, 72, endOf(runs[5] as Run)], [728, 72, endOf(last)]])
+    expect(file.lines.map(([u]) => u)).toEqual([1])
+  })
 })
