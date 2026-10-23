@@ -339,7 +339,7 @@ three against each other (`gate-pack.mjs` `baseRecordOf`), so a layout file is n
 was made over. The layer gate draws every output over its `base.pdf` wrapped by optional content (its draws and its bundle's base are
 made over it too), arXiv's PDF where a fixture has none (no marks: never wrapped), and `arxiv.pdf` stays the left's. A paper production would refuse a base
 page of ours would keep the layout file the pack held before, made over arXiv's PDF, its `base.json` saying why
-(`source: 'arxiv'`, outside the version check); in the pack of 2026-10-23 (`c10eafbb`, LAYOUT 16: each unit laid only where every page it is on is arXiv's page, the same words) every one of the 7 papers has ours, each made on the tree production compiles it on (`base.json`'s `image`: the year its 00README declares, else that of arXiv's build; 2307.16209, 2608.16117 and 2609.26457 on TeX Live 2023).
+(`source: 'arxiv'`, outside the version check); in the pack of 2026-10-24 (`26ebc7f4`, LAYOUT 18: the marks of LAYOUT 17 and the unit refusals of 18, each unit laid only where every page it is on is arXiv's page, the same words) every one of the 7 papers has ours, each made on the tree production compiles it on (`base.json`'s `image`: the year its 00README declares, else that of arXiv's build; 2307.16209, 2608.16117 and 2609.26457 on TeX Live 2023).
 Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
 The wrap reads each base's units from its paper's source, so the pack holds that too: `sources/<paper>/source.gz`, one a paper
 (`gate-pack.mjs make --sources=<dir of <paper>/source.gz>`, `data/corpus` by default; a make with a base of ours and no source
