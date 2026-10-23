@@ -1,15 +1,12 @@
 // @vitest-environment node
-import * as PL from '@cantoo/pdf-lib'
 import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
-import { constants as Z, deflateSync, inflateRawSync, inflateSync } from 'node:zlib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import type { Written } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readInkTexts, readMarked, readMarkProbe, readNameProbe, readSkipProbe } from '@/pdf-reader/engine/layout/marks.mjs'
-import { removerOf } from '@/pdf-reader/engine/layout/remove.mjs'
 import { startxrefOf } from '@/pdf-reader/engine/layout/tail.mjs'
 import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { layerOfPaper } from '@/pdf-reader/engine/pipeline/page-pass.mjs'
@@ -28,11 +25,6 @@ import { LAB } from './helpers/lab-data'
 
 const PDFJS_DIR = dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'))
 const open = (bytes: Uint8Array) => getDocument({ data: bytes.slice(), verbosity: 0, cMapUrl: join(PDFJS_DIR, 'cmaps/'), cMapPacked: true, standardFontDataUrl: join(PDFJS_DIR, 'standard_fonts/'), useSystemFonts: false })
-const deflate = (b: Uint8Array) => new Uint8Array(deflateSync(b))
-const inflate = (b: Uint8Array, limit: number) => {
-  const o = { finishFlush: Z.Z_SYNC_FLUSH, maxOutputLength: limit + 1 }
-  try { return new Uint8Array(inflateSync(b, o)) } catch (e) { if ((e as { code?: string })?.code === 'ERR_BUFFER_TOO_LARGE') throw e; return new Uint8Array(inflateRawSync(b.subarray(2), o)) }
-}
 
 describe.skipIf(!LAB)('the real papers: production\'s page stream, the marks given or read here, tells what the whole path tells; so does the oracle', () => {
   for (const name of ['1512.03385v1', '1706.03762v7', '2307.16209v1', '2608.04322v1']) {
@@ -54,12 +46,12 @@ describe.skipIf(!LAB)('the real papers: production\'s page stream, the marks giv
       const base = { bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex'), xref: startxrefOf(bytes) as number }
       const id = name.replace(/v\d+$/, ''), version = Number(name.slice(id.length + 1))
       const pass = async (o: Record<string, unknown>, readHere = false) => {
-        const t = open(bytes), doc = await t.promise, remover = removerOf({ bytes, PL, inflate, deflate })
+        const t = open(bytes), doc = await t.promise
         // (the marked original read by the pass itself, a page at a time beside arXiv's in the stream)
         const m = readHere ? open(markedBytes) : null
         const told: string[] = []
         const r = await layerOfPaper({
-          paper: { id, version }, source: paper as never, arxiv: { doc }, OPS, pdfjs: PDFJS, base, image: '1', remove: ({ plans }) => remover.remove(plans), ...o,
+          paper: { id, version }, source: paper as never, arxiv: { doc }, OPS, pdfjs: PDFJS, base, image: '1', ...o,
           ...((m ? { marks: null, marked: { doc: await m.promise, log, options } } : { marks }) as Record<string, unknown>),
           onHead: (h, units) => { told.push(...units.map(u => u.sha256), h.sha256) },
           onLeft: l => { told.push((l as Written).sha256) }, onPart: p => { told.push((p as Written).sha256) },

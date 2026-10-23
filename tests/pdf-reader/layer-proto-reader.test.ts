@@ -5,7 +5,7 @@ import { rolesFor } from '@/pdf-reader/engine/rules/font-roles.mjs'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { type BundleParts, bundleUnitsOf, type ReadBundle, readBundle, STRING_MAX, writeBundle } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { layerRows, type Row, rowOf, toTranslate, unitOf } from '@/pdf-reader/engine/layer-proto/rows.mjs'
-import { REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
+import { withGroups } from './helpers/groups'
 import { indexLayout, LAYOUT, LAYOUT_SCHEMA, type LayoutFile, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
@@ -78,9 +78,8 @@ function layoutOf(): LayoutFile {
     ph: [], labels: [], headings: [], pageText: [], held: [], names: [],
   } as never
 }
-/** the bundle's parts: the units, the left (the units v0's anchors hold), the layout file, the add-on */
-function partsOf({ layout = true, addon = true } = {}): BundleParts {
-  const tail = Uint8Array.from({ length: 64 }, (_, i) => (i * 37 + 11) & 255)
+/** the bundle's parts: the units, the left (the units v0's anchors hold), the layout file, its cell rules */
+function partsOf({ layout = true } = {}): BundleParts {
   return {
     paper: { id: '2610.00001', version: 1, pages: 2 },
     base: { bytes: 12_345, sha256: '0123456789abcdef'.repeat(4), url: '/api/v1/original/2610.00001v1' },
@@ -88,7 +87,7 @@ function partsOf({ layout = true, addon = true } = {}): BundleParts {
     units: bundleUnitsOf(sourceUnits()),
     left: { kinds: SPECS.map(s => s.kind), pages: [VIEW, VIEW], units: SPECS.map((s, id) => [id, id, s.lines.map(rectOf)] as [number, number, [number, number, number, number, number][]]).filter(([id]) => SPECS[id]!.left) },
     layout: layout ? layoutOf() : null,
-    addon: addon ? { manifest: { schema: 1, removal: REMOVAL, pages: 2, sets: {}, page: { 1: { ok: true }, 2: { ok: true } }, appended: tail.length, stats: { removed: 2 } } as never, tail } : null,
+    rules: layout ? { 2: [20, 250, 80, 250.4] } : null,
   }
 }
 const bundleOf = (o?: Parameters<typeof partsOf>[0]): ReadBundle => readBundle(writeBundle(partsOf(o)))
@@ -98,7 +97,7 @@ function docOf(ready: Promise<unknown> | null = null) {
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
   const items = [1, 2].map(p => SPECS.flatMap(s => s.lines.filter(l => l[0] === p).map(([, x0, x1, b]) => ({ str: s.text, transform: [10, 0, 0, 10, x0, b], width: x1 - x0, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false }))))
   const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items[n - 1], styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {}, getAnnotations: async () => [{ subtype: 'Link', rect: [270, 2, 290, 12], url: `https://example.org/p${n}`, overlaidText: '', borderStyle: { width: 0, style: 1 }, color: null }] })
-  return { numPages: 2, getPage: async (n: number) => { await ready; return pageOf(n) } }
+  return withGroups({ numPages: 2, getPage: async (n: number) => { await ready; return pageOf(n) } })
 }
 /** every face served whole, one slice over every code point; the faces asked, in turn */
 const facesAsked: string[] = []
@@ -130,7 +129,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     await expect(openLayer({ index: light, doc: docOf(), target: 'zh', faceSources, hyphUrl, leftPart: async () => new Uint8Array(), onRetired: () => {} } as never)).rejects.toThrow(/light index/)
   })
 
-  it('opens v0 with the bundle\'s left, layout and add-on, the target\'s units and cells\' groups, L7\'s labels, the served faces and hyphenation, at 2.5 and dpr 1', async () => {
+  it('opens v0 with the bundle\'s left, layout and cell rules, the target\'s units and cells\' groups, L7\'s labels, the served faces and hyphenation, at 2.5 and dpr 1', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const bundle = bundleOf(), doc = docOf()
     const layer = await openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl })
@@ -145,8 +144,8 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     expect(o.tex).toMatchObject({ symbols: 'text', extents: 'v0' })
     expect(o.tex?.index.file).toEqual(bundle.layout)
     expect(o.tex?.pieces).toEqual(new Map())
-    // (v0's removal reads no OPS: none is passed, and none asked of the host)
-    expect(o.removal).toEqual({ mode: 'draw', doc, manifest: bundle.addon!.manifest })
+    // (what the file could not hide: none in a BUNDLE 3 file; its cell rules by page)
+    expect([o.hiding?.unhidden?.(0), o.hiding?.labelKept?.(0), o.hiding?.rules?.(2), o.hiding?.rules?.(1)]).toEqual([null, false, [20, 250, 80, 250.4], undefined])
     // (the names of a float come from the rule set, given to the run whole: the built-in one where the host passes none)
     expect(o.labels).toEqual({ captions: { figure: 'target', table: 'target' } })
     expect(o.rules).toBe(BUILTIN_RULES)
@@ -155,18 +154,18 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     // (the door passes the rule set, never a parameter of its own)
     expect(Object.keys(o)).not.toContain('params')
     layer.dispose()
-    // a bundle the maker and the remover refused: a layout file of no unit, so that every unit is the original's, and no removal
-    const bare = bundleOf({ layout: false, addon: false })
+    // a bundle the maker refused: a layout file of no unit, so that every unit is the original's, and no cell rules
+    const bare = bundleOf({ layout: false })
     const plain = await openLayer({ bundle: bare, doc, target: 'de', faceSources, hyphUrl })
     const p = seen.opens.at(-1) as unknown as Opened
-    expect([p.tex.index.file.units, p.removal]).toEqual([[], null])
+    expect([p.tex.index.file.units, p.hiding?.rules?.(2)]).toEqual([[], undefined])
     expect(p.labels).toEqual({ captions: { figure: 'target', table: 'target' } })
     plain.dispose()
   })
 
   it("with no layout file nothing is drawn: every unit is the original's, one with a citation or a text symbol alike (the layer draws only from the file)", async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
-    const bundle = bundleOf({ layout: false, addon: false }), rows = rowsOf(bundle)
+    const bundle = bundleOf({ layout: false }), rows = rowsOf(bundle)
     const layer = await openLayer({ bundle, doc: docOf(), target: 'zh', faceSources, hyphUrl })
     layer.take(rows)
     layer.end()
@@ -224,7 +223,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
       doc: docOf(), geometry: { schema: 1, kinds: bundle.left.kinds, left: { pages: bundle.left.pages, units: bundle.left.units } } as never, units: units as never, target: 'zh',
       pages: Number.POSITIVE_INFINITY, scale: 2.5, dpr: 1, copy: false, faceSources, hyphUrl,
       tex: { symbols: 'text', extents: 'v0', index: (await import('@/pdf-reader/engine/layout/file.mjs')).indexLayout(bundle.layout!), pieces: pieces as never },
-      removal: { mode: 'draw', doc: docOf(), manifest: bundle.addon!.manifest },
+      
       labels: { captions: { figure: 'target', table: 'target' } },
     })
     await whole.until(2)
@@ -277,7 +276,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     const source = document.createElement('canvas')
     source.width = 1500
     source.height = 1500
-    const copy = await layer.copyOf(2, source, 5)
+    const copy = await layer.copyOf(2, { k: 5, width: source.width, height: source.height })
     expect(copy).toBeInstanceOf(HTMLCanvasElement)
     expect(copy).not.toBe(source)
     expect([copy.width, copy.height]).toEqual([1500, 1500])
@@ -387,7 +386,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     const source = document.createElement('canvas')
     source.width = 10
     source.height = 10
-    expect(() => layer.copyOf(1, source, 2.5)).toThrow(/let go/)
+    expect(() => layer.copyOf(1, { k: 2.5, width: source.width, height: source.height })).toThrow(/let go/)
     expect(layer.take(rowsOf(bundle))).toEqual({ complete: [] })
     expect(layer.stats().rules).toEqual({ schema: 5, version: BUILTIN_RULES.version })
     expect(layer.unitAt(1, 100, 262)).toBe(0)
@@ -430,7 +429,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     const source = document.createElement('canvas')
     source.width = 10
     source.height = 10
-    const copy = layer.copyOf(1, source, 2.5)
+    const copy = layer.copyOf(1, { k: 2.5, width: source.width, height: source.height })
     await tick()
     layer.dispose()
     go()
@@ -486,7 +485,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     source.width = 750
     source.height = 750
     const late = <T,>(p: Promise<T>) => Promise.race([p, new Promise<string>(ok => setTimeout(() => ok('waited'), 300))])
-    expect(await late(layer.copyOf(1, source, 2.5))).toBeInstanceOf(HTMLCanvasElement)
+    expect(await late(layer.copyOf(1, { k: 2.5, width: source.width, height: source.height }))).toBeInstanceOf(HTMLCanvasElement)
     expect(await late(layer.pageOf(1, { lang: 'zh' }).then(r => r.svg))).toBeInstanceOf(SVGSVGElement)
     expect(second).toBe(false)
     layer.take(rows.filter(r => r[0] > 3))
@@ -520,7 +519,7 @@ describe("the original's canvas with no copy kept (openProto copy: false): read 
       doc: docOf(), geometry: { schema: 1, kinds: bundle.left.kinds, left: { pages: bundle.left.pages, units: bundle.left.units } } as never, units: units as never, target: 'zh',
       pages: Number.POSITIVE_INFINITY, scale: 2.5, dpr: 1, copy, faceSources, hyphUrl, ...(rules ? { rules: rules as never } : {}),
       tex: { symbols: 'text', extents: 'v0', index: indexLayout(bundle.layout!), pieces: pieces as never },
-      removal: { mode: 'draw', doc: docOf(), manifest: bundle.addon!.manifest },
+      
       labels: { captions: { figure: 'target', table: 'target' } },
     })
   }
@@ -530,8 +529,8 @@ describe("the original's canvas with no copy kept (openProto copy: false): read 
     const kept = await open(true)
     await kept.until(2)
     const want = drawing(kept)
-    // (a drawing worth comparing: text set on both pages, units whited out)
-    expect(want.every(w => w.svg.includes('<tspan') && w.ops.includes('paper'))).toBe(true)
+    // (a drawing worth comparing: text set on both pages, units' groups hidden)
+    expect(want.every(w => w.svg.includes('<tspan') && w.ops.includes('"hidden"'))).toBe(true)
     // (a copy kept, as the gate and the lab open: the original whole until the page is released)
     expect(kept.rows.map(r => [r.left!.width, r.left!.height, r.right!.width])).toEqual([[750, 750, 750], [750, 750, 750]])
     expect(kept.rows.map(r => [r.base, !!r.released])).toEqual([[true, false], [true, false]])
@@ -608,7 +607,7 @@ describe("the original's canvas with no copy kept (openProto copy: false): read 
     const source = document.createElement('canvas')
     source.width = 750
     source.height = 750
-    expect((await layer.copyOf(1, source, 2.5)).width).toBe(750)
+    expect((await layer.copyOf(1, { k: 2.5, width: source.width, height: source.height })).width).toBe(750)
     layer.dispose()
     layer.dispose()
   })
@@ -659,8 +658,8 @@ describe('the door reaches no server-only module', () => {
   it('exports what the hosts take, and not the role table\'s or v0\'s own calls', async () => {
     const door = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     expect(Object.keys(door).sort()).toEqual([
-      'ADDON_CAP', 'ADDON_MANIFEST_CAP', 'ADDON_MANIFEST_VALUES', 'BUNDLE', 'BUNDLE_CAP', 'BUNDLE_VALUES', 'BundleRefusal', 'CTAG', 'DRAWS_HELD', 'DROPPED_ROWS', 'FACES', 'LAYOUT', 'LAYOUT_CAP', 'LAYOUT_VALUES', 'LayoutRefusal', 'PDF_OPTIONS', 'SKIP_CODES', 'VTAG',
-      'batchesOf', 'bundleKey', 'firstFaceOf', 'indexLayout', 'layerRows', 'openLayer', 'parseAddonManifest', 'parseLayout', 'readBundle', 'rowOf', 'runRows', 'toTranslate', 'trPiecesOf', 'translateUnits', 'unitOf',
+      'BUNDLE', 'BUNDLE_CAP', 'BUNDLE_VALUES', 'BundleRefusal', 'CTAG', 'DRAWS_HELD', 'DROPPED_ROWS', 'FACES', 'LAYOUT', 'LAYOUT_CAP', 'LAYOUT_VALUES', 'LayoutRefusal', 'PDF_OPTIONS', 'SKIP_CODES', 'VTAG',
+      'batchesOf', 'bundleKey', 'firstFaceOf', 'indexLayout', 'layerRows', 'openLayer', 'parseLayout', 'readBundle', 'rowOf', 'runRows', 'toTranslate', 'trPiecesOf', 'translateUnits', 'unitOf',
     ].sort())
   })
 })

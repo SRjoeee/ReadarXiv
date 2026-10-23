@@ -5,7 +5,6 @@ import { cacheKeyFor } from '@/cache/key'
 import { translateCall } from '@/core/run/call'
 import type { TranslateCall } from '@/providers/translate-service'
 import { bundleKey, CTAG, VTAG } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
-import { parseAddonManifest } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import { LAYOUT, LayoutRefusal, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
 import { type RuleField, RULES_FIELDS } from '@/pdf-reader/engine/rules/layout.mjs'
 import { CJK } from '@/pdf-reader/engine/pipeline/scripts.mjs'
@@ -13,7 +12,7 @@ import { scriptOf } from '@/pdf-reader/engine/rules/script.mjs'
 
 // The three kinds of rule and their identities (the rules-as-data plan, §1 and §9): extraction, layout and translation
 // each name their own change, and nothing names another's. The reader's refusals follow the identities: a layout file
-// and an add-on manifest are refused by their own schema, never by the version of what made them.
+// is refused by its own schema, never by the version of what made it.
 
 afterEach(() => {
   vi.doUnmock('@/pdf-reader/engine/translate/version.mjs')
@@ -123,7 +122,6 @@ const layoutFile = (over: Record<string, unknown> = {}) => ({
   schema: 5, layout: LAYOUT, pdfjs: '6.3.289', paper: { id: '2608.04322', version: 1, pages: 1 }, left: '', views: [0, 0, 612, 792], fonts: [],
   units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], names: [], lineskip: null, ...over,
 })
-const manifest = (over: Record<string, unknown> = {}) => ({ schema: 1, removal: '4', pages: 1, sets: {}, page: { 1: { ok: true } }, appended: 0, stats: {}, ...over })
 
 describe('a layout file is refused by its schema, not by its maker (decision 4)', () => {
   it('reads a schema-5 file whose `layout` is a newer maker\'s, and refuses a schema-4 or a schema-6 file', () => {
@@ -147,20 +145,6 @@ describe('a layout file is refused by its schema, not by its maker (decision 4)'
     }
     expect(parseLayout(bytesOf(layoutFile({ layout: 'x'.repeat(32) }))).layout).toBe('x'.repeat(32))
     expect(parseLayout(bytesOf(layoutFile({ layout: '3.1' }))).layout).toBe('3.1')
-  })
-})
-
-describe('an add-on manifest is refused by its schema, not by its remover (decision 4)', () => {
-  it("reads a schema-1 manifest whose `removal` is another remover's, and refuses a schema-2 one", () => {
-    for (const removal of ['1', '3', '5', '4.1']) expect(parseAddonManifest(bytesOf(manifest({ removal })), { pages: 1 }).removal).toBe(removal)
-    expect(() => parseAddonManifest(bytesOf(manifest({ schema: 2 })), { pages: 1 })).toThrow(LayoutRefusal)
-    expect(() => parseAddonManifest(bytesOf(manifest({ schema: 2, removal: '5' })), { pages: 1 })).toThrow(/schema/)
-  })
-
-  it('still reads `removal` for its shape', () => {
-    for (const bad of ['', 'a b', 'x'.repeat(33), 4, null, ['4']]) {
-      expect(() => parseAddonManifest(bytesOf(manifest({ removal: bad })), { pages: 1 }), JSON.stringify(bad)).toThrow(/^removal:/)
-    }
   })
 })
 

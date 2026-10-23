@@ -9,16 +9,16 @@
 // plain loops, a value of the wrong type named by its type and never converted. A refusal is of the whole file
 // (BundleRefusal: the reader shows the original, with no layer), but for a unit: one whose shape is wrong (a bad piece,
 // a nested piece naming no unit before it) is dropped, null at its id, and the rest stand. The layout and the add-on's
-// manifest are checked by their own modules' rules (layout/file.mjs, layout/addon-manifest.mjs).
+// cell rules are checked by their own modules' rules (layout/file.mjs, layout/cell-rules.mjs).
 //
 // Imports the layout's parsers and the engine's versions alone: never the run (live.mjs), the remover, the layout's
 // maker nor the front end, which a reader does not load. bundleUnitsOf, the writer's, reads openPaper's units and
 // nothing more.
-import { ADDON_CAP, checkAddonManifest, REMOVAL } from '../layout/addon-manifest.mjs'
+import { checkBoxes } from '../layout/cell-rules.mjs'
 import { checkLayout, encodeLayout, isPaperId, LAYOUT, UNIT_KINDS, VERSION_MAX } from '../layout/file.mjs'
 import { COORD_MAX, countValues, isInteger, isNumber, isObject, isVersionToken, LayoutRefusal, PAGES_MAX, STRING_MAX, told, utf8Strict } from '../layout/json.mjs'
-import { PDFJS, PIPELINE_VERSION } from '../pipeline/versions.mjs'
-import { bundleUnitsOf, fromBase64, toBase64, UNIT_FLAG_BITS, unitStands } from './units.mjs'
+import { PDFJS, PIPELINE_VERSION, REMOVAL } from '../pipeline/versions.mjs'
+import { bundleUnitsOf, UNIT_FLAG_BITS, unitStands } from './units.mjs'
 
 // (the units and base64 moved to units.mjs, which BUNDLE 4's chunks take too)
 export { bundleUnitsOf, UNIT_FLAG_BITS }
@@ -34,8 +34,8 @@ export const BUNDLE = '3'
 /** a bundle's bytes at most (the 147-page thesis's is 1.18 MiB) and its values (the thesis holds 165,659) */
 export const BUNDLE_CAP = 4 * 2 ** 20
 export const BUNDLE_VALUES = 1_000_000
-/** the deepest the bundle nests: its object, `addon`, the manifest, its `page`, a page's entry, its `units`, a unit's
- *  boxes (a unit's piece, the left's rectangle and the layout's rows are no deeper) */
+/** the deepest the bundle nests: its object, its units, a unit, its pieces, a piece's fields (the left's rectangle, the layout's
+ *  rows and the rules' boxes are no deeper) */
 const DEPTH = 7
 /** a unit's string at most, in code units: layout/json.mjs's, the rows' and the text pieces' too */
 export { STRING_MAX }
@@ -44,7 +44,7 @@ const SLACK = 1
 /** a PDF's bytes at most */
 const BASE_MAX = 2 ** 31
 const SHA256 = /^[0-9a-f]{64}$/
-const KEYS = ['schema', 'paper', 'base', 'versions', 'units', 'left', 'layout', 'addon']
+const KEYS = ['schema', 'paper', 'base', 'versions', 'units', 'left', 'layout', 'rules']
 const VERSIONS = ['bundle', 'pipeline', 'layout', 'removal', 'pdfjs', 'image']
 /** the reader's contract: the bundle's format and the PDF.js it reads the geometry with, what a reader asks by. A
  *  bundle of another is refused */
@@ -97,25 +97,25 @@ export const originalUrl = (id, version) => `/api/v1/original/${segmentOf(id, ve
  * The bundle file's bytes (UTF-8 JSON) from its parts: `paper` { id, version, pages }; `base` { bytes, sha256, url },
  * arXiv's PDF it was made over and our copy's address; `image`, the compiler image's name; `units`, bundleUnitsOf's;
  * `left` { kinds, pages, units }, the original's side; `layout`, the layout file (written as its file is, encodeLayout)
- * or null; `addon` { manifest, tail: the bytes after arXiv's } or null. The versions are the engine's, with the image.
- * The same parts give the same bytes: every object of the bundle's own written in one order. Never bytes past
- * BUNDLE_CAP or BUNDLE_VALUES, which readBundle refuses: the add-on is written null where the bundle would be past
- * either, then the layout too (the prepare reads the bundle back, and sees which it holds); a bundle past them with
- * neither throws BundleRefusal
+ * or null; `rules`, the rules near its table cells by page ({ [page]: x0, y0, x1, y1 stride 4 }) or null. The versions are the
+ * engine's, with the image. The same parts give the same bytes: every object of the bundle's own written in one order. Never
+ * bytes past BUNDLE_CAP or BUNDLE_VALUES, which readBundle refuses: the layout (and its rules) is written null where the bundle
+ * would be past either (the prepare reads the bundle back, and sees which it holds); a bundle past them with none throws
+ * BundleRefusal
  */
-export function writeBundle({ paper, base, image, units, left, layout, addon }) {
+export function writeBundle({ paper, base, image, units, left, layout, rules = null }) {
   const J = JSON.stringify
   const versions = { bundle: BUNDLE, pipeline: PIPELINE_VERSION, layout: LAYOUT, removal: REMOVAL, pdfjs: PDFJS, image }
   const head = `{"schema":1,"paper":${J({ id: paper.id, version: paper.version, pages: paper.pages })},"base":${J({ bytes: base.bytes, sha256: base.sha256, url: base.url })},"versions":${J(versions)},"units":${J(units)},"left":${J({ kinds: left.kinds, pages: left.pages, units: left.units })}`
-  const tries = [[layout, addon]]
-  if (addon !== null) tries.push([layout, null])
+  const pagesOf = r => (r === null || !Object.keys(r).length ? null : Object.fromEntries(Object.keys(r).map(Number).sort((x, y) => x - y).map(p => [p, r[p]])))
+  const tries = [[layout, layout === null ? null : pagesOf(rules)]]
   if (layout !== null) tries.push([null, null])
-  for (const [l, a] of tries) {
-    const text = `${head},"layout":${l === null ? 'null' : encodeLayout(l)},"addon":${a === null ? 'null' : `{"manifest":${J(a.manifest)},"tail":"${toBase64(a.tail)}"}`}}`
+  for (const [l, r] of tries) {
+    const text = `${head},"layout":${l === null ? 'null' : encodeLayout(l)},"rules":${J(r)}}`
     const bytes = new TextEncoder().encode(text)
     if (bytes.length <= BUNDLE_CAP && countValues(text, BUNDLE_VALUES, DEPTH) <= BUNDLE_VALUES) return bytes
   }
-  throw new BundleRefusal(`more than ${BUNDLE_CAP} bytes or ${BUNDLE_VALUES} values with neither its layout nor its add-on`)
+  throw new BundleRefusal(`more than ${BUNDLE_CAP} bytes or ${BUNDLE_VALUES} values with no layout`)
 }
 
 /** a paper version's bundle under this engine's versions: `layer/<id>v<n>/<VTAG>.json`, VTAG
@@ -161,10 +161,8 @@ const isText = s => typeof s === 'string' && s.length <= STRING_MAX
  * does not dropped; the left's kinds (a unit's each), pages (boxes, the paper's) and units ([id, stream, rects] of the
  * bundle's units, each rectangle a box within its page's view, as the layout file's are); the layout by its file's
  * rules (layout/file.mjs checkLayout), of the bundle's paper, PDF.js and units, its pages' views the left's; the
- * add-on's manifest by its own (layout/addon-manifest.mjs checkAddonManifest: the shipped add-on's, the paper's pages,
- * each box within its page's view as the left gives it), its tail decoded from base64 within ADDON_CAP, the manifest's
- * `appended` bytes. Returns the bundle with each unit dropped null at its id and `dropped` those ids rising, and the
- * tail as bytes; throws BundleRefusal
+ * rules by page (layout/cell-rules.mjs checkBoxes: each box within its page's view as the left gives it), null where the layout
+ * is. Returns the bundle with each unit dropped null at its id and `dropped` those ids rising; throws BundleRefusal
  */
 export function readBundle(json, caps = {}) {
   const cap = caps.bytes ?? BUNDLE_CAP, most = caps.values ?? BUNDLE_VALUES
@@ -267,15 +265,17 @@ export function readBundle(json, caps = {}) {
     for (let i = 0; i < unlaid.length; i++) if (unlaid[i][0] >= units.length) throw fail(`layout.unlaid[${i}][0]`, 'not a unit of the bundle')
   }
 
-  let addon = null
-  if (b.addon !== null) {
-    const a = exactKeys(b.addon, ['manifest', 'tail'], 'addon')
-    let manifest
-    try { manifest = checkAddonManifest(a.manifest, { pages, views, shipped: true }) } catch (e) { throw within('addon.manifest', e) }
-    let tail
-    try { tail = fromBase64(a.tail, ADDON_CAP, 'addon.tail') } catch (e) { throw e instanceof LayoutRefusal ? new BundleRefusal(e.message) : e }
-    if (tail.length !== manifest.appended) throw fail('addon.tail', `not the manifest's ${manifest.appended} bytes`)
-    addon = { manifest, tail }
+  let rules = null
+  if (b.rules !== null) {
+    if (layout === null) throw fail('rules', 'not null where the layout is none')
+    if (!isObject(b.rules) || Array.isArray(b.rules) || !Object.keys(b.rules).length) throw fail('rules', `not an object of pages (${kindOf(b.rules)})`)
+    rules = {}
+    for (const k of Object.keys(b.rules)) {
+      const p = /^[1-9]\d{0,4}$/.test(k) ? Number(k) : NaN
+      if (!isInteger(p, 1, pages)) throw fail(`rules.${told(k)}`, `not a page 1 to ${pages}`)
+      if (!Array.isArray(b.rules[k]) || !b.rules[k].length) throw fail(`rules.${k}`, `not boxes (${kindOf(b.rules[k])})`)
+      try { rules[p] = checkBoxes(b.rules[k], p, views, k) } catch (e) { throw within('rules', e) }
+    }
   }
-  return { schema: 1, paper, base, versions, units, left, layout, addon, dropped }
+  return { schema: 1, paper, base, versions, units, left, layout, rules, dropped }
 }

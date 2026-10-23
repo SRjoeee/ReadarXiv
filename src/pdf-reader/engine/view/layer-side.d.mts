@@ -22,8 +22,9 @@ export interface LayerSideOptions {
   /** the host's base check, once, after the head is read and before any composed document: true where the host's source of
    *  arXiv's bytes is head.base; false (or a rejection) is no layer (refused 'base') */
   bind(base: { bytes: number; sha256: string; xref: number }): Promise<boolean>
-  /** the composed document: arXiv's PDF followed by every tail told (null for none), opened with the view's assets,
-   *  PDF_OPTIONS and disableAutoFetch; the task is the side's (destroyed once no door reads it, and at dispose) */
+  /** the composed document (our wrapped base, whole or as a delta over arXiv's PDF; the first argument is always null: no tail),
+   *  opened with the view's assets, PDF_OPTIONS and disableAutoFetch, once a head; the task is the side's (destroyed once no door
+   *  reads it, and at dispose) */
   composed: ComposedOpener
   /** the engine's door (the tests'); the layer entry's openLayer by default */
   openLayer?: typeof openLayer
@@ -49,43 +50,16 @@ export interface LayerSide {
   coverage(): { laid: number; total: number; late: number; failed: number; stalled: number; skipped: Record<string, number>; parts: { through: number; told: number } }
   /** the harness's hooks: counts and states, a ring of the last commits (page@ms), never a page's text */
   probe(): Readonly<Record<string, number | string | boolean | null>>
-  /** the harness's registration check of a page this door laid near the view: its copy drawn twice, from the source a commit
-   *  takes (PDF.js's canvas of the left's or the place's page) and from the page drawn at the place's k (exact by
-   *  construction), the two compared pixel by pixel over their common size. Null where page `n` is not laid near the view */
-  registration(n: number, o?: { tolerance?: number; canvases?: boolean }): Promise<Registration | null>
   /** the door and every composed task let go; each place back to its pre-layer content; 'layer' not emitted after */
   dispose(): void
-}
-/** what registration() found: the place's k and the source's, the device pixels of the page's width PDF.js left off the
- *  source (`lost`: k × width − the source's width), and, where the source is a canvas of PDF.js's (`from` 'left' or
- *  'place'), the pixels compared and those differing by more than the tolerance in a channel */
-export interface Registration {
-  page: number
-  /** the page's width and height in PDF units */
-  size: [number, number]
-  from: 'left' | 'place' | 'doc'
-  k: number
-  kSource: number
-  lost: number
-  source: [number, number]
-  /** the commit's own path timed (ms): its source got (a canvas PDF.js drew, or the page drawn from the document), its copy drawn;
-   *  `doc`: the page drawn from the composed document, timed where the commit's own source was a canvas of PDF.js's */
-  ms: { source: number; copy: number; doc?: number }
-  /** the size of the page drawn from the document */
-  doc?: [number, number]
-  /** the pixels compared with the other source's copy, and those differing: the other source is the page drawn from the document
-   *  (when the commit's is a canvas of PDF.js's), or, over our base, the left's canvas where PDF.js drew it at this k */
-  compared?: number
-  differing?: number
-  maxDiff?: number
-  /** with `canvases`: the two copies (the commit's source's, the other's), which the caller lets go */
-  copies?: { source: HTMLCanvasElement; doc: HTMLCanvasElement }
 }
 /** sync; opens nothing until it can. One side per view: a second while one lives throws */
 export declare function createLayerSide(view: ReaderView, o: LayerSideOptions): LayerSide
 export declare const PAGE_MS: number
 export declare const COPY_PIXELS: number
 export declare const RECOPY_MS: number
+/** the longest a laid page's copy waits for the left's page to be drawn before it is put in place, ms */
+export declare const LEFT_WAIT_MS: number
 export declare const LEFT_RETRY_MS: number
 /** the most other pages a wanted page's running units bring their left parts from, the nearest first */
 export declare const SPREAD_MAX: number

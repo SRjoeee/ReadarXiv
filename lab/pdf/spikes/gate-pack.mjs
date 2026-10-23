@@ -7,6 +7,9 @@
 //   pack/fixtures/<fx>/base.pdf, base.json        our base page the layout file was made over, where it was (BUNDLE 8: the final
 //                                                 pass of the marked original, layer-fixtures.mjs), and its record (baseRecordOf)
 //   pack/fixtures/<fx>/units.json, record.json    the PIPELINE translations, which the gate reads beside them (--records' files)
+//   pack/sources/<paper>/source.gz                each paper's source as arXiv serves it (--sources, <paper>/source.gz), where a
+//                                                 fixture's base is ours: the layer gate wraps that base by optional content at
+//                                                 load from the source's units (layer-gate/wrap.mjs, docs/PDF-READER.md §19.9)
 //   pack/refs/<fx>/ref.json, layout.json          the frozen reference text area and the instrument's kept layout (LAYER_REFS)
 //   pack/geometry/<paper>-<target>-geometry.json  the geometry the gate resolves for each output (LAYER_GEOMETRY)
 //   pack/data/fonts/<file>                        the served faces (AXT_DATA=pack/data)
@@ -29,6 +32,7 @@
 //
 //   node lab/pdf/spikes/gate-pack.mjs make     [--year=<YYYY>] [--out=<dir>] [--json=<gate-pack.json>] [--record=<layer-gate.json>] [--fixtures=<dir>]
 //                                              [--records=<dir>] [--refs=<dir>] [--geometry=<dir>] [--fonts=<dir>] [--texmf=<dir>] [--engine=<dir>]
+//                                              [--sources=<dir>]
 // --year: the pack's TeX Live year (packPathsOf: its json, its folder and its record, the default year's as before); every command takes it
 //   node lab/pdf/spikes/gate-pack.mjs restore  [--pack=<gate-pack.json>] [--out=<dir>]    env READARXIV_CI_TOKEN, CF_ACCOUNT_ID
 //   node lab/pdf/spikes/gate-pack.mjs verify   [--pack=<gate-pack.json>] [--out=<dir>]
@@ -127,7 +131,8 @@ export function outputsOf(refs) {
 /**
  * The pack's files as { path, from }, sorted by path. `o`: the folders of a make (fixtures, records, refs, geometry),
  * `fonts` the file names to take from the fonts folder, `fontsDir`, and `patterns` the hyphenation files ({ lang: relative
- * path under texmf }) with `texmf` their root. The outputs are those of the references (`outputsOf`); every file the gate reads
+ * path under texmf }) with `texmf` their root, and `sources` the papers' sources (<paper>/source.gz), one a paper whose base is
+ * ours. The outputs are those of the references (`outputsOf`); every file the gate reads
  * for each of them must be there. Throws naming everything missing, so that a pack is never partly made.
  */
 export function entriesOf(o) {
@@ -147,7 +152,13 @@ export function entriesOf(o) {
     let base = null
     try { base = baseRecordOf(join(o.fixtures, n)) } catch (e) { missing.push(`${n}: ${e.message}`) }
     if (base) add(`fixtures/${n}/base.json`, join(o.fixtures, n, 'base.json'))
-    if (base?.source === 'ours') add(`fixtures/${n}/base.pdf`, join(o.fixtures, n, 'base.pdf'))
+    if (base?.source === 'ours') {
+      add(`fixtures/${n}/base.pdf`, join(o.fixtures, n, 'base.pdf'))
+      // (the paper's source, which the wrap reads its units from: one a paper, shared by its targets)
+      const paper = n.replace(/-[A-Za-z-]+$/, '')
+      if (!o.sources) missing.push(`sources/${paper}/source.gz (no --sources: a base of ours is wrapped from its paper's source)`)
+      else add(`sources/${paper}/source.gz`, join(o.sources, paper, 'source.gz'))
+    }
     add(`fixtures/${n}/units.json`, join(o.records, n, 'units.json'))
     add(`fixtures/${n}/record.json`, join(o.records, n, 'record.json'))
     add(`refs/${n}/ref.json`, join(o.refs, n, 'ref.json'))
@@ -542,7 +553,8 @@ async function main(argv) {
     const known = SCRIPTS.map(s => BUILTIN_RULES.scripts[s].cjkFaces).filter(Boolean)
     const used = [...new Map(targets.map(t => resolveRules(BUILTIN_RULES, t).cjkFaces).filter(Boolean).map(c => [`${c.group}|${c.kai}`, c])).values()]
     const texmf = resolve(typeof arg('texmf', argv) === 'string' ? arg('texmf', argv) : process.env.TEXMF_DIST ?? join(homedir(), 'Library/TinyTeX/texmf-dist'))
-    const entries = entriesOf({ fixtures, records, refs, geometry, fontsDir: where(argv, 'fonts'), fonts: fontFiles(FACES, known, used), patterns: TEX_PATTERN_FILES, texmf })
+    const sources = typeof arg('sources', argv) === 'string' ? resolve(arg('sources', argv)) : resolve(REPO, 'lab/pdf/data/corpus')
+    const entries = entriesOf({ fixtures, records, refs, geometry, sources, fontsDir: where(argv, 'fonts'), fonts: fontFiles(FACES, known, used), patterns: TEX_PATTERN_FILES, texmf })
     const manifest = makePack({ entries, out: where(argv, 'out'), pipeline: pipelineOf(records, names), layout, compileImage })
     writeFileSync(packFile, `${JSON.stringify(packJsonOf(manifest), null, 1)}\n`)
     const s = summaryOf(manifest.files)

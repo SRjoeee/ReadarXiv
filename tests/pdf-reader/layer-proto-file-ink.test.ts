@@ -150,14 +150,6 @@ describe("a paragraph's measure where TeX changed it: each slot its line's (F5)"
     for (const x of loose.lines) expect(x.x1).toBe(x.baseline > b7 + 0.05 ? 283.4 : 533)
     expect(loose.lines.some(x => x.baseline > b7 + 0.05 && x.baseline < b7 + 13.5 - 0.05)).toBe(true)
   })
-  it("erases a line beside the figure to its own measure's edge, not over the figure", () => {
-    const blocks = L2.blocks2(wrapped as never, views, null, new Map())
-    const px = (x: number, y: number): [number, number] => [x, 792 - y]
-    const ops = L2.unitOps({ scale: 1, lines: [] } as never, blocks, 1, { px, k: 1, hasSource: () => true, pxOf: () => px })
-    const right = ops.map(o => (o as { box: number[] }).box).map(b => (b[0] ?? 0) + (b[2] ?? 0))
-    expect(right.slice(0, 7).every(x => x < 290)).toBe(true)
-    expect(right.slice(7, 19).every(x => x > 530)).toBe(true)
-  })
 })
 
 describe('a placeholder read from the file where it holds its ink (F6)', () => {

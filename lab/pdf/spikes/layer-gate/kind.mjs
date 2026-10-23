@@ -13,7 +13,7 @@ export function engineKindOf(given, engine, exists = existsSync) {
   const kind = given ?? 'proto'
   if (kind !== 'layer' && kind !== 'proto') throw new Error(`--engine-kind=${kind}: proto (the drawn layer, v0; the default) or layer (the first layer, parked)`)
   if (kind === 'layer' && !exists(join(engine, 'src/pdf-reader/engine/layer/layer.mjs'))) {
-    throw new Error(`--engine-kind=layer measures the first layer, layer/layer.mjs, which is parked (parked/engine/layer/, see parked/README.md) and absent from ${engine}. The gate measures the drawn layer: leave --engine-kind out, or give --engine-kind=proto (the records' mode is --proto-tex=lines --removal=draw), or --door`)
+    throw new Error(`--engine-kind=layer measures the first layer, layer/layer.mjs, which is parked (parked/engine/layer/, see parked/README.md) and absent from ${engine}. The gate measures the drawn layer: leave --engine-kind out, or give --engine-kind=proto (the records' mode is --proto-tex=lines), or --door`)
   }
   return kind
 }

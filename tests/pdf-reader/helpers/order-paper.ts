@@ -5,6 +5,7 @@ import type { PageWords } from '@/pdf-reader/engine/layer-proto/words.mjs'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { indexLayout, LAYOUT, LAYOUT_SCHEMA, type LayoutFile, parseLayout, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { PDFJS } from '@/pdf-reader/engine/pipeline/versions.mjs'
+import { withGroups } from './groups'
 
 // Synthetic papers for the order of the asks (1b-D design §5: S-A to S-D, the fill paper, and S-E's shared lines): the same page of a PDF.js
 // document's shape as the take and local tests' (its text layer, its views; nothing drawn), a layout file and v0's geometry
@@ -174,7 +175,7 @@ export function build(paper: Paper): Built {
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
   const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items[n - 1], styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {}, ...(paper.annots === 'absent' ? {} : { getAnnotations: async () => { if (paper.annots === 'throw') throw new Error('the annotations cannot be read'); return annotationsOf(specs, n) } }) })
   const asked: number[] = []
-  const doc = { numPages: pages, asked, getPage: async (n: number) => { asked.push(n); if (n === paper.fail) throw new Error(`page ${n} cannot be read`); return pageOf(n) } }
+  const doc = withGroups({ numPages: pages, asked, getPage: async (n: number) => { asked.push(n); if (n === paper.fail) throw new Error(`page ${n} cannot be read`); return pageOf(n) } })
   const layout = {
     schema: LAYOUT_SCHEMA, lineskip: null, layout: LAYOUT, pdfjs: PDFJS, paper: { id: '2610.00001', version: 1, pages }, left: '', views: all.flatMap(() => VIEW), fonts: ['F1'],
     units: specs.map(s => [s.id, UNIT_KINDS.indexOf(s.kind as never), 9, 0, 1]),
@@ -240,7 +241,7 @@ export function bundleOf(P: Built): ReadBundle {
     base: { bytes: 12_345, sha256: '0123456789abcdef'.repeat(4), url: '/api/v1/original/2610.00001v1' },
     image: '1', units: bundleUnitsOf(units),
     left: { kinds: specs.map(s => s.kind), pages: Array.from({ length: pages }, () => VIEW), units: [] },
-    layout: P.layout, addon: null,
+    layout: P.layout, rules: null,
   }
   return readBundle(writeBundle(parts))
 }

@@ -1,15 +1,14 @@
 // lab/pdf/spikes/layer-gate/door-parts.mjs
 // The layer gate's page for the door in parts (--door-parts; src/pdf-reader/engine/layer-proto/reader.mjs, BUNDLE 4; the door
-// design's H3): a fixture cut into BUNDLE 4's objects by the driver (cut.mjs cutBundle at one schedule, with the chained add-on:
-// each part's tail after the parts before it), read here as a host reads them (format.mjs: the units' chunks, the head,
-// indexOf, each part against the chain), and its pages drawn twice, each in a page load of its own: door A, openLayer over the
-// cut made whole again (mergeParts, BUNDLE 3's open, over arXiv's PDF and every tail), and door B, openLayer over the index with
-// no part, each part told when the run waits for one (addPart: every part late, as a slow prepare tells them; a part with a tail
-// with the composed document through it, opened beforehand). Door S (C') is BUNDLE 3's open of the bundle with its single tail,
-// its copies drawn over door A's PNGs as door B's are (never over its own drawing of arXiv's page: a first drawing varies).
+// design's H3): a fixture cut into BUNDLE 4's objects by the driver (cut.mjs cutBundle at one schedule, the head's base the
+// wrapped page, each part carrying its pages' cell rules), read here as a host reads them (format.mjs: the units' chunks, the
+// head, indexOf, each part against the chain), and its pages drawn twice, each in a page load of its own, both over the one
+// wrapped page (base.pdf: parts carry no tail): door A, openLayer over the cut made whole again (mergeParts, BUNDLE 3's open), and
+// door B, openLayer over the index with no part, each part told when the run waits for one (addPart: every part late, as a slow
+// prepare tells them).
 // The rows are the record's, all taken, then end().
-// Each page's answer: its SVG's markup, its word table's digest (words.mjs, 1b-E), copyOf's pixels over the page as door A's load had PDF.js draw it (its PNG, so that both
-// copies start from the same pixels), and the digest of the run's records of the units on the page (the run is reached through
+// Each page's answer: its SVG's markup, its word table's digest (words.mjs, 1b-E), copyOf's pixels at the size of the page as door
+// A's load had PDF.js draw it (its PNG), and the digest of the run's records of the units on the page (the run is reached through
 // the driver's stand-in of run.mjs, which keeps each run it opens and tells this page what the run waits for); and once the
 // pages are asked, every page's state and the units left and why. Door B then tells the parts its pages did not need and ends
 // the parts, as a host does at the catalog's end, its states and units left read before endParts and after (the accounting of
@@ -71,10 +70,8 @@ async function cutOf(name) {
   const index = F.indexOf(head, chunks)
   const parts = []
   for (const p of c.parts) parts.push(await F.readPart(await bytes(p.path), { ref: p.ref, index, chain: parts.at(-1)?.chain ?? null }))
-  return { F, index, parts, docs: c.docs ?? {}, composed: c.composed ?? null }
+  return { F, index, parts }
 }
-/** arXiv's PDF followed by `tail` */
-const withTail = (original, tail) => { const out = new Uint8Array(original.length + tail.length); out.set(original); out.set(tail, original.length); return out }
 /** each page's records of the units on it (timings aside), as a digest; the run's units left and why, sorted */
 const recsOf = (run, p) => textDigest(JSON.stringify(run.stats.filter(r => r.pages.includes(p)).map(({ ms: _, ...r }) => r)))
 const skippedOf = run => run.skipped.map(s => `${s.id}:${s.why}`).sort()
@@ -91,7 +88,7 @@ async function askEvery(R, layer, { target, pages, N, sourceOf }) {
     const lang = markup.getAttribute('lang')
     markup.removeAttribute('lang')
     const { png, source } = await sourceOf(p)
-    const copy = await layer.copyOf(p, source, K)
+    const copy = await layer.copyOf(p, { k: K, width: source.width, height: source.height })
     out.push({ p, svg: markup.outerHTML, lang, w, h, words: await wordsDigest(words), links: await textDigest(JSON.stringify(links ?? [])), copy: await pixelsOf(copy), ...(png ? { png: base64(png) } : {}) })
     for (const c of [source, copy]) { c.width = 0; c.height = 0 }
   }
@@ -102,18 +99,13 @@ async function askEvery(R, layer, { target, pages, N, sourceOf }) {
 const heldOf = (layer, N) => ({ states: statesOf(layer, N), skipped: skippedOf(window.__gateRuns.at(-1)) })
 
 window.doorParts = {
-  /** door A: BUNDLE 3's open over the cut made whole (mergeParts) and arXiv's PDF through every tail, or (`bundle3`) over BUNDLE
-   *  3's bundle itself: with no add-on ('none', door C, `addon: null`) or with its single tail ('single', door S); each page's
-   *  PDF.js drawing at K kept as PNG for door B (unless `png` is false). `shared`: each page's copy drawn over door A's PNG of
-   *  it, as door B's is, not over this load's own drawing: PDF.js's first drawing of a page in a document is not always
-   *  another load's (layer-gate/door.mjs head), so two loads' copies are compared over the same pixels or not at all */
-  async whole({ name, target, rules, pages, bundle3 = false, png: keepPng = true, shared = false }) {
+  /** door A: BUNDLE 3's open over the cut made whole (mergeParts) and the wrapped page; each page's PDF.js drawing at K kept as PNG
+   *  for door B (unless `png` is false) */
+  async whole({ name, target, rules, pages, png: keepPng = true }) {
     const R = await import('/engine/layer-proto/reader.mjs')
-    const { F, index, parts, composed } = await cutOf(name)
-    const original = await bytes(`/fixtures/${name}/base.pdf`)
-    const three = bundle3 ? R.readBundle(await bytes(`/door/${name}/bundle.json`)) : null
-    const bundle = bundle3 === 'none' ? { ...three, addon: null } : bundle3 === 'single' ? three : F.mergeParts(index, parts)
-    const data = bundle3 === 'single' ? withTail(original, three.addon.tail) : bundle3 === false && composed ? await bytes(composed) : original
+    const { F, index, parts } = await cutOf(name)
+    const data = await bytes(`/fixtures/${name}/base.pdf`)
+    const bundle = F.mergeParts(index, parts)
     const rows = await json(`/door/${name}/rows.json`)
     const doc = await pdfjs.getDocument({ data, ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise
     const ruleSet = await ruleSetOf(rules)
@@ -122,7 +114,6 @@ window.doorParts = {
     layer.take(rows)
     layer.end()
     const sourceOf = async p => {
-      if (shared) return { png: null, source: await canvasOfPng(await bytes(`/door/${name}/s${p}.png`)) }
       const page = await doc.getPage(p)
       const viewport = page.getViewport({ scale: K })
       const drawn = document.createElement('canvas')
@@ -140,18 +131,15 @@ window.doorParts = {
     const stats = layer.stats()
     layer.dispose()
     await doc.loadingTask.destroy()
-    return { ...out, ...held, parts: parts.map(p => p.pages), addon: bundle.addon !== null, drawn: stats.drawn }
+    return { ...out, ...held, parts: parts.map(p => p.pages), drawn: stats.drawn }
   },
 
   /** door B: openLayer over the index, no part at the open, each told when the run waits for one */
   async parts({ name, target, rules, pages }) {
     const R = await import('/engine/layer-proto/reader.mjs')
-    const { index, parts, docs } = await cutOf(name)
+    const { index, parts } = await cutOf(name)
     const rows = await json(`/door/${name}/rows.json`)
     const doc = await pdfjs.getDocument({ data: await bytes(`/fixtures/${name}/base.pdf`), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise
-    // (the composed document through each part's tail, opened before the run: addPart is synchronous, as a host's is)
-    const composed = new Map()
-    for (const [i, path] of Object.entries(docs)) composed.set(Number(i), await pdfjs.getDocument({ data: await bytes(path), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise)
     const ruleSet = await ruleSetOf(rules)
     window.__gateRuns = []
     const log = []
@@ -159,7 +147,7 @@ window.doorParts = {
     const retired = []
     const layer = await R.openLayer({ index, doc, parts: [], target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS, leftPart: async () => new Uint8Array(), onRetired: d => { retired.push(d) } })
     layer.onPage((p, state) => log.push(`${state}:${p}`))
-    const tell = i => { const part = parts[i]; log.push(`part:${part.pages.join('-')}`); layer.addPart(part, ...(composed.has(i) ? [{ doc: composed.get(i) }] : [])) }
+    const tell = i => { const part = parts[i]; log.push(`part:${part.pages.join('-')}`); layer.addPart(part) }
     window.__gateWait = what => {
       log.push(`wait:${what}`)
       if (what === 'part' && next < parts.length) tell(next++)
@@ -178,8 +166,8 @@ window.doorParts = {
     const after = heldOf(layer, N)
     const stats = layer.stats()
     layer.dispose()
-    for (const d of new Set([doc, ...composed.values(), ...retired])) await d.loadingTask.destroy()
-    return { ...out, before, after, log, needed, of: parts.length, parts: parts.map(p => p.pages), addons: parts.filter(p => p.addon !== null).length, tails: composed.size, drawn: stats.drawn }
+    for (const d of new Set([doc, ...retired])) await d.loadingTask.destroy()
+    return { ...out, before, after, log, needed, of: parts.length, parts: parts.map(p => p.pages), drawn: stats.drawn }
   },
 }
 window.gateReady = true

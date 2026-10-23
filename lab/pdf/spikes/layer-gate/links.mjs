@@ -13,8 +13,8 @@
 //   R(p)  the records the engine answers for the page (`run.linksOf(p)`), and the engine's attribution of each to its
 //         source annotations (`run.linkSources(p)`, gate-only: `{ annots: [[page, i], ...], tier }` for each record, the
 //         records' order; `i` the annotation's rank among the page's Link annotations in PDF.js's order, T and U alike)
-//   E(p)  the area the drawing's operations leave erased (erase, paper and swap rectangles, less each restore's boxes within
-//         its clip, in the operations' order), asked at a glyph point
+//   E(p)  the area the drawing's operations leave hidden (the `hidden` operations' rectangles, less each paste's, in the
+//         operations' order), asked at a glyph point
 // The attribution is the engine's own claim. It is checked, never trusted: by target, by the in-place rectangle, by
 // uniqueness (an annotation one record claims is claimed by no other) and, for a moved record, by the drawn text; a
 // false claim fails `linksWrong` or `linksTrue`. What it cannot tell is a right link from a wrong one with the same target
@@ -110,9 +110,9 @@ export function glyphsOfLink(a, points) {
 
 /**
  * The erased area of a page as a question: whether a PDF point lies where the drawing's operations (rows[p - 1].ops, device
- * pixels [x, y, w, h]) left the paper erased at the end. In their order: erase, paper and swap rectangles erase; a restore puts
- * the page's pixels back in each of its boxes within its clip; a crop erases nothing. `devOf(x, y)`: a PDF point in the
- * operations' pixels
+ * pixels [x, y, w, h]) left the page's ink hidden at the end. In their order: a `hidden` operation's rectangles are where a
+ * unit's groups hid its ink; a `paste` puts a render's pixels back in its rectangles; a crop hides nothing. `devOf(x, y)`: a PDF
+ * point in the operations' pixels
  */
 export function erasedOf(ops, devOf) {
   const list = ops ?? []
@@ -121,9 +121,8 @@ export function erasedOf(ops, devOf) {
     const [x, y] = devOf(px, py)
     let erased = false
     for (const o of list) {
-      if (o.op === 'erase') { if (within(x, y, o.box)) erased = true }
-      else if (o.op === 'paper' || o.op === 'swap') { if (o.rects.some(b => within(x, y, b))) erased = true }
-      else if (o.op === 'restore') { if (o.boxes.some(b => within(x, y, b)) && o.clip.some(b => within(x, y, b))) erased = false }
+      if (o.op === 'hidden') { if (o.rects.some(b => within(x, y, b))) erased = true }
+      else if (o.op === 'paste') { if (o.rects.some(b => within(x, y, b))) erased = false }
     }
     return erased
   }

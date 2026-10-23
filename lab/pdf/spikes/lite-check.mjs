@@ -1,19 +1,19 @@
 // The lite worker (src/pdf-reader/engine/layout/pdf-lite.mjs) against the stock one on real PDFs: for every page of each PDF, the
-// operator list's digest and the ink read from it (layout/ink.mjs pageInk: what the layout maker, the marks read and the add-on's
-// plans consume), from a document opened without its images' pixels and from one opened as ever, must be the same; and the add-on's
-// plans (layout/addon.mjs pagePlansOf) over a layout file, the same. Prints the ArrayBuffers and RSS after each side; exits 1 where anything differs.
+// operator list's digest and the ink read from it (layout/ink.mjs pageInk: what the layout maker, the marks read and the wrap
+// consume), from a document opened without its images' pixels and from one opened as ever, must be the same; and the cell rules
+// (layout/cell-rules.mjs pageRules, the reader's `rules`) over a layout file, the same. Prints the ArrayBuffers and RSS after each side; exits 1 where anything differs.
 //   pnpm exec tsx lab/pdf/spikes/lite-check.mjs [<id>v<n> … | <pdf> …] [--layouts=<gate pack's fixtures dir>]
 //        [--gc] (node --expose-gc for --gc)
 // One side at a time, in a process of its own (a heavy PDF's stock side holds GBs): --side=stock|lite --digests=<file> writes that side's
 // digests; --compare=<stock file>,<lite file> compares two such files. Each side prints the peak ArrayBuffers and RSS it reached
 // (sampled every 10 ms, no forced gc) when --side is given.
 // Papers by id read <AXT_DATA, else lab/pdf/data>/layout/<id>/arxiv.pdf and every compile in its compiles/*.pdf; a path ending
-// in .pdf is read alone. --layouts: <dir>/<id>-zh/layout.json is the layout file the plans are made over. Data outside git, read only.
+// in .pdf is read alone. --layouts: <dir>/<id>-zh/layout.json is the layout file the cell rules are read over. Data outside git, read only.
 import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { pagePlansOf } from '../../../src/pdf-reader/engine/layout/addon.mjs'
+import { pageRules } from '../../../src/pdf-reader/engine/layout/cell-rules.mjs'
 import { indexLayout, parseLayout } from '../../../src/pdf-reader/engine/layout/file.mjs'
 import { pageInk, unreadOf } from '../../../src/pdf-reader/engine/layout/ink.mjs'
 import { LITE_ALWAYS } from './lite-pdfjs.mjs'
@@ -106,14 +106,20 @@ for (const t of targets) {
     if (existsSync(layoutFile)) {
       const index = indexLayout(parseLayout(new Uint8Array(readFileSync(layoutFile))))
       const bytes = new Uint8Array(readFileSync(join(dir, 'arxiv.pdf')))
-      const plans = []
+      const rules = []
       for (const lite of [false, true]) {
-        const task = open(bytes, lite)
-        const { plans: made } = await pagePlansOf({ doc: await task.promise, OPS, index })
-        plans.push(JSON.stringify([...made]))
+        const task = open(bytes, lite), doc = await task.promise
+        const made = []
+        for (let p = 1; p <= Math.min(doc.numPages, index.file.paper.pages); p++) {
+          const page = await doc.getPage(p)
+          const ink = pageInk(OPS, await page.getOperatorList(), page.commonObjs, { rotate: page.rotate, indices: true })
+          made.push(unreadOf(ink) ? `unread:${unreadOf(ink)}` : pageRules(index, p, ink))
+          page.cleanup()
+        }
+        rules.push(JSON.stringify(made))
         await task.destroy()
       }
-      report(plans[0] === plans[1], `${t}: the add-on's plans over the layout file (${plans[0].length} B) ${plans[0] === plans[1] ? 'byte for byte' : 'DIFFER'}`)
+      report(rules[0] === rules[1], `${t}: the cell rules over the layout file (${rules[0].length} B) ${rules[0] === rules[1] ? 'byte for byte' : 'DIFFER'}`)
     } else console.log(`skip ${t}: no ${layoutFile}`)
   }
 }

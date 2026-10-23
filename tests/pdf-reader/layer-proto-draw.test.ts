@@ -4,9 +4,9 @@ import { BUILTIN_RULES } from '@/pdf-reader/engine/rules/layout.mjs'
 import { layoutFacade } from '@/pdf-reader/engine/layer-proto/facade.mjs'
 import type { LayerIndex, ReadPart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { layerRows, sourceUnitsOf, toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
-import { REMOVAL } from '@/pdf-reader/engine/layout/addon-manifest.mjs'
 import type { TextContentLike } from '@/pdf-reader/engine/layer-proto/run.mjs'
 import { drawDataOf } from '@/pdf-reader/engine/pipeline/draw-data.mjs'
+import { withGroups } from './helpers/groups'
 import { CJK, cutSpec, groupsOfIndex, H, type PaperSpec, unitsOfRows, VIEW } from './helpers/parts-paper'
 
 // E-C's browser part (ec-browser-design.md): a page drawn from its draw geometry (run.mjs openProto `drawOf`), the door's
@@ -111,7 +111,7 @@ function docsOf(spec: PaperSpec, o: { textHold?: (n: number) => Promise<void> | 
     }
     return page
   }
-  const doc = { numPages: N, getPage: async (n: number) => { await o.pageHold?.(n); return pageOf(n) } }
+  const doc = withGroups({ numPages: N, getPage: async (n: number) => { await o.pageHold?.(n); return pageOf(n) } })
   /** each page's draw, as the server reads it (pipeline/draw-data.mjs) and a left part carries it (checked JSON) */
   const draws = async () => {
     const out: (Draw | null)[] = []
@@ -146,7 +146,7 @@ async function runOf(P: { index: LayerIndex; parts: ReadPart[] }, doc: unknown, 
   const run = await openProto({
     parts: true, doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
     target: 'zh', pages: N, scale: 1, dpr: 1, copy: o.copy ?? false, free: true, records: true, labels: LABELS as never,
-    tex: { ...HYBRID, index: facade.index, pieces: new Map() }, removal: { mode: 'draw', doc, manifest: { schema: 1, removal: REMOVAL, pages: N, sets: {}, page: {} } as never },
+    tex: { ...HYBRID, index: facade.index, pieces: new Map() }, 
     ...(drawOf ? { drawOf: (p: number) => { asked.push(p); return drawOf(p) } } : {}), ...(o.drawsComing ? { drawsComing: true } : {}), ...(o.rules ? { rules: o.rules } : {}), ...(o.OPS ? { OPS: o.OPS } : {}),
   } as never)
   for (const part of P.parts) { facade.add(part); run.grow(part) }
@@ -491,7 +491,7 @@ describe('a page\'s pixels held only while they are its reading\'s', () => {
     const run = await openProto({
       parts: true, doc: data.doc, geometry: { schema: 1, kinds: P.index.kinds.map(k => k ?? ''), left: { pages: [], units: [] } } as never, units: [], expect: toTranslate(P.index, 'zh'), groups: groupsOfIndex(P.index),
       target: 'zh', pages: SPEC.pages, scale: 1, dpr: 1, copy: false, free: true, records: true, labels: LABELS as never,
-      tex: { ...HYBRID, index: facade.index, pieces: new Map() }, removal: { mode: 'draw', doc: data.doc, manifest: { schema: 1, removal: REMOVAL, pages: SPEC.pages, sets: {}, page: {} } as never },
+      tex: { ...HYBRID, index: facade.index, pieces: new Map() }, 
       drawOf: async (p: number) => D[p - 1]!, drawsComing: true,
     } as never)
     for (const part of P.parts) { facade.add(part); run.grow(part) }

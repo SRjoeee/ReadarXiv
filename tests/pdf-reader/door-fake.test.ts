@@ -17,14 +17,14 @@ async function openFake(s: DoorSetup, opts: FakeDoorOptions = {}) {
   const docFor = (r: number): LayerDocument => {
     let d = docs.get(r)
     if (!d) {
-      d = { numPages: N + r, getPage: async (n: number) => { await s.hold?.(n); if (s.failPages?.includes(n)) throw new Error(`page ${n} cannot be read`); return { n } } }
+      d = { numPages: N, getPage: async (n: number) => { await s.hold?.(n); if (s.failPages?.includes(n)) throw new Error(`page ${n} cannot be read`); return { n } } }
       docs.set(r, d)
     }
     return d
   }
   const parts = s.paper.readParts.slice(0, s.parts)
   const layer = await door.openLayer({
-    index: s.paper.index, doc: docFor(parts.at(-1)?.chain.r ?? 0), parts, target: 'zh', faceSources: (async () => null) as never, hyphUrl: () => '', leftPart: s.leftPart, onRetired: s.onRetired,
+    index: s.paper.index, doc: docFor(0), parts, target: 'zh', faceSources: (async () => null) as never, hyphUrl: () => '', leftPart: s.leftPart, onRetired: s.onRetired,
   })
   return { door, layer, advance: () => door.advance(), docFor, closure: (p: number): readonly number[] => opts.closure?.(p) ?? [p] }
 }
@@ -70,7 +70,7 @@ describe('the fake door: what only it has', () => {
       const door = createFakeDoor()
       const doc = { numPages: N, getPage: async () => { throw value } }
       const parts = M.readParts.slice(0, 3)
-      const layer = await door.openLayer({ index: M.index, doc: { numPages: N + 2, getPage: doc.getPage }, parts, target: 'zh', faceSources: (async () => null) as never, hyphUrl: () => '', leftPart: async () => new Uint8Array(), onRetired: () => {} })
+      const layer = await door.openLayer({ index: M.index, doc: { numPages: N, getPage: doc.getPage }, parts, target: 'zh', faceSources: (async () => null) as never, hyphUrl: () => '', leftPart: async () => new Uint8Array(), onRetired: () => {} })
       const one = layer.pageOf(1, { lang: 'zh' }).then(() => 'laid', () => 'failed')
       await door.advance()
       expect(await one).toBe('failed')
