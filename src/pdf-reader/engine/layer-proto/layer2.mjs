@@ -2324,9 +2324,7 @@ export async function warmFaces(to, cjk, designs, yieldNow, ready = async () => 
  * holds a forced break of TeX's inside its frame (`joinAt`, finishUnit's: the line after it, its frame's pitch) has its
  * grid `G`: B with each such gap closed to that pitch, TeX's room and any opening its rule set for a tall next line with
  * it (which the drawing's own rule opens again where its line is tall: breakLines settle), the lines after it moved up by
- * the rest, its foot (B's last) kept. A block with no forced break has its grid too where TeX opened a gap for a tall line
- * of the original (\lineskip): that gap is closed to the block's regular pitch the same way, in `G` alone; the block's pitch
- * (`pitch0`) is the grid's with its forced breaks closed, as it was. The drawing leaves the room after the line the break ends
+ * the rest, its foot (B's last) kept. The drawing leaves the room after the line the break ends
  * wherever its translation sets it (breakLines), so that on the original's own pitch a break the translation sets where
  * TeX did puts the line after it on TeX's own, and the room the translation does not use of the block is at its foot.
  * The block's pitch is its grid's.
@@ -2338,38 +2336,15 @@ export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, refer
     b.B = b.rects.map(r => info(r)?.baseline ?? r[2] + 0.24 * (r[4] - r[2]))
     b.exact = b.rects.map(r => !!info(r)?.exact)
     b.sizes = b.rects.map(r => info(r)?.size ?? (r[4] - r[2]) / 0.894)
-    // (a gap TeX opened for a tall line of the original, \lineskip under a fraction or a big operator, is closed to the block's
-    // regular pitch, the median of its other gaps: the translation's line k stands where the block's rhythm puts it, not on
-    // the original's own baseline k, and the drawing opens a gap again only where its own line is tall (breakLines settle).
-    // The box test is the one `through` applies below: the gap is no wider than the last line's depth, the next line's
-    // height and \lineskip, so it is the opening of that rule and no wider room of the paragraph's; and it is wider than
-    // the regular pitch by more than half a point, the layout file's hundredths and a line's rounding not an opening)
-    const openedAt = i => {
-      const to = info(b.rects[i - 1]), from = info(b.rects[i])
-      return !!lineskip && !!to && !!from && [to.baseline, to.bottom, from.baseline, from.top].every(Number.isFinite)
-        && to.baseline - from.baseline <= (to.baseline - to.bottom) + (from.top - from.baseline) + lineskip[0] + 0.025
-    }
-    const joinPitch = i => (i > 0 ? joinAt?.get(rectKey(b.rects[i])) : undefined)
-    const regular = b.B.slice(1).map((y, j) => ({ gap: b.B[j] - y, i: j + 1 })).filter(g => g.gap > 0 && joinPitch(g.i) === undefined && !openedAt(g.i)).map(g => g.gap)
-    const regularPitch = regular.length ? median(regular) : null
-    const tallPitch = i => (i > 0 && regularPitch !== null && b.B[i - 1] - b.B[i] > regularPitch + 0.5 && openedAt(i) ? regularPitch : undefined)
-    const gridOf = at => {
+    if (joinAt?.size && b.rects.some((r, i) => i > 0 && joinAt.has(rectKey(r)))) {
       let up = 0
-      return b.B.map((y, i) => {
-        const pitch = i > 0 ? at(i) : undefined
+      b.G = b.B.map((y, i) => {
+        const pitch = i > 0 ? joinAt.get(rectKey(b.rects[i])) : undefined
         if (pitch !== undefined) up += Math.max(0, b.B[i - 1] - y - pitch)
         return y + up
       })
     }
-    const hasGap = at => b.rects.some((r, i) => i > 0 && at(i) !== undefined)
-    // (the block's pitch is the grid's with its forced breaks' gaps closed, as it was: a tall line's opening stays in it, so
-    // that the pitch the other leadings are laid at is the original's, and only the leading-1 grid is the block's rhythm)
-    const joined = hasGap(joinPitch) ? gridOf(joinPitch) : null
-    const both = i => joinPitch(i) ?? tallPitch(i)
-    // (the tall-line closing is applied below, to the unit's last block alone)
-    b.tallGrid = hasGap(both) && hasGap(tallPitch) ? gridOf(both) : null
-    if (joined) b.G = joined
-    const G = joined ?? b.B
+    const G = b.G ?? b.B
     const d = G.slice(1).map((y, i) => G[i] - y).filter(v => v > 0)
     b.pitch0 = d.length ? median(d) : null
     // (a layout file's baselines, `file`, are written to a hundredth: an evenly set block's pitch is its gaps' mean, which
@@ -2410,14 +2385,6 @@ export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, refer
         && to.baseline - from.baseline <= (to.baseline - to.bottom) + (from.top - from.baseline) + lineskip[0] + 0.025
       a.through = !!tight && ia >= 0 && ib > ia && rects.slice(ia + 1, ib).every(r => r[2] >= last[2])
     }
-  }
-  // (the grid with a tall line's opening closed, for the unit's last block: where the text goes on in a later block, a slot above
-  // the foot that the closing keeps may be one a tall line of the translation's own is then opened out of, which fails the state
-  // (`over`) where the original's grid would have dropped the slot and let the line flow on: 2610.21880's unit 73 went from two
-  // lines and two to three at 0.85 of its size, its next block empty)
-  for (const [i, b] of blocks.entries()) {
-    if (b.tallGrid && i === blocks.length - 1) b.G = b.tallGrid
-    delete b.tallGrid
   }
   return blocks
 }

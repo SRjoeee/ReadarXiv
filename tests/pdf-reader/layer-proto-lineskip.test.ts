@@ -140,40 +140,6 @@ describe("a line opens by TeX's rule", () => {
     const heldInfo = new Map(withHeld.map((r, i) => [`${r[0]}|${r.slice(1).join()}`, { ...(info([8, 9, 10, 11, 12]).get(`${rows[i]![0]}|${rows[i]!.slice(1).join()}`) as object), ...(i === 2 ? { baseline: 422 } : {}) }]))
     expect(L2.blocks2(withHeld as never, [[0, 0, 612, 792]], new Set([`1|${held.slice(1).join()}`]), heldInfo as never, null, null, [1, 0]).map(b => [b.flow, b.through])).toEqual([[0, false], [0, undefined]])
   })
-  it("closes the gap TeX opened for a tall line of the original in the leading-1 grid, so that line k stands where the block's rhythm puts it", () => {
-    // one block of five lines, 12 apart but for an 18 gap under the second (the formula 9.5 deep, the next line 7.5 high, \lineskip 1:
-    // 9.5 + 7.5 + 1 = 18, TeX's own opening)
-    const ys = [500, 488, 470, 458, 446]
-    const rects = ys.map(y => [1, 0, y - 2, 100, y + 8])
-    const info = (boxes = true) => new Map(rects.map((r, i) => [`${r[0]}|${r.slice(1).join()}`, { baseline: ys[i]!, size: 10, top: boxes ? ys[i]! + (i === 2 ? 7.5 : 7) : undefined, bottom: boxes ? ys[i]! - (i === 1 ? 9.5 : 2) : undefined, exact: true, file: true, j: 10 + i, frame: 0 }]))
-    const blocksOf = (boxes = true, skip: [number, number] | null = [1, 0]) => L2.blocks2(rects as never, [[0, 0, 612, 792]], null, info(boxes) as never, null, null, skip)
-    const five = [word(18), space, word(18), space, word(18), space, word(18), space, word(18)]
-    const baselines = (blocks: unknown[]) => L2.layoutUnit2(five as never, blocks as never, 10, P([1, 0], { order: [] }) as never).lines.map(x => x.baseline)
-    const closed = blocksOf()
-    expect(closed).toHaveLength(1)
-    expect(closed[0]!.G).toEqual([500, 488, 476, 464, 452])
-    expect(closed[0]!.pitch0).toBe(12)
-    // (the original's own baselines are the record: B keeps the 18)
-    expect(closed[0]!.B).toEqual(ys)
-    expect(baselines(closed)).toEqual([500, 488, 476, 464, 452])
-    // the box test is the evidence: no values of the paper's, or no boxes in its file, and the gap stays where TeX put it
-    expect(blocksOf(true, null)[0]!.G).toBeUndefined()
-    expect(blocksOf(false)[0]!.G).toBeUndefined()
-    expect(baselines(blocksOf(true, null))).toEqual([500, 488, 470, 458, 446])
-    // a block set evenly has no grid of its own, and a gap wider than the boxes give (a float, a rule: not the rule's opening) stays
-    const even = [500, 488, 476, 464, 452], evenRects = even.map(y => [1, 0, y - 2, 100, y + 8])
-    const evenInfo = new Map(evenRects.map((r, i) => [`${r[0]}|${r.slice(1).join()}`, { baseline: even[i]!, size: 10, top: even[i]! + 7, bottom: even[i]! - 2, exact: true, file: true, j: 10 + i, frame: 0 }]))
-    expect(L2.blocks2(evenRects as never, [[0, 0, 612, 792]], null, evenInfo as never, null, null, [1, 0])[0]!.G).toBeUndefined()
-    // a block the text goes on from into a later block keeps the original's grid (a slot the closing keeps above
-    // the foot may be one a tall line of the translation's own is then opened out of, which fails the state: 2610.21880's unit 73)
-    const ys2 = [500, 488, 470, 434, 422], rects2 = ys2.map(y => [1, 0, y - 2, 100, y + 8])
-    const info2 = new Map(rects2.map((r, i) => [`${r[0]}|${r.slice(1).join()}`, { baseline: ys2[i]!, size: 10, top: ys2[i]! + (i === 2 ? 7.5 : 7), bottom: ys2[i]! - (i === 1 ? 9.5 : 2), exact: true, file: true, j: 10 + i, frame: 0 }]))
-    const two = L2.blocks2(rects2 as never, [[0, 0, 612, 792]], null, info2 as never, null, null, [1, 0])
-    expect(two.map(b => b.flow)).toEqual([0, 0])
-    expect(two[0]!.G).toBeUndefined()
-    const wideInfo = new Map(rects.map((r, i) => [`${r[0]}|${r.slice(1).join()}`, { baseline: ys[i]!, size: 10, top: ys[i]! + 7, bottom: ys[i]! - 2, exact: true, file: true, j: 10 + i, frame: 0 }]))
-    expect(L2.blocks2(rects as never, [[0, 0, 612, 792]], null, wideInfo as never, null, null, [1, 0])[0]!.G).toBeUndefined()
-  })
   it("sets two blocks in one flow where only the unit's own lines lie between them in the file, in one frame", () => {
     // two blocks of v0 (a gap of 36 pt splits them: a paragraph's lines TeX opened, or the unit's two parts), 500, 488 | 440, 428
     const rects = [500, 488, 440, 428].map(y => [1, 0, y - 2, 100, y + 8])
