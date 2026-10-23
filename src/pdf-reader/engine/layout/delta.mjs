@@ -8,7 +8,9 @@
 // entries each mapped to the original's object where the two are canonically equal (the whole sub-graph reused: a font with its
 // descriptor, font file, widths and ToUnicode; an image with its SMask), else copied with its closure under new numbers from
 // the original's /Size up. Resource names stay ours (they live in the page's dict alone, so no content stream is rewritten).
-// Nothing else: the catalog, page tree, outlines, destinations, annotations and info stay the original's.
+// Nothing else: the page tree, outlines, destinations, annotations and info stay the original's, and so does the catalog but
+// for our /OCProperties where our pages are wrapped by optional content (layout/wrap.mjs): the catalog is then written again,
+// every key the original's but that one.
 //
 // Canonical form (one Merkle form for both documents, exact): a stream is its dict without /Length and its stored bytes, those
 // its RESOLVED /Length names (layout/xref.mjs: PDF.js's reading, never a scan to `endstream`), no decoding; a dict is its
@@ -321,6 +323,16 @@ export async function deltaOf(origBytes, finalBytes, { PL, replacedPages = null,
       pageObjects.push([op.ref.objectNumber, op.ref.generationNumber, enc(`${op.ref.objectNumber} ${op.ref.generationNumber} obj\n<<${ents.join('')} >>\nendobj\n`)])
     }
     if (replaced.length === 0) return refusal('delta-empty', 'no page of ours differs from arXiv\'s where the layer lays')
+    // our pages wrapped by optional content (layout/wrap.mjs): the catalog's /OCProperties, and that key alone, carried into the
+    // original's catalog, written again under its number (its groups the objects our pages' /Properties name, copied once)
+    const ourCat = look(U, U.trailer.root), ocp = ourCat instanceof PDFDict ? ourCat.get(PDFName.of('OCProperties')) : undefined
+    if (ocp !== undefined) {
+      const rootRef = O.trailer.root, cat = look(O, rootRef)
+      if (!(rootRef instanceof PDFRef) || !(cat instanceof PDFDict)) return refusal('delta-parse', 'arXiv\'s catalog is no object of its own')
+      const ents = cat.entries().filter(([k]) => k.asString() !== '/OCProperties').map(([k, v]) => ` ${k.toString()} ${lit(v, sameRef)}`)
+      ents.push(` /OCProperties ${lit(ocp, x => copyRef(x, 'other', false))}`)
+      pageObjects.push([rootRef.objectNumber, rootRef.generationNumber, enc(`${rootRef.objectNumber} ${rootRef.generationNumber} obj\n<<${ents.join('')} >>\nendobj\n`)])
+    }
     const all = [...pageObjects, ...objects]
     if (all.length > objectsMax) return refusal('delta-bound', `${all.length} objects, past ${objectsMax}`)
     const written = appendSection({ end: origBytes.length, objects: all, kind: O.kind, prev: O.startxref, size: next, trailer: { root: O.trailer.root, info: O.trailer.info, id: O.trailer.id } })
@@ -411,7 +423,7 @@ function textDiffers(a, b) {
  * (a, d, e) PDF.js opens the composed bytes with no message that neither source alone gives (its console captured, each
  * document read in turn), the original's page count, every page's box and text (strings, places within 0.01) ours on replaced
  * pages and the original's elsewhere. What the delta overrides of the original is bounded: the replaced pages' objects exactly
- * (no catalog, no other page), its /Size not below the original's. An original PDF.js recovers by its own scan (any message
+ * (no other page; the catalog only to carry our /OCProperties, every other key of it the original's), its /Size not below the original's. An original PDF.js recovers by its own scan (any message
  * of its cross-reference on the original alone) is refused (`delta-xref`). { ok: true, pages, replaced } or { ok: false, code
  * ('delta-proof' or 'delta-xref'), why }. Never throws but a failed allocation
  */
@@ -434,7 +446,7 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
     if (xP.length !== N) return no(`the composed document has ${xP.length} pages, arXiv's PDF ${N}`)
     if ([...rep].some(p => p > M)) return no('a replaced page past ours')
     // (what the delta overrides of the original: the replaced pages' objects, exactly, and nothing else of the original's numbers
-    // — no catalog, no other page — and its /Size not below the original's)
+    // — no other page, the catalog only for our /OCProperties — and its /Size not below the original's)
     if (sect.size < O.size) return no(`its /Size ${sect.size} is below the original's ${O.size}`)
     // (the composed trailer is the delta's own: it keeps the original's /Root and /Info as references and /ID byte for byte, so
     // that the catalog, outlines, destinations and document info stay the original's)
@@ -445,13 +457,27 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
     if (idBytes(X.own.id) !== idBytes(O.trailer.id)) return no('its trailer\'s /ID is not the original\'s')
     const pageRefs = new Map(oP.map((o, i) => [o.ref.objectNumber, i + 1]))
     const over = new Set()
+    // (the catalog, written again only to carry our /OCProperties: every other key the original's, that one ours)
+    const root = O.trailer.root, ourOcp = (() => { const c = U.lookup(U.trailer.root); return c instanceof PL.PDFDict ? c.get(PL.PDFName.of('OCProperties')) : undefined })()
+    let catalog = false
     for (const [n, g] of sect.rows) {
       if (n >= O.size) continue
+      if (n === root.objectNumber && g === root.generationNumber) { catalog = true; continue }
       const p = pageRefs.get(n)
       if (p === undefined || !rep.has(p) || oP[p - 1].ref.generationNumber !== g) return no(`it overrides the original's object ${n} ${g}, no replaced page's`)
       over.add(p)
     }
     if (over.size !== rep.size) return no(`it writes ${over.size} of the ${rep.size} pages it says it replaces`)
+    if (catalog !== (ourOcp !== undefined)) return no(catalog ? 'it writes the catalog again, our pass having no /OCProperties' : 'it does not carry our /OCProperties')
+    if (catalog) {
+      const xc = X.lookup(root), oc = O.lookup(root)
+      // (key by key, a reference by its number: the catalog's tree is the composed document's, its replaced pages ours)
+      const keysOf = d => (d instanceof PL.PDFDict ? new Map(d.entries().map(([k, v]) => [k.asString(), v]).filter(([k]) => k !== '/OCProperties')) : null)
+      const kx = keysOf(xc), ko = keysOf(oc)
+      if (!kx || !ko || kx.size !== ko.size || [...ko].some(([k, v]) => !kx.has(k) || (v instanceof PL.PDFRef || kx.get(k) instanceof PL.PDFRef ? refText(v) !== refText(kx.get(k)) : !same(X, kx.get(k), O, v)))) return no('its catalog is not the original\'s but for /OCProperties')
+      const xo = xc instanceof PL.PDFDict ? xc.get(PL.PDFName.of('OCProperties')) : undefined
+      if (xo === undefined || !same(X, xo, U, ourOcp)) return no('its /OCProperties is not ours')
+    }
     const drop = new Set(['/Contents', '/Resources'])
     const contents = (doc, page) => contentsOf(PL, doc, page.node)
     for (let p = 1; p <= N; p++) {

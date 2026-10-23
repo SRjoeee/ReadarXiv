@@ -22,7 +22,7 @@ import { readArxivText } from '../layout/arxiv.mjs'
 import { boxesCheck, finalCheck, markTextBeyond, markTextOf, pageTextAt, prefixDoc, textOfPdf } from '../layout/base.mjs'
 import { lineCheckOf } from '../layout/carry.mjs'
 import { chainedAddon } from '../layout/chain.mjs'
-import { DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_WHYS, deltaSection, pagesOf } from '../layout/delta-wire.mjs'
+import { DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_WHYS, deltaSection, pagesOf, wrapWhy } from '../layout/delta-wire.mjs'
 import { texLiveOf } from '../layout/guard.mjs'
 import { makerOf, rulesOf } from '../layout/make.mjs'
 import { markedPages, marksOfHead, readMarked } from '../layout/marks.mjs'
@@ -315,6 +315,10 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   // (and how it is held: a delta over arXiv's PDF where the host gave one that checks, else our whole PDF, `stats.delta` saying
   // which and why)
   let baseDoc = null, baseText = null, lineCheck = null, oursHead = null, oursTail = null, deltaStat = null
+  // our pages wrapped by optional content (layout/wrap.mjs wrapFinal, in the maker child: `ours.wrap` its stats, unhidden and
+  // labelKept, `ours` the wrapped bytes' document, length, digest and startxref): written into the head's base of either kind
+  const wrap = ours?.wrap ?? null
+  if (wrap !== null) { const why = wrapWhy(wrap.stats, wrap.unhidden, wrap.labelKept); if (why !== null) throw new TypeError(`ours.wrap: ${why}`) }
   if (!(marks && !('marks' in marks))) {
     const tree = treeGiven ?? (marked ? texLiveOf(marked.log) : null)
     const held = oursDoc ? await deltaOfOurs(ours.delta, { orig: origRef, ours, M: oursDoc.numPages, N, tree, doc }) : null
@@ -325,10 +329,13 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
       oursTail = { bytes: oursHead.bytes, xref: oursHead.xref }
       if (held?.delta && held.delta.replaced.at(-1)[1] <= oursHead.check.pages[0]) {
         const d = held.delta
-        oursHead = { source: 'ours', kind: 'delta', bytes: d.bytes.length, sha256: d.sha256, xref: d.xref, pages: N, tree: oursHead.tree, check: oursHead.check, replaced: d.replaced, stats: d.stats }
+        oursHead = { source: 'ours', kind: 'delta', bytes: d.bytes.length, sha256: d.sha256, xref: d.xref, pages: N, tree: oursHead.tree, check: oursHead.check, replaced: d.replaced, stats: { ...d.stats, ...(wrap ? wrap.stats : {}) }, ...(wrap ? { unhidden: wrap.unhidden, labelKept: wrap.labelKept } : {}) }
         oursTail = { bytes: origRef.bytes + d.bytes.length, xref: d.xref }
         deltaStat = { kind: 'delta', bytes: d.bytes.length, replaced: d.stats.replaced }
-      } else if (held) deltaStat = { kind: 'full', why: held.why ?? 'delta-shape', ...(held.reason ? { reason: held.reason } : {}) }
+      } else {
+        if (held) deltaStat = { kind: 'full', why: held.why ?? 'delta-shape', ...(held.reason ? { reason: held.reason } : {}) }
+        if (wrap) oursHead = { ...oursHead, stats: wrap.stats, unhidden: wrap.unhidden, labelKept: wrap.labelKept }
+      }
     }
   }
 

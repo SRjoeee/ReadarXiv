@@ -27,7 +27,7 @@
 //
 // An original module (no port statement). It imports the remover's lexer and page walk (layout/remove.mjs), the section writer
 // and its reader; @cantoo/pdf-lib (MIT), deflate and inflate are given.
-import { deltaSection } from './delta-wire.mjs'
+import { deltaSection, UNHIDDEN_MAX } from './delta-wire.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, pageInk } from './ink.mjs'
 import { followsOf } from './marks.mjs'
 import { ownOf, UNHIDDEN } from './own.mjs'
@@ -401,8 +401,7 @@ function sameOps(a, b) {
   return null
 }
 
-/** the units a head lists as the original's at most (beside its stats) */
-export const UNHIDDEN_MAX = 20_000
+export { UNHIDDEN_MAX }
 
 /**
  * Our final pass read, owned and wrapped: the maker child's one call, before any document of its own is open (its delta is then
@@ -413,10 +412,11 @@ export const UNHIDDEN_MAX = 20_000
  * bounds (capped, timed out, its boxes merged, rotated) is left unwrapped, its units the original's. Returns { bytes, xref,
  * sha256, stats, unhidden, labelKept } — `stats` { wrapped, refusedPages, unhidden: { marks, across, spell, page, bounds }, split,
  * groups, labelKept } (integers, the head's), `unhidden` [[unit id, code of UNHIDDEN], …] ascending, `labelKept` the unit ids
- * whose label is left the original's ink, `own` own.mjs's stats (the record's) — or { refused (WRAP_WHYS), why }: the paper's
+ * whose label is left the original's ink, `own` own.mjs's stats (the record's), `owned` own.mjs's whole result where `keepOwned`
+ * (the lab's) — or { refused (WRAP_WHYS), why }: the paper's
  * base is then arXiv's PDF. Never throws but a failed allocation
  */
-export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions = {}, OPS, units = null, follows: given = undefined, deflate, inflate = null }) {
+export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions = {}, OPS, units = null, follows: given = undefined, deflate, inflate = null, keepOwned = false }) {
   let task = null
   const pages = [], facts = []
   try {
@@ -457,9 +457,9 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
     if (u.unhidden) { counts[u.unhidden]++; unhidden.push([id, u.unhidden]) }
     else if (u.labelKept) labelKept.push(id)
   }
-  if (unhidden.length > UNHIDDEN_MAX) return { refused: 'wrap-bound', why: `${unhidden.length} units the original's, past ${UNHIDDEN_MAX}` }
+  if (unhidden.length > UNHIDDEN_MAX || labelKept.length > UNHIDDEN_MAX) return { refused: 'wrap-bound', why: `${unhidden.length} units the original's, past ${UNHIDDEN_MAX}` }
   const stats = { ...made.stats, unhidden: counts, labelKept: labelKept.length }
-  return { bytes: made.bytes, xref: made.xref, sha256: made.sha256, stats, unhidden, labelKept, own: { ...own.stats, unhidden: counts } }
+  return { bytes: made.bytes, xref: made.xref, sha256: made.sha256, stats, unhidden, labelKept, own: { ...own.stats, unhidden: counts }, ...(keepOwned ? { owned: own } : {}) }
 }
 
 export { alignOf }
