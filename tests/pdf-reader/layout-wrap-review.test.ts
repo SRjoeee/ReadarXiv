@@ -146,3 +146,55 @@ describe('the proof of a split " show (review debt)', () => {
     expect(pixelsApart(await renderPage(bytes, 2), await renderPage(r.bytes, 2))).toBeLessThan(200)
   })
 })
+
+// ---- the re-review (at 09c0c45e)
+describe('re-review B1, S4: a dense page is the page\'s, within the documented bounds', () => {
+  const plot = (n: number) => `q 0.5 w 72 100 m\n${Array.from({ length: n }, (_, i) => `${72 + (i % 4000) * 0.1} ${100 + (i % 977) * 0.5} l`).join('\n')}\nS Q\n`
+  it('wraps a page of 160,000 operators in one stream (no spread of its operators, the proof\'s reads each under its own budget)', async () => {
+    const { bytes } = await markedSample({ pages: [2], edit: only(unit(0, 72, 700, '(Order)') + plot(160_000)) })
+    const r = ok(await wrapped(bytes, { units: [{ src: 'Order' }] }))
+    expect(r.stats.wrapped).toBe(1)
+    expect(r.unhidden).toEqual([])
+  })
+})
+
+describe('re-review B2: arXiv\'s own layers stay listed in the composed document', () => {
+  it('keeps arXiv\'s /OCGs and default, ours appended: an unreplaced page\'s hidden layer stays hidden', async () => {
+    const body = (p: number, marked: boolean) => (p === 2 && marked ? unit(0, 72, 720, '(Order)') : run(72, 720, '(Order)')) + run(72, 700, '(shown)', { before: '/OC /fA BDC ', after: ' EMC' }) + run(72, 680, '(hidden)', { before: '/OC /fB BDC ', after: ' EMC' })
+    const orig = (await markedSample({ pages: [1, 2], edit: (_, p) => body(p, false), foreignOC: true })).bytes
+    const ours = (await markedSample({ pages: [1, 2], edit: (_, p) => body(p, true), foreignOC: true })).bytes
+    const r = ok(await wrapped(ours, { units: [{ src: 'Order' }] }))
+    const d = await deltaOf(orig, r.bytes, { PL: PL as never, replacedPages: [2] })
+    if ('refused' in d) throw new Error(d.why)
+    const proof = await proveDelta(orig, d.delta, r.bytes, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, replaced: d.replaced })
+    expect(proof.ok).toBe(true)
+    const composed = new Uint8Array(orig.length + d.delta.length)
+    composed.set(orig)
+    composed.set(d.delta, orig.length)
+    expect(pixelsApart(await renderPage(composed, 1), await renderPage(orig, 1))).toBe(0)
+    expect(pixelsApart(await renderPage(composed, 2), await renderPage(r.bytes, 2))).toBe(0)
+  })
+})
+
+describe('re-review S1, S2, S3: the wrap\'s inputs and the delta\'s pages', () => {
+  it('requires units (null said for none), deflate and inflate', async () => {
+    const { bytes } = await markedSample({ pages: [2], edit: only(unit(0, 72, 700, '(Order)')) })
+    const { wrapFinal } = await import('@/pdf-reader/engine/layout/wrap.mjs')
+    const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const { deflate, inflate } = await import('./helpers/ocg-pdfs')
+    const base = { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, OPS }
+    await expect(wrapFinal(bytes, { ...base, deflate, inflate } as never)).rejects.toThrow(/units/)
+    await expect(wrapFinal(bytes, { ...base, units: null, deflate } as never)).rejects.toThrow(/inflate/)
+  })
+  it('refuses a delta that leaves a page of ours naming a group of ours arXiv\'s (delta-pages), and the proof one that does', async () => {
+    const { bytes: orig } = await markedSample({ pages: [2, 3], edit: (_, p) => run(72, 700, p === 2 ? '(Order)' : '(the)') })
+    const { bytes: ours } = await markedSample({ pages: [2, 3], edit: (_, p) => unit(p - 2, 72, 700, p === 2 ? '(Order)' : '(the)') })
+    const r = ok(await wrapped(ours, { units: [{ src: 'Order' }, { src: 'the' }] }))
+    expect(r.pages).toEqual([[2, 3]])
+    expect(await deltaOf(orig, r.bytes, { PL: PL as never, replacedPages: [2] })).toMatchObject({ refused: 'delta-pages' })
+    const whole = await deltaOf(orig, r.bytes, { PL: PL as never })
+    if ('refused' in whole) throw new Error(whole.why)
+    const prove = (replaced: [number, number][]) => proveDelta(orig, whole.delta, r.bytes, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, replaced })
+    expect((await prove(whole.replaced)).ok).toBe(true)
+  })
+})

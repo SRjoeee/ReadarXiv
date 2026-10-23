@@ -216,7 +216,7 @@ describe('a delta the host gives over more pages of ours than arXiv\'s (CodeRabb
 })
 
 describe('layerOfPaper over our base page wrapped by optional content (ours.wrap)', () => {
-  const WRAP = { stats: { wrapped: 3, refusedPages: 0, unhidden: { marks: 0, across: 0, spell: 1, page: 0, bounds: 0 }, split: 0, groups: 3, labelKept: 0 }, unhidden: [[1, 'spell']] as [number, string][], labelKept: [] as number[] }
+  const WRAP = { stats: { wrapped: 3, refusedPages: 0, unhidden: { marks: 0, across: 0, spell: 1, page: 0, bounds: 0 }, split: 0, groups: 3, labelKept: 0 }, unhidden: [[1, 'spell']] as [number, string][], labelKept: [] as number[], pages: [[1, 3]] as [number, number][] }
   it('writes the wrap\'s counts and lists into the head\'s base, whole or a delta', async () => {
     const full = await passOf(worldOf(), { orig: ORIG, ours: oursOf(worldOf(), { wrap: WRAP }) })
     expect(full.head.base).toMatchObject({ source: 'ours', stats: WRAP.stats, unhidden: WRAP.unhidden, labelKept: [] })
@@ -229,11 +229,13 @@ describe('layerOfPaper over our base page wrapped by optional content (ours.wrap
     const got = await passOf(worldOf(), { orig: ORIG, ours: oursOf(worldOf(), { delta: d, wrap: { ...WRAP, pages: [[1, 3]] } }) })
     expect(got.head.base).not.toHaveProperty('kind')
     expect(got.r).toMatchObject({ stats: { delta: { kind: 'full', why: 'delta-shape' } } })
-    const fine = await passOf(worldOf(), { orig: ORIG, ours: oursOf(worldOf(), { delta: d, wrap: { ...WRAP, pages: [[1, 1], [3, 3]] } }) })
+    const fine = await passOf(worldOf(), { orig: ORIG, ours: oursOf(worldOf(), { delta: d, wrap: { ...WRAP, stats: { ...WRAP.stats, wrapped: 2 }, pages: [[1, 1], [3, 3]] } }) })
     expect(fine.head.base).toMatchObject({ kind: 'delta' })
   })
   it('refuses a host\'s wrap whose counts are not its lists\' (a defect, thrown); a refused wrap is the paper\'s fallback, `wrap`', async () => {
     await expect(passOf(worldOf(), { orig: ORIG, ours: oursOf(worldOf(), { wrap: { ...WRAP, unhidden: [[1, 'spell'], [2, 'spell']] } }) })).rejects.toThrow(/ours.wrap/)
+    // (the wrapped pages required, within our pages, as many as the stats say: review 2's S3)
+    for (const pages of [undefined, [[1, 4]], [[1, 2]]]) await expect(passOf(worldOf(), { orig: ORIG, ours: oursOf(worldOf(), { wrap: { ...WRAP, pages } }) }), String(pages)).rejects.toThrow(/ours.wrap: pages/)
     const got = await passOf(worldOf(), { orig: ORIG, ours: { refused: 'wrap', why: 'wrap-proof: page 2: a group left open' } })
     expect(got.head.base).toEqual({ source: 'arxiv', ...ORIG, why: 'wrap' })
     expect(got.parts.map(p => p.noLayout?.refused)).toEqual(['wrap', 'wrap'])
