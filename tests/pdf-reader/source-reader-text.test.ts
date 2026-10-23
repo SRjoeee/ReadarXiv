@@ -137,6 +137,14 @@ describe('S4: one branch of a conditional is the translator\'s, never both', () 
     expect(texts(projectOf({ 'main.tex': enc(doc(body, '\\input{flags}')), 'flags.tex': enc('\\def\\Flag{1}\n') }))).toEqual(['Draft branch words.'])
   })
 
+  it('a definition local to a group, or a command \\let to \\undefined, is no definition the body sees (#457 review)', () => {
+    const body = '\\ifdefined\\Flag Draft branch words. \\else Final branch words. \\fi'
+    expect(texts(project(`{\\def\\Flag{1}}\n${doc(body)}`))).toEqual([])
+    expect(texts(project(`\\let\\Flag\\undefined\n${doc(body)}`))).toEqual([])
+    expect(texts(project(`\\def\\Flag{1}\n\\let\\Flag\\undefined\n${doc(body)}`))).toEqual([])
+    expect(texts(project(`{\\gdef\\Flag{1}}\n${doc(body)}`))).toEqual(['Draft branch words.'])
+  })
+
   it('a test in the preamble is not decided by what the preamble defines (it may come first): neither branch; the same test in the body is', () => {
     const cond = '\\ifdefined\\Flag Draft title words here.\\else Final title words here.\\fi'
     const pre = project(`\\documentclass{article}\n\\def\\Flag{1}\n\\title{${cond}}\n\\begin{document}\n\\maketitle\nBody words here.\n\\end{document}\n`)

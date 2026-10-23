@@ -1775,8 +1775,19 @@ const DEFINES = /^(?:(?:re)?newcommand|providecommand|DeclareRobustCommand|[gex]
  * review, an unused.tex's \\def\\Flag had chosen the branch TeX does not set
  */
 function preambleDefinitions(mainFile, read, scan) {
-  const out = new Set(), done = new Set()
-  const take = (t, cmds, upto) => { for (const c of cmds) { if (c.at >= upto) break; if (c.inDef || !c.sure || !DEFINES.test(c.name)) continue; const m = /^\*?\s*\{?\s*\\([A-Za-z@]+)/.exec(t.slice(c.end, c.end + 200)); if (m) out.add(m[1]) } }
+  // (only one TeX keeps to the body: outside every group, or a global one, \\gdef and \\xdef — {\\def\\Flag{1}} is gone at the
+  // group's end —; and no command \\let to \\undefined anywhere in what is read, which TeX leaves or makes undefined)
+  const out = new Set(), done = new Set(), cleared = new Set()
+  const take = (t, cmds, upto) => {
+    for (const c of cmds) {
+      if (c.at >= upto) break
+      if (c.inDef || !c.sure || !DEFINES.test(c.name)) continue
+      const m = /^\*?\s*\{?\s*\\([A-Za-z@]+)\s*\}?\s*=?\s*(?:\\([A-Za-z@]+))?/.exec(t.slice(c.end, c.end + 200))
+      if (!m) continue
+      if (c.name === 'let' && /^(?:undefined|@undefined)$/.test(m[2] ?? '')) { cleared.add(m[1]); continue }
+      if (c.depth === 0 || c.name === 'gdef' || c.name === 'xdef') out.add(m[1])
+    }
+  }
   const t = mainFile.text, cmds = texCommands(t, scan), { begin } = boundsOf(cmds, t), upto = begin >= 0 ? begin : 0
   take(t, cmds, upto)
   for (const c of cmds) {
@@ -1790,6 +1801,7 @@ function preambleDefinitions(mainFile, read, scan) {
       done.add(f.rel); take(f.text, texCommands(f.text, scan), f.text.length)
     }
   }
+  for (const name of cleared) out.delete(name)
   return out
 }
 function readProject(fsys, main, tables, sourceText, own) {
