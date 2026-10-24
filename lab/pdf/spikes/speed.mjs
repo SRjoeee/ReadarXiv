@@ -72,7 +72,7 @@ async function child() {
   let t = at()
   const source = live.openPaper((await tar.unpackSource(new Uint8Array(readFileSync(meta.source)))).files)
   const plog = front.lastTexLog(readFileSync(join(dir, 'P', `${meta.stem}.log`), 'latin1')), ink = mk.inkSamples(source.units)
-  const options = { engine: source.meta.compiler, classes: mk.LAYOUT_CLASSES, switches: mk.readMarkProbe(plog, mk.probeSamples(source.units)), inkless: mk.readInkProbe(plog, ink), texts: mk.readInkTexts(plog, ink), names: mk.readNameProbe(plog), lineskip: mk.readSkipProbe(plog) }
+  const options = { engine: source.meta.compiler, classes: mk.LAYOUT_CLASSES, switches: mk.readMarkProbe(plog, mk.probeSamples(source.units)), inkless: mk.readInkProbe(plog, ink), texts: mk.readInkTexts(plog, [...ink, ...mk.leadSamples(source.units, ink)]), names: mk.readNameProbe(plog), lineskip: mk.readSkipProbe(plog) }
   const markedBytes = new Uint8Array(readFileSync(join(dir, 'L', `${meta.stem}.pdf`))), log = front.lastTexLog(readFileSync(join(dir, 'L', `${meta.stem}.log`), 'latin1'))
   const arxivBytes = new Uint8Array(readFileSync(meta.arxiv))
   ms.source = at() - t

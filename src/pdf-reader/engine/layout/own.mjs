@@ -39,7 +39,7 @@
 import { utf8 } from '../translate/mt.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { UNHIDDEN } from './delta-wire.mjs'
-import { classOf } from './marks.mjs'
+import { classOf, INK_ANY, leadStep } from './marks.mjs'
 import { OWNED, ownedOf, regionsOf, spellOf } from './stream.mjs'
 
 export { UNHIDDEN }
@@ -281,31 +281,36 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
   }
 
   // ---- a cell's lead macro (MR 5b): a cell that opens with a placeholder of no mark of its own (\\CompletionTokenCap{}, \\#,
-  // \\bertbase) has that ink set before its start mark, on its line, after the point before it. A cell takes no label, and what
-  // stands before it on its line may be an unmarked cell's (a number), however close the columns (\\tabcolsep 2pt, @{}): so
-  // the placeholder's ink is told by its TEXT alone — the text the marking's probe showed the macro sets (`texts`, marks.mjs
-  // readInkTexts) or a text symbol's (\\# "#") — the glyphs right before the start that spell exactly it, none of them
-  // CELL_ABUT of an em or more from the next, on the start's line, in its region, in no group. Where the text is not known or
-  // the glyphs there are not it, the cell is the original's, as before (leadUnmarked); 2610.21098v1 p13
+  // \\bertbase, \\texttt{max\\_tokens}, \\dprime{}) has that ink set before its start mark, on its line, after the point before
+  // it. A cell takes no label, and what stands before it on its line may be an unmarked cell's (a number), however close the
+  // columns (\\tabcolsep 2pt, @{}): so the placeholder's ink is told by its TEXT alone — the text the marking's probe showed the
+  // placeholder sets (`texts`, marks.mjs readInkTexts: "1,024", "max_tokens", a formula's glyph it spells no character of as
+  // INK_ANY, one glyph) or a text symbol's (\\# "#") — the glyphs right before the start, in stream order, that spell exactly it
+  // (marks.mjs leadStep), none of them CELL_ABUT of an em or more from the next, on the start's line, in its region, in no
+  // group. Where the text is not known or the glyphs there are not it, the cell is the original's, as before (leadUnmarked);
+  // 2610.21098v1 p13, 2610.21176v1 p13
   const cellLead = new Set()
   /** the text a unit's unmarked lead placeholders set, NFKC with no white space, and its parts in order (each `symbol` where
-   *  it is a text symbol's), or null where one is not known */
+   *  it is a text symbol's), or null where one is not known — or where a footnote's call stands among them, whose ink would
+   *  stand between them and the start, and the text holds INK_ANY, which could be read from that ink */
   const norm = t => t.normalize('NFKC').replace(/\s/gu, '')
   const leadText = (u, id) => {
-    let out = ''
+    let out = '', footnote = false
     const parts = []
     for (let k = 0; k < (u?.pieces?.length ?? 0); k++) {
       const piece = u.pieces[k]
       if (piece?.t === 'text') { if (/\S/.test(typeof piece.s === 'string' ? piece.s : '')) break; continue }
       const c = classOf(piece)
       if (!c) continue
-      if (c === 'footnote' || where.has(`p${id}.${k}a`) || where.has(`p${id}.${k}b`)) break
+      if (c === 'footnote') { footnote = true; break }
+      if (where.has(`p${id}.${k}a`) || where.has(`p${id}.${k}b`)) break
       const sym = symbolText(piece.src), t = texts?.get(piece.src) ?? sym
       if (typeof t !== 'string') return null
       if (norm(t)) parts.push({ text: norm(t), symbol: sym !== null })
       out += t
     }
     out = norm(out)
+    if (footnote && out.includes(INK_ANY)) return null
     return out ? { text: out, parts } : null
   }
   for (const [id, { s }] of textOf) {
@@ -317,29 +322,34 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
     const [p, q] = s, pg = pages[p - 1], S = pt(s), r = at(s), R = regions[p - 1]
     if (S.glyph >= pg.glyphs.length) continue
     const F = pg.glyphs[S.glyph], from = q > 0 ? pg.points[q - 1].glyph : 0
-    const run = []
-    let right = F, got = ''
+    // (each glyph of the run and the characters of the text it took, a formula's glyph one)
+    const run = [], took = []
+    let right = F, end = want.length
     work += S.glyph - from
-    for (let g = S.glyph - 1; g >= from && got.length < want.length; g--) {
+    for (let g = S.glyph - 1; g >= from && end > 0; g--) {
       const G = pg.glyphs[g]
       if (R.glyph[g] !== r || gOwn[p - 1][g] !== null || Math.abs(G.y - F.y) >= 0.5 * Math.max(G.size, F.size)) break
       if (right.x0 - G.x1 >= CELL_ABUT * Math.max(G.size, right.size)) break
+      const e = leadStep(want, end, norm(G.u ?? ''))
+      if (e < 0) break
       run.push([p, g])
-      got = (G.u ?? '').normalize('NFKC').replace(/\s/gu, '') + got
+      took.push(end - e)
+      end = e
       right = G
     }
-    if (got !== want) continue
+    if (end !== 0) continue
     // (each part its own: a text symbol's (\\#) with the text — the layer draws it as its character in the translation, never
     // from a crop, so its ink is hidden whenever the cell is drawn —, a macro's, which the maker finds by the same text and
     // crops, the placeholder's `.p`: a mixed lead all `.p` would leave the "#" under the drawn one)
     run.reverse()
+    took.reverse()
     let w = 0
     for (const part of lead.parts) {
       const mine = []
       let n = 0
-      while (w < run.length && n < part.text.length) { const c = norm(pg.glyphs[run[w][1]].u ?? ''); mine.push(run[w++]); n += c.length }
+      while (w < run.length && n < part.text.length) { n += took[w]; mine.push(run[w++]) }
       // (the blank glyphs after a part: its own)
-      while (w < run.length && !norm(pg.glyphs[run[w][1]].u ?? '')) mine.push(run[w++])
+      while (w < run.length && took[w] === 0) mine.push(run[w++])
       if (part.symbol) claim({ glyphs: mine }, `u${id}`, 'u')
       else claim({ glyphs: mine }, `u${id}.p`, 'p')
     }

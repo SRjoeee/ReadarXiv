@@ -207,6 +207,8 @@ export const PDFJS = '6.3.289'
  * closing punctuation a theorem's head sets after its note the note's (amsthm's "(Note)."), and the
  * spell check's letter symbols, a wrapper's own words and lines of their own no unit's (REVTeX's e-mail notes, a folio): the
  * base's bytes change, and the first two rules being the maker's reading too, the layout files of the units they reach
- * (LAYOUT 20)
+ * (LAYOUT 20); and a cell's lead owned by the text TeX sets for it, as the probe reads it (marks.mjs readInkTexts, MARKS_SCHEMA
+ * 10: "1,024", "max_tokens", a formula's glyph spelled by no character one glyph: own.mjs MR 5b), and a front heading's ink
+ * (ICML's \icmltitle), which the layout compile now marks (LAYOUT 20)
  */
 export const REMOVAL = '10'

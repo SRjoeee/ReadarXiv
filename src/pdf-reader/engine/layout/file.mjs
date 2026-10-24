@@ -91,8 +91,11 @@ export { LayoutRefusal } from './json.mjs'
  *  its unit's next mark, begins where the glyphs to that mark spell it whole, not where its first characters first stand in the
  *  piece's own ink (a display's \\text{for every} before "For", a URL's dots before the full stop: the display's or the URL's
  *  segments were cut short, the rest read as the unit's text), and a display that ends a footnote is found to its page's folio
- *  (it was LOST): the layout file's segments and the wrap's groups are one reading again (the file's schema is 5 still;
- *  MARKS_SCHEMA 9 still) */
+ *  (it was LOST): the layout file's segments and the wrap's groups are one reading again; and (the units still English
+ *  against production after it) a placeholder at a unit's head is found by the text TeX sets for it, as the probe now reads
+ *  it (marks.mjs readInkTexts, MARKS_SCHEMA 10: ASCII's punctuation, "1,024"; inline code at the head asked about too,
+ *  "max_tokens"; a formula's glyph spelled by no character one glyph, INK_ANY, $d'$), and a front heading (ICML's
+ *  \\icmltitle) is marked as any heading in the layout compile, its title's ink its own (the file's schema is 5 still) */
 export const LAYOUT = '20'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
