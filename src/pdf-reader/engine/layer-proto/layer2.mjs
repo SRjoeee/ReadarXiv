@@ -764,8 +764,12 @@ export function unitSizeOf(prep, P, unit = null) {
  *  small capitals faces (PSNFSS's ptmrc8t and its kind, fontinst's smallcapsscale) set theirs at 0.8, a case change of another kind
  *  (\MakeUppercase) at 1 */
 export const SMALL_CAPS_SHARE = 0.9
-/** smallCapsOf's answer for a unit with no faked small capital: one, read and never written */
-const NO_SMALL_CAPS = Object.freeze({ small: new Set(), lower: new Set(), letters: Object.freeze([]) })
+/** the share of the size the layer draws small capitals at where the unit's page tells none (no faked one of its own: a face of
+ *  real small capitals, which a face of none draws for it): NFSS's virtual faces' (ptmrc8t's), the share the survey's pages show
+ *  (smallCapsOf's `ratio`) */
+export const SMALL_CAPS_RATIO = 0.8
+/** smallCapsOf's answer for a unit with no faked small capital and no capitals of the text's: one, read and never written */
+const NO_SMALL_CAPS = Object.freeze({ small: new Set(), upper: new Set(), lower: new Set(), letters: Object.freeze([]) })
 /**
  * The unit's faked small capitals (2602.23285's appendix headings, 2026-10-24). A face of the Times family has no small capitals of
  * its own, so NFSS sets `\scshape` in a virtual face that draws each lowercase letter as its upright face's capital at 0.8 of the
@@ -774,20 +778,34 @@ const NO_SMALL_CAPS = Object.freeze({ small: new Set(), lower: new Set(), letter
  * reads no case): a capital paired with a lowercase letter of the source, set at most SMALL_CAPS_SHARE of the median size of the
  * unit's letters and digits whose case TeX did not change, is a faked small capital. A capital at their size is a case change of
  * another kind, and a face of real small capitals (cmcsc10, LM Roman Caps, a face with an SC name) draws a lowercase letter as
- * itself. Returns { small, lower, letters }: the page characters that are faked small capitals, those whose source letter is a
- * lowercase one (the letters that can tell small capitals), and every page letter and digit read, each by the alignment's pairs
- * (`pair` into S, gapsOfOnce's); `small` is empty where no letter of the unit's is of the source's own case
+ * itself. A capital paired with a lowercase letter of the source at the size of the letters TeX did not change is a capital of
+ * the text's (`upper`): a class's \MakeTextUppercase heading (acmart's section titles, 2610.22065), a capital at its full size.
+ * Returns { small, upper, lower, letters, ratio }: the page characters that are faked small capitals, those that are capitals of
+ * the text's, those whose source letter is a lowercase one (the letters that can tell either), and every page letter and digit
+ * read, each by the alignment's pairs (`pair` into S, gapsOfOnce's); `small` and `upper` are empty where no letter of the unit's
+ * is of the source's own case. `ratio`, where `small` holds any: their size over the capitals' (the medians), to the hundredth,
+ * the share the layer draws its own small capitals at (tokensOf2's capsRatio). The survey's 1747 faked capitals of 32 papers are
+ * at 0.80 but one table's 36, at 0.71 (2608.27181, at 7 pt): a unit's own, never a paper's
  */
 function smallCapsOf(unit, uc, O, S, pair) {
   if (!pair || typeof unit?.src !== 'string') return NO_SMALL_CAPS
-  // (a faked small capital is set at most SMALL_CAPS_SHARE of a median no larger than the unit's largest glyph: where no capital of
-  // the unit's is that small, none is one, and the walk below is not made, the reading of nearly every unit)
-  // (plain loops: no closure a unit, the reading of every unit)
-  let big = 0, any = false
-  for (let i = 0; i < uc.length; i++) { const c = uc[i]; if (!c.sep && !c.space && c.size > big && c.st?.fam !== 'math') big = c.size }
+  // (a faked small capital is set at most SMALL_CAPS_SHARE of a median no larger than the unit's largest glyph, and a unit of the
+  // text's capitals sets more capitals than lowercase letters: where no capital of the unit's is that small and its lowercase
+  // letters are as many as its capitals, neither is, and the walk below is not made, the reading of nearly every unit)
+  // (plain loops, a letter's case by its code where it is ASCII: no closure and no string a character, the reading of every unit)
+  let big = 0, any = false, ups = 0, lows = 0
+  for (let i = 0; i < uc.length; i++) {
+    const c = uc[i]
+    if (c.sep || c.space || c.st?.fam === 'math') continue
+    if (c.size > big) big = c.size
+    const code = c.ch.charCodeAt(0)
+    if (code >= 65 && code <= 90) ups++
+    else if (code >= 97 && code <= 122) lows++
+    else if (code > 127) { if (c.ch !== c.ch.toLowerCase()) ups++; else if (c.ch !== c.ch.toUpperCase()) lows++ }
+  }
   for (let i = 0; i < uc.length && !any; i++) { const c = uc[i]; any = !c.sep && !c.space && c.size > 0 && c.size <= SMALL_CAPS_SHARE * big && c.st?.fam !== 'math' && c.ch !== c.ch.toLowerCase() }
-  if (!any) return NO_SMALL_CAPS
-  const small = new Set(), lower = new Set(), letters = []
+  if (!any && ups <= lows) return NO_SMALL_CAPS
+  const small = new Set(), upper = new Set(), lower = new Set(), letters = []
   const src = [...unit.src], same = []
   const cased = ch => ch.toLowerCase() !== ch.toUpperCase()
   O.forEach((o, q) => {
@@ -815,10 +833,15 @@ function smallCapsOf(unit, uc, O, S, pair) {
       same.push(c.size)
     }
   })
-  if (!same.length) return { small, lower, letters }
-  const ref = median(same)
-  for (const c of lower) if (cased(c.ch) && c.ch === c.ch.toUpperCase() && c.size <= SMALL_CAPS_SHARE * ref) small.add(c)
-  return { small, lower, letters }
+  if (!same.length) return { small, upper, lower, letters }
+  const ref = median(same), sizes = []
+  for (const c of lower) {
+    if (!cased(c.ch) || c.ch !== c.ch.toUpperCase()) continue
+    if (c.size <= SMALL_CAPS_SHARE * ref) { small.add(c); sizes.push(c.size) }
+    else upper.add(c)
+  }
+  // (their share of the capitals' size, to the hundredth: each glyph's size is the PDF's own, so one tells it exactly)
+  return sizes.length ? { small, upper, lower, letters, ratio: Math.round((100 * median(sizes)) / ref) / 100 } : { small, upper, lower, letters }
 }
 /**
  * Whether `chars` ({ st, small, lower }) are set in small capitals: what most of the glyphs that can tell hold, a tie to none.
@@ -981,6 +1004,11 @@ function alignUnit(out, unit, rects, deny) {
     const sc = smallCapsOf(unit, uc, O, gapsOf2.last.S, gapsOf2.last.pair)
     out.orig = originalStyle(uc, O, matched, sc.small) ?? rectStyle(uc)
     if (sc.small.size && out.orig && !out.orig.st.caps && capsVote(sc.letters.map(c => ({ st: c.st, small: sc.small.has(c), lower: sc.lower.has(c) })))) out.orig = { ...out.orig, st: { ...out.orig.st, caps: true } }
+    // (the share of the size its small capitals are set at, where it has faked ones: what the layer draws its own at, tokensOf2)
+    if (sc.ratio) out.capsRatio = sc.ratio
+    // (in the text's capitals, where most of its letters that can tell are: a class's \MakeTextUppercase heading, whose translation
+    // is drawn in the target's capitals at its size, tokensOf2's `upper`; a CJK character has no case)
+    if (out.orig && sc.upper.size > 0 && 2 * sc.upper.size > sc.lower.size) out.orig = { ...out.orig, st: { ...out.orig.st, upper: true } }
     // (its base style and its pieces' colours as its glyphs hold them, where its source pieces tell what each word is inside: E1)
     out.measured = measuredOf(unit, uc, O, gapsOf2.last.S, gapsOf2.last.pair, sc)
     // (where each later page of the unit begins in its source: its translation's page breaks, E3c)
@@ -2043,6 +2071,69 @@ const headOfCut = (t, extra) => {
   return { ...rest, ...extra }
 }
 
+// ---- small capitals the layer draws itself (2602.23285's appendix headings, 2026-10-24)
+// A run set in small capitals in a face with none of its own (Nimbus Roman, Nimbus Sans, FreeMono, Latin Modern's bold) is drawn
+// as NFSS's virtual faces set them: each lowercase letter as the face's capital at the share of the size the original's small
+// capitals are set at (the unit's capsRatio, else SMALL_CAPS_RATIO), the other characters as they are, each run of one case a
+// token of its own (`sc`, that share), glued to the one before, measured and drawn in the face with no small capitals asked of
+// it. No browser synthesizes them: Chromium did at 0.7 where TeX sets 0.8, Firefox and WebKit each in their own way, so that
+// widths and line breaks were the browser's. A face of real small capitals (its smcp, Latin Modern's caps face) draws its own
+
+/** whether the layer draws a run's small capitals itself: a run set in them (`caps`, a Latin run's: fonts.mjs) in a face with
+ *  none of its own (font-roles.mjs ownSmallCaps; a prototype face's are not known, so none) */
+export const selfCaps = face => !!face?.caps && !(face.id && ownSmallCaps(face.id))
+/** a target's capitals: its language's case mapping (Turkish i to İ, German ß to SS), the root's where it names none a locale
+ *  reads, never the device's */
+const uppers = new Map()
+export function upperOf(to) {
+  let f = uppers.get(to)
+  if (!f) {
+    let loc = 'und'
+    try { 'a'.toLocaleUpperCase(to); loc = to } catch {}
+    f = s => s.toLocaleUpperCase(loc)
+    uppers.set(to, f)
+  }
+  return f
+}
+const MARKS = /^\p{M}$/u, CAPITAL = /^\p{Lu}$/u
+/**
+ * `s` in runs of one case as the layer draws its small capitals (selfCaps): each { s: its text as drawn, k: the share of the
+ * size it is drawn at (1, or `ratio` for a run of small capitals), at: its first character's UTF-16 offset in `s`, n: its
+ * length there }. A small capital is a letter the target's case mapping changes (`upper`), drawn as its capitals, or a capital
+ * `smallAt` (its offset in `s`) says the page sets as one (a rendering of the page's own characters, smallCapsAt); a mark stays
+ * with the letter before it
+ */
+export function caseRuns(s, ratio, upper, smallAt = null) {
+  const out = []
+  let at = 0
+  for (const ch of s) {
+    const last = out.at(-1)
+    const k = last && MARKS.test(ch) ? last.k : upper(ch) !== ch || (smallAt?.(at) && CAPITAL.test(ch)) ? ratio : 1
+    if (last?.k === k) { last.src += ch; last.n += ch.length }
+    else out.push({ src: ch, k, at, n: ch.length })
+    at += ch.length
+  }
+  return out.map(({ src, k, at: a, n }) => ({ s: k === 1 ? src : upper(src), k, at: a, n }))
+}
+/** a rendering of the page's own characters (`chars`, its gap's; `text` as gapsOfOnce joins them, fillRunsOf's walk): by each
+ *  UTF-16 offset of `text`, whether its character is set at most SMALL_CAPS_SHARE of `size` (the unit's capitals'), a faked small
+ *  capital where it is a capital; null where its characters do not give the text */
+export function smallCapsAt(chars, text, size) {
+  if (!Array.isArray(chars) || !chars.length || typeof text !== 'string' || !(size > 0)) return null
+  const flags = []
+  let joined = ''
+  for (const c of chars) {
+    const small = c.size > 0 && c.size <= SMALL_CAPS_SHARE * size
+    for (const ch of c.ch) {
+      if (/\s/.test(ch)) { if (joined && !joined.endsWith(' ')) { joined += ' '; flags.push(false) } continue }
+      joined += ch
+      for (let i = 0; i < ch.length; i++) flags.push(small)
+    }
+  }
+  while (joined.endsWith(' ')) { joined = joined.slice(0, -1); flags.pop() }
+  return joined === text && flags.some(Boolean) ? at => !!flags[at] : null
+}
+
 /**
  * A unit's pieces as tokens: { s, st, face, cls ('cjk'|'latin'), w100, glue (no break before), punct ('open'|'close'),
  * asp (CJK–Latin autospace before it), hyph (a language to hyphenate it in) }, { space }, { crop }, { sup }. `base`: the
@@ -2116,13 +2207,21 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     }
     tokens.push(t)
   }
-  const pushText = (s, st, extra = {}, track = null) => {
+  // (small capitals the layer draws itself, where a run's face has none of its own: at the share its page sets them at, capsRatio,
+  // a capital of a rendering of the page's own characters a small one where the page sets it at most SMALL_CAPS_SHARE of the
+  // unit's size: caseRuns; and the capitals of an all-capitals unit's text, `upper`; each by the target's case mapping)
+  const capsK = resolved.capsRatio ?? SMALL_CAPS_RATIO, upper = upperOf(to)
+  const plainOf = face => (selfCaps(face) ? { ...face, caps: false } : face)
+  const pushText = (s, st, extra = {}, track = null, smallAt = null) => {
     for (const m of s.matchAll(/\s+|\S+/g)) {
       const chunk = m[0]
       if (/^\s+$/.test(chunk)) {
         // (none right after a lead whose glue is the original's: the unit's text begins after it, its own white space
         // TeX's to skip)
-        if (tokens.length && !lastIsSpace() && !tokens.at(-1).leadEnd && !tokens.at(-1).kernEnd) tokens.push({ space: true, st, face: faceOf(st, 'latin', to), w100: measure(' ', faceOf(st, 'latin', to)), ...(afterHead ? { keep: true } : {}) })
+        if (tokens.length && !lastIsSpace() && !tokens.at(-1).leadEnd && !tokens.at(-1).kernEnd) {
+          const face = plainOf(faceOf(st, 'latin', to))
+          tokens.push({ space: true, st, face, w100: measure(' ', face), ...(afterHead ? { keep: true } : {}) })
+        }
         afterHead = false
         continue
       }
@@ -2143,29 +2242,42 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
         const pieces = p.cls !== 'latin' ? [p.s] : st.fam === 'mono' || /^(?:https?:|www\.)/.test(p.s) ? p.s.split(/(?<=[/.\-_#?&=])(?=[^/.\-_#?&=])/) : !extra.ph ? p.s.split(/(?<=[A-Za-zÀ-ɏЀ-ӿ][-/])(?=[A-Za-zÀ-ɏЀ-ӿ])/) : [p.s]
         let po = 0
         pieces.forEach((s, q) => {
-          const face = faceOf(st, p.cls, to)
-          const t = { s, st, face, cls: p.cls, w100: measure(s, face), ...extra, ...(q > 0 ? { brk: true } : {}) }
-          if (track && s.length) {
-            const i = m.index + p.off + po, last = i + s.length - 1
-            const sm = track.sm, a = track.base + track.map.from[i], z = track.base + track.map.from[last] + track.map.span[last] - 1
-            // (a token that is only escapes `shown` spells as white space, a lone backslash, tilde or caret, has no place of its own:
-            // the plain text collapses it into the white space around it, whose offset is the next word's)
-            if (!sm || /\S/.test(track.sh.slice(sm[a], sm[z] + 1))) {
-              t.at = track.at[sm ? sm[a] : a]
-              t.end = track.at[sm ? sm[z] : z] + 1
+          const face0 = faceOf(st, p.cls, to)
+          // (a word in the text's capitals, an all-capitals heading's (`upper`): the target's capitals of it, at its size; a word in
+          // small capitals the layer draws itself: its runs of one case, each a token glued to the one before; neither
+          // hyphenated, and any other word one token. Case is each character's own, whatever its script: caseRuns)
+          const from = m.index + p.off + po
+          const all = p.cls === 'latin' && !!st.upper
+          const runs = !all && p.cls === 'latin' && selfCaps(face0) ? caseRuns(s, capsK, upper, smallAt && (i => smallAt(from + i))) : null
+          const face = runs || all ? plainOf(face0) : face0
+          // (no object a word where it is one token: the reading of nearly every word)
+          for (let r = 0, count = runs ? runs.length : 1; r < count; r++) {
+            const run = runs?.[r], rs = run ? run.s : all ? upper(s) : s, k = run ? run.k : 1, at = run ? run.at : 0, len = run ? run.n : s.length
+            const t = { s: rs, st, face, cls: p.cls, w100: measure(rs, face) * k, ...extra, ...(q > 0 && at === 0 ? { brk: true } : {}) }
+            if (k !== 1) t.sc = k
+            if (track && len) {
+              const i = from + at, last = i + len - 1
+              const sm = track.sm, a = track.base + track.map.from[i], z = track.base + track.map.from[last] + track.map.span[last] - 1
+              // (a token that is only escapes `shown` spells as white space, a lone backslash, tilde or caret, has no place of its own:
+              // the plain text collapses it into the white space around it, whose offset is the next word's)
+              if (!sm || /\S/.test(track.sh.slice(sm[a], sm[z] + 1))) {
+                t.at = track.at[sm ? sm[a] : a]
+                t.end = track.at[sm ? sm[z] : z] + 1
+              }
             }
+            // within a chunk, parts stand together (no break), but Chinese and Japanese break before and after a CJK
+            // character, and a word may break after its own hyphen
+            if (at > 0) t.glue = true
+            else if (q === 0 && n > 0 && !(!keepAll && (p.cls === 'cjk' || parts[n - 1].cls === 'cjk'))) t.glue = true
+            if (p.cls === 'cjk' && s.length === 1 && !centred && P.compressMax >= 0) t.punct = PUNCT_CLOSE.test(s) ? 'close' : PUNCT_OPEN.test(s) ? 'open' : null
+            if (!runs && !all && p.cls === 'latin' && P.hyphen && !extra.ph && st.fam !== 'mono' && s.length >= minWord && unit.kind !== 'heading' && !unit.title) {
+              const word = s.replace(/[^A-Za-zÀ-ɏЀ-ӿ]+$/, '').replace(/^[^A-Za-zÀ-ɏЀ-ӿ]+/, '')
+              const cyr = /[Ѐ-ӿ]/.test(word)
+              if (word.length >= minWord && (cyr ? /^[Ѐ-ӿ]+$/.test(word) : /^[A-Za-zÀ-ɏ][a-zà-ɏß]+$/.test(word))) t.hyph = cyr ? 'ru' : latinLang
+            }
+            push(t)
           }
           po += s.length
-          // within a chunk, parts stand together (no break), but Chinese and Japanese break before and after a CJK
-          // character, and a word may break after its own hyphen
-          if (q === 0 && n > 0 && !(!keepAll && (p.cls === 'cjk' || parts[n - 1].cls === 'cjk'))) t.glue = true
-          if (p.cls === 'cjk' && s.length === 1 && !centred && P.compressMax >= 0) t.punct = PUNCT_CLOSE.test(s) ? 'close' : PUNCT_OPEN.test(s) ? 'open' : null
-          if (p.cls === 'latin' && P.hyphen && !extra.ph && st.fam !== 'mono' && s.length >= minWord && unit.kind !== 'heading' && !unit.title) {
-            const word = s.replace(/[^A-Za-zÀ-ɏЀ-ӿ]+$/, '').replace(/^[^A-Za-zÀ-ɏЀ-ӿ]+/, '')
-            const cyr = /[Ѐ-ӿ]/.test(word)
-            if (word.length >= minWord && (cyr ? /^[Ѐ-ӿ]+$/.test(word) : /^[A-Za-zÀ-ɏ][a-zà-ɏß]+$/.test(word))) t.hyph = cyr ? 'ru' : latinLang
-          }
-          push(t)
         })
       })
     }
@@ -2313,7 +2425,8 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     }
     if (!r.text) return
     if (r.text === ' ') { pushText(' ', style()); return }
-    const own = r.math ? { ...style(), italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3 } : r.mode === 'orig-text' && r.st && r.st.fam !== 'math' ? { ...style(), fam: r.st.fam === 'mono' ? 'mono' : style().fam, design: r.st.fam === 'mono' ? designs.mono : style().design } : style()
+    // (a formula's text in no small capitals and no capitals of the text's: TeX sets neither in math)
+    const own = r.math ? { ...style(), italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3, caps: false, upper: false } : r.mode === 'orig-text' && r.st && r.st.fam !== 'math' ? { ...style(), fam: r.st.fam === 'mono' ? 'mono' : style().fam, design: r.st.fam === 'mono' ? designs.mono : style().design } : style()
     // (in its glyphs' own colour where the file gives one: a citation in hyperref's colorlinks blue, which the unit's source
     // does not name; mixed or black, its run's. A run the source colours, which the file's `colours` row gives, wins)
     const fill = resolved.fillOf?.(k)
@@ -2331,14 +2444,24 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       if (last && (last.st.color ?? null) === (rs.color ?? null)) last.text += run.text
       else runs.push({ text: run.text, st: rs })
     }
+    // (the page's own characters in small capitals the layer draws itself: a capital the page sets as a small one is drawn so,
+    // "ODEBRAIN"'s RAIN, which the page's text gives in capitals: smallCapsAt)
+    const capsAt = r.mode === 'orig-text' && !r.math && own.caps && !own.upper ? smallCapsAt(r.gap?.chars, r.text, resolved.orig?.size) : null
     if (r.sup) {
-      // (a raised rendering in its runs too, each glued to the one before: a superscript citation's black brackets, its blue digits)
+      // (a raised rendering in its runs too, each glued to the one before: a superscript citation's black brackets, its blue digits;
+      // a mark, drawn as it is, in no small capitals)
       for (const run of runs ?? [{ text: r.text, st }]) {
-        const face = faceOf(run.st, 'latin', to)
+        const face = plainOf(faceOf(run.st, 'latin', to))
         tokens.push({ s: run.text, st: run.st, face, cls: 'latin', w100: measure(run.text, face) * 0.62, sup: true, glue: true, ph: r.mode, k })
       }
-    } else if (runs) for (const run of runs) pushText(run.text, run.st, { ph: r.mode, k })
-    else pushText(r.text, st, { ph: r.mode, k, ...(r.math ? { math: true } : {}) })
+    } else if (runs) {
+      let at = 0
+      for (const run of runs) {
+        const from = at
+        pushText(run.text, run.st, { ph: r.mode, k }, null, capsAt && (i => capsAt(from + i)))
+        at += run.text.length
+      }
+    } else pushText(r.text, st, { ph: r.mode, k, ...(r.math ? { math: true } : {}) }, null, capsAt)
   })
   // the class's own marks after the unit's text (finishUnit's `tail`), each in its own style, in place of the translation's
   // own marks of their kinds at its end (markKind: its "\uFF09\u3002" for the original's ")."), never shown twice
@@ -2357,7 +2480,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       if (n === cps.length) break
       if (n === 0) { tokens.pop(); continue }
       t.s = cps.slice(0, n).join('')
-      t.w100 = measure(t.s, t.face)
+      t.w100 = measure(t.s, t.face) * (t.sc ?? 1)
       break
     }
     for (const c of resolved.tail) {
@@ -2699,8 +2822,9 @@ function cropExtent(r) {
 
 /**
  * A laid line's extent over its baseline (`a`) and under it (`d`), PDF units, at its drawn size `f` and the layout's
- * `scale`: its text's ink (ink100, the drawn glyphs' own; a superscript at 0.62 of the size raised 0.36 em, as svgOfUnit
- * sets it) and each crop's, over and under its TeX baseline, drawn at the scale (cropOfBox). `text`: its text's alone
+ * `scale`: its text's ink (ink100, the drawn glyphs' own; a superscript at 0.62 of the size raised 0.36 em, small capitals the
+ * layer draws at their share, `sc`, as svgOfUnit sets them) and each crop's, over and under its TeX baseline, drawn at the scale
+ * (cropOfBox). `text`: its text's alone
  */
 export function lineExtent(line, f, scale) {
   let a = 0, d = 0, ta = 0, td = 0
@@ -2708,7 +2832,7 @@ export function lineExtent(line, f, scale) {
     const t = it.t
     if (t.crop) { const e = cropExtent(t.crop); a = Math.max(a, e.up * scale); d = Math.max(d, e.down * scale); continue }
     if (!t.s || t.space || !t.face) continue
-    const m = ink100(t.s, t.face), k = t.sup ? 0.62 : 1, up = t.sup ? 0.36 * f : 0
+    const m = ink100(t.s, t.face), k = (t.sup ? 0.62 : 1) * (t.sc ?? 1), up = t.sup ? 0.36 * f : 0
     ta = Math.max(ta, up + (m.a * k * f) / 100)
     td = Math.max(td, (m.d * k * f) / 100 - up)
   }
@@ -3082,14 +3206,14 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
       if (t0.s && [...t0.s].length > 1 && tokW(t0, f, st, scale) > cap) {
         const chars = [...t0.s]
         let k = 0, used = 0
-        const per = chars.map(c => (w100(c, t0.face) * f) / 100)
+        const per = chars.map(c => (w100(c, t0.face) * (t0.sc ?? 1) * f) / 100)
         while (k < chars.length && used + per[k] <= cap) used += per[k++]
         k = Math.max(1, k)
         // (the part left never opens with a mark no line starts with: the cut moves back before it)
         while (k > 1 && k < chars.length && barredChar(chars[k])) k--
         line.items.push({ t: headOfCut(t0, { s: chars.slice(0, k).join('') }), w: per.slice(0, k).reduce((a, b) => a + b, 0), shift: 0, asp: 0 })
         const tail = chars.slice(k).join('')
-        tokens = [...tokens.slice(0, i), { ...t0, s: tail, w100: w100(tail, t0.face), glue: false, asp: false }, ...tokens.slice(i + 1)]
+        tokens = [...tokens.slice(0, i), { ...t0, s: tail, w100: w100(tail, t0.face) * (t0.sc ?? 1), glue: false, asp: false }, ...tokens.slice(i + 1)]
       } else {
         // the group's first token alone (the rest goes on): a glued group never runs past the line
         line.items.push(items[0])
@@ -3124,7 +3248,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
         line.items.push({ t: headOfCut(t0, { s: cut.head, hyphenated: true }), w: cut.hw, shift: 0, asp })
         line.x += cut.hw + asp
         const tail = word.slice(cut.at)
-        tokens = [...tokens.slice(0, i), { ...t0, s: tail, w100: w100(tail, t0.face), glue: false, asp: false }, ...tokens.slice(i + 1)]
+        tokens = [...tokens.slice(0, i), { ...t0, s: tail, w100: w100(tail, t0.face) * (t0.sc ?? 1), glue: false, asp: false }, ...tokens.slice(i + 1)]
       }
     }
     // the line is closed: its trailing spaces dropped
@@ -3747,15 +3871,13 @@ function faceClass(face) {
   return c
 }
 /**
- * A run's small capitals as its face's rule draws them: by the face's own (its smcp feature), or synthesized from its capitals
- * where it has none (Nimbus Roman, Nimbus Sans, FreeMono: font-synthesis-small-caps over the layer's font-synthesis none, as the
- * canvas that measured the run synthesizes them, `small-caps` in fontString; Chromium at 0.7 of the size). With synthesis off,
- * such a face drew its lowercase letters as themselves, narrower than they were measured: no small capitals at all. Latin
- * Modern's caps face draws them by its own letters (font-roles.mjs ownSmallCaps), and a prototype face (no id) as before
+ * A run's small capitals as its face's rule draws them: by the face's own smcp feature (font-roles.mjs ownSmallCaps), as the
+ * canvas that measured the run sets them (`small-caps` in fontString). No rule asks a browser to synthesize any: a face with
+ * none of its own has its small capitals drawn by the layer, its runs in the face with none asked (selfCaps, caseRuns), and
+ * Latin Modern's caps face, whose letters are its small capitals, is asked none (fonts.mjs)
  */
 export function capsRule(face) {
-  if (!face.caps) return ''
-  return face.id && !ownSmallCaps(face.id) ? ';font-variant:small-caps;font-synthesis-small-caps:auto' : ';font-variant:small-caps'
+  return face.caps && face.id && ownSmallCaps(face.id) ? ';font-variant:small-caps' : ''
 }
 const n2 = v => Math.round(v * 100) / 100
 /** a fill (0xRRGGBB) as the drawing writes it */
@@ -3788,8 +3910,8 @@ export function svgOfUnit(L, page, toPx, scale, id) {
       }
       const cls = faceClass(run.face)
       const fill = run.color ? ` fill="${fillAttr(run.color)}"` : ''
-      // (v0: a role table face's size correction, 1 for the prototype's faces)
-      const size = n2((run.sup ? fs * 0.62 : fs) * (run.face.size ?? 1))
+      // (v0: a role table face's size correction, 1 for the prototype's faces; small capitals the layer draws at their share, `sc`)
+      const size = n2((run.sup ? fs * 0.62 : fs) * (run.face.size ?? 1) * (run.sc ?? 1))
       const y = run.sup ? n2(by - LF * 0.36 * scale) : n2(by)
       const cx = run.xs.map(x => toPx(x, line.baseline)[0])
       const xs = run.chars ? cx.map(n2).join(' ') : n2(cx[0])
@@ -3814,7 +3936,8 @@ const faceKey = face => `${face.family}|${face.weight}|${face.style}|${face.caps
 
 /**
  * A laid line as svgOfUnit draws it, in order: each <tspan> of its text (a run) and each crop. A run is { face, chars, sup,
- * color, text, xs, track, items }: `xs` the PDF x of its start, or of each of its characters where it is a run of single CJK
+ * color, text, xs, track, items, sc }: `sc` the share of the size small capitals the layer draws are set at (none for any other
+ * run); `xs` the PDF x of its start, or of each of its characters where it is a run of single CJK
  * characters (`chars`), each at its own place; `track` the tracking it is drawn with, em of the layout's size, after each
  * character; `items`, each item of the line drawn in it as [its index, the UTF-16 offset of its text in the run's]. A crop
  * is { crop: its item's index }. The one walk the SVG and the links read (links.mjs places a link over a run's characters by it)
@@ -3845,7 +3968,8 @@ export function lineRuns(line, L) {
     const single = t.cls === 'cjk' && [...t.s].length === 1 && !t.sup
     // faces alike by their class (each token has a face object of its own): single CJK characters of one face share
     // a run, which keeps the DOM small (one tspan for a line's run, not one a character)
-    const sameFace = run && faceKey(run.face) === faceKey(t.face) && run.face.oblique === t.face.oblique && run.sup === !!t.sup && run.color === t.st?.color
+    // (and small capitals the layer draws at one share of the size, `sc`: a word's runs of one case are tspans of their own)
+    const sameFace = run && faceKey(run.face) === faceKey(t.face) && run.face.oblique === t.face.oblique && run.sup === !!t.sup && run.color === t.st?.color && run.sc === t.sc
     if (single) {
       // single CJK characters share a run, each at its own place (justification between them included)
       if (!sameFace || !run.chars) {
@@ -3863,6 +3987,7 @@ export function lineRuns(line, L) {
       if (!glued) {
         flush()
         run = { face: t.face, chars: false, sup: !!t.sup, color: t.st?.color, text: '', xs: [it.x], track: t.sup ? 0 : t.cls === 'cjk' ? LS.state.track : LS.state.trackLatin, items: [] }
+        if (t.sc) run.sc = t.sc
       }
       run.items.push([n, run.text.length])
       run.text += t.s
@@ -3892,7 +4017,7 @@ export function runEdge(run, at, line, L, measure = w100) {
     return it.x + it.w
   }
   const before = run.text.slice(0, at)
-  const LF = (line?.seg ?? L).f, f = LF * (run.sup ? 0.62 : 1)
+  const LF = (line?.seg ?? L).f, f = LF * (run.sup ? 0.62 : 1) * (run.sc ?? 1)
   return run.xs[0] + (measure(before, run.face) * f) / 100 + (run.track ? run.track * LF * [...before].length : 0)
 }
 
@@ -3934,14 +4059,35 @@ export function keptLines(rects, prep, page, blocks = null) {
 }
 
 /**
+ * A babel name's word as the layer draws it in `face` (run.mjs paintNames): { face, runs: [{ s, k }], text }. Where the layer
+ * draws the face's small capitals itself (selfCaps: a name's small capitals are a face's of real ones, whose share no glyph of the
+ * page tells), its runs of one case in the face with none asked, at SMALL_CAPS_RATIO; else the word whole. `text`: what is
+ * drawn, for its face's slices, which are loaded before any of it is measured (runsWidth)
+ */
+export function nameRuns(text, face, to) {
+  if (!selfCaps(face)) return { face, runs: [{ s: text, k: 1 }], text }
+  const runs = caseRuns(text, SMALL_CAPS_RATIO, upperOf(to))
+  return { face: { ...face, caps: false }, runs, text: runs.map(r => r.s).join('') }
+}
+/** nameRuns' word's width at size 1 (PDF units per unit of size): each run's in the face at its share */
+export const runsWidth = ({ face, runs }) => runs.reduce((a, r) => a + widthOf(r.s, face) * r.k, 0)
+/**
  * A babel name drawn in the target's word (run.mjs paintNames) as SVG: one <text> at its baseline (`baseline`, from `x`,
  * PDF units), its word in `face` at `size`, the face's own size correction applied, an oblique face skewed about its
- * baseline as a unit's run is (svgOfUnit). `toPx(x, y)`: PDF to the SVG's CSS pixels; `scale`: CSS pixels per PDF unit
+ * baseline as a unit's run is (svgOfUnit); its runs of one case where the layer draws its small capitals (`runs`, nameRuns'),
+ * each at its own place. `toPx(x, y)`: PDF to the SVG's CSS pixels; `scale`: CSS pixels per PDF unit
  */
-export function svgOfName({ occurrence, text, x, baseline, size, face, color = null }, toPx, scale) {
+export function svgOfName({ occurrence, text, x, baseline, size, face, color = null, runs = null }, toPx, scale) {
   const [px, py] = toPx(x, baseline)
   const fill = color ? ` fill="${fillAttr(color)}"` : ''
-  const span = `<tspan class="${faceClass(face)}" x="${n2(px)}" y="${n2(py)}" font-size="${n2(size * scale * (face.size ?? 1))}"${fill}>${esc(text)}</tspan>`
+  // (small capitals the layer draws itself, nameRuns': each run of one case a <tspan> at its own x, at its share of the size)
+  let span = '', at = x
+  if (runs?.length && !(runs.length === 1 && runs[0].k === 1)) {
+    for (const r of runs) {
+      span += `<tspan class="${faceClass(face)}" x="${n2(toPx(at, baseline)[0])}" y="${n2(py)}" font-size="${n2(size * scale * (face.size ?? 1) * r.k)}"${fill}>${esc(r.s)}</tspan>`
+      at += widthOf(r.s, face) * r.k * size
+    }
+  } else span = `<tspan class="${faceClass(face)}" x="${n2(px)}" y="${n2(py)}" font-size="${n2(size * scale * (face.size ?? 1))}"${fill}>${esc(runs?.[0]?.s ?? text)}</tspan>`
   const line = face.oblique ? `<text transform="translate(${n2(px)} ${n2(py)}) skewX(${-face.oblique}) translate(${-n2(px)} ${-n2(py)})">${span}</text>` : `<text y="${n2(py)}">${span}</text>`
   return `<g data-n="${occurrence}">${line}</g>`
 }

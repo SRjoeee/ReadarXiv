@@ -29,7 +29,7 @@
 // face the reader's device holds: no source of a face but its URL, no font rule written here, no generic family. A
 // character no served slice holds keeps its unit the original's.
 import { COVERAGE } from '../rules/font-coverage.mjs'
-import { canDrawIn, FACES, faceFor, rolesFor } from '../rules/font-roles.mjs'
+import { canDrawIn, capsLetters, FACES, faceFor, rolesFor } from '../rules/font-roles.mjs'
 
 /** the PostScript name without its subset tag */
 const bare = name => String(name ?? '').replace(/^[A-Z]{6}\+/, '')
@@ -79,14 +79,16 @@ export const roleFaces = () => ROLES
  */
 export const CJK_SLANT_DEG = 13
 /** the role table's face of a run: faceFor's, as faceOf's object, with the ids of its faces and fallbacks (`ids`); a CJK
- *  italic run's sheared CJK_SLANT_DEG (`oblique`) */
+ *  italic run's sheared CJK_SLANT_DEG (`oblique`). Its `caps`, small capitals asked of the face, is none in a face whose letters
+ *  are them (Latin Modern's caps face, capsLetters): asked, the canvas measured capitals it synthesized at 0.7, narrower than the
+ *  face's own letters the drawing set, which synthesizes nothing (1125 against 1187 px for one heading, Chromium) */
 function roleFaceOf(st, cls) {
   const roles = ROLES
   const id = faceFor(roles, { script: cls, cls: st.fam === 'math' ? 'serif' : st.fam, design: st.design ?? 'times', bold: !!st.bold, italic: !!st.italic, caps: !!st.caps })
   const F = FACES[id]
   const ids = [...new Set([id, ...(roles.fallbacks[id] ?? []), ...(cls !== 'cjk' && roles.cjk ? [roles.cjk.body] : [])])].filter(f => FACES[f])
   const slant = cls === 'cjk' && !!st.italic && !!roles.cjk
-  return { family: [...new Set(ids.map(f => `"${FACES[f].family}"`))].join(', '), weight: F.weight, style: F.style, oblique: slant ? CJK_SLANT_DEG : 0, stand: st.italic ? (cls === 'cjk' ? (slant ? 'oblique' : '') : 'italic') : '', caps: !!st.caps && cls !== 'cjk', size: F.size ?? 1, id, ids }
+  return { family: [...new Set(ids.map(f => `"${FACES[f].family}"`))].join(', '), weight: F.weight, style: F.style, oblique: slant ? CJK_SLANT_DEG : 0, stand: st.italic ? (cls === 'cjk' ? (slant ? 'oblique' : '') : 'italic') : '', caps: !!st.caps && cls !== 'cjk' && !capsLetters(id), size: F.size ?? 1, id, ids }
 }
 // ---- the role table's faces as the host serves them
 

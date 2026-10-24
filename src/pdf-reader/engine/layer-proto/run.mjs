@@ -1350,10 +1350,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         leadsOf.set(nm.unit, { nm, rec, text, st, chars: mine.map(c => ({ ...c, page: pg })) })
         continue
       }
-      const face = faceOf(st, /[\u2e80-\u9fff\uac00-\ud7af\u3040-\u30ff\uf900-\ufaff]/.test(text) ? 'cjk' : 'latin', to)
+      // (its small capitals, where its face has none of its own, drawn by the layer: layer2.mjs nameRuns)
+      const drawn = L2.nameRuns(text, faceOf(st, /[\u2e80-\u9fff\uac00-\ud7af\u3040-\u30ff\uf900-\ufaff]/.test(text) ? 'cjk' : 'latin', to), to)
       if (FS) {
         const tFonts = performance.now()
-        const no = await FS.check([{ face, text }])
+        const no = await FS.check([{ face: drawn.face, text: drawn.text }])
         fontWait += performance.now() - tFonts
         if (disposed) return
         if (no) { rec.why = no.why; continue }
@@ -1368,7 +1369,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         else if (c.x0 >= nm.x1 - 0.1) right = Math.min(right, c.x0 - 0.25 * nm.size)
       }
       left = Math.min(left, nm.x0); right = Math.max(right, nm.x1)
-      const w = L2.widthOf(text, face) * nm.size, mid = (nm.x0 + nm.x1) / 2
+      const w = L2.runsWidth(drawn) * nm.size, mid = (nm.x0 + nm.x1) / 2
       const room = nm.centred ? 2 * Math.min(mid - left, right - mid) : right - nm.x0
       const k = w > room ? room / w : 1
       if (k < P.floorMin - 1e-9) { Object.assign(rec, { why: 'unfit', text, w: r1(w), room: r1(room) }); continue }
@@ -1381,7 +1382,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const hid = [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)]
       r.ops.push({ op: 'hidden', rects: [hid] })
       audit?.push({ what: 'erase', unit: -1, name: nm.occurrence, page: pg, box: [hid[0], hid[1], hid[0] + hid[2], hid[1] + hid[3]] })
-      r.markup.push(L2.svgOfName({ occurrence: nm.occurrence, text, x, baseline: nm.baseline, size, face, color: st.color ?? null }, cssOf(pg), scale))
+      r.markup.push(L2.svgOfName({ occurrence: nm.occurrence, text, x, baseline: nm.baseline, size, face: drawn.face, runs: drawn.runs, color: st.color ?? null }, cssOf(pg), scale))
       Object.assign(rec, { drawn: true, text, size: r1(size), x: r1(x), w: r1(w * k), chars: mine.map(c => ({ ...c, page: pg })) })
     }
   }
