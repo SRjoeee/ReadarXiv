@@ -184,6 +184,9 @@ function forgetFailed() {
  *                      failed), else null, the slices its characters are in loaded. No other face is tried
  *   ready(face, text)  the slices of `face` that hold `text` loaded, as far as they can be (a measure is taken at once)
  *   warm(id)           the face's table asked and its first slice fetched, at once, not awaited
+ *   unloaded(face, text)  the FontFaces of the slices that hold `text`'s characters and have not loaded (each character's
+ *                      from the first of the face's ids whose served ranges hold it); [] where a table could not be had.
+ *                      The warmer loads them itself, a few at a time (warm.mjs)
  */
 export function roleFaceSet({ faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, keepFailed = false } = {}) {
   // (a warmer's set, keepFailed, lets nothing go: a run's open does, and a run under way keeps what failed for its units)
@@ -268,6 +271,20 @@ export function roleFaceSet({ faceSources = null, faceUrl = file => `/fonts/${en
     },
     warm(id) {
       if (FACES[id]) table(id).then(t => t?.faces[0]?.load()).catch(() => {})
+    },
+    async unloaded(face, text) {
+      const got = await tablesOf(face.ids)
+      if (!got) return []
+      const out = new Set()
+      for (const ch of new Set(glyphs(text))) {
+        if (/\s/u.test(ch)) continue
+        // (the first of the face's ids whose served ranges hold it: the family CSS takes the glyph from)
+        for (const t of got) {
+          const f = t?.faces.find(x => { const r = rangesOf.get(x); return r === null || canDrawIn(ch, [r]) })
+          if (f) { out.add(f); break }
+        }
+      }
+      return [...out].filter(f => f.status === 'unloaded')
     },
   }
 }

@@ -1,31 +1,51 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// The faces a page will be drawn in, asked at once before the page is laid (layer-proto/warm.mjs; docs/PDF-READER.md
-// §11.8): the paper's family read from its parts' layouts, what each page sets (its units with their original's style there,
-// its babel names, its fonts), the target's roles for the family, what v0 will draw of the page in the faces it will draw it
-// in, one load a face, nothing asked twice, never a rejection. FontFace and document.fonts are stand-ins that record what is
-// declared and loaded
+// The faces a page will be drawn in, loaded before the page is laid (layer-proto/warm.mjs; docs/PDF-READER.md §11.8): the
+// paper's family read from its parts' layouts, what each page sets (its units with their original's style there, its babel
+// names, its fonts), the target's roles for the family, the slices that hold what v0 will draw of the page in the faces it
+// will draw it in, each slice once, WAVE_SLOTS at a time, never a rejection. FontFace and document.fonts are stand-ins that
+// record what is declared and loaded
 
 interface Stub { family: string; url: string; weight: string; status: string; unicodeRange?: string }
 let declared: Stub[] = []
-let loads: { font: string; text: string }[] = []
+/** each FontFace load: its file and weight */
+let loads: { url: string; weight: string }[] = []
+/** the loads in flight, and the most there were at once */
+let inFlight = 0, most = 0
+/** a load's answer, held until released where `hold` is set */
+let hold = false
+let held: (() => void)[] = []
 const g = globalThis as Record<string, unknown>
 beforeEach(() => {
   declared = []
   loads = []
+  inFlight = 0
+  most = 0
+  hold = false
+  held = []
   vi.resetModules()
   g.OffscreenCanvas = class { width = 8; height = 8; getContext() { return { measureText: () => ({ width: 0 }) } } }
   g.FontFace = class {
     family: string; url: string; weight: string; status = 'unloaded'; unicodeRange?: string
     constructor(family: string, src: string, d: { weight?: string; unicodeRange?: string } = {}) { this.family = family; this.url = src; this.weight = d.weight ?? '400'; this.unicodeRange = d.unicodeRange }
-    load() { this.status = 'loaded'; return Promise.resolve(this) }
+    load() {
+      this.status = 'loading'
+      loads.push({ url: this.url, weight: this.weight })
+      inFlight++
+      most = Math.max(most, inFlight)
+      return new Promise(resolve => {
+        const done = () => { inFlight--; this.status = 'loaded'; resolve(this) }
+        if (hold) held.push(done)
+        else queueMicrotask(done)
+      })
+    }
   }
   Object.defineProperty(document, 'fonts', {
     configurable: true,
     value: {
       add(f: Stub) { declared.push(f) },
       delete(f: Stub) { declared = declared.filter(x => x !== f) },
-      async load(font: string, text: string) { loads.push({ font, text }); return [] },
+      async load() { return [] },
     },
   })
 })
@@ -43,10 +63,15 @@ function partOf(fonts: Record<string, number>) {
   })
   return { layout: { fonts: names, lines } }
 }
-/** a host serving each face asked as one slice of the CJK and Latin blocks, recording the faces asked */
+/** a host serving each face asked in three slices: Latin (L), CJK below U+8000 (A), CJK from U+8000 (B); the faces asked */
 function host(asked: string[]) {
-  return async (id: string) => { asked.push(id); return [{ url: `/s/${id}.woff2`, ranges: [0x20, 0x24f, 0x3000, 0x9fff, 0xff00, 0xffef] }] }
+  return async (id: string) => {
+    asked.push(id)
+    return [{ url: `/s/${id}-L.woff2`, ranges: [0x20, 0x24f] }, { url: `/s/${id}-A.woff2`, ranges: [0x3000, 0x7fff] }, { url: `/s/${id}-B.woff2`, ranges: [0x8000, 0x9fff, 0xff00, 0xffef] }]
+  }
 }
+/** the slices loaded, as `<face id>-<slice>` */
+const loaded = () => loads.map(l => /\/s\/([^"]+)\.woff2/.exec(l.url)?.[1]).sort()
 const REGULAR = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true, name: 'NimbusRomNo9L-Regu' } as const
 const BOLD = { ...REGULAR, bold: true, name: 'NimbusRomNo9L-Medi' } as const
 
@@ -91,56 +116,52 @@ describe('pagesOfParts: what each page sets, by the parts read so far', () => {
   })
 })
 
-describe('faceWarmer: one load a face for what v0 will draw of a page, before v0 checks it', () => {
+describe('faceWarmer: the slices of what v0 will draw of a page, loaded before v0 checks it', () => {
   it('a Times paper in Chinese: each unit in its original\'s style, a heading with none in the bold, an author\'s never; the Latin ones in Nimbus Roman', async () => {
     const { faceWarmer } = await import('@/pdf-reader/engine/layer-proto/warm.mjs')
     const asked: string[] = []
-    const w = faceWarmer({ faceSources: host(asked), target: 'zh' })
-    await w.warm({
+    await faceWarmer({ faceSources: host(asked), target: 'zh' }).warm({
       units: [
         { kind: 'para', text: '\u4e2d\u6587 Transformer \u4e2d', st: REGULAR },
         // (a heading set in a regular font is drawn regular, as v0 draws it in its original's style)
         { kind: 'heading', text: '\u7b80\u4ecb', st: REGULAR },
-        { kind: 'author', text: '\u6d69\u8f89\u8d3e', st: REGULAR },
+        // (an author's unit is never drawn: its characters, here the only ones from U+8000, are not asked)
+        { kind: 'author', text: '\u8d3e\u8f89', st: REGULAR },
       ],
     }, 'times')
     expect(asked).toContain('shs-sc-regular')
     expect(asked).not.toContain('shs-sc-bold')
-    expect(asked).toContain('nimbus-roman-regular')
-    const cjk = loads.filter(l => /"axt-shs-sc[^"]*"/.test(l.font.split(',')[0] ?? ''))
-    // (each face once, its characters once each, white space never; the author's characters not at all)
-    expect(cjk.map(l => [...l.text].sort().join(''))).toEqual([[...'\u4e2d\u6587\u7b80\u4ecb'].sort().join('')])
-    const latin = loads.find(l => /[a-z]/.test(l.text))
-    expect([...(latin?.text ?? '')].sort().join('')).toBe([...new Set('Transformer')].sort().join(''))
-    expect(loads.every(l => !/\s/.test(l.text))).toBe(true)
+    expect(loaded()).toEqual(['nimbus-roman-regular-L', 'shs-sc-regular-A'])
     // a heading the layout tells no style of: the bold
-    const asked2: string[] = []
-    await faceWarmer({ faceSources: host(asked2), target: 'zh' }).warm({ units: [{ kind: 'heading', text: '\u6458\u8981', st: null }] }, 'times')
-    expect(asked2).toContain('shs-sc-bold')
-    expect(asked2).not.toContain('shs-sc-regular')
+    loads = []
+    await faceWarmer({ faceSources: host([]), target: 'zh' }).warm({ units: [{ kind: 'heading', text: '\u7b80\u4ecb', st: null }] }, 'times')
+    expect(loaded()).toEqual(['shs-sc-bold-A'])
   })
 
-  it('a page\'s names in the target\'s words and style, its text fonts\' alphabets (no formula\'s), and page 1\'s likely faces', async () => {
+  it('a page\'s names in the target\'s words and style, its text fonts\' alphabets, no formula\'s', async () => {
     const { faceWarmer } = await import('@/pdf-reader/engine/layer-proto/warm.mjs')
-    const asked: string[] = []
     const math = { fam: 'math', bold: false, italic: true, caps: false, design: 'cm', known: true, name: 'CMMI10' } as const
     const mono = { fam: 'mono', bold: false, italic: false, caps: false, design: 'courier', known: true, name: 'NimbusMonL-Regu' } as const
-    await faceWarmer({ faceSources: host(asked), target: 'zh' }).warm({ names: [{ key: 'abstract', capitals: false, st: BOLD }], fonts: [REGULAR, mono, math] }, 'times')
-    // (the abstract's name, its word in Chinese, in the bold face its original is set in)
-    expect(loads.some(l => /^700 /.test(l.font) && [...l.text].sort().join('') === [...'\u6458\u8981'].sort().join(''))).toBe(true)
-    expect(asked).toContain('shs-sc-bold')
-    expect(asked).toContain('nimbus-roman-regular')
-    expect(asked).toContain('freemono-regular')
+    // (the abstract's name, its word in Chinese across both CJK slices, in the bold face its original is set in)
+    await faceWarmer({ faceSources: host([]), target: 'zh' }).warm({ names: [{ key: 'abstract', capitals: false, st: BOLD }] }, 'times')
+    expect(loaded()).toEqual(['shs-sc-bold-A', 'shs-sc-bold-B'])
+    loads = []
+    await faceWarmer({ faceSources: host([]), target: 'zh' }).warm({ fonts: [REGULAR, mono, math] }, 'times')
+    expect(loaded()).toEqual(['freemono-regular-L', 'nimbus-roman-regular-L'])
     // (a formula's font asks nothing: its glyphs are v0's to measure)
-    const asked1: string[] = [], before = loads.length
-    await faceWarmer({ faceSources: host(asked1), target: 'zh' }).warm({ fonts: [math] }, 'times')
-    expect(asked1).toEqual([])
-    expect(loads.length).toBe(before)
-    // page 1's likely faces: the CJK body's regular and bold, the Latin's regular, bold and italic
-    const asked2: string[] = []
-    await faceWarmer({ faceSources: host(asked2), target: 'zh' }).warm({ likely: 'times' }, 'times')
-    for (const id of ['shs-sc-regular', 'shs-sc-bold', 'nimbus-roman-regular', 'nimbus-roman-bold', 'nimbus-roman-italic']) expect(asked2).toContain(id)
+    loads = []
+    const asked: string[] = []
+    await faceWarmer({ faceSources: host(asked), target: 'zh' }).warm({ fonts: [math] }, 'times')
+    expect(asked).toEqual([])
+    expect(loads).toEqual([])
+  })
+
+  it('page 1\'s likely faces (v0\'s warmFaces): the CJK body\'s regular and bold, the Latin\'s regular, bold and italic; none of CJK for an alphabet', async () => {
+    const { faceWarmer } = await import('@/pdf-reader/engine/layer-proto/warm.mjs')
+    await faceWarmer({ faceSources: host([]), target: 'zh' }).warm({ likely: 'times' }, 'times')
+    expect(loaded()).toEqual(['nimbus-roman-bold-L', 'nimbus-roman-italic-L', 'nimbus-roman-regular-L', 'shs-sc-bold-A', 'shs-sc-regular-A'])
     // (an alphabet target warms no CJK face)
+    loads = []
     const asked3: string[] = []
     await faceWarmer({ faceSources: host(asked3), target: 'fr' }).warm({ likely: 'times' }, 'times')
     expect(asked3.some(id => id.startsWith('shs-'))).toBe(false)
@@ -151,21 +172,31 @@ describe('faceWarmer: one load a face for what v0 will draw of a page, before v0
     const asked: string[] = []
     const cmr = { fam: 'serif', bold: false, italic: false, caps: false, design: 'cm', known: true, name: 'CMR10' } as const
     await faceWarmer({ faceSources: host(asked), target: 'zh' }).warm({ units: [{ kind: 'para', text: '\u4e2d', st: cmr }, { kind: 'heading', text: '\u6587', st: { ...cmr, bold: true, name: 'CMBX12' } }] }, 'cm')
-    expect(asked).toContain('shs-sc-light')
-    expect(asked).toContain('shs-sc-semibold')
+    expect(loaded()).toEqual(['shs-sc-light-A', 'shs-sc-semibold-A'])
     expect(asked).not.toContain('shs-sc-regular')
   })
 
-  it('a character asked once is not asked again; a host that cannot say rejects nothing', async () => {
-    const { faceWarmer } = await import('@/pdf-reader/engine/layer-proto/warm.mjs')
-    const asked: string[] = []
-    const w = faceWarmer({ faceSources: host(asked), target: 'zh' })
-    await w.warm({ units: [{ kind: 'para', text: '\u4e2d\u6587', st: REGULAR }] }, 'times')
+  it('WAVE_SLOTS slices at a time; a slice loaded or loading is not asked again; a host that cannot say rejects nothing', async () => {
+    const { faceWarmer, WAVE_SLOTS } = await import('@/pdf-reader/engine/layer-proto/warm.mjs')
+    // (a face in twelve slices of a CJK block each, and a page whose characters are in every one)
+    const many = async (id: string) => Array.from({ length: 12 }, (_, i) => ({ url: `/s/${id}-${i}.woff2`, ranges: [0x4e00 + 0x100 * i, 0x4eff + 0x100 * i] }))
+    const w = faceWarmer({ faceSources: many, target: 'zh' })
+    hold = true
+    const text = Array.from({ length: 12 }, (_, i) => String.fromCodePoint(0x4e00 + 0x100 * i)).join('')
+    const wave = w.warm({ units: [{ kind: 'para', text, st: REGULAR }] }, 'times')
+    for (let i = 0; i < 40 && (held.length || loads.length < 12); i++) {
+      await new Promise(r => setTimeout(r, 0))
+      held.shift()?.()
+    }
+    hold = false
+    for (const done of held.splice(0)) done()
+    await wave
+    expect(loads.length).toBe(12)
+    expect(most).toBe(WAVE_SLOTS)
+    // (asked again, nothing is loaded again)
     const n = loads.length
-    await w.warm({ units: [{ kind: 'para', text: '\u6587\u4e2d', st: REGULAR }] }, 'times')
+    await w.warm({ units: [{ kind: 'para', text, st: REGULAR }] }, 'times')
     expect(loads.length).toBe(n)
-    await w.warm({ units: [{ kind: 'para', text: '\u6587\u5b57', st: REGULAR }] }, 'times')
-    expect(loads.at(-1)?.text).toBe('\u5b57')
     const failing = faceWarmer({ faceSources: async () => { throw new Error('the table did not come') }, target: 'zh' })
     await expect(failing.warm({ units: [{ kind: 'para', text: '\u4e2d', st: null }] }, 'times')).resolves.toBeUndefined()
   })

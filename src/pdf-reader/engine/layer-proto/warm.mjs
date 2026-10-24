@@ -35,6 +35,12 @@ import { BUILTIN_RULES, resolveRules } from '../rules/layout.mjs'
 import { classifyFont, faceOfRoles, fontString, roleFaceSet } from './fonts.mjs'
 import { cjkClassRe } from './layer2.mjs'
 
+/** the slices the wave loads at a time. The edge answers the streams of a connection side by side, whatever their priority
+ *  (2026-10-24, staging: a High fetch of 120 KB asked beside 28 slices loaded as fonts, VeryHigh, ended at 175 to 470 ms, as
+ *  beside 28 asked Low or High), so a read of the original's PDF asked while the wave is in flight shares the line with
+ *  every slice in flight; the composed document reads the PDF one range after another, each waiting for the last. A few
+ *  slices at a time keep the line busy across their round trips and leave those reads a share of it */
+export const WAVE_SLOTS = 4
 /** the characters v0 warms each face with on page 1 (layer2.mjs warmFaces): a CJK one and a Latin one */
 const LIKELY_CJK = '\u6c38', LIKELY_LATIN = 'a'
 
@@ -116,9 +122,10 @@ export function pagesOfParts(parts) {
  * `page.units` ({ kind, text, st }: a unit's kind, its translated text and its original's style there, pagesOfParts'; an
  * author's is never drawn and is not asked), `page.names` (pagesOfParts', in the target's words), `page.fonts` (the classes
  * of the original's text fonts on the page: each face's alphabet slice) and `page.likely` (the serif design of page 1, for
- * the faces v0 warms there; null: none). It resolves once each has loaded or failed; it never rejects. A character asked
- * once in a face is not asked again. Its face set lets nothing go that failed (keepFailed): a slice that fails here fails
- * v0's check of the units that need it, as if v0 had asked it itself; a run's open forgets it, and asks again
+ * the faces v0 warms there; null: none). The slices are loaded WAVE_SLOTS at a time, in the order the page asks them; a
+ * slice v0 asks meanwhile v0 loads at once, as before. It resolves once each has loaded or failed; it never rejects. A slice
+ * loaded or loading is not asked again. Its face set lets nothing go that failed (keepFailed): a slice that fails here
+ * fails v0's check of the units that need it, as if v0 had asked it itself; a run's open forgets it, and asks again
  */
 export function faceWarmer({ faceSources, target, rules = BUILTIN_RULES }) {
   const R = resolveRules(rules, target)
@@ -159,7 +166,12 @@ export function faceWarmer({ faceSources, target, rules = BUILTIN_RULES }) {
           ask(st, 'latin', [LIKELY_LATIN])
         }
       }
-      await Promise.all([...runs.values()].map(r => FS.ready(r.face, [...r.chars].join(''))))
+      // (each run's slices not loaded yet, in the order the page asks them, each slice once; loaded WAVE_SLOTS at a time)
+      const lists = await Promise.all([...runs.values()].map(r => FS.unloaded(r.face, [...r.chars].join('')).catch(() => [])))
+      const queue = [...new Set(lists.flat())]
+      await Promise.all(Array.from({ length: Math.min(WAVE_SLOTS, queue.length) }, async () => {
+        for (let f = queue.shift(); f; f = queue.shift()) await f.load().catch(() => null)
+      }))
     },
   }
 }

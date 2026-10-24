@@ -22,9 +22,11 @@ export interface WarmUnit { kind: string | null; text: string; st: FontClass | n
  *  warms there (null: not page 1's) */
 export interface WarmPage { units?: readonly WarmUnit[]; names?: readonly WarmName[]; fonts?: readonly FontClass[]; likely?: string | null }
 export interface FaceWarmer {
-  /** the slices that hold what v0 will draw of `page` in the target's faces for the paper's English `family`, asked at once;
-   *  resolves once each has loaded or failed, never rejects */
+  /** the slices that hold what v0 will draw of `page` in the target's faces for the paper's English `family`, loaded
+   *  WAVE_SLOTS at a time; resolves once each has loaded or failed, never rejects */
   warm(page: WarmPage, family: EnglishFamily): Promise<void>
 }
+/** the slices the wave loads at a time */
+export declare const WAVE_SLOTS: number
 /** a warmer of one target's faces over the host's served slices */
 export declare function faceWarmer(o: { faceSources: FaceSources; target: string; rules?: FrozenRuleSet }): FaceWarmer
