@@ -11,7 +11,7 @@ import type { UnitWire } from './bundle.mjs'
 /** the format: raised with any change to the shape of a head, part, left part or catalog; 6, a part with no layout says why;
  *  7, a left part's draw items carry their fills; 8, the head's base says whose PDF the layer is drawn over (ours or arXiv's)
  *  and `orig` names arXiv's beside ours, the catalog names the base */
-export declare const BUNDLE5: '9'
+export declare const BUNDLE5: '10'
 /** the formats a reader takes: its own and 7's (a bundle drawn over arXiv's PDF; its head read as `base.source` 'arxiv') */
 export declare const BUNDLES_READ: readonly ['7', '8']
 /** whose PDF a layer is drawn over: our compile's final pass, or arXiv's */
@@ -192,6 +192,8 @@ export interface ReadPart {
   noLayout: Readonly<LayoutRefusalRecord> | null
   /** the rules near its table cells by page (x0, y0, x1, y1 stride 4: layer2.mjs cellBands), null where the layout is none or no page has any */
   rules: Readonly<Record<number, readonly number[]>> | null
+  /** its pages' figure units (BUNDLE 10, figure-rows.mjs), none where its layout is none */
+  figures: readonly import('./figure-rows.mjs').FigureRow[]
   leftParts: (Ref & { page: number })[]
   /** the state after this part */
   chain: PartChain
@@ -315,7 +317,7 @@ export declare function writeLeftPart(o: {
 export declare function writePart(o: {
   paper: { id: string; version: number }; head: string; prev: string | null; pages: readonly [number, number]; views: readonly number[]
   left: readonly UnitWire[]; fileOnly: readonly (readonly [number, number])[]; layout: LayoutPart | LayoutRefusalRecord | null
-  rules?: Readonly<Record<number, readonly number[]>> | null; leftParts: readonly (Written & { page: number })[]
+  rules?: Readonly<Record<number, readonly number[]>> | null; figures?: readonly import('./figure-rows.mjs').FigureRowWire[]; leftParts: readonly (Written & { page: number })[]
 }): Promise<Written & { from: number; to: number }>
 /** the catalog, written by the Worker from the refs it committed (only sha256, bytes, from and to of each are read) */
 export declare function writeCatalog(o: {

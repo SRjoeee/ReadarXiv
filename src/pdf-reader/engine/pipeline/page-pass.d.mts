@@ -111,3 +111,5 @@ export declare function layerOfPaper(o: LayerOptions): Promise<
   | { through: number; count: number; stats: { left: LeftSide['stats']; layout: { stats?: LayoutStats; refused?: string; why?: string; own?: OwnVerdict; rulesFailed?: string }; rules: { pages: number } | null; draw?: { pages: number; none: number; why: Record<string, number>; bytes: number; ms: number; /** left parts whose draw the writer shed (for size, or with tokens past a cap) */ shed: number }; closed?: [from: number, to: number, read: number][]; toplevels?: { files: number; pages: [marked: number | null, arxiv: number] }; delta?: { kind: 'delta'; bytes: number; replaced: number } | { kind: 'full'; why: string; reason?: string } } }
   | { refused: 'anchors'; why: string }
 >
+/** the figure units the wrap drew, appended to `bundle` as units of kind figtext, and their rows by page */
+export declare function figureUnits(given: { units: readonly object[] } | null | undefined, o: { bundle: unknown[]; undrawable?: readonly number[] | null; M: number }): Map<number, import('../layer-proto/figure-rows.mjs').FigureRowWire[]>

@@ -73,7 +73,7 @@ export function layoutRecordOf(r) {
  * end holds a source's (its UTF-8 bytes), and its row (layer-proto/figure-rows.mjs figureRow) in a Map by page; none on a page
  * past our `M` pages or that the line check says is not drawn (`undrawable`: its units the original's, so are its figures)
  */
-function figureUnits(given, { bundle, undrawable, M }) {
+export function figureUnits(given, { bundle, undrawable, M }) {
   const byPage = new Map()
   if (!given || !Array.isArray(given.units)) return byPage
   const skip = new Set(undrawable ?? [])

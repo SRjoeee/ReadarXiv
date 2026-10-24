@@ -1,31 +1,35 @@
 // The text inside a vector figure of our final pass (docs/route/orphan-text.md stage 5, the content class `figures`,
 // rules/content-classes.mjs): the labels, axis titles, legends and annotations a figure draws as glyphs, cut into ink units, one
-// a label or a line, each translated once on the server as a unit of kind `figure` and drawn in its own run's box by the layer
-// (layer-proto/figure-text.mjs), its ink hidden by its own optional-content group (`f<k>`, layout/wrap.mjs). Read in the maker
-// child from what it already has: the pages pageInk read (`indices` and `turned`) and own.mjs's ownership. Nothing of arXiv's
-// PDF, no layout file, no position estimated: every place is our glyphs'.
+// a label or a line, each a unit of kind `figtext` the bundle's units hold after the paper's own (pipeline/page-pass.mjs
+// figureUnits), translated with them whatever the reader's switch, and drawn in its own run's box by the layer (run.mjs
+// paintFigures, layer-proto/figure-fit.mjs), its ink hidden by its own optional-content group (`f<k>`, layout/wrap.mjs). Read in
+// the maker child from what it already has: the pages pageInk read (`indices` and `turned`) and own.mjs's ownership. Nothing of
+// arXiv's PDF, no layout file, no position estimated: every place is our glyphs'.
 //
 // Which glyphs: those no unit owns, no blank, inside a figure our compile set —
 //   - an included PDF's: shown inside a form XObject (pageInk's `form`; pdfTeX includes a PDF, and an EPS made one, as a form);
-//   - a TikZ or pgfplots picture's: between the picture's points `zs` and `ze` (layout/marks.mjs POINTS_TEX, around pgf's
-//     \pgfsys@beginpicture and \pgfsys@endpicture, inside the picture's own box: TeX sets its text in our fonts).
+//   - a TikZ or pgfplots picture's: between the picture's points `zs` and `ze` (layout/marks.mjs POINTS_TEX, inside pgf's
+//     \pgfsys@beginpicture and \pgfsys@endpicture, in the picture's own box: TeX sets its text in our fonts; pageInk's
+//     `pictures`).
 // Level and turned alike (a y-axis title set at 90 degrees keeps its turn).
 //
 // How they are cut (RUN_*): in stream order, a glyph joins the run before it where both are such glyphs, of one font, size,
-// colour and direction, on one baseline (within RUN_DY of their size across it), at most RUN_GAP of its size past the run's end
-// along it and not back over it; any other glyph between ends the run. A run is a unit when it spells a word (two letters
-// together) in a face that is no math face; its text the glyphs' Unicode (NFKC) with a space where two stand apart by
-// SPACE_GAP of their size. What it is not, a number, a tick's label, a letter alone, a formula's, stays the original's ink and is
-// counted by the ledger as it was.
+// colour, direction and kind (a form's or a picture's), on one baseline (within RUN_DY of their size across it), at most RUN_GAP
+// of its size past the run's end along it and not back over it by more than RUN_BACK; any other glyph between ends the run. A
+// run is a unit when it spells a word (two letters together) in a face that is no math face, every glyph of it a character a
+// reader can trust (UNREAD); its text the glyphs' Unicode (NFKC) with a space where two stand apart by SPACE_GAP of their size.
+// What it is not, a number, a tick's label, a letter alone, a formula's, stays the original's ink. A font that gives no Unicode
+// a reader can trust leaves its unit the original's too, which the wrap tells from the font's own dict (remove.mjs unicodeOf).
 //
 // Each unit's place, in its own frame (its first glyph's origin, along its direction, up across it): its box from its first
-// glyph's start to its last glyph's end, its font's band from its descent to its ascent; its anchor, where a translation of
-// another length keeps its place — `start` where a figure's line stands right before it along its baseline and none after
-// (a legend's line sample), `end` where one stands right after it and none before (a y tick's label against its axis), else
-// `centre` (a node's text, an axis title, a box's label: TeX and the plotting programs centre them). A unit whose band meets
-// other ink inside its box (a glyph of another run, a stroke that crosses it, an image), but a box that holds the whole band (a
-// frame, a node's fill, the plot's own background), is `crowded`: a translation there could cover that ink, so it stays the
-// original's.
+// glyph's start to its last glyph's end, its band from its descent to its ascent, at least DRAW_BAND (the line a translation is
+// drawn in: a CJK face's full em); its anchor, where a translation of another length keeps its place, read from the ink nearest
+// it along its baseline within ANCHOR_REACH (a figure's lines by their segments, pageInk's `shapes`; else a box's edges) —
+// `start` where the ink before it is nearer by ANCHOR_RATIO (a legend's line sample, an arrow it labels), `end` where the ink
+// after it is (a word against its axis), else `centre` (a node's text, an axis title: TeX and the plotting programs centre
+// them). A unit whose band meets other ink inside its box — another glyph's, a stroke's segment widened by its half line width,
+// a fill's edge, an image's or a shading's box —, but a fill that holds the whole band (a node's fill, the plot's background), is
+// `crowded`: a translation there could cover that ink, so it stays the original's.
 //
 // Pure arithmetic over the pages; an original module (no port statement).
 import { classifyFont } from '../layer-proto/fonts.mjs'
@@ -42,6 +46,9 @@ const RUN_BACK = 0.3
 export const SPACE_GAP = 0.15
 /** a figure's line right before or after a unit along its baseline, within this many of its sizes, anchors it there */
 export const ANCHOR_REACH = 1.5
+/** …where the ink on one side of it is nearer than the other side's by this ratio at least (a line sample right before a legend's
+ *  entry, an axis right after a tick's word; none on a side is as far as can be) */
+export const ANCHOR_RATIO = 2
 /** the band a translation is drawn in, descent and ascent in em, at the least: a unit is crowded where other ink meets it */
 export const DRAW_BAND = Object.freeze([-0.15, 0.88])
 /** a unit's band inside its box, shrunk by this share of its size at each edge before other ink is looked for in it (an
@@ -56,10 +63,9 @@ export const figureGroup = k => `f${k}`
 /** why a figure's text is not a unit drawn (wrapFinal's counts, and each unit's `why`) */
 export const FIGURE_WHYS = Object.freeze(['crowded', 'unicode', 'shared', 'page', 'bounds'])
 
-
 const WORD = /\p{L}{2}/u
 /** a glyph's Unicode no reader can trust: none, a private use's, a replacement character, a control */
-const UNREAD = /[-�\p{Cc}]|[\u{F0000}-\u{10FFFF}]/u
+const UNREAD = /[\uE000-\uF8FF\uFFFD\p{Cc}]|[\u{F0000}-\u{10FFFF}]/u
 
 /**
  * A page's glyphs as one stream, level and turned, in the order the content shows them (by show and place in it), each with its
@@ -200,12 +206,13 @@ function roomOf(pg, f, u, own) {
   const pad = CROWD_PAD * u.size
   const band = [pad, u.descent * u.size + pad, u.length - pad, u.ascent * u.size - pad]
   const reach = ANCHOR_REACH * u.size
-  let crowded = false, before = false, after = false
+  // (the nearest ink right before its box along its baseline and right after it, within the reach: their gaps to the box)
+  let crowded = false, before = Infinity, after = Infinity
   /** an extent along the baseline, of ink across the band: inside the box, or right before or after it */
   const along1 = (a0, a1) => {
     if (a1 > band[0] && a0 < band[2]) crowded = true
-    else if (a1 <= band[0] && a1 >= -reach) before = true
-    else if (a0 >= band[2] && a0 <= u.length + reach) after = true
+    else if (a1 <= band[0] && a1 >= -reach) before = Math.min(before, -a1)
+    else if (a0 >= band[2] && a0 <= u.length + reach) after = Math.min(after, a0 - u.length)
   }
   for (let g = 0; g < G.length && !crowded; g++) {
     if (mineG.has(g)) continue
@@ -223,7 +230,8 @@ function roomOf(pg, f, u, own) {
     const holds = e[0] <= 0 && e[2] >= u.length && e[1] <= u.descent * u.size && e[3] >= u.ascent * u.size
     if (!holds) along1(e[0], e[2])
   }
-  return { crowded, anchor: before && !after ? 'start' : after && !before ? 'end' : 'centre' }
+  // (set from its start where the ink before it is nearer by half, from its end where the ink after it is: else from its middle)
+  return { crowded, anchor: Math.max(before, 0) * ANCHOR_RATIO < Math.max(after, 0) ? 'start' : Math.max(after, 0) * ANCHOR_RATIO < Math.max(before, 0) ? 'end' : 'centre' }
 }
 
 /** a path's lines against a unit's band (in its frame): each segment's part across the band (a stroke's widened by its half
