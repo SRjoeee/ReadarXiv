@@ -10,7 +10,7 @@ import type { LayerDocument } from '@/pdf-reader/engine/layer-proto/reader.mjs'
 import type { Row } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { type Made, N } from './helpers/format-paper'
 import { cutSpec, docsOf, type PaperSpec, rowsOfIndex } from './helpers/parts-paper'
-import { ALL, content, installSideFakes, jobRef, layerOf, M, macrotask, nearOn, type Options, type Setup, settle, setup } from './helpers/side-setup'
+import { ALL, content, installSideFakes, jobRef, layerOf, M, macrotask, nearOn, type Options, places, type Setup, settle, setup } from './helpers/side-setup'
 
 // a canvas context that draws nothing and reads a white page, made before layer2.mjs loads (it measures with a canvas of its own
 // made then): an em a CJK character, half one any other (layer-door.test.ts's)
@@ -419,6 +419,21 @@ describe('the real door: a page the layer draws nothing of its own on is arXiv\'
       expect(content(s, 1)).toBe('original')
     })
   }
+  it('a page that ended as the original with nothing drawn carries no translating card, whatever rows come after for another page', async () => {
+    const m = await M()
+    const s = await real()
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    s.side.take(noneRows(m))
+    await still(s)
+    expect(content(s, 1)).toBe('original')
+    const cards = () => places(s)[0]?.querySelectorAll('.axt-translating .axt-translating-mark').length ?? 0
+    expect(cards()).toBe(0)
+    // (another batch of rows: the page that ended stays bare)
+    s.side.take(noneRows(m).slice(0, 2))
+    await still(s)
+    expect(cards()).toBe(0)
+  })
   it('the same pages with their rows translated: the layer (the control)', async () => {
     const m = await M()
     const s = await real()
