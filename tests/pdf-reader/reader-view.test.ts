@@ -4,6 +4,7 @@
 // The real PDF.js, in a real browser, is pnpm e2e:reader's (its development entry, ?layer=1).
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFollower } from '@/pdf-reader/engine/view/sync.mjs'
+import { TEXT_BACK_MS } from '@/pdf-reader/engine/view/places.mjs'
 import { createReaderView, type DocumentTask, internalsOf, type ReaderHost, type ReaderView, type Shapes, type ViewEvent, type ViewPrefs } from '@/pdf-reader/engine/view/reader-view.mjs'
 import { clientOf, drawPanes, FakeEventBus, FakeIO, FakeLinkService, FakePDFPageView, FakePDFViewer, FakeRO, fakeDoc, fakeKit, fakeTask, flush, installLayout, type ManualClock, manualClock, reads, resetFakes } from './helpers/reader-fakes'
 
@@ -856,6 +857,38 @@ describe('V12: the web\'s fixes as plain behaviour', () => {
     await s.clock.advance(700)
     await flush(20)
     expect(v.draws).toBe(2)
+  })
+
+  it('while a zoom\'s or a pinch\'s steps last the places\' stack is marked scaling, its text layers out of style and layout; marked no more once they are drawn again, nor for a zoom of one step', async () => {
+    const s = setup()
+    await opened(s, 4)
+    await nearOn(s, [1])
+    await flush(20)
+    const stack = s.panes.right.querySelector(':scope > .pdfViewer') as HTMLElement
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(false)
+    s.view.zoomBy(1.1); await s.clock.advance(50); s.view.zoomBy(1.1)
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(true)
+    // (drawn again after the steps' delay, the text layers still out a while: a step soon after finds them so)
+    await s.clock.advance(450)
+    await flush(20)
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(true)
+    s.view.zoomBy(1.1)
+    await s.clock.advance(450)
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(true)
+    await s.clock.advance(TEXT_BACK_MS + 100)
+    await flush(20)
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(false)
+    s.view.pinch('right', 1.1, [800, 300])
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(true)
+    await s.clock.advance(400 + TEXT_BACK_MS + 100)
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(false)
+    // (a zoom the menu sets is drawn at once: no step to wait for)
+    s.view.zoomTo(2)
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(false)
+    // (and the view's end takes the mark with it)
+    s.view.zoomBy(1.1)
+    s.view.dispose()
+    expect(stack.hasAttribute('data-axt-scaling')).toBe(false)
   })
 
   it('a stub Shapes gets every paint, hit and click, and layoutOf none', async () => {

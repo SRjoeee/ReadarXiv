@@ -69,11 +69,15 @@ function skeleton(n) {
 /** how long after a keyboard's jump the place jumped to may still take the focus when it comes to show its page: the jump's
  *  scroll brings it near within a frame or two; a place that comes near later is the reader's own scroll */
 export const FOCUS_WAIT_MS = 2000
+/** how long after a zoom's or a pinch's steps are drawn again the laid pages' text layers stay out of style and layout (ms):
+ *  steps a little further apart than their drawing delay (Ctrl+= pressed every 350 to 500 ms, WebKit's presses the slower) find
+ *  them still out, so that a run of steps sizes them once, after its last, not once a step */
+export const TEXT_BACK_MS = 500
 export function createPlaces(o) {
   const { stack, root, kit, clock } = o
   /** each place: its element, its holder, what it shows, whether it is near; and each as a page view is read */
   let list = [], slots = []
-  let doc = null, disposed = false, redrawTimer = 0
+  let doc = null, disposed = false, redrawTimer = 0, textTimer = 0
   /** the page views to draw, one at a time (PDF.js's own viewer draws one page at a time) */
   const queue = []
   let drawing = null
@@ -248,9 +252,13 @@ export function createPlaces(o) {
       else if (list[n - 1]) sizeOf(list[n - 1])
     },
     /** the left's scale changed: the stack's --scale-factor, and each page view's scale, by CSS until `drawingDelay` has
-     *  passed (a zoom's or a pinch's steps), then drawn again once */
+     *  passed (a zoom's or a pinch's steps), then drawn again once. While the steps last, and TEXT_BACK_MS after they are
+     *  drawn again, the stack is marked scaling (`data-axt-scaling`): the laid pages' text layers are out of style and layout
+     *  (engine.css), so that no step makes their spans' sizes again (each a calc of --total-scale-factor), and they are sized
+     *  once, after the last step */
     scale(scaleFactor, scale, drawingDelay = -1) {
       if (disposed) return
+      if (drawingDelay >= 0) { clock.clear(textTimer); textTimer = 0; stack.setAttribute('data-axt-scaling', '') }
       if (scaleFactor) stack.style.setProperty('--scale-factor', scaleFactor)
       for (const p of list) sizeOf(p)
       const views = list.filter(p => p.view)
@@ -258,6 +266,7 @@ export function createPlaces(o) {
       clock.clear(redrawTimer)
       const redraw = () => {
         redrawTimer = 0
+        if (stack.hasAttribute('data-axt-scaling')) textTimer = clock.later(() => { textTimer = 0; stack.removeAttribute('data-axt-scaling') }, TEXT_BACK_MS)
         for (const p of list) {
           if (!p.view) continue
           // drawn at another scale (a zoom's steps stretch its canvas by CSS): drawn again at its own
@@ -343,9 +352,11 @@ export function createPlaces(o) {
       pending = null
       document.removeEventListener('focusin', giveUp, true)
       clock.clear(redrawTimer)
+      clock.clear(textTimer)
       near.disconnect()
       remove()
       stack.style.removeProperty('--scale-factor')
+      stack.removeAttribute('data-axt-scaling')
       doc = null
     },
   }

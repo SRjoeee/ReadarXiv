@@ -855,6 +855,25 @@ try {
     const tree = await place.ariaSnapshot()
     const once = ['[echo] Introduction', 'The Read arXiv Contributors'].map(w => ({ w, n: tree.split(w).length - 1 }))
     check('the accessibility tree holds each text of the laid page once (the text layer\'s; the SVG\'s hidden)', once.every(x => x.n === 1), JSON.stringify(once))
+    // a pinch over the laid page: while its steps last the text layer is out of style and layout (engine.css, the stack marked
+    // scaling: no step makes its spans again), and once the page is drawn again it is back, the same spans, the selection kept
+    const pinchAt = await page.evaluate(sel => { const r = document.querySelector(sel).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 3] }, P1)
+    const kept = await page.evaluate(sel => {
+      const spans = [...document.querySelectorAll(`${sel} .axt-layer > .textLayer > span`)]
+      const range = document.createRange()
+      range.setStartBefore(spans[0]); range.setEndAfter(spans[Math.min(3, spans.length - 1)])
+      getSelection().removeAllRanges(); getSelection().addRange(range)
+      return { spans: spans.length, selected: getSelection().toString() }
+    }, P1)
+    const z0 = await probe(), zoom0 = z0.zoom ?? z0.scale
+    await page.evaluate(([x, y]) => { window.__reader.controller.pinch('right', 1.05, [x, y]); window.__reader.controller.pinch('right', 1.05, [x, y]) }, pinchAt)
+    const during = await page.evaluate(sel => { const t = document.querySelector(`${sel} .axt-layer > .textLayer`); return { display: t ? getComputedStyle(t).display : null, marked: !!t?.closest('[data-axt-scaling]') } }, P1)
+    await page.waitForTimeout(1200)
+    const settled = await page.evaluate(sel => { const t = document.querySelector(`${sel} .axt-layer > .textLayer`); return { display: t ? getComputedStyle(t).display : null, marked: !!document.querySelector('#right [data-axt-scaling]'), spans: t?.querySelectorAll(':scope > span').length ?? 0, selected: getSelection().toString() } }, P1)
+    check('a pinch over the laid page: its text layer out of style and layout while the steps last, back once it is drawn again, the same spans, the selection kept', during.display === 'none' && during.marked && settled.display !== 'none' && !settled.marked && settled.spans === kept.spans && kept.selected.length > 0 && settled.selected === kept.selected, JSON.stringify({ kept, during, settled }))
+    await page.evaluate(() => getSelection().removeAllRanges())
+    await page.evaluate(z => window.__reader.controller.zoomTo(z), zoom0)
+    await page.waitForTimeout(900)
     // the dark look: the layer's text dimmed by the reader's filter, its copy by the page canvas's, the wash over the layer screened
     await page.evaluate(() => document.documentElement.setAttribute('data-axt-dim', ''))
     const dark = await page.evaluate(() => { const css = sel => (document.querySelector(sel) ? getComputedStyle(document.querySelector(sel)) : null); return { svg: css('#right .axt-layer > svg')?.filter ?? null, copy: css('#right .axt-layer > canvas')?.filter ?? null, wash: css('#right .axt-hl')?.mixBlendMode ?? null, links: css('#right .axt-layer > .axt-links')?.filter ?? null } })
