@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import { sourceUnitsOf } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { bundleUnitsOf, NAME_KIND } from '@/pdf-reader/engine/layer-proto/units.mjs'
 import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { CONJUNCTION_GAPS, NAME_GAPS } from '@/pdf-reader/engine/rules/tex-names.mjs'
 import { NAMES_MAX, paperNames } from '@/pdf-reader/engine/source/paper-names.mjs'
+import { plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The structural names a paper's TeX prints that no package names in every target (PDF-READER §19.12): read from the paper's
 // own definitions, each a unit of its own after the source's in the bundle (bundleUnitsOf, kind `name`), translated once
@@ -55,6 +57,21 @@ describe('the name units in the bundle (bundleUnitsOf)', () => {
     expect(named.names[0]).toBe('Conjecture')
     expect(units.slice(n)).toEqual(named.names.map(s => [NAME_KIND, 0, null, null, null, [[0, s]]]))
     expect(units.slice(0, n).every(u => u[0] !== NAME_KIND)).toBe(true)
+  })
+  it('reads a name in its file\'s characters, UTF-8 or the encoding the main file declares, and holds it as any text piece is (its UTF-8 bytes read latin1)', () => {
+    const tex = doc('\\newtheorem{thm}{Th\u00e9or\u00e8me}')
+    const bytesOf = (s: string) => Uint8Array.from(s, c => c.charCodeAt(0))
+    const papers = [
+      openPaper(new Map([['main.tex', enc(tex)]])),
+      openPaper(new Map([['main.tex', bytesOf(tex.replace('\\documentclass{article}', '\\documentclass{article}\\usepackage[latin1]{inputenc}'))]])),
+      openPaper(new Map([['main.tex', bytesOf(tex.replace('\\documentclass{article}', '\\documentclass{article}\\usepackage[cp1252]{inputenc}'))]])),
+    ]
+    for (const p of papers) {
+      expect(p.names).toEqual(['Th\u00e9or\u00e8me'])
+      const units = bundleUnitsOf(p), n = p.units.length
+      expect(units[n]).toEqual([NAME_KIND, 0, null, null, null, [[0, 'Th\u00c3\u00a9or\u00c3\u00a8me']]])
+      expect(plainSource(sourceUnitsOf({ units })[n] as never)).toBe('Th\u00e9or\u00e8me')
+    }
   })
   it('reads the paper\'s every TeX file: a class it ships defines names too (acmart\'s Conjecture)', () => {
     const p = paperOf('\\documentclass{own}\n\\begin{document}\nText.\n\\end{document}\n', [['own.cls', '\\LoadClass{article}\n\\newtheorem{conjecture}{Conjecture}\n']])

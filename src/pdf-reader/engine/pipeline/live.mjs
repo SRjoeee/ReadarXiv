@@ -21,7 +21,7 @@
 import { analyze } from '../source/paper-meta.mjs'
 import { paperNames } from '../source/paper-names.mjs'
 import { DVI_LAYOUT_TEX, inkSamples, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, NAME_ENGLISH, probeSamples } from '../layout/marks.mjs'
-import { BALANCE_DEF, documentBounds, DVI_MARK_DEF, dviEngine, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1, texText } from '../source/latex-front.mjs'
+import { BALANCE_DEF, documentBounds, DVI_MARK_DEF, dviEngine, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1, texFilesOf, texText } from '../source/latex-front.mjs'
 import { strategiesFor, typesetBy } from './scripts.mjs'
 import { authorsTranslated } from '../translate/kept.mjs'
 import { passagesInSource, translationOf } from './cache.mjs'
@@ -233,7 +233,7 @@ export function openPaper(files) {
   const project = loadProject(fsys, meta.main, { tables: true })
   // (the structural names its TeX prints that no package names in every target: units of their own in the bundle, after its
   // source's, sent to the translator once: source/paper-names.mjs, bundleUnitsOf)
-  const names = paperNames(fsys.list().filter(f => /\.(tex|sty|cls)$/i.test(f)).map(f => texText(fsys.read(f))))
+  const names = paperNames(texFilesOf(fsys, meta.main))
   return { fsys, meta, project, units: project.units, inFloat: project.inFloat, kept: nameCells(project.units), names }
 }
 

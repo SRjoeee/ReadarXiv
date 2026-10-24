@@ -10,6 +10,9 @@ export const UNIT_FLAG_BITS = Object.freeze({ TITLE: 1, FRONT: 2, BRACKETED: 4, 
 const FLAG_BITS = 15
 /** a piece's tag: a text, a placeholder, a group's open and close, a nested unit */
 const TEXT = 0, PH = 1, OPEN = 2, CLOSE = 3, NESTED = 4
+/** a string as the engine's text holds it: its UTF-8 bytes read latin1 (mt.mjs plainSource decodes it), as a source unit's
+ *  text piece is */
+const engineText = s => (/^[\t\n\r -~]*$/.test(s) ? s : String.fromCharCode(...new TextEncoder().encode(s)))
 /** the display edges a unit may have (mt.mjs displayEdges), in their order */
 export const EDGES = Object.freeze(['lead', 'trail', 'inner'])
 /** a unit's table cell's keys, in their order */
@@ -98,7 +101,8 @@ function pieceOf(p, idOf) {
 export function bundleUnitsOf(paper) {
   const idOf = new Map()
   paper.units.forEach((u, i) => idOf.set(u, i))
-  const names = (paper.names ?? []).map(s => [NAME_KIND, 0, null, null, null, [[TEXT, s]]])
+  // (each name as the engine's text, as a source unit's text piece holds it: a UTF-8 file's accented name as its bytes)
+  const names = (paper.names ?? []).map(s => [NAME_KIND, 0, null, null, null, [[TEXT, engineText(s)]]])
   return [...paper.units.map(u => {
     const flags = (u.title ? UNIT_FLAG_BITS.TITLE : 0) | (u.front ? UNIT_FLAG_BITS.FRONT : 0) | (u.bracketed ? UNIT_FLAG_BITS.BRACKETED : 0) | (paper.kept.has(u) ? UNIT_FLAG_BITS.KEPT : 0)
     const c = u.cell

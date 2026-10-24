@@ -44,6 +44,8 @@ export declare const dviEngine: (engine: string | null | undefined) => boolean
 export declare const DVI_MARK_DEF: string
 /** a source file's bytes as TeX reads its lines: latin1, each line's end (CR, LF or CRLF) an LF */
 export declare const texText: (bytes: Uint8Array) => string
+/** the package's TeX files (.tex, .sty, .cls), each as its characters, decoded as the units' text is */
+export declare function texFilesOf(fsys: { list(): string[]; read(p: string): Uint8Array | null }, main: string): string[]
 /** a string's code units as bytes, each its low eight bits (source text is read byte for byte) */
 export declare const latin1Bytes: (s: string) => Uint8Array
 /** a/./b/../c → a/c: a file as the package holds it and as TeX's file system has it, whatever spelling named it */

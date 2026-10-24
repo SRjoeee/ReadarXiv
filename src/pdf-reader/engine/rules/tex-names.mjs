@@ -119,7 +119,9 @@ export function refInTarget(text, to, labels = null, names = null) {
  * is no head of a name the target's dictionary holds, nor one the paper's name units translate (`names`)
  */
 export function headInTarget(text, to, names = null) {
-  const m = typeof text === 'string' && /^\s*(\p{L}[\p{L} ]*?)\s*((?:[A-Z]{0,2}\d+|[A-Z](?=[.\-–]\d))(?:[.\-–]\d+)*[a-z]?|[IVXLCDM]{1,7}|[A-Z])?(\s*[.:]?\s*[([]?)\s*$/u.exec(text)
+  // (its name of the characters a paper's own name may hold, source/paper-names.mjs PLAIN's: "Sub-Claim", "Thm.", the
+  // shortest that leaves a number and punctuation after it, so that a package's names read as they did)
+  const m = typeof text === 'string' && /^\s*(\p{L}[\p{L}\p{M} .'\u2019-]*?)\s*((?:[A-Z]{0,2}\d+|[A-Z](?=[.\-–]\d))(?:[.\-–]\d+)*[a-z]?|[IVXLCDM]{1,7}|[A-Z])?(\s*[.:]?\s*[([]?)\s*$/u.exec(text)
   if (!m) return null
   const name = headName(m[1].replace(/\s+/g, ' '), to, names)
   if (!name) return null

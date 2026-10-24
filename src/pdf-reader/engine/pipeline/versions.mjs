@@ -199,8 +199,8 @@
 //     or \autoref, the counter types' English names and the conjunctions' words some target has no package word for
 //     (rules/tex-names.mjs NAME_GAPS, CONJUNCTION_GAPS). Translated with the paper's units, the first batch's (rows.mjs
 //     batchesOf, runRows), cached by their text as any unit; the layer draws a head's or a generated reference's name in that
-//     translation where no package gives the target one (PDF-READER §19.12). Over 168 local sources (40,765 units) 900 name
-//     units in 84 papers (32 at most; 19 papers call cleveref or \autoref); the source's units and their ids are 28's, every
+//     translation where no package gives the target one (PDF-READER §19.12). Over 168 local sources (40,765 units) 923 name
+//     units in 85 papers (32 at most; 19 papers call cleveref or \autoref); the source's units and their ids are 28's, every
 //     hash kept: a copy of 28 carries every unit, and the name units are asked once
 export const PIPELINE_VERSION = '29'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
