@@ -24,7 +24,7 @@ function worldOf(): World {
   for (const p of [1, 2, 3]) { const ls = linesOf(p); marks.push([`${p - 1}s`, p, 72, 700], [`${p - 1}e`, p, endOf(ls[9] as Run), 592]) }
   return { pages, marked: pages, marks, units: [1, 2, 3].map(p => unit('para', [text(words(100 * p, 100))])) }
 }
-const source = (w: World) => ({ units: w.units, kept: new Set(), inFloat: [] }) as never
+const source = (w: World, names: string[] = []) => ({ units: w.units, kept: new Set(), inFloat: [], names }) as never
 const readOf = (w: World) => readMarked(markedOf(w.marked ?? w.pages, w.marks), '', { engine: 'pdflatex', switches: null, inkless: null, texts: null, names: null, units: w.units, OPS } as never)
 const oursOf = (w: World, more: Record<string, unknown> = {}) => ({ doc: markedOf(w.marked ?? w.pages, w.marks), ...OURS, check: { marks: w.marks.length }, ...more })
 /** the ink unit the wrap would make of the head on page p (layout/ink-units.mjs's rows: the run's box, its size, its face) */
@@ -35,11 +35,11 @@ const headUnit = (id: number, page: number) => ({
 const INK = { base: 3, units: [headUnit(3, 2), headUnit(4, 3)] }
 const LEDGER = { classes: ['body', 300, 290, 'heads', 30, 28], letters: 318, orphanLetters: 4, orphans: [2, 4, 'lost'] }
 
-async function passOf(w: World, o: Record<string, unknown>) {
+async function passOf(w: World, o: Record<string, unknown>, names: string[] = []) {
   const parts: Written[] = []
   let head: Written | null = null, units: Written[] = []
-  await layerOfPaper({
-    paper: PAPER, source: source(w), marks: await readOf(w), arxiv: { doc: arxivOf(w.pages) }, OPS, pdfjs: '6.3.289', image: '1', tree: '2025', orig: ORIG,
+  const r = await layerOfPaper({
+    paper: PAPER, source: source(w, names), marks: await readOf(w), arxiv: { doc: arxivOf(w.pages) }, OPS, pdfjs: '6.3.289', image: '1', tree: '2025', orig: ORIG,
     onHead: (h: Written, c: Written[]) => { head = h; units = c }, onLeft: () => {}, onPart: (p: Written) => { parts.push(p) },
     ...o,
   } as never)
@@ -49,7 +49,7 @@ async function passOf(w: World, o: Record<string, unknown>) {
   const index = indexOf(rh, chunks), read: ReadPart[] = []
   let chain: PartChain | null = null
   for (const p of parts) { const x = await readPart(p.bytes, { ref: p.ref, index, chain }); read.push(x); chain = x.chain }
-  return { head: rh, units, chunks, parts: read }
+  return { head: rh, units, chunks, parts: read, r: r as unknown as { stats: { closed: [number, number, number][] } } }
 }
 const formatOf = (c: Written) => JSON.parse(new TextDecoder().decode(c.bytes)).format
 
@@ -69,6 +69,38 @@ describe('the ink units in the page pass', () => {
       const line = part && part.layout && 'lines' in part.layout ? part.layout.lines.find(e => e[0] === 3)?.[1] : null
       expect(line?.slice(0, 7)).toEqual([2, 72, endOf(HEAD_RUN), 760, 767.5, 757.5, 10])
     }
+  })
+
+  it('after the paper\'s structural names, which the source units\' chunk holds as the prepare child writes it, never laid (PDF-READER §19.12)', async () => {
+    const names = ['Section', 'and']
+    const marked = (w: World) => ({ doc: markedOf(w.marked ?? w.pages, w.marks), log: '', options: { engine: 'pdflatex', switches: null, inkless: null, texts: null, names: null, OPS } })
+    // (the wrap's ink units from the bundle's units before them, 3 source units and 2 names: wrapFinal's `inkFrom`)
+    const ink = { base: 5, units: [headUnit(5, 2), headUnit(6, 3)] }
+    // the pass whole, then streamed: the marks read whole (the left whole), and the marked original a page at a time (the left
+    // streamed), each by the whole run's predicates
+    const capture = {}, w0 = worldOf()
+    const runs = [
+      await passOf(w0, { ours: oursOf(w0, { ink, wrap: null }), capture }, names),
+      await passOf(worldOf(), { ours: oursOf(worldOf(), { ink, wrap: null }), oracle: capture }, names),
+      await passOf(worldOf(), { ours: oursOf(worldOf(), { ink, wrap: null }), marks: null, marked: marked(worldOf()), oracle: capture }, names),
+    ]
+    for (const got of runs) {
+      expect(got.chunks.map(c => [c.from, c.to])).toEqual([[0, 4], [5, 6]])
+      // (a stream's first part cut before the last page is read: no name awaited by the cut)
+      if (got !== runs[0]) expect(got.r.stats.closed[0]?.[2]).toBeLessThan(3)
+      expect(got.units.map(formatOf)).toEqual([UNITS_FORMAT, INK_UNITS_FORMAT])
+      expect(got.chunks[0]?.units.slice(3)).toEqual([['name', 0, null, null, null, [[0, 'Section']]], ['name', 0, null, null, null, [[0, 'and']]]])
+      const laid = got.parts.flatMap(p => (p.layout && 'units' in p.layout ? p.layout.units.map(u => u[0]) : []))
+      expect(laid).toEqual(expect.arrayContaining([0, 1, 2, 5, 6]))
+      expect(laid).not.toContain(3)
+      expect(laid).not.toContain(4)
+      expect(got.parts.map(p => p.pages)).toEqual(runs[0]?.parts.map(p => p.pages))
+      expect(got.parts.at(-1)?.pages[1]).toBe(3)
+    }
+    // (a wrap that numbered its ink units from the source units alone, a host of before: none, the pass as it was)
+    const w = worldOf()
+    const got = await passOf(w, { ours: oursOf(w, { ink: INK, wrap: null }) }, names)
+    expect(got.chunks.map(c => [c.from, c.to])).toEqual([[0, 4]])
   })
 
   it('writes the wrap\'s ledger into the head\'s base, and invariant (o) reads it', async () => {

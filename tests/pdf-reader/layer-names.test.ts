@@ -48,7 +48,7 @@ const span = (page: ReturnType<typeof pageOf>, from: number, to = from): [number
 }
 /** the unit read in a layout file of one line and no label, each placeholder's ink a segment (`rows`, by its k); its references
  *  renamed for `to` where `names`, then its tokens */
-const read = (u: never, page: ReturnType<typeof pageOf>, rows: Record<number, [number, number]>, names: string | null = null) => {
+const read = (u: never, page: ReturnType<typeof pageOf>, rows: Record<number, [number, number]>, names: string | null = null, own: ReadonlyMap<string, string> | null = null) => {
   const lu = {
     lines: Float64Array.from([1, page.rect[1]!, page.rect[3]!, 100, 108, 98, 10, 0]), frames: Float64Array.from([1, 0, 0, 1, -1, 0]), erase: [new Float64Array(0)], labels: new Float64Array(0),
     ph: new Map(Object.entries(rows).map(([k, [a, z]]) => [Number(k), { kind: 'ref', flags: 0, segs: Float64Array.from([1, a - 0.3, 100, z + 0.3, 108, 98]) }])),
@@ -56,7 +56,7 @@ const read = (u: never, page: ReturnType<typeof pageOf>, rows: Record<number, [n
   const t = T.texRects(lu)
   const kOf = (u as unknown as { pieces: { k?: number }[] }).pieces.map(p => p.k ?? -1)
   const prep = L2.prepareUnit(u, t.rects as never, [page.page as never], new Map() as never, null, T.texParts(lu, kOf, { lines: t }) as never)
-  if (names) L2.renameRefs(prep as never, names, resolveRules(BUILTIN_RULES, names).labels)
+  if (names) L2.renameRefs(prep as never, names, resolveRules(BUILTIN_RULES, names).labels, own)
   const tokens = L2.tokensOf2(u, prep as never, 'zh', BASE as never, DESIGNS as never, P() as never, null, () => 0) as unknown as { s?: string; st: { color?: string } }[]
   return { prep: prep as unknown as { label?: { text: string } }, drawn: tokens.filter(x => typeof x.s === 'string' && /\S/.test(x.s)).map(x => [x.s, x.st.color ?? null]) }
 }
@@ -103,6 +103,11 @@ describe('a generated reference in the target\'s names (renameRefs)', () => {
     const pg = pageOf([['in', plain()], ['Section', plain(0)], ['A.7', plain(0x0000ff)], ['here', plain()]])
     const u = unitOf([text('in '), ph('\\Cref{sec:technical-results}'), text(' here')], ['\u5728', 1, '\u4e2d'])
     expect(read(u, pg, { 1: span(pg, 1, 2) }, 'zh').drawn.map(([s]) => s)).toContain('Section')
+    // (the paper's name unit's translation where it has one: PDF-READER §19.12)
+    const own = read(u, pg, { 1: span(pg, 1, 2) }, 'zh', new Map([['Section', '\u8282']])).drawn
+    expect(own.map(([s]) => s)).not.toContain('Section')
+    expect(own.map(([s]) => s).join('')).toContain('\u8282A.7')
+    expect(own.find(([s]) => s === 'A.7')?.[1]).toBe('#0000ff')
   })
   it('a citation\'s note, its name and number, in the target\'s; the cited work\'s own text as it is ("[Ascolani et al., 2026, Lemma 1]")', () => {
     const pg = pageOf([['builds', plain()], ['on', plain()], ['[Ascolani', plain(0x0000ff)], ['et', plain(0x0000ff)], ['al.,', plain(0x0000ff)], ['2026,', plain(0x0000ff)], ['Lemma', plain(0)], ['1]', plain(0)]])
@@ -138,5 +143,27 @@ describe('a theorem-like head\'s label in the target (headLabelInTarget)', () =>
     // (a theorem's longer name is no babel name's: translator's "Proof Sketch", CodeRabbit on #468)
     expect(L2.headLabelInTarget([...item('Proof', 85, 0, bold()), ...item('Sketch', 115, 1, bold()), ...item('1.', 150, 2, bold())] as never, 'zh')?.text).toBe('\u8bc1\u660e\u63d0\u8981 1.')
     expect(L2.headLabelInTarget([...item('Theorem', 85, 0, bold()), ...item('2.', 130, 1, bold())] as never, 'ja')).toBeNull()
+  })
+  it('in the paper\'s name unit\'s translation where no dictionary holds the name (PDF-READER §19.12); a babel name never', () => {
+    const own = new Map([['Assumption', '\u5047\u8bbe'], ['Theorem', '\u5b9a\u7406'], ['Proof', '\u8bc1\u660e']])
+    expect(L2.headLabelInTarget([...item('Assumption', 85, 0, bold()), ...item('1.', 140, 1, bold())] as never, 'zh', own)?.text).toBe('\u5047\u8bbe 1.')
+    expect(L2.headLabelInTarget([...item('Theorem', 85, 0, bold()), ...item('2.', 130, 1, bold())] as never, 'ja', own)?.parts).toEqual([{ text: '\u5b9a\u7406 2', st: { bold: true, italic: false } }, { text: '.', st: { bold: true, italic: false } }])
+    expect(L2.headLabelInTarget(item('Proof.', 85, 0, plain()) as never, 'zh', own)).toBeNull()
+  })
+})
+
+describe('a structural name\'s row (nameOfRow)', () => {
+  const row = (state: string, ...s: string[]) => ({ kind: 'name', src: ' Section ', state, pieces: s.map(x => ({ t: 'text', s: x })) })
+  it('its English and the target\'s word: the translation\'s text, an ideographic full stop the translator ends it with gone', () => {
+    expect(L2.nameOfRow(row('whole', '\u8282'))).toEqual(['Section', '\u8282'])
+    expect(L2.nameOfRow(row('whole', ' \u7ae0', '\u8282\u3002 '))).toEqual(['Section', '\u7ae0\u8282'])
+    expect(L2.nameOfRow(row('partial', 'Abschnitt'))).toEqual(['Section', 'Abschnitt'])
+  })
+  it('none for another unit, a row of no translation, or an empty one', () => {
+    expect(L2.nameOfRow({ ...row('whole', 'x'), kind: 'para' })).toBeNull()
+    expect(L2.nameOfRow(row('none', 'Section'))).toBeNull()
+    expect(L2.nameOfRow(row('lost'))).toBeNull()
+    expect(L2.nameOfRow(row('whole', ' ', '\u3002'))).toBeNull()
+    expect(L2.nameOfRow(null)).toBeNull()
   })
 })

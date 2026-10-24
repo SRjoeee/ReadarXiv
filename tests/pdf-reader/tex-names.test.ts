@@ -102,3 +102,41 @@ describe('refInTarget: a generated reference in the target\'s names, never half 
     expect(refInTarget('(3)', 'zh', labelsOf('zh'))).toEqual([])
   })
 })
+
+describe('the paper\'s own name units (PDF-READER §19.12): a word no package names in the target, in its translation', () => {
+  // (the translations a target's name units came back with, English to the target's: source/paper-names.mjs, run.mjs)
+  const ZH = new Map([['Section', '\u8282'], ['and', '\u548c'], ['Assumption', '\u5047\u8bbe'], ['Theorem', '\u5b9a\u7406X'], ['Main Assumption', '\u4e3b\u8981\u5047\u8bbe']])
+  const withNames = (text: string, to: string, names: ReadonlyMap<string, string>) => {
+    const r = refInTarget(text, to, labelsOf(to), names)
+    if (r === null) return null
+    let out = '', at = 0
+    for (const [a, b, w] of r) { out += text.slice(at, a) + w; at = b }
+    return out + text.slice(at)
+  }
+  it('zh\'s "Section A.7" and every CJK target\'s "and", a plural read as its type\'s singular (2610.18513v1 p19)', () => {
+    expect(withNames('Section A.7', 'zh', ZH)).toBe('\u8282 A.7')
+    expect(withNames('Sections 5.2.1, 5.2.3 and 5.2.4', 'zh', ZH)).toBe('\u8282 5.2.1, 5.2.3 \u548c 5.2.4')
+    expect(withNames('section 2', 'zh', ZH)).toBe('\u8282 2')
+    expect(withNames('Theorems 2.1 and 2.2', 'zh', ZH)).toBe('\u5b9a\u7406 2.1 \u548c 2.2')
+  })
+  it('the paper\'s own names, the longest first; an inflected target\'s plural whole or not at all', () => {
+    expect(withNames('Main Assumption 3', 'zh', ZH)).toBe('\u4e3b\u8981\u5047\u8bbe 3')
+    expect(withNames('Assumption 2', 'de', new Map([['Assumption', 'Annahme']]))).toBe('Annahme 2')
+    expect(withNames('Assumptions 1 and 2', 'de', new Map([['Assumption', 'Annahme']]))).toBeNull()
+  })
+  it('a package\'s word first, the name unit\'s only where there is none', () => {
+    expect(withNames('Theorem A.17', 'zh', ZH)).toBe('\u5b9a\u7406 A.17')
+    expect(headInTarget('Theorem 1.', 'zh', ZH)).toBe('\u5b9a\u7406 1.')
+    expect(withNames('Figure 3', 'ja', new Map([['Figure', 'X']]))).toBe('\u56f3 3')
+  })
+  it('a theorem-like head no dictionary holds: zh\'s Assumption, ja\'s and ko\'s and zh-TW\'s every name', () => {
+    expect(headInTarget('Assumption 1.', 'zh', ZH)).toBe('\u5047\u8bbe 1.')
+    expect(headInTarget('Theorem 2.', 'ja', new Map([['Theorem', '\u5b9a\u7406']]))).toBe('\u5b9a\u7406 2.')
+    expect(headInTarget('Definition 5.1 (', 'ko', new Map([['Definition', '\uc815\uc758']]))).toBe('\uc815\uc758 5.1 (')
+    expect(headName('Conjecture', 'zh-TW', new Map([['Conjecture', '\u731c\u60f3']]))).toBe('\u731c\u60f3')
+    // (none where the name has no unit, or its translation none: the original's)
+    expect(headInTarget('Assumption 1.', 'zh', new Map())).toBeNull()
+    expect(headInTarget('Assumption 1.', 'zh', new Map([['Assumption', '  ']]))).toBeNull()
+    expect(refName('Assumption', 'it', null, new Map([['Assumption', 'Ipotesi']]))).toBeNull()
+  })
+})

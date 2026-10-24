@@ -552,7 +552,9 @@ export { UNHIDDEN_MAX }
  * unit with none is the original's: no reader can hide it), `pages` the pages wrapped as ranges (the host's delta must replace
  * every one: layerOfPaper refuses a delta that does not), `own` own.mjs's stats (the record's), `ledger` the content classes'
  * counts and first orphans (layout/ledger.mjs ledgerSummary: the head's base `ledger`), `ink` the ink units (layout/ink-units.mjs:
- * { base, units }, the page pass's `ours.ink`, opaque to the host), `owned` own.mjs's whole result and
+ * { base, units }, the page pass's `ours.ink`, opaque to the host; their ids from `inkFrom` on, the bundle's units before them:
+ * the source units' and the paper's structural names', layer-proto/units.mjs bundleUnitsOf; `units.length` where it is not
+ * given), `owned` own.mjs's whole result and
  * `ledgerWhole` the ledger's where `keepOwned` (the lab's); `bounds` { groupsPage, sequencesPage, groupsDoc } wrapOf's (tests) — or { refused (WRAP_WHYS), why }: the paper's
  * base is then arXiv's PDF. Never throws but a failed allocation
  */
@@ -561,7 +563,7 @@ export { UNHIDDEN_MAX }
  *  `/axt-H0E ri` (2610.20967v1, 2610.20581v1), the same mark at the same place */
 const lowerPoint = x => (/[A-Z]/.test(x.name) ? { ...x, name: x.name.toLowerCase() } : x)
 
-export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions = {}, OPS, units, follows: given = undefined, texts, deflate, inflate, keepOwned = false, bounds = {} }) {
+export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions = {}, OPS, units, follows: given = undefined, texts, deflate, inflate, keepOwned = false, bounds = {}, inkFrom = null }) {
   // (units required: null alone, said, asks for no spell check, the lab's pair whose source is not read; deflate and inflate
   // required, the written bytes read back)
   if (units === undefined) throw new TypeError('units: the paper\'s source units, or null said for no spell check')
@@ -572,6 +574,9 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   // (the paper's SOURCE units: a translation's (a record's units, its text pieces `tr`) holds no text after a placeholder to
   // find its ink's end by, nor the source text the spell check reads)
   if (units !== null && (!Array.isArray(units) || units.some(u => u?.pieces?.some?.(p => p?.tr)))) throw new TypeError('units: the paper\'s source units (live.mjs openPaper\'s, layerOfPaper\'s `source.units`), not a translation\'s')
+  // (the ink units' first id: the bundle's units before them, at least the source units')
+  if (inkFrom !== null && !(Number.isInteger(inkFrom) && inkFrom >= (units?.length ?? 0))) throw new TypeError(`inkFrom: the bundle's units before the ink units (bundleUnitsOf(paper).length), at least units.length, or null (${String(inkFrom)})`)
+  const inkBase = units ? inkFrom ?? units.length : 0
   // (each unit one the spell check can read: a source text or pieces; a hole, or an entry with neither, is no paper's units.
   // null alone asks for no spell check, the lab's pair whose source is not read)
   if (units !== null) for (let i = 0; i < units.length; i++) {
@@ -607,7 +612,7 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   // each is hidden by its own groups as any unit is; the ledger's orphans those no unit owns still. None where the source is
   // not read (units null: no id to start from, no echo)
   const classed = ledgerOf(pages, own, { units })
-  const ink = units ? inkUnitsOf(pages, classed, { units }) : []
+  const ink = units ? inkUnitsOf(pages, classed, { units, from: inkBase }) : []
   claimInk(own, ink)
   const ledger = ink.length ? inkLeft(classed, own, pages) : classed
   const plans = new Map()
@@ -636,7 +641,7 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   if (unhidden.length > UNHIDDEN_MAX || labelKept.length > UNHIDDEN_MAX) return { refused: 'wrap-bound', why: `${unhidden.length} units the original's, past ${UNHIDDEN_MAX}` }
   const stats = { ...made.stats, unhidden: counts, labelKept: labelKept.length }
   const wrappedPages = rangesOf([...made.pages].filter(([, x]) => x.ok).map(([p]) => p))
-  return { bytes: made.bytes, xref: made.xref, sha256: made.sha256, stats, unhidden, labelKept, pages: wrappedPages, own: { ...own.stats, unhidden: counts }, ledger: ledgerSummary(ledger), ink: { base: units ? units.length : 0, units: ink.map(({ id, kind, cls, echo, pieces, rows }) => ({ id, kind, cls, echo, pieces, rows })), off: inkOff(ink, made.pages) }, ...(keepOwned ? { owned: own, ledgerWhole: ledger } : {}) }
+  return { bytes: made.bytes, xref: made.xref, sha256: made.sha256, stats, unhidden, labelKept, pages: wrappedPages, own: { ...own.stats, unhidden: counts }, ledger: ledgerSummary(ledger), ink: { base: inkBase, units: ink.map(({ id, kind, cls, echo, pieces, rows }) => ({ id, kind, cls, echo, pieces, rows })), off: inkOff(ink, made.pages) }, ...(keepOwned ? { owned: own, ledgerWhole: ledger } : {}) }
 }
 
 export { alignOf }

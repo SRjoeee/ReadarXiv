@@ -2601,6 +2601,45 @@ layout rules' labels) for a float's or an appendix's in a target that has neithe
 - **Limits.** Japanese, Korean and Traditional Chinese have no theorem dictionary in TeX Live (translator has none, ctex's are
   Simplified Chinese), and no target outside cleveref's languages has a section's or an equation's name or an "and": those
   heads and references stay the original's. A name translator's dictionary lacks ("Assumption", "Conjecture", "Claim") stays
-  English in every target. The next step, the owner's other ground truth: each paper's own `\newtheorem` names and the
-  names cleveref prints, passed to the translator once a paper as units of their own and cached with its rows (a new unit
-  kind the maker, the wrap and the sweep would read as no page's ink).
+  English in every target, until the paper's own name units give it a word (§19.12).
+
+### 19.12 The paper's own names, units of their own (PIPELINE 29)
+
+A name no package gives the target is the paper's to name, and the translator's to translate: each paper's structural names
+are units of their own, sent to the translator once with its units, cached by their text as any unit is, and read by the
+layer wherever such a name is drawn (the owner's other ground truth of 2026-10-25, after §19.11).
+
+- **Which names** (`source/paper-names.mjs paperNames`, over every `.tex`, `.sty` and `.cls` file the paper ships, comments
+  dropped, in the order its files are read): a theorem-like environment's printed name (`\newtheorem` and its starred form,
+  llncs's `\spnewtheorem`, elsarticle's `\newproof`, mdframed's `\newmdtheoremenv`, thmtools' `\declaretheorem`, its `name=`
+  or else its environment's name capitalised, as thmtools prints it); the reference names the paper gives (cleveref's
+  `\crefname` and `\Crefname`, thmtools' `refname=` and `Refname=`, a redefined `\<type>autorefname`); and, where the paper
+  calls cleveref or `\autoref` at all, the words no package names in some target the readers offer
+  (`rules/tex-names.json` `gaps` and `conjunctionGaps`, which `tex-names-make.mjs` derives from the same files: each counter
+  type's English singular, "Section", "Equation", "Theorem" …, nineteen, and the conjunctions' one word, "and"; a range's
+  " to " is no word of one sense alone, and a conjunction of punctuation is every target's). A name is plain words alone
+  (one holding a command or a brace is the original's), each once, at most 96 a paper.
+- **Where they are**: after the source's units in the bundle (`layer-proto/units.mjs bundleUnitsOf`, kind `name`, one text
+  piece), so that every source unit keeps its id and its hash; the prepare child writes them in the source units' chunks, and
+  the ink units (§19.10) follow them: the wrap numbers its ink units from the bundle's count before them
+  (`wrapFinal`'s `inkFrom`, which the host gives as `bundleUnitsOf(paper).length`; `page-pass.mjs inkOfHost` takes no ink
+  unit numbered otherwise). A name unit is no page's ink: the maker, the anchors and the wrap never see it (`paper.units` is
+  the source's alone), the page pass settles it from the start and lays it nowhere, the door awaits it on no page.
+- **Translated first**: a language's batches carry the names first (`rows.mjs batchesOf`, `runRows`), so that the first page
+  drawn has them; their class is `generated`, always translated (`rules/content-classes.mjs`). A row of one is the run's
+  word for that name (`layer2.mjs nameOfRow`: its translation's text, an ideographic full stop the translator ends a word
+  with dropped), taken at the open or with any rows (`run.mjs take`), never laid; one that comes after a page is drawn
+  changes no drawing.
+- **Read where a name is drawn** (`rules/tex-names.mjs`): a package's word first, as §19.11 has it; else the name unit's
+  translation: a theorem-like head's name (`headName`), a generated reference's name (`refName`: the form itself, a name the
+  paper defines, or in a target whose names do not inflect its type's singular, so that zh's "Sections 5.2.1, 5.2.3 and
+  5.2.4" reads its section's word once), its conjunction's word with the English spacing (`conjunctionOf`). A reference any
+  part of which has no word yet is still the original's whole. In a target that inflects, a plural no package and no name
+  unit gives stays English whole ("Assumptions 1 and 2" in de).
+- **Measured** (2026-10-25, the 168 local sources): 919 name units in 84 papers, 33 at most, 40,765 source units unchanged
+  (every hash kept: the versions' 29 carries a copy of 28 whole). The paper's own names besides the gaps: "Conjecture" in 26
+  papers, "Assumption" and "Claim" in 14, "Question" and "Fact" in 8, "Proof", "Problem" 7 (a class's own: acmart's
+  Conjecture, llncs's Claim), a Portuguese paper's "Teorema", "Lema". The gates' fixtures hold no name unit's row yet (their
+  records are of an earlier pipeline): their drawing is unchanged until the records are made again.
+- **Limits.** The translator sees a name alone, with no sentence around it: a word of two senses may come back in the other
+  ("Note", "Line"). A name only a macro of the paper's prints (`\newcommand{\thmname}{Satz}`) is not read.

@@ -24,6 +24,9 @@ import { PIPELINE_VERSION } from '@/pdf-reader/engine/pipeline/versions.mjs'
 //                Latin-1 file under its inputenc (2610.20581), a conditional the paper decides (2610.21098's \ifdefined)
 //   arity        PIPELINE 28's cuts (heading-arity.test.ts): a group after a heading, a starred heading with a short title, a
 //                \multirow of five arguments (2610.31660v1's stray brace, 2607.24653v2's \multirow)
+//   names        PIPELINE 29's name units (paper-names.test.ts): a paper's own theorem names and cleveref's, and where it calls
+//                \cref the words no package names in some target (2610.18513v1's "Section", "and")
+// A source's structural names are its units too (bundleUnitsOf, after the source's): each recorded as `name: <its text>`
 
 const enc = (s: string) => new TextEncoder().encode(s)
 const SAMPLE = new URL('../fixtures/pdf/sample-1/', import.meta.url)
@@ -37,6 +40,9 @@ const UNIT_CUT_SOURCES: Record<string, () => Map<string, Uint8Array>> = {
   'text-read': () => new Map([
     ['main.tex', Uint8Array.from('\\def\\Preprint{1}\n\\documentclass{article}\n\\usepackage[latin1]{inputenc}\n\\newcommand{\\nb}[1]{Notebook~#1}\n\\begin{document}\nThe notebooks (\\nb{4}--\\nb{6}) of the Universit\xe9 run.\n\n\\ifdefined\\Preprint\nThe public code is at \\url{a}.\n\\else\nAn anonymized copy is at \\url{b}.\n\\fi\nIt contains the generator.\n\\end{document}\n', c => c.charCodeAt(0))],
   ]),
+  names: () => new Map([
+    ['main.tex', enc('\\documentclass{article}\n\\usepackage{amsthm,cleveref}\n\\newtheorem{conj}{Conjecture}\n\\crefname{conj}{conjecture}{conjectures}\n\\begin{document}\n\\section{Intro}\\label{s}\nAs \\cref{s} says.\n\\begin{conj}\\label{c}\nIt holds.\n\\end{conj}\n\\end{document}\n')],
+  ]),
   arity: () => new Map([
     ['main.tex', enc('\\documentclass{article}\n\\begin{document}\n\\section{Approaches to $H_0$}\n{Measurements differ.\n\n\\section*[Short]{A long title}\n{\\bf Lead} words.\n\n\\begin{tabular}{cc}\n\\multirow[c]{2}{*}[-2pt]{Merged} & One \\\\\n& Two \\\\\n\\end{tabular}}\n\\end{document}\n')],
   ]),
@@ -44,7 +50,10 @@ const UNIT_CUT_SOURCES: Record<string, () => Map<string, Uint8Array>> = {
 const GOLDEN = new URL('./golden/unit-cut.json', import.meta.url)
 type Cut = Record<string, string[]>
 /** each unit of a source as `kind: type,type,…` (its pieces' types in order: text, ph, open, close, nested) */
-const cutOf = (): Cut => Object.fromEntries(Object.entries(UNIT_CUT_SOURCES).map(([name, files]) => [name, (openPaper(files()).units as { kind: string; pieces: { t: string }[] }[]).map(u => `${u.kind}: ${u.pieces.map(p => p.t).join(',')}`)]))
+const cutOf = (): Cut => Object.fromEntries(Object.entries(UNIT_CUT_SOURCES).map(([name, files]) => {
+  const p = openPaper(files())
+  return [name, [...(p.units as { kind: string; pieces: { t: string }[] }[]).map(u => `${u.kind}: ${u.pieces.map(q => q.t).join(',')}`), ...p.names.map(s => `name: ${s}`)]]
+}))
 /** the sources whose cut differs from the recorded one, and the first unit that does in each */
 function moved(now: Cut, was: Cut): string[] {
   const out: string[] = []

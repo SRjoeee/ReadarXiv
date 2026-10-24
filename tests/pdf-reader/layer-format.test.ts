@@ -1706,15 +1706,16 @@ describe('records (amendment M15): derived once, the engine\'s own predicates', 
       const chunks = await writeUnitChunks({ paper: PAPER, units: units as never })
       const read: ReadUnitsChunk[] = []
       for (const c of chunks) read.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: read.at(-1) ?? null }))
-      const { records: r } = unitsOfChunks(read)
+      const { records: r, kinds } = unitsOfChunks(read)
       const bundle = { units }
       expect(units.length).toBeGreaterThan(5)
       for (const lang of LANGS) {
         const kept = (i: number) => (r.flags[i]! & RECORD_FLAG.KEPT) !== 0 || (!authorsTranslated(lang) && (r.flags[i]! & RECORD_FLAG.AUTHOR) !== 0)
         const derived = [...units.keys()].filter(i => units[i] !== null && !kept(i))
         expect(derived, lang).toEqual(toTranslate(bundle, lang))
-        // the batches: the same cuts from the records' lengths as batchesOf makes from the plain source
-        let left = derived
+        // the batches: the same cuts from the records' lengths as batchesOf makes from the plain source, the paper's structural
+        // names first (their kind the chunks': PDF-READER §19.12)
+        let left = [...derived.filter(i => kinds[i] === 'name'), ...derived.filter(i => kinds[i] !== 'name')]
         const batches: number[][] = []
         for (let first = true; left.length; first = false) {
           const b = batchOf(left, i => r.plainLength[i]!, first ? FIRST_BATCH : NEXT_BATCH)

@@ -119,13 +119,14 @@ const ECHO_ORDER = { heading: 0, caption: 1 }
 /**
  * The ink units of a document. `pages` as the wrap reads them (layout/wrap.mjs: each glyph { u, x0, x1, ix0, ix1, y, size, top,
  * bottom, font, blank? }, its points, its view); `ledger` ledgerOf's over them (its `lines`); `units` the paper's source units,
- * their ids their indices, or null (no echo). Ids from units.length on. Returns [{ id, kind, cls, echo, pieces, glyphs: { text:
+ * their ids their indices, or null (no echo). Ids from `from` on: the bundle's units before them, the source units' and the
+ * paper's structural names' (layer-proto/units.mjs bundleUnitsOf), units.length where it is not given. Returns [{ id, kind, cls, echo, pieces, glyphs: { text:
  * [[page, g]], ph: [[page, g]] }, rows: { unit: [id, kind, depth, flags, pieces], lines (8 a line, the face's name at 7),
  * frames, erase, ph } }]
  */
-export function inkUnitsOf(pages, ledger, { units = null } = {}) {
+export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
   const fams = new Map()
-  const base = units?.length ?? 0
+  const base = Number.isInteger(from) && from >= (units?.length ?? 0) ? from : units?.length ?? 0
   // the source units an ink unit may echo, by their letters
   const echoOf = new Map()
   if (units) units.forEach((u, i) => {

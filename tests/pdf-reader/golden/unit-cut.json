@@ -1,5 +1,5 @@
 {
- "pipeline": "28",
+ "pipeline": "29",
  "units": {
   "sample-1": [
    "heading: text",
@@ -46,7 +46,10 @@
    "para: open,text,close,text,ph,text",
    "para: text,ph,text,ph,text,ph,ph,text",
    "heading: text",
-   "para: text,ph,text,open,text,close,text"
+   "para: text,ph,text,open,text,close,text",
+   "name: Theorem",
+   "name: Lemma",
+   "name: Definition"
   ],
   "llncs-url": [
    "para: text,ph,text,ph,text,ph,text"
@@ -54,6 +57,34 @@
   "text-read": [
    "para: text",
    "para: ph,text"
+  ],
+  "names": [
+   "heading: text",
+   "para: ph,text,ph,text",
+   "theorem: ph,text",
+   "name: Conjecture",
+   "name: conjecture",
+   "name: conjectures",
+   "name: Equation",
+   "name: Page",
+   "name: Part",
+   "name: Chapter",
+   "name: Section",
+   "name: Item",
+   "name: Footnote",
+   "name: Theorem",
+   "name: Lemma",
+   "name: Corollary",
+   "name: Proposition",
+   "name: Definition",
+   "name: Result",
+   "name: Example",
+   "name: Remark",
+   "name: Note",
+   "name: Algorithm",
+   "name: Listing",
+   "name: Line",
+   "name: and"
   ],
   "arity": [
    "heading: text,ph",

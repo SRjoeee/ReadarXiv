@@ -54,7 +54,7 @@ async function made(key, { engine, out, base, bytes, layoutFile, source }) {
   }
   mkdirSync(dir, { recursive: true })
   const E = f => import(join(engine, 'src/pdf-reader/engine', f))
-  const [{ wrapFinal }, { openPaper }, { unpackSource }, { indexLayout, parseLayout }, { pageInk }] = await Promise.all(['layout/wrap.mjs', 'pipeline/live.mjs', 'source/tar.mjs', 'layout/file.mjs', 'layout/ink.mjs'].map(E))
+  const [{ wrapFinal }, { openPaper }, { unpackSource }, { indexLayout, parseLayout }, { pageInk }, { bundleUnitsOf }] = await Promise.all(['layout/wrap.mjs', 'pipeline/live.mjs', 'source/tar.mjs', 'layout/file.mjs', 'layout/ink.mjs', 'layer-proto/bundle.mjs'].map(E))
   // (the cell rules by the engine's own module; an engine from before REMOVAL 8 has none and reads its rules from its add-on, which
   // this instrument no longer makes: the gate's own module then, whose rules such an engine does not read)
   const { pageRules, checkBoxes } = await E('layout/cell-rules.mjs').catch(() => import('../../../../src/pdf-reader/engine/layout/cell-rules.mjs'))
@@ -65,9 +65,11 @@ async function made(key, { engine, out, base, bytes, layoutFile, source }) {
   const t0 = performance.now()
   let head = { wrapped: false, why: 'no source' }, data = bytes
   if (source) {
-    const units = openPaper((await unpackSource(new Uint8Array(readFileSync(source)))).files).units
+    const opened = openPaper((await unpackSource(new Uint8Array(readFileSync(source)))).files), units = opened.units
     const texts = textsOf(base)
-    const r = await wrapFinal(new Uint8Array(bytes), { PL, getDocument: pdfjs.getDocument, documentOptions, OPS: pdfjs.OPS, units, texts, deflate, inflate })
+    // (the ink units' ids after the bundle's units before them, the source units' and the paper's structural names', as the
+    // page pass reads them: an engine of before ignores it)
+    const r = await wrapFinal(new Uint8Array(bytes), { PL, getDocument: pdfjs.getDocument, documentOptions, OPS: pdfjs.OPS, units, texts, deflate, inflate, inkFrom: bundleUnitsOf(opened).length })
     if (r.refused) head = { wrapped: false, why: `${r.refused}: ${String(r.why ?? '').slice(0, 200)}` }
     else {
       // (and the ink units the wrap made, where its engine makes them: docs/route/orphan-text.md, the gate's --ink)

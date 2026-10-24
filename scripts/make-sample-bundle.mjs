@@ -141,7 +141,9 @@ const arxivDoc = await arxivTask.promise
 step(2, 'the units')
 const kinds = paper.units.map(u => u.kind)
 const units = bundleUnitsOf(paper)
-console.log(`   ${units.length} units (${[...new Set(kinds)].map(k => `${kinds.filter(x => x === k).length} ${k}`).join(', ')})`)
+// (the bundle's kinds: the source units', then the structural names' (kind `name`))
+const bundleKinds = units.map(u => u[0])
+console.log(`   ${units.length} units (${[...new Set(bundleKinds)].map(k => `${bundleKinds.filter(x => x === k).length} ${k}`).join(', ')})`)
 
 // 3. the left geometry: our compile's unit marks carried to the PDF of step 1
 step(3, 'the left geometry')

@@ -17,6 +17,7 @@ import { layerDraws, readLeftPart } from './format.mjs'
 import { echoRows, layerIds, sourceUnitsOf, unitOf } from './rows.mjs'
 import { shownTranslated, TOGGLE_DEFAULTS, unitClass } from '../rules/content-classes.mjs'
 import { openProto } from './run.mjs'
+import { NAME_KIND } from './units.mjs'
 import { BUILTIN_RULES, resolveRules } from '../rules/layout.mjs'
 
 export { PDF_OPTIONS, SKIP_CODES } from './run.mjs'
@@ -176,7 +177,9 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   const shown = id => kinds[id] !== null && kinds[id] !== undefined && shownTranslated(kinds[id], on)
   // (a unit of the paper's whose class is not shown: its row is not taken; a row of no unit is the take's to count)
   const hidden = id => kinds[id] !== null && kinds[id] !== undefined && !shownTranslated(kinds[id], on)
-  const expect = layerIds(source, target).filter(shown)
+  // (a structural name's unit, kind `name`, is no page's: awaited by none, its row the run's word for that name, PDF-READER §19.12)
+  const named = new Set(sourceUnitsOf(source).flatMap((u, id) => (u?.kind === NAME_KIND ? [id] : [])))
+  const expect = layerIds(source, target).filter(id => shown(id) && !named.has(id))
   // (each cell's group as the units' cells give it: a group is read once its own cells' rows are in)
   const groups = new Map()
   sourceUnitsOf(source).forEach((u, id) => { const g = u ? groupOf(u) : null; if (g) groups.set(id, g) })

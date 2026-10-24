@@ -16,7 +16,7 @@ import { BundleRefusal } from '../layer-proto/bundle.mjs'
 import { PART_PAGES_MAX, partCutter, wholeCutter, wholeFrontier } from '../layer-proto/cut.mjs'
 import { chunkTotals, deltaBaseWhy, groupsOfUnits, indexOf, layerDraws, partTarget, readHead, readPart, readUnitsChunk, TOKEN_LIMIT, whyText, writeHead, writeUnitChunks } from '../layer-proto/format.mjs'
 import { needBound } from '../layer-proto/need.mjs'
-import { bundleUnitsOf } from '../layer-proto/units.mjs'
+import { bundleUnitsOf, NAME_KIND } from '../layer-proto/units.mjs'
 import { readArxivText } from '../layout/arxiv.mjs'
 import { boxesCheck, finalCheck, markTextBeyond, markTextOf, pageTextAt, prefixDoc, textOfPdf } from '../layout/base.mjs'
 import { lineCheckOf } from '../layout/carry.mjs'
@@ -357,11 +357,14 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   const leftFloats = left.tokens === text.tokens ? floatMatches(text.tokens, texts, floating) : floatMatches(left.tokens, texts, floating)
   // (the maker's, of its own document's tokens: our base page's, else arXiv's)
   const floatMatch = baseText && baseText !== text ? floatMatches(baseText.tokens, texts, floating) : left.tokens === text.tokens ? leftFloats : floatMatches(text.tokens, texts, floating)
-  // the ink units the wrap made of text no source unit owns (pipeline/ink-pass.mjs, docs/route/orphan-text.md §8): units after the
-  // source units', where our base page is the base and each of their pages is drawable; none else
+  // the bundle's units as the prepare child writes them: the source units', then the paper's structural names' (bundleUnitsOf, kind
+  // `name`: no page's ink, never anchored nor laid; PDF-READER §19.12)
+  const sourceBundle = bundleUnitsOf(source), names = sourceBundle.length - units.length
+  // the ink units the wrap made of text no source unit owns (pipeline/ink-pass.mjs, docs/route/orphan-text.md §8): units after those,
+  // where our base page is the base and each of their pages is drawable; none else
   // (and where their chunks fit beside the source units' within a head's bounds: format.mjs writeUnitChunks `before`)
-  const ink = oursHead ? await inkWithinChunks(paper, bundleUnitsOf(source), inkOfHost(ours?.ink, source, lineCheck?.undrawable ?? [])) : null
-  const bundle = bundleWithInk(bundleUnitsOf(source), ink)
+  const ink = oursHead ? await inkWithinChunks(paper, sourceBundle, inkOfHost(ours?.ink, { units: sourceBundle }, lineCheck?.undrawable ?? [])) : null
+  const bundle = bundleWithInk(sourceBundle, ink)
   const inkLeft = ink ? inkAnchors(left.tokens, ink) : null
   // the rule set's frame and columns, of arXiv's text alone where it says so (rules 1 and 4: made once, at step T), each side's
   // of its own tokens; else the rules given (pageFrame and pageColumns by default: the whole run's)
@@ -380,7 +383,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   const given = oracle ? { makerFrame: () => oracle.frame, columnEdges: oracle.columnEdges, leftFrame: () => oracle.leftFrame, columns: () => oracle.columns } : { makerFrame: frame, columnEdges: null, leftFrame: leftFrameRule, columns }
   if (marked && streams) {
     if (oracle) for (const k of ['frame', 'columnEdges', 'leftFrame', 'columns']) if (oracle[k] === undefined) throw new TypeError(`oracle.${k}: a whole run's (capture), for the marked original read a page at a time`)
-    const r = await markedStream({ draw, paper, units, texts, floating, text, baseText, left, leftFloats, floatMatch, bundle, ink, inkLeft, marked, markedOptions, doc: baseDoc, N, OPS, pdfjs, bases: { ours: oursHead, orig: origRef }, deltaStat, lineCheck, image, onHead, onLeft, onPart, verdicts, given, rules, inFloat, forward, several })
+    const r = await markedStream({ draw, paper, units, texts, names, floating, text, baseText, left, leftFloats, floatMatch, bundle, ink, inkLeft, marked, markedOptions, doc: baseDoc, N, OPS, pdfjs, bases: { ours: oursHead, orig: origRef }, deltaStat, lineCheck, image, onHead, onLeft, onPart, verdicts, given, rules, inFloat, forward, several })
     if (r) return r
     marks = { refused: 'marks' }
   } else if (marked) {
@@ -577,10 +580,12 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
   for (let i = 0; i < n; i++) { const g = grouped.of[i]; if (g >= 0) (members.get(g) ?? members.set(g, []).get(g)).push(i) }
   const closed = []
   let X = 0
-  const settled = i => !st || st.settled(i)
+  // (a structural name's unit, bundleUnitsOf's: no page's ink, settled from the start and asked of no maker)
+  const isName = i => bundle[i]?.[0] === NAME_KIND
+  const settled = i => !st || isName(i) || st.settled(i)
   /** whether unit i is in K for good: its left anchor final and its rows made (or none) */
   const inK = i => left.done(i) && settled(i)
-  const kIds = () => { const out = []; for (let i = 0; i < n; i++) if (inK(i)) out.push(i); return out }
+  const kIds = () => { const out = []; for (let i = 0; i < n; i++) if (inK(i) && !isName(i)) out.push(i); return out }
   /** where the left stands: the least slot in K each unit may get, and the smallest unit whose left anchor is not final */
   let nowAt = -1, nowLeft = null
   const leftNow = () => {
@@ -744,10 +749,11 @@ const arxivDrive = (maker, st, N) => async ({ making, close, read }) => {
  * them, or every unit where the marks are none (`unitMarks` null), unbounded from the start. `page(p)` the marked page p read;
  * `end()` every page read, or the reading given up (a mark not read has no word: no bounds)
  */
-function streamingLeft({ doc, views, edges, texts, floating, floatMatch, frame, columns, unitMarks, forward = null, ink = null, inkLeft = null }) {
+function streamingLeft({ doc, views, edges, texts, names = 0, floating, floatMatch, frame, columns, unitMarks, forward = null, ink = null, inkLeft = null }) {
   const n = texts.length, byPage = pageIndex(doc)
-  // (the ink units after the source units': their anchors known from the start, inkAnchors')
-  const total = ink ? n + ink.units.length : n
+  // (the paper's structural names after the source units' (`names` of them: bundleUnitsOf), never anchored, done from the start;
+  // then the ink units: their anchors known from the start, inkAnchors')
+  const total = ink ? ink.base + ink.units.length : n + names
   const side = leftSideStream({ doc, views, edges, columns })
   const done = new Uint8Array(total)
   let doneCount = 0, pending = 0
@@ -777,6 +783,7 @@ function streamingLeft({ doc, views, edges, texts, floating, floatMatch, frame, 
   const settle = u => { if (!done[u]) { done[u] = 1; doneCount++ } }
   const run = () => R.run((id, an) => { side.add(id, an); settle(id) }, u => { side.none(u); settle(u) })
   run()
+  for (let u = n; u < n + names; u++) settle(u)
   if (ink) for (const u of ink.units) { const an = inkLeft?.get(u.id) ?? null; if (an) side.add(u.id, an); else side.none(u.id); settle(u.id) }
   return {
     pages: side.pages, leftPages: side.leftPages, units: side.units, firstPage: side.firstPage, stats: side.stats,
@@ -799,12 +806,12 @@ function streamingLeft({ doc, views, edges, texts, floating, floatMatch, frame, 
  * going on with the unit marks read (the whole path refuses the marks then, its left placed without them: not this one's)
  */
 async function markedStream(o) {
-  const { paper, units, texts, floating, text, baseText, left, leftFloats, floatMatch, bundle, ink, inkLeft, marked, markedOptions, doc, N, OPS, pdfjs, bases, deltaStat, lineCheck, image, onHead, onLeft, onPart, verdicts, given, rules, inFloat, forward, several } = o
+  const { paper, units, texts, names, floating, text, baseText, left, leftFloats, floatMatch, bundle, ink, inkLeft, marked, markedOptions, doc, N, OPS, pdfjs, bases, deltaStat, lineCheck, image, onHead, onLeft, onPart, verdicts, given, rules, inFloat, forward, several } = o
   const events = markedPages(marked.doc, marked.log, markedOptions)
   let head = null
   try { head = (await events.next()).value?.head ?? null } catch (e) { if (isMemoryError(e)) throw e }
   if (!head) return null
-  const L = streamingLeft({ doc: left.tokens, views: text.views, edges: left.edges, texts, floating, floatMatch: leftFloats, frame: given.leftFrame, columns: given.columns, unitMarks: head.unitMarks, forward, ink, inkLeft })
+  const L = streamingLeft({ doc: left.tokens, views: text.views, edges: left.edges, texts, names, floating, floatMatch: leftFloats, frame: given.leftFrame, columns: given.columns, unitMarks: head.unitMarks, forward, ink, inkLeft })
   let maker = null, st = null, made = null
   try {
     maker = await makerOf({ units, marks: marksOfHead(head, markedOptions.engine), arxiv: doc, OPS, paper, left: '', pdfjs, text: baseText ?? text, lineCheck, floatMatch, frame: given.makerFrame, cellRules: true, parts: true, draw: o.draw, rules, inFloat, ...(given.columnEdges ? { columnEdges: given.columnEdges } : {}) })
