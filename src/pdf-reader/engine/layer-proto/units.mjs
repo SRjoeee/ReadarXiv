@@ -14,6 +14,8 @@ const TEXT = 0, PH = 1, OPEN = 2, CLOSE = 3, NESTED = 4
 export const EDGES = Object.freeze(['lead', 'trail', 'inner'])
 /** a unit's table cell's keys, in their order */
 export const CELL = Object.freeze(['table', 'row', 'col', 'span', 'head'])
+/** a structural name's unit (bundleUnitsOf): no page's ink, a word of the target's for the layer */
+export const NAME_KIND = 'name'
 /** a unit's kind, a lower-case word */
 const KIND = /^[a-z]{1,32}$/
 /** a heading's depth (latex-front.mjs DEPTH: -1 a \part, 0 a \chapter …), with the readers' margin */
@@ -86,12 +88,16 @@ function pieceOf(p, idOf) {
  * edges or null, its pieces], by its index. Its flags TITLE, FRONT and BRACKETED as the front end set them, KEPT where
  * the paper keeps it (`kept`, nameCells); its edges displayEdges' (mt.mjs), restated here so that the reader's parse
  * loads no front end (a test holds the two equal). Language-independent and deterministic: every object written in one
- * order. Throws on a piece the front end does not make
+ * order. Throws on a piece the front end does not make.
+ * After the source's units, the paper's structural names (openPaper's `names`: source/paper-names.mjs), each a unit of kind
+ * `name` of one text piece, its name: translated with the paper's units and cached by its text as any unit, never laid (it is
+ * no page's ink), read by the layer as the target's word for that name (PDF-READER §19.12). The source's units keep their ids
  */
 export function bundleUnitsOf(paper) {
   const idOf = new Map()
   paper.units.forEach((u, i) => idOf.set(u, i))
-  return paper.units.map(u => {
+  const names = (paper.names ?? []).map(s => [NAME_KIND, 0, null, null, null, [[TEXT, s]]])
+  return [...paper.units.map(u => {
     const flags = (u.title ? UNIT_FLAG_BITS.TITLE : 0) | (u.front ? UNIT_FLAG_BITS.FRONT : 0) | (u.bracketed ? UNIT_FLAG_BITS.BRACKETED : 0) | (paper.kept.has(u) ? UNIT_FLAG_BITS.KEPT : 0)
     const c = u.cell
     const edges = {}
@@ -102,7 +108,7 @@ export function bundleUnitsOf(paper) {
       Object.keys(edges).length ? edges : null,
       u.pieces.map(p => pieceOf(p, idOf)),
     ]
-  })
+  }), ...names]
 }
 
 // ---------------------------------------------------------------- the reader's

@@ -178,7 +178,19 @@ for (const [to, t] of Object.entries(TARGETS)) {
   if (t.ctex) for (const [form, [type]] of forms) if (ctex[type] && refs[form] === undefined) refs[form] = ctex[type]
   out.targets[to] = { heads, refs, conj }
 }
-out.files = Object.fromEntries([...files].sort((a, b) => (a[0] < b[0] ? -1 : 1)))
+// ---- what no package names in some target: each counter type's English \Crefname, singular (cleveref's english, outside its
+// branches), and the conjunctions, where a target the readers offer has no word for it. A paper that generates references sends
+// these to the translator once, as units of their own (source/paper-names.mjs; PDF-READER §19.12). In a target whose names do
+// not inflect (CJK), babel's names of a float and an appendix (the layout rules' labels, every target's) count as its words
+const UNINFLECTED = new Set(['zh', 'zh-TW', 'ja', 'ko']), BABEL_TYPES = new Set(['figure', 'table', 'appendix'])
+const singular = {}
+for (const [key, v] of en.names) { const [type, n, capital, path] = key.split('|'); if (n === '0' && capital === 'C' && path === '' && !(type in singular)) singular[type] = v }
+const named = (to, word) => { const t = out.targets[to]; return !!(t.heads[word] || t.refs[word] || (UNINFLECTED.has(to) && BABEL_TYPES.has(types[word]))) }
+out.singular = singular
+out.gaps = [...new Set(Object.values(singular))].filter(word => Object.keys(TARGETS).some(to => !named(to, word)))
+// (a conjunction of punctuation alone, ", ", is the same in every target: no word to translate)
+out.conjunctionGaps = out.conjunctions.filter(c => /\p{L}/u.test(c) && Object.keys(TARGETS).some(to => !out.targets[to].conj[c]))
+out.files =Object.fromEntries([...files].sort((a, b) => (a[0] < b[0] ? -1 : 1)))
 // (every character past ASCII written as its escape: the file holds no line of CJK, which the English gate would count)
 const text = `${JSON.stringify(out, null, 1).replace(/[\u0080-\uffff]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)}\n`
 if (process.argv.includes('--check')) {

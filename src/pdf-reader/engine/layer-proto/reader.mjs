@@ -15,6 +15,7 @@ import { layoutFacade } from './facade.mjs'
 import { OPEN_FAMILY } from './fonts.mjs'
 import { layerDraws, readLeftPart } from './format.mjs'
 import { sourceUnitsOf, toTranslate, unitOf } from './rows.mjs'
+import { NAME_KIND } from './units.mjs'
 import { openProto } from './run.mjs'
 import { BUILTIN_RULES, resolveRules } from '../rules/layout.mjs'
 
@@ -166,7 +167,10 @@ function checkPart(part, index, ch) {
 
 async function openOne({ four, bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS }, token) {
   const source = four ? index : bundle
-  const expect = toTranslate(source, target)
+  // (the units laid: the paper's structural names, units of kind `name` (bundleUnitsOf), are no page's ink, and their rows are
+  // the run's words for those names, taken apart: openProto's `names`, PDF-READER §19.12)
+  const kinds = sourceUnitsOf(source).map(u => u?.kind ?? null)
+  const expect = toTranslate(source, target).filter(id => kinds[id] !== NAME_KIND)
   // (each cell's group as the units' cells give it: a group is read once its own cells' rows are in)
   const groups = new Map()
   sourceUnitsOf(source).forEach((u, id) => { const g = u ? groupOf(u) : null; if (g) groups.set(id, g) })
@@ -452,6 +456,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       const got = new Map()
       for (const row of rows) {
         const u = unitOf(source, row)
+        if (u?.kind === NAME_KIND) { run.name(u); droppedRows.delete(row[0]); continue }
         if (u) { got.set(row[0], u); droppedRows.delete(row[0]); continue }
         dropped++
         const id = Array.isArray(row) ? row[0] : null

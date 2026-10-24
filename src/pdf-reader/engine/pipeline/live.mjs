@@ -19,6 +19,7 @@
 // first preview is set as today, and never waits for the original: nothing is known to plan it from yet. Where a plan
 // cannot be made, the translation is set as today, and the reason noted
 import { analyze } from '../source/paper-meta.mjs'
+import { paperNames } from '../source/paper-names.mjs'
 import { DVI_LAYOUT_TEX, inkSamples, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, NAME_ENGLISH, probeSamples } from '../layout/marks.mjs'
 import { BALANCE_DEF, documentBounds, DVI_MARK_DEF, dviEngine, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1, texText } from '../source/latex-front.mjs'
 import { strategiesFor, typesetBy } from './scripts.mjs'
@@ -230,7 +231,10 @@ export function openPaper(files) {
   const meta = analyze(fsys)
   if (!meta.main) throw new Error('no main file')
   const project = loadProject(fsys, meta.main, { tables: true })
-  return { fsys, meta, project, units: project.units, inFloat: project.inFloat, kept: nameCells(project.units) }
+  // (the structural names its TeX prints that no package names in every target: units of their own in the bundle, after its
+  // source's, sent to the translator once: source/paper-names.mjs, bundleUnitsOf)
+  const names = paperNames(fsys.list().filter(f => /\.(tex|sty|cls)$/i.test(f)).map(f => texText(fsys.read(f))))
+  return { fsys, meta, project, units: project.units, inFloat: project.inFloat, kept: nameCells(project.units), names }
 }
 
 /** the preamble alone, closed at once: its log names the document's font families; with `width`, also how wide the

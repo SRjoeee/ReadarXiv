@@ -813,7 +813,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const [, pg, x0, , x1, top, bottom] = lb
     const chars = (chars2[pg - 1] ?? []).filter(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 >= x0 - 0.5 && (c.x0 + c.x1) / 2 <= x1 + 0.5 && c.yb >= bottom - 0.5 && c.yb <= top + 0.5).map(c => ({ ...c, page: pg }))
     if (!chars.length) return null
-    const head = L2.headLabelInTarget(chars, to)
+    const head = L2.headLabelInTarget(chars, to, names)
     return head ? { ...head, chars } : null
   }
   /** page j's table rules near its cells (the file's: layer2.mjs cellBands), or undefined */
@@ -873,7 +873,15 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // the units as they have come (take), by id: none for one not yet arrived, or never to come; and the ids still
   // awaited (expect's, but those given at once)
   const U = new Map()
-  given.forEach((u, id) => U.set(id, u))
+  // (the paper's structural names, units of kind `name` (bundleUnitsOf): no page's ink, never laid; each translated one the
+  // target's word for its English, which a head and a generated reference read where no package names it: `names`, §19.12)
+  const names = new Map()
+  const takeName = u => {
+    if (u?.kind !== NAME_KIND || typeof u.src !== 'string') return
+    const t = Array.isArray(u.pieces) && (u.state === 'whole' || u.state === 'partial') ? u.pieces.filter(q => q.t === 'text').map(q => q.s).join('').replace(/\s+/g, ' ').trim() : ''
+    if (t) names.set(u.src.replace(/\s+/g, ' ').trim(), t)
+  }
+  given.forEach((u, id) => { if (u?.kind === NAME_KIND) takeName(u); else U.set(id, u) })
   const awaited = new Set(expect ?? [])
   const pending = new Set([...awaited].filter(id => U.get(id) === undefined))
   // each unit's table group as the paper's own bundle gives it (groups.mjs groupOf), where the host knows it: a group is
@@ -1864,7 +1872,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (prep.unproven !== undefined) { p.refused = true; p.why = 'unproven'; unlead(p); return }
     // (the names cleveref and \autoref generate in its references, and a citation's note's, in the target's: layer2.mjs
     // renameRefs, PDF-READER §19.11)
-    if (labels) L2.renameRefs(prep, to, R.labels)
+    if (labels) L2.renameRefs(prep, to, R.labels, names)
     // a float's label in the target's name where the final names it so (labelInTarget): its ink erased and accounted as
     // the unit's text, and set as the line's start, in its own style, before the translation
     const relabel = labels && relabels(p.id) ? L2.labelInTarget(prep.label, R.labels, labels.captions, to) : null
@@ -3203,6 +3211,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     failed: p => failedPages.has(p) || (partsEnded && p > through),
     /** a wait under way looks again at what it waits for (its `still` among it) */
     poke: () => changed(),
+    /** a structural name's row (a unit of kind `name`, its translation the target's word for it: `names`), taken apart from the
+     *  units laid; one that comes after a page is drawn changes no drawing */
+    name: u => takeName(u),
     /**
      * Units as they arrive (rows: id → its row, the units record's): each awaited unit's row, which wins over one taken
      * before it until the unit is placed; a translated row's pieces' k read into the file's pieces (trPiecesOf: the
