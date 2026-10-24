@@ -182,6 +182,14 @@ describe('small capitals the layer draws itself, at the share the page sets them
     expect(shares(drawn)).toEqual([['PARA', 1], ['x', 1]])
   })
 
+  it('a word longer than its line is cut by its characters across its runs of one case, as a word of one token is (Codex on #461)', () => {
+    // ("Introduction" at 10 in a frame 30 wide: I 5, each small capital 4; the line takes I and NTRODU, 29, the next CTION. Its
+    // capital alone on a line of its own, the runs after it cut on the next, it took three)
+    const tokens = tokensOf([text('Introduction', true)], 'es', capsBase, { capsRatio: 0.8 }, undefined) as never
+    const L = L2.layoutUnit2(tokens, [block(30, 3)] as never, 10, P() as never) as unknown as { lines: { items: { t: Tok }[] }[] }
+    expect(L.lines.map(l => l.items.map(it => [it.t.s, it.t.sc ?? 1]))).toEqual([[['I', 1], ['NTRODU', 0.8]], [['CTION', 0.8]]])
+  })
+
   it('laid and drawn alike: each run a <tspan> at its share of the size, its edge where its tokens\' widths put it', () => {
     const tokens = tokensOf([text('Discusión: perspectivas', true)], 'es', capsBase, { capsRatio: 0.8 }) as never
     const L = L2.layoutUnit2(tokens, [block(400)] as never, 10, P() as never) as unknown as { f: number; lines: { items: { t: Tok; x: number; w: number }[] }[] }

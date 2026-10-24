@@ -2306,7 +2306,8 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
             }
             // within a chunk, parts stand together (no break), but Chinese and Japanese break before and after a CJK
             // character, and a word may break after its own hyphen
-            if (at > 0) t.glue = true
+            // (a word's later run of one case goes on the word, `cont`: the breaker cuts a word too long for its line across them)
+            if (at > 0) { t.glue = true; t.cont = true }
             else if (q === 0 && n > 0 && !(!keepAll && (p.cls === 'cjk' || parts[n - 1].cls === 'cjk'))) t.glue = true
             if (p.cls === 'cjk' && s.length === 1 && !centred && P.compressMax >= 0) t.punct = PUNCT_CLOSE.test(s) ? 'close' : PUNCT_OPEN.test(s) ? 'open' : null
             if (!runs && !all && p.cls === 'latin' && P.hyphen && !extra.ph && st.fam !== 'mono' && s.length >= minWord && unit.kind !== 'heading' && !unit.title) {
@@ -3243,7 +3244,38 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
     }
     if (!line.items.length) {
       // nothing on the line yet, and the group is longer than it: cut by characters (a URL, a long formula word)
-      if (t0.s && [...t0.s].length > 1 && tokW(t0, f, st, scale) > cap) {
+      if (tokens[i + 1]?.cont) {
+        // (a word of small capitals the layer draws, cut into runs of one case, `cont`: as many of its characters as the line
+        // holds, across its runs, as a word of one token is cut below; never its first run alone on a line of its own)
+        let m = i + 1
+        while (m < tokens.length && tokens[m].cont) m++
+        let q = i, used = 0
+        for (; q < m; q++) {
+          const tw = tokW(tokens[q], f, st, scale)
+          if (used + tw > cap) break
+          line.items.push({ t: tokens[q], w: tw, shift: 0, asp: 0 })
+          used += tw
+        }
+        if (q === m) {
+          // (the word whole on the line: what is glued after it goes on, as the group's first token alone does below)
+          if (tokens[m]) tokens = [...tokens.slice(0, m), { ...tokens[m], glue: false }, ...tokens.slice(m + 1)]
+        } else {
+          const t = tokens[q], chars = [...t.s]
+          const per = chars.map(c => (w100(c, t.face) * (t.sc ?? 1) * f) / 100)
+          let k = 0, head = 0
+          while (k < chars.length && used + head + per[k] <= cap) head += per[k++]
+          if (q === i) { k = Math.max(1, k); head = per.slice(0, k).reduce((a, b) => a + b, 0) }
+          while (k > 1 && k < chars.length && barredChar(chars[k])) { k--; head -= per[k] }
+          if (k > 0) {
+            line.items.push({ t: headOfCut(t, { s: chars.slice(0, k).join('') }), w: head, shift: 0, asp: 0 })
+            used += head
+            const tail = chars.slice(k).join('')
+            tokens = [...tokens.slice(0, q), { ...t, s: tail, w100: w100(tail, t.face) * (t.sc ?? 1), glue: false, cont: false, asp: false }, ...tokens.slice(q + 1)]
+          } else tokens = [...tokens.slice(0, q), { ...t, glue: false, cont: false }, ...tokens.slice(q + 1)]
+        }
+        line.x += used
+        i = q
+      } else if (t0.s && [...t0.s].length > 1 && tokW(t0, f, st, scale) > cap) {
         const chars = [...t0.s]
         let k = 0, used = 0
         const per = chars.map(c => (w100(c, t0.face) * (t0.sc ?? 1) * f) / 100)
