@@ -193,11 +193,7 @@
 //     2 units' hashes change, in one paper (2607.24653v2: a \multirow[c]{3}{w}[-2pt]{…} of five arguments is now read whole,
 //     and the pairs after it are numbered one on, their texts the same); every other unit is 27's. A copy of 27 carries
 //     every unit it holds the source of, matched by sourceHash (live.mjs PIPELINE_CARRIES), and a changed unit is asked again
-// 29: the text inside a paper's vector figures is units of its own (the content class `figures`, docs/route/orphan-text.md stage
-//     5): each label, axis title, legend entry or annotation an included PDF or a TikZ picture draws in glyphs no unit owns a unit
-//     of kind figtext after the paper's own (layout/figure-text.mjs, pipeline/page-pass.mjs figureUnits), its text our glyphs',
-//     translated as any unit is. No unit of 28's changes, nor its id: the new units come after every one of them
-export const PIPELINE_VERSION = '29'
+export const PIPELINE_VERSION = '28'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
@@ -228,10 +224,13 @@ export const PDFJS = '6.3.289'
  * labels (own.mjs isLabelForm's `note`, JOINT), each in its unit's label group, where they were left the original's ink in no
  * group (`labelKept`), so that the layer draws them in the target's names: the base's bytes and the head's `labelKept` change,
  * the layout files and the units do not (over 25 local papers labelKept 298 → 96, 202 labels newly in their groups;
- * 2610.18513v1 100 → 23; every other wrap count, and every page of every group shown, as before: the ocg gate); 12 (the
- * content class `figures`, PDF-READER §19.12): each figure unit's ink (layout/figure-text.mjs) its own group, `f<k>`, its runs
- * wrapped where they are shown — in the page's stream, or in the stream of the form XObject an included PDF is, that form written
- * again once with /Properties of its own (layout/wrap.mjs wrapPage, proveForm) —, and a font with no Unicode a reader can trust
- * leaving its figure the original's (remove.mjs unicodeOf): the base's bytes change where a figure has text
+ * 2610.18513v1 100 → 23; every other wrap count, and every page of every group shown, as before: the ocg gate); and in the
+ * same unreleased 11 (docs/route/orphan-text.md, stage 2) the ink units' glyphs, text no source unit owns made units of our
+ * own glyphs (layout/ink-units.mjs), wrapped in groups of their own, `u<id>` and `u<id>.p` from the source units' count on:
+ * the base's bytes change where a page holds such text; and in the same unreleased 11 (the content class `figures`,
+ * stage 5, PDF-READER §19.12) each figure unit's ink (layout/figure-text.mjs) its own group, `f<k>`, its runs wrapped where they
+ * are shown — in the page's stream, or in the stream of the form XObject an included PDF is, that form written again once with
+ * /Properties of its own (layout/wrap.mjs wrapPage, proveForm) —, and a font with no Unicode a reader can trust leaving its figure
+ * the original's (remove.mjs unicodeOf): the base's bytes change where a figure has text
  */
-export const REMOVAL = '12'
+export const REMOVAL = '11'

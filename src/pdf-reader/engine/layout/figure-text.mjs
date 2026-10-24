@@ -1,7 +1,8 @@
 // The text inside a vector figure of our final pass (docs/route/orphan-text.md stage 5, the content class `figures`,
 // rules/content-classes.mjs): the labels, axis titles, legends and annotations a figure draws as glyphs, cut into ink units, one
-// a label or a line, each a unit of kind `figtext` the bundle's units hold after the paper's own (pipeline/page-pass.mjs
-// figureUnits), translated with them whatever the reader's switch, and drawn in its own run's box by the layer (run.mjs
+// a label or a line, each an ink unit of kind `inkfigures` the bundle's units hold after the paper's own and the other ink units
+// (pipeline/page-pass.mjs figureUnits), translated with them whatever the reader's toggles, and drawn in its own run's box by the
+// layer where they show the class (run.mjs
 // paintFigures, layer-proto/figure-fit.mjs), its ink hidden by its own optional-content group (`f<k>`, layout/wrap.mjs). Read in
 // the maker child from what it already has: the pages pageInk read (`indices` and `turned`) and own.mjs's ownership. Nothing of
 // arXiv's PDF, no layout file, no position estimated: every place is our glyphs'.

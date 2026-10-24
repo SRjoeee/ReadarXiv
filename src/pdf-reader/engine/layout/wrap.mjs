@@ -36,7 +36,8 @@ import { isMemoryError } from '../pipeline/memory.mjs'
 import { DELTA_OBJECTS_MAX, deltaSection, rangesOf, UNHIDDEN_MAX } from './delta-wire.mjs'
 import { figureUnitsOf, FIGURE_WHYS } from './figure-text.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, pageInk } from './ink.mjs'
-import { ledgerOf, ledgerSummary } from './ledger.mjs'
+import { claimInk, inkOff, inkUnitsOf } from './ink-units.mjs'
+import { inkLeft, ledgerOf, ledgerSummary } from './ledger.mjs'
 import { followsOf } from './marks.mjs'
 import { ownOf, UNHIDDEN } from './own.mjs'
 import { alignOf, DecodeLimit, lex, LexLimit, openRemover } from './remove.mjs'
@@ -679,10 +680,11 @@ export { UNHIDDEN_MAX }
  * `labelKept` the unit ids whose label is left the original's ink, each of the units with a group in the document alone (a
  * unit with none is the original's: no reader can hide it), `pages` the pages wrapped as ranges (the host's delta must replace
  * every one: layerOfPaper refuses a delta that does not), `own` own.mjs's stats (the record's), `ledger` the content classes'
- * counts (layout/ledger.mjs ledgerSummary: integers, for the record; nothing reads them yet), `owned` own.mjs's whole result and
- * `ledgerWhole` the ledger's where `keepOwned` (the lab's); `figures` the figure units drawn and their counts (layout/figure-text.mjs:
- * each its group in the document; `figureUnits` every unit cut, with why, where `keepOwned`), none asked with `figures` false (the
- * lab's A/B); `bounds` { groupsPage, sequencesPage, groupsDoc } wrapOf's (tests) — or { refused (WRAP_WHYS), why }: the paper's
+ * counts and first orphans (layout/ledger.mjs ledgerSummary: the head's base `ledger`), `ink` the ink units (layout/ink-units.mjs:
+ * { base, units }, the page pass's `ours.ink`, opaque to the host), `owned` own.mjs's whole result and `ledgerWhole` the ledger's
+ * where `keepOwned` (the lab's); `figures` the figure units drawn and their counts (layout/figure-text.mjs: each its group in the
+ * document; `figureUnits` every unit cut, with why, where `keepOwned`), none asked with `figures` false (the lab's A/B);
+ * `bounds` { groupsPage, sequencesPage, groupsDoc } wrapOf's (tests) — or { refused (WRAP_WHYS), why }: the paper's
  * base is then arXiv's PDF. Never throws but a failed allocation
  */
 /** a point as ownership reads it: its name in lower case, as every mark's name is written (marks.mjs MARK_NAME): a class that
@@ -717,7 +719,7 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
       const ops = await page.getOperatorList()
       const ink = pageInk(OPS, ops, page.commonObjs, { rotate: page.rotate ?? 0, indices: true, turned: true, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
       const unread = ink.rotated || ink.capped || ink.timedOut || ink.degraded
-      pages.push(unread ? { glyphs: [], turned: [], shapes: new Map(), pictures: [], boxes: [], paths: [], points: [], boxAt: [], view: [...page.view] } : { glyphs: ink.glyphs.map(g => ({ n: g.n, k: g.k, u: g.u, x0: g.x0, x1: g.x1, ix0: g.ix0, ix1: g.ix1, y: g.y, size: g.size, top: g.top, bottom: g.bottom, font: g.font, fill: g.fill, ...(g.blank ? { blank: true } : {}), ...(g.form ? { form: true } : {}), ...(g.clipped ? { clipped: true } : {}), ...(g.fid ? { fid: g.fid } : {}), ...(g.pid ? { pid: g.pid } : {}) })), turned: ink.turned, shapes: ink.shapes, pictures: ink.pictures, boxes: ink.boxes, paths: ink.paths, points: ink.points.map(lowerPoint), boxAt: ink.boxAt, view: [...page.view] })
+      pages.push(unread ? { glyphs: [], turned: [], shapes: new Map(), pictures: [], boxes: [], paths: [], points: [], boxAt: [], view: [...page.view] } : { glyphs: ink.glyphs.map(g => ({ n: g.n, k: g.k, u: g.u, x0: g.x0, x1: g.x1, ix0: g.ix0, ix1: g.ix1, y: g.y, size: g.size, top: g.top, bottom: g.bottom, font: g.font, fill: g.fill, ...(g.blank ? { blank: true } : {}), ...(g.form ? { form: true } : {}), ...(g.clipped ? { clipped: true } : {}), ...(g.fid ? { fid: g.fid } : {}), ...(g.pid ? { pid: g.pid } : {}) })), turned: ink.turned, shapes: ink.shapes, pictures: ink.pictures, boxes: ink.boxes, paths: ink.paths, points: ink.points.map(lowerPoint), paras: ink.paras ?? [], boxAt: ink.boxAt, view: [...page.view] })
       facts.push(unread ? null : alignOf(OPS, ops))
       page.cleanup()
     }
@@ -731,20 +733,27 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   // pairs, or a Map; a cell's lead macro is owned by them alone, own.mjs)
   const shown = texts instanceof Map ? texts : Array.isArray(texts) ? new Map(Array.from({ length: Math.floor(texts.length / 2) }, (_, j) => [texts[2 * j], texts[2 * j + 1]]).filter(([a, b]) => typeof a === 'string' && typeof b === 'string')) : null
   const own = ownOf(pages, { units, follows, texts: shown })
-  // (the text inside the vector figures, no unit's: its ink units, each its own group f<k>, a crowded one none; layout/figure-text.mjs)
+  // (the text inside the vector figures, no source unit's: its figure units, each its own group f<k>, a crowded one none;
+  // layout/figure-text.mjs), cut before the ink units so that a figure's text is the figures' class, never an ink unit's
   const fig = withFigureText ? figureUnitsOf(pages, own) : { units: [], glyphs: pages.map(() => new Map()), turned: pages.map(() => new Map()), stats: { letters: 0 } }
   // (the figures' paths as their lines are read by then: let go before the wrap reads the pages again)
   for (const pg of pages) pg.shapes = null
-  const withFigures = (all) => own.glyphs.map((row, i) => {
+  /** each page's owners with the figure units' groups: every one's (`all`: the ledger's, crowded or not) or the drawn ones' */
+  const withFigures = all => own.glyphs.map((row, i) => {
     const m = fig.glyphs[i]
     if (!m?.size) return row
     const out = Array.from(row)
     for (const [g, k] of m) if (all || !fig.units[k].why) out[g] = fig.units[k].group
     return out
   })
-  // (every glyph's content class: the record's counts, the sweep's orphans; layout/ledger.mjs. A figure unit's glyphs are its own,
-  // the figures' class, crowded or not)
-  const ledger = ledgerOf(pages, { ...own, glyphs: withFigures(true) }, { units })
+  // (every glyph's content class: the record's counts, the sweep's orphans; layout/ledger.mjs: a figure unit's glyphs are the
+  // figures', crowded or not), then the ink units, the text no unit owns made units of our glyphs (layout/ink-units.mjs), their
+  // glyphs claimed before the wrap is planned, so that each is hidden by its own groups as any unit is; the ledger's orphans those
+  // no unit owns still. None where the source is not read (units null: no id to start from, no echo)
+  const classed = ledgerOf(pages, { ...own, glyphs: withFigures(true) }, { units })
+  const ink = units ? inkUnitsOf(pages, classed, { units }) : []
+  claimInk(own, ink)
+  const ledger = ink.length ? inkLeft(classed, { ...own, glyphs: withFigures(true) }, pages) : classed
   const owners = withFigures(false)
   const plans = new Map()
   pages.forEach((pg, i) => {
@@ -791,7 +800,7 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   if (unhidden.length > UNHIDDEN_MAX || labelKept.length > UNHIDDEN_MAX) return { refused: 'wrap-bound', why: `${unhidden.length} units the original's, past ${UNHIDDEN_MAX}` }
   const stats = { ...made.stats, unhidden: counts, labelKept: labelKept.length }
   const wrappedPages = rangesOf([...made.pages].filter(([, x]) => x.ok).map(([p]) => p))
-  return { bytes: made.bytes, xref: made.xref, sha256: made.sha256, stats, unhidden, labelKept, pages: wrappedPages, own: { ...own.stats, unhidden: counts }, ledger: ledgerSummary(ledger), figures, ...(keepOwned ? { owned: own, ledgerWhole: ledger, figureUnits: fig.units } : {}) }
+  return { bytes: made.bytes, xref: made.xref, sha256: made.sha256, stats, unhidden, labelKept, pages: wrappedPages, own: { ...own.stats, unhidden: counts }, ledger: ledgerSummary(ledger), ink: { base: units ? units.length : 0, units: ink.map(({ id, kind, cls, echo, pieces, rows }) => ({ id, kind, cls, echo, pieces, rows })), off: inkOff(ink, made.pages) }, figures, ...(keepOwned ? { owned: own, ledgerWhole: ledger, figureUnits: fig.units } : {}) }
 }
 
 /** the figure units as the page pass takes them: those drawn (their group in the document, `why` null), each { page, group,

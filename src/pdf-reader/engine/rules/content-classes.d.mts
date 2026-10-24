@@ -13,12 +13,8 @@ export interface ClassPolicy {
 }
 /** the reader's toggles, in the settings' order */
 export declare const TOGGLES: readonly Toggle[]
-/** each toggle a reader turns on or off, on where the reader's settings say nothing */
-export declare const TOGGLE_DEFAULTS: Readonly<Record<Exclude<Toggle, 'always' | 'never'>, boolean>>
-/** the toggles on by default, as shownTranslated takes them */
-export declare function defaultToggles(): Set<Toggle>
 /** the kind of a figure's ink unit */
-export declare const FIGURE_KIND: 'figtext'
+export declare const FIGURE_KIND: 'inkfigures'
 /** each class's policy, in code order */
 export declare const CLASSES: Readonly<Record<ClassId, ClassPolicy>>
 /** the classes by their code */
@@ -29,5 +25,7 @@ export declare const CLASS_CODE: Readonly<Record<ClassId, number>>
 export declare const UNIT_CLASS: Readonly<Record<string, ClassId>>
 /** a unit's class: of the front end's unit, of the bundle's, or of a kind; null for none */
 export declare function unitClass(u: string | { kind?: unknown } | readonly unknown[] | null | undefined): ClassId | null
+/** each toggle's default where a reader has set none */
+export declare const TOGGLE_DEFAULTS: Readonly<Record<Exclude<Toggle, 'always' | 'never'>, boolean>>
 /** whether a class is shown translated under a reader's toggles turned on */
 export declare function shownTranslated(cls: string, on: ReadonlySet<string> | null | undefined): boolean

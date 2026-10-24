@@ -718,6 +718,12 @@ export const POINTS_TEX = [
   '\\ifdefined\\AddToHook\\AddToHook{cmd/@outputpage/before}{\\ifaxt@bodied\\else\\ifvoid\\@outputbox\\else\\axt@bump\\begingroup\\ifvbox\\@outputbox\\boxmaxdepth\\dp\\@outputbox\\global\\setbox\\@outputbox\\vbox to\\ht\\@outputbox{\\axt@point{bs\\axt@bn}\\penalty\\@M\\unvbox\\@outputbox\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\else\\global\\setbox\\@outputbox\\hbox to\\wd\\@outputbox{\\axt@point{bs\\axt@bn}\\unhbox\\@outputbox\\axt@point{be\\axt@bn}}\\fi\\endgroup\\fi\\fi\\global\\axt@bodiedfalse}\\fi',
   '\\AtBeginDocument{\\ifdefined\\@endfloatbox\\let\\axt@efb\\@endfloatbox\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}\\fi}',
   '\\AtBeginDocument{\\ifdefined\\pgfsys@beginpicture\\let\\axt@pgfbp\\pgfsys@beginpicture\\def\\pgfsys@beginpicture{\\axt@pgfbp\\axt@point{zs}}\\let\\axt@pgfep\\pgfsys@endpicture\\def\\pgfsys@endpicture{\\axt@point{ze}\\axt@pgfep}\\fi}',
+  // (each paragraph's start, q<n> at LaTeX's para/begin, inside its indentation box: \\IndentBox, not yet put back, wrapped
+  // whole with the point before it, of its size; never a node of the paragraph's own, which would make a paragraph whose
+  // indent a \\lastbox takes (wrapfig's \\WF@floathand, then \\@@par) or a \\noindent before $$ no longer empty, a line
+  // of its own: 2609.26457 p8 on TeX Live 2023, 2026-10-25. A paragraph with no indent (\\noindent, an \\item's, the first
+  // after a heading whose class takes it) carries none and reads as the one before; the ledger's blocks, orphan-text.md §4)
+  '\\gdef\\axt@pq{0}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{para/begin}{\\ifvoid\\IndentBox\\else\\xdef\\axt@pq{\\the\\numexpr\\axt@pq+1\\relax}\\global\\setbox\\IndentBox\\hbox{\\axt@point{q\\axt@pq}\\box\\IndentBox}\\fi}\\fi\\fi',
 ].join('')
 
 /**

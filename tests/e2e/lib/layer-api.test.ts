@@ -385,7 +385,7 @@ describe('BUNDLE 4: the catalog, the 202s with the objects made so far, the obje
     const files = sampleFiles(), ours = createHash('sha256').update(files.wrapped).digest('hex')
     const headRef = layer4.refs.head as { sha256: string; bytes: number }
     const head = await F.readHead(layer4.objects.get(headRef.sha256) as Uint8Array, { ref: { kind: 'head', ...headRef } as never })
-    expect(head.bundle).toBe('10')
+    expect(head.bundle).toBe(F.BUNDLE5)
     expect(F.layerDraws(head.base)).toBe(true)
     // (the base of ours is the wrapped pass, its wrap's fields in the head; arXiv's PDF beside it the stand-in)
     expect(head.base).toMatchObject({ source: 'ours', bytes: files.wrapped.length, sha256: ours, pages: layer4.paper.pages, tree: '2025', check: { pages: [layer4.paper.pages, layer4.paper.pages], boxes: 'equal', carried: 1 }, unhidden: files.wrap.unhidden, labelKept: files.wrap.labelKept })
@@ -401,8 +401,8 @@ describe('BUNDLE 4: the catalog, the 202s with the objects made so far, the obje
       const part = await F.readPart(layer4.objects.get(r.sha256) as Uint8Array, { ref: r as never, index, chain })
       chain = part.chain
       if (part.layout) laid++
-      // (the TikZ figure's text the wrap drew, each a unit of kind figtext the units chunks hold: the content class `figures`)
-      for (const f of part.figures) { figures++; expect(index.units[f.id]?.[0]).toBe('figtext') }
+      // (the TikZ figure's text the wrap drew, each an ink unit of kind inkfigures: the content class `figures`)
+      for (const f of part.figures) { figures++; expect(index.units[f.id]?.[0]).toBe('inkfigures') }
     }
     expect(laid).toBe(layer4.refs.parts.length)
     expect(figures).toBe(files.wrap.figures.units.length)

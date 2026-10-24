@@ -96,7 +96,8 @@ export interface RunHost {
    *  extension's loading rule, DESIGN §10); none: always shown */
   hidden?: { now(): boolean; shown(signal: AbortSignal): Promise<void> }
   createSide?: typeof createLayerSide
-  /** whether the figures' text is shown translated (the reader's figure switch, `image.enabled`); none: the policy table's default */
+  /** whether the figures' text is shown translated (the reader's figure switch, `image.enabled`: the class `figures`'s toggle);
+   *  none: the engine's default (rules/content-classes.mjs TOGGLE_DEFAULTS) */
   figures?(): boolean
 }
 export interface Run {
@@ -610,7 +611,8 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     const make = host.createSide ?? createLayerSide
     side = make(view, {
       paper, target, faceSources: host.faces ?? servedFaces(host.api, f), hyphUrl: lang => `${host.api}/hyph/${lang}.json`, ...options(),
-      ...(host.figures ? { figures: host.figures() } : {}),
+      // (the reader's toggles: the figure switch's class, the others the engine's defaults)
+      ...(host.figures ? { classes: { figures: host.figures() } } : {}),
     })
     void translate()
     await look(my, signal)
@@ -640,7 +642,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
       again()
     },
     retarget: to => retarget(to),
-    setFigures: on => { if (!disposed) side?.setFigures(on) },
+    setFigures: on => { if (!disposed) side?.setClasses({ figures: on }) },
     dispose() {
       if (disposed) return
       disposed = true

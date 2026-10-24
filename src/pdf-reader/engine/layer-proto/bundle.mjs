@@ -193,7 +193,8 @@ export function readBundle(json, caps = {}) {
   if (!Array.isArray(units)) throw fail('units', `not an array (${kindOf(units)})`)
   const stands = new Uint8Array(units.length), dropped = []
   for (let i = 0; i < units.length; i++) {
-    if (unitStands(units[i], i, stands)) stands[i] = 1
+    // (an ink unit's seven too, after the source units', as a BUNDLE5 ink chunk holds it: the lab's door draws them so)
+    if (unitStands(units[i], i, stands, { ink: true })) stands[i] = 1
     else { units[i] = null; dropped.push(i) }
   }
 

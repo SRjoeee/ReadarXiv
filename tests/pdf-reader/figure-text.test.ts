@@ -20,7 +20,7 @@ import { DOCUMENT_OPTIONS, renderPage, wrapped } from './helpers/ocg-pdfs'
 const FIXTURE = new URL('../fixtures/pdf/figures/', import.meta.url)
 type Unit = { text: string; angle: number; anchor: string; form: boolean; why: string | null; page: number; group: string; x: number; y: number; ux: number; uy: number; length: number; size: number; ascent: number; descent: number }
 type Page = { glyphs: { u: string; x0: number; x1: number; ix0: number; ix1: number; top: number; bottom: number; blank?: boolean }[]; turned: unknown[]; boxes: number[]; shapes: Map<number, unknown>; pictures: { name: string }[] }
-let final: Uint8Array, wrap: { bytes: Uint8Array; figures: { units: Unit[]; stats: Record<string, number> }; figureUnits: Unit[]; ledger: { classes: Record<string, number[]> }; stats: { groups: number } }
+let final: Uint8Array, wrap: { bytes: Uint8Array; figures: { units: Unit[]; stats: Record<string, number> }; figureUnits: Unit[]; ledger: { classes: (string | number)[] }; stats: { groups: number } }
 let pages: Page[]
 
 /** the pages as wrapFinal reads them for the figures (pageInk with `indices` and `turned`) */
@@ -49,11 +49,12 @@ beforeAll(async () => {
 const byText = (units: Unit[], text: string) => { const u = units.find(x => x.text === text); if (!u) throw new Error(`no unit "${text}" among ${units.map(x => x.text).join(' | ')}`); return u }
 
 describe('the figures\' text cut into ink units (layout/figure-text.mjs)', () => {
-  it('is the policy table\'s class `figures`, built, its kind figtext, its toggle on by default', () => {
+  it('is the policy table\'s class `figures`, built, its kind an ink kind, its toggle off by default until the settings show it', () => {
     expect(CLASSES.figures.state).toBe('built')
+    expect(FIGURE_KIND).toBe('inkfigures')
     expect(unitClass(FIGURE_KIND)).toBe('figures')
-    expect(unitClass([FIGURE_KIND, 0, null, null, null, []])).toBe('figures')
-    expect(TOGGLE_DEFAULTS.figures).toBe(true)
+    expect(unitClass([FIGURE_KIND, 0, null, null, null, [], null])).toBe('figures')
+    expect(TOGGLE_DEFAULTS.figures).toBe(false)
   })
 
   it('the fixture was compiled over the layout compile\'s points: a TikZ picture between `zs` and `ze`', () => {
@@ -107,8 +108,10 @@ describe('the figures\' text cut into ink units (layout/figure-text.mjs)', () =>
     expect(s.drawn).toBe(12)
     expect(new Set(wrap.figures.units.map(u => u.group)).size).toBe(s.drawn)
     for (const u of wrap.figures.units) expect(u.ascent).toBeGreaterThanOrEqual(DRAW_BAND[1])
-    // (the ledger's class `figures` holds every figure glyph, drawn or not)
-    expect(wrap.ledger.classes.figures?.[1]).toBeGreaterThan(100)
+    // (the ledger's class `figures` holds every figure glyph, drawn or not: [class, glyphs, letters, …])
+    const at = wrap.ledger.classes.indexOf('figures')
+    expect(at).toBeGreaterThanOrEqual(0)
+    expect(wrap.ledger.classes[at + 1]).toBeGreaterThan(100)
   })
 })
 
@@ -182,7 +185,7 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
 
 describe('the figure units on the wire (page-pass.mjs figureUnits)', () => {
   const unit = (text: string, page = 1) => ({ page, group: 'f0', text, font: 'ArialMT', size: 8, fill: 0, angle: 0, x: 10, y: 10, ux: 1, uy: 0, length: 40, ascent: 0.88, descent: -0.2, anchor: 'centre', form: true })
-  it('appends each drawn unit after the paper\'s own as a unit of kind figtext, its row on its page; a label of names keeps its source', () => {
+  it('appends each drawn unit after the paper\'s own as an ink unit of kind inkfigures, its row on its page; a label of names keeps its source', () => {
     const bundle: unknown[][] = [['para', 0, null, null, null, [[0, 'We evaluate on HellaSwag and report the loss.']]]]
     const rows = figureUnits({ units: [unit('Validation loss'), unit('HellaSwag', 2), unit('Hidden page', 3)] }, { bundle, undrawable: [3], M: 3, prose: 'We evaluate on HellaSwag and report the loss.' })
     expect(bundle.slice(1).map(u => [u[0], u[1], u[5]])).toEqual([[FIGURE_KIND, 0, [[0, 'Validation loss']]], [FIGURE_KIND, UNIT_FLAG_BITS.KEPT, [[0, 'HellaSwag']]]])

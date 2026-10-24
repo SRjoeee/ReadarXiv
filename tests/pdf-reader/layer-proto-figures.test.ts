@@ -44,10 +44,10 @@ function paper({ text = '\u4fe1\u53f7\u5f3a\u5ea6', src = 'Signal strength', sta
   }
   return {
     doc: withGroups({ numPages: 1, getPage: async () => page }),
-    geometry: { schema: 1, kinds: ['para', 'figtext'], left: { pages: [[0, 0, 300, 300]], units: [[0, 0, [[1, 20, 197.85, 120, 206.83]]]] } },
+    geometry: { schema: 1, kinds: ['para', 'inkfigures'], left: { pages: [[0, 0, 300, 300]], units: [[0, 0, [[1, 20, 197.85, 120, 206.83]]]] } },
     units: [
       { kind: 'para', src: 'Alpha beta gamma', state: 'whole', pieces: [{ t: 'text', tr: true, s: '\u6c49\u5b57' }] },
-      { kind: 'figtext', src, state, pieces: state === 'whole' ? [{ t: 'text', tr: true, s: text }] : undefined },
+      { kind: 'inkfigures', src, state, pieces: state === 'whole' ? [{ t: 'text', tr: true, s: text }] : undefined },
     ],
     tex: { index: indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(file)))), pieces: new Map() },
   }

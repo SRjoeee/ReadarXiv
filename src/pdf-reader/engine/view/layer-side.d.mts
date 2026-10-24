@@ -13,6 +13,8 @@ export interface LayerSideOptions {
   paper: { id: string; version: number }
   /** the target's language tag (the rows', the layer's, the SVG's lang) */
   target: string
+  /** the reader's toggles (rules/content-classes.mjs TOGGLE_DEFAULTS where not given): a class they do not show is the original's */
+  classes?: Partial<Record<'heads' | 'tables' | 'figures' | 'references' | 'names', boolean>> | null
   faceSources: FaceSources
   hyphUrl(lang: string): string
   rules?: FrozenRuleSet
@@ -32,8 +34,6 @@ export interface LayerSideOptions {
   keepPixels?: number
   /** how many pages past the near ones are laid ahead while the reader rests (AHEAD_PAGES by default; 0 lays none) */
   ahead?: number
-  /** whether the figures' text is shown translated at the open (the content class `figures`; the policy table's default, on) */
-  figures?: boolean
 }
 export interface LayerSide {
   /** what the host has heard, any number of times, from any source, in any order: merged, deduplicated by digest, fetched
@@ -54,11 +54,12 @@ export interface LayerSide {
    *  over the same composed document (no document opened or read again). The host takes the new target's rows as they come; a page
    *  laid keeps the target before until the new one's page commits or fails, or dropOthers */
   retarget(to: string): void
+  /** the reader's toggles changed: the door opened again over the same documents, parts and rows (nothing fetched or translated),
+   *  each laid page keeping its drawing until the new door's commits; the same toggles again, nothing */
+  setClasses(classes: Partial<Record<'heads' | 'tables' | 'figures' | 'references' | 'names', boolean>> | null): void
   /** every page that still shows another target's layer back to the original's page: the host's word that this target's rows
    *  will not come (its service failed, or the translation stopped short) */
   dropOthers(): void
-  /** the figures' text shown translated or not: the door opened again with every row held, nothing prepared or translated again */
-  setFigures(on: boolean): void
   /** the ids of the units whose rows the open door's page still waits for (the door's rowsFor: its closure's, Need(page)),
    *  for a host that translates as it shows to translate first; [] with no door, out of the paper, or once the page is ready */
   rowsFor(page: number): number[]

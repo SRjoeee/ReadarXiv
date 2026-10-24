@@ -1,7 +1,7 @@
 // format.mjs's types: the layer's wire format, BUNDLE 4 (the prepare pipeline's bundle 4 contract)
 import type { LayoutFile, LayoutPart } from '../layout/file.mjs'
 import type { ReadBundle } from './bundle.mjs'
-import type { BundleUnit } from './units.mjs'
+import type { BundleUnit, InkBundleUnit } from './units.mjs'
 import type { Draw, DrawSource } from './draw.mjs'
 
 export type { UnitWire } from './bundle.mjs'
@@ -30,6 +30,8 @@ export declare const RETRY_LIMITS: readonly ['wall', 'budget']
 export declare const baseRefusalRetryable: (refusal: unknown) => boolean
 /** a units chunk's own format (envelope `"format":"1"`): raised only by a change to the chunk's shape */
 export declare const UNITS_FORMAT: '1'
+export declare const INK_UNITS_FORMAT: '2'
+export declare const UNITS_FORMATS_READ: readonly string[]
 /** the reader's contract, `b<BUNDLE5>-j<PDFJS>`, named with the 5 beside bundle.mjs's CTAG whatever BUNDLE5's value */
 export declare const CTAG5: string
 /** the content's, `<CTAG5>-p<PIPELINE>-l<LAYOUT>-r<REMOVAL>`: a key's directory, the catalog's name */
@@ -111,7 +113,7 @@ export interface BaseCheck { pages: [ours: number, arxiv: number]; boxes: 'equal
 /** a base of ours held as a delta over arXiv's PDF (`kind` 'delta'): `bytes` and `sha256` the delta section's, `xref` its
  *  startxref in the composed document (arXiv's bytes first), the check's pages [M, N] (M < N only for a paper of several
  *  toplevel sources), the pages it writes again (`replaced`, ranges within our M) and its counts */
-export interface DeltaBase { source: 'ours'; kind: 'delta'; bytes: number; sha256: string; xref: number; pages: number; tree: string; check: BaseCheck; replaced: [from: number, to: number][]; stats: import('../layout/delta.mjs').DeltaStats & Partial<WrapStats>; unhidden?: [unit: number, why: Unhidden][]; labelKept?: number[] }
+export interface DeltaBase { source: 'ours'; kind: 'delta'; bytes: number; sha256: string; xref: number; pages: number; tree: string; check: BaseCheck; replaced: [from: number, to: number][]; stats: import('../layout/delta.mjs').DeltaStats & Partial<WrapStats>; unhidden?: [unit: number, why: Unhidden][]; labelKept?: number[]; ledger?: import("../layout/ledger.mjs").LedgerSummary }
 /** our pages wrapped by optional content (layout/wrap.mjs): every unit with a group `axt:u<id>` and in neither list is the
  *  reader's to hide where it draws it; `unhidden` the units whose ink stays the original's and why, `labelKept` those whose
  *  label is left the original's ink (only the body drawn) */
@@ -122,7 +124,7 @@ export type Unhidden = import('../layout/delta-wire.mjs').Unhidden
  *  (absent: a head of 7, or a producer that made no base of its own). `xref`: the PDF's last cross-reference section's
  *  offset */
 export type HeadBase =
-  | { source: 'ours'; kind?: undefined; bytes: number; sha256: string; xref: number; pages: number; tree: string; check: BaseCheck; stats?: WrapStats; unhidden?: [unit: number, why: Unhidden][]; labelKept?: number[] }
+  | { source: 'ours'; kind?: undefined; bytes: number; sha256: string; xref: number; pages: number; tree: string; check: BaseCheck; stats?: WrapStats; unhidden?: [unit: number, why: Unhidden][]; labelKept?: number[]; ledger?: import("../layout/ledger.mjs").LedgerSummary }
   | DeltaBase
   | { source: 'arxiv'; bytes: number; sha256: string; xref: number; why?: LayoutRefused }
 export interface ReadHead {
@@ -294,7 +296,9 @@ export interface Written {
 }
 /** the units as chunks, greedy by id; a unit past either cap alone throws BundleRefusal (`kind` 'units', and `id`), and the
  *  chunks past CHUNKS_MAX, UNITS_TOTAL_BYTES or UNITS_TOTAL_VALUES `units-too-large` (its `data` { what, bound, size }) */
-export declare function writeUnitChunks(o: { paper: { id: string; version: number }; units: readonly BundleUnit[] }): Promise<(Written & { from: number; to: number })[]>
+export declare function writeUnitChunks(o: { paper: { id: string; version: number }; units: readonly (BundleUnit | InkBundleUnit)[]; start?: number; before?: ChunkTotals | null }): Promise<(Written & { from: number; to: number })[]>
+export interface ChunkTotals { chunks: number; bytes: number; values: number }
+export declare function chunkTotals(chunks: readonly { bytes: Uint8Array; values: number }[]): ChunkTotals
 export declare function writeHead(o: {
   paper: { id: string; version: number; pages: number }
   /** the PDF the layer is drawn over; one given with no `source` is arXiv's (as every base was before BUNDLE 8) */

@@ -189,9 +189,9 @@ export interface OpenLayerOptions {
   /** PDF.js's operator codes (the host's PDF.js): a page read live reads its characters' fills as its draw tells them (run.mjs
    *  openProto `OPS`); none, such a page tells no fill */
   OPS?: Record<string, number> | null
-  /** whether the figures' text is drawn translated (the content class `figures`, the parts' figure units; the policy table's
-   *  default, on): off, every figure unit is left the original's, its row taken all the same */
-  figures?: boolean
+  /** the reader's toggles (rules/content-classes.mjs TOGGLE_DEFAULTS where not given): a unit whose class they do not show is the
+   *  original's; a change of them is a new open, as a change of language is */
+  classes?: Partial<Record<'heads' | 'tables' | 'figures' | 'references' | 'names', boolean>> | null
 }
 /** the draws of left parts the door holds for the run at most (their left parts' bytes) */
 export declare const DRAWS_HELD: number
@@ -207,6 +207,8 @@ export interface OpenBundleLayerOptions {
   onRetired?: (doc: LayerDocument) => void
   /** PDF.js's operator codes, as OpenLayerOptions' */
   OPS?: Record<string, number> | null
+  /** the reader's toggles, as OpenLayerOptions' */
+  classes?: Partial<Record<'heads' | 'tables' | 'figures' | 'references' | 'names', boolean>> | null
 }
 /** the layer of one paper and target, as either reader shows it: v0 opened over the composed document with the paper's left,
  *  layout and add-on, the target's caption names on every float (L7), the served faces and hyphenation, at scale 2.5 and dpr 1

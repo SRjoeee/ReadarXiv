@@ -95,11 +95,13 @@ export { LayoutRefusal } from './json.mjs'
  *  against production after it) a placeholder at a unit's head is found by the text TeX sets for it, as the probe now reads
  *  it (marks.mjs readInkTexts, MARKS_SCHEMA 10: ASCII's punctuation, "1,024"; inline code at the head asked about too,
  *  "max_tokens"; a formula's glyph spelled by no character one glyph, INK_ANY, $d'$), and a front heading (ICML's
- *  \\icmltitle) is marked as any heading in the layout compile, its title's ink its own (the file's schema is 5 still); 21 (the
- *  content class `figures`): the layout compile sets a point inside each pgf picture's own box (marks.mjs POINTS_TEX, `zs` and
- *  `ze`), so that a TikZ or pgfplots picture's text is told apart in our final pass (layout/figure-text.mjs); nothing outside the
- *  picture's box moves, and no reader of the marks sees the points (ink.mjs keeps them apart, `pictures`) (the file's schema is 5
- *  still) */
+ *  \\icmltitle) is marked as any heading in the layout compile, its title's ink its own (the file's schema is 5 still); 21
+ *  (docs/route/orphan-text.md, stage 2): the ink units' rows, text no source unit owns laid from our own glyphs (layout/ink-units.mjs,
+ *  pipeline/ink-pass.mjs), of the kinds UNIT_KINDS names after the source units'; and in the same unreleased 21 (the content
+ *  class `figures`, stage 5) the layout compile sets a point inside each pgf picture's own box (marks.mjs POINTS_TEX, `zs` and
+ *  `ze`), so that a TikZ or pgfplots picture's text is told apart in our final pass (layout/figure-text.mjs): nothing outside
+ *  the picture's box moves, and no reader of the marks sees the points (ink.mjs keeps them apart, `pictures`) (the file's
+ *  schema is 5 still) */
 export const LAYOUT = '21'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
@@ -115,7 +117,9 @@ export const LAYOUT_VALUES = 1_000_000
 /** the deepest the file nests: its object, then lines, frames or erase (the arrays of entries), then an entry [id, rows],
  *  then its rows (a flat array of numbers): four brackets, and no other field of the schema reaches past three */
 export const LAYOUT_DEPTH = 4
-export const UNIT_KINDS = Object.freeze(['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author'])
+/** a unit's kinds, by index: the source units', then the ink units' (layout/ink-units.mjs INK_KIND: a new kind takes the next index,
+ *  so that a file of before reads as it was) */
+export const UNIT_KINDS = Object.freeze(['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author', 'inkheads', 'inkcontents', 'inknotes', 'inkorphan', 'inknames'])
 export const PH_KINDS = Object.freeze(['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other'])
 export const LABEL_KINDS = Object.freeze(['number', 'item', 'caption', 'footnote'])
 /** a unit's flags. TITLE: the paper's title; FRONT: its front matter; CENTRED: its lines set centred, as TeX set its

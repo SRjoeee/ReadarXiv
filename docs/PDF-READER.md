@@ -2537,8 +2537,27 @@ after its last, on one baseline, as `folioOf` reads a folio), whether it is insi
 `form` with `indices`), and its face's family (math, typewriter). No layout file and no version changes: nothing on the wire,
 nothing in the compile. What no class explains is an orphan: the sweep's invariant (o) is no orphan letters (`orphanRows`, rows
 in the sweep's shape), run in the lab by `lab/pdf/spikes/ledger.mjs` (record `lab/pdf/records/ledger.md`). The class `figures`
-is built (§19.12); the ink units that translate the other planned classes are the note's later stages. A glyph a figure unit owns
-(`f<k>`) is the ledger's `figures`.
+is built (§19.12): a glyph a figure unit owns (`f<k>`) is the ledger's `figures`, cut before the ink units, so that none of them
+takes a figure's text.
+
+**The ink units (stages 2 and 3, BUNDLE5 `'10'`, LAYOUT `'21'`, REMOVAL `'11'`).** Text no source unit owns — the running heads and
+feet, the contents and the lists, a note with no unit, prose the front end did not cut — is made units of our own glyphs in the
+wrap (`layout/ink-units.mjs`), from the ledger's lines: a head's line one, a contents entry or a block one paragraph of TeX's (the
+layout compile's point `q<n>` at LaTeX's para/begin, inside the paragraph's indentation box so that no paragraph's list
+changes, which pageInk keeps apart from the marks' points as `paras`; a paragraph with no indentation carries none and reads
+as the one before), each of its
+class's kind (`inkheads`, `inkcontents`, `inknotes`, `inkorphan`, after the source kinds in UNIT_KINDS; `inknames` a block
+most of whose letters are an author unit's words, of the names toggle as that unit is), its numbering, leaders
+and page number left the original's ink, its math and typewriter runs (and a web address in any face) kept placeholders. One
+whose letters and placeholders are a source unit's (a heading first), else an earlier ink unit's (a running head), echoes it: its pieces that unit's, its row that unit's row under its own id, never translated
+itself (`rows.mjs` `echoRows`, `layerIds`). Its glyphs are claimed under its own groups, `u<id>` and `u<id>.p`, so the reader
+hides it as any unit; one the wrap could not hide alone (its page not wrapped, its placeholder's group merged: `ink.off`), or on a
+page not drawable, keeps its id (which names its groups and which an echo names) and is laid nowhere. The page pass carries them (`pipeline/ink-pass.mjs`, from the host's `ours.ink`): in the bundle's units
+after the source units', in a chunk of their own (`INK_UNITS_FORMAT` `'2'`, a seventh element, the echo; the source units' chunks
+byte for byte as before), on the left by arXiv's tokens on their lines, in the layout by the wrap's rows. The reader's toggles
+are an option of the layer's open (`classes`, `TOGGLE_DEFAULTS`); a change of them is an open again over the same documents, parts
+and rows (`layer-side.mjs` `setClasses`), each laid page kept until the new door's commits: 81 to 384 ms to the two pages in view
+over 14 page pairs (the layer gate's jump, `--perf`). The web's half is `docs/route/orphan-text.md` §8.
 
 ### 19.11 Structural names: a head's, a reference's, in the target's words
 
@@ -2629,15 +2648,18 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   operators, ours taken out, the form's own) and the document's graph (`graphWhy`: each form's dict and resources ours but its
   stream and `/Properties`). `wrapFinal` returns `figures` { units (the drawn ones: page, group, text, font, size, fill, angle,
   x, y, ux, uy, length, ascent, descent, anchor, form), stats (units, drawn, each why, letters, forms) }; with `figures: false`
-  none (the lab's A/B). REMOVAL 12.
-- **On the wire** (BUNDLE 10, PIPELINE 29): each drawn figure unit a unit of kind `figtext` after the paper's own (`page-pass.mjs
+  none (the lab's A/B). REMOVAL 11 (shared, unreleased, with the ink units').
+- **On the wire** (BUNDLE5 10, shared with the ink units'): each drawn figure unit an ink unit of kind `inkfigures` (its class
+  `figures`), after the source units' and the other ink units', in their chunk (`INK_UNITS_FORMAT`, its echo null; `page-pass.mjs
   figureUnits`: its one text piece our glyphs' text, KEPT where it is only names, as a table's cell of names is, mt.mjs isName
-  against the paper's running text; none over arXiv's base nor on a page the line check does not draw), so that
+  against the paper's running text; none over arXiv's base, on a page the line check does not draw, or where the chunk would
+  pass a head's bounds: none of the paper's then, `afterFit`), so that
   it is translated as any unit is (`toTranslate` takes it; no sentence cuts, `NOT_RUNNING`); and its place a row of the part of
   its page (`figures`, `layer-proto/figure-rows.mjs`: [id, group, page, x, y, ux, uy, length, size, ascent, descent, anchor,
-  fill, font], checked by `partShape`: ids rising, each a unit of kind figtext, on the part's pages, within their views, none
-  where the part has no layout). A part of 7's holds none. No unit of 28's moves: the new units come after every one of them
-  (`PIPELINE_CARRIES` 28). The host passes `ours.wrap.figures` (the web's `ourWrap` adds `figures: r.figures`).
+  fill, font], checked by `partShape`: ids rising, each a unit of kind inkfigures, on the part's pages, within their views,
+  none where the part has no layout; the key there only where the part has one, so that a part of none is 10's as the ink units
+  write it, and none in a part of 7's or 9's). The source units and their chunks are as before, so PIPELINE stays 28. The host
+  passes `ours.wrap.figures` (the web's `ourWrap` adds `figures: r.figures`).
 - **Drawn** (`run.mjs paintFigures`, once a page's figures' rows are in: the page waits for them as for its units', `rowsFor`
   ranks them with its page): its translation's text in a face of its font's family, weight and slant, in its fill, on its run's
   baseline, turned by its angle (`layer2.mjs svgOfFigure`), by the fit rule (`layer-proto/figure-fit.mjs`): at its size, shrunk
@@ -2645,11 +2667,13 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   OFF in render A. Left the original's: no row (`untranslated`), a translation that says its source again (`same`), no group in
   the document (`unhidden`), a face's refusal, `unfit`; a label of names (`kept`). The run's `figures` lists each. A page is
   ready once its figures are painted, not while a face they wait for loads.
-- **The switch** is the reader's figure switch (the extension's `image.enabled`, the reading options' image switch, §9.1, which the HTML
-  page's figure text shares; the policy table's default, `TOGGLE_DEFAULTS.figures`, on): `openLayer({ figures })`, the layer
-  side's `figures` option and `setFigures(on)`, which opens the door again over the same composed document with every row held, so
-  that nothing is prepared, fetched or translated again (a switch turned while a door opens opens it again once that door is in);
-  the session follows the switch as it lands, from here or elsewhere. A form one page wrote again and another paints: the other
+- **The switch** is the toggle `figures` of the reader's toggles (§19.10: `openLayer({ classes })`, the layer side's `classes`
+  and `setClasses`, which opens the door again over the same documents with every row held, so that nothing is prepared, fetched
+  or translated again): a figure unit's row is taken, and its figure drawn, where it is on; off, it is the original's, as any
+  unit of a class not shown. Its default, `TOGGLE_DEFAULTS.figures`, is off until the web's settings show it (the coordinator's
+  word of 2026-10-25, so that the gates, which open with the defaults, need no new translation). The extension's reader passes
+  its figure switch (`image.enabled`, the reading options' image switch, §9.1, which the HTML page's figure text shares) as
+  `classes.figures`, and follows the switch as it lands, from here or elsewhere. A form one page wrote again and another paints: the other
   page's figures in it are `shared`, the original's, and its render shows the form's groups ON, since each render sets the
   visibility of its own page's drawn groups alone (visibility.mjs).
 - **Measured** (2026-10-25, `lab/pdf/spikes/figure-gate.mjs`, record `lab/pdf/records/figure-gate.md`): on the gate pack's 7

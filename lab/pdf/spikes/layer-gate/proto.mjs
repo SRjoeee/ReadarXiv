@@ -505,7 +505,7 @@ window.gate = {
    * not hide and the cell rules, wrap.json). Over an unwrapped page the document holds no group of ours, and every unit is the
    * original's
    */
-  async open({ name, target, ref, units: which, pages, place, dump, order, faces, tex, names = null, rules = null, perf = false, parts: cut = null, slices = null }) {
+  async open({ name, target, ref, units: which, pages, place, dump, order, faces, tex, names = null, rules = null, perf = false, parts: cut = null, slices = null, sources = null }) {
     let V
     try { V = await import('/engine/layer-proto/run.mjs') } catch (e) { return { ready: false, why: `layer-proto/run.mjs: ${String(e?.message ?? e).slice(0, 200)}` } }
     const base = `/fixtures/${name}/`
@@ -517,6 +517,11 @@ window.gate = {
       wrap = await json(`${base}wrap.json`)
     } catch (e) { return { ready: false, why: String(e?.message ?? e).slice(0, 200) } }
     const doc = await pdfjs.getDocument({ data, ...PDF_ASSETS, ...V.PDF_OPTIONS }).promise
+    // (each unit's source pieces, where the gate has the paper's source and the unit is the bundle's (`sources`: layer-gate.mjs
+    // sourcesOf, by the unit's hash), beside its translated pieces as rows.mjs unitOf gives them to the reader's run: what its
+    // reading of a label asks, whether the unit's source begins with text, is the source's, as the door's is)
+    const withSource = (u, id) => { if (u && Array.isArray(sources?.[id])) Object.defineProperty(u, 'source', { value: sources[id], enumerable: false, configurable: true }); return u }
+    unitsFile.units.forEach(withSource)
     // the layout file given (the engine's own maker's, or the fixture's) read by the engine's own reader, and the units
     // file's pieces by unit, beside v0's own inputs: the layer draws only from it
     let texIn = null
@@ -530,7 +535,7 @@ window.gate = {
     let parts = null, tableGroups = null
     if (cut) {
       const tr = new Map(fixtureUnits.units.map(u => [u.id, u.pieces])), rowsK = []
-      unitsFile.units.forEach((u, id) => { if (u) rowsK.push([id, withK(u, tr.get(id))]) })
+      unitsFile.units.forEach((u, id) => { if (u) rowsK.push([id, withSource(withK(u, tr.get(id)), id)]) })
       tableGroups = new Map(rowsK.filter(([, u]) => u.group).map(([id, u]) => [id, u.group]))
       parts = cut === 'delta' ? await deltaParts(rowsK) : Array.from({ length: Math.ceil(rowsK.length / cut) }, (_, i) => rowsK.slice(cut * i, cut * i + cut))
       if (texIn) texIn.pieces = new Map()

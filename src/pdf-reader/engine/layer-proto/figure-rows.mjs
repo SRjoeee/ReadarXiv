@@ -1,5 +1,5 @@
 // The figure units a part carries (BUNDLE 10, the content class `figures`: docs/route/orphan-text.md stage 5): each a figure's
-// ink unit (layout/figure-text.mjs), a unit of the paper's of kind `figtext` whose text the units chunks hold and the reader
+// ink unit (layout/figure-text.mjs), a unit of the paper's of kind `inkfigures` whose text the ink units' chunk holds and the reader
 // translates as any unit's, its place on its page here: its run's first glyph's origin, its direction, its box's length along it,
 // its size and its band, its anchor, its fill and its font's name. A part carries those of its pages; a reader checks each row
 // before it is used, as every part's field is (format.mjs partShape), and refuses the part for a row of no shape.

@@ -104,7 +104,7 @@ export async function cutSample({ pdf, bundle, wrapped, wrap }, { base: kind = '
   }
   // (each left part carries its page's draw, a page with no tokens its draw alone (C1.5), as the page pass ships them under a head
   // of ours; the head says they come)
-  const cut = await cutBundle(whole, { draw: true, figures, leftPages: p => { const l = side.leftPages(p), d = pages[p - 1].draw; return d ? { ...(l ?? {}), draw: d } : l } })
+  const cut = await cutBundle(whole, { draw: true, figures, ...(allUnits.length > raw.units.length ? { inkFrom: raw.units.length } : {}), leftPages: p => { const l = side.leftPages(p), d = pages[p - 1].draw; return d ? { ...(l ?? {}), draw: d } : l } })
   const objects = new Map()
   for (const w of [...cut.units, cut.head, ...cut.parts, ...cut.left]) objects.set(w.sha256, w.bytes)
   // the index and the chain as the service reads them: the cut is held to its own readers

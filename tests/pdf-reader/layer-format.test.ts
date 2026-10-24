@@ -381,7 +381,7 @@ describe('a reader\'s envelope', () => {
     describe(kind, () => {
       const tag = kind === 'units' ? 'format' : 'bundle'
       it('refuses another format, another kind, and a key of the schema missing or extra', async () => {
-        expect(await refusal(read(kind, o => { o[tag] = kind === 'units' ? '2' : '3' }))).toMatchObject({ kind, path: tag })
+        expect(await refusal(read(kind, o => { o[tag] = '3' }))).toMatchObject({ kind, path: tag })
         expect(await refusal(read(kind, o => { o[tag] = 4 }))).toMatchObject({ path: tag })
         expect(await refusal(read(kind, o => { o.kind = kind === 'part' ? 'head' : 'part' }))).toMatchObject({ path: 'kind' })
         expect(await refusal(read(kind, o => { delete o.kind }))).toMatchObject({ path: 'kind' })
@@ -1396,9 +1396,10 @@ describe('a part against the chain', () => {
     await refused(1, p => { (p as Any).figures = [row({ 11: 3 })] }, 'figures[0][11]')
     await refused(1, p => { (p as Any).figures = [row().slice(1)] }, 'figures[0]')
     await refused(1, p => { (p as Any).figures = {} }, 'figures')
-    await refused(1, p => { delete (p as Any).figures }, 'figures')
+    // (the key there only where the part has a figure unit: a part of none is written as one before figures)
+    await refused(1, p => { (p as Any).figures = [] }, 'figures')
     await refused(2, p => { (p as Any).layout = null; (p as Any).rules = null; (p as Any).fileOnly = []; (p as Any).figures = [row({ 2: 4 })] }, 'figures')
-    expect(await partWith(1, p => { (p as Any).figures = [] })).toMatchObject({ figures: [] })
+    expect(await partWith(1, p => { delete (p as Any).figures })).toMatchObject({ figures: [] })
   })
 
   it('a layout with no cell rules is a part (`rules: null`), as the writer writes one given none or an empty table', async () => {

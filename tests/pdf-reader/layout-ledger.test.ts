@@ -195,6 +195,14 @@ describe('ledgerOf', () => {
     expect(classAt(l, 1, at(pg, 'n'))).toBe('orphan')
   })
 
+  it("gives each line its paragraph, TeX's (the page's paragraph points), one going on from the page before", () => {
+    const p1 = page({ point: 'bs1' }, { glyphs: run('First words here', 100, 700) }, { glyphs: run('more of them', 100, 688) }, { point: 'be1' })
+    p1.page.paras = [{ name: 'q4', glyph: 0, box: 0 }, { name: 'q5', glyph: p1.page.glyphs.length - 3, box: 0 }]
+    const p2 = page({ point: 'bs2' }, { glyphs: run('going on', 100, 700) }, { point: 'be2' })
+    const l = ledger([p1, p2])
+    expect(l.lines.map(x => [x.page, x.para])).toEqual([[1, 4], [1, 4], [2, 5]])
+  })
+
   it('lists ORPHAN_LINES_MAX orphan lines at most, and counts them all', () => {
     const parts: Part[] = [{ point: 'bs1' }]
     for (let i = 0; i < ORPHAN_LINES_MAX + 5; i++) parts.push({ glyphs: run('word', 100, 700 - 12 * i) })
@@ -207,7 +215,7 @@ describe('ledgerOf', () => {
   it('summarizes as integers and gives the sweep\'s rows', () => {
     const pg = page({ point: 'bs1' }, { glyphs: run('Body', 100, 600), owner: 'u0' }, { glyphs: run('Lost words', 100, 580) }, { point: 'be1' })
     const l = ledger([pg], [{ kind: 'para' }])
-    expect(ledgerSummary(l)).toEqual({ classes: { body: [4, 4], orphan: [9, 9] }, letters: 13, orphanLetters: 9 })
+    expect(ledgerSummary(l)).toEqual({ classes: ['body', 4, 4, 'orphan', 9, 9], letters: 13, orphanLetters: 9, orphans: [1, 9, 'Lost words'] })
     expect(orphanRows(l, { paper: '2610.00001v1' })).toEqual([{ inv: 'o', sev: 'violation', paper: '2610.00001v1', page: 1, unit: null, what: 'orphan text', text: 'Lost words', detail: { letters: 9, x0: 100, x1: 150, y: 580 } }])
   })
 })
