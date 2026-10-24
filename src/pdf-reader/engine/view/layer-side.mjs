@@ -492,9 +492,11 @@ export function createLayerSide(view, o) {
   }
   /** a page whose layer is not coming now: its place back to its pre-layer content where it holds the layer's */
   function shownOriginal(n) {
-    // (a page that failed is the original's: no paragraph of it is coming)
+    // (a page that failed, or that ended with nothing of the layer to draw, is the original's: no paragraph of it is coming, and
+    // no mark comes back to it this attempt, whatever rows another page takes; again() lets it be marked once more)
     unmark(n)
     const P = rec(n)
+    P.originalShown = true
     if (P.content && (P.content.gen !== gen || !P.content.wrap)) unlay(n)
     // the right's shapes there the original's again, as its place is
     if (right?.hide(n)) startsFor([...rows.keys()])
@@ -878,7 +880,7 @@ export function createLayerSide(view, o) {
     const P = pages.get(n)
     // (none on a page that stays the original's: its parts hold no layout to lay, originalPageOf; nor once the host has said this
     // attempt's rows will not come, dropOthers, until another attempt begins)
-    if (disposed || marksOff || state === 'refused' || P?.content?.wrap || P?.failed || originalPageOf(n)) return unmark(n)
+    if (disposed || marksOff || state === 'refused' || P?.content?.wrap || P?.failed || P?.originalShown || originalPageOf(n)) return unmark(n)
     const place = V.places.page(n)
     const units = [], view = []
     for (const part of feed.state().parts) {
@@ -1315,6 +1317,7 @@ export function createLayerSide(view, o) {
     again() {
       if (disposed || state === 'refused') return
       marksOff = false
+      for (const P of pages.values()) P.originalShown = false
       rows.clear()
       rowsEnded = false
       stopAhead()
