@@ -19,6 +19,7 @@ import { createFollower } from './sync.mjs'
 import { createPlaces } from './places.mjs'
 import { createLighting } from './lighting.mjs'
 import { linkLayer } from './links.mjs'
+import { textLayer } from './text-layer.mjs'
 
 const DISPLAYS = ['original', 'bilingual', 'translation']
 /** arXiv's margin stamp, which its dvips and Ghostscript PDFs carry as their Info Title: `arXiv:1007.0072v1  [quant-ph]  1 Jul 2010` */
@@ -902,6 +903,7 @@ export function createReaderView(host) {
     },
     emit,
     links: (n, records) => linkLayer(records, { viewport: places.views().get(n)?.viewport ?? null, follow, open: url => host.links.openExternal(url), words: host.words }),
+    text: (n, data, lang) => textLayer(data, { viewport: places.views().get(n)?.viewport ?? null, Builder: V?.TextLayerBuilder ?? null, lang }),
     light: (id, s = -1) => lighting.light(id == null ? null : { id, s }),
   })
   showMode()

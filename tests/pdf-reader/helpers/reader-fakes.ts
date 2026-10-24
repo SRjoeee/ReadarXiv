@@ -382,6 +382,44 @@ export class FakePDFPageView {
 
 /** the kit as the host hands it: the fakes, and the getDocument options the view must pass on */
 export const ASSETS = Object.freeze({ cMapUrl: 'cmaps/', cMapPacked: true, standardFontDataUrl: 'fonts/', wasmUrl: 'wasm/' })
+/** PDF.js's TextLayerBuilder as the layer's text uses it (pdf_viewer's): a `div.textLayer`, rendered from its page's text content
+ *  stream into one span an item (its text as a text node, its direction) and the end of content, its spans told to its highlighter;
+ *  `cancel()` empties it. Every builder made and every one cancelled is kept */
+export class FakeTextLayerBuilder {
+  static made: FakeTextLayerBuilder[] = []
+  static cancelled: FakeTextLayerBuilder[] = []
+  div = document.createElement('div')
+  viewport: unknown = null
+  constructor(readonly o: { pdfPage: { streamTextContent(): ReadableStream }; highlighter?: { setTextMapping(divs: HTMLElement[], strs: string[]): void } }) {
+    this.div.className = 'textLayer'
+    this.div.tabIndex = 0
+    FakeTextLayerBuilder.made.push(this)
+  }
+  async render({ viewport }: { viewport: unknown }) {
+    this.viewport = viewport
+    const reader = this.o.pdfPage.streamTextContent().getReader()
+    const divs: HTMLElement[] = [], strs: string[] = []
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      for (const it of (value as { items: { str: string; dir: string; transform: number[]; hasEOL: boolean }[] }).items) {
+        const span = document.createElement('span')
+        span.textContent = it.str
+        span.dir = it.dir
+        span.dataset.at = it.transform.join(',')
+        divs.push(span)
+        strs.push(it.str)
+        this.div.append(span)
+        if (it.hasEOL) this.div.append(document.createElement('br'))
+      }
+    }
+    this.o.highlighter?.setTextMapping(divs, strs)
+    const end = document.createElement('div')
+    end.className = 'endOfContent'
+    this.div.append(end)
+  }
+  cancel() { FakeTextLayerBuilder.cancelled.push(this); this.div.replaceChildren() }
+}
 export function fakeKit() {
   return {
     lib: { AnnotationMode: { DISABLE: 0, ENABLE: 1, ENABLE_FORMS: 2 } },
@@ -395,6 +433,8 @@ export function resetFakes() {
   FakePDFViewer.made = []
   FakePDFPageView.made = []
   FakePDFPageView.log = []
+  FakeTextLayerBuilder.made = []
+  FakeTextLayerBuilder.cancelled = []
 }
 
 // ---------------------------------------------------------------- the observers

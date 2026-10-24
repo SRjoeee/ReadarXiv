@@ -59,6 +59,7 @@ import * as L2 from './layer2.mjs'
 import { unitHiding } from './hide.mjs'
 import { cropSourceOff, labelGroup, nameGroup, textGroup, visibilityOf } from './visibility.mjs'
 import * as LK from './links.mjs'
+import * as TL from './textlayer.mjs'
 import { locatedWhole, shortSkipsOf, texParts, texRects } from './tex.mjs'
 import { trPiecesOf } from '../layer/pieces.mjs'
 import { addUnitWords, copyWords, freezeWords, newWords, pieceOffsets, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
@@ -818,7 +819,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  words (the page's word table, built as each unit is painted in `wordsOpen` and frozen into `words` once the page is final:
    *  words.mjs) and links (links.mjs: frozen into `links` once the page is final, null before; `linksOpen` holds the moved
    *  records the units' matches make as they are made, each over the unit's drawing on this page: linkUnit), its fill numbers
-   *  (adaptiveFill's pass) */
+   *  (adaptiveFill's pass), its text items kept compact (`items`, textlayer.mjs itemsOf: read as the page is drawn) and what each
+   *  drawn thing adds to its text layer (`text`: the operations it appended and its segments, textRecord) */
   const makeRow = i => {
     const view = geometry.left.pages[i - 1] ?? [0, 0, 612, 792]
     const w = (view[2] - view[0]) * scale, h = (view[3] - view[1]) * scale
@@ -826,7 +828,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (no pixels until the page is drawn, drawPageOn sizes them: a page never drawn holds its row alone, not a canvas's default
     // 300 x 150, which a jump past a paper's pages kept on every page it did not draw)
     for (const c of [left, right]) if (c) { c.width = 0; c.height = 0; c.style.width = `${w}px`; c.style.height = `${h}px` }
-    rows[i - 1] = { page: i, left, right, w, h, base: false, ops: [], off: new Set(), markup: [], words: null, wordsOpen: null, links: null, linksOpen: null, fill: null }
+    rows[i - 1] = { page: i, left, right, w, h, base: false, ops: [], off: new Set(), markup: [], words: null, wordsOpen: null, links: null, linksOpen: null, fill: null, items: null, text: null }
   }
   if (!partsMode) for (let i = 1; i <= N; i++) makeRow(i)
   const sheet = document.head.appendChild(document.createElement('style'))
@@ -1283,6 +1285,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  page itself, never whether the host has let it go (its row's `base`): a view cuts it from the page as PDF.js draws it
    *  then (drawCopy), and v0's own copy keeps the page's canvases while a unit on it is still to be painted (release) */
   const hasSource = j => j >= 1 && j <= N && !failedPages.has(j) && views[j - 1] !== undefined
+  /** a drawn thing's part of its page's text layer (textlayer.mjs): the range of the page's operations it appended (whose erasures
+   *  are its own) and its drawn lines as segments, kept with the page's record. A page's are final once it is (textOf) */
+  const textRecord = (r, from, key, unit, segs) => {
+    const T = (r.text ??= { owners: [], drawn: [] })
+    if (r.ops.length > from) T.owners.push([from, r.ops.length, key])
+    T.drawn.push(unit === undefined ? { key, segs } : { key, unit, segs })
+  }
   const paint = (p, pg) => withWork(pg, () => paintUnit(p, pg))
   const paintUnit = (p, pg) => {
     // (its links matched and placed at its first paint, its layout final on every page: links.mjs; the drawing reads none of it)
@@ -1298,6 +1307,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     hidStats.units++
     hidStats.fromB += h.fromB.length
     hidStats.pastedKeep += h.fromC.length
+    const opsFrom = r.ops.length
     for (const o of ops) { r.ops.push(o); if (o.op === 'crop') hidStats.crops++ }
     const tCompose = performance.now()
     const tSvg = performance.now()
@@ -1306,6 +1316,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (the page's word table, beside the markup: the unit's words in its text's order, its kept lines where the text passes them,
     // each token's place in its translation; a page whose table is frozen is final)
     if (!r.words) addUnitWords(r.wordsOpen ??= newWords(), p.layout, pg, p.id, (at, end) => (p.wordOf ??= wordIndexer(plainOfPieces(p.unit.pieces)))(at, end), L2.keptLines(p.rects, p.prep, pg, p.blocks), crop => hasSource(crop.page), p.pieceAt ??= pieceOffsets(p.unit.pieces))
+    // (and its text layer's: the operations it appended, and its drawn lines as segments, read by textOf once the page is final)
+    textRecord(r, opsFrom, `u${p.id}`, p.id, TL.segsOfUnit(p.layout, pg, crop => hasSource(crop.page)))
     workOf(pg).ops += ops.length
     const T = timesOf(pg)
     T.ops += tCompose - tOps
@@ -1380,9 +1392,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       r.off.add(nameGroup(nm.occurrence))
       const [ax, ay] = px(nm.x0, nm.top), [bx, by] = px(nm.x1, nm.bottom)
       const hid = [Math.min(ax, bx), Math.min(ay, by), Math.abs(bx - ax), Math.abs(by - ay)]
+      const opsFrom = r.ops.length
       r.ops.push({ op: 'hidden', rects: [hid] })
       audit?.push({ what: 'erase', unit: -1, name: nm.occurrence, page: pg, box: [hid[0], hid[1], hid[0] + hid[2], hid[1] + hid[3]] })
       r.markup.push(L2.svgOfName({ occurrence: nm.occurrence, text, x, baseline: nm.baseline, size, face: drawn.face, runs: drawn.runs, color: st.color ?? null }, cssOf(pg), scale))
+      textRecord(r, opsFrom, `n${nm.occurrence}`, undefined, [TL.nameSeg(text, x, w * k, nm.baseline, size)])
       Object.assign(rec, { drawn: true, text, size: r1(size), x: r1(x), w: r1(w * k), chars: mine.map(c => ({ ...c, page: pg })) })
     }
   }
@@ -2538,6 +2552,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       await Promise.all([...byFace.values()].map(e => FS.ready(e.face, e.text)))
     }
     chars2[i - 1] = L2.pageChars2(tc, fontOf, fonts.mapOf, fills)
+    // (its text items kept compact with its record, for its text layer: textOf)
+    r.items = TL.itemsOf(tc)
     // (and its characters by baseline, which every unit's edges read, made once the page is: edgesOf)
     rowsByPage[i] = rowsOf(chars2[i - 1])
     workOf(i).edges += chars2[i - 1].length
@@ -3040,6 +3056,18 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (!readyOf(pg)) throw new RangeError(`linksOf: page ${pg} is not final`)
       freezeLinksOf(pg)
       return LK.copyLinks(r.links)
+    },
+    /**
+     * Page `pg`'s text layer (textlayer.mjs; docs/PDF-READER.md §11.11): the composed page's text items the drawing keeps, those
+     * it moves with a crop, and each drawn line of the translation, in reading order, plain data made anew on every ask (none of
+     * its objects the run's). Only a page that is final (ready) has one; a RangeError for another. Read from the page's record
+     * alone (its text items, its operations and its drawn things' segments): no layout, ink or PDF.js call
+     */
+    textOf(pg) {
+      const r = rows[pg - 1]
+      if (!r) throw new RangeError(`textOf: page ${pg} has no row`)
+      if (!readyOf(pg)) throw new RangeError(`textOf: page ${pg} is not final`)
+      return TL.textLayerOf({ n: pg, items: r.items ?? TL.NO_ITEMS, view: r.view ?? [0, 0, r.w / scale, r.h / scale] }, { ops: r.ops, devOf: pxOf(pg), owners: r.text?.owners ?? [] }, r.text?.drawn ?? [], { sourceOf: j => rows[j - 1]?.items ?? null })
     },
     /** the counts of the links read and frozen so far (LayerStats.links), a copy */
     get linkStats() { return { ...linkStats, dropped: { ...linkStats.dropped } } },
