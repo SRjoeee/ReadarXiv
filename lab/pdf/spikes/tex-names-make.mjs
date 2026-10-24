@@ -182,7 +182,7 @@ for (const [to, t] of Object.entries(TARGETS)) {
 }
 // ---- what no package names in some target: each counter type's English \Crefname, singular (cleveref's english, outside its
 // branches), and the conjunctions, where a target the readers offer has no word for it. A paper that generates references sends
-// these to the translator once, as units of their own (source/paper-names.mjs; PDF-READER §19.12). In a target whose names do
+// these to the translator once, as units of their own (source/paper-names.mjs; PDF-READER §19.13). In a target whose names do
 // not inflect (CJK), babel's names of a float and an appendix (the layout rules' labels, every target's) count as its words
 const UNINFLECTED = new Set(['zh', 'zh-TW', 'ja', 'ko']), BABEL_TYPES = new Set(['figure', 'table', 'appendix'])
 const singular = {}

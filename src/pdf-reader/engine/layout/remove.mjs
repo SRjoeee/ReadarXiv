@@ -197,6 +197,8 @@ export function readAtMost(stream, limit) {
 const PAINT = new Set(['S', 's', 'f', 'F', 'f*', 'B', 'B*', 'b', 'b*', 'n'])
 /** a form nested deeper than this is not walked: the page is refused */
 const FORM_DEPTH = 12
+/** a glyph name that names a code, not a character (a generator's own numbering): its Unicode is not read from it */
+const CODE_NAME = /^(?:g|G|glyph|cid|index|c|C)\d+$/
 /** the operators a page's walk may visit, its forms' as often as they are painted (openRemover's `walkMax`), of those it
  *  keeps (WALK_OPS): past it the page is refused. Forms that paint each other ten times over, eight deep, are 10^8
  *  paints; the heaviest of the 2,793 pages of the 124 papers in data/corpus visits 66,344 (2608.27728 page 15) */
@@ -342,8 +344,28 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
         info.width = code => { const w = code >= first && code < first + ws.length ? ws[code - first] : missing; return info.type3 ? w * fm[0] + fm[4] : w / 1000 }
       }
     }
+    info.unicode = unicodeOf(sub, dict)
     fontCache.set(key, info)
     return info
+  }
+  /**
+   * Whether a font's codes have a Unicode a reader can trust (layout/figure-text.mjs: a figure's text in a font with none is
+   * left the original's, counted): a /ToUnicode; else a simple font whose encoding names its glyphs (a standard encoding, a
+   * /Differences whose every name is a glyph's name, not a code's — `g12`, `cid12`, `glyph12`, `index12`, `c12` —, or a Type 1
+   * font's own encoding, which names its glyphs); else a composite font of a CMap that is no identity. A symbolic TrueType or a
+   * Type 3 font with neither, and an Identity CMap with no /ToUnicode, give a code, not a character
+   */
+  function unicodeOf(sub, dict) {
+    if (get(dict, 'ToUnicode') instanceof PDFStream) return true
+    const en = get(dict, 'Encoding')
+    if (sub === 'Type0') { const n = nameOf(en); return typeof n === 'string' && !/^Identity-[HV]$/.test(n) }
+    if (en instanceof PDFName) return /^(?:WinAnsi|MacRoman|MacExpert|Standard)Encoding$/.test(nameOf(en) ?? '')
+    if (en instanceof PDFDict) {
+      const d = look(en.get(PDFName.of('Differences')))
+      const names = d instanceof PDFArray ? d.asArray().map(look).filter(v => v instanceof PDFName).map(nameOf) : []
+      return !names.some(n => typeof n !== 'string' || CODE_NAME.test(n))
+    }
+    return sub === 'Type1' || sub === 'MMType1'
   }
   const codesOf = (info, b) => {
     const out = []

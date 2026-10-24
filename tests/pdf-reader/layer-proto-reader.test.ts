@@ -136,6 +136,16 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     await expect(openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl, classes: { margins: true } } as never)).rejects.toThrow(/classes/)
   })
 
+  it('draws the figures\' text translated where the toggle `figures` is on, and leaves it the original\'s by default', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const bundle = bundleOf(), doc = docOf()
+    for (const [classes, shown] of [[null, false], [{ figures: true }, true], [{ figures: false }, false], [{ tables: false }, false]] as const) {
+      const layer = await openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl, classes })
+      expect((seen.opens.at(-1) as unknown as { hiding: { figuresShown: boolean } }).hiding.figuresShown).toBe(shown)
+      layer.dispose()
+    }
+  })
+
   it('refuses a light index (M24): the layer needs the units\' bodies', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const light = { kind: 'index', light: true, sha256: 'a'.repeat(64), head: { paper: { pages: 1 } }, units: [], kinds: [], pieces: new Uint32Array(0), dropped: [], records: {} }
@@ -310,7 +320,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     layer.dispose()
   })
 
-  it('a paper\'s structural names (units of kind `name`, after the source\'s): no page awaits one, and its row is the run\'s word for the name, neither placed nor skipped nor late (PDF-READER §19.12)', async () => {
+  it('a paper\'s structural names (units of kind `name`, after the source\'s): no page awaits one, and its row is the run\'s word for the name, neither placed nor skipped nor late (PDF-READER §19.13)', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const bundle = bundleOf({ names: ['Assumption'] }), rows = rowsOf(bundle), id = SPECS.length
     expect([bundle.units[id]?.[0], bundle.left.kinds[id]]).toEqual(['name', 'name'])

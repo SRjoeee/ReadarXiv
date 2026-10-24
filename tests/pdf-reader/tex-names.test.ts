@@ -103,7 +103,7 @@ describe('refInTarget: a generated reference in the target\'s names, never half 
   })
 })
 
-describe('the paper\'s own name units (PDF-READER §19.12): a word no package names in the target, in its translation', () => {
+describe('the paper\'s own name units (PDF-READER §19.13): a word no package names in the target, in its translation', () => {
   // (the translations a target's name units came back with, English to the target's: source/paper-names.mjs, run.mjs)
   const ZH = new Map([['Section', '\u8282'], ['and', '\u548c'], ['Assumption', '\u5047\u8bbe'], ['Theorem', '\u5b9a\u7406X'], ['Main Assumption', '\u4e3b\u8981\u5047\u8bbe']])
   const withNames = (text: string, to: string, names: ReadonlyMap<string, string>) => {

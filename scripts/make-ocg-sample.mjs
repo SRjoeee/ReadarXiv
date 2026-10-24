@@ -5,7 +5,8 @@
 //     TeX Live in Docker, no network; remade with the bundle);
 //   - `sample-1-wrapped.pdf`: it wrapped (layout/wrap.mjs wrapFinal, the sample's source units: its unit ids the bundle's), our
 //     pass and the wrap section (groups `axt:u<id>`, `axt:u<id>.p`, `axt:u<id>.l`, `axt:n<occ>`, all ON);
-//   - `sample-1-wrapped.json`: wrapFinal's head fields (bytes, sha256, xref, stats, unhidden, labelKept).
+//   - `sample-1-wrapped.json`: wrapFinal's head fields (bytes, sha256, xref, stats, unhidden, labelKept) and its figure units
+//     (`figures`: the TikZ figure's text, each drawn unit with its group and place, and the counts; the page pass's `ours.wrap.figures`).
 //   pnpm exec tsx scripts/make-ocg-sample.mjs           # writes the wrapped pair
 //   pnpm exec tsx scripts/make-ocg-sample.mjs --check   # exits 1 where they differ
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -16,7 +17,7 @@ const dir = new URL('../tests/fixtures/pdf/ocg/', import.meta.url), sample = new
 const units = openPaper(new Map(['main.tex', 'refs.bib', 'main.bbl'].map(f => [f, new Uint8Array(readFileSync(new URL(f, sample)))]))).units
 const r = await wrapped(new Uint8Array(readFileSync(new URL('sample-1-final.pdf', dir))), { units, follows: undefined })
 if ('refused' in r) throw new Error(`${r.refused}: ${r.why}`)
-const head = `${JSON.stringify({ bytes: r.bytes.length, sha256: r.sha256, xref: r.xref, stats: r.stats, unhidden: r.unhidden, labelKept: r.labelKept }, null, 1)}\n`
+const head = `${JSON.stringify({ bytes: r.bytes.length, sha256: r.sha256, xref: r.xref, stats: r.stats, unhidden: r.unhidden, labelKept: r.labelKept, figures: r.figures }, null, 1)}\n`
 if (process.argv.includes('--check')) {
   const same = readFileSync(new URL('sample-1-wrapped.json', dir), 'utf8') === head && Buffer.compare(readFileSync(new URL('sample-1-wrapped.pdf', dir)), Buffer.from(r.bytes)) === 0
   console.log(same ? 'the same' : 'they differ')

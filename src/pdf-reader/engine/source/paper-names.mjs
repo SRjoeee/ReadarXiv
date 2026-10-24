@@ -1,5 +1,5 @@
 // src/pdf-reader/engine/source/paper-names.mjs
-// The structural names a paper's TeX prints that no package names in every target (PDF-READER §19.12): each becomes a unit of
+// The structural names a paper's TeX prints that no package names in every target (PDF-READER §19.13): each becomes a unit of
 // its own (bundleUnitsOf, kind `name`), sent to the translator once with the paper's units and cached by its text as any unit,
 // and the layer draws a theorem's head or a generated reference's name in that translation where no package gives the target
 // a word (rules/tex-names.mjs, `names`). Read from the paper's own definitions, in the order its files write them:

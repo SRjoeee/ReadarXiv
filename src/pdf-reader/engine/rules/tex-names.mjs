@@ -2,7 +2,7 @@
 // The names TeX's packages give a theorem-like head and a generated reference in a target (PDF-READER §19.11), read from
 // tex-names.json, which lab/pdf/spikes/tex-names-make.mjs writes from TeX Live's own files: translator's theorem dictionaries
 // (ctex's for Chinese), cleveref's and hyperref's language definitions, ctex's names. No name is written here: a word no
-// package gives in the target is the paper's own name unit's translation (`names`: source/paper-names.mjs, PDF-READER §19.12),
+// package gives in the target is the paper's own name unit's translation (`names`: source/paper-names.mjs, PDF-READER §19.13),
 // sent to the translator once like any unit, else the original's.
 //
 // Pure: no DOM, no clock. An original module (no port statement).

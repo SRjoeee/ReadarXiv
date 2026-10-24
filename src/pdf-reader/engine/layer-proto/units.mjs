@@ -96,7 +96,7 @@ function pieceOf(p, idOf) {
  * order. Throws on a piece the front end does not make.
  * After the source's units, the paper's structural names (openPaper's `names`: source/paper-names.mjs), each a unit of kind
  * `name` of one text piece, its name: translated with the paper's units and cached by its text as any unit, never laid (it is
- * no page's ink), read by the layer as the target's word for that name (PDF-READER §19.12). The source's units keep their ids
+ * no page's ink), read by the layer as the target's word for that name (PDF-READER §19.13). The source's units keep their ids
  */
 export function bundleUnitsOf(paper) {
   const idOf = new Map()

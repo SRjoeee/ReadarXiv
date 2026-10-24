@@ -1384,6 +1384,24 @@ describe('a part against the chain', () => {
     expect(await partWith(1, p => { (p as Any).rules = { 2: [72, 500, 700, 500.4], 3: [72, 300, 200, 300.3] } })).toMatchObject({ rules: { 2: [72, 500, 700, 500.4], 3: [72, 300, 200, 300.3] } })
   })
 
+  it('refuses figure rows (BUNDLE 10, the content class `figures`) of no shape, on a page outside the part\'s own, of a unit not a figure\'s, or where the layout is none', async () => {
+    // (a row: [id, group, page, x, y, ux, uy, length, size, ascent, descent, anchor, fill, font])
+    const row = (o: Record<number, unknown> = {}) => Object.assign([1, 0, 2, 100, 400, 1, 0, 60, 8, 0.88, -0.2, 1, 0, 'ArialMT'], o)
+    await refused(1, p => { (p as Any).figures = [row()] }, 'figures[0][0]')
+    await refused(1, p => { (p as Any).figures = [row({ 0: 99_999 })] }, 'figures[0][0]')
+    await refused(1, p => { (p as Any).figures = [row({ 0: 0 })] }, 'figures[0][0]')
+    await refused(1, p => { (p as Any).figures = [row({ 2: 4 })] }, 'figures[0][2]')
+    await refused(1, p => { (p as Any).figures = [row({ 3: 9_999 })] }, 'figures[0][3]')
+    await refused(1, p => { (p as Any).figures = [row({ 5: 0.5 })] }, 'figures[0][5]')
+    await refused(1, p => { (p as Any).figures = [row({ 11: 3 })] }, 'figures[0][11]')
+    await refused(1, p => { (p as Any).figures = [row().slice(1)] }, 'figures[0]')
+    await refused(1, p => { (p as Any).figures = {} }, 'figures')
+    // (the key there only where the part has a figure unit: a part of none is written as one before figures)
+    await refused(1, p => { (p as Any).figures = [] }, 'figures')
+    await refused(2, p => { (p as Any).layout = null; (p as Any).rules = null; (p as Any).fileOnly = []; (p as Any).figures = [row({ 2: 4 })] }, 'figures')
+    expect(await partWith(1, p => { delete (p as Any).figures })).toMatchObject({ figures: [] })
+  })
+
   it('a layout with no cell rules is a part (`rules: null`), as the writer writes one given none or an empty table', async () => {
     const bare = await partWith(1, p => { (p as Any).rules = null })
     expect([bare.layout !== null, bare.rules]).toEqual([true, null])
@@ -1714,7 +1732,7 @@ describe('records (amendment M15): derived once, the engine\'s own predicates', 
         const derived = [...units.keys()].filter(i => units[i] !== null && !kept(i))
         expect(derived, lang).toEqual(toTranslate(bundle, lang))
         // the batches: the same cuts from the records' lengths as batchesOf makes from the plain source, the paper's structural
-        // names first (their kind the chunks': PDF-READER §19.12)
+        // names first (their kind the chunks': PDF-READER §19.13)
         let left = [...derived.filter(i => kinds[i] === 'name'), ...derived.filter(i => kinds[i] !== 'name')]
         const batches: number[][] = []
         for (let first = true; left.length; first = false) {

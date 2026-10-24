@@ -953,12 +953,14 @@ export function isName(text, prose) {
   const nameWord = w => { const bare = w.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, ''); return !bare || /[0-9]/.test(bare) || /^[A-Z][^a-z]*$/.test(bare) || /^[A-Za-z][a-z]*[A-Z]/.test(bare) || (/^[A-Z][a-z]+$/.test(bare) && proper(bare) && !common(bare)) }
   return words.every(nameWord)
 }
+const shortUnit = u => u.kind === 'cell' || u.kind === 'figure'
+const textOfUnit = u => u.pieces.filter(p => p.t === 'text').map(p => p.s).join(' ')
+/** the running text isName reads a short text against: every unit's text but a table cell's and a figure's */
+export const proseOf = units => units.filter(u => u && !shortUnit(u)).map(textOfUnit).join('\n')
 /** the table cells and figure texts that are only names (isName): they keep their source */
 export function nameCells(units) {
-  const short = u => u.kind === 'cell' || u.kind === 'figure'
-  const textOf = u => u.pieces.filter(p => p.t === 'text').map(p => p.s).join(' ')
-  const prose = units.filter(u => !short(u)).map(textOf).join('\n')
-  return new Set(units.filter(u => short(u) && isName(textOf(u), prose)))
+  const prose = proseOf(units)
+  return new Set(units.filter(u => shortUnit(u) && isName(textOfUnit(u), prose)))
 }
 
 /** what the sentence splitter reads a placeholder as (core/sentences SplitContext; the HTML page reads the node, here

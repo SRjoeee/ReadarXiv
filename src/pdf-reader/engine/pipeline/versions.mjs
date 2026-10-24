@@ -199,7 +199,7 @@
 //     or \autoref, the counter types' English names and the conjunctions' words some target has no package word for
 //     (rules/tex-names.mjs NAME_GAPS, CONJUNCTION_GAPS). Translated with the paper's units, the first batch's (rows.mjs
 //     batchesOf, runRows), cached by their text as any unit; the layer draws a head's or a generated reference's name in that
-//     translation where no package gives the target one (PDF-READER §19.12). Over 168 local sources (40,765 units) 923 name
+//     translation where no package gives the target one (PDF-READER §19.13). Over 168 local sources (40,765 units) 923 name
 //     units in 85 papers (32 at most; 19 papers call cleveref or \autoref); the source's units and their ids are 28's, every
 //     hash kept: a copy of 28 carries every unit, and the name units are asked once
 export const PIPELINE_VERSION = '29'
@@ -236,6 +236,10 @@ export const PDFJS = '6.3.289'
  * 2610.18513v1 100 → 23; every other wrap count, and every page of every group shown, as before: the ocg gate); and in the
  * same unreleased 11 (docs/route/orphan-text.md, stage 2) the ink units' glyphs, text no source unit owns made units of our
  * own glyphs (layout/ink-units.mjs), wrapped in groups of their own, `u<id>` and `u<id>.p` from the source units' count on:
- * the base's bytes change where a page holds such text
+ * the base's bytes change where a page holds such text; and in the same unreleased 11 (the content class `figures`,
+ * stage 5, PDF-READER §19.12) each figure unit's ink (layout/figure-text.mjs) its own group, `f<k>`, its runs wrapped where they
+ * are shown — in the page's stream, or in the stream of the form XObject an included PDF is, that form written again once with
+ * /Properties of its own (layout/wrap.mjs wrapPage, proveForm) —, and a font with no Unicode a reader can trust leaving its figure
+ * the original's (remove.mjs unicodeOf): the base's bytes change where a figure has text
  */
 export const REMOVAL = '11'

@@ -1,0 +1,13 @@
+// figure-rows.mjs's types: the figure units a part carries (BUNDLE 10)
+import type { FigureUnit } from '../layout/figure-text.mjs'
+
+/** a row: [id, group, page, x, y, ux, uy, length, size, ascent, descent, anchor, fill, font] */
+export type FigureRowWire = [number, number, number, number, number, number, number, number, number, number, number, number, number, string]
+/** a figure row as a part's reader gives it */
+export interface FigureRow { id: number; group: string; page: number; x: number; y: number; ux: number; uy: number; length: number; size: number; ascent: number; descent: number; anchor: 'start' | 'centre' | 'end'; fill: number; font: string }
+export declare const FIGURE_ROW: number
+export declare const ANCHORS: readonly ['start', 'centre', 'end']
+export declare const FONT_NAME_MAX: number
+export declare function figureGroupOf(k: number): string
+export declare function figureRow(id: number, u: Pick<FigureUnit, 'group' | 'page' | 'x' | 'y' | 'ux' | 'uy' | 'length' | 'size' | 'ascent' | 'descent' | 'anchor' | 'fill' | 'font'>): FigureRowWire
+export declare function checkFigures(rows: unknown, o: { a: number; b: number; views: readonly number[]; unitCount: number }): readonly FigureRow[]

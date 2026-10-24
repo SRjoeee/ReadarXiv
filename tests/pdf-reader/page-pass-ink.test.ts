@@ -71,7 +71,7 @@ describe('the ink units in the page pass', () => {
     }
   })
 
-  it('after the paper\'s structural names, which the source units\' chunk holds as the prepare child writes it, never laid (PDF-READER §19.12)', async () => {
+  it('after the paper\'s structural names, which the source units\' chunk holds as the prepare child writes it, never laid (PDF-READER §19.13)', async () => {
     const names = ['Section', 'and']
     const marked = (w: World) => ({ doc: markedOf(w.marked ?? w.pages, w.marks), log: '', options: { engine: 'pdflatex', switches: null, inkless: null, texts: null, names: null, OPS } })
     // (the wrap's ink units from the bundle's units before them, 3 source units and 2 names: wrapFinal's `inkFrom`)
@@ -146,6 +146,27 @@ describe('the ink units in the page pass', () => {
     expect(await inkWithinChunks(PAPER, units, null)).toBe(null)
     // (the bound itself: chunks written before count against it)
     await expect(writeUnitChunks({ paper: PAPER, units: inkBundleUnitsOf([headUnit(1, 2)] as never), start: 1, before: { chunks: CHUNKS_MAX, bytes: 0, values: 0 } })).rejects.toThrow(/units-too-large/)
+  })
+
+  it('carries the figure units after the other ink units, in the ink units\' chunk, each row in the part of its page', async () => {
+    // (a figure unit the wrap drew on page 2: layout/wrap.mjs wrapFinal `figures`, the host's ours.wrap.figures)
+    const fig = { page: 2, group: 'f0', text: 'Validation loss', font: 'ABCDEF+ArialMT', size: 8, fill: 0, angle: 0, x: 100, y: 400, ux: 1, uy: 0, length: 60, ascent: 0.88, descent: -0.2, anchor: 'centre', form: true }
+    const stats = { wrapped: 3, refusedPages: 0, unhidden: { marks: 0, across: 0, spell: 0, page: 0, bounds: 0 }, split: 0, groups: 5, labelKept: 0 }
+    const wrap = { stats, unhidden: [], labelKept: [], pages: [[1, 3]], figures: { units: [fig] } }
+    for (const whole of [false, true]) {
+      for (const ink of [INK, null]) {
+        const w = worldOf()
+        const got = await passOf(w, { ours: oursOf(w, { ink, wrap }), whole })
+        // (the source units' chunk as before, then one of INK_UNITS_FORMAT: the ink units by their ids, the figure unit after them)
+        const id = ink ? 5 : 3
+        expect(got.chunks.map(c => [c.from, c.to])).toEqual([[0, 2], [3, id]])
+        expect(got.units.map(formatOf)).toEqual([UNITS_FORMAT, INK_UNITS_FORMAT])
+        expect(got.chunks[1]?.units.at(-1)).toEqual(['inkfigures', 0, null, null, null, [[0, 'Validation loss']], null])
+        // (its row in the part of page 2 alone, by its id; no other part holds the key)
+        const holding = got.parts.filter(p => p.figures.length)
+        expect(holding.map(p => p.figures.map(f => [f.id, f.page, f.group]))).toEqual([[[id, 2, 'f0']]])
+      }
+    }
   })
 
   it('anchors each on the left by arXiv\'s tokens on its lines', () => {

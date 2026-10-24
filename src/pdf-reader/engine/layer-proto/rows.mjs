@@ -147,7 +147,7 @@ export function echoRows(bundle, rows) {
 }
 const ECHOES = new WeakMap()
 /** the ids `ids` with the paper's structural names first (units of kind `name`, bundleUnitsOf): the first batch carries them,
- *  so that the first page drawn has the target's words for its heads and references (PDF-READER §19.12) */
+ *  so that the first page drawn has the target's words for its heads and references (PDF-READER §19.13) */
 const namesFirst = (s, ids) => [...ids.filter(i => s.units[i]?.kind === NAME_KIND), ...ids.filter(i => s.units[i]?.kind !== NAME_KIND)]
 /** a language's batches in source order, the paper's structural names first (namesFirst): the first up to FIRST_BATCH characters
  *  of plain source, the rest up to NEXT_BATCH */
