@@ -328,6 +328,30 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     const apart = [page([{ pt: 'h0s' }, 'Bound', { pt: 'h0e' }, { dx: 4 }, '1.', { pt: '1s' }, 'Every x', { pt: '1e' }])]
     expect(groupsOf(ownOf(apart, { units: [{ kind: 'heading', src: 'Bound' }, { kind: 'theorem', src: 'Every x' }] }), apart)).toEqual({ u0: 'Bound', u1: 'Every x', 'u1.l': '1.' })
   })
+  it('takes a theorem\'s head before its note, the bracket the head opens the note with, as the note\'s label (2610.18513v1 p18u150)', () => {
+    // amsthm: "Definition 5.1 (s-conductance). For …": the head's name, number and "(" before the note's start mark were no
+    // label's form, left the original's ink in no group, and the head stayed English under the note's translation
+    const pages = [page(['Definition 5.1 (', { pt: 'h0s' }, 's-conductance', { pt: 'h0e' }, ').', { dx: 3 }, { pt: '1s' }, 'For s', { pt: '1e' }])]
+    const r = ownOf(pages, { units: [{ kind: 'heading', bracketed: true, src: 's-conductance' }, { kind: 'theorem', src: 'For s' }] })
+    expect(groupsOf(r, pages)).toEqual({ 'u0.l': 'Definition 5.1 (', u0: 's-conductance).', u1: 'For s' })
+    expect([r.units.get(0)?.labelKept, r.stats.labelKept]).toEqual([false, 0])
+    // (a unit no head's brackets hold keeps the rule: "Table 1 (" is no label's form)
+    const plain = [page(['Table 1 (', { pt: '0s' }, 'note', { pt: '0e' }])]
+    expect(ownOf(plain, { units: [{ kind: 'para', src: 'note' }] }).units.get(0)?.labelKept).toBe(true)
+    expect(isLabelForm('Definition 5.1 (', true)).toBe(true)
+    expect(isLabelForm('Definition 5.1 (', false)).toBe(false)
+  })
+  it('takes the joint a head sets after the babel name that leads its unit as the unit\'s label (2610.18513v1 p7u51: amsthm\'s "Proof.")', () => {
+    // the "." after the name, no label's form, was left the original's ink, so that the name's lead could not be drawn and
+    // "Proof." stayed English
+    const pages = [page([{ pt: 'n3.proof.s' }, 'Proof', { pt: 'n3.proof.e' }, '.', { dx: 3 }, { pt: '0s' }, 'Easy', { pt: '0e' }])]
+    const r = ownOf(pages, { units: units('Easy') })
+    expect(groupsOf(r, pages)).toEqual({ n3: 'Proof', 'u0.l': '.', u0: 'Easy' })
+    expect(r.units.get(0)?.labelKept).toBe(false)
+    // (punctuation alone with no name before it is no label, as before)
+    const bare = [page([{ pt: '3e' }, { dx: 6 }, '.', { dx: 3 }, { pt: '0s' }, 'Easy', { pt: '0e' }])]
+    expect(ownOf(bare, { units: units('Easy') }).units.get(0)?.labelKept).toBe(true)
+  })
   it('owns a title its class sets again by its first occurrence, an end mark alone (2610.22065v1 p1u0: acmart\'s ACM Reference Format)', () => {
     const pages = [page(['ABNAT: Attention', { pt: 'h0e' }, '\n', { pt: '1s' }, 'Abstract text', { pt: '1e' }, '\nRef: ', { pt: 'h0s' }, 'ABNAT: Attention', { pt: 'h0e' }, '. In Proc.'])]
     const r = ownOf(pages, { units: [{ kind: 'heading', src: 'ABNAT: Attention' }, { src: 'Abstract text' }] })

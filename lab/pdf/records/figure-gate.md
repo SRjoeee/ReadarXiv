@@ -1,6 +1,6 @@
 # The figures' text gate (lab/pdf/spikes/figure-gate.mjs)
 
-Stage 5 of `docs/route/orphan-text.md`, the content class `figures` (`docs/PDF-READER.md` §19.11): each paper's final pass wrapped
+Stage 5 of `docs/route/orphan-text.md`, the content class `figures` (`docs/PDF-READER.md` §19.12): each paper's final pass wrapped
 as `wrapFinal` wraps it over its source units, its figure units counted by what became of them, and every page holding a drawn
 one rendered by PDF.js in Node at scale 2: G1 (every group shown is the page wrapped without the figures, a split show's
 antialiasing within the ocg gate's allowance), G3f (hiding the figures changes pixels inside their own bands alone), D (each drawn

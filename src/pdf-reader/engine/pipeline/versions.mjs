@@ -222,10 +222,16 @@ export const PDFJS = '6.3.289'
  * base's bytes change, and the first two rules being the maker's reading too, the layout files of the units they reach
  * (LAYOUT 20); and a cell's lead owned by the text TeX sets for it, as the probe reads it (marks.mjs readInkTexts, MARKS_SCHEMA
  * 10: "1,024", "max_tokens", a formula's glyph spelled by no character one glyph: own.mjs MR 5b), and a front heading's ink
- * (ICML's \icmltitle), which the layout compile now marks (LAYOUT 20)
+ * (ICML's \icmltitle), which the layout compile now marks (LAYOUT 20); 11 (the structural names, PDF-READER §19.11): a
+ * theorem's head before its note, the bracket it opens the note with ("Definition 5.1 (", a unit the front end read in a head's
+ * brackets), and the joint a head sets after the babel name that leads its unit (amsthm's "." after "Proof") are their units'
+ * labels (own.mjs isLabelForm's `note`, JOINT), each in its unit's label group, where they were left the original's ink in no
+ * group (`labelKept`), so that the layer draws them in the target's names: the base's bytes and the head's `labelKept` change,
+ * the layout files and the units do not (over 25 local papers labelKept 298 → 96, 202 labels newly in their groups;
+ * 2610.18513v1 100 → 23; every other wrap count, and every page of every group shown, as before: the ocg gate); 12 (the
+ * content class `figures`, PDF-READER §19.12): each figure unit's ink (layout/figure-text.mjs) its own group, `f<k>`, its runs
+ * wrapped where they are shown — in the page's stream, or in the stream of the form XObject an included PDF is, that form written
+ * again once with /Properties of its own (layout/wrap.mjs wrapPage, proveForm) —, and a font with no Unicode a reader can trust
+ * leaving its figure the original's (remove.mjs unicodeOf): the base's bytes change where a figure has text
  */
-// 11 (the content class `figures`): each figure unit's ink (layout/figure-text.mjs) its own group, `f<k>`, its runs wrapped where
-// they are shown — in the page's stream, or in the stream of the form XObject an included PDF is, that form written again once
-// with /Properties of its own (layout/wrap.mjs wrapPage, proveForm) —, and a font with no Unicode a reader can trust leaving its
-// figure the original's (remove.mjs unicodeOf): the base's bytes change where a figure has text
-export const REMOVAL = '11'
+export const REMOVAL = '12'

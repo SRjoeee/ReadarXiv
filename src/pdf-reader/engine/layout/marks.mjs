@@ -24,7 +24,7 @@ import { annotsOf, linkKindOf, MAX_GLYPHS, MAX_LINKS, readAnnots } from '../laye
 import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
 import { listWithin, OPS_MS, within } from './oplist.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
-import { NAME_KEYS } from './names.mjs'
+import { NAME_ENGLISH, NAME_KEYS } from './names.mjs'
 import { fillOfColour } from './colour.mjs'
 import { boundedJson, checkKeys, checkPages, checkViews, COORD_MAX, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
 import { OWNED, OWNED_HOW, ownedPages, spellOf, STREAM_COLUMNS, WANT } from './stream.mjs'
@@ -406,9 +406,8 @@ export function readInkApart(log, samples) {
 // ---- babel's names: what each one's own text is, TeX asked
 /** each name's macro, by key (file.mjs NAME_KEYS): babel's [captions], which a class defines as well */
 export const NAME_MACROS = Object.freeze({ abstract: 'abstractname', ref: 'refname', bib: 'bibname', contents: 'contentsname', listfigure: 'listfigurename', listtable: 'listtablename', appendix: 'appendixname', index: 'indexname', proof: 'proofname', preface: 'prefacename', glossary: 'glossaryname', figure: 'figurename', table: 'tablename' })
-/** each name's English value, babel's en [captions] (the layout rules' pinned locale files): what a style that writes a
- *  name literally writes (literalNames) */
-export const NAME_ENGLISH = Object.freeze({ abstract: 'Abstract', ref: 'References', bib: 'Bibliography', contents: 'Contents', listfigure: 'List of Figures', listtable: 'List of Tables', appendix: 'Appendix', index: 'Index', proof: 'Proof', preface: 'Preface', glossary: 'Glossary', figure: 'Figure', table: 'Table' })
+/** each name's English value (names.mjs): what a style that writes a name literally writes (literalNames) */
+export { NAME_ENGLISH }
 /**
  * The name section of the probe (`name`): for each name the wrapper wrapped as the document began (NAMES_TEX keeps the
  * macro as it was, \axt@nmt@<key>), a row `name <key> <0 or 1>`: 1 where its own text, as a \protected@edef expands it,

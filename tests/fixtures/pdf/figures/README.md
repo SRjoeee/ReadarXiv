@@ -1,7 +1,7 @@
 # figures: the text inside vector figures
 
 One page of vector figures in each shape the engine cuts into figure units (the content class `figures`, `docs/PDF-READER.md`
-§19.11), compiled as our final pass compiles a paper's: the layout compile's points (`layout/marks.mjs` `POINTS_TEX`, a TikZ
+§19.12), compiled as our final pass compiles a paper's: the layout compile's points (`layout/marks.mjs` `POINTS_TEX`, a TikZ
 picture's `zs` and `ze` among them) before `\documentclass`.
 
 **Licence: CC0 1.0.** The sources and everything made from them are ours, dedicated to the public domain

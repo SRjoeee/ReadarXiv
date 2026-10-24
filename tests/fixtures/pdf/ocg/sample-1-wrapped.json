@@ -1,12 +1,12 @@
 {
- "bytes": 245080,
- "sha256": "5ab9be7ecb2a1ccc2b4c9938aab5dc3f255ca4966a27e1d859fc8dc11e35a46d",
- "xref": 244100,
+ "bytes": 245270,
+ "sha256": "96f675caff3bb49b87d2611b4818f6ac94f6a3b6fdba838cdca2a25ec9d5f838",
+ "xref": 244276,
  "stats": {
   "wrapped": 4,
   "refusedPages": 0,
   "split": 0,
-  "groups": 91,
+  "groups": 93,
   "unhidden": {
    "marks": 2,
    "across": 0,
@@ -14,13 +14,10 @@
    "page": 0,
    "bounds": 0
   },
-  "labelKept": 2
+  "labelKept": 0
  },
  "unhidden": [],
- "labelKept": [
-  16,
-  19
- ],
+ "labelKept": [],
  "figures": {
   "units": [
    {
