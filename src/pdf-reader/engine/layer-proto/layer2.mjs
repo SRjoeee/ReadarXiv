@@ -778,6 +778,11 @@ export const SMALL_CAPS_SHARE = 0.9
 function smallCapsOf(unit, uc, O, S, pair) {
   const small = new Set(), lower = new Set(), letters = []
   if (!pair || typeof unit?.src !== 'string') return { small, lower, letters }
+  // (a faked small capital is set at most SMALL_CAPS_SHARE of a median no larger than the unit's largest glyph: where no capital of
+  // the unit's is that small, none is one, and the walk below is not made, the reading of nearly every unit)
+  let big = 0
+  for (const c of uc) if (!c.sep && !c.space && c.size > big && c.st?.fam !== 'math') big = c.size
+  if (!uc.some(c => !c.sep && !c.space && c.size > 0 && c.size <= SMALL_CAPS_SHARE * big && c.st?.fam !== 'math' && c.ch !== c.ch.toLowerCase())) return { small, lower, letters }
   const src = [...unit.src], same = []
   const cased = ch => ch.toLowerCase() !== ch.toUpperCase()
   O.forEach((o, q) => {
