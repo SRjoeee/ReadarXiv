@@ -22,6 +22,9 @@ export interface Params {
   lastLines?: boolean
   /** step 3: the CJK runs' tracking the fit's first state takes, in em; null: a face's size correction given back (run.mjs) */
   trackStart: number | null
+  /** a run of a unit split by its displays (layoutRuns): the fit's first state takes its unit's tracking, the tightest its
+   *  runs need (and its CJK punctuation's compression) */
+  runTrack?: { track: number; trackLatin: number; compress: number }
   /** the leading relative to the original's pitch (leadOf; false: leadBase on any pitch); fillBySize's cap (run.mjs
    *  fillSize, off at 0) and the size a unit may grow to (growTo) */
   leadRel: boolean; fillSize: number; growTo?: number
@@ -106,6 +109,9 @@ export interface Prepared extends Map<number, Resolved> {
   /** the alignment: the unit's base style and its colour pieces' colours measured on its matched glyphs (measuredStyle; `st`
    *  null where the unit carries no source pieces, its colour then told only where every glyph whose fill is told holds one) */
   measured?: { st: { bold: boolean; italic: boolean; caps: boolean; fam: string; design?: string } | null; fill: number | null; pieces: Map<number, number> } | null
+  /** the alignment: the share of the size its faked small capitals are set at, of its capitals' (smallCapsOf's `ratio`, to the
+   *  hundredth), where it has any: what the layer draws its own small capitals at (tokensOf2) */
+  capsRatio?: number
   /** the alignment: where the first source word starts on the first line */
   firstX0?: number
   /** the lines kept as the original's, by key: the alignment's (no source word), part 4's displays, the finish's */
@@ -190,11 +196,11 @@ export interface UnitParts {
   colourOf: (k: number) => number | null
 }
 /** a token of a unit's translation */
-export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; kern?: boolean; leadEnd?: boolean; kernW?: number; [more: string]: unknown }   // kern: a lead's last, its width the original's glue after it; leadEnd: a lead's last, no space after it; kernW: explicit glue after it (at 100 px), its item's `kern`
+export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; kern?: boolean; leadEnd?: boolean; kernW?: number; sc?: number; cont?: boolean; [more: string]: unknown }   // kern: a lead's last, its width the original's glue after it; leadEnd: a lead's last, no space after it; kernW: explicit glue after it (at 100 px), its item's `kern`; sc: a run of small capitals the layer draws, the share of the size it is drawn at (its `s` the capitals drawn); cont: a word's later run of one case
 /** a laid line: its slot, and its items at their places */
 /** a laid line: its slot's fields, its items, and `past`, how many of the unit's kept regions the text passed before its first item
  *  (breakLines: where the page's word table writes a region's kept lines) */
-export interface Line { block: number; page: number; x0: number; x1: number; baseline: number; target: number | null; mode: string; used: number; cap: number; items: { t: Token; x: number; w: number; kern?: number }[]; past?: number; after?: number; [more: string]: unknown }   // an item's w: its own width; kern: the explicit glue after it, an advance apart from w (0 once a line's end drops it)
+export interface Line { block: number; page: number; x0: number; x1: number; baseline: number; target: number | null; mode: string; used: number; cap: number; items: { t: Token; x: number; w: number; kern?: number }[]; past?: number; after?: number; seg?: { f: number; scale: number; state: Layout['state'] }; [more: string]: unknown }   // an item's w: its own width; kern: the explicit glue after it, an advance apart from w (0 once a line's end drops it)
 /** layoutUnit2's answer */
 /** a unit laid: its lines and the state that set them; `opened`, the lines TeX's rule opened (P.lineskip), `unopened` the
  *  lines it would have opened where it has no values (none read: they stay nearer the line before than nothing) */
@@ -229,8 +235,34 @@ export declare function pageChars2(textContent: { items: unknown[] }, fontOf: (f
  *  first, and the parity of the slant toggles around it (`flip`); null where the unit carries no source pieces or their text is
  *  not its `src` */
 export declare function sourceScopes(unit: { src?: string; source?: readonly { t: string; s?: string; src?: string }[] }): { sets: number; chain: number[]; flip: number }[] | null
-/** the unit's base style and its pieces' colours from its matched characters with their source scopes (E1) */
-export declare function measuredStyle(chars: readonly { st: FontClass & { fill?: number }; sets: number; chain: readonly number[]; flip?: number }[]): { st: { bold: boolean; italic: boolean; caps: boolean; fam: string; design?: string }; fill: number | null; pieces: Map<number, number> } | null
+/** the unit's base style and its pieces' colours from its matched characters with their source scopes (E1); `small` and `lower`
+ *  where the unit has faked small capitals (each glyph one, and its source letter lowercase: the glyphs that tell them) */
+export declare function measuredStyle(chars: readonly { st: FontClass & { fill?: number }; sets: number; chain: readonly number[]; flip?: number; small?: boolean; lower?: boolean }[]): { st: { bold: boolean; italic: boolean; caps: boolean; fam: string; design?: string }; fill: number | null; pieces: Map<number, number> } | null
+/** a faked small capital is set at most this share of the size of its unit's letters whose case TeX did not change */
+export declare const SMALL_CAPS_SHARE: number
+/** the share of the size the layer draws small capitals at where the unit's page tells none (0.8, NFSS's virtual faces') */
+export declare const SMALL_CAPS_RATIO: number
+/** whether the layer draws a run's small capitals itself: a run set in them in a face with none of its own */
+export declare const selfCaps: (face: Pick<Face, 'caps' | 'id'> | null | undefined) => boolean
+/** a target's capitals: its language's case mapping, the root's where it names no locale */
+export declare function upperOf(to: string): (s: string) => string
+/** `s` in runs of one case as the layer draws its small capitals: each its text as drawn, the share of the size it is drawn at
+ *  (1, or `ratio`), its first character's UTF-16 offset in `s` and its length there; `smallAt`: a capital the page sets small */
+export declare function caseRuns(s: string, ratio: number, upper: (s: string) => string, smallAt?: ((at: number) => boolean) | null): { s: string; k: number; at: number; n: number }[]
+/** a rendering of the page's own characters: by each UTF-16 offset of `text`, whether its character is set at most SMALL_CAPS_SHARE
+ *  of `size`; null where its characters do not give the text, or none is */
+export declare function smallCapsAt(chars: readonly { ch: string; size: number }[] | null | undefined, text: string, size: number | undefined): ((at: number) => boolean) | null
+/** a babel name's word as the layer draws it in `face`: its runs of one case where it draws the face's small capitals itself */
+export declare function nameRuns(text: string, face: Face, to: string): { face: Face; runs: { s: string; k: number }[]; text: string }
+/** nameRuns' word's width at size 1 */
+export declare const runsWidth: (drawn: { face: Face; runs: readonly { s: string; k: number }[] }) => number
+/** the size a unit set in small capitals is drawn at in a CJK target, × its nominal size (the owner's, 2026-10-24: 1) */
+export declare const CJK_CAPS_SIZE: number
+/** the size a unit is laid at: the original's, its faked small capitals aside, × CJK_CAPS_SIZE in a CJK target where its base is
+ *  set in small capitals; undefined where no glyph of it was read */
+export declare function unitSizeOf(prep: Pick<Prepared, 'orig' | 'measured'> | null | undefined, P: { cjk?: boolean } | null | undefined, unit?: Pick<Unit, 'pieces'> | null): number | undefined
+/** a face's small capitals as its CSS rule draws them: its own smcp's, '' for any other (none is ever synthesized) */
+export declare function capsRule(face: Pick<Face, 'caps'> & { id?: string }): string
 /** a rendering's text in runs of one fill (0xRRGGBB, or -1 untold); null where its characters do not give the text or tell no fill */
 export declare function fillRunsOf(chars: readonly Pick<Char, 'ch' | 'st'>[] | null | undefined, text: string): { text: string; fill: number }[] | null
 /** the kind a mark no line may start with is across scripts ("." and the ideographic full stop: 'stop'; ")" and a closing corner bracket: 'close'), else the mark itself */
@@ -295,7 +327,7 @@ export declare function nameInTarget(name: { key: string; capitals: boolean }, o
 /** a text's width at size 1 in a face */
 export declare const widthOf: (s: string, face: Face) => number
 /** a babel name drawn in the target's word, as SVG markup (a <g data-n="occurrence">) */
-export declare function svgOfName(o: { occurrence: number; text: string; x: number; baseline: number; size: number; face: Face; color?: string | null }, toPx: (x: number, y: number) => number[], scale: number): string
+export declare function svgOfName(o: { occurrence: number; text: string; x: number; baseline: number; size: number; face: Face; color?: string | null; runs?: readonly { s: string; k: number }[] | null }, toPx: (x: number, y: number) => number[], scale: number): string
 /** a character style's colour as a run takes it: its fill where told (black: `color` undefined), nothing where not */
 export declare function colourOfStyle(st: { fill?: number } | null | undefined): { color?: string }
 /** a character style's font class, its fill aside (the class itself where no fill was set on it) */
@@ -338,6 +370,21 @@ export declare const SOLID: number
 /** the unit's leading relative to the original's own pitch: leadBase of a solid line, never closer than the original's */
 export declare function leadOf(blocks: readonly Pick<Block2, 'pitch0'>[], s: number, P: Pick<Params, 'leadBase'>): number
 export declare function layoutUnit2(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params): Layout
+/** a unit's run between its kept regions (a display each): its blocks (those of one `after`, from the unit's block `bi0`) and
+ *  its tokens; with layoutRuns, its parameters and its own layout */
+export interface Run { after: number; idx: number[]; bi0: number; blocks: Block2[]; tokens: Token[]; P?: Params; layout?: Layout }
+/** a unit's runs, or null where it is one run, a run with text has no slots of its own or a block no run's text, or the blocks
+ *  are not in their regions' order */
+export declare function runsOf(tokens: readonly Token[], blocks: readonly Block2[]): Run[] | null
+/** a run's parameters: its first block's place in the unit (`blockBase`), the gap under the paragraph and a heading's last
+ *  lines the last run's alone */
+export declare function runParams(P: Params, run: Run, last: boolean): Params
+/** a unit's runs laid each at its own state (the first of the fit's at which its own text fits its own slots, from the
+ *  tightest tracking any of them needs: runTrack), joined as one layout (joinRuns); null where the unit is one run or a run
+ *  does not fit alone */
+export declare function layoutRuns(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params, fit?: readonly Pick<Line, 'from' | 'page'>[] | null): { layout: Layout & { runs: number }; runs: (Run & { P: Params; layout: Layout })[] } | null
+/** the runs' layouts as one: each line's block its place in the unit's blocks, and its run's size, scale and state (`seg`) */
+export declare function joinRuns(runs: readonly { bi0: number; layout: Layout }[]): Layout & { runs: number }
 /** a run's ink over (a) and under (d) its baseline at 100 px in its face (the measure that gives its width) */
 export declare function ink100(s: string, face: Face): { a: number; d: number }
 /** a laid line's extent over (a) and under (d) its baseline, PDF units: its text's ink and its crops' over their TeX
@@ -355,6 +402,8 @@ export declare function shareOf(layout: Pick<Layout, 'lines'>, blocks: readonly 
 /** whether a layout's lines keep a shared row as the fit left it (no text there further right; none where the fit set none; its
  *  line there on the fit's baseline) */
 export declare function keepsShare(share: Share | null | undefined, lines: readonly Line[]): boolean
+/** whether `lines` set no token on a later page than the fit's lines (`fit`) set it (the page fill's guard) */
+export declare function keepsPages(fit: readonly Pick<Line, 'from' | 'page'>[], lines: readonly Pick<Line, 'from' | 'page'>[]): boolean
 /** a box in v0's device pixels on the page: [x, y, w, h] */
 export type DevBox = [number, number, number, number]
 /** one of the layer's drawing operations over render A (hideOps'): where a unit's hidden ink lies (nothing drawn), a plane of the
@@ -378,8 +427,9 @@ export declare function drawOps(ctx: CanvasRenderingContext2D | OffscreenCanvasR
 export declare function svgOfUnit(L: Layout, page: number, toPx: (x: number, y: number) => number[], scale: number, id: number): string
 /** a <tspan> of a laid line's text as svgOfUnit draws it: its face, whether it is a run of single CJK characters each at its
  *  own place (`chars`), a superscript's, its colour, text, the PDF x of its start (of each character, `chars`), its tracking,
- *  and each item drawn in it as [its index in the line, the UTF-16 offset of its text in the run's] */
-export interface LineRun { face: Face; chars: boolean; sup: boolean; color?: string; text: string; xs: number[]; track?: number; items: [number, number][]; crop?: undefined }
+ *  each item drawn in it as [its index in the line, the UTF-16 offset of its text in the run's], and the share of the size small
+ *  capitals the layer draws are set at (`sc`) */
+export interface LineRun { face: Face; chars: boolean; sup: boolean; color?: string; text: string; xs: number[]; track?: number; items: [number, number][]; sc?: number; crop?: undefined }
 /** a laid line as svgOfUnit draws it, in order: its runs and its crops (`crop`: the item's index) */
 export declare function lineRuns(line: Line, L: Layout): (LineRun | { crop: number })[]
 /** the PDF x of a run's edge before its UTF-16 offset `at`, as the browser lays it out (the run's start, the measure of the text
@@ -400,3 +450,6 @@ export interface CellBand { B: number; lo: number; hi: number }
 export declare function cellBands(blocks: readonly { page: number; B: readonly number[]; rects: readonly (readonly number[])[] }[], rulesOf: (page: number) => readonly number[] | undefined, s: number, P: Pick<Params, 'cellClear' | 'cellCapMin'>): { cap: number; bands: Map<number, CellBand[]> } | null
 /** each laid line on one of the original's lines moved into that line's band at the size it is drawn at */
 export declare function clearLines(lines: { block: number; baseline: number }[], bands: Map<number, CellBand[]>, f: number): void
+/** the characters a target's rules set in its CJK face: the CJK blocks, and with `quotes` (the rules' cjkQuotes) the curly quotes,
+ *  dashes, ellipsis and middle dot too */
+export declare const cjkClassRe: (quotes: boolean) => RegExp

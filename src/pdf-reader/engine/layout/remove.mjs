@@ -175,9 +175,12 @@ export function lex(b, limit = Infinity, keep = null) {
 export class LexLimit extends Error { constructor(limit) { super(`a content stream holding more than ${limit} bytes`); this.limit = limit } }
 /** decode's refusal of a stream that decodes to more than it was allowed: the walk refuses its page */
 export class DecodeLimit extends Error { constructor(limit) { super(`a stream decoding to more than ${limit} bytes`); this.limit = limit } }
-/** a decoding stream's bytes, read a chunk at a time and no further than `limit` past (DecodeLimit) */
+/** a decoding stream's bytes, read a chunk at a time and no further than `limit` past (DecodeLimit), as bytes of their own: the
+ *  stream's buffer grows by CHUNK and doubles past it, and its view would hold it all (a form of 2 KB held 128 KB), which the
+ *  decoded streams' cache, bounded by the bytes it holds, kept for every stream it held: 2610.21924's page 9, 3,128 forms of a
+ *  plot's markers, held 960 MB in a wrap of our final pass, and the maker died of its memory */
 const CHUNK = 1 << 16
-function readAtMost(stream, limit) {
+export function readAtMost(stream, limit) {
   let total = 0
   for (;;) {
     const got = stream.getBytes(CHUNK)
@@ -187,7 +190,8 @@ function readAtMost(stream, limit) {
   }
   if (!total) return new Uint8Array(0)
   stream.reset()
-  return stream.getBytes(total)
+  const out = stream.getBytes(total)
+  return out.byteOffset === 0 && out.byteLength === out.buffer.byteLength ? out : out.slice()
 }
 
 const PAINT = new Set(['S', 's', 'f', 'F', 'f*', 'B', 'B*', 'b', 'b*', 'n'])
@@ -251,7 +255,8 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
       out = st.getContents()
       if (out.length > limit) throw new DecodeLimit(limit)
     }
-    if ((decodedBytes += out.length) <= 4 * bytesMax) decoded.set(st, out)
+    // (counted by what it holds: the buffer its view keeps, not the view's length)
+    if ((decodedBytes += out.buffer.byteLength) <= 4 * bytesMax) decoded.set(st, out)
     return out
   }
   const pages = doc.getPages()
@@ -527,18 +532,23 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
  * What alignPage reads of PDF.js's operator list of a page (OPS, opList), its alignment facts: `codes`, for each
  * text-showing operation (showText, showSpacedText) outside an annotation's appearance, in order, its glyph objects'
  * character codes (`originalCharCode`; null for a glyph with none, which is not compared; -1 for one that is not a code,
- * which no code equals); `paths`, the number of constructPath operations outside an annotation. The facts are what a
+ * which no code equals); `paths`, the number of constructPath operations outside an annotation and a soft mask's group. The facts are what a
  * remover with no PDF.js aligns a page by: the page is aligned by them exactly as by the list. Pure
  */
 export function alignOf(OPS, opList) {
   const { fnArray, argsArray } = opList
   const codes = []
-  let paths = 0, inAnnot = 0
+  let paths = 0, inAnnot = 0, inMask = 0
+  // (a soft mask's group: PDF.js lists the content of an ExtGState's /SMask in a group of its own, which no content stream
+  // the walk reads paints: not the page's, as an annotation's appearance is not; 2610.19159v1 p3)
+  const groups = []
   for (let j = 0; j < fnArray.length; j++) {
     const fn = fnArray[j]
     if (fn === OPS.beginAnnotation) inAnnot++
     else if (fn === OPS.endAnnotation) inAnnot = Math.max(0, inAnnot - 1)
-    else if (inAnnot) continue
+    else if (fn === OPS.beginGroup) { const m = !!argsArray[j]?.[0]?.smask; groups.push(m); if (m) inMask++ }
+    else if (fn === OPS.endGroup) { if (groups.pop()) inMask-- }
+    else if (inAnnot || inMask) continue
     else if (fn === OPS.showText || fn === OPS.showSpacedText) {
       const gl = (argsArray[j]?.[0] ?? []).filter(g => g && typeof g === 'object')
       const row = new Array(gl.length)

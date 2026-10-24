@@ -1,4 +1,9 @@
 // delta.mjs's types: our base page as an incremental update over arXiv's PDF, built and proved in the box
+/** a host's reading of one of the proof's documents: the getDocument options of its own over the proof's, `own` (ours alone: the bytes
+ *  themselves given to PDF.js, no copy, and given up on an opening that fails), and its reading of every page's text (readArxivText)
+ *  of the document the proof opened and gives it, its result unread (the proof makes each page's record of the text content the page
+ *  gave); the document the host's from its opening (the result's `documents`) */
+export interface DeltaReader { options?: Record<string, unknown>; own?: boolean; read(doc: { numPages: number; getPage(n: number): Promise<unknown> }): Promise<unknown> }
 import type { DeltaWhy, PageRanges } from './delta-wire.mjs'
 import type { PdfLib } from './remove.mjs'
 
@@ -27,6 +32,10 @@ export declare function proveDelta(origBytes: Uint8Array, deltaBytes: Uint8Array
   getDocument: (options: Record<string, unknown>) => { promise: Promise<unknown>; destroy?: () => Promise<void> }
   documentOptions?: Record<string, unknown>
   replaced: PageRanges
+  /** the host's own readings of arXiv's PDF (`orig`) and of our final pass (`ours`), in place of the proof's: the proof opens the
+   *  document of a copy of its own bytes (ours of them where `own`) at verbosity 1, with `options` over `documentOptions`, under its
+   *  capture of the console, and gives it to `read`; every document opened is handed back in the result's `documents` */
+  readers?: { orig?: DeltaReader; ours?: DeltaReader } | null
   objectsMax?: number; decodedMax?: number; heldMax?: number
-}): Promise<{ ok: true; pages: [ours: number, arxiv: number]; replaced: number } | { ok: false; code: 'delta-proof' | 'delta-xref'; why: string }>
+}): Promise<({ ok: true; pages: [ours: number, arxiv: number]; replaced: number } | { ok: false; code: 'delta-proof' | 'delta-xref'; why: string }) & { documents?: { orig: unknown | null; ours: unknown | null } }>
 export declare function wrappedPagesOf(PL: import('./remove.mjs').PdfLib, doc: unknown): number[]

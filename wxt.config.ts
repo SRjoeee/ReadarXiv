@@ -144,12 +144,13 @@ export default defineConfig({
     host_permissions: ['https://openrouter.ai/*', 'https://translate-pa.googleapis.com/*', 'https://edge.microsoft.com/*', 'https://arxiv.org/*', 'https://readarxiv.com/*'],
     // The floating button (DESIGN §4.0c) frames the popup as its control panel, and a page may only load an extension
     // file that is declared here. One file, and only to arXiv. What the popup loads for itself (its script, its
-    // style sheet) is asked for by the extension's own origin and needs no entry; the button's mark is inline vector. A page that
-    // may frame the popup could try to trick a click on it: the popup shows no key and no paper text, and what a
-    // click can do there is what the reader does there anyway — start or undo a translation, pick a mode or a service
-    // On this experiment branch the PDF reader's page too: arXiv's PDF page frames it (entrypoints/pdf.content.ts), and
-    // what that page loads for itself is asked for by the extension's own origin, as the popup's is, and needs no entry
-    web_accessible_resources: [{ resources: ['popup.html'], matches: ['https://arxiv.org/*'] }, { resources: ['pdf-reader.html'], matches: ['https://arxiv.org/*'] }],
+    // style sheet) is asked for by the extension's own origin and needs no entry; the button's mark is inline vector.
+    // The PDF reader's page too: arXiv's PDF page frames it (entrypoints/pdf.content.ts), and what that page loads for
+    // itself is asked for by the extension's own origin, as the popup's is, and needs no entry.
+    // Both at a dynamic address (`use_dynamic_url`): the browser session's id, which `runtime.getURL` gives and no page
+    // can guess, so the static address an arXiv page could frame lands on an error page. Framed, either page acts only
+    // once the content script that made its frame vouches for it (shared/frame-owner.ts)
+    web_accessible_resources: [{ resources: ['popup.html'], matches: ['https://arxiv.org/*'], use_dynamic_url: true }, { resources: ['pdf-reader.html'], matches: ['https://arxiv.org/*'], use_dynamic_url: true }],
     // A custom endpoint may be http on 127.0.0.1 / the LAN (Ollama, LM Studio); with only the localhost literal the request fails outright (Codex on #6).
     // This is only the range that may be requested; the real grant is still asked for per origin on the settings page
     optional_host_permissions: ['https://*/*', 'http://*/*'],

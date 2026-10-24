@@ -6,10 +6,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type Ref, writePart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { PDF_OPTIONS } from '@/pdf-reader/engine/layer-proto/run.mjs'
-import { createLayerSide, LEFT_RETRY_MS, noLayoutPage, PAGE_MS, SPREAD_MAX, spreadPages } from '@/pdf-reader/engine/view/layer-side.mjs'
+import { AHEAD_IDLE_MS, AHEAD_PAGES, createLayerSide, IOS_KEEP_PIXELS, KEEP_PIXELS, keepBudget, LEFT_RETRY_MS, noLayoutPage, onIos, PAGE_MS, SPREAD_MAX, spreadPages } from '@/pdf-reader/engine/view/layer-side.mjs'
 import { type DocumentTask, internalsOf, type ViewEvent } from '@/pdf-reader/engine/view/reader-view.mjs'
 import { made, N, ORIG, partInputs } from './helpers/format-paper'
-import { ASSETS, clientOf, FakePDFPageView, FakePDFViewer, fakeDoc, fakeTask, flush } from './helpers/reader-fakes'
+import { ASSETS, clientOf, FakeIO, FakePDFPageView, FakePDFViewer, fakeDoc, fakeTask, flush } from './helpers/reader-fakes'
 import { ALL, content, installSideFakes, jobRef, layerOf, M, macrotask, nearOn, places, renders, rowOf, type Setup, settle, setup } from './helpers/side-setup'
 
 installSideFakes()
@@ -255,8 +255,8 @@ describe('one frame a page: the copy at the place\'s k, whatever PDF.js drew the
 })
 
 describe('L9: the window under the pageOf contract', () => {
-  it('a laid page far from the view lets its element and its copy go; back in view it is asked again and drawn the same', async () => {
-    const s = await setup()
+  it('a laid page far from the view lets its element and its copy go where none is kept (keepPixels 0); back in view it is asked again and drawn the same', async () => {
+    const s = await setup({ keepPixels: 0 })
     await nearOn(s, [1, 2])
     s.side.tell(await ALL())
     await settle(s)
@@ -275,6 +275,217 @@ describe('L9: the window under the pageOf contract', () => {
     const again = layerOf(s, 2)?.querySelector('svg') as SVGSVGElement
     expect(again).not.toBe(svg)
     expect(again.outerHTML).toBe(html)
+  })
+})
+
+describe('no flash coming back: the drawings kept off the view (KEEP_PIXELS, §11.8)', () => {
+  /** the side open with every row, pages 1 and 2 near and laid */
+  async function laid(o: Parameters<typeof setup>[0] = {}) {
+    const s = await setup({ door: { rows: 'gate' }, ...o })
+    const m = await M()
+    await nearOn(s, [1, 2])
+    s.side.tell(await ALL())
+    s.side.take(m.index.units.map((_, id) => rowOf(id)))
+    s.side.end()
+    await settle(s)
+    return { s, m }
+  }
+
+  it('a laid page far from the view keeps its drawing detached; back in view it is put back in the same task, the same elements, nothing asked or drawn again', async () => {
+    const { s } = await laid({ ahead: 0 })
+    const wrap = layerOf(s, 2) as HTMLElement, copy = wrap.querySelector('canvas') as HTMLCanvasElement, svg = wrap.querySelector('svg')
+    const asked = s.side.probe().asked as number, copies = s.side.probe().copies as number
+    await nearOn(s, [2], false)
+    // (detached: the place holds the empty element, and no page view is made of it)
+    expect(content(s, 2)).toBe('none')
+    expect(wrap.isConnected).toBe(false)
+    expect(copy.width).toBeGreaterThan(0)
+    expect(s.side.probe()).toMatchObject({ drawings: 1, drawnPixels: copy.width * copy.height })
+    const made = FakePDFPageView.made.length
+    // near again: put back at once, before any task of the door's or the view's
+    FakeIO.tell([places(s)[1] as HTMLElement], true)
+    expect(content(s, 2)).toBe('layer')
+    expect(layerOf(s, 2)).toBe(wrap)
+    expect(wrap.querySelector('canvas')).toBe(copy)
+    expect(wrap.querySelector('svg')).toBe(svg)
+    await settle(s)
+    expect(FakePDFPageView.made.length).toBe(made)
+    expect(s.side.probe()).toMatchObject({ asked, copies, drawings: 0, drawnPixels: 0, restored: 1 })
+  })
+
+  it('past the budget the drawing farthest from the view is let go (its copy released), whichever was kept last: that page is asked and drawn again as it comes near', async () => {
+    const { s } = await laid({ ahead: 0 })
+    const one = layerOf(s, 1)?.querySelector('canvas') as HTMLCanvasElement, two = layerOf(s, 2)?.querySelector('canvas') as HTMLCanvasElement
+    const px = one.width * one.height
+    expect(two.width * two.height).toBe(px)
+    // a budget for one page and a half, the view at page 1: page 2 kept first, then page 1, which lets page 2's go (farther)
+    const t = await laid({ ahead: 0, keepPixels: Math.floor(1.5 * px) })
+    expect(internalsOf(t.s.view).centre()).toBe(1)
+    const second = layerOf(t.s, 2)?.querySelector('canvas') as HTMLCanvasElement
+    await nearOn(t.s, [2], false)
+    await nearOn(t.s, [1], false)
+    expect(t.s.side.probe()).toMatchObject({ drawings: 1, drawnPixels: px, dropped: 1 })
+    expect(second.width).toBe(0)
+    const asked = t.s.side.probe().asked as number
+    await nearOn(t.s, [1])
+    expect(content(t.s, 1)).toBe('layer')
+    await nearOn(t.s, [2])
+    await settle(t.s)
+    expect(t.s.side.probe().asked as number).toBe(asked + 1)
+    expect(content(t.s, 2)).toBe('layer')
+  })
+
+  it('the budget is the device\'s (keepBudget): a 64th of its memory (4 GB where the browser does not say), two of its screens at least, KEEP_PIXELS at most', () => {
+    const MB = 2 ** 20
+    expect(keepBudget({ deviceMemory: 4, screenPixels: 1080 * 2400 })).toBe((64 * MB) / 4)
+    expect(keepBudget({ deviceMemory: 8, screenPixels: 3024 * 1964 })).toBe(KEEP_PIXELS)
+    expect(keepBudget({ deviceMemory: 2, screenPixels: 720 * 1600 })).toBe((32 * MB) / 4)
+    // (none told: a phone's 4 GB; a large screen on a small memory: two screens)
+    expect(keepBudget({ screenPixels: 1080 * 2400 })).toBe((64 * MB) / 4)
+    expect(keepBudget({ deviceMemory: 0.5, screenPixels: 2560 * 1600 * 4 })).toBe(Math.min(KEEP_PIXELS, 2 * 2560 * 1600 * 4))
+    expect(keepBudget()).toBe((64 * MB) / 4)
+    // (iOS and iPadOS: IOS_KEEP_PIXELS at most, whatever the screen; an iPad says it is a Mac with a touch screen)
+    expect(keepBudget({ ios: true, screenPixels: 1179 * 2556 })).toBe(IOS_KEEP_PIXELS)
+    expect(keepBudget({ ios: true, screenPixels: 100 * 100 })).toBe(IOS_KEEP_PIXELS)
+    expect(onIos({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1', maxTouchPoints: 5 })).toBe(true)
+    expect(onIos({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15', maxTouchPoints: 5 })).toBe(true)
+    expect(onIos({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15', maxTouchPoints: 0 })).toBe(false)
+    expect(onIos({ userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36', maxTouchPoints: 5 })).toBe(false)
+    expect(onIos(null)).toBe(false)
+  })
+
+  it('a drawing kept while the pane was zoomed comes back drawn as it was, then again at the place\'s new k', async () => {
+    const { s } = await laid({ ahead: 0 })
+    const kept = layerOf(s, 2)?.querySelector('canvas') as HTMLCanvasElement
+    await nearOn(s, [2], false)
+    s.view.zoomTo(2)
+    await settle(s, 4)
+    await s.clock.advance(700)
+    await settle(s)
+    const copies = s.side.probe().copies as number
+    await nearOn(s, [2])
+    // (the drawing as it was, in place at once; its copy drawn at the new k after)
+    expect(content(s, 2)).toBe('layer')
+    await settle(s)
+    expect(s.side.probe().copies as number).toBe(copies + 1)
+    expect(kept.width).toBe(0)
+    expect(layerOf(s, 2)?.querySelector('canvas')).not.toBe(kept)
+  })
+
+  it('again(), another target and dropOthers() let the kept drawings go: none of a door before is put back', async () => {
+    const { s, m } = await laid({ ahead: 0 })
+    const copy = layerOf(s, 2)?.querySelector('canvas') as HTMLCanvasElement
+    await nearOn(s, [2], false)
+    expect(s.side.probe().drawings).toBe(1)
+    s.side.again()
+    await settle(s)
+    expect(s.side.probe().drawings).toBe(0)
+    expect(copy.width).toBe(0)
+    s.side.take(m.index.units.map((_, id) => rowOf(id)))
+    s.side.end()
+    await settle(s)
+    await nearOn(s, [2])
+    await settle(s)
+    expect(content(s, 2)).toBe('layer')
+    expect(layerOf(s, 2)?.querySelector('canvas')).not.toBe(copy)
+    const again = layerOf(s, 2)?.querySelector('canvas') as HTMLCanvasElement
+    await nearOn(s, [2], false)
+    expect(s.side.probe().drawings).toBe(1)
+    s.side.retarget('ja')
+    await settle(s)
+    expect(s.side.probe().drawings).toBe(0)
+    expect(again.width).toBe(0)
+  })
+
+  it('dispose and a refusal let every kept drawing go', async () => {
+    const { s } = await laid({ ahead: 0 })
+    const copy = layerOf(s, 2)?.querySelector('canvas') as HTMLCanvasElement
+    await nearOn(s, [2], false)
+    s.side.dispose()
+    await flush(10)
+    expect(copy.width).toBe(0)
+  })
+})
+
+describe('the pages ahead: laid while the reader rests, kept off the view (AHEAD_PAGES, §11.8)', () => {
+  it('once the rows have ended and the view rests AHEAD_IDLE_MS, the pages after the near ones are laid and drawn off the view; coming near they are put back at once', async () => {
+    const s = await setup({ door: { rows: 'gate' } })
+    const m = await M()
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    s.side.take(m.index.units.map((_, id) => rowOf(id)))
+    await settle(s)
+    expect(content(s, 1)).toBe('layer')
+    // (no lay ahead before the rows end: a host that translates as it shows is asked for nothing)
+    await s.clock.advance(AHEAD_IDLE_MS + 100)
+    await settle(s)
+    expect(s.side.probe().ahead).toBe(0)
+    s.side.end()
+    await settle(s, 4)
+    await s.clock.advance(AHEAD_IDLE_MS + 100)
+    await settle(s, 60)
+    expect(s.side.probe()).toMatchObject({ ahead: AHEAD_PAGES, aheadKept: AHEAD_PAGES, drawings: AHEAD_PAGES })
+    expect(content(s, 2)).toBe('none')
+    const asked = s.side.probe().asked as number
+    FakeIO.tell([places(s)[1] as HTMLElement], true)
+    expect(content(s, 2)).toBe('layer')
+    await settle(s)
+    expect(s.side.probe().asked).toBe(asked)
+  })
+
+  it('a scroll during the rest puts the pages ahead off: none is asked until the view rests again', async () => {
+    const s = await setup({ door: { rows: 'gate' } })
+    const m = await M()
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    s.side.take(m.index.units.map((_, id) => rowOf(id)))
+    s.side.end()
+    await settle(s)
+    const ahead = s.side.probe().ahead as number
+    expect(ahead).toBe(0)
+    for (let i = 0; i < 4; i++) {
+      s.panes.right.scrollTop = 10 + i
+      s.panes.right.dispatchEvent(new Event('scroll'))
+      await s.clock.advance(AHEAD_IDLE_MS / 2)
+    }
+    expect(s.side.probe().ahead).toBe(ahead)
+    await s.clock.advance(AHEAD_IDLE_MS + 100)
+    await settle(s, 60)
+    expect(s.side.probe().ahead as number).toBeGreaterThan(0)
+  })
+
+  it('ahead: 0 lays none', async () => {
+    const s = await setup({ door: { rows: 'gate' }, ahead: 0 })
+    const m = await M()
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    s.side.take(m.index.units.map((_, id) => rowOf(id)))
+    s.side.end()
+    await settle(s)
+    await s.clock.advance(AHEAD_IDLE_MS + 100)
+    await settle(s, 60)
+    expect(s.side.probe()).toMatchObject({ ahead: 0, drawings: 0 })
+  })
+})
+
+describe('the faces in one wave (warm.mjs, §11.8)', () => {
+  it('the faces of the near pages\' units are asked of the host once their rows and parts are in, before the door is open', async () => {
+    const asked: string[] = []
+    let bound: (v: boolean) => void = () => {}
+    const s = await setup({ door: { rows: 'gate' }, faceSources: async id => { asked.push(id); return null }, bind: () => new Promise<boolean>(r => { bound = r }) })
+    const m = await M()
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    await settle(s, 10)
+    s.side.take(m.index.units.map((_, id) => rowOf(id, `\u4e2d\u6587 ${id}`)))
+    await settle(s, 10)
+    expect(s.opens).toBe(0)
+    // the target's CJK body face (regular or light by the paper's family), and the bold one: page 1's likely faces, v0's
+    expect(asked.some(id => /^shs-sc-(regular|light)$/.test(id))).toBe(true)
+    expect(asked.some(id => /^shs-sc-(bold|semibold)$/.test(id))).toBe(true)
+    bound(true)
+    await settle(s)
+    expect(s.opens).toBe(1)
   })
 })
 
@@ -762,6 +973,164 @@ describe('L15: a fork', () => {
   })
 })
 
+describe('another target over the same layer (retarget)', () => {
+  const svgLang = (s: Setup, n: number) => layerOf(s, n)?.querySelector('svg')?.getAttribute('lang') ?? null
+  /** the side open on its first target (zh), pages 1 and 2 near and laid with its rows */
+  async function laid() {
+    const s = await setup({ door: { rows: 'gate' } })
+    const m = await M()
+    await nearOn(s, [1, 2])
+    s.side.tell(await ALL())
+    s.side.take(m.index.units.map((_, id) => rowOf(id)))
+    s.side.end()
+    await settle(s)
+    return { s, m }
+  }
+
+  it('opens the door again over the same composed document, with nothing read again; each laid page keeps its drawing until the new target\'s commits', async () => {
+    const { s, m } = await laid()
+    expect([svgLang(s, 1), svgLang(s, 2)]).toEqual(['zh', 'zh'])
+    const kept = layerOf(s, 1)?.querySelector('svg'), fetched = s.fetched.length
+    s.side.retarget('ja')
+    await settle(s)
+    expect(s.opens).toBe(2)
+    expect(s.composed.length).toBe(1)
+    expect(s.destroyed).toEqual([])
+    expect(s.side.probe()).toMatchObject({ target: 'ja', composed: 1, docs: 1, rows: 0 })
+    // (the feed's objects are read once: the new door is given the parts read)
+    expect(s.fetched.length).toBe(fetched)
+    // the new target's pages wait for its rows: the target before stays drawn, the new door given none of its rows
+    expect(content(s, 1)).toBe('layer')
+    expect(layerOf(s, 1)?.querySelector('svg')).toBe(kept)
+    expect(s.doors[1]?.taken).toEqual([])
+    s.side.take(m.index.units.map((_, id) => rowOf(id, `ja ${id}`)))
+    s.side.end()
+    await settle(s)
+    expect([content(s, 1), content(s, 2)]).toEqual(['layer', 'layer'])
+    expect([svgLang(s, 1), svgLang(s, 2)]).toEqual(['ja', 'ja'])
+    expect(kept?.isConnected).toBe(false)
+  })
+
+  it('lets the door before go at once: a copy of it under way is aborted and never put in place', async () => {
+    const { s, m } = await laid()
+    // (page 3's copy by the first door held at its render)
+    const doc = (await s.composed[0]!.task.promise) as unknown as { getPage(n: number): Promise<object> }
+    const get = doc.getPage.bind(doc)
+    let release = () => {}
+    const held = new Promise<void>(r => { release = r })
+    doc.getPage = async (n: number) => Object.assign(await get(n), { render: () => ({ promise: held }) })
+    await nearOn(s, [3])
+    await settle(s, 6)
+    const ask = s.doors[0]?.copies.find(c => c[0] === 3)?.[1] as { signal?: AbortSignal } | undefined
+    expect(ask?.signal?.aborted).toBe(false)
+    s.side.retarget('ja')
+    expect(ask?.signal?.aborted).toBe(true)
+    expect(s.doors[0]?.layer.pageState.bind(s.doors[0]?.layer)).toThrow()
+    release()
+    doc.getPage = get
+    await settle(s)
+    expect(content(s, 3)).not.toBe('layer')
+    s.side.take(m.index.units.map((_, id) => rowOf(id, `ja ${id}`)))
+    s.side.end()
+    await settle(s)
+    expect(svgLang(s, 3)).toBe('ja')
+  })
+
+  it('dropOthers: the pages still showing the target before go back to the original\'s page; the new target\'s stay', async () => {
+    const { s, m } = await laid()
+    s.side.retarget('ja')
+    await settle(s)
+    expect(content(s, 1)).toBe('layer')
+    s.side.dropOthers()
+    await flush(4)
+    expect([content(s, 1), content(s, 2)]).toEqual(['original', 'original'])
+    s.side.take(m.index.units.map((_, id) => rowOf(id, `ja ${id}`)))
+    s.side.end()
+    await settle(s)
+    s.side.dropOthers()
+    await flush(4)
+    expect([svgLang(s, 1), svgLang(s, 2)]).toEqual(['ja', 'ja'])
+  })
+
+  it('the kept pages of the target before are lit and hit by nothing until the new target\'s page commits (their shapes muted), or the original shows', async () => {
+    const { s, m } = await laid()
+    s.side.retarget('ja')
+    await settle(s)
+    expect(s.side.probe().muted).toBe('1 2')
+    s.side.take(m.index.units.map((_, id) => rowOf(id, `ja ${id}`)))
+    s.side.end()
+    await settle(s)
+    expect(s.side.probe().muted).toBe('')
+    s.side.retarget('ko')
+    await settle(s)
+    expect(s.side.probe().muted).toBe('1 2')
+    s.side.dropOthers()
+    await flush(4)
+    expect([s.side.probe().muted, content(s, 1)]).toEqual(['', 'original'])
+  })
+
+  it('A -> B -> C in quick succession, and a retarget while the door opens: the last target alone laid, the side not refused', async () => {
+    const { s, m } = await laid()
+    s.side.retarget('ja')
+    s.side.retarget('ko')
+    await settle(s)
+    s.side.take(m.index.units.map((_, id) => rowOf(id, `ko ${id}`)))
+    s.side.end()
+    await settle(s)
+    expect([svgLang(s, 1), svgLang(s, 2), s.side.probe().state, s.side.probe().composed]).toEqual(['ko', 'ko', 'open', 1])
+    // (an open overtaken while it waits on the composed document, which then fails: nothing refused)
+    const r = await setup({ door: { rows: 'gate' }, composedFailAt: [0] })
+    await nearOn(r, [1])
+    r.side.tell(await ALL())
+    r.side.retarget('ja')
+    await settle(r)
+    expect(r.side.probe().target).toBe('ja')
+  })
+
+  it('zh -> ja -> zh, then the rows will not come: the first zh door\'s pages go to the original as the ja ones would (a drawing of a door before)', async () => {
+    const { s } = await laid()
+    s.side.retarget('ja')
+    s.side.retarget('zh')
+    await settle(s)
+    expect([content(s, 1), s.side.probe().muted]).toEqual(['layer', '1 2'])
+    s.side.dropOthers()
+    await flush(4)
+    expect([content(s, 1), content(s, 2), s.side.probe().muted]).toEqual(['original', 'original', ''])
+  })
+
+  it('a page holding the focus is kept by dropOthers until the focus leaves, then let go as the others: the original, its shapes unmuted', async () => {
+    const { s } = await laid()
+    s.side.retarget('ja')
+    await settle(s)
+    const b = document.createElement('button')
+    layerOf(s, 1)?.append(b)
+    b.focus()
+    s.side.dropOthers()
+    await flush(4)
+    expect([content(s, 1), content(s, 2)]).toEqual(['layer', 'original'])
+    const out = document.createElement('button')
+    document.body.append(out)
+    out.focus()
+    await settle(s, 4)
+    expect([content(s, 1), s.side.probe().muted]).toEqual(['original', ''])
+    out.remove()
+  })
+
+  it('the same target, or a side that refused its layer: nothing', async () => {
+    const { s } = await laid()
+    s.side.retarget('zh')
+    await settle(s)
+    expect(s.opens).toBe(1)
+    const r = await setup({ bind: async () => false })
+    r.side.tell(await ALL())
+    await settle(r)
+    expect(r.side.probe().state).toBe('refused')
+    r.side.retarget('ja')
+    await settle(r)
+    expect([r.opens, r.side.probe().target]).toEqual([0, 'zh'])
+  })
+})
+
 describe('the parts after their end (the review\'s probe 4)', () => {
   it('an end told short, then a part past it with a later end: the door opened again over every part, the side open, its pages laid', async () => {
     const s = await setup()
@@ -1224,7 +1593,8 @@ describe('the PR\'s review, second round', () => {
   })
 
   it('a page this door laid, let go far away and near again, whose copy then fails: the right\'s shapes the original\'s there too (4289064231)', async () => {
-    const s = await setup({ copyFails: (d, n, before) => d === 0 && n === 1 && before === 1 })
+    // (no drawing kept off the view: the page is laid and drawn again as it comes near)
+    const s = await setup({ copyFails: (d, n, before) => d === 0 && n === 1 && before === 1, keepPixels: 0 })
     await nearOn(s, [1])
     s.side.tell(await ALL())
     await settle(s)
@@ -1253,7 +1623,8 @@ describe('the PR\'s review, third round (#379)', () => {
   }
 
   it('a page shown as the original again before its left part came: the left part landing later makes no translated shapes there (4289273765, 4289274948)', async () => {
-    const s = await setup({ copyFails: (d, n, before) => d === 0 && n === 1 && before === 1 })
+    // (no drawing kept off the view: the page is laid and drawn again as it comes near)
+    const s = await setup({ copyFails: (d, n, before) => d === 0 && n === 1 && before === 1, keepPixels: 0 })
     await nearOn(s, [1])
     s.side.tell(await ALL())
     await settle(s)

@@ -402,7 +402,7 @@ describe('the run in parts: waits, failures and documents', () => {
     expect(doc.reads.slice(reads)).toEqual([2])
   })
 
-  it('parses a page once for every render of its copies (its planes, its crops\' sources, a copy again): warm, at most WARM_PAGES pages, let go at dispose', async () => {
+  it('parses a page once for every render of its copies (its planes, its crops\' sources, a copy again) and of a later run over the same document: warm, the document\'s, at most WARM_PAGES pages', async () => {
     const { WARM_PAGES } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
     const P = await takePaper(TAKE)
     const base = docsOf(TAKE)(0)
@@ -425,16 +425,25 @@ describe('the run in parts: waits, failures and documents', () => {
     const canvas = document.createElement('canvas')
     canvas.width = 10
     canvas.height = 10
-    lists.length = 0
-    cleaned.length = 0
-    await run.drawCopy(2, canvas.getContext('2d')!, 1)
-    await run.drawCopy(2, canvas.getContext('2d')!, 2)
-    // (A and C of page 2, B of pages 1 and 3, twice: each page's list asked once, none let go between)
+    // (the pages read for the lay: each page's list asked once, and kept)
     expect([...lists].sort()).toEqual([1, 2, 3])
     expect(cleaned).toEqual([])
+    lists.length = 0
+    await run.drawCopy(2, canvas.getContext('2d')!, 1)
+    await run.drawCopy(2, canvas.getContext('2d')!, 2)
+    // (A and C of page 2, B of pages 1 and 3, twice: drawn from the lay's parse, none asked again, none let go between)
+    expect(lists).toEqual([])
+    expect(cleaned).toEqual([])
     expect(WARM_PAGES).toBeGreaterThanOrEqual(3)
+    // (the pages are the document's, kept past the run's dispose: a run opened again over it, another target's, reads and copies
+    // them with no list asked again)
     run.dispose()
-    expect([...cleaned].sort()).toEqual([1, 2, 3])
+    const again = await openWarm(P, doc, { target: 'ja' })
+    await again.until(3)
+    await again.drawCopy(2, canvas.getContext('2d')!, 1)
+    expect(lists).toEqual([])
+    expect(cleaned).toEqual([])
+    again.dispose()
   })
 
   it('steps over a page whose drawing throws: its units the original\'s on all their pages, why page; the others drawn', async () => {

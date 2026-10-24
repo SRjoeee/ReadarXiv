@@ -11,7 +11,8 @@
 // the page's width), and on every page laid near the view:
 //   - the copy is on the place's box at the pixel ratio, as PDF.js sizes a page view's canvas;
 //   - the SVG and the links are the page's size at its scale, not its floored box;
-// and a page retired and laid again at the same zoom gives the same copy, 0 pixels differing (the time's half of the rule).
+// and a page drawn again at the same zoom gives the same copy, 0 pixels differing, while one far from the view and back is its
+// kept drawing, nothing drawn again (the time's half of the rule).
 // (Before the per-unit erasure a copy could also be cut from PDF.js's canvas of the original, and its erase rectangles' residue
 // was measured here; a copy is now always rendered from the composed document, and what it hides is glyph-exact by its groups:
 // the pixel gates of lab/pdf/spikes/ocg-gate.mjs and lab/pdf/spikes/ocg-reader.mjs.)
@@ -148,28 +149,43 @@ try {
         continue
       }
 
-      // ------------------------------------------------------------------ the time's half: retired, then laid again
+      // ------------------------------------------------------------------ the time's half: kept off the view and put back; drawn again
       await page.waitForFunction(settled, null, { timeout: 15_000 }).catch(() => undefined)
       await sleep(1500)
       const first = await page.evaluate(() => {
         const c = document.querySelector('#right .axt-place[data-page-number="1"] canvas.axt-layer-copy')
-        window.__axtFirst = { w: c.width, h: c.height, px: c.getContext('2d').getImageData(0, 0, c.width, c.height).data }
-        return { retirements: window.__reader.side().probe().retirements }
+        window.__axtFirst = { w: c.width, h: c.height, px: c.getContext('2d').getImageData(0, 0, c.width, c.height).data, el: c }
+        const p = window.__reader.side().probe()
+        return { retirements: p.retirements, copies: p.copies }
       })
-      await page.evaluate(() => { document.getElementById('right').scrollTop = 1e7 })
-      const retired = await page.waitForFunction(r => window.__reader.side().probe().retirements > r && !document.querySelector('#right .axt-place[data-page-number="1"] canvas.axt-layer-copy'), first.retirements, { timeout: 20_000 }).then(() => true, () => false)
-      await page.evaluate(() => { document.getElementById('right').scrollTop = 0 })
-      const again = retired && await page.waitForFunction(() => document.querySelector('#right .axt-place[data-page-number="1"] canvas.axt-layer-copy')?.width > 0, null, { timeout: 30_000 }).then(() => true, () => false)
-      const same = again ? await page.evaluate(() => {
+      /** page 1's copy now against the first: its size, the pixels that differ, and whether it is the first's very canvas */
+      const againstFirst = () => page.evaluate(() => {
         const c = document.querySelector('#right .axt-place[data-page-number="1"] canvas.axt-layer-copy'), a = window.__axtFirst
-        if (c.width !== a.w || c.height !== a.h) return { differing: -1, size: [c.width, c.height], was: [a.w, a.h] }
+        if (c.width !== a.w || c.height !== a.h) return { differing: -1, size: [c.width, c.height], was: [a.w, a.h], same: c === a.el }
         const b = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
         let differing = 0
         for (let i = 0; i < a.px.length; i += 4) if (a.px[i] !== b[i] || a.px[i + 1] !== b[i + 1] || a.px[i + 2] !== b[i + 2]) differing++
-        window.__axtFirst = null
-        return { differing, size: [c.width, c.height] }
-      }) : null
-      check(`DPR ${dpr}: page 1 retired and laid again at the same zoom draws the same copy (0 pixels differ)`, same?.differing === 0, JSON.stringify({ retired, again, ...same }))
+        return { differing, size: [c.width, c.height], same: c === a.el }
+      })
+      // far from the view: out of the document, its drawing kept (layer-side.mjs KEEP_PIXELS); back: put back as it was, nothing drawn
+      await page.evaluate(() => { document.getElementById('right').scrollTop = 1e7 })
+      const retired = await page.waitForFunction(r => window.__reader.side().probe().retirements > r && !document.querySelector('#right .axt-place[data-page-number="1"] canvas.axt-layer-copy'), first.retirements, { timeout: 20_000 }).then(() => true, () => false)
+      await page.evaluate(() => { document.getElementById('right').scrollTop = 0 })
+      const back = retired && await page.waitForFunction(() => document.querySelector('#right .axt-place[data-page-number="1"] canvas.axt-layer-copy')?.width > 0, null, { timeout: 30_000 }).then(() => true, () => false)
+      const kept = back ? await againstFirst() : null
+      const copiesBack = await page.evaluate(() => window.__reader.side().probe().copies)
+      check(`DPR ${dpr}: page 1 far from the view and back is put back as it was drawn: its very copy, 0 pixels differing, no copy drawn again`, kept?.same === true && kept.differing === 0 && copiesBack === first.copies, JSON.stringify({ retired, back, ...kept, copies: [first.copies, copiesBack] }))
+      // drawn again at the same zoom (a zoom away and back: the recopy at each): the same copy, 0 pixels differing
+      const z0 = await page.evaluate(() => window.__reader.view.probe().scale)
+      for (const z of [z0 * 1.25, z0]) {
+        await page.evaluate(z => window.__reader.view.zoomTo(z), z)
+        await page.waitForFunction(settled, null, { timeout: 20_000 }).catch(() => undefined)
+        await sleep(1500)
+        await page.waitForFunction(settled, null, { timeout: 20_000 }).catch(() => undefined)
+      }
+      const drawn = await againstFirst()
+      await page.evaluate(() => { window.__axtFirst = null })
+      check(`DPR ${dpr}: page 1 drawn again at the same zoom (a zoom away and back) draws the same copy (0 pixels differ)`, drawn?.same === false && drawn.differing === 0, JSON.stringify(drawn))
 
       // ------------------------------------------------------------------ each zoom
       const seen = []

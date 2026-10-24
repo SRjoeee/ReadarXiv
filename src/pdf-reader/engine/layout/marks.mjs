@@ -16,7 +16,7 @@
 import { frontMarks, lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
 import { textless } from '../rules/arg-roles.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
-import { INK_FREE_LEAD } from '../rules/tex-kernel.mjs'
+import { INK_FREE_LEAD, prefixWord } from '../rules/tex-kernel.mjs'
 import { tokenAtMark, tokenizeDocument } from '../pipeline/anchors.mjs'
 import { DISPLAY, plainTranslated } from '../translate/mt.mjs'
 import { readLines } from '../pipeline/typeset/tex.mjs'
@@ -27,7 +27,7 @@ import { isMemoryError } from '../pipeline/memory.mjs'
 import { NAME_KEYS } from './names.mjs'
 import { fillOfColour } from './colour.mjs'
 import { boundedJson, checkKeys, checkPages, checkViews, COORD_MAX, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
-import { OWNED, OWNED_HOW, ownedPages, STREAM_COLUMNS, WANT } from './stream.mjs'
+import { OWNED, OWNED_HOW, ownedPages, spellOf, STREAM_COLUMNS, WANT } from './stream.mjs'
 
 // ---------------------------------------------------------------- the classes
 /** every class, in this order */
@@ -193,34 +193,59 @@ export function inkSamples(units) {
   const seen = new Set()
   for (const u of units) for (const p of u.pieces) {
     if (seen.size >= INK_MAX) return [...seen]
-    if (p.t !== 'ph' || classOf(p) !== 'macro' || seen.has(p.src) || symbolText(p.src) !== null) continue
-    const src = p.src ?? ''
-    if (!src || src.length > INK_SRC_MAX || /[%#]|\\(?:verb|lstinline|begin|end|par)(?![A-Za-z@])/.test(src) || !balanced(src)) continue
-    seen.add(src)
+    if (p.t !== 'ph' || classOf(p) !== 'macro' || seen.has(p.src) || symbolText(p.src) !== null || !boxable(p.src)) continue
+    seen.add(p.src)
   }
   return [...seen]
 }
 const balanced = s => { let d = 0; for (let i = 0; i < s.length; i++) { if (s[i] === '\\') { i++; continue } if (s[i] === '{') d++; else if (s[i] === '}' && --d < 0) return false } return d === 0 }
+/** a source TeX can set in a box of its own: no comment or parameter sign, no \\verb, its braces balanced, no environment, no
+ *  paragraph's end, at most INK_SRC_MAX long */
+const boxable = src => !!src && src.length <= INK_SRC_MAX && !/[%#]|\\(?:verb|lstinline|begin|end|par)(?![A-Za-z@])/.test(src) && balanced(src)
+/** the leads the ink section asks about past the paper's macros inkSamples takes, at most */
+export const LEAD_MAX = 64
+/**
+ * The leads' samples: the placeholders at a unit's head, before its start mark (headEnd), where no mark goes, that inkSamples
+ * does not ask about — inline code (classOf 'code': a cell's \\texttt{max\\_tokens}, 2610.21098v1 p13u138) and a paper's macro
+ * past INK_MAX —, once, in the paper's order, each a source TeX can set in a box of its own, at most LEAD_MAX. What TeX sets
+ * for one is its text (readInkTexts), by which the layout finds a lead's ink beside its unit's start (make.mjs besideMarks)
+ * and the erasure a cell's (own.mjs, MR 5b): with no text, the unit is the original's. Asked last (markProbeTex)
+ */
+export function leadSamples(units, asked = inkSamples(units)) {
+  const seen = new Set(asked), out = []
+  for (const u of units) {
+    const pieces = u.pieces ?? [], head = headEnd(pieces, 0)
+    for (let k = 0; k < head; k++) {
+      if (out.length >= LEAD_MAX) return out
+      const p = pieces[k], cls = classOf(p)
+      if ((cls !== 'macro' && cls !== 'code') || seen.has(p.src) || symbolText(p.src) !== null || !boxable(p.src)) continue
+      seen.add(p.src)
+      out.push(p.src)
+    }
+  }
+  return out
+}
 /**
  * The ink section of the probe (`ink`): each sample set in a box of its own, in a group, and the box shown in the log
- * (\showbox, every node: TeX's own list of what it set), between a row `ink-at <i>` and a row `ink-end <i>`; an empty
- * paragraph after each starts TeX's error count again. Writes nothing, ships out nothing (readInkProbe)
+ * (\showbox, every node: TeX's own list of what it set), between a row `ink-at <i>` and a row `ink-end <i>` (`i` numbered on
+ * from `from`); an empty paragraph after each starts TeX's error count again. Writes nothing, ships out nothing (readInkProbe)
  */
-export function inkSection(samples) {
+export function inkSection(samples, from = 0) {
   const show = '\\begingroup\\showboxbreadth=100000 \\showboxdepth=100000 \\tracingonline=0 \\showbox\\axt@ibox\\endgroup'
-  const tests = samples.map((src, i) => `${probeRow('ink-at', i)}\\begingroup\\global\\setbox\\axt@ibox\\box\\voidb@x\\setbox\\axt@ibox\\hbox{${src}}${show}\\endgroup${probeRow('ink-end', i)}\\noindent\\par`)
+  const tests = samples.map((src, i) => `${probeRow('ink-at', from + i)}\\begingroup\\global\\setbox\\axt@ibox\\box\\voidb@x\\setbox\\axt@ibox\\hbox{${src}}${show}\\endgroup${probeRow('ink-end', from + i)}\\noindent\\par`)
   return `\\begingroup\\newbox\\axt@ibox${tests.join('\n')}\\endgroup`
 }
 /** the probe document of the layout marks: its punctuation section, then its ink section, its name section, its skip section,
- *  and last the punctuation section of the paper's own macros (probeSamples' `own`, numbered on from the asked ones): a call
- *  of one runs whatever its body does, which may be more errors than TeX goes on past (a hundred in one paragraph), and what
- *  it loses then is the answers after it, its own kind's, which the marking does without as before. 2610.21377's jnsao.cls
- *  defines \\and as ` and ` in a group at \\begin{document}, which completeMacros takes for the document's (a definition in a
- *  group or a hook is read as any other); the probe's \\and is the kernel's, \\end{tabular}…, and TeX stops there: the answers
- *  for \\N and \\defeq after it are lost, the ink answers before it stand */
-export const markProbeTex = (samples, ink = []) => {
+ *  the punctuation section of the paper's own macros (probeSamples' `own`, numbered on from the asked ones), and last the ink
+ *  section of the leads (leadSamples, numbered on from `ink`): a call of one of the paper's macros runs whatever its body does,
+ *  which may be more errors than TeX goes on past (a hundred in one paragraph), and what it loses then is the answers after
+ *  it, its own kind's, which the marking does without as before. 2610.21377's jnsao.cls defines \\and as ` and ` in a group at
+ *  \\begin{document}, which completeMacros takes for the document's (a definition in a group or a hook is read as any other);
+ *  the probe's \\and is the kernel's, \\end{tabular}…, and TeX stops there: the answers for \\N and \\defeq after it are lost,
+ *  the ink answers before it stand. A paper with no lead to ask about has the document it had */
+export const markProbeTex = (samples, ink = [], leads = []) => {
   const n = samples.findIndex(s => s.own), asked = n < 0 ? samples : samples.slice(0, n)
-  return probeTex([punctuationSection(asked), ...(ink.length ? [inkSection(ink)] : []), nameSection(), skipSection(), ...(n < 0 ? [] : [punctuationSection(samples.slice(n), n)])])
+  return probeTex([punctuationSection(asked), ...(ink.length ? [inkSection(ink)] : []), nameSection(), skipSection(), ...(n < 0 ? [] : [punctuationSection(samples.slice(n), n)]), ...(leads.length ? [inkSection(leads, ink.length)] : [])])
 }
 /** a node TeX lists that sets no ink: glue, a kern, a penalty, a math switch, a box (its own nodes listed below it), a
  *  mark, a colour stack, a write, a destination, a saved or restored matrix, an adjust's or a discretionary's head
@@ -265,43 +290,84 @@ export function readInkProbe(log, samples) {
 
 /** a macro's text as the ink section shows it set, at most */
 export const INK_TEXT_MAX = 64
-/** a character node of a text font's (OT1, T1, LY1, TU), a letter or a digit, as TeX lists it; a ligature of them */
-const TEXT_CHAR = /^\.+\\(?:OT1|T1|LY1|TU)\/\S+ ([A-Za-z0-9])$/
-const TEXT_LIGATURE = /^\.+\\(?:OT1|T1|LY1|TU)\/\S+ \S+ \(ligature ([A-Za-z0-9]{2,3})\)$/
-/** a node between a macro's letters that sets no ink: glue, a kern, a penalty, a math switch, a box's head */
+/** what a lead's text holds for a glyph of a formula's whose character it does not spell (readInkTexts): one glyph, whatever its
+ *  text — U+FFFC, the object replacement character, which no glyph of TeX's text is */
+export const INK_ANY = '\uFFFC'
+/** a character node as TeX lists it, of a font of LaTeX's (its encoding, the rest of its name): the character as TeX prints it,
+ *  and a ligature's characters */
+const CHAR_NODE = /^\.+\\([A-Za-z0-9]+)\/\S+ (\S|\^\^[0-9a-f]{2}|\^\^.)(?: \(ligature (\S{2,3})\))?$/
+/** the text encodings, whose letters and digits are ASCII's */
+const TEXT_ENCODING = new Set(['OT1', 'T1', 'LY1', 'TU'])
+/** the punctuation each text encoding sets as ASCII's character and TeX prints as it: every one's, and T1's and TU's more
+ *  (OT1 sets ¡ ¿ ” “ ˙ – — at < > " \\ _ { |, and its italic £ at $; LY1 is taken at the first alone). Not `?`: the probe has
+ *  no aux, and a macro's \\ref sets "??" there (2610.21098v1's \\figref{…}), never in the paper */
+const PUNCT_ALL = '!#%&()*+,-./:;=@[]'
+const PUNCT_WIDE = `${PUNCT_ALL}"$<>\\^_{|}~`
+/** a node between a macro's characters that sets no ink: glue, a kern, a penalty, a math switch, a box's head */
 const TEXT_PASS = /^\.+\\(?:glue|kern|penalty|mathon|mathoff|[hv]box\()/
 /**
  * The text each sample sets, from the probe's log (inkSection): each sample whose box TeX listed in full with no error
- * between its rows, of letters and digits of text fonts (OT1, T1, LY1, TU: those are ASCII's there) and ligatures of
- * them, at any depth, with nothing else but nodes that set no ink between them — \newcommand\bert{BERT\xspace}'s
- * "BERT", a model's name with a subscript in small capitals "BERTBASE" — as [source, text], the letters in TeX's order,
- * at most INK_TEXT_MAX. Anything else (a rule, an image, a symbol, an error) is no answer: what it sets is not known as
- * text. The layout finds such a macro, set at a unit's head where no mark goes, by its letters (make.mjs)
+ * between its rows, of characters with nothing else but nodes that set no ink between them (glue, kerns, penalties, a
+ * formula's switches, boxes at any depth), as [source, text], the characters in TeX's order, at most INK_TEXT_MAX:
+ * - a letter or a digit of a text font (OT1, T1, LY1, TU: those are ASCII's there), a ligature of them, and the punctuation
+ *   the font sets as ASCII's (PUNCT_ALL; T1's and TU's PUNCT_WIDE): \\newcommand\\bert{BERT\\xspace}'s "BERT", a model's name
+ *   with a subscript in small capitals "BERTBASE", 2610.21098v1's \\CompletionTokenCap{} = 1{,}024 "1,024", a cell's lead
+ *   \\texttt{max\\_tokens} "max_tokens" (T1's underscore; OT1's is a rule: no answer);
+ * - in a formula, between its \\mathon and \\mathoff, each character too: a text font's as above, a letter or a digit of math
+ *   italic (OML, whose letters are ASCII's) as itself, any other — a symbol, a script's prime, a math comma (OML's, which TeX
+ *   prints as `;`) — INK_ANY, one glyph whatever its text: 2610.21176v1's \\dprime{} = $d'$, "d" and INK_ANY.
+ * A text that spells no character (a formula's symbols alone, $\\checkmark$) is no answer: nothing of it tells its ink from
+ * another's; nor is anything else (a rule, an image, a text font's character of no such kind, a character of no text font
+ * outside a formula, an error): what it sets is not known as text. The layout finds such a placeholder, set at a unit's head
+ * where no mark goes, by its text (make.mjs besideMarks), and the erasure a cell's (own.mjs, MR 5b), each glyph by leadStep
  */
 export function readInkTexts(log, samples) {
   const out = []
-  let at = null, text = null, bad = false, done = false
+  let at = null, text = null, bad = false, done = false, math = 0
   for (const line of (log ?? '').split('\n')) {
     const [r] = /^LAYOUT-PROBE /.test(line) ? readProbe(line) : []
     if (r && r.schema === PROBE_SCHEMA && (r.tag === 'ink-at' || r.tag === 'ink-end') && r.fields.length === 1) {
       const i = Number(r.fields[0])
-      if (r.tag === 'ink-at') { at = i; text = null; bad = false; done = false; continue }
-      if (at === i && done && !bad && text && text.length <= INK_TEXT_MAX && samples[i] !== undefined) out.push([samples[i], text])
+      if (r.tag === 'ink-at') { at = i; text = null; bad = false; done = false; math = 0; continue }
+      if (at === i && done && !bad && text && text.length <= INK_TEXT_MAX && text.replaceAll(INK_ANY, '') !== '' && samples[i] !== undefined) out.push([samples[i], text])
       at = null
       continue
     }
     if (at === null || done) continue
-    if (/^(?:! |[^\s:]+:\d+: )OK\.$/.test(line)) { done = text !== null; if (!done) bad = true; continue }
+    if (/^(?:! |[^\s:]+:\d+: )OK\.$/.test(line)) { done = text !== null && math === 0; if (!done) bad = true; continue }
     if (TEX_ERROR.test(line)) { bad = true; continue }
     if (/^> \\box\d+=/.test(line)) { text = ''; continue }
     if (text === null) continue
     if (/^\\hbox\(/.test(line) && !text) continue
-    const c = TEXT_CHAR.exec(line) ?? TEXT_LIGATURE.exec(line)
-    if (c) { text += c[1]; continue }
+    if (/^\.+\\mathon(?![A-Za-z])/.test(line)) math++
+    else if (/^\.+\\mathoff(?![A-Za-z])/.test(line) && --math < 0) { bad = true; continue }
+    const c = CHAR_NODE.exec(line)
+    if (c) {
+      const [, enc, ch, lig] = c, punct = enc === 'T1' || enc === 'TU' ? PUNCT_WIDE : PUNCT_ALL
+      if (TEXT_ENCODING.has(enc) && (lig ? /^[A-Za-z0-9]+$/.test(lig) : /^[A-Za-z0-9]$/.test(ch) || (ch.length === 1 && punct.includes(ch)))) text += lig ?? ch
+      else if (math > 0 && !lig && enc === 'OML' && /^[A-Za-z0-9]$/.test(ch)) text += ch
+      else if (math > 0) text += INK_ANY
+      else bad = true
+      continue
+    }
     if (TEXT_PASS.test(line) || line === '') continue
     bad = true
   }
   return out
+}
+/**
+ * One glyph of a lead's ink read against its text from the end, nearest the unit's start first (make.mjs besideMarks,
+ * own.mjs's cell lead): `want` the text up to `end` (exclusive), `t` the glyph's text, both as the reader normalises them,
+ * white space taken out. An INK_ANY is one glyph of any text but none (a blank glyph is no formula's: the lead is not read
+ * past it); every other character is spelled by the glyphs' own, a blank glyph passed over between them. Returns the end
+ * past the glyph, or -1 where it is not the lead's
+ */
+export function leadStep(want, end, t) {
+  if (end <= 0) return -1
+  if (want[end - 1] === INK_ANY) return t ? end - 1 : -1
+  if (!t) return end
+  const k = end - t.length, part = k >= 0 ? want.slice(k, end) : null
+  return part === t && !part.includes(INK_ANY) ? k : -1
 }
 
 /** a box's first node that no character before it can kern or join with, and that TeX's hyphenation takes as a word's end as it
@@ -1049,7 +1115,12 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
   const own = u => {
     const i = index.get(u)
     if (u.kind === 'cell') return { start: `\\leavevmode\\axtmark{t${i}s}`, end: `\\axtend{t${i}e}` }
-    if (u.kind === 'heading') return u.front ? null : { start: `\\axthmark{h${i}s}`, end: `\\axthmark{h${i}e}` }
+    // (a front heading too, a class's command whose text it hands elsewhere as well — ICML's \\icmltitle, set in a box the class
+    // measures and never ships, in its running head and in the PDF's title —: a heading's marks set nothing in the output
+    // routine's heads, are gobbled in a PDF string and written to no file (the gate, LAYOUT_TEX), set no destination in a box
+    // never shipped, and a title's end mark alone is set where TeX sets the title, its first occurrence the unit's where the
+    // class sets it again (own.mjs MR 3). Left with no mark, the title's ink had no group: 2610.22195v1 p1u0 stayed English)
+    if (u.kind === 'heading') return { start: `\\axthmark{h${i}s}`, end: `\\axthmark{h${i}e}` }
     // (the front matter's units: their unit marks, no line probe, which would act on the class's own paragraph)
     const f = front(u)
     if (f) return f
@@ -1060,14 +1131,24 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
   const copyOf = new Map(units.map((u, i) => [u, copies[i]]))
   units.forEach((u, i) => {
     const passed = own(u) ? passedOver(u.pieces) : null
-    let last = null, gap = false
+    // (a front matter unit's marks robust: a class may store its text with \protected@xdef before it sets it — \thanks, whose
+    // note the title sets —, where \axtpma, which a moving argument's copy must not carry, takes its argument off; with
+    // \protect before it, it is stored as it is and set where the note is: 2610.20484's \texttt and 2610.11256's \href in a
+    // \thanks were LOST, their marks gone)
+    const lead = front(u) ? '\\protect' : ''
+    let last = null, gap = false, beforePrefix = null, gapBefore = false
     /** the groups open at a piece, innermost last: whether each is, or is inside, an argument read verbatim */
     const verbatim = []
-    copies[i].pieces = u.pieces.flatMap((p, k) => {
+    const out = u.pieces.map((p, k) => {
       const piece = p.t === 'nested' ? { ...p, unit: copyOf.get(p.unit) ?? p.unit } : p
-      // (`spaced`: white space alone between the piece before and this one)
-      const after = last, spaced = gap
-      if (p.t !== 'text' || /[^ \t\r\n]/.test(p.s)) { last = p; gap = false } else gap = true
+      // (`spaced`: white space alone between the piece before and this one; after a prefix (PREFIX_WORDS: \protect), the piece
+      // before the prefix's, the pair one command whose marks stand before the prefix)
+      const prefixed = k > 0 && prefixWord(u.pieces[k - 1].t === 'ph' ? u.pieces[k - 1].src : null)
+      const after = prefixed ? beforePrefix : last, spaced = prefixed ? gapBefore : gap
+      if (p.t !== 'text' || /[^ \t\r\n]/.test(p.s)) {
+        if (p.t === 'ph' && prefixWord(p.src)) { beforePrefix = last; gapBefore = gap }
+        last = p; gap = false
+      } else gap = true
       if (p.t === 'open') verbatim.push(verbatim.at(-1) === true || VERBATIM_ARG.test(p.src ?? ''))
       else if (p.t === 'close') verbatim.pop()
       if (verbatim.at(-1) === true) return [piece]
@@ -1079,7 +1160,8 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       // part the word's hyphenation and kerns — but not one whose box TeX began with a node apart from it (`apart`: a kern, glue,
       // a colour), which no kern or ligature of the letters before it reaches and their hyphenation ends at (`0.58\\pp`, \\pp
       // `\\,pp`)
-      const before = u.pieces[k - 1], next = u.pieces[k + 1]
+      // (the piece before a prefix's, past it: the pair is one command, glued to the word before it as the command alone would be)
+      const before = u.pieces[prefixed ? k - 2 : k - 1], next = u.pieces[k + 1]
       if (cls === 'macro' && before?.t === 'text' && WORD_END.test(before.s) && !parted.has(p.src)) return [piece]
       // (a complete call keeps its opening mark whatever TeX answered for what follows, as any macro of the paper's has it: the
       // answer is the closing mark's and the next piece's alone. A call that ends in a control word is answered '2' before a word,
@@ -1090,14 +1172,21 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       if (said === '2') return [piece]
       const name = `${cls === 'footnote' ? 'n' : 'p'}${i}.${k}`
       // (an inline formula's opening mark is set on the empty list too: \axtpmm, LAYOUT_TEX)
-      const open = { t: 'ph', src: `\\${cls === 'math' ? 'axtpmm' : 'axtpma'}{${name}a}` }
+      const open = { t: 'ph', src: `${lead}\\${cls === 'math' ? 'axtpmm' : 'axtpma'}{${name}a}` }
       // a complete call's closing mark, where TeX answered for what follows (`said`), only before white space or punctuation, or at
       // the unit's end: before a letter or a digit it would stand inside a word (`\\tf{}s`: TeX would break Transform-ers no
       // more), before another piece against that piece's first character
       const closes = !answered(p) || next === undefined || (next.t === 'text' && /^[ \t\r\n.,;:!?]/.test(next.s)) || gluedTo(p, next)
       if (said === '1' || !closes || (looks(p) && !(cls === 'footnote' && said === '0')) || ENDS_IN_CS.test(p.src) || /\s$/.test(p.src) || ENDS_ENV.test(p.src)) return [open, piece]
-      return [open, piece, { t: 'ph', src: `\\axtpm{${name}b}` }]
+      return [open, piece, { t: 'ph', src: `${lead}\\axtpm{${name}b}` }]
     })
+    // (a prefixed piece's opening mark before its prefix)
+    for (let k = 1; k < out.length; k++) {
+      if (!prefixWord(u.pieces[k - 1].t === 'ph' ? u.pieces[k - 1].src : null) || out[k - 1].length !== 1 || out[k].length < 2 || out[k][0] === u.pieces[k]) continue
+      out[k - 1] = [out[k][0], ...out[k - 1]]
+      out[k] = out[k].slice(1)
+    }
+    copies[i].pieces = out.flat()
   })
   const at = new Map([...index, ...copies.map((c, i) => [c, i])])
   return { units: copies, mark: u => (at.has(u) ? own(units[at.get(u)]) : null) }
@@ -1121,8 +1210,11 @@ export const MARKS_DEPTH = 3
  *  and each colour piece's fill as TeX set its run (`colours`: AXT-COLOUR at the piece, readColours); 9 the paper's macros
  *  that read nothing past their arguments (`marking.complete`, completeCalled: a call of one gets its closing mark, and the
  *  piece after it its marks) and those whose box TeX began with no character (`marking.apart`, readInkApart: glued to a
- *  word, marked all the same) */
-export const MARKS_SCHEMA = 9
+ *  word, marked all the same); 10 the texts as TeX sets them (`marking.texts`, readInkTexts): ASCII's punctuation a text font
+ *  sets, a formula's glyphs it does not spell as INK_ANY, and the leads' (leadSamples: inline code at a unit's head, a macro
+ *  past INK_MAX) past the macros', so that "1,024", "max_tokens" and $d'$ find their ink: a reader of 9 would refuse
+ *  them as no letters and digits */
+export const MARKS_SCHEMA = 10
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
 const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'align', 'words', 'tokens', 'chars', 'owned', 'links']
 /** the keys a marks file holds: KEYS, and `colours` where a colour piece has a fill (a file of before, or of a paper with
@@ -1170,17 +1262,20 @@ function checkInkless(v, path) {
   })
   return v
 }
-/** the macros' texts the probe showed (readInkTexts), as the maker takes them: null where no probe ran, else a flat
- *  list of at most INK_MAX pairs (the file nests no deeper: MARKS_DEPTH), each a source of 1 to INK_SRC_MAX code units,
- *  none twice, then its 1 to INK_TEXT_MAX letters and digits; else a refusal at `path` */
+/** a text readInkTexts gives: letters, digits, the punctuation a text font sets as ASCII's and INK_ANY, one character spelled at
+ *  least */
+const INK_TEXT = new RegExp(`^(?=.*[^${INK_ANY}])[A-Za-z0-9${PUNCT_WIDE.replace(/[\\\]^-]/g, '\\$&')}${INK_ANY}]+$`, 'u')
+/** the placeholders' texts the probe showed (readInkTexts), as the maker takes them: null where no probe ran, else a flat
+ *  list of at most INK_MAX + LEAD_MAX pairs (the file nests no deeper: MARKS_DEPTH), each a source of 1 to INK_SRC_MAX code
+ *  units, none twice, then its text of 1 to INK_TEXT_MAX code units (INK_TEXT); else a refusal at `path` */
 function checkTexts(v, path) {
   if (v === null) return null
-  if (!Array.isArray(v) || v.length % 2 !== 0 || v.length > 2 * INK_MAX) throw new LayoutRefusal(path, `not null or a list of at most ${INK_MAX} pairs`)
+  if (!Array.isArray(v) || v.length % 2 !== 0 || v.length > 2 * (INK_MAX + LEAD_MAX)) throw new LayoutRefusal(path, `not null or a list of at most ${INK_MAX + LEAD_MAX} pairs`)
   const seen = new Set()
   for (let i = 0; i < v.length; i += 2) {
     const src = v[i], text = v[i + 1]
     if (typeof src !== 'string' || src.length < 1 || src.length > INK_SRC_MAX || seen.has(src)) throw new LayoutRefusal(`${path}[${i}]`, `not a source of 1 to ${INK_SRC_MAX} code units, once`)
-    if (typeof text !== 'string' || !/^[A-Za-z0-9]+$/.test(text) || text.length > INK_TEXT_MAX) throw new LayoutRefusal(`${path}[${i + 1}]`, `not 1 to ${INK_TEXT_MAX} letters and digits`)
+    if (typeof text !== 'string' || !INK_TEXT.test(text) || text.length > INK_TEXT_MAX) throw new LayoutRefusal(`${path}[${i + 1}]`, `not 1 to ${INK_TEXT_MAX} letters, digits, ASCII's punctuation or a formula's glyphs, one spelled`)
     seen.add(src)
   }
   return v
@@ -1261,7 +1356,8 @@ const endsOf = i => [`${i}e`, `t${i}e`, `h${i}e`]
 /**
  * What the marking says of each piece with an opening mark, for its own ink (layout/stream.mjs Follow): by its opening
  * mark's name, whether it has a closing mark (`names`: the destinations set and those dropped), the first WANT
- * characters of the text after it in its unit up to the next visible piece, its unit's next marks, and whether a visible
+ * characters of the text after it in its unit up to the next visible piece (and, `rest`, the whole of it as the spell check
+ * reads one: stream.mjs spellOf), its unit's next marks, and whether a visible
  * piece with no mark follows it with no text between. A display's group (`group`): the displays right after it, with
  * nothing visible between, that have no opening mark (TeX sets none on the empty list it resumes the paragraph with
  * after a display: LAYOUT_TEX's \axt@pmc), by their opening marks' names; the text after it and its next piece are then
@@ -1283,7 +1379,23 @@ export function followsOf(units, names) {
     }
     const want = asSet(after).normalize('NFKC').toLowerCase().replace(/\s/g, '').slice(0, WANT)
     const next = q < u.pieces.length ? nameOf(i, q) : null
-    return { closing: names.has(`${name.slice(0, -1)}b`), want, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked: !!next && !names.has(`${next}a`), group }
+    const blocked = !!next && !names.has(`${next}a`)
+    // (`through`, the erasure's: past the unmarked visible pieces right after it, nothing but white space between, the next
+    // marked piece's opening; null where text or the unit's end comes first)
+    let through = null
+    if (blocked && !/\S/.test(after)) {
+      for (let r = q + 1; r < u.pieces.length; r++) {
+        const p = u.pieces[r]
+        if (p.t === 'text') { if (/\S/.test(plainTranslated([p]))) break; continue }
+        const c = classOf(p)
+        if (!c) continue
+        if (names.has(`${nameOf(i, r)}a`)) { through = `${nameOf(i, r)}a`; break }
+      }
+    }
+    // (`rest`, the erasure's: the whole text after it up to its next visible piece, as the spell check reads one — its letters and
+    // digits —, so that the text after it is told where it runs exactly to its unit's next mark, not where its first WANT
+    // characters first stand: a display's \\text{for every}, a URL's dots)
+    return { closing: names.has(`${name.slice(0, -1)}b`), want, rest: spellOf(after), display, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group }
   }
 }
 

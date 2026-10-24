@@ -72,6 +72,11 @@ export interface LayerShapes {
    *  there until `show`; whether its shapes changed */
   hide(page: number): boolean
   show(page: number): boolean
+  /** a page that shows another target's layer (`on`), none of whose geometry the laid layout or the mirror holds: nothing of it
+   *  lit or hit until it is unmuted, whatever reset() does; whether that changed anything */
+  mute(page: number, on: boolean): boolean
+  /** the pages muted, rising */
+  muted(): number[]
   /** a unit's starts on the right: its words' where it is all on laid pages, `left` where it is on none, null else */
   starts(id: number, text: string, offsets: readonly number[] | undefined, left: Int32Array | null): Int32Array | null
   /** every page back to the mirror (a door opened again) */

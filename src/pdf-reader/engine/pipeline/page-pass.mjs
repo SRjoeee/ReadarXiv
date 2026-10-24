@@ -40,7 +40,7 @@ const PLAIN_WHY = Object.freeze({ compile: 'the marked compile was refused', tex
  * Why a part has no layout, as its record says it (layer-proto/format.mjs LAYOUT_REFUSED: `{ refused, why }`, `why` within
  * WHY_MAX): the paper's refusal — the marked original's (layout/paper.mjs markedOfPaper's 'compile', 'texlive', 'engine',
  * 'marks', and the probe's), the page count's, the maker's ('carry': no unit laid, no page with a unit on it arXiv's page; its throw
- * 'failed', a refusal of its own) — or the part's own (a verdict's 'read', a part's bound's 'part'). TeX's and the carry's say
+ * 'failed', a refusal of its own; 'memory', 'clock' and 'crashed', the host's re-cut after a maker that died) — or the part's own (a verdict's 'read', a part's bound's 'part'). TeX's and the carry's say
  * so; every fault of the engine's own (the probe, the reading, the maker, a part's reader) is `marks`. Null for none
  */
 export function layoutRecordOf(r) {
@@ -57,6 +57,11 @@ export function layoutRecordOf(r) {
     case 'failed': return { refused: 'marks', why: said('the layout maker failed') }
     case 'read': return { refused: 'marks', why: said('its own reader refused its layout') }
     case 'part': return { refused: 'marks', why: said('its layout passes a part\'s bounds') }
+    // (the host's re-cut after a maker that died — of its memory, past its clock, or otherwise: the web's maker death table —,
+    // no refusal of the maker's own)
+    case 'memory': return { refused: 'marks', why: said('the layout maker ran out of memory, and the parts were cut again without it') }
+    case 'clock': return { refused: 'marks', why: said('the layout maker passed its clock, and the parts were cut again without it') }
+    case 'crashed': return { refused: 'marks', why: said('the layout maker exited, and the parts were cut again without it') }
     default: return { refused: 'marks', why: said(`the layout maker refused it (${String(r.refused).slice(0, 40)})`) }
   }
 }

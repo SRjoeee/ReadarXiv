@@ -65,9 +65,18 @@ describe('the gate runs when what it loads changes', () => {
     // the page (layer-gate/proto.mjs) imports these from /engine/; layer-gate.mjs imports the others in Node
     // (and the wrap's, layer-gate/wrap.mjs: the base page wrapped by optional content and its cell rules, beside the source
     // units' reading, which is the pipeline's and not the drawing's)
-    const loaded = closure(['layer/check.mjs', 'layout/json.mjs', 'layer-proto/visibility.mjs', 'layer-proto/hide.mjs', 'layout/ink.mjs', 'layer-proto/run.mjs', 'layout/file.mjs', 'rules/layout.mjs', 'layout/wrap.mjs', 'layout/cell-rules.mjs', 'layout/remove.mjs', 'layer-proto/hyph.mjs'].map(E))
+    const loaded = closure(['layer/check.mjs', 'layout/json.mjs', 'layer-proto/visibility.mjs', 'layer-proto/hide.mjs', 'layout/ink.mjs', 'layer-proto/run.mjs', 'layout/file.mjs', 'rules/layout.mjs', 'layout/wrap.mjs', 'layout/cell-rules.mjs', 'layout/remove.mjs', 'layer-proto/hyph.mjs', 'layer-proto/rows.mjs'].map(E))
+    // (and the rows' reading, rows.mjs, whose units openProto takes: their table groups, translate/groups.mjs, and a cell's
+    // span, layer-proto/cells.mjs — Devin on #456)
     expect(loaded.length).toBeGreaterThan(20)
     expect(loaded.filter(f => !covered(patterns, f))).toEqual([])
+  })
+  it('loads in the page no module the page cannot import: none of the repository\'s TypeScript (src/core), which only --door transpiles', () => {
+    // (3310dfa7 on #456: run.mjs imported translate/groups.mjs, whose mt.mjs imports src/core's .ts: every output of the head run
+    // failed to load the engine, "did not run")
+    const E = (f: string) => join(ROOT, 'src/pdf-reader/engine', f)
+    const page = closure(['layer/check.mjs', 'layout/json.mjs', 'layer-proto/visibility.mjs', 'layer-proto/hide.mjs', 'layout/ink.mjs', 'layer-proto/run.mjs', 'layout/file.mjs', 'rules/layout.mjs', 'layer-proto/hyph.mjs'].map(E))
+    expect(page.filter(f => f.endsWith('.ts'))).toEqual([])
   })
   it('covers the gate, its scorer and measures, the rules gate, the pack and its manifest, and itself', () => {
     const gate = ['lab/pdf/spikes/layer-gate.mjs', ...readdirSync(join(ROOT, 'lab/pdf/spikes/layer-gate')).map(f => `lab/pdf/spikes/layer-gate/${f}`), 'lab/pdf/spikes/rules-gate.mjs', 'lab/pdf/spikes/gate-pack.mjs', 'scripts/r2-read.mjs', 'lab/pdf/gate-pack.json', '.github/workflows/rules-gate.yml']

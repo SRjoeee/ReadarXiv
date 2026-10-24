@@ -6,7 +6,7 @@ import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
 import { patch } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classOf, colourPieceOf, DISPLAY, encodeLayoutMarks, readColours, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_SCHEMA, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, FOLLOWERS, GLYPHS_PIECE, inkSamples, inkSection, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, markedPages, readMarked, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks } from '@/pdf-reader/engine/layout/marks.mjs'
+import { classOf, colourPieceOf, DISPLAY, encodeLayoutMarks, readColours, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_SCHEMA, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, FOLLOWERS, GLYPHS_PIECE, INK_ANY, INK_MAX, inkSamples, inkSection, LEAD_MAX, leadSamples, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, markedPages, readMarked, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
 import { GLYPHS_PAGE } from '@/pdf-reader/engine/layout/ink.mjs'
 import { OPS_MS } from '@/pdf-reader/engine/layout/oplist.mjs'
@@ -122,7 +122,7 @@ describe('layoutMarking', () => {
     expect(mark(nth(marked, 0))).toEqual(mark(note))
     expect(nth(para.pieces as Piece[], 1).unit).toBe(note)
   })
-  it('cells and headings get their own unit marks', () => {
+  it('cells and headings get their own unit marks, a front heading too (ICML\'s \\icmltitle: 2610.22195v1 p1u0 had none)', () => {
     const units = [
       unit('cell', [text('Cell')]), unit('heading', [text('Method')]), unit('heading', [text('Front')], { front: true } as Partial<SourceUnit>),
       unit('figure', [text('Axis')]), unit('para', [text('Prose.')]), unit('heading', [text('A title')], { title: true } as Partial<SourceUnit>),
@@ -131,12 +131,24 @@ describe('layoutMarking', () => {
       const { units: marked, mark } = layoutMarking(units, MARK_CLASSES, { lines })
       expect(mark(nth(units, 0))).toEqual({ start: '\\leavevmode\\axtmark{t0s}', end: '\\axtend{t0e}' })
       expect(mark(nth(units, 1))).toEqual({ start: '\\axthmark{h1s}', end: '\\axthmark{h1e}' })
-      expect(mark(nth(units, 2))).toBeNull()
+      // (a class's command whose text it hands elsewhere too: the heading's marks set nothing in a running head, a PDF string or
+      // a file, and none in a box TeX never ships — the gate, LAYOUT_TEX)
+      expect(mark(nth(units, 2))).toEqual({ start: '\\axthmark{h2s}', end: '\\axthmark{h2e}' })
       expect(mark(nth(units, 3))).toBeNull()
       expect(mark(nth(units, 4))).toEqual({ start: '\\leavevmode\\axtmark{4s}', end: '\\axtend{4e}', ...(lines ? { before: '\\axtlines{4}' } : {}) })
       expect(mark(nth(units, 5))).toEqual({ start: '\\axthmark{h5s}', end: '\\axthmark{h5e}' })
       units.forEach((u, i) => { expect(mark(nth(marked, i))).toEqual(mark(u)) })
     }
+  })
+  it('marks ICML\'s \\icmltitle in the layout compile, in the argument the style sets as its title, measures in a box and hands to its running head and the PDF\'s title (2610.22195v1 p1u0)', () => {
+    const enc = (s: string) => new TextEncoder().encode(s), dec = (b: Uint8Array | undefined) => new TextDecoder('latin1').decode(b)
+    const tex = '\\documentclass{article}\n\\usepackage{icml2026}\n\\begin{document}\n\\twocolumn[\n\\icmltitle{HTN-Orchestrate: A Hierarchical Framework}\n\\icmlauthor{Jane Doe}{x}\n]\nBody words.\n\\end{document}\n'
+    const sty = '\\long\\def\\icmltitle#1{\\ifx\\undefined\\@icmltitlerunning\\gdef\\@icmltitlerunning{#1}\\fi\\hypersetup{pdftitle={#1}}\\global\\setbox\\titrun=\\vbox{\\small\\bf\\@icmltitlerunning}{\\center\\toptitlebar{\\Large\\bf #1}\\bottomtitlebar}}\n\\newcommand{\\icmlauthor}[2]{\\mbox{#1}}\n'
+    const p = openPaper(new Map([['main.tex', enc(tex)], ['icml2026.sty', enc(sty)]]))
+    expect(p.units[0]).toMatchObject({ kind: 'heading', title: true, front: true })
+    expect(dec(originalFiles(p, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))).toContain('\\icmltitle{\\axthmark{h0s}HTN-Orchestrate: A Hierarchical Framework\\axthmark{h0e}}')
+    // (the translation's own marks none: markUnits leaves a front unit out, and the style sets the translated title where it likes)
+    expect(dec(originalFiles(p, { lines: true }).get('main.tex'))).toContain('\\icmltitle{HTN-Orchestrate: A Hierarchical Framework}')
   })
   it('marks no placeholder a unit passes over before its start mark, and none in a unit with no mark', () => {
     // patch passes over the commands at a unit's head; an opening mark there would start a table's row before \\cline
@@ -170,11 +182,17 @@ describe('layoutMarking', () => {
       for (const o of opening) expect(o.index >= at || o.index + o[0].length === at, `${i}: ${out}`).toBe(true)
     }
   })
-  it('marks nothing a prefix command applies to: \\protect\\eqref keeps its \\protect', () => {
-    // a mark between them would take the \\protect, and be written as itself to a file (2608.23586's list of figures)
+  it('marks nothing between a prefix and the command it applies to: \\protect\\eqref is marked as one, before its \\protect', () => {
+    // a mark between them would take the \\protect, and be written as itself to a file (2608.23586's list of figures); before
+    // the pair it is the pair's (rules/tex-kernel.mjs PREFIX_WORDS)
     const { units: marked } = layoutMarking([unit('para', [text('A (Eq.~'), ph('\\protect'), ph('\\eqref{e}'), text(') and '), ph('\\noexpand'), text(' '), ph('$x$'), text(' then '), ph('$y$')])], MARK_CLASSES, { lines: false })
     // (\\noexpand itself is a paper's macro to the classes, marked before it as any)
-    expect(srcs(marked[0])).toEqual(['text', 'ph \\protect', 'ph \\eqref{e}', 'text', 'ph \\axtpma{p0.4a}', 'ph \\noexpand', 'text', 'ph $x$', 'text', 'ph \\axtpmm{p0.8a}', 'ph $y$', 'ph \\axtpm{p0.8b}'])
+    expect(srcs(marked[0])).toEqual(['text', 'ph \\axtpma{p0.2a}', 'ph \\protect', 'ph \\eqref{e}', 'ph \\axtpm{p0.2b}', 'text', 'ph \\axtpma{p0.4a}', 'ph \\noexpand', 'text', 'ph $x$', 'text', 'ph \\axtpmm{p0.8a}', 'ph $y$', 'ph \\axtpm{p0.8b}'])
+  })
+  it('marks no macro inside a word behind a prefix either: Giessenbachstra\\protect\\ss e', () => {
+    // (the word before the prefix is the macro's neighbour: \\protect is transparent, and the guard looks past it as the marks do)
+    const { units: marked } = layoutMarking([unit('para', [text('In Giessenbachstra'), ph('\\protect'), ph('\\ss'), text(' e, the end')])], MARK_CLASSES, { lines: false })
+    expect(srcs(marked[0])).toEqual(['text', 'ph \\protect', 'ph \\ss', 'text'])
   })
   it('marks no macro inside a word', () => {
     // a letter command or an accent glued to the word's letters (Giessenbachstra\\ss e, 2608.15334): a mark there would
@@ -435,7 +453,7 @@ describe('what a paper\'s macro sets: TeX asked (the ink section), and LaTeX\'s 
     expect(readInkProbe(log, samples)).toEqual(['\\rule{0pt}{2.0ex}', '\\fontsize{7.6pt}{1em}', '\\color{red}'])
     expect(readInkProbe('', samples)).toEqual([])
   })
-  it('readInkTexts: a box of letters and digits of text fonts alone, at any depth, is its text; anything else no answer', () => {
+  it('readInkTexts: a box of characters a text spells, at any depth, is its text; anything else no answer', () => {
     // 1810.04805's own listings (TeX Live 2026's pdfTeX): \newcommand\bert{BERT\xspace}, and \bertbase's subscript in
     // small capitals inside math
     const log = [
@@ -443,7 +461,8 @@ describe('what a paper\'s macro sets: TeX asked (the ink section), and LaTeX\'s 
       'LAYOUT-PROBE 1 ink-at 1', '> \\box75=', '\\hbox(7.31458+1.76027)x49.59885', '.\\OT1/ptm/m/n/10.95 B', '.\\OT1/ptm/m/n/10.95 E', '.\\OT1/ptm/m/n/10.95 R', '.\\kern-0.657', '.\\OT1/ptm/m/n/10.95 T', '.\\mathon', '.\\hbox(5.43198+0.09995)x22.26787, shifted 1.66032', '..\\OT1/ptm/m/sc/8 B', '..\\kern-0.27998', '..\\OT1/ptm/m/sc/8 A', '..\\OT1/ptm/m/sc/8 S', '..\\OT1/ptm/m/sc/8 E', '.\\mathoff', '', './main.tex:9: OK.', 'LAYOUT-PROBE 1 ink-end 1',
       // a ligature, a space
       'LAYOUT-PROBE 1 ink-at 2', '> \\box75=', '\\hbox(6.9+0.0)x40.0', '.\\T1/cmr/m/n/10 ^^\\ (ligature ffi)', '.\\T1/cmr/m/n/10 x', '.\\glue 3.33 plus 1.66', '.\\T1/cmr/m/n/10 2', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 2',
-      // a math italic letter, a symbol, a rule, an error, nothing at all, a cut listing
+      // a math italic letter (OML's letters are ASCII's), a per cent sign (one of ASCII's punctuation every text font sets as it),
+      // a rule, an error, nothing at all, a cut listing
       'LAYOUT-PROBE 1 ink-at 3', '> \\box75=', '\\hbox(4.3+0.0)x5.7', '.\\mathon', '.\\OML/cmm/m/it/10 x', '.\\mathoff', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 3',
       'LAYOUT-PROBE 1 ink-at 4', '> \\box75=', '\\hbox(6.8+0.1)x8.3', '.\\OT1/ptm/m/n/10 %', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 4',
       'LAYOUT-PROBE 1 ink-at 5', '> \\box75=', '\\hbox(6.8+0.0)x10.0', '.\\OT1/ptm/m/n/10 A', '.\\rule(0.4+0.0)x3.0', '', '! OK.', 'LAYOUT-PROBE 1 ink-end 5',
@@ -452,11 +471,54 @@ describe('what a paper\'s macro sets: TeX asked (the ink section), and LaTeX\'s 
       'LAYOUT-PROBE 1 ink-at 8', '> \\box75=', '\\hbox(6.8+0.0)x5.0', '.\\OT1/ptm/m/n/10 A',
     ].join('\n')
     const samples = ['\\bert', '\\bertbase', '\\office', '\\x', '\\pct', '\\boxed', '\\broken', '\\nothing', '\\cut']
-    expect(readInkTexts(log, samples)).toEqual([['\\bert', 'BERT'], ['\\bertbase', 'BERTBASE'], ['\\office', 'ffix2']])
+    expect(readInkTexts(log, samples)).toEqual([['\\bert', 'BERT'], ['\\bertbase', 'BERTBASE'], ['\\office', 'ffix2'], ['\\x', 'x'], ['\\pct', '%']])
     expect(readInkTexts('', samples)).toEqual([])
     // 65 letters: past INK_TEXT_MAX, no answer
     const long = ['LAYOUT-PROBE 1 ink-at 0', '> \\box75=', '\\hbox(6.8+0.0)x325.0', ...Array.from({ length: 65 }, () => '.\\OT1/ptm/m/n/10 A'), '', '! OK.', 'LAYOUT-PROBE 1 ink-end 0'].join('\n')
     expect(readInkTexts(long, ['\\long'])).toEqual([])
+  })
+  it('readInkTexts: what TeX sets for a cell\'s lead, as it sets it — a number\'s groups, \\texttt\'s characters, a formula\'s glyphs (MARKS_SCHEMA 10)', () => {
+    // TeX Live 2025's pdfTeX listings of the leads 2610.21098v1 p13 and 2610.21176v1 p13 left English: \\CompletionTokenCap{} =
+    // 1{,}024 in Times; a cell's \\texttt{max\\_tokens} in T1's Courier (its underscore a character); \\dprime{} = $d'$, a math
+    // italic d and cmsy's prime raised
+    const listing = (i: number, ...nodes: string[]) => [`LAYOUT-PROBE 1 ink-at ${i}`, '> \\box60=', '\\hbox(7.4+1.6)x24.6', ...nodes, '', '! OK.', `LAYOUT-PROBE 1 ink-end ${i}`]
+    const t1 = (font: string, s: string) => [...s].map(c => `.\\T1/${font}/m/n/10.95 ${c}`)
+    const log = [
+      ...listing(0, ...t1('ptm', '1,024')),
+      ...listing(1, ...t1('pcr', 'max_tokens')),
+      ...listing(2, '.\\mathon', '.\\OML/cmm/m/it/10 d', '.\\hbox(3.8889+0.0)x2.80556, shifted -3.62892', '..\\OMS/cmsy/m/n/7 0', '.\\mathoff'),
+      // $1{,}024$: its digits the text font's, its comma math italic's (TeX prints it `;`): one glyph whatever its text
+      ...listing(3, '.\\mathon', '.\\OT1/cmr/m/n/10 1', '.\\OML/cmm/m/it/10 ;', '.\\OT1/cmr/m/n/10 0', '.\\OT1/cmr/m/n/10 2', '.\\OT1/cmr/m/n/10 4', '.\\mathoff'),
+      // OT1's \\_ is a rule, and its character 0x5F a dot accent: no answer
+      ...listing(4, '.\\OT1/cmtt/m/n/10 m', '.\\kern0.6', '.\\vbox(0.4+0.0)x3.0', '..\\rule(0.4+0.0)x3.0', '.\\OT1/cmtt/m/n/10 t'),
+      ...listing(5, '.\\OT1/cmr/m/n/10 a', '.\\OT1/cmr/m/n/10 _'),
+      // a formula's glyphs alone ($\\checkmark$), a \\ref the probe cannot resolve ("??": no aux), a dingbat outside a formula
+      ...listing(6, '.\\hbox(6.9+0.0)x8.3', '..\\mathon', '..\\U/msa/m/n/10 X', '..\\mathoff'),
+      ...listing(7, ...t1('ptm', 'Figure'), '.\\glue 2.7 plus 1.4', '.\\T1/ptm/b/n/10.95 ?', '.\\T1/ptm/b/n/10.95 ?'),
+      ...listing(8, '.\\U/pzd/m/n/10 3'),
+      // a formula TeX's listing never closes is no answer either
+      ...listing(9, '.\\mathon', '.\\OML/cmm/m/it/10 d'),
+    ].join('\n')
+    const samples = ['\\CompletionTokenCap{}', '\\texttt{max\\_tokens}', '\\dprime{}', '\\cap{}', '\\texttt{m\\_t}', '\\dot', '\\checkmark', '\\figref{a}', '\\cmark', '\\open']
+    expect(readInkTexts(log, samples)).toEqual([['\\CompletionTokenCap{}', '1,024'], ['\\texttt{max\\_tokens}', 'max_tokens'], ['\\dprime{}', `d${INK_ANY}`], ['\\cap{}', `1${INK_ANY}024`]])
+  })
+  it('leadSamples: the placeholders at a unit\'s head the ink section does not ask about — inline code, a macro past INK_MAX —, asked last', () => {
+    const paper = paperIn('\\begin{tabular}{ll}\nCap parameter & \\texttt{max\\_tokens} on Chat routes \\\\\nBudget & \\EpisodeTokenBudget{} tokens \\\\\n\\end{tabular}\n\nWe set \\texttt{inline} in prose.', '\\newcommand{\\EpisodeTokenBudget}{128{,}000}')
+    const ink = inkSamples(paper.units), leads = leadSamples(paper.units, ink)
+    // (the macro is among the paper's macros already; the code that leads a cell is a lead, the code inside prose none)
+    expect(ink).toEqual(['\\EpisodeTokenBudget{}'])
+    expect(leads).toEqual(['\\texttt{max\\_tokens}'])
+    // past INK_MAX, a macro that leads a unit is a lead too
+    const many = paperIn(`${Array.from({ length: INK_MAX }, (_, i) => `Text \\m${'i'.repeat(i + 1)}{} here.`).join('\n\n')}\n\n\\lead{} opens this paragraph.`, `${Array.from({ length: INK_MAX }, (_, i) => `\\newcommand{\\m${'i'.repeat(i + 1)}}{A}`).join('\n')}\n\\newcommand{\\lead}{B}`)
+    expect(inkSamples(many.units)).toHaveLength(INK_MAX)
+    expect(leadSamples(many.units)).toEqual(['\\lead{}'])
+    // asked after every other section, numbered on from the macros; with no lead, the document the probe had
+    const samples = [{ src: '\\cite{a}', call: false }]
+    const doc = markProbeTex(samples, ink, leads)
+    expect(doc.indexOf('ink-at 1')).toBeGreaterThan(doc.indexOf('skip'))
+    expect(doc).toContain('\\hbox{\\texttt{max\\_tokens}}')
+    expect(markProbeTex(samples, ink, [])).toBe(markProbeTex(samples, ink))
+    expect(inkSection(['\\x'], 3)).toContain('LAYOUT-PROBE 1 ink-at 3')
   })
   it('headEnd: a unit\'s head before its start mark, as patch places it', () => {
     const ph = (src: string) => ({ t: 'ph', src }), text = (s: string) => ({ t: 'text', s })
@@ -801,6 +863,11 @@ describe('reading the marked original', () => {
     expect(said.marking.texts).toEqual(['\\bert', 'BERT', '\\ours', 'OURS'])
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(said))).marking.texts).toEqual(['\\bert', 'BERT', '\\ours', 'OURS'])
     await expect(layoutMarksOf(doc, '', { engine: 'pdflatex', texts: [['\\bert', 'BE RT']] })).rejects.toThrow(LayoutRefusal)
+    // (MARKS_SCHEMA 10: a number's punctuation, \\texttt's underscore, a formula's glyph spelled by no character, through the file;
+    // a text that spells no character is none)
+    const leads = await layoutMarksOf(doc, '', { engine: 'pdflatex', texts: [['\\CompletionTokenCap{}', '1,024'], ['\\texttt{max\\_tokens}', 'max_tokens'], ['\\dprime{}', `d${INK_ANY}`]] })
+    expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(leads))).marking.texts).toEqual(['\\CompletionTokenCap{}', '1,024', '\\texttt{max\\_tokens}', 'max_tokens', '\\dprime{}', `d${INK_ANY}`])
+    await expect(layoutMarksOf(doc, '', { engine: 'pdflatex', texts: [['\\checkmark', INK_ANY]] })).rejects.toThrow(LayoutRefusal)
     const none2 = await layoutMarksOf(doc, '', { engine: 'pdflatex', inkless: ['\\rule{0pt}{2ex}'] })
     expect(parseLayoutMarks(new TextEncoder().encode(encodeLayoutMarks(none2))).marking.inkless).toEqual(['\\rule{0pt}{2ex}'])
     // the paper's \\lineskip and \\lineskiplimit as readSkipProbe gives them (PDF units: 1pt is 0.9962640099626402), written to
@@ -1072,14 +1139,15 @@ describe('the marks file', () => {
     parse.mockRestore()
     expect(refusal(new Uint8Array([0x7b, 0xc3, 0x28, 0x7d]))).toBe('')
     const rows: [string, (m: LayoutMarks & Record<string, unknown>) => void, string][] = [
-      ['schema 1, a file before the stream', m => { m.schema = 1 as 9 }, 'schema'],
-      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 9 }, 'schema'],
-      ['schema 3, a file before the babel names', m => { m.schema = 3 as 9 }, 'schema'],
-      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 9 }, 'schema'],
-      ['schema 5, a file before the empty-list marks, the column ends and the display groups', m => { m.schema = 5 as 9 }, 'schema'],
-      ['schema 6, a file before the link annotations', m => { m.schema = 6 as 9 }, 'schema'],
-      ['schema 7, a file before the alignment', m => { m.schema = 7 as 9 }, 'schema'],
-      ['schema 8, a file before the complete macros and the boxes apart (its maker would replay a marking it was not made with)', m => { m.schema = 8 as 9 }, 'schema'],
+      ['schema 1, a file before the stream', m => { m.schema = 1 as 10 }, 'schema'],
+      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 10 }, 'schema'],
+      ['schema 3, a file before the babel names', m => { m.schema = 3 as 10 }, 'schema'],
+      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 10 }, 'schema'],
+      ['schema 5, a file before the empty-list marks, the column ends and the display groups', m => { m.schema = 5 as 10 }, 'schema'],
+      ['schema 6, a file before the link annotations', m => { m.schema = 6 as 10 }, 'schema'],
+      ['schema 7, a file before the alignment', m => { m.schema = 7 as 10 }, 'schema'],
+      ['schema 8, a file before the complete macros and the boxes apart (its maker would replay a marking it was not made with)', m => { m.schema = 8 as 10 }, 'schema'],
+      ['schema 9, a file before the texts as TeX sets them (its maker would find no lead of punctuation, code or a formula)', m => { m.schema = 9 as 10 }, 'schema'],
       ['complete macros of no object', m => { (m.marking as Record<string, unknown>).complete = ['bert', 0] }, 'marking.complete'],
       ['a complete macro\'s name with its backslash', m => { (m.marking as Record<string, unknown>).complete = { '\\bert': 0 } }, 'marking.complete.\\\\bert'],
       ['a complete macro of arity 10', m => { (m.marking as Record<string, unknown>).complete = { bert: 10 } }, 'marking.complete.bert'],
@@ -1111,7 +1179,10 @@ describe('the marks file', () => {
       ['a text source twice', m => { m.marking.texts = ['\\bert', 'BERT', '\\bert', 'B'] }, 'marking.texts[2]'],
       ['a text of a space', m => { m.marking.texts = ['\\bert', 'BE RT'] }, 'marking.texts[1]'],
       ['a text of 65 letters', m => { m.marking.texts = ['\\bert', 'B'.repeat(65)] }, 'marking.texts[1]'],
-      ['65 texts', m => { m.marking.texts = Array.from({ length: 65 }, (_, i) => [`\\m${'i'.repeat(i + 1)}`, 'A']).flat() }, 'marking.texts'],
+      ['a text of a formula\'s glyphs alone', m => { m.marking.texts = ['\\checkmark', `${INK_ANY}${INK_ANY}`] }, 'marking.texts[1]'],
+      ['a text of OT1\'s quote', m => { m.marking.texts = ['\\q', '\'A\''] }, 'marking.texts[1]'],
+      // (the macros' and the leads': INK_MAX + LEAD_MAX, one past them)
+      ['129 texts', m => { m.marking.texts = Array.from({ length: INK_MAX + LEAD_MAX + 1 }, (_, i) => [`\\m${'i'.repeat(i + 1)}`, 'A']).flat() }, 'marking.texts'],
       ['chars not an array', m => { (m as Record<string, unknown>).chars = 'x2' }, 'chars'],
       ['a char of 33 code units', m => { m.chars[0] = 'x'.repeat(33) }, 'chars[0]'],
       ['a char that is a number', m => { (m.chars as unknown[])[1] = 2 }, 'chars[1]'],

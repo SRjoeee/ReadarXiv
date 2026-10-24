@@ -33,7 +33,7 @@ mkdirSync(join(OUT, NAME), { recursive: true })
 // ---- the wrap, as the maker child makes it, kept by the base's digest
 const FX = join(PACK, 'fixtures', NAME)
 const baseBytes = new Uint8Array(readFileSync(join(FX, 'base.pdf')))
-const digest = createHash('sha256').update(baseBytes).update(readFileSync(join(REPO, 'src/pdf-reader/engine/layout/wrap.mjs'))).update(readFileSync(join(REPO, 'src/pdf-reader/engine/layout/own.mjs'))).digest('hex').slice(0, 16)
+const digest = createHash('sha256').update(baseBytes).update(readFileSync(join(REPO, 'src/pdf-reader/engine/layout/wrap.mjs'))).update(readFileSync(join(REPO, 'src/pdf-reader/engine/layout/own.mjs'))).update(existsSync(join(FX, 'base.json')) ? readFileSync(join(FX, 'base.json')) : 'no record').digest('hex').slice(0, 16)
 const wrappedPath = join(OUT, NAME, `wrapped-${digest}.pdf`), headPath = join(OUT, NAME, `wrapped-${digest}.json`), glyphsPath = join(OUT, NAME, `wrapped-${digest}-ink2.json`)
 if (!existsSync(wrappedPath) || !existsSync(glyphsPath)) {
   const { wrapFinal } = await import(join(REPO, 'src/pdf-reader/engine/layout/wrap.mjs'))
@@ -44,7 +44,7 @@ if (!existsSync(wrappedPath) || !existsSync(glyphsPath)) {
   const units = openPaper((await unpackSource(new Uint8Array(readFileSync(sourceGz)))).files).units
   const t0 = performance.now()
   const r = await wrapFinal(baseBytes, {
-    PL, getDocument, OPS, units, documentOptions: { verbosity: 0, useSystemFonts: false, isEvalSupported: false, fontExtraProperties: true, standardFontDataUrl: join(REPO, 'node_modules/pdfjs-dist/standard_fonts/'), cMapUrl: join(REPO, 'node_modules/pdfjs-dist/cmaps/'), cMapPacked: true },
+    PL, getDocument, OPS, units, texts: (existsSync(join(FX, 'base.json')) ? JSON.parse(readFileSync(join(FX, 'base.json'), 'utf8'))?.texts : null) ?? null, documentOptions: { verbosity: 0, useSystemFonts: false, isEvalSupported: false, fontExtraProperties: true, standardFontDataUrl: join(REPO, 'node_modules/pdfjs-dist/standard_fonts/'), cMapUrl: join(REPO, 'node_modules/pdfjs-dist/cmaps/'), cMapPacked: true },
     deflate: b => new Uint8Array(deflateSync(b, { level: 6 })), inflate: (b, limit) => new Uint8Array(inflateSync(b, { maxOutputLength: limit + 1 })), keepOwned: true,
   })
   if ('refused' in r) throw new Error(`wrap refused: ${r.refused}: ${r.why}`)

@@ -1,13 +1,14 @@
 // The layer's text layer as the reading view builds it (engine/view/text-layer.mjs and its place in the layer side's commit;
 // docs/PDF-READER.md §11.11): the engine's text layer data made into PDF.js's own text layer, one span an item in reading order,
 // its translated spans in the target's language (TV1-TV3); over the fake door, built after the commit at idle, between the SVG and
-// the links, the SVG then out of the accessibility tree, and let go with the drawing it belongs to (TS1-TS5). The real PDF.js's
+// the links, the SVG then out of the accessibility tree, kept with a drawing kept off the view or laid ahead, and let go with the drawing it belongs to (TS1-TS10). The real PDF.js's
 // placement, selection, copy and search are the browsers' (pnpm e2e:reader; the web's layer.mjs)
 import { describe, expect, it } from 'vitest'
 import type { TextLayerData } from '@/pdf-reader/engine/layer-proto/reader.mjs'
 import { ITEMS_MAX, STR_MAX, textContentOf, textItems, textLayer } from '@/pdf-reader/engine/view/text-layer.mjs'
-import { FakeTextLayerBuilder, flush } from './helpers/reader-fakes'
-import { ALL, installSideFakes, layerOf, nearOn, settle, setup } from './helpers/side-setup'
+import { AHEAD_IDLE_MS, AHEAD_PAGES } from '@/pdf-reader/engine/view/layer-side.mjs'
+import { FakeIO, FakeTextLayerBuilder, flush } from './helpers/reader-fakes'
+import { ALL, content, installSideFakes, layerOf, M, nearOn, places, rowOf, settle, setup } from './helpers/side-setup'
 
 const it0 = (o: Record<string, unknown> = {}) => ({ str: 'a', x: 72, y: 698, w: 10, h: 10, base: 700, dir: 'ltr', fontSize: 10, from: 'kept', ...o })
 const data = (items: unknown[]): TextLayerData => ({ items, page: { w: 612, h: 792 }, stats: { kept: 0, moved: 0, translated: 0, dropped: 0, work: 0, merged: 0 } }) as TextLayerData
@@ -63,7 +64,7 @@ describe('TV3: built by PDF.js\'s builder', () => {
 
 describe('the layer side: the text layer with the laid page (the fake door)', () => {
   installSideFakes()
-  const opened = async (o: { textBuilder?: unknown } = { textBuilder: FakeTextLayerBuilder }) => {
+  const opened = async (o: { textBuilder?: unknown; keepPixels?: number; ahead?: number } = { textBuilder: FakeTextLayerBuilder }) => {
     const s = await setup({ ...o, links: () => [{ boxes: [100, 600, 300, 612], url: 'https://example.org/', name: 'example.org', moved: true, order: 0 }] })
     await nearOn(s, [1, 2])
     s.side.tell(await ALL())
@@ -84,8 +85,8 @@ describe('the layer side: the text layer with the laid page (the fake door)', ()
     expect(s.side.probe().texts).toBe(2)
   })
 
-  it('TS2: let go with its page far from the view, cancelled in PDF.js\'s registry; built again with the page laid again', async () => {
-    const s = await opened()
+  it('TS2: let go with its page far from the view where no drawing is kept (keepPixels 0), cancelled in PDF.js\'s registry; built again with the page laid again', async () => {
+    const s = await opened({ textBuilder: FakeTextLayerBuilder, keepPixels: 0 })
     const was = textOn(s, 2)
     await nearOn(s, [2], false)
     await settle(s)
@@ -111,11 +112,11 @@ describe('the layer side: the text layer with the laid page (the fake door)', ()
     expect(FakeTextLayerBuilder.made.length).toBe(FakeTextLayerBuilder.cancelled.length)
   })
 
-  it('TS6: one whose page is let go while it is built is not put anywhere, and is cancelled', async () => {
+  it('TS6: one whose page is let go while it is built (no drawing kept) is not put anywhere, and is cancelled', async () => {
     let open = () => {}
     const gate = new Promise<void>(r => { open = r })
     class Slow extends FakeTextLayerBuilder { override async render(o: { viewport: unknown }) { await gate; return super.render(o) } }
-    const s = await setup({ textBuilder: Slow })
+    const s = await setup({ textBuilder: Slow, keepPixels: 0 })
     await nearOn(s, [1])
     s.side.tell(await ALL())
     await settle(s)
@@ -127,6 +128,79 @@ describe('the layer side: the text layer with the laid page (the fake door)', ()
     await settle(s)
     expect(s.panes.right.querySelectorAll('.textLayer').length).toBe(0)
     expect(FakeTextLayerBuilder.cancelled).toEqual(FakeTextLayerBuilder.made)
+  })
+
+  it('TS7: a drawing kept off the view keeps its text layer, and brings the same one back in place; let go past the budget, it is cancelled', async () => {
+    const s = await opened({ textBuilder: FakeTextLayerBuilder, ahead: 0 })
+    const was = textOn(s, 2) as HTMLElement
+    expect(was).not.toBeNull()
+    await nearOn(s, [2], false)
+    expect(s.side.probe().drawings).toBe(1)
+    expect(was.isConnected).toBe(false)
+    expect(FakeTextLayerBuilder.cancelled.map(b => b.div)).not.toContain(was)
+    FakeIO.tell([places(s)[1] as HTMLElement], true)
+    expect(content(s, 2)).toBe('layer')
+    expect(textOn(s, 2)).toBe(was)
+    await settle(s)
+    expect(textOn(s, 2)).toBe(was)
+    expect(s.side.probe().texts).toBe(2)
+    // (kept again, then let go with the side: its text layer cancelled with its copy)
+    await nearOn(s, [2], false)
+    s.side.dispose()
+    expect(FakeTextLayerBuilder.cancelled.map(b => b.div)).toContain(was)
+  })
+
+  it('TS8: one built while its page is kept off the view goes into the kept drawing and comes back with it', async () => {
+    let open = () => {}
+    const gate = new Promise<void>(r => { open = r })
+    class Slow extends FakeTextLayerBuilder { override async render(o: { viewport: unknown }) { await gate; return super.render(o) } }
+    const s = await setup({ textBuilder: Slow, ahead: 0 })
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    await settle(s)
+    expect(textOn(s, 1)).toBeNull()
+    await nearOn(s, [1], false)
+    expect(s.side.probe().drawings).toBe(1)
+    open()
+    await settle(s)
+    expect(FakeTextLayerBuilder.cancelled).toEqual([])
+    FakeIO.tell([places(s)[0] as HTMLElement], true)
+    expect(textOn(s, 1)).not.toBeNull()
+    expect(textOn(s, 1)).toBe(FakeTextLayerBuilder.made[0]?.div)
+  })
+
+  it('TS9: a page laid ahead has its text layer built off the view, in place the moment it comes near', async () => {
+    const s = await setup({ door: { rows: 'gate' }, textBuilder: FakeTextLayerBuilder })
+    const m = await M()
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    s.side.take(m.index.units.map((_, id) => rowOf(id)))
+    s.side.end()
+    await settle(s, 4)
+    await s.clock.advance(AHEAD_IDLE_MS + 100)
+    await settle(s, 60)
+    expect(s.side.probe()).toMatchObject({ aheadKept: AHEAD_PAGES, texts: 1 + AHEAD_PAGES })
+    FakeIO.tell([places(s)[1] as HTMLElement], true)
+    expect(content(s, 2)).toBe('layer')
+    expect([...(textOn(s, 2)?.querySelectorAll('span') ?? [])].map(x => x.textContent)).toContain('2')
+  })
+
+  it('TS10: another target\'s pages carry their text layer in that target\'s language', async () => {
+    const s = await setup({ door: { rows: 'gate' }, textBuilder: FakeTextLayerBuilder, ahead: 0 })
+    const m = await M()
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    s.side.take(m.index.units.map((_, id) => rowOf(id)))
+    s.side.end()
+    await settle(s)
+    const langs = () => [...(textOn(s, 1)?.querySelectorAll('span') ?? [])].map(x => x.lang).filter(Boolean)
+    expect(langs()).toEqual(['zh'])
+    s.side.retarget('ja')
+    await settle(s)
+    s.side.take(m.index.units.map((_, id) => rowOf(id, `ja ${id}`)))
+    s.side.end()
+    await settle(s)
+    expect(langs()).toEqual(['ja'])
   })
 
   it('TS4: dispose lets every text layer go', async () => {

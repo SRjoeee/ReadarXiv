@@ -124,7 +124,9 @@ const META_BY_KIND: Record<ProviderErrorKind, RequestErrorMeta> = {
   'no-key': { kind: 'access-denied', isRetryable: false }, // as 401 / 403: no retry, the whole queue drains
   'auth': { kind: 'access-denied', isRetryable: false },
   'aborted': { isRetryable: false },
-  'invalid-response': { isRetryable: false },
+  // Its kind named: left unnamed, the policy reads one off the message, and a raw model output quoted there that says
+  // "429" or "timeout" paused the whole queue or was retried as a network failure (`malformedReply` lifts the retry once)
+  'invalid-response': { kind: 'unknown', isRetryable: false },
   // The request itself is wrong (4xx other than 401/403/429): any number of retries gives the same, so the fallback chain changes engine (Codex on #17)
   'bad-request': { kind: 'bad-request', isRetryable: false },
   'rate-limit': { kind: 'rate-limit' },
@@ -138,8 +140,9 @@ const META_BY_KIND: Record<ProviderErrorKind, RequestErrorMeta> = {
  * constructor argument.
  *
  * One criterion only: was this failure **caused by some segment**, or is the whole road blocked?
- * - `invalid-response`: most likely some segment led the model's output astray, and splitting finds it (a wholly
- *   broken server response is declared false by the provider itself)
+ * - `invalid-response`: a parsed reply whose segments do not match the request's — most likely some segment led the
+ *   model's output astray, and splitting finds it. A reply with no usable shape at all is the endpoint's, and its
+ *   provider says so (`malformedReply`)
  * - `timeout`: the smaller the batch, the likelier it returns within the budget
  * - `unknown`: no evidence, the old behaviour kept (split)
  * - `rate-limit` / `network` / `bad-request`: splitting only **multiplies the same failure by the segment count** —
@@ -163,6 +166,20 @@ const ISOLATABLE_BY_KIND: Record<ProviderErrorKind, boolean> = {
   'no-key': false,
   'auth': false,
   'aborted': false,
+}
+
+/** How many times a malformed reply is sent again before the chain takes over (DESIGN §8.2) */
+export const MALFORMED_RETRIES = 1
+
+/**
+ * A reply with no usable shape at all (DESIGN §8.2): no object could be parsed from it (prose, fenced JSON, a schema
+ * mismatch, a model that ignores `response_format`), or a web translator's body is not JSON, not the array asked for,
+ * or not as many items as were sent. **The endpoint's, not a segment's**: no smaller batch reads better, so it is not
+ * isolatable — split, one 4-segment batch became 40 paid requests (issue #78) — and it is sent once more, a model's
+ * slip, by the request queue (its retry delay, its deadline), before the chain takes over
+ */
+export function malformedReply(message: string, cause?: unknown): ProviderError {
+  return attachRequestErrorMeta(new ProviderError('invalid-response', message, { cause, isolatable: false }), { isRetryable: true, maxRetries: MALFORMED_RETRIES })
 }
 
 export class ProviderError extends Error {

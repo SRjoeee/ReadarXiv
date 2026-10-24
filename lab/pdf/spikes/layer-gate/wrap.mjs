@@ -8,7 +8,7 @@
 // wrap.json. A fixture with no source, or whose wrap is refused (an arXiv base has no marks), is served unwrapped and said so:
 // its units are then the original's (the document holds no group of ours). Plain Node; the engine is the one measured.
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { constants as zlibConstants, deflateSync, inflateRawSync, inflateSync } from 'node:zlib'
 import { sha256 } from './ref.mjs'
 
@@ -17,6 +17,15 @@ const inflate = (b, limit = Infinity) => {
   try { return new Uint8Array(inflateSync(b, o)) } catch (e) { if (e?.code === 'ERR_BUFFER_TOO_LARGE') throw e; return new Uint8Array(inflateRawSync(b.subarray(2), o)) }
 }
 const deflate = b => new Uint8Array(deflateSync(b, { level: 6 }))
+
+/** the marking's texts the fixture's base page was marked with (base.json's `texts`, layer-fixtures.mjs), or null where the
+ *  record holds none (a pack of before: a cell's lead macro then stays the original's) */
+export function textsOf(base) {
+  const f = join(dirname(base), 'base.json')
+  if (!existsSync(f)) return null
+  const t = JSON.parse(readFileSync(f, 'utf8'))?.texts
+  return Array.isArray(t) ? t : null
+}
 
 /** the engine's layout modules, digested: a change of any (the wrap, the ownership, the walk, the ink, the rules) wraps again */
 function layoutDigest(engine) {
@@ -32,7 +41,7 @@ function layoutDigest(engine) {
  */
 export function wrapOf({ engine, out, base, layoutFile, source, runs = new Map() }) {
   const bytes = readFileSync(base)
-  const key = sha256([sha256(bytes), sha256(readFileSync(layoutFile)), source ? sha256(readFileSync(source)) : 'none', layoutDigest(engine)].join('\n')).slice(0, 24)
+  const key = sha256([sha256(bytes), sha256(readFileSync(layoutFile)), source ? sha256(readFileSync(source)) : 'none', JSON.stringify(textsOf(base)), layoutDigest(engine)].join('\n')).slice(0, 24)
   if (!runs.has(key)) runs.set(key, made(key, { engine, out, base, bytes, layoutFile, source }))
   return runs.get(key)
 }
@@ -57,7 +66,8 @@ async function made(key, { engine, out, base, bytes, layoutFile, source }) {
   let head = { wrapped: false, why: 'no source' }, data = bytes
   if (source) {
     const units = openPaper((await unpackSource(new Uint8Array(readFileSync(source)))).files).units
-    const r = await wrapFinal(new Uint8Array(bytes), { PL, getDocument: pdfjs.getDocument, documentOptions, OPS: pdfjs.OPS, units, deflate, inflate })
+    const texts = textsOf(base)
+    const r = await wrapFinal(new Uint8Array(bytes), { PL, getDocument: pdfjs.getDocument, documentOptions, OPS: pdfjs.OPS, units, texts, deflate, inflate })
     if (r.refused) head = { wrapped: false, why: `${r.refused}: ${String(r.why ?? '').slice(0, 200)}` }
     else {
       head = { wrapped: true, why: null, stats: r.stats, unhidden: r.unhidden, labelKept: r.labelKept }

@@ -265,6 +265,20 @@ describe('frontMarks: the front matter\'s units, marked in the layout compile as
     const a = { ...unit([text('Ada Lovelace, '), ph('\\texttt{ada@x.org}'), text(' and more')]), kind: 'author' } as SourceUnit
     const { units, mark } = layoutMarking([a], MARK_CLASSES, { lines: true })
     expect(mark(a)).toEqual({ start: '\\leavevmode\\axtmark{0s}', end: '\\axtend{0e}' })
-    expect(((units[0]?.pieces ?? []) as Piece[]).map(p => p.src ?? p.s).join('')).toContain('\\axtpma{p0.1a}\\texttt{ada@x.org}\\axtpm{p0.1b}')
+    // (robust: a class may store a front unit's text with \\protected@xdef, \\thanks's, where \\axtpma alone takes itself off)
+    expect(((units[0]?.pieces ?? []) as Piece[]).map(p => p.src ?? p.s).join('')).toContain('\\protect\\axtpma{p0.1a}\\texttt{ada@x.org}\\protect\\axtpm{p0.1b}')
+  })
+  it('a \\thanks\'s placeholders keep their marks through its \\protected@xdef: \\texttt, \\href\'s text and \\protect\\url (2610.20484, 2610.11256, 2610.21880)', () => {
+    const note = { ...unit([text('Corresponding author: '), ph('\\texttt{a@b.org}'), text(' or '), ph('\\protect'), ph('\\url{c@d.org}'), text('. Email: '), { t: 'open', id: 1, src: '\\href{mailto:e@f.org}{' } as Piece, ph('e@f.org'), { t: 'close', id: 1, src: '}' } as Piece, text('.')]), kind: 'footnote', front: true } as SourceUnit
+    const { units, mark } = layoutMarking([note], MARK_CLASSES, { lines: true })
+    expect(mark(note)).toEqual({ start: '\\leavevmode\\axtmark{0s}', end: '\\axtend{0e}' })
+    const out = ((units[0]?.pieces ?? []) as Piece[]).map(p => p.src ?? p.s).join('')
+    expect(out).toContain('\\protect\\axtpma{p0.1a}\\texttt{a@b.org}\\protect\\axtpm{p0.1b}')
+    expect(out).toContain('\\protect\\axtpma{p0.4a}\\protect\\url{c@d.org}\\protect\\axtpm{p0.4b}')
+    expect(out).toContain('\\href{mailto:e@f.org}{\\protect\\axtpma{p0.7a}e@f.org')
+    // (a body unit's marks are as they were: no \\protect before them)
+    const body = unit([text('see '), ph('\\texttt{a@b.org}'), text(' now')])
+    const plain = ((layoutMarking([body], MARK_CLASSES, { lines: true }).units[0]?.pieces ?? []) as Piece[]).map(p => p.src ?? p.s).join('')
+    expect(plain).toContain('see \\axtpma{p0.1a}\\texttt{a@b.org}\\axtpm{p0.1b}')
   })
 })

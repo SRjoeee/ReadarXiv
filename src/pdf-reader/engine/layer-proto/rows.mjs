@@ -12,6 +12,7 @@
 // did not go through readBundle is read with the same care a row is: a unit of no shape is a dropped one, a row of no
 // shape is no row, and neither throws.
 import { decideGroups, groupOf } from '../translate/groups.mjs'
+import { cellSpans } from './cells.mjs'
 import { kOfSource } from '../layer/pieces.mjs'
 import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource, translateUnits, utf8 } from '../translate/mt.mjs'
 import { authorsTranslated } from '../translate/kept.mjs'
@@ -200,6 +201,9 @@ export function unitOf(bundle, row) {
   // (its source pieces, by identity: what each source word is inside, which the layer reads its base style and its pieces' colours by,
   // layer2.mjs sourceScopes; never written to a row)
   Object.defineProperty(unit, 'source', { value: src.pieces, enumerable: false })
+  // (whether its box is other cells' too, of its source unit — its span, a \\multirow among its source pieces —, which a
+  // translated row's pieces may not keep: run.mjs readGroup reads it; never written to a row)
+  if (src.cell) Object.defineProperty(unit, 'spans', { value: cellSpans(src), enumerable: false })
   // (its row's sentences, each one's start after the first in the plain source and translation, where the row has them: where
   // the layer cuts the translation at a page break, layer2.mjs pageCutsOf; never written to a row)
   const n = row[4]

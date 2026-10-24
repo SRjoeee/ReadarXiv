@@ -276,3 +276,106 @@ describe('ownedPages: a piece found once the pages it may read are in, the pages
     expect(() => s.add(2, pageOf(['x']), () => {})).toThrow(RangeError)
   })
 })
+
+// ---- the erasure's reading (own.mjs: `erasure`), the sweep of 2026-10-24: a piece's ink where the maker's reading leaves it
+// LOST, found exactly; the maker's reading unchanged
+describe('ownedOf for the erasure (erasure: true)', () => {
+  const ink = (pages: StreamPage[], follows: Record<string, Follow>, erasure: boolean) => {
+    const out: Record<string, string | [string, number]> = {}
+    for (const [name, e] of ownedOf(pages, { follows: n => follows[n] ?? null, erasure })) out[name] = shown(pages, e)
+    return out
+  }
+  it('finds the text after a piece where TeX set a straight quote as a curly one (2610.19159v1 p42u845: \\S{}"Held fixed")', () => {
+    const page = pageOf(['from ', { at: 'p0.6a' }, '§', '”Held fixed (parity)', { at: '0e' }])
+    const f = { 'p0.6a': open('"heldfix') }
+    expect(ink([page], f, false)).toEqual({ 'p0.6a': 'open, the text after it not found' })
+    expect(ink([page], f, true)).toEqual({ 'p0.6a': ['§', 0] })
+  })
+  it('owns a piece whose ink is a rule alone before the text after it (2610.19159v1 p151u1677: \\_ before \\allowbreak); a swap still none', () => {
+    const page = pageOf(['the compute', { at: 'p0.2a' }, { rule: [126, 699, 131, 699.4] }, { u: 's', x: 132, y: 700 }, 'star function', { at: '0e' }])
+    const f = { 'p0.2a': open('sstarfun') }
+    expect(ink([page], f, false)).toEqual({ 'p0.2a': 'open, nothing before the text after it' })
+    expect(ink([page], f, true)).toEqual({ 'p0.2a': ['', 1] })
+    // (a rule under the text after it — \uline{sstar} painted before its word — is that text's: none)
+    const ul = pageOf(['the compute', { at: 'p0.2a' }, { rule: [127, 697, 160, 697.4] }, 'sstar function', { at: '0e' }])
+    expect(ink([ul], f, true)).toEqual({ 'p0.2a': 'open, nothing before the text after it' })
+    // (REVTeX's swap, no rule: the text after it at once is not the piece's ink)
+    const swapped = pageOf(['as shown', { at: 'p0.1a' }, '.', { u: '1', x: 120, y: 703.5, size: 7 }, { at: '0e' }])
+    expect(ink([swapped], { 'p0.1a': open('.', ['0e']) }, true)).toEqual({ 'p0.1a': 'open, nothing before the text after it' })
+  })
+  it('owns an opening alone over the unmarked placeholders after it to the next marked one\'s opening (2610.21547v1 p17u234)', () => {
+    // \cls{circle}$\to$\cls{donut}: the arrow has no mark; nothing but placeholders between the two openings
+    const page = pageOf(['flipping (', { at: 'p0.1a' }, 'circle', '→', { at: 'p0.3a' }, 'donut', { at: 'p0.3b' }, ') over', { at: '0e' }])
+    const through: Follow = { closing: false, want: '', ends: ['p0.2a', '0e'], blocked: true, through: 'p0.3a' }
+    expect(ink([page], { 'p0.1a': through, 'p0.3a': closed }, false)).toEqual({ 'p0.1a': 'open, an unmarked piece follows', 'p0.3a': ['donut', 0] })
+    expect(ink([page], { 'p0.1a': through, 'p0.3a': closed }, true)).toEqual({ 'p0.1a': ['circle→', 0], 'p0.3a': ['donut', 0] })
+    // (over a line's end: the arrow at the line's end, the next placeholder on the next line)
+    const broken = pageOf(['flipping (', { at: 'p0.1a' }, 'circle', '→', '\n', { at: 'p0.3a' }, 'donut', { at: 'p0.3b' }, ') over', { at: '0e' }])
+    expect(ink([broken], { 'p0.1a': through, 'p0.3a': closed }, true)).toEqual({ 'p0.1a': ['circle→', 0], 'p0.3a': ['donut', 0] })
+    // (text between the unmarked piece and the next mark: where the one ends is not known, none)
+    const blocked: Follow = { ...through, through: null }
+    expect(ink([page], { 'p0.1a': blocked, 'p0.3a': closed }, true)).toEqual({ 'p0.1a': 'open, an unmarked piece follows', 'p0.3a': ['donut', 0] })
+  })
+  it('ends a display after its unit\'s end mark at a later unit\'s opening, that unit\'s label left out (2610.20595v1 p19u153)', () => {
+    const page = pageOf(['states follow', { at: '0e' }, { at: 'p0.3a' }, '\nE=mc(G9)', '\n', { u: '2', x: 72, y: 676 }, { u: '.', x: 77, y: 676 }, { at: 'p1.0a' }, { at: 'h1s' }, { u: 'T', x: 90, y: 676 }, 'riangulene', { at: 'p1.0b' }])
+    const f = { 'p0.3a': open('', ['0e']), 'p1.0a': closed }
+    expect(ink([page], f, false)['p0.3a']).toBe("open, the next mark not its unit's")
+    expect(ink([page], f, true)['p0.3a']).toEqual(['E=mc(G9)', 0])
+    // (a later unit with no start mark, a title of two lines whose placeholder opens on its second: its first line is the
+    // title's, not the display's; none — the review of b479095e)
+    const title = pageOf(['states follow', { at: '0e' }, { at: 'p0.3a' }, '\nE=mc', '\nTitle line one', '\nfor ', { at: 'p1.1a' }, 'X', { at: 'p1.1b' }, ' rest', { at: '1e' }])
+    expect(ink([title], { 'p0.3a': open('', ['0e']), 'p1.1a': closed }, true)['p0.3a']).toBe("open, the next mark not its unit's")
+    // (an earlier unit's opening next: none, as before)
+    const earlier = pageOf(['follow', { at: 'p3.1a' }, '\na=b(1)', { at: 'p2.0a' }, 'text', { at: 'p2.0b' }])
+    expect(ink([earlier], { 'p3.1a': open('', ['3e']), 'p2.0a': closed }, true)['p3.1a']).toBe("open, the next mark not its unit's")
+  })
+})
+
+// ---- the release sweep of 2026-10-24 (staging d74bd1cf against production 699b4aea): units newly English, `unhidden`
+describe('ownedOf for the erasure: the release sweep of 2026-10-24', () => {
+  const ink = (pages: StreamPage[], follows: Record<string, Follow>, erasure: boolean) => {
+    const out: Record<string, string | [string, number]> = {}
+    for (const [name, e] of ownedOf(pages, { follows: n => follows[n] ?? null, erasure })) out[name] = shown(pages, e)
+    return out
+  }
+  it('tells the text after a piece where it runs to its unit\'s next mark, not where its first characters first stand in the piece (2610.16663v1 p45u229, 2610.21376v1 p9u88)', () => {
+    // "Let \[ … \text{for every } y∈ℝ^s (6) \] For $X$, define": the text after the display is "For", whose letters the display's
+    // \text holds first; the glyphs from the right "For" to the next mark spell the text after it exactly
+    const page = pageOf(['Let ', { at: 'p0.1a' }, '\nf(y)=0 for every y (6)', '\nFor ', { at: 'p0.3a' }, 'X', { at: 'p0.3b' }, ', define', { at: '0e' }])
+    const f: Record<string, Follow> = { 'p0.1a': { ...open('for', ['p0.3a', '0e']), rest: 'for' }, 'p0.3a': closed }
+    expect(ink([page], f, true)['p0.1a']).toEqual(['f(y)=0foreveryy(6)', 0])
+    // (the maker's reading the same: the layout's segment of the display is the erasure's, and the page stream's too)
+    expect(owned([page], f)['p0.1a']).toEqual(['f(y)=0foreveryy(6)', 0])
+    // (with no `rest`, a marking of before: the first place)
+    expect(ink([page], { ...f, 'p0.1a': open('for', ['p0.3a', '0e']) }, true)['p0.1a']).toEqual(['f(y)=0', 0])
+    // (a URL's dots before the full stop after it, the unit's end next: 2610.21376v1 p9u88)
+    const url = pageOf(['code at ', { at: 'p0.1a' }, 'https://github.com/a/b', '.', { at: '0e' }])
+    expect(ink([url], { 'p0.1a': { ...open('.', ['0e']), rest: '' } }, true)['p0.1a']).toEqual(['https://github.com/a/b', 0])
+    // (where no place spells it to the end, the first, as before)
+    const none = pageOf(['Let ', { at: 'p0.1a' }, 'a for b', ' For it ', { at: 'p0.3a' }, 'X', { at: 'p0.3b' }])
+    expect(ink([none], { 'p0.1a': { ...open('for', ['p0.3a', '0e']), rest: 'for' }, 'p0.3a': closed }, true)['p0.1a']).toEqual(['a', 0])
+  })
+  it('owns a display that ends a footnote to its page\'s stream end, its folio aside (2610.16663v1 p16u58)', () => {
+    // the footnote's end mark before its display (MARK_DEF), no mark after it on its page, the folio last and lowest
+    const items: Item[] = [{ at: 'bs1' }, 'body text', { at: 'be1' }, { at: '3s' }, '\n\n3 The value satisfying', { at: '3e' }, { at: 'p3.9a' }, '\n          Z y g(y) dy = 0,']
+    const f: Record<string, Follow> = { 'p3.9a': { ...open('', ['3e', 't3e', 'h3e']), display: true } }
+    const page = pageOf([...items, { u: '1', x: 300, y: 600 }, { u: '6', x: 305, y: 600 }])
+    expect(ink([page], f, true)['p3.9a']).toEqual(['Zyg(y)dy=0,', 0])
+    // (the maker's reading the same, a page at a time too: the layout holds the display's segments, which the reader shows it
+    // again through)
+    expect(owned([page], f)['p3.9a']).toEqual(['Zyg(y)dy=0,', 0])
+    // (no folio to tell where the display ends — the page's foot is no page number, or it stands near the display: a running
+    // foot's text would be hidden with it; none)
+    expect(ink([pageOf([...items, { u: 'J', x: 300, y: 600 }, { u: 'x', x: 305, y: 600 }])], f, true)['p3.9a']).toBe('open, the next mark on another page')
+    expect(ink([pageOf([...items, '\n16'])], f, true)['p3.9a']).toBe('open, the next mark on another page')
+    // (a footnote after it with no mark of its own, starting at the footnote's edge, is no display's ink: none)
+    expect(ink([pageOf([...items, '\n4 https://x.org/y', { u: '1', x: 300, y: 600 }, { u: '6', x: 305, y: 600 }])], f, true)['p3.9a']).toBe('open, the next mark on another page')
+    // (a line of the page's foot above the folio, centred \footskip below the display: none — Devin on #462)
+    expect(ink([pageOf([...items, '\n\n\n          (c) 2026 The Authors', { u: '1', x: 300, y: 600 }, { u: '6', x: 305, y: 600 }])], f, true)['p3.9a']).toBe('open, the next mark on another page')
+    // (a piece that is no display — an inline formula or a citation ending the note, its ink its own and what follows it no
+    // business of its: none, as before)
+    expect(ink([page], { 'p3.9a': open('', ['3e', 't3e', 'h3e']) }, true)['p3.9a']).toBe('open, the next mark on another page')
+    // (text after it, or its end mark not before it: as before)
+    expect(ink([page], { 'p3.9a': open('and', ['3e']) }, true)['p3.9a']).not.toEqual(['Zyg(y)dy=0,', 0])
+  })
+})

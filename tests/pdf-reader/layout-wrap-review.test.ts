@@ -1,7 +1,7 @@
 // @vitest-environment node
 import * as PL from '@cantoo/pdf-lib'
 import { deflateSync } from 'node:zlib'
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { deltaOf, proveDelta } from '@/pdf-reader/engine/layout/delta.mjs'
 import { DOCUMENT_OPTIONS, markedSample, pixelsApart, renderPage, wrapped } from './helpers/ocg-pdfs'
@@ -137,10 +137,10 @@ describe('S7: the bytes written are the bytes proved', () => {
   it('refuses a page whose deflated stream does not inflate to the stream it proved', async () => {
     const { bytes } = await markedSample({ pages: [2] })
     const { wrapFinal } = await import('@/pdf-reader/engine/layout/wrap.mjs')
-    const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+
     const { inflate } = await import('./helpers/ocg-pdfs')
     const lossy = (b: Uint8Array) => new Uint8Array(deflateSync(b.subarray(0, Math.floor(b.length * 0.6))))
-    const r = ok(await wrapFinal(bytes, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, OPS, units: null, follows: null, deflate: lossy, inflate } as never))
+    const r = ok(await wrapFinal(bytes, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, OPS, units: null, follows: null, texts: null, deflate: lossy, inflate } as never))
     expect(r.stats.wrapped).toBe(0)
     expect(r.stats.refusedPages).toBe(1)
   })
@@ -191,11 +191,14 @@ describe('re-review S1, S2, S3: the wrap\'s inputs and the delta\'s pages', () =
   it('requires units (null said for none), deflate and inflate', async () => {
     const { bytes } = await markedSample({ pages: [2], edit: only(unit(0, 72, 700, '(Order)')) })
     const { wrapFinal } = await import('@/pdf-reader/engine/layout/wrap.mjs')
-    const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+
     const { deflate, inflate } = await import('./helpers/ocg-pdfs')
     const base = { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, OPS }
     await expect(wrapFinal(bytes, { ...base, deflate, inflate } as never)).rejects.toThrow(/units/)
     await expect(wrapFinal(bytes, { ...base, units: null, deflate } as never)).rejects.toThrow(/inflate/)
+    // (texts required too, null said where the marks are not in hand: a caller that drops them is told)
+    await expect(wrapFinal(bytes, { ...base, units: null, deflate, inflate } as never)).rejects.toThrow(/texts/)
+    expect('refused' in (await wrapFinal(bytes, { ...base, units: null, follows: null, texts: null, deflate, inflate } as never))).toBe(false)
   })
   it('refuses a delta that leaves a page of ours naming a group of ours arXiv\'s (delta-pages), and the proof one that does', async () => {
     const { bytes: orig } = await markedSample({ pages: [2, 3], edit: (_, p) => run(72, 700, p === 2 ? '(Order)' : '(the)') })
@@ -248,5 +251,50 @@ describe('the pixel tier: a lead macro after a label, a babel name inside a \\cr
     const { bytes } = await markedSample({ pages: [2], edit: only(page) })
     const r = ok(await wrapped(bytes, { units: [{ pieces: [{ t: 'text', s: 'see ' }, { t: 'ph', src: '\\cref{app}' }, { t: 'text', s: '.' }] }] }))
     expect(groups(r, bytes.length)).toEqual(new Set(['u0', 'u0.p']))
+  })
+})
+
+// ---- the sweep of 2026-10-24: a page refused for a soft mask's paths (2610.19159v1 p3, its figure's ExtGState /SMask)
+describe('coverage: a soft mask\'s content is no painted ink of the page', () => {
+  /** an ExtGState /GS1 whose soft mask is a luminosity group of two filled paths, on page 2 */
+  const softMask = (doc: PL.PDFDocument) => {
+    const ctx = doc.context, res = doc.getPages()[1]!.node.Resources()!
+    const g = ctx.register(ctx.flateStream(Uint8Array.from('0 0 100 100 re f 100 100 50 50 re f', c => c.charCodeAt(0)), { Type: 'XObject', Subtype: 'Form', BBox: [0, 0, 612, 792], Group: ctx.obj({ S: 'Transparency', CS: 'DeviceGray' }), Resources: ctx.obj({}) }))
+    res.set(PL.PDFName.of('ExtGState'), ctx.obj({ GS1: ctx.obj({ Type: 'ExtGState', SMask: ctx.obj({ Type: 'Mask', S: 'Luminosity', G: g }) }) }))
+  }
+  const page = `q /GS1 gs 0 0 0 rg 300 300 80 80 re f Q /axt-0s ri ${run(72, 700, '(see)')}/axt-p0.1a ri q 110 698 30 0.6 re f Q /axt-p0.1b ri ${run(150, 700, '(more)')}/axt-0e ri\n`
+  const units = [{ pieces: [{ t: 'text', s: 'see' }, { t: 'ph', src: '\\rule{1em}{0.6pt}' }, { t: 'text', s: 'more' }] }]
+  it('lists no path of a soft mask among the page\'s own (alignOf), as the remover\'s walk reads none', async () => {
+    const { bytes } = await markedSample({ pages: [2], edit: only(page), tweak: softMask })
+    const task = getDocument({ ...DOCUMENT_OPTIONS, data: bytes.slice() } as never)
+    const ops = await (await (await task.promise).getPage(2)).getOperatorList()
+    const { alignOf } = await import('@/pdf-reader/engine/layout/wrap.mjs')
+    expect(ops.fnArray.filter((f: number) => f === OPS.constructPath).length).toBe(4)
+    expect(alignOf(OPS, ops).paths).toBe(2)
+    await task.destroy()
+  })
+  it('wraps a page whose placeholder owns a rule beside a soft mask: its unit hidden, its rule kept with it', async () => {
+    const { bytes } = await markedSample({ pages: [2], edit: only(page), tweak: softMask })
+    const r = ok(await wrapped(bytes, { units }))
+    expect(r.stats.refusedPages).toBe(0)
+    expect(r.unhidden).toEqual([])
+    expect(r.stats.groups).toBe(2)
+    // (by pixels: the unit's text and its placeholder's rule OFF is the page with the masked square alone)
+    const want = (await markedSample({ pages: [2], edit: only('q /GS1 gs 0 0 0 rg 300 300 80 80 re f Q\n'), tweak: softMask })).bytes
+    expect(pixelsApart(await renderPage(r.bytes, 2, { off: n => n === 'axt:u0' || n === 'axt:u0.p' }), await renderPage(want, 2))).toBe(0)
+    // (and all ON, our page)
+    expect(pixelsApart(await renderPage(r.bytes, 2), await renderPage(bytes, 2))).toBe(0)
+  })
+})
+
+// ---- the sweep of 2026-10-24: a title a class sets in capitals by \uppercase, its mark's name in capitals with it
+// (2610.20967v1 spconf's \section and \title, 2610.20581v1 amsart's \title: `/axt-H0E ri`)
+describe('coverage: a mark \\uppercase set in capitals', () => {
+  it('reads a point\'s name whatever case TeX set it in: the title owned and hidden', async () => {
+    const page = `/axt-bs1 ri ${run(72, 700, '(ALL SERRIN BANDS)')}/axt-H0E ri /axt-1s ri ${run(72, 680, '(Text)')}/axt-1e ri\n`
+    const { bytes } = await markedSample({ pages: [2], edit: only(page) })
+    const r = ok(await wrapped(bytes, { units: [{ kind: 'heading', src: 'All Serrin bands' }, { src: 'Text' }] }))
+    expect(r.unhidden).toEqual([])
+    expect(r.stats.groups).toBe(2)
   })
 })

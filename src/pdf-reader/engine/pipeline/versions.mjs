@@ -175,7 +175,16 @@
 //     Letter) was compiled by pdfTeX (A4) and its base page refused for its page box; it is now a `latex` compile to arXiv's page
 //     size. The units, the wire and its reading back are 25's: a copy of 25 carries every unit it holds the source of
 //     (live.mjs PIPELINE_CARRIES). Raised so that such a paper's bundle, now with a layout, is made again under a new key (VTAG)
-export const PIPELINE_VERSION = '26'
+// 27: the source reader's text is what TeX sets (S1-S4 of 2026-10-24, latex-front.mjs): a paper macro whose body sets words of
+//     its own is its expansion, one text piece whose source is the call (\newcommand{\nb}[1]{Notebook~#1}: 2610.21547 sent
+//     "(4--6)"), never a pair around its argument; a file that is not UTF-8 has its text read in the input encoding its main
+//     file declares (latin1, cp1252; latin1 where it declares none), not as UTF-8 (2610.20581's U+FFFDs); and a conditional TeX
+//     closes with \fi gives the translator one branch where its own text decides it (\iftrue, \if 0), else, where both
+//     branches hold words, neither (2610.21098's \ifdefined branches, one unit). Over 150 local sources 159 of 36,111 units
+//     change, in 6 papers (S1 117 in three, S2 33 in one, S4 9 in two); every other unit is 26's, and so are the marked
+//     original and the untranslated patch of every paper but the two whose units S1 or S4 changed. A copy of 26 carries every unit it holds the source of, matched by sourceHash (live.mjs PIPELINE_CARRIES), and a changed
+//     unit, whose hash is new, is asked again
+export const PIPELINE_VERSION = '27'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
@@ -183,6 +192,23 @@ export const PDFJS = '6.3.289'
  * REMOVAL, how our page's ink a drawn unit replaces is taken away (the head's `versions.removal`, in the key: VTAG): 1 to 7 the
  * text-removed PDF (an add-on of removed pages appended to the base, swapped in where a unit is drawn; 6 chained over the
  * parts, 7 over our base page); 8 our page's own streams wrapped by optional content, each unit's ink in its own groups, which
- * the reader hides where it draws the unit (layout/wrap.mjs, docs/route/ocg-erasure.md): no add-on, no tail
+ * the reader hides where it draws the unit (layout/wrap.mjs, docs/route/ocg-erasure.md): no add-on, no tail; 9 (the sweep of
+ * 2026-10-24, its units left English though their ink could be owned): a soft mask's content no ink of the page's (remove.mjs
+ * alignOf, ink.mjs indices), a title read back past its own placeholders' points, a mark's name read in lower case, a cell's
+ * lead macro owned where it abuts the cell, the spell check blind to spacing accents and dotless letters, and the
+ * erasure's reading of the placeholders (stream.mjs ownedOf `erasure`): the base's bytes change, the layouts do not; 10 (the
+ * release sweep of 2026-10-24): a label's name followed by a letter and a number is a label (own.mjs LABEL_FORM: "Table S3:",
+ * "Figure A1", which were left the original's ink, `labelKept`), and the delta's proof reads a direct value of the catalog by
+ * its references' numbers (delta.mjs sameDirect: 2610.20030's direct /Names failed it, and its base of 8 pages of 12, which
+ * only a delta holds, was refused): the base's bytes and the head's base change; and (its units newly English against
+ * production, all `unhidden`) the text after a placeholder told where it runs exactly to its unit's next mark (a display's
+ * \text, a URL's dots), a display that ends a footnote owned to its page's folio, an opening point TeX set inside another
+ * unit's range owning nothing of it (a run-in heading), a title its class sets again (acmart) its first occurrence, the
+ * closing punctuation a theorem's head sets after its note the note's (amsthm's "(Note)."), and the
+ * spell check's letter symbols, a wrapper's own words and lines of their own no unit's (REVTeX's e-mail notes, a folio): the
+ * base's bytes change, and the first two rules being the maker's reading too, the layout files of the units they reach
+ * (LAYOUT 20); and a cell's lead owned by the text TeX sets for it, as the probe reads it (marks.mjs readInkTexts, MARKS_SCHEMA
+ * 10: "1,024", "max_tokens", a formula's glyph spelled by no character one glyph: own.mjs MR 5b), and a front heading's ink
+ * (ICML's \icmltitle), which the layout compile now marks (LAYOUT 20)
  */
-export const REMOVAL = '8'
+export const REMOVAL = '10'

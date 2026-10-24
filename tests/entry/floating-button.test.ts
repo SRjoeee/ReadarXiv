@@ -61,7 +61,8 @@ const pointer = (type: string, x: number, y: number, extra: Partial<PointerEvent
 /** happy-dom has no Fullscreen API: the property the entry reads is put on the document for the test */
 const setFullscreen = (element: Element | null) =>
   Object.defineProperty(document, 'fullscreenElement', { configurable: true, get: () => element })
-const click = (detail = 1) => new MouseEvent('click', { bubbles: true, cancelable: true, composed: true, detail })
+/** a click as the reader's pointer or keyboard makes it: trusted, as no page script's can be (core/floating/button.ts acts on no other) */
+const click = (detail = 1) => Object.defineProperty(new MouseEvent('click', { bubbles: true, cancelable: true, composed: true, detail }), 'isTrusted', { value: true })
 
 beforeEach(() => {
   document.body.innerHTML = ''
@@ -119,6 +120,23 @@ describe('the floating button: what it is made of', () => {
     expect([dock.dataset.axtActive, main.getAttribute('aria-label'), q('.axt-fb-main .axt-fb-tip').textContent]).toEqual(['yes', 'Show the original', 'Show the original'])
     entry.activate(false)
     expect(dock.dataset.axtActive).toBe('no')
+  })
+
+  it('a page script\'s click acts on nothing: no panel, so no frame address to read, no toggle, no settings, no hiding (the button sits in an open shadow root on arXiv\'s pages)', () => {
+    const onPanelFrame = vi.fn(() => () => undefined)
+    const panel = mount({ main: { kind: 'panel' }, onPanelFrame })
+    // what `element.click()` dispatches from a page script: an untrusted click
+    const scripted = () => new MouseEvent('click', { bubbles: true, cancelable: true, composed: true, detail: 1 })
+    panel.q('button.axt-fb-main').dispatchEvent(scripted())
+    expect([panel.q('.axt-fb-panel-box').hidden, panel.q('.axt-fb-panel-box iframe'), onPanelFrame.mock.calls.length]).toEqual([true, null, 0])
+    const run = vi.fn<() => void>()
+    const toggle = mount({ main: { kind: 'toggle', run } })
+    for (const selector of ['button.axt-fb-main', '.axt-fb-panel', '.axt-fb-settings', '.axt-fb-options', '.axt-fb-lock']) toggle.q(selector).dispatchEvent(scripted())
+    for (const item of toggle.root.querySelectorAll('[role="menuitem"]')) item.dispatchEvent(scripted())
+    expect([run.mock.calls.length, toggle.onSettings.mock.calls.length, toggle.onHide.mock.calls.length, toggle.onPlacement.mock.calls.length, toggle.q('.axt-fb-panel-box').hidden]).toEqual([0, 0, 0, 0, true])
+    // the control: the reader's own click opens the panel, and the host is handed its frame to vouch for
+    panel.q('button.axt-fb-main').dispatchEvent(click())
+    expect([panel.q('.axt-fb-panel-box').hidden, onPanelFrame.mock.calls.length]).toEqual([false, 1])
   })
 
   it('names every control; the tooltips are the same words for the eye only; the settings ask the host', () => {

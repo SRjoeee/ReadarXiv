@@ -59,7 +59,7 @@ export function cell(id: number, page: number, b: number, c: Cell, group: string
 }
 const at = (table: number, row: number, col = 0, head = false): Cell => ({ table, row, col, span: 1, head })
 
-export interface Paper { name: string; specs: Spec[]; pages: number; /** a page whose reading throws */ fail?: number; /** what the pages' annotations do: `throw` (a read that rejects), `absent` (a page object with no such call); the default reads */ annots?: 'throw' | 'absent' }
+export interface Paper { name: string; specs: Spec[]; pages: number; /** a page whose reading throws */ fail?: number; /** what the pages' annotations do: `throw` (a read that rejects), `absent` (a page object with no such call); the default reads */ annots?: 'throw' | 'absent'; /** the page's text no unit holds (a label kept as the original's: an inline list's "(2)") */ extra?: Line[] }
 /** S-A, the chain: a unit across every break, and one over 2 to 3 to 4 */
 const chain: Paper = {
   name: 'S-A chain', pages: 5,
@@ -171,7 +171,7 @@ const trOf = (s: Spec) => CJK(s.chars, s.at)
 export function build(paper: Paper): Built {
   const { specs, pages } = paper
   const all = Array.from({ length: pages }, (_, i) => i + 1)
-  const items = all.map(p => specs.flatMap(s => s.lines.filter(l => l.page === p).map(l => ({ str: l.text, transform: [10, 0, 0, 10, l.x0, l.b], width: l.x1 - l.x0, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false }))))
+  const items = all.map(p => [...specs.flatMap(s => s.lines), ...(paper.extra ?? [])].filter(l => l.page === p).map(l => ({ str: l.text, transform: [10, 0, 0, 10, l.x0, l.b], width: l.x1 - l.x0, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false })))
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
   const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items[n - 1], styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {}, ...(paper.annots === 'absent' ? {} : { getAnnotations: async () => { if (paper.annots === 'throw') throw new Error('the annotations cannot be read'); return annotationsOf(specs, n) } }) })
   const asked: number[] = []

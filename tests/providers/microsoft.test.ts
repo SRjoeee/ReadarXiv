@@ -115,11 +115,17 @@ describe('createMicrosoftProvider', () => {
 
   it('a count mismatch / a missing translations[0].text → invalid-response', async () => {
     const short = vi.fn(async () => ok(['一']))
-    expect(((await provider(short).translate(req(['a', 'b'])).catch(e => e)) as ProviderError).kind).toBe('invalid-response')
+    const fewer = await provider(short).translate(req(['a', 'b'])).catch(e => e)
+    expect((fewer as ProviderError).kind).toBe('invalid-response')
     const missing = vi.fn(async () => new Response(JSON.stringify([{ translations: [] }]), { status: 200 }))
     const error = await provider(missing).translate(req(['a'])).catch(e => e)
     expect((error as ProviderError).kind).toBe('invalid-response')
     expect((error as ProviderError).message).toContain('item 1')
+    // the endpoint answers item for item: both are its own doing, not split, sent once more (DESIGN §8.2, issue #78)
+    for (const e of [fewer, error]) {
+      expect((e as ProviderError).isolatable).toBe(false)
+      expect(getRequestErrorMeta(e)).toMatchObject({ isRetryable: true, maxRetries: 1 })
+    }
   })
 
   it('a non-JSON response → invalid-response, and not isolatable (a smaller split fails the same)', async () => {

@@ -423,6 +423,12 @@ switch alone: figure text in every display), `uiLanguage` (the reader's words), 
 
 - **Writing the display**: 对照 writes `mode: 'side'`, unless it is `'stack'` (a side-by-side choice already for the
   reader); 译文 writes `'only'`; both clear `pdfReader.original`. 原文 sets `pdfReader.original` and leaves `mode` alone.
+- **Another target language**, once a translation has started (chosen here or elsewhere): the translation in it in place, the
+  page never loaded again (`settings.ts` `followOf` `retarget`, the run's `retarget`, §11.8). The left, both documents, the zoom,
+  the sync and the reading place stay; each laid page shows the language before until the new one's page is laid, and the
+  original's page where the new one's service fails or stops short with nothing translated. The line and the phase are an open's (Translating, §8). A hold
+  for the language before (one the layer does not set) is lifted and the translated display shown again; a hold for the
+  paper's own reason stays.
 
 **New**, a `pdfReader` group; `CONFIG_VERSION` 18 → 19, with a migration that adds it with its defaults:
 
@@ -551,13 +557,24 @@ each piece. They stay in the source language, counted, and the failure is kept (
 ### 11.1 The page
 
 - `src/entrypoints/pdf-reader/` (`index.html`, `main.tsx`, `App.tsx`), built by WXT with React and TypeScript.
-  `pdf.content.ts` opens it in its frame with `?paper=<id>`; `web_accessible_resources` names it.
+  `pdf.content.ts` opens it in its frame with `?paper=<id>`; `web_accessible_resources` names it, at the browser session's
+  dynamic address (`use_dynamic_url`, DESIGN §4.0c).
 - It frames nothing: the translation is the layer's, drawn in the page (§11.7–§11.9); the compile page it framed until
   Stage 5 is parked (`parked/README.md`).
 - **The reader's address is not trusted.** The reader is a page that arXiv's pages may frame, so its URL is not its own to
   trust: a page that frames it must not point its requests anywhere else. It fetches the paper from arXiv and its layer
   from our server, or either from a server on this machine when a probe says so; the build, never a paper, a service or a
   framing page, chooses which server it reads the layer from (`src/pdf-reader/addresses.ts` `READER_API`).
+- **Framed, the reader acts only for the content script that made its frame** (`shared/frame-owner.ts`, DESIGN §4.0c):
+  with no such content script to vouch for it, it draws nothing and does nothing — no paper fetched, no run started, no
+  setting written, whatever its address asks (`ask=translate` included). **Nor does a release build's reader that is no
+  frame**: the PDF page only ever frames it, while an arXiv page that learnt its address could send its own tab there
+  (Chrome 153 lets that navigation through; Chrome 131 refuses it: measured 2026-10-24), and there the settings alone
+  would start a run (`?paper=` and a translated display). A development build, and the
+  harness's copy of a release build (the manifest key `axt_top_level_reader`, which `scripts/check-output.mjs` holds no
+  build carries; `tests/e2e/lib/extension.mjs`), open it as its address says, for the browser checks and the probes.
+- **`?paper=` is an arXiv id or none** (`core/paper-id.ts`, read once by `addresses.ts` `paperOf`): anything else is an
+  address with no paper, its card shown, and never a request or a link.
 - The demo papers stay reachable by address for the probes and the e2e checks (`?paper=<id>` without `live=1`, the
   probes' form since the prototype), never from the interface.
 
@@ -739,18 +756,59 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   arXiv's PDF, §19.8, is drawn with annotations off where the delta replaces it) and its SVG, put in one task, in place: the place's size and the pane's
   scroll unchanged, its page view destroyed first, no viewer document set. A zoom draws the copies again at the new k
   600 ms after it, nothing laid again; a copy is kept while it is at the scale a copy drawn then would be at. A page this
-  door laid that leaves the view lets its SVG and its copy go and holds an
-  empty element (retired: the place shows no page, and no page view is made of it); a page the door makes ready while it
-  is far is retired at once, and committed directly when it comes near. The one exception: a page that holds the focus (a
-  link, or the place a jump gave it to) is kept as it goes far, and let go once the focus has left it (read a task after
-  the focus moves, never in a microtask: a native Tab clears the focus before it arrives at the next link), so at most one
-  far page stays laid, and the focus never falls to the document. A page that fails, or whose copy fails, shows the
+  door laid that leaves the view takes its drawing out of the document and holds an empty element (retired: the place shows
+  no page, and no page view is made of it); a page the door makes ready while it is far is retired at once, and committed
+  directly when it comes near. The one exception: a page that holds the focus (a link, or the place a jump gave it to) is
+  kept in place as it goes far, and retired once the focus has left it (read a task after the focus moves, never in a
+  microtask: a native Tab clears the focus before it arrives at the next link), so at most one far page stays in the
+  document, and the focus never falls to the document.
+- **No flash coming back** (the owner's goal of 2026-10-24: a page already seen never shows the original, or an empty place,
+  before its translation, coming back to it). A retired page's drawing — its copy, its SVG and its links, detached — is kept off the view,
+  and put back in its place in the same task as the page comes near again (`bringBack`), one pane height before it can be
+  seen: no ask, no copy drawn, the right's shapes the page's own. The drawings are kept within the device's budget
+  (`keepBudget`): a 64th of its memory (`navigator.deviceMemory`, 4 GB where the browser does not say) at 4 bytes a pixel, at
+  least two of its screens' pixels, at most `KEEP_PIXELS`, 2^25 pixels (128 MiB), and on iOS and iPadOS at most
+  `IOS_KEEP_PIXELS`, 2^23 (32 MiB: its WebKit tells no memory and kills a tab past its process's limit; until Safari 17 it also
+  refused a canvas past a page-wide canvas cap of about 200 MB on an iPhone SE, WebKit bug 195325, which WebKit PR 14375 removed;
+  32 MiB beside the near pages' copies stays under a third of the lowest cap reported); past it the drawing farthest from the
+  view goes first. A copy costs its pixels: an A4 page at 120 % on a 2x screen is 1905 × 2694 pixels, 19.6 MiB of the GPU process's
+  memory in Chromium 153 on Metal (an `ImageBitmap` of it no less; the probe of 2026-10-24). So a computer of 8 GB keeps six and
+  a half such pages, nine at 100 %, twelve at the reader's fit (two thirds of what the left pane's PDF.js holds of its own at
+  that zoom, its ten page views drawn), and a phone of 4 GB 64 MiB, some ten pages of its screen at the fit. A page let go past
+  it is laid again from the door's kept markup as before. A drawing kept across a zoom comes back as it was and is drawn again
+  at the new k. A later attempt, a fork or another target lets every kept drawing go (they are the door before's), as do
+  `dropOthers()`, a refusal and the dispose. A host may give its own budget (`keepPixels`; 0 keeps none).
+- **The faces, in one wave** (`layer-proto/warm.mjs`). v0 checks and loads the faces of a unit as it lays it, one unit after
+  another (E2), so a page whose units brought new characters waited a round trip a unit: 2602.23285v2 in Chinese asked 38
+  font files in 12 waves before its first page, 4.3 to 9.2 s of a cold visit (production, 2026-10-24). The side asks the
+  slices of what v0 will draw of the near pages at once, the page in the middle of the view first (page 1 alone until a page
+  is shown, the others after it), as soon as the index, their rows and the parts that locate them are in (before the
+  composed document is open): each unit's translation in the style its lines are set in on the page (their most common font
+  by width, formulas aside, as v0 takes its original's most common class; a heading the layout tells no font of in the
+  bold), an author's unit never (v0 never draws one; on 2602.23285v2's page 1 its names alone took 16 slices, 1.7 MB, where
+  the units drawn take 1.4 MB), the page's babel names in the target's words, the alphabet slice of each text font the page
+  is set in, and on page 1 the faces v0 warms there (`warmFaces`). CJK characters go by the rules' class to the CJK face,
+  the rest to the style's Latin face; the paper's family is read from the parts' layouts (each font weighted by the lines
+  set in it; the same family page 1's characters give on the seven papers of the gate pack). The slices are loaded
+  `WAVE_SLOTS` (4) at a time: the edge answers a connection's streams side by side whatever their priority (staging,
+  2026-10-24: a High fetch beside 28 slices loaded as fonts, VeryHigh, ended in 175 to 470 ms, as beside 28 asked Low or
+  High), so a wave of 28 slices in flight held each read of the original the composed document makes, one after another,
+  to a share of the line in 29. v0's checks are unchanged: they find the slices loaded or loading, and a run the wave did
+  not foresee (a bold word in a paragraph, a character only the original's text holds) asks its own as before. A slice is
+  asked once.
+- **The pages ahead** (the prefetch on the layer). Once the rows of the attempt have ended (a host that translates as it shows
+  is asked for nothing it has not translated), the door is open, no page of the view is asked of it, the right pane is shown
+  and the document visible, and the view has rested `AHEAD_IDLE_MS` (600 ms: no scroll, nothing asked, the last near page
+  committed), the side lays the `AHEAD_PAGES` (2) pages after the last near page past the middle of the view, one at a time,
+  each after its faces' wave, and draws each at its place's k into a drawing kept off the view: the reader reaching it finds
+  it put back at once. A scroll gives the window up (its ask and its copy under way aborted) until the view rests again; a
+  page come near meanwhile is committed as any near page. A host may lay none (`ahead: 0`). A page that fails, or whose copy fails, shows the
   original and is asked again on a zoom, on coming near or (a copy) on the next scroll; one asked, told `laying` and not
   laid within 30 s (`PAGE_MS`) shows the original, warns once a side and is asked again on the next scroll, its late
   `ready` taken. A page still `waiting` (its part, its closure or its rows) is never a stall. After a reopen a laid page
   keeps its drawing until the new door's page is ready; leaving the view, that drawing goes and the place shows its own
-  content again. The window holds a copy for the places near the view alone: their pixels are bounded by the near area at
-  any zoom, so no copy of a far page is kept.
+  content again. The document holds a copy for the places near the view alone (their pixels bounded by the near area at
+  any zoom); far ones are kept off it, within the device's budget.
 - **No scale is captured.** Before the per-unit erasure a copy could be cut from the left's canvas or a place's page view where
   PDF.js had drawn it near k, which meant reading the scale PDF.js drew at (`pagerender`), refusing a canvas drawn at two
   scales (PDF.js's `approximateFraction` floors width and height to different terms at most ratios) and slack for the
@@ -764,8 +822,9 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   a tolerance for it. The SVG and the links are laid in the same frame: the page's size at its scale (`--axt-frame-w` and
   `-h`, `--total-scale-factor` times its size in PDF units), never the place's floored box. `pnpm e2e:registration` holds it
   on the sample at DPR 1 and 2, at the fit and every step of the zoom menu: each copy on the place's box at the pixel ratio,
-  the SVG and the links the page's size, and a page retired and laid again the same copy to the pixel (82 of 82, over our
-  base whole and as a delta, 2026-10-23; at the fit and 100 % no zoom's recopy makes a long task).
+  the SVG and the links the page's size, a page far from the view and back its very copy (nothing drawn again), and a page
+  drawn again at the same zoom (a zoom away and back) the same copy to the pixel (84 of 84, 2026-10-24; at the fit and 100 %
+  no zoom's recopy makes a long task).
 - **What a copy hides** (the per-unit erasure's reader side, `layer-proto/visibility.mjs`, `layer-proto/hide.mjs`; the file
   side is §19.9). Our page is wrapped: each unit's text in group `axt:u<id>`, its placeholders in `axt:u<id>.p`, its label
   in `axt:u<id>.l`, each babel name in `axt:n<occ>`, all shown by default. A copy is the page with the groups of the units
@@ -786,7 +845,11 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
     kept where it stands (drawn as a crop, or as text in the translation), its kept ones and its displays then pasted from B
     through their segments; its label group where the reading draws the label in the target's form; a babel name that leads
     it (RUN_IN) with it. A unit the head lists as `unhidden` (marks, across, spell, page, bounds) or whose text group the
-    document does not hold (an unwrapped page; a base that was not wrapped) is the original's and is not drawn; one the
+    document does not hold (an unwrapped page; a base that was not wrapped) is the original's and is not drawn — a table's
+    cell so alone, the rest of its group drawn (the coordinator's ruling of 2026-10-24, coverage first: a table with one
+    English cell beats an English table), but for one spanning columns or rows (`\multicolumn`, `\multirow`), whose box the
+    others share, and one that fails the spell check (its range may hold a sibling's ink), which keep the group the
+    original's as any cell that cannot be drawn does; one the
     head lists as `labelKept` draws its body alone and never hides a label. A table rule near a CJK cell (`cellBands`) is
     read from the part's `rules` (each page's, made by the maker over our page's ink: `layout/cell-rules.mjs`), the one fact
     of the add-on's manifest a reader kept.
@@ -803,13 +866,38 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
     14.9 against 18.7 (2608.04322v1), 18.5 against 15.7 (2608.16117v1), 15.0 against 19.3 (2609.26457v1); on the thesis (2307.16209v1, 147 pages, render alone) 9.2 ms against 10.0 cold (p95 25.1 against
     25.1), 9.5 against 8.3 warm (p95 23.8 against 22.4): within §8's 1.5× cold and about 1.1× warm. A copy (render A, B and C
     where asked, its pastes and crops) 31.9 to 36.5 ms at the median.
-  - **One parse a page, planes cut to their boxes** (the review of #447). A copy's renders keep the page's rendering state for each
-    other (`run.mjs` `renderAt`, `WARM_PAGES` 4 pages, the one drawn last kept longest, let go at dispose): PDF.js 6.3.289's
-    `page.cleanup` drops the operator list and the decoded images, so A, B and C and every recopy after a zoom each parsed the
-    page and decoded its images again (2602.23285v2 p8, 16.6 MB of images, at k 2 in Node: 4 operator lists and 80 image decodes
-    for A, B, C and A again, 1 and 20 now). B and C are rendered on the box their operations cut from alone (`layer2.mjs`
+  - **One parse a page, planes cut to their boxes** (the review of #447). The document keeps its pages' rendering state for every
+    render after them (`visibility.mjs`, through which every render of the document goes: `WARM_PAGES` 4 pages, the one drawn
+    last kept longest, the oldest let go by its `cleanup()`, the rest with the document): PDF.js 6.3.289's `page.cleanup` drops
+    the operator list and the decoded images, so A, B and C and every recopy after a zoom each parsed the page and decoded its
+    images again (2602.23285v2 p8, 16.6 MB of images, at k 2 in Node: 4 operator lists and 80 image decodes for A, B, C and A
+    again, 1 and 20 now). The lay's reads of a page (its pixels, a live reading) keep it warm too, so a page's copy renders from
+    the parse its lay made, and a run opened again over the same document (another target, a retry) reads and copies its warm
+    pages with no operator list asked. The bound is the document's: at most `WARM_PAGES` pages' operator lists and decoded
+    images, whatever runs over it. It stays 4 beside the drawings kept off the view (2026-10-24): a page coming back is put
+    back from its drawing with no render, so more warm pages would buy the scroll back nothing, while a warm page holds its
+    images decoded (2602.23285v2 p8, 16.6 MB of them compressed) where a kept drawing costs its pixels alone. B and C are rendered on the box their operations cut from alone (`layer2.mjs`
     `opsSources`: 8 to 30 % of the pages' pixels on the pack), with render A's annotation mode, and a copy of a page that leaves
     the view is aborted before its next render (`copyOf`'s `signal`).
+  - **Another target, in place** (`retarget(to)`). The layer is the paper's whatever the language, so another target is a later
+    attempt over the same layer and the same composed document: the door laying the target before is let go at once (its
+    generation past: nothing it lays or copies is put in place, and no page is asked of it in the new language; its copies
+    under way aborted), then the door opened again as `again()` opens it, over the latest composed document (no document opened
+    or read again, no range of the base or the original asked). Its run sets its own groups off a page (render A) through the
+    document's one configuration. A laid page keeps the target before until the new target's page commits; one the new door
+    fails or stalls shows the original's page; `dropOthers()`, the host's word that the new target's rows will not come (its
+    service failed, or it stopped short with no unit translated), lets every page still showing another target's layer go to the
+    original's (one holding the focus once the focus leaves it). A kept page's shapes are muted (`shapes.mjs` `mute`): nothing
+    of it is lit or hit until the new target's page commits, since neither the new layout nor the mirror describes its drawing;
+    it is not drawn again on a zoom either (its door is gone), so it is soft until then. The run's renders stop once it is let go
+    (`VIS.render`'s `live`), so the door before holds no turn of the document's queue; a live reading pins its page warm until
+    its fills are read. A stop tells the end only where a unit of the target was translated (`whole` or `partial`); a service
+    that never answers ends as any stop does, by the request queue's bounds (each batch's timeout, the queue's whole budget).
+    A language change during a limit's wait (429) is retargeted in place, the look asked no sooner. Whatever the target, a laid
+    page whose copy hides nothing (`LaidPage.hides` 0: no unit translated there, its rows `none`, lost or not come by the end, or
+    nothing to translate) is never put in place: arXiv's page stays, never our base page in its place. `dropOthers()` lets go
+    every drawing of a door before, another target's or this one's before it was opened again. The left pane is not
+    touched. A same-target retry keeps its pages as before.
   - **The left first, or in the same frame.** A copy ready while the left's page is being drawn waits for it (at most
     `LEFT_WAIT_MS`) and is put in place in the task the left's page is told drawn in. Chromium, 2602.23285v2 p8 at k 2, asked to
     both painted, three runs: 3,275 to 3,324 ms before (the right 2,031 to 2,083 ms after the left), 1,260 to 1,272 ms now (0 to
@@ -992,8 +1080,12 @@ Decided 2026-10-24 (the owner's request of 2026-10-23; the route note that draft
   `-h`, the SVG's), contained (`contain: strict`). The SVG's text becomes drawn, not read: `aria-hidden` and `user-select: none`,
   so a selection, a copy, a search and a screen reader each meet one copy of the text (Chromium's `window.find` finds the text
   layer's alone; Firefox's and WebKit's find read the SVG's drawn text too, which `user-select` does not take out of a search
-  there: a translated phrase is found first in the SVG, at the same place). It goes with the drawing it belongs to (retired, failed back to the original, replaced, disposed), cancelled from
-  PDF.js's registry of its selection listener; one that comes after its page was let go is put nowhere. The hover highlight is
+  there: a translated phrase is found first in the SVG, at the same place). It is part of the drawing it belongs to: a drawing kept off the view (§11.8, "No flash coming back") keeps its
+  text layer and brings the same one back as its page comes near; a page laid ahead has its text layer built while it is kept,
+  so it is there the moment the page is near; one that arrives while its page is kept goes into the kept drawing. It goes when
+  its drawing goes (retired with no drawing kept, let go past the keep's budget, failed back to the original, replaced, another
+  target's or door's, disposed), cancelled from PDF.js's registry of its selection listener; one that comes after its page was
+  let go is put nowhere. Its translated spans carry the language of the target their drawing was laid in. The hover highlight is
   unaffected: the lighting reads the pointer's place, not its target. A host whose PDF.js gives no builder draws the page as
   before, with none. A page shown as the original's (no layout, refused parts, a page over arXiv's PDF) is never committed, so it
   gets no layer of ours: PDF.js's own is there.
@@ -1010,7 +1102,7 @@ Decided 2026-10-24 (the owner's request of 2026-10-23; the route note that draft
 
 The rows: `tests/pdf-reader/textlayer.test.ts` (TL1-TL21, the pure core), `layer-door.test.ts` (the real door's pages and their
 layers through three opens) and the conformance suite (`helpers/door-conformance.ts`), `text-layer-view.test.ts` (TV1-TV3 the
-builder, TS1-TS6 the side); in a real browser `pnpm e2e:reader` (built after the commit between the drawing and the links; one
+builder, TS1-TS10 the side: TS7-TS9 a kept drawing's and a page laid ahead's, TS10 another target's); in a real browser `pnpm e2e:reader` (built after the commit between the drawing and the links; one
 drag from a heading's number through its translated heading into the paragraph after it, the selection and its copy; a
 formula's text where its crop is drawn; find of a translated and of a kept phrase in the text layer; invisible, with its
 control; one copy of each text in the accessibility tree; the hover over it; let go far from the view) and the web's
@@ -1407,6 +1499,8 @@ The edge cases, decided:
 - **A unit's alignment** (whether its lines are centred) is extraction, and TeX's own: the marked original writes, for a unit's or a heading's end mark, the stretch of `\leftskip`, `\rightskip` and `\parfillskip` its paragraph was broken with, read once the paragraph ended (`AXT-ALIGN`, `layout/marks.mjs` `readAlign`: centred, flush left, flush right or justified; `{\centering text}` and a blank line is justified, its group closed before its paragraph ended), and the layout maker sets `UNIT_FLAG.CENTRED` from it. A unit TeX set in a box (a one-line caption `\@makecaption` centres, `\centerline`) or whose line the log lacks is read from arXiv's lines instead: every line's centre on its column's (the text block's for a full-width row), one line short of it by more than an em; and a one-line paragraph TeX set justified that its own glue centres (`\noindent\hfill X\hfill\null`) is centred where its line is on its column's middle and more than two ems off both edges. The layer draws by the flag. A table cell, which the probe does not read, it decides by the cell's own lines (several centred: a makecell's) or its table's column on the page (a single line: centred where the column's cells' middles are all within 2 pt of each other and their widths are not, so a column whose cells share a start or an end never is; a cell its column cannot decide, alone in it, a header's or of widths alike, as the layout file's flag says); a unit of a part with no layout by its lines and the page's column, as before the file had a flag (2026-10-19: the layer's own guess had centred 1810.04805's "C.1" and "5.3" headings and missed IEEEtran's centred ones).
 - **A placeholder's colour** (its glyphs' fill: hyperref's coloured links and citations, a coloured formula) is extraction: the layout file's placeholder row ends with the colour more than half its inked glyphs are filled with, where that is not black (`0xRRGGBB`; `MIXED_FILL`, -1, where no one colour holds more than half), read from arXiv's operator list (`layout/ink.mjs`, every colour space as PDF.js turns it to RGB; a pattern's fill counts as none).
 - **A character's colour** is an attribute of the original's glyphs, as its font is (E1 of the residuals' batch R2, 2026-10-19). Each text item of a page's draw carries its characters' fills (`layout/fills.mjs` `itemFills`: the glyphs of the page's ink on the item's baseline within its extent, read in order as the item's own text; an item they do not spell exactly — turned, a glyph too many or too few, a combined accent set as two glyphs, a right-to-left run — tells none, nor does a Type 3 glyph whose procedure paints its own colours), and a page read live tells the same from the list PDF.js drew it by, its render's or its early pixel read's, with no second parse: a walk of the glyphs alone, `LIVE_FILLS_MS` at most, past which the page tells none (`run.mjs` `liveFillsOf`, with the host's `OPS`). The reader's character holds it as `st.fill`. The drawing reads it three ways. A unit's base weight, slant, small capitals, family and colour are those most of its matched glyphs hold outside every piece that may set that attribute (a style pair or switch in any spelling, `{\bf …}` too; a colour piece, a link, a paper's own macro), and of all its glyphs only where none lies outside; a tie goes to regular, upright, serif and black, else to the unit's first glyph (`layer2.mjs` `measuredStyle`). A glyph's slant is read as it would be without the `\emph` and `\em` toggles around it, so that a unit wholly inside one is drawn as the original. A piece that may set colour and that no `colours` row tells takes its own glyphs' colour; a row (TeX's, PR-C) wins. A unit read without its source pieces (a lab record, not a reader's) keeps the reading before: the majority, its groups' share taken off (`baseOf`), and a colour only where every glyph whose fill is told holds the same one. A rendering of the page's own characters (a citation, a reference, an equation's number) is drawn in runs of its characters' fills: `[16]` keeps its black brackets and blue digits. The placeholder's row fill above stays only for a character whose fill is not told. Word-level colour inside a sentence stays a limit: no majority paints a unit. On the wire, a styled pair whose two ends stand where the wire is cut anyway (a forced break, a display or an item beside it, never an inline formula, which the translator moves as a word; a kept pair's edge; the unit's end) keeps its markers (`translate/mt.mjs` `classOf`, the boundary rule). The draw's item rows carry the fills as their tenth value (`BUNDLE5` `'7'`); the boundary rule raises `TRANSLATE_VERSION` to `'4'` and `PIPELINE_VERSION` to `'22'`, whose copies carry every unit whose wire it leaves alone (`mt.mjs` `boundaryChanges`): over 137 papers' sources 126 of 36,136 units, in 29 papers, are asked again.
+- **A unit's size and its small capitals, where NFSS fakes them** (the owner's report of 2026-10-24 on staging: 2602.23285v2's appendix headings, page 15, drawn far smaller than the original in zh, es and de, and in es and de with no small capitals) are read from the original's glyphs as its other attributes are. The Times family has no small capitals of its own, nor have PSNFSS's other base-35 families: NFSS sets `\scshape` in a virtual face (`ptmrc8t` and its kind) that draws each lowercase letter as the upright face's capital at 0.8 of the size, in the same PDF font as the capitals, so that no font name says small capitals, and the `\sc` of a class's heading (ICLR's and ICML's subsections, IEEEtran's sections and table captions) is in no piece of the unit's source. The alignment pairs each page letter with the source letter it spells (case-blind): a capital paired with a lowercase source letter, set at most `SMALL_CAPS_SHARE` (0.9) of the median size of the unit's letters and digits whose case TeX kept, is a faked small capital (`layer2.mjs` `smallCapsOf`), and their median size over the capitals' is the share the unit sets them at (`capsRatio`, to the hundredth: 0.80 on 1711 of the 1747 faked capitals of the 32 papers of the corpus that set any, 0.71 on the other 36, one table's at 7 pt in 2608.27181; a unit's own, never a paper's). The unit's size is the median of its glyphs with those set aside: its capitals', the size TeX was asked for (2602.23285v2's "A.2 DYNAMIC SPECTRAL GRAPH STRUCTURE", 21 of its 25 letters at 7.97 pt, is read at 9.96 where it was read at 7.97, the median its small capitals made). It is set in small capitals where most of its glyphs that can tell say so (`capsVote`: a faked small capital says so, a lowercase source letter drawn as itself says not, and where the unit has faked ones a capital or a digit of a face that names no small capitals says nothing, since NFSS draws it alike in either shape), of the glyphs outside every piece that may set them as `measuredStyle` reads every attribute; a unit read without its source pieces (the gate's, the lab's) of all its letters, its `\textsc` groups' share taken off as `baseOf` takes off its other groups'. A capital paired with a lowercase source letter at the others' size is a capital of the text's: a class's `\MakeTextUppercase` (REVTeX's section titles, 2610.21288v1's "I. INTRODUCTION", drawn "I. INTRODUCCIÓN" in Spanish where it was "Introducción"), the unit set in them (`upper`) where most of its letters that can tell are, and its translation drawn in the target's capitals at its size. A face of real small capitals (cmcsc10, LM Roman Caps, a face with an SC name) draws its lowercase letters as themselves, and a unit with no letter of the source's own case to read the sizes against reads as before. In a CJK target, which has no case, a unit set in small capitals is laid at its nominal size × `CJK_CAPS_SIZE` (`layer2.mjs` `unitSizeOf`; 1, the owner's of 2026-10-24).
+- **Small capitals the layer draws itself, and capitals.** A run in small capitals in a face with none of its own (no smcp feature: Nimbus Roman, Nimbus Sans, FreeMono; `rules/font-roles.mjs` `ownSmallCaps`) is drawn as NFSS's virtual faces draw it: each lowercase letter as the face's capital at the unit's `capsRatio` of the size, `SMALL_CAPS_RATIO` (0.8) where its page tells none (a face of real small capitals the target's face has none of), the other characters as they are; each run of one case is a token of its own, glued to the one before and never hyphenated, measured in the face with no small capitals asked of it as it is drawn, a `<tspan>` at its share of the size (`layer2.mjs` `caseRuns`, `selfCaps`; `lineRuns`' `sc`, which `svgOfUnit`, `runEdge`, `lineExtent` and the breaker's cut read). Case is each character's, whatever its script, in the target's own case mapping (`upperOf`, `toLocaleUpperCase` of the target, the root's for a code no locale reads, never the device's: Turkish i to İ and ı to I, German ß to SS measured as the expanded capitals, Greek's tonos dropped, Lithuanian's dot above dropped after i, a mark with its letter): a Latin word inside a CJK translation takes its own small capitals or capitals, a CJK character, Arabic, Devanagari and Thai none, a digit or a mark is drawn as it is. A rendering of the page's own characters keeps the small capitals its page sets (a macro's text in faked small capitals, which the PDF's text gives in capitals: a capital the page sets at most `SMALL_CAPS_SHARE` of the unit's size is drawn as a small one, `smallCapsAt`; 2602.23285v2's `\method`, "ODEBRAIN" in typewriter capitals at the text's size, is drawn as it is), a formula's text takes neither small capitals nor capitals, and a babel name in a face of real small capitals is drawn as a run is (`nameRuns`). No rule asks a browser to synthesize any (`capsRule`): synthesized, they were each browser's, Chromium's at 0.7 of the size (Nimbus Roman's "Discusión: perspectivas clave" at 20 px, 237.31 px), Firefox's at 0.8 (266.93), WebKit's at two widths (its SVG 241.57, its canvas 237.30), where the layer's own are 266.91 in all three. A face's smcp feature draws its own (Libertine, CMU, XCharter and the other faces `METRICS` says have one), and Latin Modern's caps face, whose letters are its small capitals, is asked none (`capsLetters`, `fonts.mjs`), so that it is measured as it is drawn: asked them, the canvas measured capitals it synthesized, 1125 against the 1187 px it drew. `tests/e2e/layer-small-caps.mjs` (`pnpm e2e:small-caps`) lays and draws ICLR's heading in Spanish, German and Russian, a paragraph's `\textsc` run and a REVTeX heading in capitals in Chromium, Firefox and WebKit: each run's glyphs are drawn as wide as they were measured (within 0.02 px and a sixtieth of a pixel a glyph, Firefox's unit; WebKit's `getComputedTextLength` gives a run unkerned though it draws it kerned, so the test reads `getSubStringLength`), and every item is laid at the same place in the three (within 0.00002 PDF units in the role table's faces). Measured on the gate pack (13785c79, 32 outputs, the model tier in the rules gate's configuration, base `next` 3713cf45, and 5e723185 before it alike): no measure worse and no page moved; the units' own records (`--dump`) move in 2608.04322v1 alone, against `next` its section headings at 7.97 to 9.96 pt and its table captions at 6.38 to 7.97 (84 units on 63 pages of its 7 outputs), against the first step of this change, which left the browser to synthesize them, 60 of those, their small capitals at 0.8 where Chromium set 0.7, two captions a line longer (de, fr); over those 7 outputs the pixel tier's translated share rises from 82.7 % to 83.3 % and its lost-ink regions fall from 29 to 28, as at the first step. No unit of the other 25 outputs moved (none in Latin Modern's caps face, none in capitals of the text's). A limit, the front end's: an explicit `\MakeUppercase{…}` (`\MakeTextUppercase`, `\uppercase`) in a unit's source is one placeholder of `source/latex-front.mjs`, its words left the original's, and `\section{\MakeUppercase{Related Work}}` makes no unit at all; none of the 37 930 units of the 158 local sources holds one.
 - **A translator's stutter** (a word of five letters or more written twice in a row where the unit's source sets no word twice: Microsoft's "konformen konformen" in 2608.16117's German abstract, the M1 survey) is layout: `layer-proto/stutter.mjs`, applied where a unit's text becomes tokens (`layer2.mjs tokensOf2`), so every host's rows and every cached translation are drawn with the word once, and the rows, the cache and the plain text the sentence offsets count in keep the translation as it came (the word table keeps each drawn word's place in it). It bumps nothing (§18.3); making it a translation rule would raise `TRANSLATE_VERSION` and translate every unit again for a defect of three units in the 31 outputs measured. Only alphabetic scripts that set words apart by spaces: a CJK or Thai repeat is not this rule's.
 
 ### 18.2 The identities
@@ -1531,6 +1625,8 @@ Decisions made by the maintainer by looking at crops, and what they changed. The
 **A letter-spaced line squeezes (PR #438).** A line takes the group it misses only when, without it, it would stretch more than `STRETCH_MIN` = 0.05 em a gap, the overflow is at most what it can give, and that squeeze a gap is less than the stretch. What it can give: the blank halves of comma-, full-stop- and bracket-type marks, spaces down to `spaceMin`, then `SQUEEZE` = 0.02 em a gap, never past the tracking floor (`trackMin`) and never below the tracking the page fill raised (`fitTrack`). Only marks whose ink sits in one half of the em in every face the layer draws are cut: comma, full stop, enumeration comma, brackets and quotes. Never the colon, the semicolon, `!` or `?`: the CJK face centres them, and a question mark cut by half ran 0.22 em into the next character. Measured on the 53 papers of the release route's sweep: lines more than 0.15 em a gap over their unit's least 403 to 265, ragged CJK lines 625 to 457, the owner's line (2610.10069 page 7, unit 49) 0.194 to 0.022 em a gap. Long formulas stay stretched: no new cap and no new ragged rule.
 
 **The fill's top is relative to the original's pitch for Chinese (`fillLeadRel`).** The fill spreads a unit's lines up to a top; the em top (`fillLead`, 2 em of the size drawn) equals the original's own pitch on a double-spaced original and is below what the frame allows, so the paragraph ended early (2610.11256 page 12, unit 75: 7 lines of 9). The top is now the looser of the em top and `fillLeadRel` = 1.3 times the original's pitch, scaled by the fit's size; 1.3 is the engine's own Chinese `leadBase`, so Chinese reads at the same density as its original. Chosen by the owner by eye on crops, 2026-10-23, over 1.5 and over replacing the em top outright (which tightened 3,035 single-spaced units). Simplified and Traditional Chinese only; Japanese and Korean stay off until measured. Measured on the 53 papers (Chinese): 168 units whose leading shows change by a median of 0.20 pitch (0.36 em), none tighter, none past its frame, no new collision, and a page of single-spaced originals is unchanged. It acts only where the em cap binds: a single-spaced original keeps its top, and the band, tracking, size and the leftover below the paragraph are unchanged. For the same two scripts the halving that finds the loosest leading now tries the top itself (it was left untried when the fraction of a step was under a half, so the unit took neither tracking nor the page's size). With that step more pages grow, and a unit of one line keeps its own size in these scripts: it has no frame to spread over, and a larger size only carries its ink past the original's line (a note under a table's rule, 2610.21924 page 18, whose formulas touched the rule at x1.1).
+
+**A unit split by its displays is laid a run at a time (2026-10-24).** The text between two displays is set on the slots between them alone, so each run of a unit is a text block of its own (the rubric below), and each takes its own state: the first of the fit's states at which its own text fits its own slots (`layer2.mjs` `runsOf`, `layoutRuns`), its size and leading its own, and the page fill fills each run as a unit of the page the unit begins on, the page's target reading the unit once, as one, at its fit as one, so that its neighbours keep the rhythm they had (`run.mjs` `fillUnitsOf`, `fillPass`; voting a run at a time moved 55 of 158 such pages' targets and 64 single-run neighbours); its runs grow with the page's size together, read by the unit's line count (`fillPage`; a run of one line had stayed at 1.0 beside its unit's others at 1.1); filling each run on its own first page was measured and declined ( on 7 Chinese papers, link colours lost 2 to 9 and paragraph ends letter-spaced 4 to 14). A run opens at a display alone: a forced break that opens another frame (tokensOf2's `brk`) keeps its frames in the run, as the unit's own walk sets them. Where a run set larger would carry a token to a later page than the unit's fit set it, the unit is laid as one. The owner's ruling of 2026-10-09 (sizes per unit where some must shrink) is carried to its natural unit: only a cramped run shrinks. Every run fits at the state the unit's fit found, so each comes out there or more naturally. One tracking a paragraph: the walk tightens a run's tracking (and its CJK punctuation's compression) before it shrinks it, so a cramped run came out tighter than a roomy one, and the page fill tracked a roomy run further still; the paragraph read at two letter spacings, its roomy part's last line looser than its own tightest lines (the sweep's (j), paragraph end letter-spaced: 967 rows over 53 papers in Chinese where `next` has 12). Each run is laid again from the tightest tracking any of them needs (`P.runTrack`, the walk's first state), and the page fill gives a unit's runs the least fill tracking any of them takes (`fillPage`); size and leading stay each run's own. The page fill keeps a unit's text on the pages its fit set it (`layer2.mjs` `keepsPages`, read for a unit's runs; read for every unit, it moves 34 more pages of 19 Chinese papers, a change of its own left for later): a looser leading holds fewer lines on a page's frame, and the page cuts (`pageCutsOf`) keep text only from the page before; 2610.21884v1's unit 10 in Chinese, a paragraph over pages 1 and 2, had its last run filled to a leading of 1.61 and a sentence of page 1 drawn at the top of page 2 (the sweep's (i), sentence drawn on another page). 2602.23285v2's unit 35 in Japanese (seven lines, then two after each of two displays) was set at 0.85 throughout because the two lines after eq. 5 held their text from 0.85 alone, its first run five tight lines over two empty ones; it is now 1.0, 1.0 and 0.85, its first run six lines at a leading of 1.1. A unit of one run (no display, or a paragraph over a page break, one run), a table's cell, a unit the fit's further steps set (widened, run past its display, below the floor) and one whose runs do not each fit alone are laid as before, byte for byte, and filled as before: measured over the Chinese sweep set (19 papers traced, 2026-10-24), every page with no line of a unit laid in runs is drawn byte for byte as `next` draws it; the 3 that differ each hold the lines of such a unit begun on the page before (2610.21201v1 page 23, 2610.21026v1 pages 18 and 33). Running the text on past the display was rejected: it moves text across the display, breaking where the paragraph meets its equation. A run's lines carry its size, scale and state (`seg`), which the drawing, the word table, the links and the checker read a line by; the even pass, which sets a page's units at one size, lays a unit as one again.
 
 **Judging a block (the rubric for samples and rulings).** The owner, 2026-10-23: judge per block, not per line. A block is better, the same or worse than its base on three questions. (i) Uniformity inside the block: no line stretched or squeezed out of step with the others. (ii) The block lands in place: each sentence at the right place in its paragraph, paragraph boundaries where the original has them. (iii) Rhythm against its neighbours: leading and density consistent with the page's other blocks. A shift under one pitch counts as the same. Line-level shifts and per-line offsets are normal and are not a verdict.
 
@@ -1929,6 +2025,20 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   `transcode`, off with `layout`): written as UTF-8, as only a translation may (`translationFiles` switches the option to
   `utf8`), 2610.20581's `latin1` source set each é as Ã© and each no-break space in math as a `\^` error, 74 errors and a
   page more than arXiv's, a fault no remedy of the guard's could mend. The live path's original transcodes as before.
+- **A unit's text is what TeX sets** (PIPELINE 27; S1 to S4 of 2026-10-24, `source/latex-front.mjs`). Wrong words sent to the
+  translator are worse than a unit left English. *A paper macro that sets words of its own* (`\newcommand{\nb}[1]{Notebook~#1}`)
+  is its expansion: the call is one text piece, its source the call (as an accent's letter is), or one placeholder where the
+  body is more than text; only a body that sets no word outside its groups, commands and formulas is a pair around its
+  argument (2610.21547 sent "(4--6)" for "(Notebook 4--Notebook 6)"). *A file that is not UTF-8* has its text pieces read in
+  the encoding its main file declares (`latin1`, `cp1252`/`ansinew`), else latin1, what pdfTeX reads a byte as; a UTF-8 file
+  is never decoded again (2610.20581's é were U+FFFD). *A conditional TeX closes with `\fi`* gives one branch where its own text decides it (`\iftrue`, `\if` or `\ifx` of two
+  characters: an author's `\if 0 … \fi`); any other (`\ifdefined`, `\ifcsname`, a `\newif`, `\ifx` of commands) whose two
+  branches hold words gives neither (`skipped.ifUnknown`, left English: 2610.21098's two \ifdefined branches were one unit),
+  and so does one whose span holds `\verb`, inline code, a verbatim environment or a definition, where the scan could take an
+  `\else` TeX never reads for one. Following the paper's definitions was tried and dropped: the review of #457 found a fault
+  in it in each of three rounds (a file nothing reads, a group, a `\let` in the body), and that is TeX's own work. Not resolved by the probe compile: the units are cut before any
+  compile and must be the same on every reader. The accents were checked and needed nothing: the regression's "JÃ©rÃ´me"
+  was a report printing the units' raw bytes (their text is UTF-8 read latin1; `mt.mjs` `utf8` decodes it)
 - **Under `latex`, nothing dvipdfmx could not draw.** Our DVI is drawn by dvipdfmx, arXiv's by dvips and ps2pdf: a PSTricks
   picture, or any PostScript of the page's, dvipdfmx cannot interpret is missing from our page alone, and the marks and boxes
   would pass. The final pass is refused (`final`) where its log says dvipdfmx failed a special or an image (`base.mjs`
@@ -1976,6 +2086,72 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   word, reached the next cell's word (`reachIn`, LAYOUT 14), its end mark's word was the paragraph's, and the cell took the
   paragraph's eighth line (`lineTaken`). A start mark on a turned token's box now reaches none (`turnedAt`): the cell stays
   the original's, as the maker never lays a turned run, and the paragraph is laid as production lays it.
+- **The pin's sweep, LAYOUT 19** (2026-10-24: 133 units newly English against the staging of LAYOUT 16, the maker's share of
+  them bisected over the merges between): three causes, each one rule.
+  - *A start mark takes the word it stands before* (`pipeline/anchors.mjs` `tokenAtMark`). A mark carries the word it stands at
+    in the marked original, and is placed on our base page only where the base page has that word there. The marked original
+    is read in one text item a line, its width shared by its characters, so that a word's box is approximate; the wrap
+    (#444) cuts our base page's items at its groups, whose boxes are then exact. A caption's start mark after its label
+    ("Figure 1: Attention") was nearer the label's "1" in the one and on "attention" in the other: 24 units of 11 papers
+    (`unplacedMarks`). A start mark now takes the nearest word it does not stand past, the word it stands past only where
+    there is no other; with no slack past a word's end: half a character of slack took a label's narrow digit for the first
+    word in three units (2610.22214's "9", 1.4 pt short of the mark). An end mark keeps its rule, the last word that begins
+    before it: a rule that took the last word ending before the mark took the word before it wherever the last word's shared
+    box overruns the mark (2610.10069's "given by|", 9.8 pt; 5 units lost in the 18 papers' run). Where the next word's shared
+    box begins before the end mark (2610.20716's "model| the", 2610.20581's "Theorem| 2.2"), the carried word is the one
+    beside the base page's on the side the mark faces, and the unit is bounded by the base page's word (`wordAt`: one word
+    over, never two); the start side the same, before its mark. The shared width itself (the tokenizer's) is left as it is.
+  - *A front matter unit's placeholders keep their marks* (`layout/marks.mjs` `layoutMarking`). \axtpma takes itself off in a
+    moving argument, as a copy written to a list must; a \thanks stores its text with \protected@xdef and sets it in its note,
+    so its placeholders' marks were gone and their ink LOST (5 notes' addresses, `\texttt`, `\href`). The marks of a front
+    unit (`frontMarks`, LAYOUT 17) have `\protect` before them. And `\protect` is a prefix of the next token alone
+    (`rules/tex-kernel.mjs` `PREFIX_WORDS`): the piece after it is marked as one with it, its opening mark before the prefix,
+    where before it had none (`\protect\url` in IEEEtran's notes).
+  - *The wrap holds a decoded stream as bytes of its own* (`layout/remove.mjs` `readAtMost`). The object layer's decoding stream
+    grows its buffer by 64 KB chunks and doubles it; its view held the whole buffer, and the decoded streams' cache, counted by
+    the views' lengths, held it for every stream. 2610.21924's page 9 paints 3,128 forms (a plot's markers): the wrap of our
+    final pass in the maker child held 960 MB, the maker died of its memory (`prlimit --data` 1,024 MiB), and the host's re-cut
+    gave every part no layout. The cache now counts the bytes it holds. A part cut again after the maker died says so
+    (`page-pass.mjs` `layoutRecordOf`: `memory`, `clock`, `crashed`), not that the maker refused the paper.
+- **The release sweep, LAYOUT 20** (2026-10-24: 21 units newly English against production, all `unhidden`): the maker reads
+  a piece's ink as the wrap does (§19.9: `stream.mjs ownedOf`'s two rules, one reading for both). The text after a piece,
+  where it runs to its unit's next mark, begins where the glyphs to that mark spell it whole (followsOf's `rest`), not where
+  its first `WANT` characters first stand: a display's `\text{for every}` before "For" (2610.16663v1 p45, 2610.21037v1 p15),
+  a table display's header word "position" before "Positions" (2610.20285v1 p28), a URL's dots and `$=.068$`'s point before
+  the full stop after them (2610.21376v1 p9, 2610.21098v1 p15) cut the piece's segments short, the rest read as the unit's
+  text, which the spell check refused. And a display that ends a footnote, LOST before, is found to its page's folio
+  (2610.16663v1 p16). Over the 24 papers of the release sweep, 8 rows of their layout files move, those units' placeholder and
+  erase rows alone; no unit is laid or left that was not before; on the gate pack every layout file is the one before but its
+  version (pack `13785c79`).
+  - *A lead is found by the text TeX sets for it* (the last five units English on staging and translated on production:
+    2610.21098v1 p13u138, u142, u144, 2610.21176v1 p13u88, 2610.22195v1 p1u0; MARKS_SCHEMA 10, LAYOUT 20 and REMOVAL 10 shared,
+    unreleased). A placeholder at a unit's head gets no mark (`headEnd`), and its ink, set before the start mark, is found by
+    its text: the maker's head (`make.mjs besideMarks`) and the wrap's cell lead (§19.9, MR 5b) read the glyphs there against
+    the text the marking's probe showed it sets. The probe read letters and digits alone (`marks.mjs readInkTexts`), asked
+    about the paper's macros alone (`inkSamples`), and the marks file took nothing else (`checkTexts`): `\SweepCapLow{}` =
+    `1{,}024` and `\EpisodeTokenBudget{}` = `128{,}000` had no text for their commas, a cell's `\texttt{max\_tokens}` was not
+    asked, and `\dprime{}` = `$d'$` sets math. The probe's text is now what TeX lists: a text font's letters, digits and the
+    punctuation it sets as ASCII's ("1,024"; T1's underscore, "max_tokens"; OT1's is a rule, no answer), a formula's math
+    italic letters and any other glyph of a formula one glyph whatever its text (`INK_ANY`: "d" and the prime), and a text that
+    spells no character ($\checkmark$) no answer; the leads the macros' list does not hold — inline code, a macro past
+    `INK_MAX` — are asked last (`leadSamples`, the probe document unchanged where a paper has none), their texts read but
+    never the marking's (`inkless`, `apart`); each glyph is read against the text by one step (`leadStep`), and a formula's
+    glyph only where nothing of ink stands between the lead and the mark (a footnote's call's). `?` is no character spelled: the
+    probe has no aux, and a `\ref` sets "??" there.
+  - *A front heading is marked as any heading* (`marks.mjs layoutMarking`). ICML's `\icmltitle`, the paper's own style's
+    command, is a front unit (latex-front.mjs, PIPELINE 10: its text handed to the running head and the PDF's title too),
+    and the heading's branch gave a front heading no mark, while `frontMarks` (LAYOUT 17), which marks the other front units,
+    left headings to their own marks: the title had none, and its ink no group. A heading's marks set nothing in the output
+    routine's heads, a PDF string or a file (the gate), nor in the box ICML measures its running title in and never ships;
+    the title's end mark alone is set where it sets the title. 2610.22195v1's base page sets every glyph and box as before.
+  - Over the 25 papers of the release sweep, offline through the page pass, against `next` (5e723185): units laid and hidden
+    gained 8, lost 0; with no LOST placeholder (the layer's `locatedWhole`) gained 12, lost 0 (2610.21098v1 u136, u138, u142,
+    u144, u198, u505; 2610.21176v1 u88, u124; 2610.22195v1 u0, u208, u210; 2610.21085v1 u164); the model check's ink in no
+    group inside a drawn unit's rectangles and own ink outside them the same on every paper (45 and 1,452 glyphs). 44 rows of
+    four papers' layout files move, the gained units' (their lead found where it was their label), and only 2610.22195v1's
+    base page's bytes change. On the gate pack every layout file and base page is the one before; two base
+    records would read more texts (1512.03385v1's `\eg`, `\ie`, `\vs`; 2608.04322v1's address), which move no glyph's group:
+    the pack stays `13785c79`.
 - **A unit the layer leaves the original's says why** (read time, no stored artefact, no version token): each `skipped` record
   of the run (`layer-proto/run.mjs`) carries a `code` of `SKIP_CODES` beside its `why`: `unlocated` (the file holds no row of
   it, and the file's own reason beside it, `unlaid`), `pieces`, `noRow`, `lost` (a visible piece the file has no position
@@ -2062,22 +2238,44 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   `DELTA_MAX_SHARE` 0.35 of our whole base page, `DELTA_OBJECTS_MAX` 200,000 objects, `DELTA_HELD_MAX` 64 MiB of forms held,
   `DELTA_DECODED_MAX` 48 MiB of object and cross-reference streams decoded), nothing to replace (`delta-empty`), the proof
   (`delta-proof`), a delta the page pass was given that does not check (`delta-shape`).
-- **The proof** (`proveDelta(origBytes, delta, finalBytes, { PL, getDocument, documentOptions, replaced })`, in the box, the
-  structural one; pixels are the lab's gate): every entry of the section at its `n g obj` (`delta-wire.mjs` `deltaSection`),
-  `/Prev` the original's startxref, the composed startxref the section's; the composed page graphs, read again by the object
-  layer, ours on replaced pages (the page dict's other keys the original's) and the original's elsewhere (a pairwise graph
-  comparison: cycles compare as the graphs they make); PDF.js opening the composed bytes with no message neither source alone
-  gives (its console captured, each document read in turn); the original's page count; every page's box, rotation, user unit and text (strings and
-  places within 0.01) ours on replaced pages and the original's elsewhere. What the delta overrides of the original is bounded:
+- **The proof** (`proveDelta(origBytes, delta, finalBytes, { PL, getDocument, documentOptions, replaced, readers })`, in the
+  box, the structural one; pixels are the lab's gate): every entry of the section at its `n g obj` (`delta-wire.mjs`
+  `deltaSection`), `/Prev` the original's startxref, the composed startxref the section's; the composed page graphs, read again
+  by the object layer, ours on replaced pages (the page dict's other keys the original's) and the original's elsewhere (a
+  pairwise graph comparison: cycles compare as the graphs they make); PDF.js opening the composed bytes with no message neither
+  source alone gives (its console captured, each document read in turn, the composed one first); the original's page count;
+  every page's box (within 0.01), rotation and user unit, and its text items exactly, every field of every item (`page-text.mjs`
+  `textRecordOf`: one SHA-256 of their exact values a page; before 2026-10-24 within 0.01 — the pack's composed pages are ours
+  item for item, 290 pages and 97,702 items, 106,763 wrapped; a string by its UTF-16 code units, so that a lone surrogate is never
+  U+FFFD), ours on replaced pages and the original's elsewhere. `readers` `{ orig, ours }`, where the host gives them: its own
+  readings of arXiv's PDF and of our final pass, each `{ options, own?, read(doc) }`. In its turn and under its capture of the
+  console the proof opens the document itself, of a copy of its own bytes (ours of the bytes themselves where `own`: PDF.js takes
+  them at the opening, so that one that fails leaves them given up, which the host reads by their length), at PDF.js's verbosity
+  1, with the reader's options over `documentOptions`, and gives it to `read`, which reads every page with `readArxivText(doc, {
+  draw: true })`: the proof makes each page's record of the text content that page gives the reader (asked with the defaults),
+  before the reader sees it, so that what is compared is what the proof's document gave, where the proof hears PDF.js. Every
+  document it opened is the host's from then on, handed back in the result (`documents`, whatever the verdict): each text read
+  once in the box, not twice. A reader that throws, or a page it did not read or read otherwise (compared or not, as the proof's
+  own reading reads every page), is a PDF.js failure; a failed opening is destroyed, its failure kept over a destroy's. The
+  composed bytes are let go once read, and the object layer's three documents when its checks return, before a reader's document
+  is opened. What the delta overrides of the original is bounded:
   the replaced pages' objects exactly (no other page; the catalog only to carry our `/OCProperties`, every other key of it the
-  original's, that key ours), its `/Size` not below the original's, and its trailer the
+  original's, that key ours: a key's value read as the text the delta wrote, a reference by its number within a direct value
+  too, never by what it names, since a direct name tree's destinations name pages and a replaced page is ours; REMOVAL 10:
+  2610.20030's direct `/Names` failed the proof, and its base of 8 pages of 12, which only a delta holds, was refused), its
+  `/Size` not below the original's, and its trailer the
   original's `/Root` and `/Info` (as references) and `/ID` (byte for byte), so that no fresh catalog is pointed at. An original whose
   cross-reference PDF.js recovers on its own (any such message on the original alone: it then indexes the whole file, where an
   unreplaced page may be another object than the cross-reference's) is refused (`delta-xref`), and so is a cross-reference
   entry of a type PDF.js does not know. Any other failure is `delta-proof`.
-- **The host's contract.** At the end of the maker child, once the maker let its documents go: `deltaOf(orig, final, { PL,
-  replacedPages })` and `proveDelta(...)`; then `layerOfPaper({ ..., ours: { doc, bytes, sha256, xref, ..., delta: { bytes,
-  sha256, replaced, stats } } })` (or `delta: { refused, why }`). The page pass checks it again (shape, bounds, digest, the
+- **The host's contract.** In the maker child, before it opens a document of its own: `deltaOf(orig, final, { PL,
+  replacedPages })` and `proveDelta(...)` with its `readers`, whose documents (arXiv's PDF and our page, opened by the proof with
+  the draw's options) it reads and keeps (the documents and texts the page pass is given: `arxiv: { doc, text }`, `ours: { doc,
+  ..., text }`, so that `checkOurBase` reads our page's text no more; `ours.text` only where the check reads our page whole, not a
+  partial delta's composed document, which it reads anew — none of the 107 deltas measured is partial), PDF.js's verbosity, which
+  PDF.js 6 holds for the process, set back to 0 after the proof; then `layerOfPaper({ ..., ours: { doc, bytes, sha256, xref, text, ..., delta: { bytes,
+  sha256, replaced, stats } } })` (or `delta: { refused, why }`). The box is one vCPU: a proof beside the page pass, in a thread
+  of its own, would save nothing; a reading not made does. The page pass checks it again (shape, bounds, digest, the
   section over `orig`, the head's reader): the head's base becomes `kind: 'delta'` where it checks, else stays `full` with
   `stats.delta: { kind: 'full', why }` — never a refusal of the paper. The page pass binds `replaced` to the delta's bytes: each
   replaced page's object (arXiv's PDF.js document's page refs) among the section's entries, and no other page's. One rule
@@ -2103,7 +2301,10 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
 - **Measured** (2026-10-23, the gate pack's 7 pairs and 2602.23285v2, this builder against the spike's): 2,078,038 delta
   bytes over 83,666,965 of originals, 2.48 % (the spike 2.48 %); the largest 0.70 MiB (2307.16209v1); per paper 0.30 % to
   30.05 % of the original and at most 28.5 % of our base page; the proof passes on 8 of 8; two builds give the same bytes; the
-  build 15 to 160 ms, the proof 0.2 to 1.4 s (Node).
+  build 15 to 160 ms, the proof 0.2 to 1.4 s (Node). With the readers (2026-10-24, the same 8, wrapped and not): the same
+  verdicts (8 of 8 both ways), the same deltas (2.56 %, 3.06 % wrapped); the box's whole-document text reads 5 to 3, the
+  proof and the two readings together 0.6 to 1.8 s less CPU a paper in Node (the 147-page thesis 1.8 s), the memory after them
+  the same (within 2 MiB). The proof is 85 to 90 % PDF.js's text reads, the object layer 28 to 68 ms (`docs/route/delta.md` §17).
 
 ### 19.9 Our pages wrapped by optional content (per-unit erasure, the file side)
 
@@ -2117,9 +2318,43 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   floats: `stream.mjs regionsOf`). Text `u<id>`: from its start mark (`<id>s`, `t<id>s`, `h<id>s`) to its end mark; across
   pages only inside the bodies, but a range outside them from page p to p + 1 at one depth (a continued footnote) is page p
   to the next unit's start in that region and page p + 1 from after the last other unit's end (over more pages: `across`); a
-  unit with an end mark alone (a title) from the point before it. Placeholders `u<id>.p`: `stream.mjs ownedOf`'s entry
-  (the marking's `follows`); a footnote call is its unit's `.p` too. Label `u<id>.l`: the glyphs on the start's first glyph's
-  baseline between the previous unit's end mark and the start, the placeholders' and names' ranges passed over. Babel name
+  unit with an end mark alone (a title) from the point before it that is not one of its own placeholders' (a title's
+  `$-$` or `:` sets points inside it: 2610.20848v1's title was read from its last one); where that range opens with ink TeX
+  set before the title on lines of its own (amsart's date, a journal's header) and its last glyphs spell the title's source
+  exactly, those lines are left the page's (no group) and the title is the rest (none trimmed on a line of the title's own,
+  nor for a title that opens with a placeholder of no mark of its own: that lead is its ink). A point's name is read in lower case:
+  a class that sets a title or a heading by `\uppercase` (spconf's `\section`, amsart's `\title`) sets its marks' names in
+  capitals with it (`/axt-H0E ri`). Placeholders `u<id>.p`: `stream.mjs ownedOf`'s entry (the marking's `follows`) read with
+  `erasure`, which finds exactly what the maker's reading leaves LOST (the maker's layouts unchanged): the text after a piece
+  compared with TeX's quotes as one (OT1 sets `"` as ”: `\S{}"Held fixed"`), rules alone before the text after it the piece's
+  own (`\_` before `\allowbreak` is a rule; not one that reaches under the text after it, ulem's `\uline`), an opening alone
+  over placeholders of no mark of their own, nothing else between, to the next marked piece's opening
+  (`\cls{circle}$\to$\cls{donut}`), and a display after its unit's end mark ending at a later unit's opening as at its start
+  mark, where that unit's start mark follows the opening (an end-only title's opening may stand lines into it). Two rules the
+  maker's reading shares since LAYOUT 20, so that the layout file's segments of a piece and the wrap's group of it are one
+  reading (with the erasure's alone, a display's tail past the maker's segment was hidden with the piece and shown again from
+  render B through that segment only: lost): where the text after a piece runs to its unit's next mark (its next piece's
+  opening or its end mark), the text is told where the glyphs to that mark spell it exactly (the followsOf `rest`), not where
+  its first `WANT` characters first stand, which may be in the piece's own ink (a display's `\text{for every}` before "For",
+  a table display's header word before "Positions", a URL's dots or `$=.068$`'s point before the full stop: 2610.16663v1,
+  2610.20285v1, 2610.21037v1, 2610.21376v1, 2610.21098v1: 8 rows of 24 papers' layout files move, these units' segments
+  alone, no unit laid or not laid otherwise); and a display that ends a footnote (its unit's last piece, after its end mark,
+  no mark after it on its page, which the maker left LOST) owns its region's ink to the page's folio (`stream.mjs folioOf`: the
+  run ending the page's stream on one baseline, outside the bodies, that spells a page number alone and stands below all else
+  by 1.5 of its size), where each of its lines starts 2 em or more right of the footnote's own lines (a display is centred
+  or indented; a footnote after it with no mark of its own starts at that edge, its number within 1.8 em of it) and stands
+  within 2.5 of its size of the line before it (a line of the page's foot above the folio, a centred copyright line, is
+  \footskip below the text block); none for a piece that is no display (an inline formula's or a citation's ink ends with
+  it), on a page with no folio (a running foot's text would be hidden with it), or where a line starts nearer or stands
+  apart (2610.16663v1 p16). A
+  placeholder whose opening point TeX set inside another unit's range, between its start and end marks on one page, owns
+  nothing of that unit's (a run-in `\paragraph` is set at the next paragraph's start, after that paragraph's lead
+  placeholder's opening mark: 2610.21085v1 p5). A footnote call is its unit's `.p` too. Label `u<id>.l`: the glyphs on the start's first glyph's
+  baseline between the previous unit's end mark and the start, the placeholders' and names' ranges passed over, but the
+  closing punctuation a head macro sets after the unit before it — right after that unit's end mark, each glyph within a fifth
+  of an em of the one before, the first of that unit's last glyph — which is that unit's text (amsthm's "(Minimum detectable
+  PDI)." after a theorem's note: as the body's label, no label's form, it was left the original's ink under the body's
+  drawing, 2610.21491v1 p7; its group now hides it where the note is drawn, as the line's erase did before the wrap). Babel name
   `n<occ>`: between `n<occ>.<key>.s` and `.e`, but never over a placeholder's ink (cleveref's "Appendix" inside a `\cref` is
   the reference's). A glyph is one group's: a placeholder's or a name's over the text's, the text's over a label's, the first
   text's over a later. A unit that opens with a placeholder of no mark of its own (a paper's macro first in it: `\bert`,
@@ -2128,7 +2363,23 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   label (`.l`), the rest that placeholder's ink (`.p`). Images and forms are no unit's (a form whose ink is all one group's
   is wrapped whole). A unit's text takes its glyphs alone, never a rule: a rule in its range (a footnote's separator, a
   class's rule above a title, an underline) is the page's and stays; a placeholder's rules are its `.p`.
-  A table cell (`t<id>s`) takes no label (what stands before it on its line is another cell's). Marks absent, twice or out of
+  A table cell (`t<id>s`) takes no label (what stands before it on its line is another cell's); a cell that opens with a
+  placeholder of no mark of its own (`\CompletionTokenCap{}`, `\texttt{max\_tokens}`, `\dprime{}`, `\#`) has that ink before
+  its start mark, told by its text alone, never by a gap (an unmarked number cell may stand 0.4 em or nothing before it:
+  `\tabcolsep` 2pt, `@{}`): the glyphs right before the start, in stream order, that spell exactly the text the marking's
+  probe showed the placeholder sets (`wrapFinal`'s `texts`, the marks file's `marking.texts`: TeX's own listing of it, a text
+  font's letters, digits and ASCII's punctuation, "1,024", "max_tokens", a formula's math italic letters as themselves and
+  any other glyph of it one glyph whatever its text, `INK_ANY`, $d'$ "d" and one glyph; the probe asks about inline code at a
+  unit's head too, `marks.mjs leadSamples`; MARKS_SCHEMA 10) or a text symbol's (`\#` "#"), each under `CELL_ABUT` 0.6 em
+  from the next, are its `.p` (a footnote's call among the lead's pieces sets its mark between them and the start: a text
+  with a formula's glyph is then not read, whose glyph that mark could be)
+  (a text symbol's part of it goes with the text, `u<id>`, whatever else the lead holds: the layer draws a symbol as its
+  character, never from a crop, and the reader hides `.p` only for a found placeholder; its letters, `\O`'s "Ø", are its
+  character in the source the spell check reads); where that text is not known or not there, the cell is
+  `marks`. Marks set twice are the unit's first occurrence where that is an end mark alone and every later one a pair (a
+  title TeX set in vertical mode, its class setting it again in a line: acmart's ACM Reference Format, 2610.22065v1 p1; TeX
+  keeps a name's first destination, so the layout's is that one), the later occurrences' ink the page's. Marks absent, twice
+  otherwise (a heading again in a running head, both pairs) or out of
   order, a unit the paper's units lack, a placeholder whose ink cannot be told apart (its range lost: hidden with the text,
   it could not be kept in place, and the spell check reads no symbol), or a unit that opens with a placeholder of no mark of
   its own whose ink still stands, in no group, on its start's line before its start mark (a table's cell, `\bertlarge` first
@@ -2138,11 +2389,31 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   20 million glyphs and boxes (real ranges cost the ink once), over every loop (text, labels, placeholders, names); past it a
   unit is `marks`.
 - **The spell check** (what makes "a unit that cannot be delimited shows the original" exact): a unit's `u` glyphs must spell
-  its source text, letters and digits alone (NFKD, marks and case dropped, `ß` as `ss`: TeX's accents, ligatures, hyphenation
-  and punctuation are no evidence), or it is `spell`, its groups still written. Its label must be a label's form (a number
-  or an item's mark, maybe a caption's, a section's or a theorem's name before it, in brackets or with a stop, a dash or a
-  bar after it) or empty; where it is not and its glyphs stand apart from the text's, the label is left the original's ink
-  (`labelKept`: no `.l` group, the body alone drawn; the coordinator's amendment of 2026-10-28), else `spell`.
+  its source text, letters and digits alone (`stream.mjs spellOf`: NFKD, marks, TeX's spacing accents U+02C6, U+02C7, U+02D8
+  to U+02DD and case dropped, a dotless `ı` and `ȷ` as their letters, and a letter Unicode does not decompose as its base
+  letters — `ß` `ss`, `ø` `o`, `æ` `ae`, `œ` `oe`, `ł` `l`, `đ` `d` —, so that a letter symbol reads alike whichever way its
+  font maps it (OT1 sets `\l` as a bar over an l, T1 as its own glyph): TeX's accents — OT1 sets `\^e` as `ˆ` beside `e` —,
+  ligatures, hyphenation and punctuation are no evidence), or it is `spell`, its groups still written. The source's text is
+  its pieces' with a text symbol of no mark of its own as its character (`F\o lner`: 2610.21037v1), outside a unit's lead but
+  a cell's. Three readings are tried where the letters differ, each exact in its own terms: a wrapper (an `open` piece) may set
+  words of its own before its argument, at most 16 letters at each (siamart's `\funding` sets "Funding:": 2610.20266v1,
+  2610.20285v1; read by the places each part may end at, a part at a time, within a million steps a unit — a regular
+  expression of the slots backtracked for seconds over 51 letters and seven `\emph`); a title's lead on lines of its own
+  (above); and lines of the unit's text that stand on lines of their own —
+  no other line of the unit on their baseline where their extents meet — and below every line kept that their extent meets
+  on their page (a column's foot, a page's: a line among or above the unit's own may be in the layout's frame of it), whose
+  letters the source does not go on with, are left the page's, every other line spelling the source in order and whole
+  (REVTeX's e-mail notes at a column's foot in
+  mid-paragraph: 2610.20716v1, 2610.21288v1, 2610.21765v1, 2610.20848v1; a folio inside a footnote run on to the next page:
+  2610.10069v1), never for a unit with a visible placeholder of no mark of its own, whose ink such a line may be. On the
+  sweep's 6 units so released (14 runs: e-mail notes and their marks, an unmarked footnote's URL, a folio) the layout file's lines of the unit
+  hold none of the lines left, so nothing is drawn over that ink. Its label must be a label's form (a number
+  or an item's mark, maybe a caption's, a section's or a theorem's name before it, the number after a name maybe with a letter
+  before it, a supplement's or an appendix's "Table S3:", "Figure A1" (REMOVAL 10: 2610.21924's fifteen and 2610.16663's ten
+  centred captions were drawn left, their labels kept and their text centred apart; a letter and a number alone, "A100", are
+  no label), in brackets or with a stop, a dash or a bar after it) or empty; where it is not and its glyphs stand apart from
+  the text's, the label is left the original's ink (`labelKept`: no `.l` group, the body alone drawn; the coordinator's
+  amendment of 2026-10-28), else `spell`.
 - **The wrap** (`layout/wrap.mjs` `wrapOf`): our bytes and ONE incremental section of their cross-reference kind
   (`appendSection`): each wrapped page's dict again under its number, `/Resources` our page's with `/Properties` mapping
   `/axt<group>` to its OCG, ONE new content stream (its pieces joined, deflated at a fixed level: the same inputs give the same
@@ -2155,7 +2426,9 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   the chunk before it, codes kept): no re-anchoring. Content streams name properties, never OCG objects (the later export
   re-points names, §3.3 of the note).
 - **Page refusals** (the page left unwrapped, its units `page`): it does not align with PDF.js's reading (remove.mjs
-  `alignPage`), passes the walk's bounds or the wrap's own (`WRAP_DECODED_PAGE` 32 MiB of its content streams decoded,
+  `alignPage`; a soft mask's content, an ExtGState's `/SMask` that PDF.js lists as a group, is no painted ink of the page's,
+  as an annotation's appearance is not: alignOf counts no path or show of it, pageInk's `indices` give none a place —
+  2610.19159v1 p3's figure was refused for it, REMOVAL 9), passes the walk's bounds or the wrap's own (`WRAP_DECODED_PAGE` 32 MiB of its content streams decoded,
   `WRAP_HELD_PAGE` 48 MiB of every operator's heap by remove.mjs COST, about 300,000 operators: each read of the page — the
   wrap's, the proof's of the new stream, the proof's of the unwrapped page — under these bounds of its own, in turn, so that a
   plot of millions of path operators is a refused page and never the process), fails its proof (below), or fails in any
@@ -2182,7 +2455,7 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   documentOptions, OPS, units, deflate, inflate })` → `{ bytes, xref, sha256, stats, unhidden, labelKept, pages, own }`
   (`documentOptions` the box's: the lite worker, `maxImageSize: NO_IMAGE_PIXELS`, so that the ownership's read of every
   page decodes no image: a stock read of the 46 MB pair peaks at 3 GB of native memory); then `deltaOf(orig, bytes)` with
-  every page replaced that the wrap wrapped (the default) and `proveDelta`; then `layerOfPaper({ …, ours: { doc (of the
+  every page replaced that the wrap wrapped (the default) and `proveDelta` (its `readers` reading the wrapped bytes' document, §19.8); then `layerOfPaper({ …, ours: { doc (of the
   wrapped bytes), bytes, sha256, xref, delta, wrap: { stats, unhidden, labelKept, pages } } })` (a delta that leaves a wrapped
   page arXiv's is refused there, `delta-shape`, beside deltaOf's and the proof's own check on the bytes: a unit's group on it
   could not be hidden); the record notes `own` (`{ units, unhidden: { marks, across, spell, page,

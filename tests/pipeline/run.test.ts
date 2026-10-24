@@ -1,11 +1,14 @@
-import { describe, expect, it, vi } from 'vitest'
+import { MockLanguageModelV4 } from 'ai/test'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { extract, type Block } from '@/core/extractor'
 import { startTranslation, type Progress, type Transport } from '@/core/pipeline/run'
 import { T_CLASS } from '@/core/marks'
 import { ERROR_CLASS, FOR_ATTR, INLINE_ATTR, ON_ATTR, PARTIAL_ATTR, PENDING_CLASS, STATE_ATTR } from '@/core/renderer/attrs'
 import { TABLE_RULES } from '@/core/rules/latexml'
 import { DEFAULT_PRELOAD } from '@/core/scheduler/lazy'
-import type { TranslateCall } from '@/providers/translate-service'
+import { createOpenAICompatProvider } from '@/providers/openai-compat'
+import { CancelledScopeRegistry } from '@/providers/request/cancellation'
+import { createTranslateService, type TranslateCall } from '@/providers/translate-service'
 import { RECORD_SHAPES } from '@/shared/diagnostics'
 import { reasonText } from '@/ui/strings'
 
@@ -361,7 +364,11 @@ describe('startTranslation', () => {
     await run.translate([byId(blocks, 'p1')])
     const widget = doc.querySelector(`.${ERROR_CLASS}[${FOR_ATTR}="p1"]`)!
     fail = false
-    widget.shadowRoot!.querySelector('button')!.click()
+    const button = widget.shadowRoot!.querySelector('button')!
+    // A page script's click retries nothing (DESIGN §4.0c): the reader's own does
+    button.click()
+    expect(run.progress()).toMatchObject({ failed: 1 })
+    button.dispatchEvent(Object.defineProperty(new MouseEvent('click', { bubbles: true, cancelable: true, composed: true }), 'isTrusted', { value: true }))
     await new Promise(resolve => setTimeout(resolve, 20))
     expect(run.progress()).toMatchObject({ failed: 0, done: 1 })
     expect(doc.querySelector(`.${ERROR_CLASS}`)).toBeNull()
@@ -623,3 +630,61 @@ describe('the start of a run reads the layout before it writes to the page', () 
   })
 })
 
+// Issue #78: what one 4-segment batch costs when the model's replies cannot be used, counted at the model across the three
+// layers that each retried or split it — the content side here, the service's queues and the provider. Before, a reply in
+// no usable shape cost 40 requests (T(4) = 8 + 2·T(2), T(2) = 16) and so did a reply with the wrong ids every time
+describe('a batch whose replies cannot be used costs a small constant, counted end to end (issue #78)', () => {
+  afterEach(() => { vi.useRealTimers() })
+  const FOUR = ['p1', 'p2', 'p3', 'p4'].map(id => `<p class="ltx_p" id="${id}">Paragraph ${id} of the section.</p>`).join('')
+  const usage = { inputTokens: { total: 1, noCache: 1, cacheRead: undefined, cacheWrite: undefined }, outputTokens: { total: 1, text: 1, reasoning: undefined } }
+  /** the ids the request carried: the protocol sends the segments as a JSON array in the user message */
+  const idsIn = (prompt: unknown) => [...JSON.stringify(prompt).matchAll(/\\"id\\":\\"([^"\\]+)\\"/g)].map(m => m[1]!).filter(id => id !== '<id>')
+  /** an OpenAI-compatible model whose reply is `answer(ids)`; every request counted */
+  async function costOf(answer: (ids: string[]) => string) {
+    vi.useFakeTimers()
+    let requests = 0
+    const model = new MockLanguageModelV4({
+      doGenerate: async ({ prompt }) => {
+        requests++
+        return { content: [{ type: 'text', text: answer(idsIn(prompt)) }], finishReason: { unified: 'stop', raw: undefined }, usage, warnings: [] }
+      },
+    })
+    const provider = createOpenAICompatProvider({ baseURL: 'https://openrouter.ai/api/v1', apiKey: 'k', model: 'm' }, { model })
+    const service = createTranslateService({ getProvider: async () => provider, cancelled: new CancelledScopeRegistry() })
+    const doc = docOf(FOUR)
+    const blocks = extract(doc)
+    const run = await start(doc, blocks, call => service.translate(call), { capabilities: { maxBatchChars: provider.maxBatchChars, maxBatchItems: provider.maxBatchItems, renderPath: 'tags' } })
+    const done = run.translate(blocks)
+    await vi.runAllTimersAsync()
+    await done
+    return { requests, run, doc }
+  }
+  const translated = (ids: string[], skip = '') => JSON.stringify({ segments: ids.filter(id => id !== skip).map(id => ({ id, text: `T ${id}` })) })
+
+  it('every reply in no usable shape (prose for JSON): 2 requests — the batch and its one retry, then no split', async () => {
+    const { requests, run } = await costOf(() => 'I translated your text, here it is: T p1, T p2, T p3, T p4.')
+    expect(requests).toBe(2)
+    expect(run.progress()).toMatchObject({ failed: 4, done: 0 })
+  })
+
+  it('every reply parsed with ids the request never had: 8 — the batch, 3 retries and each segment alone — and the content side splits it no further', async () => {
+    const { requests, run } = await costOf(() => JSON.stringify({ segments: [{ id: 'q1', text: 'x' }] }))
+    expect(requests).toBe(1 + 3 + 4)
+    expect(run.progress()).toMatchObject({ failed: 4, done: 0 })
+  })
+
+  it('one segment that leads the model astray is still isolated: the other three are translated, it alone fails', async () => {
+    // the model drops p2 whenever it is in the batch: the batch fails, its retries too, then each segment goes alone
+    const { requests, run, doc } = await costOf(ids => translated(ids, 'p2'))
+    expect(requests).toBe(1 + 3 + 4)
+    expect(run.progress()).toMatchObject({ failed: 1, done: 3 })
+    expect(doc.getElementById('p2')?.getAttribute(STATE_ATTR)).toBe('failed')
+    expect(['p1', 'p3', 'p4'].map(id => doc.querySelector(`.${T_CLASS}[${FOR_ATTR}="${id}"]`)?.textContent)).toEqual(['T p1', 'T p3', 'T p4'])
+  })
+
+  it('a sound model costs one request for the batch (the control: the counter counts what is sent)', async () => {
+    const { requests, run } = await costOf(ids => translated(ids))
+    expect(requests).toBe(1)
+    expect(run.progress()).toMatchObject({ failed: 0, done: 4 })
+  })
+})

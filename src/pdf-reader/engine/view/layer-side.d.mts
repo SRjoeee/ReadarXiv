@@ -28,6 +28,10 @@ export interface LayerSideOptions {
   composed: ComposedOpener
   /** the engine's door (the tests'); the layer entry's openLayer by default */
   openLayer?: typeof openLayer
+  /** the most device pixels of laid pages' drawings kept off the view (this device's keepBudget by default; 0 keeps none) */
+  keepPixels?: number
+  /** how many pages past the near ones are laid ahead while the reader rests (AHEAD_PAGES by default; 0 lays none) */
+  ahead?: number
 }
 export interface LayerSide {
   /** what the host has heard, any number of times, from any source, in any order: merged, deduplicated by digest, fetched
@@ -43,6 +47,14 @@ export interface LayerSide {
   /** a later attempt: the door disposed and opened again over the latest document with every part added, and no row carried
    *  (the host takes its rows again). Pages laid keep their drawing until the new door's page is ready */
   again(): void
+  /** the layer in another language, in place (`to` a target of the rules'; the same target or a refused side: nothing): the door
+   *  laying the one before let go at once, so that nothing it lays or copies is put in place, then the open again as again() does,
+   *  over the same composed document (no document opened or read again). The host takes the new target's rows as they come; a page
+   *  laid keeps the target before until the new one's page commits or fails, or dropOthers */
+  retarget(to: string): void
+  /** every page that still shows another target's layer back to the original's page: the host's word that this target's rows
+   *  will not come (its service failed, or the translation stopped short) */
+  dropOthers(): void
   /** the ids of the units whose rows the open door's page still waits for (the door's rowsFor: its closure's, Need(page)),
    *  for a host that translates as it shows to translate first; [] with no door, out of the paper, or once the page is ready */
   rowsFor(page: number): number[]
@@ -56,6 +68,22 @@ export interface LayerSide {
 /** sync; opens nothing until it can. One side per view: a second while one lives throws */
 export declare function createLayerSide(view: ReaderView, o: LayerSideOptions): LayerSide
 export declare const PAGE_MS: number
+/** the most device pixels of laid pages' drawings kept off the view on any device, put back as their pages come near again */
+export declare const KEEP_PIXELS: number
+/** the share of a device's memory its kept drawings may take */
+export declare const KEEP_SHARE: number
+/** the memory a device is taken to have where its browser does not say, GB */
+export declare const KEEP_MEMORY_GB: number
+/** this device's budget of kept drawings, device pixels: KEEP_SHARE of its memory, at least two screens, at most KEEP_PIXELS */
+export declare function keepBudget(o?: { deviceMemory?: number; screenPixels?: number; ios?: boolean }): number
+/** the most kept on iOS and iPadOS */
+export declare const IOS_KEEP_PIXELS: number
+/** whether the browser runs on iOS or iPadOS */
+export declare function onIos(nav?: { userAgent?: string; maxTouchPoints?: number } | null): boolean
+/** how many pages past the near ones are laid ahead while the reader rests, once the rows have ended */
+export declare const AHEAD_PAGES: number
+/** how long the view rests before the pages ahead are laid, ms */
+export declare const AHEAD_IDLE_MS: number
 export declare const COPY_PIXELS: number
 export declare const RECOPY_MS: number
 /** the longest a laid page's copy waits for the left's page to be drawn before it is put in place, ms */

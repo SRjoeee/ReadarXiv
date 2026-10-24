@@ -559,14 +559,15 @@ describe('a copy made under pipeline 21, reopened under 22 (and on)', () => {
   })
 })
 
-// A copy made under pipeline 23, 24 or 25, reopened under 26: 24 changes a unit's lines at a page break (anchors.mjs), the left
+// A copy made under pipeline 23 to 26, reopened under 27: 24 changes a unit's lines at a page break (anchors.mjs), the left
 // side alone, 25 guesses a package's toplevel sources where it has no 00README (paper-meta.mjs) and 26 takes the compiler of a
-// package that names none from arXiv's PDF (guard.mjs compilerOfPdf): none a unit, the wire or its reading back: every unit
-// is the copy's by its hash, carried as it has it, and nothing is sent
-describe('a copy made under pipeline 23, 24 or 25, reopened under 26', () => {
+// package that names none from arXiv's PDF (guard.mjs compilerOfPdf): none a unit, the wire or its reading back; 27 reads a
+// unit's text as TeX sets it (latex-front.mjs: a macro's words, a file's input encoding, one branch of a conditional), and a
+// unit it leaves as it was keeps its hash: every unit is the copy's by its hash, carried as it has it, and nothing is sent
+describe('a copy made under pipeline 23 to 26, reopened under 27', () => {
   const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
-  it.each(['23', '24', '25'])('takes every unit as the copy of %s has it: nothing is sent again', async pipeline => {
-    expect(PIPELINE_VERSION).toBe('26')
+  it.each(['23', '24', '25', '26'])('takes every unit as the copy of %s has it: nothing is sent again', async pipeline => {
+    expect(PIPELINE_VERSION).toBe('27')
     const p = paper(), n = p.units.length
     const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
     const record = JSON.parse(JSON.stringify({ pipeline, format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))

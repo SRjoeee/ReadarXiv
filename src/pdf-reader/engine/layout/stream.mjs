@@ -57,8 +57,46 @@ export const WANT = 8
 /** the glyph visits a paper's ownership may cost: real ranges never overlap, and cost the glyphs once */
 const WORK = 20_000_000
 
+/** a text's letters and digits, without their accents, lower case: the per-unit erasure's evidence that ink is a text's (own.mjs's
+ *  spell check, the text after a piece told from the piece's own ink) */
+// (a spacing accent — OT1's \\^ sets ˆ beside its letter, a modifier letter to Unicode: TeX's own, U+02C6, U+02C7 and
+// U+02D8 to U+02DD, the others no letters already; not every modifier letter, CJK's prolonged sound mark and iteration mark among
+// them — is no letter, and a dotless ı or ȷ under an accent is its letter: 2610.20595v1 "Ciˆencia", 2610.20581v1 "Estad´ısticas".
+// A letter Unicode does not decompose is its base letters, so that a letter symbol reads the same whichever way the font maps
+// it: \\o ø, \\ae æ, \\oe œ, \\l ł — OT1 sets \\l as a bar over an l, T1 as its own glyph —, \\ss ß, \\dh đ; and a final sigma
+// is a sigma, the one letter whose lower case hangs on what follows it ("ΟΣ" lowers to "ος", its "Σ" alone to "σ"), so that a
+// text spelled a glyph at a time spells as it does whole)
+const BASE_LETTERS = { ß: 'ss', ı: 'i', ȷ: 'j', ø: 'o', æ: 'ae', œ: 'oe', ł: 'l', đ: 'd', ð: 'd', ħ: 'h', þ: 'th', ŋ: 'n', ς: 'σ' }
+export const spellOf = s => s.normalize('NFKD').replace(/[\p{M}\u02c6\u02c7\u02d8-\u02dd]/gu, '').toLowerCase().replace(/[ßıȷøæœłđðħþŋς]/g, c => BASE_LETTERS[c]).replace(/[^\p{L}\p{N}]/gu, '')
+
 /** a region's code: in a column's body or not, at a depth of floats */
 const code = (body, depth) => depth * 2 + (body ? 1 : 0)
+
+/** how far below every other glyph of its page a folio stands, in its size: LaTeX's running foot is \\footskip (30pt) below the
+ *  text block's last baseline, a display's or a footnote's next line one baselineskip */
+const FOLIO_GAP = 1.5
+/** how far right of a footnote's own lines' start each line of a display that ends it starts, at least, in its size (an em) */
+const FOOT_DISPLAY_INDENT = 2
+/** how far apart two lines of a display that ends a footnote may stand, at most, in their size: a display's rows and its
+ *  scripts lie within two, the page's foot \\footskip (30pt) below the text block */
+const FOOT_DISPLAY_GAP = 2.5
+/** a folio's characters: a page number, arabic or roman, maybe between dashes */
+const FOLIO = /^[-\u2013\u2014]?(?:\d{1,4}|[ivxlcdm]{1,8})[-\u2013\u2014]?$/
+/** where a page's folio begins among its glyphs (its glyph count where it has none, `regions` its regionsOf): the run of
+ *  glyphs that ends its stream, on one baseline and outside the bodies, that spells a page number alone and stands below every
+ *  other glyph of the page by FOLIO_GAP of its size or more */
+export function folioOf(page, regions) {
+  const G = page.glyphs, n = G.n
+  if (!n) return 0
+  let k = n - 1
+  const y = G.y[k], size = G.size[k]
+  while (k > 0 && Math.abs(G.y[k - 1] - y) < 0.5 * Math.max(size, G.size[k - 1])) k--
+  let s = ''
+  for (let g = k; g < n; g++) { if (regions.glyph[g] % 2 === 1) return n; s += charOf(G.u[g] ?? '') }
+  if (!FOLIO.test(s)) return n
+  for (let g = 0; g < k; g++) if (G.y[g] - y < FOLIO_GAP * size) return n
+  return k
+}
 /** a glyph's character as the text after a piece is compared with it: NFKC, lower case, no white space, no variation
  *  selector */
 const charOf = u => u.normalize('NFKC').toLowerCase().replace(/\s|\p{Variation_Selector}/gu, '')
@@ -96,7 +134,10 @@ export function regionsOf(page) {
  *   column's body (else what TeX shipped between cannot be cut: unbracketed), the two in one region; outside the
  *   bodies, not across a column (JUMP_X, JUMP_Y). A closing point expected (`closing`) and not read: none.
  * - An opening point alone: to the next mark's point on its page, in its region; where text follows the piece in its
- *   unit, to where that text's first WANT characters (`want`) begin, a hyphen passed over; where none does, the next
+ *   unit, to where that text's first WANT characters (`want`) begin, a hyphen passed over — and where the next point is its
+ *   unit's next mark, so that the text after it runs to that point, the first such place from which the glyphs to the point
+ *   spell that whole text (`rest`, spellOf: textTo), its first characters standing in the piece's own ink before (a display's
+ *   \\text{for every} before "For", a URL's dots before the full stop after it); where none does, the next
  *   mark must be its unit's next one (`ends`), or a later unit's start mark — MARK_DEF sets a unit's end mark before a
  *   display that ends it — and then what stands on that mark's line before it is that unit's label (a heading's number,
  *   an item's mark), not the piece's; or, where that mark is outside the bodies (a footnote's), the column's body's end;
@@ -114,9 +155,20 @@ export function regionsOf(page) {
  *   opening point, since TeX sets none on the empty list it resumes the paragraph with (a whatsit there would keep the
  *   empty paragraph between two displays a line). The first owns the whole group's ink, to the text after the last
  *   ('open, with the displays after it'); each later one is 'in the display before it'. Their split is not TeX's to give.
- * A name set twice owns nothing, nor where the work is past its bound
+ * A name set twice owns nothing, nor where the work is past its bound.
+ * `erasure` (own.mjs's, the per-unit erasure's reading; the maker's is without it, its layouts unchanged): a piece is found
+ * where its ink is told exactly though the maker leaves it LOST — the text after it compared with TeX's quotes as one (`"`
+ * set as ” by OT1); nothing before the text after it but rules, those rules its own (\\_ before \\allowbreak); an opening
+ * alone followed by placeholders with no mark of their own and nothing else up to the next marked piece's opening
+ * (`through`, marks.mjs followsOf), what stands between the two its own and theirs; and a later unit's opening next, as a
+ * later unit's start mark is (that unit's label on its line left out). The sweep of 2026-10-24.
+ * - A display that ends a footnote (footEnd: a display, its unit's last visible piece, after the unit's end mark, outside the
+ *   bodies, no mark after it on its page): what its region holds from it to the page's folio (folioOf), each of its lines
+ *   indented from the footnote's own and near the one before; with no folio, a line at the footnote's edge (a note after it
+ *   with no mark) or one apart (the page's foot), none (the release sweep of 2026-10-24, 2610.16663v1 p16u58: the maker left
+ *   it LOST, the erasure the unit the original's).
  */
-export function ownedOf(pages, { follows, dropped = [] }) {
+export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
   const twice = new Set(dropped)
   const regions = pages.map(regionsOf)
   // every point by its name, in stream order: [page, index]; the mark points in stream order (brackets and names apart)
@@ -174,6 +226,9 @@ export function ownedOf(pages, { follows, dropped = [] }) {
       }
       return false
     }
+    /** where the text after the piece begins among `glyphs`, which run to the point named `to` (textAt; where
+     *  that point is its unit's next mark, so that the text after it runs to it: textTo) */
+    const textEnd = (glyphs, to) => (typeof f.rest === 'string' && to !== null && f.ends.includes(to) ? textTo(pages, glyphs, f.want, f.rest, erasure) : textAt(pages, glyphs, f.want, erasure))
     if (closes.length) {
       const [pb, qb] = closes[0]
       if (pb < pa || (pb === pa && qb < qa)) { out.set(name, none(HOW['marks out of order'])); continue }
@@ -203,8 +258,12 @@ export function ownedOf(pages, { follows, dropped = [] }) {
       if (jumps(glyphs)) return none(HOW['across a column, unbracketed'])
       if (!glyphs.length && !boxes.length) return { how: HOW[f.want ? 'open, to the text after it' : "open, to its unit's next mark"], glyphs, boxes }
       if (!f.want) {
-        const later = START.exec(N.name)
-        if (f.blocked) return none(HOW['open, an unmarked piece follows'])
+        // (the erasure's: a later unit's opening as its start mark only where that unit's start mark follows it on the page — the
+        // opening is its lead placeholder's, on its first line; an end-only unit's opening may stand lines into it)
+        const opening = erasure ? OPENING.exec(N.name) : null
+        const startsAfter = id => [`${id}s`, `h${id}s`, `t${id}s`].some(n => (where.get(n) ?? []).some(([p, q]) => p === pa && q > next[1]))
+        const later = START.exec(N.name) ?? (opening && startsAfter(opening[2]) ? [N.name, opening[2]] : null)
+        if (f.blocked) return erasure && f.through && N.name === f.through ? { how: HOW["open, to its unit's next mark"], glyphs, boxes } : none(HOW['open, an unmarked piece follows'])
         if (f.ends.includes(N.name)) return { how: HOW["open, to its unit's next mark"], glyphs, boxes }
         if (later && Number(later[1]) > Number(m[2])) {
           // the next unit's label: the glyphs on its start mark's line before it, the boxes after the first of them
@@ -216,9 +275,18 @@ export function ownedOf(pages, { follows, dropped = [] }) {
         }
         return none(HOW["open, the next mark not its unit's"])
       }
-      const end = textAt(pages, glyphs, f.want)
+      const end = textEnd(glyphs, N.name)
       if (end < 0) return none(HOW['open, the text after it not found'])
-      if (end === 0) return none(HOW['open, nothing before the text after it'])
+      if (end === 0) {
+        // (the erasure's: rules alone before the text after it are the piece's ink — a glyph set there would be one, and
+        // REVTeX's swapped punctuation sets none)
+        // (a rule under or over the text after it — ulem's \\uline, soul's \\hl paint theirs before the word — is that text's, not
+        // the piece's: none where a rule reaches past the first glyph of the text after it on its line)
+        const [p0, g0] = glyphs[0], P0 = pages[p0 - 1], ruled = boxes.filter(([q, b]) => q < p0 || (q === p0 && b < P0.boxAt[g0]))
+        const under = ([q, b]) => q === p0 && P0.boxes[4 * b + 2] > P0.glyphs.x0[g0] + 0.1 * P0.glyphs.size[g0] && P0.boxes[4 * b + 1] < P0.glyphs.y[g0] + P0.glyphs.size[g0] && P0.boxes[4 * b + 3] > P0.glyphs.y[g0] - 0.5 * P0.glyphs.size[g0]
+        if (erasure && ruled.length && !ruled.some(under)) return { how: HOW['open, to the text after it'], glyphs: [], boxes: ruled }
+        return none(HOW['open, nothing before the text after it'])
+      }
       return cut(HOW['open, to the text after it'], glyphs, boxes, end)
     }
     /** an opening point alone in a column's body, its next mark past that body's end, or null where it is not so */
@@ -236,7 +304,7 @@ export function ownedOf(pages, { follows, dropped = [] }) {
       if (!E) return null
       if (f.want) {
         const { glyphs, boxes } = takeTo(stop)
-        const end = textAt(pages, glyphs, f.want)
+        const end = textEnd(glyphs, stop ? pages[stop[0] - 1].points[stop[1]].name : null)
         return end > 0 ? cut(HOW["open, past its column's end"], glyphs, boxes, end) : null
       }
       if (f.blocked) return null
@@ -246,8 +314,44 @@ export function ownedOf(pages, { follows, dropped = [] }) {
       const { glyphs, boxes } = takeTo(through ? stop : E)
       return { how: HOW[through ? "open, past its column's end" : "open, to its column's end"], glyphs, boxes }
     }
+    /** an opening point alone outside the bodies, its unit's last visible piece with no text after it, after its
+     *  unit's end mark on its page (MARK_DEF sets the end mark before a display that ends a unit), no mark after it on its page:
+     *  a display that ends a footnote (2610.16663v1 p16u58). What its region holds from it to the page's folio (folioOf) is what
+     *  TeX set for it, where every line of it starts FOOT_DISPLAY_INDENT of its size or more right of where the footnote's own
+     *  text starts its lines: a display is centred or indented in the footnote's measure, and a footnote after it with no mark
+     *  of its own (a note of a URL alone) starts at that edge, its number within 1.8 em of it (LaTeX's \\@makefntext), and each
+     *  line within FOOT_DISPLAY_GAP of its size of the one before it: a line of the page's foot above the folio (a copyright
+     *  line, centred) stands \\footskip below the text block. None on a page with no folio to tell where it ends (a running
+     *  foot's text would be hidden with it), where a line starts nearer or stands apart, or for a piece that is no display (an
+     *  inline formula or a citation ends with its own ink, which this reading cannot tell from what follows it) */
+    const footEnd = () => {
+      if (!f.display || rA % 2 !== 0 || f.want || f.blocked || f.ends.some(n => OPENING.test(n))) return null
+      const end = f.ends.flatMap(n => where.get(n) ?? []).find(([p, q]) => p === pa && q < qa)
+      if (!end) return null
+      const P = pages[pa - 1], G = P.glyphs, R = regions[pa - 1], stop = folioOf(P, R), glyphs = [], boxes = []
+      if (stop < A.glyph || stop >= G.n) return null
+      take(glyphs, boxes, pa, A.glyph, stop, A.box, P.boxAt[stop])
+      if (!glyphs.length) return null
+      // (the footnote's own text on this page: from its start mark there, else the page's start, to its end mark)
+      const start = [`${m[2]}s`, `t${m[2]}s`, `h${m[2]}s`].flatMap(n => where.get(n) ?? []).find(([p, q]) => p === pa && q < end[1])
+      let edge = Infinity
+      for (let g = start ? P.points[start[1]].glyph : 0; g < P.points[end[1]].glyph; g++) if (R.glyph[g] === rA && /\S/.test(G.u[g] ?? '')) edge = Math.min(edge, G.x0[g])
+      if (edge === Infinity) return null
+      let before = null
+      for (let j = 0; j < glyphs.length;) {
+        let k = j, x0 = Infinity, size = 0
+        const y = G.y[glyphs[j][1]]
+        while (k < glyphs.length && Math.abs(G.y[glyphs[k][1]] - y) < 0.5 * Math.max(G.size[glyphs[k][1]], G.size[glyphs[j][1]])) { x0 = Math.min(x0, G.x0[glyphs[k][1]]); size = Math.max(size, G.size[glyphs[k][1]]); k++ }
+        if (x0 < edge + FOOT_DISPLAY_INDENT * size) return null
+        if (before && Math.abs(before.y - y) > FOOT_DISPLAY_GAP * Math.max(before.size, size)) return null
+        before = { y, size }
+        j = k
+      }
+      return { how: HOW["open, to its column's end"], glyphs, boxes }
+    }
     let e = alone()
     if (e.how === HOW['open, the next mark on another page'] || e.how === HOW['open, the text after it not found']) e = pastColumn() ?? e
+    if (e.how === HOW['open, the next mark on another page']) e = footEnd() ?? e
     if (f.group?.length && e.how < OWNED) {
       e = { ...e, how: HOW['open, with the displays after it'] }
       for (const g of f.group) if (!where.has(g)) out.set(g, none(HOW['in the display before it']))
@@ -360,8 +464,35 @@ export function ownedPages({ follows, dropped = [], closing = () => null }) {
  *  which their characters spell it (a hyphen the text has not passed over, white space never compared, the last glyph's
  *  characters past its end: a ligature), or from which they spell the start of it up to the last glyph (the text runs
  *  to the next point); -1 where it is nowhere */
-function textAt(pages, glyphs, want) {
-  const chars = glyphs.map(([p, g]) => charOf(pages[p - 1].glyphs.u[g]))
+function textAt(pages, glyphs, want, quotes = false) {
+  for (const e of textStarts(pages, glyphs, want, quotes)) return e
+  return -1
+}
+
+/** textAt where the text after a piece runs to the point its glyphs end at (its unit's next mark; `rest` the whole of that
+ *  text as spellOf reads it): the first place textAt would take from which the glyphs to their end spell `rest` exactly, else
+ *  textAt's. The first WANT characters of the text after a piece may stand in the piece's own ink first: a display's
+ *  \\text{for every} before "For", a URL's dots before the full stop after it (2610.16663v1 p45u229, 2610.21376v1 p9u88) */
+function textTo(pages, glyphs, want, rest, quotes) {
+  const spelled = glyphs.map(([p, g]) => spellOf(pages[p - 1].glyphs.u[g] ?? ''))
+  const at = new Array(glyphs.length)
+  let n = 0
+  for (let j = 0; j < glyphs.length; j++) { at[j] = n; n += spelled[j].length }
+  const all = spelled.join('')
+  let first = -1
+  for (const e of textStarts(pages, glyphs, want, quotes)) {
+    if (first < 0) first = e
+    if (n - at[e] === rest.length && all.endsWith(rest)) return e
+  }
+  return first
+}
+
+/** each place textAt's text begins at, in order */
+function* textStarts(pages, glyphs, want, quotes) {
+  // (`quotes`: TeX's quotes as one, a straight one set as a curly one by OT1 and the source's '' read as ”)
+  const fold = c => (quotes ? c.replace(/[\u201c\u201d\u201e\u201f\u2033"]/g, '"').replace(/[\u2018\u2019\u201a\u201b\u2032']/g, "'") : c)
+  want = fold(want)
+  const chars = glyphs.map(([p, g]) => fold(charOf(pages[p - 1].glyphs.u[g])))
   for (let e = 0; e < chars.length; e++) {
     if (!chars[e]) continue
     let w = 0, h = e
@@ -373,7 +504,6 @@ function textAt(pages, glyphs, want) {
       if ((c === '-' || c === '‐') && h > e) continue
       break
     }
-    if (w >= want.length || (h === chars.length && w > 0)) return e
+    if (w >= want.length || (h === chars.length && w > 0)) yield e
   }
-  return -1
 }

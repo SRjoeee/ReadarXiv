@@ -6,7 +6,8 @@ import { browser } from 'wxt/browser'
 import { bilingualPdfOf, ENTRY_CHECK_MS, htmlVersionOf, pdfUrlOf, translatedHtmlUrlOf } from '@/core/pdf/entry'
 import { COMMAND_ID } from '@/entrypoints/background/context-menu'
 import { readerRuns } from '@/pdf-reader/support'
-import { onMessages, sendMessage, sendToActiveTab } from '@/shared/messages'
+import type { FrameOwner } from '@/shared/frame-owner'
+import { onMessages, sendMessage, sendToActiveTab, sendToTab } from '@/shared/messages'
 import { downloadPack } from '@/shared/pack'
 import { localeStale } from '@/ui/use-surface-config'
 import { closePopup, EMBEDDED } from './embedded'
@@ -29,9 +30,12 @@ export function paperEntries(id: string): Promise<{ html: string | null; pdf: st
   ]).then(([html, pdf]) => ({ html, pdf }))
 }
 
-/** The extension's own browser as the popup's host */
-const browserHost = (): PopupHost => ({
-  toTab: sendToActiveTab,
+/**
+ * The extension's own browser as the popup's host. Framed, its tab is the one whose content script made the frame and
+ * vouched for it (shared/frame-owner.ts), whichever tab is active; under the toolbar, the active tab
+ */
+const browserHost = (owner: FrameOwner): PopupHost => ({
+  toTab: owner.framed ? message => sendToTab(owner.tab, message) : sendToActiveTab,
   toBackground: sendMessage,
   onBroadcast: onMessages,
   openTab: url => browser.tabs.create({ url }),
@@ -45,13 +49,13 @@ const browserHost = (): PopupHost => ({
   // arXiv's pages alone show their address to the extension: the host permissions also reach openrouter.ai,
   // translate-pa.googleapis.com, edge.microsoft.com and any origin the reader granted, but not a tab's address —
   // any other tab's is null here
-  tabUrl: async () => (await browser.tabs.query({ active: true, currentWindow: true }))[0]?.url ?? null,
+  tabUrl: async () => (owner.framed ? await browser.tabs.get(owner.tab) : (await browser.tabs.query({ active: true, currentWindow: true }))[0])?.url ?? null,
   entriesOf: paperEntries,
   readerRuns: readerRuns(),
 })
 
-export function usePopupData(seed: { rejected?: readonly string[] } = {}): { input: PopupInput; error: string | null; actions: PopupActions } {
-  const [popup] = useState(() => createPopupState(browserHost(), seed))
+export function usePopupData(seed: { rejected?: readonly string[]; owner?: FrameOwner } = {}): { input: PopupInput; error: string | null; actions: PopupActions } {
+  const [popup] = useState(() => createPopupState(browserHost(seed.owner ?? { framed: false }), seed))
   // Started in an effect and stopped by its clean-up, so a strict-mode remount asks and polls once
   useEffect(() => popup.start(), [popup])
   const { input, error } = useSyncExternalStore(popup.subscribe, popup.state)

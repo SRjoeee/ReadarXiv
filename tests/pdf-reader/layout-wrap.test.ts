@@ -157,4 +157,49 @@ describe('both forms of the base from one wrapped pass (§2.1, T2.5)', () => {
     const bad = await proveDelta(orig, forged, r.bytes, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, replaced: d.replaced })
     expect(bad.ok).toBe(false)
   })
+
+  it('proves a delta over an original whose catalog holds a direct value naming a replaced page (2610.20030\'s /Names)', async () => {
+    // (arXiv's catalog of 2610.20030 holds its name tree directly: /Names << /Dests << /Kids [...] >> >>, whose destinations name
+    // its pages. The delta writes the catalog again to carry our /OCProperties, every other key as the original's text; the
+    // proof compared a direct value by what its references name, and a replaced page's object is ours: refused, so the paper
+    // of two toplevel sources, whose base of 8 pages of 12 only a delta holds, lost its layout)
+    const PL = await import('@cantoo/pdf-lib')
+    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const { deltaOf, proveDelta } = await import('@/pdf-reader/engine/layout/delta.mjs')
+    const { appendSection } = await import('@/pdf-reader/engine/layout/section.mjs')
+    const { startxrefOf } = await import('@/pdf-reader/engine/layout/tail.mjs')
+    const { readFileSync } = await import('node:fs')
+    const sample = new Uint8Array(readFileSync(SAMPLE_1))
+    // (sample-1 with its catalog written again by an update, a direct /Names whose destination names its page 1)
+    const doc = await PL.PDFDocument.load(sample, { updateMetadata: false })
+    type Ref = { objectNumber: number; generationNumber: number }
+    const [first, second] = doc.getPages()
+    if (!first || !second) throw new Error('sample-1 has two pages at least')
+    const root = doc.context.trailerInfo.Root as unknown as Ref, page1 = first.ref
+    const ref = (r: Ref) => `${r.objectNumber} ${r.generationNumber} R`
+    const ents = doc.catalog.entries().filter(([k]) => k.asString() !== '/Names').map(([k, v]) => ` ${k.toString()} ${v.toString()}`).join('')
+    const cat = `${root.objectNumber} ${root.generationNumber} obj\n<<${ents} /Names << /Dests << /Names [(axt.first) [${ref(page1)} /Fit]] >> >> >>\nendobj\n`
+    const prev = startxrefOf(sample) as number
+    const kind = Array.from(sample.subarray(prev, prev + 4), c => String.fromCharCode(c)).join('') === 'xref' ? 'table' : 'stream'
+    const { Info, ID } = doc.context.trailerInfo
+    const section = appendSection({ end: sample.length, objects: [[root.objectNumber, root.generationNumber, Uint8Array.from(cat, c => c.charCodeAt(0))]], kind, prev, size: doc.context.largestObjectNumber + 1, trailer: { root: ref(root), info: Info ? String(Info) : undefined, id: ID ? String(ID) : undefined } })
+    const orig = new Uint8Array(sample.length + section.bytes.length)
+    orig.set(sample)
+    orig.set(section.bytes, sample.length)
+    const { bytes } = await markedSample()
+    const r = ok(await wrapped(bytes))
+    const d = await deltaOf(orig, r.bytes, { PL: PL as never })
+    if ('refused' in d) throw new Error(d.why)
+    expect(d.replaced[0]?.[0]).toBe(1)
+    const prove = (delta: Uint8Array) => proveDelta(orig, delta, r.bytes, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, replaced: d.replaced })
+    const proof = await prove(d.delta)
+    expect(proof.ok, proof.ok ? '' : proof.why).toBe(true)
+    // (and a direct value of the catalog written otherwise still fails it: the destination's name changed)
+    const text = Array.from(d.delta, c => String.fromCharCode(c)).join('')
+    expect(text).toContain('(axt.first)')
+    expect((await prove(Uint8Array.from(text.replace('(axt.first)', '(axt.other)'), c => c.charCodeAt(0)))).ok).toBe(false)
+    // (or one of its references renumbered: the destination naming another page)
+    const page2 = second.ref
+    expect((await prove(Uint8Array.from(text.replace(`[${ref(page1)} /Fit]`, `[${ref(page2)} /Fit]`), c => c.charCodeAt(0)))).ok).toBe(false)
+  })
 })
