@@ -221,6 +221,10 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     for (const [ink, src] of [['Følner', 'Folner'], ['Łukasz', 'Lukasz'], ['Encyclopædia', 'Encyclopaedia'], ['Œuvre', 'Oeuvre'], ['Straße', 'Strasse'], ['l\u0337odz', 'łodz'], ['Gödel', 'Go\u0308del'], ['Estad´ısticas', 'Estadísticas'], ['ﬁ ﬂ ﬀ ﬃ', 'fi fl ff ffi']] as const) expect(spellOf(ink), ink).toBe(spellOf(src))
     // (a letter still differs)
     for (const [a, b] of [['Følner', 'Fulner'], ['Łukasz', 'Kukasz']] as const) expect(spellOf(a)).not.toBe(spellOf(b))
+    // (a text spelled a glyph at a time spells as it does whole: a final sigma lowers by what follows it — Codex on #462)
+    for (const t of ['ΟΣ', 'ΛΟΓΟΣ ΚΑΙ', 'λόγος']) expect([...t].map(spellOf).join(''), t).toBe(spellOf(t))
+    const greek = [page([{ pt: '0s' }, 'ΟΣ', { pt: '0e' }])]
+    expect(ownOf(greek, { units: units('ΟΣ') }).units.get(0)?.unhidden).toBe(null)
   })
   it('reads a text symbol of no mark of its own as its character in the source (2610.21037v1 p3u28: F\\o lner)', () => {
     const pages = [page([{ pt: '0s' }, 'a Følner sequence', { pt: '0e' }])]

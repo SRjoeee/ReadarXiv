@@ -63,9 +63,11 @@ const WORK = 20_000_000
 // U+02D8 to U+02DD, the others no letters already; not every modifier letter, CJK's prolonged sound mark and iteration mark among
 // them — is no letter, and a dotless ı or ȷ under an accent is its letter: 2610.20595v1 "Ciˆencia", 2610.20581v1 "Estad´ısticas".
 // A letter Unicode does not decompose is its base letters, so that a letter symbol reads the same whichever way the font maps
-// it: \\o ø, \\ae æ, \\oe œ, \\l ł — OT1 sets \\l as a bar over an l, T1 as its own glyph —, \\ss ß, \\dh đ)
-const BASE_LETTERS = { ß: 'ss', ı: 'i', ȷ: 'j', ø: 'o', æ: 'ae', œ: 'oe', ł: 'l', đ: 'd', ð: 'd', ħ: 'h', þ: 'th', ŋ: 'n' }
-export const spellOf = s => s.normalize('NFKD').replace(/[\p{M}\u02c6\u02c7\u02d8-\u02dd]/gu, '').toLowerCase().replace(/[ßıȷøæœłđðħþŋ]/g, c => BASE_LETTERS[c]).replace(/[^\p{L}\p{N}]/gu, '')
+// it: \\o ø, \\ae æ, \\oe œ, \\l ł — OT1 sets \\l as a bar over an l, T1 as its own glyph —, \\ss ß, \\dh đ; and a final sigma
+// is a sigma, the one letter whose lower case hangs on what follows it ("ΟΣ" lowers to "ος", its "Σ" alone to "σ"), so that a
+// text spelled a glyph at a time spells as it does whole)
+const BASE_LETTERS = { ß: 'ss', ı: 'i', ȷ: 'j', ø: 'o', æ: 'ae', œ: 'oe', ł: 'l', đ: 'd', ð: 'd', ħ: 'h', þ: 'th', ŋ: 'n', ς: 'σ' }
+export const spellOf = s => s.normalize('NFKD').replace(/[\p{M}\u02c6\u02c7\u02d8-\u02dd]/gu, '').toLowerCase().replace(/[ßıȷøæœłđðħþŋς]/g, c => BASE_LETTERS[c]).replace(/[^\p{L}\p{N}]/gu, '')
 
 /** a region's code: in a column's body or not, at a depth of floats */
 const code = (body, depth) => depth * 2 + (body ? 1 : 0)
