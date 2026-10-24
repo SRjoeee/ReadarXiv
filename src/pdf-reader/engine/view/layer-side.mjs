@@ -933,7 +933,9 @@ export function createLayerSide(view, o) {
     const place = V.places.page(n)
     const units = [], view = []
     for (const part of feed.state().parts) {
-      if (Array.isArray(part.pages) && n >= part.pages[0] && n <= part.pages[1] && part.views) view.splice(0, 4, ...part.views.slice(4 * (n - part.pages[0]), 4 * (n - part.pages[0]) + 4))
+      // (a part's views run through its reach, the last page its layout runs to: a paragraph that crosses into a page no part
+      // owns yet is located there all the same)
+      if (Array.isArray(part.pages) && n >= part.pages[0] && n <= Math.max(part.pages[1], part.reach ?? 0) && part.views?.length >= 4 * (n - part.pages[0] + 1)) view.splice(0, 4, ...part.views.slice(4 * (n - part.pages[0]), 4 * (n - part.pages[0]) + 4))
       for (const [id, , rects] of part.left ?? []) {
         const on = (rects ?? []).filter(r => r[0] === n)
         if (!on.length || index?.kinds[id] === 'author' || (rowsEnded && !rows.has(id))) continue
@@ -942,9 +944,9 @@ export function createLayerSide(view, o) {
     }
     if (!place || !units.length || view.length !== 4 || !(view[2] > view[0]) || !(view[3] > view[1])) return unmark(n)
     const [x0, y0, x1, y1] = view, w = x1 - x0, h = y1 - y0
-    // (none on a page the original turns a quarter: the parts' rectangles are in the page's own frame, which its view shows across)
-    const box = place.getBoundingClientRect?.()
-    if (box?.width > 0 && box.height > 0 && Math.abs(box.width / box.height - h / w) < Math.abs(box.width / box.height - w / h)) return unmark(n)
+    // (none on a page the original shows turned, by its /Rotate or its view's: the parts' rectangles are in the page's own frame,
+    // which a turned view shows otherwise; its view's rotation as PDF.js holds it, as the links read it)
+    if (((V.places.view(n)?.viewport?.rotation ?? 0) % 360 + 360) % 360 !== 0) return unmark(n)
     const cq = (v, axis) => `${(100 * v).toFixed(3)}cq${axis}`
     let el = marks.get(n)
     if (!el) {

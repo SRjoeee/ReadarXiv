@@ -1774,6 +1774,29 @@ describe('translating: the indicator over a near page\'s paragraphs not laid yet
     expect(marksOf(s, 1)).toBeGreaterThan(0)
   })
 
+  it('a paragraph that crosses into a page no part owns yet is marked there through its part\'s reach; none on a page the original shows turned', async () => {
+    const m = await M()
+    expect([m.readParts[0]?.pages, m.readParts[0]?.reach]).toEqual([[1, 1], 2])
+    const s = await setup({ door: { rows: 'gate' } })
+    await nearOn(s, [1, 2])
+    // (only the first part, pages [1, 1] reaching page 2)
+    s.side.tell({ head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [jobRef(m, 0)] })
+    await settle(s, 10, false)
+    expect(marksOf(s, 2)).toBeGreaterThan(0)
+    // (the view turned a half: the rectangles in the page's frame would land opposite their paragraphs)
+    const inner = internalsOf(s.view) as unknown as { places: { view: (n: number) => unknown } }
+    const was = inner.places.view
+    inner.places.view = (n: number) => (n === 2 ? { viewport: { rotation: 180 } } : was.call(inner.places, n))
+    try {
+      s.side.take([rowOf(unitsOn(m, 1)[0] as number)])
+      await settle(s, 3, false)
+      expect(marksOf(s, 2)).toBe(0)
+      expect(marksOf(s, 1)).toBeGreaterThan(0)
+    } finally {
+      inner.places.view = was
+    }
+  })
+
   it('a page that fails shows the original with no mark', async () => {
     const s = await setup({ copyFails: [1] })
     await nearOn(s, [1])
