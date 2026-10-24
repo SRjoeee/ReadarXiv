@@ -2636,10 +2636,11 @@ layer wherever such a name is drawn (the owner's other ground truth of 2026-10-2
   5.2.4" reads its section's word once), its conjunction's word with the English spacing (`conjunctionOf`). A reference any
   part of which has no word yet is still the original's whole. In a target that inflects, a plural no package and no name
   unit gives stays English whole ("Assumptions 1 and 2" in de).
-- **Measured** (2026-10-25, the 168 local sources): 919 name units in 84 papers, 33 at most, 40,765 source units unchanged
-  (every hash kept: the versions' 29 carries a copy of 28 whole). The paper's own names besides the gaps: "Conjecture" in 26
-  papers, "Assumption" and "Claim" in 14, "Question" and "Fact" in 8, "Proof", "Problem" 7 (a class's own: acmart's
-  Conjecture, llncs's Claim), a Portuguese paper's "Teorema", "Lema". The gates' fixtures hold no name unit's row yet (their
-  records are of an earlier pipeline): their drawing is unchanged until the records are made again.
+- **Measured** (2026-10-25, the 168 local sources): 900 name units in 84 papers, 32 at most (19 of them call cleveref or
+  `\autoref`), 40,765 source units unchanged (every hash kept: the versions' 29 carries a copy of 28 whole). The paper's own
+  names besides the gaps: "Conjecture" in 26 papers, "Assumption" and "Claim" in 14, "Question" and "Fact" in 8, "Proof"
+  and "Problem" in 7 (a class's own among them: acmart's Conjecture, llncs's Claim), a Portuguese paper's "Teorema" and
+  "Lema". The gates' fixtures hold no name unit's row yet (their records are of an earlier pipeline): their drawing is
+  unchanged until the records are made again.
 - **Limits.** The translator sees a name alone, with no sentence around it: a word of two senses may come back in the other
   ("Note", "Line"). A name only a macro of the paper's prints (`\newcommand{\thmname}{Satz}`) is not read.
