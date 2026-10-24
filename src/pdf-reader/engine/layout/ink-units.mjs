@@ -10,9 +10,10 @@
 //   2. a line's words: its glyphs left to right, a word ended where two stand a fifth of their size apart; a head's or a list's
 //      line keeps its numbering and its page number the original's ink (a leading section number, a trailing run of leader
 //      dots and a number: no unit's, never erased), so that a contents entry's title is drawn up to its leaders;
-//   3. a unit: a head's line alone; a list's line with the next where it ends in no page number (an entry continued); a note's
-//      or an orphan's lines while they follow on one page and in one region, each within BLOCK_DY of its size below the one
-//      before and meeting it across;
+//   3. a unit: a head's line alone; the others' lines while they follow on one page and in one region, each within BLOCK_DY of
+//      its size below the one before and meeting it across, and in one paragraph of TeX's (ink.mjs `paras`: a contents entry,
+//      a note, a paragraph); where the compile marked none, a list's line with the next where it ends in no page number (an
+//      entry continued), a note's or an orphan's while they follow;
 //   4. inside a unit, a run of a math face's glyphs or of a typewriter face's is a placeholder (`math`, `url`): its ink kept,
 //      its source the run's characters;
 //   5. echo: a unit whose letters (stream.mjs spellOf) and count of kept runs equal a source unit's letters and count of
@@ -76,7 +77,7 @@ function wordsOf(G, gs, fams) {
   let cur = null, prev = null
   for (const g of order) {
     const x = G[g], f = famOf(fams, x.font), fam = f === 'math' ? 'math' : f === 'mono' ? 'mono' : 'text'
-    if (!cur || (prev && x.x0 - G[prev].x1 > WORD_GAP * Math.max(x.size, G[prev].size)) || cur.fam !== fam) { cur = { gs: [], text: '', fam }; out.push(cur) }
+    if (!cur || (prev !== null && x.x0 - G[prev].x1 > WORD_GAP * Math.max(x.size, G[prev].size)) || cur.fam !== fam) { cur = { gs: [], text: '', fam }; out.push(cur) }
     cur.gs.push(g); cur.text += x.u
     prev = g
   }
@@ -137,7 +138,10 @@ export function inkUnitsOf(pages, ledger, { units = null } = {}) {
   for (const s of segs) {
     const last = groups.at(-1), prev = last?.at(-1)
     const follows = prev && prev.page === s.page && prev.cls === s.cls && prev.region === s.region && prev.y - s.y > 0 && prev.y - s.y <= BLOCK_DY * Math.max(prev.size, s.size) && s.x0 < prev.x1 && s.x1 > prev.x0
-    const joins = follows && (s.cls === 'notes' || s.cls === 'orphan' || (s.cls === 'contents' && !prev.ended))
+    // (by TeX's paragraphs where the compile marked them, ink.mjs `paras`: a block one paragraph, a contents entry one; else by the
+    // lines' places, as before)
+    const paras = prev && prev.para !== null && prev.para !== undefined && s.para !== null && s.para !== undefined
+    const joins = follows && s.cls !== 'heads' && (paras ? prev.para === s.para : s.cls === 'notes' || s.cls === 'orphan' || (s.cls === 'contents' && !prev.ended))
     if (joins) last.push(s)
     else groups.push([s])
   }

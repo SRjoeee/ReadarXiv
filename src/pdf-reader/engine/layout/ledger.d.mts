@@ -12,7 +12,7 @@ export declare const FORM_SHARE: number
 export declare const ORPHAN_LINES_MAX: number
 /** an unowned line as the rules read it */
 export interface LedgerLine {
-  gs: number[]; region: number; zone: 'contents' | 'references' | 'index' | null; y: number; size: number; x0: number; x1: number
+  gs: number[]; region: number; zone: 'contents' | 'references' | 'index' | null; para: number | null; y: number; size: number; x0: number; x1: number
   n: number; letters: number; words: number; pairs: number; math: number; mono: number; form: number; relation: boolean; depth: number
   outside: boolean; head: boolean; foot: boolean
 }
@@ -23,6 +23,8 @@ export interface LedgerPage {
   glyphs: { u?: string; x0: number; x1: number; y: number; size: number; font?: string; form?: boolean; blank?: boolean }[]
   boxes?: ArrayLike<number>
   points?: { name: string; glyph: number; box: number }[]
+  /** the paragraphs' points (ink.mjs `paras`) */
+  paras?: { name: string; glyph: number; box: number }[]
 }
 export interface OrphanLine { page: number; text: string; letters: number; x0: number; x1: number; y: number }
 export interface Ledger {
@@ -33,7 +35,7 @@ export interface Ledger {
   orphanLetters: number
   orphans: OrphanLine[]
   /** every line of glyphs no unit owns, in stream order */
-  lines: { page: number; cls: ClassId; gs: number[]; region: number; zone: 'contents' | 'references' | 'index' | null; y: number; size: number; x0: number; x1: number; letters: number }[]
+  lines: { page: number; cls: ClassId; gs: number[]; region: number; zone: 'contents' | 'references' | 'index' | null; para: number | null; y: number; size: number; x0: number; x1: number; letters: number }[]
 }
 export declare function ledgerOf(pages: LedgerPage[], own: { glyphs: (string | null)[][] } | null, o?: { units?: readonly unknown[] | null }): Ledger
 export declare const HEAD_ORPHANS: number

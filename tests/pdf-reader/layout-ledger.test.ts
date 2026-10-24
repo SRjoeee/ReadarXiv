@@ -195,6 +195,14 @@ describe('ledgerOf', () => {
     expect(classAt(l, 1, at(pg, 'n'))).toBe('orphan')
   })
 
+  it("gives each line its paragraph, TeX's (the page's paragraph points), one going on from the page before", () => {
+    const p1 = page({ point: 'bs1' }, { glyphs: run('First words here', 100, 700) }, { glyphs: run('more of them', 100, 688) }, { point: 'be1' })
+    p1.page.paras = [{ name: 'q4', glyph: 0, box: 0 }, { name: 'q5', glyph: p1.page.glyphs.length - 3, box: 0 }]
+    const p2 = page({ point: 'bs2' }, { glyphs: run('going on', 100, 700) }, { point: 'be2' })
+    const l = ledger([p1, p2])
+    expect(l.lines.map(x => [x.page, x.para])).toEqual([[1, 4], [1, 4], [2, 5]])
+  })
+
   it('lists ORPHAN_LINES_MAX orphan lines at most, and counts them all', () => {
     const parts: Part[] = [{ point: 'bs1' }]
     for (let i = 0; i < ORPHAN_LINES_MAX + 5; i++) parts.push({ glyphs: run('word', 100, 700 - 12 * i) })
