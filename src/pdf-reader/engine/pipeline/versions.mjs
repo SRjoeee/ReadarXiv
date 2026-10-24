@@ -200,6 +200,13 @@ export const PDFJS = '6.3.289'
  * release sweep of 2026-10-24): a label's name followed by a letter and a number is a label (own.mjs LABEL_FORM: "Table S3:",
  * "Figure A1", which were left the original's ink, `labelKept`), and the delta's proof reads a direct value of the catalog by
  * its references' numbers (delta.mjs sameDirect: 2610.20030's direct /Names failed it, and its base of 8 pages of 12, which
- * only a delta holds, was refused): the base's bytes and the head's base change, the layouts do not
+ * only a delta holds, was refused): the base's bytes and the head's base change; and (its units newly English against
+ * production, all `unhidden`) the text after a placeholder told where it runs exactly to its unit's next mark (a display's
+ * \text, a URL's dots), a display that ends a footnote owned to its page's folio, an opening point TeX set inside another
+ * unit's range owning nothing of it (a run-in heading), a title its class sets again (acmart) its first occurrence, the
+ * closing punctuation a theorem's head sets after its note the note's (amsthm's "(Note)."), and the
+ * spell check's letter symbols, a wrapper's own words and lines of their own no unit's (REVTeX's e-mail notes, a folio): the
+ * base's bytes change, and the first two rules being the maker's reading too, the layout files of the units they reach
+ * (LAYOUT 20)
  */
 export const REMOVAL = '10'
