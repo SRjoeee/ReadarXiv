@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { type BundleUnit, bundleUnitsOf, type ReadBundle, UNIT_FLAG_BITS } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import {
-  batchesOf, layerRows, type Row, rowOf, type RowSourceUnit, runRows, sourceUnitsOf, toTranslate, type TranslateResult, unitOf,
+  batchesOf, echoRows, layerIds, layerRows, type Row, rowOf, type RowSourceUnit, runRows, sourceUnitsOf, toTranslate, type TranslateResult, unitOf,
 } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { kOfSource, trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { PIECES_MAX } from '@/pdf-reader/engine/layout/json.mjs'
@@ -604,5 +604,36 @@ describe('runRows', () => {
     const runs = await runRows(b, { lang: 'de', send, format: 'runs', onRows: () => {}, signal: undefined })
     expect(seen[0]?.texts.every(t => !t.includes('<x') && !t.includes('@a#'))).toBe(true)
     expect(runs.rows.get(0)?.[2]).toBe('whole')
+  })
+})
+
+describe("the ink units' rows (docs/route/orphan-text.md §8)", () => {
+  // (a heading, a paragraph, then an ink unit that echoes the heading and one of its own: units.mjs inkBundleUnitsOf's tuples)
+  const heading: BundleUnit = ['heading', 0, 1, null, null, [[0, 'Introduction']]]
+  const para: BundleUnit = ['para', 0, null, null, null, [[0, 'Some words of the body.']]]
+  const echo = ['inkcontents', 0, null, null, null, [[0, 'Introduction']], 0] as unknown as BundleUnit
+  const own = ['inkheads', 0, null, null, null, [[0, 'Journal of Things']], null] as unknown as BundleUnit
+  const b = bundleOf([heading, para, echo, own])
+  it('translates an ink unit of its own, never one that echoes a unit, and awaits both', () => {
+    expect(toTranslate(b, 'de')).toEqual([0, 1, 3])
+    expect(layerIds(b, 'de')).toEqual([0, 1, 2, 3])
+  })
+  it("gives an echo its unit's row under its own id, the row's pieces its own", () => {
+    const row = [0, ['Einleitung'], 'whole', 'test', null] as unknown as Row
+    expect(echoRows(b, [row])).toEqual([[2, ['Einleitung'], 'whole', 'test', null]])
+    expect(unitOf(b, [2, ['Einleitung'], 'whole', 'test', null] as unknown as Row)).toMatchObject({ kind: 'inkcontents', state: 'whole', pieces: [{ t: 'text', tr: true, s: 'Einleitung' }] })
+    expect(echoRows(b, [[1, ['x'], 'whole', null, null] as unknown as Row])).toEqual([])
+  })
+  it("reads an echo of an echo as its first unit's: awaited, and its row made of that unit's", () => {
+    const head2 = ['inkheads', 0, null, null, null, [[0, 'Journal of Things']], 3] as unknown as BundleUnit
+    const head3 = ['inkheads', 0, null, null, null, [[0, 'Journal of Things']], 4] as unknown as BundleUnit
+    const c = bundleOf([heading, para, echo, own, head2, head3])
+    expect(toTranslate(c, 'de')).toEqual([0, 1, 3])
+    expect(layerIds(c, 'de')).toEqual([0, 1, 2, 3, 4, 5])
+    expect(echoRows(c, [[3, ['Zeitschrift'], 'whole', 'test', null] as unknown as Row]).map(r => r[0])).toEqual([4, 5])
+  })
+  it('reads no echo that is not an earlier unit', () => {
+    const bad = bundleOf([heading, ['inkcontents', 0, null, null, null, [[0, 'Introduction']], 3] as unknown as BundleUnit])
+    expect(layerIds(bad, 'de')).toEqual([0])
   })
 })

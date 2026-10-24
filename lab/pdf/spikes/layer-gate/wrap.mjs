@@ -70,7 +70,8 @@ async function made(key, { engine, out, base, bytes, layoutFile, source }) {
     const r = await wrapFinal(new Uint8Array(bytes), { PL, getDocument: pdfjs.getDocument, documentOptions, OPS: pdfjs.OPS, units, texts, deflate, inflate })
     if (r.refused) head = { wrapped: false, why: `${r.refused}: ${String(r.why ?? '').slice(0, 200)}` }
     else {
-      head = { wrapped: true, why: null, stats: r.stats, unhidden: r.unhidden, labelKept: r.labelKept }
+      // (and the ink units the wrap made, where its engine makes them: docs/route/orphan-text.md, the gate's --ink)
+      head = { wrapped: true, why: null, stats: r.stats, unhidden: r.unhidden, labelKept: r.labelKept, ...(r.ink ? { ink: r.ink } : {}) }
       data = r.bytes
       writeFileSync(pdfFile, r.bytes)
     }

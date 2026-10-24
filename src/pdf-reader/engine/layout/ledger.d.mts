@@ -12,7 +12,7 @@ export declare const FORM_SHARE: number
 export declare const ORPHAN_LINES_MAX: number
 /** an unowned line as the rules read it */
 export interface LedgerLine {
-  gs: number[]; region: number; zone: 'contents' | 'references' | 'index' | null; y: number; size: number; x0: number; x1: number
+  gs: number[]; region: number; zone: 'contents' | 'references' | 'index' | null; para: number | null; y: number; size: number; x0: number; x1: number
   n: number; letters: number; words: number; pairs: number; math: number; mono: number; form: number; relation: boolean; depth: number
   outside: boolean; head: boolean; foot: boolean
 }
@@ -23,6 +23,8 @@ export interface LedgerPage {
   glyphs: { u?: string; x0: number; x1: number; y: number; size: number; font?: string; form?: boolean; blank?: boolean }[]
   boxes?: ArrayLike<number>
   points?: { name: string; glyph: number; box: number }[]
+  /** the paragraphs' points (ink.mjs `paras`) */
+  paras?: { name: string; glyph: number; box: number }[]
 }
 export interface OrphanLine { page: number; text: string; letters: number; x0: number; x1: number; y: number }
 export interface Ledger {
@@ -32,9 +34,19 @@ export interface Ledger {
   letters: number
   orphanLetters: number
   orphans: OrphanLine[]
+  /** every line of glyphs no unit owns, in stream order */
+  lines: { page: number; cls: ClassId; gs: number[]; region: number; zone: 'contents' | 'references' | 'index' | null; para: number | null; y: number; size: number; x0: number; x1: number; letters: number }[]
 }
 export declare function ledgerOf(pages: LedgerPage[], own: { glyphs: (string | null)[][] } | null, o?: { units?: readonly unknown[] | null }): Ledger
-export interface LedgerSummary { classes: Partial<Record<ClassId, [glyphs: number, letters: number]>>; letters: number; orphanLetters: number }
+export declare const HEAD_ORPHANS: number
+export declare const HEAD_TEXT: number
+/** flat, as a head holds it: `classes` [class, glyphs, letters, …], `orphans` [page, letters, text, …] */
+export interface LedgerSummary { classes: (ClassId | number)[]; letters: number; orphanLetters: number; orphans: (number | string)[] }
 export declare function ledgerSummary(ledger: Ledger): LedgerSummary
 export interface OrphanRow { inv: 'o'; sev: 'violation'; paper: string; page: number; unit: null; what: 'orphan text'; text: string; detail: { letters: number; x0: number; x1: number; y: number } }
 export declare function orphanRows(ledger: Ledger, o: { paper: string }): OrphanRow[]
+/** the ledger once the ink units own what they own: its orphans those no unit owns still */
+export declare function inkLeft(ledger: Ledger, own: { glyphs: (string | null)[][] } | null, pages: LedgerPage[]): Ledger
+export interface HeadOrphanRow { inv: 'o'; sev: 'violation'; paper: string; page: number | null; unit: null; what: 'orphan text' | 'orphans not listed'; text: string; detail: { letters: number } }
+/** invariant (o) from a head's base ledger */
+export declare function orphanRowsOfHead(head: { base?: { ledger?: LedgerSummary } | object } | null | undefined, o: { paper: string }): HeadOrphanRow[]

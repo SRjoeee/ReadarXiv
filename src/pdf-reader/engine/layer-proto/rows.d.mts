@@ -41,6 +41,10 @@ export declare function layerRows(bundle: RowsBundle, results: ReadonlyMap<numbe
 /** the ids a language translates (keptFor's rule over the flags and kinds), rising, and its batches: 2,500 characters
  *  first, then 12,000, in source order */
 export declare function toTranslate(bundle: RowsBundle, lang: string): number[]
+/** the ids whose rows a layer awaits: those translated, and each ink unit whose echo is one of them */
+export declare function layerIds(bundle: RowsBundle, lang: string): number[]
+/** the rows of the ink units that echo the units of `rows`: the echo's row under the ink unit's id */
+export declare function echoRows(bundle: RowsBundle, rows: readonly Row[]): Row[]
 export declare function batchesOf(bundle: RowsBundle, lang: string): number[][]
 /** runRows' options: the language; the engine's `send` (mt.mjs translateUnits') and its wire format; `rank(id)`, how far a
  *  unit is from the reading place (lower first; the source's order without it); `onRows`, given the rows not given before
