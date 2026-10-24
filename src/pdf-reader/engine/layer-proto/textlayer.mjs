@@ -105,6 +105,8 @@ export function segsOfUnit(L, page, drawnCrop = () => true) {
   const out = []
   for (const line of L?.lines ?? []) {
     if (line.page !== page) continue
+    // (the line's own fit: a unit laid in runs keeps each run's size and scale on its lines, layer2.mjs joinRuns, as svgOfUnit reads them)
+    const LL = line.seg ?? L
     const items = line.items
     let seg = null
     const flush = () => { if (seg && /\S/u.test(seg.str)) out.push(done(seg)); seg = null }
@@ -113,7 +115,7 @@ export function segsOfUnit(L, page, drawnCrop = () => true) {
       if (t.crop) {
         flush()
         if (!drawnCrop(t.crop)) return
-        const c = t.crop.crop, b = t.crop.baseline, sc = L.scale
+        const c = t.crop.crop, b = t.crop.baseline, sc = LL.scale
         out.push({ crop: { page: t.crop.page, src: [c[0], c[1], c[2], c[3]], dst: [it.x, line.baseline + (c[1] - b) * sc, it.x + it.w, line.baseline + (c[3] - b) * sc], text: typeof t.crop.text === 'string' ? t.crop.text : '' }, space: false })
         return
       }
@@ -124,7 +126,7 @@ export function segsOfUnit(L, page, drawnCrop = () => true) {
       }
       if (typeof t.s !== 'string' || !t.s) return
       if (seg && (seg.cls !== t.cls || seg.sup !== !!t.sup)) flush()
-      const band = tokenBand(t, L, line.baseline)
+      const band = tokenBand(t, LL, line.baseline)
       if (!seg) seg = { str: '', x0: it.x, x1: it.x + it.w, top: band.top, bottom: band.bottom, base: band.y, size: 0, cls: t.cls, sup: !!t.sup, lx0: line.x0, lx1: line.x1 }
       seg.str += t.s
       seg.x1 = Math.max(seg.x1, it.x + it.w)
@@ -132,7 +134,7 @@ export function segsOfUnit(L, page, drawnCrop = () => true) {
       seg.bottom = Math.min(seg.bottom, band.bottom)
       seg.size = Math.max(seg.size, band.h)
       if (n === items.length - 1 && t.cls === 'latin' && !t.hyphenated) seg.str += ' '
-      else if (n < items.length - 1 && t.cls !== 'cjk' && (it.kern ?? 0) >= COPY_SPACE_EM * L.f) seg.str += ' '
+      else if (n < items.length - 1 && t.cls !== 'cjk' && (it.kern ?? 0) >= COPY_SPACE_EM * LL.f) seg.str += ' '
     })
     flush()
   }
@@ -190,6 +192,14 @@ function itemOut(P, i, from, unit) {
 }
 /** a point across an item's box at its centre's height (PDF units): `along` the share of its width (its centre at a half) */
 const centreOf = (P, i, along = 0.5) => { const o = i * F; return [P.num[o] + along * P.num[o + 2], P.num[o + 1] + (P.num[o + 4] - 0.5) * P.num[o + 3]] }
+/** characters a..b of compact item i of P (of n, `cs`), at their share of its width (equal advance), pushed to `out` ({ str, num },
+ *  its count `n` where it has one): the item itself where they are all of it; a line's end after the last of them alone */
+function pushPiece(out, P, i, a, b, n, cs) {
+  const o = i * F, share = P.num[o + 2] / n
+  out.str.push(a === 0 && b === n ? P.str[i] : cs.slice(a, b).join(''))
+  out.num.push(P.num[o] + a * share, P.num[o + 1], (b - a) * share, P.num[o + 3], P.num[o + 4], P.num[o + 5] & (b === n ? EOL | RTL : RTL))
+  if (typeof out.n === 'number') out.n++
+}
 /** a character's state where no operation erased it, and where one did that no drawn thing's range holds */
 const KEPT = Symbol('kept'), NO_OWNER = Symbol('no owner')
 const inBox = (x, y, b) => x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]
@@ -236,6 +246,10 @@ export function textLayerOf(page, plan, drawn, o = {}) {
   const test = ops.length ? eraserOf(ops) : null
   const ownerOf = k => { let lo = 0, hi = owners.length - 1; while (lo <= hi) { const m = (lo + hi) >> 1, r = owners[m]; if (k < r[0]) hi = m - 1; else if (k >= r[1]) lo = m + 1; else return r[2] } return null }
   const cut = { str: [], num: [] }, owner = [], erasedOf = []
+  // (this page's crops' sources, in drawing order: an erased item is cut at their edges too, so that a crop takes the characters
+  // under its source alone, never the prose of the same item around it)
+  const ownSrc = []
+  for (const d of things) for (const sg of d.segs) if (sg.crop?.page === self) ownSrc.push(sg.crop.src)
   let spent = false
   for (let i = 0; i < P.n; i++) {
     const o = i * F
@@ -248,7 +262,7 @@ export function textLayerOf(page, plan, drawn, o = {}) {
       continue
     }
     const cs = [...P.str[i]], n = cs.length
-    const states = []
+    const states = [], under = []
     for (let k = 0; k < n; k++) {
       let by = -1
       if (!spent) {
@@ -257,15 +271,15 @@ export function textLayerOf(page, plan, drawn, o = {}) {
         by = test(dx, dy, budget)
         // (past the budget: the rest kept)
         if (by === null) { spent = true; by = -1 }
-      }
+        // (an erased character under a crop's source: the first such crop's)
+        under.push(by < 0 ? -1 : ownSrc.findIndex(b => inBox(cx, cy, b)))
+      } else under.push(-1)
       states.push(by < 0 ? KEPT : ownerOf(by) ?? NO_OWNER)
     }
     for (let a = 0; a < n;) {
       let b = a + 1
-      while (b < n && states[b] === states[a]) b++
-      const share = P.num[o + 2] / n
-      cut.str.push(a === 0 && b === n ? P.str[i] : cs.slice(a, b).join(''))
-      cut.num.push(P.num[o] + a * share, P.num[o + 1], (b - a) * share, P.num[o + 3], P.num[o + 4], P.num[o + 5] & (b === n ? EOL | RTL : RTL))
+      while (b < n && states[b] === states[a] && under[b] === under[a]) b++
+      pushPiece(cut, P, i, a, b, n, cs)
       erasedOf.push(states[a] !== KEPT)
       owner.push(states[a] === KEPT || states[a] === NO_OWNER ? null : states[a])
       a = b
@@ -290,9 +304,19 @@ export function textLayerOf(page, plan, drawn, o = {}) {
     } else {
       let Q = other.get(c.page)
       if (Q === undefined) { Q = o.sourceOf?.(c.page) ?? null; other.set(c.page, Q) }
+      // (each item's characters under the source alone, by their centres: a run of them a moved item)
       for (let i = 0; Q && i < Q.n; i++) {
-        const [cx, cy] = centreOf(Q, i)
-        if (inBox(cx, cy, c.src)) list.push(relocated(itemOut(Q, i, 'moved', d.unit), c))
+        const cs = [...Q.str[i]], n = cs.length
+        for (let a = 0; a < n; a++) {
+          const [cx, cy] = centreOf(Q, i, n > 1 ? (a + 0.5) / n : 0.5)
+          if (!inBox(cx, cy, c.src)) continue
+          let b = a + 1
+          while (b < n && inBox(...centreOf(Q, i, (b + 0.5) / n), c.src)) b++
+          const piece = { n: 0, str: [], num: [] }
+          pushPiece(piece, Q, i, a, b, n, cs)
+          list.push(relocated(itemOut(piece, 0, 'moved', d.unit), c))
+          a = b
+        }
       }
     }
     // (none under its source: the crop's own plain text over its drawn box)

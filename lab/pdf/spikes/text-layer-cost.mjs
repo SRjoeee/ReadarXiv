@@ -42,7 +42,11 @@ const median = xs => xs.slice().sort((a, b) => a - b)[Math.floor(xs.length / 2)]
 window.cost = {
   async page(name, n, runs, scale, plan) {
     const data = new Uint8Array(await (await fetch('/pdf/' + name)).arrayBuffer())
-    const doc = await pdfjs.getDocument({ data, cMapUrl: '/pdfjs/cmaps/', cMapPacked: true, standardFontDataUrl: '/pdfjs/standard_fonts/', verbosity: 0 }).promise
+    // (the document let go once its page is measured, or the measure fails: no worker of a page before weighs on the next)
+    const task = pdfjs.getDocument({ data, cMapUrl: '/pdfjs/cmaps/', cMapPacked: true, standardFontDataUrl: '/pdfjs/standard_fonts/', verbosity: 0 })
+    try { return await this.measure(await task.promise, n, runs, scale, plan) } finally { await task.destroy() }
+  },
+  async measure(doc, n, runs, scale, plan) {
     const page = await doc.getPage(n), tc = await page.getTextContent(), view = page.view
     const vp = page.getViewport({ scale: 2.5 }), devOf = (x, y) => vp.convertToViewportPoint(x, y)
     const t0 = performance.now(), items = TL.itemsOf(tc), tItems = performance.now() - t0
@@ -89,6 +93,8 @@ window.cost = {
       const a = performance.now()
       const built = await textLayer(out, { viewport: shown, Builder: viewer.TextLayerBuilder, lang: 'zh' })
       const b = performance.now()
+      // (a page with nothing to place has no layer: no host time to measure)
+      if (!built) { nodes = 0; break }
       wrap.append(built.div)
       built.div.getBoundingClientRect()
       const c = performance.now()
@@ -97,7 +103,7 @@ window.cost = {
       built.cancel()
     }
     const bytes = items.num.byteLength + items.str.reduce((s, x) => s + 2 * x.length + 40, 0)
-    return { page: n, items: items.n, lines: lines.length, ops: ops.length, out: out.items.length, stats: out.stats, msItems: +tItems.toFixed(2), msEngine: +median(engine).toFixed(2), msHost: +median(host).toFixed(2), msLayout: +median(layout).toFixed(2), nodes, bytes }
+    return { page: n, items: items.n, lines: lines.length, ops: ops.length, out: out.items.length, stats: out.stats, msItems: +tItems.toFixed(2), msEngine: +median(engine).toFixed(2), msHost: host.length ? +median(host).toFixed(2) : null, msLayout: layout.length ? +median(layout).toFixed(2) : null, nodes, bytes }
   },
 }
 window.ready = true

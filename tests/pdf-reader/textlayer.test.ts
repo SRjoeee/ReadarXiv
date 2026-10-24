@@ -89,6 +89,18 @@ describe('crops: the formula\'s text where it is drawn', () => {
     const d = textLayerOf(P([item('para', 100, 700, 150)]), { ops: [erase(90, 690, 400, 712)], devOf: dev, owners: [[0, 1, 'u7']] }, [{ key: 'u7', unit: 7, segs: [{ ...crop(2, [45, 95, 65, 115], [120, 645, 140, 665]), space: true }, seg('y', 150, 160, 650)] }], { sourceOf: p => (p === 2 ? other : null) })
     expect(d.items.map(i => [i.str, i.from])).toEqual([['g ', 'moved'], ['y', 'translated']])
   })
+  it('TL23 an item a crop\'s source holds part of moves those characters alone, the prose around them dropped with its unit; from another page too', () => {
+    // "left (12) right": 15 characters of 4 units each from 300; "(12)" its characters 5-8, x 320-336; the crop's source over them
+    const page = P([item('left (12) right', 300, 700, 60)])
+    const d = textLayerOf(page, { ops: [erase(290, 690, 400, 712)], devOf: dev, owners: [[0, 1, 'u7']] }, [{ key: 'u7', unit: 7, segs: [seg('links ', 100, 130, 650), crop(1, [319, 697, 337, 713], [130, 647, 148, 663]), seg('rechts', 150, 180, 650)] }])
+    expect(d.items.map(i => [i.str, i.from])).toEqual([['links ', 'translated'], ['(12) ', 'moved'], ['rechts', 'translated']])
+    const m = d.items[1]!
+    expect([m.x, m.w].map(v => Math.round(v * 100) / 100)).toEqual([131, 16])
+    expect(d.stats).toMatchObject({ moved: 1, dropped: 2 })
+    const other: CompactItems = itemsOf({ items: [item('a (12) b', 40, 100, 32)] })
+    const e = textLayerOf(P([item('para', 100, 700, 150)]), { ops: [erase(90, 690, 400, 712)], devOf: dev, owners: [[0, 1, 'u7']] }, [{ key: 'u7', unit: 7, segs: [crop(2, [47, 95, 65, 115], [120, 645, 138, 665])] }], { sourceOf: p => (p === 2 ? other : null) })
+    expect(e.items.map(i => [i.str, i.from])).toEqual([['(12)', 'moved']])
+  })
 })
 
 describe('reading order and the breaks a copy reads', () => {
@@ -226,5 +238,17 @@ describe('the inputs', () => {
     const L = { f: 10, scale: 1, lines: [{ page: 1, baseline: 700, x0: 72, x1: 300, items: [tok('x', 72, 6), tok('2', 78, 4, { sup: true }), tok('y', 82, 6)] }] } as never
     const segs = segsOfUnit(L, 1) as TextSeg[]
     expect(segs.map(s => [s.str, s.base, Math.round(s.size * 100) / 100])).toEqual([['x', 700, 10], ['2', 703.6, 6.2], ['y ', 700, 10]])
+  })
+  it('TL22 a line of a run laid at its own fit (line.seg, layer2.mjs joinRuns) is measured at that fit: its size, a crop\'s scale, a copy\'s space', () => {
+    const face = { size: 1 }
+    const tok = (s: string, x: number, w: number, kern = 0) => ({ x, w, kern, t: { s, cls: 'latin', face } })
+    const crop = { x: 120, w: 20, t: { crop: { page: 1, crop: [300, 690, 320, 710], baseline: 700, text: 'z' } } }
+    // (the unit's first run at f 10 and scale 1; its second, past a display, fitted at f 8 and scale 0.8)
+    const L = { f: 10, scale: 1, lines: [{ page: 1, baseline: 600, seg: { f: 8, scale: 0.8 }, items: [tok('a', 72, 10, 2.2), tok('b', 85, 10), crop] }] } as never
+    const segs = segsOfUnit(L, 1)
+    // (a kern of 2.2 is a space at f 8, COPY_SPACE_EM of 8, not at f 10)
+    expect(segs.map(s => ('crop' in s ? `[${s.crop.text}]` : s.str))).toEqual(['a b', '[z]'])
+    expect((segs[0] as TextSeg).size).toBe(8)
+    expect((segs[1] as { crop: { dst: number[] } }).crop.dst).toEqual([120, 592, 140, 608])
   })
 })
