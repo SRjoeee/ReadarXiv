@@ -131,8 +131,12 @@ window.door = {
     const bundle = R.readBundle(bundleBytes)
     const ruleSet = await ruleSetOf(rules)
     const doc = await pdfjs.getDocument({ data: await composedOf(name, bundle), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise
+    // (the door's default toggles, as it gives the run them: rules/content-classes.mjs; an engine of before them has none)
+    const classes = await import('/engine/rules/content-classes.mjs').catch(() => null)
+    const toggles = classes?.defaultToggles?.() ?? null
     const run = await V.openProto({
       doc, geometry, units: record.units, target, pages: Number.POSITIVE_INFINITY, scale, dpr, copy: true,
+      ...(toggles && classes.unitShown ? { shown: u => classes.unitShown(u, toggles) } : {}),
       tex: { use: 'lines', texOnly: true, symbols: 'text', extents: 'v0', index: F.indexLayout(F.parseLayout(layout)), pieces: new Map(unitsFile.units.map(u => [u.id, u.pieces])) },
       // (the cell rules the bundle carries, as the door reads them; a BUNDLE 3 bundle names no unit the wrap could not hide)
       hiding: { rules: q => bundle.rules?.[q] },
