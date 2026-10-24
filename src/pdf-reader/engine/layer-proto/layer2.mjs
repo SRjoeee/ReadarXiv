@@ -2484,8 +2484,8 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       if (last && (last.st.color ?? null) === (rs.color ?? null)) last.text += run.text
       else runs.push({ text: run.text, st: rs })
     }
-    // (the page's own characters in small capitals the layer draws itself: a capital the page sets as a small one is drawn so,
-    // "ODEBRAIN"'s RAIN, which the page's text gives in capitals: smallCapsAt)
+    // (the page's own characters in small capitals the layer draws itself: a capital the page sets as a small one is drawn so, a
+    // macro's text in faked small capitals, which the page's text gives in capitals: smallCapsAt)
     const capsAt = r.mode === 'orig-text' && !r.math && own.caps && !own.upper ? smallCapsAt(r.gap?.chars, r.text, resolved.orig?.size) : null
     if (r.sup) {
       // (a raised rendering in its runs too, each glued to the one before: a superscript citation's black brackets, its blue digits;

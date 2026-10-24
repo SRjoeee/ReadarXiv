@@ -171,7 +171,7 @@ describe('small capitals the layer draws itself, at the share the page sets them
     expect(shares(drawn)).toEqual([['I', 1], ['NTRODUCCIÓN', 0.8]])
   })
 
-  it('a rendering of the page\'s own characters keeps its small capitals: "ODEBRAIN", its RAIN set at 7.97 beside 9.963', () => {
+  it('a rendering of the page\'s own characters keeps the small capitals the page sets: a macro\'s capitals at 7.97 beside 9.963', () => {
     const chars = [...'ODEBRAIN'].map((ch, k) => ({ ch, size: k < 4 ? 9.963 : 7.97, st: times }))
     const drawn = tokensOf([text('Ideas clave de ', true), { t: 'ph', src: '\\ours', k: 1 }], 'es', capsBase, { orig: { size: 9.963 } }, undefined, [[1, { mode: 'orig-text', text: 'ODEBRAIN', gap: { chars } }]]).filter(t => t.s && /\S/.test(t.s))
     expect(shares(drawn).slice(-2)).toEqual([['ODEB', 1], ['RAIN', 0.8]])
