@@ -1977,6 +1977,17 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   in it in each of three rounds (a file nothing reads, a group, a `\let` in the body), and that is TeX's own work. Not resolved by the probe compile: the units are cut before any
   compile and must be the same on every reader. The accents were checked and needed nothing: the regression's "JÃ©rÃ´me"
   was a report printing the units' raw bytes (their text is UTF-8 read latin1; `mt.mjs` `utf8` decodes it)
+- **A command takes what its definition takes** (PIPELINE 28, `source/latex-front.mjs` `argsOfForm`, `unitForm`). A heading,
+  a caption, a footnote, a `\thanks`, a `\title` and an author block take an optional argument and one text (LaTeX's
+  `\@startsection` a star, a short title and the title; subcaption's `\subcaptionbox` up to its contents, which are walked),
+  or the arity the paper's own definition gives; `\multicolumn`, `\multirow`, `\makecell` and `\shortstack` the arguments
+  the role table gives them. A group after them is the text's. Read as "up to two groups", the stray `{` on the line after
+  2610.31660v1's `\subsection{Approaches to determining $H_0$}`, closed 330 lines later by a stray `}}`, was taken for the
+  heading's second argument and skipped: §II.A to mid-§IV had no unit (57 units, now 126), and nothing there was translated.
+  Over 167 local sources two units' hashes moved, in one paper (2607.24653v2's `\multirow[c]{3}{w}[-2pt]{…}`, now read
+  whole: the pairs after it numbered one on, their texts the same). Where nothing defines a command or an environment
+  (`commandArgs`, `envArgs`), and for a citation (`\citefield{key}{field}` takes two groups, a field name the translator
+  must not see), every adjacent group is still taken: words left English break nothing, an argument translated breaks TeX
 - **Under `latex`, nothing dvipdfmx could not draw.** Our DVI is drawn by dvipdfmx, arXiv's by dvips and ps2pdf: a PSTricks
   picture, or any PostScript of the page's, dvipdfmx cannot interpret is missing from our page alone, and the marks and boxes
   would pass. The final pass is refused (`final`) where its log says dvipdfmx failed a special or an image (`base.mjs`

@@ -418,6 +418,37 @@ function argsAfter(s, i, max = 9) {
   }
   return { args, end: i }
 }
+/** the arguments of a command whose form is known, as argsAfter reads groups: `form` one character per parameter, `[` an
+ *  optional one where it is given, `{` a required group (where none is, the reading stops), a star before the first where
+ *  written. Nothing past the form: a group after it is the text's */
+function argsOfForm(s, i, form) {
+  const args = []
+  const k0 = skipSpaces(s, i)
+  if (s[k0] === '*' && (s[k0 + 1] === '{' || s[k0 + 1] === '[')) i = k0 + 1
+  for (const shape of form) {
+    const k = skipSpaces(s, i)
+    if (shape === '[') { if (s[k] !== '[') continue; const e = matchGroup(s, k, '[', ']'); if (e < 0) break; args.push({ kind: 'opt', start: k, end: e }); i = e; continue }
+    if (s[k] !== '{') break
+    const e = matchGroup(s, k); if (e < 0) break
+    args.push({ kind: 'req', start: k, end: e }); i = e
+  }
+  return { args, end: i }
+}
+/** the forms of the commands whose argument is a unit of their own (HEADINGS, OWN_UNIT_ARG, FRONT_MATTER) where it is not
+ *  `[{`: LaTeX's sectioning commands (\\@startsection) take a star, a short title and the title, a caption, a footnote, a
+ *  \\thanks, a \\title and an author block (authblk's \\author[1]{…}, elsarticle's \\address[a]{…}) an optional argument and
+ *  their text. subcaption's \\subcaptionbox[list]{heading}[width][pos]{contents}: up to its contents, which are walked as
+ *  they stand. Taken as `up to two groups`, the stray `{` on the line after 2610.31660v1's \\subsection{…}, closed 330
+ *  lines later, was the heading's second argument, and §II.A to mid-§IV had no unit (57 units, now 126) */
+const UNIT_FORMS = { subcaptionbox: '[{[[', captionof: '{[{', tablecaption: '{' }
+/** such a command's form: the paper's own definition where it gives one an arity (\\renewcommand{\\section}[2]{…}, in its
+ *  files or a class it ships), else LaTeX's. One of no parameter (\\renewcommand\\section{\\@startsection…}) reads on in its
+ *  body: LaTeX's form is what it reads */
+function unitForm(name, ctx) {
+  const macro = ctx.macros.get(name)
+  if (macro?.params > 0) return (macro.opt ? '[' : '') + '{'.repeat(macro.params - (macro.opt ? 1 : 0))
+  return UNIT_FORMS[name] ?? '[{'
+}
 /** a citation command: natbib's, biblatex's, apacite's (\cite, \citep, \citet, \parencite, \textcite, \citeA, \citeNP,
  *  \fullcite …) */
 const CITATION = /^[A-Za-z]*cite[A-Za-z]*$/i
@@ -1039,7 +1070,7 @@ function frontNotes(s, from, to, b, ctx) {
   for (const m of s.slice(from, to).matchAll(/\\(?:thanks|footnote)(?![A-Za-z@])/g)) {
     const at = from + m.index
     if (at < past || inComment(s, at)) continue
-    const { args, end } = argsAfter(s, at + m[0].length, 2)
+    const { args, end } = argsOfForm(s, at + m[0].length, unitForm(m[0].slice(1), ctx))
     if (!args.some(a => a.kind === 'req')) continue
     frontNote(s, at, end, b, ctx)
     past = end
@@ -1061,7 +1092,7 @@ function frontBlock(s, from, to, b, ctx) {
   for (const m of s.slice(from, to).matchAll(/\\(?:thanks|footnote)(?![A-Za-z@])/g)) {
     const at = from + m.index
     if (at < past || inComment(s, at)) continue
-    const { args, end } = argsAfter(s, at + m[0].length, 2)
+    const { args, end } = argsOfForm(s, at + m[0].length, unitForm(m[0].slice(1), ctx))
     if (!args.some(a => a.kind === 'req')) continue
     names(past, at)
     frontNote(s, at, end, b, ctx)
@@ -1249,12 +1280,13 @@ function walk(s, from, to, b, ctx) {
       // a TikZ picture: only its texts are prose (tikzText); the drawing stays as it is
       if (env === 'tikzpicture') { tikzText(s, afterBegin, bodyEnd, b, ctx); i = afterEnd; continue }
       if (SKIP_ENVS.test(env) || ctx.skipEnvs.has(env)) { ctx.skipped[env] = (ctx.skipped[env] ?? 0) + 1; i = afterEnd; continue }
-      if (ctx.tblrEnvs.has(env) && (ctx.tblrMath || argsAfter(s, afterBegin, 2).args.some(a => TBLR_MATH.test(uncommented(s.slice(a.start, a.end)))))) { ctx.skipped[env] = (ctx.skipped[env] ?? 0) + 1; i = afterEnd; continue }
+      if (ctx.tblrEnvs.has(env) && (ctx.tblrMath || argsOfForm(s, afterBegin, '[{').args.some(a => TBLR_MATH.test(uncommented(s.slice(a.start, a.end)))))) { ctx.skipped[env] = (ctx.skipped[env] ?? 0) + 1; i = afterEnd; continue }
       if (TABLE_ENVS.test(env)) {
         if (!ctx.tables) { ctx.skipped[env] = (ctx.skipped[env] ?? 0) + 1; i = afterEnd; continue }
         // a table: each cell is a unit of its own; & and \\ end it. The column specification and width stay as they are
         const tp = ctx.ownEnvs.has(env) ? null : environmentParams(env, paper?.bindings ?? null), tr = tp && readArgs(s, afterBegin, tp, bodyEnd)
-        const argsEnd = tr?.complete ? tr.end : argsAfter(s, afterBegin, env.startsWith('tabularx') || env === 'tabular*' || env === 'tabulary' ? 3 : 2).end
+        // (one the table does not know by its form: tabularx's, tabular*'s and tabulary's {width}[pos]{spec}, else [pos]{spec})
+        const argsEnd = tr?.complete ? tr.end : argsOfForm(s, afterBegin, env.startsWith('tabularx') || env === 'tabular*' || env === 'tabulary' ? '{[{' : '[{').end
         // (the paper's tables numbered in the order they begin, a table nested in a cell after the one it is in)
         const saved = b.kind, savedCell = b.cellMode, first = b.units.length, table = (ctx.tableCount = (ctx.tableCount ?? 0) + 1); b.kind = 'cell'; b.cellMode = true
         walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved; b.cellMode = savedCell
@@ -1312,10 +1344,11 @@ function walk(s, from, to, b, ctx) {
     }
     if (HEADINGS.has(name) || OWN_UNIT_ARG.has(name)) {
       // its text: where the role table knows a text argument, that one (\\captionof's after its {figure}); else its first
-      // required argument, an optional one before it (a short caption, a heading's for the contents) kept as it is
+      // required argument (\\captionof's last), an optional one before it (a short caption, a heading's for the contents)
+      // kept as it is. What it takes is its form (unitForm), and a group after it is the text's
       const read = name === 'captionof' || name === 'tablecaption' ? commandArgs(s, end, name, to) : null
-      const { args, end: e } = read?.known ? read : argsAfter(s, end, 2)
-      const req = read?.known ? args.findLast(a => a.kind === 'req' && a.role === 't') : args.find(a => a.kind === 'req')
+      const { args, end: e } = read?.known ? read : argsOfForm(s, end, unitForm(name, ctx))
+      const req = read?.known ? args.findLast(a => a.kind === 'req' && a.role === 't') : name === 'captionof' ? args.findLast(a => a.kind === 'req') : args.find(a => a.kind === 'req')
       if (!req) { endText(); b.ph(s.slice(i, end), i, end); i = end; continue }
       const saved = b.kind
       if (name === 'footnote' || name === 'footnotetext' || name === 'thanks') {
@@ -1340,12 +1373,12 @@ function walk(s, from, to, b, ctx) {
       b.kind = CAPTIONS.has(name) ? 'caption' : name === 'abstract' ? 'abstract' : 'heading'; b.title = name === 'title'; b.depth = DEPTH[name]; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.title = false; b.depth = undefined; b.kind = saved
       i = e; continue
     }
-    // \multicolumn{n}{spec}{text}, \multirow{n}{width}{text}, \makecell{text}: only the last argument is prose
+    // \multicolumn{n}{spec}{text}, \multirow[v]{n}{width}[shift]{text}, \makecell[pos]{text}: only the content is prose,
+    // the arguments read as the role table gives them. Read as `up to one group more than it needs`, the group after a
+    // \multicolumn{2}{c}{…} was taken for its content and the content itself never sent
     if ((name === 'multicolumn' || name === 'multirow' || name === 'makecell' || name === 'shortstack') && b.cellMode) {
-      const want = name === 'multicolumn' || name === 'multirow' ? 3 : 1
-      const { args, end: e } = argsAfter(s, end, want + 1)
-      const reqs = args.filter(a => a.kind === 'req'), last = reqs.at(-1)
-      if (last && reqs.length >= want) { endText(); const id = b.open(s.slice(i, last.start + 1), i); walk(s, last.start + 1, last.end - 1, b, ctx); b.close(id, '}', e); i = e; continue }
+      const read = commandArgs(s, end, name, to), last = read.known ? read.args.findLast(a => a.kind === 'req' && a.role === 'c') : null
+      if (last && s[last.start] === '{' && last.end === read.end) { endText(); const id = b.open(s.slice(i, last.start + 1), i); walk(s, last.start + 1, last.end - 1, b, ctx); b.close(id, '}', read.end); i = read.end; continue }
     }
     // subfig's \subfloat[caption]{content}: the caption in the optional argument, the content walked
     if (name === 'subfloat') {
@@ -1359,7 +1392,7 @@ function walk(s, from, to, b, ctx) {
       }
     }
     if (FRONT_MATTER.has(name)) {
-      const { args, end: e } = argsAfter(s, end, 3)
+      const { args, end: e } = argsOfForm(s, end, unitForm(name, ctx))
       endText(); b.flush()
       for (const a of args) (a.kind === 'req' ? frontBlock : frontNotes)(s, a.start + 1, a.end - 1, b, ctx)
       i = e; continue
@@ -1660,13 +1693,13 @@ function frontMatter(s, from, to, b, ctx) {
     if (c.at < past) continue
     if (c.name === 'title') {
       if (c !== title) continue
-      const { args, end } = argsAfter(s, c.end, 2), req = args.find(a => a.kind === 'req')
+      const { args, end } = argsOfForm(s, c.end, unitForm('title', ctx)), req = args.find(a => a.kind === 'req')
       if (req) { b.kind = 'heading'; b.title = true; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.title = false; b.kind = undefined; past = end }
       continue
     }
-    if (FRONT_MATTER.has(c.name)) { const { args, end } = argsAfter(s, c.end, 3); for (const a of args) (a.kind === 'req' ? frontBlock : frontNotes)(s, a.start + 1, a.end - 1, b, ctx); past = end; continue }
+    if (FRONT_MATTER.has(c.name)) { const { args, end } = argsOfForm(s, c.end, unitForm(c.name, ctx)); for (const a of args) (a.kind === 'req' ? frontBlock : frontNotes)(s, a.start + 1, a.end - 1, b, ctx); past = end; continue }
     // a \thanks of its own (revtex's, after \author{…}): a front note, as in the body
-    if (c.name === 'thanks') { const { args, end } = argsAfter(s, c.end, 2); if (args.some(a => a.kind === 'req')) { b.flush(); frontNote(s, c.at, end, b, ctx); past = end } continue }
+    if (c.name === 'thanks') { const { args, end } = argsOfForm(s, c.end, unitForm('thanks', ctx)); if (args.some(a => a.kind === 'req')) { b.flush(); frontNote(s, c.at, end, b, ctx); past = end } continue }
     if (c.name === 'begin' && FRONT_ROLES[`env:${c.env}`]) {
       const [bodyEnd, afterEnd] = endOfEnv(s, c.end, c.env), { end: argsEnd } = envArgs(s, c.end, bodyEnd, c.env, ctx), saved = b.kind
       b.flush(); b.kind = FRONT_ROLES[`env:${c.env}`][0] === 'abstract' ? 'abstract' : 'heading'; walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved
