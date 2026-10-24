@@ -680,8 +680,9 @@ export function createLayerSide(view, o) {
     ring.push(`${n}@${Math.round(clock.now())}`)
     if (ring.length > RING) ring.shift()
     shapesOf(n, laid)
-    // (the view's pages laid: the pages ahead once it rests)
+    // (the view's pages laid: the pages ahead once it rests; the first one shown, the other near pages' faces)
     aheadSoon()
+    if (counts.commits === 1) warmSoon()
   }
   /** a laid page's drawing, made of its copy and the door's page (its SVG and links), not in its place yet: its wrapper (the copy,
    *  the SVG and the links in the copy's frame), and what the side keeps of it */
@@ -794,8 +795,12 @@ export function createLayerSide(view, o) {
       if (disposed) return
     }
   }
-  /** the near pages warmed (warmPages), the page in the middle of the view first; before the places are laid out (no original
-   *  open yet), pages 1 and 2, where a paper opens. Once a task, whatever asked it */
+  /** the warm-ups in turn, so that a page's wave waits for the one asked before it, whoever asked it */
+  let warmChain = Promise.resolve()
+  /** the near pages warmed (warmPages), the page in the middle of the view first (before the places are laid out, no original open
+   *  yet, page 1, where a paper opens), and the others only once a page has been put in place: until the first page is shown, its
+   *  own wave alone shares the line with what that page waits for besides (the composed document's bytes, its delta), and no other
+   *  page's (2602.23285v2 in Chinese, pages 1 and 2 together: 3.3 MB of slices beside the delta's 478 KB). Once a task */
   function warmSoon() {
     if (warmQueued || disposed) return
     warmQueued = true
@@ -804,9 +809,10 @@ export function createLayerSide(view, o) {
       const count = V.places.count()
       const near = []
       for (let n = 1; n <= count; n++) if (V.places.near(n)) near.push(n)
-      const c = V.centre()
-      if (c) near.sort((a, b) => Math.abs(a - c) - Math.abs(b - c) || a - b)
-      void warmPages(count ? near : [1, 2]).catch(e => warn('faces', e))
+      const c = V.centre() || near[0] || 1
+      near.sort((a, b) => Math.abs(a - c) - Math.abs(b - c) || a - b)
+      const qs = !count ? [1] : counts.commits ? near : near.slice(0, 1)
+      warmChain = warmChain.then(() => warmPages(qs)).catch(e => warn('faces', e))
     })
   }
 
@@ -848,7 +854,7 @@ export function createLayerSide(view, o) {
       for (let m = last + 1; m <= Math.min(count, last + aheadPages); m++) {
         const P = rec(m)
         if (V.places.near(m) || drawings.has(m) || P.content?.wrap || P.failed || originalPageOf(m)) continue
-        await warmPages([m])
+        await (warmChain = warmChain.then(() => warmPages([m])).catch(e => warn('faces', e)))
         if (ac.signal.aborted || disposed || my !== gen) return
         aheadPage = m
         counts.ahead++
