@@ -14,7 +14,8 @@ import { BundleRefusal } from './bundle.mjs'
 import { layoutFacade } from './facade.mjs'
 import { OPEN_FAMILY } from './fonts.mjs'
 import { layerDraws, readLeftPart } from './format.mjs'
-import { sourceUnitsOf, toTranslate, unitOf } from './rows.mjs'
+import { echoRows, layerIds, sourceUnitsOf, unitOf } from './rows.mjs'
+import { shownTranslated, TOGGLE_DEFAULTS, unitClass } from '../rules/content-classes.mjs'
 import { openProto } from './run.mjs'
 import { BUILTIN_RULES, resolveRules } from '../rules/layout.mjs'
 
@@ -116,7 +117,7 @@ export const DROPPED_ROWS = 1000
 export const DRAWS_HELD = 16 * 2 ** 20
 
 export async function openLayer(o = {}) {
-  const { bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules = BUILTIN_RULES, drawsHeld = DRAWS_HELD, OPS = null } = o ?? {}
+  const { bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules = BUILTIN_RULES, drawsHeld = DRAWS_HELD, OPS = null, classes = null } = o ?? {}
   const four = bundle === undefined
   if (four) {
     if (index === null || typeof index !== 'object' || index.kind !== 'index' || !Array.isArray(index.units) || !index.head) throw new TypeError(`index: a layer index (indexOf's), not ${kindOf(index)}`)
@@ -135,6 +136,7 @@ export async function openLayer(o = {}) {
   if (typeof hyphUrl !== 'function') throw new TypeError(`hyphUrl: a function, not ${kindOf(hyphUrl)}`)
   if (OPS !== null && typeof OPS !== 'object') throw new TypeError(`OPS: PDF.js's operator codes or null, not ${kindOf(OPS)}`)
   checkRules(rules)
+  if (classes !== null && (typeof classes !== 'object' || Object.entries(classes).some(([k, v]) => !Object.hasOwn(TOGGLE_DEFAULTS, k) || typeof v !== 'boolean'))) throw new TypeError(`classes: the reader's toggles, { ${Object.keys(TOGGLE_DEFAULTS).join(', ')} } booleans, not ${kindOf(classes)}`)
   // (the parts told at the open stand as a chain over the composed document, before anything is opened)
   if (four) {
     let ch = { through: 0, last: null }
@@ -152,7 +154,7 @@ export async function openLayer(o = {}) {
   // (taken before the open's first await: two opens at once are refused alike)
   const token = {}
   opened = token
-  try { return await openOne({ four, bundle, index, doc, parts: parts ?? [], target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS }, token) } catch (e) { if (opened === token) opened = null; throw e }
+  try { return await openOne({ four, bundle, index, doc, parts: parts ?? [], target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS, classes }, token) } catch (e) { if (opened === token) opened = null; throw e }
 }
 
 /** a part told to the door, against the index and the chain so far (`ch`: through, last): a ReadPart of the index's head that
@@ -164,9 +166,17 @@ function checkPart(part, index, ch) {
   if (part.prev !== ch.last) throw new BundleRefusal('not following the digest of the last part', { kind: 'part', path: 'prev' })
 }
 
-async function openOne({ four, bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS }, token) {
+async function openOne({ four, bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS, classes }, token) {
   const source = four ? index : bundle
-  const expect = toTranslate(source, target)
+  // the reader's toggles (rules/content-classes.mjs, docs/route/orphan-text.md §8): a unit whose class they do not show is the
+  // original's, its row never taken, and awaited by no page; every class is translated on the server whatever they are, and a
+  // change of them opens the layer again, as a change of language does
+  const on = new Set(Object.entries({ ...TOGGLE_DEFAULTS, ...(classes ?? {}) }).filter(([, v]) => v).map(([k]) => k))
+  const kinds = sourceUnitsOf(source).map(u => (u ? unitClass(u) : null))
+  const shown = id => kinds[id] !== null && kinds[id] !== undefined && shownTranslated(kinds[id], on)
+  // (a unit of the paper's whose class is not shown: its row is not taken; a row of no unit is the take's to count)
+  const hidden = id => kinds[id] !== null && kinds[id] !== undefined && !shownTranslated(kinds[id], on)
+  const expect = layerIds(source, target).filter(shown)
   // (each cell's group as the units' cells give it: a group is read once its own cells' rows are in)
   const groups = new Map()
   sourceUnitsOf(source).forEach((u, id) => { const g = u ? groupOf(u) : null; if (g) groups.set(id, g) })
@@ -450,7 +460,11 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
     take(rows) {
       if (disposed) return { complete: [] }
       const got = new Map()
-      for (const row of rows) {
+      // (each row, and the rows of the ink units that echo its unit; a unit whose class is not shown none)
+      const all = [...rows]
+      all.push(...echoRows(source, all))
+      for (const row of all) {
+        if (Array.isArray(row) && Number.isSafeInteger(row[0]) && hidden(row[0])) continue
         const u = unitOf(source, row)
         if (u) { got.set(row[0], u); droppedRows.delete(row[0]); continue }
         dropped++

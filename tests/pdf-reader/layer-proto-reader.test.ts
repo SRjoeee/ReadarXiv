@@ -123,6 +123,18 @@ type Opened = Parameters<typeof import('@/pdf-reader/engine/layer-proto/run.mjs'
 afterEach(() => { vi.restoreAllMocks() })
 
 describe('the reader\'s door: two readers\' hosts are the same calls', () => {
+  it('awaits the units its toggles show: a class turned off is the original\'s, and a toggle that is none is refused', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const bundle = bundleOf(), doc = docOf()
+    const all = toTranslate(bundle, 'zh')
+    for (const [classes, want] of [[{ names: true }, all], [{ tables: false }, all.filter(id => id !== 1 && bundle.units[id]?.[0] !== 'cell')]] as const) {
+      const layer = await openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl, classes })
+      expect((seen.opens.at(-1) as unknown as Opened).expect).toEqual(want)
+      layer.dispose()
+    }
+    await expect(openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl, classes: { margins: true } } as never)).rejects.toThrow(/classes/)
+  })
+
   it('refuses a light index (M24): the layer needs the units\' bodies', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const light = { kind: 'index', light: true, sha256: 'a'.repeat(64), head: { paper: { pages: 1 } }, units: [], kinds: [], pieces: new Uint32Array(0), dropped: [], records: {} }
@@ -137,7 +149,9 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     expect(o.doc).toBe(doc)
     expect(o.geometry).toEqual({ schema: 1, kinds: bundle.left.kinds, left: { pages: bundle.left.pages, units: bundle.left.units } })
     expect(o.units).toEqual([])
-    expect(o.expect).toEqual(toTranslate(bundle, 'zh'))
+    // (the author block, unit 1, is the names toggle's, off where the reader has not turned it on: rules/content-classes.mjs
+    // TOGGLE_DEFAULTS)
+    expect(o.expect).toEqual(toTranslate(bundle, 'zh').filter(id => id !== 1))
     expect(o.groups).toEqual(new Map([[4, '0:h'], [5, '0:c0'], [6, '0:c0']]))
     expect(o.target).toBe('zh')
     expect([o.scale, o.dpr, o.copy, o.pages]).toEqual([2.5, 1, false, Number.POSITIVE_INFINITY])
@@ -289,7 +303,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     expect(layer.unitAt(3, 100, 262)).toBeNull()
     expect(layer.unitAt(1, Number.NaN, 262)).toBeNull()
     const s = layer.stats()
-    expect(s).toMatchObject({ units: toTranslate(bundle, 'zh').length, drawn: whole.stats.length, pages: [1, 2], dropped: 0, rules: { schema: 5, version: BUILTIN_RULES.version } })
+    expect(s).toMatchObject({ units: toTranslate(bundle, 'zh').filter(id => bundle.units[id]?.[0] !== 'author').length, drawn: whole.stats.length, pages: [1, 2], dropped: 0, rules: { schema: 5, version: BUILTIN_RULES.version } })
     expect(Object.keys(s.pageMs)).toEqual(['1', '2'])
     expect(s.slowestTaskMs).toBeGreaterThanOrEqual(0)
     layer.dispose()

@@ -59,9 +59,10 @@ function pieceFrom(p, k, at, units) {
     default: return null
   }
 }
-/** a unit as openPaper makes it, from the bundle's [kind, flags, depth, cell, edges, pieces]; null where it has no shape */
+/** a unit as openPaper makes it, from the bundle's [kind, flags, depth, cell, edges, pieces] (an ink unit's with its echo after:
+ *  units.mjs inkBundleUnitsOf); null where it has no shape */
 function unitFrom(b, at, units) {
-  if (!Array.isArray(b) || b.length !== 6) return null
+  if (!Array.isArray(b) || !(b.length === 6 || b.length === 7)) return null
   const [kind, flags, depth, cell, edges, list] = b
   if (typeof kind !== 'string' || !Number.isInteger(flags) || !Array.isArray(list)) return null
   const pieces = []
@@ -80,6 +81,8 @@ function unitFrom(b, at, units) {
     u.cell = { table: cell.table, row: cell.row, col: cell.col, span: cell.span, head: cell.head }
   }
   if (edges !== null && edges !== undefined && typeof edges === 'object') for (const e of EDGES) if (typeof edges[e] === 'string') u[e] = edges[e]
+  // (an ink unit's echo: the earlier unit whose row it is drawn with, never translated itself)
+  if (b.length === 7) { if (!(b[6] === null || (Number.isInteger(b[6]) && b[6] >= 0 && b[6] < at && units[b[6]]))) return null; if (b[6] !== null) u.echo = b[6] }
   return u
 }
 
@@ -121,9 +124,27 @@ const keptOf = (s, lang) => (authorsTranslated(lang) ? s.kept : s.keptAll)
  *  does not write them as the paper does (translate/kept.mjs authorsTranslated), the author block */
 export function toTranslate(bundle, lang) {
   const s = sourceOf(bundle), kept = keptOf(s, lang), ids = []
-  s.units.forEach((u, i) => { if (u && !kept.has(u)) ids.push(i) })
+  s.units.forEach((u, i) => { if (u && !kept.has(u) && u.echo === undefined) ids.push(i) })
   return ids
 }
+/** the ids whose rows a layer awaits, rising: those a language translates (toTranslate), and each ink unit whose echo is one of
+ *  them, whose row the layer makes of its echo's (echoRows) */
+export function layerIds(bundle, lang) {
+  const s = sourceOf(bundle), mine = new Set(toTranslate(bundle, lang)), ids = []
+  s.units.forEach((u, i) => { if (u && (mine.has(i) || (u.echo !== undefined && mine.has(u.echo)))) ids.push(i) })
+  return ids
+}
+/** the rows of the ink units that echo the units of `rows` (each [id, pieces, state, …]): the echo's row under the ink unit's id,
+ *  its pieces' k the ink unit's own (its pieces its echo's: units.mjs inkBundleUnitsOf, ink-units.mjs rule 5) */
+export function echoRows(bundle, rows) {
+  const s = sourceOf(bundle)
+  let by = ECHOES.get(s)
+  if (!by) { by = new Map(); s.units.forEach((u, i) => { if (u?.echo !== undefined) (by.get(u.echo) ?? by.set(u.echo, []).get(u.echo)).push(i) }); ECHOES.set(s, by) }
+  const out = []
+  for (const row of rows) if (Array.isArray(row)) for (const id of by.get(row[0]) ?? []) out.push([id, ...row.slice(1)])
+  return out
+}
+const ECHOES = new WeakMap()
 /** a language's batches in source order: the first up to FIRST_BATCH characters of plain source, the rest up to NEXT_BATCH */
 export function batchesOf(bundle, lang) {
   const s = sourceOf(bundle), out = []
