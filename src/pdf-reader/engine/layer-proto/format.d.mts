@@ -113,7 +113,7 @@ export interface BaseCheck { pages: [ours: number, arxiv: number]; boxes: 'equal
 /** a base of ours held as a delta over arXiv's PDF (`kind` 'delta'): `bytes` and `sha256` the delta section's, `xref` its
  *  startxref in the composed document (arXiv's bytes first), the check's pages [M, N] (M < N only for a paper of several
  *  toplevel sources), the pages it writes again (`replaced`, ranges within our M) and its counts */
-export interface DeltaBase { source: 'ours'; kind: 'delta'; bytes: number; sha256: string; xref: number; pages: number; tree: string; check: BaseCheck; replaced: [from: number, to: number][]; stats: import('../layout/delta.mjs').DeltaStats & Partial<WrapStats>; unhidden?: [unit: number, why: Unhidden][]; labelKept?: number[] }
+export interface DeltaBase { source: 'ours'; kind: 'delta'; bytes: number; sha256: string; xref: number; pages: number; tree: string; check: BaseCheck; replaced: [from: number, to: number][]; stats: import('../layout/delta.mjs').DeltaStats & Partial<WrapStats>; unhidden?: [unit: number, why: Unhidden][]; labelKept?: number[]; ledger?: import("../layout/ledger.mjs").LedgerSummary }
 /** our pages wrapped by optional content (layout/wrap.mjs): every unit with a group `axt:u<id>` and in neither list is the
  *  reader's to hide where it draws it; `unhidden` the units whose ink stays the original's and why, `labelKept` those whose
  *  label is left the original's ink (only the body drawn) */
@@ -124,7 +124,7 @@ export type Unhidden = import('../layout/delta-wire.mjs').Unhidden
  *  (absent: a head of 7, or a producer that made no base of its own). `xref`: the PDF's last cross-reference section's
  *  offset */
 export type HeadBase =
-  | { source: 'ours'; kind?: undefined; bytes: number; sha256: string; xref: number; pages: number; tree: string; check: BaseCheck; stats?: WrapStats; unhidden?: [unit: number, why: Unhidden][]; labelKept?: number[] }
+  | { source: 'ours'; kind?: undefined; bytes: number; sha256: string; xref: number; pages: number; tree: string; check: BaseCheck; stats?: WrapStats; unhidden?: [unit: number, why: Unhidden][]; labelKept?: number[]; ledger?: import("../layout/ledger.mjs").LedgerSummary }
   | DeltaBase
   | { source: 'arxiv'; bytes: number; sha256: string; xref: number; why?: LayoutRefused }
 export interface ReadHead {

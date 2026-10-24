@@ -47,4 +47,4 @@ export declare function orphanRows(ledger: Ledger, o: { paper: string }): Orphan
 export declare function inkLeft(ledger: Ledger, own: { glyphs: (string | null)[][] } | null, pages: LedgerPage[]): Ledger
 export interface HeadOrphanRow { inv: 'o'; sev: 'violation'; paper: string; page: number | null; unit: null; what: 'orphan text' | 'orphans not listed'; text: string; detail: { letters: number } }
 /** invariant (o) from a head's base ledger */
-export declare function orphanRowsOfHead(head: { base?: { ledger?: LedgerSummary } } | null | undefined, o: { paper: string }): HeadOrphanRow[]
+export declare function orphanRowsOfHead(head: { base?: { ledger?: LedgerSummary } | object } | null | undefined, o: { paper: string }): HeadOrphanRow[]

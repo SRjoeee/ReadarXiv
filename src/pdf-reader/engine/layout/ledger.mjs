@@ -207,7 +207,7 @@ export const HEAD_ORPHANS = 64, HEAD_TEXT = 120
 export function ledgerSummary(ledger) {
   const classes = []
   for (const id of CLASS_IDS) { const c = ledger.counts[id]; if (c.glyphs) classes.push(id, c.glyphs, c.letters) }
-  return { classes, letters: ledger.letters, orphanLetters: ledger.orphanLetters, orphans: ledger.orphans.slice(0, HEAD_ORPHANS).flatMap(o => [o.page, o.letters, o.text.slice(0, HEAD_TEXT)]) }
+  return { classes, letters: ledger.letters, orphanLetters: ledger.orphanLetters, orphans: ledger.orphans.slice(0, HEAD_ORPHANS).flatMap(o => [o.page, o.letters, o.text.replace(/\p{Cc}/gu, ' ').slice(0, HEAD_TEXT)]) }
 }
 
 /** the ledger once the ink units own what they own (layout/ink-units.mjs claimInk): its orphans the orphan glyphs no unit owns

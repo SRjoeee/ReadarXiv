@@ -761,7 +761,7 @@ function ledgerOf(K, l, N) {
   const orphans = []
   for (let j = 0; j < o.orphans.length; j += 3) {
     const page = o.orphans[j], letters = o.orphans[j + 1], text = o.orphans[j + 2]
-    if (!isInteger(page, 1, N) || !isInteger(letters, 0, Number.MAX_SAFE_INTEGER) || typeof text !== 'string' || text.length > HEAD_TEXT || /[\u0000-\u001f\u007f-\u009f]/u.test(text)) throw refuse(K, `base.ledger.orphans[${j}]`, `not a page 1 to ${N}, letters and a text of at most ${HEAD_TEXT} code units`)
+    if (!isInteger(page, 1, N) || !isInteger(letters, 0, Number.MAX_SAFE_INTEGER) || typeof text !== 'string' || text.length > HEAD_TEXT || /\p{Cc}/u.test(text)) throw refuse(K, `base.ledger.orphans[${j}]`, `not a page 1 to ${N}, letters and a text of at most ${HEAD_TEXT} code units`)
     orphans.push(page, letters, text)
   }
   return { classes, letters: o.letters, orphanLetters: o.orphanLetters, orphans }
