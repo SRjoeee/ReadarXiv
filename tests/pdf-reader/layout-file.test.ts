@@ -427,7 +427,7 @@ const ROWS: [string, Edit, string][] = [
   ['an id twice', f => { f.units[2][0] = f.units[1][0] }, 'units[2][0]'],
   ['a negative id', f => { f.units[0][0] = -1 }, 'units[0][0]'],
   ['a unit row of 4', f => { f.units[1].pop() }, 'units[1]'],
-  ['a kind of 9', f => { f.units[1][1] = 9 }, 'units[1][1]'],
+  ['a kind past UNIT_KINDS (13)', f => { f.units[1][1] = 13 }, 'units[1][1]'],
   ['depth 6', f => { f.units[1][2] = 6 }, 'units[1][2]'],
   ['depth -2', f => { f.units[1][2] = -2 }, 'units[1][2]'],
   ['depth 8', f => { f.units[1][2] = 8 }, 'units[1][2]'],

@@ -207,7 +207,7 @@ describe('ledgerOf', () => {
   it('summarizes as integers and gives the sweep\'s rows', () => {
     const pg = page({ point: 'bs1' }, { glyphs: run('Body', 100, 600), owner: 'u0' }, { glyphs: run('Lost words', 100, 580) }, { point: 'be1' })
     const l = ledger([pg], [{ kind: 'para' }])
-    expect(ledgerSummary(l)).toEqual({ classes: { body: [4, 4], orphan: [9, 9] }, letters: 13, orphanLetters: 9 })
+    expect(ledgerSummary(l)).toEqual({ classes: ['body', 4, 4, 'orphan', 9, 9], letters: 13, orphanLetters: 9, orphans: [1, 9, 'Lost words'] })
     expect(orphanRows(l, { paper: '2610.00001v1' })).toEqual([{ inv: 'o', sev: 'violation', paper: '2610.00001v1', page: 1, unit: null, what: 'orphan text', text: 'Lost words', detail: { letters: 9, x0: 100, x1: 150, y: 580 } }])
   })
 })

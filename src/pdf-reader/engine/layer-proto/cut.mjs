@@ -144,7 +144,9 @@ export async function wholeCutter(whole, o) {
   if (whole.layout) for (const u of whole.layout.units) if (!(u[0] < whole.units.length)) throw refuse('part', 'layout.units', `unit ${u[0]} is not a unit of the paper`)
 
   // units and head
-  const units = await writeUnitChunks({ paper, units: whole.units })
+  // (the ink units after the source units' in chunks of their own from `inkFrom`, INK_UNITS_FORMAT: format.mjs writeUnitChunks `start`)
+  const inkFrom = Number.isInteger(o.inkFrom) && o.inkFrom > 0 && o.inkFrom < whole.units.length ? o.inkFrom : null
+  const units = inkFrom === null ? await writeUnitChunks({ paper, units: whole.units }) : [...await writeUnitChunks({ paper, units: whole.units.slice(0, inkFrom) }), ...await writeUnitChunks({ paper, units: whole.units.slice(inkFrom), start: inkFrom })]
   const image = o.image ?? whole.versions?.image
   const base = o.base ?? whole.base
   const lineskip = 'lineskip' in o ? o.lineskip : whole.layout?.lineskip ?? null

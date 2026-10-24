@@ -173,9 +173,9 @@ one more units chunk, stores the ledger, reads invariant (o) and offers the togg
 4. **Translation.** The rows path translates the ink units like any unit, once on the server, whatever the toggles
    (`layer-proto/rows.mjs` `toTranslate`). An echo unit is never sent: its row is its echo's (`unitOf` takes the echo's row).
    The translation client needs no change beyond translating every chunk the head lists.
-5. **The record's ledger.** The head's base carries `ledger: { classes: { [class]: [glyphs, letters] }, letters, orphanLetters,
-   orphans: [[page, letters, text], …] }`, with at most 64 orphans and their text cut at 120 code units, written by the engine
-   from `ours.wrap.ledger`. The web stores it with the head; nothing else reads it.
+5. **The record's ledger.** The head's base carries `ledger: { classes: [class, glyphs, letters, …], letters, orphanLetters,
+   orphans: [page, letters, text, …] }`, flat (a head nests four deep at most), with at most 64 orphans and their text cut at 120
+   code units, written by the engine from `ours.wrap.ledger`. The web stores it with the head; nothing else reads it.
 6. **Invariant (o).** The sweep calls `orphanRowsOfHead(head, { paper })` (`layout/ledger.mjs`). That gives one row per listed
    orphan `{ inv: 'o', sev: 'violation', paper, page, unit: null, what: 'orphan text', text, detail: { letters } }`, plus one
    row `{ what: 'orphans not listed', detail: { letters } }` where `orphanLetters` passes the listed ones. A head without a

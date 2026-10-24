@@ -29,6 +29,7 @@ import { columnsOfTokens, pageColumns } from '../view/highlight.mjs'
 import { anchorUnits, boundsFromMarks, floatMatches, frameOfTokens, pageFrame, pageIndex } from './anchors.mjs'
 import { rangedAnchors } from './left-part.mjs'
 import { leftSideOf, leftSideStream } from './left-side.mjs'
+import { bundleWithInk, inkAnchors, inkOfHost, layoutWithInk, streamWithInk } from './ink-pass.mjs'
 import { isMemoryError } from './memory.mjs'
 
 /** units TeX sets away from where the source has them (anchors.mjs `floating`), as the maker and the web's left take them */
@@ -340,11 +341,11 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
       }
       if (held?.delta && held.delta.replaced.at(-1)[1] <= oursHead.check.pages[0]) {
         const d = held.delta
-        oursHead = { source: 'ours', kind: 'delta', bytes: d.bytes.length, sha256: d.sha256, xref: d.xref, pages: N, tree: oursHead.tree, check: oursHead.check, replaced: d.replaced, stats: { ...d.stats, ...(wrap ? wrap.stats : {}) }, ...(wrap ? { unhidden: wrap.unhidden, labelKept: wrap.labelKept } : {}) }
+        oursHead = { source: 'ours', kind: 'delta', bytes: d.bytes.length, sha256: d.sha256, xref: d.xref, pages: N, tree: oursHead.tree, check: oursHead.check, replaced: d.replaced, stats: { ...d.stats, ...(wrap ? wrap.stats : {}) }, ...(wrap ? { unhidden: wrap.unhidden, labelKept: wrap.labelKept } : {}), ...(wrap?.ledger ? { ledger: wrap.ledger } : {}) }
         deltaStat = { kind: 'delta', bytes: d.bytes.length, replaced: d.stats.replaced }
       } else {
         if (held) deltaStat = { kind: 'full', why: held.why ?? 'delta-shape', ...(held.reason ? { reason: held.reason } : {}) }
-        if (wrap) oursHead = { ...oursHead, stats: wrap.stats, unhidden: wrap.unhidden, labelKept: wrap.labelKept }
+        if (wrap) oursHead = { ...oursHead, stats: wrap.stats, unhidden: wrap.unhidden, labelKept: wrap.labelKept, ...(wrap.ledger ? { ledger: wrap.ledger } : {}) }
       }
     }
   }
@@ -356,7 +357,11 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   const leftFloats = left.tokens === text.tokens ? floatMatches(text.tokens, texts, floating) : floatMatches(left.tokens, texts, floating)
   // (the maker's, of its own document's tokens: our base page's, else arXiv's)
   const floatMatch = baseText && baseText !== text ? floatMatches(baseText.tokens, texts, floating) : left.tokens === text.tokens ? leftFloats : floatMatches(text.tokens, texts, floating)
-  const bundle = bundleUnitsOf(source)
+  // the ink units the wrap made of text no source unit owns (pipeline/ink-pass.mjs, docs/route/orphan-text.md §8): units after the
+  // source units', where our base page is the base and each of their pages is drawable; none else
+  const ink = oursHead ? inkOfHost(ours?.ink, source, lineCheck?.undrawable ?? []) : null
+  const bundle = bundleWithInk(bundleUnitsOf(source), ink)
+  const inkLeft = ink ? inkAnchors(left.tokens, ink) : null
   // the rule set's frame and columns, of arXiv's text alone where it says so (rules 1 and 4: made once, at step T), each side's
   // of its own tokens; else the rules given (pageFrame and pageColumns by default: the whole run's)
   const frameOn = tokens => (rules.frame === 'tokens' ? (F => () => F)(frameOfTokens(tokens)) : frameGiven)
@@ -374,7 +379,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   const given = oracle ? { makerFrame: () => oracle.frame, columnEdges: oracle.columnEdges, leftFrame: () => oracle.leftFrame, columns: () => oracle.columns } : { makerFrame: frame, columnEdges: null, leftFrame: leftFrameRule, columns }
   if (marked && streams) {
     if (oracle) for (const k of ['frame', 'columnEdges', 'leftFrame', 'columns']) if (oracle[k] === undefined) throw new TypeError(`oracle.${k}: a whole run's (capture), for the marked original read a page at a time`)
-    const r = await markedStream({ draw, paper, units, texts, floating, text, baseText, left, leftFloats, floatMatch, bundle, marked, markedOptions, doc: baseDoc, N, OPS, pdfjs, bases: { ours: oursHead, orig: origRef }, deltaStat, lineCheck, image, onHead, onLeft, onPart, verdicts, given, rules, inFloat, forward, several })
+    const r = await markedStream({ draw, paper, units, texts, floating, text, baseText, left, leftFloats, floatMatch, bundle, ink, inkLeft, marked, markedOptions, doc: baseDoc, N, OPS, pdfjs, bases: { ours: oursHead, orig: origRef }, deltaStat, lineCheck, image, onHead, onLeft, onPart, verdicts, given, rules, inFloat, forward, several })
     if (r) return r
     marks = { refused: 'marks' }
   } else if (marked) {
@@ -386,6 +391,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   const unitMarks = marks && 'marks' in marks ? marks.unitMarks : null
   const leftFrame = capture ? (d, ms) => { capture.leftFrame = leftFrameRule(d, ms); return capture.leftFrame } : leftFrameRule
   const anchors = anchorUnits(left.tokens, texts, { ...(unitMarks ? { bounds: boundsFromMarks(left.tokens, unitMarks) } : {}), floating, floatMatch: leftFloats, frame: leftFrame, forward })
+  if (inkLeft) for (const [id, a] of inkLeft) anchors.set(id, a)
   const leftColumns = capture ? (v, a, k) => { capture.columns = (columns ?? pageColumns)(v, a, k); return capture.columns } : columns
   const side = leftSideOf({ doc: left.tokens, views: text.views, anchors, edges: left.edges, ...(leftColumns ? { columns: leftColumns } : {}) })
   if (side.units.length === 0) return { refused: 'anchors', why: 'the anchors located no unit on arXiv\'s PDF' }
@@ -405,7 +411,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
     }
   } else made = { refused: marks?.refused ?? 'marks', ...(marks?.why ? { why: marks.why } : {}), ...(marks?.own ? { own: marks.own } : {}) }
 
-  const ctx = { paper, N, bases: { ours: oursHead, orig: origRef }, deltaStat, lines: lineCheck?.pageLines ?? null, image, pdfjs, onHead, onLeft, onPart, verdicts, side, bundle, made, maker, several }
+  const ctx = { paper, N, bases: { ours: oursHead, orig: origRef }, deltaStat, lines: lineCheck?.pageLines ?? null, image, pdfjs, onHead, onLeft, onPart, verdicts, side, bundle, ink, made, maker, several }
   if (maker && streams) {
     // (the maker's throws are the layout's, its own calls' alone: a sink's, the reader's or the cutter's go on as themselves)
     let st = null
@@ -416,7 +422,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
       if (isMemoryError(e)) throw e
       ctx.made = { refused: 'failed', why: why(e) }
     }
-    if (st) return streamed(ctx, { maker, st, lineskip: marks.marks.marking.lineskip ?? null, left: wholeLeft(side), drive: arxivDrive(maker, st, N) })
+    if (st) return streamed(ctx, { maker, st: streamWithInk(st, ink), lineskip: marks.marks.marking.lineskip ?? null, left: wholeLeft(side), drive: arxivDrive(maker, st, N) })
     return cutWhole(ctx, null)
   }
   // (stage 1: the whole made first)
@@ -433,7 +439,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
       r = null
     }
   }
-  return cutWhole(ctx, r && 'file' in r ? r : null)
+  return cutWhole(ctx, r && 'file' in r ? { ...r, file: layoutWithInk(r.file, ink, ink ? ink.units.map(u => u.id) : []) } : null)
 }
 
 /** our lines in place on arXiv's PDF of marked pages a to b of N (to the marked original's end with the paper's last), and
@@ -499,7 +505,7 @@ async function cutWhole(ctx, r) {
   const { base, orig } = headBaseOf(ctx, !!layout)
   const state = { index: null, chain: null, read: null }
   const whole = { paper: { ...paper, pages: N }, base, orig, versions: { image }, units: bundle, left: { pages: side.pages, units: side.units }, layout }
-  const { units: chunks, head, cutter, known } = await wholeCutter(whole, { draw: drawsOurs(base, ctx.maker), leftPages: drawsOurs(base, ctx.maker) ? drawn(side.leftPages, ctx.maker) : side.leftPages, base, orig, image, rules: cellRules, verdict: ctx.verdicts ? verdictOf(state) : null, recordOf: layoutRecordOf, ...(layout ? {} : { noLayout: layoutRecordOf(ctx.made) }) })
+  const { units: chunks, head, cutter, known } = await wholeCutter(whole, { draw: drawsOurs(base, ctx.maker), leftPages: drawsOurs(base, ctx.maker) ? drawn(side.leftPages, ctx.maker) : side.leftPages, base, orig, image, rules: cellRules, verdict: ctx.verdicts ? verdictOf(state) : null, recordOf: layoutRecordOf, ...(ctx.ink ? { inkFrom: ctx.ink.base } : {}), ...(layout ? {} : { noLayout: layoutRecordOf(ctx.made) }) })
   if (ctx.verdicts) state.index = await indexOfHead(head, chunks)
   if (ctx.onHead) await ctx.onHead(head, chunks)
   for (;;) {
@@ -547,7 +553,7 @@ const wholeLeft = side => {
 async function streamed(ctx, { maker, st, lineskip, left, drive }) {
   const { paper, N, image, bundle } = ctx
   const lines = ctx.lines ?? (maker ? maker.pageLines() : new Map())
-  const units = await writeUnitChunks({ paper, units: bundle })
+  const units = await chunksOf(paper, bundle, ctx.ink)
   const { base, orig } = headBaseOf(ctx, !!st)
   const head = await writeHead({ paper: { ...paper, pages: N }, base, orig, image, units, lineskip, draw: drawsOurs(base, maker) })
   const state = { index: ctx.verdicts ? await indexOfHead(head, units) : null, chain: null, read: null }
@@ -714,6 +720,13 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
   return { through: N, count: cutter.parts.length, stats: { left: left.stats, layout: layoutStats, rules: st?.cellRules ? { pages: ruled + st.cellRules.size } : null, ...(maker ? { draw: { ...maker.drawStats, shed: ctx.drawShed ?? 0 } } : {}), closed, ...(ctx.several ? { toplevels: ctx.several } : {}), ...deltaOfStats(ctx, base) } }
 }
 
+/** the bundle's units' chunks: the source units' as the prepare child wrote them (writeUnitChunks of the source units alone, byte for
+ *  byte), then the ink units' from their first id (INK_UNITS_FORMAT), so that the host announces those it has and the maker's */
+async function chunksOf(paper, bundle, ink) {
+  if (!ink) return writeUnitChunks({ paper, units: bundle })
+  return [...await writeUnitChunks({ paper, units: bundle.slice(0, ink.base) }), ...await writeUnitChunks({ paper, units: bundle.slice(ink.base), start: ink.base })]
+}
+
 /** the drive with the marks given: arXiv's pages in order, each read and its stream told */
 const arxivDrive = (maker, st, N) => async ({ making, close, read }) => {
   for (let p = 1; p <= N; p++) {
@@ -729,10 +742,12 @@ const arxivDrive = (maker, st, N) => async ({ making, close, read }) => {
  * them, or every unit where the marks are none (`unitMarks` null), unbounded from the start. `page(p)` the marked page p read;
  * `end()` every page read, or the reading given up (a mark not read has no word: no bounds)
  */
-function streamingLeft({ doc, views, edges, texts, floating, floatMatch, frame, columns, unitMarks, forward = null }) {
+function streamingLeft({ doc, views, edges, texts, floating, floatMatch, frame, columns, unitMarks, forward = null, ink = null, inkLeft = null }) {
   const n = texts.length, byPage = pageIndex(doc)
+  // (the ink units after the source units': their anchors known from the start, inkAnchors')
+  const total = ink ? n + ink.units.length : n
   const side = leftSideStream({ doc, views, edges, columns })
-  const done = new Uint8Array(n)
+  const done = new Uint8Array(total)
   let doneCount = 0, pending = 0
   const pairs = new Map()
   const R = rangedAnchors(doc, texts, { floating, floatMatch, frame, boundsKnown: () => pending === 0, forward })
@@ -760,9 +775,10 @@ function streamingLeft({ doc, views, edges, texts, floating, floatMatch, frame, 
   const settle = u => { if (!done[u]) { done[u] = 1; doneCount++ } }
   const run = () => R.run((id, an) => { side.add(id, an); settle(id) }, u => { side.none(u); settle(u) })
   run()
+  if (ink) for (const u of ink.units) { const an = inkLeft?.get(u.id) ?? null; if (an) side.add(u.id, an); else side.none(u.id); settle(u.id) }
   return {
     pages: side.pages, leftPages: side.leftPages, units: side.units, firstPage: side.firstPage, stats: side.stats,
-    done: i => done[i] === 1, all: () => doneCount === n, frontier: () => R.am, firstTok: p => (p <= lastPage ? R.firstTok[p] : doc.length),
+    done: i => done[i] === 1, all: () => doneCount === total, frontier: () => R.am, firstTok: p => (p <= lastPage ? R.firstTok[p] : doc.length),
     /** a number that changes whenever the units done or the frontier do (both only grow) */
     version: () => doneCount * (lastPage + 2) + R.am,
     page(p) { resolve(pairs.get(p) ?? []); pairs.delete(p); run() },
@@ -781,23 +797,23 @@ function streamingLeft({ doc, views, edges, texts, floating, floatMatch, frame, 
  * going on with the unit marks read (the whole path refuses the marks then, its left placed without them: not this one's)
  */
 async function markedStream(o) {
-  const { paper, units, texts, floating, text, baseText, left, leftFloats, floatMatch, bundle, marked, markedOptions, doc, N, OPS, pdfjs, bases, deltaStat, lineCheck, image, onHead, onLeft, onPart, verdicts, given, rules, inFloat, forward, several } = o
+  const { paper, units, texts, floating, text, baseText, left, leftFloats, floatMatch, bundle, ink, inkLeft, marked, markedOptions, doc, N, OPS, pdfjs, bases, deltaStat, lineCheck, image, onHead, onLeft, onPart, verdicts, given, rules, inFloat, forward, several } = o
   const events = markedPages(marked.doc, marked.log, markedOptions)
   let head = null
   try { head = (await events.next()).value?.head ?? null } catch (e) { if (isMemoryError(e)) throw e }
   if (!head) return null
-  const L = streamingLeft({ doc: left.tokens, views: text.views, edges: left.edges, texts, floating, floatMatch: leftFloats, frame: given.leftFrame, columns: given.columns, unitMarks: head.unitMarks, forward })
+  const L = streamingLeft({ doc: left.tokens, views: text.views, edges: left.edges, texts, floating, floatMatch: leftFloats, frame: given.leftFrame, columns: given.columns, unitMarks: head.unitMarks, forward, ink, inkLeft })
   let maker = null, st = null, made = null
   try {
     maker = await makerOf({ units, marks: marksOfHead(head, markedOptions.engine), arxiv: doc, OPS, paper, left: '', pdfjs, text: baseText ?? text, lineCheck, floatMatch, frame: given.makerFrame, cellRules: true, parts: true, draw: o.draw, rules, inFloat, ...(given.columnEdges ? { columnEdges: given.columnEdges } : {}) })
-    if (maker.refused) { made = { refused: maker.refused, stats: maker.stats }; maker = null } else st = maker.stream({ marked: head })
+    if (maker.refused) { made = { refused: maker.refused, stats: maker.stats }; maker = null } else st = streamWithInk(maker.stream({ marked: head }), ink)
   } catch (e) {
     if (isMemoryError(e)) throw e
     made = { refused: 'failed', why: why(e) }
     maker = null
   }
   const M = head.pages
-  const ctx = { paper, N, bases, deltaStat, lines: lineCheck?.pageLines ?? null, image, pdfjs, onHead, onLeft, onPart, verdicts, bundle, made, several }
+  const ctx = { paper, N, bases, deltaStat, lines: lineCheck?.pageLines ?? null, image, pdfjs, onHead, onLeft, onPart, verdicts, bundle, ink, made, several }
   let broken = null
   const drive = async ({ making, close, read }) => {
     for (let t = 1; t <= Math.max(M, N); t++) {

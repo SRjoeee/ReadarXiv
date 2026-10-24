@@ -35,7 +35,8 @@
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { DELTA_OBJECTS_MAX, deltaSection, rangesOf, UNHIDDEN_MAX } from './delta-wire.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, pageInk } from './ink.mjs'
-import { ledgerOf, ledgerSummary } from './ledger.mjs'
+import { claimInk, inkUnitsOf } from './ink-units.mjs'
+import { inkLeft, ledgerOf, ledgerSummary } from './ledger.mjs'
 import { followsOf } from './marks.mjs'
 import { ownOf, UNHIDDEN } from './own.mjs'
 import { alignOf, DecodeLimit, lex, LexLimit, openRemover } from './remove.mjs'
@@ -550,7 +551,8 @@ export { UNHIDDEN_MAX }
  * `labelKept` the unit ids whose label is left the original's ink, each of the units with a group in the document alone (a
  * unit with none is the original's: no reader can hide it), `pages` the pages wrapped as ranges (the host's delta must replace
  * every one: layerOfPaper refuses a delta that does not), `own` own.mjs's stats (the record's), `ledger` the content classes'
- * counts (layout/ledger.mjs ledgerSummary: integers, for the record; nothing reads them yet), `owned` own.mjs's whole result and
+ * counts and first orphans (layout/ledger.mjs ledgerSummary: the head's base `ledger`), `ink` the ink units (layout/ink-units.mjs:
+ * { base, units }, the page pass's `ours.ink`, opaque to the host), `owned` own.mjs's whole result and
  * `ledgerWhole` the ledger's where `keepOwned` (the lab's); `bounds` { groupsPage, sequencesPage, groupsDoc } wrapOf's (tests) — or { refused (WRAP_WHYS), why }: the paper's
  * base is then arXiv's PDF. Never throws but a failed allocation
  */
@@ -600,8 +602,14 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   // pairs, or a Map; a cell's lead macro is owned by them alone, own.mjs)
   const shown = texts instanceof Map ? texts : Array.isArray(texts) ? new Map(Array.from({ length: Math.floor(texts.length / 2) }, (_, j) => [texts[2 * j], texts[2 * j + 1]]).filter(([a, b]) => typeof a === 'string' && typeof b === 'string')) : null
   const own = ownOf(pages, { units, follows, texts: shown })
-  // (every glyph's content class: the record's counts, the sweep's orphans; layout/ledger.mjs)
-  const ledger = ledgerOf(pages, own, { units })
+  // (every glyph's content class: the record's counts, the sweep's orphans; layout/ledger.mjs), then the ink units, the text no
+  // source unit owns made units of our glyphs (layout/ink-units.mjs), their glyphs claimed before the wrap is planned, so that
+  // each is hidden by its own groups as any unit is; the ledger's orphans those no unit owns still. None where the source is
+  // not read (units null: no id to start from, no echo)
+  const classed = ledgerOf(pages, own, { units })
+  const ink = units ? inkUnitsOf(pages, classed, { units }) : []
+  claimInk(own, ink)
+  const ledger = ink.length ? inkLeft(classed, own, pages) : classed
   const plans = new Map()
   pages.forEach((pg, i) => { if (facts[i] && pg.points.length) plans.set(i + 1, { facts: facts[i], ...planOf(pg.glyphs, own.glyphs[i], pg.paths, own.boxes[i]) }) })
   const made = await wrapOf(finalBytes, plans, { PL, deflate, inflate, ...bounds })
@@ -628,7 +636,7 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   if (unhidden.length > UNHIDDEN_MAX || labelKept.length > UNHIDDEN_MAX) return { refused: 'wrap-bound', why: `${unhidden.length} units the original's, past ${UNHIDDEN_MAX}` }
   const stats = { ...made.stats, unhidden: counts, labelKept: labelKept.length }
   const wrappedPages = rangesOf([...made.pages].filter(([, x]) => x.ok).map(([p]) => p))
-  return { bytes: made.bytes, xref: made.xref, sha256: made.sha256, stats, unhidden, labelKept, pages: wrappedPages, own: { ...own.stats, unhidden: counts }, ledger: ledgerSummary(ledger), ...(keepOwned ? { owned: own, ledgerWhole: ledger } : {}) }
+  return { bytes: made.bytes, xref: made.xref, sha256: made.sha256, stats, unhidden, labelKept, pages: wrappedPages, own: { ...own.stats, unhidden: counts }, ledger: ledgerSummary(ledger), ink: { base: units ? units.length : 0, units: ink.map(({ id, kind, cls, echo, pieces, rows }) => ({ id, kind, cls, echo, pieces, rows })) }, ...(keepOwned ? { owned: own, ledgerWhole: ledger } : {}) }
 }
 
 export { alignOf }

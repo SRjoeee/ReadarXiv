@@ -30,6 +30,7 @@ import { BundleRefusal, originalUrl, segmentOf } from './bundle.mjs'
 import { checkDraw, DrawRefusal, wireOf } from './draw.mjs'
 import { sourceUnitsOf } from './rows.mjs'
 import { CELL, EDGES, unitStands } from './units.mjs'
+import { CLASS_IDS } from '../rules/content-classes.mjs'
 
 // ---------------------------------------------------------------- the versions and the bounds
 /** the format: raised with any change to the shape of a head, part, left part or catalog, and with it the CTAG. 6: a part
@@ -45,14 +46,22 @@ import { CELL, EDGES, unitStands } from './units.mjs'
  *  text-removed PDF's add-on (`addon`, its manifest and tail), no tail follows a part, and our base page is wrapped by optional
  *  content (the head's `base.stats`, `unhidden`, `labelKept`): a reader of 8 refuses a part of 9, and this one a part of 8, so
  *  a bundle of 8 is not found under 9's CTAG and is prepared again. The head's and the catalog's shapes are 8's. This reader
- *  reads 7's objects as well (BUNDLES_READ): a head of 7 is one over arXiv's PDF */
-export const BUNDLE5 = '9'
+ *  reads 7's objects as well (BUNDLES_READ): a head of 7 is one over arXiv's PDF. 10 (docs/route/orphan-text.md §8): the ink units,
+ *  text no source unit owns made units of our glyphs, after the source units' in a chunk of INK_UNITS_FORMAT, of kinds UNIT_KINDS
+ *  names after the source units' (a reader of 9 refuses their layout rows), and the head's base of ours carries its content
+ *  classes' ledger (`ledger`); this reader reads 9's objects unchanged (none holds either) */
+export const BUNDLE5 = '10'
 /** the formats this reader takes: its own, and 7's (a bundle drawn over arXiv's PDF, whose objects 9 reads unchanged: its
  *  head is read as `base.source` 'arxiv', with no `orig`). Every object of a bundle is of its head's format */
-export const BUNDLES_READ = Object.freeze(['7', BUNDLE5])
+export const BUNDLES_READ = Object.freeze(['7', '9', BUNDLE5])
 /** a units chunk's own format (amendment M12): raised only by a change to the chunk's shape, so that a change to a part's
  *  shape renames no unit identity and redoes no translation */
 export const UNITS_FORMAT = '1'
+/** the ink units' chunk's format (docs/route/orphan-text.md §8): UNITS_FORMAT's, an ink unit's tuple with its echo besides
+ *  (units.mjs inkBundleUnitsOf); the source units' chunks stay UNITS_FORMAT's, byte for byte */
+export const INK_UNITS_FORMAT = '2'
+/** the units chunks' formats this reader takes */
+export const UNITS_FORMATS_READ = Object.freeze([UNITS_FORMAT, INK_UNITS_FORMAT])
 /** the reader's contract, `b<BUNDLE5>-j<PDFJS>`: what a reader asks by. Named with the 5 beside bundle.mjs's CTAG (BUNDLE
  *  3's) whatever BUNDLE5's value: the web's service and readers import BUNDLE5, CTAG5 and VTAG5 by these names */
 export const CTAG5 = `b${BUNDLE5}-j${PDFJS}`
@@ -196,7 +205,7 @@ function exactKeys(kind, v, keys, path) {
  *  refused for what it is before its other keys are looked at; `optional`: keys that may be there besides `keys`. `of`: the
  *  format the object must be of (its head's), where it is known */
 function envelope(kind, v, keys, optional = [], of = null) {
-  const tag = kind === 'units' ? 'format' : 'bundle', want = kind === 'units' ? [UNITS_FORMAT] : of === null ? BUNDLES_READ : [of]
+  const tag = kind === 'units' ? 'format' : 'bundle', want = kind === 'units' ? UNITS_FORMATS_READ : of === null ? BUNDLES_READ : [of]
   if (!isObject(v)) throw refuse(kind, '', `not an object (${kindOf(v)})`)
   if (!want.includes(v[tag])) throw refuse(kind, tag, `not this reader's ${want.map(w => `'${w}'`).join(' or ')} (${typeof v[tag] === 'string' ? told(v[tag]) : kindOf(v[tag])})`)
   if (v.kind !== kind) throw refuse(kind, 'kind', `not a ${kind} (${typeof v.kind === 'string' ? told(v.kind) : kindOf(v.kind)})`)
@@ -448,7 +457,7 @@ export async function readUnitsChunk(bytes, { ref, before = null, dropped: dropp
     if (droppedBefore !== undefined) for (const d of droppedBefore) stands[d] = 0
   }
   for (let i = 0; i < units.length; i++) {
-    if (unitStands(units[i], from + i, stands)) stands[from + i] = 1
+    if (unitStands(units[i], from + i, stands, { ink: v.format === INK_UNITS_FORMAT })) stands[from + i] = 1
     else { units[i] = null; dropped.push(from + i) }
   }
   // (a paper with more dropped units than a service forwards is junk: the chain is read as the standalone start would be told it)
@@ -471,7 +480,7 @@ function unitText(u) {
   const cell = u[3] === null ? null : Object.fromEntries(CELL.map(k => [k, u[3][k]]))
   let edges = null
   if (u[4] !== null) { edges = {}; for (const k of EDGES) if (Object.hasOwn(u[4], k)) edges[k] = u[4][k] }
-  return JSON.stringify([u[0], u[1], u[2], cell, edges, u[5]])
+  return JSON.stringify(u.length === 7 ? [u[0], u[1], u[2], cell, edges, u[5], u[6]] : [u[0], u[1], u[2], cell, edges, u[5]])
 }
 
 /** the flags of a unit's record (amendment M15): the bundle's own unit flags (UNIT_FLAG_BITS: TITLE, FRONT, BRACKETED, KEPT) and
@@ -583,18 +592,21 @@ const tooLarge = (what, bound, size) => new BundleRefusal('units-too-large', { k
  * more than CHUNKS_MAX, or their bytes or values in all past UNITS_TOTAL_BYTES or UNITS_TOTAL_VALUES. Each chunk gives its
  * `values`, as the reader counts them
  */
-export async function writeUnitChunks({ paper, units }) {
+export async function writeUnitChunks({ paper, units, start = 0 }) {
   const K = 'units'
   const p = { id: paper.id, version: paper.version }
   if (!isPaperId(p.id) || !isInteger(p.version, 1, VERSION_MAX)) throw new RangeError('not a paper version')
-  const head = (from, to) => `{"format":"${UNITS_FORMAT}","kind":"units","paper":${JSON.stringify(p)},"pipeline":${JSON.stringify(PIPELINE_VERSION)},"ids":[${from},${to}],"units":[`
+  // (the ink units' chunks from `start`, after the source units', of INK_UNITS_FORMAT; every other one of UNITS_FORMAT, as before)
+  if (!isInteger(start, 0, UNIT_ID_MAX)) throw new RangeError('start: not an id')
+  const format = start > 0 ? INK_UNITS_FORMAT : UNITS_FORMAT
+  const head = (from, to) => `{"format":"${format}","kind":"units","paper":${JSON.stringify(p)},"pipeline":${JSON.stringify(PIPELINE_VERSION)},"ids":[${start + from},${start + to}],"units":[`
   // (the envelope's values do not depend on the digits of `ids`; its bytes do)
   const envelopeBytes = (from, to) => encoder.encode(head(from, to)).length + 2
   const envelopeValues = countValues(`${head(0, 0)}]}`)
-  const texts = [], out = [], stands = new Uint8Array(units.length)
+  const texts = [], out = [], stands = new Uint8Array(start + units.length).fill(1, 0, start)
   let from = 0, bytes = 0, values = 0, totalBytes = 0, totalValues = 0
   const close = async to => {
-    out.push(await finish(K, `${head(from, to)}${texts.slice(from, to + 1).join(',')}]}`, UNITS_DEF, p, { from, to }))
+    out.push(await finish(K, `${head(from, to)}${texts.slice(from, to + 1).join(',')}]}`, UNITS_DEF, p, { from: start + from, to: start + to }))
     const c = out[out.length - 1]
     totalBytes += c.bytes.length
     totalValues += c.values
@@ -603,8 +615,8 @@ export async function writeUnitChunks({ paper, units }) {
     if (totalValues > UNITS_TOTAL_VALUES) throw tooLarge('values', UNITS_TOTAL_VALUES, totalValues)
   }
   for (let i = 0; i < units.length; i++) {
-    if (!unitStands(units[i], i, stands)) throw Object.assign(refuse(K, '', `unit ${i}: does not stand (a shape the reader would drop, or a nested unit that does not stand)`), { id: i })
-    stands[i] = 1
+    if (!unitStands(units[i], start + i, stands, { ink: start > 0 })) throw Object.assign(refuse(K, '', `unit ${start + i}: does not stand (a shape the reader would drop, or a nested unit that does not stand)`), { id: start + i })
+    stands[start + i] = 1
     const text = unitText(units[i])
     const size = encoder.encode(text).length, count = inside(K, '', () => countValues(text, UNITS_VALUES, UNITS_DEPTH - 2))
     texts.push(text)
@@ -727,6 +739,33 @@ function wrapOf(K, stats, b) {
   return { stats: { ...Object.fromEntries(WRAP_STATS.map(k => [k, k === 'unhidden' ? { ...stats.unhidden } : stats[k]])) }, unhidden: b.unhidden.map(r => [r[0], r[1]]), labelKept: [...b.labelKept] }
 }
 const BASE_ARXIV = ['source', 'bytes', 'sha256', 'xref']
+/** a base of ours' content-class ledger (layout/ledger.mjs ledgerSummary, docs/route/orphan-text.md §8), an optional key, flat:
+ *  `classes` [class, glyphs, letters, …] each class once, `letters`, `orphanLetters`, `orphans` [page, letters, text, …] at most
+ *  HEAD_ORPHANS, each text at most HEAD_TEXT code units of no control character */
+const LEDGER_KEYS = ['classes', 'letters', 'orphanLetters', 'orphans']
+const HEAD_ORPHANS = 64, HEAD_TEXT = 120
+function ledgerOf(K, l, N) {
+  const o = exactKeys(K, l, LEDGER_KEYS, 'base.ledger')
+  if (!Array.isArray(o.classes) || o.classes.length % 3 !== 0 || o.classes.length > 3 * CLASS_IDS.length) throw refuse(K, 'base.ledger.classes', `not [class, glyphs, letters, …] (${kindOf(o.classes)})`)
+  const classes = [], seen = new Set()
+  for (let j = 0; j < o.classes.length; j += 3) {
+    const c = o.classes[j], g = o.classes[j + 1], l = o.classes[j + 2]
+    if (typeof c !== 'string' || !CLASS_IDS.includes(c) || seen.has(c)) throw refuse(K, `base.ledger.classes[${j}]`, 'not a class, each once')
+    if (!isInteger(g, 0, Number.MAX_SAFE_INTEGER) || !isInteger(l, 0, g)) throw refuse(K, `base.ledger.classes[${j + 1}]`, 'not glyphs and letters, integers, letters no more than glyphs')
+    seen.add(c)
+    classes.push(c, g, l)
+  }
+  count(K, o.letters, 'base.ledger.letters')
+  if (count(K, o.orphanLetters, 'base.ledger.orphanLetters') > o.letters) throw refuse(K, 'base.ledger.orphanLetters', 'more than the letters')
+  if (!Array.isArray(o.orphans) || o.orphans.length % 3 !== 0 || o.orphans.length > 3 * HEAD_ORPHANS) throw refuse(K, 'base.ledger.orphans', `not [page, letters, text, …] of at most ${HEAD_ORPHANS}`)
+  const orphans = []
+  for (let j = 0; j < o.orphans.length; j += 3) {
+    const page = o.orphans[j], letters = o.orphans[j + 1], text = o.orphans[j + 2]
+    if (!isInteger(page, 1, N) || !isInteger(letters, 0, Number.MAX_SAFE_INTEGER) || typeof text !== 'string' || text.length > HEAD_TEXT || /[\u0000-\u001f\u007f-\u009f]/u.test(text)) throw refuse(K, `base.ledger.orphans[${j}]`, `not a page 1 to ${N}, letters and a text of at most ${HEAD_TEXT} code units`)
+    orphans.push(page, letters, text)
+  }
+  return { classes, letters: o.letters, orphanLetters: o.orphanLetters, orphans }
+}
 const CHECK_KEYS = ['pages', 'boxes', 'carried']
 /** the TeX Live year our base was compiled on, as the compile's banner names it */
 const TREE = /^\d{4}$/
@@ -767,12 +806,13 @@ function baseShape(K, v, bundle, N) {
   if (!BASE_KINDS.includes(kind)) throw refuse(K, 'base.kind', `not one of ${BASE_KINDS.join(', ')} (${typeof kind === 'string' ? told(kind) : kindOf(kind)})`)
   if (kind === 'delta') return deltaShape(K, v, N)
   const wrapped = Object.hasOwn(v.base, 'stats') || Object.hasOwn(v.base, 'unhidden') || Object.hasOwn(v.base, 'labelKept')
-  const b = exactKeys(K, v.base, [...BASE_OURS, ...(Object.hasOwn(v.base, 'kind') ? ['kind'] : []), ...(wrapped ? WRAP_KEYS : [])], 'base')
+  const b = exactKeys(K, v.base, [...BASE_OURS, ...(Object.hasOwn(v.base, 'kind') ? ['kind'] : []), ...(wrapped ? WRAP_KEYS : []), ...(Object.hasOwn(v.base, 'ledger') ? ['ledger'] : [])], 'base')
   pdfRef(K, b, 'base', true)
   const check = oursCommon(K, b, N, false)
   const o = origOf(K, v)
   const wrap = wrapped ? wrapOf(K, b.stats, b) : null
-  return { base: { source: 'ours', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check, ...(wrap ? { stats: wrap.stats, unhidden: wrap.unhidden, labelKept: wrap.labelKept } : {}) }, orig: o }
+  const ledger = Object.hasOwn(b, 'ledger') ? ledgerOf(K, b.ledger, N) : null
+  return { base: { source: 'ours', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check, ...(wrap ? { stats: wrap.stats, unhidden: wrap.unhidden, labelKept: wrap.labelKept } : {}), ...(ledger ? { ledger } : {}) }, orig: o }
 }
 
 /** arXiv's PDF beside a base of ours (`orig`), required there; of a delta's, with its startxref (`xref`: the section the
@@ -808,7 +848,7 @@ function count(K, v, path) {
  *  after arXiv's bytes: `xref` within the delta, read in the composed document's offsets); no `over` (orig says it) */
 function deltaShape(K, v, N) {
   const wrapped = Object.hasOwn(v.base, 'unhidden') || Object.hasOwn(v.base, 'labelKept')
-  const b = exactKeys(K, v.base, wrapped ? [...BASE_DELTA, 'unhidden', 'labelKept'] : BASE_DELTA, 'base')
+  const b = exactKeys(K, v.base, [...(wrapped ? [...BASE_DELTA, 'unhidden', 'labelKept'] : BASE_DELTA), ...(Object.hasOwn(v.base, 'ledger') ? ['ledger'] : [])], 'base')
   if (b.kind !== 'delta') throw refuse(K, 'base.kind', `not 'delta' (${typeof b.kind === 'string' ? told(b.kind) : kindOf(b.kind)})`)
   const o = origOf(K, v, true)
   if (!isInteger(b.bytes, 1, DELTA_MAX_BYTES)) throw refuse(K, 'base.bytes', `not an integer 1 to ${DELTA_MAX_BYTES}`)
@@ -826,7 +866,7 @@ function deltaShape(K, v, N) {
   if (included.bytes > b.bytes) throw refuse(K, 'base.stats.included.bytes', 'more than the delta\'s bytes')
   if (included.objects < st.replaced) throw refuse(K, 'base.stats.included.objects', 'fewer than the pages it replaces')
   return {
-    base: { source: 'ours', kind: 'delta', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check, replaced: b.replaced.map(r => [r[0], r[1]]), stats: { replaced: st.replaced, reused: Object.fromEntries(DELTA_REUSED.map(k => [k, reused[k]])), included: { bytes: included.bytes, objects: included.objects }, ...(wrap ? wrap.stats : {}) }, ...(wrap ? { unhidden: wrap.unhidden, labelKept: wrap.labelKept } : {}) },
+    base: { source: 'ours', kind: 'delta', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check, replaced: b.replaced.map(r => [r[0], r[1]]), stats: { replaced: st.replaced, reused: Object.fromEntries(DELTA_REUSED.map(k => [k, reused[k]])), included: { bytes: included.bytes, objects: included.objects }, ...(wrap ? wrap.stats : {}) }, ...(wrap ? { unhidden: wrap.unhidden, labelKept: wrap.labelKept } : {}), ...(Object.hasOwn(b, 'ledger') ? { ledger: ledgerOf(K, b.ledger, N) } : {}) },
     orig: o,
   }
 }
@@ -896,8 +936,8 @@ export async function readHead(bytes, { ref, caps }) {
 const checkWire = c => ({ pages: [c?.pages?.[0], c?.pages?.[1]], boxes: c?.boxes, carried: isNumber(c?.carried) ? r4(c.carried) : c?.carried })
 const baseWire = b => (b.source === 'ours'
   ? b.kind === 'delta'
-    ? { source: 'ours', kind: 'delta', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check: checkWire(b.check), replaced: b.replaced, stats: b.stats, ...(b.unhidden ? { unhidden: b.unhidden, labelKept: b.labelKept } : {}) }
-    : { source: 'ours', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check: checkWire(b.check), ...(b.unhidden ? { stats: b.stats, unhidden: b.unhidden, labelKept: b.labelKept } : {}) }
+    ? { source: 'ours', kind: 'delta', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check: checkWire(b.check), replaced: b.replaced, stats: b.stats, ...(b.unhidden ? { unhidden: b.unhidden, labelKept: b.labelKept } : {}), ...(b.ledger ? { ledger: b.ledger } : {}) }
+    : { source: 'ours', bytes: b.bytes, sha256: b.sha256, xref: b.xref, pages: b.pages, tree: b.tree, check: checkWire(b.check), ...(b.unhidden ? { stats: b.stats, unhidden: b.unhidden, labelKept: b.labelKept } : {}), ...(b.ledger ? { ledger: b.ledger } : {}) }
   : { source: 'arxiv', bytes: b.bytes, sha256: b.sha256, xref: b.xref, ...(b.why === undefined || b.why === null ? {} : { why: b.why }) })
 
 /** the head written: the paper, the base (baseShape's: ours with `orig`, arXiv's PDF; or arXiv's), the versions this engine

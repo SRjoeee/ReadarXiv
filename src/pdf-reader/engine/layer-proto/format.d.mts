@@ -1,7 +1,7 @@
 // format.mjs's types: the layer's wire format, BUNDLE 4 (the prepare pipeline's bundle 4 contract)
 import type { LayoutFile, LayoutPart } from '../layout/file.mjs'
 import type { ReadBundle } from './bundle.mjs'
-import type { BundleUnit } from './units.mjs'
+import type { BundleUnit, InkBundleUnit } from './units.mjs'
 import type { Draw, DrawSource } from './draw.mjs'
 
 export type { UnitWire } from './bundle.mjs'
@@ -11,7 +11,7 @@ import type { UnitWire } from './bundle.mjs'
 /** the format: raised with any change to the shape of a head, part, left part or catalog; 6, a part with no layout says why;
  *  7, a left part's draw items carry their fills; 8, the head's base says whose PDF the layer is drawn over (ours or arXiv's)
  *  and `orig` names arXiv's beside ours, the catalog names the base */
-export declare const BUNDLE5: '9'
+export declare const BUNDLE5: '10'
 /** the formats a reader takes: its own and 7's (a bundle drawn over arXiv's PDF; its head read as `base.source` 'arxiv') */
 export declare const BUNDLES_READ: readonly ['7', '8']
 /** whose PDF a layer is drawn over: our compile's final pass, or arXiv's */
@@ -30,6 +30,8 @@ export declare const RETRY_LIMITS: readonly ['wall', 'budget']
 export declare const baseRefusalRetryable: (refusal: unknown) => boolean
 /** a units chunk's own format (envelope `"format":"1"`): raised only by a change to the chunk's shape */
 export declare const UNITS_FORMAT: '1'
+export declare const INK_UNITS_FORMAT: '2'
+export declare const UNITS_FORMATS_READ: readonly string[]
 /** the reader's contract, `b<BUNDLE5>-j<PDFJS>`, named with the 5 beside bundle.mjs's CTAG whatever BUNDLE5's value */
 export declare const CTAG5: string
 /** the content's, `<CTAG5>-p<PIPELINE>-l<LAYOUT>-r<REMOVAL>`: a key's directory, the catalog's name */
@@ -292,7 +294,7 @@ export interface Written {
 }
 /** the units as chunks, greedy by id; a unit past either cap alone throws BundleRefusal (`kind` 'units', and `id`), and the
  *  chunks past CHUNKS_MAX, UNITS_TOTAL_BYTES or UNITS_TOTAL_VALUES `units-too-large` (its `data` { what, bound, size }) */
-export declare function writeUnitChunks(o: { paper: { id: string; version: number }; units: readonly BundleUnit[] }): Promise<(Written & { from: number; to: number })[]>
+export declare function writeUnitChunks(o: { paper: { id: string; version: number }; units: readonly (BundleUnit | InkBundleUnit)[]; start?: number }): Promise<(Written & { from: number; to: number })[]>
 export declare function writeHead(o: {
   paper: { id: string; version: number; pages: number }
   /** the PDF the layer is drawn over; one given with no `source` is arXiv's (as every base was before BUNDLE 8) */

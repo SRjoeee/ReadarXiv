@@ -50,7 +50,9 @@ describe('the wrap on hand-written pages (S1, S6, S9–S12; G1, G2)', () => {
     const { bytes } = await markedSample({ pages: [2], edit: only(S1()) })
     const r = ok(await wrapped(bytes, { units: S1_UNITS }))
     expect(r.unhidden).toEqual([])
-    expect(r.stats.groups).toBe(3)
+    // (on page 2 the units' three, and the ink unit of the run between them no unit owns, `and`: layout/ink-units.mjs; the
+    // sample's other pages' text no unit of these three owns is ink units of its own)
+    expect(r.ink.units.filter(u => u.rows.lines[0] === 2).map(u => [u.kind, u.pieces])).toEqual([['inkorphan', [{ t: 'text', s: 'and' }]]])
     expect(pixelsApart(await renderPage(bytes, 2), await renderPage(r.bytes, 2))).toBe(0)
     for (const u of [0, 1, 2]) {
       const { bytes: oracle } = await markedSample({ pages: [2], edit: only(S1(u)) })

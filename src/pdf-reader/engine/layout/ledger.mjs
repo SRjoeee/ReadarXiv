@@ -82,14 +82,16 @@ const ownerClass = (group, units) => {
  * form }, stream order), `boxes`, `points` ({ name, glyph, box }) —; `own`, ownOf's result for them (its `glyphs[p - 1][g]`, a
  * group or null); `units`, the paper's units (their ids their indices), or null (every unit's class then `body`).
  * Returns { classes: per page a Uint8Array, each glyph's class code (CLASS_IDS); counts: { [class]: { glyphs, letters } } over
- * the glyphs that are no blank, a glyph's letters those it spells (a ligature's each); letters, the letters of the document; orphanLetters; orphans: the orphan lines, at most
+ * the glyphs that are no blank, a glyph's letters those it spells (a ligature's each); lines, every line of glyphs no unit owns in
+ * stream order, { page, cls, gs (its glyphs' indices on its page), region, zone, y, size, x0, x1, letters } (the ink units'
+ * input: layout/ink-units.mjs); letters, the letters of the document; orphanLetters; orphans: the orphan lines, at most
  * ORPHAN_LINES_MAX, each { page, text, letters, x0, x1, y } }
  */
 export function ledgerOf(pages, own, { units = null } = {}) {
   const counts = Object.fromEntries(CLASS_IDS.map(id => [id, { glyphs: 0, letters: 0 }]))
   const fam = new Map()
   const famOf = name => { let f = fam.get(name); if (f === undefined) { f = classifyFont(name ?? '').fam; fam.set(name, f) } return f }
-  const classes = [], orphans = []
+  const classes = [], orphans = [], lines = []
   let zone = null, letters = 0, orphanLetters = 0
   pages.forEach((pg, pi) => {
     const G = pg.glyphs ?? [], n = G.length, P = pg.points ?? [], O = own?.glyphs?.[pi] ?? []
@@ -118,6 +120,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
       Object.assign(line, wordsOf(line.gs.map(g => G[g]), famOf))
       const rule = RULES.find(r => r.test(line))
       for (const g of line.gs) out[g] = rule.code
+      lines.push({ page: pi + 1, cls: rule.cls, gs: line.gs, region: line.region, zone: line.zone, y: line.y, size: line.size, x0: line.x0, x1: line.x1, letters: line.letters })
       if (rule.cls === 'orphan') {
         orphanLetters += line.letters
         if (orphans.length < ORPHAN_LINES_MAX) orphans.push({ page: pi + 1, text: textOf(line.gs.map(g => G[g])).slice(0, TEXT_MAX), letters: line.letters, x0: line.x0, x1: line.x1, y: line.y })
@@ -153,7 +156,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
       c.letters += k; letters += k
     }
   })
-  return { classes, counts, letters, orphanLetters, orphans }
+  return { classes, counts, letters, orphanLetters, orphans, lines }
 }
 
 /** where a page's foot begins among its glyphs (its glyph count where it has none): the run of glyphs that ends its stream,
@@ -195,14 +198,52 @@ function textOf(gs) {
   return s.replace(/\s+/g, ' ').trim()
 }
 
-/** the ledger as a record holds it: integers alone — each class's [glyphs, letters] where it has any, the document's letters
- *  and its orphan letters */
+/** the orphans a head lists at most, and an orphan's text there at most (the web contract, docs/route/orphan-text.md §8) */
+export const HEAD_ORPHANS = 64, HEAD_TEXT = 120
+
+/** the ledger as a head holds it, flat (a head nests four deep at most): `classes` [class, glyphs, letters, …] for each class
+ *  that has a glyph, the document's `letters` and its `orphanLetters`, and its first HEAD_ORPHANS orphans, `orphans` [page,
+ *  letters, text cut at HEAD_TEXT, …] */
 export function ledgerSummary(ledger) {
-  const classes = {}
-  for (const id of CLASS_IDS) { const c = ledger.counts[id]; if (c.glyphs) classes[id] = [c.glyphs, c.letters] }
-  return { classes, letters: ledger.letters, orphanLetters: ledger.orphanLetters }
+  const classes = []
+  for (const id of CLASS_IDS) { const c = ledger.counts[id]; if (c.glyphs) classes.push(id, c.glyphs, c.letters) }
+  return { classes, letters: ledger.letters, orphanLetters: ledger.orphanLetters, orphans: ledger.orphans.slice(0, HEAD_ORPHANS).flatMap(o => [o.page, o.letters, o.text.slice(0, HEAD_TEXT)]) }
+}
+
+/** the ledger once the ink units own what they own (layout/ink-units.mjs claimInk): its orphans the orphan glyphs no unit owns
+ *  still, counted and listed again; its classes as they were (an ink unit's glyph keeps its line's class). `own` ownOf's,
+ *  claimed; `pages` the ledger's */
+export function inkLeft(ledger, own, pages) {
+  let orphanLetters = 0
+  const orphans = []
+  for (const l of ledger.lines) {
+    if (l.cls !== 'orphan') continue
+    const G = pages[l.page - 1]?.glyphs ?? [], O = own?.glyphs?.[l.page - 1] ?? []
+    const left = l.gs.filter(g => !O[g])
+    const n = left.reduce((k, g) => k + (G[g]?.blank ? 0 : lettersOf(G[g]?.u)), 0)
+    if (!n) continue
+    orphanLetters += n
+    if (orphans.length < ORPHAN_LINES_MAX) orphans.push({ page: l.page, text: textOf(left.map(g => G[g])).slice(0, TEXT_MAX), letters: n, x0: l.x0, x1: l.x1, y: l.y })
+  }
+  return { ...ledger, orphanLetters, orphans }
 }
 
 /** the sweep's invariant (o), no orphan letters: a row a listed orphan line, in the sweep's shape (scripts/sweep/invariants.mjs
  *  of the web), every row a violation */
 export const orphanRows = (ledger, { paper }) => ledger.orphans.map(o => ({ inv: 'o', sev: 'violation', paper, page: o.page, unit: null, what: 'orphan text', text: o.text, detail: { letters: o.letters, x0: o.x0, x1: o.x1, y: o.y } }))
+
+/** invariant (o) from a head (its base's `ledger`, ledgerSummary's): a row a listed orphan, and one for the orphan letters the head
+ *  does not list; none for a head with no ledger (an older engine's) */
+export function orphanRowsOfHead(head, { paper }) {
+  const l = head?.base?.ledger
+  if (!l || !Array.isArray(l.orphans)) return []
+  const rows = []
+  let listed = 0
+  for (let j = 0; j + 2 < l.orphans.length; j += 3) {
+    const [page, letters, text] = l.orphans.slice(j, j + 3)
+    rows.push({ inv: 'o', sev: 'violation', paper, page, unit: null, what: 'orphan text', text, detail: { letters } })
+    listed += letters
+  }
+  if (Number.isInteger(l.orphanLetters) && l.orphanLetters > listed) rows.push({ inv: 'o', sev: 'violation', paper, page: null, unit: null, what: 'orphans not listed', text: '', detail: { letters: l.orphanLetters - listed } })
+  return rows
+}

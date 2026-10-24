@@ -1,0 +1,27 @@
+// ink-units.mjs's types
+import type { Ledger, LedgerPage } from './ledger.mjs'
+/** the ledger's classes made units, and each one's kind */
+export declare const INK_KIND: Readonly<{ heads: 'inkheads'; contents: 'inkcontents'; notes: 'inknotes'; orphan: 'inkorphan' }>
+export declare const BLOCK_DY: number
+export type InkKind = 'inkheads' | 'inkcontents' | 'inknotes' | 'inkorphan'
+/** an ink unit's piece: the front end's shapes (a text, a placeholder; an echo's its source unit's pieces) */
+export type InkPiece = { t: 'text'; s: string; src?: string } | { t: 'ph'; src: string } | { t: 'open' | 'close'; id: number; src: string }
+/** an ink unit's rows as the layout file holds a unit's: `unit` [id, kind, depth, flags, pieces]; `lines` 8 numbers a line, the
+ *  face's name at 7 (the page pass gives it its index); `frames` 6 a frame; `erase` 5 a rectangle; `ph` a placeholder's row,
+ *  its kind by name */
+export interface InkRows {
+  unit: [id: number, kind: InkKind, depth: number, flags: number, pieces: number]
+  lines: (number | string)[]
+  frames: number[]
+  erase: number[]
+  ph: [k: number, kind: 'math' | 'url', flags: number, ...segments: number[]][]
+}
+export interface InkUnit {
+  id: number; kind: InkKind; cls: 'heads' | 'contents' | 'notes' | 'orphan'; echo: number | null; pieces: InkPiece[]
+  glyphs: { text: [page: number, glyph: number][]; ph: [page: number, glyph: number][] }
+  rows: InkRows
+}
+/** the ink units as the wrap gives them on (`ours.ink`): their ids from `base` */
+export interface InkOfWrap { base: number; units: Omit<InkUnit, 'glyphs'>[] }
+export declare function inkUnitsOf(pages: (LedgerPage & { view: number[] })[], ledger: Ledger, o?: { units?: readonly { kind?: string; pieces?: readonly InkPiece[] }[] | null }): InkUnit[]
+export declare function claimInk(own: { glyphs: (string | null)[][] }, ink: readonly InkUnit[]): number

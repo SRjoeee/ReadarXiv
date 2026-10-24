@@ -23,5 +23,7 @@ export declare const CLASS_CODE: Readonly<Record<ClassId, number>>
 export declare const UNIT_CLASS: Readonly<Record<string, ClassId>>
 /** a unit's class: of the front end's unit, of the bundle's, or of a kind; null for none */
 export declare function unitClass(u: string | { kind?: unknown } | readonly unknown[] | null | undefined): ClassId | null
+/** each toggle's default where a reader has set none */
+export declare const TOGGLE_DEFAULTS: Readonly<Record<Exclude<Toggle, 'always' | 'never'>, boolean>>
 /** whether a class is shown translated under a reader's toggles turned on */
 export declare function shownTranslated(cls: string, on: ReadonlySet<string> | null | undefined): boolean
