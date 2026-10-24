@@ -68,3 +68,10 @@ pnpm exec tsx lab/pdf/spikes/classes-gate.mjs --base=<next's tree> --compile --d
 - On the way, at the first run: plainnat's `410\penalty0 (19):\penalty0` before a line break gave the penalty the next line's pages
   for its number (arg-roles.mjs's value reader), so 42 entries' ink spelled no source (2609.26457v1 15, 2610.21176v1 15,
   2610.21085v1 12): fixed, a number TeX reads ends where TeX ends it; no body unit of the 32 papers moved with it.
+
+## Again after the review round (20d6bcd4, merged with `next` 9f94ae09)
+
+This branch alone, held to the same dumps of `next` 499d1dfb: the units the same on all 32 papers (an entry with no author is no
+names unit, an accented piece keeps its numbers: neither shape in these sources), every entry located (930 and 736), no body unit
+or placeholder lost, gained or moved, G1 0 pixels on the 67 pages, the same 6 entries left the original's. Orphan letters 7,293:
+#468's label groups (theorem heads, a proof's joint) take more of the pages' letters, on papers with no entry too.
