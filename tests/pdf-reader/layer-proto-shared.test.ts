@@ -53,8 +53,27 @@ describe('a shared line with something kept between the two units (2610.21098 p2
     const run = await laid(listed(66))
     const a = linesOf(run, 0)!, [b] = linesOf(run, 1)!
     const onRow = a.filter(l => Math.abs(l[1] - 226) < 10)
+    expect(onRow.length, 'a line of it on the shared row').toBeGreaterThan(0)
     expect(onRow.every(l => l[7] <= 150 + 0.01), `its lines on the row end at ${onRow.map(l => l[7])}`).toBe(true)
     expect([b![1], b![6]]).toEqual([226, 170])
+  })
+
+  it('only its line nearest the shared row ends there, where its rows stand closer than an em (Devin\'s review of #460)', async () => {
+    // (10 pt type on rows 8 pt apart: the row before the shared one is within an em of it, and was cut to the shared row's end
+    // too, though nothing of the next item stands on it)
+    const tight: Paper = {
+      name: 'inline list, tight rows', pages: 1, extra: [line(1, 234, '(2)', 154, 166)], specs: [
+        { id: 0, kind: 'para', lines: [line(1, 250, 'Uniaxial tension experiments', 20, 280), line(1, 242, 'usually consider traction-free', 20, 280), line(1, 234, 'conditions. The', 20, 150)], chars: 60, at: 0x4e00 },
+        { id: 1, kind: 'para', lines: [line(1, 234, 'Under the routed', 170, 280), line(1, 226, 'of the volumetric stretch can', 20, 280), line(1, 218, 'be tuned by the slenderness', 20, 280)], chars: 30, at: 0x5100 },
+      ],
+    }
+    const run = await laid(tight)
+    const a = linesOf(run, 0)!
+    const nearest = a.reduce((n, l) => (Math.abs(l[1] - 234) < Math.abs(n[1] - 234) ? l : n))
+    expect(nearest[7], `the line nearest the row (${nearest[1]}) ends where TeX ended the unit there`).toBeLessThanOrEqual(150 + 0.01)
+    const others = a.filter(l => l !== nearest && l !== a.at(-1))
+    expect(others.length).toBeGreaterThan(0)
+    expect(others.every(l => l[7] > 150 + 0.01), `the lines above it end at ${others.map(l => `${l[1]}:${l[7]}`)}`).toBe(true)
   })
 })
 

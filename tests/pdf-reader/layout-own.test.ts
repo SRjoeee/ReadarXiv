@@ -124,6 +124,8 @@ describe('the spell check (§1.3)', () => {
     for (const t of ['Table S3:', 'Figure S5:', 'Fig. A1.', 'Table B.2:', 'Algorithm S1']) expect(isLabelForm(t), t).toBe(true)
     // (a number with a letter before it alone is no label: a model's name, a placeholder's text at a unit's start)
     for (const t of ['A100', 'S3', 'GPT4']) expect(isLabelForm(t), t).toBe(false)
+    // (the letter stands before a number alone: two letters after a name are no number, CodeRabbit's review of #460)
+    for (const t of ['Figure AB', 'Table SS', 'Figure SII:']) expect(isLabelForm(t), t).toBe(false)
   })
 })
 
