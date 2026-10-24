@@ -23,8 +23,8 @@
    "fmtutil": "r77314"
   }
  },
- "made": "2026-10-24T20:52:07.057Z",
- "digest": "093304a2bc54dc9e36c631f2be17dccda2016cae509c9040e324c4daed7b6b0d",
+ "made": "2026-10-24T20:41:50.029Z",
+ "digest": "dc7193b4f767325e2975fcf5f99f8694e08269316db85b0fe5559d9514477521",
  "bucket": "readarxiv-ci",
  "files": [
   {
@@ -1661,9 +1661,9 @@
   },
   {
    "path": "fixtures/2609.26457v1-zh/record.json",
-   "sha256": "1ef2342a1609169832a7ed55fe3132ac9c684545dd50097fe7e03ea95ab56be2",
+   "sha256": "80cf0a2c8112b88d76ba71d7be40c2758fd489e9ce00fb8b064eef5393dae206",
    "bytes": 205289,
-   "url": "r2://readarxiv-ci/gate-pack/1ef2342a1609169832a7ed55fe3132ac9c684545dd50097fe7e03ea95ab56be2"
+   "url": "r2://readarxiv-ci/gate-pack/80cf0a2c8112b88d76ba71d7be40c2758fd489e9ce00fb8b064eef5393dae206"
   },
   {
    "path": "fixtures/2609.26457v1-zh/units.json",
@@ -1745,9 +1745,9 @@
   },
   {
    "path": "geometry/2609.26457v1-zh-geometry.json",
-   "sha256": "0ec7940987aefc09c3018862b51c06f81aac280229e571e4a6d5a04d36cce4c9",
+   "sha256": "5874586dead01883afab58ec19c7a6b7ffd02268005c0a1e5aca8a79b0784672",
    "bytes": 25899,
-   "url": "r2://readarxiv-ci/gate-pack/0ec7940987aefc09c3018862b51c06f81aac280229e571e4a6d5a04d36cce4c9"
+   "url": "r2://readarxiv-ci/gate-pack/5874586dead01883afab58ec19c7a6b7ffd02268005c0a1e5aca8a79b0784672"
   },
   {
    "path": "refs/1512.03385v1-de/layout.json",
