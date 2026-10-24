@@ -1,6 +1,6 @@
 # The content classes' stage 4: references and names (lab/pdf/spikes/classes-gate.mjs)
 
-Stage 4 of `docs/route/orphan-text.md` (`docs/PDF-READER.md` §19.12): a bibliography's entries units of their own, marked in the
+Stage 4 of `docs/route/orphan-text.md` (`docs/PDF-READER.md` §19.13): a bibliography's entries units of their own, marked in the
 bibliography's TeX, and the author block sent for every target. Counts and ids only.
 
 ## Run of 2026-10-25 (engine `feat/references-names` at 064ad3eb, against `next` 499d1dfb)

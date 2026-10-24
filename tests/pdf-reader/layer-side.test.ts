@@ -1000,6 +1000,20 @@ describe("the reader's toggles (setClasses, docs/route/orphan-text.md §8)", () 
     await settle(s)
     expect(s.opens).toBe(2)
   })
+  it('toggles turned while the door opens: the door in place takes them, opened again once the open under way is in', async () => {
+    let release = () => {}
+    const s = await setup({ door: { rows: 'gate' }, openHold: new Promise<void>(r => { release = r }) })
+    await nearOn(s, [1, 2])
+    s.side.tell(await ALL())
+    // (the open under way, held at the door, took the toggles as they were: the defaults)
+    for (let i = 0; i < 50 && s.opens === 0; i++) await new Promise(r => setTimeout(r, 0))
+    expect(s.opens).toBe(1)
+    s.side.setClasses({ figures: true })
+    release()
+    await settle(s)
+    expect(s.doors.at(-1)?.classes).toEqual({ figures: true })
+    expect(s.layer()).toBe(s.doors.at(-1)?.layer)
+  })
 })
 
 describe('another target over the same layer (retarget)', () => {

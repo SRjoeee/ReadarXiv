@@ -21,6 +21,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { readBundle } from '../../../src/pdf-reader/engine/layer-proto/bundle.mjs'
 import { cutBundle } from '../../../src/pdf-reader/engine/layer-proto/cut.mjs'
+import { figureUnits } from '../../../src/pdf-reader/engine/pipeline/page-pass.mjs'
 import { checkDelta, deltaKey, indexOf, readCatalog, readHead, readPart, readUnitsChunk, writeCatalog } from '../../../src/pdf-reader/engine/layer-proto/format.mjs'
 import { deltaOf, proveDelta } from '../../../src/pdf-reader/engine/layout/delta.mjs'
 import { layerRows, sourceUnitsOf, toTranslate } from '../../../src/pdf-reader/engine/layer-proto/rows.mjs'
@@ -29,7 +30,7 @@ import { createHash } from 'node:crypto'
 import { anchorUnits, tokenizeDocument } from '../../../src/pdf-reader/engine/pipeline/anchors.mjs'
 import { drawDataOf } from '../../../src/pdf-reader/engine/pipeline/draw-data.mjs'
 import { leftSideOf } from '../../../src/pdf-reader/engine/pipeline/left-side.mjs'
-import { textsShown } from '../../../src/pdf-reader/engine/translate/mt.mjs'
+import { proseOf, textsShown } from '../../../src/pdf-reader/engine/translate/mt.mjs'
 
 const PDFJS = dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'))
 /** the kinds TeX sets away from where the source has them (anchorUnits' `floating`) */
@@ -93,13 +94,17 @@ export async function cutSample({ pdf, bundle, wrapped, wrap }, { base: kind = '
     base = { source: 'ours', kind: 'delta', bytes: made.delta.length, sha256: made.sha256, xref: made.xref, pages: N, tree: '2025', check: { pages: [N, N], boxes: 'equal', carried: 1 }, replaced: made.replaced, stats: { ...made.stats, ...wrap.stats }, ...fields }
     delta = { bytes: made.delta.length, sha256: made.sha256, key: deltaKey(read.paper.id, read.paper.version, made.sha256), xref: made.xref, replaced: made.replaced, data: made.delta }
   }
+  // (the figures' text the wrap drew, units of kind figtext after the bundle's own and their rows by page, as the page pass adds them:
+  // page-pass.mjs figureUnits over the wrap's `figures`)
+  const allUnits = [...raw.units]
+  const figures = figureUnits(wrap.figures, { bundle: allUnits, undrawable: [], M: N, prose: proseOf(units) })
   const whole = {
     paper: read.paper, base, orig, versions: { image: read.versions.image },
-    units: raw.units, left: { pages: side.pages, units: side.units }, layout: read.layout, rules: read.rules,
+    units: allUnits, left: { pages: side.pages, units: side.units }, layout: read.layout, rules: read.rules,
   }
   // (each left part carries its page's draw, a page with no tokens its draw alone (C1.5), as the page pass ships them under a head
   // of ours; the head says they come)
-  const cut = await cutBundle(whole, { draw: true, leftPages: p => { const l = side.leftPages(p), d = pages[p - 1].draw; return d ? { ...(l ?? {}), draw: d } : l } })
+  const cut = await cutBundle(whole, { draw: true, figures, ...(allUnits.length > raw.units.length ? { inkFrom: raw.units.length } : {}), leftPages: p => { const l = side.leftPages(p), d = pages[p - 1].draw; return d ? { ...(l ?? {}), draw: d } : l } })
   const objects = new Map()
   for (const w of [...cut.units, cut.head, ...cut.parts, ...cut.left]) objects.set(w.sha256, w.bytes)
   // the index and the chain as the service reads them: the cut is held to its own readers

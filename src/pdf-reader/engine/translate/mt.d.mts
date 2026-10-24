@@ -83,5 +83,7 @@ export declare const WIRE: {
 }
 /** whether a short text (a table cell, a figure label) is only a name, judged against the paper's prose */
 export declare function isName(text: string, prose: string): boolean
+/** the running text isName reads a short text against: every unit's text but a table cell's and a figure's */
+export declare function proseOf(units: readonly ({ kind: string; pieces: Piece[] } | null | undefined)[]): string
 /** the table cells and figure texts that are only names: they keep their source */
 export declare function nameCells<U extends { kind: string; pieces: Piece[] }>(units: U[]): Set<U>

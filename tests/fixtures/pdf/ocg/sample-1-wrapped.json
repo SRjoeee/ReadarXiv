@@ -1,12 +1,12 @@
 {
- "bytes": 247051,
- "sha256": "995fc2b94834af1565fc418ae859cff1bb87b14f2e4a9c7abbbe394535bde683",
- "xref": 245986,
+ "bytes": 247250,
+ "sha256": "b8f0ea447e70c1f9368b762e8963cb65655939494fd24f7e2d954e8f858b975d",
+ "xref": 246171,
  "stats": {
   "wrapped": 4,
   "refusedPages": 0,
   "split": 0,
-  "groups": 103,
+  "groups": 105,
   "unhidden": {
    "marks": 2,
    "across": 0,
@@ -17,5 +17,56 @@
   "labelKept": 0
  },
  "unhidden": [],
- "labelKept": []
+ "labelKept": [],
+ "figures": {
+  "units": [
+   {
+    "page": 3,
+    "group": "f0",
+    "text": "start",
+    "font": "MRKXSA+CMR10",
+    "size": 10.9091,
+    "fill": 0,
+    "angle": 0,
+    "x": 224.517,
+    "y": 601.5780000000001,
+    "ux": 1,
+    "uy": 0,
+    "length": 22.51529149000001,
+    "ascent": 0.88,
+    "descent": -0.15,
+    "anchor": "end",
+    "form": false
+   },
+   {
+    "page": 3,
+    "group": "f1",
+    "text": "goal",
+    "font": "MRKXSA+CMR10",
+    "size": 10.9091,
+    "fill": 0,
+    "angle": 0,
+    "x": 368.089,
+    "y": 708.788,
+    "ux": 1,
+    "uy": 0,
+    "length": 19.39419798,
+    "ascent": 0.88,
+    "descent": -0.20600000023841528,
+    "anchor": "centre",
+    "form": false
+   }
+  ],
+  "stats": {
+   "units": 2,
+   "drawn": 2,
+   "letters": 9,
+   "forms": 0,
+   "crowded": 0,
+   "unicode": 0,
+   "shared": 0,
+   "page": 0,
+   "bounds": 0
+  }
+ }
 }

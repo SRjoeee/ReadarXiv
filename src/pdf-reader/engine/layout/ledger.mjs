@@ -8,7 +8,7 @@
 // font (a math or a typewriter face) and whether it is a letter.
 //
 // Rules, in order (RULES; each tested):
-//   1. an owned glyph is its owner's class: a unit's (u<id>, u<id>.p, u<id>.l) by its kind (content-classes.mjs unitClass), a
+//   1. an owned glyph is its owner's class: a unit's (u<id>, u<id>.p, u<id>.l) by its kind (content-classes.mjs unitClass), a figure's ink unit's (f<k>, layout/figure-text.mjs) `figures`, a
 //      babel name's (n<occ>) `generated`;
 //   2. the other glyphs, in stream order, make lines: a glyph joins the line before it where both are no unit's, in one region
 //      and one zone, on one baseline (within LINE_DY of their size: scripts and sub-scripts too) and no further right than
@@ -77,6 +77,8 @@ export const RULES = Object.freeze([
 const UNIT_GROUP = /^u(\d+)(?:\.[pl])?$/
 const ownerClass = (group, units) => {
   if (group.startsWith('n')) return 'generated'
+  // (a figure's ink unit, layout/figure-text.mjs: f<k>)
+  if (group.startsWith('f')) return 'figures'
   const m = UNIT_GROUP.exec(group)
   return (m && units ? unitClass(units[Number(m[1])]) : null) ?? 'body'
 }

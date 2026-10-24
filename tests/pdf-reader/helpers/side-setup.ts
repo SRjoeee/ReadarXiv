@@ -96,6 +96,8 @@ export interface Options {
   /** the door refuses to open, as openLayer refuses a document of another page count; or the opens (0 the first) that do */
   openFails?: boolean
   openFailAt?: readonly number[]
+  /** each open held until this settles (an open under way, for what lands meanwhile) */
+  openHold?: Promise<void>
   /** the host's getDocument options (the kit's assets) in place of the fakes' */
   assets?: Record<string, unknown>
   /** the fake door's links of a laid page (the door's own gives none); `n` the page, `door` its index (0 the first opened) */
@@ -165,6 +167,7 @@ export async function setup(o: Options = {}): Promise<Setup> {
     },
     openLayer: (async (oo: OpenLayerOptions) => {
       opens++
+      if (o.openHold) await o.openHold
       if (o.openFails || o.openFailAt?.includes(opens - 1)) throw new BundleRefusal('the document has 9 pages, not 4', { kind: 'part', path: 'doc' })
       const layer = o.real ? await o.real.openLayer(oo) : await door.openLayer(oo)
       live = layer

@@ -43,7 +43,16 @@ export interface InkPoint { name: string; glyph: number; box: number }
  *  each MERGED in `paths`); `rotated` when the page's /Rotate is not 0 (then nothing is returned) */
 /** a paragraph's point (`q<n>`), kept apart from the marks' points */
 export declare const PARA_POINT: RegExp
-export declare function pageInk(OPS: Record<string, number>, ops: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }, commonObjs: { get(id: string): unknown }, o: { rotate: number; indices?: boolean; outlines?: ReadonlyMap<string, number[]> | null; collect?: Map<string, number[]> | null; glyphsMax?: number; boxesMax?: number; stepsMax?: number; msMax?: number; glyphsOnly?: boolean }): { glyphs: Glyph[]; boxes: number[]; points: InkPoint[]; boxAt: number[]; paras: InkPoint[]; paths?: number[]; shows?: number; capped: boolean; timedOut: boolean; degraded: boolean; mergedAt: number | null; rotated: boolean }
+export declare function pageInk(OPS: Record<string, number>, ops: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }, commonObjs: { get(id: string): unknown }, o: { rotate: number; indices?: boolean; outlines?: ReadonlyMap<string, number[]> | null; collect?: Map<string, number[]> | null; glyphsMax?: number; boxesMax?: number; stepsMax?: number; msMax?: number; glyphsOnly?: boolean; turned?: boolean }): { glyphs: Glyph[]; boxes: number[]; points: InkPoint[]; boxAt: number[]; paras: InkPoint[]; paths?: number[]; shows?: number; turned?: TurnedGlyph[]; shapes?: Map<number, Shape>; pictures?: InkPoint[]; capped: boolean; timedOut: boolean; degraded: boolean; mergedAt: number | null; rotated: boolean }
+/** a glyph set turned (pageInk's `turned`): its baseline from its origin to its advance's end, its direction, its size, its
+ *  font's band in em, its box's index (-1 for none), the level glyphs and the pictures' points before it */
+export interface TurnedGlyph { u: string; n: number; k: number; ox: number; oy: number; ex: number; ey: number; ux: number; uy: number; size: number; ascent: number; descent: number; font: string; fill: number; box: number; at: number; pt: number; blank?: true; form?: true; clipped?: true; fid?: number; pid?: number }
+/** a figure's painted path as its lines (pageInk's `turned`): its segments on the page (x0, y0, x1, y1 stride 4), whether it strokes
+ *  and fills, its half line width on the page */
+export interface Shape { segs: Float32Array; stroke: boolean; fill: boolean; hw: number }
+/** a TikZ picture's points (marks.mjs POINTS_TEX) */
+export declare const PICTURE_START: 'zs'
+export declare const PICTURE_END: 'ze'
 /** why a page's ink is not read whole: nothing read, past a cap, past the walk's backstop; null where it is read whole */
 export type Unread = 'rotated' | 'capped' | 'timedOut'
 export declare function unreadOf(ink: { rotated?: boolean; capped?: boolean; timedOut?: boolean } | null | undefined): Unread | null

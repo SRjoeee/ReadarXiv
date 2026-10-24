@@ -215,11 +215,16 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   // what the wrap could not hide (the head's base: `unhidden`, by unit, and `labelKept`), and each page's cell rules as the parts
   // tell them: the run reads them as it lays
   const base = four ? index.head.base : bundle.base
-  const unhidden = new Map(base?.unhidden ?? []), labelKept = new Set(base?.labelKept ?? []), rulesByPage = new Map()
-  const hear = x => { for (const [pg, r] of Object.entries(x?.rules ?? {})) rulesByPage.set(Number(pg), r) }
+  const unhidden = new Map(base?.unhidden ?? []), labelKept = new Set(base?.labelKept ?? []), rulesByPage = new Map(), figuresByPage = new Map()
+  // (and each page's figure units, BUNDLE 10's: figure-rows.mjs, the run draws them where the reader's toggles show the class
+  // `figures`; else each is the original's, its row not taken, as any unit's of a class not shown)
+  const hear = x => {
+    for (const [pg, r] of Object.entries(x?.rules ?? {})) rulesByPage.set(Number(pg), r)
+    for (const f of x?.figures ?? []) (figuresByPage.get(f.page) ?? figuresByPage.set(f.page, []).get(f.page)).push(f)
+  }
   if (!four) hear(bundle)
   // (a bundle of 3 names no lists: its base is arXiv's PDF, which holds none of our groups, so no unit is hidden over it)
-  const hiding = { unhidden: id => unhidden.get(id) ?? null, labelKept: id => labelKept.has(id), rules: pg => rulesByPage.get(pg) }
+  const hiding = { unhidden: id => unhidden.get(id) ?? null, labelKept: id => labelKept.has(id), rules: pg => rulesByPage.get(pg), figures: pg => figuresByPage.get(pg) ?? [], figuresShown: shownTranslated('figures', on) }
   const common = { units: [], expect, classes: { ...TOGGLE_DEFAULTS, ...(classes ?? {}) }, groups, target, scale: SCALE, dpr: 1, copy: false, free: true, records: false, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, OPS, onStep: () => evaluate() }
   run = await openProto(four
     ? {

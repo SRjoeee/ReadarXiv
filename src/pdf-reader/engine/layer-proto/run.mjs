@@ -61,7 +61,9 @@ import { cropSourceOff, labelGroup, nameGroup, textGroup, visibilityOf } from '.
 import * as LK from './links.mjs'
 import * as TL from './textlayer.mjs'
 import { locatedWhole, shortSkipsOf, texParts, texRects } from './tex.mjs'
-import { trPiecesOf } from '../layer/pieces.mjs'
+import { shown as shownPiece, trPiecesOf } from '../layer/pieces.mjs'
+import { fitFigure, sameAsSource } from './figure-fit.mjs'
+import { FIGURE_KIND } from '../rules/content-classes.mjs'
 import { addUnitWords, copyWords, freezeWords, newWords, pieceOffsets, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
 import { closureOf, rowLeadOf } from './need.mjs'
 import { markWork, newWork, work, WORK_KEYS } from './work.mjs'
@@ -1422,6 +1424,62 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
   }
 
+  // ---- the figures' text (the content class `figures`, docs/route/orphan-text.md stage 5): each figure unit its page's parts
+  // carry (hiding.figures: BUNDLE 10's figure rows, figure-rows.mjs), drawn in its translation where the reader shows figures
+  // translated (hiding.figuresShown), its ink hidden by its own group (`f<k>`), its words in its run's box by the fit rule
+  // (figure-fit.mjs: on its baseline, turned as it was, its anchor kept, at its size or shrunk to the rules' last floor), in a face
+  // of its font's family and weight, in its fill; else left the original's, why told (`no row`, `untranslated`, `same` as its
+  // source, `unhidden` where the document holds no group of it, a face's refusal, `unfit`). A page whose figures are shown waits
+  // for their rows as for its units' (figuresWait). `figures`: each figure unit of the pages laid, drawn or why not
+  const figureRecs = []
+  /** each page's figures: 1 while painted (an await of their faces under way), 2 once painted; a page is ready at 2 alone */
+  const figuresDone = new Uint8Array(N + 1)
+  const figuresOn = pg => (hiding?.figuresShown ? hiding.figures?.(pg) ?? [] : [])
+  const figuresWait = pg => !ended && figuresOn(pg).some(f => pending.has(f.id))
+  const paintFigures = async pg => {
+    if (figuresDone[pg]) return
+    figuresDone[pg] = 1
+    for (const f of figuresOn(pg)) {
+      const rec = { id: f.id, group: f.group, page: pg, drawn: false, why: null }
+      figureRecs.push(rec)
+      const u = U.get(f.id)
+      if (!translated(u)) { rec.why = !u ? 'no row' : u.state === 'kept' ? 'kept' : 'untranslated'; continue }
+      const text = u.pieces.map(p => (p.t === 'text' ? shownPiece(p) : ' ')).join('').replace(/\s+/g, ' ').trim()
+      if (!text || sameAsSource(text, u.src ?? '')) { Object.assign(rec, { why: 'same', text }); continue }
+      if (!VIS.has(f.group)) { Object.assign(rec, { why: 'unhidden', text }); continue }
+      // its face: its font's family, weight and slant, the paper's design of that family
+      const cf = classifyFont(f.font)
+      const fam = cf.fam === 'math' ? 'serif' : cf.fam
+      const st = { fam, bold: cf.bold, italic: cf.italic, caps: false, design: designs[fam] ?? designs.serif }
+      const drawn = L2.nameRuns(text, faceOf(st, /[\u2e80-\u9fff\uac00-\ud7af\u3040-\u30ff\uf900-\ufaff]/.test(text) ? 'cjk' : 'latin', to), to)
+      if (FS) {
+        const tFonts = performance.now()
+        const no = await FS.check([{ face: drawn.face, text: drawn.text }])
+        fontWait += performance.now() - tFonts
+        if (disposed) return
+        if (no) { Object.assign(rec, { why: no.why, text }); continue }
+      }
+      const fit = fitFigure(f, L2.runsWidth(drawn), P.floorMin)
+      if (!fit) { Object.assign(rec, { why: 'unfit', text }); continue }
+      const r = rows[pg - 1], px = pxOf(pg)
+      r.off.add(f.group)
+      // (the original's box on the page, its band across it: where its ink was hidden, for the links' and the text layer's question)
+      const nx = -f.uy, ny = f.ux, lo = f.descent * f.size, hi = f.ascent * f.size
+      const corners = [[0, lo], [f.length, lo], [0, hi], [f.length, hi]].map(([s, t]) => px(f.x + f.ux * s + nx * t, f.y + f.uy * s + ny * t))
+      const xs = corners.map(c => c[0]), ys = corners.map(c => c[1])
+      const hid = [Math.min(...xs), Math.min(...ys), Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)]
+      const opsFrom = r.ops.length
+      r.ops.push({ op: 'hidden', rects: [hid] })
+      audit?.push({ what: 'erase', unit: f.id, figure: f.group, page: pg, box: [hid[0], hid[1], hid[0] + hid[2], hid[1] + hid[3]] })
+      const x = f.x + f.ux * fit.offset, y = f.y + f.uy * fit.offset, angle = (Math.atan2(f.uy, f.ux) * 180) / Math.PI
+      r.markup.push(L2.svgOfFigure({ group: f.group, text: drawn.text, x, y, angle, size: fit.size, face: drawn.face, color: f.fill > 0 ? L2.hexOf(f.fill) : null }, cssOf(pg), scale))
+      // (a level one's words in the page's text layer, as a name's; a turned one's are not selectable)
+      if (Math.abs(f.uy) < 1e-6 && f.ux > 0) textRecord(r, opsFrom, f.group, undefined, [TL.nameSeg(drawn.text, x, fit.width, y, fit.size)])
+      Object.assign(rec, { drawn: true, text, size: r1(fit.size), x: r1(x), y: r1(y), w: r1(fit.width) })
+    }
+    figuresDone[pg] = 2
+  }
+
   // the columns of each page, as its paragraphs' lines span them (each unit's lines as it is added, addUnits)
   const cols = []
   // a table cell's centring, which TeX's probe does not tell (a cell's marks carry none) and the page's column does not
@@ -2769,7 +2827,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    *  neither holds nor the file alone locates (a unit not told yet is not unanchored) */
   const account = () => {
     for (const c of deferred.splice(0)) { fixed.add(c.id); const d = decisionOf(c); if (d.skip) skipped.push(d.skip) }
-    U.forEach((u, id) => { if (!translated(u) || candOf.has(id)) return; const no = refusalOf(id, u); skipped.push(no ? refusedOf(id, u, no) : unanchoredOf(id, u, 'unlocated')) })
+    // (a figure's ink unit is no unit the left or the file places: its page's figures tell it, paintFigures)
+    U.forEach((u, id) => { if (!translated(u) || candOf.has(id) || u.kind === FIGURE_KIND) return; const no = refusalOf(id, u); skipped.push(no ? refusedOf(id, u, no) : unanchoredOf(id, u, 'unlocated')) })
   }
   /** whether laying page p waits for nothing more to come, neither a part nor a row (the 1b-D design §2.1): the parts cover
    *  its closure's bound, or have ended, and every entry it decides is in K and decided or settleable */
@@ -2777,6 +2836,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const C = closure(p)
     if (!partsEnded && through < C.bound) return false
     for (const i of C.rows) { if (i >= K.length) return false; const c = K[i]; if (!c.decided && !settleable(c)) return false }
+    if ([p, ...C.draw].some(figuresWait)) return false
     return true
   }
   /** the ids of the units whose rows laying page p still waits for, taken neither nor ended (its closure's over K so far: a
@@ -2793,6 +2853,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (!tableGroups) { for (const id of pending) out.add(id); break }
       for (const id of membersOf.get(c.group) ?? []) if (pending.has(id)) out.add(id)
     }
+    // (its pages' figures', where they are shown)
+    for (const q of new Set([p, ...closure(p).draw])) for (const f of figuresOn(q)) if (pending.has(f.id)) out.add(f.id)
     return [...out].sort((a, b) => a - b)
   }
   const toldComplete = new Uint8Array(N + 1)
@@ -2813,6 +2875,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (!(q >= 1 && q <= N)) return false
     if (readyAt[q]) return true
     if (!drawnPages[q] || failedPages.has(q) || undecided[q] || laid[q].length !== expected[q]) return false
+    // (its figures painted, where it has figures shown)
+    if (figuresDone[q] !== 2 && figuresOn(q).length) return false
     if (PASSES && expected[q]) {
       if (!passed[q]) return false
       for (const f of firstsOn[q] ?? []) if (!paintedOn[q]?.has(f)) return false
@@ -2934,7 +2998,15 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         consume(c)
       }
       if (!missing && !partsEnded && through < C.bound) missing = 'part'
+      // (and its pages' figures' rows, where the reader shows figures translated)
+      if (!missing && [p, ...C.draw].some(figuresWait)) missing = 'rows'
       if (missing) { report(ms); if (!still()) return; await wait(missing); continue }
+      // its pages' figures painted (paintFigures), once each, before its units: their groups and its units' are apart
+      for (const q of new Set([p, ...C.draw])) {
+        if (!drawnPages[q] || failedPages.has(q) || figuresDone[q]) continue
+        await paintFigures(q)
+        if (disposed) return
+      }
       if (!planned) plan()
       report(ms)
       // its units, in their rank (laid in order, the units its pages' drawings lay: those whose group page is p's doneAt at most)
@@ -3042,6 +3114,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     /** babel's names of the pages laid (D1a): each { occurrence, key, page, drawn, why, chars, box (the original's), and
      *  where drawn its text, size, x and width } */
     names,
+    /** the figures' text of the pages laid (the content class `figures`): each figure unit { id, group, page, drawn, why, and where
+     *  drawn its text, size, x, y and width } */
+    figures: figureRecs,
     /**
      * Page `pg`'s SVG, a new element each call (the 1b design §1, I2 and I3): class, size and spacing as the page's own, its
      * markup the strings its names and units were set in, in their order. No layout, face, ink or PDF.js call (I4): a parse of

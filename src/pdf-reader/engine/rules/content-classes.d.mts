@@ -13,6 +13,8 @@ export interface ClassPolicy {
 }
 /** the reader's toggles, in the settings' order */
 export declare const TOGGLES: readonly Toggle[]
+/** the kind of a figure's ink unit */
+export declare const FIGURE_KIND: 'inkfigures'
 /** each class's policy, in code order */
 export declare const CLASSES: Readonly<Record<ClassId, ClassPolicy>>
 /** the classes by their code */

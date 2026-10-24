@@ -25,7 +25,7 @@ export interface SampleCut {
   kinds: (string | null)[]
 }
 /** the wrap's head fields of the sample's wrapped pass (tests/fixtures/pdf/ocg/sample-1-wrapped.json) */
-export interface SampleWrap { bytes: number; sha256: string; xref: number; stats: Record<string, unknown>; unhidden: [id: number, why: string][]; labelKept: number[] }
+export interface SampleWrap { bytes: number; sha256: string; xref: number; stats: Record<string, unknown>; unhidden: [id: number, why: string][]; labelKept: number[]; figures: { units: object[]; stats: Record<string, number> } }
 /** the sample cut, its base the wrapped pass itself (`ours`, the default) or held as a delta over the stand-in PDF (`delta`) */
 export declare function cutSample(files: { pdf: Uint8Array; bundle: Uint8Array; wrapped: Uint8Array; wrap: SampleWrap }, o?: { base?: 'ours' | 'delta' }): Promise<SampleCut>
 export declare function rowsOf(index: LayerIndex, lang: string, make: (id: number, text: string) => string): Row[]
