@@ -163,9 +163,12 @@ for (const [to, t] of Object.entries(TARGETS)) {
   if (t.cleveref) {
     const tg = cleverefOf(t.cleveref)
     for (const [form, [type, n, capital, path]] of forms) {
-      // the target's form at the same branch, else its own without a branch of the kind, else its \Crefname for a capital one
-      const want = [`${type}|${n}|${capital}|${path}`, `${type}|${n}|${capital}|`, ...(capital === 'C' || /^[A-Z]/.test(form) ? [`${type}|${n}|C|`] : [])]
-      const hit = want.map(k => tg.names.get(k)).find(Boolean)
+      // the target's form of the same command (\crefname, \Crefname) in the branches English's form is in that the target's
+      // definitions test (german's has \if@cref@abbrev and no \if@cref@capitalise: English's lower-case "fig." of
+      // capitalise-.abbrev+ is its "Abb." of abbrev+), the most of them first; else, for a capital form, its \Crefname
+      const mine = new Set(path ? path.split('.') : [])
+      const fits = [...tg.names.keys()].map(k => k.split('|')).filter(([t2, n2, c2, p2]) => t2 === type && n2 === n && c2 === capital && (p2 ? p2.split('.') : []).every(b => mine.has(b))).sort((a, b) => (b[3] ? b[3].split('.').length : 0) - (a[3] ? a[3].split('.').length : 0))
+      const hit = fits.map(k => tg.names.get(k.join('|'))).find(Boolean) ?? (capital === 'C' || /^[A-Z]/.test(form) ? tg.names.get(`${type}|${n}|C|`) : undefined)
       if (hit) refs[form] = hit
     }
     for (const [v, macros] of Object.entries(conjOf)) { const tv = macros.map(m => tg.conj[m]).find(x => x?.trim()); if (tv) conj[v] = tv }

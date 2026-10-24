@@ -1167,11 +1167,12 @@ export function headLabelInTarget(chars, to) {
   if (drawnTail) parts.push({ text: drawnTail, st: own((nTail ? cs[cs.length - nTail] : cs.at(-1))?.st) })
   return { text: drawn, parts, open: /[([]\s*$/.test(drawn) }
 }
-/** a head that begins with a babel name (NAME_ENGLISH: "Proof", "Abstract") */
-const BABEL_HEADS = new RegExp(`^\\s*(?:${Object.values(NAME_ENGLISH).join('|')})(?![\\p{L}])`, 'u')
+/** a head that is a babel name whole (NAME_ENGLISH: "Proof", "Abstract"), its punctuation after it; a theorem's of a longer
+ *  name ("Proof Sketch 1.", translator's own) is no babel name's */
+const BABEL_HEADS = new RegExp(`^\\s*(?:${Object.values(NAME_ENGLISH).join('|')})\\s*[.:\\u2013\\u2014]?\\s*$`, 'u')
 /** the placeholders whose text TeX's cross-referencing packages generate, a counter type's name before the number:
- *  cleveref's \cref and \Cref (and their page and name forms), hyperref's \autoref */
-export const GENERATED_REF = /^\\(?:cref|Cref|cpageref|Cpageref|namecref|nameCref|lcnamecref|labelcref|autoref|Autoref)\*?\s*\{/
+ *  cleveref's \cref and \Cref (and their range, page and name forms), hyperref's \autoref */
+export const GENERATED_REF = /^\\(?:cref|Cref|crefrange|Crefrange|cpageref|Cpageref|cpagerefrange|Cpagerefrange|namecref|nameCref|lcnamecref|namecrefs|nameCrefs|lcnamecrefs|labelcref|labelcpageref|autoref|Autoref)\*?\s*\{/
 /** a citation's note (its last optional argument: \cite[Lemma~1]{…}, natbib's \citep[see][Section~2]{…}) as TeX sets it */
 const CITE_NOTE = /^\\(?:cite[a-z]*|parencite|textcite|autocite)\*?((?:\s*\[[^\]]*\])+)\s*\{/
 /**
@@ -3851,8 +3852,8 @@ function toLastLines(lines, blocks, below, f, slots) {
   if (!(by < -0.05)) return
   const room = slots().filter(sl => sl.block === 0)
   for (const [i, l] of lines.entries()) {
-    // (the row it is moved onto, the page fill's below aside: the slot there, within half a pitch)
-    const y = l.baseline + onto
+    // (the row it lands on, the room under the last line taken into account: the slot there, within half a pitch)
+    const y = l.baseline + by
     const at = room.reduce((q, sl) => (!q || Math.abs(sl.baseline - y) < Math.abs(q.baseline - y) ? sl : q), null)
     if (!at || Math.abs(at.baseline - y) > 0.5 * at.pitch || at.x1 < l.x1 - 0.05) return
     if (i > 0 ? Math.abs(at.x0 - l.x0) > 0.05 : !b.centred && b.start === undefined && l.x0 > at.x0 + 0.05) return

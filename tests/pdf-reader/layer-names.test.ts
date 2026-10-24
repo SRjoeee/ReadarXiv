@@ -114,6 +114,13 @@ describe('a generated reference in the target\'s names (renameRefs)', () => {
   })
 })
 
+describe('which placeholders are generated references (GENERATED_REF)', () => {
+  it('cleveref\'s every form that prints a counter\'s name, its ranges and plural names too (Devin on #468), and \\autoref; not \\ref', () => {
+    for (const s of ['\\cref{a}', '\\Cref{a,b}', '\\crefrange{a}{b}', '\\Crefrange{a}{b}', '\\cpageref{a}', '\\cpagerefrange{a}{b}', '\\namecref{a}', '\\nameCrefs{a}', '\\lcnamecrefs{a}', '\\labelcref{a}', '\\autoref{a}', '\\Autoref{a}', '\\cref*{a}']) expect(L2.GENERATED_REF.test(s), s).toBe(true)
+    for (const s of ['\\ref{a}', '\\eqref{a}', '\\crefname{x}{y}{z}', '\\pageref{a}']) expect(L2.GENERATED_REF.test(s), s).toBe(false)
+  })
+})
+
 describe('a theorem-like head\'s label in the target (headLabelInTarget)', () => {
   it('"Definition 5.1 (" drawn in ctex\'s name, the head in its bold and the note\'s bracket in its own, the note after it with no space (2610.18513v1 p18 u150)', () => {
     const cs = [...item('Definition', 85, 0, bold()), ...item('5.1', 140, 1, bold()), ...item('(', 158, 2, plain())]
@@ -128,6 +135,8 @@ describe('a theorem-like head\'s label in the target (headLabelInTarget)', () =>
     // (a babel name is the names' own, never a theorem's head: amsthm's "Proof.", whose name group a label's drawing never hides;
     // 2610.18513v1 p38 u347, where the file located no name and its label box held "Proof.", was drawn over the original's)
     expect(L2.headLabelInTarget(item('Proof.', 85, 0, plain()) as never, 'zh')).toBeNull()
+    // (a theorem's longer name is no babel name's: translator's "Proof Sketch", CodeRabbit on #468)
+    expect(L2.headLabelInTarget([...item('Proof', 85, 0, bold()), ...item('Sketch', 115, 1, bold()), ...item('1.', 150, 2, bold())] as never, 'zh')?.text).toBe('\u8bc1\u660e\u63d0\u8981 1.')
     expect(L2.headLabelInTarget([...item('Theorem', 85, 0, bold()), ...item('2.', 130, 1, bold())] as never, 'ja')).toBeNull()
   })
 })

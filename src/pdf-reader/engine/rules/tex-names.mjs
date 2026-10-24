@@ -14,8 +14,8 @@ const UNINFLECTED = new Set(['zh', 'zh-TW', 'ja', 'ko'])
  *  names: a float's, an appendix's */
 const BABEL_TYPES = new Set(['figure', 'table', 'appendix'])
 /** a number a reference or a head prints: TeX's arabic, an appendix's or a supplement's letter before it, its parts after
- *  stops or dashes, a letter after it, a roman numeral, a letter alone (an appendix), any of these in brackets (an equation) */
-const NUMBER = /^[([]?(?:(?:[A-Z]{0,2}\d+|[A-Z](?=[.\-–]\d))(?:[.\-–]\d+|[.\-–][A-Za-z](?![A-Za-z]))*[a-z]?|[IVXLCDM]{1,7}|[A-Z])[)\]]?$/
+ *  stops or dashes, a letter after it, a roman numeral in either case (a front matter's page), a letter alone (an appendix), any of these in brackets (an equation) */
+const NUMBER = /^[([]?(?:(?:[A-Z]{0,2}\d+|[A-Z](?=[.\-–]\d))(?:[.\-–]\d+|[.\-–][A-Za-z](?![A-Za-z]))*[a-z]?|[IVXLCDM]{1,7}|[ivxlcdm]{1,7}|[A-Z])[)\]]?$/
 /** the conjunctions cleveref's English prints, the longest first (", and " before " and ") */
 const CONJUNCTIONS = [...NAMES.conjunctions].sort((a, b) => b.length - a.length)
 /** a babel name as a reference's word: its letter-spacing between CJK characters dropped (zh-Hant's appendix name, its two characters a space apart, a heading's) */
@@ -95,7 +95,7 @@ export function refInTarget(text, to, labels = null) {
  * is no head of a name the target's dictionary holds
  */
 export function headInTarget(text, to) {
-  const m = typeof text === 'string' && /^\s*(\p{L}[\p{L} ]*?)\s*((?:[A-Z]{0,2}\d+|[A-Z](?=[.\-–]\d))(?:[.\-–]\d+)*[a-z]?|[IVXLCDM]{1,7})?(\s*[.:]?\s*[([]?)\s*$/u.exec(text)
+  const m = typeof text === 'string' && /^\s*(\p{L}[\p{L} ]*?)\s*((?:[A-Z]{0,2}\d+|[A-Z](?=[.\-–]\d))(?:[.\-–]\d+)*[a-z]?|[IVXLCDM]{1,7}|[A-Z])?(\s*[.:]?\s*[([]?)\s*$/u.exec(text)
   if (!m) return null
   const name = headName(m[1].replace(/\s+/g, ' '), to)
   if (!name) return null

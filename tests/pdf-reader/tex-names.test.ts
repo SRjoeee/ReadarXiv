@@ -43,6 +43,9 @@ describe('headName and headInTarget: a theorem-like head\'s name in translator\'
     expect(headInTarget('Lemma A.3.', 'de')).toBe('Lemma A.3.')
     expect(headInTarget('Lemma 3.', 'de')).toBe('Lemma 3.')
     expect(headInTarget('Main Theorem.', 'de')).toBe('Hauptsatz.')
+    // (a number that is an appendix's letter alone: \thetheorem as \Alph, Devin on #468)
+    expect(headInTarget('Theorem A.', 'zh')).toBe('\u5b9a\u7406 A.')
+    expect(headInTarget('Lemma B (', 'fr')).toBe('Lemme B (')
   })
   it('TeX\'s accents and Cyrillic decoded by LaTeX\'s own tables', () => {
     expect(headName('Definition', 'fr')).toBe('Définition')
@@ -80,6 +83,14 @@ describe('refInTarget: a generated reference in the target\'s names, never half 
     expect(renamed('Theorems 2.1 and 2.2', 'zh')).toBeNull()
     expect(renamed('Assumption 2', 'de')).toBeNull()
     expect(renamed('Theorem 1 of the paper', 'zh')).toBeNull()
+  })
+  it('a lower-case or abbreviated form in the branch the target\'s definitions test (cleveref\'s german has no \\if@cref@capitalise: Devin on #468)', () => {
+    expect(renamed('fig. 1', 'de')).toBe('Abb. 1')
+    expect(renamed('Fig. 1', 'de')).toBe('Abb. 1')
+    expect(renamed('figures 1 and 2', 'de')).toBe('Abbildungen 1 und 2')
+    expect(renamed('equation (3)', 'es')).toBe('ecuaci\u00f3n (3)')
+    // (a front matter's page in lower-case roman numerals: CodeRabbit on #468)
+    expect(renamed('Page iv', 'de')).toBe('Seite iv')
   })
   it('numbers alone (\\labelcref): their conjunction alone, or nothing', () => {
     expect(refInTarget('3 and 4', 'de', labelsOf('de'))).toEqual([[1, 6, ' und ']])

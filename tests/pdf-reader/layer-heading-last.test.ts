@@ -66,6 +66,15 @@ describe('a heading set in fewer lines than its original goes on the original\'s
     expect(placed(at)).toEqual([[500, 0]])
   })
 
+  // (the room each line keeps is read on the row it lands on, its move the room under the last line allows, not the row the
+  // last line would reach without it: CodeRabbit on #468)
+  it('its room read where its lines land, the room under the original\'s last line taken into account', () => {
+    // (no room under the last row: moved by 2 pt, on its own row, whose room is the line's; read on the shared row it no longer
+    // reaches, it stayed where it was)
+    const b = { ...block(500, 2), stop: { y: 488, band: 10, x1: 60 } }
+    expect(placed(lay(2, [b], { lastLines: true, halfLead: { head: false, foot: true, below: 0 } }))).toEqual([[498, null]])
+  })
+
   // the same unit: its first line starts after "Lemma A.2 (", kept as the original's ink there; moved down, its text stood
   // apart from it, at that line's indent on a row that has none
   it('where its first line starts past its block\'s edge with no start of its own (a label kept before it), it keeps its first lines', () => {
