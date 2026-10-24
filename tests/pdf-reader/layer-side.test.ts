@@ -973,6 +973,35 @@ describe('L15: a fork', () => {
   })
 })
 
+describe("the reader's toggles (setClasses, docs/route/orphan-text.md §8)", () => {
+  it('opens the door again with them over the same documents, parts and rows, each laid page kept until the new door commits', async () => {
+    const s = await setup({ door: { rows: 'gate' } })
+    const m = await M()
+    await nearOn(s, [1, 2])
+    s.side.tell(await ALL())
+    s.side.take(m.index.units.map((_, id) => rowOf(id)))
+    s.side.end()
+    await settle(s)
+    const kept = layerOf(s, 1)?.querySelector('svg'), fetched = s.fetched.length, rows = s.doors[0]?.taken.length
+    s.side.setClasses({ tables: false })
+    // (the drawing laid before stays in place while the new door opens: no blank, no flash)
+    expect(layerOf(s, 1)?.querySelector('svg')).toBe(kept)
+    await settle(s)
+    expect(s.opens).toBe(2)
+    expect(s.composed.length).toBe(1)
+    expect(s.fetched.length).toBe(fetched)
+    expect(s.doors[1]?.classes).toEqual({ tables: false })
+    // (the rows so far given the new door again, and their end: nothing translated again)
+    expect(s.doors[1]?.taken.length).toBe(rows)
+    expect(s.doors[1]?.ended).toBe(1)
+    expect([content(s, 1), content(s, 2)]).toEqual(['layer', 'layer'])
+    // (the same toggles again: nothing)
+    s.side.setClasses({ tables: false })
+    await settle(s)
+    expect(s.opens).toBe(2)
+  })
+})
+
 describe('another target over the same layer (retarget)', () => {
   const svgLang = (s: Setup, n: number) => layerOf(s, n)?.querySelector('svg')?.getAttribute('lang') ?? null
   /** the side open on its first target (zh), pages 1 and 2 near and laid with its rows */

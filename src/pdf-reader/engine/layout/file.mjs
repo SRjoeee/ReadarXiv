@@ -95,8 +95,10 @@ export { LayoutRefusal } from './json.mjs'
  *  against production after it) a placeholder at a unit's head is found by the text TeX sets for it, as the probe now reads
  *  it (marks.mjs readInkTexts, MARKS_SCHEMA 10: ASCII's punctuation, "1,024"; inline code at the head asked about too,
  *  "max_tokens"; a formula's glyph spelled by no character one glyph, INK_ANY, $d'$), and a front heading (ICML's
- *  \\icmltitle) is marked as any heading in the layout compile, its title's ink its own (the file's schema is 5 still) */
-export const LAYOUT = '20'
+ *  \\icmltitle) is marked as any heading in the layout compile, its title's ink its own (the file's schema is 5 still); 21
+ *  (docs/route/orphan-text.md, stage 2): the ink units' rows, text no source unit owns laid from our own glyphs (layout/ink-units.mjs,
+ *  pipeline/ink-pass.mjs), of the kinds UNIT_KINDS names after the source units' (the file's schema is 5 still) */
+export const LAYOUT = '21'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,

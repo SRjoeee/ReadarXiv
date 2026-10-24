@@ -8,7 +8,7 @@
 // task the browser reports (50 ms or more) while the page was laid. J is held to the page's closure (Need(p), 1b-D1: the run's
 // `closure(page)`, need.mjs closureOf over its K): the pages PDF.js was asked for among its `draw`, the units laid among its
 // `lay` entries' (`closure.within`); an engine that lays in order and exposes no closure gives null ('closure: n/a')
-import { answerOf, bytes, lastRun, openDoor, recsOf } from '/gate/door-common.mjs'
+import { answerOf, bytes, faceSourcesOf, hyphUrl, lastRun, openDoor, pdfjs, recsOf } from '/gate/door-common.mjs'
 
 window.doorJump = {
   async ask({ name, target, rules, page, perf = false }) {
@@ -31,10 +31,28 @@ window.doorJump = {
     const answer = await answerOf(d.layer, page, got, await bytes(`/door/${name}/s${page}.png`))
     answer.recs = await recsOf(lastRun(), page)
     if (observer) { await new Promise(ok => setTimeout(ok, 0)); observer.takeRecords().forEach(e => longTasks.push(e.duration)); observer.disconnect() }
+    // the reader's toggle (docs/route/orphan-text.md §8, with --perf): the layer opened again over the same document with another
+    // class shown, its rows replayed, and the pages in view at 1× laid (this one and the next): what a toggle costs from its
+    // change to the new drawings, nothing fetched (the document, its pages and the faces kept, as the reading view keeps them)
+    let toggle = null
+    if (perf) {
+      const R = await import('/engine/layer-proto/reader.mjs')
+      const rows = await (await fetch(`/door/${name}/rows.json`)).json()
+      const bundle = R.readBundle(new Uint8Array(await (await fetch(`/door/${name}/bundle.json`)).arrayBuffer()))
+      const inView = [page, page + 1].filter(q => q <= d.N)
+      const t3 = performance.now()
+      d.layer.dispose()
+      const again = await R.openLayer({ bundle, doc: d.doc, target, faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS, classes: { tables: false } })
+      again.take(rows)
+      again.end()
+      await Promise.all(inView.map(q => again.pageOf(q, { lang: target })))
+      toggle = { ms: Math.round(performance.now() - t3), pages: inView }
+      again.dispose()
+    }
     await d.done()
     return {
       ...answer, j, completes: d.completes, closure,
-      ...(perf ? { ms: { open: Math.round(t1 - t0), ask: Math.round(t2 - t1) }, longest: longTasks.length ? Math.round(Math.max(...longTasks)) : 0 } : {}),
+      ...(perf ? { ms: { open: Math.round(t1 - t0), ask: Math.round(t2 - t1) }, longest: longTasks.length ? Math.round(Math.max(...longTasks)) : 0, toggle } : {}),
     }
   },
 }
