@@ -1,5 +1,5 @@
 {
- "pipeline": "27",
+ "pipeline": "28",
  "units": {
   "sample-1": [
    "heading: text",
@@ -54,6 +54,15 @@
   "text-read": [
    "para: text",
    "para: ph,text"
+  ],
+  "arity": [
+   "heading: text,ph",
+   "para: open,text",
+   "heading: text",
+   "para: open,ph,text,close,text",
+   "cell: open,text,close,text",
+   "cell: text",
+   "cell: text"
   ]
  }
 }
