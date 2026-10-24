@@ -711,7 +711,7 @@ async function doorFixture(page, name, errors) {
   for (const g of gate.pages) { DOOR_FILES.set(`/door/${name}/o${g.p}.png`, Buffer.from(g.png, 'base64')); delete g.png }
   await open()
   const door = await page.evaluate(x => window.door.door(x), o)
-  if (DOOR_SHOTS) for (const d of door.pages) if (d.copyPng) { mkdirSync(DOOR_SHOTS.dir, { recursive: true }); writeFileSync(join(DOOR_SHOTS.dir, `${name}-p${d.p}.png`), Buffer.from(d.copyPng, 'base64')); writeFileSync(join(DOOR_SHOTS.dir, `${name}-p${d.p}.svg`), d.svg); delete d.copyPng }
+  if (DOOR_SHOTS) for (const d of door.pages) if (d.copyPng) { mkdirSync(DOOR_SHOTS.dir, { recursive: true }); writeFileSync(join(DOOR_SHOTS.dir, `${name}-p${d.p}.png`), Buffer.from(d.copyPng, 'base64')); writeFileSync(join(DOOR_SHOTS.dir, `${name}-p${d.p}.svg`), d.svg); const g = gate.pages.find(x => x.p === d.p); if (g) writeFileSync(join(DOOR_SHOTS.dir, `${name}-p${d.p}.gate.svg`), g.svg); delete d.copyPng }
   const rowsApart = (a, b) => { const out = []; for (let y = 0; y < Math.max(a.rows.length, b.rows.length); y++) if (a.rows[y] !== b.rows[y]) out.push(y); return out }
   for (const g of gate.pages) DOOR_FILES.delete(`/door/${name}/o${g.p}.png`)
   // (and the gate's own run at its recorded runs' resolution, 1.25 CSS px a unit at dpr 2, the same 2.5 device pixels:
