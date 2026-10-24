@@ -1,0 +1,104 @@
+// src/pdf-reader/engine/rules/tex-names.mjs
+// The names TeX's packages give a theorem-like head and a generated reference in a target (PDF-READER §19.11), read from
+// tex-names.json, which lab/pdf/spikes/tex-names-make.mjs writes from TeX Live's own files: translator's theorem dictionaries
+// (ctex's for Chinese), cleveref's and hyperref's language definitions, ctex's names. No name is written here: a word no
+// package gives in the target keeps the original's.
+//
+// Pure: no DOM, no clock. An original module (no port statement).
+import NAMES from './tex-names.json' with { type: 'json' }
+
+/** the targets whose names do not inflect (no plural, no case): an English plural or lower-case form reads as its type's one
+ *  name there */
+const UNINFLECTED = new Set(['zh', 'zh-TW', 'ja', 'ko'])
+/** the babel names (the layout rules' labels, by key) a counter type reads in a target that neither cleveref nor ctex
+ *  names: a float's, an appendix's */
+const BABEL_TYPES = new Set(['figure', 'table', 'appendix'])
+/** a number a reference or a head prints: TeX's arabic, an appendix's or a supplement's letter before it, its parts after
+ *  stops or dashes, a letter after it, a roman numeral in either case (a front matter's page), a letter alone (an appendix), any of these in brackets (an equation) */
+const NUMBER = /^[([]?(?:(?:[A-Z]{0,2}\d+|[A-Z](?=[.\-–]\d))(?:[.\-–]\d+|[.\-–][A-Za-z](?![A-Za-z]))*[a-z]?|[IVXLCDM]{1,7}|[ivxlcdm]{1,7}|[A-Z])[)\]]?$/
+/** the conjunctions cleveref's English prints, the longest first (", and " before " and ") */
+const CONJUNCTIONS = [...NAMES.conjunctions].sort((a, b) => b.length - a.length)
+/** a babel name as a reference's word: its letter-spacing between CJK characters dropped (zh-Hant's appendix name, its two characters a space apart, a heading's) */
+const unspaced = s => s.replace(/(?<=[\p{Script=Han}\p{Script=Hangul}\p{Script=Hiragana}\p{Script=Katakana}])\s+(?=[\p{Script=Han}\p{Script=Hangul}\p{Script=Hiragana}\p{Script=Katakana}])/gu, '')
+
+/** a theorem-like head's name (\newtheorem's printed name, "Definition") in the target: translator's dictionary's, or null */
+export function headName(english, to) {
+  const t = NAMES.targets[to]
+  return (t && Object.hasOwn(t.heads, english) && t.heads[english]) || null
+}
+
+/**
+ * A generated reference's name (cleveref's or \autoref's English, "Theorem", "Sections", "Eq.") in the target, or null. A
+ * theorem-like name is its head's (headName: a reference reads as the head it names); else cleveref's or hyperref's in the
+ * target, ctex's for Chinese; else, in a target whose names do not inflect, babel's name of its counter type (`labels`, the
+ * layout rules' labels: a float's, an appendix's)
+ */
+export function refName(english, to, labels = null) {
+  const t = NAMES.targets[to]
+  if (!t) return null
+  const head = headName(english, to)
+  if (head) return head
+  if (Object.hasOwn(t.refs, english) && t.refs[english]) return t.refs[english]
+  const type = Object.hasOwn(NAMES.types, english) ? NAMES.types[english] : null
+  if (UNINFLECTED.has(to) && type && BABEL_TYPES.has(type) && labels?.[type]) return unspaced(labels[type])
+  return null
+}
+
+/** the words a name may be, the longest first, so that "Main Theorem" is read before "Theorem" */
+const WORDS = [...new Set([...Object.keys(NAMES.types), ...Object.values(NAMES.targets).flatMap(t => [...Object.keys(t.heads), ...Object.keys(t.refs)])])].sort((a, b) => b.length - a.length)
+
+/**
+ * A generated reference's text as TeX set it (`text`: "Theorem A.17", "Sections 5.2.1, 5.2.3 and 5.2.4") in the target's
+ * names: the replacements, [start, end, word] over `text` in order, each name and each conjunction the reference prints; its
+ * numbers and its punctuation kept. Null where any part of it is no number, no name the target has a word for and no
+ * conjunction it has one for: the reference is then the original's whole, never half in either language. An empty list
+ * where it holds no name (\labelcref's numbers alone)
+ */
+export function refInTarget(text, to, labels = null) {
+  if (typeof text !== 'string' || !text.trim() || !NAMES.targets[to]) return null
+  const t = NAMES.targets[to]
+  const out = []
+  let i = 0, rest = '', named = false
+  const flush = () => { const s = rest.trim(); rest = ''; return !s || s.split(/\s+/).every(w => NUMBER.test(w.replace(/[,;]$/, ''))) }
+  while (i < text.length) {
+    const c = CONJUNCTIONS.find(x => text.startsWith(x, i))
+    if (c && (named || rest.trim())) {
+      if (!flush()) return null
+      // (", " between two numbers is its own conjunction where the target's is the same)
+      const w = Object.hasOwn(t.conj, c) ? t.conj[c] : null
+      if (w === null) return null
+      if (w !== c) out.push([i, i + c.length, w])
+      i += c.length
+      continue
+    }
+    const atWord = i === 0 || /[\s(]/.test(text[i - 1])
+    const name = atWord ? WORDS.find(x => text.startsWith(x, i) && !/[\p{L}\p{N}]/u.test(text[i + x.length] ?? '')) : null
+    if (name) {
+      if (!flush()) return null
+      const w = refName(name, to, labels)
+      if (!w) return null
+      named = true
+      if (w !== name) out.push([i, i + name.length, w])
+      i += name.length
+      continue
+    }
+    rest += text[i]
+    i++
+  }
+  if (!flush()) return null
+  return out
+}
+
+/**
+ * A theorem-like head as TeX set it (`text`, its label's characters: "Definition 5.1 (", "Theorem 2.", "Main Theorem.") in
+ * the target: its name in translator's dictionary's word for it, its number and its punctuation as they are. Null where it
+ * is no head of a name the target's dictionary holds
+ */
+export function headInTarget(text, to) {
+  const m = typeof text === 'string' && /^\s*(\p{L}[\p{L} ]*?)\s*((?:[A-Z]{0,2}\d+|[A-Z](?=[.\-–]\d))(?:[.\-–]\d+)*[a-z]?|[IVXLCDM]{1,7}|[A-Z])?(\s*[.:]?\s*[([]?)\s*$/u.exec(text)
+  if (!m) return null
+  const name = headName(m[1].replace(/\s+/g, ' '), to)
+  if (!name) return null
+  // (its punctuation as TeX set it, a space before an opening bracket kept: "Definition 5.1 (")
+  return `${name}${m[2] ? ` ${m[2]}` : ''}${m[3].replace(/\s+/g, ' ')}`
+}

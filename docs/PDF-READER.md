@@ -2441,9 +2441,12 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   or an item's mark, maybe a caption's, a section's or a theorem's name before it, the number after a name maybe with a letter
   before it, a supplement's or an appendix's "Table S3:", "Figure A1" (REMOVAL 10: 2610.21924's fifteen and 2610.16663's ten
   centred captions were drawn left, their labels kept and their text centred apart; a letter and a number alone, "A100", are
-  no label), in brackets or with a stop, a dash or a bar after it) or empty; where it is not and its glyphs stand apart from
-  the text's, the label is left the original's ink (`labelKept`: no `.l` group, the body alone drawn; the coordinator's
-  amendment of 2026-10-28), else `spell`.
+  no label), in brackets or with a stop, a dash or a bar after it) or empty; a theorem's note (a unit the front end read in a
+  head's brackets, `bracketed`) may end it in the bracket its head opens the note with ("Definition 5.1 ("), and the head's
+  joint after the babel name that leads its unit, its punctuation alone (amsthm's "." after "Proof", IEEEtran's "—" after
+  "Abstract"), is a label too (REMOVAL 11, §19.11: both were left the original's ink, their names English); where it is not and
+  its glyphs stand apart from the text's, the label is left the original's ink (`labelKept`: no `.l` group, the body alone
+  drawn; the coordinator's amendment of 2026-10-28), else `spell`.
 - **The wrap** (`layout/wrap.mjs` `wrapOf`): our bytes and ONE incremental section of their cross-reference kind
   (`appendSection`): each wrapped page's dict again under its number, `/Resources` our page's with `/Properties` mapping
   `/axt<group>` to its OCG, ONE new content stream (its pieces joined, deflated at a fixed level: the same inputs give the same
@@ -2534,3 +2537,52 @@ after its last, on one baseline, as `folioOf` reads a folio), whether it is insi
 nothing in the compile. What no class explains is an orphan: the sweep's invariant (o) is no orphan letters (`orphanRows`, rows
 in the sweep's shape), run in the lab by `lab/pdf/spikes/ledger.mjs` (record `lab/pdf/records/ledger.md`). The ink units that
 translate the planned classes, and the toggles, are the note's later stages.
+
+### 19.11 Structural names: a head's, a reference's, in the target's words
+
+A theorem's head, a proof's name and the names cleveref and `\autoref` generate are TeX's text, not the author's sentences:
+the translator never sees them, so the layer sets them itself, in the names TeX's own packages give the target, never in a
+table written by hand (the owner's ruling of 2026-10-25). The names are `rules/tex-names.json`, which
+`lab/pdf/spikes/tex-names-make.mjs` writes from the compile image's TeX Live files (each file's digest in it; `--check` makes
+it again and compares): translator's theorem dictionaries (beamer's; ctex's `ChineseUTF8` for Chinese) for a theorem-like
+name, cleveref's language definitions (`\Crefname` and `\crefname` by counter type, number and branch, and the conjunctions)
+and hyperref's `\HyLang@<language>` for a reference's, ctex's own names (`ctex-name-utf8.cfg`) for Chinese, and babel's (the
+layout rules' labels) for a float's or an appendix's in a target that has neither; TeX's text decoded by LaTeX's own tables
+(`t1enc.dfu`, `t2aenc.dfu`, read backwards). A name no package gives in the target is left the original's (`rules/tex-names.mjs`).
+
+- **A label is what the head macro set** (`layer2.mjs labelOf`, `tex.mjs`): whether a unit begins with text is its source's
+  (`unit.source`, rows.mjs `unitOf`), never its translation's. A paragraph that opens with a reference, "\Cref{prop:lbCs}
+  below shows how …", whose Chinese begins with "below" and sets the reference second, had cleveref's "Theorem 5.1" read as a
+  theorem's label: kept as the original's ink at the line's start and drawn again inside the translation (2610.18513v1 p19
+  u156). The code is production's (699b4aea's `labelOf` reads the translated pieces alike), not #460's or #462's.
+- **A theorem-like head** (`layer2.mjs headLabelInTarget`, `run.mjs headOf`): the layout file's label of a theorem's body
+  or its note, read from the page's characters in its box (the unit's own part of the page may leave a head's first letters
+  to the unit before: "finition5.1("), its name in translator's word for the target, its number and punctuation the
+  original's, the name and number in the style of its first character and its punctuation in its last's; after an opening
+  bracket the note follows with no space ("Definition 5.1 (s-conductance)." in Chinese: ctex's word for
+  "Definition", " 5.1 (", the note's translation, ")."). The wrap gives it a group to hide (REMOVAL 11, §19.9): a note's head ends in the bracket its head opens the
+  note with, and the joint after a babel name that leads its unit (amsthm's "." after "Proof") is that unit's label, so that
+  the name's lead is drawn (§11.8, `jointOf`) where the original's "Proof." stayed English.
+- **A generated reference** (`layer2.mjs renameRefs`, `GENERATED_REF`; `renameRuns` in `tokensOf2`): a `\cref`, `\Cref` (and
+  their page and name forms) or `\autoref` drawn as its page's text (`orig-text`) has each name and conjunction it prints
+  replaced by the target's, its numbers and punctuation kept, each run in its own colour (cleveref's black "Theorem", its
+  linked blue "A.17"); a theorem-like name as its head reads, so that a reference and the head it names agree; one any part of
+  which has no word in the target is the original's whole, never half in either language ("Section A.7", "Sections 5.2.1,
+  5.2.3 and 5.2.4" in zh: no package gives Chinese a section's name or an "and"). A citation's note ("[Ascolani et al., 2026,
+  Lemma 1]") is a name and its number the same way, the cited work's own text as it is. A name the source writes itself
+  ("Theorem~\ref{…}") is the translator's text: over the 58 papers in Chinese of the sweep's cache, 564 of 567 such names were
+  translated, against 0 of 981 generated ones before this rule.
+- **Measured** (2026-10-25, base `next` 37d84180, the 25 local papers whose zh rows the sweep's cache holds, each paper's
+  bundle made by both engines on the production path, TL2025): the units' hashes are every one kept (168 local sources); the
+  wrap's `labelKept` 298 → 96 and its groups 11,126 → 11,328, `unhidden` the same on every paper, every page of every group
+  shown our page (the ocg gate's G1, CPU canvas: the same 4 pages differ on both sides, from run to run); the sweep's checks
+  in Chromium, no unit gained or lost (`a` 41 → 41), `c` 10 → 8 violations (2610.21376v1 p4 u30, u31: a note's head now its
+  label), `e` 15 → 9, `m` 25 → 24, `j` reviews 148 → 139. 2610.18513v1 in zh: p18 u150 and p19 u157's heads, p19 u156's
+  "Theorem 5.1" drawn once, its and p18 u153's "Theorem A.17", the citation's "Lemma 1" and p7's "Proof." in Chinese;
+  "Section A.7" and "Sections 5.2.1, 5.2.3 and 5.2.4" as the paper prints them.
+- **Limits.** Japanese, Korean and Traditional Chinese have no theorem dictionary in TeX Live (translator has none, ctex's are
+  Simplified Chinese), and no target outside cleveref's languages has a section's or an equation's name or an "and": those
+  heads and references stay the original's. A name translator's dictionary lacks ("Assumption", "Conjecture", "Claim") stays
+  English in every target. The next step, the owner's other ground truth: each paper's own `\newtheorem` names and the
+  names cleveref prints, passed to the translator once a paper as units of their own and cached with its rows (a new unit
+  kind the maker, the wrap and the sweep would read as no page's ink).
