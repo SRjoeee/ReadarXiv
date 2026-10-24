@@ -867,10 +867,10 @@ try {
     }, P1)
     const z0 = await probe(), zoom0 = z0.zoom ?? z0.scale
     await page.evaluate(([x, y]) => { window.__reader.controller.pinch('right', 1.05, [x, y]); window.__reader.controller.pinch('right', 1.05, [x, y]) }, pinchAt)
-    const during = await page.evaluate(sel => { const t = document.querySelector(`${sel} .axt-layer > .textLayer`); return { display: t ? getComputedStyle(t).display : null, marked: !!t?.closest('[data-axt-scaling]') } }, P1)
+    const during = await page.evaluate(sel => { const t = document.querySelector(`${sel} .axt-layer > .textLayer`); const c = t ? getComputedStyle(t) : null; return { out: c ? c.display === 'none' || c.contentVisibility === 'hidden' : null, marked: !!t?.closest('[data-axt-scaling]') } }, P1)
     await page.waitForTimeout(1200)
-    const settled = await page.evaluate(sel => { const t = document.querySelector(`${sel} .axt-layer > .textLayer`); return { display: t ? getComputedStyle(t).display : null, marked: !!document.querySelector('#right [data-axt-scaling]'), spans: t?.querySelectorAll(':scope > span').length ?? 0, selected: getSelection().toString() } }, P1)
-    check('a pinch over the laid page: its text layer out of style and layout while the steps last, back once it is drawn again, the same spans, the selection kept', during.display === 'none' && during.marked && settled.display !== 'none' && !settled.marked && settled.spans === kept.spans && kept.selected.length > 0 && settled.selected === kept.selected, JSON.stringify({ kept, during, settled }))
+    const settled = await page.evaluate(sel => { const t = document.querySelector(`${sel} .axt-layer > .textLayer`); const c = t ? getComputedStyle(t) : null; return { out: c ? c.display === 'none' || c.contentVisibility === 'hidden' : null, marked: !!document.querySelector('#right [data-axt-scaling]'), spans: t?.querySelectorAll(':scope > span').length ?? 0, selected: getSelection().toString() } }, P1)
+    check('a pinch over the laid page: its text layer out of style and layout while the steps last, back once it is drawn again, the same spans, the selection kept', during.out === true && during.marked && settled.out === false && !settled.marked && settled.spans === kept.spans && kept.selected.length > 0 && settled.selected === kept.selected, JSON.stringify({ kept, during, settled }))
     await page.evaluate(() => getSelection().removeAllRanges())
     await page.evaluate(z => window.__reader.controller.zoomTo(z), zoom0)
     await page.waitForTimeout(900)
