@@ -1,5 +1,5 @@
 import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
-import type { LaidPage, Layer, LayerDocument, LeftPage, OpenLayerOptions, PageEvent, PageState } from '@/pdf-reader/engine/layer-proto/reader.mjs'
+import type { LaidPage, Layer, LayerDocument, LeftPage, OpenLayerOptions, PageEvent, PageState, TextLayerData } from '@/pdf-reader/engine/layer-proto/reader.mjs'
 import { type ReadPart, readLeftPart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import type { Row } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { BUILTIN_RULES, RULES_SCHEMA } from '@/pdf-reader/engine/rules/layout.mjs'
@@ -367,6 +367,29 @@ class FakeLayer implements Layer {
       this.check()
       return canvas
     })()
+  }
+  /** a ready page's text layer: its number kept (the page's first line) and one translated line, as the real door's are shaped */
+  textOf(page: number): Promise<TextLayerData> {
+    this.check()
+    this.range(page)
+    if (this.state[page] !== 'ready') return Promise.reject(new Error(`page ${page} is not laid`))
+    const [x0, y0, x1, y1] = this.viewOf(page)
+    const top = y1 - 72
+    // (answered in a microtask, as the real door's: a dispose in between rejects it)
+    return Promise.resolve().then(() => {
+      this.check()
+      return this.textData(page, x0, x1, y0, y1, top)
+    })
+  }
+  private textData(page: number, x0: number, x1: number, y0: number, y1: number, top: number): TextLayerData {
+    return ({
+      items: [
+        { str: `${page}`, x: x0 + 72, y: top - 2, w: 6, h: 10, base: top, dir: 'ltr', fontSize: 10, from: 'kept' },
+        { str: `page ${page}`, x: x0 + 90, y: top - 2.2, w: 60, h: 9.7, base: top, dir: 'ltr', fontSize: 10, from: 'translated', unit: 0, eol: true },
+      ],
+      page: { w: x1 - x0, h: y1 - y0 },
+      stats: { kept: 1, moved: 0, translated: 1, dropped: 0, work: 0, merged: 0 },
+    })
   }
   unitAt(page: number, x: number, y: number): number | null {
     if (!Number.isInteger(page) || page < 1 || page > this.through) return null
