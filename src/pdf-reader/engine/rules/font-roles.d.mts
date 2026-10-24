@@ -35,6 +35,10 @@ export declare const ENGLISH_FAMILIES: readonly EnglishFamily[]
 /** what a target draws in, for a paper's English family; `cjkFaces` is the target's CJK family as the layout rule set gives
  *  it (null for an alphabet), and a script of no alphabet's given none throws */
 export declare function rolesFor(target: string, family: EnglishFamily, cjkFaces: CjkFaces | null): RoleSet
+/** whether a face's lowercase letters are its small capitals (Latin Modern's caps face): measured and drawn as they are */
+export declare const capsLetters: (id: string) => boolean
+/** whether a face draws small capitals of its own: by its smcp feature, or by its letters (Latin Modern's caps face) */
+export declare const ownSmallCaps: (id: string) => boolean
 /** the face a run is drawn in */
 export declare function faceFor(roles: RoleSet, run: { script: 'cjk' | 'latin'; cls: FontClass['cls']; design: Design; bold: boolean; italic: boolean; caps: boolean }): FaceId
 /** whether every character of `text` (but white space and the default ignorable) is in one of `faces`' coverage or
