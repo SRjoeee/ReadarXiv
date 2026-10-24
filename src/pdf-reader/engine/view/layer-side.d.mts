@@ -77,7 +77,11 @@ export declare const KEEP_SHARE: number
 /** the memory a device is taken to have where its browser does not say, GB */
 export declare const KEEP_MEMORY_GB: number
 /** this device's budget of kept drawings, device pixels: KEEP_SHARE of its memory, at least two screens, at most KEEP_PIXELS */
-export declare function keepBudget(o?: { deviceMemory?: number; screenPixels?: number }): number
+export declare function keepBudget(o?: { deviceMemory?: number; screenPixels?: number; ios?: boolean }): number
+/** the most kept on iOS and iPadOS */
+export declare const IOS_KEEP_PIXELS: number
+/** whether the browser runs on iOS or iPadOS */
+export declare function onIos(nav?: { userAgent?: string; maxTouchPoints?: number } | null): boolean
 /** how many pages past the near ones are laid ahead while the reader rests, once the rows have ended */
 export declare const AHEAD_PAGES: number
 /** how long the view rests before the pages ahead are laid, ms */

@@ -80,17 +80,27 @@ export const KEEP_SHARE = 1 / 64
 /** the memory a device is taken to have where its browser does not say (navigator.deviceMemory: Chromium's alone), GB: a phone's
  *  of today, so that no device is given more than it may hold */
 export const KEEP_MEMORY_GB = 4
+/** the most on iOS and iPadOS, whose WebKit tells no memory (no deviceMemory) and kills a tab past its process's limit: 2^23
+ *  pixels, 32 MiB. Until Safari 17, WebKit also refused a canvas once all of a page's canvases held past a cap of its own (about
+ *  200 MB on an iPhone SE, 256 MB on iOS 12 devices, 384 MB reported: WebKit bug 195325); WebKit PR 14375 (265628@main,
+ *  2023-06-29) removed that cap, leaving canvases to the process's limit. 32 MiB kept, beside the near pages' copies (an
+ *  iPhone at 3x holds some 7 MB a page at the fit), stays under a third of the lowest cap reported, on the reader's floor
+ *  (Safari 17) and below it */
+export const IOS_KEEP_PIXELS = 2 ** 23
 /**
  * The device pixels of drawings the side keeps off the view on this device: KEEP_SHARE of its memory (`deviceMemory`, GB, where the
  * browser tells it, else KEEP_MEMORY_GB) at 4 bytes a pixel, never fewer than two of its screens' pixels (`screenPixels`: its width
- * and height at its pixel ratio, so that a page left a screen behind is always kept), never more than KEEP_PIXELS
+ * and height at its pixel ratio, so that a page left a screen behind is always kept), never more than KEEP_PIXELS, nor than
+ * IOS_KEEP_PIXELS on iOS or iPadOS (`ios`)
  */
-export function keepBudget({ deviceMemory, screenPixels } = {}) {
+export function keepBudget({ deviceMemory, screenPixels, ios = false } = {}) {
   const gb = Number.isFinite(deviceMemory) && deviceMemory > 0 ? deviceMemory : KEEP_MEMORY_GB
   const byMemory = Math.floor((gb * 2 ** 30 * KEEP_SHARE) / 4)
   const floor = Number.isFinite(screenPixels) && screenPixels > 0 ? 2 * screenPixels : 0
-  return Math.min(KEEP_PIXELS, Math.max(byMemory, floor))
+  return Math.min(ios ? IOS_KEEP_PIXELS : KEEP_PIXELS, Math.max(byMemory, floor))
 }
+/** whether the browser runs on iOS or iPadOS (an iPad says it is a Mac, with a touch screen): its WebKit, whatever its name */
+export const onIos = (nav = globalThis.navigator) => !!nav && (/\biP(?:hone|ad|od)\b/.test(nav.userAgent ?? '') || (/\bMacintosh\b/.test(nav.userAgent ?? '') && (nav.maxTouchPoints ?? 0) > 1))
 /** how many pages past the near ones the side lays ahead while the reader rests, the next first (the prefetch extended to the
  *  layer: the pages' rows, faces, layout and copy made before the reader reaches them, kept as drawings off the view) */
 export const AHEAD_PAGES = 2
@@ -149,6 +159,7 @@ export function createLayerSide(view, o) {
   const keepPixels = Number.isFinite(o.keepPixels) ? Math.max(0, o.keepPixels) : keepBudget({
     deviceMemory: globalThis.navigator?.deviceMemory,
     screenPixels: (globalThis.screen?.width ?? 0) * (globalThis.screen?.height ?? 0) * (globalThis.devicePixelRatio || 1) ** 2,
+    ios: onIos(),
   })
   const aheadPages = Number.isSafeInteger(o.ahead) ? Math.max(0, o.ahead) : AHEAD_PAGES
   /** the indicator's look over the paragraphs not laid yet (INDICATORS), or none */
@@ -627,13 +638,15 @@ export function createLayerSide(view, o) {
    *  the left's page views on (opaque, read back by the CPU unless the host opens its documents with enableHWA). A delta's replaced
    *  page keeps the original's /Annots, ~91 % of whose link rectangles are ours: the layer draws its own links from the layout, so
    *  the original's annotations are not drawn into the copy */
-  async function copyAt(d, n, k, my) {
+  async function copyAt(d, n, k, my, owner = null) {
     const vp = V.places.view(n)?.viewport, box = V.places.box(n)
     if (!vp?.scale || !box) throw new Error(`page ${n} has no viewport to draw its copy at`)
     const r = k / vp.scale
     const annotationMode = index?.head?.base?.kind === 'delta' && replacedPage(n) ? V.lib?.AnnotationMode?.DISABLE : undefined
-    // (aborted where the page leaves the view before its copy is drawn: retire; its queued renders not drawn)
+    // (aborted where the page leaves the view before its copy is drawn: retire; its queued renders not drawn; and, a copy of the
+    // pages ahead, `owner`'s abort: stopAhead lets that copy go and no other of the page's)
     const P = rec(n), ac = new AbortController()
+    if (owner) { if (owner.aborted) ac.abort(owner.reason); else owner.addEventListener('abort', () => ac.abort(owner.reason), { once: true }) }
     ;(P.copyAcs ??= new Set()).add(ac)
     const canvas = await d.copyOf(n, { k, width: Math.max(1, Math.round(box.width * r)), height: Math.max(1, Math.round(box.height * r)), context: { alpha: false, willReadFrequently: !V.assets?.enableHWA }, annotationMode, signal: ac.signal }).finally(() => P.copyAcs.delete(ac))
     if (disposed || my !== gen) { release(canvas); return null }
@@ -898,7 +911,7 @@ export function createLayerSide(view, o) {
   }
 
   // ---------------------------------------------------------------- the pages ahead (the prefetch, on the layer; §11.8)
-  let aheadTimer = 0, aheadAc = null, aheadPage = 0
+  let aheadTimer = 0, aheadAc = null
   /** the pages ahead laid once the view has rested AHEAD_IDLE_MS (layAhead), the wait begun again at each call */
   function aheadSoon() {
     if (disposed || !rowsEnded) return
@@ -909,10 +922,10 @@ export function createLayerSide(view, o) {
   function stopAhead() {
     clock.clear(aheadTimer)
     aheadTimer = 0
+    // (the pages ahead's own asks and copy let go, which aheadAc's signal reaches; a copy of the same page that a commit began, the
+    // page come near meanwhile, is the commit's and goes on)
     aheadAc?.abort()
     aheadAc = null
-    for (const ac of pages.get(aheadPage)?.copyAcs ?? []) ac.abort()
-    aheadPage = 0
   }
   /**
    * The AHEAD_PAGES pages after the last near page past the middle of the view, each laid by the door and drawn at its place's k,
@@ -937,7 +950,6 @@ export function createLayerSide(view, o) {
         if (V.places.near(m) || drawings.has(m) || P.content?.wrap || P.failed || originalPageOf(m)) continue
         await (warmChain = warmChain.then(() => warmPages([m])).catch(e => warn('faces', e)))
         if (ac.signal.aborted || disposed || my !== gen) return
-        aheadPage = m
         counts.ahead++
         let laid
         try { laid = await d.pageOf(m, { lang: doorTarget, signal: ac.signal }) } catch { return }
@@ -948,7 +960,7 @@ export function createLayerSide(view, o) {
         const k = kOf(m)
         if (k === null) continue
         let got
-        try { got = await copyAt(d, m, k, my) } catch { return }
+        try { got = await copyAt(d, m, k, my, ac.signal) } catch { return }
         if (!got) return
         if (ac.signal.aborted || disposed || my !== gen) { release(got.canvas); return }
         if (V.places.near(m)) { if (!(P.content?.gen === my && P.content.wrap)) putInPlace(m, drawingOf(m, laid, got, my), laid); else release(got.canvas); continue }
@@ -956,7 +968,7 @@ export function createLayerSide(view, o) {
         if (drawings.has(m)) counts.aheadKept++
       }
     } finally {
-      if (aheadAc === ac) { aheadAc = null; aheadPage = 0 }
+      if (aheadAc === ac) aheadAc = null
     }
   }
 
