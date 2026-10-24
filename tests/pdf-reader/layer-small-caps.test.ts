@@ -236,8 +236,8 @@ describe('case is each character\'s, in the target\'s case mapping', () => {
     // (i with a combining dot above: one letter, its mark with it, the dot dropped in Lithuanian's capital and kept in the root's)
     expect(runsOf('Ki̇', 'lt')).toEqual([['K', 1], ['I', 0.8]])
     expect(runsOf('Ki̇', 'en')).toEqual([['K', 1], ['İ', 0.8]])
-    // (a code no locale reads: the root's mapping, never the device's)
-    expect(L2.upperOf('x-none')('i')).toBe('I')
+    // (no code, or one no locale takes: the root's mapping, never the device's)
+    for (const to of [undefined, '', 'not a tag']) expect(L2.upperOf(to as never)('i')).toBe('I')
   })
 })
 

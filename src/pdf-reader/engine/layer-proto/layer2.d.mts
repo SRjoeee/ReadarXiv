@@ -256,7 +256,7 @@ export declare function smallCapsAt(chars: readonly { ch: string; size: number }
 export declare function nameRuns(text: string, face: Face, to: string): { face: Face; runs: { s: string; k: number }[]; text: string }
 /** nameRuns' word's width at size 1 */
 export declare const runsWidth: (drawn: { face: Face; runs: readonly { s: string; k: number }[] }) => number
-/** the size a unit set in small capitals is drawn at in a CJK target, × its nominal size (the owner's to choose; 1) */
+/** the size a unit set in small capitals is drawn at in a CJK target, × its nominal size (the owner's, 2026-10-24: 1) */
 export declare const CJK_CAPS_SIZE: number
 /** the size a unit is laid at: the original's, its faked small capitals aside, × CJK_CAPS_SIZE in a CJK target where its base is
  *  set in small capitals; undefined where no glyph of it was read */

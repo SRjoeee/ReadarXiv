@@ -743,7 +743,7 @@ function originalStyle(uc, O, matched, small = null) {
 
 /**
  * The size a unit set in small capitals is drawn at in a CJK target (zh, zh-TW, ja, ko), × its nominal size (its capitals',
- * originalStyle): the owner's to choose (2602.23285's appendix headings, 2026-10-24). A CJK script has no case, so its characters
+ * originalStyle): the owner's (2602.23285's appendix headings, 2026-10-24: 1, as it is). A CJK script has no case, so its characters
  * stand where the original's capitals and small capitals both do; at 1 they are set at the size TeX was asked for, as an alphabet's
  * capitals are. The one number to change
  */
@@ -768,6 +768,8 @@ export const SMALL_CAPS_SHARE = 0.9
  *  real small capitals, which a face of none draws for it): NFSS's virtual faces' (ptmrc8t's), the share the survey's pages show
  *  (smallCapsOf's `ratio`) */
 export const SMALL_CAPS_RATIO = 0.8
+/** a lowercase letter, of any script */
+const LOWER = /\p{Ll}/u
 /** smallCapsOf's answer for a unit with no faked small capital and no capitals of the text's: one, read and never written */
 const NO_SMALL_CAPS = Object.freeze({ small: new Set(), upper: new Set(), lower: new Set(), letters: Object.freeze([]) })
 /**
@@ -785,26 +787,31 @@ const NO_SMALL_CAPS = Object.freeze({ small: new Set(), upper: new Set(), lower:
  * read, each by the alignment's pairs (`pair` into S, gapsOfOnce's); `small` and `upper` are empty where no letter of the unit's
  * is of the source's own case. `ratio`, where `small` holds any: their size over the capitals' (the medians), to the hundredth,
  * the share the layer draws its own small capitals at (tokensOf2's capsRatio). The survey's 1747 faked capitals of 32 papers are
- * at 0.80 but one table's 36, at 0.71 (2608.27181, at 7 pt): a unit's own, never a paper's
+ * at 0.80 but one table's 36, at 0.71 (2608.27181, at 7 pt): a unit's own, never a paper's. `src`, where it walked the unit: the
+ * source's code points it read, which measuredOf takes
  */
 function smallCapsOf(unit, uc, O, S, pair) {
   if (!pair || typeof unit?.src !== 'string') return NO_SMALL_CAPS
   // (a faked small capital is set at most SMALL_CAPS_SHARE of a median no larger than the unit's largest glyph, and a unit of the
-  // text's capitals sets more capitals than lowercase letters: where no capital of the unit's is that small and its lowercase
-  // letters are as many as its capitals, neither is, and the walk below is not made, the reading of nearly every unit)
+  // text's capitals sets as lowercase letters fewer than half of its source's: where no capital of the unit's is that small and
+  // its page sets half its source's lowercase letters or more, neither is, and the walk below is not made, the reading of nearly
+  // every unit, a table's cell of acronyms too)
   // (plain loops, a letter's case by its code where it is ASCII: no closure and no string a character, the reading of every unit)
-  let big = 0, any = false, ups = 0, lows = 0
+  let big = 0, any = false, lows = 0
   for (let i = 0; i < uc.length; i++) {
     const c = uc[i]
     if (c.sep || c.space || c.st?.fam === 'math') continue
     if (c.size > big) big = c.size
     const code = c.ch.charCodeAt(0)
-    if (code >= 65 && code <= 90) ups++
-    else if (code >= 97 && code <= 122) lows++
-    else if (code > 127) { if (c.ch !== c.ch.toLowerCase()) ups++; else if (c.ch !== c.ch.toUpperCase()) lows++ }
+    if ((code >= 97 && code <= 122) || (code > 127 && LOWER.test(c.ch))) lows++
   }
   for (let i = 0; i < uc.length && !any; i++) { const c = uc[i]; any = !c.sep && !c.space && c.size > 0 && c.size <= SMALL_CAPS_SHARE * big && c.st?.fam !== 'math' && c.ch !== c.ch.toLowerCase() }
-  if (!any && ups <= lows) return NO_SMALL_CAPS
+  if (!any) {
+    const src = unit.src
+    let srcLows = 0
+    for (let i = 0; i < src.length; i++) { const code = src.charCodeAt(i); if ((code >= 97 && code <= 122) || (code > 127 && LOWER.test(src[i]))) srcLows++ }
+    if (2 * lows >= srcLows) return NO_SMALL_CAPS
+  }
   const small = new Set(), upper = new Set(), lower = new Set(), letters = []
   const src = [...unit.src], same = []
   const cased = ch => ch.toLowerCase() !== ch.toUpperCase()
@@ -833,7 +840,8 @@ function smallCapsOf(unit, uc, O, S, pair) {
       same.push(c.size)
     }
   })
-  if (!same.length) return { small, upper, lower, letters }
+  // (its source's code points beside: measuredOf reads them again, and takes these)
+  if (!same.length) return { small, upper, lower, letters, src }
   const ref = median(same), sizes = []
   for (const c of lower) {
     if (!cased(c.ch) || c.ch !== c.ch.toUpperCase()) continue
@@ -841,7 +849,7 @@ function smallCapsOf(unit, uc, O, S, pair) {
     else upper.add(c)
   }
   // (their share of the capitals' size, to the hundredth: each glyph's size is the PDF's own, so one tells it exactly)
-  return sizes.length ? { small, upper, lower, letters, ratio: Math.round((100 * median(sizes)) / ref) / 100 } : { small, upper, lower, letters }
+  return sizes.length ? { small, upper, lower, letters, src, ratio: Math.round((100 * median(sizes)) / ref) / 100 } : { small, upper, lower, letters, src }
 }
 /**
  * Whether `chars` ({ st, small, lower }) are set in small capitals: what most of the glyphs that can tell hold, a tie to none.
@@ -866,7 +874,7 @@ function capsVote(chars) {
  */
 function measuredOf(unit, uc, O, S, pair, sc = null) {
   const scopes = sourceScopes(unit), none = { sets: 0, chain: [], flip: 0 }, chars = [], fake = sc?.small.size > 0
-  const src = scopes ? [...unit.src] : null
+  const src = scopes ? (sc?.src ?? [...unit.src]) : null
   const measured = c => !c.sep && !c.space && c.st && /\S/.test(c.ch) && c.st.fam !== 'math'
   O.forEach((o, q) => {
     if (!pair || pair[q] < 0) return
@@ -2072,7 +2080,7 @@ const headOfCut = (t, extra) => {
 }
 
 // ---- small capitals the layer draws itself (2602.23285's appendix headings, 2026-10-24)
-// A run set in small capitals in a face with none of its own (Nimbus Roman, Nimbus Sans, FreeMono, Latin Modern's bold) is drawn
+// A run set in small capitals in a face with none of its own (Nimbus Roman, Nimbus Sans, FreeMono: no smcp feature) is drawn
 // as NFSS's virtual faces set them: each lowercase letter as the face's capital at the share of the size the original's small
 // capitals are set at (the unit's capsRatio, else SMALL_CAPS_RATIO), the other characters as they are, each run of one case a
 // token of its own (`sc`, that share), glued to the one before, measured and drawn in the face with no small capitals asked of
@@ -2082,14 +2090,16 @@ const headOfCut = (t, extra) => {
 /** whether the layer draws a run's small capitals itself: a run set in them (`caps`, a Latin run's: fonts.mjs) in a face with
  *  none of its own (font-roles.mjs ownSmallCaps; a prototype face's are not known, so none) */
 export const selfCaps = face => !!face?.caps && !(face.id && ownSmallCaps(face.id))
+/** a face as the layer draws its small capitals in: with none asked of it where it draws them itself (selfCaps) */
+const plainOf = face => (selfCaps(face) ? { ...face, caps: false } : face)
 /** a target's capitals: its language's case mapping (Turkish i to İ, German ß to SS), the root's where it names none a locale
- *  reads, never the device's */
+ *  reads (no code, or one no locale takes), never the device's */
 const uppers = new Map()
 export function upperOf(to) {
   let f = uppers.get(to)
   if (!f) {
     let loc = 'und'
-    try { 'a'.toLocaleUpperCase(to); loc = to } catch {}
+    if (typeof to === 'string' && to) try { 'a'.toLocaleUpperCase(to); loc = to } catch {}
     f = s => s.toLocaleUpperCase(loc)
     uppers.set(to, f)
   }
@@ -2211,7 +2221,6 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
   // a capital of a rendering of the page's own characters a small one where the page sets it at most SMALL_CAPS_SHARE of the
   // unit's size: caseRuns; and the capitals of an all-capitals unit's text, `upper`; each by the target's case mapping)
   const capsK = resolved.capsRatio ?? SMALL_CAPS_RATIO, upper = upperOf(to)
-  const plainOf = face => (selfCaps(face) ? { ...face, caps: false } : face)
   const pushText = (s, st, extra = {}, track = null, smallAt = null) => {
     for (const m of s.matchAll(/\s+|\S+/g)) {
       const chunk = m[0]
@@ -2426,7 +2435,8 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     if (!r.text) return
     if (r.text === ' ') { pushText(' ', style()); return }
     // (a formula's text in no small capitals and no capitals of the text's: TeX sets neither in math)
-    const own = r.math ? { ...style(), italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3, caps: false, upper: false } : r.mode === 'orig-text' && r.st && r.st.fam !== 'math' ? { ...style(), fam: r.st.fam === 'mono' ? 'mono' : style().fam, design: r.st.fam === 'mono' ? designs.mono : style().design } : style()
+    const own = r.math ? { ...style(), italic: /[A-Za-z]/.test(r.text) && r.text.length <= 3, caps: false } : r.mode === 'orig-text' && r.st && r.st.fam !== 'math' ? { ...style(), fam: r.st.fam === 'mono' ? 'mono' : style().fam, design: r.st.fam === 'mono' ? designs.mono : style().design } : style()
+    if (r.math && own.upper) own.upper = false
     // (in its glyphs' own colour where the file gives one: a citation in hyperref's colorlinks blue, which the unit's source
     // does not name; mixed or black, its run's. A run the source colours, which the file's `colours` row gives, wins)
     const fill = resolved.fillOf?.(k)
