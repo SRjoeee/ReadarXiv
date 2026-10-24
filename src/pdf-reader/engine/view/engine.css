@@ -132,6 +132,15 @@ html[data-axt-dim] {
 .axt-layer > .axt-layer-copy { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
 .axt-layer > svg { position: absolute; left: 0; top: 0; width: var(--axt-frame-w, 100%); height: var(--axt-frame-h, 100%); overflow: visible; font-synthesis: none; text-rendering: geometricPrecision; }
 .axt-layer > svg text { white-space: pre; }
+/* ----- the layer's text layer (text-layer.mjs; docs/PDF-READER.md §11.11): PDF.js's own text layer over the drawing, under the
+   links, built after the commit; what a selection, a copy and a search on a laid page read, one copy of each text. The SVG's
+   text is drawn, not read: out of selection (and, in layer-side.mjs, out of the accessibility tree). An upright page's layer is
+   laid in the copy's frame, as the SVG is, not in the place's box that PDF.js floors to whole CSS px (its inline size, set by
+   PDF.js's builder, overridden); a page turned a quarter keeps PDF.js's own box, which its rotation rule turns. Contained: its
+   spans' style and layout are the layer's alone, never the page's */
+.axt-layer > svg { -webkit-user-select: none; user-select: none; }
+.axt-layer > .textLayer { contain: strict; }
+.axt-layer > .textLayer[data-axt-frame] { width: var(--axt-frame-w, 100%) !important; height: var(--axt-frame-h, 100%) !important; }
 html[data-axt-dim] .axt-layer > svg { filter: invert(88.8%) hue-rotate(180deg); }
 /* ----- the layer's links over a laid page (links.mjs): one anchor a link, at the union of its boxes, each box a span of its
    own; every size a share of the page's frame (the SVG's: the page's size at its scale) or of the link's, so a zoom moves

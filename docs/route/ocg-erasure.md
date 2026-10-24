@@ -2,7 +2,7 @@
 
 Subject: architecture audit items 5(a) and 5(b). Read-only design, no code. Engine refs are to `.worktrees/route-delta`
 (feat/delta-base, d50f78c1), `src/pdf-reader/engine/`. Inputs: `route/architecture-audit.md` §5, `route/ocg-spike.md`,
-`route/delta.md` §2, §8, §13–15, `route/text-layer.md`, `layout/stream.mjs`, `layout/marks.mjs`, `layout/ink.mjs`,
+`route/delta.md` §2, §8, §13–15, the text layer (then `route/text-layer.md`, now `PDF-READER.md` §11.11), `layout/stream.mjs`, `layout/marks.mjs`, `layout/ink.mjs`,
 `layout/remove.mjs`, `layer-proto/removal.mjs`, the coordinator's ruling R1–R6 (binding). The measurements behind §11 are
 in `route/ocgrev/` (scripts `own.mjs`, `cmp2.mjs`, `paths.mjs`, `fetch.sh`; outputs `*.L2.json`, `api/`). v1 and v2 are kept as
 `route/ocg-erasure.v1.md` and `route/ocg-erasure.v2.md`. v3 applies the coordinator's conditions C1–C4. C1's re-measure is
@@ -203,7 +203,7 @@ Oracles: on synthetic pages, the generator emits the page without unit u's opera
 | Audit 1 (unmarked compile as the reader's page) | Would remove the `ri` literals that make MR boundaries TJ boundaries. It conflicts with §1–2 and is not taken while ownership comes from the marks |
 | PDF.js pin | X1. A version move passes G0–G7 in CI and the lab, and §8 on staging, both hosts on one pin |
 | Highlight, sync, links, contents | They read the layout file, the parts and the left document. Their (n,k) is the composed page's, the only one there is |
-| Text layer (text-layer.md) | Invariant: no `getTextContent` on a wrapped page, because it ignores visibility. The text layer's kept items on a wrapped page come from the layout file and units (text-layer.md §7: `textOf` in the run) for units not in D(p), and from the original's (left) document for ink no unit owns. Hidden units contribute only translated items |
+| Text layer (`PDF-READER.md` §11.11) | Invariant: no `getTextContent` on a wrapped page, because it ignores visibility. The text layer's kept items on a wrapped page come from the layout file and units (`textOf` in the run) for units not in D(p), and from the original's (left) document for ink no unit owns. Hidden units contribute only translated items. As built (2026-10-24, before the wrap) `textOf` reads the composed page's text content as the lay reads it, split by the drawing's operations: the wrap's PR changes that input for a wrapped page |
 | Download (R5) | Today: the compiled final and arXiv's link. Future (owner's 10-08 decision, download = the instant layer exported): the composed document with drawn units' names re-pointed OFF and the layer appended as one incremental update with our font subsets (§3.3). Now: `/D` all ON and `/Order []` |
 | Printing | The DOM is printed (canvas A + SVG). The PDF.js `print` intent is unused; if it is ever used, configs are made with that intent |
 | Prefetch (delta.md §16) | Unchanged: one byte source, and the delta is in memory |
@@ -286,8 +286,8 @@ found by grep in the route-delta engine and the web repo's delta-web worktree:
 - **prefetch:** `web/src/ranges.ts` (priority gate, prefetch wrapper), `web/src/session/run.mjs` (idle hooks); extension
   `session/ranges.ts` and `session/run.ts`.
 - **text layer:** `web/src/layer/door.ts` (host DOM from `textOf`); `engine/view/places.mjs` and `view/reader-view.mjs` (the
-  page's DOM slot, `textLayerMode`); `engine/layer-proto/run.mjs` `textOf` (text-layer.md §7: the engine lane writes it, the web
-  lane hosts it).
+  page's DOM slot, `textLayerMode`); `engine/layer-proto/run.mjs` `textOf` (built 2026-10-24, `PDF-READER.md` §11.11: the
+  engine's `textOf` and the shared view's host, both hosts passing PDF.js's `TextLayerBuilder`).
 
 **Known overlaps** (each change goes through the lane named first; the other reviews):
 
