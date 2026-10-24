@@ -106,6 +106,10 @@ export const onIos = (nav = globalThis.navigator) => !!nav && (/\biP(?:hone|ad|o
 export const AHEAD_PAGES = 2
 /** how long the view rests (no scroll, no page asked, nothing laid) before the pages ahead are laid */
 export const AHEAD_IDLE_MS = 600
+/** the translating card's padding, CSS pixels at the reader's 100 % (engine.css --axt-tr-pad-x and -pad-y, where the sheet gives
+ *  none: the owner's of 2026-10-25) */
+export const PAD_X = 14
+export const PAD_Y = 4
 /** the pages wanted last whose geometry is kept beside the near ones (§3.2) */
 const WANTED_KEPT = 20
 /** the commits the probe keeps */
@@ -236,6 +240,7 @@ export function createLayerSide(view, o) {
     if (disposed || state === 'refused') return
     state = 'refused'
     why = w
+    unmarkAll()
     warn(`open (${w})`, e ?? new Error(w))
     const was = door
     door = null
@@ -433,6 +438,7 @@ export function createLayerSide(view, o) {
     if (!c) return false
     const P = rec(n)
     if (disposed || !door || c.gen !== gen || c.target !== doorTarget || (P.content?.wrap && P.content !== c) || !V.places.swap(n, c.wrap)) { release(c.copy); return false }
+    unmark(n)
     P.content = c
     P.failed = false
     P.stalled = false
@@ -486,6 +492,8 @@ export function createLayerSide(view, o) {
   }
   /** a page whose layer is not coming now: its place back to its pre-layer content where it holds the layer's */
   function shownOriginal(n) {
+    // (a page that failed is the original's: no paragraph of it is coming)
+    unmark(n)
     const P = rec(n)
     if (P.content && (P.content.gen !== gen || !P.content.wrap)) unlay(n)
     // the right's shapes there the original's again, as its place is
@@ -685,6 +693,7 @@ export function createLayerSide(view, o) {
   function putInPlace(n, content, laid) {
     const P = rec(n), was = P.content
     if (!V.places.swap(n, content.wrap)) { release(content.copy); return }
+    unmark(n)
     if (was !== content) release(was?.copy)
     dropDrawing(n)
     P.content = content
@@ -821,6 +830,7 @@ export function createLayerSide(view, o) {
    *  own wave alone shares the line with what that page waits for besides (the composed document's bytes, its delta), and no other
    *  page's (2602.23285v2 in Chinese, pages 1 and 2 together: 3.3 MB of slices beside the delta's 478 KB). Once a task */
   function warmSoon() {
+    markSoon()
     if (warmQueued || disposed) return
     warmQueued = true
     queueMicrotask(() => {
@@ -833,6 +843,102 @@ export function createLayerSide(view, o) {
       const qs = !count ? [1] : counts.commits ? near : near.slice(0, 1)
       warmChain = warmChain.then(() => warmPages(qs)).catch(e => warn('faces', e))
     })
+  }
+
+  // ---------------------------------------------------------------- translating (the indicator; §11.8)
+  /** each near page's indicator, by page: one element over the place (a child of the place itself, so that no swap of what the
+   *  place shows takes it), holding one mark a paragraph */
+  const marks = new Map()
+  let markQueued = false, marksOff = false
+  /** the indicators made again at the next microtask, for every near page */
+  function markSoon() {
+    if (markQueued || disposed) return
+    markQueued = true
+    queueMicrotask(() => {
+      markQueued = false
+      for (const n of [...marks.keys()]) if (!V.places.near(n)) unmark(n)
+      for (let n = 1; n <= V.places.count(); n++) if (V.places.near(n)) markPage(n)
+    })
+  }
+  /** whether the light can pass: a registered property animated (@property) and a size container's units, which the readers'
+   *  floors before Firefox 128 lack the first of; else the marks are a still ground */
+  function moves() {
+    const C = globalThis.CSS
+    return typeof C?.registerProperty === 'function' && typeof C.supports === 'function' && C.supports('width', '1cqh')
+  }
+  function unmark(n) { const el = marks.get(n); if (el) { el.remove(); marks.delete(n) } }
+  function unmarkAll() { for (const n of [...marks.keys()]) unmark(n) }
+  /**
+   * Page n's indicator: over each paragraph the parts read so far locate on it (its rectangles there, the union of them),
+   * while the page is not laid and can still be (the layer open or opening, the page not failed): none for an author's unit
+   * (never drawn), nor for one whose rows have ended with no row of it (it stays the original's). Its box in shares of the page's
+   * view, so that no zoom moves it
+   */
+  function markPage(n) {
+    const P = pages.get(n)
+    // (none on a page that stays the original's: its parts hold no layout to lay, originalPageOf; nor once the host has said this
+    // attempt's rows will not come, dropOthers, until another attempt begins)
+    if (disposed || marksOff || state === 'refused' || P?.content?.wrap || P?.failed || originalPageOf(n)) return unmark(n)
+    const place = V.places.page(n)
+    const units = [], view = []
+    for (const part of feed.state().parts) {
+      if (Array.isArray(part.pages) && n >= part.pages[0] && n <= part.pages[1] && part.views) view.splice(0, 4, ...part.views.slice(4 * (n - part.pages[0]), 4 * (n - part.pages[0]) + 4))
+      for (const [id, , rects] of part.left ?? []) {
+        const on = (rects ?? []).filter(r => r[0] === n)
+        if (!on.length || index?.kinds[id] === 'author' || (rowsEnded && !rows.has(id))) continue
+        units.push({ id, on })
+      }
+    }
+    if (!place || !units.length || view.length !== 4 || !(view[2] > view[0]) || !(view[3] > view[1])) return unmark(n)
+    const [x0, y0, x1, y1] = view, w = x1 - x0, h = y1 - y0
+    // (none on a page the original turns a quarter: the parts' rectangles are in the page's own frame, which its view shows across)
+    const box = place.getBoundingClientRect?.()
+    if (box?.width > 0 && box.height > 0 && Math.abs(box.width / box.height - h / w) < Math.abs(box.width / box.height - w / h)) return unmark(n)
+    const cq = (v, axis) => `${(100 * v).toFixed(3)}cq${axis}`
+    let el = marks.get(n)
+    if (!el) {
+      el = document.createElement('div')
+      el.className = moves() ? 'axt-translating' : 'axt-translating axt-translating-still'
+      el.setAttribute('aria-hidden', 'true')
+      marks.set(n, el)
+    }
+    if (el.parentNode !== place) place.append(el)
+    // (the card's padding and corner are CSS pixels at the reader's 100 %, the sheet's --axt-tr-pad-x, -pad-y and -radius, scaled
+    // with the page: a CSS pixel at 100 % is 3/4 of a point, PDF.js's own, so a page w points wide is 4w/3 of them, and one of
+    // them is 100/(4w/3) cqw of the page's overlay, --axt-tr-u)
+    el.style.setProperty('--axt-tr-u', `${(100 / ((4 * w) / 3)).toFixed(5)}cqw`)
+    const css = typeof getComputedStyle === 'function' ? getComputedStyle(el) : null
+    const px = v => { const x = Number.parseFloat(css?.getPropertyValue(v) ?? ''); return Number.isFinite(x) && x >= 0 ? x : null }
+    const padX = (px('--axt-tr-pad-x') ?? PAD_X) * 0.75, padY = (px('--axt-tr-pad-y') ?? PAD_Y) * 0.75
+    const boxes = units.map(({ id, on }) => ({ id, ax: Math.min(...on.map(r => r[1])), ay: Math.min(...on.map(r => r[2])), bx: Math.max(...on.map(r => r[3])), by: Math.max(...on.map(r => r[4])) }))
+    // (each paragraph's card kept from one call to the next where it stays, its style changed in place: a card put in again would
+    // begin its delay and its fade again, and rows come in batches)
+    const had = new Map([...el.children].map(c => [c.dataset.axtU, c]))
+    const want = new Set()
+    boxes.forEach((b, i) => {
+      // (never two cards over each other: each side's padding at most half the gap to the nearest mark beside it, above or below
+      // where their columns meet, left or right where their lines do)
+      let pX = padX, pY = padY
+      boxes.forEach((o, j) => {
+        if (j === i) return
+        if (b.ax < o.bx && o.ax < b.bx) pY = Math.min(pY, Math.max(0, Math.max(o.ay - b.by, b.ay - o.by) / 2))
+        if (b.ay < o.by && o.ay < b.by) pX = Math.min(pX, Math.max(0, Math.max(o.ax - b.bx, b.ax - o.bx) / 2))
+      })
+      // (its box and its padding in the page's shares, as container units of the page's overlay: the card's geometry and the
+      // light's offset are the sheet's, engine.css)
+      const style = `--axt-tr-x:${cq((b.ax - x0) / w, 'w')};--axt-tr-y:${cq((y1 - b.by) / h, 'h')};--axt-tr-w:${cq((b.bx - b.ax) / w, 'w')};--axt-tr-h:${cq((b.by - b.ay) / h, 'h')};--axt-tr-px:${cq(pX / w, 'w')};--axt-tr-py:${cq(pY / h, 'h')}`
+      const key = String(b.id)
+      want.add(key)
+      let m = had.get(key)
+      if (!m) {
+        m = document.createElement('i')
+        m.className = 'axt-translating-mark'
+        m.dataset.axtU = key
+        el.append(m)
+      }
+      if (m.getAttribute('style') !== style) m.setAttribute('style', style)
+    })
+    for (const [key, c] of had) if (!want.has(key)) c.remove()
   }
 
   // ---------------------------------------------------------------- the pages ahead (the prefetch, on the layer; §11.8)
@@ -1161,6 +1267,8 @@ export function createLayerSide(view, o) {
       rowsEnded = true
       if (door && !rowsTold) { rowsTold = true; door.end() }
       aheadSoon()
+      // (a paragraph with no row now is the original's: its mark goes)
+      markSoon()
     },
     /**
      * The layer in another language (`to`, a target of the rules'), in place: the door laying the target before is let go at once
@@ -1191,6 +1299,9 @@ export function createLayerSide(view, o) {
     dropOthers() {
       if (disposed) return
       dropped = true
+      // (this attempt's rows will not come: no page says it is being translated until another attempt begins, again)
+      marksOff = true
+      unmarkAll()
       dropDrawings(c => c.target !== target || c.gen !== gen)
       let hid = false
       for (const [n, P] of pages) {
@@ -1203,6 +1314,7 @@ export function createLayerSide(view, o) {
     },
     again() {
       if (disposed || state === 'refused') return
+      marksOff = false
       rows.clear()
       rowsEnded = false
       stopAhead()
@@ -1212,6 +1324,7 @@ export function createLayerSide(view, o) {
       if (contents?.clearTexts()) outlineSoon()
       reopenWanted = true
       void pump()
+      markSoon()
     },
     /** the ids of the units whose rows the open door's page still waits for (its closure's, Need(page)): a host translating
      *  as it shows translates them first; [] with no door, a page out of the paper or one ready */
@@ -1242,6 +1355,7 @@ export function createLayerSide(view, o) {
       feed.dispose()
       ac.abort()
       warmAc.abort()
+      unmarkAll()
       leftAc.abort()
       for (const off of offs) off()
       offPage?.()
