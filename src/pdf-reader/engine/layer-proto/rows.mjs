@@ -15,7 +15,6 @@ import { decideGroups, groupOf } from '../translate/groups.mjs'
 import { cellSpans } from './cells.mjs'
 import { kOfSource } from '../layer/pieces.mjs'
 import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource, translateUnits, utf8 } from '../translate/mt.mjs'
-import { authorsTranslated } from '../translate/kept.mjs'
 import { PIECES_MAX } from '../layout/json.mjs'
 import { STRING_MAX, UNIT_FLAG_BITS } from './bundle.mjs'
 
@@ -86,10 +85,9 @@ function unitFrom(b, at, units) {
   return u
 }
 
-const NOTHING = Object.freeze({ units: Object.freeze([]), kept: new Set(), keptAll: new Set(), cells: [], idOf: new Map(), plain: [] })
+const NOTHING = Object.freeze({ units: Object.freeze([]), kept: new Set(), cells: [], idOf: new Map(), plain: [] })
 /** the source units of each bundle, built once: the units (null where dropped), the units the pipeline keeps (the KEPT
- *  flag: openPaper's `kept`), those with the author block's added, the table cells, each unit's id, and its plain
- *  source, worked out when asked */
+ *  flag: openPaper's `kept`), the table cells, each unit's id, and its plain source, worked out when asked */
 const SOURCES = new WeakMap()
 function sourceOf(bundle) {
   if (bundle === null || typeof bundle !== 'object') return NOTHING
@@ -103,7 +101,7 @@ function sourceOf(bundle) {
     if (u && list[i][1] & UNIT_FLAG_BITS.KEPT) kept.add(u)
   }
   const present = units.filter(Boolean)
-  s = { units, kept, keptAll: new Set([...kept, ...present.filter(u => u.kind === 'author')]), cells: present.filter(u => u.cell), idOf: new Map(units.flatMap((u, i) => (u ? [[u, i]] : []))), plain: new Array(units.length) }
+  s = { units, kept, cells: present.filter(u => u.cell), idOf: new Map(units.flatMap((u, i) => (u ? [[u, i]] : []))), plain: new Array(units.length) }
   SOURCES.set(bundle, s)
   return s
 }
@@ -118,10 +116,13 @@ const plainOf = (s, id) => (s.plain[id] ??= plainSource(s.units[id]))
 export const sourceUnitsOf = bundle => sourceOf(bundle).units
 
 // ---------------------------------------------------------------- the ids a language translates
-/** the units a translation into `lang` leaves as they are: live.mjs keptFor's rule, over the bundle's flags and kinds */
-const keptOf = (s, lang) => (authorsTranslated(lang) ? s.kept : s.keptAll)
-/** the ids a language translates, rising: the units that stand, but the names kept (the KEPT flag) and, where the language
- *  does not write them as the paper does (translate/kept.mjs authorsTranslated), the author block */
+/** the units a translation into any language leaves as they are: the names a table holds (the KEPT flag, nameCells). Every
+ *  content class is translated once, whatever the language and whatever a reader's toggles show (the owner, 2026-10-25;
+ *  rules/content-classes.mjs): the author block's names and places and a bibliography entry's names too, which a reader's
+ *  "names" toggle shows or hides (TRANSLATE_VERSION 6; before it the author block was sent only where the target's script
+ *  writes names its own way, translate/kept.mjs authorsTranslated, which the TeX path's keptFor still reads) */
+const keptOf = s => s.kept
+/** the ids a language translates, rising: the units that stand, but the names kept (the KEPT flag) */
 export function toTranslate(bundle, lang) {
   const s = sourceOf(bundle), kept = keptOf(s, lang), ids = []
   s.units.forEach((u, i) => { if (u && !kept.has(u) && u.echo === undefined) ids.push(i) })

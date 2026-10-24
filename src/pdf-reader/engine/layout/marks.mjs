@@ -31,7 +31,7 @@ import { OWNED, OWNED_HOW, ownedPages, spellOf, STREAM_COLUMNS, WANT } from './s
 
 // ---------------------------------------------------------------- the classes
 /** every class, in this order */
-export const MARK_CLASSES = Object.freeze(['math', 'display', 'cite', 'ref', 'eqref', 'code', 'url', 'footnote', 'macro'])
+export const MARK_CLASSES = Object.freeze(['math', 'display', 'cite', 'ref', 'eqref', 'code', 'url', 'footnote', 'macro', 'number'])
 /** the classes the run marks when asked: the global default, every class (Task 2's corpus check). The paper's own switch
  *  (layoutMarking's `switches`, what TeX answers to the mark probe) takes marks off a command's placeholders where TeX
  *  says they would change what follows them */
@@ -55,6 +55,10 @@ const EQREF = /^\\eqref(?![A-Za-z@])/
 const REF = /^\\(?:ref|autoref|[cC]ref|pageref|nameref)(?![A-Za-z@])/
 const CODE = /^\\(?:texttt|verb|lstinline)(?![A-Za-z@])/
 const URL = /^\\(?:url|href)(?![A-Za-z@])/
+/** a number a bibliography entry keeps as the original's ink (latex-front.mjs keepNumbers): text of a digit and no letter, or
+ *  a DOI written out, letters and all; none of TeX's special characters — no command, so it reads nothing after it and both its
+ *  marks go */
+const NUMBER = /^(?:[^\s\p{L}\\{}$%#&^_~]*\d[^\s\p{L}\\{}$%#&^_~]*|10\.\d{4,9}\/[^\s\\{}$%#&^_~]+)$/u
 /** a footnote's call: \footnotemark, and a \footnote whose note the scanner made no unit of (fewer than two letters: a
  *  number, a link) — a call all the same, which the layer places by its mark */
 const FOOTNOTE_MARK = /^\\footnote(?:mark)?(?![A-Za-z@])/
@@ -82,6 +86,7 @@ export function classOf(piece) {
   if (CODE.test(src)) return 'code'
   if (URL.test(src)) return 'url'
   if (FOOTNOTE_MARK.test(src)) return 'footnote'
+  if (NUMBER.test(src)) return 'number'
   return 'macro'
 }
 
@@ -102,6 +107,12 @@ const COMPLETE_SRC_MAX = 200
 /** the complete macros as a map, name → arity, from the front end's pairs or the marking's object */
 const completeMap = c => (c instanceof Map ? c : new Map(Array.isArray(c) ? c : Object.entries(c ?? {})))
 /** a piece's leading command: \cite of \cite[p.~3]{a}, \footnote of a call; null for none */
+/** the units in the order the probe's samples are taken: a bibliography's entries (latex-front.mjs bibliography: kinds
+ *  `reference` and `refnames`) after every other unit, wherever they stand, so that the body's samples are the ones they were
+ *  before entries were units, and an entry's takes what room the caps leave. A macro a .bbl defines (\\providecommand{\\doi}),
+ *  unknown to the probe's preamble, is no answer there (an error), never a wrong one */
+const BIB = u => u?.kind === 'reference' || u?.kind === 'refnames'
+const sampleOrder = units => (units.some(BIB) ? [...units.filter(u => !BIB(u)), ...units.filter(BIB)] : units)
 export const commandOf = p => (p?.t === 'nested' ? /^\\[A-Za-z@]+/.exec(p.pre ?? '')?.[0] : p?.t === 'ph' ? /^\\[A-Za-z@]+/.exec(p.src ?? '')?.[0] : null) ?? null
 /**
  * The mark probe's samples: each command of the asked classes the paper writes, once, by the first piece of it TeX can
@@ -115,7 +126,7 @@ export const commandOf = p => (p?.t === 'nested' ? /^\\[A-Za-z@]+/.exec(p.pre ??
 export function probeSamples(units, complete = null) {
   const seen = new Map(), own = new Map(), closed = completeMap(complete)
   const fit = src => !/[%#]|\\(?:verb|lstinline)(?![A-Za-z@])/.test(src) && src.length <= 400
-  for (const u of units) for (const [k, p] of u.pieces.entries()) {
+  for (const u of sampleOrder(units)) for (const [k, p] of u.pieces.entries()) {
     const cmd = commandOf(p), cls = classOf(p)
     if (!cmd) continue
     if (ASKED.has(cls)) {
@@ -191,7 +202,7 @@ const INK_SRC_MAX = 200
  */
 export function inkSamples(units) {
   const seen = new Set()
-  for (const u of units) for (const p of u.pieces) {
+  for (const u of sampleOrder(units)) for (const p of u.pieces) {
     if (seen.size >= INK_MAX) return [...seen]
     if (p.t !== 'ph' || classOf(p) !== 'macro' || seen.has(p.src) || symbolText(p.src) !== null || !boxable(p.src)) continue
     seen.add(p.src)
@@ -213,7 +224,7 @@ export const LEAD_MAX = 64
  */
 export function leadSamples(units, asked = inkSamples(units)) {
   const seen = new Set(asked), out = []
-  for (const u of units) {
+  for (const u of sampleOrder(units)) {
     const pieces = u.pieces ?? [], head = headEnd(pieces, 0)
     for (let k = 0; k < head; k++) {
       if (out.length >= LEAD_MAX) return out
@@ -1221,8 +1232,9 @@ export const MARKS_DEPTH = 3
  *  word, marked all the same); 10 the texts as TeX sets them (`marking.texts`, readInkTexts): ASCII's punctuation a text font
  *  sets, a formula's glyphs it does not spell as INK_ANY, and the leads' (leadSamples: inline code at a unit's head, a macro
  *  past INK_MAX) past the macros', so that "1,024", "max_tokens" and $d'$ find their ink: a reader of 9 would refuse
- *  them as no letters and digits */
-export const MARKS_SCHEMA = 10
+ *  them as no letters and digits; 11 the class `number` (a bibliography entry's number, both its marks), which a reader of
+ *  10 refuses as no class of MARK_CLASSES */
+export const MARKS_SCHEMA = 11
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
 const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'align', 'words', 'tokens', 'chars', 'owned', 'links']
 /** the keys a marks file holds: KEYS, and `colours` where a colour piece has a fill (a file of before, or of a paper with

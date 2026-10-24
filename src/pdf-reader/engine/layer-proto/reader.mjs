@@ -15,7 +15,7 @@ import { layoutFacade } from './facade.mjs'
 import { OPEN_FAMILY } from './fonts.mjs'
 import { layerDraws, readLeftPart } from './format.mjs'
 import { echoRows, layerIds, sourceUnitsOf, unitOf } from './rows.mjs'
-import { shownTranslated, TOGGLE_DEFAULTS, unitClass } from '../rules/content-classes.mjs'
+import { classesOn, shownTranslated, TOGGLE_DEFAULTS, unitClass } from '../rules/content-classes.mjs'
 import { openProto } from './run.mjs'
 import { BUILTIN_RULES, resolveRules } from '../rules/layout.mjs'
 
@@ -171,7 +171,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   // the reader's toggles (rules/content-classes.mjs, docs/route/orphan-text.md §8): a unit whose class they do not show is the
   // original's, its row never taken, and awaited by no page; every class is translated on the server whatever they are, and a
   // change of them opens the layer again, as a change of language does
-  const on = new Set(Object.entries({ ...TOGGLE_DEFAULTS, ...(classes ?? {}) }).filter(([, v]) => v).map(([k]) => k))
+  const on = classesOn(classes)
   const kinds = sourceUnitsOf(source).map(u => (u ? unitClass(u) : null))
   const shown = id => kinds[id] !== null && kinds[id] !== undefined && shownTranslated(kinds[id], on)
   // (a unit of the paper's whose class is not shown: its row is not taken; a row of no unit is the take's to count)
@@ -225,7 +225,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   if (!four) hear(bundle)
   // (a bundle of 3 names no lists: its base is arXiv's PDF, which holds none of our groups, so no unit is hidden over it)
   const hiding = { unhidden: id => unhidden.get(id) ?? null, labelKept: id => labelKept.has(id), rules: pg => rulesByPage.get(pg), figures: pg => figuresByPage.get(pg) ?? [], figuresShown: shownTranslated('figures', on) }
-  const common = { units: [], expect, groups, target, scale: SCALE, dpr: 1, copy: false, free: true, records: false, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, OPS, onStep: () => evaluate() }
+  const common = { units: [], expect, classes: { ...TOGGLE_DEFAULTS, ...(classes ?? {}) }, groups, target, scale: SCALE, dpr: 1, copy: false, free: true, records: false, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, OPS, onStep: () => evaluate() }
   run = await openProto(four
     ? {
         ...common, parts: true, doc, pages: index.head.paper.pages, onRetired, drawOf: page => drawOfPage(page), drawsComing: index.head.draw === 1,

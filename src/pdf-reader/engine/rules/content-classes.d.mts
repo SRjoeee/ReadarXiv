@@ -27,5 +27,11 @@ export declare const UNIT_CLASS: Readonly<Record<string, ClassId>>
 export declare function unitClass(u: string | { kind?: unknown } | readonly unknown[] | null | undefined): ClassId | null
 /** each toggle's default where a reader has set none */
 export declare const TOGGLE_DEFAULTS: Readonly<Record<Exclude<Toggle, 'always' | 'never'>, boolean>>
+/** the toggles of an open of the run given none (openProto: the lab's, the tests'): TOGGLE_DEFAULTS's, figures on */
+export declare const RUN_DEFAULTS: Readonly<Record<Exclude<Toggle, 'always' | 'never'>, boolean>>
 /** whether a class is shown translated under a reader's toggles turned on */
 export declare function shownTranslated(cls: string, on: ReadonlySet<string> | null | undefined): boolean
+/** the toggles on under a reader's `classes` ({ [toggle]: boolean } over TOGGLE_DEFAULTS; null, the defaults) */
+export declare function classesOn(classes: Partial<Record<Exclude<Toggle, 'always' | 'never'>, boolean>> | null | undefined): Set<Toggle>
+/** whether a unit is shown translated under the toggles on: its class's */
+export declare function unitShown(u: string | { kind?: unknown } | readonly unknown[] | null | undefined, on: ReadonlySet<string> | null | undefined): boolean

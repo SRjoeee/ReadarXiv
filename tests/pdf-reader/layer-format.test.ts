@@ -10,7 +10,6 @@ import {
   isFinalEnd, keyOf, keyParts, LAYOUT_REFUSED, LEFT_CAP, LEFT_VALUES, mergeParts, PART_CAP, PART_VALUES, partTarget, readCatalog, readHead, readLeftPart, readPart,
   readUnitsChunk, TOKENS_PAGE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, unitsOfChunks, droppedOf, DROPPED_MAX, UNIT_ID_MAX, VTAG5, WHY_MAX, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks,
 } from '@/pdf-reader/engine/layer-proto/format.mjs'
-import { authorsTranslated } from '@/pdf-reader/engine/translate/kept.mjs'
 import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
 import { batchesOf, sourceUnitsOf, toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { groupOf } from '@/pdf-reader/engine/translate/groups.mjs'
@@ -1728,7 +1727,8 @@ describe('records (amendment M15): derived once, the engine\'s own predicates', 
       const bundle = { units }
       expect(units.length).toBeGreaterThan(5)
       for (const lang of LANGS) {
-        const kept = (i: number) => (r.flags[i]! & RECORD_FLAG.KEPT) !== 0 || (!authorsTranslated(lang) && (r.flags[i]! & RECORD_FLAG.AUTHOR) !== 0)
+        // (the names a table holds alone: the author block is translated for every target, TRANSLATE_VERSION 6)
+        const kept = (i: number) => (r.flags[i]! & RECORD_FLAG.KEPT) !== 0
         const derived = [...units.keys()].filter(i => units[i] !== null && !kept(i))
         expect(derived, lang).toEqual(toTranslate(bundle, lang))
         // the batches: the same cuts from the records' lengths as batchesOf makes from the plain source

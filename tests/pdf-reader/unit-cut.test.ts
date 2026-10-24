@@ -24,10 +24,14 @@ import { PIPELINE_VERSION } from '@/pdf-reader/engine/pipeline/versions.mjs'
 //                Latin-1 file under its inputenc (2610.20581), a conditional the paper decides (2610.21098's \ifdefined)
 //   arity        PIPELINE 28's cuts (heading-arity.test.ts): a group after a heading, a starred heading with a short title, a
 //                \multirow of five arguments (2610.31660v1's stray brace, 2607.24653v2's \multirow)
+//   bibliography PIPELINE 29's cuts (bibliography-units.test.ts): a .bbl's entries, each its names and the rest, natbib's
+//                author-year, IEEEtran's quoted title, REVTeX's fields; an entry's numbers placeholders
 
 const enc = (s: string) => new TextEncoder().encode(s)
 const SAMPLE = new URL('../fixtures/pdf/sample-1/', import.meta.url)
 const LLNCS = '\\NeedsTeXFormat{LaTeX2e}\\ProvidesClass{llncs}\\LoadClass{article}\n\\AtBeginDocument{\\@ifundefined{url}{\\def\\url#1{#1}}{}}\n'
+/** TeX's opening quotes, which a template literal cannot hold as they are */
+const QUOTES = '``'
 const UNIT_CUT_SOURCES: Record<string, () => Map<string, Uint8Array>> = {
   'sample-1': () => new Map(['main.tex', 'main.bbl', 'refs.bib'].map(name => [name, new Uint8Array(readFileSync(new URL(name, SAMPLE)))])),
   'llncs-url': () => new Map([
@@ -39,6 +43,25 @@ const UNIT_CUT_SOURCES: Record<string, () => Map<string, Uint8Array>> = {
   ]),
   arity: () => new Map([
     ['main.tex', enc('\\documentclass{article}\n\\begin{document}\n\\section{Approaches to $H_0$}\n{Measurements differ.\n\n\\section*[Short]{A long title}\n{\\bf Lead} words.\n\n\\begin{tabular}{cc}\n\\multirow[c]{2}{*}[-2pt]{Merged} & One \\\\\n& Two \\\\\n\\end{tabular}}\n\\end{document}\n')],
+  ]),
+  bibliography: () => new Map([
+    ['main.tex', enc('\\documentclass{article}\n\\usepackage{natbib}\n\\begin{document}\nWords \\citep{a} and \\citep{b}.\n\n\\bibliography{refs}\n\\end{document}\n')],
+    ['main.bbl', enc(String.raw`\begin{thebibliography}{3}
+\providecommand{\natexlab}[1]{#1}
+
+\bibitem[{Ando and Zhang(2005)}]{a}
+Rie~Kubota Ando and Tong Zhang. 2005.
+\newblock A framework for learning.
+\newblock \emph{Journal of Machine Learning Research}, 6(Nov):1817--1853.
+
+\bibitem{b}
+C.~Wang and S.~Shang, ${QUOTES}Building pipelines,'' in \emph{Proc. ACM}, 2025, pp. 1230--1233.
+
+\bibitem [{\citenamefont {Davis}(1971)}]{c}%
+  \BibitemOpen
+  \bibfield  {author} {\bibinfo {author} {\bibfnamefont {M.}~\bibnamefont {Davis}},\ }\bibinfo {journal} {Phys. Rev. Lett.}\ \textbf {\bibinfo {volume} {27}} (\bibinfo {year} {1971})\BibitemShut {NoStop}%
+\end{thebibliography}
+`)],
   ]),
 }
 const GOLDEN = new URL('./golden/unit-cut.json', import.meta.url)
@@ -82,5 +105,8 @@ describe('the unit cut is recorded under the PIPELINE_VERSION it was cut by', ()
     // (PIPELINE 28's: the group after each heading the text's, the \multirow's content a cell's pair)
     expect(now['arity']?.slice(0, 5).map(u => u.split(':')[0])).toEqual(['heading', 'para', 'heading', 'para', 'cell'])
     expect(now['arity']?.[4]).toBe('cell: open,text,close,text')
+    // (PIPELINE 29's: each entry its names and the rest, the sample's three and the .bbl's three)
+    expect(now['sample-1']?.slice(-6).map(u => u.split(':')[0])).toEqual(['refnames', 'reference', 'refnames', 'reference', 'refnames', 'reference'])
+    expect(now['bibliography']?.slice(1).map(u => u.split(':')[0])).toEqual(['refnames', 'reference', 'refnames', 'reference', 'refnames', 'reference'])
   })
 })

@@ -113,6 +113,7 @@ async function open(P: ReturnType<typeof paper>, how: 'whole' | 'parts', { group
   const pieces = new Map<number, unknown[]>()
   // (the units file's pieces: the translated units')
   if (how === 'whole') for (const [id, r] of P.rows) { const tr = r.pieces && r.state === 'whole' ? trPiecesOf(r.pieces, (p: unknown) => (p as { k: number }).k) : null; if (tr) pieces.set(id, tr) }
+  // (no toggles given: the run's defaults, the door's, which leave the author block's names the original's)
   return openProto({
     doc: P.doc, target: 'zh', pages: 3, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, order, free,
     ...(how === 'parts' ? { expect: [...P.rows.keys()] } : {}),
@@ -136,7 +137,8 @@ describe('the paper of these tests, opened whole (today\'s call)', () => {
     const run = await open(paper(), 'whole')
     await run.until(3)
     const d = drawing(run)
-    // (the author line is the file's alone, which places no author: unanchored, as a cell whose citation it does not find)
+    // (the author line, a class the default toggles hide, which the file places no line of: unanchored, as a cell whose
+    // citation it does not find)
     // (and a paragraph only the left holds is the original's: unanchored)
     expect(d.skipped).toEqual(['11:unanchored', '12:group: a cell not drawn', '1:unanchored', '25:unanchored', '2:unanchored'])
     expect(new Set(d.order)).toEqual(new Set([0, 7, 8, 9, 10, ...Array.from({ length: 11 }, (_, i) => 14 + i)]))

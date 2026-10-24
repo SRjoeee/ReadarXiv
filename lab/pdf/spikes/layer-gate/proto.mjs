@@ -552,6 +552,8 @@ window.gate = {
     // (--perf: no copy of v0's own, as a reader opens it: the page's drawing is drawCopy's, at a view's resolution. And the run lets
     // go of what it has laid as the reader's does, the 1b design §3, so that a page or a unit let go too early moves a measure:
     // what it lets go is kept for the measures on the gate's shelf, `records`, read through laidOf)
+    // (no toggles given: the run's own, which leave the author block and a bibliography's entries the original's, as an engine
+    // of before them leaves the author block itself)
     const opts = { doc, geometry, units: parts ? [] : unitsFile.units, ...(parts ? { expect: parts.flat().map(([id]) => id), groups: tableGroups } : {}), target, pages, scale: K / devicePixelRatio, dpr: devicePixelRatio, ...(ruleSet ? { rules: ruleSet } : {}), order: order ?? null, ...(faces ? { faces } : {}), ...(faceSources ? { faceSources } : {}), ...(texIn ? { tex: texIn } : {}), labels: { captions: unitsFile.captions ?? null }, faceUrl: f => `/fonts/${encodeURIComponent(f)}`, fontUrl: f => `/proto-fonts/${f}.otf`, hyphUrl: l => `/hyph/${l}.json`, ...(perf ? { copy: false } : {}), free: true, records: true, OPS: pdfjs.OPS }
     // (what the wrap could not hide, by unit, and the cell rules by page: the run's `hiding`, as the reader's door gives it)
     const unhidden = new Map(wrap.unhidden ?? []), labelKept = new Set(wrap.labelKept ?? []), cellRules = new Map(Object.entries(wrap.rules ?? {}).map(([q, r]) => [Number(q), r]))

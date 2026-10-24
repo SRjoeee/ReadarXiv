@@ -193,7 +193,15 @@
 //     2 units' hashes change, in one paper (2607.24653v2: a \multirow[c]{3}{w}[-2pt]{…} of five arguments is now read whole,
 //     and the pairs after it are numbered one on, their texts the same); every other unit is 27's. A copy of 27 carries
 //     every unit it holds the source of, matched by sourceHash (live.mjs PIPELINE_CARRIES), and a changed unit is asked again
-export const PIPELINE_VERSION = '28'
+// 29: a bibliography's entries are units (latex-front.mjs bibliography; the content classes' stage 4, docs/route/orphan-text.md):
+//     each \\bibitem's names, its first block, a unit of kind `refnames` (class names), and the rest one of kind `reference`
+//     (class references), from the paper's thebibliography or the .bbl its package holds, which \\bibliography now reads; an
+//     entry's numbers placeholders (keepNumbers), \\newblock and IEEEtran's spacing declarations no argument's takers; and a number
+//     TeX reads ends where TeX ends it (rules/arg-roles.mjs's value reader: `\\penalty0` at a line's end took the next line's
+//     digits, as natbib's bibliographies write it between a volume and its pages). No other unit of the classes gate's 32 papers changes its
+//     cutting, kind or text (lab/pdf/records/classes-gate.md), but the ids of the units after a bibliography (an appendix's),
+//     which move up past its entries; raised with TRANSLATE_VERSION 6 (the author block sent for every target)
+export const PIPELINE_VERSION = '29'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

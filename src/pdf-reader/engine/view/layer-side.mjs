@@ -43,6 +43,7 @@ import { pathsOf, wantsFloats } from './floats.mjs'
 import { internalsOf } from './reader-view.mjs'
 import { bySentence } from './highlight.mjs'
 import { createShapes, layerShapes } from './shapes.mjs'
+import { classesOn, unitShown } from '../rules/content-classes.mjs'
 
 /** how long a page asked for, once told `laying`, may take to be laid before its place shows the original (the web's D5-R7d) */
 export const PAGE_MS = 30_000
@@ -924,9 +925,10 @@ export function createLayerSide(view, o) {
   function unmarkAll() { for (const n of [...marks.keys()]) unmark(n) }
   /**
    * Page n's indicator: over each paragraph the parts read so far locate on it (its rectangles there, the union of them),
-   * while the page is not laid and can still be (the layer open or opening, the page not failed): none for an author's unit
-   * (never drawn), nor for one whose rows have ended with no row of it (it stays the original's). Its box in shares of the page's
-   * view, so that no zoom moves it
+   * while the page is not laid and can still be (the layer open or opening, the page not failed): none for a unit whose class
+   * the reader's toggles hide (never drawn: the author block's names and a bibliography's entries by default,
+   * rules/content-classes.mjs), nor for one whose rows have ended with no row of it (it stays the original's). Its box in shares
+   * of the page's view, so that no zoom moves it
    */
   function markPage(n) {
     const P = pages.get(n)
@@ -934,14 +936,14 @@ export function createLayerSide(view, o) {
     // attempt's rows will not come, dropOthers, until another attempt begins)
     if (disposed || marksOff || state === 'refused' || P?.content?.wrap || P?.failed || P?.originalShown || originalPageOf(n)) return unmark(n)
     const place = V.places.page(n)
-    const units = [], view = []
+    const units = [], view = [], shownOn = classesOn(classes)
     for (const part of feed.state().parts) {
       // (a part's views run through its reach, the last page its layout runs to: a paragraph that crosses into a page no part
       // owns yet is located there all the same)
       if (Array.isArray(part.pages) && n >= part.pages[0] && n <= Math.max(part.pages[1], part.reach ?? 0) && part.views?.length >= 4 * (n - part.pages[0] + 1)) view.splice(0, 4, ...part.views.slice(4 * (n - part.pages[0]), 4 * (n - part.pages[0]) + 4))
       for (const [id, , rects] of part.left ?? []) {
         const on = (rects ?? []).filter(r => r[0] === n)
-        if (!on.length || index?.kinds[id] === 'author' || (rowsEnded && !rows.has(id))) continue
+        if (!on.length || !unitShown(index?.kinds[id] ?? '', shownOn) || (rowsEnded && !rows.has(id))) continue
         units.push({ id, on })
       }
     }
@@ -1358,6 +1360,8 @@ export function createLayerSide(view, o) {
       const same = (a, b) => JSON.stringify(Object.entries(a ?? {}).sort()) === JSON.stringify(Object.entries(b ?? {}).sort())
       if (same(next, classes)) return
       classes = next ?? null
+      // (the translating indicator reads them too: a class no longer shown loses its marks, one turned on gains them)
+      markSoon()
       warmAc.abort()
       warmAc = new AbortController()
       gen++

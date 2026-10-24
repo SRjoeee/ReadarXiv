@@ -63,7 +63,7 @@ export interface Setup {
   destroyed: string[]; warned: () => string[]; opens: number; highlight(on: boolean): void
   /** each door opened: the door, the rows it took, its ends, the copies it was asked (page, the ask, k) and each copy's size
    *  (page, width, height) */
-  doors: { layer: Layer; taken: Row[]; ended: number; copies: [number, unknown, number][]; sized: [number, number, number][]; classes: unknown }[]
+  doors: { layer: Layer; taken: Row[]; ended: number; copies: [number, unknown, number][]; sized: [number, number, number][]; classes: unknown; options?: OpenLayerOptions }[]
   /** the door the side holds now (the last opened, while it lives) */
   layer(): Layer | null
   real: boolean
@@ -107,6 +107,8 @@ export interface Options {
   /** the side's bounds (LayerSideOptions): the drawings' pixels kept off the view, the pages laid ahead */
   keepPixels?: number
   ahead?: number
+  /** the reader's toggles (LayerSideOptions `classes`), none by default: the door's defaults */
+  classes?: Partial<Record<'heads' | 'tables' | 'figures' | 'references' | 'names', boolean>>
 }
 /** the view over the original (its four pages), its layer side over the door and the paper's objects served by digest */
 export async function setup(o: Options = {}): Promise<Setup> {
@@ -154,7 +156,7 @@ export async function setup(o: Options = {}): Promise<Setup> {
   const doors: Setup['doors'] = []
   const side = createLayerSide(view, {
     paper: { id: '2608.04322', version: 1 }, target: 'zh', faceSources: o.faceSources ?? (async () => null), hyphUrl: () => '',
-    ...(o.keepPixels === undefined ? {} : { keepPixels: o.keepPixels }), ...(o.ahead === undefined ? {} : { ahead: o.ahead }),
+    ...(o.keepPixels === undefined ? {} : { keepPixels: o.keepPixels }), ...(o.ahead === undefined ? {} : { ahead: o.ahead }), ...(o.classes === undefined ? {} : { classes: o.classes }),
     fetchObject, bind: (o.bind ?? (async () => true)) as never,
     composed: (tail, options) => {
       const task = fakeTask(destroyed, `composed ${composed.length}`)
@@ -169,7 +171,7 @@ export async function setup(o: Options = {}): Promise<Setup> {
       if (o.openFails || o.openFailAt?.includes(opens - 1)) throw new BundleRefusal('the document has 9 pages, not 4', { kind: 'part', path: 'doc' })
       const layer = o.real ? await o.real.openLayer(oo) : await door.openLayer(oo)
       live = layer
-      const seen: Setup['doors'][number] = { layer, taken: [], ended: 0, copies: [], sized: [], classes: (oo as { classes?: unknown }).classes ?? null }
+      const seen: Setup['doors'][number] = { layer, taken: [], ended: 0, copies: [], sized: [], classes: (oo as { classes?: unknown }).classes ?? null, options: oo }
       doors.push(seen)
       const take = layer.take.bind(layer), end = layer.end.bind(layer), copyOf = layer.copyOf.bind(layer), dispose = layer.dispose.bind(layer)
       layer.take = r => { seen.taken.push(...r); return take(r) }

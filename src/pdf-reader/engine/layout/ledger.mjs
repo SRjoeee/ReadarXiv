@@ -42,10 +42,14 @@ export const ORPHAN_LINES_MAX = 200
 /** an orphan line's text as listed, at most */
 const TEXT_MAX = 160
 
-/** the babel names whose text opens a zone, and the zone it opens: a list, the bibliography, an index; a unit's start ends it */
+/** the babel names whose text opens a zone, and the zone it opens: a list, the bibliography, an index; a unit's start ends it, but a
+ *  bibliography entry's (ENTRY_KINDS), which opens the references' */
 const ZONE_OF = Object.freeze({ contents: 'contents', listfigure: 'contents', listtable: 'contents', ref: 'references', bib: 'references', index: 'index', glossary: 'index' })
 const NAME_END = /^n\d+\.([a-z]{1,16})\.e$/
-const UNIT_START = /^[th]?\d+s$/
+const UNIT_START = /^[th]?(\d+)s$/
+/** the units a bibliography's entry is (latex-front.mjs bibliography): an entry's start opens the references' zone, whatever
+ *  name opened it or none did (REVTeX's, whose \\refname no heading sets), and the start of any other unit ends it */
+const ENTRY_KINDS = new Set(['reference', 'refnames'])
 /** a page's column mark (MARK_DEF's c<n>-<k>, set by shipout/background before anything of the page): no mark of its text */
 const COLUMN = /^c[12]-\d+$/
 const BRACKET = /^b[se]\d+$/
@@ -112,8 +116,9 @@ export function ledgerOf(pages, own, { units = null } = {}) {
     for (let q = 0, g = 0; g <= n; g++) {
       for (; q < P.length && P[q].glyph <= g; q++) {
         const m = NAME_END.exec(P[q].name)
+        const start = m ? null : UNIT_START.exec(P[q].name)
         if (m && Object.hasOwn(ZONE_OF, m[1])) zone = ZONE_OF[m[1]]
-        else if (UNIT_START.test(P[q].name)) zone = null
+        else if (start) { const u = units?.[Number(start[1])]; zone = ENTRY_KINDS.has(Array.isArray(u) ? u[0] : u?.kind) ? 'references' : null }
       }
       if (g < n) zones[g] = zone
     }
