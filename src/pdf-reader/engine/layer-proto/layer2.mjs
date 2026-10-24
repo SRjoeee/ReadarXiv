@@ -2555,6 +2555,9 @@ function slotsAt(blocks, st, P, s) {
       const em = s * st.scale
       let x1 = mx1
       for (const d of b.shortSkips ?? []) if (d.top < y && d.top > y - SHORT_SKIP * em && Math.min(x1, d.x1) > Math.max(x0, d.x0)) x1 = Math.min(x1, d.x0 - PREDISPLAY * em)
+      // (a line on a shared row whose rest stays another's, `stop` (run.mjs keptAfter): within an em of its baseline, it ends
+      // where TeX ended the unit's text there)
+      if (b.stop && Math.abs(y - b.stop.y) < b.stop.band) x1 = Math.min(x1, b.stop.x1)
       // a sliver beside a formula (narrower than 1.5 em) holds no text: its words were the formula's
       if (x1 - x0 < 1.5 * s * st.scale) continue
       out.push({ block: bi, page: b.page, x0, x1, baseline: y, target, centred: b.centred, pitch, after: b.after ?? 0, foot: feet[bi], flow: b.flow ?? bi })
@@ -3478,9 +3481,10 @@ export function keepsPages(fit, lines) {
 /** whether a layout of a unit keeps its shared row as the unit's fit left it (shareOf): its text there ending no further
  *  right, none there where the fit set none, and the line that ends furthest there on the baseline the fit set it at (`at`),
  *  so that the next unit on the row, laid from the fit's end and on its baseline, stays clear of it and on its line
- *  (run.mjs fillPage). True with no share */
+ *  (run.mjs fillPage). True with no share, and with one no next unit is laid from (`kept`: something stays between the two
+ *  on the row, run.mjs keptAfter, and the unit's own line there ends where TeX's did, its slot's `stop`) */
 export function keepsShare(share, lines) {
-  if (!share) return true
+  if (!share || share.kept) return true
   let far = null
   for (const l of lines) {
     if (!onShare(share, l)) continue

@@ -37,6 +37,27 @@ const split = (chars: number): Paper => ({
   ],
 })
 
+/** two items of an inline list (inparaenum): unit 0 two full rows and its last [20, 150] at 226, the next item's label "(2)"
+ *  [154, 166] on that row (no unit's: kept as the original's), unit 1 from 170 on it, then two full rows; unit 0's translation
+ *  `chars` CJK characters */
+const listed = (chars: number): Paper => ({
+  ...split(chars), name: `inline list, ${chars}`,
+  specs: split(chars).specs.map(s => (s.id === 1 ? { ...s, lines: [line(1, 226, 'Under the routed', 170, 280), ...s.lines.slice(1)] } : s)),
+  extra: [line(1, 226, '(2)', 154, 166)],
+})
+
+describe('a shared line with something kept between the two units (2610.21098 p2: inparaenum\'s "(2)")', () => {
+  it('the unit before it ends its text on the row where TeX did, and the next unit\'s first line stays where TeX set it', async () => {
+    // (before: the unit's last line ran on to its block's edge over the label and the next item's first words, while the next
+    // unit, refused the row because the label stands between, was set at TeX's place: two units drawn over each other)
+    const run = await laid(listed(66))
+    const a = linesOf(run, 0)!, [b] = linesOf(run, 1)!
+    const onRow = a.filter(l => Math.abs(l[1] - 226) < 10)
+    expect(onRow.every(l => l[7] <= 150 + 0.01), `its lines on the row end at ${onRow.map(l => l[7])}`).toBe(true)
+    expect([b![1], b![6]]).toEqual([226, 170])
+  })
+})
+
 describe('a shared line: the next unit\'s first line starts where the translation before it ends on the row', () => {
   it('a heading shorter than its English: its text starts 10 pt after the heading\'s end, where the fill left it', async () => {
     const run = await laid(runIn(3))
