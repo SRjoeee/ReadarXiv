@@ -490,7 +490,7 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
     const G = ([p, i]) => pages[p - 1].glyphs[i]
     const ink = (text.get(id) ?? []).map(a => spellOf(G(a).u ?? '')).join('')
     if (ink === src.text || ink === src.bare) return true
-    if (src.parts.length > 1 && slotted(src.parts).test(ink)) return true
+    if (src.parts.length > 1 && slotted(src.parts, ink)) return true
     const t = textOf.get(id)
     if (t && !t.s && trimLead(id, src.text)) return true
     return releaseLines(id, src.text)
@@ -568,12 +568,27 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
 
 /** the letters a wrapper's own words may take at its slot in the spell check (sourceOf) */
 const OPEN_WORDS = 16
-/** a matcher of a unit's letters by its source's parts, a wrapper's slot between each two (empty parts' slots one) */
-function slotted(parts) {
-  const slot = `[\\p{L}\\p{N}]{0,${OPEN_WORDS}}`
-  let re = parts[0]
-  for (let k = 1; k < parts.length; k++) { if (!re.endsWith(slot)) re += slot; re += parts[k] }
-  return new RegExp(`^${re}$`, 'u')
+/** the steps the slotted reading of one unit may take; past them the unit is not read so (it stays `spell`) */
+const SLOT_WORK = 1_000_000
+/** whether a unit's letters `ink` are its source's parts in order, a wrapper's slot of at most OPEN_WORDS letters between each
+ *  two (a run of empty parts one slot): read by the places each part may end at, a part at a time — bounded by the ink's length
+ *  and SLOT_WORK, never a backtracking search (seven \\emph{a} and 51 letters of ink took a regular expression over a
+ *  second) */
+function slotted(parts, ink) {
+  const SLOT = null, tokens = [parts[0]]
+  for (let k = 1; k < parts.length; k++) { if (tokens.at(-1) !== SLOT) tokens.push(SLOT); if (parts[k]) tokens.push(parts[k]) }
+  let at = new Set([0]), work = 0
+  for (const t of tokens) {
+    const next = new Set()
+    for (const x of at) {
+      if (t === SLOT) { for (let w = 0; w <= OPEN_WORDS && x + w <= ink.length; w++) next.add(x + w); work += OPEN_WORDS + 1 }
+      else { if (ink.startsWith(t, x)) next.add(x + t.length); work += t.length + 1 }
+      if (work > SLOT_WORK) return false
+    }
+    if (!next.size) return false
+    at = next
+  }
+  return at.has(ink.length)
 }
 
 /** a unit's source text for the spell check, as spellOf reads it, in parts: its `src` where it has one, else its pieces' — a

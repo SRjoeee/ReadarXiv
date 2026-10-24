@@ -242,6 +242,13 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     expect(ownOf(long, { units: [unit] }).units.get(0)?.unhidden).toBe('spell')
     const elsewhere = [page([{ pt: '0s' }, 'Submitted JOUR 10/2026. Funded by the DFG.', { pt: '0e' }])]
     expect(ownOf(elsewhere, { units: [unit] }).units.get(0)?.unhidden).toBe('spell')
+    // (the slots are read a part at a time, never by a backtracking search: seven \emph{a} and a "z" against fifty a's and an
+    // "x" are refused at once — a regular expression took over a second, Codex on #462)
+    const pieces = [...Array.from({ length: 7 }, (_, i) => [{ t: 'open', id: i + 1, src: '\\emph{' }, { t: 'text', s: 'a' }, { t: 'close', id: i + 1, src: '}' }]).flat(), { t: 'text', s: 'z' }]
+    const many = [page([{ pt: '0s' }, `${'a'.repeat(50)}x`, { pt: '0e' }])]
+    const t0 = performance.now()
+    expect(ownOf(many, { units: [{ pieces }] }).units.get(0)?.unhidden).toBe('spell')
+    expect(performance.now() - t0).toBeLessThan(200)
   })
   it('leaves the lines of their own its source does not spell the page\'s (2610.21765v1 p1u13: REVTeX\'s e-mail notes; 2610.10069v1 p7u53: a folio)', () => {
     // the paragraph's first column, the column's e-mail note at its foot, its second column

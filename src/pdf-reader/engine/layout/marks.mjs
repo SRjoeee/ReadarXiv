@@ -1318,7 +1318,7 @@ export function followsOf(units, names) {
     // (`rest`, the erasure's: the whole text after it up to its next visible piece, as the spell check reads one — its letters and
     // digits —, so that the text after it is told where it runs exactly to its unit's next mark, not where its first WANT
     // characters first stand: a display's \\text{for every}, a URL's dots)
-    return { closing: names.has(`${name.slice(0, -1)}b`), want, rest: spellOf(after), ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group }
+    return { closing: names.has(`${name.slice(0, -1)}b`), want, rest: spellOf(after), display, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group }
   }
 }
 

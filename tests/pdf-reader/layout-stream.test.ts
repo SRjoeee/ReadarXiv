@@ -358,7 +358,7 @@ describe('ownedOf for the erasure: the release sweep of 2026-10-24', () => {
   it('owns a display that ends a footnote to its page\'s stream end, its folio aside (2610.16663v1 p16u58)', () => {
     // the footnote's end mark before its display (MARK_DEF), no mark after it on its page, the folio last and lowest
     const items: Item[] = [{ at: 'bs1' }, 'body text', { at: 'be1' }, { at: '3s' }, '\n\n3 The value satisfying', { at: '3e' }, { at: 'p3.9a' }, '\n          Z y g(y) dy = 0,']
-    const f = { 'p3.9a': open('', ['3e', 't3e', 'h3e']) }
+    const f: Record<string, Follow> = { 'p3.9a': { ...open('', ['3e', 't3e', 'h3e']), display: true } }
     const page = pageOf([...items, { u: '1', x: 300, y: 600 }, { u: '6', x: 305, y: 600 }])
     expect(ink([page], f, true)['p3.9a']).toEqual(['Zyg(y)dy=0,', 0])
     // (the maker's reading the same, a page at a time too: the layout holds the display's segments, which the reader shows it
@@ -370,6 +370,11 @@ describe('ownedOf for the erasure: the release sweep of 2026-10-24', () => {
     expect(ink([pageOf([...items, '\n16'])], f, true)['p3.9a']).toBe('open, the next mark on another page')
     // (a footnote after it with no mark of its own, starting at the footnote's edge, is no display's ink: none)
     expect(ink([pageOf([...items, '\n4 https://x.org/y', { u: '1', x: 300, y: 600 }, { u: '6', x: 305, y: 600 }])], f, true)['p3.9a']).toBe('open, the next mark on another page')
+    // (a line of the page's foot above the folio, centred \footskip below the display: none — Devin on #462)
+    expect(ink([pageOf([...items, '\n\n\n          (c) 2026 The Authors', { u: '1', x: 300, y: 600 }, { u: '6', x: 305, y: 600 }])], f, true)['p3.9a']).toBe('open, the next mark on another page')
+    // (a piece that is no display — an inline formula or a citation ending the note, its ink its own and what follows it no
+    // business of its: none, as before)
+    expect(ink([page], { 'p3.9a': open('', ['3e', 't3e', 'h3e']) }, true)['p3.9a']).toBe('open, the next mark on another page')
     // (text after it, or its end mark not before it: as before)
     expect(ink([page], { 'p3.9a': open('and', ['3e']) }, true)['p3.9a']).not.toEqual(['Zyg(y)dy=0,', 0])
   })

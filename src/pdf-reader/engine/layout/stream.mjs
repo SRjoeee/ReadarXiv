@@ -75,6 +75,9 @@ const code = (body, depth) => depth * 2 + (body ? 1 : 0)
 const FOLIO_GAP = 1.5
 /** how far right of a footnote's own lines' start each line of a display that ends it starts, at least, in its size (an em) */
 const FOOT_DISPLAY_INDENT = 2
+/** how far apart two lines of a display that ends a footnote may stand, at most, in their size: a display's rows and its
+ *  scripts lie within two, the page's foot \\footskip (30pt) below the text block */
+const FOOT_DISPLAY_GAP = 2.5
 /** a folio's characters: a page number, arabic or roman, maybe between dashes */
 const FOLIO = /^[-\u2013\u2014]?(?:\d{1,4}|[ivxlcdm]{1,8})[-\u2013\u2014]?$/
 /** where a page's folio begins among its glyphs (its glyph count where it has none, `regions` its regionsOf): the run of
@@ -157,10 +160,11 @@ export function regionsOf(page) {
  * alone followed by placeholders with no mark of their own and nothing else up to the next marked piece's opening
  * (`through`, marks.mjs followsOf), what stands between the two its own and theirs; and a later unit's opening next, as a
  * later unit's start mark is (that unit's label on its line left out). The sweep of 2026-10-24.
- * - A display that ends a footnote (footEnd: its unit's last visible piece, after the unit's end mark, outside the bodies, no
- *   mark after it on its page): what its region holds from it to the page's folio (folioOf), each of its lines indented from
- *   the footnote's own; with no folio, or a line at the footnote's edge (a note after it with no mark), none (the release
- *   sweep of 2026-10-24, 2610.16663v1 p16u58: the maker left it LOST, the erasure the unit the original's).
+ * - A display that ends a footnote (footEnd: a display, its unit's last visible piece, after the unit's end mark, outside the
+ *   bodies, no mark after it on its page): what its region holds from it to the page's folio (folioOf), each of its lines
+ *   indented from the footnote's own and near the one before; with no folio, a line at the footnote's edge (a note after it
+ *   with no mark) or one apart (the page's foot), none (the release sweep of 2026-10-24, 2610.16663v1 p16u58: the maker left
+ *   it LOST, the erasure the unit the original's).
  */
 export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
   const twice = new Set(dropped)
@@ -313,10 +317,13 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
      *  a display that ends a footnote (2610.16663v1 p16u58). What its region holds from it to the page's folio (folioOf) is what
      *  TeX set for it, where every line of it starts FOOT_DISPLAY_INDENT of its size or more right of where the footnote's own
      *  text starts its lines: a display is centred or indented in the footnote's measure, and a footnote after it with no mark
-     *  of its own (a note of a URL alone) starts at that edge, its number within 1.8 em of it (LaTeX's \\@makefntext). None on a
-     *  page with no folio to tell where it ends (a running foot's text would be hidden with it), or where a line starts nearer */
+     *  of its own (a note of a URL alone) starts at that edge, its number within 1.8 em of it (LaTeX's \\@makefntext), and each
+     *  line within FOOT_DISPLAY_GAP of its size of the one before it: a line of the page's foot above the folio (a copyright
+     *  line, centred) stands \\footskip below the text block. None on a page with no folio to tell where it ends (a running
+     *  foot's text would be hidden with it), where a line starts nearer or stands apart, or for a piece that is no display (an
+     *  inline formula or a citation ends with its own ink, which this reading cannot tell from what follows it) */
     const footEnd = () => {
-      if (rA % 2 !== 0 || f.want || f.blocked || f.ends.some(n => OPENING.test(n))) return null
+      if (!f.display || rA % 2 !== 0 || f.want || f.blocked || f.ends.some(n => OPENING.test(n))) return null
       const end = f.ends.flatMap(n => where.get(n) ?? []).find(([p, q]) => p === pa && q < qa)
       if (!end) return null
       const P = pages[pa - 1], G = P.glyphs, R = regions[pa - 1], stop = folioOf(P, R), glyphs = [], boxes = []
@@ -328,11 +335,14 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
       let edge = Infinity
       for (let g = start ? P.points[start[1]].glyph : 0; g < P.points[end[1]].glyph; g++) if (R.glyph[g] === rA && /\S/.test(G.u[g] ?? '')) edge = Math.min(edge, G.x0[g])
       if (edge === Infinity) return null
+      let before = null
       for (let j = 0; j < glyphs.length;) {
         let k = j, x0 = Infinity, size = 0
         const y = G.y[glyphs[j][1]]
         while (k < glyphs.length && Math.abs(G.y[glyphs[k][1]] - y) < 0.5 * Math.max(G.size[glyphs[k][1]], G.size[glyphs[j][1]])) { x0 = Math.min(x0, G.x0[glyphs[k][1]]); size = Math.max(size, G.size[glyphs[k][1]]); k++ }
         if (x0 < edge + FOOT_DISPLAY_INDENT * size) return null
+        if (before && Math.abs(before.y - y) > FOOT_DISPLAY_GAP * Math.max(before.size, size)) return null
+        before = { y, size }
         j = k
       }
       return { how: HOW["open, to its column's end"], glyphs, boxes }

@@ -17,11 +17,11 @@ export interface StreamPage { glyphs: StreamGlyphs; boxes: number[]; points: Ink
  *  characters of the text after it in its unit (NFKC, lower case, no white space), '' for none; `ends`, the names of
  *  its unit's next marks (the next marked piece's opening mark, the unit's end marks); `blocked`, a visible piece with no
  *  mark follows it with no text between; `through` (the erasure's), past such pieces with nothing but white space between,
- *  the next marked piece's opening mark, else null; `rest` (the erasure's), the whole text after it up to its next visible
- *  piece as spellOf reads it; `group`, a display's display group: the opening marks' names of the displays
+ *  the next marked piece's opening mark, else null; `rest`, the whole text after it up to its next visible piece as spellOf
+ *  reads it; `display`, the piece is a display; `group`, a display's display group: the opening marks' names of the displays
  *  right after it with nothing visible between that have no opening point (the text after it and its next piece then
  *  the last one's) */
-export interface Follow { closing: boolean; want: string; rest?: string; ends: string[]; blocked: boolean; through?: string | null; group?: string[] }
+export interface Follow { closing: boolean; want: string; rest?: string; display?: boolean; ends: string[]; blocked: boolean; through?: string | null; group?: string[] }
 /** a text's letters and digits, without their accents, lower case: the per-unit erasure's evidence that ink is a text's */
 export declare function spellOf(s: string): string
 export interface Owned { how: number; glyphs: [page: number, index: number][]; boxes: [page: number, index: number][] }
