@@ -33,7 +33,7 @@ import { layerDraws } from '../layer-proto/format.mjs'
 import { pagesOf } from '../layout/delta-wire.mjs'
 import { openLayer as theDoor, PDF_OPTIONS } from '../layer-proto/reader.mjs'
 import { visibilityOf } from '../layer-proto/visibility.mjs'
-import { faceWarmer, familyOfParts } from '../layer-proto/warm.mjs'
+import { faceWarmer, familyOfParts, pagesOfParts } from '../layer-proto/warm.mjs'
 import { unitOf } from '../layer-proto/rows.mjs'
 import { plainTranslated } from '../translate/mt.mjs'
 import { createContents } from './contents.mjs'
@@ -751,47 +751,47 @@ export function createLayerSide(view, o) {
   }
 
   // ---------------------------------------------------------------- the faces, in one wave (warm.mjs; §11.8)
-  /** the target's warmer (made again for another target), the units whose faces it was asked for (by target, family and unit),
-   *  and each page's units as the parts read so far locate them (made again as more parts are read) */
+  /** the target's warmer (made again for another target), what it was asked for (by target, family and unit; by target, family
+   *  and page for a page's names and fonts; page 1's likely faces), and what each page of the parts read so far sets
+   *  (warm.mjs pagesOfParts, read again as more parts are read) */
   let warmer = null, warmerOf = null, warmQueued = false
   const warmedUnits = new Set()
-  let onPageOf = null, onPageParts = null
-  /** the units of page q as the parts read so far locate them: their layouts' lines on it, else their left rectangles there */
-  function unitsOn(q) {
+  let pagesRead = null, pagesReadOf = null
+  const pagesNow = () => {
     const parts = feed.state().parts
-    if (onPageParts !== parts || !onPageOf) {
-      onPageParts = parts
-      onPageOf = new Map()
-      const add = (pg, id) => { const s = onPageOf.get(pg) ?? onPageOf.set(pg, new Set()).get(pg); s.add(id) }
-      for (const part of parts) {
-        if (part.layout?.lines) { for (const [id, rows8] of part.layout.lines) for (let i = 0; i < (rows8?.length ?? 0); i += 8) add(rows8[i], id) }
-        else for (const [id, , rects] of part.left ?? []) for (const r of rects) add(r[0], id)
-      }
-    }
-    return onPageOf.get(q) ?? new Set()
+    if (pagesReadOf !== parts || !pagesRead) { pagesReadOf = parts; pagesRead = pagesOfParts(parts) }
+    return pagesRead
   }
   /** a row's translated text (its strings; a placeholder's piece is the source's, drawn as it is) */
   const textOf = row => (Array.isArray(row?.[1]) ? row[1].filter(x => typeof x === 'string').join('') : '')
-  /** the faces of pages `qs`' units asked of the host at once, page by page in that order (each page's wave awaited before the
-   *  next's), as soon as the index, their rows and the parts that locate them are in, whether or not a door is open: v0's checks
-   *  then find them loaded or loading (warm.mjs). A unit asked once in a target and a family is not asked again */
+  /** the faces of what v0 will draw of pages `qs` asked of the host at once, page by page in that order (each page's wave
+   *  awaited before the next's), as soon as the index, their rows and the parts that locate them are in, whether or not a door
+   *  is open: v0's checks then find them loaded or loading (warm.mjs). A unit asked once in a target and a family is not asked
+   *  again, nor are a page's names and fonts once its part is read */
   async function warmPages(qs) {
     if (disposed || state === 'refused' || !index || !rows.size) return
     if (!warmer || warmerOf !== target) {
       warmer = faceWarmer({ faceSources: o.faceSources, target, ...(o.rules ? { rules: o.rules } : {}) })
       warmerOf = target
     }
-    const family = familyOfParts(feed.state().parts)
+    const parts = feed.state().parts, family = familyOfParts(parts), pages = pagesNow()
     for (const q of qs) {
+      const pg = pages.get(q)
+      if (!pg) continue
       const units = []
-      for (const id of unitsOn(q)) {
+      for (const [id, st] of pg.units) {
         const key = `${target}|${family}|${id}`, row = rows.get(id)
         if (warmedUnits.has(key) || !row) continue
         warmedUnits.add(key)
         const text = textOf(row)
-        if (text) units.push({ heading: index.kinds[id] === 'heading', text })
+        if (text) units.push({ kind: index.kinds[id] ?? null, text, st })
       }
-      if (units.length) await warmer.warm(units, family)
+      const pageKey = `${target}|${family}|page ${q}`, likelyKey = `${target}|${family}|likely`
+      const extras = !warmedUnits.has(pageKey)
+      warmedUnits.add(pageKey)
+      // (v0 warms its likely faces on page 1, in the serif design most of page 1's characters are set in)
+      const likely = q === 1 && !warmedUnits.has(likelyKey) ? (warmedUnits.add(likelyKey), pg.serif ?? (family === 'other' ? 'times' : family)) : null
+      if (units.length || extras || likely) await warmer.warm({ units, names: extras ? pg.names : [], fonts: extras ? pg.fonts : [], likely }, family)
       if (disposed) return
     }
   }
