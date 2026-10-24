@@ -23,6 +23,11 @@ describe('the table is TeX Live\'s', () => {
     expect(file.image).toMatch(/^texlive\/texlive:TL2025-historic@sha256:[0-9a-f]{64}$/)
     for (const f of ['cleveref.sty', 'hyperref.sty', 't1enc.dfu', 't2aenc.dfu', 'ctex-name-utf8.cfg', 'translator-theorem-dictionary-ChineseUTF8.dict']) expect(file.files[f]).toMatch(/^[0-9a-f]{64}$/)
   })
+  it('is LPPL 1.3c data throughout, each source taken under it, as docs/THIRD_PARTY.md registers it', () => {
+    expect(file.licence).toMatch(/^LPPL 1\.3c: /)
+    expect(file.licence).not.toMatch(/GPL|GNU/)
+    for (const f of Object.keys(file.files)) expect(file.licence.replace('{German,French,Spanish,Russian,Portuguese}', 'German'), f).toContain(f.replace(/-(?:French|Spanish|Russian|Portuguese)\.dict$/, '-German.dict'))
+  })
   it('every target the readers offer has its entry', () => {
     expect(Object.keys(file.targets).sort()).toEqual(['de', 'es', 'fr', 'ja', 'ko', 'pt', 'ru', 'zh', 'zh-TW'])
   })

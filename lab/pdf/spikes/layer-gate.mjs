@@ -603,7 +603,8 @@ async function runFixture(page, name, errors) {
   // the page the layer draws over: the base page wrapped by optional content (or cached), as the reader's is
   const wrap = await wrappedOf(name)
   Object.assign(meta, { wrap: wrap.key })
-  const info = await page.evaluate(o => window.gate.open(o), { name, target, ref: refPages(ref), composite: COMPOSITE, units: PROTO_UNITS, pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), place: PROTO_PLACE?.[name] ?? null, dump: !!DUMP, order: PROTO_ORDER?.[name] ?? null, faces: PROTO_FACES, tex: TEX, rules: '/rules/layout-rules.json', names: RULES_LABELS(target), perf: PERF, parts: PARTS, slices: SLICES })
+  const sources = PROTO_UNITS === 'p7' ? null : await sourcesOf(name)
+  const info = await page.evaluate(o => window.gate.open(o), { name, target, sources, ref: refPages(ref), composite: COMPOSITE, units: PROTO_UNITS, pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), place: PROTO_PLACE?.[name] ?? null, dump: !!DUMP, order: PROTO_ORDER?.[name] ?? null, faces: PROTO_FACES, tex: TEX, rules: '/rules/layout-rules.json', names: RULES_LABELS(target), perf: PERF, parts: PARTS, slices: SLICES })
   if (!info.ready) { failures.push(name); return { name, ready: false, why: info.why, meta } }
   const n = Math.min(info.pages, PAGES ?? (ALL_PAGES.has(paper) ? info.pages : PAGES_OF))
   const pages = [], frames = []
@@ -1118,6 +1119,22 @@ function resultOf(rec, src, kOfSource) {
 }
 /** each paper's bundle units (openPaper's over its source, bundleUnitsOf), once a paper */
 const PAPER_UNITS = new Map()
+/**
+ * Each unit's source pieces for the gate's own run, by its id (null for none): the paper's bundle units' (openPaper's over its
+ * source.gz) where the fixture's record names the unit by the same hash (cache.mjs sourceHash: the pack may be of an earlier
+ * pipeline), so that the run reads a unit as the reader's door does (rows.mjs unitOf's `source`). Null where the paper has no
+ * source here
+ */
+async function sourcesOf(name) {
+  const { paper } = nameOf(name)
+  const source = sourceOf(paper), recordFile = trFile(name, 'record.json')
+  if (!source || !existsSync(recordFile)) return null
+  const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
+  const [{ bundleUnitsOf }, { sourceUnitsOf }, { openPaper }, { unpackSource }, { sourceHash }] = await Promise.all(['layer-proto/bundle.mjs', 'layer-proto/rows.mjs', 'pipeline/live.mjs', 'source/tar.mjs', 'pipeline/cache.mjs'].map(f => import(E(f))))
+  if (!PAPER_UNITS.has(paper)) PAPER_UNITS.set(paper, bundleUnitsOf(openPaper((await unpackSource(new Uint8Array(readFileSync(source)))).files)))
+  const src = sourceUnitsOf({ units: PAPER_UNITS.get(paper) }), record = readJson(recordFile)
+  return Promise.all(record.units.map(async (rec, id) => (rec && src[id] && typeof rec.hash === 'string' && (await sourceHash(src[id])) === rec.hash ? src[id].pieces : null)))
+}
 /**
  * --door: a fixture's bundle, written by the engine from the parts a paper's prepare has (bundle-check.mjs's): its units
  * (openPaper over its source.gz), the geometry the gate gives v0 as its left, the fixture's layout file and its cell rules,
