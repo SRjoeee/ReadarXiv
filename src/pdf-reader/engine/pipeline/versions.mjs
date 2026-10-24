@@ -203,7 +203,8 @@ export const PDFJS = '6.3.289'
  * only a delta holds, was refused): the base's bytes and the head's base change; and (its units newly English against
  * production, all `unhidden`) the text after a placeholder told where it runs exactly to its unit's next mark (a display's
  * \text, a URL's dots), a display that ends a footnote owned to its page's folio, an opening point TeX set inside another
- * unit's range owning nothing of it (a run-in heading), a title its class sets again (acmart) its first occurrence, and the
+ * unit's range owning nothing of it (a run-in heading), a title its class sets again (acmart) its first occurrence, the
+ * closing punctuation a theorem's head sets after its note the note's (amsthm's "(Note)."), and the
  * spell check's letter symbols, a wrapper's own words and lines of their own no unit's (REVTeX's e-mail notes, a folio): the
  * base's bytes change, and the first two rules being the maker's reading too, the layout files of the units they reach
  * (LAYOUT 20)

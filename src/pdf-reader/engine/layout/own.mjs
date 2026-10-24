@@ -18,7 +18,8 @@
 //      given (`follows`), else the pair, or an opening alone to the next point in its region; nothing of another unit's range
 //      its opening point stands in (a run-in heading);
 //   5. a label: the glyphs on the start's first glyph's baseline between the previous unit's end mark and the start, the
-//      placeholders' and names' ranges passed over; none for a table cell;
+//      placeholders' and names' ranges passed over — but the closing punctuation a head sets abutting the unit before it, that
+//      unit's text (amsthm's "(Note).") —; none for a table cell;
 //   6. a babel name `n<occ>`: between `n<occ>.<key>.s` and `.e`;
 //   7. images and forms are never a unit's here (a form whose ink is all one group's is wrapped whole by wrap.mjs).
 // A glyph is one group's: a placeholder's or a name's over the text's, the text's over a label's, the first text's over a later.
@@ -52,6 +53,10 @@ const END = /^([th]?)(\d+)e$/
 /** a cell's lead macro's ink abuts its start: each gap under this share of an em (a word's space is a third; two \\tabcolsep
  *  between columns are more than one) */
 const CELL_ABUT = 0.6
+/** a head macro's closing punctuation after the unit before a start (MR 5): a closing bracket or quote, a stop, a colon */
+const HEAD_PUNCT = /^[)\]}.,:;!?\u2019\u201d]$/u
+/** that punctuation abuts the glyph before it: each gap under this share of an em (a word's space is a third) */
+const HEAD_ABUT = 0.2
 const OPENING = /^([pn])(\d+)\.(\d+)a$/
 const CLOSING = /^([pn])(\d+)\.(\d+)b$/
 const NAME_START = /^n(\d+)\.([a-z]{1,16})\.s$/
@@ -244,6 +249,23 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
     // label and that ink stands between the unit before it and its start (a cell aside: an unmarked number cell may), so the
     // run is split: its longest opening that is a label's form the label, the rest the placeholder's ink (`.p`)
     lead.glyphs.reverse()
+    // the closing punctuation a head macro sets after the unit before it, right after that unit's end mark and abutting its
+    // last glyph on this line (amsthm's "(Note)." after a theorem's note, a run-in heading's \\@addpunct), is that unit's text:
+    // its group hides it where that unit is drawn, as the line's erase did before the wrap (2610.21491v1 p7u71), and no label
+    // of this unit's, which would leave it standing under this unit's drawing
+    const prev = qq >= 0 ? END.exec(pg.points[qq].name) : null
+    if (prev && Number(prev[2]) !== id) {
+      const mine = `u${prev[2]}`, E = pg.points[qq].glyph
+      let k = 0, left = E > 0 && gOwn[p - 1][E - 1] === mine ? pg.glyphs[E - 1] : null
+      while (left && k < lead.glyphs.length) {
+        const G = pg.glyphs[lead.glyphs[k][1]]
+        if (!HEAD_PUNCT.test((G.u ?? '').normalize('NFKC')) || G.x0 - left.x1 >= HEAD_ABUT * Math.max(G.size, left.size) || Math.abs(G.y - left.y) >= 0.5 * Math.max(G.size, left.size)) break
+        left = G
+        k++
+      }
+      if (k) { claim({ glyphs: lead.glyphs.slice(0, k) }, mine, 'u'); lead.glyphs = lead.glyphs.slice(k) }
+      if (!lead.glyphs.length) continue
+    }
     const cell = units?.[id]?.kind === 'cell' || pt(s).name.startsWith('t')
     if (units && !cell && opensUnmarked(units[id], id)) {
       let k = 0

@@ -2191,7 +2191,11 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   placeholder whose opening point TeX set inside another unit's range, between its start and end marks on one page, owns
   nothing of that unit's (a run-in `\paragraph` is set at the next paragraph's start, after that paragraph's lead
   placeholder's opening mark: 2610.21085v1 p5). A footnote call is its unit's `.p` too. Label `u<id>.l`: the glyphs on the start's first glyph's
-  baseline between the previous unit's end mark and the start, the placeholders' and names' ranges passed over. Babel name
+  baseline between the previous unit's end mark and the start, the placeholders' and names' ranges passed over, but the
+  closing punctuation a head macro sets after the unit before it — right after that unit's end mark, each glyph within a fifth
+  of an em of the one before, the first of that unit's last glyph — which is that unit's text (amsthm's "(Minimum detectable
+  PDI)." after a theorem's note: as the body's label, no label's form, it was left the original's ink under the body's
+  drawing, 2610.21491v1 p7; its group now hides it where the note is drawn, as the line's erase did before the wrap). Babel name
   `n<occ>`: between `n<occ>.<key>.s` and `.e`, but never over a placeholder's ink (cleveref's "Appendix" inside a `\cref` is
   the reference's). A glyph is one group's: a placeholder's or a name's over the text's, the text's over a label's, the first
   text's over a later. A unit that opens with a placeholder of no mark of its own (a paper's macro first in it: `\bert`,

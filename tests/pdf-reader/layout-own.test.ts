@@ -274,6 +274,22 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     expect(groupsOf(r, pages)).toEqual({ u0: 'What  is.', 'u0.p': 'V', 'u1.p': 'V(q)', u1: ' rest' })
     expect([r.units.get(0)?.unhidden, r.units.get(1)?.unhidden]).toEqual([null, null])
   })
+  it('gives the punctuation a theorem\'s head sets after its note to the note, never to the body\'s label (2610.21491v1 p7u71)', () => {
+    // amsthm: "Corollary 1 (Minimum detectable PDI). Under …": the note a unit of its own, its ")." set by the head after the
+    // note's end mark, before the body's start mark: as the body's label (no label's form) it was left the original's ink,
+    // standing under the body's drawing
+    const pages = [page(['Corollary 1 (', { pt: 'h0s' }, 'Minimum detectable PDI', { pt: 'h0e' }, ').', { dx: 3 }, { pt: '1s' }, 'Under the assumptions', { pt: '1e' }])]
+    const r = ownOf(pages, { units: [{ kind: 'heading', src: 'Minimum detectable PDI' }, { kind: 'theorem', src: 'Under the assumptions' }] })
+    expect(groupsOf(r, pages)).toEqual({ u0: 'Minimum detectable PDI).', u1: 'Under the assumptions' })
+    expect([r.units.get(0)?.unhidden, r.units.get(1)?.unhidden, r.units.get(1)?.labelKept]).toEqual([null, null, false])
+    // (a body's own label after it is still its label: "Proof 2.", a word space after the note's end)
+    const labelled = [page(['Lemma 2 (', { pt: 'h0s' }, 'Bound', { pt: 'h0e' }, ').', { dx: 3 }, '(i)', { dx: 3 }, { pt: '1s' }, 'Every x', { pt: '1e' }])]
+    const l = ownOf(labelled, { units: [{ kind: 'heading', src: 'Bound' }, { kind: 'theorem', src: 'Every x' }] })
+    expect(groupsOf(l, labelled)).toEqual({ u0: 'Bound).', u1: 'Every x', 'u1.l': '(i)' })
+    // (punctuation apart from the unit before, by a word's space or more, is no head's: as before, this unit's label)
+    const apart = [page([{ pt: 'h0s' }, 'Bound', { pt: 'h0e' }, { dx: 4 }, '1.', { pt: '1s' }, 'Every x', { pt: '1e' }])]
+    expect(groupsOf(ownOf(apart, { units: [{ kind: 'heading', src: 'Bound' }, { kind: 'theorem', src: 'Every x' }] }), apart)).toEqual({ u0: 'Bound', u1: 'Every x', 'u1.l': '1.' })
+  })
   it('owns a title its class sets again by its first occurrence, an end mark alone (2610.22065v1 p1u0: acmart\'s ACM Reference Format)', () => {
     const pages = [page(['ABNAT: Attention', { pt: 'h0e' }, '\n', { pt: '1s' }, 'Abstract text', { pt: '1e' }, '\nRef: ', { pt: 'h0s' }, 'ABNAT: Attention', { pt: 'h0e' }, '. In Proc.'])]
     const r = ownOf(pages, { units: [{ kind: 'heading', src: 'ABNAT: Attention' }, { src: 'Abstract text' }] })
