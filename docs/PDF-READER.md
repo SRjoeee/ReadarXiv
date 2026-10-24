@@ -793,6 +793,15 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   to a share of the line in 29. v0's checks are unchanged: they find the slices loaded or loading, and a run the wave did
   not foresee (a bold word in a paragraph, a character only the original's text holds) asks its own as before. A slice is
   asked once.
+- **Translating** (the host's `indicator`; none by default until the owner chooses a look, 2026-10-24). While a near page
+  is not laid, its place shows the original's page, and each paragraph the parts read so far locate on it carries a mark in
+  one of two looks: `shimmer`, a soft band of light passing over the paragraph, or `spinner`, a small ring turning at its
+  first line's start. The marks sit at the paragraph's box in shares of the page, so no zoom moves them, above the page and
+  under the pointer (no pointer events, hidden from assistive technology). With reduced motion asked, the shimmer is a faint
+  still wash and the ring a still quarter. A page is laid whole, through its page pass, the moment its rows and slices are
+  in (the coordinator's ruling of 2026-10-24: pages, never a unit drawn on a provisional fit that later moves), and all its
+  marks go in the same task its drawing is put in place. An author's unit has none (it is never drawn), nor has a paragraph
+  whose rows ended with no row of it, nor has a page that failed (the original's).
 - **The pages ahead** (the prefetch on the layer). Once the rows of the attempt have ended (a host that translates as it shows
   is asked for nothing it has not translated), the door is open, no page of the view is asked of it, the right pane is shown
   and the document visible, and the view has rested `AHEAD_IDLE_MS` (600 ms: no scroll, nothing asked, the last near page

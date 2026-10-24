@@ -10,7 +10,7 @@ import { AHEAD_IDLE_MS, AHEAD_PAGES, createLayerSide, KEEP_PIXELS, keepBudget, L
 import { type DocumentTask, internalsOf, type ViewEvent } from '@/pdf-reader/engine/view/reader-view.mjs'
 import { made, N, ORIG, partInputs } from './helpers/format-paper'
 import { ASSETS, clientOf, FakeIO, FakePDFPageView, FakePDFViewer, fakeDoc, fakeTask, flush } from './helpers/reader-fakes'
-import { ALL, content, installSideFakes, jobRef, layerOf, M, macrotask, nearOn, places, renders, rowOf, type Setup, settle, setup } from './helpers/side-setup'
+import { ALL, content, installSideFakes, jobRef, layerOf, M, macrotask, nearOn, places, renders, rowOf, type Setup, settle, setup, unitsOn } from './helpers/side-setup'
 
 installSideFakes()
 
@@ -1672,5 +1672,57 @@ describe('the side: one a view, and its dispose', () => {
     await settle(s)
     expect(s.events.length).toBe(n)
     expect(s.door.layer).toBeNull()
+  })
+})
+
+describe('translating: the indicator over a near page\'s paragraphs not laid yet (§11.8)', () => {
+  const marksOf = (s: Setup, n: number) => places(s)[n - 1]?.querySelectorAll('.axt-translating .axt-translating-mark').length ?? 0
+  it('a mark over each paragraph the parts locate on a near page while it is not laid, none once it is; in the look the host asked', async () => {
+    const s = await setup({ indicator: 'shimmer', door: { rows: 'gate' } })
+    const m = await M()
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    await settle(s, 10, false)
+    const on1 = unitsOn(m, 1).filter(id => m.index.kinds[id] !== 'author')
+    expect(on1.length).toBeGreaterThan(0)
+    expect(marksOf(s, 1)).toBe(on1.length)
+    expect(places(s)[0]?.querySelector('.axt-translating')?.classList.contains('axt-translating-shimmer')).toBe(true)
+    // (no pointer, and nothing for assistive technology)
+    expect(places(s)[0]?.querySelector('.axt-translating')?.getAttribute('aria-hidden')).toBe('true')
+    s.side.take(m.index.units.map((_, id) => rowOf(id)))
+    s.side.end()
+    await settle(s)
+    expect(content(s, 1)).toBe('layer')
+    expect(marksOf(s, 1)).toBe(0)
+  })
+
+  it('none where the host asked for none, none on a far page, and none for a paragraph whose rows ended without a row of it', async () => {
+    const plain = await setup({ door: { rows: 'gate' } })
+    await nearOn(plain, [1])
+    plain.side.tell(await ALL())
+    await settle(plain, 10, false)
+    expect(places(plain)[0]?.querySelector('.axt-translating')).toBeNull()
+    const s = await setup({ indicator: 'spinner', door: { rows: 'gate' } })
+    const m = await M()
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    await settle(s, 10, false)
+    expect(marksOf(s, 3)).toBe(0)
+    const before = marksOf(s, 1)
+    // (every row but one unit's of page 1, then the rows' end: that one stays the original's, its mark goes with the rest)
+    const [kept] = unitsOn(m, 1)
+    s.side.take(m.index.units.map((_, id) => rowOf(id)).filter(r => r[0] !== kept))
+    s.side.end()
+    await settle(s, 3, false)
+    expect(marksOf(s, 1)).toBeLessThan(before)
+  })
+
+  it('a page that fails shows the original with no mark', async () => {
+    const s = await setup({ indicator: 'shimmer', copyFails: [1] })
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    await settle(s)
+    expect(content(s, 1)).toBe('original')
+    expect(marksOf(s, 1)).toBe(0)
   })
 })

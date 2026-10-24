@@ -103,6 +103,8 @@ export interface Options {
   /** the side's bounds (LayerSideOptions): the drawings' pixels kept off the view, the pages laid ahead */
   keepPixels?: number
   ahead?: number
+  /** the indicator over a near page's paragraphs not laid yet (LayerSideOptions) */
+  indicator?: 'shimmer' | 'spinner' | null
 }
 /** the view over the original (its four pages), its layer side over the door and the paper's objects served by digest */
 export async function setup(o: Options = {}): Promise<Setup> {
@@ -148,7 +150,7 @@ export async function setup(o: Options = {}): Promise<Setup> {
   const doors: Setup['doors'] = []
   const side = createLayerSide(view, {
     paper: { id: '2608.04322', version: 1 }, target: 'zh', faceSources: o.faceSources ?? (async () => null), hyphUrl: () => '',
-    ...(o.keepPixels === undefined ? {} : { keepPixels: o.keepPixels }), ...(o.ahead === undefined ? {} : { ahead: o.ahead }),
+    ...(o.keepPixels === undefined ? {} : { keepPixels: o.keepPixels }), ...(o.ahead === undefined ? {} : { ahead: o.ahead }), ...(o.indicator === undefined ? {} : { indicator: o.indicator }),
     fetchObject, bind: (o.bind ?? (async () => true)) as never,
     composed: (tail, options) => {
       const task = fakeTask(destroyed, `composed ${composed.length}`)

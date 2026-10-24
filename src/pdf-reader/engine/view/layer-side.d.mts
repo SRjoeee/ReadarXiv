@@ -32,6 +32,8 @@ export interface LayerSideOptions {
   keepPixels?: number
   /** how many pages past the near ones are laid ahead while the reader rests (AHEAD_PAGES by default; 0 lays none) */
   ahead?: number
+  /** the indicator over a near page's paragraphs not laid yet (one of INDICATORS); none by default */
+  indicator?: 'shimmer' | 'spinner' | null
 }
 export interface LayerSide {
   /** what the host has heard, any number of times, from any source, in any order: merged, deduplicated by digest, fetched
@@ -80,6 +82,8 @@ export declare function keepBudget(o?: { deviceMemory?: number; screenPixels?: n
 export declare const AHEAD_PAGES: number
 /** how long the view rests before the pages ahead are laid, ms */
 export declare const AHEAD_IDLE_MS: number
+/** the looks of the indicator over a near page's paragraphs not laid yet */
+export declare const INDICATORS: readonly ['shimmer', 'spinner']
 export declare const COPY_PIXELS: number
 export declare const RECOPY_MS: number
 /** the longest a laid page's copy waits for the left's page to be drawn before it is put in place, ms */

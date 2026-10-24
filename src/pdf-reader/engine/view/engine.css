@@ -56,6 +56,28 @@ html[data-axt-dim] { --axt-sk: oklch(0.275 0.004 255); --axt-sk-paper: rgb(29 29
 .axt-sk-authors i { block-size: 1.2cqw; }
 .axt-sk-authors i:nth-child(3n) { inline-size: 70%; justify-self: center; }
 .axt-sk-abstract { margin-inline: 9%; }
+/* ----- translating (layer-side.mjs markPage): over a near page whose place shows the original's page, one mark a paragraph
+   not laid yet, at its box in shares of the page (no zoom moves it), above the page and under nothing the reader acts on (no
+   pointer). Two looks while the owner chooses (2026-10-24), the host's `indicator`: a soft band of light passing over the
+   paragraph (shimmer), or a small ring turning at its first line's start (spinner). Still where the reader asks for less motion:
+   the shimmer a faint wash, the ring a quarter at rest */
+:root { --axt-tr-ink: oklch(0.62 0.12 255); }
+html[data-axt-dim] { --axt-tr-ink: oklch(0.72 0.1 255); }
+.axt-translating { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.axt-translating .axt-translating-mark { position: absolute; display: block; }
+.axt-translating-shimmer .axt-translating-mark { overflow: hidden; border-radius: 0.25cqw;
+  background: linear-gradient(100deg, transparent 0 35%, color-mix(in oklab, var(--axt-tr-ink) 16%, transparent) 50%, transparent 65% 100%) 0 0 / 300% 100% no-repeat;
+  animation: axt-tr-sweep 1.6s ease-in-out infinite; }
+@keyframes axt-tr-sweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
+.axt-translating-spinner .axt-translating-mark::before { content: ""; position: absolute; box-sizing: border-box;
+  left: var(--axt-tr-x, 0%); top: var(--axt-tr-y, 0%); inline-size: 1.6cqw; block-size: 1.6cqw; margin-inline-start: -2.1cqw; margin-block-start: 0.1cqw;
+  border-radius: 50%; border: 0.22cqw solid color-mix(in oklab, var(--axt-tr-ink) 25%, transparent); border-block-start-color: var(--axt-tr-ink);
+  animation: axt-tr-turn 0.9s linear infinite; }
+@keyframes axt-tr-turn { to { transform: rotate(1turn); } }
+@media (prefers-reduced-motion: reduce) {
+  .axt-translating-shimmer .axt-translating-mark { animation: none; background: color-mix(in oklab, var(--axt-tr-ink) 7%, transparent); }
+  .axt-translating-spinner .axt-translating-mark::before { animation: none; }
+}
 /* ----- the layer drawn in a place (layer-side.mjs; the web's placeholders.css as it drew it): the page's copy fills the
    place, and the engine's SVG and the page's links are laid over it in the copy's frame. The copy is the composed page drawn as
    PDF.js draws a page view (drawn.mjs pageBox): at the pane's scale from the page's top-left corner, on a canvas of the place's box, which
