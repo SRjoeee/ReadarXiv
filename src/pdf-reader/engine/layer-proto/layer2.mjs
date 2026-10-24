@@ -770,6 +770,8 @@ export const SMALL_CAPS_SHARE = 0.9
 export const SMALL_CAPS_RATIO = 0.8
 /** a lowercase letter, of any script */
 const LOWER = /\p{Ll}/u
+/** whether a character has case */
+const cased = ch => ch.toLowerCase() !== ch.toUpperCase()
 /** smallCapsOf's answer for a unit with no faked small capital and no capitals of the text's: one, read and never written */
 const NO_SMALL_CAPS = Object.freeze({ small: new Set(), upper: new Set(), lower: new Set(), letters: Object.freeze([]) })
 /**
@@ -814,14 +816,15 @@ function smallCapsOf(unit, uc, O, S, pair) {
   }
   const small = new Set(), upper = new Set(), lower = new Set(), letters = []
   const src = [...unit.src], same = []
-  const cased = ch => ch.toLowerCase() !== ch.toUpperCase()
-  O.forEach((o, q) => {
-    if (pair[q] < 0) return
-    const w = S[pair[q]]
+  // (plain loops over the words and their characters: no closure and no slice a word)
+  for (let q = 0; q < O.length; q++) {
+    if (pair[q] < 0) continue
+    const o = O[q], w = S[pair[q]]
     let at = w?.start ?? 0
     const end = w?.end ?? -1
-    for (const c of uc.slice(o.start, o.end + 1)) {
-      if (c.sep || c.space) continue
+    for (let i = o.start; i <= o.end; i++) {
+      const c = uc[i]
+      if (!c || c.sep || c.space) continue
       const key = norm(c.ch)
       if (!key) continue
       // (the source's next letters that spell this character's: one, or a ligature's two or three; measuredOf's walk)
@@ -839,7 +842,7 @@ function smallCapsOf(unit, uc, O, S, pair) {
       }
       same.push(c.size)
     }
-  })
+  }
   // (its source's code points beside: measuredOf reads them again, and takes these)
   if (!same.length) return { small, upper, lower, letters, src }
   const ref = median(same), sizes = []
@@ -858,9 +861,13 @@ function smallCapsOf(unit, uc, O, S, pair) {
  * face names none tells nothing, since NFSS draws a capital and a digit alike in either shape
  */
 function capsVote(chars) {
-  const fake = chars.some(c => c.small)
-  return majorityOf(chars, c => (c.st.caps || c.small ? true : fake && !c.lower ? undefined : false), false) ?? false
+  let fake = false
+  for (let i = 0; i < chars.length && !fake; i++) fake = !!chars[i].small
+  return majorityOf(chars, fake ? CAPS_OF_FAKED : CAPS_OF_NAMED, false) ?? false
 }
+/** what a glyph tells of small capitals beside faked ones, and where there are none (capsVote): no closure a vote */
+const CAPS_OF_FAKED = c => (c.st.caps || c.small ? true : !c.lower ? undefined : false)
+const CAPS_OF_NAMED = c => !!c.st.caps
 
 /**
  * The unit's measured style (measuredStyle) over its matched words' characters, each by the source character it is: a page word
@@ -1929,26 +1936,49 @@ export const LINK_OPEN = /^\\(?:href|hyperref|hyperlink)(?![A-Za-z])/
  * the front end cuts into a group and the switch's placeholder) sets them over the rest of its group, or of the unit
  */
 function baseOf(unit, base) {
-  let total = 0, capsAfter = false
-  const inGroup = { italic: 0, bold: 0, caps: 0 }
+  // (each open group by what it sets, bits of GROUP_ITALIC, GROUP_BOLD and GROUP_CAPS, and how many of the open ones set each: no
+  // object a group and no closure a piece, the reading of every unit's tokens)
+  let total = 0, capsAfter = false, inItalic = 0, inBold = 0, inCaps = 0, nItalic = 0, nBold = 0, nCaps = 0
   const open = []
   for (const p of unit.pieces) {
-    if (p.t === 'open') open.push({ italic: /^\\(?:textit|emph|itshape|textsl)\b/.test(p.src), bold: /^\\(?:textbf|bfseries)\b/.test(p.src), caps: /^\\(?:textsc|scshape)\b/.test(p.src) })
-    else if (p.t === 'close') open.pop()
-    else if (p.t === 'ph' && /^\\(?:sc|scshape)$/.test(p.src ?? '')) { if (open.length) open.at(-1).caps = true; else capsAfter = true }
-    else if (p.t === 'text') {
-      const n = p.s.replace(/\s+/g, '').length
+    if (p.t === 'open') {
+      const bits = (/^\\(?:textit|emph|itshape|textsl)\b/.test(p.src) ? GROUP_ITALIC : 0) | (/^\\(?:textbf|bfseries)\b/.test(p.src) ? GROUP_BOLD : 0) | (/^\\(?:textsc|scshape)\b/.test(p.src) ? GROUP_CAPS : 0)
+      open.push(bits)
+      if (bits & GROUP_ITALIC) nItalic++
+      if (bits & GROUP_BOLD) nBold++
+      if (bits & GROUP_CAPS) nCaps++
+    } else if (p.t === 'close') {
+      const bits = open.pop() ?? 0
+      if (bits & GROUP_ITALIC) nItalic--
+      if (bits & GROUP_BOLD) nBold--
+      if (bits & GROUP_CAPS) nCaps--
+    } else if (p.t === 'ph' && /^\\(?:sc|scshape)$/.test(p.src ?? '')) {
+      if (!open.length) capsAfter = true
+      else if (!(open[open.length - 1] & GROUP_CAPS)) { open[open.length - 1] |= GROUP_CAPS; nCaps++ }
+    } else if (p.t === 'text') {
+      const n = nonSpace(p.s)
       total += n
-      if (open.some(o => o.italic)) inGroup.italic += n
-      if (open.some(o => o.bold)) inGroup.bold += n
-      if (capsAfter || open.some(o => o.caps)) inGroup.caps += n
+      if (nItalic) inItalic += n
+      if (nBold) inBold += n
+      if (capsAfter || nCaps) inCaps += n
     }
   }
   const out = { ...base }
-  if (total && base.italic && inGroup.italic >= 0.5 * total) out.italic = false
-  if (total && base.bold && inGroup.bold >= 0.5 * total) out.bold = false
-  if (total && base.caps && inGroup.caps >= 0.5 * total) out.caps = false
+  if (total && base.italic && inItalic >= 0.5 * total) out.italic = false
+  if (total && base.bold && inBold >= 0.5 * total) out.bold = false
+  if (total && base.caps && inCaps >= 0.5 * total) out.caps = false
   return out
+}
+const GROUP_ITALIC = 1, GROUP_BOLD = 2, GROUP_CAPS = 4
+/** a string's UTF-16 code units that are no white space (JavaScript's \s), counted with no string made */
+function nonSpace(s) {
+  let n = 0
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i)
+    if (c === 32 || (c >= 9 && c <= 13) || c === 0xa0 || c === 0x1680 || (c >= 0x2000 && c <= 0x200a) || c === 0x2028 || c === 0x2029 || c === 0x202f || c === 0x205f || c === 0x3000 || c === 0xfeff) continue
+    n++
+  }
+  return n
 }
 
 const mcache = new Map(), icache = new Map()
