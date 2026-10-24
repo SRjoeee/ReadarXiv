@@ -86,8 +86,14 @@ export { LayoutRefusal } from './json.mjs'
  *  unit's placeholder marks are robust (`\\protect` before each: a \\thanks's \\protected@xdef took them off) and a piece after
  *  `\\protect` is marked before the prefix (rules/tex-kernel.mjs PREFIX_WORDS), so that its ink is its own (5 notes' addresses
  *  were LOST); and the wrap's decoded streams are held as bytes of their own (layout/remove.mjs readAtMost: 2610.21924's maker
- *  died of its memory) (the file's schema is 5 still; MARKS_SCHEMA 9 still) */
-export const LAYOUT = '19'
+ *  died of its memory) (the file's schema is 5 still; MARKS_SCHEMA 9 still); 20 (the release sweep of 2026-10-24): a piece's
+ *  ink read as the per-unit erasure reads it (stream.mjs ownedOf, both readings one): the text after a piece, where it runs to
+ *  its unit's next mark, begins where the glyphs to that mark spell it whole, not where its first characters first stand in the
+ *  piece's own ink (a display's \\text{for every} before "For", a URL's dots before the full stop: the display's or the URL's
+ *  segments were cut short, the rest read as the unit's text), and a display that ends a footnote is found to its page's folio
+ *  (it was LOST): the layout file's segments and the wrap's groups are one reading again (the file's schema is 5 still;
+ *  MARKS_SCHEMA 9 still) */
+export const LAYOUT = '20'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,

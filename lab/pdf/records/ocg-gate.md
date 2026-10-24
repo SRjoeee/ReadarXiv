@@ -104,3 +104,35 @@ lead (a `\#` cell's "#" in `.p`, which the reader hides only for a found placeho
 one) had overlap 7 -> 20 (1512.03385v1 p7, 1810.04805v2 p7): the lead of text symbols alone now goes with the text.
 Crops of 1810.04805v2 p7 for the ruling (arXiv's own page, the old build, the new):
 `~/Downloads/readarxiv-test/route-ocg-cover-evidence/1810.04805v2-zh-p7-arxiv-old-new.png`.
+
+## The run at `abb30736` (the release sweep of 2026-10-24: LAYOUT 20, REMOVAL 10)
+
+The release sweep's sixteen papers whose units the round reaches, in Chinese (arXiv's PDF and our final pass made offline by the
+production page pass, `markedOfPaper` on TeX Live 2025 in Docker; each paper's source units and the marks' texts). Chromium, GPU
+canvas: G1 pages with px outside split glyphs and image edges none on every page of the sixteen, proof ok on fifteen and the
+sixteenth's delta past its bound (2610.21765v1: full, as on staging).
+
+| Paper | Pages | Wrapped | Refused | marks | spell | Labels kept | Splits | Groups | Proof | G1 pages |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|
+| 2610.10069v1 | 27 | 27 | 0 | 0 | 0 | 12 | 0 | 392 | ok | 0 |
+| 2610.16663v1 | 67 | 67 | 0 | 0 | 1 | 34 | 3 | 620 | ok | 0 |
+| 2610.20266v1 | 30 | 30 | 0 | 1 | 1 | 10 | 0 | 388 | ok | 0 |
+| 2610.20285v1 | 36 | 36 | 0 | 4 | 0 | 10 | 0 | 561 | ok | 0 |
+| 2610.20716v1 | 25 | 25 | 0 | 3 | 4 | 1 | 131 | 365 | ok | 0 |
+| 2610.20848v1 | 12 | 12 | 0 | 2 | 0 | 18 | 3 | 215 | ok | 0 |
+| 2610.21037v1 | 19 | 19 | 0 | 0 | 0 | 18 | 1 | 302 | ok | 0 |
+| 2610.21085v1 | 35 | 35 | 0 | 15 | 0 | 5 | 4 | 654 | ok | 0 |
+| 2610.21098v1 | 26 | 26 | 0 | 6 | 0 | 0 | 46 | 833 | ok | 0 |
+| 2610.21176v1 | 18 | 18 | 0 | 1 | 0 | 6 | 0 | 335 | ok | 0 |
+| 2610.21288v1 | 21 | 21 | 0 | 3 | 0 | 1 | 0 | 309 | ok | 0 |
+| 2610.21376v1 | 23 | 23 | 0 | 4 | 3 | 9 | 36 | 610 | ok | 0 |
+| 2610.21491v1 | 20 | 20 | 0 | 8 | 1 | 19 | 10 | 399 | ok | 0 |
+| 2610.21765v1 | 14 | 14 | 0 | 3 | 0 | 2 | 0 | 342 | delta-bound | 0 |
+| 2610.22065v1 | 7 | 7 | 0 | 13 | 0 | 1 | 1 | 181 | ok | 0 |
+| 2610.22195v1 | 20 | 20 | 0 | 6 | 0 | 0 | 12 | 490 | ok | 0 |
+| **All** | **400** | **400** | **0** | **69** | **10** | **146** | **247** | | | **0** |
+
+Against `next` (c54a8702) on the 25 papers of the sweep's records, the units drawable (laid and hidden) 18 more and none fewer;
+the layout files of five papers move in 8 rows, those units' placeholder and erase rows. The gate pack's papers own their ink as
+on `next`, glyph for glyph: the layer gate's pixel tier on its 32 outputs is `next`'s on every total (next on `435d19bd`, this
+tree on `13785c79`).
