@@ -27,7 +27,7 @@ import { isMemoryError } from '../pipeline/memory.mjs'
 import { NAME_KEYS } from './names.mjs'
 import { fillOfColour } from './colour.mjs'
 import { boundedJson, checkKeys, checkPages, checkViews, COORD_MAX, countValues, inView, isInteger, isNumber, isObject, LayoutRefusal, told } from './json.mjs'
-import { OWNED, OWNED_HOW, ownedPages, STREAM_COLUMNS, WANT } from './stream.mjs'
+import { OWNED, OWNED_HOW, ownedPages, spellOf, STREAM_COLUMNS, WANT } from './stream.mjs'
 
 // ---------------------------------------------------------------- the classes
 /** every class, in this order */
@@ -1279,7 +1279,8 @@ const endsOf = i => [`${i}e`, `t${i}e`, `h${i}e`]
 /**
  * What the marking says of each piece with an opening mark, for its own ink (layout/stream.mjs Follow): by its opening
  * mark's name, whether it has a closing mark (`names`: the destinations set and those dropped), the first WANT
- * characters of the text after it in its unit up to the next visible piece, its unit's next marks, and whether a visible
+ * characters of the text after it in its unit up to the next visible piece (and, `rest`, the whole of it as the spell check
+ * reads one: stream.mjs spellOf), its unit's next marks, and whether a visible
  * piece with no mark follows it with no text between. A display's group (`group`): the displays right after it, with
  * nothing visible between, that have no opening mark (TeX sets none on the empty list it resumes the paragraph with
  * after a display: LAYOUT_TEX's \axt@pmc), by their opening marks' names; the text after it and its next piece are then
@@ -1314,7 +1315,10 @@ export function followsOf(units, names) {
         if (names.has(`${nameOf(i, r)}a`)) { through = `${nameOf(i, r)}a`; break }
       }
     }
-    return { closing: names.has(`${name.slice(0, -1)}b`), want, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group }
+    // (`rest`, the erasure's: the whole text after it up to its next visible piece, as the spell check reads one — its letters and
+    // digits —, so that the text after it is told where it runs exactly to its unit's next mark, not where its first WANT
+    // characters first stand: a display's \\text{for every}, a URL's dots)
+    return { closing: names.has(`${name.slice(0, -1)}b`), want, rest: spellOf(after), ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group }
   }
 }
 

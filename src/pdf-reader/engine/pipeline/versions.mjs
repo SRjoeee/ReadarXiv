@@ -196,6 +196,12 @@ export const PDFJS = '6.3.289'
  * 2026-10-24, its units left English though their ink could be owned): a soft mask's content no ink of the page's (remove.mjs
  * alignOf, ink.mjs indices), a title read back past its own placeholders' points, a mark's name read in lower case, a cell's
  * lead macro owned where it abuts the cell, the spell check blind to spacing accents and dotless letters, and the
- * erasure's reading of the placeholders (stream.mjs ownedOf `erasure`): the base's bytes change, the layouts do not
+ * erasure's reading of the placeholders (stream.mjs ownedOf `erasure`): the base's bytes change, the layouts do not; 10 (the
+ * release sweep of 2026-10-24, units newly English against production, all `unhidden`): the text after a placeholder told where
+ * it runs exactly to its unit's next mark (a display's \text, a URL's dots), a display that ends a footnote owned to its page's
+ * folio, an opening point TeX set inside another unit's range owning nothing of it (a run-in heading), a title its class sets
+ * again (acmart) its first occurrence, and the spell check's letter symbols, a wrapper's own words and lines of their own no
+ * unit's (REVTeX's e-mail notes, a folio): the base's bytes change, and the first two rules being the maker's reading too,
+ * the layout files of the units they reach (LAYOUT 20)
  */
-export const REMOVAL = '9'
+export const REMOVAL = '10'

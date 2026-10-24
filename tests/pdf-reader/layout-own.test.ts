@@ -204,3 +204,76 @@ describe('coverage: what the 2026-10-24 sweep left English', () => {
     expect(groupsOf(o, other)).toEqual({ u0: 'Ours', u1: '(Single)' })
   })
 })
+
+// ---- the release sweep of 2026-10-24 (staging d74bd1cf against production 699b4aea): units newly English, all `unhidden`
+describe('coverage: what the release sweep of 2026-10-24 left English', () => {
+  it('spells a letter symbol, whatever its font maps it to, and accepts correct text (OT1 accents, dotless i, ligatures)', () => {
+    // (Unicode decomposes none of ø æ œ ł: each is its base letters on both sides, the source's symbol or the font's glyph)
+    for (const [ink, src] of [['Følner', 'Folner'], ['Łukasz', 'Lukasz'], ['Encyclopædia', 'Encyclopaedia'], ['Œuvre', 'Oeuvre'], ['Straße', 'Strasse'], ['l\u0337odz', 'łodz'], ['Gödel', 'Go\u0308del'], ['Estad´ısticas', 'Estadísticas'], ['ﬁ ﬂ ﬀ ﬃ', 'fi fl ff ffi']] as const) expect(spellOf(ink), ink).toBe(spellOf(src))
+    // (a letter still differs)
+    for (const [a, b] of [['Følner', 'Fulner'], ['Łukasz', 'Kukasz']] as const) expect(spellOf(a)).not.toBe(spellOf(b))
+  })
+  it('reads a text symbol of no mark of its own as its character in the source (2610.21037v1 p3u28: F\\o lner)', () => {
+    const pages = [page([{ pt: '0s' }, 'a Følner sequence', { pt: '0e' }])]
+    const unit = { pieces: [{ t: 'text', s: 'a F' }, { t: 'ph', src: '\\o' }, { t: 'text', s: ' lner sequence' }] }
+    const r = ownOf(pages, { units: [unit] })
+    expect(r.units.get(0)?.unhidden).toBe(null)
+    // (one with marks of its own is its placeholder's ink, never the text's)
+    const marked = [page([{ pt: '0s' }, 'a F', { pt: 'p0.1a' }, 'ø', { pt: 'p0.1b' }, 'lner sequence', { pt: '0e' }])]
+    const m = ownOf(marked, { units: [unit] })
+    expect(groupsOf(m, marked)).toEqual({ u0: 'a Flner sequence', 'u0.p': 'ø' })
+    expect(m.units.get(0)?.unhidden).toBe(null)
+  })
+  it('lets a wrapper set words of its own before its argument (2610.20266v1 p1u0: siamart\'s \\funding)', () => {
+    const unit = { kind: 'footnote', pieces: [{ t: 'text', s: 'Submitted 10/2026.\n' }, { t: 'open', id: 1, src: '\\funding{' }, { t: 'text', s: 'Funded by the DFG.' }, { t: 'close', id: 1, src: '}' }] }
+    const pages = [page([{ pt: '0s' }, 'Submitted 10/2026. Funding: Funded by the DFG.', { pt: '0e' }])]
+    expect(ownOf(pages, { units: [unit] }).units.get(0)?.unhidden).toBe(null)
+    // (words past a wrapper's, or anywhere else, are still refused)
+    const long = [page([{ pt: '0s' }, 'Submitted 10/2026. Funding of the twenty research councils: Funded by the DFG.', { pt: '0e' }])]
+    expect(ownOf(long, { units: [unit] }).units.get(0)?.unhidden).toBe('spell')
+    const elsewhere = [page([{ pt: '0s' }, 'Submitted JOUR 10/2026. Funded by the DFG.', { pt: '0e' }])]
+    expect(ownOf(elsewhere, { units: [unit] }).units.get(0)?.unhidden).toBe('spell')
+  })
+  it('leaves the lines of their own its source does not spell the page\'s (2610.21765v1 p1u13: REVTeX\'s e-mail notes; 2610.10069v1 p7u53: a folio)', () => {
+    // the paragraph's first column, the column's e-mail note at its foot, its second column
+    const pages = [page([{ pt: '0s' }, 'This is a very\n', 'hard thing\n', '\n*d25062@iitmandi.ac.in\n', { dx: 300 }, 'to achieve.', { pt: '0e' }])]
+    const r = ownOf(pages, { units: units('This is a very hard thing to achieve.') })
+    expect(r.units.get(0)?.unhidden).toBe(null)
+    expect(groupsOf(r, pages)).toEqual({ u0: 'This is a veryhard thingto achieve.' })
+    // (a line on a baseline of another of the unit's lines, its extent meeting theirs, is never released: the original's)
+    const shared = [page([{ pt: '0s' }, 'This is a very\n', 'hard\n', 'JOUR\n', 'thing', { pt: '0e' }])]
+    shared[0]!.glyphs.forEach(g => { if (g.y === 676) { g.y = 700; g.top = 707; g.bottom = 698 } })
+    expect(ownOf(shared, { units: units('This is a very hard thing') }).units.get(0)?.unhidden).toBe('spell')
+    // (nor one above a line kept in its column: words TeX set among the unit's own, which the layout's frame may hold)
+    const among = [page([{ pt: '0s' }, 'This is a very\n', 'JOURNAL\n', 'hard thing', { pt: '0e' }])]
+    expect(ownOf(among, { units: units('This is a very hard thing') }).units.get(0)?.unhidden).toBe('spell')
+    // (nor any line of a unit with a visible placeholder of no mark of its own, whose ink that line may be)
+    const unmarked = [page([{ pt: '0s' }, 'We have\n', 'E = mc2\n', 'here.', { pt: '0e' }])]
+    expect(ownOf(unmarked, { units: [{ pieces: [{ t: 'text', s: 'We have ' }, { t: 'ph', src: '\\[E=mc^2\\]' }, { t: 'text', s: ' here.' }] }] }).units.get(0)?.unhidden).toBe('spell')
+    // (a page's folio after a footnote run on to the next page (2a): released)
+    const foot = [page([{ pt: 'bs1' }, 'body', { pt: 'be1' }, { pt: '0s' }, 'Neither estimator\n', '\n\n7']), page([{ pt: 'bs2' }, 'b', { pt: 'be2' }, 'enforces it.', { pt: '0e' }])]
+    const f = ownOf(foot, { units: units('Neither estimator enforces it.') })
+    expect(f.units.get(0)?.unhidden).toBe(null)
+    expect(groupsOf(f, foot)).toEqual({ u0: 'Neither estimatorenforces it.' })
+  })
+  it('owns nothing of another unit\'s range for a placeholder whose opening point TeX set there (2610.21085v1 p5u43: a run-in heading)', () => {
+    // \paragraph{What $\cand$ is.} $\cand(q)$ rest: the heading is set at the paragraph's start, after its lead placeholder's
+    // opening mark
+    const pages = [page([{ pt: 'h0s' }, 'What ', { pt: 'p0.1a' }, { pt: 'p1.0a' }, 'V', { pt: 'p0.1b' }, ' is.', { pt: 'h0e' }, { pt: '1s' }, 'V(q)', { pt: 'p1.0b' }, ' rest', { pt: '1e' }])]
+    const us = [{ kind: 'heading', pieces: [{ t: 'text', s: 'What ' }, { t: 'ph', src: '$V$' }, { t: 'text', s: ' is.' }] }, { pieces: [{ t: 'ph', src: '$V(q)$' }, { t: 'text', s: ' rest' }] }]
+    const r = ownOf(pages, { units: us })
+    expect(groupsOf(r, pages)).toEqual({ u0: 'What  is.', 'u0.p': 'V', 'u1.p': 'V(q)', u1: ' rest' })
+    expect([r.units.get(0)?.unhidden, r.units.get(1)?.unhidden]).toEqual([null, null])
+  })
+  it('owns a title its class sets again by its first occurrence, an end mark alone (2610.22065v1 p1u0: acmart\'s ACM Reference Format)', () => {
+    const pages = [page(['ABNAT: Attention', { pt: 'h0e' }, '\n', { pt: '1s' }, 'Abstract text', { pt: '1e' }, '\nRef: ', { pt: 'h0s' }, 'ABNAT: Attention', { pt: 'h0e' }, '. In Proc.'])]
+    const r = ownOf(pages, { units: [{ kind: 'heading', src: 'ABNAT: Attention' }, { src: 'Abstract text' }] })
+    expect(groupsOf(r, pages)).toEqual({ u0: 'ABNAT: Attention', u1: 'Abstract text' })
+    expect(r.units.get(0)?.unhidden).toBe(null)
+    // (every occurrence a pair — a heading again in a running head — or the end alone not first: the original's, as before)
+    const pairs = [page([{ pt: 'h0s' }, 'Intro', { pt: 'h0e' }, '\n', { pt: 'h0s' }, 'Intro', { pt: 'h0e' }])]
+    expect(ownOf(pairs, { units: [{ kind: 'heading', src: 'Intro' }] }).units.get(0)?.unhidden).toBe('marks')
+    const later = [page([{ pt: 'h0s' }, 'Intro', { pt: 'h0e' }, '\n', 'Intro', { pt: 'h0e' }])]
+    expect(ownOf(later, { units: [{ kind: 'heading', src: 'Intro' }] }).units.get(0)?.unhidden).toBe('marks')
+  })
+})

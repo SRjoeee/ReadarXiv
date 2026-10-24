@@ -12,9 +12,11 @@
 //      page p from its start to the next unit's start in that region (else the stream's end) and page p + 1 from after the last
 //      other unit's end in it (else the stream's start) to its end mark; over more pages, `across`;
 //   3. a unit with an end mark alone (a title: TeX sets no start in vertical mode): from the point before it on its page, its
-//      glyphs alone (a rule above a title is no title's);
+//      glyphs alone (a rule above a title is no title's); marks set twice are its first occurrence where that is an end mark
+//      alone and every later one a pair (a title its class sets again: acmart);
 //   4. a placeholder (`p<id>.<j>a`/`b`, a footnote call `n<id>.<j>a`/`b`): stream.mjs ownedOf's entry where the marking is
-//      given (`follows`), else the pair, or an opening alone to the next point in its region;
+//      given (`follows`), else the pair, or an opening alone to the next point in its region; nothing of another unit's range
+//      its opening point stands in (a run-in heading);
 //   5. a label: the glyphs on the start's first glyph's baseline between the previous unit's end mark and the start, the
 //      placeholders' and names' ranges passed over; none for a table cell;
 //   6. a babel name `n<occ>`: between `n<occ>.<key>.s` and `.e`;
@@ -24,18 +26,20 @@
 // units do not name; the work is bounded (OWN_WORK).
 //
 // The spell check (§1.3) is what makes "a unit that cannot be delimited shows the original" exact: a unit's `u` glyphs must
-// spell its source text, letters and digits alone (NFKD, marks and case dropped: TeX's accents, ligatures, hyphenation and
-// punctuation are no unit's evidence), or it is `unhidden: 'spell'`; its label must be a label's form (a number, an item's mark,
+// spell its source text, letters and digits alone (stream.mjs spellOf: NFKD, marks and case dropped, a letter Unicode does not
+// decompose as its base letters: TeX's accents, ligatures, letter symbols, hyphenation and punctuation are no unit's evidence),
+// a wrapper's own words at its slot and lines of their own no unit's aside (spells), or it is `unhidden: 'spell'`; its label
+// must be a label's form (a number, an item's mark,
 // a caption's name and number) or empty, else the label is left the original's ink (`labelKept`, the coordinator's amendment of
 // 2026-10-28) where its ink is apart from the text's, and the unit `spell` where it is not.
 //
 // Pure arithmetic over what pageInk read (layout/ink.mjs, `indices`); imports the stream's regions and a unit's source text.
 // An original module (no port statement).
-import { plainSource } from '../translate/mt.mjs'
+import { utf8 } from '../translate/mt.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { UNHIDDEN } from './delta-wire.mjs'
 import { classOf } from './marks.mjs'
-import { OWNED, ownedOf, regionsOf } from './stream.mjs'
+import { OWNED, ownedOf, regionsOf, spellOf } from './stream.mjs'
 
 export { UNHIDDEN }
 /** the glyphs and boxes the ownership of a paper may visit (real ranges never overlap: they cost its ink once) */
@@ -54,11 +58,8 @@ const NAME_START = /^n(\d+)\.([a-z]{1,16})\.s$/
 const NAME_END = /^n(\d+)\.([a-z]{1,16})\.e$/
 const BRACKET = /^[bf][se]\d+$/
 
-/** a text's evidence for the spell check: its letters and digits, without their accents, lower case */
-// (a spacing accent — OT1's \\^ sets ˆ beside its letter, a modifier letter to Unicode: TeX's own, U+02C6, U+02C7 and
-// U+02D8 to U+02DD, the others no letters already; not every modifier letter, CJK's prolonged sound mark and iteration mark among them — is no letter, and a dotless ı or ȷ under an
-// accent is its letter: 2610.20595v1 "Ciˆencia", 2610.20581v1 "Estad´ısticas")
-export const spellOf = s => s.normalize('NFKD').replace(/[\p{M}\u02c6\u02c7\u02d8-\u02dd]/gu, '').toLowerCase().replace(/ß/g, 'ss').replace(/ı/g, 'i').replace(/ȷ/g, 'j').replace(/[^\p{L}\p{N}]/gu, '')
+/** a text's evidence for the spell check: its letters and digits, without their accents, lower case (stream.mjs's) */
+export { spellOf }
 /** a label's form (§1.3): a number or an item's mark, maybe a caption's or a section's name before it, in brackets or with a
  *  stop after it — of its characters, NFKC, lower case, no white space */
 const LABEL_NAME = '(?:figure|fig\\.?|table|tab\\.?|algorithm|alg\\.?|listing|section|sec\\.?|chapter|appendix|part|step|case|example|definition|lemma|theorem|proposition|corollary|remark|claim|note|assumption|exercise|problem|equation|eq\\.?|proof|keywords?|index ?terms)'
@@ -151,8 +152,17 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
     const u = unit(id)
     if (work > OWN_WORK) { u.unhidden = 'marks'; continue }
     const S = [`${id}s`, `t${id}s`, `h${id}s`].flatMap(n => where.get(n) ?? []), E = [`${id}e`, `t${id}e`, `h${id}e`].flatMap(n => where.get(n) ?? [])
-    if (S.length > 1 || E.length > 1) { u.unhidden = 'marks'; continue }
-    const s = S[0] ?? null, e = E[0] ?? null
+    let s = S[0] ?? null, e = E[0] ?? null
+    if (S.length > 1 || E.length > 1) {
+      // (marks TeX set more than once: the unit is its first occurrence where that is an end mark alone and every later one a
+      // pair, one start before each end — a title TeX set in vertical mode, where no start mark goes (MR 3), its class setting
+      // its text again later in a line, start and end marks both: acmart's ACM Reference Format, 2610.22065v1 p1u0. TeX keeps
+      // the first destination of a name, so the layout's is that one too. The later occurrences' ink is the page's. Anything
+      // else — a heading again in a running head, every occurrence a pair — is the original's)
+      const startsIn = k => S.filter(y => before(y, E[k]) && (k === 0 || before(E[k - 1], y))).length
+      if (startsIn(0) !== 0 || S.length !== E.length - 1 || E.some((_, k) => k > 0 && startsIn(k) !== 1)) { u.unhidden = 'marks'; continue }
+      s = null
+    }
     if (!e) { if (!units || units[id]) u.unhidden = 'marks'; continue }
     if (s && before(e, s)) { u.unhidden = 'marks'; continue }
     let list = null
@@ -273,9 +283,6 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
     out = norm(out)
     return out ? { text: out, parts } : null
   }
-  /** the glyphs of the cells' leads that are text symbols' (their text drawn by the layer as characters): no letter of the
-   *  source text the spell check reads, as a placeholder's is none (\\O "Ø", \\ss "ß") */
-  const symbolGlyphs = new Set()
   for (const [id, { s }] of textOf) {
     if (!s || !units || !(units[id]?.kind === 'cell' || pt(s).name.startsWith('t')) || !opensUnmarked(units[id], id)) continue
     if (work > OWN_WORK) { unit(id).unhidden ??= 'marks'; continue }
@@ -308,7 +315,7 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
       while (w < run.length && n < part.text.length) { const c = norm(pg.glyphs[run[w][1]].u ?? ''); mine.push(run[w++]); n += c.length }
       // (the blank glyphs after a part: its own)
       while (w < run.length && !norm(pg.glyphs[run[w][1]].u ?? '')) mine.push(run[w++])
-      if (part.symbol) { claim({ glyphs: mine }, `u${id}`, 'u'); for (const [pp, g] of mine) symbolGlyphs.add(`${pp}|${g}`) }
+      if (part.symbol) claim({ glyphs: mine }, `u${id}`, 'u')
       else claim({ glyphs: mine }, `u${id}.p`, 'p')
     }
     cellLead.add(id)
@@ -317,6 +324,9 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
   // ---- the placeholders (MR 4)
   // (the erasure's reading: stream.mjs ownedOf `erasure`, a piece's ink found exactly where the maker's reading leaves it LOST)
   const owned = follows ? ownedOf(pages.map((pg, i) => streamPage(pg, i)), { follows, erasure: true }) : null
+  // (each page's units whose start and end marks both stand on it: [id, start, end])
+  const spansOn = new Map()
+  for (const [id, { s, e }] of textOf) if (s && s[0] === e[0]) (spansOn.get(s[0]) ?? spansOn.set(s[0], []).get(s[0])).push([id, s, e])
   for (const [name, list] of where) {
     const m = OPENING.exec(name)
     if (!m) continue
@@ -341,6 +351,17 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
       }
       if (!e) lost = true
     }
+    // (an opening point inside another unit's range, between its start and end marks on one page: TeX set it there out of its
+    // unit's order — a run-in \\paragraph's heading is set at the start of the next paragraph, after that paragraph's lead
+    // placeholder's opening mark, 2610.21085v1 p5u43 — and what that unit's range holds is that unit's, never this piece's)
+    if (e && list.length === 1) {
+      const A = list[0], hosts = new Set()
+      for (const [other, s, t] of spansOn.get(A[0]) ?? []) if (other !== id && before(s, A) && before(A, t)) hosts.add(other)
+      if (hosts.size) {
+        const host = g => { if (g === null || g[0] !== 'u') return false; const dot = g.indexOf('.'); return hosts.has(Number(dot < 0 ? g.slice(1) : g.slice(1, dot))) }
+        e = { glyphs: e.glyphs.filter(([p, i]) => !host(gOwn[p - 1][i])), boxes: e.boxes.filter(([p, b]) => !host(bOwn[p - 1][b])) }
+      }
+    }
     if (e) claim(e, `u${id}.p`, 'p')
     // a placeholder whose ink cannot be told apart is in the text's range: hidden with it, it could not be kept in place, and the
     // spell check reads no symbol (=, ×, †): its unit is the original's
@@ -359,7 +380,7 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
   // ---- each unit's groups and pages, and the spell check (§1.3)
   const text = new Map(), label = new Map()
   for (let p = 1; p <= P; p++) {
-    const G = gOwn[p - 1], glyphs = pages[p - 1].glyphs
+    const G = gOwn[p - 1]
     for (let i = 0; i < G.length; i++) {
       const g = G[i]
       if (g === null || g[0] !== 'u') continue
@@ -367,7 +388,7 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
       const u = unit(id)
       u.groups.add(g)
       u.pages.add(p)
-      if (dot < 0 && !symbolGlyphs.has(`${p}|${i}`)) (text.get(id) ?? text.set(id, []).get(id)).push(glyphs[i].u ?? '')
+      if (dot < 0) (text.get(id) ?? text.set(id, []).get(id)).push([p, i])
       else if (g.endsWith('.l')) (label.get(id) ?? label.set(id, []).get(id)).push([p, i])
     }
     for (const g of bOwn[p - 1]) { if (g === null || g[0] !== 'u') continue; const dot = g.indexOf('.'), id = Number(dot < 0 ? g.slice(1) : g.slice(1, dot)); unit(id).groups.add(g); unit(id).pages.add(p) }
@@ -394,8 +415,8 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
     if (u.unhidden) continue
     // (a unit the marks name and the units do not: no source to spell it against, so the original's)
     if (units && !units[id]) { u.unhidden = 'marks'; continue }
-    const src = units ? sourceOf(units[id]) : null
-    if (src !== null && spellOf(text.get(id)?.join('') ?? '') !== spellOf(src) && !(textOf.get(id) && !textOf.get(id).s && trimLead(id, spellOf(src)))) { u.unhidden = 'spell'; spell.push(id); continue }
+    const src = units ? sourceOf(units[id], k => where.has(`p${id}.${k}a`) || where.has(`p${id}.${k}b`), cellLead.has(id)) : null
+    if (src !== null && !spells(id, src)) { u.unhidden = 'spell'; spell.push(id); continue }
     const lead = label.get(id)
     if (lead) {
       const chars = lead.map(([p, i]) => pages[p - 1].glyphs[i].u ?? '').join('')
@@ -433,8 +454,71 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
       if (rest.some(b => b[0] === a[0] && Math.abs(G(b).y - G(a).y) < 0.5 * Math.max(G(b).size, G(a).size))) return false
     }
     for (const [p, i] of lead) gOwn[p - 1][i] = null
-    text.set(id, rest.map(a => G(a).u ?? ''))
+    text.set(id, rest)
     return true
+  }
+  /** whether unit id's text glyphs spell its source `src` (sourceOf's): exactly; with a wrapper's own words at its slots
+   *  (OPEN_WORDS letters at most, each: siamart's \\funding sets "Funding:" before its argument, 2610.20266v1 p1u0); a title
+   *  whose lead TeX set on lines of its own (trimLead); or with lines of their own the source does not spell left the page's
+   *  (releaseLines) */
+  function spells(id, src) {
+    const G = ([p, i]) => pages[p - 1].glyphs[i]
+    const ink = (text.get(id) ?? []).map(a => spellOf(G(a).u ?? '')).join('')
+    if (ink === src.text || ink === src.bare) return true
+    if (src.parts.length > 1 && slotted(src.parts).test(ink)) return true
+    const t = textOf.get(id)
+    if (t && !t.s && trimLead(id, src.text)) return true
+    return releaseLines(id, src.text)
+  }
+  /** a unit's lines of glyphs its source does not spell, each on a line of its own, left the page's: what TeX shipped in the
+   *  unit's range that is no unit's — REVTeX's e-mail notes at a column's foot in mid-paragraph (2610.21765v1 p1u13), a page's
+   *  folio after a footnote that runs on to the next page (2610.10069v1 p7u53). Its lines are its glyphs' runs in stream order
+   *  on one page and one baseline; one is released where the source does not go on with its letters, no other line of the
+   *  unit stands on its baseline where their extents meet, and every line kept that its extent meets on its page stands above
+   *  it; every other line must spell the source in order, whole. A unit
+   *  with a visible placeholder of no mark of its own is never released from: that ink, in the text's range, may be such a
+   *  line, and would be drawn again over the original's */
+  function releaseLines(id, want) {
+    if (units && unmarkedPiece(units[id], id)) return false
+    const G = ([p, i]) => pages[p - 1].glyphs[i]
+    const lines = []
+    for (const a of text.get(id) ?? []) {
+      const last = lines.at(-1), b = last?.at(-1)
+      if (b && b[0] === a[0] && Math.abs(G(b).y - G(a).y) < 0.5 * Math.max(G(b).size, G(a).size)) last.push(a)
+      else lines.push([a])
+    }
+    const box = l => { let x0 = Infinity, x1 = -Infinity; for (const a of l) { x0 = Math.min(x0, G(a).x0); x1 = Math.max(x1, G(a).x1) } return { p: l[0][0], y: G(l[0]).y, size: G(l[0]).size, x0, x1 } }
+    const boxes = lines.map(box)
+    const alone = k => boxes.every((o, m) => m === k || o.p !== boxes[k].p || Math.abs(o.y - boxes[k].y) >= 0.5 * Math.max(o.size, boxes[k].size) || o.x1 <= boxes[k].x0 || boxes[k].x1 <= o.x0)
+    let j = 0
+    const released = []
+    for (let k = 0; k < lines.length; k++) {
+      const t = lines[k].map(a => spellOf(G(a).u ?? '')).join('')
+      if (want.startsWith(t, j)) { j += t.length; continue }
+      if (!alone(k)) return false
+      released.push(k)
+    }
+    if (j !== want.length || !released.length) return false
+    const out = new Set(released)
+    // (and each stands below every line kept that its extent meets on its page: a column's foot, a page's — a line of words
+    // TeX set above or among the unit's own, a wrapper's heading line, may be in the layout's frame of the unit, and the
+    // translation drawn over it)
+    const meets = (o, b) => o.p === b.p && o.x0 < b.x1 && b.x0 < o.x1
+    for (const k of out) if (boxes.some((o, m) => !out.has(m) && meets(o, boxes[k]) && o.y < boxes[k].y)) return false
+    for (const k of out) for (const [p, i] of lines[k]) gOwn[p - 1][i] = null
+    text.set(id, lines.filter((_, k) => !out.has(k)).flat())
+    return true
+  }
+  /** whether a unit holds a visible placeholder (a text symbol aside, which sets a letter among the text's) with no mark of its
+   *  own */
+  function unmarkedPiece(u, id) {
+    if (!Array.isArray(u?.pieces)) return false
+    return u.pieces.some((piece, k) => {
+      const c = classOf(piece)
+      if (!c || symbolText(piece.src) !== null) return false
+      const n = c === 'footnote' ? 'n' : 'p'
+      return !where.has(`${n}${id}.${k}a`) && !where.has(`${n}${id}.${k}b`)
+    })
   }
   /** whether a label's glyphs stand apart from the unit's text glyphs on their pages (no two boxes meet) */
   function apart(lead, id) {
@@ -457,11 +541,35 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
   return { glyphs: gOwn, boxes: bOwn, units: unitOf, stats: { units: unitOf.size, unhidden, spell: spell.slice(0, SPELL_LIST_MAX), labelKept, leaks: { count: leaks.length, units: leaks.slice(0, SPELL_LIST_MAX) } } }
 }
 
-/** a unit's source text for the spell check: its `src` where it has one, else its pieces' (placeholders dropped) */
-function sourceOf(u) {
+/** the letters a wrapper's own words may take at its slot in the spell check (sourceOf) */
+const OPEN_WORDS = 16
+/** a matcher of a unit's letters by its source's parts, a wrapper's slot between each two (empty parts' slots one) */
+function slotted(parts) {
+  const slot = `[\\p{L}\\p{N}]{0,${OPEN_WORDS}}`
+  let re = parts[0]
+  for (let k = 1; k < parts.length; k++) { if (!re.endsWith(slot)) re += slot; re += parts[k] }
+  return new RegExp(`^${re}$`, 'u')
+}
+
+/** a unit's source text for the spell check, as spellOf reads it, in parts: its `src` where it has one, else its pieces' — a
+ *  placeholder dropped, but a text symbol of no mark of its own (\\o, \\ss: `marked(k)` false), whose ink TeX set among the
+ *  text's, its character (in the unit's lead, before any text, only where `lead`: a cell's lead ink taken with its text; any
+ *  other unit's lead ink is its label's or its placeholder's, MR 5); and a slot before each wrapper's argument (an `open`
+ *  piece: siamart's \\funding{…}), where the macro may set words of its own. Returns { text, bare, parts: [text before the
+ *  first slot, …] } (`bare` the text without the symbols: one whose ink an opening alone before it took, `$x$\\o`, is no
+ *  text's), or null where there is none */
+function sourceOf(u, marked, lead) {
   if (!u) return null
-  if (typeof u.src === 'string') return u.src
-  return Array.isArray(u.pieces) ? plainSource(u) : null
+  if (typeof u.src === 'string') { const t = spellOf(u.src); return { text: t, bare: t, parts: [t] } }
+  if (!Array.isArray(u.pieces)) return null
+  const parts = ['']
+  let opened = false, bare = ''
+  u.pieces.forEach((p, k) => {
+    if (p?.t === 'text') { const s = typeof p.s === 'string' ? p.s : '', t = spellOf(utf8(s)); parts[parts.length - 1] += t; bare += t; if (/\S/.test(s)) opened = true }
+    else if (p?.t === 'open') parts.push('')
+    else if (p?.t === 'ph' && !marked(k) && (opened || lead)) { const sym = symbolText(p.src); if (sym !== null) parts[parts.length - 1] += spellOf(sym) }
+  })
+  return { text: parts.join(''), bare, parts }
 }
 
 /** a page as stream.mjs ownedOf reads one: its glyphs' columns (x0, y, size, u) and their count */
