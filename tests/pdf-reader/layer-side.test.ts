@@ -1703,6 +1703,27 @@ describe('translating: the indicator over a near page\'s paragraphs not laid yet
     expect(marksOf(s, 1)).toBe(0)
   })
 
+  it('marks a class the reader\'s toggles show, and gives the door those toggles: a table\'s cells hidden under "tables" off', async () => {
+    const m = await M()
+    // (a page holding cells, and the defaults' marks there: every paragraph but an author block's, whose names are off)
+    const n = [1, 2, 3, 4].find(p => unitsOn(m, p).some(id => m.index.kinds[id] === 'cell'))!
+    expect(n).toBeDefined()
+    const on = unitsOn(m, n), cells = on.filter(id => m.index.kinds[id] === 'cell'), authors = on.filter(id => m.index.kinds[id] === 'author')
+    const plain = await setup({ door: { rows: 'gate' } })
+    await nearOn(plain, [n])
+    plain.side.tell(await ALL())
+    await settle(plain, 10, false)
+    expect(plain.doors[0]?.options?.toggles).toBeUndefined()
+    expect(places(plain)[n - 1]?.querySelectorAll('.axt-translating .axt-translating-mark').length).toBe(on.length - authors.length)
+    // (tables off, names on: the door told so, no cell marked, the author block marked as any paragraph)
+    const off = await setup({ door: { rows: 'gate' }, toggles: { tables: false, names: true } })
+    await nearOn(off, [n])
+    off.side.tell(await ALL())
+    await settle(off, 10, false)
+    expect(off.doors[0]?.options?.toggles).toEqual({ tables: false, names: true })
+    expect(places(off)[n - 1]?.querySelectorAll('.axt-translating .axt-translating-mark').length).toBe(on.length - cells.length)
+  })
+
   it('none on a far page, and none for a paragraph whose rows ended without a row of it', async () => {
     const s = await setup({ door: { rows: 'gate' } })
     const m = await M()
