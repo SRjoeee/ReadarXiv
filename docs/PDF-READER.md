@@ -777,14 +777,22 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   `dropOthers()`, a refusal and the dispose. A host may give its own budget (`keepPixels`; 0 keeps none).
 - **The faces, in one wave** (`layer-proto/warm.mjs`). v0 checks and loads the faces of a unit as it lays it, one unit after
   another (E2), so a page whose units brought new characters waited a round trip a unit: 2602.23285v2 in Chinese asked 38
-  font files in 12 waves before its first page, 4.3 to 9.2 s of a cold visit (production, 2026-10-24). The side asks the faces
-  of the near pages' units of the host at once, the page in the middle of the view first, as soon as the index, their rows
-  and the parts that locate them are in (before the composed document is open: pages 1 and 2 before the places are laid out):
-  a heading's translation in the target's bold body face, any other's in its body face, CJK characters by the rules' class
-  in the CJK face and the rest in the paper's serif, the paper's family read from the parts' layouts (each font weighted by
-  the lines set in it; the same family page 1's characters give on the seven papers of the gate pack). v0's checks are
-  unchanged: they find the slices loaded or loading, and a run whose style the warm-up did not guess (a bold word in a
-  paragraph, a label, a name) asks its own as before. A character is asked once a target and family.
+  font files in 12 waves before its first page, 4.3 to 9.2 s of a cold visit (production, 2026-10-24). The side asks the
+  slices of what v0 will draw of the near pages at once, the page in the middle of the view first (page 1 alone until a page
+  is shown, the others after it), as soon as the index, their rows and the parts that locate them are in (before the
+  composed document is open): each unit's translation in the style its lines are set in on the page (their most common font
+  by width, formulas aside, as v0 takes its original's most common class; a heading the layout tells no font of in the
+  bold), an author's unit never (v0 never draws one; on 2602.23285v2's page 1 its names alone took 16 slices, 1.7 MB, where
+  the units drawn take 1.4 MB), the page's babel names in the target's words, the alphabet slice of each text font the page
+  is set in, and on page 1 the faces v0 warms there (`warmFaces`). CJK characters go by the rules' class to the CJK face,
+  the rest to the style's Latin face; the paper's family is read from the parts' layouts (each font weighted by the lines
+  set in it; the same family page 1's characters give on the seven papers of the gate pack). The slices are loaded
+  `WAVE_SLOTS` (4) at a time: the edge answers a connection's streams side by side whatever their priority (staging,
+  2026-10-24: a High fetch beside 28 slices loaded as fonts, VeryHigh, ended in 175 to 470 ms, as beside 28 asked Low or
+  High), so a wave of 28 slices in flight held each read of the original the composed document makes, one after another,
+  to a share of the line in 29. v0's checks are unchanged: they find the slices loaded or loading, and a run the wave did
+  not foresee (a bold word in a paragraph, a character only the original's text holds) asks its own as before. A slice is
+  asked once.
 - **The pages ahead** (the prefetch on the layer). Once the rows of the attempt have ended (a host that translates as it shows
   is asked for nothing it has not translated), the door is open, no page of the view is asked of it, the right pane is shown
   and the document visible, and the view has rested `AHEAD_IDLE_MS` (600 ms: no scroll, nothing asked, the last near page
