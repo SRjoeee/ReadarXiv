@@ -157,6 +157,18 @@ describe('what reads as before', () => {
     expect(tokens.base.caps).toBe(false)
   })
 
+  it('a \\MakeUppercase in a smaller group (Devin on #461): the front end makes it a placeholder, its capitals no word of the source', () => {
+    // ("See {\small\MakeUppercase{important}} results here.": latex-front's pieces as it cuts them, "IMPORTANT" at 9 pt beside 10 pt
+    // text, so its letters are a placeholder's rendering, never paired with "important" and never read as small capitals)
+    const line = lineOf([['See', 9.963, times], ['IMPORTANT', 8.966, times, 2.5], ['results', 9.963, times, 2.5], ['here.', 9.963, times, 2.5]])
+    const source = [text('See '), open('{', 1), { t: 'ph', src: '\\small' }, { t: 'ph', src: '\\MakeUppercase{important}' }, close(1), text(' results here.')]
+    for (const withSource of [true, false]) {
+      const { prep, tokens } = read(unitOf(source, ['Véase ', 1, 2, 3, 4, ' resultados aquí.'], 'para', withSource), line)
+      expect(prep.orig!.size).toBeCloseTo(9.963, 3)
+      expect(tokens.base.caps).toBe(false)
+    }
+  })
+
   it('a unit of genuinely mixed sizes ({\\small …} inside a paragraph): the median of all its glyphs, as before', () => {
     // (its small text lowercase as the source writes it: no case changed, nothing set aside)
     const line = lineOf([['Results', 9.963, times], ['are', 9.963, times, 2.5], ['shown', 7.97, times, 2.5], ['in', 7.97, times, 2], ['full', 7.97, times, 2], ['here', 7.97, times, 2]])
