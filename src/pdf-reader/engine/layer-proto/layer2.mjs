@@ -755,7 +755,8 @@ export function unitSizeOf(prep, P, unit = null) {
   const size = prep?.orig?.size
   if (!(size > 0)) return undefined
   if (!P?.cjk) return size
-  const caps = prep.measured?.st ? prep.measured.st.caps : unit?.pieces ? baseOf(unit, prep.orig.st).caps : prep.orig.st?.caps
+  // (baseOf only takes small capitals off, so a majority of none needs no reading of its groups)
+  const caps = prep.measured?.st ? prep.measured.st.caps : !!prep.orig.st?.caps && (!unit?.pieces || baseOf(unit, prep.orig.st).caps)
   return caps ? size * CJK_CAPS_SIZE : size
 }
 
@@ -763,6 +764,8 @@ export function unitSizeOf(prep, P, unit = null) {
  *  small capitals faces (PSNFSS's ptmrc8t and its kind, fontinst's smallcapsscale) set theirs at 0.8, a case change of another kind
  *  (\MakeUppercase) at 1 */
 export const SMALL_CAPS_SHARE = 0.9
+/** smallCapsOf's answer for a unit with no faked small capital: one, read and never written */
+const NO_SMALL_CAPS = Object.freeze({ small: new Set(), lower: new Set(), letters: Object.freeze([]) })
 /**
  * The unit's faked small capitals (2602.23285's appendix headings, 2026-10-24). A face of the Times family has no small capitals of
  * its own, so NFSS sets `\scshape` in a virtual face that draws each lowercase letter as its upright face's capital at 0.8 of the
@@ -776,13 +779,13 @@ export const SMALL_CAPS_SHARE = 0.9
  * (`pair` into S, gapsOfOnce's); `small` is empty where no letter of the unit's is of the source's own case
  */
 function smallCapsOf(unit, uc, O, S, pair) {
-  const small = new Set(), lower = new Set(), letters = []
-  if (!pair || typeof unit?.src !== 'string') return { small, lower, letters }
+  if (!pair || typeof unit?.src !== 'string') return NO_SMALL_CAPS
   // (a faked small capital is set at most SMALL_CAPS_SHARE of a median no larger than the unit's largest glyph: where no capital of
   // the unit's is that small, none is one, and the walk below is not made, the reading of nearly every unit)
   let big = 0
   for (const c of uc) if (!c.sep && !c.space && c.size > big && c.st?.fam !== 'math') big = c.size
-  if (!uc.some(c => !c.sep && !c.space && c.size > 0 && c.size <= SMALL_CAPS_SHARE * big && c.st?.fam !== 'math' && c.ch !== c.ch.toLowerCase())) return { small, lower, letters }
+  if (!uc.some(c => !c.sep && !c.space && c.size > 0 && c.size <= SMALL_CAPS_SHARE * big && c.st?.fam !== 'math' && c.ch !== c.ch.toLowerCase())) return NO_SMALL_CAPS
+  const small = new Set(), lower = new Set(), letters = []
   const src = [...unit.src], same = []
   const cased = ch => ch.toLowerCase() !== ch.toUpperCase()
   O.forEach((o, q) => {
@@ -1882,21 +1885,23 @@ export const LINK_OPEN = /^\\(?:href|hyperref|hyperlink)(?![A-Za-z])/
 /**
  * The unit's base style without what its own groups set: where explicit groups (\textit, \textbf, \textsc…) hold most of its
  * text and the original's majority has that style, the majority came from the groups, and the text outside them is
- * not so set (2608.04322's "\textbf{RQ1:} \textit{…}": the label was drawn bold italic)
+ * not so set (2608.04322's "\textbf{RQ1:} \textit{…}": the label was drawn bold italic). A small capitals switch (`{\sc …}`, which
+ * the front end cuts into a group and the switch's placeholder) sets them over the rest of its group, or of the unit
  */
 function baseOf(unit, base) {
-  let total = 0
+  let total = 0, capsAfter = false
   const inGroup = { italic: 0, bold: 0, caps: 0 }
   const open = []
   for (const p of unit.pieces) {
     if (p.t === 'open') open.push({ italic: /^\\(?:textit|emph|itshape|textsl)\b/.test(p.src), bold: /^\\(?:textbf|bfseries)\b/.test(p.src), caps: /^\\(?:textsc|scshape)\b/.test(p.src) })
     else if (p.t === 'close') open.pop()
+    else if (p.t === 'ph' && /^\\(?:sc|scshape)$/.test(p.src ?? '')) { if (open.length) open.at(-1).caps = true; else capsAfter = true }
     else if (p.t === 'text') {
       const n = p.s.replace(/\s+/g, '').length
       total += n
       if (open.some(o => o.italic)) inGroup.italic += n
       if (open.some(o => o.bold)) inGroup.bold += n
-      if (open.some(o => o.caps)) inGroup.caps += n
+      if (capsAfter || open.some(o => o.caps)) inGroup.caps += n
     }
   }
   const out = { ...base }

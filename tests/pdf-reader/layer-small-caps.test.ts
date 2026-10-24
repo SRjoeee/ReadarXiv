@@ -133,6 +133,15 @@ describe('inline \\textsc in a paragraph', () => {
     }
   })
 
+  it('the same in the switch\'s spelling, {\\sc …}, cut into a group and the switch (CodeRabbit on #461)', () => {
+    const switched = [text('See '), open('{', 1), { t: 'ph', src: '\\sc' }, text(' ComplexityWorld'), close(1), text('.')]
+    for (const withSource of [true, false]) {
+      const { tokens, drawn } = read(unitOf(switched, ['Véase ', 1, 2, 3, 4, '.'], 'para', withSource), line())
+      expect(tokens.base.caps).toBe(false)
+      expect(drawn.map(t => [t.s, !!t.st.caps])).toEqual([['Véase', false], ['ComplexityWorld', true], ['.', false]])
+    }
+  })
+
   it('its base takes no small capitals, the \\textsc run alone takes them', () => {
     for (const withSource of [true, false]) {
       const { tokens, drawn } = read(unitOf(source, ['Véase ', 1, 2, 3, '.'], 'para', withSource), line())
