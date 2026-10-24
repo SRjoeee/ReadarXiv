@@ -112,7 +112,7 @@ export async function openDoor({ name, target, rules }) {
   for (let p = 1; p <= N; p++) if (run.complete(p)) expected.push(p)
   layer.end()
   const completes = { reported, expected, ok: reported.length === new Set(reported).size && reported.slice().sort((a, b) => a - b).join() === expected.join() }
-  return { layer, doc, N, drawn, extra, completes, async done() { layer.dispose(); await doc.loadingTask.destroy() } }
+  return { layer, doc, N, drawn, extra, completes, ruleSet, async done() { layer.dispose(); await doc.loadingTask.destroy() } }
 }
 
 /** a laid page's answer, the numbers every run is compared by: its SVG's markup (lang aside), its size, its word table's digest
