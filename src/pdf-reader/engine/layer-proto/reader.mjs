@@ -8,6 +8,7 @@
 // faces and the face to ask for first, and the translation loop the extension runs itself. It reaches none of the server's
 // modules (live.mjs, the remover, the layout maker and its marks) and no node: specifier: a test walks its imports.
 import { groupOf } from '../translate/groups.mjs'
+import { TOGGLE_DEFAULTS } from '../rules/content-classes.mjs'
 import { rolesFor } from '../rules/font-roles.mjs'
 import { indexLayout } from '../layout/file.mjs'
 import { BundleRefusal } from './bundle.mjs'
@@ -116,7 +117,7 @@ export const DROPPED_ROWS = 1000
 export const DRAWS_HELD = 16 * 2 ** 20
 
 export async function openLayer(o = {}) {
-  const { bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules = BUILTIN_RULES, drawsHeld = DRAWS_HELD, OPS = null } = o ?? {}
+  const { bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules = BUILTIN_RULES, drawsHeld = DRAWS_HELD, OPS = null, figures = TOGGLE_DEFAULTS.figures } = o ?? {}
   const four = bundle === undefined
   if (four) {
     if (index === null || typeof index !== 'object' || index.kind !== 'index' || !Array.isArray(index.units) || !index.head) throw new TypeError(`index: a layer index (indexOf's), not ${kindOf(index)}`)
@@ -134,6 +135,7 @@ export async function openLayer(o = {}) {
   if (typeof faceSources !== 'function') throw new TypeError(`faceSources: a function, not ${kindOf(faceSources)}`)
   if (typeof hyphUrl !== 'function') throw new TypeError(`hyphUrl: a function, not ${kindOf(hyphUrl)}`)
   if (OPS !== null && typeof OPS !== 'object') throw new TypeError(`OPS: PDF.js's operator codes or null, not ${kindOf(OPS)}`)
+  if (typeof figures !== 'boolean') throw new TypeError(`figures: whether the figures' text is shown translated, not ${kindOf(figures)}`)
   checkRules(rules)
   // (the parts told at the open stand as a chain over the composed document, before anything is opened)
   if (four) {
@@ -152,7 +154,7 @@ export async function openLayer(o = {}) {
   // (taken before the open's first await: two opens at once are refused alike)
   const token = {}
   opened = token
-  try { return await openOne({ four, bundle, index, doc, parts: parts ?? [], target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS }, token) } catch (e) { if (opened === token) opened = null; throw e }
+  try { return await openOne({ four, bundle, index, doc, parts: parts ?? [], target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS, figures }, token) } catch (e) { if (opened === token) opened = null; throw e }
 }
 
 /** a part told to the door, against the index and the chain so far (`ch`: through, last): a ReadPart of the index's head that
@@ -164,7 +166,7 @@ function checkPart(part, index, ch) {
   if (part.prev !== ch.last) throw new BundleRefusal('not following the digest of the last part', { kind: 'part', path: 'prev' })
 }
 
-async function openOne({ four, bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS }, token) {
+async function openOne({ four, bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS, figures }, token) {
   const source = four ? index : bundle
   const expect = toTranslate(source, target)
   // (each cell's group as the units' cells give it: a group is read once its own cells' rows are in)
@@ -205,11 +207,15 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   // what the wrap could not hide (the head's base: `unhidden`, by unit, and `labelKept`), and each page's cell rules as the parts
   // tell them: the run reads them as it lays
   const base = four ? index.head.base : bundle.base
-  const unhidden = new Map(base?.unhidden ?? []), labelKept = new Set(base?.labelKept ?? []), rulesByPage = new Map()
-  const hear = x => { for (const [pg, r] of Object.entries(x?.rules ?? {})) rulesByPage.set(Number(pg), r) }
+  const unhidden = new Map(base?.unhidden ?? []), labelKept = new Set(base?.labelKept ?? []), rulesByPage = new Map(), figuresByPage = new Map()
+  // (and each page's figure units, BUNDLE 10's: figure-rows.mjs, the run draws them where the reader shows figures translated)
+  const hear = x => {
+    for (const [pg, r] of Object.entries(x?.rules ?? {})) rulesByPage.set(Number(pg), r)
+    for (const f of x?.figures ?? []) (figuresByPage.get(f.page) ?? figuresByPage.set(f.page, []).get(f.page)).push(f)
+  }
   if (!four) hear(bundle)
   // (a bundle of 3 names no lists: its base is arXiv's PDF, which holds none of our groups, so no unit is hidden over it)
-  const hiding = { unhidden: id => unhidden.get(id) ?? null, labelKept: id => labelKept.has(id), rules: pg => rulesByPage.get(pg) }
+  const hiding = { unhidden: id => unhidden.get(id) ?? null, labelKept: id => labelKept.has(id), rules: pg => rulesByPage.get(pg), figures: pg => figuresByPage.get(pg) ?? [], figuresShown: figures }
   const common = { units: [], expect, groups, target, scale: SCALE, dpr: 1, copy: false, free: true, records: false, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, OPS, onStep: () => evaluate() }
   run = await openProto(four
     ? {

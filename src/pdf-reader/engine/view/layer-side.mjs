@@ -32,6 +32,7 @@
 import { layerDraws } from '../layer-proto/format.mjs'
 import { pagesOf } from '../layout/delta-wire.mjs'
 import { openLayer as theDoor, PDF_OPTIONS } from '../layer-proto/reader.mjs'
+import { TOGGLE_DEFAULTS } from '../rules/content-classes.mjs'
 import { visibilityOf } from '../layer-proto/visibility.mjs'
 import { faceWarmer, familyOfParts, pagesOfParts } from '../layer-proto/warm.mjs'
 import { unitOf } from '../layer-proto/rows.mjs'
@@ -175,6 +176,9 @@ export function createLayerSide(view, o) {
   let index = null, bound = null, door = null, doorParts = [], gen = 0, offPage = null
   /** the language the side lays (retarget sets another), and the one the open door lays */
   let target = o.target, doorTarget = null
+  /** whether the figures' text is shown translated (the reader's figure switch, the content class `figures`; setFigures sets it):
+   *  the door draws the figure units or leaves them the original's, from the same rows either way */
+  let figuresShown = typeof o.figures === 'boolean' ? o.figures : TOGGLE_DEFAULTS.figures
   /** whether the host has said this target's rows will not come (dropOthers): another target's pages are the original's from then */
   let dropped = false
   /** whether the layer is drawn over our own compile (the head's base says `ours`: the layer route, design §3.2; the engine's
@@ -354,7 +358,7 @@ export function createLayerSide(view, o) {
     let layer
     try {
       layer = await open({
-        index, doc, parts, target, faceSources: o.faceSources, hyphUrl: o.hyphUrl, ...(o.rules ? { rules: o.rules } : {}), OPS: V.lib?.OPS ?? null,
+        index, doc, parts, target, faceSources: o.faceSources, hyphUrl: o.hyphUrl, ...(o.rules ? { rules: o.rules } : {}), OPS: V.lib?.OPS ?? null, figures: figuresShown,
         // (the left parts' fetches go with the door's generation: a reopen, a refusal or the dispose aborts them)
         leftPart: (_page, ref) => o.fetchObject(ref, leftAc.signal),
         onRetired: d => retired(d, me),
@@ -1259,6 +1263,18 @@ export function createLayerSide(view, o) {
       shapesChanged()
       // the contents' titles are the attempt's rows': the source's until its rows come
       if (contents?.clearTexts()) outlineSoon()
+      reopenWanted = true
+      void pump()
+    },
+    /**
+     * The figures' text shown translated or not (`on`: the reader's figure switch, the content class `figures`): the door opened
+     * again over the same composed document with every row held, so that nothing is prepared or translated again (a figure unit's
+     * row is made whatever the switch); its pages laid again, each keeping its drawing until the new door's page is ready
+     */
+    setFigures(on) {
+      if (disposed || typeof on !== 'boolean' || on === figuresShown) return
+      figuresShown = on
+      if (state === 'refused' || !door) return
       reopenWanted = true
       void pump()
     },

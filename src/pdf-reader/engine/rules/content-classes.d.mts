@@ -13,6 +13,12 @@ export interface ClassPolicy {
 }
 /** the reader's toggles, in the settings' order */
 export declare const TOGGLES: readonly Toggle[]
+/** each toggle a reader turns on or off, on where the reader's settings say nothing */
+export declare const TOGGLE_DEFAULTS: Readonly<Record<Exclude<Toggle, 'always' | 'never'>, boolean>>
+/** the toggles on by default, as shownTranslated takes them */
+export declare function defaultToggles(): Set<Toggle>
+/** the kind of a figure's ink unit */
+export declare const FIGURE_KIND: 'figtext'
 /** each class's policy, in code order */
 export declare const CLASSES: Readonly<Record<ClassId, ClassPolicy>>
 /** the classes by their code */

@@ -96,6 +96,8 @@ export interface RunHost {
    *  extension's loading rule, DESIGN §10); none: always shown */
   hidden?: { now(): boolean; shown(signal: AbortSignal): Promise<void> }
   createSide?: typeof createLayerSide
+  /** whether the figures' text is shown translated (the reader's figure switch, `image.enabled`); none: the policy table's default */
+  figures?(): boolean
 }
 export interface Run {
   /** the run again in place: the translation's missing rows, or the whole run where it found no layer */
@@ -103,6 +105,8 @@ export interface Run {
   /** the translation in another target language (`to`, the layer's code: a BCP 47 tag), in place (§7 above): nothing where it is
    *  the run's own target */
   retarget(to: string): void
+  /** the figures' text shown translated or not, in place: the layer opened again with its rows held, nothing translated again */
+  setFigures(on: boolean): void
   dispose(): void
   readonly side: LayerSide | null
   probe(): Readonly<Record<string, number | string | boolean | null>>
@@ -606,6 +610,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     const make = host.createSide ?? createLayerSide
     side = make(view, {
       paper, target, faceSources: host.faces ?? servedFaces(host.api, f), hyphUrl: lang => `${host.api}/hyph/${lang}.json`, ...options(),
+      ...(host.figures ? { figures: host.figures() } : {}),
     })
     void translate()
     await look(my, signal)
@@ -635,6 +640,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
       again()
     },
     retarget: to => retarget(to),
+    setFigures: on => { if (!disposed) side?.setFigures(on) },
     dispose() {
       if (disposed) return
       disposed = true

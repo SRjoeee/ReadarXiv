@@ -82,6 +82,12 @@ const clock = () => (typeof performance !== 'undefined' ? performance.now() : Da
 const ASCENT = 0.75, DESCENT = -0.22
 /** a glyph's run counts as level when its rise across is under this share of its advance */
 const LEVEL = 1e-3
+/** a turned glyph's axes meet square within this share (a cosine): a shear past it is no turn (pageInk's `turned`) */
+const TURN_SKEW = 0.02
+/** a TikZ picture's points (layout/marks.mjs POINTS_TEX, around pgf's picture): a figure's text and lines lie between them */
+export const PICTURE_START = 'zs', PICTURE_END = 'ze'
+/** a figure's curve as this many chords (`turned`'s shapes), and the numbers a page's shapes hold at most */
+const CURVE_STEPS = 8, SHAPE_NUMBERS_PAGE = 1_000_000
 const FONT_MATRIX = [0.001, 0, 0, 0.001, 0, 0]
 /** a matrix that was not one: everything under it is placed nowhere (each number it gives is not finite) */
 const BROKEN = Object.freeze([Number.NaN, Number.NaN, Number.NaN, Number.NaN, Number.NaN, Number.NaN])
@@ -224,12 +230,12 @@ const POINT = /^axt-([A-Za-z0-9.-]{1,64})$/
  * text, place, size and fill: layout/fills.mjs reads no more), with no box, path, image or outline read: `boxes` empty, a
  * glyph's outline its line's
  */
-export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity, boxesMax = Infinity, stepsMax = STEPS_MAX, msMax = INK_MS, glyphsOnly = false }) {
+export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity, boxesMax = Infinity, stepsMax = STEPS_MAX, msMax = INK_MS, glyphsOnly = false, turned = false }) {
   const turn = (((Number(rotate) % 360) + 360) % 360)
-  if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], ...(indices ? { paths: [], shows: 0 } : {}), capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true }
+  if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], ...(indices ? { paths: [], shows: 0 } : {}), ...(turned ? { turned: [], shapes: new Map(), pictures: [] } : {}), capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true }
   const fnArray = ops?.fnArray ?? [], argsArray = ops?.argsArray ?? []
   const n = Math.min(fnArray.length, OPS_CAP)
-  const glyphs = [], boxes = [], points = [], boxAt = [], paths = []
+  const glyphs = [], boxes = [], points = [], boxAt = [], paths = [], turnedOut = [], pictures = []
   // (the guards: reading stops once `stop` is set: `over` past glyphsMax, `deep` ink placed in a state past STACK_MAX not
   // kept, `many` past stepsMax, the three caps; `late` past msMax, the backstop. The clock is read once every CLOCK_EVERY steps)
   let stop = false, over = false, deep = false, many = false, late = false, steps = 0, check = CLOCK_EVERY
@@ -290,6 +296,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   } = OPS
   const STROKES = new Set([OPS.stroke, OPS.closeStroke, OPS.fillStroke, OPS.eoFillStroke, OPS.closeFillStroke, OPS.closeEOFillStroke])
   const PAINTS = new Set([...STROKES, OPS.fill, OPS.eoFill])
+  const FILLS = new Set([OPS.fill, OPS.eoFill, OPS.fillStroke, OPS.eoFillStroke, OPS.closeFillStroke, OPS.closeEOFillStroke])
   let s = fresh()
   const stack = []
   // (past STACK_MAX a level holds no copy, `unsaved` counting them. Its save changes nothing, so the state goes on exact; its
@@ -376,7 +383,12 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     if (typeof u !== 'string' || !known() || (s.tr & 3) === 3) return
     const ty = s.y + s.rise, size = s.size
     const level = M[0] * hs > 0 && M[3] > 0 && Math.abs(M[1]) <= LEVEL * Math.abs(M[0])
-    if (!level) { if (!glyphsOnly) addBox(M, Math.min(xa, xb), ty + descent * size, Math.max(xa, xb), ty + ascent * size, -4); return }
+    if (!level) {
+      const had = boxes.length
+      if (!glyphsOnly) addBox(M, Math.min(xa, xb), ty + descent * size, Math.max(xa, xb), ty + ascent * size, -4)
+      if (turned) turnedGlyph(g, M, hs, xa, xb, ty, ascent, descent, boxes.length > had ? had / 4 : -1)
+      return
+    }
     const ox = M[0] * xa + M[2] * ty + M[4], oy = M[1] * xa + M[3] * ty + M[5], ex = M[0] * xb + M[2] * ty + M[4]
     const sz = size * M[3]
     const name = typeof s.font.name === 'string' && s.font.name ? s.font.name : s.fontId
@@ -397,6 +409,60 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     }
   }
 
+  /** a glyph set turned (`turned`, layout/figure-text.mjs: a figure's y-axis title), as a TurnedGlyph: its baseline from its
+   *  origin (ox, oy) to its advance's end (ex, ey), its direction (ux, uy), its size and its font's ascent and descent in em, a
+   *  rotation of the page's axes alone (no mirror, no shear past TURN_SKEW); its box's index among the page's boxes (-1 where
+   *  its clip left none), the level glyphs and the points before it in the stream (`at`, `pt`). A glyph mirrored or sheared is
+   *  a box alone, as before */
+  const turnedGlyph = (g, M, hs, xa, xb, ty, ascent, descent, box) => {
+    const ax = M[0] * hs, ay = M[1] * hs, upx = M[2], upy = M[3]
+    const la = Math.hypot(ax, ay), lu = Math.hypot(upx, upy)
+    if (!(la > 0 && lu > 0) || ax * upy - ay * upx <= 0 || Math.abs(ax * upx + ay * upy) > TURN_SKEW * la * lu) return
+    const ox = M[0] * xa + M[2] * ty + M[4], oy = M[1] * xa + M[3] * ty + M[5], ex = M[0] * xb + M[2] * ty + M[4], ey = M[1] * xb + M[3] * ty + M[5]
+    const sz = s.size * lu
+    const name = typeof s.font.name === 'string' && s.font.name ? s.font.name : s.fontId
+    const t = { u: g.unicode, n: curShow, k: glyphAt, ox, oy, ex, ey, ux: ax / la, uy: ay / la, size: sz, ascent, descent, font: name, fill: s.tr & 1 ? NO_FILL : s.fill, box, at: glyphs.length, pt: pictures.length }
+    if (!/\S/.test(t.u)) t.blank = true
+    if (s.form > 0) t.form = true
+    if (finite(ox, oy, ex, ey, sz) && turnedOut.length < glyphsMax) turnedOut.push(t)
+  }
+  /** a figure's painted path as its lines (`turned`): inside a form or a TikZ picture (between the points `zs` and `ze`), its
+   *  segments on the page (a curve's CURVE_STEPS chords, a fill's subpaths closed), whether it strokes and fills, and its half line
+   *  width on the page, by its box's index; at most SHAPE_NUMBERS_PAGE numbers a page, the paths past them their boxes alone */
+  const shapes = new Map()
+  let picture = 0, shapeNumbers = 0
+  const shapeOf = (box, op, data) => {
+    if (!data || typeof data.length !== 'number' || shapeNumbers + data.length * 2 > SHAPE_NUMBERS_PAGE) return
+    const m = s.ctm, fill = FILLS.has(op), segs = []
+    let x = 0, y = 0, sx = 0, sy = 0, open = false
+    const X = (px, py) => m[0] * px + m[2] * py + m[4], Y = (px, py) => m[1] * px + m[3] * py + m[5]
+    const close = () => { if (fill && open && (x !== sx || y !== sy)) segs.push(x, y, sx, sy) }
+    for (let i = 0; i < data.length;) {
+      const o = data[i++]
+      if (o === 0) { close(); x = sx = X(data[i], data[i + 1]); y = sy = Y(data[i], data[i + 1]); open = true; i += 2 }
+      else if (o === 1) { const nx = X(data[i], data[i + 1]), ny = Y(data[i], data[i + 1]); segs.push(x, y, nx, ny); x = nx; y = ny; i += 2 }
+      else if (o === 2 || o === 3) {
+        // (a cubic's control points and end, a quadratic's one control point and end)
+        const n = o === 2 ? 6 : 4, c = []
+        for (let q = 0; q < n; q += 2) c.push(X(data[i + q], data[i + q + 1]), Y(data[i + q], data[i + q + 1]))
+        i += n
+        let px = x, py = y
+        for (let k = 1; k <= CURVE_STEPS; k++) {
+          const t = k / CURVE_STEPS, u = 1 - t
+          const qx = o === 2 ? u * u * u * x + 3 * u * u * t * c[0] + 3 * u * t * t * c[2] + t * t * t * c[4] : u * u * x + 2 * u * t * c[0] + t * t * c[2]
+          const qy = o === 2 ? u * u * u * y + 3 * u * u * t * c[1] + 3 * u * t * t * c[3] + t * t * t * c[5] : u * u * y + 2 * u * t * c[1] + t * t * c[3]
+          segs.push(px, py, qx, qy)
+          px = qx; py = qy
+        }
+        x = px; y = py
+      } else if (o === 4) { if (x !== sx || y !== sy) segs.push(x, y, sx, sy); x = sx; y = sy }
+      else return
+    }
+    close()
+    if (!segs.every(Number.isFinite)) return
+    shapeNumbers += segs.length
+    shapes.set(box, { segs: Float32Array.from(segs), stroke: STROKES.has(op), fill, hw: Math.max(0.25, (s.lw / 2) * Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]))) })
+  }
   /** showText as the canvas runs it (showText, showType3Text): each glyph's origin, its advance, the line moved on */
   const show = arr => {
     if (indices) { if (!inAnnotation && !inMask) showAt++; curShow = inAnnotation || inMask ? -1 : showAt; glyphAt = -1 }
@@ -530,7 +596,10 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
         const ok = mm && mm.length >= 4 && finite(mm[0], mm[1], mm[2], mm[3]) && mm[2] >= mm[0] && mm[3] >= mm[1]
         if (ok && PAINTS.has(op)) {
           const e = STROKES.has(op) ? s.lw / 2 : 0
+          const had = boxes.length
           addBox(s.ctm, mm[0] - e, mm[1] - e, mm[2] + e, mm[3] + e, inAnnotation || inMask ? -1 : pathAt)
+          // (a figure's path, its segments kept: whether it crosses a figure's label is its lines', not its box's)
+          if (turned && boxes.length > had && (s.form > 0 || picture > 0) && !inAnnotation && !inMask) shapeOf(had / 4, op, a[1]?.[0])
         }
         // a clip takes effect after the path is painted (the canvas's pendingClip)
         if (s.pendingClip) { if (ok) clipTo(s.ctm, mm[0], mm[1], mm[2], mm[3]); else s.clip = [0, 0, -1, -1]; s.pendingClip = false }
@@ -561,7 +630,9 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       case INTENT: {
         const name = typeof a[0] === 'string' ? a[0] : a[0] && typeof a[0] === 'object' ? a[0].name : null
         const m = typeof name === 'string' ? POINT.exec(name) : null
-        if (m) points.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 })
+        // (a picture's points apart, `pictures`: no mark of any unit's, never among the points the marks and the ownership read)
+        if (m && (m[1] === PICTURE_START || m[1] === PICTURE_END)) { pictures.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 }); picture = m[1] === PICTURE_START ? picture + 1 : Math.max(0, picture - 1) }
+        else if (m) points.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 })
         break
       }
       default:
@@ -576,7 +647,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       if (indices) paths.push(MERGED)
     }
   }
-  return { glyphs, boxes, points, boxAt, ...(indices ? { paths, shows: showAt + 1 } : {}), capped: fnArray.length > OPS_CAP || over || deep || many, timedOut: late, degraded: tiles !== null, mergedAt, rotated: false }
+  return { glyphs, boxes, points, boxAt, ...(indices ? { paths, shows: showAt + 1 } : {}), ...(turned ? { turned: turnedOut, shapes, pictures } : {}), capped: fnArray.length > OPS_CAP || over || deep || many, timedOut: late, degraded: tiles !== null, mergedAt, rotated: false }
 }
 
 /** why a page's ink (pageInk's) is not read whole, or null where it is: 'rotated' (nothing read), 'capped' (past a cap) or

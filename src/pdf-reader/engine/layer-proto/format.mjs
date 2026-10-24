@@ -27,7 +27,9 @@ import { PDFJS, PIPELINE_VERSION, REMOVAL } from '../pipeline/versions.mjs'
 import { groupOf } from '../translate/groups.mjs'
 import { plainSource } from '../translate/mt.mjs'
 import { BundleRefusal, originalUrl, segmentOf } from './bundle.mjs'
+import { FIGURE_KIND } from '../rules/content-classes.mjs'
 import { checkDraw, DrawRefusal, wireOf } from './draw.mjs'
+import { checkFigures } from './figure-rows.mjs'
 import { sourceUnitsOf } from './rows.mjs'
 import { CELL, EDGES, unitStands } from './units.mjs'
 
@@ -44,9 +46,11 @@ import { CELL, EDGES, unitStands } from './units.mjs'
  *  refuses the new keys. 9 (REMOVAL 8, the per-unit erasure): a part carries its pages' cell rules (`rules`) in place of the
  *  text-removed PDF's add-on (`addon`, its manifest and tail), no tail follows a part, and our base page is wrapped by optional
  *  content (the head's `base.stats`, `unhidden`, `labelKept`): a reader of 8 refuses a part of 9, and this one a part of 8, so
- *  a bundle of 8 is not found under 9's CTAG and is prepared again. The head's and the catalog's shapes are 8's. This reader
- *  reads 7's objects as well (BUNDLES_READ): a head of 7 is one over arXiv's PDF */
-export const BUNDLE5 = '9'
+ *  a bundle of 8 is not found under 9's CTAG and is prepared again. The head's and the catalog's shapes are 8's. 10 (the content
+ *  class `figures`, docs/route/orphan-text.md stage 5): a part carries its pages' figure units (`figures`, figure-rows.mjs: each a
+ *  unit of kind `figtext` the units chunks hold, its place on its page), which a reader of 9 refuses; a bundle of 9 is not found
+ *  under 10's CTAG and is prepared again. This reader reads 7's objects as well (BUNDLES_READ): a head of 7 is one over arXiv's PDF */
+export const BUNDLE5 = '10'
 /** the formats this reader takes: its own, and 7's (a bundle drawn over arXiv's PDF, whose objects 9 reads unchanged: its
  *  head is read as `base.source` 'arxiv', with no `orig`). Every object of a bundle is of its head's format */
 export const BUNDLES_READ = Object.freeze(['7', BUNDLE5])
@@ -957,7 +961,7 @@ export function indexOf(head, chunks, o = {}) {
 }
 
 // ---------------------------------------------------------------- the parts
-const PART_KEYS_WIRE = ['bundle', 'kind', 'head', 'prev', 'pages', 'views', 'left', 'fileOnly', 'layout', 'rules', 'leftParts']
+const PART_KEYS_WIRE = ['bundle', 'kind', 'head', 'prev', 'pages', 'views', 'left', 'fileOnly', 'layout', 'rules', 'figures', 'leftParts']
 const PART_DEF = { cap: PART_CAP, values: PART_VALUES, depth: PART_DEPTH }
 
 /**
@@ -1073,6 +1077,12 @@ function partShape(v, { N, unitCount }) {
     }
   }
 
+  // figures: its pages' figure units, where its layout is (figure-rows.mjs), none of them a left unit nor a file-only one
+  const figures = inside(K, '', () => checkFigures(v.figures ?? [], { a, b, views, unitCount }))
+  if (figures.length && layout === null) throw refuse(K, 'figures', 'figure units where the layout is none')
+  const placed = new Set(fileOnly.map(e => e[0]))
+  for (let i = 0; i < figures.length; i++) if (inLeft.has(figures[i].id) || placed.has(figures[i].id)) throw refuse(K, `figures[${i}][0]`, 'a unit of the left or of the layout')
+
   // leftParts
   const lp = v.leftParts
   if (!Array.isArray(lp) || lp.length !== b - a + 1) throw refuse(K, 'leftParts', `not one ref for each of the pages ${a} to ${b} (${kindOf(lp)})`)
@@ -1080,7 +1090,7 @@ function partShape(v, { N, unitCount }) {
     const r = refOf(K, lp[i], `leftParts[${i}]`, 'left', 'page', LEFT_CAP)
     if (r.page !== a + i) throw refuse(K, `leftParts[${i}].page`, `not page ${a + i}, in page order`)
   }
-  return { a, b, reach, views, left, fileOnly, layout, noLayout, rules, leftParts: lp }
+  return { a, b, reach, views, left, fileOnly, layout, noLayout, rules, figures, leftParts: lp }
 }
 
 /** the chain before any part */
@@ -1100,7 +1110,8 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
   const head = index.head, N = head.paper.pages
   const was = chain ?? initialChain(index)
   const { value: v, sha256 } = await opened(K, bytes, ref, PART_DEF, caps)
-  envelope(K, v, PART_KEYS_WIRE, [], head.bundle ?? null)
+  // (a part of 7's holds no figures: its head is one over arXiv's PDF, which holds none of our groups)
+  envelope(K, v, head.bundle === '7' ? PART_KEYS_WIRE.filter(k => k !== 'figures') : PART_KEYS_WIRE, [], head.bundle ?? null)
   // (what the chain says of where the part begins and what it follows, before the shape that needs the chain's counts)
   if (v.head !== index.sha256) throw refuse(K, 'head', 'not the head of the index')
   if (v.head !== was.head) throw refuse(K, 'head', 'not the head of the parts told')
@@ -1121,6 +1132,12 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
       if (UNIT_KINDS[kind] !== unitKind) throw refuse(K, `layout.units[${i}][1]`, 'not its unit\'s kind')
       if (count !== pieces) throw refuse(K, `layout.units[${i}][4]`, 'not its unit\'s pieces')
     }
+  }
+  // (a figure row is a unit of kind `figtext`, where the unit stands)
+  for (let i = 0; i < s.figures.length; i++) {
+    const id = s.figures[i].id
+    if (index.units[id] === null) continue
+    if ((index.light === true ? index.kinds[id] : index.units[id][0]) !== FIGURE_KIND) throw refuse(K, `figures[${i}][0]`, `not a unit of kind ${FIGURE_KIND}`)
   }
 
   // against the chain
@@ -1154,6 +1171,8 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
     tell(e[0], `fileOnly[${i}][0]`)
     note(e[1] + 0.5, e[0])
   }
+  // (a figure unit told once, by the part of its page; no slot of K's)
+  for (let i = 0; i < s.figures.length; i++) { const id = s.figures[i].id; if (told[id] === 1) throw refuse(K, `figures[${i}][0]`, 'a unit already told by an earlier part'); told[id] = 1 }
   for (const g of mine) groups[g] = 1
   if (any && !(lowSlot > was.slot || (lowSlot === was.slot && lowId > was.id))) throw refuse(K, 'left', 'a unit that is not after the last one told (slot, id)')
   // (the views of the pages the last part reached past its own: those this part's views include are as told; a part whose own
@@ -1166,7 +1185,7 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
   })
   return {
     kind: 'part', sha256, bytes: bytes.length, head: v.head, prev: v.prev, pages: [s.a, s.b], reach: s.reach, views: Object.freeze(s.views),
-    left: s.left, fileOnly: s.fileOnly, layout: s.layout, noLayout: s.noLayout, rules: s.rules, leftParts: s.leftParts, chain: after,
+    left: s.left, fileOnly: s.fileOnly, layout: s.layout, noLayout: s.noLayout, rules: s.rules, figures: s.figures, leftParts: s.leftParts, chain: after,
   }
 }
 
@@ -1177,7 +1196,7 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
  * and views to a thousandth, layout rows as the layout file writes them. Throws BundleRefusal for a part its reader would refuse
  * for itself: past PART_CAP or PART_VALUES, its content past CONTENT_MAX, a shape the part alone shows wrong
  */
-export async function writePart({ paper, head, prev, pages, views, left, fileOnly, layout, rules = null, leftParts }) {
+export async function writePart({ paper, head, prev, pages, views, left, fileOnly, layout, rules = null, figures = [], leftParts }) {
   const K = 'part'
   const obj = {
     bundle: BUNDLE5, kind: 'part', head, prev, pages: [pages[0], pages[1]],
@@ -1186,6 +1205,7 @@ export async function writePart({ paper, head, prev, pages, views, left, fileOnl
     fileOnly: fileOnly.map(([id, after]) => [id, after]),
     layout: layout === null ? null : isLayoutRefusal(layout) ? { refused: layout.refused, why: layout.why } : layoutPartRows(layout),
     rules: rules === null || !Object.keys(rules).length ? null : Object.fromEntries(Object.keys(rules).map(Number).sort((x, y) => x - y).map(p => [p, rules[p]])),
+    figures: figures.map(r => [...r]).sort((x, y) => x[0] - y[0]),
     leftParts: leftParts.map(l => ({ kind: 'left', page: l.page, sha256: l.sha256, bytes: l.bytes.length })),
   }
   if (!isInteger(pages[0], 1, PAGES_MAX) || !isInteger(pages[1], pages[0], PAGES_MAX)) throw refuse(K, 'pages', 'not [from, to] pages')

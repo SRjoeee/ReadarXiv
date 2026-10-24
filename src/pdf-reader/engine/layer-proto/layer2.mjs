@@ -4164,6 +4164,19 @@ export function svgOfName({ occurrence, text, x, baseline, size, face, color = n
   return `<g data-n="${occurrence}">${line}</g>`
 }
 
+/**
+ * A figure's text drawn in the target's words (run.mjs paintFigures, the content class `figures`) as SVG: one <text> on its run's
+ * baseline from `x`, `y` (PDF units, the place its anchor keeps), turned by `angle` (degrees anticlockwise, as the page's), its
+ * words in `face` at `size`, the face's own size correction applied, in its fill (`color`, black where none). `toPx(x, y)`: PDF to
+ * the SVG's CSS pixels; `scale`: CSS pixels per PDF unit
+ */
+export function svgOfFigure({ group, text, x, y, angle, size, face, color = null }, toPx, scale) {
+  const [px, py] = toPx(x, y)
+  const fill = color ? ` fill="${fillAttr(color)}"` : ''
+  const turn = Math.abs(angle) > 1e-6 ? ` rotate(${n2(-angle)})` : ''
+  return `<g data-f="${esc(group)}"><text transform="translate(${n2(px)} ${n2(py)})${turn}"><tspan class="${faceClass(face)}" x="0" y="0" font-size="${n2(size * scale * (face.size ?? 1))}"${fill}>${esc(text)}</tspan></text></g>`
+}
+
 // ---- the scorer's view of a laid-out unit
 
 /** the translated text's runs as drawn, by style key (class, weight, slant or its stand-in), placeholders' text left out */

@@ -189,6 +189,9 @@ export interface OpenLayerOptions {
   /** PDF.js's operator codes (the host's PDF.js): a page read live reads its characters' fills as its draw tells them (run.mjs
    *  openProto `OPS`); none, such a page tells no fill */
   OPS?: Record<string, number> | null
+  /** whether the figures' text is drawn translated (the content class `figures`, the parts' figure units; the policy table's
+   *  default, on): off, every figure unit is left the original's, its row taken all the same */
+  figures?: boolean
 }
 /** the draws of left parts the door holds for the run at most (their left parts' bytes) */
 export declare const DRAWS_HELD: number

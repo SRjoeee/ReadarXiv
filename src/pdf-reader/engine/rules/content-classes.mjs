@@ -8,6 +8,12 @@
 
 /** the reader's toggles, in the order the settings list them: `always` and `never` are no toggle */
 export const TOGGLES = Object.freeze(['always', 'heads', 'tables', 'figures', 'references', 'names', 'never'])
+/** each toggle a reader turns on or off, on where the reader's settings say nothing (the extension's `image.enabled` and the
+ *  web's settings default to these): figure text on (the owner's ruling of 2026-10-25), and every other toggle what the reader
+ *  draws today */
+export const TOGGLE_DEFAULTS = Object.freeze({ heads: true, tables: true, figures: true, references: true, names: true })
+/** the toggles on by default, as shownTranslated takes them */
+export const defaultToggles = () => new Set(Object.keys(TOGGLE_DEFAULTS).filter(t => TOGGLE_DEFAULTS[t]))
 
 /**
  * Each class: `toggle` (TOGGLES); `state`, what exists today — `built` (translated and drawn), `planned` (accounted for by the
@@ -23,7 +29,7 @@ export const CLASSES = Object.freeze({
   orphan: Object.freeze({ toggle: 'always', state: 'planned', glyphs: true, truth: 'text no unit owns and no other class explains: a front-end defect, or text TeX generates (a theorem head)' }),
   heads: Object.freeze({ toggle: 'heads', state: 'planned', glyphs: true, truth: 'the output routine\'s head, shipped before the page\'s first mark, and its foot, after the last' }),
   tables: Object.freeze({ toggle: 'tables', state: 'built', glyphs: true, truth: "the source's table cells (units of kind cell)" }),
-  figures: Object.freeze({ toggle: 'figures', state: 'planned', glyphs: true, truth: "glyphs our compile sets in a figure: an included PDF's (a form XObject), a float's own that no unit owns, a TikZ text's unit" }),
+  figures: Object.freeze({ toggle: 'figures', state: 'built', glyphs: true, truth: "glyphs our compile sets in a vector figure, no unit's: an included PDF's (a form XObject) and a TikZ or pgfplots picture's (between its points), cut into ink units of kind `figtext` (layout/figure-text.mjs), each drawn in its run's box; a float's other text no unit owns, counted" }),
   ocr: Object.freeze({ toggle: 'figures', state: 'planned', glyphs: false, truth: "a bitmap figure's text, read and placed by OCR (PP-OCR, as the extension's: DESIGN §15.3); the owner's OK of 2026-10-25" }),
   references: Object.freeze({ toggle: 'references', state: 'planned', glyphs: true, truth: "the bibliography, between its name and the next unit; its entries' fields from the .bbl's \\bibitem" }),
   index: Object.freeze({ toggle: 'references', state: 'planned', glyphs: true, truth: 'an index or a glossary, between its name and the next unit (proposed: back matter, with the references)' }),
@@ -37,8 +43,10 @@ export const CLASS_IDS = Object.freeze(Object.keys(CLASSES))
 /** a class's code */
 export const CLASS_CODE = Object.freeze(Object.fromEntries(CLASS_IDS.map((id, i) => [id, i])))
 
-/** a unit's class by its kind (latex-front.mjs's kinds); a kind not here is `body` */
-export const UNIT_CLASS = Object.freeze({ para: 'body', heading: 'body', abstract: 'body', caption: 'body', footnote: 'body', cell: 'tables', author: 'names', figure: 'figures' })
+/** the kind of a figure's ink unit (layout/figure-text.mjs): its text our glyphs', its place its run's */
+export const FIGURE_KIND = 'figtext'
+/** a unit's class by its kind (latex-front.mjs's kinds, and a figure's ink unit's); a kind not here is `body` */
+export const UNIT_CLASS = Object.freeze({ para: 'body', heading: 'body', abstract: 'body', caption: 'body', footnote: 'body', cell: 'tables', author: 'names', figure: 'figures', [FIGURE_KIND]: 'figures' })
 /** a unit's class: of the front end's unit ({ kind }), of the bundle's ([kind, flags, …]) or of a kind; null for none */
 export function unitClass(u) {
   const kind = typeof u === 'string' ? u : Array.isArray(u) ? u[0] : u?.kind

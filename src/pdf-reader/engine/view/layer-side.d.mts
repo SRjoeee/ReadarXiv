@@ -32,6 +32,8 @@ export interface LayerSideOptions {
   keepPixels?: number
   /** how many pages past the near ones are laid ahead while the reader rests (AHEAD_PAGES by default; 0 lays none) */
   ahead?: number
+  /** whether the figures' text is shown translated at the open (the content class `figures`; the policy table's default, on) */
+  figures?: boolean
 }
 export interface LayerSide {
   /** what the host has heard, any number of times, from any source, in any order: merged, deduplicated by digest, fetched
@@ -55,6 +57,8 @@ export interface LayerSide {
   /** every page that still shows another target's layer back to the original's page: the host's word that this target's rows
    *  will not come (its service failed, or the translation stopped short) */
   dropOthers(): void
+  /** the figures' text shown translated or not: the door opened again with every row held, nothing prepared or translated again */
+  setFigures(on: boolean): void
   /** the ids of the units whose rows the open door's page still waits for (the door's rowsFor: its closure's, Need(page)),
    *  for a host that translates as it shows to translate first; [] with no door, out of the paper, or once the page is ready */
   rowsFor(page: number): number[]
