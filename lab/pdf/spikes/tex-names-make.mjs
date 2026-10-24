@@ -190,9 +190,10 @@ for (const [key, v] of en.names) { const [type, n, capital, path] = key.split('|
 const named = (to, word) => { const t = out.targets[to]; return !!(t.heads[word] || t.refs[word] || (UNINFLECTED.has(to) && BABEL_TYPES.has(types[word]))) }
 out.singular = singular
 out.gaps = [...new Set(Object.values(singular))].filter(word => Object.keys(TARGETS).some(to => !named(to, word)))
-// (a conjunction of punctuation alone, ", ", is the same in every target: no word to translate)
-out.conjunctionGaps = out.conjunctions.filter(c => /\p{L}/u.test(c) && Object.keys(TARGETS).some(to => !out.targets[to].conj[c]))
-out.files =Object.fromEntries([...files].sort((a, b) => (a[0] < b[0] ? -1 : 1)))
+// (a conjunction of punctuation alone, ", ", is the same in every target: no word to translate; a range's, \crefrange's " to ",
+// is none either: a word alone that the translator reads with no numbers either side of it, "to", has no one sense to give)
+out.conjunctionGaps = out.conjunctions.filter(c => /\p{L}/u.test(c) && !conjOf[c].every(m => /range/.test(m)) && Object.keys(TARGETS).some(to => !out.targets[to].conj[c]))
+out.files = Object.fromEntries([...files].sort((a, b) => (a[0] < b[0] ? -1 : 1)))
 // (every character past ASCII written as its escape: the file holds no line of CJK, which the English gate would count)
 const text = `${JSON.stringify(out, null, 1).replace(/[\u0080-\uffff]/g, c => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)}\n`
 if (process.argv.includes('--check')) {

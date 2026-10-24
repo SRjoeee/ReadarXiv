@@ -193,7 +193,16 @@
 //     2 units' hashes change, in one paper (2607.24653v2: a \multirow[c]{3}{w}[-2pt]{…} of five arguments is now read whole,
 //     and the pairs after it are numbered one on, their texts the same); every other unit is 27's. A copy of 27 carries
 //     every unit it holds the source of, matched by sourceHash (live.mjs PIPELINE_CARRIES), and a changed unit is asked again
-export const PIPELINE_VERSION = '28'
+// 29: the structural names a paper's TeX prints that no package names in every target are units of their own, after the
+//     source's in its bundle (source/paper-names.mjs, units.mjs bundleUnitsOf: kind `name`, one text piece): its theorem-like
+//     environments' printed names, the reference names it gives cleveref, thmtools and \autoref, and, where it calls cleveref
+//     or \autoref, the counter types' English names and the conjunctions' words some target has no package word for
+//     (rules/tex-names.mjs NAME_GAPS, CONJUNCTION_GAPS). Translated with the paper's units, the first batch's (rows.mjs
+//     batchesOf, runRows), cached by their text as any unit; the layer draws a head's or a generated reference's name in that
+//     translation where no package gives the target one (PDF-READER §19.12). Over 168 local sources (40,765 units) 919 name
+//     units in 84 papers (33 at most); the source's units and their ids are 28's, every hash kept: a copy of 28 carries every
+//     unit, and the name units are asked once
+export const PIPELINE_VERSION = '29'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

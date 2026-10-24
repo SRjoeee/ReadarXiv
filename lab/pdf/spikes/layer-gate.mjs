@@ -1158,7 +1158,8 @@ async function doorBundleOf(name) {
   const bytes = writeBundle({
     paper: { id, version: Number(version), pages: layout.paper.pages },
     base: { bytes: arxiv.length, sha256: sha256(arxiv), url: `/api/v1/original/${id.replace('/', '_')}v${version}` },
-    image: '1', units: PAPER_UNITS.get(paper), left: { kinds: g.kinds, pages: g.left.pages, units: g.left.units }, layout,
+    // (a kind for each of the bundle's units: the geometry's, the source's, then the structural names' (bundleUnitsOf's `name` units))
+    image: '1', units: PAPER_UNITS.get(paper), left: { kinds: PAPER_UNITS.get(paper).map((u, i) => g.kinds[i] ?? u[0]), pages: g.left.pages, units: g.left.units }, layout,
     rules: Object.keys(wrap.head.rules ?? {}).length ? wrap.head.rules : null,
   })
   const bundle = readBundle(bytes), src = sourceUnitsOf(bundle), wanted = new Set(toTranslate(bundle, target))

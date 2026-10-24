@@ -160,7 +160,8 @@ const left = await (async () => {
     if (!anchor?.rects.length) continue
     located.push([id, anchor.tokens[0], anchor.rects.map(r => [r.page, hundredths(r.x0), hundredths(r.y0), hundredths(r.x1), hundredths(r.y1)])])
   }
-  return { kinds, pages: here.views.map(v => v.map(hundredths)), units: located }
+  // (a kind for each of the bundle's units: the source's, then the structural names' (bundleUnitsOf's `name` units))
+  return { kinds: units.map(u => u[0]), pages: here.views.map(v => v.map(hundredths)), units: located }
 })()
 await markedTask.destroy()
 console.log(`   ${left.units.length} of ${units.length} units located on ${left.pages.length} pages`)
