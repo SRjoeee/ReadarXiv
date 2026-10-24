@@ -1696,15 +1696,6 @@ const tblrOf = texts => {
   return { tblrEnvs: new Set([...TBLR_ENVS, ...named]), tblrMath: inner.some(t => TBLR_MATH.test(t)) }
 }
 
-/**
- * The preamble's prose, in the order it is written. TeX sets nothing there, but a class keeps the front matter's text
- * for \\maketitle, and each is a unit as the body would make it: the title TeX keeps (the last \\title it acts on — a
- * commented one never: 2608.23818's old title was translated, its real one stayed English), the author blocks and their
- * notes (FRONT_MATTER), every front matter command the role table knows (FRONT_ROLES: AAAI's \\affiliations, \\keywords,
- * a \\thanks, a \\date; frontCommand), an abstract or keywords written as an environment or as \\abstract{…}
- * (2608.08903, 2608.01482), and the same in a file the preamble \\inputs (2608.13505's abstract, 2608.03994's title and
- * affiliation). Nothing in a comment, a skipped conditional or a definition's body, which TeX runs only where it is used
- */
 // ---------------------------------------------------------------- the bibliography
 /** an entry's units' kinds: its names (its first block: the authors, an editor), and the rest of it */
 const BIB_KINDS = new Set(['reference', 'refnames'])
@@ -1796,6 +1787,15 @@ function keepNumbers(pieces) {
   })
 }
 
+/**
+ * The preamble's prose, in the order it is written. TeX sets nothing there, but a class keeps the front matter's text
+ * for \\maketitle, and each is a unit as the body would make it: the title TeX keeps (the last \\title it acts on — a
+ * commented one never: 2608.23818's old title was translated, its real one stayed English), the author blocks and their
+ * notes (FRONT_MATTER), every front matter command the role table knows (FRONT_ROLES: AAAI's \\affiliations, \\keywords,
+ * a \\thanks, a \\date; frontCommand), an abstract or keywords written as an environment or as \\abstract{…}
+ * (2608.08903, 2608.01482), and the same in a file the preamble \\inputs (2608.13505's abstract, 2608.03994's title and
+ * affiliation). Nothing in a comment, a skipped conditional or a definition's body, which TeX runs only where it is used
+ */
 function frontMatter(s, from, to, b, ctx) {
   const cmds = texCommands(s, { from, to, lineEnvs: ctx.lineEnvs, ifs: ctx.ifs, ifValues: ctx.ifValues }).filter(c => !c.inDef)
   const titles = cmds.filter(c => c.name === 'title'), title = titles.filter(c => c.depth === 0).at(-1) ?? titles.at(-1)
