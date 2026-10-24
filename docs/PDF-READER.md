@@ -2094,7 +2094,10 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   composed bytes are let go once read, and the object layer's three documents when its checks return, before a reader's document
   is opened. What the delta overrides of the original is bounded:
   the replaced pages' objects exactly (no other page; the catalog only to carry our `/OCProperties`, every other key of it the
-  original's, that key ours), its `/Size` not below the original's, and its trailer the
+  original's, that key ours: a key's value read as the text the delta wrote, a reference by its number within a direct value
+  too, never by what it names, since a direct name tree's destinations name pages and a replaced page is ours; REMOVAL 10:
+  2610.20030's direct `/Names` failed the proof, and its base of 8 pages of 12, which only a delta holds, was refused), its
+  `/Size` not below the original's, and its trailer the
   original's `/Root` and `/Info` (as references) and `/ID` (byte for byte), so that no fresh catalog is pointed at. An original whose
   cross-reference PDF.js recovers on its own (any such message on the original alone: it then indexes the whole file, where an
   unreplaced page may be another object than the cross-reference's) is refused (`delta-xref`), and so is a cross-reference
@@ -2192,9 +2195,12 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   its source text, letters and digits alone (NFKD, marks, TeX's spacing accents U+02C6, U+02C7, U+02D8 to U+02DD and case dropped, `ß` as
   `ss`, a dotless `ı` and `ȷ` as their letters: TeX's accents — OT1 sets `\^e` as `ˆ` beside `e` —, ligatures, hyphenation
   and punctuation are no evidence), or it is `spell`, its groups still written. Its label must be a label's form (a number
-  or an item's mark, maybe a caption's, a section's or a theorem's name before it, in brackets or with a stop, a dash or a
-  bar after it) or empty; where it is not and its glyphs stand apart from the text's, the label is left the original's ink
-  (`labelKept`: no `.l` group, the body alone drawn; the coordinator's amendment of 2026-10-28), else `spell`.
+  or an item's mark, maybe a caption's, a section's or a theorem's name before it, the number after a name maybe with a letter
+  before it, a supplement's or an appendix's "Table S3:", "Figure A1" (REMOVAL 10: 2610.21924's fifteen and 2610.16663's ten
+  centred captions were drawn left, their labels kept and their text centred apart; a letter and a number alone, "A100", are
+  no label), in brackets or with a stop, a dash or a bar after it) or empty; where it is not and its glyphs stand apart from
+  the text's, the label is left the original's ink (`labelKept`: no `.l` group, the body alone drawn; the coordinator's
+  amendment of 2026-10-28), else `spell`.
 - **The wrap** (`layout/wrap.mjs` `wrapOf`): our bytes and ONE incremental section of their cross-reference kind
   (`appendSection`): each wrapped page's dict again under its number, `/Resources` our page's with `/Properties` mapping
   `/axt<group>` to its OCG, ONE new content stream (its pieces joined, deflated at a fixed level: the same inputs give the same

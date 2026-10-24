@@ -196,6 +196,10 @@ export const PDFJS = '6.3.289'
  * 2026-10-24, its units left English though their ink could be owned): a soft mask's content no ink of the page's (remove.mjs
  * alignOf, ink.mjs indices), a title read back past its own placeholders' points, a mark's name read in lower case, a cell's
  * lead macro owned where it abuts the cell, the spell check blind to spacing accents and dotless letters, and the
- * erasure's reading of the placeholders (stream.mjs ownedOf `erasure`): the base's bytes change, the layouts do not
+ * erasure's reading of the placeholders (stream.mjs ownedOf `erasure`): the base's bytes change, the layouts do not; 10 (the
+ * release sweep of 2026-10-24): a label's name followed by a letter and a number is a label (own.mjs LABEL_FORM: "Table S3:",
+ * "Figure A1", which were left the original's ink, `labelKept`), and the delta's proof reads a direct value of the catalog by
+ * its references' numbers (delta.mjs sameDirect: 2610.20030's direct /Names failed it, and its base of 8 pages of 12, which
+ * only a delta holds, was refused): the base's bytes and the head's base change, the layouts do not
  */
-export const REMOVAL = '9'
+export const REMOVAL = '10'
