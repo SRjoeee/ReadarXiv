@@ -118,6 +118,13 @@ describe('the spell check (§1.3)', () => {
     for (const t of ['1', '3.2.', '(a)', 'Figure 1.1 –', 'Table 10:', 'iv.', '•', 'Remark.', '']) expect(isLabelForm(t), t).toBe(true)
     for (const t of ['BERT', '2 1 1 ×', 'JOUR', 'LOC']) expect(isLabelForm(t), t).toBe(false)
   })
+  it('knows a supplement\'s and an appendix\'s numbers after a label\'s name (2610.21924\'s "Table S3:", 2610.16663\'s "Figure S5:")', () => {
+    // (read as no label, the caption's label was left the original's ink (labelKept): the layer could not move it, and a centred
+    // caption's text was centred apart from it, the line drawn left)
+    for (const t of ['Table S3:', 'Figure S5:', 'Fig. A1.', 'Table B.2:', 'Algorithm S1']) expect(isLabelForm(t), t).toBe(true)
+    // (a number with a letter before it alone is no label: a model's name, a placeholder's text at a unit's start)
+    for (const t of ['A100', 'S3', 'GPT4']) expect(isLabelForm(t), t).toBe(false)
+  })
 })
 
 // ---- the sweep of 2026-10-24 (staging 5fb92292, pin dd56fcc5): units left English whose ink could be owned
