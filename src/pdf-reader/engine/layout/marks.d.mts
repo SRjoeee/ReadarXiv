@@ -2,7 +2,7 @@
 import type { SourceUnit, UnitMark } from '../source/latex-front.mjs'
 import type { NameKey } from './names.mjs'
 
-export type MarkClass = 'math' | 'display' | 'cite' | 'ref' | 'eqref' | 'code' | 'url' | 'footnote' | 'macro'
+export type MarkClass = 'math' | 'display' | 'cite' | 'ref' | 'eqref' | 'code' | 'url' | 'footnote' | 'macro' | 'number'
 /** every class, in this order */
 export declare const MARK_CLASSES: readonly MarkClass[]
 /** the classes the run marks when asked: the global default (Task 2's corpus check); the paper's own switch
@@ -129,7 +129,7 @@ export declare function layoutMarking(units: readonly SourceUnit[], classes: rea
 
 /** the marks file (internal, prep/<mid>/marks-<sha>.json): what the layout maker reads from the marked original */
 export interface LayoutMarks {
-  schema: 10
+  schema: 11
   /** the engine that compiled it (meta.compiler) */
   engine: string
   /** what the marked original was marked with: layoutMarking's classes and the paper's own switch (TeX's answers to the
@@ -184,7 +184,7 @@ export declare function destRect(a: unknown): [x0: number, y0: number, x1: numbe
 export declare const MARKS_CAP: number
 export declare const MARKS_VALUES: number
 export declare const MARKS_DEPTH: number
-export declare const MARKS_SCHEMA: 10
+export declare const MARKS_SCHEMA: 11
 /** a unit's alignment code (readAlign) */
 export type AlignCode = 'c' | 'l' | 'r' | 'j'
 export declare const ALIGN_CODES: readonly AlignCode[]

@@ -9,6 +9,7 @@ import { withGroups } from './helpers/groups'
 import { indexLayout, LAYOUT, LAYOUT_SCHEMA, type LayoutFile, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
+import { TOGGLE_DEFAULTS } from '@/pdf-reader/engine/rules/content-classes.mjs'
 import { PDFJS } from '@/pdf-reader/engine/pipeline/versions.mjs'
 
 // The reader's door (layer-proto/reader.mjs, A2's E4): both readers open the instant layer through openLayer, over a
@@ -163,6 +164,8 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     // (the author block, unit 1, is the names toggle's, off where the reader has not turned it on: rules/content-classes.mjs
     // TOGGLE_DEFAULTS)
     expect(o.expect).toEqual(toTranslate(bundle, 'zh').filter(id => id !== 1))
+    // (the run given the door's toggles resolved: none given, TOGGLE_DEFAULTS)
+    expect(o.classes).toEqual(TOGGLE_DEFAULTS)
     expect(o.groups).toEqual(new Map([[4, '0:h'], [5, '0:c0'], [6, '0:c0']]))
     expect(o.target).toBe('zh')
     expect([o.scale, o.dpr, o.copy, o.pages]).toEqual([2.5, 1, false, Number.POSITIVE_INFINITY])
@@ -186,6 +189,14 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     expect([p.tex.index.file.units, p.hiding?.rules?.(2)]).toEqual([[], undefined])
     expect(p.labels).toEqual({ captions: { figure: 'target', table: 'target' } })
     plain.dispose()
+  })
+
+  it('gives the run the toggles it was opened with, which leaves a class they hide the original\'s however its rows come', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const bundle = bundleOf(), doc = docOf()
+    const layer = await openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl, classes: { names: true, references: true } })
+    expect((seen.opens.at(-1) as unknown as Opened).classes).toEqual({ ...TOGGLE_DEFAULTS, names: true, references: true })
+    layer.dispose()
   })
 
   it("with no layout file nothing is drawn: every unit is the original's, one with a citation or a text symbol alike (the layer draws only from the file)", async () => {
@@ -320,7 +331,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     layer.dispose()
   })
 
-  it('a paper\'s structural names (units of kind `name`, after the source\'s): no page awaits one, and its row is the run\'s word for the name, neither placed nor skipped nor late (PDF-READER §19.13)', async () => {
+  it('a paper\'s structural names (units of kind `name`, after the source\'s): no page awaits one, and its row is the run\'s word for the name, neither placed nor skipped nor late (PDF-READER §19.14)', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const bundle = bundleOf({ names: ['Assumption'] }), rows = rowsOf(bundle), id = SPECS.length
     expect([bundle.units[id]?.[0], bundle.left.kinds[id]]).toEqual(['name', 'name'])

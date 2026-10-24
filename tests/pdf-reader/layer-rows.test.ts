@@ -316,15 +316,22 @@ describe('toTranslate', () => {
   const tex = '\\documentclass{article}\n\\title{A Title}\n\\author{Ada Lovelace}\n\\begin{document}\n\\maketitle\nThe prose names AlphaNet and BetaNet in running text, and says more.\n\n\\begin{tabular}{ll}\n\\toprule\nModel & Training cost \\\\\n\\midrule\nAlphaNet & fast training \\\\\nBetaNet & slow \\\\\n\\bottomrule\n\\end{tabular}\n\nAnother paragraph.\n\\end{document}\n'
   const paper = openPaper(new Map([['main.tex', enc(tex)]]))
   const bundle = bundleOf(bundleUnitsOf(paper))
-  it('holds the paper\'s units: names kept, an author block kept where the language writes it as the paper does', () => {
+  it('holds the paper\'s units: names kept, an author block', () => {
     expect(paper.units.some(u => u.kind === 'author')).toBe(true)
     expect(paper.kept.size).toBeGreaterThan(0)
     expect(toTranslate(bundle, 'zh').length).toBeGreaterThan(0)
   })
+  // (every content class translated once whatever the language, the author block's names among them: the owner's ruling of
+  // 2026-10-25, TRANSLATE_VERSION 6; a reader's "names" toggle shows them or not. keptFor, the TeX path's, keeps them for a
+  // target that writes names as the paper does)
   for (const lang of ['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'ru', 'en-GB', 'xx']) {
-    it(`is the complement of keptFor, rising (${lang})`, () => {
-      const kept = keptFor(paper, lang), want = paper.units.map((u, i) => (kept.has(u) ? -1 : i)).filter(i => i >= 0)
+    it(`is every unit but the names a table holds, rising, the author block's among them (${lang})`, () => {
+      const want = paper.units.map((u, i) => (paper.kept.has(u) ? -1 : i)).filter(i => i >= 0)
       expect(toTranslate(bundle, lang)).toEqual(want)
+      expect(want).toContain(paper.units.findIndex(u => u.kind === 'author'))
+      // (keptFor, the TeX path's, is the same where the target writes names its own way, and keeps them where it does not)
+      const kept = keptFor(paper, lang)
+      expect(paper.units.filter((u, i) => !kept.has(u) && !want.includes(i))).toEqual([])
     })
   }
   it('skips a dropped unit', () => {
@@ -353,16 +360,16 @@ describe('batchesOf', () => {
     expect(batchesOf(sized(30000, 5, 5, 13000, 7), 'zh')).toEqual([[0], [1, 2], [3], [4]])
     expect(batchesOf(sized(), 'zh')).toEqual([])
   })
-  it('carries the paper\'s structural names first (units of kind `name`, after the source\'s): the first batch holds them, so that the first page drawn has its heads\' and references\' words (PDF-READER §19.13)', () => {
+  it('carries the paper\'s structural names first (units of kind `name`, after the source\'s): the first batch holds them, so that the first page drawn has its heads\' and references\' words (PDF-READER §19.14)', () => {
     const name = (s: string): BundleUnit => ['name', 0, null, null, null, [[0, s]]]
     const b = bundleOf([...sized(900, 900, 900, 900).units, name('Section'), name('and')])
     // 7 + 3 + 900 + 900 = 1,810; a third paragraph would make 2,710
     expect(batchesOf(b, 'zh')).toEqual([[4, 5, 0, 1], [2, 3]])
     expect(toTranslate(b, 'zh')).toEqual([0, 1, 2, 3, 4, 5])
   })
-  it('batches what toTranslate holds: a kept unit and a dropped one are in none', () => {
+  it('batches what toTranslate holds: a kept unit and a dropped one are in none, an author block in every language\'s', () => {
     const b = bundleOf([['para', 0, null, null, null, [[0, 'a']]], ['para', KEPT, null, null, null, [[0, 'b']]], null, ['author', 0, null, null, null, [[0, 'c']]], ['para', 0, null, null, null, [[0, 'd']]]])
-    expect(batchesOf(b, 'de')).toEqual([[0, 4]])
+    expect(batchesOf(b, 'de')).toEqual([[0, 3, 4]])
     expect(batchesOf(b, 'zh')).toEqual([[0, 3, 4]])
   })
   it('is the one rule: batchOf takes the units in the order given, runLive\'s batches are batchesOf\'s', async () => {
@@ -407,10 +414,10 @@ describe('layerRows', () => {
     const { rows } = layerRows(b, resultsOf(b, [[0, { state: 'lost' }], [1, { state: 'none' }]]), 'de')
     expect(rows).toEqual([[0, [], 'lost', null, null], [1, [], 'none', null, null]])
   })
-  it('gives no row for a unit the language keeps (its author block, a name), nor for a dropped one', () => {
+  it('gives no row for a unit kept (a name a table holds), nor for a dropped one; an author block\'s in every language', () => {
     const b = bundleOf([BASE[0] as BundleUnit, BASE[3] as BundleUnit, null, ['para', KEPT, null, null, null, [[0, 'Kept']]]])
     const results = resultsOf(b, [[0, 'T'], [1, 'Ada'], [3, 'Kept']])
-    expect(layerRows(b, results, 'de').rows.map(r => r[0])).toEqual([0])
+    expect(layerRows(b, results, 'de').rows.map(r => r[0])).toEqual([0, 1])
     expect(layerRows(b, results, 'zh').rows.map(r => r[0])).toEqual([0, 1])
   })
   it('holds a table group\'s cells until every cell of it is in, then gives every cell', () => {
@@ -537,7 +544,7 @@ describe('runRows', () => {
     expect(seen[1]?.held).toEqual([])
     expect(out.rows.size).toBe(16)
   })
-  it('asks the paper\'s structural names before any unit, wherever the reader is (PDF-READER §19.13)', async () => {
+  it('asks the paper\'s structural names before any unit, wherever the reader is (PDF-READER §19.14)', async () => {
     const b = bundleOf([...longBundle(30).units, ['name', 0, null, null, null, [[0, 'Conjecture']]]])
     const { send, calls } = sender()
     const out = await runRows(b, { lang: 'de', send, rank: id => Math.abs(id - 29), onRows: () => {} })

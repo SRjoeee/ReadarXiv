@@ -1152,7 +1152,7 @@ export function spacedText(chars) {
  * original's. The parts it is drawn in: its name and number in the style of its first character, its punctuation after them
  * in the style of its last (amsthm's bold "Definition 5.1" and the note's upright "("), and whether it ends in an opening
  * bracket, which the unit's text follows with no space. Null where it is no head of a name the target's dictionary holds,
- * nor one the paper's name units translate (`names`, English → the target's: §19.13)
+ * nor one the paper's name units translate (`names`, English → the target's: §19.14)
  */
 export function headLabelInTarget(chars, to, names = null) {
   const text = spacedText(chars)
@@ -1171,7 +1171,7 @@ export function headLabelInTarget(chars, to, names = null) {
 }
 /**
  * A structural name's row (a unit of kind `name`, bundleUnitsOf's, as rows.mjs unitOf reads it) as [its English, the target's
- * word for it] (PDF-READER §19.13): its source's text and its translation's text pieces joined, each's white space one space,
+ * word for it] (PDF-READER §19.14): its source's text and its translation's text pieces joined, each's white space one space,
  * an ideographic full stop the translator ends a word with as a sentence gone. Null for another unit, a row of no
  * translation (none, lost) or of an empty one
  */
@@ -1196,7 +1196,7 @@ const CITE_NOTE = /^\\(?:cite[a-z]*|parencite|textcite|autocite)\*?((?:\s*\[[^\]
  * numbers ("[Ascolani et al., 2026, Lemma 1]", the note "Lemma 1" in ctex's name for a lemma and "1"), the rest of a citation
  * the cited work's own. One no package names whole in
  * the target is left as its page shows it. `labels`: the layout rules' labels (babel's names); `names`: the paper's own name
- * units' translations (English → the target's: §19.13), a word no package names in the target
+ * units' translations (English → the target's: §19.14), a word no package names in the target
  */
 export function renameRefs(prep, to, labels, names = null) {
   for (const r of prep.values()) {

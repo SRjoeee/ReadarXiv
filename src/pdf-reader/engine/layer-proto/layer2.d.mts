@@ -332,7 +332,7 @@ export declare function spacedText(chars: readonly Pick<Char, 'ch' | 'x0' | 'x1'
 /** a theorem-like head's label as the target names it (its name in translator's word, its number and punctuation the original's),
  *  the parts it is drawn in, each in its own style, and whether it ends in an opening bracket; null where it is no such head */
 /** a structural name's row (a unit of kind `name`) as [its English, the target's word for it]; null for another unit, or a
- *  row of no translation or an empty one (PDF-READER §19.13) */
+ *  row of no translation or an empty one (PDF-READER §19.14) */
 export declare function nameOfRow(u: { kind?: string; src?: string; state?: string; pieces?: readonly { t: string; s?: string }[] } | null | undefined): [english: string, word: string] | null
 export declare function headLabelInTarget(chars: readonly Char[], to: string, names?: ReadonlyMap<string, string> | null): { text: string; parts: { text: string; st: { bold: boolean; italic: boolean; color?: string } }[]; open: boolean } | null
 /** the placeholders whose text cleveref and \autoref generate */

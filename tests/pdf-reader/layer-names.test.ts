@@ -103,7 +103,7 @@ describe('a generated reference in the target\'s names (renameRefs)', () => {
     const pg = pageOf([['in', plain()], ['Section', plain(0)], ['A.7', plain(0x0000ff)], ['here', plain()]])
     const u = unitOf([text('in '), ph('\\Cref{sec:technical-results}'), text(' here')], ['\u5728', 1, '\u4e2d'])
     expect(read(u, pg, { 1: span(pg, 1, 2) }, 'zh').drawn.map(([s]) => s)).toContain('Section')
-    // (the paper's name unit's translation where it has one: PDF-READER §19.13)
+    // (the paper's name unit's translation where it has one: PDF-READER §19.14)
     const own = read(u, pg, { 1: span(pg, 1, 2) }, 'zh', new Map([['Section', '\u8282']])).drawn
     expect(own.map(([s]) => s)).not.toContain('Section')
     expect(own.map(([s]) => s).join('')).toContain('\u8282A.7')
@@ -144,7 +144,7 @@ describe('a theorem-like head\'s label in the target (headLabelInTarget)', () =>
     expect(L2.headLabelInTarget([...item('Proof', 85, 0, bold()), ...item('Sketch', 115, 1, bold()), ...item('1.', 150, 2, bold())] as never, 'zh')?.text).toBe('\u8bc1\u660e\u63d0\u8981 1.')
     expect(L2.headLabelInTarget([...item('Theorem', 85, 0, bold()), ...item('2.', 130, 1, bold())] as never, 'ja')).toBeNull()
   })
-  it('in the paper\'s name unit\'s translation where no dictionary holds the name (PDF-READER §19.13); a babel name never', () => {
+  it('in the paper\'s name unit\'s translation where no dictionary holds the name (PDF-READER §19.14); a babel name never', () => {
     const own = new Map([['Assumption', '\u5047\u8bbe'], ['Theorem', '\u5b9a\u7406'], ['Proof', '\u8bc1\u660e']])
     expect(L2.headLabelInTarget([...item('Assumption', 85, 0, bold()), ...item('1.', 140, 1, bold())] as never, 'zh', own)?.text).toBe('\u5047\u8bbe 1.')
     expect(L2.headLabelInTarget([...item('Theorem', 85, 0, bold()), ...item('2.', 130, 1, bold())] as never, 'ja', own)?.parts).toEqual([{ text: '\u5b9a\u7406 2', st: { bold: true, italic: false } }, { text: '.', st: { bold: true, italic: false } }])

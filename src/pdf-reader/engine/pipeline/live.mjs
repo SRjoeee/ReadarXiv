@@ -494,6 +494,8 @@ export { PIPELINE_VERSION } from './versions.mjs'
  * - 24: 25 guesses a package's toplevel sources where it has no 00README (source/paper-meta.mjs), which changes which
  *   papers get a layout and, among several toplevel files, which one is the main, not what is sent for a unit or how a reply
  *   is read back: every unit whose source a copy holds is carried, and older pipelines keep their own tests
+ * - 28: 29 makes a bibliography's entries units of their own (latex-front.mjs bibliography), which a copy holds no source of,
+ *   and changes no other unit's cutting or text: every unit whose source a copy holds is carried, as from 23 to 27
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
 const NO_RUN = (pieces, unit = null) => (unit ? formulaRuns(unit.pieces).size === 0 : !holdsUnbalanced(pieces))

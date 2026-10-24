@@ -2604,7 +2604,7 @@ layout rules' labels) for a float's or an appendix's in a target that has neithe
 - **Limits.** Japanese, Korean and Traditional Chinese have no theorem dictionary in TeX Live (translator has none, ctex's are
   Simplified Chinese), and no target outside cleveref's languages has a section's or an equation's name or an "and": those
   heads and references stay the original's. A name translator's dictionary lacks ("Assumption", "Conjecture", "Claim") stays
-  English in every target, until the paper's own name units give it a word (§19.13).
+  English in every target, until the paper's own name units give it a word (§19.14).
 
 ### 19.12 The text inside vector figures (the content class `figures`, stage 5 of `docs/route/orphan-text.md`)
 
@@ -2684,7 +2684,46 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   again is copied into the delta whole: two of the pack's deltas pass their bound with the figures and are held `full`
   (2307.16209v1, 2609.26457v1), none of the 25-paper set's.
 
-### 19.13 The paper's own names, units of their own (PIPELINE 29)
+### 19.13 References and names, and the reader's toggles (stage 4 of `docs/route/orphan-text.md`)
+
+The owner's rulings of 2026-10-25: we own format correctness (positions from TeX, the original's ink owned and hidden by its own
+groups, line fit, no double ink, structure kept) and the provider owns translation quality; every class is translated once, on the
+server, into the shared cache, and a reader's settings only show or hide it; "references" means whole entries, "names" the front
+matter's authors and the names inside references, which follow "names" and not "references".
+
+- **Entries are units** (`source/latex-front.mjs` `bibliography`, PIPELINE 29). The ground truth is the bibliography's TeX the
+  compile reads: the paper's `thebibliography`, or the job's `.bbl` where `\bibliography` reads it and the package holds it
+  (BibTeX's output; never biber's data, which is biblatex's and no text). Each `\bibitem`'s entry, from its key to the next
+  `\bibitem`, is two units: its names, the first block, kind `refnames` (class names): up to the first `\newblock` (plain, abbrv,
+  unsrt, ieee, the natbib styles, acl, ACM's), else REVTeX's and ACM's `\bibfield{author}`, else IEEEtran's text before the
+  title's opening quotes; and the rest, kind `reference` (class references). A first block that holds a lower-case word of letters no
+  name holds (a title's: "A survey of methods, revised edition.") is no names, whatever its punctuation: the entry is one unit of
+  the references. A `.bbl` is read in the encoding the paper declares, as its own TeX is. The label (`\bibitem`'s optional argument, set in the
+  list's label box) and the key are no piece; what a style writes before the first entry is no unit, nor REVTeX's `\BibitemOpen`
+  and `\BibitemShut`. In an entry a number (a year, pages, a volume and its issue: a token of a digit and no letter, white space
+  or a piece that sets none on each side) or a DOI written out, letters and all (`10.1007/s00125-020-05190-9.`, after `doi: ` or
+  `doi:`) is a placeholder of the class `number` (`layout/marks.mjs`, both
+  marks, MARKS_SCHEMA 11), the original's ink as a web address and a formula are. Both units are marked as the body's are, in the
+  bibliography's own TeX (the `.bbl` written back marked: a paper that ships it runs no BibTeX), so their places, their ink and
+  their groups are TeX's (LAYOUT 22: UNIT_KINDS `reference`, `refnames`; PH_KINDS `number`; a maker of 21 reads neither, so
+  the gate pack is made again). The entries' units are numbered after every other unit of the source (`entriesLast`), so that
+  no other unit's number moves: a translation held by a unit's number (the gate pack's frozen ones) is still its unit's, and
+  a host that cuts the source's units before BibTeX has written the `.bbl` can add the entries after it without renumbering
+  what it announced. The probe asks about an entry's commands after every other unit's, so the body's marks are what they were. Measured: `lab/pdf/spikes/classes-gate.mjs`, record
+  `lab/pdf/records/classes-gate.md`.
+- **Not yet units:** a bibliography the compile makes itself (BibTeX or biber over a `.bib`, in the prepare's first compile):
+  the units are written before any compile, so its entries have no unit and stay the original's (the ledger's `references`), and
+  a bibliography biblatex sets from biber's fields (`\printbibliography`), whose text is no TeX the front end can mark.
+- **Names are translated for every target** (`layer-proto/rows.mjs` `toTranslate`, TRANSLATE_VERSION 6): the author block's units
+  are sent whatever the language, as every unit is but a table's kept names; they are laid as any unit, and stay the original's
+  where the wrap cannot hide their ink (`unhidden`).
+- **The toggles** are stage 2's (`classes` at the door's open and the layer side's, `setClasses`, TOGGLE_DEFAULTS: references and
+  names off): an entry's units and the author block's are of the classes `references` and `names` (UNIT_CLASS), so that with
+  their toggle off no page awaits their rows, the door takes none, and the translating indicator marks none (it reads the same
+  `classes`); the door gives the run its classes resolved over TOGGLE_DEFAULTS, and a direct open of v0 (run.mjs openProto, the
+  lab's and the tests') given none draws every class but the names and the references, as it drew before the toggles.
+
+### 19.14 The paper's own names, units of their own (PIPELINE 29)
 
 A name no package gives the target is the paper's to name, and the translator's to translate: each paper's structural names
 are units of their own, sent to the translator once with its units, cached by their text as any unit is, and read by the
@@ -2718,7 +2757,7 @@ layer wherever such a name is drawn (the owner's other ground truth of 2026-10-2
   part of which has no word yet is still the original's whole. In a target that inflects, a plural no package and no name
   unit gives stays English whole ("Assumptions 1 and 2" in de).
 - **Measured** (2026-10-25, the 168 local sources): 923 name units in 85 papers, 32 at most (19 of them call cleveref or
-  `\autoref`), 40,765 source units unchanged (every hash kept: the versions' 29 carries a copy of 28 whole). The paper's own
+  `\autoref`); every source unit's hash the bibliography's 29 gives it (§19.13), 168 of 168 papers the same. The paper's own
   names besides the gaps: "Conjecture" in 26 papers, "Assumption" and "Claim" in 14, "Question" and "Fact" in 8, "Proof"
   and "Problem" in 7 (a class's own among them: acmart's Conjecture, llncs's Claim), a Portuguese paper's "Teorema",
   "Lema" and "Corolário", a Chinese paper's own Chinese names (each file read in its own encoding, as the units' text is,

@@ -25,9 +25,9 @@ export const CLASSES = Object.freeze({
   tables: Object.freeze({ toggle: 'tables', state: 'built', glyphs: true, truth: "the source's table cells (units of kind cell)" }),
   figures: Object.freeze({ toggle: 'figures', state: 'built', glyphs: true, truth: "glyphs our compile sets in a vector figure, no unit's: an included PDF's (a form XObject) and a TikZ or pgfplots picture's (between its points), cut into ink units of kind `inkfigures` (layout/figure-text.mjs), each drawn in its run's box; a float's other text no unit owns, counted" }),
   ocr: Object.freeze({ toggle: 'figures', state: 'planned', glyphs: false, truth: "a bitmap figure's text, read and placed by OCR (PP-OCR, as the extension's: DESIGN §15.3); the owner's OK of 2026-10-25" }),
-  references: Object.freeze({ toggle: 'references', state: 'planned', glyphs: true, truth: "the bibliography, between its name and the next unit; its entries' fields from the .bbl's \\bibitem" }),
+  references: Object.freeze({ toggle: 'references', state: 'built', glyphs: true, truth: "the bibliography's entries, each \\bibitem's text a unit (kind reference) as the compile reads it: the paper's thebibliography or its .bbl, marked like the body; its label, numbers, web addresses and formulas the original's ink. A bibliography no \\bibitem sets (biblatex's), between its name and the next unit" }),
   index: Object.freeze({ toggle: 'references', state: 'planned', glyphs: true, truth: 'an index or a glossary, between its name and the next unit (proposed: back matter, with the references)' }),
-  names: Object.freeze({ toggle: 'names', state: 'built', glyphs: true, truth: "the author block's units (names and places), translated where the target's script writes names its own (translate/kept.mjs)" }),
+  names: Object.freeze({ toggle: 'names', state: 'built', glyphs: true, truth: "the author block's units (names and places, kind author) and an entry's names in the bibliography (its first block, kind refnames), translated once whatever the target" }),
   math: Object.freeze({ toggle: 'never', state: 'never', glyphs: true, truth: 'a math font\'s glyphs, a formula\'s line no unit owns' }),
   code: Object.freeze({ toggle: 'never', state: 'never', glyphs: true, truth: "a typewriter font's lines no unit owns: code, a log, a URL" }),
   symbols: Object.freeze({ toggle: 'never', state: 'never', glyphs: true, truth: 'a line with no letter: numbers, a folio, a symbol' }),
@@ -45,8 +45,10 @@ export const UNIT_CLASS = Object.freeze({
   // (the ink units', layout/ink-units.mjs INK_KIND: their kind names their class)
   inkheads: 'heads', inkcontents: 'contents', inknotes: 'notes', inkorphan: 'orphan', inknames: 'names', inkgenerated: 'generated', [FIGURE_KIND]: 'figures',
   // (a structural name's unit, bundleUnitsOf's: a theorem head's or a generated reference's word in the target, always
-  // translated: PDF-READER §19.13)
+  // translated: PDF-READER §19.14)
   name: 'generated',
+  // (a bibliography's entries, latex-front.mjs bibliography: its names the names', the rest the references')
+  reference: 'references', refnames: 'names',
 })
 /** a unit's class: of the front end's unit ({ kind }), of the bundle's ([kind, flags, …]) or of a kind; null for none */
 export function unitClass(u) {
@@ -56,8 +58,17 @@ export function unitClass(u) {
 }
 
 /** each toggle's default, where a reader has set none (the owner's, 2026-10-25): heads and tables on; names and references off
- *  (the references lane builds them); figures off until built */
+ *  and figures off */
 export const TOGGLE_DEFAULTS = Object.freeze({ heads: true, tables: true, figures: false, references: false, names: false })
+/** the toggles of an open of the run given none (layer-proto/run.mjs openProto: the lab's gates, the tests'; the door gives its
+ *  own): the reader's defaults, but figures, whose units every run drew before the toggles. The lab's fixture maker sends no
+ *  unit they hide (the gates hold no translation of it) */
+export const RUN_DEFAULTS = Object.freeze({ ...TOGGLE_DEFAULTS, figures: true })
+/** the toggles on under a reader's `classes` (the door's option: { [toggle]: boolean } over TOGGLE_DEFAULTS; null, the
+ *  defaults), as a Set shownTranslated reads */
+export const classesOn = classes => new Set(Object.entries({ ...TOGGLE_DEFAULTS, ...(classes ?? {}) }).filter(([, v]) => v).map(([k]) => k))
+/** whether a unit is shown translated under the toggles on (`on`, classesOn's): its class's (unitClass) */
+export const unitShown = (u, on) => { const cls = unitClass(u); return cls !== null && shownTranslated(cls, on) }
 
 /** whether a class is shown translated under a reader's settings (`on`: the toggles turned on; `always` is, `never` is not) */
 export const shownTranslated = (cls, on) => {

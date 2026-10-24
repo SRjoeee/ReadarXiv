@@ -1746,6 +1746,33 @@ describe('translating: the indicator over a near page\'s paragraphs not laid yet
     expect(marksOf(s, 1)).toBe(0)
   })
 
+  it('marks a class the reader\'s toggles (`classes`) show: a table\'s cells hidden under "tables" off, the author block under "names" on', async () => {
+    const m = await M()
+    // (a page holding cells, and the defaults' marks there: every paragraph but an author block's, whose names are off)
+    const n = [1, 2, 3, 4].find(p => unitsOn(m, p).some(id => m.index.kinds[id] === 'cell'))!
+    expect(n).toBeDefined()
+    const on = unitsOn(m, n), cells = on.filter(id => m.index.kinds[id] === 'cell'), authors = on.filter(id => m.index.kinds[id] === 'author')
+    const marks = (s: Setup) => places(s)[n - 1]?.querySelectorAll('.axt-translating .axt-translating-mark').length
+    const plain = await setup({ door: { rows: 'gate' } })
+    await nearOn(plain, [n])
+    plain.side.tell(await ALL())
+    await settle(plain, 10, false)
+    expect(plain.doors[0]?.classes).toBeNull()
+    expect(marks(plain)).toBe(on.length - authors.length)
+    // (tables off, names on, given at the side's creation: the door told so, no cell marked, the author block marked as any)
+    const off = await setup({ door: { rows: 'gate' }, classes: { tables: false, names: true } })
+    await nearOn(off, [n])
+    off.side.tell(await ALL())
+    await settle(off, 10, false)
+    expect(off.doors[0]?.classes).toEqual({ tables: false, names: true })
+    expect(marks(off)).toBe(on.length - cells.length)
+    // (and set later, setClasses: the door opened again with them, and the marks read them)
+    plain.side.setClasses({ tables: false, names: true })
+    await settle(plain, 10, false)
+    expect(plain.doors.at(-1)?.classes).toEqual({ tables: false, names: true })
+    expect(marks(plain)).toBe(on.length - cells.length)
+  })
+
   it('none on a far page, and none for a paragraph whose rows ended without a row of it', async () => {
     const s = await setup({ door: { rows: 'gate' } })
     const m = await M()

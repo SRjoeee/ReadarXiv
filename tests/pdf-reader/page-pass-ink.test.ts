@@ -71,7 +71,7 @@ describe('the ink units in the page pass', () => {
     }
   })
 
-  it('after the paper\'s structural names, which the source units\' chunk holds as the prepare child writes it, never laid (PDF-READER §19.13)', async () => {
+  it('after the paper\'s structural names, which the source units\' chunk holds as the prepare child writes it, never laid (PDF-READER §19.14)', async () => {
     const names = ['Section', 'and']
     const marked = (w: World) => ({ doc: markedOf(w.marked ?? w.pages, w.marks), log: '', options: { engine: 'pdflatex', switches: null, inkless: null, texts: null, names: null, OPS } })
     // (the wrap's ink units from the bundle's units before them, 3 source units and 2 names: wrapFinal's `inkFrom`)

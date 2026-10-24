@@ -83,7 +83,7 @@ const CONTENT_BOX = new Map([['resizebox', 3], ['scalebox', 2], ['adjustbox', 2]
 /** declarations that take no argument: a brace group after one is a group of its own, never its argument. Taken for
  *  \\centering's argument, the {\\small …} a table sat in stayed untranslated whole (five of 2608.05876's eight
  *  tables). The rules take an optional width alone (\\toprule[1pt]) */
-const NO_ARGS = new Set(['centering', 'raggedright', 'raggedleft', 'noindent', 'indent', 'normalfont', 'rmfamily', 'sffamily', 'ttfamily', 'bfseries', 'mdseries', 'itshape', 'upshape', 'slshape', 'scshape', 'em', 'bf', 'it', 'rm', 'sf', 'tt', 'sc', 'sl', 'normalsize', 'small', 'footnotesize', 'scriptsize', 'tiny', 'large', 'Large', 'LARGE', 'huge', 'Huge', 'selectfont', 'smallskip', 'medskip', 'bigskip', 'hfill', 'vfill', 'hfil', 'vfil', 'newline', 'clearpage', 'newpage', 'cleardoublepage', 'maketitle', 'appendix', 'toprule', 'midrule', 'bottomrule', 'hline', 'arraybackslash', 'protect', 'relax', 'leavevmode', 'strut', 'null', 'quad', 'qquad', 'enspace', 'thinspace', 'nobreak', 'allowbreak', 'sloppy', 'fussy', 'ignorespaces', 'unskip'])
+const NO_ARGS = new Set(['centering', 'raggedright', 'raggedleft', 'noindent', 'indent', 'normalfont', 'rmfamily', 'sffamily', 'ttfamily', 'bfseries', 'mdseries', 'itshape', 'upshape', 'slshape', 'scshape', 'em', 'bf', 'it', 'rm', 'sf', 'tt', 'sc', 'sl', 'normalsize', 'small', 'footnotesize', 'scriptsize', 'tiny', 'large', 'Large', 'LARGE', 'huge', 'Huge', 'selectfont', 'smallskip', 'medskip', 'bigskip', 'newblock', 'BIBentryALTinterwordspacing', 'BIBentrySTDinterwordspacing', 'hfill', 'vfill', 'hfil', 'vfil', 'newline', 'clearpage', 'newpage', 'cleardoublepage', 'maketitle', 'appendix', 'toprule', 'midrule', 'bottomrule', 'hline', 'arraybackslash', 'protect', 'relax', 'leavevmode', 'strut', 'null', 'quad', 'qquad', 'enspace', 'thinspace', 'nobreak', 'allowbreak', 'sloppy', 'fussy', 'ignorespaces', 'unskip'])
 /** NO_ARGS by its exported name: the layout marks take a placeholder of one for one that sets no ink (layout/marks.mjs) */
 export const NO_ARG_COMMANDS = NO_ARGS
 const OPT_ONLY = new Set(['toprule', 'midrule', 'bottomrule'])
@@ -865,6 +865,7 @@ class Builder {
     if (!u) return
     // (a file that is not UTF-8: each text piece as UTF-8, `src` its own bytes, which patch writes back, before its letters join it)
     u.pieces = joinLetters(keepAddresses(u.pieces).map(p => { if (p.t !== 'text' || p.src !== undefined) return p; const t = asEngineText(this.file, p.s); return t === p.s ? p : { t: 'text', s: t, src: p.s } }))
+    if (BIB_KINDS.has(u.kind)) u.pieces = keepNumbers(u.pieces)
     // trim placeholders and whitespace at both ends out of the unit: they stay in the source untouched
     const letters = u.pieces.filter(p => p.t === 'text').map(p => p.s).join('')
     if ((letters.match(/\p{L}/gu) ?? []).length < 2) {
@@ -1279,6 +1280,8 @@ function walk(s, from, to, b, ctx) {
       endText(); b.flush()
       // a TikZ picture: only its texts are prose (tikzText); the drawing stays as it is
       if (env === 'tikzpicture') { tikzText(s, afterBegin, bodyEnd, b, ctx); i = afterEnd; continue }
+      // the bibliography: each \\bibitem's entry its units (bibliography), not one the paper defines anew
+      if (env === 'thebibliography' && !ctx.skipEnvs.has(env)) { bibliography(s, afterBegin, bodyEnd, b, ctx); i = afterEnd; continue }
       if (SKIP_ENVS.test(env) || ctx.skipEnvs.has(env)) { ctx.skipped[env] = (ctx.skipped[env] ?? 0) + 1; i = afterEnd; continue }
       if (ctx.tblrEnvs.has(env) && (ctx.tblrMath || argsOfForm(s, afterBegin, '[{').args.some(a => TBLR_MATH.test(uncommented(s.slice(a.start, a.end)))))) { ctx.skipped[env] = (ctx.skipped[env] ?? 0) + 1; i = afterEnd; continue }
       if (TABLE_ENVS.test(env)) {
@@ -1328,6 +1331,23 @@ function walk(s, from, to, b, ctx) {
       // — one TeX surely reaches (documentEnds): not one in a conditional's branch it skips or cannot tell
       if (m?.[1].trim() === 'document' && (ctx.ends?.get(b.file)?.has(at) ?? true)) { ctx.ended = true; return }
       continue
+    }
+    // \\bibliography{…}: TeX reads the job's .bbl there, which the package holds (BibTeX's output, shipped; one the compile
+    // makes is no source the front end reads before it)
+    if (name === 'bibliography' && ctx.bbl) {
+      const { args, end: e } = argsAfter(s, end, 1)
+      if (args[0]?.kind === 'req') { endText(); b.flush(); ctx.visit(ctx.bbl, [], b.inFloat); i = e; continue }
+    }
+    // in a bibliography entry, a command that sets its text argument as it stands (BIB_TEXT): a pair around it, its other
+    // arguments kept with the opening; a \\bibinfo of a field that is no prose (BIB_KEPT_FIELD) one placeholder
+    if (BIB_KINDS.has(b.kind) && BIB_TEXT.has(name)) {
+      const before = BIB_TEXT.get(name), { args, end: e } = argsAfter(s, end, before + 1), reqs = args.filter(a => a.kind === 'req')
+      if (args.length === before + 1 && reqs.length === before + 1) {
+        const text = reqs[before], field = before ? s.slice(reqs[0].start + 1, reqs[0].end - 1).trim() : ''
+        endText()
+        if (name === 'bibinfo' && BIB_KEPT_FIELD.test(field)) { b.ph(s.slice(i, e), i, e); i = e; continue }
+        const id = b.open(s.slice(i, text.start + 1), i); walk(s, text.start + 1, text.end - 1, b, ctx); b.close(id, '}', e); i = e; continue
+      }
     }
     if (name === 'item') { endText(); b.flush(); const { args, end: e } = argsAfter(s, end, 1); i = args.length && args[0].kind === 'opt' ? e : end; continue }
     if (name === 'input' || name === 'include' || name === 'subfile' || IMPORTS.has(name)) {
@@ -1676,6 +1696,152 @@ const tblrOf = texts => {
   return { tblrEnvs: new Set([...TBLR_ENVS, ...named]), tblrMath: inner.some(t => TBLR_MATH.test(t)) }
 }
 
+// ---------------------------------------------------------------- the bibliography
+/** an entry's units' kinds: its names (its first block: the authors, an editor), and the rest of it */
+const BIB_KINDS = new Set(['reference', 'refnames'])
+/**
+ * The source's units with a bibliography's entries moved after every other, in their order (in place): an entry's unit is
+ * numbered after the last of the rest, so that no other unit's number is what it was before entries were units of their own
+ * (a translation held by a unit's number, the gate pack's, is still that unit's), and the units a host cuts before the job's
+ * .bbl is made (the web's prepare announces them before the first compile) keep their numbers when the entries come after
+ * it. Nothing reads an entry by its place among the units: its marks place it on the page, the ledger's zone reads them
+ */
+function entriesLast(units) {
+  const entries = units.filter(u => BIB_KINDS.has(u.kind))
+  if (!entries.length) return
+  const rest = units.filter(u => !BIB_KINDS.has(u.kind))
+  units.length = 0
+  units.push(...rest, ...entries)
+}
+/** the commands of a bibliography that set their last argument as text, by how many arguments come before it: REVTeX's and
+ *  acmart's fields (\\bibinfo{title}{…}, \\bibfield{author}{…}), REVTeX's name fonts, a quoted or shown title, IEEEtran's
+ *  language. Any other command of a .bbl is what the walk makes of it elsewhere: \\newblock a placeholder, \\url and \\href
+ *  theirs, \\emph a pair */
+const BIB_TEXT = new Map([['bibinfo', 1], ['bibfield', 1], ['bibnamefont', 0], ['bibfnamefont', 0], ['citenamefont', 0], ['enquote', 0], ['showarticletitle', 0], ['BIBforeignlanguage', 1]])
+/** a \\bibinfo field that is no prose: kept as the paper has it, one placeholder */
+const BIB_KEPT_FIELD = /^(?:doi|url|eprint|isbn|issn|archive|archiveprefix|primaryclass|eid|lccn|mrnumber|zbl)$/i
+/**
+ * A bibliography (thebibliography's body, `from` after its \\begin, `to` its \\end): each \\bibitem's entry, from its key's
+ * group to the next \\bibitem or the end, is its own units (docs/route/orphan-text.md §5, "References"; the owner's rulings
+ * of 2026-10-25): its names, the first block — up to the first \\newblock (the BibTeX styles that open an entry with its
+ * authors: plain, abbrv, unsrt, the natbib styles, acl, ACM's), else REVTeX's and ACM's \\bibfield{author}, else IEEEtran's
+ * up to the title's opening quotes — a unit of kind `refnames` (the reader's "names"), and the rest a unit of kind
+ * `reference` (its "References"). Its label (\\bibitem's optional argument, set in the list's label box) and its key are
+ * no piece of either; what precedes the first \\bibitem (the style's \\providecommand's) is no unit, nor is REVTeX's
+ * \\BibitemOpen and \\BibitemShut. In an entry its numbers stay the original's ink (keepNumbers), its web addresses and
+ * formulas too, as everywhere. A bibliography a paper sets otherwise (biblatex's \\printbibliography, from biber's data) has
+ * no \\bibitem here: its text is the ledger's `references`, between its name and the next unit. The entries' units are numbered
+ * after every other unit of the source (entriesLast)
+ */
+function bibliography(s, from, to, b, ctx) {
+  const { end: start } = argsOfForm(s, from, '{')
+  const scan = c => texCommands(s, { from: c[0], to: c[1], lineEnvs: ctx.lineEnvs, ifs: ctx.ifs, ifValues: ctx.ifValues }).filter(x => x.depth === 0 && !x.inDef)
+  const items = scan([start, to]).filter(c => c.name === 'bibitem')
+  const saved = b.kind
+  b.flush()
+  items.forEach((c, n) => {
+    let a = argsOfForm(s, c.end, '[{').end, z = n + 1 < items.length ? items[n + 1].at : to
+    const cmds = scan([a, z])
+    // (REVTeX's entry: its text between \\BibitemOpen and \\BibitemShut{…})
+    const open = cmds.find(x => x.name === 'BibitemOpen'), shut = cmds.find(x => x.name === 'BibitemShut')
+    if (open && !/\S/.test(s.slice(a, open.at).replace(/%.*$/gm, ''))) a = open.end
+    if (shut && shut.at > a) z = shut.at
+    const names = namesEnd(s, a, z, cmds.filter(x => x.at >= a && x.at < z))
+    if (names > a) { b.kind = 'refnames'; walk(s, a, names, b, ctx); b.flush(); a = names }
+    b.kind = 'reference'; walk(s, a, z, b, ctx); b.flush()
+  })
+  b.kind = saved
+}
+/** where an entry's names end, the first block (bibliography), from `a` to `z` and its commands at its top level; `a` where
+ *  it has none the front end can tell */
+function namesEnd(s, a, z, cmds) {
+  const block = cmds.find(x => x.name === 'newblock')
+  if (block) return namesLike(s.slice(a, block.at)) ? block.at : a
+  // (REVTeX's and ACM's field of authors, an entry's first: the call up to its text's group)
+  const field = cmds[0]?.name === 'bibfield' ? argsAfter(s, cmds[0].end, 2) : null
+  if (field?.args.length === 2 && /^\{\s*(?:author|editor)\s*\}$/.test(s.slice(field.args[0].start, field.args[0].end))) return field.end
+  // (IEEEtran's: the authors, then the title in quotes; a book's in \\emph, which a name never is)
+  for (let k = a, depth = 0; k < z - 1; k++) {
+    const ch = s[k]
+    if (ch === '%') { k = skipComment(s, k); continue }
+    if (ch === '\\') { if (depth === 0 && /^\\(?:emph|textit|em|it)(?![A-Za-z@])/.test(s.slice(k, k + 8))) return a; k++; continue }
+    if (ch === '{') depth++
+    else if (ch === '}') depth--
+    else if (depth === 0 && ch === '`' && s[k + 1] === '`') return /,\s*$/.test(s.slice(a, k)) ? k : a
+  }
+  return a
+}
+/** the lower-case words a block of names holds (van, von, de la…; "and", "others", "editors"), which no title's lower-case word
+ *  is taken for */
+const NAME_PARTICLES = new Set(['and', 'und', 'van', 'von', 'der', 'den', 'del', 'della', 'des', 'dos', 'das', 'ter', 'ten', 'bin', 'ibn', 'others', 'editor', 'editors', 'eds'])
+/**
+ * Whether an entry's first block reads as its names, not an entry with no author whose first block is its title ("The Research
+ * Guide.", "A survey of methods, revised edition."): no lower-case word of three letters or more but a name's (NAME_PARTICLES),
+ * whatever its punctuation, nor "The" first; then a comma, an "and", a tie or an initial (BibTeX's name formats: "J.~Smith",
+ * "Ba, Kiros, and Hinton", "et~al."), else a few capitalised words ("William Feller.") opening with no article
+ */
+function namesLike(tex) {
+  // (the block's letters as a reader reads them: a letter command its letter, \\L's L; an accent and any other command nothing, so
+  // that a word they sit in stays whole, G{\\"u}l{\\c{c}}ehre's, M{\\k{a}}dry's; the words apart at a space or a tie)
+  const t = tex.replace(/%[^\n]*/g, ' ').replace(/\\([A-Z])[A-Za-z]*(?![A-Za-z@])\s*/g, '$1').replace(/\\(?:[a-z@][A-Za-z@]*|[^A-Za-z@])\s*/g, '').replace(/[{}]/g, '').replace(/\s+/g, ' ').trim()
+  const words = t.split(/[\s~]+/).filter(w => /\p{L}/u.test(w))
+  // (a word of letters alone, its punctuation after it: a key a style writes in the block, apacite's anderson1952asymptotic, is none)
+  if (!words.length || words[0] === 'The' || !words.every(w => !/^\p{Ll}{3,}\p{P}*$/u.test(w) || NAME_PARTICLES.has(w.replace(/\P{L}+$/u, '')))) return false
+  if (/[,~]|\band\b|\bet al\b|(?:^|[\s(])\p{Lu}\./u.test(t) || /~/.test(tex)) return true
+  return words.length <= 4 && !/^An?$/.test(words[0])
+}
+/** a token of an entry's text that is a number and no word — a year, pages, a volume and its issue: "1994.", "157--166,",
+ *  "5(2):157--166" — a digit in it, no letter, white space or a piece that sets none on either side; or a DOI written out,
+ *  letters and all ("10.1007/s00125-020-05190-9."), whose left may be any character but a letter or a digit ("doi:10.…") */
+const NUMBER_TOKEN = /[^\s\p{L}]*\d[^\s\p{L}]*/gu
+const DOI_TOKEN = /10\.\d{4,9}\/\S+/gu
+/** a text's tokens of either, in order: its DOIs, then its numbers outside them */
+function numberTokens(s) {
+  const dois = [...s.matchAll(DOI_TOKEN)].map(m => ({ index: m.index, text: m[0], doi: true }))
+  const inDoi = (a, b) => dois.some(d => a < d.index + d.text.length && b > d.index)
+  const numbers = [...s.matchAll(NUMBER_TOKEN)].filter(m => !inDoi(m.index, m.index + m[0].length)).map(m => ({ index: m.index, text: m[0], doi: false }))
+  return [...dois, ...numbers].sort((a, b) => a.index - b.index)
+}
+/** a piece beside which a token stands apart: none (the unit's edge), a group's open or close, a tie, a space of TeX's or a
+ *  penalty, a kern or glue of its own (natbib's `\\penalty0` between a volume, its issue and its pages) */
+const APART = p => !p || p.t === 'open' || p.t === 'close' || (p.t === 'ph' && /^(?:~|\\[ ,;:!]|\\(?:newblock|quad|qquad|enspace|thinspace|space|penalty|allowbreak|nobreak|hskip|kern)(?![A-Za-z@]))/.test(p.src ?? ''))
+/**
+ * An entry's numbers, each a placeholder: what the original's ink keeps (the owner, 2026-10-25: labels, numbers, years, DOIs,
+ * web addresses and formulas stay the original's ink), each token of a text piece that holds a digit and no letter, with white
+ * space or a piece that sets no letter on either side (APART), so that no mark of its goes inside a word or between two glyphs
+ * TeX kerns. A piece whose source is other bytes than its text (an accent's letter joined into its word, a file transcoded:
+ * `src`) is cut only where the two are the same bytes, in their common head or their common tail, each part keeping its own
+ * source where it differs from its text: `\\"{o}verview, 2020.`'s year is the year's own placeholder
+ */
+function keepNumbers(pieces) {
+  return pieces.flatMap((p, k) => {
+    if (p.t !== 'text' || !/\d/.test(p.s)) return [p]
+    const src = p.src ?? p.s, n = p.s.length, d = src.length - n
+    let head = 0
+    while (head < n && head < src.length && p.s[head] === src[head]) head++
+    let tail = 0
+    while (tail < n - head && tail < src.length - head && p.s[n - 1 - tail] === src[src.length - 1 - tail]) tail++
+    /** a cut of the text where the source is cut the same way, or -1 */
+    const at = i => (i <= head ? i : i >= n - tail ? i + d : -1)
+    const part = (x, y) => {
+      const t = p.s.slice(x, y), from = src.slice(at(x), at(y)), { src: _, ...plain } = p
+      return from === t ? { ...plain, s: t } : { ...p, s: t, src: from }
+    }
+    const out = []
+    let last = 0
+    for (const m of numberTokens(p.s)) {
+      const end = m.index + m.text.length
+      const left = m.index > 0 ? (m.doi ? /[^\p{L}\d]/u : /\s/).test(p.s[m.index - 1]) : APART(pieces[k - 1]), right = end < n ? /\s/.test(p.s[end]) : APART(pieces[k + 1])
+      if (!left || !right || at(m.index) < 0 || at(end) < 0 || src.slice(at(m.index), at(end)) !== m.text) continue
+      if (m.index > last) out.push(part(last, m.index))
+      out.push({ t: 'ph', src: m.text })
+      last = end
+    }
+    if (!out.length) return [p]
+    if (last < n) out.push(part(last, n))
+    return out
+  })
+}
 /**
  * The preamble's prose, in the order it is written. TeX sets nothing there, but a class keeps the front matter's text
  * for \\maketitle, and each is a unit as the body would make it: the title TeX keeps (the last \\title it acts on — a
@@ -1785,7 +1951,10 @@ export function loadProject(fsys, main, { tables = false } = {}) {
   const own = fsys.list().filter(f => /\.(tex|sty|cls)$/i.test(f)).map(f => ({ file: f, text: sourceText(f) }))
   const outer = paper, outerDecoders = decoders
   paper = paperOf(own.map(x => x.text))
-  decoders = decodersOf(own, sourceText, main)
+  // (the job's .bbl, which \\bibliography reads, decoded as the package's own TeX is: BibTeX writes it in the .bib's bytes, the
+  // encoding the paper declares; it is read as none of the package's own files otherwise)
+  const mainRel = [normalizePath(main), normalizePath(`${main}.tex`)].find(f => fsys.read(f)), bbl = mainRel ? normalizePath(`${jobName(mainRel)}.bbl`) : null
+  decoders = decodersOf(bbl && fsys.read(bbl) ? [...own, { file: bbl, text: sourceText(bbl) }] : own, sourceText, main)
   try { return readProject(fsys, main, tables, sourceText, own) } finally { paper = outer; decoders = outerDecoders }
 }
 /** each of the package's files that is not UTF-8, by its normalized name, with its decoding (INPUT_ENCODINGS): the one the
@@ -1840,7 +2009,11 @@ function readProject(fsys, main, tables, sourceText, own) {
   // the paper's \\newif conditionals, and those whose value TeX reads the same everywhere (newifValues)
   const ifs = new Set([...sources.map(sourceText).join('\n').matchAll(/\\newif\s*\\(if[A-Za-z@]+)/g)].map(m => m[1]))
   const ifValues = newifValues(sources.map(sourceText), ifs)
-  const ctx = { tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), ...tblrOf(sources.map(sourceText)) }
+  // (the job's .bbl, where the package holds it and it is BibTeX's, a thebibliography: what \\bibliography reads. Not biber's,
+  // which is biblatex's data — \\entry, \\field — and no text, which \\bibliography, biblatex's alias of \\addbibresource, never reads)
+  const bblName = `${jobName(mainFile.rel)}.bbl`, bblBytes = fsys.read(bblName)
+  const bbl = bblBytes && /\\begin\s*\{thebibliography\}/.test(texText(bblBytes)) ? bblName : null
+  const ctx = { bbl, tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), ...tblrOf(sources.map(sourceText)) }
   const scan = { lineEnvs, ifs, ifValues }
   let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;
@@ -1881,6 +2054,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   ctx.called = (name, kind) => { const c = calls.get(name) ?? calls.set(name, { n: 0, kinds: new Set() }).get(name); c.n++; c.kinds.add(kind ?? 'para') }
   visit(mainFile.rel)
   storedBodies(calls, { ctx, files, units, own })
+  entriesLast(units)
   // a source declared in a Latin-1 family encoding: its bytes read as latin1 are already the right characters
   const enc = inputencFrom(mainCmds ?? texCommands(all, scan), all)?.options.split(',').map(x => x.trim()).find(x => /^(latin1|latin9|ansinew|cp1252|cp1250|latin2|applemac|decmulti)$/.test(x))
   const isUtf8 = t => { try { new TextDecoder('utf-8', { fatal: true }).decode(latin1Bytes(t)); return true } catch { return false } }

@@ -955,8 +955,9 @@ export function isName(text, prose) {
 }
 const shortUnit = u => u.kind === 'cell' || u.kind === 'figure'
 const textOfUnit = u => u.pieces.filter(p => p.t === 'text').map(p => p.s).join(' ')
-/** the running text isName reads a short text against: every unit's text but a table cell's and a figure's */
-export const proseOf = units => units.filter(u => u && !shortUnit(u)).map(textOfUnit).join('\n')
+/** the running text isName reads a short text against: every unit's text but a table cell's and a figure's, and a
+ *  bibliography's entries none of it (their titles are in title case, their names all proper nouns) */
+export const proseOf = units => units.filter(u => u && !shortUnit(u) && u.kind !== 'reference' && u.kind !== 'refnames').map(textOfUnit).join('\n')
 /** the table cells and figure texts that are only names (isName): they keep their source */
 export function nameCells(units) {
   const prose = proseOf(units)

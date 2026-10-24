@@ -101,8 +101,12 @@ export { LayoutRefusal } from './json.mjs'
  *  class `figures`, stage 5) the layout compile sets a point inside each pgf picture's own box (marks.mjs POINTS_TEX, `zs` and
  *  `ze`), so that a TikZ or pgfplots picture's text is told apart in our final pass (layout/figure-text.mjs): nothing outside
  *  the picture's box moves, and no reader of the marks sees the points (ink.mjs keeps them apart, `pictures`) (the file's
- *  schema is 5 still) */
-export const LAYOUT = '21'
+ *  schema is 5 still); 22 (stage 4): a bibliography's entries units of their own, numbered after the source's other units
+ *  (UNIT_KINDS `reference`, and `refnames` for an entry's names, latex-front.mjs bibliography and entriesLast), marked as the
+ *  body's, and an entry's numbers placeholders of their own (PH_KINDS `number`, both marks: MARKS_SCHEMA 11). A maker of 21
+ *  reads neither kind, so a file of 22 is another maker's: the gate pack is made again, each side of the rules gate on its own
+ *  (the file's schema is 5 still) */
+export const LAYOUT = '22'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,
@@ -119,8 +123,8 @@ export const LAYOUT_VALUES = 1_000_000
 export const LAYOUT_DEPTH = 4
 /** a unit's kinds, by index: the source units', then the ink units' (layout/ink-units.mjs INK_KIND: a new kind takes the next index,
  *  so that a file of before reads as it was) */
-export const UNIT_KINDS = Object.freeze(['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author', 'inkheads', 'inkcontents', 'inknotes', 'inkorphan', 'inknames'])
-export const PH_KINDS = Object.freeze(['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other'])
+export const UNIT_KINDS = Object.freeze(['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author', 'inkheads', 'inkcontents', 'inknotes', 'inkorphan', 'inknames', 'reference', 'refnames'])
+export const PH_KINDS = Object.freeze(['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other', 'number'])
 export const LABEL_KINDS = Object.freeze(['number', 'item', 'caption', 'footnote'])
 /** a unit's flags. TITLE: the paper's title; FRONT: its front matter; CENTRED: its lines set centred, as TeX set its
  *  paragraph where the marked original tells it (\centering, a center environment, a class's centred heading), else as

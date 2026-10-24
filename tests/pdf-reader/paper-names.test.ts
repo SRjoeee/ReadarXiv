@@ -6,7 +6,7 @@ import { CONJUNCTION_GAPS, GENERATED_COMMANDS, NAME_GAPS } from '@/pdf-reader/en
 import { NAMES_MAX, paperNames } from '@/pdf-reader/engine/source/paper-names.mjs'
 import { plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
 
-// The structural names a paper's TeX prints that no package names in every target (PDF-READER §19.13): read from the paper's
+// The structural names a paper's TeX prints that no package names in every target (PDF-READER §19.14): read from the paper's
 // own definitions, each a unit of its own after the source's in the bundle (bundleUnitsOf, kind `name`), translated once
 // with the paper's units
 

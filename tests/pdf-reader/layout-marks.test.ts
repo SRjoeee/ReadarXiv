@@ -71,10 +71,13 @@ describe('the classes', () => {
     for (const src of ['&', '#', '^', '_', '{', '}']) expect(classOf({ t: 'ph', src }), src).toBeNull()
     // an address kept as it is, ink of its own
     expect(classOf({ t: 'ph', src: 'jatin@us.ibm.com' })).toBe('macro')
+    // a bibliography entry's number (latex-front.mjs keepNumbers): text of a digit and no letter, which reads nothing after it
+    for (const src of ['1994.', '157--166,', '5(2):157--166', '(2017)', '10.1145/3786335.3813167']) expect(classOf({ t: 'ph', src }), src).toBe('number')
+    for (const src of ['1994a', '\\natexlab{a}', '2$^{nd}$', '{2017}', '12~']) expect(classOf({ t: 'ph', src }), src).not.toBe('number')
     // a control word of the list followed by letters is another command
     expect(INVISIBLE.test('\\labelwidth')).toBe(false)
     expect(DISPLAY.test('\\begin{equationx}')).toBe(false)
-    expect(MARK_CLASSES).toEqual(['math', 'display', 'cite', 'ref', 'eqref', 'code', 'url', 'footnote', 'macro'])
+    expect(MARK_CLASSES).toEqual(['math', 'display', 'cite', 'ref', 'eqref', 'code', 'url', 'footnote', 'macro', 'number'])
     expect(LAYOUT_CLASSES).toEqual(MARK_CLASSES)
   })
 })
@@ -1139,15 +1142,16 @@ describe('the marks file', () => {
     parse.mockRestore()
     expect(refusal(new Uint8Array([0x7b, 0xc3, 0x28, 0x7d]))).toBe('')
     const rows: [string, (m: LayoutMarks & Record<string, unknown>) => void, string][] = [
-      ['schema 1, a file before the stream', m => { m.schema = 1 as 10 }, 'schema'],
-      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 10 }, 'schema'],
-      ['schema 3, a file before the babel names', m => { m.schema = 3 as 10 }, 'schema'],
-      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 10 }, 'schema'],
-      ['schema 5, a file before the empty-list marks, the column ends and the display groups', m => { m.schema = 5 as 10 }, 'schema'],
-      ['schema 6, a file before the link annotations', m => { m.schema = 6 as 10 }, 'schema'],
-      ['schema 7, a file before the alignment', m => { m.schema = 7 as 10 }, 'schema'],
-      ['schema 8, a file before the complete macros and the boxes apart (its maker would replay a marking it was not made with)', m => { m.schema = 8 as 10 }, 'schema'],
-      ['schema 9, a file before the texts as TeX sets them (its maker would find no lead of punctuation, code or a formula)', m => { m.schema = 9 as 10 }, 'schema'],
+      ['schema 1, a file before the stream', m => { m.schema = 1 as 11 }, 'schema'],
+      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 11 }, 'schema'],
+      ['schema 3, a file before the babel names', m => { m.schema = 3 as 11 }, 'schema'],
+      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 11 }, 'schema'],
+      ['schema 5, a file before the empty-list marks, the column ends and the display groups', m => { m.schema = 5 as 11 }, 'schema'],
+      ['schema 6, a file before the link annotations', m => { m.schema = 6 as 11 }, 'schema'],
+      ['schema 7, a file before the alignment', m => { m.schema = 7 as 11 }, 'schema'],
+      ['schema 8, a file before the complete macros and the boxes apart (its maker would replay a marking it was not made with)', m => { m.schema = 8 as 11 }, 'schema'],
+      ['schema 9, a file before the texts as TeX sets them (its maker would find no lead of punctuation, code or a formula)', m => { m.schema = 9 as 11 }, 'schema'],
+      ['schema 10, a file before the numbers a bibliography entry keeps (its maker would read no class `number`)', m => { m.schema = 10 as 11 }, 'schema'],
       ['complete macros of no object', m => { (m.marking as Record<string, unknown>).complete = ['bert', 0] }, 'marking.complete'],
       ['a complete macro\'s name with its backslash', m => { (m.marking as Record<string, unknown>).complete = { '\\bert': 0 } }, 'marking.complete.\\\\bert'],
       ['a complete macro of arity 10', m => { (m.marking as Record<string, unknown>).complete = { bert: 10 } }, 'marking.complete.bert'],

@@ -28,6 +28,10 @@
 //   lines, erase } as a unit's, which the pixel measures count as a drawn unit's own text, and the model ones do not.
 import { naturalOf, pitchOf, roomOf } from '../../../../src/pdf-reader/engine/layer-proto/break-room.mjs'
 import { noStart } from '../../../../src/pdf-reader/engine/layer-proto/no-start.mjs'
+/** the kinds no unit of is measured as text left the original's or drawn: a figure's text, and the classes the reader's default
+ *  toggles hide (rules/content-classes.mjs TOGGLE_DEFAULTS: the author block's names, a bibliography's entries), which it never
+ *  draws */
+const UNMEASURED = new Set(['figure', 'author', 'reference', 'refnames'])
 
 const lum = (a, i) => a[i] * 0.299 + a[i + 1] * 0.587 + a[i + 2] * 0.114
 /** a value to d decimals, as the parity harness's toFixed */
@@ -131,7 +135,7 @@ export function modelPage({ units, ref, items, translated, cut = [], placement =
   // why; cells apart
   const counts = { textOn: 0, textDrawn: 0, cellsOn: 0, cellsDrawn: 0, left: {} }
   for (const r of ref) {
-    if (!translated.has(r.id) || r.kind === 'author' || r.kind === 'figure') continue
+    if (!translated.has(r.id) || UNMEASURED.has(r.kind)) continue
     const drawn = drawnIds.has(r.id)
     if (r.kind === 'cell') { counts.cellsOn++; if (drawn) counts.cellsDrawn++; continue }
     counts.textOn++
@@ -197,7 +201,7 @@ export function modelPage({ units, ref, items, translated, cut = [], placement =
   }
   // the drawn text area in cells: the model tier's denominator for its defect rates
   let modelCells = 0
-  for (const u of drawn) if (u.kind !== 'cell' && u.kind !== 'author' && u.kind !== 'figure') for (const _ of cellsOf(u.orig)) modelCells++
+  for (const u of drawn) if (u.kind !== 'cell' && !UNMEASURED.has(u.kind)) for (const _ of cellsOf(u.orig)) modelCells++
   return { units: counts, fills, geo, gaps: paraGapsOf(drawn, ref, items), wrongPageText, droppedPh, cropForeign, modelCells, ...(placement ? cropPlacementOf(placement) : {}) }
 }
 
@@ -839,7 +843,7 @@ export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, ite
   // cells), nor does a fraction of a pixel in where the text is put; a line set shorter or lower does, by the area it
   // leaves. Text and table cells apart
   const origM = mask()
-  for (const r of ref) if (r.kind !== 'author' && r.kind !== 'figure') for (const l of r.orig) paint(origM, [l.x0, l.baseline - 0.25 * l.size, l.x1, l.baseline + 0.75 * l.size])
+  for (const r of ref) if (!UNMEASURED.has(r.kind)) for (const l of r.orig) paint(origM, [l.x0, l.baseline - 0.25 * l.size, l.x1, l.baseline + 0.75 * l.size])
   const drawnM = mask()
   for (const u of drawn) {
     for (const l of u.lines) paint(drawnM, [l.x0, l.baseline - 0.25 * l.size, l.x1, l.baseline + 0.75 * l.size])
@@ -848,7 +852,7 @@ export function pixelPage({ k, view, W, H, O, C, T, units, names = [], kept, ite
   const coverage = { text: { cells: 0, translated: 0, english: 0, blank: 0 }, cells: { cells: 0, translated: 0, english: 0, blank: 0 } }
   let neutral = 0
   for (const r of ref) {
-    if (r.kind === 'author' || r.kind === 'figure') continue
+    if (UNMEASURED.has(r.kind)) continue
     const tally = r.kind === 'cell' ? coverage.cells : coverage.text
     for (const cell of cellsOf(r.orig)) {
       const [a, b, c, d] = boxPx(cell)

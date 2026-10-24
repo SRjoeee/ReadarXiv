@@ -386,7 +386,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   // (the maker's, of its own document's tokens: our base page's, else arXiv's)
   const floatMatch = baseText && baseText !== text ? floatMatches(baseText.tokens, texts, floating) : left.tokens === text.tokens ? leftFloats : floatMatches(text.tokens, texts, floating)
   // the bundle's units as the prepare child writes them: the source units', then the paper's structural names' (bundleUnitsOf, kind
-  // `name`: no page's ink, never anchored nor laid; PDF-READER §19.13)
+  // `name`: no page's ink, never anchored nor laid; PDF-READER §19.14)
   const sourceBundle = bundleUnitsOf(source), names = sourceBundle.length - units.length
   // the ink units the wrap made of text no source unit owns (pipeline/ink-pass.mjs, docs/route/orphan-text.md §8): units after those,
   // where our base page is the base and each of their pages is drawable; none else

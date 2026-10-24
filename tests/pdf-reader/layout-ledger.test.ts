@@ -2,7 +2,7 @@ import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { type LedgerPage, ledgerOf, ledgerSummary, ORPHAN_LINES_MAX, orphanRows } from '@/pdf-reader/engine/layout/ledger.mjs'
 import { pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
-import { CLASS_CODE, CLASS_IDS, CLASSES, shownTranslated, TOGGLES, UNIT_CLASS, unitClass } from '@/pdf-reader/engine/rules/content-classes.mjs'
+import { CLASS_CODE, CLASS_IDS, CLASSES, classesOn, shownTranslated, TOGGLE_DEFAULTS, TOGGLES, UNIT_CLASS, unitClass, unitShown } from '@/pdf-reader/engine/rules/content-classes.mjs'
 
 // The content classes and the ledger of our final pass (docs/route/orphan-text.md, stage 1): every glyph one class, by TeX's
 // facts — its owner, its region, the babel names' points, stream order — and its own font
@@ -36,11 +36,25 @@ describe('the content classes', () => {
     expect(unitClass({ kind: 'figure' })).toBe('figures')
     expect(unitClass(['cell', 0, []])).toBe('tables')
     expect(unitClass('author')).toBe('names')
+    // (a bibliography's entry: its names the names', the rest the references', latex-front.mjs bibliography)
+    expect(unitClass({ kind: 'reference' })).toBe('references')
+    expect(unitClass(['refnames', 0, null, null, null, []])).toBe('names')
     // (a kind the table does not name is the body's; no kind, no class)
     expect(unitClass({ kind: 'list' })).toBe('body')
     expect(unitClass(null)).toBeNull()
     expect(unitClass({})).toBeNull()
     for (const cls of Object.values(UNIT_CLASS)) expect(CLASS_IDS).toContain(cls)
+  })
+
+  it('turns references and names on only where a reader\'s classes say so (stage 4: an entry\'s rest, its names, the author block)', () => {
+    expect(TOGGLE_DEFAULTS.references).toBe(false)
+    expect(TOGGLE_DEFAULTS.names).toBe(false)
+    expect([...classesOn(null)].sort()).toEqual(Object.keys(TOGGLE_DEFAULTS).filter(t => TOGGLE_DEFAULTS[t as keyof typeof TOGGLE_DEFAULTS]).sort())
+    // (a unit by its class: the body always, a cell under tables, an entry's rest under references, its names under names)
+    const on = classesOn({ references: true, tables: false })
+    expect(['para', 'cell', 'reference', 'refnames', 'author'].map(kind => unitShown({ kind }, on))).toEqual([true, false, true, false, false])
+    expect(['reference', 'refnames', 'author'].map(kind => unitShown({ kind }, classesOn({ names: true })))).toEqual([false, true, true])
+    expect(unitShown(null, on)).toBe(false)
   })
 
   it('shows a class translated under the toggles turned on', () => {
@@ -156,6 +170,23 @@ describe('ledgerOf', () => {
     const l = ledger([pg])
     expect(classAt(l, 1, at(pg, 'S'))).toBe('references')
     expect(classAt(l, 1, at(pg, 'T'))).toBe('orphan')
+  })
+
+  it('opens the references\' zone at a bibliography entry\'s start, a name before it or none: the text between entries is theirs, a unit after them ends it', () => {
+    // (REVTeX's bibliography, which no babel name opens: an entry, its label its names' own (own.mjs's u<id>.l), its names and rest
+    // owned, the style's own words after it; the next entry's alpha label no unit owns; then an appendix's paragraph and a line
+    // no unit owns)
+    const units = [{ kind: 'refnames' }, { kind: 'reference' }, { kind: 'refnames' }, { kind: 'para' }]
+    const pg = page(
+      { point: 'bs1' },
+      { glyphs: run('[Ab17]', 60, 700), owner: 'u0.l' }, { point: '0s' }, { glyphs: run('Bee.', 100, 700), owner: 'u0' }, { point: '0e' },
+      { point: '1s' }, { glyphs: run('Title.', 160, 700), owner: 'u1' }, { point: '1e' }, { glyphs: run('Online only', 100, 690) },
+      { glyphs: run('[Cd18]', 60, 680) }, { point: '2s' }, { glyphs: run('Dee.', 100, 680), owner: 'u2' }, { point: '2e' },
+      { point: '3s' }, { glyphs: run('Appendix text', 100, 600), owner: 'u3' }, { point: '3e' }, { glyphs: run('Wonder 1 (Main)', 100, 580) }, { point: 'be1' },
+    )
+    const l = ledger([pg], units)
+    expect(['A', 'B', 'T', 'O', 'C', 'D', 'p', 'W'].map(ch => classAt(l, 1, at(pg, ch)))).toEqual(['names', 'names', 'references', 'references', 'references', 'names', 'body', 'orphan'])
+    expect(l.counts.references.letters).toBe(['Title', 'Onlineonly', 'Cd'].join('').length)
   })
 
   it('reads a formula\'s line, a code line and a line of no word as never translated', () => {
