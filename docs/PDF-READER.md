@@ -2557,7 +2557,8 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   0.05 of the size across), at most `RUN_GAP` 0.6 of the size past the run's end; a run spelling a word (two letters together)
   in no math face is a unit, its text the glyphs' Unicode (NFKC), a space at a gap of `SPACE_GAP` 0.15 em. A number, a tick's
   label, a letter alone or a formula stays the original's; so does a run a glyph of which is not wholly inside the clip in force
-  (an included figure's viewport: pageInk's `clipped`; 1706.03762v7's cropped attention figures held two such titles).
+  (an included figure's viewport: pageInk's `clipped`; 1706.03762v7's cropped attention figures held two such titles) or inside
+  its page's box (a row's origin off its page is one no part's reader takes, `checkFigures`).
 - **Its place**, our glyphs' and nothing estimated: its first glyph's origin, its direction, its box's length along it, its band
   (its glyphs', at least `DRAW_BAND` [-0.15, 0.88] em: the line a CJK translation is drawn in). Its anchor is read from the
   figure's ink nearest it along its baseline within `ANCHOR_REACH` 1.5 em, a path by its segments (pageInk's `shapes`, a curve as
@@ -2590,7 +2591,8 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   baseline, turned by its angle (`layer2.mjs svgOfFigure`), by the fit rule (`layer-proto/figure-fit.mjs`): at its size, shrunk
   to its box's length where longer, to the rules' last floor (`floorMin`, 0.6) at most, its anchor's place kept; its group set
   OFF in render A. Left the original's: no row (`untranslated`), a translation that says its source again (`same`), no group in
-  the document (`unhidden`), a face's refusal, `unfit`. The run's `figures` lists each.
+  the document (`unhidden`), a face's refusal, `unfit`; a label of names (`kept`). The run's `figures` lists each. A page is
+  ready once its figures are painted, not while a face they wait for loads.
 - **The switch** is the reader's figure switch (the extension's `image.enabled`, the reading options' image switch, §9.1, which the HTML
   page's figure text shares; the policy table's default, `TOGGLE_DEFAULTS.figures`, on): `openLayer({ figures })`, the layer
   side's `figures` option and `setFigures(on)`, which opens the door again over the same composed document with every row held, so

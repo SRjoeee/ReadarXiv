@@ -20,8 +20,9 @@
 // run is a unit when it spells a word (two letters together) in a face that is no math face, every glyph of it a character a
 // reader can trust (UNREAD); its text the glyphs' Unicode (NFKC) with a space where two stand apart by SPACE_GAP of their size.
 // What it is not, a number, a tick's label, a letter alone, a formula's, stays the original's ink; so does a run a glyph of which
-// is not wholly inside the clip in force (an included figure's viewport cuts off what it does not show: pageInk's `clipped`). A font that gives no Unicode
-// a reader can trust leaves its unit the original's too, which the wrap tells from the font's own dict (remove.mjs unicodeOf).
+// is not wholly inside the clip in force (an included figure's viewport cuts off what it does not show: pageInk's `clipped`) or
+// inside its page's box. A font that gives no Unicode a reader can trust leaves its unit the original's too, which the wrap
+// tells from the font's own dict (remove.mjs unicodeOf).
 //
 // Each unit's place, in its own frame (its first glyph's origin, along its direction, up across it): its box from its first
 // glyph's start to its last glyph's end, its band from its descent to its ascent, at least DRAW_BAND (the line a translation is
@@ -152,6 +153,9 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
     }
     close()
     stats.runs += runs.length
+    // (the page's box, which clips what it draws as a clip path does: a run past it, in part, is not shown whole either)
+    const V = pg.view?.length === 4 ? [Math.min(pg.view[0], pg.view[2]), Math.min(pg.view[1], pg.view[3]), Math.max(pg.view[0], pg.view[2]), Math.max(pg.view[1], pg.view[3])] : null
+    const offPage = (x, y) => !!V && (x < V[0] || x > V[2] || y < V[1] || y > V[3])
     let onPage = 0
     for (const r of runs) {
       const gs = r.gs.filter(x => !x.blank)
@@ -159,8 +163,9 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       const text = textOf(r.gs, r.frame)
       if (!WORD.test(text.normalize('NFKC'))) continue
       if (gs.some(x => UNREAD.test(x.u)) || text.length > FIGURE_TEXT_MAX) continue
-      // (a run its clip cuts, whole or in part, is not shown whole: no text a translation could stand for)
-      if (r.clipped) { stats.clipped++; continue }
+      // (a run its clip cuts, or its page's edge, whole or in part, is not shown whole: no text a translation could stand for,
+      // and a row whose origin is off its page no part's reader takes, figure-rows.mjs checkFigures)
+      if (r.clipped || gs.some(x => offPage(x.ox, x.oy) || offPage(x.ex, x.ey))) { stats.clipped++; continue }
       if (onPage >= unitsPage || units.length >= unitsDoc) { stats.past++; continue }
       const f = r.frame, first = gs[0]
       const s0 = 0, s1 = Math.max(...gs.map(x => along(f, x.ex, x.ey)))

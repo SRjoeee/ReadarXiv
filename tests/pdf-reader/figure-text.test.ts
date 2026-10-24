@@ -162,6 +162,17 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
     expect(figureUnitsOf([{ ...pg, pictures: [] }] as never, null).units.map(u => u.text)).toEqual(['In Out'])
   })
 
+  it('a label past its page\'s edge is not shown whole: it stays the original\'s, counted with the clipped', () => {
+    const at = (view: number[]) => figureUnitsOf([{ ...word('label'), view }] as never, null)
+    expect(at([0, 0, 300, 300]).units.map(u => u.text)).toEqual(['label'])
+    // (the page's box starting inside its first letter, or ending inside its last, or below its baseline)
+    for (const view of [[102, 0, 300, 300], [0, 0, 120, 300], [0, 101, 300, 300]]) {
+      const r = at(view)
+      expect(r.units).toEqual([])
+      expect(r.stats.clipped).toBe(1)
+    }
+  })
+
   it('a glyph a unit owns, or one outside every figure, is no figure\'s', () => {
     const pg = word('label')
     expect(figureUnitsOf([{ ...pg, pictures: [] }] as never, null).units).toEqual([])

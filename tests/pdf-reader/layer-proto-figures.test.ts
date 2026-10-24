@@ -107,6 +107,28 @@ describe('the figures\' text drawn by the layer (run.mjs paintFigures)', () => {
     await run.until(1)
     expect(run.figures[0]).toMatchObject({ drawn: false, why: 'untranslated' })
   })
+
+  it('a page of figures alone is ready once its figures are painted, not while a face they wait for loads', async () => {
+    let release = () => {}
+    const held = new Promise<void>(r => { release = r })
+    const fonts = document.fonts as unknown as { load: (font: string, text: string) => Promise<unknown> }
+    const was = fonts.load
+    fonts.load = async (_font, text) => { if (text.includes('\u4fe1')) await held; return [] }
+    try {
+      // (the page's paragraph placed nowhere: no unit of the page's own to wait for)
+      const p = paper()
+      p.geometry.left.units = []
+      const run = await open({ hiding: hiding(true) }, p) as Run
+      const laid = run.until(1)
+      for (let i = 0; i < 30; i++) await new Promise(r => setTimeout(r, 0))
+      expect(run.svgOf(1).querySelector('[data-f]')).toBeNull()
+      expect(run.ready(1)).toBe(false)
+      release()
+      await laid
+      expect(run.ready(1)).toBe(true)
+      expect(run.svgOf(1).querySelector('[data-f="f0"]')?.textContent).toBe('\u4fe1\u53f7\u5f3a\u5ea6')
+    } finally { fonts.load = was }
+  })
 })
 
 describe('the fit rule (figure-fit.mjs)', () => {

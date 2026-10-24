@@ -1411,6 +1411,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // source, `unhidden` where the document holds no group of it, a face's refusal, `unfit`). A page whose figures are shown waits
   // for their rows as for its units' (figuresWait). `figures`: each figure unit of the pages laid, drawn or why not
   const figureRecs = []
+  /** each page's figures: 1 while painted (an await of their faces under way), 2 once painted; a page is ready at 2 alone */
   const figuresDone = new Uint8Array(N + 1)
   const figuresOn = pg => (hiding?.figuresShown ? hiding.figures?.(pg) ?? [] : [])
   const figuresWait = pg => !ended && figuresOn(pg).some(f => pending.has(f.id))
@@ -1455,6 +1456,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (Math.abs(f.uy) < 1e-6 && f.ux > 0) textRecord(r, opsFrom, f.group, undefined, [TL.nameSeg(drawn.text, x, fit.width, y, fit.size)])
       Object.assign(rec, { drawn: true, text, size: r1(fit.size), x: r1(x), y: r1(y), w: r1(fit.width) })
     }
+    figuresDone[pg] = 2
   }
 
   // the columns of each page, as its paragraphs' lines span them (each unit's lines as it is added, addUnits)
@@ -2845,7 +2847,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (readyAt[q]) return true
     if (!drawnPages[q] || failedPages.has(q) || undecided[q] || laid[q].length !== expected[q]) return false
     // (its figures painted, where it has figures shown)
-    if (!figuresDone[q] && figuresOn(q).length) return false
+    if (figuresDone[q] !== 2 && figuresOn(q).length) return false
     if (PASSES && expected[q]) {
       if (!passed[q]) return false
       for (const f of firstsOn[q] ?? []) if (!paintedOn[q]?.has(f)) return false
