@@ -41,7 +41,7 @@ export const CLASS_CODE = Object.freeze(Object.fromEntries(CLASS_IDS.map((id, i)
 export const UNIT_CLASS = Object.freeze({
   para: 'body', heading: 'body', abstract: 'body', caption: 'body', footnote: 'body', cell: 'tables', author: 'names', figure: 'figures',
   // (the ink units', layout/ink-units.mjs INK_KIND: their kind names their class)
-  inkheads: 'heads', inkcontents: 'contents', inknotes: 'notes', inkorphan: 'orphan', inkgenerated: 'generated',
+  inkheads: 'heads', inkcontents: 'contents', inknotes: 'notes', inkorphan: 'orphan', inknames: 'names', inkgenerated: 'generated',
 })
 /** a unit's class: of the front end's unit ({ kind }), of the bundle's ([kind, flags, …]) or of a kind; null for none */
 export function unitClass(u) {

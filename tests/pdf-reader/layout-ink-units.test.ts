@@ -49,6 +49,16 @@ describe('inkUnitsOf', () => {
     expect(ink[0]!.rows.unit).toEqual([2, 'inkheads', 9, 0, 1])
   })
 
+  it('makes a running head that repeats no source unit one translation: each page after the first echoes the first', () => {
+    const head = (n: number) => page({ glyphs: run('JOURNAL NAME, VOL. XX', 100, 760) }, { glyphs: run(String(n), 520, 760) }, { point: 'bs1' }, { glyphs: run('Body', 100, 600), owner: 'u1' }, { point: 'be1' })
+    const { ink } = unitsOf([head(1), head(2), head(3)], SOURCE)
+    expect(ink.map(u => [u.id, u.kind, textOf(u), u.echo])).toEqual([[2, 'inkheads', 'JOURNAL NAME, VOL. XX', null], [3, 'inkheads', 'JOURNAL NAME, VOL. XX', 2], [4, 'inkheads', 'JOURNAL NAME, VOL. XX', 2]])
+    expect(ink[1]!.pieces).toEqual(ink[0]!.pieces)
+    const units = inkBundleUnitsOf(ink as never), stands = new Uint8Array(5).fill(1, 0, 2)
+    units.forEach((u, i) => { if (unitStands(u, 2 + i, stands, { ink: true })) stands[2 + i] = 1 })
+    expect([...stands]).toEqual([1, 1, 1, 1, 1])
+  })
+
   it("makes a contents entry a unit up to its leaders, which stay the original's with its number and page, and echoes its heading's row", () => {
     const pg = page({ point: 'bs1' }, { point: 'n1.contents.e' }, { glyphs: run('1 Introduction . . . . . 3', 100, 700) }, { glyphs: run('2 Methods . . . . . 5', 100, 688) }, { point: 'be1' })
     const { ink } = unitsOf([pg], SOURCE)
@@ -78,6 +88,13 @@ describe('inkUnitsOf', () => {
     expect(ink[0]!.rows.frames).toEqual([1, 0, 0, 2, -1, ink[0]!.rows.frames[5]])
   })
 
+  it("keeps a web address in the text's face a placeholder: a note of an address alone is no unit", () => {
+    const notes = (text: string) => page({ point: 'bs1' }, { glyphs: run('Body', 100, 600), owner: 'u1' }, { point: 'be1' }, { glyphs: run(text, 100, 120, { size: 8 }) }, { glyphs: run('7', 300, 40) })
+    expect(unitsOf([notes('1https://github.com/tensorflow/tensor2tensor')], SOURCE).ink).toEqual([])
+    const { ink } = unitsOf([notes('2Code at https://example.org/x and data')], SOURCE)
+    expect(ink.map(u => [u.kind, textOf(u)])).toEqual([['inknotes', '2Code at ⟦·⟧ and data']])
+  })
+
   it('makes no unit of a line of no class it translates: math, code, a number, a figure, the bibliography', () => {
     const pg = page(
       { point: 'bs1' }, { glyphs: [...run('softmax', 100, 700), ...run('x', 140, 700, { font: 'CMMI10' }), ...run('=', 150, 700)] },
@@ -85,6 +102,13 @@ describe('inkUnitsOf', () => {
       { point: 'n2.ref.e' }, { glyphs: run('A. Author. A title. 2020.', 100, 640) }, { point: 'be1' },
     )
     expect(unitsOf([pg]).ink).toEqual([])
+  })
+
+  it("gives a block of an author unit's names the names toggle's kind, and leaves its affiliation the always translated", () => {
+    const authors = [{ kind: 'author', pieces: [{ t: 'text', s: 'Jose Agustin Lozano Torres and Axel de la Macorra' }] }]
+    const pg = page({ point: 'bs1' }, { para: 1 }, { glyphs: run('Jose Agustin Lozano Torres and Axel de la Macorra', 100, 740) }, { para: 2 }, { glyphs: run('Instituto de Fisica, Universidad Nacional', 100, 720) }, { point: 'be1' })
+    const { ink } = unitsOf([pg], authors)
+    expect(ink.map(u => [u.kind, u.cls, unitClass(u.kind)])).toEqual([['inknames', 'names', 'names'], ['inkorphan', 'orphan', 'orphan']])
   })
 
   it('claims its glyphs under its own groups, where no unit owns them, and the ledger counts no orphan left', () => {

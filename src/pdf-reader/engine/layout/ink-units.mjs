@@ -15,16 +15,20 @@
 //      a note, a paragraph); where the compile marked none, a list's line with the next where it ends in no page number (an
 //      entry continued), a note's or an orphan's while they follow;
 //   4. inside a unit, a run of a math face's glyphs or of a typewriter face's is a placeholder (`math`, `url`): its ink kept,
-//      its source the run's characters;
+//      its source the run's characters; a word that is a web address is one in whatever face (a note of an address alone
+//      is then no unit);
 //   5. echo: a unit whose letters (stream.mjs spellOf) and count of kept runs equal a source unit's letters and count of
 //      visible placeholders (a heading first, then a caption, then any) takes that unit's pieces, each visible placeholder
 //      placed by its kept run in turn, and is drawn with its row: the contents read as the headings they repeat, and no
-//      translation is made for them;
+//      translation is made for them; one that equals no source unit but an ink unit before it (a running head on every
+//      page) echoes that one;
 //   6. its rows as the layout maker writes a unit's (layout/make.mjs rowsOf): each line's box, baseline, size and face from its
 //      glyphs, its erase rectangles merged as there, its frames by page and column with the room below each, a placeholder's
 //      segments its glyphs' boxes, a head's line centred where TeX centred it on the page;
 //   7. what it owns: its text glyphs `u<id>`, its placeholders' `u<id>.p` (own.mjs's groups), claimed in the wrap
-//      (claimInk), every one a glyph no unit owned.
+//      (claimInk), every one a glyph no unit owned;
+//   8. a block of notes or orphans whose letters are mostly an author unit's words (NAMES_SHARE) is its names (`inknames`): of
+//      the names toggle, as the author block is, not always translated (REVTeX's names its marks do not own).
 // Pure arithmetic; an original module (no port statement).
 import { classifyFont } from '../layer-proto/fonts.mjs'
 import { utf8 } from '../translate/mt.mjs'
@@ -32,7 +36,9 @@ import { classOf } from './marks.mjs'
 import { spellOf } from './stream.mjs'
 
 /** the ledger's classes made units, and each one's kind (rules/content-classes.mjs UNIT_CLASS gives the class back) */
-export const INK_KIND = Object.freeze({ heads: 'inkheads', contents: 'inkcontents', notes: 'inknotes', orphan: 'inkorphan' })
+export const INK_KIND = Object.freeze({ heads: 'inkheads', contents: 'inkcontents', notes: 'inknotes', orphan: 'inkorphan', names: 'inknames' })
+/** a block of the names an author unit holds: this share of its letters, at least, in words of an author unit's (rule 8) */
+export const NAMES_SHARE = 0.6
 /** a block's next line: within this many of its size below the one before */
 export const BLOCK_DY = 1.75
 /** two glyphs one word: closer than this share of their size */
@@ -41,6 +47,8 @@ const WORD_GAP = 0.12
 const NUMBERING = /^\(?(?:\d{1,4}|[ivxlcdm]{1,6}|[IVXLCDM]{1,6}|[A-Z])(?:[.\-–](?:\d{1,4}|[A-Za-z]))*[.:)]?$/u
 /** a page number at a line's end: arabic or roman */
 const PAGE_NUMBER = /^(?:\d{1,4}|[ivxlcdm]{1,8})$/
+/** a word that is a web address, a note's mark before it or not */
+const URL_WORD = /(?:https?|ftp):\/\/|^\d{0,3}www\.[^\s.]+\.[a-z]/iu
 /** a leader: dots alone */
 const LEADER = /^[.·•…]+$/u
 /** a line's erase rectangles at most, merged where they meet (layout/make.mjs MERGE, ERASE_MAX) */
@@ -81,6 +89,8 @@ function wordsOf(G, gs, fams) {
     cur.gs.push(g); cur.text += x.u
     prev = g
   }
+  // (an address set in the text's face, \urlstyle{same}: a typewriter run as any, kept, rule 4)
+  for (const w of out) if (w.fam === 'text' && URL_WORD.test(w.text)) w.fam = 'mono'
   return out
 }
 
@@ -127,7 +137,7 @@ export function inkUnitsOf(pages, ledger, { units = null } = {}) {
   // each line of a class made units, its words trimmed (rule 2)
   const segs = []
   for (const L of ledger.lines ?? []) {
-    if (!Object.hasOwn(INK_KIND, L.cls)) continue
+    if (!Object.hasOwn(INK_KIND, L.cls) || L.cls === 'names') continue
     const G = pages[L.page - 1]?.glyphs ?? []
     const [words, ended] = trimmed(wordsOf(G, L.gs, fams), L.cls)
     if (!words.some(w => w.fam === 'text' && PAIR.test(w.text.normalize('NFKC')))) continue
@@ -141,13 +151,26 @@ export function inkUnitsOf(pages, ledger, { units = null } = {}) {
     // (by TeX's paragraphs where the compile marked them, ink.mjs `paras`: a block one paragraph, a contents entry one; else by the
     // lines' places, as before)
     const paras = prev && prev.para !== null && prev.para !== undefined && s.para !== null && s.para !== undefined
-    const joins = follows && s.cls !== 'heads' && (paras ? prev.para === s.para : s.cls === 'notes' || s.cls === 'orphan' || (s.cls === 'contents' && !prev.ended))
+    // (a paragraph with no point of its own reads as the one before: a contents line ending in its page number ends its entry
+    // whatever its point)
+    const joins = follows && s.cls !== 'heads' && (s.cls !== 'contents' || !prev.ended) && (paras ? prev.para === s.para : s.cls === 'notes' || s.cls === 'orphan' || s.cls === 'contents')
     if (joins) last.push(s)
     else groups.push([s])
   }
   const out = []
+  // (the ink units an ink unit may echo, by their letters: each one echoing none, rule 5)
+  const inkEchoOf = new Map()
+  // (the author units' words: a block whose letters are an author unit's names is that unit's, of the names toggle, rule 8)
+  const authorWords = new Set()
+  if (units) for (const u of units) if (u?.kind === 'author') for (const w of utf8(u.pieces.filter(p => p.t === 'text').map(p => p.s ?? '').join(' ')).split(/[^\p{L}]+/u)) { const s = spellOf(w); if (s.length >= 2) authorWords.add(s) }
+  const namesOf = lines => {
+    if (!authorWords.size) return false
+    let all = 0, named = 0
+    for (const l of lines) for (const w of l.words) if (w.fam === 'text') for (const part of w.text.split(/[^\p{L}]+/u)) { const s = spellOf(part); if (!s) continue; all += s.length; if (authorWords.has(s)) named += s.length }
+    return all > 0 && named >= NAMES_SHARE * all
+  }
   for (const lines of groups) {
-    const id = base + out.length, cls = lines[0].cls, page = lines[0].page, P = pages[page - 1]
+    const id = base + out.length, cls = (lines[0].cls === 'orphan' || lines[0].cls === 'notes') && namesOf(lines) ? 'names' : lines[0].cls, page = lines[0].page, P = pages[page - 1]
     const G = P.glyphs
     // pieces: text words joined, a run of math or typewriter words a placeholder (rule 4)
     const pieces = [], phs = []
@@ -178,14 +201,17 @@ export function inkUnitsOf(pages, ledger, { units = null } = {}) {
     // echo (rule 5): its letters and its placeholders' count a source unit's; its pieces then that unit's, each visible placeholder
     // of it placed by the ink unit's kept run in its turn
     let echo = null, own = pieces, kept = phs
-    const e = units ? echoOf.get(`${spellOf(plain)}#${phs.length}`) : undefined
-    if (e !== undefined) {
-      echo = e
-      own = units[e].pieces.map(p => ({ ...p }))
+    const spell = spellOf(plain), key = `${spell}#${phs.length}`
+    const e = units ? echoOf.get(key) : undefined
+    const before = e === undefined && spell.length >= 4 ? inkEchoOf.get(key) : undefined
+    if (e !== undefined || before !== undefined) {
+      echo = e ?? out[before].id
+      own = (e !== undefined ? units[e].pieces : out[before].pieces).map(p => ({ ...p }))
       const visible = own.flatMap((p, k) => (p.t === 'ph' && classOf(p) !== null ? [k] : []))
       kept = phs.map((p, j) => ({ ...p, k: visible[j] }))
     }
     const textGlyphs = lines.flatMap(l => l.words.filter(w => w.fam === 'text').flatMap(w => w.gs.map(g => [l.page, g])))
+    if (echo === null && spell.length >= 4 && !inkEchoOf.has(key)) inkEchoOf.set(key, out.length)
     out.push({ id, kind: INK_KIND[cls], cls, echo, pieces: own, glyphs: { text: textGlyphs, ph: kept.flatMap(p => p.gs) }, rows: rowsOf(id, INK_KIND[cls], cls, lines, kept, own.length, pages) })
   }
   return out
