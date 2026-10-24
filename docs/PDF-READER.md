@@ -1959,6 +1959,33 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   word, reached the next cell's word (`reachIn`, LAYOUT 14), its end mark's word was the paragraph's, and the cell took the
   paragraph's eighth line (`lineTaken`). A start mark on a turned token's box now reaches none (`turnedAt`): the cell stays
   the original's, as the maker never lays a turned run, and the paragraph is laid as production lays it.
+- **The pin's sweep, LAYOUT 19** (2026-10-24: 133 units newly English against the staging of LAYOUT 16, the maker's share of
+  them bisected over the merges between): three causes, each one rule.
+  - *A start mark takes the word it stands before* (`pipeline/anchors.mjs` `tokenAtMark`). A mark carries the word it stands at
+    in the marked original, and is placed on our base page only where the base page has that word there. The marked original
+    is read in one text item a line, its width shared by its characters, so that a word's box is approximate; the wrap
+    (#444) cuts our base page's items at its groups, whose boxes are then exact. A caption's start mark after its label
+    ("Figure 1: Attention") was nearer the label's "1" in the one and on "attention" in the other: 24 units of 11 papers
+    (`unplacedMarks`). A start mark now takes the nearest word it does not stand past, the word it stands past only where
+    there is no other; with no slack past a word's end: half a character of slack took a label's narrow digit for the first
+    word in three units (2610.22214's "9", 1.4 pt short of the mark). An end mark keeps its rule, the last word that begins
+    before it: a rule that took the last word ending before the mark took the word before it wherever the last word's shared
+    box overruns the mark (2610.10069's "given by|", 9.8 pt; 5 units lost in the 18 papers' run). Where the next word's shared
+    box begins before the end mark (2610.20716's "model| the", 2610.20581's "Theorem| 2.2"), the carried word is the one
+    beside the base page's on the side the mark faces, and the unit is bounded by the base page's word (`wordAt`: one word
+    over, never two); the start side the same, before its mark. The shared width itself (the tokenizer's) is left as it is.
+  - *A front matter unit's placeholders keep their marks* (`layout/marks.mjs` `layoutMarking`). \axtpma takes itself off in a
+    moving argument, as a copy written to a list must; a \thanks stores its text with \protected@xdef and sets it in its note,
+    so its placeholders' marks were gone and their ink LOST (5 notes' addresses, `\texttt`, `\href`). The marks of a front
+    unit (`frontMarks`, LAYOUT 17) have `\protect` before them. And `\protect` is a prefix of the next token alone
+    (`rules/tex-kernel.mjs` `PREFIX_WORDS`): the piece after it is marked as one with it, its opening mark before the prefix,
+    where before it had none (`\protect\url` in IEEEtran's notes).
+  - *The wrap holds a decoded stream as bytes of its own* (`layout/remove.mjs` `readAtMost`). The object layer's decoding stream
+    grows its buffer by 64 KB chunks and doubles it; its view held the whole buffer, and the decoded streams' cache, counted by
+    the views' lengths, held it for every stream. 2610.21924's page 9 paints 3,128 forms (a plot's markers): the wrap of our
+    final pass in the maker child held 960 MB, the maker died of its memory (`prlimit --data` 1,024 MiB), and the host's re-cut
+    gave every part no layout. The cache now counts the bytes it holds. A part cut again after the maker died says so
+    (`page-pass.mjs` `layoutRecordOf`: `memory`, `clock`, `crashed`), not that the maker refused the paper.
 - **A unit the layer leaves the original's says why** (read time, no stored artefact, no version token): each `skipped` record
   of the run (`layer-proto/run.mjs`) carries a `code` of `SKIP_CODES` beside its `why`: `unlocated` (the file holds no row of
   it, and the file's own reason beside it, `unlaid`), `pieces`, `noRow`, `lost` (a visible piece the file has no position

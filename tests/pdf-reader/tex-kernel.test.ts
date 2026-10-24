@@ -63,8 +63,10 @@ describe('the maker: a placeholder after an ink-free control sequence keeps its 
   })
   it('guard: a paper\'s macro, which may look ahead, still takes the marks of the piece after it', () => {
     expect(marked([text('see '), ph('\\bert'), text(' '), ph('\\ref{x}'), text(' for it')])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\bert', 'text', 'ph \\ref{x}', 'text'])
-    // \xspace and a prefix look ahead too
-    expect(marked([text('see '), ph('\\protect'), ph('\\ref{x}'), text(' now')])).toEqual(['text', 'ph \\protect', 'ph \\ref{x}', 'text'])
+    // \protect is a prefix of the next token alone (PREFIX_WORDS): the pair is marked as one, its opening mark before the prefix
+    expect(marked([text('see '), ph('\\protect'), ph('\\ref{x}'), text(' now')])).toEqual(['text', 'ph \\axtpma{p0.2a}', 'ph \\protect', 'ph \\ref{x}', 'ph \\axtpm{p0.2b}', 'text'])
+    // and after a macro that looks ahead the pair is not marked: the macro's look ahead is the pair's
+    expect(marked([text('see '), ph('\\bert'), ph('\\protect'), ph('\\ref{x}'), text(' now')])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\bert', 'ph \\protect', 'ph \\ref{x}', 'text'])
     // and a kernel macro that starts with \@ is a macro, not the symbol
     expect(marked([text('see '), ph('\\@ifnextchar'), text(' '), ph('\\ref{x}'), text(' now')])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\@ifnextchar', 'text', 'ph \\ref{x}', 'text'])
   })

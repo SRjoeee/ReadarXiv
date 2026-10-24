@@ -6,6 +6,8 @@ export declare function lex(bytes: Uint8Array, limit?: number, keep?: ReadonlySe
 export declare class LexLimit extends Error { limit: number }
 /** decode's refusal of a stream decoding to more than it was allowed */
 export declare class DecodeLimit extends Error { limit: number }
+/** a decoding stream's bytes (PDF.js's DecodeStream, as the object layer ports it) no further than `limit`, as bytes of their own */
+export declare function readAtMost(stream: { getBytes(n?: number): Uint8Array; reset(): void }, limit: number): Uint8Array
 /** the heap a lexed token, and a recorded event, is held in, by its kind */
 export declare const COST: Readonly<Record<'op' | 'num' | 'name' | 'str' | 'mark' | 'kw' | 'atom' | 'event' | 'code', number>>
 /** what a page's walk may hold: its streams' operators and its events by COST, each stream lexed once, and their decoded bytes */

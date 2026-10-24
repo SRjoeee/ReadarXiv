@@ -153,6 +153,13 @@ describe.skipIf(!docker)('the marked original sets every text item where the pap
     // (the names' unit, which \\maketitle sets in a table's cell, and each note, which \\thanks keeps for the foot of the page)
     expect([r.unitMarksOf('Ada Lovelace'), r.unitMarksOf('Analytical Engine'), r.unitMarksOf('Difference Engine')]).toEqual(['se', 'se', 'se'])
   }, 900_000)
+  it('a \\thanks\'s placeholders, robust (\\protect\\axtpma) through its \\protected@xdef, and \\protect\\url marked before its prefix, under hyperref (2610.20484, 2610.11256, 2610.21880)', async () => {
+    const r = await compare(`\\documentclass{article}\n\\usepackage{hyperref}\n\\title{Counting Paths}\n\\author{Ada Lovelace\\thanks{Corresponding author: \\texttt{ada@x.org}, or \\protect\\url{c@d.org}. Email: \\href{mailto:e@f.org}{e@f.org}.}}\n\\date{}\n\\begin{document}\n\\maketitle\n${lines('a word')}\n\\end{document}\n`)
+    expect(r.marked).toEqual(r.own)
+    // (the note's own marks, and each placeholder's: \\texttt's and \\url's both, \\href's text its opening one)
+    expect(r.unitMarksOf('Corresponding author')).toBe('se')
+    expect([r.marksOf('\\texttt{ada@x.org}'), r.marksOf('\\url{c@d.org}'), r.marksOf('e@f.org')?.includes('a')]).toEqual(['ab', 'ab', true])
+  }, 900_000)
   it('a unit that ends inside \\emph{...} on a centred line (2610.21880\'s IEEEtran author block): its end mark keeps the italic correction \\emph adds after its group', async () => {
     const r = await compare(`\\documentclass[conference]{IEEEtran}\n\\begin{document}\n\\title{A Title}\n\\author{Sohani Hiam, Mohammad Soleymani, \\emph{Senior Member, IEEE}, \\\\and Rafael F. Schaefer, \\emph{Senior Member, IEEE}\n \\\\ \n\\thanks{This work was supported.}}\n\\maketitle\n\\begin{center}\nA centred paragraph of Rafael F. Schaefer, \\emph{Senior Member, IEEE}\n\\end{center}\n\\end{document}\n`)
     expect(r.marked).toEqual(r.own)

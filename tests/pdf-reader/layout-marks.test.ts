@@ -170,11 +170,17 @@ describe('layoutMarking', () => {
       for (const o of opening) expect(o.index >= at || o.index + o[0].length === at, `${i}: ${out}`).toBe(true)
     }
   })
-  it('marks nothing a prefix command applies to: \\protect\\eqref keeps its \\protect', () => {
-    // a mark between them would take the \\protect, and be written as itself to a file (2608.23586's list of figures)
+  it('marks nothing between a prefix and the command it applies to: \\protect\\eqref is marked as one, before its \\protect', () => {
+    // a mark between them would take the \\protect, and be written as itself to a file (2608.23586's list of figures); before
+    // the pair it is the pair's (rules/tex-kernel.mjs PREFIX_WORDS)
     const { units: marked } = layoutMarking([unit('para', [text('A (Eq.~'), ph('\\protect'), ph('\\eqref{e}'), text(') and '), ph('\\noexpand'), text(' '), ph('$x$'), text(' then '), ph('$y$')])], MARK_CLASSES, { lines: false })
     // (\\noexpand itself is a paper's macro to the classes, marked before it as any)
-    expect(srcs(marked[0])).toEqual(['text', 'ph \\protect', 'ph \\eqref{e}', 'text', 'ph \\axtpma{p0.4a}', 'ph \\noexpand', 'text', 'ph $x$', 'text', 'ph \\axtpmm{p0.8a}', 'ph $y$', 'ph \\axtpm{p0.8b}'])
+    expect(srcs(marked[0])).toEqual(['text', 'ph \\axtpma{p0.2a}', 'ph \\protect', 'ph \\eqref{e}', 'ph \\axtpm{p0.2b}', 'text', 'ph \\axtpma{p0.4a}', 'ph \\noexpand', 'text', 'ph $x$', 'text', 'ph \\axtpmm{p0.8a}', 'ph $y$', 'ph \\axtpm{p0.8b}'])
+  })
+  it('marks no macro inside a word behind a prefix either: Giessenbachstra\\protect\\ss e', () => {
+    // (the word before the prefix is the macro's neighbour: \\protect is transparent, and the guard looks past it as the marks do)
+    const { units: marked } = layoutMarking([unit('para', [text('In Giessenbachstra'), ph('\\protect'), ph('\\ss'), text(' e, the end')])], MARK_CLASSES, { lines: false })
+    expect(srcs(marked[0])).toEqual(['text', 'ph \\protect', 'ph \\ss', 'text'])
   })
   it('marks no macro inside a word', () => {
     // a letter command or an accent glued to the word's letters (Giessenbachstra\\ss e, 2608.15334): a mark there would

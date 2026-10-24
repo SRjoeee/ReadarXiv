@@ -9,3 +9,5 @@ export declare const BREAK_HINTS: readonly string[]
 export declare const INK_FREE_LEAD: string
 /** whether a placeholder's whole source is one entry of INK_FREE_SYMBOLS or INK_FREE_WORDS, alone or before an empty group */
 export declare function inkFree(src: string | undefined | null): boolean
+export declare const PREFIX_WORDS: readonly ['protect']
+export declare function prefixWord(src: string | undefined | null): boolean

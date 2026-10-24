@@ -934,7 +934,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const { units: copies } = layoutMarking(units, marks.marking.classes, { lines: false, switches: marks.marking.switches, inkless: marks.marking.inkless, complete: marks.marking.complete, apart: marks.marking.apart })
     copies.forEach((c, i) => {
       for (const p of c.pieces) {
-        const m = p.t === 'ph' && /^\\axtpm[am]?\{[pn](\d+)\.(\d+)([ab])\}$/.exec(p.src ?? '')
+        // (a front matter unit's marks robust: \protect before each, marks.mjs layoutMarking)
+        const m = p.t === 'ph' && /^(?:\\protect)?\\axtpm[am]?\{[pn](\d+)\.(\d+)([ab])\}$/.exec(p.src ?? '')
         if (!m || Number(m[1]) !== i) continue
         const key = `${i}.${m[2]}`, d = design.get(key) ?? design.set(key, { open: false, close: false }).get(key)
         if (m[3] === 'a') d.open = true; else d.close = true

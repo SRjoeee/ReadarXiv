@@ -16,7 +16,7 @@
 import { frontMarks, lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
 import { textless } from '../rules/arg-roles.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
-import { INK_FREE_LEAD } from '../rules/tex-kernel.mjs'
+import { INK_FREE_LEAD, prefixWord } from '../rules/tex-kernel.mjs'
 import { tokenAtMark, tokenizeDocument } from '../pipeline/anchors.mjs'
 import { DISPLAY, plainTranslated } from '../translate/mt.mjs'
 import { readLines } from '../pipeline/typeset/tex.mjs'
@@ -1060,14 +1060,24 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
   const copyOf = new Map(units.map((u, i) => [u, copies[i]]))
   units.forEach((u, i) => {
     const passed = own(u) ? passedOver(u.pieces) : null
-    let last = null, gap = false
+    // (a front matter unit's marks robust: a class may store its text with \protected@xdef before it sets it — \thanks, whose
+    // note the title sets —, where \axtpma, which a moving argument's copy must not carry, takes its argument off; with
+    // \protect before it, it is stored as it is and set where the note is: 2610.20484's \texttt and 2610.11256's \href in a
+    // \thanks were LOST, their marks gone)
+    const lead = front(u) ? '\\protect' : ''
+    let last = null, gap = false, beforePrefix = null, gapBefore = false
     /** the groups open at a piece, innermost last: whether each is, or is inside, an argument read verbatim */
     const verbatim = []
-    copies[i].pieces = u.pieces.flatMap((p, k) => {
+    const out = u.pieces.map((p, k) => {
       const piece = p.t === 'nested' ? { ...p, unit: copyOf.get(p.unit) ?? p.unit } : p
-      // (`spaced`: white space alone between the piece before and this one)
-      const after = last, spaced = gap
-      if (p.t !== 'text' || /[^ \t\r\n]/.test(p.s)) { last = p; gap = false } else gap = true
+      // (`spaced`: white space alone between the piece before and this one; after a prefix (PREFIX_WORDS: \protect), the piece
+      // before the prefix's, the pair one command whose marks stand before the prefix)
+      const prefixed = k > 0 && prefixWord(u.pieces[k - 1].t === 'ph' ? u.pieces[k - 1].src : null)
+      const after = prefixed ? beforePrefix : last, spaced = prefixed ? gapBefore : gap
+      if (p.t !== 'text' || /[^ \t\r\n]/.test(p.s)) {
+        if (p.t === 'ph' && prefixWord(p.src)) { beforePrefix = last; gapBefore = gap }
+        last = p; gap = false
+      } else gap = true
       if (p.t === 'open') verbatim.push(verbatim.at(-1) === true || VERBATIM_ARG.test(p.src ?? ''))
       else if (p.t === 'close') verbatim.pop()
       if (verbatim.at(-1) === true) return [piece]
@@ -1079,7 +1089,8 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       // part the word's hyphenation and kerns — but not one whose box TeX began with a node apart from it (`apart`: a kern, glue,
       // a colour), which no kern or ligature of the letters before it reaches and their hyphenation ends at (`0.58\\pp`, \\pp
       // `\\,pp`)
-      const before = u.pieces[k - 1], next = u.pieces[k + 1]
+      // (the piece before a prefix's, past it: the pair is one command, glued to the word before it as the command alone would be)
+      const before = u.pieces[prefixed ? k - 2 : k - 1], next = u.pieces[k + 1]
       if (cls === 'macro' && before?.t === 'text' && WORD_END.test(before.s) && !parted.has(p.src)) return [piece]
       // (a complete call keeps its opening mark whatever TeX answered for what follows, as any macro of the paper's has it: the
       // answer is the closing mark's and the next piece's alone. A call that ends in a control word is answered '2' before a word,
@@ -1090,14 +1101,21 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       if (said === '2') return [piece]
       const name = `${cls === 'footnote' ? 'n' : 'p'}${i}.${k}`
       // (an inline formula's opening mark is set on the empty list too: \axtpmm, LAYOUT_TEX)
-      const open = { t: 'ph', src: `\\${cls === 'math' ? 'axtpmm' : 'axtpma'}{${name}a}` }
+      const open = { t: 'ph', src: `${lead}\\${cls === 'math' ? 'axtpmm' : 'axtpma'}{${name}a}` }
       // a complete call's closing mark, where TeX answered for what follows (`said`), only before white space or punctuation, or at
       // the unit's end: before a letter or a digit it would stand inside a word (`\\tf{}s`: TeX would break Transform-ers no
       // more), before another piece against that piece's first character
       const closes = !answered(p) || next === undefined || (next.t === 'text' && /^[ \t\r\n.,;:!?]/.test(next.s)) || gluedTo(p, next)
       if (said === '1' || !closes || (looks(p) && !(cls === 'footnote' && said === '0')) || ENDS_IN_CS.test(p.src) || /\s$/.test(p.src) || ENDS_ENV.test(p.src)) return [open, piece]
-      return [open, piece, { t: 'ph', src: `\\axtpm{${name}b}` }]
+      return [open, piece, { t: 'ph', src: `${lead}\\axtpm{${name}b}` }]
     })
+    // (a prefixed piece's opening mark before its prefix)
+    for (let k = 1; k < out.length; k++) {
+      if (!prefixWord(u.pieces[k - 1].t === 'ph' ? u.pieces[k - 1].src : null) || out[k - 1].length !== 1 || out[k].length < 2 || out[k][0] === u.pieces[k]) continue
+      out[k - 1] = [out[k][0], ...out[k - 1]]
+      out[k] = out[k].slice(1)
+    }
+    copies[i].pieces = out.flat()
   })
   const at = new Map([...index, ...copies.map((c, i) => [c, i])])
   return { units: copies, mark: u => (at.has(u) ? own(units[at.get(u)]) : null) }

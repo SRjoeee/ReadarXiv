@@ -79,8 +79,15 @@ export { LayoutRefusal } from './json.mjs'
  *  paragraph reached the next cell's word, took the paragraph's line and left the paragraph unlaid, as no maker before 14
  *  did; and why each unit not laid is the original's, a code of UNLAID a unit (`unlaid`, a key held only where a unit is
  *  not laid, as `colours`: every file of before reads and writes back unchanged; a part holds those of the units it tells),
- *  so that no unit is left out of the file without its reason (the file's schema is 5 still) */
-export const LAYOUT = '18'
+ *  so that no unit is left out of the file without its reason (the file's schema is 5 still); 19 (the pin's sweep, 2026-10-24):
+ *  a start mark takes the nearest word it does not stand past (pipeline/anchors.mjs tokenAtMark), so that the word it carries
+ *  from the marked original, read in one text item a line, is the word our wrapped base page, read in items cut at its groups,
+ *  has there (24 units of 11 papers, a caption's or a paragraph's start after its label, were unplaced); a front matter
+ *  unit's placeholder marks are robust (`\\protect` before each: a \\thanks's \\protected@xdef took them off) and a piece after
+ *  `\\protect` is marked before the prefix (rules/tex-kernel.mjs PREFIX_WORDS), so that its ink is its own (5 notes' addresses
+ *  were LOST); and the wrap's decoded streams are held as bytes of their own (layout/remove.mjs readAtMost: 2610.21924's maker
+ *  died of its memory) (the file's schema is 5 still; MARKS_SCHEMA 9 still) */
+export const LAYOUT = '19'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,
