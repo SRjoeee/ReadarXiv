@@ -119,6 +119,23 @@ Rie~Kubota Ando and Tong Zhang. 2005.
   })
 })
 
+describe('plainnat\'s \\penalty0 between a volume, its issue and its pages', () => {
+  // (TeX reads the penalty's number and stops at the line's end: the next line's digits are text, the pages' (2609.26457v1's
+  // 15 entries the wrap left the original's, their ink spelling no source)
+  const entry = '\\begin{thebibliography}{1}\n\\bibitem[Audibert et~al.(2009)]{a}\nJ.-Y. Audibert and R.~Munos.\n\\newblock Exploration tradeoff.\n\\newblock \\emph{Theoretical Computer Science}, 410\\penalty0 (19):\\penalty0\n  1876--1902, 2009.\n\\end{thebibliography}'
+  it('reads the digits after a \\penalty0 at a line\'s end as the text\'s, each number its own placeholder', () => {
+    const p = open({ 'main.tex': doc(`Bandits \\citep{a}.\n\n${entry}`, '\\usepackage{natbib}') })
+    const ref = bib(p).find(u => u.kind === 'reference')!
+    expect(ref.pieces.filter(x => x.t === 'ph').map(x => [x.src, classOf(x as never)])).toEqual([
+      ['\\newblock', null], ['\\newblock', null], ['410', 'number'], ['\\penalty0 ', null], ['(19):', 'number'], ['\\penalty0\n  ', null], ['1876--1902,', 'number'], ['2009.', 'number'],
+    ])
+  })
+  it('and so in the body: a penalty\'s number ends where TeX ends it', () => {
+    const p = open({ 'main.tex': doc('Some words\\penalty0\n  12 apples are many.') })
+    expect(plainSource(units(p)[0] as never)).toContain('12 apples')
+  })
+})
+
 describe('a bibliography biblatex sets from biber\'s data (\\printbibliography)', () => {
   // (biber's .bbl holds the entries' fields, no text TeX sets as it stands: \\printbibliography sets each entry from them)
   const BIBER = `% $ biblatex auxiliary file $

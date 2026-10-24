@@ -312,10 +312,12 @@ const tokenEnd = (s, k) => {
   return j + 1
 }
 // TeX's number and dimension: a sign, digits or a register, a unit; glue with its plus and minus; a box's specification,
-// `to` or `spread` before its dimension (\\hbox to 2cm{…}, \\vbox spread 1em{…})
+// `to` or `spread` before its dimension (\\hbox to 2cm{…}, \\vbox spread 1em{…}). Digits after a space are no part of a
+// number TeX has read: `\\penalty0` at a line's end, the next line's `1876--1902` the text's (natbib's bibliographies, between
+// a volume, its issue and its pages; read as the penalty's, its digits were no text and the entry's ink spelled no source)
 const UNIT = String.raw`(?:true\s*)?(?:pt|em|ex|cm|mm|in|bp|sp|pc|dd|cc|mu|px|fill?l?)(?![A-Za-z])`
 const FACTOR = String.raw`[-+\s]*(?:\d+(?:[.,]\d*)?|[.,]\d+)?\s*`
-const QUANTITY = String.raw`${FACTOR}(?:${UNIT}|\\[A-Za-z@]+(?:\s*\d+)?|\d*)`
+const QUANTITY = String.raw`${FACTOR}(?:${UNIT}|\\[A-Za-z@]+(?:\s*\d+)?)?`
 const TEX_VALUE = new RegExp(String.raw`^\s*=?\s*(?:(?:to|spread)(?![A-Za-z])\s*)?(?:${QUANTITY})(?:\s*(?:plus|minus)\s*${QUANTITY})*`)
 /**
  * The arguments of a command whose parameters the table knows, at s[i] just after its name: each { shape, role, param,

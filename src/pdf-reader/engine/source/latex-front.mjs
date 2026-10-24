@@ -1768,8 +1768,9 @@ function namesEnd(s, a, z, cmds) {
 /** a token of an entry's text that is a number and no word — a year, pages, a volume and its issue: "1994.", "157--166,",
  *  "5(2):157--166", a DOI written out — a digit in it, no letter, white space or a piece that sets none on either side */
 const NUMBER_TOKEN = /[^\s\p{L}]*\d[^\s\p{L}]*/gu
-/** a piece beside which a token stands apart: none (the unit's edge), a group's open or close, a tie or a space of TeX's */
-const APART = p => !p || p.t === 'open' || p.t === 'close' || (p.t === 'ph' && /^(?:~|\\[ ,;:!]|\\(?:newblock|quad|qquad|enspace|thinspace|space)(?![A-Za-z@]))/.test(p.src ?? ''))
+/** a piece beside which a token stands apart: none (the unit's edge), a group's open or close, a tie, a space of TeX's or a
+ *  penalty, a kern or glue of its own (natbib's `\\penalty0` between a volume, its issue and its pages) */
+const APART = p => !p || p.t === 'open' || p.t === 'close' || (p.t === 'ph' && /^(?:~|\\[ ,;:!]|\\(?:newblock|quad|qquad|enspace|thinspace|space|penalty|allowbreak|nobreak|hskip|kern)(?![A-Za-z@]))/.test(p.src ?? ''))
 /**
  * An entry's numbers, each a placeholder: what the original's ink keeps (the owner, 2026-10-25: labels, numbers, years, DOIs,
  * web addresses and formulas stay the original's ink), each token of a text piece of the paper's own bytes (none an accent's

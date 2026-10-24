@@ -178,6 +178,8 @@ for (const arg of process.argv.slice(2).filter(a => !a.startsWith('--'))) {
           const by = {}
           for (const [u, why] of w.unhidden ?? []) { const k = `${paper.units[u]?.kind}:${String(why).split(':')[0]}`; by[k] = (by[k] ?? 0) + 1 }
           row.unhidden = by
+          // (the entries the wrap left the original's, their text: a local look alone, never a record's)
+          if (process.env.GATE_SHOW_UNHIDDEN === '1') for (const [u, why] of w.unhidden ?? []) if (BIB.has(paper.units[u]?.kind)) console.error(JSON.stringify([id, u, why, plainSource(paper.units[u]).slice(0, 300)]))
           row.ledger = Object.fromEntries(Object.entries(w.ledger?.classes ?? {}).filter(([c]) => ['body', 'references', 'names', 'orphan'].includes(c)).map(([c, v]) => [c, v[1]]))
           row.orphanLetters = w.ledger?.orphanLetters ?? null
           const g1 = []
