@@ -7,27 +7,31 @@ antialiasing within the ocg gate's allowance), G3f (hiding the figures changes p
 band loses its ink: no double ink), O (each band then one colour: nothing a translation drawn there could cover). Counts and ids
 only.
 
-## Run of 2026-10-25 (engine `feat/figure-text` on `next` 499d1dfb)
+## Run of 2026-10-25, the pack 09208b43 (engine `feat/figure-text` on `next` 1cdca756)
 
-**The gate pack's 7 bases** (fx-next, made 2026-10-24 under LAYOUT 20: their TikZ pictures carry no points, so only the included
-PDFs' text is read; their sources, the marking's texts):
+**The gate pack's 7 bases** (the pack `09208b43`, LAYOUT 21: #473's `093304a2` with 1810.04805v2's seven base pages and records
+made again by this engine, `layer-fixtures.mjs --offline`, its pgfplots axis now between its points; its layout files and
+translations byte for byte the same; their sources, the marking's texts):
 
 | Paper | Units | Drawn | Crowded | Forms written again | Letters | G1 | G3f | D | O |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | 1512.03385v1 | 181 | 166 | 15 | 7 | 968 | 0 | 0 | 0 | 0 |
 | 1706.03762v7 | 240 | 169 | 71 | 5 | 1,006 | 0 | 0 | 0 | 0 |
-| 1810.04805v2 | 138 | 115 | 23 | 4 | 654 | 0 | 0 | 0 | 0 |
+| 1810.04805v2 | 146 | 119 | 27 | 4 | 729 | 0 | 0 | 0 | 0 |
 | 2307.16209v1 | 56 | 56 | 0 | 26 | 116 | 0 | 0 | 0 | 0 |
 | 2608.04322v1 | 237 | 180 | 57 | 8 | 1,861 | 0 | 0 | 0 | 0 |
 | 2608.16117v1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
 | 2609.26457v1 | 170 | 156 | 14 | 10 | 1,826 | 0 | 0 | 0 | 0 |
-| **Pack** | **1,022** | **842** | **180** | **60** | **6,431** | **0** | **0** | **0** | **0** |
+| **Pack** | **1,030** | **846** | **184** | **60** | **6,506** | **0** | **0** | **0** | **0** |
 
 No unit of a font of no Unicode, of a form shared or past a page's bounds. (A unit's room is read against what may meet its band
 on the page alone: a box apart from it there is no ink of its room, so a turned label is no longer crowded by a long rule a page
 box's extent in its frame reached over, 2609.26457v1's "AIRA*" at 30 degrees.) 13 pixels of G1 lie in split shows (1512.03385v1 p4,
 2609.26457v1), each within Δ 16. Before the clip rule two titles of 1706.03762v7's cropped attention figures (its viewport cuts
-them off: nothing is shown there) were cut into units and failed D; they are now left out (`clipped`).
+them off: nothing is shown there) were cut into units and failed D; they are now left out (`clipped`). On the bases before
+(LAYOUT 20, no points in a TikZ picture) the pack held 1,022 units, 842 drawn: the 8 units, 4 drawn, it gains are
+1810.04805v2's TikZ text. The ink units of #471 are the same with the figure units and without them on every paper (the
+figures' glyphs are the ledger's `figures`, never an ink unit's), and the ocg gate's proofs are as before.
 
 **The 25-paper set** (the release sweep's papers with sources in `lab/pdf/data/layout`), made again under LAYOUT 21 by
 `figure-final.mjs` (the pinned TL2025 image; 23 of 25: 2610.20595v1 needs TeX Live 2023, 2610.21765v1 is a `latex` paper the

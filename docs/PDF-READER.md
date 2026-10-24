@@ -2677,8 +2677,8 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   page's figures in it are `shared`, the original's, and its render shows the form's groups ON, since each render sets the
   visibility of its own page's drawn groups alone (visibility.mjs).
 - **Measured** (2026-10-25, `lab/pdf/spikes/figure-gate.mjs`, record `lab/pdf/records/figure-gate.md`): on the gate pack's 7
-  bases (made before LAYOUT 21: their TikZ text has no points, their included PDFs' text is read), 842 of 1,022 figure units
-  drawn, 180 crowded, 60 forms written again; on 23 of the 25-paper set compiled again under LAYOUT 21
+  bases (the pack `09208b43`, LAYOUT 21: 1810.04805v2's pgfplots axis between its points), 846 of 1,030 figure units drawn, 184
+  crowded, 60 forms written again; on 23 of the 25-paper set compiled again under LAYOUT 21
   (`lab/pdf/spikes/figure-final.mjs`; five of them TikZ or pgfplots papers), 1,216 of 1,469 drawn, 253 crowded, 99 forms; none
   of a font of no Unicode on either. Every group shown is the page wrapped without the figures (G1, 13 pixels of split shows
   within the ocg gate's allowance), hiding the figures changes pixels inside their own bands alone (G3f 0), every drawn band
