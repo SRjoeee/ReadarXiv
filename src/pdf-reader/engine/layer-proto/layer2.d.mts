@@ -109,6 +109,9 @@ export interface Prepared extends Map<number, Resolved> {
   /** the alignment: the unit's base style and its colour pieces' colours measured on its matched glyphs (measuredStyle; `st`
    *  null where the unit carries no source pieces, its colour then told only where every glyph whose fill is told holds one) */
   measured?: { st: { bold: boolean; italic: boolean; caps: boolean; fam: string; design?: string } | null; fill: number | null; pieces: Map<number, number> } | null
+  /** the alignment: the share of the size its faked small capitals are set at, of its capitals' (smallCapsOf's `ratio`, to the
+   *  hundredth), where it has any: what the layer draws its own small capitals at (tokensOf2) */
+  capsRatio?: number
   /** the alignment: where the first source word starts on the first line */
   firstX0?: number
   /** the lines kept as the original's, by key: the alignment's (no source word), part 4's displays, the finish's */
@@ -193,7 +196,7 @@ export interface UnitParts {
   colourOf: (k: number) => number | null
 }
 /** a token of a unit's translation */
-export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; kern?: boolean; leadEnd?: boolean; kernW?: number; [more: string]: unknown }   // kern: a lead's last, its width the original's glue after it; leadEnd: a lead's last, no space after it; kernW: explicit glue after it (at 100 px), its item's `kern`
+export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'latin'; w100: number; space?: boolean; crop?: Resolved; sup?: boolean; glue?: boolean; ph?: string; k?: number; hyphenated?: boolean; kern?: boolean; leadEnd?: boolean; kernW?: number; sc?: number; cont?: boolean; [more: string]: unknown }   // kern: a lead's last, its width the original's glue after it; leadEnd: a lead's last, no space after it; kernW: explicit glue after it (at 100 px), its item's `kern`; sc: a run of small capitals the layer draws, the share of the size it is drawn at (its `s` the capitals drawn); cont: a word's later run of one case
 /** a laid line: its slot, and its items at their places */
 /** a laid line: its slot's fields, its items, and `past`, how many of the unit's kept regions the text passed before its first item
  *  (breakLines: where the page's word table writes a region's kept lines) */
@@ -232,8 +235,34 @@ export declare function pageChars2(textContent: { items: unknown[] }, fontOf: (f
  *  first, and the parity of the slant toggles around it (`flip`); null where the unit carries no source pieces or their text is
  *  not its `src` */
 export declare function sourceScopes(unit: { src?: string; source?: readonly { t: string; s?: string; src?: string }[] }): { sets: number; chain: number[]; flip: number }[] | null
-/** the unit's base style and its pieces' colours from its matched characters with their source scopes (E1) */
-export declare function measuredStyle(chars: readonly { st: FontClass & { fill?: number }; sets: number; chain: readonly number[]; flip?: number }[]): { st: { bold: boolean; italic: boolean; caps: boolean; fam: string; design?: string }; fill: number | null; pieces: Map<number, number> } | null
+/** the unit's base style and its pieces' colours from its matched characters with their source scopes (E1); `small` and `lower`
+ *  where the unit has faked small capitals (each glyph one, and its source letter lowercase: the glyphs that tell them) */
+export declare function measuredStyle(chars: readonly { st: FontClass & { fill?: number }; sets: number; chain: readonly number[]; flip?: number; small?: boolean; lower?: boolean }[]): { st: { bold: boolean; italic: boolean; caps: boolean; fam: string; design?: string }; fill: number | null; pieces: Map<number, number> } | null
+/** a faked small capital is set at most this share of the size of its unit's letters whose case TeX did not change */
+export declare const SMALL_CAPS_SHARE: number
+/** the share of the size the layer draws small capitals at where the unit's page tells none (0.8, NFSS's virtual faces') */
+export declare const SMALL_CAPS_RATIO: number
+/** whether the layer draws a run's small capitals itself: a run set in them in a face with none of its own */
+export declare const selfCaps: (face: Pick<Face, 'caps' | 'id'> | null | undefined) => boolean
+/** a target's capitals: its language's case mapping, the root's where it names no locale */
+export declare function upperOf(to: string): (s: string) => string
+/** `s` in runs of one case as the layer draws its small capitals: each its text as drawn, the share of the size it is drawn at
+ *  (1, or `ratio`), its first character's UTF-16 offset in `s` and its length there; `smallAt`: a capital the page sets small */
+export declare function caseRuns(s: string, ratio: number, upper: (s: string) => string, smallAt?: ((at: number) => boolean) | null): { s: string; k: number; at: number; n: number }[]
+/** a rendering of the page's own characters: by each UTF-16 offset of `text`, whether its character is set at most SMALL_CAPS_SHARE
+ *  of `size`; null where its characters do not give the text, or none is */
+export declare function smallCapsAt(chars: readonly { ch: string; size: number }[] | null | undefined, text: string, size: number | undefined): ((at: number) => boolean) | null
+/** a babel name's word as the layer draws it in `face`: its runs of one case where it draws the face's small capitals itself */
+export declare function nameRuns(text: string, face: Face, to: string): { face: Face; runs: { s: string; k: number }[]; text: string }
+/** nameRuns' word's width at size 1 */
+export declare const runsWidth: (drawn: { face: Face; runs: readonly { s: string; k: number }[] }) => number
+/** the size a unit set in small capitals is drawn at in a CJK target, × its nominal size (the owner's, 2026-10-24: 1) */
+export declare const CJK_CAPS_SIZE: number
+/** the size a unit is laid at: the original's, its faked small capitals aside, × CJK_CAPS_SIZE in a CJK target where its base is
+ *  set in small capitals; undefined where no glyph of it was read */
+export declare function unitSizeOf(prep: Pick<Prepared, 'orig' | 'measured'> | null | undefined, P: { cjk?: boolean } | null | undefined, unit?: Pick<Unit, 'pieces'> | null): number | undefined
+/** a face's small capitals as its CSS rule draws them: its own smcp's, '' for any other (none is ever synthesized) */
+export declare function capsRule(face: Pick<Face, 'caps'> & { id?: string }): string
 /** a rendering's text in runs of one fill (0xRRGGBB, or -1 untold); null where its characters do not give the text or tell no fill */
 export declare function fillRunsOf(chars: readonly Pick<Char, 'ch' | 'st'>[] | null | undefined, text: string): { text: string; fill: number }[] | null
 /** the kind a mark no line may start with is across scripts ("." and the ideographic full stop: 'stop'; ")" and a closing corner bracket: 'close'), else the mark itself */
@@ -298,7 +327,7 @@ export declare function nameInTarget(name: { key: string; capitals: boolean }, o
 /** a text's width at size 1 in a face */
 export declare const widthOf: (s: string, face: Face) => number
 /** a babel name drawn in the target's word, as SVG markup (a <g data-n="occurrence">) */
-export declare function svgOfName(o: { occurrence: number; text: string; x: number; baseline: number; size: number; face: Face; color?: string | null }, toPx: (x: number, y: number) => number[], scale: number): string
+export declare function svgOfName(o: { occurrence: number; text: string; x: number; baseline: number; size: number; face: Face; color?: string | null; runs?: readonly { s: string; k: number }[] | null }, toPx: (x: number, y: number) => number[], scale: number): string
 /** a character style's colour as a run takes it: its fill where told (black: `color` undefined), nothing where not */
 export declare function colourOfStyle(st: { fill?: number } | null | undefined): { color?: string }
 /** a character style's font class, its fill aside (the class itself where no fill was set on it) */
@@ -398,8 +427,9 @@ export declare function drawOps(ctx: CanvasRenderingContext2D | OffscreenCanvasR
 export declare function svgOfUnit(L: Layout, page: number, toPx: (x: number, y: number) => number[], scale: number, id: number): string
 /** a <tspan> of a laid line's text as svgOfUnit draws it: its face, whether it is a run of single CJK characters each at its
  *  own place (`chars`), a superscript's, its colour, text, the PDF x of its start (of each character, `chars`), its tracking,
- *  and each item drawn in it as [its index in the line, the UTF-16 offset of its text in the run's] */
-export interface LineRun { face: Face; chars: boolean; sup: boolean; color?: string; text: string; xs: number[]; track?: number; items: [number, number][]; crop?: undefined }
+ *  each item drawn in it as [its index in the line, the UTF-16 offset of its text in the run's], and the share of the size small
+ *  capitals the layer draws are set at (`sc`) */
+export interface LineRun { face: Face; chars: boolean; sup: boolean; color?: string; text: string; xs: number[]; track?: number; items: [number, number][]; sc?: number; crop?: undefined }
 /** a laid line as svgOfUnit draws it, in order: its runs and its crops (`crop`: the item's index) */
 export declare function lineRuns(line: Line, L: Layout): (LineRun | { crop: number })[]
 /** the PDF x of a run's edge before its UTF-16 offset `at`, as the browser lays it out (the run's start, the measure of the text
