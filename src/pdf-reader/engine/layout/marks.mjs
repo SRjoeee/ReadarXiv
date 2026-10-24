@@ -55,9 +55,10 @@ const EQREF = /^\\eqref(?![A-Za-z@])/
 const REF = /^\\(?:ref|autoref|[cC]ref|pageref|nameref)(?![A-Za-z@])/
 const CODE = /^\\(?:texttt|verb|lstinline)(?![A-Za-z@])/
 const URL = /^\\(?:url|href)(?![A-Za-z@])/
-/** a number a bibliography entry keeps as the original's ink (latex-front.mjs keepNumbers): text of a digit and no letter,
- *  none of TeX's special characters — no command, so it reads nothing after it and both its marks go */
-const NUMBER = /^[^\s\p{L}\\{}$%#&^_~]*\d[^\s\p{L}\\{}$%#&^_~]*$/u
+/** a number a bibliography entry keeps as the original's ink (latex-front.mjs keepNumbers): text of a digit and no letter, or
+ *  a DOI written out, letters and all; none of TeX's special characters — no command, so it reads nothing after it and both its
+ *  marks go */
+const NUMBER = /^(?:[^\s\p{L}\\{}$%#&^_~]*\d[^\s\p{L}\\{}$%#&^_~]*|10\.\d{4,9}\/[^\s\\{}$%#&^_~]+)$/u
 /** a footnote's call: \footnotemark, and a \footnote whose note the scanner made no unit of (fewer than two letters: a
  *  number, a link) — a call all the same, which the layer places by its mark */
 const FOOTNOTE_MARK = /^\\footnote(?:mark)?(?![A-Za-z@])/

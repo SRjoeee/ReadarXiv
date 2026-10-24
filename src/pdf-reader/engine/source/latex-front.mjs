@@ -1771,23 +1771,37 @@ function namesEnd(s, a, z, cmds) {
   }
   return a
 }
-/** particles a name holds in lower case (van, von, de la…), which no title's lower-case word is taken for */
-const NAME_PARTICLES = new Set(['and', 'van', 'von', 'der', 'den', 'del', 'della', 'des', 'dos', 'das', 'ter', 'ten', 'bin', 'ibn', 'others'])
+/** the lower-case words a block of names holds (van, von, de la…; "and", "others", "editors"), which no title's lower-case word
+ *  is taken for */
+const NAME_PARTICLES = new Set(['and', 'und', 'van', 'von', 'der', 'den', 'del', 'della', 'des', 'dos', 'das', 'ter', 'ten', 'bin', 'ibn', 'others', 'editor', 'editors', 'eds'])
 /**
  * Whether an entry's first block reads as its names, not an entry with no author whose first block is its title ("The Research
- * Guide.", "A survey of parallel genetic algorithms."): a comma, an "and", a tie or an initial (BibTeX's name formats: "J.~Smith",
- * "Ba, Kiros, and Hinton", "et~al."), else a few capitalised words ("William Feller.") opening with no article and holding no
- * lower-case word of three letters or more but a name's particle
+ * Guide.", "A survey of methods, revised edition."): no lower-case word of three letters or more but a name's (NAME_PARTICLES),
+ * whatever its punctuation, nor "The" first; then a comma, an "and", a tie or an initial (BibTeX's name formats: "J.~Smith",
+ * "Ba, Kiros, and Hinton", "et~al."), else a few capitalised words ("William Feller.") opening with no article
  */
 function namesLike(tex) {
-  const t = tex.replace(/%[^\n]*/g, ' ').replace(/\\[A-Za-z@]+\s*/g, ' ').replace(/[{}]/g, '').replace(/\s+/g, ' ').trim()
+  // (the block's letters as a reader reads them: a letter command its letter, \\L's L; an accent and any other command nothing, so
+  // that a word they sit in stays whole, G{\\"u}l{\\c{c}}ehre's, M{\\k{a}}dry's; the words apart at a space or a tie)
+  const t = tex.replace(/%[^\n]*/g, ' ').replace(/\\([A-Z])[A-Za-z]*(?![A-Za-z@])\s*/g, '$1').replace(/\\(?:[a-z@][A-Za-z@]*|[^A-Za-z@])\s*/g, '').replace(/[{}]/g, '').replace(/\s+/g, ' ').trim()
+  const words = t.split(/[\s~]+/).filter(w => /\p{L}/u.test(w))
+  // (a word of letters alone, its punctuation after it: a key a style writes in the block, apacite's anderson1952asymptotic, is none)
+  if (!words.length || words[0] === 'The' || !words.every(w => !/^\p{Ll}{3,}\p{P}*$/u.test(w) || NAME_PARTICLES.has(w.replace(/\P{L}+$/u, '')))) return false
   if (/[,~]|\band\b|\bet al\b|(?:^|[\s(])\p{Lu}\./u.test(t) || /~/.test(tex)) return true
-  const words = t.split(' ').filter(w => /\p{L}/u.test(w))
-  return words.length > 0 && words.length <= 4 && !/^(?:The|An?)$/.test(words[0]) && words.every(w => !/^\p{Ll}{3,}/u.test(w) || NAME_PARTICLES.has(w.replace(/\P{L}+$/u, '')))
+  return words.length <= 4 && !/^An?$/.test(words[0])
 }
 /** a token of an entry's text that is a number and no word — a year, pages, a volume and its issue: "1994.", "157--166,",
- *  "5(2):157--166", a DOI written out — a digit in it, no letter, white space or a piece that sets none on either side */
+ *  "5(2):157--166" — a digit in it, no letter, white space or a piece that sets none on either side; or a DOI written out,
+ *  letters and all ("10.1007/s00125-020-05190-9."), whose left may be any character but a letter or a digit ("doi:10.…") */
 const NUMBER_TOKEN = /[^\s\p{L}]*\d[^\s\p{L}]*/gu
+const DOI_TOKEN = /10\.\d{4,9}\/\S+/gu
+/** a text's tokens of either, in order: its DOIs, then its numbers outside them */
+function numberTokens(s) {
+  const dois = [...s.matchAll(DOI_TOKEN)].map(m => ({ index: m.index, text: m[0], doi: true }))
+  const inDoi = (a, b) => dois.some(d => a < d.index + d.text.length && b > d.index)
+  const numbers = [...s.matchAll(NUMBER_TOKEN)].filter(m => !inDoi(m.index, m.index + m[0].length)).map(m => ({ index: m.index, text: m[0], doi: false }))
+  return [...dois, ...numbers].sort((a, b) => a.index - b.index)
+}
 /** a piece beside which a token stands apart: none (the unit's edge), a group's open or close, a tie, a space of TeX's or a
  *  penalty, a kern or glue of its own (natbib's `\\penalty0` between a volume, its issue and its pages) */
 const APART = p => !p || p.t === 'open' || p.t === 'close' || (p.t === 'ph' && /^(?:~|\\[ ,;:!]|\\(?:newblock|quad|qquad|enspace|thinspace|space|penalty|allowbreak|nobreak|hskip|kern)(?![A-Za-z@]))/.test(p.src ?? ''))
@@ -1815,12 +1829,12 @@ function keepNumbers(pieces) {
     }
     const out = []
     let last = 0
-    for (const m of p.s.matchAll(NUMBER_TOKEN)) {
-      const end = m.index + m[0].length
-      const left = m.index > 0 ? /\s/.test(p.s[m.index - 1]) : APART(pieces[k - 1]), right = end < n ? /\s/.test(p.s[end]) : APART(pieces[k + 1])
-      if (!left || !right || at(m.index) < 0 || at(end) < 0 || src.slice(at(m.index), at(end)) !== m[0]) continue
+    for (const m of numberTokens(p.s)) {
+      const end = m.index + m.text.length
+      const left = m.index > 0 ? (m.doi ? /[^\p{L}\d]/u : /\s/).test(p.s[m.index - 1]) : APART(pieces[k - 1]), right = end < n ? /\s/.test(p.s[end]) : APART(pieces[k + 1])
+      if (!left || !right || at(m.index) < 0 || at(end) < 0 || src.slice(at(m.index), at(end)) !== m.text) continue
       if (m.index > last) out.push(part(last, m.index))
-      out.push({ t: 'ph', src: m[0] })
+      out.push({ t: 'ph', src: m.text })
       last = end
     }
     if (!out.length) return [p]
@@ -1937,7 +1951,10 @@ export function loadProject(fsys, main, { tables = false } = {}) {
   const own = fsys.list().filter(f => /\.(tex|sty|cls)$/i.test(f)).map(f => ({ file: f, text: sourceText(f) }))
   const outer = paper, outerDecoders = decoders
   paper = paperOf(own.map(x => x.text))
-  decoders = decodersOf(own, sourceText, main)
+  // (the job's .bbl, which \\bibliography reads, decoded as the package's own TeX is: BibTeX writes it in the .bib's bytes, the
+  // encoding the paper declares; it is read as none of the package's own files otherwise)
+  const mainRel = [normalizePath(main), normalizePath(`${main}.tex`)].find(f => fsys.read(f)), bbl = mainRel ? normalizePath(`${jobName(mainRel)}.bbl`) : null
+  decoders = decodersOf(bbl && fsys.read(bbl) ? [...own, { file: bbl, text: sourceText(bbl) }] : own, sourceText, main)
   try { return readProject(fsys, main, tables, sourceText, own) } finally { paper = outer; decoders = outerDecoders }
 }
 /** each of the package's files that is not UTF-8, by its normalized name, with its decoding (INPUT_ENCODINGS): the one the

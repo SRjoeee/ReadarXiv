@@ -2617,10 +2617,13 @@ matter's authors and the names inside references, which follow "names" and not "
   (BibTeX's output; never biber's data, which is biblatex's and no text). Each `\bibitem`'s entry, from its key to the next
   `\bibitem`, is two units: its names, the first block, kind `refnames` (class names): up to the first `\newblock` (plain, abbrv,
   unsrt, ieee, the natbib styles, acl, ACM's), else REVTeX's and ACM's `\bibfield{author}`, else IEEEtran's text before the
-  title's opening quotes; and the rest, kind `reference` (class references). The label (`\bibitem`'s optional argument, set in the
+  title's opening quotes; and the rest, kind `reference` (class references). A first block that holds a lower-case word of letters no
+  name holds (a title's: "A survey of methods, revised edition.") is no names, whatever its punctuation: the entry is one unit of
+  the references. A `.bbl` is read in the encoding the paper declares, as its own TeX is. The label (`\bibitem`'s optional argument, set in the
   list's label box) and the key are no piece; what a style writes before the first entry is no unit, nor REVTeX's `\BibitemOpen`
-  and `\BibitemShut`. In an entry a number (a year, pages, a volume and its issue, a DOI written out: a token of a digit and no
-  letter, white space or a piece that sets none on each side) is a placeholder of the class `number` (`layout/marks.mjs`, both
+  and `\BibitemShut`. In an entry a number (a year, pages, a volume and its issue: a token of a digit and no letter, white space
+  or a piece that sets none on each side) or a DOI written out, letters and all (`10.1007/s00125-020-05190-9.`, after `doi: ` or
+  `doi:`) is a placeholder of the class `number` (`layout/marks.mjs`, both
   marks, MARKS_SCHEMA 11), the original's ink as a web address and a formula are. Both units are marked as the body's are, in the
   bibliography's own TeX (the `.bbl` written back marked: a paper that ships it runs no BibTeX), so their places, their ink and
   their groups are TeX's (LAYOUT 22: UNIT_KINDS `reference`, `refnames`; PH_KINDS `number`; a maker of 21 reads neither, so

@@ -139,10 +139,10 @@ for (const arg of process.argv.slice(2).filter(a => !a.startsWith('--'))) {
         if (DUMP) { mkdirSync(DUMP, { recursive: true }); writeFileSync(join(DUMP, `${id}.json`), JSON.stringify({ kinds: paper.units.map(u => u.kind), fonts: lm.file.fonts, lines: lm.file.lines, ph: lm.file.ph })) }
         // (another run's dump, the base engine's (--against): every unit but the entries, the base's id for each, its rows and its
         // placeholders' rows against this run's)
+        // (a line's eighth number is its font's index in the file's `fonts`, which the entries' fonts, met first, move: the name)
+        const named = (rows, fonts) => rows && Array.from(rows, (v, j) => (j % 8 === 7 ? fonts[v] : v))
         const against = AGAINST && join(AGAINST, `${id}.json`)
         if (against && existsSync(against)) {
-          // (a line's eighth number is its font's index in the file's `fonts`, which the entries' fonts, met first, move: the name)
-          const named = (rows, fonts) => rows && Array.from(rows, (v, j) => (j % 8 === 7 ? fonts[v] : v))
           const o = JSON.parse(readFileSync(against, 'utf8')), theirLines = new Map(o.lines.map(([u, r]) => [u, named(r, o.fonts)])), mineLines = new Map([...lines].map(([u, r]) => [u, named(r, lm.file.fonts)]))
           const body = paper.units.flatMap((u, i) => (BIB.has(u.kind) ? [] : [i]))
           const phOf = (rows, at) => JSON.stringify(rows.filter(r => r[0] === at).map(r => r.slice(1)))
@@ -160,12 +160,12 @@ for (const arg of process.argv.slice(2).filter(a => !a.startsWith('--'))) {
         // (the base engine's file, the pack's: its units located against this one's, the entries taken out)
         const packLayout = PACK && join(PACK, 'fixtures', `${id}-zh`, 'layout.json')
         if (packLayout && existsSync(packLayout)) {
-          const theirsFile = JSON.parse(readFileSync(packLayout, 'utf8')), theirLines = new Map(theirsFile.lines.map(([u, rows]) => [u, rows]))
+          const theirsFile = JSON.parse(readFileSync(packLayout, 'utf8')), theirLines = new Map(theirsFile.lines.map(([u, rows]) => [u, named(rows, theirsFile.fonts)]))
           const body = paper.units.flatMap((u, i) => (BIB.has(u.kind) ? [] : [i]))
           let lost = 0, gainedBody = 0, moved = 0
           const which = { lost: [], gained: [], moved: [] }
           body.forEach((mineId, theirId) => {
-            const m = lines.get(mineId), t = theirLines.get(theirId)
+            const m = named(lines.get(mineId), lm.file.fonts), t = theirLines.get(theirId)
             if (t?.length && !m?.length) { lost++; which.lost.push(`${theirId}:${paper.units[mineId].kind}`) }
             else if (m?.length && !t?.length) { gainedBody++; which.gained.push(`${theirId}:${paper.units[mineId].kind}`) }
             else if (m && t && JSON.stringify(m) !== JSON.stringify(t)) { moved++; which.moved.push(`${theirId}:${paper.units[mineId].kind}:${m.length}/${t.length}${process.argv.includes('--rows') ? ` ${JSON.stringify([...m].slice(0, 16))} ${JSON.stringify(t.slice(0, 16))}` : ''}`) }

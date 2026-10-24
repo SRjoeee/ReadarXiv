@@ -165,6 +165,32 @@ describe('an entry with an accented word, and one with no author', () => {
   })
 })
 
+describe('an entry with no author whose title has a comma, and names a title\'s checks keep', () => {
+  const entries = '\\begin{thebibliography}{4}\n\\bibitem{manual}\nA survey of methods, revised edition.\n\\newblock University Press, 2020.\n\n\\bibitem{ed}\nA.~Smith and B.~Jones, editors.\n\\newblock Handbook of Proofs, 2019.\n\n\\bibitem{an}\nAn Wang, Bo Li, and others.\n\\newblock Graphs, 2018.\n\n\\bibitem{van}\nLudwig van Beethoven.\n\\newblock Symphonies, 1808.\n\\end{thebibliography}'
+  const p = open({ 'main.tex': doc(`Surveys \\cite{manual,ed,an,van}.\n\n${entries}`) })
+  it('makes a title with a comma no names: a lower-case word no name holds is a title\'s, whatever its punctuation', () => {
+    expect(bib(p).map(u => [u.kind, shown(u)])).toEqual([
+      ['reference', 'A survey of methods, revised edition. [\\newblock] University Press, [2020.]'],
+      ['refnames', 'A.[~]Smith and B.[~]Jones, editors.'],
+      ['reference', '[\\newblock] Handbook of Proofs, [2019.]'],
+      ['refnames', 'An Wang, Bo Li, and others.'],
+      ['reference', '[\\newblock] Graphs, [2018.]'],
+      ['refnames', 'Ludwig van Beethoven.'],
+      ['reference', '[\\newblock] Symphonies, [1808.]'],
+    ])
+  })
+})
+
+describe('a bibliography the package holds in Latin-1, as its source declares', () => {
+  const latin1 = (t: string) => Uint8Array.from(t, c => c.charCodeAt(0))
+  const bbl = '\\begin{thebibliography}{1}\n\\bibitem{c}\nJ.~Dupont.\n\\newblock Un caf\u00e9 fran\u00e7ais, 1999.\n\\end{thebibliography}\n'
+  const tex = doc('Coffee \\cite{c}.\n\n\\bibliographystyle{plain}\n\\bibliography{refs}', '\\usepackage[latin1]{inputenc}')
+  const p = openPaper(new Map([['main.tex', enc(tex)], ['main.bbl', latin1(bbl)]]))
+  it('reads the .bbl in the source\'s encoding: its entries\' words the characters the paper sets', () => {
+    expect(plainSource(bib(p)[1] as never)).toContain('Un caf\u00e9 fran\u00e7ais')
+  })
+})
+
 describe('a bibliography biblatex sets from biber\'s data (\\printbibliography)', () => {
   // (biber's .bbl holds the entries' fields, no text TeX sets as it stands: \\printbibliography sets each entry from them)
   const BIBER = `% $ biblatex auxiliary file $
@@ -232,6 +258,12 @@ L.~A. Agrawal and O.~Khattab, \`\`{GEPA}: Reflective prompt evolution,'' 2026.
     expect(cls).toContainEqual(['10.1145/3786335.3813167', 'number'])
     // (IEEEtran's spacing declarations set no ink and take no argument: no mark, nothing of the text after them taken)
     expect(cls).toContainEqual(['\\BIBentrySTDinterwordspacing', null])
+  })
+  it('keeps a DOI written out the original\'s, letters and all, after "doi: " or glued to "doi:"', () => {
+    const q = open({ 'main.tex': doc('See \\cite{x,y}.\n\n\\begin{thebibliography}{2}\n\\bibitem{x}\nA.~Smith.\n\\newblock Diabetes, 2020. doi: 10.1007/s00125-020-05190-9.\n\n\\bibitem{y}\nB.~Jones.\n\\newblock Cells, 2021. doi:10.1016/j.cell.2021.01.001\n\\end{thebibliography}') })
+    const kept = bib(q).flatMap(u => u.pieces.filter(x => x.t === 'ph' && classOf(x as never) === 'number').map(x => x.src))
+    expect(kept).toEqual(['2020.', '10.1007/s00125-020-05190-9.', '2021.', '10.1016/j.cell.2021.01.001'])
+    expect(bib(q).map(u => plainSource(u as never)).join(' ')).not.toMatch(/s00125|j\.cell/)
   })
 })
 
