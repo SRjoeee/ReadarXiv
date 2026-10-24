@@ -2500,3 +2500,18 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   ownership on 247 pages (measured at 85fdc442, while the remover was still there; that comparison ended with its deletion), 0 px outside image edges, and the image-edge pixels the two change equal (72 on GPU, 31 on CPU).
   Chromium differs from itself on two pages in earlier runs of one long-lived browser (2608.04322v1 p9 GPU, 2609.26457v1 p2
   CPU: our unwrapped page against itself), 0 px from fresh documents.
+
+### 19.10 Content classes and the ledger (stage 1 of `docs/route/orphan-text.md`)
+
+Every text glyph of our final pass belongs to exactly one content class, and each class has one translation path, made once on
+the server, and one reader toggle (the owner's rulings of 2026-10-25: always, heads and feet, tables, figure text, references,
+names, never). The one table is `rules/content-classes.mjs` (`CLASSES`, `TOGGLES`; a unit's class by its kind, `unitClass`, the
+same on the server and in every reader, from what the bundle's units already carry). The maker child's `wrapFinal` returns each
+paper's ledger (`layout/ledger.mjs` `ledgerOf`, `ledgerSummary`: each class's glyphs and letters, the document's letters, its
+orphan letters), read from facts alone: a glyph's owner (own.mjs), its region (in a column's body or not, a float's depth), the
+babel names' points that open a list or the bibliography, stream order on the page (the head before its first mark, the foot
+after its last, on one baseline, as `folioOf` reads a folio), whether it is inside a form XObject (an included PDF: pageInk's
+`form` with `indices`), and its face's family (math, typewriter). No layout file and no version changes: nothing on the wire,
+nothing in the compile. What no class explains is an orphan: the sweep's invariant (o) is no orphan letters (`orphanRows`, rows
+in the sweep's shape), run in the lab by `lab/pdf/spikes/ledger.mjs` (record `lab/pdf/records/ledger.md`). The ink units that
+translate the planned classes, and the toggles, are the note's later stages.

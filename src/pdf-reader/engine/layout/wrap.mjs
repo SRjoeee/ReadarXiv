@@ -35,6 +35,7 @@
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { DELTA_OBJECTS_MAX, deltaSection, rangesOf, UNHIDDEN_MAX } from './delta-wire.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, pageInk } from './ink.mjs'
+import { ledgerOf, ledgerSummary } from './ledger.mjs'
 import { followsOf } from './marks.mjs'
 import { ownOf, UNHIDDEN } from './own.mjs'
 import { alignOf, DecodeLimit, lex, LexLimit, openRemover } from './remove.mjs'
@@ -548,8 +549,9 @@ export { UNHIDDEN_MAX }
  * groups, labelKept } (integers, the head's: every unit counted), `unhidden` [[unit id, code of UNHIDDEN], …] ascending and
  * `labelKept` the unit ids whose label is left the original's ink, each of the units with a group in the document alone (a
  * unit with none is the original's: no reader can hide it), `pages` the pages wrapped as ranges (the host's delta must replace
- * every one: layerOfPaper refuses a delta that does not), `own` own.mjs's stats (the record's), `owned` own.mjs's whole result where `keepOwned`
- * (the lab's); `bounds` { groupsPage, sequencesPage, groupsDoc } wrapOf's (tests) — or { refused (WRAP_WHYS), why }: the paper's
+ * every one: layerOfPaper refuses a delta that does not), `own` own.mjs's stats (the record's), `ledger` the content classes'
+ * counts (layout/ledger.mjs ledgerSummary: integers, for the record; nothing reads them yet), `owned` own.mjs's whole result and
+ * `ledgerWhole` the ledger's where `keepOwned` (the lab's); `bounds` { groupsPage, sequencesPage, groupsDoc } wrapOf's (tests) — or { refused (WRAP_WHYS), why }: the paper's
  * base is then arXiv's PDF. Never throws but a failed allocation
  */
 /** a point as ownership reads it: its name in lower case, as every mark's name is written (marks.mjs MARK_NAME): a class that
@@ -584,7 +586,7 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
       const ops = await page.getOperatorList()
       const ink = pageInk(OPS, ops, page.commonObjs, { rotate: page.rotate ?? 0, indices: true, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
       const unread = ink.rotated || ink.capped || ink.timedOut || ink.degraded
-      pages.push(unread ? { glyphs: [], boxes: [], paths: [], points: [], boxAt: [], view: [...page.view] } : { glyphs: ink.glyphs.map(g => ({ n: g.n, k: g.k, u: g.u, x0: g.x0, x1: g.x1, ix0: g.ix0, ix1: g.ix1, y: g.y, size: g.size, top: g.top, bottom: g.bottom })), boxes: ink.boxes, paths: ink.paths, points: ink.points.map(lowerPoint), boxAt: ink.boxAt, view: [...page.view] })
+      pages.push(unread ? { glyphs: [], boxes: [], paths: [], points: [], boxAt: [], view: [...page.view] } : { glyphs: ink.glyphs.map(g => ({ n: g.n, k: g.k, u: g.u, x0: g.x0, x1: g.x1, ix0: g.ix0, ix1: g.ix1, y: g.y, size: g.size, top: g.top, bottom: g.bottom, font: g.font, ...(g.blank ? { blank: true } : {}), ...(g.form ? { form: true } : {}) })), boxes: ink.boxes, paths: ink.paths, points: ink.points.map(lowerPoint), boxAt: ink.boxAt, view: [...page.view] })
       facts.push(unread ? null : alignOf(OPS, ops))
       page.cleanup()
     }
@@ -598,6 +600,8 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   // pairs, or a Map; a cell's lead macro is owned by them alone, own.mjs)
   const shown = texts instanceof Map ? texts : Array.isArray(texts) ? new Map(Array.from({ length: Math.floor(texts.length / 2) }, (_, j) => [texts[2 * j], texts[2 * j + 1]]).filter(([a, b]) => typeof a === 'string' && typeof b === 'string')) : null
   const own = ownOf(pages, { units, follows, texts: shown })
+  // (every glyph's content class: the record's counts, the sweep's orphans; layout/ledger.mjs)
+  const ledger = ledgerOf(pages, own, { units })
   const plans = new Map()
   pages.forEach((pg, i) => { if (facts[i] && pg.points.length) plans.set(i + 1, { facts: facts[i], ...planOf(pg.glyphs, own.glyphs[i], pg.paths, own.boxes[i]) }) })
   const made = await wrapOf(finalBytes, plans, { PL, deflate, inflate, ...bounds })
@@ -624,7 +628,7 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   if (unhidden.length > UNHIDDEN_MAX || labelKept.length > UNHIDDEN_MAX) return { refused: 'wrap-bound', why: `${unhidden.length} units the original's, past ${UNHIDDEN_MAX}` }
   const stats = { ...made.stats, unhidden: counts, labelKept: labelKept.length }
   const wrappedPages = rangesOf([...made.pages].filter(([, x]) => x.ok).map(([p]) => p))
-  return { bytes: made.bytes, xref: made.xref, sha256: made.sha256, stats, unhidden, labelKept, pages: wrappedPages, own: { ...own.stats, unhidden: counts }, ...(keepOwned ? { owned: own } : {}) }
+  return { bytes: made.bytes, xref: made.xref, sha256: made.sha256, stats, unhidden, labelKept, pages: wrappedPages, own: { ...own.stats, unhidden: counts }, ledger: ledgerSummary(ledger), ...(keepOwned ? { owned: own, ledgerWhole: ledger } : {}) }
 }
 
 export { alignOf }
