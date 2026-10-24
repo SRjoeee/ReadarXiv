@@ -23,7 +23,7 @@ export const CLASSES = Object.freeze({
   orphan: Object.freeze({ toggle: 'always', state: 'planned', glyphs: true, truth: 'text no unit owns and no other class explains: a front-end defect, or text TeX generates (a theorem head)' }),
   heads: Object.freeze({ toggle: 'heads', state: 'planned', glyphs: true, truth: 'the output routine\'s head, shipped before the page\'s first mark, and its foot, after the last' }),
   tables: Object.freeze({ toggle: 'tables', state: 'built', glyphs: true, truth: "the source's table cells (units of kind cell)" }),
-  figures: Object.freeze({ toggle: 'figures', state: 'planned', glyphs: true, truth: "glyphs our compile sets in a figure: an included PDF's (a form XObject), a float's own that no unit owns, a TikZ text's unit" }),
+  figures: Object.freeze({ toggle: 'figures', state: 'built', glyphs: true, truth: "glyphs our compile sets in a vector figure, no unit's: an included PDF's (a form XObject) and a TikZ or pgfplots picture's (between its points), cut into ink units of kind `inkfigures` (layout/figure-text.mjs), each drawn in its run's box; a float's other text no unit owns, counted" }),
   ocr: Object.freeze({ toggle: 'figures', state: 'planned', glyphs: false, truth: "a bitmap figure's text, read and placed by OCR (PP-OCR, as the extension's: DESIGN §15.3); the owner's OK of 2026-10-25" }),
   references: Object.freeze({ toggle: 'references', state: 'planned', glyphs: true, truth: "the bibliography, between its name and the next unit; its entries' fields from the .bbl's \\bibitem" }),
   index: Object.freeze({ toggle: 'references', state: 'planned', glyphs: true, truth: 'an index or a glossary, between its name and the next unit (proposed: back matter, with the references)' }),
@@ -37,11 +37,13 @@ export const CLASS_IDS = Object.freeze(Object.keys(CLASSES))
 /** a class's code */
 export const CLASS_CODE = Object.freeze(Object.fromEntries(CLASS_IDS.map((id, i) => [id, i])))
 
-/** a unit's class by its kind (latex-front.mjs's kinds); a kind not here is `body` */
+/** the kind of a figure's ink unit (layout/figure-text.mjs): its text our glyphs', its place its run's (the parts' figure rows) */
+export const FIGURE_KIND = 'inkfigures'
+/** a unit's class by its kind (latex-front.mjs's kinds, and the ink units'); a kind not here is `body` */
 export const UNIT_CLASS = Object.freeze({
   para: 'body', heading: 'body', abstract: 'body', caption: 'body', footnote: 'body', cell: 'tables', author: 'names', figure: 'figures',
   // (the ink units', layout/ink-units.mjs INK_KIND: their kind names their class)
-  inkheads: 'heads', inkcontents: 'contents', inknotes: 'notes', inkorphan: 'orphan', inknames: 'names', inkgenerated: 'generated',
+  inkheads: 'heads', inkcontents: 'contents', inknotes: 'notes', inkorphan: 'orphan', inknames: 'names', inkgenerated: 'generated', [FIGURE_KIND]: 'figures',
 })
 /** a unit's class: of the front end's unit ({ kind }), of the bundle's ([kind, flags, …]) or of a kind; null for none */
 export function unitClass(u) {

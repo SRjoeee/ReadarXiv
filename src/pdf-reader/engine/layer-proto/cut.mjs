@@ -157,7 +157,7 @@ export async function wholeCutter(whole, o) {
   // K and its frontier, then the parts
   const { K, F } = wholeFrontier(whole, frontier)
   const cutter = partCutter({
-    paper, N, head, views: whole.left.pages, leftPages: o.leftPages, rules: o.rules ?? whole.rules ?? null,
+    paper, N, head, views: whole.left.pages, leftPages: o.leftPages, rules: o.rules ?? whole.rules ?? null, figures: o.figures ?? null,
     target: o.target ?? null, partPagesMax: o.partPagesMax, verdict: o.verdict ?? null, recordOf: o.recordOf ?? null,
   })
   // each page's need bound (need.mjs: the last page whose part laying it reads), over the whole K, once
@@ -194,7 +194,7 @@ export function wholeFrontier(whole, frontier = needFrontier, grouped = groupsOf
  *
  * `paper` { id, version }, `N` its pages, `head` the head written, `views` every page's view; `leftPages`, `target`, `partPagesMax`:
  * cutBundle's; `rules` the cell rules by page (an object or a Map of page to boxes; null: none), a part with a layout carrying its own
- * pages'.
+ * pages'; `figures` the figure units' rows by page (figure-rows.mjs figureRow's, an object or a Map; null: none), the same.
  * `verdict({ pages, input, written })`: of the part as cut with its layout, its pages' layout refused ({ refused, ...why }) or
  * kept (null); a part refused is the same pages with no layout (C1.4: its units drawn from the left, a table group's
  * layout-only cells too). With a verdict, a part its writer refuses with its layout for what that
@@ -207,7 +207,7 @@ export function wholeFrontier(whole, frontier = needFrontier, grouped = groupsOf
  * `recordOf(refused)`, the record of a part a verdict or a part's bound refused its layout (`verdicts[i]`); null for either,
  * `layout: null` (no reason recorded: 5's shape)
  */
-export function partCutter({ paper, N, head, views, leftPages, rules = null, target: targetOf = null, partPagesMax, verdict = null, retain = true, recordOf = null }) {
+export function partCutter({ paper, N, head, views, leftPages, rules = null, figures = null, target: targetOf = null, partPagesMax, verdict = null, retain = true, recordOf = null }) {
   if (typeof leftPages !== 'function') throw new TypeError('leftPages: a function of the page')
   const maxPages = partPagesMax === undefined ? PART_PAGES_MAX : partPagesMax
   if (!Number.isSafeInteger(maxPages) || maxPages < 1) throw new RangeError(`partPagesMax: ${String(maxPages)} is not a positive whole number of pages`)
@@ -296,13 +296,20 @@ export function partCutter({ paper, N, head, views, leftPages, rules = null, tar
       for (let p = a; p <= b; p++) { const r = rules instanceof Map ? rules.get(p) : rules[p]; if (r?.length) out[p] = r }
       return Object.keys(out).length ? out : null
     }
+    // (its pages' figure units, figure-rows.mjs rows, where its layout is: a page's figures are drawn over our page as its units are)
+    const figuresOf = (b, withLayout) => {
+      if (!withLayout || !layout || !figures) return []
+      const out = []
+      for (let p = a; p <= b; p++) out.push(...((figures instanceof Map ? figures.get(p) : figures[p]) ?? []))
+      return out
+    }
     // without its layout a part tells its left units alone: a layout-only unit of the range is not told (C1.4: the reader draws the
     // part from the left, a table group's left cells among them, its layout-only cells not at all); that is the documented price of a
     // part with no layout
     const write = async (b, withLayout) => {
       await leftTo(b)
       const x = input(b, withLayout)
-      const w = await writePart({ paper, head: head.sha256, prev, pages: x.pages, views: x.views, left: x.left, fileOnly: x.fileOnly, layout: x.part ?? absent, rules: rulesOf(b, withLayout), leftParts: lefts.slice(a - 1, b) })
+      const w = await writePart({ paper, head: head.sha256, prev, pages: x.pages, views: x.views, left: x.left, fileOnly: x.fileOnly, layout: x.part ?? absent, rules: rulesOf(b, withLayout), figures: figuresOf(b, withLayout), leftParts: lefts.slice(a - 1, b) })
       return { w, x }
     }
     // a size refusal is the cut's to answer (a shorter part), any other is a defect; but under a verdict, the writer's refusal of

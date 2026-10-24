@@ -55,6 +55,8 @@ export interface CutOptions {
   frontier?(K: readonly CutEntry[], N: number): readonly number[]
   /** the cell rules in place of `whole.rules` */
   rules?: WholePaper['rules']
+  /** the figure units' rows by page (figure-rows.mjs figureRow's), a part with a layout carrying its own pages' */
+  figures?: Readonly<Record<number, readonly import('./figure-rows.mjs').FigureRowWire[]>> | ReadonlyMap<number, readonly import('./figure-rows.mjs').FigureRowWire[]> | null
   base?: { bytes: number; sha256: string; xref: number } | import('./format.mjs').HeadBase
   /** arXiv's PDF beside a base of ours (the head's `orig`) */
   orig?: { bytes: number; sha256: string } | null
@@ -98,7 +100,7 @@ export interface PartCutter {
 export declare function wholeFrontier(whole: WholePaper, frontier?: CutOptions['frontier'], grouped?: TableGroups): { K: CutKnown['K']; F: number[] }
 export declare function partCutter(o: {
   paper: { id: string; version: number }; N: number; head: Written; views: readonly Box[]
-  leftPages: CutOptions['leftPages']; rules?: WholePaper['rules']
+  leftPages: CutOptions['leftPages']; rules?: WholePaper['rules']; figures?: CutOptions['figures']
   target?: CutOptions['target'] | null; partPagesMax?: number; verdict?: PartVerdict | null
   /** false: no part nor left part kept once given (`parts` and `left` hold nulls): a stream's */
   retain?: boolean
