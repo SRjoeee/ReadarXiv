@@ -12,7 +12,7 @@
 // unit learns, and the characters the restore counts as accounted for, are the same keys whichever unit took them.
 import { PH_FLAG } from '../layout/file.mjs'
 import { naturalOf, pitchOf, roomOf } from './break-room.mjs'
-import { charKey, charsOfUnit2, cropFields, cropPartsOfSegments, labelOf, learnCite, phClass2, phClassProven, PREDISPLAY, SHORT_SKIP, texToText2 } from './layer2.mjs'
+import { charKey, charsOfUnit2, cropFields, cropPartsOfSegments, labelOf, learnCite, phClass2, phClassProven, PREDISPLAY, SHORT_SKIP, sourcePiecesOf, texToText2 } from './layer2.mjs'
 
 /** v0's placeholder classes that draw ink of their own (layer-proto/check.mjs VISIBLE; a nested footnote's mark is 'num') */
 const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'umacro', 'display', 'symbol'])
@@ -459,12 +459,17 @@ export function texParts(lu, kOf, { lines, extents = 'v0', shown = Infinity, lin
     if (lb.length < 7) {
       // none in the file: v0's; and where the unit begins with text, a mark its first line holds before its first source
       // word (the file's first line starts at the unit's own mark, before the class's: a footnote's ∗ and †, which are no
-      // word and so in no gap, were erased as its text)
+      // word and so in no gap, were erased as its text). Whether it begins with text is its source's, never its translation's
+      // (labelOf)
       const rest = labelOf(out, unit, rects, charsByPage, gaps)
-      const first = unit.pieces.find(p => p.t !== 'ph' || !['zero', 'space'].includes(phClass2(p.src).cls))
+      const first = sourcePiecesOf(unit).find(p => p.t !== 'ph' || !['zero', 'space'].includes(phClass2(p.src).cls))
       if (out.label || out.firstX0 === undefined || first?.t !== 'text' || !/\S/.test(first.s)) return rest
       const key = rectKey(rects[0]), before = out.uc.filter(c => !c.sep && !c.space && /\S/.test(c.ch) && `${c.page}|${c.rect.join()}` === key && c.x1 <= out.firstX0 + 0.1)
-      if (before.length && before.every(c => !/[\p{L}\p{N}]/u.test(c.ch))) out.label = { x1: Math.max(...before.map(c => c.x1)), text: before.map(c => c.ch).join(''), chars: before }
+      // (never the marks the source itself begins with, its own text: a cell's "(nats)", 2610.21085v1 p30 u358, whose "(" read
+      // as a class's mark left the cell's line short of its bracket and its table's header group unfit)
+      const own = (unit.src ?? '').match(/^[^\p{L}\p{N}]*/u)[0].replace(/\s/gu, '')
+      const marks = before.map(c => c.ch).join('')
+      if (before.length && before.every(c => !/[\p{L}\p{N}]/u.test(c.ch)) && !own.startsWith(marks)) out.label = { x1: Math.max(...before.map(c => c.x1)), text: marks, chars: before }
       return rest
     }
     // the label's box (kind, page, x0, baseline, x1, top, bottom): the page's characters inside it

@@ -73,6 +73,8 @@ import { escapeMap, plainOfPieces, plainTracker, transformMap } from './words.mj
 import { ownSmallCaps } from '../rules/font-roles.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { textPieceOf } from '../rules/text-piece.mjs'
+import { headInTarget, refInTarget } from '../rules/tex-names.mjs'
+import { NAME_ENGLISH } from '../layout/names.mjs'
 import { fillsByChar, UNKNOWN } from '../layout/fills.mjs'
 
 /** a source text piece's characters (mt.mjs utf8: its bytes, read latin1, as UTF-8), here so that the drawing loads no wire module:
@@ -1039,18 +1041,26 @@ function alignUnit(out, unit, rects, deny) {
   return gaps
 }
 
+/** a unit's source pieces (rows.mjs unitOf's `source`, whatever order its translation sets them in), else its own pieces */
+export const sourcePiecesOf = unit => (Array.isArray(unit?.source) ? unit.source : unit.pieces)
 /**
  * Part 3, labels, v0's: a label the unit's first line starts with that no placeholder draws (the unit begins with text):
  * a footnote's mark, a bullet, an item's number, set by the class before the unit's own start. Kept as the original's:
  * the first line starts after it (out.label). Returns the gaps without it.
+ * Whether the unit begins with text is its source's (`unit.source`, rows.mjs unitOf's; its pieces where it carries none),
+ * never its translation's: a label is what the class set before the unit's own start, and a placeholder the source opens
+ * with is the unit's own ink, whatever its translation puts first (2610.18513v1 p19 u156, "\Cref{prop:lbCs} below shows
+ * how…", whose Chinese begins with "below" and sets the placeholder second: its cleveref ink "Theorem 5.1" was taken for a
+ * theorem's label, kept as the original's at the line's start, and drawn again inside the translation)
  */
 export function labelOf(out, unit, rects, charsByPage, gapsIn) {
   let gaps = gapsIn
   const uc = out.uc
+  const pieces = sourcePiecesOf(unit)
   // Iteration 3: the label is the first gap's first atom, so that one written beside a placeholder's rendering is found
   // ("¹ http://image-net.org/…": the footnote's mark and its URL were one gap, the mark erased), and a unit may start
   // with a placeholder that cannot render as it (a URL, not a reference)
-  const firstText = unit.pieces.find(p => p.t !== 'ph' || !['zero', 'space'].includes(phClass(p.src)))
+  const firstText = pieces.find(p => p.t !== 'ph' || !['zero', 'space'].includes(phClass(p.src)))
   const g0 = gaps[0]
   if (g0) {
     const isReal = c => !c.sep && !c.space && /\S/.test(c.ch)
@@ -1082,7 +1092,7 @@ export function labelOf(out, unit, rects, charsByPage, gapsIn) {
     // write, before its first word: another unit's ink on that line (a run-in heading: 1810.04805's "Input/Output
     // Representations"), kept as the original's like a label, the first line starting after it; it was kept and laid over
     const real = g0.chars.filter(isReal)
-    const drawsFirst = unit.pieces.find(p => (p.t === 'text' ? /\S/.test(p.s) : p.t === 'ph' ? !['zero', 'space'].includes(phClass(p.src)) : p.t === 'nested'))
+    const drawsFirst = pieces.find(p => (p.t === 'text' ? /\S/.test(p.s) : p.t === 'ph' ? !['zero', 'space'].includes(phClass(p.src)) : p.t === 'nested'))
     if (!out.label && real.length && drawsFirst?.t === 'text' && out.firstX0 !== undefined && real.every(c => `${c.page}|${c.rect.join()}` === firstKey && c.x1 <= out.firstX0 + 0.1) && uc.findIndex(isReal) === uc.indexOf(real[0]) && !nearIn(norm(real.map(c => c.ch).join('')), norm(unit.src), unit.src)) {
       out.label = { x1: Math.max(...real.map(c => c.x1)), text: g0.text, chars: real }
       gaps = gaps.slice(1)
@@ -1125,6 +1135,84 @@ export function nameInTarget(name, own, labels, to) {
   if (!word) return null
   const text = name.capitals ? word.toLocaleUpperCase(to) : word
   return text.replace(/\s+/g, '') === String(own ?? '').replace(/\s+/g, '') ? null : text
+}
+/** a label's characters as its text: in reading order, a space where two stand a fifth of their size apart (a layout file's
+ *  label box gives its glyphs, and no spaces: "Definition5.1(") */
+export function spacedText(chars) {
+  const cs = [...(chars ?? [])].filter(c => /\S/.test(c.ch ?? '')).sort((a, b) => a.x0 - b.x0)
+  let out = ''
+  cs.forEach((c, i) => { if (i && c.x0 - cs[i - 1].x1 >= 0.2 * Math.max(c.size ?? 0, cs[i - 1].size ?? 0)) out += ' '; out += c.ch })
+  return out
+}
+/**
+ * A theorem-like head's label as the target names it (PDF-READER §19.10): the head macro's label TeX set before the unit (the
+ * layout file's label box, `chars` the page's characters in it: "Definition 5.1 (", "Theorem 2."), its name in translator's
+ * dictionary's word for the target (rules/tex-names.mjs headInTarget: ctex's for Chinese), its number and punctuation the
+ * original's. The parts it is drawn in: its name and number in the style of its first character, its punctuation after them
+ * in the style of its last (amsthm's bold "Definition 5.1" and the note's upright "("), and whether it ends in an opening
+ * bracket, which the unit's text follows with no space. Null where it is no head of a name the target's dictionary holds
+ */
+export function headLabelInTarget(chars, to) {
+  const text = spacedText(chars)
+  // (a babel name's head is the names' own, nameInTarget's: amsthm's "Proof.", whose name group a label's drawing never hides,
+  // 2610.18513v1 p38 u347, the file holding no name there and the label box the name and its joint both)
+  if (BABEL_HEADS.test(text)) return null
+  const drawn = headInTarget(text, to)
+  if (!drawn) return null
+  const cs = [...chars].filter(c => /\S/.test(c.ch ?? '')).sort((a, b) => a.x0 - b.x0)
+  const tail = /[\s.:([]*$/.exec(text)[0], drawnTail = /[\s.:([]*$/.exec(drawn)[0]
+  const own = st => (st && st.fam !== 'math' ? { bold: !!st.bold, italic: !!st.italic, ...colourOfStyle(st) } : {})
+  const nTail = tail.replace(/\s/g, '').length
+  const parts = [{ text: drawn.slice(0, drawn.length - drawnTail.length), st: own(cs[0]?.st) }]
+  if (drawnTail) parts.push({ text: drawnTail, st: own((nTail ? cs[cs.length - nTail] : cs.at(-1))?.st) })
+  return { text: drawn, parts, open: /[([]\s*$/.test(drawn) }
+}
+/** a head that begins with a babel name (NAME_ENGLISH: "Proof", "Abstract") */
+const BABEL_HEADS = new RegExp(`^\\s*(?:${Object.values(NAME_ENGLISH).join('|')})(?![\\p{L}])`, 'u')
+/** the placeholders whose text TeX's cross-referencing packages generate, a counter type's name before the number:
+ *  cleveref's \cref and \Cref (and their page and name forms), hyperref's \autoref */
+export const GENERATED_REF = /^\\(?:cref|Cref|cpageref|Cpageref|namecref|nameCref|lcnamecref|labelcref|autoref|Autoref)\*?\s*\{/
+/** a citation's note (its last optional argument: \cite[Lemma~1]{…}, natbib's \citep[see][Section~2]{…}) as TeX sets it */
+const CITE_NOTE = /^\\(?:cite[a-z]*|parencite|textcite|autocite)\*?((?:\s*\[[^\]]*\])+)\s*\{/
+/**
+ * Each placeholder a unit's reading draws as its page's text (`orig-text`) whose names a package generated, in the target's
+ * names (`rename`, [start, end, word] over its text: rules/tex-names.mjs refInTarget): a generated reference whole
+ * (GENERATED_REF: "Theorem A.17" in zh ctex's name for a theorem and "A.17"), a citation's note where it is a name and its
+ * numbers ("[Ascolani et al., 2026, Lemma 1]", the note "Lemma 1" in ctex's name for a lemma and "1"), the rest of a citation
+ * the cited work's own. One no package names whole in
+ * the target is left as its page shows it. `labels`: the layout rules' labels (babel's names)
+ */
+export function renameRefs(prep, to, labels) {
+  for (const r of prep.values()) {
+    if (r?.mode !== 'orig-text' || r.sup || typeof r.src !== 'string' || typeof r.text !== 'string') continue
+    if (GENERATED_REF.test(r.src)) {
+      const x = refInTarget(r.text, to, labels)
+      if (x?.length) r.rename = x
+      continue
+    }
+    const m = CITE_NOTE.exec(r.src)
+    if (!m) continue
+    const note = [...m[1].matchAll(/\[([^\]]*)\]/g)].at(-1)?.[1].replace(/~|\\[ ,]/g, ' ').replace(/\s+/g, ' ').trim()
+    if (!note || !/\p{L}/u.test(note)) continue
+    const at = r.text.lastIndexOf(note)
+    if (at < 0 || r.text.indexOf(note) !== at || /[\p{L}\p{N}]/u.test(r.text[at + note.length] ?? '')) continue
+    const x = refInTarget(note, to, labels)
+    if (x?.length) r.rename = x.map(([a, b, w]) => [a + at, b + at, w])
+  }
+}
+/** a rendering's runs (each { text, st }, their texts joined its text) with its replacements made, each inside one run; null
+ *  where one crosses two runs (a name half in a link's colour), the runs then as they are */
+export function renameRuns(runs, rename) {
+  const out = runs.map(r => ({ ...r }))
+  let from = 0
+  const starts = out.map(r => { const s = from; from += r.text.length; return s })
+  for (const [a, b, w] of [...rename].sort((x, y) => y[0] - x[0])) {
+    const i = starts.findIndex((s, j) => a >= s && b <= s + out[j].text.length)
+    if (i < 0) return null
+    const s = starts[i]
+    out[i].text = out[i].text.slice(0, a - s) + w + out[i].text.slice(b - s)
+  }
+  return out
 }
 /** a text's width at size 1 in a face (its run's at 100 px over 100: the canvas's, cached), for a name's room */
 export const widthOf = (s, face) => w100(s, face) / 100
@@ -2478,16 +2566,20 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     // than the colours need)
     // (not inside a run a colours row tells: TeX's colour wins, as it does over the row's fill above)
     const fills = r.mode === 'orig-text' && !r.math && !own.colourRun ? fillRunsOf(r.gap?.chars, r.text) : null
-    const runs = fills ? [] : null
+    let runs = fills ? [] : null
     for (const run of fills ?? []) {
       const rs = run.fill === UNKNOWN ? st : { ...own, color: run.fill > 0 ? hexOf(run.fill) : undefined }
       const last = runs.at(-1)
       if (last && (last.st.color ?? null) === (rs.color ?? null)) last.text += run.text
       else runs.push({ text: run.text, st: rs })
     }
+    // (the names a package generated in it in the target's (renameRefs: cleveref's "Theorem" of "Theorem A.17"), each in its own
+    // run's colour, its numbers as they are)
+    const renamed = r.mode === 'orig-text' && !r.math && !r.sup && r.rename?.length ? renameRuns(runs ?? [{ text: r.text, st }], r.rename) : null
+    if (renamed) runs = renamed
     // (the page's own characters in small capitals the layer draws itself: a capital the page sets as a small one is drawn so, a
     // macro's text in faked small capitals, which the page's text gives in capitals: smallCapsAt)
-    const capsAt = r.mode === 'orig-text' && !r.math && own.caps && !own.upper ? smallCapsAt(r.gap?.chars, r.text, resolved.orig?.size) : null
+    const capsAt = !renamed && r.mode === 'orig-text' && !r.math && own.caps && !own.upper ? smallCapsAt(r.gap?.chars, r.text, resolved.orig?.size) : null
     if (r.sup) {
       // (a raised rendering in its runs too, each glued to the one before: a superscript citation's black brackets, its blue digits;
       // a mark, drawn as it is, in no small capitals)
