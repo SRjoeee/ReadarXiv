@@ -36,7 +36,10 @@
 // whose class the gates' run hides (content-classes.mjs RUN_DEFAULTS: the names, a bibliography's entries) is never sent; its
 // record says `none`.
 //   pnpm exec tsx lab/pdf/spikes/layer-fixtures.mjs [--only=<paper>[:<target>],…] [--targets=<t>,…] [--fresh] [--list]
-//       [--of=<fixtures folder>] [--engine=<worktree>] [--offline]
+//       [--of=<fixtures folder>] [--engine=<worktree>] [--offline] [--layouts-only]
+// --layouts-only makes an output's layout file and base page (layout.json, base.pdf, base.json) and nothing else: the
+// translation it holds (units.json, record.json) is left as it is, a pack's frozen one kept over a maker that moves the
+// layout and not the units the record names (a unit numbered past the record's, a bibliography's entry, has no row there).
 // With no option, Task 12's 21 outputs (OUTPUTS below, with the table-heavy, footnote-heavy and XeLaTeX papers found by
 // their rules). --only names the outputs to make: <id>v<n>:<target>, or <id>:<target> for a paper whose version the list
 // knows; a paper named without a target is made into each of --targets. --targets alone makes every paper of the list
@@ -77,6 +80,7 @@ const root = new URL('..', import.meta.url).pathname
 const REPO = resolve(root, '../..')
 const argOf = name => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? null
 const OFFLINE = process.argv.includes('--offline')
+const LAYOUTS_ONLY = process.argv.includes('--layouts-only')
 /** the engine the outputs are made with: this repository's, or another worktree's (--engine) */
 const ENGINE = resolve(argOf('engine') ?? REPO)
 const engine = path => import(pathToFileURL(join(ENGINE, 'src/pdf-reader/engine', path)).href)
@@ -590,6 +594,7 @@ for (const [id, target] of asked) {
       const made = layout.base.source === 'ours' ? { source: 'ours', head: layout.base.head } : layout.base
       write(join(out, 'base.json'), `${JSON.stringify(baseRecordOfMade({ made, layout: layout.base.source === 'ours' ? (layout.text ? Buffer.from(layout.text) : null) : kept, image: COMPILE_IMAGE, texts: layout.base.source === 'ours' ? layout.texts ?? null : null }), null, 1)}\n`)
     }
+    if (LAYOUTS_ONLY) { console.log(`ok   ${id}:${target} the layout file and base page alone (--layouts-only)`); continue }
     // the translation: the record made before, where it is of this cut of the units; else staging's; else Microsoft's
     const recordFile = join(out, 'record.json'), unitsFile = join(out, 'units.json')
     let record = null, from = null, source = null
