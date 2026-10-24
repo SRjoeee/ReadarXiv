@@ -136,3 +136,22 @@ Against `next` (c54a8702) on the 25 papers of the sweep's records, the units dra
 the layout files of five papers move in 8 rows, those units' placeholder and erase rows. The gate pack's papers own their ink as
 on `next`, glyph for glyph: the layer gate's pixel tier on its 32 outputs is `next`'s on every total (next on `435d19bd`, this
 tree on `13785c79`).
+
+## The run at `3341ccdc` (the leads' texts as TeX sets them, a front heading marked: MARKS_SCHEMA 10)
+
+The four papers of the release sweep whose groups the round moves, in Chinese, made as the run at `abb30736` was (offline,
+`markedOfPaper` on TeX Live 2025 in Docker; each paper's source units and the marks' texts). Chromium, GPU canvas: G1 pages
+with px outside split glyphs and image edges none on every page, proof ok on all four.
+
+| Paper | Pages | Wrapped | Refused | marks | spell | Labels kept | Splits | Groups | Proof | G1 pages |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|
+| 2610.21085v1 | 35 | 35 | 0 | 15 | 0 | 5 | 4 | 654 | ok | 0 |
+| 2610.21098v1 | 26 | 26 | 0 | 2 | 0 | 0 | 46 | 835 | ok | 0 |
+| 2610.21176v1 | 18 | 18 | 0 | 0 | 0 | 6 | 0 | 336 | ok | 0 |
+| 2610.22195v1 | 20 | 20 | 0 | 3 | 0 | 0 | 14 | 491 | ok | 0 |
+| **All** | **99** | **99** | **0** | **20** | **0** | **11** | **64** | | | **0** |
+
+Against the run at `abb30736`: `marks` 6 -> 2 (2610.21098v1's four cells led by "1,024", "max_tokens" and "128,000"), 1 -> 0
+(2610.21176v1's cell led by $d'$), 6 -> 3 (2610.22195v1's ICML title and its two cells led by `\texttt`); two shows more are
+split in 2610.22195v1 (12 -> 14), where a new group's ink meets another's in one show. 2610.21085v1 is the same: its unit gained, led by
+`\texttt{qwen3b}`, is a paragraph's, which the label rule owned before; its layout found the lead only now.

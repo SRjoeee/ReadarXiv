@@ -4,8 +4,8 @@
 //
 // The order, and why:
 //   1. the mark probe (live.mjs probeFiles `marks`), compiled in one pass: its log holds the paper's own switch (TeX's
-//      answers to the mark probe, readMarkProbe), the macros that set no ink (readInkProbe), the text the others set
-//      (readInkTexts), whether each babel name's own text holds a lowercase letter (readNameProbe) and the paper's
+//      answers to the mark probe, readMarkProbe), the macros that set no ink (readInkProbe), the text the others and the
+//      units' leads set (readInkTexts), whether each babel name's own text holds a lowercase letter (readNameProbe) and the paper's
 //      \lineskip and \lineskiplimit (readSkipProbe). Read as runLive
 //      reads the font probe, from its log alone: the probe has no body and so no pages,
 //      and a compiler need not call that a success
@@ -26,7 +26,7 @@ import { DRAFT_OPTION, listsMissing, notFound, originalFiles, probeFiles, ranThr
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { auxUnits, engineUnknown, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.mjs'
 import { DRIVER_OUTPUT_MARK, driverLostInk, driverOutputGiven, driverOutputTruncated, finalCheck, markTextOf } from './base.mjs'
-import { completeCalled, inkSamples, LAYOUT_CLASSES, probeSamples, readInkApart, readInkProbe, readInkTexts, readMarked, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from './marks.mjs'
+import { completeCalled, inkSamples, LAYOUT_CLASSES, leadSamples, probeSamples, readInkApart, readInkProbe, readInkTexts, readMarked, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from './marks.mjs'
 
 /** the layout guard's compiles past the marked original's, at most, the unmarked original's among them */
 const GUARD_EXTRA = 2
@@ -130,8 +130,9 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     const c = await asked({ main, engine, rerun: false, bibtex: false, overrides: probeFiles(paper, { marks: true }) })
     const log = lastTexLog(c?.log)
     if (!log) return null
-    const ink = inkSamples(paper.units)
-    return { switches: readMarkProbe(log, probeSamples(paper.units, paper.project?.complete)), inkless: readInkProbe(log, ink), texts: readInkTexts(log, ink), names: readNameProbe(log), lineskip: readSkipProbe(log), apart: readInkApart(log, ink) }
+    // (the texts of the macros and of the units' leads, asked last: live.mjs probeFiles)
+    const ink = inkSamples(paper.units), leads = leadSamples(paper.units, ink)
+    return { switches: readMarkProbe(log, probeSamples(paper.units, paper.project?.complete)), inkless: readInkProbe(log, ink), texts: readInkTexts(log, [...ink, ...leads]), names: readNameProbe(log), lineskip: readSkipProbe(log), apart: readInkApart(log, ink) }
   })
   if (!probe) return { refused: 'probe', ms }
   // (the day the marked original and its final pass are compiled on: the host's, asked once; any failure of the host's but a

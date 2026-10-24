@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
+import { INK_ANY } from '@/pdf-reader/engine/layout/marks.mjs'
 import { isLabelForm, ownOf, spellOf } from '@/pdf-reader/engine/layout/own.mjs'
 
 // Each unit's own ink by its marks in stream order (layout/own.mjs; design docs/route/ocg-erasure.md §1): the rules MR 1–6 on
@@ -188,6 +189,32 @@ describe('coverage: what the 2026-10-24 sweep left English', () => {
     const r = ownOf(pages, { units: cells, texts: new Map([['\\bert', 'BERT']]) })
     expect(groupsOf(r, pages)).toEqual({ u0: 'Model', u1: '#Steps', 'u1.p': 'BERT' })
     expect(r.units.get(1)?.unhidden).toBe(null)
+  })
+  it('owns a cell\'s lead of inline code or a formula by the text the probe read (MARKS_SCHEMA 10: 2610.21098v1 p13u138, 2610.21176v1 p13u88)', () => {
+    // "Cap parameter | \\texttt{max\\_tokens} on Chat Completions routes", T1's underscore a glyph of its own
+    const code = [page([{ pt: 't0s' }, 'Cap parameter', { pt: 't0e' }, { dx: 30 }, 'max_tokens', { pt: 't1s' }, 'on Chat routes', { pt: 't1e' }])]
+    const codeCells = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Cap parameter' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\texttt{max\\_tokens}' }, { t: 'text', s: ' on Chat routes' }] }]
+    const c = ownOf(code, { units: codeCells, texts: new Map([['\\texttt{max\\_tokens}', 'max_tokens']]) })
+    expect(groupsOf(c, code)).toEqual({ u0: 'Cap parameter', u1: 'on Chat routes', 'u1.p': 'max_tokens' })
+    expect(c.units.get(1)?.unhidden).toBe(null)
+    // "Prop. 1 | \\dprime{} tracks the gap": $d'$, a math italic d and a prime the probe spells as no character (INK_ANY, one glyph)
+    const prime = [page([{ pt: 't0s' }, 'Prop. 1', { pt: 't0e' }, { dx: 30 }, 'd\u2032', { pt: 't1s' }, 'tracks the gap', { pt: 't1e' }])]
+    const lead = [{ kind: 'cell', pieces: [{ t: 'text', s: 'Prop. 1' }] }, { kind: 'cell', pieces: [{ t: 'ph', src: '\\dprime{}' }, { t: 'text', s: ' tracks the gap' }] }]
+    const texts = new Map([['\\dprime{}', `d${INK_ANY}`]])
+    const p = ownOf(prime, { units: lead, texts })
+    expect(groupsOf(p, prime)).toEqual({ u0: 'Prop. 1', u1: 'tracks the gap', 'u1.p': 'd\u2032' })
+    expect(p.units.get(1)?.unhidden).toBe(null)
+    // (its spelled letter is the glyphs' own: another letter there, the cell the original's)
+    const other = [page([{ pt: 't0s' }, 'Prop. 1', { pt: 't0e' }, { dx: 30 }, 'x\u2032', { pt: 't1s' }, 'tracks the gap', { pt: 't1e' }])]
+    expect(ownOf(other, { units: lead, texts }).units.get(1)?.unhidden).toBe('marks')
+    // (a formula's glyph is no blank one: a blank glyph where it stands, the cell the original's)
+    const blank = [page([{ pt: 't0s' }, 'Prop. 1', { pt: 't0e' }, { dx: 30 }, 'd ', { pt: 't1s' }, 'tracks the gap', { pt: 't1e' }])]
+    expect(ownOf(blank, { units: lead, texts }).units.get(1)?.unhidden).toBe('marks')
+    // (a footnote's call among the lead's pieces sets its mark between them and the start: a glyph read as the formula's would be
+    // that mark's, so the cell is the original's — here the call's "1" would spell the prime)
+    const call = [page([{ pt: 't0s' }, 'Prop. 1', { pt: 't0e' }, { dx: 30 }, 'd1', { pt: 't1s' }, 'tracks the gap', { pt: 't1e' }])]
+    const noted = [lead[0]!, { kind: 'cell', pieces: [{ t: 'ph', src: '\\dprime{}' }, { t: 'ph', src: '\\footnotemark' }, { t: 'text', s: ' tracks the gap' }] }]
+    expect(ownOf(call, { units: noted, texts }).units.get(1)?.unhidden).toBe('marks')
   })
   it('spells a cell whose lead is a letter symbol with the letter it sets (\\O, \\ss: Devin on #456)', () => {
     const pages = [page([{ pt: 't0s' }, 'Name', { pt: 't0e' }, { dx: 30 }, '\u00d8', { pt: 't1s' }, 'stergaard', { pt: 't1e' }])]

@@ -19,7 +19,7 @@
 // first preview is set as today, and never waits for the original: nothing is known to plan it from yet. Where a plan
 // cannot be made, the translation is set as today, and the reason noted
 import { analyze } from '../source/paper-meta.mjs'
-import { DVI_LAYOUT_TEX, inkSamples, LAYOUT_TEX, layoutMarking, literalNames, markProbeTex, NAME_ENGLISH, probeSamples } from '../layout/marks.mjs'
+import { DVI_LAYOUT_TEX, inkSamples, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, NAME_ENGLISH, probeSamples } from '../layout/marks.mjs'
 import { BALANCE_DEF, documentBounds, DVI_MARK_DEF, dviEngine, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1, texText } from '../source/latex-front.mjs'
 import { strategiesFor, typesetBy } from './scripts.mjs'
 import { authorsTranslated } from '../translate/kept.mjs'
@@ -238,7 +238,8 @@ export function openPaper(files) {
  *  with `marks`, the layout marks' TeX (MARK_DEF, LAYOUT_TEX) first and, after the width probe, the mark probe
  *  (layout/marks.mjs markProbeTex: what the paper's own citation and footnote commands do with a mark and with what
  *  follows them), whose answers (readMarkProbe, over `probeSamples(paper.units, paper.project.complete)`) are the paper's own switch, and what
- *  each of its macros sets (readInkProbe, over `inkSamples(paper.units)`); under `latex` (latex-front.mjs dviEngine), each
+ *  each of its macros sets (readInkProbe, over `inkSamples(paper.units)`; and its units' leads, last: leadSamples); under
+ *  `latex` (latex-front.mjs dviEngine), each
  *  followed by its DVI marks (DVI_MARK_DEF, marks.mjs DVI_LAYOUT_TEX), so that the probe asks TeX about the marks the DVI
  *  compile sets. Without it, the bytes as before */
 export function probeFiles({ fsys, project, meta }, { width = false, marks = false } = {}) {
@@ -247,7 +248,7 @@ export function probeFiles({ fsys, project, meta }, { width = false, marks = fal
   const text = texText(fsys.read(project.main))
   const at = beginDocument(text)
   const dvi = dviEngine(meta?.compiler)
-  const head = marks ? MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') : '', probe = marks ? markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units)) : ''
+  const head = marks ? MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') : '', probe = marks ? markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units), leadSamples(project.units)) : ''
   return new Map([[project.main, latin1Bytes(`${head}${END_TEX}${text.slice(0, at)}${FONT_PROBE}\\begin{document}${width ? WIDTH_PROBE : ''}${probe}\\end{document}\n`)]])
 }
 

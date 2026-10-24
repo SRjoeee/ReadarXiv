@@ -32,20 +32,30 @@ export declare function readProbe(log: string): { schema: number; tag: string; f
 /** the punctuation section (`punct`) */
 export declare function punctuationSection(samples: readonly { src: string; call: boolean; glued?: string }[], from?: number): string
 /** the layout marks' probe document, after \\begin{document} of the font probe: the punctuation section, then the ink
- *  section where `ink` holds samples */
-export declare function markProbeTex(samples: readonly { src: string; call: boolean; own?: true; glued?: string }[], ink?: readonly string[]): string
+ *  section where `ink` holds samples, and last an ink section of `leads` (leadSamples), numbered on from `ink` */
+export declare function markProbeTex(samples: readonly { src: string; call: boolean; own?: true; glued?: string }[], ink?: readonly string[], leads?: readonly string[]): string
 /** the distinct sources of the paper's macros the ink section asks about, at most */
 export declare const INK_MAX: number
 /** the ink section's samples: each macro's source once, in the paper's order, that TeX can set in a box of its own */
 export declare function inkSamples(units: readonly SourceUnit[]): string[]
-/** the ink section (`ink`): each sample in a box, the box shown in the log */
-export declare function inkSection(samples: readonly string[]): string
+/** the leads the ink section asks about past the paper's macros inkSamples takes, at most */
+export declare const LEAD_MAX: number
+/** the leads' samples: the placeholders at a unit's head (headEnd) of inline code or a paper's macro that `asked` does not
+ *  hold, once, in the paper's order, that TeX can set in a box of its own, at most LEAD_MAX */
+export declare function leadSamples(units: readonly SourceUnit[], asked?: readonly string[]): string[]
+/** the ink section (`ink`): each sample in a box, the box shown in the log, its rows numbered from `from` */
+export declare function inkSection(samples: readonly string[], from?: number): string
 /** the samples TeX set no ink for, from the probe's log */
 export declare function readInkProbe(log: string, samples: readonly string[]): string[]
 /** a macro's text as the ink section shows it set, at most */
 export declare const INK_TEXT_MAX: number
-/** each sample's text, where the probe showed it sets letters and digits of text fonts alone: [source, text] */
+/** what a lead's text holds for a glyph of a formula's whose character it does not spell: one glyph, whatever its text */
+export declare const INK_ANY: string
+/** each sample's text, where the probe showed it sets characters a text names: a text font's letters, digits and ASCII's
+ *  punctuation, a formula's, its glyphs it does not spell INK_ANY, one spelled at least: [source, text] */
 export declare function readInkTexts(log: string, samples: readonly string[]): [string, string][]
+/** one glyph of a lead's ink (its text `t`) read against the text `want` up to `end` from its end: the end past it, or -1 */
+export declare function leadStep(want: string, end: number, t: string): number
 /** the samples whose box TeX began with no character (a kern, glue, a box, a formula, a colour): glued to a word, none of its letters */
 export declare function readInkApart(log: string, samples: readonly string[]): string[]
 /** the paper's macros a marking takes for reading nothing past their arguments, at most */
@@ -119,7 +129,7 @@ export declare function layoutMarking(units: readonly SourceUnit[], classes: rea
 
 /** the marks file (internal, prep/<mid>/marks-<sha>.json): what the layout maker reads from the marked original */
 export interface LayoutMarks {
-  schema: 9
+  schema: 10
   /** the engine that compiled it (meta.compiler) */
   engine: string
   /** what the marked original was marked with: layoutMarking's classes and the paper's own switch (TeX's answers to the
@@ -174,7 +184,7 @@ export declare function destRect(a: unknown): [x0: number, y0: number, x1: numbe
 export declare const MARKS_CAP: number
 export declare const MARKS_VALUES: number
 export declare const MARKS_DEPTH: number
-export declare const MARKS_SCHEMA: 9
+export declare const MARKS_SCHEMA: 10
 /** a unit's alignment code (readAlign) */
 export type AlignCode = 'c' | 'l' | 'r' | 'j'
 export declare const ALIGN_CODES: readonly AlignCode[]

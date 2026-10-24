@@ -35,7 +35,7 @@ import { checkBoxes, pageRules } from './cell-rules.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { drawDataOf } from '../pipeline/draw-data.mjs'
 import { DRAW_HELD_MAX } from '../layer-proto/draw.mjs'
-import { classOf, colourPieceOf, followsOf, headEnd, layoutMarking, markAt, symbolText, vetoTwice } from './marks.mjs'
+import { classOf, colourPieceOf, followsOf, headEnd, INK_ANY, layoutMarking, leadStep, markAt, symbolText, vetoTwice } from './marks.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
 import { readAnnots } from '../layer-proto/links.mjs'
 
@@ -1153,7 +1153,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         const entry = { row: [i, k, kind, PH_FLAG.LOST], cls, state: 'unmarked' }
         ph.push(entry)
         if (sym !== null) (one.symbols ??= []).push({ entry, sym })
-        else if (cls === 'macro' && k < head) (one.heads ??= []).push({ entry, k, src: piece.src })
+        // (a head: a paper's macro, or inline code — a cell's \\texttt{max\\_tokens}, which the probe asks about too: marks.mjs
+        // leadSamples)
+        else if ((cls === 'macro' || cls === 'code') && k < head) (one.heads ??= []).push({ entry, k, src: piece.src, cls, head })
         else if (cls === 'macro' && last >= 0 && k > last) (one.tails ??= []).push({ entry, k, src: piece.src })
         continue
       }
@@ -1351,20 +1353,23 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   }
 
   /**
-   * A unit's head and tail pieces: the paper's macros it opens with, before its start mark, and those after its end mark,
-   * past its last words, where no mark goes (marks.mjs headEnd and passedOver; patch's end mark after the last word:
-   * 1810's \bert, "BERT", opening three paragraphs; a table row's \specialrule in 1706; a figure's \includegraphics
-   * before the text under it in 2307, and in 1706 after a forced break after its panel's title), where the mark stands
-   * on the unit's first line (its last). TeX set their ink before the start mark: on that line left of it, or on a line
-   * before it (after the end mark: right of it, or on a line after it), never on the unit's own lines, which begin at
-   * the one mark and end at the other. So, the piece nearest the mark first:
+   * A unit's head and tail pieces: the paper's macros it opens with (and its inline code, a head's), before its start
+   * mark, and those after its end mark, past its last words, where no mark goes (marks.mjs headEnd and passedOver; patch's
+   * end mark after the last word: 1810's \bert, "BERT", opening three paragraphs; a table row's \specialrule in 1706; a
+   * figure's \includegraphics before the text under it in 2307, and in 1706 after a forced break after its panel's title;
+   * 2610.21098's cell led by \texttt{max\_tokens}), where the mark stands on the unit's first line (its last). TeX set their
+   * ink before the start mark: on that line left of it, or on a line before it (after the end mark: right of it, or on a
+   * line after it), never on the unit's own lines, which begin at the one mark and end at the other. So, the piece nearest
+   * the mark first:
    * - a head: the glyphs right before the mark on its line, as a label's run takes them (each within LABEL_EM of the
-   *   next), those of no unit's, whose characters are the text the probe showed the macro sets (marks.mjs readInkTexts):
-   *   the piece is found there, a segment of the first line, which takes them in and erases them, and the layer draws
-   *   them where the translation puts the piece;
-   * - no glyph of no unit's within LABEL_EM beside the mark (or beside the head found next to it): the piece set nothing
-   *   on the line beside the mark, and is EMPTY: the translation draws nothing for it, and its ink, wherever TeX set it,
-   *   stays the original's, as the unit's lines never take it;
+   *   next), those of no unit's, which spell the text the probe showed the piece sets (marks.mjs readInkTexts: "1,024",
+   *   "max_tokens"; a formula's glyph it spells no character of, INK_ANY, any one glyph, where nothing but the heads found
+   *   and pieces of no ink stand between the piece and the mark — 2610.21176's \dprime{}, $d'$ —, leadStep): the piece is
+   *   found there, a segment of the first line, which takes them in and erases them, and the layer draws them where the
+   *   translation puts the piece;
+   * - no glyph of no unit's within LABEL_EM beside the mark (or beside the head found next to it): a macro set nothing on the
+   *   line beside the mark, and is EMPTY: the translation draws nothing for it, and its ink, wherever TeX set it, stays the
+   *   original's, as the unit's lines never take it (inline code sets ink: LOST);
    * - else it stays LOST, and those beyond it: what the line shows there is not known as the piece's (a label, perhaps).
    * A tail is looked at only where the last line took nothing past the end mark (its closing punctuation)
    */
@@ -1383,14 +1388,22 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       run.push(g)
       edge = tail ? Math.max(edge, P.x1[g]) : Math.min(edge, P.x0[g])
     }
+    const found = new Set()
     for (const h of [...(tail ? one.tails : one.heads)].sort((x, y) => (tail ? x.k - y.k : y.k - x.k))) {
       const { entry } = h, kind = entry.row[2]
-      if (!run.length) { entry.row = [i, h.k, kind, PH_FLAG.EMPTY]; entry.state = 'empty'; entry.head = true; continue }
+      // (inline code always sets ink: none beside the mark is ink not known, never a piece that set nothing)
+      if (!run.length) { if (h.cls === 'code') return; entry.row = [i, h.k, kind, PH_FLAG.EMPTY]; entry.state = 'empty'; entry.head = true; continue }
       const text = tail ? null : shown.get(h.src)
       if (!text) return
-      let got = '', n = 0
-      while (n < run.length && got.length < text.length) { got = charsOf(P.u[run[n]]).replace(/\s+/g, '') + got; n++ }
-      if (got !== text.toLowerCase()) return
+      // (a formula's glyph of no character spelled, INK_ANY, is any glyph's: read only where nothing but heads found nearer and
+      // pieces of no ink stand between this one and the mark, whose ink would stand nearer — a \\footnotemark's)
+      if (text.includes(INK_ANY) && !one.u.pieces.slice(h.k + 1, h.head).every((p, j) => found.has(h.k + 1 + j) || !classOf(p) || (classOf(p) === 'macro' && inkless.has(p.src)))) return
+      // (each glyph against the text from its end, nearest the mark first: marks.mjs leadStep)
+      const want = text.toLowerCase()
+      let end = want.length, n = 0
+      while (n < run.length && end > 0) { end = leadStep(want, end, charsOf(P.u[run[n]]).replace(/\s+/g, '')); if (end < 0) return; n++ }
+      if (end !== 0) return
+      found.add(h.k)
       const gs = run.splice(0, n)
       let x0 = Infinity, x1 = -Infinity, top = -Infinity, bottom = Infinity
       for (const g of gs) { x0 = Math.min(x0, P.ix0[g]); x1 = Math.max(x1, P.ix1[g]); top = Math.max(top, P.top[g]); bottom = Math.min(bottom, P.bottom[g]) }
