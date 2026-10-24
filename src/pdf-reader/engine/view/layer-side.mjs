@@ -66,6 +66,9 @@ export function spreadPages(p, ids, pagesOf, isIn, max = SPREAD_MAX) {
   for (const id of ids) for (const q of pagesOf(id) ?? []) if (q !== p) out.add(q)
   return [...out].sort((a, b) => Math.abs(a - p) - Math.abs(b - p) || a - b).slice(0, max).filter(q => !isIn(q))
 }
+/** how long a laid page's text layer may wait for the main thread to be idle before it is built anyway (ms): it is built after
+ *  the page's commit, never on its path (docs/PDF-READER.md §11.11) */
+export const TEXT_IDLE_MS = 500
 /** the most device pixels of laid pages' drawings the side keeps off the view on any device (docs/PDF-READER.md §11.8, "No flash
  *  coming back"): a laid page that leaves the near area keeps its drawing (its copy, its SVG and its links, detached from the
  *  place), put back in place in one task as it comes near again, so that a page already laid never shows the original or an empty
@@ -114,6 +117,8 @@ const isAbort = e => e?.name === 'AbortError'
 /** an error tagged with the side's code for why there is no layer (a BundleRefusal's own `why` is its message) */
 const coded = (e, code) => { const out = e instanceof Error ? e : new Error(String(e ?? code)); out.axtCode ??= code; return out }
 const release = c => { if (c) { c.width = 0; c.height = 0; c.remove() } }
+/** what a place showed of the layer let go: its copy's pixels, and its text layer from PDF.js's registry of its selection listener */
+const dropContent = c => { release(c?.copy); try { c?.text?.cancel() } catch { /* PDF.js's own */ } if (c) c.text = null }
 const isPrefix = (a, b) => a.length <= b.length && a.every((p, i) => p.sha256 === b[i].sha256)
 
 /** whether a layout part has lines on page `n` (its `lines`: per unit, rows of 8 numbers, the first the page) */
@@ -387,7 +392,9 @@ export function createLayerSide(view, o) {
   const rec = n => { let P = pages.get(n); if (!P) { P = { ask: null, clock: 0, content: null, failed: false, stalled: false, copying: false, again: false }; pages.set(n, P) } return P }
   let ready = 0, failed = 0, stalls = 0
   const rearm = new Set()
-  const counts = { asked: 0, commits: 0, retired: 0, copies: 0, composed: 0, opens: 0, added: 0, leftParts: 0, forks: 0, restored: 0, dropped: 0, ahead: 0, aheadKept: 0 }
+  const counts = { asked: 0, commits: 0, retired: 0, copies: 0, composed: 0, opens: 0, added: 0, leftParts: 0, forks: 0, restored: 0, dropped: 0, ahead: 0, aheadKept: 0, texts: 0 }
+  /** each text layer built: its page, its items, its spans and the main thread's time to build it (ms), the last RING */
+  const textRing = []
   const ring = []
   const empty = () => { const e = document.createElement('div'); e.className = 'axt-layer axt-layer-retired'; return e }
   /** the drawings of laid pages kept off the view (keepPixels), by page: each the content its place held (its wrapper, SVG, copy,
@@ -400,7 +407,7 @@ export function createLayerSide(view, o) {
   function keepDrawing(n, c) {
     dropDrawing(n)
     const px = pixelsOf(c)
-    if (!px || px > keepPixels) { release(c.copy); return }
+    if (!px || px > keepPixels) { dropContent(c); return }
     drawings.set(n, { c, px })
     drawnPixels += px
     const at = V.centre() || n
@@ -410,7 +417,7 @@ export function createLayerSide(view, o) {
       const d = drawings.get(far)
       drawings.delete(far)
       drawnPixels -= d.px
-      release(d.c.copy)
+      dropContent(d.c)
       counts.dropped++
     }
   }
@@ -422,8 +429,8 @@ export function createLayerSide(view, o) {
     drawnPixels -= d.px
     return d.c
   }
-  /** page n's kept drawing let go, its copy released */
-  function dropDrawing(n) { const c = takeDrawing(n); if (c) release(c.copy) }
+  /** page n's kept drawing let go, its copy and its text layer released */
+  function dropDrawing(n) { const c = takeDrawing(n); if (c) dropContent(c) }
   /** every kept drawing `drop` names let go (all by default): a door before's, another target's, the side's end */
   function dropDrawings(drop = () => true) { for (const [n, d] of [...drawings]) if (drop(d.c)) { dropDrawing(n); counts.dropped++ } }
   /** page n's kept drawing put back in its place as it comes near, in one task (no original, no empty place first), where it is
@@ -432,7 +439,7 @@ export function createLayerSide(view, o) {
     const c = takeDrawing(n)
     if (!c) return false
     const P = rec(n)
-    if (disposed || !door || c.gen !== gen || c.target !== doorTarget || (P.content?.wrap && P.content !== c) || !V.places.swap(n, c.wrap)) { release(c.copy); return false }
+    if (disposed || !door || c.gen !== gen || c.target !== doorTarget || (P.content?.wrap && P.content !== c) || !V.places.swap(n, c.wrap)) { dropContent(c); return false }
     P.content = c
     P.failed = false
     P.stalled = false
@@ -500,7 +507,7 @@ export function createLayerSide(view, o) {
   function unlay(n) {
     const P = pages.get(n)
     if (!P?.content) return
-    release(P.content.copy)
+    dropContent(P.content)
     P.content = null
     V.places.restore(n)
     // (the original's page there: the mirror's geometry is its own)
@@ -553,12 +560,12 @@ export function createLayerSide(view, o) {
     if (holdsFocus(n)) { keptForFocus.add(n); return }
     keptForFocus.delete(n)
     const was = P.content
-    P.content = { wrap: null, svg: null, copy: null, k: 0, gen, target: doorTarget }
+    P.content = { wrap: null, svg: null, copy: null, k: 0, gen, target: doorTarget, text: null }
     if (V.places.swap(n, empty(), { blank: true })) counts.retired++
     else P.content = null
     // (this door's drawing in this target kept off the view, to be put back as the page comes near again: KEEP_PIXELS)
     if (was?.wrap && was.gen === gen && was.target === doorTarget && P.content) keepDrawing(n, was)
-    else release(was?.copy)
+    else dropContent(was)
   }
   /** the near pages to ask, asked together once the places told have all been heard: the farthest from the page in the
    *  middle of the view first and that page last, the door laying the newest ask first (D1), so that the page the reader is
@@ -684,11 +691,13 @@ export function createLayerSide(view, o) {
    *  unchanged (places.mjs swap); what the place held of the layer before let go */
   function putInPlace(n, content, laid) {
     const P = rec(n), was = P.content
-    if (!V.places.swap(n, content.wrap)) { release(content.copy); return }
-    if (was !== content) release(was?.copy)
+    if (!V.places.swap(n, content.wrap)) { dropContent(content); return }
+    if (was !== content) dropContent(was)
     dropDrawing(n)
     P.content = content
     P.failed = false
+    // its text layer, once the main thread is idle: never on the commit's path
+    textSoon(n, content, door)
     counts.commits++
     ring.push(`${n}@${Math.round(clock.now())}`)
     if (ring.length > RING) ring.shift()
@@ -702,6 +711,9 @@ export function createLayerSide(view, o) {
   function drawingOf(n, laid, got, my) {
     laid.svg.setAttribute('viewBox', `0 0 ${laid.w} ${laid.h}`)
     laid.svg.setAttribute('preserveAspectRatio', 'none')
+    // (its text is drawn, not read: the page's text layer, built after the commit, is what a selection, a copy, a search and a
+    // screen reader take, one copy of every piece of text; engine.css takes the SVG's text out of selection)
+    laid.svg.setAttribute('aria-hidden', 'true')
     got.canvas.className = 'axt-layer-copy'
     got.canvas.setAttribute('aria-hidden', 'true')
     const wrap = document.createElement('div')
@@ -718,7 +730,7 @@ export function createLayerSide(view, o) {
     // its links over the drawing, in the place's coordinates: one element, sized by shares of the page, which no zoom moves
     const links = V.links(n, laid.links)
     wrap.append(got.canvas, laid.svg, ...(links ? [links] : []))
-    return { wrap, svg: laid.svg, copy: got.canvas, k: got.k, gen: my, target: doorTarget }
+    return { wrap, svg: laid.svg, copy: got.canvas, k: got.k, gen: my, target: doorTarget, text: null }
   }
   /** the right's shapes of a laid page: its words (the units the layer shows as the original's from the left's tokens); both the
    *  words given, and the page shown again where an earlier fallback hid it */
@@ -733,8 +745,10 @@ export function createLayerSide(view, o) {
   function keepFar(n, content, laid) {
     retire(n)
     const P = rec(n)
-    if (P.content?.wrap || holdsFocus(n)) { release(content.copy); return }
+    if (P.content?.wrap || holdsFocus(n)) { dropContent(content); return }
     keepDrawing(n, content)
+    // (its text layer built while it is kept, so that it comes back with it: a page laid ahead is read as soon as it is near)
+    if (drawings.get(n)?.c === content) textSoon(n, content, door)
     shapesOf(n, laid)
   }
   /** a laid page's copy drawn again at the place's new k (a zoom). A copy is kept while it is at the k a copy drawn now would be
@@ -761,6 +775,41 @@ export function createLayerSide(view, o) {
       P.copying = false
       if (P.again) { P.again = false; void recopy(n) }
     }
+  }
+
+  // ---------------------------------------------------------------- the text layer (docs/PDF-READER.md §11.11)
+  /** the idle callbacks asked for, cancelled at dispose */
+  const idles = new Set()
+  /** `cb` once the main thread is idle (within TEXT_IDLE_MS), or in a task where the browser tells no idleness (the tests') */
+  const idle = cb => {
+    if (typeof requestIdleCallback !== 'function') { clock.later(cb, 0); return }
+    const id = requestIdleCallback(() => { idles.delete(id); if (!disposed) cb() }, { timeout: TEXT_IDLE_MS })
+    idles.add(id)
+  }
+  /** content `c` of page n (laid by door `d`) given its text layer at idle: the door's data for the page, built by PDF.js's own
+   *  builder over the place (the view's `text`), put between the SVG and the links, its translated spans in the target `c` was
+   *  laid in. Built whether `c` is in its place or kept off the view (a drawing kept or laid ahead, KEEP_PIXELS: the layer comes
+   *  back with it); nothing where `c` is neither by then (retired, let go), or the door or the builder has none. Released with
+   *  the content (dropContent) */
+  function textSoon(n, c, d) {
+    if (typeof V.text !== 'function' || typeof d?.textOf !== 'function') return
+    idle(async () => {
+      const shows = () => !disposed && door === d && !!c.wrap && (pages.get(n)?.content === c || drawings.get(n)?.c === c)
+      if (!shows()) return
+      let data
+      try { data = await d.textOf(n) } catch (e) { if (shows()) warn('text', e); return }
+      if (!shows()) return
+      const t0 = clock.now()
+      let built
+      try { built = await V.text(n, data, c.target ?? target) } catch (e) { if (shows()) warn('text', e); return }
+      if (!built) return
+      if (!shows() || c.text) { try { built.cancel() } catch { /* PDF.js's own */ } return }
+      c.wrap.insertBefore(built.div, c.wrap.querySelector(':scope > .axt-links'))
+      c.text = built
+      counts.texts++
+      textRing.push(`${n}:${data.items.length}/${built.div.childElementCount}@${Math.round((clock.now() - t0) * 10) / 10}`)
+      if (textRing.length > RING) textRing.shift()
+    })
   }
 
   // ---------------------------------------------------------------- the faces, in one wave (warm.mjs; §11.8)
@@ -948,7 +997,7 @@ export function createLayerSide(view, o) {
     V.onOriginal(s => {
       if (disposed || s !== 'opened') return
       // the places laid out again for another page count let their content go, and the drawings kept off the view with them
-      for (const [n, P] of pages) if (P.content && !V.places.page(n)?.contains(P.content.wrap ?? null) && P.content.wrap) { release(P.content.copy); P.content = null }
+      for (const [n, P] of pages) if (P.content && !V.places.page(n)?.contains(P.content.wrap ?? null) && P.content.wrap) { dropContent(P.content); P.content = null }
       dropDrawings()
       if (contents) void contents.outline(V.left.doc()).then(m => { if (m) outlineSoon() }, () => {})
       void pump()
@@ -1229,7 +1278,7 @@ export function createLayerSide(view, o) {
         state, why, gen, target, index: !!index, bound: bound === true, parts: doorParts.length, read: feed.state().parts.length, ended: partsEnded,
         rows: rows.size, rowsEnded, ready, failed, stalled: stalls, laid: laidNow, retired: retiredNow, asking,
         composed: counts.composed, docs: entries.size, opens: counts.opens, forks: counts.forks, asked: counts.asked, commits: counts.commits, copies: counts.copies, retirements: counts.retired,
-        leftParts: counts.leftParts, leftAsked: leftAsked.size, kept: kept.size, commitsRing: ring.join(' '),
+        leftParts: counts.leftParts, leftAsked: leftAsked.size, kept: kept.size, commitsRing: ring.join(' '), texts: counts.texts, textsRing: textRing.join(' '),
         drawings: drawings.size, drawnPixels, restored: counts.restored, dropped: counts.dropped, ahead: counts.ahead, aheadKept: counts.aheadKept,
         shapesLaid: right ? Array.from({ length: V.places.count() }, (_, i) => right.laid(i + 1)).filter(Boolean).length : 0,
         muted: right ? right.muted().join(' ') : '',
@@ -1250,6 +1299,8 @@ export function createLayerSide(view, o) {
       try { was?.dispose() } catch { /* the door's own */ }
       clock.clear(recopyTimer)
       clock.cancel(outlineFrame); clock.cancel(headingFrame); clock.cancel(layerFrame)
+      for (const id of idles) cancelIdleCallback(id)
+      idles.clear()
       stopAhead()
       dropDrawings()
       for (const n of pages.keys()) { abortAsk(n); unlay(n) }
