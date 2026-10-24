@@ -782,9 +782,11 @@ function smallCapsOf(unit, uc, O, S, pair) {
   if (!pair || typeof unit?.src !== 'string') return NO_SMALL_CAPS
   // (a faked small capital is set at most SMALL_CAPS_SHARE of a median no larger than the unit's largest glyph: where no capital of
   // the unit's is that small, none is one, and the walk below is not made, the reading of nearly every unit)
-  let big = 0
-  for (const c of uc) if (!c.sep && !c.space && c.size > big && c.st?.fam !== 'math') big = c.size
-  if (!uc.some(c => !c.sep && !c.space && c.size > 0 && c.size <= SMALL_CAPS_SHARE * big && c.st?.fam !== 'math' && c.ch !== c.ch.toLowerCase())) return NO_SMALL_CAPS
+  // (plain loops: no closure a unit, the reading of every unit)
+  let big = 0, any = false
+  for (let i = 0; i < uc.length; i++) { const c = uc[i]; if (!c.sep && !c.space && c.size > big && c.st?.fam !== 'math') big = c.size }
+  for (let i = 0; i < uc.length && !any; i++) { const c = uc[i]; any = !c.sep && !c.space && c.size > 0 && c.size <= SMALL_CAPS_SHARE * big && c.st?.fam !== 'math' && c.ch !== c.ch.toLowerCase() }
+  if (!any) return NO_SMALL_CAPS
   const small = new Set(), lower = new Set(), letters = []
   const src = [...unit.src], same = []
   const cased = ch => ch.toLowerCase() !== ch.toUpperCase()
@@ -840,7 +842,7 @@ function capsVote(chars) {
  * same one
  */
 function measuredOf(unit, uc, O, S, pair, sc = null) {
-  const scopes = sourceScopes(unit), none = { sets: 0, chain: [], flip: 0 }, chars = []
+  const scopes = sourceScopes(unit), none = { sets: 0, chain: [], flip: 0 }, chars = [], fake = sc?.small.size > 0
   const src = scopes ? [...unit.src] : null
   const measured = c => !c.sep && !c.space && c.st && /\S/.test(c.ch) && c.st.fam !== 'math'
   O.forEach((o, q) => {
@@ -861,7 +863,9 @@ function measuredOf(unit, uc, O, S, pair, sc = null) {
       at = k
       if (!measured(c)) continue
       const scope = scopes[first] ?? none
-      chars.push({ st: c.st, sets: scope.sets, chain: scope.chain, flip: scope.flip, ...(sc?.small.size ? { small: sc.small.has(c), lower: sc.lower.has(c) } : {}) })
+      const ch = { st: c.st, sets: scope.sets, chain: scope.chain, flip: scope.flip }
+      if (fake) { ch.small = sc.small.has(c); ch.lower = sc.lower.has(c) }
+      chars.push(ch)
     }
   })
   if (!chars.length) return null
