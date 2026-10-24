@@ -765,14 +765,16 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
 - **No flash coming back** (the owner's goal of 2026-10-24: a page already seen never shows the original, or an empty place,
   before its translation, coming back to it). A retired page's drawing — its copy, its SVG and its links, detached — is kept off the view,
   and put back in its place in the same task as the page comes near again (`bringBack`), one pane height before it can be
-  seen: no ask, no copy drawn, the right's shapes the page's own. The drawings are kept within `KEEP_PIXELS`, 2^25 device
-  pixels (128 MiB at 4 bytes a pixel), the least recently seen let go first: an A4 page's copy at 120 % on a 2x screen is
-  1905 × 2694 pixels, 19.6 MiB of the GPU process's memory in Chromium 153 on Metal (an `ImageBitmap` of it no less; the probe
-  of 2026-10-24), so six and a half such pages are kept, nine at 100 %, twelve at the reader's fit, 26 to 49 at a ratio of 1:
-  two thirds of what the left pane's PDF.js holds of its own at the same zoom (its buffer of ten page views drawn). A page
-  let go past it is laid again from the door's kept markup as before. A drawing kept across a zoom comes back as it was and
-  is drawn again at the new k. A later attempt, a fork or another target lets every kept drawing go (they are the door
-  before's), as do `dropOthers()`, a refusal and the dispose. A host may give its own budget (`keepPixels`; 0 keeps none).
+  seen: no ask, no copy drawn, the right's shapes the page's own. The drawings are kept within the device's budget
+  (`keepBudget`): a 64th of its memory (`navigator.deviceMemory`, 4 GB where the browser does not say) at 4 bytes a pixel, at
+  least two of its screens' pixels, at most `KEEP_PIXELS`, 2^25 pixels (128 MiB); past it the drawing farthest from the view
+  goes first. A copy costs its pixels: an A4 page at 120 % on a 2x screen is 1905 × 2694 pixels, 19.6 MiB of the GPU process's
+  memory in Chromium 153 on Metal (an `ImageBitmap` of it no less; the probe of 2026-10-24). So a computer of 8 GB keeps six and
+  a half such pages, nine at 100 %, twelve at the reader's fit (two thirds of what the left pane's PDF.js holds of its own at
+  that zoom, its ten page views drawn), and a phone of 4 GB 64 MiB, some ten pages of its screen at the fit. A page let go past
+  it is laid again from the door's kept markup as before. A drawing kept across a zoom comes back as it was and is drawn again
+  at the new k. A later attempt, a fork or another target lets every kept drawing go (they are the door before's), as do
+  `dropOthers()`, a refusal and the dispose. A host may give its own budget (`keepPixels`; 0 keeps none).
 - **The faces, in one wave** (`layer-proto/warm.mjs`). v0 checks and loads the faces of a unit as it lays it, one unit after
   another (E2), so a page whose units brought new characters waited a round trip a unit: 2602.23285v2 in Chinese asked 38
   font files in 12 waves before its first page, 4.3 to 9.2 s of a cold visit (production, 2026-10-24). The side asks the faces
@@ -795,7 +797,7 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   `ready` taken. A page still `waiting` (its part, its closure or its rows) is never a stall. After a reopen a laid page
   keeps its drawing until the new door's page is ready; leaving the view, that drawing goes and the place shows its own
   content again. The document holds a copy for the places near the view alone (their pixels bounded by the near area at
-  any zoom); far ones are kept off it, within `KEEP_PIXELS`.
+  any zoom); far ones are kept off it, within the device's budget.
 - **No scale is captured.** Before the per-unit erasure a copy could be cut from the left's canvas or a place's page view where
   PDF.js had drawn it near k, which meant reading the scale PDF.js drew at (`pagerender`), refusing a canvas drawn at two
   scales (PDF.js's `approximateFraction` floors width and height to different terms at most ratios) and slack for the

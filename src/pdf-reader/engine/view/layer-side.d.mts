@@ -28,7 +28,7 @@ export interface LayerSideOptions {
   composed: ComposedOpener
   /** the engine's door (the tests'); the layer entry's openLayer by default */
   openLayer?: typeof openLayer
-  /** the most device pixels of laid pages' drawings kept off the view (KEEP_PIXELS by default; 0 keeps none) */
+  /** the most device pixels of laid pages' drawings kept off the view (this device's keepBudget by default; 0 keeps none) */
   keepPixels?: number
   /** how many pages past the near ones are laid ahead while the reader rests (AHEAD_PAGES by default; 0 lays none) */
   ahead?: number
@@ -68,8 +68,14 @@ export interface LayerSide {
 /** sync; opens nothing until it can. One side per view: a second while one lives throws */
 export declare function createLayerSide(view: ReaderView, o: LayerSideOptions): LayerSide
 export declare const PAGE_MS: number
-/** the most device pixels of laid pages' drawings kept off the view, put back as their pages come near again */
+/** the most device pixels of laid pages' drawings kept off the view on any device, put back as their pages come near again */
 export declare const KEEP_PIXELS: number
+/** the share of a device's memory its kept drawings may take */
+export declare const KEEP_SHARE: number
+/** the memory a device is taken to have where its browser does not say, GB */
+export declare const KEEP_MEMORY_GB: number
+/** this device's budget of kept drawings, device pixels: KEEP_SHARE of its memory, at least two screens, at most KEEP_PIXELS */
+export declare function keepBudget(o?: { deviceMemory?: number; screenPixels?: number }): number
 /** how many pages past the near ones are laid ahead while the reader rests, once the rows have ended */
 export declare const AHEAD_PAGES: number
 /** how long the view rests before the pages ahead are laid, ms */

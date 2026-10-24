@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type Ref, writePart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { PDF_OPTIONS } from '@/pdf-reader/engine/layer-proto/run.mjs'
-import { AHEAD_IDLE_MS, AHEAD_PAGES, createLayerSide, LEFT_RETRY_MS, noLayoutPage, PAGE_MS, SPREAD_MAX, spreadPages } from '@/pdf-reader/engine/view/layer-side.mjs'
+import { AHEAD_IDLE_MS, AHEAD_PAGES, createLayerSide, KEEP_PIXELS, keepBudget, LEFT_RETRY_MS, noLayoutPage, PAGE_MS, SPREAD_MAX, spreadPages } from '@/pdf-reader/engine/view/layer-side.mjs'
 import { type DocumentTask, internalsOf, type ViewEvent } from '@/pdf-reader/engine/view/reader-view.mjs'
 import { made, N, ORIG, partInputs } from './helpers/format-paper'
 import { ASSETS, clientOf, FakeIO, FakePDFPageView, FakePDFViewer, fakeDoc, fakeTask, flush } from './helpers/reader-fakes'
@@ -313,25 +313,37 @@ describe('no flash coming back: the drawings kept off the view (KEEP_PIXELS, §1
     expect(s.side.probe()).toMatchObject({ asked, copies, drawings: 0, drawnPixels: 0, restored: 1 })
   })
 
-  it('past the budget the drawing seen least recently is let go (its copy released): that page is asked and drawn again as it comes near', async () => {
+  it('past the budget the drawing farthest from the view is let go (its copy released), whichever was kept last: that page is asked and drawn again as it comes near', async () => {
     const { s } = await laid({ ahead: 0 })
     const one = layerOf(s, 1)?.querySelector('canvas') as HTMLCanvasElement, two = layerOf(s, 2)?.querySelector('canvas') as HTMLCanvasElement
     const px = one.width * one.height
     expect(two.width * two.height).toBe(px)
-    // a budget for one page and a half: page 1 kept first, then page 2, which lets page 1's go
+    // a budget for one page and a half, the view at page 1: page 2 kept first, then page 1, which lets page 2's go (farther)
     const t = await laid({ ahead: 0, keepPixels: Math.floor(1.5 * px) })
-    const first = layerOf(t.s, 1)?.querySelector('canvas') as HTMLCanvasElement
-    await nearOn(t.s, [1], false)
+    expect(internalsOf(t.s.view).centre()).toBe(1)
+    const second = layerOf(t.s, 2)?.querySelector('canvas') as HTMLCanvasElement
     await nearOn(t.s, [2], false)
+    await nearOn(t.s, [1], false)
     expect(t.s.side.probe()).toMatchObject({ drawings: 1, drawnPixels: px, dropped: 1 })
-    expect(first.width).toBe(0)
+    expect(second.width).toBe(0)
     const asked = t.s.side.probe().asked as number
-    await nearOn(t.s, [2])
-    expect(content(t.s, 2)).toBe('layer')
     await nearOn(t.s, [1])
+    expect(content(t.s, 1)).toBe('layer')
+    await nearOn(t.s, [2])
     await settle(t.s)
     expect(t.s.side.probe().asked as number).toBe(asked + 1)
-    expect(content(t.s, 1)).toBe('layer')
+    expect(content(t.s, 2)).toBe('layer')
+  })
+
+  it('the budget is the device\'s (keepBudget): a 64th of its memory (4 GB where the browser does not say), two of its screens at least, KEEP_PIXELS at most', () => {
+    const MB = 2 ** 20
+    expect(keepBudget({ deviceMemory: 4, screenPixels: 1080 * 2400 })).toBe((64 * MB) / 4)
+    expect(keepBudget({ deviceMemory: 8, screenPixels: 3024 * 1964 })).toBe(KEEP_PIXELS)
+    expect(keepBudget({ deviceMemory: 2, screenPixels: 720 * 1600 })).toBe((32 * MB) / 4)
+    // (none told: a phone's 4 GB; a large screen on a small memory: two screens)
+    expect(keepBudget({ screenPixels: 1080 * 2400 })).toBe((64 * MB) / 4)
+    expect(keepBudget({ deviceMemory: 0.5, screenPixels: 2560 * 1600 * 4 })).toBe(Math.min(KEEP_PIXELS, 2 * 2560 * 1600 * 4))
+    expect(keepBudget()).toBe((64 * MB) / 4)
   })
 
   it('a drawing kept while the pane was zoomed comes back drawn as it was, then again at the place\'s new k', async () => {

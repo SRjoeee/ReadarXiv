@@ -66,14 +66,31 @@ export function spreadPages(p, ids, pagesOf, isIn, max = SPREAD_MAX) {
   for (const id of ids) for (const q of pagesOf(id) ?? []) if (q !== p) out.add(q)
   return [...out].sort((a, b) => Math.abs(a - p) - Math.abs(b - p) || a - b).slice(0, max).filter(q => !isIn(q))
 }
-/** the most device pixels of laid pages' drawings the side keeps off the view (docs/PDF-READER.md §11.8, "No flash coming back"):
- *  a laid page that leaves the near area keeps its drawing (its copy, its SVG and its links, detached from the place), put back in
- *  place in one task as it comes near again, so that a page already laid never shows the original or an empty place first; the
- *  least recently seen let go first past it. 2^25 pixels, 128 MiB at the 4 bytes a pixel a copy costs: an A4 page at 120 % on a
- *  2x screen is 1905 x 2694 pixels, 19.6 MiB of the GPU process's memory as Chromium 153 on Metal holds it (an ImageBitmap of it
- *  no less; 2026-10-24), so six and a half such pages, nine at 100 %, twelve at the reader's fit (87 %), 26 to 49 at a ratio of 1:
- *  two thirds of what the left pane's PDF.js may hold of its own (ten page views drawn, its buffer) at the same zoom */
+/** the most device pixels of laid pages' drawings the side keeps off the view on any device (docs/PDF-READER.md §11.8, "No flash
+ *  coming back"): a laid page that leaves the near area keeps its drawing (its copy, its SVG and its links, detached from the
+ *  place), put back in place in one task as it comes near again, so that a page already laid never shows the original or an empty
+ *  place first; past the device's budget (keepBudget) the page farthest from the view is let go first. 2^25 pixels, 128 MiB at the
+ *  4 bytes a pixel a copy costs: an A4 page at 120 % on a 2x screen is 1905 x 2694 pixels, 19.6 MiB of the GPU process's memory
+ *  as Chromium 153 on Metal holds it (an ImageBitmap of it no less; 2026-10-24), so six and a half such pages, nine at 100 %, twelve
+ *  at the reader's fit (87 %): two thirds of what the left pane's PDF.js may hold of its own (ten page views drawn) at that zoom */
 export const KEEP_PIXELS = 2 ** 25
+/** the share of a device's memory its kept drawings may take: 1/64, 64 MiB on a phone of 4 GB (some ten pages of its screen at the
+ *  fit), 128 MiB (KEEP_PIXELS) on a computer of 8 GB, the most navigator.deviceMemory tells */
+export const KEEP_SHARE = 1 / 64
+/** the memory a device is taken to have where its browser does not say (navigator.deviceMemory: Chromium's alone), GB: a phone's
+ *  of today, so that no device is given more than it may hold */
+export const KEEP_MEMORY_GB = 4
+/**
+ * The device pixels of drawings the side keeps off the view on this device: KEEP_SHARE of its memory (`deviceMemory`, GB, where the
+ * browser tells it, else KEEP_MEMORY_GB) at 4 bytes a pixel, never fewer than two of its screens' pixels (`screenPixels`: its width
+ * and height at its pixel ratio, so that a page left a screen behind is always kept), never more than KEEP_PIXELS
+ */
+export function keepBudget({ deviceMemory, screenPixels } = {}) {
+  const gb = Number.isFinite(deviceMemory) && deviceMemory > 0 ? deviceMemory : KEEP_MEMORY_GB
+  const byMemory = Math.floor((gb * 2 ** 30 * KEEP_SHARE) / 4)
+  const floor = Number.isFinite(screenPixels) && screenPixels > 0 ? 2 * screenPixels : 0
+  return Math.min(KEEP_PIXELS, Math.max(byMemory, floor))
+}
 /** how many pages past the near ones the side lays ahead while the reader rests, the next first (the prefetch extended to the
  *  layer: the pages' rows, faces, layout and copy made before the reader reaches them, kept as drawings off the view) */
 export const AHEAD_PAGES = 2
@@ -122,8 +139,12 @@ function drawnList(pdfPage) {
 export function createLayerSide(view, o) {
   const V = internalsOf(view)
   const open = o.openLayer ?? theDoor
-  /** the host's bounds where it gives them: the pixels of the drawings kept off the view, the pages laid ahead */
-  const keepPixels = Number.isFinite(o.keepPixels) ? Math.max(0, o.keepPixels) : KEEP_PIXELS
+  /** the host's bounds where it gives them: the pixels of the drawings kept off the view (else this device's: keepBudget), the
+   *  pages laid ahead */
+  const keepPixels = Number.isFinite(o.keepPixels) ? Math.max(0, o.keepPixels) : keepBudget({
+    deviceMemory: globalThis.navigator?.deviceMemory,
+    screenPixels: (globalThis.screen?.width ?? 0) * (globalThis.screen?.height ?? 0) * (globalThis.devicePixelRatio || 1) ** 2,
+  })
   const aheadPages = Number.isSafeInteger(o.ahead) ? Math.max(0, o.ahead) : AHEAD_PAGES
   const clock = V.clock
   const ac = new AbortController()
@@ -358,22 +379,25 @@ export function createLayerSide(view, o) {
   const counts = { asked: 0, commits: 0, retired: 0, copies: 0, composed: 0, opens: 0, added: 0, leftParts: 0, forks: 0, restored: 0, dropped: 0, ahead: 0, aheadKept: 0 }
   const ring = []
   const empty = () => { const e = document.createElement('div'); e.className = 'axt-layer axt-layer-retired'; return e }
-  /** the drawings of laid pages kept off the view (KEEP_PIXELS), by page, the least recently seen first (a Map keeps its order of
-   *  insertion: a page kept again goes last): each the content its place held (its wrapper, SVG, copy, k, door generation and
-   *  target), and its copy's pixels */
+  /** the drawings of laid pages kept off the view (keepPixels), by page: each the content its place held (its wrapper, SVG, copy,
+   *  k, door generation and target), and its copy's pixels */
   const drawings = new Map()
   let drawnPixels = 0
   const pixelsOf = c => (c?.copy ? c.copy.width * c.copy.height : 0)
-  /** a laid page's content kept off the view, the least recently seen let go past KEEP_PIXELS */
+  /** a laid page's content kept off the view; past keepPixels the drawing farthest from the view let go first (the page in the
+   *  middle of the view, else the page just kept), the one kept longest first between two as far */
   function keepDrawing(n, c) {
     dropDrawing(n)
     const px = pixelsOf(c)
     if (!px || px > keepPixels) { release(c.copy); return }
     drawings.set(n, { c, px })
     drawnPixels += px
-    for (const [m, d] of drawings) {
-      if (drawnPixels <= keepPixels) break
-      drawings.delete(m)
+    const at = V.centre() || n
+    while (drawnPixels > keepPixels) {
+      let far = null, most = -1
+      for (const m of drawings.keys()) { const d = Math.abs(m - at); if (d > most) { far = m; most = d } }
+      const d = drawings.get(far)
+      drawings.delete(far)
       drawnPixels -= d.px
       release(d.c.copy)
       counts.dropped++

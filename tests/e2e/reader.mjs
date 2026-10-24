@@ -947,7 +947,7 @@ try {
     await page.evaluate(() => document.querySelector('header button')?.focus())
     await page.waitForTimeout(300)
     const w1 = await held()
-    check('through the paper and back: the layer in the document near the view alone, each page far from it out of it (its copy, its SVG and its links, kept off the view within KEEP_PIXELS), the one the focus held once the focus left it', w1.laid <= w1.near && w1.svgs === w1.laid && w1.copies === w1.laid && w1.links <= w1.laid && w1.laid + w1.retired <= sampleCut.paper.pages && w1.drawings <= w1.retired && w1.drawnPixels <= 2 ** 25, `${JSON.stringify(w0)} then ${JSON.stringify(w1)}; the focus was on place ${focusedPlace || 'none'}${keptForFocus ? ', laid while it held it' : ''}`)
+    check('through the paper and back: the layer in the document near the view alone, each page far from it out of it (its copy, its SVG and its links, kept off the view within the device's budget), the one the focus held once the focus left it', w1.laid <= w1.near && w1.svgs === w1.laid && w1.copies === w1.laid && w1.links <= w1.laid && w1.laid + w1.retired <= sampleCut.paper.pages && w1.drawings <= w1.retired && w1.drawnPixels <= 2 ** 25, `${JSON.stringify(w0)} then ${JSON.stringify(w1)}; the focus was on place ${focusedPlace || 'none'}${keptForFocus ? ', laid while it held it' : ''}`)
     note(`the window on the sample (4 pages; JS heap in MB): before ${JSON.stringify(w0)}, after a scroll through it and back ${JSON.stringify(w1)}`)
     const long = await page.evaluate(() => window.__long)
     note(`the layer's longest main-thread task in this run: ${Math.max(0, ...long)} ms over ${long.length} long task(s) (a reading on a shared machine: L7 is reader-perf's)`)
@@ -966,7 +966,7 @@ try {
     const page = await openReader({ mode: 'bilingual' })
     const side = () => page.evaluate(() => window.__reader.side()?.probe() ?? null)
     /** what each place shows: the layer's language (a dash where its copy is not drawn), the original's page view, or nothing (a far
-     *  place holding the empty element of a page laid off the view, its drawing kept: layer-side.mjs retire, KEEP_PIXELS) */
+     *  place holding the empty element of a page laid off the view, its drawing kept: layer-side.mjs retire, keepBudget) */
     const shownNow = () => page.evaluate(() => [...document.querySelectorAll('#right .axt-place')].map(p => {
       const l = p.querySelector('.axt-place-view > .axt-layer:not(.axt-layer-retired)')
       if (l) return `${l.querySelector('svg')?.getAttribute('lang') ?? '?'}${l.querySelector('canvas.axt-layer-copy')?.width > 0 ? '' : '-'}`
