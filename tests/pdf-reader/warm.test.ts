@@ -201,3 +201,36 @@ describe('faceWarmer: the slices of what v0 will draw of a page, loaded before v
     await expect(failing.warm({ units: [{ kind: 'para', text: '\u4e2d', st: null }] }, 'times')).resolves.toBeUndefined()
   })
 })
+
+describe('a page reached before its own part, and a wave let go', () => {
+  it('a page only a unit running on from an earlier part reaches is not covered until its own part is read', async () => {
+    const { pagesOfParts } = await import('@/pdf-reader/engine/layer-proto/warm.mjs')
+    // (part 1 covers page 1; its unit 0 runs on to page 2, which part 2 covers)
+    const part1 = { pages: [1, 1], layout: { fonts: ['AAAAAA+NimbusRomNo9L-Regu'], lines: [[0, [1, 72, 540, 100, 110, 98, 10, 0, 2, 72, 540, 700, 710, 698, 10, 0]]] as [number, number[]][] } }
+    const part2 = { pages: [2, 2], layout: { fonts: ['BBBBBB+NimbusRomNo9L-Medi'], lines: [[1, [2, 72, 540, 650, 660, 648, 10, 0]]] as [number, number[]][], names: [[0, 11, 2, 72, 600, 120, 610, 598, 9, 0, 0, -1, 0, 72, 540]] } }
+    const first = pagesOfParts([part1])
+    expect(first.get(1)?.covered).toBe(true)
+    expect(first.get(2)?.covered).toBe(false)
+    expect([...(first.get(2)?.units.keys() ?? [])]).toEqual([0])
+    const both = pagesOfParts([part1, part2])
+    expect(both.get(2)?.covered).toBe(true)
+    expect([...(both.get(2)?.units.keys() ?? [])].sort()).toEqual([0, 1])
+    expect(both.get(2)?.names.map(n => n.key)).toEqual(['figure'])
+  })
+
+  it('a wave whose signal is aborted begins no slice more; those loading settle', async () => {
+    const { faceWarmer, WAVE_SLOTS } = await import('@/pdf-reader/engine/layer-proto/warm.mjs')
+    const many = async (id: string) => Array.from({ length: 12 }, (_, i) => ({ url: `/s/${id}-${i}.woff2`, ranges: [0x4e00 + 0x100 * i, 0x4eff + 0x100 * i] }))
+    const ac = new AbortController()
+    hold = true
+    const text = Array.from({ length: 12 }, (_, i) => String.fromCodePoint(0x4e00 + 0x100 * i)).join('')
+    const wave = faceWarmer({ faceSources: many, target: 'zh' }).warm({ units: [{ kind: 'para', text, st: REGULAR }] }, 'times', { signal: ac.signal })
+    for (let i = 0; i < 20 && loads.length < WAVE_SLOTS; i++) await new Promise(r => setTimeout(r, 0))
+    expect(loads.length).toBe(WAVE_SLOTS)
+    ac.abort()
+    hold = false
+    for (const done of held.splice(0)) done()
+    await wave
+    expect(loads.length).toBe(WAVE_SLOTS)
+  })
+})

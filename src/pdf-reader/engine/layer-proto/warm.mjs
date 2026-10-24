@@ -70,15 +70,18 @@ export function familyOfParts(parts) {
  * and the style its original is set in there (classifyFont's of its lines' most common font by width, formulas' fonts
  * aside; null where the layout tells none: a part with no layout locates its units by their left rectangles); `names`, the
  * babel names the layout sets on it ({ key, capitals, st }); `fonts`, the classes of the fonts its lines are set in; `serif`,
- * the serif design most of its lines are set in (v0's `designs.serif` on page 1), null with none. A line row is
- * [page, x0, x1, baseline, top, bottom, size, font]; a name row's page is its third number, its font its tenth
+ * the serif design most of its lines are set in (v0's `designs.serif` on page 1), null with none; `covered`, whether a part
+ * read covers the page (its `pages`): a page reached only by a unit running on to it from an earlier part has more to come,
+ * its own part's names, fonts and units. A line row is [page, x0, x1, baseline, top, bottom, size, font]; a name row's page
+ * is its third number, its font its tenth
  */
 export function pagesOfParts(parts) {
   const classes = new Map()
   const classOf = name => classes.get(name) ?? classes.set(name, classifyFont(name)).get(name)
   const pages = new Map()
-  const pageOf = q => pages.get(q) ?? pages.set(q, { units: new Map(), names: [], fonts: new Map(), serifs: new Map() }).get(q)
+  const pageOf = q => pages.get(q) ?? pages.set(q, { units: new Map(), names: [], fonts: new Map(), serifs: new Map(), covered: false }).get(q)
   for (const p of parts ?? []) {
+    if (Array.isArray(p?.pages) && Number.isSafeInteger(p.pages[0]) && Number.isSafeInteger(p.pages[1])) for (let q = p.pages[0]; q <= p.pages[1]; q++) pageOf(q).covered = true
     const L = p?.layout
     if (L && Array.isArray(L.fonts) && Array.isArray(L.lines)) {
       for (const [id, rows] of L.lines) {
@@ -110,7 +113,7 @@ export function pagesOfParts(parts) {
       units.set(id, best ? classOf(best[0]) : null)
     }
     const serif = [...pg.serifs].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
-    out.set(q, { units, names: pg.names, fonts: [...pg.fonts.values()], serif })
+    out.set(q, { units, names: pg.names, fonts: [...pg.fonts.values()], serif, covered: pg.covered })
   }
   return out
 }
@@ -123,8 +126,9 @@ export function pagesOfParts(parts) {
  * author's is never drawn and is not asked), `page.names` (pagesOfParts', in the target's words), `page.fonts` (the classes
  * of the original's text fonts on the page: each face's alphabet slice) and `page.likely` (the serif design of page 1, for
  * the faces v0 warms there; null: none). The slices are loaded WAVE_SLOTS at a time, in the order the page asks them; a
- * slice v0 asks meanwhile v0 loads at once, as before. It resolves once each has loaded or failed; it never rejects. A slice
- * loaded or loading is not asked again. Its face set lets nothing go that failed (keepFailed): a slice that fails here
+ * slice v0 asks meanwhile v0 loads at once, as before; `signal` aborted, no slice more is begun (those loading settle). It
+ * resolves once each has loaded or failed, or the signal has stopped it; it never rejects. A slice loaded or loading is not
+ * asked again. Its face set lets nothing go that failed (keepFailed): a slice that fails here
  * fails v0's check of the units that need it, as if v0 had asked it itself; a run's open forgets it, and asks again
  */
 export function faceWarmer({ faceSources, target, rules = BUILTIN_RULES }) {
@@ -133,7 +137,7 @@ export function faceWarmer({ faceSources, target, rules = BUILTIN_RULES }) {
   const FS = roleFaceSet({ faceSources, keepFailed: true })
   const rolesOf = new Map()
   return {
-    async warm(page, family) {
+    async warm(page, family, { signal = null } = {}) {
       let roles = rolesOf.get(family)
       if (!roles) rolesOf.set(family, (roles = rolesFor(target, family, R.cjkFaces)))
       const design = page?.likely ?? (family === 'other' ? 'times' : family)
@@ -170,7 +174,7 @@ export function faceWarmer({ faceSources, target, rules = BUILTIN_RULES }) {
       const lists = await Promise.all([...runs.values()].map(r => FS.unloaded(r.face, [...r.chars].join('')).catch(() => [])))
       const queue = [...new Set(lists.flat())]
       await Promise.all(Array.from({ length: Math.min(WAVE_SLOTS, queue.length) }, async () => {
-        for (let f = queue.shift(); f; f = queue.shift()) await f.load().catch(() => null)
+        for (let f = queue.shift(); f && !signal?.aborted; f = queue.shift()) await f.load().catch(() => null)
       }))
     },
   }

@@ -13,8 +13,9 @@ export declare function familyOfParts(parts: readonly WarmPart[] | null | undefi
 /** a babel name set on a page: its key (NAME_KEYS'), whether it is set in capitals, its font's class (null: none told) */
 export interface WarmName { key: string; capitals: boolean; st: FontClass | null }
 /** what a page of the parts read so far sets: its units with their original's style there (null: none told), its names, the
- *  classes of the fonts its lines are set in, and the serif design most of its lines are set in (null: none) */
-export interface WarmPageOfParts { units: Map<number, FontClass | null>; names: WarmName[]; fonts: FontClass[]; serif: string | null }
+ *  classes of the fonts its lines are set in, the serif design most of its lines are set in (null: none), and whether a part
+ *  read covers it (else only a unit running on to it from an earlier part reaches it so far) */
+export interface WarmPageOfParts { units: Map<number, FontClass | null>; names: WarmName[]; fonts: FontClass[]; serif: string | null; covered: boolean }
 export declare function pagesOfParts(parts: readonly WarmPart[] | null | undefined): Map<number, WarmPageOfParts>
 /** a unit as the warmer reads it: its kind (an author's is never drawn), its translated text, its original's style */
 export interface WarmUnit { kind: string | null; text: string; st: FontClass | null }
@@ -23,8 +24,9 @@ export interface WarmUnit { kind: string | null; text: string; st: FontClass | n
 export interface WarmPage { units?: readonly WarmUnit[]; names?: readonly WarmName[]; fonts?: readonly FontClass[]; likely?: string | null }
 export interface FaceWarmer {
   /** the slices that hold what v0 will draw of `page` in the target's faces for the paper's English `family`, loaded
-   *  WAVE_SLOTS at a time; resolves once each has loaded or failed, never rejects */
-  warm(page: WarmPage, family: EnglishFamily): Promise<void>
+   *  WAVE_SLOTS at a time, no more begun once `signal` is aborted; resolves once each has loaded or failed or the signal has
+   *  stopped it, never rejects */
+  warm(page: WarmPage, family: EnglishFamily, o?: { signal?: AbortSignal | null }): Promise<void>
 }
 /** the slices the wave loads at a time */
 export declare const WAVE_SLOTS: number

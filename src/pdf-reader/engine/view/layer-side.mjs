@@ -756,6 +756,9 @@ export function createLayerSide(view, o) {
    *  (warm.mjs pagesOfParts, read again as more parts are read) */
   let warmer = null, warmerOf = null, warmQueued = false
   const warmedUnits = new Set()
+  /** the waves' stop: aborted as the side ends or another target is shown, so that no slice more of a wave is begun for what is
+   *  no longer read (those loading settle; a slice is the reader's for any later paper) */
+  let warmAc = new AbortController()
   let pagesRead = null, pagesReadOf = null
   const pagesNow = () => {
     const parts = feed.state().parts
@@ -775,7 +778,9 @@ export function createLayerSide(view, o) {
       warmerOf = target
     }
     const parts = feed.state().parts, family = familyOfParts(parts), pages = pagesNow()
+    const signal = warmAc.signal
     for (const q of qs) {
+      if (signal.aborted) return
       const pg = pages.get(q)
       if (!pg) continue
       const units = []
@@ -787,11 +792,12 @@ export function createLayerSide(view, o) {
         if (text) units.push({ kind: index.kinds[id] ?? null, text, st })
       }
       const pageKey = `${target}|${family}|page ${q}`, likelyKey = `${target}|${family}|likely`
+      // (a page's names and fonts asked once its own part is read: one only a unit running on to it reaches has more to come)
       const extras = !warmedUnits.has(pageKey)
-      warmedUnits.add(pageKey)
+      if (pg.covered) warmedUnits.add(pageKey)
       // (v0 warms its likely faces on page 1, in the serif design most of page 1's characters are set in)
       const likely = q === 1 && !warmedUnits.has(likelyKey) ? (warmedUnits.add(likelyKey), pg.serif ?? (family === 'other' ? 'times' : family)) : null
-      if (units.length || extras || likely) await warmer.warm({ units, names: extras ? pg.names : [], fonts: extras ? pg.fonts : [], likely }, family)
+      if (units.length || extras || likely) await warmer.warm({ units, names: extras ? pg.names : [], fonts: extras ? pg.fonts : [], likely }, family, { signal })
       if (disposed) return
     }
   }
@@ -1154,6 +1160,9 @@ export function createLayerSide(view, o) {
     retarget(to) {
       if (disposed || state === 'refused' || typeof to !== 'string' || !to || to === target) return
       target = to
+      // (the target before's waves begin no slice more)
+      warmAc.abort()
+      warmAc = new AbortController()
       dropped = false
       gen++
       offPage?.()
@@ -1220,6 +1229,7 @@ export function createLayerSide(view, o) {
       detach()
       feed.dispose()
       ac.abort()
+      warmAc.abort()
       leftAc.abort()
       for (const off of offs) off()
       offPage?.()
