@@ -783,7 +783,7 @@ const NO_SMALL_CAPS = Object.freeze({ small: new Set(), upper: new Set(), lower:
  * unit's letters and digits whose case TeX did not change, is a faked small capital. A capital at their size is a case change of
  * another kind, and a face of real small capitals (cmcsc10, LM Roman Caps, a face with an SC name) draws a lowercase letter as
  * itself. A capital paired with a lowercase letter of the source at the size of the letters TeX did not change is a capital of
- * the text's (`upper`): a class's \MakeTextUppercase heading (acmart's section titles, 2610.22065), a capital at its full size.
+ * the text's (`upper`): a class's \MakeTextUppercase heading (REVTeX's section titles, 2610.21288), a capital at its full size.
  * Returns { small, upper, lower, letters, ratio }: the page characters that are faked small capitals, those that are capitals of
  * the text's, those whose source letter is a lowercase one (the letters that can tell either), and every page letter and digit
  * read, each by the alignment's pairs (`pair` into S, gapsOfOnce's); `small` and `upper` are empty where no letter of the unit's

@@ -8,7 +8,7 @@ import { plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
 // no piece of the unit's source. The unit's size is its capitals' (TeX's nominal size), not the median its small capitals make,
 // and it is set in small capitals, which the layer draws itself where its face has none of its own: each lowercase letter as the
 // face's capital at the share of the size the page sets them at, measured as it is drawn, no browser synthesizing any. Case is
-// each character's, in the target's case mapping. A unit its class sets in the text's capitals (acmart's \MakeTextUppercase) is
+// each character's, in the target's case mapping. A unit its class sets in the text's capitals (REVTeX's \MakeTextUppercase) is
 // drawn in the target's capitals; a real small-caps face and a unit of mixed sizes read as before
 
 type L2 = typeof import('@/pdf-reader/engine/layer-proto/layer2.mjs')
@@ -241,7 +241,7 @@ describe('case is each character\'s, in the target\'s case mapping', () => {
   })
 })
 
-describe('a unit its class sets in the text\'s capitals (acmart\'s \\MakeTextUppercase section titles, 2610.22065)', () => {
+describe('a unit its class sets in the text\'s capitals (REVTeX\'s \\MakeTextUppercase section titles, 2610.21288)', () => {
   // ("2 RELATED WORK": its capitals at the text's size where the source writes "Related Work")
   const line = () => lineOf([['RELATED', 9.963, times], ['WORK', 9.963, times, 2.5]])
   const source = [text('Related Work')]

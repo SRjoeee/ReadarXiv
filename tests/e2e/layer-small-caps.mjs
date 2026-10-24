@@ -141,12 +141,12 @@ const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 't
 const text = s => ({ t: 'text', s, tr: true })
 const odebrain = [...'ODEBRAIN'].map((ch, k) => ({ ch, size: k < 4 ? 9.963 : 7.97 }))
 /** the units laid in each browser: ICLR's appendix heading in Spanish and German (2602.23285 p15), its method's name the page's own
- *  characters; a paragraph's \textsc run (2608.07584); a German heading whose ß expands; an acmart all-capitals heading; Russian */
+ *  characters; a paragraph's \textsc run (2608.07584); a German heading whose ß expands; a REVTeX all-capitals heading; Russian */
 const CASES = [
   { name: 'ICLR heading, es', to: 'es', width: 300, base: { ...BASE, caps: true }, unit: { kind: 'heading', src: '', pieces: [text('A.1 Discusión: perspectivas clave sobre '), { t: 'ph', src: '\\ours', k: 1 }] }, resolved: { fields: { orig: { size: 9.963 }, capsRatio: 0.8 }, renderings: [[1, { mode: 'orig-text', text: 'ODEBRAIN', gap: { chars: odebrain } }]] }, synth: 'Discusión: perspectivas clave' },
   { name: 'ICLR heading, de', to: 'de', width: 300, base: { ...BASE, caps: true }, unit: { kind: 'heading', src: '', pieces: [text('A.2 Dynamische spektrale Graphstruktur und Größe')] }, resolved: { fields: { orig: { size: 9.963 }, capsRatio: 0.8 } }, synth: 'Dynamische spektrale Graphstruktur' },
   { name: 'a \\textsc run in a paragraph, es', to: 'es', width: 160, base: BASE, unit: { kind: 'para', src: '', pieces: [text('Véase '), { t: 'open', id: 1, src: '\\textsc{' }, text('ComplexityWorld'), { t: 'close', id: 1, src: '}' }, text(' para los detalles del entorno y de sus tareas.')] }, resolved: { fields: { orig: { size: 9.963 }, capsRatio: 0.8 } } },
-  { name: 'acmart all-capitals heading, es', to: 'es', width: 300, base: { ...BASE, upper: true }, unit: { kind: 'heading', src: '', pieces: [text('Trabajos relacionados y Straße')] }, resolved: { fields: { orig: { size: 9.963 } } } },
+  { name: 'REVTeX all-capitals heading, es', to: 'es', width: 300, base: { ...BASE, upper: true }, unit: { kind: 'heading', src: '', pieces: [text('Trabajos relacionados y Straße')] }, resolved: { fields: { orig: { size: 9.963 } } } },
   { name: 'ICLR heading, ru', to: 'ru', width: 300, base: { ...BASE, caps: true }, unit: { kind: 'heading', src: '', pieces: [text('Обсуждение: ключевые идеи')] }, resolved: { fields: { orig: { size: 9.963 }, capsRatio: 0.8 } }, synth: 'Обсуждение: ключевые идеи' },
 ]
 
