@@ -345,9 +345,10 @@ was made over. The layer gate draws every output over its `base.pdf` wrapped by 
 made over it too), arXiv's PDF where a fixture has none (no marks: never wrapped), and `arxiv.pdf` stays the left's. A paper production would refuse a base
 page of ours would keep the layout file the pack held before, made over arXiv's PDF, its `base.json` saying why
 (`source: 'arxiv'`, outside the version check); in the pack of 2026-10-24 (`13785c79`, LAYOUT 20: `435d19bd`'s base pages and layout files, the layout files' version aside; `435d19bd` LAYOUT 19, each base record with its marks' texts: the marks of LAYOUT 17 and the unit refusals of 18, each unit laid only where every page it is on is arXiv's page, the same words) every one of the 7 papers has ours, each made on the tree production compiles it on (`base.json`'s `image`: the year its 00README declares, else that of arXiv's build; 2307.16209, 2608.16117 and 2609.26457 on TeX Live 2023).
-The pack of 2026-10-25 (`5a8dbce8`, LAYOUT 22, stage 4's references) is `093304a2`'s with each output's `base.pdf`, `base.json`
-and `layout.json` made again by the engine (`layer-fixtures.mjs --offline --layouts-only`, each paper on its base record's
-year), every other file its own bytes: the instrument is the same, so the rules gate measures the two engines on their own packs
+The pack of 2026-10-25 (`927cec93`, LAYOUT 22, stage 4's references) is `09208b43`'s (#469's figures) with each output's
+`base.pdf`, `base.json` and `layout.json` made again by the engine (`layer-fixtures.mjs --offline --layouts-only`, each paper on
+its base record's year; the same maker over the merge base's engine makes `09208b43` again, digest for digest), every other file
+its own bytes: the instrument is the same, so the rules gate measures the two engines on their own packs
 alike. A bibliography's entries are numbered after the source's other units, so every unit the frozen records name keeps its
 number, and its rows in the layout file are byte for byte the ones before (the font table gains the entries' faces at its end);
 the entries' units have no translation in the pack, as the gates' run hides them (`RUN_DEFAULTS`).
