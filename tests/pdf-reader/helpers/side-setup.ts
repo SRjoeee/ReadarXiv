@@ -100,6 +100,9 @@ export interface Options {
   assets?: Record<string, unknown>
   /** the fake door's links of a laid page (the door's own gives none); `n` the page, `door` its index (0 the first opened) */
   links?: (n: number, door: number) => LinkRecord[]
+  /** the side's bounds (LayerSideOptions): the drawings' pixels kept off the view, the pages laid ahead */
+  keepPixels?: number
+  ahead?: number
 }
 /** the view over the original (its four pages), its layer side over the door and the paper's objects served by digest */
 export async function setup(o: Options = {}): Promise<Setup> {
@@ -145,6 +148,7 @@ export async function setup(o: Options = {}): Promise<Setup> {
   const doors: Setup['doors'] = []
   const side = createLayerSide(view, {
     paper: { id: '2608.04322', version: 1 }, target: 'zh', faceSources: o.faceSources ?? (async () => null), hyphUrl: () => '',
+    ...(o.keepPixels === undefined ? {} : { keepPixels: o.keepPixels }), ...(o.ahead === undefined ? {} : { ahead: o.ahead }),
     fetchObject, bind: (o.bind ?? (async () => true)) as never,
     composed: (tail, options) => {
       const task = fakeTask(destroyed, `composed ${composed.length}`)

@@ -1820,7 +1820,7 @@ const PUNCT_OPEN = /^[\uFF08\u300C\u300E\u3010\u3014\u3008\u300A\u3018\u3016“�
  *  the compatibility supplement), where a non-`u` class took every astral character for CJK through its surrogates and
  *  sent Mathematical Alphanumeric Symbols, which the body face lacks, to it. `quotes` (the rules' cjkQuotes): whether the
  *  curly quotes, dashes, ellipsis and middle dot are CJK's too */
-const cjkClassRe = quotes => (!quotes ? /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u{20000}-\u{3FFFF}]/u : /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F“”‘’—…·\u{20000}-\u{3FFFF}]/u)
+export const cjkClassRe = quotes => (!quotes ? /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u{20000}-\u{3FFFF}]/u : /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F“”‘’—…·\u{20000}-\u{3FFFF}]/u)
 /** the attributes a piece may set over what it holds, a bit each: weight, slant, small capitals, family, colour */
 const WEIGHT = 1, SLANT = 2, CAPS = 4, FAMILY = 8, COLOUR = 16, EVERY = 31
 const STYLE_CMDS = [

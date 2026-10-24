@@ -54,9 +54,15 @@ export interface RoleFaceSet {
   ready(face: Face, text: string): Promise<void>
   /** the face's table asked and its first slice fetched, at once, not awaited */
   warm(id: FaceId): void
+  /** the FontFaces of the slices that hold `text`'s characters and have not loaded (each character's from the first of the
+   *  face's ids whose served ranges hold it); [] where a table could not be had */
+  unloaded(face: Face, text: string): Promise<FontFace[]>
 }
-/** the role table's faces as one run is given them: `faceSources`, or each face's whole file at `faceUrl(file)` */
-export declare function roleFaceSet(o?: { faceSources?: FaceSources | null; faceUrl?: (file: string) => string }): RoleFaceSet
+/** the role table's faces as one run is given them: `faceSources`, or each face's whole file at `faceUrl(file)`; `keepFailed`, a
+ *  warmer's: nothing that failed is let go (a run's open lets it go) */
+export declare function roleFaceSet(o?: { faceSources?: FaceSources | null; faceUrl?: (file: string) => string; keepFailed?: boolean }): RoleFaceSet
+/** a run's face in a role set of the caller's (rolesFor's), as v0's roles give it */
+export declare function faceOfRoles(roles: import('../rules/font-roles.mjs').RoleSet, st: Style, cls: 'cjk' | 'latin'): Face
 /** the faces a unit's tokens are drawn in, each with its characters */
 export declare function runsOfTokens(tokens: readonly { face?: Face; s?: string; hyph?: string }[]): FaceRun[]
 /** the id of the face a target's body text is drawn in (after setRoleFaces) */

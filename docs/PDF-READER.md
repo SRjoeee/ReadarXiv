@@ -756,18 +756,59 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   arXiv's PDF, §19.8, is drawn with annotations off where the delta replaces it) and its SVG, put in one task, in place: the place's size and the pane's
   scroll unchanged, its page view destroyed first, no viewer document set. A zoom draws the copies again at the new k
   600 ms after it, nothing laid again; a copy is kept while it is at the scale a copy drawn then would be at. A page this
-  door laid that leaves the view lets its SVG and its copy go and holds an
-  empty element (retired: the place shows no page, and no page view is made of it); a page the door makes ready while it
-  is far is retired at once, and committed directly when it comes near. The one exception: a page that holds the focus (a
-  link, or the place a jump gave it to) is kept as it goes far, and let go once the focus has left it (read a task after
-  the focus moves, never in a microtask: a native Tab clears the focus before it arrives at the next link), so at most one
-  far page stays laid, and the focus never falls to the document. A page that fails, or whose copy fails, shows the
+  door laid that leaves the view takes its drawing out of the document and holds an empty element (retired: the place shows
+  no page, and no page view is made of it); a page the door makes ready while it is far is retired at once, and committed
+  directly when it comes near. The one exception: a page that holds the focus (a link, or the place a jump gave it to) is
+  kept in place as it goes far, and retired once the focus has left it (read a task after the focus moves, never in a
+  microtask: a native Tab clears the focus before it arrives at the next link), so at most one far page stays in the
+  document, and the focus never falls to the document.
+- **No flash coming back** (the owner's goal of 2026-10-24: a page already seen never shows the original, or an empty place,
+  before its translation, coming back to it). A retired page's drawing — its copy, its SVG and its links, detached — is kept off the view,
+  and put back in its place in the same task as the page comes near again (`bringBack`), one pane height before it can be
+  seen: no ask, no copy drawn, the right's shapes the page's own. The drawings are kept within the device's budget
+  (`keepBudget`): a 64th of its memory (`navigator.deviceMemory`, 4 GB where the browser does not say) at 4 bytes a pixel, at
+  least two of its screens' pixels, at most `KEEP_PIXELS`, 2^25 pixels (128 MiB), and on iOS and iPadOS at most
+  `IOS_KEEP_PIXELS`, 2^23 (32 MiB: its WebKit tells no memory and kills a tab past its process's limit; until Safari 17 it also
+  refused a canvas past a page-wide canvas cap of about 200 MB on an iPhone SE, WebKit bug 195325, which WebKit PR 14375 removed;
+  32 MiB beside the near pages' copies stays under a third of the lowest cap reported); past it the drawing farthest from the
+  view goes first. A copy costs its pixels: an A4 page at 120 % on a 2x screen is 1905 × 2694 pixels, 19.6 MiB of the GPU process's
+  memory in Chromium 153 on Metal (an `ImageBitmap` of it no less; the probe of 2026-10-24). So a computer of 8 GB keeps six and
+  a half such pages, nine at 100 %, twelve at the reader's fit (two thirds of what the left pane's PDF.js holds of its own at
+  that zoom, its ten page views drawn), and a phone of 4 GB 64 MiB, some ten pages of its screen at the fit. A page let go past
+  it is laid again from the door's kept markup as before. A drawing kept across a zoom comes back as it was and is drawn again
+  at the new k. A later attempt, a fork or another target lets every kept drawing go (they are the door before's), as do
+  `dropOthers()`, a refusal and the dispose. A host may give its own budget (`keepPixels`; 0 keeps none).
+- **The faces, in one wave** (`layer-proto/warm.mjs`). v0 checks and loads the faces of a unit as it lays it, one unit after
+  another (E2), so a page whose units brought new characters waited a round trip a unit: 2602.23285v2 in Chinese asked 38
+  font files in 12 waves before its first page, 4.3 to 9.2 s of a cold visit (production, 2026-10-24). The side asks the
+  slices of what v0 will draw of the near pages at once, the page in the middle of the view first (page 1 alone until a page
+  is shown, the others after it), as soon as the index, their rows and the parts that locate them are in (before the
+  composed document is open): each unit's translation in the style its lines are set in on the page (their most common font
+  by width, formulas aside, as v0 takes its original's most common class; a heading the layout tells no font of in the
+  bold), an author's unit never (v0 never draws one; on 2602.23285v2's page 1 its names alone took 16 slices, 1.7 MB, where
+  the units drawn take 1.4 MB), the page's babel names in the target's words, the alphabet slice of each text font the page
+  is set in, and on page 1 the faces v0 warms there (`warmFaces`). CJK characters go by the rules' class to the CJK face,
+  the rest to the style's Latin face; the paper's family is read from the parts' layouts (each font weighted by the lines
+  set in it; the same family page 1's characters give on the seven papers of the gate pack). The slices are loaded
+  `WAVE_SLOTS` (4) at a time: the edge answers a connection's streams side by side whatever their priority (staging,
+  2026-10-24: a High fetch beside 28 slices loaded as fonts, VeryHigh, ended in 175 to 470 ms, as beside 28 asked Low or
+  High), so a wave of 28 slices in flight held each read of the original the composed document makes, one after another,
+  to a share of the line in 29. v0's checks are unchanged: they find the slices loaded or loading, and a run the wave did
+  not foresee (a bold word in a paragraph, a character only the original's text holds) asks its own as before. A slice is
+  asked once.
+- **The pages ahead** (the prefetch on the layer). Once the rows of the attempt have ended (a host that translates as it shows
+  is asked for nothing it has not translated), the door is open, no page of the view is asked of it, the right pane is shown
+  and the document visible, and the view has rested `AHEAD_IDLE_MS` (600 ms: no scroll, nothing asked, the last near page
+  committed), the side lays the `AHEAD_PAGES` (2) pages after the last near page past the middle of the view, one at a time,
+  each after its faces' wave, and draws each at its place's k into a drawing kept off the view: the reader reaching it finds
+  it put back at once. A scroll gives the window up (its ask and its copy under way aborted) until the view rests again; a
+  page come near meanwhile is committed as any near page. A host may lay none (`ahead: 0`). A page that fails, or whose copy fails, shows the
   original and is asked again on a zoom, on coming near or (a copy) on the next scroll; one asked, told `laying` and not
   laid within 30 s (`PAGE_MS`) shows the original, warns once a side and is asked again on the next scroll, its late
   `ready` taken. A page still `waiting` (its part, its closure or its rows) is never a stall. After a reopen a laid page
   keeps its drawing until the new door's page is ready; leaving the view, that drawing goes and the place shows its own
-  content again. The window holds a copy for the places near the view alone: their pixels are bounded by the near area at
-  any zoom, so no copy of a far page is kept.
+  content again. The document holds a copy for the places near the view alone (their pixels bounded by the near area at
+  any zoom); far ones are kept off it, within the device's budget.
 - **No scale is captured.** Before the per-unit erasure a copy could be cut from the left's canvas or a place's page view where
   PDF.js had drawn it near k, which meant reading the scale PDF.js drew at (`pagerender`), refusing a canvas drawn at two
   scales (PDF.js's `approximateFraction` floors width and height to different terms at most ratios) and slack for the
@@ -781,8 +822,9 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   a tolerance for it. The SVG and the links are laid in the same frame: the page's size at its scale (`--axt-frame-w` and
   `-h`, `--total-scale-factor` times its size in PDF units), never the place's floored box. `pnpm e2e:registration` holds it
   on the sample at DPR 1 and 2, at the fit and every step of the zoom menu: each copy on the place's box at the pixel ratio,
-  the SVG and the links the page's size, and a page retired and laid again the same copy to the pixel (82 of 82, over our
-  base whole and as a delta, 2026-10-23; at the fit and 100 % no zoom's recopy makes a long task).
+  the SVG and the links the page's size, a page far from the view and back its very copy (nothing drawn again), and a page
+  drawn again at the same zoom (a zoom away and back) the same copy to the pixel (84 of 84, 2026-10-24; at the fit and 100 %
+  no zoom's recopy makes a long task).
 - **What a copy hides** (the per-unit erasure's reader side, `layer-proto/visibility.mjs`, `layer-proto/hide.mjs`; the file
   side is §19.9). Our page is wrapped: each unit's text in group `axt:u<id>`, its placeholders in `axt:u<id>.p`, its label
   in `axt:u<id>.l`, each babel name in `axt:n<occ>`, all shown by default. A copy is the page with the groups of the units
@@ -832,7 +874,9 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
     again, 1 and 20 now). The lay's reads of a page (its pixels, a live reading) keep it warm too, so a page's copy renders from
     the parse its lay made, and a run opened again over the same document (another target, a retry) reads and copies its warm
     pages with no operator list asked. The bound is the document's: at most `WARM_PAGES` pages' operator lists and decoded
-    images, whatever runs over it. B and C are rendered on the box their operations cut from alone (`layer2.mjs`
+    images, whatever runs over it. It stays 4 beside the drawings kept off the view (2026-10-24): a page coming back is put
+    back from its drawing with no render, so more warm pages would buy the scroll back nothing, while a warm page holds its
+    images decoded (2602.23285v2 p8, 16.6 MB of them compressed) where a kept drawing costs its pixels alone. B and C are rendered on the box their operations cut from alone (`layer2.mjs`
     `opsSources`: 8 to 30 % of the pages' pixels on the pack), with render A's annotation mode, and a copy of a page that leaves
     the view is aborted before its next render (`copyOf`'s `signal`).
   - **Another target, in place** (`retarget(to)`). The layer is the paper's whatever the language, so another target is a later
