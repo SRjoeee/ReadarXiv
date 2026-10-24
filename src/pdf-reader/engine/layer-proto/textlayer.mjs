@@ -60,7 +60,8 @@ const CJK = /[\u2e80-\u9fff\uac00-\ud7af\u3040-\u30ff\uf900-\ufaff]/u
  * of a direction a reader selects across (its transform without rotation, skew or mirror; `dir` not 'ttb'), as x, baseline,
  * width and size in PDF units, the font's ascent where PDF.js tells it (a style's `ascent`; ASCENT else), whether a line ends
  * after it and whether it runs right to left; strings apart. A line ends after an item where the next one stands on another
- * line (its baseline apart by most of the larger size: a superscript or a fraction's part does not end it), by the geometry
+ * line (its baseline apart from its line's, its largest item's so far, by most of the larger size: a superscript, a
+ * subscript or a fraction's part does not end it, nor hides the end of the line it closes), by the geometry
  * alone, never PDF.js's `hasEOL`: a page read from its draw has none (draw.mjs drawInputsOf), and the two readings of a page
  * give one layer. Rotated text (an axis label) is left out: the left pane's own layer holds it
  */
@@ -81,9 +82,12 @@ export function itemsOf(tc) {
     str.push(it.str)
     num.push(e, f, it.width, size, finite(asc) && asc > 0.3 && asc < 1.2 ? asc : ASCENT, it.dir === 'rtl' ? RTL : 0)
   }
-  for (let i = 0; i + 1 < str.length; i++) {
-    const o = i * F
-    if (Math.abs(num[o + F + 1] - num[o + 1]) > LINE_APART * Math.max(num[o + 3], num[o + F + 3])) num[o + 5] |= EOL
+  // (each next item against its line's own baseline, its largest item's so far, not against the item before it: a line that ends
+  // in a subscript or a superscript still ends there, and a fraction's two parts stay on their line)
+  for (let i = 0, base = num[1], size = num[3]; i + 1 < str.length; i++) {
+    const q = (i + 1) * F, nb = num[q + 1], ns = num[q + 3]
+    if (Math.abs(nb - base) > LINE_APART * Math.max(size, ns)) { num[i * F + 5] |= EOL; base = nb; size = ns }
+    else if (ns > size) { base = nb; size = ns }
   }
   return { n: str.length, str, num: Float32Array.from(num) }
 }

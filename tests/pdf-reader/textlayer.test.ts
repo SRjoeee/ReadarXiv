@@ -210,6 +210,15 @@ describe('the inputs', () => {
     const d = textLayerOf({ n: 1, items: draw, view: VIEW }, { ops: [], devOf: dev, owners: [] }, [])
     expect(d.items.map(i => i.eol ?? false)).toEqual([true, false])
   })
+  it('TL24 a line that ends in a subscript ends there; a fraction\'s parts on their line do not end it', () => {
+    const sub = itemsOf({ items: [item('H', 72, 700, 8), item('2', 80, 697, 4, { height: 7 }), item('Next line', 72, 688, 40)], styles: {} })
+    expect(Array.from({ length: sub.n }, (_, i) => (sub.num[i * 6 + 5]! & 1) === 1)).toEqual([false, true, false])
+    const d = textLayerOf({ n: 1, items: sub, view: VIEW }, { ops: [], devOf: dev, owners: [] }, [])
+    expect(d.items.map(i => i.eol ?? false)).toEqual([false, true, false])
+    // (a fraction's numerator 6 above its line and its denominator 6 below, at size 7: one line with the text around them)
+    const frac = itemsOf({ items: [item('x =', 72, 700, 15), item('a', 90, 706, 4, { height: 7 }), item('b', 90, 694, 4, { height: 7 }), item('then', 100, 700, 20)], styles: {} })
+    expect(Array.from({ length: frac.n }, (_, i) => (frac.num[i * 6 + 5]! & 1) === 1)).toEqual([false, false, false, false])
+  })
   it('TL15 a unit\'s lines as segments: split at a crop and where the script changes, a copy\'s spaces, a crop\'s space after it', () => {
     const face = { size: 1 }
     const tok = (s: string, x: number, w: number, o: Record<string, unknown> = {}) => ({ x, w, t: { s, cls: 'latin', face, ...o } })
