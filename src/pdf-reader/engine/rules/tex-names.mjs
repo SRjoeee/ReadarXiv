@@ -123,8 +123,15 @@ export function headInTarget(text, to, names = null) {
   // shortest that leaves a number and punctuation after it, so that a package's names read as they did)
   const m = typeof text === 'string' && /^\s*(\p{L}[\p{L}\p{M} .'\u2019-]*?)\s*((?:[A-Z]{0,2}\d+|[A-Z](?=[.\-–]\d))(?:[.\-–]\d+)*[a-z]?|[IVXLCDM]{1,7}|[A-Z])?(\s*[.:]?\s*[([]?)\s*$/u.exec(text)
   if (!m) return null
-  const name = headName(m[1].replace(/\s+/g, ' '), to, names)
+  const english = m[1].replace(/\s+/g, ' ')
+  let name = headName(english, to, names), tail = m[3]
+  // (an unnumbered head of a name that ends in its own stop, a style that sets no punctuation after it: "Thm.", the stop the
+  // name's where the name without it has no word)
+  if (!name && !m[2] && /^\s*\./.test(tail)) {
+    const dotted = headName(`${english}.`, to, names)
+    if (dotted) { name = dotted; tail = tail.replace(/^\s*\./, '') }
+  }
   if (!name) return null
   // (its punctuation as TeX set it, a space before an opening bracket kept: "Definition 5.1 (")
-  return `${name}${m[2] ? ` ${m[2]}` : ''}${m[3].replace(/\s+/g, ' ')}`
+  return `${name}${m[2] ? ` ${m[2]}` : ''}${tail.replace(/\s+/g, ' ')}`
 }
