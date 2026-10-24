@@ -1,116 +1,151 @@
-# Closed-world coverage on our own compile: orphan text — design note (phase 1)
+# Closed-world coverage on our own compile: content classes and orphan text — design note
 
-Status: proposal, 2026-10-25, for the owner's decisions in §5. Nothing is built. Engine at `next` 37d84180. Measurement
-scripts and raw rows (not in the tree): the session scratchpad's `orphans/measure.mjs`, `agg.py`, `pack.jsonl`, `wide.jsonl`,
-`staging.jsonl`, `agg.txt`.
+Status: stage 1 built (2026-10-25: `rules/content-classes.mjs`, `layout/ledger.mjs`, `lab/pdf/spikes/ledger.mjs`); stages 2–8 are
+the plan of §7, for the owner after he reads §5. Engine at `next` 37d84180. The phase 1 measurement's scripts and raw rows are not
+in the tree (the session scratchpad's `orphans/`); stage 1's gate reproduces the pack's numbers from the engine itself.
 
 ## 1. The rule
 
-Every text glyph TeX sets on a page of our final pass is accounted for, and nothing else is possible: it is **owned** by a
-source unit (its text `u<id>`, placeholder `u<id>.p`, label `u<id>.l`, a babel name `n<occ>`: `layout/own.mjs`), or it falls in
-a **declared exclusion class** (§3), or it is an **orphan**. An orphan becomes an **ink unit** made from our own glyphs, is
-translated, and is hidden by its own optional-content group like any unit. Source units stay primary: they segment by the
-author's structure and carry placeholders. The ink path only fills what they leave, and every orphan of the prose kind is also
-a front-end defect to fix at the source (it is counted, §4.4).
+Every text glyph TeX sets on a page of our final pass belongs to **exactly one content class**. Each class has one translation
+path, run once on the server into the shared cache, and one reader toggle; turning a toggle shows or hides what was made, with
+no new prepare and no new MT. The owner's rulings of 2026-10-25 bind it:
+1. **We own format correctness, not MT quality**: where a translation sits, that its original's ink is owned and erased, that
+   it fits its lines, no double ink, structure kept. A name translated is a short unit like any other; how well it is
+   translated is the provider's, and a reader can change provider.
+2. **OCR positions are approved for bitmap figure text**, following the extension's recogniser (DESIGN §15.3, PP-OCR).
+3. **Settings are a few items** (§5). Internal classes map onto them in one table.
 
-## 2. Measured today (ownOf over our final pass, letters only: a glyph with a Unicode letter)
+Source units stay primary: they segment by the author's structure and carry placeholders. Glyphs no unit owns get a class by
+TeX's facts; what no class explains is an **orphan**, counted and gated (§4), and later an ink unit made from our own glyphs.
 
-| Set | Papers / pages | Letters owned by units |
+## 2. Measured (letters only)
+
+| Set | Papers / pages | Letters in units today |
 |---|---:|---:|
-| Gate pack (fx-next bases, current units, the marking's texts) | 7 / 271 | **81.8 %** (per paper 61.4 to 88.6) |
+| Gate pack (fx-next bases, current units; stage 1's gate) | 7 / 271 | **81.8 %** (per paper 61.4 to 88.6) |
 | Wide (`bt-wide` bases of 2026-10-24, current units) | 116 / 2,415 | **85.5 %** (p10 73.7, median 86.8, p90 94.4) |
-| Staging (the 53-paper corpus's bases; units not local, so no spell or follows) | 50 / 1,367 | **80.8 %** (min 49.3, median 86.8) |
+| Staging (the 53-paper corpus's bases, no units local) | 50 / 1,367 | **80.8 %** (min 49.3, median 86.8) |
 
-Where the rest is, as a share of all letters (classes read by region brackets, babel-name points, fonts and line shape; the
-lexical classes are approximate, and part of "prose" and "short lines" in two-column REVTeX is bibliography the classifier
-missed):
+The rest, as a share of all letters (phase 1's line classifier; its lexical classes are approximate, and part of "prose" in
+two-column REVTeX is bibliography it missed):
 
 | Class | Pack | Wide | Staging | Examples |
 |---|---:|---:|---:|---|
-| Bibliography | 14.0 % | 10.3 % | 10.1 % | "[1] Y. Bengio, P. Simard, and P. Frasconi. Learning long-term …" |
-| Figure and table internals (in a float, not a caption or cell) | 0.9 | 1.4 | 1.1 | "iter. (1e4)", "Outer loop", plot labels |
-| Code, verbatim, prompts (tt fonts) | 0.2 | 1.0 | 3.6 | 2610.19159's shell logs, 2608.02163's prompts |
-| Math (display, math-font lines) | 0.3 | 0.3 | 0.5 | "Attention(Q,K,V) = softmax(…)V" |
-| **Running heads and feet** | 1.0 | 0.4 | 0.4 | "JOURNAL NAME, VOL. XX", "1.1. HISTORICAL OVERVIEW", "page 2 of 52" |
-| **Contents, LoF, LoT** | 1.7 | 0.1 | 0.2 | 2610.18513 p2 (48 lines), 2307.16209 pp 9–15 |
-| **Notes and margins outside the body** | 0.0 | 0.6 | 0.3 | funding notes, "Corresponding author.", 2610.21377's margin heads |
-| **Front matter not cut** | 0.2 | 0.1 | 0.3 | affiliations (CMTI9 in REVTeX), thesis title pages |
-| **Generated headings and theorem heads** | 0.0 | 0.3 | 1.2 | "ACKNOWLEDGMENTS", "Appendices", "Theorem 2.1 (" |
-| **Prose with no unit** | 0.0 | 0.1 | 1.5 | 2610.21377 pp 34–43 (proofs), 2610.19159's agent trajectories |
+| References | 14.0 % | 10.3 % | 10.1 % | "[1] Y. Bengio, P. Simard, and P. Frasconi. Learning long-term …" |
+| Figure text (floats, included PDFs) | 0.9 | 1.4 | 1.1 | "iter. (1e4)", "Outer loop", plot labels |
+| Code, verbatim, prompts | 0.2 | 1.0 | 3.6 | 2610.19159's shell logs, 2608.02163's prompts |
+| Math | 0.3 | 0.3 | 0.5 | "Attention(Q,K,V) = softmax(…)V" |
+| Running heads and feet | 1.0 | 0.4 | 0.4 | "JOURNAL NAME, VOL. XX", "1.1. HISTORICAL OVERVIEW", "page 2 of 52" |
+| Contents, LoF, LoT | 1.7 | 0.1 | 0.2 | 2610.18513 p2 (48 lines), 2307.16209 pp 9–15 |
+| Notes and margins | 0.0 | 0.6 | 0.3 | funding notes, "Corresponding author.", 2610.21377's margin heads |
+| Front matter not cut | 0.2 | 0.1 | 0.3 | affiliations (CMTI9 in REVTeX), a thesis's title pages |
+| Generated headings, theorem heads | 0.0 | 0.3 | 1.2 | "ACKNOWLEDGMENTS", "Appendices", "Theorem 2.1 (" |
+| Prose with no unit | 0.0 | 0.1 | 1.5 | 2610.21377 pp 34–43 (proofs), 2610.19159's agent trajectories, the 2610.31660 shape |
 
-The bold rows are what the ink path would translate: **2.9 % / 1.6 % / 3.8 %** of letters. The sweep owner's count on the same
-53 papers agrees in kind (439 rows in 18 papers: 77 contents entries, 386 running-head rows, 51 running feet in 2610.21377).
+Ink units the later stages add (blocks: a contents entry or a head line one): 17 a paper in wide (against 204 source units a
+paper), 48 in staging, 60 in the pack (229 of them one thesis's contents). Running heads repeat, so the distinct texts sent to
+MT are far fewer. **Reuse** (an orphan's letters, its number, leaders and page number aside, equal to an owned unit's): contents
+lines 140 of 151 equal in wide; running heads 105 of 152 in the pack, 279 of 624 in wide (the rest are author lists, journal
+lines and dates, which no unit holds). The sweep owner's count on the 53 papers agrees in kind (439 rows in 18 papers).
 
-**Ink units added** (blocks: lines of one class, near in y, overlapping in x; a contents entry or a head line is one): pack 421
-(60 a paper, of which 229 are one thesis's contents), wide 1,989 (17 a paper, against 204 source units a paper), staging 2,407
-(48 a paper). Running heads repeat, so the distinct texts sent to MT are far fewer than the head blocks.
+## 3. The class model (stage 1, built)
 
-**Reuse** (an orphan whose letters, its number, leaders and page number aside, equal an owned unit's): contents lines 140 of
-151 equal in wide, 77 equal and 63 inside one in staging (multi-line entries are cut by line here; §4.2 makes them whole);
-running heads 105 of 152 in the pack, 279 of 624 in wide (the rest are author lists, journal lines and dates, which no unit holds).
+`rules/content-classes.mjs` holds the one table: each class's toggle, its state (`built`, `planned`, `never`), whether a glyph
+can hold it, and its ground truth. A unit's class is a pure function of its kind (`UNIT_CLASS`: cell → tables, author → names,
+figure → figures, every other kind → body), which the bundle's units already carry, so the server and every reader tell it
+alike with no new field on the wire. An ink unit (stage 2 on) carries its class when it is made.
 
-## 3. Exclusion classes (declared, each from a TeX fact where one exists)
+`layout/ledger.mjs` gives every glyph of our final pass its class in the maker child (`wrapFinal`'s `ledger`, integers for the
+record), by these facts, in order: an owned glyph is its owner's (a unit's by kind, a babel name's `generated`); the other glyphs,
+cut into lines by stream order and baseline, by the first rule that holds — no two letters together (`symbols`); an included
+PDF's glyphs, inside a form XObject (`figures`); outside the column bodies, before the page's first mark or the foot after its
+last (`heads`), else `notes`; between a list's or the bibliography's babel name and the next unit (`contents`, `references`,
+`index`); a math face's line (`math`); a typewriter face's (`code`); a float's remaining text (`figures`); else `orphan`. The
+sweep's invariant **(o)** is "no orphan letters" (`orphanRows`, rows in the sweep's shape); `lab/pdf/spikes/ledger.mjs` runs it.
 
-1. Math: glyphs of a math font (one font-class table in `rules/`, beside font-roles), and a display between units.
-2. Float internals that are no caption and no cell: an included graphic's text (its form XObject, Type 3 fonts), TikZ, plots.
-3. Code: SKIP_ENVS' and the paper's code environments, tt-font runs; URLs, e-mail addresses and DOIs inside any ink unit stay as
-   kept runs.
-4. Lines with no letter (numbers, folios, symbols).
-5. **Bibliography: the owner's choice (§5.1).** Its zone is exact: points at `\thebibliography`/biblatex's `\printbibliography`
-   begin and end, not a heading guess.
-6. **Author names: the owner's choice (§5.2).**
+Stage 1's gate (`lab/pdf/records/ledger.md`): on the pack, body 59.7–88.5 % of letters, references 4.7–33.7 %, tables 0–5.1 %,
+figures 0–2.8 %, contents 4.3 % (the thesis), heads 0–1.7 %, and orphans 1,086 letters (0.22 %) in 3 papers: the thesis's title
+pages and its "ABSTRACT" and "RESUMO", 2608.16117's affiliations, an "and" between authors. Wider, the orphans are 2.31 % of
+the letters of 116 papers and 3.91 % of staging's 50, most of them REVTeX's: a bibliography no babel name opens (stage 4's
+`\bibitem` points end that), and affiliations and dates the front end cuts but the marks do not own, a coverage defect the
+invariant now names; then prose no unit holds (2610.21377, 2610.19159). The ledger costs 39–79 ms on a 147-page paper, beside
+`ownOf`'s 180 ms.
 
-## 4. How an ink unit is made, drawn and kept exact
+## 4. How an ink unit is made, drawn and kept exact (stages 2–3)
 
-1. **Where: the maker child, after `ownOf`** (the one place our final pass is read whole). Its text is our glyphs' Unicode in
-   stream order (our fonts' ToUnicode; a line-end hyphen joined as the text layer joins it); its lines are its glyphs' baselines
-   and extents. Nothing is read from arXiv's PDF, and no position is estimated: every coordinate is a glyph TeX set.
-2. **Blocks by TeX, not by geometry:** LAYOUT_TEX adds a point at LaTeX's `para/begin` and `para/end` hooks (`q<k>s`, `q<k>e`), so
-   every paragraph TeX makes is bracketed in the stream, the unmarked ones too. A contents entry is a paragraph
-   (`\@dottedtocline`), so each entry is one block, whole across its lines. A running head or foot is one `\hbox` in the output
-   routine (outside the body bracket): one block per line. Until the points land (stage 2), blocks are lines.
-3. **Kept runs:** inside an ink unit, the leader dots, a leading section number, a trailing page number, math-font runs and
-   URLs are kept runs (`o<id>.p`): their ink stays, and the layer crops them from render B as it does a placeholder. So a
-   contents entry's dots, number and page stay the original's ink; only the title is drawn, in the box from the title's first
-   glyph to the leaders' first.
-4. **Reuse:** an ink unit whose text (letters and digits, case aside: `spellOf`) equals an owned unit's source text takes that
-   unit's row: no MT, the same words as the heading or title it repeats. A head set in capitals keeps the row's text, put in
-   capitals for a cased target. One with no translated row stays the original's (never a fresh MT of a heading's copy).
-5. **Others are translated** in one batch a paper, short ones with the paper's title as context, as plain text with ⟦n⟧ for
-   kept runs. Cache key: the text and `INK_VERSION`, no `rules` slot (as a PDF text today).
-6. **Ownership and erasure:** groups `o<id>` and `o<id>.p` in the same wrap section, the same spell check (its glyphs are its
-   text by construction, so it checks the kept runs), the same "a unit that cannot be delimited shows the original".
-7. **Counting what is left:** each paper's record carries the ledger (owned, excluded by class, ink units, orphans left), and the
-   sweep gets an invariant: orphan letters outside every class = 0, prose orphans listed as front-end defects.
+1. **Where:** the maker child, after the ledger. Its text is our glyphs' Unicode in stream order; its lines are its glyphs'
+   baselines and extents. Nothing is read from arXiv's PDF and no position is estimated.
+2. **Blocks by TeX:** points at LaTeX's `para/begin` and `para/end` bracket every paragraph TeX makes, so a contents entry is one
+   block across its lines; points around `\@thehead` and `\@thefoot` make the head and the foot exact (stage 1 reads them by
+   stream order and one baseline, as `folioOf` reads a folio).
+3. **Kept runs:** leader dots, a section number, a page number, math-face runs and URLs inside an ink unit stay the original's
+   ink (`o<id>.p`, cropped from render B like a placeholder). A contents entry's title is drawn in the box from its first glyph
+   to the leaders' first.
+4. **Reuse:** an ink unit whose letters equal an owned unit's source text takes that unit's row: the contents and the heads read
+   as the headings and the title they repeat. A heading with no translated row leaves its copy the original's.
+5. **Ownership and erasure:** groups `o<id>`, `o<id>.p` in the same wrap section, the same spell check, the same "a unit that
+   cannot be delimited shows the original".
 
-## 5. Owner decisions
+## 5. The reader's settings and each class's path
 
-1. **Bibliography (10–14 % of letters, the largest class):** (a) excluded, as today; (b) the entries' titles alone (needs each
-   `\bibitem`'s fields: the .bbl is ours, so they are exact); (c) whole entries by MT, names and venues mangled. Recommended (a)
-   now, (b) as its own later stage.
-2. **Author names** (front matter, running heads "D.D. NOVAES AND P.C.C.R. PEREIRA"): (a) kept as ink; (b) transliterated by MT.
-   Recommended (a); affiliations and notes are translated either way.
+The owner's map (2026-10-25; the settings' own words are the locale packs', these are their English). "Always" is no toggle; every class is translated once on the server whatever the toggles.
+
+| Setting | Internal classes | How it is translated correctly; its ground truth | State | Agent-days |
+|---|---|---|---|---:|
+| Always | body (prose, headings, captions, footnotes, abstract, title) | source units placed by TeX's marks | built | — |
+| Always | generated: babel names, theorem heads, generated headings | babel names are built; a theorem head's name is `\newtheorem`'s argument, marked where TeX sets it, as a babel name is | names built; heads planned | 1 |
+| Always | contents (TOC, LoF, LoT) | ink units from our glyphs, whole by para points; each title takes its heading's or caption's row | planned | 1.5 |
+| Always | notes (footnotes and margin notes no unit owns) | ink units by block | planned | 1 |
+| Always | orphan (prose with no unit) | an ink unit at once; the front-end cause fixed at the source as found | planned | 1 + fixes |
+| "Heads and feet" | heads (running heads and feet) | ink units by line, exact by head and foot points; a head equal to the title's or a heading's text takes its row, set in capitals for a cased target where the head is | planned | 1.5 |
+| "Tables" | tables (cells) | today's cell units; tables no unit cuts (inside a float) become ink units by row | cells built; uncut planned | 0.5 + 1 |
+| "Figure text" | figures (vector) | the glyphs of an included PDF (form XObjects) and of a float, set by our compile: exact text from their fonts, exact places; erasure needs optional content inside form XObjects (shared streams), and a Type 3 font with no Unicode is left the original's | planned | 3 |
+| "Figure text" | ocr (bitmap) | PP-OCR as the extension runs it (DESIGN §15.3), once on the server over each figure's image; places from OCR (approved); erasure by a patch of the background under each line, as the extension's image translation does | planned | 3.5 |
+| "References" | references, index (proposed) | each `\bibitem` a unit, cut from the .bbl our compile writes after its bibliography step and marked like the body; the authors, title and venue known from its fields (biblatex's `\field`, `\name`; BibTeX styles' `\newblock` blocks) | planned | 3 |
+| "Names" | names: author blocks, names in references | author units today (names and places together: stage splits them, places always); in references, the names field of each entry | names built; split and references planned | 1.5 |
+| Never | math, code and verbatim, symbols | kept as the original's ink | never | — |
+| — | reader toggles in both hosts | a class's units drawn or not (and its groups ON or OFF) by the settings | planned | 2 |
+
+**Names, plainly.** Achievable and exact: an author block's names (their own units, by TeX's marks); names in references where
+the .bbl gives them as a field — biblatex always, the BibTeX styles that open an entry with an authors block (plain, abbrv,
+unsrt, IEEEtran, the natbib styles). Not separable: names written inside body prose ("as Smith showed") are part of that unit;
+names in a BibTeX style with no blocks stay inside the whole entry (they follow "References", not "Names"); an author-year citation's
+names are its placeholder's ink, kept as the original's either way; a running head typed by the author with the names follows
+"Heads and feet" (and "Names" too where it equals the author units' text and takes their row).
+
+**Classes missing from the owner's map, proposed:**
+- Algorithms and pseudocode: under "Figure text" (they sit in a float like a figure): steps and comments translated, keywords and
+  math kept. Stage 1 counts them as figures; telling them apart needs the float's type at its point (`\@captype` at
+  `\@endfloatbox`).
+- Affiliations, addresses, dates, keywords, acknowledgements, a thesis's title page, an epigraph: always (body).
+- Index and glossary: under "References", as back matter (the ledger's `index` class).
+- URLs, e-mail addresses, DOIs, ORCIDs: never (kept runs wherever they stand).
+- Equation tags, folios, numbers: never (`symbols`).
+- Copyright and licence lines in the foot: with the foot, under "Heads and feet".
 
 ## 6. Risks and the gates that hold them
 
 | Risk | Gate |
 |---|---|
-| Fragment quality (heads, labels, "Theorem 2.1 (") | reuse first; context batch; the placeholder survival suite gets ink-unit shapes; the sweep's (a) review rows |
-| Double ink (orphan ink left under the translation) | `ocg-gate.mjs` G1 (all groups ON equals the unwrapped page, 0 px outside split glyphs) and the pixel tier |
-| Positions | none estimated: glyph boxes of our pass only; layout-make tests that an ink unit's lines are its glyphs' |
-| The para points move a line | B vs C pixel test (§3.8 of `design.md`), 0 new differing pages on the pack and the sweep |
-| A class misread as translatable (a plot label, code) | exclusion before the ink path; the sweep's (a) and crops |
+| A glyph in the wrong class | the ledger's unit tests per rule; `lab/pdf/spikes/ledger.mjs` over the pack and the sweep; invariant (o) |
+| Double ink (orphan ink left under a translation) | `ocg-gate.mjs` G1 (all groups ON equals the unwrapped page) and the pixel tier |
+| Positions | none estimated: our glyphs' boxes (OCR's alone for bitmaps, by the ruling); layout-make tests per shape |
+| New points move a line (stages 2–3) | the B vs C pixel test of `design.md` §3.8: no new differing page on the pack and the sweep |
+| A toggle that re-prepares | every class made once; a test that the rows of every class exist whatever the settings |
 
-## 7. Versions, stages, hours
+## 7. Versions, stages
 
-Versions: LAYOUT (para points, ink rows), REMOVAL (new groups), BUNDLE (ink units in the units part), a new `INK_VERSION` in the
-translate key; PIPELINE stays (source units unchanged). Gate pack: every fixture remade (bases, layouts, records, refs).
+| Stage | Scope | Versions | Agent-days |
+|---|---|---|---:|
+| 1 (built) | class table, ledger in `wrapFinal`, invariant (o) rows, the lab gate | none (no wire, no compile change; the web stores the ledger later) | 1 |
+| 2 | ink units: heads and feet, notes, contents by line; reuse; groups; drawn; head and foot points | LAYOUT, REMOVAL, BUNDLE, new INK in the translate key | 4 |
+| 3 | para points; whole blocks; orphan prose; theorem heads and generated headings | LAYOUT | 3 |
+| 4 | references and names in them (.bbl units) | PIPELINE (units), LAYOUT | 4.5 |
+| 5 | vector figure text | LAYOUT, REMOVAL | 3 |
+| 6 | OCR on the server | a new OCR version in the key | 3.5 |
+| 7 | names split from places; tables no unit cuts | PIPELINE | 2.5 |
+| 8 | reader toggles in the web and the extension | — | 2 |
 
-| Stage | Scope | Agent-days |
-|---|---|---:|
-| 1 | Ledger and exclusion classes in the maker child, the record's counts and the sweep invariant; no drawing | 1 |
-| 2 | Ink units for heads, feet, notes and contents by line; reuse; groups; layer draws them; tests per shape | 3 |
-| 3 | Para points; whole blocks; prose and generated headings; B vs C pixel check | 2 |
-| 4 | Owner's §5 choices; gate pack remade; release sweep as acceptance | 1.5 |
-
-The heading-argument PR touches `latex-front.mjs`; this design does not (stage 3 touches `layout/marks.mjs` LAYOUT_TEX only).
+About 23 agent-days in all. The web sweep reads invariant (o) once the engine is pinned (`scripts/sweep/invariants.mjs`), and the
+container stores `wrapFinal`'s `ledger` in the record (a web change). This design touches `latex-front.mjs` only in stages 4 and
+7; the heading-argument PR's owner is told first.

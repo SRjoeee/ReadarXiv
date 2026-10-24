@@ -9,8 +9,8 @@ export interface Glyph {
   /** a Type 3 glyph whose procedure paints its own colours (d0, a fill in it): `fill` no reading of its ink */
   ownColour?: boolean
   /** with `indices`: its text-showing operation's place among the page's own (-1 in an annotation's appearance), its
-   *  place among that operation's glyphs, and whether its Unicode is blank */
-  n?: number; k?: number; blank?: boolean
+   *  place among that operation's glyphs, whether its Unicode is blank, and whether it is shown inside a form XObject */
+  n?: number; k?: number; blank?: boolean; form?: boolean
 }
 /** a glyph's fill of no colour (a pattern's, PDF.js's transparent) */
 export declare const NO_FILL: -1
