@@ -106,6 +106,10 @@ export const onIos = (nav = globalThis.navigator) => !!nav && (/\biP(?:hone|ad|o
 export const AHEAD_PAGES = 2
 /** how long the view rests (no scroll, no page asked, nothing laid) before the pages ahead are laid */
 export const AHEAD_IDLE_MS = 600
+/** the translating card's padding, CSS pixels at the reader's 100 % (engine.css --axt-tr-pad-x and -pad-y, where the sheet gives
+ *  none: the owner's of 2026-10-25) */
+export const PAD_X = 14
+export const PAD_Y = 4
 /** the pages wanted last whose geometry is kept beside the near ones (§3.2) */
 const WANTED_KEPT = 20
 /** the commits the probe keeps */
@@ -856,6 +860,12 @@ export function createLayerSide(view, o) {
       for (let n = 1; n <= V.places.count(); n++) if (V.places.near(n)) markPage(n)
     })
   }
+  /** whether the light can pass: a registered property animated (@property) and a size container's units, which the readers'
+   *  floors before Firefox 128 lack the first of; else the marks are a still ground */
+  function moves() {
+    const C = globalThis.CSS
+    return typeof C?.registerProperty === 'function' && typeof C.supports === 'function' && C.supports('width', '1cqh')
+  }
   function unmark(n) { const el = marks.get(n); if (el) { el.remove(); marks.delete(n) } }
   function unmarkAll() { for (const n of [...marks.keys()]) unmark(n) }
   /**
@@ -879,20 +889,37 @@ export function createLayerSide(view, o) {
     }
     if (!place || !units.length || view.length !== 4 || !(view[2] > view[0]) || !(view[3] > view[1])) return unmark(n)
     const [x0, y0, x1, y1] = view, w = x1 - x0, h = y1 - y0
-    const pc = v => `${(100 * v).toFixed(3)}%`
+    const cq = (v, axis) => `${(100 * v).toFixed(3)}cq${axis}`
     let el = marks.get(n)
     if (!el) {
       el = document.createElement('div')
-      el.className = 'axt-translating'
+      el.className = moves() ? 'axt-translating' : 'axt-translating axt-translating-still'
       el.setAttribute('aria-hidden', 'true')
       marks.set(n, el)
     }
     if (el.parentNode !== place) place.append(el)
-    el.replaceChildren(...units.map(on => {
-      const ax = Math.min(...on.map(r => r[1])), ay = Math.min(...on.map(r => r[2])), bx = Math.max(...on.map(r => r[3])), by = Math.max(...on.map(r => r[4]))
+    // (the card's padding and corner are CSS pixels at the reader's 100 %, the sheet's --axt-tr-pad-x, -pad-y and -radius, scaled
+    // with the page: a CSS pixel at 100 % is 3/4 of a point, PDF.js's own, so a page w points wide is 4w/3 of them, and one of
+    // them is 100/(4w/3) cqw of the page's overlay, --axt-tr-u)
+    el.style.setProperty('--axt-tr-u', `${(100 / ((4 * w) / 3)).toFixed(5)}cqw`)
+    const css = typeof getComputedStyle === 'function' ? getComputedStyle(el) : null
+    const px = v => { const x = Number.parseFloat(css?.getPropertyValue(v) ?? ''); return Number.isFinite(x) && x >= 0 ? x : null }
+    const padX = (px('--axt-tr-pad-x') ?? PAD_X) * 0.75, padY = (px('--axt-tr-pad-y') ?? PAD_Y) * 0.75
+    const boxes = units.map(on => ({ ax: Math.min(...on.map(r => r[1])), ay: Math.min(...on.map(r => r[2])), bx: Math.max(...on.map(r => r[3])), by: Math.max(...on.map(r => r[4])) }))
+    el.replaceChildren(...boxes.map((b, i) => {
+      // (never two cards over each other: each side's padding at most half the gap to the nearest mark beside it, above or below
+      // where their columns meet, left or right where their lines do)
+      let pX = padX, pY = padY
+      boxes.forEach((o, j) => {
+        if (j === i) return
+        if (b.ax < o.bx && o.ax < b.bx) pY = Math.min(pY, Math.max(0, Math.max(o.ay - b.by, b.ay - o.by) / 2))
+        if (b.ay < o.by && o.ay < b.by) pX = Math.min(pX, Math.max(0, Math.max(o.ax - b.bx, b.ax - o.bx) / 2))
+      })
       const m = document.createElement('i')
       m.className = 'axt-translating-mark'
-      m.style.cssText = `left:${pc((ax - x0) / w)};top:${pc((y1 - by) / h)};width:${pc((bx - ax) / w)};height:${pc((by - ay) / h)}`
+      // (its box and its padding in the page's shares, as container units of the page's overlay: the card's geometry and the
+      // light's offset are the sheet's, engine.css)
+      m.style.cssText = `--x:${cq((b.ax - x0) / w, 'w')};--y:${cq((y1 - b.by) / h, 'h')};--w:${cq((b.bx - b.ax) / w, 'w')};--h:${cq((b.by - b.ay) / h, 'h')};--px:${cq(pX / w, 'w')};--py:${cq(pY / h, 'h')}`
       return m
     }))
   }

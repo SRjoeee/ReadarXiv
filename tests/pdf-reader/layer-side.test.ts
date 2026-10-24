@@ -1719,6 +1719,33 @@ describe('translating: the indicator over a near page\'s paragraphs not laid yet
     expect(marksOf(s, 1)).toBeLessThan(before)
   })
 
+  it('each mark its box in the page\'s shares as the overlay\'s container units; a still ground where the browser cannot pass the light', async () => {
+    try {
+      for (const can of [false, true]) {
+        vi.stubGlobal('CSS', can ? { registerProperty: () => {}, supports: () => true } : { supports: () => true })
+        const s = await setup({ door: { rows: 'gate' } })
+        await nearOn(s, [1])
+        s.side.tell(await ALL())
+        await settle(s, 10, false)
+        const el = places(s)[0]?.querySelector('.axt-translating') as HTMLElement | null
+        const mark = el?.querySelector('.axt-translating-mark') as HTMLElement | null
+        expect(mark?.getAttribute('style')).toMatch(/^--x: ?[\d.]+cqw; ?--y: ?[\d.]+cqh; ?--w: ?[\d.]+cqw; ?--h: ?[\d.]+cqh; ?--px: ?[\d.]+cqw; ?--py: ?[\d.]+cqh;?$/)
+        // (the scale of a CSS pixel at 100 % on the page's overlay: 100 / (4w/3) cqw, w its width in points)
+        expect(el?.style.getPropertyValue('--axt-tr-u')).toMatch(/^[\d.]+cqw$/)
+        // (no two cards meet: each box grown by its own padding is clear of every other)
+        const boxes = [...(el?.querySelectorAll('.axt-translating-mark') ?? [])].map(e => {
+          const v = (k: string) => Number.parseFloat((e as HTMLElement).style.getPropertyValue(k))
+          return { l: v('--x') - v('--px'), r: v('--x') + v('--w') + v('--px'), t: v('--y') - v('--py'), b: v('--y') + v('--h') + v('--py') }
+        })
+        for (const [i, a] of boxes.entries()) for (const c of boxes.slice(i + 1)) expect(a.l < c.r - 1e-3 && c.l < a.r - 1e-3 && a.t < c.b - 1e-3 && c.t < a.b - 1e-3).toBe(false)
+        expect(boxes.some(b => b.r - b.l > 0)).toBe(true)
+        expect(el?.classList.contains('axt-translating-still')).toBe(!can)
+      }
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('a page that fails shows the original with no mark', async () => {
     const s = await setup({ copyFails: [1] })
     await nearOn(s, [1])

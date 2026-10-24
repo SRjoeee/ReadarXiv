@@ -796,16 +796,25 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   to a share of the line in 29. v0's checks are unchanged: they find the slices loaded or loading, and a run the wave did
   not foresee (a bold word in a paragraph, a character only the original's text holds) asks its own as before. A slice is
   asked once.
-- **Translating** (the owner's choice of 2026-10-25: the shimmer). While a near page is not laid, its place shows the
-  original's page, and each paragraph the parts read so far locate on it carries a mark: a soft band of light passing over
-  the paragraph. Every value of the look is a custom property of `engine.css` (`--axt-tr-*`: the ink, the wash and the band's
-  strength, the band's width, its speed and easing, the corner, the still wash), so that another look is a change of values,
-  no code. The marks sit at the paragraph's box in shares of the page, so no zoom moves them, above the page and under the
-  pointer (no pointer events, hidden from assistive technology). With reduced motion asked, the band stands still as a faint
-  wash. A page is laid whole, through its page pass, the moment its rows and slices are in (the coordinator's ruling of
-  2026-10-24: pages, never a unit drawn on a provisional fit that later moves), and all its marks go in the same task its
-  drawing is put in place. An author's unit has none (it is never drawn), nor has a paragraph whose rows ended with no row of
-  it, nor has a page that failed (the original's).
+- **Translating** (the owner's "Field", 2026-10-25). While a near page is not laid, its place shows the original's page,
+  and each paragraph the parts read so far locate on it carries a mark: a card over its box, showing its own share of one
+  diagonal light that crosses the whole page. The page's overlay is a size container and carries the pass (one registered
+  property, `--axt-tr-p`, for the page); a mark's background is three pages wide, set back by the mark's place in the page, so
+  the light is one surface whatever the paragraphs. On paper the light clears a faint ground rather than covering the glyphs.
+  A mark shows after 300 ms (a fast page shows none) and fades in over 0.4 s; a pass takes 3.4 s, its last 20 % a pause. The
+  card stands out from its paragraph by 14 CSS pixels inline and 4 block, with 8-pixel corners, at the reader's 100 % (the
+  owner's, 2026-10-25), scaled with the page so a zoom keeps it in proportion; each side's padding is at most half the gap to
+  the nearest card beside it, so no two cards meet.
+  Every value of the look is a custom property of `engine.css` (`--axt-tr-*`: the ground, the light and its shoulders and
+  where they stand, the angle, the blend, a filter, the card's padding and corner, the pass and its easing, the drift, the
+  delay and the fade; a look of another shape sets `--axt-tr-image`, `-size` and `-position` on the mark), so that the owner's
+  final look (Graphite now; Pearl, Aurora or Ember) is a change of values, no code. With reduced motion asked, and where the
+  browser cannot animate a registered property or size a container (Firefox before 128 among the reader's browsers), the mark
+  is the still ground. The marks sit at the paragraph's box in shares of the page, so no zoom moves them, above the page and
+  under the pointer (no pointer events, hidden from assistive technology). A page is laid whole, through its page pass, the
+  moment its rows and slices are in (the coordinator's ruling of 2026-10-24: pages, never a unit drawn on a provisional fit
+  that later moves), and all its marks go in the same task its drawing is put in place. An author's unit has none (it is
+  never drawn), nor has a paragraph whose rows ended with no row of it, nor has a page that failed (the original's).
 - **The pages ahead** (the prefetch on the layer). Once the rows of the attempt have ended (a host that translates as it shows
   is asked for nothing it has not translated), the door is open, no page of the view is asked of it, the right pane is shown
   and the document visible, and the view has rested `AHEAD_IDLE_MS` (600 ms: no scroll, nothing asked, the last near page
