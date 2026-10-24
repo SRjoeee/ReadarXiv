@@ -37,6 +37,63 @@ const split = (chars: number): Paper => ({
   ],
 })
 
+/** two items of an inline list (inparaenum): unit 0 two full rows and its last [20, 150] at 226, the next item's label "(2)"
+ *  [154, 166] on that row (no unit's: kept as the original's), unit 1 from 170 on it, then two full rows; unit 0's translation
+ *  `chars` CJK characters */
+const listed = (chars: number): Paper => ({
+  ...split(chars), name: `inline list, ${chars}`,
+  specs: split(chars).specs.map(s => (s.id === 1 ? { ...s, lines: [line(1, 226, 'Under the routed', 170, 280), ...s.lines.slice(1)] } : s)),
+  extra: [line(1, 226, '(2)', 154, 166)],
+})
+
+describe('a shared line with something kept between the two units (2610.21098 p2: inparaenum\'s "(2)")', () => {
+  it('the unit before it ends its text on the row where TeX did, and the next unit\'s first line stays where TeX set it', async () => {
+    // (before: the unit's last line ran on to its block's edge over the label and the next item's first words, while the next
+    // unit, refused the row because the label stands between, was set at TeX's place: two units drawn over each other)
+    const run = await laid(listed(66))
+    const a = linesOf(run, 0)!, [b] = linesOf(run, 1)!
+    const onRow = a.filter(l => Math.abs(l[1] - 226) < 10)
+    expect(onRow.length, 'a line of it on the shared row').toBeGreaterThan(0)
+    expect(onRow.every(l => l[7] <= 150 + 0.01), `its lines on the row end at ${onRow.map(l => l[7])}`).toBe(true)
+    expect([b![1], b![6]]).toEqual([226, 170])
+  })
+
+  it('a line the fill sets over the shared row, within an em of it, ends there too, though no slot stands on the row itself', async () => {
+    // (the shared row the unit's last, its foot: a leading that spreads two lines over its three rows sets the second 8 pt over
+    // the row, more than half its pitch, and its text ran over the label (2610.21098 p2 u15 over u16 under a stop of half a pitch))
+    const spread: Paper = {
+      name: 'inline list, spread', pages: 1, extra: [line(1, 228, '(2)', 154, 166)], specs: [
+        { id: 0, kind: 'para', lines: [line(1, 250, 'Uniaxial tension experiments', 20, 280), line(1, 239, 'usually consider traction-free', 20, 280), line(1, 228, 'conditions. The', 20, 150)], chars: 40, at: 0x4e00 },
+        { id: 1, kind: 'para', lines: [line(1, 228, 'Under the routed', 170, 280), line(1, 217, 'of the volumetric stretch can', 20, 280), line(1, 206, 'be tuned by the slenderness', 20, 280)], chars: 30, at: 0x5100 },
+      ],
+    }
+    const run = await laid(spread)
+    const a = linesOf(run, 0)!
+    const near = a.filter(l => Math.abs(l[1] - 228) < 10)
+    expect(near.every(l => l[7] <= 150 + 0.01), `its lines within an em of the row: ${near.map(l => `${l[1]}:${l[7]}`)}`).toBe(true)
+    const [b] = linesOf(run, 1)!
+    expect([b![1], b![6]]).toEqual([228, 170])
+  })
+
+  it('only its line nearest the shared row ends there, where its rows stand closer than an em (Devin\'s review of #460)', async () => {
+    // (10 pt type on rows 8 pt apart: the row before the shared one is within an em of it, and was cut to the shared row's end
+    // too, though nothing of the next item stands on it)
+    const tight: Paper = {
+      name: 'inline list, tight rows', pages: 1, extra: [line(1, 234, '(2)', 154, 166)], specs: [
+        { id: 0, kind: 'para', lines: [line(1, 250, 'Uniaxial tension experiments', 20, 280), line(1, 242, 'usually consider traction-free', 20, 280), line(1, 234, 'conditions. The', 20, 150)], chars: 60, at: 0x4e00 },
+        { id: 1, kind: 'para', lines: [line(1, 234, 'Under the routed', 170, 280), line(1, 226, 'of the volumetric stretch can', 20, 280), line(1, 218, 'be tuned by the slenderness', 20, 280)], chars: 30, at: 0x5100 },
+      ],
+    }
+    const run = await laid(tight)
+    const a = linesOf(run, 0)!
+    const nearest = a.reduce((n, l) => (Math.abs(l[1] - 234) < Math.abs(n[1] - 234) ? l : n))
+    expect(nearest[7], `the line nearest the row (${nearest[1]}) ends where TeX ended the unit there`).toBeLessThanOrEqual(150 + 0.01)
+    const others = a.filter(l => l !== nearest && l !== a.at(-1))
+    expect(others.length).toBeGreaterThan(0)
+    expect(others.every(l => l[7] > 150 + 0.01), `the lines above it end at ${others.map(l => `${l[1]}:${l[7]}`)}`).toBe(true)
+  })
+})
+
 describe('a shared line: the next unit\'s first line starts where the translation before it ends on the row', () => {
   it('a heading shorter than its English: its text starts 10 pt after the heading\'s end, where the fill left it', async () => {
     const run = await laid(runIn(3))
