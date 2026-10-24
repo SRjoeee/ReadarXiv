@@ -5,7 +5,7 @@
 // bytes and keys. Imports the format's writers, the door's need rule (need.mjs) and nothing that loads a canvas.
 import { indexLayout, NAME_FLAG } from '../layout/file.mjs'
 import { BundleRefusal } from './bundle.mjs'
-import { groupsOfUnits, partTarget, writeHead, writeLeftPart, writePart, writeUnitChunks } from './format.mjs'
+import { chunkTotals, groupsOfUnits, partTarget, writeHead, writeLeftPart, writePart, writeUnitChunks } from './format.mjs'
 import { needBound, needsOf, rowLeadOf } from './need.mjs'
 
 const refuse = (kind, path, why, data) => new BundleRefusal(why, { kind, path, ...(data ? { data } : {}) })
@@ -144,7 +144,10 @@ export async function wholeCutter(whole, o) {
   if (whole.layout) for (const u of whole.layout.units) if (!(u[0] < whole.units.length)) throw refuse('part', 'layout.units', `unit ${u[0]} is not a unit of the paper`)
 
   // units and head
-  const units = await writeUnitChunks({ paper, units: whole.units })
+  // (the ink units after the source units' in chunks of their own from `inkFrom`, INK_UNITS_FORMAT: format.mjs writeUnitChunks `start`)
+  const inkFrom = Number.isInteger(o.inkFrom) && o.inkFrom > 0 && o.inkFrom < whole.units.length ? o.inkFrom : null
+  const src = await writeUnitChunks({ paper, units: inkFrom === null ? whole.units : whole.units.slice(0, inkFrom) })
+  const units = inkFrom === null ? src : [...src, ...await writeUnitChunks({ paper, units: whole.units.slice(inkFrom), start: inkFrom, before: chunkTotals(src) })]
   const image = o.image ?? whole.versions?.image
   const base = o.base ?? whole.base
   const lineskip = 'lineskip' in o ? o.lineskip : whole.layout?.lineskip ?? null

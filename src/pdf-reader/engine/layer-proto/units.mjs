@@ -18,6 +18,8 @@ export const CELL = Object.freeze(['table', 'row', 'col', 'span', 'head'])
 export const NAME_KIND = 'name'
 /** a unit's kind, a lower-case word */
 const KIND = /^[a-z]{1,32}$/
+/** an ink unit's kind (layout/ink-units.mjs INK_KIND's): `ink` and its class */
+const INK_KIND = /^ink[a-z]{1,29}$/
 /** a heading's depth (latex-front.mjs DEPTH: -1 a \part, 0 a \chapter …), with the readers' margin */
 const DEPTH_MIN = -1, DEPTH_MAX = 9
 
@@ -111,21 +113,34 @@ export function bundleUnitsOf(paper) {
   }), ...names]
 }
 
+/**
+ * The ink units as the bundle holds them (docs/route/orphan-text.md §8): each [kind, flags, depth, cell, edges, pieces, echo], its
+ * kind INK_KIND's, its echo the source unit whose row it is drawn with (null: a translation of its own); written in a chunk of
+ * INK_UNITS_FORMAT after the source units' (format.mjs writeUnitChunks `start`). `ink` the wrap's (layout/wrap.mjs wrapFinal
+ * `ink.units`): no nested piece
+ */
+export function inkBundleUnitsOf(ink) {
+  return ink.map(u => [u.kind, 0, null, null, null, u.pieces.map(p => pieceOf(p, new Map())), u.echo ?? null])
+}
+
 // ---------------------------------------------------------------- the reader's
 const isText = s => typeof s === 'string' && s.length <= STRING_MAX
 
 /**
- * Whether unit `u` (the file's `units[i]`) stands: its shape [kind, flags, depth, cell, edges, pieces], its kind a
+ * Whether unit `u` (the file's `units[i]`) stands: its shape [kind, flags, depth, cell, edges, pieces] (and, with `ink`, an ink
+ * unit's [..., echo]: its kind an ink kind, its echo null or an earlier unit that stands), its kind a
  * lower-case word, every string within STRING_MAX, each piece one of the six of its tag's shape; a nested piece's unit
  * one before it that stands (`stands`), so that no unit nests itself. A group's open and close are not paired: the front
  * end makes an open with no close (`\multirow{`, whose close the next cell holds) and a close with no open before it (a
  * part with no text dropped with its open: the corpus's 2212.06817, 2608.03063, 2608.15761), and every reader of a unit
  * takes either alone (mt.mjs serialize)
  */
-export function unitStands(u, i, stands) {
-  if (!Array.isArray(u) || u.length !== 6) return false
+export function unitStands(u, i, stands, { ink = false } = {}) {
+  if (!Array.isArray(u) || !(u.length === 6 || (ink && u.length === 7))) return false
   const kind = u[0], flags = u[1], depth = u[2], cell = u[3], edges = u[4], pieces = u[5]
   if (typeof kind !== 'string' || kind.length > 32 || !KIND.test(kind)) return false
+  // (an ink unit, of a chunk of INK_UNITS_FORMAT alone: its kind an ink kind, its echo null or a unit before it that stands)
+  if (u.length === 7 && !(INK_KIND.test(kind) && (u[6] === null || (isInteger(u[6], 0, i - 1) && stands[u[6]] === 1)))) return false
   if (!isInteger(flags, 0, FLAG_BITS)) return false
   if (depth !== null && !isInteger(depth, DEPTH_MIN, DEPTH_MAX)) return false
   if (cell !== null) {

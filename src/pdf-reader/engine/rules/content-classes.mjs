@@ -38,15 +38,24 @@ export const CLASS_IDS = Object.freeze(Object.keys(CLASSES))
 export const CLASS_CODE = Object.freeze(Object.fromEntries(CLASS_IDS.map((id, i) => [id, i])))
 
 /** a unit's class by its kind (latex-front.mjs's kinds); a kind not here is `body` */
-/** (`name`: a structural name's unit, bundleUnitsOf's, a theorem head's or a generated reference's word in the target, the
- *  `generated` class, always translated: PDF-READER §19.12) */
-export const UNIT_CLASS = Object.freeze({ para: 'body', heading: 'body', abstract: 'body', caption: 'body', footnote: 'body', cell: 'tables', author: 'names', figure: 'figures', name: 'generated' })
+export const UNIT_CLASS = Object.freeze({
+  para: 'body', heading: 'body', abstract: 'body', caption: 'body', footnote: 'body', cell: 'tables', author: 'names', figure: 'figures',
+  // (the ink units', layout/ink-units.mjs INK_KIND: their kind names their class)
+  inkheads: 'heads', inkcontents: 'contents', inknotes: 'notes', inkorphan: 'orphan', inknames: 'names', inkgenerated: 'generated',
+  // (a structural name's unit, bundleUnitsOf's: a theorem head's or a generated reference's word in the target, always
+  // translated: PDF-READER §19.12)
+  name: 'generated',
+})
 /** a unit's class: of the front end's unit ({ kind }), of the bundle's ([kind, flags, …]) or of a kind; null for none */
 export function unitClass(u) {
   const kind = typeof u === 'string' ? u : Array.isArray(u) ? u[0] : u?.kind
   if (typeof kind !== 'string') return null
   return Object.hasOwn(UNIT_CLASS, kind) ? UNIT_CLASS[kind] : 'body'
 }
+
+/** each toggle's default, where a reader has set none (the owner's, 2026-10-25): heads and tables on; names and references off
+ *  (the references lane builds them); figures off until built */
+export const TOGGLE_DEFAULTS = Object.freeze({ heads: true, tables: true, figures: false, references: false, names: false })
 
 /** whether a class is shown translated under a reader's settings (`on`: the toggles turned on; `always` is, `never` is not) */
 export const shownTranslated = (cls, on) => {

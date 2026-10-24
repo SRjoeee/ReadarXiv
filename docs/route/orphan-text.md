@@ -1,7 +1,8 @@
 # Closed-world coverage on our own compile: content classes and orphan text — design note
 
-Status: stage 1 built (2026-10-25: `rules/content-classes.mjs`, `layout/ledger.mjs`, `lab/pdf/spikes/ledger.mjs`); stages 2–8 are
-the plan of §7, for the owner after he reads §5. Engine at `next` 37d84180. The phase 1 measurement's scripts and raw rows are not
+Status: stage 1 built (2026-10-25: `rules/content-classes.mjs`, `layout/ledger.mjs`, `lab/pdf/spikes/ledger.mjs`); stages 2 and 3
+built (`layout/ink-units.mjs`, `pipeline/ink-pass.mjs`, paragraph points, the toggles at the layer's open); stages 4–8 are the
+plan of §7. Engine at `next` 37d84180. The phase 1 measurement's scripts and raw rows are not
 in the tree (the session scratchpad's `orphans/`); stage 1's gate reproduces the pack's numbers from the engine itself.
 
 ## 1. The rule
@@ -138,8 +139,8 @@ names are its placeholder's ink, kept as the original's either way; a running he
 | Stage | Scope | Versions | Agent-days |
 |---|---|---|---:|
 | 1 (built) | class table, ledger in `wrapFinal`, invariant (o) rows, the lab gate | none (no wire, no compile change; the web stores the ledger later) | 1 |
-| 2 | ink units: heads and feet, notes, contents by line; reuse; groups; drawn; head and foot points | LAYOUT, REMOVAL, BUNDLE, new INK in the translate key | 4 |
-| 3 | para points; whole blocks; orphan prose; theorem heads and generated headings | LAYOUT | 3 |
+| 2 (built) | ink units: heads and feet, notes, contents, orphans; echo rows; their groups; the ink chunk; the toggles at the open | LAYOUT 21, REMOVAL 11, BUNDLE5 10, an INK_UNITS_FORMAT chunk (the source chunks unchanged); no translate key moves | 4 |
+| 3 (built) | paragraph points (q<n> at para/begin); a contents entry and a block one paragraph of TeX's | in LAYOUT 21; base pages pixel-identical on the pack | 3 |
 | 4 | references and names in them (.bbl units) | PIPELINE (units), LAYOUT | 4.5 |
 | 5 | vector figure text | LAYOUT, REMOVAL | 3 |
 | 6 | OCR on the server | a new OCR version in the key | 3.5 |
@@ -149,3 +150,47 @@ names are its placeholder's ink, kept as the original's either way; a running he
 About 23 agent-days in all. The web sweep reads invariant (o) once the engine is pinned (`scripts/sweep/invariants.mjs`), and the
 container stores `wrapFinal`'s `ledger` in the record (a web change). This design touches `latex-front.mjs` only in stages 4 and
 7; the heading-argument PR's owner is told first.
+
+## 8. The web contract for stages 2–3 (2026-10-25; the engine and the web land for one pin)
+
+The engine makes ink units in the maker child and carries them through the page pass; the web passes them through, announces
+one more units chunk, stores the ledger, reads invariant (o) and offers the toggles. Every name below is the engine's export.
+
+1. **`ours.ink`.** `wrapFinal` returns `ink` beside `ledger` (an opaque value: the ink units, their glyphs, rows and groups). The
+   container passes it on unchanged: `ourWrap` returns it, and the maker gives `layerOfPaper({ ours: { …, wrap: { stats,
+   unhidden, labelKept, pages, ledger }, ink } })`. `ledger` is `wrapFinal`'s `ledger`, now inside `wrap`. `ink.off` (added 2026-10-25) lists the ink units the wrap could not
+   hide alone (a page it did not wrap, a placeholder on a page whose groups it merged): the pass keeps them, their ids naming
+   their groups, and lays none of them, as it lays none on a page not drawable; the host passes `ink` whole. With no `ours.ink`
+   (an older wrap, a refused one) the pass makes no ink unit and everything else is as before.
+2. **The ink chunk.** Ink units are units with ids after the source units' (N to N + K − 1), in one more units chunk (`kind:
+   'units'`, `from: N`, `to: N + K`), which the engine writes. `onHead(head, units)` then gets the prepare child's chunks
+   followed by the maker's: `units.slice(announced.length)` are new. The maker writes and announces each new chunk (role
+   `units`, as the prepare child announces its own) before the head. `layerSink`'s check becomes: the first `announced.length`
+   chunks equal the prepare child's, the rest are the maker's own. The Worker accepts a head whose units list is longer than
+   the prepare's announcement by chunks the maker announced. The catalog's `units` lists every chunk.
+3. **The bundle unit of an ink unit.** It is today's tuple with a seventh element: `[kind, flags, depth, null, null, pieces,
+   echo]`. `kind` names its class (`inkheads`, `inkcontents`, `inknotes`, `inkgenerated`, `inkorphan`, `inknames`: a block of
+   notes or orphans most of whose letters are an author unit's words, of the names toggle as the author block is; added
+   2026-10-25), and `unitClass(kind)` gives it. `echo` is the id of the source unit it repeats, or of an earlier ink unit (a running head on every page: added
+   2026-10-25), its row that unit's, with no translation of its own; or
+   null. Pieces are text, with ⟦n⟧ placeholders for kept runs (leader dots, numbers, math, URLs), whose ink stays.
+   BUNDLE is raised.
+4. **Translation.** The rows path translates the ink units like any unit, once on the server, whatever the toggles
+   (`layer-proto/rows.mjs` `toTranslate`). An echo unit is never sent: its row is its echo's (`unitOf` takes the echo's row).
+   The translation client needs no change beyond translating every chunk the head lists.
+5. **The record's ledger.** The head's base carries `ledger: { classes: [class, glyphs, letters, …], letters, orphanLetters,
+   orphans: [page, letters, text, …] }`, flat (a head nests four deep at most), with at most 64 orphans and their text cut at 120
+   code units, written by the engine from `ours.wrap.ledger`. The web stores it with the head; nothing else reads it.
+6. **Invariant (o).** The sweep calls `orphanRowsOfHead(head, { paper })` (`layout/ledger.mjs`). That gives one row per listed
+   orphan `{ inv: 'o', sev: 'violation', paper, page, unit: null, what: 'orphan text', text, detail: { letters } }`, plus one
+   row `{ what: 'orphans not listed', detail: { letters } }` where `orphanLetters` passes the listed ones. A head without a
+   ledger (an older engine's) gives no row.
+7. **The toggles.** The reader's option is `classes: { heads, tables, figures, references, names }`, booleans, defaulting to
+   `TOGGLE_DEFAULTS` (`rules/content-classes.mjs`: heads true, tables true, names false, references false, figures false until
+   built). Each host stores it with its other reader settings and gives it to the layer at its open (`openLayer({ classes })`);
+   a change of it is an open again, as a change of language is (a laid page never changes: run.mjs), through the reading view's
+   `setClasses(classes)` (view/layer-side.mjs): the same documents, parts and rows, each laid page kept until the new door's
+   commits. A unit whose class is not shown is drawn as the original's (its groups ON, no row drawn); nothing is fetched,
+   prepared or translated. Measured (the layer gate's jump, `--perf`): the open again and the two pages in view at 1× laid in
+   81 to 384 ms over 14 page pairs of 6 papers (2026-10-25). The labels are the owner's words, in the locale packs
+   (one key a toggle). "Always" and "never" are no setting.

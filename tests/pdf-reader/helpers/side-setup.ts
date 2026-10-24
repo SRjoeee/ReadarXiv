@@ -63,7 +63,7 @@ export interface Setup {
   destroyed: string[]; warned: () => string[]; opens: number; highlight(on: boolean): void
   /** each door opened: the door, the rows it took, its ends, the copies it was asked (page, the ask, k) and each copy's size
    *  (page, width, height) */
-  doors: { layer: Layer; taken: Row[]; ended: number; copies: [number, unknown, number][]; sized: [number, number, number][] }[]
+  doors: { layer: Layer; taken: Row[]; ended: number; copies: [number, unknown, number][]; sized: [number, number, number][]; classes: unknown }[]
   /** the door the side holds now (the last opened, while it lives) */
   layer(): Layer | null
   real: boolean
@@ -166,7 +166,7 @@ export async function setup(o: Options = {}): Promise<Setup> {
       if (o.openFails || o.openFailAt?.includes(opens - 1)) throw new BundleRefusal('the document has 9 pages, not 4', { kind: 'part', path: 'doc' })
       const layer = o.real ? await o.real.openLayer(oo) : await door.openLayer(oo)
       live = layer
-      const seen: Setup['doors'][number] = { layer, taken: [], ended: 0, copies: [], sized: [] }
+      const seen: Setup['doors'][number] = { layer, taken: [], ended: 0, copies: [], sized: [], classes: (oo as { classes?: unknown }).classes ?? null }
       doors.push(seen)
       const take = layer.take.bind(layer), end = layer.end.bind(layer), copyOf = layer.copyOf.bind(layer), dispose = layer.dispose.bind(layer)
       layer.take = r => { seen.taken.push(...r); return take(r) }

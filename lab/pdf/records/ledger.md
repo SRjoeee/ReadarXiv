@@ -34,3 +34,15 @@ In both, most orphan letters are REVTeX's: its bibliography, which no babel name
 affiliations and dates, which the front end cuts but the marks do not own (a coverage defect the invariant now names); then
 prose no unit holds (2610.21377 pp 34–43, 2610.19159's trajectories). The ledger's own cost, beside `ownOf`'s, on 2307.16209 (147
 pages, 243,732 glyphs): 39–79 ms against 180 ms, the pages' reading 1,140 ms.
+
+## Stages 2 and 3: the ink units (2026-10-25)
+
+The same gate after the ink units (`layout/ink-units.mjs`: the text no source unit owns made units of our glyphs and claimed;
+the ledger counted again over what is left, `inkLeft`). Pack (its seven papers' bases made again with the paragraph points, every
+page pixel-identical to the LAYOUT 20 bases): 500,301 letters, orphans 1,086 → 0, 286 ink units (152 heads, 96 contents, 35
+orphans, 2 notes, 1 names), 214 of them echoes of a unit's row, so that 72 are translated; 2307.16209 alone 238 (its contents,
+its running heads and its title pages), 2609.26457 31 (27 running heads, each the title's echo).
+
+The 116 papers of `bt-wide` (bases of before the paragraph points: blocks by the lines' places): orphans 2.31 % → 981 letters
+(0.019 %), in 9 papers, 1,879 ink units (959 orphans, 599 heads, 134 contents, 128 notes, 59 names), 683 echoes. Staging's 50
+bases hold no source here, so no unit and no ink unit.

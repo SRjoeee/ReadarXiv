@@ -2535,8 +2535,26 @@ babel names' points that open a list or the bibliography, stream order on the pa
 after its last, on one baseline, as `folioOf` reads a folio), whether it is inside a form XObject (an included PDF: pageInk's
 `form` with `indices`), and its face's family (math, typewriter). No layout file and no version changes: nothing on the wire,
 nothing in the compile. What no class explains is an orphan: the sweep's invariant (o) is no orphan letters (`orphanRows`, rows
-in the sweep's shape), run in the lab by `lab/pdf/spikes/ledger.mjs` (record `lab/pdf/records/ledger.md`). The ink units that
-translate the planned classes, and the toggles, are the note's later stages.
+in the sweep's shape), run in the lab by `lab/pdf/spikes/ledger.mjs` (record `lab/pdf/records/ledger.md`).
+
+**The ink units (stages 2 and 3, BUNDLE5 `'10'`, LAYOUT `'21'`, REMOVAL `'11'`).** Text no source unit owns — the running heads and
+feet, the contents and the lists, a note with no unit, prose the front end did not cut — is made units of our own glyphs in the
+wrap (`layout/ink-units.mjs`), from the ledger's lines: a head's line one, a contents entry or a block one paragraph of TeX's (the
+layout compile's point `q<n>` at LaTeX's para/begin, inside the paragraph's indentation box so that no paragraph's list
+changes, which pageInk keeps apart from the marks' points as `paras`; a paragraph with no indentation carries none and reads
+as the one before), each of its
+class's kind (`inkheads`, `inkcontents`, `inknotes`, `inkorphan`, after the source kinds in UNIT_KINDS; `inknames` a block
+most of whose letters are an author unit's words, of the names toggle as that unit is), its numbering, leaders
+and page number left the original's ink, its math and typewriter runs (and a web address in any face) kept placeholders. One
+whose letters and placeholders are a source unit's (a heading first), else an earlier ink unit's (a running head), echoes it: its pieces that unit's, its row that unit's row under its own id, never translated
+itself (`rows.mjs` `echoRows`, `layerIds`). Its glyphs are claimed under its own groups, `u<id>` and `u<id>.p`, so the reader
+hides it as any unit; one the wrap could not hide alone (its page not wrapped, its placeholder's group merged: `ink.off`), or on a
+page not drawable, keeps its id (which names its groups and which an echo names) and is laid nowhere. The page pass carries them (`pipeline/ink-pass.mjs`, from the host's `ours.ink`): in the bundle's units
+after the source units', in a chunk of their own (`INK_UNITS_FORMAT` `'2'`, a seventh element, the echo; the source units' chunks
+byte for byte as before), on the left by arXiv's tokens on their lines, in the layout by the wrap's rows. The reader's toggles
+are an option of the layer's open (`classes`, `TOGGLE_DEFAULTS`); a change of them is an open again over the same documents, parts
+and rows (`layer-side.mjs` `setClasses`), each laid page kept until the new door's commits: 81 to 384 ms to the two pages in view
+over 14 page pairs (the layer gate's jump, `--perf`). The web's half is `docs/route/orphan-text.md` §8.
 
 ### 19.11 Structural names: a head's, a reference's, in the target's words
 

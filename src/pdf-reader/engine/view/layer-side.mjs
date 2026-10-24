@@ -179,6 +179,9 @@ export function createLayerSide(view, o) {
   let index = null, bound = null, door = null, doorParts = [], gen = 0, offPage = null
   /** the language the side lays (retarget sets another), and the one the open door lays */
   let target = o.target, doorTarget = null
+  /** the reader's toggles the door lays by (rules/content-classes.mjs; setClasses sets others): a class they do not show is the
+   *  original's (docs/route/orphan-text.md §8); null, the defaults */
+  let classes = o.classes ?? null
   /** whether the host has said this target's rows will not come (dropOthers): another target's pages are the original's from then */
   let dropped = false
   /** whether the layer is drawn over our own compile (the head's base says `ours`: the layer route, design §3.2; the engine's
@@ -359,7 +362,7 @@ export function createLayerSide(view, o) {
     let layer
     try {
       layer = await open({
-        index, doc, parts, target, faceSources: o.faceSources, hyphUrl: o.hyphUrl, ...(o.rules ? { rules: o.rules } : {}), OPS: V.lib?.OPS ?? null,
+        index, doc, parts, target, faceSources: o.faceSources, hyphUrl: o.hyphUrl, ...(o.rules ? { rules: o.rules } : {}), ...(classes ? { classes } : {}), OPS: V.lib?.OPS ?? null,
         // (the left parts' fetches go with the door's generation: a reopen, a refusal or the dispose aborts them)
         leftPart: (_page, ref) => o.fetchObject(ref, leftAc.signal),
         onRetired: d => retired(d, me),
@@ -1346,6 +1349,27 @@ export function createLayerSide(view, o) {
       try { was?.dispose() } catch (e) { warn('dispose', e) }
       for (const n of pages.keys()) { abortAsk(n); for (const c of pages.get(n).copyAcs ?? []) c.abort() }
       side.again()
+    },
+    /** the reader's toggles changed (docs/route/orphan-text.md §8): the door opened again over the same documents and parts, the rows
+     *  so far given it again, as after a fork; each laid page keeps its drawing until the new door's commits (a class it no longer
+     *  shows is then the original's), nothing fetched and nothing translated. The same toggles again change nothing */
+    setClasses(next) {
+      if (disposed || state === 'refused') return
+      const same = (a, b) => JSON.stringify(Object.entries(a ?? {}).sort()) === JSON.stringify(Object.entries(b ?? {}).sort())
+      if (same(next, classes)) return
+      classes = next ?? null
+      warmAc.abort()
+      warmAc = new AbortController()
+      gen++
+      offPage?.()
+      offPage = null
+      const was = door
+      door = null
+      doorParts = []
+      try { was?.dispose() } catch (e) { warn('dispose', e) }
+      for (const n of pages.keys()) { abortAsk(n); for (const c of pages.get(n).copyAcs ?? []) c.abort() }
+      reopenWanted = true
+      void pump()
     },
     /** every page that still shows a drawing of a door before (another target's, or this one's before it was opened again) back to
      *  the original's page: the host's word that this target's rows will not come (its service failed, or it stopped short) */
