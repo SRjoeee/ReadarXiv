@@ -131,12 +131,8 @@ window.door = {
     const bundle = R.readBundle(bundleBytes)
     const ruleSet = await ruleSetOf(rules)
     const doc = await pdfjs.getDocument({ data: await composedOf(name, bundle), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise
-    // (the door's default toggles, as it gives the run them: rules/content-classes.mjs; an engine of before them has none)
-    const classes = await import('/engine/rules/content-classes.mjs').catch(() => null)
-    const toggles = classes?.defaultToggles?.() ?? null
     const run = await V.openProto({
       doc, geometry, units: record.units, target, pages: Number.POSITIVE_INFINITY, scale, dpr, copy: true,
-      ...(toggles && classes.unitShown ? { shown: u => classes.unitShown(u, toggles) } : {}),
       tex: { use: 'lines', texOnly: true, symbols: 'text', extents: 'v0', index: F.indexLayout(F.parseLayout(layout)), pieces: new Map(unitsFile.units.map(u => [u.id, u.pieces])) },
       // (the cell rules the bundle carries, as the door reads them; a BUNDLE 3 bundle names no unit the wrap could not hide)
       hiding: { rules: q => bundle.rules?.[q] },
@@ -168,7 +164,7 @@ window.door = {
   },
 
   /** the reader's door over the bundle, its rows taken `part` a part as they come, the same pages asked for in turn */
-  async door({ name, target, rules, pages, part }) {
+  async door({ name, target, rules, pages, part, shots = [] }) {
     const R = await import('/engine/layer-proto/reader.mjs')
     const [bundleBytes, rows] = await Promise.all([bytes(`/door/${name}/bundle.json`), json(`/door/${name}/rows.json`)])
     const bundle = R.readBundle(bundleBytes)
@@ -199,7 +195,8 @@ window.door = {
       // run's own original (its PNG); the page this load's PDF.js draws compared with that original apart
       const original = await canvasOfPng(`/door/${name}/o${p}.png`)
       const copy = await layer.copyOf(p, { k: K, width: original.width, height: original.height })
-      out.push({ p, svg: markup.outerHTML, lang, w, h, words: await wordsDigest(words), links: await textDigest(JSON.stringify(links ?? [])), source: await pixelsOf(source), original: await pixelsOf(original), copy: await pixelsOf(copy) })
+      // (--door-shots: the page's copy plane as PNG, for the eye: what the drawing hides under its SVG)
+      out.push({ p, svg: markup.outerHTML, lang, w, h, words: await wordsDigest(words), links: await textDigest(JSON.stringify(links ?? [])), source: await pixelsOf(source), original: await pixelsOf(original), copy: await pixelsOf(copy), ...(shots.includes(p) ? { copyPng: await pngOf(copy) } : {}) })
       for (const c of [source, original, copy]) { c.width = 0; c.height = 0 }
     }
     await fed

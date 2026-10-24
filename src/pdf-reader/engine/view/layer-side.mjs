@@ -43,7 +43,7 @@ import { pathsOf, wantsFloats } from './floats.mjs'
 import { internalsOf } from './reader-view.mjs'
 import { bySentence } from './highlight.mjs'
 import { createShapes, layerShapes } from './shapes.mjs'
-import { togglesOf, unitShown } from '../rules/content-classes.mjs'
+import { classesOn, unitShown } from '../rules/content-classes.mjs'
 
 /** how long a page asked for, once told `laying`, may take to be laid before its place shows the original (the web's D5-R7d) */
 export const PAGE_MS = 30_000
@@ -158,9 +158,6 @@ function drawnList(pdfPage) {
 /** the layer side of `view`; `o` its options (LayerSideOptions; `openLayer`, the door, the tests') */
 export function createLayerSide(view, o) {
   const V = internalsOf(view)
-  /** the reader's toggles, read once (o.toggles: names or booleans, rules/content-classes.mjs togglesOf; the defaults where
-   *  none): the set every open of the door is given, and the translating indicator reads */
-  const shownToggles = togglesOf(o.toggles ?? null)
   const open = o.openLayer ?? theDoor
   /** the host's bounds where it gives them: the pixels of the drawings kept off the view (else this device's: keepBudget), the
    *  pages laid ahead */
@@ -183,6 +180,9 @@ export function createLayerSide(view, o) {
   let index = null, bound = null, door = null, doorParts = [], gen = 0, offPage = null
   /** the language the side lays (retarget sets another), and the one the open door lays */
   let target = o.target, doorTarget = null
+  /** the reader's toggles the door lays by (rules/content-classes.mjs; setClasses sets others): a class they do not show is the
+   *  original's (docs/route/orphan-text.md §8); null, the defaults */
+  let classes = o.classes ?? null
   /** whether the host has said this target's rows will not come (dropOthers): another target's pages are the original's from then */
   let dropped = false
   /** whether the layer is drawn over our own compile (the head's base says `ours`: the layer route, design §3.2; the engine's
@@ -363,7 +363,7 @@ export function createLayerSide(view, o) {
     let layer
     try {
       layer = await open({
-        index, doc, parts, target, faceSources: o.faceSources, hyphUrl: o.hyphUrl, ...(o.rules ? { rules: o.rules } : {}), ...(o.toggles ? { toggles: shownToggles } : {}), OPS: V.lib?.OPS ?? null,
+        index, doc, parts, target, faceSources: o.faceSources, hyphUrl: o.hyphUrl, ...(o.rules ? { rules: o.rules } : {}), ...(classes ? { classes } : {}), OPS: V.lib?.OPS ?? null,
         // (the left parts' fetches go with the door's generation: a reopen, a refusal or the dispose aborts them)
         leftPart: (_page, ref) => o.fetchObject(ref, leftAc.signal),
         onRetired: d => retired(d, me),
@@ -936,14 +936,14 @@ export function createLayerSide(view, o) {
     // attempt's rows will not come, dropOthers, until another attempt begins)
     if (disposed || marksOff || state === 'refused' || P?.content?.wrap || P?.failed || P?.originalShown || originalPageOf(n)) return unmark(n)
     const place = V.places.page(n)
-    const units = [], view = []
+    const units = [], view = [], shownOn = classesOn(classes)
     for (const part of feed.state().parts) {
       // (a part's views run through its reach, the last page its layout runs to: a paragraph that crosses into a page no part
       // owns yet is located there all the same)
       if (Array.isArray(part.pages) && n >= part.pages[0] && n <= Math.max(part.pages[1], part.reach ?? 0) && part.views?.length >= 4 * (n - part.pages[0] + 1)) view.splice(0, 4, ...part.views.slice(4 * (n - part.pages[0]), 4 * (n - part.pages[0]) + 4))
       for (const [id, , rects] of part.left ?? []) {
         const on = (rects ?? []).filter(r => r[0] === n)
-        if (!on.length || !unitShown(index?.kinds[id] ?? '', shownToggles) || (rowsEnded && !rows.has(id))) continue
+        if (!on.length || !unitShown(index?.kinds[id] ?? '', shownOn) || (rowsEnded && !rows.has(id))) continue
         units.push({ id, on })
       }
     }
@@ -1351,6 +1351,29 @@ export function createLayerSide(view, o) {
       try { was?.dispose() } catch (e) { warn('dispose', e) }
       for (const n of pages.keys()) { abortAsk(n); for (const c of pages.get(n).copyAcs ?? []) c.abort() }
       side.again()
+    },
+    /** the reader's toggles changed (docs/route/orphan-text.md §8): the door opened again over the same documents and parts, the rows
+     *  so far given it again, as after a fork; each laid page keeps its drawing until the new door's commits (a class it no longer
+     *  shows is then the original's), nothing fetched and nothing translated. The same toggles again change nothing */
+    setClasses(next) {
+      if (disposed || state === 'refused') return
+      const same = (a, b) => JSON.stringify(Object.entries(a ?? {}).sort()) === JSON.stringify(Object.entries(b ?? {}).sort())
+      if (same(next, classes)) return
+      classes = next ?? null
+      // (the translating indicator reads them too: a class no longer shown loses its marks, one turned on gains them)
+      markSoon()
+      warmAc.abort()
+      warmAc = new AbortController()
+      gen++
+      offPage?.()
+      offPage = null
+      const was = door
+      door = null
+      doorParts = []
+      try { was?.dispose() } catch (e) { warn('dispose', e) }
+      for (const n of pages.keys()) { abortAsk(n); for (const c of pages.get(n).copyAcs ?? []) c.abort() }
+      reopenWanted = true
+      void pump()
     },
     /** every page that still shows a drawing of a door before (another target's, or this one's before it was opened again) back to
      *  the original's page: the host's word that this target's rows will not come (its service failed, or it stopped short) */

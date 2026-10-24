@@ -2,7 +2,7 @@ import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { type LedgerPage, ledgerOf, ledgerSummary, ORPHAN_LINES_MAX, orphanRows } from '@/pdf-reader/engine/layout/ledger.mjs'
 import { pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
-import { CLASS_CODE, CLASS_IDS, CLASSES, defaultToggles, shownTranslated, TOGGLE_DEFAULTS, TOGGLES, togglesOf, UNIT_CLASS, unitClass, unitShown } from '@/pdf-reader/engine/rules/content-classes.mjs'
+import { CLASS_CODE, CLASS_IDS, CLASSES, classesOn, shownTranslated, TOGGLE_DEFAULTS, TOGGLES, UNIT_CLASS, unitClass, unitShown } from '@/pdf-reader/engine/rules/content-classes.mjs'
 
 // The content classes and the ledger of our final pass (docs/route/orphan-text.md, stage 1): every glyph one class, by TeX's
 // facts — its owner, its region, the babel names' points, stream order — and its own font
@@ -46,21 +46,14 @@ describe('the content classes', () => {
     for (const cls of Object.values(UNIT_CLASS)) expect(CLASS_IDS).toContain(cls)
   })
 
-  it('turns references and names off until the reader\'s settings say otherwise, every other toggle on (the owner, 2026-10-25)', () => {
-    expect(TOGGLE_DEFAULTS).toEqual({ heads: true, tables: true, figures: true, references: false, names: false })
-    expect(Object.keys(TOGGLE_DEFAULTS)).toEqual(TOGGLES.filter(t => t !== 'always' && t !== 'never'))
-    expect([...defaultToggles()].sort()).toEqual(['figures', 'heads', 'tables'])
-    expect(defaultToggles()).not.toBe(defaultToggles())
-    // (a host's toggles: names, or booleans over the defaults; a name that is no toggle dropped; none, the defaults)
-    expect([...togglesOf(['names', 'references', 'always', 'nothing'])].sort()).toEqual(['names', 'references'])
-    expect([...togglesOf({ references: true, tables: false })].sort()).toEqual(['figures', 'heads', 'references'])
-    expect(togglesOf(null)).toEqual(defaultToggles())
-    expect(() => togglesOf('names' as never)).toThrow(TypeError)
-    expect(() => togglesOf(3 as never)).toThrow(TypeError)
-    // (a unit by its class: the body always, a cell under tables, an entry's rest under references, its names under names; the
-    // names given are the toggles on, every other off)
-    const on = togglesOf(['references'])
+  it('turns references and names on only where a reader\'s classes say so (stage 4: an entry\'s rest, its names, the author block)', () => {
+    expect(TOGGLE_DEFAULTS.references).toBe(false)
+    expect(TOGGLE_DEFAULTS.names).toBe(false)
+    expect([...classesOn(null)].sort()).toEqual(Object.keys(TOGGLE_DEFAULTS).filter(t => TOGGLE_DEFAULTS[t as keyof typeof TOGGLE_DEFAULTS]).sort())
+    // (a unit by its class: the body always, a cell under tables, an entry's rest under references, its names under names)
+    const on = classesOn({ references: true, tables: false })
     expect(['para', 'cell', 'reference', 'refnames', 'author'].map(kind => unitShown({ kind }, on))).toEqual([true, false, true, false, false])
+    expect(['reference', 'refnames', 'author'].map(kind => unitShown({ kind }, classesOn({ names: true })))).toEqual([false, true, true])
     expect(unitShown(null, on)).toBe(false)
   })
 
@@ -233,6 +226,14 @@ describe('ledgerOf', () => {
     expect(classAt(l, 1, at(pg, 'n'))).toBe('orphan')
   })
 
+  it("gives each line its paragraph, TeX's (the page's paragraph points), one going on from the page before", () => {
+    const p1 = page({ point: 'bs1' }, { glyphs: run('First words here', 100, 700) }, { glyphs: run('more of them', 100, 688) }, { point: 'be1' })
+    p1.page.paras = [{ name: 'q4', glyph: 0, box: 0 }, { name: 'q5', glyph: p1.page.glyphs.length - 3, box: 0 }]
+    const p2 = page({ point: 'bs2' }, { glyphs: run('going on', 100, 700) }, { point: 'be2' })
+    const l = ledger([p1, p2])
+    expect(l.lines.map(x => [x.page, x.para])).toEqual([[1, 4], [1, 4], [2, 5]])
+  })
+
   it('lists ORPHAN_LINES_MAX orphan lines at most, and counts them all', () => {
     const parts: Part[] = [{ point: 'bs1' }]
     for (let i = 0; i < ORPHAN_LINES_MAX + 5; i++) parts.push({ glyphs: run('word', 100, 700 - 12 * i) })
@@ -245,7 +246,7 @@ describe('ledgerOf', () => {
   it('summarizes as integers and gives the sweep\'s rows', () => {
     const pg = page({ point: 'bs1' }, { glyphs: run('Body', 100, 600), owner: 'u0' }, { glyphs: run('Lost words', 100, 580) }, { point: 'be1' })
     const l = ledger([pg], [{ kind: 'para' }])
-    expect(ledgerSummary(l)).toEqual({ classes: { body: [4, 4], orphan: [9, 9] }, letters: 13, orphanLetters: 9 })
+    expect(ledgerSummary(l)).toEqual({ classes: ['body', 4, 4, 'orphan', 9, 9], letters: 13, orphanLetters: 9, orphans: [1, 9, 'Lost words'] })
     expect(orphanRows(l, { paper: '2610.00001v1' })).toEqual([{ inv: 'o', sev: 'violation', paper: '2610.00001v1', page: 1, unit: null, what: 'orphan text', text: 'Lost words', detail: { letters: 9, x0: 100, x1: 150, y: 580 } }])
   })
 })

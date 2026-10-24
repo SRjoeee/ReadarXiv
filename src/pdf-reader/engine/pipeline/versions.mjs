@@ -232,6 +232,9 @@ export const PDFJS = '6.3.289'
  * labels (own.mjs isLabelForm's `note`, JOINT), each in its unit's label group, where they were left the original's ink in no
  * group (`labelKept`), so that the layer draws them in the target's names: the base's bytes and the head's `labelKept` change,
  * the layout files and the units do not (over 25 local papers labelKept 298 → 96, 202 labels newly in their groups;
- * 2610.18513v1 100 → 23; every other wrap count, and every page of every group shown, as before: the ocg gate)
+ * 2610.18513v1 100 → 23; every other wrap count, and every page of every group shown, as before: the ocg gate); and in the
+ * same unreleased 11 (docs/route/orphan-text.md, stage 2) the ink units' glyphs, text no source unit owns made units of our
+ * own glyphs (layout/ink-units.mjs), wrapped in groups of their own, `u<id>` and `u<id>.p` from the source units' count on:
+ * the base's bytes change where a page holds such text
  */
 export const REMOVAL = '11'

@@ -11,7 +11,6 @@ import type { Row } from './rows.mjs'
 import type { PageWords } from './words.mjs'
 import type { TextLayerData } from './textlayer.mjs'
 import type { FrozenRuleSet, RULES_SCHEMA } from '../rules/layout.mjs'
-import type { Toggle } from '../rules/content-classes.mjs'
 
 export { PDF_OPTIONS, SKIP_CODES, type SkipCode } from './run.mjs'
 /** the dropped rows the door names at most (stats `droppedRows`) */
@@ -19,7 +18,6 @@ export declare const DROPPED_ROWS: number
 export { BUNDLE, BUNDLE_CAP, BUNDLE_VALUES, BundleRefusal, bundleKey, CTAG, readBundle, VTAG } from './bundle.mjs'
 export { batchesOf, layerRows, rowOf, runRows, toTranslate, unitOf } from './rows.mjs'
 export { indexLayout, LAYOUT, LAYOUT_CAP, LAYOUT_VALUES, LayoutRefusal, parseLayout } from '../layout/file.mjs'
-export { defaultToggles, TOGGLE_DEFAULTS, TOGGLES, togglesOf, type Toggle } from '../rules/content-classes.mjs'
 export { trPiecesOf } from '../layer/pieces.mjs'
 export { FACES } from '../rules/font-roles.mjs'
 export { translateUnits } from '../translate/mt.mjs'
@@ -191,10 +189,9 @@ export interface OpenLayerOptions {
   /** PDF.js's operator codes (the host's PDF.js): a page read live reads its characters' fills as its draw tells them (run.mjs
    *  openProto `OPS`); none, such a page tells no fill */
   OPS?: Record<string, number> | null
-  /** the reader's toggles (rules/content-classes.mjs): the toggle names turned on, or { [toggle]: boolean } over the defaults;
-   *  absent or null: TOGGLE_DEFAULTS (references and names off). A unit whose class they hide is not awaited and not drawn, its
-   *  ink the page's: another set is another open over the same rows, no prepare and no translation again */
-  toggles?: Iterable<string> | Partial<Record<Toggle, boolean>> | null
+  /** the reader's toggles (rules/content-classes.mjs TOGGLE_DEFAULTS where not given): a unit whose class they do not show is the
+   *  original's; a change of them is a new open, as a change of language is */
+  classes?: Partial<Record<'heads' | 'tables' | 'figures' | 'references' | 'names', boolean>> | null
 }
 /** the draws of left parts the door holds for the run at most (their left parts' bytes) */
 export declare const DRAWS_HELD: number
@@ -211,7 +208,7 @@ export interface OpenBundleLayerOptions {
   /** PDF.js's operator codes, as OpenLayerOptions' */
   OPS?: Record<string, number> | null
   /** the reader's toggles, as OpenLayerOptions' */
-  toggles?: Iterable<string> | Partial<Record<Toggle, boolean>> | null
+  classes?: Partial<Record<'heads' | 'tables' | 'figures' | 'references' | 'names', boolean>> | null
 }
 /** the layer of one paper and target, as either reader shows it: v0 opened over the composed document with the paper's left,
  *  layout and add-on, the target's caption names on every float (L7), the served faces and hyphenation, at scale 2.5 and dpr 1

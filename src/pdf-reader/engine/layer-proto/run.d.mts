@@ -74,7 +74,7 @@ export declare const PDF_OPTIONS: { cMapPacked: true; enableHWA: true; disableSt
  *  with the maker's own code beside it, `unlaid`; `pieces`, `noRow`, `lost`), `offPages`, `author`, `refused` (its row not of
  *  this unit), `group`, the drawing's (`unfit`, `unproven`, `served`, `face`, `error`, `page`) and the door's `rowUnfit` (a row
  *  naming no unit or piece of the paper's, dropped before the run sees it: the door's stats `droppedRows`), `unhidden` (its
- *  ink not wrapped in its groups by the file) and `hidden` (its class one the reader's toggles hide: openProto `shown`) */
+ *  ink not wrapped in its groups by the file) and `hidden` (its class one the reader's toggles hide: openProto `classes`) */
 export declare const SKIP_CODES: readonly ['unlocated', 'pieces', 'noRow', 'lost', 'offPages', 'author', 'refused', 'group', 'unfit', 'unproven', 'served', 'face', 'error', 'page', 'rowUnfit', 'unhidden', 'hidden']
 export type SkipCode = (typeof SKIP_CODES)[number]
 /** `code` where it is one of SKIP_CODES; throws a TypeError for any other */
@@ -303,10 +303,9 @@ export declare function openProto(o: {
   units: readonly (Unit | undefined)[]
   /** the ids of the units the run will report, taken as they arrive; null (the default): every unit is in `units` */
   expect?: readonly number[] | null
-  /** whether a unit's class is shown translated (the reader's toggles: rules/content-classes.mjs unitShown); a unit it says
-   *  not is left the original's, skipped `hidden`. Null (the default): the reader's default toggles (references and names
-   *  off, TOGGLE_DEFAULTS); `() => true` shows every class */
-  shown?: ((u: Unit) => boolean) | null
+  /** the reader's toggles, the door's `classes` (rules/content-classes.mjs): a unit whose class they do not show is left the
+   *  original's, skipped `hidden`. Null (the default): every class but the names and the references (the door gives its own) */
+  classes?: Partial<Record<'heads' | 'tables' | 'figures' | 'references' | 'names', boolean>> | null
   /** each unit's table group (groups.mjs groupOf), known at open: a group is read once its own cells' rows are in, and a
    *  row whose group is another is no unit of this paper's; null (the default): a group waits for every row */
   groups?: ReadonlyMap<number, string> | null

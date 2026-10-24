@@ -3,7 +3,7 @@ import { bundleUnitsOf } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { classOf, LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { defaultToggles, shownTranslated, togglesOf, unitClass, unitShown } from '@/pdf-reader/engine/rules/content-classes.mjs'
+import { classesOn, shownTranslated, unitClass, unitShown } from '@/pdf-reader/engine/rules/content-classes.mjs'
 import { plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The content classes' stage 4 (docs/route/orphan-text.md §5, "References" and "Names"; the owner's rulings of 2026-10-25): a
@@ -75,10 +75,10 @@ describe('a numeric \\bibitem bibliography written in the paper (plain, abbrv, u
     for (const lang of ['zh', 'de']) for (const u of bib(p)) expect(toTranslate(bundle as never, lang)).toContain(units(p).indexOf(u))
     expect(bib(p).map(u => unitClass(u))).toEqual(['names', 'references', 'names', 'references'])
     // (the defaults: references off and names off)
-    expect(bib(p).map(u => unitShown(u, defaultToggles()))).toEqual([false, false, false, false])
+    expect(bib(p).map(u => unitShown(u, classesOn(null)))).toEqual([false, false, false, false])
     // (references on alone: an entry's rest, never its names, which follow the names toggle)
-    expect(bib(p).map(u => unitShown(u, togglesOf(['references'])))).toEqual([false, true, false, true])
-    expect(bib(p).map(u => unitShown(u, togglesOf({ names: true })))).toEqual([true, false, true, false])
+    expect(bib(p).map(u => unitShown(u, classesOn({ references: true })))).toEqual([false, true, false, true])
+    expect(bib(p).map(u => unitShown(u, classesOn({ names: true })))).toEqual([true, false, true, false])
   })
 })
 
@@ -265,9 +265,9 @@ describe('an author block with affiliations and \\thanks: the class names, trans
   it('shows the names translated under the names toggle alone; the note and the body always', () => {
     const author = units(p).find(u => u.kind === 'author')!, note = units(p).find(u => u.kind === 'footnote')!
     expect([unitClass(author), unitClass(note)]).toEqual(['names', 'body'])
-    expect(shownTranslated('names', defaultToggles())).toBe(false)
-    expect(unitShown(author, togglesOf(['names']))).toBe(true)
-    expect(unitShown(author, togglesOf(['references']))).toBe(false)
-    expect(unitShown(note, defaultToggles())).toBe(true)
+    expect(shownTranslated('names', classesOn(null))).toBe(false)
+    expect(unitShown(author, classesOn({ names: true }))).toBe(true)
+    expect(unitShown(author, classesOn({ references: true }))).toBe(false)
+    expect(unitShown(note, classesOn(null))).toBe(true)
   })
 })

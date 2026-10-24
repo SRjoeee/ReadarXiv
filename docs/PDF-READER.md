@@ -2535,8 +2535,26 @@ babel names' points that open a list or the bibliography, stream order on the pa
 after its last, on one baseline, as `folioOf` reads a folio), whether it is inside a form XObject (an included PDF: pageInk's
 `form` with `indices`), and its face's family (math, typewriter). No layout file and no version changes: nothing on the wire,
 nothing in the compile. What no class explains is an orphan: the sweep's invariant (o) is no orphan letters (`orphanRows`, rows
-in the sweep's shape), run in the lab by `lab/pdf/spikes/ledger.mjs` (record `lab/pdf/records/ledger.md`). The ink units that
-translate the planned classes, and the toggles, are the note's later stages.
+in the sweep's shape), run in the lab by `lab/pdf/spikes/ledger.mjs` (record `lab/pdf/records/ledger.md`).
+
+**The ink units (stages 2 and 3, BUNDLE5 `'10'`, LAYOUT `'21'`, REMOVAL `'11'`).** Text no source unit owns — the running heads and
+feet, the contents and the lists, a note with no unit, prose the front end did not cut — is made units of our own glyphs in the
+wrap (`layout/ink-units.mjs`), from the ledger's lines: a head's line one, a contents entry or a block one paragraph of TeX's (the
+layout compile's point `q<n>` at LaTeX's para/begin, inside the paragraph's indentation box so that no paragraph's list
+changes, which pageInk keeps apart from the marks' points as `paras`; a paragraph with no indentation carries none and reads
+as the one before), each of its
+class's kind (`inkheads`, `inkcontents`, `inknotes`, `inkorphan`, after the source kinds in UNIT_KINDS; `inknames` a block
+most of whose letters are an author unit's words, of the names toggle as that unit is), its numbering, leaders
+and page number left the original's ink, its math and typewriter runs (and a web address in any face) kept placeholders. One
+whose letters and placeholders are a source unit's (a heading first), else an earlier ink unit's (a running head), echoes it: its pieces that unit's, its row that unit's row under its own id, never translated
+itself (`rows.mjs` `echoRows`, `layerIds`). Its glyphs are claimed under its own groups, `u<id>` and `u<id>.p`, so the reader
+hides it as any unit; one the wrap could not hide alone (its page not wrapped, its placeholder's group merged: `ink.off`), or on a
+page not drawable, keeps its id (which names its groups and which an echo names) and is laid nowhere. The page pass carries them (`pipeline/ink-pass.mjs`, from the host's `ours.ink`): in the bundle's units
+after the source units', in a chunk of their own (`INK_UNITS_FORMAT` `'2'`, a seventh element, the echo; the source units' chunks
+byte for byte as before), on the left by arXiv's tokens on their lines, in the layout by the wrap's rows. The reader's toggles
+are an option of the layer's open (`classes`, `TOGGLE_DEFAULTS`); a change of them is an open again over the same documents, parts
+and rows (`layer-side.mjs` `setClasses`), each laid page kept until the new door's commits: 81 to 384 ms to the two pages in view
+over 14 page pairs (the layer gate's jump, `--perf`). The web's half is `docs/route/orphan-text.md` §8.
 
 ### 19.11 Structural names: a head's, a reference's, in the target's words
 
@@ -2614,9 +2632,7 @@ matter's authors and the names inside references, which follow "names" and not "
 - **Names are translated for every target** (`layer-proto/rows.mjs` `toTranslate`, TRANSLATE_VERSION 6): the author block's units
   are sent whatever the language, as every unit is but a table's kept names; they are laid as any unit, and stay the original's
   where the wrap cannot hide their ink (`unhidden`).
-- **The toggles** (`rules/content-classes.mjs` `TOGGLE_DEFAULTS`, `togglesOf`, `unitShown`; the door's and the layer side's
-  `toggles`: the names of the toggles on, or `{ [toggle]: boolean }` over the defaults; none, the defaults: references and names
-  off, every other toggle on). A unit whose class they hide is not awaited by the door (no page waits for its row), not drawn (a
-  row given anyway is skipped `hidden`), and marked by no translating indicator; its ink is the page's. Another set of toggles is
-  another open of the door over the same rows and the same composed document: nothing is prepared or translated again. The web
-  and the extension wire their settings to it later (stage 8).
+- **The toggles** are stage 2's (`classes` at the door's open and the layer side's, `setClasses`, TOGGLE_DEFAULTS: references and
+  names off): an entry's units and the author block's are of the classes `references` and `names` (UNIT_CLASS), so that with
+  their toggle off no page awaits their rows, the door takes none, and the translating indicator marks none (it reads the same
+  `classes`); a direct open of v0 (run.mjs openProto, the lab's) takes the same option, TOGGLE_DEFAULTS where it is given none.

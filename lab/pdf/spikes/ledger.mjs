@@ -6,7 +6,8 @@
 // each paper's source (`--sources`, lab/pdf/data/corpus/<id>/source.gz: its units), and bases given whole (`--pair=<id>=<base.pdf>`,
 // whose source is not read: every unit's class then `body`). It writes one JSON line a paper (counts only), and with `--rows`
 // the orphan rows after it (a paper's text: never into a record). `--check=<n>` exits 1 where any paper's orphan letters pass n.
-//   pnpm exec tsx lab/pdf/spikes/ledger.mjs [--pack=<dir>] [--sources=<dir>] [--pair=<id>=<base.pdf>] [--rows] [--check=<n>] <id>…
+// `--ink` prints each ink unit after it (its kind, echo, page, lines and text: a paper's text again, never recorded).
+//   pnpm exec tsx lab/pdf/spikes/ledger.mjs [--pack=<dir>] [--sources=<dir>] [--pair=<id>=<base.pdf>] [--rows] [--ink] [--check=<n>] <id>…
 import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
@@ -49,9 +50,17 @@ for (const id of IDS) {
   const { ledger } = r, letters = ledger.letters
   // (the letters in classes whose path is built: classified ink, not drawn ink — a unit the wrap leaves the original's, its
   // `unhidden`, is counted in its class all the same)
-  const owned = CLASS_IDS.filter(c => CLASSES[c].state === 'built').reduce((n, c) => n + (ledger.classes[c]?.[1] ?? 0), 0)
-  const share = Object.fromEntries(CLASS_IDS.filter(c => ledger.classes[c]?.[1]).map(c => [c, pct(ledger.classes[c][1], letters)]))
-  console.log(JSON.stringify({ id, units: units ? units.length : null, letters, builtShare: pct(owned, letters), orphanLetters: ledger.orphanLetters, orphanShare: pct(ledger.orphanLetters, letters), share, ms }))
+  // (the summary's classes flat, [class, glyphs, letters, …]: ledger.mjs ledgerSummary)
+  const lettersOf = new Map()
+  for (let j = 0; j < ledger.classes.length; j += 3) lettersOf.set(ledger.classes[j], ledger.classes[j + 2])
+  const owned = CLASS_IDS.filter(c => CLASSES[c].state === 'built').reduce((n, c) => n + (lettersOf.get(c) ?? 0), 0)
+  const share = Object.fromEntries(CLASS_IDS.filter(c => lettersOf.get(c)).map(c => [c, pct(lettersOf.get(c), letters)]))
+  // the ink units (layout/ink-units.mjs): how many of each kind, how many echo a source unit's row
+  const inkKinds = {}
+  for (const u of r.ink.units) inkKinds[u.kind] = (inkKinds[u.kind] ?? 0) + 1
+  const ink = { units: r.ink.units.length, kinds: inkKinds, echo: r.ink.units.filter(u => u.echo !== null).length }
+  console.log(JSON.stringify({ id, units: units ? units.length : null, letters, builtShare: pct(owned, letters), orphanLetters: ledger.orphanLetters, orphanShare: pct(ledger.orphanLetters, letters), share, ink, ms }))
+  if (process.argv.includes('--ink')) for (const u of r.ink.units) console.log(JSON.stringify({ ink: u.id, kind: u.kind, echo: u.echo, page: u.rows.lines[0], lines: u.rows.lines.length / 8, text: u.pieces.map(p => (p.t === 'text' ? p.s : p.t === 'ph' ? '⟦·⟧' : '')).join('').slice(0, 100) }))
   if (ROWS) for (const row of orphanRows(r.ledgerWhole, { paper: id })) console.log(JSON.stringify(row))
   if (CHECK !== null && ledger.orphanLetters > CHECK) failed = true
 }

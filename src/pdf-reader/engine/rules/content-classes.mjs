@@ -38,7 +38,13 @@ export const CLASS_IDS = Object.freeze(Object.keys(CLASSES))
 export const CLASS_CODE = Object.freeze(Object.fromEntries(CLASS_IDS.map((id, i) => [id, i])))
 
 /** a unit's class by its kind (latex-front.mjs's kinds); a kind not here is `body` */
-export const UNIT_CLASS = Object.freeze({ para: 'body', heading: 'body', abstract: 'body', caption: 'body', footnote: 'body', cell: 'tables', author: 'names', figure: 'figures', reference: 'references', refnames: 'names' })
+export const UNIT_CLASS = Object.freeze({
+  para: 'body', heading: 'body', abstract: 'body', caption: 'body', footnote: 'body', cell: 'tables', author: 'names', figure: 'figures',
+  // (the ink units', layout/ink-units.mjs INK_KIND: their kind names their class)
+  inkheads: 'heads', inkcontents: 'contents', inknotes: 'notes', inkorphan: 'orphan', inknames: 'names', inkgenerated: 'generated',
+  // (a bibliography's entries, latex-front.mjs bibliography: its names the names', the rest the references')
+  reference: 'references', refnames: 'names',
+})
 /** a unit's class: of the front end's unit ({ kind }), of the bundle's ([kind, flags, …]) or of a kind; null for none */
 export function unitClass(u) {
   const kind = typeof u === 'string' ? u : Array.isArray(u) ? u[0] : u?.kind
@@ -46,20 +52,13 @@ export function unitClass(u) {
   return Object.hasOwn(UNIT_CLASS, kind) ? UNIT_CLASS[kind] : 'body'
 }
 
-/** each toggle's state until the reader's settings hold one (the owner, 2026-10-25: references and names off), the toggles a
- *  reader turns on or off alone: what a host shows where it passes no toggles */
-export const TOGGLE_DEFAULTS = Object.freeze({ heads: true, tables: true, figures: true, references: false, names: false })
-/** the toggles on by default (TOGGLE_DEFAULTS), a new Set each call */
-export const defaultToggles = () => new Set(Object.keys(TOGGLE_DEFAULTS).filter(t => TOGGLE_DEFAULTS[t]))
-/** the toggles a host gives (an iterable of TOGGLES' names, or { [toggle]: boolean } over TOGGLE_DEFAULTS), as the Set
- *  shownTranslated reads; null or undefined: the defaults. A name that is no toggle is dropped */
-export function togglesOf(given) {
-  if (given === null || given === undefined) return defaultToggles()
-  if (typeof given === 'object' && typeof given[Symbol.iterator] !== 'function') return new Set(Object.keys(TOGGLE_DEFAULTS).filter(t => (Object.hasOwn(given, t) ? !!given[t] : TOGGLE_DEFAULTS[t])))
-  if (typeof given?.[Symbol.iterator] !== 'function' || typeof given === 'string') throw new TypeError('toggles: an iterable of toggle names or an object of booleans')
-  return new Set([...given].filter(t => Object.hasOwn(TOGGLE_DEFAULTS, t)))
-}
-/** whether a unit is shown translated under a reader's toggles (`on`, togglesOf's): its class's (unitClass) */
+/** each toggle's default, where a reader has set none (the owner's, 2026-10-25): heads and tables on; names and references off
+ *  (the references lane builds them); figures off until built */
+export const TOGGLE_DEFAULTS = Object.freeze({ heads: true, tables: true, figures: false, references: false, names: false })
+/** the toggles on under a reader's `classes` (the door's option: { [toggle]: boolean } over TOGGLE_DEFAULTS; null, the
+ *  defaults), as a Set shownTranslated reads */
+export const classesOn = classes => new Set(Object.entries({ ...TOGGLE_DEFAULTS, ...(classes ?? {}) }).filter(([, v]) => v).map(([k]) => k))
+/** whether a unit is shown translated under the toggles on (`on`, classesOn's): its class's (unitClass) */
 export const unitShown = (u, on) => { const cls = unitClass(u); return cls !== null && shownTranslated(cls, on) }
 
 /** whether a class is shown translated under a reader's settings (`on`: the toggles turned on; `always` is, `never` is not) */

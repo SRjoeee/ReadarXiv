@@ -23,13 +23,11 @@ export declare const CLASS_CODE: Readonly<Record<ClassId, number>>
 export declare const UNIT_CLASS: Readonly<Record<string, ClassId>>
 /** a unit's class: of the front end's unit, of the bundle's, or of a kind; null for none */
 export declare function unitClass(u: string | { kind?: unknown } | readonly unknown[] | null | undefined): ClassId | null
+/** each toggle's default where a reader has set none */
+export declare const TOGGLE_DEFAULTS: Readonly<Record<Exclude<Toggle, 'always' | 'never'>, boolean>>
 /** whether a class is shown translated under a reader's toggles turned on */
 export declare function shownTranslated(cls: string, on: ReadonlySet<string> | null | undefined): boolean
-/** the toggles a reader turns on or off, each one's state until the settings hold one */
-export declare const TOGGLE_DEFAULTS: Readonly<Record<'heads' | 'tables' | 'figures' | 'references' | 'names', boolean>>
-/** the toggles on by default, a new Set each call */
-export declare function defaultToggles(): Set<Toggle>
-/** the toggles a host gives (names, or booleans over TOGGLE_DEFAULTS) as a Set; null or undefined: the defaults */
-export declare function togglesOf(given: Iterable<string> | Partial<Record<Toggle, boolean>> | null | undefined): Set<Toggle>
-/** whether a unit is shown translated under a reader's toggles: its class's */
+/** the toggles on under a reader's `classes` ({ [toggle]: boolean } over TOGGLE_DEFAULTS; null, the defaults) */
+export declare function classesOn(classes: Partial<Record<Exclude<Toggle, 'always' | 'never'>, boolean>> | null | undefined): Set<Toggle>
+/** whether a unit is shown translated under the toggles on: its class's */
 export declare function unitShown(u: string | { kind?: unknown } | readonly unknown[] | null | undefined, on: ReadonlySet<string> | null | undefined): boolean

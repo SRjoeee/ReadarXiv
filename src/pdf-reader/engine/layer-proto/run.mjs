@@ -71,7 +71,11 @@ import { itemFills } from '../layout/fills.mjs'
 import { GLYPHS_PAGE, pageInk } from '../layout/ink.mjs'
 import { listWithin } from '../layout/oplist.mjs'
 import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
-import { defaultToggles, unitShown } from '../rules/content-classes.mjs'
+import { classesOn, unitShown } from '../rules/content-classes.mjs'
+
+/** the toggles of a direct open (the lab's, the tests') given none: every class drawn but the names and the references, which no
+ *  run drew before the reader's toggles (the door gives its own, TOGGLE_DEFAULTS resolved) */
+const RUN_CLASSES = Object.freeze({ heads: true, tables: true, figures: true, references: false, names: false })
 
 /** the prototype's getDocument options beside the host's asset URLs (main.js ASSETS): its canvases on the GPU, the whole
  *  file read at once; and each font's own ToUnicode map exported with it (fontExtraProperties: what the text layer reads a
@@ -91,7 +95,7 @@ export const PDF_OPTIONS = { cMapPacked: true, enableHWA: true, disableStream: t
  * page that failed); the door's `rowUnfit` (its translated row names no unit or piece of the paper's: reader.mjs, a row
  * dropped before the run sees it); `unhidden` (the file could not wrap its ink in its groups: `hiding.unhidden`'s reason, or
  * no group of it in the document, docs/route/ocg-erasure.md §6); and `hidden` (its class one the reader's toggles hide, openProto
- * `shown`: rules/content-classes.mjs)
+ * `classes`: rules/content-classes.mjs)
  */
 export const SKIP_CODES = Object.freeze(['unlocated', 'pieces', 'noRow', 'lost', 'offPages', 'author', 'refused', 'group', 'unfit', 'unproven', 'served', 'face', 'error', 'page', 'rowUnfit', 'unhidden', 'hidden'])
 /** `code` where it is one of SKIP_CODES; a TypeError for any other, a defect of the caller's: no record carries a code outside the set */
@@ -750,10 +754,12 @@ export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
 export const unitSpans = u => (typeof u?.spans === 'boolean' ? u.spans : cellSpans(u))
 export { cellSpans }
 
-export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, batch = 8, phMode = 'auto', order: orderIn = null, faces = 'roles', faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex, copy = true, hiding = null, labels = null, rules = BUILTIN_RULES, parts: partsMode = false, onRetired = null, onStep = null, onWait = null, free = false, records = true, drawOf = null, drawsComing = false, OPS = null, shown = null }) {
-  if (shown !== null && typeof shown !== 'function') throw new TypeError(`shown: a function of a unit or null, not ${kindOf(shown)}`)
-  // (none given: the reader's default toggles, references and names off, as the door's own; `() => true` shows every class)
-  const defaults = defaultToggles(), classShown = shown ?? (u => unitShown(u, defaults))
+export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, batch = 8, phMode = 'auto', order: orderIn = null, faces = 'roles', faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex, copy = true, hiding = null, labels = null, rules = BUILTIN_RULES, parts: partsMode = false, onRetired = null, onStep = null, onWait = null, free = false, records = true, drawOf = null, drawsComing = false, OPS = null, classes = null }) {
+  if (classes !== null && typeof classes !== 'object') throw new TypeError(`classes: the reader's toggles or null, not ${kindOf(classes)}`)
+  // (the reader's toggles, the door's option, which the door gives resolved: a unit whose class they do not show is the original's.
+  // A direct open given none draws what it drew before the toggles, the author block's names and a bibliography's entries left
+  // the original's: RUN_CLASSES)
+  const on = classesOn({ ...RUN_CLASSES, ...(classes ?? {}) }), classShown = u => unitShown(u, on)
   if (expect !== null && (!Array.isArray(expect) || !expect.every(id => Number.isSafeInteger(id) && id >= 0))) throw new TypeError(`expect: ids of units or null, not ${kindOf(expect)}`)
   if (drawOf !== null && typeof drawOf !== 'function') throw new TypeError(`drawOf: a function or null, not ${kindOf(drawOf)}`)
   if (tableGroups !== null && !(tableGroups instanceof Map)) throw new TypeError(`groups: a Map of ids to groups or null, not ${kindOf(tableGroups)}`)
@@ -1215,7 +1221,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const no = refusalOf(c.id, u)
     if (no) return { p: null, skip: refusedOf(c.id, u, no) }
     // (a unit whose class the reader's toggles hide: its row made, its ink the page's — rules/content-classes.mjs; the door
-    // awaits none, so one comes here only where a host gives the open its units or rows itself)
+    // takes no row of one, so one comes here only where a host gives the open its units or rows itself)
     if (!classShown(u)) return { p: null, skip: c.rects ? { id: c.id, kind: u.kind, why: 'hidden', code: 'hidden', chars: trCharsOf(u), pages: [...new Set(c.rects.map(r => r[0]))] } : unanchoredOf(c.id, u, 'hidden') }
     // (a unit the left holds wholly past the pages shown is none of the run's)
     if (c.rects?.every(r => r[0] > N)) return { p: null }

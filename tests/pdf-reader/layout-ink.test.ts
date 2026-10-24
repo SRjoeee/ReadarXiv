@@ -301,6 +301,17 @@ describe('pageInk', () => {
     expect(boxAt).toEqual([0, 0, 1])
   })
 
+  it("keeps a paragraph's point (q<n>) apart from the marks' points, in stream order among the glyphs", () => {
+    const { points, paras } = ink([
+      [OPS.setRenderingIntent, [{ name: 'axt-q1' }]], ...text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A')), [OPS.setRenderingIntent, [{ name: 'axt-0s' }]], show(g('B'))),
+      [OPS.setRenderingIntent, [{ name: 'axt-q2' }]], ...text('f1', 10, [1, 0, 0, 1, 72, 680], show(g('C'))),
+      // (a probe's mark of another shape is no paragraph's)
+      [OPS.setRenderingIntent, [{ name: 'axt-q3a' }]],
+    ])
+    expect(points).toEqual([{ name: '0s', glyph: 1, box: 0 }, { name: 'q3a', glyph: 3, box: 0 }])
+    expect(paras).toEqual([{ name: 'q1', glyph: 0, box: 0 }, { name: 'q2', glyph: 2, box: 0 }])
+  })
+
   it('a hostile list gives no number that is not finite, and never throws', () => {
     const { glyphs, boxes } = ink([
       [OPS.transform, [Number.NaN, 0, 0, 1, 0, 0]], ...text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A'))), [OPS.constructPath, [OPS.fill, [null], Float32Array.from([0, 0, 1, 1])]],

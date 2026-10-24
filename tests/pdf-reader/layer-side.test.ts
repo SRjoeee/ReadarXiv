@@ -973,6 +973,35 @@ describe('L15: a fork', () => {
   })
 })
 
+describe("the reader's toggles (setClasses, docs/route/orphan-text.md §8)", () => {
+  it('opens the door again with them over the same documents, parts and rows, each laid page kept until the new door commits', async () => {
+    const s = await setup({ door: { rows: 'gate' } })
+    const m = await M()
+    await nearOn(s, [1, 2])
+    s.side.tell(await ALL())
+    s.side.take(m.index.units.map((_, id) => rowOf(id)))
+    s.side.end()
+    await settle(s)
+    const kept = layerOf(s, 1)?.querySelector('svg'), fetched = s.fetched.length, rows = s.doors[0]?.taken.length
+    s.side.setClasses({ tables: false })
+    // (the drawing laid before stays in place while the new door opens: no blank, no flash)
+    expect(layerOf(s, 1)?.querySelector('svg')).toBe(kept)
+    await settle(s)
+    expect(s.opens).toBe(2)
+    expect(s.composed.length).toBe(1)
+    expect(s.fetched.length).toBe(fetched)
+    expect(s.doors[1]?.classes).toEqual({ tables: false })
+    // (the rows so far given the new door again, and their end: nothing translated again)
+    expect(s.doors[1]?.taken.length).toBe(rows)
+    expect(s.doors[1]?.ended).toBe(1)
+    expect([content(s, 1), content(s, 2)]).toEqual(['layer', 'layer'])
+    // (the same toggles again: nothing)
+    s.side.setClasses({ tables: false })
+    await settle(s)
+    expect(s.opens).toBe(2)
+  })
+})
+
 describe('another target over the same layer (retarget)', () => {
   const svgLang = (s: Setup, n: number) => layerOf(s, n)?.querySelector('svg')?.getAttribute('lang') ?? null
   /** the side open on its first target (zh), pages 1 and 2 near and laid with its rows */
@@ -1703,26 +1732,31 @@ describe('translating: the indicator over a near page\'s paragraphs not laid yet
     expect(marksOf(s, 1)).toBe(0)
   })
 
-  it('marks a class the reader\'s toggles show, and gives the door those toggles: a table\'s cells hidden under "tables" off', async () => {
+  it('marks a class the reader\'s toggles (`classes`) show: a table\'s cells hidden under "tables" off, the author block under "names" on', async () => {
     const m = await M()
     // (a page holding cells, and the defaults' marks there: every paragraph but an author block's, whose names are off)
     const n = [1, 2, 3, 4].find(p => unitsOn(m, p).some(id => m.index.kinds[id] === 'cell'))!
     expect(n).toBeDefined()
     const on = unitsOn(m, n), cells = on.filter(id => m.index.kinds[id] === 'cell'), authors = on.filter(id => m.index.kinds[id] === 'author')
+    const marks = (s: Setup) => places(s)[n - 1]?.querySelectorAll('.axt-translating .axt-translating-mark').length
     const plain = await setup({ door: { rows: 'gate' } })
     await nearOn(plain, [n])
     plain.side.tell(await ALL())
     await settle(plain, 10, false)
-    expect(plain.doors[0]?.options?.toggles).toBeUndefined()
-    expect(places(plain)[n - 1]?.querySelectorAll('.axt-translating .axt-translating-mark').length).toBe(on.length - authors.length)
-    // (tables off, names on: the door told so, no cell marked, the author block marked as any paragraph)
-    const off = await setup({ door: { rows: 'gate' }, toggles: { tables: false, names: true } })
+    expect(plain.doors[0]?.classes).toBeNull()
+    expect(marks(plain)).toBe(on.length - authors.length)
+    // (tables off, names on, given at the side's creation: the door told so, no cell marked, the author block marked as any)
+    const off = await setup({ door: { rows: 'gate' }, classes: { tables: false, names: true } })
     await nearOn(off, [n])
     off.side.tell(await ALL())
     await settle(off, 10, false)
-    // (read once, as a set: a host's iterable is taken as it was, however often the door is opened)
-    expect(off.doors[0]?.options?.toggles).toEqual(new Set(['heads', 'figures', 'names']))
-    expect(places(off)[n - 1]?.querySelectorAll('.axt-translating .axt-translating-mark').length).toBe(on.length - cells.length)
+    expect(off.doors[0]?.classes).toEqual({ tables: false, names: true })
+    expect(marks(off)).toBe(on.length - cells.length)
+    // (and set later, setClasses: the door opened again with them, and the marks read them)
+    plain.side.setClasses({ tables: false, names: true })
+    await settle(plain, 10, false)
+    expect(plain.doors.at(-1)?.classes).toEqual({ tables: false, names: true })
+    expect(marks(plain)).toBe(on.length - cells.length)
   })
 
   it('none on a far page, and none for a paragraph whose rows ended without a row of it', async () => {

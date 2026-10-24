@@ -9,6 +9,7 @@ import { withGroups } from './helpers/groups'
 import { indexLayout, LAYOUT, LAYOUT_SCHEMA, type LayoutFile, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
+import { TOGGLE_DEFAULTS } from '@/pdf-reader/engine/rules/content-classes.mjs'
 import { PDFJS } from '@/pdf-reader/engine/pipeline/versions.mjs'
 
 // The reader's door (layer-proto/reader.mjs, A2's E4): both readers open the instant layer through openLayer, over a
@@ -123,6 +124,18 @@ type Opened = Parameters<typeof import('@/pdf-reader/engine/layer-proto/run.mjs'
 afterEach(() => { vi.restoreAllMocks() })
 
 describe('the reader\'s door: two readers\' hosts are the same calls', () => {
+  it('awaits the units its toggles show: a class turned off is the original\'s, and a toggle that is none is refused', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const bundle = bundleOf(), doc = docOf()
+    const all = toTranslate(bundle, 'zh')
+    for (const [classes, want] of [[{ names: true }, all], [{ tables: false }, all.filter(id => id !== 1 && bundle.units[id]?.[0] !== 'cell')]] as const) {
+      const layer = await openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl, classes })
+      expect((seen.opens.at(-1) as unknown as Opened).expect).toEqual(want)
+      layer.dispose()
+    }
+    await expect(openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl, classes: { margins: true } } as never)).rejects.toThrow(/classes/)
+  })
+
   it('refuses a light index (M24): the layer needs the units\' bodies', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const light = { kind: 'index', light: true, sha256: 'a'.repeat(64), head: { paper: { pages: 1 } }, units: [], kinds: [], pieces: new Uint32Array(0), dropped: [], records: {} }
@@ -137,13 +150,11 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     expect(o.doc).toBe(doc)
     expect(o.geometry).toEqual({ schema: 1, kinds: bundle.left.kinds, left: { pages: bundle.left.pages, units: bundle.left.units } })
     expect(o.units).toEqual([])
-    // (the units the target translates, but those whose class the reader's toggles hide: by default the author block's names,
-    // rules/content-classes.mjs TOGGLE_DEFAULTS)
-    const kinds = bundle.units.map(u => u?.[0])
-    expect(o.expect).toEqual(toTranslate(bundle, 'zh').filter(id => kinds[id] !== 'author'))
-    expect(toTranslate(bundle, 'zh').some(id => kinds[id] === 'author')).toBe(true)
-    expect(o.shown?.({ kind: 'author' } as never)).toBe(false)
-    expect(o.shown?.({ kind: 'para' } as never)).toBe(true)
+    // (the author block, unit 1, is the names toggle's, off where the reader has not turned it on: rules/content-classes.mjs
+    // TOGGLE_DEFAULTS)
+    expect(o.expect).toEqual(toTranslate(bundle, 'zh').filter(id => id !== 1))
+    // (the run given the door's toggles resolved: none given, TOGGLE_DEFAULTS)
+    expect(o.classes).toEqual(TOGGLE_DEFAULTS)
     expect(o.groups).toEqual(new Map([[4, '0:h'], [5, '0:c0'], [6, '0:c0']]))
     expect(o.target).toBe('zh')
     expect([o.scale, o.dpr, o.copy, o.pages]).toEqual([2.5, 1, false, Number.POSITIVE_INFINITY])
@@ -169,28 +180,12 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     plain.dispose()
   })
 
-  it('awaits and draws a class the reader\'s toggles show, and only that: the names turned on, tables off (rules/content-classes.mjs)', async () => {
+  it('gives the run the toggles it was opened with, which leaves a class they hide the original\'s however its rows come', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
-    const bundle = bundleOf(), doc = docOf(), kinds = bundle.units.map(u => u?.[0])
-    const all = toTranslate(bundle, 'zh')
-    // (names on: the author block awaited as any unit, every other class as the defaults have it)
-    const named = await openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl, toggles: ['names', 'tables'] })
-    const o = seen.opens.at(-1) as unknown as Opened
-    expect(o.expect).toEqual(all)
-    expect(o.shown?.({ kind: 'author' } as never)).toBe(true)
-    named.dispose()
-    // (as booleans over the defaults: names on and tables off, no cell awaited and its row not drawn)
-    const off = await openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl, toggles: { names: true, tables: false } })
-    const p = seen.opens.at(-1) as unknown as Opened
-    expect(p.expect).toEqual(all.filter(id => kinds[id] !== 'cell'))
-    expect(p.shown?.({ kind: 'cell' } as never)).toBe(false)
-    expect(p.shown?.({ kind: 'reference' } as never)).toBe(false)
-    expect(p.shown?.({ kind: 'refnames' } as never)).toBe(true)
-    off.dispose()
-    // (a value that is no set of toggles: refused before the page's one open is taken)
-    await expect(openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl, toggles: 'names' as never })).rejects.toThrow(TypeError)
-    const next = await openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl })
-    next.dispose()
+    const bundle = bundleOf(), doc = docOf()
+    const layer = await openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl, classes: { names: true, references: true } })
+    expect((seen.opens.at(-1) as unknown as Opened).classes).toEqual({ ...TOGGLE_DEFAULTS, names: true, references: true })
+    layer.dispose()
   })
 
   it("with no layout file nothing is drawn: every unit is the original's, one with a citation or a text symbol alike (the layer draws only from the file)", async () => {
@@ -319,7 +314,6 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     expect(layer.unitAt(3, 100, 262)).toBeNull()
     expect(layer.unitAt(1, Number.NaN, 262)).toBeNull()
     const s = layer.stats()
-    // (the units awaited: the target's, but the author block's names, which the default toggles hide)
     expect(s).toMatchObject({ units: toTranslate(bundle, 'zh').filter(id => bundle.units[id]?.[0] !== 'author').length, drawn: whole.stats.length, pages: [1, 2], dropped: 0, rules: { schema: 5, version: BUILTIN_RULES.version } })
     expect(Object.keys(s.pageMs)).toEqual(['1', '2'])
     expect(s.slowestTaskMs).toBeGreaterThanOrEqual(0)
@@ -691,7 +685,6 @@ describe('the door reaches no server-only module', () => {
     expect(Object.keys(door).sort()).toEqual([
       'BUNDLE', 'BUNDLE_CAP', 'BUNDLE_VALUES', 'BundleRefusal', 'CTAG', 'DRAWS_HELD', 'DROPPED_ROWS', 'FACES', 'LAYOUT', 'LAYOUT_CAP', 'LAYOUT_VALUES', 'LayoutRefusal', 'PDF_OPTIONS', 'SKIP_CODES', 'VTAG',
       'batchesOf', 'bundleKey', 'firstFaceOf', 'indexLayout', 'layerRows', 'openLayer', 'parseLayout', 'readBundle', 'rowOf', 'runRows', 'toTranslate', 'trPiecesOf', 'translateUnits', 'unitOf',
-      'TOGGLES', 'TOGGLE_DEFAULTS', 'defaultToggles', 'togglesOf',
     ].sort())
   })
 })

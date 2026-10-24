@@ -113,11 +113,9 @@ async function open(P: ReturnType<typeof paper>, how: 'whole' | 'parts', { group
   const pieces = new Map<number, unknown[]>()
   // (the units file's pieces: the translated units')
   if (how === 'whole') for (const [id, r] of P.rows) { const tr = r.pieces && r.state === 'whole' ? trPiecesOf(r.pieces, (p: unknown) => (p as { k: number }).k) : null; if (tr) pieces.set(id, tr) }
-  // (the door's: a class the reader's default toggles hide, the author block's names, is left the original's)
-  const { defaultToggles, unitShown } = await import('@/pdf-reader/engine/rules/content-classes.mjs')
-  const on = defaultToggles()
+  // (no toggles given: the run's defaults, the door's, which leave the author block's names the original's)
   return openProto({
-    doc: P.doc, target: 'zh', pages: 3, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, order, free, shown: (u: unknown) => unitShown(u as never, on),
+    doc: P.doc, target: 'zh', pages: 3, scale: 1, dpr: 1, copy: false, geometry: P.geometry, units, order, free,
     ...(how === 'parts' ? { expect: [...P.rows.keys()] } : {}),
     ...(groups ? { groups } : {}),
     tex: { index: P.index, pieces, symbols: 'text', extents: 'v0' },

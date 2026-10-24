@@ -207,6 +207,13 @@ const arg = name => { const a = process.argv.find(x => x === `--${name}` || x.st
  *  its steps, the drawing again at twice the resolution, the canvases held and the JS heap; per paper, the layout
  *  maker's time (and its operator lists'), the wrap's, and the bytes the reader is sent (the layout file). One pass a run: spikes/layer-perf.mjs takes the medians of several runs and the budget */
 const PERF = !!arg('perf')
+/** --ink (with --door and its proofs, never recorded): the wrap's ink units drawn too (docs/route/orphan-text.md): text no source unit
+ *  owns, an echo with its source unit's row */
+const INK = !!arg('ink')
+/** --door-shots=<dir>:<fixture>:<page>,…: the door's copy plane (PNG) and drawing (SVG) of those pages written to <dir>, for the
+ *  eye (a proof's aid, never recorded) */
+const DOOR_SHOTS = (() => { const v = arg('door-shots'); if (!v) return null; const [dir, ...rest] = v.split(':'); const want = new Map(); for (const x of rest.join(':').split(',')) { const m = /^(.+):(\d+)$/.exec(x); if (m) (want.get(m[1]) ?? want.set(m[1], []).get(m[1])).push(Number(m[2])) } return { dir: resolve(dir), want } })()
+if (INK && arg('record')) throw new Error('--ink: a proof of the ink units, never a record (no --record)')
 const TIER = PERF ? 'model' : arg('tier') ?? 'model'
 if (TIER !== 'model' && TIER !== 'pixel') throw new Error(`--tier=${TIER}: model or pixel`)
 const ENGINE = resolve(typeof arg('engine') === 'string' ? arg('engine') : REPO)
@@ -603,7 +610,8 @@ async function runFixture(page, name, errors) {
   // the page the layer draws over: the base page wrapped by optional content (or cached), as the reader's is
   const wrap = await wrappedOf(name)
   Object.assign(meta, { wrap: wrap.key })
-  const info = await page.evaluate(o => window.gate.open(o), { name, target, ref: refPages(ref), composite: COMPOSITE, units: PROTO_UNITS, pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), place: PROTO_PLACE?.[name] ?? null, dump: !!DUMP, order: PROTO_ORDER?.[name] ?? null, faces: PROTO_FACES, tex: TEX, rules: '/rules/layout-rules.json', names: RULES_LABELS(target), perf: PERF, parts: PARTS, slices: SLICES })
+  const sources = PROTO_UNITS === 'p7' ? null : await sourcesOf(name)
+  const info = await page.evaluate(o => window.gate.open(o), { name, target, sources, ref: refPages(ref), composite: COMPOSITE, units: PROTO_UNITS, pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), place: PROTO_PLACE?.[name] ?? null, dump: !!DUMP, order: PROTO_ORDER?.[name] ?? null, faces: PROTO_FACES, tex: TEX, rules: '/rules/layout-rules.json', names: RULES_LABELS(target), perf: PERF, parts: PARTS, slices: SLICES })
   if (!info.ready) { failures.push(name); return { name, ready: false, why: info.why, meta } }
   const n = Math.min(info.pages, PAGES ?? (ALL_PAGES.has(paper) ? info.pages : PAGES_OF))
   const pages = [], frames = []
@@ -697,13 +705,14 @@ async function doorFixture(page, name, errors) {
   DOOR_FILES.set(`/door/${name}/rows.json`, JSON.stringify(made.rows))
   // (the wrapped page's links against the page unwrapped, all the paper's pages, in Node: linksComposed, gated at 0)
   const links = await composedLinks(made.composed.base, made.composed.wrapped ? [made.composed.wrapped] : [], made.composed.pages)
-  const o = { name, target, rules: '/rules/layout-rules.json', pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), part: DOOR }
+  const o = { name, target, rules: '/rules/layout-rules.json', pages: PAGES ?? (ALL_PAGES.has(paper) ? 100000 : PAGES_OF), part: DOOR, shots: DOOR_SHOTS?.want.get(name) ?? [] }
   const open = async () => { await page.goto(`${ORIGIN}/gate/page.html?kind=proto&door=1`); await page.waitForFunction(() => window.gateReady === true) }
   await open()
   const gate = await page.evaluate(x => window.door.gate(x), o)
   for (const g of gate.pages) { DOOR_FILES.set(`/door/${name}/o${g.p}.png`, Buffer.from(g.png, 'base64')); delete g.png }
   await open()
   const door = await page.evaluate(x => window.door.door(x), o)
+  if (DOOR_SHOTS) for (const d of door.pages) if (d.copyPng) { mkdirSync(DOOR_SHOTS.dir, { recursive: true }); writeFileSync(join(DOOR_SHOTS.dir, `${name}-p${d.p}.png`), Buffer.from(d.copyPng, 'base64')); writeFileSync(join(DOOR_SHOTS.dir, `${name}-p${d.p}.svg`), d.svg); const g = gate.pages.find(x => x.p === d.p); if (g) writeFileSync(join(DOOR_SHOTS.dir, `${name}-p${d.p}.gate.svg`), g.svg); delete d.copyPng }
   const rowsApart = (a, b) => { const out = []; for (let y = 0; y < Math.max(a.rows.length, b.rows.length); y++) if (a.rows[y] !== b.rows[y]) out.push(y); return out }
   for (const g of gate.pages) DOOR_FILES.delete(`/door/${name}/o${g.p}.png`)
   // (and the gate's own run at its recorded runs' resolution, 1.25 CSS px a unit at dpr 2, the same 2.5 device pixels:
@@ -847,13 +856,13 @@ async function doorJumpTask(page, key, errors) {
     for (const p of pages) {
       await openDoorPage(page, 'doorjump')
       const r = await page.evaluate(x => window.doorJump.ask(x), { name, target, rules: '/rules/layout-rules.json', page: p, perf: PERF })
-      out.push({ p, ...sameAs(r, ref.pages[p - 1], target), completes: r.completes.ok, j: r.j, closure: r.closure, ...(r.ms ? { ms: r.ms, longest: r.longest } : {}) })
+      out.push({ p, ...sameAs(r, ref.pages[p - 1], target), completes: r.completes.ok, j: r.j, closure: r.closure, ...(r.ms ? { ms: r.ms, longest: r.longest, toggle: r.toggle } : {}) })
     }
     const n = key => out.filter(e => e[key]).length
     const ok = out.length === pages.length && KEYS.every(k => n(k) === out.length) && out.every(e => e.completes && (!e.closure || e.closure.within)) && !errors.length
     if (!ok) failures.push(key)
     const mean = f => (out.reduce((a, e) => a + f(e), 0) / out.length).toFixed(1)
-    const detail = JUMP_LIST || PERF ? out.map(e => `p${e.p}${e.ms ? ` ${secondsOf(e.ms.open + e.ms.ask)} s (open ${secondsOf(e.ms.open)} + ask ${secondsOf(e.ms.ask)}), longest task ${e.longest} ms,` : ''} ${e.j.drawn.length} pages drawn ${e.j.drawn.length > 8 ? `(${e.j.drawn[0]}..${e.j.drawn.at(-1)})` : `(${e.j.drawn.join(' ')})`}, ${e.j.units} units laid`).join('; ') : ''
+    const detail = JUMP_LIST || PERF ? out.map(e => `p${e.p}${e.ms ? ` ${secondsOf(e.ms.open + e.ms.ask)} s (open ${secondsOf(e.ms.open)} + ask ${secondsOf(e.ms.ask)}), longest task ${e.longest} ms,${e.toggle ? ` a toggle's reopen to pages ${e.toggle.pages.join(' and ')} laid ${e.toggle.ms} ms,` : ''}` : ''} ${e.j.drawn.length} pages drawn ${e.j.drawn.length > 8 ? `(${e.j.drawn[0]}..${e.j.drawn.at(-1)})` : `(${e.j.drawn.join(' ')})`}, ${e.j.units} units laid`).join('; ') : ''
     const line = `${out.length} pages asked first and alone (${pages[0]}..${pages.at(-1)}): SVG ${n('svg')}/${out.length} equal, words ${n('words')}, links ${n('links')}, copy ${n('copy')}, records ${n('recs')}, completions ${n('completes')}; J: ${mean(e => e.j.drawn.length)} pages drawn and ${mean(e => e.j.units)} units laid a page; closure: ${out.some(e => e.closure) ? `J within Need(p) on ${out.filter(e => e.closure?.within).length}/${out.length}` : 'n/a'}${detail ? `; ${detail}` : ''}${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
     return { name, key, door: true, ok, ready: true, line, pages: out }
   } finally { doneWith(name) }
@@ -1119,6 +1128,22 @@ function resultOf(rec, src, kOfSource) {
 /** each paper's bundle units (openPaper's over its source, bundleUnitsOf), once a paper */
 const PAPER_UNITS = new Map()
 /**
+ * Each unit's source pieces for the gate's own run, by its id (null for none): the paper's bundle units' (openPaper's over its
+ * source.gz) where the fixture's record names the unit by the same hash (cache.mjs sourceHash: the pack may be of an earlier
+ * pipeline), so that the run reads a unit as the reader's door does (rows.mjs unitOf's `source`). Null where the paper has no
+ * source here
+ */
+async function sourcesOf(name) {
+  const { paper } = nameOf(name)
+  const source = sourceOf(paper), recordFile = trFile(name, 'record.json')
+  if (!source || !existsSync(recordFile)) return null
+  const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
+  const [{ bundleUnitsOf }, { sourceUnitsOf }, { openPaper }, { unpackSource }, { sourceHash }] = await Promise.all(['layer-proto/bundle.mjs', 'layer-proto/rows.mjs', 'pipeline/live.mjs', 'source/tar.mjs', 'pipeline/cache.mjs'].map(f => import(E(f))))
+  if (!PAPER_UNITS.has(paper)) PAPER_UNITS.set(paper, bundleUnitsOf(openPaper((await unpackSource(new Uint8Array(readFileSync(source)))).files)))
+  const src = sourceUnitsOf({ units: PAPER_UNITS.get(paper) }), record = readJson(recordFile)
+  return Promise.all(record.units.map(async (rec, id) => (rec && src[id] && typeof rec.hash === 'string' && (await sourceHash(src[id])) === rec.hash ? src[id].pieces : null)))
+}
+/**
  * --door: a fixture's bundle, written by the engine from the parts a paper's prepare has (bundle-check.mjs's): its units
  * (openPaper over its source.gz), the geometry the gate gives v0 as its left, the fixture's layout file and its cell rules,
  * the page the layer is drawn over as its base (the wrapped page, layer-gate/wrap.mjs, or the base page where it could not be
@@ -1129,19 +1154,25 @@ const PAPER_UNITS = new Map()
 async function doorBundleOf(name) {
   const { paper, target } = nameOf(name)
   const E = f => join(ENGINE, 'src/pdf-reader/engine', f)
+  // (--ink: the wrap's ink units in the bundle after the source units', their rows in the layout, as the page pass carries them:
+  // pipeline/ink-pass.mjs; an echo is drawn with its source unit's row, the others stay the original's, the gate holding no
+  // translation of theirs; on the left their kinds and no anchor, the gate's geometry holding no tokens)
+  const inkPass = INK ? await import(E('pipeline/ink-pass.mjs')) : null
   const [{ bundleUnitsOf, readBundle, writeBundle }, { rowOf, sourceUnitsOf, toTranslate }, { openPaper }, { unpackSource }, { kOfSource }, { parseLayout }] = await Promise.all(['layer-proto/bundle.mjs', 'layer-proto/rows.mjs', 'pipeline/live.mjs', 'source/tar.mjs', 'layer/pieces.mjs', 'layout/file.mjs'].map(f => import(E(f))))
   const source = sourceOf(paper)
   if (!source) throw new Error(`${name}: no source.gz for ${paper} under ${SOURCES.join(', ')} (--sources)`)
   if (!PAPER_UNITS.has(paper)) PAPER_UNITS.set(paper, bundleUnitsOf(openPaper((await unpackSource(new Uint8Array(readFileSync(source)))).files)))
   const wrap = await wrappedOf(name)
   const arxiv = new Uint8Array(readFileSync(wrap.file)), unwrapped = new Uint8Array(readFileSync(basePdf(name)))
-  const layout = parseLayout(new Uint8Array(readFileSync(join(FIXTURES, name, 'layout.json'))))
+  const ink = inkPass ? inkPass.inkOfHost(wrap.head.ink ?? null, { units: PAPER_UNITS.get(paper) }) : null
+  const layout0 = parseLayout(new Uint8Array(readFileSync(join(FIXTURES, name, 'layout.json'))))
+  const layout = ink ? inkPass.layoutWithInk(layout0, ink, ink.units.map(u => u.id)) : layout0
   const g = readJson(geometryFile(name))
   const [, id, version] = /^(.+)v(\d+)$/.exec(paper)
   const bytes = writeBundle({
     paper: { id, version: Number(version), pages: layout.paper.pages },
     base: { bytes: arxiv.length, sha256: sha256(arxiv), url: `/api/v1/original/${id.replace('/', '_')}v${version}` },
-    image: '1', units: PAPER_UNITS.get(paper), left: { kinds: g.kinds, pages: g.left.pages, units: g.left.units }, layout,
+    image: '1', units: ink ? inkPass.bundleWithInk(PAPER_UNITS.get(paper), ink) : PAPER_UNITS.get(paper), left: { kinds: ink ? [...g.kinds, ...ink.units.map(u => u.kind)] : g.kinds, pages: g.left.pages, units: g.left.units }, layout,
     rules: Object.keys(wrap.head.rules ?? {}).length ? wrap.head.rules : null,
   })
   const bundle = readBundle(bytes), src = sourceUnitsOf(bundle), wanted = new Set(toTranslate(bundle, target))
