@@ -479,7 +479,7 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
       expect(d.retired).toEqual([d.docFor(0)])
     })
 
-    it('rejects what is pending, throws on pageOf, leftPageOf, copyOf and pageState, and answers stats and unitAt', async () => {
+    it('rejects what is pending, throws on pageOf, leftPageOf, copyOf, textOf and pageState, and answers stats and unitAt', async () => {
       const d = await open()
       await d.add(0)
       const pending = settle(ask(d.layer, 3))
@@ -492,6 +492,7 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
       expect(() => d.layer.pageState(1)).toThrow()
       expect(() => d.layer.leftPageOf(1)).toThrow()
       expect(() => d.layer.copyOf(1, { k: 1, width: 10, height: 10 })).toThrow()
+      expect(() => d.layer.textOf(1)).toThrow()
       expect(d.layer.stats().parts).toEqual({ through: 1, told: 1 })
       expect(d.layer.unitAt(1, 0, 0)).toBeNull()
       // (a part after dispose is a no-op, and nothing is told)
@@ -514,7 +515,7 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
     })
   })
 
-  describe('the door: copyOf and unitAt', () => {
+  describe('the door: copyOf, textOf and unitAt', () => {
     it('copies a ready page at the size asked, and refuses a page not ready', async () => {
       const d = await open({ parts: 3 })
       expect(await settle(d.layer.copyOf(1, { k: 2, width: 120, height: 160 }))).toHaveProperty('error')
@@ -526,6 +527,28 @@ export function runDoorConformance(makeDoor: MakeDoor): void {
       expect(copy.width).toBe(120)
       expect(copy.height).toBe(160)
       d.layer.dispose()
+    })
+
+    it('gives a ready page\'s text layer, plain data anew on every call, and refuses a page not ready', async () => {
+      const d = await open({ parts: 3 })
+      expect(await settle(d.layer.textOf(1))).toHaveProperty('error')
+      const one = ask(d.layer, 1)
+      await d.advance()
+      await one
+      const a = await d.layer.textOf(1), b = await d.layer.textOf(1)
+      expect(a).toEqual(b)
+      expect(a).not.toBe(b)
+      expect(a.items).not.toBe(b.items)
+      expect(a.page.w).toBeGreaterThan(0)
+      for (const it of a.items) {
+        expect(typeof it.str).toBe('string')
+        expect([it.x, it.y, it.w, it.h, it.base, it.fontSize].every(Number.isFinite)).toBe(true)
+        expect(['kept', 'moved', 'translated']).toContain(it.from)
+      }
+      // (a dispose between the ask and its answer rejects it)
+      const late = settle(d.layer.textOf(1))
+      d.layer.dispose()
+      expect(await late).toHaveProperty('error')
     })
 
     it('finds the smallest unit under a point on a covered page, and none on an uncovered one', async () => {

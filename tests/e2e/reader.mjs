@@ -21,7 +21,9 @@
 //     the extension's own translation (the echo endpoint) taken as rows: the pages laid on the right in place, the original
 //     until then, the highlight on both panes (the left's part fetched on the first want alone), a figure lit whole, the dark
 //     look, the links (named, reached by Tab, followed by Enter on the left's document, out of the paper through the host,
-//     axe's link-name, kept through a zoom), the contents and the heading read, the pair level, the window;
+//     axe's link-name, kept through a zoom), the text layer (built after the commit, a drag across a heading's number, its
+//     translated heading and the next paragraph, the copy of it, a formula's text where its crop is drawn, find, invisible), the
+//     contents and the heading read, the pair level, the window;
 //   - the reader's states on the layer: none for the paper, refused, a server error, a reset and its retry, and arXiv's
 //     bytes not the layer's base (our copy shown).
 //
@@ -730,6 +732,7 @@ try {
     const p1 = await side()
     check('the side read every object: its parts through the end', p1?.ended === true && p1?.parts === sampleCut.refs.parts.length, JSON.stringify(p1))
 
+
     // the highlight: the view reads nothing of the left before the pointer wants a page (trap 2); a want over the right reads its
     // page's. The layer fetches the left parts of the pages it draws for their draw geometry (E-C: the door's drawOf), through the
     // door's one cache of left parts the view reads too: each left part is downloaded once in all, whoever asked for it first
@@ -752,6 +755,8 @@ try {
     const onPage1 = sampleCut.located.filter(u => u[2][0]?.[0] === 1 && sampleCut.kinds[u[0]] === 'para')
     const unit = onPage1[0]
     const litOf = () => page.evaluate(() => ({ lit: window.__reader.view.probe().lit, left: document.querySelectorAll('#left .page[data-page-number="1"] .axt-hl').length, right: document.querySelectorAll('#right .page[data-page-number="1"] .axt-hl').length }))
+    // (over the page's text layer, PDF.js's spans under the pointer: the lighting reads the pointer's place, not its target)
+    await page.waitForFunction(() => !!document.querySelector('#right .axt-place[data-page-number="1"] .axt-layer > .textLayer span'), null, { timeout: 15_000 }).catch(() => undefined)
     const at = await screenOf('right', unit)
     await page.mouse.move(at.x, at.y)
     await page.waitForTimeout(150)
@@ -769,6 +774,87 @@ try {
     const h2 = await litOf()
     const v2 = await viewLeft()
     check('the pointer over the left lights the unit on both panes; the page\'s left part not read nor downloaded again', lightLeft && h2.left > 0 && h2.right > 0 && v2.asked === 1 && v2.read === 1 && leftFetches().get(sampleCut.leftRefs[1]) === 1 && onceEach(), `${JSON.stringify(h2)}; the view asked ${v2.asked} and read ${v2.read}; ${leftLine()}`)
+    // the text layer (docs/PDF-READER.md §11.11): PDF.js's own text layer over the laid page, built at idle after the commit; what a
+    // selection, a copy, a search and a screen reader take of the page, one copy of each text
+    const P1 = '#right .axt-place[data-page-number="1"]'
+    const built = await page.waitForFunction(sel => !!document.querySelector(`${sel} .axt-layer > .textLayer span`), P1, { timeout: 15_000 }).then(() => true, () => false)
+    const tl = await page.evaluate(sel => {
+      const l = document.querySelector(`${sel} .axt-layer`), svg = l?.querySelector(':scope > svg')
+      const spans = [...(l?.querySelectorAll(':scope > .textLayer > span') ?? [])]
+      return {
+        order: [...(l?.children ?? [])].map(c => `${c.tagName.toLowerCase()}${c.classList.contains('textLayer') ? '.textLayer' : c.classList.contains('axt-links') ? '.axt-links' : ''}`),
+        spans: spans.length, translated: spans.filter(x => x.lang === 'de').length, kept: spans.filter(x => !x.lang).length,
+        svg: { hidden: svg?.getAttribute('aria-hidden'), select: svg ? getComputedStyle(svg).userSelect : null }, ring: window.__reader.side()?.probe().textsRing,
+      }
+    }, P1)
+    check('the text layer: built after the commit between the drawing and the links, its translated spans in the target\'s language beside the page\'s own text, the SVG\'s text out of selection and of the tree', built && tl.order.join() === 'canvas,svg,div.textLayer,div.axt-links' && tl.translated > 0 && tl.kept > 0 && tl.svg.hidden === 'true' && tl.svg.select === 'none', JSON.stringify(tl))
+    // one drag from a heading's number (the page's own text) through its translated heading into the paragraph after it
+    const spanBox = (sel, test) => page.evaluate(([sel, test]) => {
+      const spans = [...document.querySelectorAll(`${sel} .axt-layer > .textLayer > span`)]
+      const at = spans.findIndex(x => new RegExp(test).test(x.textContent))
+      if (at < 0) return null
+      const r = spans[at].getBoundingClientRect()
+      return { at, x0: r.left, x1: r.right, y: (r.top + r.bottom) / 2 }
+    }, [sel, test])
+    const from = await spanBox(P1, '^1 $'), to = await spanBox(P1, '^de:|A monotone path')
+    let sel = null
+    if (from && to) {
+      await page.evaluate(() => getSelection().removeAllRanges())
+      await page.mouse.move(from.x0 + 1, from.y)
+      await page.mouse.down()
+      await page.mouse.move((from.x0 + to.x1) / 2, (from.y + to.y) / 2, { steps: 5 })
+      await page.mouse.move(to.x1 - 1, to.y, { steps: 5 })
+      await page.mouse.up()
+      sel = await page.evaluate(([sel, a, b]) => {
+        const spans = [...document.querySelectorAll(`${sel} .axt-layer > .textLayer > span`)]
+        const norm = t => t.replace(/\s+/g, ' ').trim()
+        const s = getSelection(), anchor = s.anchorNode && (s.anchorNode.nodeType === 1 ? s.anchorNode : s.anchorNode.parentElement)
+        return { got: norm(s.toString()), want: norm(spans.slice(a, b + 1).map(x => x.textContent).join(' ')), inLayer: !!anchor?.closest('.textLayer') }
+      }, [P1, from.at, to.at])
+    }
+    check('selection: one drag from a heading\'s number (the page\'s own) through its translated heading into the next paragraph selects them in reading order, in the text layer', !!sel && sel.inLayer && sel.got.length > 20 && sel.got === sel.want, JSON.stringify(sel))
+    // a copy of it: PDF.js's copy handler writes the selection's text
+    await page.evaluate(() => { const set = DataTransfer.prototype.setData; window.__copied = null; DataTransfer.prototype.setData = function (t, v) { if (t === 'text/plain') window.__copied = v; return set.call(this, t, v) } })
+    await page.keyboard.press('ControlOrMeta+C')
+    const copied = await page.evaluate(() => (window.__copied ?? '').replace(/\s+/g, ' ').trim())
+    check('copy: the selection copied as its text', !!sel && copied === sel.got, JSON.stringify({ copied: copied.slice(0, 80), selected: sel?.got.slice(0, 80) }))
+    // a formula drawn as a crop: its text in the text layer where the crop is drawn. The SVG's invisible copy text of a crop starts
+    // at the crop's left edge on its line's baseline, and the crop is drawn from there across, at its own height (a fraction's parts
+    // above and below the line): a span of the text layer across it, within two lines of it, holds the formula's text
+    const crops = await page.evaluate(sel => {
+      const l = document.querySelector(`${sel} .axt-layer`)
+      const spans = [...l.querySelectorAll(':scope > .textLayer > span')].map(x => ({ r: x.getBoundingClientRect(), t: x.textContent, lang: x.lang }))
+      return [...l.querySelectorAll(':scope > svg tspan[fill-opacity="0"]')].map(t => {
+        const r = t.getBoundingClientRect(), mid = (r.top + r.bottom) / 2
+        const near = spans.filter(x => !x.lang && /\S/.test(x.t) && x.r.left < r.right && r.left < x.r.right && Math.abs((x.r.top + x.r.bottom) / 2 - mid) < 2 * r.height)
+        return { alt: t.textContent, under: near.map(x => x.t).join('') }
+      })
+    }, P1)
+    check('a formula drawn as a crop: its text selectable where it is drawn', crops.length > 0 && crops.every(c => c.under.length > 0), JSON.stringify(crops.slice(0, 6)))
+    // find: a phrase of the translation and one of the page's own text, each found in the text layer, not in the SVG
+    const finds = await page.evaluate(() => ['Introduction', 'Contributors'].map(w => {
+      getSelection().removeAllRanges()
+      const ok = window.find(w, false, false, true)
+      const a = getSelection().anchorNode, el = a && (a.nodeType === 1 ? a : a.parentElement)
+      return { w, ok, in: el?.closest('.textLayer') ? 'text' : el?.closest('svg') ? 'svg' : 'other' }
+    }))
+    check('find: the translated text and the page\'s own text found in the text layer', finds.every(f => f.ok && f.in === 'text'), JSON.stringify(finds))
+    // invisible: the place's pixels the same with the text layer and without it
+    await page.evaluate(() => getSelection().removeAllRanges())
+    const place = page.locator(P1)
+    const withText = await place.screenshot()
+    await page.evaluate(sel => { document.querySelector(`${sel} .axt-layer > .textLayer`).style.visibility = 'hidden' }, P1)
+    const withoutText = await place.screenshot()
+    await page.evaluate(sel => { document.querySelector(`${sel} .axt-layer > .textLayer`).style.visibility = '' }, P1)
+    check('invisible: the place\'s pixels the same with the text layer and without it', withText.equals(withoutText), `${withText.length} and ${withoutText.length} bytes`)
+    await page.evaluate(sel => { for (const x of document.querySelectorAll(`${sel} .axt-layer > .textLayer > span`)) x.style.color = 'black' }, P1)
+    const inked = await place.screenshot()
+    await page.evaluate(sel => { for (const x of document.querySelectorAll(`${sel} .axt-layer > .textLayer > span`)) x.style.color = '' }, P1)
+    control('a text layer drawn in ink is seen: the place\'s pixels differ', { ok: inked.equals(withoutText), detail: `${inked.length} and ${withoutText.length} bytes` })
+    // one copy of each text in the accessibility tree: the text layer's, the SVG's hidden
+    const tree = await place.ariaSnapshot()
+    const once = ['[echo] Introduction', 'The Read arXiv Contributors'].map(w => ({ w, n: tree.split(w).length - 1 }))
+    check('the accessibility tree holds each text of the laid page once (the text layer\'s; the SVG\'s hidden)', once.every(x => x.n === 1), JSON.stringify(once))
     // the dark look: the layer's text dimmed by the reader's filter, its copy by the page canvas's, the wash over the layer screened
     await page.evaluate(() => document.documentElement.setAttribute('data-axt-dim', ''))
     const dark = await page.evaluate(() => { const css = sel => (document.querySelector(sel) ? getComputedStyle(document.querySelector(sel)) : null); return { svg: css('#right .axt-layer > svg')?.filter ?? null, copy: css('#right .axt-layer > canvas')?.filter ?? null, wash: css('#right .axt-hl')?.mixBlendMode ?? null, links: css('#right .axt-layer > .axt-links')?.filter ?? null } })
@@ -934,7 +1020,7 @@ try {
     const held = async () => page.evaluate(() => {
       const near = window.__reader.view.probe().nearPlaces, sp = window.__reader.side().probe()
       const right = document.getElementById('right')
-      return { near, laid: sp.laid, retired: sp.retired, drawings: sp.drawings, drawnPixels: sp.drawnPixels, svgs: right.querySelectorAll('.axt-layer > svg').length, links: right.querySelectorAll('.axt-layer > .axt-links').length, copies: [...right.querySelectorAll('canvas.axt-layer-copy')].filter(c => c.width > 0).length, nodes: right.querySelectorAll('*').length, heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e5) / 10 : null }
+      return { near, laid: sp.laid, retired: sp.retired, drawings: sp.drawings, drawnPixels: sp.drawnPixels, svgs: right.querySelectorAll('.axt-layer > svg').length, links: right.querySelectorAll('.axt-layer > .axt-links').length, texts: right.querySelectorAll('.axt-layer > .textLayer').length, copies: [...right.querySelectorAll('canvas.axt-layer-copy')].filter(c => c.width > 0).length, nodes: right.querySelectorAll('*').length, heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e5) / 10 : null }
     })
     const w0 = await held()
     await page.mouse.move(R1.x + R1.width / 2, R1.y + R1.height / 2)
@@ -947,7 +1033,7 @@ try {
     await page.evaluate(() => document.querySelector('header button')?.focus())
     await page.waitForTimeout(300)
     const w1 = await held()
-    check('through the paper and back: the layer in the document near the view alone, each page far from it out of it (its copy, its SVG and its links, kept off the view within the budget the device sets), the one the focus held once the focus left it', w1.laid <= w1.near && w1.svgs === w1.laid && w1.copies === w1.laid && w1.links <= w1.laid && w1.laid + w1.retired <= sampleCut.paper.pages && w1.drawings <= w1.retired && w1.drawnPixels <= 2 ** 25, `${JSON.stringify(w0)} then ${JSON.stringify(w1)}; the focus was on place ${focusedPlace || 'none'}${keptForFocus ? ', laid while it held it' : ''}`)
+    check('through the paper and back: the layer in the document near the view alone, each page far from it out of it (its copy, its SVG, its text layer and its links, kept off the view within the budget the device sets), the one the focus held once the focus left it', w1.laid <= w1.near && w1.svgs === w1.laid && w1.copies === w1.laid && w1.links <= w1.laid && w1.texts <= w1.laid && w1.laid + w1.retired <= sampleCut.paper.pages && w1.drawings <= w1.retired && w1.drawnPixels <= 2 ** 25, `${JSON.stringify(w0)} then ${JSON.stringify(w1)}; the focus was on place ${focusedPlace || 'none'}${keptForFocus ? ', laid while it held it' : ''}`)
     note(`the window on the sample (4 pages; JS heap in MB): before ${JSON.stringify(w0)}, after a scroll through it and back ${JSON.stringify(w1)}`)
     const long = await page.evaluate(() => window.__long)
     note(`the layer's longest main-thread task in this run: ${Math.max(0, ...long)} ms over ${long.length} long task(s) (a reading on a shared machine: L7 is reader-perf's)`)

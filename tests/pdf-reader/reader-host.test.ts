@@ -8,7 +8,7 @@ import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { ENTRY_CHECK_MS } from '@/core/pdf/entry'
 import type { SessionEvent } from '@/pdf-reader/session/events'
 
-vi.mock('@/pdf-reader/pdfjs', () => ({ ASSETS: {}, EventBus: class {}, LinkTarget: {}, PDFLinkService: class {}, PDFPageView: class {}, PDFViewer: class {}, pdfjsLib: { getDocument: () => ({ promise: new Promise(() => {}), destroy: async () => {} }) } }))
+vi.mock('@/pdf-reader/pdfjs', () => ({ ASSETS: {}, EventBus: class {}, LinkTarget: {}, PDFLinkService: class {}, PDFPageView: class {}, PDFViewer: class {}, TextLayerBuilder: class {}, pdfjsLib: { getDocument: () => ({ promise: new Promise(() => {}), destroy: async () => {} }) } }))
 const { displayFrom, openReader, outward, prefsOf } = await import('@/pdf-reader/session/host')
 const { abstractOf, ownVersion } = await import('@/pdf-reader/session/paper')
 

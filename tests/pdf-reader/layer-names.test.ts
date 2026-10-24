@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 import { plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
 
-// Structural names in the layer (PDF-READER §19.10): a label is what the head macro set before the unit, never the unit's
+// Structural names in the layer (PDF-READER §19.11): a label is what the head macro set before the unit, never the unit's
 // own opening placeholder however its translation reorders it; a theorem-like head and the names cleveref and \autoref
 // generate are drawn in the target's names, their numbers the original's
 

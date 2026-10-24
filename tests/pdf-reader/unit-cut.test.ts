@@ -22,6 +22,8 @@ import { PIPELINE_VERSION } from '@/pdf-reader/engine/pipeline/versions.mjs'
 //                \newline before it and a formula after (the cut #435 moved)
 //   text-read    PIPELINE 27's cuts (source-reader-text.test.ts): a macro that sets words of its own (2610.21547's \nb), a
 //                Latin-1 file under its inputenc (2610.20581), a conditional the paper decides (2610.21098's \ifdefined)
+//   arity        PIPELINE 28's cuts (heading-arity.test.ts): a group after a heading, a starred heading with a short title, a
+//                \multirow of five arguments (2610.31660v1's stray brace, 2607.24653v2's \multirow)
 
 const enc = (s: string) => new TextEncoder().encode(s)
 const SAMPLE = new URL('../fixtures/pdf/sample-1/', import.meta.url)
@@ -34,6 +36,9 @@ const UNIT_CUT_SOURCES: Record<string, () => Map<string, Uint8Array>> = {
   ]),
   'text-read': () => new Map([
     ['main.tex', Uint8Array.from('\\def\\Preprint{1}\n\\documentclass{article}\n\\usepackage[latin1]{inputenc}\n\\newcommand{\\nb}[1]{Notebook~#1}\n\\begin{document}\nThe notebooks (\\nb{4}--\\nb{6}) of the Universit\xe9 run.\n\n\\ifdefined\\Preprint\nThe public code is at \\url{a}.\n\\else\nAn anonymized copy is at \\url{b}.\n\\fi\nIt contains the generator.\n\\end{document}\n', c => c.charCodeAt(0))],
+  ]),
+  arity: () => new Map([
+    ['main.tex', enc('\\documentclass{article}\n\\begin{document}\n\\section{Approaches to $H_0$}\n{Measurements differ.\n\n\\section*[Short]{A long title}\n{\\bf Lead} words.\n\n\\begin{tabular}{cc}\n\\multirow[c]{2}{*}[-2pt]{Merged} & One \\\\\n& Two \\\\\n\\end{tabular}}\n\\end{document}\n')],
   ]),
 }
 const GOLDEN = new URL('./golden/unit-cut.json', import.meta.url)
@@ -74,5 +79,8 @@ describe('the unit cut is recorded under the PIPELINE_VERSION it was cut by', ()
     for (const s of ['\\\\cite{', '\\\\begin{equation}', '\\\\begin{align}', '\\\\[', '\\\\href{']) expect(sources.includes(s), s).toBe(true)
     // (#435's cut: the \url one placeholder, the \newline one before it)
     expect(now['llncs-url']).toEqual(['para: text,ph,text,ph,text,ph,text'])
+    // (PIPELINE 28's: the group after each heading the text's, the \multirow's content a cell's pair)
+    expect(now['arity']?.slice(0, 5).map(u => u.split(':')[0])).toEqual(['heading', 'para', 'heading', 'para', 'cell'])
+    expect(now['arity']?.[4]).toBe('cell: open,text,close,text')
   })
 })

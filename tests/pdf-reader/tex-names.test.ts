@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { headInTarget, headName, refInTarget, refName } from '@/pdf-reader/engine/rules/tex-names.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
-// The names TeX's packages give a theorem's head and a generated reference in each target (PDF-READER §19.10): translator's
+// The names TeX's packages give a theorem's head and a generated reference in each target (PDF-READER §19.11): translator's
 // theorem dictionaries (ctex's for Chinese), cleveref's and hyperref's language definitions, ctex's names, babel's (the layout
 // rules' labels) where a target has no other; nothing written by hand
 

@@ -1145,7 +1145,7 @@ export function spacedText(chars) {
   return out
 }
 /**
- * A theorem-like head's label as the target names it (PDF-READER §19.10): the head macro's label TeX set before the unit (the
+ * A theorem-like head's label as the target names it (PDF-READER §19.11): the head macro's label TeX set before the unit (the
  * layout file's label box, `chars` the page's characters in it: "Definition 5.1 (", "Theorem 2."), its name in translator's
  * dictionary's word for the target (rules/tex-names.mjs headInTarget: ctex's for Chinese), its number and punctuation the
  * original's. The parts it is drawn in: its name and number in the style of its first character, its punctuation after them

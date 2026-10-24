@@ -184,7 +184,16 @@
 //     change, in 6 papers (S1 117 in three, S2 33 in one, S4 9 in two); every other unit is 26's, and so are the marked
 //     original and the untranslated patch of every paper but the two whose units S1 or S4 changed. A copy of 26 carries every unit it holds the source of, matched by sourceHash (live.mjs PIPELINE_CARRIES), and a changed
 //     unit, whose hash is new, is asked again
-export const PIPELINE_VERSION = '27'
+// 28: a command whose argument is a unit of its own takes what its definition takes, and a group after it is the text's
+//     (latex-front.mjs argsOfForm, unitForm): a heading a star, a short title and one title, a caption, a footnote, a \thanks, a
+//     \title and an author block an optional argument and their text, the paper's own definition's arity where it gives one;
+//     \multicolumn, \multirow, \makecell and \shortstack the arguments the role table gives them. Read as `up to two groups`, the
+//     stray `{` after 2610.31660v1's \subsection{Approaches to determining $H_0$}, closed 330 lines later, was the heading's
+//     second argument, and §II.A to mid-§IV had no unit: 57 units, now 126. Over 167 local sources (157 papers, 40,182 units)
+//     2 units' hashes change, in one paper (2607.24653v2: a \multirow[c]{3}{w}[-2pt]{…} of five arguments is now read whole,
+//     and the pairs after it are numbered one on, their texts the same); every other unit is 27's. A copy of 27 carries
+//     every unit it holds the source of, matched by sourceHash (live.mjs PIPELINE_CARRIES), and a changed unit is asked again
+export const PIPELINE_VERSION = '28'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
@@ -209,7 +218,7 @@ export const PDFJS = '6.3.289'
  * base's bytes change, and the first two rules being the maker's reading too, the layout files of the units they reach
  * (LAYOUT 20); and a cell's lead owned by the text TeX sets for it, as the probe reads it (marks.mjs readInkTexts, MARKS_SCHEMA
  * 10: "1,024", "max_tokens", a formula's glyph spelled by no character one glyph: own.mjs MR 5b), and a front heading's ink
- * (ICML's \icmltitle), which the layout compile now marks (LAYOUT 20); 11 (the structural names, PDF-READER §19.10): a
+ * (ICML's \icmltitle), which the layout compile now marks (LAYOUT 20); 11 (the structural names, PDF-READER §19.11): a
  * theorem's head before its note, the bracket it opens the note with ("Definition 5.1 (", a unit the front end read in a head's
  * brackets), and the joint a head sets after the babel name that leads its unit (amsthm's "." after "Proof") are their units'
  * labels (own.mjs isLabelForm's `note`, JOINT), each in its unit's label group, where they were left the original's ink in no

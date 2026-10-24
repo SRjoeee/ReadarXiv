@@ -88,6 +88,8 @@ export declare const COPY_PIXELS: number
 export declare const RECOPY_MS: number
 /** the longest a laid page's copy waits for the left's page to be drawn before it is put in place, ms */
 export declare const LEFT_WAIT_MS: number
+/** how long a laid page's text layer may wait for the main thread to be idle before it is built anyway (ms) */
+export declare const TEXT_IDLE_MS: number
 export declare const LEFT_RETRY_MS: number
 /** the most other pages a wanted page's running units bring their left parts from, the nearest first */
 export declare const SPREAD_MAX: number

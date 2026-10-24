@@ -101,7 +101,7 @@ const finite = (...xs) => xs.every(Number.isFinite)
  *  NO_FILL for one of no colour (a pattern, PDF.js's transparent) */
 const fresh = () => ({
   ctm: IDENTITY, clip: null, lw: 1, font: null, fontId: '', size: 0, dir: 1, cs: 0, ws: 0, hs: 1, rise: 0, leading: 0, tr: 0,
-  tm: IDENTITY, x: 0, y: 0, lx: 0, ly: 0, pendingClip: false, lost: false, fill: 0,
+  tm: IDENTITY, x: 0, y: 0, lx: 0, ly: 0, pendingClip: false, lost: false, fill: 0, form: 0,
 })
 /** a glyph's fill of no colour (a pattern's, PDF.js's transparent) */
 export const NO_FILL = -1
@@ -211,7 +211,8 @@ const POINT = /^axt-([A-Za-z0-9.-]{1,64})$/
  * cell's rule there is not among its rules
  * `indices` (the text remover's, layout/remove.mjs): each glyph also carries where the content stream shows it: `n`, its
  * text-showing operation's place among the page's own (an annotation's appearance not counted: -1 there), and `k`, its
- * place among that operation's glyphs, and `blank: true` where its Unicode is blank; and `paths` gives, for each box,
+ * place among that operation's glyphs, `blank: true` where its Unicode is blank, and `form: true` where it is shown inside a
+ * form XObject (an included PDF's, the ledger's figures: layout/ledger.mjs); and `paths` gives, for each box,
  * its path's place among the page's own painted paths (constructPath), or its kind: -1 a path of an annotation's
  * appearance, -2 a shading, -3 an image, -4 a glyph set rotated or mirrored; and `shows` counts the page's own
  * text-showing operations. Off, the answer is the maker's, unchanged.
@@ -389,7 +390,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       const a = M[0] * (xa + box[0] * size * hs) + M[2] * ty + M[4], b = M[0] * (xa + box[2] * size * hs) + M[2] * ty + M[4]
       glyph.ix0 = Math.min(a, b); glyph.ix1 = Math.max(a, b); glyph.top = oy + box[3] * sz; glyph.bottom = oy + box[1] * sz
     } else if (box) { glyph.top = glyph.bottom = oy; glyph.ix0 = glyph.ix1 = ox }
-    if (indices) { glyph.n = curShow; glyph.k = glyphAt; if (!/\S/.test(u)) glyph.blank = true }
+    if (indices) { glyph.n = curShow; glyph.k = glyphAt; if (!/\S/.test(u)) glyph.blank = true; if (s.form > 0) glyph.form = true }
     if (finite(glyph.x0, glyph.x1, glyph.y, glyph.top, glyph.bottom, glyph.size, glyph.ix0, glyph.ix1)) {
       if (glyphs.length >= glyphsMax) { over = true; stop = true; return }
       glyphs.push(glyph); boxAt.push(boxes.length / 4)
@@ -500,6 +501,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       case NEXT_SPACING_SHOW: s.ws = num(a[0]); s.cs = num(a[1]); moveText(0, s.leading); show(a[2]); break
       case FORM: {
         push()
+        s.form++
         if (a[0]) s.ctm = mul(s.ctm, matrixOf(a[0]))
         const bb = a[1]
         if (bb && bb.length >= 4) clipTo(s.ctm, num(bb[0]), num(bb[1]), num(bb[2]), num(bb[3]))

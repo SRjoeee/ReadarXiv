@@ -9,6 +9,7 @@ import type { FaceSources } from './fonts.mjs'
 import type { LayerIndex, ReadLeftPart, ReadPart, Ref } from './format.mjs'
 import type { Row } from './rows.mjs'
 import type { PageWords } from './words.mjs'
+import type { TextLayerData } from './textlayer.mjs'
 import type { FrozenRuleSet, RULES_SCHEMA } from '../rules/layout.mjs'
 
 export { PDF_OPTIONS, SKIP_CODES, type SkipCode } from './run.mjs'
@@ -68,6 +69,7 @@ export type PageState = 'ready' | 'laying' | 'waiting' | 'failed'
 /** a state `onPage` tells: `waiting` is the state before any is told */
 export type PageEvent = Exclude<PageState, 'waiting'>
 export type { PageWords } from './words.mjs'
+export type { TextItem, TextLayerData } from './textlayer.mjs'
 /** a link of a laid page, plain data (links.mjs, the engine's 3a: a link over text the layer redraws laid over what is drawn of
  *  it, `moved: true`; one over the original's ink left where it stands, `moved: false`; one over erased text that matched
  *  nothing dropped, never left). The contract the gate measures (lab/pdf/README.md, "The links"):
@@ -151,6 +153,10 @@ export interface Layer {
    *  context's options, `annotationMode` PDF.js's. For any ready page after end() until dispose (D-4); a page not ready rejects;
    *  throws after dispose */
   copyOf(page: number, o: { k: number; width: number; height: number; context?: CanvasRenderingContext2DSettings | null; annotationMode?: number; signal?: AbortSignal | null }): Promise<HTMLCanvasElement>
+  /** a ready page's text layer (textlayer.mjs; docs/PDF-READER.md §11.11), plain data made anew on every call, for any ready page
+   *  until dispose: the composed page's text items its drawing keeps where they stand, those it moves with a crop, and each drawn
+   *  line of the translation, in reading order, in the page's PDF units. A page not ready rejects; throws after dispose (as copyOf) */
+  textOf(page: number): Promise<TextLayerData>
   /** the unit at a point of a page (the parts' left rectangles, PDF units), the smallest where several hold it; null where none
    *  is located or the page is uncovered (D-6). Answers after dispose */
   unitAt(page: number, x: number, y: number): number | null

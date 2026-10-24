@@ -1,6 +1,6 @@
 // lab/pdf/spikes/tex-names-make.mjs
 // The names TeX's own packages give a theorem's head and a generated reference in each target the readers offer, read from
-// TeX Live's files and written to src/pdf-reader/engine/rules/tex-names.json (rules/tex-names.mjs reads it; PDF-READER §19.10).
+// TeX Live's files and written to src/pdf-reader/engine/rules/tex-names.json (rules/tex-names.mjs reads it; PDF-READER §19.11).
 // Nothing is written by hand: every name is a package's.
 //   - a theorem-like head's name (\newtheorem's printed "Theorem", "Definition", …): the translator package's theorem
 //     dictionaries (beamer's; ctex's ChineseUTF8 for zh), `\providetranslation{<English>}{<target>}`;

@@ -64,9 +64,10 @@ missing or drawn twice, and the fidelity measures against the original page, no 
 | `lab/pdf/spikes/layer-fixtures.mjs` | To make a fixture's outputs: a paper into a target, with the layout compile and the translation (staging's record where it holds one, else Microsoft's free endpoint). | `data/` for the papers and compiles it caches, Docker, the network only where `--offline` is not given. |
 | `lab/pdf/spikes/layer-cut.mjs` | After the front end cuts the units anew, to carry the gate's fixed inputs to the new cut's ids. | The old and the made fixtures. |
 | `lab/pdf/spikes/layer-perf.mjs` | To hold the layer to its cost budget: runs of `layer-gate.mjs --perf` against the old path's. `--record` writes `records/layer-perf.*`. | The runs' JSON files. |
+| `lab/pdf/spikes/text-layer-cost.mjs` | After a change to the text layer (`layer-proto/textlayer.mjs`, `view/text-layer.mjs`; docs/PDF-READER.md §11.11): the engine's step and the host's build of a laid page's text layer, its nodes and its items' bytes, on any PDF's pages (their own text content, a synthetic translation of them: `--plan=translated\|half\|kept`), in Chromium. Its record: `records/text-layer.md`. | A PDF (our final pass of the heaviest papers), Playwright's Chromium. |
 | `lab/pdf/spikes/table-groups.mjs` | To measure the table groups' decision (`src/pdf-reader/engine/translate/groups.mjs`) over translations already made; `--write` makes the gate's decided records. | The fixtures' records, the corpus sample, Microsoft's kept answers; Docker for the captions. |
 
-Records: `lab/pdf/records/layer-fidelity.md`, `lab/pdf/records/layer-gate.md`, `lab/pdf/records/layer-perf.md`.
+Records: `lab/pdf/records/layer-fidelity.md`, `lab/pdf/records/layer-gate.md`, `lab/pdf/records/layer-perf.md`, `lab/pdf/records/text-layer.md`.
 
 **The layer draws only from the layout file (route step 2, 2026-10-22).** A unit the file does not locate whole (not held, or a
 visible piece it has no position for: a placeholder LOST or with no row, but a text symbol, a macro that sets no ink, a space)
@@ -280,6 +281,7 @@ synthetic cases and the Node gates run in CI (`tests/pdf-reader/layout-own.test.
 | File | When to run it | What it needs |
 |---|---|---|
 | `lab/pdf/spikes/ocg-gate.mjs` | After any change to `layout/own.mjs`, `layout/wrap.mjs`, the marks or what the delta copies, and before a pull request that touches them: per paper the wrap's counts, time and growth, the delta built from the wrapped bytes and its proof; in Chromium (`--canvas=gpu`, the production canvas, and `cpu`) every page's G1 (all groups ON is our page outside split glyphs and image edges) and G2' (text and labels OFF is the remover's cut of the same ownership, image-edge pixels counted on both sides). Reported, not gated; its run is recorded in `records/ocg-gate.md`. | The gate pack's fixtures (`--pack`, `data/fixtures/<id>-zh/arxiv.pdf` and `base.pdf`), each paper's source (`--sources`, `data/corpus/<id>/source.gz`), the heavy pair by `--pair`, Playwright's Chromium. No network, no Docker. |
+| `lab/pdf/spikes/ledger.mjs` | After any change to `layout/ledger.mjs`, `rules/content-classes.mjs`, `layout/own.mjs`, the marks or the front end's units: per paper the ledger of our final pass as `wrapFinal` makes it (each content class's share of the letters, the units' share, the orphan letters), and with `--rows` invariant (o)'s orphan lines (a paper's text: printed, never recorded); `--check=<n>` exits 1 where a paper's orphan letters pass n. Reported; its run is recorded in `records/ledger.md`. | The gate pack's fixtures (`--pack`, `data/fixtures/<id>-zh/base.pdf` and `base.json`), each paper's source (`--sources`, `data/corpus/<id>/source.gz`), bases given whole by `--pair=<id>=<base.pdf>` (no units: every unit's class the body's). No network, no Docker. |
 
 ### The rules gate in CI
 

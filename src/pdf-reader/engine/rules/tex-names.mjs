@@ -1,5 +1,5 @@
 // src/pdf-reader/engine/rules/tex-names.mjs
-// The names TeX's packages give a theorem-like head and a generated reference in a target (PDF-READER §19.10), read from
+// The names TeX's packages give a theorem-like head and a generated reference in a target (PDF-READER §19.11), read from
 // tex-names.json, which lab/pdf/spikes/tex-names-make.mjs writes from TeX Live's own files: translator's theorem dictionaries
 // (ctex's for Chinese), cleveref's and hyperref's language definitions, ctex's names. No name is written here: a word no
 // package gives in the target keeps the original's.
