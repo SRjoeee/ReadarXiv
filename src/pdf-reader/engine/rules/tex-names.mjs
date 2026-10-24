@@ -8,6 +8,10 @@
 // Pure: no DOM, no clock. An original module (no port statement).
 import NAMES from './tex-names.json' with { type: 'json' }
 
+/** the commands whose text TeX's cross-referencing packages generate, a counter type's name before the number: cleveref's
+ *  \cref and \Cref and their range, page and name forms, hyperref's \autoref. The layer renames their text (layer2.mjs
+ *  GENERATED_REF), and a paper that calls any of them sends the names no package gives some target (source/paper-names.mjs) */
+export const GENERATED_COMMANDS = Object.freeze(['cref', 'Cref', 'crefrange', 'Crefrange', 'cpageref', 'Cpageref', 'cpagerefrange', 'Cpagerefrange', 'namecref', 'nameCref', 'lcnamecref', 'namecrefs', 'nameCrefs', 'lcnamecrefs', 'labelcref', 'labelcpageref', 'autoref', 'Autoref'])
 /** the targets whose names do not inflect (no plural, no case): an English plural or lower-case form reads as its type's one
  *  name there */
 const UNINFLECTED = new Set(['zh', 'zh-TW', 'ja', 'ko'])

@@ -12,5 +12,7 @@ export declare function headInTarget(text: string, to: string, names?: ReadonlyM
 /** the words no package names in some target the readers offer (cleveref's types' English singulars), which a paper that generates
  *  references sends to the translator as name units */
 export declare const NAME_GAPS: readonly string[]
+/** the commands whose text a cross-referencing package generates (cleveref's, \autoref) */
+export declare const GENERATED_COMMANDS: readonly string[]
 /** the conjunctions' words no package names in some target ("and", "to") */
 export declare const CONJUNCTION_GAPS: readonly string[]

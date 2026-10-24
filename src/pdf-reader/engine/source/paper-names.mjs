@@ -14,7 +14,7 @@
 // original's. At most NAMES_MAX a paper.
 //
 // Pure: no DOM, no clock. An original module (no port statement).
-import { CONJUNCTION_GAPS, NAME_GAPS } from '../rules/tex-names.mjs'
+import { CONJUNCTION_GAPS, GENERATED_COMMANDS, NAME_GAPS } from '../rules/tex-names.mjs'
 
 /** the names a paper's units may hold at most (a paper defines a few dozen at most; the gaps are 21) */
 export const NAMES_MAX = 96
@@ -54,8 +54,8 @@ const optionOf = (opts, key) => {
   return m ? m[1].replace(/^\{|\}$/g, '').trim() : null
 }
 
-/** the generated-reference commands whose names a reader may draw (cleveref's, \autoref): layer2.mjs GENERATED_REF's */
-const CALLS = /\\(?:cref|Cref|crefrange|Crefrange|cpageref|Cpageref|namecref|nameCref|lcnamecref|labelcref|autoref|Autoref)\*?\s*\{/
+/** a call of a command whose names a reader may draw (rules/tex-names.mjs GENERATED_COMMANDS: layer2.mjs GENERATED_REF's) */
+const CALLS = new RegExp(`\\\\(?:${GENERATED_COMMANDS.join('|')})\\*?\\s*\\{`)
 
 /**
  * The paper's structural names (`texts`, its files' TeX in the order they are read): each name once, in the order first

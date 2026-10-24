@@ -73,7 +73,7 @@ import { escapeMap, plainOfPieces, plainTracker, transformMap } from './words.mj
 import { ownSmallCaps } from '../rules/font-roles.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { textPieceOf } from '../rules/text-piece.mjs'
-import { headInTarget, refInTarget } from '../rules/tex-names.mjs'
+import { GENERATED_COMMANDS, headInTarget, refInTarget } from '../rules/tex-names.mjs'
 import { NAME_KIND } from './units.mjs'
 import { NAME_ENGLISH } from '../layout/names.mjs'
 import { fillsByChar, UNKNOWN } from '../layout/fills.mjs'
@@ -1186,7 +1186,7 @@ export function nameOfRow(u) {
 const BABEL_HEADS = new RegExp(`^\\s*(?:${Object.values(NAME_ENGLISH).join('|')})\\s*[.:\\u2013\\u2014]?\\s*$`, 'u')
 /** the placeholders whose text TeX's cross-referencing packages generate, a counter type's name before the number:
  *  cleveref's \cref and \Cref (and their range, page and name forms), hyperref's \autoref */
-export const GENERATED_REF = /^\\(?:cref|Cref|crefrange|Crefrange|cpageref|Cpageref|cpagerefrange|Cpagerefrange|namecref|nameCref|lcnamecref|namecrefs|nameCrefs|lcnamecrefs|labelcref|labelcpageref|autoref|Autoref)\*?\s*\{/
+export const GENERATED_REF = new RegExp(`^\\\\(?:${GENERATED_COMMANDS.join('|')})\\*?\\s*\\{`)
 /** a citation's note (its last optional argument: \cite[Lemma~1]{…}, natbib's \citep[see][Section~2]{…}) as TeX sets it */
 const CITE_NOTE = /^\\(?:cite[a-z]*|parencite|textcite|autocite)\*?((?:\s*\[[^\]]*\])+)\s*\{/
 /**

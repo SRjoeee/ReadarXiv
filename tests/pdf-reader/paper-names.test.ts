@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { sourceUnitsOf } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { bundleUnitsOf, NAME_KIND } from '@/pdf-reader/engine/layer-proto/units.mjs'
 import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { CONJUNCTION_GAPS, NAME_GAPS } from '@/pdf-reader/engine/rules/tex-names.mjs'
+import { CONJUNCTION_GAPS, GENERATED_COMMANDS, NAME_GAPS } from '@/pdf-reader/engine/rules/tex-names.mjs'
 import { NAMES_MAX, paperNames } from '@/pdf-reader/engine/source/paper-names.mjs'
 import { plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
 
@@ -32,6 +32,8 @@ describe('paperNames: the names the paper defines', () => {
     // (a range's " to " is no word of one sense alone)
     expect(called).not.toContain('to')
     expect(paperNames(['See \\autoref{fig:a}.'])).toEqual(called)
+    // (every command whose names the layer renames, rules/tex-names.mjs GENERATED_COMMANDS: a plural name's, a page range's; Codex on #474)
+    for (const c of GENERATED_COMMANDS) expect(paperNames([`\\${c}{a}`]), c).toEqual(called)
     // (the paper's own names first, the words after)
     expect(paperNames(['\\newtheorem{conj}{Conjecture}', '\\cref{conj:a}'])).toEqual(['Conjecture', ...called])
     expect(paperNames(['See \\ref{fig:a}.'])).toEqual([])
