@@ -25,9 +25,9 @@ export const CLASSES = Object.freeze({
   tables: Object.freeze({ toggle: 'tables', state: 'built', glyphs: true, truth: "the source's table cells (units of kind cell)" }),
   figures: Object.freeze({ toggle: 'figures', state: 'planned', glyphs: true, truth: "glyphs our compile sets in a figure: an included PDF's (a form XObject), a float's own that no unit owns, a TikZ text's unit" }),
   ocr: Object.freeze({ toggle: 'figures', state: 'planned', glyphs: false, truth: "a bitmap figure's text, read and placed by OCR (PP-OCR, as the extension's: DESIGN §15.3); the owner's OK of 2026-10-25" }),
-  references: Object.freeze({ toggle: 'references', state: 'planned', glyphs: true, truth: "the bibliography, between its name and the next unit; its entries' fields from the .bbl's \\bibitem" }),
+  references: Object.freeze({ toggle: 'references', state: 'built', glyphs: true, truth: "the bibliography's entries, each \\bibitem's text a unit (kind reference) as the compile reads it: the paper's thebibliography or its .bbl, marked like the body; its label, numbers, web addresses and formulas the original's ink. A bibliography no \\bibitem sets (biblatex's), between its name and the next unit" }),
   index: Object.freeze({ toggle: 'references', state: 'planned', glyphs: true, truth: 'an index or a glossary, between its name and the next unit (proposed: back matter, with the references)' }),
-  names: Object.freeze({ toggle: 'names', state: 'built', glyphs: true, truth: "the author block's units (names and places), translated where the target's script writes names its own (translate/kept.mjs)" }),
+  names: Object.freeze({ toggle: 'names', state: 'built', glyphs: true, truth: "the author block's units (names and places, kind author) and an entry's names in the bibliography (its first block, kind refnames), translated once whatever the target" }),
   math: Object.freeze({ toggle: 'never', state: 'never', glyphs: true, truth: 'a math font\'s glyphs, a formula\'s line no unit owns' }),
   code: Object.freeze({ toggle: 'never', state: 'never', glyphs: true, truth: "a typewriter font's lines no unit owns: code, a log, a URL" }),
   symbols: Object.freeze({ toggle: 'never', state: 'never', glyphs: true, truth: 'a line with no letter: numbers, a folio, a symbol' }),
@@ -38,13 +38,29 @@ export const CLASS_IDS = Object.freeze(Object.keys(CLASSES))
 export const CLASS_CODE = Object.freeze(Object.fromEntries(CLASS_IDS.map((id, i) => [id, i])))
 
 /** a unit's class by its kind (latex-front.mjs's kinds); a kind not here is `body` */
-export const UNIT_CLASS = Object.freeze({ para: 'body', heading: 'body', abstract: 'body', caption: 'body', footnote: 'body', cell: 'tables', author: 'names', figure: 'figures' })
+export const UNIT_CLASS = Object.freeze({ para: 'body', heading: 'body', abstract: 'body', caption: 'body', footnote: 'body', cell: 'tables', author: 'names', figure: 'figures', reference: 'references', refnames: 'names' })
 /** a unit's class: of the front end's unit ({ kind }), of the bundle's ([kind, flags, …]) or of a kind; null for none */
 export function unitClass(u) {
   const kind = typeof u === 'string' ? u : Array.isArray(u) ? u[0] : u?.kind
   if (typeof kind !== 'string') return null
   return Object.hasOwn(UNIT_CLASS, kind) ? UNIT_CLASS[kind] : 'body'
 }
+
+/** each toggle's state until the reader's settings hold one (the owner, 2026-10-25: references and names off), the toggles a
+ *  reader turns on or off alone: what a host shows where it passes no toggles */
+export const TOGGLE_DEFAULTS = Object.freeze({ heads: true, tables: true, figures: true, references: false, names: false })
+/** the toggles on by default (TOGGLE_DEFAULTS), a new Set each call */
+export const defaultToggles = () => new Set(Object.keys(TOGGLE_DEFAULTS).filter(t => TOGGLE_DEFAULTS[t]))
+/** the toggles a host gives (an iterable of TOGGLES' names, or { [toggle]: boolean } over TOGGLE_DEFAULTS), as the Set
+ *  shownTranslated reads; null or undefined: the defaults. A name that is no toggle is dropped */
+export function togglesOf(given) {
+  if (given === null || given === undefined) return defaultToggles()
+  if (typeof given === 'object' && typeof given[Symbol.iterator] !== 'function') return new Set(Object.keys(TOGGLE_DEFAULTS).filter(t => (Object.hasOwn(given, t) ? !!given[t] : TOGGLE_DEFAULTS[t])))
+  if (typeof given?.[Symbol.iterator] !== 'function' || typeof given === 'string') throw new TypeError('toggles: an iterable of toggle names or an object of booleans')
+  return new Set([...given].filter(t => Object.hasOwn(TOGGLE_DEFAULTS, t)))
+}
+/** whether a unit is shown translated under a reader's toggles (`on`, togglesOf's): its class's (unitClass) */
+export const unitShown = (u, on) => { const cls = unitClass(u); return cls !== null && shownTranslated(cls, on) }
 
 /** whether a class is shown translated under a reader's settings (`on`: the toggles turned on; `always` is, `never` is not) */
 export const shownTranslated = (cls, on) => {

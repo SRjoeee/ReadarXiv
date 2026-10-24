@@ -2,7 +2,7 @@ import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { type LedgerPage, ledgerOf, ledgerSummary, ORPHAN_LINES_MAX, orphanRows } from '@/pdf-reader/engine/layout/ledger.mjs'
 import { pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
-import { CLASS_CODE, CLASS_IDS, CLASSES, shownTranslated, TOGGLES, UNIT_CLASS, unitClass } from '@/pdf-reader/engine/rules/content-classes.mjs'
+import { CLASS_CODE, CLASS_IDS, CLASSES, defaultToggles, shownTranslated, TOGGLE_DEFAULTS, TOGGLES, togglesOf, UNIT_CLASS, unitClass, unitShown } from '@/pdf-reader/engine/rules/content-classes.mjs'
 
 // The content classes and the ledger of our final pass (docs/route/orphan-text.md, stage 1): every glyph one class, by TeX's
 // facts — its owner, its region, the babel names' points, stream order — and its own font
@@ -36,11 +36,32 @@ describe('the content classes', () => {
     expect(unitClass({ kind: 'figure' })).toBe('figures')
     expect(unitClass(['cell', 0, []])).toBe('tables')
     expect(unitClass('author')).toBe('names')
+    // (a bibliography's entry: its names the names', the rest the references', latex-front.mjs bibliography)
+    expect(unitClass({ kind: 'reference' })).toBe('references')
+    expect(unitClass(['refnames', 0, null, null, null, []])).toBe('names')
     // (a kind the table does not name is the body's; no kind, no class)
     expect(unitClass({ kind: 'list' })).toBe('body')
     expect(unitClass(null)).toBeNull()
     expect(unitClass({})).toBeNull()
     for (const cls of Object.values(UNIT_CLASS)) expect(CLASS_IDS).toContain(cls)
+  })
+
+  it('turns references and names off until the reader\'s settings say otherwise, every other toggle on (the owner, 2026-10-25)', () => {
+    expect(TOGGLE_DEFAULTS).toEqual({ heads: true, tables: true, figures: true, references: false, names: false })
+    expect(Object.keys(TOGGLE_DEFAULTS)).toEqual(TOGGLES.filter(t => t !== 'always' && t !== 'never'))
+    expect([...defaultToggles()].sort()).toEqual(['figures', 'heads', 'tables'])
+    expect(defaultToggles()).not.toBe(defaultToggles())
+    // (a host's toggles: names, or booleans over the defaults; a name that is no toggle dropped; none, the defaults)
+    expect([...togglesOf(['names', 'references', 'always', 'nothing'])].sort()).toEqual(['names', 'references'])
+    expect([...togglesOf({ references: true, tables: false })].sort()).toEqual(['figures', 'heads', 'references'])
+    expect(togglesOf(null)).toEqual(defaultToggles())
+    expect(() => togglesOf('names' as never)).toThrow(TypeError)
+    expect(() => togglesOf(3 as never)).toThrow(TypeError)
+    // (a unit by its class: the body always, a cell under tables, an entry's rest under references, its names under names; the
+    // names given are the toggles on, every other off)
+    const on = togglesOf(['references'])
+    expect(['para', 'cell', 'reference', 'refnames', 'author'].map(kind => unitShown({ kind }, on))).toEqual([true, false, true, false, false])
+    expect(unitShown(null, on)).toBe(false)
   })
 
   it('shows a class translated under the toggles turned on', () => {

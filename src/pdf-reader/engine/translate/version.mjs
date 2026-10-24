@@ -54,4 +54,8 @@
 //    came back moved before it (0 of 4,825). Over 180 papers' sources 4,215 of 44,825 units, in 153 papers, change their
 //    wire (mt.mjs displayStopChanges tells exactly those); every other unit's is 4's byte for byte, and a reply that keeps
 //    the stop is read back to 4's pieces
-export const TRANSLATE_VERSION = '5'
+// 6: every content class is translated once, whatever the language (the owner, 2026-10-25; rules/content-classes.mjs): the
+//    author block's names and places are sent for every target, not only where its script writes names its own way
+//    (layer-proto/rows.mjs toTranslate, layerRows), and a bibliography entry's units (PIPELINE 29) with them; a reader's
+//    toggles show or hide them. Every other unit's wire is 5's byte for byte
+export const TRANSLATE_VERSION = '6'

@@ -169,7 +169,7 @@ describe('a valid file', () => {
     expect([...index.unit(3)!.labels]).toEqual([0, 2, 50, 720, 66, 728.5, 717])
     expect([...index.unit(8)!.labels]).toEqual([3, 2, 66, 100, 70, 106, 98])
     expect(index.unit(8)!.ph.get(1)).toEqual({ kind: 'macro', flags: PH_FLAG.LOST, segs: new Float64Array(0), text: null, fill: null })
-    expect(LAYOUT).toBe('20')
+    expect(LAYOUT).toBe('21')
     expect(index.unit(5)!.held).toEqual([1])
     expect(index.unit(2)!.held).toEqual([])
     expect(PAGE_TEXT_KINDS).toEqual(['cite', 'ref', 'eqref'])
@@ -427,7 +427,7 @@ const ROWS: [string, Edit, string][] = [
   ['an id twice', f => { f.units[2][0] = f.units[1][0] }, 'units[2][0]'],
   ['a negative id', f => { f.units[0][0] = -1 }, 'units[0][0]'],
   ['a unit row of 4', f => { f.units[1].pop() }, 'units[1]'],
-  ['a kind of 9', f => { f.units[1][1] = 9 }, 'units[1][1]'],
+  ['a kind of 11', f => { f.units[1][1] = 11 }, 'units[1][1]'],
   ['depth 6', f => { f.units[1][2] = 6 }, 'units[1][2]'],
   ['depth -2', f => { f.units[1][2] = -2 }, 'units[1][2]'],
   ['depth 8', f => { f.units[1][2] = 8 }, 'units[1][2]'],
@@ -492,7 +492,7 @@ const ROWS: [string, Edit, string][] = [
   ['a segment on an EMPTY placeholder', f => { f.ph[4].push(...f.ph[0].slice(4)) }, 'ph[4]'],
   ['EMPTY and LOST together', f => { f.ph[4][3] = PH_FLAG.EMPTY | PH_FLAG.LOST }, 'ph[4][3]'],
   ['NUMBERED on a citation', f => { f.ph[1][3] = PH_FLAG.SOURCE_BRACKETS | PH_FLAG.NUMBERED }, 'ph[1][3]'],
-  ['a placeholder kind of 10', f => { f.ph[0][2] = 10 }, 'ph[0][2]'],
+  ['a placeholder kind of 11', f => { f.ph[0][2] = 11 }, 'ph[0][2]'],
   ['placeholder flags of 512', f => { f.ph[0][3] = 512 }, 'ph[0][3]'],
   // JOINED: a display's, alone, with no segments of its own (its ink its group's first display's)
   ['JOINED on a formula', f => { f.ph[0] = [2, 1, MATH, PH_FLAG.JOINED] }, 'ph[0]'],

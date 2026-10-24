@@ -4,6 +4,7 @@ import type { LayerIndex, Ref } from '../layer-proto/format.mjs'
 import type { openLayer } from '../layer-proto/reader.mjs'
 import type { Row } from '../layer-proto/rows.mjs'
 import type { FrozenRuleSet } from '../rules/layout.mjs'
+import type { Toggle } from '../rules/content-classes.mjs'
 import type { TellRef } from './feed.mjs'
 import type { ComposedOpener, ReaderView } from './reader-view.mjs'
 
@@ -32,6 +33,8 @@ export interface LayerSideOptions {
   keepPixels?: number
   /** how many pages past the near ones are laid ahead while the reader rests (AHEAD_PAGES by default; 0 lays none) */
   ahead?: number
+  /** the reader's toggles, given to every open of the door (reader.mjs OpenLayerOptions `toggles`): absent, TOGGLE_DEFAULTS */
+  toggles?: Iterable<string> | Partial<Record<Toggle, boolean>> | null
 }
 export interface LayerSide {
   /** what the host has heard, any number of times, from any source, in any order: merged, deduplicated by digest, fetched

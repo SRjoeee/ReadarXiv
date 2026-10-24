@@ -475,8 +475,8 @@ function unitText(u) {
 }
 
 /** the flags of a unit's record (amendment M15): the bundle's own unit flags (UNIT_FLAG_BITS: TITLE, FRONT, BRACKETED, KEPT) and
- *  AUTHOR, set where the unit's kind is `author` (rows.mjs toTranslate keeps the KEPT names, and the author block where the
- *  target does not write it as the paper does) */
+ *  AUTHOR, set where the unit's kind is `author` (rows.mjs toTranslate keeps the KEPT names alone, whatever the target, since
+ *  TRANSLATE_VERSION 6; a reader's toggles tell a unit's class by its record's `kind`, rules/content-classes.mjs UNIT_CLASS) */
 export const RECORD_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, BRACKETED: 4, KEPT: 8, AUTHOR: 16 })
 /** a record's `depth` for a unit that has none (a heading's depth runs from -1, a \part, so -1 cannot be it), and its `kind` for
  *  a kind that is none of UNIT_KINDS, or a unit that does not stand */

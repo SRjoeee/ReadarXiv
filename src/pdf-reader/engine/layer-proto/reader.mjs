@@ -17,6 +17,7 @@ import { layerDraws, readLeftPart } from './format.mjs'
 import { sourceUnitsOf, toTranslate, unitOf } from './rows.mjs'
 import { openProto } from './run.mjs'
 import { BUILTIN_RULES, resolveRules } from '../rules/layout.mjs'
+import { togglesOf, unitShown } from '../rules/content-classes.mjs'
 
 export { PDF_OPTIONS, SKIP_CODES } from './run.mjs'
 export { BUNDLE, BUNDLE_CAP, BUNDLE_VALUES, BundleRefusal, bundleKey, CTAG, readBundle, VTAG } from './bundle.mjs'
@@ -25,6 +26,7 @@ export { indexLayout, LAYOUT, LAYOUT_CAP, LAYOUT_VALUES, LayoutRefusal, parseLay
 export { trPiecesOf } from '../layer/pieces.mjs'
 export { FACES } from '../rules/font-roles.mjs'
 export { translateUnits } from '../translate/mt.mjs'
+export { defaultToggles, TOGGLE_DEFAULTS, TOGGLES, togglesOf } from '../rules/content-classes.mjs'
 
 /** how the layout file is taken, the layer gate's (--proto-tex=lines): no symbol drawn as text asked to be found, each
  *  line's erase extent v0's own */
@@ -86,6 +88,12 @@ function addShapes(by, units) {
  * of choices on every device. Each choice made for the target is the layout rules' (`rules`; the built-in set where none),
  * none a host's own. One layer is open a page (a realm) at a time: v0's faces are the page's.
  *
+ * The reader's toggles (`toggles`: rules/content-classes.mjs togglesOf's input, TOGGLE_DEFAULTS where none — references and
+ * names off): every class is translated once on the server, whatever they say, and a toggle only shows or hides what was made
+ * (docs/route/orphan-text.md §1). A unit whose class they hide (unitShown) is no unit the open awaits: its row, where one comes,
+ * is not drawn, and its ink stays the page's; a page waits for no row of one. Another set of toggles is another open over the
+ * same rows and the same composed document: no prepare and no translation again.
+ *
  * Two opens. BUNDLE 4 (`index`: indexOf's, the head and every unit; `parts`: those told at the open, in order, over the
  * composed document; `leftPart(page, ref)`: the host's transport for the left parts; `onRetired(doc)`:
  * a document the layer no longer reads, the host's to destroy): the parts come over time (addPart, endParts), and a page is
@@ -116,7 +124,7 @@ export const DROPPED_ROWS = 1000
 export const DRAWS_HELD = 16 * 2 ** 20
 
 export async function openLayer(o = {}) {
-  const { bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules = BUILTIN_RULES, drawsHeld = DRAWS_HELD, OPS = null } = o ?? {}
+  const { bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules = BUILTIN_RULES, drawsHeld = DRAWS_HELD, OPS = null, toggles: given = null } = o ?? {}
   const four = bundle === undefined
   if (four) {
     if (index === null || typeof index !== 'object' || index.kind !== 'index' || !Array.isArray(index.units) || !index.head) throw new TypeError(`index: a layer index (indexOf's), not ${kindOf(index)}`)
@@ -135,6 +143,7 @@ export async function openLayer(o = {}) {
   if (typeof hyphUrl !== 'function') throw new TypeError(`hyphUrl: a function, not ${kindOf(hyphUrl)}`)
   if (OPS !== null && typeof OPS !== 'object') throw new TypeError(`OPS: PDF.js's operator codes or null, not ${kindOf(OPS)}`)
   checkRules(rules)
+  const toggles = togglesOf(given)
   // (the parts told at the open stand as a chain over the composed document, before anything is opened)
   if (four) {
     let ch = { through: 0, last: null }
@@ -152,7 +161,7 @@ export async function openLayer(o = {}) {
   // (taken before the open's first await: two opens at once are refused alike)
   const token = {}
   opened = token
-  try { return await openOne({ four, bundle, index, doc, parts: parts ?? [], target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS }, token) } catch (e) { if (opened === token) opened = null; throw e }
+  try { return await openOne({ four, bundle, index, doc, parts: parts ?? [], target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS, toggles }, token) } catch (e) { if (opened === token) opened = null; throw e }
 }
 
 /** a part told to the door, against the index and the chain so far (`ch`: through, last): a ReadPart of the index's head that
@@ -164,9 +173,10 @@ function checkPart(part, index, ch) {
   if (part.prev !== ch.last) throw new BundleRefusal('not following the digest of the last part', { kind: 'part', path: 'prev' })
 }
 
-async function openOne({ four, bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS }, token) {
+async function openOne({ four, bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS, toggles }, token) {
   const source = four ? index : bundle
-  const expect = toTranslate(source, target)
+  // (the units the open awaits: those the target translates whose class the toggles show; a hidden one's row is not drawn)
+  const all = sourceUnitsOf(source), expect = toTranslate(source, target).filter(id => unitShown(all[id], toggles))
   // (each cell's group as the units' cells give it: a group is read once its own cells' rows are in)
   const groups = new Map()
   sourceUnitsOf(source).forEach((u, id) => { const g = u ? groupOf(u) : null; if (g) groups.set(id, g) })
@@ -210,7 +220,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   if (!four) hear(bundle)
   // (a bundle of 3 names no lists: its base is arXiv's PDF, which holds none of our groups, so no unit is hidden over it)
   const hiding = { unhidden: id => unhidden.get(id) ?? null, labelKept: id => labelKept.has(id), rules: pg => rulesByPage.get(pg) }
-  const common = { units: [], expect, groups, target, scale: SCALE, dpr: 1, copy: false, free: true, records: false, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, OPS, onStep: () => evaluate() }
+  const common = { units: [], expect, shown: u => unitShown(u, toggles), groups, target, scale: SCALE, dpr: 1, copy: false, free: true, records: false, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, OPS, onStep: () => evaluate() }
   run = await openProto(four
     ? {
         ...common, parts: true, doc, pages: index.head.paper.pages, onRetired, drawOf: page => drawOfPage(page), drawsComing: index.head.draw === 1,

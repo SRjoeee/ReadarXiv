@@ -137,7 +137,13 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     expect(o.doc).toBe(doc)
     expect(o.geometry).toEqual({ schema: 1, kinds: bundle.left.kinds, left: { pages: bundle.left.pages, units: bundle.left.units } })
     expect(o.units).toEqual([])
-    expect(o.expect).toEqual(toTranslate(bundle, 'zh'))
+    // (the units the target translates, but those whose class the reader's toggles hide: by default the author block's names,
+    // rules/content-classes.mjs TOGGLE_DEFAULTS)
+    const kinds = bundle.units.map(u => u?.[0])
+    expect(o.expect).toEqual(toTranslate(bundle, 'zh').filter(id => kinds[id] !== 'author'))
+    expect(toTranslate(bundle, 'zh').some(id => kinds[id] === 'author')).toBe(true)
+    expect(o.shown?.({ kind: 'author' } as never)).toBe(false)
+    expect(o.shown?.({ kind: 'para' } as never)).toBe(true)
     expect(o.groups).toEqual(new Map([[4, '0:h'], [5, '0:c0'], [6, '0:c0']]))
     expect(o.target).toBe('zh')
     expect([o.scale, o.dpr, o.copy, o.pages]).toEqual([2.5, 1, false, Number.POSITIVE_INFINITY])
@@ -161,6 +167,30 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     expect([p.tex.index.file.units, p.hiding?.rules?.(2)]).toEqual([[], undefined])
     expect(p.labels).toEqual({ captions: { figure: 'target', table: 'target' } })
     plain.dispose()
+  })
+
+  it('awaits and draws a class the reader\'s toggles show, and only that: the names turned on, tables off (rules/content-classes.mjs)', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const bundle = bundleOf(), doc = docOf(), kinds = bundle.units.map(u => u?.[0])
+    const all = toTranslate(bundle, 'zh')
+    // (names on: the author block awaited as any unit, every other class as the defaults have it)
+    const named = await openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl, toggles: ['names', 'tables'] })
+    const o = seen.opens.at(-1) as unknown as Opened
+    expect(o.expect).toEqual(all)
+    expect(o.shown?.({ kind: 'author' } as never)).toBe(true)
+    named.dispose()
+    // (as booleans over the defaults: names on and tables off, no cell awaited and its row not drawn)
+    const off = await openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl, toggles: { names: true, tables: false } })
+    const p = seen.opens.at(-1) as unknown as Opened
+    expect(p.expect).toEqual(all.filter(id => kinds[id] !== 'cell'))
+    expect(p.shown?.({ kind: 'cell' } as never)).toBe(false)
+    expect(p.shown?.({ kind: 'reference' } as never)).toBe(false)
+    expect(p.shown?.({ kind: 'refnames' } as never)).toBe(true)
+    off.dispose()
+    // (a value that is no set of toggles: refused before the page's one open is taken)
+    await expect(openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl, toggles: 'names' as never })).rejects.toThrow(TypeError)
+    const next = await openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl })
+    next.dispose()
   })
 
   it("with no layout file nothing is drawn: every unit is the original's, one with a citation or a text symbol alike (the layer draws only from the file)", async () => {
@@ -289,7 +319,8 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     expect(layer.unitAt(3, 100, 262)).toBeNull()
     expect(layer.unitAt(1, Number.NaN, 262)).toBeNull()
     const s = layer.stats()
-    expect(s).toMatchObject({ units: toTranslate(bundle, 'zh').length, drawn: whole.stats.length, pages: [1, 2], dropped: 0, rules: { schema: 5, version: BUILTIN_RULES.version } })
+    // (the units awaited: the target's, but the author block's names, which the default toggles hide)
+    expect(s).toMatchObject({ units: toTranslate(bundle, 'zh').filter(id => bundle.units[id]?.[0] !== 'author').length, drawn: whole.stats.length, pages: [1, 2], dropped: 0, rules: { schema: 5, version: BUILTIN_RULES.version } })
     expect(Object.keys(s.pageMs)).toEqual(['1', '2'])
     expect(s.slowestTaskMs).toBeGreaterThanOrEqual(0)
     layer.dispose()
@@ -660,6 +691,7 @@ describe('the door reaches no server-only module', () => {
     expect(Object.keys(door).sort()).toEqual([
       'BUNDLE', 'BUNDLE_CAP', 'BUNDLE_VALUES', 'BundleRefusal', 'CTAG', 'DRAWS_HELD', 'DROPPED_ROWS', 'FACES', 'LAYOUT', 'LAYOUT_CAP', 'LAYOUT_VALUES', 'LayoutRefusal', 'PDF_OPTIONS', 'SKIP_CODES', 'VTAG',
       'batchesOf', 'bundleKey', 'firstFaceOf', 'indexLayout', 'layerRows', 'openLayer', 'parseLayout', 'readBundle', 'rowOf', 'runRows', 'toTranslate', 'trPiecesOf', 'translateUnits', 'unitOf',
+      'TOGGLES', 'TOGGLE_DEFAULTS', 'defaultToggles', 'togglesOf',
     ].sort())
   })
 })

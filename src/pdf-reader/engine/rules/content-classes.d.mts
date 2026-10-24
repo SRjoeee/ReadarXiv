@@ -25,3 +25,11 @@ export declare const UNIT_CLASS: Readonly<Record<string, ClassId>>
 export declare function unitClass(u: string | { kind?: unknown } | readonly unknown[] | null | undefined): ClassId | null
 /** whether a class is shown translated under a reader's toggles turned on */
 export declare function shownTranslated(cls: string, on: ReadonlySet<string> | null | undefined): boolean
+/** the toggles a reader turns on or off, each one's state until the settings hold one */
+export declare const TOGGLE_DEFAULTS: Readonly<Record<'heads' | 'tables' | 'figures' | 'references' | 'names', boolean>>
+/** the toggles on by default, a new Set each call */
+export declare function defaultToggles(): Set<Toggle>
+/** the toggles a host gives (names, or booleans over TOGGLE_DEFAULTS) as a Set; null or undefined: the defaults */
+export declare function togglesOf(given: Iterable<string> | Partial<Record<Toggle, boolean>> | null | undefined): Set<Toggle>
+/** whether a unit is shown translated under a reader's toggles: its class's */
+export declare function unitShown(u: string | { kind?: unknown } | readonly unknown[] | null | undefined, on: ReadonlySet<string> | null | undefined): boolean

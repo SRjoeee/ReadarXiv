@@ -953,11 +953,12 @@ export function isName(text, prose) {
   const nameWord = w => { const bare = w.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, ''); return !bare || /[0-9]/.test(bare) || /^[A-Z][^a-z]*$/.test(bare) || /^[A-Za-z][a-z]*[A-Z]/.test(bare) || (/^[A-Z][a-z]+$/.test(bare) && proper(bare) && !common(bare)) }
   return words.every(nameWord)
 }
-/** the table cells and figure texts that are only names (isName): they keep their source */
+/** the table cells and figure texts that are only names (isName): they keep their source. The prose they are judged against
+ *  is the body's, a bibliography's entries none of it (their titles are in title case, their names all proper nouns) */
 export function nameCells(units) {
   const short = u => u.kind === 'cell' || u.kind === 'figure'
   const textOf = u => u.pieces.filter(p => p.t === 'text').map(p => p.s).join(' ')
-  const prose = units.filter(u => !short(u)).map(textOf).join('\n')
+  const prose = units.filter(u => !short(u) && u.kind !== 'reference' && u.kind !== 'refnames').map(textOf).join('\n')
   return new Set(units.filter(u => short(u) && isName(textOf(u), prose)))
 }
 
