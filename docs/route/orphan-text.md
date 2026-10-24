@@ -149,3 +149,40 @@ names are its placeholder's ink, kept as the original's either way; a running he
 About 23 agent-days in all. The web sweep reads invariant (o) once the engine is pinned (`scripts/sweep/invariants.mjs`), and the
 container stores `wrapFinal`'s `ledger` in the record (a web change). This design touches `latex-front.mjs` only in stages 4 and
 7; the heading-argument PR's owner is told first.
+
+## 8. The web contract for stages 2–3 (2026-10-25; the engine and the web land for one pin)
+
+The engine makes ink units in the maker child and carries them through the page pass; the web passes them through, announces
+one more units chunk, stores the ledger, reads invariant (o) and offers the toggles. Every name below is the engine's export.
+
+1. **`ours.ink`.** `wrapFinal` returns `ink` beside `ledger` (an opaque value: the ink units, their glyphs, rows and groups). The
+   container passes it on unchanged: `ourWrap` returns it, and the maker gives `layerOfPaper({ ours: { …, wrap: { stats,
+   unhidden, labelKept, pages, ledger }, ink } })`. `ledger` is `wrapFinal`'s `ledger`, now inside `wrap`. With no `ours.ink`
+   (an older wrap, a refused one) the pass makes no ink unit and everything else is as before.
+2. **The ink chunk.** Ink units are units with ids after the source units' (N to N + K − 1), in one more units chunk (`kind:
+   'units'`, `from: N`, `to: N + K`), which the engine writes. `onHead(head, units)` then gets the prepare child's chunks
+   followed by the maker's: `units.slice(announced.length)` are new. The maker writes and announces each new chunk (role
+   `units`, as the prepare child announces its own) before the head. `layerSink`'s check becomes: the first `announced.length`
+   chunks equal the prepare child's, the rest are the maker's own. The Worker accepts a head whose units list is longer than
+   the prepare's announcement by chunks the maker announced. The catalog's `units` lists every chunk.
+3. **The bundle unit of an ink unit.** It is today's tuple with a seventh element: `[kind, flags, depth, null, null, pieces,
+   echo]`. `kind` names its class (`inkheads`, `inkcontents`, `inknotes`, `inkgenerated`, `inkorphan`), and `unitClass(kind)`
+   gives it. `echo` is the id of the source unit it repeats (its row is that unit's, with no translation of its own), or
+   null. Pieces are text, with ⟦n⟧ placeholders for kept runs (leader dots, numbers, math, URLs), whose ink stays.
+   BUNDLE is raised.
+4. **Translation.** The rows path translates the ink units like any unit, once on the server, whatever the toggles
+   (`layer-proto/rows.mjs` `toTranslate`). An echo unit is never sent: its row is its echo's (`unitOf` takes the echo's row).
+   The translation client needs no change beyond translating every chunk the head lists.
+5. **The record's ledger.** The head's base carries `ledger: { classes: { [class]: [glyphs, letters] }, letters, orphanLetters,
+   orphans: [[page, letters, text], …] }`, with at most 64 orphans and their text cut at 120 code units, written by the engine
+   from `ours.wrap.ledger`. The web stores it with the head; nothing else reads it.
+6. **Invariant (o).** The sweep calls `orphanRowsOfHead(head, { paper })` (`layout/ledger.mjs`). That gives one row per listed
+   orphan `{ inv: 'o', sev: 'violation', paper, page, unit: null, what: 'orphan text', text, detail: { letters } }`, plus one
+   row `{ what: 'orphans not listed', detail: { letters } }` where `orphanLetters` passes the listed ones. A head without a
+   ledger (an older engine's) gives no row.
+7. **The toggles.** The reader's option is `classes: { heads, tables, figures, references, names }`, booleans, defaulting to
+   `TOGGLE_DEFAULTS` (`rules/content-classes.mjs`: heads true, tables true, names false, references false, figures false until
+   built). Each host stores it with its other reader settings and passes it to the layer at open and on change
+   (`layer.setClasses(classes)`). A unit whose class is not shown is drawn as the original's (its groups ON, no row drawn).
+   The layer re-lays the open pages, with no fetch and no prepare. The labels are the owner's words, in the locale packs
+   (one key a toggle). "Always" and "never" are no setting.
