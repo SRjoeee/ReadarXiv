@@ -934,7 +934,7 @@ try {
     const held = async () => page.evaluate(() => {
       const near = window.__reader.view.probe().nearPlaces, sp = window.__reader.side().probe()
       const right = document.getElementById('right')
-      return { near, laid: sp.laid, retired: sp.retired, svgs: right.querySelectorAll('.axt-layer > svg').length, links: right.querySelectorAll('.axt-layer > .axt-links').length, copies: [...right.querySelectorAll('canvas.axt-layer-copy')].filter(c => c.width > 0).length, nodes: right.querySelectorAll('*').length, heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e5) / 10 : null }
+      return { near, laid: sp.laid, retired: sp.retired, drawings: sp.drawings, drawnPixels: sp.drawnPixels, svgs: right.querySelectorAll('.axt-layer > svg').length, links: right.querySelectorAll('.axt-layer > .axt-links').length, copies: [...right.querySelectorAll('canvas.axt-layer-copy')].filter(c => c.width > 0).length, nodes: right.querySelectorAll('*').length, heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1e5) / 10 : null }
     })
     const w0 = await held()
     await page.mouse.move(R1.x + R1.width / 2, R1.y + R1.height / 2)
@@ -947,7 +947,7 @@ try {
     await page.evaluate(() => document.querySelector('header button')?.focus())
     await page.waitForTimeout(300)
     const w1 = await held()
-    check('through the paper and back: the layer held near the view alone, each page far from it let go (its copy, its SVG and its links), the one the focus held once the focus left it', w1.laid <= w1.near && w1.svgs === w1.laid && w1.copies === w1.laid && w1.links <= w1.laid && w1.laid + w1.retired <= sampleCut.paper.pages, `${JSON.stringify(w0)} then ${JSON.stringify(w1)}; the focus was on place ${focusedPlace || 'none'}${keptForFocus ? ', laid while it held it' : ''}`)
+    check('through the paper and back: the layer in the document near the view alone, each page far from it out of it (its copy, its SVG and its links, kept off the view within KEEP_PIXELS), the one the focus held once the focus left it', w1.laid <= w1.near && w1.svgs === w1.laid && w1.copies === w1.laid && w1.links <= w1.laid && w1.laid + w1.retired <= sampleCut.paper.pages && w1.drawings <= w1.retired && w1.drawnPixels <= 2 ** 25, `${JSON.stringify(w0)} then ${JSON.stringify(w1)}; the focus was on place ${focusedPlace || 'none'}${keptForFocus ? ', laid while it held it' : ''}`)
     note(`the window on the sample (4 pages; JS heap in MB): before ${JSON.stringify(w0)}, after a scroll through it and back ${JSON.stringify(w1)}`)
     const long = await page.evaluate(() => window.__long)
     note(`the layer's longest main-thread task in this run: ${Math.max(0, ...long)} ms over ${long.length} long task(s) (a reading on a shared machine: L7 is reader-perf's)`)
@@ -965,9 +965,10 @@ try {
     await seedService(worker, { id: 'svc-e2efail0', name: 'failing', baseURL: echo.failingURL, model: 'local-echo' }, { choose: false })
     const page = await openReader({ mode: 'bilingual' })
     const side = () => page.evaluate(() => window.__reader.side()?.probe() ?? null)
-    /** what each place shows: the layer's language (a dash where its copy is not drawn), the original's page view, or nothing */
+    /** what each place shows: the layer's language (a dash where its copy is not drawn), the original's page view, or nothing (a far
+     *  place holding the empty element of a page laid off the view, its drawing kept: layer-side.mjs retire, KEEP_PIXELS) */
     const shownNow = () => page.evaluate(() => [...document.querySelectorAll('#right .axt-place')].map(p => {
-      const l = p.querySelector('.axt-place-view > .axt-layer')
+      const l = p.querySelector('.axt-place-view > .axt-layer:not(.axt-layer-retired)')
       if (l) return `${l.querySelector('svg')?.getAttribute('lang') ?? '?'}${l.querySelector('canvas.axt-layer-copy')?.width > 0 ? '' : '-'}`
       return p.querySelector('.axt-place-view > .page canvas') ? 'original' : 'none'
     }))

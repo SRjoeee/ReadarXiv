@@ -156,7 +156,8 @@ describe('the real door: (c) a page stepped over', () => {
 describe('the real door: (d) a fresh LaidPage each call, and L1 text as text', () => {
   it('a page let go and asked again is drawn anew, its markup equal; a translation of markup is text, a control character no element', async () => {
     const m = await M()
-    const s = await real()
+    // (no drawing kept off the view: a page let go is asked of the door again as it comes near)
+    const s = await real({ keepPixels: 0 })
     await nearOn(s, [1, 2])
     s.side.tell(await ALL())
     const rows = rowsOfIndex(m.index).map(r => (r[0] === 0 ? ([0, ['<img src=x onerror=alert(1)>'], r[2], r[3], r[4]] as Row) : r[0] === 2 ? ([2, ['a \u202e b'], r[2], r[3], r[4]] as Row) : r))

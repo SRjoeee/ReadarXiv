@@ -420,3 +420,6 @@ export interface CellBand { B: number; lo: number; hi: number }
 export declare function cellBands(blocks: readonly { page: number; B: readonly number[]; rects: readonly (readonly number[])[] }[], rulesOf: (page: number) => readonly number[] | undefined, s: number, P: Pick<Params, 'cellClear' | 'cellCapMin'>): { cap: number; bands: Map<number, CellBand[]> } | null
 /** each laid line on one of the original's lines moved into that line's band at the size it is drawn at */
 export declare function clearLines(lines: { block: number; baseline: number }[], bands: Map<number, CellBand[]>, f: number): void
+/** the characters a target's rules set in its CJK face: the CJK blocks, and with `quotes` (the rules' cjkQuotes) the curly quotes,
+ *  dashes, ellipsis and middle dot too */
+export declare const cjkClassRe: (quotes: boolean) => RegExp

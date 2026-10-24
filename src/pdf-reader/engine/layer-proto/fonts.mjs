@@ -79,15 +79,17 @@ export const roleFaces = () => ROLES
  */
 export const CJK_SLANT_DEG = 13
 /** the role table's face of a run: faceFor's, as faceOf's object, with the ids of its faces and fallbacks (`ids`); a CJK
- *  italic run's sheared CJK_SLANT_DEG (`oblique`) */
-function roleFaceOf(st, cls) {
-  const roles = ROLES
+ *  italic run's sheared CJK_SLANT_DEG (`oblique`). `roles`: the run's (setRoleFaces), or a role set of its own (faceWarmer's) */
+function roleFaceOf(st, cls, roles = ROLES) {
   const id = faceFor(roles, { script: cls, cls: st.fam === 'math' ? 'serif' : st.fam, design: st.design ?? 'times', bold: !!st.bold, italic: !!st.italic, caps: !!st.caps })
   const F = FACES[id]
   const ids = [...new Set([id, ...(roles.fallbacks[id] ?? []), ...(cls !== 'cjk' && roles.cjk ? [roles.cjk.body] : [])])].filter(f => FACES[f])
   const slant = cls === 'cjk' && !!st.italic && !!roles.cjk
   return { family: [...new Set(ids.map(f => `"${FACES[f].family}"`))].join(', '), weight: F.weight, style: F.style, oblique: slant ? CJK_SLANT_DEG : 0, stand: st.italic ? (cls === 'cjk' ? (slant ? 'oblique' : '') : 'italic') : '', caps: !!st.caps && cls !== 'cjk', size: F.size ?? 1, id, ids }
 }
+/** a run's face in a role set of the caller's (rolesFor's), as roleFaceOf gives it: the warmer's (warm.mjs), which asks the faces a
+ *  page's units will be drawn in before v0 has set its own roles (setRoleFaces) */
+export const faceOfRoles = (roles, st, cls) => roleFaceOf(st, cls, roles)
 // ---- the role table's faces as the host serves them
 
 /** a value's kind, for a refusal: its type, never its text */
@@ -183,8 +185,9 @@ function forgetFailed() {
  *   ready(face, text)  the slices of `face` that hold `text` loaded, as far as they can be (a measure is taken at once)
  *   warm(id)           the face's table asked and its first slice fetched, at once, not awaited
  */
-export function roleFaceSet({ faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}` } = {}) {
-  forgetFailed()
+export function roleFaceSet({ faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, keepFailed = false } = {}) {
+  // (a warmer's set, keepFailed, lets nothing go: a run's open does, and a run under way keeps what failed for its units)
+  if (!keepFailed) forgetFailed()
   const tables = new Map()
   /** a face's table: null (not served) or { lists (its served ranges, as one sorted list), faces (its FontFaces) } */
   const table = id => {

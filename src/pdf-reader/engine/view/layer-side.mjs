@@ -33,6 +33,7 @@ import { layerDraws } from '../layer-proto/format.mjs'
 import { pagesOf } from '../layout/delta-wire.mjs'
 import { openLayer as theDoor, PDF_OPTIONS } from '../layer-proto/reader.mjs'
 import { visibilityOf } from '../layer-proto/visibility.mjs'
+import { faceWarmer, familyOfParts } from '../layer-proto/warm.mjs'
 import { unitOf } from '../layer-proto/rows.mjs'
 import { plainTranslated } from '../translate/mt.mjs'
 import { createContents } from './contents.mjs'
@@ -65,6 +66,19 @@ export function spreadPages(p, ids, pagesOf, isIn, max = SPREAD_MAX) {
   for (const id of ids) for (const q of pagesOf(id) ?? []) if (q !== p) out.add(q)
   return [...out].sort((a, b) => Math.abs(a - p) - Math.abs(b - p) || a - b).slice(0, max).filter(q => !isIn(q))
 }
+/** the most device pixels of laid pages' drawings the side keeps off the view (docs/PDF-READER.md §11.8, "No flash coming back"):
+ *  a laid page that leaves the near area keeps its drawing (its copy, its SVG and its links, detached from the place), put back in
+ *  place in one task as it comes near again, so that a page already laid never shows the original or an empty place first; the
+ *  least recently seen let go first past it. 2^25 pixels, 128 MiB at the 4 bytes a pixel a copy costs: an A4 page at 120 % on a
+ *  2x screen is 1905 x 2694 pixels, 19.6 MiB of the GPU process's memory as Chromium 153 on Metal holds it (an ImageBitmap of it
+ *  no less; 2026-10-24), so six and a half such pages, nine at 100 %, twelve at the reader's fit (87 %), 26 to 49 at a ratio of 1:
+ *  two thirds of what the left pane's PDF.js may hold of its own (ten page views drawn, its buffer) at the same zoom */
+export const KEEP_PIXELS = 2 ** 25
+/** how many pages past the near ones the side lays ahead while the reader rests, the next first (the prefetch extended to the
+ *  layer: the pages' rows, faces, layout and copy made before the reader reaches them, kept as drawings off the view) */
+export const AHEAD_PAGES = 2
+/** how long the view rests (no scroll, no page asked, nothing laid) before the pages ahead are laid */
+export const AHEAD_IDLE_MS = 600
 /** the pages wanted last whose geometry is kept beside the near ones (§3.2) */
 const WANTED_KEPT = 20
 /** the commits the probe keeps */
@@ -108,6 +122,9 @@ function drawnList(pdfPage) {
 export function createLayerSide(view, o) {
   const V = internalsOf(view)
   const open = o.openLayer ?? theDoor
+  /** the host's bounds where it gives them: the pixels of the drawings kept off the view, the pages laid ahead */
+  const keepPixels = Number.isFinite(o.keepPixels) ? Math.max(0, o.keepPixels) : KEEP_PIXELS
+  const aheadPages = Number.isSafeInteger(o.ahead) ? Math.max(0, o.ahead) : AHEAD_PAGES
   const clock = V.clock
   const ac = new AbortController()
   let disposed = false
@@ -192,6 +209,8 @@ export function createLayerSide(view, o) {
     door = null
     offPage?.()
     try { was?.dispose() } catch { /* the door's own */ }
+    stopAhead()
+    dropDrawings()
     for (const n of pages.keys()) { abortAsk(n); unlay(n) }
     // nothing more is read: the feed's fetches and the left parts' let go, the latest composed document with them (the
     // door told retired lets go its own), the right's shapes the original's again, as its places are
@@ -270,6 +289,9 @@ export function createLayerSide(view, o) {
     offPage?.()
     offPage = null
     if (was) { try { was.dispose() } catch (e) { warn('dispose', e) } }
+    // (the drawings kept off the view are the door before's: the new door's pages are laid again as they come near)
+    stopAhead()
+    dropDrawings()
     leftAc.abort()
     leftAc = new AbortController()
     // (a copy under way is the door's before: its page is copied again by this one, and its renders hold the document's queue)
@@ -316,6 +338,7 @@ export function createLayerSide(view, o) {
     for (const p of wantsBefore) want(p)
     wantsBefore.clear()
     for (let n = 1; n <= V.places.count(); n++) if (V.places.near(n)) askSoon(n)
+    aheadSoon()
   }
 
   // ---------------------------------------------------------------- the rows
@@ -332,9 +355,63 @@ export function createLayerSide(view, o) {
   const rec = n => { let P = pages.get(n); if (!P) { P = { ask: null, clock: 0, content: null, failed: false, stalled: false, copying: false, again: false }; pages.set(n, P) } return P }
   let ready = 0, failed = 0, stalls = 0
   const rearm = new Set()
-  const counts = { asked: 0, commits: 0, retired: 0, copies: 0, composed: 0, opens: 0, added: 0, leftParts: 0, forks: 0 }
+  const counts = { asked: 0, commits: 0, retired: 0, copies: 0, composed: 0, opens: 0, added: 0, leftParts: 0, forks: 0, restored: 0, dropped: 0, ahead: 0, aheadKept: 0 }
   const ring = []
   const empty = () => { const e = document.createElement('div'); e.className = 'axt-layer axt-layer-retired'; return e }
+  /** the drawings of laid pages kept off the view (KEEP_PIXELS), by page, the least recently seen first (a Map keeps its order of
+   *  insertion: a page kept again goes last): each the content its place held (its wrapper, SVG, copy, k, door generation and
+   *  target), and its copy's pixels */
+  const drawings = new Map()
+  let drawnPixels = 0
+  const pixelsOf = c => (c?.copy ? c.copy.width * c.copy.height : 0)
+  /** a laid page's content kept off the view, the least recently seen let go past KEEP_PIXELS */
+  function keepDrawing(n, c) {
+    dropDrawing(n)
+    const px = pixelsOf(c)
+    if (!px || px > keepPixels) { release(c.copy); return }
+    drawings.set(n, { c, px })
+    drawnPixels += px
+    for (const [m, d] of drawings) {
+      if (drawnPixels <= keepPixels) break
+      drawings.delete(m)
+      drawnPixels -= d.px
+      release(d.c.copy)
+      counts.dropped++
+    }
+  }
+  /** page n's kept drawing taken out of the keep (its copy not released: the caller's), or null */
+  function takeDrawing(n) {
+    const d = drawings.get(n)
+    if (!d) return null
+    drawings.delete(n)
+    drawnPixels -= d.px
+    return d.c
+  }
+  /** page n's kept drawing let go, its copy released */
+  function dropDrawing(n) { const c = takeDrawing(n); if (c) release(c.copy) }
+  /** every kept drawing `drop` names let go (all by default): a door before's, another target's, the side's end */
+  function dropDrawings(drop = () => true) { for (const [n, d] of [...drawings]) if (drop(d.c)) { dropDrawing(n); counts.dropped++ } }
+  /** page n's kept drawing put back in its place as it comes near, in one task (no original, no empty place first), where it is
+   *  this door's in this target; its copy drawn again at the place's k where a zoom has changed it since. Whether it was */
+  function bringBack(n) {
+    const c = takeDrawing(n)
+    if (!c) return false
+    const P = rec(n)
+    if (disposed || !door || c.gen !== gen || c.target !== doorTarget || (P.content?.wrap && P.content !== c) || !V.places.swap(n, c.wrap)) { release(c.copy); return false }
+    P.content = c
+    P.failed = false
+    P.stalled = false
+    rearm.delete(n)
+    counts.restored++
+    ring.push(`${n}@${Math.round(clock.now())}`)
+    if (ring.length > RING) ring.shift()
+    // (the right's shapes there the layer's again: its words were made when it was laid, and are kept with the page's shapes)
+    const unmuted = right?.mute(n, false), shown = right?.show(n)
+    if (unmuted && !shown) shapesChanged()
+    if (shown) startsFor([...rows.keys()])
+    if (c.k !== kOf(n)) void recopy(n)
+    return true
+  }
 
   function told(my, n, s) {
     if (disposed || my !== gen) return
@@ -444,7 +521,9 @@ export function createLayerSide(view, o) {
     P.content = { wrap: null, svg: null, copy: null, k: 0, gen, target: doorTarget }
     if (V.places.swap(n, empty(), { blank: true })) counts.retired++
     else P.content = null
-    release(was?.copy)
+    // (this door's drawing in this target kept off the view, to be put back as the page comes near again: KEEP_PIXELS)
+    if (was?.wrap && was.gen === gen && was.target === doorTarget && P.content) keepDrawing(n, was)
+    else release(was?.copy)
   }
   /** the near pages to ask, asked together once the places told have all been heard: the farthest from the page in the
    *  middle of the view first and that page last, the door laying the newest ask first (D1), so that the page the reader is
@@ -557,9 +636,32 @@ export function createLayerSide(view, o) {
     if (!got) return
     // (the left first, or in the same frame: a copy ready while the left's page is being drawn waits for it, at most LEFT_WAIT_MS,
     // and is put in place in the same task as the left's page is told drawn, so that the two panes paint within one frame)
-    await leftDrawn(n)
-    if (disposed || my !== gen) { release(got.canvas); return }
-    if (!V.places.near(n) || P.content?.gen === my && P.content.wrap) { release(got.canvas); if (!V.places.near(n)) retire(n); return }
+    if (V.places.near(n)) await leftDrawn(n)
+    if (disposed || my !== gen || (P.content?.gen === my && P.content.wrap)) { release(got.canvas); return }
+    const content = drawingOf(n, laid, got, my)
+    // (a page that went far while its copy was drawn: its drawing kept off the view, the place holding nothing until it comes near)
+    if (!V.places.near(n)) { keepFar(n, content, laid); return }
+    putInPlace(n, content, laid)
+  }
+  /** a laid page's drawing put in its place, in one task: its page view destroyed first, the place's size and the pane's scroll
+   *  unchanged (places.mjs swap); what the place held of the layer before let go */
+  function putInPlace(n, content, laid) {
+    const P = rec(n), was = P.content
+    if (!V.places.swap(n, content.wrap)) { release(content.copy); return }
+    if (was !== content) release(was?.copy)
+    dropDrawing(n)
+    P.content = content
+    P.failed = false
+    counts.commits++
+    ring.push(`${n}@${Math.round(clock.now())}`)
+    if (ring.length > RING) ring.shift()
+    shapesOf(n, laid)
+    // (the view's pages laid: the pages ahead once it rests)
+    aheadSoon()
+  }
+  /** a laid page's drawing, made of its copy and the door's page (its SVG and links), not in its place yet: its wrapper (the copy,
+   *  the SVG and the links in the copy's frame), and what the side keeps of it */
+  function drawingOf(n, laid, got, my) {
     laid.svg.setAttribute('viewBox', `0 0 ${laid.w} ${laid.h}`)
     laid.svg.setAttribute('preserveAspectRatio', 'none')
     got.canvas.className = 'axt-layer-copy'
@@ -578,20 +680,24 @@ export function createLayerSide(view, o) {
     // its links over the drawing, in the place's coordinates: one element, sized by shares of the page, which no zoom moves
     const links = V.links(n, laid.links)
     wrap.append(got.canvas, laid.svg, ...(links ? [links] : []))
-    const was = P.content
-    if (!V.places.swap(n, wrap)) { release(got.canvas); return }
-    release(was?.copy)
-    P.content = { wrap, svg: laid.svg, copy: got.canvas, k: got.k, gen: my, target: doorTarget }
-    P.failed = false
-    counts.commits++
-    ring.push(`${n}@${Math.round(clock.now())}`)
-    if (ring.length > RING) ring.shift()
-    // the right's shapes of the page: its words (the units the layer shows as the original's from the left's tokens)
-    // (both: the words given, and the page shown again where an earlier fallback hid it)
+    return { wrap, svg: laid.svg, copy: got.canvas, k: got.k, gen: my, target: doorTarget }
+  }
+  /** the right's shapes of a laid page: its words (the units the layer shows as the original's from the left's tokens); both the
+   *  words given, and the page shown again where an earlier fallback hid it */
+  function shapesOf(n, laid) {
     const unmuted = right?.mute(n, false)
     const given = right?.lay(n, laid.words), shown = right?.show(n)
     if (unmuted && !given && !shown) shapesChanged()
     if (given || shown) startsFor([...laid.words.spans.map(s => s[0]), ...laid.words.original])
+  }
+  /** a laid page's drawing made while its place is far (its copy drawn after it left, or laid ahead): kept off the view, its place
+   *  holding an empty element (retired) until it comes near and the drawing is put back (bringBack); its shapes laid already */
+  function keepFar(n, content, laid) {
+    retire(n)
+    const P = rec(n)
+    if (P.content?.wrap || holdsFocus(n)) { release(content.copy); return }
+    keepDrawing(n, content)
+    shapesOf(n, laid)
   }
   /** a laid page's copy drawn again at the place's new k (a zoom). A copy is kept while it is at the k a copy drawn now would be
    *  at, whatever the zoom has done since */
@@ -619,15 +725,142 @@ export function createLayerSide(view, o) {
     }
   }
 
+  // ---------------------------------------------------------------- the faces, in one wave (warm.mjs; §11.8)
+  /** the target's warmer (made again for another target), the units whose faces it was asked for (by target, family and unit),
+   *  and each page's units as the parts read so far locate them (made again as more parts are read) */
+  let warmer = null, warmerOf = null, warmQueued = false
+  const warmedUnits = new Set()
+  let onPageOf = null, onPageParts = null
+  /** the units of page q as the parts read so far locate them: their layouts' lines on it, else their left rectangles there */
+  function unitsOn(q) {
+    const parts = feed.state().parts
+    if (onPageParts !== parts || !onPageOf) {
+      onPageParts = parts
+      onPageOf = new Map()
+      const add = (pg, id) => { const s = onPageOf.get(pg) ?? onPageOf.set(pg, new Set()).get(pg); s.add(id) }
+      for (const part of parts) {
+        if (part.layout?.lines) { for (const [id, rows8] of part.layout.lines) for (let i = 0; i < (rows8?.length ?? 0); i += 8) add(rows8[i], id) }
+        else for (const [id, , rects] of part.left ?? []) for (const r of rects) add(r[0], id)
+      }
+    }
+    return onPageOf.get(q) ?? new Set()
+  }
+  /** a row's translated text (its strings; a placeholder's piece is the source's, drawn as it is) */
+  const textOf = row => (Array.isArray(row?.[1]) ? row[1].filter(x => typeof x === 'string').join('') : '')
+  /** the faces of pages `qs`' units asked of the host at once, page by page in that order (each page's wave awaited before the
+   *  next's), as soon as the index, their rows and the parts that locate them are in, whether or not a door is open: v0's checks
+   *  then find them loaded or loading (warm.mjs). A unit asked once in a target and a family is not asked again */
+  async function warmPages(qs) {
+    if (disposed || state === 'refused' || !index || !rows.size) return
+    if (!warmer || warmerOf !== target) {
+      warmer = faceWarmer({ faceSources: o.faceSources, target, ...(o.rules ? { rules: o.rules } : {}) })
+      warmerOf = target
+    }
+    const family = familyOfParts(feed.state().parts)
+    for (const q of qs) {
+      const units = []
+      for (const id of unitsOn(q)) {
+        const key = `${target}|${family}|${id}`, row = rows.get(id)
+        if (warmedUnits.has(key) || !row) continue
+        warmedUnits.add(key)
+        const text = textOf(row)
+        if (text) units.push({ heading: index.kinds[id] === 'heading', text })
+      }
+      if (units.length) await warmer.warm(units, family)
+      if (disposed) return
+    }
+  }
+  /** the near pages warmed (warmPages), the page in the middle of the view first; before the places are laid out (no original
+   *  open yet), pages 1 and 2, where a paper opens. Once a task, whatever asked it */
+  function warmSoon() {
+    if (warmQueued || disposed) return
+    warmQueued = true
+    queueMicrotask(() => {
+      warmQueued = false
+      const count = V.places.count()
+      const near = []
+      for (let n = 1; n <= count; n++) if (V.places.near(n)) near.push(n)
+      const c = V.centre()
+      if (c) near.sort((a, b) => Math.abs(a - c) - Math.abs(b - c) || a - b)
+      void warmPages(count ? near : [1, 2]).catch(e => warn('faces', e))
+    })
+  }
+
+  // ---------------------------------------------------------------- the pages ahead (the prefetch, on the layer; §11.8)
+  let aheadTimer = 0, aheadAc = null, aheadPage = 0
+  /** the pages ahead laid once the view has rested AHEAD_IDLE_MS (layAhead), the wait begun again at each call */
+  function aheadSoon() {
+    if (disposed || !rowsEnded) return
+    clock.clear(aheadTimer)
+    aheadTimer = clock.later(() => { aheadTimer = 0; void layAhead().catch(e => warn('ahead', e)) }, AHEAD_IDLE_MS)
+  }
+  /** the pages ahead given up: their wait, their ask and their copy under way */
+  function stopAhead() {
+    clock.clear(aheadTimer)
+    aheadTimer = 0
+    aheadAc?.abort()
+    aheadAc = null
+    for (const ac of pages.get(aheadPage)?.copyAcs ?? []) ac.abort()
+    aheadPage = 0
+  }
+  /**
+   * The AHEAD_PAGES pages after the last near page past the middle of the view, each laid by the door and drawn at its place's k,
+   * kept as a drawing off the view (KEEP_PIXELS) and put back as it comes near (bringBack): the next page ready before the reader
+   * reaches it. Only once this attempt's rows have ended (a host that translates as it shows is asked for nothing it has not
+   * translated), the door open, no page of the view asked of it, the right pane shown (V.centre) and the document visible; one
+   * page at a time, each after its faces' wave; the window given up at the next scroll (stopAhead). A page near by the time it is
+   * laid is committed as any near page
+   */
+  async function layAhead() {
+    if (disposed || !door || state !== 'open' || !rowsEnded || aheadAc || !aheadPages) return
+    if (globalThis.document?.visibilityState === 'hidden') return
+    for (const P of pages.values()) if (P.ask) { aheadSoon(); return }
+    const c = V.centre(), count = V.places.count()
+    if (!c || !count) return
+    let last = c
+    while (last < count && V.places.near(last + 1)) last++
+    const ac = (aheadAc = new AbortController()), my = gen, d = door
+    try {
+      for (let m = last + 1; m <= Math.min(count, last + aheadPages); m++) {
+        const P = rec(m)
+        if (V.places.near(m) || drawings.has(m) || P.content?.wrap || P.failed || originalPageOf(m)) continue
+        await warmPages([m])
+        if (ac.signal.aborted || disposed || my !== gen) return
+        aheadPage = m
+        counts.ahead++
+        let laid
+        try { laid = await d.pageOf(m, { lang: doorTarget, signal: ac.signal }) } catch { return }
+        if (ac.signal.aborted || disposed || my !== gen) return
+        // (come near while it was laid: committed as any near page is)
+        if (V.places.near(m)) { await commit(m, laid, my); continue }
+        if (originalPageOf(m) || laid.hides === 0) continue
+        const k = kOf(m)
+        if (k === null) continue
+        let got
+        try { got = await copyAt(d, m, k, my) } catch { return }
+        if (!got) return
+        if (ac.signal.aborted || disposed || my !== gen) { release(got.canvas); return }
+        if (V.places.near(m)) { if (!(P.content?.gen === my && P.content.wrap)) putInPlace(m, drawingOf(m, laid, got, my), laid); else release(got.canvas); continue }
+        keepFar(m, drawingOf(m, laid, got, my), laid)
+        if (drawings.has(m)) counts.aheadKept++
+      }
+    } finally {
+      if (aheadAc === ac) { aheadAc = null; aheadPage = 0 }
+    }
+  }
+
   // ---------------------------------------------------------------- the view's events
   let recopyTimer = 0
   const offs = [
     V.onNear((n, on) => {
       if (disposed) return
       if (on) {
-        // a page whose layer failed or was let go asked again on coming near
-        rec(n).failed = false
-        askSoon(n)
+        // a page laid before put back as it was, in this task; else (a page whose layer failed or was let go too) asked again
+        if (!bringBack(n)) {
+          rec(n).failed = false
+          askSoon(n)
+        }
+        warmSoon()
       } else {
         toAsk.delete(n)
         abortAsk(n)
@@ -660,11 +893,15 @@ export function createLayerSide(view, o) {
       // the pages given up at PAGE_MS asked again, where they are near
       if (rearm.size) { const again = [...rearm]; rearm.clear(); for (const n of again) { abortAsk(n); askSoon(n) } }
       headingSoon()
+      // (the reader moves: the pages ahead wait for the next rest)
+      stopAhead()
+      aheadSoon()
     }),
     V.onOriginal(s => {
       if (disposed || s !== 'opened') return
-      // the places laid out again for another page count let their content go
+      // the places laid out again for another page count let their content go, and the drawings kept off the view with them
       for (const [n, P] of pages) if (P.content && !V.places.page(n)?.contains(P.content.wrap ?? null) && P.content.wrap) { release(P.content.copy); P.content = null }
+      dropDrawings()
       if (contents) void contents.outline(V.left.doc()).then(m => { if (m) outlineSoon() }, () => {})
       void pump()
     }),
@@ -714,6 +951,7 @@ export function createLayerSide(view, o) {
     shapedParts = parts
     if (contents.addParts(more)) outlineSoon()
     shapesChanged()
+    warmSoon()
   }
   /** a want of page p (the pointer over it, either pane): its left part fetched once, on the first, and once it is in the
    *  other pages' of its running units (spreadFrom) */
@@ -828,6 +1066,7 @@ export function createLayerSide(view, o) {
     outlineSoon()
     const doc = V.left.doc()
     if (doc) void contents.outline(doc).then(m => { if (m) outlineSoon() }, () => {})
+    warmSoon()
   }
   function outlineSoon() {
     if (outlineFrame || disposed || !contents) return
@@ -867,11 +1106,13 @@ export function createLayerSide(view, o) {
       if (door) { try { door.take(given) } catch (e) { warn('rows', e) } }
       if (contents?.take(given)) outlineSoon()
       if (left) startsFor(given.filter(r => r?.[4]).map(r => r[0]))
+      warmSoon()
     },
     end() {
       if (disposed) return
       rowsEnded = true
       if (door && !rowsTold) { rowsTold = true; door.end() }
+      aheadSoon()
     },
     /**
      * The layer in another language (`to`, a target of the rules'), in place: the door laying the target before is let go at once
@@ -899,6 +1140,7 @@ export function createLayerSide(view, o) {
     dropOthers() {
       if (disposed) return
       dropped = true
+      dropDrawings(c => c.target !== target || c.gen !== gen)
       let hid = false
       for (const [n, P] of pages) {
         if (!P.content || (P.content.target === target && P.content.gen === gen)) continue
@@ -912,6 +1154,7 @@ export function createLayerSide(view, o) {
       if (disposed || state === 'refused') return
       rows.clear()
       rowsEnded = false
+      stopAhead()
       leftStarts.clear(); rightStarts.clear()
       shapesChanged()
       // the contents' titles are the attempt's rows': the source's until its rows come
@@ -936,6 +1179,7 @@ export function createLayerSide(view, o) {
         rows: rows.size, rowsEnded, ready, failed, stalled: stalls, laid: laidNow, retired: retiredNow, asking,
         composed: counts.composed, docs: entries.size, opens: counts.opens, forks: counts.forks, asked: counts.asked, commits: counts.commits, copies: counts.copies, retirements: counts.retired,
         leftParts: counts.leftParts, leftAsked: leftAsked.size, kept: kept.size, commitsRing: ring.join(' '),
+        drawings: drawings.size, drawnPixels, restored: counts.restored, dropped: counts.dropped, ahead: counts.ahead, aheadKept: counts.aheadKept,
         shapesLaid: right ? Array.from({ length: V.places.count() }, (_, i) => right.laid(i + 1)).filter(Boolean).length : 0,
         muted: right ? right.muted().join(' ') : '',
       }
@@ -954,6 +1198,8 @@ export function createLayerSide(view, o) {
       try { was?.dispose() } catch { /* the door's own */ }
       clock.clear(recopyTimer)
       clock.cancel(outlineFrame); clock.cancel(headingFrame); clock.cancel(layerFrame)
+      stopAhead()
+      dropDrawings()
       for (const n of pages.keys()) { abortAsk(n); unlay(n) }
       pages.clear()
       V.setShapes('left', null)

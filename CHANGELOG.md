@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- In the PDF reader, a page you have already read comes back translated at once when you scroll back to it, never the original or an empty page first. While you rest on a page, the next two are prepared, so that they are translated when you reach them. The fonts a page is drawn in come in one go instead of one paragraph after another, so the first translated page appears sooner.
 - Fixed: a translation service whose model does not answer in the shape the extension asks for (prose instead of JSON, say) no longer turns one batch of four paragraphs into 40 paid requests: it is asked once more, then the next service on the chain takes over, two requests in all. The free web translators are spared the same way.
 - The PDF reader and the control panel do nothing when a page that is not the extension's own puts them in a frame or sends its tab to them: no translation is started, no setting is changed, and a click there acts on no tab. The floating button answers only your own clicks, never a page's script.
 
