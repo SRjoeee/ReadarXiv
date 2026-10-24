@@ -47,6 +47,8 @@ for (const id of IDS) {
   const ms = Math.round(performance.now() - t0)
   if (r.refused) { console.log(JSON.stringify({ id, refused: r.refused, why: r.why })); failed = true; continue }
   const { ledger } = r, letters = ledger.letters
+  // (the letters in classes whose path is built: classified ink, not drawn ink — a unit the wrap leaves the original's, its
+  // `unhidden`, is counted in its class all the same)
   const owned = CLASS_IDS.filter(c => CLASSES[c].state === 'built').reduce((n, c) => n + (ledger.classes[c]?.[1] ?? 0), 0)
   const share = Object.fromEntries(CLASS_IDS.filter(c => ledger.classes[c]?.[1]).map(c => [c, pct(ledger.classes[c][1], letters)]))
   console.log(JSON.stringify({ id, units: units ? units.length : null, letters, builtShare: pct(owned, letters), orphanLetters: ledger.orphanLetters, orphanShare: pct(ledger.orphanLetters, letters), share, ms }))

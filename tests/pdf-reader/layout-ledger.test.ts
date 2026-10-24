@@ -187,6 +187,14 @@ describe('ledgerOf', () => {
     expect(l.orphans.map(o => o.text)).toEqual(['left', 'right', 'far away', 'next line'])
   })
 
+  it('counts a ligature\'s letters each, one character or two (Devin on #467)', () => {
+    const pg = page({ point: 'bs1' }, { glyphs: run('ﬁnd', 100, 700) }, { glyphs: run('ﬁ', 100, 680) }, { glyphs: [{ u: 'fi', x0: 100, x1: 105, y: 660, size: 10, font: 'CMR10' }, ...run('nd', 105, 660)] }, { point: 'be1' })
+    const l = ledger([pg])
+    expect(l.orphans.map(o => o.letters)).toEqual([4, 2, 4])
+    expect(l.counts.orphan.letters).toBe(10)
+    expect(classAt(l, 1, at(pg, 'n'))).toBe('orphan')
+  })
+
   it('lists ORPHAN_LINES_MAX orphan lines at most, and counts them all', () => {
     const parts: Part[] = [{ point: 'bs1' }]
     for (let i = 0; i < ORPHAN_LINES_MAX + 5; i++) parts.push({ glyphs: run('word', 100, 700 - 12 * i) })

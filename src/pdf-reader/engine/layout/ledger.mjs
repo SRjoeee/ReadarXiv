@@ -49,7 +49,9 @@ const UNIT_START = /^[th]?\d+s$/
 /** a page's column mark (MARK_DEF's c<n>-<k>, set by shipout/background before anything of the page): no mark of its text */
 const COLUMN = /^c[12]-\d+$/
 const BRACKET = /^b[se]\d+$/
-const LETTER = /\p{L}/u
+/** the letters a glyph spells: a ligature's each (ﬁ, ﬄ: NFKC), whether PDF.js gives it as one character or as its letters */
+const LETTERS = /\p{L}/gu
+const lettersOf = u => (u ? (u.normalize('NFKC').match(LETTERS) ?? []).length : 0)
 const WORD = /\p{L}{3,}/gu, PAIR = /\p{L}{2,}/gu
 
 /** the line rules, in order: the first whose test holds gives the line its class */
@@ -80,7 +82,7 @@ const ownerClass = (group, units) => {
  * form }, stream order), `boxes`, `points` ({ name, glyph, box }) —; `own`, ownOf's result for them (its `glyphs[p - 1][g]`, a
  * group or null); `units`, the paper's units (their ids their indices), or null (every unit's class then `body`).
  * Returns { classes: per page a Uint8Array, each glyph's class code (CLASS_IDS); counts: { [class]: { glyphs, letters } } over
- * the glyphs that are no blank; letters, the letters of the document; orphanLetters; orphans: the orphan lines, at most
+ * the glyphs that are no blank, a glyph's letters those it spells (a ligature's each); letters, the letters of the document; orphanLetters; orphans: the orphan lines, at most
  * ORPHAN_LINES_MAX, each { page, text, letters, x0, x1, y } }
  */
 export function ledgerOf(pages, own, { units = null } = {}) {
@@ -135,7 +137,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
       if (x.blank || !/\S/u.test(x.u ?? '')) continue
       const f = famOf(x.font)
       line.n++
-      if (LETTER.test(x.u)) line.letters++
+      line.letters += lettersOf(x.u)
       if (f === 'math') line.math++
       if (f === 'mono') line.mono++
       if (x.form) line.form++
@@ -146,9 +148,9 @@ export function ledgerOf(pages, own, { units = null } = {}) {
     for (let g = 0; g < n; g++) {
       const x = G[g]
       if (x.blank || !/\S/u.test(x.u ?? '')) continue
-      const c = counts[CLASS_IDS[out[g]]], isLetter = LETTER.test(x.u)
+      const c = counts[CLASS_IDS[out[g]]], k = lettersOf(x.u)
       c.glyphs++
-      if (isLetter) { c.letters++; letters++ }
+      c.letters += k; letters += k
     }
   })
   return { classes, counts, letters, orphanLetters, orphans }
@@ -176,7 +178,7 @@ function wordsOf(gs, famOf) {
   let s = '', prev = null
   for (const g of [...gs].sort((a, b) => a.x0 - b.x0)) {
     s += (prev && g.x0 - prev.x1 > 0.2 * g.size) || famOf(g.font) === 'math' ? ' ' : ''
-    if (famOf(g.font) !== 'math') s += g.u ?? ''
+    if (famOf(g.font) !== 'math') s += (g.u ?? '').normalize('NFKC')
     prev = g
   }
   return { words: (s.match(WORD) ?? []).length, pairs: (s.match(PAIR) ?? []).length }
