@@ -140,6 +140,16 @@ describe('reading order and the breaks a copy reads', () => {
     expect(strs(d)).toEqual(['top', 'Résumé', 'bottom'])
     expect(d.items[1]!.unit).toBeUndefined()
   })
+  it('TL25 a babel name drawn within its line goes on along it: no line\'s end before the kept text beside it, a space between', () => {
+    // "Appendix A": "Appendix" hidden by its name's group and drawn as "Anhang", the letter kept beside it
+    const page = P([item('Appendix', 72, 700, 45), item('A', 122, 700, 7)])
+    const d = textLayerOf(page, { ops: [erase(70, 695, 118, 712)], devOf: dev, owners: [[0, 1, 'n3']] }, [{ key: 'n3', segs: [nameSeg('Anhang', 72, 38, 700, 10)] }])
+    expect(d.items.map(i => [i.str, i.from, i.eol ?? false])).toEqual([['Anhang ', 'translated', false], ['A', 'kept', false]])
+    // (and a line's end where the kept text after it is on the next line)
+    const two = P([item('Appendix', 72, 700, 45), item('Text', 72, 686, 20)])
+    const e = textLayerOf(two, { ops: [erase(70, 695, 118, 712)], devOf: dev, owners: [[0, 1, 'n3']] }, [{ key: 'n3', segs: [nameSeg('Anhang', 72, 38, 700, 10)] }])
+    expect(e.items.map(i => [i.str, i.eol ?? false])).toEqual([['Anhang', true], ['Text', false]])
+  })
   it('TL17 between two sources: a space where they stand apart on one line, a line\'s end where they stand on two', () => {
     const page = P([item('Theorem 1.', 72, 700, 50), item('Let x', 130, 700, 100)])
     const d = textLayerOf(page, { ops: [erase(128, 695, 300, 712)], devOf: dev, owners: [[0, 1, 'u1']] }, [{ key: 'u1', unit: 1, segs: [seg('Soit x', 130, 220, 700)] }])

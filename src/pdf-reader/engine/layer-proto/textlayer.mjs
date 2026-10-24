@@ -365,7 +365,9 @@ export function textLayerOf(page, plan, drawn, o = {}) {
     const mine = inner.get(d.key) ?? []
     const items = mine.length ? interleave(seq, mine) : seq
     if (!items.length) continue
-    const block = { key: anchor.get(d.key), items, block: true }
+    // (a unit's block ends its line; a babel name's is drawn within its line, kept text beside it: the breaks after it are the
+    // geometry's, as between any two sources)
+    const block = { key: anchor.get(d.key), items, block: d.unit !== undefined }
     if (block.key === undefined) unanchored.push(block); else top.push(block)
   }
   top.sort((a, b) => a.key - b.key)
@@ -373,8 +375,8 @@ export function textLayerOf(page, plan, drawn, o = {}) {
     const at = top.findIndex(e => after(b.items[0], e.items[0]))
     top.splice(at < 0 ? top.length : at, 0, b)
   }
-  // ---- flattened, the breaks between entries made: a line's end where the next entry is on another line, a space where it goes
-  // on along the line past a gap
+  // ---- flattened, the breaks between entries made: a line's end after a unit's block, and where the next entry is on another
+  // line; a space where it goes on along the line past a gap
   let items = []
   for (const e of top) {
     const first = items.length
