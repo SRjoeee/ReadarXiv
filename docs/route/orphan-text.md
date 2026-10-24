@@ -142,7 +142,7 @@ names are its placeholder's ink, kept as the original's either way; a running he
 | 1 (built) | class table, ledger in `wrapFinal`, invariant (o) rows, the lab gate | none (no wire, no compile change; the web stores the ledger later) | 1 |
 | 2 (built) | ink units: heads and feet, notes, contents, orphans; echo rows; their groups; the ink chunk; the toggles at the open | LAYOUT 21, REMOVAL 11, BUNDLE5 10, an INK_UNITS_FORMAT chunk (the source chunks unchanged); no translate key moves | 4 |
 | 3 (built) | paragraph points (q<n> at para/begin); a contents entry and a block one paragraph of TeX's | in LAYOUT 21; base pages pixel-identical on the pack | 3 |
-| 4 (built, source-held bibliographies) | references and names in them (.bbl units); the author block for every target | PIPELINE 29, in LAYOUT 21, MARKS_SCHEMA 11, TRANSLATE 6 | 4.5 |
+| 4 (built, source-held bibliographies) | references and names in them (.bbl units); the author block for every target | PIPELINE 29, LAYOUT 22, MARKS_SCHEMA 11, TRANSLATE 6 | 4.5 |
 | 5 | vector figure text | LAYOUT, REMOVAL | 3 |
 | 6 | OCR on the server | a new OCR version in the key | 3.5 |
 | 7 | names split from places; tables no unit cuts | PIPELINE | 2.5 |

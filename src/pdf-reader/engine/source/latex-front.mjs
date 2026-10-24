@@ -1699,6 +1699,20 @@ const tblrOf = texts => {
 // ---------------------------------------------------------------- the bibliography
 /** an entry's units' kinds: its names (its first block: the authors, an editor), and the rest of it */
 const BIB_KINDS = new Set(['reference', 'refnames'])
+/**
+ * The source's units with a bibliography's entries moved after every other, in their order (in place): an entry's unit is
+ * numbered after the last of the rest, so that no other unit's number is what it was before entries were units of their own
+ * (a translation held by a unit's number, the gate pack's, is still that unit's), and the units a host cuts before the job's
+ * .bbl is made (the web's prepare announces them before the first compile) keep their numbers when the entries come after
+ * it. Nothing reads an entry by its place among the units: its marks place it on the page, the ledger's zone reads them
+ */
+function entriesLast(units) {
+  const entries = units.filter(u => BIB_KINDS.has(u.kind))
+  if (!entries.length) return
+  const rest = units.filter(u => !BIB_KINDS.has(u.kind))
+  units.length = 0
+  units.push(...rest, ...entries)
+}
 /** the commands of a bibliography that set their last argument as text, by how many arguments come before it: REVTeX's and
  *  acmart's fields (\\bibinfo{title}{…}, \\bibfield{author}{…}), REVTeX's name fonts, a quoted or shown title, IEEEtran's
  *  language. Any other command of a .bbl is what the walk makes of it elsewhere: \\newblock a placeholder, \\url and \\href
@@ -1716,7 +1730,8 @@ const BIB_KEPT_FIELD = /^(?:doi|url|eprint|isbn|issn|archive|archiveprefix|prima
  * no piece of either; what precedes the first \\bibitem (the style's \\providecommand's) is no unit, nor is REVTeX's
  * \\BibitemOpen and \\BibitemShut. In an entry its numbers stay the original's ink (keepNumbers), its web addresses and
  * formulas too, as everywhere. A bibliography a paper sets otherwise (biblatex's \\printbibliography, from biber's data) has
- * no \\bibitem here: its text is the ledger's `references`, between its name and the next unit
+ * no \\bibitem here: its text is the ledger's `references`, between its name and the next unit. The entries' units are numbered
+ * after every other unit of the source (entriesLast)
  */
 function bibliography(s, from, to, b, ctx) {
   const { end: start } = argsOfForm(s, from, '{')
@@ -2012,6 +2027,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   ctx.called = (name, kind) => { const c = calls.get(name) ?? calls.set(name, { n: 0, kinds: new Set() }).get(name); c.n++; c.kinds.add(kind ?? 'para') }
   visit(mainFile.rel)
   storedBodies(calls, { ctx, files, units, own })
+  entriesLast(units)
   // a source declared in a Latin-1 family encoding: its bytes read as latin1 are already the right characters
   const enc = inputencFrom(mainCmds ?? texCommands(all, scan), all)?.options.split(',').map(x => x.trim()).find(x => /^(latin1|latin9|ansinew|cp1252|cp1250|latin2|applemac|decmulti)$/.test(x))
   const isUtf8 = t => { try { new TextDecoder('utf-8', { fatal: true }).decode(latin1Bytes(t)); return true } catch { return false } }

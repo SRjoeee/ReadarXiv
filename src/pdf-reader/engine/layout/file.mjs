@@ -97,11 +97,12 @@ export { LayoutRefusal } from './json.mjs'
  *  "max_tokens"; a formula's glyph spelled by no character one glyph, INK_ANY, $d'$), and a front heading (ICML's
  *  \\icmltitle) is marked as any heading in the layout compile, its title's ink its own (the file's schema is 5 still); 21
  *  (docs/route/orphan-text.md, stage 2): the ink units' rows, text no source unit owns laid from our own glyphs (layout/ink-units.mjs,
- *  pipeline/ink-pass.mjs), of the kinds UNIT_KINDS names after the source units'; and, in the same unreleased 21 (stage 4), a
- *  bibliography's entries units of their own (UNIT_KINDS `reference`, and `refnames` for an entry's names, latex-front.mjs
- *  bibliography), marked as the body's, and an entry's numbers placeholders of their own (PH_KINDS `number`, both marks:
- *  MARKS_SCHEMA 11) (the file's schema is 5 still) */
-export const LAYOUT = '21'
+ *  pipeline/ink-pass.mjs), of the kinds UNIT_KINDS names after the source units' (the file's schema is 5 still); 22 (stage 4): a
+ *  bibliography's entries units of their own, numbered after the source's other units (UNIT_KINDS `reference`, and `refnames`
+ *  for an entry's names, latex-front.mjs bibliography and entriesLast), marked as the body's, and an entry's numbers
+ *  placeholders of their own (PH_KINDS `number`, both marks: MARKS_SCHEMA 11). A maker of 21 reads neither kind, so a file of
+ *  22 is another maker's: the gate pack is made again, each side of the rules gate on its own (the file's schema is 5 still) */
+export const LAYOUT = '22'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,

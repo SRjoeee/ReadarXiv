@@ -32,7 +32,9 @@
 // cut of the paper's units is taken again, never sent twice (--fresh: made anew): the output's own folder's, then the
 // translations made for that cut before (out/layer-gate/translations/<output>/<cut>/, wherever their fixtures went), then
 // the gate's fixed fixture's. Where none is of this cut and staging holds none, the fixed fixture's record of another cut
-// (an earlier front end's) seeds every unit whose source is one of its (cache.mjs seedFrom), and only the rest is sent.
+// (an earlier front end's) seeds every unit whose source is one of its (cache.mjs seedFrom), and only the rest is sent. A unit
+// whose class the gates' run hides (content-classes.mjs RUN_DEFAULTS: the names, a bibliography's entries) is never sent; its
+// record says `none`.
 //   pnpm exec tsx lab/pdf/spikes/layer-fixtures.mjs [--only=<paper>[:<target>],…] [--targets=<t>,…] [--fresh] [--list]
 //       [--of=<fixtures folder>] [--engine=<worktree>] [--offline]
 // With no option, Task 12's 21 outputs (OUTPUTS below, with the table-heavy, footnote-heavy and XeLaTeX papers found by
@@ -87,6 +89,11 @@ const { encodeLayoutMarks, LAYOUT_CLASSES, layoutMarksOf, parseLayoutMarks } = M
 const LIVE = await engine('pipeline/live.mjs')
 const { keptFor, openPaper, originalFiles, PIPELINE_CARRIES, PIPELINE_VERSION, TYPESETTING_VERSION } = LIVE
 const { unpackSource } = await engine('source/tar.mjs')
+// (a unit the gates' run leaves the original's by its class, the toggles of an open given none: rules/content-classes.mjs
+// RUN_DEFAULTS, the names and a bibliography's entries, is sent nowhere: the gates neither await nor draw it, and a fixture holds
+// no translation of it, the owner's ruling of 2026-10-25 for the pack. An engine of before them hides none)
+const CLASSES = await engine('rules/content-classes.mjs').catch(() => null)
+const hiddenOf = CLASSES?.RUN_DEFAULTS ? (on => u => !CLASSES.unitShown(u, on))(CLASSES.classesOn(CLASSES.RUN_DEFAULTS)) : () => false
 // the translation's modules only where a request may be made (mt.mjs and the rules reach the extension's code by alias)
 const { RULES_VERSION } = OFFLINE ? { RULES_VERSION: null } : await import(pathToFileURL(join(ENGINE, 'src/core/rules/latexml.ts')).href)
 const { MICROSOFT_LANG, translateTexts, translateUnits } = OFFLINE ? { MICROSOFT_LANG: {} } : await engine('translate/mt.mjs')
@@ -480,10 +487,10 @@ async function stagingRecord(paperId, version, target) {
   if (sha256(record) !== ref.sha256 || record.length !== ref.bytes) throw new Error(`staging ${ref.key}: not the bytes its manifest names`)
   return { record, from: { host: STAGING, oid, units: ref.key, sha256: ref.sha256, made: manifest.made, quality: manifest.quality?.counts ?? null } }
 }
-/** a record made here: every unit the target does not keep, through Microsoft's endpoint on the markers wire */
+/** a record made here: every unit the target does not keep and the gates' run shows, through Microsoft's endpoint on the markers wire */
 async function microsoftRecord(paper, target, hashes) {
   const kept = keptFor(paper, target)
-  const todo = paper.units.filter(u => !kept.has(u))
+  const todo = paper.units.filter(u => !kept.has(u) && !hiddenOf(u))
   const t0 = Date.now()
   const { results: got, how } = await translateUnits(todo, texts => translateTexts(texts, target, { parallel: 2, send: microsoft }), 'markers')
   const results = new Map()
@@ -511,7 +518,7 @@ async function seededRecord(paper, target, hashes, from) {
     for (const [i, x] of seed) if (!results.has(i) && !kept.has(paper.units[i]) && carries(x.pieces, paper.units[i])) results.set(i, x)
   }
   const carried = results.size
-  const todo = paper.units.filter((u, i) => !kept.has(u) && !results.has(i))
+  const todo = paper.units.filter((u, i) => !kept.has(u) && !results.has(i) && !hiddenOf(u))
   const t0 = Date.now()
   let how = null
   if (todo.length) {

@@ -2623,8 +2623,11 @@ matter's authors and the names inside references, which follow "names" and not "
   letter, white space or a piece that sets none on each side) is a placeholder of the class `number` (`layout/marks.mjs`, both
   marks, MARKS_SCHEMA 11), the original's ink as a web address and a formula are. Both units are marked as the body's are, in the
   bibliography's own TeX (the `.bbl` written back marked: a paper that ships it runs no BibTeX), so their places, their ink and
-  their groups are TeX's (LAYOUT 21: UNIT_KINDS `reference`, `refnames`; PH_KINDS `number`). The probe asks about an entry's
-  commands after every other unit's, so the body's marks are what they were. Measured: `lab/pdf/spikes/classes-gate.mjs`, record
+  their groups are TeX's (LAYOUT 22: UNIT_KINDS `reference`, `refnames`; PH_KINDS `number`; a maker of 21 reads neither, so
+  the gate pack is made again). The entries' units are numbered after every other unit of the source (`entriesLast`), so that
+  no other unit's number moves: a translation held by a unit's number (the gate pack's frozen ones) is still its unit's, and
+  a host that cuts the source's units before BibTeX has written the `.bbl` can add the entries after it without renumbering
+  what it announced. The probe asks about an entry's commands after every other unit's, so the body's marks are what they were. Measured: `lab/pdf/spikes/classes-gate.mjs`, record
   `lab/pdf/records/classes-gate.md`.
 - **Not yet units:** a bibliography the compile makes itself (BibTeX or biber over a `.bib`, in the prepare's first compile):
   the units are written before any compile, so its entries have no unit and stay the original's (the ledger's `references`), and
@@ -2635,4 +2638,5 @@ matter's authors and the names inside references, which follow "names" and not "
 - **The toggles** are stage 2's (`classes` at the door's open and the layer side's, `setClasses`, TOGGLE_DEFAULTS: references and
   names off): an entry's units and the author block's are of the classes `references` and `names` (UNIT_CLASS), so that with
   their toggle off no page awaits their rows, the door takes none, and the translating indicator marks none (it reads the same
-  `classes`); a direct open of v0 (run.mjs openProto, the lab's) takes the same option, TOGGLE_DEFAULTS where it is given none.
+  `classes`); the door gives the run its classes resolved over TOGGLE_DEFAULTS, and a direct open of v0 (run.mjs openProto, the
+  lab's and the tests') given none draws every class but the names and the references, as it drew before the toggles.

@@ -71,11 +71,7 @@ import { itemFills } from '../layout/fills.mjs'
 import { GLYPHS_PAGE, pageInk } from '../layout/ink.mjs'
 import { listWithin } from '../layout/oplist.mjs'
 import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
-import { classesOn, unitShown } from '../rules/content-classes.mjs'
-
-/** the toggles of a direct open (the lab's, the tests') given none: every class drawn but the names and the references, which no
- *  run drew before the reader's toggles (the door gives its own, TOGGLE_DEFAULTS resolved) */
-const RUN_CLASSES = Object.freeze({ heads: true, tables: true, figures: true, references: false, names: false })
+import { classesOn, RUN_DEFAULTS, unitShown } from '../rules/content-classes.mjs'
 
 /** the prototype's getDocument options beside the host's asset URLs (main.js ASSETS): its canvases on the GPU, the whole
  *  file read at once; and each font's own ToUnicode map exported with it (fontExtraProperties: what the text layer reads a
@@ -758,8 +754,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   if (classes !== null && typeof classes !== 'object') throw new TypeError(`classes: the reader's toggles or null, not ${kindOf(classes)}`)
   // (the reader's toggles, the door's option, which the door gives resolved: a unit whose class they do not show is the original's.
   // A direct open given none draws what it drew before the toggles, the author block's names and a bibliography's entries left
-  // the original's: RUN_CLASSES)
-  const on = classesOn({ ...RUN_CLASSES, ...(classes ?? {}) }), classShown = u => unitShown(u, on)
+  // the original's: RUN_DEFAULTS)
+  const on = classesOn({ ...RUN_DEFAULTS, ...(classes ?? {}) }), classShown = u => unitShown(u, on)
   if (expect !== null && (!Array.isArray(expect) || !expect.every(id => Number.isSafeInteger(id) && id >= 0))) throw new TypeError(`expect: ids of units or null, not ${kindOf(expect)}`)
   if (drawOf !== null && typeof drawOf !== 'function') throw new TypeError(`drawOf: a function or null, not ${kindOf(drawOf)}`)
   if (tableGroups !== null && !(tableGroups instanceof Map)) throw new TypeError(`groups: a Map of ids to groups or null, not ${kindOf(tableGroups)}`)

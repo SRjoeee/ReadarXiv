@@ -52,6 +52,16 @@ describe('a numeric \\bibitem bibliography written in the paper (plain, abbrv, u
     // (the body's paragraph is the body's, before them)
     expect(units(p)[0]?.kind).toBe('para')
   })
+  it('numbers the entries after every other unit, so that a unit after the bibliography keeps the number it had before entries were units', () => {
+    const body = `\\section{Intro}\nAttention needs normalization \\cite{layernorm2016}.\n\n${PLAIN}\n\n\\appendix\n\\section{Proofs}\nThe appendix proves the claims.`
+    const withBib = units(open({ 'main.tex': doc(body) })), without = units(open({ 'main.tex': doc(body.replace(PLAIN, '')) }))
+    const isBib = (u: Unit) => u.kind === 'reference' || u.kind === 'refnames'
+    // (the source's other units first, as a front end with no entries numbers them; the four entries' units after them, in order)
+    expect(withBib.slice(0, without.length).map(shown)).toEqual(without.map(shown))
+    expect(withBib.slice(without.length).every(isBib)).toBe(true)
+    expect(withBib.filter(isBib).map(u => u.kind)).toEqual(['refnames', 'reference', 'refnames', 'reference'])
+    expect(withBib.map(shown).indexOf('The appendix proves the claims.')).toBe(without.map(shown).indexOf('The appendix proves the claims.'))
+  })
   it('keeps an entry\'s numbers the original\'s ink: each a placeholder of the class `number`, both its marks; a word with a digit stays text', () => {
     const nums = bib(p).flatMap(u => u.pieces.filter(x => x.t === 'ph' && classOf(x as never) === 'number').map(x => x.src))
     expect(nums).toEqual(['2016.', '5(2):157--166,', '1994.'])

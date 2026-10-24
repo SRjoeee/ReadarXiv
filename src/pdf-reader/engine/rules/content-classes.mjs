@@ -55,6 +55,10 @@ export function unitClass(u) {
 /** each toggle's default, where a reader has set none (the owner's, 2026-10-25): heads and tables on; names and references off
  *  (the references lane builds them); figures off until built */
 export const TOGGLE_DEFAULTS = Object.freeze({ heads: true, tables: true, figures: false, references: false, names: false })
+/** the toggles of an open of the run given none (layer-proto/run.mjs openProto: the lab's gates, the tests'; the door gives its
+ *  own): the reader's defaults, but figures, whose units every run drew before the toggles. The lab's fixture maker sends no
+ *  unit they hide (the gates hold no translation of it) */
+export const RUN_DEFAULTS = Object.freeze({ ...TOGGLE_DEFAULTS, figures: true })
 /** the toggles on under a reader's `classes` (the door's option: { [toggle]: boolean } over TOGGLE_DEFAULTS; null, the
  *  defaults), as a Set shownTranslated reads */
 export const classesOn = classes => new Set(Object.entries({ ...TOGGLE_DEFAULTS, ...(classes ?? {}) }).filter(([, v]) => v).map(([k]) => k))
