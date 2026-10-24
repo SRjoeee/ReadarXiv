@@ -1429,7 +1429,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const cf = classifyFont(f.font)
       const fam = cf.fam === 'math' ? 'serif' : cf.fam
       const st = { fam, bold: cf.bold, italic: cf.italic, caps: false, design: designs[fam] ?? designs.serif }
-      const drawn = L2.nameRuns(text, faceOf(st, /[⺀-鿿가-힯぀-ヿ豈-﫿]/.test(text) ? 'cjk' : 'latin', to), to)
+      const drawn = L2.nameRuns(text, faceOf(st, /[\u2e80-\u9fff\uac00-\ud7af\u3040-\u30ff\uf900-\ufaff]/.test(text) ? 'cjk' : 'latin', to), to)
       if (FS) {
         const tFonts = performance.now()
         const no = await FS.check([{ face: drawn.face, text: drawn.text }])

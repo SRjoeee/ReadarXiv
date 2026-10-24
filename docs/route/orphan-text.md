@@ -1,7 +1,9 @@
 # Closed-world coverage on our own compile: content classes and orphan text — design note
 
-Status: stage 1 built (2026-10-25: `rules/content-classes.mjs`, `layout/ledger.mjs`, `lab/pdf/spikes/ledger.mjs`); stages 2–8 are
-the plan of §7, for the owner after he reads §5. Engine at `next` 37d84180. The phase 1 measurement's scripts and raw rows are not
+Status: stage 1 built (2026-10-25: `rules/content-classes.mjs`, `layout/ledger.mjs`, `lab/pdf/spikes/ledger.mjs`); stage 5, the
+vector figures' text, built (2026-10-25: `layout/figure-text.mjs`, its groups in `layout/wrap.mjs`, BUNDLE 10's figure rows,
+`run.mjs paintFigures`, the reader's switch; settled in `docs/PDF-READER.md` §19.11, its gate `lab/pdf/spikes/figure-gate.mjs`);
+stages 2–4 and 6–8 are the plan of §7, for the owner after he reads §5. Engine at `next` 37d84180. The phase 1 measurement's scripts and raw rows are not
 in the tree (the session scratchpad's `orphans/`); stage 1's gate reproduces the pack's numbers from the engine itself.
 
 ## 1. The rule
@@ -99,7 +101,7 @@ The owner's map (2026-10-25; the settings' own words are the locale packs', thes
 | Always | orphan (prose with no unit) | an ink unit at once; the front-end cause fixed at the source as found | planned | 1 + fixes |
 | "Heads and feet" | heads (running heads and feet) | ink units by line, exact by head and foot points; a head equal to the title's or a heading's text takes its row, set in capitals for a cased target where the head is | planned | 1.5 |
 | "Tables" | tables (cells) | today's cell units; tables no unit cuts (inside a float) become ink units by row | cells built; uncut planned | 0.5 + 1 |
-| "Figure text" | figures (vector) | the glyphs of an included PDF (form XObjects) and of a float, set by our compile: exact text from their fonts, exact places; erasure needs optional content inside form XObjects (shared streams), and a Type 3 font with no Unicode is left the original's | planned | 3 |
+| "Figure text" | figures (vector) | the glyphs of an included PDF (form XObjects) and of a TikZ or pgfplots picture (between its points), set by our compile: exact text from their fonts, exact places; ink units of kind figtext, each its own group, inside a form by the form written again once; a font with no usable Unicode, a form shared, a crowded band left the original's (PDF-READER §19.11); a float's other text no unit owns stays counted, not drawn | built | — |
 | "Figure text" | ocr (bitmap) | PP-OCR as the extension runs it (DESIGN §15.3), once on the server over each figure's image; places from OCR (approved); erasure by a patch of the background under each line, as the extension's image translation does | planned | 3.5 |
 | "References" | references, index (proposed) | each `\bibitem` a unit, cut from the .bbl our compile writes after its bibliography step and marked like the body; the authors, title and venue known from its fields (biblatex's `\field`, `\name`; BibTeX styles' `\newblock` blocks) | planned | 3 |
 | "Names" | names: author blocks, names in references | author units today (names and places together: stage splits them, places always); in references, the names field of each entry | names built; split and references planned | 1.5 |
@@ -123,6 +125,12 @@ names are its placeholder's ink, kept as the original's either way; a running he
 - Equation tags, folios, numbers: never (`symbols`).
 - Copyright and licence lines in the foot: with the foot, under "Heads and feet".
 
+**Open after stage 5** (for the front end's owner): the front end still cuts a TikZ picture's texts into units of kind `figure`
+(latex-front.mjs `tikzText`), which the layout compile never marks and the layer never draws; they are translated beside the
+`figtext` units that draw the same words. Dropping them (a PIPELINE change in latex-front.mjs) or letting a figtext unit take
+their row is the front end's to decide. A float's other text no unit owns (an algorithm's steps, a subfigure's letter) is still
+the ledger's `figures` and drawn nowhere.
+
 ## 6. Risks and the gates that hold them
 
 | Risk | Gate |
@@ -141,7 +149,7 @@ names are its placeholder's ink, kept as the original's either way; a running he
 | 2 | ink units: heads and feet, notes, contents by line; reuse; groups; drawn; head and foot points | LAYOUT, REMOVAL, BUNDLE, new INK in the translate key | 4 |
 | 3 | para points; whole blocks; orphan prose; theorem heads and generated headings | LAYOUT | 3 |
 | 4 | references and names in them (.bbl units) | PIPELINE (units), LAYOUT | 4.5 |
-| 5 | vector figure text | LAYOUT, REMOVAL | 3 |
+| 5 (built) | vector figure text: units of kind figtext, their groups, the parts' figure rows, the reader's switch | LAYOUT 21, REMOVAL 11, BUNDLE 10, PIPELINE 29 | — |
 | 6 | OCR on the server | a new OCR version in the key | 3.5 |
 | 7 | names split from places; tables no unit cuts | PIPELINE | 2.5 |
 | 8 | reader toggles in the web and the extension | — | 2 |

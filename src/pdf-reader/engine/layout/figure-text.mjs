@@ -18,7 +18,8 @@
 // of its size past the run's end along it and not back over it by more than RUN_BACK; any other glyph between ends the run. A
 // run is a unit when it spells a word (two letters together) in a face that is no math face, every glyph of it a character a
 // reader can trust (UNREAD); its text the glyphs' Unicode (NFKC) with a space where two stand apart by SPACE_GAP of their size.
-// What it is not, a number, a tick's label, a letter alone, a formula's, stays the original's ink. A font that gives no Unicode
+// What it is not, a number, a tick's label, a letter alone, a formula's, stays the original's ink; so does a run a glyph of which
+// is not wholly inside the clip in force (an included figure's viewport cuts off what it does not show: pageInk's `clipped`). A font that gives no Unicode
 // a reader can trust leaves its unit the original's too, which the wrap tells from the font's own dict (remove.mjs unicodeOf).
 //
 // Each unit's place, in its own frame (its first glyph's origin, along its direction, up across it): its box from its first
@@ -83,12 +84,12 @@ function streamOf(pg, owners) {
     for (; q < P.length && P[q].glyph <= g; q++) { const nm = P[q].name; if (nm === PICTURE_START) d++; else if (nm === PICTURE_END) d = Math.max(0, d - 1) }
     const x = G[g]
     if (!(x.n >= 0)) continue
-    out.push({ i: g, turned: false, n: x.n, k: x.k, u: x.u ?? '', blank: !!x.blank || !/\S/u.test(x.u ?? ''), ox: x.x0, oy: x.y, ex: x.x1, ey: x.y, ux: 1, uy: 0, size: x.size, ascent: (x.top - x.y) / Math.max(x.size, 1e-6), descent: (x.bottom - x.y) / Math.max(x.size, 1e-6), font: x.font, fill: x.fill ?? 0, form: !!x.form, picture: d, owner: owners?.[g] ?? null, ink: [x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top] })
+    out.push({ i: g, turned: false, n: x.n, k: x.k, u: x.u ?? '', blank: !!x.blank || !/\S/u.test(x.u ?? ''), ox: x.x0, oy: x.y, ex: x.x1, ey: x.y, ux: 1, uy: 0, size: x.size, ascent: (x.top - x.y) / Math.max(x.size, 1e-6), descent: (x.bottom - x.y) / Math.max(x.size, 1e-6), font: x.font, fill: x.fill ?? 0, form: !!x.form, picture: d, owner: owners?.[g] ?? null, ink: [x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top], clipped: !!x.clipped })
   }
   T.forEach((t, j) => {
     if (!(t.n >= 0)) return
     const picture = depthAtPoint[Math.min(Math.max(t.pt ?? 0, 0), P.length)]
-    out.push({ i: j, turned: true, n: t.n, k: t.k, u: t.u ?? '', blank: !!t.blank || !/\S/u.test(t.u ?? ''), ox: t.ox, oy: t.oy, ex: t.ex, ey: t.ey, ux: t.ux, uy: t.uy, size: t.size, ascent: t.ascent, descent: t.descent, font: t.font, fill: t.fill ?? 0, form: !!t.form, picture, owner: null, box: t.box })
+    out.push({ i: j, turned: true, n: t.n, k: t.k, u: t.u ?? '', blank: !!t.blank || !/\S/u.test(t.u ?? ''), ox: t.ox, oy: t.oy, ex: t.ex, ey: t.ey, ux: t.ux, uy: t.uy, size: t.size, ascent: t.ascent, descent: t.descent, font: t.font, fill: t.fill ?? 0, form: !!t.form, picture, owner: null, box: t.box, clipped: !!t.clipped })
   })
   out.sort((a, b) => a.n - b.n || a.k - b.k)
   return out
@@ -122,14 +123,14 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
   const fam = new Map()
   const famOf = name => { let f = fam.get(name); if (f === undefined) { f = classifyFont(name ?? '').fam; fam.set(name, f) } return f }
   const units = [], glyphMaps = [], turnedMaps = []
-  const stats = { units: 0, crowded: 0, letters: 0, runs: 0, past: 0 }
+  const stats = { units: 0, crowded: 0, letters: 0, runs: 0, past: 0, clipped: 0 }
   pages.forEach((pg, pi) => {
     const glyphMap = new Map(), turnedMap = new Map()
     glyphMaps.push(glyphMap); turnedMaps.push(turnedMap)
     const S = streamOf(pg, own?.glyphs?.[pi])
     const runs = []
     let run = null
-    const close = () => { if (run && run.gs.some(x => !x.blank)) runs.push(run); run = null }
+    const close = () => { if (run?.gs.some(x => !x.blank)) runs.push(run); run = null }
     for (const x of S) {
       const figure = !x.owner && (x.form || x.picture > 0)
       if (!figure) { close(); continue }
@@ -145,6 +146,7 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
         run = { gs: [], font: x.font, size: x.size, fill: x.fill, form: x.form, s1: 0, frame: { ox: x.ox, oy: x.oy, ux: x.ux, uy: x.uy } }
       }
       run.gs.push(x)
+      if (x.clipped && !x.blank) run.clipped = true
       run.s1 = Math.max(run.s1, along(run.frame, x.ex, x.ey))
     }
     close()
@@ -156,6 +158,8 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       const text = textOf(r.gs, r.frame)
       if (!WORD.test(text.normalize('NFKC'))) continue
       if (gs.some(x => UNREAD.test(x.u)) || text.length > FIGURE_TEXT_MAX) continue
+      // (a run its clip cuts, whole or in part, is not shown whole: no text a translation could stand for)
+      if (r.clipped) { stats.clipped++; continue }
       if (onPage >= unitsPage || units.length >= unitsDoc) { stats.past++; continue }
       const f = r.frame, first = gs[0]
       const s0 = 0, s1 = Math.max(...gs.map(x => along(f, x.ex, x.ey)))

@@ -419,7 +419,8 @@ the same values, and each follows the others through the shared configuration's 
 `reading.sentenceHighlight` (对照高亮), `appearance.activeHighlight` among `appearance.highlights` (高亮颜色: the swatches are
 the configured highlight profiles, the three built-in and any added), `image.enabled` with `image.modes` (图片翻译:
 figure text is shown when it is on and the display's mode, §3, is among the modes, as on the HTML page) (since v20 the
-switch alone: figure text in every display), `uiLanguage` (the reader's words), `mode` (the display, §3).
+switch alone: figure text in every display; and on the layer the vector figures' text, §19.11, shown or hidden in place), `uiLanguage`
+(the reader's words), `mode` (the display, §3).
 
 - **Writing the display**: 对照 writes `mode: 'side'`, unless it is `'stack'` (a side-by-side choice already for the
   reader); 译文 writes `'only'`; both clear `pdfReader.original`. 原文 sets `pdfReader.original` and leaves `mode` alone.
@@ -2532,5 +2533,70 @@ babel names' points that open a list or the bibliography, stream order on the pa
 after its last, on one baseline, as `folioOf` reads a folio), whether it is inside a form XObject (an included PDF: pageInk's
 `form` with `indices`), and its face's family (math, typewriter). No layout file and no version changes: nothing on the wire,
 nothing in the compile. What no class explains is an orphan: the sweep's invariant (o) is no orphan letters (`orphanRows`, rows
-in the sweep's shape), run in the lab by `lab/pdf/spikes/ledger.mjs` (record `lab/pdf/records/ledger.md`). The ink units that
-translate the planned classes, and the toggles, are the note's later stages.
+in the sweep's shape), run in the lab by `lab/pdf/spikes/ledger.mjs` (record `lab/pdf/records/ledger.md`). The class `figures`
+is built (§19.11); the ink units that translate the other planned classes are the note's later stages. A glyph a figure unit owns
+(`f<k>`) is the ledger's `figures`.
+
+### 19.11 The text inside vector figures (the content class `figures`, stage 5 of `docs/route/orphan-text.md`)
+
+The labels, axis titles, legends and annotations a figure draws as glyphs are units of their own, made from our final pass's
+glyphs, translated with the paper's units whatever the reader's switch, and drawn in each original run's box; the switch shows or
+hides what was made. The owner's rulings of 2026-10-25 bind it: the format is ours (exact positions from our compile's glyphs,
+each original's ink owned and hidden by its own optional-content group, the text in its original's box, no double ink, no overlap
+with the figure's lines), the translation's quality the provider's; translated once into the shared cache, shown or hidden by
+the toggle with no prepare again; bitmap figures (OCR) are another lane.
+
+- **Which glyphs** (`layout/figure-text.mjs` `figureUnitsOf`, in `wrapFinal`, after `ownOf`): those no unit owns inside a figure
+  our compile set — an included PDF's (shown inside a form XObject: pdfTeX includes a PDF, and an EPS made one, as a form), or a
+  TikZ or pgfplots picture's (between the points `zs` and `ze` the layout compile now sets inside pgf's `\pgfsys@beginpicture`
+  and `\pgfsys@endpicture`, in the picture's own box: `marks.mjs POINTS_TEX`, LAYOUT 21; pageInk keeps them apart, `pictures`,
+  so that no reader of the marks or the ownership sees them). A glyph set turned is read too (pageInk's `turned`: its baseline,
+  direction, size and band), so that a y-axis title keeps its turn.
+- **Cut** into runs, one a label or a line: in stream order, one font, size, colour, direction and kind, one baseline (`RUN_DY`
+  0.05 of the size across), at most `RUN_GAP` 0.6 of the size past the run's end; a run spelling a word (two letters together)
+  in no math face is a unit, its text the glyphs' Unicode (NFKC), a space at a gap of `SPACE_GAP` 0.15 em. A number, a tick's
+  label, a letter alone or a formula stays the original's; so does a run a glyph of which is not wholly inside the clip in force
+  (an included figure's viewport: pageInk's `clipped`; 1706.03762v7's cropped attention figures held two such titles).
+- **Its place**, our glyphs' and nothing estimated: its first glyph's origin, its direction, its box's length along it, its band
+  (its glyphs', at least `DRAW_BAND` [-0.15, 0.88] em: the line a CJK translation is drawn in). Its anchor is read from the
+  figure's ink nearest it along its baseline within `ANCHOR_REACH` 1.5 em, a path by its segments (pageInk's `shapes`, a curve as
+  eight chords, a fill's subpaths closed, at most a million numbers a page): `start` where the ink before it is nearer by
+  `ANCHOR_RATIO` 2 (a legend's line sample, an arrow it labels), `end` where the ink after it is, else `centre`. A unit whose
+  band meets other ink inside its box (another glyph, a stroke's segment widened by its half line width, a fill's edge, an image
+  or a shading not holding the band) is `crowded`, left the original's: a translation there could cover that ink.
+- **Its ink** is its own group `f<k>` (`layout/wrap.mjs`): its runs wrapped where they are shown, in the page's stream, or in the
+  stream of the form an included PDF is, that form written again once in the wrap section under its own number, its dict ours but
+  its stream's keys and `/Resources`, its resources its own with `/Properties` naming its groups (beside a form's own entries:
+  Illustrator's layer `/MC0` kept). A figure's group is left out, its unit the original's, where its font gives no Unicode a reader
+  can trust (`remove.mjs unicodeOf`: no `/ToUnicode`, and a `/Differences` naming codes, `g41`, or an Identity CMap: `unicode`),
+  where its form is painted twice on its page, has no resources of its own, holds a unit's ink, or was written again by an
+  earlier page (`shared`), and where its page passes the wrap's bounds with it (`bounds`: the page is then wrapped without its
+  figures, so a figure never costs a page). The proof proves each form written as it proves a page (its BDCs balanced, its
+  operators, ours taken out, the form's own) and the document's graph (`graphWhy`: each form's dict and resources ours but its
+  stream and `/Properties`). `wrapFinal` returns `figures` { units (the drawn ones: page, group, text, font, size, fill, angle,
+  x, y, ux, uy, length, ascent, descent, anchor, form), stats (units, drawn, each why, letters, forms) }; with `figures: false`
+  none (the lab's A/B). REMOVAL 11.
+- **On the wire** (BUNDLE 10, PIPELINE 29): each drawn figure unit a unit of kind `figtext` after the paper's own (`page-pass.mjs
+  figureUnits`: its one text piece our glyphs' text; none over arXiv's base nor on a page the line check does not draw), so that
+  it is translated as any unit is (`toTranslate` takes it; no sentence cuts, `NOT_RUNNING`); and its place a row of the part of
+  its page (`figures`, `layer-proto/figure-rows.mjs`: [id, group, page, x, y, ux, uy, length, size, ascent, descent, anchor,
+  fill, font], checked by `partShape`: ids rising, each a unit of kind figtext, on the part's pages, within their views, none
+  where the part has no layout). A part of 7's holds none. No unit of 28's moves: the new units come after every one of them
+  (`PIPELINE_CARRIES` 28). The host passes `ours.wrap.figures` (the web's `ourWrap` adds `figures: r.figures`).
+- **Drawn** (`run.mjs paintFigures`, once a page's figures' rows are in: the page waits for them as for its units', `rowsFor`
+  ranks them with its page): its translation's text in a face of its font's family, weight and slant, in its fill, on its run's
+  baseline, turned by its angle (`layer2.mjs svgOfFigure`), by the fit rule (`layer-proto/figure-fit.mjs`): at its size, shrunk
+  to its box's length where longer, to the rules' last floor (`floorMin`, 0.6) at most, its anchor's place kept; its group set
+  OFF in render A. Left the original's: no row (`untranslated`), a translation that says its source again (`same`), no group in
+  the document (`unhidden`), a face's refusal, `unfit`. The run's `figures` lists each.
+- **The switch** is the reader's figure switch (the extension's `image.enabled`, the reading options' image switch, §9.1, which the HTML
+  page's figure text shares; the policy table's default, `TOGGLE_DEFAULTS.figures`, on): `openLayer({ figures })`, the layer
+  side's `figures` option and `setFigures(on)`, which opens the door again over the same composed document with every row held, so
+  that nothing is prepared, fetched or translated again; the session follows the switch as it lands, from here or elsewhere.
+- **Measured** (2026-10-25, `lab/pdf/spikes/figure-gate.mjs`, record `lab/pdf/records/figure-gate.md`): on the gate pack's 7
+  bases (made before LAYOUT 21: their TikZ text has no points, their included PDFs' text is read), 841 of 1,022 figure units
+  drawn, 181 crowded, none of a font of no Unicode, 60 forms written again; every group shown is the page wrapped without the
+  figures (G1, 13 pixels of split shows within the ocg gate's allowance), hiding the figures changes pixels inside their own
+  bands alone (G3f 0), every drawn band loses its ink (no double ink, D 0) and is then blank (no stroke or other glyph a
+  translation could cover, O 0). The 25-paper set, compiled again under LAYOUT 21 (`lab/pdf/spikes/figure-final.mjs`): see the
+  record.

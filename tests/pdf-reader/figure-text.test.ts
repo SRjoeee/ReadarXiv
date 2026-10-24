@@ -101,7 +101,7 @@ describe('the figures\' text cut into ink units (layout/figure-text.mjs)', () =>
 
   it('counts every unit by its why, and gives each drawn one a group the document holds', () => {
     const s = wrap.figures.stats
-    expect(s.units).toBe(s.drawn + FIGURE_WHYS.reduce((n, w) => n + (s[w] ?? 0), 0))
+    expect(s.units).toBe((s.drawn ?? 0) + FIGURE_WHYS.reduce((n, w) => n + (s[w] ?? 0), 0))
     expect(s.drawn).toBe(12)
     expect(new Set(wrap.figures.units.map(u => u.group)).size).toBe(s.drawn)
     for (const u of wrap.figures.units) expect(u.ascent).toBeGreaterThanOrEqual(DRAW_BAND[1])

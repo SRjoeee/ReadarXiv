@@ -135,10 +135,14 @@ export async function wrapOf(finalBytes, plans, { PL, deflate, inflate, groupsPa
       // without its figures' groups (their units `bounds`: a figure never costs the page); then with its placeholders' and
       // labels' groups merged into the text's)
       const page = () => {
-        const first = attempt(planHasFigures(plan))
-        if (first.made.ok || !planHasFigures(plan)) return first
-        const bare = attempt(false)
-        return bare.made.ok || bare.made.docFull ? bare : first
+        if (!planHasFigures(plan)) return attempt(false)
+        let first
+        try { first = attempt(true) } catch (e) {
+          if (isMemoryError(e)) throw e
+          first = { made: { ok: false, why: `its wrap with its figures failed: ${String(e?.message ?? e).slice(0, 160)}` } }
+        }
+        // (the page as it is wrapped without its figures, whatever came of it: a figure never costs the page)
+        return first.made.ok ? first : attempt(false)
       }
       const attempt = figures => {
         const past = m => m.ok && (m.groups.size > groupsPage || m.sequences > sequencesPage)
@@ -676,7 +680,9 @@ export { UNHIDDEN_MAX }
  * unit with none is the original's: no reader can hide it), `pages` the pages wrapped as ranges (the host's delta must replace
  * every one: layerOfPaper refuses a delta that does not), `own` own.mjs's stats (the record's), `ledger` the content classes'
  * counts (layout/ledger.mjs ledgerSummary: integers, for the record; nothing reads them yet), `owned` own.mjs's whole result and
- * `ledgerWhole` the ledger's where `keepOwned` (the lab's); `bounds` { groupsPage, sequencesPage, groupsDoc } wrapOf's (tests) — or { refused (WRAP_WHYS), why }: the paper's
+ * `ledgerWhole` the ledger's where `keepOwned` (the lab's); `figures` the figure units drawn and their counts (layout/figure-text.mjs:
+ * each its group in the document; `figureUnits` every unit cut, with why, where `keepOwned`), none asked with `figures` false (the
+ * lab's A/B); `bounds` { groupsPage, sequencesPage, groupsDoc } wrapOf's (tests) — or { refused (WRAP_WHYS), why }: the paper's
  * base is then arXiv's PDF. Never throws but a failed allocation
  */
 /** a point as ownership reads it: its name in lower case, as every mark's name is written (marks.mjs MARK_NAME): a class that
@@ -684,7 +690,7 @@ export { UNHIDDEN_MAX }
  *  `/axt-H0E ri` (2610.20967v1, 2610.20581v1), the same mark at the same place */
 const lowerPoint = x => (/[A-Z]/.test(x.name) ? { ...x, name: x.name.toLowerCase() } : x)
 
-export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions = {}, OPS, units, follows: given = undefined, texts, deflate, inflate, keepOwned = false, bounds = {} }) {
+export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions = {}, OPS, units, follows: given = undefined, texts, deflate, inflate, keepOwned = false, bounds = {}, figures: withFigureText = true }) {
   // (units required: null alone, said, asks for no spell check, the lab's pair whose source is not read; deflate and inflate
   // required, the written bytes read back)
   if (units === undefined) throw new TypeError('units: the paper\'s source units, or null said for no spell check')
@@ -711,7 +717,7 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
       const ops = await page.getOperatorList()
       const ink = pageInk(OPS, ops, page.commonObjs, { rotate: page.rotate ?? 0, indices: true, turned: true, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
       const unread = ink.rotated || ink.capped || ink.timedOut || ink.degraded
-      pages.push(unread ? { glyphs: [], turned: [], shapes: new Map(), pictures: [], boxes: [], paths: [], points: [], boxAt: [], view: [...page.view] } : { glyphs: ink.glyphs.map(g => ({ n: g.n, k: g.k, u: g.u, x0: g.x0, x1: g.x1, ix0: g.ix0, ix1: g.ix1, y: g.y, size: g.size, top: g.top, bottom: g.bottom, font: g.font, fill: g.fill, ...(g.blank ? { blank: true } : {}), ...(g.form ? { form: true } : {}) })), turned: ink.turned, shapes: ink.shapes, pictures: ink.pictures, boxes: ink.boxes, paths: ink.paths, points: ink.points.map(lowerPoint), boxAt: ink.boxAt, view: [...page.view] })
+      pages.push(unread ? { glyphs: [], turned: [], shapes: new Map(), pictures: [], boxes: [], paths: [], points: [], boxAt: [], view: [...page.view] } : { glyphs: ink.glyphs.map(g => ({ n: g.n, k: g.k, u: g.u, x0: g.x0, x1: g.x1, ix0: g.ix0, ix1: g.ix1, y: g.y, size: g.size, top: g.top, bottom: g.bottom, font: g.font, fill: g.fill, ...(g.blank ? { blank: true } : {}), ...(g.form ? { form: true } : {}), ...(g.clipped ? { clipped: true } : {}) })), turned: ink.turned, shapes: ink.shapes, pictures: ink.pictures, boxes: ink.boxes, paths: ink.paths, points: ink.points.map(lowerPoint), boxAt: ink.boxAt, view: [...page.view] })
       facts.push(unread ? null : alignOf(OPS, ops))
       page.cleanup()
     }
@@ -726,7 +732,7 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   const shown = texts instanceof Map ? texts : Array.isArray(texts) ? new Map(Array.from({ length: Math.floor(texts.length / 2) }, (_, j) => [texts[2 * j], texts[2 * j + 1]]).filter(([a, b]) => typeof a === 'string' && typeof b === 'string')) : null
   const own = ownOf(pages, { units, follows, texts: shown })
   // (the text inside the vector figures, no unit's: its ink units, each its own group f<k>, a crowded one none; layout/figure-text.mjs)
-  const fig = figureUnitsOf(pages, own)
+  const fig = withFigureText ? figureUnitsOf(pages, own) : { units: [], glyphs: pages.map(() => new Map()), turned: pages.map(() => new Map()), stats: { letters: 0 } }
   const withFigures = (all) => own.glyphs.map((row, i) => {
     const m = fig.glyphs[i]
     if (!m?.size) return row

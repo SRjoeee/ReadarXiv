@@ -403,12 +403,17 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       glyph.ix0 = Math.min(a, b); glyph.ix1 = Math.max(a, b); glyph.top = oy + box[3] * sz; glyph.bottom = oy + box[1] * sz
     } else if (box) { glyph.top = glyph.bottom = oy; glyph.ix0 = glyph.ix1 = ox }
     if (indices) { glyph.n = curShow; glyph.k = glyphAt; if (!/\S/.test(u)) glyph.blank = true; if (s.form > 0) glyph.form = true }
+    // (`turned`, the figures' reading: a glyph not wholly inside the clip in force is not shown whole, an included figure's text its
+    // viewport cuts off)
+    if (turned && outsideClip(Math.min(glyph.x0, glyph.ix0), glyph.bottom, Math.max(glyph.x1, glyph.ix1), glyph.top)) glyph.clipped = true
     if (finite(glyph.x0, glyph.x1, glyph.y, glyph.top, glyph.bottom, glyph.size, glyph.ix0, glyph.ix1)) {
       if (glyphs.length >= glyphsMax) { over = true; stop = true; return }
       glyphs.push(glyph); boxAt.push(boxes.length / 4)
     }
   }
 
+  /** whether a box on the page is not wholly inside the clip in force (a hair's slack: an edge on the clip's) */
+  const outsideClip = (x0, y0, x1, y1) => !!s.clip && (x0 < s.clip[0] - 0.05 || y0 < s.clip[1] - 0.05 || x1 > s.clip[2] + 0.05 || y1 > s.clip[3] + 0.05)
   /** a glyph set turned (`turned`, layout/figure-text.mjs: a figure's y-axis title), as a TurnedGlyph: its baseline from its
    *  origin (ox, oy) to its advance's end (ex, ey), its direction (ux, uy), its size and its font's ascent and descent in em, a
    *  rotation of the page's axes alone (no mirror, no shear past TURN_SKEW); its box's index among the page's boxes (-1 where
@@ -424,6 +429,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     const t = { u: g.unicode, n: curShow, k: glyphAt, ox, oy, ex, ey, ux: ax / la, uy: ay / la, size: sz, ascent, descent, font: name, fill: s.tr & 1 ? NO_FILL : s.fill, box, at: glyphs.length, pt: pictures.length }
     if (!/\S/.test(t.u)) t.blank = true
     if (s.form > 0) t.form = true
+    if (outsideClip(Math.min(ox, ex) - Math.abs(upx) * s.size, Math.min(oy, ey) - Math.abs(upy) * s.size, Math.max(ox, ex) + Math.abs(upx) * s.size, Math.max(oy, ey) + Math.abs(upy) * s.size)) t.clipped = true
     if (finite(ox, oy, ex, ey, sz) && turnedOut.length < glyphsMax) turnedOut.push(t)
   }
   /** a figure's painted path as its lines (`turned`): inside a form or a TikZ picture (between the points `zs` and `ze`), its

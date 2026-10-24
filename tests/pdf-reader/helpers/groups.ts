@@ -4,17 +4,19 @@
 // hide nothing (no content of the test's PDFs is marked): a test of what is hidden reads the visibility asked (`asked`), and the pixel
 // gates use wrapped PDFs (layer-ocg-pixels.test.ts).
 
-/** the groups a test's configuration names: units 0 to `units` - 1, names 0 to `names` - 1, less `missing` */
-export interface GroupsOptions { units?: number; names?: number; missing?: readonly string[] }
+/** the groups a test's configuration names: units 0 to `units` - 1, names 0 to `names` - 1, figures 0 to `figures` - 1 (`f<k>`,
+ *  the content class `figures`), less `missing` */
+export interface GroupsOptions { units?: number; names?: number; figures?: number; missing?: readonly string[] }
 
 /** a fake configuration as PDF.js's OptionalContentConfig is read by visibility.mjs and by a render: iterable [id, { name }], each
  *  group's visibility set by setVisibility and read by isVisible; `hidden()` the names hidden now */
-export function fakeConfig({ units = 2000, names = 200, missing = [] }: GroupsOptions = {}) {
+export function fakeConfig({ units = 2000, names = 200, figures = 50, missing = [] }: GroupsOptions = {}) {
   const gone = new Set(missing)
   const groups = new Map<string, { name: string; visible: boolean }>()
   const add = (g: string) => { if (!gone.has(g)) groups.set(`${groups.size}R`, { name: `axt:${g}`, visible: true }) }
   for (let id = 0; id < units; id++) for (const g of [`u${id}`, `u${id}.p`, `u${id}.l`]) add(g)
   for (let n = 0; n < names; n++) add(`n${n}`)
+  for (let k = 0; k < figures; k++) add(`f${k}`)
   return {
     // (every intent PDF.js may check a render's against)
     renderingIntent: 0xff,

@@ -973,6 +973,39 @@ describe('L15: a fork', () => {
   })
 })
 
+describe('the figures\' text shown translated or not (setFigures, the content class `figures`)', () => {
+  it('opens the door again with the switch, every row held taken, nothing read or translated again; the same switch does nothing', async () => {
+    const s = await setup({ door: { rows: 'gate' } })
+    const m = await M()
+    await nearOn(s, [1, 2])
+    s.side.tell(await ALL())
+    const rows = m.index.units.map((_, id) => rowOf(id))
+    s.side.take(rows)
+    s.side.end()
+    await settle(s)
+    // (the policy table's default at the open: on)
+    expect(s.opens).toBe(1)
+    expect(s.doors[0]?.options.figures).toBe(true)
+    const fetched = s.fetched.length
+    s.side.setFigures(false)
+    await settle(s)
+    expect(s.opens).toBe(2)
+    expect(s.doors[1]?.options.figures).toBe(false)
+    // (the same composed document, no object fetched again, every row held given the new door: no translation asked again)
+    expect(s.composed.length).toBe(1)
+    expect(s.fetched.length).toBe(fetched)
+    expect(s.doors[1]?.taken.length).toBe(rows.length)
+    expect(s.doors[1]?.ended).toBe(1)
+    s.side.setFigures(false)
+    await settle(s)
+    expect(s.opens).toBe(2)
+    s.side.setFigures(true)
+    await settle(s)
+    expect(s.opens).toBe(3)
+    expect(s.doors[2]?.options.figures).toBe(true)
+  })
+})
+
 describe('another target over the same layer (retarget)', () => {
   const svgLang = (s: Setup, n: number) => layerOf(s, n)?.querySelector('svg')?.getAttribute('lang') ?? null
   /** the side open on its first target (zh), pages 1 and 2 near and laid with its rows */

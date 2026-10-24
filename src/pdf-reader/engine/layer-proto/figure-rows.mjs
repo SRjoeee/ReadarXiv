@@ -43,27 +43,27 @@ export function checkFigures(rows, { a, b, views, unitCount }) {
   const out = []
   let last = -1
   for (let i = 0; i < rows.length; i++) {
-    let r = rows[i]
-    const path = `figures[${i}]`
+    const r = rows[i], path = `figures[${i}]`
     if (!Array.isArray(r) || r.length !== FIGURE_ROW) throw fail(path, `not [id, group, page, x, y, ux, uy, length, size, ascent, descent, anchor, fill, font] (${kindOf(r)})`)
-    if (!isInteger(r[0], last + 1, unitCount - 1)) throw fail(`${path}[0]`, 'not a unit\'s id above the last')
-    last = r[0]
-    if (!isInteger(r[1], 0, GROUP_MAX)) throw fail(`${path}[1]`, 'not a group\'s number')
-    const group = r[1]
-    r = r.slice(1)
-    if (!isInteger(r[1], a, b)) throw fail(`${path}[1]`, `not a page ${a} to ${b}`)
-    const o = 4 * (r[1] - a)
-    for (const [q, lo, hi] of [[2, views[o] - SLACK, views[o + 2] + SLACK], [3, views[o + 1] - SLACK, views[o + 3] + SLACK]]) if (!isNumber(r[q]) || r[q] < lo || r[q] > hi) throw fail(`${path}[${q}]`, 'not a number within its page\'s view')
-    if (!isNumber(r[4]) || !isNumber(r[5]) || Math.abs(Math.hypot(r[4], r[5]) - 1) > 1e-3) throw fail(`${path}[4]`, 'not a direction')
-    if (!isNumber(r[6]) || !(r[6] > 0) || r[6] > COORD_MAX) throw fail(`${path}[6]`, 'not a length above 0')
-    if (!isNumber(r[7]) || !(r[7] > 0) || r[7] > SIZE_MAX) throw fail(`${path}[7]`, `not a size above 0 and at most ${SIZE_MAX}`)
-    if (!isNumber(r[8]) || r[8] < 0 || r[8] > BAND_MAX) throw fail(`${path}[8]`, `not an ascent 0 to ${BAND_MAX}`)
-    if (!isNumber(r[9]) || r[9] > 0 || r[9] < -BAND_MAX) throw fail(`${path}[9]`, `not a descent -${BAND_MAX} to 0`)
-    if (!isInteger(r[10], 0, ANCHORS.length - 1)) throw fail(`${path}[10]`, 'not an anchor\'s code')
-    if (!isInteger(r[11], -1, 0xffffff)) throw fail(`${path}[11]`, 'not a fill, 0xRRGGBB or -1')
+    // (each value named by its place in the row, as the wire holds it)
+    const [id, group, page, x, y, ux, uy, length, size, ascent, descent, anchor, fill, font] = r
+    if (!isInteger(id, last + 1, unitCount - 1)) throw fail(`${path}[0]`, 'not a unit\'s id above the last')
+    last = id
+    if (!isInteger(group, 0, GROUP_MAX)) throw fail(`${path}[1]`, 'not a group\'s number')
+    if (!isInteger(page, a, b)) throw fail(`${path}[2]`, `not a page ${a} to ${b}`)
+    const o = 4 * (page - a)
+    if (!isNumber(x) || x < views[o] - SLACK || x > views[o + 2] + SLACK) throw fail(`${path}[3]`, 'not a number within its page\'s view')
+    if (!isNumber(y) || y < views[o + 1] - SLACK || y > views[o + 3] + SLACK) throw fail(`${path}[4]`, 'not a number within its page\'s view')
+    if (!isNumber(ux) || !isNumber(uy) || Math.abs(Math.hypot(ux, uy) - 1) > 1e-3) throw fail(`${path}[5]`, 'not a direction')
+    if (!isNumber(length) || !(length > 0) || length > COORD_MAX) throw fail(`${path}[7]`, 'not a length above 0')
+    if (!isNumber(size) || !(size > 0) || size > SIZE_MAX) throw fail(`${path}[8]`, `not a size above 0 and at most ${SIZE_MAX}`)
+    if (!isNumber(ascent) || ascent < 0 || ascent > BAND_MAX) throw fail(`${path}[9]`, `not an ascent 0 to ${BAND_MAX}`)
+    if (!isNumber(descent) || descent > 0 || descent < -BAND_MAX) throw fail(`${path}[10]`, `not a descent -${BAND_MAX} to 0`)
+    if (!isInteger(anchor, 0, ANCHORS.length - 1)) throw fail(`${path}[11]`, 'not an anchor\'s code')
+    if (!isInteger(fill, -1, 0xffffff)) throw fail(`${path}[12]`, 'not a fill, 0xRRGGBB or -1')
     // biome-ignore lint/suspicious/noControlCharactersInRegex: a control character is what is refused
-    if (typeof r[12] !== 'string' || r[12].length > FONT_NAME_MAX || /[\u0000-\u001f\u007f]/.test(r[12])) throw fail(`${path}[12]`, `not a font's name of ${FONT_NAME_MAX} code units at most`)
-    out.push(Object.freeze({ id: last, group: figureGroupOf(group), page: r[1], x: r[2], y: r[3], ux: r[4], uy: r[5], length: r[6], size: r[7], ascent: r[8], descent: r[9], anchor: ANCHORS[r[10]], fill: r[11], font: r[12] }))
+    if (typeof font !== 'string' || font.length > FONT_NAME_MAX || /[\u0000-\u001f\u007f]/.test(font)) throw fail(`${path}[13]`, `not a font's name of ${FONT_NAME_MAX} code units at most`)
+    out.push(Object.freeze({ id, group: figureGroupOf(group), page, x, y, ux, uy, length, size, ascent, descent, anchor: ANCHORS[anchor], fill, font }))
   }
   return Object.freeze(out)
 }
