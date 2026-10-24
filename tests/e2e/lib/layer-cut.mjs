@@ -30,7 +30,7 @@ import { createHash } from 'node:crypto'
 import { anchorUnits, tokenizeDocument } from '../../../src/pdf-reader/engine/pipeline/anchors.mjs'
 import { drawDataOf } from '../../../src/pdf-reader/engine/pipeline/draw-data.mjs'
 import { leftSideOf } from '../../../src/pdf-reader/engine/pipeline/left-side.mjs'
-import { textsShown } from '../../../src/pdf-reader/engine/translate/mt.mjs'
+import { proseOf, textsShown } from '../../../src/pdf-reader/engine/translate/mt.mjs'
 
 const PDFJS = dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'))
 /** the kinds TeX sets away from where the source has them (anchorUnits' `floating`) */
@@ -97,7 +97,7 @@ export async function cutSample({ pdf, bundle, wrapped, wrap }, { base: kind = '
   // (the figures' text the wrap drew, units of kind figtext after the bundle's own and their rows by page, as the page pass adds them:
   // page-pass.mjs figureUnits over the wrap's `figures`)
   const allUnits = [...raw.units]
-  const figures = figureUnits(wrap.figures, { bundle: allUnits, undrawable: [], M: N })
+  const figures = figureUnits(wrap.figures, { bundle: allUnits, undrawable: [], M: N, prose: proseOf(units) })
   const whole = {
     paper: read.paper, base, orig, versions: { image: read.versions.image },
     units: allUnits, left: { pages: side.pages, units: side.units }, layout: read.layout, rules: read.rules,

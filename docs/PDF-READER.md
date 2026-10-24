@@ -2552,7 +2552,8 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   and `\pgfsys@endpicture`, in the picture's own box: `marks.mjs POINTS_TEX`, LAYOUT 21; pageInk keeps them apart, `pictures`,
   so that no reader of the marks or the ownership sees them). A glyph set turned is read too (pageInk's `turned`: its baseline,
   direction, size and band), so that a y-axis title keeps its turn.
-- **Cut** into runs, one a label or a line: in stream order, one font, size, colour, direction and kind, one baseline (`RUN_DY`
+- **Cut** into runs, one a label or a line: in stream order, one font, size, colour, direction and figure (one form painted, one
+  picture: pageInk's `fid` and `pid`, so that two figures side by side never make one label), one baseline (`RUN_DY`
   0.05 of the size across), at most `RUN_GAP` 0.6 of the size past the run's end; a run spelling a word (two letters together)
   in no math face is a unit, its text the glyphs' Unicode (NFKC), a space at a gap of `SPACE_GAP` 0.15 em. A number, a tick's
   label, a letter alone or a formula stays the original's; so does a run a glyph of which is not wholly inside the clip in force
@@ -2577,7 +2578,8 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   x, y, ux, uy, length, ascent, descent, anchor, form), stats (units, drawn, each why, letters, forms) }; with `figures: false`
   none (the lab's A/B). REMOVAL 11.
 - **On the wire** (BUNDLE 10, PIPELINE 29): each drawn figure unit a unit of kind `figtext` after the paper's own (`page-pass.mjs
-  figureUnits`: its one text piece our glyphs' text; none over arXiv's base nor on a page the line check does not draw), so that
+  figureUnits`: its one text piece our glyphs' text, KEPT where it is only names, as a table's cell of names is, mt.mjs isName
+  against the paper's running text; none over arXiv's base nor on a page the line check does not draw), so that
   it is translated as any unit is (`toTranslate` takes it; no sentence cuts, `NOT_RUNNING`); and its place a row of the part of
   its page (`figures`, `layer-proto/figure-rows.mjs`: [id, group, page, x, y, ux, uy, length, size, ascent, descent, anchor,
   fill, font], checked by `partShape`: ids rising, each a unit of kind figtext, on the part's pages, within their views, none
@@ -2592,10 +2594,13 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
 - **The switch** is the reader's figure switch (the extension's `image.enabled`, the reading options' image switch, §9.1, which the HTML
   page's figure text shares; the policy table's default, `TOGGLE_DEFAULTS.figures`, on): `openLayer({ figures })`, the layer
   side's `figures` option and `setFigures(on)`, which opens the door again over the same composed document with every row held, so
-  that nothing is prepared, fetched or translated again; the session follows the switch as it lands, from here or elsewhere.
+  that nothing is prepared, fetched or translated again (a switch turned while a door opens opens it again once that door is in);
+  the session follows the switch as it lands, from here or elsewhere. A form one page wrote again and another paints: the other
+  page's figures in it are `shared`, the original's, and its render shows the form's groups ON, since each render sets the
+  visibility of its own page's drawn groups alone (visibility.mjs).
 - **Measured** (2026-10-25, `lab/pdf/spikes/figure-gate.mjs`, record `lab/pdf/records/figure-gate.md`): on the gate pack's 7
-  bases (made before LAYOUT 21: their TikZ text has no points, their included PDFs' text is read), 841 of 1,022 figure units
-  drawn, 181 crowded, 60 forms written again; on 23 of the 25-paper set compiled again under LAYOUT 21
+  bases (made before LAYOUT 21: their TikZ text has no points, their included PDFs' text is read), 842 of 1,022 figure units
+  drawn, 180 crowded, 60 forms written again; on 23 of the 25-paper set compiled again under LAYOUT 21
   (`lab/pdf/spikes/figure-final.mjs`; five of them TikZ or pgfplots papers), 1,216 of 1,469 drawn, 253 crowded, 99 forms; none
   of a font of no Unicode on either. Every group shown is the page wrapped without the figures (G1, 13 pixels of split shows
   within the ocg gate's allowance), hiding the figures changes pixels inside their own bands alone (G3f 0), every drawn band

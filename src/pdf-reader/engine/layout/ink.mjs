@@ -107,7 +107,7 @@ const finite = (...xs) => xs.every(Number.isFinite)
  *  NO_FILL for one of no colour (a pattern, PDF.js's transparent) */
 const fresh = () => ({
   ctm: IDENTITY, clip: null, lw: 1, font: null, fontId: '', size: 0, dir: 1, cs: 0, ws: 0, hs: 1, rise: 0, leading: 0, tr: 0,
-  tm: IDENTITY, x: 0, y: 0, lx: 0, ly: 0, pendingClip: false, lost: false, fill: 0, form: 0,
+  tm: IDENTITY, x: 0, y: 0, lx: 0, ly: 0, pendingClip: false, lost: false, fill: 0, form: 0, formId: 0,
 })
 /** a glyph's fill of no colour (a pattern's, PDF.js's transparent) */
 export const NO_FILL = -1
@@ -406,6 +406,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     // (`turned`, the figures' reading: a glyph not wholly inside the clip in force is not shown whole, an included figure's text its
     // viewport cuts off)
     if (turned && outsideClip(Math.min(glyph.x0, glyph.ix0), glyph.bottom, Math.max(glyph.x1, glyph.ix1), glyph.top)) glyph.clipped = true
+    if (turned) { if (s.formId) glyph.fid = s.formId; if (pictureIds.length) glyph.pid = pictureIds.at(-1) }
     if (finite(glyph.x0, glyph.x1, glyph.y, glyph.top, glyph.bottom, glyph.size, glyph.ix0, glyph.ix1)) {
       if (glyphs.length >= glyphsMax) { over = true; stop = true; return }
       glyphs.push(glyph); boxAt.push(boxes.length / 4)
@@ -429,6 +430,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     const t = { u: g.unicode, n: curShow, k: glyphAt, ox, oy, ex, ey, ux: ax / la, uy: ay / la, size: sz, ascent, descent, font: name, fill: s.tr & 1 ? NO_FILL : s.fill, box, at: glyphs.length, pt: pictures.length }
     if (!/\S/.test(t.u)) t.blank = true
     if (s.form > 0) t.form = true
+    if (s.formId) t.fid = s.formId
+    if (pictureIds.length) t.pid = pictureIds.at(-1)
     if (outsideClip(Math.min(ox, ex) - Math.abs(upx) * s.size, Math.min(oy, ey) - Math.abs(upy) * s.size, Math.max(ox, ex) + Math.abs(upx) * s.size, Math.max(oy, ey) + Math.abs(upy) * s.size)) t.clipped = true
     if (finite(ox, oy, ex, ey, sz) && turnedOut.length < glyphsMax) turnedOut.push(t)
   }
@@ -437,6 +440,10 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
    *  width on the page, by its box's index; at most SHAPE_NUMBERS_PAGE numbers a page, the paths past them their boxes alone */
   const shapes = new Map()
   let picture = 0, shapeNumbers = 0
+  /** each form painted and each TikZ picture its own number (`turned`: a figure's glyphs are of one figure, `fid` and `pid`, so
+   *  that two figures side by side never make one label); the pictures open now */
+  let formSeq = 0, pictureSeq = 0
+  const pictureIds = []
   const shapeOf = (box, op, data) => {
     if (!data || typeof data.length !== 'number' || shapeNumbers + data.length * 2 > SHAPE_NUMBERS_PAGE) return
     const m = s.ctm, fill = FILLS.has(op), segs = []
@@ -574,6 +581,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       case FORM: {
         push()
         s.form++
+        s.formId = ++formSeq
         if (a[0]) s.ctm = mul(s.ctm, matrixOf(a[0]))
         const bb = a[1]
         if (bb && bb.length >= 4) clipTo(s.ctm, num(bb[0]), num(bb[1]), num(bb[2]), num(bb[3]))
@@ -637,7 +645,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
         const name = typeof a[0] === 'string' ? a[0] : a[0] && typeof a[0] === 'object' ? a[0].name : null
         const m = typeof name === 'string' ? POINT.exec(name) : null
         // (a picture's points apart, `pictures`: no mark of any unit's, never among the points the marks and the ownership read)
-        if (m && (m[1] === PICTURE_START || m[1] === PICTURE_END)) { pictures.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 }); picture = m[1] === PICTURE_START ? picture + 1 : Math.max(0, picture - 1) }
+        if (m && (m[1] === PICTURE_START || m[1] === PICTURE_END)) { pictures.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 }); picture = m[1] === PICTURE_START ? picture + 1 : Math.max(0, picture - 1); if (m[1] === PICTURE_START) pictureIds.push(++pictureSeq); else pictureIds.pop() }
         else if (m) points.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 })
         break
       }

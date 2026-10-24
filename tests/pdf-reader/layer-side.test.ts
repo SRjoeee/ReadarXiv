@@ -1004,6 +1004,22 @@ describe('the figures\' text shown translated or not (setFigures, the content cl
     expect(s.opens).toBe(3)
     expect(s.doors[2]?.options.figures).toBe(true)
   })
+
+  it('a switch turned while the door opens: the door in place takes it, opened again once the open under way is in', async () => {
+    let release = () => {}
+    const s = await setup({ door: { rows: 'gate' }, openHold: new Promise<void>(r => { release = r }) })
+    await nearOn(s, [1, 2])
+    s.side.tell(await ALL())
+    // (the open under way, held at the door, took the switch as it was: on)
+    for (let i = 0; i < 50 && s.opens === 0; i++) await new Promise(r => setTimeout(r, 0))
+    expect(s.opens).toBe(1)
+    s.side.setFigures(false)
+    release()
+    await settle(s)
+    expect(s.doors[0]?.options.figures).toBe(true)
+    expect(s.doors.at(-1)?.options.figures).toBe(false)
+    expect(s.opens).toBe(2)
+  })
 })
 
 describe('another target over the same layer (retarget)', () => {

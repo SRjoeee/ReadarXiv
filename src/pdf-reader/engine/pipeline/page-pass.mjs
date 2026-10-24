@@ -17,7 +17,7 @@ import { PART_PAGES_MAX, partCutter, wholeCutter, wholeFrontier } from '../layer
 import { deltaBaseWhy, groupsOfUnits, indexOf, layerDraws, partTarget, readHead, readPart, readUnitsChunk, TOKEN_LIMIT, whyText, writeHead, writeUnitChunks } from '../layer-proto/format.mjs'
 import { needBound } from '../layer-proto/need.mjs'
 import { figureRow } from '../layer-proto/figure-rows.mjs'
-import { bundleUnitsOf } from '../layer-proto/units.mjs'
+import { bundleUnitsOf, UNIT_FLAG_BITS } from '../layer-proto/units.mjs'
 import { readArxivText } from '../layout/arxiv.mjs'
 import { boxesCheck, finalCheck, markTextBeyond, markTextOf, pageTextAt, prefixDoc, textOfPdf } from '../layout/base.mjs'
 import { lineCheckOf } from '../layout/carry.mjs'
@@ -26,7 +26,7 @@ import { texLiveOf } from '../layout/guard.mjs'
 import { makerOf, rulesOf } from '../layout/make.mjs'
 import { markedPages, marksOfHead, readMarked } from '../layout/marks.mjs'
 import { FIGURE_KIND } from '../rules/content-classes.mjs'
-import { displayEdges, unitText } from '../translate/mt.mjs'
+import { displayEdges, isName, proseOf, unitText } from '../translate/mt.mjs'
 import { columnsOfTokens, pageColumns } from '../view/highlight.mjs'
 import { anchorUnits, boundsFromMarks, floatMatches, frameOfTokens, pageFrame, pageIndex } from './anchors.mjs'
 import { rangedAnchors } from './left-part.mjs'
@@ -70,17 +70,20 @@ export function layoutRecordOf(r) {
 /**
  * The figure units the wrap drew (layout/wrap.mjs wrapFinal's `figures`, the host's `ours.wrap.figures`; none where it gives none):
  * each a unit of kind figtext appended to `bundle` after the paper's own units, its one text piece our glyphs' text as the front
- * end holds a source's (its UTF-8 bytes), and its row (layer-proto/figure-rows.mjs figureRow) in a Map by page; none on a page
+ * end holds a source's (its UTF-8 bytes), KEPT where it is only names (mt.mjs isName against `prose`, the paper's running text: a
+ * dataset's or a model's name keeps its source, as a table's cell of names does), and its row (layer-proto/figure-rows.mjs
+ * figureRow) in a Map by page; none on a page
  * past our `M` pages or that the line check says is not drawn (`undrawable`: its units the original's, so are its figures)
  */
-export function figureUnits(given, { bundle, undrawable, M }) {
+export function figureUnits(given, { bundle, undrawable, M, prose = '' }) {
   const byPage = new Map()
   if (!given || !Array.isArray(given.units)) return byPage
   const skip = new Set(undrawable ?? [])
   for (const u of given.units) {
     if (!u || typeof u !== 'object' || !Number.isInteger(u.page) || u.page < 1 || u.page > M || skip.has(u.page) || typeof u.text !== 'string' || !/\S/u.test(u.text)) continue
     const id = bundle.length
-    bundle.push([FIGURE_KIND, 0, null, null, null, [[0, latin1Of(u.text)]]])
+    // (a label that is only names, a dataset's, a model's, keeps its source, as a table's cell of names does: mt.mjs isName)
+    bundle.push([FIGURE_KIND, isName(u.text, prose) ? UNIT_FLAG_BITS.KEPT : 0, null, null, null, [[0, latin1Of(u.text)]]])
     const list = byPage.get(u.page) ?? byPage.set(u.page, []).get(u.page)
     list.push(figureRow(id, u))
   }
@@ -383,7 +386,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   const bundle = bundleUnitsOf(source)
   // (the text inside the vector figures the wrap gave its own groups: units of kind figtext after the paper's own, their rows by
   // page; none over arXiv's base nor on a page our base does not draw)
-  const figures = oursHead ? figureUnits(wrap?.figures, { bundle, undrawable: lineCheck?.undrawable, M: oursDoc?.numPages ?? 0 }) : new Map()
+  const figures = oursHead ? figureUnits(wrap?.figures, { bundle, undrawable: lineCheck?.undrawable, M: oursDoc?.numPages ?? 0, prose: proseOf(source.units) }) : new Map()
   // the rule set's frame and columns, of arXiv's text alone where it says so (rules 1 and 4: made once, at step T), each side's
   // of its own tokens; else the rules given (pageFrame and pageColumns by default: the whole run's)
   const frameOn = tokens => (rules.frame === 'tokens' ? (F => () => F)(frameOfTokens(tokens)) : frameGiven)

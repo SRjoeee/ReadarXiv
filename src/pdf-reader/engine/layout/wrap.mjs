@@ -717,7 +717,7 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
       const ops = await page.getOperatorList()
       const ink = pageInk(OPS, ops, page.commonObjs, { rotate: page.rotate ?? 0, indices: true, turned: true, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
       const unread = ink.rotated || ink.capped || ink.timedOut || ink.degraded
-      pages.push(unread ? { glyphs: [], turned: [], shapes: new Map(), pictures: [], boxes: [], paths: [], points: [], boxAt: [], view: [...page.view] } : { glyphs: ink.glyphs.map(g => ({ n: g.n, k: g.k, u: g.u, x0: g.x0, x1: g.x1, ix0: g.ix0, ix1: g.ix1, y: g.y, size: g.size, top: g.top, bottom: g.bottom, font: g.font, fill: g.fill, ...(g.blank ? { blank: true } : {}), ...(g.form ? { form: true } : {}), ...(g.clipped ? { clipped: true } : {}) })), turned: ink.turned, shapes: ink.shapes, pictures: ink.pictures, boxes: ink.boxes, paths: ink.paths, points: ink.points.map(lowerPoint), boxAt: ink.boxAt, view: [...page.view] })
+      pages.push(unread ? { glyphs: [], turned: [], shapes: new Map(), pictures: [], boxes: [], paths: [], points: [], boxAt: [], view: [...page.view] } : { glyphs: ink.glyphs.map(g => ({ n: g.n, k: g.k, u: g.u, x0: g.x0, x1: g.x1, ix0: g.ix0, ix1: g.ix1, y: g.y, size: g.size, top: g.top, bottom: g.bottom, font: g.font, fill: g.fill, ...(g.blank ? { blank: true } : {}), ...(g.form ? { form: true } : {}), ...(g.clipped ? { clipped: true } : {}), ...(g.fid ? { fid: g.fid } : {}), ...(g.pid ? { pid: g.pid } : {}) })), turned: ink.turned, shapes: ink.shapes, pictures: ink.pictures, boxes: ink.boxes, paths: ink.paths, points: ink.points.map(lowerPoint), boxAt: ink.boxAt, view: [...page.view] })
       facts.push(unread ? null : alignOf(OPS, ops))
       page.cleanup()
     }
@@ -733,6 +733,8 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   const own = ownOf(pages, { units, follows, texts: shown })
   // (the text inside the vector figures, no unit's: its ink units, each its own group f<k>, a crowded one none; layout/figure-text.mjs)
   const fig = withFigureText ? figureUnitsOf(pages, own) : { units: [], glyphs: pages.map(() => new Map()), turned: pages.map(() => new Map()), stats: { letters: 0 } }
+  // (the figures' paths as their lines are read by then: let go before the wrap reads the pages again)
+  for (const pg of pages) pg.shapes = null
   const withFigures = (all) => own.glyphs.map((row, i) => {
     const m = fig.glyphs[i]
     if (!m?.size) return row

@@ -6,6 +6,8 @@ import { ANCHOR_REACH, DRAW_BAND, figureUnitsOf, FIGURE_WHYS } from '@/pdf-reade
 import { pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
 import { POINTS_TEX } from '@/pdf-reader/engine/layout/marks.mjs'
 import { CLASSES, FIGURE_KIND, TOGGLE_DEFAULTS, unitClass } from '@/pdf-reader/engine/rules/content-classes.mjs'
+import { figureUnits } from '@/pdf-reader/engine/pipeline/page-pass.mjs'
+import { UNIT_FLAG_BITS } from '@/pdf-reader/engine/layer-proto/units.mjs'
 import { DOCUMENT_OPTIONS, renderPage, wrapped } from './helpers/ocg-pdfs'
 
 // The text inside vector figures (docs/route/orphan-text.md stage 5, the content class `figures`): our final pass's glyphs that
@@ -150,10 +152,31 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
     expect(one(word('two words')).text).toBe('two words')
   })
 
+  it('two figures side by side never make one label: a run is one form\'s or one picture\'s', () => {
+    const pg = word('In Out')
+    // (the first two letters painted by one form, the last three by another, half an em apart on one baseline)
+    for (const [i, g] of pg.glyphs.entries()) Object.assign(g, { form: true, fid: i < 3 ? 1 : 2 })
+    expect(figureUnitsOf([{ ...pg, pictures: [] }] as never, null).units.map(u => u.text)).toEqual(['In', 'Out'])
+    // (one form: one label)
+    for (const g of pg.glyphs) Object.assign(g, { fid: 1 })
+    expect(figureUnitsOf([{ ...pg, pictures: [] }] as never, null).units.map(u => u.text)).toEqual(['In Out'])
+  })
+
   it('a glyph a unit owns, or one outside every figure, is no figure\'s', () => {
     const pg = word('label')
     expect(figureUnitsOf([{ ...pg, pictures: [] }] as never, null).units).toEqual([])
     expect(figureUnitsOf([pg] as never, { glyphs: [pg.glyphs.map(() => 'u3')] }).units).toEqual([])
+  })
+})
+
+describe('the figure units on the wire (page-pass.mjs figureUnits)', () => {
+  const unit = (text: string, page = 1) => ({ page, group: 'f0', text, font: 'ArialMT', size: 8, fill: 0, angle: 0, x: 10, y: 10, ux: 1, uy: 0, length: 40, ascent: 0.88, descent: -0.2, anchor: 'centre', form: true })
+  it('appends each drawn unit after the paper\'s own as a unit of kind figtext, its row on its page; a label of names keeps its source', () => {
+    const bundle: unknown[][] = [['para', 0, null, null, null, [[0, 'We evaluate on HellaSwag and report the loss.']]]]
+    const rows = figureUnits({ units: [unit('Validation loss'), unit('HellaSwag', 2), unit('Hidden page', 3)] }, { bundle, undrawable: [3], M: 3, prose: 'We evaluate on HellaSwag and report the loss.' })
+    expect(bundle.slice(1).map(u => [u[0], u[1], u[5]])).toEqual([[FIGURE_KIND, 0, [[0, 'Validation loss']]], [FIGURE_KIND, UNIT_FLAG_BITS.KEPT, [[0, 'HellaSwag']]]])
+    expect([...rows.keys()]).toEqual([1, 2])
+    expect(rows.get(1)?.[0]?.slice(0, 3)).toEqual([1, 0, 1])
   })
 })
 

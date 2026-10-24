@@ -14,8 +14,9 @@
 // Level and turned alike (a y-axis title set at 90 degrees keeps its turn).
 //
 // How they are cut (RUN_*): in stream order, a glyph joins the run before it where both are such glyphs, of one font, size,
-// colour, direction and kind (a form's or a picture's), on one baseline (within RUN_DY of their size across it), at most RUN_GAP
-// of its size past the run's end along it and not back over it by more than RUN_BACK; any other glyph between ends the run. A
+// colour, direction and figure (one form painted, one picture: pageInk's `fid` and `pid`, so that two figures side by side never
+// make one label), on one baseline (within RUN_DY of their size across it), at most RUN_GAP of its size past the run's end along
+// it and not back over it by more than RUN_BACK; any other glyph between ends the run. A
 // run is a unit when it spells a word (two letters together) in a face that is no math face, every glyph of it a character a
 // reader can trust (UNREAD); its text the glyphs' Unicode (NFKC) with a space where two stand apart by SPACE_GAP of their size.
 // What it is not, a number, a tick's label, a letter alone, a formula's, stays the original's ink; so does a run a glyph of which
@@ -84,12 +85,12 @@ function streamOf(pg, owners) {
     for (; q < P.length && P[q].glyph <= g; q++) { const nm = P[q].name; if (nm === PICTURE_START) d++; else if (nm === PICTURE_END) d = Math.max(0, d - 1) }
     const x = G[g]
     if (!(x.n >= 0)) continue
-    out.push({ i: g, turned: false, n: x.n, k: x.k, u: x.u ?? '', blank: !!x.blank || !/\S/u.test(x.u ?? ''), ox: x.x0, oy: x.y, ex: x.x1, ey: x.y, ux: 1, uy: 0, size: x.size, ascent: (x.top - x.y) / Math.max(x.size, 1e-6), descent: (x.bottom - x.y) / Math.max(x.size, 1e-6), font: x.font, fill: x.fill ?? 0, form: !!x.form, picture: d, owner: owners?.[g] ?? null, ink: [x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top], clipped: !!x.clipped })
+    out.push({ i: g, turned: false, n: x.n, k: x.k, u: x.u ?? '', blank: !!x.blank || !/\S/u.test(x.u ?? ''), ox: x.x0, oy: x.y, ex: x.x1, ey: x.y, ux: 1, uy: 0, size: x.size, ascent: (x.top - x.y) / Math.max(x.size, 1e-6), descent: (x.bottom - x.y) / Math.max(x.size, 1e-6), font: x.font, fill: x.fill ?? 0, form: !!x.form, picture: d, owner: owners?.[g] ?? null, ink: [x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top], clipped: !!x.clipped, fid: x.fid ?? 0, pid: x.pid ?? 0 })
   }
   T.forEach((t, j) => {
     if (!(t.n >= 0)) return
     const picture = depthAtPoint[Math.min(Math.max(t.pt ?? 0, 0), P.length)]
-    out.push({ i: j, turned: true, n: t.n, k: t.k, u: t.u ?? '', blank: !!t.blank || !/\S/u.test(t.u ?? ''), ox: t.ox, oy: t.oy, ex: t.ex, ey: t.ey, ux: t.ux, uy: t.uy, size: t.size, ascent: t.ascent, descent: t.descent, font: t.font, fill: t.fill ?? 0, form: !!t.form, picture, owner: null, box: t.box, clipped: !!t.clipped })
+    out.push({ i: j, turned: true, n: t.n, k: t.k, u: t.u ?? '', blank: !!t.blank || !/\S/u.test(t.u ?? ''), ox: t.ox, oy: t.oy, ex: t.ex, ey: t.ey, ux: t.ux, uy: t.uy, size: t.size, ascent: t.ascent, descent: t.descent, font: t.font, fill: t.fill ?? 0, form: !!t.form, picture, owner: null, box: t.box, clipped: !!t.clipped, fid: t.fid ?? 0, pid: t.pid ?? 0 })
   })
   out.sort((a, b) => a.n - b.n || a.k - b.k)
   return out
@@ -136,14 +137,14 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       if (!figure) { close(); continue }
       if (run) {
         const f = run.frame, s = along(f, x.ox, x.oy), t = across(f, x.ox, x.oy)
-        const joins = x.font === run.font && Math.abs(x.size - run.size) <= 0.01 * run.size && x.fill === run.fill && x.form === run.form
+        const joins = x.font === run.font && Math.abs(x.size - run.size) <= 0.01 * run.size && x.fill === run.fill && x.form === run.form && x.fid === run.fid && x.pid === run.pid
           && Math.abs(x.ux - f.ux) < 1e-3 && Math.abs(x.uy - f.uy) < 1e-3 && Math.abs(t) <= RUN_DY * run.size
           && s >= run.s1 - RUN_BACK * run.size && s - run.s1 <= RUN_GAP * run.size
         if (!joins) close()
       }
       if (!run) {
         if (x.blank) continue
-        run = { gs: [], font: x.font, size: x.size, fill: x.fill, form: x.form, s1: 0, frame: { ox: x.ox, oy: x.oy, ux: x.ux, uy: x.uy } }
+        run = { gs: [], font: x.font, size: x.size, fill: x.fill, form: x.form, fid: x.fid, pid: x.pid, s1: 0, frame: { ox: x.ox, oy: x.oy, ux: x.ux, uy: x.uy } }
       }
       run.gs.push(x)
       if (x.clipped && !x.blank) run.clipped = true
@@ -212,6 +213,13 @@ function roomOf(pg, f, u, own) {
   const reach = ANCHOR_REACH * u.size
   // (the nearest ink right before its box along its baseline and right after it, within the reach: their gaps to the box)
   let crowded = false, before = Infinity, after = Infinity
+  // (what may meet its band or its reach, on the page: its frame's box there, a box apart from it no ink of its room)
+  const near = (() => {
+    const nx = -u.uy, ny = u.ux, lo = u.descent * u.size, hi = u.ascent * u.size
+    const pts = [[-reach, lo], [u.length + reach, lo], [-reach, hi], [u.length + reach, hi]].map(([s1, t]) => [u.x + u.ux * s1 + nx * t, u.y + u.uy * s1 + ny * t])
+    return [Math.min(...pts.map(p => p[0])), Math.min(...pts.map(p => p[1])), Math.max(...pts.map(p => p[0])), Math.max(...pts.map(p => p[1]))]
+  })()
+  const apart = (x0, y0, x1, y1) => Math.max(x0, x1) < near[0] || Math.min(x0, x1) > near[2] || Math.max(y0, y1) < near[1] || Math.min(y0, y1) > near[3]
   /** an extent along the baseline, of ink across the band: inside the box, or right before or after it */
   const along1 = (a0, a1) => {
     if (a1 > band[0] && a0 < band[2]) crowded = true
@@ -221,12 +229,12 @@ function roomOf(pg, f, u, own) {
   for (let g = 0; g < G.length && !crowded; g++) {
     if (mineG.has(g)) continue
     const x = G[g]
-    if (x.blank || !/\S/u.test(x.u ?? '')) continue
+    if (x.blank || !/\S/u.test(x.u ?? '') || apart(x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top)) continue
     const e = inFrame(f, [x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top])
     if (e[3] > band[1] && e[1] < band[3] && e[2] > band[0] && e[0] < band[2]) crowded = true
   }
   for (let b = 0; b + 3 < B.length && !crowded; b += 4) {
-    if (mineB.has(b / 4)) continue
+    if (apart(B[b], B[b + 1], B[b + 2], B[b + 3]) || mineB.has(b / 4)) continue
     const e = inFrame(f, [B[b], B[b + 1], B[b + 2], B[b + 3]])
     if (e[3] <= band[1] || e[1] >= band[3] || e[2] <= -reach || e[0] >= u.length + reach) continue
     const shape = S?.get(b / 4)

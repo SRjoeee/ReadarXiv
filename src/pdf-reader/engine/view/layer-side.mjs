@@ -360,10 +360,12 @@ export function createLayerSide(view, o) {
     const doc = await composedFor().catch(e => { if (disposed || my !== gen) return null; throw coded(e, 'composed') })
     if (disposed || my !== gen) return
     const me = {}
+    // (the figure switch as this open takes it: one turned while the open is under way opens the door again once it is in)
+    const shown = figuresShown
     let layer
     try {
       layer = await open({
-        index, doc, parts, target, faceSources: o.faceSources, hyphUrl: o.hyphUrl, ...(o.rules ? { rules: o.rules } : {}), OPS: V.lib?.OPS ?? null, figures: figuresShown,
+        index, doc, parts, target, faceSources: o.faceSources, hyphUrl: o.hyphUrl, ...(o.rules ? { rules: o.rules } : {}), OPS: V.lib?.OPS ?? null, figures: shown,
         // (the left parts' fetches go with the door's generation: a reopen, a refusal or the dispose aborts them)
         leftPart: (_page, ref) => o.fetchObject(ref, leftAc.signal),
         onRetired: d => retired(d, me),
@@ -385,6 +387,7 @@ export function createLayerSide(view, o) {
     wantsBefore.clear()
     for (let n = 1; n <= V.places.count(); n++) if (V.places.near(n)) askSoon(n)
     aheadSoon()
+    if (shown !== figuresShown) { reopenWanted = true; void pump() }
   }
 
   // ---------------------------------------------------------------- the rows
@@ -1392,6 +1395,7 @@ export function createLayerSide(view, o) {
     setFigures(on) {
       if (disposed || typeof on !== 'boolean' || on === figuresShown) return
       figuresShown = on
+      // (no door yet: the open under way, or the first, takes the switch as it is once its door is in)
       if (state === 'refused' || !door) return
       reopenWanted = true
       void pump()

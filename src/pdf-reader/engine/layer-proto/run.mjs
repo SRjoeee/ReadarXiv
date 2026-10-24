@@ -1421,7 +1421,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const rec = { id: f.id, group: f.group, page: pg, drawn: false, why: null }
       figureRecs.push(rec)
       const u = U.get(f.id)
-      if (!translated(u)) { rec.why = u ? 'untranslated' : 'no row'; continue }
+      if (!translated(u)) { rec.why = !u ? 'no row' : u.state === 'kept' ? 'kept' : 'untranslated'; continue }
       const text = u.pieces.map(p => (p.t === 'text' ? shownPiece(p) : ' ')).join('').replace(/\s+/g, ' ').trim()
       if (!text || sameAsSource(text, u.src ?? '')) { Object.assign(rec, { why: 'same', text }); continue }
       if (!VIS.has(f.group)) { Object.assign(rec, { why: 'unhidden', text }); continue }

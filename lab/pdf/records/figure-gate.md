@@ -20,10 +20,12 @@ PDFs' text is read; their sources, the marking's texts):
 | 2307.16209v1 | 56 | 56 | 0 | 26 | 116 | 0 | 0 | 0 | 0 |
 | 2608.04322v1 | 237 | 180 | 57 | 8 | 1,861 | 0 | 0 | 0 | 0 |
 | 2608.16117v1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 2609.26457v1 | 170 | 155 | 15 | 10 | 1,826 | 0 | 0 | 0 | 0 |
-| **Pack** | **1,022** | **841** | **181** | **60** | **6,431** | **0** | **0** | **0** | **0** |
+| 2609.26457v1 | 170 | 156 | 14 | 10 | 1,826 | 0 | 0 | 0 | 0 |
+| **Pack** | **1,022** | **842** | **180** | **60** | **6,431** | **0** | **0** | **0** | **0** |
 
-No unit of a font of no Unicode, of a form shared or past a page's bounds. 13 pixels of G1 lie in split shows (1512.03385v1 p4,
+No unit of a font of no Unicode, of a form shared or past a page's bounds. (A unit's room is read against what may meet its band
+on the page alone: a box apart from it there is no ink of its room, so a turned label is no longer crowded by a long rule a page
+box's extent in its frame reached over, 2609.26457v1's "AIRA*" at 30 degrees.) 13 pixels of G1 lie in split shows (1512.03385v1 p4,
 2609.26457v1), each within Δ 16. Before the clip rule two titles of 1706.03762v7's cropped attention figures (its viewport cuts
 them off: nothing is shown there) were cut into units and failed D; they are now left out (`clipped`).
 
