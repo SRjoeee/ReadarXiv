@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, the items of a list set inside a paragraph ("(1) … (2) …") no longer draw over each other: an item's translation ends on its last line where the original's did, before the next item's number. A centred caption numbered for a supplement or an appendix ("Table S3:", "Figure A1") stays centred with its number. A paper that comes with a supplement as a second main file is translated again (one paper of fifty had stayed in English).
 - Fixed: a translation service whose model does not answer in the shape the extension asks for (prose instead of JSON, say) no longer turns one batch of four paragraphs into 40 paid requests: it is asked once more, then the next service on the chain takes over, two requests in all. The free web translators are spared the same way.
 - The PDF reader and the control panel do nothing when a page that is not the extension's own puts them in a frame or sends its tab to them: no translation is started, no setting is changed, and a click there acts on no tab. The floating button answers only your own clicks, never a page's script.
 

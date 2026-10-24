@@ -64,7 +64,10 @@ export { spellOf }
  *  stop after it — of its characters, NFKC, lower case, no white space */
 const LABEL_NAME = '(?:figure|fig\\.?|table|tab\\.?|algorithm|alg\\.?|listing|section|sec\\.?|chapter|appendix|part|step|case|example|definition|lemma|theorem|proposition|corollary|remark|claim|note|assumption|exercise|problem|equation|eq\\.?|proof|keywords?|index ?terms)'
 const LABEL_NUMBER = '[([]?(?:\\d{1,4}|[a-z]|[ivxlcdm]{1,6})(?:[.\\-–](?:\\d{1,4}|[a-z]))*'
-const LABEL_FORM = new RegExp(`^(?:(?:${LABEL_NAME}(?:${LABEL_NUMBER})?|${LABEL_NUMBER})[)\\].:–—|]{0,2}|[•◦▪▫‣⁃∙·∗*–—\\-+○●■□►▸▹➢✓✔])$`, 'u')
+// (after a name, a number may take a letter before it: a supplement's or an appendix's, "Table S3:", "Figure A1", the letter
+// before a digit alone, so that two letters are no number, "Figure AB"; alone, a letter and a number are a model's or a
+// product's name, "A100", no label)
+const LABEL_FORM = new RegExp(`^(?:(?:${LABEL_NAME}(?:(?:[a-z](?=\\d))?${LABEL_NUMBER})?|${LABEL_NUMBER})[)\\].:–—|]{0,2}|[•◦▪▫‣⁃∙·∗*–—\\-+○●■□►▸▹➢✓✔])$`, 'u')
 const labelText = s => s.normalize('NFKC').toLowerCase().replace(/\s/gu, '')
 export const isLabelForm = s => { const t = labelText(s); return t === '' || LABEL_FORM.test(t) }
 

@@ -1468,6 +1468,22 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (half > (r[3] - r[1]) / 2) { b.x0 = mid - half; b.x1 = mid + half }
     } else if (right > b.x1) b.x1 = right
   }
+  /** whether something of the page stands on a shared row (need.mjs rowLeadOf: `row`, the last row of the unit before) between
+   *  that unit's end there and `x`, where the next unit's text begins: a character of the page, which stays where it is (a
+   *  label kept as the original's, a name), so that the next unit is not laid from that unit's end (layout2's `start`) */
+  const keptBetween = (row, x) => (chars2[row.page - 1] ?? []).some(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 > row.x1 + 0.1 && (c.x0 + c.x1) / 2 < x - 0.1 && Math.abs(c.yb - row.baseline) < 0.4 * row.size)
+  /** a unit's shared row (`followers`: the next unit's first row continues its last) where something stays between the two
+   *  (keptBetween), read before the next unit is laid: up to where the file begins that unit's first line, or ends its label
+   *  on the row where the file holds one (the label stays the original's, and its text begins after it); else null */
+  const keptAfter = p => {
+    const fid = followers.get(p.id), row = fid === undefined ? null : candOf.get(fid)?.lead
+    const fu = row ? tex.index.unit(fid) : null
+    if (!fu?.lines.length) return null
+    let x = fu.lines[1]
+    const lb = fu.labels
+    if (lb.length >= 7 && lb[1] === row.page && Math.abs(lb[3] - row.baseline) < 0.4 * row.size) x = Math.max(x, lb[4] + 0.2)
+    return keptBetween(row, x) ? row : null
+  }
   /** the unit's edges (P.halfLead; layer2.mjs footFloorAt): whether its first and last lines share their baseline with ink
    *  that stays where it is, a label kept as the original's or a character of the page beside the line's own in its column (a
    *  run-in heading, another unit that ends or begins on it, a mark set before it: `head`, `foot` false), which would stand
@@ -1890,6 +1906,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (carried) { const r0 = p.rects[0], lx0 = Math.min(...prep.label.chars.map(c => c.x0)); if (lx0 < r0[1]) p.rects[0] = [r0[0], lx0, r0[2], r0[3], r0[4]] }
     p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced, LINESKIP, prep.breakAt, prep.joinAt, centredFlag)
     if (p.unit.kind !== 'cell') for (const b of p.blocks) widen(b, p)
+    // (a unit whose last row another unit's first continues on a shared line, where something of the page stands between the
+    // two that stays (a label kept as the original's: inparaenum's "(2)" between two items, 2610.21098 page 2): the next unit's
+    // first line stays where TeX set it (layout2's `start` is not taken, keptBetween), so this unit's text on the row ends
+    // where TeX ended it (`stop`, slotsAt), as it does where nothing comes after it. Run past it to the block's edge, its
+    // last line was drawn over that label and over the next unit's first words)
+    const kept = keptAfter(p)
+    if (kept) for (const b of p.blocks) if (b.page === kept.page && b.B.some(y => Math.abs(y - kept.baseline) < 0.05)) b.stop = { y: kept.baseline, band: kept.size, x1: kept.x1 }
     // (the unit's displays TeX set with its short skip under a line of its own that ends 2 em before them, each the block's of
     // that line: the line laid there ends as far before them, layer2.mjs slotsAt)
     L2.shortSkipsTo(p.blocks, shortSkipsOf(lu), prep.lineInfo)
@@ -1920,8 +1943,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const row = candOf.get(p.id)?.lead
     if (row && p.blocks[0] && !p.blocks[0].centred && p.blocks[0].page === row.page && Math.abs(p.blocks[0].B[0] - row.baseline) < 0.05) {
       const b = p.blocks[0], a = byId.get(row.id), share = a && !a.refused ? a.share ?? null : null, x = b.x0 + b.indent
-      const between = (chars2[b.page - 1] ?? []).some(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 > row.x1 + 0.1 && (c.x0 + c.x1) / 2 < x - 0.1 && Math.abs(c.yb - row.baseline) < 0.4 * row.size)
-      if (share && !between) {
+      if (share && !share.kept && !keptBetween(row, x)) {
         b.start = share.end !== null ? share.end + Math.max(0, x - row.x1) : row.x0
         if (share.end !== null && Math.abs(share.at - b.B[0]) >= 0.05) b.startY = share.at
         // (painted on the row's page after that unit, whose erasing of the row covers where it starts: paintLed)
@@ -2019,7 +2041,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     settleLayout(p)
     // (a unit whose last row another unit's first continues on a shared line: where its translation ends on that row, which
     // that unit is laid from, and which its page's fill keeps; its last run's, where it is laid in runs)
-    if (followers.has(p.id)) { const r = candOf.get(followers.get(p.id))?.lead; p.share = r ? L2.shareOf(p.layout, p.blocks, r) : null; if (p.runs) p.runs.at(-1).share = p.share }
+    // (`kept`: something stays between the two on the row, keptAfter, and this unit's text there ended where TeX's did: the next
+    // unit's first line stays where TeX set it, whatever its own reading of the row)
+    if (followers.has(p.id)) { const r = candOf.get(followers.get(p.id))?.lead; p.share = r ? L2.shareOf(p.layout, p.blocks, r) : null; if (p.share && kept) p.share.kept = true; if (p.runs) p.runs.at(-1).share = p.share }
     const t4 = lap()
     p.layout.extents = new Map([...prep.extents].map(([r, e]) => [r.join(), e]))
     if (p.blocks[0] && (prep.label || prep.firstX0 !== undefined)) {
