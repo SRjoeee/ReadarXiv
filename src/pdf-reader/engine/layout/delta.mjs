@@ -463,6 +463,30 @@ function sameGraph(PL) {
   }
 }
 
+/**
+ * Whether two direct values are the same text of PDF: dicts key by key, arrays item by item, leaves as sameGraph reads them, and
+ * a reference by its number and generation, never by what it names. What the delta writes again of the original's catalog is
+ * its keys' text, references as they are (deltaOf's `lit`, sameRef), and what they name is the composed document's: a name
+ * tree's destinations name pages, a replaced one ours (2610.20030's catalog holds its /Names directly)
+ */
+function sameDirect(PL) {
+  const { PDFRef, PDFDict, PDFArray, PDFRawStream, PDFName, PDFNumber, PDFString, PDFHexString } = PL
+  const leaf = v => (v instanceof PDFName ? v.asString() : v instanceof PDFNumber ? `n${v.asNumber()}` : v instanceof PDFString || v instanceof PDFHexString ? `x${hexOf(v.asBytes())}` : v === undefined ? 'null' : String(v))
+  const eq = (a, b, depth = 0) => {
+    if (depth > 4 * DEPTH_MAX) return false
+    if (a instanceof PDFRef || b instanceof PDFRef) return a instanceof PDFRef && b instanceof PDFRef && a.objectNumber === b.objectNumber && a.generationNumber === b.generationNumber
+    if (a instanceof PDFRawStream || b instanceof PDFRawStream) return false
+    if (a instanceof PDFDict || b instanceof PDFDict) {
+      if (!(a instanceof PDFDict && b instanceof PDFDict)) return false
+      const ea = new Map(a.entries().map(([k, v]) => [k.asString(), v])), eb = new Map(b.entries().map(([k, v]) => [k.asString(), v]))
+      return ea.size === eb.size && [...ea].every(([k, v]) => eb.has(k) && eq(v, eb.get(k), depth + 1))
+    }
+    if (a instanceof PDFArray || b instanceof PDFArray) return a instanceof PDFArray && b instanceof PDFArray && a.size() === b.size() && a.asArray().every((x, i) => eq(x, b.get(i), depth + 1))
+    return leaf(a) === leaf(b)
+  }
+  return eq
+}
+
 /** why the composed document's optional content is not ours one to one (null where it is): ours to its by the position of each
  *  in /OCProperties' /OCGs, then by each replaced page's /Properties names; a map that is not a bijection is a merge or a split */
 function ocIdentityWhy(PL, U, X, ourOcp, pages) {
@@ -673,10 +697,11 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
     if (catalog !== (ourOcp !== undefined)) return no(catalog ? 'it writes the catalog again, our pass having no /OCProperties' : 'it does not carry our /OCProperties')
     if (catalog) {
       const xc = X.lookup(root), oc = O.lookup(root)
-      // (key by key, a reference by its number: the catalog's tree is the composed document's, its replaced pages ours)
+      // (key by key, a reference by its number, within a direct value too (sameDirect): the catalog's tree is the composed
+      // document's, its replaced pages ours)
       const keysOf = d => (d instanceof PL.PDFDict ? new Map(d.entries().map(([k, v]) => [k.asString(), v]).filter(([k]) => k !== '/OCProperties')) : null)
-      const kx = keysOf(xc), ko = keysOf(oc)
-      if (!kx || !ko || kx.size !== ko.size || [...ko].some(([k, v]) => !kx.has(k) || (v instanceof PL.PDFRef || kx.get(k) instanceof PL.PDFRef ? refText(v) !== refText(kx.get(k)) : !same(X, kx.get(k), O, v)))) return no('its catalog is not the original\'s but for /OCProperties')
+      const kx = keysOf(xc), ko = keysOf(oc), direct = sameDirect(PL)
+      if (!kx || !ko || kx.size !== ko.size || [...ko].some(([k, v]) => !kx.has(k) || !direct(kx.get(k), v))) return no('its catalog is not the original\'s but for /OCProperties')
       const why = ocPropertiesWhy(PL, O, X, layersOf(PL, O, U))
       if (why) return no(why)
     }
