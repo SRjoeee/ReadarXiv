@@ -592,8 +592,10 @@ const tooLarge = (what, bound, size) => new BundleRefusal('units-too-large', { k
  * more than CHUNKS_MAX, or their bytes or values in all past UNITS_TOTAL_BYTES or UNITS_TOTAL_VALUES. Each chunk gives its
  * `values`, as the reader counts them
  */
-export async function writeUnitChunks({ paper, units, start = 0 }) {
+export async function writeUnitChunks({ paper, units, start = 0, before = null }) {
   const K = 'units'
+  // (`before`: the chunks written before these, chunkTotals', so that the bounds are of all the chunks a head lists)
+  const b0 = before ?? { chunks: 0, bytes: 0, values: 0 }
   const p = { id: paper.id, version: paper.version }
   if (!isPaperId(p.id) || !isInteger(p.version, 1, VERSION_MAX)) throw new RangeError('not a paper version')
   // (the ink units' chunks from `start`, after the source units', of INK_UNITS_FORMAT; every other one of UNITS_FORMAT, as before)
@@ -610,9 +612,9 @@ export async function writeUnitChunks({ paper, units, start = 0 }) {
     const c = out[out.length - 1]
     totalBytes += c.bytes.length
     totalValues += c.values
-    if (out.length > CHUNKS_MAX) throw tooLarge('chunks', CHUNKS_MAX, out.length)
-    if (totalBytes > UNITS_TOTAL_BYTES) throw tooLarge('bytes', UNITS_TOTAL_BYTES, totalBytes)
-    if (totalValues > UNITS_TOTAL_VALUES) throw tooLarge('values', UNITS_TOTAL_VALUES, totalValues)
+    if (b0.chunks + out.length > CHUNKS_MAX) throw tooLarge('chunks', CHUNKS_MAX, b0.chunks + out.length)
+    if (b0.bytes + totalBytes > UNITS_TOTAL_BYTES) throw tooLarge('bytes', UNITS_TOTAL_BYTES, b0.bytes + totalBytes)
+    if (b0.values + totalValues > UNITS_TOTAL_VALUES) throw tooLarge('values', UNITS_TOTAL_VALUES, b0.values + totalValues)
   }
   for (let i = 0; i < units.length; i++) {
     if (!unitStands(units[i], start + i, stands, { ink: start > 0 })) throw Object.assign(refuse(K, '', `unit ${start + i}: does not stand (a shape the reader would drop, or a nested unit that does not stand)`), { id: start + i })
@@ -632,6 +634,8 @@ export async function writeUnitChunks({ paper, units, start = 0 }) {
   if (units.length) await close(units.length - 1)
   return out
 }
+/** written chunks' count, bytes and values, as writeUnitChunks' `before` takes them */
+export const chunkTotals = chunks => ({ chunks: chunks.length, bytes: chunks.reduce((n, c) => n + c.bytes.length, 0), values: chunks.reduce((n, c) => n + c.values, 0) })
 
 /**
  * The units of chunks read in order, head-less (amendment M3; the head's indexOf takes the same): each chunk after the one
@@ -751,7 +755,8 @@ function ledgerOf(K, l, N) {
   for (let j = 0; j < o.classes.length; j += 3) {
     const c = o.classes[j], g = o.classes[j + 1], l = o.classes[j + 2]
     if (typeof c !== 'string' || !CLASS_IDS.includes(c) || seen.has(c)) throw refuse(K, `base.ledger.classes[${j}]`, 'not a class, each once')
-    if (!isInteger(g, 0, Number.MAX_SAFE_INTEGER) || !isInteger(l, 0, g)) throw refuse(K, `base.ledger.classes[${j + 1}]`, 'not glyphs and letters, integers, letters no more than glyphs')
+    // (letters apart from glyphs: a ligature's glyph is its letters, NFKC's, ledger.mjs lettersOf)
+    if (!isInteger(g, 0, Number.MAX_SAFE_INTEGER) || !isInteger(l, 0, Number.MAX_SAFE_INTEGER)) throw refuse(K, `base.ledger.classes[${j + 1}]`, 'not glyphs and letters, integers')
     seen.add(c)
     classes.push(c, g, l)
   }

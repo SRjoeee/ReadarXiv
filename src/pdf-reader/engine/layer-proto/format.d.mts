@@ -294,7 +294,9 @@ export interface Written {
 }
 /** the units as chunks, greedy by id; a unit past either cap alone throws BundleRefusal (`kind` 'units', and `id`), and the
  *  chunks past CHUNKS_MAX, UNITS_TOTAL_BYTES or UNITS_TOTAL_VALUES `units-too-large` (its `data` { what, bound, size }) */
-export declare function writeUnitChunks(o: { paper: { id: string; version: number }; units: readonly (BundleUnit | InkBundleUnit)[]; start?: number }): Promise<(Written & { from: number; to: number })[]>
+export declare function writeUnitChunks(o: { paper: { id: string; version: number }; units: readonly (BundleUnit | InkBundleUnit)[]; start?: number; before?: ChunkTotals | null }): Promise<(Written & { from: number; to: number })[]>
+export interface ChunkTotals { chunks: number; bytes: number; values: number }
+export declare function chunkTotals(chunks: readonly { bytes: Uint8Array; values: number }[]): ChunkTotals
 export declare function writeHead(o: {
   paper: { id: string; version: number; pages: number }
   /** the PDF the layer is drawn over; one given with no `source` is arXiv's (as every base was before BUNDLE 8) */

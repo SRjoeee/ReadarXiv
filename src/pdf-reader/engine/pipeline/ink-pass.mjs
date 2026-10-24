@@ -7,6 +7,8 @@
 // An original module (no port statement). It imports the engine's own pure modules alone.
 import { PH_KINDS, UNIT_KINDS } from '../layout/file.mjs'
 import { fontName } from '../layout/make.mjs'
+import { BundleRefusal } from '../layer-proto/bundle.mjs'
+import { chunkTotals, writeUnitChunks } from '../layer-proto/format.mjs'
 import { inkBundleUnitsOf } from '../layer-proto/units.mjs'
 import { lineRects } from './anchors.mjs'
 
@@ -15,14 +17,16 @@ const SLACK = 1
 
 /**
  * The ink units the host gave (`ours.ink`, layout/wrap.mjs wrapFinal's `ink`) where they are this paper's: their ids from the
- * source units' count on, rising, each a kind of UNIT_KINDS with rows of the wrap's shape; the units on a page `undrawable` (the
- * line check's: carry.mjs lineCheckOf) left out, as the maker leaves out a unit on one. Null where there are none or the value is
- * not the wrap's (a host of before, a crafted value): the pass is then as it was
+ * source units' count on, rising, each a kind of UNIT_KINDS with rows of the wrap's shape. Every one keeps the wrap's id, which
+ * names its groups in our wrapped page (visibility.mjs textGroup) and which an echo names; `off` those the pass does not lay, as
+ * the maker lays no unit on a page not drawable: one on a page `undrawable` (the line check's: carry.mjs lineCheckOf), or that
+ * the wrap could not hide alone (its `off`: a page it did not wrap, a placeholder on a page whose groups it merged). Null where
+ * there are none, all are off, or the value is not the wrap's (a host of before, a crafted value): the pass is then as it was
  */
 export function inkOfHost(ink, source, undrawable = []) {
   const N = source?.units?.length
   if (!ink || !Array.isArray(ink.units) || ink.base !== N || !ink.units.length) return null
-  const off = new Set(undrawable)
+  const pages = new Set(undrawable)
   let next = N
   const units = []
   for (const u of ink.units) {
@@ -30,14 +34,24 @@ export function inkOfHost(ink, source, undrawable = []) {
     next++
     units.push(u)
   }
-  // (a unit on a page not drawable is no unit: the ids after it move down, so that they stay one run from N)
-  const kept = units.filter(u => { for (let j = 0; j < u.rows.lines.length; j += 8) if (off.has(u.rows.lines[j])) return false; return true })
-  if (!kept.length) return null
-  if (kept.length === units.length) return { base: N, units }
-  return { base: N, units: kept.map((u, k) => renumbered(u, N + k)) }
+  const off = new Set((Array.isArray(ink.off) ? ink.off : []).filter(id => Number.isInteger(id) && id >= N && id < next))
+  for (const u of units) for (let j = 0; j < u.rows.lines.length; j += 8) if (pages.has(u.rows.lines[j])) { off.add(u.id); break }
+  if (off.size === units.length) return null
+  return { base: N, units, off }
 }
-/** an ink unit under another id: its rows' id with it */
-const renumbered = (u, id) => ({ ...u, id, rows: { ...u.rows, unit: [id, ...u.rows.unit.slice(1)] } })
+
+/**
+ * The ink units where their chunks fit beside the source units' within the bounds a head's chunks are read by (format.mjs
+ * CHUNKS_MAX, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, a chunk's own): both written once as the pass writes them (chunksOf), else
+ * null, the pass as it was. `sourceUnits` the bundle's (bundleUnitsOf's); a refusal of the source units' own is the pass's, later
+ */
+export async function inkWithinChunks(paper, sourceUnits, ink) {
+  if (!ink) return null
+  let src
+  try { src = await writeUnitChunks({ paper, units: sourceUnits }) } catch (e) { if (e instanceof BundleRefusal) return ink; throw e }
+  try { await writeUnitChunks({ paper, units: inkBundleUnitsOf(ink.units), start: ink.base, before: chunkTotals(src) }) } catch (e) { if (e instanceof BundleRefusal) return null; throw e }
+  return ink
+}
 
 /** the bundle's units with the ink units after the source units' */
 export const bundleWithInk = (bundle, ink) => (ink ? [...bundle, ...inkBundleUnitsOf(ink.units)] : bundle)
@@ -76,7 +90,8 @@ function rowsOf(ink, ids, fonts) {
   const by = new Map(ink.units.map(u => [u.id, u]))
   for (const id of ids) {
     const u = by.get(id)
-    if (!u) continue
+    // (a unit off, inkOfHost's, is laid nowhere: the original's)
+    if (!u || ink.off?.has?.(id)) continue
     const r = u.rows
     out.units.push([id, UNIT_KINDS.indexOf(r.unit[1]), r.unit[2], r.unit[3], r.unit[4]])
     const lines = r.lines.slice()

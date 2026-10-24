@@ -1,9 +1,10 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { indexOf, INK_UNITS_FORMAT, type PartChain, type ReadPart, type ReadUnitsChunk, readHead, readPart, readUnitsChunk, UNITS_FORMAT, type Written } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { CHUNKS_MAX, indexOf, INK_UNITS_FORMAT, type PartChain, type ReadPart, type ReadUnitsChunk, readHead, readPart, readUnitsChunk, UNITS_FORMAT, type Written, writeUnitChunks } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { readMarked } from '@/pdf-reader/engine/layout/marks.mjs'
 import { orphanRowsOfHead } from '@/pdf-reader/engine/layout/ledger.mjs'
-import { inkAnchors, inkOfHost } from '@/pdf-reader/engine/pipeline/ink-pass.mjs'
+import { inkAnchors, inkOfHost, inkWithinChunks, layoutWithInk } from '@/pdf-reader/engine/pipeline/ink-pass.mjs'
+import { inkBundleUnitsOf } from '@/pdf-reader/engine/layer-proto/units.mjs'
 import { layerOfPaper } from '@/pdf-reader/engine/pipeline/page-pass.mjs'
 import { arxivOf, endOf, markedOf, type Page, type Run, text, unit, words, type World } from './helpers/make-world'
 
@@ -86,9 +87,33 @@ describe('the ink units in the page pass', () => {
     }
   })
 
-  it('leaves out a unit on a page not drawable, the ids after it moved down', () => {
+  it('keeps every unit its id, which names its groups in our page, and lays none on a page not drawable or the wrap left off', () => {
     const got = inkOfHost(INK, { units: [0, 1, 2] }, [2])
-    expect(got?.units.map(u => [u.id, u.rows.lines[0], u.rows.unit[0]])).toEqual([[3, 3, 3]])
+    expect(got?.units.map(u => [u.id, u.rows.lines[0], u.rows.unit[0]])).toEqual([[3, 2, 3], [4, 3, 4]])
+    expect([...(got?.off ?? [])]).toEqual([3])
+    expect([...(inkOfHost({ ...INK, off: [4, 9, 'x'] }, { units: [0, 1, 2] }) ?? { off: [] }).off]).toEqual([4])
+    // (all off: none, the pass as it was)
+    expect(inkOfHost(INK, { units: [0, 1, 2] }, [2, 3])).toBe(null)
+    // (one off is in no layout's rows)
+    const layout = { fonts: [], units: [], lines: [], frames: [], erase: [], ph: [] }
+    expect(layoutWithInk(layout, got, [3, 4]).units.map(u => u[0])).toEqual([4])
+  })
+
+  it('keeps an echo of an ink unit as the wrap made it, whether or not that unit is laid', () => {
+    const echoOf = (id: number, page: number, echo: number | null) => ({ ...headUnit(id, page), echo })
+    const ink = { base: 3, units: [echoOf(3, 2, null), echoOf(4, 3, 3), echoOf(5, 4, 0)] }
+    const got = inkOfHost(ink, { units: [0, 1, 2] }, [2])
+    expect(got?.units.map(u => [u.id, u.echo])).toEqual([[3, null], [4, 3], [5, 0]])
+    expect([...(got?.off ?? [])]).toEqual([3])
+  })
+
+  it('makes none where their chunks would pass a head\'s bounds beside the source units\'', async () => {
+    const units = [['para', 0, null, null, null, [[0, 'Body']]]] as never
+    const one = { base: 1, units: [headUnit(1, 2)] } as never
+    expect(await inkWithinChunks(PAPER, units, one)).toBe(one)
+    expect(await inkWithinChunks(PAPER, units, null)).toBe(null)
+    // (the bound itself: chunks written before count against it)
+    await expect(writeUnitChunks({ paper: PAPER, units: inkBundleUnitsOf([headUnit(1, 2)] as never), start: 1, before: { chunks: CHUNKS_MAX, bytes: 0, values: 0 } })).rejects.toThrow(/units-too-large/)
   })
 
   it('anchors each on the left by arXiv\'s tokens on its lines', () => {

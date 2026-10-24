@@ -23,6 +23,8 @@ export interface InkUnit {
   rows: InkRows
 }
 /** the ink units as the wrap gives them on (`ours.ink`): their ids from `base` */
-export interface InkOfWrap { base: number; units: Omit<InkUnit, 'glyphs'>[] }
+export interface InkOfWrap { base: number; units: Omit<InkUnit, 'glyphs'>[]; off?: number[] }
 export declare function inkUnitsOf(pages: (LedgerPage & { view: number[] })[], ledger: Ledger, o?: { units?: readonly { kind?: string; pieces?: readonly InkPiece[] }[] | null }): InkUnit[]
 export declare function claimInk(own: { glyphs: (string | null)[][] }, ink: readonly InkUnit[]): number
+/** the ink units the wrap could not hide alone: one with a glyph on a page not wrapped, or a placeholder on a page whose groups were merged */
+export declare function inkOff(ink: readonly InkUnit[], pages: Map<number, { ok?: boolean; merged?: boolean }>): number[]

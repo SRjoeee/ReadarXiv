@@ -624,6 +624,14 @@ describe("the ink units' rows (docs/route/orphan-text.md §8)", () => {
     expect(unitOf(b, [2, ['Einleitung'], 'whole', 'test', null] as unknown as Row)).toMatchObject({ kind: 'inkcontents', state: 'whole', pieces: [{ t: 'text', tr: true, s: 'Einleitung' }] })
     expect(echoRows(b, [[1, ['x'], 'whole', null, null] as unknown as Row])).toEqual([])
   })
+  it("reads an echo of an echo as its first unit's: awaited, and its row made of that unit's", () => {
+    const head2 = ['inkheads', 0, null, null, null, [[0, 'Journal of Things']], 3] as unknown as BundleUnit
+    const head3 = ['inkheads', 0, null, null, null, [[0, 'Journal of Things']], 4] as unknown as BundleUnit
+    const c = bundleOf([heading, para, echo, own, head2, head3])
+    expect(toTranslate(c, 'de')).toEqual([0, 1, 3])
+    expect(layerIds(c, 'de')).toEqual([0, 1, 2, 3, 4, 5])
+    expect(echoRows(c, [[3, ['Zeitschrift'], 'whole', 'test', null] as unknown as Row]).map(r => r[0])).toEqual([4, 5])
+  })
   it('reads no echo that is not an earlier unit', () => {
     const bad = bundleOf([heading, ['inkcontents', 0, null, null, null, [[0, 'Introduction']], 3] as unknown as BundleUnit])
     expect(layerIds(bad, 'de')).toEqual([0])

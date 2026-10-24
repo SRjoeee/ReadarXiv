@@ -50,8 +50,11 @@ for (const id of IDS) {
   const { ledger } = r, letters = ledger.letters
   // (the letters in classes whose path is built: classified ink, not drawn ink — a unit the wrap leaves the original's, its
   // `unhidden`, is counted in its class all the same)
-  const owned = CLASS_IDS.filter(c => CLASSES[c].state === 'built').reduce((n, c) => n + (ledger.classes[c]?.[1] ?? 0), 0)
-  const share = Object.fromEntries(CLASS_IDS.filter(c => ledger.classes[c]?.[1]).map(c => [c, pct(ledger.classes[c][1], letters)]))
+  // (the summary's classes flat, [class, glyphs, letters, …]: ledger.mjs ledgerSummary)
+  const lettersOf = new Map()
+  for (let j = 0; j < ledger.classes.length; j += 3) lettersOf.set(ledger.classes[j], ledger.classes[j + 2])
+  const owned = CLASS_IDS.filter(c => CLASSES[c].state === 'built').reduce((n, c) => n + (lettersOf.get(c) ?? 0), 0)
+  const share = Object.fromEntries(CLASS_IDS.filter(c => lettersOf.get(c)).map(c => [c, pct(lettersOf.get(c), letters)]))
   // the ink units (layout/ink-units.mjs): how many of each kind, how many echo a source unit's row
   const inkKinds = {}
   for (const u of r.ink.units) inkKinds[u.kind] = (inkKinds[u.kind] ?? 0) + 1

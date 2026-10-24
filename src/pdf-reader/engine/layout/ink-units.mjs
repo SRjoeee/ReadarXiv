@@ -318,3 +318,15 @@ export function claimInk(own, ink) {
   }
   return n
 }
+
+/** the ink units the wrap could not hide alone, as it reads a source unit (wrap.mjs `unhidden`): one with a glyph on a page it did
+ *  not wrap, or a placeholder on a page whose groups it merged (its placeholder's ink then folded into its text's). `pages` the
+ *  wrap's (wrapOf's `pages`: page -> { ok, merged }). The page pass lays none of them (pipeline/ink-pass.mjs inkOfHost `off`) */
+export function inkOff(ink, pages) {
+  const out = []
+  for (const u of ink) {
+    const on = new Set([...u.glyphs.text, ...u.glyphs.ph].map(([p]) => p)), ph = new Set(u.glyphs.ph.map(([p]) => p))
+    for (const p of on) { const x = pages.get(p); if (!x?.ok || (x.merged && ph.has(p))) { out.push(u.id); break } }
+  }
+  return out
+}

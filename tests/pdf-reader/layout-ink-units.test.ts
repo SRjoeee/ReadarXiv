@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { claimInk, inkUnitsOf } from '@/pdf-reader/engine/layout/ink-units.mjs'
+import { claimInk, inkOff, inkUnitsOf } from '@/pdf-reader/engine/layout/ink-units.mjs'
 import { inkLeft, type LedgerPage, ledgerOf } from '@/pdf-reader/engine/layout/ledger.mjs'
 import { inkBundleUnitsOf, unitStands } from '@/pdf-reader/engine/layer-proto/units.mjs'
 import { unitClass } from '@/pdf-reader/engine/rules/content-classes.mjs'
@@ -119,6 +119,10 @@ describe('inkUnitsOf', () => {
     expect(claimInk(own, ink)).toBe(10)
     expect(own.glyphs[0]!.slice(0, 10)).toEqual([...Array(9).fill('u1'), 'u1.p'])
     expect(inkLeft(ledger, own, pages.map(p => p.page)).orphanLetters).toBe(0)
+    // (one the wrap cannot hide alone is off: its page not wrapped, or its placeholder's group merged into its text's)
+    expect(inkOff(ink as never, new Map([[1, { ok: true }]]))).toEqual([])
+    expect(inkOff(ink as never, new Map([[1, { ok: false }]]))).toEqual([1])
+    expect(inkOff(ink as never, new Map([[1, { ok: true, merged: true }]]))).toEqual([1])
   })
 
   it('writes each as a bundle unit that stands, of its kind, with its echo', () => {

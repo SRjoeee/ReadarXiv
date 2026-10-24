@@ -14,7 +14,7 @@
 // An original module (no port statement). It imports the engine's own modules alone, by relative path.
 import { BundleRefusal } from '../layer-proto/bundle.mjs'
 import { PART_PAGES_MAX, partCutter, wholeCutter, wholeFrontier } from '../layer-proto/cut.mjs'
-import { deltaBaseWhy, groupsOfUnits, indexOf, layerDraws, partTarget, readHead, readPart, readUnitsChunk, TOKEN_LIMIT, whyText, writeHead, writeUnitChunks } from '../layer-proto/format.mjs'
+import { chunkTotals, deltaBaseWhy, groupsOfUnits, indexOf, layerDraws, partTarget, readHead, readPart, readUnitsChunk, TOKEN_LIMIT, whyText, writeHead, writeUnitChunks } from '../layer-proto/format.mjs'
 import { needBound } from '../layer-proto/need.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { readArxivText } from '../layout/arxiv.mjs'
@@ -29,7 +29,7 @@ import { columnsOfTokens, pageColumns } from '../view/highlight.mjs'
 import { anchorUnits, boundsFromMarks, floatMatches, frameOfTokens, pageFrame, pageIndex } from './anchors.mjs'
 import { rangedAnchors } from './left-part.mjs'
 import { leftSideOf, leftSideStream } from './left-side.mjs'
-import { bundleWithInk, inkAnchors, inkOfHost, layoutWithInk, streamWithInk } from './ink-pass.mjs'
+import { bundleWithInk, inkAnchors, inkOfHost, inkWithinChunks, layoutWithInk, streamWithInk } from './ink-pass.mjs'
 import { isMemoryError } from './memory.mjs'
 
 /** units TeX sets away from where the source has them (anchors.mjs `floating`), as the maker and the web's left take them */
@@ -359,7 +359,8 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   const floatMatch = baseText && baseText !== text ? floatMatches(baseText.tokens, texts, floating) : left.tokens === text.tokens ? leftFloats : floatMatches(text.tokens, texts, floating)
   // the ink units the wrap made of text no source unit owns (pipeline/ink-pass.mjs, docs/route/orphan-text.md §8): units after the
   // source units', where our base page is the base and each of their pages is drawable; none else
-  const ink = oursHead ? inkOfHost(ours?.ink, source, lineCheck?.undrawable ?? []) : null
+  // (and where their chunks fit beside the source units' within a head's bounds: format.mjs writeUnitChunks `before`)
+  const ink = oursHead ? await inkWithinChunks(paper, bundleUnitsOf(source), inkOfHost(ours?.ink, source, lineCheck?.undrawable ?? [])) : null
   const bundle = bundleWithInk(bundleUnitsOf(source), ink)
   const inkLeft = ink ? inkAnchors(left.tokens, ink) : null
   // the rule set's frame and columns, of arXiv's text alone where it says so (rules 1 and 4: made once, at step T), each side's
@@ -724,7 +725,8 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
  *  byte), then the ink units' from their first id (INK_UNITS_FORMAT), so that the host announces those it has and the maker's */
 async function chunksOf(paper, bundle, ink) {
   if (!ink) return writeUnitChunks({ paper, units: bundle })
-  return [...await writeUnitChunks({ paper, units: bundle.slice(0, ink.base) }), ...await writeUnitChunks({ paper, units: bundle.slice(ink.base), start: ink.base })]
+  const src = await writeUnitChunks({ paper, units: bundle.slice(0, ink.base) })
+  return [...src, ...await writeUnitChunks({ paper, units: bundle.slice(ink.base), start: ink.base, before: chunkTotals(src) })]
 }
 
 /** the drive with the marks given: arXiv's pages in order, each read and its stream told */

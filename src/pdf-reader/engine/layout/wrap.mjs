@@ -35,7 +35,7 @@
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { DELTA_OBJECTS_MAX, deltaSection, rangesOf, UNHIDDEN_MAX } from './delta-wire.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, pageInk } from './ink.mjs'
-import { claimInk, inkUnitsOf } from './ink-units.mjs'
+import { claimInk, inkOff, inkUnitsOf } from './ink-units.mjs'
 import { inkLeft, ledgerOf, ledgerSummary } from './ledger.mjs'
 import { followsOf } from './marks.mjs'
 import { ownOf, UNHIDDEN } from './own.mjs'
@@ -636,7 +636,7 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   if (unhidden.length > UNHIDDEN_MAX || labelKept.length > UNHIDDEN_MAX) return { refused: 'wrap-bound', why: `${unhidden.length} units the original's, past ${UNHIDDEN_MAX}` }
   const stats = { ...made.stats, unhidden: counts, labelKept: labelKept.length }
   const wrappedPages = rangesOf([...made.pages].filter(([, x]) => x.ok).map(([p]) => p))
-  return { bytes: made.bytes, xref: made.xref, sha256: made.sha256, stats, unhidden, labelKept, pages: wrappedPages, own: { ...own.stats, unhidden: counts }, ledger: ledgerSummary(ledger), ink: { base: units ? units.length : 0, units: ink.map(({ id, kind, cls, echo, pieces, rows }) => ({ id, kind, cls, echo, pieces, rows })) }, ...(keepOwned ? { owned: own, ledgerWhole: ledger } : {}) }
+  return { bytes: made.bytes, xref: made.xref, sha256: made.sha256, stats, unhidden, labelKept, pages: wrappedPages, own: { ...own.stats, unhidden: counts }, ledger: ledgerSummary(ledger), ink: { base: units ? units.length : 0, units: ink.map(({ id, kind, cls, echo, pieces, rows }) => ({ id, kind, cls, echo, pieces, rows })), off: inkOff(ink, made.pages) }, ...(keepOwned ? { owned: own, ledgerWhole: ledger } : {}) }
 }
 
 export { alignOf }

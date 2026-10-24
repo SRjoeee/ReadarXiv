@@ -158,7 +158,9 @@ one more units chunk, stores the ledger, reads invariant (o) and offers the togg
 
 1. **`ours.ink`.** `wrapFinal` returns `ink` beside `ledger` (an opaque value: the ink units, their glyphs, rows and groups). The
    container passes it on unchanged: `ourWrap` returns it, and the maker gives `layerOfPaper({ ours: { …, wrap: { stats,
-   unhidden, labelKept, pages, ledger }, ink } })`. `ledger` is `wrapFinal`'s `ledger`, now inside `wrap`. With no `ours.ink`
+   unhidden, labelKept, pages, ledger }, ink } })`. `ledger` is `wrapFinal`'s `ledger`, now inside `wrap`. `ink.off` (added 2026-10-25) lists the ink units the wrap could not
+   hide alone (a page it did not wrap, a placeholder on a page whose groups it merged): the pass keeps them, their ids naming
+   their groups, and lays none of them, as it lays none on a page not drawable; the host passes `ink` whole. With no `ours.ink`
    (an older wrap, a refused one) the pass makes no ink unit and everything else is as before.
 2. **The ink chunk.** Ink units are units with ids after the source units' (N to N + K − 1), in one more units chunk (`kind:
    'units'`, `from: N`, `to: N + K`), which the engine writes. `onHead(head, units)` then gets the prepare child's chunks

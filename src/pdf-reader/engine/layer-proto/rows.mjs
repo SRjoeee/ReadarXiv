@@ -82,7 +82,7 @@ function unitFrom(b, at, units) {
   }
   if (edges !== null && edges !== undefined && typeof edges === 'object') for (const e of EDGES) if (typeof edges[e] === 'string') u[e] = edges[e]
   // (an ink unit's echo: the earlier unit whose row it is drawn with, never translated itself)
-  if (b.length === 7) { if (!(b[6] === null || (Number.isInteger(b[6]) && b[6] >= 0 && b[6] < at && units[b[6]]))) return null; if (b[6] !== null) u.echo = b[6] }
+  if (b.length === 7) { if (!(b[6] === null || (Number.isInteger(b[6]) && b[6] >= 0 && b[6] < at && units[b[6]]))) return null; if (b[6] !== null) u.echo = units[b[6]].echo ?? b[6] }
   return u
 }
 
