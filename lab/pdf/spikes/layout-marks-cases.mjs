@@ -156,6 +156,14 @@ const STAY = {
   // an italic word's correction before \\eqref's \\textup, under each engine: XeTeX's word is a whatsit (review I2)
   'an italic word before \\eqref': { engines: ['pdflatex', 'xelatex', 'lualatex'], src: doc('\\usepackage{iftex}\\ifPDFTeX\\else\\usepackage{fontspec}\\fi\\usepackage{amsmath}\\usepackage{amsthm}\\newtheorem{theorem}{Theorem}', `\\begin{equation} x = y \\label{e} \\end{equation}\n\\begin{theorem}${prose(24, i => [' by \\eqref{e}', ' with~\\eqref{e} and', ' of \\ref{e}', ' \\emph{set} by \\eqref{e}'][i % 4])}.\\end{theorem}\n${prose(6, () => '')}`) },
   'a word glued to a formula or a footnote\'s call, never hyphenated': doc('\\usepackage[margin=6.5cm]{geometry}', `${prose(30, i => [' representations$x_{' + i + '}$', ' characterization\\footnote{N.}', ' considerably$y$ is', ' experimentally\\footnotemark{} and'][i % 4])}`),
+  // ICML's \\icmltitle, the paper's own command, a front heading the layout compile marks (2610.22195v1): with no running title
+  // of its own, it hands the title to the running head (the output routine), to the PDF's title (a PDF string, with hyperref)
+  // and measures it in a box it never ships, then sets it in \\twocolumn's block
+  'ICML\'s \\icmltitle: the title in the running head, the PDF\'s title and a box never shipped': doc(String.raw`\makeatletter\newbox\titrun
+\long\def\icmltitle#1{\ifx\undefined\@icmltitlerunning\gdef\@icmltitlerunning{#1}\fi\ifdefined\hypersetup\hypersetup{pdftitle={#1}}\fi
+\global\setbox\titrun=\vbox{\small\bf\@icmltitlerunning}\thispagestyle{plain}{\center\baselineskip 18pt\hrule height1pt\vskip .25in{\Large\bf #1}\vskip .22in\hrule height1pt\vskip .3in}}
+\def\ps@icml{\def\@oddhead{\hfil\small\bf\@icmltitlerunning\hfil}\let\@evenhead\@oddhead\def\@oddfoot{\hfil\thepage\hfil}\let\@evenfoot\@oddfoot}\pagestyle{icml}
+\makeatother`, `\\twocolumn[\\icmltitle{The Title of a Paper in a Style of Its Own}]\n${Array.from({ length: 8 }, () => prose(30, () => '')).join('\n\n')}`),
 }
 
 // ---------------------------------------------------------------- compiling

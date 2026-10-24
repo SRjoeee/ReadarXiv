@@ -1,7 +1,7 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it, vi } from 'vitest'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
-import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, MARKS_SCHEMA, marksFile, parseLayoutMarks, probeSamples, readInkApart, readInkProbe, readInkTexts, readMarked, readMarkProbe, readNameProbe, readSkipProbe } from '@/pdf-reader/engine/layout/marks.mjs'
+import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, leadSamples, MARKS_SCHEMA, marksFile, parseLayoutMarks, probeSamples, readInkApart, readInkProbe, readInkTexts, readMarked, readMarkProbe, readNameProbe, readSkipProbe } from '@/pdf-reader/engine/layout/marks.mjs'
 import { layoutMarksOfPaper, markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
 import { type Compiled, type CompileRequest, openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 
@@ -264,7 +264,7 @@ describe('markedOfPaper: the probe and the marked compile, the reading left to t
     expect(made.log).toContain('AXT-LINES 0 3 12.0pt 10')
     expect(made.log).not.toContain('AXT-LINES 0 1 12.0pt 10')
     const ink = inkSamples(paper.units)
-    expect(made.options).toEqual({ engine: 'pdflatex', classes: LAYOUT_CLASSES, switches: readMarkProbe(PROBE_LOG, probeSamples(paper.units)), inkless: readInkProbe(PROBE_LOG, ink), texts: readInkTexts(PROBE_LOG, ink), names: readNameProbe(PROBE_LOG), lineskip: readSkipProbe(PROBE_LOG), complete: { bert: 0 }, apart: readInkApart(PROBE_LOG, ink) })
+    expect(made.options).toEqual({ engine: 'pdflatex', classes: LAYOUT_CLASSES, switches: readMarkProbe(PROBE_LOG, probeSamples(paper.units)), inkless: readInkProbe(PROBE_LOG, ink), texts: readInkTexts(PROBE_LOG, [...ink, ...leadSamples(paper.units, ink)]), names: readNameProbe(PROBE_LOG), lineskip: readSkipProbe(PROBE_LOG), complete: { bert: 0 }, apart: readInkApart(PROBE_LOG, ink) })
     expect(made.ms).toEqual({ probe: expect.any(Number), compile: expect.any(Number) })
     expect(made).not.toHaveProperty('cm')
     // read by the host as layerOfPaper reads `marked` (readMarked with the units and the operator codes): the same marks

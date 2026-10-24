@@ -8,7 +8,7 @@ import { floatMatches, pageFrame } from '@/pdf-reader/engine/pipeline/anchors.mj
 import { displayEdges, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
 import { type Annot, arxivOf, baseOf, CH, endOf, FONTS, lineCheckOf, type Mark, markedOf, marksOf, type Page, PATHS, ph, type Run, text, unit, words, type World, xAt } from './helpers/make-world'
 import { INK_MS } from '@/pdf-reader/engine/layout/ink.mjs'
-import { LINKS_MAX, markedPages, marksOfHead, readMarked } from '@/pdf-reader/engine/layout/marks.mjs'
+import { INK_ANY, LINKS_MAX, markedPages, marksOfHead, readMarked } from '@/pdf-reader/engine/layout/marks.mjs'
 import { MAX_LINKS } from '@/pdf-reader/engine/layer-proto/links.mjs'
 import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
 
@@ -1338,6 +1338,36 @@ describe('makeLayout, a unit\'s head pieces: its macros before its start mark, w
       expect(file.labels).toHaveLength(1)
       expect(stats.ph.heads).toEqual([0, 0])
     }
+  })
+  it('inline code at the head is a head piece too, found by the text TeX sets for it (MARKS_SCHEMA 10: 2610.21098v1 p13u138)', async () => {
+    // "\\texttt{max\\_tokens} on Chat Completions routes": the probe asks about the code that leads a unit (marks.mjs leadSamples)
+    const code: Run[] = [{ s: 'max_tokens on Chat routes', x: 72, y: 700 }]
+    const w: World = { pages: [{ runs: code }], marks: [['0s', 1, xAt(code[0] as Run, 11), 700], ['0e', 1, endOf(code[0] as Run), 700]], units: [unit('para', [ph('\\texttt{max\\_tokens}'), text(' on Chat routes')])] }
+    const { file, stats } = await made({ ...w, texts: [['\\texttt{max\\_tokens}', 'max_tokens']] })
+    expect(phOf(file, 0, 0)[3]).toBe(0)
+    expect(phOf(file, 0, 0).slice(4, 8)).toEqual([1, 72, 700, xAt(code[0] as Run, 10)])
+    expect(stats.ph.heads).toEqual([1, 0])
+    // (no text known: LOST as before; and code with nothing beside the mark set ink not known, LOST, never EMPTY)
+    expect((phOf((await made(w)).file, 0, 0)[3] ?? 0) & PH_FLAG.LOST).toBe(PH_FLAG.LOST)
+    const none: Run[] = [{ s: 'on Chat routes', x: 72, y: 700 }]
+    const bare = await made({ pages: [{ runs: none }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(none[0] as Run), 700]], units: w.units, texts: [['\\texttt{max\\_tokens}', 'max_tokens']] })
+    expect((phOf(bare.file, 0, 0)[3] ?? 0) & PH_FLAG.LOST).toBe(PH_FLAG.LOST)
+  })
+  it('a formula\'s glyph the probe spells as no character (INK_ANY) is any one glyph, only where nothing of ink stands between it and the mark (2610.21176v1 p13u88)', async () => {
+    // "\\dprime{} tracks the gap": $d'$, a math italic d and a prime
+    const runs: Run[] = [{ s: 'd\u2032 tracks the gap', x: 72, y: 700 }]
+    const w: World = { pages: [{ runs }], marks: [['0s', 1, xAt(runs[0] as Run, 3), 700], ['0e', 1, endOf(runs[0] as Run), 700]], units: [unit('para', [ph('\\dprime{}'), text(' tracks the gap')])], texts: [['\\dprime{}', `d${INK_ANY}`]] }
+    const { file, stats } = await made(w)
+    expect(phOf(file, 0, 0)[3]).toBe(0)
+    expect(phOf(file, 0, 0).slice(4, 8)).toEqual([1, 72, 700, xAt(runs[0] as Run, 2)])
+    expect(stats.ph.heads).toEqual([1, 0])
+    // (its spelled letter is the glyphs' own: another there, LOST)
+    const other = await made({ ...w, pages: [{ runs: [{ s: 'x\u2032 tracks the gap', x: 72, y: 700 }] }] })
+    expect((phOf(other.file, 0, 0)[3] ?? 0) & PH_FLAG.LOST).toBe(PH_FLAG.LOST)
+    // (a footnote's call between the piece and the mark sets its mark nearer: the "1" is no formula's glyph, LOST)
+    const noted: Run[] = [{ s: 'd1 tracks the gap', x: 72, y: 700 }]
+    const n = await made({ ...w, pages: [{ runs: noted }], units: [unit('para', [ph('\\dprime{}'), ph('\\footnotemark'), text(' tracks the gap')])] })
+    expect((phOf(n.file, 0, 0)[3] ?? 0) & PH_FLAG.LOST).toBe(PH_FLAG.LOST)
   })
   it('one that set nothing on the line before the start mark is EMPTY: a figure\'s image above its text, a row\'s rule', async () => {
     const text1: Run[] = [{ s: 'Retrieved from the reference', x: 72, y: 700 }]

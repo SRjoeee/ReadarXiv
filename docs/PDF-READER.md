@@ -1998,6 +1998,35 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   (2610.16663v1 p16). Over the 24 papers of the release sweep, 8 rows of their layout files move, those units' placeholder and
   erase rows alone; no unit is laid or left that was not before; on the gate pack every layout file is the one before but its
   version (pack `13785c79`).
+  - *A lead is found by the text TeX sets for it* (the last five units English on staging and translated on production:
+    2610.21098v1 p13u138, u142, u144, 2610.21176v1 p13u88, 2610.22195v1 p1u0; MARKS_SCHEMA 10, LAYOUT 20 and REMOVAL 10 shared,
+    unreleased). A placeholder at a unit's head gets no mark (`headEnd`), and its ink, set before the start mark, is found by
+    its text: the maker's head (`make.mjs besideMarks`) and the wrap's cell lead (§19.9, MR 5b) read the glyphs there against
+    the text the marking's probe showed it sets. The probe read letters and digits alone (`marks.mjs readInkTexts`), asked
+    about the paper's macros alone (`inkSamples`), and the marks file took nothing else (`checkTexts`): `\SweepCapLow{}` =
+    `1{,}024` and `\EpisodeTokenBudget{}` = `128{,}000` had no text for their commas, a cell's `\texttt{max\_tokens}` was not
+    asked, and `\dprime{}` = `$d'$` sets math. The probe's text is now what TeX lists: a text font's letters, digits and the
+    punctuation it sets as ASCII's ("1,024"; T1's underscore, "max_tokens"; OT1's is a rule, no answer), a formula's math
+    italic letters and any other glyph of a formula one glyph whatever its text (`INK_ANY`: "d" and the prime), and a text that
+    spells no character ($\checkmark$) no answer; the leads the macros' list does not hold — inline code, a macro past
+    `INK_MAX` — are asked last (`leadSamples`, the probe document unchanged where a paper has none), their texts read but
+    never the marking's (`inkless`, `apart`); each glyph is read against the text by one step (`leadStep`), and a formula's
+    glyph only where nothing of ink stands between the lead and the mark (a footnote's call's). `?` is no character spelled: the
+    probe has no aux, and a `\ref` sets "??" there.
+  - *A front heading is marked as any heading* (`marks.mjs layoutMarking`). ICML's `\icmltitle`, the paper's own style's
+    command, is a front unit (latex-front.mjs, PIPELINE 10: its text handed to the running head and the PDF's title too),
+    and the heading's branch gave a front heading no mark, while `frontMarks` (LAYOUT 17), which marks the other front units,
+    left headings to their own marks: the title had none, and its ink no group. A heading's marks set nothing in the output
+    routine's heads, a PDF string or a file (the gate), nor in the box ICML measures its running title in and never ships;
+    the title's end mark alone is set where it sets the title. 2610.22195v1's base page sets every glyph and box as before.
+  - Over the 25 papers of the release sweep, offline through the page pass, against `next` (5e723185): units laid and hidden
+    gained 8, lost 0; with no LOST placeholder (the layer's `locatedWhole`) gained 12, lost 0 (2610.21098v1 u136, u138, u142,
+    u144, u198, u505; 2610.21176v1 u88, u124; 2610.22195v1 u0, u208, u210; 2610.21085v1 u164); the model check's ink in no
+    group inside a drawn unit's rectangles and own ink outside them the same on every paper (45 and 1,452 glyphs). 44 rows of
+    four papers' layout files move, the gained units' (their lead found where it was their label), and only 2610.22195v1's
+    base page's bytes change. On the gate pack every layout file and base page is the one before; two base
+    records would read more texts (1512.03385v1's `\eg`, `\ie`, `\vs`; 2608.04322v1's address), which move no glyph's group:
+    the pack stays `13785c79`.
 - **A unit the layer leaves the original's says why** (read time, no stored artefact, no version token): each `skipped` record
   of the run (`layer-proto/run.mjs`) carries a `code` of `SKIP_CODES` beside its `why`: `unlocated` (the file holds no row of
   it, and the file's own reason beside it, `unlaid`), `pieces`, `noRow`, `lost` (a visible piece the file has no position
@@ -2210,10 +2239,15 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   is wrapped whole). A unit's text takes its glyphs alone, never a rule: a rule in its range (a footnote's separator, a
   class's rule above a title, an underline) is the page's and stays; a placeholder's rules are its `.p`.
   A table cell (`t<id>s`) takes no label (what stands before it on its line is another cell's); a cell that opens with a
-  placeholder of no mark of its own (`\CompletionTokenCap{}`, `\#`) has that ink before its start mark, told by its text
-  alone, never by a gap (an unmarked number cell may stand 0.4 em or nothing before it: `\tabcolsep` 2pt, `@{}`): the glyphs
-  right before the start that spell exactly the text the marking's probe showed the macro sets (`wrapFinal`'s `texts`, the
-  marks file's `marking.texts`) or a text symbol's (`\#` "#"), each under `CELL_ABUT` 0.6 em from the next, are its `.p`
+  placeholder of no mark of its own (`\CompletionTokenCap{}`, `\texttt{max\_tokens}`, `\dprime{}`, `\#`) has that ink before
+  its start mark, told by its text alone, never by a gap (an unmarked number cell may stand 0.4 em or nothing before it:
+  `\tabcolsep` 2pt, `@{}`): the glyphs right before the start, in stream order, that spell exactly the text the marking's
+  probe showed the placeholder sets (`wrapFinal`'s `texts`, the marks file's `marking.texts`: TeX's own listing of it, a text
+  font's letters, digits and ASCII's punctuation, "1,024", "max_tokens", a formula's math italic letters as themselves and
+  any other glyph of it one glyph whatever its text, `INK_ANY`, $d'$ "d" and one glyph; the probe asks about inline code at a
+  unit's head too, `marks.mjs leadSamples`; MARKS_SCHEMA 10) or a text symbol's (`\#` "#"), each under `CELL_ABUT` 0.6 em
+  from the next, are its `.p` (a footnote's call among the lead's pieces sets its mark between them and the start: a text
+  with a formula's glyph is then not read, whose glyph that mark could be)
   (a text symbol's part of it goes with the text, `u<id>`, whatever else the lead holds: the layer draws a symbol as its
   character, never from a crop, and the reader hides `.p` only for a found placeholder; its letters, `\O`'s "Ø", are its
   character in the source the spell check reads); where that text is not known or not there, the cell is
