@@ -2,7 +2,7 @@
 
 Status: stage 1 built (2026-10-25: `rules/content-classes.mjs`, `layout/ledger.mjs`, `lab/pdf/spikes/ledger.mjs`); stage 4 built
 for the bibliographies the source holds, with the names and the engine's side of the toggles (2026-10-25: settled in
-`docs/PDF-READER.md` §19.11, measured by `lab/pdf/spikes/classes-gate.mjs`); stages 2, 3 and 5–8 are the plan of §7, for the owner
+`docs/PDF-READER.md` §19.12, measured by `lab/pdf/spikes/classes-gate.mjs`); stages 2, 3 and 5–8 are the plan of §7, for the owner
 after he reads §5. Engine at `next` 37d84180. The phase 1 measurement's scripts and raw rows are not
 in the tree (the session scratchpad's `orphans/`); stage 1's gate reproduces the pack's numbers from the engine itself.
 
@@ -103,10 +103,10 @@ The owner's map (2026-10-25; the settings' own words are the locale packs', thes
 | "Tables" | tables (cells) | today's cell units; tables no unit cuts (inside a float) become ink units by row | cells built; uncut planned | 0.5 + 1 |
 | "Figure text" | figures (vector) | the glyphs of an included PDF (form XObjects) and of a float, set by our compile: exact text from their fonts, exact places; erasure needs optional content inside form XObjects (shared streams), and a Type 3 font with no Unicode is left the original's | planned | 3 |
 | "Figure text" | ocr (bitmap) | PP-OCR as the extension runs it (DESIGN §15.3), once on the server over each figure's image; places from OCR (approved); erasure by a patch of the background under each line, as the extension's image translation does | planned | 3.5 |
-| "References" | references, index (proposed) | each `\bibitem` two units, its names and the rest, from the bibliography's TeX the source holds (thebibliography, a shipped .bbl), marked like the body (PDF-READER §19.11); a .bbl the prepare's own BibTeX or biber makes is no source yet (its units would come after the first compile, which the web's prepare writes its units before) | built (source-held); compile-made planned | 3 |
+| "References" | references, index (proposed) | each `\bibitem` two units, its names and the rest, from the bibliography's TeX the source holds (thebibliography, a shipped .bbl), marked like the body (PDF-READER §19.12); a .bbl the prepare's own BibTeX or biber makes is no source yet (its units would come after the first compile, which the web's prepare writes its units before) | built (source-held); compile-made planned | 3 |
 | "Names" | names: author blocks, names in references | author units, translated for every target (TRANSLATE 6); an entry's first block (kind refnames) | built; split from places planned | 1.5 |
 | Never | math, code and verbatim, symbols | kept as the original's ink | never | — |
-| — | reader toggles in both hosts | a class's units drawn or not (and its groups ON or OFF) by the settings: the door's and the layer side's `toggles` (PDF-READER §19.11), the hosts' settings to wire | engine built; hosts planned | 2 |
+| — | reader toggles in both hosts | a class's units drawn or not (and its groups ON or OFF) by the settings: the door's and the layer side's `toggles` (PDF-READER §19.12), the hosts' settings to wire | engine built; hosts planned | 2 |
 
 **Names, plainly.** Achievable and exact: an author block's names (their own units, by TeX's marks); names in references where
 the .bbl gives them as a field — biblatex always, the BibTeX styles that open an entry with an authors block (plain, abbrv,

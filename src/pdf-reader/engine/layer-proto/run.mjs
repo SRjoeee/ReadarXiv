@@ -806,6 +806,18 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** whether unit `id`'s label may be drawn anew: its label group in the document, and the file not keeping it as the original's
    *  (`labelKept`, design §6: a label its marks cannot delimit stays the original's ink, the body drawn) */
   const relabels = id => !hiding?.labelKept?.(id) && VIS.has(labelGroup(id))
+  /** unit `p`'s label as a theorem-like head in the target's name (layer2.mjs headLabelInTarget), its characters the page's in
+   *  the layout file's label box (its first: a head's one), or null. The page's, not the unit's own part of it: the box is TeX's,
+   *  and the part's split may leave a head's first letters to the unit before (2610.18513v1 p18 u150, "finition5.1(") */
+  const headOf = p => {
+    const lb = p.tex?.lu?.labels
+    if (!lb || lb.length < 7) return null
+    const [, pg, x0, , x1, top, bottom] = lb
+    const chars = (chars2[pg - 1] ?? []).filter(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 >= x0 - 0.5 && (c.x0 + c.x1) / 2 <= x1 + 0.5 && c.yb >= bottom - 0.5 && c.yb <= top + 0.5).map(c => ({ ...c, page: pg }))
+    if (!chars.length) return null
+    const head = L2.headLabelInTarget(chars, to)
+    return head ? { ...head, chars } : null
+  }
   /** page j's table rules near its cells (the file's: layer2.mjs cellBands), or undefined */
   const rulesOf = j => hiding?.rules?.(j)
   // (parts: the last page a part covers, and whether the parts have ended; every page at once otherwise. A page that failed:
@@ -1854,11 +1866,19 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // function of every unit laid before it; no unit of the 30 outputs is read otherwise without it, 2026-10-15)
     const prep = L2.prepareUnit(p.unit, p.rects, local, phMode === 'source' ? null : new Map(), null, parts)
     if (prep.unproven !== undefined) { p.refused = true; p.why = 'unproven'; unlead(p); return }
+    // (the names cleveref and \autoref generate in its references, and a citation's note's, in the target's: layer2.mjs
+    // renameRefs, PDF-READER §19.11)
+    if (labels) L2.renameRefs(prep, to, R.labels)
     // a float's label in the target's name where the final names it so (labelInTarget): its ink erased and accounted as
     // the unit's text, and set as the line's start, in its own style, before the translation
     const relabel = labels && relabels(p.id) ? L2.labelInTarget(prep.label, R.labels, labels.captions, to) : null
-    if (relabel) {
-      prep.label = { ...prep.label, drawn: relabel }
+    // or a theorem-like head's (its unit's body or its note), in translator's name for the target, its number and punctuation
+    // the original's (headLabelInTarget, PDF-READER §19.11): read from the page's characters in the file's label box, each
+    // part in its own style
+    const head = !relabel && labels && relabels(p.id) && (p.unit.kind === 'theorem' || p.unit.kind === 'heading') ? headOf(p) : null
+    if (head) prep.label = { ...(prep.label ?? {}), x1: Math.max(...head.chars.map(c => c.x1)), text: head.chars.map(c => c.ch).join(''), chars: head.chars, drawn: head.text, parts: head.parts, open: head.open }
+    if (relabel || head) {
+      if (relabel) prep.label = { ...prep.label, drawn: relabel }
       for (const c of prep.label.chars) prep.cat?.set(L2.charKey(c), 'acc')
       // (a file's first line starts at the unit's own mark, after the label the class set before it: the line the label
       // is now part of starts where the label does)
@@ -1973,7 +1993,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (P.borrow && p.unit.kind !== 'cell') for (const b of p.blocks) b.freeOf = () => freeFor(b, s)
     const t2 = lap()
     // (the label's own style: a class's bold or italic label)
-    const lead = prep.lead ?? (prep.label?.drawn ? { parts: [{ text: prep.label.drawn, st: (st => (st && st.fam !== 'math' ? { bold: !!st.bold, italic: !!st.italic, ...L2.colourOfStyle(st) } : {}))(prep.label.chars[0]?.st) }] } : null)
+    const lead = prep.lead ?? (prep.label?.parts ? { parts: prep.label.parts, ...(prep.label.open ? { gap: 0 } : {}) } : prep.label?.drawn ? { parts: [{ text: prep.label.drawn, st: (st => (st && st.fam !== 'math' ? { bold: !!st.bold, italic: !!st.italic, ...L2.colourOfStyle(st) } : {}))(prep.label.chars[0]?.st) }] } : null)
     // the faces the unit's runs are set in, served and loaded before a width is taken in any of them (one taken before its
     // slice is there would stay in the cache): the tokens read once with no measure, their faces and texts checked; a
     // unit with a character no served slice holds, or a slice that does not load, stays the original's

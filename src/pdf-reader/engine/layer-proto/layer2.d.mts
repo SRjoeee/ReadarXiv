@@ -292,7 +292,10 @@ export declare const hexOf: (rgb: number) => string
 export declare function prepareUnit(unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], citeMap: CiteMap | null, deny: ReadonlySet<string> | null, parts: UnitParts): Prepared
 /** the unit's placeholders by piece index, classed by phClassProven */
 export declare function placeholdersOf(unit: Unit): Placeholder[]
-/** part 3, the alignment's where the file has no label: the first gap's label, out.label set; the gaps without it */
+/** a unit's source pieces (rows.mjs unitOf's non-enumerable `source`), else its own pieces */
+export declare const sourcePiecesOf: (unit: Unit & { source?: Unit['pieces'] }) => Unit['pieces']
+/** part 3, the alignment's where the file has no label: the first gap's label, out.label set; the gaps without it. Whether
+ *  the unit begins with text is its source's (sourcePiecesOf), never its translation's */
 export declare function labelOf(out: Prepared, unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], gaps: Gap[]): Gap[]
 /** a citation's keys from its source */
 export declare const citeKeys: (src: string) => string[]
@@ -324,6 +327,17 @@ export declare function labelInTarget(label: { text?: string; chars?: { ch: stri
 /** a babel name as the layer sets it in the target, wherever TeX identified the heading: the target's word for its key
  *  (capitals where the original's are); null where the target has none, or where the word is the original's */
 export declare function nameInTarget(name: { key: string; capitals: boolean }, own: string | null | undefined, labels: Readonly<Record<string, string>> | null | undefined, to: string): string | null
+/** a label's characters as its text, a space where two stand a fifth of their size apart */
+export declare function spacedText(chars: readonly Pick<Char, 'ch' | 'x0' | 'x1' | 'size'>[]): string
+/** a theorem-like head's label as the target names it (its name in translator's word, its number and punctuation the original's),
+ *  the parts it is drawn in, each in its own style, and whether it ends in an opening bracket; null where it is no such head */
+export declare function headLabelInTarget(chars: readonly Char[], to: string): { text: string; parts: { text: string; st: { bold: boolean; italic: boolean; color?: string } }[]; open: boolean } | null
+/** the placeholders whose text cleveref and \autoref generate */
+export declare const GENERATED_REF: RegExp
+/** each `orig-text` rendering of a generated reference, or of a citation's note, in the target's names: its `rename` set */
+export declare function renameRefs(prep: Prepared, to: string, labels: Readonly<Record<string, string>> | null | undefined): void
+/** a rendering's runs with its replacements made, each inside one run; null where one crosses two */
+export declare function renameRuns<R extends { text: string }>(runs: readonly R[], rename: readonly [number, number, string][]): R[] | null
 /** a text's width at size 1 in a face */
 export declare const widthOf: (s: string, face: Face) => number
 /** a babel name drawn in the target's word, as SVG markup (a <g data-n="occurrence">) */

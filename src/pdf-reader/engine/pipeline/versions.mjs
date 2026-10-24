@@ -226,6 +226,12 @@ export const PDFJS = '6.3.289'
  * base's bytes change, and the first two rules being the maker's reading too, the layout files of the units they reach
  * (LAYOUT 20); and a cell's lead owned by the text TeX sets for it, as the probe reads it (marks.mjs readInkTexts, MARKS_SCHEMA
  * 10: "1,024", "max_tokens", a formula's glyph spelled by no character one glyph: own.mjs MR 5b), and a front heading's ink
- * (ICML's \icmltitle), which the layout compile now marks (LAYOUT 20)
+ * (ICML's \icmltitle), which the layout compile now marks (LAYOUT 20); 11 (the structural names, PDF-READER §19.11): a
+ * theorem's head before its note, the bracket it opens the note with ("Definition 5.1 (", a unit the front end read in a head's
+ * brackets), and the joint a head sets after the babel name that leads its unit (amsthm's "." after "Proof") are their units'
+ * labels (own.mjs isLabelForm's `note`, JOINT), each in its unit's label group, where they were left the original's ink in no
+ * group (`labelKept`), so that the layer draws them in the target's names: the base's bytes and the head's `labelKept` change,
+ * the layout files and the units do not (over 25 local papers labelKept 298 → 96, 202 labels newly in their groups;
+ * 2610.18513v1 100 → 23; every other wrap count, and every page of every group shown, as before: the ocg gate)
  */
-export const REMOVAL = '10'
+export const REMOVAL = '11'

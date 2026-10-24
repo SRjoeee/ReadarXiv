@@ -74,7 +74,12 @@ const LABEL_NUMBER = '[([]?(?:\\d{1,4}|[a-z]|[ivxlcdm]{1,6})(?:[.\\-–](?:\\d{1
 // product's name, "A100", no label)
 const LABEL_FORM = new RegExp(`^(?:(?:${LABEL_NAME}(?:(?:[a-z](?=\\d))?${LABEL_NUMBER})?|${LABEL_NUMBER})[)\\].:–—|]{0,2}|[•◦▪▫‣⁃∙·∗*–—\\-+○●■□►▸▹➢✓✔])$`, 'u')
 const labelText = s => s.normalize('NFKC').toLowerCase().replace(/\s/gu, '')
-export const isLabelForm = s => { const t = labelText(s); return t === '' || LABEL_FORM.test(t) }
+/** a head's joint between a babel name and its unit's text, as a label holds it: its punctuation alone */
+const JOINT = /^[.:;,\u2013\u2014-]{1,2}$/u
+/** (`note`: the label of a theorem's note, a unit the front end read in a head's brackets (latex-front.mjs `bracketed`): the head
+ *  macro sets the bracket that opens the note after its name and number, amsthm's "Definition 5.1 (", which is the head's own,
+ *  and so the label's) */
+export const isLabelForm = (s, note = false) => { const t = labelText(s); const u = note ? t.replace(/[([]$/u, '') : t; return u === '' || LABEL_FORM.test(u) }
 
 /**
  * Each unit's own ink of a document, by its marks. `pages` (page p at index p - 1): what pageInk read of each page with
@@ -156,6 +161,8 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
   for (const name of where.keys()) { const m = START.exec(name) ?? END.exec(name) ?? OPENING.exec(name) ?? CLOSING.exec(name); if (m) ids.add(Number(m[2])) }
   if (units) units.forEach((_, i) => ids.add(i))
   const textOf = new Map()
+  /** the units whose label the walk back from their start reached past a babel name's range (MR 5): their label is that head's joint */
+  const afterName = new Set()
   for (const id of [...ids].sort((a, b) => a - b)) {
     const u = unit(id)
     if (work > OWN_WORK) { u.unhidden = 'marks'; continue }
@@ -241,6 +248,8 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
       const open = c ? `${c[1]}${c[2]}.${c[3]}a` : nm ? `n${nm[1]}.${nm[2]}.s` : null
       const o = open ? (where.get(open) ?? []).find(([op, oq]) => op === p && oq < qq) : null
       if (o) { qq = o[1]; g = Math.min(g, pg.points[qq].glyph - 1) }
+      // (a babel name passed over: what stands between it and the start is the head's joint, amsthm's "." after "Proof")
+      if (o && nm) afterName.add(id)
     }
     if (qq < 0) for (; g >= 0; g--) glyphAt(g)
     if (!lead.glyphs.length) continue
@@ -272,7 +281,7 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
       // (the label ends at a word's end: the next glyph a gap of a fifth of an em or more after it, or none)
       const G = j => pg.glyphs[lead.glyphs[j][1]]
       const wordEnd = j => j === lead.glyphs.length || G(j).x0 - G(j - 1).x1 >= 0.2 * Math.max(G(j).size, G(j - 1).size) || !/\S/.test(G(j).u ?? '')
-      for (let j = lead.glyphs.length; j > 0; j--) if (wordEnd(j) && isLabelForm(lead.glyphs.slice(0, j).map(([, i]) => pg.glyphs[i].u ?? '').join(''))) { k = j; break }
+      for (let j = lead.glyphs.length; j > 0; j--) if (wordEnd(j) && isLabelForm(lead.glyphs.slice(0, j).map(([, i]) => pg.glyphs[i].u ?? '').join(''), units[id]?.bracketed === true)) { k = j; break }
       if (k) claim({ glyphs: lead.glyphs.slice(0, k) }, `u${id}.l`, 'l')
       if (k < lead.glyphs.length) claim({ glyphs: lead.glyphs.slice(k) }, `u${id}.p`, 'p')
       continue
@@ -456,7 +465,9 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
     if (lead) {
       const chars = lead.map(([p, i]) => pages[p - 1].glyphs[i].u ?? '').join('')
       // the label is no label: its ink left the original's where it stands apart from the text's, else the unit the original
-      if (!isLabelForm(chars)) {
+      // (a head's joint after the babel name that leads the unit, its punctuation alone, is a label: the name's lead draws it,
+      // run.mjs jointOf; IEEEtran's "—" after "Abstract", amsthm's "." after "Proof")
+      if (!isLabelForm(chars, units?.[id]?.bracketed === true) && !(afterName.has(id) && JOINT.test(labelText(chars)))) {
         if (!apart(lead, id)) { u.unhidden = 'spell'; spell.push(id); continue }
         for (const [p, i] of lead) gOwn[p - 1][i] = null
         u.groups.delete(`u${id}.l`)
