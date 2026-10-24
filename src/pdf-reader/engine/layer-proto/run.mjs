@@ -1874,7 +1874,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
     const t1 = lap()
     const orig = prep.orig
-    const s = orig?.size ?? median(p.rects.map(r => r[4] - r[2])) / 0.894
+    // (the original's size, its faked small capitals aside; a CJK target's small capitals at CJK_CAPS_SIZE of it: layer2.mjs unitSizeOf)
+    const s = L2.unitSizeOf(prep, P, p.unit) ?? median(p.rects.map(r => r[4] - r[2])) / 0.894
     const base = orig && orig.st.fam !== 'math' ? { ...orig.st } : { fam: 'serif', bold: p.unit.kind === 'heading', italic: false, caps: false, design: designs.serif }
     const keep = prep.keep?.length ? new Set(prep.keep) : null
     // (centred as the layout file has the unit, UNIT_FLAG.CENTRED: TeX's own alignment where the marked original tells it, else

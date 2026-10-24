@@ -232,8 +232,18 @@ export declare function pageChars2(textContent: { items: unknown[] }, fontOf: (f
  *  first, and the parity of the slant toggles around it (`flip`); null where the unit carries no source pieces or their text is
  *  not its `src` */
 export declare function sourceScopes(unit: { src?: string; source?: readonly { t: string; s?: string; src?: string }[] }): { sets: number; chain: number[]; flip: number }[] | null
-/** the unit's base style and its pieces' colours from its matched characters with their source scopes (E1) */
-export declare function measuredStyle(chars: readonly { st: FontClass & { fill?: number }; sets: number; chain: readonly number[]; flip?: number }[]): { st: { bold: boolean; italic: boolean; caps: boolean; fam: string; design?: string }; fill: number | null; pieces: Map<number, number> } | null
+/** the unit's base style and its pieces' colours from its matched characters with their source scopes (E1); `small` and `lower`
+ *  where the unit has faked small capitals (each glyph one, and its source letter lowercase: the glyphs that tell them) */
+export declare function measuredStyle(chars: readonly { st: FontClass & { fill?: number }; sets: number; chain: readonly number[]; flip?: number; small?: boolean; lower?: boolean }[]): { st: { bold: boolean; italic: boolean; caps: boolean; fam: string; design?: string }; fill: number | null; pieces: Map<number, number> } | null
+/** a faked small capital is set at most this share of the size of its unit's letters whose case TeX did not change */
+export declare const SMALL_CAPS_SHARE: number
+/** the size a unit set in small capitals is drawn at in a CJK target, × its nominal size (the owner's to choose; 1) */
+export declare const CJK_CAPS_SIZE: number
+/** the size a unit is laid at: the original's, its faked small capitals aside, × CJK_CAPS_SIZE in a CJK target where its base is
+ *  set in small capitals; undefined where no glyph of it was read */
+export declare function unitSizeOf(prep: Pick<Prepared, 'orig' | 'measured'> | null | undefined, P: { cjk?: boolean } | null | undefined, unit?: Pick<Unit, 'pieces'> | null): number | undefined
+/** a face's small capitals as its CSS rule draws them: '' for a face of none, its own, or synthesized where it has none */
+export declare function capsRule(face: Pick<Face, 'caps'> & { id?: string }): string
 /** a rendering's text in runs of one fill (0xRRGGBB, or -1 untold); null where its characters do not give the text or tell no fill */
 export declare function fillRunsOf(chars: readonly Pick<Char, 'ch' | 'st'>[] | null | undefined, text: string): { text: string; fill: number }[] | null
 /** the kind a mark no line may start with is across scripts ("." and the ideographic full stop: 'stop'; ")" and a closing corner bracket: 'close'), else the mark itself */

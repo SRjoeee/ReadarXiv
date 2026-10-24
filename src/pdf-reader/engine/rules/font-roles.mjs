@@ -25,7 +25,7 @@
 //
 // Also the names behind both renderers' reading of a paper's fonts: each design's NFSS family names (the TeX path's
 // font probe, familyOfProbe) and its PostScript names (a PDF's fonts, classifyFont and familyOfFonts), in one table.
-import { COVERAGE } from './font-coverage.mjs'
+import { COVERAGE, METRICS } from './font-coverage.mjs'
 import { scriptOf } from './script.mjs'
 
 /**
@@ -408,12 +408,20 @@ const styled = (group, bold, italic, letters) => {
   return first
 }
 
+/** the faces whose letters are small capitals: Latin Modern's caps face, upright and oblique (faceFor) */
+const CAPS_FACES = new Set(['lm-roman-caps', 'lm-roman-caps-italic'])
+/** whether a face draws small capitals of its own: by its smcp feature (METRICS), or by its letters (Latin Modern's caps face).
+ *  A run set in small capitals in a face with neither has them synthesized from its capitals (layer-proto/layer2.mjs faceClass),
+ *  as the canvas that measures the run synthesizes them */
+export const ownSmallCaps = id => CAPS_FACES.has(id) || !!METRICS[id]?.smcp
+
 /** the face a run is drawn in. A CJK run takes its target's CJK family by weight, whatever its class (no sans, no
  *  fangsong: §4.4): its slant is that face sheared where it is drawn (layer-proto/fonts.mjs CJK_SLANT_DEG), an italic run
  *  the body's and a bold italic one the bold's (docs/PDF-READER.md §18.1, the font roles). A Latin run takes its design's
  *  group (math the math face); small capitals take Latin Modern's caps face, and elsewhere stay the face's: the drawing
- *  sets them by its smcp feature where METRICS says it has one, else as capitals at 0.8 of the size. A CJK run of a
- *  target with no CJK roles is set as a Latin run, and canDraw then finds what its face cannot draw */
+ *  sets them by its smcp feature where METRICS says it has one, else synthesizes them from its capitals (ownSmallCaps), as
+ *  Chromium does at 0.7 of the size. A CJK run of a target with no CJK roles is set as a Latin run, and canDraw then finds
+ *  what its face cannot draw */
 export function faceFor(roles, run) {
   const c = roles.cjk
   if (run.script === 'cjk' && c) return run.bold ? c.bold : c.body
