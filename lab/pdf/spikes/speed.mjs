@@ -98,7 +98,7 @@ async function child() {
     t = at()
     const w = await wrapMod.wrapFinal(finalBytes, { PL, getDocument, documentOptions: { cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: 0, useSystemFonts: false }, OPS, units: source.units, texts: marks?.marking?.texts ?? options.texts?.flat() ?? null, deflate, inflate })
     ms.wrap = at() - t
-    if (!w.refused) { oursBytes = w.bytes; wrap = { stats: w.stats, unhidden: w.unhidden, labelKept: w.labelKept, pages: w.pages } }
+    if (!w.refused) { oursBytes = w.bytes; wrap = { stats: w.stats, unhidden: w.unhidden, labelKept: w.labelKept, pages: w.pages, figures: w.figures } }
   }
   const ours = oursBytes ? { doc: await open(oursBytes, LITE_DRAW), bytes: oursBytes.length, sha256: createHash('sha256').update(oursBytes).digest('hex'), xref: tail.startxrefOf(oursBytes), check: { marks: 0 }, ...(wrap ? { wrap } : {}) } : null
   let first = null, parts = 0

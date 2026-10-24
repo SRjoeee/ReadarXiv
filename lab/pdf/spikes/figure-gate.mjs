@@ -73,15 +73,16 @@ for (const id of IDS) {
   const units = src && existsSync(src) ? openPaper((await unpackSource(new Uint8Array(readFileSync(src)))).files).units : null
   const final = new Uint8Array(readFileSync(base))
   const t0 = performance.now()
-  const wrapOptions = { PL, getDocument, documentOptions: { ...OPTIONS }, OPS, units, ...(units ? {} : { follows: null }), texts: units ? texts : null, deflate, inflate }
-  const r = await wrapFinal(final, wrapOptions)
+  const wrapOptions = { PL, getDocument, documentOptions: { ...OPTIONS }, OPS, units, ...(units ? {} : { follows: null }), deflate, inflate }
+  const marked = units ? texts : null
+  const r = await wrapFinal(final, { ...wrapOptions, texts: marked })
   const ms = Math.round(performance.now() - t0)
   if (r.refused) { console.log(JSON.stringify({ id, refused: r.refused, why: r.why })); failed = true; continue }
   const drawn = r.figures.units
   const byPage = new Map()
   for (const u of drawn) (byPage.get(u.page) ?? byPage.set(u.page, []).get(u.page)).push(u)
   const fails = { G1: [], G3f: [], D: [], O: [] }
-  const bare = await wrapFinal(final, { ...wrapOptions, figures: false })
+  const bare = await wrapFinal(final, { ...wrapOptions, texts: marked, figures: false })
   if (bare.refused) { console.log(JSON.stringify({ id, refused: `without figures: ${bare.refused}`, why: bare.why })); failed = true; continue }
   let G1u = 0, splitPx = 0
   const A = await renderer(r.bytes), U = await renderer(bare.bytes), F = await renderer(final)
@@ -114,8 +115,16 @@ for (const id of IDS) {
       if (outside) fails.G3f.push(`p${p}: ${outside} px outside the figures' bands`)
       list.forEach((u, k) => {
         if (!lost[k]) fails.D.push(`p${p} ${u.group} ${JSON.stringify(u.text)}`)
-        const b = bands[k], colours = new Set()
-        for (let y = Math.ceil(b[1] + 1); y < Math.floor(b[3] - 1); y++) for (let x = Math.ceil(b[0] + 1); x < Math.floor(b[2] - 1); x++) { const o = 4 * (y * w + x); colours.add(`${off.data[o] >> 4},${off.data[o + 1] >> 4},${off.data[o + 2] >> 4}`) }
+        // (the band itself, in the unit's own frame, a pixel in from each edge: a turned label's box is no page box)
+        const b = bands[k], colours = new Set(), h = on.height, inset = 1 / SCALE
+        for (let y = Math.floor(b[1]); y <= Math.ceil(b[3]); y++) for (let x = Math.floor(b[0]); x <= Math.ceil(b[2]); x++) {
+          if (x < 0 || y < 0 || x >= w || y >= h) continue
+          const px = (x + 0.5) / SCALE - u.x, py = (h - y - 0.5) / SCALE - u.y
+          const sAlong = px * u.ux + py * u.uy, tAcross = -px * u.uy + py * u.ux
+          if (sAlong < inset || sAlong > u.length - inset || tAcross < u.descent * u.size + inset || tAcross > u.ascent * u.size - inset) continue
+          const o = 4 * (y * w + x)
+          colours.add(`${off.data[o] >> 4},${off.data[o + 1] >> 4},${off.data[o + 2] >> 4}`)
+        }
         if (colours.size > 1) fails.O.push(`p${p} ${u.group} ${JSON.stringify(u.text)} ${colours.size} colours`)
       })
     }

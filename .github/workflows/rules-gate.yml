@@ -19,6 +19,7 @@ on:
       - 'src/pdf-reader/engine/layout/cell-rules.mjs'
       - 'src/pdf-reader/engine/layout/colour.mjs'
       - 'src/pdf-reader/engine/layout/delta-wire.mjs'
+      - 'src/pdf-reader/engine/layout/figure-text.mjs'
       - 'src/pdf-reader/engine/layout/file.mjs'
       - 'src/pdf-reader/engine/layout/fills.mjs'
       - 'src/pdf-reader/engine/layout/ink.mjs'
