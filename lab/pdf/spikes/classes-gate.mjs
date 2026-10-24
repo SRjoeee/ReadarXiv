@@ -187,6 +187,15 @@ for (const arg of process.argv.slice(2).filter(a => !a.startsWith('--'))) {
           row.g1 = { pages: entryPages.size, apart: g1.reduce((x, y) => x + Math.max(0, y), 0), mismatched: g1.filter(x => x < 0).length }
         }
       } else row.layout = lm.refused
+      // (the base page dumped, and the base engine's run's against it on every page: the entries' marks move nothing)
+      if (DUMP) { mkdirSync(DUMP, { recursive: true }); writeFileSync(join(DUMP, `${id}.pdf`), ours) }
+      const againstPdf = AGAINST && join(AGAINST, `${id}.pdf`)
+      if (againstPdf && existsSync(againstPdf)) {
+        const theirsBase = new Uint8Array(readFileSync(againstPdf)), n = bd.doc.numPages
+        let px = 0, pagesApart = 0
+        for (let p = 1; p <= n; p++) { const d = await apart(theirsBase, ours, p); if (d !== 0) { pagesApart++; px += Math.max(0, d) } }
+        row.vsRunBase = { pages: n, pagesApart, px }
+      }
       const packBase = PACK && join(PACK, 'fixtures', `${id}-zh`, 'base.pdf')
       if (packBase && existsSync(packBase)) {
         const theirsBase = new Uint8Array(readFileSync(packBase)), n = bd.doc.numPages
