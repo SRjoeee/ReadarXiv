@@ -65,17 +65,17 @@ html[data-axt-dim] { --axt-sk: oklch(0.275 0.004 255); --axt-sk-paper: rgb(29 29
 html[data-axt-dim] { --axt-tr-ink: oklch(0.72 0.1 255); }
 .axt-translating { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
 .axt-translating .axt-translating-mark { position: absolute; display: block; }
-.axt-translating-shimmer .axt-translating-mark { overflow: hidden; border-radius: 0.25cqw;
-  background: linear-gradient(100deg, transparent 0 35%, color-mix(in oklab, var(--axt-tr-ink) 16%, transparent) 50%, transparent 65% 100%) 0 0 / 300% 100% no-repeat;
-  animation: axt-tr-sweep 1.6s ease-in-out infinite; }
-@keyframes axt-tr-sweep { from { background-position: 100% 0; } to { background-position: 0 0; } }
+.axt-translating-shimmer .axt-translating-mark { overflow: hidden; border-radius: 0.25cqw; background-color: color-mix(in oklab, var(--axt-tr-ink) 5%, transparent);
+  background-image: linear-gradient(100deg, transparent 30%, color-mix(in oklab, var(--axt-tr-ink) 18%, transparent) 50%, transparent 70%);
+  background-size: 200% 100%; background-repeat: no-repeat; animation: axt-tr-sweep 1.8s ease-in-out infinite; }
+@keyframes axt-tr-sweep { from { background-position: 150% 0; } to { background-position: -50% 0; } }
 .axt-translating-spinner .axt-translating-mark::before { content: ""; position: absolute; box-sizing: border-box;
   left: var(--axt-tr-x, 0%); top: var(--axt-tr-y, 0%); inline-size: 1.6cqw; block-size: 1.6cqw; margin-inline-start: -2.1cqw; margin-block-start: 0.1cqw;
   border-radius: 50%; border: 0.22cqw solid color-mix(in oklab, var(--axt-tr-ink) 25%, transparent); border-block-start-color: var(--axt-tr-ink);
   animation: axt-tr-turn 0.9s linear infinite; }
 @keyframes axt-tr-turn { to { transform: rotate(1turn); } }
 @media (prefers-reduced-motion: reduce) {
-  .axt-translating-shimmer .axt-translating-mark { animation: none; background: color-mix(in oklab, var(--axt-tr-ink) 7%, transparent); }
+  .axt-translating-shimmer .axt-translating-mark { animation: none; background-image: none; background-color: color-mix(in oklab, var(--axt-tr-ink) 8%, transparent); }
   .axt-translating-spinner .axt-translating-mark::before { animation: none; }
 }
 /* ----- the layer drawn in a place (layer-side.mjs; the web's placeholders.css as it drew it): the page's copy fills the
