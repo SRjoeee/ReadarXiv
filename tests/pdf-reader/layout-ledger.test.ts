@@ -179,6 +179,23 @@ describe('ledgerOf', () => {
     expect(classAt(l, 1, at(pg, 'T'))).toBe('orphan')
   })
 
+  it('opens the references\' zone at a bibliography entry\'s start, a name before it or none: the text between entries is theirs, a unit after them ends it', () => {
+    // (REVTeX's bibliography, which no babel name opens: an entry, its label its names' own (own.mjs's u<id>.l), its names and rest
+    // owned, the style's own words after it; the next entry's alpha label no unit owns; then an appendix's paragraph and a line
+    // no unit owns)
+    const units = [{ kind: 'refnames' }, { kind: 'reference' }, { kind: 'refnames' }, { kind: 'para' }]
+    const pg = page(
+      { point: 'bs1' },
+      { glyphs: run('[Ab17]', 60, 700), owner: 'u0.l' }, { point: '0s' }, { glyphs: run('Bee.', 100, 700), owner: 'u0' }, { point: '0e' },
+      { point: '1s' }, { glyphs: run('Title.', 160, 700), owner: 'u1' }, { point: '1e' }, { glyphs: run('Online only', 100, 690) },
+      { glyphs: run('[Cd18]', 60, 680) }, { point: '2s' }, { glyphs: run('Dee.', 100, 680), owner: 'u2' }, { point: '2e' },
+      { point: '3s' }, { glyphs: run('Appendix text', 100, 600), owner: 'u3' }, { point: '3e' }, { glyphs: run('Wonder 1 (Main)', 100, 580) }, { point: 'be1' },
+    )
+    const l = ledger([pg], units)
+    expect(['A', 'B', 'T', 'O', 'C', 'D', 'p', 'W'].map(ch => classAt(l, 1, at(pg, ch)))).toEqual(['names', 'names', 'references', 'references', 'references', 'names', 'body', 'orphan'])
+    expect(l.counts.references.letters).toBe(['Title', 'Onlineonly', 'Cd'].join('').length)
+  })
+
   it('reads a formula\'s line, a code line and a line of no word as never translated', () => {
     const pg = page(
       { point: 'bs1' },

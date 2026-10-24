@@ -2534,3 +2534,37 @@ after its last, on one baseline, as `folioOf` reads a folio), whether it is insi
 nothing in the compile. What no class explains is an orphan: the sweep's invariant (o) is no orphan letters (`orphanRows`, rows
 in the sweep's shape), run in the lab by `lab/pdf/spikes/ledger.mjs` (record `lab/pdf/records/ledger.md`). The ink units that
 translate the planned classes, and the toggles, are the note's later stages.
+
+### 19.11 References and names, and the reader's toggles (stage 4 of `docs/route/orphan-text.md`)
+
+The owner's rulings of 2026-10-25: we own format correctness (positions from TeX, the original's ink owned and hidden by its own
+groups, line fit, no double ink, structure kept) and the provider owns translation quality; every class is translated once, on the
+server, into the shared cache, and a reader's settings only show or hide it; "references" means whole entries, "names" the front
+matter's authors and the names inside references, which follow "names" and not "references".
+
+- **Entries are units** (`source/latex-front.mjs` `bibliography`, PIPELINE 29). The ground truth is the bibliography's TeX the
+  compile reads: the paper's `thebibliography`, or the job's `.bbl` where `\bibliography` reads it and the package holds it
+  (BibTeX's output; never biber's data, which is biblatex's and no text). Each `\bibitem`'s entry, from its key to the next
+  `\bibitem`, is two units: its names, the first block, kind `refnames` (class names): up to the first `\newblock` (plain, abbrv,
+  unsrt, ieee, the natbib styles, acl, ACM's), else REVTeX's and ACM's `\bibfield{author}`, else IEEEtran's text before the
+  title's opening quotes; and the rest, kind `reference` (class references). The label (`\bibitem`'s optional argument, set in the
+  list's label box) and the key are no piece; what a style writes before the first entry is no unit, nor REVTeX's `\BibitemOpen`
+  and `\BibitemShut`. In an entry a number (a year, pages, a volume and its issue, a DOI written out: a token of a digit and no
+  letter, white space or a piece that sets none on each side) is a placeholder of the class `number` (`layout/marks.mjs`, both
+  marks, MARKS_SCHEMA 11), the original's ink as a web address and a formula are. Both units are marked as the body's are, in the
+  bibliography's own TeX (the `.bbl` written back marked: a paper that ships it runs no BibTeX), so their places, their ink and
+  their groups are TeX's (LAYOUT 21: UNIT_KINDS `reference`, `refnames`; PH_KINDS `number`). The probe asks about an entry's
+  commands after every other unit's, so the body's marks are what they were. Measured: `lab/pdf/spikes/classes-gate.mjs`, record
+  `lab/pdf/records/classes-gate.md`.
+- **Not yet units:** a bibliography the compile makes itself (BibTeX or biber over a `.bib`, in the prepare's first compile):
+  the units are written before any compile, so its entries have no unit and stay the original's (the ledger's `references`), and
+  a bibliography biblatex sets from biber's fields (`\printbibliography`), whose text is no TeX the front end can mark.
+- **Names are translated for every target** (`layer-proto/rows.mjs` `toTranslate`, TRANSLATE_VERSION 6): the author block's units
+  are sent whatever the language, as every unit is but a table's kept names; they are laid as any unit, and stay the original's
+  where the wrap cannot hide their ink (`unhidden`).
+- **The toggles** (`rules/content-classes.mjs` `TOGGLE_DEFAULTS`, `togglesOf`, `unitShown`; the door's and the layer side's
+  `toggles`: the names of the toggles on, or `{ [toggle]: boolean }` over the defaults; none, the defaults: references and names
+  off, every other toggle on). A unit whose class they hide is not awaited by the door (no page waits for its row), not drawn (a
+  row given anyway is skipped `hidden`), and marked by no translating indicator; its ink is the page's. Another set of toggles is
+  another open of the door over the same rows and the same composed document: nothing is prepared or translated again. The web
+  and the extension wire their settings to it later (stage 8).
