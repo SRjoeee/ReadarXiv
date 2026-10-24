@@ -1987,6 +1987,16 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     final pass in the maker child held 960 MB, the maker died of its memory (`prlimit --data` 1,024 MiB), and the host's re-cut
     gave every part no layout. The cache now counts the bytes it holds. A part cut again after the maker died says so
     (`page-pass.mjs` `layoutRecordOf`: `memory`, `clock`, `crashed`), not that the maker refused the paper.
+- **The release sweep, LAYOUT 20** (2026-10-24: 21 units newly English against production, all `unhidden`): the maker reads
+  a piece's ink as the wrap does (§19.9: `stream.mjs ownedOf`'s two rules, one reading for both). The text after a piece,
+  where it runs to its unit's next mark, begins where the glyphs to that mark spell it whole (followsOf's `rest`), not where
+  its first `WANT` characters first stand: a display's `\text{for every}` before "For" (2610.16663v1 p45, 2610.21037v1 p15),
+  a table display's header word "position" before "Positions" (2610.20285v1 p28), a URL's dots and `$=.068$`'s point before
+  the full stop after them (2610.21376v1 p9, 2610.21098v1 p15) cut the piece's segments short, the rest read as the unit's
+  text, which the spell check refused. And a display that ends a footnote, LOST before, is found to its page's folio
+  (2610.16663v1 p16). Over the 24 papers of the release sweep, 8 rows of their layout files move, those units' placeholder and
+  erase rows alone; no unit is laid or left that was not before; on the gate pack every layout file is the one before but its
+  version (pack `13785c79`).
 - **A unit the layer leaves the original's says why** (read time, no stored artefact, no version token): each `skipped` record
   of the run (`layer-proto/run.mjs`) carries a `code` of `SKIP_CODES` beside its `why`: `unlocated` (the file holds no row of
   it, and the file's own reason beside it, `unlaid`), `pieces`, `noRow`, `lost` (a visible piece the file has no position
@@ -2165,8 +2175,31 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   own (`\_` before `\allowbreak` is a rule; not one that reaches under the text after it, ulem's `\uline`), an opening alone
   over placeholders of no mark of their own, nothing else between, to the next marked piece's opening
   (`\cls{circle}$\to$\cls{donut}`), and a display after its unit's end mark ending at a later unit's opening as at its start
-  mark, where that unit's start mark follows the opening (an end-only title's opening may stand lines into it); a footnote call is its unit's `.p` too. Label `u<id>.l`: the glyphs on the start's first glyph's
-  baseline between the previous unit's end mark and the start, the placeholders' and names' ranges passed over. Babel name
+  mark, where that unit's start mark follows the opening (an end-only title's opening may stand lines into it). Two rules the
+  maker's reading shares since LAYOUT 20, so that the layout file's segments of a piece and the wrap's group of it are one
+  reading (with the erasure's alone, a display's tail past the maker's segment was hidden with the piece and shown again from
+  render B through that segment only: lost): where the text after a piece runs to its unit's next mark (its next piece's
+  opening or its end mark), the text is told where the glyphs to that mark spell it exactly (the followsOf `rest`), not where
+  its first `WANT` characters first stand, which may be in the piece's own ink (a display's `\text{for every}` before "For",
+  a table display's header word before "Positions", a URL's dots or `$=.068$`'s point before the full stop: 2610.16663v1,
+  2610.20285v1, 2610.21037v1, 2610.21376v1, 2610.21098v1: 8 rows of 24 papers' layout files move, these units' segments
+  alone, no unit laid or not laid otherwise); and a display that ends a footnote (its unit's last piece, after its end mark,
+  no mark after it on its page, which the maker left LOST) owns its region's ink to the page's folio (`stream.mjs folioOf`: the
+  run ending the page's stream on one baseline, outside the bodies, that spells a page number alone and stands below all else
+  by 1.5 of its size), where each of its lines starts 2 em or more right of the footnote's own lines (a display is centred
+  or indented; a footnote after it with no mark of its own starts at that edge, its number within 1.8 em of it) and stands
+  within 2.5 of its size of the line before it (a line of the page's foot above the folio, a centred copyright line, is
+  \footskip below the text block); none for a piece that is no display (an inline formula's or a citation's ink ends with
+  it), on a page with no folio (a running foot's text would be hidden with it), or where a line starts nearer or stands
+  apart (2610.16663v1 p16). A
+  placeholder whose opening point TeX set inside another unit's range, between its start and end marks on one page, owns
+  nothing of that unit's (a run-in `\paragraph` is set at the next paragraph's start, after that paragraph's lead
+  placeholder's opening mark: 2610.21085v1 p5). A footnote call is its unit's `.p` too. Label `u<id>.l`: the glyphs on the start's first glyph's
+  baseline between the previous unit's end mark and the start, the placeholders' and names' ranges passed over, but the
+  closing punctuation a head macro sets after the unit before it — right after that unit's end mark, each glyph within a fifth
+  of an em of the one before, the first of that unit's last glyph — which is that unit's text (amsthm's "(Minimum detectable
+  PDI)." after a theorem's note: as the body's label, no label's form, it was left the original's ink under the body's
+  drawing, 2610.21491v1 p7; its group now hides it where the note is drawn, as the line's erase did before the wrap). Babel name
   `n<occ>`: between `n<occ>.<key>.s` and `.e`, but never over a placeholder's ink (cleveref's "Appendix" inside a `\cref` is
   the reference's). A glyph is one group's: a placeholder's or a name's over the text's, the text's over a label's, the first
   text's over a later. A unit that opens with a placeholder of no mark of its own (a paper's macro first in it: `\bert`,
@@ -2181,9 +2214,12 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   right before the start that spell exactly the text the marking's probe showed the macro sets (`wrapFinal`'s `texts`, the
   marks file's `marking.texts`) or a text symbol's (`\#` "#"), each under `CELL_ABUT` 0.6 em from the next, are its `.p`
   (a text symbol's part of it goes with the text, `u<id>`, whatever else the lead holds: the layer draws a symbol as its
-  character, never from a crop, and the reader hides `.p` only for a found placeholder; its letters, `\O`'s "Ø", are no
-  source text the spell check reads, as a placeholder's are none); where that text is not known or not there, the cell is
-  `marks`. Marks absent, twice or out of
+  character, never from a crop, and the reader hides `.p` only for a found placeholder; its letters, `\O`'s "Ø", are its
+  character in the source the spell check reads); where that text is not known or not there, the cell is
+  `marks`. Marks set twice are the unit's first occurrence where that is an end mark alone and every later one a pair (a
+  title TeX set in vertical mode, its class setting it again in a line: acmart's ACM Reference Format, 2610.22065v1 p1; TeX
+  keeps a name's first destination, so the layout's is that one), the later occurrences' ink the page's. Marks absent, twice
+  otherwise (a heading again in a running head, both pairs) or out of
   order, a unit the paper's units lack, a placeholder whose ink cannot be told apart (its range lost: hidden with the text,
   it could not be kept in place, and the spell check reads no symbol), or a unit that opens with a placeholder of no mark of
   its own whose ink still stands, in no group, on its start's line before its start mark (a table's cell, `\bertlarge` first
@@ -2193,9 +2229,25 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   20 million glyphs and boxes (real ranges cost the ink once), over every loop (text, labels, placeholders, names); past it a
   unit is `marks`.
 - **The spell check** (what makes "a unit that cannot be delimited shows the original" exact): a unit's `u` glyphs must spell
-  its source text, letters and digits alone (NFKD, marks, TeX's spacing accents U+02C6, U+02C7, U+02D8 to U+02DD and case dropped, `ß` as
-  `ss`, a dotless `ı` and `ȷ` as their letters: TeX's accents — OT1 sets `\^e` as `ˆ` beside `e` —, ligatures, hyphenation
-  and punctuation are no evidence), or it is `spell`, its groups still written. Its label must be a label's form (a number
+  its source text, letters and digits alone (`stream.mjs spellOf`: NFKD, marks, TeX's spacing accents U+02C6, U+02C7, U+02D8
+  to U+02DD and case dropped, a dotless `ı` and `ȷ` as their letters, and a letter Unicode does not decompose as its base
+  letters — `ß` `ss`, `ø` `o`, `æ` `ae`, `œ` `oe`, `ł` `l`, `đ` `d` —, so that a letter symbol reads alike whichever way its
+  font maps it (OT1 sets `\l` as a bar over an l, T1 as its own glyph): TeX's accents — OT1 sets `\^e` as `ˆ` beside `e` —,
+  ligatures, hyphenation and punctuation are no evidence), or it is `spell`, its groups still written. The source's text is
+  its pieces' with a text symbol of no mark of its own as its character (`F\o lner`: 2610.21037v1), outside a unit's lead but
+  a cell's. Three readings are tried where the letters differ, each exact in its own terms: a wrapper (an `open` piece) may set
+  words of its own before its argument, at most 16 letters at each (siamart's `\funding` sets "Funding:": 2610.20266v1,
+  2610.20285v1; read by the places each part may end at, a part at a time, within a million steps a unit — a regular
+  expression of the slots backtracked for seconds over 51 letters and seven `\emph`); a title's lead on lines of its own
+  (above); and lines of the unit's text that stand on lines of their own —
+  no other line of the unit on their baseline where their extents meet — and below every line kept that their extent meets
+  on their page (a column's foot, a page's: a line among or above the unit's own may be in the layout's frame of it), whose
+  letters the source does not go on with, are left the page's, every other line spelling the source in order and whole
+  (REVTeX's e-mail notes at a column's foot in
+  mid-paragraph: 2610.20716v1, 2610.21288v1, 2610.21765v1, 2610.20848v1; a folio inside a footnote run on to the next page:
+  2610.10069v1), never for a unit with a visible placeholder of no mark of its own, whose ink such a line may be. On the
+  sweep's 6 units so released (14 runs: e-mail notes and their marks, an unmarked footnote's URL, a folio) the layout file's lines of the unit
+  hold none of the lines left, so nothing is drawn over that ink. Its label must be a label's form (a number
   or an item's mark, maybe a caption's, a section's or a theorem's name before it, the number after a name maybe with a letter
   before it, a supplement's or an appendix's "Table S3:", "Figure A1" (REMOVAL 10: 2610.21924's fifteen and 2610.16663's ten
   centred captions were drawn left, their labels kept and their text centred apart; a letter and a number alone, "A100", are
