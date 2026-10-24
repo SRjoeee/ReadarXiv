@@ -78,7 +78,7 @@ describe('a label is what the head macro set, never a placeholder the unit\'s so
     // read by the source's pieces, the cell begins with text; its "(" before its first word is the source's own, which read as a
     // class's mark left its line short of its bracket and its table's header group unfit
     const pg = pageOf([['(nats)', plain()]])
-    const { prep } = read(unitOf([text(' (nats) ')], ['（国民党）'], 'cell'), pg, {})
+    const { prep } = read(unitOf([text(' (nats) ')], ['\uff08\u56fd\u6c11\u515a\uff09'], 'cell'), pg, {})
     expect(prep.label).toBeUndefined()
   })
   it('still takes a label the class set before a source that begins with text (a float\'s "Figure 3:")', () => {

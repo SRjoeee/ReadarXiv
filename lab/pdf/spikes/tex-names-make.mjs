@@ -139,7 +139,7 @@ function hyperrefOf(lang) {
   return out
 }
 
-// ---- ctex's zh names (ctex-name-utf8.cfg: `figurename = 图 ,`), by the counter type they name
+// ---- ctex's zh names (ctex-name-utf8.cfg: `figurename = <name> ,`), by the counter type they name
 const CTEX_TYPES = { figurename: 'figure', tablename: 'table', appendixname: 'appendix', algorithmname: 'algorithm' }
 const ctex = {}
 for (const m of read('ctex-name-utf8.cfg').matchAll(/^\s*([a-z]+name)\s*=\s*([^,\n]+?)\s*,?\s*$/gm)) if (CTEX_TYPES[m[1]]) ctex[CTEX_TYPES[m[1]]] = m[2].trim()
