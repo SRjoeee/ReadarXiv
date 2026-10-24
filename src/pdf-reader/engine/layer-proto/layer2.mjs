@@ -3599,7 +3599,7 @@ export function layoutUnit2(tokens, blocks, s, P) {
 function laidOut({ r, st, f }, s, P, tried, blocks) {
   const clipped = r.rest < r.total
   P._compress = st.compress
-  if (P.lastLines && !clipped) toLastLines(r.lines, blocks, P.halfLead?.below, f)
+  if (P.lastLines && !clipped) toLastLines(r.lines, blocks, P.halfLead?.below, f, () => slotsAt(blocks, { ...st, lead: 1, box: undefined }, P, s))
   placeItems(r.lines, f, P)
   const count = t => (t.s ? [...t.s].length : t.crop ? 1 : 0)
   const allChars = r.tokens.reduce((a, t) => a + count(t), 0)
@@ -3735,16 +3735,36 @@ export function layoutAt(tokens, blocks, s, P, st) {
  * and every line above it as far down; each keeps its slot's measure (the first its start, where the heading's number is
  * drawn with it: run.mjs). Never nearer the next line of its column (the original's room under its last line, `below`:
  * P.halfLead, run.mjs edgesOf) than the size it is set at, `f`: the line's box clear of the next line's. Only a heading of
- * one block (its lines one run of a column); a body paragraph is never moved
+ * one block (its lines one run of a column); a body paragraph is never moved.
+ *
+ * Only where the lines keep their own room where they land (`slots`: the state's slots on the original's own rows, at its
+ * pitch and with no page fill's floor, which the lines go past; the one within half a pitch of the row each is moved onto).
+ * Its lines stay where they were laid if a line
+ * would end past where its new row's room ends: the stop of a row it shares with the next unit, TeX's text ending there
+ * before what stays of the page (run.mjs keptAfter: amsthm's theorem note, whose last row the theorem's body goes on after
+ * the note's `).`; 2610.18513v1 page 35, unit 316 moved down onto its row whole and drawn over the body's first words), or a
+ * narrower measure. The same where a line after the first would start elsewhere than on its row, or where the first line
+ * starts past its block's left edge with no start of its own (`start`: the number run.mjs draws with it): what stands
+ * before it on its row stays there (a label kept as the original's, "Lemma A.2 ("), and the text moved off it stood apart
+ * from it, at that line's indent on a row that has none
  */
-function toLastLines(lines, blocks, below, f) {
+function toLastLines(lines, blocks, below, f, slots) {
   if (blocks?.length !== 1 || !lines.length || lines.some(l => l.block !== 0)) return
-  const B = blocks[0].B
-  if (lines.length >= originalLines(blocks[0])) return
+  const b = blocks[0], B = b.B
+  if (lines.length >= originalLines(b)) return
   const last = Math.min(...B)
-  let by = last - lines.at(-1).baseline
+  const onto = last - lines.at(-1).baseline
+  let by = onto
   if (Number.isFinite(below) && below < f) by += f - below
   if (!(by < -0.05)) return
+  const room = slots().filter(sl => sl.block === 0)
+  for (const [i, l] of lines.entries()) {
+    // (the row it is moved onto, the page fill's below aside: the slot there, within half a pitch)
+    const y = l.baseline + onto
+    const at = room.reduce((q, sl) => (!q || Math.abs(sl.baseline - y) < Math.abs(q.baseline - y) ? sl : q), null)
+    if (!at || Math.abs(at.baseline - y) > 0.5 * at.pitch || at.x1 < l.x1 - 0.05) return
+    if (i > 0 ? Math.abs(at.x0 - l.x0) > 0.05 : !b.centred && b.start === undefined && l.x0 > at.x0 + 0.05) return
+  }
   // (each line's target the original's line it now stands on, where it does: the record's drift reads it)
   for (const l of lines) {
     l.baseline += by
