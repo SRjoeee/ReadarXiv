@@ -106,11 +106,6 @@ export const onIos = (nav = globalThis.navigator) => !!nav && (/\biP(?:hone|ad|o
 export const AHEAD_PAGES = 2
 /** how long the view rests (no scroll, no page asked, nothing laid) before the pages ahead are laid */
 export const AHEAD_IDLE_MS = 600
-/** the looks of the indicator over a near page's paragraphs not laid yet, while its place shows the original's page (docs/
- *  PDF-READER.md §11.8, "Translating"): 'shimmer', a soft band of light passing over each paragraph; 'spinner', a small turning
- *  ring at each paragraph's start. Built behind the host's `indicator` option until the owner chooses one (2026-10-24): none by
- *  default */
-export const INDICATORS = Object.freeze(['shimmer', 'spinner'])
 /** the pages wanted last whose geometry is kept beside the near ones (§3.2) */
 const WANTED_KEPT = 20
 /** the commits the probe keeps */
@@ -162,8 +157,6 @@ export function createLayerSide(view, o) {
     ios: onIos(),
   })
   const aheadPages = Number.isSafeInteger(o.ahead) ? Math.max(0, o.ahead) : AHEAD_PAGES
-  /** the indicator's look over the paragraphs not laid yet (INDICATORS), or none */
-  const indicator = INDICATORS.includes(o.indicator) ? o.indicator : null
   const clock = V.clock
   const ac = new AbortController()
   let disposed = false
@@ -855,7 +848,7 @@ export function createLayerSide(view, o) {
   let markQueued = false
   /** the indicators made again at the next microtask, for every near page */
   function markSoon() {
-    if (!indicator || markQueued || disposed) return
+    if (markQueued || disposed) return
     markQueued = true
     queueMicrotask(() => {
       markQueued = false
@@ -875,12 +868,11 @@ export function createLayerSide(view, o) {
     const P = pages.get(n)
     if (disposed || state === 'refused' || P?.content?.wrap || P?.failed) return unmark(n)
     const place = V.places.page(n)
-    const units = [], view = [], all = []
+    const units = [], view = []
     for (const part of feed.state().parts) {
       if (Array.isArray(part.pages) && n >= part.pages[0] && n <= part.pages[1] && part.views) view.splice(0, 4, ...part.views.slice(4 * (n - part.pages[0]), 4 * (n - part.pages[0]) + 4))
       for (const [id, , rects] of part.left ?? []) {
         const on = (rects ?? []).filter(r => r[0] === n)
-        all.push(...on)
         if (!on.length || index?.kinds[id] === 'author' || (rowsEnded && !rows.has(id))) continue
         units.push(on)
       }
@@ -891,7 +883,7 @@ export function createLayerSide(view, o) {
     let el = marks.get(n)
     if (!el) {
       el = document.createElement('div')
-      el.className = `axt-translating axt-translating-${indicator}`
+      el.className = 'axt-translating'
       el.setAttribute('aria-hidden', 'true')
       marks.set(n, el)
     }
@@ -900,12 +892,7 @@ export function createLayerSide(view, o) {
       const ax = Math.min(...on.map(r => r[1])), ay = Math.min(...on.map(r => r[2])), bx = Math.max(...on.map(r => r[3])), by = Math.max(...on.map(r => r[4]))
       const m = document.createElement('i')
       m.className = 'axt-translating-mark'
-      // (where the ring turns: at the paragraph's first line, at its column's left edge, the least start of every line on the
-      // page its width overlaps, so that a heading's number or an item's label, outside its unit, stays clear of it)
-      const first = on.reduce((a, r) => (r[4] > a[4] || (r[4] === a[4] && r[1] < a[1]) ? r : a), on[0])
-      const edge = Math.min(ax, ...all.filter(r => r[1] <= bx && r[3] >= ax).map(r => r[1]))
-      const W = Math.max(1e-6, bx - ax), H = Math.max(1e-6, by - ay)
-      m.style.cssText = `left:${pc((ax - x0) / w)};top:${pc((y1 - by) / h)};width:${pc((bx - ax) / w)};height:${pc((by - ay) / h)};--axt-tr-x:${pc((edge - ax) / W)};--axt-tr-y:${pc((by - first[4]) / H)}`
+      m.style.cssText = `left:${pc((ax - x0) / w)};top:${pc((y1 - by) / h)};width:${pc((bx - ax) / w)};height:${pc((by - ay) / h)}`
       return m
     }))
   }

@@ -58,25 +58,29 @@ html[data-axt-dim] { --axt-sk: oklch(0.275 0.004 255); --axt-sk-paper: rgb(29 29
 .axt-sk-abstract { margin-inline: 9%; }
 /* ----- translating (layer-side.mjs markPage): over a near page whose place shows the original's page, one mark a paragraph
    not laid yet, at its box in shares of the page (no zoom moves it), above the page and under nothing the reader acts on (no
-   pointer). Two looks while the owner chooses (2026-10-24), the host's `indicator`: a soft band of light passing over the
-   paragraph (shimmer), or a small ring turning at its first line's start (spinner). Still where the reader asks for less motion:
-   the shimmer a faint wash, the ring a quarter at rest */
-:root { --axt-tr-ink: oklch(0.62 0.12 255); }
+   pointer): a soft band of light passing over the paragraph (the shimmer, the owner's choice of 2026-10-25). Every value of its
+   look is one of the custom properties below, so that another look is a change of values alone: the ink, the wash under the band
+   and the band's own strength (shares of the ink), the band's width (a share of the mark), its speed and easing, the mark's
+   corner, and what stands still where the reader asks for less motion (a wash, no band) */
+:root {
+  --axt-tr-ink: oklch(0.62 0.12 255);
+  --axt-tr-wash: 5%;
+  --axt-tr-band: 18%;
+  --axt-tr-band-width: 40%;
+  --axt-tr-speed: 1.8s;
+  --axt-tr-easing: ease-in-out;
+  --axt-tr-radius: 0.25cqw;
+  --axt-tr-still: 8%;
+}
 html[data-axt-dim] { --axt-tr-ink: oklch(0.72 0.1 255); }
 .axt-translating { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
-.axt-translating .axt-translating-mark { position: absolute; display: block; }
-.axt-translating-shimmer .axt-translating-mark { overflow: hidden; border-radius: 0.25cqw; background-color: color-mix(in oklab, var(--axt-tr-ink) 5%, transparent);
-  background-image: linear-gradient(100deg, transparent 30%, color-mix(in oklab, var(--axt-tr-ink) 18%, transparent) 50%, transparent 70%);
-  background-size: 200% 100%; background-repeat: no-repeat; animation: axt-tr-sweep 1.8s ease-in-out infinite; }
+.axt-translating .axt-translating-mark { position: absolute; display: block; overflow: hidden; border-radius: var(--axt-tr-radius);
+  background-color: color-mix(in oklab, var(--axt-tr-ink) var(--axt-tr-wash), transparent);
+  background-image: linear-gradient(100deg, transparent calc(50% - var(--axt-tr-band-width) / 2), color-mix(in oklab, var(--axt-tr-ink) var(--axt-tr-band), transparent) 50%, transparent calc(50% + var(--axt-tr-band-width) / 2));
+  background-size: 200% 100%; background-repeat: no-repeat; animation: axt-tr-sweep var(--axt-tr-speed) var(--axt-tr-easing) infinite; }
 @keyframes axt-tr-sweep { from { background-position: 150% 0; } to { background-position: -50% 0; } }
-.axt-translating-spinner .axt-translating-mark::before { content: ""; position: absolute; box-sizing: border-box;
-  left: var(--axt-tr-x, 0%); top: var(--axt-tr-y, 0%); inline-size: 1.6cqw; block-size: 1.6cqw; margin-inline-start: -2.1cqw; margin-block-start: 0.1cqw;
-  border-radius: 50%; border: 0.22cqw solid color-mix(in oklab, var(--axt-tr-ink) 25%, transparent); border-block-start-color: var(--axt-tr-ink);
-  animation: axt-tr-turn 0.9s linear infinite; }
-@keyframes axt-tr-turn { to { transform: rotate(1turn); } }
 @media (prefers-reduced-motion: reduce) {
-  .axt-translating-shimmer .axt-translating-mark { animation: none; background-image: none; background-color: color-mix(in oklab, var(--axt-tr-ink) 8%, transparent); }
-  .axt-translating-spinner .axt-translating-mark::before { animation: none; }
+  .axt-translating .axt-translating-mark { animation: none; background-image: none; background-color: color-mix(in oklab, var(--axt-tr-ink) var(--axt-tr-still), transparent); }
 }
 /* ----- the layer drawn in a place (layer-side.mjs; the web's placeholders.css as it drew it): the page's copy fills the
    place, and the engine's SVG and the page's links are laid over it in the copy's frame. The copy is the composed page drawn as

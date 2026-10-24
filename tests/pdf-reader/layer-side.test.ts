@@ -1685,8 +1685,8 @@ describe('the side: one a view, and its dispose', () => {
 
 describe('translating: the indicator over a near page\'s paragraphs not laid yet (§11.8)', () => {
   const marksOf = (s: Setup, n: number) => places(s)[n - 1]?.querySelectorAll('.axt-translating .axt-translating-mark').length ?? 0
-  it('a mark over each paragraph the parts locate on a near page while it is not laid, none once it is; in the look the host asked', async () => {
-    const s = await setup({ indicator: 'shimmer', door: { rows: 'gate' } })
+  it('a mark over each paragraph the parts locate on a near page while it is not laid, none once it is', async () => {
+    const s = await setup({ door: { rows: 'gate' } })
     const m = await M()
     await nearOn(s, [1])
     s.side.tell(await ALL())
@@ -1694,7 +1694,6 @@ describe('translating: the indicator over a near page\'s paragraphs not laid yet
     const on1 = unitsOn(m, 1).filter(id => m.index.kinds[id] !== 'author')
     expect(on1.length).toBeGreaterThan(0)
     expect(marksOf(s, 1)).toBe(on1.length)
-    expect(places(s)[0]?.querySelector('.axt-translating')?.classList.contains('axt-translating-shimmer')).toBe(true)
     // (no pointer, and nothing for assistive technology)
     expect(places(s)[0]?.querySelector('.axt-translating')?.getAttribute('aria-hidden')).toBe('true')
     s.side.take(m.index.units.map((_, id) => rowOf(id)))
@@ -1704,13 +1703,8 @@ describe('translating: the indicator over a near page\'s paragraphs not laid yet
     expect(marksOf(s, 1)).toBe(0)
   })
 
-  it('none where the host asked for none, none on a far page, and none for a paragraph whose rows ended without a row of it', async () => {
-    const plain = await setup({ door: { rows: 'gate' } })
-    await nearOn(plain, [1])
-    plain.side.tell(await ALL())
-    await settle(plain, 10, false)
-    expect(places(plain)[0]?.querySelector('.axt-translating')).toBeNull()
-    const s = await setup({ indicator: 'spinner', door: { rows: 'gate' } })
+  it('none on a far page, and none for a paragraph whose rows ended without a row of it', async () => {
+    const s = await setup({ door: { rows: 'gate' } })
     const m = await M()
     await nearOn(s, [1])
     s.side.tell(await ALL())
@@ -1726,7 +1720,7 @@ describe('translating: the indicator over a near page\'s paragraphs not laid yet
   })
 
   it('a page that fails shows the original with no mark', async () => {
-    const s = await setup({ indicator: 'shimmer', copyFails: [1] })
+    const s = await setup({ copyFails: [1] })
     await nearOn(s, [1])
     s.side.tell(await ALL())
     await settle(s)
