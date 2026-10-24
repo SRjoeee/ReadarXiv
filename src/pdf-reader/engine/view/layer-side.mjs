@@ -158,6 +158,9 @@ function drawnList(pdfPage) {
 /** the layer side of `view`; `o` its options (LayerSideOptions; `openLayer`, the door, the tests') */
 export function createLayerSide(view, o) {
   const V = internalsOf(view)
+  /** the reader's toggles, read once (o.toggles: names or booleans, rules/content-classes.mjs togglesOf; the defaults where
+   *  none): the set every open of the door is given, and the translating indicator reads */
+  const shownToggles = togglesOf(o.toggles ?? null)
   const open = o.openLayer ?? theDoor
   /** the host's bounds where it gives them: the pixels of the drawings kept off the view (else this device's: keepBudget), the
    *  pages laid ahead */
@@ -360,7 +363,7 @@ export function createLayerSide(view, o) {
     let layer
     try {
       layer = await open({
-        index, doc, parts, target, faceSources: o.faceSources, hyphUrl: o.hyphUrl, ...(o.rules ? { rules: o.rules } : {}), ...(o.toggles ? { toggles: o.toggles } : {}), OPS: V.lib?.OPS ?? null,
+        index, doc, parts, target, faceSources: o.faceSources, hyphUrl: o.hyphUrl, ...(o.rules ? { rules: o.rules } : {}), ...(o.toggles ? { toggles: shownToggles } : {}), OPS: V.lib?.OPS ?? null,
         // (the left parts' fetches go with the door's generation: a reopen, a refusal or the dispose aborts them)
         leftPart: (_page, ref) => o.fetchObject(ref, leftAc.signal),
         onRetired: d => retired(d, me),
@@ -902,8 +905,6 @@ export function createLayerSide(view, o) {
    *  place shows takes it), holding one mark a paragraph */
   const marks = new Map()
   let markQueued = false, marksOff = false
-  /** the reader's toggles, as the door is given them (o.toggles: the defaults where none) */
-  const shownToggles = togglesOf(o.toggles ?? null)
   /** the indicators made again at the next microtask, for every near page */
   function markSoon() {
     if (markQueued || disposed) return

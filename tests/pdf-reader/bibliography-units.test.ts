@@ -136,6 +136,25 @@ describe('plainnat\'s \\penalty0 between a volume, its issue and its pages', () 
   })
 })
 
+describe('an entry with an accented word, and one with no author', () => {
+  const entries = '\\begin{thebibliography}{3}\n\\bibitem{a}\nK.~G{\\"o}del.\n\\newblock An \\"{o}verview of proofs, 2020.\n\n\\bibitem{guide}\nThe Research Guide.\n\\newblock University Press, 2021.\n\n\\bibitem{b}\nWilliam Feller.\n\\newblock Probability, 1968.\n\\end{thebibliography}'
+  const p = open({ 'main.tex': doc(`Proofs \\cite{a,guide,b}.\n\n${entries}`) })
+  it('keeps a number the original\'s ink in a piece an accent\'s letter joined: the year its own placeholder, the word its own source', () => {
+    const ref = bib(p)[1]!
+    expect(ref.kind).toBe('reference')
+    expect(ref.pieces.filter(x => x.t === 'ph' && classOf(x as never) === 'number').map(x => x.src)).toEqual(['2020.'])
+    // (the accented word's text and source, which patch writes back, as before the cut)
+    const word = ref.pieces.find(x => x.t === 'text' && x.src !== undefined)!
+    expect([word.src?.trim(), plainSource(ref as never)]).toEqual(['An \\"{o}verview of proofs,', expect.stringContaining('verview of proofs,')])
+  })
+  it('makes an entry with no author one unit of the references: its first block a title, which no names toggle holds', () => {
+    expect(bib(p).map(u => u.kind)).toEqual(['refnames', 'reference', 'reference', 'refnames', 'reference'])
+    expect(shown(bib(p)[2]!)).toBe('The Research Guide. [\\newblock] University Press, [2021.]')
+    // (a name of two capitalised words is a name, as one with an initial or a tie is)
+    expect(shown(bib(p)[3]!)).toBe('William Feller.')
+  })
+})
+
 describe('a bibliography biblatex sets from biber\'s data (\\printbibliography)', () => {
   // (biber's .bbl holds the entries' fields, no text TeX sets as it stands: \\printbibliography sets each entry from them)
   const BIBER = `% $ biblatex auxiliary file $

@@ -304,7 +304,8 @@ export declare function openProto(o: {
   /** the ids of the units the run will report, taken as they arrive; null (the default): every unit is in `units` */
   expect?: readonly number[] | null
   /** whether a unit's class is shown translated (the reader's toggles: rules/content-classes.mjs unitShown); a unit it says
-   *  not is left the original's, skipped `hidden`. Null (the default): every class */
+   *  not is left the original's, skipped `hidden`. Null (the default): the reader's default toggles (references and names
+   *  off, TOGGLE_DEFAULTS); `() => true` shows every class */
   shown?: ((u: Unit) => boolean) | null
   /** each unit's table group (groups.mjs groupOf), known at open: a group is read once its own cells' rows are in, and a
    *  row whose group is another is no unit of this paper's; null (the default): a group waits for every row */

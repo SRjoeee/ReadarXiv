@@ -1720,7 +1720,8 @@ describe('translating: the indicator over a near page\'s paragraphs not laid yet
     await nearOn(off, [n])
     off.side.tell(await ALL())
     await settle(off, 10, false)
-    expect(off.doors[0]?.options?.toggles).toEqual({ tables: false, names: true })
+    // (read once, as a set: a host's iterable is taken as it was, however often the door is opened)
+    expect(off.doors[0]?.options?.toggles).toEqual(new Set(['heads', 'figures', 'names']))
     expect(places(off)[n - 1]?.querySelectorAll('.axt-translating .axt-translating-mark').length).toBe(on.length - cells.length)
   })
 

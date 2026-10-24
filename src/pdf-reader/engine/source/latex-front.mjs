@@ -1741,7 +1741,7 @@ function bibliography(s, from, to, b, ctx) {
  *  it has none the front end can tell */
 function namesEnd(s, a, z, cmds) {
   const block = cmds.find(x => x.name === 'newblock')
-  if (block) return block.at
+  if (block) return namesLike(s.slice(a, block.at)) ? block.at : a
   // (REVTeX's and ACM's field of authors, an entry's first: the call up to its text's group)
   const field = cmds[0]?.name === 'bibfield' ? argsAfter(s, cmds[0].end, 2) : null
   if (field?.args.length === 2 && /^\{\s*(?:author|editor)\s*\}$/.test(s.slice(field.args[0].start, field.args[0].end))) return field.end
@@ -1756,6 +1756,20 @@ function namesEnd(s, a, z, cmds) {
   }
   return a
 }
+/** particles a name holds in lower case (van, von, de la…), which no title's lower-case word is taken for */
+const NAME_PARTICLES = new Set(['and', 'van', 'von', 'der', 'den', 'del', 'della', 'des', 'dos', 'das', 'ter', 'ten', 'bin', 'ibn', 'others'])
+/**
+ * Whether an entry's first block reads as its names, not an entry with no author whose first block is its title ("The Research
+ * Guide.", "A survey of parallel genetic algorithms."): a comma, an "and", a tie or an initial (BibTeX's name formats: "J.~Smith",
+ * "Ba, Kiros, and Hinton", "et~al."), else a few capitalised words ("William Feller.") opening with no article and holding no
+ * lower-case word of three letters or more but a name's particle
+ */
+function namesLike(tex) {
+  const t = tex.replace(/%[^\n]*/g, ' ').replace(/\\[A-Za-z@]+\s*/g, ' ').replace(/[{}]/g, '').replace(/\s+/g, ' ').trim()
+  if (/[,~]|\band\b|\bet al\b|(?:^|[\s(])\p{Lu}\./u.test(t) || /~/.test(tex)) return true
+  const words = t.split(' ').filter(w => /\p{L}/u.test(w))
+  return words.length > 0 && words.length <= 4 && !/^(?:The|An?)$/.test(words[0]) && words.every(w => !/^\p{Ll}{3,}/u.test(w) || NAME_PARTICLES.has(w.replace(/\P{L}+$/u, '')))
+}
 /** a token of an entry's text that is a number and no word — a year, pages, a volume and its issue: "1994.", "157--166,",
  *  "5(2):157--166", a DOI written out — a digit in it, no letter, white space or a piece that sets none on either side */
 const NUMBER_TOKEN = /[^\s\p{L}]*\d[^\s\p{L}]*/gu
@@ -1764,29 +1778,41 @@ const NUMBER_TOKEN = /[^\s\p{L}]*\d[^\s\p{L}]*/gu
 const APART = p => !p || p.t === 'open' || p.t === 'close' || (p.t === 'ph' && /^(?:~|\\[ ,;:!]|\\(?:newblock|quad|qquad|enspace|thinspace|space|penalty|allowbreak|nobreak|hskip|kern)(?![A-Za-z@]))/.test(p.src ?? ''))
 /**
  * An entry's numbers, each a placeholder: what the original's ink keeps (the owner, 2026-10-25: labels, numbers, years, DOIs,
- * web addresses and formulas stay the original's ink), each token of a text piece of the paper's own bytes (none an accent's
- * letters joined, nor one transcoded) that holds a digit and no letter, with white space or a piece that sets no letter on
- * either side (APART), so that no mark of its goes inside a word or between two glyphs TeX kerns
+ * web addresses and formulas stay the original's ink), each token of a text piece that holds a digit and no letter, with white
+ * space or a piece that sets no letter on either side (APART), so that no mark of its goes inside a word or between two glyphs
+ * TeX kerns. A piece whose source is other bytes than its text (an accent's letter joined into its word, a file transcoded:
+ * `src`) is cut only where the two are the same bytes, in their common head or their common tail, each part keeping its own
+ * source where it differs from its text: `\\"{o}verview, 2020.`'s year is the year's own placeholder
  */
 function keepNumbers(pieces) {
   return pieces.flatMap((p, k) => {
-    if (p.t !== 'text' || p.src !== undefined || !/\d/.test(p.s)) return [p]
+    if (p.t !== 'text' || !/\d/.test(p.s)) return [p]
+    const src = p.src ?? p.s, n = p.s.length, d = src.length - n
+    let head = 0
+    while (head < n && head < src.length && p.s[head] === src[head]) head++
+    let tail = 0
+    while (tail < n - head && tail < src.length - head && p.s[n - 1 - tail] === src[src.length - 1 - tail]) tail++
+    /** a cut of the text where the source is cut the same way, or -1 */
+    const at = i => (i <= head ? i : i >= n - tail ? i + d : -1)
+    const part = (x, y) => {
+      const t = p.s.slice(x, y), from = src.slice(at(x), at(y)), { src: _, ...plain } = p
+      return from === t ? { ...plain, s: t } : { ...p, s: t, src: from }
+    }
     const out = []
-    let at = 0
+    let last = 0
     for (const m of p.s.matchAll(NUMBER_TOKEN)) {
       const end = m.index + m[0].length
-      const left = m.index > 0 ? /\s/.test(p.s[m.index - 1]) : APART(pieces[k - 1]), right = end < p.s.length ? /\s/.test(p.s[end]) : APART(pieces[k + 1])
-      if (!left || !right) continue
-      if (m.index > at) out.push({ ...p, s: p.s.slice(at, m.index) })
+      const left = m.index > 0 ? /\s/.test(p.s[m.index - 1]) : APART(pieces[k - 1]), right = end < n ? /\s/.test(p.s[end]) : APART(pieces[k + 1])
+      if (!left || !right || at(m.index) < 0 || at(end) < 0 || src.slice(at(m.index), at(end)) !== m[0]) continue
+      if (m.index > last) out.push(part(last, m.index))
       out.push({ t: 'ph', src: m[0] })
-      at = end
+      last = end
     }
     if (!out.length) return [p]
-    if (at < p.s.length) out.push({ ...p, s: p.s.slice(at) })
+    if (last < n) out.push(part(last, n))
     return out
   })
 }
-
 /**
  * The preamble's prose, in the order it is written. TeX sets nothing there, but a class keeps the front matter's text
  * for \\maketitle, and each is a unit as the body would make it: the title TeX keeps (the last \\title it acts on — a
