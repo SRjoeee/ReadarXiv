@@ -58,6 +58,23 @@ describe('a shared line with something kept between the two units (2610.21098 p2
     expect([b![1], b![6]]).toEqual([226, 170])
   })
 
+  it('a line the fill sets over the shared row, within an em of it, ends there too, though no slot stands on the row itself', async () => {
+    // (the shared row the unit's last, its foot: a leading that spreads two lines over its three rows sets the second 8 pt over
+    // the row, more than half its pitch, and its text ran over the label (2610.21098 p2 u15 over u16 under a stop of half a pitch))
+    const spread: Paper = {
+      name: 'inline list, spread', pages: 1, extra: [line(1, 228, '(2)', 154, 166)], specs: [
+        { id: 0, kind: 'para', lines: [line(1, 250, 'Uniaxial tension experiments', 20, 280), line(1, 239, 'usually consider traction-free', 20, 280), line(1, 228, 'conditions. The', 20, 150)], chars: 40, at: 0x4e00 },
+        { id: 1, kind: 'para', lines: [line(1, 228, 'Under the routed', 170, 280), line(1, 217, 'of the volumetric stretch can', 20, 280), line(1, 206, 'be tuned by the slenderness', 20, 280)], chars: 30, at: 0x5100 },
+      ],
+    }
+    const run = await laid(spread)
+    const a = linesOf(run, 0)!
+    const near = a.filter(l => Math.abs(l[1] - 228) < 10)
+    expect(near.every(l => l[7] <= 150 + 0.01), `its lines within an em of the row: ${near.map(l => `${l[1]}:${l[7]}`)}`).toBe(true)
+    const [b] = linesOf(run, 1)!
+    expect([b![1], b![6]]).toEqual([228, 170])
+  })
+
   it('only its line nearest the shared row ends there, where its rows stand closer than an em (Devin\'s review of #460)', async () => {
     // (10 pt type on rows 8 pt apart: the row before the shared one is within an em of it, and was cut to the shared row's end
     // too, though nothing of the next item stands on it)
