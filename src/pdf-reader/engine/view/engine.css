@@ -60,7 +60,7 @@ html[data-axt-dim] { --axt-sk: oklch(0.275 0.004 255); --axt-sk-paper: rgb(29 29
    laid yet, above the page and under nothing the reader acts on (no pointer). The look is the owner's "Field" (2026-10-25): one
    diagonal light crossing the whole page, each mark showing its own share of it. The page's overlay is a size container and
    carries the pass (--axt-tr-p, one value for the page); a mark's background is three pages wide (300cqw), set back by the mark's
-   own place in the page (--x, --y, written by the code in the page's shares, less the card's padding --px, --py). On paper the light
+   own place in the page (--axt-tr-x, -y, written by the code in the page's shares, less the card's padding --axt-tr-px, -py). On paper the light
    clears a faint ground rather than covering the glyphs. Every value of the look is a custom property below: the ground and the
    light (its two shoulders and its peak), where they stand in the band, the band's angle, the blend, a filter, the card's
    padding and corner, the pass's length and easing, the drift of a look that moves on its own (--axt-tr-t, Aurora's), the
@@ -101,12 +101,12 @@ html[data-axt-dim] {
 @keyframes axt-tr-pass { 0% { --axt-tr-p: 0; } 80%, 100% { --axt-tr-p: 1; } }
 @keyframes axt-tr-drift { to { --axt-tr-t: 1; } }
 .axt-translating .axt-translating-mark { position: absolute; display: block;
-  left: calc(var(--x) - var(--px)); top: calc(var(--y) - var(--py));
-  width: calc(var(--w) + 2 * var(--px)); height: calc(var(--h) + 2 * var(--py));
+  left: calc(var(--axt-tr-x) - var(--axt-tr-px)); top: calc(var(--axt-tr-y) - var(--axt-tr-py));
+  width: calc(var(--axt-tr-w) + 2 * var(--axt-tr-px)); height: calc(var(--axt-tr-h) + 2 * var(--axt-tr-py));
   border-radius: calc(var(--axt-tr-radius) * var(--axt-tr-u, 0.1cqw)); mix-blend-mode: var(--axt-tr-blend); filter: var(--axt-tr-filter);
   background-image: var(--axt-tr-image, linear-gradient(var(--axt-tr-angle), var(--axt-tr-ground) 0 var(--axt-tr-edge), var(--axt-tr-light-a) var(--axt-tr-shoulder), var(--axt-tr-light) 50%, var(--axt-tr-light-b) calc(100% - var(--axt-tr-shoulder)), var(--axt-tr-ground) calc(100% - var(--axt-tr-edge)) 100%));
   background-size: var(--axt-tr-size, 300cqw 100cqh); background-repeat: no-repeat;
-  background-position: var(--axt-tr-position, calc((var(--axt-tr-p) * 2 - 2) * 100cqw - (var(--x) - var(--px))) calc(0px - (var(--y) - var(--py))));
+  background-position: var(--axt-tr-position, calc((var(--axt-tr-p) * 2 - 2) * 100cqw - (var(--axt-tr-x) - var(--axt-tr-px))) calc(0px - (var(--axt-tr-y) - var(--axt-tr-py))));
   animation: axt-tr-in var(--axt-tr-fade) ease var(--axt-tr-delay) both; }
 @keyframes axt-tr-in { from { opacity: 0; } to { opacity: 1; } }
 .axt-translating-still, .axt-translating-still .axt-translating-mark { animation: none; }

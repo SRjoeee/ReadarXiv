@@ -849,7 +849,7 @@ export function createLayerSide(view, o) {
   /** each near page's indicator, by page: one element over the place (a child of the place itself, so that no swap of what the
    *  place shows takes it), holding one mark a paragraph */
   const marks = new Map()
-  let markQueued = false
+  let markQueued = false, marksOff = false
   /** the indicators made again at the next microtask, for every near page */
   function markSoon() {
     if (markQueued || disposed) return
@@ -876,7 +876,9 @@ export function createLayerSide(view, o) {
    */
   function markPage(n) {
     const P = pages.get(n)
-    if (disposed || state === 'refused' || P?.content?.wrap || P?.failed) return unmark(n)
+    // (none on a page that stays the original's: its parts hold no layout to lay, originalPageOf; nor once the host has said this
+    // attempt's rows will not come, dropOthers, until another attempt begins)
+    if (disposed || marksOff || state === 'refused' || P?.content?.wrap || P?.failed || originalPageOf(n)) return unmark(n)
     const place = V.places.page(n)
     const units = [], view = []
     for (const part of feed.state().parts) {
@@ -884,11 +886,14 @@ export function createLayerSide(view, o) {
       for (const [id, , rects] of part.left ?? []) {
         const on = (rects ?? []).filter(r => r[0] === n)
         if (!on.length || index?.kinds[id] === 'author' || (rowsEnded && !rows.has(id))) continue
-        units.push(on)
+        units.push({ id, on })
       }
     }
     if (!place || !units.length || view.length !== 4 || !(view[2] > view[0]) || !(view[3] > view[1])) return unmark(n)
     const [x0, y0, x1, y1] = view, w = x1 - x0, h = y1 - y0
+    // (none on a page the original turns a quarter: the parts' rectangles are in the page's own frame, which its view shows across)
+    const box = place.getBoundingClientRect?.()
+    if (box?.width > 0 && box.height > 0 && Math.abs(box.width / box.height - h / w) < Math.abs(box.width / box.height - w / h)) return unmark(n)
     const cq = (v, axis) => `${(100 * v).toFixed(3)}cq${axis}`
     let el = marks.get(n)
     if (!el) {
@@ -905,8 +910,12 @@ export function createLayerSide(view, o) {
     const css = typeof getComputedStyle === 'function' ? getComputedStyle(el) : null
     const px = v => { const x = Number.parseFloat(css?.getPropertyValue(v) ?? ''); return Number.isFinite(x) && x >= 0 ? x : null }
     const padX = (px('--axt-tr-pad-x') ?? PAD_X) * 0.75, padY = (px('--axt-tr-pad-y') ?? PAD_Y) * 0.75
-    const boxes = units.map(on => ({ ax: Math.min(...on.map(r => r[1])), ay: Math.min(...on.map(r => r[2])), bx: Math.max(...on.map(r => r[3])), by: Math.max(...on.map(r => r[4])) }))
-    el.replaceChildren(...boxes.map((b, i) => {
+    const boxes = units.map(({ id, on }) => ({ id, ax: Math.min(...on.map(r => r[1])), ay: Math.min(...on.map(r => r[2])), bx: Math.max(...on.map(r => r[3])), by: Math.max(...on.map(r => r[4])) }))
+    // (each paragraph's card kept from one call to the next where it stays, its style changed in place: a card put in again would
+    // begin its delay and its fade again, and rows come in batches)
+    const had = new Map([...el.children].map(c => [c.dataset.axtU, c]))
+    const want = new Set()
+    boxes.forEach((b, i) => {
       // (never two cards over each other: each side's padding at most half the gap to the nearest mark beside it, above or below
       // where their columns meet, left or right where their lines do)
       let pX = padX, pY = padY
@@ -915,13 +924,21 @@ export function createLayerSide(view, o) {
         if (b.ax < o.bx && o.ax < b.bx) pY = Math.min(pY, Math.max(0, Math.max(o.ay - b.by, b.ay - o.by) / 2))
         if (b.ay < o.by && o.ay < b.by) pX = Math.min(pX, Math.max(0, Math.max(o.ax - b.bx, b.ax - o.bx) / 2))
       })
-      const m = document.createElement('i')
-      m.className = 'axt-translating-mark'
       // (its box and its padding in the page's shares, as container units of the page's overlay: the card's geometry and the
       // light's offset are the sheet's, engine.css)
-      m.style.cssText = `--x:${cq((b.ax - x0) / w, 'w')};--y:${cq((y1 - b.by) / h, 'h')};--w:${cq((b.bx - b.ax) / w, 'w')};--h:${cq((b.by - b.ay) / h, 'h')};--px:${cq(pX / w, 'w')};--py:${cq(pY / h, 'h')}`
-      return m
-    }))
+      const style = `--axt-tr-x:${cq((b.ax - x0) / w, 'w')};--axt-tr-y:${cq((y1 - b.by) / h, 'h')};--axt-tr-w:${cq((b.bx - b.ax) / w, 'w')};--axt-tr-h:${cq((b.by - b.ay) / h, 'h')};--axt-tr-px:${cq(pX / w, 'w')};--axt-tr-py:${cq(pY / h, 'h')}`
+      const key = String(b.id)
+      want.add(key)
+      let m = had.get(key)
+      if (!m) {
+        m = document.createElement('i')
+        m.className = 'axt-translating-mark'
+        m.dataset.axtU = key
+        el.append(m)
+      }
+      if (m.getAttribute('style') !== style) m.setAttribute('style', style)
+    })
+    for (const [key, c] of had) if (!want.has(key)) c.remove()
   }
 
   // ---------------------------------------------------------------- the pages ahead (the prefetch, on the layer; §11.8)
@@ -1282,6 +1299,9 @@ export function createLayerSide(view, o) {
     dropOthers() {
       if (disposed) return
       dropped = true
+      // (this attempt's rows will not come: no page says it is being translated until another attempt begins, again)
+      marksOff = true
+      unmarkAll()
       dropDrawings(c => c.target !== target || c.gen !== gen)
       let hid = false
       for (const [n, P] of pages) {
@@ -1294,6 +1314,7 @@ export function createLayerSide(view, o) {
     },
     again() {
       if (disposed || state === 'refused') return
+      marksOff = false
       rows.clear()
       rowsEnded = false
       stopAhead()
@@ -1303,6 +1324,7 @@ export function createLayerSide(view, o) {
       if (contents?.clearTexts()) outlineSoon()
       reopenWanted = true
       void pump()
+      markSoon()
     },
     /** the ids of the units whose rows the open door's page still waits for (its closure's, Need(page)): a host translating
      *  as it shows translates them first; [] with no door, a page out of the paper or one ready */

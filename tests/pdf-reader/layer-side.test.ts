@@ -1729,13 +1729,13 @@ describe('translating: the indicator over a near page\'s paragraphs not laid yet
         await settle(s, 10, false)
         const el = places(s)[0]?.querySelector('.axt-translating') as HTMLElement | null
         const mark = el?.querySelector('.axt-translating-mark') as HTMLElement | null
-        expect(mark?.getAttribute('style')).toMatch(/^--x: ?[\d.]+cqw; ?--y: ?[\d.]+cqh; ?--w: ?[\d.]+cqw; ?--h: ?[\d.]+cqh; ?--px: ?[\d.]+cqw; ?--py: ?[\d.]+cqh;?$/)
+        expect(mark?.getAttribute('style')).toMatch(/^--axt-tr-x: ?[\d.]+cqw; ?--axt-tr-y: ?[\d.]+cqh; ?--axt-tr-w: ?[\d.]+cqw; ?--axt-tr-h: ?[\d.]+cqh; ?--axt-tr-px: ?[\d.]+cqw; ?--axt-tr-py: ?[\d.]+cqh;?$/)
         // (the scale of a CSS pixel at 100 % on the page's overlay: 100 / (4w/3) cqw, w its width in points)
         expect(el?.style.getPropertyValue('--axt-tr-u')).toMatch(/^[\d.]+cqw$/)
         // (no two cards meet: each box grown by its own padding is clear of every other)
         const boxes = [...(el?.querySelectorAll('.axt-translating-mark') ?? [])].map(e => {
           const v = (k: string) => Number.parseFloat((e as HTMLElement).style.getPropertyValue(k))
-          return { l: v('--x') - v('--px'), r: v('--x') + v('--w') + v('--px'), t: v('--y') - v('--py'), b: v('--y') + v('--h') + v('--py') }
+          return { l: v('--axt-tr-x') - v('--axt-tr-px'), r: v('--axt-tr-x') + v('--axt-tr-w') + v('--axt-tr-px'), t: v('--axt-tr-y') - v('--axt-tr-py'), b: v('--axt-tr-y') + v('--axt-tr-h') + v('--axt-tr-py') }
         })
         for (const [i, a] of boxes.entries()) for (const c of boxes.slice(i + 1)) expect(a.l < c.r - 1e-3 && c.l < a.r - 1e-3 && a.t < c.b - 1e-3 && c.t < a.b - 1e-3).toBe(false)
         expect(boxes.some(b => b.r - b.l > 0)).toBe(true)
@@ -1744,6 +1744,34 @@ describe('translating: the indicator over a near page\'s paragraphs not laid yet
     } finally {
       vi.unstubAllGlobals()
     }
+  })
+
+  it('a card stays the same element while rows come in batches (its delay and fade run once); a page that stays the original\'s has none; the host\'s word that the rows will not come takes every card, until another attempt', async () => {
+    const s = await setup({ door: { rows: 'gate' } })
+    const m = await M()
+    await nearOn(s, [1, 4])
+    s.side.tell(await ALL())
+    await settle(s, 10, false)
+    const first = [...(places(s)[0]?.querySelectorAll('.axt-translating-mark') ?? [])]
+    expect(first.length).toBeGreaterThan(0)
+    // (rows of another page: page 1's cards are the same elements)
+    const other = m.index.units.map((_, id) => id).filter(id => !unitsOn(m, 1).includes(id)).slice(0, 3)
+    s.side.take(other.map(id => rowOf(id)))
+    await settle(s, 3, false)
+    const again = [...(places(s)[0]?.querySelectorAll('.axt-translating-mark') ?? [])]
+    expect(again.length).toBe(first.length)
+    expect(again.every((e, i) => e === first[i])).toBe(true)
+    // (page 4's parts hold no layout: it stays the original's, with no card)
+    expect(marksOf(s, 4)).toBe(0)
+    s.side.dropOthers()
+    await settle(s, 3, false)
+    expect(marksOf(s, 1)).toBe(0)
+    s.side.take(other.map(id => rowOf(id)))
+    await settle(s, 3, false)
+    expect(marksOf(s, 1)).toBe(0)
+    s.side.again()
+    await settle(s, 3, false)
+    expect(marksOf(s, 1)).toBeGreaterThan(0)
   })
 
   it('a page that fails shows the original with no mark', async () => {
