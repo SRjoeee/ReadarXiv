@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type Ref, writePart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { PDF_OPTIONS } from '@/pdf-reader/engine/layer-proto/run.mjs'
-import { AHEAD_IDLE_MS, AHEAD_PAGES, createLayerSide, KEEP_PIXELS, keepBudget, LEFT_RETRY_MS, noLayoutPage, PAGE_MS, SPREAD_MAX, spreadPages } from '@/pdf-reader/engine/view/layer-side.mjs'
+import { AHEAD_IDLE_MS, AHEAD_PAGES, createLayerSide, IOS_KEEP_PIXELS, KEEP_PIXELS, keepBudget, LEFT_RETRY_MS, noLayoutPage, onIos, PAGE_MS, SPREAD_MAX, spreadPages } from '@/pdf-reader/engine/view/layer-side.mjs'
 import { type DocumentTask, internalsOf, type ViewEvent } from '@/pdf-reader/engine/view/reader-view.mjs'
 import { made, N, ORIG, partInputs } from './helpers/format-paper'
 import { ASSETS, clientOf, FakeIO, FakePDFPageView, FakePDFViewer, fakeDoc, fakeTask, flush } from './helpers/reader-fakes'
@@ -344,6 +344,14 @@ describe('no flash coming back: the drawings kept off the view (KEEP_PIXELS, §1
     expect(keepBudget({ screenPixels: 1080 * 2400 })).toBe((64 * MB) / 4)
     expect(keepBudget({ deviceMemory: 0.5, screenPixels: 2560 * 1600 * 4 })).toBe(Math.min(KEEP_PIXELS, 2 * 2560 * 1600 * 4))
     expect(keepBudget()).toBe((64 * MB) / 4)
+    // (iOS and iPadOS: IOS_KEEP_PIXELS at most, whatever the screen; an iPad says it is a Mac with a touch screen)
+    expect(keepBudget({ ios: true, screenPixels: 1179 * 2556 })).toBe(IOS_KEEP_PIXELS)
+    expect(keepBudget({ ios: true, screenPixels: 100 * 100 })).toBe(IOS_KEEP_PIXELS)
+    expect(onIos({ userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1', maxTouchPoints: 5 })).toBe(true)
+    expect(onIos({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15', maxTouchPoints: 5 })).toBe(true)
+    expect(onIos({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15', maxTouchPoints: 0 })).toBe(false)
+    expect(onIos({ userAgent: 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36', maxTouchPoints: 5 })).toBe(false)
+    expect(onIos(null)).toBe(false)
   })
 
   it('a drawing kept while the pane was zoomed comes back drawn as it was, then again at the place\'s new k', async () => {

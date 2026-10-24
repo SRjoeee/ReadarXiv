@@ -767,8 +767,11 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   and put back in its place in the same task as the page comes near again (`bringBack`), one pane height before it can be
   seen: no ask, no copy drawn, the right's shapes the page's own. The drawings are kept within the device's budget
   (`keepBudget`): a 64th of its memory (`navigator.deviceMemory`, 4 GB where the browser does not say) at 4 bytes a pixel, at
-  least two of its screens' pixels, at most `KEEP_PIXELS`, 2^25 pixels (128 MiB); past it the drawing farthest from the view
-  goes first. A copy costs its pixels: an A4 page at 120 % on a 2x screen is 1905 × 2694 pixels, 19.6 MiB of the GPU process's
+  least two of its screens' pixels, at most `KEEP_PIXELS`, 2^25 pixels (128 MiB), and on iOS and iPadOS at most
+  `IOS_KEEP_PIXELS`, 2^23 (32 MiB: its WebKit tells no memory and kills a tab past its process's limit; until Safari 17 it also
+  refused a canvas past a page-wide canvas cap of about 200 MB on an iPhone SE, WebKit bug 195325, which WebKit PR 14375 removed;
+  32 MiB beside the near pages' copies stays under a third of the lowest cap reported); past it the drawing farthest from the
+  view goes first. A copy costs its pixels: an A4 page at 120 % on a 2x screen is 1905 × 2694 pixels, 19.6 MiB of the GPU process's
   memory in Chromium 153 on Metal (an `ImageBitmap` of it no less; the probe of 2026-10-24). So a computer of 8 GB keeps six and
   a half such pages, nine at 100 %, twelve at the reader's fit (two thirds of what the left pane's PDF.js holds of its own at
   that zoom, its ten page views drawn), and a phone of 4 GB 64 MiB, some ten pages of its screen at the fit. A page let go past

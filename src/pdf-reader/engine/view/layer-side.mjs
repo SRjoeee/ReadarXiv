@@ -80,17 +80,27 @@ export const KEEP_SHARE = 1 / 64
 /** the memory a device is taken to have where its browser does not say (navigator.deviceMemory: Chromium's alone), GB: a phone's
  *  of today, so that no device is given more than it may hold */
 export const KEEP_MEMORY_GB = 4
+/** the most on iOS and iPadOS, whose WebKit tells no memory (no deviceMemory) and kills a tab past its process's limit: 2^23
+ *  pixels, 32 MiB. Until Safari 17, WebKit also refused a canvas once all of a page's canvases held past a cap of its own (about
+ *  200 MB on an iPhone SE, 256 MB on iOS 12 devices, 384 MB reported: WebKit bug 195325); WebKit PR 14375 (265628@main,
+ *  2023-06-29) removed that cap, leaving canvases to the process's limit. 32 MiB kept, beside the near pages' copies (an
+ *  iPhone at 3x holds some 7 MB a page at the fit), stays under a third of the lowest cap reported, on the reader's floor
+ *  (Safari 17) and below it */
+export const IOS_KEEP_PIXELS = 2 ** 23
 /**
  * The device pixels of drawings the side keeps off the view on this device: KEEP_SHARE of its memory (`deviceMemory`, GB, where the
  * browser tells it, else KEEP_MEMORY_GB) at 4 bytes a pixel, never fewer than two of its screens' pixels (`screenPixels`: its width
- * and height at its pixel ratio, so that a page left a screen behind is always kept), never more than KEEP_PIXELS
+ * and height at its pixel ratio, so that a page left a screen behind is always kept), never more than KEEP_PIXELS, nor than
+ * IOS_KEEP_PIXELS on iOS or iPadOS (`ios`)
  */
-export function keepBudget({ deviceMemory, screenPixels } = {}) {
+export function keepBudget({ deviceMemory, screenPixels, ios = false } = {}) {
   const gb = Number.isFinite(deviceMemory) && deviceMemory > 0 ? deviceMemory : KEEP_MEMORY_GB
   const byMemory = Math.floor((gb * 2 ** 30 * KEEP_SHARE) / 4)
   const floor = Number.isFinite(screenPixels) && screenPixels > 0 ? 2 * screenPixels : 0
-  return Math.min(KEEP_PIXELS, Math.max(byMemory, floor))
+  return Math.min(ios ? IOS_KEEP_PIXELS : KEEP_PIXELS, Math.max(byMemory, floor))
 }
+/** whether the browser runs on iOS or iPadOS (an iPad says it is a Mac, with a touch screen): its WebKit, whatever its name */
+export const onIos = (nav = globalThis.navigator) => !!nav && (/\biP(?:hone|ad|od)\b/.test(nav.userAgent ?? '') || (/\bMacintosh\b/.test(nav.userAgent ?? '') && (nav.maxTouchPoints ?? 0) > 1))
 /** how many pages past the near ones the side lays ahead while the reader rests, the next first (the prefetch extended to the
  *  layer: the pages' rows, faces, layout and copy made before the reader reaches them, kept as drawings off the view) */
 export const AHEAD_PAGES = 2
@@ -144,6 +154,7 @@ export function createLayerSide(view, o) {
   const keepPixels = Number.isFinite(o.keepPixels) ? Math.max(0, o.keepPixels) : keepBudget({
     deviceMemory: globalThis.navigator?.deviceMemory,
     screenPixels: (globalThis.screen?.width ?? 0) * (globalThis.screen?.height ?? 0) * (globalThis.devicePixelRatio || 1) ** 2,
+    ios: onIos(),
   })
   const aheadPages = Number.isSafeInteger(o.ahead) ? Math.max(0, o.ahead) : AHEAD_PAGES
   const clock = V.clock
