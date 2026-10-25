@@ -66,7 +66,7 @@ import { noStart } from './no-start.mjs'
 import { work } from './work.mjs'
 import { sourceRepeats, stutterCuts } from './stutter.mjs'
 import { blocksOf, CITE, kinsokuOf, lcsPairs, median, norm, phClass, texToText, wordsOf } from './layer1.mjs'
-import { faceOf, fontString, styleKey } from './fonts.mjs'
+import { faceOf, fontString, roleFaces, styleKey } from './fonts.mjs'
 import { breakPoints } from './hyph.mjs'
 import { shown } from '../layer/pieces.mjs'
 import { escapeMap, plainOfPieces, plainTracker, transformMap } from './words.mjs'
@@ -106,15 +106,20 @@ const wRef = ch => {
 /** a character's width at 100 px in its item's own design (iteration 3: Times' for all, before, which put a Palatino
  *  or Computer Modern line's characters points off by its end: a caption's label read "2" for "Figure 2:") */
 const designW = new Map()
-/** each style's font at 100 px in its design, by the style object (one a run of an item, asked for each of its characters: a
- *  face resolved through the role table each time was most of wDesign's time, the trace of 2026-10-25) */
-const designFont = new WeakMap()
+/** each style's font at 100 px in its design, by the role set it was resolved under (fonts.mjs roleFaces: setRoleFaces makes a
+ *  new one for another target or family, and a face's fallbacks are the set's) and the style object (one a run of an item, asked
+ *  for each of its characters: a face resolved through the role table each time was most of wDesign's time, the trace of
+ *  2026-10-25). No role set (the prototype's faces) is a key of its own */
+const designFonts = new WeakMap(), NO_ROLES = {}
 const wDesign = (ch, st) => {
   if (!st?.known) return wRef(ch)
-  let font = designFont.get(st)
+  const roles = roleFaces() ?? NO_ROLES
+  let byStyle = designFonts.get(roles)
+  if (!byStyle) designFonts.set(roles, (byStyle = new WeakMap()))
+  let font = byStyle.get(st)
   if (font === undefined) {
     font = fontString(faceOf({ ...st, fam: st.fam === 'math' ? 'serif' : st.fam }, 'latin', 'en'), 100)
-    designFont.set(st, font)
+    byStyle.set(st, font)
   }
   const key = `${font}|${ch}`
   let w = designW.get(key)
