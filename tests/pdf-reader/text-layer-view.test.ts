@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import type { TextLayerData } from '@/pdf-reader/engine/layer-proto/reader.mjs'
 import { ITEMS_MAX, STR_MAX, textContentOf, textItems, textLayer } from '@/pdf-reader/engine/view/text-layer.mjs'
-import { AHEAD_IDLE_MS, AHEAD_PAGES } from '@/pdf-reader/engine/view/layer-side.mjs'
+import { AHEAD_IDLE_MS, AHEAD_PAGES, TEXT_IDLE_MS } from '@/pdf-reader/engine/view/layer-side.mjs'
 import { FakeIO, FakeTextLayerBuilder, flush } from './helpers/reader-fakes'
 import { ALL, content, installSideFakes, layerOf, M, nearOn, places, rowOf, settle, setup } from './helpers/side-setup'
 
@@ -201,6 +201,27 @@ describe('the layer side: the text layer with the laid page (the fake door)', ()
     s.side.end()
     await settle(s)
     expect(langs()).toEqual(['ja'])
+  })
+
+  it('TS11: none is built while a zoom\'s steps scale the pane (its stack marked scaling); built once they are drawn again', async () => {
+    const s = await setup({ textBuilder: FakeTextLayerBuilder, ahead: 0 })
+    const stack = s.panes.right.querySelector(':scope > .pdfViewer') as HTMLElement
+    stack.setAttribute('data-axt-scaling', '')
+    await nearOn(s, [1])
+    s.side.tell(await ALL())
+    await settle(s)
+    expect(layerOf(s, 1)?.querySelector(':scope > svg')).not.toBeNull()
+    expect(textOn(s, 1)).toBeNull()
+    expect(FakeTextLayerBuilder.made).toEqual([])
+    // (asked again a while on, not in a loop of its own)
+    await s.clock.advance(3 * TEXT_IDLE_MS)
+    await settle(s)
+    expect(FakeTextLayerBuilder.made).toEqual([])
+    stack.removeAttribute('data-axt-scaling')
+    await s.clock.advance(TEXT_IDLE_MS + 10)
+    await settle(s)
+    expect(textOn(s, 1)).not.toBeNull()
+    expect(FakeTextLayerBuilder.made.length).toBe(1)
   })
 
   it('TS4: dispose lets every text layer go', async () => {

@@ -29,6 +29,8 @@ export interface Places {
 }
 /** how long after a keyboard's jump the place jumped to may still take the focus when it comes to show its page */
 export declare const FOCUS_WAIT_MS: number
+/** how long the laid pages' text layers stay out of style and layout after a zoom's steps are drawn again (ms) */
+export declare const TEXT_BACK_MS: number
 export declare function createPlaces(o: {
   stack: HTMLElement
   root: HTMLElement

@@ -140,6 +140,13 @@ html[data-axt-dim] {
    spans' style and layout are the layer's alone, never the page's */
 .axt-layer > svg { -webkit-user-select: none; user-select: none; }
 .axt-layer > .textLayer { contain: strict; }
+/* while a zoom's or a pinch's steps scale the pages by CSS (places.mjs scale: the stack marked scaling until they are drawn
+   again), the text layers are out of style and layout: each span's size is a calc of --total-scale-factor, which every step
+   changes, so a step would make every span of every near page again (the web's zoom check on the sample: twice the frames over
+   budget in a pinch).
+   They are sized once, as the steps end; a selection in them stays, and shows again with them. (content-visibility: hidden in
+   their place measured worse: WebKit's pinch 52 frames over budget to display: none's 33, main's 38; Chromium no better) */
+[data-axt-scaling] .axt-layer > .textLayer { display: none; }
 .axt-layer > .textLayer[data-axt-frame] { width: var(--axt-frame-w, 100%) !important; height: var(--axt-frame-h, 100%) !important; }
 html[data-axt-dim] .axt-layer > svg { filter: invert(88.8%) hue-rotate(180deg); }
 /* ----- the layer's links over a laid page (links.mjs): one anchor a link, at the union of its boxes, each box a span of its
