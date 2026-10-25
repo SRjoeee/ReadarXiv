@@ -1,7 +1,8 @@
-// A menu's rows (the reader's design, §6.7; the redesign's design, §5.3): 30 px, an 8 px radius, the name at the row's
-// start, a hint after it and the chosen one's check at the row's very end, in a slot every row of a choice keeps, so that
-// a new choice moves nothing else (the maintainer, 2026-10-25); the list's behaviour is the shared one (ui/menu-nav.ts). A listbox of options (a
-// choice among values), or a menu of radios (the zoom) or of plain items (the download). Moved from the reader
+// A menu's rows (the reader's design, §6.7; the redesign's design, §5.3; UI.md §4): 30 px, an 8 px radius, the name at
+// the row's start, a hint after it and the chosen one's check at the row's very end, in a slot every row of a choice
+// keeps, so that a new choice moves nothing else (the maintainer, 2026-10-25); the list's behaviour is the shared one
+// (ui/menu-nav.ts). A listbox of options (a choice among values), or a menu of radios (the zoom) or of plain items (the
+// download). Moved from the reader
 // (pdf-reader/ui/ReaderMenu.tsx) for the extension's pages, which add these and change no row the reader draws: two
 // lines, each hint under its name (the service menu); a neutral button in a row, which picking the row presses (the
 // Chrome pack's download), a loader turning while it runs; a sample drawn in a style at a row's end (the style menu);

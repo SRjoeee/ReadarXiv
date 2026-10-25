@@ -363,14 +363,14 @@ Rules:
   or the panel's frame holds it, cleared as it closes; the style menu opens upward (the redesign's §5.3). The row
   toggles it, a press outside or Escape closes it.
 - A menu's rows, every menu's — the popup's, the settings page's, the PDF reader's (`src/ui/controls/MenuList.tsx`),
-  and the website's, which follows the same measures: the words at the row's start, 10 px in, on the words of the
-  search field above them; then a hint, a sample (the style menu), a button (S-P-40) or its spinner (S-P-41); and in a
-  choice — a listbox, a menu of radios — the chosen row's check last, at the row's very end, 10 px in, in a 14 px slot
-  every row of the choice keeps, so that a new choice moves nothing else and every check of every menu ends on one
-  edge. The Chrome row can be chosen and hold its action at once (chosen, then a target whose pack is to be had, or
-  P10's download): its check comes after the action. A menu of plain items (the download, a service's ⋯) keeps no
-  slot. The chosen row keeps its ground, the check its 14 px and its ink. Until 2026-10-25 the check led the row
-  (the maintainer: 「当前我们可以看到如图的所有选项就是对勾选项的这种选择，对勾都在前方…我们应该把它放在字的后边」)
+  and the website's, whose rows are taller (36 px) at the same insets: the words at the row's start, 10 px in, on the
+  words of the search field above them; then a hint, a sample (the style menu), a button (S-P-40) or its spinner
+  (S-P-41); and in a choice — a listbox, a menu of radios — the chosen row's check last, at the row's very end, 10 px
+  in, in a 14 px slot every row of the choice keeps, so that a new choice moves nothing else and every check of every
+  menu ends on one edge. The Chrome row can be chosen and hold its action at once (chosen, then a target whose pack is
+  to be had, or P10's download): its check comes after the action. A menu of plain items (the download, a service's ⋯)
+  keeps no slot. The chosen row keeps its ground, the check its 14 px and its ink. Until 2026-10-25 the check led the
+  row (the maintainer: 「当前我们可以看到如图的所有选项就是对勾选项的这种选择，对勾都在前方…我们应该把它放在字的后边」)
 - Layout (the redesign's §5.1): the brand row, the group (翻译服务, 目标语言, 提示词), a note, the primary, the display,
   the foot (对照高亮, 图片翻译, 译文样式). 320 px wide; the brand row 48 px, the mark 24 px and the name 15 px / 600; the
   large buttons (the primary, its pair, a paper's two entries) 44 px, radius 10, their words 15 px / 600 and a shortcut's
