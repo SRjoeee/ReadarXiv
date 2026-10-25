@@ -866,12 +866,8 @@ describe('V12: the web\'s fixes as plain behaviour', () => {
     await flush(20)
     const stack = s.panes.right.querySelector(':scope > .pdfViewer') as HTMLElement
     expect(stack.hasAttribute('data-axt-scaling')).toBe(false)
-    const at = stack.style.getPropertyValue('--scale-factor')
     s.view.zoomBy(1.1); await s.clock.advance(50); s.view.zoomBy(1.1)
     expect(stack.hasAttribute('data-axt-scaling')).toBe(true)
-    // (the scale the steps began at, which the text layers keep through them, not the one a later step sets)
-    expect(stack.style.getPropertyValue('--axt-scale-at')).toBe(at)
-    expect(stack.style.getPropertyValue('--scale-factor')).not.toBe(at)
     // (drawn again after the steps' delay, the text layers still out a while: a step soon after finds them so)
     await s.clock.advance(450)
     await flush(20)

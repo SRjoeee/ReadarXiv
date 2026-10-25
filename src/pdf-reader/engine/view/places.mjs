@@ -253,18 +253,12 @@ export function createPlaces(o) {
     },
     /** the left's scale changed: the stack's --scale-factor, and each page view's scale, by CSS until `drawingDelay` has
      *  passed (a zoom's or a pinch's steps), then drawn again once. While the steps last, and TEXT_BACK_MS after they are
-     *  drawn again, the stack is marked scaling (`data-axt-scaling`, and `--axt-scale-at` the scale the steps began at): the laid
-     *  pages' text layers keep their styles and boxes at that scale, unseen (engine.css), so that no step makes their spans
-     *  again (each sized by a calc of --total-scale-factor), and they are sized once, after the last step */
+     *  drawn again, the stack is marked scaling (`data-axt-scaling`): the laid pages' text layers are out of style and layout
+     *  (engine.css), so that no step makes their spans' sizes again (each a calc of --total-scale-factor), and they are sized
+     *  once, after the last step */
     scale(scaleFactor, scale, drawingDelay = -1) {
       if (disposed) return
-      if (drawingDelay >= 0) {
-        clock.clear(textTimer)
-        textTimer = 0
-        // (the scale the steps begin at, which the text layers keep through them: engine.css)
-        if (!stack.hasAttribute('data-axt-scaling')) stack.style.setProperty('--axt-scale-at', stack.style.getPropertyValue('--scale-factor') || '1')
-        stack.setAttribute('data-axt-scaling', '')
-      }
+      if (drawingDelay >= 0) { clock.clear(textTimer); textTimer = 0; stack.setAttribute('data-axt-scaling', '') }
       if (scaleFactor) stack.style.setProperty('--scale-factor', scaleFactor)
       for (const p of list) sizeOf(p)
       const views = list.filter(p => p.view)

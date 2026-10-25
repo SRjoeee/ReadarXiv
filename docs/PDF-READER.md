@@ -1104,7 +1104,16 @@ Decided 2026-10-24 (the owner's request of 2026-10-23; the route note that draft
   so it is there the moment the page is near; one that arrives while its page is kept goes into the kept drawing. It goes when
   its drawing goes (retired with no drawing kept, let go past the keep's budget, failed back to the original, replaced, another
   target's or door's, disposed), cancelled from PDF.js's registry of its selection listener; one that comes after its page was
-  let go is put nowhere. Its translated spans carry the language of the target their drawing was laid in. The hover highlight is
+  let go is put nowhere. Its translated spans carry the language of the target their drawing was laid in. Through a zoom's or a pinch's steps
+  (CSS alone until PDF.js draws again, places.mjs) the text layers are out of style and layout (display: none): each span's size
+  is a calc of --total-scale-factor, which every step changes, so a step made every span of every near page again (the web's
+  zoom check: twice main's frames over budget in a pinch). The stack is marked `data-axt-scaling` from the first step to
+  TEXT_BACK_MS (500 ms) after the redraw, so that a run of steps sizes them once, after its last; none is built in a pane while it
+  is marked. A selection in them stays, and shows again with them. Measured against main (zoom.mjs, alternated): WebKit level,
+  Chromium's pinch some 4 frames over main's (mean 27 to 23), the cost of taking the layers' boxes down at a gesture's first step
+  and building them again after its last. Freezing them at the gesture's starting scale under visibility: hidden instead levelled
+  Chromium's pinch but cost WebKit's and Firefox's step zoom (WebKit 16 to main's 13), and content-visibility: hidden cost
+  WebKit's pinch: the follow-up is a freeze whose style no step reaches in any engine. The hover highlight is
   unaffected: the lighting reads the pointer's place, not its target. A host whose PDF.js gives no builder draws the page as
   before, with none. A page shown as the original's (no layout, refused parts, a page over arXiv's PDF) is never committed, so it
   gets no layer of ours: PDF.js's own is there.
