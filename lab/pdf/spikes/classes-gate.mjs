@@ -134,6 +134,8 @@ for (const arg of process.argv.slice(2).filter(a => !a.startsWith('--'))) {
     if (!made.base?.pdf) { row.base = made.base?.refused ?? 'none'; console.log(JSON.stringify(row)); continue }
     const ours = made.base.pdf
     const bd = await open(ours)
+    // (our base page, the marked original's final pass, has arXiv's pages: the guard refuses a marked original of another count)
+    row.pages = [pages, bd.doc.numPages]
     try {
       const lm = await makeLayout({ units: paper.units, marks: made.marks, arxiv: bd.doc, OPS, paper: { id: id.replace(/v\d+$/, ''), version: Number(/v(\d+)$/.exec(id)?.[1] ?? 1) }, left: '', pdfjs: PDFJS })
       if ('file' in lm) {
