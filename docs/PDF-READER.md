@@ -361,7 +361,9 @@ The states are §8's.
 
 - Anchored under their button, 6 px below it, kept within the window; they grow from the button (scale 0.97 → 1 and
   4 px, 150 ms). Escape and a press outside close them; focus returns to the button.
-- Items are 30 px rows with an 8 px radius; the chosen one checked.
+- Items are 30 px rows with an 8 px radius, their words 10 px in, on the search field's words; the chosen one's check
+  at the row's end, 10 px in, in a 14 px slot every row of the menu keeps, after anything else the row holds (UI.md §4).
+  Until 2026-10-25 it led the row (the maintainer: 「对勾都在前方…我们应该把它放在字的后边」).
 - 目标语言: a search field, then the nine languages the reader supports, each in its own language: 日本語, 简体中文,
   繁體中文, 한국어, Deutsch, Español, Français, Português, Русский.
 - 翻译服务: the same list and labels as the popup's service menu.

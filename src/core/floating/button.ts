@@ -332,7 +332,7 @@ svg { display: block }
 .axt-fb-dock[data-axt-side="right"] .axt-fb-menu { right: calc(100% + 28px); transform-origin: right top }
 .axt-fb-dock[data-axt-side="left"] .axt-fb-menu { left: calc(100% + 28px); transform-origin: left top }
 .axt-fb-menu button {
-  display: flex; align-items: center; gap: 8px; width: 100%; box-sizing: border-box; height: 30px; padding: 0 10px 0 8px;
+  display: flex; align-items: center; gap: 8px; width: 100%; box-sizing: border-box; height: 30px; padding: 0 10px;
   border-radius: 8px; cursor: pointer; user-select: none; text-align: start;
 }
 .axt-fb-menu button:hover, .axt-fb-menu button:focus-visible { background: var(--axt-fill) }
