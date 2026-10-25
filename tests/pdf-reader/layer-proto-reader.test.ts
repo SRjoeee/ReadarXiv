@@ -137,10 +137,10 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     await expect(openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl, classes: { margins: true } } as never)).rejects.toThrow(/classes/)
   })
 
-  it('draws the figures\' text translated where the toggle `figures` is on, and leaves it the original\'s by default', async () => {
+  it('draws the figures\' text translated where the toggle `figures` is on, as it is by default, and the original\'s where it is off', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const bundle = bundleOf(), doc = docOf()
-    for (const [classes, shown] of [[null, false], [{ figures: true }, true], [{ figures: false }, false], [{ tables: false }, false]] as const) {
+    for (const [classes, shown] of [[null, true], [{ figures: true }, true], [{ figures: false }, false], [{ tables: false }, true]] as const) {
       const layer = await openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl, classes })
       expect((seen.opens.at(-1) as unknown as { hiding: { figuresShown: boolean } }).hiding.figuresShown).toBe(shown)
       layer.dispose()
