@@ -2706,8 +2706,8 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
 - **The switch** is the toggle `figures` of the reader's toggles (§19.10: `openLayer({ classes })`, the layer side's `classes`
   and `setClasses`, which opens the door again over the same documents with every row held, so that nothing is prepared, fetched
   or translated again): a figure unit's row is taken, and its figure drawn, where it is on; off, it is the original's, as any
-  unit of a class not shown. Its default, `TOGGLE_DEFAULTS.figures`, is off until the web's settings show it (the coordinator's
-  word of 2026-10-25, so that the gates, which open with the defaults, need no new translation). The extension's reader passes
+  unit of a class not shown. Its default, `TOGGLE_DEFAULTS.figures`, is on (the owner's, 2026-10-25, having seen the web's
+  settings: a figure's text is shown translated, and a label that does not fit stays the original's). The extension's reader passes
   its figure switch (`image.enabled`, the reading options' image switch, §9.1, which the HTML page's figure text shares) as
   `classes.figures`, and follows the switch as it lands, from here or elsewhere. A form one page wrote again and another paints: the other
   page's figures in it are `shared`, the original's, and its render shows the form's groups ON, since each render sets the
@@ -2774,10 +2774,10 @@ matter's authors and the names inside references, which follow "names" and not "
   maker's and the page pass's `FLOATING`: a class sets its places where it likes, amsart's addresses at the paper's end). The TeX
   page keeps the places with the names where it kept the names (`keptFor`, `\axtwide`, the strategies that set no author block).
 - **The toggles** are stage 2's (`classes` at the door's open and the layer side's, `setClasses`, TOGGLE_DEFAULTS: references and
-  names off): an entry's units and the author block's are of the classes `references` and `names` (UNIT_CLASS), so that with
+  names off, heads, tables and figures on): an entry's units and the author block's are of the classes `references` and `names` (UNIT_CLASS), so that with
   their toggle off no page awaits their rows, the door takes none, and the translating indicator marks none (it reads the same
   `classes`); the door gives the run its classes resolved over TOGGLE_DEFAULTS, and a direct open of v0 (run.mjs openProto, the
-  lab's and the tests') given none draws every class but the names and the references, as it drew before the toggles.
+  lab's and the tests') given none takes the same defaults: every class but the names and the references.
 
 ### 19.14 The paper's own names, units of their own (PIPELINE 29)
 

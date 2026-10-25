@@ -197,8 +197,7 @@ one more units chunk, stores the ledger, reads invariant (o) and offers the togg
    row `{ what: 'orphans not listed', detail: { letters } }` where `orphanLetters` passes the listed ones. A head without a
    ledger (an older engine's) gives no row.
 7. **The toggles.** The reader's option is `classes: { heads, tables, figures, references, names }`, booleans, defaulting to
-   `TOGGLE_DEFAULTS` (`rules/content-classes.mjs`: heads true, tables true, names false, references false, figures false until
-   built). Each host stores it with its other reader settings and gives it to the layer at its open (`openLayer({ classes })`);
+   `TOGGLE_DEFAULTS` (`rules/content-classes.mjs`: heads true, tables true, figures true, names false, references false). Each host stores it with its other reader settings and gives it to the layer at its open (`openLayer({ classes })`);
    a change of it is an open again, as a change of language is (a laid page never changes: run.mjs), through the reading view's
    `setClasses(classes)` (view/layer-side.mjs): the same documents, parts and rows, each laid page kept until the new door's
    commits. A unit whose class is not shown is drawn as the original's (its groups ON, no row drawn); nothing is fetched,

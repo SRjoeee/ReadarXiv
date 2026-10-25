@@ -74,7 +74,7 @@ import { itemFills } from '../layout/fills.mjs'
 import { GLYPHS_PAGE, pageInk } from '../layout/ink.mjs'
 import { listWithin } from '../layout/oplist.mjs'
 import { BUILTIN_RULES, resolveRules, RULES_SCHEMA } from '../rules/layout.mjs'
-import { classesOn, RUN_DEFAULTS, unitShown } from '../rules/content-classes.mjs'
+import { classesOn, unitShown } from '../rules/content-classes.mjs'
 
 /** the prototype's getDocument options beside the host's asset URLs (main.js ASSETS): its canvases on the GPU, the whole
  *  file read at once; and each font's own ToUnicode map exported with it (fontExtraProperties: what the text layer reads a
@@ -756,9 +756,9 @@ export { cellSpans }
 export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, batch = 8, phMode = 'auto', order: orderIn = null, faces = 'roles', faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex, copy = true, hiding = null, labels = null, rules = BUILTIN_RULES, parts: partsMode = false, onRetired = null, onStep = null, onWait = null, free = false, records = true, drawOf = null, drawsComing = false, OPS = null, classes = null }) {
   if (classes !== null && typeof classes !== 'object') throw new TypeError(`classes: the reader's toggles or null, not ${kindOf(classes)}`)
   // (the reader's toggles, the door's option, which the door gives resolved: a unit whose class they do not show is the original's.
-  // A direct open given none draws what it drew before the toggles, the author block's names and a bibliography's entries left
-  // the original's: RUN_DEFAULTS)
-  const on = classesOn({ ...RUN_DEFAULTS, ...(classes ?? {}) }), classShown = u => unitShown(u, on)
+  // A direct open given none takes the reader's defaults, the author block's names and a bibliography's entries left the
+  // original's: TOGGLE_DEFAULTS)
+  const on = classesOn(classes), classShown = u => unitShown(u, on)
   if (expect !== null && (!Array.isArray(expect) || !expect.every(id => Number.isSafeInteger(id) && id >= 0))) throw new TypeError(`expect: ids of units or null, not ${kindOf(expect)}`)
   if (drawOf !== null && typeof drawOf !== 'function') throw new TypeError(`drawOf: a function or null, not ${kindOf(drawOf)}`)
   if (tableGroups !== null && !(tableGroups instanceof Map)) throw new TypeError(`groups: a Map of ids to groups or null, not ${kindOf(tableGroups)}`)

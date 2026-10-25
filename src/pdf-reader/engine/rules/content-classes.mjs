@@ -59,13 +59,10 @@ export function unitClass(u) {
   return Object.hasOwn(UNIT_CLASS, kind) ? UNIT_CLASS[kind] : 'body'
 }
 
-/** each toggle's default, where a reader has set none (the owner's, 2026-10-25): heads and tables on; names and references off
- *  and figures off */
-export const TOGGLE_DEFAULTS = Object.freeze({ heads: true, tables: true, figures: false, references: false, names: false })
-/** the toggles of an open of the run given none (layer-proto/run.mjs openProto: the lab's gates, the tests'; the door gives its
- *  own): the reader's defaults, but figures, whose units every run drew before the toggles. The lab's fixture maker sends no
- *  unit they hide (the gates hold no translation of it) */
-export const RUN_DEFAULTS = Object.freeze({ ...TOGGLE_DEFAULTS, figures: true })
+/** each toggle's default, where a reader has set none (the owner's, 2026-10-25): heads, tables and figures on; names and
+ *  references off. A direct open of the run given none (layer-proto/run.mjs openProto: the lab's gates, the tests') takes them
+ *  too, and the lab's fixture maker sends no unit they hide (the gates hold no translation of it) */
+export const TOGGLE_DEFAULTS = Object.freeze({ heads: true, tables: true, figures: true, references: false, names: false })
 /** the toggles on under a reader's `classes` (the door's option: { [toggle]: boolean } over TOGGLE_DEFAULTS; null, the
  *  defaults), as a Set shownTranslated reads */
 export const classesOn = classes => new Set(Object.entries({ ...TOGGLE_DEFAULTS, ...(classes ?? {}) }).filter(([, v]) => v).map(([k]) => k))

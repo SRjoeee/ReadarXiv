@@ -52,12 +52,12 @@ beforeAll(async () => {
 const byText = (units: Unit[], text: string) => { const u = units.find(x => x.text === text); if (!u) throw new Error(`no unit "${text}" among ${units.map(x => x.text).join(' | ')}`); return u }
 
 describe('the figures\' text cut into ink units (layout/figure-text.mjs)', () => {
-  it('is the policy table\'s class `figures`, built, its kind an ink kind, its toggle off by default until the settings show it', () => {
+  it('is the policy table\'s class `figures`, built, its kind an ink kind, its toggle on by default (the owner\'s, 2026-10-25)', () => {
     expect(CLASSES.figures.state).toBe('built')
     expect(FIGURE_KIND).toBe('inkfigures')
     expect(unitClass(FIGURE_KIND)).toBe('figures')
     expect(unitClass([FIGURE_KIND, 0, null, null, null, [], null])).toBe('figures')
-    expect(TOGGLE_DEFAULTS.figures).toBe(false)
+    expect(TOGGLE_DEFAULTS.figures).toBe(true)
   })
 
   it('the fixture was compiled over the layout compile\'s points: a TikZ picture between `zs` and `ze`', () => {

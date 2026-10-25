@@ -351,7 +351,7 @@ its base record's year; the same maker over the merge base's engine makes `09208
 its own bytes: the instrument is the same, so the rules gate measures the two engines on their own packs
 alike. A bibliography's entries are numbered after the source's other units, so every unit the frozen records name keeps its
 number, and its rows in the layout file are byte for byte the ones before (the font table gains the entries' faces at its end);
-the entries' units have no translation in the pack, as the gates' run hides them (`RUN_DEFAULTS`).
+the entries' units have no translation in the pack, as the gates' run hides them (`TOGGLE_DEFAULTS`).
 Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
 The wrap reads each base's units from its paper's source, so the pack holds that too: `sources/<paper>/source.gz`, one a paper
 (`gate-pack.mjs make --sources=<dir of <paper>/source.gz>`, `data/corpus` by default; a make with a base of ours and no source
