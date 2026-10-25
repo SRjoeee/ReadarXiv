@@ -266,7 +266,11 @@ export function createPlaces(o) {
       clock.clear(redrawTimer)
       const redraw = () => {
         redrawTimer = 0
-        if (stack.hasAttribute('data-axt-scaling')) textTimer = clock.later(() => { textTimer = 0; stack.removeAttribute('data-axt-scaling') }, TEXT_BACK_MS)
+        // (one reveal at a time: a menu zoom while one waits replaces it, so that the next step's clear reaches the one that waits)
+        if (stack.hasAttribute('data-axt-scaling')) {
+          clock.clear(textTimer)
+          textTimer = clock.later(() => { textTimer = 0; stack.removeAttribute('data-axt-scaling') }, TEXT_BACK_MS)
+        }
         for (const p of list) {
           if (!p.view) continue
           // drawn at another scale (a zoom's steps stretch its canvas by CSS): drawn again at its own
