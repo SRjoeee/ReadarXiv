@@ -737,6 +737,9 @@ export function createLayerSide(view, o) {
       const unit = vp.scale * (vp.userUnit || 1)
       wrap.style.setProperty('--axt-frame-w', `calc(var(--total-scale-factor) * ${vp.width / unit}px)`)
       wrap.style.setProperty('--axt-frame-h', `calc(var(--total-scale-factor) * ${vp.height / unit}px)`)
+      // (and the size in PDF units alone, which a text layer frozen through a zoom's steps reads at the scale it froze at: engine.css)
+      wrap.style.setProperty('--axt-frame-w0', `${vp.width / unit}px`)
+      wrap.style.setProperty('--axt-frame-h0', `${vp.height / unit}px`)
     }
     // its links over the drawing, in the place's coordinates: one element, sized by shares of the page, which no zoom moves
     const links = V.links(n, laid.links)

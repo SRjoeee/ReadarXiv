@@ -141,12 +141,19 @@ html[data-axt-dim] {
 .axt-layer > svg { -webkit-user-select: none; user-select: none; }
 .axt-layer > .textLayer { contain: strict; }
 /* while a zoom's or a pinch's steps scale the pages by CSS (places.mjs scale: the stack marked scaling until they are drawn
-   again), the text layers are out of style and layout: each span's size is a calc of --total-scale-factor, which every step
-   changes, so a step would make every span of every near page again (the web's zoom check on the sample: twice the frames over
-   budget in a pinch).
-   They are sized once, as the steps end; a selection in them stays, and shows again with them. (content-visibility: hidden in
-   their place measured worse: WebKit's pinch 52 frames over budget to display: none's 33, main's 38; Chromium no better) */
-[data-axt-scaling] .axt-layer > .textLayer { display: none; }
+   again, --axt-scale-at the scale they began at), the text layers are frozen at that scale, unseen: every scale their spans and
+   their box read (--scale-factor, --total-scale-factor, the copy's frame) is the one they began at, so that no step changes a
+   computed style or a box of theirs, and no step makes their spans again (each sized by a calc of --total-scale-factor: the
+   web's zoom check on the sample, twice the frames over budget in a pinch). They are sized once, as the steps end; a selection in
+   them stays, and shows again with them. (Out by display: none instead, their boxes are torn down at a gesture's first step and
+   built again at its end: Chromium's pinch some 4 frames over main's; content-visibility: hidden measured worse in WebKit) */
+[data-axt-scaling] .axt-layer > .textLayer {
+  --scale-factor: var(--axt-scale-at);
+  --total-scale-factor: calc(var(--axt-scale-at) * var(--user-unit, 1));
+  --axt-frame-w: calc(var(--total-scale-factor) * var(--axt-frame-w0));
+  --axt-frame-h: calc(var(--total-scale-factor) * var(--axt-frame-h0));
+  visibility: hidden;
+}
 .axt-layer > .textLayer[data-axt-frame] { width: var(--axt-frame-w, 100%) !important; height: var(--axt-frame-h, 100%) !important; }
 html[data-axt-dim] .axt-layer > svg { filter: invert(88.8%) hue-rotate(180deg); }
 /* ----- the layer's links over a laid page (links.mjs): one anchor a link, at the union of its boxes, each box a span of its
