@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
-import { edges, offCentre, shootEach } from './align.mjs'
+import { edges, menuRows, offCentre, shootEach } from './align.mjs'
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const EXT = fileURLToPath(new URL('../../../.output/chrome-mv3-dev', import.meta.url))
@@ -308,6 +308,8 @@ async function menus(page, lang) {
     check(`${tag}: the last row manages the list: after a separator, in ink-2, never chosen`, manage?.cls === 'item manage' && manage.separated && manage.color === ink2 && manage.selected === 'false' && manage.check === 'hidden', JSON.stringify(manage))
     const off = await offCentre(page, { rows: `${pop} .item` })
     check(`${tag}: each menu row's parts on its centre line`, off.length === 0, JSON.stringify(off))
+    const trail = await menuRows(page, pop)
+    check(`${tag}: the services' words 10 px in, each check last in its 14 px slot 10 px from the row's end, after the button and the spinner`, trail.length === 0, JSON.stringify(trail))
     await page.locator(pop).screenshot({ path: join(OUT, `${lang}-${theme}-menu-services.png`), animations: 'disabled', caret: 'hide' })
     // the keys reach the pack's row though it cannot be chosen, its button on the lift there; Enter runs its action,
     // and on the busy one nothing
@@ -329,7 +331,10 @@ async function menus(page, lang) {
     // the menu grows in over 150 ms (pop-in): measured and shot at rest
     await page.waitForTimeout(250)
     const samples = await page.evaluate(pop => [...document.querySelectorAll(`${pop} .preview`)].map(p => ({ align: getComputedStyle(p).textAlign, size: getComputedStyle(p).fontSize, hidden: p.getAttribute('aria-hidden'), styled: !!p.getAttribute('style'), lang: p.getAttribute('lang'), end: Math.round(p.closest('.item').getBoundingClientRect().right - p.getBoundingClientRect().right) })), pop)
-    check(`${tag}: each style's sample at its row's end, 12.5 px, drawn in its style and its language, hidden from a screen reader`, samples.length > 0 && samples.every(s => s.align === 'end' && s.size === '12.5px' && s.hidden === 'true' && s.styled && s.lang === 'zh-CN' && s.end === 10), JSON.stringify(samples))
+    // the sample ends where the check's slot begins: 10 px in, 14 of the slot, 8 between (the trailing check)
+    check(`${tag}: each style's sample at its row's end before the check, 12.5 px, drawn in its style and its language, hidden from a screen reader`, samples.length > 0 && samples.every(s => s.align === 'end' && s.size === '12.5px' && s.hidden === 'true' && s.styled && s.lang === 'zh-CN' && s.end === 32), JSON.stringify(samples))
+    const styled = await menuRows(page, pop)
+    check(`${tag}: the styles' words 10 px in, each check last in its slot, after the sample`, styled.length === 0, JSON.stringify(styled))
     await page.locator(pop).screenshot({ path: join(OUT, `${lang}-${theme}-menu-styles.png`), animations: 'disabled', caret: 'hide' })
     await page.keyboard.press('Escape')
     // the languages: the reader's rows, and the search
@@ -339,6 +344,8 @@ async function menus(page, lang) {
     await page.waitForTimeout(250)
     const heights = await page.evaluate(pop => [...document.querySelectorAll(`${pop} .item`)].map(i => i.getBoundingClientRect().height), pop)
     const langs = await page.evaluate(pop => [...document.querySelectorAll(`${pop} .item`)].map(i => i.querySelector('[lang]')?.getAttribute('lang') ?? null), pop)
+    const listed = await menuRows(page, pop)
+    check(`${tag}: the languages' words on the search field's, each check last in its slot`, listed.length === 0, JSON.stringify(listed))
     await page.keyboard.type('deu')
     const found = await page.evaluate(pop => document.querySelectorAll(`${pop} .item`).length, pop)
     check(`${tag}: the language menu keeps the reader's 30 px rows, each name marked as its language, and its search narrows them`, heights.length === 9 && heights.every(h => near(h, 30)) && langs.every(l => !!l) && found === 1, JSON.stringify({ heights, langs, found }))

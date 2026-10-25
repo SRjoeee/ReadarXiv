@@ -32,14 +32,16 @@
   .pop .sep { height: 0.5px; margin: 4px 8px; border: 0; background: var(--chrome-line); }
   .pop .search { display: block; width: 100%; height: 30px; margin: 0 0 4px; padding: 0 10px; border: 0; border-radius: 8px; background: var(--fill); color: var(--ink); }
   .pop .search::placeholder { color: var(--ink-2); }
-  .pop .item { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px 0 8px; border-radius: 8px; cursor: pointer; }
+  /* a row's words 10 px in, on the search field's words, and the check's slot 10 px from its end (the maintainer,
+     2026-10-25): the same inset at both ends, the same in every menu */
+  .pop .item { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border-radius: 8px; cursor: pointer; }
   .pop .item[data-active] { background: var(--fill); }
   /* the item the keyboard moves is the focus (aria-activedescendant), and carries the ring a focused control does */
   .pop :is([role="menu"], [role="listbox"]):focus-visible .item[data-active],
   html:not([data-axt-pointer]) .pop .search:focus-visible ~ [role="listbox"] .item[data-active] { outline: 2px solid var(--focus); outline-offset: -2px; }
   .pop .item[aria-disabled="true"] { color: var(--ink-3); cursor: default; }
   .pop .item .hint { margin-inline-start: auto; color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
-  .pop .item .check { color: var(--ink); }
+  .pop .item .check { flex: none; color: var(--ink); }
   .switch { position: relative; width: 28px; height: 17px; flex: none; border-radius: 999px; background: var(--ink-3); transition: background-color 150ms; }
   .switch::after { content: ""; position: absolute; inset-block-start: 2px; inset-inline-start: 2px; width: 13px; height: 13px; border-radius: 999px; background: oklch(1 0 0); box-shadow: 0 1px 2px oklch(0 0 0 / 0.25); transition: translate 150ms ease-out; }
   .switch[aria-checked="true"] { background: var(--ink); }

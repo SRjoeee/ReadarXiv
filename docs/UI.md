@@ -94,7 +94,7 @@ Redrawn 2026-09-27 (the redesign's §5, §10.1).
 | S-P-33a | Note · no HTML version, the PDF entry offered | arXiv 没有这篇论文的 HTML 版本 | S-P-33b without its last clause where PDF 翻译 is offered beside it, which does translate (Part 5's final review): the information tone and no settings button (in P0, a line with the information icon). A service that cannot run speaks first on these pages (S-P-31 / S-P-32), and under P0's paper when nothing takes over (S-P-32): it is why both entries are greyed |
 | S-P-33b | Note · no HTML version, nothing to translate | arXiv 没有这篇论文的 HTML 版本，无法翻译 | Numbered S-P-33 until 2026-09-28, beside the paused note, which keeps S-P-33. On an entry page (S-P-03b) and P0's paper when neither entry can be had: the alert tone and no settings button, since nothing in the settings changes what arXiv converted. The floating button says it too (S-I-06) |
 | S-P-35 | Note · image translation paused | 图片翻译已暂停：{原因} | `images.fatal`; shown while text translation continues. The alert tone, with 设置 |
-| S-P-40 | Service menu · Chrome item action | 下载 | A neutral button in the item while `downloadable` (the redesign's §5.3); the item is greyed until the pack is there; the click itself starts the download (user gesture) |
+| S-P-40 | Service menu · Chrome item action | 下载 | A neutral button in the item while `downloadable` (the redesign's §5.3); the item is greyed until the pack is there; the click itself starts the download (user gesture). On the chosen row the check follows it (§4) |
 | S-P-41 | Service menu · Chrome item subtitle · downloading | 语言包下载中 | Spinner in place of the button; no progress events, so no bar |
 | S-P-42 | Service menu · Chrome item subtitle · unavailable | 当前不可用 | `unavailable` / `unsupported`, greyed, no button |
 | S-P-43 | Service menu · Chrome item subtitle · ready | 浏览器内置，无需联网 | |
@@ -362,6 +362,15 @@ Rules:
 - A menu is the shared popover under its row; the popup takes a minimum height while it is open, so that its window
   or the panel's frame holds it, cleared as it closes; the style menu opens upward (the redesign's §5.3). The row
   toggles it, a press outside or Escape closes it.
+- A menu's rows, every menu's — the popup's, the settings page's, the PDF reader's (`src/ui/controls/MenuList.tsx`),
+  and the website's, whose rows are taller (36 px) at the same insets: the words at the row's start, 10 px in, on the
+  words of the search field above them; then a hint, a sample (the style menu), a button (S-P-40) or its spinner
+  (S-P-41); and in a choice — a listbox, a menu of radios — the chosen row's check last, at the row's very end, 10 px
+  in, in a 14 px slot every row of the choice keeps, so that a new choice moves nothing else and every check of every
+  menu ends on one edge. The Chrome row can be chosen and hold its action at once (chosen, then a target whose pack is
+  to be had, or P10's download): its check comes after the action. A menu of plain items (the download, a service's ⋯)
+  keeps no slot. The chosen row keeps its ground, the check its 14 px and its ink. Until 2026-10-25 the check led the
+  row (the maintainer: 「当前我们可以看到如图的所有选项就是对勾选项的这种选择，对勾都在前方…我们应该把它放在字的后边」)
 - Layout (the redesign's §5.1): the brand row, the group (翻译服务, 目标语言, 提示词), a note, the primary, the display,
   the foot (对照高亮, 图片翻译, 译文样式). 320 px wide; the brand row 48 px, the mark 24 px and the name 15 px / 600; the
   large buttons (the primary, its pair, a paper's two entries) 44 px, radius 10, their words 15 px / 600 and a shortcut's
