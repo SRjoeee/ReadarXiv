@@ -40,8 +40,12 @@ export const OCR_MIN_PX = 32
 export const OCR_SEGS_PAGE = 250_000
 /** why an image is not read */
 export const OCR_IMAGE_WHYS = Object.freeze(['small', 'big', 'error', 'timeout', 'budget'])
-/** the cache key of an image's reading: the recogniser's version and its pixels' digest */
-export const ocrKey = sha256 => `${OCR_VERSION}|${sha256}`
+/** the cache key of an image's reading: the recogniser's version, the host's reader (its runtime and its canvas, whose
+ *  resampling the reading turns on: the same figure read in Chromium and in Node agreed on 431 of 484 lines, DESIGN §15.4, so
+ *  that a canvas upgraded re-keys the cache rather than mixing two readings in it) and its pixels' digest */
+export const ocrKey = (sha256, reader) => `${OCR_VERSION}|${reader}|${sha256}`
+/** a host's reader as the cache key names it: 1 to 64 characters of letters, digits and `.+-_@/` */
+const READER = /^[0-9A-Za-z.+\-_@/]{1,64}$/
 
 const mul = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]]
 const apply = (m, x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]]
@@ -190,21 +194,27 @@ const isTimeout = e => e?.name === 'TimeoutError' || e?.code === 'timeout' || e?
  * table's cell of names is: mt.mjs isName); `from` the first id after the head's units, `before` the head's chunks' totals
  * (format.mjs chunkTotals), so that the chunk keeps every chunk of the paper within the bounds a head's are read by;
  * `recognise(pixels)` the host's recogniser ({ data RGBA, width, height } → src/shared/ocr.ts OcrLine[]; a TimeoutError where its
- * host gave up on it); `cache` { get(key) → lines | null, put(key, lines) } or null (either may reject: no cache then);
+ * host gave up on it), `reader` what it runs on (its runtime's and its canvas's packages and versions: the cache key's); `cache` { get(key) → lines | null, put(key, lines) } or null (either may reject: no cache then);
  * `budgetMs` the recogniser's time the paper may take, by `now`. Returns { units (the bundle's tuples), chunks (written, ids from
  * `from`; none where there is no label, or where the chunk would pass a bound: `stats.refused`), stats }
  */
-export async function ocrPass({ doc, OPS, paper, source = null, from, before = null, recognise, cache = null, budgetMs = OCR_BUDGET_MS, now = () => performance.now(), unitsDoc = OCR_UNITS_DOC }) {
+export async function ocrPass({ doc, OPS, paper, source = null, from, before = null, recognise, reader, cache = null, budgetMs = OCR_BUDGET_MS, now = () => performance.now(), unitsDoc = OCR_UNITS_DOC }) {
+  if (typeof reader !== 'string' || !READER.test(reader)) throw new TypeError('reader: the host\'s recogniser, its runtime and canvas (onnxruntime-web@1.30.0+napi-canvas@1.0.10)')
   const prose = source?.units ? proseOf(source.units) : ''
   // (images: those painted, read by the recogniser, from the cache, the same as one read before, and each why one is not read)
-  const stats = { pages: 0, images: { painted: 0, read: 0, cached: 0, again: 0, ...Object.fromEntries(OCR_IMAGE_WHYS.map(w => [w, 0])) }, lines: 0, units: 0, kept: 0, labels: {}, recogniseMs: 0, cacheFailed: 0, refused: null }
+  // (the labels the extension's merge made of the lines, `boxes`: each a unit drawn or left with its why, `labels`; and the time
+  // each step took, ms by `now`: the pages' reading, the images' decoding, their digests, the recogniser, the labels)
+  const stats = { pages: 0, images: { painted: 0, read: 0, cached: 0, again: 0, ...Object.fromEntries(OCR_IMAGE_WHYS.map(w => [w, 0])) }, lines: 0, boxes: 0, units: 0, kept: 0, labels: {}, recogniseMs: 0, cacheFailed: 0, refused: null, ms: { pages: 0, decode: 0, digest: 0, labels: 0 } }
+  const lap = (k, t0) => { stats.ms[k] += now() - t0 }
   const units = []
   const seen = new Map()
   let spent = 0
   for (let p = 1; p <= doc.numPages; p++) {
+    let t = now()
     const page = await doc.getPage(p)
     try {
       const { images, paths } = paintsOf(await page.getOperatorList(), OPS)
+      lap('pages', t)
       stats.pages++
       if (!images.length) continue
       const view = page.view
@@ -215,14 +225,18 @@ export async function ocrPass({ doc, OPS, paper, source = null, from, before = n
         const corners = [apply(im.ctm, 0, 0), apply(im.ctm, 1, 0), apply(im.ctm, 1, 1), apply(im.ctm, 0, 1)]
         const box = boxOfPoints(corners)
         if (Math.min(Math.hypot(corners[1][0] - corners[0][0], corners[1][1] - corners[0][1]), Math.hypot(corners[3][0] - corners[0][0], corners[3][1] - corners[0][1])) < OCR_MIN_SIDE) { stats.images.small++; continue }
+        t = now()
         const image = await imageOf(page, im.id)
+        lap('decode', t)
         if (!image?.data || !(image.width > 0) || !(image.height > 0)) { stats.images.big++; continue }
         if (image.width < OCR_MIN_PX || image.height < OCR_MIN_PX) { stats.images.small++; continue }
+        t = now()
         const sha = await digestOf(image)
+        lap('digest', t)
         let lines = seen.get(sha)
         if (lines) stats.images.again++
         else {
-          const key = ocrKey(sha)
+          const key = ocrKey(sha, reader)
           try { lines = cache ? await cache.get(key) : null } catch { stats.cacheFailed++; lines = null }
           if (Array.isArray(lines)) stats.images.cached++
           else {
@@ -245,7 +259,10 @@ export async function ocrPass({ doc, OPS, paper, source = null, from, before = n
         const segs = near.flatMap(q => q.segs)
         const others = segs.length > OCR_SEGS_PAGE ? null : { boxes: boxes.filter(b => meets(b, box)), segs, fills: near.filter(q => q.fill).map(q => q.segs) }
         const limit = Math.min(OCR_UNITS_IMAGE, unitsDoc - units.length)
+        t = now()
         const got = labelsOf({ image, lines, place: { page: p, ctm: im.ctm, clip: im.clips, view }, others, taken, limit })
+        lap('labels', t)
+        stats.boxes += got.units.length + got.left.length
         for (const l of got.left) stats.labels[l.why] = (stats.labels[l.why] ?? 0) + 1
         for (const u of got.units) {
           const kept = isName(u.text, prose)

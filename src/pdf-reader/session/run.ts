@@ -613,6 +613,8 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
       paper, target, faceSources: host.faces ?? servedFaces(host.api, f), hyphUrl: lang => `${host.api}/hyph/${lang}.json`, ...options(),
       // (the reader's toggles: the figure switch's class, the others the engine's defaults)
       ...(host.figures ? { classes: { figures: host.figures() } } : {}),
+      // (a late chunk read, the bitmap figures' labels told after the parts: its units translated too, the rows held given again)
+      onIndex: () => { void translate() },
     })
     void translate()
     await look(my, signal)

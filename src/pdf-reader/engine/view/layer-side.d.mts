@@ -15,6 +15,9 @@ export interface LayerSideOptions {
   target: string
   /** the reader's toggles (rules/content-classes.mjs TOGGLE_DEFAULTS where not given): a class they do not show is the original's */
   classes?: Partial<Record<'heads' | 'tables' | 'figures' | 'references' | 'names', boolean>> | null
+  /** told once the index grows with a late chunk (the bitmap figures' labels, told after the head and the parts): a host that
+   *  translates the units itself translates the new ones (index() gives the grown index from then on) */
+  onIndex?: (index: LayerIndex) => void
   faceSources: FaceSources
   hyphUrl(lang: string): string
   rules?: FrozenRuleSet
@@ -40,7 +43,8 @@ export interface LayerSide {
    *  through fetchObject (units and head at once, parts in parallel, read and added in page order); a part beginning at or
    *  before the last told under another digest is a fork: the door opened again over the new chain */
   tell(refs: { units?: readonly TellRef[]; head?: TellRef | null; parts?: readonly TellRef[]; end?: { through: number; refused?: string } | null }): void
-  /** the index once read; null where the layer is refused or the side disposed. The rows' parsers read it */
+  /** the index once read, the latest (grown by the late chunks read since); null where the layer is refused or the side disposed.
+   *  The rows' parsers read it */
   index(): Promise<LayerIndex | null>
   /** rows: before the door opens held (latest per unit id); kept for the contents, the sentences and a fork's open again */
   take(rows: readonly Row[]): void

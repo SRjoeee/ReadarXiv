@@ -9,22 +9,26 @@
 //
 // Each line, in the image's pixels (origin top left, y down), is its quad in reading order (↖ ↗ ↘ ↙: a line read on its side
 // has its first corner where its reading begins), so that it is a frame: along it from its first corner to its second, across
-// it from its first to its fourth; its length L and its thickness T. Its patch is the quad grown by PATCH_PAD of T on each side
-// (less where the image's edge is nearer: a patch never leaves its image), its ring the band RING of T wide around the patch.
-// A label is drawn only where every one of its lines holds:
-//   - its ring flat: RING_FLAT of the ring's pixels within NEAR of the ring's colour, the patch's (no ink reaches past the
-//     patch: what the patch covers is the line's ink whole, and nothing else of the figure's); a pixel of another line's patch
-//     is not the ring's (that line's ink is its own label's, or kept);
-//   - its inside the line's ink alone: no more than CROWD of its pixels off the colours between the ring's and the ink's (a
-//     marker of another colour, a line of the plot through the label);
-//   - its patch clear of every other label's patch and of every line no label holds (a number, a letter alone: kept), and of the
-//     page's own ink over the image (its text, a path drawn after it), which a patch would cover; inside the clip in force and
-//     the page; its frame not mirrored by its placement.
+// it from its first to its fourth; its length L and its thickness T. A label's patch is over its line, or, for a label of several
+// lines, over the block they make (one patch: the room between two lines and a descender in it covered, no seam between two
+// patches): its box grown by PATCH_PAD of T on each side (less where the image's edge is nearer: a patch never leaves its image),
+// a side that fails drawn in, to none, then into the box by PATCH_PAD and twice it; its ring the band RING of T wide around it,
+// its edge the band EDGE of T right outside it. A label is drawn only where:
+//   - its ring is flat: RING_FLAT of the ring's pixels within NEAR of the ring's colour, the patch's ground (no ink reaches past
+//     the patch: what it covers is its lines' ink whole, and nothing else of the figure's); a pixel of a box no line of the label
+//     holds is not the ring's (that line's ink is its own label's, or kept), but at the patch's edge, where every pixel is read
+//     within NEAR_EDGE (a glyph the patch's edge would cut, its faint antialiased tip);
+//   - it covers no ink of another line: where it meets another line's box, the pixels there are the ground's (a number, a letter
+//     alone, another label's text: kept);
+//   - each line's box holds that line's ink alone: no more than CROWD of its pixels off the colours between the ground's and the
+//     ink's (a marker of another colour, a line of the plot through the label);
+//   - it is clear of the page's own ink over the image (its text, a path drawn after it, a fill holding it), which a patch would
+//     cover, and of a patch another image drew on its page; inside the clip in force and the page; its frame not mirrored by its
+//     placement.
 // Else it stays the original's, its reason told (`busy`, `crowded`, `overlap`, `covered`, `clipped`, `mirrored`, `outside`,
-// `long`, `past`). Its text size is the extension's (core/renderer/image.ts fontBounds: 72 % of a line's thickness), its colours
-// the ring's (the patch's) and the ink's, and its anchor read as a vector figure's is (layout/figure-text.mjs): `start` where
-// ink stands right before it along its baseline and none as near after it (a legend's marker), `end` the other way, else
-// `centre`.
+// `long`, `past`). Its text size is the extension's (core/renderer/image.ts fontBounds: 72 % of its thinnest line's thickness),
+// its colours the ground's and the ink's, and its anchor read as a vector figure's is (layout/figure-text.mjs): `start` where ink
+// stands right before it along its baseline and none as near after it (a legend's marker), `end` the other way, else `centre`.
 //
 // An original module (no port statement).
 import { linesToBoxes } from '../../../core/image/boxes.ts'
@@ -35,11 +39,14 @@ export const PATCH_PAD = 0.08
 /** the ring around a patch: this share of the line's thickness wide, at least RING_MIN_PX */
 export const RING = 0.15
 const RING_MIN_PX = 2
-/** the band right outside a patch, this share of its line's thickness (at least RING_MIN_PX), whose every pixel the ring reads,
+/** the band right outside a patch, this share of its lines' thickness (at least RING_MIN_PX), every pixel of which is read,
  *  another line's box or not: ink there is a glyph the patch's edge would cut */
 const EDGE = 0.06
-/** …of which this share at most is ink, or EDGE_OFF_MIN pixels (a JPEG's noise): past it a glyph crosses the patch's edge */
-const EDGE_OFF = 0.002, EDGE_OFF_MIN = 2
+/** …of which this share at most is ink (a JPEG's noise; none in a band of fewer than 500 pixels): past it a glyph crosses the
+ *  patch's edge */
+const EDGE_OFF = 0.002
+/** a pixel at a patch's edge is ink past this distance from the ground's colour: closer than NEAR, a glyph's faint tip */
+const NEAR_EDGE = 20
 /** a ring is flat where this share of its pixels at least are within NEAR of its colour */
 export const RING_FLAT = 0.97
 /** two colours alike: within this distance in RGB (0 to 441) */
@@ -64,29 +71,38 @@ export const OCR_WHYS = Object.freeze(['busy', 'crowded', 'overlap', 'covered', 
 /** the anchors, by their code in a place (layer-proto/ocr-rows.mjs) */
 export const OCR_ANCHORS = Object.freeze(['start', 'centre', 'end'])
 
-const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
-/** a colour's distance to the colours between two (antialiased ink on its ground lies there) */
-function offSegment(p, a, b) {
-  const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], dd = d[0] * d[0] + d[1] * d[1] + d[2] * d[2]
-  if (dd === 0) return dist(p, a)
-  const k = Math.max(0, Math.min(1, ((p[0] - a[0]) * d[0] + (p[1] - a[1]) * d[1] + (p[2] - a[2]) * d[2]) / dd))
-  return Math.hypot(p[0] - a[0] - k * d[0], p[1] - a[1] - k * d[1], p[2] - a[2] - k * d[2])
+// (a colour packed 0xRRGGBB, as the pixels are read: no array a pixel)
+const NEAR2 = NEAR * NEAR
+/** whether two packed colours are apart, past NEAR */
+const apartC = (c, r, g, b) => { const dr = (c >>> 16) - r, dg = ((c >>> 8) & 255) - g, db = (c & 255) - b; return dr * dr + dg * dg + db * db > NEAR2 }
+/** …past NEAR_EDGE: at a patch's edge a glyph's faint antialiased tip shows */
+const NEAR_EDGE2 = NEAR_EDGE * NEAR_EDGE
+const apartEdge = (c, r, g, b) => { const dr = (c >>> 16) - r, dg = ((c >>> 8) & 255) - g, db = (c & 255) - b; return dr * dr + dg * dg + db * db > NEAR_EDGE2 }
+/** a packed colour's distance to the colours between two (antialiased ink on its ground lies there), squared, past NEAR */
+function offSegment(c, a, b) {
+  const pr = c >>> 16, pg = (c >>> 8) & 255, pb = c & 255
+  const dr = b[0] - a[0], dg = b[1] - a[1], db = b[2] - a[2], dd = dr * dr + dg * dg + db * db
+  const k = dd === 0 ? 0 : Math.max(0, Math.min(1, ((pr - a[0]) * dr + (pg - a[1]) * dg + (pb - a[2]) * db) / dd))
+  const er = pr - a[0] - k * dr, eg = pg - a[1] - k * dg, eb = pb - a[2] - k * db
+  return er * er + eg * eg + eb * eb > NEAR2
 }
 const rgbOf = c => (Math.round(c[0]) << 16) | (Math.round(c[1]) << 8) | Math.round(c[2])
 
 /**
  * A pixel reader of an image as PDF.js decodes one (`kind` 1: one bit a pixel, rows padded to a byte, 1 white; 2: RGB; 3: RGBA),
- * each pixel as the page shows it over white: (x, y) → [r, g, b], x and y integers inside the image
+ * each pixel as the page shows it over white: (x, y) → 0xRRGGBB, x and y integers inside the image
  */
 export function pixelReader({ data, width, kind }) {
   if (kind === 1) {
     const row = (width + 7) >> 3
-    return (x, y) => { const v = (data[y * row + (x >> 3)] >> (7 - (x & 7))) & 1 ? 255 : 0; return [v, v, v] }
+    return (x, y) => ((data[y * row + (x >> 3)] >> (7 - (x & 7))) & 1 ? 0xffffff : 0)
   }
-  if (kind === 2) return (x, y) => { const i = 3 * (y * width + x); return [data[i], data[i + 1], data[i + 2]] }
+  if (kind === 2) return (x, y) => { const i = 3 * (y * width + x); return (data[i] << 16) | (data[i + 1] << 8) | data[i + 2] }
   return (x, y) => {
-    const i = 4 * (y * width + x), a = data[i + 3] / 255
-    return [data[i] * a + 255 * (1 - a), data[i + 1] * a + 255 * (1 - a), data[i + 2] * a + 255 * (1 - a)]
+    const i = 4 * (y * width + x), a = data[i + 3]
+    if (a === 255) return (data[i] << 16) | (data[i + 1] << 8) | data[i + 2]
+    const over = v => Math.round((v * a + 255 * (255 - a)) / 255)
+    return (over(data[i]) << 16) | (over(data[i + 1]) << 8) | over(data[i + 2])
   }
 }
 
@@ -128,20 +144,20 @@ function patchOf(f, W, H, g) {
   const side = (k, a, b, dx, dy) => (g[k] < 0 ? Math.max(g[k], -(k % 2 ? f.T : f.L) / 4) : Math.min(g[k], reachOf(a, dx, dy, W, H), reachOf(b, dx, dy, W, H)))
   return [-side(0, corners[0], corners[3], -f.ux, -f.uy), -side(1, corners[0], corners[1], -f.nx, -f.ny), f.L + side(2, corners[1], corners[2], f.ux, f.uy), f.T + side(3, corners[3], corners[2], f.nx, f.ny)]
 }
-/**
- * The patches a line tries, the largest first, as each side's growth in shares of its thickness [start, top, end, foot]: grown
- * PATCH_PAD all round, half of it, none; then, where those meet another line's ink, its sides drawn in toward its ink, one
- * side or two, by PATCH_PAD or twice it (a box holds its line's ink with room, and the ring tells whether a patch drawn in still
- * holds it all)
- */
-const TRIES = (() => {
-  const out = [[1, 1, 1, 1], [0.5, 0.5, 0.5, 0.5], [0, 0, 0, 0]]
-  const ins = [0, -1, -2], more = []
-  for (const a of ins) for (const b of ins) for (const c of [0, -1]) for (const d of [0, -1]) if (a || b || c || d) more.push([c, a, d, b])
-  // (the larger first: the less taken off)
-  more.sort((x, y) => y.reduce((n, v) => n + v, 0) - x.reduce((n, v) => n + v, 0))
-  return Object.freeze([...out, ...more].map(t => Object.freeze(t.map(v => v * PATCH_PAD))))
-})()
+/** the side of patch `p` ([s0, t0, s1, t1]: start, top, end, foot) a point outside it stands past the most: 0 to 3 */
+function farthestOut(p, s, t) {
+  const d = [p[0] - s, p[1] - t, s - p[2], t - p[3]]
+  let k = 0
+  for (let j = 1; j < 4; j++) if (d[j] > d[k]) k = j
+  return k
+}
+/** the side of patch `p` a point inside it is nearest */
+function nearestIn(p, s, t) {
+  const d = [s - p[0], t - p[1], p[2] - s, p[3] - t]
+  let k = 0
+  for (let j = 1; j < 4; j++) if (d[j] < d[k]) k = j
+  return k
+}
 const quadOf = (f, r) => [at(f, r[0], r[1]), at(f, r[2], r[1]), at(f, r[2], r[3]), at(f, r[0], r[3])]
 const holds = (r, s, t) => s >= r[0] && s <= r[2] && t >= r[1] && t <= r[3]
 
@@ -152,17 +168,17 @@ function boundsOf(q, W, H) {
   return [Math.max(0, Math.floor(x0)), Math.max(0, Math.floor(y0)), Math.min(W, Math.ceil(x1)), Math.min(H, Math.ceil(y1))]
 }
 
-/** the colour most pixels of a list are (5 bits a channel), as their mean; null for none */
-function modeOf(colours) {
-  if (!colours.length) return null
+/** the colour most of a list of packed colours are (5 bits a channel), as their mean [r, g, b]; null for none */
+function modeOf(colours, n = colours.length) {
+  if (!n) return null
   const bins = new Map()
-  for (const c of colours) {
-    const k = ((c[0] >> 3) << 10) | ((c[1] >> 3) << 5) | (c[2] >> 3)
-    const b = bins.get(k)
-    if (b) { b.n++; b.r += c[0]; b.g += c[1]; b.b += c[2] } else bins.set(k, { n: 1, r: c[0], g: c[1], b: c[2] })
+  for (let i = 0; i < n; i++) {
+    const c = colours[i], r = c >>> 16, g = (c >>> 8) & 255, b = c & 255, k = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3)
+    const e = bins.get(k)
+    if (e) { e.n++; e.r += r; e.g += g; e.b += b } else bins.set(k, { n: 1, r, g, b })
   }
   let best = null
-  for (const b of bins.values()) if (!best || b.n > best.n) best = b
+  for (const e of bins.values()) if (!best || e.n > best.n) best = e
   return [best.r / best.n, best.g / best.n, best.b / best.n]
 }
 
@@ -233,7 +249,8 @@ export function labelsOf({ image, lines, place, others = { boxes: [], segs: [], 
   const lineBounds = lineQuads.map(q => (q ? boundsOf(q, W, H) : null))
   const member = new Set(boxes.flatMap(bx => bx.members))
   const units = [], left = []
-  const near = (i, b) => lineBounds.flatMap((lb, j) => (j !== i && lb && lb[0] < b[2] && lb[2] > b[0] && lb[1] < b[3] && lb[3] > b[1] ? [j] : []))
+  /** the lines but `own` whose boxes meet bounds `b` */
+  const near = (own, b) => lineBounds.flatMap((lb, j) => (!own.has(j) && lb && lb[0] < b[2] && lb[2] > b[0] && lb[1] < b[3] && lb[3] > b[1] ? [j] : []))
   const inLine = (js, x, y) => {
     for (const j of js) {
       const [s, t] = inFrame(frames[j], x, y)
@@ -242,82 +259,125 @@ export function labelsOf({ image, lines, place, others = { boxes: [], segs: [], 
     return false
   }
   /**
-   * A line's patch and its reading of its pixels: the first of TRIES whose ring is flat and that covers no ink of another line (where it meets another line's box, the pixels there
-   * are all its ring's colour: a line's box has room round its ink, and two boxes that meet over ink are no two labels a patch
-   * can tell apart); then its ink's
-   * colour, its inside crowded or not, and the ink before and after it along its baseline (distances in pixels)
+   * A label's patch: over its line, or over the block its lines make (the box round them all, one patch, so that the room between
+   * two lines, a descender of the first, is covered too and no seam between two patches shows). The largest it can hold: grown
+   * PATCH_PAD of its lines' thickness each side, a side that fails drawn in — to none, then into the box by PATCH_PAD and twice it,
+   * no more (a box holds its line's ink with room, and the ring tells whether a patch drawn in still holds it all) — until its ring
+   * is flat, no ink stands right at its edge (a glyph it would cut: every pixel of the band read, whoever's box it is in) and it
+   * covers no ink of another line (where it meets a box no line of the label's is, the pixels there are all its ground's colour:
+   * a line's box has room round its ink, and two boxes that meet over ink are no two labels a patch can tell apart). `f` the
+   * frame (a line's, or the block's), `T` its lines' thickness, `own` the label's lines. { why } or { patch, bg }
    */
-  const readLine = i => {
-    // (the ring's pixels in another line's box are that line's, but those right at the patch's edge: ink there is ink the patch's
-    // edge cuts, its own line's or another's)
-    const f = frames[i], ring = Math.max(RING_MIN_PX, RING * f.T), edge = Math.max(RING_MIN_PX, EDGE * f.T)
-    let r = null, bg = null, why = 'busy'
-    for (const k of TRIES) {
-      const p = patchOf(f, W, H, k.map(v => v * f.T))
+  const readArea = (f, T, own) => {
+    const pad = PATCH_PAD * T, ring = Math.max(RING_MIN_PX, RING * T), edge = Math.max(RING_MIN_PX, EDGE * T)
+    const g = [pad, pad, pad, pad]
+    const widest = patchOf(f, W, H, g)
+    if (!widest) return { why: 'outside' }
+    const ob = boundsOf(quadOf(f, [widest[0] - ring, widest[1] - ring, widest[2] + ring, widest[3] + ring]), W, H)
+    const nearby = near(own, ob), mine = [...own]
+    let bg = null, why = 'busy'
+    const ringPx = new Int32Array(Math.max(16, (ob[2] - ob[0]) * (ob[3] - ob[1])))
+    for (let step = 0; step < 8; step++) {
+      const p = patchOf(f, W, H, g)
       if (!p) return { why: 'outside' }
       const outer = [p[0] - ring, p[1] - ring, p[2] + ring, p[3] + ring]
-      const ob = boundsOf(quadOf(f, outer), W, H), nearby = near(i, ob)
-      const ringPx = [], edgePx = [], shared = []
-      for (let y = ob[1]; y < ob[3]; y++) for (let x = ob[0]; x < ob[2]; x++) {
-        const [s, t] = inFrame(f, x + 0.5, y + 0.5)
-        if (!holds(outer, s, t)) continue
-        const mine = holds(p, s, t), other = inLine(nearby, x + 0.5, y + 0.5)
-        // (inside the patch and in another line's box: what the patch would cover of that line's, which must be no ink of it)
-        if (mine) { if (other) shared.push(px(x, y)); continue }
-        const q = px(x, y)
-        if (Math.max(p[0] - s, s - p[2], p[1] - t, t - p[3]) <= edge) edgePx.push(q)
-        if (!other) ringPx.push(q)
+      const [x0, y0, x1, y1] = boundsOf(quadOf(f, outer), W, H)
+      // (by side of the patch, start, top, end, foot: the ring's pixels and those off its colour, the edge's, the shared ink)
+      const ringN = [0, 0, 0, 0], ringOff = [0, 0, 0, 0], edgeN = [0, 0, 0, 0], edgeOff = [0, 0, 0, 0], sharedOff = [0, 0, 0, 0]
+      let n = 0
+      const sides = []
+      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+        const [s0, t] = inFrame(f, x + 0.5, y + 0.5)
+        if (s0 < outer[0] || s0 > outer[2] || t < outer[1] || t > outer[3]) continue
+        const c = px(x, y), other = nearby.length ? inLine(nearby, x + 0.5, y + 0.5) : false
+        if (s0 >= p[0] && s0 <= p[2] && t >= p[1] && t <= p[3]) {
+          // (inside the patch and in another line's box: what the patch would cover of that line's)
+          if (other) sides.push(-1 - nearestIn(p, s0, t), c)
+          continue
+        }
+        const side = farthestOut(p, s0, t), d = Math.max(p[0] - s0, s0 - p[2], p[1] - t, t - p[3])
+        if (d <= edge) { edgeN[side]++; sides.push(side, c) }
+        // (a pixel of the label's own lines past the patch is its ink: the ring's to judge, as any)
+        if (!other || inLine(mine, x + 0.5, y + 0.5)) { ringPx[n++] = c; ringN[side]++; sides.push(4 + side, c) }
       }
-      if (ringPx.length < RING_MIN) { why = 'busy'; continue }
-      const colour = modeOf(ringPx)
-      let flat = 0, cut = 0
-      for (const q of ringPx) if (dist(q, colour) <= NEAR) flat++
-      if (flat < RING_FLAT * ringPx.length) { why = 'busy'; continue }
-      for (const q of edgePx) if (dist(q, colour) > NEAR) cut++
-      if (cut > Math.max(EDGE_OFF_MIN, EDGE_OFF * edgePx.length)) { why = 'busy'; continue }
-      if (shared.some(q => dist(q, colour) > NEAR)) { why = 'overlap'; continue }
-      // (a patch drawn in past where its own ink is leaves that ink at its edge: its ring is then no longer flat, above)
-      r = p; bg = colour
-      break
+      if (n < RING_MIN) return { why: 'busy' }
+      bg ??= modeOf(ringPx, n)
+      const [r, gg, b] = bg
+      for (let k = 0; k < sides.length; k += 2) {
+        const at2 = sides[k], c = sides[k + 1]
+        if (at2 < 0) { if (apartC(c, r, gg, b)) sharedOff[-1 - at2]++ } else if (at2 < 4) { if (apartEdge(c, r, gg, b)) edgeOff[at2]++ } else if (apartC(c, r, gg, b)) ringOff[at2 - 4]++
+      }
+      const ringTotal = ringN.reduce((a2, v) => a2 + v, 0), offTotal = ringOff.reduce((a2, v) => a2 + v, 0)
+      const bad = [0, 1, 2, 3].filter(k => sharedOff[k] > 0 || edgeOff[k] > Math.floor(EDGE_OFF * edgeN[k]) || (ringOff[k] > (1 - RING_FLAT) * Math.max(ringN[k], 1) && ringOff[k] > 2))
+      if (!bad.length && offTotal <= (1 - RING_FLAT) * ringTotal) return { patch: quadOf(f, p), bg }
+      why = bad.some(k => sharedOff[k] > 0) ? 'overlap' : 'busy'
+      // (each failing side drawn in by a step, none past twice PATCH_PAD into the box; a ring off as a whole with no side to blame
+      // draws in every side)
+      let moved = false
+      for (const k of bad.length ? bad : [0, 1, 2, 3]) {
+        const next = g[k] > 0 ? 0 : g[k] - pad
+        if (next < -2 * pad - 1e-9) continue
+        g[k] = next
+        moved = true
+      }
+      if (!moved) break
     }
-    if (!r) return { why }
-    const inside = []
+    return { why }
+  }
+  /** a line's ink under its label's ground: its colour, its inside crowded or not, the ink before and after its box along its
+   *  baseline (pixels, its anchor's evidence) */
+  const readInk = (i, bg, own) => {
+    const f = frames[i], inside = []
     const [ix0, iy0, ix1, iy1] = boundsOf(lineQuads[i], W, H)
     for (let y = iy0; y < iy1; y++) for (let x = ix0; x < ix1; x++) {
-      const [s, t] = inFrame(f, x + 0.5, y + 0.5)
-      if (s >= 0 && s <= f.L && t >= 0 && t <= f.T) inside.push(px(x, y))
+      const [s0, t] = inFrame(f, x + 0.5, y + 0.5)
+      if (s0 >= 0 && s0 <= f.L && t >= 0 && t <= f.T) inside.push(px(x, y))
     }
-    const ink = inside.filter(q => dist(q, bg) > NEAR)
+    const [r0, g0, b0] = bg
+    const ink = inside.filter(c => apartC(c, r0, g0, b0))
     const fg = modeOf(ink)
     if (!fg) return { why: 'busy' }
     let off = 0
-    for (const q of inside) if (offSegment(q, bg, fg) > NEAR) off++
+    for (const c of inside) if (offSegment(c, bg, fg)) off++
     if (off > CROWD * inside.length) return { why: 'crowded' }
-    // (the ink nearest before its patch along its band, and after it, within the reach: a marker, an axis, another word)
-    const reach = ANCHOR_REACH * OCR_SIZE * f.T
+    // (the ink nearest before its box along its band, and after it, within the reach, the label's own lines aside: a marker, an
+    // axis, another word)
+    const reach = ANCHOR_REACH * OCR_SIZE * f.T, mine = [...own]
     let before = Infinity, after = Infinity
-    const strip = [r[0] - reach, 0, r[2] + reach, f.T]
+    const strip = [-reach, 0, f.L + reach, f.T]
     const [sx0, sy0, sx1, sy1] = boundsOf(quadOf(f, strip), W, H)
     for (let y = sy0; y < sy1; y++) for (let x = sx0; x < sx1; x++) {
-      const [s, t] = inFrame(f, x + 0.5, y + 0.5)
-      if (t < 0 || t > f.T || (s >= r[0] && s <= r[2]) || s < strip[0] || s > strip[2]) continue
-      if (dist(px(x, y), bg) <= NEAR) continue
-      if (s < r[0]) before = Math.min(before, r[0] - s)
-      else after = Math.min(after, s - r[2])
+      const [s0, t] = inFrame(f, x + 0.5, y + 0.5)
+      if (t < 0 || t > f.T || (s0 >= 0 && s0 <= f.L) || s0 < strip[0] || s0 > strip[2]) continue
+      if (!apartC(px(x, y), r0, g0, b0) || inLine(mine, x + 0.5, y + 0.5)) continue
+      if (s0 < 0) before = Math.min(before, -s0)
+      else after = Math.min(after, s0 - f.L)
     }
-    return { why: null, patch: quadOf(f, r), bg, fg, before, after }
+    return { why: null, fg, before, after }
   }
   for (const bx of boxes) {
     const text = bx.text.replace(/\s+/gu, ' ').trim()
     if (bx.members.length > OCR_LINES_MAX || text.length > OCR_TEXT_MAX) { left.push({ text, why: 'long' }); continue }
     if (units.length >= limit) { left.push({ text, why: 'past' }); continue }
+    if (bx.members.some(i => !lineQuads[i])) { left.push({ text, why: 'outside' }); continue }
+    const own = new Set(bx.members)
+    // (one line's frame, or the block's: the box round every line of the label, upright as the extension merges them)
+    const T = [...bx.members].map(i => frames[i].T).sort((x, y) => x - y)[(bx.members.length - 1) >> 1]
+    let area
+    if (bx.members.length === 1) area = frames[bx.members[0]]
+    else {
+      const pts = bx.members.flatMap(i => lineQuads[i])
+      const x0 = Math.min(...pts.map(q => q[0])), y0 = Math.min(...pts.map(q => q[1])), x1 = Math.max(...pts.map(q => q[0])), y1 = Math.max(...pts.map(q => q[1]))
+      area = frameOf([[x0, y0], [x1, y0], [x1, y1], [x0, y1]])
+    }
+    const got = readArea(area, T, own)
+    if (got.why) { left.push({ text, why: got.why }); continue }
     let why = null
     const read = []
     for (const i of bx.members) {
-      if (!lineQuads[i]) { why = 'outside'; break }
-      const r = readLine(i)
+      const r = readInk(i, got.bg, own)
       if (r.why) { why = r.why; break }
-      read.push({ i, ...r })
+      read.push({ i, patch: got.patch, bg: got.bg, ...r })
     }
     if (why) { left.push({ text, why }); continue }
     // (on the page: each line's quad and its patch, by its placement)

@@ -19,13 +19,13 @@
 // shapes.
 
 import { bodyMax, frameOfTokens, inkEdges } from '../pipeline/anchors.mjs'
-import { FIGURE_KIND } from '../rules/content-classes.mjs'
+import { FIGURE_KIND, OCR_KIND } from '../rules/content-classes.mjs'
 // floats.mjs imports this module's geometry; its shapes are read here only when a sentence is drawn (reachAt)
 import { floatShapes } from './floats.mjs'
 
 /** kinds of unit that are no running text: what lies among their words is their float's, not theirs (a figure's ink unit, a
- *  label's: content-classes.mjs FIGURE_KIND) */
-const NOT_RUNNING = new Set(['caption', 'heading', 'cell', 'figure', FIGURE_KIND])
+ *  label's: content-classes.mjs FIGURE_KIND; a bitmap figure's label, OCR_KIND) */
+const NOT_RUNNING = new Set(['caption', 'heading', 'cell', 'figure', FIGURE_KIND, OCR_KIND])
 /** whether a kind of unit may light by sentence: running text (hitOf, sentencesFit) */
 export const bySentence = kind => !NOT_RUNNING.has(kind)
 /** kinds of unit a float holds, which may be wider than the measure (a table, a figure and its caption): their blocks

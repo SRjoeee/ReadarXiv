@@ -1,5 +1,7 @@
 // bitmap-text.mjs's types: a bitmap figure's labels, read by the recogniser and placed on its page (PDF-READER §19.15)
-import type { OcrLine } from '../../../shared/ocr'
+/** a recognised line (src/shared/ocr.ts OcrLine's shape): its text, its corners normalised to the image (origin top left, in
+ *  reading order), its confidence, and a line read on its side's angle and own length and thickness */
+export interface OcrLine { text: string; quad: readonly (readonly [number, number])[]; conf: number; angle?: number; len?: number; thick?: number }
 
 export type Pt = [number, number]
 /** a label drawn: its text, its lines' count, its size (PDF units), its anchor, its ground's colour and its ink's (0xRRGGBB), and

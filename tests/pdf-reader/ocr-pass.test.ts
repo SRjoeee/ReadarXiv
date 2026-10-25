@@ -27,12 +27,14 @@ function pageOf(paints: [string, number[]][], objs: Record<string, unknown>) {
 const docOf = (pages: ReturnType<typeof pageOf>[]) => ({ numPages: pages.length, getPage: async (n: number) => pages[n - 1]! })
 const PAPER = { id: '2608.04322', version: 1 }
 const at = (x: number, y: number, w = W, h = H) => [w, 0, 0, h, x, y]
+/** the host's reader, as the cache key names it */
+const READER = 'onnxruntime-web@1.30.0+napi-canvas@1.0.10'
 
 describe('the bitmap figures\' pass (ocrPass)', () => {
   it('reads each image once a paper and writes its labels as one chunk after the head\'s units, each with its place', async () => {
     const seen: number[] = []
     const doc = docOf([pageOf([['a', at(50, 400)], ['a', at(50, 100)]], { a: picture() })])
-    const r = await ocrPass({ doc, OPS, paper: PAPER, from: 30, recognise: async px => { seen.push(px.width); return [LINE] } })
+    const r = await ocrPass({ doc, OPS, paper: PAPER, reader: READER, from: 30, recognise: async px => { seen.push(px.width); return [LINE] } })
     expect(seen).toEqual([W])
     expect(r.stats.images).toMatchObject({ painted: 2, read: 1, again: 1 })
     expect(r.stats.units).toBe(2)
@@ -45,7 +47,7 @@ describe('the bitmap figures\' pass (ocrPass)', () => {
   it('leaves an image the cap kept from its pixels, one too small, one the recogniser refuses or gives up on: each counted, the paper read', async () => {
     const tiny = { data: new Uint8ClampedArray(20 * 20 * 4).fill(255), width: 20, height: 20, kind: 3 }
     const doc = docOf([pageOf([['big', at(50, 400)], ['small', at(50, 300, 20, 20)], ['tiny', at(50, 100)], ['bad', at(300, 100)], ['slow', at(300, 400)]], { tiny, bad: picture(1), slow: picture(2) })])
-    const r = await ocrPass({ doc, OPS, paper: PAPER, from: 0, recognise: async px => { if (px.data[4 * (90 * W + 110)] === 33) throw new Error('the recogniser\'s'); throw Object.assign(new Error('late'), { name: 'TimeoutError' }) } })
+    const r = await ocrPass({ doc, OPS, paper: PAPER, reader: READER, from: 0, recognise: async px => { if (px.data[4 * (90 * W + 110)] === 33) throw new Error('the recogniser\'s'); throw Object.assign(new Error('late'), { name: 'TimeoutError' }) } })
     expect(r.stats.images).toMatchObject({ painted: 5, big: 1, small: 2, error: 1, timeout: 1, read: 0 })
     expect(r.chunks).toEqual([])
   })
@@ -53,7 +55,7 @@ describe('the bitmap figures\' pass (ocrPass)', () => {
   it('stops reading past its budget: the rest of the paper\'s images the original\'s (`budget`)', async () => {
     let t = 0
     const doc = docOf([pageOf([['a', at(50, 400)], ['b', at(50, 100)]], { a: picture(), b: picture(5) })])
-    const r = await ocrPass({ doc, OPS, paper: PAPER, from: 0, budgetMs: 100, now: () => t, recognise: async () => { t += 150; return [LINE] } })
+    const r = await ocrPass({ doc, OPS, paper: PAPER, reader: READER, from: 0, budgetMs: 100, now: () => t, recognise: async () => { t += 150; return [LINE] } })
     expect(r.stats.images).toMatchObject({ read: 1, budget: 1 })
     expect(r.stats.units).toBe(1)
   })
@@ -64,22 +66,27 @@ describe('the bitmap figures\' pass (ocrPass)', () => {
     const doc = () => docOf([pageOf([['a', at(50, 400)]], { a: picture() })])
     let reads = 0
     const recognise = async () => { reads++; return [LINE] }
-    await ocrPass({ doc: doc(), OPS, paper: PAPER, from: 0, recognise, cache })
+    await ocrPass({ doc: doc(), OPS, paper: PAPER, reader: READER, from: 0, recognise, cache })
     const [key] = [...puts.keys()]
-    expect(key).toMatch(new RegExp(`^${OCR_VERSION.replace(/\./g, '\\.')}\\|[0-9a-f]{64}$`))
-    expect(key).toBe(ocrKey(key!.split('|')[1]!))
-    const again = await ocrPass({ doc: doc(), OPS, paper: PAPER, from: 0, recognise, cache })
+    expect(key).toBe(ocrKey(key!.split('|')[2]!, READER))
+    expect(key!.startsWith(`${OCR_VERSION}|${READER}|`)).toBe(true)
+    // (another canvas, another key: two readings never mixed)
+    const other = await ocrPass({ doc: doc(), OPS, paper: PAPER, reader: 'onnxruntime-web@1.30.0+napi-canvas@1.0.11', from: 0, recognise, cache })
+    expect(other.stats.images).toMatchObject({ read: 1, cached: 0 })
+    expect(reads).toBe(2)
+    reads = 1
+    const again = await ocrPass({ doc: doc(), OPS, paper: PAPER, reader: READER, from: 0, recognise, cache })
     expect(reads).toBe(1)
     expect(again.stats.images).toMatchObject({ cached: 1, read: 0 })
     expect(again.stats.units).toBe(1)
     const broken = { get: async () => { throw new Error('no cache') }, put: async () => { throw new Error('no cache') } }
-    const r = await ocrPass({ doc: doc(), OPS, paper: PAPER, from: 0, recognise, cache: broken })
+    const r = await ocrPass({ doc: doc(), OPS, paper: PAPER, reader: READER, from: 0, recognise, cache: broken })
     expect(r.stats).toMatchObject({ cacheFailed: 2, units: 1 })
   })
 
   it('keeps a label of names as a table\'s cell of names is: its source, the KEPT flag', async () => {
     const doc = docOf([pageOf([['a', at(50, 400)]], { a: picture() })])
-    const r = await ocrPass({ doc, OPS, paper: PAPER, from: 0, recognise: async () => [{ ...LINE, text: 'GPT-4o' }] })
+    const r = await ocrPass({ doc, OPS, paper: PAPER, reader: READER, from: 0, recognise: async () => [{ ...LINE, text: 'GPT-4o' }] })
     expect(r.stats.kept).toBe(1)
     expect(r.units[0]?.[1]).toBe(8)
   })
