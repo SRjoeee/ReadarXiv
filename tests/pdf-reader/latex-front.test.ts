@@ -63,6 +63,7 @@ const patched = (p: ReturnType<typeof project>) => {
 describe('the front matter: its notes (1706.03762) and its names and places (the owner, 2026-09-28)', () => {
   const AUTHORS = '\\author{Alice\\thanks{Equal contribution. Listing order is random.}\\\\ Bob\\footnotemark[1] \\hspace{1mm}\\thanks{Work performed while at X.}}'
   const authors = (p: ReturnType<typeof project>) => (p.units as Unit[]).filter(u => u.kind === 'author').map(u => textOf(u).trim())
+  const places = (p: ReturnType<typeof project>) => (p.units as Unit[]).filter(u => u.kind === 'affiliation').map(u => textOf(u).replace(/\s+/g, ' ').trim())
 
   it('in the preamble: each \\thanks a footnote of its own, the names between them units of kind author', () => {
     const p = project(`\\documentclass{article}\\title{The Paper}${AUTHORS}\\begin{document}\\maketitle\nWords here.\\end{document}`)
@@ -84,18 +85,21 @@ describe('the front matter: its notes (1706.03762) and its names and places (the
     const units = p.units as (Unit & { title?: boolean })[]
     expect(units.filter(u => u.kind === 'footnote').map(textOf).sort()).toEqual(['Now elsewhere.', 'Supported by a grant.'])
     expect(units.filter(u => u.title).map(textOf)).toEqual(['The Paper'])
-    expect(authors(p)).toEqual(['Alice', 'Somewhere'])
+    expect(authors(p)).toEqual(['Alice'])
+    expect(places(p)).toEqual(['Somewhere'])
   })
 
   it('IEEEtran\'s blocks and acmart\'s parts of an affiliation are names and places; an address, a mark, a key stay', () => {
     const ieee = project('\\documentclass{article}\\begin{document}\\author{\\IEEEauthorblockN{Alice Smith\\IEEEauthorrefmark{1}}\\IEEEauthorblockA{Peking University\\\\ \\texttt{alice@pku.edu.cn}}}\\maketitle\nWords.\\end{document}')
-    expect(authors(ieee).join('|')).toMatch(/^Alice Smith.*Peking University$/)
-    expect(authors(ieee).join('|')).not.toMatch(/alice@/)
+    expect(authors(ieee)).toEqual(['Alice Smith'])
+    expect(places(ieee)).toEqual(['Peking University'])
     const acm = project('\\documentclass{article}\\begin{document}\\author{Alice}\\affiliation{\\institution{Peking University}\\city{Beijing}\\country{China}}\\email{alice@pku.edu.cn}\\maketitle\nWords.\\end{document}')
-    expect(authors(acm).join('|')).toMatch(/Alice\|Peking University.*Beijing.*China/)
-    // elsarticle's keys and values: keys an engine would translate
+    expect(authors(acm)).toEqual(['Alice'])
+    expect(places(acm)).toEqual(['Peking UniversityBeijingChina'])
+    // elsarticle's keys and values: each value of words a unit of places, the keys (an engine would translate them) as they are
     const els = project('\\documentclass{article}\\begin{document}\\author{Alice}\\affiliation{organization={Peking University}, city={Beijing}}\\maketitle\nWords.\\end{document}')
     expect(authors(els)).toEqual(['Alice'])
+    expect(places(els)).toEqual(['Peking University', 'Beijing'])
   })
 })
 
@@ -187,10 +191,10 @@ describe('a translated line of names that may not fit its box (2608.06701: Japan
     expect(marked(IEEE.replace('Somewhere\\\\ Elsewhere', 'Somewhere, \\{sl225, reyhaneh\\}@illinois.edu, or write to jatin@us.ibm.com today'))).toContain('\\{sl225, reyhaneh\\}@illinois.edu')
   })
 
-  it('a line that holds \\and is left as it is: article ends a table there, which cannot be set inside a box (2608.21180)', () => {
+  it('\\and is no unit\'s: article ends a table there, which cannot be set inside a box (2608.21180), so each author\'s block is its own', () => {
     const tex = marked('\\documentclass{article}\\author{Alice Example \\and Bob Example}\\begin{document}\\maketitle\nWords.\\end{document}')
-    expect(tex).not.toContain('\\axtwide')
-    expect(marked('\\documentclass{article}\\author{Alice Example \\And Bob Example}\\begin{document}\\maketitle\nWords.\\end{document}')).not.toContain('\\axtwide')
+    expect(tex).toMatch(/\\author\{\\axtwide\{<T\d+>\}\s*\\and\s*\\axtwide\{<T\d+>\}\}/)
+    expect(marked('\\documentclass{article}\\author{Alice Example \\And Bob Example}\\begin{document}\\maketitle\nWords.\\end{document}')).not.toMatch(/\\axtwide\{[^}]*\\And/)
   })
 
   it('nothing is wrapped where nothing is translated: the original compiles as the paper does', () => {

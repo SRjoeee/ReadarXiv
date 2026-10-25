@@ -17,6 +17,8 @@ const engineText = s => (/^[\t\n\r -~]*$/.test(s) ? s : String.fromCharCode(...n
 export const EDGES = Object.freeze(['lead', 'trail', 'inner'])
 /** a unit's table cell's keys, in their order */
 export const CELL = Object.freeze(['table', 'row', 'col', 'span', 'head'])
+/** a TikZ picture's text as the front end cuts it (latex-front.mjs tikzText): kept as it is in the bundle (bundleUnitsOf) */
+const TIKZ_KIND = 'figure'
 /** a structural name's unit (bundleUnitsOf): no page's ink, a word of the target's for the layer */
 export const NAME_KIND = 'name'
 /** a unit's kind, a lower-case word */
@@ -91,7 +93,11 @@ function pieceOf(p, idOf) {
 /**
  * The bundle's units from openPaper's paper: each unit [kind, flags, depth or null, its table cell or null, its display
  * edges or null, its pieces], by its index. Its flags TITLE, FRONT and BRACKETED as the front end set them, KEPT where
- * the paper keeps it (`kept`, nameCells); its edges displayEdges' (mt.mjs), restated here so that the reader's parse
+ * the paper keeps it (`kept`, nameCells) and on a TikZ picture's text (kind `figure`, latex-front.mjs tikzText): the layout
+ * compile marks none of them, so they own no glyph, and the picture's glyphs are the figure ink units' (layout/figure-text.mjs,
+ * kind `inkfigures`), each glyph one unit's, translated once (docs/route/orphan-text.md §5; sent as well, the same words went to
+ * the translator twice); kept in place, not dropped, so that every unit after them keeps its id (the gate pack's frozen
+ * translations name units by it); its edges displayEdges' (mt.mjs), restated here so that the reader's parse
  * loads no front end (a test holds the two equal). Language-independent and deterministic: every object written in one
  * order. Throws on a piece the front end does not make.
  * After the source's units, the paper's structural names (openPaper's `names`: source/paper-names.mjs), each a unit of kind
@@ -104,7 +110,7 @@ export function bundleUnitsOf(paper) {
   // (each name as the engine's text, as a source unit's text piece holds it: a UTF-8 file's accented name as its bytes)
   const names = (paper.names ?? []).map(s => [NAME_KIND, 0, null, null, null, [[TEXT, engineText(s)]]])
   return [...paper.units.map(u => {
-    const flags = (u.title ? UNIT_FLAG_BITS.TITLE : 0) | (u.front ? UNIT_FLAG_BITS.FRONT : 0) | (u.bracketed ? UNIT_FLAG_BITS.BRACKETED : 0) | (paper.kept.has(u) ? UNIT_FLAG_BITS.KEPT : 0)
+    const flags = (u.title ? UNIT_FLAG_BITS.TITLE : 0) | (u.front ? UNIT_FLAG_BITS.FRONT : 0) | (u.bracketed ? UNIT_FLAG_BITS.BRACKETED : 0) | (paper.kept.has(u) || u.kind === TIKZ_KIND ? UNIT_FLAG_BITS.KEPT : 0)
     const c = u.cell
     const edges = {}
     for (const k of EDGES) if (typeof u[k] === 'string') edges[k] = u[k]

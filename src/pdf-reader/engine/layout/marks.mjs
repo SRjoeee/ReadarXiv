@@ -727,14 +727,26 @@ export const POINTS_TEX = [
   '\\newif\\ifaxt@bodied',
   '\\ifdefined\\AddToHook\\AddToHook{cmd/@makecol/before}{\\ifvoid\\@cclv\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@cclv\\global\\setbox\\@cclv\\vbox to\\ht\\@cclv{\\axt@point{bs\\axt@bn}\\penalty\\@M\\unvbox\\@cclv\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\endgroup\\global\\axt@bodiedtrue\\fi}\\fi',
   '\\ifdefined\\AddToHook\\AddToHook{cmd/@outputpage/before}{\\ifaxt@bodied\\else\\ifvoid\\@outputbox\\else\\axt@bump\\begingroup\\ifvbox\\@outputbox\\boxmaxdepth\\dp\\@outputbox\\global\\setbox\\@outputbox\\vbox to\\ht\\@outputbox{\\axt@point{bs\\axt@bn}\\penalty\\@M\\unvbox\\@outputbox\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\else\\global\\setbox\\@outputbox\\hbox to\\wd\\@outputbox{\\axt@point{bs\\axt@bn}\\unhbox\\@outputbox\\axt@point{be\\axt@bn}}\\fi\\endgroup\\fi\\fi\\global\\axt@bodiedfalse}\\fi',
-  '\\AtBeginDocument{\\ifdefined\\@endfloatbox\\let\\axt@efb\\@endfloatbox\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}\\fi}',
+  // (a table's float says so, `ft<n>` after its opening point: \\@captype is `table` where \\@endfloatbox closes it, a table
+  // environment's or a sidewaystable's; the ledger's class `tables` for the text no unit owns in it, layout/ledger.mjs)
+  '\\def\\axt@tabletype{table}\\def\\axt@ftype{\\ifx\\@captype\\axt@tabletype\\axt@point{ft\\axt@bn}\\fi}',
+  '\\AtBeginDocument{\\ifdefined\\@endfloatbox\\let\\axt@efb\\@endfloatbox\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\axt@ftype\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}\\fi}',
   '\\AtBeginDocument{\\ifdefined\\pgfsys@beginpicture\\let\\axt@pgfbp\\pgfsys@beginpicture\\def\\pgfsys@beginpicture{\\axt@pgfbp\\axt@point{zs}}\\let\\axt@pgfep\\pgfsys@endpicture\\def\\pgfsys@endpicture{\\axt@point{ze}\\axt@pgfep}\\fi}',
-  // (each paragraph's start, q<n> at LaTeX's para/begin, inside its indentation box: \\IndentBox, not yet put back, wrapped
-  // whole with the point before it, of its size; never a node of the paragraph's own, which would make a paragraph whose
-  // indent a \\lastbox takes (wrapfig's \\WF@floathand, then \\@@par) or a \\noindent before $$ no longer empty, a line
-  // of its own: 2609.26457 p8 on TeX Live 2023, 2026-10-25. A paragraph with no indent (\\noindent, an \\item's, the first
-  // after a heading whose class takes it) carries none and reads as the one before; the ledger's blocks, orphan-text.md §4)
-  '\\gdef\\axt@pq{0}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{para/begin}{\\ifvoid\\IndentBox\\else\\xdef\\axt@pq{\\the\\numexpr\\axt@pq+1\\relax}\\global\\setbox\\IndentBox\\hbox{\\axt@point{q\\axt@pq}\\box\\IndentBox}\\fi}\\fi\\fi',
+  // (each paragraph's start, q<n>, whatever its indent: at LaTeX's para/before, in vertical mode once the paragraph TeX began is
+  // taken back and before it begins again, the point in the vertical list before its first line and a \\penalty\\@M after it,
+  // so that no place to break is made (the glue after it, the paragraph's zero \\parskip and its \\baselineskip, follows a
+  // penalty: neither is one; at a page's or a \\vsplit's top the page builder drops the penalty and the glue past the point as
+  // it drops them past nothing, \\topskip the same). Never a node of the paragraph's own, which would make a paragraph whose
+  // indent a \\lastbox takes (wrapfig's \\WF@floathand, then \\@@par) or a \\noindent before $$ no longer empty, a line of its
+  // own (2609.26457 p8 on TeX Live 2023), and never inside the indentation box alone, which a paragraph with no indent has none
+  // of (\\noindent: a contents entry's, a footnote's, a note's, a table's cell) and which \\everypar takes back where a class
+  // removes the indent (an \\item's label, the first paragraph after a heading, a paragraph after a display): those carried no
+  // point and read as the one before. Where the vertical list is an empty inner one — a box's first item, whose height a
+  // \\vtop takes (a minipage's or a \\parbox's [t], a p column's cell) — the point goes inside \\IndentBox at para/begin, as it
+  // did, and a paragraph there with no indent carries none; the ledger's blocks, orphan-text.md §4)
+  '\\gdef\\axt@pq{0}\\newif\\ifaxt@pqset\\def\\axt@pqnext{\\xdef\\axt@pq{\\the\\numexpr\\axt@pq+1\\relax}}',
+  '\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{para/before}{\\global\\axt@pqsetfalse\\ifinner\\ifnum\\lastnodetype<0 \\else\\axt@pqv\\fi\\else\\axt@pqv\\fi}\\def\\axt@pqv{\\axt@pqnext\\axt@point{q\\axt@pq}\\penalty\\@M\\global\\axt@pqsettrue}',
+  '\\AddToHook{para/begin}{\\ifaxt@pqset\\else\\ifvoid\\IndentBox\\else\\axt@pqnext\\global\\setbox\\IndentBox\\hbox{\\axt@point{q\\axt@pq}\\box\\IndentBox}\\fi\\fi\\global\\axt@pqsetfalse}\\fi\\fi',
 ].join('')
 
 /**

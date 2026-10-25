@@ -634,6 +634,16 @@ describe('LAYOUT_TEX', () => {
     for (const arg of args) expect(MARK_NAME.test(arg), arg).toBe(true)
     for (const key of NAME_KEYS) expect(key, key).toMatch(/^[a-z]{1,16}$/)
   })
+  it('LAYOUT_TEX sets each paragraph\'s point at para/before, whatever its indent, in its indentation box only first in a box', () => {
+    // every paragraph TeX begins (\noindent's, an \item's, the first after a heading: lab/pdf/spikes/layout-marks-cases.mjs
+    // ONLY=paras), the point in the vertical list before its first line with a \penalty10000 after it, so that no place to break
+    // is made; where the list is an empty inner one (a \vtop's first item: its height) the indentation box's, as before
+    expect(POINTS_TEX).toContain('\\AddToHook{para/before}{\\global\\axt@pqsetfalse\\ifinner\\ifnum\\lastnodetype<0 \\else\\axt@pqv\\fi\\else\\axt@pqv\\fi}')
+    expect(POINTS_TEX).toContain('\\def\\axt@pqv{\\axt@pqnext\\axt@point{q\\axt@pq}\\penalty\\@M\\global\\axt@pqsettrue}')
+    expect(POINTS_TEX).toContain('\\AddToHook{para/begin}{\\ifaxt@pqset\\else\\ifvoid\\IndentBox\\else\\axt@pqnext\\global\\setbox\\IndentBox\\hbox{\\axt@point{q\\axt@pq}\\box\\IndentBox}\\fi\\fi\\global\\axt@pqsetfalse}')
+    // a kernel with no paragraph hooks or no \IndentBox sets none
+    expect(POINTS_TEX).toContain('\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{para/before}')
+  })
   it('LAYOUT_TEX sets a point beside each destination, around each column\'s body and around each float\'s box', () => {
     // a rendering intent named after the destination, in each engine's literal; none in DVI
     expect(POINTS_TEX).toContain('\\ifdefined\\XeTeXrevision\\def\\axt@point#1{\\special{pdf:code /axt-#1 ri}}')
@@ -653,7 +663,9 @@ describe('LAYOUT_TEX', () => {
     expect(POINTS_TEX).toContain('\\def\\axt@vtake{\\ifcase\\numexpr\\lastnodetype-10\\relax\\or\\expandafter\\axt@vtg\\or\\expandafter\\axt@vtk\\or\\expandafter\\axt@vtp\\fi}')
     // a float's points around its finished box (\@endfloatbox closes it): at its start a point would give its first
     // paragraph a \parskip (2608.01890's figures)
-    expect(POINTS_TEX).toContain('\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}')
+    // and a table's float its type, `ft<n>` after its opening point, where TeX's \@captype is `table` (the ledger's class `tables`)
+    expect(POINTS_TEX).toContain('\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\axt@ftype\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}')
+    expect(POINTS_TEX).toContain('\\def\\axt@tabletype{table}\\def\\axt@ftype{\\ifx\\@captype\\axt@tabletype\\axt@point{ft\\axt@bn}\\fi}')
     expect(POINTS_TEX).not.toContain('@floatboxreset')
     // after the destination's own definition, inside LAYOUT_TEX; its count a macro, no register; one line
     expect(LAYOUT_TEX.indexOf(POINTS_TEX)).toBeGreaterThan(LAYOUT_TEX.indexOf('\\def\\axt@dest#1'))

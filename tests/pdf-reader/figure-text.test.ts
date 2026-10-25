@@ -8,6 +8,9 @@ import { POINTS_TEX } from '@/pdf-reader/engine/layout/marks.mjs'
 import { CLASSES, FIGURE_KIND, TOGGLE_DEFAULTS, unitClass } from '@/pdf-reader/engine/rules/content-classes.mjs'
 import { figureUnits } from '@/pdf-reader/engine/pipeline/page-pass.mjs'
 import { UNIT_FLAG_BITS } from '@/pdf-reader/engine/layer-proto/units.mjs'
+import { bundleUnitsOf } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
+import { layerIds, toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
+import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { DOCUMENT_OPTIONS, renderPage, wrapped } from './helpers/ocg-pdfs'
 
 // The text inside vector figures (docs/route/orphan-text.md stage 5, the content class `figures`): our final pass's glyphs that
@@ -191,6 +194,18 @@ describe('the figure units on the wire (page-pass.mjs figureUnits)', () => {
     expect(bundle.slice(1).map(u => [u[0], u[1], u[5]])).toEqual([[FIGURE_KIND, 0, [[0, 'Validation loss']]], [FIGURE_KIND, UNIT_FLAG_BITS.KEPT, [[0, 'HellaSwag']]]])
     expect([...rows.keys()]).toEqual([1, 2])
     expect(rows.get(1)?.[0]?.slice(0, 3)).toEqual([1, 0, 1])
+  })
+  it('a TikZ picture\'s text the front end cuts (kind figure) is kept in the bundle: never sent nor awaited, each glyph one owner\'s', () => {
+    // the layout compile marks none of them, so the picture's glyphs are the figure ink units' (inkfigures), translated once;
+    // kept in place, so that the units after them keep their ids
+    const tex = '\\documentclass{article}\n\\usepackage{tikz}\n\\begin{document}\nThe model is shown in the figure below.\n\n\\begin{tikzpicture}\\node at (0,0) {Masked language model};\\end{tikzpicture}\n\nAnd the paragraph after it.\n\\end{document}\n'
+    const paper = openPaper(new Map([['main.tex', new TextEncoder().encode(tex)]]))
+    const kinds = paper.units.map(u => u.kind), fig = kinds.indexOf('figure')
+    expect(kinds).toEqual(['para', 'figure', 'para'])
+    const bundle = { units: bundleUnitsOf(paper) }
+    expect(bundle.units[fig]?.[1]).toBe(UNIT_FLAG_BITS.KEPT)
+    expect(toTranslate(bundle, 'zh')).toEqual([0, 2])
+    expect(layerIds(bundle, 'zh')).toEqual([0, 2])
   })
 })
 

@@ -312,6 +312,15 @@ describe('pageInk', () => {
     expect(paras).toEqual([{ name: 'q1', glyph: 0, box: 0 }, { name: 'q2', glyph: 2, box: 0 }])
   })
 
+  it("keeps a table's float's point (ft<n>) apart too, its float's opening point (fs<n>) among the marks' points", () => {
+    const { points, tables } = ink([
+      [OPS.setRenderingIntent, [{ name: 'axt-fs3' }]], [OPS.setRenderingIntent, [{ name: 'axt-ft3' }]], ...text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A'))),
+      [OPS.setRenderingIntent, [{ name: 'axt-fe3' }]], [OPS.setRenderingIntent, [{ name: 'axt-ft3x' }]],
+    ])
+    expect(points).toEqual([{ name: 'fs3', glyph: 0, box: 0 }, { name: 'fe3', glyph: 1, box: 0 }, { name: 'ft3x', glyph: 1, box: 0 }])
+    expect(tables).toEqual([{ name: 'ft3', glyph: 0, box: 0 }])
+  })
+
   it('a hostile list gives no number that is not finite, and never throws', () => {
     const { glyphs, boxes } = ink([
       [OPS.transform, [Number.NaN, 0, 0, 1, 0, 0]], ...text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A'))), [OPS.constructPath, [OPS.fill, [null], Float32Array.from([0, 0, 1, 1])]],

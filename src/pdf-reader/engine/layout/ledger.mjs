@@ -13,6 +13,9 @@
 //   2. the other glyphs, in stream order, make lines: a glyph joins the line before it where both are no unit's, in one region
 //      and one zone, on one baseline (within LINE_DY of their size: scripts and sub-scripts too) and no further right than
 //      LINE_GAP of its size; each line is given one class by the first rule of RULES it meets, and so is every glyph of it.
+//      A line inside a table's float (its innermost float's opening point `fs<n>` followed by `ft<n>`, marks.mjs POINTS_TEX: TeX's
+//      \\@captype a table there) is a table's text no unit cut, the class `tables` (a row of the table, docs/route/orphan-text.md §5),
+//      unless a rule before says it is no text to translate (numbers alone, a formula, code).
 // A page our compile left unbracketed (no column body anywhere on it: a page not read, an included page) has no "outside the
 // bodies": its lines are read as a body's. The heads and the foot are read by stream order and one baseline, as folioOf reads a
 // folio; stage 2 brackets them by points of their own (the note's §7).
@@ -53,6 +56,8 @@ const ENTRY_KINDS = new Set(['reference', 'refnames'])
 /** a page's column mark (MARK_DEF's c<n>-<k>, set by shipout/background before anything of the page): no mark of its text */
 const COLUMN = /^c[12]-\d+$/
 const BRACKET = /^b[se]\d+$/
+/** a float's opening and closing points (marks.mjs POINTS_TEX), its number */
+const FLOAT = /^f([se])(\d+)$/
 /** the letters a glyph spells: a ligature's each (ﬁ, ﬄ: NFKC), whether PDF.js gives it as one character or as its letters */
 const LETTERS = /\p{L}/gu
 const lettersOf = u => (u ? (u.normalize('NFKC').match(LETTERS) ?? []).length : 0)
@@ -69,6 +74,7 @@ export const RULES = Object.freeze([
   ['contents', l => l.zone === 'contents'],
   ['math', l => l.math > 0 && ((l.words < MATH_WORDS && (l.math >= MATH_SHARE * l.n || l.relation)) || (l.relation && l.words <= DISPLAY_WORDS && l.math >= DISPLAY_SHARE * l.n))],
   ['code', l => l.mono >= MONO_SHARE * l.n],
+  ['tables', l => l.table],
   ['figures', l => l.depth > 0],
   ['orphan', () => true],
 ].map(([cls, test]) => Object.freeze({ cls, code: CLASS_CODE[cls], test })))
@@ -132,6 +138,17 @@ export function ledgerOf(pages, own, { units = null } = {}) {
         paraAt[g] = para
       }
     }
+    // each glyph's float a table's or not: its innermost float's (fs<n> … fe<n>, in stream order) number among the page's table
+    // floats (`tables`, ft<n>)
+    const tableFloat = new Set((pg.tables ?? []).map(t => t.name.slice(2)))
+    const inTable = new Uint8Array(n)
+    if (tableFloat.size) {
+      const stack = []
+      for (let q = 0, g = 0; g < n; g++) {
+        for (; q < P.length && P[q].glyph <= g; q++) { const m = FLOAT.exec(P[q].name); if (m) { if (m[1] === 's') stack.push(m[2]); else { const at = stack.lastIndexOf(m[2]); if (at >= 0) stack.splice(at) } } }
+        if (stack.length && tableFloat.has(stack.at(-1))) inTable[g] = 1
+      }
+    }
     let line = null
     const close = () => {
       if (!line) return
@@ -152,7 +169,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
       if (line && !(line.region === region && line.zone === zones[g] && Math.abs(x.y - line.y) <= LINE_DY * Math.max(size, line.size) && x.x0 >= line.x0 - size && x.x0 - line.x1 <= LINE_GAP * size)) close()
       if (!line) {
         const depth = region >> 1, body = (region & 1) === 1
-        line = { gs: [], region, zone: zones[g], para: paraAt[g], y: x.y, size, x0: x.x0, x1: x.x1, n: 0, letters: 0, words: 0, pairs: 0, math: 0, mono: 0, form: 0, relation: false, depth, outside: bracketed && !body && depth === 0, head: g < first, foot: g >= footFrom }
+        line = { gs: [], region, zone: zones[g], para: paraAt[g], y: x.y, size, x0: x.x0, x1: x.x1, n: 0, letters: 0, words: 0, pairs: 0, math: 0, mono: 0, form: 0, relation: false, depth, outside: bracketed && !body && depth === 0, head: g < first, foot: g >= footFrom, table: depth > 0 && inTable[g] === 1 }
       }
       line.gs.push(g); line.x1 = Math.max(line.x1, x.x1); line.size = Math.max(line.size, size)
       if (x.blank || !/\S/u.test(x.u ?? '')) continue

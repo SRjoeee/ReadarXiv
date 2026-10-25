@@ -186,9 +186,12 @@ export function readOutlines(table) {
  *  which PDF.js keeps in the operator list with its name (it drops marked-content points, DP and MP) and which its text
  *  layer passes over. The name: a mark's, or a bracket's (bs, be, fs, fe and a number) */
 const POINT = /^axt-([A-Za-z0-9.-]{1,64})$/
-/** a paragraph's point (marks.mjs POINTS_TEX: `q<n>` at LaTeX's para/begin): kept apart (`paras`), so that no reader of the marks
+/** a paragraph's point (marks.mjs POINTS_TEX: `q<n>` at LaTeX's para/before): kept apart (`paras`), so that no reader of the marks
  *  meets it among their points; the ledger reads it (layout/ledger.mjs) */
 export const PARA_POINT = /^q\d+$/
+/** a table's float's point (marks.mjs POINTS_TEX: `ft<n>` after its opening point `fs<n>`): kept apart (`tables`) as a paragraph's
+ *  is; the ledger reads it (layout/ledger.mjs: the float `n` a table's) */
+export const TABLE_POINT = /^ft\d+$/
 
 /**
  * A page's ink: { glyphs, boxes, points, boxAt, capped, timedOut, degraded, mergedAt, rotated }. `glyphs`: each glyph
@@ -238,7 +241,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], ...(indices ? { paths: [], shows: 0 } : {}), ...(turned ? { turned: [], shapes: new Map(), pictures: [] } : {}), capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true }
   const fnArray = ops?.fnArray ?? [], argsArray = ops?.argsArray ?? []
   const n = Math.min(fnArray.length, OPS_CAP)
-  const glyphs = [], boxes = [], points = [], boxAt = [], paths = [], paras = [], turnedOut = [], pictures = []
+  const glyphs = [], boxes = [], points = [], boxAt = [], paths = [], paras = [], tables = [], turnedOut = [], pictures = []
   // (the guards: reading stops once `stop` is set: `over` past glyphsMax, `deep` ink placed in a state past STACK_MAX not
   // kept, `many` past stepsMax, the three caps; `late` past msMax, the backstop. The clock is read once every CLOCK_EVERY steps)
   let stop = false, over = false, deep = false, many = false, late = false, steps = 0, check = CLOCK_EVERY
@@ -647,10 +650,10 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       case INTENT: {
         const name = typeof a[0] === 'string' ? a[0] : a[0] && typeof a[0] === 'object' ? a[0].name : null
         const m = typeof name === 'string' ? POINT.exec(name) : null
-        // (a picture's points apart, `pictures`, and a paragraph's, `paras`: no mark of any unit's, never among the points the
-        // marks and the ownership read)
+        // (a picture's points apart, `pictures`, a paragraph's, `paras`, and a table's float's, `tables`: no mark of any unit's,
+        // never among the points the marks and the ownership read)
         if (m && (m[1] === PICTURE_START || m[1] === PICTURE_END)) { pictures.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 }); picture = m[1] === PICTURE_START ? picture + 1 : Math.max(0, picture - 1); if (m[1] === PICTURE_START) pictureIds.push(++pictureSeq); else pictureIds.pop() }
-        else if (m) (PARA_POINT.test(m[1]) ? paras : points).push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 })
+        else if (m) (PARA_POINT.test(m[1]) ? paras : TABLE_POINT.test(m[1]) ? tables : points).push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 })
         break
       }
       default:
@@ -665,7 +668,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       if (indices) paths.push(MERGED)
     }
   }
-  return { glyphs, boxes, points, boxAt, paras, ...(indices ? { paths, shows: showAt + 1 } : {}), ...(turned ? { turned: turnedOut, shapes, pictures } : {}), capped: fnArray.length > OPS_CAP || over || deep || many, timedOut: late, degraded: tiles !== null, mergedAt, rotated: false }
+  return { glyphs, boxes, points, boxAt, paras, tables, ...(indices ? { paths, shows: showAt + 1 } : {}), ...(turned ? { turned: turnedOut, shapes, pictures } : {}), capped: fnArray.length > OPS_CAP || over || deep || many, timedOut: late, degraded: tiles !== null, mergedAt, rotated: false }
 }
 
 /** why a page's ink (pageInk's) is not read whole, or null where it is: 'rotated' (nothing read), 'capped' (past a cap) or

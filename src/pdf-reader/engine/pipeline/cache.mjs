@@ -105,7 +105,7 @@ export const inSourceOf = u => (u?.inSource ? { inSource: true } : {})
  * there, counted on every visit to the copy as on the one that made it (the review of 2026-10-04, I-6). From the
  * record's units as they are: no field of the record's is added for it
  */
-export const passagesInSource = units => units.filter(u => u?.inSource && u.kind !== 'author').length
+export const passagesInSource = units => units.filter(u => u?.inSource && u.kind !== 'author' && u.kind !== 'affiliation').length
 
 /**
  * A run again's seed: the copy's (seedFrom), with what the visit's last run made over it (runLive's results), so that

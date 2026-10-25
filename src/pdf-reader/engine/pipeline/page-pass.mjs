@@ -35,7 +35,7 @@ import { bundleWithInk, inkAnchors, inkOfHost, inkWithinChunks, layoutWithInk, s
 import { isMemoryError } from './memory.mjs'
 
 /** units TeX sets away from where the source has them (anchors.mjs `floating`), as the maker and the web's left take them */
-const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure'])
+const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure', 'affiliation'])
 const why = e => String(e?.message ?? e).slice(0, 200)
 /** the why each refusal word says where none was given */
 const PLAIN_WHY = Object.freeze({ compile: 'the marked compile was refused', texlive: 'the paper needs another TeX Live', engine: 'the host does not run the paper\'s compiler', marks: 'the marked original could not be read', final: 'there is no final pass of the marked original', boxes: 'our pages are not arXiv\'s', wrap: 'our pages could not be wrapped by optional content' })

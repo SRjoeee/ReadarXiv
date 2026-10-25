@@ -2552,9 +2552,7 @@ takes a figure's text.
 **The ink units (stages 2 and 3, BUNDLE5 `'10'`, LAYOUT `'21'`, REMOVAL `'11'`).** Text no source unit owns — the running heads and
 feet, the contents and the lists, a note with no unit, prose the front end did not cut — is made units of our own glyphs in the
 wrap (`layout/ink-units.mjs`), from the ledger's lines: a head's line one, a contents entry or a block one paragraph of TeX's (the
-layout compile's point `q<n>` at LaTeX's para/begin, inside the paragraph's indentation box so that no paragraph's list
-changes, which pageInk keeps apart from the marks' points as `paras`; a paragraph with no indentation carries none and reads
-as the one before), each of its
+layout compile's point `q<n>`, which pageInk keeps apart from the marks' points as `paras`), each of its
 class's kind (`inkheads`, `inkcontents`, `inknotes`, `inkorphan`, after the source kinds in UNIT_KINDS; `inknames` a block
 most of whose letters are an author unit's words, of the names toggle as that unit is), its numbering, leaders
 and page number left the original's ink, its math and typewriter runs (and a web address in any face) kept placeholders. One
@@ -2567,6 +2565,32 @@ byte for byte as before), on the left by arXiv's tokens on their lines, in the l
 are an option of the layer's open (`classes`, `TOGGLE_DEFAULTS`); a change of them is an open again over the same documents, parts
 and rows (`layer-side.mjs` `setClasses`), each laid page kept until the new door's commits: 81 to 384 ms to the two pages in view
 over 14 page pairs (the layer gate's jump, `--perf`). The web's half is `docs/route/orphan-text.md` §8.
+
+**Every paragraph's point, whatever its indent (LAYOUT `'23'`).** The point `q<n>` is set at LaTeX's para/before, in vertical
+mode once the paragraph TeX began is taken back and before it begins again: a whatsit in the vertical list before the
+paragraph's first line, a `\penalty10000` after it (marks.mjs POINTS_TEX). It was set inside the paragraph's indentation box
+at para/begin, so that no paragraph's own list changed (a `\noindent` before `$$` or a paragraph whose indent wrapfig takes
+with `\lastbox` would have become a line of its own); a paragraph with no indentation box carried none and read as the one
+before it — every `\noindent` paragraph (a contents entry's, a note's), an `\item`'s and the first after a heading or a display,
+whose box `\everypar` takes back — so that two such paragraphs one under the other were one block. The vertical list is no
+paragraph's list, and the penalty makes no place to break: the glue after the point (the paragraph's zero `\parskip`, its
+`\baselineskip`) follows a penalty, and at a page's or a `\vsplit`'s top the page builder drops the penalty and that glue past
+a whatsit as it drops them past nothing, `\topskip` the same. Where the vertical list is an empty inner one — a box's first
+item, whose height a `\vtop` takes (a minipage's or a `\parbox`'s `[t]`, a p column's cell) — the point stays inside the
+indentation box at para/begin, and a paragraph there with no indent (a footnote's, `\@makefntext`'s `\noindent`) carries none.
+Held by `lab/pdf/spikes/layout-marks-cases.mjs` `ONLY=paras` (pdfLaTeX, XeLaTeX and latex with dvipdfmx, with hyperref and
+without: every text item where it was, TeX's DVI to the sp, and each paragraph's point at its first glyph: 12 paragraph starts
+of 17 had none before, on every engine).
+
+**A table no unit cuts (stage 7, LAYOUT `'23'`).** A table inside a table's float whose cells the front end did not cut (a table
+a package writes at the compile, a macro's, a CSV's) was the ledger's `figures`, counted and drawn nowhere. The layout compile
+names a table's float: `ft<n>` after its opening point `fs<n>` where TeX's `\@captype` is `table` at `\@endfloatbox` (a
+table environment's, a sidewaystable's), kept apart by pageInk as `tables`. A line no unit owns in such a float, not a formula's,
+code's or numbers' alone, is the class `tables` (layout/ledger.mjs), and its row is cut into its cells, each run of glyphs no
+further apart than `CELL_GAP` 0.6 of their size (the columns' room, `\tabcolsep` twice, is more, a word's space less: a figure
+label's `RUN_GAP`), each cell spelling a word an ink unit of kind `inktables` (class `tables`, toggle `tables`: layout/ink-units.mjs
+rule 2a), its numbers' cells the original's ink as a number is; a cell's next line joins it only where the cell opened a paragraph
+of its own (a p column's), never an l, c or r column's, all of one paragraph, the table's. The cut cells stay the source's units.
 
 ### 19.11 Structural names: a head's, a reference's, in the target's words
 
@@ -2667,6 +2691,11 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   none where the part has no layout; the key there only where the part has one, so that a part of none is 10's as the ink units
   write it, and none in a part of 7's or 9's). The source units and their chunks are as before, so PIPELINE stays 28. The host
   passes `ours.wrap.figures` (the web's `ourWrap` adds `figures: r.figures`).
+- **One owner a glyph.** The front end cuts a TikZ picture's texts into units of kind `figure` too (latex-front.mjs `tikzText`,
+  for the TeX page), which the layout compile never marks, so they own no glyph; translated beside the figure units that draw
+  the same words, they went to the translator twice. They are kept in the bundle (layer-proto/units.mjs bundleUnitsOf: the KEPT
+  flag), never sent nor awaited, the picture's glyphs the figure units' alone; kept in place, not dropped, so that every unit
+  after them keeps its id (PIPELINE 29, unreleased: the gate pack's frozen translations name units by it).
 - **Drawn** (`run.mjs paintFigures`, once a page's figures' rows are in: the page waits for them as for its units', `rowsFor`
   ranks them with its page): its translation's text in a face of its font's family, weight and slant, in its fill, on its run's
   baseline, turned by its angle (`layer2.mjs svgOfFigure`), by the fit rule (`layer-proto/figure-fit.mjs`): at its size, shrunk
@@ -2726,6 +2755,24 @@ matter's authors and the names inside references, which follow "names" and not "
 - **Names are translated for every target** (`layer-proto/rows.mjs` `toTranslate`, TRANSLATE_VERSION 6): the author block's units
   are sent whatever the language, as every unit is but a table's kept names; they are laid as any unit, and stay the original's
   where the wrap cannot hide their ink (`unhidden`).
+- **The names, apart from the places** (stage 7, PIPELINE 29 and LAYOUT 23): an author block's affiliations, institutions and
+  addresses are prose for a reader, the body's, always translated; only the authors' names are the names' (kind `author`, the
+  toggle `names`). Read from the TeX the source holds (latex-front.mjs `frontBlock`), never from the page: the command — `\author`
+  and its kin of the role table (`FRONT_NAMES`: ICML's `\icmlauthor`, IEEEtran's `\IEEEauthorblockN`) open with names, every
+  other author block is places throughout (`\affil`, `\affiliation`, `\institute`, `\address`, `\IEEEauthorblockA`, ICML's
+  `\icmlaffiliation`, AAAI's `\affiliations`, REVTeX's `\altaffiliation`); in an `\author`, each author's block (between `\and`,
+  `\And`, `\AND`) is the rows of the tabular LaTeX sets it in, its names the first row and its places the rest (NeurIPS's
+  `Name\thanks{…} \\ Department \\ University`), but where its places are a numbered list, each row opening with its mark
+  (`$^1$University of X`), every row before the first such row is names (names that run over two rows), and a row that holds an
+  author's note (`\thanks`, `\footnotemark`) is names; a row an affiliation's mark opens never is. Each row a unit of its own
+  (kind `affiliation`), marked in the layout compile as the names are (`frontMarks`); elsarticle's affiliation of keys and values
+  each value of words a unit, its marks inside the value's braces (a postcode, the keys and the separators as they are);
+  authblk's `\authorcr` begins another row of names, its places its `\affil`'s. An e-mail, a web address, an ORCID written out
+  stay the original's ink, placeholders as everywhere (`keepAddresses`). The block's names keep the number the whole block had,
+  and the places are numbered after every other unit of the source, before the bibliography's entries (`entriesLast`), so that
+  every unit the gate pack's frozen translations name keeps its number; a place is searched on arXiv's page as a float is (the
+  maker's and the page pass's `FLOATING`: a class sets its places where it likes, amsart's addresses at the paper's end). The TeX
+  page keeps the places with the names where it kept the names (`keptFor`, `\axtwide`, the strategies that set no author block).
 - **The toggles** are stage 2's (`classes` at the door's open and the layer side's, `setClasses`, TOGGLE_DEFAULTS: references and
   names off): an entry's units and the author block's are of the classes `references` and `names` (UNIT_CLASS), so that with
   their toggle off no page awaits their rows, the door takes none, and the translating indicator marks none (it reads the same

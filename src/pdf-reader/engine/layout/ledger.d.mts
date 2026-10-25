@@ -14,7 +14,7 @@ export declare const ORPHAN_LINES_MAX: number
 export interface LedgerLine {
   gs: number[]; region: number; zone: 'contents' | 'references' | 'index' | null; para: number | null; y: number; size: number; x0: number; x1: number
   n: number; letters: number; words: number; pairs: number; math: number; mono: number; form: number; relation: boolean; depth: number
-  outside: boolean; head: boolean; foot: boolean
+  outside: boolean; head: boolean; foot: boolean; table: boolean
 }
 /** the line rules, in order */
 export declare const RULES: readonly { readonly cls: ClassId; readonly code: number; readonly test: (l: LedgerLine) => boolean }[]
@@ -25,6 +25,8 @@ export interface LedgerPage {
   points?: { name: string; glyph: number; box: number }[]
   /** the paragraphs' points (ink.mjs `paras`) */
   paras?: { name: string; glyph: number; box: number }[]
+  /** the table floats' points (ink.mjs `tables`: ft<n>, the float n a table's) */
+  tables?: { name: string; glyph: number; box: number }[]
 }
 export interface OrphanLine { page: number; text: string; letters: number; x0: number; x1: number; y: number }
 export interface Ledger {

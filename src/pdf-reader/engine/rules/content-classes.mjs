@@ -16,18 +16,18 @@ export const TOGGLES = Object.freeze(['always', 'heads', 'tables', 'figures', 'r
  * order (CLASS_IDS): a code is an index here, kept in a Uint8Array a page
  */
 export const CLASSES = Object.freeze({
-  body: Object.freeze({ toggle: 'always', state: 'built', glyphs: true, truth: "the source's units (prose, headings, captions, footnotes, abstract, title), placed by TeX's marks" }),
+  body: Object.freeze({ toggle: 'always', state: 'built', glyphs: true, truth: "the source's units (prose, headings, captions, footnotes, abstract, title, and an author block's affiliations, institutions and addresses: kind affiliation), placed by TeX's marks" }),
   generated: Object.freeze({ toggle: 'always', state: 'built', glyphs: true, truth: "babel's names (\\refname, \\contentsname…), marked where TeX sets them; a theorem head's and a generated reference's names, the target's packages' or the paper's own name units' (rules/tex-names.mjs, source/paper-names.mjs)" }),
   contents: Object.freeze({ toggle: 'always', state: 'planned', glyphs: true, truth: "the contents and the lists of figures and tables, between a list's name and the next unit; their rows the headings' and captions'" }),
   notes: Object.freeze({ toggle: 'always', state: 'planned', glyphs: true, truth: "text below the column bodies no unit owns: a note with no unit, a margin's" }),
   orphan: Object.freeze({ toggle: 'always', state: 'planned', glyphs: true, truth: 'text no unit owns and no other class explains: a front-end defect, or text TeX generates (a theorem head)' }),
   heads: Object.freeze({ toggle: 'heads', state: 'planned', glyphs: true, truth: 'the output routine\'s head, shipped before the page\'s first mark, and its foot, after the last' }),
-  tables: Object.freeze({ toggle: 'tables', state: 'built', glyphs: true, truth: "the source's table cells (units of kind cell)" }),
+  tables: Object.freeze({ toggle: 'tables', state: 'built', glyphs: true, truth: "the source's table cells (units of kind cell); a table no unit cuts, in a table's float (TeX's \\@captype there, the point ft<n>), its rows' cells ink units of kind inktables (layout/ink-units.mjs)" }),
   figures: Object.freeze({ toggle: 'figures', state: 'built', glyphs: true, truth: "glyphs our compile sets in a vector figure, no unit's: an included PDF's (a form XObject) and a TikZ or pgfplots picture's (between its points), cut into ink units of kind `inkfigures` (layout/figure-text.mjs), each drawn in its run's box; a float's other text no unit owns, counted" }),
   ocr: Object.freeze({ toggle: 'figures', state: 'planned', glyphs: false, truth: "a bitmap figure's text, read and placed by OCR (PP-OCR, as the extension's: DESIGN §15.3); the owner's OK of 2026-10-25" }),
   references: Object.freeze({ toggle: 'references', state: 'built', glyphs: true, truth: "the bibliography's entries, each \\bibitem's text a unit (kind reference) as the compile reads it: the paper's thebibliography or its .bbl, marked like the body; its label, numbers, web addresses and formulas the original's ink. A bibliography no \\bibitem sets (biblatex's), between its name and the next unit" }),
   index: Object.freeze({ toggle: 'references', state: 'planned', glyphs: true, truth: 'an index or a glossary, between its name and the next unit (proposed: back matter, with the references)' }),
-  names: Object.freeze({ toggle: 'names', state: 'built', glyphs: true, truth: "the author block's units (names and places, kind author) and an entry's names in the bibliography (its first block, kind refnames), translated once whatever the target" }),
+  names: Object.freeze({ toggle: 'names', state: 'built', glyphs: true, truth: "the author block's names (kind author; its places are the body's, kind affiliation: latex-front.mjs frontBlock) and an entry's names in the bibliography (its first block, kind refnames), translated once whatever the target" }),
   math: Object.freeze({ toggle: 'never', state: 'never', glyphs: true, truth: 'a math font\'s glyphs, a formula\'s line no unit owns' }),
   code: Object.freeze({ toggle: 'never', state: 'never', glyphs: true, truth: "a typewriter font's lines no unit owns: code, a log, a URL" }),
   symbols: Object.freeze({ toggle: 'never', state: 'never', glyphs: true, truth: 'a line with no letter: numbers, a folio, a symbol' }),
@@ -42,8 +42,10 @@ export const FIGURE_KIND = 'inkfigures'
 /** a unit's class by its kind (latex-front.mjs's kinds, and the ink units'); a kind not here is `body` */
 export const UNIT_CLASS = Object.freeze({
   para: 'body', heading: 'body', abstract: 'body', caption: 'body', footnote: 'body', cell: 'tables', author: 'names', figure: 'figures',
+  // (an author block's places, latex-front.mjs frontBlock: prose, always translated; its names `author`)
+  affiliation: 'body',
   // (the ink units', layout/ink-units.mjs INK_KIND: their kind names their class)
-  inkheads: 'heads', inkcontents: 'contents', inknotes: 'notes', inkorphan: 'orphan', inknames: 'names', inkgenerated: 'generated', [FIGURE_KIND]: 'figures',
+  inkheads: 'heads', inkcontents: 'contents', inknotes: 'notes', inkorphan: 'orphan', inknames: 'names', inkgenerated: 'generated', inktables: 'tables', [FIGURE_KIND]: 'figures',
   // (a structural name's unit, bundleUnitsOf's: a theorem head's or a generated reference's word in the target, always
   // translated: PDF-READER §19.14)
   name: 'generated',

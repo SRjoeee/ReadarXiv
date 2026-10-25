@@ -5,7 +5,10 @@ built (`layout/ink-units.mjs`, `pipeline/ink-pass.mjs`, paragraph points, the to
 bibliographies the source holds, with the names (settled in `docs/PDF-READER.md` §19.13, measured by
 `lab/pdf/spikes/classes-gate.mjs`); stage 5, the vector figures' text, built (2026-10-25: `layout/figure-text.mjs`, its groups in
 `layout/wrap.mjs`, ink units of kind `inkfigures` and BUNDLE 10's figure rows, `run.mjs paintFigures` under the toggle `figures`;
-settled in `docs/PDF-READER.md` §19.12, its gate `lab/pdf/spikes/figure-gate.mjs`); stages 6–8 are the plan of §7. Engine at
+settled in `docs/PDF-READER.md` §19.12, its gate `lab/pdf/spikes/figure-gate.mjs`); stage 7 built (2026-10-25: the author block's
+names apart from its places, a table no unit cuts made ink units of its rows' cells, every paragraph's point whatever its indent,
+the front end's TikZ texts kept so that each glyph has one owner; settled in `docs/PDF-READER.md` §19.10, §19.12 and §19.13);
+stages 6 and 8 are the plan of §7. Engine at
 `next` 37d84180. The phase 1 measurement's scripts and raw rows are not
 in the tree (the session scratchpad's `orphans/`); stage 1's gate reproduces the pack's numbers from the engine itself.
 
@@ -80,7 +83,7 @@ invariant now names; then prose no unit holds (2610.21377, 2610.19159). The ledg
 
 1. **Where:** the maker child, after the ledger. Its text is our glyphs' Unicode in stream order; its lines are its glyphs'
    baselines and extents. Nothing is read from arXiv's PDF and no position is estimated.
-2. **Blocks by TeX:** points at LaTeX's `para/begin` and `para/end` bracket every paragraph TeX makes, so a contents entry is one
+2. **Blocks by TeX:** a point at LaTeX's `para/before` opens every paragraph TeX makes, whatever its indent, so a contents entry is one
    block across its lines; points around `\@thehead` and `\@thefoot` make the head and the foot exact (stage 1 reads them by
    stream order and one baseline, as `folioOf` reads a folio).
 3. **Kept runs:** leader dots, a section number, a page number, math-face runs and URLs inside an ink unit stay the original's
@@ -103,11 +106,11 @@ The owner's map (2026-10-25; the settings' own words are the locale packs', thes
 | Always | notes (footnotes and margin notes no unit owns) | ink units by block | planned | 1 |
 | Always | orphan (prose with no unit) | an ink unit at once; the front-end cause fixed at the source as found | planned | 1 + fixes |
 | "Heads and feet" | heads (running heads and feet) | ink units by line, exact by head and foot points; a head equal to the title's or a heading's text takes its row, set in capitals for a cased target where the head is | planned | 1.5 |
-| "Tables" | tables (cells) | today's cell units; tables no unit cuts (inside a float) become ink units by row | cells built; uncut planned | 0.5 + 1 |
+| "Tables" | tables (cells) | today's cell units; a table no unit cuts, in a table's float (TeX's `\@captype`, the point `ft<n>`), its rows' cells ink units of kind inktables (PDF-READER §19.10) | built | — |
 | "Figure text" | figures (vector) | the glyphs of an included PDF (form XObjects) and of a TikZ or pgfplots picture (between its points), set by our compile: exact text from their fonts, exact places; ink units of kind inkfigures, each its own group, inside a form by the form written again once; a font with no usable Unicode, a form shared, a crowded band left the original's (PDF-READER §19.12); a float's other text no unit owns stays counted, not drawn | built | — |
 | "Figure text" | ocr (bitmap) | PP-OCR as the extension runs it (DESIGN §15.3), once on the server over each figure's image; places from OCR (approved); erasure by a patch of the background under each line, as the extension's image translation does | planned | 3.5 |
 | "References" | references, index (proposed) | each `\bibitem` two units, its names and the rest, from the bibliography's TeX the source holds (thebibliography, a shipped .bbl), marked like the body (PDF-READER §19.13); a .bbl the prepare's own BibTeX or biber makes is no source yet (its units would come after the first compile, which the web's prepare writes its units before) | built (source-held); compile-made planned | 3 |
-| "Names" | names: author blocks, names in references | author units, translated for every target (TRANSLATE 6); an entry's first block (kind refnames) | built; split from places planned | 1.5 |
+| "Names" | names: the author blocks' names, names in references | author units, translated for every target (TRANSLATE 6), the block's places apart (kind affiliation, the body's: PDF-READER §19.13); an entry's first block (kind refnames) | built | — |
 | Never | math, code and verbatim, symbols | kept as the original's ink | never | — |
 | — | reader toggles in both hosts | a class's units drawn or not (and its groups ON or OFF) by the settings: the door's and the layer side's `classes`, the side's `setClasses`, the hosts' settings to wire | engine built; hosts planned | 2 |
 
@@ -128,12 +131,9 @@ names are its placeholder's ink, kept as the original's either way; a running he
 - Equation tags, folios, numbers: never (`symbols`).
 - Copyright and licence lines in the foot: with the foot, under "Heads and feet".
 
-**Open after stage 5** (for the front end's owner): the front end still cuts a TikZ picture's texts into units of kind `figure`
-(latex-front.mjs `tikzText`), which the layout compile never marks and the layer never draws; they are translated beside the
-`inkfigures` units that draw the same words, while the toggle `figures` is on. Dropping them (a PIPELINE change in
-latex-front.mjs) or letting an inkfigures unit take
-their row is the front end's to decide. A float's other text no unit owns (an algorithm's steps, a subfigure's letter) is still
-the ledger's `figures` and drawn nowhere.
+A float's other text no unit owns (an algorithm's steps, a subfigure's letter) is still the ledger's `figures` and drawn nowhere;
+a table's float's is the class `tables` (§19.10). The front end's TikZ texts (kind `figure`) are kept in the bundle, the picture's
+glyphs the figure units' alone (§19.12).
 
 ## 6. Risks and the gates that hold them
 
@@ -155,7 +155,7 @@ the ledger's `figures` and drawn nowhere.
 | 4 (built, source-held bibliographies) | references and names in them (.bbl units); the author block for every target | PIPELINE 29, LAYOUT 22, MARKS_SCHEMA 11, TRANSLATE 6 | 4.5 |
 | 5 (built) | vector figure text: ink units of kind inkfigures, their groups, the parts' figure rows, under the toggle `figures` | in LAYOUT 21, REMOVAL 11 and BUNDLE5 10 (the key `figures` of a part, there only where it has one) | — |
 | 6 | OCR on the server | a new OCR version in the key | 3.5 |
-| 7 | names split from places; tables no unit cuts | PIPELINE | 2.5 |
+| 7 (built) | names split from places; tables no unit cuts; every paragraph's point; the TikZ texts kept | PIPELINE 29, LAYOUT 23 (the kinds `affiliation`, `inktables`, the points), REMOVAL 11, TRANSLATE 6 | 2.5 |
 | 8 | reader toggles in the web and the extension | — | 2 |
 
 About 23 agent-days in all. The web sweep reads invariant (o) once the engine is pinned (`scripts/sweep/invariants.mjs`), and the

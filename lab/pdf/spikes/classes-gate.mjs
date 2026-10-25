@@ -15,6 +15,12 @@
 //     base engine's is given (`--pack`: <pack>/fixtures/<id>-zh/base.pdf, our final pass as the base engine made it), the
 //     two base pages' pixels apart on every page (marks in the bibliography move nothing: 0) and the base engine's layout file's
 //     units located against this one's, the entries taken out (`lost`: a unit the base's file locates and this one's does not);
+//   - with `--glyphs` (and `--dump`), each glyph of our base page that is a letter by what owns it (<id>.own.json: per page a
+//     string, a character a glyph, '.' none, else its owner's content class, rules/content-classes.mjs, by CLASS_CHARS, upper
+//     case where the reader can draw it — a source unit the layout file locates and the wrap can hide, an ink unit the wrap did
+//     not leave off —, ' ' no letter), the ink units (kind, class, echo, off, letters) and the figure units' counts: two runs'
+//     dumps held to each other glyph by glyph (lab/pdf/spikes/coverage-diff.mjs), the letters a class gains or loses; with
+//     `--g1=all`, G1 on every page, not the entries' alone (no double ink: the wrap with every group ON is the page);
 //   - with `--dump=<dir>`, the layout file's units, fonts, lines and placeholders written there (<id>.json), and with
 //     `--against=<dir>`, another run's dump (the base engine's, `--engine=<its tree>`, made over its own compiles) unit by unit
 //     against this one's, the entries taken out and each line's font by its name (`vsRun`: lost, gained, moved, placeholders
@@ -22,7 +28,7 @@
 // One JSON line a paper; the compiles in <out>/compiles/<id>/ (kept by what they compile, never sent). A paper's text is never
 // printed. Runs with tsx from the repository root:
 //   pnpm exec tsx lab/pdf/spikes/classes-gate.mjs --base=<dir holding src/> [--engine=<dir holding src/>] [--compile]
-//       [--dump=<dir>] [--against=<dir>] [--which] [--pack=<gate pack>] [--out=<dir>] <id>=<dir with source.gz and arxiv.pdf>[@<year>] …
+//       [--dump=<dir>] [--glyphs] [--g1=all] [--against=<dir>] [--which] [--pack=<gate pack>] [--out=<dir>] <id>=<dir with source.gz and arxiv.pdf>[@<year>] …
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -39,13 +45,15 @@ const run = promisify(execFile)
 const LAB = resolve(dirname(new URL(import.meta.url).pathname), '..')
 const argOf = name => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? null
 const BASE = argOf('base'), PACK = argOf('pack'), OUT = resolve(argOf('out') ?? join(LAB, 'out/classes-gate'))
-const COMPILE = process.argv.includes('--compile'), DUMP = argOf('dump'), AGAINST = argOf('against')
+const COMPILE = process.argv.includes('--compile'), DUMP = argOf('dump'), AGAINST = argOf('against'), GLYPHS = process.argv.includes('--glyphs'), G1_ALL = argOf('g1') === 'all'
 if (!BASE) { console.error('usage: classes-gate.mjs --base=<dir holding src/> [--engine=<dir holding src/>] [--compile] [--dump=<dir>] [--against=<dir>] [--pack=<pack>] <id>=<dir>[@<year>] …'); process.exit(2) }
 // (the engine measured: this repository's, or another tree's (`--engine`): the base engine's own run, dumped, is what --against
 // compares a run with, unit by unit)
 const ENGINE = join(resolve(argOf('engine') ?? join(LAB, '../..')), 'src/pdf-reader/engine')
 const E = f => import(pathToFileURL(join(ENGINE, f)).href)
-const [{ openPaper, originalFiles }, { LAYOUT_CLASSES }, { layoutMarksOfPaper }, { makeLayout }, { wrapFinal }, { creationEpochOf }, { NO_IMAGE_PIXELS }, { PDFJS }, { plainSource }, { unpackSource }] = await Promise.all(['pipeline/live.mjs', 'layout/marks.mjs', 'layout/paper.mjs', 'layout/make.mjs', 'layout/wrap.mjs', 'layout/base.mjs', 'layout/pdf-lite.mjs', 'pipeline/versions.mjs', 'translate/mt.mjs', 'source/tar.mjs'].map(E))
+const [{ openPaper, originalFiles }, { LAYOUT_CLASSES }, { layoutMarksOfPaper }, { makeLayout }, { wrapFinal }, { creationEpochOf }, { NO_IMAGE_PIXELS }, { PDFJS }, { plainSource }, { unpackSource }, { BOXES_PAGE, GLYPHS_PAGE, pageInk }, { unitClass }] = await Promise.all(['pipeline/live.mjs', 'layout/marks.mjs', 'layout/paper.mjs', 'layout/make.mjs', 'layout/wrap.mjs', 'layout/base.mjs', 'layout/pdf-lite.mjs', 'pipeline/versions.mjs', 'translate/mt.mjs', 'source/tar.mjs', 'layout/ink.mjs', 'rules/content-classes.mjs'].map(E))
+/** a content class's character in a glyph dump (--glyphs): lower case its owner the reader cannot draw, upper case one it can */
+const CLASS_CHARS = Object.freeze({ body: 'b', generated: 'g', contents: 'c', notes: 'n', orphan: 'o', heads: 'h', tables: 't', figures: 'f', ocr: 'x', references: 'r', index: 'i', names: 'm', math: 'a', code: 'd', symbols: 's' })
 const base = await import(pathToFileURL(join(BASE, 'src/pdf-reader/engine/pipeline/live.mjs')).href)
 const IMAGES = JSON.parse(readFileSync(join(LAB, 'compile-images.json'), 'utf8'))
 const NM = join(LAB, '../../node_modules/pdfjs-dist/')
@@ -85,7 +93,9 @@ async function compileIn(image, paper, files, keep, req) {
 /** pixels apart (any channel past 24) between two renders of one page */
 async function apart(a, b, page, { off = null } = {}) {
   const { renderPage } = await import('../../../tests/pdf-reader/helpers/ocg-pdfs.ts')
-  const x = await renderPage(a, page, { scale: 2 }), y = await renderPage(b, page, { scale: 2, off })
+  // (a page PDF.js in Node cannot draw, a glyph its canvas refuses: -2, counted as no comparison, never as 0)
+  let x, y
+  try { x = await renderPage(a, page, { scale: 2 }); y = await renderPage(b, page, { scale: 2, off }) } catch { return -2 }
   if (x.width !== y.width || x.height !== y.height) return -1
   let n = 0
   for (let i = 0; i < x.data.length; i += 4) if (Math.abs(x.data[i] - y.data[i]) > 24 || Math.abs(x.data[i + 1] - y.data[i + 1]) > 24 || Math.abs(x.data[i + 2] - y.data[i + 2]) > 24) n++
@@ -172,7 +182,7 @@ for (const arg of process.argv.slice(2).filter(a => !a.startsWith('--'))) {
           })
           row.vsBase = { lost, gainedBody, moved, ...(process.argv.includes('--which') ? { which } : {}) }
         }
-        const w = await wrapFinal(ours, { PL, getDocument, documentOptions: { ...DOC, maxImageSize: NO_IMAGE_PIXELS }, OPS, units: paper.units, texts: made.marks.marking?.texts ?? null, deflate: x => deflateSync(x, { level: 6 }), inflate: (x, l) => inflateSync(x, { maxOutputLength: l + 1 }) })
+        const w = await wrapFinal(ours, { PL, getDocument, documentOptions: { ...DOC, maxImageSize: NO_IMAGE_PIXELS }, OPS, units: paper.units, texts: made.marks.marking?.texts ?? null, deflate: x => deflateSync(x, { level: 6 }), inflate: (x, l) => inflateSync(x, { maxOutputLength: l + 1 }), keepOwned: GLYPHS })
         if (w.refused) row.wrap = w.refused
         else {
           const by = {}
@@ -182,9 +192,35 @@ for (const arg of process.argv.slice(2).filter(a => !a.startsWith('--'))) {
           if (process.env.GATE_SHOW_UNHIDDEN === '1') for (const [u, why] of w.unhidden ?? []) if (BIB.has(paper.units[u]?.kind)) console.error(JSON.stringify([id, u, why, plainSource(paper.units[u]).slice(0, 300)]))
           row.ledger = Object.fromEntries(Object.entries(w.ledger?.classes ?? {}).filter(([c]) => ['body', 'references', 'names', 'orphan'].includes(c)).map(([c, v]) => [c, v[1]]))
           row.orphanLetters = w.ledger?.orphanLetters ?? null
-          const g1 = []
-          for (const p of [...entryPages].sort((x, y) => x - y)) g1.push(await apart(ours, w.bytes, p))
-          row.g1 = { pages: entryPages.size, apart: g1.reduce((x, y) => x + Math.max(0, y), 0), mismatched: g1.filter(x => x < 0).length }
+          const g1 = [], g1Pages = G1_ALL ? Array.from({ length: bd.doc.numPages }, (_, k) => k + 1) : [...entryPages].sort((x, y) => x - y)
+          for (const p of g1Pages) g1.push(await apart(ours, w.bytes, p))
+          row.g1 = { pages: g1Pages.length, apart: g1.reduce((x, y) => x + Math.max(0, y), 0), mismatched: g1.filter(x => x === -1).length, unread: g1.filter(x => x === -2).length, ...(G1_ALL ? { pagesApart: g1Pages.filter((_, k) => g1[k] !== 0) } : {}) }
+          row.ink = {}
+          for (const u of w.ink?.units ?? []) row.ink[u.kind] = (row.ink[u.kind] ?? 0) + 1
+          row.figures = w.figures?.stats ?? null
+          if (GLYPHS && DUMP) {
+            // (each letter by its owner, as the wrap took the page: pageInk with its own options, wrap.mjs wrapFinal's)
+            const located = new Set(lm.file.lines.filter(([, r]) => r?.length).map(([u]) => u))
+            const inkOf = new Map((w.ink?.units ?? []).map(u => [u.id, u])), off = new Set(w.ink?.off ?? [])
+            const pagesOut = []
+            for (let p = 1; p <= bd.doc.numPages; p++) {
+              const pg = await bd.doc.getPage(p)
+              const pink = pageInk(OPS, await pg.getOperatorList(), pg.commonObjs, { rotate: pg.rotate ?? 0, indices: true, turned: true, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
+              const own = w.owned?.glyphs?.[p - 1] ?? []
+              let line = ''
+              pink.glyphs.forEach((g, i) => {
+                if (g.blank || !/\p{L}/u.test((g.u ?? '').normalize('NFKC'))) { line += ' '; return }
+                const m = /^u(\d+)/.exec(own[i] ?? '')
+                if (!m) { line += '.'; return }
+                const uid = Number(m[1]), iu = inkOf.get(uid)
+                const c = CLASS_CHARS[iu ? iu.cls : unitClass(paper.units[uid])] ?? '?'
+                line += (iu ? !off.has(uid) : located.has(uid) && !w.owned.units.get(uid)?.unhidden) ? c.toUpperCase() : c
+              })
+              pagesOut.push(line)
+            }
+            const letters = u => u.pieces.filter(x => x.t === 'text').map(x => x.s ?? '').join('').match(/\p{L}/gu)?.length ?? 0
+            writeFileSync(join(DUMP, `${id}.own.json`), JSON.stringify({ kinds: paper.units.map(u => u.kind), ink: (w.ink?.units ?? []).map(u => [u.id, u.kind, u.cls, u.echo, off.has(u.id) ? 1 : 0, letters(u)]), figures: w.figures?.stats ?? null, pages: pagesOut }))
+          }
         }
       } else row.layout = lm.refused
       // (the base page dumped, and the base engine's run's against it on every page: the entries' marks move nothing)
@@ -192,16 +228,18 @@ for (const arg of process.argv.slice(2).filter(a => !a.startsWith('--'))) {
       const againstPdf = AGAINST && join(AGAINST, `${id}.pdf`)
       if (againstPdf && existsSync(againstPdf)) {
         const theirsBase = new Uint8Array(readFileSync(againstPdf)), n = bd.doc.numPages
-        let px = 0, pagesApart = 0
-        for (let p = 1; p <= n; p++) { const d = await apart(theirsBase, ours, p); if (d !== 0) { pagesApart++; px += Math.max(0, d) } }
-        row.vsRunBase = { pages: n, pagesApart, px }
+        let px = 0, pagesApart = 0, unread = 0
+        const apartAt = []
+        for (let p = 1; p <= n; p++) { const d = await apart(theirsBase, ours, p); if (d === -2) unread++; else if (d !== 0) { pagesApart++; px += Math.max(0, d); apartAt.push(p) } }
+        row.vsRunBase = { pages: n, pagesApart, px, unread, apartAt }
       }
       const packBase = PACK && join(PACK, 'fixtures', `${id}-zh`, 'base.pdf')
       if (packBase && existsSync(packBase)) {
         const theirsBase = new Uint8Array(readFileSync(packBase)), n = bd.doc.numPages
-        let px = 0, pagesApart = 0
-        for (let p = 1; p <= n; p++) { const d = await apart(theirsBase, ours, p); if (d !== 0) { pagesApart++; px += Math.max(0, d) } }
-        row.vsBaseBase = { pages: n, pagesApart, px, sha: [sha(theirsBase), sha(ours)] }
+        let px = 0, pagesApart = 0, unread = 0
+        const apartAt = []
+        for (let p = 1; p <= n; p++) { const d = await apart(theirsBase, ours, p); if (d === -2) unread++; else if (d !== 0) { pagesApart++; px += Math.max(0, d); apartAt.push(p) } }
+        row.vsBaseBase = { pages: n, pagesApart, px, unread, apartAt, sha: [sha(theirsBase), sha(ours)] }
       }
     } finally { await bd.close() }
   }

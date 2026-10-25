@@ -92,6 +92,15 @@
    "name: Line",
    "name: and"
   ],
+  "authors": [
+   "author: text",
+   "footnote: text",
+   "author: text,ph,text",
+   "para: ph,text",
+   "affiliation: text",
+   "affiliation: ph,text",
+   "affiliation: text"
+  ],
   "arity": [
    "heading: text,ph",
    "para: open,text",

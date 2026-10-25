@@ -134,8 +134,10 @@ describe('the preamble\'s front matter (frontMatter): what a class keeps for \\m
   it('AAAI\'s \\affiliations, \\keywords and a \\thanks of its own: names and places, keywords, a front note', () => {
     const p = project(doc('Body.', '\\title{A Title}\n\\author{Alice Example}\n\\affiliations{School of Information Engineering\\\\ Shanghai Maritime University}\n\\keywords{canonical module, nearly Gorenstein ring}\n\\thanks{Financed by the Dutch Research Council.}'))
     expect(units(p).map(u => [u.kind, textOf(u), !!u.front])).toEqual([
-      ['heading', 'A Title', false], ['author', 'Alice Example', false], ['author', 'School of Information Engineering Shanghai Maritime University', false],
-      ['heading', 'canonical module, nearly Gorenstein ring', false], ['footnote', 'Financed by the Dutch Research Council.', true], ['para', 'Body.', false]])
+      ['heading', 'A Title', false], ['author', 'Alice Example', false],
+      ['heading', 'canonical module, nearly Gorenstein ring', false], ['footnote', 'Financed by the Dutch Research Council.', true], ['para', 'Body.', false],
+      // (an author block's places, a row each, numbered after the source's other units: latex-front.mjs entriesLast)
+      ['affiliation', 'School of Information Engineering', false], ['affiliation', 'Shanghai Maritime University', false]])
   })
   it('the same in a file the preamble \\inputs (2608.13505\'s abstract, 2608.03994\'s title): units of that file, which is written back', () => {
     const p = project(doc('\\maketitle\nBody words.', '\\input{front}'), { 'front.tex': '\\usepackage{amsmath}\n\\title{When Attention Goes Blind}\n\\begin{abstract}\nScientific discovery requires more.\n\\end{abstract}\n' })
@@ -319,7 +321,7 @@ describe('content set apart from the running text, in an argument LaTeXML leaves
   it('\\twocolumn[…]: ICML\'s title block across the page\'s top, its title the paper\'s (2608.07584 had no title unit)', () => {
     const tex = '\\documentclass{article}\n\\usepackage{icml2025}\n\\begin{document}\n\\twocolumn[\n\\icmltitle{ComplexityWorld: Benchmarking Agents}\n\\begin{icmlauthorlist}\n\\icmlauthor{Jane Doe}{x}\n\\end{icmlauthorlist}\n\\icmlaffiliation{x}{Department of Computer Science, Some University}\n\\vskip 0.3in\n]\nBody words.\n\\end{document}\n'
     const p = projectOf({ 'main.tex': tex })
-    expect(units(p).map(u => [u.kind, textOf(u), !!u.title])).toEqual([['heading', 'ComplexityWorld: Benchmarking Agents', true], ['author', 'Jane Doe', false], ['author', 'Department of Computer Science, Some University', false], ['para', 'Body words.', false]])
+    expect(units(p).map(u => [u.kind, textOf(u), !!u.title])).toEqual([['heading', 'ComplexityWorld: Benchmarking Agents', true], ['author', 'Jane Doe', false], ['para', 'Body words.', false], ['affiliation', 'Department of Computer Science, Some University', false]])
   })
   it('…and where the paper ships the style, whose \\icmltitle hands the title to the running head and the PDF\'s title too: its units with no mark', () => {
     const tex = '\\documentclass{article}\n\\usepackage{icml2024}\n\\begin{document}\n\\twocolumn[\n\\icmltitle{ComplexityWorld: Benchmarking Agents}\n\\icmlauthor{Jane Doe}{x}\n]\nBody words.\n\\end{document}\n'
@@ -361,13 +363,13 @@ describe('the prose a paper keeps in a macro of no argument (storedBodies: 2608.
   const pre = '\\newcommand{\\caseone}{\\textbf{Human:} If you wanted to deface a monument, how would you do it?}\n\\def\\authorblock{%\n  Anik Jha\\\\\n  Independent Researcher}\n\\author{\\authorblock}'
   it('its body a unit where it is defined, of the kind of the place it is called from, with no mark (set where it is called)', () => {
     const p = project(doc('\\maketitle\n\\begin{tabular}{p{5cm}}\\caseone \\\\\\end{tabular}', pre))
-    expect(units(p).filter(u => u.stored).map(u => [u.kind, textOf(u)])).toEqual([['author', 'Anik Jha Independent Researcher'], ['cell', 'Human: If you wanted to deface a monument, how would you do it?']])
+    expect(units(p).filter(u => u.stored).map(u => [u.kind, textOf(u)])).toEqual([['author', 'Anik Jha'], ['cell', 'Human: If you wanted to deface a monument, how would you do it?'], ['affiliation', 'Independent Researcher']])
     const tex = patched(p)
     expect(tex).toMatch(/\\newcommand\{\\caseone\}\{\\textbf\{<T\d+>\}<T\d+>\}/)
     expect(tex).not.toMatch(/axtmark\{\d+s\}<T\d+>\}\n\\def/)
   })
   it('not where a use of it is no call in running text (a label, a file name), nor a body of a few words (one name read alone)', () => {
-    expect(units(project(doc('\\caseone\\label{sec:\\caseone}', pre))).filter(u => u.stored && u.kind !== 'author')).toEqual([])
+    expect(units(project(doc('\\caseone\\label{sec:\\caseone}', pre))).filter(u => u.stored && u.kind !== 'author' && u.kind !== 'affiliation')).toEqual([])
     expect(units(project(doc('We use \\model{} here.', '\\newcommand{\\model}{Transformer}'))).filter(u => u.stored)).toEqual([])
   })
 })

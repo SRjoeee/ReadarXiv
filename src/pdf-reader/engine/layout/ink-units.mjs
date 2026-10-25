@@ -5,11 +5,17 @@
 // position estimated: every coordinate is a glyph's our compile set.
 //
 // The rules (each tested):
-//   1. the classes made units: heads (`inkheads`), contents (`inkcontents`), notes (`inknotes`), orphans (`inkorphan`); a line
-//      of another class is never one;
+//   1. the classes made units: heads (`inkheads`), contents (`inkcontents`), notes (`inknotes`), orphans (`inkorphan`), and the
+//      rows of a table no unit cut (`inktables`, the ledger's `tables`: a table's float's text no unit owns); a line of another
+//      class is never one;
 //   2. a line's words: its glyphs left to right, a word ended where two stand a fifth of their size apart; a head's or a list's
 //      line keeps its numbering and its page number the original's ink (a leading section number, a trailing run of leader
 //      dots and a number: no unit's, never erased), so that a contents entry's title is drawn up to its leaders;
+//   2a. a table's row: cut into its cells, each run of its glyphs no further apart than CELL_GAP of their size (the columns' room,
+//      \\tabcolsep twice, is more; a word's space less: figure-text.mjs RUN_GAP, a label's), each cell's run a line of its own,
+//      a run that spells no word (two letters together) no unit: a cell of numbers is the original's ink, as a number is; a
+//      cell's next line joins it only where the cell opened a paragraph of its own (a p column's: its point at the cell's
+//      first glyph), never an l, c or r column's, all of one paragraph, the table's;
 //   3. a unit: a head's line alone; the others' lines while they follow on one page and in one region, each within BLOCK_DY of
 //      its size below the one before and meeting it across, and in one paragraph of TeX's (ink.mjs `paras`: a contents entry,
 //      a note, a paragraph); where the compile marked none, a list's line with the next where it ends in no page number (an
@@ -36,7 +42,9 @@ import { classOf } from './marks.mjs'
 import { spellOf } from './stream.mjs'
 
 /** the ledger's classes made units, and each one's kind (rules/content-classes.mjs UNIT_CLASS gives the class back) */
-export const INK_KIND = Object.freeze({ heads: 'inkheads', contents: 'inkcontents', notes: 'inknotes', orphan: 'inkorphan', names: 'inknames' })
+export const INK_KIND = Object.freeze({ heads: 'inkheads', contents: 'inkcontents', notes: 'inknotes', orphan: 'inkorphan', names: 'inknames', tables: 'inktables' })
+/** two glyphs of a table's row one cell: no further apart than this share of their size (rule 2a; figure-text.mjs RUN_GAP) */
+export const CELL_GAP = 0.6
 /** a block of the names an author unit holds: this share of its letters, at least, in words of an author unit's (rule 8) */
 export const NAMES_SHARE = 0.6
 /** a block's next line: within this many of its size below the one before */
@@ -94,6 +102,19 @@ function wordsOf(G, gs, fams) {
   return out
 }
 
+/** a table's row as its cells (rule 2a): its glyphs left to right, a cell ended where the next stands CELL_GAP of their size past
+ *  its end; each the row's line with its own glyphs and extent */
+function cellsOf(G, L) {
+  const order = L.gs.filter(g => G[g] && !G[g].blank && /\S/u.test(G[g].u ?? '')).sort((a, b) => G[a].x0 - G[b].x0)
+  const out = []
+  let cur = null
+  for (const g of order) {
+    const x = G[g]
+    if (!cur || x.x0 - cur.x1 > CELL_GAP * Math.max(x.size, cur.size)) { cur = { ...L, gs: [], x0: x.x0, x1: x.x1, size: x.size }; out.push(cur) }
+    cur.gs.push(g); cur.x1 = Math.max(cur.x1, x.x1); cur.size = Math.max(cur.size, x.size)
+  }
+  return out
+}
 /** a list's or a head's line less its numbering and its page number: [kept words, whether it ended in a page number] */
 function trimmed(words, cls) {
   if (cls !== 'heads' && cls !== 'contents') return [words, false]
@@ -140,9 +161,13 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
   for (const L of ledger.lines ?? []) {
     if (!Object.hasOwn(INK_KIND, L.cls) || L.cls === 'names') continue
     const G = pages[L.page - 1]?.glyphs ?? []
-    const [words, ended] = trimmed(wordsOf(G, L.gs, fams), L.cls)
-    if (!words.some(w => w.fam === 'text' && PAIR.test(w.text.normalize('NFKC')))) continue
-    segs.push({ ...L, words, ended })
+    // (a table's row, its cells: rule 2a; each whether its paragraph opens at its first glyph, a p column's cell)
+    for (const part of L.cls === 'tables' ? cellsOf(G, L) : [L]) {
+      const [words, ended] = trimmed(wordsOf(G, part.gs, fams), part.cls)
+      if (!words.some(w => w.fam === 'text' && PAIR.test(w.text.normalize('NFKC')))) continue
+      const opens = part.cls === 'tables' && (pages[part.page - 1]?.paras ?? []).some(q => q.glyph === Math.min(...part.gs))
+      segs.push({ ...part, words, ended, opens })
+    }
   }
   // units of lines (rule 3)
   const groups = []
@@ -154,7 +179,9 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     const paras = prev && prev.para !== null && prev.para !== undefined && s.para !== null && s.para !== undefined
     // (a paragraph with no point of its own reads as the one before: a contents line ending in its page number ends its entry
     // whatever its point)
-    const joins = follows && s.cls !== 'heads' && (s.cls !== 'contents' || !prev.ended) && (paras ? prev.para === s.para : s.cls === 'notes' || s.cls === 'orphan' || s.cls === 'contents')
+    // (a table's cell goes on below only where its block opened its paragraph, a p column's cell: every cell of an l, c or r
+    // column is of the paragraph the table is set in, and a row's last cell stands over the next row's first)
+    const joins = follows && s.cls !== 'heads' && (s.cls !== 'contents' || !prev.ended) && (s.cls !== 'tables' || (paras && last[0].opens)) && (paras ? prev.para === s.para : s.cls === 'notes' || s.cls === 'orphan' || s.cls === 'contents')
     if (joins) last.push(s)
     else groups.push([s])
   }

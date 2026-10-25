@@ -18,15 +18,16 @@ function run(text: string, x: number, y: number, { font = 'CMR10', size = 10 }: 
   }
   return out
 }
-type Part = { glyphs: G[]; owner?: string | null } | { point: string } | { para: number }
+type Part = { glyphs: G[]; owner?: string | null } | { point: string } | { para: number } | { table: number }
 function page(...parts: Part[]) {
-  const glyphs: G[] = [], own: (string | null)[] = [], points: { name: string; glyph: number; box: number }[] = [], paras: { name: string; glyph: number; box: number }[] = []
+  const glyphs: G[] = [], own: (string | null)[] = [], points: { name: string; glyph: number; box: number }[] = [], paras: { name: string; glyph: number; box: number }[] = [], tables: { name: string; glyph: number; box: number }[] = []
   for (const p of parts) {
     if ('point' in p) points.push({ name: p.point, glyph: glyphs.length, box: 0 })
     else if ('para' in p) paras.push({ name: `q${p.para}`, glyph: glyphs.length, box: 0 })
+    else if ('table' in p) tables.push({ name: `ft${p.table}`, glyph: glyphs.length, box: 0 })
     else for (const g of p.glyphs) { glyphs.push(g); own.push(p.owner ?? null) }
   }
-  return { page: { glyphs, boxes: [], points, paras, view: [0, 0, 612, 792] }, own }
+  return { page: { glyphs, boxes: [], points, paras, tables, view: [0, 0, 612, 792] }, own }
 }
 const unitsOf = (pages: ReturnType<typeof page>[], units: { kind: string; pieces: unknown[] }[] = []) => {
   const ledger = ledgerOf(pages.map(p => p.page), { glyphs: pages.map(p => p.own) }, { units })
@@ -102,6 +103,35 @@ describe('inkUnitsOf', () => {
       { point: 'n2.ref.e' }, { glyphs: run('A. Author. A title. 2020.', 100, 640) }, { point: 'be1' },
     )
     expect(unitsOf([pg]).ink).toEqual([])
+  })
+
+  it("makes a table no unit cut, in a table's float, ink units of its rows' cells (class tables); a cell of numbers the original's", () => {
+    // (the float a table's, `ft1` after its opening point: TeX's \\@captype; its rows' cells apart by their columns' room)
+    const pg = page(
+      { point: 'bs1' }, { glyphs: run('Body words of the paper here', 100, 740), owner: 'u1' }, { point: 'be1' },
+      { point: 'fs1' }, { table: 1 }, { para: 7 },
+      { glyphs: [...run('Model', 100, 600), ...run('Accuracy', 160, 600)] },
+      { glyphs: [...run('BERT base', 100, 585), ...run('84.6', 160, 585)] },
+      { point: 'fe1' },
+    )
+    const { ledger, ink } = unitsOf([pg], SOURCE)
+    expect(ledger.lines.filter(l => l.cls === 'tables').length).toBe(2)
+    expect(ink.map(u => [u.kind, u.cls, unitClass(u.kind), textOf(u)])).toEqual([['inktables', 'tables', 'tables', 'Model'], ['inktables', 'tables', 'tables', 'Accuracy'], ['inktables', 'tables', 'tables', 'BERT base']])
+    // (each cell one line, its extent its own glyphs')
+    expect(ink.map(u => [u.rows.lines[1], u.rows.lines[2]])).toEqual([[100, 125], [160, 200], [100, 145]])
+  })
+
+  it("joins a table's cell over two lines, a paragraph of its own (a p column's), and makes no unit of a figure's float's text", () => {
+    const cell = page(
+      { point: 'fs1' }, { table: 1 },
+      { para: 3 }, { glyphs: run('The first line of a', 100, 600) }, { glyphs: run('long cell of words', 100, 588) },
+      { para: 4 }, { glyphs: run('Another cell here', 300, 600) },
+      { point: 'fe1' },
+    )
+    expect(unitsOf([cell]).ink.map(u => [u.kind, textOf(u), u.rows.lines.length / 8])).toEqual([['inktables', 'The first line of a long cell of words', 2], ['inktables', 'Another cell here', 1]])
+    const figure = page({ point: 'fs1' }, { glyphs: [...run('Model', 100, 600), ...run('Accuracy', 140, 600)] }, { point: 'fe1' })
+    expect(unitsOf([figure]).ink).toEqual([])
+    expect(unitsOf([figure]).ledger.lines.map(l => l.cls)).toEqual(['figures'])
   })
 
   it("gives a block of an author unit's names the names toggle's kind, and leaves its affiliation the always translated", () => {

@@ -24,7 +24,9 @@
 //                                                                  survey's, an inline formula first after a display, a
 //                                                                  display group and a display at a page's foot; ONLY=runin:
 //                                                                  the run-in leads' stream case, F; ONLY=dvi: the DVI
-//                                                                  cases alone, every document under latex)
+//                                                                  cases alone, every document under latex; ONLY=paras:
+//                                                                  the paragraphs' points, their documents that stay and
+//                                                                  each paragraph's point at its first glyph)
 // NATIVE_TEX=1 compiles with this machine's TeX Live in place of Docker's (lab/pdf/spikes/native-tex/: its NATIVE_TEX_BIN,
 // NATIVE_TEXMFLOCAL and NATIVE_TEXMFVAR), the jobs one after another as in the container; a compile so is not the image's
 // package versions byte for byte
@@ -61,6 +63,8 @@ const WRAPPERS_ONLY = process.env.ONLY === 'wrappers'
 const LOST_ONLY = process.env.ONLY === 'lost'
 /** the DVI cases alone: every document under latex */
 const DVI_ONLY = process.env.ONLY === 'dvi'
+/** the paragraphs' points alone (marks.mjs POINTS_TEX q<n>): their documents that stay, and each paragraph's point */
+const PARAS_ONLY = process.env.ONLY === 'paras'
 /** this machine's TeX Live in place of Docker's */
 const NATIVE = process.env.NATIVE_TEX === '1'
 const dir = mkdtempSync(join(tmpdir(), 'layout-marks-cases-'))
@@ -166,6 +170,39 @@ const STAY = {
 \makeatother`, `\\twocolumn[\\icmltitle{The Title of a Paper in a Style of Its Own}]\n${Array.from({ length: 8 }, () => prose(30, () => '')).join('\n\n')}`),
 }
 
+/**
+ * The paragraphs' points (marks.mjs POINTS_TEX, q<n> at para/before): every paragraph TeX begins, whatever its indent, each
+ * opening with a word `Zp<x><y>` the check finds among the glyphs (PARA_STARTS: those that carry a point; PARA_NONE: a
+ * paragraph with no indent first in a box, which carries none). Under pdfLaTeX and XeLaTeX, and latex (every document)
+ */
+const PARAS = {
+  'paragraphs with no indent and paragraphs whose indent is taken back': { engines: ['pdflatex', 'xelatex'], src: doc('\\usepackage{amsmath}', String.raw`Zpaa ${prose(14, i => (i === 3 ? ' $x$' : ''))}
+
+\noindent Zpab ${prose(14, () => '')}
+\section{A heading with $h$}
+Zpac ${prose(10, () => '')}
+\begin{itemize}
+\item Zpad ${prose(8, () => '')}
+\item Zpae ${prose(8, i => (i === 2 ? ' $y$' : ''))}
+\end{itemize}
+Zpag ${prose(8, () => '')}
+\begin{equation} a = b \end{equation}
+
+\noindent$$ c = d $$ ${prose(6, () => '')}
+
+${prose(6, () => '')}\footnote{Zpai ${prose(4, () => '')}\par Zpaj ${prose(4, () => '')}}
+
+\noindent Zpao \begin{minipage}[t]{0.45\linewidth}\noindent Zpak ${prose(5, () => '')}\par Zpal ${prose(5, () => '')}\end{minipage}\hfill
+\begin{minipage}[t]{0.45\linewidth}Zpam ${prose(5, () => '')}\end{minipage}
+
+\begin{tabular}{p{4cm}l} Zpan ${prose(3, () => '')} & $z$ \\ \end{tabular}
+
+${Array.from({ length: 6 }, (_, i) => `\\noindent Zpb${'abcdef'[i]} ${prose(18, () => '')}`).join('\n\n')}`) },
+}
+const PARA_STARTS = ['Zpaa', 'Zpab', 'Zpac', 'Zpad', 'Zpae', 'Zpag', 'Zpaj', 'Zpao', 'Zpal', 'Zpam', 'Zpan', 'Zpba', 'Zpbb', 'Zpbc', 'Zpbd', 'Zpbe', 'Zpbf']
+const PARA_NONE = ['Zpai', 'Zpak']
+for (const [name, v] of Object.entries(PARAS)) STAY[name] = v
+
 // ---------------------------------------------------------------- compiling
 /** each job in its own directory, all in one container: `passes` runs of `engine`, the terminal kept. XeLaTeX's own run
  *  calls xdvipdfmx quiet (-q), which then says nothing of a destination set twice: the two steps here, as the TeX page
@@ -192,7 +229,7 @@ function queue(name, src, { engine = 'pdflatex', passes = 2, variants = ['v0', '
   if (engine === 'latex') files = { ...files, '00README.json': JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], process: { compiler: 'latex' } }) }
   const all = new Map([['main.tex', new TextEncoder().encode(src)], ...Object.entries(files).map(([f, t]) => [f, new TextEncoder().encode(t)])])
   const paper = openPaper(all)
-  if ((STREAM_ONLY && !name.startsWith('stream-')) || (RUNIN_ONLY && !name.startsWith('stream-F-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-')) || (WRAPPERS_ONLY && !name.startsWith('wrappers-')) || (LOST_ONLY && !name.startsWith('stay-an-inline-formula-first-after-a-display') && !name.startsWith('stream-E-')) || (DVI_ONLY && !/-latex(?:-hyperref)?$/.test(name))) return paper
+  if ((STREAM_ONLY && !name.startsWith('stream-')) || (RUNIN_ONLY && !name.startsWith('stream-F-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-')) || (WRAPPERS_ONLY && !name.startsWith('wrappers-')) || (LOST_ONLY && !name.startsWith('stay-an-inline-formula-first-after-a-display') && !name.startsWith('stream-E-')) || (DVI_ONLY && !/-latex(?:-hyperref)?$/.test(name)) || (PARAS_ONLY && !name.startsWith('stay-paragraphs-'))) return paper
   queued.push({ name, paper, engine, passes, variants, own, trace, files: all })
   return paper
 }
@@ -288,8 +325,9 @@ function dviMoved(a, b) {
   return out
 }
 const READ_LINE = /^(?:AXT-|Missing character: |! LaTeX Error: Unicode character )/
-/** the log lines the run reads (live.mjs readingsOf), and LaTeX's warnings and errors */
-const readLog = name => lastTexLog(read(name, 'log', 'latin1') ?? '').split('\n').filter(l => READ_LINE.test(l) || /^(?:LaTeX|Package \S+|Class \S+) Warning|^! /.test(l))
+/** the log lines the run reads (live.mjs readingsOf), and LaTeX's warnings and errors; but AXT-ALIGN, the layout compile's own
+ *  report of each unit's alignment (marks.mjs LAYOUT_TEX), which v0 does not ask for */
+const readLog = name => lastTexLog(read(name, 'log', 'latin1') ?? '').split('\n').filter(l => (READ_LINE.test(l) && !/^AXT-ALIGN /.test(l)) || /^(?:LaTeX|Package \S+|Class \S+) Warning|^! /.test(l))
 const errorsOf = name => (read(name, 'log', 'latin1') ?? '').match(/^! .*/gm) ?? []
 const near = (m, page, x, y, d) => !!m && m.page === page && Math.hypot(m.x - x, m.y - y) <= d
 
@@ -709,7 +747,7 @@ console.log(`compiling ${jobs.length} documents in ${dir}, after ${queued.filter
 compileAll(jobs)
 
 // ---------------------------------------------------------------- the checks
-if (!STREAM_ONLY && !NAMES_ONLY && !UNMARK_ONLY && !LOST_ONLY && !DVI_ONLY) {
+if (!STREAM_ONLY && !NAMES_ONLY && !UNMARK_ONLY && !LOST_ONLY && !DVI_ONLY && !PARAS_ONLY) {
   const heads = wrappersPaper.units.filter(u => u.kind === 'heading').map(u => u.pieces.filter(p => p.t === 'text').map(p => p.s).join('').trim())
   check('the wrappers\' titles are headings, the paper\'s display one placeholder', ['Opening', 'The End of Training', 'A Chapter Numbered by Hand', 'The Long Title of It', 'Notes on the Method'].every(h => heads.includes(h)) && wrappersPaper.units.some(u => u.pieces.some(p => p.t === 'ph' && /^\\begin\{eqsplit\}[\s\S]*\\end\{eqsplit\}$/.test(p.src))), JSON.stringify(heads))
   for (const v of ['v0', 'v1']) {
@@ -721,7 +759,7 @@ if (!STREAM_ONLY && !NAMES_ONLY && !UNMARK_ONLY && !LOST_ONLY && !DVI_ONLY) {
 }
 if (!STREAM_ONLY && !NAMES_ONLY && !UNMARK_ONLY && !WRAPPERS_ONLY) {
 for (const [name, , engine] of stays) {
-  if ((LOST_ONLY || DVI_ONLY) && !queued.some(q => q.name === stayKey(name, engine))) continue
+  if ((LOST_ONLY || DVI_ONLY || PARAS_ONLY) && !queued.some(q => q.name === stayKey(name, engine))) continue
   for (const hyper of [false, true]) {
     const key = `${stayKey(name, engine)}${hyper ? '-hyperref' : ''}`
     const [a, b] = [await pdfOf(`${key}-v0`), await pdfOf(`${key}-v1`)]
@@ -739,7 +777,35 @@ for (const [name, , engine] of stays) {
     check(`${label}: the log the run reads and LaTeX's warnings unchanged`, JSON.stringify(logA) === JSON.stringify(logB), JSON.stringify(logB.filter(l => !logA.includes(l)).slice(0, 4)))
   }
 }
-if (!LOST_ONLY) {
+// each paragraph's point stands at its first glyph (pageInk's `paras`, the next glyph in the stream after the point; an \\item's
+// label before its word, no letter between them), but a paragraph with no indent first in a box, which carries none
+for (const [name, , engine] of stays) {
+  if (!Object.hasOwn(PARAS, name) || !queued.some(q => q.name === stayKey(name, engine))) continue
+  for (const hyper of [false, true]) {
+    const key = `${stayKey(name, engine)}${hyper ? '-hyperref' : ''}`, r = await inkOf(`${key}-v1`)
+    const label = `each paragraph's point at its first glyph: ${name}${engine === 'pdflatex' ? '' : ` (${engine})`}${hyper ? ', with hyperref' : ''}`
+    if (!r) { check(label, false, 'no PDF'); continue }
+    const at = new Map(), points = new Set()
+    r.pages.forEach((pg, p) => {
+      const text = pg.glyphs.map(g => g.u ?? '').join(''), offsets = []
+      let o = 0
+      for (const g of pg.glyphs) { offsets.push(o); o += (g.u ?? '').length }
+      const qs = (pg.paras ?? []).map(q => q.glyph)
+      for (const w of [...PARA_STARTS, ...PARA_NONE]) {
+        const i = text.indexOf(w), g = i >= 0 ? offsets.indexOf(i) : -1
+        if (g < 0) continue
+        // (the point nearest before the word, no letter between)
+        const q = Math.max(-1, ...qs.filter(x => x <= g))
+        at.set(w, q >= 0 && !pg.glyphs.slice(q, g).some(x => /\p{L}/u.test(x.u ?? '')) ? `${p + 1}:${q}` : `${p + 1}:none`)
+        if (q >= 0) points.add(`${p + 1}:${q}`)
+      }
+    })
+    const missing = PARA_STARTS.filter(w => !at.has(w) || !points.has(at.get(w))), extra = PARA_NONE.filter(w => at.has(w) && points.has(at.get(w)))
+    check(label, !missing.length && !extra.length, JSON.stringify({ missing, extra, found: at.size }))
+    await r.task.destroy()
+  }
+}
+if (!LOST_ONLY && !PARAS_ONLY) {
   // under latex a cell's mark in a \resizebox (dvips's scale, which dvipdfmx reads) lies on its glyphs: dvipdfmx reckons a
   // `pdf:dest`'s place in the scaled box, as pdfTeX its FitR (not XeTeX's: xdvipdfmx's under \pdfsetmatrix, printed below)
   const key = `${stayKey('a cell in \\resizebox', 'latex')}-v1`, r = await pdfOf(key)
@@ -748,7 +814,7 @@ if (!LOST_ONLY) {
   check('a cell mark in \\resizebox lies on its glyphs under latex and dvipdfmx (within 1 pt)', got.length >= 4 && got.every(c => c.d !== null && c.d <= 1), JSON.stringify(got))
 }
 
-if (!LOST_ONLY && !DVI_ONLY) {
+if (!LOST_ONLY && !DVI_ONLY && !PARAS_ONLY) {
 {
   // REVTeX's swap takes the closing mark into a \csname: the probe's box with both marks errors, so before `!`, `?` and
   // a word the answer is the opening mark alone, not every mark (a box that errors measured the previous box once)
@@ -858,7 +924,7 @@ for (const [job, label] of [['natmove-stop', "natbib [super] with natmove, a cit
 }
 
 // ---------------------------------------------------------------- \axt@unmark's check
-if (!STREAM_ONLY && !NAMES_ONLY && !WRAPPERS_ONLY && !LOST_ONLY && !DVI_ONLY) {
+if (!STREAM_ONLY && !NAMES_ONLY && !WRAPPERS_ONLY && !LOST_ONLY && !DVI_ONLY && !PARAS_ONLY) {
   const unit = /^UNIT SUMMARY n=(\d+), bad=(\d+)/m.exec(read('unmark-unit-v1', 'log', 'latin1') ?? '')
   check('\\axt@unmark on hand-written lists: the bare regex\'s result by tokens, in every case', !!unit && Number(unit[1]) >= 25 && unit[2] === '0', `${unit?.[0]} ${(read('unmark-unit-v1', 'log', 'latin1') ?? '').match(/^UNIT DIFF.*/gm)?.slice(0, 3)}`)
   for (const [job, label] of [['unmark-files', 'with hyperref'], ['unmark-files-titlesec', 'and with titlesec']]) {
@@ -877,7 +943,7 @@ if (!STREAM_ONLY && !NAMES_ONLY && !WRAPPERS_ONLY && !LOST_ONLY && !DVI_ONLY) {
 
 
 // ---------------------------------------------------------------- the names' checks
-if (!STREAM_ONLY && !UNMARK_ONLY && !WRAPPERS_ONLY && !LOST_ONLY && !DVI_ONLY) {
+if (!STREAM_ONLY && !UNMARK_ONLY && !WRAPPERS_ONLY && !LOST_ONLY && !DVI_ONLY && !PARAS_ONLY) {
   for (const j of nameJobs) {
     const label = `a babel name: ${j.name} (${j.engine}${j.hyper ? ', with hyperref' : ''})`
     const [a, b] = [await pdfOf(`${j.key}-v0`), await pdfOf(`${j.key}-v1`)]
@@ -977,7 +1043,7 @@ const OWN = {
   E: [['\\begin{equation} a = b', 'a=b(1)'], ['$x_1$', 'x1'], ['\\begin{align} c', 'c=d(2)e=f(3)g=h'], ['\\begin{equation} e = f', 'LOST:in the display before it'], ['\\begin{equation*} g', 'LOST:in the display before it'], ['$u$', 'u'],
     ['\\begin{equation} p_', (src, n) => ({ s: `${glyphsOf(src.replace(/\\(?:begin|end)\{equation\}/g, '')).s}(${4 + n})`, rules: 0 })], ['$w_', glyphsOf]],
 }
-for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : LOST_ONLY ? streams.filter(x => x.name === 'E') : RUNIN_ONLY ? streams.filter(x => x.name === 'F') : DVI_ONLY ? streams.filter(x => x.engine === 'latex') : [...streams, luaStream]) {
+for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY || PARAS_ONLY ? [] : LOST_ONLY ? streams.filter(x => x.name === 'E') : RUNIN_ONLY ? streams.filter(x => x.name === 'F') : DVI_ONLY ? streams.filter(x => x.engine === 'latex') : [...streams, luaStream]) {
   const label = `the stream, ${s.name} (${s.engine})`
   const [a, b] = [await inkOf(`${s.key}-v1`), await inkOf(`${s.key}-v1np`)]
   if (!a || !b) { check(`${label}: compiled`, false, `no PDF (${a ? 'v1np' : 'v1'})`); continue }
@@ -1060,7 +1126,7 @@ for (const s of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY ? [] : LOST_ONLY ? st
 }
 
 // TeX's own boxes: the points' nodes out (the corpus check's comparison), nothing else different
-for (const name of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY || LOST_ONLY || RUNIN_ONLY || DVI_ONLY ? [] : Object.keys(TRACED)) {
+for (const name of NAMES_ONLY || UNMARK_ONLY || WRAPPERS_ONLY || LOST_ONLY || RUNIN_ONLY || DVI_ONLY || PARAS_ONLY ? [] : Object.keys(TRACED)) {
   const boxesOf = v => { const log = read(`${traceKey(name)}-${v}`, 'log', 'latin1') ?? ''; const out = [], lines = log.split('\n'); for (let i = 0; i < lines.length; i++) if (/^Completed box being shipped out \[/.test(lines[i])) { const at = i; while (i < lines.length && lines[i] !== '') i++; out.push(...lines.slice(at, i), '') } return pageBoxes(out.join('\n')) }
   const [a, b] = [boxesOf('v1np'), boxesOf('v1')], d = boxDiff(a, b)
   check(`the stream, TeX's boxes with the points and without them the same: ${name}`, a.length > 0 && a.length === b.length && !d.length, JSON.stringify({ pages: [a.length, b.length], differences: d.length, first: d.slice(0, 3).map(x => [x.page, x.v0, x.v1]) }))

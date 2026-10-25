@@ -28,6 +28,8 @@ import { PIPELINE_VERSION } from '@/pdf-reader/engine/pipeline/versions.mjs'
 //                author-year, IEEEtran's quoted title, REVTeX's fields; an entry's numbers placeholders
 //   names        PIPELINE 29's name units (paper-names.test.ts): a paper's own theorem names and cleveref's, and where it calls
 //                \cref the words no package names in some target (2610.18513v1's "Section", "and")
+//   authors      PIPELINE 29's author blocks (author-places.test.ts): the names apart from the places, a row each, an \And block,
+//                a numbered list of places, an \affil, the places numbered after the source's other units
 // A source's structural names are its units too (bundleUnitsOf, after the source's): each recorded as `name: <its text>`
 
 const enc = (s: string) => new TextEncoder().encode(s)
@@ -46,6 +48,9 @@ const UNIT_CUT_SOURCES: Record<string, () => Map<string, Uint8Array>> = {
   ]),
   names: () => new Map([
     ['main.tex', enc('\\documentclass{article}\n\\usepackage{amsthm,cleveref}\n\\newtheorem{conj}{Conjecture}\n\\crefname{conj}{conjecture}{conjectures}\n\\begin{document}\n\\section{Intro}\\label{s}\nAs \\cref{s} says.\n\\begin{conj}\\label{c}\nIt holds.\n\\end{conj}\n\\end{document}\n')],
+  ]),
+  authors: () => new Map([
+    ['main.tex', enc('\\documentclass{article}\n\\author{Alice Smith\\thanks{Equal.} \\\\ Google Brain \\\\ \\texttt{alice@g.com} \\And Bob Jones$^{1}$ \\\\ $^{1}$University of Somewhere}\n\\affil{Institute of Elsewhere}\n\\begin{document}\n\\maketitle\nThe body.\n\\end{document}\n')],
   ]),
   arity: () => new Map([
     ['main.tex', enc('\\documentclass{article}\n\\begin{document}\n\\section{Approaches to $H_0$}\n{Measurements differ.\n\n\\section*[Short]{A long title}\n{\\bf Lead} words.\n\n\\begin{tabular}{cc}\n\\multirow[c]{2}{*}[-2pt]{Merged} & One \\\\\n& Two \\\\\n\\end{tabular}}\n\\end{document}\n')],
@@ -119,5 +124,7 @@ describe('the unit cut is recorded under the PIPELINE_VERSION it was cut by', ()
     // (and PIPELINE 29's name units, after the source's: the sample's theorem names)
     expect(now['sample-1']?.filter(u => u.startsWith('name: '))).toEqual(['name: Theorem', 'name: Lemma', 'name: Definition'])
     expect(now['bibliography']?.slice(1).map(u => u.split(':')[0])).toEqual(['refnames', 'reference', 'refnames', 'reference', 'refnames', 'reference'])
+    // (PIPELINE 29's author blocks: each block's names where they were, its places after the source's other units)
+    expect(now['authors']?.map(u => u.split(':')[0])).toEqual(['author', 'footnote', 'author', 'para', 'affiliation', 'affiliation', 'affiliation'])
   })
 })
