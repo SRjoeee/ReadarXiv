@@ -2403,7 +2403,9 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   placeholder's opening mark: 2610.21085v1 p5). A footnote call is its unit's `.p` too. Label `u<id>.l`: the glyphs on the start's first glyph's
   baseline between the previous unit's end mark and the start, the placeholders' and names' ranges passed over, but the
   closing punctuation a head macro sets after the unit before it — right after that unit's end mark, each glyph within a fifth
-  of an em of the one before, the first of that unit's last glyph — which is that unit's text (amsthm's "(Minimum detectable
+  of an em of the one before, the first of the glyph right before it, which is that unit's own (its text, or a placeholder of
+  that unit's set after its end mark: a note that ends in a citation, `\axthmark{h…e} \citep{…}`, whose ")." stood a
+  citation away from the end mark's glyph and was no one's, 2610.18513v1 p35) — which is that unit's text (amsthm's "(Minimum detectable
   PDI)." after a theorem's note: as the body's label, no label's form, it was left the original's ink under the body's
   drawing, 2610.21491v1 p7; its group now hides it where the note is drawn, as the line's erase did before the wrap). Babel name
   `n<occ>`: between `n<occ>.<key>.s` and `.e`, but never over a placeholder's ink (cleveref's "Appendix" inside a `\cref` is
