@@ -2079,6 +2079,15 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   whole: the pairs after it numbered one on, their texts the same). Where nothing defines a command or an environment
   (`commandArgs`, `envArgs`), and for a citation (`\citefield{key}{field}` takes two groups, a field name the translator
   must not see), every adjacent group is still taken: words left English break nothing, an argument translated breaks TeX
+- **An author block's options after its text are its own** (PIPELINE 29, `source/latex-front.mjs` `frontArgs`). The front
+  matter's commands (`\author`, `\affil`, `\affiliation`, `\institute`, `\address`) take, after the form above, every optional
+  argument that follows their text, as their classes read it by looking past it (`\@ifnextchar[`): the Elsevier classes' and
+  ceurart's `\author[1]{Name}[orcid=…]`. Read short, the bracket was a unit of its own, sent to the translator, and its start
+  mark stood between the call and the option: the class no longer saw the option, set it as text, and 2610.21084v1's marked
+  original (cas-sc) ran to 50 pages against arXiv's 49, the paper refused whole (the release sweep of 2026-10-25). The guard's
+  fallbacks cannot mend such a cause: no mark of the names' is at fault and no error names a unit, so the units it unmarks are
+  others; a mis-cut is mended where the units are cut. Over 157 local sources two papers change (2610.21084v1, and 2608.12096's
+  ceurart `[email=…]`), every other unit's hash kept
 - **Under `latex`, nothing dvipdfmx could not draw.** Our DVI is drawn by dvipdfmx, arXiv's by dvips and ps2pdf: a PSTricks
   picture, or any PostScript of the page's, dvipdfmx cannot interpret is missing from our page alone, and the marks and boxes
   would pass. The final pass is refused (`final`) where its log says dvipdfmx failed a special or an image (`base.mjs`
