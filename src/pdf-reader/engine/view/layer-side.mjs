@@ -807,6 +807,9 @@ export function createLayerSide(view, o) {
     idle(async () => {
       const shows = () => !disposed && door === d && !!c.wrap && (pages.get(n)?.content === c || drawings.get(n)?.c === c)
       if (!shows()) return
+      // (none built in a pane a zoom's or a pinch's steps are scaling, places.mjs: asked again TEXT_IDLE_MS on, until they are
+      // drawn; a drawing kept off the view is in no pane, and is built)
+      if (c.wrap.closest('[data-axt-scaling]')) { clock.later(() => { if (!disposed) textSoon(n, c, d) }, TEXT_IDLE_MS); return }
       let data
       try { data = await d.textOf(n) } catch (e) { if (shows()) warn('text', e); return }
       if (!shows()) return
