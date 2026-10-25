@@ -95,9 +95,10 @@ const { keptFor, openPaper, originalFiles, PIPELINE_CARRIES, PIPELINE_VERSION, T
 const { unpackSource } = await engine('source/tar.mjs')
 // (a unit the gates' run leaves the original's by its class, the toggles of an open given none: rules/content-classes.mjs
 // TOGGLE_DEFAULTS, the names and a bibliography's entries, is sent nowhere: the gates neither await nor draw it, and a fixture holds
-// no translation of it, the owner's ruling of 2026-10-25 for the pack. An engine of before them hides none)
+// no translation of it, the owner's ruling of 2026-10-25 for the pack. An engine of before them hides none; one whose run had
+// defaults of its own, RUN_DEFAULTS (figures on where the reader's were off, before #476), is given those, as its run opens with)
 const CLASSES = await engine('rules/content-classes.mjs').catch(() => null)
-const hiddenOf = CLASSES?.TOGGLE_DEFAULTS ? (on => u => !CLASSES.unitShown(u, on))(CLASSES.classesOn(null)) : () => false
+const hiddenOf = CLASSES?.TOGGLE_DEFAULTS ? (on => u => !CLASSES.unitShown(u, on))(CLASSES.classesOn(CLASSES.RUN_DEFAULTS ?? null)) : () => false
 // the translation's modules only where a request may be made (mt.mjs and the rules reach the extension's code by alias)
 const { RULES_VERSION } = OFFLINE ? { RULES_VERSION: null } : await import(pathToFileURL(join(ENGINE, 'src/core/rules/latexml.ts')).href)
 const { MICROSOFT_LANG, translateTexts, translateUnits } = OFFLINE ? { MICROSOFT_LANG: {} } : await engine('translate/mt.mjs')
