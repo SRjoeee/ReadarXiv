@@ -208,7 +208,15 @@
 //     words some target has no package word for (rules/tex-names.mjs NAME_GAPS, CONJUNCTION_GAPS). Translated with the
 //     paper's units, the first batch's (rows.mjs batchesOf, runRows), cached by their text as any unit; the layer draws a
 //     head's or a generated reference's name in that translation where no package gives the target one. Over 168 local
-//     sources 923 name units in 85 papers (32 at most; 19 papers call cleveref or \autoref); they change no source unit
+//     sources 923 name units in 85 papers (32 at most; 19 papers call cleveref or \autoref); they change no source unit.
+//     And in the same unreleased 29 (the release sweep of 2026-10-25): a front matter command's optional arguments after its
+//     text are the command's (latex-front.mjs frontArgs), as its class reads them by looking past the text: the Elsevier
+//     classes' and ceurart's \author[1]{Name}[orcid=…], read short by 28's form, made the bracket a unit of its own, whose start
+//     mark stood between the call and the option, so that the class set the option as text and 2610.21084v1's marked original
+//     ran to 50 pages against arXiv's 49, refused whole (its names marks' fallback could not reach it: no mark of the names'
+//     was at fault, nor any the errors blamed). Over 157 local sources two papers' units change (2610.21084v1's three
+//     [orcid=…] and 2608.12096's two [email=…] gone), every other unit's hash kept; the marked compile of the gate pack's 7
+//     papers and the 25 of lab/pdf/data/layout makes arXiv's pages on every one TeX compiles
 export const PIPELINE_VERSION = '29'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */

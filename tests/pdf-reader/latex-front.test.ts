@@ -87,6 +87,20 @@ describe('the front matter: its notes (1706.03762) and its names and places (the
     expect(authors(p)).toEqual(['Alice', 'Somewhere'])
   })
 
+  it('an optional argument after an author block\'s text is the command\'s: no unit, no mark between them (2610.21084v1, cas-sc)', () => {
+    // (the Elsevier classes read \\author[1]{Name}[orcid=…] by looking past the name: a unit of the bracket, its start mark between
+    // the two, hid the option from the class, which set it as text, and the marked original ran a page longer than the paper)
+    for (const where of ['preamble', 'body']) {
+      const author = '\\author[1]{Matthias Chung}[orcid=0000-0001-7822-4539]\n\\cormark[1]\n\\affiliation[1]{Emory University}[type=edu]'
+      const tex = where === 'preamble' ? `\\documentclass{article}\n${author}\n\\begin{document}\n\\maketitle\nWords here.\n\\end{document}` : `\\documentclass{article}\n\\begin{document}\n${author}\n\\maketitle\nWords here.\n\\end{document}`
+      const p = openPaper(new Map([['main.tex', new TextEncoder().encode(tex)]]))
+      expect((p.units as unknown as Unit[]).map(u => textOf(u).trim()), where).toEqual(['Matthias Chung', 'Emory University', 'Words here.'])
+      const marked = new TextDecoder().decode(originalFiles(p, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+      expect(marked, where).toContain('\\axtend{0e}}[orcid=0000-0001-7822-4539]\n\\cormark[1]')
+      expect(marked, where).toMatch(/\\axtend\{1e\}\}\[type=edu\]/)
+    }
+  })
+
   it('IEEEtran\'s blocks and acmart\'s parts of an affiliation are names and places; an address, a mark, a key stay', () => {
     const ieee = project('\\documentclass{article}\\begin{document}\\author{\\IEEEauthorblockN{Alice Smith\\IEEEauthorrefmark{1}}\\IEEEauthorblockA{Peking University\\\\ \\texttt{alice@pku.edu.cn}}}\\maketitle\nWords.\\end{document}')
     expect(authors(ieee).join('|')).toMatch(/^Alice Smith.*Peking University$/)

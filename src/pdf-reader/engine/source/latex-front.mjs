@@ -434,6 +434,25 @@ function argsOfForm(s, i, form) {
   }
   return { args, end: i }
 }
+/**
+ * A front matter command's call as its class reads it (FRONT_MATTER): its form's arguments (argsOfForm), and every optional
+ * argument right after its text, which a class reads by looking past it (\\@ifnextchar[): the Elsevier classes' \\author[1]{Name}
+ * [orcid=…]. Read short, the option was walked as the text after the call, a unit of its own "[orcid=0000-…]" whose start mark
+ * stood between the call and its option: the class no longer saw it, set the bracket as text and the marked original ran a page
+ * longer than the paper (2610.21084v1, cas-sc: 50 pages against 49, refused). `to` bounds the reading
+ */
+function frontArgs(s, i, name, ctx, to = s.length) {
+  const { args, end: formEnd } = argsOfForm(s, i, unitForm(name, ctx))
+  let end = formEnd
+  if (args.at(-1)?.kind === 'req') for (;;) {
+    const k = skipSpaces(s, end)
+    if (s[k] !== '[') break
+    const e = matchGroup(s, k, '[', ']')
+    if (e < 0 || e > to) break
+    args.push({ kind: 'opt', start: k, end: e }); end = e
+  }
+  return { args, end }
+}
 /** the forms of the commands whose argument is a unit of their own (HEADINGS, OWN_UNIT_ARG, FRONT_MATTER) where it is not
  *  `[{`: LaTeX's sectioning commands (\\@startsection) take a star, a short title and the title, a caption, a footnote, a
  *  \\thanks, a \\title and an author block (authblk's \\author[1]{…}, elsarticle's \\address[a]{…}) an optional argument and
@@ -1412,7 +1431,7 @@ function walk(s, from, to, b, ctx) {
       }
     }
     if (FRONT_MATTER.has(name)) {
-      const { args, end: e } = argsOfForm(s, end, unitForm(name, ctx))
+      const { args, end: e } = frontArgs(s, end, name, ctx, to)
       endText(); b.flush()
       for (const a of args) (a.kind === 'req' ? frontBlock : frontNotes)(s, a.start + 1, a.end - 1, b, ctx)
       i = e; continue
@@ -1863,7 +1882,7 @@ function frontMatter(s, from, to, b, ctx) {
       if (req) { b.kind = 'heading'; b.title = true; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.title = false; b.kind = undefined; past = end }
       continue
     }
-    if (FRONT_MATTER.has(c.name)) { const { args, end } = argsOfForm(s, c.end, unitForm(c.name, ctx)); for (const a of args) (a.kind === 'req' ? frontBlock : frontNotes)(s, a.start + 1, a.end - 1, b, ctx); past = end; continue }
+    if (FRONT_MATTER.has(c.name)) { const { args, end } = frontArgs(s, c.end, c.name, ctx, to); for (const a of args) (a.kind === 'req' ? frontBlock : frontNotes)(s, a.start + 1, a.end - 1, b, ctx); past = end; continue }
     // a \thanks of its own (revtex's, after \author{…}): a front note, as in the body
     if (c.name === 'thanks') { const { args, end } = argsOfForm(s, c.end, unitForm('thanks', ctx)); if (args.some(a => a.kind === 'req')) { b.flush(); frontNote(s, c.at, end, b, ctx); past = end } continue }
     if (c.name === 'begin' && FRONT_ROLES[`env:${c.env}`]) {
