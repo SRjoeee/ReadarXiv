@@ -381,9 +381,17 @@ const LETTERS = {
   de: `${LATIN}ÄÖÜäöüß`, fr: `${LATIN}ÀÂÆÇÉÈÊËÎÏÔŒÙÛÜŸàâæçéèêëîïôœùûüÿ`, es: `${LATIN}ÁÉÍÑÓÚÜáéíñóúü¡¿`,
   pt: `${LATIN}ÃÕÁÂÀÇÉÊÍÓÔÚÜãõáâàçéêíóôúü`, ru: `${CYRILLIC}Ёё`,
 }
+// (worked out once a target: faceFor asks it for every run of every unit laid)
+const LETTERS_OF = new Map()
 const lettersOf = target => {
-  const language = new Intl.Locale(target).language
-  return Object.hasOwn(LETTERS, language) ? LETTERS[language] : scriptOf(target) === 'Cyrl' ? CYRILLIC : LATIN
+  let letters = LETTERS_OF.get(target)
+  if (letters === undefined) {
+    const language = new Intl.Locale(target).language
+    letters = Object.hasOwn(LETTERS, language) ? LETTERS[language] : scriptOf(target) === 'Cyrl' ? CYRILLIC : LATIN
+    if (LETTERS_OF.size >= 256) LETTERS_OF.clear()
+    LETTERS_OF.set(target, letters)
+  }
+  return letters
 }
 const holdsAll = new Map()
 // whether a face holds every letter (cached: a table's faces by a handful of targets)
