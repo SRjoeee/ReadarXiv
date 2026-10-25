@@ -60,9 +60,10 @@ function pieceFrom(p, k, at, units) {
   }
 }
 /** a unit as openPaper makes it, from the bundle's [kind, flags, depth, cell, edges, pieces] (an ink unit's with its echo after:
- *  units.mjs inkBundleUnitsOf); null where it has no shape */
+ *  units.mjs inkBundleUnitsOf; a bitmap figure's label's with its place after that, which the layer reads from the bundle's own
+ *  unit, ocr-rows.mjs); null where it has no shape */
 function unitFrom(b, at, units) {
-  if (!Array.isArray(b) || !(b.length === 6 || b.length === 7)) return null
+  if (!Array.isArray(b) || !(b.length === 6 || b.length === 7 || b.length === 8)) return null
   const [kind, flags, depth, cell, edges, list] = b
   if (typeof kind !== 'string' || !Number.isInteger(flags) || !Array.isArray(list)) return null
   const pieces = []
@@ -82,7 +83,7 @@ function unitFrom(b, at, units) {
   }
   if (edges !== null && edges !== undefined && typeof edges === 'object') for (const e of EDGES) if (typeof edges[e] === 'string') u[e] = edges[e]
   // (an ink unit's echo: the earlier unit whose row it is drawn with, never translated itself)
-  if (b.length === 7) { if (!(b[6] === null || (Number.isInteger(b[6]) && b[6] >= 0 && b[6] < at && units[b[6]]))) return null; if (b[6] !== null) u.echo = units[b[6]].echo ?? b[6] }
+  if (b.length >= 7) { if (!(b[6] === null || (Number.isInteger(b[6]) && b[6] >= 0 && b[6] < at && units[b[6]]))) return null; if (b[6] !== null) u.echo = units[b[6]].echo ?? b[6] }
   return u
 }
 

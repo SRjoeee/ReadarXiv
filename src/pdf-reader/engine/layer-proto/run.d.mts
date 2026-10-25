@@ -292,6 +292,10 @@ export interface HidingOptions {
   /** whether a unit's label is left the original's ink (the wrap wrote it no group): the body drawn, the label kept */
   labelKept?: (id: number) => boolean
   rules?: (page: number) => readonly number[] | undefined
+  /** whether the reader shows figures translated (the toggle `figures`): their units' rows taken and drawn */
+  figuresShown?: boolean
+  /** a page's bitmap figures' labels (the content class `ocr`): each its unit's id and its place (ocr-rows.mjs) */
+  ocr?: (page: number) => readonly ({ id: number } & import('./ocr-rows.mjs').OcrPlace)[]
 }
 /** whether a table cell's box is other cells' too: it spans columns or rows (\\multirow, \\multicolumn) */
 export declare function cellSpans(u: { cell?: { span?: number } | null; pieces?: readonly { t?: string; s?: string; src?: unknown }[] } | null | undefined): boolean

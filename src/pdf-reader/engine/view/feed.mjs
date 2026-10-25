@@ -15,7 +15,12 @@
 // follow yet (a gap, a `prev` not told) waits until it does, and is not fetched before. A part refused (its fetch or its read)
 // stops the chain at the part before it; told again, it is fetched and read again. The head first told is the layer's: another
 // is passed over, with one warning.
-import { indexOf, readHead, readPart, readUnitsChunk } from '../layer-proto/format.mjs'
+//
+// The late chunks (PDF-READER §19.15): a units chunk told past the head's — the bitmap figures' labels, which the maker announces
+// after its last part — is read after the head's, in id order, into the index (format.mjs indexOf's, or indexWithLate's once the
+// index is read: a new index, which `state()` gives and the side opens its door again with). One that cannot be fetched or read is
+// passed over with a warning: those figures stay the original's, and nothing else of the layer is refused.
+import { indexOf, indexWithLate, LATE_MAX, readHead, readPart, readUnitsChunk } from '../layer-proto/format.mjs'
 
 /** a ref as the readers take it: its own fields, a part's `prev` left out (the readers read a part's own) */
 const refOf = r => ({ kind: r.kind, sha256: r.sha256, bytes: r.bytes, ...(r.from === undefined ? {} : { from: r.from }), ...(r.to === undefined ? {} : { to: r.to }), ...(r.page === undefined ? {} : { page: r.page }) })
@@ -50,6 +55,11 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
   let reading = false
   /** the units refs told, whose bytes go with the index */
   const unitShas = new Set()
+  /** every units ref told, by its first id: the head's are read by the head's list, those past it are the late chunks */
+  const toldUnits = new Map()
+  /** the late chunks' refs read into the index, or passed over, by digest */
+  const lateDone = new Set()
+  let readingLate = false
   function refuse(code, e) {
     if (refused || disposed) return
     refused = code
@@ -76,16 +86,63 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
         bytes.delete(head.units[i].sha256)
         if (gone()) return
       }
-      index = indexOf(head, chunks)
+      // (the late chunks told so far, in the index from the first: a catalog names them with the head's)
+      const late = []
+      for (const r of lateRefs(chunks.at(-1)?.to ?? -1)) {
+        lateDone.add(r.sha256)
+        try { late.push(await readUnitsChunk(await fetch(r), { ref: refOf(r), before: late.at(-1) ?? chunks.at(-1) ?? null })) } catch (e) {
+          if (gone()) return
+          warn('the layer\'s late units', e)
+          break
+        } finally { bytes.delete(r.sha256) }
+      }
+      // (late chunks the index refuses, a unit of another kind among them: passed over, the layer the head's)
+      try { index = indexOf(head, [...chunks, ...late]) } catch (e) {
+        if (!late.length) throw e
+        warn('the layer\'s late units', e)
+        index = indexOf(head, chunks)
+      }
       for (const sha of unitShas) bytes.delete(sha)
       resolveIndex(index)
       changed()
       void readChain()
+      void readLate()
     } catch (e) {
       bytes.delete(headRef.sha256)
       for (const sha of unitShas) bytes.delete(sha)
       if (!gone()) refuse(e?.axtCode ?? 'index', e)
     } finally { reading = false }
+  }
+
+  /** the late chunks' refs told and not yet read, from the id after `last` on, as long as they follow one another */
+  function lateRefs(last) {
+    const out = []
+    for (let next = last + 1, r; (r = toldUnits.get(next)) && out.length < LATE_MAX; next = r.to + 1) {
+      if (lateDone.has(r.sha256)) continue
+      out.push(r)
+    }
+    return out
+  }
+  /** a late chunk told after the index: read alone, the index's dropped ids told it, and the index made anew with it */
+  async function readLate() {
+    if (!index || readingLate || disposed) return
+    readingLate = true
+    try {
+      for (let [r] = lateRefs(index.units.length - 1); r && !disposed; [r] = lateRefs(index.units.length - 1)) {
+        lateDone.add(r.sha256)
+        try {
+          const c = await readUnitsChunk(await fetch(r), { ref: refOf(r), dropped: [...index.dropped] })
+          if (disposed) return
+          index = indexWithLate(index, c)
+          changed()
+        } catch (e) {
+          if (gone()) return
+          // (a late chunk that cannot be read: its figures stay the original's, and the layer is the layer it was)
+          warn('the layer\'s late units', e)
+          return
+        } finally { bytes.delete(r.sha256) }
+      }
+    } finally { readingLate = false }
   }
 
   // ---------------------------------------------------------------- the chain
@@ -194,7 +251,13 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
      *  the chain */
     tell({ units, head, parts, end: told1 } = {}) {
       if (disposed || refused) return
-      if (!index) for (const r of units ?? []) { unitShas.add(r.sha256); void fetch(r) }
+      for (const r of units ?? []) {
+        if (!Number.isInteger(r?.from) || toldUnits.has(r.from)) continue
+        toldUnits.set(r.from, r)
+        // (before the index, every chunk told is fetched at once; after it, only one past it, a late chunk, is)
+        if (!index) { unitShas.add(r.sha256); void fetch(r) }
+      }
+      if (index && units?.length) void readLate()
       if (head) {
         if (!headRef) { headRef = head; void readIndex() } else if (head.sha256 !== headRef.sha256 && !otherHead) { otherHead = true; warn('another head is passed over', new Error(head.sha256)) }
       }

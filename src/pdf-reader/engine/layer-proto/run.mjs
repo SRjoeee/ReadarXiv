@@ -63,7 +63,8 @@ import * as TL from './textlayer.mjs'
 import { locatedWhole, shortSkipsOf, texParts, texRects } from './tex.mjs'
 import { shown as shownPiece, trPiecesOf } from '../layer/pieces.mjs'
 import { fitFigure, sameAsSource } from './figure-fit.mjs'
-import { FIGURE_KIND } from '../rules/content-classes.mjs'
+import { FIGURE_KIND, OCR_KIND } from '../rules/content-classes.mjs'
+import { fitOcr } from './ocr-fit.mjs'
 import { NAME_KIND } from './units.mjs'
 import { addUnitWords, copyWords, freezeWords, newWords, pieceOffsets, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
 import { closureOf, rowLeadOf } from './need.mjs'
@@ -703,7 +704,8 @@ export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
  * default): a unit is drawn by hiding its groups on the pages it is drawn on (hide.mjs, visibility.mjs), its crops cut from the page
  * with every unit's text hidden, what its reading keeps pasted from a render that shows it. `hiding` (the file's word on what it
  * could not wrap): `unhidden(id)`, why a unit's ink cannot be hidden (marks, across, spell, page, bounds) or null, and
- * `rules(page)`, the table rules near the page's cells (x0, y0, x1, y1 stride 4: layer2.mjs cellBands); a unit it says is unhidden,
+ * `rules(page)`, the table rules near the page's cells (x0, y0, x1, y1 stride 4: layer2.mjs cellBands), and a page's figures' units and
+ * bitmap figures' labels (`figures(page)`, `ocr(page)`, drawn where `figuresShown`: paintFigures, paintOcr); a unit it says is unhidden,
  * or whose text group the document does not hold, is the original's. Absent: every unit the document holds a group for is drawn.
  * `labels`: { captions }, which of the two floats, figures and tables, the final names in the target's language (the
  * record's `captions`, live.mjs captionsOf): a float's label is drawn in the target's name for it, which the layout rules
@@ -1484,6 +1486,65 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       Object.assign(rec, { drawn: true, text, size: r1(fit.size), x: r1(x), y: r1(y), w: r1(fit.width) })
     }
     figuresDone[pg] = 2
+  }
+
+  // ---- the bitmap figures' labels (the content class `ocr`, PDF-READER §19.15): each label of a page's images the layer's late
+  // chunk carries (hiding.ocr: its place in its unit, ocr-rows.mjs), drawn where the reader shows figures translated
+  // (hiding.figuresShown): over each of its lines a patch of the ground's colour, then its translation in its lines' boxes by the
+  // fit rule (ocr-fit.mjs: on each line's middle along its direction, its anchor kept, at its size or shrunk to the rules' last
+  // floor), in a face of the paper's sans family, in its ink's colour; every patch of the page before any label's text. Else
+  // left the original's, its patches not drawn, why told (`no row`, `kept`, `untranslated`, `same` as its source, a face's
+  // refusal, `unfit`, `outside` its page's view). A page whose labels are shown waits for their rows as for its figures'.
+  // `ocr`: each label of the pages laid, drawn or why not
+  const ocrRecs = []
+  /** each page's labels: 1 while painted, 2 once painted; a page is ready at 2 alone */
+  const ocrDone = new Uint8Array(N + 1)
+  const ocrOn = pg => (hiding?.figuresShown ? hiding.ocr?.(pg) ?? [] : [])
+  const ocrWait = pg => !ended && ocrOn(pg).some(o => pending.has(o.id))
+  const paintOcr = async pg => {
+    if (ocrDone[pg]) return
+    ocrDone[pg] = 1
+    const patches = [], texts = [], vw = views[pg - 1]
+    // (the page's view, which a patch's corners stand in: a place the maker gave for another page's box is the original's)
+    const view = vw?.viewBox ?? null
+    const inView = ([x, y]) => !view || (x >= Math.min(view[0], view[2]) - 1 && x <= Math.max(view[0], view[2]) + 1 && y >= Math.min(view[1], view[3]) - 1 && y <= Math.max(view[1], view[3]) + 1)
+    for (const o of ocrOn(pg)) {
+      const rec = { id: o.id, page: pg, drawn: false, why: null }
+      ocrRecs.push(rec)
+      const u = U.get(o.id)
+      if (!translated(u)) { rec.why = !u ? 'no row' : u.state === 'kept' ? 'kept' : 'untranslated'; continue }
+      const text = u.pieces.map(p => (p.t === 'text' ? shownPiece(p) : ' ')).join('').replace(/\s+/g, ' ').trim()
+      if (!text || sameAsSource(text, u.src ?? '')) { Object.assign(rec, { why: 'same', text }); continue }
+      if (!o.lines.every(l => l.patch.every(inView))) { Object.assign(rec, { why: 'outside', text }); continue }
+      const st = { fam: 'sans', bold: false, italic: false, caps: false, design: designs.sans ?? designs.serif }
+      const face = faceOf(st, /[\u2e80-\u9fff\uac00-\ud7af\u3040-\u30ff\uf900-\ufaff]/.test(text) ? 'cjk' : 'latin', to)
+      const drawn = L2.nameRuns(text, face, to)
+      if (FS) {
+        const tFonts = performance.now()
+        const no = await FS.check([{ face: drawn.face, text: drawn.text }])
+        fontWait += performance.now() - tFonts
+        if (disposed) return
+        if (no) { Object.assign(rec, { why: no.why, text }); continue }
+      }
+      const fit = fitOcr(o, drawn.text, s => L2.runsWidth(L2.nameRuns(s, drawn.face, to)), P.floorMin)
+      if (!fit) { Object.assign(rec, { why: 'unfit', text }); continue }
+      const r = rows[pg - 1], px = pxOf(pg)
+      // (the patches' box on the page: where the original's text was covered, for the links' and the text layer's question)
+      const corners = o.lines.flatMap(l => l.patch.map(([x, y]) => px(x, y)))
+      const xs = corners.map(c => c[0]), ys = corners.map(c => c[1])
+      const opsFrom = r.ops.length
+      r.ops.push({ op: 'hidden', rects: [[Math.min(...xs), Math.min(...ys), Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)]] })
+      audit?.push({ what: 'erase', unit: o.id, ocr: true, page: pg, box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] })
+      const svg = L2.svgOfOcr({ id: o.id, place: o, laid: fit.lines, face: drawn.face, size: fit.size }, cssOf(pg), scale)
+      patches.push(svg.patches)
+      texts.push(svg.text)
+      // (a level line's words in the page's text layer, as a figure's; a turned one's are not selectable)
+      const level = fit.lines.filter(l => Math.abs(l.angle) < 1e-6)
+      if (level.length) textRecord(r, opsFrom, `o${o.id}`, undefined, level.map(l => TL.nameSeg(l.text, l.x, l.width, l.y, fit.size)))
+      Object.assign(rec, { drawn: true, text, size: r1(fit.size), lines: fit.lines.length })
+    }
+    if (patches.length) rows[pg - 1].markup.push(...patches, ...texts)
+    ocrDone[pg] = 2
   }
 
   // the columns of each page, as its paragraphs' lines span them (each unit's lines as it is added, addUnits)
@@ -2834,7 +2895,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const account = () => {
     for (const c of deferred.splice(0)) { fixed.add(c.id); const d = decisionOf(c); if (d.skip) skipped.push(d.skip) }
     // (a figure's ink unit is no unit the left or the file places: its page's figures tell it, paintFigures)
-    U.forEach((u, id) => { if (!translated(u) || candOf.has(id) || u.kind === FIGURE_KIND) return; const no = refusalOf(id, u); skipped.push(no ? refusedOf(id, u, no) : unanchoredOf(id, u, 'unlocated')) })
+    U.forEach((u, id) => { if (!translated(u) || candOf.has(id) || u.kind === FIGURE_KIND || u.kind === OCR_KIND) return; const no = refusalOf(id, u); skipped.push(no ? refusedOf(id, u, no) : unanchoredOf(id, u, 'unlocated')) })
   }
   /** whether laying page p waits for nothing more to come, neither a part nor a row (the 1b-D design §2.1): the parts cover
    *  its closure's bound, or have ended, and every entry it decides is in K and decided or settleable */
@@ -2842,7 +2903,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const C = closure(p)
     if (!partsEnded && through < C.bound) return false
     for (const i of C.rows) { if (i >= K.length) return false; const c = K[i]; if (!c.decided && !settleable(c)) return false }
-    if ([p, ...C.draw].some(figuresWait)) return false
+    if ([p, ...C.draw].some(figuresWait) || [p, ...C.draw].some(ocrWait)) return false
     return true
   }
   /** the ids of the units whose rows laying page p still waits for, taken neither nor ended (its closure's over K so far: a
@@ -2860,7 +2921,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       for (const id of membersOf.get(c.group) ?? []) if (pending.has(id)) out.add(id)
     }
     // (its pages' figures', where they are shown)
-    for (const q of new Set([p, ...closure(p).draw])) for (const f of figuresOn(q)) if (pending.has(f.id)) out.add(f.id)
+    for (const q of new Set([p, ...closure(p).draw])) for (const f of [...figuresOn(q), ...ocrOn(q)]) if (pending.has(f.id)) out.add(f.id)
     return [...out].sort((a, b) => a - b)
   }
   const toldComplete = new Uint8Array(N + 1)
@@ -2883,6 +2944,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (!drawnPages[q] || failedPages.has(q) || undecided[q] || laid[q].length !== expected[q]) return false
     // (its figures painted, where it has figures shown)
     if (figuresDone[q] !== 2 && figuresOn(q).length) return false
+    if (ocrDone[q] !== 2 && ocrOn(q).length) return false
     if (PASSES && expected[q]) {
       if (!passed[q]) return false
       for (const f of firstsOn[q] ?? []) if (!paintedOn[q]?.has(f)) return false
@@ -3005,13 +3067,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       }
       if (!missing && !partsEnded && through < C.bound) missing = 'part'
       // (and its pages' figures' rows, where the reader shows figures translated)
-      if (!missing && [p, ...C.draw].some(figuresWait)) missing = 'rows'
+      if (!missing && [p, ...C.draw].some(q => figuresWait(q) || ocrWait(q))) missing = 'rows'
       if (missing) { report(ms); if (!still()) return; await wait(missing); continue }
       // its pages' figures painted (paintFigures), once each, before its units: their groups and its units' are apart
       for (const q of new Set([p, ...C.draw])) {
-        if (!drawnPages[q] || failedPages.has(q) || figuresDone[q]) continue
-        await paintFigures(q)
-        if (disposed) return
+        if (!drawnPages[q] || failedPages.has(q)) continue
+        if (!figuresDone[q]) { await paintFigures(q); if (disposed) return }
+        if (!ocrDone[q]) { await paintOcr(q); if (disposed) return }
       }
       if (!planned) plan()
       report(ms)
@@ -3123,6 +3185,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     /** the figures' text of the pages laid (the content class `figures`): each figure unit { id, group, page, drawn, why, and where
      *  drawn its text, size, x, y and width } */
     figures: figureRecs,
+    /** the bitmap figures' labels of the pages laid (the content class `ocr`): each { id, page, drawn, why, and where drawn its
+     *  text, size and lines } */
+    ocr: ocrRecs,
     /**
      * Page `pg`'s SVG, a new element each call (the 1b design §1, I2 and I3): class, size and spacing as the page's own, its
      * markup the strings its names and units were set in, in their order. No layout, face, ink or PDF.js call (I4): a parse of

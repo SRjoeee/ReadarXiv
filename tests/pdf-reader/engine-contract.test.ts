@@ -105,9 +105,9 @@ describe('the engine\'s imports', () => {
     expect(engineViolations(inEngine)).toEqual([])
   })
 
-  it('reach the core by the four allowed modules alone, each file of them naming modules by relative path only', () => {
+  it('reach the core by the allowed modules alone, each file of them naming modules by relative path only', () => {
     const outside = closure.filter(f => !f.startsWith(`${ENGINE}/`))
-    // (the entries reach three of the four: names.ts is the figures' and the extension's session's)
+    // (the entries reach all of them but names.ts, the figures' and the extension's session's)
     expect(outside.every(core), outside.join(' ')).toBe(true)
     expect(outside.length).toBeGreaterThanOrEqual(2)
     for (const file of outside) {

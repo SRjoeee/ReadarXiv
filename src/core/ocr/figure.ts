@@ -21,7 +21,7 @@ async function framesOf(image: Blob): Promise<number> {
  * decode — is answered without 14 MB of WebAssembly compiled and two models loaded, to be held for a minute, for a
  * figure that gets no overlay (Codex on #281)
  */
-export async function readFigure(image: Blob, recogniser: () => Promise<Recogniser>): Promise<OcrResult> {
+export async function readFigure(image: Blob, recogniser: () => Promise<Pick<Recogniser, 'recognise'>>): Promise<OcrResult> {
   // `createImageBitmap` turns the pixels by the file's EXIF orientation, as the page's <img> does: the corners come
   // out in the frame the reader sees
   const bitmap = await createImageBitmap(image)

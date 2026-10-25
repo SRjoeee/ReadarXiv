@@ -285,6 +285,10 @@ export function createLayerSide(view, o) {
     if (f.refused) return refuse(f.refused)
     if (!f.index) return
     if (!index) indexed(f.index)
+    // (an index made anew with a late chunk, the bitmap figures' labels, PDF-READER §19.15: the door opened again over it, as a
+    // change of the toggles opens it, each laid page kept until the new door's commits; the shapes and the contents are of the
+    // units the parts locate, which a late chunk holds none of)
+    else if (f.index !== index) { index = f.index; reopenWanted = true }
     // the original open before the first open: the places are its pages, and the extension's base check reads its bytes or
     // its end (the web's is bound by its route). Once a door is open, a dropped original stops nothing: the door reads the
     // composed document

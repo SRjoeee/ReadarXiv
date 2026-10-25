@@ -345,6 +345,8 @@ export declare function renameRuns<R extends { text: string }>(runs: readonly R[
 export declare const widthOf: (s: string, face: Face) => number
 /** a babel name drawn in the target's word, as SVG markup (a <g data-n="occurrence">) */
 export declare function svgOfName(o: { occurrence: number; text: string; x: number; baseline: number; size: number; face: Face; color?: string | null; runs?: readonly { s: string; k: number }[] | null }, toPx: (x: number, y: number) => number[], scale: number): string
+/** a bitmap figure's label as SVG: its patches (the ground's colour over each line) and its text (each line it fills), apart */
+export declare function svgOfOcr(o: { id: number; place: import('./ocr-rows.mjs').OcrPlace; laid: readonly import('./ocr-fit.mjs').OcrLineLaid[]; face: Face; size: number }, toPx: (x: number, y: number) => number[], scale: number): { patches: string; text: string }
 /** a character style's colour as a run takes it: its fill where told (black: `color` undefined), nothing where not */
 export declare function colourOfStyle(st: { fill?: number } | null | undefined): { color?: string }
 /** a character style's font class, its fill aside (the class itself where no fill was set on it) */

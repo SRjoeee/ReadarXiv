@@ -125,11 +125,12 @@ export function platformImportsOf(file, text) {
  *  resolves a value. */
 export const ENGINE = /^src\/pdf-reader\/engine\//
 
-/** The four modules of the core an engine file may import, by their path with no extension or index file (the
- *  placeholder wire's tokens, the sentence splitter, the figure-name test, the runs of a formula split across inline
- *  formulas). Nothing deeper in the core: a sibling of one of them is another module. The closure of each holds those four
- *  alone, by relative path (a test holds it), so the web's pin, a plain page and plain node load it as the engine's own files */
-export const ENGINE_ALLOW = ['src/core/sentences', 'src/core/protector/tokens', 'src/core/names', 'src/core/protector/math-runs']
+/** The modules of the core an engine file may import, by their path with no extension or index file (the placeholder wire's
+ *  tokens, the sentence splitter, the figure-name test, the runs of a formula split across inline formulas; and the bitmap
+ *  figures' (PDF-READER §19.15): the recogniser's version, the extension's lines to labels and the numeric cell it reads).
+ *  Nothing deeper in the core: a sibling of one of them is another module. The closure of each holds those alone, by relative
+ *  path (a test holds it), so the web's pin, a plain page and plain node load it as the engine's own files */
+export const ENGINE_ALLOW = ['src/core/sentences', 'src/core/protector/tokens', 'src/core/names', 'src/core/protector/math-runs', 'src/core/ocr/version', 'src/core/image/boxes', 'src/core/rules/numeric']
 
 /** The packages an engine file may import, by name and under which directory. The engine imports no PDF library: the
  *  layout maker is handed it (`PL`) */

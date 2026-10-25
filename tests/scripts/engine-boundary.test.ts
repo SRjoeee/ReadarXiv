@@ -211,10 +211,10 @@ describe('the engine\'s packages', () => {
 })
 
 describe('the exported rule', () => {
-  it('scopes to src/pdf-reader/engine/ and allows the four core modules by path', () => {
+  it('scopes to src/pdf-reader/engine/ and allows the core modules by path: the four of the text, the three of the bitmap figures', () => {
     expect(ENGINE.test(`${E}/mt.mjs`)).toBe(true)
     expect(ENGINE.test('src/pdf-reader/controller.ts')).toBe(false)
-    expect(ENGINE_ALLOW).toEqual(['src/core/sentences', 'src/core/protector/tokens', 'src/core/names', 'src/core/protector/math-runs'])
+    expect(ENGINE_ALLOW).toEqual(['src/core/sentences', 'src/core/protector/tokens', 'src/core/names', 'src/core/protector/math-runs', 'src/core/ocr/version', 'src/core/image/boxes', 'src/core/rules/numeric'])
   })
 })
 
@@ -377,13 +377,13 @@ describe('the repository\'s engine today', () => {
     for (const file of ENGINE_MOVE_OUT) expect(found.some(v => v.file === file), `${file} no longer violates: take it off the list`).toBe(true)
     for (const target of ENGINE_MOVE_IN) expect(found.some(v => resolveFor(v) === target), `${target} is no longer imported from the engine: take it off the list`).toBe(true)
   })
-  it('has a closure behind the four core modules it may import that is alias-free and holds nothing but those four', () => {
+  it('has a closure behind the core modules it may import that is alias-free and holds nothing but them', () => {
     const allowed = new Set<string>()
     for (const module of ENGINE_ALLOW as string[]) for (const file of closureOf([module]) as Set<string>) allowed.add(file)
     for (const file of allowed) {
       for (const spec of valueImportsOf(readFileSync(file, 'utf8')) as string[]) expect(spec.startsWith('.'), `${file} imports ${spec}`).toBe(true)
-      expect((ENGINE_ALLOW as string[]).includes(resolveSpecifier('src/x.ts', file)), `${file} is not one of the four`).toBe(true)
+      expect((ENGINE_ALLOW as string[]).includes(resolveSpecifier('src/x.ts', file)), `${file} is not one of them`).toBe(true)
     }
-    expect(allowed.size).toBe(4)
+    expect(allowed.size).toBe(ENGINE_ALLOW.length)
   })
 })

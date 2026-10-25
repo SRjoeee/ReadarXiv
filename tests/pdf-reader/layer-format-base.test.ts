@@ -91,6 +91,8 @@ describe('the head of BUNDLE 8', () => {
     const h = parsed(M.head)
     h.bundle = '7'
     h.base = { ...BASE }
+    // (7's versions: no recogniser's, which a head of 10 names)
+    delete h.versions.ocr
     const f = forged('head', h)
     const read = await readHead(f.bytes, { ref: f.ref })
     expect(read).toMatchObject({ bundle: '7', base: { source: 'arxiv', ...BASE }, orig: null })
@@ -124,6 +126,7 @@ describe('layerDraws: the one predicate of whether a head\'s layer draws', () =>
     const seven = parsed(M.head)
     seven.bundle = '7'
     seven.base = { ...BASE }
+    delete seven.versions.ocr
     const f = forged('head', seven)
     expect(layerDraws((await readHead(f.bytes, { ref: f.ref })).base)).toBe(false)
     for (const b of [null, undefined, {}, { source: 'Ours' }, 'ours']) expect(layerDraws(b as never), JSON.stringify(b)).toBe(false)
@@ -178,6 +181,7 @@ describe('the catalog of BUNDLE 8 names the base', () => {
     const seven = parsed(w)
     seven.bundle = '7'
     delete seven.base
+    delete seven.versions.ocr
     expect(await readCatalog(new TextEncoder().encode(JSON.stringify(seven)))).toMatchObject({ bundle: '7', base: null })
   })
 })

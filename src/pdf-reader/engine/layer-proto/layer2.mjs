@@ -4305,6 +4305,26 @@ export function svgOfFigure({ group, text, x, y, angle, size, face, color = null
   return `<g data-f="${esc(group)}"><text transform="translate(${n2(px)} ${n2(py)})${turn}"><tspan class="${faceClass(face)}" x="0" y="0" font-size="${n2(size * scale * (face.size ?? 1))}"${fill}>${esc(text)}</tspan></text></g>`
 }
 
+/**
+ * A bitmap figure's label drawn in the target's words (run.mjs paintOcr, the content class `ocr`) as SVG, in two parts the page
+ * puts in its order (every label's patches before any label's text, so that no patch covers a translation): `patches`, a
+ * polygon of the ground's colour (`bg`, 0xRRGGBB) over each line of the original in the image (`place.lines`' patch quads, PDF
+ * units: the original's text under it is covered, the image is not rewritten); `text`, each line it fills (ocr-fit.mjs fitOcr's)
+ * a <text> on its baseline, turned by its angle, in `face` at `size`, in the ink's colour (`fg`). `toPx(x, y)`: PDF to the SVG's
+ * CSS pixels; `scale`: CSS pixels per PDF unit
+ */
+export function svgOfOcr({ id, place, laid, face, size }, toPx, scale) {
+  const pts = q => q.map(([x, y]) => toPx(x, y).map(n2).join(',')).join(' ')
+  const patches = `<g data-o="${id}">${place.lines.map(l => `<polygon points="${pts(l.patch)}" fill="${fillAttr(hexOf(place.bg))}"/>`).join('')}</g>`
+  const fill = ` fill="${fillAttr(hexOf(place.fg))}"`
+  const lines = laid.map(l => {
+    const [px, py] = toPx(l.x, l.y)
+    const turn = Math.abs(l.angle) > 1e-6 ? ` rotate(${n2(-l.angle)})` : ''
+    return `<text transform="translate(${n2(px)} ${n2(py)})${turn}"><tspan class="${faceClass(face)}" x="0" y="0" font-size="${n2(size * scale * (face.size ?? 1))}"${fill}>${esc(l.text)}</tspan></text>`
+  }).join('')
+  return { patches, text: `<g data-o="${id}">${lines}</g>` }
+}
+
 // ---- the scorer's view of a laid-out unit
 
 /** the translated text's runs as drawn, by style key (class, weight, slant or its stand-in), placeholders' text left out */

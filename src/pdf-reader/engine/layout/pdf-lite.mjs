@@ -33,6 +33,9 @@
 // once, before the first getDocument. A document whose pages' draw geometry is read (pipeline/draw-data.mjs) is opened with
 // `maxImageSize: LINK_TEXT_PIXELS` and `fontExtraProperties: true`: without the latter a font carries no ToUnicode map and every page
 // tells its draw as none (`why: 'props'`).
+// A third opt-in, `maxImageSize: OCR_IMAGE_PIXELS`, decodes an image of OCR_PIXELS_MAX pixels at most and refuses one larger the
+// same way (the bitmap figures' pass, pipeline/ocr-pass.mjs: `w` and `h` are buildPaintImageXObject's own, its image's /Width and
+// /Height, in scope at the anchor).
 // Server-side only: the browser layer (the extension, run.mjs's rendering, copyOf) keeps stock
 // PDF.js, which has to decode the images it draws.
 //
@@ -52,9 +55,17 @@ export const NO_IMAGE_PIXELS = Number.MAX_SAFE_INTEGER
  *  limit" to a stock worker too */
 export const LINK_TEXT_PIXELS = Number.MAX_SAFE_INTEGER - 1
 
+/** `maxImageSize` for a document read for its images' pixels up to OCR_PIXELS_MAX each (the bitmap figures' recogniser:
+ *  pipeline/ocr-pass.mjs): an image past it keeps its paint operator and gets no pixels, so that it is counted as past the cap
+ *  (`big`) rather than lost with its placement as a stock worker's `maxImageSize` drops it; "no limit" to a stock worker */
+export const OCR_IMAGE_PIXELS = Number.MAX_SAFE_INTEGER - 2
+/** the pixels an image may have to be decoded for the recogniser: the 2026-10-03 probe's largest figure, 10,973 × 3,570, and its
+ *  peak of 975 MiB, with room for none larger (docs/route/orphan-text.md stage 6) */
+export const OCR_PIXELS_MAX = 40_000_000
+
 /** the one line of buildPaintImageXObject that decodes an image's pixels, in the callback of the unawaited buildImage */
 const ANCHOR = 'imgData = await imageObj.createImageData(false, isOffscreenCanvasSupported);'
-const GUARD = `if (this.options.maxImageSize >= ${LINK_TEXT_PIXELS}) throw new Error("image pixels not decoded");\n      `
+const GUARD = `if (this.options.maxImageSize >= ${LINK_TEXT_PIXELS} || (this.options.maxImageSize === ${OCR_IMAGE_PIXELS} && w * h > ${OCR_PIXELS_MAX})) throw new Error("image pixels not decoded");\n      `
 /** the one condition of Page.getAnnotationsData under which a Link annotation's overlaid text is made: the page's whole text
  *  extracted again, through an Intersector, for every page that holds a link. The server's readers (the marks read, the
  *  layout maker) take an annotation's rectangle and destination and find the glyphs under it themselves: for a document that
