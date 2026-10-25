@@ -324,6 +324,13 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     const labelled = [page(['Lemma 2 (', { pt: 'h0s' }, 'Bound', { pt: 'h0e' }, ').', { dx: 3 }, '(i)', { dx: 3 }, { pt: '1s' }, 'Every x', { pt: '1e' }])]
     const l = ownOf(labelled, { units: [{ kind: 'heading', src: 'Bound' }, { kind: 'theorem', src: 'Every x' }] })
     expect(groupsOf(l, labelled)).toEqual({ u0: 'Bound).', u1: 'Every x', 'u1.l': '(i)' })
+    // (a note that ends in a placeholder, set after the note's end mark (a heading's marks around its text): the ")." after the
+    // placeholder abuts it, not the end mark's glyph, and is the note's all the same. 2610.18513v1 p35's "Lemma A.1 (… [Bobkov and
+    // Ledoux, 2009b])." left a stray ")." standing under the drawing)
+    const cited = [page(['Lemma A.1 (', { pt: 'h0s' }, 'Inequality', { pt: 'h0e' }, { dx: 3 }, { pt: 'p0.1a' }, '[Bobkov, 2009b]', { pt: 'p0.1b' }, ').', { dx: 3 }, { pt: '1s' }, 'If x', { pt: '1e' }])]
+    const c = ownOf(cited, { units: [{ kind: 'heading', bracketed: true, pieces: [{ t: 'text', s: 'Inequality ' }, { t: 'ph', src: '\\citep{bl}' }] }, { kind: 'theorem', src: 'If x' }] })
+    expect(groupsOf(c, cited)).toEqual({ 'u0.l': 'Lemma A.1 (', u0: 'Inequality).', 'u0.p': '[Bobkov, 2009b]', u1: 'If x' })
+    expect([c.units.get(0)?.unhidden, c.units.get(1)?.unhidden, c.units.get(1)?.labelKept]).toEqual([null, null, false])
     // (punctuation apart from the unit before, by a word's space or more, is no head's: as before, this unit's label)
     const apart = [page([{ pt: 'h0s' }, 'Bound', { pt: 'h0e' }, { dx: 4 }, '1.', { pt: '1s' }, 'Every x', { pt: '1e' }])]
     expect(groupsOf(ownOf(apart, { units: [{ kind: 'heading', src: 'Bound' }, { kind: 'theorem', src: 'Every x' }] }), apart)).toEqual({ u0: 'Bound', u1: 'Every x', 'u1.l': '1.' })

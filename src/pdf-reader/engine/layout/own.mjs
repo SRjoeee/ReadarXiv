@@ -240,6 +240,9 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
     work += S.glyph + q
     const glyphAt = i => { if (R.glyph[i] !== r || gOwn[p - 1][i] !== null) return; const G = pg.glyphs[i]; if (Math.abs(G.y - F.y) < 0.5 * Math.max(G.size, F.size)) lead.glyphs.push([p, i]) }
     let qq = q - 1
+    // (the placeholders the walk passed over, each its unit and the glyphs between its points: not yet claimed, this pass
+    // running before the placeholders')
+    const passed = []
     for (; qq >= 0; qq--) {
       const X = pg.points[qq]
       for (; g >= X.glyph; g--) glyphAt(g)
@@ -247,6 +250,7 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
       const c = CLOSING.exec(X.name), nm = NAME_END.exec(X.name)
       const open = c ? `${c[1]}${c[2]}.${c[3]}a` : nm ? `n${nm[1]}.${nm[2]}.s` : null
       const o = open ? (where.get(open) ?? []).find(([op, oq]) => op === p && oq < qq) : null
+      if (o && c) passed.push({ unit: Number(c[2]), from: pg.points[o[1]].glyph, to: X.glyph })
       if (o) { qq = o[1]; g = Math.min(g, pg.points[qq].glyph - 1) }
       // (a babel name passed over: what stands between it and the start is the head's joint, amsthm's "." after "Proof")
       if (o && nm) afterName.add(id)
@@ -261,11 +265,15 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
     // the closing punctuation a head macro sets after the unit before it, right after that unit's end mark and abutting its
     // last glyph on this line (amsthm's "(Note)." after a theorem's note, a run-in heading's \\@addpunct), is that unit's text:
     // its group hides it where that unit is drawn, as the line's erase did before the wrap (2610.21491v1 p7u71), and no label
-    // of this unit's, which would leave it standing under this unit's drawing
+    // of this unit's, which would leave it standing under this unit's drawing. Its last glyph is the one right before the
+    // punctuation, the unit's text or a placeholder of its set after its end mark (a note that ends in a citation: a heading's
+    // marks stand around its text, `\\axthmark{h…e} \\citep{…}`), which the walk back passed over: measured against the end
+    // mark's glyph, the ")." after 2610.18513v1 p35's "[Bobkov and Ledoux, 2009b]" stood a citation away and was no one's
     const prev = qq >= 0 ? END.exec(pg.points[qq].name) : null
     if (prev && Number(prev[2]) !== id) {
-      const mine = `u${prev[2]}`, E = pg.points[qq].glyph
-      let k = 0, left = E > 0 && gOwn[p - 1][E - 1] === mine ? pg.glyphs[E - 1] : null
+      const mine = `u${prev[2]}`, L = lead.glyphs[0][1], before = L > 0 ? gOwn[p - 1][L - 1] : null
+      const its = before === mine || (before === null && passed.some(x => x.unit === Number(prev[2]) && L - 1 >= x.from && L - 1 < x.to))
+      let k = 0, left = its ? pg.glyphs[L - 1] : null
       while (left && k < lead.glyphs.length) {
         const G = pg.glyphs[lead.glyphs[k][1]]
         if (!HEAD_PUNCT.test((G.u ?? '').normalize('NFKC')) || G.x0 - left.x1 >= HEAD_ABUT * Math.max(G.size, left.size) || Math.abs(G.y - left.y) >= 0.5 * Math.max(G.size, left.size)) break
