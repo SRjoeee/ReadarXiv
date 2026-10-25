@@ -106,9 +106,16 @@ const wRef = ch => {
 /** a character's width at 100 px in its item's own design (iteration 3: Times' for all, before, which put a Palatino
  *  or Computer Modern line's characters points off by its end: a caption's label read "2" for "Figure 2:") */
 const designW = new Map()
+/** each style's font at 100 px in its design, by the style object (one a run of an item, asked for each of its characters: a
+ *  face resolved through the role table each time was most of wDesign's time, the trace of 2026-10-25) */
+const designFont = new WeakMap()
 const wDesign = (ch, st) => {
   if (!st?.known) return wRef(ch)
-  const font = fontString(faceOf({ ...st, fam: st.fam === 'math' ? 'serif' : st.fam }, 'latin', 'en'), 100)
+  let font = designFont.get(st)
+  if (font === undefined) {
+    font = fontString(faceOf({ ...st, fam: st.fam === 'math' ? 'serif' : st.fam }, 'latin', 'en'), 100)
+    designFont.set(st, font)
+  }
   const key = `${font}|${ch}`
   let w = designW.get(key)
   if (w === undefined) {
