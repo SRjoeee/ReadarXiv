@@ -10,10 +10,15 @@ export const UNIT_FLAG_BITS = Object.freeze({ TITLE: 1, FRONT: 2, BRACKETED: 4, 
 const FLAG_BITS = 15
 /** a piece's tag: a text, a placeholder, a group's open and close, a nested unit */
 const TEXT = 0, PH = 1, OPEN = 2, CLOSE = 3, NESTED = 4
+/** a string as the engine's text holds it: its UTF-8 bytes read latin1 (mt.mjs plainSource decodes it), as a source unit's
+ *  text piece is */
+const engineText = s => (/^[\t\n\r -~]*$/.test(s) ? s : String.fromCharCode(...new TextEncoder().encode(s)))
 /** the display edges a unit may have (mt.mjs displayEdges), in their order */
 export const EDGES = Object.freeze(['lead', 'trail', 'inner'])
 /** a unit's table cell's keys, in their order */
 export const CELL = Object.freeze(['table', 'row', 'col', 'span', 'head'])
+/** a structural name's unit (bundleUnitsOf): no page's ink, a word of the target's for the layer */
+export const NAME_KIND = 'name'
 /** a unit's kind, a lower-case word */
 const KIND = /^[a-z]{1,32}$/
 /** an ink unit's kind (layout/ink-units.mjs INK_KIND's): `ink` and its class */
@@ -88,12 +93,17 @@ function pieceOf(p, idOf) {
  * edges or null, its pieces], by its index. Its flags TITLE, FRONT and BRACKETED as the front end set them, KEPT where
  * the paper keeps it (`kept`, nameCells); its edges displayEdges' (mt.mjs), restated here so that the reader's parse
  * loads no front end (a test holds the two equal). Language-independent and deterministic: every object written in one
- * order. Throws on a piece the front end does not make
+ * order. Throws on a piece the front end does not make.
+ * After the source's units, the paper's structural names (openPaper's `names`: source/paper-names.mjs), each a unit of kind
+ * `name` of one text piece, its name: translated with the paper's units and cached by its text as any unit, never laid (it is
+ * no page's ink), read by the layer as the target's word for that name (PDF-READER §19.14). The source's units keep their ids
  */
 export function bundleUnitsOf(paper) {
   const idOf = new Map()
   paper.units.forEach((u, i) => idOf.set(u, i))
-  return paper.units.map(u => {
+  // (each name as the engine's text, as a source unit's text piece holds it: a UTF-8 file's accented name as its bytes)
+  const names = (paper.names ?? []).map(s => [NAME_KIND, 0, null, null, null, [[TEXT, engineText(s)]]])
+  return [...paper.units.map(u => {
     const flags = (u.title ? UNIT_FLAG_BITS.TITLE : 0) | (u.front ? UNIT_FLAG_BITS.FRONT : 0) | (u.bracketed ? UNIT_FLAG_BITS.BRACKETED : 0) | (paper.kept.has(u) ? UNIT_FLAG_BITS.KEPT : 0)
     const c = u.cell
     const edges = {}
@@ -104,7 +114,7 @@ export function bundleUnitsOf(paper) {
       Object.keys(edges).length ? edges : null,
       u.pieces.map(p => pieceOf(p, idOf)),
     ]
-  })
+  }), ...names]
 }
 
 /**

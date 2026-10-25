@@ -201,6 +201,14 @@
 //     digits, as natbib's bibliographies write it between a volume and its pages). No other unit of the classes gate's 32 papers changes its
 //     cutting, kind or text (lab/pdf/records/classes-gate.md), but the ids of the units after a bibliography (an appendix's),
 //     which move up past its entries; raised with TRANSLATE_VERSION 6 (the author block sent for every target)
+//     And in the same unreleased 29 (PDF-READER §19.14): the structural names a paper's TeX prints that no package names in
+//     every target are units of their own, after the source's in its bundle (source/paper-names.mjs, units.mjs bundleUnitsOf:
+//     kind `name`, one text piece): its theorem-like environments' printed names, the reference names it gives cleveref,
+//     thmtools and \autoref, and, where it calls cleveref or \autoref, the counter types' English names and the conjunctions'
+//     words some target has no package word for (rules/tex-names.mjs NAME_GAPS, CONJUNCTION_GAPS). Translated with the
+//     paper's units, the first batch's (rows.mjs batchesOf, runRows), cached by their text as any unit; the layer draws a
+//     head's or a generated reference's name in that translation where no package gives the target one. Over 168 local
+//     sources 923 name units in 85 papers (32 at most; 19 papers call cleveref or \autoref); they change no source unit
 export const PIPELINE_VERSION = '29'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */

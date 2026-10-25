@@ -1967,6 +1967,16 @@ function decodersOf(own, sourceText, main) {
   for (const x of bad) out.set(x.file, INPUT_ENCODINGS[declared ?? 'latin1'])
   return out
 }
+/**
+ * The package's TeX files (.tex, .sty, .cls, in the file system's order), each as its characters: a UTF-8 file decoded as
+ * UTF-8, one that is not by the encoding the main file declares, else latin1 (decodersOf, as the units' text is): what a
+ * name the paper defines reads as (source/paper-names.mjs)
+ */
+export function texFilesOf(fsys, main) {
+  const own = fsys.list().filter(f => /\.(tex|sty|cls)$/i.test(f)).map(f => ({ file: f, text: texText(fsys.read(f)) }))
+  const dec = decodersOf(own, null, main)
+  return own.map(x => { const d = dec.get(x.file); return d ? d(x.text) : UTF8_LAX.decode(latin1Bytes(x.text)) })
+}
 function readProject(fsys, main, tables, sourceText, own) {
   const ownTexts = own.map(x => x.text)
   // a file as TeX finds it — in the directories import.sty puts on its path (`dirs`, the last imported first), then from

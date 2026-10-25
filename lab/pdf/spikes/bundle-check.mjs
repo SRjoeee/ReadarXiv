@@ -63,7 +63,8 @@ for (const [name, target] of PAPERS) {
     base: { bytes: arxiv.length, sha256: sha256(arxiv), url: `/api/v1/original/${id.replace('/', '_')}v${version}` },
     image: IMAGE,
     units: bundleUnitsOf(paper),
-    left: { kinds: geometry.kinds, pages: geometry.left.pages, units: geometry.left.units },
+    // (a kind for each of the bundle's units: the geometry's, the source's, then the structural names' (bundleUnitsOf's `name` units))
+    left: { kinds: bundleUnitsOf(paper).map((u, i) => geometry.kinds[i] ?? u[0]), pages: geometry.left.pages, units: geometry.left.units },
     layout,
     rules: null,
   }

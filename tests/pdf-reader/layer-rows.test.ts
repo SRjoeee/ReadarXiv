@@ -360,6 +360,13 @@ describe('batchesOf', () => {
     expect(batchesOf(sized(30000, 5, 5, 13000, 7), 'zh')).toEqual([[0], [1, 2], [3], [4]])
     expect(batchesOf(sized(), 'zh')).toEqual([])
   })
+  it('carries the paper\'s structural names first (units of kind `name`, after the source\'s): the first batch holds them, so that the first page drawn has its heads\' and references\' words (PDF-READER §19.14)', () => {
+    const name = (s: string): BundleUnit => ['name', 0, null, null, null, [[0, s]]]
+    const b = bundleOf([...sized(900, 900, 900, 900).units, name('Section'), name('and')])
+    // 7 + 3 + 900 + 900 = 1,810; a third paragraph would make 2,710
+    expect(batchesOf(b, 'zh')).toEqual([[4, 5, 0, 1], [2, 3]])
+    expect(toTranslate(b, 'zh')).toEqual([0, 1, 2, 3, 4, 5])
+  })
   it('batches what toTranslate holds: a kept unit and a dropped one are in none, an author block in every language\'s', () => {
     const b = bundleOf([['para', 0, null, null, null, [[0, 'a']]], ['para', KEPT, null, null, null, [[0, 'b']]], null, ['author', 0, null, null, null, [[0, 'c']]], ['para', 0, null, null, null, [[0, 'd']]]])
     expect(batchesOf(b, 'de')).toEqual([[0, 3, 4]])
@@ -536,6 +543,13 @@ describe('runRows', () => {
     expect(seen[1]?.ids.slice(-4)).toEqual([12, 13, 14, 15])
     expect(seen[1]?.held).toEqual([])
     expect(out.rows.size).toBe(16)
+  })
+  it('asks the paper\'s structural names before any unit, wherever the reader is (PDF-READER §19.14)', async () => {
+    const b = bundleOf([...longBundle(30).units, ['name', 0, null, null, null, [[0, 'Conjecture']]]])
+    const { send, calls } = sender()
+    const out = await runRows(b, { lang: 'de', send, rank: id => Math.abs(id - 29), onRows: () => {} })
+    expect(calls[0]?.[0]).toBe('Conjecture')
+    expect(out.rows.get(30)?.[2]).toBe('whole')
   })
   it('asks the unit nearest the reading place first, afresh for every batch', async () => {
     const b = longBundle(30), ranks: number[] = []

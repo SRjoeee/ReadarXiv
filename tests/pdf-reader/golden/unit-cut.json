@@ -52,7 +52,10 @@
    "refnames: text,ph,text",
    "reference: ph,text,open,ph,text,ph,close,text,ph,text,ph",
    "refnames: text,ph,text",
-   "reference: ph,text,open,ph,text,close,text,ph,ph,text,ph,text,ph"
+   "reference: ph,text,open,ph,text,close,text,ph,ph,text,ph,text,ph",
+   "name: Theorem",
+   "name: Lemma",
+   "name: Definition"
   ],
   "llncs-url": [
    "para: text,ph,text,ph,text,ph,text"
@@ -60,6 +63,34 @@
   "text-read": [
    "para: text",
    "para: ph,text"
+  ],
+  "names": [
+   "heading: text",
+   "para: ph,text,ph,text",
+   "theorem: ph,text",
+   "name: Conjecture",
+   "name: conjecture",
+   "name: conjectures",
+   "name: Equation",
+   "name: Page",
+   "name: Part",
+   "name: Chapter",
+   "name: Section",
+   "name: Item",
+   "name: Footnote",
+   "name: Theorem",
+   "name: Lemma",
+   "name: Corollary",
+   "name: Proposition",
+   "name: Definition",
+   "name: Result",
+   "name: Example",
+   "name: Remark",
+   "name: Note",
+   "name: Algorithm",
+   "name: Listing",
+   "name: Line",
+   "name: and"
   ],
   "arity": [
    "heading: text,ph",

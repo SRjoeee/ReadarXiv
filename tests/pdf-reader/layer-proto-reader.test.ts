@@ -80,13 +80,14 @@ function layoutOf(): LayoutFile {
   } as never
 }
 /** the bundle's parts: the units, the left (the units v0's anchors hold), the layout file, its cell rules */
-function partsOf({ layout = true } = {}): BundleParts {
+function partsOf({ layout = true, names = [] as string[] } = {}): BundleParts {
   return {
     paper: { id: '2610.00001', version: 1, pages: 2 },
     base: { bytes: 12_345, sha256: '0123456789abcdef'.repeat(4), url: '/api/v1/original/2610.00001v1' },
     image: '1',
-    units: bundleUnitsOf(sourceUnits()),
-    left: { kinds: SPECS.map(s => s.kind), pages: [VIEW, VIEW], units: SPECS.map((s, id) => [id, id, s.lines.map(rectOf)] as [number, number, [number, number, number, number, number][]]).filter(([id]) => SPECS[id]!.left) },
+    // (the paper's structural names, `names`, units of kind `name` after the source's: bundleUnitsOf)
+    units: bundleUnitsOf({ ...sourceUnits(), names }),
+    left: { kinds: [...SPECS.map(s => s.kind), ...names.map(() => 'name')], pages: [VIEW, VIEW], units: SPECS.map((s, id) => [id, id, s.lines.map(rectOf)] as [number, number, [number, number, number, number, number][]]).filter(([id]) => SPECS[id]!.left) },
     layout: layout ? layoutOf() : null,
     rules: layout ? { 2: [20, 250, 80, 250.4] } : null,
   }
@@ -328,6 +329,36 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     expect(Object.keys(s.pageMs)).toEqual(['1', '2'])
     expect(s.slowestTaskMs).toBeGreaterThanOrEqual(0)
     layer.dispose()
+  })
+
+  it('a paper\'s structural names (units of kind `name`, after the source\'s): no page awaits one, and its row is the run\'s word for the name, neither placed nor skipped nor late (PDF-READER §19.14)', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const bundle = bundleOf({ names: ['Assumption'] }), rows = rowsOf(bundle), id = SPECS.length
+    expect([bundle.units[id]?.[0], bundle.left.kinds[id]]).toEqual(['name', 'name'])
+    const name = rows.find(r => r[0] === id)!
+    expect(name).toBeTruthy()
+    const layer = await openLayer({ bundle, doc: docOf(), target: 'zh', faceSources, hyphUrl })
+    const o = seen.opens.at(-1) as unknown as Opened
+    expect(o.expect).not.toContain(id)
+    // (every page complete with the source's rows alone)
+    expect(layer.take(rows.filter(r => r !== name)).complete.sort()).toEqual([1, 2])
+    layer.take([name])
+    layer.end()
+    const run = seen.runs.at(-1) as Run
+    await run.until(2)
+    expect(run.placed.map(p => p.id)).not.toContain(id)
+    expect(run.skipped.map(k => k.id)).not.toContain(id)
+    expect(run.late()).not.toContain(id)
+    expect(layer.stats()).toMatchObject({ units: SPECS.filter(sp => sp.kind !== 'author').length, dropped: 0 })
+    layer.dispose()
+    // (a run a host opens with the name among the units it awaits, as the gate may: it awaits it neither, the geometry's kind
+    // saying what it is)
+    const { openProto } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const direct = await openProto({ ...o, expect: [...(o.expect ?? []), id], onStep: () => {} } as never)
+    expect(direct.take(new Map(rows.filter(r => r !== name).map(r => [r[0], unitOf(bundle, r)!]))).complete.sort()).toEqual([1, 2])
+    direct.take(new Map([[id, unitOf(bundle, name)!]]))
+    expect(direct.late()).not.toContain(id)
+    direct.dispose()
   })
 
   it('the unit at a point is the smallest shape that holds it, where two do', async () => {

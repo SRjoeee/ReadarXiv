@@ -1150,5 +1150,65 @@
     ", and ": " e "
    }
   }
- }
+ },
+ "singular": {
+  "equation": "Equation",
+  "figure": "Figure",
+  "subfigure": "Figure",
+  "table": "Table",
+  "subtable": "Table",
+  "page": "Page",
+  "part": "Part",
+  "chapter": "Chapter",
+  "section": "Section",
+  "subsection": "Section",
+  "subsubsection": "Section",
+  "appendix": "Appendix",
+  "subappendix": "Appendix",
+  "subsubappendix": "Appendix",
+  "subsubsubappendix": "Appendix",
+  "enumi": "Item",
+  "enumii": "Item",
+  "enumiii": "Item",
+  "enumiv": "Item",
+  "enumv": "Item",
+  "footnote": "Footnote",
+  "theorem": "Theorem",
+  "lemma": "Lemma",
+  "corollary": "Corollary",
+  "proposition": "Proposition",
+  "definition": "Definition",
+  "result": "Result",
+  "example": "Example",
+  "remark": "Remark",
+  "note": "Note",
+  "algorithm": "Algorithm",
+  "listing": "Listing",
+  "line": "Line"
+ },
+ "gaps": [
+  "Equation",
+  "Page",
+  "Part",
+  "Chapter",
+  "Section",
+  "Item",
+  "Footnote",
+  "Theorem",
+  "Lemma",
+  "Corollary",
+  "Proposition",
+  "Definition",
+  "Result",
+  "Example",
+  "Remark",
+  "Note",
+  "Algorithm",
+  "Listing",
+  "Line"
+ ],
+ "conjunctionGaps": [
+  " and ",
+  ", and "
+ ]
 }

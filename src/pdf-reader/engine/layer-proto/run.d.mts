@@ -232,7 +232,8 @@ export interface ProtoRun {
   /** units as they arrive (id → row): a row wins over one taken before it until its unit is placed; the hybrid's pieces
    *  read from each translated row's pieces' k; a row no unit of this paper's (not a unit's shape, its kind not the
    *  layout file's or the geometry's, its group not the open's `groups`, a k past its source's pieces) left the
-   *  original's, in `skipped`. The pages newly complete (inputs: each by its own closure, out of the stream's order): those not
+   *  original's, in `skipped`; a structural name's row (a unit of kind `name`) the target's word for that name, which a
+   *  theorem's head and a generated reference read (PDF-READER §19.14), never laid nor awaited. The pages newly complete (inputs: each by its own closure, out of the stream's order): those not
    *  reported complete before */
   take(rows: ReadonlyMap<number, Unit>): { complete: number[] }
   /** no more units: every page is complete with what it holds */

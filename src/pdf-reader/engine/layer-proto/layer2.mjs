@@ -73,7 +73,8 @@ import { escapeMap, plainOfPieces, plainTracker, transformMap } from './words.mj
 import { ownSmallCaps } from '../rules/font-roles.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { textPieceOf } from '../rules/text-piece.mjs'
-import { headInTarget, refInTarget } from '../rules/tex-names.mjs'
+import { GENERATED_COMMANDS, headInTarget, refInTarget } from '../rules/tex-names.mjs'
+import { NAME_KIND } from './units.mjs'
 import { NAME_ENGLISH } from '../layout/names.mjs'
 import { fillsByChar, UNKNOWN } from '../layout/fills.mjs'
 
@@ -1150,14 +1151,15 @@ export function spacedText(chars) {
  * dictionary's word for the target (rules/tex-names.mjs headInTarget: ctex's for Chinese), its number and punctuation the
  * original's. The parts it is drawn in: its name and number in the style of its first character, its punctuation after them
  * in the style of its last (amsthm's bold "Definition 5.1" and the note's upright "("), and whether it ends in an opening
- * bracket, which the unit's text follows with no space. Null where it is no head of a name the target's dictionary holds
+ * bracket, which the unit's text follows with no space. Null where it is no head of a name the target's dictionary holds,
+ * nor one the paper's name units translate (`names`, English → the target's: §19.14)
  */
-export function headLabelInTarget(chars, to) {
+export function headLabelInTarget(chars, to, names = null) {
   const text = spacedText(chars)
   // (a babel name's head is the names' own, nameInTarget's: amsthm's "Proof.", whose name group a label's drawing never hides,
   // 2610.18513v1 p38 u347, the file holding no name there and the label box the name and its joint both)
   if (BABEL_HEADS.test(text)) return null
-  const drawn = headInTarget(text, to)
+  const drawn = headInTarget(text, to, names)
   if (!drawn) return null
   const cs = [...chars].filter(c => /\S/.test(c.ch ?? '')).sort((a, b) => a.x0 - b.x0)
   const tail = /[\s.:([]*$/.exec(text)[0], drawnTail = /[\s.:([]*$/.exec(drawn)[0]
@@ -1167,12 +1169,24 @@ export function headLabelInTarget(chars, to) {
   if (drawnTail) parts.push({ text: drawnTail, st: own((nTail ? cs[cs.length - nTail] : cs.at(-1))?.st) })
   return { text: drawn, parts, open: /[([]\s*$/.test(drawn) }
 }
+/**
+ * A structural name's row (a unit of kind `name`, bundleUnitsOf's, as rows.mjs unitOf reads it) as [its English, the target's
+ * word for it] (PDF-READER §19.14): its source's text and its translation's text pieces joined, each's white space one space,
+ * an ideographic full stop the translator ends a word with as a sentence gone. Null for another unit, a row of no
+ * translation (none, lost) or of an empty one
+ */
+export function nameOfRow(u) {
+  if (u?.kind !== NAME_KIND || typeof u.src !== 'string' || !Array.isArray(u.pieces) || (u.state !== 'whole' && u.state !== 'partial')) return null
+  const english = u.src.replace(/\s+/g, ' ').trim()
+  const word = u.pieces.filter(q => q?.t === 'text' && typeof q.s === 'string').map(q => q.s).join('').replace(/\s+/g, ' ').trim().replace(/[\u3002\uff0e]$/u, '').trim()
+  return english && word ? [english, word] : null
+}
 /** a head that is a babel name whole (NAME_ENGLISH: "Proof", "Abstract"), its punctuation after it; a theorem's of a longer
  *  name ("Proof Sketch 1.", translator's own) is no babel name's */
 const BABEL_HEADS = new RegExp(`^\\s*(?:${Object.values(NAME_ENGLISH).join('|')})\\s*[.:\\u2013\\u2014]?\\s*$`, 'u')
 /** the placeholders whose text TeX's cross-referencing packages generate, a counter type's name before the number:
  *  cleveref's \cref and \Cref (and their range, page and name forms), hyperref's \autoref */
-export const GENERATED_REF = /^\\(?:cref|Cref|crefrange|Crefrange|cpageref|Cpageref|cpagerefrange|Cpagerefrange|namecref|nameCref|lcnamecref|namecrefs|nameCrefs|lcnamecrefs|labelcref|labelcpageref|autoref|Autoref)\*?\s*\{/
+export const GENERATED_REF = new RegExp(`^\\\\(?:${GENERATED_COMMANDS.join('|')})\\*?\\s*\\{`)
 /** a citation's note (its last optional argument: \cite[Lemma~1]{…}, natbib's \citep[see][Section~2]{…}) as TeX sets it */
 const CITE_NOTE = /^\\(?:cite[a-z]*|parencite|textcite|autocite)\*?((?:\s*\[[^\]]*\])+)\s*\{/
 /**
@@ -1181,13 +1195,14 @@ const CITE_NOTE = /^\\(?:cite[a-z]*|parencite|textcite|autocite)\*?((?:\s*\[[^\]
  * (GENERATED_REF: "Theorem A.17" in zh ctex's name for a theorem and "A.17"), a citation's note where it is a name and its
  * numbers ("[Ascolani et al., 2026, Lemma 1]", the note "Lemma 1" in ctex's name for a lemma and "1"), the rest of a citation
  * the cited work's own. One no package names whole in
- * the target is left as its page shows it. `labels`: the layout rules' labels (babel's names)
+ * the target is left as its page shows it. `labels`: the layout rules' labels (babel's names); `names`: the paper's own name
+ * units' translations (English → the target's: §19.14), a word no package names in the target
  */
-export function renameRefs(prep, to, labels) {
+export function renameRefs(prep, to, labels, names = null) {
   for (const r of prep.values()) {
     if (r?.mode !== 'orig-text' || r.sup || typeof r.src !== 'string' || typeof r.text !== 'string') continue
     if (GENERATED_REF.test(r.src)) {
-      const x = refInTarget(r.text, to, labels)
+      const x = refInTarget(r.text, to, labels, names)
       if (x?.length) r.rename = x
       continue
     }
@@ -1197,7 +1212,7 @@ export function renameRefs(prep, to, labels) {
     if (!note || !/\p{L}/u.test(note)) continue
     const at = r.text.lastIndexOf(note)
     if (at < 0 || r.text.indexOf(note) !== at || /[\p{L}\p{N}]/u.test(r.text[at + note.length] ?? '')) continue
-    const x = refInTarget(note, to, labels)
+    const x = refInTarget(note, to, labels, names)
     if (x?.length) r.rename = x.map(([a, b, w]) => [a + at, b + at, w])
   }
 }

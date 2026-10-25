@@ -17,7 +17,8 @@ const SLACK = 1
 
 /**
  * The ink units the host gave (`ours.ink`, layout/wrap.mjs wrapFinal's `ink`) where they are this paper's: their ids from the
- * source units' count on, rising, each a kind of UNIT_KINDS with rows of the wrap's shape. Every one keeps the wrap's id, which
+ * count of `source.units` on (the page pass gives the bundle's units before them: the source units' and the paper's structural
+ * names', layer-proto/units.mjs bundleUnitsOf; wrapFinal's `inkFrom`), rising, each a kind of UNIT_KINDS with rows of the wrap's shape. Every one keeps the wrap's id, which
  * names its groups in our wrapped page (visibility.mjs textGroup) and which an echo names; `off` those the pass does not lay, as
  * the maker lays no unit on a page not drawable: one on a page `undrawable` (the line check's: carry.mjs lineCheckOf), or that
  * the wrap could not hide alone (its `off`: a page it did not wrap, a placeholder on a page whose groups it merged). Null where

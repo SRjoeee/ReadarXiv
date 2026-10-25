@@ -331,11 +331,14 @@ export declare function nameInTarget(name: { key: string; capitals: boolean }, o
 export declare function spacedText(chars: readonly Pick<Char, 'ch' | 'x0' | 'x1' | 'size'>[]): string
 /** a theorem-like head's label as the target names it (its name in translator's word, its number and punctuation the original's),
  *  the parts it is drawn in, each in its own style, and whether it ends in an opening bracket; null where it is no such head */
-export declare function headLabelInTarget(chars: readonly Char[], to: string): { text: string; parts: { text: string; st: { bold: boolean; italic: boolean; color?: string } }[]; open: boolean } | null
+/** a structural name's row (a unit of kind `name`) as [its English, the target's word for it]; null for another unit, or a
+ *  row of no translation or an empty one (PDF-READER §19.14) */
+export declare function nameOfRow(u: { kind?: string; src?: string; state?: string; pieces?: readonly { t: string; s?: string }[] } | null | undefined): [english: string, word: string] | null
+export declare function headLabelInTarget(chars: readonly Char[], to: string, names?: ReadonlyMap<string, string> | null): { text: string; parts: { text: string; st: { bold: boolean; italic: boolean; color?: string } }[]; open: boolean } | null
 /** the placeholders whose text cleveref and \autoref generate */
 export declare const GENERATED_REF: RegExp
 /** each `orig-text` rendering of a generated reference, or of a citation's note, in the target's names: its `rename` set */
-export declare function renameRefs(prep: Prepared, to: string, labels: Readonly<Record<string, string>> | null | undefined): void
+export declare function renameRefs(prep: Prepared, to: string, labels: Readonly<Record<string, string>> | null | undefined, names?: ReadonlyMap<string, string> | null): void
 /** a rendering's runs with its replacements made, each inside one run; null where one crosses two */
 export declare function renameRuns<R extends { text: string }>(runs: readonly R[], rename: readonly [number, number, string][]): R[] | null
 /** a text's width at size 1 in a face */

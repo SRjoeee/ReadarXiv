@@ -17,7 +17,7 @@ export const TOGGLES = Object.freeze(['always', 'heads', 'tables', 'figures', 'r
  */
 export const CLASSES = Object.freeze({
   body: Object.freeze({ toggle: 'always', state: 'built', glyphs: true, truth: "the source's units (prose, headings, captions, footnotes, abstract, title), placed by TeX's marks" }),
-  generated: Object.freeze({ toggle: 'always', state: 'built', glyphs: true, truth: "babel's names (\\refname, \\contentsname…), marked where TeX sets them" }),
+  generated: Object.freeze({ toggle: 'always', state: 'built', glyphs: true, truth: "babel's names (\\refname, \\contentsname…), marked where TeX sets them; a theorem head's and a generated reference's names, the target's packages' or the paper's own name units' (rules/tex-names.mjs, source/paper-names.mjs)" }),
   contents: Object.freeze({ toggle: 'always', state: 'planned', glyphs: true, truth: "the contents and the lists of figures and tables, between a list's name and the next unit; their rows the headings' and captions'" }),
   notes: Object.freeze({ toggle: 'always', state: 'planned', glyphs: true, truth: "text below the column bodies no unit owns: a note with no unit, a margin's" }),
   orphan: Object.freeze({ toggle: 'always', state: 'planned', glyphs: true, truth: 'text no unit owns and no other class explains: a front-end defect, or text TeX generates (a theorem head)' }),
@@ -44,6 +44,9 @@ export const UNIT_CLASS = Object.freeze({
   para: 'body', heading: 'body', abstract: 'body', caption: 'body', footnote: 'body', cell: 'tables', author: 'names', figure: 'figures',
   // (the ink units', layout/ink-units.mjs INK_KIND: their kind names their class)
   inkheads: 'heads', inkcontents: 'contents', inknotes: 'notes', inkorphan: 'orphan', inknames: 'names', inkgenerated: 'generated', [FIGURE_KIND]: 'figures',
+  // (a structural name's unit, bundleUnitsOf's: a theorem head's or a generated reference's word in the target, always
+  // translated: PDF-READER §19.14)
+  name: 'generated',
   // (a bibliography's entries, latex-front.mjs bibliography: its names the names', the rest the references')
   reference: 'references', refnames: 'names',
 })

@@ -17,6 +17,7 @@ import { kOfSource } from '../layer/pieces.mjs'
 import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource, translateUnits, utf8 } from '../translate/mt.mjs'
 import { PIECES_MAX } from '../layout/json.mjs'
 import { STRING_MAX, UNIT_FLAG_BITS } from './bundle.mjs'
+import { NAME_KIND } from './units.mjs'
 
 /** the states of a row, and those a translation gives (a kept one is a table cell held whole in its source) */
 const STATES = new Set(['whole', 'partial', 'none', 'lost', 'kept'])
@@ -146,10 +147,14 @@ export function echoRows(bundle, rows) {
   return out
 }
 const ECHOES = new WeakMap()
-/** a language's batches in source order: the first up to FIRST_BATCH characters of plain source, the rest up to NEXT_BATCH */
+/** the ids `ids` with the paper's structural names first (units of kind `name`, bundleUnitsOf): the first batch carries them,
+ *  so that the first page drawn has the target's words for its heads and references (PDF-READER §19.14) */
+const namesFirst = (s, ids) => [...ids.filter(i => s.units[i]?.kind === NAME_KIND), ...ids.filter(i => s.units[i]?.kind !== NAME_KIND)]
+/** a language's batches in source order, the paper's structural names first (namesFirst): the first up to FIRST_BATCH characters
+ *  of plain source, the rest up to NEXT_BATCH */
 export function batchesOf(bundle, lang) {
   const s = sourceOf(bundle), out = []
-  let left = toTranslate(bundle, lang)
+  let left = namesFirst(s, toTranslate(bundle, lang))
   for (let first = true; left.length; first = false) {
     const batch = batchOf(left, i => plainOf(s, i).length, first ? FIRST_BATCH : NEXT_BATCH)
     out.push(batch)
@@ -289,8 +294,8 @@ export async function runRows(bundle, { lang, send, format = 'markers', rank = i
   const s = sourceOf(bundle), todo = new Set(toTranslate(bundle, lang))
   const results = new Map(), given = new Map()
   let final = [], stopped = null
-  /** units nearest the reader first, as `rank` has them now */
-  const nearest = ids => ids.map(i => [i, rank(i)]).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(([i]) => i)
+  /** units nearest the reader first, as `rank` has them now, the paper's structural names before them (namesFirst) */
+  const nearest = ids => namesFirst(s, ids.map(i => [i, rank(i)]).sort((a, b) => a[1] - b[1] || a[0] - b[0]).map(([i]) => i))
   for (let first = true; todo.size; first = false) {
     if (signal?.aborted) { stopped = 'aborted'; break }
     const batch = batchOf(nearest([...todo]), i => plainOf(s, i).length, first ? FIRST_BATCH : NEXT_BATCH)

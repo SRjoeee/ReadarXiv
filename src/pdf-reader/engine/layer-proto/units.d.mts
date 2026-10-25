@@ -14,8 +14,11 @@ export type BundlePiece = [0, s: string] | [0, s: string, src: string] | [1, src
 export type BundleUnit = [kind: string, flags: number, depth: number | null, cell: CellPlace | null, edges: { lead?: string; trail?: string; inner?: string } | null, pieces: BundlePiece[]]
 /** an ink unit (an ink kind, of a chunk of INK_UNITS_FORMAT alone): a unit with the source unit whose row it is drawn with, or null */
 export type InkBundleUnit = [kind: string, flags: 0, depth: null, cell: null, edges: null, pieces: BundlePiece[], echo: number | null]
-/** the bundle's units from openPaper's paper (its `units` and `kept`); throws on a piece the front end does not make */
-export declare function bundleUnitsOf(paper: { units: readonly SourceUnit[]; kept: ReadonlySet<SourceUnit> }): BundleUnit[]
+/** the structural name's unit kind (its units after the source's: bundleUnitsOf) */
+export declare const NAME_KIND: 'name'
+/** the bundle's units from openPaper's paper (its `units` and `kept`, then a unit of kind `name` for each of its `names`);
+ *  throws on a piece the front end does not make */
+export declare function bundleUnitsOf(paper: { units: readonly SourceUnit[]; kept: ReadonlySet<SourceUnit>; names?: readonly string[] }): BundleUnit[]
 /** whether unit `u` (the file's `units[i]`) stands: its shape, strings within STRING_MAX, a nested piece's unit one before it
  *  that stands (`stands`, a flag per unit id) */
 export declare function unitStands(u: unknown, i: number, stands: ArrayLike<number>, o?: { ink?: boolean }): boolean
