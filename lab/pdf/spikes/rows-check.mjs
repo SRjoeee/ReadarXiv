@@ -13,7 +13,7 @@
 //      the cell closes) among them;
 //   3. toTranslate(bundle, lang) is the complement of keptFor(paper, lang), for every language, less a TikZ picture's texts
 //      (kind `figure`), which the layer leaves to the figure ink units that draw their glyphs (rows.mjs TIKZ_KIND);
-//   4. batchesOf(bundle, lang) is runLive's batches in source order: its batches as the real runLive cuts them (a failing
+//   4. batchesOf(bundle, lang) is runLive's batches in source order (on a paper with no TikZ texts, which runLive still sends): its batches as the real runLive cuts them (a failing
 //      compiler and a translator that gives the wire back), and as the rule stood inline there before it was shared;
 //   5. layerRows over the record's results gives each unit its row, and keeps whole and holds the table cells groups.mjs
 //      decideGroups does over the paper's own units and the same results (the records carry no group decision: they
@@ -79,7 +79,8 @@ function resultOf(rec, src) {
 
 /** runLive's rule for a batch as it stood inline there (the unit nearest the reader first, here the source's order) */
 function inlineBatches(paper, lang) {
-  const kept = keptFor(paper, lang), todo = new Set(paper.units.map((u, i) => i).filter(i => !kept.has(paper.units[i])))
+  // (less a TikZ picture's texts, which the layer route sends no more: rows.mjs TIKZ_KIND)
+  const kept = keptFor(paper, lang), todo = new Set(paper.units.map((u, i) => i).filter(i => !kept.has(paper.units[i]) && paper.units[i].kind !== 'figure'))
   const out = []
   for (let first = true; todo.size; first = false) {
     const order = [...todo].sort((a, b) => a - b), batch = []
@@ -133,7 +134,9 @@ for (const name of [...new Set(CASES.map(c => c[0]))]) {
   for (const lang of new Set([...langs, 'zh', 'de'])) {
     const got = batchesOf(bundle, lang), inline = inlineBatches(paper, lang)
     if (!isDeepStrictEqual(got, inline)) mine.push(`batchesOf(${lang}) is not the inline rule's`)
-    if (RUNLIVE) {
+    // (runLive, the TeX path, still sends a TikZ picture's texts, which its pages set: its batches are the layer's where a paper
+    // has none)
+    if (RUNLIVE && !paper.units.some(u => u.kind === 'figure')) {
       const live = await runLiveBatches(paper, lang)
       if (!isDeepStrictEqual(got, live)) mine.push(`batchesOf(${lang}) is not runLive's (${got.length} batches, runLive ${live.length})`)
     }

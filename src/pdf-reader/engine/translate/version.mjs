@@ -57,8 +57,8 @@
 // 6: every content class is translated once, whatever the language (the owner, 2026-10-25; rules/content-classes.mjs): the
 //    author block's names and places are sent for every target, not only where its script writes names its own way
 //    (layer-proto/rows.mjs toTranslate, layerRows), and a bibliography entry's units (PIPELINE 29) with them; a reader's
-//    toggles show or hide them. Every other unit's wire is 5's byte for byte. And in the same unreleased 6: a TikZ picture's
-//    text the front end cuts (kind `figure`, latex-front.mjs tikzText) is no longer sent, the figure units that draw its glyphs
-//    being the ones translated (layer-proto/rows.mjs TIKZ_KIND); every unit sent is sent as before, and a reply that holds a
-//    numeric entity past U+10FFFF is read with that entity as it stands (mt.mjs decode), where the reading threw
+//    toggles show or hide them. Every other unit's wire is 5's byte for byte
+// (No version since 6: a reply holding a numeric entity past U+10FFFF, whose reading threw and stopped the run, is read with
+// that entity as it stands, as the background's decoder reads it (mt.mjs decode); every reply read before is read the same,
+// and none was read so before. A TikZ picture's texts no longer sent is the plan's, not the wire's: versions.mjs, PIPELINE 31)
 export const TRANSLATE_VERSION = '6'

@@ -362,6 +362,22 @@ describe('toTranslate', () => {
         expect(layerIds(bundle, lang).filter(i => figures.includes(i))).toEqual([])
       })
     }
+    it('leave an ink unit that repeats one its own translation: it echoes none, and one that echoes it takes its row', () => {
+      // (a TikZ label, a running head of the same words the maker made an ink unit echoing it, and a contents entry echoing that
+      // head: layout/ink-units.mjs echo, rule 5, whose chain unitFrom follows)
+      const b = bundleOf([
+        ['para', 0, null, null, null, [[0, 'Prose before the figure.']]],
+        ['figure', 0, null, null, null, [[0, 'Input layer']]],
+        ['inkheads', 0, null, null, null, [[0, 'Input layer']], 1],
+        ['inkcontents', 0, null, null, null, [[0, 'Input layer']], 2],
+      ] as never)
+      for (const lang of ['zh', 'de']) {
+        expect(toTranslate(b, lang), lang).toEqual([0, 2])
+        expect(layerIds(b, lang), lang).toEqual([0, 2, 3])
+      }
+      expect(echoRows(b, [[2, ['x'], 'whole', 'g', null]] as never).map(r => r[0])).toEqual([3])
+      expect(echoRows(b, [[1, ['x'], 'whole', 'g', null]] as never)).toEqual([])
+    })
     it('take no row, whatever results a caller holds for them', () => {
       const results = new Map(figures.map(i => [i, { state: 'whole', pieces: [{ t: 'text', tr: true, s: 'x' }] }]))
       expect(layerRows(bundle, results as never, 'de').rows.map(r => r[0]).filter(i => figures.includes(i))).toEqual([])

@@ -105,6 +105,10 @@ function sourceOf(bundle) {
   const units = new Array(list.length).fill(null), kept = new Set()
   for (let i = 0; i < list.length; i++) {
     const u = unitFrom(list[i], i, units)
+    // (an ink unit that echoes a TikZ picture's text, its words the same, a running head or a contents entry that repeats a
+    // node's label, takes no echo: the text sends no row to take, so the ink unit is translated itself, its pieces being the
+    // text's; one that echoes it after is that ink unit's echo, unitFrom's chain)
+    if (u?.echo !== undefined && units[u.echo]?.kind === TIKZ_KIND) delete u.echo
     units[i] = u
     if (u && (list[i][1] & UNIT_FLAG_BITS.KEPT || u.kind === TIKZ_KIND)) kept.add(u)
   }
