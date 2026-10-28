@@ -35,6 +35,7 @@ globalThis.pdfjsWorker = await import(`data:text/javascript;base64,${Buffer.from
 const OPTIONS = { cMapUrl: join(PDFJS, 'cmaps/'), cMapPacked: true, standardFontDataUrl: join(PDFJS, 'standard_fonts/'), verbosity: 0, useSystemFonts: false, maxImageSize: NO_IMAGE_PIXELS }
 const deflate = b => deflateSync(b, { level: 6 }), inflate = (b, l) => inflateSync(b, { maxOutputLength: l + 1 })
 /** the marking's texts a fixture's base page was marked with (base.json's `texts`), else null */
+const inklessOf = base => { const f = join(dirname(base), 'base.json'); const t = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8'))?.inkless : null; return Array.isArray(t) ? t : null }
 const textsOf = base => { const f = join(dirname(base), 'base.json'); const t = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8'))?.texts : null; return Array.isArray(t) ? t : null }
 const pct = (a, b) => (b ? Math.round((1000 * a) / b) / 10 : 0)
 
@@ -44,7 +45,7 @@ for (const id of IDS) {
   const src = join(SOURCES, id, 'source.gz')
   const units = !PAIRS.has(id) && existsSync(src) ? openPaper((await unpackSource(new Uint8Array(readFileSync(src)))).files).units : null
   const t0 = performance.now()
-  const r = await wrapFinal(new Uint8Array(readFileSync(base)), { PL, getDocument, documentOptions: OPTIONS, OPS, units, ...(units ? {} : { follows: null }), texts: PAIRS.has(id) ? null : textsOf(base), deflate, inflate, keepOwned: true })
+  const r = await wrapFinal(new Uint8Array(readFileSync(base)), { PL, getDocument, documentOptions: OPTIONS, OPS, units, ...(units ? {} : { follows: null }), texts: PAIRS.has(id) ? null : textsOf(base), inkless: PAIRS.has(id) ? null : inklessOf(base), deflate, inflate, keepOwned: true })
   const ms = Math.round(performance.now() - t0)
   if (r.refused) { console.log(JSON.stringify({ id, refused: r.refused, why: r.why })); failed = true; continue }
   const { ledger } = r, letters = ledger.letters

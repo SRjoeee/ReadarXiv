@@ -2,8 +2,9 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-// Every caller of the wrap (layout/wrap.mjs wrapFinal) says the marking's texts: the marks file's `marking.texts` where it holds
-// the marks (a cell's lead macro is owned by them alone, layout/own.mjs), null where it does not. wrapFinal refuses a call
+// Every caller of the wrap (layout/wrap.mjs wrapFinal) says the marking's texts and inkless macros: the marks file's
+// `marking.texts` and `marking.inkless` where it holds the marks (a cell's lead macro is owned by its texts alone, a unit that opens
+// with a macro TeX said sets no ink opens with its text: layout/own.mjs), null where it does not. wrapFinal refuses a call
 // without them at run time; this holds the callers the unit tests never run (the lab's spikes, the scripts) to it as well
 
 const ROOT = process.cwd()
@@ -20,7 +21,7 @@ const callsIn = (text: string) => {
 }
 
 describe('the wrap\'s callers', () => {
-  it('each pass `texts` (null said where the marks are not in hand)', () => {
+  it('each pass `texts` and `inkless` (null said where the marks are not in hand)', () => {
     const found: string[] = []
     for (const f of [...files('lab/pdf'), ...files('scripts'), ...files('src/pdf-reader'), ...files('tests/pdf-reader')]) {
       const text = readFileSync(join(ROOT, f), 'utf8')
@@ -29,6 +30,7 @@ describe('the wrap\'s callers', () => {
         if (/export (?:async )?function wrapFinal|declare function wrapFinal/.test(call) || /^\)?\)\.rejects\.toThrow\(/.test(text.slice(text.indexOf(call) + call.length).replace(/^ as never/, ''))) continue
         found.push(f)
         expect(/\btexts\b/.test(call), `${f}: ${call.slice(0, 120)}`).toBe(true)
+        expect(/\binkless\b/.test(call), `${f}: ${call.slice(0, 120)}`).toBe(true)
       }
     }
     expect(found.length).toBeGreaterThanOrEqual(6)

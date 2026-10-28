@@ -140,7 +140,7 @@ describe('S7: the bytes written are the bytes proved', () => {
 
     const { inflate } = await import('./helpers/ocg-pdfs')
     const lossy = (b: Uint8Array) => new Uint8Array(deflateSync(b.subarray(0, Math.floor(b.length * 0.6))))
-    const r = ok(await wrapFinal(bytes, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, OPS, units: null, follows: null, texts: null, deflate: lossy, inflate } as never))
+    const r = ok(await wrapFinal(bytes, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, OPS, units: null, follows: null, texts: null, inkless: null, deflate: lossy, inflate } as never))
     expect(r.stats.wrapped).toBe(0)
     expect(r.stats.refusedPages).toBe(1)
   })
@@ -198,7 +198,9 @@ describe('re-review S1, S2, S3: the wrap\'s inputs and the delta\'s pages', () =
     await expect(wrapFinal(bytes, { ...base, units: null, deflate } as never)).rejects.toThrow(/inflate/)
     // (texts required too, null said where the marks are not in hand: a caller that drops them is told)
     await expect(wrapFinal(bytes, { ...base, units: null, deflate, inflate } as never)).rejects.toThrow(/texts/)
-    expect('refused' in (await wrapFinal(bytes, { ...base, units: null, follows: null, texts: null, deflate, inflate } as never))).toBe(false)
+    // (and inkless, as texts are: the macros TeX said set no ink, which a unit may open with, 2609.20976v1's title)
+    await expect(wrapFinal(bytes, { ...base, units: null, texts: null, deflate, inflate } as never)).rejects.toThrow(/inkless/)
+    expect('refused' in (await wrapFinal(bytes, { ...base, units: null, follows: null, texts: null, inkless: null, deflate, inflate } as never))).toBe(false)
   })
   it('refuses a delta that leaves a page of ours naming a group of ours arXiv\'s (delta-pages), and the proof one that does', async () => {
     const { bytes: orig } = await markedSample({ pages: [2, 3], edit: (_, p) => run(72, 700, p === 2 ? '(Order)' : '(the)') })

@@ -79,6 +79,7 @@ window.gate = {
 
 /** the marking's texts a fixture's base page was marked with (base.json's `texts`, the pack's), else null: the marks not in
  *  hand */
+const inklessOf = base => { const f = join(dirname(base), 'base.json'); const t = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8'))?.inkless : null; return Array.isArray(t) ? t : null }
 const textsOf = base => { const f = join(dirname(base), 'base.json'); const t = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8'))?.texts : null; return Array.isArray(t) ? t : null }
 
 async function paper(id) {
@@ -87,7 +88,7 @@ async function paper(id) {
   const units = !PAIRS.has(id) && existsSync(src) ? openPaper((await unpackSource(new Uint8Array(readFileSync(src)))).files).units : null
   const bytes = new Uint8Array(readFileSync(pair.base)), orig = new Uint8Array(readFileSync(pair.orig))
   const t0 = performance.now()
-  const r = await wrapFinal(bytes, { PL, getDocument, documentOptions: OPTIONS, OPS, units, ...(units ? {} : { follows: null }), texts: textsOf(pair.base), deflate, inflate, keepOwned: true })
+  const r = await wrapFinal(bytes, { PL, getDocument, documentOptions: OPTIONS, OPS, units, ...(units ? {} : { follows: null }), texts: textsOf(pair.base), inkless: inklessOf(pair.base), deflate, inflate, keepOwned: true })
   const wrapMs = Math.round(performance.now() - t0)
   if (r.refused) return { id, refused: r.refused, why: r.why }
   const d = await deltaOf(orig, r.bytes, { PL }), d0 = await deltaOf(orig, bytes, { PL })

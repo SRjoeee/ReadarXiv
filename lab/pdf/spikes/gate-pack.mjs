@@ -229,13 +229,14 @@ export function baseRecordOf(dir) {
  * bytes of the layout file the fixture holds after the make (the one made over our page; where our page was refused, the one
  * kept in its place, keptLayoutOf; null where there is none), `image` the compile image our page was made on
  */
-export function baseRecordOfMade({ made, layout, image = null, texts = null }) {
+export function baseRecordOfMade({ made, layout, image = null, texts = null, inkless = null }) {
   const file = layout ? { sha256: sha256(layout), bytes: layout.length } : null
   if (made?.source === 'ours') {
     const { source, ...base } = made.head
     // (`texts`: the marks' `marking.texts` the base page was marked with, flat [macro source, text, …]: what the gate's wrap is
-    // given, as the maker child gives production's (layout/wrap.mjs wrapFinal), for a cell's lead macro)
-    return { schema: BASE_RECORD_SCHEMA, source, base, ...(image ? { image } : {}), layout: file, ...(texts ? { texts: [...texts] } : {}) }
+    // given, as the maker child gives production's (layout/wrap.mjs wrapFinal), for a cell's lead macro; `inkless`: the macros TeX
+    // said set no ink, which the wrap reads as no placeholder of ink, as the maker does)
+    return { schema: BASE_RECORD_SCHEMA, source, base, ...(image ? { image } : {}), layout: file, ...(texts ? { texts: [...texts] } : {}), ...(inkless ? { inkless: [...inkless] } : {}) }
   }
   return { schema: BASE_RECORD_SCHEMA, source: 'arxiv', why: made?.why, ...(made?.detail ? { detail: made.detail } : {}), layout: file }
 }

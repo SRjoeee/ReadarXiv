@@ -52,6 +52,15 @@ const START = /^[th]?(\d+)s$/
  *  low on a page to high on it, and right by this share of the page's width and up by this share of its height, crossed
  *  into the next column: what TeX shipped between is in it, and cannot be told apart */
 const JUMP_X = 0.25, JUMP_Y = 0.25
+/** the glyphs of `glyphs` ([page, g], stream order, one page) on the line the first stands on: up to the first that TeX set at a
+ *  new line's start, left of the one before by an em and below it by half its size, or all */
+function lineEnd(G, glyphs) {
+  for (let j = 1; j < glyphs.length; j++) {
+    const a = glyphs[j - 1][1], b = glyphs[j][1], em = Math.min(G.size[a], G.size[b])
+    if (G.x0[b] < G.x0[a] - em && G.y[b] < G.y[a] - 0.5 * em) return j
+  }
+  return glyphs.length
+}
 /** the characters of the text after an opening point alone that it is found by */
 export const WANT = 8
 /** the glyph visits a paper's ownership may cost: real ranges never overlap, and cost the glyphs once */
@@ -254,7 +263,7 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
           return f.blocked && (glyphs.length || boxes.length) ? none(HOW['open, an unmarked piece follows']) : { how: HOW["open, to its column's end"], glyphs, boxes }
         }
       }
-      const { glyphs, boxes } = takeTo(next)
+      let { glyphs, boxes } = takeTo(next)
       if (jumps(glyphs)) return none(HOW['across a column, unbracketed'])
       if (!glyphs.length && !boxes.length) return { how: HOW[f.want ? 'open, to the text after it' : "open, to its unit's next mark"], glyphs, boxes }
       if (!f.want) {
@@ -268,6 +277,11 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
         if (later && Number(later[1]) > Number(m[2])) {
           // the next unit's label: the glyphs on its start mark's line before it, the boxes after the first of them
           const G = P.glyphs, after = N.glyph
+          // (a piece that is no display, alone at its unit's end, owns its first line at most: TeX's next line is no ink set for
+          // it, and the next unit may start many lines on — the last author's \\orcidlink of 2609.20976v1 ran to the abstract's
+          // label over the affiliations and the e-mail, which no unit then owned and no ink unit was made of)
+          const line = f.display ? glyphs.length : lineEnd(G, glyphs)
+          if (line < glyphs.length) { const upTo = P.boxAt[glyphs[line][1]]; glyphs = glyphs.slice(0, line); boxes = boxes.filter(([, b]) => b < upTo) }
           let end = glyphs.length
           while (after < G.n && end > 0 && Math.abs(G.y[glyphs[end - 1][1]] - G.y[after]) < 0.5 * Math.max(G.size[glyphs[end - 1][1]], G.size[after])) end--
           const upTo = end < glyphs.length ? P.boxAt[glyphs[end][1]] : N.box
