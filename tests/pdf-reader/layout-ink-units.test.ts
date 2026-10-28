@@ -9,12 +9,12 @@ import { unitClass } from '@/pdf-reader/engine/rules/content-classes.mjs'
 // repeats, its rows as the layout maker writes a unit's
 
 type G = LedgerPage['glyphs'][number] & { top: number; bottom: number; ix0: number; ix1: number }
-/** a run's glyphs, 5 pt a character, on a baseline */
-function run(text: string, x: number, y: number, { font = 'CMR10', size = 10, fill = 0 }: { font?: string; size?: number; fill?: number } = {}): G[] {
+/** a run's glyphs, 5 pt a character, on a baseline; a space `space` pt (a face's word space where a test needs it: CMR10's 3.33) */
+function run(text: string, x: number, y: number, { font = 'CMR10', size = 10, fill = 0, space = 5 }: { font?: string; size?: number; fill?: number; space?: number } = {}): G[] {
   const out: G[] = []
   for (const ch of text) {
     if (ch !== ' ') out.push({ u: ch, x0: x, x1: x + 5, ix0: x, ix1: x + 5, y, top: y + 7, bottom: y - 2, size, font, fill } as G)
-    x += 5
+    x += ch === ' ' ? space : 5
   }
   return out
 }
@@ -37,7 +37,7 @@ const SOURCE = [{ kind: 'heading', pieces: [{ t: 'text', s: 'Introduction' }] },
 
 describe('inkUnitsOf', () => {
   it("makes a head's line a unit of its own, its section number and its page number the original's ink", () => {
-    const pg = page({ point: 'c1-2' }, { glyphs: run('1.1. HISTORICAL OVERVIEW', 100, 760) }, { glyphs: run('17', 520, 760) }, { point: 'bs1' }, { glyphs: run('Body', 100, 600), owner: 'u1' }, { point: 'be1' })
+    const pg = page({ point: 'c1-2' }, { glyphs: run('1.1.  HISTORICAL OVERVIEW', 100, 760) }, { glyphs: run('17', 520, 760) }, { point: 'bs1' }, { glyphs: run('Body', 100, 600), owner: 'u1' }, { point: 'be1' })
     const { ink } = unitsOf([pg], SOURCE)
     expect(ink.map(u => [u.id, u.kind, u.cls, textOf(u)])).toEqual([[2, 'inkheads', 'heads', 'HISTORICAL OVERVIEW']])
     expect(unitClass(ink[0]!.kind)).toBe('heads')
@@ -45,8 +45,37 @@ describe('inkUnitsOf', () => {
     const H = 'HISTORICAL OVERVIEW'.replace(/ /g, '').length
     expect(ink[0]!.glyphs.text).toHaveLength(H)
     // (its line's box the title's glyphs', its baseline, size and face theirs)
-    expect(ink[0]!.rows.lines.slice(0, 8)).toEqual([1, 125, 220, 760, 767, 758, 10, 'CMR10'])
+    expect(ink[0]!.rows.lines.slice(0, 8)).toEqual([1, 130, 225, 760, 767, 758, 10, 'CMR10'])
     expect(ink[0]!.rows.unit).toEqual([2, 'inkheads', 9, 0, 1])
+  })
+
+  it("keeps a number in a head's or an entry's own words the unit's, the page's own ink a number set apart alone (2010.11929v2's head)", () => {
+    const words = (s: string, x: number, y: number) => ({ glyphs: run(s, x, y, { space: 3.33 }) })
+    const heads = (...lines: { glyphs: G[] }[]) => unitsOf([page({ point: 'c1-2' }, ...lines, { point: 'bs1' }, { glyphs: run('Body', 100, 600), owner: 'u1' }, { point: 'be1' })], SOURCE).ink
+    const ICLR = 'Published as a conference paper at ICLR 2021'
+    // (a year inside a head, at a word space from the word before: the head's, translated in its flow, no glyph of it left)
+    const year = heads(words(ICLR, 100, 760))
+    expect(year.map(textOf)).toEqual([ICLR])
+    expect(year[0]!.glyphs.text).toHaveLength(ICLR.replace(/ /g, '').length)
+    // (a folio beside it, set apart: the page's own ink; the year the head's still)
+    const folio = heads(words(ICLR, 100, 760), { glyphs: run('12', 520, 760) })
+    expect(folio.map(textOf)).toEqual([ICLR])
+    expect(folio[0]!.glyphs.text).toHaveLength(ICLR.replace(/ /g, '').length)
+    // (a running head on page after page, the same year on each: the head's still, one translation the pages after echo)
+    const every = unitsOf([1, 2, 3].map(() => page({ point: 'c1-2' }, words(ICLR, 100, 760), { point: 'bs1' }, { glyphs: run('Body', 100, 600), owner: 'u1' }, { point: 'be1' })), SOURCE).ink
+    expect(every.map(u => [textOf(u), u.echo])).toEqual([[ICLR, null], [ICLR, 2], [ICLR, 2]])
+    // (amsart's odd page: a title as wide as the line between its \hfil's, its folio \llap'ed at the edge, two digits nearer its
+    // last word than its words are to each other, 2610.21884v1; the folio differs from page to page where the words recur: the
+    // page's own, the head one translation)
+    const amsart = [11, 13, 15].map(n => page({ point: 'c1-2' }, { glyphs: [...run('BACKWARD MEAN CURVATURE FLOW', 100, 760, { space: 4 }), ...run(String(n), 239, 760)] }, { point: 'bs1' }, { glyphs: run('Body', 100, 600), owner: 'u1' }, { point: 'be1' }))
+    expect(unitsOf(amsart, SOURCE).ink.map(u => [textOf(u), u.echo])).toEqual([['BACKWARD MEAN CURVATURE FLOW', null], ['BACKWARD MEAN CURVATURE FLOW', 2], ['BACKWARD MEAN CURVATURE FLOW', 2]])
+    // (an even page's: its folio first, set apart; a head that starts with a year, and one with an article, theirs)
+    expect(heads({ glyphs: run('12', 100, 760) }, words('AUTHOR ET AL.', 300, 760)).map(textOf)).toEqual(['AUTHOR ET AL.'])
+    expect(heads(words('2021 IEEE International Conference on Robotics', 100, 760)).map(textOf)).toEqual(['2021 IEEE International Conference on Robotics'])
+    expect(heads(words('A Study of Wavelets', 100, 760)).map(textOf)).toEqual(['A Study of Wavelets'])
+    // (an entry's title that ends in a year before its leaders: the year the title's, its page number alone the original's)
+    const entry = unitsOf([page({ point: 'bs1' }, { point: 'n1.contents.e' }, { glyphs: [...run('4', 100, 700), ...run('Results for 2021 . . . 14', 115, 700, { space: 3.33 })] }, { point: 'be1' })]).ink
+    expect(entry.map(u => [textOf(u), u.rows.unit[1]])).toEqual([['Results for 2021', 'inkcontents']])
   })
 
   it('makes a running head that repeats no source unit one translation: each page after the first echoes the first', () => {
@@ -60,7 +89,7 @@ describe('inkUnitsOf', () => {
   })
 
   it("makes a contents entry a unit up to its leaders, which stay the original's with its number and page, and echoes its heading's row", () => {
-    const pg = page({ point: 'bs1' }, { point: 'n1.contents.e' }, { glyphs: run('1 Introduction . . . . . 3', 100, 700) }, { glyphs: run('2 Methods . . . . . 5', 100, 688) }, { point: 'be1' })
+    const pg = page({ point: 'bs1' }, { point: 'n1.contents.e' }, { glyphs: run('1  Introduction . . . . . 3', 100, 700) }, { glyphs: run('2  Methods . . . . . 5', 100, 688) }, { point: 'be1' })
     const { ink } = unitsOf([pg], SOURCE)
     expect(ink.map(u => [u.kind, textOf(u), u.echo])).toEqual([['inkcontents', 'Introduction', 0], ['inkcontents', 'Methods', null]])
     // (an echo's pieces its source unit's: its row is that unit's, k for k)
@@ -69,7 +98,7 @@ describe('inkUnitsOf', () => {
   })
 
   it("joins a contents entry's lines by TeX's paragraphs where the compile marked them, else where a line ends in no page number", () => {
-    const lines = [{ glyphs: run('3 Black hole perturbations and', 100, 700) }, { glyphs: run('quasinormal modes . . . 21', 110, 688) }, { glyphs: run('4 Results . . . 30', 100, 676) }]
+    const lines = [{ glyphs: run('3  Black hole perturbations and', 100, 700) }, { glyphs: run('quasinormal modes . . . 21', 110, 688) }, { glyphs: run('4  Results . . . 30', 100, 676) }]
     const marked = page({ point: 'bs1' }, { point: 'n1.contents.e' }, { para: 7 }, lines[0]!, lines[1]!, { para: 8 }, lines[2]!, { point: 'be1' })
     const bare = page({ point: 'bs1' }, { point: 'n1.contents.e' }, lines[0]!, lines[1]!, lines[2]!, { point: 'be1' })
     for (const pg of [marked, bare]) expect(unitsOf([pg]).ink.map(textOf)).toEqual(['Black hole perturbations and quasinormal modes', 'Results'])
@@ -77,9 +106,10 @@ describe('inkUnitsOf', () => {
 
   it("joins a contents entry's lines by TeX's paragraph at the list's own leading, a thesis's set double (2610.19274v1 pp67-69)", () => {
     // (each line 29 pt below the one before at 12 pt, 2.4 of its size: past BLOCK_DY, so each line was a unit, translated alone)
-    const at = (s: string, y: number) => ({ glyphs: run(s, 100, y, { size: 12 }) })
-    const entry = [at('6 Internal structure of the depth-', 700), at('wise convolutions and the mod-', 671), at('ule shown here . . . 14', 642)]
-    const marked = page({ point: 'bs1' }, { point: 'n1.contents.e' }, { para: 280 }, ...entry, { para: 281 }, at('7 Overview of the module . . . 15', 613), { point: 'be1' })
+    // (its number at the list's edge, its text and its lines after it a number's width in: TeX's \@dottedtocline)
+    const at = (s: string, y: number, x = 115) => ({ glyphs: run(s, x, y, { size: 12 }) })
+    const entry = [at('6  Internal structure of the depth-', 700, 100), at('wise convolutions and the mod-', 671), at('ule shown here . . . 14', 642)]
+    const marked = page({ point: 'bs1' }, { point: 'n1.contents.e' }, { para: 280 }, ...entry, { para: 281 }, at('7  Overview of the module . . . 15', 613, 100), { point: 'be1' })
     expect(unitsOf([marked]).ink.map(textOf)).toEqual(['Internal structure of the depthwise convolutions and the module shown here', 'Overview of the module'])
     // (no paragraph marked: the lines' places, as before, BLOCK_DY)
     const bare = page({ point: 'bs1' }, { point: 'n1.contents.e' }, ...entry, { point: 'be1' })
@@ -89,6 +119,27 @@ describe('inkUnitsOf', () => {
     const at10 = (s: string, y: number) => ({ glyphs: run(s, 100, y, { size: 9 }) })
     const items = page({ point: 'bs1' }, { para: 9 }, at10('[1] R. Adams, Sobolev spaces, vol. 140 of', 700), at10('Pure and Applied Mathematics, 2003.', 690), at10('[2] G. Beylkin and the fast wavelet', 670), at10('transforms of operators, 1991.', 660), at10('[3] A. Damianou, deep processes', 640), at10('in Machine Learning, 2013.', 630), { point: 'be1' })
     expect(unitsOf([items]).ink.length).toBe(3)
+    // (and single-line entries, 20 apart, all at the list's edge: three, not one — Codex on #487)
+    const single = page({ point: 'bs1' }, { para: 9 }, at10('Ando and Zhang, a framework for learning.', 700), at10('Wang and Shang, building the pipelines.', 680), at10('Davis, on the letters of the year.', 660), { point: 'be1' })
+    expect(unitsOf([single]).ink.length).toBe(3)
+    // (an entry set double on a page whose other lines are single: one unit still, whatever the page's leading — Devin on #487)
+    const mixed = page({ point: 'bs1' }, { para: 3 }, ...Array.from({ length: 8 }, (_, k) => ({ glyphs: run(`an orphan line of words ${k}`, 100, 780 - 12 * k, { size: 12 }) })), { point: 'n1.contents.e' }, { para: 280 }, ...entry, { point: 'be1' })
+    expect(unitsOf([mixed]).ink.map(textOf)).toContain('Internal structure of the depthwise convolutions and the module shown here')
+    // (a bibliography as 2610.20266v1 p21 sets it: its centred heading, then its entries, each line after the first hung under the
+    // text, 11 pt apart inside one and 22 between two, the labels right-aligned so that [10] starts half a size left of [8]: the
+    // heading, [8] and [10] apart, each entry whole)
+    const at9 = (s: string, x: number, y: number) => ({ glyphs: run(s, x, y, { size: 9 }) })
+    const bib = page(
+      { point: 'bs1' }, { para: 191 }, at9('REFERENCES', 264.5, 735.6),
+      at9('[8] I. Daubechies, Ten Lectures on Wavelets, vol. 61 of CBMS', 79.2, 713.8), at9('Regional Conference Series, SIAM, 1992.', 110.3, 702.8),
+      at9('[10] V. Druskin, A. Greenbaum, and L. Knizhnerman, Using', 74.5, 680.9), at9('nonsymmetric Lanczos for matrix functions.', 109.5, 669.9),
+      { point: 'be1' },
+    )
+    expect(unitsOf([bib]).ink.map(textOf)).toEqual([
+      'REFERENCES',
+      '[8] I. Daubechies, Ten Lectures on Wavelets, vol. 61 of CBMS Regional Conference Series, SIAM, 1992.',
+      '[10] V. Druskin, A. Greenbaum, and L. Knizhnerman, Using nonsymmetric Lanczos for matrix functions.',
+    ])
   })
 
   it("makes an orphan's block a unit, a paragraph of TeX's apart from the next, and its math a placeholder whose ink stays", () => {
@@ -176,7 +227,7 @@ describe('inkUnitsOf', () => {
   })
 
   it('writes each as a bundle unit that stands, of its kind, with its echo', () => {
-    const pg = page({ point: 'bs1' }, { point: 'n1.contents.e' }, { glyphs: run('1 Introduction . . 3', 100, 700) }, { glyphs: run('2 Other things . . 4', 100, 688) }, { point: 'be1' })
+    const pg = page({ point: 'bs1' }, { point: 'n1.contents.e' }, { glyphs: run('1  Introduction . . 3', 100, 700) }, { glyphs: run('2  Other things . . 4', 100, 688) }, { point: 'be1' })
     const { ink } = unitsOf([pg], SOURCE)
     const units = inkBundleUnitsOf(ink as never)
     expect(units).toEqual([['inkcontents', 0, null, null, null, [[0, 'Introduction']], 0], ['inkcontents', 0, null, null, null, [[0, 'Other things']], null]])

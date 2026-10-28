@@ -136,10 +136,13 @@ export { LayoutRefusal } from './json.mjs'
  *  still); 25 (the release sweep of 2026-10-29, 24 counted released): a line of ours too short to be evidence, under
  *  LINE_EVIDENCE letters and digits, is never found on another page of arXiv's (carry.mjs lineCheckOf: 2610.21765v1 p7's axis
  *  label "q", matched on arXiv's p6, left the page undrawn and 10 units English), and a word a hyphen cuts at a line's end goes on
- *  in the line below alone, never in text the stream gives next elsewhere (pipeline/anchors.mjs tokenizeDocument: "sim-" and the
- *  axis label "q" above it read as "simq" since #484); a contents entry, a note or an orphan's paragraph is one unit at its
- *  page's own leading, set double too (layout/ink-units.mjs PARA_DY, PARA_PITCH: 2610.19274v1's list of figures, cut line by
- *  line and each translated alone), and a script a text face sets after a formula's run is that run's placeholder (C_n²'s "2").
+ *  in the line below or at the next column's top alone, never in text the stream gives next elsewhere (pipeline/anchors.mjs
+ *  tokenizeDocument: "Sim-" and the next column's axis label "q" read as "simq" since #484); a contents entry, a note or an
+ *  orphan's paragraph is one unit at its own leading, set double too (layout/ink-units.mjs PARA_DY, EDGE, INDENT: 2610.19274v1's list of figures, cut line by
+ *  line and each translated alone), a script a text face sets after a formula's run is that run's placeholder (C_n²'s "2"), and
+ *  a head's or an entry's number is the page's own ink only where it stands apart from the line's text (ink-units.mjs APART: a
+ *  folio, a section number) or is a running head's folio (another number where its words recur), one in its own words the
+ *  unit's (2010.11929v2's head "… at ICLR 2021", its year drawn apart).
  *  The rows of the units they reach change, so a file of 24 is another maker's (the file's schema is 5 still) */
 export const LAYOUT = '25'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its

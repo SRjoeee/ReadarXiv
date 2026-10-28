@@ -90,11 +90,11 @@ C.~Wang and S.~Shang, ${QUOTES}Building pipelines,'' in \emph{Proc. ACM}, 2025, 
 }
 // ---- the ink units' sources: pages of glyphs as the wrap reads them (5 pt a character, on a baseline), the ledger's classes
 type G = LedgerPage['glyphs'][number] & { top: number; bottom: number; ix0: number; ix1: number }
-function inkRun(text: string, x: number, y: number, { font = 'CMR10', size = 10, fill = 0 }: { font?: string; size?: number; fill?: number } = {}): G[] {
+function inkRun(text: string, x: number, y: number, { font = 'CMR10', size = 10, fill = 0, space = 5 }: { font?: string; size?: number; fill?: number; space?: number } = {}): G[] {
   const out: G[] = []
   for (const ch of text) {
     if (ch !== ' ') out.push({ u: ch, x0: x, x1: x + 5, ix0: x, ix1: x + 5, y, top: y + 7, bottom: y - 2, size, font, fill } as G)
-    x += 5
+    x += ch === ' ' ? space : 5
   }
   return out
 }
@@ -111,9 +111,11 @@ function inkPage(...parts: Part[]) {
 const HEADING = [{ kind: 'heading', pieces: [{ t: 'text', s: 'Introduction' }] }, { kind: 'para', pieces: [{ t: 'text', s: 'Body words of the paper here' }] }]
 const INK_CUT_SOURCES: Record<string, () => { pages: ReturnType<typeof inkPage>[]; units: unknown[] }> = {
   // a contents entry echoing its heading, another over two lines, a running head
-  contents: () => ({ units: HEADING, pages: [inkPage({ point: 'bs1' }, { point: 'n1.contents.e' }, { para: 1 }, { glyphs: inkRun('1 Introduction . . . 3', 100, 700) }, { para: 2 }, { glyphs: inkRun('2 Black hole perturbations and', 100, 688) }, { glyphs: inkRun('quasinormal modes . . . 21', 110, 676) }, { point: 'be1' })] }),
+  contents: () => ({ units: HEADING, pages: [inkPage({ point: 'bs1' }, { point: 'n1.contents.e' }, { para: 1 }, { glyphs: inkRun('1  Introduction . . . 3', 100, 700) }, { para: 2 }, { glyphs: inkRun('2  Black hole perturbations and', 100, 688) }, { glyphs: inkRun('quasinormal modes . . . 21', 110, 676) }, { point: 'be1' })] }),
   // LAYOUT 25's: a list set double, an entry one unit; a formula's script its placeholder's
-  double: () => ({ units: [], pages: [inkPage({ point: 'bs1' }, { point: 'n1.contents.e' }, { para: 7 }, { glyphs: inkRun('6 Internal structure of the depth-', 100, 700, { size: 12 }) }, { glyphs: inkRun('wise convolutions and the mod-', 100, 671, { size: 12 }) }, { glyphs: inkRun('ule shown here . . . 14', 100, 642, { size: 12 }) }, { para: 8 }, { glyphs: [...inkRun('7 Turbulence strength', 100, 613, { size: 12 }), ...inkRun('C', 230, 613, { font: 'CMMI12', size: 12 }), ...inkRun('n', 236, 611, { font: 'CMMI8', size: 8 }), ...inkRun('2', 241, 618, { font: 'CMR8', size: 8 }), ...inkRun('. . . 15', 260, 613, { size: 12 })] }, { point: 'be1' })] }),
+  double: () => ({ units: [], pages: [inkPage({ point: 'bs1' }, { point: 'n1.contents.e' }, { para: 7 }, { glyphs: inkRun('6  Internal structure of the depth-', 100, 700, { size: 12 }) }, { glyphs: inkRun('wise convolutions and the mod-', 115, 671, { size: 12 }) }, { glyphs: inkRun('ule shown here . . . 14', 115, 642, { size: 12 }) }, { para: 8 }, { glyphs: [...inkRun('7  Turbulence strength', 100, 613, { size: 12 }), ...inkRun('C', 230, 613, { font: 'CMMI12', size: 12 }), ...inkRun('n', 236, 611, { font: 'CMMI8', size: 8 }), ...inkRun('2', 241, 618, { font: 'CMR8', size: 8 }), ...inkRun('. . . 15', 260, 613, { size: 12 })] }, { point: 'be1' })] }),
+  // a running head with a year in its words and its folio set apart (2010.11929v2's): the year the head's, the folio no unit's
+  heads: () => ({ units: HEADING, pages: [inkPage({ point: 'c1-2' }, { glyphs: inkRun('Published as a conference paper at ICLR 2021', 100, 760, { space: 3.33 }) }, { glyphs: inkRun('12', 520, 760) }, { point: 'bs1' }, { point: 'be1' })] }),
   // LAYOUT 23's: an orphan's runs of another weight, colour and slant
   styles: () => ({ units: [], pages: [inkPage({ point: 'bs1' }, { para: 1 }, { glyphs: [...inkRun('Definition 1', 100, 700, { font: 'CMBX10' }), ...inkRun('([TT])', 165, 700), ...inkRun('holds', 200, 700, { fill: 0x0071bc }), ...inkRun('here and now', 230, 700, { font: 'CMTI10' })] }, { point: 'be1' })] }),
 }

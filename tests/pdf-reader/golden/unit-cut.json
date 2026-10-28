@@ -126,6 +126,9 @@
    "inkcontents: \"Internal structure of the depthwise convolutions and the module shown here\"",
    "inkcontents: \"Turbulence strength \",ph($Cn2$)"
   ],
+  "heads": [
+   "inkheads: \"Published as a conference paper at ICLR 2021\""
+  ],
   "styles": [
    "inkorphan: open(\\textbf{),\"Definition 1\",close,\" ([TT]) \",open(\\textcolor[HTML]{0071BC}{),\"holds\",close,\" \",open(\\textit{),\"here and now\",close"
   ]
