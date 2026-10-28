@@ -2892,7 +2892,7 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   loses its ink (no double ink, D 0) and is then blank (no stroke or other glyph a translation could cover, O 0). A form written
   again is copied into the delta whole: two of the pack's deltas pass their bound with the figures and are held `full`
   (2307.16209v1, 2609.26457v1), none of the 25-paper set's. The sets, rooms and runs by script (2026-10-29, the pack
-  `e8e9eeb5` and 24 of the 25-paper set made again on this engine, the record's run of that day): the wrap's every count is
+  `ad76c514` and 24 of the 25-paper set made again on this engine, the record's run of that day): the wrap's every count is
   `next`'s, G1, G3f, D and O 0, and R (each drawn unit's room blank once the figures are hidden) 0; 944 of the pack's 1,030
   units and 1,159 of the set's 1,469 are in sets of two or more, 138 and 223 of them anchored by their column. Over a model of
   zh the labels drawn go from 589 to 830 of 846 on the pack and from 905 to 1,177 of 1,216 on the set, and the sets of mixed

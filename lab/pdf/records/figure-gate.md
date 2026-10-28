@@ -9,7 +9,7 @@ band loses its ink: no double ink), O (each band then one colour: nothing a tran
 (`figure-text.mjs` setsOf) and the fit rule's counts, label by label as BUNDLE 10 drew them against set by set (`figure-fit.mjs`
 fitFigureSet), over a model of zh translations or Microsoft's. Counts and ids only.
 
-## Run of 2026-10-29, the pack e8e9eeb5 (engine `fix/figure-text-groups` on `next` 80f52980)
+## Run of 2026-10-29, the pack ad76c514 (engine `fix/figure-text-groups` merged with `next` 25b498b0, LAYOUT 25)
 
 The owner's rule of 2026-10-29 (`docs/PDF-READER.md` §19.12, its set and its room): a figure's labels of one group at one size,
 each from its original's edge, a translation into the free line beside it, a group that cannot fit shrinking as one. The wrap is
@@ -57,8 +57,8 @@ in its runs by script.
 | 2610.21924v1 | 135 | 86 | 23 | 121 | 43 | 81 | 0 | 0 | 0 | 0 | 0 | 77 → 86 | 70 → 77 | 4 → 0 | 7 |
 | 2610.22065v1 | 121 | 89 | 24 | 64 | 6 | 86 | 0 | 0 | 0 | 0 | 0 | 78 → 89 | 72 → 89 | 5 → 0 | 7 |
 | 2610.22195v1 | 202 | 184 | 37 | 152 | 9 | 183 | 0 | 0 | 0 | 0 | 0 | 164 → 184 | 160 → 184 | 4 → 0 | 15 |
-| 2610.22214v1 | 108 | 70 | 28 | 75 | 18 | 55 | 0 | 0 | 0 | 0 | 0 | 65 → 70 | 47 → 54 | 7 → 0 | 10 |
-| **All** | **1,469** | **1,216** | **293** | **1,159** | **223** | **1,158** | **0** | **0** | **0** | **0** | **0** | **905 → 1,177** | **819 → 1,088** | **43 → 0** | **116** |
+| 2610.22214v1 | 108 | 70 | 28 | 75 | 18 | 53 | 0 | 0 | 0 | 0 | 0 | 65 → 70 | 47 → 54 | 7 → 0 | 10 |
+| **All** | **1,469** | **1,216** | **293** | **1,159** | **223** | **1,156** | **0** | **0** | **0** | **0** | **0** | **905 → 1,177** | **819 → 1,088** | **43 → 0** | **116** |
 
 **Microsoft's translations** (three papers: two of the pack, and 2010.11929v2 made by `figure-final.mjs`; a label whose translation says its source again is not counted):
 
@@ -78,7 +78,11 @@ clamp (now within 0.05). One unit of 2602.23285v2 had turned crowded on the firs
 reaching it once the scan went past the reach: crowding and the anchor read alone are read within the reach again, and on every
 paper of both sets the wrap's counts (units, drawn, crowded, forms) are `next`'s. After the review of #490 (a clipped ground's
 edge, and a room stopping short of a unit of another direction's) every count above is as before but 2610.21924v1's labels at
-their full size, 84 to 77: its turned and level labels round its scatter plots now leave each other's line.
+their full size, 84 to 77: its turned and level labels round its scatter plots now leave each other's line. A turned label's
+room then ends where its band leaves its figure or its page (the review's third finding): 2610.22214v1's labels with room
+55 to 53, every other count as before. The numbers above are of the final engine, merged with `next` 25b498b0 (#487) and
+measured on the pack ad76c514 (its base pages and sources the bytes of e8e9eeb5's, its layout files LAYOUT 25's), where the pack
+gives every count of e8e9eeb5; `next` 25b498b0's own engine gives the same wrap counts on both sets, and G1, G3f, D and O 0.
 
 ## Run of 2026-10-25, the pack 09208b43 (engine `feat/figure-text` on `next` 1cdca756)
 
