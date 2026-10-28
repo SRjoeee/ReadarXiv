@@ -366,6 +366,10 @@ places not in the frozen references. The base pages are pixel for pixel `690d0e1
 Its review round's (`0b3109a8`, LAYOUT 24 still) is `7edfbd6f`'s with 2608.04322v1's seven outputs made again: its note's e-mail,
 `zhou\_qianli@nwpu.edu.cn`, is one placeholder where its `\_` had parted it, so its layout file's rows of that note and its base
 page's marks change; the base page's pixels are `7edfbd6f`'s. 3 new objects.
+The pack of #486 (`e8e9eeb5`, LAYOUT 24 still) is `0b3109a8`'s with 2608.16117v1's two outputs (de, zh) made again: the probe now
+knows its .bbl's `\URLprefix`, so the `\url` after it in its entries is marked, and an entry's `\DOIprefix\doi{…}` is parted
+(`docs/PDF-READER.md` §19.7, the look-ahead pairs): their layout files' rows of those entries and their base pages' marks change,
+the base pages' pixels are `0b3109a8`'s; every other output's files are its own bytes. 3 new objects.
 Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
 The wrap reads each base's units from its paper's source, so the pack holds that too: `sources/<paper>/source.gz`, one a paper
 (`gate-pack.mjs make --sources=<dir of <paper>/source.gz>`, `data/corpus` by default; a make with a base of ours and no source
