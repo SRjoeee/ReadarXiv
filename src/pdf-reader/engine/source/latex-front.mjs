@@ -936,12 +936,40 @@ const joinLetters = pieces => {
 // (0000-0002-1825-0097), and the domain after a list of names in braces
 const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+|\b(?:https?|ftp):\/\/[^\s{}\\]*[^\s{}\\.,;:!?)\]]|\bwww\.[\w-]+(?:\.[\w-]+)+(?:\/[^\s{}\\]*[^\s{}\\.,;:!?)\]])?|\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b/g, HAS_EMAIL = new RegExp(EMAIL.source)
 const AT_DOMAIN = /^@[\w-]+(?:\.[\w-]+)+/
+/** an e-mail whose local part TeX escapes (`goh\_siong\_thye@a-star.edu.sg`, 2608.11884; `tang\_chao@xtu.edu.cn`, 2608.29778):
+ *  each `\_` a placeholder of its own, which parted the address, its first words left text ("goh siong", "tang", sent to the
+ *  translator). The words before the address that its `\_` join, the `\_` and the address are one placeholder, as the paper
+ *  has them; a word apart from it by white space or anything else stays as it is */
+function escapedLocals(pieces) {
+  const out = []
+  for (let k = 0; k < pieces.length; k++) {
+    const p = pieces[k]
+    if (p.t === 'ph' && p.src === '\\_' && out.at(-1)?.t === 'text' && out.at(-1).src === undefined && /[\w.+-]$/.test(out.at(-1).s)) {
+      // (the run of `\_` and plain words up to a text that opens with the rest of an address)
+      let j = k
+      while (pieces[j]?.t === 'ph' && pieces[j].src === '\\_' && pieces[j + 1]?.t === 'text' && pieces[j + 1].src === undefined && /^[\w.+-]*$/.test(pieces[j + 1].s)) j += 2
+      const tail = pieces[j]?.t === 'ph' && pieces[j].src === '\\_' ? pieces[j + 1] : null
+      const rest = tail?.t === 'text' && tail.src === undefined ? /^[\w.+-]*@[\w-]+(?:\.[\w-]+)+/.exec(tail.s)?.[0] : null
+      if (rest) {
+        const before = out.pop(), head = /[\w.+-]+$/.exec(before.s)[0]
+        if (before.s.length > head.length) out.push({ ...before, s: before.s.slice(0, -head.length) })
+        out.push({ t: 'ph', src: head + pieces.slice(k, j + 1).map(x => x.src ?? x.s).join('') + rest })
+        if (tail.s.length > rest.length) out.push({ ...tail, s: tail.s.slice(rest.length) })
+        k = j + 1
+        continue
+      }
+    }
+    out.push(p)
+  }
+  return out
+}
 /** An address is not prose: an e-mail in a unit's text (jatin@us.ibm.com), an ORCID, a web address a link shows as its text
  *  (\\href{https://osf.io/gjvbs}{https://osf.io/gjvbs}, now that a link's text is text: 2608.14893), and a list of names
  *  in escaped braces with its domain ({sl225, samand2, reyhaneh}@illinois.edu), each become a placeholder, kept as the
  *  paper has it. Sent as text, a machine translation spelled one of 2608.06701's names in katakana and joined the list
  *  with the ideographic comma */
 function keepAddresses(pieces) {
+  pieces = escapedLocals(pieces)
   const lists = []
   for (let k = 0; k < pieces.length; k++) {
     const p = pieces[k], names = pieces[k + 1], shut = pieces[k + 2], after = pieces[k + 3]
@@ -2732,13 +2760,18 @@ const LETTER_GROUP = inner => {
  * likes (amsart: the date in a note of the first page, the addresses at the paper's end), and an unmarked unit is searched
  * between its marked neighbours, so the addresses' marks alone took 2610.21037's date out of its search
  */
+/** a block's text as TeX reads its tokens, for comparing two: no comment, a blank line a paragraph's end, any other run of white
+ *  space one space, none at either end */
+const asTokens = t => t.replace(/(?<!\\)%[^\n]*(?:\n[ \t]*)?/g, '').replace(/[ \t]*\n[ \t]*\n\s*/g, '\u2029').replace(/[ \t\n]+/g, ' ').trim()
 export function frontMarks(units) {
   const id = new Map(units.map((u, i) => [u, i]))
   const front = units.filter(u => (inAuthorBlock(u) || (u.front && u.kind !== 'heading' && !u.held)) && (!u.stored || (u.once && inAuthorBlock(u))) && !inMath(u))
   // (what a class compares is a command's whole argument: an author block's unit by its block's text, which two commands share
   // where they are equal — revtex's two equal \\affiliation{…}, set once —, never two rows of one block, which the class sets
   // each where it stands: 1706.03762v7's three "Google Brain" rows of one \\author; a note by its own text)
-  const keyOf = u => (BLOCK_OF.has(u) ? `b:${BLOCK_OF.get(u).text}` : `u:${sourceText(u)}`)
+  // (a block's text as TeX reads it: a comment none, a space's run one space, a blank line a paragraph's end — two equal
+  // \\affiliation{…} that differ in their lines' breaks are one to REVTeX)
+  const keyOf = u => (BLOCK_OF.has(u) ? `b:${asTokens(BLOCK_OF.get(u).text)}` : `u:${sourceText(u)}`)
   const seen = new Map()
   for (const u of front) { const k = keyOf(u), owners = seen.get(k) ?? seen.set(k, new Set()).get(k); owners.add(BLOCK_OF.get(u) ?? u) }
   const marked = new Set(front.filter(u => seen.get(keyOf(u)).size === 1))
