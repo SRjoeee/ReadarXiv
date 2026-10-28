@@ -450,8 +450,8 @@ describe('a letter command is the letter itself in its word: TeX\'s skipped spac
 
   it('a bibliography entry\'s numbers are kept before its letters join their words: a year between two letters stays a placeholder', () => {
     const p = project('\\documentclass{article}\\begin{document}\nText.\n\\begin{thebibliography}{1}\n\\bibitem{a} S{\\o}ren. 2020. The {\\O}resund study.\n\\end{thebibliography}\n\\end{document}')
-    const entry = (p.units as Unit[]).find(u => (u as unknown as { kind: string }).kind === 'reference')
-    expect(entry?.pieces.filter(x => x.t === 'ph').map(x => x.src)).toContain('2020.')
+    const entry = (p.units as Unit[]).find(u => u.kind === 'reference')
+    expect(entry?.pieces.filter(x => x.t === 'ph').map(x => (x as { src?: string }).src)).toContain('2020.')
     expect(serialize(entry as never).wire).toMatch(/^Søren\. @a# The Øresund study\.$/)
   })
 
