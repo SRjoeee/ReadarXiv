@@ -2574,7 +2574,11 @@ changes, which pageInk keeps apart from the marks' points as `paras`; a paragrap
 as the one before), each of its
 class's kind (`inkheads`, `inkcontents`, `inknotes`, `inkorphan`, after the source kinds in UNIT_KINDS; `inknames` a block
 most of whose letters are an author unit's words, of the names toggle as that unit is), its numbering, leaders
-and page number left the original's ink, its math and typewriter runs (and a web address in any face) kept placeholders. One
+and page number left the original's ink, its math and typewriter runs (and a web address in any face) kept placeholders, and
+each run of its words in another weight, slant or colour than most of its glyphs hold a group of the commands that set it
+(`\textbf{`, `\textmd{`, `\textit{`, `\textup{`, `\textcolor[HTML]{…}{`, rule 9, LAYOUT `'23'`), as a source unit's groups are,
+so that its translation keeps each run's style (the release sweep of 2026-10-25, (d): a theorem's bold head before its regular
+note, a reference's italic title, a coloured term, all drawn in the unit's one style). One
 whose letters and placeholders are a source unit's (a heading first), else an earlier ink unit's (a running head), echoes it: its pieces that unit's, its row that unit's row under its own id, never translated
 itself (`rows.mjs` `echoRows`, `layerIds`). Its glyphs are claimed under its own groups, `u<id>` and `u<id>.p`, so the reader
 hides it as any unit; one the wrap could not hide alone (its page not wrapped, its placeholder's group merged: `ink.off`), or on a

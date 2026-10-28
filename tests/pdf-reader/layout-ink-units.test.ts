@@ -10,10 +10,10 @@ import { unitClass } from '@/pdf-reader/engine/rules/content-classes.mjs'
 
 type G = LedgerPage['glyphs'][number] & { top: number; bottom: number; ix0: number; ix1: number }
 /** a run's glyphs, 5 pt a character, on a baseline */
-function run(text: string, x: number, y: number, { font = 'CMR10', size = 10 }: { font?: string; size?: number } = {}): G[] {
+function run(text: string, x: number, y: number, { font = 'CMR10', size = 10, fill = 0 }: { font?: string; size?: number; fill?: number } = {}): G[] {
   const out: G[] = []
   for (const ch of text) {
-    if (ch !== ' ') out.push({ u: ch, x0: x, x1: x + 5, ix0: x, ix1: x + 5, y, top: y + 7, bottom: y - 2, size, font })
+    if (ch !== ' ') out.push({ u: ch, x0: x, x1: x + 5, ix0: x, ix1: x + 5, y, top: y + 7, bottom: y - 2, size, font, fill } as G)
     x += 5
   }
   return out
@@ -86,6 +86,26 @@ describe('inkUnitsOf', () => {
     expect(ink[0]!.glyphs.ph).toEqual([[1, pg.page.glyphs.findIndex(g => g.font === 'CMMI10')]])
     expect(ink[0]!.rows.lines.length / 8).toBe(2)
     expect(ink[0]!.rows.frames).toEqual([1, 0, 0, 2, -1, ink[0]!.rows.frames[5]])
+  })
+
+  it("keeps each run of another weight, slant or colour than the unit's a group of its own, as a source unit's (the sweep's (d))", () => {
+    // (a theorem's bold head before its regular note, a term in hyperref's blue, a phrase in italics: drawn in the unit's one
+    // style, regular, before)
+    const pg = page({ point: 'bs1' }, { para: 1 }, {
+      glyphs: [...run('Definition 1', 100, 700, { font: 'CMBX10' }), ...run('([TT])', 165, 700), ...run('holds', 200, 700, { fill: 0x0071bc }), ...run('here and now', 230, 700, { font: 'CMTI10' })],
+    }, { point: 'be1' })
+    const { ink } = unitsOf([pg])
+    expect(ink.map(u => u.pieces)).toEqual([[
+      { t: 'open', id: 1, src: '\\textbf{' }, { t: 'text', s: 'Definition 1' }, { t: 'close', id: 1, src: '}' }, { t: 'text', s: ' ([TT]) ' },
+      { t: 'open', id: 2, src: '\\textcolor[HTML]{0071BC}{' }, { t: 'text', s: 'holds' }, { t: 'close', id: 2, src: '}' }, { t: 'text', s: ' ' },
+      { t: 'open', id: 3, src: '\\textit{' }, { t: 'text', s: 'here and now' }, { t: 'close', id: 3, src: '}' },
+    ]])
+    expect(ink[0]!.rows.unit[4]).toBe(11)
+    // (a unit in one style is its text alone: the reader measures that style on its glyphs; a bold one with a regular word, that
+    // word in \textmd)
+    expect(unitsOf([page({ point: 'bs1' }, { glyphs: run('Collusion index', 100, 700, { font: 'CMBX12' }) }, { point: 'be1' })]).ink[0]!.pieces).toEqual([{ t: 'text', s: 'Collusion index' }])
+    const bold = unitsOf([page({ point: 'bs1' }, { glyphs: [...run('Lemma 3.3.', 100, 700, { font: 'CMBX10' }), ...run('(1)', 155, 700)] }, { point: 'be1' })]).ink[0]!
+    expect(bold.pieces.map(p => p.t === 'text' ? p.s : p.src)).toEqual(['Lemma 3.3. ', '\\textmd{', '(1)', '}'])
   })
 
   it("keeps a web address in the text's face a placeholder: a note of an address alone is no unit", () => {

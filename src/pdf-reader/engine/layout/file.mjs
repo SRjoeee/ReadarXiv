@@ -110,9 +110,11 @@ export { LayoutRefusal } from './json.mjs'
  *  that unit's line (make.mjs headTail, MR 5's rule: amsthm's ")." after a note that ends in a citation, which was the body's
  *  label row and was shown again from the original where it stood, 2610.18513v1 p35), and a label row that meets an ink unit's
  *  text goes (pipeline/ink-pass.mjs layoutWithInk: a label the wrap left in no group and an ink unit claimed, SIAM's "AMS
- *  subject classifications.", a theorem's head whose note is a citation, shown again under the ink unit's translation, 12
- *  rows of 5 local papers). The rows of the units they reach change, so a file of 22 is another maker's: the stored layers are
- *  made again and the gate pack with them (the file's schema is 5 still) */
+ *  subject classifications.", a theorem's head whose note is a citation, shown again under the ink unit's translation: 39
+ *  rows of 22 papers, 0 after, 30 of the sweep's 32 rows of (c)); and an ink unit's runs in another weight, slant or colour
+ *  than its own are groups of the commands that set them (layout/ink-units.mjs rule 9: the sweep's (d), its text drawn in one
+ *  style). The rows of the units they reach change, so a file of 22 is another maker's: the stored layers are made again and
+ *  the gate pack with them (the file's schema is 5 still) */
 export const LAYOUT = '23'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
