@@ -2836,8 +2836,11 @@ translated.
   affiliations, institutions, addresses and its e-mail line are units of their own, kind `affiliation` (class body: always
   translated), its names kind `author` (class names: the names toggle). Read from the TeX the source holds: the command (`\author`
   and its kin names, `\affil`, `\affiliation`, `\institute`, `\address` and their kin places), the rows of the tabular LaTeX sets an
-  `\author` in, a numbered list of places, an author's note; IEEEtran's, acmart's, REVTeX's, elsarticle's (each key's value),
-  llncs', ICML's and AAAI's forms. An e-mail, a web address and an ORCID written out stay placeholders, the original's ink. Every
+  `\author` in (its first row names, the rest places, but a row that holds an author's note, sets an affiliation's mark after a
+  name, opens with "and", or stands before a numbered list of places is names: 2608.14893's and 2610.21880v1's second rows of
+  names), a numbered list of places; IEEEtran's, acmart's, REVTeX's, elsarticle's (each key's value), llncs', ICML's and AAAI's
+  forms. A later row with none of these is a place, as the classes set it: a name alone there cannot be told from a place by its
+  TeX. An e-mail, a web address and an ORCID written out stay placeholders, the original's ink. Every
   unit keeps its number: what PIPELINE 29 cut the text between two notes into (one unit of kind author, a unit the walk flushed
   inside it one more: `olderUnits`, a walk of the old cut in a shadow of the walk's context) keeps it in the first unit cut inside
   its range, of either kind, and every other unit cut there is numbered after every other unit of the source, before the entries

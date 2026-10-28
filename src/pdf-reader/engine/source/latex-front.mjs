@@ -1131,16 +1131,21 @@ const MARK_FIRST = /^(?:\$\s*(?:\{\s*\})?\s*\^|\\\(\s*(?:\{\s*\})?\s*\^|\\(?:tex
  *  names that run over two rows, their places set elsewhere (2608.14893's second row of names, read as a place). A place opens
  *  with its mark, never sets one after its words */
 const MARK_AFTER = /[^\s{$\\]\s*(?:\$\s*(?:\{\s*\})?\s*\^|\\\(\s*(?:\{\s*\})?\s*\^|\\(?:textsuperscript|IEEEauthorrefmark|affmark)(?![A-Za-z@]))/
-/** whether a row of an author block opens with an affiliation's mark (MARK_FIRST), what stands before its text aside */
-function markFirst(src) {
+/** a row of an author block that opens with the word "and" (`\\\\and Rafael F. Schaefer, \\emph{Senior Member, IEEE}`, IEEEtran's
+ *  journal form, 2610.21880v1): the list of names its row before broke, never a place */
+const AND_FIRST = /^and(?![A-Za-z@])/
+/** a row of an author block with what stands before its text taken off (ROW_LEAD) */
+function rowText(src) {
   let t = src
   for (;;) {
     const m = ROW_LEAD.exec(t)
     if (!m || (m[1] !== undefined && !NO_ARGS.has(m[1]))) break
     t = t.slice(m[0].length)
   }
-  return MARK_FIRST.test(t)
+  return t
 }
+/** whether a row of an author block opens with an affiliation's mark (MARK_FIRST), what stands before its text aside */
+function markFirst(src) { return MARK_FIRST.test(rowText(src)) }
 /** an author block's row and block ends at its top level ({ at, end, and }), in order: no group, formula or environment is
  *  looked into (a row TeX ends inside a tabular of the block's own is that tabular's) */
 function frontEnds(s, from, to) {
@@ -1200,9 +1205,9 @@ function frontBlock(s, from, to, b, ctx, role = 'names') {
     const led = rows.map(([x, y]) => markFirst(s.slice(x, y))), marked = led.indexOf(true)
     // (a row of names: the block's first, every row before its numbered places where it has them, a row that holds an
     // author's note, which LaTeX's \\thanks is and a note's mark sets after a name, and a row that sets an affiliation's mark
-    // after a name (MARK_AFTER); never one an affiliation's mark opens)
+    // after a name (MARK_AFTER) or opens with "and" (AND_FIRST); never one an affiliation's mark opens)
     const noted = ([x, y]) => notes.some(n => n.at >= x && n.at < y) || /\\footnotemark(?![A-Za-z@])/.test(s.slice(x, y))
-    rows.forEach((row, r) => kindAt.push([row[0], role === 'names' && !led[r] && (r === 0 || (marked >= 0 && r < marked) || noted(row) || MARK_AFTER.test(s.slice(row[0], row[1]))) ? 'author' : 'affiliation']))
+    rows.forEach((row, r) => kindAt.push([row[0], role === 'names' && !led[r] && (r === 0 || (marked >= 0 && r < marked) || noted(row) || MARK_AFTER.test(s.slice(row[0], row[1])) || AND_FIRST.test(rowText(s.slice(row[0], row[1])))) ? 'author' : 'affiliation']))
   }
   const kindOf = at => kindAt.findLast(([x]) => x <= at)?.[1] ?? 'affiliation'
   // (the units' numbers: what PIPELINE 29 cut the text between two notes into, its walk as one author block's (olderUnits), keeps

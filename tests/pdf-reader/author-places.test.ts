@@ -41,7 +41,7 @@ describe('an author block\'s names and its places, by the TeX that sets them', (
     expect(names(p)).toEqual(['Alice', 'Bob'])
     expect(places(p)).toEqual(['The University'])
   })
-  it('a row that sets an affiliation\'s mark after a name is names, its places set elsewhere (2608.14893\'s second row of names)', () => {
+  it('a row that sets an affiliation\'s mark after a name, or opens with "and", is names, its places set elsewhere (2608.14893\'s and 2610.21880v1\'s second rows of names)', () => {
     const p = open('\\maketitle\nWords.', '\\author{Favio Di Ciocco$^{1,2,\\dagger}$, Sebastian Pinto$^{1}$ \\\\\nMarcelo Kuperman$^{3,4}$, Pablo Balenzuela\\textsuperscript{1,2,*}}\n\\date{}')
     expect(names(p)).toEqual(['Favio Di Ciocco, Sebastian Pinto', 'Marcelo Kuperman, Pablo Balenzuela'])
     expect(places(p)).toEqual([])
@@ -49,6 +49,10 @@ describe('an author block\'s names and its places, by the TeX that sets them', (
     const q = open('\\maketitle\nWords.', '\\author{Alice Smith$^{1}$ \\\\ Bob Jones$^{2}$ \\\\ $^{1}$University of Somewhere, $^{2}$Institute of Elsewhere}')
     expect(names(q)).toEqual(['Alice Smith', 'Bob Jones'])
     expect(places(q)).toEqual(['University of Somewhere, Institute of Elsewhere'])
+    // (IEEEtran's journal form: a list of names its row broke, the next row opening with "and", 2610.21880v1)
+    const r = open('\\maketitle\nWords.', '\\author{Sohani Hiam, Mohammad Soleymani, \\emph{Senior Member, IEEE}, \\\\and Rafael F. Schaefer, \\emph{Senior Member, IEEE}\n\\\\\n\\thanks{Rafael Schaefer is with TU Dresden.}}', 'IEEEtran')
+    expect(places(r)).toEqual([])
+    expect(names(r).join('|')).toMatch(/Rafael F\. Schaefer/)
     // (a row with no mark after the first is a place, as the classes set it: a name alone on a later row cannot be told from a
     // place by its TeX)
     expect(places(open('\\maketitle\nWords.', '\\author{Alice Smith \\\\ Department of Physics}'))).toEqual(['Department of Physics'])
