@@ -55,9 +55,11 @@ export { BUCKET, sha256 }
 export const PACK_SCHEMA = 2
 /** the pack's objects in the bucket: gate-pack/<sha256> */
 export const KEY_PREFIX = 'gate-pack/'
-/** the weights a CJK group's roles are built from (rules/font-roles.mjs rolesFor): the body, the bold, and the lights and semibolds
- *  the rule `cjkFaces.light` switches between */
-export const ROLE_WEIGHTS = ['light', 'regular', 'semibold', 'bold']
+/** the weights a CJK group's roles are built from (rules/font-roles.mjs rolesFor): the body and the bold, beside every English
+ *  family (the ruling of 2026-10-29) */
+export const ROLE_WEIGHTS = ['regular', 'bold']
+/** the Kai faces of the catalog: no engine since 2026-10-19 draws emphasis in one, and the rule set names none since its schema 6 */
+const KAI = ['fandolkai', 'bkai00mp']
 
 const here = new URL('.', import.meta.url).pathname
 const REPO = resolve(here, '../../..')
@@ -98,24 +100,18 @@ function safePath(path) {
 
 /**
  * The font files the outputs can draw in. Every face of the role table that is no CJK face, whole (no rule picks a Latin
- * face, and the papers' families decide which are drawn); of a CJK group, only what a target of the pack names: the four
- * weights its roles are built from, so that a rule moving `cjkFaces.light` can be measured, and its Kai. `known` are the
- * CJK families (`{ group, kai }`) the built-in rule set names for any script, `used` those of the pack's targets. A group
- * or a Kai the pack's targets do not use (Traditional Chinese's, which has no fixture) is left out.
+ * face, and the papers' families decide which are drawn); of a CJK group, only what a target of the pack names: the
+ * weights its roles are built from. `known` are the CJK families (`{ group }`) the built-in rule set names for any script,
+ * `used` those of the pack's targets. A group the pack's targets do not use (Traditional Chinese's, which has no fixture),
+ * and the Kai faces no target draws, are left out.
  */
 export function fontFiles(faces, known, used) {
   const ids = Object.keys(faces)
-  const cjk = new Set()
-  for (const { group, kai } of known) {
-    for (const id of ids) if (id.startsWith(`${group}-`)) cjk.add(id)
-    if (kai) cjk.add(kai)
-  }
+  const cjk = new Set(KAI)
+  for (const { group } of known) for (const id of ids) if (id.startsWith(`${group}-`)) cjk.add(id)
   const want = new Set(ids.filter(id => !cjk.has(id)))
   const need = id => { if (!Object.hasOwn(faces, id)) throw new Error(`the role table has no face ${id}`); want.add(id) }
-  for (const { group, kai } of used) {
-    for (const w of ROLE_WEIGHTS) need(`${group}-${w}`)
-    if (kai) need(kai)
-  }
+  for (const { group } of used) for (const w of ROLE_WEIGHTS) need(`${group}-${w}`)
   return [...new Set([...want].map(id => faces[id].file))].sort()
 }
 
@@ -557,7 +553,7 @@ async function main(argv) {
     const layout = layoutVersionOf(fixtures, names, await layoutOfEngine(engine))
     const targets = [...new Set(names.map(n => nameOf(n).target))].sort()
     const known = SCRIPTS.map(s => BUILTIN_RULES.scripts[s].cjkFaces).filter(Boolean)
-    const used = [...new Map(targets.map(t => resolveRules(BUILTIN_RULES, t).cjkFaces).filter(Boolean).map(c => [`${c.group}|${c.kai}`, c])).values()]
+    const used = [...new Map(targets.map(t => resolveRules(BUILTIN_RULES, t).cjkFaces).filter(Boolean).map(c => [c.group, c])).values()]
     const texmf = resolve(typeof arg('texmf', argv) === 'string' ? arg('texmf', argv) : process.env.TEXMF_DIST ?? join(homedir(), 'Library/TinyTeX/texmf-dist'))
     const sources = typeof arg('sources', argv) === 'string' ? resolve(arg('sources', argv)) : resolve(REPO, 'lab/pdf/data/corpus')
     const entries = entriesOf({ fixtures, records, refs, geometry, sources, fontsDir: where(argv, 'fonts'), fonts: fontFiles(FACES, known, used), patterns: TEX_PATTERN_FILES, texmf })

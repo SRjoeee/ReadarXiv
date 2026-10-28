@@ -27,10 +27,12 @@ export interface RoleSet {
   cjk: { body: FaceId; bold: FaceId } | null   // an italic run is its weight's face sheared (layer-proto/fonts.mjs CJK_SLANT_DEG)
   fallbacks: Readonly<Record<FaceId, readonly FaceId[]>>
 }
-/** a script's CJK faces: its group, its Kai (kept in the rule set for engines before 2026-10-19, read by none since: an
- *  italic run is the body sheared), the English designs beside which it is light */
-export interface CjkFaces { group: string; kai: string | null; light: readonly string[] }
-/** the English families a paper's body is set in; a rule may name them as the ones a CJK face is light beside */
+/** a script's CJK faces: its group, drawn at Regular and Bold beside every English family (RULES_SCHEMA 6: the Light designs
+ *  and the Kai, which no engine since 2026-10-19 read, gone from the set) */
+export interface CjkFaces { group: string }
+/** whether a face of the catalog is a CJK one (Source Han Serif's, Harano Aji's, a Kai) */
+export declare function isCjkFace(id: string): boolean
+/** the English families a paper's body is set in */
 export declare const ENGLISH_FAMILIES: readonly EnglishFamily[]
 /** what a target draws in, for a paper's English family; `cjkFaces` is the target's CJK family as the layout rule set gives
  *  it (null for an alphabet), and a script of no alphabet's given none throws */

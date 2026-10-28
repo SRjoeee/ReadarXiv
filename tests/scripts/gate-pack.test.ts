@@ -303,18 +303,19 @@ describe('the base record a make of the fixtures writes', () => {
 
 describe('the faces the pack holds', () => {
   const faces = Object.fromEntries(
-    ['shs-sc-light', 'shs-sc-regular', 'shs-sc-medium', 'shs-sc-semibold', 'shs-sc-bold', 'shs-k-light', 'shs-k-regular', 'shs-k-semibold', 'shs-k-bold', 'fandolkai', 'bkai00mp', 'nimbus-roman-regular', 'cmun-serif-bold'].map(id => [id, { file: `${id}.otf` }]),
+    ['shs-sc-regular', 'shs-sc-medium', 'shs-sc-bold', 'shs-k-regular', 'shs-k-bold', 'fandolkai', 'bkai00mp', 'nimbus-roman-regular', 'cmun-serif-bold'].map(id => [id, { file: `${id}.otf` }]),
   )
-  const known = [{ group: 'shs-sc', kai: 'fandolkai' }, { group: 'shs-k', kai: null }, { group: 'shs-tc', kai: 'bkai00mp' }]
-  it('takes every face that is no CJK face whole, and of a CJK group the four weights its roles are built from and its Kai', () => {
-    const files = fontFiles(faces, known, [{ group: 'shs-sc', kai: 'fandolkai' }])
-    expect(files).toEqual(['cmun-serif-bold.otf', 'fandolkai.otf', 'nimbus-roman-regular.otf', 'shs-sc-bold.otf', 'shs-sc-light.otf', 'shs-sc-regular.otf', 'shs-sc-semibold.otf'])
+  const known = [{ group: 'shs-sc' }, { group: 'shs-k' }, { group: 'shs-tc' }]
+  it('takes every face that is no CJK face whole, and of a CJK group the two weights its roles are built from; no Kai', () => {
+    const files = fontFiles(faces, known, [{ group: 'shs-sc' }])
+    expect(files).toEqual(['cmun-serif-bold.otf', 'nimbus-roman-regular.otf', 'shs-sc-bold.otf', 'shs-sc-regular.otf'])
   })
   it('leaves out the group no target of the pack uses, and names a face the table lacks', () => {
-    const files = fontFiles(faces, known, [{ group: 'shs-sc', kai: 'fandolkai' }, { group: 'shs-k', kai: null }])
+    const files = fontFiles(faces, known, [{ group: 'shs-sc' }, { group: 'shs-k' }])
     expect(files.some(f => f.startsWith('shs-k'))).toBe(true)
     expect(files).not.toContain('bkai00mp.otf')
-    expect(() => fontFiles(faces, known, [{ group: 'shs-tc', kai: 'bkai00mp' }])).toThrow(/shs-tc-light/)
+    expect(files).not.toContain('fandolkai.otf')
+    expect(() => fontFiles(faces, known, [{ group: 'shs-tc' }])).toThrow(/shs-tc-regular/)
   })
 })
 

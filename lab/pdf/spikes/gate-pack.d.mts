@@ -15,7 +15,7 @@ export interface PackImage extends CompileImage { year?: string }
 export interface Manifest { schema: number; pipeline: string; layout: LayoutVersion; compileImage?: PackImage; made: string; digest: string; files: PackFile[] }
 export interface PackJson extends Manifest { bucket: string; files: (PackFile & { url: string })[] }
 export declare function listingDigest(files: PackFile[]): string
-export declare function fontFiles(faces: Record<string, { file: string }>, known: { group: string; kai: string | null }[], used: { group: string; kai: string | null }[]): string[]
+export declare function fontFiles(faces: Record<string, { file: string }>, known: { group: string }[], used: { group: string }[]): string[]
 export declare function outputsOf(dir: string): string[]
 export declare function entriesOf(o: { fixtures: string; records: string; refs: string; geometry: string; fontsDir: string; fonts: string[]; patterns: Record<string, string>; texmf: string }): { path: string; from: string }[]
 export declare function pipelineOf(records: string, names: string[]): string
