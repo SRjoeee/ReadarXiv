@@ -23,6 +23,11 @@ export interface FigureUnit {
   ascent: number
   descent: number
   anchor: 'start' | 'centre' | 'end'
+  /** its set's first unit's k: the units of one column or one baseline of one figure, fitted at one size (figure-fit.mjs) */
+  set: number
+  /** its room: the free line before its box's start and after its end along its direction, PDF units */
+  before: number
+  after: number
   /** shown inside a form XObject (an included PDF's) */
   form: boolean
   /** why it is not drawn, or null */
@@ -34,10 +39,13 @@ export declare const RUN_GAP: number
 export declare const SPACE_GAP: number
 export declare const ANCHOR_REACH: number
 export declare const DRAW_BAND: readonly [number, number]
+export declare const ALIGN_TOL: number
+export declare const ROOM_MAX: number
+export declare const ROOM_CLEAR: number
 export declare const FIGURE_UNITS_PAGE: number
 export declare const FIGURE_UNITS_DOC: number
 export declare const FIGURE_TEXT_MAX: number
 export declare const FIGURE_WHYS: readonly FigureWhy[]
 export declare function figureGroup(k: number): string
 /** the figure units of a document: each unit, and by page which glyph (level, and turned) is whose */
-export declare function figureUnitsOf(pages: readonly object[], own: { glyphs: readonly (readonly (string | null)[])[] } | null, o?: { unitsPage?: number; unitsDoc?: number }): { units: FigureUnit[]; glyphs: Map<number, number>[]; turned: Map<number, number>[]; stats: { units: number; crowded: number; letters: number; runs: number; past: number; clipped: number } }
+export declare function figureUnitsOf(pages: readonly object[], own: { glyphs: readonly (readonly (string | null)[])[] } | null, o?: { unitsPage?: number; unitsDoc?: number }): { units: FigureUnit[]; glyphs: Map<number, number>[]; turned: Map<number, number>[]; stats: { units: number; crowded: number; letters: number; runs: number; past: number; clipped: number; sets: number; grouped: number; aligned: number } }
