@@ -4,8 +4,79 @@ Stage 5 of `docs/route/orphan-text.md`, the content class `figures` (`docs/PDF-R
 as `wrapFinal` wraps it over its source units, its figure units counted by what became of them, and every page holding a drawn
 one rendered by PDF.js in Node at scale 2: G1 (every group shown is the page wrapped without the figures, a split show's
 antialiasing within the ocg gate's allowance), G3f (hiding the figures changes pixels inside their own bands alone), D (each drawn
-band loses its ink: no double ink), O (each band then one colour: nothing a translation drawn there could cover). Counts and ids
-only.
+band loses its ink: no double ink), O (each band then one colour: nothing a translation drawn there could cover); since
+2026-10-29 R (each drawn unit's room, the free line beside its box a longer translation may take, then one colour too), the sets
+(`figure-text.mjs` setsOf) and the fit rule's counts, label by label as BUNDLE 10 drew them against set by set (`figure-fit.mjs`
+fitFigureSet), over a model of zh translations or Microsoft's. Counts and ids only.
+
+## Run of 2026-10-29, the pack e8e9eeb5 (engine `fix/figure-text-groups` on `next` 80f52980)
+
+The owner's rule of 2026-10-29 (`docs/PDF-READER.md` §19.12, its set and its room): a figure's labels of one group at one size,
+each from its original's edge, a translation into the free line beside it, a group that cannot fit shrinking as one. The wrap is
+the same (every unit cut, crowded and drawn as on `next`: the base engine's gate gives the same counts, and its G1, G3f, D and O
+are 0 on every paper as here); what changes is each drawn unit's anchor (its column's), its set and its room, which the rows of
+BUNDLE5 11 carry.
+
+**The fit's translations.** The pack holds no translation of a figure unit, so the fit is counted twice: over a MODEL of zh (a
+CJK em for every 2.7 of a label's letters, two at least, its digits kept, 0.55 em each: a model, not a translator's answers), and
+on three papers over Microsoft's answers (mt.mjs translateUnits over translateTexts, as the fixture maker asks; a label whose
+translation says its source again is not drawn on either side), each translation's width by kind of character (a CJK character
+or a full-width sign an em, a space 0.3, any other 0.55). "10" is BUNDLE 10's layer: each label alone in its box, to the floor
+(0.6) at most, and a translation that mixes CJK with a Latin letter or a digit not drawn (its one CJK face, as the web serves
+it, holds no Latin: `served`; in the model, a label with a digit); "11" this one's: set by set, rooms taken, every translation
+in its runs by script.
+
+**The gate pack's 7 bases**, the model's translations (2608.16117v1 holds no figure text):
+
+| Paper | Units | Drawn | Sets | Units in sets | Anchors moved | With room | G1 | G3f | D | O | R | Labels drawn 10 → 11 | At full size 10 → 11 | Sets of mixed sizes 10 → 11 | Sets resized |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1512.03385v1 | 181 | 166 | 24 | 178 | 11 | 162 | 0 | 0 | 0 | 0 | 0 | 25 → 166 | 21 → 150 | 0 → 0 | 15 |
+| 1706.03762v7 | 240 | 169 | 5 | 240 | 72 | 165 | 0 | 0 | 0 | 0 | 0 | 124 → 158 | 60 → 158 | 4 → 0 | 4 |
+| 1810.04805v2 | 146 | 119 | 30 | 120 | 6 | 115 | 0 | 0 | 0 | 0 | 0 | 108 → 118 | 80 → 100 | 2 → 0 | 7 |
+| 2307.16209v1 | 56 | 56 | 20 | 40 | 0 | 54 | 0 | 0 | 0 | 0 | 0 | 56 → 56 | 4 → 52 | 0 → 0 | 20 |
+| 2608.04322v1 | 237 | 180 | 37 | 225 | 31 | 180 | 0 | 0 | 0 | 0 | 0 | 135 → 180 | 119 → 174 | 8 → 0 | 19 |
+| 2609.26457v1 | 170 | 156 | 36 | 141 | 18 | 154 | 0 | 0 | 0 | 0 | 0 | 141 → 152 | 134 → 132 | 2 → 0 | 7 |
+| **All** | **1,030** | **846** | **152** | **944** | **138** | **830** | **0** | **0** | **0** | **0** | **0** | **589 → 830** | **418 → 766** | **16 → 0** | **72** |
+
+**The 25-paper set** (`lab/pdf/data/layout`, made again by `figure-final.mjs` on this engine: 24 of 25, 2610.21765v1 a `latex` paper the script's host does not run; 2610.20595v1 on TeX Live 2023), the model's translations, the 16 papers with figure units:
+
+| Paper | Units | Drawn | Sets | Units in sets | Anchors moved | With room | G1 | G3f | D | O | R | Labels drawn 10 → 11 | At full size 10 → 11 | Sets of mixed sizes 10 → 11 | Sets resized |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 2602.23285v2 | 73 | 63 | 16 | 48 | 9 | 60 | 0 | 0 | 0 | 0 | 0 | 59 → 63 | 56 → 63 | 2 → 0 | 4 |
+| 2610.11256v1 | 75 | 75 | 11 | 71 | 33 | 75 | 0 | 0 | 0 | 0 | 0 | 22 → 75 | 20 → 75 | 2 → 0 | 8 |
+| 2610.20285v1 | 12 | 12 | 2 | 7 | 0 | 11 | 0 | 0 | 0 | 0 | 0 | 12 → 12 | 3 → 4 | 0 → 0 | 1 |
+| 2610.20484v1 | 5 | 2 | 1 | 2 | 2 | 2 | 0 | 0 | 0 | 0 | 0 | 2 → 2 | 1 → 1 | 0 → 0 | 0 |
+| 2610.20848v1 | 34 | 33 | 5 | 10 | 6 | 33 | 0 | 0 | 0 | 0 | 0 | 30 → 33 | 29 → 33 | 0 → 0 | 0 |
+| 2610.21085v1 | 71 | 63 | 20 | 61 | 12 | 61 | 0 | 0 | 0 | 0 | 0 | 58 → 60 | 48 → 59 | 4 → 0 | 6 |
+| 2610.21098v1 | 350 | 321 | 63 | 342 | 42 | 296 | 0 | 0 | 0 | 0 | 0 | 161 → 286 | 146 → 235 | 8 → 0 | 37 |
+| 2610.21176v1 | 122 | 92 | 32 | 104 | 24 | 90 | 0 | 0 | 0 | 0 | 0 | 64 → 92 | 62 → 91 | 1 → 0 | 10 |
+| 2610.21288v1 | 25 | 23 | 6 | 17 | 1 | 23 | 0 | 0 | 0 | 0 | 0 | 20 → 22 | 18 → 20 | 2 → 0 | 2 |
+| 2610.21491v1 | 37 | 34 | 9 | 30 | 14 | 34 | 0 | 0 | 0 | 0 | 0 | 29 → 34 | 28 → 34 | 1 → 0 | 4 |
+| 2610.21827v1 | 16 | 3 | 6 | 14 | 0 | 3 | 0 | 0 | 0 | 0 | 0 | 3 → 3 | 3 → 3 | 0 → 0 | 0 |
+| 2610.21880v1 | 83 | 66 | 10 | 41 | 4 | 65 | 0 | 0 | 0 | 0 | 0 | 61 → 66 | 56 → 66 | 3 → 0 | 5 |
+| 2610.21924v1 | 135 | 86 | 23 | 121 | 43 | 81 | 0 | 0 | 0 | 0 | 0 | 77 → 86 | 70 → 84 | 4 → 0 | 7 |
+| 2610.22065v1 | 121 | 89 | 24 | 64 | 6 | 86 | 0 | 0 | 0 | 0 | 0 | 78 → 89 | 72 → 89 | 5 → 0 | 7 |
+| 2610.22195v1 | 202 | 184 | 37 | 152 | 9 | 183 | 0 | 0 | 0 | 0 | 0 | 164 → 184 | 160 → 184 | 4 → 0 | 15 |
+| 2610.22214v1 | 108 | 70 | 28 | 75 | 18 | 55 | 0 | 0 | 0 | 0 | 0 | 65 → 70 | 47 → 54 | 7 → 0 | 10 |
+| **All** | **1,469** | **1,216** | **293** | **1,159** | **223** | **1,158** | **0** | **0** | **0** | **0** | **0** | **905 → 1,177** | **819 → 1,095** | **43 → 0** | **116** |
+
+**Microsoft's translations** (three papers: two of the pack, and 2010.11929v2 made by `figure-final.mjs`; a label whose translation says its source again is not counted):
+
+| Paper | Units | Drawn | Sets | Units in sets | Anchors moved | With room | G1 | G3f | D | O | R | Labels drawn 10 → 11 | At full size 10 → 11 | Sets of mixed sizes 10 → 11 | Sets resized |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1512.03385v1 | 181 | 166 | 24 | 178 | 11 | 162 | 0 | 0 | 0 | 0 | 0 | 21 → 140 | 16 → 124 | 0 → 0 | 14 |
+| 1810.04805v2 | 146 | 119 | 30 | 120 | 6 | 115 | 0 | 0 | 0 | 0 | 0 | 47 → 57 | 30 → 42 | 2 → 0 | 7 |
+| 2010.11929v2 | 119 | 87 | 22 | 77 | 26 | 87 | 0 | 0 | 0 | 0 | 0 | 39 → 68 | 34 → 58 | 4 → 0 | 8 |
+| **All** | **446** | **372** | **76** | **375** | **43** | **364** | **0** | **0** | **0** | **0** | **0** | **107 → 265** | **80 → 224** | **6 → 0** | **29** |
+
+The two R failures of the first run on the 25-paper set, and the four of a second, were the room's own: a caption laid over a
+screenshot in 2602.23285v2 (an image behind its band, taken as its ground: its pixels beside the box are no ground, so an image's
+or a shading's ground now leaves no room), 2610.21924v1's "ARCHIVE" node (a rounded node past the page's shapes, its box taken as
+its ground's edge: a ground of unknown lines now ends the free line a band's height inside its edges), and three bars of
+2610.21924v1 whose rectangles' edges, single floats, fell a hair past their own clipped boxes and were dropped by the clip's
+clamp (now within 0.05). One unit of 2602.23285v2 had turned crowded on the first run, a clipped line's unclipped segment
+reaching it once the scan went past the reach: crowding and the anchor read alone are read within the reach again, and on every
+paper of both sets the wrap's counts (units, drawn, crowded, forms) are `next`'s.
 
 ## Run of 2026-10-25, the pack 09208b43 (engine `feat/figure-text` on `next` 1cdca756)
 
