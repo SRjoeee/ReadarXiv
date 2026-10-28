@@ -290,23 +290,25 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     expect(ownOf(many, { units: [{ pieces }] }).units.get(0)?.unhidden).toBe('spell')
     expect(performance.now() - t0).toBeLessThan(200)
   })
-  it("owns its first line alone for a piece no display alone at its unit's end, the next unit lines on (2609.20976v1 u3.p)", () => {
+  it("owns its lines up to TeX's skip before another block for a piece no display alone at its unit's end (2609.20976v1 u3.p)", () => {
     // JCAP's last author, "Surhud More,^{c,d}", her \\orcidlink marked open alone after her end mark; the affiliations and the
-    // e-mail TeX set below, no unit's, then the abstract: the piece ran to the abstract's label over them all, and no ink unit
-    // was made of them
-    const pages = [page([{ pt: '0s' }, 'Surhud More,', { pt: '0e' }, { pt: 'p0.1a' }, 'cd\n', 'Department of Physics\n', 'surhud at iucaa\n', 'Abstract. ', { pt: '1s' }, 'The amplitude', { pt: '1e' }])]
+    // e-mail TeX set below after a skip, no unit's, then the abstract: the piece ran to the abstract's label over them all, and
+    // no ink unit was made of them
+    const pages = [page([{ pt: '0s' }, 'Surhud More,', { pt: '0e' }, { pt: 'p0.1a' }, 'cd\n', 'Department of Physics\n', 'surhud at iucaa\n', 'Abstract. ', { pt: '1s' }, 'The amplitude', { pt: '1e' }, '\nand more of it here\nand its last line'])]
+    // (the skip: the names' line apart from the lines below by two of the page's pitches)
+    pages[0]!.glyphs.forEach(g => { if (g.y < 700) { g.y -= 12; g.top -= 12; g.bottom -= 12 } })
     const authors = [{ kind: 'author', pieces: [{ t: 'text', s: 'Surhud More,' }, { t: 'ph', src: '\\orcidlink{0000-0002-2986-2371}' }] }, { kind: 'abstract', pieces: [{ t: 'text', s: 'The amplitude' }] }]
     // (the marking's follows, as the wrap makes them of the units and the points read)
     const marked = (pgs: ReturnType<typeof page>[], us: unknown[]) => ownOf(pgs, { units: us, follows: followsOf(us as never, new Set(pgs.flatMap(p => p.points.map(x => x.name)))) })
-    const r = marked(pages, authors)
-    const g = groupsOf(r, pages)
+    const g = groupsOf(marked(pages, authors), pages)
     expect(g['u0.p']).toBe('cd')
     expect([g.u0, g.u1]).toEqual(['Surhud More,', 'The amplitude'])
     expect(Object.values(g).join('')).not.toMatch(/Department|iucaa/)
-    // (a line its own source spells on is still its: a reference's \\Eprint wrapped over two lines, 2307.16209v1 p138 u481)
-    const wrapped = [page([{ pt: '0s' }, 'See the paper', { pt: '0e' }, { pt: 'p0.1a' }, 'arXiv:gr-qc/0511111\n', '[gr-qc]\n', 'Department of Physics\n', { pt: '1s' }, 'Next one', { pt: '1e' }])]
+    // (at the page's leading the lines are still its, whatever they hold: a reference's \\Eprint wrapped over two lines, its
+    // entry's full stop on a third, and an entry TeX gave no unit, 2307.16209v1 p138 u487 and p147 u777: none left no one's)
+    const wrapped = [page([{ pt: '0s' }, 'See the paper', { pt: '0e' }, { pt: 'p0.1a' }, 'arXiv:gr-qc/0511111\n', '[gr-qc]\n', '.\n', '[167] https://github.com/strings\n', { pt: '1s' }, 'Next one', { pt: '1e' }, '\nand a line\nand another'])]
     const eprint = [{ kind: 'reference', pieces: [{ t: 'text', s: 'See the paper' }, { t: 'ph', src: '\\Eprint {http://arxiv.org/abs/gr-qc/0511111} {arXiv:gr-qc/0511111 [gr-qc]}' }] }, { pieces: [{ t: 'text', s: 'Next one' }] }]
-    expect(groupsOf(marked(wrapped, eprint), wrapped)['u0.p']).toBe('arXiv:gr-qc/0511111[gr-qc]')
+    expect(groupsOf(marked(wrapped, eprint), wrapped)['u0.p']).toBe('arXiv:gr-qc/0511111[gr-qc].[167] https://github.com/strings')
     // (a display there owns its lines, as before: TeX sets one over many)
     const display = [page([{ pt: '0s' }, 'We have', { pt: '0e' }, { pt: 'p0.1a' }, 'E = mc\n', '+ more\n', { pt: '1s' }, 'Next one', { pt: '1e' }])]
     const shown = groupsOf(marked(display, [{ pieces: [{ t: 'text', s: 'We have' }, { t: 'ph', src: '\\[E = mc + more\\]' }] }, { pieces: [{ t: 'text', s: 'Next one' }] }]), display)

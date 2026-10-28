@@ -259,9 +259,9 @@ export const PDFJS = '6.3.289'
  * other owners of this release): a macro TeX said sets no ink (the marks file's `marking.inkless`, wrapFinal's `inkless`, as the
  * maker reads it) is no placeholder of ink in own.mjs, so that a unit that opens with one (a title in `\boldmath`) opens with its
  * text and its lead's lines of their own are released (JCAP's header line had left the title the original's, `spell`); and an
- * opening point alone at its unit's end, no display, owns its first line and the lines after it its own source spells on, no
- * more (stream.mjs lineEnd: the last author's `\orcidlink` had owned the affiliations and the e-mail below it, to the abstract's
- * label, which no ink unit then made a unit of; a reference's wrapped `\Eprint` keeps its second line): the base's bytes change
- * where a paper has either
+ * opening point alone at its unit's end, no display, owns its lines up to TeX's skip before another block, no further
+ * (stream.mjs lineEnd, BLOCK_GAP of the page's line pitch: the last author's `\orcidlink` had owned the affiliations and the
+ * e-mail below the names, to the abstract's label, which no ink unit then made a unit of; at a bibliography's leading a wrapped
+ * `\Eprint` keeps every line it held): the base's bytes change where a paper has either
  */
 export const REMOVAL = '12'

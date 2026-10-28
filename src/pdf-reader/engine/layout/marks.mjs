@@ -18,7 +18,7 @@ import { textless } from '../rules/arg-roles.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { INK_FREE_LEAD, prefixWord } from '../rules/tex-kernel.mjs'
 import { tokenAtMark, tokenizeDocument } from '../pipeline/anchors.mjs'
-import { DISPLAY, plainTranslated, utf8 } from '../translate/mt.mjs'
+import { DISPLAY, plainTranslated } from '../translate/mt.mjs'
 import { readLines } from '../pipeline/typeset/tex.mjs'
 import { annotsOf, linkKindOf, MAX_GLYPHS, MAX_LINKS, readAnnots } from '../layer-proto/links.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
@@ -1415,7 +1415,7 @@ export function followsOf(units, names) {
     // (`rest`, the erasure's: the whole text after it up to its next visible piece, as the spell check reads one — its letters and
     // digits —, so that the text after it is told where it runs exactly to its unit's next mark, not where its first WANT
     // characters first stand: a display's \\text{for every}, a URL's dots)
-    return { closing: names.has(`${name.slice(0, -1)}b`), want, rest: spellOf(after), own: spellOf(utf8(u.pieces[k]?.src ?? '')), display, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group }
+    return { closing: names.has(`${name.slice(0, -1)}b`), want, rest: spellOf(after), display, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group }
   }
 }
 
