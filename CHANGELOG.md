@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- In the PDF reader, the affiliations, institutions, addresses and e-mail line under a paper's authors are translated, each where the paper sets it; the authors' names stay as the paper prints them. An affiliation a paper writes once in a macro of its own is translated too.
 - Fixed: in the PDF reader, a paragraph in which a paper's own shorthand that adds its space by itself (such as "SNR" or a tool's name) comes right before a formula, a citation or a footnote mark is translated: 22 paragraphs in 10 of 32 papers, an abstract among them, had stayed in English.
 - Fixed: in the PDF reader, the text a paper's class prints by itself (a theorem's head whose note is only a citation, such as "Definition 1 ([TT])", a journal's "AMS subject classifications.", a bold heading over a table) is no longer drawn over the original's words, which had stayed visible under the translation. It now keeps the bold, italic and colour of its own words, where it had been drawn all in one style. The closing bracket and full stop after a theorem's note that ends in a citation now follow the note's translation, where they had stayed at the original's place.
 - In the PDF reader, laying out a translated page takes about a quarter less of the browser's time on a slow device, so scrolling stays smoother while pages are translated.
