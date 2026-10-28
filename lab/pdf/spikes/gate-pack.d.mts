@@ -30,7 +30,7 @@ export declare function baseRecordOf(dir: string): (
   | { schema: 1; source: 'arxiv'; why: string; detail?: string; layout: { sha256: string; bytes: number } }
 ) | null
 /** the record base.json holds for a fixture a make of the fixtures made */
-export declare function baseRecordOfMade(o: { made: { source: 'ours'; head: Record<string, unknown> } | { source: 'arxiv'; why: string; detail?: string }; layout: Uint8Array | null; image?: string | null; texts?: readonly string[] | null }): Record<string, unknown>
+export declare function baseRecordOfMade(o: { made: { source: 'ours'; head: Record<string, unknown> } | { source: 'arxiv'; why: string; detail?: string }; layout: Uint8Array | null; image?: string | null; texts?: readonly string[] | null; inkless?: readonly string[] | null }): Record<string, unknown>
 /** the layout file a fixture keeps where its base page of ours is refused: an older maker's, never the engine's own */
 export declare function keptLayoutOf(bytes: Uint8Array | null, engineLayout: string): Uint8Array | null
 export declare function layoutVersionOf(fixtures: string, names: string[], expected: LayoutVersion): LayoutVersion
