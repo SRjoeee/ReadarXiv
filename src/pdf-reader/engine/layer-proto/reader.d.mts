@@ -218,7 +218,6 @@ export interface OpenBundleLayerOptions {
  *  its shape (an object holding `scripts` and `languages`, else a TypeError), not its values. BUNDLE 4: the parts told at the
  *  open must follow one another (BundleRefusal) over a document of N + the last one's chain.r pages */
 export declare function openLayer(o: OpenLayerOptions | OpenBundleLayerOptions): Promise<Layer>
-/** the face a host asks for first, at the open, before the paper's family is known: the target's CJK body face (light
- *  where the rule set says so beside the family v0 opens with), else null; `rules`: the set the layer is opened with
- *  (absent: the built-in one) */
+/** the face a host asks for first, at the open, before the paper's family is known: the target's CJK body face (its
+ *  Regular, beside every family), else null; `rules`: the set the layer is opened with (absent: the built-in one) */
 export declare function firstFaceOf(target: string, rules?: FrozenRuleSet): FaceId | null

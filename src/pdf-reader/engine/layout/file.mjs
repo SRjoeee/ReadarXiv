@@ -133,14 +133,25 @@ export { LayoutRefusal } from './json.mjs'
  *  every unit at the number it had, the rows cut apart after the source's other units and before the entries (entriesLast);
  *  and a bibliography's entry one unit, whole (`refnames` kept at its index, made no more): a maker or a reader of 23 reads no
  *  such kind, so a file of 24 is another maker's, and each side of the rules gate reads its own pack (the file's schema is 5
- *  still); 25 (the mark probe's answers past a sample TeX gives up on, and a .bbl's own definitions): each box of the probe
+ *  still); 25 (the release sweep of 2026-10-29, 24 counted released): a line of ours too short to be evidence, under
+ *  LINE_EVIDENCE letters and digits, is never found on another page of arXiv's (carry.mjs lineCheckOf: 2610.21765v1 p7's axis
+ *  label "q", matched on arXiv's p6, left the page undrawn and 10 units English), and a word a hyphen cuts at a line's end goes on
+ *  in the line below or at the next column's top alone, never in text the stream gives next elsewhere (pipeline/anchors.mjs
+ *  tokenizeDocument: "Sim-" and the next column's axis label "q" read as "simq" since #484); a contents entry, a note or an
+ *  orphan's paragraph is one unit at its own leading, set double too (layout/ink-units.mjs PARA_DY, EDGE, INDENT: 2610.19274v1's list of figures, cut line by
+ *  line and each translated alone), a script a text face sets after a formula's run is that run's placeholder (C_n²'s "2"), and
+ *  a head's or an entry's number is the page's own ink only where it stands apart from the line's text (ink-units.mjs APART: a
+ *  folio, a section number) or is a running head's folio (another number where its words recur), one in its own words the
+ *  unit's (2010.11929v2's head "… at ICLR 2021", its year drawn apart).
+ *  The rows of the units they reach change, so a file of 24 is another maker's (the file's schema is 5 still); and in the same
+ *  unreleased 25 (the mark probe's answers past a sample TeX gives up on, and a .bbl's own definitions): each box of the probe
  *  ends at the group level it began at, the groups its sample left open closed (marks.mjs PROBE_UNWIND: 2010.11929v2's \\tikz,
  *  asked alone, opened a picture it never closed, in which pgf's \\selectfont selects \\nullfont, and every box after it set
  *  no character: its \\natexlab{a} and \\doi{…} read as setting no ink and given no row, 8 of its entries English, and a pair's
  *  boxes, all empty, read as a mark that moves nothing), a box TeX set a character in \\nullfont in no answer; and the probe
  *  sets a .bbl's definitions as its styles write them, its conditionals whole (live.mjs bblProvides: natbib's
- *  `\\expandafter\\ifx\\csname natexlab\\endcsname\\relax\\def\\natexlab#1{#1}\\fi`, 2608.25210v2's entries). The rows of the pieces
- *  they reach change, so a file of 24 is another maker's (the file's schema is 5 still; MARKS_SCHEMA 12 still) */
+ *  `\\expandafter\\ifx\\csname urlstyle\\endcsname\\relax … \\fi`, its \\doi TeX's branch). The rows of the pieces they reach change
+ *  (2010.11929v2's 8 entries; MARKS_SCHEMA 12 still) */
 export const LAYOUT = '25'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour

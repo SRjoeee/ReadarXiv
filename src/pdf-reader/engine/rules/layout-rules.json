@@ -1,7 +1,7 @@
 {
-  "schema": 5,
-  "version": 5,
-  "note": "fillLeadRel: the Chinese fill may spread a loose original's lines to 1.3 times the original's own pitch where that is looser than the em top (fillLead); single-spaced originals, Japanese, Korean and the alphabets are unchanged (schema 5)",
+  "schema": 6,
+  "version": 6,
+  "note": "cjkFaces holds its group alone: a CJK script is drawn at Regular and Bold beside every English family, no longer Light and SemiBold beside Computer Modern and Garamond (the maintainer's ruling of 2026-10-29); the unread kai goes with the light designs (schema 6)",
   "hyphenation": {
     "minWord": 5,
     "en": { "left": 2, "right": 3 },
@@ -41,7 +41,7 @@
       "latinPatterns": "en",
       "cellClear": 0.5,
       "cellCapMin": 0.6,
-      "cjkFaces": { "group": "shs-sc", "kai": "fandolkai", "light": ["cm", "garamond"] }
+      "cjkFaces": { "group": "shs-sc" }
     },
     "Hant": {
       "order": ["track", "borrow", "lead", "shrink"],
@@ -76,7 +76,7 @@
       "latinPatterns": "en",
       "cellClear": 0.5,
       "cellCapMin": 0.6,
-      "cjkFaces": { "group": "shs-tc", "kai": "bkai00mp", "light": ["cm", "garamond"] }
+      "cjkFaces": { "group": "shs-tc" }
     },
     "Jpan": {
       "order": ["track", "borrow", "lead", "shrink"],
@@ -111,7 +111,7 @@
       "latinPatterns": "en",
       "cellClear": 0.5,
       "cellCapMin": 0.6,
-      "cjkFaces": { "group": "haranoaji", "kai": null, "light": ["cm", "garamond"] }
+      "cjkFaces": { "group": "haranoaji" }
     },
     "Kore": {
       "order": ["track", "borrow", "lead", "shrink"],
@@ -146,7 +146,7 @@
       "latinPatterns": "en",
       "cellClear": 0.5,
       "cellCapMin": 0.6,
-      "cjkFaces": { "group": "shs-k", "kai": null, "light": ["cm", "garamond"] }
+      "cjkFaces": { "group": "shs-k" }
     },
     "Latn": {
       "order": ["track", "borrow", "shrink", "lead"],

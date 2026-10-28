@@ -1,10 +1,10 @@
 // Wire-format negotiation (#104, DESIGN §8.5): one session can have one format only, and the chain takes the intersection.
 // Tested with synthetic engines, because the real markers-only engine (Microsoft) only arrives with #98.
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
 import { DEFAULT_CONFIG } from '@/config/schema'
 import type { WireFormat } from '@/core/protector'
-import { buildChain } from '@/providers'
+import { PROBE_MS, availableWithin, buildChain } from '@/providers'
 import type { TranslationProvider } from '@/providers/types'
 
 const engine = (id: string, wireFormats: readonly WireFormat[], available = true): TranslationProvider => ({
@@ -117,5 +117,35 @@ describe('buildChain\'s format negotiation', () => {
     })
     expect(chain.map(p => p.id)).toEqual(['google-web'])
     expect(renderPath).toBe('tags')
+  })
+})
+
+describe('a probe that does not answer (#88 E1)', () => {
+  beforeEach(() => fakeBrowser.reset())
+  afterEach(() => { vi.useRealTimers() })
+  const silent = (id: string): TranslationProvider => ({ ...engine(id, ['tags']), isAvailable: () => new Promise<boolean>(() => {}) })
+
+  it('holds the build no longer than PROBE_MS: the engine is passed over, the chain\'s other engines still take over (rule 3)', async () => {
+    vi.useFakeTimers()
+    let built: Awaited<ReturnType<typeof buildChain>> | undefined
+    void buildChain({ ...DEFAULT_CONFIG, provider: 'google-web' }, { freeEngines: [() => silent('builtin-ish'), () => engine('other-ish', ['tags'])] }).then(b => { built = b })
+    await vi.advanceTimersByTimeAsync(PROBE_MS - 1)
+    expect(built).toBeUndefined()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(built?.chain.map(p => p.id)).toEqual(['google-web', 'other-ish'])
+    expect(built?.renderPath).toBe('tags')
+  })
+
+  it('a probe that throws is a no as well, and one that answers keeps its answer', async () => {
+    const throwing: TranslationProvider = { ...engine('throws-ish', ['tags']), isAvailable: async () => { throw new Error('the browser said nothing useful') } }
+    const { chain } = await chainOf([throwing, engine('yes-ish', ['tags']), engine('no-ish', ['tags'], false)])
+    expect(chain.map(p => p.id)).toEqual(['google-web', 'yes-ish'])
+    expect(await availableWithin(engine('x', ['tags']))).toBe(true)
+    expect(await availableWithin(engine('x', ['tags'], false))).toBe(false)
+  })
+
+  it('stays inside the status\'s deadline twice over: a status that waits on two late probes still answers', async () => {
+    const { STATUS_DEADLINE_MS } = await import('@/entrypoints/background/provider-status')
+    expect(PROBE_MS * 2).toBeLessThan(STATUS_DEADLINE_MS)
   })
 })

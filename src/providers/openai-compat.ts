@@ -9,6 +9,7 @@ import { createModel, type OpenAICompatConfig } from './model'
 import { buildPrompts } from './prompt'
 import { promptKey, type PromptsConfig } from './prompt-library'
 import { attachRequestErrorMeta } from './request/retry-policy'
+import { redact } from '@/shared/diagnostics'
 import { thinkingBodyFields } from './thinking'
 import { malformedReply, ProviderError, type TranslateRequest, type TranslateResult, type TranslationProvider } from './types'
 import { WIRE_FORMATS } from './wire-formats'
@@ -85,7 +86,7 @@ export function createOpenAICompatProvider(
         })
         output = result.output
       } catch (e) {
-        throw toProviderError(e)
+        throw toProviderError(e, config.apiKey)
       }
       return { segments: alignSegments(request, output.segments), provider: 'openai-compat', model: config.model }
     },
@@ -106,7 +107,18 @@ function alignSegments(request: TranslateRequest, returned: { id: string; text: 
   return request.segments.map(s => ({ id: s.id, text: byId.get(s.id)! }))
 }
 
-function toProviderError(e: unknown): ProviderError {
+/**
+ * The endpoint's words with the key taken out: the service's own key wherever it stands, then every shape the log's redaction
+ * knows. An endpoint may echo what it was sent in a refusal ("Incorrect API key provided: …"), and this message goes on to the
+ * worker's console, the connection test's sentence and the page (#88 E4; CLAUDE.md rule 5). A key too short to be told from a
+ * word (under 8 characters) is left to the shapes
+ */
+export function withoutKey(message: string, apiKey: string): string {
+  const key = apiKey.trim()
+  return redact(key.length >= 8 ? message.split(key).join('…') : message)
+}
+
+function toProviderError(e: unknown, apiKey: string): ProviderError {
   if (e instanceof ProviderError) return e
   const name = (e as { name?: unknown })?.name
   if (name === 'AbortError') return new ProviderError('aborted', 'request aborted', { cause: e })
@@ -116,7 +128,8 @@ function toProviderError(e: unknown): ProviderError {
     // `bad-request` and a 5xx `network`, neither split into smaller batches; before, both were `unknown`, which the
     // content side halves and resends — a wrong model name cost several paid requests per batch before the chain took over
     const kind = status === undefined ? 'network' : kindOfStatus(status)
-    const err = new ProviderError(kind, e.message, { cause: e })
+    // The cause is not kept: it holds the request's body and the reply's, and whatever prints the error prints its cause
+    const err = new ProviderError(kind, withoutKey(e.message, apiKey))
     return attachRequestErrorMeta(err, { statusCode: status, responseHeaders: e.responseHeaders, isRetryable: e.isRetryable })
   }
   if (typeof name === 'string' && /NoObjectGenerated|NoOutputGenerated|TypeValidation|JSONParse/.test(name)) {
@@ -126,6 +139,6 @@ function toProviderError(e: unknown): ProviderError {
     const snippet = typeof raw === 'string' && raw.trim() ? `; raw model output: ${raw.trim().slice(0, 300)}` : ''
     return malformedReply(`${(e as Error).message}${snippet}`, e)
   }
-  if (e instanceof TypeError) return attachRequestErrorMeta(new ProviderError('network', e.message, { cause: e }), { kind: 'network', isRetryable: true })
-  return new ProviderError('unknown', e instanceof Error ? e.message : String(e), { cause: e })
+  if (e instanceof TypeError) return attachRequestErrorMeta(new ProviderError('network', withoutKey(e.message, apiKey), { cause: e }), { kind: 'network', isRetryable: true })
+  return new ProviderError('unknown', withoutKey(e instanceof Error ? e.message : String(e), apiKey), { cause: e })
 }

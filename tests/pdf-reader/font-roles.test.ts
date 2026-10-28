@@ -1,7 +1,8 @@
 // The font role table (font-roles.mjs) and its generated coverage (font-coverage.mjs): a PDF font's class from its
 // PostScript name, a paper's English family from the TeX path's probe or the layout file's fonts (one table of names behind
-// both), the faces each target draws in under the maintainer's rulings of 2026-10-06 (spec §1.3, §4.4), and whether a
-// text is drawable from the served faces alone. No face is the reader's own: one rendering on every device
+// both), the faces each target draws in under the maintainer's rulings of 2026-10-06 (spec §1.3, §4.4) and of 2026-10-29 (a
+// CJK target's Regular and Bold beside every English family), and whether a text is drawable from the served faces alone.
+// No face is the reader's own: one rendering on every device
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { COVERAGE, COVERAGE_SOURCE, METRICS } from '@/pdf-reader/engine/rules/font-coverage.mjs'
@@ -77,20 +78,15 @@ describe('the family of a paper', () => {
 })
 
 describe('the roles', () => {
-  it('the CJK roles follow the rulings', () => {
-    // (no Kai, whatever the rule set names: emphasis is the body sheared, the owner's ruling of 2026-10-19)
-    expect(rolesFor('zh', 'cm').cjk).toEqual({ body: 'shs-sc-light', bold: 'shs-sc-semibold' })
-    expect(rolesFor('zh', 'garamond').cjk).toEqual({ body: 'shs-sc-light', bold: 'shs-sc-semibold' })
-    for (const family of ['times', 'libertine', 'palatino', 'charter', 'utopia', 'other'] as const) {
-      expect(rolesFor('zh', family).cjk, family).toEqual({ body: 'shs-sc-regular', bold: 'shs-sc-bold' })
+  it('the CJK roles follow the rulings: Regular and Bold beside every English family', () => {
+    // (no Kai: emphasis is the body sheared, the owner's ruling of 2026-10-19; no Light and SemiBold beside Computer Modern
+    // and Garamond, which read lighter than the page they sit in: the maintainer's ruling of 2026-10-29)
+    const families = ['cm', 'times', 'libertine', 'palatino', 'charter', 'garamond', 'utopia', 'other'] as const
+    // (Korean: Source Han Serif K, as SC and TC, the maintainer, 2026-10-06)
+    const groups = { zh: 'shs-sc', 'zh-TW': 'shs-tc', 'zh-Hant': 'shs-tc', ja: 'haranoaji', ko: 'shs-k' } as const
+    for (const [target, group] of Object.entries(groups)) for (const family of families) {
+      expect(rolesFor(target, family).cjk, `${target} ${family}`).toEqual({ body: `${group}-regular`, bold: `${group}-bold` })
     }
-    expect(rolesFor('zh-TW', 'cm').cjk).toEqual({ body: 'shs-tc-light', bold: 'shs-tc-semibold' })
-    expect(rolesFor('zh-Hant', 'times').cjk).toEqual({ body: 'shs-tc-regular', bold: 'shs-tc-bold' })
-    expect(rolesFor('ja', 'cm').cjk).toEqual({ body: 'haranoaji-light', bold: 'haranoaji-semibold' })
-    expect(rolesFor('ja', 'times').cjk).toEqual({ body: 'haranoaji-regular', bold: 'haranoaji-bold' })
-    // Korean: Source Han Serif K, as SC and TC (the maintainer, 2026-10-06)
-    expect(rolesFor('ko', 'cm').cjk).toEqual({ body: 'shs-k-light', bold: 'shs-k-semibold' })
-    expect(rolesFor('ko', 'times').cjk).toEqual({ body: 'shs-k-regular', bold: 'shs-k-bold' })
     for (const lang of ['de', 'fr', 'ru']) expect(rolesFor(lang, 'cm').cjk, lang).toBeNull()
     expect(rolesFor('zh', 'cm')).toMatchObject({ target: 'zh', family: 'cm' })
     expect(() => rolesFor('ar', 'cm')).toThrow()
@@ -98,8 +94,10 @@ describe('the roles', () => {
 
   it('the fallbacks: TC to SC at its weight, every Latin face to Latin Modern Math, none for a Kai no role takes', () => {
     const tw = rolesFor('zh-TW', 'cm')
-    expect(tw.fallbacks['shs-tc-light']).toEqual(['shs-sc-light'])
-    expect(tw.fallbacks['shs-tc-semibold']).toEqual(['shs-sc-semibold'])
+    expect(tw.fallbacks['shs-tc-regular']).toEqual(['shs-sc-regular'])
+    expect(tw.fallbacks['shs-tc-bold']).toEqual(['shs-sc-bold'])
+    // (TC's weights the catalog holds, and no other: its Light and SemiBold went with the ruling of 2026-10-29)
+    expect(Object.keys(tw.fallbacks).filter(id => id.startsWith('shs-tc-')).sort()).toEqual(['shs-tc-bold', 'shs-tc-medium', 'shs-tc-regular'])
     expect(tw.fallbacks.bkai00mp).toBeUndefined()
     expect(rolesFor('zh', 'times').fallbacks.fandolkai).toBeUndefined()
     for (const [id, face] of Object.entries(FACES)) {
@@ -161,20 +159,20 @@ describe('the roles', () => {
     expect(faceFor(rolesFor('de', 'cm'), run({ design: 'cm', caps: true, bold: true, italic: true }))).toBe('lm-roman-bolditalic')
     // CJK runs: the body family by weight and slant, whatever the run's class (no sans, no fangsong: §4.4)
     const zh = rolesFor('zh', 'cm')
-    expect(faceFor(zh, run({ script: 'cjk', cls: 'sans', design: 'helvetica' }))).toBe('shs-sc-light')
-    expect(faceFor(zh, run({ script: 'cjk', cls: 'mono', design: 'cmtt' }))).toBe('shs-sc-light')
-    expect(faceFor(zh, run({ script: 'cjk', cls: 'sans', design: 'helvetica', bold: true }))).toBe('shs-sc-semibold')
+    expect(faceFor(zh, run({ script: 'cjk', cls: 'sans', design: 'helvetica' }))).toBe('shs-sc-regular')
+    expect(faceFor(zh, run({ script: 'cjk', cls: 'mono', design: 'cmtt' }))).toBe('shs-sc-regular')
+    expect(faceFor(zh, run({ script: 'cjk', cls: 'sans', design: 'helvetica', bold: true }))).toBe('shs-sc-bold')
     // a CJK run's face is its weight's, slanted or not: its slant is a shear of that face where it is drawn (layer-proto/
     // fonts.mjs CJK_SLANT_DEG, the owner's ruling of 2026-10-19), a bold italic run's the bold face's
-    expect(faceFor(zh, run({ script: 'cjk', italic: true }))).toBe('shs-sc-light')
-    expect(faceFor(zh, run({ script: 'cjk', bold: true, italic: true }))).toBe('shs-sc-semibold')
+    expect(faceFor(zh, run({ script: 'cjk', italic: true }))).toBe('shs-sc-regular')
+    expect(faceFor(zh, run({ script: 'cjk', bold: true, italic: true }))).toBe('shs-sc-bold')
     expect(faceFor(rolesFor('zh', 'times'), run({ script: 'cjk', bold: true, italic: true }))).toBe('shs-sc-bold')
     expect(faceFor(rolesFor('zh-TW', 'times'), run({ script: 'cjk', italic: true }))).toBe('shs-tc-regular')
     expect(faceFor(rolesFor('zh-TW', 'times'), run({ script: 'cjk', bold: true, italic: true }))).toBe('shs-tc-bold')
     const ja = rolesFor('ja', 'times')
     expect(faceFor(ja, run({ script: 'cjk', italic: true }))).toBe('haranoaji-regular')
     expect(faceFor(ja, run({ script: 'cjk', bold: true, italic: true }))).toBe('haranoaji-bold')
-    expect(faceFor(rolesFor('ko', 'cm'), run({ script: 'cjk', bold: true }))).toBe('shs-k-semibold')
+    expect(faceFor(rolesFor('ko', 'cm'), run({ script: 'cjk', bold: true }))).toBe('shs-k-bold')
   })
 })
 
@@ -230,7 +228,7 @@ describe('the faces', () => {
     expect(held('axt-source-han-serif-sc', 'shs-sc-regular')).toEqual(['Source'])
     expect(held('axt-haranoaji', 'haranoaji-regular')).toEqual(['Harano Aji'])
     // the four groups whose own names hold one are declared under neutral names; the face ids and files stay
-    expect(Object.values(FACES).filter(f => /^(haranoaji|biolinum|erewhon|pt-mono)-/.test(f.id))).toHaveLength(15)
+    expect(Object.values(FACES).filter(f => /^(haranoaji|biolinum|erewhon|pt-mono)-/.test(f.id))).toHaveLength(13)
     expect(new Set(Object.values(FACES).filter(f => /^haranoaji-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-mincho']))
     expect(new Set(Object.values(FACES).filter(f => /^biolinum-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-humanist-sans']))
     expect(new Set(Object.values(FACES).filter(f => /^erewhon-/.test(f.id)).map(f => f.family))).toEqual(new Set(['axt-transitional']))
@@ -238,7 +236,9 @@ describe('the faces', () => {
   })
 
   it('the table\'s faces are the plan\'s', () => {
-    const cjk = ['light', 'regular', 'medium', 'semibold', 'bold']
+    // (a CJK group's Regular and Bold, which the roles draw, and its Medium, which none does; its Light and SemiBold gone with the
+    // ruling of 2026-10-29)
+    const cjk = ['regular', 'medium', 'bold']
     const four = ['regular', 'bold', 'italic', 'bolditalic']
     const want = [
       ...['shs-sc', 'shs-tc', 'shs-k', 'haranoaji'].flatMap(g => cjk.map(w => `${g}-${w}`)),
@@ -248,8 +248,8 @@ describe('the faces', () => {
       'inconsolata-regular', 'inconsolata-bold', 'pt-mono-regular', 'pt-mono-bold',
     ]
     expect(Object.keys(FACES).sort()).toEqual(want.sort())
-    expect(FACES['shs-sc-light']).toMatchObject({ file: 'SourceHanSerifSC-Light.otf', family: 'axt-shs-sc', weight: 300, style: 'normal', source: 'hosted' })
-    expect(FACES['haranoaji-semibold']).toMatchObject({ file: 'HaranoAjiMincho-SemiBold.otf', family: 'axt-mincho', weight: 600, source: 'texlive' })
+    expect(FACES['shs-sc-regular']).toMatchObject({ file: 'SourceHanSerifSC-Regular.otf', family: 'axt-shs-sc', weight: 400, style: 'normal', source: 'hosted' })
+    expect(FACES['haranoaji-bold']).toMatchObject({ file: 'HaranoAjiMincho-Bold.otf', family: 'axt-mincho', weight: 700, source: 'texlive' })
     expect(FACES['lm-sans-bolditalic']).toMatchObject({ file: 'lmsans10-boldoblique.otf', family: 'axt-lm-sans', weight: 700, style: 'italic' })
     expect(FACES['lm-roman-caps-italic']).toMatchObject({ file: 'lmromancaps10-oblique.otf', family: 'axt-lm-roman-caps', weight: 400, style: 'italic' })
     expect(FACES['cmun-mono-bolditalic']).toMatchObject({ file: 'cmuntx.otf', family: 'axt-cmun-mono', weight: 700, style: 'italic' })
@@ -323,11 +323,11 @@ describe('the faces', () => {
     }
     // a character Source Han Serif SC holds and TC lacks is drawn through TC's fallback. Release 2.003R's language OTFs
     // map the same 44,779 code points in SC and in TC, so there it draws nothing TC cannot: the coverage is then equal
-    const only = firstLacking('shs-sc-light', 'shs-tc-light')
-    if (only < 0) expect(COVERAGE['shs-tc-light']).toEqual(COVERAGE['shs-sc-light'])
+    const only = firstLacking('shs-sc-regular', 'shs-tc-regular')
+    if (only < 0) expect(COVERAGE['shs-tc-regular']).toEqual(COVERAGE['shs-sc-regular'])
     else {
-      expect(canDraw(String.fromCodePoint(only), ['shs-tc-light'], tw)).toBe(true)
-      expect(canDraw(String.fromCodePoint(only), ['shs-tc-light'], alone)).toBe(false)
+      expect(canDraw(String.fromCodePoint(only), ['shs-tc-regular'], tw)).toBe(true)
+      expect(canDraw(String.fromCodePoint(only), ['shs-tc-regular'], alone)).toBe(false)
     }
     // a character no face holds (the private use area), and one face unknown to the table
     expect(canDraw('\ue000', Object.keys(FACES), tw)).toBe(false)
@@ -387,12 +387,12 @@ describe('the fixes of the review', () => {
     const zh = rolesFor('zh', 'cm'), ja = rolesFor('ja', 'cm'), ko = rolesFor('ko', 'cm')
     // a zero width space, non-joiner, joiner, word joiner, byte order mark, soft hyphen, variation selector
     for (const ch of ['\u200b', '\u200c', '\u200d', '\u2060', '\ufeff', '\u00ad', '\ufe00']) {
-      expect(canDraw(`\u4e2d${ch}\u6587`, ['shs-sc-light'], zh), ch.codePointAt(0)!.toString(16)).toBe(true)
-      expect(canDraw(`\u65e5${ch}\u672c`, ['haranoaji-light'], ja)).toBe(true)
-      expect(canDraw(`\ud55c${ch}\uad6d`, ['shs-k-light'], ko)).toBe(true)
+      expect(canDraw(`\u4e2d${ch}\u6587`, ['shs-sc-regular'], zh), ch.codePointAt(0)!.toString(16)).toBe(true)
+      expect(canDraw(`\u65e5${ch}\u672c`, ['haranoaji-regular'], ja)).toBe(true)
+      expect(canDraw(`\ud55c${ch}\uad6d`, ['shs-k-regular'], ko)).toBe(true)
     }
     // a visible character no face holds still is not drawable
-    expect(canDraw('\u4e2d\u200b\ue000', ['shs-sc-light'], zh)).toBe(false)
+    expect(canDraw('\u4e2d\u200b\ue000', ['shs-sc-regular'], zh)).toBe(false)
   })
 
   it('M3: a style whose face lacks the target\'s letters falls back within its family, never to the original', () => {
@@ -448,9 +448,9 @@ describe('the fixes of the review', () => {
     const tw = rolesFor('zh-TW', 'cm')
     // a character AR PL KaitiM Big5 lacks, drawn only two hops away
     let lacks = -1
-    for (let cp = 0x4e00; cp <= 0x9fff && lacks < 0; cp++) if (!canDraw(String.fromCodePoint(cp), ['bkai00mp'], { ...tw, fallbacks: {} }) && canDraw(String.fromCodePoint(cp), ['shs-sc-light'], { ...tw, fallbacks: {} })) lacks = cp
+    for (let cp = 0x4e00; cp <= 0x9fff && lacks < 0; cp++) if (!canDraw(String.fromCodePoint(cp), ['bkai00mp'], { ...tw, fallbacks: {} }) && canDraw(String.fromCodePoint(cp), ['shs-sc-regular'], { ...tw, fallbacks: {} })) lacks = cp
     expect(lacks).toBeGreaterThan(0)
-    const chain = { ...tw, fallbacks: { bkai00mp: ['lm-roman-regular'], 'lm-roman-regular': ['shs-sc-light'] } }
+    const chain = { ...tw, fallbacks: { bkai00mp: ['lm-roman-regular'], 'lm-roman-regular': ['shs-sc-regular'] } }
     expect(canDraw(String.fromCodePoint(lacks), ['bkai00mp'], chain)).toBe(true)
     expect(canDraw(String.fromCodePoint(lacks), ['bkai00mp'], { ...chain, fallbacks: { bkai00mp: ['lm-roman-regular'] } })).toBe(false)
     expect(familyOfProbe({ rm: 'cmr', sf: 'cmss', tt: 'cmtt', body: 'ptm' })).toBe('times')
@@ -501,9 +501,9 @@ describe('the fixes of the review', () => {
 
   it('Korean: Source Han Serif K with its size correction, and no role draws Un Batang', () => {
     // Source Han Serif K's Hangul matched to SC's ideographs at the same weight (median ink heights, task-7-report.md)
-    const want: Record<string, number> = { 'shs-k-light': 0.956, 'shs-k-regular': 0.959, 'shs-k-medium': 0.965, 'shs-k-semibold': 0.967, 'shs-k-bold': 0.974 }
+    const want: Record<string, number> = { 'shs-k-regular': 0.959, 'shs-k-medium': 0.965, 'shs-k-bold': 0.974 }
     for (const f of Object.values(FACES)) expect(f.size, f.id).toBe(want[f.id] ?? 1)
-    expect(faceFor(rolesFor('ko', 'cm'), run({ script: 'cjk' }))).toBe('shs-k-light')
+    expect(faceFor(rolesFor('ko', 'cm'), run({ script: 'cjk' }))).toBe('shs-k-regular')
     expect(faceFor(rolesFor('ko', 'times'), run({ script: 'cjk', bold: true, italic: true }))).toBe('shs-k-bold')
     expect(Object.values(FACES).some(f => /unbatang/i.test(f.id + f.file))).toBe(false)
     for (const target of ['ko', 'zh', 'zh-TW', 'ja', 'de', 'ru']) {

@@ -81,14 +81,14 @@ jobs:
       PR: ${{ github.event.pull_request.number }}
     steps:
       # the pull request's own commit, not the merge: its sha is the one the lab links open
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: false
       # (pnpm comes with corepack, at the version package.json names: no third party's action runs in a job that holds a token)
       - run: corepack enable
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -138,7 +138,7 @@ jobs:
           fi
       - name: Pack from the cache
         id: pack-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           key: gate-pack-${{ steps.pack.outputs.digest }}
           path: lab/pdf/out/gate-pack
@@ -150,7 +150,7 @@ jobs:
         run: node lab/pdf/spikes/gate-pack.mjs restore
       - name: Keep the pack
         if: steps.pack-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           key: gate-pack-${{ steps.pack.outputs.digest }}
           path: lab/pdf/out/gate-pack
@@ -159,7 +159,7 @@ jobs:
       - name: Merge base pack from the cache
         id: base-cache
         if: steps.pack.outputs.same != 'true'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           key: gate-pack-${{ steps.pack.outputs.base }}
           path: ${{ runner.temp }}/base-pack
@@ -171,7 +171,7 @@ jobs:
         run: node "$RUNNER_TEMP/base/lab/pdf/spikes/gate-pack.mjs" restore --pack="$RUNNER_TEMP/base/lab/pdf/gate-pack.json" --out="$BASE_PACK"
       - name: Keep the merge base pack
         if: steps.pack.outputs.same != 'true' && steps.base-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           key: gate-pack-${{ steps.pack.outputs.base }}
           path: ${{ runner.temp }}/base-pack
@@ -225,7 +225,7 @@ jobs:
           fi
       - name: Numbers
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: rules-gate
           path: ${{ runner.temp }}/verdict/rules-gate.json
