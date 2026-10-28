@@ -133,8 +133,15 @@ export { LayoutRefusal } from './json.mjs'
  *  every unit at the number it had, the rows cut apart after the source's other units and before the entries (entriesLast);
  *  and a bibliography's entry one unit, whole (`refnames` kept at its index, made no more): a maker or a reader of 23 reads no
  *  such kind, so a file of 24 is another maker's, and each side of the rules gate reads its own pack (the file's schema is 5
- *  still) */
-export const LAYOUT = '24'
+ *  still); 25 (the mark probe's answers past a sample TeX gives up on, and a .bbl's own definitions): each box of the probe
+ *  ends at the group level it began at, the groups its sample left open closed (marks.mjs PROBE_UNWIND: 2010.11929v2's \\tikz,
+ *  asked alone, opened a picture it never closed, in which pgf's \\selectfont selects \\nullfont, and every box after it set
+ *  no character: its \\natexlab{a} and \\doi{…} read as setting no ink and given no row, 8 of its entries English, and a pair's
+ *  boxes, all empty, read as a mark that moves nothing), a box TeX set a character in \\nullfont in no answer; and the probe
+ *  sets a .bbl's definitions as its styles write them, its conditionals whole (live.mjs bblProvides: natbib's
+ *  `\\expandafter\\ifx\\csname natexlab\\endcsname\\relax\\def\\natexlab#1{#1}\\fi`, 2608.25210v2's entries). The rows of the pieces
+ *  they reach change, so a file of 24 is another maker's (the file's schema is 5 still; MARKS_SCHEMA 12 still) */
+export const LAYOUT = '25'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,
