@@ -34,6 +34,10 @@ export interface Params {
   adaptiveFill: { band: number; track: number; size: number } | null; fillLead: number | null; fillLeadRel: number | null
   /** what the fill leaves over: at each unit's foot, or packed to the end of its run of paragraphs (run.mjs packPage) */
   leftover: 'foot' | 'pack'
+  /** at the original's leading, a block's lines one pitch apart, its gaps TeX's \lineskip rule opened closed (slotsAt on the blocks' `E`) */
+  evenPitch: boolean
+  /** a unit TeX set flush left or flush right keeps that alignment (run.mjs sets its blocks' `flush`, placeItems reads it) */
+  keepAlign: boolean
   /** breaking: lines break only at spaces, which quotes are CJK's, centred punctuation, the characters no line starts or
    *  ends with, and the hyphenation patterns of a Latin word */
   keepAll: boolean; cjkQuotes: boolean; centredPunct: boolean; noStart: string; noEnd: string; latinPatterns: 'en' | 'de'
@@ -208,7 +212,7 @@ export interface Layout { lines: Line[]; f: number; s: number; scale: number; st
 /** the original page's ink at a fraction of its canvas's resolution */
 export interface InkMap { w: number; h: number; ink: Uint8Array; factor: number }
 /** a unit's block with its lines' measured baselines */
-export interface Block2 extends Block { measures?: Map<string, [number, number]> | null; B: number[]; exact: boolean[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; through?: boolean; freeOf?: () => number; G?: number[]; start?: number; startY?: number; shortSkips?: readonly { x0: number; x1: number; top: number; bottom: number }[] }   // G: the grid, B with the gaps of its forced breaks closed (blocks2); start: the first line's start where a shared line sets it, startY its baseline where the line before it there stands off TeX's (run.mjs layout2); shortSkips: the unit's displays on the block's page that TeX set with its short skip (tex.mjs shortSkipsOf, slotsAt)
+export interface Block2 extends Block { measures?: Map<string, [number, number]> | null; B: number[]; exact: boolean[]; E?: number[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; through?: boolean; freeOf?: () => number; G?: number[]; start?: number; startY?: number; shortSkips?: readonly { x0: number; x1: number; top: number; bottom: number }[] }   // G: the grid, B with the gaps of its forced breaks closed (blocks2); start: the first line's start where a shared line sets it, startY its baseline where the line before it there stands off TeX's (run.mjs layout2); shortSkips: the unit's displays on the block's page that TeX set with its short skip (tex.mjs shortSkipsOf, slotsAt); E: the grid with each gap TeX's \lineskip rule opened closed to the pitch (blocks2, evenGridOf), where it has one, slotsAt's under P.evenPitch
 type ToDev = (x: number, y: number) => [number, number]
 /** of a line's size: a display whose top stands under its baseline nearer than this is in reach of its descent */
 export declare const SHORT_SKIP: number
@@ -420,6 +424,12 @@ export declare function ink100(s: string, face: Face): { a: number; d: number }
 export declare function lineExtent(line: Pick<Line, 'items'>, f: number, scale: number): { a: number; d: number; text: { a: number; d: number } }
 /** a unit laid at one state of the fit, with no search (the page fill's): clipped where the state does not set it whole */
 export declare function layoutAt(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params, st: Layout['state']): Layout
+/** the distance TeX set between the original's line a formula's crop stands on (on its baseline, its rectangle holding the crop's
+ *  centre) and the line after it (`below`) or before it, on the unit's grid; -Infinity where the blocks hold no such line */
+export declare function texRoomOf(blocks: readonly (Pick<Block2, 'page' | 'B' | 'rects'> & { G?: readonly number[] })[] | null, r: { page: number; baseline: number; crop: readonly number[] }, below: boolean): number
+/** a grid `G` with each gap TeX's \lineskip rule opened (`opened`, a gap's) closed to the pitch `p0`, every other gap the grid's;
+ *  no line lower than the grid's own (blocks2's `E`) */
+export declare function evenGridOf(G: readonly number[], opened: readonly boolean[], p0: number): number[]
 /** the floor a page fill's state asks of a unit's last line (footFloorAt), or null where it asks none */
 export declare function footFloorOf(blocks: readonly Block2[], st: Layout['state'], P: Params, s: number): number | null
 /** a unit's shared row as its layout leaves it (need.mjs rowLeadOf's row): its page, baseline and band (an em), the block's span,

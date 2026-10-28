@@ -41,8 +41,11 @@ import BUILTIN_JSON from './layout-rules.json' with { type: 'json' }
  *  against the page's own paragraphs (run.mjs pageTarget), no longer against the page before's and the fullest page's. 5 (2026-10-23):
  *  `fillLeadRel` added, the fill's top relative to the original's own pitch (run.mjs fillLeadsOf). 6 (2026-10-29): `cjkFaces`
  *  holds its group alone, a CJK script drawn at Regular and Bold beside every English family (the maintainer's ruling): its
- *  `light` designs gone, and its `kai`, which no engine since 2026-10-19 read, gone with them as was planned at its ruling */
-export const RULES_SCHEMA = 6
+ *  `light` designs gone, and its `kai`, which no engine since 2026-10-19 read, gone with them as was planned at its ruling.
+ *  7 (2026-10-29, the maintainer's ruling on lane B's B1 and B2): `evenPitch` added, a block's lines at the original's leading
+ *  one pitch apart (layer2.mjs evenGridOf), and `keepAlign`, a unit TeX set flush left or flush right kept so (the layout
+ *  file's UNIT_FLAG.FLUSH_LEFT and FLUSH_RIGHT, LAYOUT 26) */
+export const RULES_SCHEMA = 7
 /** a set's bytes at most, as received (the migrated set is about 8 KB) */
 export const RULES_CAP = 65_536
 /** a set's JSON values at most, counted before JSON.parse (layout/json.mjs countValues) */
@@ -157,6 +160,11 @@ const SCRIPT_FIELDS = [
   { key: 'fillLeadRel', group: 'fit', kind: 'number', nullable: true, min: 1, max: 3, step: 0.05, words: "The loosest line pitch the fill spreads a unit's lines to, as a multiple of the original's own pitch, where that is looser than the pitch above; empty: the pitch above alone.", schema: () => z.nullable(range(1, 3)) },
   // (D6's F6c, 2026-10-08: built switchable, for the maintainer to decide by looking; 'foot' is what the fill left before)
   { key: 'leftover', group: 'fit', kind: 'enum', values: LEFTOVER, words: "Where what the fill leaves over goes: at each paragraph's foot, or packed to the end of its run of paragraphs, each keeping the original's gap to the one above it.", schema: () => z.literal([...LEFTOVER]) },
+  // (lane B's B1, the maintainer's ruling of 2026-10-29: at the original's leading a block's lines stood on the original's
+  // baselines, which carry the gaps TeX opened under the original's tall lines to whatever line of the translation stands
+  // there; on, they stand one pitch apart from the first, the block's own pitch, and the translation's own tall lines are
+  // opened by TeX's rule, layer2.mjs evenGridOf. Schema 7)
+  { key: 'evenPitch', group: 'fit', kind: 'boolean', words: "Whether a block's lines at the original's leading stand one pitch apart from its first line, the block's own pitch, rather than on the original's baselines, where TeX opened gaps under its tall lines.", schema: () => z.boolean() },
   // breaking (layer2.mjs tokensOf2, placeItems; layer1.mjs kinsokuOf)
   { key: 'keepAll', group: 'breaking', kind: 'boolean', words: 'Whether lines break only at spaces (Korean and the alphabets) rather than between any two CJK characters.', schema: () => z.boolean() },
   { key: 'cjkQuotes', group: 'breaking', kind: 'boolean', words: 'Whether curly quotes, dashes, the ellipsis and the middle dot are set as CJK characters.', schema: () => z.boolean() },
@@ -164,6 +172,10 @@ const SCRIPT_FIELDS = [
   { key: 'noEnd', group: 'breaking', kind: 'chars', words: 'The characters no line ends with.', schema: characters },
   { key: 'hyphen', group: 'breaking', kind: 'enum', values: [0, 1], words: "Whether a Latin word is hyphenated at a line's end (1) or not (0).", schema: () => z.literal([0, 1]) },
   { key: 'latinPatterns', group: 'breaking', kind: 'enum', values: ['en', 'de'], words: 'The hyphenation patterns a Latin word uses.', schema: () => z.literal(['en', 'de']) },
+  // (lane B's B2, the maintainer's ruling of 2026-10-29: a unit TeX set flush left or flush right, as the layout file's
+  // UNIT_FLAG.FLUSH_LEFT and FLUSH_RIGHT say, keeps that alignment, where it was justified or set flush left; centred units
+  // follow TeX's CENTRED as before. Schema 7)
+  { key: 'keepAlign', group: 'breaking', kind: 'boolean', words: 'Whether a unit TeX set flush left (ragged right) or flush right keeps that alignment: its lines left ragged, never justified, or set to the right edge.', schema: () => z.boolean() },
   // table cells (layer2.mjs cellBands)
   { key: 'cellClear', group: 'cells', kind: 'number', min: 0, max: 5, step: 0.1, words: "The room kept between a table cell's text and a rule over or under it, in PDF units.", schema: () => range(0, 5) },
   { key: 'cellCapMin', group: 'cells', kind: 'number', min: 0.3, max: 1, step: 0.05, words: "The smallest share of the size a cell's text may be capped to between its rules.", schema: () => range(0.3, 1) },

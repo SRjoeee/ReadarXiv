@@ -767,8 +767,15 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /^
  *   The paragraph is the next to end at the mark's group level or below, or one ending deeper inside ordinary groups (a
  *   list's \par, a font's group) whose groups close back to it in vertical mode, each followed by \aftergroup, as the
  *   lines probe's (latex-front.mjs PARA_END_TEX): one ending inside a box, a note or a cell is one inside the unit, and the
- *   hook waits for the next. In an \hbox, or after the paragraph ended (v), the skips at the mark. Through \message and
- *   hooks, which put nothing in any list
+ *   hook waits for the next. A paragraph a box's close ends (a \vbox, \vtop, \insert or \vcenter closed in horizontal mode)
+ *   TeX ends itself, with no \par where LaTeX sets no \partokencontext (TeX Live 2023's LaTeX: elsarticle's abstract,
+ *   `\global\setbox\absbox=\vbox\bgroup … \egroup`), so no para/after hook runs for it: that box is watched where it closes
+ *   (\aftergroup in the innermost box group, reached through ordinary groups as the paragraph goes on; none at the bottom
+ *   level, where only a \par ends a paragraph), and where it closes before a \par has told the paragraph's skips, the skips
+ *   at the mark are written, nothing of the unit being set after it. Each end mark's reading is written once (a serial), so
+ *   the hook that runs later at another paragraph's \par writes nothing: it wrote the keywords' \raggedright for
+ *   2608.16117v1's abstract. In an \hbox, or after the paragraph ended (v), the skips at the mark. Through \message, hooks
+ *   and \aftergroup, which put nothing in any list
  * - **The gate.** No mark is set while TeX sets a contents list or a list of figures or tables (\@starttoc, global: the
  *   list is read in a group), nor in the output routine (\@outputpage: its running heads, local to the routine's group).
  *   MARK_DEF's own \axtmark is gated too, so a caption's start mark is set where its float is and not first in the list
@@ -973,12 +980,15 @@ export const LAYOUT_TEX = [
   '\\def\\axt@put#1{\\axt@ic\\axt@mark{#1}\\ifaxt@sig\\vadjust{}\\fi}',
   '\\def\\axt@ift#1#2\\relax{\\if t#1\\expandafter\\@firstoftwo\\else\\expandafter\\@secondoftwo\\fi}',
   '\\def\\axt@ags{\\the\\gluestretchorder\\leftskip\\space\\the\\gluestretch\\leftskip\\space\\the\\gluestretchorder\\rightskip\\space\\the\\gluestretch\\rightskip\\space\\the\\gluestretchorder\\parfillskip\\space\\the\\gluestretch\\parfillskip}',
-  '\\def\\axt@agnow#1#2{\\message{^^JAXT-ALIGN #1 #2\\space\\axt@ags^^J}}\\def\\axt@agcap#1{\\expandafter\\xdef\\csname axt@ag@#1\\endcsname{\\axt@ags}}\\def\\axt@agmsg#1{\\message{^^JAXT-ALIGN #1 p \\csname axt@ag@#1\\endcsname^^J}}',
+  '\\def\\axt@agnow#1#2{\\message{^^JAXT-ALIGN #1 #2\\space\\axt@ags^^J}}\\def\\axt@agcap#1{\\expandafter\\xdef\\csname axt@ag@#1\\endcsname{\\axt@ags}}\\def\\axt@agmsg#1#2{\\ifcsname axt@agd@#2\\endcsname\\else\\expandafter\\gdef\\csname axt@agd@#2\\endcsname{}\\message{^^JAXT-ALIGN #1 p \\csname axt@ag@#2\\endcsname^^J}\\fi}',
+  '\\def\\axt@agopen#1{\\ifcsname axt@agd@#1\\endcsname\\expandafter\\@gobble\\else\\expandafter\\@firstofone\\fi}\\gdef\\axt@agn{0}',
   '\\def\\axt@agplain{\\ifnum\\ifnum\\currentgrouptype=1 1\\else\\ifnum\\currentgrouptype=14 1\\else0\\fi\\fi=1 \\expandafter\\@firstoftwo\\else\\expandafter\\@secondoftwo\\fi}',
-  '\\def\\axt@agover#1#2{\\ifnum\\currentgrouplevel>#2 \\axt@agplain{\\axt@agcap{#1}\\axt@agafter{#1}{#2}}{\\AddToHookNext{para/after}{\\axt@agover{#1}{#2}}}\\else\\axt@agcap{#1}\\axt@agmsg{#1}\\fi}',
-  '\\def\\axt@agafter#1#2{\\expandafter\\gdef\\csname axt@agb@#1\\endcsname{\\axt@agback{#1}{#2}}\\expandafter\\aftergroup\\csname axt@agb@#1\\endcsname}',
-  '\\def\\axt@agback#1#2{\\ifnum\\currentgrouplevel>#2 \\axt@agplain{\\axt@agafter{#1}{#2}}{\\AddToHookNext{para/after}{\\axt@agover{#1}{#2}}}\\else\\ifhmode\\AddToHookNext{para/after}{\\axt@agover{#1}{#2}}\\else\\axt@agmsg{#1}\\fi\\fi}',
-  '\\def\\axt@agpar#1{\\edef\\axt@agt{\\noexpand\\AddToHookNext{para/after}{\\noexpand\\axt@agover{#1}{\\the\\currentgrouplevel}}}\\axt@agt}',
+  '\\def\\axt@agbox{\\ifnum\\ifcase\\currentgrouptype 0\\or0\\or0\\or0\\or1\\or1\\or0\\or0\\or0\\or0\\or0\\or1\\or1\\else0\\fi=1 \\expandafter\\@firstoftwo\\else\\expandafter\\@secondoftwo\\fi}',
+  '\\def\\axt@agover#1#2#3{\\axt@agopen{#3}{\\ifnum\\currentgrouplevel>#2 \\axt@agplain{\\axt@agcap{#3}\\axt@agafter{#1}{#2}{#3}}{\\AddToHookNext{para/after}{\\axt@agover{#1}{#2}{#3}}}\\else\\axt@agcap{#3}\\axt@agmsg{#1}{#3}\\fi}}',
+  '\\def\\axt@agafter#1#2#3{\\expandafter\\gdef\\csname axt@agb@#3\\endcsname{\\axt@agback{#1}{#2}{#3}}\\expandafter\\aftergroup\\csname axt@agb@#3\\endcsname}',
+  '\\def\\axt@agback#1#2#3{\\axt@agopen{#3}{\\ifnum\\currentgrouplevel>#2 \\axt@agplain{\\axt@agafter{#1}{#2}{#3}}{\\AddToHookNext{para/after}{\\axt@agover{#1}{#2}{#3}}}\\else\\ifhmode\\AddToHookNext{para/after}{\\axt@agover{#1}{#2}{#3}}\\else\\axt@agmsg{#1}{#3}\\fi\\fi}}',
+  '\\def\\axt@agw#1#2{\\ifnum\\currentgrouplevel>\\z@\\axt@agbox{\\axt@agz{#1}{#2}\\axt@agmsg}{\\axt@agplain{\\axt@agz{#1}{#2}\\axt@agup}{}}\\fi}\\def\\axt@agz#1#2#3{\\expandafter\\gdef\\csname axt@agw@#2\\endcsname{#3{#1}{#2}}\\expandafter\\aftergroup\\csname axt@agw@#2\\endcsname}\\def\\axt@agup#1#2{\\axt@agopen{#2}{\\ifhmode\\axt@agw{#1}{#2}\\fi}}',
+  '\\def\\axt@agpar#1{\\xdef\\axt@agn{\\the\\numexpr\\axt@agn+1}\\axt@agcap{\\axt@agn}\\edef\\axt@agt{\\noexpand\\AddToHookNext{para/after}{\\noexpand\\axt@agover{#1}{\\the\\currentgrouplevel}{\\axt@agn}}\\noexpand\\axt@agw{#1}{\\axt@agn}}\\axt@agt}',
   '\\def\\axt@alg#1e#2\\@nil{\\ifx\\relax#2\\relax\\else\\ifhmode\\ifinner\\axt@agnow{#1}h\\else\\ifdefined\\AddToHookNext\\axt@agpar{#1}\\fi\\fi\\else\\axt@agnow{#1}v\\fi\\fi}',
   '\\def\\axt@align#1{\\axt@ift#1\\relax{}{\\axt@alg#1e\\@nil}}',
   '\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\axt@align{#1}\\ifhmode\\axt@put{#1}\\else\\axt@mark{#1}\\fi\\fi}',

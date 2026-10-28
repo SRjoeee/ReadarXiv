@@ -156,8 +156,14 @@ export { LayoutRefusal } from './json.mjs'
  *  MARKS_SCHEMA 13: 2608.25210v2's body filled INK_MAX, its entries' \\natexlab{} never asked, 54 entries English);
  *  and in the same unreleased 25: a math face told by its family's names (layer-proto/fonts.mjs classifyFont: Euler's EUEX,
  *  EURM and EURB, MathTime's MTMI, MTSY and MTEX, XITSMath, and XITS's text face no math face), which the ledger's math lines,
- *  the ink units' kept runs and the figure runs' words read where a paper sets them */
-export const LAYOUT = '25'
+ *  the ink units' kept runs and the figure runs' words read where a paper sets them; 26 (the maintainer's ruling of
+ *  2026-10-29 on lane B's B2): a unit TeX set flush left or flush right is UNIT_FLAG.FLUSH_LEFT or FLUSH_RIGHT, by TeX's word
+ *  alone (marks.mjs readAlign), and that word is the paragraph's own where a box's close ended it: under a LaTeX that inserts
+ *  no \par there (TeX Live 2023), the probe's hook ran at the next paragraph's \par and told its skips (2608.16117v1's
+ *  elsarticle abstract, boxed with no \par, read as its keywords' \raggedright), now the skips at the unit's end mark
+ *  (LAYOUT_TEX watches the box). A reader of 25 refuses the new flags, so a file of 26 is another maker's (the file's schema
+ *  is 5 still) */
+export const LAYOUT = '26'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,
@@ -179,8 +185,11 @@ export const PH_KINDS = Object.freeze(['math', 'display', 'cite', 'ref', 'eqref'
 export const LABEL_KINDS = Object.freeze(['number', 'item', 'caption', 'footnote'])
 /** a unit's flags. TITLE: the paper's title; FRONT: its front matter; CENTRED: its lines set centred, as TeX set its
  *  paragraph where the marked original tells it (\centering, a center environment, a class's centred heading), else as
- *  arXiv's lines show it (make.mjs): what the layer sets the translation's lines by (run.mjs) */
-export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4 })
+ *  arXiv's lines show it (make.mjs); FLUSH_LEFT, FLUSH_RIGHT: its lines set flush left (\raggedright, a flushleft
+ *  environment, ragged2e's \RaggedRight, a class's ragged heading) or flush right (\raggedleft, flushright), only where the
+ *  marked original tells it (marks.mjs readAlign), never read off arXiv's lines (LAYOUT 26). What the layer sets the
+ *  translation's lines by (run.mjs); a unit holds one of the three at most */
+export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4, FLUSH_LEFT: 8, FLUSH_RIGHT: 16 })
 /** babel's names (names.mjs), whose occurrences the file locates (`names`) */
 export { NAME_KEYS } from './names.mjs'
 /** a name's flags. CENTRED: centred in its column, as a unit is (UNIT_FLAG.CENTRED); CAPITALS: its glyphs capitals where
@@ -256,7 +265,10 @@ const NAME_ROW = 15
 const SKIP_MAX = Math.round(((16384 * 72) / 72.27) * 100) / 100
 /** a rectangle lies within its page's view by this, PDF units */
 const SLACK = 1
-const UNIT_BITS = UNIT_FLAG.TITLE | UNIT_FLAG.FRONT | UNIT_FLAG.CENTRED
+const UNIT_BITS = UNIT_FLAG.TITLE | UNIT_FLAG.FRONT | UNIT_FLAG.CENTRED | UNIT_FLAG.FLUSH_LEFT | UNIT_FLAG.FLUSH_RIGHT
+/** a unit's alignment flags, and how many of them each value of those bits holds */
+const ALIGN_BITS = UNIT_FLAG.CENTRED | UNIT_FLAG.FLUSH_LEFT | UNIT_FLAG.FLUSH_RIGHT
+const ALIGNED = Array.from({ length: ALIGN_BITS + 1 }, (_, v) => [UNIT_FLAG.CENTRED, UNIT_FLAG.FLUSH_LEFT, UNIT_FLAG.FLUSH_RIGHT].filter(b => (v & b) !== 0).length)
 const PH_BITS = 511
 const HEADING = UNIT_KINDS.indexOf('heading'), DISPLAY = PH_KINDS.indexOf('display'), MACRO = PH_KINDS.indexOf('macro')
 const PAGE_TEXT = new Set(PAGE_TEXT_KINDS.map(k => PH_KINDS.indexOf(k)))
@@ -422,6 +434,7 @@ function checkRows(f, { views, lo, hi, sized = true }) {
     if (!isInteger(kind, 0, UNIT_KINDS.length - 1)) throw refuse(`units[${i}][1]`, 'not a kind of UNIT_KINDS')
     if (!isInteger(depth, DEPTH_MIN, DEPTH_MAX) && depth !== DEPTH_NONE) throw refuse(`units[${i}][2]`, `not a depth ${DEPTH_MIN} to ${DEPTH_MAX}, or ${DEPTH_NONE}`)
     if (!isInteger(flags, 0, UNIT_BITS)) throw refuse(`units[${i}][3]`, 'not flags of UNIT_FLAG')
+    if (ALIGNED[flags & ALIGN_BITS] > 1) throw refuse(`units[${i}][3]`, 'more than one of CENTRED, FLUSH_LEFT and FLUSH_RIGHT')
     if (!isInteger(pieces, 0, PIECES_MAX)) throw refuse(`units[${i}][4]`, `not a count 0 to ${PIECES_MAX}`)
     zeroes(u)
     last = u[0]
@@ -781,6 +794,7 @@ export function indexLayout(file) {
     byId.set(id, {
       id, kind: UNIT_KINDS[kind], depth,
       title: (flags & UNIT_FLAG.TITLE) !== 0, front: (flags & UNIT_FLAG.FRONT) !== 0, centred: (flags & UNIT_FLAG.CENTRED) !== 0,
+      flush: (flags & UNIT_FLAG.FLUSH_LEFT) !== 0 ? 'left' : (flags & UNIT_FLAG.FLUSH_RIGHT) !== 0 ? 'right' : null,
       pieces, lines: NONE, frames: NONE, erase: [], ph: new Map(), labels: NONE, heading: null, held: NO_HELD, colours: NO_COLOURS,
     })
   }

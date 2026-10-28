@@ -441,6 +441,37 @@ describe('makeLayout', () => {
     expect((boxed.file.units[1]?.[3] ?? 0) & UNIT_FLAG.CENTRED).toBe(UNIT_FLAG.CENTRED)
   })
 
+  it('a unit TeX set flush left is FLUSH_LEFT, one flush right FLUSH_RIGHT, by TeX\'s word alone, never by its lines', async () => {
+    // (a justified paragraph of 200 pt lines from 72, the column; a ragged one, its lines short of the column's edge; a quote set
+    // flush right, its lines ending on the edge from starts that vary)
+    const para = [0, 1, 2, 3].map((j): Run => ({ s: `${'abcd efgh '.repeat(3)}line${j} wxyz`, x: 72, y: 700 - 12 * j }))
+    para.push({ s: 'last line of it', x: 72, y: 652 })
+    const rag = [{ s: 'x'.repeat(30), x: 72, y: 620 }, { s: 'y'.repeat(24), x: 72, y: 608 }, { s: 'z'.repeat(16), x: 72, y: 596 }]
+    const quote = [{ s: 'q'.repeat(30), x: 122, y: 560 }, { s: 'r'.repeat(20), x: 172, y: 548 }]
+    const ws = (rs: Run[]) => rs.map(r => r.s).join(' ')
+    const w: World = {
+      pages: [{ runs: [...para, ...rag, ...quote] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(para[4] as Run), 652], ['1s', 1, 72, 620], ['1e', 1, endOf(rag[2] as Run), 596], ['2s', 1, 122, 560], ['2e', 1, endOf(quote[1] as Run), 548]],
+      units: [unit('para', [text(ws(para))]), unit('para', [text(ws(rag))]), unit('para', [text(ws(quote))])],
+    }
+    const flush = (f: { units: unknown[][] }, i: number) => ((f.units[i]?.[3] as number) ?? 0) & (UNIT_FLAG.FLUSH_LEFT | UNIT_FLAG.FLUSH_RIGHT)
+    // (\raggedright: \rightskip alone stretches; \raggedleft: \leftskip alone)
+    const LEFT = 'p 0 0.0pt 1 1.0pt 1 1.0pt', RIGHT = 'p 1 1.0pt 0 0.0pt 0 0.0pt', JUST = 'p 0 0.0pt 0 0.0pt 1 1.0pt'
+    const told = (await made(w, `AXT-ALIGN 0 ${JUST}\nAXT-ALIGN 1 ${LEFT}\nAXT-ALIGN 2 ${RIGHT}\n`)).file
+    expect([0, 1, 2].map(i => flush(told, i))).toEqual([0, UNIT_FLAG.FLUSH_LEFT, UNIT_FLAG.FLUSH_RIGHT])
+    expect([0, 1, 2].map(i => indexLayout(told).unit(i)?.flush)).toEqual([null, 'left', 'right'])
+    // (no word from TeX: neither flag, whatever the lines look like: the ragged one is not read off its short lines)
+    const none = (await made(w)).file
+    expect([0, 1, 2].map(i => flush(none, i))).toEqual([0, 0, 0])
+    // (TeX's word whatever the lines look like: a paragraph TeX set flush left whose lines but its last reach the column's edge
+    // is flush left all the same; it was the probe that misread a boxed paragraph's alignment, and it reads its own now)
+    const edge = (await made(w, `AXT-ALIGN 0 ${LEFT}\n`)).file
+    expect(flush(edge, 0)).toBe(UNIT_FLAG.FLUSH_LEFT)
+    // (a centred unit is CENTRED and neither flush flag)
+    const centred = (await made(w, `AXT-ALIGN 1 p 1 1.0pt 1 1.0pt 0 0.0pt\n`)).file
+    expect(((centred.units[1]?.[3] as number) ?? 0) & (UNIT_FLAG.CENTRED | UNIT_FLAG.FLUSH_LEFT | UNIT_FLAG.FLUSH_RIGHT)).toBe(UNIT_FLAG.CENTRED)
+  })
+
   it('a one-line paragraph TeX set justified and its own glue centred (\\hfill X\\hfill) is CENTRED, off both edges by more than two ems; one nearer an edge is not', async () => {
     const para = [0, 1, 2, 3].map((j): Run => ({ s: `${'abcd efgh '.repeat(3)}line${j} wxyz`, x: 72, y: 700 - 12 * j }))
     // (the paragraph spans 72 to 272, its middle 172: a line of 60 on it, 70 off each edge; one of 170, 15 off each, an em and

@@ -179,13 +179,19 @@ describe("a line opens by TeX's rule", () => {
   })
   it('pushes the later slots only as far as their pitch under the line set lower: a gap of the original wider than it takes the push in', () => {
     // one block whose original opened a gap of 18 (a tall line of its own) between 488 and 470: the formula on 500, 6 deep,
-    // opens the second line by 2, to 486; 470 is still 16 under it, more than the pitch: it stays on its baseline
+    // opens the second line by 2, to 486; 470 is still 16 under it, more than the pitch: it stays on its baseline. On the
+    // original's own baselines (evenPitch off): with it on, the grid holds no such gap (layer-even-pitch.test.ts)
     const opened = (B: number[]) => ({ ...block(B.length), B, rects: B.map(b => [1, 0, b - 2, 100, b + 8]) })
     const four = [crop(7.5, 6), space, word(14), space, word(18), space, word(18), space, word(18)]
-    expect(L2.layoutUnit2(four as never, [opened([500, 488, 470, 458])] as never, 10, P([1, 0]) as never).lines.map(x => x.baseline)).toEqual([500, 486, 470, 458])
+    expect(L2.layoutUnit2(four as never, [opened([500, 488, 470, 458])] as never, 10, P([1, 0], { evenPitch: false }) as never).lines.map(x => x.baseline)).toEqual([500, 486, 470, 458])
     // a gap of 14 takes 2 of a push of 3 (the formula 7 deep): the slots under it move 1, those after them with them (the
     // last, 450, past the foot by it, dropped and not needed)
-    expect(L2.layoutUnit2([crop(7.5, 7), ...four.slice(1)] as never, [opened([500, 488, 474, 462, 450])] as never, 10, P([1, 0]) as never).lines.map(x => x.baseline)).toEqual([500, 485, 473, 461])
+    expect(L2.layoutUnit2([crop(7.5, 7), ...four.slice(1)] as never, [opened([500, 488, 474, 462, 450])] as never, 10, P([1, 0], { evenPitch: false }) as never).lines.map(x => x.baseline)).toEqual([500, 485, 473, 461])
+    // (evenPitch on, the 18 TeX's \\lineskip rule set closed (blocks2's `E`): every line a pitch under the one before it but the
+    // second, which the formula opens; a block with no `E`, its gaps none the rule set, stands on the original's grid, as above)
+    const E = L2.evenGridOf([500, 488, 470, 458], [false, true, false], 12)
+    expect(L2.layoutUnit2(four as never, [{ ...opened([500, 488, 470, 458]), E }] as never, 10, P([1, 0]) as never).lines.map(x => x.baseline)).toEqual([500, 486, 474, 462])
+    expect(L2.layoutUnit2(four as never, [opened([500, 488, 470, 458])] as never, 10, P([1, 0]) as never).lines.map(x => x.baseline)).toEqual([500, 486, 470, 458])
   })
   it("sets a line its rule moves past its block's foot into the room of its flow's next block, where nothing kept lies between", () => {
     // block 0 at 500 and 488, block 1 from 470 (v0 split one paragraph at the 18 TeX opened there): the second line, opened

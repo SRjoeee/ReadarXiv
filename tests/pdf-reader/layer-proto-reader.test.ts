@@ -230,20 +230,20 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
   it('opens v0 with the rule set a host passes, and says which in its stats; the built-in one where it passes none', async () => {
     const { firstFaceOf, openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const set = structuredClone(BUILTIN_RULES) as unknown as { version: number; scripts: Record<string, { leadBase: number; cjkFaces: { group: string } }> }
-    set.version = 7
+    set.version = 8
     set.scripts.Hans!.leadBase = 1.5
     set.scripts.Hans!.cjkFaces.group = 'shs-k'
     const layer = await openLayer({ bundle: bundleOf(), doc: docOf(), target: 'zh', faceSources, hyphUrl, rules: set as never })
     const o = seen.opens.at(-1) as unknown as Opened
     expect(o.rules).toBe(set)
-    expect(layer.stats().rules).toEqual({ schema: 6, version: 7 })
+    expect(layer.stats().rules).toEqual({ schema: 7, version: 8 })
     // (the face asked first is the set's: Korean's group for Chinese, which the built-in set does not say)
     expect(facesAsked[0]).toBe('shs-k-regular')
     expect(firstFaceOf('zh', set as never)).toBe('shs-k-regular')
     expect(firstFaceOf('zh')).toBe('shs-sc-regular')
     layer.dispose()
     const built = await openLayer({ bundle: bundleOf(), doc: docOf(), target: 'zh', faceSources, hyphUrl })
-    expect(built.stats().rules).toEqual({ schema: 6, version: BUILTIN_RULES.version })
+    expect(built.stats().rules).toEqual({ schema: 7, version: BUILTIN_RULES.version })
     built.dispose()
   })
 
@@ -325,7 +325,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     expect(layer.unitAt(3, 100, 262)).toBeNull()
     expect(layer.unitAt(1, Number.NaN, 262)).toBeNull()
     const s = layer.stats()
-    expect(s).toMatchObject({ units: toTranslate(bundle, 'zh').filter(id => bundle.units[id]?.[0] !== 'author').length, drawn: whole.stats.length, pages: [1, 2], dropped: 0, rules: { schema: 6, version: BUILTIN_RULES.version } })
+    expect(s).toMatchObject({ units: toTranslate(bundle, 'zh').filter(id => bundle.units[id]?.[0] !== 'author').length, drawn: whole.stats.length, pages: [1, 2], dropped: 0, rules: { schema: 7, version: BUILTIN_RULES.version } })
     expect(Object.keys(s.pageMs)).toEqual(['1', '2'])
     expect(s.slowestTaskMs).toBeGreaterThanOrEqual(0)
     layer.dispose()
@@ -454,7 +454,7 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     source.height = 10
     expect(() => layer.copyOf(1, { k: 2.5, width: source.width, height: source.height })).toThrow(/let go/)
     expect(layer.take(rowsOf(bundle))).toEqual({ complete: [] })
-    expect(layer.stats().rules).toEqual({ schema: 6, version: BUILTIN_RULES.version })
+    expect(layer.stats().rules).toEqual({ schema: 7, version: BUILTIN_RULES.version })
     expect(layer.unitAt(1, 100, 262)).toBe(0)
   })
 

@@ -1847,12 +1847,12 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       const below = Math.min(H, Math.max(0, r2(lastRow.bottom - (Number.isFinite(next) ? next : view[1] + FOOT))))
       frames.push(f.page, f.col, f.first, f.n, q === 0 ? -1 : share, below)
     }
-    // flags: centred as TeX set the unit's paragraph, where the marked original's log tells it (marks.mjs readAlign: its
-    // \leftskip, \rightskip and \parfillskip when it ended; the author's own alignment). Where it does not (a caption
-    // \@makecaption centres in an \hbox on one line, the title and front matter, which carry no marks, a cell): centred where
-    // every line's centre is its column's and one line at least is short of it by an em; the first line from its label on
-    // (a caption's "Figure 1." centred with its text), a line across both columns of a page of two by the text block
-    // (blockEdges: the pool of such lines is a few, and 1810.04805's title read 8.7 pt off by its own). A justified one-line
+    // flags: centred, flush left or flush right as TeX set the unit's paragraph, where the marked original's log tells it
+    // (marks.mjs readAlign: its \leftskip, \rightskip and \parfillskip when it ended; the author's own alignment). Where it
+    // does not (a caption \@makecaption centres in an \hbox on one line, the title and front matter, which carry no marks, a
+    // cell): centred where every line's centre is its column's and one line at least is short of it by an em; the first line
+    // from its label on (a caption's "Figure 1." centred with its text), a line across both columns of a page of two by the
+    // text block (blockEdges: the pool of such lines is a few, and 1810.04805's title read 8.7 pt off by its own). A justified one-line
     // paragraph centred by its own glue (\noindent\hfill X\hfill\null, whose skips are the paper's) is centred where its
     // line is on its column's middle and stands off both edges by more than INSET ems
     const told = alignTeX.get(i)
@@ -1866,7 +1866,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (!(x0 - e[0] > INSET * em && e[1] - r.x1 > INSET * em)) inset = false
     })
     const isCentred = told === undefined ? centred && short : told === 'c' || (told === 'j' && centred && inset)
-    const flags = (u.title ? UNIT_FLAG.TITLE : 0) | (u.front ? UNIT_FLAG.FRONT : 0) | (isCentred ? UNIT_FLAG.CENTRED : 0)
+    // (flush left or flush right only as TeX told it, never read off arXiv's lines: a ragged paragraph's lines can all reach
+    // near its edge, and a justified one's can stop short of it; a unit TeX does not tell keeps neither)
+    const flags = (u.title ? UNIT_FLAG.TITLE : 0) | (u.front ? UNIT_FLAG.FRONT : 0) | (isCentred ? UNIT_FLAG.CENTRED : 0) | (told === 'l' ? UNIT_FLAG.FLUSH_LEFT : 0) | (told === 'r' ? UNIT_FLAG.FLUSH_RIGHT : 0)
     const depth = Number.isInteger(u.depth) && u.depth >= -1 && u.depth <= 5 ? u.depth : 9
     one.out = { unit: [i, KIND.get(u.kind), depth, flags, u.pieces.length], lines, frames, erase, splits: fs.length > 1 }
   }

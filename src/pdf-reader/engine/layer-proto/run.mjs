@@ -2056,6 +2056,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const carried = centredFlag === true && relabels(p.id) && !!prep.label?.chars?.length && !prep.label.drawn && !!p.rects[0] && prep.label.chars.every(c => c.page === p.rects[0][0])
     if (carried) { const r0 = p.rects[0], lx0 = Math.min(...prep.label.chars.map(c => c.x0)); if (lx0 < r0[1]) p.rects[0] = [r0[0], lx0, r0[2], r0[3], r0[4]] }
     p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced, LINESKIP, prep.breakAt, prep.joinAt, centredFlag)
+    // (a unit TeX set flush left or flush right, the layout file's UNIT_FLAG.FLUSH_LEFT or FLUSH_RIGHT, keeps that alignment
+    // where the rules keep it, P.keepAlign: its lines never justified, layer2.mjs placeItems; a cell is set by its own lines)
+    if (P.keepAlign && lu.flush && p.unit.kind !== 'cell') for (const b of p.blocks) if (!b.centred) b.flush = lu.flush
     if (p.unit.kind !== 'cell') for (const b of p.blocks) widen(b, p)
     // (a unit whose last row another unit's first continues on a shared line, where something of the page stands between the
     // two that stays (a label kept as the original's: inparaenum's "(2)" between two items, 2610.21098 page 2): the next unit's

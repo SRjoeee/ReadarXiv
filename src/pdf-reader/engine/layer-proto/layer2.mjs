@@ -2801,6 +2801,15 @@ export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, refer
     // the rounding does not move, where their median may be off by a few thousandths and its lines' slots so a line off
     // the last baseline at 1.3 times it: 1512.03385's unit 59)
     if (d.length > 1 && b.rects.every(r => info(r)?.file) && d.every(v => Math.abs(v - b.pitch0) <= 0.02)) b.pitch0 = d.reduce((a, v) => a + v, 0) / d.length
+    // (the block's grid with one pitch inside it, `E`, which slotsAt lays on at the original's leading where P.evenPitch: each gap
+    // wider than the pitch that TeX's \lineskip rule set closed to it, evenGridOf. The rule's gap is no wider than the two lines'
+    // boxes and \lineskip, the test `through` below makes between two blocks; a wider one holds something else (a line of the
+    // unit's another block stands in it, a \vadjust, a float) and keeps its room. Made here, once a block; a block with no such
+    // gap has none, nor has any where the file tells no \lineskip)
+    if (lineskip && b.pitch0 !== null) {
+      const opened = G.slice(1).map((y, i) => G[i] - y > b.pitch0 && tightOf(info(b.rects[i]), info(b.rects[i + 1]), G[i] - y, lineskip))
+      if (opened.includes(true)) b.E = evenGridOf(G, opened, b.pitch0)
+    }
     b.free = 0
   }
   // (TeX's lines, a layout file's: the blocks that continue each other in the file are one flow, breakLines. The next block
@@ -2831,12 +2840,19 @@ export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, refer
     // 1810.04805's page 6, unit 81: 9.64 + 7.45 + 1 = 18.09 for a gap of 18.02)
     if (next) {
       const last = a.rects.at(-1), ia = where(last), ib = where(b.rects[0])
-      const tight = lineskip && [to.baseline, to.bottom, from.baseline, from.top].every(Number.isFinite)
-        && to.baseline - from.baseline <= (to.baseline - to.bottom) + (from.top - from.baseline) + lineskip[0] + 0.025
-      a.through = !!tight && ia >= 0 && ib > ia && rects.slice(ia + 1, ib).every(r => r[2] >= last[2])
+      const tight = !!lineskip && tightOf(to, from, to.baseline - from.baseline, lineskip)
+      a.through = tight && ia >= 0 && ib > ia && rects.slice(ia + 1, ib).every(r => r[2] >= last[2])
     }
   }
   return blocks
+}
+
+/** whether TeX's \lineskip rule set two consecutive lines of the file (`upper`, `lower`: their lineInfo, baseline, top and
+ *  bottom) `gap` apart: no wider than the upper's depth, the lower's height and \lineskip, the file's hundredths within 0.025
+ *  (±0.005 each of five values) */
+function tightOf(upper, lower, gap, lineskip) {
+  return [upper?.baseline, upper?.bottom, lower?.baseline, lower?.top].every(Number.isFinite)
+    && gap <= (upper.baseline - upper.bottom) + (lower.top - lower.baseline) + lineskip[0] + 0.025
 }
 
 /**
@@ -2959,6 +2975,48 @@ export const SHORT_SKIP = 0.3
  *  width and 2 em) */
 export const PREDISPLAY = 2
 
+/**
+ * A block's grid at the original's leading with one pitch inside it (P.evenPitch, lane B's B1, the maintainer's ruling of
+ * 2026-10-29): each gap of the grid `G` TeX's \lineskip rule opened under a tall line of the original (`opened`, blocks2's)
+ * closed to the block's own pitch `p0` (pitch0: \baselineskip, the median of its gaps), where the grid on the original's baselines carries
+ * it to whatever line of the translation stands there (the block-level audit's finding 1: 32 of 520 multi-line body units at
+ * leading 1 a point or more off their median pitch, up to 6.7 pt). Every other gap is the original's, its hundredths and all,
+ * and so is a gap that holds something else (a line of the unit's another block, a \vadjust: wider than the rule sets).
+ * The first line stays on the original's first baseline (the paragraph's start never moves, B′), every line under a closed
+ * gap moves up by it, and none stands lower than the original's own (the grid's forced breaks' gaps closed, `G`). The
+ * translation's own tall lines are opened by TeX's rule (breakLines' settle), and what the closed gaps free stays at the
+ * block's foot
+ */
+export function evenGridOf(G, opened, p0) {
+  const out = [G[0]]
+  for (let k = 1; k < G.length; k++) { const gap = G[k - 1] - G[k]; out.push(out[k - 1] - (opened[k - 1] && gap > p0 ? p0 : gap)) }
+  return out
+}
+/** how near a formula's baseline is to a line's of the file for it to stand on that line (PDF units): both are written to a
+ *  hundredth */
+const ON_LINE = 0.05
+
+/**
+ * The distance TeX set between the line of the original a formula `r` (a crop) stands on and the line after it (`below`, the
+ * crop on the upper line of a pair) or before it, on the unit's grid (its blocks' `G`, the forced breaks' room closed): TeX's
+ * own \lineskip rule for that formula, read from its baselines (breakLines' settle). The line is the one the formula stands
+ * on: on the crop's page and baseline, its rectangle holding the crop's centre, never a line of another block merely across
+ * it (a unit's two blocks side by side have lines at one baseline each, and a block's span is its widest line's: the review
+ * of #496), nor the other half of a line its rectangles cut in two. -Infinity where the unit's blocks hold no line of the
+ * original under the crop, or none past it on that side
+ */
+export function texRoomOf(blocks, r, below) {
+  const cx = (r.crop[0] + r.crop[2]) / 2
+  for (const b of blocks ?? []) {
+    if (b.page !== r.page) continue
+    const j = b.B.findIndex((y, i) => Math.abs(y - r.baseline) <= ON_LINE && b.rects[i][1] <= cx && cx <= b.rects[i][3])
+    if (j < 0) continue
+    const G = b.G ?? b.B, k = below ? j + 1 : j - 1
+    return k >= 0 && k < G.length ? Math.abs(G[j] - G[k]) : -Infinity
+  }
+  return -Infinity
+}
+
 /** the slots (lines) a unit's blocks hold at a state: each { block, page, x0, x1, baseline, target, centred }. The pitch is
  *  the original's times the leading, whatever the size (D6's F6a, 2026-10-08: a Latin line shrunk with its size sat on none
  *  of the original's baselines and its unit ended a fraction of a line short, the blank added to the gap below it; every
@@ -2983,8 +3041,9 @@ function slotsAt(blocks, st, P, s) {
     const onGrid = Math.abs(st.lead - 1) < 1e-6
     const low = lows[bi]
     const firstBlock = bi + base === 0
-    // (on the original's pitch, its grid: its forced breaks' gaps closed, blocks2, the foot B's own)
-    const G = b.G ?? b.B
+    // (on the original's pitch, its grid: its forced breaks' gaps closed, blocks2, the foot B's own; with evenPitch, its
+    // gaps TeX's \lineskip rule opened closed to the pitch, blocks2's `E`)
+    const G = onGrid && P.evenPitch && b.E ? b.E : b.G ?? b.B
     for (let k = 0; k < 400; k++) {
       // (the first line on a shared row stands on the baseline the line before it there was laid at, `startY`, where that is
       // not TeX's (run.mjs layout2, shareOf's `at`): the row's line, its measure the row's, whatever the block's foot)
@@ -3008,7 +3067,10 @@ function slotsAt(blocks, st, P, s) {
       for (const d of b.shortSkips ?? []) if (d.top < y && d.top > y - SHORT_SKIP * em && Math.min(x1, d.x1) > Math.max(x0, d.x0)) x1 = Math.min(x1, d.x0 - PREDISPLAY * em)
       // a sliver beside a formula (narrower than 1.5 em) holds no text: its words were the formula's
       if (x1 - x0 < 1.5 * s * st.scale) continue
-      out.push({ block: bi, page: b.page, x0, x1, baseline: y, target, centred: b.centred, pitch, after: b.after ?? 0, foot: feet[bi], flow: b.flow ?? bi })
+      const slot = { block: bi, page: b.page, x0, x1, baseline: y, target, centred: b.centred, pitch, after: b.after ?? 0, foot: feet[bi], flow: b.flow ?? bi }
+      // (a unit TeX set flush left or flush right, run.mjs: placeItems sets its lines by it)
+      if (b.flush) slot.flush = b.flush
+      out.push(slot)
     }
     // (a line on a shared row whose rest stays another's, `stop` (run.mjs keptAfter): of the block's slots within an em of its
     // baseline, the nearest ends where TeX ended the unit's text there; one that leaves too narrow for text gives way, as a
@@ -3110,7 +3172,7 @@ const squeezable = (items, hangs, compress, P) => (compress < P.compressMax ? it
  * (the break the glue alone allows), or a token cut by its characters would leave one at the head of its tail (the cut
  * moves back before it). A line TeX's own break opens (`newline`, `blockTo`) is tokensOf2's: its `dropped`.
  */
-function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
+function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = null) {
   work.breaks++
   // (step 3, 'flow': a kept region breaks the line and skips no slot: the text after a display may stand above it, where
   // the slots below it are too few for it and those above it too many; the last resort before the unit is not drawn)
@@ -3179,7 +3241,17 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
     const [skip, limit] = P.lineskip
     const e0 = lineExtent(prev, f, scale), e1 = lineExtent(line, f, scale)
     if (prev.baseline - e0.d - (line.baseline + e1.a) >= limit) return
-    const shift = e0.d + e1.a + skip - (prev.baseline - line.baseline)
+    // (the ink stands in for TeX's boxes, which the translation's lines have none of; but where the pair holds a formula TeX set
+    // in the original, TeX measured that formula's room itself: the distance TeX left between its line and the next (a crop on
+    // the upper line) or the one before (on the lower), texRoomOf. Where that distance already keeps the two lines' ink
+    // \lineskiplimit apart, TeX's rule holds at it, and the pair is set no farther apart than it: the ink of a radical or an
+    // ascender passes its box by a few hundredths, and the rule on the ink opened 1706.03762's Spanish unit 33 by 2.35 under the
+    // fraction TeX had opened 2.26 under, its last line past its foot, the unit a size smaller)
+    let dist = e0.d + e1.a + skip, tex = -Infinity
+    for (const it of prev.items) if (it.t.crop) tex = Math.max(tex, texRoomOf(blocks, it.t.crop, true))
+    for (const it of line.items) if (it.t.crop) tex = Math.max(tex, texRoomOf(blocks, it.t.crop, false))
+    if (tex - e0.d - e1.a >= limit) dist = Math.min(dist, tex)
+    const shift = dist - (prev.baseline - line.baseline)
     // (a line opens; it never moves up. Where \lineskiplimit is over \lineskip, TeX sets a clearance between the two to
     // \lineskip, nearer than the slots, and every line after it nearer with it: that needs each later slot moved up,
     // which is not built. The line moved up alone spaced a paragraph unevenly, 10 and 14 apart where TeX sets 10, and a
@@ -3632,6 +3704,10 @@ function placeItems(lines, f, P) {
     const latinish = latinishOf(line.items, P)
     let perSpace = 0, perGap = 0
     line.mode = line.centred ? 'centred' : line === last || line.ends ? 'last' : 'just'
+    // (a line of a unit TeX set flush left is ragged at its natural spacing, every line of one set flush right stands at the
+    // right edge, its last too: \raggedleft sets no \parfillskip past it; P.keepAlign, run.mjs)
+    if (line.flush === 'left' && line.mode === 'just') line.mode = 'ragged'
+    else if (line.flush === 'right') line.mode = 'right'
     // a line squeezed to take its last group (breakLines' squeezeTakes): its marks' blank halves first, as many as it needs,
     // then its word spaces down to spaceMin, then each gap by what is left, which breakLines kept within SQUEEZE em; a mark's
     // half more than it needed is spread as any line's slack
@@ -3663,7 +3739,7 @@ function placeItems(lines, f, P) {
       }
     }
     if (line.mode === 'last' && slack < 0 && !spaces.length) slack = 0
-    let x = line.x0 + (line.centred ? Math.max(0, slack) / 2 : 0)
+    let x = line.x0 + (line.centred ? Math.max(0, slack) / 2 : line.mode === 'right' ? Math.max(0, slack) : 0)
     line.items.forEach((it, n) => {
       x += it.asp ?? 0
       it.x = x + (it.shift ?? 0)
@@ -3729,7 +3805,7 @@ export function layoutUnit2(tokens, blocks, s, P) {
     tried++
     work.fit++
     const f = s * st.scale
-    const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale)
+    const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, true, blocks)
     last = { r, st, f }
     if (r.rest >= r.total) break
   }
@@ -3743,7 +3819,7 @@ export function layoutUnit2(tokens, blocks, s, P) {
     for (const st of statesOf(P, blocks, s)) {
       tried++
       const f = s * st.scale
-      past = { r: breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, false), st, f }
+      past = { r: breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, false, blocks), st, f }
       if (past.r.rest >= past.r.total) break
     }
     if (past.r.rest >= past.r.total) last = past
@@ -3755,7 +3831,7 @@ export function layoutUnit2(tokens, blocks, s, P) {
       tried++
       work.fit++
       const f = s * st.scale
-      const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, 'flow')
+      const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, 'flow', blocks)
       if (r.rest >= r.total) { last = { r, st, f }; break }
     }
   }
@@ -3767,7 +3843,7 @@ export function layoutUnit2(tokens, blocks, s, P) {
       work.fit++
       const st = { ...last.st, scale: Math.round((1 + k * P.step) * 1000) / 1000, knob: 'grow' }
       const f = s * st.scale
-      const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale)
+      const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, true, blocks)
       if (r.rest >= r.total) { last = { r, st, f }; break }
     }
   }
@@ -3904,7 +3980,7 @@ export function joinRuns(runs) {
 export function layoutAt(tokens, blocks, s, P, st) {
   work.fit++
   const f = s * st.scale
-  return laidOut({ r: breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale), st, f }, s, P, 1, blocks)
+  return laidOut({ r: breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, true, blocks), st, f }, s, P, 1, blocks)
 }
 
 /**

@@ -69,9 +69,15 @@ describe('readAlign: the alignment TeX set a unit\'s paragraph by', () => {
     expect(LAYOUT_TEX).toContain('\\protected\\def\\axtmark#1{\\ifaxt@off\\axt@colseen\\else\\axt@align{#1}')
     expect(LAYOUT_TEX).toContain('\\protected\\def\\axt@hm#1{\\ifaxt@off\\else\\axt@align{#1}')
     // (the skips a paragraph is broken by are those at its \\par, so its own are read once it ends: a one-shot para/after hook set
-    // at the mark, at its group level or below, or deeper through ordinary groups back to it; in a box, or after its end, at the mark)
-    expect(LAYOUT_TEX).toContain('\\def\\axt@agpar#1{\\edef\\axt@agt{\\noexpand\\AddToHookNext{para/after}{\\noexpand\\axt@agover{#1}{\\the\\currentgrouplevel}}}\\axt@agt}')
-    expect(LAYOUT_TEX).toContain('\\def\\axt@agover#1#2{\\ifnum\\currentgrouplevel>#2 \\axt@agplain{\\axt@agcap{#1}\\axt@agafter{#1}{#2}}{\\AddToHookNext{para/after}{\\axt@agover{#1}{#2}}}\\else\\axt@agcap{#1}\\axt@agmsg{#1}\\fi}')
+    // at the mark, at its group level or below, or deeper through ordinary groups back to it; in a box, or after its end, at the
+    // mark. Each end mark's reading a serial of its own, its skips taken at the mark, and written once)
+    expect(LAYOUT_TEX).toContain('\\def\\axt@agpar#1{\\xdef\\axt@agn{\\the\\numexpr\\axt@agn+1}\\axt@agcap{\\axt@agn}\\edef\\axt@agt{\\noexpand\\AddToHookNext{para/after}{\\noexpand\\axt@agover{#1}{\\the\\currentgrouplevel}{\\axt@agn}}\\noexpand\\axt@agw{#1}{\\axt@agn}}\\axt@agt}')
+    expect(LAYOUT_TEX).toContain('\\def\\axt@agover#1#2#3{\\axt@agopen{#3}{\\ifnum\\currentgrouplevel>#2 \\axt@agplain{\\axt@agcap{#3}\\axt@agafter{#1}{#2}{#3}}{\\AddToHookNext{para/after}{\\axt@agover{#1}{#2}{#3}}}\\else\\axt@agcap{#3}\\axt@agmsg{#1}{#3}\\fi}}')
+    expect(LAYOUT_TEX).toContain('\\def\\axt@agmsg#1#2{\\ifcsname axt@agd@#2\\endcsname\\else\\expandafter\\gdef\\csname axt@agd@#2\\endcsname{}\\message{^^JAXT-ALIGN #1 p \\csname axt@ag@#2\\endcsname^^J}\\fi}')
+    // (a paragraph a box's close ends, where TeX inserts no \\par: the box it is set in watched where it closes, the innermost of
+    // a \\vbox, \\vtop, \\insert or \\vcenter, through ordinary groups as the paragraph goes on, none at the bottom level)
+    expect(LAYOUT_TEX).toContain('\\def\\axt@agw#1#2{\\ifnum\\currentgrouplevel>\\z@\\axt@agbox{\\axt@agz{#1}{#2}\\axt@agmsg}{\\axt@agplain{\\axt@agz{#1}{#2}\\axt@agup}{}}\\fi}')
+    expect(LAYOUT_TEX).toContain('\\def\\axt@agbox{\\ifnum\\ifcase\\currentgrouptype 0\\or0\\or0\\or0\\or1\\or1\\or0\\or0\\or0\\or0\\or0\\or1\\or1\\else0\\fi=1 ')
     expect(LAYOUT_TEX).toContain('\\ifhmode\\ifinner\\axt@agnow{#1}h\\else\\ifdefined\\AddToHookNext\\axt@agpar{#1}\\fi\\fi\\else\\axt@agnow{#1}v\\fi')
   })
 })
@@ -92,6 +98,34 @@ AXT-ALIGN 8 p 2 1.0pt 0 0.0pt 0 0.0pt
 AXT-ALIGN 13 p 0 20.0pt 0 20.0pt 0 0.0pt
 AXT-ALIGN 18 p 4 1.0pt 4 1.0pt 0 0.0pt
 `
+
+/** TeX Live 2023's pdfLaTeX (its LaTeX sets no \\partokencontext, so TeX ends a paragraph a box's close ends with no \\par and no
+ *  para/after hook runs for it), the probe watching the box (lab/pdf/spikes/layout-align-cases.mjs): elsarticle's abstract
+ *  (`\\global\\setbox\\absbox=\\vbox\\bgroup … \\egroup`) and its \\raggedright keywords; a \\vbox of no \\par, then a \\raggedright
+ *  paragraph; the mark in a group inside a \\vbox, then flushright; a \\raggedleft \\vtop, then a centred paragraph; a small
+ *  environment in a \\vbox, then \\raggedright; a \\raggedleft \\vbox inside a \\raggedright paragraph, the paragraph; a marginal
+ *  note. The probe before it read each boxed paragraph by the next paragraph's \\par: 1 l, 4 l, 6 r, 8 c, 10 l, 12 l */
+const BOXED_2023 = `This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023)
+AXT-ALIGN 1 p 0 0.0pt 0 0.0pt 1 1.0pt
+AXT-ALIGN 2 p 0 0.0pt 1 1.0pt 1 1.0pt
+AXT-ALIGN 4 p 0 0.0pt 0 0.0pt 1 1.0pt
+AXT-ALIGN 5 p 0 0.0pt 1 1.0pt 1 1.0pt
+AXT-ALIGN 6 p 0 0.0pt 0 0.0pt 1 1.0pt
+AXT-ALIGN 7 p 1 1.0pt 0 0.0pt 0 0.0pt
+AXT-ALIGN 8 p 1 1.0pt 0 0.0pt 0 0.0pt
+AXT-ALIGN 9 p 1 1.0pt 1 1.0pt 0 0.0pt
+AXT-ALIGN 10 p 0 0.0pt 0 0.0pt 1 1.0pt
+AXT-ALIGN 11 p 0 0.0pt 1 1.0pt 1 1.0pt
+AXT-ALIGN 12 p 1 1.0pt 0 0.0pt 0 0.0pt
+AXT-ALIGN 13 p 0 0.0pt 1 1.0pt 1 1.0pt
+AXT-ALIGN 14 p 0 0.0pt 1 1.0pt 1 1.0pt
+`
+
+describe('readAlign: a paragraph a box\'s close ends, under a LaTeX that inserts no \\par there', () => {
+  it('reads each boxed paragraph by its own skips, not the next paragraph\'s', () => {
+    expect(readAlign(BOXED_2023)).toEqual([[1, 'j'], [2, 'l'], [4, 'j'], [5, 'l'], [6, 'j'], [7, 'r'], [8, 'r'], [9, 'c'], [10, 'j'], [11, 'l'], [12, 'r'], [13, 'l'], [14, 'l']])
+  })
+})
 
 describe('readAlign: a paragraph\'s own skips, LuaTeX\'s orders', () => {
   it('a centring group closed before its paragraph ended reads justified, as TeX set it', () => {
