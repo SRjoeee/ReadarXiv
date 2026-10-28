@@ -479,6 +479,8 @@ describe('the ink section\'s cap and a bibliography\'s entries (2608.25210v2: it
     expect(shareInk({ inkless: ['\\e{x}'], texts: [['\\natexlab{a}', 'a'], ['\\up{abc}', 'ABC']], apart: ['\\natexlab{a}'] }, shared)).toEqual({
       inkless: ['\\e{x}', '\\e{y}'], texts: [['\\natexlab{a}', 'a'], ['\\up{abc}', 'ABC'], ['\\natexlab{b}', 'b']], apart: ['\\natexlab{a}', '\\natexlab{b}'],
     })
+    // (a call past the share whose argument holds "fi": its sample's no ink carried, no text — TeX's ligature glyph may be no text)
+    expect(shareInk({ inkless: [], texts: [['\\doi{10.1/acl}', 'doi:10.1/acl']], apart: ['\\doi{10.1/acl}'] }, new Map([['\\doi{10.1/findings}', '\\doi{10.1/acl}']]))).toEqual({ inkless: [], texts: [['\\doi{10.1/acl}', 'doi:10.1/acl']], apart: ['\\doi{10.1/acl}', '\\doi{10.1/findings}'] })
     expect(shareInk({ inkless: null, texts: null, apart: null }, shared)).toEqual({ inkless: null, texts: null, apart: null })
     expect(shareInk({ inkless: ['\\a'], texts: [], apart: [] }, new Map())).toEqual({ inkless: ['\\a'], texts: [], apart: [] })
   })

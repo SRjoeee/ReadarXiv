@@ -2357,7 +2357,34 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     `ad76c514` (#487's): each layout file the same but its version, each base page byte for byte `e8e9eeb5`'s; the rules gate's
     model tier 0 worse, 0 pages moved. Left: the ink section asks at most `INK_MAX` (64) sources, the entries' last, so a paper
     whose body fills them asks none of its entries' (2608.25210v2's `\natexlab{}`, 13 of its 37 left; 2608.15334v1 49 of 52,
-    2608.12606v1 31 of 32, 2307.16209v1 18): the follow-up.
+    2608.12606v1 31 of 32, 2307.16209v1 18): the follow-up, below.
+- **The ink section's entries in a share of their own, LAYOUT 25, MARKS_SCHEMA 13** (2026-10-29: 2608.25210v2's 64 entries
+  English, their `\natexlab{}` never asked). The ink section asks a paper's macros one source at a time, the body's at most
+  `INK_MAX` (64) and the entries after them (`sampleOrder`), so a body that fills the cap leaves every entry's macro unasked:
+  no answer, no row for a `\natexlab{}` that sets no ink, the entry the original's. The cap cut 9 of the 36 papers measured
+  (2608.25210v2's body writes 101 sources). Now:
+  - *The entries' share* (`marks.mjs` `ENTRY_INK_MAX`, 64, past the body's `INK_MAX`): asked first a sample of each shape of
+    call — its command and its arguments' shape (`entryShape`: each argument empty, plain text, or as written: `\natexlab{a}`,
+    `{b}` and `{c}` one shape, `\natexlab{}` another, REVTeX's `\href@noop {} {\emph {…}}` its own) —, so that every shape is
+    asked, then with the room left each further call of its own, in the paper's order: a bibliography the share holds is asked
+    call by call, as before.
+  - *The calls past it are answered by their shape's sample* (`inkShared`, at most `ENTRY_SHARED_MAX`, 1,024; `shareInk`,
+    `readInkAnswers`, the one reader of the ink answers production and the lab take): no ink and a box begun apart as the
+    sample's; a text only where each plain argument the two differ in stands once in the sample's text, put in the call's
+    (`carriedText`: `\natexlab{a}`'s "a" gives `\natexlab{b}` "b", `\doi{10.1/x}`'s "doi:10.1/x" gives "doi:10.2/y"), and none
+    where a macro transforms its argument (an `\uppercase`d one's text holds no argument) or the call's letters a font sets as a
+    ligature (ff, fi, fl: 2609.26457v1's "findings" in a DOI, whose glyph TeX's listing gives as no text). A carried text is
+    used only where the page's glyphs spell it (the split's `textedTo`, the leads' `leadStep`): one that does not stays LOST, as
+    an unasked call's does. The marks file names up to `INK_ANSWERS_MAX` answers (MARKS_SCHEMA 13; a reader of 12 refuses past
+    `INK_MAX`).
+  - Measured (`classes-gate.mjs --made --compile` against `next` 7ea4e57e, #492's tree, over the 36 papers; TeX's answers
+    dumped): on 30 of the 35 compiled none changed; on 5 only answers gained, none lost or changed — 6 sources no ink
+    (2608.25210v2's `\natexlab{}`, `{a}`…`{d}`, its paper's own definition setting nothing, and its `\showISSN{…}`) and 82
+    texts (2610.21377v1 72 `\nolinkurl{doi:…}`, 2307.16209v1 4 of REVTeX's `\href@noop`, 2608.25210v2 2, 2608.10322v2 and
+    2610.21098v1 2 `\natexlab`s each). Drawn gained 54, lost 0, all 2608.25210v2's entries; the entries the wrap leaves the
+    original's for their marks there 63 to 0; every base page pixel for pixel `next`'s (952 pages), its page count arXiv's; no
+    unit's lines lost, gained or moved; the wrap of the five papers (`ocg-gate.mjs`) as `next`'s. The gate pack is `f1ec0c3e`:
+    `ad76c514` with 2307.16209v1-zh's base record made again (8 more texts), every layout file and base page byte for byte.
 - **A unit the layer leaves the original's says why** (read time, no stored artefact, no version token): each `skipped` record
   of the run (`layer-proto/run.mjs`) carries a `code` of `SKIP_CODES` beside its `why`: `unlocated` (the file holds no row of
   it, and the file's own reason beside it, `unlaid`), `pieces`, `noRow`, `lost` (a visible piece the file has no position
