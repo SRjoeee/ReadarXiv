@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { completeMacros, frontMarks, inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { bblProvides, openPaper, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { AHEAD_PROBE_MAX, aheadKey, aheadSamples, carriedText, completeCall, completeCalled, ENTRY_INK_MAX, ENTRY_SHARED_MAX, entryShape, followsOf, INK_MAX, inkSamples, inkShared, layoutMarking, leadSamples, MARK_CLASSES, markProbeTex, probeSamples, readInkApart, readInkProbe, readInkTexts, readMarkProbe, shareInk, symbolText } from '@/pdf-reader/engine/layout/marks.mjs'
+import { AHEAD_PROBE_MAX, aheadKey, aheadSamples, carriedText, completeCall, completeCalled, ENTRY_INK_MAX, ENTRY_SHARED_MAX, entryShape, followsOf, INK_MAX, inkSamples, inkShared, layoutMarking, leadSamples, MARK_CLASSES, markProbeTex, probeSamples, readInkAnswers, readInkApart, readInkProbe, readInkTexts, readMarkProbe, shareInk, symbolText } from '@/pdf-reader/engine/layout/marks.mjs'
 import { boundsFromMarks, tokenizeDocument, uprightToken } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 
 // The layout marks a placeholder gets where what stands beside it was guessed at: the paper's own macro taken to look ahead
@@ -450,6 +450,13 @@ describe('the ink section\'s cap and a bibliography\'s entries (2608.25210v2: it
     expect(carriedText('\\twice{a}', '\\twice{b}', 'aa')).toBeNull()
     expect(carriedText('\\x{a}', '\\x{\\emph{b}}', 'a')).toBeNull()
     expect(carriedText('\\x{a}', '\\y{b}', 'a')).toBeNull()
+  })
+  it('readInkAnswers: the probe\'s log read for the samples and carried to the calls that share one (2608.25210v2\'s \\natexlab{} no ink, its \\natexlab{b} "b")', () => {
+    const units = [entry('\\natexlab{}'), entry('\\natexlab{a}'), entry('\\natexlab{b}')]
+    expect(inkSamples(units)).toEqual(['\\natexlab{}', '\\natexlab{a}'])
+    const listing = (i: number, ...nodes: string[]) => [`LAYOUT-PROBE 1 ink-at ${i}`, '> \\box60=', ...nodes, '', '! OK.', `LAYOUT-PROBE 1 ink-end ${i}`]
+    const log = [...listing(0, '\\hbox(0.0+0.0)x0.0'), ...listing(1, '\\hbox(4.3+0.0)x5.0', '.\\OT1/cmr/m/n/10 a')].join('\n')
+    expect(readInkAnswers(log, units)).toEqual({ inkless: ['\\natexlab{}'], texts: [['\\natexlab{a}', 'a'], ['\\natexlab{b}', 'b']], apart: [] })
   })
   it('shareInk: a call sets no ink, or begins apart, where its sample does; its text carried where carriedText gives one; null kept null', () => {
     const shared = new Map([['\\natexlab{b}', '\\natexlab{a}'], ['\\up{def}', '\\up{abc}'], ['\\e{y}', '\\e{x}']])

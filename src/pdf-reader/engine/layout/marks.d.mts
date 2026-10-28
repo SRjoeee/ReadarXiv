@@ -64,6 +64,8 @@ export declare function inkShared(units: readonly SourceUnit[]): Map<string, str
 export declare function entryShape(src: string): string
 /** the text a call that shares a sample sets, carried from the sample's text by its plain arguments; null where it cannot be */
 export declare function carriedText(sample: string, call: string, text: string): string | null
+/** the ink section's answers from the probe's log, each carried to the entries' calls that share a sample: the one reader */
+export declare function readInkAnswers(log: string, units: readonly SourceUnit[]): { inkless: string[]; texts: [string, string][]; apart: string[] }
 /** the ink section's answers carried to the calls that share a sample */
 export declare function shareInk<I extends string[] | null, T extends [string, string][] | null, A extends string[] | null>(answers: { inkless: I; texts: T; apart: A }, shared: Map<string, string> | null): { inkless: I; texts: T; apart: A }
 /** the leads the ink section asks about past the paper's macros inkSamples takes, at most */

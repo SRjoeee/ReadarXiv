@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import type { Written } from '@/pdf-reader/engine/layer-proto/format.mjs'
-import { inkSamples, LAYOUT_CLASSES, leadSamples, probeSamples, readInkProbe, readInkTexts, readMarked, readMarkProbe, readNameProbe, readSkipProbe } from '@/pdf-reader/engine/layout/marks.mjs'
+import { LAYOUT_CLASSES, probeSamples, readInkAnswers, readMarked, readMarkProbe, readNameProbe, readSkipProbe } from '@/pdf-reader/engine/layout/marks.mjs'
 import { startxrefOf } from '@/pdf-reader/engine/layout/tail.mjs'
 import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { layerOfPaper } from '@/pdf-reader/engine/pipeline/page-pass.mjs'
@@ -35,8 +35,8 @@ describe.skipIf(!LAB)('the real papers: production\'s page stream, the marks giv
       const paper = openPaper(source.files)
       // the probe's log, the latest the lab keeps, and the marked compile the marks were read from
       const probes = readdirSync(join(root, 'compiles')).filter(f => /^probe-.*\.log$/.test(f)).sort((a, b) => statSync(join(root, 'compiles', b)).mtimeMs - statSync(join(root, 'compiles', a)).mtimeMs)
-      const plog = lastTexLog(readFileSync(join(root, 'compiles', probes[0] as string), 'latin1')), ink = inkSamples(paper.units)
-      const probe = { switches: readMarkProbe(plog, probeSamples(paper.units)), inkless: readInkProbe(plog, ink), texts: readInkTexts(plog, [...ink, ...leadSamples(paper.units, ink)]), names: readNameProbe(plog), lineskip: readSkipProbe(plog) }
+      const plog = lastTexLog(readFileSync(join(root, 'compiles', probes[0] as string), 'latin1')), ink = readInkAnswers(plog, paper.units)
+      const probe = { switches: readMarkProbe(plog, probeSamples(paper.units)), inkless: ink.inkless, texts: ink.texts, names: readNameProbe(plog), lineskip: readSkipProbe(plog) }
       const markedBytes = new Uint8Array(readFileSync(join(root, 'compiles', `${key}.pdf`))), log = lastTexLog(readFileSync(join(root, 'compiles', `${key}.log`), 'latin1'))
       const options = { engine: paper.meta.compiler, classes: LAYOUT_CLASSES, ...probe }
       const t1 = open(markedBytes)

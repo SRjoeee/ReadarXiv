@@ -378,6 +378,13 @@ export function carriedText(sample, call, text) {
   out += text.slice(end)
   return INK_TEXT.test(out) && out.length <= INK_TEXT_MAX ? out : null
 }
+/** the ink section's answers from the probe's log, as the layout takes them: the macros TeX said set no ink (readInkProbe), the
+ *  texts it showed they and the leads set (readInkTexts), those whose box it began apart (readInkApart), each carried to the
+ *  entries' calls that share a sample (shareInk). The one reader every caller takes them by: layout/paper.mjs, the lab's */
+export function readInkAnswers(log, units) {
+  const ink = inkSamples(units), leads = leadSamples(units, ink)
+  return shareInk({ inkless: readInkProbe(log, ink), texts: readInkTexts(log, [...ink, ...leads]), apart: readInkApart(log, ink) }, inkShared(units))
+}
 /** the ink section's answers (readInkProbe, readInkTexts, readInkApart) carried to the calls that share a sample (inkShared):
  *  a call sets no ink, or begins apart, where its sample does; its text carriedText's. { inkless, texts, apart } as given,
  *  each null kept null */
