@@ -20,7 +20,7 @@ import { latinFontsFor } from '../source/latex-front.mjs'
 // the script of a language, in a module of its own that imports nothing: the reader loads it without this module's LaTeX parser
 export { scriptOf }
 /** the translation a strategy sets: without the author block's names and places under one that cannot take them */
-export const typesetBy = (translated, strategy) => (strategy.authors === false ? new Map([...translated].filter(([u]) => u.kind !== 'author')) : translated)
+export const typesetBy = (translated, strategy) => (strategy.authors === false ? new Map([...translated].filter(([u]) => u.kind !== 'author' && u.kind !== 'affiliation')) : translated)
 /** the engines whose fonts are 8-bit: an alphabet needs its encoding under them, CJK its CJKutf8 (classic LaTeX, which the
  *  browser compiles with pdfLaTeX, is one) */
 const EIGHT_BIT = new Set(['pdflatex', 'latex'])

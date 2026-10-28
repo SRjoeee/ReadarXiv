@@ -1,11 +1,17 @@
 // lab/pdf/spikes/classes-gate.mjs
-// The content classes' stage 4 gate (docs/route/orphan-text.md §5, "References" and "Names"): a bibliography's entries units of
-// their own, marked in the bibliography's TeX, and the author block translated for every target. Per paper, against another
-// engine's tree (`--base`, the merge base's src/: `git archive <base> src | tar -x -C <dir>`):
-//   - the units (both engines' openPaper over the paper's source): those gained by kind, and whether every other unit is the
-//     base's, in order (`same`: the base's units equal this one's with the entries taken out, by kind and plain source), and
-//     whether the marked original's files (live.mjs originalFiles, the layout marks, no switch) are the base's outside each
-//     bibliography (`marksSame`: a file's bytes with every thebibliography taken out);
+// The content classes' gate (docs/route/orphan-text.md §5, "References" and "Names"): a bibliography's entries units of their own,
+// each whole, marked in the bibliography's TeX (the paper's, the .bbl it ships, or with `--made` the one BibTeX makes in the
+// prepare's first pass: layout/paper.mjs madeBibliography), an author block's places units apart from its names, and the author
+// block translated for every target. Per paper, against another engine's tree (`--base`, the merge base's src/: `git archive
+// <base> src | tar -x -C <dir>`):
+//   - the units (both engines' openPaper over the paper's source): those gained by kind (entries, places), and whether every
+//     other unit is the base's, in order (`same`: the base's units equal this one's with the entries, the places and the author
+//     block's names taken out of both, by kind and plain source; `authors`, the author block's names and places on each side;
+//     where not the same, `lost` and `added`, the units of either side the other has none of), and whether the marked original's
+//     files (live.mjs originalFiles, the layout marks, no switch) are the base's outside each bibliography (`marksSame`: a file's
+//     bytes with every thebibliography taken out; an author block's marks move with its places, so a paper with places is not);
+//   - with `--made`, the job's .bbl BibTeX makes (madeBibliography, its one draft with BibTeX, kept by what it compiles): `made`,
+//     the entries it gained or why none, and the paper opened again with it for what follows;
 //   - with `--compile`, this engine's layout marks and base page as production makes them (layout/paper.mjs layoutMarksOfPaper:
 //     the mark probe, the marked original, its final pass; latexmk in the year's pinned image of lab/pdf/compile-images.json,
 //     no network, the date arXiv's PDF's), and over the base page the layout file (layout/make.mjs makeLayout) and the wrap
@@ -21,7 +27,7 @@
 //     moved; `--which` names them).
 // One JSON line a paper; the compiles in <out>/compiles/<id>/ (kept by what they compile, never sent). A paper's text is never
 // printed. Runs with tsx from the repository root:
-//   pnpm exec tsx lab/pdf/spikes/classes-gate.mjs --base=<dir holding src/> [--engine=<dir holding src/>] [--compile]
+//   pnpm exec tsx lab/pdf/spikes/classes-gate.mjs --base=<dir holding src/> [--engine=<dir holding src/>] [--made] [--compile]
 //       [--dump=<dir>] [--against=<dir>] [--which] [--pack=<gate pack>] [--out=<dir>] <id>=<dir with source.gz and arxiv.pdf>[@<year>] …
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -39,19 +45,25 @@ const run = promisify(execFile)
 const LAB = resolve(dirname(new URL(import.meta.url).pathname), '..')
 const argOf = name => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? null
 const BASE = argOf('base'), PACK = argOf('pack'), OUT = resolve(argOf('out') ?? join(LAB, 'out/classes-gate'))
-const COMPILE = process.argv.includes('--compile'), DUMP = argOf('dump'), AGAINST = argOf('against')
+const COMPILE = process.argv.includes('--compile'), MADE = process.argv.includes('--made'), DUMP = argOf('dump'), AGAINST = argOf('against')
 if (!BASE) { console.error('usage: classes-gate.mjs --base=<dir holding src/> [--engine=<dir holding src/>] [--compile] [--dump=<dir>] [--against=<dir>] [--pack=<pack>] <id>=<dir>[@<year>] …'); process.exit(2) }
 // (the engine measured: this repository's, or another tree's (`--engine`): the base engine's own run, dumped, is what --against
 // compares a run with, unit by unit)
 const ENGINE = join(resolve(argOf('engine') ?? join(LAB, '../..')), 'src/pdf-reader/engine')
 const E = f => import(pathToFileURL(join(ENGINE, f)).href)
-const [{ openPaper, originalFiles }, { LAYOUT_CLASSES }, { layoutMarksOfPaper }, { makeLayout }, { wrapFinal }, { creationEpochOf }, { NO_IMAGE_PIXELS }, { PDFJS }, { plainSource }, { unpackSource }] = await Promise.all(['pipeline/live.mjs', 'layout/marks.mjs', 'layout/paper.mjs', 'layout/make.mjs', 'layout/wrap.mjs', 'layout/base.mjs', 'layout/pdf-lite.mjs', 'pipeline/versions.mjs', 'translate/mt.mjs', 'source/tar.mjs'].map(E))
+const [{ openPaper, originalFiles }, { LAYOUT_CLASSES }, { layoutMarksOfPaper, madeBibliography }, { makeLayout }, { wrapFinal }, { creationEpochOf }, { NO_IMAGE_PIXELS }, { PDFJS }, { plainSource }, { unpackSource }] = await Promise.all(['pipeline/live.mjs', 'layout/marks.mjs', 'layout/paper.mjs', 'layout/make.mjs', 'layout/wrap.mjs', 'layout/base.mjs', 'layout/pdf-lite.mjs', 'pipeline/versions.mjs', 'translate/mt.mjs', 'source/tar.mjs'].map(E))
 const base = await import(pathToFileURL(join(BASE, 'src/pdf-reader/engine/pipeline/live.mjs')).href)
 const IMAGES = JSON.parse(readFileSync(join(LAB, 'compile-images.json'), 'utf8'))
 const NM = join(LAB, '../../node_modules/pdfjs-dist/')
 const DOC = { verbosity: 0, cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, useSystemFonts: false }
 const open = async bytes => { const task = getDocument({ ...DOC, data: bytes.slice() }); try { return { doc: await task.promise, close: () => task.destroy() } } catch (e) { await task.destroy().catch(() => {}); throw e } }
 const BIB = new Set(['reference', 'refnames'])
+/** an author block's places (latex-front.mjs frontBlock: kind affiliation) and its names, which the places are cut from */
+const PLACES = 'affiliation', AUTHOR = new Set(['author', PLACES])
+/** this engine's units the base engine has under the same id: every unit but the entries and an author block's units cut apart
+ *  after every other (frontBlock's `later`), each at the id it had (an author block's in-place unit, a place or names, where the
+ *  base's one unit of the block was: its rows moved with its text, counted apart as `authorsMoved`) */
+const keptIds = paper => paper.units.flatMap((u, i) => (BIB.has(u.kind) || u.later ? [] : [i]))
 const sha = b => createHash('sha256').update(b).digest('hex').slice(0, 16)
 const latin1 = b => Buffer.from(b).toString('latin1')
 /** a file's text with every thebibliography taken out (the base engine marks none of it) */
@@ -70,7 +82,11 @@ async function compileIn(image, paper, files, keep, req) {
     const main = paper.project.main, stem = main.slice(main.lastIndexOf('/') + 1).replace(/\.[^.]*$/, '')
     const date = Number.isSafeInteger(req.sourceDate) ? ['-e', 'FORCE_SOURCE_DATE=1', '-e', `SOURCE_DATE_EPOCH=${req.sourceDate}`] : []
     const t0 = Date.now()
-    await run('docker', ['run', '--rm', '--init', '--pull', 'never', ...PLATFORM, '--network', 'none', '--cpus', '2', '--memory', '3g', ...date, '-v', `${dir}:/work`, '-w', '/work', image, 'timeout', '600', 'latexmk', ...latexmkEngine(req.engine), ...(req.rerun ? [] : ['-e', '$max_repeat=1']), ...(req.bibtex === false ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main], { maxBuffer: 1 << 26 }).catch(() => null)
+    // (one pass and then the bibliography step, as the web's sandbox answers a one-pass request with `bibtex`: BibTeX on the job's
+    // aux after the pass, never a pass of TeX's after it: madeBibliography's draft)
+    const latexmk = ['latexmk', ...latexmkEngine(req.engine), ...(req.rerun ? [] : ['-e', '$max_repeat=1']), ...(req.bibtex === false || (!req.rerun && req.bibtex === true) ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main]
+    const command = !req.rerun && req.bibtex === true ? ['sh', '-c', `${latexmk.map(a => `'${a.replaceAll("'", "'\\''")}'`).join(' ')}; bibtex './${stem}'`] : latexmk
+    await run('docker', ['run', '--rm', '--init', '--pull', 'never', ...PLATFORM, '--network', 'none', '--cpus', '2', '--memory', '3g', ...date, '-v', `${dir}:/work`, '-w', '/work', image, 'timeout', '600', ...command], { maxBuffer: 1 << 26 }).catch(() => null)
     const pdf = join(dir, `${stem}.pdf`), log = join(dir, `${stem}.log`)
     if (!existsSync(log)) return { ok: false, error: 'no log' }
     const out = { ok: existsSync(pdf), pdf: existsSync(pdf) ? new Uint8Array(readFileSync(pdf)) : null, log: readFileSync(log, 'latin1'), ms: Date.now() - t0 }
@@ -95,21 +111,33 @@ async function apart(a, b, page, { off = null } = {}) {
 for (const arg of process.argv.slice(2).filter(a => !a.startsWith('--'))) {
   const [id, rest] = arg.split('='), [dir, yearGiven] = rest.split('@')
   const { files } = await unpackSource(new Uint8Array(readFileSync(join(dir, 'source.gz'))))
-  const paper = openPaper(files), theirs = base.openPaper(files)
+  const opened = openPaper(files), theirs = base.openPaper(files)
   const kinds = {}
-  for (const u of paper.units) if (BIB.has(u.kind)) kinds[u.kind] = (kinds[u.kind] ?? 0) + 1
+  for (const u of opened.units) if (BIB.has(u.kind) || u.kind === PLACES) kinds[u.kind] = (kinds[u.kind] ?? 0) + 1
   const key = u => `${u.kind}|${plainSource(u)}`
-  const mine = paper.units.filter(u => !BIB.has(u.kind)).map(key), was = theirs.units.map(key)
+  const kept = u => !BIB.has(u.kind) && !AUTHOR.has(u.kind)
+  const mine = opened.units.filter(kept).map(key), was = theirs.units.filter(kept).map(key)
   const same = mine.length === was.length && mine.every((k, i) => k === was[i])
   const firstOther = same ? null : mine.findIndex((k, i) => k !== was[i])
+  /** the keys of `a` that `b` has none of, each as many times as `a` has more of it */
+  const less = (a, b) => { const left = new Map(); for (const k of b) left.set(k, (left.get(k) ?? 0) + 1); return a.filter(k => { const n = left.get(k) ?? 0; if (n) { left.set(k, n - 1); return false } return true }) }
+  const authors = { mine: opened.units.filter(u => u.kind === 'author').length, places: opened.units.filter(u => u.kind === PLACES).length, base: theirs.units.filter(u => u.kind === 'author').length }
   const filesOf = (p, mod) => mod.originalFiles(p, { lines: true, layout: LAYOUT_CLASSES })
-  const a = filesOf(paper, { originalFiles }), b = filesOf(theirs, base)
+  const a = filesOf(opened, { originalFiles }), b = filesOf(theirs, base)
   // (a mark names its unit by its id, and the units after a bibliography move up past its entries: each of this engine's ids
   // written as the base's, the entries' left as they are, before the files are compared)
-  const idOf = new Map(paper.units.flatMap((u, i) => (BIB.has(u.kind) ? [] : [i])).map((mineId, theirId) => [mineId, theirId]))
+  const idOf = new Map(opened.units.flatMap((u, i) => (BIB.has(u.kind) ? [] : [i])).map((mineId, theirId) => [mineId, theirId]))
   const asBase = t => t.replace(/(\\axt(?:mark|end|lines|pma|pmm|pm|hmark|colour)\s*\{[thpn]?)(\d+)/g, (m, head, n) => (idOf.has(Number(n)) ? `${head}${idOf.get(Number(n))}` : m))
   const marksSame = [...new Set([...a.keys(), ...b.keys()])].filter(p => !/\.bbl$/.test(p)).every(p => outsideBibliography(asBase(latin1(a.get(p) ?? new Uint8Array()))) === outsideBibliography(latin1(b.get(p) ?? new Uint8Array())))
-  const row = { id, units: paper.units.length, was: theirs.units.length, gained: kinds, same, ...(same ? {} : { firstOther }), marksSame }
+  const row = { id, units: opened.units.length, was: theirs.units.length, gained: kinds, same, ...(same ? {} : { firstOther, lost: less(was, mine).length, added: less(mine, was).length, ...(process.argv.includes('--which') ? { which: { lost: less(was, mine).map(k => k.split('|')[0]), added: less(mine, was).map(k => k.split('|')[0]) } } : {}) }), authors, marksSame }
+  // (the job's .bbl BibTeX makes, where the paper ships none: the prepare's first pass, its own compile kept as the others are)
+  let paper = opened
+  if (MADE) {
+    const year = yearGiven ?? IMAGES.default, image = IMAGES.images[year].texlive
+    const r = await madeBibliography(opened, { compile: req => compileIn(image, opened, files, join(OUT, 'compiles', id), req) })
+    row.made = 'paper' in r ? { entries: r.paper.units.length - opened.units.length, ms: r.ms } : { kept: r.kept, ms: r.ms }
+    if ('paper' in r) paper = r.paper
+  }
   if (COMPILE) {
     const arxiv = new Uint8Array(readFileSync(join(dir, 'arxiv.pdf')))
     const ax = await open(arxiv)
@@ -132,7 +160,7 @@ for (const arg of process.argv.slice(2).filter(a => !a.startsWith('--'))) {
         const lines = new Map(lm.file.lines.map(([u, rows]) => [u, rows]))
         const located = {}, entryPages = new Set()
         paper.units.forEach((u, i) => {
-          const k = BIB.has(u.kind) ? u.kind : u.kind === 'author' ? 'author' : 'other', r = lines.get(i)
+          const k = BIB.has(u.kind) || AUTHOR.has(u.kind) ? u.kind : 'other', r = lines.get(i)
           located[k] ??= [0, 0]
           located[k][1]++
           if (r?.length) { located[k][0]++; if (BIB.has(u.kind)) for (let j = 0; j < r.length; j += 8) entryPages.add(r[j]) }
@@ -146,33 +174,34 @@ for (const arg of process.argv.slice(2).filter(a => !a.startsWith('--'))) {
         const against = AGAINST && join(AGAINST, `${id}.json`)
         if (against && existsSync(against)) {
           const o = JSON.parse(readFileSync(against, 'utf8')), theirLines = new Map(o.lines.map(([u, r]) => [u, named(r, o.fonts)])), mineLines = new Map([...lines].map(([u, r]) => [u, named(r, lm.file.fonts)]))
-          const body = paper.units.flatMap((u, i) => (BIB.has(u.kind) ? [] : [i]))
+          const body = keptIds(paper)
           const phOf = (rows, at) => JSON.stringify(rows.filter(r => r[0] === at).map(r => r.slice(1)))
-          let lost = 0, gainedBody = 0, moved = 0, phMoved = 0
+          let lost = 0, gainedBody = 0, moved = 0, phMoved = 0, authorsMoved = 0
           const which = []
           body.forEach((mineId, theirId) => {
-            const m = mineLines.get(mineId), t = theirLines.get(theirId)
+            const m = mineLines.get(mineId), t = theirLines.get(theirId), block = AUTHOR.has(paper.units[mineId].kind)
             if (t?.length && !m?.length) { lost++; which.push(`lost ${theirId}`) }
             else if (m?.length && !t?.length) { gainedBody++; which.push(`gained ${theirId}`) }
-            else if (m && t && JSON.stringify(m) !== JSON.stringify(t)) { moved++; which.push(`moved ${theirId}`) }
-            if (phOf(lm.file.ph, mineId) !== phOf(o.ph, theirId)) phMoved++
+            else if (m && t && JSON.stringify(m) !== JSON.stringify(t)) { if (block) authorsMoved++; else moved++; which.push(`moved ${theirId}${block ? ':block' : ''}`) }
+            if (!block && phOf(lm.file.ph, mineId) !== phOf(o.ph, theirId)) phMoved++
           })
-          row.vsRun = { units: body.length, theirs: o.kinds.length, lost, gainedBody, moved, phMoved, ...(process.argv.includes('--which') ? { which } : {}) }
+          row.vsRun = { units: body.length, theirs: o.kinds.length, lost, gainedBody, moved, phMoved, authorsMoved, ...(process.argv.includes('--which') ? { which } : {}) }
         }
         // (the base engine's file, the pack's: its units located against this one's, the entries taken out)
         const packLayout = PACK && join(PACK, 'fixtures', `${id}-zh`, 'layout.json')
         if (packLayout && existsSync(packLayout)) {
           const theirsFile = JSON.parse(readFileSync(packLayout, 'utf8')), theirLines = new Map(theirsFile.lines.map(([u, rows]) => [u, named(rows, theirsFile.fonts)]))
-          const body = paper.units.flatMap((u, i) => (BIB.has(u.kind) ? [] : [i]))
-          let lost = 0, gainedBody = 0, moved = 0
+          const body = keptIds(paper)
+          let lost = 0, gainedBody = 0, moved = 0, authorsMoved = 0
           const which = { lost: [], gained: [], moved: [] }
           body.forEach((mineId, theirId) => {
             const m = named(lines.get(mineId), lm.file.fonts), t = theirLines.get(theirId)
             if (t?.length && !m?.length) { lost++; which.lost.push(`${theirId}:${paper.units[mineId].kind}`) }
             else if (m?.length && !t?.length) { gainedBody++; which.gained.push(`${theirId}:${paper.units[mineId].kind}`) }
+            else if (m && t && AUTHOR.has(paper.units[mineId].kind) && JSON.stringify(m) !== JSON.stringify(t)) authorsMoved++
             else if (m && t && JSON.stringify(m) !== JSON.stringify(t)) { moved++; which.moved.push(`${theirId}:${paper.units[mineId].kind}:${m.length}/${t.length}${process.argv.includes('--rows') ? ` ${JSON.stringify([...m].slice(0, 16))} ${JSON.stringify(t.slice(0, 16))}` : ''}`) }
           })
-          row.vsBase = { lost, gainedBody, moved, ...(process.argv.includes('--which') ? { which } : {}) }
+          row.vsBase = { lost, gainedBody, moved, authorsMoved, ...(process.argv.includes('--which') ? { which } : {}) }
         }
         const w = await wrapFinal(ours, { PL, getDocument, documentOptions: { ...DOC, maxImageSize: NO_IMAGE_PIXELS }, OPS, units: paper.units, texts: made.marks.marking?.texts ?? null, inkless: made.marks.marking?.inkless ?? null, deflate: x => deflateSync(x, { level: 6 }), inflate: (x, l) => inflateSync(x, { maxOutputLength: l + 1 }) })
         if (w.refused) row.wrap = w.refused

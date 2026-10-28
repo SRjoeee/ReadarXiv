@@ -49,7 +49,7 @@ const CLOSED = OWNED_HOW.indexOf('closed')
 export { OPS_MS }
 const PAGES_MAX = 10_000, COORD_MAX = 14_400
 /** units TeX sets away from where the source has them (anchors.mjs `floating`) */
-const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure'])
+const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure', 'affiliation'])
 /** a line's body glyphs: within this share of its median size */
 const BODY = 0.15
 /** a glyph on a line, scripts included: its baseline within this of the line's (and a placeholder's of its mark's) */

@@ -24,10 +24,14 @@ import { PIPELINE_VERSION } from '@/pdf-reader/engine/pipeline/versions.mjs'
 //                Latin-1 file under its inputenc (2610.20581), a conditional the paper decides (2610.21098's \ifdefined)
 //   arity        PIPELINE 28's cuts (heading-arity.test.ts): a group after a heading, a starred heading with a short title, a
 //                \multirow of five arguments (2610.31660v1's stray brace, 2607.24653v2's \multirow)
-//   bibliography PIPELINE 29's cuts (bibliography-units.test.ts): a .bbl's entries, each its names and the rest, natbib's
-//                author-year, IEEEtran's quoted title, REVTeX's fields; an entry's numbers placeholders
+//   bibliography PIPELINE 29's cuts (bibliography-units.test.ts): a .bbl's entries, natbib's author-year, IEEEtran's quoted
+//                title, REVTeX's fields; an entry's numbers placeholders; and PIPELINE 30's: each entry one unit, whole
 //   names        PIPELINE 29's name units (paper-names.test.ts): a paper's own theorem names and cleveref's, and where it calls
 //                \cref the words no package names in some target (2610.18513v1's "Section", "and")
+//   authors      PIPELINE 30's author blocks (author-places.test.ts): the names apart from the places, a row each, an \And block,
+//                a numbered list of places, an \affil; what was one unit numbered as it was, the rows cut from it after the others
+//   made-bbl     PIPELINE 30's \bibliography (made-bibliography.test.ts): the paragraph that runs into it ends there, the job's
+//                .bbl BibTeX makes or none
 // A source's structural names are its units too (bundleUnitsOf, after the source's): each recorded as `name: <its text>`
 
 const enc = (s: string) => new TextEncoder().encode(s)
@@ -68,6 +72,13 @@ C.~Wang and S.~Shang, ${QUOTES}Building pipelines,'' in \emph{Proc. ACM}, 2025, 
   \bibfield  {author} {\bibinfo {author} {\bibfnamefont {M.}~\bibnamefont {Davis}},\ }\bibinfo {journal} {Phys. Rev. Lett.}\ \textbf {\bibinfo {volume} {27}} (\bibinfo {year} {1971})\BibitemShut {NoStop}%
 \end{thebibliography}
 `)],
+  ]),
+  authors: () => new Map([
+    ['main.tex', enc('\\documentclass{article}\n\\author{Alice Smith\\thanks{Equal.} \\\\ Google Brain \\\\ \\texttt{alice@g.com} \\And Bob Jones$^{1}$ \\\\ $^{1}$University of Somewhere}\n\\affil{Institute of Elsewhere}\n\\begin{document}\n\\maketitle\nThe body.\n\\end{document}\n')],
+  ]),
+  'made-bbl': () => new Map([
+    ['main.tex', enc('\\documentclass{article}\n\\begin{document}\nNormalization helps \\cite{ba}.\nThe paragraph runs into it.\n\\bibliographystyle{plain}\n\\bibliography{refs}\n\\end{document}\n')],
+    ['refs.bib', enc('@article{ba, author={Jimmy Lei Ba}, title={Layer normalization}, year={2016}}\n')],
   ]),
 }
 const GOLDEN = new URL('./golden/unit-cut.json', import.meta.url)
@@ -114,10 +125,17 @@ describe('the unit cut is recorded under the PIPELINE_VERSION it was cut by', ()
     // (PIPELINE 28's: the group after each heading the text's, the \multirow's content a cell's pair)
     expect(now['arity']?.slice(0, 5).map(u => u.split(':')[0])).toEqual(['heading', 'para', 'heading', 'para', 'cell'])
     expect(now['arity']?.[4]).toBe('cell: open,text,close,text')
-    // (PIPELINE 29's: each entry its names and the rest, the sample's three and the .bbl's three)
-    expect(now['sample-1']?.filter(u => !u.startsWith('name: ')).slice(-6).map(u => u.split(':')[0])).toEqual(['refnames', 'reference', 'refnames', 'reference', 'refnames', 'reference'])
+    // (PIPELINE 30's: each entry one unit, whole, the sample's three and the .bbl's three)
+    expect(now['sample-1']?.filter(u => !u.startsWith('name: ')).slice(-3).map(u => u.split(':')[0])).toEqual(['reference', 'reference', 'reference'])
+    expect(now['sample-1']?.filter(u => !u.startsWith('name: ')).slice(-4, -3).map(u => u.split(':')[0])).not.toEqual(['reference'])
     // (and PIPELINE 29's name units, after the source's: the sample's theorem names)
     expect(now['sample-1']?.filter(u => u.startsWith('name: '))).toEqual(['name: Theorem', 'name: Lemma', 'name: Definition'])
-    expect(now['bibliography']?.slice(1).map(u => u.split(':')[0])).toEqual(['refnames', 'reference', 'refnames', 'reference', 'refnames', 'reference'])
+    expect(now['bibliography']?.slice(1).map(u => u.split(':')[0])).toEqual(['reference', 'reference', 'reference'])
+    // (PIPELINE 30's author blocks: what was one unit keeps its number in the first unit cut from it, of either kind; the others
+    // after the source's other units)
+    expect(now['authors']?.map(u => u.split(':')[0])).toEqual(['author', 'footnote', 'affiliation', 'affiliation', 'para', 'author', 'affiliation'])
+    // (and its \\bibliography: the paragraph before it ends there, no placeholder of it; \\bibliographystyle before it the
+    // paragraph's, with the .bbl or without)
+    expect(now['made-bbl']).toEqual(['para: text,ph,text,ph,text'])
   })
 })

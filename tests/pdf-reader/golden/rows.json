@@ -1,12 +1,12 @@
 {
-  "the ids and batches each language translates": "5aa02bbf383ceb16cc960bf347565e431b8fdb9866713f967e532776e3e13e59",
-  "runRows into zh over markers, faithful": "3fd9d9d733a0497d88104c4f8236e817764b20712b7438f28138e250fc506965",
-  "runRows into zh over markers, lossy": "3fd9d9d733a0497d88104c4f8236e817764b20712b7438f28138e250fc506965",
-  "runRows into de over markers, faithful": "3fd9d9d733a0497d88104c4f8236e817764b20712b7438f28138e250fc506965",
-  "runRows into de over markers, lossy": "3fd9d9d733a0497d88104c4f8236e817764b20712b7438f28138e250fc506965",
-  "runRows into zh over tags, faithful": "5658eda7f4b818c6037b58f0662637af4d4aa82adbacebacf9e2e8bb6943d603",
-  "runRows into zh over tags, lossy": "9eb6e3f40c880697ee26da5d84c80c5e56f8d5b3600db391ca923e1fe5622abb",
-  "runRows into zh over runs, faithful": "94d20c069dc0d80d6a1692517ea13ba4afcd7f3eb7994b5cdbe0fe5cbac89788",
-  "runRows into zh over runs, lossy": "94d20c069dc0d80d6a1692517ea13ba4afcd7f3eb7994b5cdbe0fe5cbac89788",
-  "layerRows over every result at once, and as the batches fill": "fbcc1ab6822e5322f18dcf5d5ff4af974678c0907c5bc23a4400101d898238ae"
+  "the ids and batches each language translates": "f681c013ce22be29cf6464d54c83e1676f3bba496bd20d8771ce822509f1c28b",
+  "runRows into zh over markers, faithful": "a9476699626ada0f8c0d97e8099a3e65f7ff8f4d0b342a1dcaee73552f79bd01",
+  "runRows into zh over markers, lossy": "a9476699626ada0f8c0d97e8099a3e65f7ff8f4d0b342a1dcaee73552f79bd01",
+  "runRows into de over markers, faithful": "a9476699626ada0f8c0d97e8099a3e65f7ff8f4d0b342a1dcaee73552f79bd01",
+  "runRows into de over markers, lossy": "a9476699626ada0f8c0d97e8099a3e65f7ff8f4d0b342a1dcaee73552f79bd01",
+  "runRows into zh over tags, faithful": "8528008045716441b06d97607b7eab3717debdc06fe5cccaf54ef1009cb0f68f",
+  "runRows into zh over tags, lossy": "e09c8b2b46a1e75a5aa579eef9fafc03d3eda1d72eabf0beb83610281020294b",
+  "runRows into zh over runs, faithful": "6c91eeae9da9e806b68772200f3b1518481aa61d9a56b0276385bc552ec42621",
+  "runRows into zh over runs, lossy": "6c91eeae9da9e806b68772200f3b1518481aa61d9a56b0276385bc552ec42621",
+  "layerRows over every result at once, and as the batches fill": "070368b0f8f2058cc932712d9541bbd829906d977b417f795c0f16ffe317ff36"
 }
