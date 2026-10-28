@@ -917,7 +917,14 @@ only how it meets the rest of the extension.
   marked original, a unit left as it is or set in the source — the accent is written as the source has it. Only a
   letter every strategy sets: LaTeX's UTF-8 table declares it (pdfLaTeX sets it as the accent, in OT1, T1, T2A and
   CJKutf8) and Latin Modern, TeX Gyre and CMU hold it in every face (XeLaTeX), 145 letters measured on TL 2026; any
-  other, and an accent the paper defines anew (`\def\v{\varphi}`), stays a placeholder. A formula the author split
+  other, and an accent the paper defines anew (`\def\v{\varphi}`), stays a placeholder. So does a letter command of the
+  kernel's (`letterCommand`: `\o`, `\O`, `\ss`, `\ae`, `\AE`, `\oe`, `\OE`, `\aa`, `\AA`, `\l`, `\L`) go as its letter, with
+  the spaces TeX skips after its control word, an empty group after it and a group around it alone (`{\L}ukasz`,
+  `\L{}ukasz`, `Bj\o rn`): a marker, it had come back as "Ł ukasz" (2010.11929v2); not one the paper defines itself, nor
+  the dotless `\i` and `\j`. And an `\ifmmode` in a paragraph's text is its `\else`, as TeX in text mode reads it: one letter
+  there goes in its word (`ifmmodeLetter`: REVTeX's `Louren\ifmmode~\mbox{\c{c}}\else \c{c}\fi{}o` is "Lourenço", read
+  with both branches as "Louren ç ç o"), and its first branch, math, is no text. The pairs such a span held spend their
+  ids as before (`pairsOf`), so that every unit after it keeps its pieces (PIPELINE 31). A formula the author split
   across inline formulas (`$\{\Phi_0$, $\Phi_1$, $\Phi_2\}$`: delimiters balanced across the parts alone, nothing but
   white space and punctuation between them; `core/protector/math-runs.ts`) goes out as one marker, and its reply is read
   back as the run's own pieces in their order (`mt.mjs` `formulaRuns`, TRANSLATE_VERSION 2): sent apart, Microsoft's

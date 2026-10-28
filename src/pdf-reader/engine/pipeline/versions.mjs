@@ -225,8 +225,11 @@
 //     it whether the .bbl is there or not, so that a paper's units are the same before BibTeX writes its .bbl and after
 //     (layout/paper.mjs madeBibliography: the job's .bbl the prepare's first pass makes is a shipped one); and a macro's body
 //     is no unit where a .sty or a .cls defines it (storedBodies: a class's own \\maketitle, jcappub's), an author block's
-//     unit of a macro called once marked in its definition (2609.20976v1's \\affiliation[a]{\\CU})
-export const PIPELINE_VERSION = '30'
+//     unit of a macro called once marked in its definition (2609.20976v1's \\affiliation[a]{\\CU}); 31 (shared): a letter
+//     command of the kernel's (\\L, \\o, \\ss, \\ae, \\aa…) is the letter itself in its word, the spaces TeX skips after it,
+//     an empty group after it and a group around it alone none of the text (latex-front.mjs letterCommand): it went out as a
+//     marker, and 2010.11929v2's `{\\L}ukasz Kaiser` came back as "Ł ukasz Kaiser"
+export const PIPELINE_VERSION = '31'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

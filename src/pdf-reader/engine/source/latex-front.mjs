@@ -8,6 +8,7 @@
 
 // ---------------------------------------------------------------- files and bytes
 import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, overriddenFallback, paperOf, paperParams, paramsOf, readArgs } from '../rules/arg-roles.mjs'
+import { TEXT_SYMBOLS } from '../rules/text-symbols.mjs'
 /** unpacked files (a Map of relative path → bytes) as a project's file system */
 export function inMemory(map) { return { list: () => [...map.keys()], read: p => map.get(p) ?? null } }
 /** a/./b/../c → a/c: a file as the package holds it (tar.mjs untar names each so) and as TeX's file system has it,
@@ -269,6 +270,31 @@ function accentLetter(s, i, end, name, to, own) {
   const arg = accentBase(s, end, to)
   const letter = arg && (arg.base + mark).normalize('NFC')
   return letter && SETTABLE.has(letter) ? { letter, end: arg.end } : null
+}
+/** the kernel's letters of Latin scripts (TEXT_SYMBOLS: \\o, \\O, \\ss, \\ae, \\AE, \\oe, \\OE, \\aa, \\AA, \\l, \\L), each the one
+ *  letter it sets; not the dotless \\i and \\j, which a paper makes its own as often as not (text-symbols.mjs) */
+const LETTER_COMMANDS = new Map(['o', 'O', 'ss', 'ae', 'AE', 'oe', 'OE', 'aa', 'AA', 'l', 'L'].map(n => [n, TEXT_SYMBOLS[`\\${n}`]]))
+/**
+ * The letter a letter command at s[i] sets (`end` past its name), as TeX sets it in its word: the spaces after the control
+ * word TeX skips, and an empty group ending it, with it — `\\L ukasz`, `\\L{}ukasz`, `Bj\\o rn`, `Stra\\ss e` are Łukasz, Bjørn,
+ * Straße —; where the paper does not define the command itself (\\def\\o{\\omega}: ownLetters); with where its source ends, or
+ * null.
+ * A placeholder, it went out as a marker, and the marker a word touches gets a space of ours (mt.mjs serialize): 2010.11929v2's
+ * `{\\L}ukasz Kaiser` came back as "Ł ukasz Kaiser"
+ */
+function letterCommand(s, i, end, name, to, own) {
+  const letter = LETTER_COMMANDS.get(name)
+  if (!letter || own?.has(name)) return null
+  let e = skipSpaces(s, end)
+  if (s.startsWith('{}', e)) e += 2
+  return e <= to ? { letter, end: e } : null
+}
+/** the letter commands a paper's own files define anew (\\renewcommand{\\o}{\\omega}, \\def\\L{\\mathcal{L}}, a \\let): there the
+ *  command is the paper's, and no letter is made of it */
+const ownLetters = texts => {
+  const out = new Set()
+  for (const m of texts.map(uncommented).join('\n').matchAll(/\\(?:(?:(?:re)?newcommand|providecommand)\*?|DeclareRobustCommand\*?|(?:New|Renew|Provide|Declare)DocumentCommand|[gex]?def|let)\s*\{?\s*\\([A-Za-z]+)(?![A-Za-z@])/g)) if (LETTER_COMMANDS.has(m[1])) out.add(m[1])
+  return out
 }
 /** the accents a paper's own files define anew (\\def\\v{\\varphi}, \\renewcommand{\\H}{\\mathcal{H}}, a package's
  *  \\let\\'…): there the command is the paper's, and no letter is made of it */
@@ -1058,6 +1084,31 @@ function conditionalAt(s, end, to, ifs) {
   const fi = branchEnd(s, first, to, ifs, { toFi: true })
   return fi < 0 ? null : { thenFrom: end, thenTo: first - 5, elseFrom: first, elseTo: fi - 3, end: fi }
 }
+/**
+ * The letter an \\ifmmode at s[i] sets in a paragraph's text (`end` past its name), where its \\else branch is one letter alone
+ * (an accent and its letter, a letter command): TeX in text mode takes that branch, never the first, a math form of the same
+ * letter (REVTeX's .bbl writes a name's accent both ways: `Louren\\ifmmode~\\mbox{\\c{c}}\\else \\c{c}\\fi{}o`, read with both
+ * branches as "Louren ç ç o", 2610.20716v1); the spaces TeX skips after \\fi, and an empty group ending it, with it. With
+ * where its source ends, or null
+ */
+function ifmmodeLetter(s, end, to, ctx) {
+  const c = conditionalAt(s, end, to, ctx.ifs)
+  if (!c || c.elseFrom < 0 || consumes(s, end, c.end)) return null
+  const k = skipSpaces(s, c.elseFrom)
+  let one = null
+  if (s[k] === '\\') {
+    const cmd = commandAt(s, k)
+    one = accentLetter(s, k, cmd.end, cmd.name, c.elseTo, ctx.ownAccents) || letterCommand(s, k, cmd.end, cmd.name, c.elseTo, ctx.ownLetters)
+  } else if (s[k] === '{') {
+    const g = matchGroup(s, k), j = skipSpaces(s, k + 1), cmd = s[j] === '\\' ? commandAt(s, j) : null
+    const inner = g > 0 && g <= c.elseTo && cmd && (accentLetter(s, j, cmd.end, cmd.name, g - 1, ctx.ownAccents) || letterCommand(s, j, cmd.end, cmd.name, g - 1, ctx.ownLetters))
+    if (inner && skipSpaces(s, inner.end) === g - 1) one = { letter: inner.letter, end: g }
+  }
+  if (!one || skipSpaces(s, one.end) !== c.elseTo) return null
+  let e = skipSpaces(s, c.end)
+  if (s.startsWith('{}', e)) e += 2
+  return e <= to ? { letter: one.letter, end: e } : null
+}
 /** the control word that ends at `at` (branchEnd's \\fi, \\else, \\or) */
 const commandBefore = (s, at) => /\\([A-Za-z]+)$/.exec(s.slice(Math.max(0, at - 6), at))?.[1]
 /** whether s[from, to) holds words TeX would set: letters outside comments, math, commands' names and their arguments — but
@@ -1276,6 +1327,18 @@ function frontBlock(s, from, to, b, ctx, role = 'names') {
 const BLOCK_OF = new WeakMap()
 /** the units of a list no other of it nests */
 const topUnits = list => { const nested = new Set(list.flatMap(u => u.pieces.filter(p => p.t === 'nested').map(p => p.unit))); return list.filter(u => !nested.has(u)) }
+/** the pairs the walk counts over s[from, to) without the letters it makes of a letter command and of \\ifmmode (ctx.letters
+ *  false: PIPELINE 30's reading), walked in a shadow of the walk's context and builder: what a span read as one letter now
+ *  spends of the pairs' ids, as a group around an accent spends its own, so that every pair after it keeps its id (a copy's
+ *  translations are found again by the units' pieces: cache.mjs sourceHash) */
+function pairsOf(s, from, to, b, ctx) {
+  if (to <= from) return 0
+  const shadow = { ...ctx, letters: false, called: null, fits: [], bibliography: [], floats: new Set(), visit: () => {}, visitFront: () => {}, ends: new Map(ctx.ends), skipped: { ...ctx.skipped }, dirs: [...ctx.dirs] }
+  const sb = new Builder(b.file, [], s, ctx.bodies, shadow.floats)
+  if (b.inFloat) sb.inFloat = true
+  sb.kind = b.kind; walk(s, from, to, sb, shadow); sb.flush()
+  return sb.pairId
+}
 /** the ranges of the units PIPELINE 29 cut the text of an author block between two notes into (its walk whole, of kind
  *  author), walked in a shadow of the walk's context and builder, so that nothing it counts, numbers or reads (a call of the
  *  paper's macro, a table's number, a file) is counted twice */
@@ -1429,6 +1492,10 @@ function walk(s, from, to, b, ctx) {
       const k = skipSpaces(s, i + 1), accent = s[k] === '\\' ? commandAt(s, k) : null
       const letter = accent && accentLetter(s, k, accent.end, accent.name, e - 1, ctx.ownAccents)
       if (letter && skipSpaces(s, letter.end) === e - 1) { endText(); b.pairId++; b.letter(letter.letter, s.slice(i, e), i, e); i = e; continue }
+      // (and around a letter command alone, {\\L}ukasz, {\\ss}, or an \\ifmmode whose \\else is one, Abell{\\ifmmode\\acute{a}\\else
+      // \\'{a}\\fi}n: the letter in its word, the group's id spent as the accent's is)
+      const kernelLetter = !letter && accent && ctx.letters !== false && (letterCommand(s, k, accent.end, accent.name, e - 1, ctx.ownLetters) || (accent.name === 'ifmmode' ? ifmmodeLetter(s, accent.end, e - 1, ctx) : null))
+      if (kernelLetter && skipSpaces(s, kernelLetter.end) === e - 1) { endText(); b.pairId += pairsOf(s, i, e, b, ctx); b.letter(kernelLetter.letter, s.slice(i, e), i, e); i = e; continue }
       endText(); const id = b.open('{', i); walk(s, i + 1, e - 1, b, ctx); b.close(id, '}', e); i = e; continue
     }
     if (c === '&' && b.cellMode) { endText(); b.flush(); i++; continue }
@@ -1448,22 +1515,32 @@ function walk(s, from, to, b, ctx) {
     // (conditionalValue: \\iftrue, \\if 0) the live branch is walked, the rest stays in the source; where it does not and
     // both branches hold words, neither branch is the translator's (`skipped.ifUnknown`): left English, never the branch
     // TeX does not set. One whose branches hold no words (wordsIn) has its pieces as they were
+    // \\ifmmode whose \\else branch is one letter: that letter in its word, as TeX sets it in text (ifmmodeLetter)
+    const mathOr = name === 'ifmmode' && ctx.letters !== false ? ifmmodeLetter(s, end, to, ctx) : null
+    if (mathOr) { endText(); b.pairId += pairsOf(s, i, mathOr.end, b, ctx); b.letter(mathOr.letter, s.slice(i, mathOr.end), i, mathOr.end); i = mathOr.end; continue }
     if (isConditional(name, ctx.ifs) && name !== 'ifcase') {
       // (one whose span holds what TeX reads otherwise than as tokens there — \\verb, inline code, a verbatim environment, a
       // definition's body — may have its \\else where TeX has none: its value is not taken, neither branch is text)
       const c = conditionalAt(s, end, to, ctx.ifs)
       // (\\unless inverts the test: not taken, neither branch is text)
-      const value = c && !consumes(s, end, c.end) && !/\\unless\s*$/.test(s.slice(Math.max(0, i - 12), i)) ? conditionalValue(name, s, end) : null
+      // (\\ifmmode in the walk's text, never math, is false: TeX in text mode takes its \\else)
+      const value = c && !consumes(s, end, c.end) && !/\\unless\s*$/.test(s.slice(Math.max(0, i - 12), i)) ? (name === 'ifmmode' && ctx.letters !== false ? false : conditionalValue(name, s, end)) : null
       if (c) c.thenFrom = Math.min(testEnd(name, s, end), c.thenTo)
       if (c && (value !== null || (wordsIn(s, c.thenFrom, c.thenTo) && c.elseFrom >= 0 && wordsIn(s, c.elseFrom, c.elseTo)))) {
         const [from, upto] = value === true ? [c.thenFrom, c.thenTo] : value === false ? (c.elseFrom >= 0 ? [c.elseFrom, c.elseTo] : [c.thenTo, c.thenTo]) : [-1, -1]
-        const dead = value === null ? true : value ? c.elseFrom >= 0 && wordsIn(s, c.elseFrom, c.elseTo) : wordsIn(s, c.thenFrom, c.thenTo)
+        // (\\ifmmode's first branch is math, never text, whatever it holds: only its \\else is walked)
+        const mathFirst = name === 'ifmmode' && ctx.letters !== false
+        const dead = value === null ? true : value ? c.elseFrom >= 0 && wordsIn(s, c.elseFrom, c.elseTo) : mathFirst || wordsIn(s, c.thenFrom, c.thenTo)
         if (dead) {
           const block = holdsBlock(s.slice(c.thenFrom, c.end))
           endText()
           if (value === null) { ctx.skipped.ifUnknown = (ctx.skipped.ifUnknown ?? 0) + 1; if (block) b.flush(); else b.ph(s.slice(i, c.end), i, c.end); i = c.end; continue }
-          if (block) { b.flush(); walk(s, from, upto, b, ctx); b.flush(); i = c.end; continue }
-          b.ph(s.slice(i, from), i, from); walk(s, from, upto, b, ctx); endText(); if (upto < c.end) b.ph(s.slice(upto, c.end), upto, c.end); i = c.end; continue
+          // (\\ifmmode's pairs as the walk counted them before it read its \\else alone, so that every pair after it keeps its id)
+          const ids = mathFirst ? [b.pairId, pairsOf(s, i, c.end, b, ctx)] : null
+          if (block) { b.flush(); walk(s, from, upto, b, ctx); b.flush(); if (ids) b.pairId = Math.max(b.pairId, ids[0] + ids[1]); i = c.end; continue }
+          b.ph(s.slice(i, from), i, from); walk(s, from, upto, b, ctx); endText(); if (upto < c.end) b.ph(s.slice(upto, c.end), upto, c.end)
+          if (ids) b.pairId = Math.max(b.pairId, ids[0] + ids[1])
+          i = c.end; continue
         }
       }
     }
@@ -1714,6 +1791,9 @@ function walk(s, from, to, b, ctx) {
     // whatever comes next — pdfTeX stops at a CJK character there
     const letter = ACCENTS.has(name) && accentLetter(s, i, end, name, to, ctx.ownAccents)
     if (letter) { endText(); b.letter(letter.letter, s.slice(i, letter.end), i, letter.end); i = letter.end; continue }
+    // a letter command, \\L ukasz, \\L{}ukasz, Bj\\o rn: the letter in its word (letterCommand), TeX's skipped spaces with it
+    const kernelLetter = ctx.letters !== false && letterCommand(s, i, end, name, to, ctx.ownLetters)
+    if (kernelLetter) { endText(); b.pairId += pairsOf(s, i, kernelLetter.end, b, ctx); b.letter(kernelLetter.letter, s.slice(i, kernelLetter.end), i, kernelLetter.end); i = kernelLetter.end; continue }
     if (ACCENTS.has(name)) {
       let k = /^[A-Za-z]$/.test(name) ? skipSpaces(s, end) : end
       if (s[k] === '{') k = matchGroup(s, k)
@@ -2198,7 +2278,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   // which is biblatex's data — \\entry, \\field — and no text, which \\bibliography, biblatex's alias of \\addbibresource, never reads)
   const bblName = `${jobName(mainFile.rel)}.bbl`, bblBytes = fsys.read(bblName)
   const bbl = bblBytes && /\\begin\s*\{thebibliography\}/.test(texText(bblBytes)) ? bblName : null
-  const ctx = { bbl, tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], ...tblrOf(sources.map(sourceText)) }
+  const ctx = { bbl, tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], ...tblrOf(sources.map(sourceText)) }
   const scan = { lineEnvs, ifs, ifValues }
   let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;

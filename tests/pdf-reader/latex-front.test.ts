@@ -405,6 +405,73 @@ describe('an accent inside a word is the letter itself before translation, and t
   })
 })
 
+describe('a letter command is the letter itself in its word: TeX\'s skipped spaces, an empty group and a group around it alone none of the wire (2010.11929v2: "Ł ukasz Kaiser")', () => {
+  const doc = (body: string, defs = '') => project(`\\documentclass{article}${defs}\\begin{document}\n${body}\n\\end{document}`)
+  const wire = (p: ReturnType<typeof project>) => (p.units as never[]).map(u => serialize(u).wire)
+  const source = (p: ReturnType<typeof project>) => new TextDecoder('latin1').decode(patch(p, new Map()).get('main.tex'))
+
+  it('{\\L}ukasz, 2010.11929v2\'s entry as its .bbl writes it: one word on the wire, no marker beside it; written back byte for byte', () => {
+    const body = 'Aidan~N Gomez, {\\L}ukasz Kaiser, and Illia Polosukhin. Attention is all you need.'
+    const p = doc(body)
+    expect(wire(p)).toEqual(['Aidan @a# N Gomez, Łukasz Kaiser, and Illia Polosukhin. Attention is all you need.'])
+    expect(source(p)).toContain(body)
+  })
+
+  it('every form TeX sets as one word: the group around it, an empty group after it, the spaces after its control word', () => {
+    const forms: [string, string][] = [
+      ['{\\L}ukasz', 'Łukasz'], ['{ \\L }ukasz', 'Łukasz'], ['\\L{}ukasz', 'Łukasz'], ['\\L ukasz', 'Łukasz'], ['\\L\nukasz', 'Łukasz'], ['{\\L{}}ukasz', 'Łukasz'],
+      ['Bj\\o rn', 'Bjørn'], ['Bj{\\o}rn', 'Bjørn'], ['Stra\\ss e', 'Straße'], ['Stra{\\ss}e', 'Straße'], ['Ny{\\aa}rd', 'Nyård'],
+      ['\\O stergaard', 'Østergaard'], ['{\\AE}lfric', 'Ælfric'], ['C{\\ae}sar', 'Cæsar'], ['{\\OE}uvre', 'Œuvre'], ['man{\\oe}uvre', 'manœuvre'],
+      ['{\\AA}ngstr{\\"o}m', 'Ångström'], ['W\\l odek', 'Włodek'],
+    ]
+    for (const [tex, word] of forms) {
+      const p = doc(`The work of ${tex} matters.`)
+      expect(wire(p), tex).toEqual([`The work of ${word} matters.`])
+      expect(source(p), tex).toContain(`The work of ${tex} matters.`)
+      expect((p.units as Unit[])[0]?.pieces.map(x => x.t), tex).toEqual(['text'])
+    }
+  })
+
+  it('after an empty group a space is TeX\'s again, and a letter at a word\'s end keeps the punctuation after it', () => {
+    expect(wire(doc('Die Gro\\ss{} Stadt, ein Gru\\ss.'))).toEqual(['Die Groß Stadt, ein Gruß.'])
+    expect(wire(doc('Bj{\\o}rn and S{\\o}ren.'))).toEqual(['Bjørn and Søren.'])
+  })
+
+  it('a group around the letter spends its pair\'s id, as a group around an accent does: the pairs after it keep theirs', () => {
+    const ids = (body: string) => ((doc(body).units as Unit[])[0]?.pieces ?? []).filter(x => x.t === 'open').map(x => (x as unknown as { id: number }).id)
+    expect(ids('The work of {\\L}ukasz and \\emph{others} matters.')).toEqual(ids('The work of {L}ukasz and \\emph{others} matters.').slice(1))
+  })
+
+  it('a placeholder still where the paper defines the command itself, and for the dotless \\i and \\j, which papers make their own', () => {
+    expect(wire(doc('The value \\o{} and \\L{} here.', '\\renewcommand{\\o}{\\omega}\\def\\L{\\mathcal{L}}'))).toEqual(['The value @a# and @b# here.'])
+    expect(wire(doc('The index \\i{} and \\j{} here.'))).toEqual(['The index @a# and @b# here.'])
+  })
+
+  it('\\ifmmode in a paragraph\'s text is its \\else: REVTeX\'s names, an accent written both ways, one word on the wire (2610.20716v1\'s "Louren ç ç o")', () => {
+    const forms: [string, string][] = [
+      ['Louren\\ifmmode~\\mbox{\\c{c}}\\else \\c{c}\\fi{}o', 'Lourenço'], ['Abell{\\ifmmode\\acute{a}\\else\\\'{a}\\fi}n', 'Abellán'],
+      ['\\ifmmode \\check{S}\\else \\v{S}\\fi{}upi\\ifmmode~\\acute{c}\\else \\\'{c}\\fi{}', 'Šupić'], ['Binicio\\ifmmode~\\breve{g}\\else \\u{g}\\fi{}lu', 'Binicioğlu'],
+      ['Kurzy\\ifmmode~\\acute{n}\\else \\\'{n}\\fi{}ski', 'Kurzyński'], ['Ta\\ifmmode~\\check{s}\\else \\v{s}\\fi{}evsk\\\'y', 'Taševský'],
+      ['Bj\\ifmmode\\varnothing\\else\\o\\fi rn', 'Bjørn'],
+    ]
+    for (const [tex, word] of forms) {
+      const p = doc(`The work of ${tex} matters.`)
+      expect(wire(p), tex).toEqual([`The work of ${word} matters.`])
+      expect(source(p), tex).toContain(`The work of ${tex} matters.`)
+    }
+    // (an \\else that is no one letter: its first branch is math, no text of TeX's, and only the \\else is walked)
+    const w = wire(doc('Text \\ifmmode x^2 squared\\else the square\\fi{} here.'))[0] ?? ''
+    expect(w).toContain('the square')
+    expect(w).not.toContain('squared')
+  })
+
+  it('the layout compile\'s marks: a unit that opens with the letter has its start mark before its group, as the source writes it', () => {
+    const p = doc('{\\L}ukasz Kaiser wrote it.')
+    const tex = new TextDecoder('latin1').decode(patch(p, new Map(), { mark: markUnits(p.units) }).get('main.tex'))
+    expect(tex).toContain('\\leavevmode\\axtmark{0s}{\\L}ukasz Kaiser wrote it.\\axtend{0e}')
+  })
+})
+
 describe('a display outside a unit\'s marks (the reader\'s anchors take it from beyond them: 211 of 747 displays were lit with no unit)', () => {
   const body = (b: string) => project(`\\documentclass{article}\\begin{document}\n${b}\n\\end{document}`).units as (Unit & { lead?: string; trail?: string })[]
   const flags = (b: string) => body(b).map(u => [textOf(u).trim().split(' ')[0], typeof u.lead === 'string', typeof u.trail === 'string'])
