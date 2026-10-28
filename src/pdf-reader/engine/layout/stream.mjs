@@ -319,15 +319,20 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
         const opening = erasure ? OPENING.exec(N.name) : null
         const startsAfter = id => [`${id}s`, `h${id}s`, `t${id}s`].some(n => (where.get(n) ?? []).some(([p, q]) => p === pa && q > next[1]))
         const later = START.exec(N.name) ?? (opening && startsAfter(opening[2]) ? [N.name, opening[2]] : null)
-        if (f.blocked && !erasure && f.split && f.through && N.name === f.through) {
-          // (the maker's reading of the erasure's `through`: a paper's macro and the one unmarked piece right after it, which no
-          // mark could stand before (marks.mjs followsOf `split`), their ink to the next marked piece's point, the macro's the
-          // glyphs that set the text TeX sets for it, character for character, the piece's the rest — but where the rest runs on
-          // as the macro's word, which its text then did not hold whole: none)
-          const end = textedTo(pages, glyphs, f.split.text)
-          if (end > 0 && end < glyphs.length && !runsOn(pages, glyphs, end)) {
-            const [p, g] = glyphs[end], from = pages[p - 1].boxAt[g]
-            out.set(f.split.name, { how: HOW["open, to its unit's next mark"], glyphs: glyphs.slice(end), boxes: boxes.filter(([q, b]) => q > p || (q === p && b >= from)) })
+        const S = f.blocked ? f.split : null
+        if (S && (S.ends ? S.ends.includes(N.name) : f.through && N.name === f.through)) {
+          // (a paper's macro and the one unmarked piece right after it, which no mark could stand before (marks.mjs followsOf
+          // `split`), their ink to the next marked piece's point — or, text after that piece, to where that text begins, as an
+          // opening's ink runs to the text after it: a .bbl's `\\DOIprefix\\doi{…}.` at an entry's end —, the macro's the glyphs
+          // that set the text TeX sets for it, character for character, the piece's the rest; but where the rest runs on as the
+          // macro's word, which its text then did not hold whole, none. The maker's reading parts the two; the erasure's owns them
+          // as the macro's, one ink of its unit's as `through` reads it)
+          const end = textedTo(pages, glyphs, S.text)
+          const stop = end > 0 && end < glyphs.length && !runsOn(pages, glyphs, end) ? (S.ends ? afterText(pages, glyphs, end, S, erasure) : glyphs.length) : -1
+          if (stop > end) {
+            if (erasure) return cut(HOW[S.ends ? 'open, to the text after it' : "open, to its unit's next mark"], glyphs, boxes, stop)
+            const [p, g] = glyphs[end], from = pages[p - 1].boxAt[g], piece = cut(HOW["open, to its unit's next mark"], glyphs, boxes, stop)
+            out.set(S.name, { how: piece.how, glyphs: piece.glyphs.slice(end), boxes: piece.boxes.filter(([q, b]) => q > p || (q === p && b >= from)) })
             return cut(HOW["open, to its unit's next mark"], glyphs, boxes, end)
           }
         }
@@ -585,6 +590,12 @@ function textedTo(pages, glyphs, text) {
     if (n === want.length) return j + 1
   }
   return -1
+}
+/** where the text after a split's piece begins among `glyphs` from `end` on (textTo with its `rest`, the glyphs running to a
+ *  piece of its unit's ends), as an index into `glyphs`; -1 where it is not found, or the piece would own nothing */
+function afterText(pages, glyphs, end, S, quotes) {
+  const e = textTo(pages, glyphs.slice(end), S.want, S.rest, quotes)
+  return e > 0 ? end + e : -1
 }
 /** whether the glyph at `end` (the first not blank from it) runs on as the word the glyph before it ends: both a letter or a
  *  digit, on one page, on one baseline and at one size (within a twentieth of it) — the macro's text then ended inside its word

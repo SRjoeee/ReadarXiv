@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { completeMacros, frontMarks, inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { bblProvides, openPaper, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { AHEAD_PROBE_MAX, aheadKey, aheadSamples, completeCall, completeCalled, followsOf, layoutMarking, MARK_CLASSES, markProbeTex, probeSamples, readInkApart, readMarkProbe, symbolText } from '@/pdf-reader/engine/layout/marks.mjs'
 import { boundsFromMarks, tokenizeDocument, uprightToken } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 
@@ -341,18 +342,49 @@ describe('a placeholder no mark may stand before (\\footnote after \\xspace, TeX
   // (2609.20976v1 u19: `\\lgnrm \\footnote{\\url{…}}~\\citep{…}`, the call between a macro and a marked citation)
   const u = unit([text('The code '), ph('\\lgnrm'), text(' '), ph('\\footnote{\\url{https://x.org}}'), ph('~'), ph('\\citep{a}'), text(', which')])
   const names = new Set(['p0.1a', 'p0.5a', 'p0.5b'])
-  it('followsOf: the split where the macro\'s text is known, ends in a letter or a digit, and the call is the one unmarked piece before the next marked one', () => {
+  it('followsOf: the split where the macro\'s text is known, a letter or a digit in it, and the call is the one unmarked piece before the next marked one', () => {
     expect(followsOf([u], names, ['\\lgnrm', 'lognormal_galaxies'])('p0.1a')).toMatchObject({ blocked: true, through: 'p0.5a', split: { name: 'n0.3a', text: 'lognormal_galaxies' } })
     expect(followsOf([u], names, new Map([['\\lgnrm', 'lognormal_galaxies']]))('p0.1a')?.split).toEqual({ name: 'n0.3a', text: 'lognormal_galaxies' })
-    // (no texts, as the wrap asks: the erasure's reading as it was; no text for the macro, or one ending in punctuation)
+    // (a text ending in punctuation, read character for character: "doi:")
+    expect(followsOf([u], names, ['\\lgnrm', 'galaxies.'])('p0.1a')?.split).toEqual({ name: 'n0.3a', text: 'galaxies.' })
+    // (no texts, as the wrap asked before; no text for the macro, or one of no letter or digit)
     expect(followsOf([u], names)('p0.1a')?.split).toBeUndefined()
     expect(followsOf([u], names, ['\\other', 'x'])('p0.1a')?.split).toBeUndefined()
-    expect(followsOf([u], names, ['\\lgnrm', 'galaxies.'])('p0.1a')?.split).toBeUndefined()
-    // (two unmarked pieces before the next marked one, or a paper's macro after it, whose text tells it: none)
+    expect(followsOf([u], names, ['\\lgnrm', '--'])('p0.1a')?.split).toBeUndefined()
+    // (two unmarked pieces before the next marked one: none; a paper's macro after it, the one unmarked piece: as a call)
     const two = unit([ph('\\lgnrm'), text(' '), ph('\\footnote{x}'), ph('$y$'), ph('\\citep{a}')])
     expect(followsOf([two], new Set(['p0.0a', 'p0.4a']), ['\\lgnrm', 'lognormal'])('p0.0a')?.split).toBeUndefined()
     const macro = unit([ph('\\lgnrm'), text(' '), ph('\\mice'), text(' '), ph('\\citep{a}')])
-    expect(followsOf([macro], new Set(['p0.0a', 'p0.4a']), ['\\lgnrm', 'lognormal'])('p0.0a')?.split).toBeUndefined()
+    expect(followsOf([macro], new Set(['p0.0a', 'p0.4a']), ['\\lgnrm', 'lognormal'])('p0.0a')?.split).toEqual({ name: 'p0.2a', text: 'lognormal' })
+    // (a text symbol after it, which the layout draws as its character: none)
+    const sym = unit([ph('\\lgnrm'), text(' '), ph('\\%'), text(' '), ph('\\citep{a}')])
+    expect(followsOf([sym], new Set(['p0.0a', 'p0.4a']), ['\\lgnrm', 'lognormal'])('p0.0a')?.split).toBeUndefined()
+  })
+  it('followsOf: the split of a piece with text after it, to a piece of its unit\'s ends (an elsarticle .bbl\'s `\\DOIprefix\\doi{…}.` at an entry\'s end)', () => {
+    const e = { ...unit([text('Tools of Radio Astronomy. '), ph('\\newblock'), text(' '), ph('\\DOIprefix'), ph('\\doi{10.1007/978-3-642-39950-3}'), text('.')]), kind: 'reference' } as SourceUnit
+    expect(followsOf([e], new Set(['p0.3a', '0s', '0e']), ['\\DOIprefix', 'doi:'])('p0.3a')?.split).toEqual({ name: 'p0.4a', text: 'doi:', want: '.', rest: '', ends: ['0e', 't0e', 'h0e'] })
+    // (text, then another piece: its opening one of the ends)
+    const f = unit([ph('\\DOIprefix'), ph('\\doi{10.1/x}'), text(', see '), ph('\\url{https://x.org}'), text('.')])
+    expect(followsOf([f], new Set(['p0.0a', 'p0.3a']), ['\\DOIprefix', 'doi:'])('p0.0a')?.split).toEqual({ name: 'p0.1a', text: 'doi:', want: ',see', rest: 'see', ends: ['p0.3a', '0e', 't0e', 'h0e'] })
+    // (no text after it, the unit's end: no point ends its ink, none)
+    const g = unit([ph('\\DOIprefix'), ph('\\doi{10.1/x}')])
+    expect(followsOf([g], new Set(['p0.0a']), ['\\DOIprefix', 'doi:'])('p0.0a')?.split).toBeUndefined()
+  })
+})
+
+describe('the mark probe sets a .bbl\'s own definitions first (an elsarticle .bbl\'s \\DOIprefix and \\doi, 2610.20848v1)', () => {
+  const tex = '\\documentclass{article}\n\\begin{document}\nA word \\cite{a}.\n\\bibliographystyle{plain}\\bibliography{refs}\n\\end{document}\n'
+  const bbl = '\\begin{thebibliography}{1}\n\\providecommand{\\url}[1]{\\texttt{#1}}\n\\providecommand{\\DOIprefix}{doi:}\n\\providecommand{\\doi}[1]{\\href{http://dx.doi.org/#1}{\\path{#1}}}\n\\expandafter\\ifx\\csname natexlab\\endcsname\\relax\\def\\natexlab#1{#1}\\fi\n\\bibitem{a} A. Author. A title. \\newblock \\DOIprefix\\doi{10.1/x}.\n\\end{thebibliography}\n'
+  const enc = (t: string) => new TextEncoder().encode(t)
+  const probeOf = (files: [string, string][]) => new TextDecoder().decode(probeFiles(openPaper(new Map(files.map(([p, t]) => [p, enc(t)]))), { marks: true }).get('main.tex'))
+  it('each \\providecommand before its first \\bibitem, whole, right after \\begin{document}: the probe\'s ink section then knows the entries\' macros', () => {
+    expect(bblProvides(inMemory(new Map([['main.tex', enc(tex)], ['main.bbl', enc(bbl)]])), 'main.tex')).toBe('\\providecommand{\\url}[1]{\\texttt{#1}}\\providecommand{\\DOIprefix}{doi:}\\providecommand{\\doi}[1]{\\href{http://dx.doi.org/#1}{\\path{#1}}}')
+    const probe = probeOf([['main.tex', tex], ['main.bbl', bbl]])
+    expect(probe).toContain('\\begin{document}\\providecommand{\\url}[1]{\\texttt{#1}}\\providecommand{\\DOIprefix}{doi:}')
+    // (none past the first \\bibitem, nor what is no \\providecommand)
+    expect(probe).not.toContain('natexlab')
+    // (a paper with no .bbl asks as before)
+    expect(probeOf([['main.tex', tex]])).not.toContain('\\providecommand')
   })
 })
 

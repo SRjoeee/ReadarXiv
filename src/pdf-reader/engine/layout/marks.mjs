@@ -1519,9 +1519,11 @@ const endsOf = i => [`${i}e`, `t${i}e`, `h${i}e`]
  * after a display: LAYOUT_TEX's \axt@pmc), by their opening marks' names; the text after it and its next piece are then
  * the group's last one's. With `texts` (the probe's: readInkTexts' pairs, flat, or a Map), a paper's macro whose next piece has
  * no mark of its own and is the only visible one before its unit's next marked piece, white space alone between
- * (`through`), is `split`: that piece's opening mark's name, which no point sets, and the text TeX sets for the macro (ending in
- * a letter or a digit), by which the maker's reading parts the two's ink, character for character (stream.mjs ownedOf):
- * 2609.20976's `\lgnrm \footnote{…}`, before which \xspace sets no space and would before a mark (aheadSamples' answer 2)
+ * (`through`), or followed by text up to a piece of its unit's ends, is `split`: that piece's opening mark's name, which no point
+ * sets, the text TeX sets for the macro (a letter or a digit in it), by which the maker's reading parts the two's ink,
+ * character for character, and the text after that piece as an opening's (`want`, `rest`, `ends`), where its ink ends
+ * (stream.mjs ownedOf): 2609.20976's `\lgnrm \footnote{…}`, before which \xspace sets no space and would before a mark
+ * (aheadSamples' answer 2), and an elsarticle .bbl's `\DOIprefix\doi{…}.` at an entry's end
  */
 export function followsOf(units, names, texts = null) {
   const shown = texts instanceof Map ? texts : Array.isArray(texts) ? new Map(Array.from({ length: Math.floor(texts.length / 2) }, (_, j) => [texts[2 * j], texts[2 * j + 1]])) : null
@@ -1554,14 +1556,25 @@ export function followsOf(units, names, texts = null) {
         others++
       }
     }
-    // (`split`, the maker's: the macro's text, where the one unmarked piece after it is a placeholder the maker cannot find
-    // with no mark: AHEAD_FOLLOWS)
-    const text = shown && through && !others && classOf(u.pieces[k]) === 'macro' && AHEAD_FOLLOWS.has(classOf(u.pieces[q])) ? shown.get(u.pieces[k].src) : undefined
-    const said = typeof text === 'string' && /[\p{L}\p{N}]$/u.test(text) ? text : ''
+    // (`split`: the macro's text, where the one unmarked piece after it is a placeholder the maker cannot find with no mark
+    // (AHEAD_FOLLOWS, or a paper's macro that is no text symbol: a .bbl's `\\DOIprefix\\doi{…}`), the next marked piece right after
+    // that piece (`through`), or text after it, then a piece of its unit's ends (`want`, `rest`, `ends`, as an opening's): its ink
+    // ends where that text begins)
+    const F = blocked && !/\S/.test(after) ? u.pieces[q] : null, fcls = classOf(F)
+    const parted = !!F && classOf(u.pieces[k]) === 'macro' && (AHEAD_FOLLOWS.has(fcls) || (fcls === 'macro' && symbolText(F.src) === null))
+    let trail = null
+    if (parted && !through) {
+      let rest = '', r = q + 1
+      for (; r < u.pieces.length && !classOf(u.pieces[r]); r++) if (u.pieces[r].t === 'text') rest += plainTranslated([u.pieces[r]])
+      const fnext = r < u.pieces.length ? nameOf(i, r) : null
+      if (/\S/.test(rest)) trail = { want: asSet(rest).normalize('NFKC').toLowerCase().replace(/\s/g, '').slice(0, WANT), rest: spellOf(rest), ends: [...(fnext ? [`${fnext}a`] : []), ...endsOf(i)] }
+    }
+    const text = shown && parted && ((through && !others) || trail) ? shown.get(u.pieces[k].src) : undefined
+    const said = typeof text === 'string' && /[\p{L}\p{N}]/u.test(text) ? text : ''
     // (`rest`, the erasure's: the whole text after it up to its next visible piece, as the spell check reads one — its letters and
     // digits —, so that the text after it is told where it runs exactly to its unit's next mark, not where its first WANT
     // characters first stand: a display's \\text{for every}, a URL's dots)
-    return { closing: names.has(`${name.slice(0, -1)}b`), want, rest: spellOf(after), display, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group, ...(said ? { split: { name: `${next}a`, text: said } } : {}) }
+    return { closing: names.has(`${name.slice(0, -1)}b`), want, rest: spellOf(after), display, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group, ...(said ? { split: { name: `${next}a`, text: said, ...(trail ?? {}) } } : {}) }
   }
 }
 

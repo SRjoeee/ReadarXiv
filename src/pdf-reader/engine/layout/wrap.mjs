@@ -737,10 +737,11 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
     return { refused: 'wrap-parse', why: `PDF.js: ${String(e?.message ?? e)}`.slice(0, 300) }
   } finally { await task?.destroy?.().catch?.(() => {}) }
   const names = new Set(pages.flatMap(pg => pg.points.map(x => x.name)))
-  const follows = given !== undefined ? given : units ? followsOf(units, names) : null
   // (the texts the marking's probe showed the paper's macros set: the marks file's `marking.texts`, flat [source, text, …]
-  // pairs, or a Map; a cell's lead macro is owned by them alone, own.mjs)
+  // pairs, or a Map; a cell's lead macro is owned by them alone, own.mjs; and a split piece's ink, after a macro, ends as the
+  // maker's reading parts it: marks.mjs followsOf `split`)
   const shown = texts instanceof Map ? texts : Array.isArray(texts) ? new Map(Array.from({ length: Math.floor(texts.length / 2) }, (_, j) => [texts[2 * j], texts[2 * j + 1]]).filter(([a, b]) => typeof a === 'string' && typeof b === 'string')) : null
+  const follows = given !== undefined ? given : units ? followsOf(units, names, shown) : null
   const own = ownOf(pages, { units, follows, texts: shown, inkless: inkless === null ? null : new Set(inkless) })
   // (the text inside the vector figures, no source unit's: its figure units, each its own group f<k>, a crowded one none;
   // layout/figure-text.mjs), cut before the ink units so that a figure's text is the figures' class, never an ink unit's
