@@ -65,6 +65,21 @@ describe('the wrap on hand-written pages (S1, S6, S9–S12; G1, G2)', () => {
     expect(r.unhidden).toEqual([[1, 'spell']])
     expect(r.stats.unhidden.spell).toBe(1)
   })
+  it('reads a placeholder after a paper\'s macro that no mark may stand before as the maker parts it, by the macro\'s text (an elsarticle .bbl\'s `\\DOIprefix\\doi{…}.`)', async () => {
+    // (the macro's opening point alone, the \\doi after it unmarked, a full stop to the unit's end: with the text the probe showed
+    // \\DOIprefix sets, the two's ink to where the full stop begins is the unit's; with none, no point ends it, and the unit is the
+    // original's, as on next)
+    const page = [run(72, 700, '(Tools)-290(of)-290(Radio.)', { before: '/axt-0s ri ' }), run(160, 700, '(doi:)', { before: '/axt-p0.3a ri ' }), run(185, 700, '(10.1007/978)'), run(250, 700, '(.)', { after: ' /axt-0e ri' })].join('')
+    const { bytes } = await markedSample({ pages: [2], edit: only(page) })
+    const units = [{ kind: 'reference', src: 'Tools of Radio. .', pieces: [{ t: 'text', s: 'Tools of Radio. ' }, { t: 'ph', src: '\\newblock' }, { t: 'text', s: ' ' }, { t: 'ph', src: '\\DOIprefix' }, { t: 'ph', src: '\\doi{10.1007/978}' }, { t: 'text', s: '.' }] }]
+    const told = ok(await wrapped(bytes, { units, follows: undefined, texts: ['\\DOIprefix', 'doi:'] }))
+    expect(told.unhidden).toEqual([])
+    expect(pixelsApart(await renderPage(bytes, 2), await renderPage(told.bytes, 2))).toBe(0)
+    const { bytes: oracle } = await markedSample({ pages: [2], edit: only(page.replace(/\[/g, '3 Tr [').replace(/\] TJ /g, '] TJ 0 Tr ')) })
+    expect(pixelsApart(await renderPage(told.bytes, 2, { off: off(/^axt:u0(?:\.p)?$/) }), await renderPage(oracle, 2))).toBe(0)
+    const none = ok(await wrapped(bytes, { units, follows: undefined, texts: null }))
+    expect(none.unhidden).toEqual([[0, 'marks']])
+  })
   it('closes a run at a foreign marked-content sequence and at q/Q, and keeps the foreign ones (S6, S12)', async () => {
     const text = [run(72, 700, '(Order)', { before: '/axt-0s ri /Span <</MCID 0>> BDC ', after: ' EMC' }), run(72, 680, '(the)', { before: 'q ', after: ' Q /axt-0e ri' })].join('')
     const { bytes } = await markedSample({ pages: [2], edit: only(text) })

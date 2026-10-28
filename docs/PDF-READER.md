@@ -2240,8 +2240,29 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     a digit), character for character, the placeholder's the rest, kept in the marks file under the opening mark it would have
     had (`owned`) and placed from it (`make.mjs`); glyphs that do not set it, nothing left, or a rest that runs on as the
     macro's word (a letter or a digit on its baseline at its size: its text then ended inside the word, the review of #483),
-    LOST as before. The wrap is given no texts, and reads as
-    it did.
+    LOST as before. The wrap reads it as the maker does (below).
+  - *A piece with text after it, and a .bbl's own macros* (2610.20848v1's elsarticle entries, `\newblock \DOIprefix\doi{…}.`:
+    `\DOIprefix` gets its opening mark alone, `\doi{…}` after it none, and with text after the `\doi` no marked piece ends their
+    ink: the wrap left 35 entries the original's). The split takes a piece followed by text, then by a piece of its unit's ends,
+    too (`followsOf`: that text as an opening's, `want`, `rest`, `ends`): its ink ends where that text begins (`textTo`, so that
+    the DOI's own dots are none of the full stop's). The piece may be a paper's macro that is no text symbol (`\doi`), and the
+    macro's text may end in punctuation ("doi:"), read character for character as before. The wrap gives `followsOf` its texts
+    and owns the two as the macro's (`through`'s reading), the maker parts them. And the mark probe sets the .bbl's own
+    `\providecommand`s first (`live.mjs bblProvides`, the .bbl's lines before its first `\bibitem`): TeX reads them only where
+    `\bibliography` stands, so the probe knew none of the entries' macros, their calls an error there and no text.
+    `\providecommand` defines only what is undefined, as it does where the .bbl is read; it is read as TeX reads the .bbl, a
+    comment gone with its line's end and a definition under the .bbl's `\makeatletter` given one again (the reviews of #486:
+    REVTeX's `\@ifxundefined`, 2307.16209v1). Measured (`classes-gate.mjs --made --compile`, the bibliography's entries units
+    and the job's .bbl made as production makes it, against `next` eb759e9f, over the 35 papers: the 25, 2610.20848v1,
+    2608.12606v1, 2610.34042v1 and the gate pack's 7): drawn gained 58, lost 0 — 56 entries (2610.20848v1's 35, all its
+    entries with a DOI; 2608.12096v1 17; 2608.16117v1 u186, u190, u199, u202, a `\URLprefix` before its `\url` among them,
+    answered now the probe knows it) and 2 paragraphs (2212.06817v2 u187's `\algname\footnote{…}` and 2608.18685v1 u9's
+    `\methodname\footnote{…}`, text after the call); every base page pixel for pixel `next`'s; the entries the wrap leaves the
+    original's 134 to 78. Those left are other shapes: 2608.25210v2's 64, a `\natexlab{}` after the year that sets no ink, which
+    its .bbl defines by `\expandafter\ifx\csname natexlab\endcsname\relax\def…\fi` and not by `\providecommand`; an entry's
+    `\&` LOST (2608.12606v1 3, 2610.34042v1 2); `\dodoi{…}` alone at an entry's end (2608.12606v1 u175); `{\DJ}uri…`
+    (2608.16117v1 u207); 2610.20716v1's 6 by the spell check. The gate pack is `0b3109a8`'s with 2608.16117v1's two outputs'
+    layout files and base pages made again (`e8e9eeb5`: their base pages' marks move, their pixels do not).
   - Measured (2026-10-28, `lab/pdf/spikes/classes-gate.mjs --compile`, production's path on each paper's year, against `next`
     2346530d unit by unit (and c038d549 before it alike), over the 25 papers of 170 local sources whose units hold the shape and the gate pack's 7): drawn
     (laid, no LOST piece: `locatedWhole`'s rule) gained 22, lost 0, in 10 papers (2609.20976v1 u4, u19, u41, u46, u59, u61;

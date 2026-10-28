@@ -246,13 +246,41 @@ export function openPaper(files) {
  *  `latex` (latex-front.mjs dviEngine), each
  *  followed by its DVI marks (DVI_MARK_DEF, marks.mjs DVI_LAYOUT_TEX), so that the probe asks TeX about the marks the DVI
  *  compile sets. Without it, the bytes as before */
+/**
+ * The definitions a paper's .bbl makes for itself (`<job>.bbl`, the one TeX reads: shipped or made, layout/paper.mjs
+ * madeBibliography): each `\\providecommand` of the lines before its first `\\bibitem`, whole, in its order (an elsarticle .bbl's
+ * `\\providecommand{\\DOIprefix}{doi:}`, `\\providecommand{\\doi}[1]{…}`). TeX reads them where \\bibliography stands, so the
+ * mark probe, set right after \\begin{document}, knew none of the entries' own macros: their calls an error there, no answer and no
+ * text. A \\providecommand defines only what is undefined, as it does where the .bbl is read. Read as TeX reads the .bbl: a comment
+ * (an unescaped `%` to its line's end) taken out with its line's end and the next line's leading blanks, so that neither a
+ * commented-out definition nor a brace in a comment counts, and the definition's tokens are TeX's; and one read under
+ * `\\makeatletter` given in it again, `@` a letter as it was there (the reviews of #486). '' where the paper has no .bbl, or none
+ */
+export function bblProvides(fsys, main) {
+  const path = `${jobName(main)}.bbl`
+  if (!fsys.list().includes(path)) return ''
+  const text = uncommentedTex(texText(fsys.read(path))), end = text.search(/\\bibitem(?![A-Za-z@])/)
+  const head = end < 0 ? text : text.slice(0, end), out = []
+  /** where `@` is a letter in the head: after a \\makeatletter, before the \\makeatother after it */
+  const letters = at => { const a = head.lastIndexOf('\\makeatletter', at), o = head.lastIndexOf('\\makeatother', at); return a >= 0 && a > o }
+  for (const m of head.matchAll(/\\providecommand\*?\s*(?:\{\s*\\[A-Za-z@]+\s*\}|\\[A-Za-z@]+)\s*(?:\[\d\]\s*)?(?:\[[^\]]*\]\s*)?\{/g)) {
+    // (its body, braces balanced; a body that runs off the .bbl's head is none)
+    let depth = 1, j = m.index + m[0].length
+    for (; j < head.length && depth; j++) { if (head[j] === '\\') { j++; continue } if (head[j] === '{') depth++; else if (head[j] === '}') depth-- }
+    if (!depth) out.push(letters(m.index) ? `\\makeatletter${head.slice(m.index, j)}\\makeatother ` : head.slice(m.index, j))
+  }
+  return out.join('')
+}
+/** a TeX source with its comments taken out as TeX reads them: from an unescaped `%` (an even number of backslashes before it) to
+ *  its line's end, that line's end and the next line's leading blanks with it (TeX skips the blanks a line begins with) */
+const uncommentedTex = t => t.replace(/(?<!\\)((?:\\\\)*)%[^\n]*(?:\n[ \t]*)?/g, '$1')
 export function probeFiles({ fsys, project, meta }, { width = false, marks = false } = {}) {
   // (the main file as the front end reads it, its line ends TeX's: read raw, a lone-CR preamble's first comment hid its
   // \begin{document}, and the probe was the whole document and a second one)
   const text = texText(fsys.read(project.main))
   const at = beginDocument(text)
   const dvi = dviEngine(meta?.compiler)
-  const head = marks ? MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') : '', probe = marks ? markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units), leadSamples(project.units)) : ''
+  const head = marks ? MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') : '', probe = marks ? `${bblProvides(fsys, project.main)}${markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units), leadSamples(project.units))}` : ''
   return new Map([[project.main, latin1Bytes(`${head}${END_TEX}${text.slice(0, at)}${FONT_PROBE}\\begin{document}${width ? WIDTH_PROBE : ''}${probe}\\end{document}\n`)]])
 }
 

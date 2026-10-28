@@ -339,6 +339,22 @@ describe('ownedOf for the erasure (erasure: true)', () => {
     expect(ink([sym], { 'p0.1a': { ...split, split: { name: 'n0.3a', text: `d${INK_ANY}` } }, 'p0.5a': closed }, false)).toEqual({ 'p0.1a': ['d′', 0], 'n0.3a': ['1', 0], 'p0.5a': ['[1]', 0] })
     expect(ink([page], { 'p0.1a': { ...split, split: undefined }, 'p0.5a': closed }, false)).toEqual({ 'p0.1a': 'open, an unmarked piece follows', 'p0.5a': ['[1]', 0] })
   })
+  it('parts a macro\'s ink from an unmarked piece with text after it, to where that text begins (an elsarticle .bbl\'s `\\DOIprefix\\doi{…}.`, 2610.20848v1)', () => {
+    // \DOIprefix = "doi:", then \doi{10.1007/978-3} unmarked and the entry's full stop: the DOI's own dots are no text after it
+    const page = pageOf(['Radio. ', { at: 'p0.3a' }, 'doi:10.1007/978-3.', { at: '0e' }])
+    const split: Follow = { closing: false, want: '', ends: ['p0.4a', '0e'], blocked: true, through: null, split: { name: 'p0.4a', text: 'doi:', want: '.', rest: '', ends: ['0e'] } }
+    expect(ink([page], { 'p0.3a': split }, false)).toEqual({ 'p0.3a': ['doi:', 0], 'p0.4a': ['10.1007/978-3', 0] })
+    expect(owned([page], { 'p0.3a': split })).toEqual({ 'p0.3a': ['doi:', 0], 'p0.4a': ['10.1007/978-3', 0] })
+    // (the erasure's reading: the two's ink the macro's, to the full stop)
+    expect(ink([page], { 'p0.3a': split }, true)).toEqual({ 'p0.3a': ['doi:10.1007/978-3', 0] })
+    // (text after it, then a marked piece's point: to where that text begins)
+    const more = pageOf(['Radio. ', { at: 'p0.3a' }, 'doi:10.1/x, see ', { at: 'p0.7a' }, 'x.org', { at: 'p0.7b' }, '.', { at: '0e' }])
+    const seen: Follow = { ...split, split: { name: 'p0.4a', text: 'doi:', want: ',see', rest: 'see', ends: ['p0.7a', '0e'] } }
+    expect(ink([more], { 'p0.3a': seen, 'p0.7a': closed }, false)).toEqual({ 'p0.3a': ['doi:', 0], 'p0.4a': ['10.1/x', 0], 'p0.7a': ['x.org', 0] })
+    // (its text after it not found, or the next point no piece of its ends: LOST as before)
+    expect(ink([page], { 'p0.3a': { ...split, split: { ...(split.split as object), want: ';', rest: '' } as never } }, false)['p0.3a']).toBe('open, an unmarked piece follows')
+    expect(ink([more], { 'p0.3a': { ...seen, split: { ...(seen.split as object), ends: ['0e'] } as never }, 'p0.7a': closed }, false)['p0.3a']).toBe('open, an unmarked piece follows')
+  })
   it('ends a display after its unit\'s end mark at a later unit\'s opening, that unit\'s label left out (2610.20595v1 p19u153)', () => {
     const page = pageOf(['states follow', { at: '0e' }, { at: 'p0.3a' }, '\nE=mc(G9)', '\n', { u: '2', x: 72, y: 676 }, { u: '.', x: 77, y: 676 }, { at: 'p1.0a' }, { at: 'h1s' }, { u: 'T', x: 90, y: 676 }, 'riangulene', { at: 'p1.0b' }])
     const f = { 'p0.3a': open('', ['0e']), 'p1.0a': closed }
