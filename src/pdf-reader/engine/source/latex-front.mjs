@@ -1127,6 +1127,10 @@ const ROW_LEAD = /^(?:\s+|%[^\n]*(?:\n|$)|\{|\\(?:vspace|hspace|vskip)\*?\s*\{[^
 /** an affiliation's mark opening a row (a numbered list of places, `$^1$University of X`): a superscript, IEEEtran's
  *  \\IEEEauthorrefmark, a style's \\affmark. A row of names sets its marks after each name, never before the first */
 const MARK_FIRST = /^(?:\$\s*(?:\{\s*\})?\s*\^|\\\(\s*(?:\{\s*\})?\s*\^|\\(?:textsuperscript|IEEEauthorrefmark|affmark)(?![A-Za-z@]))/
+/** the same mark after a name's last letter (`Marcelo Kuperman$^{3,4}$`): a row of names, wherever it stands in its block —
+ *  names that run over two rows, their places set elsewhere (2608.14893's second row of names, read as a place). A place opens
+ *  with its mark, never sets one after its words */
+const MARK_AFTER = /[^\s{$\\]\s*(?:\$\s*(?:\{\s*\})?\s*\^|\\\(\s*(?:\{\s*\})?\s*\^|\\(?:textsuperscript|IEEEauthorrefmark|affmark)(?![A-Za-z@]))/
 /** whether a row of an author block opens with an affiliation's mark (MARK_FIRST), what stands before its text aside */
 function markFirst(src) {
   let t = src
@@ -1194,10 +1198,11 @@ function frontBlock(s, from, to, b, ctx, role = 'names') {
   const kindAt = []
   for (const rows of blocks) {
     const led = rows.map(([x, y]) => markFirst(s.slice(x, y))), marked = led.indexOf(true)
-    // (a row of names: the block's first, every row before its numbered places where it has them, and a row that holds an
-    // author's note, which LaTeX's \\thanks is and a note's mark sets after a name; never one an affiliation's mark opens)
+    // (a row of names: the block's first, every row before its numbered places where it has them, a row that holds an
+    // author's note, which LaTeX's \\thanks is and a note's mark sets after a name, and a row that sets an affiliation's mark
+    // after a name (MARK_AFTER); never one an affiliation's mark opens)
     const noted = ([x, y]) => notes.some(n => n.at >= x && n.at < y) || /\\footnotemark(?![A-Za-z@])/.test(s.slice(x, y))
-    rows.forEach((row, r) => kindAt.push([row[0], role === 'names' && !led[r] && (r === 0 || (marked >= 0 && r < marked) || noted(row)) ? 'author' : 'affiliation']))
+    rows.forEach((row, r) => kindAt.push([row[0], role === 'names' && !led[r] && (r === 0 || (marked >= 0 && r < marked) || noted(row) || MARK_AFTER.test(s.slice(row[0], row[1]))) ? 'author' : 'affiliation']))
   }
   const kindOf = at => kindAt.findLast(([x]) => x <= at)?.[1] ?? 'affiliation'
   // (the units' numbers: what PIPELINE 29 cut the text between two notes into, its walk as one author block's (olderUnits), keeps

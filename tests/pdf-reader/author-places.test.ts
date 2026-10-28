@@ -41,6 +41,18 @@ describe('an author block\'s names and its places, by the TeX that sets them', (
     expect(names(p)).toEqual(['Alice', 'Bob'])
     expect(places(p)).toEqual(['The University'])
   })
+  it('a row that sets an affiliation\'s mark after a name is names, its places set elsewhere (2608.14893\'s second row of names)', () => {
+    const p = open('\\maketitle\nWords.', '\\author{Favio Di Ciocco$^{1,2,\\dagger}$, Sebastian Pinto$^{1}$ \\\\\nMarcelo Kuperman$^{3,4}$, Pablo Balenzuela\\textsuperscript{1,2,*}}\n\\date{}')
+    expect(names(p)).toEqual(['Favio Di Ciocco, Sebastian Pinto', 'Marcelo Kuperman, Pablo Balenzuela'])
+    expect(places(p)).toEqual([])
+    // (a place opens with its mark: a row led by one stays a place, after any rows of names)
+    const q = open('\\maketitle\nWords.', '\\author{Alice Smith$^{1}$ \\\\ Bob Jones$^{2}$ \\\\ $^{1}$University of Somewhere, $^{2}$Institute of Elsewhere}')
+    expect(names(q)).toEqual(['Alice Smith', 'Bob Jones'])
+    expect(places(q)).toEqual(['University of Somewhere, Institute of Elsewhere'])
+    // (a row with no mark after the first is a place, as the classes set it: a name alone on a later row cannot be told from a
+    // place by its TeX)
+    expect(places(open('\\maketitle\nWords.', '\\author{Alice Smith \\\\ Department of Physics}'))).toEqual(['Department of Physics'])
+  })
   it('authblk: \\author[n] names, a row of them begun by \\authorcr, \\affil[n] places, a row each', () => {
     const p = open('\\maketitle\nWords.', '\\usepackage{authblk}\n\\author[1]{Alice Smith}\n\\author[2]{Bob Jones \\authorcr Carol White}\n\\affil[1]{University of Somewhere}\n\\affil[2]{Institute of Elsewhere \\\\ A City}')
     expect(names(p)).toEqual(['Alice Smith', 'Bob Jones Carol White'])
