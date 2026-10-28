@@ -194,3 +194,55 @@ describe('a layout no barred start touches is the one it was', () => {
     expect(digests).toEqual({ de: '458033d154ed2821', ru: 'fe6bba85f07f8b69', zh: '2dcefb1882647b20', ja: '8e3872a8cb90cd41', ko: '31d1186069ea0844' })
   })
 })
+
+describe('a pair UAX 14 keeps together', () => {
+  // (LB17, B2 × B2: Chinese and Japanese write their dash as two em dashes, U+2014 twice, which xeCJK sets full width and
+  // never breaks between; LB22's × IN between two ellipses alike. Each is a CJK token of its own where the rules set the dash
+  // and the ellipsis as CJK's, cjkQuotes, so the breaker could break between the two)
+  const WIDE = /[\u2014\u2026\u3000-\u9fff]/u
+  const wideMeasure = (s: string) => [...s].reduce((a, ch) => a + (WIDE.test(ch) ? 100 : 50), 0)
+  const HAN = '\u6c49\u5b57\u6587\u672c\u7ffb\u8bd1\u6a21\u578b\u6570\u636e'
+  for (const [what, pair] of [['two em dashes', '\u2014\u2014'], ['two two-dot leaders', '\u2025\u2025']] as const) {
+    it(`${what} stand on one line wherever the line ends (zh, ja)`, () => {
+      for (const to of ['zh', 'ja']) {
+        // (eight characters a line, 82 pt; the pair at every position of the first line and across its end)
+        for (let n = 0; n <= 10; n++) {
+          const text = `${HAN.slice(0, n)}\u8fd9\u662f${pair}\u6d4b\u8bd5${HAN}${HAN}`
+          const { shown, layout } = lay(text, to, 82, { measure: wideMeasure })
+          expect(layout.clipped, `${to} ${n}`).toBe(false)
+          expect(ink(shown.join('')), `${to} ${n}`).toBe(ink(text))
+          const split = shown.slice(1).filter((l, k) => shown[k]!.endsWith(pair[0]!) && l.startsWith(pair[1]!))
+          expect(split, `${to} ${n}: ${JSON.stringify(shown)}`).toEqual([])
+        }
+      }
+    })
+  }
+  it('a single em dash is no pair: a line may still end after it, and after the second of two', () => {
+    // (seven characters and the dash fill the line, 80 pt; the next character opens the next one)
+    expect(lay(`${HAN.slice(0, 7)}\u2014\u6d4b\u8bd5`, 'zh', 82, { measure: wideMeasure }).shown).toEqual([`${HAN.slice(0, 7)}\u2014`, '\u6d4b\u8bd5'])
+    expect(lay(`${HAN.slice(0, 6)}\u2014\u2014\u6d4b\u8bd5`, 'zh', 82, { measure: wideMeasure }).shown).toEqual([`${HAN.slice(0, 6)}\u2014\u2014`, '\u6d4b\u8bd5'])
+  })
+})
+
+describe('a word cut by its characters', () => {
+  // (a word wider than its line is cut where the line ends: never inside a character the reader sees as one, a letter and
+  // the combining marks over it, a flag's two regional indicators)
+  const MARK = /^\p{M}/u
+  it('is cut between graphemes: no line opens with a combining mark', () => {
+    for (const word of ['e\u0301'.repeat(14), 'a\u0308o\u0308u\u0308'.repeat(5), 'n\u0303\u0323'.repeat(9)]) {
+      for (const w of [23, 27, 31, 46]) {
+        const { shown, layout } = lay(`${word} cc`, 'de', w, { lines: 30 })
+        expect(layout.clipped, `${w}`).toBe(false)
+        expect(shown.join('').replace(/\s+/g, ''), `${w}`).toBe(`${word}cc`)
+        expect(shown.filter(l => MARK.test(l)), `${w}: ${JSON.stringify(shown)}`).toEqual([])
+      }
+    }
+  })
+  it("is cut between graphemes: a flag's two regional indicators stay together", () => {
+    const flags = '\u{1f1ef}\u{1f1f5}\u{1f1e9}\u{1f1ea}\u{1f1eb}\u{1f1f7}'.repeat(3)
+    for (const w of [23, 31, 46]) {
+      const { shown } = lay(`${flags} cc`, 'de', w, { lines: 30 })
+      for (const l of shown) expect([...l.replace(/\s.*$/, '')].filter(c => /\p{RI}/u.test(c)).length % 2, `${w}: ${JSON.stringify(shown)}`).toBe(0)
+    }
+  })
+})

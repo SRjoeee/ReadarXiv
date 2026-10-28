@@ -62,7 +62,7 @@
 // from its source), and the first line's repairs (a far-in first line moved to its block's edge, its start snapped back to
 // its first word). A unit the file does not hold stays the original's. The descriptions above of what those did are the
 // history of how the readings the file now gives were first made.
-import { noStart } from './no-start.mjs'
+import { keptPair, noStart } from './no-start.mjs'
 import { work } from './work.mjs'
 import { sourceRepeats, stutterCuts } from './stutter.mjs'
 import { blocksOf, CITE, kinsokuOf, lcsPairs, median, norm, phClass, texToText, wordsOf } from './layer1.mjs'
@@ -316,6 +316,8 @@ export function phClass2(src) {
  *  it is drawn as; a LaTeX text symbol's character as it is (\textasciicircum's caret is no such mark) */
 const symbolDrawn = src => symbolText(src) ?? texToText2(src).replace(/^\^\(?|\)$/g, '')
 const GRAPHEMES = new Intl.Segmenter('en', { granularity: 'grapheme' })
+/** a text's graphemes, each a string: what a reader sees as one character */
+const graphemesOf = t => Array.from(GRAPHEMES.segment(t), g => g.segment)
 /**
  * Whether a placeholder of phClass2's 'symbol' (no Latin letter or digit in its rendering) is a text symbol, the one
  * kind the file's crops exempt (tex.mjs cropsOf): its drawn text one grapheme (\%, \_, $\times$, $^\dagger$), and a formula's
@@ -1930,13 +1932,22 @@ export function extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, 
 
 const PUNCT_CLOSE = /^[\u3001\u3002\uFF0C\uFF0E\uFF1A\uFF1B\uFF01\uFF1F\uFF09\u300D\u300F\u3011\u3015\u3009\u300B\u3019\u3017”’]$/
 const PUNCT_OPEN = /^[\uFF08\u300C\u300E\u3010\u3014\u3008\u300A\u3018\u3016“‘]$/
-/** the characters a CJK run takes: CJK, full-width forms, and where the rules say so (Chinese and Japanese) the curly quotes
- *  and dashes, which xeCJK sets full width there (Korean sets them as its Western punctuation). Tested a code point at a time (`u`): a
- *  character outside the BMP is CJK only in the two ideographic planes, U+20000 to U+3FFFF (the CJK extensions B to J and
- *  the compatibility supplement), where a non-`u` class took every astral character for CJK through its surrogates and
- *  sent Mathematical Alphanumeric Symbols, which the body face lacks, to it. `quotes` (the rules' cjkQuotes): whether the
- *  curly quotes, dashes, ellipsis and middle dot are CJK's too */
-export const cjkClassRe = quotes => (!quotes ? /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u{20000}-\u{3FFFF}]/u : /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F“”‘’—…·\u{20000}-\u{3FFFF}]/u)
+/** the characters a CJK run takes: CJK, full-width forms, Hangul, and where the rules say so (Chinese and Japanese) the curly
+ *  quotes and dashes, which xeCJK sets full width there (Korean sets them as its Western punctuation). As code points, tested
+ *  a code point at a time (`u`): the compatibility ideographs' first, U+F900, typed as itself was normalized into the unified
+ *  ideograph U+8C48 it stands for, and its range ran on over U+A000 to U+F8FF (Yi, Lisu, Vai, Cyrillic Extended-B, Latin
+ *  Extended-D, the surrogates and the private-use area, a font's icons: laid in the CJK face), as in pipeline/anchors.mjs.
+ *  A character outside the BMP is CJK only in the two ideographic planes, U+20000 to U+3FFFF (the CJK extensions B to J
+ *  and the compatibility supplement), where a non-`u` class took every astral character for CJK through its surrogates and
+ *  sent Mathematical Alphanumeric Symbols, which the body face lacks, to it. Hangul is its syllables and every block of its
+ *  jamo (the compatibility jamo and the two extended blocks among them) */
+const CJK_SPANS = [[0x1100, 0x11ff], [0x2e80, 0x9fff], [0xa960, 0xa97f], [0xac00, 0xd7ff], [0xf900, 0xfaff], [0xff00, 0xffef], [0x20000, 0x3ffff]]
+/** the curly quotes, the em dash, the ellipsis and the middle dot: CJK's where the rules' cjkQuotes say so */
+const CJK_QUOTES = [0x201c, 0x201d, 0x2018, 0x2019, 0x2014, 0x2026, 0xb7].map(c => [c, c])
+const spansClass = spans => new RegExp(`[${spans.map(([a, b]) => (a === b ? `\\u{${a.toString(16)}}` : `\\u{${a.toString(16)}}-\\u{${b.toString(16)}}`)).join('')}]`, 'u')
+const CJK_CLASS = [spansClass(CJK_SPANS), spansClass([...CJK_SPANS, ...CJK_QUOTES])]
+/** `quotes` (the rules' cjkQuotes): whether the curly quotes, dashes, ellipsis and middle dot are CJK's too */
+export const cjkClassRe = quotes => CJK_CLASS[quotes ? 1 : 0]
 /** the attributes a piece may set over what it holds, a bit each: weight, slant, small capitals, family, colour */
 const WEIGHT = 1, SLANT = 2, CAPS = 4, FAMILY = 8, COLOUR = 16, EVERY = 31
 const STYLE_CMDS = [
@@ -2352,6 +2363,8 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     afterHead = false
     if (prev && !prev.space && !t.space) {
       if (kinsoku.starts(t.s ?? '') || (prev.s && kinsoku.ends(prev.s))) t.glue = true
+      // (a pair UAX 14 keeps together, two em dashes or two ellipses, each a CJK character of its own: no-start.mjs keptPair)
+      else if (keptPair(prev.s, t.s)) t.glue = true
       // Latin after Latin with nothing between them (a number and its ×, a word and its placeholder's text) stands
       // together, but not after a word's own hyphen
       // (a kern between them is something: the glue a line may break at, or a \kern's, which glues them itself)
@@ -3068,6 +3081,9 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
   const kinsoku = kinsokuOf(P.noStart ?? '', P.noEnd ?? '')
   const barredChar = ch => noStart(ch) || kinsoku.starts(ch)
   const barred = t => !t.space && typeof t.s === 'string' && t.s !== '' && barredChar(t.s)
+  // (a word wider than its line cut by its characters, each a grapheme, what a reader sees as one character: a letter and the
+  // marks over it, a flag's two regional indicators; never before a mark no line opens with, nor inside a pair UAX 14 keeps)
+  const cutBarred = (chars, k) => barredChar(chars[k]) || keptPair(chars[k - 1], chars[k])
   let line = null
   // (`past`: how many of the unit's kept regions the text has passed before the line's first item, the walk's own count
   // (`consumed`, below): where the page's word table writes a region's kept lines, words.mjs, in the text's order whatever
@@ -3380,12 +3396,12 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
           // (the word whole on the line: what is glued after it goes on, as the group's first token alone does below)
           if (tokens[m]) tokens = [...tokens.slice(0, m), { ...tokens[m], glue: false }, ...tokens.slice(m + 1)]
         } else {
-          const t = tokens[q], chars = [...t.s]
+          const t = tokens[q], chars = graphemesOf(t.s)
           const per = chars.map(c => (w100(c, t.face) * (t.sc ?? 1) * f) / 100)
           let k = 0, head = 0
           while (k < chars.length && used + head + per[k] <= cap) head += per[k++]
           if (q === i) { k = Math.max(1, k); head = per.slice(0, k).reduce((a, b) => a + b, 0) }
-          while (k > 1 && k < chars.length && barredChar(chars[k])) { k--; head -= per[k] }
+          while (k > 1 && k < chars.length && cutBarred(chars, k)) { k--; head -= per[k] }
           if (k > 0) {
             line.items.push({ t: headOfCut(t, { s: chars.slice(0, k).join('') }), w: head, shift: 0, asp: 0 })
             used += head
@@ -3395,14 +3411,14 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true) {
         }
         line.x += used
         i = q
-      } else if (t0.s && [...t0.s].length > 1 && tokW(t0, f, st, scale) > cap) {
-        const chars = [...t0.s]
+      } else if (t0.s && graphemesOf(t0.s).length > 1 && tokW(t0, f, st, scale) > cap) {
+        const chars = graphemesOf(t0.s)
         let k = 0, used = 0
         const per = chars.map(c => (w100(c, t0.face) * (t0.sc ?? 1) * f) / 100)
         while (k < chars.length && used + per[k] <= cap) used += per[k++]
         k = Math.max(1, k)
-        // (the part left never opens with a mark no line starts with: the cut moves back before it)
-        while (k > 1 && k < chars.length && barredChar(chars[k])) k--
+        // (the part left never opens with a mark no line starts with, nor parts a pair UAX 14 keeps: the cut moves back before it)
+        while (k > 1 && k < chars.length && cutBarred(chars, k)) k--
         line.items.push({ t: headOfCut(t0, { s: chars.slice(0, k).join('') }), w: per.slice(0, k).reduce((a, b) => a + b, 0), shift: 0, asp: 0 })
         const tail = chars.slice(k).join('')
         tokens = [...tokens.slice(0, i), { ...t0, s: tail, w100: w100(tail, t0.face) * (t0.sc ?? 1), glue: false, asp: false }, ...tokens.slice(i + 1)]
