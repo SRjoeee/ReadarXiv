@@ -1276,7 +1276,10 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   References' Chinese lit nothing on either side, its Conclusion's and Acknowledgements' did). A source unit and an ink unit (its
   left anchor arXiv's tokens on its lines, `ink-pass.mjs` `inkAnchors`) light as units. A figure's level label is anchored by
   arXiv's tokens in its run's band (`figureAnchors`, PIPELINE 31) and its translation's words are under its unit's id
-  (`run.mjs` `paintFigures`); it is held by its float as a drawing's TikZ text is (`floats.mjs` `HELD`: as running text it stopped
+  (`run.mjs` `paintFigures`); its part holds its left anchor beside its figure row, never a layout row of it (`format.mjs`
+  `partShape`; the chain tells its row once, apart from its left unit, `figured`), and the layer's units leave it to its row (the
+  web's re-pin at 3b2aa271: every part with a figure unit was refused its layout, `figures[0][0]: a unit of the left or of the
+  layout`, until the check took the left anchor); it is held by its float as a drawing's TikZ text is (`floats.mjs` `HELD`: as running text it stopped
   the caption's walk, a diagram of labelled boxes losing its float), so hovering it lights the figure whole, and one outside
   every float lights alone; a turned label is in no text layer, and the figure's float lights it. A babel name (Abstract,
   References, Contents, …) is no unit of the bundle's: each occurrence lights as a heading under a hover id of its own
