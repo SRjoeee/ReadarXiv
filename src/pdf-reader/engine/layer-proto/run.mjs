@@ -62,7 +62,7 @@ import * as LK from './links.mjs'
 import * as TL from './textlayer.mjs'
 import { locatedWhole, shortSkipsOf, texParts, texRects } from './tex.mjs'
 import { shown as shownPiece, trPiecesOf } from '../layer/pieces.mjs'
-import { fitFigure, sameAsSource } from './figure-fit.mjs'
+import { fitFigureSet, sameAsSource } from './figure-fit.mjs'
 import { FIGURE_KIND } from '../rules/content-classes.mjs'
 import { NAME_KIND } from './units.mjs'
 import { addUnitWords, copyWords, freezeWords, newWords, pieceOffsets, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
@@ -1431,12 +1431,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   }
 
   // ---- the figures' text (the content class `figures`, docs/route/orphan-text.md stage 5): each figure unit its page's parts
-  // carry (hiding.figures: BUNDLE 10's figure rows, figure-rows.mjs), drawn in its translation where the reader shows figures
-  // translated (hiding.figuresShown), its ink hidden by its own group (`f<k>`), its words in its run's box by the fit rule
-  // (figure-fit.mjs: on its baseline, turned as it was, its anchor kept, at its size or shrunk to the rules' last floor), in a face
-  // of its font's family and weight, in its fill; else left the original's, why told (`no row`, `untranslated`, `same` as its
-  // source, `unhidden` where the document holds no group of it, a face's refusal, `unfit`). A page whose figures are shown waits
-  // for their rows as for its units' (figuresWait). `figures`: each figure unit of the pages laid, drawn or why not
+  // carry (hiding.figures: BUNDLE 11's figure rows, figure-rows.mjs), drawn in its translation where the reader shows figures
+  // translated (hiding.figuresShown), its ink hidden by its own group (`f<k>`), its words by the fit rule with the rest of its set
+  // (figure-fit.mjs fitFigureSet: on its baseline, turned as it was, from its anchor's edge, into the room beside its box, every
+  // unit of one set at one size, the original's or one factor less, to the rules' last floor), in a face of its font's family and
+  // weight, in its fill; else left the original's, why told (`no row`, `untranslated`, `same` as its source, `unhidden` where the
+  // document holds no group of it, a face's refusal, `unfit`). A page whose figures are shown waits for their rows as for its
+  // units' (figuresWait). `figures`: each figure unit of the pages laid, drawn or why not
   const figureRecs = []
   /** each page's figures: 1 while painted (an await of their faces under way), 2 once painted; a page is ready at 2 alone */
   const figuresDone = new Uint8Array(N + 1)
@@ -1445,6 +1446,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const paintFigures = async pg => {
     if (figuresDone[pg]) return
     figuresDone[pg] = 1
+    // (each unit's translation and face first, then each set fitted at one size, then each drawn in its rows' order)
+    const ready = []
     for (const f of figuresOn(pg)) {
       const rec = { id: f.id, group: f.group, page: pg, drawn: false, why: null }
       figureRecs.push(rec)
@@ -1465,7 +1468,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         if (disposed) return
         if (no) { Object.assign(rec, { why: no.why, text }); continue }
       }
-      const fit = fitFigure(f, L2.runsWidth(drawn), P.floorMin)
+      ready.push({ f, rec, text, drawn, width1: L2.runsWidth(drawn) })
+    }
+    const bySet = new Map()
+    for (const c of ready) (bySet.get(c.f.set ?? c.f.group) ?? bySet.set(c.f.set ?? c.f.group, []).get(c.f.set ?? c.f.group)).push(c)
+    const fits = new Map()
+    for (const list of bySet.values()) fitFigureSet(list, P.floorMin).forEach((fit, i) => fits.set(list[i], fit))
+    for (const c of ready) {
+      const { f, rec, text, drawn } = c, fit = fits.get(c)
       if (!fit) { Object.assign(rec, { why: 'unfit', text }); continue }
       const r = rows[pg - 1], px = pxOf(pg)
       r.off.add(f.group)
@@ -1481,7 +1491,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       r.markup.push(L2.svgOfFigure({ group: f.group, text: drawn.text, x, y, angle, size: fit.size, face: drawn.face, color: f.fill > 0 ? L2.hexOf(f.fill) : null }, cssOf(pg), scale))
       // (a level one's words in the page's text layer, as a name's; a turned one's are not selectable)
       if (Math.abs(f.uy) < 1e-6 && f.ux > 0) textRecord(r, opsFrom, f.group, undefined, [TL.nameSeg(drawn.text, x, fit.width, y, fit.size)])
-      Object.assign(rec, { drawn: true, text, size: r1(fit.size), x: r1(x), y: r1(y), w: r1(fit.width) })
+      Object.assign(rec, { drawn: true, text, size: r1(fit.size), x: r1(x), y: r1(y), w: r1(fit.width), set: f.set ?? f.group })
     }
     figuresDone[pg] = 2
   }

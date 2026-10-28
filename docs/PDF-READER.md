@@ -2756,6 +2756,24 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   `ANCHOR_RATIO` 2 (a legend's line sample, an arrow it labels), `end` where the ink after it is, else `centre`. A unit whose
   band meets other ink inside its box (another glyph, a stroke's segment widened by its half line width, a fill's edge, an image
   or a shading not holding the band) is `crowded`, left the original's: a translation there could cover that ink.
+- **Its set and its room** (the owner's rule of 2026-10-29, after 2010.11929v2's legends in Chinese: "All" drawn smaller
+  than the other entries, "Patch size" starting further right than its column, "Head 3" smaller than "Head 1", each label
+  fitted to its own box and anchored by what it read alone; `figure-text.mjs` `setsOf`, `roomsOf`): the labels of one group are set at one size, the original's by default; each keeps the original's alignment
+  and anchor; a translation may take free space, never touching other ink nor leaving its figure; only a group that cannot
+  fit shrinks, all of it by one factor, never a label alone. A **column** is the runs of one figure, size and direction whose
+  starts, ends or middles agree within `ALIGN_TOL` 0.08 of their size, two units or more among them; its other runs, a
+  number or a "…", count for its edge (2010.11929v2's "Head 1/2/3", one length, read their end alone, the frame being
+  nearer after them than their markers before; the column's "…" shares their start alone). A unit in a column takes the
+  column's edge as its anchor — the edge the most of its runs share, a tie broken by the readings of its units, then
+  start, end, middle — whatever it read alone: a legend's longest entry with its frame right after it ("Patch size",
+  0.4 em before the frame and 0.8 em after its sample) read as centred. A number alone at a word's edge makes no column,
+  so an axis's title over a tick's label stays centred. A **set** (`set`, its first unit's k) is the units of one column of
+  one edge and those of one figure, size and direction on one baseline (an axis's words, a legend laid in a row, the two
+  panels' x titles of one figure), joined. A unit's **room** (`before`, `after`, PDF units along its direction) is the free
+  line beside its box: to the nearest ink its band meets (a glyph, a stroke, a fill's edge, an image, the edge of a ground
+  it stands on), `ROOM_CLEAR` 0.15 em short of it; never past its figure's extent (pageInk's `figures`: every box painted
+  inside the form or the picture, with its glyphs); half the line to another unit whose band its own meets, the other half
+  that unit's; `ROOM_MAX` 6 em at most.
 - **Its ink** is its own group `f<k>` (`layout/wrap.mjs`): its runs wrapped where they are shown, in the page's stream, or in the
   stream of the form an included PDF is, that form written again once in the wrap section under its own number, its dict ours but
   its stream's keys and `/Resources`, its resources its own with `/Properties` naming its groups (beside a form's own entries:
@@ -2766,8 +2784,9 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   figures, so a figure never costs a page). The proof proves each form written as it proves a page (its BDCs balanced, its
   operators, ours taken out, the form's own) and the document's graph (`graphWhy`: each form's dict and resources ours but its
   stream and `/Properties`). `wrapFinal` returns `figures` { units (the drawn ones: page, group, text, font, size, fill, angle,
-  x, y, ux, uy, length, ascent, descent, anchor, form), stats (units, drawn, each why, letters, forms) }; with `figures: false`
-  none (the lab's A/B). REMOVAL 11 (shared, unreleased, with the ink units').
+  x, y, ux, uy, length, ascent, descent, anchor, form, set, before, after), stats (units, drawn, each why, letters, forms,
+  sets, grouped, aligned) }; with `figures: false` none (the lab's A/B). REMOVAL 11 (shared, unreleased, with the ink units');
+  the sets and rooms change no byte of the base.
 - **On the wire** (BUNDLE5 10, shared with the ink units'): each drawn figure unit an ink unit of kind `inkfigures` (its class
   `figures`), after the source units' and the other ink units', in their chunk (`INK_UNITS_FORMAT`, its echo null; `page-pass.mjs
   figureUnits`: its one text piece our glyphs' text, KEPT where it is only names, as a table's cell of names is, mt.mjs isName
@@ -2775,15 +2794,21 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   pass a head's bounds: none of the paper's then, `afterFit`), so that
   it is translated as any unit is (`toTranslate` takes it; no sentence cuts, `NOT_RUNNING`); and its place a row of the part of
   its page (`figures`, `layer-proto/figure-rows.mjs`: [id, group, page, x, y, ux, uy, length, size, ascent, descent, anchor,
-  fill, font], checked by `partShape`: ids rising, each a unit of kind inkfigures, on the part's pages, within their views,
-  none where the part has no layout; the key there only where the part has one, so that a part of none is 10's as the ink units
-  write it, and none in a part of 7's or 9's). The source units and their chunks are as before, so PIPELINE stays 28. The host
-  passes `ours.wrap.figures` (the web's `ourWrap` adds `figures: r.figures`).
+  fill, font, set, before, after], checked by `partShape`: ids rising, each a unit of kind inkfigures, on the part's pages,
+  within their views, its set a group's number at most its own, its room 0 or more, none where the part has no layout; the
+  key there only where the part has one, so that a part of none is 10's as the ink units write it, and none in a part of 7's
+  or 9's). The set and the room are BUNDLE5 11's (CTAG `b11-…`: a bundle of 10 is prepared again); a part of 10's rows, 14
+  values, is read each unit its own set with no room, as 10 drew it. The source units and their chunks are as before, so
+  PIPELINE stays as it was and no translation is asked again. The host passes `ours.wrap.figures` (the web's `ourWrap` adds
+  `figures: r.figures`).
 - **Drawn** (`run.mjs paintFigures`, once a page's figures' rows are in: the page waits for them as for its units', `rowsFor`
   ranks them with its page): its translation's text in a face of its font's family, weight and slant, in its fill, on its run's
-  baseline, turned by its angle (`layer2.mjs svgOfFigure`), by the fit rule (`layer-proto/figure-fit.mjs`): at its size, shrunk
-  to its box's length where longer, to the rules' last floor (`floorMin`, 0.6) at most, its anchor's place kept; its group set
-  OFF in render A. Left the original's: no row (`untranslated`), a translation that says its source again (`same`), no group in
+  baseline, turned by its angle (`layer2.mjs svgOfFigure`), by the fit rule (`layer-proto/figure-fit.mjs` `fitFigureSet`), set
+  by set: each translation from its anchor's edge (a start one from the original's start, an end one to its end, a middle one
+  about its middle), into its room on the side its anchor grows to (a middle one the same either side); every unit of a set at
+  one size, the original's where each fits, else the one factor its tightest translation needs, to the rules' last floor
+  (`floorMin`, 0.6) at most; a translation that would need less is the original's (`unfit`), and the rest of its set keeps the
+  factor the others need. Its group set OFF in render A. Left the original's: no row (`untranslated`), a translation that says its source again (`same`), no group in
   the document (`unhidden`), a face's refusal, `unfit`; a label of names (`kept`). The run's `figures` lists each. A page is
   ready once its figures are painted, not while a face they wait for loads.
 - **The switch** is the toggle `figures` of the reader's toggles (§19.10: `openLayer({ classes })`, the layer side's `classes`

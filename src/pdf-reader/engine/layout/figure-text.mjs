@@ -35,6 +35,17 @@
 // a fill's edge, an image's or a shading's box —, but a fill that holds the whole band (a node's fill, the plot's background), is
 // `crowded`: a translation there could cover that ink, so it stays the original's.
 //
+// Its set and its room (the owner's rule of 2026-10-29: the labels of one group set at one size, the original's, each keeping the
+// original's alignment; a translation may take free space, never touching other ink nor leaving its figure; a group that cannot
+// fit shrinks as one). A unit in a column — runs of one figure, size and direction whose starts, ends or middles lie on one line
+// within ALIGN_TOL (across their direction; for turned runs a level or upright line of the page too), two units or more among
+// them (a legend's "…" tells its column's start) — keeps its column's edge as its anchor, whatever it read alone (a legend's
+// entry with its frame right after it was set from its end, the longest one centred). The units of one column, and those of one
+// figure, size and direction on one baseline, are one set (`set`, its first unit's k), which the layer fits at one size
+// (layer-proto/figure-fit.mjs fitFigureSet). Its room (`before`, `after`) is the free line beside its box: to the nearest ink
+// its band meets (or the edge of the ground it stands on), ROOM_CLEAR short of it, within its figure's extent (pageInk's
+// `figures` and its glyphs), half the line to another unit's band (the other half that unit's), ROOM_MAX at most.
+//
 // Pure arithmetic over the pages; an original module (no port statement).
 import { classifyFont } from '../layer-proto/fonts.mjs'
 import { PICTURE_END, PICTURE_START } from './ink.mjs'
@@ -58,6 +69,12 @@ export const DRAW_BAND = Object.freeze([-0.15, 0.88])
 /** a unit's band inside its box, shrunk by this share of its size at each edge before other ink is looked for in it (an
  *  antialiased edge, a glyph's side bearing) */
 const CROWD_PAD = 0.04
+/** two runs of one figure, one size and one direction share an edge (a column's start, end or middle) where theirs lie on one
+ *  line within this share of their size (a legend's entries, an axis's labels set against it) */
+export const ALIGN_TOL = 0.08
+/** a unit's room, the free line before and after its box that a longer translation may take: at most this many of its sizes a
+ *  side, and this share of its size short of other ink (a translation never touches another's ink) */
+export const ROOM_MAX = 6, ROOM_CLEAR = 0.15
 /** the units a page may hold, at most, and a paper (past them the rest stay the original's, counted) */
 export const FIGURE_UNITS_PAGE = 400, FIGURE_UNITS_DOC = 4000
 /** a unit's text at most, in code units (a long run is a paragraph some figure holds: cut there, its rest the original's) */
@@ -120,13 +137,14 @@ function inFrame(f, b) {
  * a group or null). Returns { units, glyphs, turned, stats }: `units` each { k, page, group, text, font, size, fill, angle (degrees,
  * anticlockwise), x, y (its first glyph's origin), ux, uy, length (its box along its direction), ascent, descent (its band, em),
  * anchor ('start' | 'centre' | 'end'), form, why (null, or 'crowded') }; `glyphs[p - 1]` a Map of a level glyph's index to its
- * unit's k and `turned[p - 1]` of a turned glyph's; `stats` { units, crowded, letters, runs }
+ * unit's k and `turned[p - 1]` of a turned glyph's, and each unit's set and room (setsOf, roomsOf: `set`, its set's first
+ * unit's k; `before`, `after`, PDF units); `stats` { units, crowded, letters, runs, sets, grouped, aligned }
  */
 export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, unitsDoc = FIGURE_UNITS_DOC } = {}) {
   const fam = new Map()
   const famOf = name => { let f = fam.get(name); if (f === undefined) { f = classifyFont(name ?? '').fam; fam.set(name, f) } return f }
   const units = [], glyphMaps = [], turnedMaps = []
-  const stats = { units: 0, crowded: 0, letters: 0, runs: 0, past: 0, clipped: 0 }
+  const stats = { units: 0, crowded: 0, letters: 0, runs: 0, past: 0, clipped: 0, sets: 0, grouped: 0, aligned: 0 }
   pages.forEach((pg, pi) => {
     const glyphMap = new Map(), turnedMap = new Map()
     glyphMaps.push(glyphMap); turnedMaps.push(turnedMap)
@@ -158,8 +176,12 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
     const V = pg.view?.length === 4 ? [Math.min(pg.view[0], pg.view[2]), Math.min(pg.view[1], pg.view[3]), Math.max(pg.view[0], pg.view[2]), Math.max(pg.view[1], pg.view[3])] : null
     const offPage = (x, y) => !!V && (x < V[0] || x > V[2] || y < V[1] || y > V[3])
     let onPage = 0
+    // (the page's units with their free line, and every run shown whole, a unit's or not: a column's edge is told by them all,
+    // a legend's "…" among its entries, a tick's number under its axis's words)
+    const mine = [], evidence = []
     for (const r of runs) {
       const gs = r.gs.filter(x => !x.blank)
+      if (!r.clipped && !gs.some(x => offPage(x.ox, x.oy) || offPage(x.ex, x.ey))) evidence.push(edgesOf(r, gs))
       if (famOf(r.font) === 'math') continue
       const text = textOf(r.gs, r.frame)
       if (!WORD.test(text.normalize('NFKC'))) continue
@@ -178,13 +200,163 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       u.anchor = room.anchor
       if (room.crowded) { u.why = 'crowded'; stats.crowded++ }
       units.push(u)
+      mine.push({ u, r, free: room })
+      evidence.at(-1).unit = u
       onPage++
       stats.units++
       stats.letters += (text.match(/\p{L}/gu) ?? []).length
       for (const x of r.gs) (x.turned ? turnedMap : glyphMap).set(x.i, k)
     }
+    // (the page's units in their columns and sets, then each one's room on its line)
+    setsOf(mine, evidence, stats)
+    roomsOf(pg, S, mine)
   })
   return { units, glyphs: glyphMaps, turned: turnedMaps, stats }
+}
+
+/** a run's edges and its baseline (so that runs of one direction compare by number): each edge's place along its direction in
+ *  the page's own frame turned to it (`along`), and its point on the page (`x`, `y`) — its start (its first glyph's origin), end
+ *  (its last glyph's end) and middle —, its baseline across its direction, its size and what it may share an edge with (`key`:
+ *  one figure, one direction, one size), and the lines its edges may share (`axes`: across its direction always; for a run
+ *  turned off the page's axes, the page's level and upright lines too, as a turned axis's labels end on one level line) */
+function edgesOf(r, gs) {
+  const f = r.frame, s0 = f.ox * f.ux + f.oy * f.uy, len = Math.max(0, ...gs.map(x => along(f, x.ex, x.ey)))
+  const at = s => ({ along: s0 + s, x: f.ox + f.ux * s, y: f.oy + f.uy * s })
+  const square = Math.abs(f.ux) < 1e-3 || Math.abs(f.uy) < 1e-3
+  return { start: at(0), end: at(len), centre: at(len / 2), t: -f.ox * f.uy + f.oy * f.ux, size: r.size, key: `${r.fid}:${r.pid}:${Math.round(f.ux * 1000)}:${Math.round(f.uy * 1000)}:${r.size.toFixed(2)}`, axes: square ? AXES.slice(0, 1) : AXES, unit: null }
+}
+
+/** the edges a column may share, in the order a tie between them is broken (a column is read from its start) */
+const EDGES = Object.freeze(['start', 'end', 'centre'])
+/** the lines a column's edges lie on: across the runs' direction (`along`: one place along it), upright (`x`), level (`y`) */
+const AXES = Object.freeze(['along', 'x', 'y'])
+
+/**
+ * A page's units in their columns and sets (the owner's rule of 2026-10-29: the labels of one group set at one size, each
+ * keeping the original's alignment). A column: the runs of one key (one figure, direction and size) whose starts, ends or
+ * middles lie on one line within ALIGN_TOL of their size — across their direction, or for runs turned off the page's axes on
+ * a level or upright line of the page (a turned axis's labels, each ending at its tick) —, units or not (a legend's "…", a
+ * tick's number tell its column's edge too). A unit in a column with another unit keeps that column's edge as its anchor — the
+ * edge the most of its runs share; where edges tie, the one the most of the column's units read alone (roomOf), else the
+ * first of EDGES — whatever it read alone: a legend's entry with its frame near its end is set from its start as its column
+ * is. A set: the units of one column of one edge, and the units of one key on one baseline (within RUN_DY of their size: an
+ * axis's words, a legend laid in a row), joined; its number `set` is its first unit's k, which the layer fits it by
+ * (figure-fit.mjs fitFigureSet: one size for all). Counts the sets of two units or more (`sets`), the units in them
+ * (`grouped`) and those whose anchor the column changed (`aligned`)
+ */
+function setsOf(mine, evidence, stats) {
+  for (const { u } of mine) u.set = u.k
+  if (mine.length < 2) return
+  // (each edge's columns on each line: the runs of a key in the order of that edge's place, each joined to the one before
+  // within the tolerance)
+  const byKey = new Map()
+  evidence.forEach((e, i) => (byKey.get(e.key) ?? byKey.set(e.key, []).get(e.key)).push(i))
+  const lines = EDGES.flatMap(edge => AXES.map(axis => ({ edge, axis, parent: new Int32Array(evidence.length).map((_, i) => i) })))
+  const find = (parent, i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i] } return i }
+  for (const list of byKey.values()) {
+    if (list.length < 2) continue
+    for (const { edge, axis, parent } of lines) {
+      if (!evidence[list[0]].axes.includes(axis)) continue
+      const order = [...list].sort((a, b) => evidence[a][edge][axis] - evidence[b][edge][axis])
+      for (let j = 1; j < order.length; j++) {
+        const a = evidence[order[j - 1]], b = evidence[order[j]]
+        if (b[edge][axis] - a[edge][axis] <= ALIGN_TOL * b.size) parent[find(parent, order[j])] = find(parent, order[j - 1])
+      }
+    }
+  }
+  // (each column's runs, its units, and its units' readings alone)
+  for (const line of lines) {
+    line.runs = new Map(); line.units = new Map(); line.votes = new Map()
+    for (let i = 0; i < evidence.length; i++) {
+      const c = find(line.parent, i)
+      line.runs.set(c, (line.runs.get(c) ?? 0) + 1)
+      const u = evidence[i].unit
+      if (!u) continue
+      line.units.set(c, (line.units.get(c) ?? 0) + 1)
+      const v = line.votes.get(c) ?? line.votes.set(c, { start: 0, end: 0, centre: 0 }).get(c)
+      v[u.anchor]++
+    }
+  }
+  // (each unit's column: of the columns it shares with another unit, the one the most runs share; a tie, by the readings of its
+  // units of that column's edge, then EDGES' order. A number alone at a word's edge makes no column: an axis's title over a
+  // tick's label stays centred)
+  const at = new Map(evidence.map((e, i) => [e.unit, i]).filter(([u]) => u))
+  const chosen = new Map()
+  for (const { u } of mine) {
+    const i = at.get(u)
+    let best = null
+    for (const line of lines) {
+      const c = find(line.parent, i), n = line.units.get(c) > 1 ? line.runs.get(c) : 0
+      if (n < 2) continue
+      const vote = line.votes.get(c)[line.edge]
+      if (!best || n > best.n || (n === best.n && vote > best.vote)) best = { n, vote, edge: line.edge, id: `${line.edge}:${line.axis}:${c}` }
+    }
+    if (best) chosen.set(u, best)
+  }
+  // (the sets: a column's units of one edge, and a key's units on one baseline)
+  const parent = new Map(mine.map(({ u }) => [u, u]))
+  const root = u => { while (parent.get(u) !== u) { parent.set(u, parent.get(parent.get(u))); u = parent.get(u) } return u }
+  const join = (a, b) => { const x = root(a), y = root(b); if (x !== y) parent.set(x.k < y.k ? y : x, x.k < y.k ? x : y) }
+  const firstOf = new Map()
+  for (const [u, c] of chosen) { if (firstOf.has(c.id)) join(firstOf.get(c.id), u); else firstOf.set(c.id, u) }
+  const unitsByKey = new Map()
+  for (const { u } of mine) { const e = evidence[at.get(u)]; (unitsByKey.get(e.key) ?? unitsByKey.set(e.key, []).get(e.key)).push(u) }
+  for (const list of unitsByKey.values()) {
+    const order = [...list].sort((a, b) => evidence[at.get(a)].t - evidence[at.get(b)].t)
+    for (let j = 1; j < order.length; j++) if (Math.abs(evidence[at.get(order[j])].t - evidence[at.get(order[j - 1])].t) <= RUN_DY * order[j].size) join(order[j - 1], order[j])
+  }
+  const members = new Map()
+  for (const { u } of mine) {
+    const c = chosen.get(u)
+    if (c && c.edge !== u.anchor) { u.anchor = c.edge; stats.aligned++ }
+    u.set = root(u).k
+    members.set(u.set, (members.get(u.set) ?? 0) + 1)
+  }
+  for (const n of members.values()) if (n > 1) { stats.sets++; stats.grouped += n }
+}
+
+/**
+ * Each unit's room on its line (`before`, `after`: PDF units along its direction before its box's start and after its end), the
+ * free line a translation longer than its original may take (the owner's rule of 2026-10-29: into free space, never touching
+ * other ink, never leaving its figure): the ink its band meets nearest along its baseline (roomOf's `free`: another glyph, a
+ * stroke, a fill's edge, an image) less ROOM_CLEAR of its size; never past its figure's extent (pageInk's `figures`, with its
+ * figure's glyphs); half the line between it and another unit whose band its own meets (a neighbour's translation may take
+ * the other half); ROOM_MAX of its size at most
+ */
+function roomsOf(pg, S, mine) {
+  if (!mine.length) return
+  // (each figure's extent: its boxes', pageInk's, and its glyphs')
+  const ext = new Map()
+  for (const [key, b] of pg.figures ?? []) ext.set(key, [...b])
+  for (const x of S) {
+    if (!(x.form || x.picture > 0) || x.blank || x.turned) continue
+    const key = `${x.fid}:${x.pid}`, b = ext.get(key), g = x.ink
+    if (!b) ext.set(key, [...g])
+    else { if (g[0] < b[0]) b[0] = g[0]; if (g[1] < b[1]) b[1] = g[1]; if (g[2] > b[2]) b[2] = g[2]; if (g[3] > b[3]) b[3] = g[3] }
+  }
+  // (each unit's band on the page, as a box: its neighbours' line against it)
+  const boxOf = u => {
+    const nx = -u.uy, ny = u.ux, lo = u.descent * u.size, hi = u.ascent * u.size
+    const pts = [[0, lo], [u.length, lo], [0, hi], [u.length, hi]].map(([s1, t]) => [u.x + u.ux * s1 + nx * t, u.y + u.uy * s1 + ny * t])
+    return [Math.min(...pts.map(p => p[0])), Math.min(...pts.map(p => p[1])), Math.max(...pts.map(p => p[0])), Math.max(...pts.map(p => p[1]))]
+  }
+  const bands = mine.map(({ u }) => boxOf(u))
+  mine.forEach(({ u, r, free }, i) => {
+    const f = { ox: u.x, oy: u.y, ux: u.ux, uy: u.uy }, clear = ROOM_CLEAR * u.size, pad = CROWD_PAD * u.size
+    const lo = u.descent * u.size + pad, hi = u.ascent * u.size - pad
+    let before = Math.min(ROOM_MAX * u.size, free.before - clear), after = Math.min(ROOM_MAX * u.size, free.after - clear)
+    const e = ext.get(`${r.fid}:${r.pid}`)
+    if (e) { const b = inFrame(f, e); before = Math.min(before, -b[0]); after = Math.min(after, b[2] - u.length) }
+    bands.forEach((b, j) => {
+      if (j === i) return
+      const o = inFrame(f, b)
+      if (o[3] <= lo || o[1] >= hi) return
+      if (o[2] <= 0) before = Math.min(before, (-o[2] - clear) / 2)
+      else if (o[0] >= u.length) after = Math.min(after, (o[0] - u.length - clear) / 2)
+    })
+    u.before = Math.max(0, before)
+    u.after = Math.max(0, after)
+  })
 }
 
 /** a run's text: its glyphs' Unicode (NFKC), a space where two stand SPACE_GAP of their size apart or more (or a blank between) */
@@ -216,46 +388,56 @@ function roomOf(pg, f, u, own) {
   const mineG = new Set(own.filter(x => !x.turned).map(x => x.i)), mineB = new Set(own.filter(x => x.turned && x.box >= 0).map(x => x.box))
   const pad = CROWD_PAD * u.size
   const band = [pad, u.descent * u.size + pad, u.length - pad, u.ascent * u.size - pad]
-  const reach = ANCHOR_REACH * u.size
-  // (the nearest ink right before its box along its baseline and right after it, within the reach: their gaps to the box)
-  let crowded = false, before = Infinity, after = Infinity
-  // (what may meet its band or its reach, on the page: its frame's box there, a box apart from it no ink of its room)
+  const reach = ANCHOR_REACH * u.size, far = Math.max(reach, (ROOM_MAX + ROOM_CLEAR) * u.size)
+  // (the nearest ink right before its box along its baseline and right after it, within the reach: their gaps to the box; and
+  // within `far`, glyphs too, the free line either side: its room, roomsOf)
+  let crowded = false, before = Infinity, after = Infinity, freeBefore = Infinity, freeAfter = Infinity
+  // (what may meet its band or its line, on the page: its frame's box there, a box apart from it no ink of its room)
   const near = (() => {
     const nx = -u.uy, ny = u.ux, lo = u.descent * u.size, hi = u.ascent * u.size
-    const pts = [[-reach, lo], [u.length + reach, lo], [-reach, hi], [u.length + reach, hi]].map(([s1, t]) => [u.x + u.ux * s1 + nx * t, u.y + u.uy * s1 + ny * t])
+    const pts = [[-far, lo], [u.length + far, lo], [-far, hi], [u.length + far, hi]].map(([s1, t]) => [u.x + u.ux * s1 + nx * t, u.y + u.uy * s1 + ny * t])
     return [Math.min(...pts.map(p => p[0])), Math.min(...pts.map(p => p[1])), Math.max(...pts.map(p => p[0])), Math.max(...pts.map(p => p[1]))]
   })()
   const apart = (x0, y0, x1, y1) => Math.max(x0, x1) < near[0] || Math.min(x0, x1) > near[2] || Math.max(y0, y1) < near[1] || Math.min(y0, y1) > near[3]
+  /** an extent along the baseline of ink beside the box, its free line's end */
+  const free1 = (a0, a1) => {
+    if (a1 <= band[0]) { if (a1 >= -far) freeBefore = Math.min(freeBefore, -a1) }
+    else if (a0 >= band[2]) { if (a0 <= u.length + far) freeAfter = Math.min(freeAfter, a0 - u.length) }
+  }
   /** an extent along the baseline, of ink across the band: inside the box, or right before or after it */
   const along1 = (a0, a1) => {
     if (a1 > band[0] && a0 < band[2]) crowded = true
     else if (a1 <= band[0] && a1 >= -reach) before = Math.min(before, -a1)
     else if (a0 >= band[2] && a0 <= u.length + reach) after = Math.min(after, a0 - u.length)
+    free1(a0, a1)
   }
   for (let g = 0; g < G.length && !crowded; g++) {
     if (mineG.has(g)) continue
     const x = G[g]
     if (x.blank || !/\S/u.test(x.u ?? '') || apart(x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top)) continue
     const e = inFrame(f, [x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top])
-    if (e[3] > band[1] && e[1] < band[3] && e[2] > band[0] && e[0] < band[2]) crowded = true
+    if (e[3] > band[1] && e[1] < band[3]) { if (e[2] > band[0] && e[0] < band[2]) crowded = true; else free1(e[0], e[2]) }
   }
   for (let b = 0; b + 3 < B.length && !crowded; b += 4) {
     if (apart(B[b], B[b + 1], B[b + 2], B[b + 3]) || mineB.has(b / 4)) continue
     const e = inFrame(f, [B[b], B[b + 1], B[b + 2], B[b + 3]])
-    if (e[3] <= band[1] || e[1] >= band[3] || e[2] <= -reach || e[0] >= u.length + reach) continue
+    if (e[3] <= band[1] || e[1] >= band[3] || e[2] <= -far || e[0] >= u.length + far) continue
     const shape = S?.get(b / 4)
-    if (shape) { shapeRoom(shape, f, band, along1); continue }
+    if (shape) { shapeRoom(shape, f, band, along1, free1); continue }
     const holds = e[0] <= 0 && e[2] >= u.length && e[1] <= u.descent * u.size && e[3] >= u.ascent * u.size
+    // (a box behind the whole band is its ground, no ink of its box: its edges are where its free line ends)
     if (!holds) along1(e[0], e[2])
+    else { free1(e[0], e[0]); free1(e[2], e[2]) }
   }
   // (set from its start where the ink before it is nearer by half, from its end where the ink after it is: else from its middle)
-  return { crowded, anchor: Math.max(before, 0) * ANCHOR_RATIO < Math.max(after, 0) ? 'start' : Math.max(after, 0) * ANCHOR_RATIO < Math.max(before, 0) ? 'end' : 'centre' }
+  const anchor = Math.max(before, 0) * ANCHOR_RATIO < Math.max(after, 0) ? 'start' : Math.max(after, 0) * ANCHOR_RATIO < Math.max(before, 0) ? 'end' : 'centre'
+  return { crowded, anchor, before: freeBefore, after: freeAfter }
 }
 
 /** a path's lines against a unit's band (in its frame): each segment's part across the band (a stroke's widened by its half
  *  width) told by its extent along it (along1); a fill none of whose edges reach into the band's box and that holds the band's
- *  middle is behind the text, told nothing */
-function shapeRoom(shape, f, band, along1) {
+ *  middle is behind the text, its edges told as the free line's ends alone (free1: a translation stays on its ground) */
+function shapeRoom(shape, f, band, along1, free1) {
   const { segs, hw } = shape, w = shape.stroke ? hw : 0
   const t0 = band[1] - w, t1 = band[3] + w
   const parts = []
@@ -272,7 +454,7 @@ function shapeRoom(shape, f, band, along1) {
     parts.push([Math.min(p, q) - w, Math.max(p, q) + w])
   }
   const inside = parts.some(([a, b]) => b > band[0] && a < band[2])
-  if (shape.fill && !shape.stroke && !inside && holdsPoint(shape, f, (band[0] + band[2]) / 2, (band[1] + band[3]) / 2)) return
+  if (shape.fill && !shape.stroke && !inside && holdsPoint(shape, f, (band[0] + band[2]) / 2, (band[1] + band[3]) / 2)) { for (const [a, b] of parts) free1(a, b); return }
   for (const [a, b] of parts) along1(a, b)
 }
 
