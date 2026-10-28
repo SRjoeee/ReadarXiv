@@ -61,13 +61,13 @@ describe('decideLayerText: the decision on two layouts of the same words', () =>
 })
 
 /** a laid page's SVG of tspans ({ x, text, size, opacity }) and a window that styles each in one face */
-function pageOf(spans: { x: string; text: string; size?: string; spacing?: string; opacity?: string }[]) {
+function pageOf(spans: { x: string; text: string; size?: string; spacing?: string; opacity?: string }[], fontFamily = '"axt-cmun-serif", "axt-lm-math"') {
   const tspans = spans.map(s => ({
     textContent: s.text,
     getAttribute: (k: string) => ({ x: s.x, 'font-size': s.size ?? '12.5', 'letter-spacing': s.spacing ?? null, 'fill-opacity': s.opacity ?? null } as Record<string, string | null>)[k] ?? null,
   }))
   const svg = { querySelectorAll: (q: string) => (q === 'tspan' ? tspans : []) }
-  const view = { getComputedStyle: () => ({ fontFamily: '"axt-cmun-serif", "axt-lm-math"', fontWeight: '400', fontStyle: 'normal' }) }
+  const view = { getComputedStyle: () => ({ fontFamily, fontWeight: '400', fontStyle: 'normal' }) }
   return { svg: svg as unknown as SVGSVGElement, view: view as unknown as Window }
 }
 
@@ -92,7 +92,7 @@ describe('wordsOf: the words a laid page offers, its runs of one place', () => {
 })
 
 /** a document that lays SVG text out by `layout` (each rendering's places for a word, or null to throw); `state` counts */
-function fakeDocument(layout: ((rendering: string, text: string) => number[] | null) | 'none') {
+function fakeDocument(layout: ((rendering: string, text: string, family: string) => number[] | null) | 'none') {
   const attributes = new Map<string, string>()
   const state = { probes: 0, removed: 0 }
   type Element = Record<string, unknown> & { attrs: Record<string, string>; children: unknown[]; style: Record<string, string>; textContent: string }
@@ -107,7 +107,7 @@ function fakeDocument(layout: ((rendering: string, text: string) => number[] | n
       el.getNumberOfChars = () => el.textContent.length
       el.getStartPositionOfChar = (i: number) => {
         const rendering = /text-rendering:([^;]+)/.exec(el.style.cssText ?? '')?.[1] ?? ''
-        const xs = layout(rendering, el.textContent)
+        const xs = layout(rendering, el.textContent, el.style.fontFamily ?? '')
         if (!xs) throw new Error('no layout')
         return { x: xs[i], y: 0 }
       }
@@ -116,7 +116,7 @@ function fakeDocument(layout: ((rendering: string, text: string) => number[] | n
   }
   const doc = {
     body: { append() { state.probes++ } },
-    documentElement: { setAttribute: (k: string, v: string) => attributes.set(k, v) },
+    documentElement: { setAttribute: (k: string, v: string) => attributes.set(k, v), removeAttribute: (k: string) => attributes.delete(k) },
     createElementNS: (_ns: string, name: string) => element(name),
   }
   return { doc: doc as unknown as Document, attributes, state }
@@ -176,6 +176,34 @@ describe('applyLayerText: decided once a document, from the first laid page that
     expect(applyLayerText(broken, f.doc)).toBeNull()
     expect(f.attributes.has(ATTRIBUTE)).toBe(false)
     expect(applyLayerText(svgIn(f.doc), f.doc)).toBe('auto')
+  })
+
+  it('decides for each source of faces apart: the lab going from the system\'s faces to the served ones decides again, and clears auto where the new answer is precise', () => {
+    // (Linux: the system's faces laid out with fractional advances under both renderings, the served web fonts on whole pixels under auto)
+    const linux = (rendering: string, text: string, family: string) => (/axt-/.test(family) ? rounded(rendering, text) : linear(rendering, text))
+    const f = fakeDocument(linux)
+    const system = pageOf(['Homogenisierungsproblems', 'Transformer', 'quasinormal', 'Tutwiler'].map((text, i) => ({ x: String(i * 100), text })), '"Times New Roman", serif')
+    const systemSvg = Object.assign(Object.create(system.svg as object), { ownerDocument: { ...f.doc, defaultView: system.view } }) as unknown as SVGSVGElement
+    expect(applyLayerText(systemSvg, f.doc, 'prototype')).toBe('auto')
+    expect(f.attributes.get(ATTRIBUTE)).toBe('auto')
+    // (the served faces: their own decision, precise, and the attribute the system's faces set cleared)
+    expect(applyLayerText(svgIn(f.doc), f.doc, 'roles')).toBe('precise')
+    expect(f.attributes.has(ATTRIBUTE)).toBe(false)
+    // (and back: each source's decision kept, laid out once)
+    expect(applyLayerText(systemSvg, f.doc, 'prototype')).toBe('auto')
+    expect(f.attributes.get(ATTRIBUTE)).toBe('auto')
+    expect(applyLayerText(svgIn(f.doc), f.doc, 'roles')).toBe('precise')
+    expect(f.attributes.has(ATTRIBUTE)).toBe(false)
+    expect(f.state.probes).toBe(2)
+  })
+
+  it('a source of faces whose first page tells nothing draws in geometricPrecision until one does: another source\'s auto is cleared', () => {
+    const f = fakeDocument(linear)
+    expect(applyLayerText(svgIn(f.doc), f.doc, 'prototype')).toBe('auto')
+    const cjk = pageOf([{ x: '10 22.5', text: '\u4e2d\u6587' }])
+    const cjkSvg = Object.assign(Object.create(cjk.svg as object), { ownerDocument: { ...f.doc, defaultView: cjk.view } }) as unknown as SVGSVGElement
+    expect(applyLayerText(cjkSvg, f.doc, 'roles')).toBeNull()
+    expect(f.attributes.has(ATTRIBUTE)).toBe(false)
   })
 
   it('leaves a page that tells nothing (no words of one place) undecided, for the next page to tell', () => {

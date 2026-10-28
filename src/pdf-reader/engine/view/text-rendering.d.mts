@@ -19,5 +19,6 @@ export declare function decideLayerText(precise: readonly (readonly number[] | n
 export declare function wordsOf(svg: SVGSVGElement | null | undefined, view?: Pick<Window, 'getComputedStyle'> | null): ProbeWord[]
 /** the words laid out again under both renderings in a hidden SVG of the layer's scale, and the decision on them */
 export declare function probeWords(doc: Document | null | undefined, words: readonly ProbeWord[] | null | undefined): LayerText | null
-/** the document's decision from a laid page's SVG, made once and written on its <html>; null while no page has told */
-export declare function applyLayerText(svg: SVGSVGElement | null | undefined, doc?: Document | null): LayerText | null
+/** the document's decision from a laid page's SVG, made once for each source of faces (`faces`: the readers' served faces by
+ *  default; the layer lab's system faces apart) and written on its <html>; null while no page of that source has told */
+export declare function applyLayerText(svg: SVGSVGElement | null | undefined, doc?: Document | null, faces?: string): LayerText | null

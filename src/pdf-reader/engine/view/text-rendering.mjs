@@ -125,21 +125,40 @@ export function probeWords(doc, words) {
   }
 }
 
-/** each document's decision, once one is made */
+/** each document's decisions, by the source of the faces its layer is drawn in */
 const decided = new WeakMap()
+/** a decision written on <html>: the attribute for `auto`, none for anything else (engine.css's geometricPrecision) */
+function write(doc, answer) {
+  if (answer === 'auto') doc.documentElement?.setAttribute(ATTRIBUTE, 'auto')
+  else doc.documentElement?.removeAttribute?.(ATTRIBUTE)
+}
 /**
  * The layer's text rendering for a document, decided from a laid page's SVG (`svg`, in the document) the first time a page
  * tells, and written on its <html>: `data-axt-layer-text="auto"` where the layer takes `auto`, no attribute (engine.css's
- * geometricPrecision) elsewhere. Returns the document's decision, or null while no page has told. It never throws: a commit
- * calls it, and a page whose words cannot be read leaves the decision to the next
+ * geometricPrecision) elsewhere. Returns the decision, or null while no page has told. It never throws: a commit calls it,
+ * and a page whose words cannot be read leaves the decision to the next.
+ * `faces` names the source of the faces the layer is drawn in, each a decision of its own: a system can lay its own faces out
+ * otherwise than the web fonts a reader serves (Linux: fractional advances under both renderings for the one, whole pixels
+ * under `auto` for the other). The readers draw in the faces they serve alone (the default); the layer lab also in the system's
+ * (its prototype's faces), and a decision made for one never stands for the other: a source not decided yet draws in
+ * geometricPrecision, whatever another said
  */
-export function applyLayerText(svg, doc = svg?.ownerDocument) {
+export function applyLayerText(svg, doc = svg?.ownerDocument, faces = 'served') {
   if (!doc) return null
-  if (decided.has(doc)) return decided.get(doc)
+  let bySource = decided.get(doc)
+  if (!bySource) decided.set(doc, (bySource = new Map()))
+  if (bySource.has(faces)) {
+    const answer = bySource.get(faces)
+    write(doc, answer)
+    return answer
+  }
   let answer = null
   try { answer = probeWords(doc, wordsOf(svg)) } catch { answer = null }
-  if (answer === null) return null
-  decided.set(doc, answer)
-  if (answer === 'auto') doc.documentElement?.setAttribute(ATTRIBUTE, 'auto')
+  if (answer === null) {
+    if (bySource.size) write(doc, null)
+    return null
+  }
+  bySource.set(faces, answer)
+  write(doc, answer)
   return answer
 }

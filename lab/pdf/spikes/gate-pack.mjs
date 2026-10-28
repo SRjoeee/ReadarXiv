@@ -55,11 +55,9 @@ export { BUCKET, sha256 }
 export const PACK_SCHEMA = 2
 /** the pack's objects in the bucket: gate-pack/<sha256> */
 export const KEY_PREFIX = 'gate-pack/'
-/** the weights a CJK group's roles are built from (rules/font-roles.mjs rolesFor): the body and the bold, beside every English
- *  family (the ruling of 2026-10-29) */
-export const ROLE_WEIGHTS = ['regular', 'bold']
-/** the Kai faces of the catalog: no engine since 2026-10-19 draws emphasis in one, and the rule set names none since its schema 6 */
-const KAI = ['fandolkai', 'bkai00mp']
+/** a CJK face of a catalog, by its family (rules/font-roles.mjs CJK_GROUPS): a group's (Source Han Serif's, Harano Aji's) or a
+ *  Kai. Every engine's catalog writes them so */
+const CJK_FAMILY = /^axt-(shs-|mincho|fandolkai|bkai00mp)/
 
 const here = new URL('.', import.meta.url).pathname
 const REPO = resolve(here, '../../..')
@@ -99,19 +97,43 @@ function safePath(path) {
 }
 
 /**
- * The font files the outputs can draw in. Every face of the role table that is no CJK face, whole (no rule picks a Latin
- * face, and the papers' families decide which are drawn); of a CJK group, only what a target of the pack names: the
- * weights its roles are built from. `known` are the CJK families (`{ group }`) the built-in rule set names for any script,
- * `used` those of the pack's targets. A group the pack's targets do not use (Traditional Chinese's, which has no fixture),
- * and the Kai faces no target draws, are left out.
+ * The CJK faces an engine draws the pack's targets in, by its own role table: for each target its built-in rule set gives CJK
+ * faces, the faces its `rolesFor` takes beside each English family it knows (an engine of schema 5 takes Light and SemiBold
+ * beside Computer Modern and Garamond, and Regular and Bold beside the rest; one of schema 6 Regular and Bold beside every
+ * family), and the faces those fall back to (Traditional Chinese's to Simplified's). A Kai is among them only where the
+ * engine's roles draw one (an engine before 2026-10-19 drew emphasis in it; none since). `engine`: the engine's
+ * { rolesFor, ENGLISH_FAMILIES } (rules/font-roles.mjs) and { BUILTIN_RULES, resolveRules } (rules/layout.mjs), as the make
+ * imports them from the tree --engine names
  */
-export function fontFiles(faces, known, used) {
+export function cjkRoleFaces({ rolesFor, ENGLISH_FAMILIES, BUILTIN_RULES, resolveRules }, targets) {
+  const out = new Set()
+  for (const target of targets) {
+    const { cjkFaces } = resolveRules(BUILTIN_RULES, target)
+    if (!cjkFaces) continue
+    for (const family of ENGLISH_FAMILIES) {
+      const roles = rolesFor(target, family, cjkFaces)
+      for (const id of Object.values(roles.cjk ?? {})) {
+        if (typeof id !== 'string') continue
+        out.add(id)
+        for (const fallback of roles.fallbacks?.[id] ?? []) out.add(fallback)
+      }
+    }
+  }
+  return out
+}
+
+/**
+ * The font files the outputs can draw in. Every face of the role table that is no CJK face, whole (no rule picks a Latin
+ * face, and the papers' families decide which are drawn); of the CJK faces, those the engine's roles draw the pack's
+ * targets in (`roleFaces`, cjkRoleFaces'), so that a rule moving which family takes which of its weights can be measured.
+ * A group the pack's targets do not draw in (Traditional Chinese's, which has no fixture), and a Kai no role draws, are left
+ * out.
+ */
+export function fontFiles(faces, roleFaces) {
   const ids = Object.keys(faces)
-  const cjk = new Set(KAI)
-  for (const { group } of known) for (const id of ids) if (id.startsWith(`${group}-`)) cjk.add(id)
-  const want = new Set(ids.filter(id => !cjk.has(id)))
+  const want = new Set(ids.filter(id => !CJK_FAMILY.test(faces[id].family ?? '')))
   const need = id => { if (!Object.hasOwn(faces, id)) throw new Error(`the role table has no face ${id}`); want.add(id) }
-  for (const { group } of used) for (const w of ROLE_WEIGHTS) need(`${group}-${w}`)
+  for (const id of roleFaces) need(id)
   return [...new Set([...want].map(id => faces[id].file))].sort()
 }
 
@@ -547,16 +569,14 @@ async function main(argv) {
     const compileImage = { year, ...pin }
     const engine = resolve(typeof arg('engine', argv) === 'string' ? arg('engine', argv) : REPO)
     const E = f => import(pathToFileURL(join(engine, ENGINE, f)).href)
-    const [{ FACES }, { BUILTIN_RULES, resolveRules, SCRIPTS }, { TEX_PATTERN_FILES }] = await Promise.all([E('rules/font-roles.mjs'), E('rules/layout.mjs'), E('layer-proto/hyph.mjs')])
+    const [{ FACES, rolesFor, ENGLISH_FAMILIES }, { BUILTIN_RULES, resolveRules }, { TEX_PATTERN_FILES }] = await Promise.all([E('rules/font-roles.mjs'), E('rules/layout.mjs'), E('layer-proto/hyph.mjs')])
     const { fixtures, records, refs, geometry } = recordInputs(argv)
     const names = outputsOf(refs)
     const layout = layoutVersionOf(fixtures, names, await layoutOfEngine(engine))
     const targets = [...new Set(names.map(n => nameOf(n).target))].sort()
-    const known = SCRIPTS.map(s => BUILTIN_RULES.scripts[s].cjkFaces).filter(Boolean)
-    const used = [...new Map(targets.map(t => resolveRules(BUILTIN_RULES, t).cjkFaces).filter(Boolean).map(c => [c.group, c])).values()]
     const texmf = resolve(typeof arg('texmf', argv) === 'string' ? arg('texmf', argv) : process.env.TEXMF_DIST ?? join(homedir(), 'Library/TinyTeX/texmf-dist'))
     const sources = typeof arg('sources', argv) === 'string' ? resolve(arg('sources', argv)) : resolve(REPO, 'lab/pdf/data/corpus')
-    const entries = entriesOf({ fixtures, records, refs, geometry, sources, fontsDir: where(argv, 'fonts'), fonts: fontFiles(FACES, known, used), patterns: TEX_PATTERN_FILES, texmf })
+    const entries = entriesOf({ fixtures, records, refs, geometry, sources, fontsDir: where(argv, 'fonts'), fonts: fontFiles(FACES, cjkRoleFaces({ rolesFor, ENGLISH_FAMILIES, BUILTIN_RULES, resolveRules }, targets)), patterns: TEX_PATTERN_FILES, texmf })
     const manifest = makePack({ entries, out: where(argv, 'out'), pipeline: pipelineOf(records, names), layout, compileImage })
     writeFileSync(packFile, `${JSON.stringify(packJsonOf(manifest), null, 1)}\n`)
     const s = summaryOf(manifest.files)

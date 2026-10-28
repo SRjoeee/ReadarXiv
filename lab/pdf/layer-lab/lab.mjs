@@ -287,8 +287,9 @@ class Pane {
         for (const c of [...div.children]) if (!c.classList.contains('num')) c.remove()
         div.append(...parts)
         // (drawn as the readers draw it: the layer's text rendering decided, as the readers decide it, from the first page whose
-        // words tell; text-rendering.mjs, its answer on <html> for engine.css)
-        if (this.kind === 'v0' && state.look === 'product') (await layerText)?.applyLayerText(div.querySelector('.axt-layer > svg'))
+        // words tell; text-rendering.mjs, its answer on <html> for engine.css. Each source of faces decides apart: the role
+        // table's served faces, and the prototype's system faces, which a system may lay out otherwise)
+        if (this.kind === 'v0' && state.look === 'product') (await layerText)?.applyLayerText(div.querySelector('.axt-layer > svg'), document, state.v0faces)
         div.dataset.rendered = '1'
       })
     } catch (e) {

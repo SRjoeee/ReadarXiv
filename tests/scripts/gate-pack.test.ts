@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { LAYOUT, LAYOUT_SCHEMA } from '../../src/pdf-reader/engine/layout/file.mjs'
 import { signV4 } from '../../scripts/r2-read.mjs'
-import { BASE_RECORD_SCHEMA, baseRecordOf, baseRecordOfMade, checkCompileImage, keptLayoutOf, COMPILE_IMAGES_FILE, compileImageOf, compileImagesOf, localImageDigests, packPathsOf, entriesOf, fontFiles, inputsOfRecord, layoutOfEngine, layoutVersionOf, listingDigest, makePack, objectsOf, objectUrl, outputsOf, PACK_SCHEMA, packJsonOf, pipelineOf, RECORD_INPUTS, restorePack, sha256, summaryOf, verifyPack } from '../../lab/pdf/spikes/gate-pack.mjs'
+import { BASE_RECORD_SCHEMA, baseRecordOf, baseRecordOfMade, checkCompileImage, keptLayoutOf, COMPILE_IMAGES_FILE, compileImageOf, compileImagesOf, localImageDigests, packPathsOf, entriesOf, cjkRoleFaces, fontFiles, inputsOfRecord, layoutOfEngine, layoutVersionOf, listingDigest, makePack, objectsOf, objectUrl, outputsOf, PACK_SCHEMA, packJsonOf, pipelineOf, RECORD_INPUTS, restorePack, sha256, summaryOf, verifyPack } from '../../lab/pdf/spikes/gate-pack.mjs'
 
 // The rules gate's fixture pack (lab/pdf/spikes/gate-pack.mjs, Task R6): made the same on every make, restored by digest
 // from a private bucket, and checked before the gate reads it. The inputs here are small synthetic files.
@@ -302,20 +302,50 @@ describe('the base record a make of the fixtures writes', () => {
 })
 
 describe('the faces the pack holds', () => {
-  const faces = Object.fromEntries(
-    ['shs-sc-regular', 'shs-sc-medium', 'shs-sc-bold', 'shs-k-regular', 'shs-k-bold', 'fandolkai', 'bkai00mp', 'nimbus-roman-regular', 'cmun-serif-bold'].map(id => [id, { file: `${id}.otf` }]),
-  )
-  const known = [{ group: 'shs-sc' }, { group: 'shs-k' }, { group: 'shs-tc' }]
-  it('takes every face that is no CJK face whole, and of a CJK group the two weights its roles are built from; no Kai', () => {
-    const files = fontFiles(faces, known, [{ group: 'shs-sc' }])
-    expect(files).toEqual(['cmun-serif-bold.otf', 'nimbus-roman-regular.otf', 'shs-sc-bold.otf', 'shs-sc-regular.otf'])
+  // (a catalog of both schemas' CJK weights, the Kais and two Latin faces, each with its family as the role table writes it)
+  const faces = Object.fromEntries(([
+    ['shs-sc-light', 'axt-shs-sc'], ['shs-sc-regular', 'axt-shs-sc'], ['shs-sc-medium', 'axt-shs-sc'], ['shs-sc-semibold', 'axt-shs-sc'], ['shs-sc-bold', 'axt-shs-sc'],
+    ['shs-tc-regular', 'axt-shs-tc'], ['shs-tc-bold', 'axt-shs-tc'], ['shs-k-regular', 'axt-shs-k'], ['shs-k-bold', 'axt-shs-k'],
+    ['fandolkai', 'axt-fandolkai'], ['bkai00mp', 'axt-bkai00mp'], ['nimbus-roman-regular', 'axt-nimbus-roman'], ['cmun-serif-bold', 'axt-cmun-serif'],
+  ] as const).map(([id, family]) => [id, { file: `${id}.otf`, family }]))
+  const LATIN = ['cmun-serif-bold.otf', 'nimbus-roman-regular.otf']
+  /** an engine as the make reads it: its role table (`rolesFor`, `ENGLISH_FAMILIES`) and its rule set's CJK families */
+  type Roles = (target: string, family: string, cjk: { group: string; kai?: string | null }) => { cjk: Record<string, string> | null; fallbacks: Record<string, string[]> }
+  const engine = (rolesFor: Roles) => ({
+    rolesFor, ENGLISH_FAMILIES: ['cm', 'times', 'garamond', 'other'], BUILTIN_RULES: {},
+    resolveRules: (_set: unknown, t: string) => ({ cjkFaces: ({ zh: { group: 'shs-sc', kai: 'fandolkai' }, 'zh-TW': { group: 'shs-tc', kai: 'bkai00mp' }, ko: { group: 'shs-k', kai: null } } as Record<string, { group: string; kai: string | null }>)[t] ?? null }),
   })
-  it('leaves out the group no target of the pack uses, and names a face the table lacks', () => {
-    const files = fontFiles(faces, known, [{ group: 'shs-sc' }, { group: 'shs-k' }])
+  const light = (family: string) => ['cm', 'garamond'].includes(family)
+  // (schema 5: Light, and SemiBold for bold, beside Computer Modern and Garamond; Regular and Bold beside the rest)
+  const schema5 = engine((_t, family, cjk) => ({ cjk: { body: `${cjk.group}-${light(family) ? 'light' : 'regular'}`, bold: `${cjk.group}-${light(family) ? 'semibold' : 'bold'}` }, fallbacks: {} }))
+  // (schema 6: Regular and Bold beside every family)
+  const schema6 = engine((_t, _f, cjk) => ({ cjk: { body: `${cjk.group}-regular`, bold: `${cjk.group}-bold` }, fallbacks: {} }))
+
+  it('takes every face that is no CJK face whole, and the CJK faces the selected engine\'s own roles draw: Regular and Bold for schema 6', () => {
+    expect(fontFiles(faces, cjkRoleFaces(schema6, ['de', 'zh']))).toEqual([...LATIN, 'shs-sc-bold.otf', 'shs-sc-regular.otf'])
+  })
+
+  it('takes a schema-5 engine\'s Light and SemiBold, which it draws beside Computer Modern and Garamond (an older tree given by --engine)', () => {
+    expect(fontFiles(faces, cjkRoleFaces(schema5, ['zh']))).toEqual([...LATIN, 'shs-sc-bold.otf', 'shs-sc-light.otf', 'shs-sc-regular.otf', 'shs-sc-semibold.otf'])
+  })
+
+  it('takes a Kai only where the engine\'s roles draw it, and the faces a role falls back to', () => {
+    expect(fontFiles(faces, cjkRoleFaces(schema5, ['zh']))).not.toContain('fandolkai.otf')
+    // (an engine before 2026-10-19 drew emphasis in its Kai)
+    const kai = engine((_t, _f, cjk) => ({ cjk: { body: `${cjk.group}-regular`, bold: `${cjk.group}-bold`, ...(cjk.kai ? { italic: cjk.kai } : {}) }, fallbacks: {} }))
+    expect(fontFiles(faces, cjkRoleFaces(kai, ['zh']))).toContain('fandolkai.otf')
+    // (Traditional Chinese's characters TC lacks, from SC at the same weight)
+    const tcToSc: Record<string, string[]> = { 'shs-tc-regular': ['shs-sc-regular'], 'shs-tc-bold': ['shs-sc-bold'] }
+    const hant = engine((_t, _f, cjk) => ({ cjk: { body: `${cjk.group}-regular`, bold: `${cjk.group}-bold` }, fallbacks: cjk.group === 'shs-tc' ? tcToSc : {} }))
+    expect(fontFiles(faces, cjkRoleFaces(hant, ['zh-TW']))).toEqual([...LATIN, 'shs-sc-bold.otf', 'shs-sc-regular.otf', 'shs-tc-bold.otf', 'shs-tc-regular.otf'])
+  })
+
+  it('leaves out the groups no target of the pack draws in, and names a face the table lacks', () => {
+    const files = fontFiles(faces, cjkRoleFaces(schema6, ['zh', 'ko']))
     expect(files.some(f => f.startsWith('shs-k'))).toBe(true)
+    expect(files.some(f => f.startsWith('shs-tc'))).toBe(false)
     expect(files).not.toContain('bkai00mp.otf')
-    expect(files).not.toContain('fandolkai.otf')
-    expect(() => fontFiles(faces, known, [{ group: 'shs-tc' }])).toThrow(/shs-tc-regular/)
+    expect(() => fontFiles(faces, new Set(['shs-sc-extrabold']))).toThrow(/shs-sc-extrabold/)
   })
 })
 
