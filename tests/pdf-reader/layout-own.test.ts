@@ -304,6 +304,10 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     expect(g['u0.p']).toBe('cd')
     expect([g.u0, g.u1]).toEqual(['Surhud More,', 'The amplitude'])
     expect(Object.values(g).join('')).not.toMatch(/Department|iucaa/)
+    // (an indented or centred block after a short line is a line apart all the same: its drop, not where it starts — Devin on #482)
+    const centred = [page([{ pt: '0s' }, 'Surhud More,', { pt: '0e' }, { pt: 'p0.1a' }, 'cd\n', { dx: 120 }, 'Department of Physics\n', 'surhud at iucaa\n', 'Abstract. ', { pt: '1s' }, 'The amplitude', { pt: '1e' }, '\nand more of it here\nand its last line'])]
+    centred[0]!.glyphs.forEach(gl => { if (gl.y < 700) { gl.y -= 12; gl.top -= 12; gl.bottom -= 12 } })
+    expect(groupsOf(marked(centred, authors), centred)['u0.p']).toBe('cd')
     // (at the page's leading the lines are still its, whatever they hold: a reference's \\Eprint wrapped over two lines, its
     // entry's full stop on a third, and an entry TeX gave no unit, 2307.16209v1 p138 u487 and p147 u777: none left no one's)
     const wrapped = [page([{ pt: '0s' }, 'See the paper', { pt: '0e' }, { pt: 'p0.1a' }, 'arXiv:gr-qc/0511111\n', '[gr-qc]\n', '.\n', '[167] https://github.com/strings\n', { pt: '1s' }, 'Next one', { pt: '1e' }, '\nand a line\nand another'])]

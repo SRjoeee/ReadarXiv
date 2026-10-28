@@ -82,14 +82,18 @@ function pitchOf(G) {
 }
 /** how many of `glyphs` ([page, g], stream order, one page) a piece alone at its unit's end owns: its lines up to the first that
  *  starts a gap BLOCK_GAP of the page's pitch or more below the line before (`anchor`, the baseline of its unit's line it opens
- *  on, the first line's where it opens on a line of its own), or all; a new line is one TeX set at a line's start, left of the
- *  glyph before or where it starts, and below it by half its size */
+ *  on, the first line's where it opens on a line of its own), or all; a new line is one TeX set below the glyph before by half
+ *  its size, at or left of where that glyph starts, or below it by a size or more wherever it starts (an indented block) */
 function lineEnd(G, glyphs, anchor, pitch) {
   if (!pitch) return glyphs.length
   let from = 0, base = anchor
   for (let j = 1; j <= glyphs.length; j++) {
     const a = glyphs[j - 1][1], b = glyphs[j]?.[1]
-    if (b !== undefined) { const em = Math.min(G.size[a], G.size[b]); if (!(G.x0[b] <= G.x0[a] && G.y[b] < G.y[a] - 0.5 * em)) continue }
+    if (b !== undefined) {
+      const em = Math.min(G.size[a], G.size[b]), drop = G.y[a] - G.y[b]
+      // (a drop of a size or more is a line apart, wherever it starts: an indented or centred block after a short line)
+      if (!(drop > 0.5 * em && (G.x0[b] <= G.x0[a] || drop > Math.max(G.size[a], G.size[b])))) continue
+    }
     const y = lineBase(G, glyphs, from, j)
     if (from > 0 && base - y >= BLOCK_GAP * pitch) return from
     base = from === 0 && anchor !== null ? anchor : y
