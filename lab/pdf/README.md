@@ -379,9 +379,9 @@ its three units of Łukasz Kaiser (`{\L}ukasz`, `\L{}ukasz`) hold the letter in 
 `\L{}ukasz Kaiser and Ilya Sutskever` stands before `\L{}` (it stood after it, the Ł outside the unit) and the placeholders after
 it are numbered anew: its layout file's rows and its base page's marks change, the base pages' pixels are `ad76c514`'s on all
 15 pages; every other output's files are its own bytes. 3 new objects.
-The pack of lane B's B2 (`27995c12`, LAYOUT 26) is `efd01632`'s with each output's `layout.json` and `base.json` made again the
+The pack of lane B's B2 (`d541e4c9`, LAYOUT 26) is `8afa0824`'s with each output's `layout.json` and `base.json` made again the
 same way: every base page byte for byte the one before (the alignment probe sets nothing in TeX's lists), every layout file
-`efd01632`'s but for its version and the flags TeX tells, `FLUSH_LEFT` on 63 units (1706.03762v7's 23 headings, 1810.04805v2's 29,
+`8afa0824`'s but for its version and the flags TeX tells, `FLUSH_LEFT` on 63 units (1706.03762v7's 23 headings, 1810.04805v2's 29,
 2609.26457v1's 7 title and author lines, 2608.16117v1's keywords) and `FLUSH_RIGHT` on one (2307.16209v1's quote); 2608.16117v1's
 abstract, which the probe read as its keywords' `\raggedright` under TeX Live 2023, has neither. The faces and every other file are
 the instrument's own bytes (a make by `pack-make.mjs` would take the faces of this engine's roles, Regular and Bold alone: that

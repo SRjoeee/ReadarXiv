@@ -138,7 +138,7 @@ describe('each writer then its reader is the identity', () => {
     expect(p1.leftParts).toEqual([M.lefts[1]!.ref])
     expect(p2.leftParts).toEqual([M.lefts[2]!.ref, M.lefts[3]!.ref])
     expect(p1.chain).toEqual({
-      head: M.head.sha256, through: 1, last: M.parts[0]!.sha256, slot: 12, id: 2, told: Uint8Array.of(1, 0, 1, 0, 0, 0, 0, 0), groups: Uint8Array.of(0, 0, 0), reach: 2, ahead: VIEWS[1],
+      head: M.head.sha256, through: 1, last: M.parts[0]!.sha256, slot: 12, id: 2, told: Uint8Array.of(1, 0, 1, 0, 0, 0, 0, 0), figured: Uint8Array.of(0, 0, 0, 0, 0, 0, 0, 0), groups: Uint8Array.of(0, 0, 0), reach: 2, ahead: VIEWS[1],
     })
     expect(p2.chain).toMatchObject({ through: 3, slot: 41.5, id: 5, reach: 4, ahead: VIEWS[3] })
     expect(p3.chain).toMatchObject({ through: 4, slot: 70, id: 7, reach: 4, ahead: [] })
@@ -1406,6 +1406,11 @@ describe('a part against the chain', () => {
     await refused(1, p => { (p as Any).figures = [] }, 'figures')
     await refused(2, p => { (p as Any).layout = null; (p as Any).rules = null; (p as Any).fileOnly = []; (p as Any).figures = [row({ 2: 4 })] }, 'figures')
     expect(await partWith(1, p => { delete (p as Any).figures })).toMatchObject({ figures: [] })
+    // (a figure unit is never a layout row of its part: its figure row alone draws it; a left unit it may be, its hover's anchor,
+    // pipeline/ink-pass.mjs figureAnchors)
+    const e = await refusal(partWith(1, p => { (p as Any).figures = [row({ 0: (p as Any).layout.units[0][0] })] }))
+    expect(e).toMatchObject({ kind: 'part', path: 'figures[0][0]' })
+    expect(String(e?.message)).toMatch(/a unit of the layout too/)
   })
 
   it('a layout with no cell rules is a part (`rules: null`), as the writer writes one given none or an empty table', async () => {

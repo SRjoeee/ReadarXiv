@@ -210,6 +210,13 @@ describe('the ink units in the page pass', () => {
         expect([x0 <= 100, x1 >= 140, y0 <= 400, y1 >= 400]).toEqual([true, true, true, true])
         // (the source units' anchors as before: each its own page's)
         for (const u of [0, 1, 2]) expect([...new Set(got.parts.flatMap(p => p.left).find(e => e[0] === u)?.[2].map(r => r[0]))]).toEqual([u + 1])
+        // every part written and read back with its layout, as the container's write path writes it: the figure unit a left unit
+        // of its part and its figure row there, never a layout row (the web's re-pin at 3b2aa271: every part with a figure unit was
+        // refused its layout, `figures[0][0]: a unit of the left or of the layout`, 2010.11929v2 pp3-22 not drawn)
+        expect(got.parts.map(p => [p.pages, p.layout !== null, p.noLayout])).toEqual(got.parts.map(p => [p.pages, true, null]))
+        const holding = got.parts.filter(p => p.figures.length)
+        expect(holding.map(p => [p.figures.map(f => f.id), p.left.some(e => e[0] === id)])).toEqual([[[id], true]])
+        expect(holding[0]!.layout && 'units' in holding[0]!.layout ? holding[0]!.layout.units.some(u => u[0] === id) : true).toBe(false)
       }
     }
   })

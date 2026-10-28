@@ -52,6 +52,12 @@ export declare function markProbeTex(samples: readonly ({ src: string; call: boo
 export declare const INK_MAX: number
 /** the ink section's samples: each macro's source once, in the paper's order, that TeX can set in a box of its own */
 export declare function inkSamples(units: readonly SourceUnit[]): string[]
+/** the distinct samples the ink section asks about a bibliography's entries, past the body's INK_MAX */
+export declare const ENTRY_INK_MAX: number
+/** the sources the ink section's answers name, at most: INK_MAX + ENTRY_INK_MAX */
+export declare const INK_ANSWERS_MAX: number
+/** the ink section's answers from the probe's log, each the asked source's own: the one reader */
+export declare function readInkAnswers(log: string, units: readonly SourceUnit[]): { inkless: string[]; texts: [string, string][]; apart: string[] }
 /** the leads the ink section asks about past the paper's macros inkSamples takes, at most */
 export declare const LEAD_MAX: number
 /** the leads' samples: the placeholders at a unit's head (headEnd) of inline code or a paper's macro that `asked` does not
@@ -143,7 +149,7 @@ export declare function layoutMarking(units: readonly SourceUnit[], classes: rea
 
 /** the marks file (internal, prep/<mid>/marks-<sha>.json): what the layout maker reads from the marked original */
 export interface LayoutMarks {
-  schema: 12
+  schema: 13
   /** the engine that compiled it (meta.compiler) */
   engine: string
   /** what the marked original was marked with: layoutMarking's classes and the paper's own switch (TeX's answers to the
@@ -198,7 +204,7 @@ export declare function destRect(a: unknown): [x0: number, y0: number, x1: numbe
 export declare const MARKS_CAP: number
 export declare const MARKS_VALUES: number
 export declare const MARKS_DEPTH: number
-export declare const MARKS_SCHEMA: 12
+export declare const MARKS_SCHEMA: 13
 /** a unit's alignment code (readAlign) */
 export type AlignCode = 'c' | 'l' | 'r' | 'j'
 export declare const ALIGN_CODES: readonly AlignCode[]

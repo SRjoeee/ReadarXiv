@@ -878,7 +878,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // the geometry's units with v0's own copy of their line rectangles: v0 grows and moves a unit's lines as it lays it,
   // and every other unit reads them as grown (its others), so the copy is shared by all of v0's reading; the geometry
   // given stays as it was (a second run over it draws as the first: the text removal's plan run and its drawing)
-  const GU = geometry.left.units.map(([id, stream, rects]) => [id, stream, rects.map(r => r.slice())])
+  // (a figure unit is no unit the layer places: its figure row draws it, paintFigures; its left anchor is the hover's alone,
+  // view/shapes.mjs, pipeline/ink-pass.mjs figureAnchors)
+  const placesUnit = id => geometry.kinds?.[id] !== FIGURE_KIND
+  const GU = geometry.left.units.filter(([id]) => placesUnit(id)).map(([id, stream, rects]) => [id, stream, rects.map(r => r.slice())])
   const placed = [], skipped = []
   const inGeometry = new Set(GU.map(u => u[0]))
   // the units as they have come (take), by id: none for one not yet arrived, or never to come; and the ids still
@@ -3301,7 +3304,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         if (geometry.left.pages[q - 1] === undefined) geometry.left.pages[q - 1] = part.views.slice(4 * (q - a), 4 * (q - a + 1))
         if (!rows[q - 1]) makeRow(q)
       }
-      const entries = part.left.map(([id, stream, rects]) => ({ id, stream, rects: rects.map(r => r.slice()) }))
+      const entries = part.left.filter(([id]) => placesUnit(id)).map(([id, stream, rects]) => ({ id, stream, rects: rects.map(r => r.slice()) }))
       for (const [id, after] of part.fileOnly) entries.push({ id, stream: after + 0.5, rects: null })
       entries.sort((x, y) => x.stream - y.stream || x.id - y.id)
       for (const c of entries) { cands.push(c); if (c.rects) GU.push([c.id, c.stream, c.rects]) }

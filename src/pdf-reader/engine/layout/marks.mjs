@@ -289,19 +289,46 @@ export function aheadSection(samples) {
 export const INK_MAX = 64
 /** a macro's source as the ink section asks about it, at most */
 const INK_SRC_MAX = 200
+/** the distinct samples the ink section asks about a bibliography's entries, past the body's INK_MAX: their own share, so that
+ *  a body whose macros fill INK_MAX leaves no entry unasked (2608.25210v2: 101 macro sources, its entries' \\natexlab{} never
+ *  asked, their entries English) */
+export const ENTRY_INK_MAX = 64
 /**
  * The ink section's samples: the source of each of the paper's macros (classOf 'macro'), once, in the order the paper
  * writes them, that TeX can set in a box of its own (no comment or parameter sign, no \verb, its braces balanced, no
- * environment, no paragraph's end), at most INK_MAX. A symbol the layout draws as text (TEXT_SYMBOLS) is not asked
+ * environment, no paragraph's end): the body's at most INK_MAX, then a bibliography's entries' at most ENTRY_INK_MAX — first the
+ * calls the room the body leaves of INK_MAX would have asked, in the paper's order, so that no entry is asked less than before;
+ * then the entries' leads, whose ink only their own text finds (make.mjs besideMarks); then each further call, in order. A call
+ * past them is no sample, as one past INK_MAX was: no answer of another call is carried to it (the reviews of #495 — no ink and
+ * a box begun apart may hang on its argument's value, and a text carried may be a prefix of what it sets, which a split or a
+ * lead read from one side would take as its end). A symbol the layout draws as text (TEXT_SYMBOLS) is not asked
  */
 export function inkSamples(units) {
-  const seen = new Set()
-  for (const u of sampleOrder(units)) for (const p of u.pieces) {
-    if (seen.size >= INK_MAX) return [...seen]
-    if (p.t !== 'ph' || classOf(p) !== 'macro' || seen.has(p.src) || symbolText(p.src) !== null || !boxable(p.src)) continue
-    seen.add(p.src)
+  const body = new Set(), calls = [], seen = new Set(), leads = new Set()
+  for (const u of sampleOrder(units)) {
+    const head = BIB(u) ? headEnd(u.pieces ?? [], 0) : 0
+    u.pieces.forEach((p, k) => {
+      if (p.t !== 'ph' || classOf(p) !== 'macro' || body.has(p.src) || symbolText(p.src) !== null || !boxable(p.src)) return
+      if (!BIB(u)) { if (body.size < INK_MAX && !seen.has(p.src)) body.add(p.src); return }
+      if (k < head) leads.add(p.src)
+      if (seen.has(p.src)) return
+      seen.add(p.src)
+      calls.push(p.src)
+    })
   }
-  return [...seen]
+  // (first the calls the body's room left would have asked, in the paper's order, so that no entry is asked less than it was;
+  // then the entries' leads, whose ink only their own text finds (make.mjs besideMarks); then each further call, in order)
+  const asked = new Set(calls.slice(0, Math.max(0, Math.min(ENTRY_INK_MAX, INK_MAX - body.size))))
+  for (const src of calls) { if (asked.size >= ENTRY_INK_MAX) break; if (leads.has(src)) asked.add(src) }
+  for (const src of calls) { if (asked.size >= ENTRY_INK_MAX) break; asked.add(src) }
+  return [...body, ...calls.filter(src => asked.has(src))]
+}
+/** the ink section's answers from the probe's log, as the layout takes them: the macros TeX said set no ink (readInkProbe), the
+ *  texts it showed they and the leads set (readInkTexts), those whose box it began apart (readInkApart), each the asked
+ *  source's own. The one reader every caller takes them by: layout/paper.mjs, the lab's */
+export function readInkAnswers(log, units) {
+  const ink = inkSamples(units), leads = leadSamples(units, ink)
+  return { inkless: readInkProbe(log, ink), texts: readInkTexts(log, [...ink, ...leads]), apart: readInkApart(log, ink) }
 }
 const balanced = s => { let d = 0; for (let i = 0; i < s.length; i++) { if (s[i] === '\\') { i++; continue } if (s[i] === '{') d++; else if (s[i] === '}' && --d < 0) return false } return d === 0 }
 /** a source TeX can set in a box of its own: no comment or parameter sign, no \\verb, its braces balanced, no environment, no
@@ -1381,8 +1408,10 @@ export const MARKS_DEPTH = 3
  *  by aheadKey, one code each: a paper's macro and the placeholder right after it, which is marked where TeX said a mark
  *  there moves nothing), which a reader of 11 refuses as no control word; and in `owned` the ink of a placeholder no mark
  *  could stand before, parted from the macro before it by that macro's text (followsOf `split`), by the opening mark's name
- *  it would have had, which a maker of 11 would not read */
-export const MARKS_SCHEMA = 12
+ *  it would have had, which a maker of 11 would not read; 13 the entries' own share of samples past the body's (ENTRY_INK_MAX), so
+ *  that `marking.inkless`, `marking.apart` and `marking.texts` name up to INK_ANSWERS_MAX sources (and LEAD_MAX more texts),
+ *  which a reader of 12 refuses past INK_MAX */
+export const MARKS_SCHEMA = 13
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
 const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'align', 'words', 'tokens', 'chars', 'owned', 'links']
 /** the keys a marks file holds: KEYS, and `colours` where a colour piece has a fill (a file of before, or of a paper with
@@ -1431,9 +1460,11 @@ function checkSwitches(v, path) {
 }
 /** the macros TeX said set no ink (readInkProbe), as the marking takes them: null where no probe ran, else at most
  *  INK_MAX sources of 1 to INK_SRC_MAX code units, none twice; else a refusal at `path` */
+/** the sources the ink section's answers name, at most: its samples', the body's and the entries' */
+export const INK_ANSWERS_MAX = INK_MAX + ENTRY_INK_MAX
 function checkInkless(v, path) {
   if (v === null) return null
-  if (!Array.isArray(v) || v.length > INK_MAX) throw new LayoutRefusal(path, `not null or an array of at most ${INK_MAX} sources`)
+  if (!Array.isArray(v) || v.length > INK_ANSWERS_MAX) throw new LayoutRefusal(path, `not null or an array of at most ${INK_ANSWERS_MAX} sources`)
   const seen = new Set()
   v.forEach((src, i) => {
     if (typeof src !== 'string' || src.length < 1 || src.length > INK_SRC_MAX || seen.has(src)) throw new LayoutRefusal(`${path}[${i}]`, `not a source of 1 to ${INK_SRC_MAX} code units, once`)
@@ -1449,7 +1480,7 @@ const INK_TEXT = new RegExp(`^(?=.*[^${INK_ANY}])[A-Za-z0-9${PUNCT_WIDE.replace(
  *  units, none twice, then its text of 1 to INK_TEXT_MAX code units (INK_TEXT); else a refusal at `path` */
 function checkTexts(v, path) {
   if (v === null) return null
-  if (!Array.isArray(v) || v.length % 2 !== 0 || v.length > 2 * (INK_MAX + LEAD_MAX)) throw new LayoutRefusal(path, `not null or a list of at most ${INK_MAX + LEAD_MAX} pairs`)
+  if (!Array.isArray(v) || v.length % 2 !== 0 || v.length > 2 * (INK_ANSWERS_MAX + LEAD_MAX)) throw new LayoutRefusal(path, `not null or a list of at most ${INK_ANSWERS_MAX + LEAD_MAX} pairs`)
   const seen = new Set()
   for (let i = 0; i < v.length; i += 2) {
     const src = v[i], text = v[i + 1]
