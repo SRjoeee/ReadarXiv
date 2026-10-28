@@ -167,13 +167,13 @@ describe('faceWarmer: the slices of what v0 will draw of a page, loaded before v
     expect(asked3.some(id => id.startsWith('shs-'))).toBe(false)
   })
 
-  it('a Computer Modern paper takes the light weights (the rules\' light designs): light for the body, semibold for a bold heading', async () => {
+  it('a Computer Modern paper takes the weights every family takes (the ruling of 2026-10-29): Regular for the body, Bold for a bold heading', async () => {
     const { faceWarmer } = await import('@/pdf-reader/engine/layer-proto/warm.mjs')
     const asked: string[] = []
     const cmr = { fam: 'serif', bold: false, italic: false, caps: false, design: 'cm', known: true, name: 'CMR10' } as const
     await faceWarmer({ faceSources: host(asked), target: 'zh' }).warm({ units: [{ kind: 'para', text: '\u4e2d', st: cmr }, { kind: 'heading', text: '\u6587', st: { ...cmr, bold: true, name: 'CMBX12' } }] }, 'cm')
-    expect(loaded()).toEqual(['shs-sc-light-A', 'shs-sc-semibold-A'])
-    expect(asked).not.toContain('shs-sc-regular')
+    expect(loaded()).toEqual(['shs-sc-bold-A', 'shs-sc-regular-A'])
+    expect(asked.some(id => /^shs-sc-(light|semibold)$/.test(id))).toBe(false)
   })
 
   it('WAVE_SLOTS slices at a time; a slice loaded or loading is not asked again; a host that cannot say rejects nothing', async () => {

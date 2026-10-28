@@ -19,7 +19,7 @@ const ONLINE_SCRIPTS = [
   'probes/retainer-path', 'probes/toggle-latency', 'probes/toggle-profile', 'probes/toggle-timeline',
 ].map(f => `tests/e2e/${f}.mjs`)
 /** the scripts that name arXiv and stay on this machine: a route table or a page.route answers it, or a local server */
-const OFFLINE_SCRIPTS = ['a11y', 'framing', 'reader', 'registration', 'viewer-control', 'probes/tex-partition', 'probes/web-app-mark'].map(f => `tests/e2e/${f}.mjs`)
+const OFFLINE_SCRIPTS = ['a11y', 'framing', 'reader', 'registration', 'viewer-control', 'probes/pinch-cost', 'probes/tex-partition', 'probes/web-app-mark'].map(f => `tests/e2e/${f}.mjs`)
 const source = (file: string) => readFileSync(join(ROOT, file), 'utf8')
 const LAUNCH = /\b(launchPersistentContext|launchWithReader|newContext|chromium\.launch)\(/
 
