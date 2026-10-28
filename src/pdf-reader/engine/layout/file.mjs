@@ -113,7 +113,9 @@ export { LayoutRefusal } from './json.mjs'
  *  subject classifications.", a theorem's head whose note is a citation, shown again under the ink unit's translation: 39
  *  rows of 22 papers, 0 after, 30 of the sweep's 32 rows of (c)); and an ink unit's runs in another weight, slant or colour
  *  than its own are groups of the commands that set them (layout/ink-units.mjs rule 9: the sweep's (d), its text drawn in one
- *  style). The rows of the units they reach change, so a file of 22 is another maker's: the stored layers are made again and
+ *  style); and in the same 23 (2609.20976v1) an opening point alone at its unit's end, no display, owns its first line at
+ *  most up to TeX's skip before another block, in both readings (stream.mjs lineEnd: the last author's \\orcidlink had owned
+ *  the affiliations and the e-mail below the names; at a bibliography's leading a wrapped \\Eprint keeps every line it held). The rows of the units they reach change, so a file of 22 is another maker's: the stored layers are made again and
  *  the gate pack with them (the file's schema is 5 still) */
 export const LAYOUT = '23'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its

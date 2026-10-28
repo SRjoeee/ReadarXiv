@@ -52,6 +52,55 @@ const START = /^[th]?(\d+)s$/
  *  low on a page to high on it, and right by this share of the page's width and up by this share of its height, crossed
  *  into the next column: what TeX shipped between is in it, and cannot be told apart */
 const JUMP_X = 0.25, JUMP_Y = 0.25
+/** a piece alone at its unit's end owns its lines up to a gap this many of the page's line pitches deep, or more: TeX's skip
+ *  before another block (an author block's affiliations below its names), never the leading of the lines a piece wraps over */
+const BLOCK_GAP = 1.5
+/** the baseline most of a line's glyphs stand on (to a tenth), the first met on a tie: its text's, not a mark's raised over it */
+function lineBase(G, glyphs, from, to) {
+  const n = new Map()
+  let best = G.y[glyphs[from][1]], most = 0
+  for (let q = from; q < to; q++) { const y = Math.round(G.y[glyphs[q][1]] * 10) / 10, c = (n.get(y) ?? 0) + 1; n.set(y, c); if (c > most) { most = c; best = y } }
+  return best
+}
+/** a page's line pitch: the drop between consecutive lines' baselines that most of them have (to a half), where its glyphs run on
+ *  a line's start (left by an em, down by half its size) and the drop is under three of its size; null where none */
+function pitchOf(G) {
+  const n = new Map()
+  let best = null, most = 0, prev = -1
+  for (let g = 0; g < G.n; g++) {
+    if (prev >= 0) {
+      const em = Math.min(G.size[prev], G.size[g]), drop = G.y[prev] - G.y[g]
+      if (G.x0[g] < G.x0[prev] - em && drop > 0.5 * em && drop < 3 * Math.max(G.size[prev], G.size[g])) {
+        const d = Math.round(drop * 2) / 2, c = (n.get(d) ?? 0) + 1
+        n.set(d, c)
+        if (c > most) { most = c; best = d }
+      }
+    }
+    prev = g
+  }
+  return best
+}
+/** how many of `glyphs` ([page, g], stream order, one page) a piece alone at its unit's end owns: its lines up to the first that
+ *  starts a gap BLOCK_GAP of the page's pitch or more below the line before (`anchor`, the baseline of its unit's line it opens
+ *  on, the first line's where it opens on a line of its own), or all; a new line is one TeX set below the glyph before by half
+ *  its size, at or left of where that glyph starts, or below it by a size or more wherever it starts (an indented block) */
+function lineEnd(G, glyphs, anchor, pitch) {
+  if (!pitch) return glyphs.length
+  let from = 0, base = anchor
+  for (let j = 1; j <= glyphs.length; j++) {
+    const a = glyphs[j - 1][1], b = glyphs[j]?.[1]
+    if (b !== undefined) {
+      const em = Math.min(G.size[a], G.size[b]), drop = G.y[a] - G.y[b]
+      // (a drop of a size or more is a line apart, wherever it starts: an indented or centred block after a short line)
+      if (!(drop > 0.5 * em && (G.x0[b] <= G.x0[a] || drop > Math.max(G.size[a], G.size[b])))) continue
+    }
+    const y = lineBase(G, glyphs, from, j)
+    if (from > 0 && base - y >= BLOCK_GAP * pitch) return from
+    base = from === 0 && anchor !== null ? anchor : y
+    from = j
+  }
+  return glyphs.length
+}
 /** the characters of the text after an opening point alone that it is found by */
 export const WANT = 8
 /** the glyph visits a paper's ownership may cost: real ranges never overlap, and cost the glyphs once */
@@ -171,6 +220,8 @@ export function regionsOf(page) {
 export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
   const twice = new Set(dropped)
   const regions = pages.map(regionsOf)
+  /** each page's line pitch (pitchOf), read once where a piece alone at its unit's end asks for it */
+  const pitches = new Map()
   // every point by its name, in stream order: [page, index]; the mark points in stream order (brackets and names apart)
   const where = new Map(), seq = []
   pages.forEach((p, i) => p.points.forEach((pt, q) => {
@@ -254,7 +305,7 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
           return f.blocked && (glyphs.length || boxes.length) ? none(HOW['open, an unmarked piece follows']) : { how: HOW["open, to its column's end"], glyphs, boxes }
         }
       }
-      const { glyphs, boxes } = takeTo(next)
+      let { glyphs, boxes } = takeTo(next)
       if (jumps(glyphs)) return none(HOW['across a column, unbracketed'])
       if (!glyphs.length && !boxes.length) return { how: HOW[f.want ? 'open, to the text after it' : "open, to its unit's next mark"], glyphs, boxes }
       if (!f.want) {
@@ -268,6 +319,18 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
         if (later && Number(later[1]) > Number(m[2])) {
           // the next unit's label: the glyphs on its start mark's line before it, the boxes after the first of them
           const G = P.glyphs, after = N.glyph
+          // (a piece that is no display, alone at its unit's end, owns its lines up to TeX's skip before another block, no further:
+          // the next unit may start many lines on — the last author's \\orcidlink of 2609.20976v1 ran to the abstract's label over
+          // the affiliations and the e-mail below the names, which no unit then owned and no ink unit was made of; a reference's
+          // \\Eprint wrapped over two lines, its entry's full stop on a third, keeps them, at the bibliography's leading)
+          let line = glyphs.length
+          if (!f.display && glyphs.length) {
+            // (the unit's line it opens on: the glyph before its first, on that glyph's line)
+            const g0 = glyphs[0][1], before = g0 - 1
+            const anchor = before >= 0 && Math.abs(G.y[before] - G.y[g0]) < Math.max(G.size[before], G.size[g0]) ? G.y[before] : null
+            line = lineEnd(G, glyphs, anchor, pitches.get(pa) ?? pitches.set(pa, pitchOf(G)).get(pa))
+          }
+          if (line < glyphs.length) { const upTo = P.boxAt[glyphs[line][1]]; glyphs = glyphs.slice(0, line); boxes = boxes.filter(([, b]) => b < upTo) }
           let end = glyphs.length
           while (after < G.n && end > 0 && Math.abs(G.y[glyphs[end - 1][1]] - G.y[after]) < 0.5 * Math.max(G.size[glyphs[end - 1][1]], G.size[after])) end--
           const upTo = end < glyphs.length ? P.boxAt[glyphs[end][1]] : N.box

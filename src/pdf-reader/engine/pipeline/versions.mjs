@@ -255,6 +255,13 @@ export const PDFJS = '6.3.289'
  * stage 5, PDF-READER §19.12) each figure unit's ink (layout/figure-text.mjs) its own group, `f<k>`, its runs wrapped where they
  * are shown — in the page's stream, or in the stream of the form XObject an included PDF is, that form written again once with
  * /Properties of its own (layout/wrap.mjs wrapPage, proveForm) —, and a font with no Unicode a reader can trust leaving its figure
- * the original's (remove.mjs unicodeOf): the base's bytes change where a figure has text
+ * the original's (remove.mjs unicodeOf): the base's bytes change where a figure has text; 12 (2609.20976v1, shared with the
+ * other owners of this release): a macro TeX said sets no ink (the marks file's `marking.inkless`, wrapFinal's `inkless`, as the
+ * maker reads it) is no placeholder of ink in own.mjs, so that a unit that opens with one (a title in `\boldmath`) opens with its
+ * text and its lead's lines of their own are released (JCAP's header line had left the title the original's, `spell`); and an
+ * opening point alone at its unit's end, no display, owns its lines up to TeX's skip before another block, no further
+ * (stream.mjs lineEnd, BLOCK_GAP of the page's line pitch: the last author's `\orcidlink` had owned the affiliations and the
+ * e-mail below the names, to the abstract's label, which no ink unit then made a unit of; at a bibliography's leading a wrapped
+ * `\Eprint` keeps every line it held): the base's bytes change where a paper has either
  */
-export const REMOVAL = '11'
+export const REMOVAL = '12'

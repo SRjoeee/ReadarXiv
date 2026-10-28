@@ -181,6 +181,22 @@ describe('our base pages the layout files were made over', () => {
     withBase(i, 'our base page', { texts: ['\\bert'] })
     expect(() => baseRecordOf(join(i.fixtures, n))).toThrow(/texts/)
   })
+  it('keeps the marking\'s inkless macros in base.json beside its texts, as the wrap is given them, and refuses a list the marks would not hold', async () => {
+    const made = { source: 'ours' as const, head: { source: 'ours', bytes: 3, sha256: sha256('our'), xref: 1, pages: 1, tree: '2025', check: {} } }
+    expect(baseRecordOfMade({ made, layout: Buffer.from('l'), inkless: ['\\boldmath'] })).toMatchObject({ inkless: ['\\boldmath'] })
+    expect('inkless' in baseRecordOfMade({ made, layout: Buffer.from('l') })).toBe(false)
+    const i = inputs()
+    put(join(i.sources, '0001.00001v1', 'source.gz'), 'the source')
+    withBase(i, 'our base page', { inkless: ['\\boldmath'] })
+    expect(baseRecordOf(join(i.fixtures, n))).toMatchObject({ inkless: ['\\boldmath'] })
+    const { inklessOf } = await import('../../lab/pdf/spikes/layer-gate/wrap.mjs')
+    expect(inklessOf(join(i.fixtures, n, 'base.pdf'))).toEqual(['\\boldmath'])
+    // (not distinct sources of 1 to 200 code units, at most 64: refused — Devin on #482)
+    for (const bad of [['\\boldmath', '\\boldmath'], [''], [3], Array.from({ length: 65 }, (_, k) => `\\m${k}`)]) {
+      withBase(i, 'our base page', { inkless: bad })
+      expect(() => baseRecordOf(join(i.fixtures, n))).toThrow(/inkless/)
+    }
+  })
   it('packs base.pdf and base.json beside arxiv.pdf where the fixture has them, and none where it has not', () => {
     const i = inputs()
     const record = withBase(i)

@@ -2400,7 +2400,12 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   apart (2610.16663v1 p16). A
   placeholder whose opening point TeX set inside another unit's range, between its start and end marks on one page, owns
   nothing of that unit's (a run-in `\paragraph` is set at the next paragraph's start, after that paragraph's lead
-  placeholder's opening mark: 2610.21085v1 p5). A footnote call is its unit's `.p` too. Label `u<id>.l`: the glyphs on the start's first glyph's
+  placeholder's opening mark: 2610.21085v1 p5). An opening point alone at its unit's end, no display, its next mark a later
+  unit's start, owns its lines up to TeX's skip before another block, a gap of 1.5 of the page's line pitches or more, no
+  further, in both readings (REMOVAL 12, LAYOUT 23, `stream.mjs` `lineEnd`: the last author's `\orcidlink` of 2609.20976v1
+  owned the affiliations and the e-mail below the names, to the abstract's label, which no ink unit then made a unit of; at a
+  bibliography's leading a reference's `\Eprint` wrapped over lines keeps every one it held, its entry's full stop and an
+  entry TeX gave no unit of its own among them, so that no glyph is left no one's). A footnote call is its unit's `.p` too. Label `u<id>.l`: the glyphs on the start's first glyph's
   baseline between the previous unit's end mark and the start, the placeholders' and names' ranges passed over, but the
   closing punctuation a head macro sets after the unit before it — right after that unit's end mark, each glyph within a fifth
   of an em of the one before, the first of the glyph right before it, which is that unit's own (its text, or a placeholder of
@@ -2414,7 +2419,10 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   drawing, 2610.21491v1 p7; its group now hides it where the note is drawn, as the line's erase did before the wrap). Babel name
   `n<occ>`: between `n<occ>.<key>.s` and `.e`, but never over a placeholder's ink (cleveref's "Appendix" inside a `\cref` is
   the reference's). A glyph is one group's: a placeholder's or a name's over the text's, the text's over a label's, the first
-  text's over a later. A unit that opens with a placeholder of no mark of its own (a paper's macro first in it: `\bert`,
+  text's over a later. A macro TeX said sets no ink (the marks file's `marking.inkless`, which the wrap is given as it is given
+  the texts, `wrapFinal`'s `inkless`, required, null said where the marks are not in hand) is no placeholder of ink here, as the
+  maker reads it (REMOVAL 12): JCAP's title in `\boldmath` opens with its text, so its lead's header line is released, where it
+  had left the title the original's (`spell`, 2609.20976v1 u0). A unit that opens with a placeholder of no mark of its own (a paper's macro first in it: `\bert`,
   `\aidehuman`) has that ink before its start mark, after its label: on a unit's first line nothing else stands between the
   unit before it and its start, so the run there is split, its longest opening that is a label's form and ends a word the
   label (`.l`), the rest that placeholder's ink (`.p`). Images and forms are no unit's (a form whose ink is all one group's

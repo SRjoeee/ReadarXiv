@@ -88,12 +88,14 @@ export const isLabelForm = (s, note = false) => { const t = labelText(s); const 
  * is { glyphs: [], boxes: [], paths: [], points: [], boxAt: [] }. `units` the paper's units (their ids their indices; each its
  * source text `src`, else layout/../translate/mt.mjs plainSource of its pieces); `follows` (layout/marks.mjs followsOf over the
  * units and the points' names) where the marking is known, else null; `texts` (a Map, a macro's source -> the text the
- * marking's probe showed it sets: the marks file's `marking.texts`) where known, else null.
+ * marking's probe showed it sets: the marks file's `marking.texts`) where known, else null; `inkless` (a Set, the macros TeX
+ * said set no ink: the marks file's `marking.inkless`) where known, else null: such a macro is no placeholder of ink, as the
+ * maker reads it (make.mjs), so a unit that opens with one (a title's `\\boldmath`) opens with its text.
  * Returns { glyphs, boxes, units, stats }: `glyphs[p - 1][g]`, `boxes[p - 1][b]` the group a page's glyph or painted rule is
  * hidden with, or null; `units` Map id -> { groups: Set, pages: Set, unhidden: a code of UNHIDDEN or null, labelKept }; `stats`
  * { units, unhidden: { marks, across, spell, page: 0, bounds: 0 }, spell: [ids, at most SPELL_LIST_MAX], labelKept }
  */
-export function ownOf(pages, { units = null, follows = null, texts = null } = {}) {
+export function ownOf(pages, { units = null, follows = null, texts = null, inkless = null } = {}) {
   const P = pages.length
   // (the glyphs and boxes visited: real ranges never overlap and cost the paper's ink once; past OWN_WORK a unit is not owned)
   let work = 0
@@ -144,13 +146,15 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
     }
   }
 
+  /** a placeholder's class, none for a macro TeX said sets no ink (`inkless`, as the maker reads the marking: make.mjs) */
+  const inkClassOf = piece => { const c = classOf(piece); return c === 'macro' && inkless?.has(piece.src) ? null : c }
   /** whether a unit's pieces open (before any text but white space) with a placeholder of ink that has no mark of its own */
   function opensUnmarked(u, id) {
     if (!Array.isArray(u?.pieces)) return false
     for (let k = 0; k < u.pieces.length; k++) {
       const piece = u.pieces[k]
       if (piece?.t === 'text') { if (/\S/.test(typeof piece.s === 'string' ? piece.s : '')) return false; continue }
-      const c = classOf(piece)
+      const c = inkClassOf(piece)
       if (c && c !== 'footnote' && !where.has(`p${id}.${k}a`) && !where.has(`p${id}.${k}b`)) return true
     }
     return false
@@ -568,7 +572,7 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
   function unmarkedPiece(u, id) {
     if (!Array.isArray(u?.pieces)) return false
     return u.pieces.some((piece, k) => {
-      const c = classOf(piece)
+      const c = inkClassOf(piece)
       if (!c || symbolText(piece.src) !== null) return false
       const n = c === 'footnote' ? 'n' : 'p'
       return !where.has(`${n}${id}.${k}a`) && !where.has(`${n}${id}.${k}b`)
