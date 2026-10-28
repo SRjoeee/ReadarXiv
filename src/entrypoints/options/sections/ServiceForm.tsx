@@ -3,7 +3,8 @@
 // own list; a name, the model's by default; extended thinking folded under More; then Connect · Cancel. Nothing is stored here: a
 // successful connection hands the service to the caller, which saves it (§11: no service without a connection). The
 // endpoint's origin is asked for on a gesture — a suggestion's press, a press on the model field, Connect — and the list
-// loads by itself only for an origin already granted. Checked when submitted: the fields at fault say why, the first
+// loads by itself only for an origin already granted that is this service's: the one a gesture of this form asked for, or the
+// edited service's own (#88 E3). Checked when submitted: the fields at fault say why, the first
 // takes the focus (§9). Open, the form is a draft the page does not reload under (ui/drafts.ts)
 import { ChevronRight } from 'lucide'
 import { type RefObject, useCallback, useEffect, useRef, useState } from 'react'
@@ -52,8 +53,14 @@ const deniedWords = (e: unknown) => (e instanceof PermissionError && e.kind === 
 
 type ListState = { kind: 'idle' } | { kind: 'loading' } | { kind: 'ready'; models: ModelOption[] } | { kind: 'failed' }
 
-/** The endpoint's models: by itself once the address and the key are in and still, for an origin already granted */
-function useModels(url: string, key: string, ready: boolean) {
+/**
+ * The endpoint's models: by itself once the address and the key are in and still, for an origin already granted — and, with a
+ * key to send, one `chosen` says is this service's. Granted is not enough for a key: the manifest grants origins no reader chose
+ * for a service (readarxiv.com, arxiv.org, the web translators'), and an address edited through one of them, a key already typed,
+ * would have sent that key there unasked (#88 E3; PRIVACY.md). With no key (a local address) nothing secret goes. A press on the
+ * model field asks for the address it holds, and lists
+ */
+function useModels(url: string, key: string, ready: boolean, chosen: (url: string) => boolean) {
   const [list, setList] = useState<ListState>({ kind: 'idle' })
   const current = useRef<AbortController | null>(null)
   const load = useCallback(() => {
@@ -71,9 +78,9 @@ function useModels(url: string, key: string, ready: boolean) {
     setList({ kind: 'idle' })
     if (!ready) return
     let gone = false
-    const timer = setTimeout(() => void hasHostPermission(url).then(yes => { if (yes && !gone) load() }), STILL_MS)
+    const timer = setTimeout(() => { if (key === '' || chosen(url)) void hasHostPermission(url).then(yes => { if (yes && !gone) load() }) }, STILL_MS)
     return () => { gone = true; clearTimeout(timer) }
-  }, [url, ready, load])
+  }, [url, ready, load, key, chosen])
   useEffect(() => () => current.current?.abort(), [])
   return { list, load }
 }
@@ -151,7 +158,12 @@ export function ServiceForm({ service, target, onConnected, onCancel }: {
   const keyInEffect = key.trim() || (savedKeyApplies ? service?.apiKey ?? '' : '')
   const local = isLoopback(url)
   const ready = isAddress(url) && (local || keyInEffect !== '')
-  const { list, load } = useModels(url.trim(), keyInEffect, ready)
+  /** this service's origin: the edited service's own, or one a gesture of this form asked for (a suggestion, the model field, Connect) */
+  const chosen = useCallback((to: string) => {
+    const pattern = patternOf(to)
+    return (savedOrigin !== null && originOf(to) === savedOrigin) || (pattern !== null && holds.current.has(pattern))
+  }, [savedOrigin])
+  const { list, load } = useModels(url.trim(), keyInEffect, ready, chosen)
 
   useEffect(() => drafts.hold(), [])
   // an opened form puts the focus on its first field (§9)

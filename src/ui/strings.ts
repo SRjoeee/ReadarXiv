@@ -11,6 +11,7 @@
 // half translated.
 import { BUILT_IN_HIGHLIGHTS, BUILT_IN_STYLES, NAME_MAX } from '@/config/appearance'
 import { LANG_CODE_TO_EN_UI_NAME, LANG_CODE_TO_ZH_NAME, type LangCode, label } from '@/config/languages'
+import { isBuiltInService } from '@/config/services'
 import type { FallbackReason } from '@/config/storage'
 import { FALLBACK_LOCALE, LOCALES, type Locale, type LocaleCode } from '@/locales'
 import type { ProviderErrorKind } from '@/providers/types'
@@ -50,6 +51,7 @@ export function setLocale(code: LocaleCode): void {
 
 /** The core renders the failure widget itself and knows no pack (DESIGN §4.2): hand it this locale's sentences, at load and on every switch */
 function installCoreStrings(): void {
+  // (the widget knows the kind alone, not the engine: its key reasons are the keyless words)
   setCoreStrings({ retry: S.page.retry, failureTitle: kind => reasonText(kind) })
 }
 
@@ -128,8 +130,14 @@ export const MODE_ORDER = ['side', 'stack', 'only'] as const
 
 /** The settings page (docs/UI.md §3.2). Same register as `S`: nouns for states, verbs for buttons */
 
-/** §3.4: ProviderErrorKind → a reader's sentence. `aborted` is the reader's own doing and shows nothing. */
-export function reasonText(kind: ProviderErrorKind): string {
+/**
+ * §3.4: ProviderErrorKind → a reader's sentence. `aborted` is the reader's own doing and shows nothing. `engine`, the id of the
+ * engine the failure is about where the caller knows it: a missing or refused key is worded as the key's only for an engine that
+ * carries one — the reader's own services; a built-in one (a web translator's 401 or 403, Chrome's translator not ready), or one
+ * not known, is told it without naming a key (#88 E5)
+ */
+export function reasonText(kind: ProviderErrorKind, engine?: string): string {
+  if ((kind === 'auth' || kind === 'no-key') && (engine === undefined || isBuiltInService(engine))) return current.REASON_KEYLESS[kind]
   return current.REASON[kind]
 }
 

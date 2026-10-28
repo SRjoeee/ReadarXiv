@@ -28,7 +28,7 @@
 // Only this directory imports a package (zod, the mini build): the readers' bundles take the validator once, here. The
 // engine's drawing modules import resolveRules' answers, never the schema.
 import * as z from 'zod/mini'
-import { ENGLISH_FAMILIES, FACES } from './font-roles.mjs'
+import { isCjkFace } from './font-roles.mjs'
 import { scriptOf } from './script.mjs'
 import { countValues, LayoutRefusal, told } from '../layout/json.mjs'
 import { NAME_KEYS } from '../layout/names.mjs'
@@ -39,13 +39,15 @@ import BUILTIN_JSON from './layout-rules.json' with { type: 'json' }
  *  page's and one size a page; `fillLead` and `leftover` added. 3 (D1a, 2026-10-08): `labels` holds every babel name
  *  (layout/names.mjs NAME_KEYS), the generated headings' as well as the floats'. 4 (1b-C, 2026-10-16): `adaptiveFill.band` is read
  *  against the page's own paragraphs (run.mjs pageTarget), no longer against the page before's and the fullest page's. 5 (2026-10-23):
- *  `fillLeadRel` added, the fill's top relative to the original's own pitch (run.mjs fillLeadsOf) */
-export const RULES_SCHEMA = 5
+ *  `fillLeadRel` added, the fill's top relative to the original's own pitch (run.mjs fillLeadsOf). 6 (2026-10-29): `cjkFaces`
+ *  holds its group alone, a CJK script drawn at Regular and Bold beside every English family (the maintainer's ruling): its
+ *  `light` designs gone, and its `kai`, which no engine since 2026-10-19 read, gone with them as was planned at its ruling */
+export const RULES_SCHEMA = 6
 /** a set's bytes at most, as received (the migrated set is about 8 KB) */
 export const RULES_CAP = 65_536
 /** a set's JSON values at most, counted before JSON.parse (layout/json.mjs countValues) */
 export const RULES_VALUES = 20_000
-/** a set nests at most this deep (its deepest field: scripts.<script>.cjkFaces.light) */
+/** a set nests at most this deep (its deepest fields: a script's lists and objects, scripts.<script>.order and .adaptiveFill) */
 const DEPTH_MAX = 8
 /** the targets either reader offers, each of which must resolve or the set is refused: the web's eight and Portuguese, which the
  *  extension's reader offers too (its menu, ui/languages.ts READER_LANGUAGES; its tag for Traditional Chinese is zh-TW). A test
@@ -57,8 +59,8 @@ const CJK_SCRIPTS = new Set(['Hans', 'Hant', 'Jpan', 'Kore'])
 const ORDER = Object.freeze(['track', 'borrow', 'lead', 'shrink'])
 const FURTHER = Object.freeze(['widen', 'flow', 'shrink'])
 const LEFTOVER = Object.freeze(['foot', 'pack'])
-/** the weights of a CJK group the role table builds its roles from (font-roles.mjs rolesFor) */
-const GROUP_WEIGHTS = Object.freeze(['light', 'regular', 'semibold', 'bold'])
+/** the weights of a CJK group the role table builds its roles from (font-roles.mjs rolesFor): the body and the bold */
+const GROUP_WEIGHTS = Object.freeze(['regular', 'bold'])
 const NOTE_MAX = 1000
 const LABEL_MAX = 32
 const CHARS_MAX = 256
@@ -168,15 +170,10 @@ const SCRIPT_FIELDS = [
   // faces (font-roles.mjs rolesFor)
   {
     key: 'cjkFaces', group: 'faces', kind: 'object', nullable: true,
-    members: [
-      { key: 'group', kind: 'text', words: 'the CJK font group' },
-      // (read by the engines before the ruling of 2026-10-19, which draw emphasis in it; kept for them until the schema next
-      // moves: an engine since draws a CJK italic run in the body's face sheared, layer-proto/fonts.mjs CJK_SLANT_DEG)
-      { key: 'kai', kind: 'text', nullable: true, words: 'its Kai for emphasis in engines before 2026-10-19 (empty: upright); since, emphasis is the body slanted and this is not read' },
-      { key: 'light', kind: 'list', words: 'the English designs beside which it takes the light weights' },
-    ],
-    words: 'The CJK family the script is drawn in; empty for an alphabet.',
-    schema: () => z.nullable(z.strictObject({ group: text(64), kai: z.nullable(text(64)), light: z.array(text(32)).check(z.maxLength(16)) })),
+    // (its group alone, drawn at Regular and Bold beside every English family: the light designs and the Kai gone at schema 6)
+    members: [{ key: 'group', kind: 'text', words: 'the CJK font group' }],
+    words: 'The CJK family the script is drawn in, at Regular and Bold; empty for an alphabet.',
+    schema: () => z.nullable(z.strictObject({ group: text(64) })),
   },
 ]
 const SCRIPT_KEYS = Object.freeze(SCRIPT_FIELDS.map(f => f.key))
@@ -264,9 +261,8 @@ function crossChecks(set) {
       return
     }
     if (!cjk) throw new RulesRefusal(`${at}.cjkFaces`, 'an alphabetic script takes no CJK faces')
-    if (!GROUP_WEIGHTS.every(w => Object.hasOwn(FACES, `${faces.group}-${w}`))) throw new RulesRefusal(`${at}.cjkFaces.group`, 'not a group of the face catalog')
-    if (faces.kai !== null && !Object.hasOwn(FACES, faces.kai)) throw new RulesRefusal(`${at}.cjkFaces.kai`, 'not a face of the catalog')
-    faces.light.forEach((design, i) => { if (!ENGLISH_FAMILIES.includes(design)) throw new RulesRefusal(`${at}.cjkFaces.light.${i}`, 'not an English design') })
+    // (a CJK group of the catalog, in both weights its roles take: a Latin family has a regular and a bold too)
+    if (!GROUP_WEIGHTS.every(w => isCjkFace(`${faces.group}-${w}`))) throw new RulesRefusal(`${at}.cjkFaces.group`, 'not a CJK group of the face catalog')
   }
   for (const script of SCRIPTS) checkFaces(set.scripts[script].cjkFaces, `scripts.${script}`, CJK_SCRIPTS.has(script))
   for (const target of TARGETS) if (!Object.hasOwn(set.languages, target)) throw new RulesRefusal(`languages.${target}`, 'missing: a target every reader offers')

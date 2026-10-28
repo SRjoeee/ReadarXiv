@@ -29,8 +29,8 @@ describe('the capsule and the card (the reader\'s design, §6.6)', () => {
     const fake = fakeController({ phase: 'loading' })
     const { container } = await mountElement(createElement(StatusCapsule, { controller: fake.controller, onChooseLanguage: () => {} }))
     const region = container.querySelector('[role="status"]')!
-    await act(async () => fake.set({ phase: 'failed', failure: 'no-key' }))
-    expect(region.textContent).toContain('尚未配置 API Key')
+    await act(async () => fake.set({ phase: 'failed', failure: 'network' }))
+    expect(region.textContent).toContain('网络连接失败')
   })
 
   it('a notice\'s 重试 retries, and its close is remembered for the visit', async () => {

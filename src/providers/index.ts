@@ -37,12 +37,34 @@ const FREE_ENGINES: readonly ((config: Config) => TranslationProvider)[] = [
 // negotiation itself is order-dependent, and before #103 opens the chain to customisation the rule has to become “the first choice decides the format”
 
 /**
+ * How long an engine's availability probe may take before it counts as unavailable. The probes are local answers (a key
+ * present, a language listed) but the built-in translator's, which asks the browser (`Translator.availability`), and a
+ * browser API is unreliable by assumption (CLAUDE.md rule 3): one that never answered held the chain's build, and with it
+ * every block waiting for a chain, until the worker died (#88 E1). Ample for an answer that comes (milliseconds); twice it
+ * stays inside the status's deadline (background/provider-status.ts STATUS_DEADLINE_MS), the most a status waits on probes
+ * that answer late
+ */
+export const PROBE_MS = 2_000
+
+/**
+ * An engine's `isAvailable()`, false where it throws or has not answered within `ms`: the chain is built, and its status
+ * told, from the engines that answered, and one that did not is passed over like one that said no — the chain's other
+ * engines still take over (rule 3). Every probe of the chain's goes through here: its build below, and its status
+ * (transport.ts)
+ */
+export function availableWithin(engine: Pick<TranslationProvider, 'isAvailable'>, ms = PROBE_MS): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const late = new Promise<false>(resolve => { timer = setTimeout(resolve, ms, false) })
+  return Promise.race([Promise.resolve().then(() => engine.isAvailable()).catch(() => false), late]).finally(() => clearTimeout(timer))
+}
+
+/**
  * Assemble the fallback chain and settle the wire format: the configured engine first, then the free engines it does
  * not duplicate (DESIGN §8.5).
  *
  * Two filters:
  * - a step whose `isAvailable()` is false is dropped (an LLM without a key, a built-in engine that cannot be
- *   probed), so no link of the chain is bound to fail; the first engine is **kept** when unavailable — the popup has
+ *   probed, or whose probe has not answered within PROBE_MS), so no link of the chain is bound to fail; the first engine is **kept** when unavailable — the popup has
  *   to say “no API key configured” by it rather than quietly switching to a free engine
  * - **the first-choice engine decides the format**: the first of its preference order, and a candidate that cannot
  *   keep it stays off the chain. `run.ts` takes the capabilities once at the start, and one session has one format
@@ -78,7 +100,8 @@ export async function buildChain(
         console.warn(`[axt] ${candidate.id} does not support this session's wire format ${format}; not joining the fallback chain`)
         continue
       }
-      if (!(await candidate.isAvailable())) continue
+      // a probe that does not answer in time is a no (availableWithin): the build is never held by one
+      if (!(await availableWithin(candidate))) continue
       chain.push(candidate)
     }
   }

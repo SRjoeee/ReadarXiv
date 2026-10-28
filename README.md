@@ -197,9 +197,11 @@ Three invariants are the ones to keep green: restoring must leave the document n
 identical, every text node must fall under exactly one rule, and every placeholder must survive the
 round trip.
 
-Contributions are welcome. Read [`CLAUDE.md`](CLAUDE.md) first — it records the constraints this
-codebase is built under, and a change that violates one of them will not be right no matter how well
-it is written.
+Issues are welcome. Pull requests from outside the project are by arrangement, and come with a
+licence grant from their author: [`CONTRIBUTING.md`](CONTRIBUTING.md) says why and how. Read
+[`CLAUDE.md`](CLAUDE.md) first — it records the constraints this codebase is built under, and a
+change that violates one of them will not be right no matter how well it is written. A security
+problem is reported privately ([`SECURITY.md`](SECURITY.md)).
 
 ## Built on
 
@@ -220,6 +222,9 @@ source in its header; [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md) is the regist
 ## License
 
 Copyright © 2026 SRjoeee. [GPL-3.0](LICENSE), the same licence as the projects it is built on.
+The copyright holder also uses his own code here in Read arXiv's website, which is closed source;
+[`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md) ("Who holds the copyright") says how that and the GPL
+fit together.
 
 This program is free software: you can redistribute it and modify it under the terms of version 3
 of the GNU General Public License as published by the Free Software Foundation. It is distributed in

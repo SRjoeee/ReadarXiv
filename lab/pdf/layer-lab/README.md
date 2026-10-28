@@ -61,6 +61,10 @@ the foot of the settings); the target languages are always named in their own la
 - **The quick view's choices** (kept in the address):
   - over the paper's add-on (`v0rm`), else erased and put back;
   - the prototype's own faces (`v0=prototype`), else the role table's;
+  - drawn as the readers draw a laid page (the default: the copy and the SVG in `engine.css`'s `.axt-layer`, which the lab
+    serves and links, the SVG scaled by its viewBox, its text rendered as `view/text-rendering.mjs`'s probe says, written on
+    the page's `<html>` at its start), or as the lab drew it before (`look=lab`: no viewBox, a transform, none of
+    `engine.css`'s text rendering, as the layer gate's own page draws it);
 
   Everything else the quick view does is the layout rule set's: see **The rules panel** below. (D, adaptive fill, and B, the
   script's leading on the original's pitch alone, are the rule `adaptiveFill`, set or empty; D's three sliders are its
@@ -129,8 +133,10 @@ request carries a project user agent and nothing about the maintainer.
 - `node lab/pdf/layer-lab/smoke.mjs --port=8095`, with the same three variables: every fixture's Original, Final and
   quick view draw their first page (a fixture with no final is not checked on Final), and the early engine's view (an
   old link's `a=layer`) still draws. Screenshots go to `lab/pdf/data/layer-lab/shots/`.
-- Against the gate's progress images (`I24`, `I25`), the quick view at the gate's resolution (zoom 0.9375 at device
-  pixel ratio 2, 2.5 device px a unit) is pixel-identical on Letter pages.
+- Against the gate's progress images (`I24`, `I25`), the quick view drawn as the lab drew it (`look=lab`) at the gate's
+  resolution (zoom 0.9375 at device pixel ratio 2, 2.5 device px a unit) is pixel-identical on Letter pages; drawn as the
+  readers draw it (the default) its text takes the readers' rendering, the weight PDF.js gives the page (docs/PDF-READER.md
+  §11.8).
 - On A4 pages the gate's own panels differ slightly: the gate screenshots the text in a box of the page's fractional
   size (1490 x 2106 for 744.095 x 1052.36 CSS px) and draws it into its 1488 x 2104 canvas. Its text is therefore
   0.13 % smaller and a little lighter there. The lab draws it at its true size. With that step applied to the lab's own

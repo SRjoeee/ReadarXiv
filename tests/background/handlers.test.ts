@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_CONFIG } from '@/config/schema'
-import { type HandlerDeps, createHandlers } from '@/entrypoints/background/handlers'
+import { IDBKeyRange, indexedDB } from 'fake-indexeddb'
+import { TranslationCache, createCacheDb } from '@/cache/store'
+import { type HandlerDeps, createHandlers, sweepAtStart } from '@/entrypoints/background/handlers'
 import { ProviderError } from '@/providers/types'
 import { DEFAULT_FLOATING_ENTRY } from '@/shared/entry-settings'
 import type { AxtMessage, AxtMessageType, AxtResponse, MessageSender } from '@/shared/messages'
@@ -320,4 +322,27 @@ describe('the background\'s handlers', () => {
       expect(sweep).toHaveBeenCalledOnce()
     })
   })
+})
+
+describe('the worker\'s start (#88 E6)', () => {
+  it('deletes the cache\'s expired entries: the rows a key version left behind go once they expire, though no key reaches them', async () => {
+    const cache = new TranslationCache({ db: createCacheDb(`axt-sweep-${Math.random()}`, { indexedDB, IDBKeyRange }) })
+    const DAY = 24 * 60 * 60 * 1000
+    await cache.set('v-old|orphan', 'an old key\'s translation', '2401.00418', Date.now() - 31 * DAY)
+    await cache.set('v-new|live', 'a translation read today', '2401.00418')
+    const lines: string[] = []
+    await sweepAtStart({ cache, diagnostics: { record: (_src: string, line: string) => void lines.push(line) } as unknown as HandlerDeps['diagnostics'] })
+    expect(await cache.db.entries.get('v-old|orphan')).toBeUndefined()
+    expect(await cache.db.entries.get('v-new|live')).toBeDefined()
+    expect(await cache.stats()).toMatchObject({ entries: 1 })
+    expect(lines).toEqual([])
+  })
+
+  it('a cleanup that fails is a line in the log, and the start goes on', async () => {
+    const lines: string[] = []
+    const cache = { clear: vi.fn(), cleanup: vi.fn(async () => { throw new DOMException('the database is closed', 'InvalidStateError') }), stats: vi.fn() }
+    await expect(sweepAtStart({ cache, diagnostics: { record: (_src: string, line: string) => void lines.push(line) } as unknown as HandlerDeps['diagnostics'] })).resolves.toBeUndefined()
+    expect(lines).toEqual(["[axt] the cache's expired entries could not be deleted at the worker's start (InvalidStateError)"])
+  })
+
 })

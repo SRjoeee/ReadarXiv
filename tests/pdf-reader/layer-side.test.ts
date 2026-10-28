@@ -480,9 +480,10 @@ describe('the faces in one wave (warm.mjs, §11.8)', () => {
     s.side.take(m.index.units.map((_, id) => rowOf(id, `\u4e2d\u6587 ${id}`)))
     await settle(s, 10)
     expect(s.opens).toBe(0)
-    // the target's CJK body face (regular or light by the paper's family), and the bold one: page 1's likely faces, v0's
-    expect(asked.some(id => /^shs-sc-(regular|light)$/.test(id))).toBe(true)
-    expect(asked.some(id => /^shs-sc-(bold|semibold)$/.test(id))).toBe(true)
+    // the target's CJK body face, its Regular beside every family, and its Bold: page 1's likely faces, v0's
+    expect(asked).toContain('shs-sc-regular')
+    expect(asked).toContain('shs-sc-bold')
+    expect(asked.some(id => /^shs-sc-(light|semibold)$/.test(id))).toBe(false)
     bound(true)
     await settle(s)
     expect(s.opens).toBe(1)

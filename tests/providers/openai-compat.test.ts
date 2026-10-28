@@ -1,7 +1,7 @@
 import { APICallError } from 'ai'
 import { MockLanguageModelV4 } from 'ai/test'
-import { describe, expect, it } from 'vitest'
-import { createOpenAICompatProvider } from '@/providers/openai-compat'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createOpenAICompatProvider, withoutKey } from '@/providers/openai-compat'
 import { getRequestErrorMeta } from '@/providers/request/retry-policy'
 import { ProviderError, type TranslateRequest } from '@/providers/types'
 
@@ -176,5 +176,40 @@ describe('openai-compat provider: the thinking switch and batch capabilities', (
     expect(sent).toContain('Current section: Intro')
     expect(sent).toContain('<document_metadata>')
     expect(sent).toContain('Input and Output Protocol')
+  })
+})
+
+describe('openai-compat provider: the key goes to the service alone (#88 E3, E4)', () => {
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it('every request the SDK sends refuses a redirect, and a refused one is a network failure for the chain', async () => {
+    const inits: RequestInit[] = []
+    // a refused redirect is how Chrome answers `redirect: 'error'` meeting a 3xx: a TypeError
+    vi.stubGlobal('fetch', vi.fn(async (_url: unknown, init: RequestInit) => { inits.push(init); throw new TypeError('Failed to fetch') }))
+    expect(await kindOf(createOpenAICompatProvider({ ...cfg, apiKey: 'sk-live-0123456789' }).translate(req))).toBe('network')
+    expect(inits.length).toBeGreaterThan(0)
+    for (const init of inits) {
+      expect(init.redirect).toBe('error')
+      expect(new Headers(init.headers).get('authorization')).toBe('Bearer sk-live-0123456789')
+    }
+  })
+
+  it('an endpoint that echoes the key in its refusal: the error carries the words, not the key, in whatever shape the key is', async () => {
+    for (const apiKey of ['hunter2-not-a-known-shape', 'sk-or-v1-abcdef0123456789']) {
+      const echoed = new APICallError({ message: `Incorrect API key provided: ${apiKey}. You can find your key at …`, url: 'u', requestBodyValues: {}, statusCode: 401, responseBody: `{"error":{"message":"Incorrect API key provided: ${apiKey}"}}`, isRetryable: false })
+      const e = await createOpenAICompatProvider({ ...cfg, apiKey }, { model: modelThrowing(echoed) }).translate(req).then(() => undefined, (x: unknown) => x)
+      expect(e).toBeInstanceOf(ProviderError)
+      expect((e as ProviderError).kind).toBe('auth')
+      expect((e as ProviderError).message).toContain('Incorrect API key provided')
+      expect((e as ProviderError).message).not.toContain(apiKey)
+      // nor in what goes with it: the SDK's error, with the reply's body, is not kept as the cause
+      expect(JSON.stringify((e as ProviderError).cause ?? null)).not.toContain(apiKey)
+    }
+  })
+
+  it('withoutKey takes the key out wherever it stands, and leaves a key too short to tell from a word to the shapes', () => {
+    expect(withoutKey('a key-of-the-reader then key-of-the-reader again', 'key-of-the-reader')).toBe('a … then … again')
+    expect(withoutKey('Bearer abc.def', '')).toBe('Bearer …')
+    expect(withoutKey('the word ok stays', 'ok')).toBe('the word ok stays')
   })
 })

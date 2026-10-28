@@ -17,7 +17,7 @@ vi.mock('@/entrypoints/background/context-menu', async importOriginal => ({
   toggleTranslation: vi.fn(async () => true),
   decideToggle: vi.fn(async () => undefined),
 }))
-vi.mock('@/entrypoints/background/handlers', () => ({ createHandlers: vi.fn(() => ({})) }))
+vi.mock('@/entrypoints/background/handlers', () => ({ createHandlers: vi.fn(() => ({})), sweepAtStart: vi.fn(async () => undefined) }))
 
 afterEach(() => {
   vi.restoreAllMocks()

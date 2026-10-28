@@ -309,16 +309,16 @@ describe('the manifest', () => {
   it('CI restores and saves the same cache: one key, one path list — two that differ never hit', () => {
     const ci = readFileSync(join(import.meta.dirname, '../../.github/workflows/ci.yml'), 'utf8')
     const blockOf = (action: string) => {
-      const at = ci.indexOf(`uses: ${action}`)
+      const at = ci.indexOf(`uses: ${action}@`)
       expect(at, action).toBeGreaterThan(-1)
       const rest = ci.slice(at).split('\n').slice(1)
       const end = rest.findIndex(line => /^\s*- /.test(line))
       return rest.slice(0, end < 0 ? undefined : end).join('\n').trim()
     }
-    expect(blockOf('actions/cache/save@v4')).toBe(blockOf('actions/cache/restore@v4'))
+    expect(blockOf('actions/cache/save')).toBe(blockOf('actions/cache/restore'))
     // the key names every input of the step that fills the cache: the pins and the code that decides where the bytes come from, so
     // that a change to how fixtures arrive is exercised cold on its own pull request
-    const key = /key: (remote-fixtures-\$\{\{ hashFiles\((.*)\) \}\})/.exec(blockOf('actions/cache/restore@v4'))
+    const key = /key: (remote-fixtures-pr-\$\{\{ hashFiles\((.*)\) \}\})/.exec(blockOf('actions/cache/restore'))
     expect(key, 'the cache key').not.toBeNull()
     expect(key![2]!.split(',').map(f => f.trim().replace(/^'|'$/g, ''))).toEqual(['tests/fixtures/remote.json', 'scripts/fetch-fixtures.mjs', 'scripts/r2-read.mjs'])
   })

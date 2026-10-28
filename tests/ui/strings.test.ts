@@ -9,11 +9,34 @@ describe('reasonText', () => {
   it('has a reader-facing sentence for every kind, free of implementation words', () => {
     const kinds = ['no-key', 'network', 'rate-limit', 'auth', 'bad-request', 'invalid-response', 'timeout', 'aborted', 'unknown'] as const
     for (const kind of kinds) {
-      const text = reasonText(kind)
-      expect(text, kind).not.toMatch(/引擎|降级|块|会话|provider|fallback|helper/)
+      for (const engine of [undefined, 'microsoft', 'svc-abcd1234']) {
+        const text = reasonText(kind, engine)
+        expect(text, `${kind} ${engine}`).not.toMatch(/引擎|降级|块|会话|provider|fallback|helper/)
+      }
     }
-    expect(reasonText('auth')).toBe('API Key 无效或已过期')
+    expect(reasonText('auth', 'svc-abcd1234')).toBe('API Key 无效或已过期')
     expect(reasonText('aborted')).toBe('')
+  })
+
+  it('names a key only for an engine that carries one: the reader\'s own services; a built-in, or an engine not known, is told without one (#88 E5)', () => {
+    for (const keyed of ['svc-abcd1234', 'openai-compat']) {
+      expect(reasonText('auth', keyed), keyed).toBe('API Key 无效或已过期')
+      expect(reasonText('no-key', keyed), keyed).toBe('尚未配置 API Key')
+    }
+    for (const keyless of ['microsoft', 'google-web', 'chrome-builtin', undefined]) {
+      for (const kind of ['auth', 'no-key'] as const) expect(reasonText(kind, keyless), `${kind} ${keyless}`).not.toMatch(/API Key|密钥/i)
+    }
+    expect(reasonText('auth', 'google-web')).toBe('翻译服务拒绝访问')
+    expect(reasonText('no-key', 'chrome-builtin')).toBe('翻译服务尚未就绪')
+    // the other kinds are the same for every engine
+    expect(reasonText('network', 'microsoft')).toBe(reasonText('network', 'svc-abcd1234'))
+    setLocale('en')
+    try {
+      for (const keyless of ['microsoft', 'google-web', 'chrome-builtin', undefined]) for (const kind of ['auth', 'no-key'] as const) expect(reasonText(kind, keyless), `${kind} ${keyless}`).not.toMatch(/key/i)
+      expect(reasonText('auth', 'svc-abcd1234')).toMatch(/API key/)
+    } finally {
+      setLocale('zh-CN')
+    }
   })
 })
 

@@ -1151,7 +1151,9 @@ try {
     const cleaner = await extensionPage()
     await cleaner.evaluate(() => new Promise(resolve => { const r = indexedDB.deleteDatabase('axt-layer'); r.onsuccess = r.onerror = r.onblocked = () => resolve(null) }))
     await cleaner.close()
-    const stateOf = page => page.evaluate(() => { const s = window.__reader.controller.getState(); return { phase: s.phase, available: s.available, display: s.display, unavailable: s.unavailable, laid: s.layer.laid, capsule: document.querySelector('.capsule:not([data-out])')?.getAttribute('data-kind') ?? null, chips: [...document.querySelectorAll('.capsule:not([data-out]) [data-action]')].map(e => e.textContent) } })
+    /** S-R-24 and S-R-26 as the Chinese pack says them (src/locales/zh-CN.ts), the interface's language here */
+    const NOT_NOW = 'PDF 对照暂时无法加载', LIMITED = 'PDF 对照请求过于频繁，请稍后再试'
+    const stateOf = page => page.evaluate(() => { const s = window.__reader.controller.getState(); return { phase: s.phase, available: s.available, display: s.display, unavailable: s.unavailable, laid: s.layer.laid, capsule: document.querySelector('.capsule:not([data-out])')?.getAttribute('data-kind') ?? null, words: document.querySelector('.capsule:not([data-out])')?.textContent ?? '', chips: [...document.querySelectorAll('.capsule:not([data-out]) [data-action]')].map(e => e.textContent) } })
     /** a wait on the controller's state (the reader's page allows no eval: each test is a function of its own) */
     const waitState = (page, test, arg, timeout = 15_000) => page.waitForFunction(test, arg, { timeout }).then(() => true, () => false)
     const whyIs = ([...whys]) => whys.includes(window.__reader?.controller?.getState().unavailable?.why)
@@ -1171,6 +1173,9 @@ try {
       await page.waitForTimeout(400)
       const st = await stateOf(page)
       check(`${name}: the original readable, the capsule says the bilingual version cannot be had now, with its retry`, said && st.capsule === 'notNow' && st.available === true && st.display === 'bilingual' && st.chips.length >= 1, JSON.stringify(st))
+      // in its own words: a limit (a 429) says so, S-R-26, not S-R-24's "cannot be loaded" (#88 E5)
+      const [own, other] = name === 'refused' ? [LIMITED, NOT_NOW] : [NOT_NOW, LIMITED]
+      check(`${name}: the capsule's words are its own (${name === 'refused' ? 'S-R-26' : 'S-R-24'})`, st.words.includes(own) && !st.words.includes(other), st.words)
       if (name === 'a reset') {
         api.set({ layer: mode.ready() })
         await page.locator('.capsule[data-kind="notNow"] button[data-action]').click()
