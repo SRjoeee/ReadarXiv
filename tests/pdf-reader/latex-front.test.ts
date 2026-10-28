@@ -419,7 +419,7 @@ describe('a letter command is the letter itself in its word: TeX\'s skipped spac
 
   it('every form TeX sets as one word: the group around it, an empty group after it, the spaces after its control word', () => {
     const forms: [string, string][] = [
-      ['{\\L}ukasz', 'Łukasz'], ['{ \\L }ukasz', 'Łukasz'], ['\\L{}ukasz', 'Łukasz'], ['\\L ukasz', 'Łukasz'], ['\\L\nukasz', 'Łukasz'], ['{\\L{}}ukasz', 'Łukasz'],
+      ['{\\L}ukasz', 'Łukasz'], ['\\L{}ukasz', 'Łukasz'], ['\\L ukasz', 'Łukasz'], ['\\L\nukasz', 'Łukasz'], ['{\\L{}}ukasz', 'Łukasz'],
       ['Bj\\o rn', 'Bjørn'], ['Bj{\\o}rn', 'Bjørn'], ['Stra\\ss e', 'Straße'], ['Stra{\\ss}e', 'Straße'], ['Ny{\\aa}rd', 'Nyård'],
       ['\\O stergaard', 'Østergaard'], ['{\\AE}lfric', 'Ælfric'], ['C{\\ae}sar', 'Cæsar'], ['{\\OE}uvre', 'Œuvre'], ['man{\\oe}uvre', 'manœuvre'],
       ['{\\AA}ngstr{\\"o}m', 'Ångström'], ['W\\l odek', 'Włodek'],
@@ -435,6 +435,24 @@ describe('a letter command is the letter itself in its word: TeX\'s skipped spac
   it('after an empty group a space is TeX\'s again, and a letter at a word\'s end keeps the punctuation after it', () => {
     expect(wire(doc('Die Gro\\ss{} Stadt, ein Gru\\ss.'))).toEqual(['Die Groß Stadt, ein Gruß.'])
     expect(wire(doc('Bj{\\o}rn and S{\\o}ren.'))).toEqual(['Bjørn and Søren.'])
+  })
+
+  it('only what TeX sets as one word: a blank line after the letter stays a paragraph\'s end, a star stays text, a space inside a group stays a space', () => {
+    // (TeX skips the spaces after the control word but not a blank line, its \par)
+    expect(wire(doc('Ein Gru\\ss\n\nNext paragraph here.'))).toEqual(['Ein Gruß', 'Next paragraph here.'])
+    // (none of these commands has a starred form: the star is the text's)
+    expect(wire(doc('The work of Gro\\ss* matters.'))).toEqual(['The work of Groß* matters.'])
+    // (a space after `{` or after an empty group is TeX's: the group is walked as a group, its space kept)
+    expect(wire(doc('Die Gro{\\ss{} }Stadt.'))).toEqual(['Die Groß Stadt.'])
+    const spaced = doc('The work of { \\L}ukasz matters.')
+    expect((spaced.units as Unit[])[0]?.pieces.map(x => x.t)).toEqual(['text', 'open', 'text', 'close', 'text'])
+  })
+
+  it('a bibliography entry\'s numbers are kept before its letters join their words: a year between two letters stays a placeholder', () => {
+    const p = project('\\documentclass{article}\\begin{document}\nText.\n\\begin{thebibliography}{1}\n\\bibitem{a} S{\\o}ren. 2020. The {\\O}resund study.\n\\end{thebibliography}\n\\end{document}')
+    const entry = (p.units as Unit[]).find(u => (u as unknown as { kind: string }).kind === 'reference')
+    expect(entry?.pieces.filter(x => x.t === 'ph').map(x => x.src)).toContain('2020.')
+    expect(serialize(entry as never).wire).toMatch(/^Søren\. @a# The Øresund study\.$/)
   })
 
   it('a group around the letter spends its pair\'s id, as a group around an accent does: the pairs after it keep theirs', () => {
@@ -459,6 +477,10 @@ describe('a letter command is the letter itself in its word: TeX\'s skipped spac
       expect(wire(p), tex).toEqual([`The work of ${word} matters.`])
       expect(source(p), tex).toContain(`The work of ${tex} matters.`)
     }
+    // (not under \\unless, which inverts it: read as before, neither branch made a letter of; an \\else whose letter a space
+    // follows before \\fi is no one letter alone, and its space stays a space)
+    expect(wire(doc('The work of \\unless\\ifmmode first\\else\\L\\fi{} done.'))[0]).toMatch(/first/)
+    expect(wire(doc('A caf\\ifmmode x\\else\\\'{e} \\fi next.'))[0]).not.toMatch(/énext/)
     // (an \\else that is no one letter: its first branch is math, no text of TeX's, and only the \\else is walked)
     const w = wire(doc('Text \\ifmmode x^2 squared\\else the square\\fi{} here.'))[0] ?? ''
     expect(w).toContain('the square')

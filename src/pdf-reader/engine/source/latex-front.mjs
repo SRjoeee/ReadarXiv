@@ -284,8 +284,12 @@ const LETTER_COMMANDS = new Map(['o', 'O', 'ss', 'ae', 'AE', 'oe', 'OE', 'aa', '
  */
 function letterCommand(s, i, end, name, to, own) {
   const letter = LETTER_COMMANDS.get(name)
-  if (!letter || own?.has(name)) return null
-  let e = skipSpaces(s, end)
+  if (!letter || own?.has(name) || !s.startsWith(name, i + 1)) return null
+  // (from the control word's own end: commandAt's takes a star after it, which none of these has, `Gro\\ss*` a star of the text)
+  const word = i + 1 + name.length
+  let e = skipSpaces(s, word)
+  // (a blank line after it is a paragraph's end, TeX's \\par: none of it the letter's)
+  if (s[e] === '\n') e = word
   if (s.startsWith('{}', e)) e += 2
   return e <= to ? { letter, end: e } : null
 }
@@ -921,8 +925,10 @@ class Builder {
     const u = this.cur; this.cur = null
     if (!u) return
     // (a file that is not UTF-8: each text piece as UTF-8, `src` its own bytes, which patch writes back, before its letters join it)
-    u.pieces = joinLetters(keepAddresses(u.pieces).map(p => { if (p.t !== 'text' || p.src !== undefined) return p; const t = asEngineText(this.file, p.s); return t === p.s ? p : { t: 'text', s: t, src: p.s } }))
-    if (BIB_KINDS.has(u.kind)) u.pieces = keepNumbers(u.pieces)
+    // (an entry's numbers kept before its letters join their words: a number between two letters of a kernel's command or an
+    // accent, `S{\\o}ren. 2020. The {\\O}resund study.`, stands in a joined piece whose source keepNumbers cannot cut)
+    const read = keepAddresses(u.pieces).map(p => { if (p.t !== 'text' || p.src !== undefined) return p; const t = asEngineText(this.file, p.s); return t === p.s ? p : { t: 'text', s: t, src: p.s } })
+    u.pieces = joinLetters(BIB_KINDS.has(u.kind) ? keepNumbers(read) : read)
     // trim placeholders and whitespace at both ends out of the unit: they stay in the source untouched
     const letters = u.pieces.filter(p => p.t === 'text').map(p => p.s).join('')
     if ((letters.match(/\p{L}/gu) ?? []).length < 2) {
@@ -1099,13 +1105,15 @@ function ifmmodeLetter(s, end, to, ctx) {
   if (s[k] === '\\') {
     const cmd = commandAt(s, k)
     one = accentLetter(s, k, cmd.end, cmd.name, c.elseTo, ctx.ownAccents) || letterCommand(s, k, cmd.end, cmd.name, c.elseTo, ctx.ownLetters)
-  } else if (s[k] === '{') {
-    const g = matchGroup(s, k), j = skipSpaces(s, k + 1), cmd = s[j] === '\\' ? commandAt(s, j) : null
-    const inner = g > 0 && g <= c.elseTo && cmd && (accentLetter(s, j, cmd.end, cmd.name, g - 1, ctx.ownAccents) || letterCommand(s, j, cmd.end, cmd.name, g - 1, ctx.ownLetters))
-    if (inner && skipSpaces(s, inner.end) === g - 1) one = { letter: inner.letter, end: g }
+  } else if (s[k] === '{' && s[k + 1] === '\\') {
+    const g = matchGroup(s, k), cmd = commandAt(s, k + 1)
+    const inner = g > 0 && g <= c.elseTo && (accentLetter(s, k + 1, cmd.end, cmd.name, g - 1, ctx.ownAccents) || letterCommand(s, k + 1, cmd.end, cmd.name, g - 1, ctx.ownLetters))
+    if (inner && inner.end === g - 1) one = { letter: inner.letter, end: g }
   }
-  if (!one || skipSpaces(s, one.end) !== c.elseTo) return null
+  // (the branch the letter alone, up to its \\fi: a space after an accent's group is a word's end, `\\'{e} \\fi`, left to the walk)
+  if (!one || one.end !== c.elseTo) return null
   let e = skipSpaces(s, c.end)
+  if (s[e] === '\n') e = c.end
   if (s.startsWith('{}', e)) e += 2
   return e <= to ? { letter: one.letter, end: e } : null
 }
@@ -1494,8 +1502,9 @@ function walk(s, from, to, b, ctx) {
       if (letter && skipSpaces(s, letter.end) === e - 1) { endText(); b.pairId++; b.letter(letter.letter, s.slice(i, e), i, e); i = e; continue }
       // (and around a letter command alone, {\\L}ukasz, {\\ss}, or an \\ifmmode whose \\else is one, Abell{\\ifmmode\\acute{a}\\else
       // \\'{a}\\fi}n: the letter in its word, the group's id spent as the accent's is)
-      const kernelLetter = !letter && accent && ctx.letters !== false && (letterCommand(s, k, accent.end, accent.name, e - 1, ctx.ownLetters) || (accent.name === 'ifmmode' ? ifmmodeLetter(s, accent.end, e - 1, ctx) : null))
-      if (kernelLetter && skipSpaces(s, kernelLetter.end) === e - 1) { endText(); b.pairId += pairsOf(s, i, e, b, ctx); b.letter(kernelLetter.letter, s.slice(i, e), i, e); i = e; continue }
+      // (the group the letter alone, no space inside it: `{ \\L}` and `{\\ss{} }` set a space too, left to the walk)
+      const kernelLetter = !letter && accent && k === i + 1 && ctx.letters !== false && (letterCommand(s, k, accent.end, accent.name, e - 1, ctx.ownLetters) || (accent.name === 'ifmmode' ? ifmmodeLetter(s, accent.end, e - 1, ctx) : null))
+      if (kernelLetter && kernelLetter.end === e - 1) { endText(); b.pairId += pairsOf(s, i, e, b, ctx); b.letter(kernelLetter.letter, s.slice(i, e), i, e); i = e; continue }
       endText(); const id = b.open('{', i); walk(s, i + 1, e - 1, b, ctx); b.close(id, '}', e); i = e; continue
     }
     if (c === '&' && b.cellMode) { endText(); b.flush(); i++; continue }
@@ -1516,7 +1525,8 @@ function walk(s, from, to, b, ctx) {
     // both branches hold words, neither branch is the translator's (`skipped.ifUnknown`): left English, never the branch
     // TeX does not set. One whose branches hold no words (wordsIn) has its pieces as they were
     // \\ifmmode whose \\else branch is one letter: that letter in its word, as TeX sets it in text (ifmmodeLetter)
-    const mathOr = name === 'ifmmode' && ctx.letters !== false ? ifmmodeLetter(s, end, to, ctx) : null
+    // (not under \\unless, which inverts it: that one TeX's conservative reading below, neither branch the translator's)
+    const mathOr = name === 'ifmmode' && ctx.letters !== false && !/\\unless\s*$/.test(s.slice(Math.max(0, i - 12), i)) ? ifmmodeLetter(s, end, to, ctx) : null
     if (mathOr) { endText(); b.pairId += pairsOf(s, i, mathOr.end, b, ctx); b.letter(mathOr.letter, s.slice(i, mathOr.end), i, mathOr.end); i = mathOr.end; continue }
     if (isConditional(name, ctx.ifs) && name !== 'ifcase') {
       // (one whose span holds what TeX reads otherwise than as tokens there — \\verb, inline code, a verbatim environment, a
