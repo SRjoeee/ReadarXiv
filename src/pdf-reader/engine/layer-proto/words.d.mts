@@ -54,6 +54,8 @@ export declare function tokenBand(t: Token, L: Layout, by: number): { y: number;
  *  (layer2.mjs keptLines), each written where the text passes it; `pieceAt`: each piece's place in the translation (pieceOffsets) */
 export declare function addUnitWords(W: OpenWords, L: Layout, page: number, id: number, wordOf: ((at: number, end: number) => number) | null, kept?: readonly KeptLine[], drawnCrop?: (crop: { page: number }) => boolean, pieceAt?: ArrayLike<number> | null): void
 /** the record a page keeps */
+/** a drawn thing's tokens (a babel name, a figure's label), one a segment, appended under `id` as a unit's span */
+export declare function addSegWords(W: OpenWords, id: number, segs: readonly { x: number; w: number; y: number; h: number; base: number; size: number }[]): void
 export declare function freezeWords(W: OpenWords | null, original: Iterable<number>): PageWords
 /** a copy of a kept record */
 export declare function copyWords(w: PageWords): PageWords

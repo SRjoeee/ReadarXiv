@@ -18,7 +18,12 @@
 // has come; the right has none until its pages bring their words, and every unit lights whole meanwhile — on the one path.
 import { sentenceStarts, tokens as wordsOfText } from '../pipeline/anchors.mjs'
 import { floatHitOf, floatOf, floatShapes, pageFloats } from './floats.mjs'
-import { blockOf, clickOf, hitOf, layoutPage, layoutParts, layoutStream, pageGeometry, pageLayout, runsOf, sentenceOf, sentencesFit, tokensIn, withSentences } from './highlight.mjs'
+import { blockOf, clickOf, hitOf, layoutPage, layoutParts, layoutSpans, layoutStream, pageGeometry, pageLayout, runsOf, sentenceOf, sentencesFit, tokensIn, withSentences } from './highlight.mjs'
+import { NAME_FLAG } from '../layout/file.mjs'
+import { isNameOccurrence, nameOccurrenceId } from '../layer-proto/units.mjs'
+
+/** how far past a name's box a token's middle may stand and be the name's, PDF units (pipeline/ink-pass.mjs SLACK) */
+const NAME_SLACK = 1
 
 /** how many of a rising list are at most v: the sentence of a word or a place by its sentences' starts there */
 function atMost(xs, v) {
@@ -100,7 +105,9 @@ const told = new WeakMap()
  * refused, once each a page. After `addParts` or `addPage` the pane's shapes are set again (lighting.mjs setShapes): what
  * a page's runs are made of may have moved, and the paint keeps what it drew by the run
  */
-export function createShapes({ kindOf = () => undefined, warn = warnOnce } = {}) {
+export function createShapes({ kindOf: unitKind = () => undefined, warn = warnOnce } = {}) {
+  // (a babel name's occurrence lit as a heading: its id no bundle id reaches, units.mjs nameOccurrenceId)
+  const kindOf = id => (isNameOccurrence(id) ? 'heading' : unitKind(id))
   const L = pageLayout(kindOf), base = pdfShapes(L)
   /** each unit's pairs, page by page ([words, tokens]); their map made once the unit's tokens are all in */
   const pairsOn = new Map(), pairsOf = new Map()
@@ -117,6 +124,45 @@ export function createShapes({ kindOf = () => undefined, warn = warnOnce } = {})
     try { pageFloats(L, p, at.regions, at.paths) } catch (e) { floatsIn.delete(p); L.floats?.delete(p); once(`the floats of page ${p}`, e) }
   }
   const refuse = (page, e) => once(`the left part of page ${page}`, e)
+  // babel's names the parts' layouts locate (layout/file.mjs `names`: References, Abstract, …), none a unit of the bundle's: each
+  // occurrence told on the left as a unit of its own (its hover id, units.mjs nameOccurrenceId), by the tokens of its page whose
+  // middle stands in its box, once both its row and its page's part are in, whichever comes first; the layer draws its words under
+  // the same id (run.mjs paintNames). One that leads a unit (RUN_IN) is that unit's, lit with it. `namesOn` the rows waiting for
+  // their page: [id, x0, x1, top, bottom] by page; `namesTold` the ids told
+  const namesOn = new Map(), namesTold = new Set()
+  const tellNames = p => {
+    const list = namesOn.get(p), input = state.pages.get(p)
+    if (!list || !input) return
+    namesOn.delete(p)
+    const T = input.table, part = { pages: [p], views: [], left: [] }, spans = []
+    for (const [id, x0, x1, top, bottom] of list) {
+      if (namesTold.has(id)) continue
+      const ks = []
+      for (let t = 0; t < T.n; t++) {
+        const mx = (T.l[t] + T.r[t]) / 2, my = (T.top[t] + T.bottom[t]) / 2
+        if (mx >= x0 - NAME_SLACK && mx <= x1 + NAME_SLACK && my >= bottom - NAME_SLACK && my <= top + NAME_SLACK) ks.push(input.first + t)
+      }
+      if (!ks.length) continue
+      namesTold.add(id)
+      part.left.push([id, ks[0], [[p, x0, bottom, x1, top]]])
+      spans.push([id, Int32Array.from(ks)])
+    }
+    if (!part.left.length) return
+    layoutParts(L, [part])
+    layoutSpans(L, p, spans)
+    state.parts.push(part)
+    for (const f of state.followers) { f.addParts([part]); f.addSpans(p, spans) }
+  }
+  const takeNames = parts => {
+    const pages = new Set()
+    for (const part of parts) for (const r of part.layout?.names ?? []) {
+      const id = nameOccurrenceId(r[0])
+      if (id === null || namesTold.has(id) || (r[10] & NAME_FLAG.RUN_IN) !== 0) continue
+      ;(namesOn.get(r[2]) ?? namesOn.set(r[2], []).get(r[2])).push([id, r[3], r[5], r[6], r[7]])
+      pages.add(r[2])
+    }
+    for (const p of pages) tellNames(p)
+  }
   // the float a unit lights, what a point lights or a click levels by and a sentence's shape (which keeps from under a
   // float, highlight.mjs reachAt) read their pages' floats, made then
   const atPage = f => (page, x, y, padX, startsOf) => { floatsOn(page); return f(page, x, y, padX, startsOf) }
@@ -136,9 +182,12 @@ export function createShapes({ kindOf = () => undefined, warn = warnOnce } = {})
      *  told them too. No page's geometry nor floats made here: each on its next use. A part telling nothing new changes
      *  nothing, and is not passed on */
     addParts(parts) {
-      if (!parts.length || !layoutParts(L, parts)) return
-      state.parts.push(...parts)
-      for (const f of state.followers) f.addParts(parts)
+      if (!parts.length) return
+      if (layoutParts(L, parts)) {
+        state.parts.push(...parts)
+        for (const f of state.followers) f.addParts(parts)
+      }
+      takeNames(parts)
     },
     /** a page's left part (format.mjs ReadLeftPart): its part of the layout, and the mirrors'; false where it was in
      *  already or is refused — malformed, or its ids reach into another page's (one warning a page) */
@@ -152,6 +201,7 @@ export function createShapes({ kindOf = () => undefined, warn = warnOnce } = {})
       state.pages.set(input.page, input)
       for (const [id, words, tokens] of input.pairs) (pairsOn.get(id) ?? pairsOn.set(id, new Map()).get(id)).set(input.page, [words, tokens])
       for (const f of state.followers) f.addPage(input)
+      tellNames(input.page)
       return true
     },
     /** a page's left part refused (the door's leftPageOf rejected): no shapes there, one warning a page; one that comes
@@ -219,6 +269,7 @@ export function mirror(source) {
   const follower = {
     addParts: parts => layoutParts(R, parts.map(copyPart)),
     addPage: input => layoutPage(R, input.page, copyPage(input)),
+    addSpans: (p, spans) => layoutSpans(R, p, spans.map(([id, ts]) => [id, ts.slice()])),
   }
   if (state.parts.length) follower.addParts(state.parts)
   for (const input of state.pages.values()) follower.addPage(input)
@@ -266,7 +317,7 @@ export function layerShapes(source) {
   const state = told.get(source.shapes)
   if (!state) throw new TypeError('not a side\'s shapes (createShapes)')
   const M = mirror(source)
-  let L, words, made, wordAt, placeAt, noPlaces, hidden
+  let L, words, made, wordAt, placeAt, noPlaces, hidden, namesKept
   /** the pages that show another target's layer (mute): none of their geometry is the drawing's */
   const muted = new Set()
   /** the laid layout, told the parts as copies, each unit's stream just before its first page's tokens until that page lays */
@@ -276,7 +327,7 @@ export function layerShapes(source) {
   })))
   function reset() {
     L = pageLayout(state.kindOf)
-    words = new Map(); made = new Set(); wordAt = new Map(); placeAt = new Map(); noPlaces = new Set(); hidden = new Set()
+    words = new Map(); made = new Set(); wordAt = new Map(); placeAt = new Map(); noPlaces = new Set(); hidden = new Set(); namesKept = new Map()
     if (state.parts.length) tellParts(state.parts)
   }
   /** page p's part of the laid layout, where its words and its left part are in */
@@ -321,29 +372,58 @@ export function layerShapes(source) {
     return true
   }
   reset()
-  const follower = { addParts: parts => tellParts(parts), addPage: input => { make(input.page) } }
+  const follower = {
+    addParts: parts => tellParts(parts),
+    addPage: input => { make(input.page) },
+    // (units told after their page came, babel's names: on a page laid already, each begins at its own first token there, the
+    // words the layer drew of it, as a unit whose page lays after it is told)
+    addSpans: (p, spans) => {
+      if (!made.has(p)) return
+      for (const [id] of spans) { const ks = L.spans.get(id)?.get(p); if (ks?.length && L.pagesOf.get(id)?.[0] === p) layoutStream(L, id, ks[0]) }
+    },
+  }
   state.followers.add(follower)
 
   const laid = p => made.has(p) && !hidden.has(p)
+  // (a babel name the layer left the original's on a laid page, in its `original`: its original's place is the left's, the
+  // mirror's geometry of it lit and hit there, whenever its row came; units.mjs nameOccurrenceId)
+  const keptName = (p, id) => namesKept.get(p)?.has(id) === true
+  const laidFor = (p, id) => laid(p) && !keptName(p, id)
   const pagesOf = id => L.pagesOf.get(id) ?? M.layout.pagesOf.get(id) ?? []
-  const mode = id => { const ps = pagesOf(id), n = ps.filter(laid).length; return !n ? 'mirror' : n === ps.length ? 'laid' : 'mixed' }
+  const mode = id => { const ps = pagesOf(id), n = ps.filter(p => laidFor(p, id)).length; return !n ? 'mirror' : n === ps.length ? 'laid' : 'mixed' }
   // a laid page's floats are the left's, as the mirror's are (made then)
   const floatsOf = p => { state.floatsOn(p); L.floats = source.layout.floats }
   const shapes = {
-    runs: id => pagesOf(id).filter(p => !muted.has(p)).flatMap(p => pageGeometry(laid(p) ? L : M.layout, p).byId.get(id) ?? []),
+    runs: id => pagesOf(id).filter(p => !muted.has(p)).flatMap(p => pageGeometry(laidFor(p, id) ? L : M.layout, p).byId.get(id) ?? []),
     block: (run, padX) => blockOf(run, padX),
     sentence: (run, starts, s, padX) => { if (!laid(run.page)) return M.shapes.sentence(run, starts, s, padX); floatsOf(run.page); return sentenceOf(L, run, starts, s, padX) },
     fits: (id, starts, now) => { const m = mode(id); return m === 'laid' ? sentencesFit(L, id, starts, !now) : m === 'mirror' ? M.shapes.fits(id, starts, now) : false },
     // (a float on a muted page lights nothing there, as its text does not: its shapes are not the drawing's)
     float: id => { const f = M.shapes.float(id); return f && muted.has(f.page) ? null : f },
     floatShapes: (f, padX) => (muted.has(f.page) ? [] : M.shapes.floatShapes(f, padX)),
-    hit: (page, x, y, padX, startsOf) => { if (muted.has(page)) return null; if (!laid(page)) return M.shapes.hit(page, x, y, padX, startsOf); floatsOf(page); return floatHitOf(source.layout, page, x, y, padX, hitOf(L, page, x, y, padX, startsOf)) },
+    hit: (page, x, y, padX, startsOf) => {
+      if (muted.has(page)) return null
+      if (!laid(page)) return M.shapes.hit(page, x, y, padX, startsOf)
+      floatsOf(page)
+      const h = floatHitOf(source.layout, page, x, y, padX, hitOf(L, page, x, y, padX, startsOf))
+      if (h || !namesKept.has(page)) return h
+      // (nothing of the laid drawing there: a name kept the original's, by the mirror's)
+      const m = M.shapes.hit(page, x, y, padX, startsOf)
+      return m && keptName(page, m.id) ? m : null
+    },
     click: (page, x, y, padX, startsOf) => { if (muted.has(page)) return null; if (!laid(page)) return M.shapes.click(page, x, y, padX, startsOf); floatsOf(page); return clickOf(L, page, x, y, padX, startsOf) },
   }
   return {
     get layout() { return L },
     shapes,
-    lay(p, w) { if (words.has(p) || !w?.tokens) return false; words.set(p, w); make(p); return true },
+    lay(p, w) {
+      if (words.has(p) || !w?.tokens) return false
+      words.set(p, w)
+      const kept = (w.original ?? []).filter(isNameOccurrence)
+      if (kept.length) namesKept.set(p, new Set(kept))
+      make(p)
+      return true
+    },
     laid,
     /** a laid page whose place shows the original again (its copy failed, a stall): the mirror's there until it is shown
      *  again; whether that changed anything */

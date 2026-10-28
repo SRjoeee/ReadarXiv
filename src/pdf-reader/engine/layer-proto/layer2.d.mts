@@ -254,8 +254,10 @@ export declare function caseRuns(s: string, ratio: number, upper: (s: string) =>
 export declare function smallCapsAt(chars: readonly { ch: string; size: number }[] | null | undefined, text: string, size: number | undefined): ((at: number) => boolean) | null
 /** a babel name's word as the layer draws it in `face`: its runs of one case where it draws the face's small capitals itself */
 export declare function nameRuns(text: string, face: Face, to: string): { face: Face; runs: { s: string; k: number }[]; text: string }
-/** nameRuns' word's width at size 1 */
-export declare const runsWidth: (drawn: { face: Face; runs: readonly { s: string; k: number }[] }) => number
+/** a name's word in its runs by script, each in its face, each run's small capitals the layer's where its face has none */
+export declare function nameScriptRuns(text: string, faceOf: (cls: 'cjk' | 'latin') => Face, to: string, quotes?: boolean): { face: Face; runs: { s: string; k: number; face: Face }[]; text: string }
+/** nameRuns' (or nameScriptRuns') word's width at size 1 */
+export declare const runsWidth: (drawn: { face: Face; runs: readonly { s: string; k: number; face?: Face }[] }) => number
 /** the size a unit set in small capitals is drawn at in a CJK target, × its nominal size (the owner's, 2026-10-24: 1) */
 export declare const CJK_CAPS_SIZE: number
 /** the size a unit is laid at: the original's, its faked small capitals aside, × CJK_CAPS_SIZE in a CJK target where its base is
@@ -327,6 +329,9 @@ export declare function labelInTarget(label: { text?: string; chars?: { ch: stri
 /** a babel name as the layer sets it in the target, wherever TeX identified the heading: the target's word for its key
  *  (capitals where the original's are); null where the target has none, or where the word is the original's */
 export declare function nameInTarget(name: { key: string; capitals: boolean }, own: string | null | undefined, labels: Readonly<Record<string, string>> | null | undefined, to: string): string | null
+/** a babel name's size and whether it is set in faked small capitals, read off its characters as a unit's are: its faked small
+ *  capitals aside where the class changed its case (`capitals`), the file's size where none of them tells one */
+export declare function nameStyleOf(chars: readonly { ch: string; size: number; st?: { fam?: string } | null }[] | null | undefined, name: { size: number; capitals: boolean }): { size: number; small: boolean }
 /** a label's characters as its text, a space where two stand a fifth of their size apart */
 export declare function spacedText(chars: readonly Pick<Char, 'ch' | 'x0' | 'x1' | 'size'>[]): string
 /** a theorem-like head's label as the target names it (its name in translator's word, its number and punctuation the original's),
