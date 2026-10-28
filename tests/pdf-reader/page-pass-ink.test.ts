@@ -131,6 +131,21 @@ describe('the ink units in the page pass', () => {
     expect(layoutWithInk(layout, got, [3, 4]).units.map(u => u[0])).toEqual([4])
   })
 
+  it("drops a unit's label row that meets an ink unit's text, which the reader would show again under its translation", () => {
+    // (SIAM's "AMS subject classifications." before the codes' unit: no label's form, left in no group by the wrap, an ink
+    // unit's; the codes' label row over it, 2610.20266v1 p1, and a row of another page, or apart on this one, kept)
+    const head = { ...headUnit(3, 2), kind: 'inkorphan', cls: 'orphan' }
+    const got = inkOfHost({ base: 3, units: [head] }, { units: [0, 1, 2] })
+    const over = [1, 1, 2, 72, 760, 80, 767.5, 757.5], other = [2, 1, 3, 72, 760, 80, 767.5, 757.5], apart = [0, 1, 2, 72, 700, 80, 707.5, 697.5]
+    const layout = { fonts: [], units: [], lines: [], frames: [], erase: [], ph: [], labels: [apart, over, other] }
+    expect(layoutWithInk(layout, got, [3]).labels).toEqual([apart, other])
+    // (in a part with none of the ink units laid as well: its rows are another part's, its label row still goes)
+    expect(layoutWithInk(layout, got, []).labels).toEqual([apart, other])
+    // (none meets: the layout as it was)
+    const none = { ...layout, labels: [apart, other] }
+    expect(layoutWithInk(none, got, [])).toBe(none)
+  })
+
   it('keeps an echo of an ink unit as the wrap made it, whether or not that unit is laid', () => {
     const echoOf = (id: number, page: number, echo: number | null) => ({ ...headUnit(id, page), echo })
     const ink = { base: 3, units: [echoOf(3, 2, null), echoOf(4, 3, 3), echoOf(5, 4, 0)] }

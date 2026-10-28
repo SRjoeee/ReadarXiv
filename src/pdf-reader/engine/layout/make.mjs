@@ -37,6 +37,7 @@ import { drawDataOf } from '../pipeline/draw-data.mjs'
 import { DRAW_HELD_MAX } from '../layer-proto/draw.mjs'
 import { classOf, colourPieceOf, followsOf, headEnd, INK_ANY, layoutMarking, leadStep, markAt, symbolText, vetoTwice } from './marks.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
+import { HEAD_ABUT, HEAD_PUNCT } from './own.mjs'
 import { readAnnots } from '../layer-proto/links.mjs'
 
 /** the how of a later display of a display group (stream.mjs): its ink is the group's first display's */
@@ -1449,7 +1450,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     row.base = r.base
     if (r.extra?.length) {
       row.extra = r.extra
-      for (const g of r.extra) { row.x0 = Math.min(row.x0, P.ix0[g]); row.x1 = Math.max(row.x1, P.ix1[g]); row.top = Math.max(row.top, P.top[g]); row.bottom = Math.min(row.bottom, P.bottom[g]) }
+      for (const g of r.extra) { row.x0 = Math.min(row.x0, P.ix0[g]); row.x1 = Math.max(row.x1, P.x1[g]); row.top = Math.max(row.top, P.top[g]); row.bottom = Math.min(row.bottom, P.bottom[g]) }
     }
     for (const [j, B] of one.boxes ?? []) if (j === 0) { row.x0 = Math.min(row.x0, B[0]); row.x1 = Math.max(row.x1, B[2]); row.top = Math.max(row.top, B[3]); row.bottom = Math.min(row.bottom, B[1]) }
     rows[0] = row
@@ -1708,6 +1709,30 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   }
   const labels = [], labelAt = new Map(), labelRows = new Map()
   const owned = (p, g, unit) => ink[p].owner[g] !== -1 && ink[p].owner[g] !== unit
+  /**
+   * How many of `run`'s first glyphs (page p, left to right, before unit i's start) are the closing punctuation a head sets
+   * after the unit before i (own.mjs MR 5): each of HEAD_PUNCT, the first within HEAD_ABUT of an em right of a glyph of another
+   * unit's on its baseline, each next within it of the one before. They are given to that unit's line there (its glyphs, its
+   * box): none where it has no line holding that glyph
+   */
+  function headTail(p, i, run) {
+    const P = ink[p]
+    if (!run.length) return 0
+    const f = run[0], near = (a, b) => Math.abs(P.y[a] - P.y[b]) < 0.5 * Math.max(P.size[a], P.size[b])
+    let left = -1
+    for (const g of band(P, P.y[f] - 0.5 * P.size[f], P.y[f] + 0.5 * P.size[f])) if (P.owner[g] >= 0 && P.owner[g] !== i && P.x1[g] <= P.x0[f] + 0.05 && near(g, f) && (left < 0 || P.x1[g] > P.x1[left])) left = g
+    if (left < 0) return 0
+    let n = 0
+    for (let prev = left; n < run.length; prev = run[n++]) {
+      const g = run[n]
+      if (!HEAD_PUNCT.test((P.u[g] ?? '').normalize('NFKC')) || P.x0[g] - P.x1[prev] >= HEAD_ABUT * Math.max(P.size[g], P.size[prev]) || !near(g, prev)) break
+    }
+    if (!n) return 0
+    const row = placedById.get(P.owner[left])?.rows.find(r => r.page === p && Math.abs(r.base - P.y[left]) < 0.5 * Math.max(r.size, P.size[left]) && r.x0 <= P.x0[left] + 0.05 && P.x1[left] <= r.x1 + 0.05)
+    if (!row) return 0
+    for (const g of run.slice(0, n)) { row.gl.push(g); P.owner[g] = P.owner[left]; row.x1 = Math.max(row.x1, P.ix1[g]); row.top = Math.max(row.top, P.top[g]); row.bottom = Math.min(row.bottom, P.bottom[g]) }
+    return n
+  }
   function labelOf(one) {
     const { id: i, u, rows, S } = one
     const r0 = rows[0]
@@ -1722,6 +1747,12 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const run = []
     let edge = S.x
     for (let q = cand.length - 1; q >= 0; q--) { const g = cand[q]; if (edge - P.x1[g] > LABEL_EM * P.size[g]) break; run.unshift(g); edge = Math.min(edge, P.x0[g]) }
+    // the closing punctuation a head sets right after the unit before this one is that unit's, as the wrap reads it (own.mjs
+    // MR 5: HEAD_PUNCT, each within HEAD_ABUT of an em of the glyph before it, the first of that unit's own): its line takes it,
+    // so that the reader draws it after that unit's translation (layer2.mjs tailOf) and its group's ink is that line's, never
+    // this unit's label, which the reader would show again from the original over the unit before's drawing (amsthm's ")."
+    // after a note that ends in a citation, 2610.18513v1 p35: u315's label row was u314's ").", shown where it stood)
+    run.splice(0, headTail(S.page, i, run))
     // wholly left of the unit's first line
     const mine = run.filter(g => P.x1[g] <= r0.x0 + 0.01)
     // or the class's own mark that the first line begins with, the unit's start mark set before it

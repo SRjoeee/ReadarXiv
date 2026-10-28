@@ -105,8 +105,15 @@ export { LayoutRefusal } from './json.mjs'
  *  (UNIT_KINDS `reference`, and `refnames` for an entry's names, latex-front.mjs bibliography and entriesLast), marked as the
  *  body's, and an entry's numbers placeholders of their own (PH_KINDS `number`, both marks: MARKS_SCHEMA 11). A maker of 21
  *  reads neither kind, so a file of 22 is another maker's: the gate pack is made again, each side of the rules gate on its own
- *  (the file's schema is 5 still) */
-export const LAYOUT = '22'
+ *  (the file's schema is 5 still); 23 (the release sweep of 2026-10-25, (c)): a label row is its unit's only where its ink is
+ *  no other unit's, as the wrap owns it (layout/own.mjs): the closing punctuation a head sets after the unit before a start is
+ *  that unit's line (make.mjs headTail, MR 5's rule: amsthm's ")." after a note that ends in a citation, which was the body's
+ *  label row and was shown again from the original where it stood, 2610.18513v1 p35), and a label row that meets an ink unit's
+ *  text goes (pipeline/ink-pass.mjs layoutWithInk: a label the wrap left in no group and an ink unit claimed, SIAM's "AMS
+ *  subject classifications.", a theorem's head whose note is a citation, shown again under the ink unit's translation, 12
+ *  rows of 5 local papers). The rows of the units they reach change, so a file of 22 is another maker's: the stored layers are
+ *  made again and the gate pack with them (the file's schema is 5 still) */
+export const LAYOUT = '23'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,
