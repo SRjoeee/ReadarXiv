@@ -352,6 +352,10 @@ its own bytes: the instrument is the same, so the rules gate measures the two en
 alike. A bibliography's entries are numbered after the source's other units, so every unit the frozen records name keeps its
 number, and its rows in the layout file are byte for byte the ones before (the font table gains the entries' faces at its end);
 the entries' units have no translation in the pack, as the gates' run hides them (`TOGGLE_DEFAULTS`).
+The pack of 2026-10-28 (`690d0e19`, LAYOUT 23, the label rows the wrap's ownership gives) is `927cec93`'s with each
+output's `layout.json` and `base.json` made again the same way: every base page is byte for byte the one before, and every
+layout file differs from the one before in its version alone (the pack's layout files hold no ink unit, and none of its papers
+sets a head's closing punctuation after a note that ends in a citation). 14 new objects.
 Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
 The wrap reads each base's units from its paper's source, so the pack holds that too: `sources/<paper>/source.gz`, one a paper
 (`gate-pack.mjs make --sources=<dir of <paper>/source.gz>`, `data/corpus` by default; a make with a base of ours and no source

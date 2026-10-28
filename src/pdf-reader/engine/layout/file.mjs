@@ -105,12 +105,22 @@ export { LayoutRefusal } from './json.mjs'
  *  (UNIT_KINDS `reference`, and `refnames` for an entry's names, latex-front.mjs bibliography and entriesLast), marked as the
  *  body's, and an entry's numbers placeholders of their own (PH_KINDS `number`, both marks: MARKS_SCHEMA 11). A maker of 21
  *  reads neither kind, so a file of 22 is another maker's: the gate pack is made again, each side of the rules gate on its own
- *  (the file's schema is 5 still); 23 (the look-ahead pairs, 2609.20976v1's abstract English): a placeholder right after a
- *  paper's macro that may look ahead (\\xspace: 2609.20976's \\snr, `\\ac{SNR}\\xspace`, before `$\\geq 50$`), past white space alone
- *  or none, is marked where the mark probe's look-ahead section says its opening mark there moves nothing (marks.mjs
- *  aheadSamples, the pair asked as the paper sets it; MARKS_SCHEMA 12), and the macro closed where its closing mark does too:
- *  that placeholder was LOST with no mark, and the macro with it ('open, an unmarked piece follows'), its unit the original's
- *  (the file's schema is 5 still; the gate pack's seven papers write no such pair, their layout files the rows they were) */
+ *  (the file's schema is 5 still); 23 (the release sweep of 2026-10-25, (c)): a label row is its unit's only where its ink is
+ *  no other unit's, as the wrap owns it (layout/own.mjs): the closing punctuation a head sets after the unit before a start is
+ *  that unit's line (make.mjs headTail, MR 5's rule: amsthm's ")." after a note that ends in a citation, which was the body's
+ *  label row and was shown again from the original where it stood, 2610.18513v1 p35), and a label row that meets an ink unit's
+ *  text goes (pipeline/ink-pass.mjs layoutWithInk: a label the wrap left in no group and an ink unit claimed, SIAM's "AMS
+ *  subject classifications.", a theorem's head whose note is a citation, shown again under the ink unit's translation: 39
+ *  rows of 22 papers, 0 after, 30 of the sweep's 32 rows of (c)); and an ink unit's runs in another weight, slant or colour
+ *  than its own are groups of the commands that set them (layout/ink-units.mjs rule 9: the sweep's (d), its text drawn in one
+ *  style). The rows of the units they reach change, so a file of 22 is another maker's: the stored layers are made again and
+ *  the gate pack with them; and in the same unreleased 23 (the look-ahead pairs, 2609.20976v1's abstract English) a
+ *  placeholder right after a paper's macro that may look ahead (\\xspace: 2609.20976's \\snr, `\\ac{SNR}\\xspace`, before
+ *  `$\\geq 50$`), past white space alone or none, is marked where the mark probe's look-ahead section says its opening mark there
+ *  moves nothing (marks.mjs aheadSamples, the pair asked as the paper sets it; MARKS_SCHEMA 12), and the macro closed where its
+ *  closing mark does too: that placeholder was LOST with no mark, and the macro with it ('open, an unmarked piece follows'),
+ *  its unit the original's (the gate pack's seven papers write no such pair: their layout files are 23's rows) (the file's
+ *  schema is 5 still) */
 export const LAYOUT = '23'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour

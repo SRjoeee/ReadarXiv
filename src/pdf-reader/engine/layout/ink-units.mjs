@@ -28,7 +28,11 @@
 //   7. what it owns: its text glyphs `u<id>`, its placeholders' `u<id>.p` (own.mjs's groups), claimed in the wrap
 //      (claimInk), every one a glyph no unit owned;
 //   8. a block of notes or orphans whose letters are mostly an author unit's words (NAMES_SHARE) is its names (`inknames`): of
-//      the names toggle, as the author block is, not always translated (REVTeX's names its marks do not own).
+//      the names toggle, as the author block is, not always translated (REVTeX's names its marks do not own);
+//   9. its style: the weight, slant and fill most of its text glyphs hold is the unit's, which the reader measures on them; a
+//      run of words in another is a group of the commands that set it (`\textbf{`, `\textmd{`, `\textit{`, `\textup{`,
+//      `\textcolor[HTML]{…}{`), as a source unit's are, so that its translation keeps each run's (a theorem's bold head before
+//      its regular note, a coloured term: the release sweep of 2026-10-25, (d), drew them all in the unit's one style).
 // Pure arithmetic; an original module (no port statement).
 import { classifyFont } from '../layer-proto/fonts.mjs'
 import { utf8 } from '../translate/mt.mjs'
@@ -78,6 +82,43 @@ function famOf(cache, name) {
   return f
 }
 
+/** a face's weight and slant, read once a face (fonts.mjs classifyFont) */
+function faceOf(cache, name) {
+  let f = cache.get(name)
+  if (f === undefined) { const c = classifyFont(name ?? ''); f = { bold: c.bold, italic: c.italic }; cache.set(name, f) }
+  return f
+}
+/** glyphs' style (rule 9): bold and italic where more than half of them are, in their faces' names, and the fill most of those
+ *  whose fill is told hold (null where none is: a pattern, a stroke alone) */
+function styleOfGlyphs(list, faces) {
+  let bold = 0, italic = 0
+  const fills = new Map()
+  for (const x of list) {
+    const f = faceOf(faces, x.font)
+    if (f.bold) bold++
+    if (f.italic) italic++
+    if (Number.isInteger(x.fill) && x.fill >= 0) fills.set(x.fill, (fills.get(x.fill) ?? 0) + 1)
+  }
+  let fill = null, most = 0
+  for (const [v, c] of fills) if (c > most) { most = c; fill = v }
+  return { bold: 2 * bold > list.length, italic: 2 * italic > list.length, fill }
+}
+/** a word's style: its glyphs' */
+const wordStyle = (G, gs, faces) => styleOfGlyphs(gs.map(g => G[g]), faces)
+/** a unit's style: its text words' glyphs' */
+const baseStyleOf = (lines, pages, faces) => styleOfGlyphs(lines.flatMap(l => l.words.filter(w => w.fam === 'text').flatMap(w => w.gs.map(g => pages[l.page - 1].glyphs[g]))), faces)
+/** a style as a run tells it: a fill not told is the unit's */
+const styleKey = (st, base) => `${st.bold ? 1 : 0}${st.italic ? 1 : 0}${st.fill ?? base.fill}`
+/** the groups a run of words opens where its style is not the unit's, outermost first: its colour (xcolor's \textcolor, the
+ *  fill its glyphs hold, which the reader measures on them), its weight, its slant (layer2.mjs STYLE_CMDS reads each) */
+function groupsOf(st, base) {
+  const out = [], fill = st.fill ?? base.fill
+  if (fill !== null && fill !== base.fill) out.push(`\\textcolor[HTML]{${fill.toString(16).padStart(6, '0').toUpperCase()}}{`)
+  if (st.bold !== base.bold) out.push(st.bold ? '\\textbf{' : '\\textmd{')
+  if (st.italic !== base.italic) out.push(st.italic ? '\\textit{' : '\\textup{')
+  return out
+}
+
 /** a line's words, left to right: { gs (glyph indices), text, fam (math, mono, or text) } */
 function wordsOf(G, gs, fams) {
   const order = [...gs].filter(g => G[g] && !G[g].blank && /\S/u.test(G[g].u ?? '')).sort((a, b) => G[a].x0 - G[b].x0)
@@ -125,7 +166,7 @@ const ECHO_ORDER = { heading: 0, caption: 1 }
  * frames, erase, ph } }]
  */
 export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
-  const fams = new Map()
+  const fams = new Map(), faces = new Map()
   const base = Number.isInteger(from) && from >= (units?.length ?? 0) ? from : units?.length ?? 0
   // the source units an ink unit may echo, by their letters
   const echoOf = new Map()
@@ -171,19 +212,38 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     return all > 0 && named >= NAMES_SHARE * all
   }
   for (const lines of groups) {
-    const id = base + out.length, cls = (lines[0].cls === 'orphan' || lines[0].cls === 'notes') && namesOf(lines) ? 'names' : lines[0].cls, page = lines[0].page, P = pages[page - 1]
-    const G = P.glyphs
-    // pieces: text words joined, a run of math or typewriter words a placeholder (rule 4)
+    const id = base + out.length, cls = (lines[0].cls === 'orphan' || lines[0].cls === 'notes') && namesOf(lines) ? 'names' : lines[0].cls
+    // pieces: text words joined, a run of math or typewriter words a placeholder (rule 4), a run of words in another weight, slant
+    // or colour than the unit's a group that sets it (rule 9)
     const pieces = [], phs = []
     let text = '', plain = ''
     const flushText = () => { if (text) { pieces.push({ t: 'text', s: sourceView(text) }); plain += text; text = '' } }
+    const style0 = baseStyleOf(lines, pages, faces), open = []
+    let runKey = styleKey(style0, style0), pairs = 0
+    const closeRun = () => { while (open.length) pieces.push({ t: 'close', id: open.pop(), src: '}' }) }
     lines.forEach((l, li) => {
       l.words.forEach((w, wi) => {
         const space = wi > 0 || li > 0
         if (w.fam === 'text') {
           // (a hyphen ending a line before a lowercase letter: the word goes on)
-          if (space && !(wi === 0 && li > 0 && /-$/.test(text) && /^\p{Ll}/u.test(w.text))) text += ' '
+          let sep = ''
+          if (space && !(wi === 0 && li > 0 && /-$/.test(text) && /^\p{Ll}/u.test(w.text))) sep = ' '
           else if (wi === 0 && li > 0 && /-$/.test(text)) text = text.slice(0, -1)
+          // (a word in another style than the run's: the run closed, the space before the word outside every group, and a group
+          // of each command that sets what the word holds and the unit does not opened)
+          const st = wordStyle(pages[l.page - 1].glyphs, w.gs, faces), k = styleKey(st, style0)
+          if (k === runKey) text += sep
+          else {
+            const styled = open.length > 0
+            if (!styled) text += sep
+            flushText()
+            closeRun()
+            if (styled) text = sep
+            const groups = groupsOf(st, style0)
+            if (groups.length) flushText()
+            for (const src of groups) { open.push(++pairs); pieces.push({ t: 'open', id: pairs, src }) }
+            runKey = k
+          }
           text += w.text
         } else {
           const lastPh = phs.at(-1)
@@ -199,6 +259,7 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
       })
     })
     flushText()
+    closeRun()
     // echo (rule 5): its letters and its placeholders' count a source unit's; its pieces then that unit's, each visible placeholder
     // of it placed by the ink unit's kept run in its turn
     let echo = null, own = pieces, kept = phs
