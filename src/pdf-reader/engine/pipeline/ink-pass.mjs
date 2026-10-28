@@ -8,6 +8,7 @@
 import { PH_KINDS, UNIT_KINDS } from '../layout/file.mjs'
 import { fontName } from '../layout/make.mjs'
 import { BundleRefusal } from '../layer-proto/bundle.mjs'
+import { levelRun } from '../layer-proto/figure-rows.mjs'
 import { chunkTotals, writeUnitChunks } from '../layer-proto/format.mjs'
 import { inkBundleUnitsOf } from '../layer-proto/units.mjs'
 import { lineRects } from './anchors.mjs'
@@ -79,6 +80,33 @@ export function inkAnchors(doc, ink) {
     if (!tokens.length) continue
     const ks = [...new Set(tokens)].sort((a, b) => a - b)
     out.set(u.id, { rects: lineRects(doc, ks), coverage: 1, tokens: ks, bounded: true, pairs: new Map() })
+  }
+  return out
+}
+
+/**
+ * Each figure unit's anchor on the left (inkAnchors' shape): arXiv's tokens on its page whose middle stands in its run's band —
+ * from its origin along its direction for its length, across from its descent to its ascent (em of its size), SLACK beyond —, its
+ * rectangles their lines', so that its translation lights its original as a source unit's does (the hover: a figure's label lit);
+ * a unit level and read left to right alone (figure-rows.mjs levelRun: a turned one's translation is in no text layer, and anchored on the
+ * left alone it would light there and nothing on the right, where the figure's float lit both). `figures` page-pass.mjs
+ * figureUnits' rows by page (layer-proto/figure-rows.mjs figureRow); a unit no token stands in has no anchor (the figure's float
+ * lights it then, as before)
+ */
+export function figureAnchors(doc, figures) {
+  const out = new Map()
+  if (!figures?.size) return out
+  const byPage = new Map()
+  doc.forEach((t, k) => (byPage.get(t.page) ?? byPage.set(t.page, []).get(t.page)).push(k))
+  for (const [page, rows] of figures) for (const [id, , , x, y, ux, uy, length, size, ascent, descent] of rows) {
+    if (!levelRun(ux, uy)) continue
+    const tokens = []
+    for (const k of byPage.get(page) ?? []) {
+      const t = doc[k], dx = t.x + t.w / 2 - x, dy = (t.top + t.bottom) / 2 - y
+      const along = dx * ux + dy * uy, across = dy * ux - dx * uy
+      if (along >= -SLACK && along <= length + SLACK && across >= descent * size - SLACK && across <= ascent * size + SLACK) tokens.push(k)
+    }
+    if (tokens.length) out.set(id, { rects: lineRects(doc, tokens), coverage: 1, tokens, bounded: true, pairs: new Map() })
   }
   return out
 }

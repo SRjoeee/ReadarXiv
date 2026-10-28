@@ -232,7 +232,9 @@
 //     its leading, 2610.19274v1's 68 to 32; a formula's script its placeholder's; a head's or an entry's number in its own words
 //     the unit's, a folio alone the page's own ink: 2010.11929v2's "ICLR 2021"), both under PIPELINE 30, so that a translation
 //     stored for the old ink units could be given to the new ones; every paper is translated again. The unit-cut golden holds
-//     the ink units' and the figure units' cut beside the source units' (tests/pdf-reader/unit-cut.test.ts)
+//     the ink units' and the figure units' cut beside the source units' (tests/pdf-reader/unit-cut.test.ts). In the same release
+//     the left side's marks gain the figure units' (pipeline/ink-pass.mjs figureAnchors: arXiv's tokens in a level label's band),
+//     so that a figure's label lights its original on hover (the owner's report on 2010.11929v2 p9, the follow-up of #487)
 export const PIPELINE_VERSION = '31'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */

@@ -242,6 +242,17 @@ export function addUnitWords(W, L, page, id, wordOf, kept = [], drawnCrop = () =
   W.spans.push([id, W.n > first ? [first, W.n - first] : []])
 }
 
+/**
+ * The tokens of a drawn thing no unit's layout lays (a babel name, a figure's label: run.mjs paintNames, paintFigures), one a drawn
+ * segment (textlayer.mjs nameSeg's: its box, its baseline, its size), appended to the page's table under `id` as a unit's span, so
+ * that the hover lights it and its original as it does a unit (view/shapes.mjs layerShapes); no word, no place (it lights whole)
+ */
+export function addSegWords(W, id, segs) {
+  const first = W.n
+  for (const s of segs) push(W, s.x, s.x + s.w, s.base, s.size, s.y + s.h, s.y, -1, -1)
+  W.spans.push([id, W.n > first ? [first, W.n - first] : []])
+}
+
 /** the record a page keeps: the table's columns cut to its tokens, its spans, and the units left the original's, rising */
 export function freezeWords(W, original) {
   const n = W?.n ?? 0

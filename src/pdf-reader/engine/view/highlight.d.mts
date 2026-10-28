@@ -35,6 +35,8 @@ export declare function layoutParts(layout: Layout, parts: readonly PartRects[])
 /** a page's part: its tokens, ids from `first`, and each unit's tokens there; false where it was given already; a
  *  RangeError where its ids reach into another page's */
 export declare function layoutPage(layout: Layout, page: number, part: { first: number; table: PageTable; spans: readonly (readonly [number, ArrayLike<number>])[] }): boolean
+/** units' tokens on a page given already: a unit told after its page came; false where the page is not in */
+export declare function layoutSpans(layout: Layout, page: number, spans: readonly (readonly [number, ArrayLike<number>])[]): boolean
 /** a unit's stream (its first token) told again where its pages bring it (the right's laid pages); false where the unit is
  *  not told or its stream is that already */
 export declare function layoutStream(layout: Layout, id: number, stream: number): boolean
