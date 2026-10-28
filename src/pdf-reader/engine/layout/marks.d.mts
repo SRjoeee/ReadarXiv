@@ -52,6 +52,20 @@ export declare function markProbeTex(samples: readonly ({ src: string; call: boo
 export declare const INK_MAX: number
 /** the ink section's samples: each macro's source once, in the paper's order, that TeX can set in a box of its own */
 export declare function inkSamples(units: readonly SourceUnit[]): string[]
+/** the distinct samples the ink section asks about a bibliography's entries, past the body's INK_MAX */
+export declare const ENTRY_INK_MAX: number
+/** the entries' calls a sample's answers are carried to, at most */
+export declare const ENTRY_SHARED_MAX: number
+/** the sources the ink section's answers name, at most: INK_MAX + ENTRY_INK_MAX + ENTRY_SHARED_MAX */
+export declare const INK_ANSWERS_MAX: number
+/** the entries' calls no sample of their own asks about whose shape a sample shares: call → that sample */
+export declare function inkShared(units: readonly SourceUnit[]): Map<string, string>
+/** the shape of an entry's macro call the calls that share a sample have alike: its command, each argument empty, plain or as written */
+export declare function entryShape(src: string): string
+/** the text a call that shares a sample sets, carried from the sample's text by its plain arguments; null where it cannot be */
+export declare function carriedText(sample: string, call: string, text: string): string | null
+/** the ink section's answers carried to the calls that share a sample */
+export declare function shareInk<I extends string[] | null, T extends [string, string][] | null, A extends string[] | null>(answers: { inkless: I; texts: T; apart: A }, shared: Map<string, string> | null): { inkless: I; texts: T; apart: A }
 /** the leads the ink section asks about past the paper's macros inkSamples takes, at most */
 export declare const LEAD_MAX: number
 /** the leads' samples: the placeholders at a unit's head (headEnd) of inline code or a paper's macro that `asked` does not
@@ -143,7 +157,7 @@ export declare function layoutMarking(units: readonly SourceUnit[], classes: rea
 
 /** the marks file (internal, prep/<mid>/marks-<sha>.json): what the layout maker reads from the marked original */
 export interface LayoutMarks {
-  schema: 12
+  schema: 13
   /** the engine that compiled it (meta.compiler) */
   engine: string
   /** what the marked original was marked with: layoutMarking's classes and the paper's own switch (TeX's answers to the
@@ -198,7 +212,7 @@ export declare function destRect(a: unknown): [x0: number, y0: number, x1: numbe
 export declare const MARKS_CAP: number
 export declare const MARKS_VALUES: number
 export declare const MARKS_DEPTH: number
-export declare const MARKS_SCHEMA: 12
+export declare const MARKS_SCHEMA: 13
 /** a unit's alignment code (readAlign) */
 export type AlignCode = 'c' | 'l' | 'r' | 'j'
 export declare const ALIGN_CODES: readonly AlignCode[]

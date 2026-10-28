@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { completeMacros, frontMarks, inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { bblProvides, openPaper, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { AHEAD_PROBE_MAX, aheadKey, aheadSamples, completeCall, completeCalled, followsOf, layoutMarking, MARK_CLASSES, markProbeTex, probeSamples, readInkApart, readInkProbe, readInkTexts, readMarkProbe, symbolText } from '@/pdf-reader/engine/layout/marks.mjs'
+import { AHEAD_PROBE_MAX, aheadKey, aheadSamples, carriedText, completeCall, completeCalled, ENTRY_INK_MAX, ENTRY_SHARED_MAX, entryShape, followsOf, INK_MAX, inkSamples, inkShared, layoutMarking, leadSamples, MARK_CLASSES, markProbeTex, probeSamples, readInkApart, readInkProbe, readInkTexts, readMarkProbe, shareInk, symbolText } from '@/pdf-reader/engine/layout/marks.mjs'
 import { boundsFromMarks, tokenizeDocument, uprightToken } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 
 // The layout marks a placeholder gets where what stands beside it was guessed at: the paper's own macro taken to look ahead
@@ -409,6 +409,55 @@ describe('a sample that leaves TeX\'s state broken (2010.11929v2\'s \\tikz\\fill
     expect(readMarkProbe(punct, samples)['\\cite']).toBe('0000000x')
     const ahead = ['LAYOUT-PROBE 1 ahead-at 0 w', nullfont('w'), 'LAYOUT-PROBE 1 ahead 0 0', 'LAYOUT-PROBE 1 ahead-at 1 d', nullfont('w'), 'LAYOUT-PROBE 1 ahead 1 0'].join('\n')
     expect(Object.entries(readMarkProbe(ahead, samples)).filter(([k]) => k.includes('#'))).toEqual([['\\snr# #$\\geq 50$', 'x'], ['\\name{x}##\\cite{a}', '2']])
+  })
+})
+
+describe('the ink section\'s cap and a bibliography\'s entries (2608.25210v2: its body\'s 101 macros fill INK_MAX, its entries\' \\natexlab{} never asked)', () => {
+  const body = (n: number) => Array.from({ length: n }, (_, i) => unit([text('A '), ph(`\\m${i}{}`), text(' word.')]))
+  const entry = (...srcs: string[]) => ({ ...unit(srcs.flatMap(src => [text('Author. 2020'), ph(src), text('. ')])), kind: 'reference' }) as SourceUnit
+  it('the entries get a share of their own past the body\'s INK_MAX: a body that fills it leaves them asked', () => {
+    const units = [...body(INK_MAX + 5), entry('\\natexlab{}'), entry('\\natexlab{a}')]
+    const asked = inkSamples(units)
+    expect(asked).toHaveLength(INK_MAX + 2)
+    expect(asked.slice(INK_MAX)).toEqual(['\\natexlab{}', '\\natexlab{a}'])
+    // (at most ENTRY_INK_MAX of their own: one a shape)
+    const many = [...body(2), ...Array.from({ length: ENTRY_INK_MAX + 3 }, (_, i) => entry(`\\e${i}{x}`))]
+    expect(inkSamples(many)).toHaveLength(2 + ENTRY_INK_MAX)
+  })
+  it('one sample a command and its arguments\' shape: \\natexlab{a}, {b} and {c} one, as written, \\natexlab{} another, an argument that is no plain text as it is written', () => {
+    expect(['\\natexlab{a}', '\\natexlab{b}', '\\natexlab{ c }', '\\natexlab{}', '\\natexlab{\\emph{a}}'].map(entryShape)).toEqual(['\\natexlab{\u0000}', '\\natexlab{\u0000}', '\\natexlab{\u0000}', '\\natexlab{}', '\\natexlab{\\emph{a}}'])
+    // (REVTeX's \href@noop {} {…}: its arguments' shape, the second as written where it holds a command)
+    expect(entryShape('\\href@noop {} {Ph.D. thesis}')).toBe('\\href@noop{}{\u0000}')
+    expect(entryShape('\\href@noop {} {\\emph {J. Phys.}}')).toBe('\\href@noop{}{\\emph {J. Phys.}}')
+    // (OT1's < > | " ' set other glyphs, and -- a dash: no plain text)
+    expect(['\\x{a<b}', '\\x{a"b}', "\\x{a'b}", '\\x{1--2}', '\\x{10.1137/0330046}'].map(entryShape)).toEqual(['\\x{a<b}', '\\x{a"b}', "\\x{a'b}", '\\x{1--2}', '\\x{\u0000}'])
+    const units = [entry('\\natexlab{a}', '\\doi{10.1/x}'), entry('\\natexlab{b}', '\\doi{10.2/y}'), entry('\\natexlab{}', '\\natexlab{c}')]
+    expect(inkSamples(units)).toEqual(['\\natexlab{a}', '\\doi{10.1/x}', '\\natexlab{}'])
+    expect([...inkShared(units)]).toEqual([['\\natexlab{b}', '\\natexlab{a}'], ['\\doi{10.2/y}', '\\doi{10.1/x}'], ['\\natexlab{c}', '\\natexlab{a}']])
+    // (a body's macro is asked as before, never shared; a call shared is no lead)
+    expect([...inkShared([...body(1), ...units])].map(([c]) => c)).toEqual(['\\natexlab{b}', '\\doi{10.2/y}', '\\natexlab{c}'])
+    expect(leadSamples([entry('\\natexlab{a}'), { ...unit([ph('\\natexlab{b}'), text(' and more.')]), kind: 'reference' } as SourceUnit])).toEqual([])
+    // (at most ENTRY_SHARED_MAX calls)
+    expect(inkShared(Array.from({ length: ENTRY_SHARED_MAX + 2 }, (_, i) => entry(`\\doi{10.${i}/x}`))).size).toBe(ENTRY_SHARED_MAX)
+  })
+  it('carriedText: the sample\'s text with each plain argument the two differ in put in place of the call\'s, where it stands once; none where a macro transforms its argument', () => {
+    expect(carriedText('\\natexlab{a}', '\\natexlab{b}', 'a')).toBe('b')
+    expect(carriedText('\\doi{10.1/x}', '\\doi{10.22/yz}', 'doi:10.1/x')).toBe('doi:10.22/yz')
+    expect(carriedText('\\href@noop {} {Ph.D. thesis}', '\\href@noop {} {M.Sc. thesis}', 'Ph.D.thesis')).toBe('M.Sc.thesis')
+    // (an uppercased argument: its text holds no "abc", and nothing is carried)
+    expect(carriedText('\\up{abc}', '\\up{def}', 'ABC')).toBeNull()
+    // (the argument twice in its text, or one that is no plain text: none)
+    expect(carriedText('\\twice{a}', '\\twice{b}', 'aa')).toBeNull()
+    expect(carriedText('\\x{a}', '\\x{\\emph{b}}', 'a')).toBeNull()
+    expect(carriedText('\\x{a}', '\\y{b}', 'a')).toBeNull()
+  })
+  it('shareInk: a call sets no ink, or begins apart, where its sample does; its text carried where carriedText gives one; null kept null', () => {
+    const shared = new Map([['\\natexlab{b}', '\\natexlab{a}'], ['\\up{def}', '\\up{abc}'], ['\\e{y}', '\\e{x}']])
+    expect(shareInk({ inkless: ['\\e{x}'], texts: [['\\natexlab{a}', 'a'], ['\\up{abc}', 'ABC']], apart: ['\\natexlab{a}'] }, shared)).toEqual({
+      inkless: ['\\e{x}', '\\e{y}'], texts: [['\\natexlab{a}', 'a'], ['\\up{abc}', 'ABC'], ['\\natexlab{b}', 'b']], apart: ['\\natexlab{a}', '\\natexlab{b}'],
+    })
+    expect(shareInk({ inkless: null, texts: null, apart: null }, shared)).toEqual({ inkless: null, texts: null, apart: null })
+    expect(shareInk({ inkless: ['\\a'], texts: [], apart: [] }, new Map())).toEqual({ inkless: ['\\a'], texts: [], apart: [] })
   })
 })
 

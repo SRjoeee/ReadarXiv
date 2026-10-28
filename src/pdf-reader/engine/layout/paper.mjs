@@ -27,7 +27,7 @@ import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { auxUnits, engineUnknown, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.mjs'
 import { DRIVER_OUTPUT_MARK, driverLostInk, driverOutputGiven, driverOutputTruncated, finalCheck, markTextOf } from './base.mjs'
-import { completeCalled, inkSamples, LAYOUT_CLASSES, leadSamples, probeSamples, readInkApart, readInkProbe, readInkTexts, readMarked, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from './marks.mjs'
+import { completeCalled, inkSamples, inkShared, LAYOUT_CLASSES, leadSamples, probeSamples, readInkApart, readInkProbe, readInkTexts, readMarked, readMarkProbe, readNameProbe, readSkipProbe, shareInk, NAME_MARK_FILE, withoutNameMarks } from './marks.mjs'
 
 /** the layout guard's compiles past the marked original's, at most, the unmarked original's among them */
 const GUARD_EXTRA = 2
@@ -196,7 +196,9 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     if (!log) return null
     // (the texts of the macros and of the units' leads, asked last: live.mjs probeFiles)
     const ink = inkSamples(paper.units), leads = leadSamples(paper.units, ink)
-    return { switches: readMarkProbe(log, probeSamples(paper.units, paper.project?.complete)), inkless: readInkProbe(log, ink), texts: readInkTexts(log, [...ink, ...leads]), names: readNameProbe(log), lineskip: readSkipProbe(log), apart: readInkApart(log, ink) }
+    // (an entry's call that shares a sample answered by it: marks.mjs inkShared, shareInk)
+    const shared = shareInk({ inkless: readInkProbe(log, ink), texts: readInkTexts(log, [...ink, ...leads]), apart: readInkApart(log, ink) }, inkShared(paper.units))
+    return { switches: readMarkProbe(log, probeSamples(paper.units, paper.project?.complete)), inkless: shared.inkless, texts: shared.texts, names: readNameProbe(log), lineskip: readSkipProbe(log), apart: shared.apart }
   })
   if (!probe) return { refused: 'probe', ms }
   // (the day the marked original and its final pass are compiled on: the host's, asked once; any failure of the host's but a
