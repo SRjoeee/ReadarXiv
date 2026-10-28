@@ -114,8 +114,17 @@ describe('the secrets', () => {
     }
     for (const name of ['rules-publish.yml', 'rules-point.yml']) for (const m of text(name).matchAll(/secrets\.(\w+)/g)) expect(['RULES_PUBLISH_SECRET', 'READARXIV_CI_TOKEN']).toContain(m[1])
   })
-  it('go to actions of GitHub\'s alone, at a major version: pnpm comes with corepack, not a third party\'s action', () => {
-    for (const name of WITH_TOKEN) for (const m of text(name).matchAll(/uses: (\S+)/g)) expect(m[1], name).toMatch(/^actions\/[a-z-]+(\/[a-z-]+)?@v\d+$/)
+  it('go to actions of GitHub\'s alone, each pinned by its full commit with its version beside it: pnpm comes with corepack, not a third party\'s action', () => {
+    // a tag moves where its owner moves it; a commit does not (#82f: the website's deploy workflows pin so, and are held to it)
+    for (const name of WITH_TOKEN) {
+      const uses = [...text(name).matchAll(/uses: (.*)/g)].map(m => m[1]!)
+      expect(uses.length, name).toBeGreaterThan(0)
+      for (const use of uses) expect(use, name).toMatch(/^actions\/[a-z-]+(\/[a-z-]+)?@[0-9a-f]{40} # v\d+\.\d+\.\d+$/)
+    }
+    // one action, one commit, in every workflow
+    const commits = new Map<string, Set<string>>()
+    for (const name of WITH_TOKEN) for (const m of text(name).matchAll(/uses: (\S+)@([0-9a-f]{40})/g)) commits.set(m[1]!, (commits.get(m[1]!) ?? new Set()).add(m[2]!))
+    for (const [action, at] of commits) expect([...at], action).toHaveLength(1)
     for (const name of WITH_TOKEN.filter(n => text(n).includes('pnpm '))) expect(text(name), name).toContain('run: corepack enable')
     expect(text('ci.yml')).not.toContain('pnpm/action-setup')
   })
@@ -147,7 +156,7 @@ describe('the secrets', () => {
     expect(ci).not.toMatch(/pull_request_target/)
     // the job that holds the token reads the repository alone, and keeps no git credential in the checkout
     expect(ci).toMatch(/^permissions:\n {2}contents: read\n/m)
-    expect(ci).toMatch(/uses: actions\/checkout@v\d+\n {8}with:\n {10}persist-credentials: false\n/)
+    expect(ci).toMatch(/uses: actions\/checkout@[0-9a-f]{40} # v[\d.]+\n {8}with:\n {10}persist-credentials: false\n/)
     // the order of the fetch among the steps stays: after the cache is restored, before the tests that read the fixtures
     const order = steps.map(step => (step.startsWith('id: fixtures-cache') ? 'restore' : step.startsWith('run: node scripts/fetch-fixtures.mjs') ? 'fetch' : step.startsWith('run: pnpm test') ? 'test' : ''))
     expect(order.filter(Boolean)).toEqual(['restore', 'fetch', 'test'])
@@ -186,8 +195,8 @@ describe('each side of the gate runs on the pack its own commit names', () => {
   it('restores the merge base\'s pack with the merge base\'s own script and manifest, from a cache keyed by its own digest, only where the layout versions differ', () => {
     const cache = step('Merge base pack from the cache'), bucket = step('Merge base pack from the bucket'), keep = step('Keep the merge base pack'), check = step('Check the merge base pack')
     for (const s of [cache, bucket, keep, check]) expect(s).toContain("steps.pack.outputs.same != 'true'")
-    expect(cache).toContain('uses: actions/cache/restore@v4')
-    expect(keep).toContain('uses: actions/cache/save@v4')
+    expect(cache).toContain('uses: actions/cache/restore@')
+    expect(keep).toContain('uses: actions/cache/save@')
     // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub expressions, not templates
     for (const s of [cache, keep]) { expect(s).toContain('key: gate-pack-${{ steps.pack.outputs.base }}'); expect(s).toContain('path: ${{ runner.temp }}/base-pack') }
     // only a cache miss reads the bucket and saves
@@ -231,6 +240,29 @@ describe('the pack\'s cache', () => {
   })
 })
 
+describe('the fixtures\' cache (ci.yml)', () => {
+  // arXiv's papers under its non-exclusive licence, never redistributed (tests/fixtures/README.md): ci.yml runs on a push to main
+  // too, and a cache saved there is restorable by any pull request, a fork's included, whose own copy of the workflow decides what
+  // happens to it (#88 E8). A pull request's cache is that pull request's alone
+  const ci = text('ci.yml')
+  const steps = ci.slice(ci.indexOf('\n    steps:\n')).split(/\n {6}- /).slice(1)
+  const SAME_REPO = "github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository"
+  it('is restored and saved only in a pull request of this repository', () => {
+    const caching = steps.filter(step => /uses: actions\/cache\//.test(step))
+    expect(caching).toHaveLength(2)
+    for (const step of caching) {
+      const condition = /^(?:id: .*\n\s+)?if: (.*)$/m.exec(step)?.[1]
+      expect(condition, step.split('\n')[0]).toBeDefined()
+      expect(condition!.startsWith(`${SAME_REPO}`), step.split('\n')[0]).toBe(true)
+    }
+    // the save after a miss alone
+    expect(caching.find(step => step.includes('actions/cache/save'))).toContain(`if: ${SAME_REPO} && steps.fixtures-cache.outputs.cache-hit != 'true'`)
+  })
+  it('is keyed apart from the entry main saved before the guard, which no run reads again and so expires', () => {
+    for (const m of ci.matchAll(/key: (\S+)\$\{\{/g)) expect(m[1]).toBe('remote-fixtures-pr-')
+  })
+})
+
 describe('the pull request gate', () => {
   const yml = text('rules-gate.yml')
   it('holds the permissions the plan names, runs in no environment, skips a fork and an unset bucket, and keeps to its budget', () => {
@@ -248,7 +280,7 @@ describe('the pull request gate', () => {
   it('edits one comment found by the marker the script writes, and uploads the numbers alone', () => {
     expect(yml).toContain(`startswith("${MARK}")`)
     expect(yml).toContain(String.raw`printf '<!-- rules-gate -->\n`)
-    expect(yml).toMatch(/upload-artifact@v4\n\s+with:\n\s+name: rules-gate\n\s+path: \$\{\{ runner\.temp \}\}\/verdict\/rules-gate\.json/)
+    expect(yml).toMatch(/upload-artifact@[0-9a-f]{40} # v[\d.]+\n\s+with:\n\s+name: rules-gate\n\s+path: \$\{\{ runner\.temp \}\}\/verdict\/rules-gate\.json/)
   })
 })
 

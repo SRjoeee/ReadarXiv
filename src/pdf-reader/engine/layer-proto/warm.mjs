@@ -22,8 +22,9 @@
 //   CJK and Latin).
 // A bold or italic run inside a paragraph, a caption's label and a character only the original's text holds (its
 // punctuation measured in the target's fallback) ask their slices when v0 lays the page, as before. The paper's family,
-// which decides a CJK target's weights (the rules' `light` designs) and its Latin runs' faces, is read from the parts'
-// layouts: each font weighted by the lines set in it (familyOfParts), where v0 weights page 1's characters. The two agree on
+// which decides its Latin runs' faces (a CJK target's weights it no longer does: Regular and Bold beside every family, the
+// ruling of 2026-10-29), is read from the parts' layouts: each font weighted by the lines set in it (familyOfParts), where
+// v0 weights page 1's characters. The two agree on
 // the seven papers of the gate pack (2026-10-24: times, palatino, cm and charter, against page 1's lines by width); where
 // they do not, the slices of the other weight were asked for nothing and v0 asks its own.
 //

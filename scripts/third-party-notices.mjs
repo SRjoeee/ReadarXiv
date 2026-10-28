@@ -12,9 +12,9 @@
 // in every one of WXT's builds, and the file is written from that once they are all done. A dependency added
 // tomorrow is in the next build's file without anyone remembering it.
 //
-// **A package without a text stops the build.** Four of the eighteen publish no licence file to npm; theirs were
-// taken from their repositories into `licenses/` here, named after the package (licenses/README.md says from
-// where). One that has neither is an error naming it, not a gap in the file.
+// **A package without a text stops the build.** Five of the twenty-one (2026-10-29; six with the dev build's one) publish
+// no licence file to npm; theirs were taken from their repositories into `licenses/` here, named after the package
+// (licenses/README.md says from where). One that has neither is an error naming it, not a gap in the file.
 //
 // **Apache-2.0's own text goes in once, at the end.** §4(a) asks for a copy of the licence; the AI SDK's packages
 // publish only its 552-byte notice and `@workflow/serde` a 73-byte pointer to a file it does not ship.

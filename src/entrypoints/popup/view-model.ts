@@ -454,9 +454,12 @@ export function derivePopupView(input: PopupInput): PopupView {
   // How the translation looks. The page applies a change straight away, so this needs no restart
   const style: Row = { value: profileName(activeStyle(config.appearance)) }
 
-  const note: Note | null = paused ? { text: S.note.paused(reasonText(parseFatal(progress.fatal ?? '').kind)), tone: 'alert', settings: true }
-    : demoted && session && !madeGood ? { text: S.note.replaced(named(demoted.id), reasonText(demoted.kind), named(session.engine.id)), tone: 'info', settings: true }
-    : page.images?.fatal ? { text: S.note.imagesPaused(reasonText(parseFatal(page.images.fatal).kind)), tone: 'alert', settings: true }
+  // A key's reason is the key's only for an engine that carries one (reasonText, #88 E5): the one put aside, for a hand-over; for a
+  // stop, the service the page's session started on — a built-in chosen, no engine of its chain has a key
+  const stoppedOn = page.running?.provider ?? config.provider
+  const note: Note | null = paused ? { text: S.note.paused(reasonText(parseFatal(progress.fatal ?? '').kind, stoppedOn)), tone: 'alert', settings: true }
+    : demoted && session && !madeGood ? { text: S.note.replaced(named(demoted.id), reasonText(demoted.kind, demoted.id), named(session.engine.id)), tone: 'info', settings: true }
+    : page.images?.fatal ? { text: S.note.imagesPaused(reasonText(parseFatal(page.images.fatal).kind, stoppedOn)), tone: 'alert', settings: true }
     : !canRun && (!on || behind)
       ? !on && saved?.fallback
         ? { text: S.note.willFallback(cannotRunWhy(config, pack, rejected), named(saved.fallback.id)), tone: 'info', settings: true }

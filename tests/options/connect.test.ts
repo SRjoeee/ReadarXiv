@@ -42,7 +42,9 @@ describe('connectService (§6.3)', () => {
 
   it('a refused key names its reason and the key field, and asks for nothing to be given back: the origin is the form\'s to let go (#299 F2c)', async () => {
     wire.answer = { ok: false, error: { kind: 'auth', message: '401', isolatable: false } }
-    expect(await connectService(SVC, 'cmn')).toEqual({ ok: false, field: 'apiKey', reason: O.services.failed(reasonText('auth')) })
+    // the reader's own service: its refusal is its key's (#88 E5: a built-in's is not)
+    expect(await connectService(SVC, 'cmn')).toEqual({ ok: false, field: 'apiKey', reason: O.services.failed(reasonText('auth', SVC.id)) })
+    expect(reasonText('auth', SVC.id)).not.toBe(reasonText('auth'))
     expect(wire.sent).toEqual([expect.objectContaining({ type: 'axt:translate' })])
   })
 
@@ -65,6 +67,18 @@ describe('listModels (§6.3)', () => {
     expect(await listModels('https://openrouter.ai/api/v1/', 'sk-x', new AbortController().signal)).toEqual([{ id: 'a/b', name: 'A B' }, { id: 'c' }])
     expect(seen[0]![0]).toBe('https://openrouter.ai/api/v1/models')
     expect((seen[0]![1]!.headers as Record<string, string>).Authorization).toBe('Bearer sk-x')
+  })
+
+  it('refuses a redirect: the key goes to the address given and nowhere else (#88 E3), and a refused one fails the list', async () => {
+    const seen: RequestInit[] = []
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      seen.push(init)
+      // Chrome's answer to `redirect: 'error'` meeting a 3xx
+      if (init.redirect === 'error') throw new TypeError('Failed to fetch')
+      return new Response(JSON.stringify({ data: [{ id: 'followed' }] }))
+    }))
+    await expect(listModels('https://api.example.com/v1', 'sk-typed-0123456789', new AbortController().signal)).rejects.toThrow(TypeError)
+    expect(seen.map(init => init.redirect)).toEqual(['error'])
   })
 
   it('asks a local endpoint without a key, and fails on an answer that is not a list', async () => {

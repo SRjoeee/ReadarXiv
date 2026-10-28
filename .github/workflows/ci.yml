@@ -13,13 +13,13 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
       # (pnpm comes with corepack, at the version package.json names: the job that fetches the fixtures holds the bucket's read token,
       # and no third party's action runs in a job that holds a token — tests/scripts/rules-workflows.test.ts)
       - run: corepack enable
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
           cache: pnpm
@@ -31,11 +31,18 @@ jobs:
       # only when missing, and saved the moment they are verified — not at the end of the job, which a failing test
       # would skip. Last but the tests, which alone read them, so arXiv being unreachable costs the tests only. One path
       # per entry `for` tests, the same list in both steps — a test holds them together. The pinned bytes are also kept in the
-      # private bucket (tests/fixtures/README.md): the fetch reads them from there before arXiv, whose pages move
+      # private bucket (tests/fixtures/README.md): the fetch reads them from there before arXiv, whose pages move.
+      # The cache is a pull request's of this repository alone, read and written by nothing else. These papers are arXiv's under its
+      # non-exclusive licence, never redistributed (tests/fixtures/README.md), and a cache saved on main is one any pull request can
+      # restore, a fork's included, whose own workflow file decides what happens to it; a pull request's cache is read by that pull
+      # request alone. So a push to main saves none (its fetch reads the bucket), and a fork's pull request neither reads nor saves
+      # (it has no token, and fetches from arXiv). The key's `pr-` names the entries made so, apart from the one main once saved
+      # under the old name, which nothing reads any more (the gate pack's cache follows the same rule, rules-gate.yml)
       - id: fixtures-cache
-        uses: actions/cache/restore@v4
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          key: remote-fixtures-${{ hashFiles('tests/fixtures/remote.json', 'scripts/fetch-fixtures.mjs', 'scripts/r2-read.mjs') }}
+          key: remote-fixtures-pr-${{ hashFiles('tests/fixtures/remote.json', 'scripts/fetch-fixtures.mjs', 'scripts/r2-read.mjs') }}
           path: |
             tests/fixtures/arxiv/2312.17527.html
             tests/fixtures/arxiv/2401.00418.html
@@ -48,10 +55,10 @@ jobs:
         env:
           READARXIV_CI_TOKEN: ${{ secrets.READARXIV_CI_TOKEN }}
           CF_ACCOUNT_ID: ${{ vars.CF_ACCOUNT_ID }}
-      - if: steps.fixtures-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+      - if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.fixtures-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
-          key: remote-fixtures-${{ hashFiles('tests/fixtures/remote.json', 'scripts/fetch-fixtures.mjs', 'scripts/r2-read.mjs') }}
+          key: remote-fixtures-pr-${{ hashFiles('tests/fixtures/remote.json', 'scripts/fetch-fixtures.mjs', 'scripts/r2-read.mjs') }}
           path: |
             tests/fixtures/arxiv/2312.17527.html
             tests/fixtures/arxiv/2401.00418.html

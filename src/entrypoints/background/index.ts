@@ -7,7 +7,7 @@ import { createLocalTransport, type ProviderStatus } from '@/providers/transport
 import { type AxtMessage, answerMessages, sendMessage, sendToTab } from '@/shared/messages'
 import { createChainHolder } from './chain'
 import { engineReady } from './engine-ready'
-import { createHandlers } from './handlers'
+import { createHandlers, sweepAtStart } from './handlers'
 import { createOriginKeeper } from './origin-keeper'
 import { createConfigOffers, statusInForce } from './provider-status'
 import { createOcrService } from './ocr'
@@ -57,6 +57,8 @@ export default defineBackground(() => {
     save: async entries => { await browser.storage.session.set({ [DIAG_KEY]: entries }).catch(() => undefined) },
   })
   const diag = (line: string) => diagnostics.record('background', line)
+  // the cache's expired entries, deleted at each start of the worker (./handlers.ts)
+  void sweepAtStart({ cache: translationCache, diagnostics })
   /** The service health record's writers besides the named call (./health-guard.ts): a chain's refusal, a configuration change */
   const health = createHealthKeeper({ getConfig, mark: markRejected, clearAmong: clearRejectedAmong, warn: diag })
 

@@ -189,6 +189,18 @@ describe('createFallbackService', () => {
     warn.mockRestore()
   })
 
+  it('the console\'s line keeps the endpoint\'s words with any key it echoed taken out (#88 E4)', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const echoed = 'Invalid credentials: Bearer sk-or-v1-0123456789abcdef sent to https://x.example/v1?api_key=AIzaSyA0123456789abcdefghij'
+    const service = createFallbackService([step('llm', [fail('auth', echoed)]), step('google-web', [ok('google-web')])])
+    await service.translate(call)
+    const printed = warn.mock.calls.map(args => args.join(' ')).join('\n')
+    expect(printed).toContain('Invalid credentials')
+    expect(printed).not.toContain('0123456789abcdef')
+    expect(printed).not.toContain('AIzaSyA0123456789')
+    warn.mockRestore()
+  })
+
   it('starts with the demotions it is given, for good: a service whose key was refused is passed over from the first call (the redesign\'s design, §4)', async () => {
     const first = step('svc-abcd1234', [ok('svc-abcd1234')])
     const second = step('microsoft', [ok('microsoft')])
