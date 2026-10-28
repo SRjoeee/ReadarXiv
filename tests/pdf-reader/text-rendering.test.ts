@@ -79,7 +79,7 @@ describe('wordsOf: the words a laid page offers, its runs of one place', () => {
 
   it('leaves out a CJK run (an x a character, which no rendering moves), a single character, a formula\'s invisible text', () => {
     const { svg, view } = pageOf([
-      { x: '10 22.5 35', text: '中文字' }, { x: '50', text: 'a' }, { x: '60', text: 'x^2 + y^2', opacity: '0' }, { x: '70', text: 'Boyce' },
+      { x: '10 22.5 35', text: '\u4e2d\u6587\u5b57' }, { x: '50', text: 'a' }, { x: '60', text: 'x^2 + y^2', opacity: '0' }, { x: '70', text: 'Boyce' },
     ])
     expect(wordsOf(svg, view).map(w => w.text)).toEqual(['Boyce'])
   })
@@ -172,7 +172,7 @@ describe('applyLayerText: decided once a document, from the first laid page that
 
   it('leaves a page that tells nothing (no words of one place) undecided, for the next page to tell', () => {
     const f = fakeDocument(linear)
-    const cjk = pageOf([{ x: '10 22.5', text: '中文' }])
+    const cjk = pageOf([{ x: '10 22.5', text: '\u4e2d\u6587' }])
     const cjkSvg = Object.assign(Object.create(cjk.svg as object), { ownerDocument: { ...f.doc, defaultView: cjk.view } }) as unknown as SVGSVGElement
     expect(applyLayerText(cjkSvg, f.doc)).toBeNull()
     expect(f.attributes.has(ATTRIBUTE)).toBe(false)
