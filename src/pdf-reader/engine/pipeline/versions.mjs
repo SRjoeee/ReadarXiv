@@ -232,7 +232,12 @@
 //     its leading, 2610.19274v1's 68 to 32; a formula's script its placeholder's; a head's or an entry's number in its own words
 //     the unit's, a folio alone the page's own ink: 2010.11929v2's "ICLR 2021"), both under PIPELINE 30, so that a translation
 //     stored for the old ink units could be given to the new ones; every paper is translated again. The unit-cut golden holds
-//     the ink units' and the figure units' cut beside the source units' (tests/pdf-reader/unit-cut.test.ts). In the same release
+//     the ink units' and the figure units' cut beside the source units' (tests/pdf-reader/unit-cut.test.ts); and in the same 31,
+//     a letter command of the kernel's (\\L, \\o, \\ss, \\ae, \\aa…) is the letter itself in its word, the spaces TeX skips
+//     after it, an empty group after it and a group around it alone none of the text (latex-front.mjs letterCommand): it went
+//     out as a marker, and the same paper's `{\\L}ukasz Kaiser` came back as "Ł ukasz Kaiser"; an \\ifmmode in a paragraph's text
+//     is its \\else, one letter there in its word (ifmmodeLetter: REVTeX's `Louren\\ifmmode~\\mbox{\\c{c}}\\else \\c{c}\\fi{}o`, read
+//     as "Louren ç ç o"), its first branch no text; the pairs such a span held spend their ids as before (pairsOf). In the same release
 //     the left side's marks gain the figure units' (pipeline/ink-pass.mjs figureAnchors: arXiv's tokens in a level label's band),
 //     so that a figure's label lights its original on hover (the owner's report on 2010.11929v2 p9, the follow-up of #487)
 export const PIPELINE_VERSION = '31'
