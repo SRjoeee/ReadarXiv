@@ -2113,7 +2113,12 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   by optional content, where PDF.js ends a line that ends in a hyphen with an empty item after the group closes, not with the
   hyphen's own: the tokenizer joins the word across that item as across the hyphen's own end of line (`anchors.mjs`
   `tokenizeDocument`, LAYOUT 23), where it read two words on our page against arXiv's one and 2610.19274v1's list of figures,
-  three hyphens a page, fell under `PAGE_SAME` on pages 67 to 69, its contents units laid nowhere. **A unit is laid only where every page it is on is drawable**
+  three hyphens a page, fell under `PAGE_SAME` on pages 67 to 69, its contents units laid nowhere. The word goes on in the line
+  below alone, half a size to three down along the line's direction, never in text the stream gives next elsewhere (LAYOUT 25:
+  a caption's "sim-" and the figure's axis label "q" above it read as "simq", 2610.21765v1 p7). A line of ours of fewer than
+  `LINE_EVIDENCE` (4) letters and digits is never found on another page of arXiv's: a figure's one-letter axis label is no
+  evidence of where its page stands (LAYOUT 25: 2610.21765v1 p7's "q", paired with arXiv's p6, left the page undrawn and ten
+  of its units English). **A unit is laid only where every page it is on is drawable**
   (`layout/make.mjs` `drawable`, LAYOUT 16; `stats.units.undrawn` the others, left the original's). Over our own page a
   drawing is right by construction: a page of the same words is drawn whatever its lines' offsets, a line re-broken by a word,
   moved a point or set with other glue. On the pack and the release sweep's 50 papers it refuses 2307.16209's pages 69 to 76
@@ -2656,7 +2661,10 @@ feet, the contents and the lists, a note with no unit, prose the front end did n
 wrap (`layout/ink-units.mjs`), from the ledger's lines: a head's line one, a contents entry or a block one paragraph of TeX's (the
 layout compile's point `q<n>` at LaTeX's para/begin, inside the paragraph's indentation box so that no paragraph's list
 changes, which pageInk keeps apart from the marks' points as `paras`; a paragraph with no indentation carries none and reads
-as the one before), each of its
+as the one before; a paragraph's next line is followed at its page's own leading, `PARA_PITCH` 1.15 of the page's line pitch
+and `PARA_DY` 3 of its size at most, where `BLOCK_DY` 1.75 falls short, LAYOUT 25: a thesis's list of figures set double was
+cut line by line, each line translated alone, 2610.19274v1 pp67–69, and a list's items, which no point of their own tells
+apart, stay apart at their skip; a script a text face sets after a formula's run is that run's placeholder, C_n²'s "2"), each of its
 class's kind (`inkheads`, `inkcontents`, `inknotes`, `inkorphan`, after the source kinds in UNIT_KINDS; `inknames` a block
 most of whose letters are an author unit's words, of the names toggle as that unit is), its numbering, leaders
 and page number left the original's ink, its math and typewriter runs (and a web address in any face) kept placeholders, and

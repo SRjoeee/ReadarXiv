@@ -11,8 +11,8 @@
 //      line keeps its numbering and its page number the original's ink (a leading section number, a trailing run of leader
 //      dots and a number: no unit's, never erased), so that a contents entry's title is drawn up to its leaders;
 //   3. a unit: a head's line alone; the others' lines while they follow on one page and in one region, each within BLOCK_DY of
-//      its size below the one before and meeting it across, and in one paragraph of TeX's (ink.mjs `paras`: a contents entry,
-//      a note, a paragraph); where the compile marked none, a list's line with the next where it ends in no page number (an
+//      its size below the one before (PARA_DY within one of TeX's paragraphs: a list set double) and meeting it across, and in
+//      one paragraph of TeX's (ink.mjs `paras`: a contents entry, a note, a paragraph); where the compile marked none, a list's line with the next where it ends in no page number (an
 //      entry continued), a note's or an orphan's while they follow;
 //   4. inside a unit, a run of a math face's glyphs or of a typewriter face's is a placeholder (`math`, `url`): its ink kept,
 //      its source the run's characters; a word that is a web address is one in whatever face (a note of an address alone
@@ -45,8 +45,14 @@ export const INK_KIND = Object.freeze({ heads: 'inkheads', contents: 'inkcontent
 export const NAMES_SHARE = 0.6
 /** a block's next line: within this many of its size below the one before */
 export const BLOCK_DY = 1.75
+/** a paragraph's next line, where TeX's paragraphs are marked (`paras`): within this many of its size below the one before */
+export const PARA_DY = 3
+/** a paragraph's next line, where TeX's paragraphs are marked: within this many of its page's line pitch below the one before */
+export const PARA_PITCH = 1.15
 /** two glyphs one word: closer than this share of their size */
 const WORD_GAP = 0.12
+/** a script: a glyph set at this share of its line's text size or less */
+const SCRIPT = 0.85
 /** a word that numbers a heading or an entry: 1, 1.2, A.3, IV, (a) */
 const NUMBERING = /^\(?(?:\d{1,4}|[ivxlcdm]{1,6}|[IVXLCDM]{1,6}|[A-Z])(?:[.\-–](?:\d{1,4}|[A-Za-z]))*[.:)]?$/u
 /** a page number at a line's end: arabic or roman */
@@ -119,13 +125,23 @@ function groupsOf(st, base) {
   return out
 }
 
+/** a kept run's placeholder source: a formula of its characters, or an address */
+const phSource = (fam, text) => sourceView(fam === 'math' ? `$${text.replace(/[$\\{}]/g, '')}$` : `\\url{${text.replace(/[\\{}]/g, '')}}`)
 /** a line's words, left to right: { gs (glyph indices), text, fam (math, mono, or text) } */
 function wordsOf(G, gs, fams) {
   const order = [...gs].filter(g => G[g] && !G[g].blank && /\S/u.test(G[g].u ?? '')).sort((a, b) => G[a].x0 - G[b].x0)
   const out = []
+  // (the line's text size, the one most of its glyphs have: a script set smaller than it, raised or lowered, is no text of the
+  // line's but its formula's — C_n²'s "2", a text face's digit, drawn on the baseline as a word of the translation, 2610.19274v1)
+  const sizes = new Map()
+  for (const g of order) { const z = Math.round(G[g].size * 10) / 10; sizes.set(z, (sizes.get(z) ?? 0) + 1) }
+  let body = 0, most = 0
+  for (const [z, n] of sizes) if (n > most) { most = n; body = z }
   let cur = null, prev = null
   for (const g of order) {
-    const x = G[g], f = famOf(fams, x.font), fam = f === 'math' ? 'math' : f === 'mono' ? 'mono' : 'text'
+    const x = G[g], f = famOf(fams, x.font)
+    let fam = f === 'math' ? 'math' : f === 'mono' ? 'mono' : 'text'
+    if (fam === 'text' && cur?.fam === 'math' && prev !== null && x.size < SCRIPT * body && Math.abs(x.y - G[prev].y) < body && x.x0 - G[prev].x1 <= WORD_GAP * body && !/\p{L}{2}/u.test(x.u ?? '')) fam = 'math'
     if (!cur || (prev !== null && x.x0 - G[prev].x1 > WORD_GAP * Math.max(x.size, G[prev].size)) || cur.fam !== fam) { cur = { gs: [], text: '', fam }; out.push(cur) }
     cur.gs.push(g); cur.text += x.u
     prev = g
@@ -185,14 +201,33 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     if (!words.some(w => w.fam === 'text' && PAIR.test(w.text.normalize('NFKC')))) continue
     segs.push({ ...L, words, ended })
   }
+  // (each page's line pitch among these lines: the drop from a line to the next below it, meeting it across, that most of them
+  // have, to a half; a paragraph of TeX's is followed at it, PARA_PITCH of it, where BLOCK_DY falls short: a list set double)
+  const pitch = new Map()
+  {
+    const drops = new Map()
+    for (let i = 1; i < segs.length; i++) {
+      const a = segs[i - 1], b = segs[i], d = a.y - b.y
+      if (a.page !== b.page || d <= 0 || d >= PARA_DY * Math.max(a.size, b.size) || !(b.x0 < a.x1 && b.x1 > a.x0)) continue
+      const m = drops.get(a.page) ?? drops.set(a.page, new Map()).get(a.page), k = Math.round(d * 2) / 2
+      m.set(k, (m.get(k) ?? 0) + 1)
+    }
+    for (const [page, m] of drops) { let best = 0, most = 0; for (const [k, n] of m) if (n > most) { most = n; best = k } pitch.set(page, best) }
+  }
   // units of lines (rule 3)
   const groups = []
   for (const s of segs) {
     const last = groups.at(-1), prev = last?.at(-1)
-    const follows = prev && prev.page === s.page && prev.cls === s.cls && prev.region === s.region && prev.y - s.y > 0 && prev.y - s.y <= BLOCK_DY * Math.max(prev.size, s.size) && s.x0 < prev.x1 && s.x1 > prev.x0
     // (by TeX's paragraphs where the compile marked them, ink.mjs `paras`: a block one paragraph, a contents entry one; else by the
     // lines' places, as before)
     const paras = prev && prev.para !== null && prev.para !== undefined && s.para !== null && s.para !== undefined
+    // (the next line of one of TeX's paragraphs at the page's own leading, PARA_PITCH of its pitch and PARA_DY of its size at
+    // most: a thesis's list of figures set double, its lines 2.4 of their size apart, was cut line by line, each translated alone,
+    // 2610.19274v1 pp67-69; never the skip between a list's items, which no point of their own tells apart, a bibliography's
+    // entries and its heading read as one paragraph, 2610.20266v1 p21; BLOCK_DY where no paragraph is marked)
+    const drop = prev ? prev.y - s.y : 0, size = prev ? Math.max(prev.size, s.size) : 0
+    const near = drop <= BLOCK_DY * size || (paras && prev.para === s.para && drop <= Math.min(PARA_DY * size, PARA_PITCH * (pitch.get(s.page) ?? 0)))
+    const follows = prev && prev.page === s.page && prev.cls === s.cls && prev.region === s.region && drop > 0 && near && s.x0 < prev.x1 && s.x1 > prev.x0
     // (a paragraph with no point of its own reads as the one before: a contents line ending in its page number ends its entry
     // whatever its point)
     const joins = follows && s.cls !== 'heads' && (s.cls !== 'contents' || !prev.ended) && (paras ? prev.para === s.para : s.cls === 'notes' || s.cls === 'orphan' || s.cls === 'contents')
@@ -247,12 +282,14 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
           text += w.text
         } else {
           const lastPh = phs.at(-1)
-          if (lastPh && lastPh.open && lastPh.fam === w.fam) { lastPh.gs.push(...w.gs.map(g => [l.page, g])); lastPh.src += w.text; return }
+          // (a run of one face over a gap or a line: one placeholder, its source the run's characters whole — the piece's too, which
+          // kept the first word's alone)
+          if (lastPh && lastPh.open && lastPh.fam === w.fam) { lastPh.gs.push(...w.gs.map(g => [l.page, g])); lastPh.src += w.text; pieces[lastPh.k].src = phSource(lastPh.fam, lastPh.src); return }
           if (space) text += ' '
           flushText()
           const ph = { k: pieces.length, fam: w.fam, gs: w.gs.map(g => [l.page, g]), src: w.text, open: true }
           phs.push(ph)
-          pieces.push({ t: 'ph', src: sourceView(w.fam === 'math' ? `$${w.text.replace(/[$\\{}]/g, '')}$` : `\\url{${w.text.replace(/[\\{}]/g, '')}}`) })
+          pieces.push({ t: 'ph', src: phSource(w.fam, w.text) })
           return
         }
         for (const p of phs) p.open = false

@@ -255,6 +255,16 @@ describe('inkEdges: a token\'s ink reaches over the marks that touch it', () => 
     expect(joined([item('integrates depth', 50, 700), item('', 50, 688, { eol: true }), item('wise convolutions', 50, 688)])).toEqual(['integrates', 'depth', 'wise', 'convolutions'])
   })
 
+  it("joins a hyphen's word only with the line below it, never with text the stream gives next elsewhere (2610.21765v1 p7's \"simq\")", () => {
+    const joined = (items: Item[]) => tokenizeDocument([{ page: 1, items, styles: {} }]).map(t => t.t)
+    // (a caption's "sim-" at its line's end, a figure's axis label "q" above it next in the stream, the caption's line after)
+    for (const end of [[item('a sim-', 50, 300), item('', 50, 288, { eol: true })], [item('a sim-', 50, 300, { eol: true })]]) {
+      expect(joined([...end, item('q', 200, 420), item('ulation here', 50, 288)])).toEqual(['a', 'sim', 'q', 'ulation', 'here'])
+      // (the line below, at a double spacing too: joined)
+      expect(joined([...end, item('ulation here', 50, 276)])).toEqual(['a', 'simulation', '', 'here'])
+    }
+  })
+
   it('the words a hyphen joins: their boxes, which anchoring reads, an even share of the item; their ink a proportional face\'s widths, the hyphen with the word it follows', () => {
     // their ink where a proportional face's widths put them in the item (Times-Roman's: state- 2166, of- 1166, art 1055
     // thousandths of an em, over its 60 units), their boxes an even share as anchoring reads them

@@ -98,7 +98,7 @@ export function tokenizeDocument(pages) {
     // carry: the token the next one joins; last: the token holding the last word's text; prev: the last item's end;
     // inkOpen, inkEnd: whether an item of marks alone may still carry the last token's ink on, and from where; lastAcross:
     // whether the last token's item is read along x
-    let carry = null, last = null, prev = null, inkOpen = false, inkEnd = 0, lastAcross = true, hyphened = null
+    let carry = null, last = null, prev = null, inkOpen = false, inkEnd = 0, lastAcross = true, hyphened = null, hyphenLine = false
     for (const it of items) {
       // (an empty item that ends a line ends the item before's: PDF.js gives the line's end so where marked content closes after
       // the item, our wrapped page's groups, so that a word a hyphen cut there was read as two on our page and one on arXiv's,
@@ -106,6 +106,10 @@ export function tokenizeDocument(pages) {
       if (!it.str) { if (it.hasEOL && prev) { carry = hyphened; prev.word = false } continue }
       const [a, b, c, d, x, y] = it.transform
       const along = Math.hypot(a, b), size = along || it.height || Math.abs(d)
+      // (a word a hyphen cut at its line's end goes on in the line below, never in text set elsewhere that the stream gives next:
+      // a figure's axis label above its caption, "sim-" and "q" read as "simq" on 2610.21765v1 p7, its page then another's to
+      // the line check; below by half a size to three, along the line's own direction)
+      if (carry && prev && hyphenLine && !(() => { const off = (y - prev.ey) * prev.ux - (x - prev.ex) * prev.uy; return off < -0.5 * size && off > -3 * Math.max(size, prev.size) })()) carry = null
       if (prev && Math.abs(x - prev.x) < 0.1 * size && Math.abs(y - prev.y) < 0.05 * size && it.str === prev.str) continue
       const st = styles?.[it.fontName], asc = st?.ascent > 0 ? st.ascent : 0.75, desc = st?.descent < 0 ? st.descent : -0.22
       const perChar = it.str.length ? it.width / it.str.length : 0
@@ -166,6 +170,7 @@ export function tokenizeDocument(pages) {
       const tail = it.str.trimEnd()
       hyphened = /[-­]$/.test(tail) && toks.length && !CJK.test(tail.at(-2) ?? '') ? last : null
       carry = it.hasEOL ? hyphened : null
+      hyphenLine = hyphened !== null
       // (one object a page, set again for every item: a heavy paper's every item made one more, of more fields, cost its
       // tokenizing a twentieth more)
       prev ??= { str: '', x: 0, y: 0, ex: 0, ey: 0, ux: 1, uy: 0, size: 0, square: true, word: false }

@@ -133,8 +133,15 @@ export { LayoutRefusal } from './json.mjs'
  *  every unit at the number it had, the rows cut apart after the source's other units and before the entries (entriesLast);
  *  and a bibliography's entry one unit, whole (`refnames` kept at its index, made no more): a maker or a reader of 23 reads no
  *  such kind, so a file of 24 is another maker's, and each side of the rules gate reads its own pack (the file's schema is 5
- *  still) */
-export const LAYOUT = '24'
+ *  still); 25 (the release sweep of 2026-10-29, 24 counted released): a line of ours too short to be evidence, under
+ *  LINE_EVIDENCE letters and digits, is never found on another page of arXiv's (carry.mjs lineCheckOf: 2610.21765v1 p7's axis
+ *  label "q", matched on arXiv's p6, left the page undrawn and 10 units English), and a word a hyphen cuts at a line's end goes on
+ *  in the line below alone, never in text the stream gives next elsewhere (pipeline/anchors.mjs tokenizeDocument: "sim-" and the
+ *  axis label "q" above it read as "simq" since #484); a contents entry, a note or an orphan's paragraph is one unit at its
+ *  page's own leading, set double too (layout/ink-units.mjs PARA_DY, PARA_PITCH: 2610.19274v1's list of figures, cut line by
+ *  line and each translated alone), and a script a text face sets after a formula's run is that run's placeholder (C_n²'s "2").
+ *  The rows of the units they reach change, so a file of 24 is another maker's (the file's schema is 5 still) */
+export const LAYOUT = '25'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,

@@ -75,6 +75,22 @@ describe('inkUnitsOf', () => {
     for (const pg of [marked, bare]) expect(unitsOf([pg]).ink.map(textOf)).toEqual(['Black hole perturbations and quasinormal modes', 'Results'])
   })
 
+  it("joins a contents entry's lines by TeX's paragraph at the list's own leading, a thesis's set double (2610.19274v1 pp67-69)", () => {
+    // (each line 29 pt below the one before at 12 pt, 2.4 of its size: past BLOCK_DY, so each line was a unit, translated alone)
+    const at = (s: string, y: number) => ({ glyphs: run(s, 100, y, { size: 12 }) })
+    const entry = [at('6 Internal structure of the depth-', 700), at('wise convolutions and the mod-', 671), at('ule shown here . . . 14', 642)]
+    const marked = page({ point: 'bs1' }, { point: 'n1.contents.e' }, { para: 280 }, ...entry, { para: 281 }, at('7 Overview of the module . . . 15', 613), { point: 'be1' })
+    expect(unitsOf([marked]).ink.map(textOf)).toEqual(['Internal structure of the depthwise convolutions and the module shown here', 'Overview of the module'])
+    // (no paragraph marked: the lines' places, as before, BLOCK_DY)
+    const bare = page({ point: 'bs1' }, { point: 'n1.contents.e' }, ...entry, { point: 'be1' })
+    expect(unitsOf([bare]).ink.length).toBe(3)
+    // (but never the skip between a list's items, which carry no point of their own and so read as the paragraph before: a
+    // bibliography's entries, 10 pt apart inside one and 20 between two, stay apart, 2610.20266v1 p21)
+    const at10 = (s: string, y: number) => ({ glyphs: run(s, 100, y, { size: 9 }) })
+    const items = page({ point: 'bs1' }, { para: 9 }, at10('[1] R. Adams, Sobolev spaces, vol. 140 of', 700), at10('Pure and Applied Mathematics, 2003.', 690), at10('[2] G. Beylkin and the fast wavelet', 670), at10('transforms of operators, 1991.', 660), at10('[3] A. Damianou, deep processes', 640), at10('in Machine Learning, 2013.', 630), { point: 'be1' })
+    expect(unitsOf([items]).ink.length).toBe(3)
+  })
+
   it("makes an orphan's block a unit, a paragraph of TeX's apart from the next, and its math a placeholder whose ink stays", () => {
     const pg = page(
       { point: 'bs1' }, { para: 1 }, { glyphs: [...run('Assume that there exist', 100, 700), ...run('x', 220, 700, { font: 'CMMI10' }), ...run('in the closed set', 230, 700)] },
@@ -106,6 +122,20 @@ describe('inkUnitsOf', () => {
     expect(unitsOf([page({ point: 'bs1' }, { glyphs: run('Collusion index', 100, 700, { font: 'CMBX12' }) }, { point: 'be1' })]).ink[0]!.pieces).toEqual([{ t: 'text', s: 'Collusion index' }])
     const bold = unitsOf([page({ point: 'bs1' }, { glyphs: [...run('Lemma 3.3.', 100, 700, { font: 'CMBX10' }), ...run('(1)', 155, 700)] }, { point: 'be1' })]).ink[0]!
     expect(bold.pieces.map(p => p.t === 'text' ? p.s : p.src)).toEqual(['Lemma 3.3. ', '\\textmd{', '(1)', '}'])
+  })
+
+  it("keeps a script a text face sets after a formula's run in that run's placeholder: C_n²'s \"2\" (2610.19274v1 p67)", () => {
+    // (C and its subscript n in a math italic, the square's 2 a text face's digit, smaller and raised: it was a word of the text,
+    // drawn on the translation's baseline)
+    const sup = (s: string, x: number, y: number) => run(s, x, y, { font: 'CMR7', size: 7 })
+    const pg = page({ point: 'bs1' }, { para: 1 }, { glyphs: [...run('turbulence strength', 100, 700), ...run('C', 200, 700, { font: 'CMMI10' }), ...run('n', 205, 698, { font: 'CMMI7', size: 7 }), ...sup('2', 210, 704), ...run('is high', 220, 700)] }, { point: 'be1' })
+    const { ink } = unitsOf([pg])
+    expect(ink.map(textOf)).toEqual(['turbulence strength ⟦·⟧ is high'])
+    expect(ink[0]!.glyphs.ph.length).toBe(3)
+    // (its source the run's characters whole: a run of one face over two words was the first word's alone, 2307.16209v1's "s = 1/2")
+    expect(ink[0]!.pieces.find(p => p.t === 'ph')).toEqual({ t: 'ph', src: '$Cn2$' })
+    const frac = unitsOf([page({ point: 'bs1' }, { para: 1 }, { glyphs: [...run('the modes for spin', 100, 700), ...run('s', 200, 700, { font: 'CMMI10' }), ...run('=', 210, 700, { font: 'CMMI10' }), ...run('1/2', 220, 700, { font: 'CMMI10' }), ...run('in the black hole', 240, 700)] }, { point: 'be1' })]).ink[0]!
+    expect(frac.pieces.find(p => p.t === 'ph')).toEqual({ t: 'ph', src: '$s=1/2$' })
   })
 
   it("keeps a web address in the text's face a placeholder: a note of an address alone is no unit", () => {
