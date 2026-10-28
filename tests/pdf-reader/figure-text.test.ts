@@ -187,7 +187,7 @@ describe('a figure\'s labels in their columns and sets, each with its room (synt
   type Line = { text: string; x: number; y: number }
   /** a picture of lines of text, one show each (10 pt, 5 a glyph), its strokes ([x0, y0, x1, y1], a segment each), its dots (small
    *  fills: [x0, y0, x1, y1]), its frame (a stroked and filled box), and its extent as pageInk gives it (`figures`) */
-  const picture = (lines: Line[], { strokes = [] as number[][], dots = [] as number[][], grounds = [] as number[][], frame = null as number[] | null, extent = [0, 0, 300, 300] } = {}) => {
+  const picture = (lines: Line[], { strokes = [] as number[][], dots = [] as number[][], grounds = [] as number[][], frame = null as number[] | null, extent = [0, 0, 300, 300], bare = [] as [number[], number][] } = {}) => {
     const glyphs = lines.flatMap((l, n) => [...l.text].map((u, i) => ({ u, n, k: i, x0: l.x + 5 * i, x1: l.x + 5 * (i + 1), ix0: l.x + 5 * i, ix1: l.x + 5 * (i + 1), y: l.y, top: l.y + 7, bottom: l.y - 2, size: 10, font: 'ArialMT', fill: 0, ...(u === ' ' ? { blank: true } : {}) })))
     const boxes: number[] = [], shapes = new Map()
     const add = (b: number[], segs: number[], stroke: boolean, fill: boolean) => { shapes.set(boxes.length / 4, { segs: Float32Array.from(segs), stroke, fill, hw: 0.25 }); boxes.push(...b) }
@@ -195,7 +195,10 @@ describe('a figure\'s labels in their columns and sets, each with its room (synt
     const rect = (b: number[]) => [b[0]!, b[1]!, b[2]!, b[1]!, b[2]!, b[1]!, b[2]!, b[3]!, b[2]!, b[3]!, b[0]!, b[3]!, b[0]!, b[3]!, b[0]!, b[1]!]
     for (const d of [...dots, ...grounds]) add(d, rect(d), false, true)
     if (frame) add(frame, rect(frame), true, true)
-    return { glyphs, turned: [], boxes, shapes, figures: new Map([['0:0', extent]]), pictures: [{ name: 'zs', glyph: 0, box: 0 }, { name: 'ze', glyph: glyphs.length, box: boxes.length / 4 }], points: [], view: [0, 0, 300, 300] }
+    // (boxes of no lines known, each with its kind as pageInk's `paths` gives it: a path's place past the page's shapes, an image -3)
+    const paths = boxes.map((_, i) => i).filter(i => i % 4 === 0).map(i => i / 4)
+    for (const [b, kind] of bare) { boxes.push(...b); paths.push(kind) }
+    return { glyphs, turned: [], boxes, shapes, paths, figures: new Map([['0:0', extent]]), pictures: [{ name: 'zs', glyph: 0, box: 0 }, { name: 'ze', glyph: glyphs.length, box: boxes.length / 4 }], points: [], view: [0, 0, 300, 300] }
   }
   type Placed = Unit & { k: number; set: number; before: number; after: number }
   const unitsOf = (pg: ReturnType<typeof picture>) => figureUnitsOf([pg] as never, null).units as unknown as Placed[]
@@ -233,6 +236,33 @@ describe('a figure\'s labels in their columns and sets, each with its room (synt
     expect(node.why).toBeNull()
     expect(node.before).toBeCloseTo(10 - ROOM_CLEAR * 10, 6)
     expect(node.after).toBeCloseTo(15 - ROOM_CLEAR * 10, 6)
+    // (a ground whose lines are not known, past the page's shapes, ends the free line a band's height inside its edges; an
+    // image behind the band leaves none: its pixels beside the box are no ground a translation may take)
+    const band = 0.88 + 0.2
+    const path = unitsOf(picture([{ text: 'label', x: 100, y: 100 }], { bare: [[[80, 90, 160, 115], 7]] }))[0]!
+    expect(path.why).toBeNull()
+    expect(path.before).toBeCloseTo(20 - band * 10 - ROOM_CLEAR * 10, 6)
+    expect(path.after).toBeCloseTo(35 - band * 10 - ROOM_CLEAR * 10, 6)
+    const image = unitsOf(picture([{ text: 'label', x: 100, y: 100 }], { bare: [[[80, 90, 160, 115], -3]] }))[0]!
+    expect(image).toMatchObject({ why: null, before: 0, after: 0 })
+  })
+
+  it('a path\'s lines past its box, its clip\'s, end no free line; a rectangle\'s edge at its box\'s edge does, a float apart', () => {
+    // (a bar from 130 to 160 right after the label, its rectangle in single floats: its left edge ends the free line at 130)
+    const bar = Float32Array.from([130.00001, 90, 160, 90, 160, 90, 160, 115, 160, 115, 130.00001, 115, 130.00001, 115, 130.00001, 90])
+    const pg = picture([{ text: 'label', x: 100, y: 100 }])
+    pg.shapes.set(pg.boxes.length / 4, { segs: bar, stroke: false, fill: true, hw: 0.25 })
+    pg.boxes.push(130, 90, 160, 115)
+    pg.paths.push(9)
+    expect(unitsOf(pg)[0]!.after).toBeCloseTo(130 - 125 - ROOM_CLEAR * 10, 4)
+    // (a line clipped to a box past the reach after the label, its segment running back under it: no ink where the clip hides it)
+    const clipped = picture([{ text: 'label', x: 100, y: 100 }])
+    clipped.shapes.set(clipped.boxes.length / 4, { segs: Float32Array.from([50, 102, 170, 102]), stroke: true, fill: false, hw: 0.25 })
+    clipped.boxes.push(150, 101.75, 170, 102.25)
+    clipped.paths.push(9)
+    expect(unitsOf(clipped)[0]).toMatchObject({ why: null })
+    // (to the clip's edge, less the 0.05 a box's edge is given for its segments' single floats)
+    expect(unitsOf(clipped)[0]!.after).toBeCloseTo(150 - 0.05 - 125 - ROOM_CLEAR * 10, 6)
   })
 
   it('two labels on one line share the line between them, half each, ROOM_CLEAR apart', () => {

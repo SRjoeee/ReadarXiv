@@ -2771,9 +2771,12 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   one edge and those of one figure, size and direction on one baseline (an axis's words, a legend laid in a row, the two
   panels' x titles of one figure), joined. A unit's **room** (`before`, `after`, PDF units along its direction) is the free
   line beside its box: to the nearest ink its band meets (a glyph, a stroke, a fill's edge, an image, the edge of a ground
-  it stands on), `ROOM_CLEAR` 0.15 em short of it; never past its figure's extent (pageInk's `figures`: every box painted
-  inside the form or the picture, with its glyphs); half the line to another unit whose band its own meets, the other half
-  that unit's; `ROOM_MAX` 6 em at most.
+  it stands on; a path's lines only as far as its box, its clip's, shows them), `ROOM_CLEAR` 0.15 em short of it; on a
+  ground whose lines are not known (a path past the page's shapes, a rounded node, a frame's stroke) a band's height inside
+  its edges, on an image's or a shading's none (2602.23285v2's caption over a screenshot); never past its figure's extent
+  (pageInk's `figures`: every box painted inside the form or the picture, with its glyphs); half the line to another unit
+  whose band its own meets, the other half that unit's; `ROOM_MAX` 6 em at most. Crowding and the anchor read alone are
+  read within the reach as before, so the same units are drawn and the base is the same bytes.
 - **Its ink** is its own group `f<k>` (`layout/wrap.mjs`): its runs wrapped where they are shown, in the page's stream, or in the
   stream of the form an included PDF is, that form written again once in the wrap section under its own number, its dict ours but
   its stream's keys and `/Resources`, its resources its own with `/Properties` naming its groups (beside a form's own entries:
@@ -2802,8 +2805,12 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   PIPELINE stays as it was and no translation is asked again. The host passes `ours.wrap.figures` (the web's `ourWrap` adds
   `figures: r.figures`).
 - **Drawn** (`run.mjs paintFigures`, once a page's figures' rows are in: the page waits for them as for its units', `rowsFor`
-  ranks them with its page): its translation's text in a face of its font's family, weight and slant, in its fill, on its run's
-  baseline, turned by its angle (`layer2.mjs svgOfFigure`), by the fit rule (`layer-proto/figure-fit.mjs` `fitFigureSet`), set
+  ranks them with its page): its translation's text in runs by script (`layer2.mjs figureRuns`: its CJK characters, by the
+  rules' class, in the target's CJK face, every other, a Latin word, a digit, a space, in its font's family's Latin face, as a
+  unit's words are; the CJK faces the web serves hold no Latin letter or digit, so that one CJK face for the whole text was
+  refused, `served`, and 2010.11929v2's "Width MLP", "Head 2" and Figure 7's title stayed the original's, Microsoft's
+  translations of them keeping "MLP", "2" and "RGB" beside their Chinese), of its font's weight and slant, in its fill, on
+  its run's baseline, turned by its angle (`layer2.mjs svgOfFigure`), by the fit rule (`layer-proto/figure-fit.mjs` `fitFigureSet`), set
   by set: each translation from its anchor's edge (a start one from the original's start, an end one to its end, a middle one
   about its middle), into its room on the side its anchor grows to (a middle one the same either side); every unit of a set at
   one size, the original's where each fits, else the one factor its tightest translation needs, to the rules' last floor

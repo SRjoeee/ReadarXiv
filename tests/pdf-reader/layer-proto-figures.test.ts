@@ -134,6 +134,24 @@ describe('the figures\' text drawn by the layer (run.mjs paintFigures)', () => {
   })
 })
 
+describe('a figure\'s translation in runs by script, each in its face', () => {
+  // (the faces as the web serves them: its CJK faces' slices hold no Latin letter, digit or space, its Latin faces' the ASCII)
+  const faceSources = async (id: string) => [id.startsWith('shs-') ? { url: 'https://faces.invalid/cjk.woff2', ranges: [0x3000, 0x9fff, 0xff00, 0xffef] } : { url: 'https://faces.invalid/latin.woff2', ranges: [32, 126] }]
+  it('a translation mixing CJK with Latin letters or digits is drawn, its CJK in the CJK face and the rest in the Latin face', async () => {
+    // (2010.11929v2's "Width MLP" and "Head 2", as Microsoft gives them; drawn in the CJK face whole they were refused, `served`)
+    for (const [text, src, latin] of [['\u5bbd\u5ea6 MLP', 'Width MLP', ' MLP'], ['\u6807\u98982', 'Head 2', '2']] as const) {
+      const run = await open({ hiding: hiding(true, [row({ anchor: 'start', after: 20 })]), faceSources }, paper({ text, src })) as Run
+      await run.until(1)
+      expect(run.figures[0]).toMatchObject({ drawn: true, why: null, text })
+      const spans = [...run.svgOf(1).querySelectorAll('[data-f="f0"] tspan')]
+      expect(spans.map(t => t.textContent)).toEqual([text.slice(0, text.length - latin.length), latin])
+      expect(new Set(spans.map(t => t.getAttribute('class'))).size).toBe(2)
+      // (one after the other along the baseline: the first placed, the next flowing after it)
+      expect(spans.map(t => t.getAttribute('x'))).toEqual(['0', null])
+    }
+  })
+})
+
 describe('a figure\'s set drawn at one size, each label from its edge into its room (the owner\'s rule of 2026-10-29)', () => {
   /** a set's rows: unit i + 1, group f<i>, its set f0, each 14 below the last, from (60, 120) */
   const setOf = (rows: Record<string, unknown>[]) => rows.map((o, i) => row({ id: i + 1, group: `f${i}`, set: 'f0', y: 120 - 14 * i, ...o }))

@@ -19,8 +19,9 @@
 // (figure-text.mjs setsOf: the units of one column or one baseline, `sets` of two or more, the units in them, those whose anchor
 // their column changed) and the fit rule over the drawn units, label by label as BUNDLE 10 drew them (each its own box, no room)
 // against set by set (figure-fit.mjs fitFigureSet, rooms taken): the labels drawn, those at their full size, the sets of two or
-// more drawn whose sizes differ, the sets whose size changed. Its translations a MODEL (zh: a CJK em for every MODEL_LETTERS of a
-// label's letters, two at least, its digits 0.55 em each), or with `--mt=<file>` Microsoft's (a JSON of label → translation;
+// more drawn whose sizes differ, the sets whose size changed; on BUNDLE 10's side a translation mixing CJK with a Latin letter or
+// a digit is not drawn (its one CJK face, served with no Latin, refused it). Its translations a MODEL (zh: a CJK em for every
+// MODEL_LETTERS of a label's letters, two at least, its digits kept, 0.55 em each), or with `--mt=<file>` Microsoft's (a JSON of label → translation;
 // `--mt-fetch` asks for the labels it lacks, as the fixture maker does: mt.mjs translateUnits over translateTexts, two requests at
 // a time, and writes the file), their widths by kind of character (a CJK character or a full-width sign an em, a space 0.3, any
 // other 0.55). Reads the gate pack's fixtures
@@ -84,9 +85,11 @@ async function fetchMt(texts) {
  * translation that says its source again): the labels drawn and at full size on each side, the sets of two or more drawn units
  * whose sizes differ, and those whose size changed
  */
-function fitCounts(units, widthOf) {
-  const items = units.map(u => ({ u, width1: widthOf(u) })).filter(x => x.width1 !== null)
-  const old = new Map(items.map(x => [x, fitFigureSet([{ f: { ...x.u, before: 0, after: 0 }, width1: x.width1 }], FLOOR)[0]]))
+function fitCounts(units, widthOf, mixedOf) {
+  const items = units.map(u => ({ u, width1: widthOf(u), mixed: mixedOf(u) })).filter(x => x.width1 !== null)
+  // (BUNDLE 10's layer drew a translation in one face, a CJK one where it held a CJK character, whose served slices hold no Latin
+  // letter or digit: one that mixed them was refused, `served`)
+  const old = new Map(items.map(x => [x, x.mixed ? null : fitFigureSet([{ f: { ...x.u, before: 0, after: 0 }, width1: x.width1 }], FLOOR)[0]]))
   const bySet = new Map()
   for (const x of items) (bySet.get(`${x.u.page}:${x.u.set}`) ?? bySet.set(`${x.u.page}:${x.u.set}`, []).get(`${x.u.page}:${x.u.set}`)).push(x)
   const now = new Map()
@@ -214,9 +217,9 @@ for (const id of IDS) {
   } finally { await A.close(); await U.close(); await F.close() }
   const s = r.figures.stats
   // (the fit rule's counts: the model's translations, and Microsoft's where asked)
-  const model = fitCounts(drawn, u => modelWidth(u.text))
+  const model = fitCounts(drawn, u => modelWidth(u.text), u => /\p{N}/u.test(u.text))
   if (MT && MT_FETCH) await fetchMt(drawn.map(u => u.text))
-  const mt = MT ? fitCounts(drawn, u => { const t = mtCache[u.text]; return typeof t === 'string' && t && !sameAsSource(t, u.text) ? textWidth(t) : null }) : null
+  const mt = MT ? fitCounts(drawn, u => { const t = mtCache[u.text]; return typeof t === 'string' && t && !sameAsSource(t, u.text) ? textWidth(t) : null }, u => WIDE.test(mtCache[u.text] ?? '') && /[A-Za-z0-9]/.test(mtCache[u.text] ?? '')) : null
   const roomed = drawn.filter(u => (u.before ?? 0) + (u.after ?? 0) > 0).length
   console.log(JSON.stringify({ id, ms, pages: byPage.size, units: s.units, drawn: s.drawn, crowded: s.crowded, unicode: s.unicode, shared: s.shared, page: s.page, bounds: s.bounds, forms: s.forms, letters: s.letters, sets: s.sets, grouped: s.grouped, aligned: s.aligned, roomed, ledgerFigures: r.ledger.classes.figures ?? null, groups: r.stats.groups, G1u, G1split: splitPx, G1: fails.G1.length, G3f: fails.G3f.length, D: fails.D.length, O: fails.O.length, R: fails.R.length, model, ...(mt ? { mt } : {}) }))
   for (const [k, list] of Object.entries(fails)) for (const f of list.slice(0, 10)) console.log(`  ${k} ${f}`)

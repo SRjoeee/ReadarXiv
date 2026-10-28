@@ -1434,8 +1434,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // carry (hiding.figures: BUNDLE 11's figure rows, figure-rows.mjs), drawn in its translation where the reader shows figures
   // translated (hiding.figuresShown), its ink hidden by its own group (`f<k>`), its words by the fit rule with the rest of its set
   // (figure-fit.mjs fitFigureSet: on its baseline, turned as it was, from its anchor's edge, into the room beside its box, every
-  // unit of one set at one size, the original's or one factor less, to the rules' last floor), in a face of its font's family and
-  // weight, in its fill; else left the original's, why told (`no row`, `untranslated`, `same` as its source, `unhidden` where the
+  // unit of one set at one size, the original's or one factor less, to the rules' last floor), in the faces of its font's family
+  // and weight (its CJK characters in the target's CJK face, the rest in the Latin one), in its fill; else left the original's, why told (`no row`, `untranslated`, `same` as its source, `unhidden` where the
   // document holds no group of it, a face's refusal, `unfit`). A page whose figures are shown waits for their rows as for its
   // units' (figuresWait). `figures`: each figure unit of the pages laid, drawn or why not
   const figureRecs = []
@@ -1456,26 +1456,28 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const text = u.pieces.map(p => (p.t === 'text' ? shownPiece(p) : ' ')).join('').replace(/\s+/g, ' ').trim()
       if (!text || sameAsSource(text, u.src ?? '')) { Object.assign(rec, { why: 'same', text }); continue }
       if (!VIS.has(f.group)) { Object.assign(rec, { why: 'unhidden', text }); continue }
-      // its face: its font's family, weight and slant, the paper's design of that family
+      // its faces: its font's family, weight and slant, the paper's design of that family; its CJK characters in the target's
+      // CJK face and every other in that family's Latin face, a run each (layer2.mjs figureRuns: one CJK face for the whole
+      // text left 2010.11929v2's "Width MLP" and "Head 2" the original's, the served CJK faces holding no Latin letter or digit)
       const cf = classifyFont(f.font)
       const fam = cf.fam === 'math' ? 'serif' : cf.fam
       const st = { fam, bold: cf.bold, italic: cf.italic, caps: false, design: designs[fam] ?? designs.serif }
-      const drawn = L2.nameRuns(text, faceOf(st, /[\u2e80-\u9fff\uac00-\ud7af\u3040-\u30ff\uf900-\ufaff]/.test(text) ? 'cjk' : 'latin', to), to)
+      const runs = L2.figureRuns(text, cls => faceOf(st, cls, to), P.cjkQuotes)
       if (FS) {
         const tFonts = performance.now()
-        const no = await FS.check([{ face: drawn.face, text: drawn.text }])
+        const no = await FS.check(runs.map(r => ({ face: r.face, text: r.s })))
         fontWait += performance.now() - tFonts
         if (disposed) return
         if (no) { Object.assign(rec, { why: no.why, text }); continue }
       }
-      ready.push({ f, rec, text, drawn, width1: L2.runsWidth(drawn) })
+      ready.push({ f, rec, text, runs, width1: L2.figureRunsWidth(runs) })
     }
     const bySet = new Map()
     for (const c of ready) (bySet.get(c.f.set ?? c.f.group) ?? bySet.set(c.f.set ?? c.f.group, []).get(c.f.set ?? c.f.group)).push(c)
     const fits = new Map()
     for (const list of bySet.values()) fitFigureSet(list, P.floorMin).forEach((fit, i) => fits.set(list[i], fit))
     for (const c of ready) {
-      const { f, rec, text, drawn } = c, fit = fits.get(c)
+      const { f, rec, text, runs } = c, fit = fits.get(c)
       if (!fit) { Object.assign(rec, { why: 'unfit', text }); continue }
       const r = rows[pg - 1], px = pxOf(pg)
       r.off.add(f.group)
@@ -1488,9 +1490,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       r.ops.push({ op: 'hidden', rects: [hid] })
       audit?.push({ what: 'erase', unit: f.id, figure: f.group, page: pg, box: [hid[0], hid[1], hid[0] + hid[2], hid[1] + hid[3]] })
       const x = f.x + f.ux * fit.offset, y = f.y + f.uy * fit.offset, angle = (Math.atan2(f.uy, f.ux) * 180) / Math.PI
-      r.markup.push(L2.svgOfFigure({ group: f.group, text: drawn.text, x, y, angle, size: fit.size, face: drawn.face, color: f.fill > 0 ? L2.hexOf(f.fill) : null }, cssOf(pg), scale))
+      r.markup.push(L2.svgOfFigure({ group: f.group, runs, x, y, angle, size: fit.size, color: f.fill > 0 ? L2.hexOf(f.fill) : null }, cssOf(pg), scale))
       // (a level one's words in the page's text layer, as a name's; a turned one's are not selectable)
-      if (Math.abs(f.uy) < 1e-6 && f.ux > 0) textRecord(r, opsFrom, f.group, undefined, [TL.nameSeg(drawn.text, x, fit.width, y, fit.size)])
+      if (Math.abs(f.uy) < 1e-6 && f.ux > 0) textRecord(r, opsFrom, f.group, undefined, [TL.nameSeg(runs.map(q => q.s).join(''), x, fit.width, y, fit.size)])
       Object.assign(rec, { drawn: true, text, size: r1(fit.size), x: r1(x), y: r1(y), w: r1(fit.width), set: f.set ?? f.group })
     }
     figuresDone[pg] = 2

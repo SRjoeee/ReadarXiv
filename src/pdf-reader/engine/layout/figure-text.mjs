@@ -75,6 +75,8 @@ export const ALIGN_TOL = 0.08
 /** a unit's room, the free line before and after its box that a longer translation may take: at most this many of its sizes a
  *  side, and this share of its size short of other ink (a translation never touches another's ink) */
 export const ROOM_MAX = 6, ROOM_CLEAR = 0.15
+/** a path's segment is told as far as its box shows it, within this many PDF units (its segments are single floats) */
+const SHOWN_SLACK = 0.05
 /** the units a page may hold, at most, and a paper (past them the rest stay the original's, counted) */
 export const FIGURE_UNITS_PAGE = 400, FIGURE_UNITS_DOC = 4000
 /** a unit's text at most, in code units (a long run is a paragraph some figure holds: cut there, its rest the original's) */
@@ -390,44 +392,54 @@ function roomOf(pg, f, u, own) {
   const band = [pad, u.descent * u.size + pad, u.length - pad, u.ascent * u.size - pad]
   const reach = ANCHOR_REACH * u.size, far = Math.max(reach, (ROOM_MAX + ROOM_CLEAR) * u.size)
   // (the nearest ink right before its box along its baseline and right after it, within the reach: their gaps to the box; and
-  // within `far`, glyphs too, the free line either side: its room, roomsOf)
+  // within `far` the free line either side, its room (roomsOf): the ink a translation there would meet, as far as it shows)
   let crowded = false, before = Infinity, after = Infinity, freeBefore = Infinity, freeAfter = Infinity
-  // (what may meet its band or its line, on the page: its frame's box there, a box apart from it no ink of its room)
-  const near = (() => {
+  // (what may meet its band, its reach or its line, on the page: its frame's box there, a box apart from it no ink of them)
+  const nearOf = d => {
     const nx = -u.uy, ny = u.ux, lo = u.descent * u.size, hi = u.ascent * u.size
-    const pts = [[-far, lo], [u.length + far, lo], [-far, hi], [u.length + far, hi]].map(([s1, t]) => [u.x + u.ux * s1 + nx * t, u.y + u.uy * s1 + ny * t])
+    const pts = [[-d, lo], [u.length + d, lo], [-d, hi], [u.length + d, hi]].map(([s1, t]) => [u.x + u.ux * s1 + nx * t, u.y + u.uy * s1 + ny * t])
     return [Math.min(...pts.map(p => p[0])), Math.min(...pts.map(p => p[1])), Math.max(...pts.map(p => p[0])), Math.max(...pts.map(p => p[1]))]
-  })()
-  const apart = (x0, y0, x1, y1) => Math.max(x0, x1) < near[0] || Math.min(x0, x1) > near[2] || Math.max(y0, y1) < near[1] || Math.min(y0, y1) > near[3]
-  /** an extent along the baseline of ink beside the box, its free line's end */
+  }
+  const apartOf = near => (x0, y0, x1, y1) => Math.max(x0, x1) < near[0] || Math.min(x0, x1) > near[2] || Math.max(y0, y1) < near[1] || Math.min(y0, y1) > near[3]
+  const apart = apartOf(nearOf(reach)), apartFar = apartOf(nearOf(far))
+  /** an extent along the baseline of ink beside the box: where its free line ends */
   const free1 = (a0, a1) => {
     if (a1 <= band[0]) { if (a1 >= -far) freeBefore = Math.min(freeBefore, -a1) }
     else if (a0 >= band[2]) { if (a0 <= u.length + far) freeAfter = Math.min(freeAfter, a0 - u.length) }
   }
-  /** an extent along the baseline, of ink across the band: inside the box, or right before or after it */
+  /** an extent along the baseline, of ink across the band: inside the box, or right before or after it (the crowding and the
+   *  anchor are read within the reach alone, as they were before the room: the same units are drawn) */
   const along1 = (a0, a1) => {
     if (a1 > band[0] && a0 < band[2]) crowded = true
     else if (a1 <= band[0] && a1 >= -reach) before = Math.min(before, -a1)
     else if (a0 >= band[2] && a0 <= u.length + reach) after = Math.min(after, a0 - u.length)
-    free1(a0, a1)
   }
   for (let g = 0; g < G.length && !crowded; g++) {
     if (mineG.has(g)) continue
-    const x = G[g]
-    if (x.blank || !/\S/u.test(x.u ?? '') || apart(x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top)) continue
-    const e = inFrame(f, [x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top])
-    if (e[3] > band[1] && e[1] < band[3]) { if (e[2] > band[0] && e[0] < band[2]) crowded = true; else free1(e[0], e[2]) }
+    const x = G[g], box = [x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top]
+    if (x.blank || !/\S/u.test(x.u ?? '') || apartFar(...box)) continue
+    const e = inFrame(f, box)
+    if (e[3] > band[1] && e[1] < band[3]) { if (e[2] > band[0] && e[0] < band[2]) { if (!apart(...box)) crowded = true } else free1(e[0], e[2]) }
   }
   for (let b = 0; b + 3 < B.length && !crowded; b += 4) {
-    if (apart(B[b], B[b + 1], B[b + 2], B[b + 3]) || mineB.has(b / 4)) continue
-    const e = inFrame(f, [B[b], B[b + 1], B[b + 2], B[b + 3]])
+    const box = [B[b], B[b + 1], B[b + 2], B[b + 3]]
+    if (apartFar(...box) || mineB.has(b / 4)) continue
+    const e = inFrame(f, box)
     if (e[3] <= band[1] || e[1] >= band[3] || e[2] <= -far || e[0] >= u.length + far) continue
+    // (the crowding and the anchor by the ink within the reach, as before; the free line by every ink, a path's lines as far as
+    // its box shows them: a line its clip cuts off is no ink there)
+    const near = !apart(...box) && !(e[2] <= -reach || e[0] >= u.length + reach)
     const shape = S?.get(b / 4)
-    if (shape) { shapeRoom(shape, f, band, along1, free1); continue }
+    if (shape) { shapeRoom(shape, f, band, near ? along1 : null, free1, e); continue }
     const holds = e[0] <= 0 && e[2] >= u.length && e[1] <= u.descent * u.size && e[3] >= u.ascent * u.size
-    // (a box behind the whole band is its ground, no ink of its box: its edges are where its free line ends)
-    if (!holds) along1(e[0], e[2])
-    else { free1(e[0], e[0]); free1(e[2], e[2]) }
+    // (a box behind the whole band is its ground, no ink of its box: a path's, its free line ending a band's height inside its
+    // edges, as its lines are not known (a rounded corner, a frame's stroke, past the page's shapes: 2610.21924v1's "ARCHIVE"
+    // node); an image's, a shading's or boxes merged, none: their pixels beside the original's box are no ground a translation
+    // may take (2602.23285v2's caption over a screenshot))
+    if (!holds) { if (near) along1(e[0], e[2]); free1(e[0], e[2]) } else if (!(pg.paths?.[b / 4] >= -1)) { freeBefore = 0; freeAfter = 0 } else {
+      const inset = (u.ascent - u.descent) * u.size
+      freeBefore = Math.min(freeBefore, Math.max(0, -e[0] - inset)); freeAfter = Math.min(freeAfter, Math.max(0, e[2] - u.length - inset))
+    }
   }
   // (set from its start where the ink before it is nearer by half, from its end where the ink after it is: else from its middle)
   const anchor = Math.max(before, 0) * ANCHOR_RATIO < Math.max(after, 0) ? 'start' : Math.max(after, 0) * ANCHOR_RATIO < Math.max(before, 0) ? 'end' : 'centre'
@@ -435,9 +447,10 @@ function roomOf(pg, f, u, own) {
 }
 
 /** a path's lines against a unit's band (in its frame): each segment's part across the band (a stroke's widened by its half
- *  width) told by its extent along it (along1); a fill none of whose edges reach into the band's box and that holds the band's
- *  middle is behind the text, its edges told as the free line's ends alone (free1: a translation stays on its ground) */
-function shapeRoom(shape, f, band, along1, free1) {
+ *  width) told by its extent along it (along1, where given), and that part as far as the path's box `e` shows it, its clip's,
+ *  as the free line's end (free1); a fill none of whose edges reach into the band's box and that holds the band's middle is
+ *  behind the text, its edges told as the free line's ends alone (a translation stays on its ground) */
+function shapeRoom(shape, f, band, along1, free1, e) {
   const { segs, hw } = shape, w = shape.stroke ? hw : 0
   const t0 = band[1] - w, t1 = band[3] + w
   const parts = []
@@ -454,8 +467,10 @@ function shapeRoom(shape, f, band, along1, free1) {
     parts.push([Math.min(p, q) - w, Math.max(p, q) + w])
   }
   const inside = parts.some(([a, b]) => b > band[0] && a < band[2])
-  if (shape.fill && !shape.stroke && !inside && holdsPoint(shape, f, (band[0] + band[2]) / 2, (band[1] + band[3]) / 2)) { for (const [a, b] of parts) free1(a, b); return }
-  for (const [a, b] of parts) along1(a, b)
+  // (to its box within SHOWN_SLACK: its segments are single floats, a rectangle's edge a hair past the box it bounds)
+  const shown = (a, b) => { const p = Math.max(a, e[0] - SHOWN_SLACK), q = Math.min(b, e[2] + SHOWN_SLACK); if (p <= q) free1(p, q) }
+  if (shape.fill && !shape.stroke && !inside && holdsPoint(shape, f, (band[0] + band[2]) / 2, (band[1] + band[3]) / 2)) { for (const [a, b] of parts) shown(a, b); return }
+  for (const [a, b] of parts) { along1?.(a, b); shown(a, b) }
 }
 
 /** whether a fill's closed edges hold a point of a frame (even-odd, as a ray along the frame's direction crosses them) */
