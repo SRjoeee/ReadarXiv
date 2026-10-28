@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { indexLayout, LAYOUT_SCHEMA, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
-import { fitFigure, sameAsSource } from '@/pdf-reader/engine/layer-proto/figure-fit.mjs'
+import { fitFigure, fitFigureSet, sameAsSource } from '@/pdf-reader/engine/layer-proto/figure-fit.mjs'
+import { checkFigures, FIGURE_ROW, FIGURE_ROW_10, figureRow } from '@/pdf-reader/engine/layer-proto/figure-rows.mjs'
 import { openProto } from '@/pdf-reader/engine/layer-proto/run.mjs'
 import { withGroups } from './helpers/groups'
 
@@ -31,10 +32,12 @@ vi.hoisted(() => {
 })
 
 const H = 300
-/** a figure unit's row as a part's reader gives it (figure-rows.mjs checkFigures): unit 1, group f0, its run at (60, 120), 60 long */
-const row = (o: Record<string, unknown> = {}) => ({ id: 1, group: 'f0', page: 1, x: 60, y: 120, ux: 1, uy: 0, length: 60, size: 10, ascent: 0.88, descent: -0.2, anchor: 'centre', fill: 0x2040a0, font: 'ABCDEF+ArialMT', ...o })
-/** the page: a paragraph's line at y = 200 the layout file does not lay, and the figure's unit (its translation `text`) */
-function paper({ text = '\u4fe1\u53f7\u5f3a\u5ea6', src = 'Signal strength', state = 'whole' } = {}) {
+/** a figure unit's row as a part's reader gives it (figure-rows.mjs checkFigures): unit 1, group f0, its run at (60, 120), 60 long,
+ *  its own set, no room */
+const row = (o: Record<string, unknown> = {}) => ({ id: 1, group: 'f0', page: 1, x: 60, y: 120, ux: 1, uy: 0, length: 60, size: 10, ascent: 0.88, descent: -0.2, anchor: 'centre', fill: 0x2040a0, font: 'ABCDEF+ArialMT', set: 'f0', before: 0, after: 0, ...o })
+/** the page: a paragraph's line at y = 200 the layout file does not lay, and the figure's units (each its translation `text`: one
+ *  given alone, or `figs`, units 1 … n) */
+function paper({ text = '\u4fe1\u53f7\u5f3a\u5ea6', src = 'Signal strength', state = 'whole', figs = null as { text: string; src: string }[] | null } = {}) {
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (px: number, py: number) => [px * scale, (H - py) * scale], convertToPdfPoint: (px: number, py: number) => [px / scale, H - py / scale] })
   const items = [{ str: 'Alpha beta gamma', transform: [10, 0, 0, 10, 20, 200], width: 100, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false }]
   const page = { view: [0, 0, 300, H], getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items, styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), cleanup() {}, commonObjs: { get: () => ({ name: 'NimbusRomNo9L-Regu' }) } }
@@ -47,7 +50,7 @@ function paper({ text = '\u4fe1\u53f7\u5f3a\u5ea6', src = 'Signal strength', sta
     geometry: { schema: 1, kinds: ['para', 'inkfigures'], left: { pages: [[0, 0, 300, 300]], units: [[0, 0, [[1, 20, 197.85, 120, 206.83]]]] } },
     units: [
       { kind: 'para', src: 'Alpha beta gamma', state: 'whole', pieces: [{ t: 'text', tr: true, s: '\u6c49\u5b57' }] },
-      { kind: 'inkfigures', src, state, pieces: state === 'whole' ? [{ t: 'text', tr: true, s: text }] : undefined },
+      ...(figs ?? [{ text, src }]).map(f => ({ kind: 'inkfigures', src: f.src, state, pieces: state === 'whole' ? [{ t: 'text', tr: true, s: f.text }] : undefined })),
     ],
     tex: { index: indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(file)))), pieces: new Map() },
   }
@@ -131,6 +134,83 @@ describe('the figures\' text drawn by the layer (run.mjs paintFigures)', () => {
   })
 })
 
+describe('a figure\'s translation in runs by script, each in its face', () => {
+  // (the faces as the web serves them: its CJK faces' slices hold no Latin letter, digit or space, its Latin faces' the ASCII)
+  const faceSources = async (id: string) => [id.startsWith('shs-') ? { url: 'https://faces.invalid/cjk.woff2', ranges: [0x3000, 0x9fff, 0xff00, 0xffef] } : { url: 'https://faces.invalid/latin.woff2', ranges: [32, 126] }]
+  it('a translation mixing CJK with Latin letters or digits is drawn, its CJK in the CJK face and the rest in the Latin face', async () => {
+    // (2010.11929v2's "Width MLP" and "Head 2", as Microsoft gives them; drawn in the CJK face whole they were refused, `served`)
+    for (const [text, src, latin] of [['\u5bbd\u5ea6 MLP', 'Width MLP', ' MLP'], ['\u6807\u98982', 'Head 2', '2']] as const) {
+      const run = await open({ hiding: hiding(true, [row({ anchor: 'start', after: 20 })]), faceSources }, paper({ text, src })) as Run
+      await run.until(1)
+      expect(run.figures[0]).toMatchObject({ drawn: true, why: null, text })
+      const spans = [...run.svgOf(1).querySelectorAll('[data-f="f0"] tspan')]
+      expect(spans.map(t => t.textContent)).toEqual([text.slice(0, text.length - latin.length), latin])
+      expect(new Set(spans.map(t => t.getAttribute('class'))).size).toBe(2)
+      // (one after the other along the baseline: the first placed, the next flowing after it)
+      expect(spans.map(t => t.getAttribute('x'))).toEqual(['0', null])
+    }
+  })
+})
+
+describe('a figure\'s set drawn at one size, each label from its edge into its room (the owner\'s rule of 2026-10-29)', () => {
+  /** a set's rows: unit i + 1, group f<i>, its set f0, each 14 below the last, from (60, 120) */
+  const setOf = (rows: Record<string, unknown>[]) => rows.map((o, i) => row({ id: i + 1, group: `f${i}`, set: 'f0', y: 120 - 14 * i, ...o }))
+  const drawn = async (rows: ReturnType<typeof row>[], figs: { text: string; src: string }[]) => {
+    const run = await open({ hiding: hiding(true, rows) }, paper({ figs })) as Run
+    await run.until(1)
+    return run.figures
+  }
+  // (an em a CJK character in the stubbed face: two at size 10 are 20 wide)
+  const ALL = { text: '\u5168\u90e8', src: 'All' }, DEPTH = { text: '\u6df1\u5ea6', src: 'Depth' }, PATCH = { text: '\u8865\u4e01\u5927\u5c0f', src: 'Patch size' }
+
+  it('a short label whose translation is wider takes the free line after it, at its own size', async () => {
+    // ("All", 15 long, 25 free after it: its translation, 20 at 10, drawn whole from its start; with no room it had shrunk to 7.5)
+    expect((await drawn([row({ length: 15, anchor: 'start', after: 25 })], [ALL]))[0]).toMatchObject({ drawn: true, size: 10, x: 60, w: 20 })
+    expect((await drawn([row({ length: 15, anchor: 'start' })], [ALL]))[0]).toMatchObject({ drawn: true, size: 7.5, x: 60, w: 15 })
+  })
+
+  it('a legend\'s entries are drawn at one size: the one factor its tightest entry needs, each from its start', async () => {
+    // ("All" has no room: 15 for 20, 0.75; "Depth" and "Patch size" fit whole, and are drawn at 0.75 with it, from their start)
+    const figs = await drawn(setOf([{ length: 15, anchor: 'start' }, { length: 25, anchor: 'start' }, { length: 50, anchor: 'start' }]), [ALL, DEPTH, PATCH])
+    expect(figs.map(f => [f.drawn, f.size, f.x, f.w])).toEqual([[true, 7.5, 60, 15], [true, 7.5, 60, 15], [true, 7.5, 60, 30]])
+    // (each its own set, as BUNDLE 10 drew them: three sizes)
+    const alone = await drawn(setOf([{ length: 15, anchor: 'start', set: 'f0' }, { length: 25, anchor: 'start', set: 'f1' }, { length: 50, anchor: 'start', set: 'f2' }]), [ALL, DEPTH, PATCH])
+    expect(alone.map(f => f.size)).toEqual([7.5, 10, 10])
+  })
+
+  it('a right-aligned set keeps its end and shrinks as one; a narrower translation ends where its original did', async () => {
+    // (six characters, 60 at 10, in 50: 5/6 for the set; "Depth"'s two, 20, then 16.7 wide, ending at 90 as its original)
+    const figs = await drawn(setOf([{ length: 50, anchor: 'end' }, { length: 30, anchor: 'end' }]), [{ text: '\u4fe1'.repeat(6), src: 'Validation loss' }, DEPTH])
+    expect(figs.map(f => [f.drawn, f.size])).toEqual([[true, 8.33], [true, 8.33]])
+    expect(figs[1]!.x! + figs[1]!.w!).toBeCloseTo(90, 0)
+    expect(figs[0]!.x).toBe(60)
+  })
+
+  it('a label that would pass the floor is the original\'s, and the rest of its set keeps the one factor the others need', async () => {
+    // (twelve characters in 60: 0.5, past the floor; four in 32: 0.8; two in 25: whole)
+    const figs = await drawn(setOf([{ length: 60, anchor: 'start' }, { length: 32, anchor: 'start' }, { length: 25, anchor: 'start' }]), [{ text: '\u4fe1'.repeat(12), src: 'A long label' }, PATCH, DEPTH])
+    expect(figs.map(f => [f.drawn, f.why, f.size ?? null])).toEqual([[false, 'unfit', null], [true, null, 8], [true, null, 8]])
+  })
+})
+
+describe('the figure rows on the wire (figure-rows.mjs)', () => {
+  const unit = { group: 'f7', page: 1, x: 10, y: 20, ux: 1, uy: 0, length: 30, size: 8, ascent: 0.88, descent: -0.2, anchor: 'start' as const, fill: 0, font: 'ArialMT' }
+  const check = (rows: unknown[], format?: string) => checkFigures(rows, { a: 1, b: 1, views: [0, 0, 300, 300], unitCount: 10, ...(format ? { format } : {}) })
+  it('a row carries its set and its room (BUNDLE 11), its room rounded down; a unit of no set is its own', () => {
+    expect(FIGURE_ROW).toBe(17)
+    expect(figureRow(3, { ...unit, set: 5, before: 1.23456, after: 7.8889 }).slice(14)).toEqual([5, 1.234, 7.888])
+    expect(figureRow(3, unit).slice(14)).toEqual([7, 0, 0])
+    expect(check([figureRow(3, { ...unit, set: 5, before: 2, after: 4 })])[0]).toMatchObject({ group: 'f7', set: 'f5', before: 2, after: 4 })
+  })
+  it('a part of 10\'s rows is read each unit its own set with no room, and a row of 11\'s shape is no row of 10\'s', () => {
+    expect(FIGURE_ROW_10).toBe(14)
+    const old = figureRow(3, unit).slice(0, FIGURE_ROW_10)
+    expect(check([old], '10')[0]).toMatchObject({ group: 'f7', set: 'f7', before: 0, after: 0 })
+    expect(() => check([old])).toThrow()
+    expect(() => check([figureRow(3, unit)], '10')).toThrow()
+  })
+})
+
 describe('the fit rule (figure-fit.mjs)', () => {
   const f = (anchor: 'start' | 'centre' | 'end') => ({ length: 60, size: 10, anchor })
   it('keeps the size where the translation fits, its anchor\'s place along the box', () => {
@@ -143,6 +223,16 @@ describe('the fit rule (figure-fit.mjs)', () => {
     expect(fitFigure(f('start'), 10, 0.6)).toMatchObject({ size: 6, width: 60 })
     expect(fitFigure(f('start'), 10.5, 0.6)).toBeNull()
     expect(fitFigure(f('start'), 0, 0.6)).toBeNull()
+  })
+  it('takes a unit\'s room on the side its anchor grows to, a middle one\'s the same either side', () => {
+    expect(fitFigure({ length: 60, size: 10, anchor: 'start', before: 50, after: 20 }, 8, 0.6)).toEqual({ size: 10, offset: 0, width: 80 })
+    expect(fitFigure({ length: 60, size: 10, anchor: 'end', before: 20, after: 50 }, 8, 0.6)).toEqual({ size: 10, offset: -20, width: 80 })
+    // (a middle one: 5 a side, 70 of line for 80, 7/8)
+    expect(fitFigure({ length: 60, size: 10, anchor: 'centre', before: 5, after: 40 }, 8, 0.6)).toMatchObject({ size: 8.75, offset: -5, width: 70 })
+  })
+  it('fits a set at one factor, the least its drawn units need', () => {
+    const set = fitFigureSet([{ f: f('start'), width1: 8 }, { f: f('start'), width1: 4 }, { f: f('start'), width1: 20 }], 0.6)
+    expect(set.map(x => x?.size ?? null)).toEqual([7.5, 7.5, null])
   })
   it('tells a translation that says its source again', () => {
     expect(sameAsSource('Signal  STRENGTH', 'Signal strength')).toBe(true)

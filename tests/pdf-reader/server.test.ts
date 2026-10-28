@@ -60,7 +60,7 @@ describe('B2: only the paper\'s id and version leave the machine', () => {
   })
 
   it('the catalog is asked by the engine\'s own CTAG, the contract of BUNDLE 8: no request names the CTAG of a bundle of 7', () => {
-    expect(CTAG5).toMatch(/^b10-j/)
+    expect(CTAG5).toMatch(/^b11-j/)
     expect(layerPath(API, PAPER)).toBe(`${API}/api/v1/layer/${PAPER.id}v${PAPER.version}/${CTAG5}`)
     for (const path of [layerPath(API, PAPER), `${layerPath(API, PAPER)}/prepare`]) expect(path).not.toMatch(/\/b7-j/)
   })

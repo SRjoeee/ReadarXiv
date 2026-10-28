@@ -396,8 +396,8 @@ describe('a reader\'s envelope', () => {
     expect(await refusal(read('units', o => { o.bundle = '5'; delete o.format }))).toMatchObject({ kind: 'units', path: 'format' })
     expect(UNITS_FORMAT).toBe('1')
     // (6: a part with no layout says why, `layout: { refused, why }`; 7: a draw's items carry their characters' fills; 8: the
-    // head's base says whose PDF the layer is drawn over)
-    expect(BUNDLE5).toBe('10')
+    // head's base says whose PDF the layer is drawn over; 11: a figure row carries its set and its room)
+    expect(BUNDLE5).toBe('11')
   })
 
   it('refuses what is not an object, and a chunk given as a part and a part given as a chunk', async () => {
@@ -1383,9 +1383,9 @@ describe('a part against the chain', () => {
     expect(await partWith(1, p => { (p as Any).rules = { 2: [72, 500, 700, 500.4], 3: [72, 300, 200, 300.3] } })).toMatchObject({ rules: { 2: [72, 500, 700, 500.4], 3: [72, 300, 200, 300.3] } })
   })
 
-  it('refuses figure rows (BUNDLE 10, the content class `figures`) of no shape, on a page outside the part\'s own, of a unit not a figure\'s, or where the layout is none', async () => {
-    // (a row: [id, group, page, x, y, ux, uy, length, size, ascent, descent, anchor, fill, font])
-    const row = (o: Record<number, unknown> = {}) => Object.assign([1, 0, 2, 100, 400, 1, 0, 60, 8, 0.88, -0.2, 1, 0, 'ArialMT'], o)
+  it('refuses figure rows (BUNDLE 10, the content class `figures`; their set and room since 11) of no shape, on a page outside the part\'s own, of a unit not a figure\'s, or where the layout is none', async () => {
+    // (a row: [id, group, page, x, y, ux, uy, length, size, ascent, descent, anchor, fill, font, set, before, after])
+    const row = (o: Record<number, unknown> = {}) => Object.assign([1, 0, 2, 100, 400, 1, 0, 60, 8, 0.88, -0.2, 1, 0, 'ArialMT', 0, 4, 12.5], o)
     await refused(1, p => { (p as Any).figures = [row()] }, 'figures[0][0]')
     await refused(1, p => { (p as Any).figures = [row({ 0: 99_999 })] }, 'figures[0][0]')
     await refused(1, p => { (p as Any).figures = [row({ 0: 0 })] }, 'figures[0][0]')
@@ -1394,6 +1394,13 @@ describe('a part against the chain', () => {
     await refused(1, p => { (p as Any).figures = [row({ 5: 0.5 })] }, 'figures[0][5]')
     await refused(1, p => { (p as Any).figures = [row({ 11: 3 })] }, 'figures[0][11]')
     await refused(1, p => { (p as Any).figures = [row().slice(1)] }, 'figures[0]')
+    // (a row of 10's, no set and no room, is no row of 11's)
+    await refused(1, p => { (p as Any).figures = [row().slice(0, 14)] }, 'figures[0]')
+    // (its set a group's number at most its own; its room 0 or more)
+    await refused(1, p => { (p as Any).figures = [row({ 1: 3, 14: 4 })] }, 'figures[0][14]')
+    await refused(1, p => { (p as Any).figures = [row({ 14: -1 })] }, 'figures[0][14]')
+    await refused(1, p => { (p as Any).figures = [row({ 15: -0.5 })] }, 'figures[0][15]')
+    await refused(1, p => { (p as Any).figures = [row({ 16: Number.NaN })] }, 'figures[0][16]')
     await refused(1, p => { (p as Any).figures = {} }, 'figures')
     // (the key there only where the part has a figure unit: a part of none is written as one before figures)
     await refused(1, p => { (p as Any).figures = [] }, 'figures')
@@ -1810,7 +1817,7 @@ describe('keys', () => {
   const sha = 'a'.repeat(64)
 
   it('keyOf names an object by its whole digest under the CTAG; catalogKey by the VTAG; keyParts takes them apart', () => {
-    expect(CTAG5).toBe(`b10-j${PDFJS}`)
+    expect(CTAG5).toBe(`b11-j${PDFJS}`)
     expect(VTAG5).toBe(`${CTAG5}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`)
     const key = keyOf('2608.04322', 3, CTAG5, sha)
     expect(key).toBe(`layer/2608.04322v3/${CTAG5}/${sha}.json`)

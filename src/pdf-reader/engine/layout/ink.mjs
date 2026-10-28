@@ -235,7 +235,7 @@ export const PARA_POINT = /^q\d+$/
  */
 export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity, boxesMax = Infinity, stepsMax = STEPS_MAX, msMax = INK_MS, glyphsOnly = false, turned = false }) {
   const turn = (((Number(rotate) % 360) + 360) % 360)
-  if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], ...(indices ? { paths: [], shows: 0 } : {}), ...(turned ? { turned: [], shapes: new Map(), pictures: [] } : {}), capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true }
+  if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], ...(indices ? { paths: [], shows: 0 } : {}), ...(turned ? { turned: [], shapes: new Map(), pictures: [], figures: new Map() } : {}), capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true }
   const fnArray = ops?.fnArray ?? [], argsArray = ops?.argsArray ?? []
   const n = Math.min(fnArray.length, OPS_CAP)
   const glyphs = [], boxes = [], points = [], boxAt = [], paths = [], paras = [], turnedOut = [], pictures = []
@@ -331,6 +331,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   const put = (x0, y0, x1, y1, path) => {
     step(1)
     if (stop || !known()) return
+    if (turned && (s.form > 0 || picture > 0) && !inAnnotation && !inMask) extend(`${s.formId}:${pictureIds.at(-1) ?? 0}`, x0, y0, x1, y1)
     if (boxes.length >= 4 * keep) { merge(x0, y0, x1, y1); return }
     if (boxes.length >= 4 * BOXES_CAP) { over = true; stop = true; return }
     boxes.push(x0, y0, x1, y1)
@@ -447,6 +448,19 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
    *  that two figures side by side never make one label); the pictures open now */
   let formSeq = 0, pictureSeq = 0
   const pictureIds = []
+  /** each figure's extent on the page (`turned`): the box of every box painted inside it, by `<fid>:<pid>` (its form's number and
+   *  its innermost picture's, 0 for none), before any budget merges it, cut to the clip in force as every box is; a figure's
+   *  glyphs carry the same numbers, so that its reader adds their boxes (layout/figure-text.mjs: a label's room never leaves its
+   *  figure) */
+  const figureBoxes = new Map()
+  const extend = (key, x0, y0, x1, y1) => {
+    const b = figureBoxes.get(key)
+    if (!b) { figureBoxes.set(key, [x0, y0, x1, y1]); return }
+    if (x0 < b[0]) b[0] = x0
+    if (y0 < b[1]) b[1] = y0
+    if (x1 > b[2]) b[2] = x1
+    if (y1 > b[3]) b[3] = y1
+  }
   const shapeOf = (box, op, data) => {
     if (!data || typeof data.length !== 'number' || shapeNumbers + data.length * 2 > SHAPE_NUMBERS_PAGE) return
     const m = s.ctm, fill = FILLS.has(op), segs = []
@@ -665,7 +679,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       if (indices) paths.push(MERGED)
     }
   }
-  return { glyphs, boxes, points, boxAt, paras, ...(indices ? { paths, shows: showAt + 1 } : {}), ...(turned ? { turned: turnedOut, shapes, pictures } : {}), capped: fnArray.length > OPS_CAP || over || deep || many, timedOut: late, degraded: tiles !== null, mergedAt, rotated: false }
+  return { glyphs, boxes, points, boxAt, paras, ...(indices ? { paths, shows: showAt + 1 } : {}), ...(turned ? { turned: turnedOut, shapes, pictures, figures: figureBoxes } : {}), capped: fnArray.length > OPS_CAP || over || deep || many, timedOut: late, degraded: tiles !== null, mergedAt, rotated: false }
 }
 
 /** why a page's ink (pageInk's) is not read whole, or null where it is: 'rotated' (nothing read), 'capped' (past a cap) or
