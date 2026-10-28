@@ -1273,14 +1273,18 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   other. A unit of one sentence lights as a sentence shape (its first row from where its text begins).
 - **Whole, whatever their sentences**: headings, captions, table cells and a drawing's text (TikZ labels).
 - **Every drawn thing lights its original, whatever its kind** (the owner's report of 2026-10-29 on 2010.11929v2 p9: its
-  References' Chinese lit nothing on either side, its Conclusion's and Acknowledgements' did). A source unit, an ink unit (its left anchor arXiv's tokens on
-  its lines, `ink-pass.mjs` `inkAnchors`) and a figure's level label (arXiv's tokens in its run's band, `figureAnchors`, PIPELINE
-  31; its translation's words under its unit's id, `run.mjs` `paintFigures`) light as units; a turned label is in no text layer,
-  and the figure's float lights it. A babel name (Abstract, References, Contents, …) is no unit of the bundle's: each occurrence
-  lights as a heading under a hover id of its own (`units.mjs` `nameOccurrenceId`: from `NAME_ID_FROM`, 2^22, past every id a
-  bundle holds, a late chunk's too, and below the view's Int32 owners), on the left by the tokens of its page in its box, which
-  the parts' layouts give (`view/shapes.mjs` `createShapes`, with no change to the wire), on the right by the words the layer
-  drew of it (`paintNames`); one that leads a unit (RUN_IN) lights with that unit.
+  References' Chinese lit nothing on either side, its Conclusion's and Acknowledgements' did). A source unit and an ink unit (its
+  left anchor arXiv's tokens on its lines, `ink-pass.mjs` `inkAnchors`) light as units. A figure's level label is anchored by
+  arXiv's tokens in its run's band (`figureAnchors`, PIPELINE 31) and its translation's words are under its unit's id
+  (`run.mjs` `paintFigures`); it is held by its float as a drawing's TikZ text is (`floats.mjs` `HELD`: as running text it stopped
+  the caption's walk, a diagram of labelled boxes losing its float), so hovering it lights the figure whole, and one outside
+  every float lights alone; a turned label is in no text layer, and the figure's float lights it. A babel name (Abstract,
+  References, Contents, …) is no unit of the bundle's: each occurrence lights as a heading under a hover id of its own
+  (`units.mjs` `nameOccurrenceId`: from `NAME_ID_FROM`, 2^22, past every id a bundle holds, a late chunk's too, and below the
+  view's Int32 owners), on the left by the tokens of its page in its box, which the parts' layouts give (`view/shapes.mjs`
+  `createShapes`, with no change to the wire), on the right by the words the layer drew of it (`paintNames`), and where the
+  layer left it the original's (no word of the target's, unfit, a face refused) by the left's geometry of it, the page's units
+  shown as the original holding its id (`layerShapes`); one that leads a unit (RUN_IN) lights with that unit.
 - **Tables, algorithms and figures** light whole with their captions, on both sides: a table or an algorithm one wash
   over it to its rules, with its caption; a figure outlined (1.5 px), its caption washed — a wash multiplied into a
   figure would change its colours. Hovering the float, its caption or one of its cells lights it. A subcaption lights

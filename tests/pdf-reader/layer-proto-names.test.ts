@@ -89,6 +89,11 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
     const none = await open({}, paper({ key: 'preface' }))
     await none.until(1)
     expect(none.names.map(n => [n.drawn, n.why])).toEqual([[false, 'no word']])
+    // (left the original's in its place: its hover id among the page's units shown as the original, no words of its own, lit
+    // there as the left's — Codex and Devin on #493)
+    const kept = none.wordsOf(1) as unknown as { spans: [number, number[]][]; original: number[] }
+    expect(kept.original).toContain(nameOccurrenceId(1))
+    expect(kept.spans.some(([id]) => id === nameOccurrenceId(1))).toBe(false)
     // (a run opened with no labels draws no name, as it draws no float's label in the target's)
     const plain = await open({ labels: null })
     await plain.until(1)

@@ -703,4 +703,28 @@ describe("babel's names light as headings on both panes, under ids no bundle id 
     expect(nth(runs, 0).toks).toEqual([2 * 2 ** 16])
     expect(l.shapes.runs(ID).map(x => x.page)).toEqual([2])
   })
+
+  it('on a laid page where the layer left it the original\'s (no word, unfit): lit and hit there as the left\'s, whenever its row came (Codex and Devin on #493)', () => {
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    // (page 2 laid with nothing drawn of the name: its id among the page's units shown as the original, as run.mjs freezes it)
+    const kept = { tokens: { n: 0, l: new Float32Array(0), r: new Float32Array(0), y: new Float32Array(0), h: new Float32Array(0), top: new Float32Array(0), bottom: new Float32Array(0) }, word: new Int32Array(0), at: new Int32Array(0), spans: [], original: [ID] }
+    for (const rowFirst of [true, false]) {
+      const l = createShapes({ kindOf })
+      l.addParts(parts)
+      if (rowFirst) l.addParts([namesPart() as never])
+      const r = layerShapes(l)
+      for (const p of [1, 2, 3]) l.addPage(nth(lefts, p))
+      expect(r.lay(2, kept as never)).toBe(true)
+      expect(r.laid(2)).toBe(true)
+      if (!rowFirst) l.addParts([namesPart() as never])
+      const left = l.shapes.runs(ID).map(x => l.shapes.block(x, PAD)), right = r.shapes.runs(ID).map(x => r.shapes.block(x, PAD))
+      expect(right).toEqual(left)
+      expect(right.length).toBe(1)
+      const b = nth(right, 0)
+      expect(r.shapes.hit(2, (b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, PAD, () => null)).toMatchObject({ id: ID, s: -1 })
+      // (a unit of the page's that the layer did not keep stays unlit where nothing of the drawing is: the mirror's units no answer)
+      const u4 = nth(l.shapes.runs(4), 0), c = l.shapes.block(u4, PAD)
+      expect(r.shapes.hit(2, (c.x0 + c.x1) / 2, (c.y0 + c.y1) / 2, PAD, () => null)?.id).not.toBe(4)
+    }
+  })
 })

@@ -1025,6 +1025,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const painted = new Set((r.wordsOpen?.spans ?? []).map(s => s[0]))
     const original = []
     for (const c of K) if (!painted.has(c.id) && c.lists.some(l => l.includes(q))) original.push(c.id)
+    // (and every babel name of the page the layer did not draw — no word of the target's, its own again, a face refused, unfit,
+    // no group of its own —, left the original's in its place: its hover id, lit there as the left's, view/shapes.mjs
+    // layerShapes; one that leads a unit is that unit's)
+    for (const nm of tex?.index.names(q) ?? []) {
+      if (nm.unit >= 0) continue
+      const id = nameOccurrenceId(nm.occurrence)
+      if (id !== null && !painted.has(id)) original.push(id)
+    }
     r.words = freezeWords(r.wordsOpen, original)
     r.wordsOpen = null
   }

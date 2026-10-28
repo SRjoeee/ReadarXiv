@@ -16,9 +16,14 @@
 // sides share.
 
 import { blockOf, pageGeometry } from './highlight.mjs'
+import { FIGURE_KIND } from '../rules/content-classes.mjs'
 
-/** kinds of unit a float holds: a table's cells, a drawing's text (TikZ); its walk goes on over them */
-const HELD = new Set(['cell', 'figure'])
+/** kinds of unit a float holds: a table's cells, a drawing's text (TikZ), a figure's labels the wrap made units (FIGURE_KIND,
+ *  anchored on the left since ink-pass.mjs figureAnchors: as running text they stopped the caption's walk, a diagram of labelled
+ *  boxes losing its float); its walk goes on over them, and hovering one lights its float */
+const HELD = new Set(['cell', 'figure', FIGURE_KIND])
+/** the kinds of a drawing's text: a float holding one is a figure */
+const DRAWING = new Set(['figure', FIGURE_KIND])
 /** a rule is a painted path at most THIN across and at least RULE_H long (horizontal) or RULE_V tall (vertical) */
 const THIN = 2, RULE_H = 20, RULE_V = 8
 /** the walk from a caption, in its lines' heights: the first item within FIRST of the caption, each next one within
@@ -234,7 +239,7 @@ export function pageFloats(L, p, regions = [], { rules = [], marks = [] } = {}) 
     for (const [id, runs] of g.byId) if (HELD.has(L.kindOf(id)) && runs.every(r => inside((r.x0 + r.x1) / 2, (r.top + r.bottom) / 2, region))) members.add(id)
     // a float holding a drawing's text (TikZ, set on the page with no form) is a figure: its boxes round its words and
     // its arrows (rules) leave too little drawn outside the text to tell (the review of B4, I3)
-    const drawing = [...members].some(id => L.kindOf(id) === 'figure')
+    const drawing = [...members].some(id => DRAWING.has(L.kindOf(id)))
     out.push({ id: c.id, page: p, kind: drawing ? 'figure' : floatKind(w, region), region, members, parts: w.parts, lead: c.lead })
   }
   known.set(p, out)
