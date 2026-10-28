@@ -2232,9 +2232,11 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     `\lgnrm \footnote{\url{…}}~\citep{…}`: TeX answers 2). The wrap read the macro's ink through to the next marked piece's
     point, the call's with it (§19.9, `through`); the maker now reads it so too and parts the two: where a paper's macro is
     followed by one unmarked placeholder of those classes and then, past white space alone, by the next marked piece, the
-    macro's ink is the glyphs from its point that spell the text the probe showed it sets (`readInkTexts`, ending in a letter or
-    a digit), the placeholder's the rest, kept in the marks file under the opening mark it would have had (`owned`) and placed
-    from it (`make.mjs`); glyphs that do not spell it, or nothing left, LOST as before. The wrap is given no texts, and reads as
+    macro's ink is the glyphs from its point that set the text the probe showed it sets (`readInkTexts`, ending in a letter or
+    a digit), character for character, the placeholder's the rest, kept in the marks file under the opening mark it would have
+    had (`owned`) and placed from it (`make.mjs`); glyphs that do not set it, nothing left, or a rest that runs on as the
+    macro's word (a letter or a digit on its baseline at its size: its text then ended inside the word, the review of #483),
+    LOST as before. The wrap is given no texts, and reads as
     it did.
   - Measured (2026-10-28, `lab/pdf/spikes/classes-gate.mjs --compile`, production's path on each paper's year, against `next`
     2346530d unit by unit (and c038d549 before it alike), over the 25 papers of 170 local sources whose units hold the shape and the gate pack's 7): drawn
