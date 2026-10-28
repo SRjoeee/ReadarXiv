@@ -211,6 +211,11 @@ export function regionsOf(page) {
  * alone followed by placeholders with no mark of their own and nothing else up to the next marked piece's opening
  * (`through`, marks.mjs followsOf), what stands between the two its own and theirs; and a later unit's opening next, as a
  * later unit's start mark is (that unit's label on its line left out). The sweep of 2026-10-24.
+ * The maker's reading takes `through` too where the marking gives a `split` (marks.mjs followsOf: a paper's macro and the one
+ * placeholder after it no mark could stand before, \\footnote after \\xspace, the macro's text known): the glyphs to the next
+ * marked piece's point parted, the macro's those that set its text from the first, character for character (textedTo), the
+ * placeholder's the rest, under the opening mark's name it would have had; where they do not set it, leave nothing, or the rest
+ * runs on as the macro's word (runsOn), LOST as before.
  * - A display that ends a footnote (footEnd: a display, its unit's last visible piece, after the unit's end mark, outside the
  *   bodies, no mark after it on its page): what its region holds from it to the page's folio (folioOf), each of its lines
  *   indented from the footnote's own and near the one before; with no folio, a line at the footnote's edge (a note after it
@@ -314,6 +319,18 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
         const opening = erasure ? OPENING.exec(N.name) : null
         const startsAfter = id => [`${id}s`, `h${id}s`, `t${id}s`].some(n => (where.get(n) ?? []).some(([p, q]) => p === pa && q > next[1]))
         const later = START.exec(N.name) ?? (opening && startsAfter(opening[2]) ? [N.name, opening[2]] : null)
+        if (f.blocked && !erasure && f.split && f.through && N.name === f.through) {
+          // (the maker's reading of the erasure's `through`: a paper's macro and the one unmarked piece right after it, which no
+          // mark could stand before (marks.mjs followsOf `split`), their ink to the next marked piece's point, the macro's the
+          // glyphs that set the text TeX sets for it, character for character, the piece's the rest — but where the rest runs on
+          // as the macro's word, which its text then did not hold whole: none)
+          const end = textedTo(pages, glyphs, f.split.text)
+          if (end > 0 && end < glyphs.length && !runsOn(pages, glyphs, end)) {
+            const [p, g] = glyphs[end], from = pages[p - 1].boxAt[g]
+            out.set(f.split.name, { how: HOW["open, to its unit's next mark"], glyphs: glyphs.slice(end), boxes: boxes.filter(([q, b]) => q > p || (q === p && b >= from)) })
+            return cut(HOW["open, to its unit's next mark"], glyphs, boxes, end)
+          }
+        }
         if (f.blocked) return erasure && f.through && N.name === f.through ? { how: HOW["open, to its unit's next mark"], glyphs, boxes } : none(HOW['open, an unmarked piece follows'])
         if (f.ends.includes(N.name)) return { how: HOW["open, to its unit's next mark"], glyphs, boxes }
         if (later && Number(later[1]) > Number(m[2])) {
@@ -548,6 +565,38 @@ function textTo(pages, glyphs, want, rest, quotes) {
     if (n - at[e] === rest.length && all.endsWith(rest)) return e
   }
   return first
+}
+
+/** one glyph of any text but none in a text the probe showed (marks.mjs INK_ANY: a formula's glyph no character spells) */
+const INK_ANY = '\uFFFC'
+/** a glyph's or a text's characters as the split reads them: NFKC, white space out */
+const setAs = s => s.normalize('NFKC').replace(/\s/g, '')
+/** the glyph after the first of `glyphs` that set `text` whole from their first, character for character (a glyph's own
+ *  characters a run of the text's, a blank glyph passed over, INK_ANY one glyph of any text but none), the glyph that completes
+ *  it the last; -1 where they do not begin so */
+function textedTo(pages, glyphs, text) {
+  const want = setAs(text)
+  let n = 0
+  for (let j = 0; j < glyphs.length && n < want.length; j++) {
+    const [p, g] = glyphs[j], t = setAs(pages[p - 1].glyphs.u[g] ?? '')
+    if (want[n] === INK_ANY) { if (!t) return -1; n++ } else if (!t) continue
+    else if (want.startsWith(t, n) && !want.slice(n, n + t.length).includes(INK_ANY)) n += t.length
+    else return -1
+    if (n === want.length) return j + 1
+  }
+  return -1
+}
+/** whether the glyph at `end` (the first not blank from it) runs on as the word the glyph before it ends: both a letter or a
+ *  digit, on one page, on one baseline and at one size (within a twentieth of it) — the macro's text then ended inside its word
+ *  (a state its probe's call did not have), and what follows is no other piece's ink alone */
+function runsOn(pages, glyphs, end) {
+  const word = /[\p{L}\p{N}]/u
+  const [p0, g0] = glyphs[end - 1], G0 = pages[p0 - 1].glyphs
+  let j = end
+  while (j < glyphs.length && !setAs(pages[glyphs[j][0] - 1].glyphs.u[glyphs[j][1]] ?? '')) j++
+  if (j >= glyphs.length) return false
+  const [p1, g1] = glyphs[j], G1 = pages[p1 - 1].glyphs, a = setAs(G0.u[g0] ?? ''), b = setAs(G1.u[g1] ?? '')
+  return p0 === p1 && word.test(a.at(-1) ?? '') && word.test(b[0] ?? '') && Math.abs(G0.y[g0] - G1.y[g1]) < 0.05 * G0.size[g0] && Math.abs(G0.size[g0] - G1.size[g1]) < 0.05 * G0.size[g0]
 }
 
 /** each place textAt's text begins at, in order */

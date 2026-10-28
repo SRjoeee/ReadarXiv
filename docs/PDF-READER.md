@@ -2207,6 +2207,58 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     base page's bytes change. On the gate pack every layout file and base page is the one before; two base
     records would read more texts (1512.03385v1's `\eg`, `\ie`, `\vs`; 2608.04322v1's address), which move no glyph's group:
     the pack stays `13785c79`.
+- **The look-ahead pairs, LAYOUT 23** (2026-10-28: 2609.20976v1's abstract and five of its paragraphs English, their translation
+  rows whole). A paper's macro may look at what follows it (`\xspace`, `\@ifnextchar`), so it gets its opening mark alone and
+  the placeholder right after it none, which the macro would see in its place (`marks.mjs` `LOOKS_AHEAD`); that placeholder,
+  with no mark, was LOST, the macro with it ('open, an unmarked piece follows', `stream.mjs`), and `tex.mjs locatedWhole` left
+  the unit the original's. 2609.20976 defines `\snr` as `\ac{SNR}\xspace` and writes `\snr $\geq 50$`.
+  - *TeX is asked about each pair* (`aheadSamples`, `aheadSection`; MARKS_SCHEMA 12). The mark probe sets each pair of a paper's
+    macro and the placeholder right after it, past white space alone or none (a formula, a citation, a reference, code, a URL,
+    a footnote's call, a number: a placeholder the maker cannot find with no mark; not a display, which no box of a line sets),
+    as the paper writes it, at most `AHEAD_PROBE_MAX` (128) a paper, in a section of its own after every other, so that an error
+    there costs only the pairs after it: in a box as the paper sets it, with every mark, and with the two openings alone, each
+    after the pair set once and let go (acronym's `\ac` sets its long form once, then the short one). Where the openings move
+    nothing (1) the placeholder is marked; where the macro's closing mark moves nothing too (0) the macro is closed. A box's width
+    cannot show hyphenation, which a mark's whatsit right after a word changes (TeX never hyphenates a word a box, a rule or a
+    formula follows, and does one a whatsit follows: `\tf \cite{a}`, Transformer[1] broken as Trans-former[1] once the
+    citation was marked, `marks-invariant.test.ts`), so one box more asks what the list ends with where the placeholder's mark
+    goes (`\lastnodetype`): a letter, a ligature or a font's kern keeps the placeholder's opening mark only where the mark boxes
+    itself before it (a formula, `\mbox`, `\textsuperscript`: `\axt@boxy`) and the macro's closing mark nowhere; a
+    discretionary or a whatsit (a XeTeX word), no mark. The answers
+    are the switch's, by the pair's key (`aheadKey`: the two sources and the white space between, joined by `#`), and the
+    samples are read from the units alone, numbered by their own rows, so that every reader of the probe's log and of the marks
+    file takes them as it takes the switch. `\snr` ends in a control word: TeX skips the space after it, and a closing mark there
+    makes it a second space, so TeX answers 1. A complete call's pair (a call TeX answered for, `completeMacros`) is marked so too,
+    its closing mark its own answer's. A pair after a macro with no opening mark of its own (glued to a word, at a cell's head)
+    or in a front unit, whose marks are robust (`\protect` before each) where the probe's box sets none so, is not marked.
+  - *A placeholder no mark may stand before is parted from the macro by its text* (`marks.mjs followsOf` `split`, `stream.mjs
+    ownedOf`). `\footnote` is one of `\xspace`'s exceptions: it sets no space before the call, and would before a mark (u19,
+    `\lgnrm \footnote{\url{…}}~\citep{…}`: TeX answers 2). The wrap read the macro's ink through to the next marked piece's
+    point, the call's with it (§19.9, `through`); the maker now reads it so too and parts the two: where a paper's macro is
+    followed by one unmarked placeholder of those classes and then, past white space alone, by the next marked piece, the
+    macro's ink is the glyphs from its point that set the text the probe showed it sets (`readInkTexts`, ending in a letter or
+    a digit), character for character, the placeholder's the rest, kept in the marks file under the opening mark it would have
+    had (`owned`) and placed from it (`make.mjs`); glyphs that do not set it, nothing left, or a rest that runs on as the
+    macro's word (a letter or a digit on its baseline at its size: its text then ended inside the word, the review of #483),
+    LOST as before. The wrap is given no texts, and reads as
+    it did.
+  - Measured (2026-10-28, `lab/pdf/spikes/classes-gate.mjs --compile`, production's path on each paper's year, against `next`
+    2346530d unit by unit (and c038d549 before it alike), over the 25 papers of 170 local sources whose units hold the shape and the gate pack's 7): drawn
+    (laid, no LOST piece: `locatedWhole`'s rule) gained 22, lost 0, in 10 papers (2609.20976v1 u4, u19, u41, u46, u59, u61;
+    2608.28692v1 5, 2610.21376v1 3, 2608.04183v1 2, and one each in 2608.08880v1, 2608.12096v1, 2608.12333v1, 2608.14934v1,
+    2608.29782v1, 2610.21547v1); no unit's lines lost or gained, 2 units' moved (their lines' extents, where a macro that opens a
+    line is found now); every page of every base page pixel for pixel `next`'s, its page count arXiv's; G1 0 on the entries'
+    pages; the units' hashes the same on all 32 (`unit-hash-diff.mjs`); the wrap of the 10 papers' base pages (`ocg-gate.mjs`,
+    Chromium's GPU canvas) leaves 63 units the original's for their marks where `next`'s left 81, its G1, split shows and delta
+    proofs as `next`'s. Of the 195 pairs asked, TeX answered 29 with 0, 55 with 1, 6 with 2 and 16 with an error (`x`); 89 had
+    no row, the probe stopped short of them (2610.21377v1's 74 all: jnsao.cls's `\and` ends TeX's run in a section before,
+    `markProbeTex`). Left English with the shape: 52 units (75 on `next`): a display after the macro (9), a pair TeX gave no
+    answer for (a table's `\colrule` or a paper's `\tagone` before a formula, which a box of a line cannot set), an author
+    block's macro glued to a name (`\orcid`), a cell's head (`\cellcolor`), a footnote's call after `\xspace` with text after
+    it, where no marked piece ends the call's ink, and a pair whose word the guard of hyphenation keeps unmarked (2608.12333v1's
+    `\EN $…$`, 2 units). The gate pack's papers write no such pair: its layout files and base pages are `690d0e19`'s byte for
+    byte (32 outputs made again, 96 files), the rules gate's model tier (`rules-gate.mjs compare`: 0 worse, 0 pages moved) and
+    the pixel tier the same on both engines.
 - **A unit the layer leaves the original's says why** (read time, no stored artefact, no version token): each `skipped` record
   of the run (`layer-proto/run.mjs`) carries a `code` of `SKIP_CODES` beside its `why`: `unlocated` (the file holds no row of
   it, and the file's own reason beside it, `unlaid`), `pieces`, `noRow`, `lost` (a visible piece the file has no position

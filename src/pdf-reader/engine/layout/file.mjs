@@ -119,7 +119,15 @@ export { LayoutRefusal } from './json.mjs'
  *  (2610.19274v1) a word a hyphen cuts at a line's end is joined where PDF.js ends the line with an empty item after it, as on
  *  our wrapped page (pipeline/anchors.mjs tokenizeDocument: the line check read two words against arXiv's one and left the list
  *  of figures' pages undrawn). The rows of the units they reach change, so a file of 22 is another maker's: the stored layers are made again and
- *  the gate pack with them (the file's schema is 5 still) */
+ *  the gate pack with them; and in the same unreleased 23 (the look-ahead pairs, 2609.20976v1's abstract English) a
+ *  placeholder right after a paper's macro that may look ahead (\\xspace: 2609.20976's \\snr, `\\ac{SNR}\\xspace`, before
+ *  `$\\geq 50$`), past white space alone or none, is marked where the mark probe's look-ahead section says its opening mark there
+ *  moves nothing (marks.mjs aheadSamples, the pair asked as the paper sets it; MARKS_SCHEMA 12), and the macro closed where its
+ *  closing mark does too: that placeholder was LOST with no mark, and the macro with it ('open, an unmarked piece follows'),
+ *  its unit the original's; where no mark may stand there (\\footnote, before which \\xspace sets no space and would before a
+ *  mark), the maker parts the two's ink to the next marked piece by the text TeX sets for the macro (stream.mjs ownedOf,
+ *  marks.mjs followsOf `split`), the piece placed from its own ink (the gate pack's seven papers write no such pair: their
+ *  layout files are 23's rows) (the file's schema is 5 still) */
 export const LAYOUT = '23'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour

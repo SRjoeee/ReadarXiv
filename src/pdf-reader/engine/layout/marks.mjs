@@ -104,6 +104,17 @@ const ASKED = new Set(['cite', 'ref', 'eqref', 'url', 'footnote'])
  *  paper may set its every number by one: 2610.21098 calls 316), each source at most COMPLETE_SRC_MAX long */
 export const PROBE_MAX = 16, COMPLETE_PROBE_MAX = 512
 const COMPLETE_SRC_MAX = 200
+/** the pairs of a paper's macro and the placeholder right after it the probe asks about at most, a paper (aheadSamples) */
+export const AHEAD_PROBE_MAX = 128
+/** the classes of a placeholder after a paper's macro the probe asks about (aheadSamples): those the maker cannot find
+ *  with no mark of their own (a paper's macro is found by the text TeX sets for it, a display is set in no box of a line) */
+const AHEAD_FOLLOWS = new Set(['math', 'cite', 'ref', 'eqref', 'code', 'url', 'footnote', 'number'])
+/** the white space between two pieces, as TeX reads it in a line: one space (any run of spaces, tabs and one line's end), or
+ *  none; null for anything else (a blank line, a paragraph's end, a character) */
+const gapOf = s => (s === '' ? '' : /^[ \t]*(?:\r?\n)?[ \t]*$/.test(s) ? ' ' : null)
+/** the key of TeX's answer for a paper's macro and the placeholder it precedes (aheadSamples): the two sources and the white
+ *  space between, joined by `#`, which neither holds (`fit`); never a control word, so no command's answer is one */
+export const aheadKey = (src, gap, follows) => `${src}#${gap}#${follows}`
 /** the complete macros as a map, name → arity, from the front end's pairs or the marking's object */
 const completeMap = c => (c instanceof Map ? c : new Map(Array.isArray(c) ? c : Object.entries(c ?? {})))
 /** a piece's leading command: \cite of \cite[p.~3]{a}, \footnote of a call; null for none */
@@ -140,7 +151,44 @@ export function probeSamples(units, complete = null) {
       own.set(cmd, { command: cmd, src: p.src, call: false, own: true, ...(glued ? { glued } : {}) })
     }
   }
-  return [...seen.values(), ...own.values()]
+  return [...seen.values(), ...own.values(), ...aheadSamples(units)]
+}
+/** a source the probe sets in a box: no comment or parameter sign, no \verb, at most 400 code units (probeSamples' `fit`) */
+const probeFit = src => typeof src === 'string' && !/[%#]|\\(?:verb|lstinline)(?![A-Za-z@])/.test(src) && src.length <= 400
+/**
+ * The look-ahead pairs' samples (`ahead`): each placeholder of the paper's own macros (classOf 'macro', not a text symbol)
+ * followed, right after it or past white space alone, by a placeholder of AHEAD_FOLLOWS, paired with that placeholder, each
+ * pair of sources (and the white space between) once, in the paper's order, at most AHEAD_PROBE_MAX, each source at most
+ * COMPLETE_SRC_MAX long. Such a macro may look at what follows it (LOOKS_AHEAD: \\xspace, \\@ifnextchar), so the piece after it
+ * gets no mark unless TeX says one there moves nothing; and that piece, unmarked, is LOST, its unit the original's
+ * (2609.20976's \\snr, `\\ac{SNR}\\xspace`, before `$\\geq 50$`). Read from the units alone, whatever the paper's complete macros:
+ * the samples are numbered by their own rows (aheadSection), the same for every reader of the probe's log. Asked last
+ */
+export function aheadSamples(units) {
+  const out = new Map()
+  for (const u of sampleOrder(units)) {
+    const pieces = u.pieces ?? []
+    for (let q = 0; q < pieces.length; q++) {
+      if (out.size >= AHEAD_PROBE_MAX) return [...out.values()]
+      const pair = pairOf(pieces, q), next = pieces[q]
+      if (!pair || !AHEAD_FOLLOWS.has(classOf(next)) || prefixWord(next.src) || !probeFit(next.src) || !next.src.length || next.src.length > COMPLETE_SRC_MAX) continue
+      const [m, gap] = pair, key = aheadKey(m.src, gap, next.src)
+      if (!out.has(key)) out.set(key, { key, src: m.src, gap, follows: next.src, math: classOf(next) === 'math', ahead: true })
+    }
+  }
+  return [...out.values()]
+}
+/** the paper's macro the placeholder at `q` of a unit's pieces follows right after it, or past one text piece of white space
+ *  alone (gapOf), and that white space: [the macro's piece, ' ' or '', its index], or null — none for a text symbol (READS_NOTHING), a
+ *  prefix (\protect: it is the next piece's), a macro after a prefix (whose marks stand before the prefix), a source the probe
+ *  cannot set in a box, or one the marks file would not hold as a pair's key (AHEAD_KEY: a control sequence first) */
+function pairOf(pieces, q) {
+  const p = pieces[q]
+  if (p?.t !== 'ph') return null
+  const gapped = pieces[q - 1]?.t === 'text', at = gapped ? q - 2 : q - 1, m = pieces[at], gap = gapped ? gapOf(pieces[q - 1].s ?? '') : ''
+  if (gap === null || at < 0 || m?.t !== 'ph' || classOf(m) !== 'macro' || READS_NOTHING(m) || prefixWord(m.src) || !probeFit(m.src) || !/^\\./.test(m.src) || m.src.length > COMPLETE_SRC_MAX) return null
+  if (at > 0 && pieces[at - 1].t === 'ph' && prefixWord(pieces[at - 1].src)) return null
+  return [m, gap, at]
 }
 // ---- the probe document: sections, each writing tagged rows
 /** the probe's schema: raised when a row's shape changes; a new section adds rows of a tag of its own, and changes no
@@ -187,8 +235,43 @@ export function punctuationSection(samples, from = 0) {
       : put(0)
     return `${each}${again}${probeRow('punct', i, '\\axt@qo')}\\gdef\\axt@qo{}\\noindent\\par`
   })
-  const reset = '\\edef\\axt@qfn{\\ifdefined\\c@footnote\\the\\c@footnote\\else0\\fi}\\def\\axt@qreset{\\ifdefined\\c@footnote\\global\\c@footnote=\\axt@qfn\\relax\\fi\\ifdefined\\citereset\\citereset\\fi}'
-  return `\\begingroup\\newbox\\axt@qbox\\gdef\\axt@qo{}${reset}${tests.join('\n')}\\endgroup`
+  return `\\begingroup\\newbox\\axt@qbox\\gdef\\axt@qo{}${PROBE_RESET}${tests.join('\n')}\\endgroup`
+}
+/** each box of the punctuation and look-ahead sections starts from the same state: the footnote counter as it was, biblatex's
+ *  citation trackers reset (punctuationSection) */
+const PROBE_RESET = '\\edef\\axt@qfn{\\ifdefined\\c@footnote\\the\\c@footnote\\else0\\fi}\\def\\axt@qreset{\\ifdefined\\c@footnote\\global\\c@footnote=\\axt@qfn\\relax\\fi\\ifdefined\\citereset\\citereset\\fi}'
+/** a placeholder before which LAYOUT_TEX's opening mark, glued to a letter, sets itself in a box (\\axt@boxy: a formula, \\mbox,
+ *  \\textsuperscript), so that TeX hyphenates the word before it no more than before the placeholder itself */
+const BOXY = /^(?:\$|\\\(|\\(?:ensuremath|mbox|textsuperscript)(?![A-Za-z@]))/
+/**
+ * The look-ahead section of the probe (`ahead`): for each pair of aheadSamples, the macro and the placeholder after it set in a
+ * box after a word as the paper sets them (a), with the macro's two marks and the placeholder's opening one (c), and with the
+ * macro's opening mark and the placeholder's (d), the boxes compared as the punctuation section's are (width, height, depth,
+ * last node, closed where meant), each after the pair set once in a box of its own and let go (a first call's state spent:
+ * acronym's \\ac sets its long form once, then the short one, so that the boxes are set from one state). A box cannot show
+ * TeX's hyphenation, which a mark's whatsit right after a word changes: TeX never hyphenates a word a box, a rule or a formula
+ * follows (a citation's box, `Transformer[1]`), and does one a whatsit follows. So a box (g) as d asks what the list ends with
+ * where the placeholder's opening mark goes (\\lastnodetype): glue, a penalty, a box or nothing of a word (0); a letter, a
+ * ligature or a font's kern, which the mark is set against (1); a discretionary or a whatsit, under XeTeX a word (2). One row
+ * a pair, `ahead <j> <code>`: 0 every mark as LAYOUT_TEX sets it (a = c = d, the list not ending in a word), 1 the macro's
+ * opening mark alone and the placeholder's (a = d, and the list not ending in a word, or ending in a letter before a
+ * placeholder the mark boxes itself before: BOXY), 2 none on the placeholder; before each box a row `ahead-at <j> <box>` (w
+ * the first, then a, c, d, g), so that an error TeX logs is that box's (readMarkProbe). An empty paragraph after each starts
+ * TeX's error count again. Writes nothing, ships out nothing
+ */
+export function aheadSection(samples) {
+  const box = (j, n, body) => `${probeRow('ahead-at', j, n)}\\global\\setbox\\axt@qbox\\box\\voidb@x\\gdef\\axt@qn{}\\axt@qreset\\setbox\\axt@qbox\\hbox{way ${body} \\unskip\\xdef\\axt@qn{\\the\\lastnodetype\\ifinner\\ifhmode/in\\fi\\fi}}\\xdef\\axt@q${n}{\\the\\wd\\axt@qbox/\\the\\ht\\axt@qbox/\\the\\dp\\axt@qbox/\\axt@qn}`
+  const put = d => `\\xdef\\axt@qo{${d}}`
+  const tests = samples.map(({ src, gap, follows, math }, j) => {
+    const open = `\\axtpma{q${j}a}`, close = `\\axtpm{q${j}b}`, next = `\\${math ? 'axtpmm' : 'axtpma'}{q${j}c}`
+    const boxes = `${box(j, 'w', `${src}${gap}${follows}`)}${box(j, 'a', `${src}${gap}${follows}`)}${box(j, 'c', `${open}${src}${close}${gap}${next}${follows}`)}${box(j, 'd', `${open}${src}${gap}${next}${follows}`)}\\gdef\\axt@qend{2}${box(j, 'g', `${open}${src}${gap}\\axt@qat${next}${follows}`)}`
+    const word = BOXY.test(follows) ? put(1) : put(2)
+    return `\\begingroup${boxes}\\endgroup\\ifx\\axt@qa\\axt@qd\\ifcase\\axt@qend\\relax\\ifx\\axt@qa\\axt@qc${put(0)}\\else${put(1)}\\fi\\or${word}\\else${put(2)}\\fi\\else${put(2)}\\fi${probeRow('ahead', j, '\\axt@qo')}\\gdef\\axt@qo{}\\noindent\\par`
+  })
+  // (what the list ends with where the placeholder's opening mark goes, by \\lastnodetype: 0 a character, 7 a ligature, 12 a kern
+  // — 1; 8 a discretionary, 9 a whatsit — 2; any other — 0)
+  const at = '\\def\\axt@qat{\\xdef\\axt@qend{\\ifcase\\lastnodetype 1\\or0\\or0\\or0\\or0\\or0\\or0\\or1\\or2\\or2\\or0\\or0\\or1\\else0\\fi}}'
+  return `\\begingroup\\newbox\\axt@qbox\\gdef\\axt@qo{}${PROBE_RESET}${at}${tests.join('\n')}\\endgroup`
 }
 // ---- what a paper's macro sets: TeX asked
 /** the distinct sources of the paper's macros the ink section asks about, at most */
@@ -253,10 +336,13 @@ export function inkSection(samples, from = 0) {
  *  it, its own kind's, which the marking does without as before. 2610.21377's jnsao.cls defines \\and as ` and ` in a group at
  *  \\begin{document}, which completeMacros takes for the document's (a definition in a group or a hook is read as any other);
  *  the probe's \\and is the kernel's, \\end{tabular}…, and TeX stops there: the answers for \\N and \\defeq after it are lost,
- *  the ink answers before it stand. A paper with no lead to ask about has the document it had */
+ *  the ink answers before it stand. A paper with no lead to ask about has the document it had. After them all the look-ahead
+ *  section (aheadSamples, numbered by its own rows): each pair's macro runs whatever its body does too, and what an error there
+ *  loses is the pairs after it, whose pieces keep no mark as before. A paper with no such pair has the document it had */
 export const markProbeTex = (samples, ink = [], leads = []) => {
-  const n = samples.findIndex(s => s.own), asked = n < 0 ? samples : samples.slice(0, n)
-  return probeTex([punctuationSection(asked), ...(ink.length ? [inkSection(ink)] : []), nameSection(), skipSection(), ...(n < 0 ? [] : [punctuationSection(samples.slice(n), n)]), ...(leads.length ? [inkSection(leads, ink.length)] : [])])
+  const listed = samples.filter(s => !s.ahead), ahead = samples.filter(s => s.ahead)
+  const n = listed.findIndex(s => s.own), asked = n < 0 ? listed : listed.slice(0, n)
+  return probeTex([punctuationSection(asked), ...(ink.length ? [inkSection(ink)] : []), nameSection(), skipSection(), ...(n < 0 ? [] : [punctuationSection(listed.slice(n), n)]), ...(leads.length ? [inkSection(leads, ink.length)] : []), ...(ahead.length ? [aheadSection(ahead)] : [])])
 }
 /** a node TeX lists that sets no ink: glue, a kern, a penalty, a math switch, a box (its own nodes listed below it), a
  *  mark, a colour stack, a write, a destination, a saved or restored matrix, an adjust's or a discretionary's head
@@ -582,19 +668,29 @@ const TEX_ERROR = /^(?:! |[^\s:]+:\d+: )/
  * the box as the paper sets it or with `{}` leaves the follower no answer at all (`x`); in the box with its opening mark,
  * no mark (2); in the box with both marks, no closing mark (1); in a second call's, none between (2). A sample with no
  * row (the probe stopped short of it), a row of another schema or another shape is no answer at all. layoutMarking sets
- * no mark where there is no answer
+ * no mark where there is no answer. And per look-ahead pair (aheadSamples, by its rows `ahead`), its key (aheadKey) and its
+ * one code: an error in the box let go or as the paper sets it no answer (`x`), in the one with the two openings or the one
+ * asking what the list ends with 2, in the one with every mark at most 1
  */
 export function readMarkProbe(log, samples) {
-  const out = {}, errored = new Map()
+  const out = {}, errored = new Map(), listed = samples.filter(s => !s.ahead), ahead = samples.filter(s => s.ahead)
   let at = null
   for (const line of (log ?? '').split('\n')) {
     if (TEX_ERROR.test(line)) { if (at) (errored.get(at[0]) ?? errored.set(at[0], new Set()).get(at[0])).add(at[1]); continue }
     const [r] = readProbe(line)
     if (!r || r.schema !== PROBE_SCHEMA) continue
     if (r.tag === 'punct-at' && r.fields.length === 3) { at = [`${r.fields[0]}:${r.fields[1]}`, r.fields[2]]; continue }
+    if (r.tag === 'ahead-at' && r.fields.length === 2) { at = [`ahead:${r.fields[0]}`, r.fields[1]]; continue }
     at = null
+    if (r.tag === 'ahead' && r.fields.length === 2) {
+      const s = ahead[Number(r.fields[0])], code = r.fields[1]
+      if (!s || !/^\d+$/.test(r.fields[0]) || !/^[012]$/.test(code)) continue
+      const bad = errored.get(`ahead:${r.fields[0]}`)
+      out[s.key] = !bad ? code : bad.has('w') || bad.has('a') ? 'x' : bad.has('d') || bad.has('g') ? '2' : code === '2' ? '2' : '1'
+      continue
+    }
     if (r.tag !== 'punct' || r.fields.length !== 2) continue
-    const i = r.fields[0], s = samples[Number(i)], codes = r.fields[1]
+    const i = r.fields[0], s = listed[Number(i)], codes = r.fields[1]
     if (!s || !/^[012]+$/.test(codes) || codes.length !== FOLLOWERS.length) continue
     out[s.command] = [...codes].map((c, j) => {
       const bad = errored.get(`${i}:${j}`)
@@ -614,7 +710,7 @@ export function askedCommands(units) {
   return out
 }
 /** the commands whose marks TeX's answers take off anywhere but between two calls: the paper's own switch, on */
-export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /[12x]/.test(switches[c].slice(0, FOLLOWERS.length - 1))).sort()
+export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /^\\[A-Za-z@]+$/.test(c) && /[12x]/.test(switches[c].slice(0, FOLLOWERS.length - 1))).sort()
 
 // ---------------------------------------------------------------- the TeX
 /**
@@ -1129,6 +1225,15 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
   }
   /** whether a piece after one that may look ahead may have its marks: TeX answered so for a footnote's call */
   const free = (after, p) => classOf(after) === 'footnote' && !!switches?.[commandOf(after)] && (classOf(p) === 'footnote' ? switches[commandOf(after)][7] === '0' : switches[commandOf(after)][6] === '0')
+  /** TeX's answer for the placeholder at `q` of a unit's pieces and the paper's macro right before it, past white space alone
+   *  or none (pairOf, aheadSamples; readMarkProbe: `0` every mark moves nothing, `1` the macro's opening mark alone and the
+   *  placeholder's, `2` or `x` none on the placeholder), with that macro's piece; null where the pair was not asked about */
+  const aheadSaid = (pieces, q) => {
+    const pair = switches ? pairOf(pieces, q) : null, code = pair ? switches[aheadKey(pair[0].src, pair[1], pieces[q].src)] : undefined
+    return code === undefined ? null : { m: pair[0], at: pair[2], code }
+  }
+  /** the paper's macros that got their opening mark, by piece: a placeholder after one is marked only so, as TeX was asked */
+  const opened = new Set()
   const base = markUnits(units), front = frontMarks(units)
   const index = new Map(units.map((u, i) => [u, i]))
   const own = u => {
@@ -1173,7 +1278,13 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       if (verbatim.at(-1) === true) return [piece]
       // (a colour piece: its colour written to the log right after it, inside its group, where its run is set: no node)
       if (colourPieceOf(p)) return [piece, { t: 'ph', src: `\\axtcolour{c${i}.${k}}` }]
-      const cls = passed && !passed.has(k) && !(LOOKS_AHEAD(after) && !READS_NOTHING(after) && !free(after, p) && !opensAfter(after, spaced)) ? classOf(p) : null
+      // (a placeholder right after a paper's macro that got its opening mark, past white space alone or none, has its marks where
+      // TeX answered that its opening mark there moves nothing, the word before it hyphenated as before: aheadSamples. A complete
+      // call's too, which its own answer leaves none there; its closing mark is its own answer's. Not in a front unit, whose marks
+      // are robust and the probe's box sets none so)
+      const pairSaid = lead ? null : aheadSaid(u.pieces, k)
+      const ahead = !!pairSaid && pairSaid.m === after && opened.has(after) && (pairSaid.code === '0' || pairSaid.code === '1')
+      const cls = passed && !passed.has(k) && !(LOOKS_AHEAD(after) && !READS_NOTHING(after) && !free(after, p) && !opensAfter(after, spaced) && !ahead) ? classOf(p) : null
       if (!cls || !on.has(cls) || (cls === 'macro' && none.has(p.src))) return [piece]
       // a paper's macro may set letters: glued to the word before, it is part of it (an accent, \\ss), and a mark would
       // part the word's hyphenation and kerns — but not one whose box TeX began with a node apart from it (`apart`: a kern, glue,
@@ -1192,6 +1303,7 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       const name = `${cls === 'footnote' ? 'n' : 'p'}${i}.${k}`
       // (an inline formula's opening mark is set on the empty list too: \axtpmm, LAYOUT_TEX)
       const open = { t: 'ph', src: `${lead}\\${cls === 'math' ? 'axtpmm' : 'axtpma'}{${name}a}` }
+      if (cls === 'macro') opened.add(p)
       // a complete call's closing mark, where TeX answered for what follows (`said`), only before white space or punctuation, or at
       // the unit's end: before a letter or a digit it would stand inside a word (`\\tf{}s`: TeX would break Transform-ers no
       // more), before another piece against that piece's first character
@@ -1199,6 +1311,15 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       if (said === '1' || !closes || (looks(p) && !(cls === 'footnote' && said === '0')) || ENDS_IN_CS.test(p.src) || /\s$/.test(p.src) || ENDS_ENV.test(p.src)) return [open, piece]
       return [open, piece, { t: 'ph', src: `${lead}\\axtpm{${name}b}` }]
     })
+    // (a paper's macro that looks ahead, with its opening mark alone, whose next piece past white space alone or none got its
+    // opening mark where TeX answered 0 for the pair: its closing mark too, as TeX set it in the probe's box. Not where it ends in
+    // white space, which may be a line's end before a blank one, or in an environment's \end, whose skip of the spaces after it
+    // the probe's box cannot show)
+    for (let q = 1; q < out.length && !lead; q++) {
+      const said = aheadSaid(u.pieces, q), k = said?.at ?? -1, m = said?.m
+      if (said?.code !== '0' || out[q].length < 2 || out[q][1] !== u.pieces[q] || out[k].length !== 2 || out[k][1] !== m || !opened.has(m) || !looks(m) || /\s$/.test(m.src) || ENDS_ENV.test(m.src)) continue
+      out[k] = [...out[k], { t: 'ph', src: `\\axtpm{p${i}.${k}b}` }]
+    }
     // (a prefixed piece's opening mark before its prefix)
     for (let k = 1; k < out.length; k++) {
       if (!prefixWord(u.pieces[k - 1].t === 'ph' ? u.pieces[k - 1].src : null) || out[k - 1].length !== 1 || out[k].length < 2 || out[k][0] === u.pieces[k]) continue
@@ -1233,8 +1354,12 @@ export const MARKS_DEPTH = 3
  *  sets, a formula's glyphs it does not spell as INK_ANY, and the leads' (leadSamples: inline code at a unit's head, a macro
  *  past INK_MAX) past the macros', so that "1,024", "max_tokens" and $d'$ find their ink: a reader of 9 would refuse
  *  them as no letters and digits; 11 the class `number` (a bibliography entry's number, both its marks), which a reader of
- *  10 refuses as no class of MARK_CLASSES */
-export const MARKS_SCHEMA = 11
+ *  10 refuses as no class of MARK_CLASSES; 12 TeX's answers for the look-ahead pairs in the switch (`marking.switches`, keyed
+ *  by aheadKey, one code each: a paper's macro and the placeholder right after it, which is marked where TeX said a mark
+ *  there moves nothing), which a reader of 11 refuses as no control word; and in `owned` the ink of a placeholder no mark
+ *  could stand before, parted from the macro before it by that macro's text (followsOf `split`), by the opening mark's name
+ *  it would have had, which a maker of 11 would not read */
+export const MARKS_SCHEMA = 12
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
 const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'align', 'words', 'tokens', 'chars', 'owned', 'links']
 /** the keys a marks file holds: KEYS, and `colours` where a colour piece has a fill (a file of before, or of a paper with
@@ -1256,17 +1381,28 @@ const CHARS_MAX = 65_536, CHAR_MAX = 32
 const SIZE_MAX = 200
 /** a piece's opening mark: the name its own ink is kept under */
 const OPENING = /^[pn]\d+\.\d+a$/
+/** a look-ahead pair's key as the marks file holds it (aheadKey): a paper's macro (a control sequence first), the white space
+ *  after it (one space or none) and the placeholder it precedes, each source at most COMPLETE_SRC_MAX code units, neither
+ *  holding `#` */
+const AHEAD_KEY = new RegExp(`^\\\\[^#]{1,${COMPLETE_SRC_MAX - 1}}# ?#[^#]{1,${COMPLETE_SRC_MAX}}$`, 's')
 /** the paper's own switch as the marking takes it (readMarkProbe): null where the probe was not run (every mark as
- *  LAYOUT_TEX sets it), else at most PROBE_MAX commands of the asked classes and COMPLETE_PROBE_MAX complete macros, each a control word, its answer a code 0, 1, 2 or x (no answer)
- *  a follower; else a refusal at `path` */
+ *  LAYOUT_TEX sets it), else at most PROBE_MAX commands of the asked classes and COMPLETE_PROBE_MAX complete macros, each a
+ *  control word, its answer a code 0, 1, 2 or x (no answer) a follower, and at most AHEAD_PROBE_MAX look-ahead pairs, each by
+ *  its key (AHEAD_KEY), its answer one such code; else a refusal at `path` */
 function checkSwitches(v, path) {
   if (v === null) return null
   if (!isObject(v)) throw new LayoutRefusal(path, 'not null or an object')
-  const keys = Object.keys(v)
-  if (keys.length > PROBE_MAX + COMPLETE_PROBE_MAX) throw new LayoutRefusal(path, `more than ${PROBE_MAX + COMPLETE_PROBE_MAX} commands`)
+  const keys = Object.keys(v), pairs = keys.filter(k => !/^\\[A-Za-z@]+$/.test(k)).length
+  if (keys.length - pairs > PROBE_MAX + COMPLETE_PROBE_MAX) throw new LayoutRefusal(path, `more than ${PROBE_MAX + COMPLETE_PROBE_MAX} commands`)
+  if (pairs > AHEAD_PROBE_MAX) throw new LayoutRefusal(path, `more than ${AHEAD_PROBE_MAX} look-ahead pairs`)
   for (const k of keys) {
-    if (!/^\\[A-Za-z@]{1,63}$/.test(k)) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a control word')
-    if (typeof v[k] !== 'string' || v[k].length !== FOLLOWERS.length || !/^[012x]+$/.test(v[k])) throw new LayoutRefusal(`${path}.${told(k)}`, `not ${FOLLOWERS.length} codes of 0, 1, 2 or x`)
+    if (/^\\[A-Za-z@]+$/.test(k)) {
+      if (k.length > 64) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a control word')
+      if (typeof v[k] !== 'string' || v[k].length !== FOLLOWERS.length || !/^[012x]+$/.test(v[k])) throw new LayoutRefusal(`${path}.${told(k)}`, `not ${FOLLOWERS.length} codes of 0, 1, 2 or x`)
+    } else {
+      if (!AHEAD_KEY.test(k)) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a control word or a look-ahead pair')
+      if (typeof v[k] !== 'string' || !/^[012x]$/.test(v[k])) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a code of 0, 1, 2 or x')
+    }
   }
   return v
 }
@@ -1381,9 +1517,14 @@ const endsOf = i => [`${i}e`, `t${i}e`, `h${i}e`]
  * piece with no mark follows it with no text between. A display's group (`group`): the displays right after it, with
  * nothing visible between, that have no opening mark (TeX sets none on the empty list it resumes the paragraph with
  * after a display: LAYOUT_TEX's \axt@pmc), by their opening marks' names; the text after it and its next piece are then
- * the group's last one's
+ * the group's last one's. With `texts` (the probe's: readInkTexts' pairs, flat, or a Map), a paper's macro whose next piece has
+ * no mark of its own and is the only visible one before its unit's next marked piece, white space alone between
+ * (`through`), is `split`: that piece's opening mark's name, which no point sets, and the text TeX sets for the macro (ending in
+ * a letter or a digit), by which the maker's reading parts the two's ink, character for character (stream.mjs ownedOf):
+ * 2609.20976's `\lgnrm \footnote{…}`, before which \xspace sets no space and would before a mark (aheadSamples' answer 2)
  */
-export function followsOf(units, names) {
+export function followsOf(units, names, texts = null) {
+  const shown = texts instanceof Map ? texts : Array.isArray(texts) ? new Map(Array.from({ length: Math.floor(texts.length / 2) }, (_, j) => [texts[2 * j], texts[2 * j + 1]])) : null
   const nameOf = (i, k) => { const c = classOf(units[i]?.pieces[k]); return c ? `${c === 'footnote' ? 'n' : 'p'}${i}.${k}` : null }
   return name => {
     const m = /^([pn])(\d+)\.(\d+)a$/.exec(name)
@@ -1402,7 +1543,7 @@ export function followsOf(units, names) {
     const blocked = !!next && !names.has(`${next}a`)
     // (`through`, the erasure's: past the unmarked visible pieces right after it, nothing but white space between, the next
     // marked piece's opening; null where text or the unit's end comes first)
-    let through = null
+    let through = null, others = 0
     if (blocked && !/\S/.test(after)) {
       for (let r = q + 1; r < u.pieces.length; r++) {
         const p = u.pieces[r]
@@ -1410,12 +1551,17 @@ export function followsOf(units, names) {
         const c = classOf(p)
         if (!c) continue
         if (names.has(`${nameOf(i, r)}a`)) { through = `${nameOf(i, r)}a`; break }
+        others++
       }
     }
+    // (`split`, the maker's: the macro's text, where the one unmarked piece after it is a placeholder the maker cannot find
+    // with no mark: AHEAD_FOLLOWS)
+    const text = shown && through && !others && classOf(u.pieces[k]) === 'macro' && AHEAD_FOLLOWS.has(classOf(u.pieces[q])) ? shown.get(u.pieces[k].src) : undefined
+    const said = typeof text === 'string' && /[\p{L}\p{N}]$/u.test(text) ? text : ''
     // (`rest`, the erasure's: the whole text after it up to its next visible piece, as the spell check reads one — its letters and
     // digits —, so that the text after it is told where it runs exactly to its unit's next mark, not where its first WANT
     // characters first stand: a display's \\text{for every}, a URL's dots)
-    return { closing: names.has(`${name.slice(0, -1)}b`), want, rest: spellOf(after), display, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group }
+    return { closing: names.has(`${name.slice(0, -1)}b`), want, rest: spellOf(after), display, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group, ...(said ? { split: { name: `${next}a`, text: said } } : {}) }
   }
 }
 
@@ -1617,7 +1763,7 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
   let words = 0
   // kept: whether the token before was written, so that a rest is written only after the word it is the rest of
   let kept = false
-  const follows = units ? followsOf(units, set) : null
+  const follows = units ? followsOf(units, set, marking.texts) : null
   const stream = units && OPS ? ownedPages({ follows, dropped, closing: name => destPage.get(`${name.slice(0, -1)}b`) ?? null }) : null
   let all = 0, found = []
   const seen = { warned: false, who: 'marked read' }
@@ -1752,7 +1898,7 @@ export async function readMarked(marked, log, o) {
   marks.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
   const chars = [], owned = []
   if (o.units && o.OPS) {
-    const follows = followsOf(o.units, head.set)
+    const follows = followsOf(o.units, head.set, head.marking?.texts)
     vetoTwice(rows, end.twice, follows)
     const charOf = new Map()
     for (const name of [...rows.keys()].sort()) {
