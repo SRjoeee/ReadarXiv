@@ -87,8 +87,15 @@ function unitFrom(b, at, units) {
 }
 
 const NOTHING = Object.freeze({ units: Object.freeze([]), kept: new Set(), cells: [], idOf: new Map(), plain: [] })
-/** the source units of each bundle, built once: the units (null where dropped), the units the pipeline keeps (the KEPT
- *  flag: openPaper's `kept`), the table cells, each unit's id, and its plain source, worked out when asked */
+/** a TikZ picture's text as the front end cuts it (latex-front.mjs tikzText): the layout compile marks none, so it owns no
+ *  glyph and the layer draws none; the picture's glyphs are the figure ink units' (layout/figure-text.mjs, kind `inkfigures`),
+ *  each glyph one unit's, translated once. Sent as well, the same words went to the translator twice and the one answer was
+ *  thrown away. Kept in the bundle at its id, every unit after it keeping its own, the left pane's floats reading it
+ *  (view/floats.mjs: a float that holds one is a drawing) */
+const TIKZ_KIND = 'figure'
+/** the source units of each bundle, built once: the units (null where dropped), the units the layer leaves as they are (the
+ *  KEPT flag, openPaper's `kept`, and a TikZ picture's texts, TIKZ_KIND), the table cells, each unit's id, and its plain
+ *  source, worked out when asked */
 const SOURCES = new WeakMap()
 function sourceOf(bundle) {
   if (bundle === null || typeof bundle !== 'object') return NOTHING
@@ -98,8 +105,12 @@ function sourceOf(bundle) {
   const units = new Array(list.length).fill(null), kept = new Set()
   for (let i = 0; i < list.length; i++) {
     const u = unitFrom(list[i], i, units)
+    // (an ink unit that echoes a TikZ picture's text, its words the same, a running head or a contents entry that repeats a
+    // node's label, takes no echo: the text sends no row to take, so the ink unit is translated itself, its pieces being the
+    // text's; one that echoes it after is that ink unit's echo, unitFrom's chain)
+    if (u?.echo !== undefined && units[u.echo]?.kind === TIKZ_KIND) delete u.echo
     units[i] = u
-    if (u && list[i][1] & UNIT_FLAG_BITS.KEPT) kept.add(u)
+    if (u && (list[i][1] & UNIT_FLAG_BITS.KEPT || u.kind === TIKZ_KIND)) kept.add(u)
   }
   const present = units.filter(Boolean)
   s = { units, kept, cells: present.filter(u => u.cell), idOf: new Map(units.flatMap((u, i) => (u ? [[u, i]] : []))), plain: new Array(units.length) }
@@ -117,13 +128,14 @@ const plainOf = (s, id) => (s.plain[id] ??= plainSource(s.units[id]))
 export const sourceUnitsOf = bundle => sourceOf(bundle).units
 
 // ---------------------------------------------------------------- the ids a language translates
-/** the units a translation into any language leaves as they are: the names a table holds (the KEPT flag, nameCells). Every
+/** the units a translation into any language leaves as they are: the names a table holds (the KEPT flag, nameCells), and a
+ *  TikZ picture's texts, whose glyphs the figure ink units translate (TIKZ_KIND). Every
  *  content class is translated once, whatever the language and whatever a reader's toggles show (the owner, 2026-10-25;
  *  rules/content-classes.mjs): the author block's names, which a reader's "names" toggle shows or hides, and its places, always
  *  shown; a bibliography's entries, under "references" (TRANSLATE_VERSION 6; before it the author block was sent only where the
  *  target's script writes names its own way, translate/kept.mjs authorsTranslated, which the TeX path's keptFor still reads) */
 const keptOf = s => s.kept
-/** the ids a language translates, rising: the units that stand, but the names kept (the KEPT flag) */
+/** the ids a language translates, rising: the units that stand, but the names kept (the KEPT flag) and a TikZ picture's texts */
 export function toTranslate(bundle, lang) {
   const s = sourceOf(bundle), kept = keptOf(s, lang), ids = []
   s.units.forEach((u, i) => { if (u && !kept.has(u) && u.echo === undefined) ids.push(i) })

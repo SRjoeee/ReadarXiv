@@ -151,7 +151,10 @@ export { LayoutRefusal } from './json.mjs'
  *  boxes, all empty, read as a mark that moves nothing), a box TeX set a character in \\nullfont in no answer; and the probe
  *  sets a .bbl's definitions as its styles write them, its conditionals whole (live.mjs bblProvides: natbib's
  *  `\\expandafter\\ifx\\csname urlstyle\\endcsname\\relax … \\fi`, its \\doi TeX's branch). The rows of the pieces they reach change
- *  (2010.11929v2's 8 entries; MARKS_SCHEMA 12 still) */
+ *  (2010.11929v2's 8 entries; MARKS_SCHEMA 12 still);
+ *  and in the same unreleased 25: a math face told by its family's names (layer-proto/fonts.mjs classifyFont: Euler's EUEX,
+ *  EURM and EURB, MathTime's MTMI, MTSY and MTEX, XITSMath, and XITS's text face no math face), which the ledger's math lines,
+ *  the ink units' kept runs and the figure runs' words read where a paper sets them */
 export const LAYOUT = '25'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour

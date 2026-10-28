@@ -85,10 +85,12 @@ describe("v0's CJK class: a character is CJK by its code point", () => {
     L2 = await import('@/pdf-reader/engine/layer-proto/layer2.mjs')
   })
   // the class as it was before astral characters were told apart: a non-`u` class, so that a surrogate half is a code unit
-  // of the BMP and every character outside it fell in the range a lone high surrogate does
+  // of the BMP and every character outside it fell in the range a lone high surrogate does; and its compatibility ideographs'
+  // range as it was meant, U+F900 to U+FAFF, where U+8C48 to U+FAFF took U+A000 to U+F8FF, Hangul's extended jamo among them
+  // (CJK still: U+A960 to U+A97F, U+D7B0 to U+D7FF)
   const WAS = (to: string) => (to === 'ko'
-    ? /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]/
-    : /[\u2E80-\u9FFF\u8C48-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u201C\u201D\u2018\u2019\u2014\u2026\u00B7]/)
+    ? /[\u2E80-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\uA960-\uA97F\uD7B0-\uD7FF]/
+    : /[\u2E80-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\uA960-\uA97F\uD7B0-\uD7FF\u201C\u201D\u2018\u2019\u2014\u2026\u00B7]/)
   const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
   const DESIGNS = { serif: 'times', sans: 'helvetica', mono: 'courier' }
   // (a target's own parameters, the layout rules' built-in ones, but no autospace, no compressed punctuation, no hyphenation)
@@ -110,7 +112,7 @@ describe("v0's CJK class: a character is CJK by its code point", () => {
       const was = bmp.map(ch => (WAS(to).test(ch) ? 'cjk' : 'latin'))
       expect(got.filter((c, i) => c !== was[i]).length, to).toBe(0)
       // (a sanity check on the comparison itself: both classes are populated)
-      expect(got.filter(c => c === 'cjk').length).toBeGreaterThan(50000)
+      expect(got.filter(c => c === 'cjk').length).toBeGreaterThan(40000)
       expect(got.filter(c => c === 'latin').length).toBeGreaterThan(10000)
     }
   })

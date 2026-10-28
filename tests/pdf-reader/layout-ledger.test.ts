@@ -26,6 +26,14 @@ describe('the content classes', () => {
     expect(CLASS_IDS.map(id => CLASS_CODE[id])).toEqual(CLASS_IDS.map((_, i) => i))
   })
 
+  it('marks built every class a unit is made of, and none of the others: the lab\'s built share (ledger.mjs builtShare) reads it', () => {
+    // (a class some kind of unit belongs to is translated and drawn: the source's units and the ink units, layout/ink-units.mjs
+    // and layout/figure-text.mjs; the index and OCR have no unit yet, the never-translated classes none by design)
+    const made = new Set(Object.values(UNIT_CLASS))
+    expect(CLASS_IDS.filter(id => CLASSES[id].state === 'built')).toEqual(CLASS_IDS.filter(id => made.has(id)))
+    expect(CLASS_IDS.filter(id => CLASSES[id].state === 'planned')).toEqual(['ocr', 'index'])
+  })
+
   it('gives a unit its class by its kind, the front end\'s and the bundle\'s alike', () => {
     expect(unitClass({ kind: 'para' })).toBe('body')
     expect(unitClass({ kind: 'heading' })).toBe('body')

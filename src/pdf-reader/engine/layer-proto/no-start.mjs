@@ -3,7 +3,8 @@
 // breakLines, with the target's rules' own marks), the drawing drops a translation's such mark opening the text after a
 // displayed formula where the original's line opens with none (layer2.mjs tokensOf2, the maintainer's fix 4 of
 // 2026-10-15), and the layer gate's measure lineStartPunct counts a drawn line that opens with one (the gate imports this
-// file: lab/pdf/spikes/layer-gate/measure.mjs). Imports nothing.
+// file: lab/pdf/spikes/layer-gate/measure.mjs); and the pairs it keeps together, which the drawing glues (tokensOf2).
+// Imports nothing.
 
 /**
  * The code points UAX 14 does not let a line start with: its classes CL, CP, IS, EX and NS (a closing mark, a closing
@@ -32,3 +33,15 @@ export const noStart = ch => {
   return false
 }
 
+
+/** UAX 14's pairs no line breaks inside, whatever the target's rules: LB17's B2 × B2 (two em dashes, the dash Chinese and
+ *  Japanese write as two U+2014, which a CJK run takes as two characters of its own; the two- and three-em dashes) and, of
+ *  LB22's × IN, two of IN (two ellipses, two two-dot leaders), from LineBreak-17.0.0.txt's B2 and IN */
+const B2 = [0x2014, 0x2e3a, 0x2e3b], IN = [0x2024, 0x2025, 0x2026, 0x22ef, 0xfe19, 0x10af6]
+/** whether no line may break between `a`'s last character and `b`'s first: a pair UAX 14 keeps together (the breaker asks it
+ *  of every two tokens it lays side by side: the last code point read from its surrogates, if it is one) */
+export const keptPair = (a, b) => {
+  if (typeof a !== 'string' || typeof b !== 'string' || !a || !b) return false
+  const lo = a.charCodeAt(a.length - 1), x = lo >= 0xdc00 && lo <= 0xdfff && a.length > 1 ? a.codePointAt(a.length - 2) : lo, y = b.codePointAt(0)
+  return (B2.includes(x) && B2.includes(y)) || (IN.includes(x) && IN.includes(y))
+}

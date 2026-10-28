@@ -128,12 +128,9 @@ units' text and takes their row).
 - Equation tags, folios, numbers: never (`symbols`).
 - Copyright and licence lines in the foot: with the foot, under "Heads and feet".
 
-**Open after stage 5** (for the front end's owner): the front end still cuts a TikZ picture's texts into units of kind `figure`
-(latex-front.mjs `tikzText`), which the layout compile never marks and the layer never draws; they are translated beside the
-`inkfigures` units that draw the same words, while the toggle `figures` is on. Dropping them (a PIPELINE change in
-latex-front.mjs) or letting an inkfigures unit take
-their row is the front end's to decide. A float's other text no unit owns (an algorithm's steps, a subfigure's letter) is still
-the ledger's `figures` and drawn nowhere.
+A float's other text no unit owns (an algorithm's steps, a subfigure's letter) is still the ledger's `figures` and drawn
+nowhere. (A TikZ picture's texts, which the front end cuts into units of kind `figure`, are sent no more: settled in
+`docs/PDF-READER.md` §19.12, "One owner a glyph".)
 
 ## 6. Risks and the gates that hold them
 
