@@ -386,6 +386,14 @@ describe('the mark probe sets a .bbl\'s own definitions first (an elsarticle .bb
     // (a paper with no .bbl asks as before)
     expect(probeOf([['main.tex', tex]])).not.toContain('\\providecommand')
   })
+  it('read as TeX reads the .bbl: no definition or \\bibitem in a comment, no brace in one, a comment\'s line end taken with it, and one under \\makeatletter given it again (the reviews of #486)', () => {
+    const bbl2 = [
+      '\\begin{thebibliography}{2}', '% \\providecommand{\\foo}{wrong}', '% a \\bibitem in a comment', '\\providecommand{\\foo}{right}',
+      '\\providecommand{\\bar}{% closing } in a comment', '  hello}', '100\\% \\providecommand{\\pct}{5\\%}', '\\makeatletter',
+      '\\providecommand{\\baz}[1]{\\@firstofone{#1}}', '\\makeatother', '\\providecommand{\\qux}{q}', '\\bibitem{a} A. Author.', '\\end{thebibliography}',
+    ].join('\n')
+    expect(bblProvides(inMemory(new Map([['main.tex', enc(tex)], ['main.bbl', enc(bbl2)]])), 'main.tex')).toBe('\\providecommand{\\foo}{right}\\providecommand{\\bar}{hello}\\providecommand{\\pct}{5\\%}\\makeatletter\\providecommand{\\baz}[1]{\\@firstofone{#1}}\\makeatother \\providecommand{\\qux}{q}')
+  })
 })
 
 describe('frontMarks: the front matter\'s units, marked in the layout compile as any unit', () => {
