@@ -187,6 +187,16 @@ describe.skipIf(!docker)('the marked original sets every text item where the pap
     expect(r.marked).toEqual(r.own)
     expect(r.switches['\\cite']?.[0]).toBe('2')
   }, 900_000)
+  it('a paper\'s macro that looks ahead before a formula, a citation or a footnote\'s call (2609.20976\'s \\snr, \\ac{SNR}\\xspace): the placeholder after it marked where TeX answered so, \\footnote not (\\xspace sets no space before it)', async () => {
+    const pre = '\\usepackage{xspace}\\usepackage{acronym}\\usepackage{url}\\newcommand{\\snr}{\\ac{SNR}\\xspace}\\newcommand{\\lgn}{\\texttt{lognormal\\allowbreak\\_galaxies}\\xspace}\\newcommand{\\nm}[1]{\\textsc{#1}\\xspace}'
+    const r = await compare(doc(pre, `\\begin{acronym}\\acro{SNR}{signal-to-noise ratio}\\end{acronym}\n\n${lines('high \\snr $\\geq 50$')}\n\n${lines('the \\snr \\cite{a}')}\n\n${lines('code \\lgn \\footnote{\\url{https://x.org}}')}\n\n${lines('by \\nm{x}\\cite{a}')}`))
+    expect(r.marked).toEqual(r.own)
+    const { aheadKey } = await import('@/pdf-reader/engine/layout/marks.mjs')
+    // (the formula and the citation after \\snr: its opening mark alone, theirs both — a closing mark after \\snr would make the
+    // space TeX skipped after it a second one; the footnote after \\lgn none; \\nm{x} right against the citation both)
+    expect([r.switches[aheadKey('\\snr', ' ', '$\\geq 50$')], r.switches[aheadKey('\\snr', ' ', '\\cite{a}')], r.switches[aheadKey('\\lgn', ' ', '\\footnote{\\url{https://x.org}}')], r.switches[aheadKey('\\nm{x}', '', '\\cite{a}')]]).toEqual(['1', '1', '2', '0'])
+    expect([r.marksOf('\\snr'), r.marksOf('$\\geq 50$'), r.marksOf('\\cite{a}'), r.marksOf('\\nm{x}')]).toEqual(['a', 'ab', 'ab', 'ab'])
+  }, 900_000)
   it('a complete macro glued to the placeholder after it (2610.21098\'s \\HarnessLimitShare{}\\%): its closing mark where TeX answered so for that follower', async () => {
     const r = await compare(doc('\\newcommand\\share{91.5}\\newcommand\\rate{0.73}', `${lines('of \\share{}\\% each')}\n\n${lines('of \\rate{}\\S{} each')}`))
     expect(r.marked).toEqual(r.own)

@@ -6,7 +6,7 @@ import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
 import { patch } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classOf, colourPieceOf, DISPLAY, encodeLayoutMarks, readColours, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_SCHEMA, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, FOLLOWERS, GLYPHS_PIECE, INK_ANY, INK_MAX, inkSamples, inkSection, LEAD_MAX, leadSamples, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, markedPages, readMarked, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks } from '@/pdf-reader/engine/layout/marks.mjs'
+import { classOf, colourPieceOf, DISPLAY, encodeLayoutMarks, readColours, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_SCHEMA, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, AHEAD_PROBE_MAX, FOLLOWERS, GLYPHS_PIECE, INK_ANY, INK_MAX, inkSamples, inkSection, LEAD_MAX, leadSamples, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, markedPages, readMarked, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
 import { GLYPHS_PAGE } from '@/pdf-reader/engine/layout/ink.mjs'
 import { OPS_MS } from '@/pdf-reader/engine/layout/oplist.mjs'
@@ -1094,7 +1094,7 @@ describe('reading the marked original', () => {
 
 /** a made-up marks file of two pages, every field used */
 const valid = (): LayoutMarks => ({
-  schema: MARKS_SCHEMA, engine: 'pdflatex', marking: { classes: [...MARK_CLASSES], switches: { '\\cite': '22220000', '\\footnote': '00000012' }, inkless: ['\\rule{0pt}{2ex}', '\\fontsize{7.6pt}{1em}'], texts: ['\\bert', 'BERT'], names: { abstract: 1, ref: 0 }, lineskip: [1, 0], complete: { bert: 0, kimi: 1 }, apart: ['\\pp'] }, pages: 2,
+  schema: MARKS_SCHEMA, engine: 'pdflatex', marking: { classes: [...MARK_CLASSES], switches: { '\\cite': '22220000', '\\footnote': '00000012', '\\snr# #$\\geq 50$': '1', '\\pp##\\cite{a}': 'x' }, inkless: ['\\rule{0pt}{2ex}', '\\fontsize{7.6pt}{1em}'], texts: ['\\bert', 'BERT'], names: { abstract: 1, ref: 0 }, lineskip: [1, 0], complete: { bert: 0, kimi: 1 }, apart: ['\\pp'] }, pages: 2,
   views: [0, 0, 612, 792, 0, 0, 612, 792],
   columns: [1, 2],
   marks: [['0s', 1, 72, 700], ['0e', 1, 300.5, 650.25], ['c1-1', 1, 0, 0], ['c2-2', 2, 0, 0], ['p0.3a', 1, 100, 700], ['p0.3b', 1, 120.75, 700], ['h1s', 2, 72, 720], ['t2s', 2, 80, 500], ['n0.5a', 1, 200, 680], ['g1t', 2, 300, 400]],
@@ -1142,16 +1142,17 @@ describe('the marks file', () => {
     parse.mockRestore()
     expect(refusal(new Uint8Array([0x7b, 0xc3, 0x28, 0x7d]))).toBe('')
     const rows: [string, (m: LayoutMarks & Record<string, unknown>) => void, string][] = [
-      ['schema 1, a file before the stream', m => { m.schema = 1 as 11 }, 'schema'],
-      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 11 }, 'schema'],
-      ['schema 3, a file before the babel names', m => { m.schema = 3 as 11 }, 'schema'],
-      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 11 }, 'schema'],
-      ['schema 5, a file before the empty-list marks, the column ends and the display groups', m => { m.schema = 5 as 11 }, 'schema'],
-      ['schema 6, a file before the link annotations', m => { m.schema = 6 as 11 }, 'schema'],
-      ['schema 7, a file before the alignment', m => { m.schema = 7 as 11 }, 'schema'],
-      ['schema 8, a file before the complete macros and the boxes apart (its maker would replay a marking it was not made with)', m => { m.schema = 8 as 11 }, 'schema'],
-      ['schema 9, a file before the texts as TeX sets them (its maker would find no lead of punctuation, code or a formula)', m => { m.schema = 9 as 11 }, 'schema'],
-      ['schema 10, a file before the numbers a bibliography entry keeps (its maker would read no class `number`)', m => { m.schema = 10 as 11 }, 'schema'],
+      ['schema 1, a file before the stream', m => { m.schema = 1 as 12 }, 'schema'],
+      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 12 }, 'schema'],
+      ['schema 3, a file before the babel names', m => { m.schema = 3 as 12 }, 'schema'],
+      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 12 }, 'schema'],
+      ['schema 5, a file before the empty-list marks, the column ends and the display groups', m => { m.schema = 5 as 12 }, 'schema'],
+      ['schema 6, a file before the link annotations', m => { m.schema = 6 as 12 }, 'schema'],
+      ['schema 7, a file before the alignment', m => { m.schema = 7 as 12 }, 'schema'],
+      ['schema 8, a file before the complete macros and the boxes apart (its maker would replay a marking it was not made with)', m => { m.schema = 8 as 12 }, 'schema'],
+      ['schema 9, a file before the texts as TeX sets them (its maker would find no lead of punctuation, code or a formula)', m => { m.schema = 9 as 12 }, 'schema'],
+      ['schema 10, a file before the numbers a bibliography entry keeps (its maker would read no class `number`)', m => { m.schema = 10 as 12 }, 'schema'],
+      ['schema 11, a file before the look-ahead pairs (its maker would replay a marking with no mark after a paper\'s macro)', m => { m.schema = 11 as 12 }, 'schema'],
       ['complete macros of no object', m => { (m.marking as Record<string, unknown>).complete = ['bert', 0] }, 'marking.complete'],
       ['a complete macro\'s name with its backslash', m => { (m.marking as Record<string, unknown>).complete = { '\\bert': 0 } }, 'marking.complete.\\\\bert'],
       ['a complete macro of arity 10', m => { (m.marking as Record<string, unknown>).complete = { bert: 10 } }, 'marking.complete.bert'],
@@ -1171,6 +1172,15 @@ describe('the marks file', () => {
       ['a switch of a code 3', m => { (m.marking.switches as Record<string, string>)['\\cite'] = '22223000' }, 'marking.switches.\\\\cite'],
       // (the asked classes' commands and the paper's own complete macros, PROBE_MAX + COMPLETE_PROBE_MAX: one past them)
       ['a switch of 529 commands', m => { m.marking.switches = switchOf(529) }, 'marking.switches'],
+      // (the look-ahead pairs, keyed by aheadKey: a macro's source, the white space after it, the placeholder's, joined by #)
+      ['a look-ahead pair of two codes', m => { (m.marking.switches as Record<string, string>)['\\snr# #$\\geq 50$'] = '11' }, 'marking.switches.\\\\snr# #$\\\\geq 50$'],
+      ['a look-ahead pair of a code 3', m => { (m.marking.switches as Record<string, string>)['\\snr# #$\\geq 50$'] = '3' }, 'marking.switches.\\\\snr# #$\\\\geq 50$'],
+      ['a look-ahead pair whose macro is no control sequence', m => { (m.marking.switches as Record<string, string>)['snr# #$x$'] = '1' }, 'marking.switches.snr# #$x$'],
+      ['a look-ahead pair with a tab between', m => { (m.marking.switches as Record<string, string>)['\\snr#\t#$x$'] = '1' }, 'marking.switches.\\\\snr#\\t#$x$'],
+      ['a look-ahead pair of no placeholder', m => { (m.marking.switches as Record<string, string>)['\\snr# #'] = '1' }, 'marking.switches.\\\\snr# #'],
+      ['a look-ahead pair whose placeholder holds #', m => { (m.marking.switches as Record<string, string>)['\\snr# #$#1$'] = '1' }, 'marking.switches.\\\\snr# #$#1$'],
+      ['a look-ahead pair whose placeholder is 201 code units', m => { (m.marking.switches as Record<string, string>)[`\\snr# #$${'x'.repeat(199)}$`] = '1' }, `marking.switches.\\\\snr# #$${'x'.repeat(12)}`],
+      ['129 look-ahead pairs', m => { m.marking.switches = Object.fromEntries(Array.from({ length: AHEAD_PROBE_MAX + 1 }, (_, i) => [`\\snr# #$${i}$`, '1'])) }, 'marking.switches'],
       ['no inkless key', m => { delete (m.marking as Partial<LayoutMarks['marking']>).inkless }, 'marking.inkless'],
       ['the inkless an object', m => { (m.marking as Record<string, unknown>).inkless = {} }, 'marking.inkless'],
       ['an inkless source twice', m => { (m.marking.inkless as string[])[1] = '\\rule{0pt}{2ex}' }, 'marking.inkless[1]'],
@@ -1267,6 +1277,9 @@ describe('the marks file', () => {
     // a switch of every command the probe asks about at most stands
     const most = valid()
     most.marking.switches = switchOf(528)
+    expect(refusal(bytes(most))).toBeNull()
+    // and with them every look-ahead pair it asks about at most, each source at its longest
+    most.marking.switches = { ...switchOf(528), ...Object.fromEntries(Array.from({ length: AHEAD_PROBE_MAX }, (_, i) => [`\\${'s'.repeat(199)}# #${`$${i}$`.padEnd(200, 'x')}`, '1'])) }
     expect(refusal(bytes(most))).toBeNull()
     // a later token the rest of the word before
     const rest = valid()
