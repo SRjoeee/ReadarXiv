@@ -2393,8 +2393,9 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   - Measured (`classes-gate.mjs --made --compile` against `next` 3b2aa271 over the 36 papers; TeX's answers dumped): on 30 of
     the 35 compiled none changed; on 5 only answers gained, none lost or changed, no switch moved — 6 sources no ink, each asked
     of its own (2608.25210v2's `\natexlab{}`, `{a}`…`{d}`, its paper's own definition setting nothing, and its `\showISSN{…}`),
-    and 80 texts (2610.21377v1 72 `\nolinkurl{doi:…}`, 2608.25210v2 2, 2307.16209v1 2 of REVTeX's `\href@noop`, 2608.10322v2
-    and 2610.21098v1 2 `\natexlab`s each). Drawn gained 54, lost 0, all 2608.25210v2's entries; the entries the wrap leaves the
+    and 72 texts, each read for its own source (2610.21377v1 64 `\nolinkurl{doi:…}`, 2608.25210v2 2, 2307.16209v1 2 of REVTeX's
+    `\href@noop`, 2608.10322v2 and 2610.21098v1 2 `\natexlab`s each; measured again on those five once no answer was carried, the
+    texts carried before, 8 of 2610.21377v1's, gone). Drawn gained 54, lost 0, all 2608.25210v2's entries; the entries the wrap leaves the
     original's for their marks there 63 to 0; every base page pixel for pixel `next`'s (952 pages), its page count arXiv's; no
     unit's lines lost, gained or moved. The gate pack is `8afa0824`: `efd01632` (#491's) with 2307.16209v1-zh's base record
     made again (18 texts, 16 before), every layout file and base page byte for byte. Left: the body's own cap, `INK_MAX`, which
