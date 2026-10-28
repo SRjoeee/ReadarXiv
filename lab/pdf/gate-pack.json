@@ -23,8 +23,8 @@
    "fmtutil": "r77314"
   }
  },
- "made": "2026-10-28T20:35:39.109Z",
- "digest": "59ef805cb5cdcb68ea4e8d2db1c8f6b11837adcf13cae4fcbf765fa50f64e2e5",
+ "made": "2026-10-28T20:47:35.631Z",
+ "digest": "8afa08248448a873418e93b8289b36299668de28b2127dea8c6b56a9dfc73d63",
  "bucket": "readarxiv-ci",
  "files": [
   {
@@ -1283,9 +1283,9 @@
   },
   {
    "path": "fixtures/2307.16209v1-zh/base.json",
-   "sha256": "16b5c3df2b6cc0cf19952d16bee483198ed6026529be162544e29e44597f581c",
-   "bytes": 4211,
-   "url": "r2://readarxiv-ci/gate-pack/16b5c3df2b6cc0cf19952d16bee483198ed6026529be162544e29e44597f581c"
+   "sha256": "e17ef1651d6c9132167eee504a41810c7dd0031f04ad9437d026f0a554bb7169",
+   "bytes": 3776,
+   "url": "r2://readarxiv-ci/gate-pack/e17ef1651d6c9132167eee504a41810c7dd0031f04ad9437d026f0a554bb7169"
   },
   {
    "path": "fixtures/2307.16209v1-zh/base.pdf",
