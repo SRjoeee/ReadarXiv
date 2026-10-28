@@ -1734,8 +1734,9 @@ describe('records (amendment M15): derived once, the engine\'s own predicates', 
       const bundle = { units }
       expect(units.length).toBeGreaterThan(5)
       for (const lang of LANGS) {
-        // (the names a table holds alone: the author block is translated for every target, TRANSLATE_VERSION 6)
-        const kept = (i: number) => (r.flags[i]! & RECORD_FLAG.KEPT) !== 0
+        // (the names a table holds alone: the author block is translated for every target, TRANSLATE_VERSION 6; and a TikZ
+        // picture's texts, kind `figure`, whose glyphs the figure ink units translate: rows.mjs TIKZ_KIND)
+        const kept = (i: number) => (r.flags[i]! & RECORD_FLAG.KEPT) !== 0 || kinds[i] === 'figure'
         const derived = [...units.keys()].filter(i => units[i] !== null && !kept(i))
         expect(derived, lang).toEqual(toTranslate(bundle, lang))
         // the batches: the same cuts from the records' lengths as batchesOf makes from the plain source, the paper's structural

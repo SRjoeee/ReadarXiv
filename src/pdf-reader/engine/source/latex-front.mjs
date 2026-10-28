@@ -998,7 +998,9 @@ function keepAddresses(pieces) {
  * The texts of a TikZ picture, each a unit of kind 'figure': a node's brace group (\\node … {text}, … node[…] (name) at
  * (x, y) {text}, in TikZ's own syntax whatever the picture draws), a pgfplots legend entry (\\addlegendentry{text}) and
  * an axis label or title in braces (xlabel={text}, ylabel=, zlabel=, title=). TeX sets them, so a translation is set in
- * the translation's fonts and a node grows to fit it. Everything else in the picture stays byte for byte.
+ * the translation's fonts and a node grows to fit it. Everything else in the picture stays byte for byte. The layer route
+ * sends none of them (layer-proto/rows.mjs TIKZ_KIND): the layout compile marks none, and the picture's glyphs are the
+ * figure ink units' (layout/figure-text.mjs), translated once; they stay units of the bundle at their ids.
  */
 function tikzText(s, from, to, b, ctx) {
   const re = /\\node\b|\bnode\b|\\addlegendentry\b|\b(?:xlabel|ylabel|zlabel|title)\s*=\s*(?=\{)/g
