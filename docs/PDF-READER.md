@@ -2237,7 +2237,7 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     from it (`make.mjs`); glyphs that do not spell it, or nothing left, LOST as before. The wrap is given no texts, and reads as
     it did.
   - Measured (2026-10-28, `lab/pdf/spikes/classes-gate.mjs --compile`, production's path on each paper's year, against `next`
-    c038d549 unit by unit, over the 25 papers of 170 local sources whose units hold the shape and the gate pack's 7): drawn
+    2346530d unit by unit (and c038d549 before it alike), over the 25 papers of 170 local sources whose units hold the shape and the gate pack's 7): drawn
     (laid, no LOST piece: `locatedWhole`'s rule) gained 22, lost 0, in 10 papers (2609.20976v1 u4, u19, u41, u46, u59, u61;
     2608.28692v1 5, 2610.21376v1 3, 2608.04183v1 2, and one each in 2608.08880v1, 2608.12096v1, 2608.12333v1, 2608.14934v1,
     2608.29782v1, 2610.21547v1); no unit's lines lost or gained, 2 units' moved (their lines' extents, where a macro that opens a
