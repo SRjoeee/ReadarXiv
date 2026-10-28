@@ -113,6 +113,21 @@ describe("TeX's own room for a formula (texRoomOf)", () => {
     // (the last line has no line after it)
     expect(L2.texRoomOf([b] as never, { page: 1, crop: [40, 430, 60, 440], baseline: 433.5 }, true)).toBe(-Infinity)
   })
+  it("is the room of the line the formula stands on, not of another block's line on its baseline whose block it overlaps", () => {
+    // (a unit's two blocks on one page with a line each at 476 (the review of #496): the first, x 0 to 150 by its overfull second
+    // line, 18.5 under its 476; the second, a column beside it from 140, 12 under its own 476, where the formula stands: its
+    // centre, 150.5, is on the second block's line and on none of the first's)
+    const left = { page: 1, x0: 0, x1: 150, rects: [[1, 0, 498, 100, 508], [1, 0, 486, 150, 496], [1, 0, 474, 100, 484], [1, 0, 455.5, 100, 465.5]], B: [500, 488, 476, 457.5] }
+    const right = { page: 1, x0: 140, x1: 240, rects: [[1, 140, 474, 240, 484], [1, 140, 462, 240, 472]], B: [476, 464] }
+    const crop = { page: 1, crop: [141, 470, 160, 482], baseline: 476 }
+    expect(L2.texRoomOf([left, right] as never, crop, true)).toBe(12)
+    expect(L2.texRoomOf([right, left] as never, crop, true)).toBe(12)
+    // (a formula on the first block's line takes that line's room)
+    expect(L2.texRoomOf([left, right] as never, { ...crop, crop: [40, 470, 60, 482] }, true)).toBe(18.5)
+    // (a line its rectangles cut in two on one baseline: the rectangle that holds the formula's centre)
+    const split = { page: 1, x0: 0, x1: 240, rects: [[1, 0, 474, 100, 484], [1, 140, 474, 240, 484], [1, 0, 462, 240, 472]], B: [476, 476, 464] }
+    expect(L2.texRoomOf([split] as never, crop, true)).toBe(12)
+  })
   it("sets the formula's pair at TeX's distance where that keeps their ink clear: the unit keeps its foot at the size of 1", () => {
     const l = L2.layoutUnit2(withFormula(2) as never, [block(OPENED)] as never, 10, P({ order: [], evenPitch: true }) as never)
     expect(l.clipped).toBe(false)

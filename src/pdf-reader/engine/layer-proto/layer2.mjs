@@ -2999,14 +2999,17 @@ const ON_LINE = 0.05
 /**
  * The distance TeX set between the line of the original a formula `r` (a crop) stands on and the line after it (`below`, the
  * crop on the upper line of a pair) or before it, on the unit's grid (its blocks' `G`, the forced breaks' room closed): TeX's
- * own \lineskip rule for that formula, read from its baselines (breakLines' settle). The block is the one on the crop's page
- * and across it (a unit over two columns has lines at one baseline in each). -Infinity where the unit's blocks hold no line
- * of the original on the crop's page and baseline, or none past it on that side
+ * own \lineskip rule for that formula, read from its baselines (breakLines' settle). The line is the one the formula stands
+ * on: on the crop's page and baseline, its rectangle holding the crop's centre, never a line of another block merely across
+ * it (a unit's two blocks side by side have lines at one baseline each, and a block's span is its widest line's: the review
+ * of #496), nor the other half of a line its rectangles cut in two. -Infinity where the unit's blocks hold no line of the
+ * original under the crop, or none past it on that side
  */
 export function texRoomOf(blocks, r, below) {
+  const cx = (r.crop[0] + r.crop[2]) / 2
   for (const b of blocks ?? []) {
-    if (b.page !== r.page || !(r.crop[0] < b.x1 && r.crop[2] > b.x0)) continue
-    const j = b.B.findIndex(y => Math.abs(y - r.baseline) <= ON_LINE)
+    if (b.page !== r.page) continue
+    const j = b.B.findIndex((y, i) => Math.abs(y - r.baseline) <= ON_LINE && b.rects[i][1] <= cx && cx <= b.rects[i][3])
     if (j < 0) continue
     const G = b.G ?? b.B, k = below ? j + 1 : j - 1
     return k >= 0 && k < G.length ? Math.abs(G[j] - G[k]) : -Infinity

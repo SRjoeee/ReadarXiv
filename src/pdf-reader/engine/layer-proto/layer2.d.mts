@@ -424,9 +424,9 @@ export declare function ink100(s: string, face: Face): { a: number; d: number }
 export declare function lineExtent(line: Pick<Line, 'items'>, f: number, scale: number): { a: number; d: number; text: { a: number; d: number } }
 /** a unit laid at one state of the fit, with no search (the page fill's): clipped where the state does not set it whole */
 export declare function layoutAt(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params, st: Layout['state']): Layout
-/** the distance TeX set between the original's line a formula's crop stands on and the line after it (`below`) or before it, on the
- *  unit's grid; -Infinity where the blocks hold no such line */
-export declare function texRoomOf(blocks: readonly Pick<Block2, 'page' | 'B' | 'x0' | 'x1'>[] | null, r: { page: number; baseline: number; crop: readonly number[] }, below: boolean): number
+/** the distance TeX set between the original's line a formula's crop stands on (on its baseline, its rectangle holding the crop's
+ *  centre) and the line after it (`below`) or before it, on the unit's grid; -Infinity where the blocks hold no such line */
+export declare function texRoomOf(blocks: readonly (Pick<Block2, 'page' | 'B' | 'rects'> & { G?: readonly number[] })[] | null, r: { page: number; baseline: number; crop: readonly number[] }, below: boolean): number
 /** a grid `G` with each gap TeX's \lineskip rule opened (`opened`, a gap's) closed to the pitch `p0`, every other gap the grid's;
  *  no line lower than the grid's own (blocks2's `E`) */
 export declare function evenGridOf(G: readonly number[], opened: readonly boolean[], p0: number): number[]
