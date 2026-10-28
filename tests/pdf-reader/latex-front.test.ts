@@ -481,6 +481,10 @@ describe('a letter command is the letter itself in its word: TeX\'s skipped spac
     // follows before \\fi is no one letter alone, and its space stays a space)
     expect(wire(doc('The work of \\unless\\ifmmode first\\else\\L\\fi{} done.'))[0]).toMatch(/first/)
     expect(wire(doc('A caf\\ifmmode x\\else\\\'{e} \\fi next.'))[0]).not.toMatch(/énext/)
+    // (a star after \\fi is the text's: the branches end at the terminator's name, and the source is written back as it was)
+    const starred = doc('Text \\ifmmode x\\else\\L\\fi* next.')
+    expect(wire(starred)).toEqual(['Text Ł* next.'])
+    expect(source(starred)).toContain('Text \\ifmmode x\\else\\L\\fi* next.')
     // (an \\else that is no one letter: its first branch is math, no text of TeX's, and only the \\else is walked)
     const w = wire(doc('Text \\ifmmode x^2 squared\\else the square\\fi{} here.'))[0] ?? ''
     expect(w).toContain('the square')

@@ -1071,9 +1071,12 @@ function branchEnd(s, from, to, ifs, { toFi = false } = {}) {
     if (s[k] === '%') { k = skipComment(s, k); continue }
     if (s[k] !== '\\') continue
     const { name, end } = commandAt(s, k)
+    // (a \\fi, an \\else, an \\or ends at its own name: commandAt's end takes a star after it, which none of them has, `\\fi*`'s
+    // star the text's, and the branches are measured back from their terminator's name)
+    const own = k + 1 + name.length
     if (isConditional(name, ifs)) depth++
-    else if (name === 'fi') { if (depth-- === 0) return end }
-    else if ((name === 'else' || name === 'or') && depth === 0 && !toFi) return end
+    else if (name === 'fi') { if (depth-- === 0) return own }
+    else if ((name === 'else' || name === 'or') && depth === 0 && !toFi) return own
     k = end - 1
   }
   return -1
