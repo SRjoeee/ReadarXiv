@@ -2784,44 +2784,121 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   again is copied into the delta whole: two of the pack's deltas pass their bound with the figures and are held `full`
   (2307.16209v1, 2609.26457v1), none of the 25-paper set's.
 
-### 19.13 References and names, and the reader's toggles (stage 4 of `docs/route/orphan-text.md`)
+### 19.13 References and names, and the reader's toggles (stages 4 and 7 of `docs/route/orphan-text.md`)
 
 The owner's rulings of 2026-10-25: we own format correctness (positions from TeX, the original's ink owned and hidden by its own
 groups, line fit, no double ink, structure kept) and the provider owns translation quality; every class is translated once, on the
-server, into the shared cache, and a reader's settings only show or hide it; "references" means whole entries, "names" the front
-matter's authors and the names inside references, which follow "names" and not "references".
+server, into the shared cache, and a reader's settings only show or hide it. And of 2026-10-28, the references and the author names
+decoupled, each toggle's duty its own: "references" governs the bibliography alone, each entry whole, the names inside an entry
+its own; "names" governs the author names under the title alone; the affiliations, addresses and the e-mail line are always
+translated.
 
-- **Entries are units** (`source/latex-front.mjs` `bibliography`, PIPELINE 29). The ground truth is the bibliography's TeX the
-  compile reads: the paper's `thebibliography`, or the job's `.bbl` where `\bibliography` reads it and the package holds it
-  (BibTeX's output; never biber's data, which is biblatex's and no text). Each `\bibitem`'s entry, from its key to the next
-  `\bibitem`, is two units: its names, the first block, kind `refnames` (class names): up to the first `\newblock` (plain, abbrv,
-  unsrt, ieee, the natbib styles, acl, ACM's), else REVTeX's and ACM's `\bibfield{author}`, else IEEEtran's text before the
-  title's opening quotes; and the rest, kind `reference` (class references). A first block that holds a lower-case word of letters no
-  name holds (a title's: "A survey of methods, revised edition.") is no names, whatever its punctuation: the entry is one unit of
-  the references. A `.bbl` is read in the encoding the paper declares, as its own TeX is. The label (`\bibitem`'s optional argument, set in the
-  list's label box) and the key are no piece; what a style writes before the first entry is no unit, nor REVTeX's `\BibitemOpen`
-  and `\BibitemShut`. In an entry a number (a year, pages, a volume and its issue: a token of a digit and no letter, white space
-  or a piece that sets none on each side) or a DOI written out, letters and all (`10.1007/s00125-020-05190-9.`, after `doi: ` or
-  `doi:`) is a placeholder of the class `number` (`layout/marks.mjs`, both
-  marks, MARKS_SCHEMA 11), the original's ink as a web address and a formula are. Both units are marked as the body's are, in the
-  bibliography's own TeX (the `.bbl` written back marked: a paper that ships it runs no BibTeX), so their places, their ink and
-  their groups are TeX's (LAYOUT 22: UNIT_KINDS `reference`, `refnames`; PH_KINDS `number`; a maker of 21 reads neither, so
-  the gate pack is made again). The entries' units are numbered after every other unit of the source (`entriesLast`), so that
-  no other unit's number moves: a translation held by a unit's number (the gate pack's frozen ones) is still its unit's, and
-  a host that cuts the source's units before BibTeX has written the `.bbl` can add the entries after it without renumbering
-  what it announced. The probe asks about an entry's commands after every other unit's, so the body's marks are what they were. Measured: `lab/pdf/spikes/classes-gate.mjs`, record
-  `lab/pdf/records/classes-gate.md`.
-- **Not yet units:** a bibliography the compile makes itself (BibTeX or biber over a `.bib`, in the prepare's first compile):
-  the units are written before any compile, so its entries have no unit and stay the original's (the ledger's `references`), and
-  a bibliography biblatex sets from biber's fields (`\printbibliography`), whose text is no TeX the front end can mark.
+- **Entries are units, each whole** (`source/latex-front.mjs` `bibliography`; PIPELINE 29, and PIPELINE 30 one unit an entry). The
+  ground truth is the bibliography's TeX the compile reads: the paper's `thebibliography`, or the job's `.bbl` where
+  `\bibliography` reads it (BibTeX's output, which the package holds or the prepare's first pass makes, below; never biber's data,
+  which is biblatex's and no text). Each `\bibitem`'s entry, from its key to the next `\bibitem`, is one unit of kind `reference`
+  (class references), its names its own: never set in two pieces styled apart, and no guess of where its names end, which
+  PIPELINE 29's `refnames` made (a committee's name in the authors' block taken for its names up to the title's words; a title
+  with a comma taken for its authors). A `.bbl` is read in the encoding the paper declares, as its own TeX is. The
+  label (`\bibitem`'s optional argument, set in the list's label box) and the key are no piece; what a style writes before the
+  first entry is no unit, nor REVTeX's `\BibitemOpen` and `\BibitemShut`. In an entry a number (a year, pages, a volume and its
+  issue: a token of a digit and no letter, white space or a piece that sets none on each side) or a DOI written out, letters and
+  all (`10.1007/s00125-020-05190-9.`, after `doi: ` or `doi:`) is a placeholder of the class `number` (`layout/marks.mjs`, both
+  marks, MARKS_SCHEMA 11), the original's ink as a web address and a formula are. An entry is marked as the body's units are, in
+  the bibliography's own TeX (the `.bbl` written back marked: no BibTeX runs over it), so its place, its ink and its groups are
+  TeX's (LAYOUT 22: UNIT_KINDS `reference`; `refnames` kept at its index, so that a file of 22 reads as it was). The entries' units
+  are numbered after every other unit of the source (`entriesLast`), so that no other unit's number moves: a translation held by a
+  unit's number (the gate pack's frozen ones) is still its unit's. The probe asks about an entry's commands after every other
+  unit's, so the body's marks are what they were. A bundle of 29 a reader still reads keeps its `refnames` units: their class is
+  the references' (`UNIT_CLASS`), the entry's two halves shown or hidden together, and "names" the author block's alone.
+- **A bibliography BibTeX makes is a shipped one** (`layout/paper.mjs` `madeBibliography`, `bibliographyKept`; the owner's ruling of
+  2026-10-28). A paper that names `\bibliography{…}` over `.bib` files its package holds, loads no biblatex and ships no job's
+  `.bbl` (102 of the local sources) had no entry unit: the units were cut before any compile, and the `.bbl` was first written
+  inside the marked compile, unmarked. The host now asks, before it tells the paper's units, one pass of the unmarked original
+  (`guard.mjs` `unmarkedFiles`: the paper's own files) as a draft with the bibliography step (`bibtex`, CM's first draft's
+  request: BibTeX on the job's aux), its files returned; the `<job>.bbl` it wrote, a `thebibliography` with a `\bibitem`, is the
+  job's `.bbl` the paper is opened again with (`live.mjs openPaper`), and from then on it is a shipped one (`meta.bbl`): written
+  back marked, no BibTeX in the marked compile. No pass is made, and the paper stays as it was, where it ships its `.bbl`, names no
+  `\bibliography`, loads biblatex, or lacks a `.bib` it names (latexmk -norc runs no BibTeX then, nor does the marked compile);
+  nor is its `.bbl` taken where the pass does not run through or returns no files, writes another job's bibliography beside the
+  main one's (chapterbib, multibib, bibunits), writes a `.bcf` (biber's), or writes no `\bibitem`. The paper's other units must be
+  the same with the `.bbl` and without (every unit before the entries and every name after them, the bundle's byte for byte,
+  their spans too), else it stays as it was (`moved`): so `\bibliography` ends the paragraph before it whether the `.bbl` is there
+  or not (TeX's `thebibliography` is a heading's paragraph end, and a `\bibliography` with no `.bbl` sets nothing), which moved 7
+  paragraphs of the local sources by one placeholder, their ids kept. The units the host tells are then a shipped `.bbl`'s:
+  the source's, the entries, the paper's names; nothing is announced twice, and no contract between the host's children changes
+  but the `.bbl` handed to the one that opens the paper again (the web's prepare: the hand-off's `bbl`). The host decides the
+  paper's TeX Live tree before the pass, so that the entries are the `.bbl` of the tree that compiles it. Measured: below.
+- **Not units:** a bibliography biblatex sets from biber's fields (`\printbibliography`), whose text is no TeX the front end can
+  mark: its entries stay the original's (the ledger's `references`), a known gap; and a `.bib` the TeX tree holds rather than the
+  package (a style's IEEEabrv): no pass is made.
+- **The author block: names apart from places** (`source/latex-front.mjs` `frontBlock`, PIPELINE 30, LAYOUT 23). An author block's
+  affiliations, institutions, addresses and its e-mail line are units of their own, kind `affiliation` (class body: always
+  translated), its names kind `author` (class names: the names toggle). Read from the TeX the source holds: the command (`\author`
+  and its kin names, `\affil`, `\affiliation`, `\institute`, `\address` and their kin places), the rows of the tabular LaTeX sets an
+  `\author` in (its first row names, the rest places, but a row that holds an author's note, sets an affiliation's mark after a
+  name, opens with "and", or stands before a numbered list of places is names: 2608.14893's and 2610.21880v1's second rows of
+  names), a numbered list of places; IEEEtran's, acmart's, REVTeX's, elsarticle's (each key's value), llncs', ICML's and AAAI's
+  forms. A later row with none of these is a place, as the classes set it: a name alone there cannot be told from a place by its
+  TeX. An e-mail, a web address and an ORCID written out stay placeholders, the original's ink; so does an e-mail whose
+  local part TeX escapes (`goh\_siong\_thye@…`, one placeholder with its `\_`, 2608.11884, 2608.29778). Every author block's
+  unit keeps its number: what PIPELINE 29 cut the text between two notes into (one unit of kind author, a unit the walk flushed
+  inside it one more: `olderUnits`, a walk of the old cut in a shadow of the walk's context) keeps it in the first unit cut inside
+  its range, of either kind, and every other unit cut there is numbered after every other unit of the source, before the entries
+  (`later`, `entriesLast`): over the local sources no source unit's number moves for it. A place is searched on arXiv's page as a float is
+  (`make.mjs`, `page-pass.mjs` FLOATING: a class sets it where it likes, amsart's addresses at the paper's end). Each row is
+  marked in the layout compile as the block's one unit was (`frontMarks`), the duplicates a class compares left unmarked by the
+  command's whole argument as TeX reads it, its comments, line breaks and runs of spaces aside (two equal `\affiliation{…}`
+  of revtex's, set once: 2610.21770v1's third, broken over two lines, had been marked and set again), never two rows of one block (article sets
+  1706.03762v7's three "Google Brain" rows each where it stands: all 15 of its block's units laid); a row that opens with its
+  first letter as a command in a group (`{\L}ukasz`) has its start mark before the group (`patch`), so that the letter is its
+  own ink.
+- **A paper's macro of its text in an author block** (`storedBodies`): `\affiliation[a]{\CU}`, `\CU` a `\newcommand` of the
+  affiliation's text (2609.20976v1), is cut where it is defined, of the kind of the place it is called from; where the macro is
+  called once in running text (`once`), its unit is marked in its definition (`frontMarks`), the one place TeX sets it, and is laid
+  as the same text written in the block is; one called more than once is set more than once, so with no mark, and stays the
+  original's. A body a `.sty` or a `.cls` defines is no unit (jcappub's `\maketitle` and `\@fpheader`: the class's own code,
+  "! ! ! ! Abstract. ! ! Keywords:", translated for nothing): its text is the class's, the ledger's, an ink unit where it is
+  one.
 - **Names are translated for every target** (`layer-proto/rows.mjs` `toTranslate`, TRANSLATE_VERSION 6): the author block's units
   are sent whatever the language, as every unit is but a table's kept names; they are laid as any unit, and stay the original's
   where the wrap cannot hide their ink (`unhidden`).
 - **The toggles** are stage 2's (`classes` at the door's open and the layer side's, `setClasses`, TOGGLE_DEFAULTS: references and
-  names off, heads, tables and figures on): an entry's units and the author block's are of the classes `references` and `names` (UNIT_CLASS), so that with
-  their toggle off no page awaits their rows, the door takes none, and the translating indicator marks none (it reads the same
-  `classes`); the door gives the run its classes resolved over TOGGLE_DEFAULTS, and a direct open of v0 (run.mjs openProto, the
-  lab's and the tests') given none takes the same defaults: every class but the names and the references.
+  names off, heads, tables and figures on): an entry's unit is of the class `references`, the author block's names of `names`, its
+  places of the body's (UNIT_CLASS), so that with their toggle off no page awaits their rows, the door takes none, and the
+  translating indicator marks none (it reads the same `classes`); the door gives the run its classes resolved over TOGGLE_DEFAULTS,
+  and a direct open of v0 (run.mjs openProto, the lab's and the tests') given none takes the same defaults: every class but the
+  names and the references. A reader's stored setting keeps its keys and its meaning: "references" the bibliography, "names" the
+  author names.
+- **Measured** (`lab/pdf/spikes/classes-gate.mjs`, record `lab/pdf/records/classes-gate.md`; `lab/pdf/spikes/unit-hash-diff.mjs`
+  over the local sources), against `next` 2346530d:
+  - **The units** of the 170 local sources (cut before any compile, so without the `.bbl`s the pass makes):
+    - by kind: `refnames` 2,371 → 0 and `reference` 3,112 → 3,198 (each entry one unit); `author` 685 → 457 and `affiliation`
+      0 → 462; `para` 14,937 → 14,930 (7 stored bodies of a class's own code: 2609.20976v1, 2610.34042v1, 2608.15334v1);
+      `footnote` 283 → 282 (2608.29778's note that is an escaped e-mail alone);
+    - 7 paragraphs before a `\bibliography` lose a trailing placeholder; 3 notes' ORCIDs and the escaped e-mails of 2 notes
+      (2608.04322, 2608.09812) are placeholders; and 2608.11884's row of e-mails, a place of the words "goh siong" before, is
+      no unit;
+    - the numbers that move, of the 41,059 units whose hash stays: 2608.29778's 41 units after that note, #15 to #55, one down;
+      and 259 entries in 20 papers (an entry's rest keeps its hash), down by 1 to 159 where names units or a stored class body
+      went before them, up by 1 to 12 where places were cut apart before them;
+    - 95 of the 170 make their `.bbl` (40 ship one, 35 name no `\bibliography`).
+  - **The classes gate** on 35 papers: the 3 of 2026-10-28, the gate pack's 7 and the 25 of `lab/pdf/data/layout`. 33 compile;
+    2610.20595v1 (`texlive`) and 2610.21765v1 (`final`) are refused on both engines.
+    - Every one of the 1,721 entries is located, among them 743 entries of the 16 papers whose `.bbl` the pass made (1.4 to
+      4.0 s a pass).
+    - The wrap leaves 51 entries the original's. 35 of them are 2610.20848v1's: elsarticle-harv ends each entry with
+      `\DOIprefix\doi{…}`, which the marking gives an opening mark alone.
+    - 88 of 100 places are located. The 12 others are REVTeX's and acmart's equal `\affiliation`s, set once and unmarked as
+      before.
+    - No body unit is lost or moved. 9 are laid that `next` left the original's: 2609.20976v1's four places in its macros,
+      2610.22065v1's 4 and 2610.21098v1's 1.
+    - 1 placeholder moved: 2610.11256v1's ORCID, now a placeholder.
+    - G1 is 2 pixels on the 115 pages the entries are on.
+    - The base pages against `next`'s: 2 of 864 pages apart, by 3 pixels, with the same operators once the marks are set aside
+      (record: `lab/pdf/records/classes-gate.md`).
+  - **A real prepare** of 2609.20976v1 through the web's image: the pass takes 4.0 s of a 40.7 s prepare. Its 39 entries are
+    announced with the source's units, and each is sent and laid; so are its 4 places.
 
 ### 19.14 The paper's own names, units of their own (PIPELINE 29)
 

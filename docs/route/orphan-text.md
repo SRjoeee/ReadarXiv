@@ -1,9 +1,9 @@
 # Closed-world coverage on our own compile: content classes and orphan text — design note
 
 Status: stage 1 built (2026-10-25: `rules/content-classes.mjs`, `layout/ledger.mjs`, `lab/pdf/spikes/ledger.mjs`); stages 2 and 3
-built (`layout/ink-units.mjs`, `pipeline/ink-pass.mjs`, paragraph points, the toggles at the layer's open); stage 4 built for the
-bibliographies the source holds, with the names (settled in `docs/PDF-READER.md` §19.13, measured by
-`lab/pdf/spikes/classes-gate.mjs`); stage 5, the vector figures' text, built (2026-10-25: `layout/figure-text.mjs`, its groups in
+built (`layout/ink-units.mjs`, `pipeline/ink-pass.mjs`, paragraph points, the toggles at the layer's open); stage 4 built, a
+bibliography BibTeX makes in the prepare's first pass with the ones the source holds, each entry one unit, and stage 7's names apart
+from places (settled in `docs/PDF-READER.md` §19.13, measured by `lab/pdf/spikes/classes-gate.mjs`); stage 5, the vector figures' text, built (2026-10-25: `layout/figure-text.mjs`, its groups in
 `layout/wrap.mjs`, ink units of kind `inkfigures` and BUNDLE 10's figure rows, `run.mjs paintFigures` under the toggle `figures`;
 settled in `docs/PDF-READER.md` §19.12, its gate `lab/pdf/spikes/figure-gate.mjs`); stages 6–8 are the plan of §7. Engine at
 `next` 37d84180. The phase 1 measurement's scripts and raw rows are not
@@ -106,23 +106,23 @@ The owner's map (2026-10-25; the settings' own words are the locale packs', thes
 | "Tables" | tables (cells) | today's cell units; tables no unit cuts (inside a float) become ink units by row | cells built; uncut planned | 0.5 + 1 |
 | "Figure text" | figures (vector) | the glyphs of an included PDF (form XObjects) and of a TikZ or pgfplots picture (between its points), set by our compile: exact text from their fonts, exact places; ink units of kind inkfigures, each its own group, inside a form by the form written again once; a font with no usable Unicode, a form shared, a crowded band left the original's (PDF-READER §19.12); a float's other text no unit owns stays counted, not drawn | built | — |
 | "Figure text" | ocr (bitmap) | PP-OCR as the extension runs it (DESIGN §15.3), once on the server over each figure's image; places from OCR (approved); erasure by a patch of the background under each line, as the extension's image translation does | planned | 3.5 |
-| "References" | references, index (proposed) | each `\bibitem` two units, its names and the rest, from the bibliography's TeX the source holds (thebibliography, a shipped .bbl), marked like the body (PDF-READER §19.13); a .bbl the prepare's own BibTeX or biber makes is no source yet (its units would come after the first compile, which the web's prepare writes its units before) | built (source-held); compile-made planned | 3 |
-| "Names" | names: author blocks, names in references | author units, translated for every target (TRANSLATE 6); an entry's first block (kind refnames) | built; split from places planned | 1.5 |
+| "References" | references, index (proposed) | each `\bibitem` one unit, whole, its names its own, from the bibliography's TeX the compile reads (thebibliography, a shipped .bbl, or the one BibTeX makes in the prepare's first pass, a shipped one from then on), marked like the body (PDF-READER §19.13); biblatex's `\printbibliography` no TeX to mark | built (biblatex a known gap) | — |
+| "Names" | names: the author block's names under the title | author units, translated for every target (TRANSLATE 6); its places (kind affiliation) the body's, always translated | built | — |
 | Never | math, code and verbatim, symbols | kept as the original's ink | never | — |
 | — | reader toggles in both hosts | a class's units drawn or not (and its groups ON or OFF) by the settings: the door's and the layer side's `classes`, the side's `setClasses`, the hosts' settings to wire | engine built; hosts planned | 2 |
 
-**Names, plainly.** Achievable and exact: an author block's names (their own units, by TeX's marks); names in references where
-the .bbl gives them as a field — biblatex always, the BibTeX styles that open an entry with an authors block (plain, abbrv,
-unsrt, IEEEtran, the natbib styles). Not separable: names written inside body prose ("as Smith showed") are part of that unit;
-names in a BibTeX style with no blocks stay inside the whole entry (they follow "References", not "Names"); an author-year citation's
-names are its placeholder's ink, kept as the original's either way; a running head typed by the author with the names follows
-"Heads and feet" (and "Names" too where it equals the author units' text and takes their row).
+**Names, plainly** (the owner's ruling of 2026-10-28: the two toggles decoupled). "Names" is an author block's names alone (their
+own units, by TeX's marks); the names inside a bibliography's entry are the entry's, under "References". Names written inside body
+prose ("as Smith showed") are part of that unit; an author-year citation's names are its placeholder's ink, kept as the original's
+either way; a running head typed by the author with the names follows "Heads and feet" (and "Names" too where it equals the author
+units' text and takes their row).
 
 **Classes missing from the owner's map, proposed:**
 - Algorithms and pseudocode: under "Figure text" (they sit in a float like a figure): steps and comments translated, keywords and
   math kept. Stage 1 counts them as figures; telling them apart needs the float's type at its point (`\@captype` at
   `\@endfloatbox`).
-- Affiliations, addresses, dates, keywords, acknowledgements, a thesis's title page, an epigraph: always (body).
+- Affiliations, addresses and the e-mail line (built: kind affiliation, PDF-READER §19.13), dates, keywords, acknowledgements, a
+  thesis's title page, an epigraph: always (body).
 - Index and glossary: under "References", as back matter (the ledger's `index` class).
 - URLs, e-mail addresses, DOIs, ORCIDs: never (kept runs wherever they stand).
 - Equation tags, folios, numbers: never (`symbols`).
@@ -152,10 +152,10 @@ the ledger's `figures` and drawn nowhere.
 | 1 (built) | class table, ledger in `wrapFinal`, invariant (o) rows, the lab gate | none (no wire, no compile change; the web stores the ledger later) | 1 |
 | 2 (built) | ink units: heads and feet, notes, contents, orphans; echo rows; their groups; the ink chunk; the toggles at the open | LAYOUT 21, REMOVAL 11, BUNDLE5 10, an INK_UNITS_FORMAT chunk (the source chunks unchanged); no translate key moves | 4 |
 | 3 (built) | paragraph points (q<n> at para/begin); a contents entry and a block one paragraph of TeX's | in LAYOUT 21; base pages pixel-identical on the pack | 3 |
-| 4 (built, source-held bibliographies) | references and names in them (.bbl units); the author block for every target | PIPELINE 29, LAYOUT 22, MARKS_SCHEMA 11, TRANSLATE 6 | 4.5 |
+| 4 (built) | references (.bbl units, the source's or the one BibTeX makes, each entry one unit); the author block for every target | PIPELINE 29 and 30, LAYOUT 22, MARKS_SCHEMA 11, TRANSLATE 6 | 4.5 |
 | 5 (built) | vector figure text: ink units of kind inkfigures, their groups, the parts' figure rows, under the toggle `figures` | in LAYOUT 21, REMOVAL 11 and BUNDLE5 10 (the key `figures` of a part, there only where it has one) | — |
 | 6 | OCR on the server | a new OCR version in the key | 3.5 |
-| 7 | names split from places; tables no unit cuts | PIPELINE | 2.5 |
+| 7 | names split from places (built: PIPELINE 30, LAYOUT 23); tables no unit cuts | PIPELINE | 1 |
 | 8 | reader toggles in the web and the extension | — | 2 |
 
 About 23 agent-days in all. The web sweep reads invariant (o) once the engine is pinned (`scripts/sweep/invariants.mjs`), and the

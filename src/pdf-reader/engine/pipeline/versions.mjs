@@ -217,7 +217,16 @@
 //     was at fault, nor any the errors blamed). Over 157 local sources two papers' units change (2610.21084v1's three
 //     [orcid=…] and 2608.12096's two [email=…] gone), every other unit's hash kept; the marked compile of the gate pack's 7
 //     papers and the 25 of lab/pdf/data/layout makes arXiv's pages on every one TeX compiles
-export const PIPELINE_VERSION = '29'
+// 30 (the content classes' coverage, shared, unreleased; the owner's rulings of 2026-10-28: the references and the author names
+//     decoupled, each its own toggle's): a bibliography's entry is one unit of kind `reference`, whole, its names its own (no
+//     `refnames` unit: latex-front.mjs bibliography); an author block's affiliations, institutions, addresses and e-mail line
+//     are units of their own, kind `affiliation`, always translated, numbered after the source's other units and before the
+//     entries (frontBlock, entriesLast; its names kind `author` keep the block's number); \\bibliography ends the unit before
+//     it whether the .bbl is there or not, so that a paper's units are the same before BibTeX writes its .bbl and after
+//     (layout/paper.mjs madeBibliography: the job's .bbl the prepare's first pass makes is a shipped one); and a macro's body
+//     is no unit where a .sty or a .cls defines it (storedBodies: a class's own \\maketitle, jcappub's), an author block's
+//     unit of a macro called once marked in its definition (2609.20976v1's \\affiliation[a]{\\CU})
+export const PIPELINE_VERSION = '30'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

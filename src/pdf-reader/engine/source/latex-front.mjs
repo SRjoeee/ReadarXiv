@@ -64,15 +64,27 @@ const OWN_UNIT_ARG = new Set(['caption', 'subcaption', 'subcaptionbox', 'caption
 const CAPTIONS = new Set(['caption', 'subcaption', 'subcaptionbox', 'captionof', 'tablecaption'])
 /** the front matter's blocks of names and places: their notes (\\thanks, \\footnote) each a footnote of its own
  *  (1706.03762's author block: its footnotes stayed in English, the whole block one opaque command), and the names and
- *  places between them units of kind 'author' — translated where the target's script writes names its own way
- *  (translate/kept.mjs authorsTranslated), else kept as the paper has them; the marks, addresses and spacing stay */
+ *  places between them units of their own (frontBlock): the authors' names of kind 'author' (the reader's "names"), the
+ *  affiliations, institutions and addresses of kind 'affiliation' (prose, always translated: docs/route/orphan-text.md §5,
+ *  the owner's ruling of 2026-10-25); the marks, e-mail and web addresses, ORCIDs and spacing stay */
 const FRONT_MATTER = new Set(['author', 'affil', 'affiliation', 'institute', 'address'])
+/** the author blocks whose text opens with the authors' names (frontBlock's `names`): LaTeX's \\author and its kin of the role
+ *  table (FRONT_ROLES' `author`); every other such block — \\affil, \\affiliation, \\institute, \\address, ICML's
+ *  \\icmlaffiliation, AAAI's \\affiliations, REVTeX's \\altaffiliation, a \\curraddr — is places throughout */
+const FRONT_NAMES = new Set(['author', 'icmlauthor', 'editor', 'editors', 'translator', 'collaboration', 'contrib', 'speaker'])
+/** an author block's role by its command: one that opens with names (FRONT_NAMES), else places (frontBlock) */
+const roleOf = name => (FRONT_NAMES.has(name) ? 'names' : 'places')
+/** a unit of an author block: its names (kind 'author') or its places (kind 'affiliation') */
+const AUTHOR_KINDS = new Set(['author', 'affiliation'])
+/** whether a unit is of an author block (AUTHOR_KINDS): what the TeX path sets and keeps as one block, names and places alike */
+export const inAuthorBlock = u => AUTHOR_KINDS.has(u?.kind)
 /** commands inside an author block whose argument is a name or a place: IEEEtran's blocks, acmart's parts of an
  *  affiliation. Anything else there — \\email, \\orcid, \\inst{1}, \\textsuperscript — stays as it is */
 const FRONT_PROSE = new Set(['IEEEauthorblockN', 'IEEEauthorblockA', 'institution', 'department', 'city', 'state', 'country'])
 /** IEEEtran's blocks, each a group of lines the class sets on its own in a cell of a table: a unit each, so that a
- *  line of names is fitted to its box alone (AUTHOR_WIDE), apart from the places' block and its line breaks */
-const FRONT_LINES = new Set(['IEEEauthorblockN', 'IEEEauthorblockA'])
+ *  line of names is fitted to its box alone (AUTHOR_WIDE), apart from the places' block and its line breaks; the block of
+ *  names (\\IEEEauthorblockN) every line of it names, the block of places (\\IEEEauthorblockA) every line places */
+const FRONT_LINES = new Map([['IEEEauthorblockN', 'author'], ['IEEEauthorblockA', 'affiliation']])
 /** import.sty's commands that read a file from a directory, {dir}{file}: whether the directory is the one imported last's */
 const IMPORTS = new Map([['import', false], ['inputfrom', false], ['includefrom', false], ['subimport', true], ['subinputfrom', true], ['subincludefrom', true]])
 const INLINE_TEXT = new Set(['textbf', 'textit', 'emph', 'textsl', 'textsc', 'underline', 'textup', 'textrm', 'textsf', 'textmd', 'textnormal', 'uline'])
@@ -920,16 +932,44 @@ const joinLetters = pieces => {
   }
   return out
 }
-// an e-mail address or a web address — the latter's last stop, comma or parenthesis the sentence's —, and the domain
-// after a list of names in braces
-const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+|\b(?:https?|ftp):\/\/[^\s{}\\]*[^\s{}\\.,;:!?)\]]|\bwww\.[\w-]+(?:\.[\w-]+)+(?:\/[^\s{}\\]*[^\s{}\\.,;:!?)\]])?/g, HAS_EMAIL = new RegExp(EMAIL.source)
+// an e-mail address or a web address — the latter's last stop, comma or parenthesis the sentence's —, an ORCID written out
+// (0000-0002-1825-0097), and the domain after a list of names in braces
+const EMAIL = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+|\b(?:https?|ftp):\/\/[^\s{}\\]*[^\s{}\\.,;:!?)\]]|\bwww\.[\w-]+(?:\.[\w-]+)+(?:\/[^\s{}\\]*[^\s{}\\.,;:!?)\]])?|\b\d{4}-\d{4}-\d{4}-\d{3}[\dX]\b/g, HAS_EMAIL = new RegExp(EMAIL.source)
 const AT_DOMAIN = /^@[\w-]+(?:\.[\w-]+)+/
-/** An address is not prose: an e-mail in a unit's text (jatin@us.ibm.com), a web address a link shows as its text
+/** an e-mail whose local part TeX escapes (`goh\_siong\_thye@a-star.edu.sg`, 2608.11884; `tang\_chao@xtu.edu.cn`, 2608.29778):
+ *  each `\_` a placeholder of its own, which parted the address, its first words left text ("goh siong", "tang", sent to the
+ *  translator). The words before the address that its `\_` join, the `\_` and the address are one placeholder, as the paper
+ *  has them; a word apart from it by white space or anything else stays as it is */
+function escapedLocals(pieces) {
+  const out = []
+  for (let k = 0; k < pieces.length; k++) {
+    const p = pieces[k]
+    if (p.t === 'ph' && p.src === '\\_' && out.at(-1)?.t === 'text' && out.at(-1).src === undefined && /[\w.+-]$/.test(out.at(-1).s)) {
+      // (the run of `\_` and plain words up to a text that opens with the rest of an address)
+      let j = k
+      while (pieces[j]?.t === 'ph' && pieces[j].src === '\\_' && pieces[j + 1]?.t === 'text' && pieces[j + 1].src === undefined && /^[\w.+-]*$/.test(pieces[j + 1].s)) j += 2
+      const tail = pieces[j]?.t === 'ph' && pieces[j].src === '\\_' ? pieces[j + 1] : null
+      const rest = tail?.t === 'text' && tail.src === undefined ? /^[\w.+-]*@[\w-]+(?:\.[\w-]+)+/.exec(tail.s)?.[0] : null
+      if (rest) {
+        const before = out.pop(), head = /[\w.+-]+$/.exec(before.s)[0]
+        if (before.s.length > head.length) out.push({ ...before, s: before.s.slice(0, -head.length) })
+        out.push({ t: 'ph', src: head + pieces.slice(k, j + 1).map(x => x.src ?? x.s).join('') + rest })
+        if (tail.s.length > rest.length) out.push({ ...tail, s: tail.s.slice(rest.length) })
+        k = j + 1
+        continue
+      }
+    }
+    out.push(p)
+  }
+  return out
+}
+/** An address is not prose: an e-mail in a unit's text (jatin@us.ibm.com), an ORCID, a web address a link shows as its text
  *  (\\href{https://osf.io/gjvbs}{https://osf.io/gjvbs}, now that a link's text is text: 2608.14893), and a list of names
  *  in escaped braces with its domain ({sl225, samand2, reyhaneh}@illinois.edu), each become a placeholder, kept as the
  *  paper has it. Sent as text, a machine translation spelled one of 2608.06701's names in katakana and joined the list
  *  with the ideographic comma */
 function keepAddresses(pieces) {
+  pieces = escapedLocals(pieces)
   const lists = []
   for (let k = 0; k < pieces.length; k++) {
     const p = pieces[k], names = pieces[k + 1], shut = pieces[k + 2], after = pieces[k + 3]
@@ -1103,22 +1143,169 @@ function frontNote(s, at, end, b, ctx) {
   walk(s, at, end, b, ctx); b.flush()
   for (const u of b.units.slice(before)) u.front = true
 }
-/** a front-matter argument: its notes as frontNotes cuts them, the names and places between them units of kind
- *  'author'. One written as keys and values (elsarticle's organization={…}, city={…}) keeps its text, notes aside */
-function frontBlock(s, from, to, b, ctx) {
-  if (/(^|[,{\s])[A-Za-z]+\s*=\s*\{/.test(s.slice(from, to))) { frontNotes(s, from, to, b, ctx); return }
-  const names = (x, y) => { if (y <= x) return; b.flush(); const saved = b.kind; b.kind = 'author'; walk(s, x, y, b, ctx); b.flush(); b.kind = saved }
-  let past = from
+/** a row's end in an author block, at its top level: the tabular a class sets the block in (LaTeX's \\maketitle, the conference
+ *  styles'). Not authblk's \\authorcr, which begins another row of names (its places are its \\affil's) */
+const FRONT_ROW = /^(?:\\|newline|tabularnewline|cr|crcr)$/
+/** an author's block's end, at its top level, the next block begun: LaTeX's \\and, NeurIPS' \\And and \\AND, llncs' \\and
+ *  between institutes */
+const FRONT_AND = /^(?:and|And|AND)$/
+/** what may stand before a row's first text and is none of it: white space, a comment, a group's opening, a declaration of no
+ *  argument (\\small, \\it: NO_ARGS), a space of TeX's, a \\vspace or an \\hspace */
+const ROW_LEAD = /^(?:\s+|%[^\n]*(?:\n|$)|\{|\\(?:vspace|hspace|vskip)\*?\s*\{[^{}]*\}|\\[,;:! ]|\\([A-Za-z@]+)(?![A-Za-z@]))/
+/** an affiliation's mark opening a row (a numbered list of places, `$^1$University of X`): a superscript, IEEEtran's
+ *  \\IEEEauthorrefmark, a style's \\affmark. A row of names sets its marks after each name, never before the first */
+const MARK_FIRST = /^(?:\$\s*(?:\{\s*\})?\s*\^|\\\(\s*(?:\{\s*\})?\s*\^|\\(?:textsuperscript|IEEEauthorrefmark|affmark)(?![A-Za-z@]))/
+/** the same mark after a name's last letter (`Marcelo Kuperman$^{3,4}$`): a row of names, wherever it stands in its block —
+ *  names that run over two rows, their places set elsewhere (2608.14893's second row of names, read as a place). A place opens
+ *  with its mark, never sets one after its words */
+const MARK_AFTER = /[^\s{$\\]\s*(?:\$\s*(?:\{\s*\})?\s*\^|\\\(\s*(?:\{\s*\})?\s*\^|\\(?:textsuperscript|IEEEauthorrefmark|affmark)(?![A-Za-z@]))/
+/** a row of an author block that opens with the word "and" (`\\\\and Rafael F. Schaefer, \\emph{Senior Member, IEEE}`, IEEEtran's
+ *  journal form, 2610.21880v1): the list of names its row before broke, never a place */
+const AND_FIRST = /^and(?![A-Za-z@])/
+/** a row of an author block with what stands before its text taken off (ROW_LEAD) */
+function rowText(src) {
+  let t = src
+  for (;;) {
+    const m = ROW_LEAD.exec(t)
+    if (!m || (m[1] !== undefined && !NO_ARGS.has(m[1]))) break
+    t = t.slice(m[0].length)
+  }
+  return t
+}
+/** whether a row of an author block opens with an affiliation's mark (MARK_FIRST), what stands before its text aside */
+function markFirst(src) { return MARK_FIRST.test(rowText(src)) }
+/** an author block's row and block ends at its top level ({ at, end, and }), in order: no group, formula or environment is
+ *  looked into (a row TeX ends inside a tabular of the block's own is that tabular's) */
+function frontEnds(s, from, to) {
+  const out = []
+  for (let k = from; k < to;) {
+    const c = s[k]
+    if (c === '%') { k = skipComment(s, k) + 1; continue }
+    if (c === '{') { const e = matchGroup(s, k); k = e < 0 || e > to ? k + 1 : e; continue }
+    if (c === '$') { const e = mathEnd(s, k); k = e < 0 || e > to ? k + 1 : e; continue }
+    if (c !== '\\') { k++; continue }
+    const { name, end } = commandAt(s, k)
+    if (name === '(' || name === '[') { const e = mathEnd(s, k); k = e < 0 || e > to ? end : e; continue }
+    if (name === 'begin') { const m = /^\s*\{([^}]+)\}/.exec(s.slice(end, to)); if (m) { const [, after] = endOfEnv(s, end + m[0].length, m[1].trim()); k = Math.min(Math.max(after, end), to); continue } }
+    if (FRONT_ROW.test(name)) {
+      // (LaTeX's \\\\, its star and its optional space with it)
+      let e = end
+      if (name === '\\') { if (s[e] === '*') e++; const j = skipSpaces(s, e); if (s[j] === '[') { const g = matchGroup(s, j, '[', ']'); if (g > 0 && g <= to) e = g } }
+      out.push({ at: k, end: e, and: false }); k = e; continue
+    }
+    if (FRONT_AND.test(name)) { out.push({ at: k, end, and: true }); k = end; continue }
+    k = end
+  }
+  return out
+}
+/**
+ * A front-matter argument (docs/route/orphan-text.md §5, "Names"): its notes as frontNotes cuts them, and the text between them
+ * units of an author block's kinds by what TeX sets it as. `role` 'names', a block that opens with the authors' names
+ * (FRONT_NAMES: \\author): each author's block (between its top level's \\and, FRONT_AND) is the rows of the tabular the class
+ * sets it in (FRONT_ROW), its names the first row and the rest its places — `Name\\thanks{…} \\\\ Department \\\\ University \\\\
+ * \\texttt{e-mail}` —, but in a block whose places are a numbered list, each opening with its mark (`$^1$University of X`,
+ * markFirst), the rows before the first such row are its names, however many (names that run over two rows), and a row that
+ * holds an author's note (\\thanks, \\footnotemark) is names, a row an affiliation's mark opens never; 'places', a block
+ * of places throughout (\\affil, \\affiliation, \\institute, \\address: places, its rows units of kind 'affiliation' each).
+ * IEEEtran's \\IEEEauthorblockN and \\IEEEauthorblockA inside a block are their own (walk, FRONT_LINES). One written as keys and
+ * values (elsarticle's organization={…}, city={…}) keeps its text, notes aside, unless it is places: then each value a unit of
+ * its own (frontValues). An e-mail or a web address in any of them, an ORCID, a mark, stays as it is (keepAddresses, the
+ * placeholders)
+ */
+function frontBlock(s, from, to, b, ctx, role = 'names') {
+  if (/(^|[,{\s])[A-Za-z]+\s*=\s*\{/.test(s.slice(from, to))) { if (role === 'places') frontValues(s, from, to, b, ctx); else frontNotes(s, from, to, b, ctx); return }
+  // the notes, wherever they are in the argument (as frontNotes finds them), and the rows' and blocks' ends at its top level
+  const notes = []
   for (const m of s.slice(from, to).matchAll(/\\(?:thanks|footnote)(?![A-Za-z@])/g)) {
     const at = from + m.index
-    if (at < past || inComment(s, at)) continue
+    if ((notes.length && at < notes.at(-1).end) || inComment(s, at)) continue
     const { args, end } = argsOfForm(s, at + m[0].length, unitForm(m[0].slice(1), ctx))
-    if (!args.some(a => a.kind === 'req')) continue
-    names(past, at)
-    frontNote(s, at, end, b, ctx)
-    past = end
+    if (args.some(a => a.kind === 'req')) notes.push({ at, end })
   }
-  names(past, to)
+  const ends = frontEnds(s, from, to).filter(e => !notes.some(n => e.at >= n.at && e.at < n.end))
+  // each block's rows and each row's kind
+  const blocks = [[]]
+  let start = from
+  for (const e of ends) { blocks.at(-1).push([start, e.at]); start = e.end; if (e.and) blocks.push([]) }
+  blocks.at(-1).push([start, to])
+  const kindAt = []
+  for (const rows of blocks) {
+    const led = rows.map(([x, y]) => markFirst(s.slice(x, y))), marked = led.indexOf(true)
+    // (a row of names: the block's first, every row before its numbered places where it has them, a row that holds an
+    // author's note, which LaTeX's \\thanks is and a note's mark sets after a name, and a row that sets an affiliation's mark
+    // after a name (MARK_AFTER) or opens with "and" (AND_FIRST); never one an affiliation's mark opens)
+    const noted = ([x, y]) => notes.some(n => n.at >= x && n.at < y) || /\\footnotemark(?![A-Za-z@])/.test(s.slice(x, y))
+    rows.forEach((row, r) => kindAt.push([row[0], role === 'names' && !led[r] && (r === 0 || (marked >= 0 && r < marked) || noted(row) || MARK_AFTER.test(s.slice(row[0], row[1])) || AND_FIRST.test(rowText(s.slice(row[0], row[1])))) ? 'author' : 'affiliation']))
+  }
+  const kindOf = at => kindAt.findLast(([x]) => x <= at)?.[1] ?? 'affiliation'
+  // (the units' numbers: what PIPELINE 29 cut the text between two notes into, its walk as one author block's (olderUnits), keeps
+  // its units' numbers — each of its units' the first unit cut inside its range, then the first left, in order —, and every
+  // other unit cut there is `later`, numbered after every other unit of the source (entriesLast), so that no unit's number
+  // moves: a translation held by a unit's number is still that unit's)
+  let span = [], spanFrom = from
+  const made = []
+  const unit = (x, y) => {
+    if (y <= x) return
+    b.flush(); const saved = b.kind, before = b.units.length; b.kind = kindOf(x); walk(s, x, y, b, ctx); b.flush(); b.kind = saved
+    span.push(...b.units.slice(before))
+    made.push(...b.units.slice(before))
+  }
+  const close = at => {
+    // (a unit nested in another, a note inside a row's group, goes where its own unit goes: none of the numbering)
+    const top = topUnits(span), older = olderUnits(s, spanFrom, at, b, ctx), kept = new Set()
+    for (const [x, y] of older) { const u = top.find(v => !kept.has(v) && v.start >= x && v.start < y) ?? top.find(v => !kept.has(v)); if (u) kept.add(u) }
+    for (const u of top) if (!kept.has(u)) u.later = true
+    span = []
+  }
+  // the text between the cuts, each a unit of its row's kind; a note a front note
+  let past = from
+  for (const c of [...notes.map(n => ({ ...n, note: true })), ...ends].sort((p, q) => p.at - q.at)) {
+    if (c.at < past) continue
+    unit(past, c.at)
+    if (c.note) { close(c.at); frontNote(s, c.at, c.end, b, ctx); spanFrom = c.end }
+    past = c.end
+  }
+  unit(past, to)
+  close(to)
+  // (the block each unit was cut from, and its whole text: what a class compares, frontMarks; beside the unit, never in it, so
+  // that no unit's pieces, nor a unit that nests it, carry it: sourceHash)
+  const block = { text: s.slice(from, to) }
+  for (const u of made) BLOCK_OF.set(u, block)
+}
+/** an author block's unit's block (frontBlock): its command's whole argument, by unit */
+const BLOCK_OF = new WeakMap()
+/** the units of a list no other of it nests */
+const topUnits = list => { const nested = new Set(list.flatMap(u => u.pieces.filter(p => p.t === 'nested').map(p => p.unit))); return list.filter(u => !nested.has(u)) }
+/** the ranges of the units PIPELINE 29 cut the text of an author block between two notes into (its walk whole, of kind
+ *  author), walked in a shadow of the walk's context and builder, so that nothing it counts, numbers or reads (a call of the
+ *  paper's macro, a table's number, a file) is counted twice */
+function olderUnits(s, from, to, b, ctx) {
+  if (to <= from) return []
+  const shadow = { ...ctx, called: null, fits: [], bibliography: [], floats: new Set(), visit: () => {}, visitFront: () => {}, ends: new Map(ctx.ends), skipped: { ...ctx.skipped }, dirs: [...ctx.dirs] }
+  const out = [], sb = new Builder(b.file, out, s, ctx.bodies, shadow.floats)
+  if (b.inFloat) sb.inFloat = true
+  sb.kind = 'author'; walk(s, from, to, sb, shadow); sb.flush()
+  return topUnits(out).map(u => [u.start, u.end])
+}
+/** a key of an affiliation's values whose value is no prose: a postcode */
+const CODE_KEY = /^(?:postcode|postalcode|zipcode|zip)$/i
+/** an affiliation written as keys and values (elsarticle's \\affiliation[a]{organization={Department of X}, city={Paris},
+ *  country={France}}, which the class prints one value after another): each value with a word in it a unit of places of its
+ *  own, its marks inside the value's braces, where the class keeps the value's tokens as they are; the keys, the separators,
+ *  a postcode (CODE_KEY) and a value of no word as they are, and its notes as frontNotes cuts them */
+function frontValues(s, from, to, b, ctx) {
+  frontNotes(s, from, to, b, ctx)
+  const block = { text: s.slice(from, to) }
+  for (const m of s.slice(from, to).matchAll(/(?:^|[,{\s])([A-Za-z]+)\s*=\s*\{/g)) {
+    const open = from + m.index + m[0].length - 1
+    if (inComment(s, open) || CODE_KEY.test(m[1])) continue
+    const close = matchGroup(s, open)
+    if (close < 0 || close > to || !wordsIn(s, open + 1, close - 1) || /\\(?:thanks|footnote)(?![A-Za-z@])/.test(s.slice(open, close))) continue
+    b.flush(); const saved = b.kind, before = b.units.length; b.kind = 'affiliation'; walk(s, open + 1, close - 1, b, ctx); b.flush(); b.kind = saved
+    // (no unit before PIPELINE 30's: each numbered after every other, frontBlock's `later`; its block the argument, frontMarks)
+    for (const u of topUnits(b.units.slice(before))) u.later = true
+    for (const u of b.units.slice(before)) BLOCK_OF.set(u, block)
+  }
 }
 /** a command's text and content arguments (commandArgs, `known`), walked: within a paragraph each one a pair around its
  *  text, the command's other arguments kept with the pair's open or close; one that holds paragraphs, a figure or a
@@ -1182,7 +1369,7 @@ function frontCommand(s, end, name, to, b, ctx, { front = false } = {}) {
   if (!arg) return -1
   b.flush()
   const from = arg.start + 1, upTo = arg.end - 1, saved = b.kind, before = b.units.length
-  if (role === 'author') frontBlock(s, from, upTo, b, ctx)
+  if (role === 'author') frontBlock(s, from, upTo, b, ctx, roleOf(name))
   else if (role === 'note' || role === 'prose') { b.kind = role === 'note' ? 'footnote' : 'para'; walk(s, from, upTo, b, ctx); b.flush(); b.kind = saved; for (const u of b.units.slice(before)) u.front = true }
   else { b.kind = role === 'abstract' ? 'abstract' : 'heading'; b.title = role === 'title'; walk(s, from, upTo, b, ctx); b.flush(); b.title = false; b.kind = saved }
   if (front) for (const u of b.units.slice(before)) u.front = true
@@ -1351,11 +1538,18 @@ function walk(s, from, to, b, ctx) {
       if (m?.[1].trim() === 'document' && (ctx.ends?.get(b.file)?.has(at) ?? true)) { ctx.ended = true; return }
       continue
     }
-    // \\bibliography{…}: TeX reads the job's .bbl there, which the package holds (BibTeX's output, shipped; one the compile
-    // makes is no source the front end reads before it)
-    if (name === 'bibliography' && ctx.bbl) {
+    // \\bibliography{…}: TeX reads the job's .bbl there, which the package holds (BibTeX's output, shipped, or the one BibTeX
+    // writes in the prepare's first pass: layout/paper.mjs madeBibliography), its thebibliography a paragraph's end (its
+    // heading's); none read, it sets nothing, and the paragraph before it ends there all the same, so that the source's units
+    // are the same with the .bbl and without it (`bibliography`, the names it reads: whether the paper has one to make)
+    if (name === 'bibliography') {
       const { args, end: e } = argsAfter(s, end, 1)
-      if (args[0]?.kind === 'req') { endText(); b.flush(); ctx.visit(ctx.bbl, [], b.inFloat); i = e; continue }
+      if (args[0]?.kind === 'req') {
+        endText(); b.flush()
+        ctx.bibliography.push(...s.slice(args[0].start + 1, args[0].end - 1).split(',').map(x => x.trim()).filter(Boolean))
+        if (ctx.bbl) ctx.visit(ctx.bbl, [], b.inFloat)
+        i = e; continue
+      }
     }
     // in a bibliography entry, a command that sets its text argument as it stands (BIB_TEXT): a pair around it, its other
     // arguments kept with the opening; a \\bibinfo of a field that is no prose (BIB_KEPT_FIELD) one placeholder
@@ -1433,16 +1627,18 @@ function walk(s, from, to, b, ctx) {
     if (FRONT_MATTER.has(name)) {
       const { args, end: e } = frontArgs(s, end, name, ctx, to)
       endText(); b.flush()
-      for (const a of args) (a.kind === 'req' ? frontBlock : frontNotes)(s, a.start + 1, a.end - 1, b, ctx)
+      for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, roleOf(name)); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) }
       i = e; continue
     }
-    if (FRONT_PROSE.has(name) && b.kind === 'author') {
+    if (FRONT_PROSE.has(name) && AUTHOR_KINDS.has(b.kind)) {
       const { args, end: e } = argsAfter(s, end, 1)
       if (args[0]?.kind === 'req') {
         endText()
-        if (FRONT_LINES.has(name)) b.flush()
+        // (IEEEtran's block a unit of its own, of its kind: \\IEEEauthorblockN's names, \\IEEEauthorblockA's places)
+        const lines = FRONT_LINES.get(name), saved = b.kind
+        if (lines) { b.flush(); b.kind = lines }
         const id = b.open(s.slice(i, args[0].start + 1), i); walk(s, args[0].start + 1, args[0].end - 1, b, ctx); b.close(id, '}', e)
-        if (FRONT_LINES.has(name)) b.flush()
+        if (lines) { b.flush(); b.kind = saved }
         i = e; continue
       }
     }
@@ -1716,21 +1912,25 @@ const tblrOf = texts => {
 }
 
 // ---------------------------------------------------------------- the bibliography
-/** an entry's units' kinds: its names (its first block: the authors, an editor), and the rest of it */
-const BIB_KINDS = new Set(['reference', 'refnames'])
+/** an entry's unit's kind, one unit an entry (bibliography; PIPELINE 29's `refnames`, an entry's names cut apart, is made no
+ *  more: PIPELINE 30) */
+const BIB_KINDS = new Set(['reference'])
 /**
- * The source's units with a bibliography's entries moved after every other, in their order (in place): an entry's unit is
- * numbered after the last of the rest, so that no other unit's number is what it was before entries were units of their own
- * (a translation held by a unit's number, the gate pack's, is still that unit's), and the units a host cuts before the job's
- * .bbl is made (the web's prepare announces them before the first compile) keep their numbers when the entries come after
- * it. Nothing reads an entry by its place among the units: its marks place it on the page, the ledger's zone reads them
+ * The source's units with an author block's later units (frontBlock's `later`: the rows cut apart from what was one unit, its
+ * names or its places), then a bibliography's entries, moved after every other, each in their order (in place): they are numbered
+ * after the last of the rest, so that no other unit's number is what it was before they were units of their own (a translation
+ * held by a unit's number, the gate pack's, is still that unit's: what was one unit of an author block keeps its number in the
+ * first unit cut from it), and the units a host cuts before the job's .bbl is made keep their numbers when the entries come
+ * after it (layout/paper.mjs madeBibliography). Nothing reads a place or an entry by its place among the units: their marks place
+ * them on the page, a place is searched on arXiv's page as a float is (it is set where the class sets it: amsart's addresses at
+ * the paper's end; make.mjs FLOATING), the ledger's zone reads the entries' marks
  */
 function entriesLast(units) {
-  const entries = units.filter(u => BIB_KINDS.has(u.kind))
-  if (!entries.length) return
-  const rest = units.filter(u => !BIB_KINDS.has(u.kind))
+  const later = units.filter(u => u.later && !BIB_KINDS.has(u.kind)), entries = units.filter(u => BIB_KINDS.has(u.kind))
+  if (!later.length && !entries.length) return
+  const rest = units.filter(u => !u.later && !BIB_KINDS.has(u.kind))
   units.length = 0
-  units.push(...rest, ...entries)
+  units.push(...rest, ...later, ...entries)
 }
 /** the commands of a bibliography that set their last argument as text, by how many arguments come before it: REVTeX's and
  *  acmart's fields (\\bibinfo{title}{…}, \\bibfield{author}{…}), REVTeX's name fonts, a quoted or shown title, IEEEtran's
@@ -1741,16 +1941,15 @@ const BIB_TEXT = new Map([['bibinfo', 1], ['bibfield', 1], ['bibnamefont', 0], [
 const BIB_KEPT_FIELD = /^(?:doi|url|eprint|isbn|issn|archive|archiveprefix|primaryclass|eid|lccn|mrnumber|zbl)$/i
 /**
  * A bibliography (thebibliography's body, `from` after its \\begin, `to` its \\end): each \\bibitem's entry, from its key's
- * group to the next \\bibitem or the end, is its own units (docs/route/orphan-text.md §5, "References"; the owner's rulings
- * of 2026-10-25): its names, the first block — up to the first \\newblock (the BibTeX styles that open an entry with its
- * authors: plain, abbrv, unsrt, the natbib styles, acl, ACM's), else REVTeX's and ACM's \\bibfield{author}, else IEEEtran's
- * up to the title's opening quotes — a unit of kind `refnames` (the reader's "names"), and the rest a unit of kind
- * `reference` (its "References"). Its label (\\bibitem's optional argument, set in the list's label box) and its key are
- * no piece of either; what precedes the first \\bibitem (the style's \\providecommand's) is no unit, nor is REVTeX's
- * \\BibitemOpen and \\BibitemShut. In an entry its numbers stay the original's ink (keepNumbers), its web addresses and
- * formulas too, as everywhere. A bibliography a paper sets otherwise (biblatex's \\printbibliography, from biber's data) has
- * no \\bibitem here: its text is the ledger's `references`, between its name and the next unit. The entries' units are numbered
- * after every other unit of the source (entriesLast)
+ * group to the next \\bibitem or the end, is one unit of kind `reference` (the reader's "References"), whole: the names it
+ * opens with are the entry's, never a unit of their own nor of the "names" toggle (the owner's ruling of 2026-10-28: the
+ * references and the author names are each their own toggle's, decoupled — "names" is the author block under the title alone —,
+ * and an entry is never set in two pieces styled apart). Its label (\\bibitem's optional argument, set in the list's label
+ * box) and its key are no piece of it; what precedes the first \\bibitem (the style's \\providecommand's) is no unit, nor is
+ * REVTeX's \\BibitemOpen and \\BibitemShut. In an entry its numbers stay the original's ink (keepNumbers), its web addresses
+ * and formulas too, as everywhere. A bibliography a paper sets otherwise (biblatex's \\printbibliography, from biber's data)
+ * has no \\bibitem here: its text is the ledger's `references`, between its name and the next unit. The entries' units are
+ * numbered after every other unit of the source (entriesLast)
  */
 function bibliography(s, from, to, b, ctx) {
   const { end: start } = argsOfForm(s, from, '{')
@@ -1765,49 +1964,9 @@ function bibliography(s, from, to, b, ctx) {
     const open = cmds.find(x => x.name === 'BibitemOpen'), shut = cmds.find(x => x.name === 'BibitemShut')
     if (open && !/\S/.test(s.slice(a, open.at).replace(/%.*$/gm, ''))) a = open.end
     if (shut && shut.at > a) z = shut.at
-    const names = namesEnd(s, a, z, cmds.filter(x => x.at >= a && x.at < z))
-    if (names > a) { b.kind = 'refnames'; walk(s, a, names, b, ctx); b.flush(); a = names }
     b.kind = 'reference'; walk(s, a, z, b, ctx); b.flush()
   })
   b.kind = saved
-}
-/** where an entry's names end, the first block (bibliography), from `a` to `z` and its commands at its top level; `a` where
- *  it has none the front end can tell */
-function namesEnd(s, a, z, cmds) {
-  const block = cmds.find(x => x.name === 'newblock')
-  if (block) return namesLike(s.slice(a, block.at)) ? block.at : a
-  // (REVTeX's and ACM's field of authors, an entry's first: the call up to its text's group)
-  const field = cmds[0]?.name === 'bibfield' ? argsAfter(s, cmds[0].end, 2) : null
-  if (field?.args.length === 2 && /^\{\s*(?:author|editor)\s*\}$/.test(s.slice(field.args[0].start, field.args[0].end))) return field.end
-  // (IEEEtran's: the authors, then the title in quotes; a book's in \\emph, which a name never is)
-  for (let k = a, depth = 0; k < z - 1; k++) {
-    const ch = s[k]
-    if (ch === '%') { k = skipComment(s, k); continue }
-    if (ch === '\\') { if (depth === 0 && /^\\(?:emph|textit|em|it)(?![A-Za-z@])/.test(s.slice(k, k + 8))) return a; k++; continue }
-    if (ch === '{') depth++
-    else if (ch === '}') depth--
-    else if (depth === 0 && ch === '`' && s[k + 1] === '`') return /,\s*$/.test(s.slice(a, k)) ? k : a
-  }
-  return a
-}
-/** the lower-case words a block of names holds (van, von, de la…; "and", "others", "editors"), which no title's lower-case word
- *  is taken for */
-const NAME_PARTICLES = new Set(['and', 'und', 'van', 'von', 'der', 'den', 'del', 'della', 'des', 'dos', 'das', 'ter', 'ten', 'bin', 'ibn', 'others', 'editor', 'editors', 'eds'])
-/**
- * Whether an entry's first block reads as its names, not an entry with no author whose first block is its title ("The Research
- * Guide.", "A survey of methods, revised edition."): no lower-case word of three letters or more but a name's (NAME_PARTICLES),
- * whatever its punctuation, nor "The" first; then a comma, an "and", a tie or an initial (BibTeX's name formats: "J.~Smith",
- * "Ba, Kiros, and Hinton", "et~al."), else a few capitalised words ("William Feller.") opening with no article
- */
-function namesLike(tex) {
-  // (the block's letters as a reader reads them: a letter command its letter, \\L's L; an accent and any other command nothing, so
-  // that a word they sit in stays whole, G{\\"u}l{\\c{c}}ehre's, M{\\k{a}}dry's; the words apart at a space or a tie)
-  const t = tex.replace(/%[^\n]*/g, ' ').replace(/\\([A-Z])[A-Za-z]*(?![A-Za-z@])\s*/g, '$1').replace(/\\(?:[a-z@][A-Za-z@]*|[^A-Za-z@])\s*/g, '').replace(/[{}]/g, '').replace(/\s+/g, ' ').trim()
-  const words = t.split(/[\s~]+/).filter(w => /\p{L}/u.test(w))
-  // (a word of letters alone, its punctuation after it: a key a style writes in the block, apacite's anderson1952asymptotic, is none)
-  if (!words.length || words[0] === 'The' || !words.every(w => !/^\p{Ll}{3,}\p{P}*$/u.test(w) || NAME_PARTICLES.has(w.replace(/\P{L}+$/u, '')))) return false
-  if (/[,~]|\band\b|\bet al\b|(?:^|[\s(])\p{Lu}\./u.test(t) || /~/.test(tex)) return true
-  return words.length <= 4 && !/^An?$/.test(words[0])
 }
 /** a token of an entry's text that is a number and no word — a year, pages, a volume and its issue: "1994.", "157--166,",
  *  "5(2):157--166" — a digit in it, no letter, white space or a piece that sets none on either side; or a DOI written out,
@@ -1882,7 +2041,7 @@ function frontMatter(s, from, to, b, ctx) {
       if (req) { b.kind = 'heading'; b.title = true; walk(s, req.start + 1, req.end - 1, b, ctx); b.flush(); b.title = false; b.kind = undefined; past = end }
       continue
     }
-    if (FRONT_MATTER.has(c.name)) { const { args, end } = frontArgs(s, c.end, c.name, ctx, to); for (const a of args) (a.kind === 'req' ? frontBlock : frontNotes)(s, a.start + 1, a.end - 1, b, ctx); past = end; continue }
+    if (FRONT_MATTER.has(c.name)) { const { args, end } = frontArgs(s, c.end, c.name, ctx, to); for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, roleOf(c.name)); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) } past = end; continue }
     // a \thanks of its own (revtex's, after \author{…}): a front note, as in the body
     if (c.name === 'thanks') { const { args, end } = argsOfForm(s, c.end, unitForm('thanks', ctx)); if (args.some(a => a.kind === 'req')) { b.flush(); frontNote(s, c.at, end, b, ctx); past = end } continue }
     if (c.name === 'begin' && FRONT_ROLES[`env:${c.env}`]) {
@@ -1937,7 +2096,13 @@ const envDefs = texts => {
  * place it is called from (an author block's names and places, a cell, a paragraph). Only a body that holds prose (four
  * words or more; names and places in an author block whatever their count: one short name, \\newcommand\\model{Transformer},
  * read alone is no sentence a translator can tell the sense of), and only where every use of the macro in the package's
- * files is a call the walk met in running text (`calls`): one inside a \\label, a file name or a comparison stays as it is
+ * files is a call the walk met in running text (`calls`): one inside a \\label, a file name or a comparison stays as it is.
+ * Never a package's or a class's own definition (a .sty or a .cls file's: jcappub's \\maketitle and \\@fpheader, whose
+ * bodies are its own code, set where the class sets them: 2609.20976v1's "! ! ! ! Abstract. ! ! Keywords:", read as prose
+ * and translated for nothing), whose text is the class's to set and no unit's.
+ * An author block's unit of a macro called once (`once`: 2609.20976v1's \\affiliation[a]{\\CU}, \\CU a \\newcommand of the
+ * affiliation's text) is set once, where TeX expands that call, with the call's own surroundings: marked where it is defined
+ * (frontMarks), it is the unit TeX sets, its marks once on the page, as the same text written in the block is
  */
 function storedBodies(calls, { ctx, files, units, own }) {
   ctx.ended = false
@@ -1946,19 +2111,20 @@ function storedBodies(calls, { ctx, files, units, own }) {
     const macro = ctx.macros.get(name)
     if (!macro?.body || call.kinds.size !== 1) continue
     const { file, start, end } = macro.body, kind = [...call.kinds][0]
+    if (/\.(?:sty|cls)$/i.test(file)) continue
     all ??= own.map(x => uncommented(x.text)).join('\n')
     const named = new RegExp(String.raw`\\${name}(?![A-Za-z@])`, 'g'), defined = new RegExp(String.raw`\\(?:(?:(?:re)?newcommand|providecommand)\*?\s*\{?\s*|DeclareRobustCommand\*?\s*\{?\s*|[gex]?def\s*|let\s*)\\${name}(?![A-Za-z@])`, 'g')
     if ((all.match(named)?.length ?? 0) - (all.match(defined)?.length ?? 0) !== call.n) continue
     const text = files.get(file) ?? own.find(x => x.file === file)?.text
     if (text === undefined || units.some(u => u.file === file && u.start < end && u.end > start)) continue
     const had = files.has(file), before = units.length, b = new Builder(file, units, text, ctx.bodies, ctx.floats)
-    if (kind === 'author') frontBlock(text, start, end, b, ctx)
+    if (AUTHOR_KINDS.has(kind)) frontBlock(text, start, end, b, ctx, kind === 'author' ? 'names' : 'places')
     else { b.kind = kind; walk(text, start, end, b, ctx); b.flush() }
     // the words its units hold, as they would be sent: fewer than four, and it is no prose (\contentsname's
     // "Contents", set in a heading)
     const words = units.slice(before).flatMap(u => u.pieces.filter(p => p.t === 'text').map(p => p.s)).join(' ').match(/\p{L}{2,}/gu)?.length ?? 0
-    if (kind !== 'author' && words < 4) { units.length = before; continue }
-    for (const u of units.slice(before)) u.stored = true
+    if (!AUTHOR_KINDS.has(kind) && words < 4) { units.length = before; continue }
+    for (const u of units.slice(before)) { u.stored = true; if (call.n === 1 && AUTHOR_KINDS.has(u.kind)) u.once = true }
     if (units.length > before && !had) files.set(file, text)
   }
 }
@@ -2032,7 +2198,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   // which is biblatex's data — \\entry, \\field — and no text, which \\bibliography, biblatex's alias of \\addbibresource, never reads)
   const bblName = `${jobName(mainFile.rel)}.bbl`, bblBytes = fsys.read(bblName)
   const bbl = bblBytes && /\\begin\s*\{thebibliography\}/.test(texText(bblBytes)) ? bblName : null
-  const ctx = { bbl, tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), ...tblrOf(sources.map(sourceText)) }
+  const ctx = { bbl, tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], ...tblrOf(sources.map(sourceText)) }
   const scan = { lineEnvs, ifs, ifValues }
   let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;
@@ -2081,7 +2247,8 @@ function readProject(fsys, main, tables, sourceText, own) {
   // the units written inside a float, by their index in `units`, rising: a number survives a copy of the units, a clone and JSON
   const inFloat = units.flatMap((u, i) => (ctx.floats.has(u) ? [i] : []))
   // (the paper's macros that read nothing past their arguments: the layout marking's, layout/marks.mjs layoutMarking `complete`)
-  return { main: mainFile.rel, files, units, inFloat, skipped, fits: ctx.fits, lineEnvs, inputenc: enc ?? null, transcode, complete: completeMacros(own) }
+  // (the bibliographies \\bibliography reads, by the names it gives, where the walk met it: what BibTeX writes the job's .bbl of)
+  return { main: mainFile.rel, files, units, inFloat, skipped, fits: ctx.fits, lineEnvs, inputenc: enc ?? null, transcode, complete: completeMacros(own), bibliography: ctx.bibliography }
 }
 
 /** whether bytes of TeX hold a ] outside every group and not escaped: one that would close an optional argument */
@@ -2181,8 +2348,12 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     // the two the mark would cost the kern, and a macro that looks ahead, as \\xspace does, would see the mark). Any
     // other command at the head of the paragraph is passed over — \\noindent, \\vspace, a run-in heading macro — since
     // \\leavevmode ahead of it would start the paragraph early and indent or move it. A text piece is cut after its
-    // leading space, which is ASCII, so the cut never falls inside a UTF-8 sequence of source text read as latin1
-    let startAt = -1, startCut = 0
+    // leading space, which is ASCII, so the cut never falls inside a UTF-8 sequence of source text read as latin1. A group that
+    // closes before the first word holding the unit's first letter as a command alone (LETTER_GROUP: `{\\L}ukasz Kaiser`, a row
+    // of 1706.03762v7's \\author, which had no start mark): the mark goes before the group, so that the letter is the unit's own
+    // ink. Any other group before the first word is as before (REVTeX's empty `\\bibfield {number} {  }`, before which a mark
+    // set the entry's text 7 pt right: 2610.20716v1)
+    let startAt = -1, startCut = 0, opened = -1
     if (m) for (let k = 0; k < pieces.length; k++) {
       const p = pieces[k]
       if (p.t === 'text') {
@@ -2192,7 +2363,8 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
         if (w[0].length === 0 && prev?.t === 'ph' && /\\[A-Za-z@]+\*?$/.test(prev.src)) { startAt = k - 1; startCut = -1 } else { startAt = k; startCut = w[0].length }
         break
       }
-      if (p.t === 'open') continue
+      if (p.t === 'open') { if (opened < 0) opened = k; continue }
+      if (p.t === 'close' && opened >= 0 && LETTER_GROUP(pieces.slice(opened + 1, k))) { startAt = opened; startCut = -1; break }
       if (p.t === 'ph' && INLINE.test(p.src)) { startAt = k; startCut = -1; break }
       if (p.t !== 'ph') break
     }
@@ -2377,7 +2549,7 @@ function wordsKept(p) {
 export function lineBreaks(u, pieces) {
   if (u.title) pieces = [{ t: 'ph', src: '\\axtbalance ' }, ...pieces.flatMap(wordsKept)]
   // a line of names too: where it is set as a paragraph (AUTHOR_WIDE), a name kept whole (2608.06701: "レ" over "イハネ")
-  else if (u.kind === 'author') pieces = pieces.flatMap(wordsKept)
+  else if (inAuthorBlock(u)) pieces = pieces.flatMap(wordsKept)
   const before = k => { for (let j = k - 1; j >= 0; j--) if (pieces[j].t !== 'text' || /\S/.test(pieces[j].s)) return pieces[j]; return null }
   const after = k => { for (let j = k + 1; j < pieces.length; j++) if (pieces[j].t !== 'text' || /\S/.test(pieces[j].s)) return pieces[j]; return null }
   return pieces.map((p, k) => {
@@ -2547,7 +2719,7 @@ const INLINE = /^(?:\$|\\\(|\\ensuremath|\\(?:cite[a-z]*|ref|eqref|autoref|[cC]r
  *  more than once), not one TeX reads in math mode (inMath) */
 export const markUnits = (units, translated = null) => {
   const id = new Map(units.map((u, i) => [u, i]))
-  return u => (u.kind === 'author' ? (translated?.has(u) && fitsWide(u) ? AUTHOR_WIDE : null) : u.kind === 'heading' || u.kind === 'cell' || u.kind === 'figure' || u.front || u.stored || inMath(u) ? null : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` })
+  return u => (inAuthorBlock(u) ? (translated?.has(u) && fitsWide(u) ? AUTHOR_WIDE : null) : u.kind === 'heading' || u.kind === 'cell' || u.kind === 'figure' || u.front || u.stored || inMath(u) ? null : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` })
 }
 /**
  * Whether a unit holds a subscript or a superscript of its own (a piece `_` or `^`, outside every formula the walker
@@ -2562,6 +2734,12 @@ const inMath = u => u.pieces.some(p => p.t === 'ph' && (p.src === '_' || p.src =
 /** a unit's source as its pieces write it, its white space one space: what a class that compares two of its front matter's
  *  texts compares */
 const sourceText = u => u.pieces.map(p => (p.t === 'text' ? p.src ?? p.s : p.t === 'nested' ? `${p.pre}\u0000${p.post}` : p.src ?? '')).join('').replace(/\s+/g, ' ').trim()
+/** whether a group's pieces (between its open and its close) are one command that sets a letter of its own, LaTeX's text symbols
+ *  (\\L, \\o, \\ss, \\ae, \\aa, \\i…), white space around it: a word's first letter in a group of its own (`{\\L}ukasz`) */
+const LETTER_GROUP = inner => {
+  const real = inner.filter(p => !(p.t === 'text' && !/\S/.test(p.s)))
+  return real.length === 1 && real[0].t === 'ph' && /^\\(?:L|l|O|o|ss|SS|ae|AE|oe|OE|aa|AA|i|j|DH|dh|TH|th|NG|ng|DJ|dj)\s*$/.test(real[0].src ?? '')
+}
 /**
  * Marks for the front matter's units in the layout compile alone (the marked original, our base page: layout/marks.mjs
  * layoutMarking): the author block's names and places and the front matter's own units the role table knows (a \\thanks,
@@ -2571,19 +2749,32 @@ const sourceText = u => u.pieces.map(p => (p.t === 'text' ? p.src ?? p.s : p.t =
  * translation, which sets them again where the class copies them; in the layout compile what TeX sets is the paper's own,
  * and a copy's marks set nothing where TeX writes (MARK_DEF's \\axtmark is \\protected: \\thanks's \\protected@xdef keeps it
  * for the note it sets) or ships it as a running head (the gate, LAYOUT_TEX). Not a heading (its own marks), not one stored
- * or read in math (markUnits'), and not one whose text another such unit's equals: a class compares them (revtex sets
- * authors' equal affiliations, and their equal notes, once), and two marks of their own would make them two. Not one a macro
+ * (set where it is called, perhaps more than once) but an author block's of a macro called once (storedBodies' `once`, marked
+ * in its definition: the one place TeX sets it), not one read in math (markUnits'), and not one whose text another such unit's
+ * equals: a class compares them (revtex sets authors' equal affiliations, and their equal notes, once), and two marks of their own
+ * would make them two. An author block's unit by its command's whole argument (frontBlock's `block`), which is what a class
+ * compares: two rows of one block are two (article sets each row of its \\author where it stands: 1706.03762v7's "Google Brain"
+ * three times), two equal commands one. Not one a macro
  * of the paper's or its class's only stores (`held`: elsarticle's \\biboptions{semicolon}, read as prose, is natbib's options,
  * and a mark there one natbib does not know: 2608.16117 lost a page). The \\date too: a class sets its front matter where it
  * likes (amsart: the date in a note of the first page, the addresses at the paper's end), and an unmarked unit is searched
  * between its marked neighbours, so the addresses' marks alone took 2610.21037's date out of its search
  */
+/** a block's text as TeX reads its tokens, for comparing two: no comment, a blank line a paragraph's end, any other run of white
+ *  space one space, none at either end */
+const asTokens = t => t.replace(/(?<!\\)%[^\n]*(?:\n[ \t]*)?/g, '').replace(/[ \t]*\n[ \t]*\n\s*/g, '\u2029').replace(/[ \t\n]+/g, ' ').trim()
 export function frontMarks(units) {
   const id = new Map(units.map((u, i) => [u, i]))
-  const front = units.filter(u => (u.kind === 'author' || (u.front && u.kind !== 'heading' && !u.held)) && !u.stored && !inMath(u))
+  const front = units.filter(u => (inAuthorBlock(u) || (u.front && u.kind !== 'heading' && !u.held)) && (!u.stored || (u.once && inAuthorBlock(u))) && !inMath(u))
+  // (what a class compares is a command's whole argument: an author block's unit by its block's text, which two commands share
+  // where they are equal — revtex's two equal \\affiliation{…}, set once —, never two rows of one block, which the class sets
+  // each where it stands: 1706.03762v7's three "Google Brain" rows of one \\author; a note by its own text)
+  // (a block's text as TeX reads it: a comment none, a space's run one space, a blank line a paragraph's end — two equal
+  // \\affiliation{…} that differ in their lines' breaks are one to REVTeX)
+  const keyOf = u => (BLOCK_OF.has(u) ? `b:${asTokens(BLOCK_OF.get(u).text)}` : `u:${sourceText(u)}`)
   const seen = new Map()
-  for (const u of front) { const t = sourceText(u); seen.set(t, (seen.get(t) ?? 0) + 1) }
-  const marked = new Set(front.filter(u => seen.get(sourceText(u)) === 1))
+  for (const u of front) { const k = keyOf(u), owners = seen.get(k) ?? seen.set(k, new Set()).get(k); owners.add(BLOCK_OF.get(u) ?? u) }
+  const marked = new Set(front.filter(u => seen.get(keyOf(u)).size === 1))
   return u => (marked.has(u) ? { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` } : null)
 }
 /** A translated line of names or places goes into \\axtwide (FIT_DEF), all of it — its marks, a \\IEEEauthorrefmark

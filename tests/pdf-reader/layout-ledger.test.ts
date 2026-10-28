@@ -36,9 +36,12 @@ describe('the content classes', () => {
     expect(unitClass({ kind: 'figure' })).toBe('figures')
     expect(unitClass(['cell', 0, []])).toBe('tables')
     expect(unitClass('author')).toBe('names')
-    // (a bibliography's entry: its names the names', the rest the references', latex-front.mjs bibliography)
+    // (a bibliography's entry, one unit, whole, the references': latex-front.mjs bibliography; PIPELINE 29's `refnames`, an entry's
+    // names cut apart, which a bundle of 29 still holds, the references' too: "names" is the author block's alone, 2026-10-28)
     expect(unitClass({ kind: 'reference' })).toBe('references')
-    expect(unitClass(['refnames', 0, null, null, null, []])).toBe('names')
+    expect(unitClass(['refnames', 0, null, null, null, []])).toBe('references')
+    // (an author block's places, the body's: always translated)
+    expect(unitClass({ kind: 'affiliation' })).toBe('body')
     // (a kind the table does not name is the body's; no kind, no class)
     expect(unitClass({ kind: 'list' })).toBe('body')
     expect(unitClass(null)).toBeNull()
@@ -46,14 +49,15 @@ describe('the content classes', () => {
     for (const cls of Object.values(UNIT_CLASS)) expect(CLASS_IDS).toContain(cls)
   })
 
-  it('turns references and names on only where a reader\'s classes say so (stage 4: an entry\'s rest, its names, the author block)', () => {
+  it('turns references and names on only where a reader\'s classes say so (an entry whole under references, the author block\'s names under names)', () => {
     expect(TOGGLE_DEFAULTS.references).toBe(false)
     expect(TOGGLE_DEFAULTS.names).toBe(false)
     expect([...classesOn(null)].sort()).toEqual(Object.keys(TOGGLE_DEFAULTS).filter(t => TOGGLE_DEFAULTS[t as keyof typeof TOGGLE_DEFAULTS]).sort())
-    // (a unit by its class: the body always, a cell under tables, an entry's rest under references, its names under names)
+    // (a unit by its class: the body always, the author block's places too, a cell under tables, an entry (and a 29's entry's
+    // names) under references, the author block's names under names)
     const on = classesOn({ references: true, tables: false })
-    expect(['para', 'cell', 'reference', 'refnames', 'author'].map(kind => unitShown({ kind }, on))).toEqual([true, false, true, false, false])
-    expect(['reference', 'refnames', 'author'].map(kind => unitShown({ kind }, classesOn({ names: true })))).toEqual([false, true, true])
+    expect(['para', 'affiliation', 'cell', 'reference', 'refnames', 'author'].map(kind => unitShown({ kind }, on))).toEqual([true, true, false, true, true, false])
+    expect(['reference', 'refnames', 'author', 'affiliation'].map(kind => unitShown({ kind }, classesOn({ names: true })))).toEqual([false, false, true, true])
     expect(unitShown(null, on)).toBe(false)
   })
 
@@ -173,10 +177,10 @@ describe('ledgerOf', () => {
   })
 
   it('opens the references\' zone at a bibliography entry\'s start, a name before it or none: the text between entries is theirs, a unit after them ends it', () => {
-    // (REVTeX's bibliography, which no babel name opens: an entry, its label its names' own (own.mjs's u<id>.l), its names and rest
-    // owned, the style's own words after it; the next entry's alpha label no unit owns; then an appendix's paragraph and a line
-    // no unit owns)
-    const units = [{ kind: 'refnames' }, { kind: 'reference' }, { kind: 'refnames' }, { kind: 'para' }]
+    // (REVTeX's bibliography, which no babel name opens: two entries, the first's label its own (own.mjs's u<id>.l), both owned,
+    // the style's own words after them; the next entry's alpha label no unit owns; then an appendix's paragraph and a line no
+    // unit owns)
+    const units = [{ kind: 'reference' }, { kind: 'reference' }, { kind: 'reference' }, { kind: 'para' }]
     const pg = page(
       { point: 'bs1' },
       { glyphs: run('[Ab17]', 60, 700), owner: 'u0.l' }, { point: '0s' }, { glyphs: run('Bee.', 100, 700), owner: 'u0' }, { point: '0e' },
@@ -185,8 +189,8 @@ describe('ledgerOf', () => {
       { point: '3s' }, { glyphs: run('Appendix text', 100, 600), owner: 'u3' }, { point: '3e' }, { glyphs: run('Wonder 1 (Main)', 100, 580) }, { point: 'be1' },
     )
     const l = ledger([pg], units)
-    expect(['A', 'B', 'T', 'O', 'C', 'D', 'p', 'W'].map(ch => classAt(l, 1, at(pg, ch)))).toEqual(['names', 'names', 'references', 'references', 'references', 'names', 'body', 'orphan'])
-    expect(l.counts.references.letters).toBe(['Title', 'Onlineonly', 'Cd'].join('').length)
+    expect(['A', 'B', 'T', 'O', 'C', 'D', 'p', 'W'].map(ch => classAt(l, 1, at(pg, ch)))).toEqual(['references', 'references', 'references', 'references', 'references', 'references', 'body', 'orphan'])
+    expect(l.counts.references.letters).toBe(['Ab', 'Bee', 'Title', 'Onlineonly', 'Cd', 'Dee'].join('').length)
   })
 
   it('reads a formula\'s line, a code line and a line of no word as never translated', () => {

@@ -76,7 +76,8 @@ describe('a source\'s line ends are read as TeX reads them: CRLF and a lone CR a
     const cls = ['%% a journal class', '\\LoadClass{article}', '\\newcommand{\\fnm}[1]{#1}', '\\newcommand{\\sur}[1]{#1}', '\\newcommand{\\affil}[2][]{#2}', ''].join('\r')
     const main = ['\\documentclass{myj}', '\\title{A title of the paper}', '\\author[1]{\\fnm{Zhang} \\sur{Gongyue}}', '\\affil[1]{An institute of somewhere}', '\\begin{document}', '\\maketitle', 'A paragraph of words in the body.', '\\end{document}', ''].join('\n')
     const p = openPaper(new Map([['main.tex', enc(main)], ['myj.cls', enc(cls)]]))
-    expect((p.units as unknown as Unit[]).map(u => u.kind)).toEqual(['heading', 'author', 'author', 'para'])
+    // (the \\affil's place where its unit was: what was one unit keeps its number, latex-front.mjs frontBlock)
+    expect((p.units as unknown as Unit[]).map(u => u.kind)).toEqual(['heading', 'author', 'affiliation', 'para'])
   })
   it('the main file chosen among candidates by its length as TeX reads it, not by its line ends\' bytes', () => {
     // (each file included by the other: no uncited candidate, the longer body chosen)

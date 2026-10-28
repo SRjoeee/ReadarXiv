@@ -21,7 +21,7 @@
 import { analyze } from '../source/paper-meta.mjs'
 import { paperNames } from '../source/paper-names.mjs'
 import { DVI_LAYOUT_TEX, inkSamples, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, NAME_ENGLISH, probeSamples } from '../layout/marks.mjs'
-import { BALANCE_DEF, documentBounds, DVI_MARK_DEF, dviEngine, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1, texFilesOf, texText } from '../source/latex-front.mjs'
+import { BALANCE_DEF, documentBounds, DVI_MARK_DEF, dviEngine, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inAuthorBlock, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1, texFilesOf, texText } from '../source/latex-front.mjs'
 import { strategiesFor, typesetBy } from './scripts.mjs'
 import { authorsTranslated } from '../translate/kept.mjs'
 import { passagesInSource, translationOf } from './cache.mjs'
@@ -408,7 +408,7 @@ function unitLines(raw, patched, out, main, skip) {
 
 /** the units a translation into `lang` leaves as they are: the names a table holds (nameCells), and the author block's
  *  names and places where the target writes them as the paper does (translate/kept.mjs authorsTranslated) */
-export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : new Set([...paper.kept, ...paper.units.filter(u => u.kind === 'author')]))
+export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : new Set([...paper.kept, ...paper.units.filter(inAuthorBlock)]))
 
 /**
  * The reader's versions (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, eighteenth addendum), apart since 2026-10-02 so that a change to the typesetting never
@@ -496,6 +496,9 @@ export { PIPELINE_VERSION } from './versions.mjs'
  *   is read back: every unit whose source a copy holds is carried, and older pipelines keep their own tests
  * - 28: 29 makes a bibliography's entries units of their own (latex-front.mjs bibliography), which a copy holds no source of,
  *   and changes no other unit's cutting or text: every unit whose source a copy holds is carried, as from 23 to 27
+ * - 29: 30 makes an entry one unit (its names no unit apart), an author block's places units apart from its names, a class's own
+ *   macro body no unit, and a paragraph end at \\bibliography: each unit it cuts otherwise has a source a copy of 29 holds none
+ *   of (its hash is new, and it is asked again); no unit is read back otherwise: every unit whose source a copy holds is carried
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
 const NO_RUN = (pieces, unit = null) => (unit ? formulaRuns(unit.pieces).size === 0 : !holdsUnbalanced(pieces))
@@ -509,7 +512,7 @@ const NO_BOUNDARY = (pieces, unit = null) => (unit ? !boundaryChanges(unit) : Ar
 const NO_DISPLAY_STOP = (pieces, unit = null) => (unit ? !displayStopChanges(unit) : Array.isArray(pieces) && !pieces.some(p => p?.t === 'ph' && displayStop(p.src)))
 const andStop = test => (pieces, unit = null) => test(pieces, unit) && NO_DISPLAY_STOP(pieces, unit)
 const BOUNDARY_AND_STOP = andStop(NO_BOUNDARY)
-export const PIPELINE_CARRIES = { 7: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 8: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 9: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 10: andStop(andStyle(NO_RUN)), 11: andStop(andStyle(NO_RUN)), 12: andStop(NO_STYLE), 13: andStop(NO_STYLE), 14: andStop(NO_STYLE), 15: BOUNDARY_AND_STOP, 16: BOUNDARY_AND_STOP, 17: BOUNDARY_AND_STOP, 18: BOUNDARY_AND_STOP, 19: BOUNDARY_AND_STOP, 20: BOUNDARY_AND_STOP, 21: BOUNDARY_AND_STOP, 22: NO_DISPLAY_STOP, 23: EVERY, 24: EVERY, 25: EVERY, 26: EVERY, 27: EVERY, 28: EVERY }
+export const PIPELINE_CARRIES = { 7: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 8: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 9: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 10: andStop(andStyle(NO_RUN)), 11: andStop(andStyle(NO_RUN)), 12: andStop(NO_STYLE), 13: andStop(NO_STYLE), 14: andStop(NO_STYLE), 15: BOUNDARY_AND_STOP, 16: BOUNDARY_AND_STOP, 17: BOUNDARY_AND_STOP, 18: BOUNDARY_AND_STOP, 19: BOUNDARY_AND_STOP, 20: BOUNDARY_AND_STOP, 21: BOUNDARY_AND_STOP, 22: NO_DISPLAY_STOP, 23: EVERY, 24: EVERY, 25: EVERY, 26: EVERY, 27: EVERY, 28: EVERY, 29: EVERY }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a
@@ -898,7 +901,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
      * count: a paragraph's five footnotes are six passages, which the bound of three had counted as one — and as one
      * again while the five were still being translated
      */
-    const reverting = (found, out, at) => [...new Set(found.flatMap(withNested))].filter(u => !out.has(u) && !kept.has(u) && !(strategies[at.s].authors === false && u.kind === 'author') && (translated.has(u) || !results.has(indexOf.get(u))))
+    const reverting = (found, out, at) => [...new Set(found.flatMap(withNested))].filter(u => !out.has(u) && !kept.has(u) && !(strategies[at.s].authors === false && inAuthorBlock(u)) && (translated.has(u) || !results.has(indexOf.get(u))))
     /** whether the letters a compile (`at`) lost beyond the original's, where the log names them by code point, stand in
      *  the translation of a unit or a few — no more passages than `room`, what the strategy may still set in the source
      *  besides `out`: lost in more, they are the strategy's font's, and in none, not a unit's (a caption babel sets).
@@ -1041,7 +1044,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     let shownPartial = null
     /** what names the floats of the translation last shown (captionsOf): the layer labels them so too */
     let captions = null
-    const passagesShown = snapshot => [...inSource].filter(u => snapshot.has(u) && u.kind !== 'author').length
+    const passagesShown = snapshot => [...inSource].filter(u => snapshot.has(u) && !inAuthorBlock(u)).length
     const planFor = snapshot => {
       if (!readings || ruleFailed.has(strategy().name)) return null
       const plan = previewTypesetting({ paper, translated: setting(snapshot), lang, strategy: strategy(), fonts, fontLog, original: readings })

@@ -1,5 +1,5 @@
 {
- "pipeline": "29",
+ "pipeline": "30",
  "units": {
   "sample-1": [
    "heading: text",
@@ -47,12 +47,9 @@
    "para: text,ph,text,ph,text,ph,ph,text",
    "heading: text",
    "para: text,ph,text,open,text,close,text",
-   "refnames: text",
-   "reference: ph,text,open,ph,text,close,text,ph,ph,text,ph,text,ph",
-   "refnames: text,ph,text",
-   "reference: ph,text,open,ph,text,ph,close,text,ph,text,ph",
-   "refnames: text,ph,text",
-   "reference: ph,text,open,ph,text,close,text,ph,ph,text,ph,text,ph",
+   "reference: text,ph,text,open,ph,text,close,text,ph,ph,text,ph,text,ph",
+   "reference: text,ph,text,ph,text,open,ph,text,ph,close,text,ph,text,ph",
+   "reference: text,ph,text,ph,text,open,ph,text,close,text,ph,ph,text,ph,text,ph",
    "name: Theorem",
    "name: Lemma",
    "name: Definition"
@@ -103,12 +100,21 @@
   ],
   "bibliography": [
    "para: text,ph,text,ph,text",
-   "refnames: text,ph,text,ph,text",
-   "reference: ph,text,ph,text,open,text,close,text",
-   "refnames: text,ph,text,ph,text",
-   "reference: text,open,text,close,text,ph,text,ph",
-   "refnames: open,open,open,text,close,ph,open,text,close,close,text,ph,close",
-   "reference: open,text,close,ph,open,open,ph,close,close,text,open,ph,close,text"
+   "reference: text,ph,text,ph,text,ph,text,ph,text,open,text,close,text",
+   "reference: text,ph,text,ph,text,open,text,close,text,ph,text,ph",
+   "reference: open,open,open,text,close,ph,open,text,close,close,text,ph,close,open,text,close,ph,open,open,ph,close,close,text,open,ph,close,text"
+  ],
+  "authors": [
+   "author: text",
+   "footnote: text",
+   "affiliation: text",
+   "affiliation: text",
+   "para: ph,text",
+   "author: text,ph,text",
+   "affiliation: ph,text"
+  ],
+  "made-bbl": [
+   "para: text,ph,text,ph,text"
   ]
  }
 }

@@ -26,7 +26,7 @@ const FIXED = join(process.env.AXT_DATA ?? join(root, 'data'), 'layer-fixtures')
 const MADE = arg('made') ? resolve(arg('made')) : null
 const OUT = arg('out') ? resolve(arg('out')) : null
 if (!MADE || !OUT) throw new Error('--made=<the new cut\'s fixtures> --out=<dir>')
-const UNIT_KINDS = ['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author', 'inkheads', 'inkcontents', 'inknotes', 'inkorphan', 'inknames', 'reference', 'refnames']
+const UNIT_KINDS = ['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author', 'inkheads', 'inkcontents', 'inknotes', 'inkorphan', 'inknames', 'reference', 'refnames', 'affiliation']
 const readJson = f => JSON.parse(readFileSync(f, 'utf8'))
 
 /** old id -> new id: the two cuts' units by kind and plain source, their longest common subsequence */
