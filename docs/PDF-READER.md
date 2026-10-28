@@ -2381,19 +2381,15 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     room the body leaves of `INK_MAX` would have asked, in the paper's order, so that no entry is asked less than it was; then
     the entries' leads (a macro at an entry's head, whose ink only its own text finds: make.mjs besideMarks); then each further
     call, in order. A bibliography the share holds is asked call by call, as before.
-  - *A call past the share is given a text alone* (`inkShared`, at most `ENTRY_SHARED_MAX`, 1,024; `shareInk`, `readInkAnswers`,
-    the one reader of the ink answers production and the lab take): the text of the first asked call of its shape (`entryShape`:
-    its command and each argument empty, plain text or as written — `\natexlab{a}`, `{b}` and `{c}` one shape, `\natexlab{}`
-    another), each plain argument the two differ in put in the call's where it stands once in that text (`carriedText`:
-    `\natexlab{a}`'s "a" gives `\natexlab{b}` "b", `\doi{10.1/x}`'s "doi:10.1/x" gives "doi:10.2/y"); none where a macro
-    transforms its argument (an `\uppercase`d one's text holds no argument) or where the call's letters a font sets as a ligature
-    (ff, fi, fl: 2609.26457v1's "findings" in a DOI, whose glyph TeX's listing gives as no text); a call's own text always
-    kept. A text is the one answer a wrong carry cannot misplace ink by: it is used only where the page's glyphs spell it (the
-    split's `textedTo`, the leads' `leadStep`), else the piece stays LOST, as an unasked call's does. No ink and a box begun
-    apart are never carried (the reviews of #495): a macro's ink may hang on its argument's value (`\ifnum#1>64 #1\fi`), and a
-    call wrongly said to set none would lose its placeholder and its entry's translation, one wrongly said apart would get a
-    mark against the word it is glued to. A lead past the share keeps a probe of its own (`leadSamples`, `LEAD_MAX`), as before.
-    The marks file names up to `INK_ANSWERS_MAX` answers (MARKS_SCHEMA 13; a reader of 12 refuses past `INK_MAX`).
+  - *A call past the share is no sample, as one past `INK_MAX` was* — no answer of another call is carried to it (the reviews
+    of #495). A shape's sample (its command and its arguments' shape) proves nothing of another call's: a macro's ink may hang
+    on its argument's value (`\ifnum#1>64 #1\fi`), so that a call wrongly said to set none would lose its placeholder and its
+    entry's translation, one wrongly said apart would get a mark against the word it is glued to; and a text carried may be a
+    prefix of what the call sets (`\def\pfx#1{#1:\ifnum#1>64 extra:\fi}`: "65:" for `\pfx{65}`'s "65:extra:"), which the split
+    before an unmarked piece and a lead's read from its unit's start take as its end, both bounded on one side only, giving
+    the rest to the next piece. A lead past the share keeps a probe of its own (`leadSamples`, `LEAD_MAX`), as before. The one
+    reader of the ink answers, production's and the lab's, is `readInkAnswers`. The marks file names up to `INK_ANSWERS_MAX`
+    answers (MARKS_SCHEMA 13; a reader of 12 refuses past `INK_MAX`).
   - Measured (`classes-gate.mjs --made --compile` against `next` 3b2aa271 over the 36 papers; TeX's answers dumped): on 30 of
     the 35 compiled none changed; on 5 only answers gained, none lost or changed, no switch moved — 6 sources no ink, each asked
     of its own (2608.25210v2's `\natexlab{}`, `{a}`…`{d}`, its paper's own definition setting nothing, and its `\showISSN{…}`),

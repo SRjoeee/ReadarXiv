@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { type Glyph, packGlyphs } from '@/pdf-reader/engine/layout/ink.mjs'
 import { type Follow, OWNED, OWNED_HOW, ownedOf, ownedPages, STREAM_COLUMNS, type StreamPage } from '@/pdf-reader/engine/layout/stream.mjs'
-import { INK_ANY, shareInk } from '@/pdf-reader/engine/layout/marks.mjs'
+import { INK_ANY } from '@/pdf-reader/engine/layout/marks.mjs'
 
 // Each placeholder's own ink in the marked compile by content-stream order: a page here is what pageInk reads of one,
 // its glyphs and boxes in the order shown and its points among them, its glyphs packed as the marks read keeps them
@@ -354,18 +354,6 @@ describe('ownedOf for the erasure (erasure: true)', () => {
     // (its text after it not found, or the next point no piece of its ends: LOST as before)
     expect(ink([page], { 'p0.3a': { ...split, split: { ...(split.split as object), want: ';', rest: '' } as never } }, false)['p0.3a']).toBe('open, an unmarked piece follows')
     expect(ink([more], { 'p0.3a': { ...seen, split: { ...(seen.split as object), ends: ['0e'] } as never }, 'p0.7a': closed }, false)['p0.3a']).toBe('open, an unmarked piece follows')
-  })
-  it('a text carried to an entry\'s call from the sample it shares (marks.mjs shareInk) parts its ink only where its glyphs spell it: else LOST, as with no text', () => {
-    // (\pfx{a} asked, its text "a:"; \pfx{b} shares its shape and is carried "b:". Where the macro sets its argument as written, the
-    // page's glyphs spell "b:" and the split parts them; where it sets another one (a lookup: "c:"), the carried text spells nothing
-    // there and the piece stays LOST, as an unasked call's does — a carry cannot place ink its glyphs do not spell)
-    const carried = new Map(shareInk({ inkless: [], texts: [['\\pfx{a}', 'a:']], apart: [] }, new Map([['\\pfx{b}', '\\pfx{a}']])).texts)
-    expect(carried.get('\\pfx{b}')).toBe('b:')
-    const split = (text: string): Follow => ({ closing: false, want: '', ends: ['p0.4a', '0e'], blocked: true, through: null, split: { name: 'p0.4a', text, want: '.', rest: '', ends: ['0e'] } })
-    const spelled = pageOf(['Radio. ', { at: 'p0.3a' }, 'b:10.1/x.', { at: '0e' }])
-    expect(ink([spelled], { 'p0.3a': split(carried.get('\\pfx{b}') as string) }, false)).toEqual({ 'p0.3a': ['b:', 0], 'p0.4a': ['10.1/x', 0] })
-    const other = pageOf(['Radio. ', { at: 'p0.3a' }, 'c:10.1/x.', { at: '0e' }])
-    expect(ink([other], { 'p0.3a': split(carried.get('\\pfx{b}') as string) }, false)['p0.3a']).toBe('open, an unmarked piece follows')
   })
   it('ends a display after its unit\'s end mark at a later unit\'s opening, that unit\'s label left out (2610.20595v1 p19u153)', () => {
     const page = pageOf(['states follow', { at: '0e' }, { at: 'p0.3a' }, '\nE=mc(G9)', '\n', { u: '2', x: 72, y: 676 }, { u: '.', x: 77, y: 676 }, { at: 'p1.0a' }, { at: 'h1s' }, { u: 'T', x: 90, y: 676 }, 'riangulene', { at: 'p1.0b' }])

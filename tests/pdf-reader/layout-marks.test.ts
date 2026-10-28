@@ -1153,7 +1153,7 @@ describe('the marks file', () => {
       ['schema 9, a file before the texts as TeX sets them (its maker would find no lead of punctuation, code or a formula)', m => { m.schema = 9 as 13 }, 'schema'],
       ['schema 10, a file before the numbers a bibliography entry keeps (its maker would read no class `number`)', m => { m.schema = 10 as 13 }, 'schema'],
       ['schema 11, a file before the look-ahead pairs (its maker would replay a marking with no mark after a paper\'s macro)', m => { m.schema = 11 as 13 }, 'schema'],
-      ['schema 12, a file before the entries\' calls answered by their sample (its maker would replay a marking whose calls of a shared sample set ink)', m => { m.schema = 12 as 13 }, 'schema'],
+      ['schema 12, a file before the entries\' own share (its reader refuses more than INK_MAX answers)', m => { m.schema = 12 as 13 }, 'schema'],
       ['complete macros of no object', m => { (m.marking as Record<string, unknown>).complete = ['bert', 0] }, 'marking.complete'],
       ['a complete macro\'s name with its backslash', m => { (m.marking as Record<string, unknown>).complete = { '\\bert': 0 } }, 'marking.complete.\\\\bert'],
       ['a complete macro of arity 10', m => { (m.marking as Record<string, unknown>).complete = { bert: 10 } }, 'marking.complete.bert'],
@@ -1187,8 +1187,8 @@ describe('the marks file', () => {
       ['an inkless source twice', m => { (m.marking.inkless as string[])[1] = '\\rule{0pt}{2ex}' }, 'marking.inkless[1]'],
       ['an inkless source empty', m => { (m.marking.inkless as string[])[0] = '' }, 'marking.inkless[0]'],
       ['an inkless source of 201 code units', m => { (m.marking.inkless as string[])[0] = `\\x${'y'.repeat(199)}` }, 'marking.inkless[0]'],
-      // (the samples' and the entries' calls they are carried to: INK_ANSWERS_MAX, one past them; MARKS_SCHEMA 13)
-      ['1153 inkless sources', m => { m.marking.inkless = Array.from({ length: INK_ANSWERS_MAX + 1 }, (_, i) => `\\m${i}`) }, 'marking.inkless'],
+      // (the body's samples and the entries': INK_ANSWERS_MAX, one past them; MARKS_SCHEMA 13)
+      [`${INK_ANSWERS_MAX + 1} inkless sources`, m => { m.marking.inkless = Array.from({ length: INK_ANSWERS_MAX + 1 }, (_, i) => `\\m${i}`) }, 'marking.inkless'],
       ['no texts key', m => { delete (m.marking as Partial<LayoutMarks['marking']>).texts }, 'marking.texts'],
       ['texts of an odd length', m => { (m.marking.texts as string[]).push('\\x') }, 'marking.texts'],
       ['texts in pairs, a level deeper than the file has', m => { (m.marking as Record<string, unknown>).texts = [['\\bert', 'BERT']] }, ''],
@@ -1198,7 +1198,7 @@ describe('the marks file', () => {
       ['a text of a formula\'s glyphs alone', m => { m.marking.texts = ['\\checkmark', `${INK_ANY}${INK_ANY}`] }, 'marking.texts[1]'],
       ['a text of OT1\'s quote', m => { m.marking.texts = ['\\q', '\'A\''] }, 'marking.texts[1]'],
       // (the answers' and the leads': INK_ANSWERS_MAX + LEAD_MAX, one past them)
-      ['1217 texts', m => { m.marking.texts = Array.from({ length: INK_ANSWERS_MAX + LEAD_MAX + 1 }, (_, i) => [`\\m${i}`, 'A']).flat() }, 'marking.texts'],
+      [`${INK_ANSWERS_MAX + LEAD_MAX + 1} texts`, m => { m.marking.texts = Array.from({ length: INK_ANSWERS_MAX + LEAD_MAX + 1 }, (_, i) => [`\\m${i}`, 'A']).flat() }, 'marking.texts'],
       ['chars not an array', m => { (m as Record<string, unknown>).chars = 'x2' }, 'chars'],
       ['a char of 33 code units', m => { m.chars[0] = 'x'.repeat(33) }, 'chars[0]'],
       ['a char that is a number', m => { (m.chars as unknown[])[1] = 2 }, 'chars[1]'],

@@ -293,22 +293,17 @@ const INK_SRC_MAX = 200
  *  a body whose macros fill INK_MAX leaves no entry unasked (2608.25210v2: 101 macro sources, its entries' \\natexlab{} never
  *  asked, their entries English) */
 export const ENTRY_INK_MAX = 64
-/** the entries' calls a sample's answers are carried to (inkShared), at most */
-export const ENTRY_SHARED_MAX = 1024
 /**
  * The ink section's samples: the source of each of the paper's macros (classOf 'macro'), once, in the order the paper
  * writes them, that TeX can set in a box of its own (no comment or parameter sign, no \verb, its braces balanced, no
  * environment, no paragraph's end): the body's at most INK_MAX, then a bibliography's entries' at most ENTRY_INK_MAX — first the
  * calls the room the body leaves of INK_MAX would have asked, in the paper's order, so that no entry is asked less than before;
- * then the entries' leads; then each further call —, a call past them given the text of an asked call of its shape where it
- * can be (inkShared, shareInk; entryShape: \\natexlab{a}, \\natexlab{b} and \\natexlab{c} one shape, \\natexlab{} another). A
- * symbol the layout draws as text (TEXT_SYMBOLS) is not asked
+ * then the entries' leads, whose ink only their own text finds (make.mjs besideMarks); then each further call, in order. A call
+ * past them is no sample, as one past INK_MAX was: no answer of another call is carried to it (the reviews of #495 — no ink and
+ * a box begun apart may hang on its argument's value, and a text carried may be a prefix of what it sets, which a split or a
+ * lead read from one side would take as its end). A symbol the layout draws as text (TEXT_SYMBOLS) is not asked
  */
-export const inkSamples = units => entryInk(units).asked
-/** the entries' calls past the share whose shape an asked call has (inkSamples): call → that call, whose text shareInk carries
- *  to it where carriedText gives one; at most ENTRY_SHARED_MAX, in the paper's order */
-export const inkShared = units => entryInk(units).shared
-function entryInk(units) {
+export function inkSamples(units) {
   const body = new Set(), calls = [], seen = new Set(), leads = new Set()
   for (const u of sampleOrder(units)) {
     const head = BIB(u) ? headEnd(u.pieces ?? [], 0) : 0
@@ -326,98 +321,14 @@ function entryInk(units) {
   const asked = new Set(calls.slice(0, Math.max(0, Math.min(ENTRY_INK_MAX, INK_MAX - body.size))))
   for (const src of calls) { if (asked.size >= ENTRY_INK_MAX) break; if (leads.has(src)) asked.add(src) }
   for (const src of calls) { if (asked.size >= ENTRY_INK_MAX) break; asked.add(src) }
-  // (a call past the share takes its text from the first asked call of its shape, where carriedText gives one)
-  const shapes = new Map(), shared = new Map()
-  for (const src of calls) if (asked.has(src) && !shapes.has(entryShape(src))) shapes.set(entryShape(src), src)
-  for (const src of calls) {
-    if (asked.has(src) || shared.size >= ENTRY_SHARED_MAX) continue
-    const sample = shapes.get(entryShape(src))
-    if (sample !== undefined) shared.set(src, sample)
-  }
-  return { asked: [...body, ...calls.filter(src => asked.has(src))], shared }
-}
-/** an argument's text a text font sets as it is written, character for character, its blanks aside: letters, digits and the
- *  ASCII punctuation every text font sets as itself (not OT1's < > | " ', which set ¡ ¿ — and quotes), no TeX special, and no
- *  run TeX makes a ligature of (--) */
-const PLAIN_ARG = /^(?!.*--)[A-Za-z0-9 .,;:!?()/+=*@[\]-]*$/s
-/** a macro's call cut as TeX reads its arguments: its command and each group or optional argument after it, white space
- *  between them passed over, [{ open, body, close }], or null where the source is anything else */
-function callArgs(src) {
-  const m = /^\\[A-Za-z@]+/.exec(src)
-  if (!m) return null
-  const args = []
-  for (let i = m[0].length; i < src.length; ) {
-    while (/\s/.test(src[i] ?? '')) i++
-    if (i >= src.length) break
-    const open = src[i], close = open === '{' ? '}' : open === '[' ? ']' : null
-    if (!close) return null
-    let depth = 0, j = i
-    for (; j < src.length; j++) {
-      if (src[j] === '\\') { j++; continue }
-      if (open === '{' ? src[j] === '{' : src[j] === '[' && depth === 0) depth++
-      else if (src[j] === close && --depth === 0) break
-    }
-    if (j >= src.length) return null
-    args.push({ open, body: src.slice(i + 1, j), close })
-    i = j + 1
-  }
-  return { command: m[0], args }
-}
-/** the shape of an entry's macro call the calls that share a sample have alike: its command, and each argument as empty, as
- *  plain text (PLAIN_ARG: its text the font sets as written) or as it is written; a source that is no call, itself */
-export function entryShape(src) {
-  const c = callArgs(src)
-  if (!c) return src
-  return `${c.command}${c.args.map(a => `${a.open}${a.body.trim() === '' ? '' : PLAIN_ARG.test(a.body) ? '\u0000' : a.body}${a.close}`).join('')}`
-}
-/**
- * The text a call sets that shares a sample (inkShared), from the sample's text: each plain argument the two differ in, its
- * blanks aside (TeX sets none of them as a character), found in the sample's text once and in place of the call's; null
- * where any is not found once, where two overlap, where the call's holds letters a font sets as a ligature (ff, fi, fl: its
- * glyph TeX's listing may give no text, 2609.26457v1's "findings" in a DOI), or where the result is no text readInkTexts gives
- * (INK_TEXT). A macro that transforms its argument (\\uppercase, a lookup) sets no text that holds it, and carries none
- */
-export function carriedText(sample, call, text) {
-  const a = callArgs(sample), b = callArgs(call)
-  if (!a || !b || a.command !== b.command || a.args.length !== b.args.length || typeof text !== 'string') return null
-  const cuts = []
-  for (let i = 0; i < a.args.length; i++) {
-    if (a.args[i].body === b.args[i].body) continue
-    const from = a.args[i].body.replace(/\s+/g, ''), to = b.args[i].body.replace(/\s+/g, '')
-    // (a call's letters a text font sets as one ligature glyph, which TeX's listing may give no text: none carried)
-    if (!from || !to || !PLAIN_ARG.test(a.args[i].body) || !PLAIN_ARG.test(b.args[i].body) || /f[fil]/.test(to)) return null
-    const at = text.indexOf(from)
-    if (at < 0 || text.indexOf(from, at + 1) >= 0) return null
-    cuts.push([at, at + from.length, to])
-  }
-  cuts.sort((x, y) => x[0] - y[0])
-  let out = '', end = 0
-  for (const [s, e, to] of cuts) { if (s < end) return null; out += text.slice(end, s) + to; end = e }
-  out += text.slice(end)
-  return INK_TEXT.test(out) && out.length <= INK_TEXT_MAX ? out : null
+  return [...body, ...calls.filter(src => asked.has(src))]
 }
 /** the ink section's answers from the probe's log, as the layout takes them: the macros TeX said set no ink (readInkProbe), the
- *  texts it showed they and the leads set (readInkTexts), those whose box it began apart (readInkApart), each carried to the
- *  entries' calls that share a sample (shareInk). The one reader every caller takes them by: layout/paper.mjs, the lab's */
+ *  texts it showed they and the leads set (readInkTexts), those whose box it began apart (readInkApart), each the asked
+ *  source's own. The one reader every caller takes them by: layout/paper.mjs, the lab's */
 export function readInkAnswers(log, units) {
   const ink = inkSamples(units), leads = leadSamples(units, ink)
-  return shareInk({ inkless: readInkProbe(log, ink), texts: readInkTexts(log, [...ink, ...leads]), apart: readInkApart(log, ink) }, inkShared(units))
-}
-/** the ink section's answers (readInkProbe, readInkTexts, readInkApart) with the texts carried to the calls that share a sample
- *  (inkShared): a call TeX gave no text of its own (a lead probed of its own keeps it) gets carriedText's, where it gives one.
- *  Only a text is carried, the one answer a wrong carry cannot misplace ink by: the maker and the wrap use it only where the
- *  page's glyphs spell it (stream.mjs textedTo, make.mjs leadStep), else the piece stays LOST, as an unasked call's does. No ink
- *  and a box begun apart are not: a macro's ink may hang on its argument's value (\\ifnum#1>64 #1\\fi), and a call wrongly said
- *  to set none would lose its placeholder, one wrongly said apart would get a mark against the word it is glued to (the reviews
- *  of #495). { inkless, texts, apart }, each null kept null */
-export function shareInk({ inkless, texts, apart }, shared) {
-  if (!shared?.size || texts === null) return { inkless, texts, apart }
-  const said = new Map(texts ?? []), out = [...texts]
-  for (const [call, sample] of shared) {
-    const t = !said.has(call) && said.has(sample) ? carriedText(sample, call, said.get(sample)) : null
-    if (t !== null) out.push([call, t])
-  }
-  return { inkless, texts: out, apart }
+  return { inkless: readInkProbe(log, ink), texts: readInkTexts(log, [...ink, ...leads]), apart: readInkApart(log, ink) }
 }
 const balanced = s => { let d = 0; for (let i = 0; i < s.length; i++) { if (s[i] === '\\') { i++; continue } if (s[i] === '{') d++; else if (s[i] === '}' && --d < 0) return false } return d === 0 }
 /** a source TeX can set in a box of its own: no comment or parameter sign, no \\verb, its braces balanced, no environment, no
@@ -433,7 +344,6 @@ export const LEAD_MAX = 64
  * and the erasure a cell's (own.mjs, MR 5b): with no text, the unit is the original's. Asked last (markProbeTex)
  */
 export function leadSamples(units, asked = inkSamples(units)) {
-  // (an entry's call past the share is a lead of its own still: a carried text may be none, the reviews of #495)
   const seen = new Set(asked), out = []
   for (const u of sampleOrder(units)) {
     const pieces = u.pieces ?? [], head = headEnd(pieces, 0)
@@ -1488,9 +1398,8 @@ export const MARKS_DEPTH = 3
  *  by aheadKey, one code each: a paper's macro and the placeholder right after it, which is marked where TeX said a mark
  *  there moves nothing), which a reader of 11 refuses as no control word; and in `owned` the ink of a placeholder no mark
  *  could stand before, parted from the macro before it by that macro's text (followsOf `split`), by the opening mark's name
- *  it would have had, which a maker of 11 would not read; 13 the entries' own share of samples past the body's, and an entry's
- *  call past it given the text of an asked call of its shape (inkShared, shareInk: \\natexlab{b}'s "b" by \\natexlab{a}'s "a"),
- *  so that `marking.inkless`, `marking.apart` and `marking.texts` name up to INK_ANSWERS_MAX sources (and LEAD_MAX more texts),
+ *  it would have had, which a maker of 11 would not read; 13 the entries' own share of samples past the body's (ENTRY_INK_MAX), so
+ *  that `marking.inkless`, `marking.apart` and `marking.texts` name up to INK_ANSWERS_MAX sources (and LEAD_MAX more texts),
  *  which a reader of 12 refuses past INK_MAX */
 export const MARKS_SCHEMA = 13
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
@@ -1541,9 +1450,8 @@ function checkSwitches(v, path) {
 }
 /** the macros TeX said set no ink (readInkProbe), as the marking takes them: null where no probe ran, else at most
  *  INK_MAX sources of 1 to INK_SRC_MAX code units, none twice; else a refusal at `path` */
-/** the sources the ink section's answers name, at most: its samples' (the body's and the entries') and the entries' calls they
- *  are carried to (inkShared) */
-export const INK_ANSWERS_MAX = INK_MAX + ENTRY_INK_MAX + ENTRY_SHARED_MAX
+/** the sources the ink section's answers name, at most: its samples', the body's and the entries' */
+export const INK_ANSWERS_MAX = INK_MAX + ENTRY_INK_MAX
 function checkInkless(v, path) {
   if (v === null) return null
   if (!Array.isArray(v) || v.length > INK_ANSWERS_MAX) throw new LayoutRefusal(path, `not null or an array of at most ${INK_ANSWERS_MAX} sources`)

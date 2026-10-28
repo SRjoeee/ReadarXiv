@@ -195,7 +195,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     const log = lastTexLog(c?.log)
     if (!log) return null
     // (the texts of the macros and of the units' leads, asked last: live.mjs probeFiles)
-    // (an entry's call that shares a sample answered by it: marks.mjs readInkAnswers, shareInk)
+    // (the body's and the entries' answers, as every reader takes them: marks.mjs readInkAnswers)
     const { inkless, texts, apart } = readInkAnswers(log, paper.units)
     return { switches: readMarkProbe(log, probeSamples(paper.units, paper.project?.complete)), inkless, texts, names: readNameProbe(log), lineskip: readSkipProbe(log), apart }
   })
