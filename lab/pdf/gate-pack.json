@@ -3,7 +3,7 @@
  "pipeline": "18",
  "layout": {
   "schema": 5,
-  "version": "24"
+  "version": "25"
  },
  "compileImage": {
   "texlive": "texlive/texlive@sha256:7056390eac37715fd3e01875037ceb4016cb17d44c611f7bbbfa7a012007979f",
@@ -23,7 +23,7 @@
    "fmtutil": "r77314"
   }
  },
- "made": "2026-10-28T18:44:10.959Z",
+ "made": "2026-10-28T16:43:27.944Z",
  "digest": "ad76c5149454d666a335575c4592551ad0633e6648bae5269172615ec1fd3426",
  "bucket": "readarxiv-ci",
  "files": [
