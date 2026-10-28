@@ -431,14 +431,25 @@ describe('the ink section\'s cap and a bibliography\'s entries (2608.25210v2: it
     expect(entryShape('\\href@noop {} {\\emph {J. Phys.}}')).toBe('\\href@noop{}{\\emph {J. Phys.}}')
     // (OT1's < > | " ' set other glyphs, and -- a dash: no plain text)
     expect(['\\x{a<b}', '\\x{a"b}', "\\x{a'b}", '\\x{1--2}', '\\x{10.1137/0330046}'].map(entryShape)).toEqual(['\\x{a<b}', '\\x{a"b}', "\\x{a'b}", '\\x{1--2}', '\\x{\u0000}'])
-    const units = [entry('\\natexlab{a}', '\\doi{10.1/x}'), entry('\\natexlab{b}', '\\doi{10.2/y}'), entry('\\natexlab{}', '\\natexlab{c}')]
-    expect(inkSamples(units)).toEqual(['\\natexlab{a}', '\\doi{10.1/x}', '\\natexlab{}'])
-    expect([...inkShared(units)]).toEqual([['\\natexlab{b}', '\\natexlab{a}'], ['\\doi{10.2/y}', '\\doi{10.1/x}'], ['\\natexlab{c}', '\\natexlab{a}']])
+    // (a bibliography the share holds: every call asked of its own, as before, none shared)
+    const few = [entry('\\natexlab{a}', '\\doi{10.1/x}'), entry('\\natexlab{b}', '\\doi{10.2/y}'), entry('\\natexlab{}', '\\natexlab{c}')]
+    expect(inkSamples(few)).toEqual(['\\natexlab{a}', '\\doi{10.1/x}', '\\natexlab{b}', '\\doi{10.2/y}', '\\natexlab{}', '\\natexlab{c}'])
+    expect(inkShared(few).size).toBe(0)
+    // (one past it: each shape's first call asked before any second one — \natexlab{} after ENTRY_INK_MAX DOIs asked all the
+    // same —, the room left to the calls in their order, the last DOI answered by its shape's sample)
+    const dois = Array.from({ length: ENTRY_INK_MAX }, (_, i) => entry(`\\doi{10.${i}/x}`))
+    const big = [...dois, entry('\\natexlab{}'), entry('\\natexlab{b}')]
+    const asked = inkSamples(big)
+    expect(asked).toHaveLength(ENTRY_INK_MAX)
+    expect(asked).toContain('\\natexlab{}')
+    expect(asked).toContain('\\natexlab{b}')
+    expect(asked.slice(0, 3)).toEqual(['\\doi{10.0/x}', '\\doi{10.1/x}', '\\doi{10.2/x}'])
+    expect([...inkShared(big)]).toEqual([[`\\doi{10.${ENTRY_INK_MAX - 2}/x}`, '\\doi{10.0/x}'], [`\\doi{10.${ENTRY_INK_MAX - 1}/x}`, '\\doi{10.0/x}']])
     // (a body's macro is asked as before, never shared; a call shared is no lead)
-    expect([...inkShared([...body(1), ...units])].map(([c]) => c)).toEqual(['\\natexlab{b}', '\\doi{10.2/y}', '\\natexlab{c}'])
-    expect(leadSamples([entry('\\natexlab{a}'), { ...unit([ph('\\natexlab{b}'), text(' and more.')]), kind: 'reference' } as SourceUnit])).toEqual([])
+    expect([...inkShared([...body(1), ...big])].map(([c]) => c)).toEqual([`\\doi{10.${ENTRY_INK_MAX - 2}/x}`, `\\doi{10.${ENTRY_INK_MAX - 1}/x}`])
+    expect(leadSamples([...dois, entry('\\natexlab{a}'), { ...unit([ph(`\\doi{10.${ENTRY_INK_MAX}/x}`), text(' and more.')]), kind: 'reference' } as SourceUnit])).toEqual([])
     // (at most ENTRY_SHARED_MAX calls)
-    expect(inkShared(Array.from({ length: ENTRY_SHARED_MAX + 2 }, (_, i) => entry(`\\doi{10.${i}/x}`))).size).toBe(ENTRY_SHARED_MAX)
+    expect(inkShared(Array.from({ length: ENTRY_INK_MAX + ENTRY_SHARED_MAX + 2 }, (_, i) => entry(`\\doi{10.${i}/x}`))).size).toBe(ENTRY_SHARED_MAX)
   })
   it('carriedText: the sample\'s text with each plain argument the two differ in put in place of the call\'s, where it stands once; none where a macro transforms its argument', () => {
     expect(carriedText('\\natexlab{a}', '\\natexlab{b}', 'a')).toBe('b')
@@ -446,17 +457,22 @@ describe('the ink section\'s cap and a bibliography\'s entries (2608.25210v2: it
     expect(carriedText('\\href@noop {} {Ph.D. thesis}', '\\href@noop {} {M.Sc. thesis}', 'Ph.D.thesis')).toBe('M.Sc.thesis')
     // (an uppercased argument: its text holds no "abc", and nothing is carried)
     expect(carriedText('\\up{abc}', '\\up{def}', 'ABC')).toBeNull()
+    // (a call's letters a font sets as one ligature: 2609.26457v1's "findings" in a DOI, which TeX's listing gives as no text)
+    expect(carriedText('\\doi{10.1/acl}', '\\doi{10.1/findings}', 'doi:10.1/acl')).toBeNull()
     // (the argument twice in its text, or one that is no plain text: none)
     expect(carriedText('\\twice{a}', '\\twice{b}', 'aa')).toBeNull()
     expect(carriedText('\\x{a}', '\\x{\\emph{b}}', 'a')).toBeNull()
     expect(carriedText('\\x{a}', '\\y{b}', 'a')).toBeNull()
   })
-  it('readInkAnswers: the probe\'s log read for the samples and carried to the calls that share one (2608.25210v2\'s \\natexlab{} no ink, its \\natexlab{b} "b")', () => {
-    const units = [entry('\\natexlab{}'), entry('\\natexlab{a}'), entry('\\natexlab{b}')]
-    expect(inkSamples(units)).toEqual(['\\natexlab{}', '\\natexlab{a}'])
+  it('readInkAnswers: the probe\'s log read for the samples and carried to the calls that share one (2608.25210v2\'s \\natexlab{} no ink; a DOI past the share "doi:10.9/z")', () => {
+    const units = [entry('\\natexlab{}'), ...Array.from({ length: ENTRY_INK_MAX }, (_, i) => entry(`\\doi{10.${i}/x}`))]
+    const asked = inkSamples(units)
+    expect(asked.slice(0, 2)).toEqual(['\\natexlab{}', '\\doi{10.0/x}'])
+    expect([...inkShared(units)]).toEqual([[`\\doi{10.${ENTRY_INK_MAX - 1}/x}`, '\\doi{10.0/x}']])
     const listing = (i: number, ...nodes: string[]) => [`LAYOUT-PROBE 1 ink-at ${i}`, '> \\box60=', ...nodes, '', '! OK.', `LAYOUT-PROBE 1 ink-end ${i}`]
-    const log = [...listing(0, '\\hbox(0.0+0.0)x0.0'), ...listing(1, '\\hbox(4.3+0.0)x5.0', '.\\OT1/cmr/m/n/10 a')].join('\n')
-    expect(readInkAnswers(log, units)).toEqual({ inkless: ['\\natexlab{}'], texts: [['\\natexlab{a}', 'a'], ['\\natexlab{b}', 'b']], apart: [] })
+    const chars = (s: string) => [...s].map(c => `.\\OT1/cmr/m/n/10 ${c}`)
+    const log = [...listing(0, '\\hbox(0.0+0.0)x0.0'), ...listing(1, '\\hbox(6.8+0.0)x40.0', ...chars('doi:10.0/x'))].join('\n')
+    expect(readInkAnswers(log, units)).toEqual({ inkless: ['\\natexlab{}'], texts: [['\\doi{10.0/x}', 'doi:10.0/x'], [`\\doi{10.${ENTRY_INK_MAX - 1}/x}`, `doi:10.${ENTRY_INK_MAX - 1}/x`]], apart: [] })
   })
   it('shareInk: a call sets no ink, or begins apart, where its sample does; its text carried where carriedText gives one; null kept null', () => {
     const shared = new Map([['\\natexlab{b}', '\\natexlab{a}'], ['\\up{def}', '\\up{abc}'], ['\\e{y}', '\\e{x}']])

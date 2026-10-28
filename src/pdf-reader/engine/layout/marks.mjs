@@ -298,27 +298,35 @@ export const ENTRY_SHARED_MAX = 1024
 /**
  * The ink section's samples: the source of each of the paper's macros (classOf 'macro'), once, in the order the paper
  * writes them, that TeX can set in a box of its own (no comment or parameter sign, no \verb, its braces balanced, no
- * environment, no paragraph's end): the body's at most INK_MAX, then a bibliography's entries' at most ENTRY_INK_MAX, one a
- * command and the shape of its arguments (entryShape: \\natexlab{a}, \\natexlab{b} and \\natexlab{c} one sample, the first,
- * as written; \\natexlab{} another), the other calls answered by it (inkShared, shareInk). A symbol the layout draws as text
- * (TEXT_SYMBOLS) is not asked
+ * environment, no paragraph's end): the body's at most INK_MAX, then a bibliography's entries' at most ENTRY_INK_MAX — first one
+ * a command and the shape of its arguments (entryShape: \\natexlab{a}, \\natexlab{b} and \\natexlab{c} one shape, its first
+ * call the sample, as written; \\natexlab{} another), so that every shape is asked, then with the room left each call of its
+ * own, in the paper's order —, the calls past them answered by their shape's sample (inkShared, shareInk). A symbol the layout
+ * draws as text (TEXT_SYMBOLS) is not asked
  */
 export const inkSamples = units => entryInk(units).asked
 /** the entries' calls no sample of their own asks about whose shape a sample shares (inkSamples): call → that sample, the
  *  answers of which shareInk carries to it; at most ENTRY_SHARED_MAX, in the paper's order */
 export const inkShared = units => entryInk(units).shared
 function entryInk(units) {
-  const body = new Set(), entries = new Set(), shapes = new Map(), shared = new Map()
+  const body = new Set(), calls = [], seen = new Set()
   for (const u of sampleOrder(units)) for (const p of u.pieces) {
-    if (p.t !== 'ph' || classOf(p) !== 'macro' || body.has(p.src) || entries.has(p.src) || shared.has(p.src) || symbolText(p.src) !== null || !boxable(p.src)) continue
+    if (p.t !== 'ph' || classOf(p) !== 'macro' || body.has(p.src) || seen.has(p.src) || symbolText(p.src) !== null || !boxable(p.src)) continue
     if (!BIB(u)) { if (body.size < INK_MAX) body.add(p.src); continue }
-    const shape = entryShape(p.src), sample = shapes.get(shape)
-    if (sample !== undefined) { if (shared.size < ENTRY_SHARED_MAX) shared.set(p.src, sample); continue }
-    if (entries.size >= ENTRY_INK_MAX) continue
-    shapes.set(shape, p.src)
-    entries.add(p.src)
+    seen.add(p.src)
+    calls.push(p.src)
   }
-  return { asked: [...body, ...entries], shared }
+  // (first a sample of each shape, so that every shape is asked; then, with the room left, each call of its own, so that a
+  // bibliography the share holds is asked call by call as before; the rest answered by their shape's sample)
+  const asked = new Set(), shapes = new Map(), shared = new Map()
+  for (const src of calls) { const shape = entryShape(src); if (!shapes.has(shape) && shapes.size < ENTRY_INK_MAX) { shapes.set(shape, src); asked.add(src) } }
+  for (const src of calls) { if (asked.size >= ENTRY_INK_MAX) break; asked.add(src) }
+  for (const src of calls) {
+    if (asked.has(src) || shared.size >= ENTRY_SHARED_MAX) continue
+    const sample = shapes.get(entryShape(src))
+    if (sample !== undefined) shared.set(src, sample)
+  }
+  return { asked: [...body, ...calls.filter(src => asked.has(src))], shared }
 }
 /** an argument's text a text font sets as it is written, character for character, its blanks aside: letters, digits and the
  *  ASCII punctuation every text font sets as itself (not OT1's < > | " ', which set ¡ ¿ — and quotes), no TeX special, and no
@@ -357,8 +365,9 @@ export function entryShape(src) {
 /**
  * The text a call sets that shares a sample (inkShared), from the sample's text: each plain argument the two differ in, its
  * blanks aside (TeX sets none of them as a character), found in the sample's text once and in place of the call's; null
- * where any is not found once, where two overlap, or where the result is no text readInkTexts gives (INK_TEXT). A macro that
- * transforms its argument (\\uppercase, a lookup) sets no text that holds it, and carries none
+ * where any is not found once, where two overlap, where the call's holds letters a font sets as a ligature (ff, fi, fl: its
+ * glyph TeX's listing may give no text, 2609.26457v1's "findings" in a DOI), or where the result is no text readInkTexts gives
+ * (INK_TEXT). A macro that transforms its argument (\\uppercase, a lookup) sets no text that holds it, and carries none
  */
 export function carriedText(sample, call, text) {
   const a = callArgs(sample), b = callArgs(call)
@@ -367,7 +376,8 @@ export function carriedText(sample, call, text) {
   for (let i = 0; i < a.args.length; i++) {
     if (a.args[i].body === b.args[i].body) continue
     const from = a.args[i].body.replace(/\s+/g, ''), to = b.args[i].body.replace(/\s+/g, '')
-    if (!from || !to || !PLAIN_ARG.test(a.args[i].body) || !PLAIN_ARG.test(b.args[i].body)) return null
+    // (a call's letters a text font sets as one ligature glyph, which TeX's listing may give no text: none carried)
+    if (!from || !to || !PLAIN_ARG.test(a.args[i].body) || !PLAIN_ARG.test(b.args[i].body) || /f[fil]/.test(to)) return null
     const at = text.indexOf(from)
     if (at < 0 || text.indexOf(from, at + 1) >= 0) return null
     cuts.push([at, at + from.length, to])
