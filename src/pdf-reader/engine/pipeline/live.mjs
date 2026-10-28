@@ -277,10 +277,13 @@ export function bblProvides(fsys, main) {
     }
     return -1
   }
-  /** the end past the conditional that opens at `i`, at its matching \\fi (the primitive conditionals nested in it counted), or -1 */
+  /** the end past the conditional that opens at `i`, at its matching \\fi (the primitive conditionals nested in it counted), or -1:
+   *  also where a word that may be a conditional of a package's or a \\newif's (\\ifpdf, \\if@foo) stands in it before its end, whose
+   *  \\fi no reading of the head alone tells from the guard's (the review of #492), the block then passed over head by head */
   const conditional = i => {
     for (let depth = 0, m; (m = at(IF_FI, i)); i = m.index + m[0].length) {
       if (m[1] === 'fi') { if (--depth === 0) return m.index + m[0].length } else if (m[1] !== undefined) depth++
+      else if (m[2]?.startsWith('if')) return -1
     }
     return -1
   }
@@ -305,8 +308,8 @@ const TOKEN = /\\(?:[A-Za-z@]+|.)/ys
 const COMMAND = /\\(?:provide|new)command(\*?)(\s*(?:\{\s*\\(?:[A-Za-z@]+|.)\s*\}|\\(?:[A-Za-z@]+|.))\s*(?:\[\s*\d\s*\]\s*)?(?:\[[^\]]*\]\s*)?)(?=\{)/ys
 /** a conditional on whether a name is defined: natbib's \\expandafter\\ifx\\csname, `\\ifx\\X\\undefined`, amsplain's `\\ifx\\undefined\\X`, e-TeX's */
 const CONDITIONAL = /\\expandafter\s*\\ifx\s*\\csname|\\ifx\s*\\(?:[A-Za-z@]+|.)\s*\\(?:undefined|relax|@undefined)(?![A-Za-z@])|\\ifx\s*\\(?:undefined|@undefined)\s*\\(?:[A-Za-z@]+|.)|\\if(?:defined|csname)(?![A-Za-z@])/y
-/** the next primitive conditional ([1] `if…`) or \\fi ([1] `fi`), or any other control sequence passed over */
-const IF_FI = /[^\\]*\\(?:(if(?:x|cat|num|dim|odd|vmode|hmode|mmode|inner|void|hbox|vbox|eof|true|false|case|defined|csname|fontchar)?|fi)(?![A-Za-z@])|[A-Za-z@]+|.)/ys
+/** the next primitive conditional ([1] `if…`) or \\fi ([1] `fi`), or any other control sequence passed over ([2] its word) */
+const IF_FI = /[^\\]*\\(?:(if(?:x|cat|num|dim|odd|vmode|hmode|mmode|inner|void|hbox|vbox|eof|true|false|case|defined|csname|fontchar)?|fi)(?![A-Za-z@])|([A-Za-z@]+)|.)/ys
 const DEFINES = /\\(?:providecommand|newcommand|[gex]?def|let)(?![A-Za-z@])/
 const RENEWS = /\\renewcommand(?![A-Za-z@])/
 const IFUNDEFINED = /\\@ifundefined(?![A-Za-z@])/y
