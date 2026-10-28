@@ -244,6 +244,17 @@ describe('inkEdges: a token\'s ink reaches over the marks that touch it', () => 
     ])
   })
 
+  it("joins a word a hyphen cuts at a line's end where an empty item ends the line, as PDF.js gives it where marked content closes (2610.19274v1)", () => {
+    // our wrapped page: the hyphen's item has no end of line of its own, an empty one after it has (the group's EMC)
+    const joined = (items: Item[]) => tokenizeDocument([{ page: 1, items, styles: {} }]).map(t => t.t)
+    const own = joined([item('integrates depth-', 50, 700, { eol: true }), item('wise convolutions', 50, 688)])
+    const empty = joined([item('integrates depth-', 50, 700), item('', 50, 688, { eol: true }), item('wise convolutions', 50, 688)])
+    expect(own).toEqual(['integrates', 'depthwise', '', 'convolutions'])
+    expect(empty).toEqual(own)
+    // (no hyphen: two words, as before; and a word on the next line is never joined to the one before as on its line)
+    expect(joined([item('integrates depth', 50, 700), item('', 50, 688, { eol: true }), item('wise convolutions', 50, 688)])).toEqual(['integrates', 'depth', 'wise', 'convolutions'])
+  })
+
   it('the words a hyphen joins: their boxes, which anchoring reads, an even share of the item; their ink a proportional face\'s widths, the hyphen with the word it follows', () => {
     // their ink where a proportional face's widths put them in the item (Times-Roman's: state- 2166, of- 1166, art 1055
     // thousandths of an em, over its 60 units), their boxes an even share as anchoring reads them
