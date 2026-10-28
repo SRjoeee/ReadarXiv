@@ -54,11 +54,11 @@ in its runs by script.
 | 2610.21491v1 | 37 | 34 | 9 | 30 | 14 | 34 | 0 | 0 | 0 | 0 | 0 | 29 → 34 | 28 → 34 | 1 → 0 | 4 |
 | 2610.21827v1 | 16 | 3 | 6 | 14 | 0 | 3 | 0 | 0 | 0 | 0 | 0 | 3 → 3 | 3 → 3 | 0 → 0 | 0 |
 | 2610.21880v1 | 83 | 66 | 10 | 41 | 4 | 65 | 0 | 0 | 0 | 0 | 0 | 61 → 66 | 56 → 66 | 3 → 0 | 5 |
-| 2610.21924v1 | 135 | 86 | 23 | 121 | 43 | 81 | 0 | 0 | 0 | 0 | 0 | 77 → 86 | 70 → 84 | 4 → 0 | 7 |
+| 2610.21924v1 | 135 | 86 | 23 | 121 | 43 | 81 | 0 | 0 | 0 | 0 | 0 | 77 → 86 | 70 → 77 | 4 → 0 | 7 |
 | 2610.22065v1 | 121 | 89 | 24 | 64 | 6 | 86 | 0 | 0 | 0 | 0 | 0 | 78 → 89 | 72 → 89 | 5 → 0 | 7 |
 | 2610.22195v1 | 202 | 184 | 37 | 152 | 9 | 183 | 0 | 0 | 0 | 0 | 0 | 164 → 184 | 160 → 184 | 4 → 0 | 15 |
 | 2610.22214v1 | 108 | 70 | 28 | 75 | 18 | 55 | 0 | 0 | 0 | 0 | 0 | 65 → 70 | 47 → 54 | 7 → 0 | 10 |
-| **All** | **1,469** | **1,216** | **293** | **1,159** | **223** | **1,158** | **0** | **0** | **0** | **0** | **0** | **905 → 1,177** | **819 → 1,095** | **43 → 0** | **116** |
+| **All** | **1,469** | **1,216** | **293** | **1,159** | **223** | **1,158** | **0** | **0** | **0** | **0** | **0** | **905 → 1,177** | **819 → 1,088** | **43 → 0** | **116** |
 
 **Microsoft's translations** (three papers: two of the pack, and 2010.11929v2 made by `figure-final.mjs`; a label whose translation says its source again is not counted):
 
@@ -76,7 +76,9 @@ its ground's edge: a ground of unknown lines now ends the free line a band's hei
 2610.21924v1 whose rectangles' edges, single floats, fell a hair past their own clipped boxes and were dropped by the clip's
 clamp (now within 0.05). One unit of 2602.23285v2 had turned crowded on the first run, a clipped line's unclipped segment
 reaching it once the scan went past the reach: crowding and the anchor read alone are read within the reach again, and on every
-paper of both sets the wrap's counts (units, drawn, crowded, forms) are `next`'s.
+paper of both sets the wrap's counts (units, drawn, crowded, forms) are `next`'s. After the review of #490 (a clipped ground's
+edge, and a room stopping short of a unit of another direction's) every count above is as before but 2610.21924v1's labels at
+their full size, 84 to 77: its turned and level labels round its scatter plots now leave each other's line.
 
 ## Run of 2026-10-25, the pack 09208b43 (engine `feat/figure-text` on `next` 1cdca756)
 
