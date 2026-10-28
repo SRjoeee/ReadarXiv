@@ -2806,7 +2806,8 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   it stands on, its clip's edge where a clip cuts it short; a path's lines only as far as its box, its clip's, shows them),
   `ROOM_CLEAR` 0.15 em short of it; on a ground whose lines are not known (a path past the page's shapes, a rounded node, a frame's stroke) a band's height inside
   its edges, on an image's or a shading's none (2602.23285v2's caption over a screenshot); never past its figure's extent
-  (pageInk's `figures`: every box painted inside the form or the picture, with its glyphs); half the line to another unit
+  (pageInk's `figures`: every box painted inside the form or the picture, with its glyphs) nor its page's box, where either
+  edge of its band leaves them (a turned label's before its box's corners project there); half the line to another unit
   whose band its own meets, the other half that unit's; short of the band and room of a unit of another direction (each
   against the other's room as first found: a level label and a turned one never take one place); `ROOM_MAX` 6 em at most. Crowding and the anchor read alone are
   read within the reach as before, so the same units are drawn and the base is the same bytes.

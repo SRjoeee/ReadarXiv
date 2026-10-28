@@ -301,6 +301,27 @@ describe('a figure\'s labels in their columns and sets, each with its room (synt
     expect(b!.before).toBeGreaterThan(0)
   })
 
+  it('a turned label\'s room ends where its band leaves its figure and its page, not where the figure\'s box projects (the review of #490)', () => {
+    // (four letters, 20 long, from (280, 100) at 30 degrees, in a figure and a page of [0, 0, 300, 300])
+    const c = Math.cos(Math.PI / 6), sn = Math.sin(Math.PI / 6), turned: unknown[] = [], boxes: number[] = []
+    ;[...'abcd'].forEach((uch, k) => {
+      const x0 = 280 + c * 5 * k, y0 = 100 + sn * 5 * k
+      turned.push({ u: uch, n: 0, k, ox: x0, oy: y0, ex: x0 + c * 5, ey: y0 + sn * 5, ux: c, uy: sn, size: 10, ascent: 0.7, descent: -0.2, font: 'ArialMT', fill: 0, box: boxes.length / 4, at: 0, pt: 1 })
+      boxes.push(x0 - 7 * sn, y0 - 2 * c, x0 + c * 5 + 2 * sn, y0 + sn * 5 + 7 * c)
+    })
+    const pg = { glyphs: [], turned, boxes, shapes: new Map(), paths: boxes.filter((_, i) => i % 4 === 0).map(() => -4), figures: new Map([['0:0', [0, 0, 300, 300]]]), pictures: [{ name: 'zs', glyph: 0, box: 0 }, { name: 'ze', glyph: 0, box: boxes.length / 4 }], points: [], view: [0, 0, 300, 300] }
+    const u = unitsOf(pg as never)[0]!
+    expect(u.angle).toBe(30)
+    // (every corner of its widest drawing, its band from before its start to after its end, inside the figure and the page)
+    const nx = -u.uy, ny = u.ux
+    for (const sAlong of [-u.before, u.length + u.after]) for (const t of [u.descent * u.size, u.ascent * u.size]) {
+      const x = u.x + u.ux * sAlong + nx * t, y = u.y + u.uy * sAlong + ny * t
+      expect(x, `x at ${sAlong}, ${t}`).toBeLessThanOrEqual(300 + 1e-6)
+      expect(y, `y at ${sAlong}, ${t}`).toBeLessThanOrEqual(300 + 1e-6)
+      expect(Math.min(x, y)).toBeGreaterThanOrEqual(-1e-6)
+    }
+  })
+
   it('two labels on one line share the line between them, half each, ROOM_CLEAR apart', () => {
     const [a, b] = unitsOf(picture([{ text: 'left', x: 100, y: 100 }, { text: 'right', x: 150, y: 100 }]))
     // ("left" ends at 120, "right" begins at 150: 30 between, 1.5 clear, 14.25 each; one set, on one baseline)

@@ -217,6 +217,22 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
   return { units, glyphs: glyphMaps, turned: turnedMaps, stats }
 }
 
+/** the stretch along a unit's direction, from its origin, over which both edges of its band stay inside box `b` [x0, y0, x1,
+ *  y1]: [s0, s1] (an axis the direction does not move along bounds nothing) */
+function spanIn(u, b) {
+  const nx = -u.uy, ny = u.ux
+  let s0 = -Infinity, s1 = Infinity
+  for (const t of [u.descent * u.size, u.ascent * u.size]) {
+    const px = u.x + nx * t, py = u.y + ny * t
+    for (const [p, d, lo, hi] of [[px, u.ux, b[0], b[2]], [py, u.uy, b[1], b[3]]]) {
+      if (Math.abs(d) < 1e-9) continue
+      const a = (lo - p) / d, z = (hi - p) / d
+      s0 = Math.max(s0, Math.min(a, z)); s1 = Math.min(s1, Math.max(a, z))
+    }
+  }
+  return [s0, s1]
+}
+
 /** a run's edges and its baseline (so that runs of one direction compare by number): each edge's place along its direction in
  *  the page's own frame turned to it (`along`), and its point on the page (`x`, `y`) — its start (its first glyph's origin), end
  *  (its last glyph's end) and middle —, its baseline across its direction, its size and what it may share an edge with (`key`:
@@ -323,7 +339,7 @@ function setsOf(mine, evidence, stats) {
  * free line a translation longer than its original may take (the owner's rule of 2026-10-29: into free space, never touching
  * other ink, never leaving its figure): the ink its band meets nearest along its baseline (roomOf's `free`: another glyph, a
  * stroke, a fill's edge, an image) less ROOM_CLEAR of its size; never past its figure's extent (pageInk's `figures`, with its
- * figure's glyphs); half the line between it and another unit whose band its own meets (a neighbour's translation may take
+ * figure's glyphs) nor its page's box, where either edge of its band leaves them (spanIn); half the line between it and another unit whose band its own meets (a neighbour's translation may take
  * the other half); ROOM_MAX of its size at most; and short of the band and room of a unit of another direction (each
  * against the other's room as first found: a level label and a turned one never take one place)
  */
@@ -345,6 +361,7 @@ function roomsOf(pg, S, mine) {
     return [Math.min(...pts.map(p => p[0])), Math.min(...pts.map(p => p[1])), Math.max(...pts.map(p => p[0])), Math.max(...pts.map(p => p[1]))]
   }
   const bands = mine.map(({ u }) => boxOf(u))
+  const view = pg.view?.length === 4 ? [Math.min(pg.view[0], pg.view[2]), Math.min(pg.view[1], pg.view[3]), Math.max(pg.view[0], pg.view[2]), Math.max(pg.view[1], pg.view[3])] : null
   // (each unit's band with its room either side, as a page box: what a unit of another direction may take, stopped short of)
   const reachOf = u => {
     const nx = -u.uy, ny = u.ux, lo = u.descent * u.size, hi = u.ascent * u.size
@@ -355,8 +372,13 @@ function roomsOf(pg, S, mine) {
     const f = { ox: u.x, oy: u.y, ux: u.ux, uy: u.uy }, clear = ROOM_CLEAR * u.size, pad = CROWD_PAD * u.size
     const lo = u.descent * u.size + pad, hi = u.ascent * u.size - pad
     let before = Math.min(ROOM_MAX * u.size, free.before - clear), after = Math.min(ROOM_MAX * u.size, free.after - clear)
-    const e = ext.get(`${r.fid}:${r.pid}`)
-    if (e) { const b = inFrame(f, e); before = Math.min(before, -b[0]); after = Math.min(after, b[2] - u.length) }
+    // (its band as far as it stays inside its figure's extent and its page's box, both its edges: a turned label leaves a box
+    // where its band crosses the box's side, before its box's corners project there, the review of #490)
+    for (const b of [ext.get(`${r.fid}:${r.pid}`), view]) {
+      if (!b) continue
+      const [s0, s1] = spanIn(u, b)
+      before = Math.min(before, -s0); after = Math.min(after, s1 - u.length)
+    }
     bands.forEach((b, j) => {
       if (j === i) return
       const o = inFrame(f, b)
