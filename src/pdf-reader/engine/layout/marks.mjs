@@ -240,26 +240,38 @@ export function punctuationSection(samples, from = 0) {
 /** each box of the punctuation and look-ahead sections starts from the same state: the footnote counter as it was, biblatex's
  *  citation trackers reset (punctuationSection) */
 const PROBE_RESET = '\\edef\\axt@qfn{\\ifdefined\\c@footnote\\the\\c@footnote\\else0\\fi}\\def\\axt@qreset{\\ifdefined\\c@footnote\\global\\c@footnote=\\axt@qfn\\relax\\fi\\ifdefined\\citereset\\citereset\\fi}'
+/** a placeholder before which LAYOUT_TEX's opening mark, glued to a letter, sets itself in a box (\\axt@boxy: a formula, \\mbox,
+ *  \\textsuperscript), so that TeX hyphenates the word before it no more than before the placeholder itself */
+const BOXY = /^(?:\$|\\\(|\\(?:ensuremath|mbox|textsuperscript)(?![A-Za-z@]))/
 /**
  * The look-ahead section of the probe (`ahead`): for each pair of aheadSamples, the macro and the placeholder after it set in a
  * box after a word as the paper sets them (a), with the macro's two marks and the placeholder's opening one (c), and with the
  * macro's opening mark and the placeholder's (d), the boxes compared as the punctuation section's are (width, height, depth,
  * last node, closed where meant), each after the pair set once in a box of its own and let go (a first call's state spent:
- * acronym's \\ac sets its long form once, then the short one, so that the three boxes are set from one state). One row a
- * pair, `ahead <j> <code>`: 0 every mark as LAYOUT_TEX sets it (a = c = d), 1 the macro's opening mark alone and the
- * placeholder's (a = d), 2 none on the placeholder; before each box a row `ahead-at <j> <box>` (w the first, then a, c, d),
- * so that an error TeX logs is that box's (readMarkProbe). An empty paragraph after each starts TeX's error count again.
- * Writes nothing, ships out nothing
+ * acronym's \\ac sets its long form once, then the short one, so that the boxes are set from one state). A box cannot show
+ * TeX's hyphenation, which a mark's whatsit right after a word changes: TeX never hyphenates a word a box, a rule or a formula
+ * follows (a citation's box, `Transformer[1]`), and does one a whatsit follows. So a box (g) as d asks what the list ends with
+ * where the placeholder's opening mark goes (\\lastnodetype): glue, a penalty, a box or nothing of a word (0); a letter, a
+ * ligature or a font's kern, which the mark is set against (1); a discretionary or a whatsit, under XeTeX a word (2). One row
+ * a pair, `ahead <j> <code>`: 0 every mark as LAYOUT_TEX sets it (a = c = d, the list not ending in a word), 1 the macro's
+ * opening mark alone and the placeholder's (a = d, and the list not ending in a word, or ending in a letter before a
+ * placeholder the mark boxes itself before: BOXY), 2 none on the placeholder; before each box a row `ahead-at <j> <box>` (w
+ * the first, then a, c, d, g), so that an error TeX logs is that box's (readMarkProbe). An empty paragraph after each starts
+ * TeX's error count again. Writes nothing, ships out nothing
  */
 export function aheadSection(samples) {
   const box = (j, n, body) => `${probeRow('ahead-at', j, n)}\\global\\setbox\\axt@qbox\\box\\voidb@x\\gdef\\axt@qn{}\\axt@qreset\\setbox\\axt@qbox\\hbox{way ${body} \\unskip\\xdef\\axt@qn{\\the\\lastnodetype\\ifinner\\ifhmode/in\\fi\\fi}}\\xdef\\axt@q${n}{\\the\\wd\\axt@qbox/\\the\\ht\\axt@qbox/\\the\\dp\\axt@qbox/\\axt@qn}`
   const put = d => `\\xdef\\axt@qo{${d}}`
   const tests = samples.map(({ src, gap, follows, math }, j) => {
     const open = `\\axtpma{q${j}a}`, close = `\\axtpm{q${j}b}`, next = `\\${math ? 'axtpmm' : 'axtpma'}{q${j}c}`
-    const boxes = `${box(j, 'w', `${src}${gap}${follows}`)}${box(j, 'a', `${src}${gap}${follows}`)}${box(j, 'c', `${open}${src}${close}${gap}${next}${follows}`)}${box(j, 'd', `${open}${src}${gap}${next}${follows}`)}`
-    return `\\begingroup${boxes}\\endgroup\\ifx\\axt@qa\\axt@qd\\ifx\\axt@qa\\axt@qc${put(0)}\\else${put(1)}\\fi\\else${put(2)}\\fi${probeRow('ahead', j, '\\axt@qo')}\\gdef\\axt@qo{}\\noindent\\par`
+    const boxes = `${box(j, 'w', `${src}${gap}${follows}`)}${box(j, 'a', `${src}${gap}${follows}`)}${box(j, 'c', `${open}${src}${close}${gap}${next}${follows}`)}${box(j, 'd', `${open}${src}${gap}${next}${follows}`)}\\gdef\\axt@qend{2}${box(j, 'g', `${open}${src}${gap}\\axt@qat${next}${follows}`)}`
+    const word = BOXY.test(follows) ? put(1) : put(2)
+    return `\\begingroup${boxes}\\endgroup\\ifx\\axt@qa\\axt@qd\\ifcase\\axt@qend\\relax\\ifx\\axt@qa\\axt@qc${put(0)}\\else${put(1)}\\fi\\or${word}\\else${put(2)}\\fi\\else${put(2)}\\fi${probeRow('ahead', j, '\\axt@qo')}\\gdef\\axt@qo{}\\noindent\\par`
   })
-  return `\\begingroup\\newbox\\axt@qbox\\gdef\\axt@qo{}${PROBE_RESET}${tests.join('\n')}\\endgroup`
+  // (what the list ends with where the placeholder's opening mark goes, by \\lastnodetype: 0 a character, 7 a ligature, 12 a kern
+  // — 1; 8 a discretionary, 9 a whatsit — 2; any other — 0)
+  const at = '\\def\\axt@qat{\\xdef\\axt@qend{\\ifcase\\lastnodetype 1\\or0\\or0\\or0\\or0\\or0\\or0\\or1\\or2\\or2\\or0\\or0\\or1\\else0\\fi}}'
+  return `\\begingroup\\newbox\\axt@qbox\\gdef\\axt@qo{}${PROBE_RESET}${at}${tests.join('\n')}\\endgroup`
 }
 // ---- what a paper's macro sets: TeX asked
 /** the distinct sources of the paper's macros the ink section asks about, at most */
@@ -657,8 +669,8 @@ const TEX_ERROR = /^(?:! |[^\s:]+:\d+: )/
  * no mark (2); in the box with both marks, no closing mark (1); in a second call's, none between (2). A sample with no
  * row (the probe stopped short of it), a row of another schema or another shape is no answer at all. layoutMarking sets
  * no mark where there is no answer. And per look-ahead pair (aheadSamples, by its rows `ahead`), its key (aheadKey) and its
- * one code: an error in the box let go or as the paper sets it no answer (`x`), in the one with the two openings 2, in the one
- * with every mark at most 1
+ * one code: an error in the box let go or as the paper sets it no answer (`x`), in the one with the two openings or the one
+ * asking what the list ends with 2, in the one with every mark at most 1
  */
 export function readMarkProbe(log, samples) {
   const out = {}, errored = new Map(), listed = samples.filter(s => !s.ahead), ahead = samples.filter(s => s.ahead)
@@ -674,7 +686,7 @@ export function readMarkProbe(log, samples) {
       const s = ahead[Number(r.fields[0])], code = r.fields[1]
       if (!s || !/^\d+$/.test(r.fields[0]) || !/^[012]$/.test(code)) continue
       const bad = errored.get(`ahead:${r.fields[0]}`)
-      out[s.key] = !bad ? code : bad.has('w') || bad.has('a') ? 'x' : bad.has('d') ? '2' : code === '2' ? '2' : '1'
+      out[s.key] = !bad ? code : bad.has('w') || bad.has('a') ? 'x' : bad.has('d') || bad.has('g') ? '2' : code === '2' ? '2' : '1'
       continue
     }
     if (r.tag !== 'punct' || r.fields.length !== 2) continue
@@ -1267,8 +1279,9 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       // (a colour piece: its colour written to the log right after it, inside its group, where its run is set: no node)
       if (colourPieceOf(p)) return [piece, { t: 'ph', src: `\\axtcolour{c${i}.${k}}` }]
       // (a placeholder right after a paper's macro that got its opening mark, past white space alone or none, has its marks where
-      // TeX answered that its opening mark there moves nothing: aheadSamples. Not in a front unit, whose marks are robust and the
-      // probe's box sets none so)
+      // TeX answered that its opening mark there moves nothing, the word before it hyphenated as before: aheadSamples. A complete
+      // call's too, which its own answer leaves none there; its closing mark is its own answer's. Not in a front unit, whose marks
+      // are robust and the probe's box sets none so)
       const pairSaid = lead ? null : aheadSaid(u.pieces, k)
       const ahead = !!pairSaid && pairSaid.m === after && opened.has(after) && (pairSaid.code === '0' || pairSaid.code === '1')
       const cls = passed && !passed.has(k) && !(LOOKS_AHEAD(after) && !READS_NOTHING(after) && !free(after, p) && !opensAfter(after, spaced) && !ahead) ? classOf(p) : null

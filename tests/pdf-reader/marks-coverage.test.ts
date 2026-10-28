@@ -280,6 +280,13 @@ describe('a paper\'s macro that looks ahead, before a placeholder (2609.20976\'s
     expect(tex).toContain('way \\axtpma{q0a}\\snr \\axtpmm{q0c}$\\geq 50$ \\unskip')
     expect(tex).toContain('way \\axtpma{q1a}\\lgnrm \\axtpma{q1c}\\footnote{\\url{https://x.org}} \\unskip')
     expect(tex).toContain('way \\axtpma{q2a}\\name{x}\\axtpm{q2b}\\axtpma{q2c}\\cite{a} \\unskip')
+    // (and what the list ends with where the placeholder's mark goes, which no box's width shows: a word there TeX would hyphenate
+    // with a whatsit after it, and not with a citation's box — none on the citation; on a formula, whose mark boxes itself, its
+    // opening mark alone)
+    expect(tex).toContain('way \\axtpma{q2a}\\name{x}\\axt@qat\\axtpma{q2c}\\cite{a} \\unskip')
+    const rows = tex.split('\n')
+    expect(rows.find(r => r.includes('ahead 0 '))).toContain('\\ifcase\\axt@qend\\relax\\ifx\\axt@qa\\axt@qc\\xdef\\axt@qo{0}\\else\\xdef\\axt@qo{1}\\fi\\or\\xdef\\axt@qo{1}\\else')
+    expect(rows.find(r => r.includes('ahead 2 '))).toContain('\\or\\xdef\\axt@qo{2}\\else')
     // (a paper with no pair asks as before)
     const plain = unit([ph('\\snr'), text(' and '), ph('\\cite{a}')])
     expect(markProbeTex(probeSamples([plain]))).toBe(markProbeTex([{ src: '\\cite{a}', call: false }]))
@@ -291,7 +298,7 @@ describe('a paper\'s macro that looks ahead, before a placeholder (2609.20976\'s
     // (a reader with the complete macros, whose own samples come before the pairs, reads the pairs by their own rows)
     expect(Object.entries(readMarkProbe(log, probeSamples([u], [['name', 1]]))).filter(([k]) => k.includes('#'))).toEqual([['\\snr# #$\\geq 50$', '1'], ['\\lgnrm# #\\footnote{\\url{https://x.org}}', '2'], ['\\name{x}##\\cite{a}', '0']])
     const err = (box: string, code: string) => readMarkProbe(`LAYOUT-PROBE 1 ahead-at 0 ${box}\n! Undefined control sequence.\nLAYOUT-PROBE 1 ahead 0 ${code}\n`, samples)['\\snr# #$\\geq 50$']
-    expect([err('w', '0'), err('a', '0'), err('d', '0'), err('c', '0'), err('c', '2')]).toEqual(['x', 'x', '2', '1', '2'])
+    expect([err('w', '0'), err('a', '0'), err('d', '0'), err('g', '0'), err('c', '0'), err('c', '2')]).toEqual(['x', 'x', '2', '2', '1', '2'])
     // (a row of no pair, or of another code, is no answer)
     expect(readMarkProbe('LAYOUT-PROBE 1 ahead 3 0\nLAYOUT-PROBE 1 ahead 0 3\n', samples)).toEqual({})
   })
@@ -316,6 +323,11 @@ describe('a paper\'s macro that looks ahead, before a placeholder (2609.20976\'s
     // (another formula after \\snr, the same formula after another macro, \\snr right against it)
     const v = unit([text('A '), ph('\\snr'), text(' '), ph('$\\geq 10$'), text(' B '), ph('\\snrx'), text(' '), ph('$\\geq 50$'), text(' C '), ph('\\snr'), ph('$\\geq 50$'), text('.')])
     expect(marksOf(v, { lines: false, switches: sw })).toEqual({ '\\snr': 'a', '$\\geq 10$': '', '\\snrx': 'a', '$\\geq 50$': '' })
+    // (a complete call TeX answered for: its closing mark its own answer's, the citation right against it as TeX answered for the
+    // pair — 2 where the call ends in a letter or a digit, the word TeX would hyphenate with a whatsit after it)
+    const z = unit([text('A '), ph('\\share{}'), ph('\\cite{a}'), text('.')])
+    const share = (code: string) => marksOf(z, { lines: false, complete: { share: 0 }, switches: { ...all('\\cite'), '\\share': '00000022', '\\share{}##\\cite{a}': code } })
+    expect([share('2'), share('1'), share('0')]).toEqual([{ '\\share{}': 'a', '\\cite{a}': '' }, { '\\share{}': 'a', '\\cite{a}': 'ab' }, { '\\share{}': 'a', '\\cite{a}': 'ab' }])
     // (a macro glued to the word before, part of it, has no mark, and the citation after it none)
     const w = unit([text('word'), ph('\\snr'), text(' '), ph('\\cite{a}'), text('.')])
     expect(marksOf(w, { lines: false, switches: sw })).toEqual({ '\\snr': '', '\\cite{a}': '' })
