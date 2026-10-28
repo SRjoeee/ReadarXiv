@@ -2394,14 +2394,16 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     call wrongly said to set none would lose its placeholder and its entry's translation, one wrongly said apart would get a
     mark against the word it is glued to. A lead past the share keeps a probe of its own (`leadSamples`, `LEAD_MAX`), as before.
     The marks file names up to `INK_ANSWERS_MAX` answers (MARKS_SCHEMA 13; a reader of 12 refuses past `INK_MAX`).
-  - Measured (`classes-gate.mjs --made --compile` against `next` 7ea4e57e, #492's tree, over the 36 papers; TeX's answers
-    dumped): on 30 of the 35 compiled none changed; on 5 only answers gained, none lost or changed — 6 sources no ink
-    (2608.25210v2's `\natexlab{}`, `{a}`…`{d}`, its paper's own definition setting nothing, and its `\showISSN{…}`) and 82
-    texts (2610.21377v1 72 `\nolinkurl{doi:…}`, 2307.16209v1 4 of REVTeX's `\href@noop`, 2608.25210v2 2, 2608.10322v2 and
-    2610.21098v1 2 `\natexlab`s each). Drawn gained 54, lost 0, all 2608.25210v2's entries; the entries the wrap leaves the
+  - Measured (`classes-gate.mjs --made --compile` against `next` 3b2aa271 over the 36 papers; TeX's answers dumped): on 30 of
+    the 35 compiled none changed; on 5 only answers gained, none lost or changed, no switch moved — 6 sources no ink, each asked
+    of its own (2608.25210v2's `\natexlab{}`, `{a}`…`{d}`, its paper's own definition setting nothing, and its `\showISSN{…}`),
+    and 80 texts (2610.21377v1 72 `\nolinkurl{doi:…}`, 2608.25210v2 2, 2307.16209v1 2 of REVTeX's `\href@noop`, 2608.10322v2
+    and 2610.21098v1 2 `\natexlab`s each). Drawn gained 54, lost 0, all 2608.25210v2's entries; the entries the wrap leaves the
     original's for their marks there 63 to 0; every base page pixel for pixel `next`'s (952 pages), its page count arXiv's; no
-    unit's lines lost, gained or moved; the wrap of the five papers (`ocg-gate.mjs`) as `next`'s. The gate pack is `59ef805c`:
-    `efd01632` (#491's) with 2307.16209v1-zh's base record made again (8 more texts), every layout file and base page byte for byte.
+    unit's lines lost, gained or moved. The gate pack is `8afa0824`: `efd01632` (#491's) with 2307.16209v1-zh's base record
+    made again (18 texts, 16 before), every layout file and base page byte for byte. Left: the body's own cap, `INK_MAX`, which
+    leaves unasked body sources past it (2610.21098v1 274, 2608.23517v1 127, 2608.28692v1 22, 2608.10322v2 and 2608.25210v2 8);
+    no entry's call is left unasked on these papers.
 - **A unit the layer leaves the original's says why** (read time, no stored artefact, no version token): each `skipped` record
   of the run (`layer-proto/run.mjs`) carries a `code` of `SKIP_CODES` beside its `why`: `unlocated` (the file holds no row of
   it, and the file's own reason beside it, `unlaid`), `pieces`, `noRow`, `lost` (a visible piece the file has no position
