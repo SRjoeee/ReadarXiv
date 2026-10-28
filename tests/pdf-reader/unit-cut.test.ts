@@ -1,8 +1,11 @@
 // @vitest-environment node
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { inkUnitsOf } from '@/pdf-reader/engine/layout/ink-units.mjs'
+import { type LedgerPage, ledgerOf } from '@/pdf-reader/engine/layout/ledger.mjs'
 import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { PIPELINE_VERSION } from '@/pdf-reader/engine/pipeline/versions.mjs'
+import { wrapped } from './helpers/ocg-pdfs'
 
 // The unit cut is a part of what PIPELINE_VERSION names (CLAUDE.md, hard rule 4): a translation is stored and found again by an
 // output identity that names the pipeline, so that a unit cut otherwise under the same version is given a translation made for
@@ -32,7 +35,11 @@ import { PIPELINE_VERSION } from '@/pdf-reader/engine/pipeline/versions.mjs'
 //                a numbered list of places, an \affil; what was one unit numbered as it was, the rows cut from it after the others
 //   made-bbl     PIPELINE 30's \bibliography (made-bibliography.test.ts): the paragraph that runs into it ends there, the job's
 //                .bbl BibTeX makes or none
-// A source's structural names are its units too (bundleUnitsOf, after the source's): each recorded as `name: <its text>`
+// A source's structural names are its units too (bundleUnitsOf, after the source's): each recorded as `name: <its text>`.
+// So are the units the wrap cuts of our pages after them (PIPELINE 31): the ink units (layout/ink-units.mjs) of a few pages written
+// here, each recorded whole (kind, echo, its pieces' text and sources), and the figure units of the figures fixture
+// (tests/fixtures/pdf/figures/, layout/figure-text.mjs), each by its text: an ink or a figure unit's cut moving under the same
+// version fails as a source unit's does (LAYOUT 23 and 25 moved the ink units under PIPELINE 30)
 
 const enc = (s: string) => new TextEncoder().encode(s)
 const SAMPLE = new URL('../fixtures/pdf/sample-1/', import.meta.url)
@@ -81,6 +88,48 @@ C.~Wang and S.~Shang, ${QUOTES}Building pipelines,'' in \emph{Proc. ACM}, 2025, 
     ['refs.bib', enc('@article{ba, author={Jimmy Lei Ba}, title={Layer normalization}, year={2016}}\n')],
   ]),
 }
+// ---- the ink units' sources: pages of glyphs as the wrap reads them (5 pt a character, on a baseline), the ledger's classes
+type G = LedgerPage['glyphs'][number] & { top: number; bottom: number; ix0: number; ix1: number }
+function inkRun(text: string, x: number, y: number, { font = 'CMR10', size = 10, fill = 0 }: { font?: string; size?: number; fill?: number } = {}): G[] {
+  const out: G[] = []
+  for (const ch of text) {
+    if (ch !== ' ') out.push({ u: ch, x0: x, x1: x + 5, ix0: x, ix1: x + 5, y, top: y + 7, bottom: y - 2, size, font, fill } as G)
+    x += 5
+  }
+  return out
+}
+type Part = { glyphs: G[] } | { point: string } | { para: number }
+function inkPage(...parts: Part[]) {
+  const glyphs: G[] = [], own: null[] = [], points: { name: string; glyph: number; box: number }[] = [], paras: { name: string; glyph: number; box: number }[] = []
+  for (const p of parts) {
+    if ('point' in p) points.push({ name: p.point, glyph: glyphs.length, box: 0 })
+    else if ('para' in p) paras.push({ name: `q${p.para}`, glyph: glyphs.length, box: 0 })
+    else for (const g of p.glyphs) { glyphs.push(g); own.push(null) }
+  }
+  return { page: { glyphs, boxes: [], points, paras, view: [0, 0, 612, 792] }, own }
+}
+const HEADING = [{ kind: 'heading', pieces: [{ t: 'text', s: 'Introduction' }] }, { kind: 'para', pieces: [{ t: 'text', s: 'Body words of the paper here' }] }]
+const INK_CUT_SOURCES: Record<string, () => { pages: ReturnType<typeof inkPage>[]; units: unknown[] }> = {
+  // a contents entry echoing its heading, another over two lines, a running head
+  contents: () => ({ units: HEADING, pages: [inkPage({ point: 'bs1' }, { point: 'n1.contents.e' }, { para: 1 }, { glyphs: inkRun('1 Introduction . . . 3', 100, 700) }, { para: 2 }, { glyphs: inkRun('2 Black hole perturbations and', 100, 688) }, { glyphs: inkRun('quasinormal modes . . . 21', 110, 676) }, { point: 'be1' })] }),
+  // LAYOUT 25's: a list set double, an entry one unit; a formula's script its placeholder's
+  double: () => ({ units: [], pages: [inkPage({ point: 'bs1' }, { point: 'n1.contents.e' }, { para: 7 }, { glyphs: inkRun('6 Internal structure of the depth-', 100, 700, { size: 12 }) }, { glyphs: inkRun('wise convolutions and the mod-', 100, 671, { size: 12 }) }, { glyphs: inkRun('ule shown here . . . 14', 100, 642, { size: 12 }) }, { para: 8 }, { glyphs: [...inkRun('7 Turbulence strength', 100, 613, { size: 12 }), ...inkRun('C', 230, 613, { font: 'CMMI12', size: 12 }), ...inkRun('n', 236, 611, { font: 'CMMI8', size: 8 }), ...inkRun('2', 241, 618, { font: 'CMR8', size: 8 }), ...inkRun('. . . 15', 260, 613, { size: 12 })] }, { point: 'be1' })] }),
+  // LAYOUT 23's: an orphan's runs of another weight, colour and slant
+  styles: () => ({ units: [], pages: [inkPage({ point: 'bs1' }, { para: 1 }, { glyphs: [...inkRun('Definition 1', 100, 700, { font: 'CMBX10' }), ...inkRun('([TT])', 165, 700), ...inkRun('holds', 200, 700, { fill: 0x0071bc }), ...inkRun('here and now', 230, 700, { font: 'CMTI10' })] }, { point: 'be1' })] }),
+}
+/** each ink unit of a source page as `kind<echo: pieces`, each piece its text, a placeholder its source, a group its command */
+const inkCutOf = (): Cut => Object.fromEntries(Object.entries(INK_CUT_SOURCES).map(([name, make]) => {
+  const { pages, units } = make()
+  const ledger = ledgerOf(pages.map(p => p.page) as never, { glyphs: pages.map(p => p.own) } as never, { units } as never)
+  const ink = inkUnitsOf(pages.map(p => p.page) as never, ledger, { units: units as never }) as { kind: string; echo: number | null; pieces: { t: string; s?: string; src?: string }[] }[]
+  return [name, ink.map(u => `${u.kind}${u.echo === null ? '' : `<${u.echo}`}: ${u.pieces.map(p => (p.t === 'text' ? JSON.stringify(p.s) : p.t === 'ph' ? `ph(${p.src})` : p.t === 'open' ? `open(${p.src})` : p.t)).join(',')}`)]
+}))
+/** the figures fixture's figure units, wrapped with no source units, each by its text, in order */
+async function figureCutOf(): Promise<Cut> {
+  const r = await (wrapped(new Uint8Array(readFileSync(new URL('../fixtures/pdf/figures/figures.pdf', import.meta.url)))) as unknown as Promise<{ figures: { units: { text: string; why: string | null }[] } }>)
+  return { figures: r.figures.units.map(u => `figure${u.why ? `(${u.why})` : ''}: ${u.text}`) }
+}
+
 const GOLDEN = new URL('./golden/unit-cut.json', import.meta.url)
 type Cut = Record<string, string[]>
 /** each unit of a source as `kind: type,type,…` (its pieces' types in order: text, ph, open, close, nested) */
@@ -100,21 +149,21 @@ function moved(now: Cut, was: Cut): string[] {
 }
 
 describe('the unit cut is recorded under the PIPELINE_VERSION it was cut by', () => {
-  it('the recorded cut is today\'s, under today\'s PIPELINE_VERSION: a cut that moves raises the version', () => {
-    const now = cutOf()
-    const golden = (existsSync(GOLDEN) ? JSON.parse(readFileSync(GOLDEN, 'utf8')) : { pipeline: null, units: {} }) as { pipeline: string | null; units: Cut }
-    const diff = moved(now, golden.units)
+  it('the recorded cut is today\'s, under today\'s PIPELINE_VERSION: a cut that moves raises the version', async () => {
+    const now = cutOf(), ink = inkCutOf(), figures = await figureCutOf()
+    const golden = (existsSync(GOLDEN) ? JSON.parse(readFileSync(GOLDEN, 'utf8')) : { pipeline: null, units: {} }) as { pipeline: string | null; units: Cut; ink?: Cut; figures?: Cut }
+    const diff = [...moved(now, golden.units), ...moved(ink, golden.ink ?? {}).map(d => `ink ${d}`), ...moved(figures, golden.figures ?? {}).map(d => `figures ${d}`)]
     const same = golden.pipeline === PIPELINE_VERSION
     if (process.env.WRITE_UNIT_CUT === '1') {
       if (diff.length && same) throw new Error(`the unit cut moved under PIPELINE_VERSION ${PIPELINE_VERSION}: raise PIPELINE_VERSION (pipeline/versions.mjs) before recording it again\n${diff.join('\n')}`)
-      writeFileSync(GOLDEN, `${JSON.stringify({ pipeline: PIPELINE_VERSION, units: now }, null, 1)}\n`)
+      writeFileSync(GOLDEN, `${JSON.stringify({ pipeline: PIPELINE_VERSION, units: now, ink, figures }, null, 1)}\n`)
       return
     }
     if (same) expect(diff, `the unit cut moved under PIPELINE_VERSION ${PIPELINE_VERSION}: a translation stored for the old cut would be given to the new one. Raise PIPELINE_VERSION (pipeline/versions.mjs), then record the cut again (WRITE_UNIT_CUT=1)`).toEqual([])
     else expect(golden.pipeline, `PIPELINE_VERSION is ${PIPELINE_VERSION}, the cut was recorded under ${golden.pipeline}: record it again (WRITE_UNIT_CUT=1)`).toBe(PIPELINE_VERSION)
   })
 
-  it('the sources hold the cuts they are here for: a citation, a footnote, display math, a table, a \\url', () => {
+  it('the sources hold the cuts they are here for: a citation, a footnote, display math, a table, a \\url', async () => {
     const now = cutOf()
     const kinds = new Set(now['sample-1']?.map(u => u.split(':')[0]))
     for (const k of ['para', 'footnote', 'cell', 'caption', 'theorem', 'heading']) expect(kinds.has(k), k).toBe(true)
@@ -137,5 +186,13 @@ describe('the unit cut is recorded under the PIPELINE_VERSION it was cut by', ()
     // (and its \\bibliography: the paragraph before it ends there, no placeholder of it; \\bibliographystyle before it the
     // paragraph's, with the .bbl or without)
     expect(now['made-bbl']).toEqual(['para: text,ph,text,ph,text'])
+    // (the ink units' sources hold what they are here for: an echo, a contents entry whole, a list set double one unit, a script
+    // in its placeholder, style groups; the figures fixture its figure units)
+    const ink = inkCutOf()
+    expect(ink['contents']?.[0]).toMatch(/^inkcontents<0: /)
+    expect(ink['double']).toHaveLength(2)
+    expect(ink['double']?.[1]).toContain('ph($Cn2$)')
+    expect(ink['styles']?.[0]).toContain('open(\\textbf{)')
+    expect((await figureCutOf()).figures?.length).toBeGreaterThan(3)
   })
 })

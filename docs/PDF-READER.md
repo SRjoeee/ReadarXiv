@@ -2664,7 +2664,9 @@ changes, which pageInk keeps apart from the marks' points as `paras`; a paragrap
 as the one before; a paragraph's next line is followed at its page's own leading, `PARA_PITCH` 1.15 of the page's line pitch
 and `PARA_DY` 3 of its size at most, where `BLOCK_DY` 1.75 falls short, LAYOUT 25: a thesis's list of figures set double was
 cut line by line, each line translated alone, 2610.19274v1 pp67–69, and a list's items, which no point of their own tells
-apart, stay apart at their skip; a script a text face sets after a formula's run is that run's placeholder, C_n²'s "2"), each of its
+apart, stay apart at their skip; a script a text face sets after a formula's run is that run's placeholder, C_n²'s "2"; the ink
+units, as the figure units, are units of the paper's for PIPELINE: a translation is stored for them and found again by an output
+identity that names PIPELINE, so their cut moving raises it, PIPELINE 31, and the unit-cut golden holds their cut), each of its
 class's kind (`inkheads`, `inkcontents`, `inknotes`, `inkorphan`, after the source kinds in UNIT_KINDS; `inknames` a block
 most of whose letters are an author unit's words, of the names toggle as that unit is), its numbering, leaders
 and page number left the original's ink, its math and typewriter runs (and a web address in any face) kept placeholders, and
