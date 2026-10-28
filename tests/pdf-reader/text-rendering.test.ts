@@ -170,6 +170,14 @@ describe('applyLayerText: decided once a document, from the first laid page that
     expect(f.state.probes).toBe(1)
   })
 
+  it('never throws at a commit: a page whose styles cannot be read is left undecided, for the next page to tell', () => {
+    const f = fakeDocument(linear)
+    const broken = Object.assign(Object.create(page.svg as object), { ownerDocument: { ...f.doc, defaultView: { getComputedStyle: () => { throw new Error('no style') } } } }) as unknown as SVGSVGElement
+    expect(applyLayerText(broken, f.doc)).toBeNull()
+    expect(f.attributes.has(ATTRIBUTE)).toBe(false)
+    expect(applyLayerText(svgIn(f.doc), f.doc)).toBe('auto')
+  })
+
   it('leaves a page that tells nothing (no words of one place) undecided, for the next page to tell', () => {
     const f = fakeDocument(linear)
     const cjk = pageOf([{ x: '10 22.5', text: '\u4e2d\u6587' }])

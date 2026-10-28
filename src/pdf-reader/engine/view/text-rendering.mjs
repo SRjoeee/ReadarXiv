@@ -130,12 +130,14 @@ const decided = new WeakMap()
 /**
  * The layer's text rendering for a document, decided from a laid page's SVG (`svg`, in the document) the first time a page
  * tells, and written on its <html>: `data-axt-layer-text="auto"` where the layer takes `auto`, no attribute (engine.css's
- * geometricPrecision) elsewhere. Returns the document's decision, or null while no page has told
+ * geometricPrecision) elsewhere. Returns the document's decision, or null while no page has told. It never throws: a commit
+ * calls it, and a page whose words cannot be read leaves the decision to the next
  */
 export function applyLayerText(svg, doc = svg?.ownerDocument) {
   if (!doc) return null
   if (decided.has(doc)) return decided.get(doc)
-  const answer = probeWords(doc, wordsOf(svg))
+  let answer = null
+  try { answer = probeWords(doc, wordsOf(svg)) } catch { answer = null }
   if (answer === null) return null
   decided.set(doc, answer)
   if (answer === 'auto') doc.documentElement?.setAttribute(ATTRIBUTE, 'auto')
