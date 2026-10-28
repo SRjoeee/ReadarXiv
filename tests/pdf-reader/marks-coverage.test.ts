@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { completeMacros, frontMarks, inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { bblProvides, openPaper, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { AHEAD_PROBE_MAX, aheadKey, aheadSamples, completeCall, completeCalled, followsOf, layoutMarking, MARK_CLASSES, markProbeTex, probeSamples, readInkApart, readMarkProbe, symbolText } from '@/pdf-reader/engine/layout/marks.mjs'
+import { AHEAD_PROBE_MAX, aheadKey, aheadSamples, completeCall, completeCalled, followsOf, layoutMarking, MARK_CLASSES, markProbeTex, probeSamples, readInkApart, readInkProbe, readInkTexts, readMarkProbe, symbolText } from '@/pdf-reader/engine/layout/marks.mjs'
 import { boundsFromMarks, tokenizeDocument, uprightToken } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 
 // The layout marks a placeholder gets where what stands beside it was guessed at: the paper's own macro taken to look ahead
@@ -372,17 +372,57 @@ describe('a placeholder no mark may stand before (\\footnote after \\xspace, TeX
   })
 })
 
+describe('a sample that leaves TeX\'s state broken (2010.11929v2\'s \\tikz\\fill, cut in two): the groups it left open closed after its box, a box in \\nullfont no answer', () => {
+  const u = unit([text('A dot '), ph('\\tikz'), ph('\\fill'), text(' then '), ph('\\natexlab{a}'), text(', with '), ph('\\snr'), text(' '), ph('$\\geq 50$'), text(' by '), ph('\\name{x}'), ph('\\cite{a}'), text('.')])
+  it('each box of the punctuation, ink and look-ahead sections ends at the group level it began at: the groups its sample left open closed after it (\\tikz alone opens a picture it never closes, in which pgf\'s \\selectfont selects \\nullfont)', () => {
+    const tex = markProbeTex(probeSamples([u]), ['\\tikz', '\\fill', '\\natexlab{a}'], ['\\lead'])
+    const boxes = tex.match(/\\setbox\\axt@[qi]box\\hbox\{/g) ?? []
+    // (the asked citation's eight followers, three boxes each and two more; four ink boxes; two pairs, five boxes each)
+    expect(boxes.length).toBeGreaterThan(40)
+    expect(tex.match(/\\xdef\\axt@level\{\\the\\currentgrouplevel\}\\setbox\\axt@[qi]box\\hbox\{/g)?.length).toBe(boxes.length)
+    expect(tex).toContain('\\xdef\\axt@level{\\the\\currentgrouplevel}\\setbox\\axt@ibox\\hbox{\\tikz}\\axt@unwind\\begingroup\\showboxbreadth')
+    expect(tex.match(/\\unskip\\xdef\\axt@qn\{\\the\\lastnodetype\\ifinner\\ifhmode\/in\\fi\\fi\}\}\\axt@unwind\\xdef\\axt@q[a-gw]\{/g)?.length).toBe(boxes.length - 4)
+    // (defined before any box: a \\begingroup's group closed by \\endgroup, a box's or a group of braces' by \\egroup, to the level saved)
+    const unwind = '\\gdef\\axt@unwind{\\global\\let\\axt@unwound\\relax\\ifnum\\currentgrouplevel>\\axt@level\\relax\\ifnum\\currentgrouptype=14 \\global\\let\\axt@unwound\\axt@unwind\\endgroup\\else\\ifnum\\currentgrouptype<6 \\ifnum\\currentgrouptype>0 \\global\\let\\axt@unwound\\axt@unwind\\egroup\\fi\\fi\\fi\\fi\\axt@unwound}'
+    expect(tex.indexOf(unwind)).toBeGreaterThan(-1)
+    expect(tex.indexOf(unwind)).toBeLessThan(tex.indexOf('\\setbox\\axt@qbox\\hbox{'))
+  })
+  // (the shape of TeX Live 2025's pdfTeX log of 2010.11929v2's probe at next, its ink section: \\fill's errors, the boxes after it
+  // in the \\nullfont the picture \\tikz opened left in force; and a box of a font of its own)
+  const nullfont = (c: string) => `Missing character: There is no ${c} in font nullfont!`
+  const listing = (i: number, ...lines: string[]) => [`LAYOUT-PROBE 1 ink-at ${i}`, ...lines, '', '! OK.', `LAYOUT-PROBE 1 ink-end ${i}`]
+  const log = [
+    ...listing(0, '! Package tikz Error: Giving up on this path. Did you forget a semicolon?.', '! Missing } inserted.', '> \\box73=void'),
+    ...listing(1, nullfont('a'), '> \\box73=', '\\hbox(0.0+0.0)x0.0'),
+    ...listing(2, nullfont('B'), nullfont('E'), '> \\box73=', '\\hbox(6.8+0.0)x4.0', '.\\kern1.0', '.\\OT1/cmr/m/n/10 R'),
+    ...listing(3, '> \\box73=', '\\hbox(6.8+0.0)x5.0', '.\\OT1/cmr/m/n/10 a'),
+  ].join('\n')
+  it('readInkProbe, readInkTexts, readInkApart: a box TeX logged a character missing from \\nullfont in has no answer — not a box that sets no ink, no text', () => {
+    const samples = ['\\fill', '\\natexlab{a}', '\\bert', '\\nx']
+    expect(readInkProbe(log, samples)).toEqual([])
+    expect(readInkTexts(log, samples)).toEqual([['\\nx', 'a']])
+    expect(readInkApart(log, samples)).toEqual([])
+  })
+  it('readMarkProbe: a box of a follower\'s or a pair\'s with a character missing from \\nullfont answers as one with an error', () => {
+    const samples = probeSamples([u])
+    const punct = ['LAYOUT-PROBE 1 punct-at 0 7 a', nullfont('w'), 'LAYOUT-PROBE 1 punct 0 00000000'].join('\n')
+    expect(readMarkProbe(punct, samples)['\\cite']).toBe('0000000x')
+    const ahead = ['LAYOUT-PROBE 1 ahead-at 0 w', nullfont('w'), 'LAYOUT-PROBE 1 ahead 0 0', 'LAYOUT-PROBE 1 ahead-at 1 d', nullfont('w'), 'LAYOUT-PROBE 1 ahead 1 0'].join('\n')
+    expect(Object.entries(readMarkProbe(ahead, samples)).filter(([k]) => k.includes('#'))).toEqual([['\\snr# #$\\geq 50$', 'x'], ['\\name{x}##\\cite{a}', '2']])
+  })
+})
+
 describe('the mark probe sets a .bbl\'s own definitions first (an elsarticle .bbl\'s \\DOIprefix and \\doi, 2610.20848v1)', () => {
   const tex = '\\documentclass{article}\n\\begin{document}\nA word \\cite{a}.\n\\bibliographystyle{plain}\\bibliography{refs}\n\\end{document}\n'
   const bbl = '\\begin{thebibliography}{1}\n\\providecommand{\\url}[1]{\\texttt{#1}}\n\\providecommand{\\DOIprefix}{doi:}\n\\providecommand{\\doi}[1]{\\href{http://dx.doi.org/#1}{\\path{#1}}}\n\\expandafter\\ifx\\csname natexlab\\endcsname\\relax\\def\\natexlab#1{#1}\\fi\n\\bibitem{a} A. Author. A title. \\newblock \\DOIprefix\\doi{10.1/x}.\n\\end{thebibliography}\n'
   const enc = (t: string) => new TextEncoder().encode(t)
   const probeOf = (files: [string, string][]) => new TextDecoder().decode(probeFiles(openPaper(new Map(files.map(([p, t]) => [p, enc(t)]))), { marks: true }).get('main.tex'))
   it('each \\providecommand before its first \\bibitem, whole, right after \\begin{document}: the probe\'s ink section then knows the entries\' macros', () => {
-    expect(bblProvides(inMemory(new Map([['main.tex', enc(tex)], ['main.bbl', enc(bbl)]])), 'main.tex')).toBe('\\providecommand{\\url}[1]{\\texttt{#1}}\\providecommand{\\DOIprefix}{doi:}\\providecommand{\\doi}[1]{\\href{http://dx.doi.org/#1}{\\path{#1}}}')
+    expect(bblProvides(inMemory(new Map([['main.tex', enc(tex)], ['main.bbl', enc(bbl)]])), 'main.tex')).toBe('\\providecommand{\\url}[1]{\\texttt{#1}}\\providecommand{\\DOIprefix}{doi:}\\providecommand{\\doi}[1]{\\href{http://dx.doi.org/#1}{\\path{#1}}}\\expandafter\\ifx\\csname natexlab\\endcsname\\relax\\def\\natexlab#1{#1}\\fi')
     const probe = probeOf([['main.tex', tex], ['main.bbl', bbl]])
     expect(probe).toContain('\\begin{document}\\providecommand{\\url}[1]{\\texttt{#1}}\\providecommand{\\DOIprefix}{doi:}')
-    // (none past the first \\bibitem, nor what is no \\providecommand)
-    expect(probe).not.toContain('natexlab')
+    // (none past the first \\bibitem)
+    expect(probe).not.toContain('\\newblock \\DOIprefix')
     // (a paper with no .bbl asks as before)
     expect(probeOf([['main.tex', tex]])).not.toContain('\\providecommand')
   })
@@ -393,6 +433,39 @@ describe('the mark probe sets a .bbl\'s own definitions first (an elsarticle .bb
       '\\providecommand{\\baz}[1]{\\@firstofone{#1}}', '\\makeatother', '\\providecommand{\\qux}{q}', '\\bibitem{a} A. Author.', '\\end{thebibliography}',
     ].join('\n')
     expect(bblProvides(inMemory(new Map([['main.tex', enc(tex)], ['main.bbl', enc(bbl2)]])), 'main.tex')).toBe('\\providecommand{\\foo}{right}\\providecommand{\\bar}{hello}\\providecommand{\\pct}{5\\%}\\makeatletter\\providecommand{\\baz}[1]{\\@firstofone{#1}}\\makeatother \\providecommand{\\qux}{q}')
+  })
+  const provides = (head: string) => bblProvides(inMemory(new Map([['main.tex', enc(tex)], ['main.bbl', enc(`\\begin{thebibliography}{1}\n${head}\n\\bibitem{a} A. Author.\n\\end{thebibliography}\n`)]])), 'main.tex')
+  it('natbib\'s conditionals, whole, both branches (2608.25210v2\'s \\natexlab{a}, 2010.11929v2\'s \\doi: TeX picks the one for a paper that loads url)', () => {
+    expect(provides('\\expandafter\\ifx\\csname natexlab\\endcsname\\relax\\def\\natexlab#1{#1}\\fi')).toBe('\\expandafter\\ifx\\csname natexlab\\endcsname\\relax\\def\\natexlab#1{#1}\\fi')
+    const doi = '\\expandafter\\ifx\\csname urlstyle\\endcsname\\relax\n  \\providecommand{\\doi}[1]{doi: #1}\\else\n  \\providecommand{\\doi}{doi: \\begingroup \\urlstyle{rm}\\Url}\\fi'
+    expect(provides(`\\providecommand{\\natexlab}[1]{#1}\n${doi}`)).toBe(`\\providecommand{\\natexlab}[1]{#1}${doi}`)
+  })
+  it('a conditional on \\undefined or \\relax, a nested one whole to its own \\fi (Springer\'s \\bisbn)', () => {
+    expect(provides('\\ifx \\bisbn   \\undefined \\def \\bisbn  #1{ISBN #1}\\fi')).toBe('\\ifx \\bisbn   \\undefined \\def \\bisbn  #1{ISBN #1}\\fi')
+    // (amsplain's, the other way round)
+    expect(provides('\\ifx\\undefined\\bysame\n\\newcommand{\\bysame}{\\leavevmode\\hbox to3em{\\hrulefill}\\,}\n\\fi')).toBe('\\ifx\\undefined\\bysame\n\\newcommand{\\bysame}{\\leavevmode\\hbox to3em{\\hrulefill}\\,}\n\\fi')
+    expect(provides('\\ifx\\a\\undefined \\ifnum1=1 \\def\\a{x}\\else\\def\\a{y}\\fi \\let\\b\\a\\fi\\ifx\\c\\relax\\def\\c{z}\\fi')).toBe('\\ifx\\a\\undefined \\ifnum1=1 \\def\\a{x}\\else\\def\\a{y}\\fi \\let\\b\\a\\fi\\ifx\\c\\relax\\def\\c{z}\\fi')
+    // (a package's conditional or a \\newif's in it, whose \\fi the head alone does not tell from the guard's: not copied whole, its
+    // definitions read one by one, each set only where undefined, and what follows read as before — the review of #492)
+    expect(provides('\\ifx\\doi\\undefined \\ifpdf \\def\\doi#1{doi: #1}\\fi \\fi\\providecommand{\\x}{y}')).toBe('\\ifx\\doi\\undefined\\def\\doi#1{doi: #1}\\fi \\providecommand{\\x}{y}')
+    // (one that defines nothing, or replaces a definition, passed over whole: not even the \\def in it)
+    expect(provides('\\ifx\\a\\undefined \\typeout{none}\\fi\\ifx\\b\\undefined \\renewcommand{\\c}{x}\\def\\b{y}\\fi')).toBe('')
+  })
+  it('\\@ifundefined{X}{…}{…} whole, under \\makeatletter', () => {
+    expect(provides('\\makeatletter\n\\@ifundefined{bbl@x}{\\def\\bbl@x#1{#1}}{}\n\\makeatother')).toBe('\\makeatletter\\@ifundefined{bbl@x}{\\def\\bbl@x#1{#1}}{}\\makeatother ')
+  })
+  it('a \\newcommand, as a \\providecommand (alpha\'s \\etalchar: one the paper defined stands)', () => {
+    expect(provides('\\newcommand{\\etalchar}[1]{$^{#1}$}\\newcommand*\\x[2][a]{#1#2}')).toBe('\\providecommand{\\etalchar}[1]{$^{#1}$}\\providecommand*\\x[2][a]{#1#2}')
+  })
+  it('a \\def or \\let of its own, set only where its name is undefined (MNRAS\'s \\mn@doi under \\makeatletter, REVTeX\'s \\let)', () => {
+    expect(provides('\\makeatletter\n\\relax\n\\def\\mn@doi@[#1]#2{\\href{http://dx.doi.org/#2}{#1}}\n\\let\\auto@bib@innerbib\\@empty\n\\makeatother\n\\gdef\\x{y}\\let\\z=\\x')).toBe(
+      '\\makeatletter\\ifx\\mn@doi@\\undefined\\def\\mn@doi@[#1]#2{\\href{http://dx.doi.org/#2}{#1}}\\fi \\makeatother \\makeatletter\\ifx\\auto@bib@innerbib\\undefined\\let\\auto@bib@innerbib\\@empty\\fi \\makeatother \\ifx\\x\\undefined\\gdef\\x{y}\\fi \\ifx\\z\\undefined\\let\\z=\\x\\fi ',
+    )
+  })
+  it('anything else passed over: a \\renewcommand, a length, a group with its own definitions, a \\def of a \\csname; and a harvard .bbl\'s head ends at its first \\harvarditem', () => {
+    expect(provides('\\renewcommand{\\refname}{R}\\setlength{\\itemsep}{0pt}{\\def\\a{b}}\\baselineskip=9pt\\expandafter\\def\\csname x@y\\endcsname{z}')).toBe('')
+    const harvard = '\\begin{thebibliography}{2}\n\\providecommand{\\a}{b}\n\\harvarditem{X}{2020}{x} X. \\def\\c{d}\n\\end{thebibliography}\n'
+    expect(bblProvides(inMemory(new Map([['main.tex', enc(tex)], ['main.bbl', enc(harvard)]])), 'main.tex')).toBe('\\providecommand{\\a}{b}')
   })
 })
 

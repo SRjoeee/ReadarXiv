@@ -322,8 +322,8 @@ describe('the paper\'s own switch: TeX asked what a mark does before what follow
   it('markProbeTex: for each sample and follower the four boxes after a word, ended at a space; a call before a second one; one line a sample, its count of errors started again', () => {
     const tex = markProbeTex([{ src: '\\cite{a}', call: false }, { src: '\\footnote{A note.}', call: true }])
     expect(tex.match(/\\typeout\{LAYOUT-PROBE 1 punct \d+ \\axt@qo\}/g)).toEqual(['\\typeout{LAYOUT-PROBE 1 punct 0 \\axt@qo}', '\\typeout{LAYOUT-PROBE 1 punct 1 \\axt@qo}'])
-    // one document of sections, each a group of its own
-    expect(tex.startsWith('\\makeatletter\\begingroup')).toBe(true)
+    // one document of sections, each a group of its own, after the definition of what closes the groups a sample left open
+    expect(tex).toMatch(/^\\makeatletter\\gdef\\axt@unwind\{[^\n]*?\\axt@unwound\}\\begingroup/)
     expect(probeTex(['A', 'B'])).toBe('\\makeatletterA\nB\\makeatother\n')
     for (const f of ['.', ',', ';', ':', '!', '?']) {
       expect(tex).toContain(`\\hbox{way \\cite{a}${f} \\unskip`)
@@ -338,7 +338,7 @@ describe('the paper\'s own switch: TeX asked what a mark does before what follow
     // trackers reset), saying at its last statement whether it closed where it was meant to
     const boxes = (tex.match(/\\hbox\{way /g) ?? []).length
     expect(boxes).toBe(2 * 7 * 4 + 2)
-    expect((tex.match(/\\global\\setbox\\axt@qbox\\box\\voidb@x\\gdef\\axt@qn\{\}\\axt@qreset\\setbox\\axt@qbox\\hbox\{way /g) ?? []).length).toBe(boxes)
+    expect((tex.match(/\\global\\setbox\\axt@qbox\\box\\voidb@x\\gdef\\axt@qn\{\}\\axt@qreset\\xdef\\axt@level\{\\the\\currentgrouplevel\}\\setbox\\axt@qbox\\hbox\{way /g) ?? []).length).toBe(boxes)
     expect((tex.match(/\\xdef\\axt@qn\{\\the\\lastnodetype\\ifinner\\ifhmode\/in\\fi\\fi\}/g) ?? []).length).toBe(boxes)
     // a row before each box, for the errors TeX logs in it
     expect(tex.match(/\\typeout\{LAYOUT-PROBE 1 punct-at \d+ \d+ [a-e]\}/g)).toHaveLength(boxes)
@@ -430,7 +430,7 @@ describe('what a paper\'s macro sets: TeX asked (the ink section), and LaTeX\'s 
   it('inkSection: each sample in a voided box, shown in full in the log between its rows, its error count started again', () => {
     const tex = inkSection(['\\rule{0pt}{2ex}', '\\bert{}'])
     expect(tex.match(/\\typeout\{LAYOUT-PROBE 1 ink-(?:at|end) \d\}/g)).toEqual(['\\typeout{LAYOUT-PROBE 1 ink-at 0}', '\\typeout{LAYOUT-PROBE 1 ink-end 0}', '\\typeout{LAYOUT-PROBE 1 ink-at 1}', '\\typeout{LAYOUT-PROBE 1 ink-end 1}'])
-    expect(tex).toContain('\\global\\setbox\\axt@ibox\\box\\voidb@x\\setbox\\axt@ibox\\hbox{\\rule{0pt}{2ex}}')
+    expect(tex).toContain('\\global\\setbox\\axt@ibox\\box\\voidb@x\\xdef\\axt@level{\\the\\currentgrouplevel}\\setbox\\axt@ibox\\hbox{\\rule{0pt}{2ex}}\\axt@unwind')
     expect(tex).toContain('\\showboxbreadth=100000 \\showboxdepth=100000 \\tracingonline=0 \\showbox\\axt@ibox')
     expect(tex.match(/\\noindent\\par/g)).toHaveLength(2)
     expect(tex).not.toMatch(/\\write|\\immediate|AXT-/)
