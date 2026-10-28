@@ -117,6 +117,25 @@ describe('a heading its class sets in faked small capitals (ICLR, IEEEtran, unde
     expect(gate.tokens.base.caps).toBe(true)
   })
 
+  it('an ink unit (its source our page\'s own capitals) as a source unit: at its full letters\' size, in small capitals', () => {
+    // (a running head in ICLR's Times \\sc that no source unit owns: its source the glyphs' text, "REFERENCES"; drawn at 9.6, the
+    // median its small capitals make, beside source headings drawn at 12)
+    const line = lineOf([['R', 12, times], ['EFERENCES', 9.6, times]])
+    const zh = String.fromCodePoint(0x53c2, 0x8003, 0x6587, 0x732e)
+    for (const to of ['zh', 'es']) {
+      const { prep, size } = read(unitOf([text('REFERENCES')], [to === 'zh' ? zh : 'Referencias'], 'inkheads'), line, to)
+      expect(prep.orig!.size).toBeCloseTo(12, 3)
+      expect(size).toBeCloseTo(12, 3)
+      expect(prep.orig!.st.caps).toBe(true)
+    }
+    // (one in capitals at one size, a case change's: its size, no small capitals, as before)
+    const upper = read(unitOf([text('REFERENCES')], ['Referencias'], 'inkheads'), lineOf([['REFERENCES', 10, times]]))
+    expect([upper.prep.orig!.size, upper.prep.orig!.st.caps]).toEqual([10, false])
+    // (one with a lowercase glyph, a drop cap before it: read as before, no small capitals)
+    const drop = read(unitOf([text('Once upon a time')], ['Erase una vez'], 'inkorphan'), lineOf([['O', 20, times], ['nce upon a time', 10, times]]))
+    expect(drop.prep.orig!.st.caps).toBe(false)
+  })
+
   it('in a CJK target: no case, at the nominal size × CJK_CAPS_SIZE (the owner\'s one value, 1)', () => {
     // (the heading in Chinese, its characters by code point)
     const zh = String.fromCodePoint(0x8ba8, 0x8bba, 0xff1a, 0x5173, 0x952e, 0x89c1, 0x89e3)

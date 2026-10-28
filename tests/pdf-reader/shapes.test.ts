@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type Anchor, type DocToken, lineRects, sentenceStarts, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
-import { readLeftPart, writeLeftPart } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { readLeftPart, UNIT_ID_MAX, writeLeftPart } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { isNameOccurrence, NAME_ID_FROM, NAME_OCCURRENCE_MAX, nameOccurrenceId } from '@/pdf-reader/engine/layer-proto/units.mjs'
+import { NAME_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { type Box, pageFloats } from '@/pdf-reader/engine/view/floats.mjs'
 import { blockOf, clickOf, layoutOf, pageGeometry, runsOf, sentenceOf } from '@/pdf-reader/engine/view/highlight.mjs'
 import { createShapes, layerShapes, leftPageInput, mirror, pdfShapes } from '@/pdf-reader/engine/view/shapes.mjs'
@@ -616,5 +618,89 @@ describe('SH5: the right\'s laid pages, from the layer\'s words (layerShapes)', 
     r.lay(3, wordsOf(3, [6], 5))
     expect(nth(r.shapes.runs(6), 0).toks).toEqual(toks)
     expect(nth(r.shapes.runs(6), 0).top).toBeCloseTo(nth(l.shapes.runs(6), 0).top - 5, 4)
+  })
+})
+
+describe("babel's names light as headings on both panes, under ids no bundle id reaches (2010.11929v2 p9's References, whose Chinese lit nothing)", () => {
+  // (a name the layout file locates on page 2 — its occurrence 7, its box over the table's first "alpha", a word no unit holds —
+  // carried in a part's layout as the wire carries it: [occurrence, key, page, x0, baseline, x1, top, bottom, size, font, flags,
+  // unit, glue, column x0, column x1])
+  const OCC = 7, ID = nameOccurrenceId(OCC) as number
+  const alpha = doc.findIndex(t => t.page === 2 && t.t === 'alpha')
+  const a = nth(doc, alpha)
+  const nameRow = (flags = 0) => [OCC, 1, 2, a.x - 1, 560, a.x + a.w + 1, 569, 557, 10, 0, flags, flags & NAME_FLAG.RUN_IN ? 4 : -1, 0, 50, 550]
+  const namesPart = (flags = 0) => ({ pages: [2], views: [], left: [], layout: { names: [nameRow(flags)] } })
+  const centre = (h: ReturnType<typeof createShapes> | ReturnType<typeof mirror>) => { const b = blockOf(nth(h.shapes.runs(ID), 0), PAD); return [(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2] as const }
+
+  it('an occurrence\'s id is past every id a bundle holds, a late chunk\'s included, and below the view\'s Int32 owners', () => {
+    expect(NAME_ID_FROM).toBeGreaterThan(UNIT_ID_MAX)
+    expect(nameOccurrenceId(0)).toBe(NAME_ID_FROM)
+    expect(nameOccurrenceId(NAME_OCCURRENCE_MAX)).toBe(2 ** 31 - 1)
+    for (const bad of [-1, 1.5, NAME_OCCURRENCE_MAX + 1, Number.NaN]) expect(nameOccurrenceId(bad)).toBeNull()
+    expect(isNameOccurrence(UNIT_ID_MAX)).toBe(false)
+  })
+
+  it('on the left by its page\'s tokens in its box, as a heading lit whole, whether its row or its page comes first', () => {
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    for (const rowFirst of [true, false]) {
+      const h = createShapes({ kindOf })
+      h.addParts(parts)
+      if (rowFirst) h.addParts([namesPart() as never])
+      for (const p of [1, 2, 3]) h.addPage(nth(lefts, p))
+      if (!rowFirst) h.addParts([namesPart() as never])
+      const runs = h.shapes.runs(ID)
+      expect(runs.map(r => r.page)).toEqual([2])
+      expect(nth(runs, 0).toks).toEqual([alpha])
+      const [x, y] = centre(h)
+      expect(h.shapes.hit(2, x, y, PAD, () => Int32Array.of(alpha))).toMatchObject({ id: ID, s: -1 })
+      // (the units as before)
+      for (const id of UNITS.keys()) expect(h.shapes.runs(id).map(r => h.shapes.block(r, PAD))).toEqual(runsOf(whole, id).map(r => blockOf(r, PAD)))
+      // (and the mirror, the right of a page shown as the original, lights it too, from its own runs)
+      const m = mirror(h)
+      expect(m.shapes.runs(ID).map(r => m.shapes.block(r, PAD))).toEqual(runs.map(r => h.shapes.block(r, PAD)))
+    }
+  })
+
+  it('never one that leads a unit (RUN_IN: IEEEtran\'s "Abstract—"), which lights with that unit', () => {
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    const h = createShapes({ kindOf })
+    h.addParts([...parts, namesPart(NAME_FLAG.RUN_IN) as never])
+    for (const p of [1, 2, 3]) h.addPage(nth(lefts, p))
+    expect(h.shapes.runs(ID)).toEqual([])
+  })
+
+  it('apart from every unit of a bundle that grows after the reader opened (a late chunk\'s units after the head\'s)', () => {
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    const kinds = new Map<number, string>()
+    const h = createShapes({ kindOf: id => kinds.get(id) ?? kindOf(id) })
+    h.addParts([...parts, namesPart() as never])
+    for (const p of [1, 2, 3]) h.addPage(nth(lefts, p))
+    // (a unit the late chunk adds, its id the next the bundle had, on the table's second word: told by a later part)
+    const late = 7, beta = doc.findIndex(t => t.page === 2 && t.t === 'beta')
+    kinds.set(late, 'figure')
+    h.addParts([{ pages: [2], views: [], left: [[late, beta, [[2, nth(doc, beta).x, 557, nth(doc, beta).x + nth(doc, beta).w, 569]]]] } as never])
+    expect(late).not.toBe(ID)
+    expect(nth(h.shapes.runs(ID), 0).toks).toEqual([alpha])
+    const [x, y] = centre(h)
+    expect(h.shapes.hit(2, x, y, PAD, () => null)).toMatchObject({ id: ID, s: -1 })
+  })
+
+  it('on a laid page by the words the layer drew of it under its id, and lit on both panes', () => {
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    const l = createShapes({ kindOf })
+    l.addParts([...parts, namesPart() as never])
+    const r = layerShapes(l)
+    // (page 2 laid: the name drawn where the original's was, one token, its span under the occurrence's id, as run.mjs writes it)
+    const T = { n: 1, l: Float32Array.of(a.x), r: Float32Array.of(a.x + 20), y: Float32Array.of(560), h: Float32Array.of(10), top: Float32Array.of(568.8), bottom: Float32Array.of(558.8) }
+    expect(r.lay(2, { tokens: T, word: Int32Array.of(-1), at: Int32Array.of(-1), spans: [[ID, [0, 1]]], original: [] } as never)).toBe(true)
+    for (const p of [1, 2, 3]) l.addPage(nth(lefts, p))
+    expect(r.laid(2)).toBe(true)
+    const runs = r.shapes.runs(ID)
+    expect(runs.map(x => x.page)).toEqual([2])
+    const b = blockOf(nth(runs, 0), PAD)
+    expect(r.shapes.hit(2, (b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, PAD, () => null)).toMatchObject({ id: ID, s: -1 })
+    // (its first token there its stream, though the name was told after the page laid)
+    expect(nth(runs, 0).toks).toEqual([2 * 2 ** 16])
+    expect(l.shapes.runs(ID).map(x => x.page)).toEqual([2])
   })
 })

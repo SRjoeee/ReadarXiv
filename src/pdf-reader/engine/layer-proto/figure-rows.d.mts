@@ -11,3 +11,5 @@ export declare const FONT_NAME_MAX: number
 export declare function figureGroupOf(k: number): string
 export declare function figureRow(id: number, u: Pick<FigureUnit, 'group' | 'page' | 'x' | 'y' | 'ux' | 'uy' | 'length' | 'size' | 'ascent' | 'descent' | 'anchor' | 'fill' | 'font'>): FigureRowWire
 export declare function checkFigures(rows: unknown, o: { a: number; b: number; views: readonly number[]; unitCount: number }): readonly FigureRow[]
+/** whether a figure unit's run is level, read left to right: its words in the text layer, its original anchored on the left */
+export declare const levelRun: (ux: number, uy: number) => boolean

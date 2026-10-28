@@ -63,9 +63,10 @@ import * as TL from './textlayer.mjs'
 import { locatedWhole, shortSkipsOf, texParts, texRects } from './tex.mjs'
 import { shown as shownPiece, trPiecesOf } from '../layer/pieces.mjs'
 import { fitFigure, sameAsSource } from './figure-fit.mjs'
+import { levelRun } from './figure-rows.mjs'
 import { FIGURE_KIND } from '../rules/content-classes.mjs'
-import { NAME_KIND } from './units.mjs'
-import { addUnitWords, copyWords, freezeWords, newWords, pieceOffsets, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
+import { NAME_KIND, nameOccurrenceId } from './units.mjs'
+import { addSegWords, addUnitWords, copyWords, freezeWords, newWords, pieceOffsets, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
 import { closureOf, rowLeadOf } from './need.mjs'
 import { markWork, newWork, work, WORK_KEYS } from './work.mjs'
 import { drawInputsOf } from './draw.mjs'
@@ -1381,21 +1382,28 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       names.push(rec)
       const mine = (chars2[pg - 1] ?? []).filter(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 >= nm.x0 - 0.5 && (c.x0 + c.x1) / 2 <= nm.x1 + 0.5 && Math.abs(c.yb - nm.baseline) < 0.3 * nm.size)
       if (!mine.length) { rec.why = 'unread'; continue }
-      const text = L2.nameInTarget(nm, mine.map(c => c.ch).join(''), R.labels, to)
+      // its size and its faked small capitals, read off its characters as a unit's are (layer2.mjs nameStyleOf): set in faked small
+      // capitals, it is drawn in small capitals as such a unit is, its word in its own case (the layer drawing its small capitals,
+      // a CJK target's at CJK_CAPS_SIZE of the size), never as a case change's capitals
+      const own = L2.nameStyleOf(mine, nm)
+      const text = L2.nameInTarget(own.small ? { ...nm, capitals: false } : nm, mine.map(c => c.ch).join(''), R.labels, to)
       if (text === null) { rec.why = !R.labels?.[nm.key] ? 'no word' : 'same'; continue }
       // its style: its characters' (a class's bold or italic heading, small capitals), its design the paper's
-      const st = styleOfChars(mine)
+      const st = own.small ? { ...styleOfChars(mine), caps: true } : styleOfChars(mine)
+      const at = own.small && P.cjk ? own.size * L2.CJK_CAPS_SIZE : own.size
       // (leading a unit: that unit's, once it is laid)
       if (nm.unit >= 0) {
         Object.assign(rec, { why: 'inline: its unit not drawn', text, unit: nm.unit })
         leadsOf.set(nm.unit, { nm, rec, text, st, chars: mine.map(c => ({ ...c, page: pg })) })
         continue
       }
-      // (its small capitals, where its face has none of its own, drawn by the layer: layer2.mjs nameRuns)
-      const drawn = L2.nameRuns(text, faceOf(st, /[\u2e80-\u9fff\uac00-\ud7af\u3040-\u30ff\uf900-\ufaff]/.test(text) ? 'cjk' : 'latin', to), to)
+      // (its runs by script, each in its face, as a unit's words are drawn: its CJK characters in the target's CJK face, the rest
+      // in the Latin one, the served CJK faces holding no Latin letter or digit; its small capitals, where a face has none of its
+      // own, drawn by the layer: layer2.mjs nameScriptRuns, nameRuns)
+      const drawn = L2.nameScriptRuns(text, cls => faceOf(st, cls, to), to, P.cjkQuotes)
       if (FS) {
         const tFonts = performance.now()
-        const no = await FS.check([{ face: drawn.face, text: drawn.text }])
+        const no = await FS.check(drawn.runs.map(q => ({ face: q.face, text: q.s })))
         fontWait += performance.now() - tFonts
         if (disposed) return
         if (no) { rec.why = no.why; continue }
@@ -1410,11 +1418,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         else if (c.x0 >= nm.x1 - 0.1) right = Math.min(right, c.x0 - 0.25 * nm.size)
       }
       left = Math.min(left, nm.x0); right = Math.max(right, nm.x1)
-      const w = L2.runsWidth(drawn) * nm.size, mid = (nm.x0 + nm.x1) / 2
+      const w = L2.runsWidth(drawn) * at, mid = (nm.x0 + nm.x1) / 2
       const room = nm.centred ? 2 * Math.min(mid - left, right - mid) : right - nm.x0
       const k = w > room ? room / w : 1
       if (k < P.floorMin - 1e-9) { Object.assign(rec, { why: 'unfit', text, w: r1(w), room: r1(room) }); continue }
-      const size = nm.size * k, x = nm.centred ? mid - (w * k) / 2 : nm.x0
+      const size = at * k, x = nm.centred ? mid - (w * k) / 2 : nm.x0
       // its ink hidden by its own group (`n<occ>`): a name whose group the document does not hold stays the original's
       if (!VIS.has(nameGroup(nm.occurrence))) { Object.assign(rec, { why: 'unhidden', text }); continue }
       const r = rows[pg - 1], px = pxOf(pg)
@@ -1425,7 +1433,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       r.ops.push({ op: 'hidden', rects: [hid] })
       audit?.push({ what: 'erase', unit: -1, name: nm.occurrence, page: pg, box: [hid[0], hid[1], hid[0] + hid[2], hid[1] + hid[3]] })
       r.markup.push(L2.svgOfName({ occurrence: nm.occurrence, text, x, baseline: nm.baseline, size, face: drawn.face, runs: drawn.runs, color: st.color ?? null }, cssOf(pg), scale))
-      textRecord(r, opsFrom, `n${nm.occurrence}`, undefined, [TL.nameSeg(text, x, w * k, nm.baseline, size)])
+      const seg = TL.nameSeg(text, x, w * k, nm.baseline, size)
+      textRecord(r, opsFrom, `n${nm.occurrence}`, undefined, [seg])
+      // (its words in the page's word table under its occurrence's hover id, which no bundle id reaches (units.mjs
+      // nameOccurrenceId): the hover lights it as a heading, and the left its original by its box, view/shapes.mjs createShapes)
+      const nid = nameOccurrenceId(nm.occurrence)
+      if (nid !== null && !r.words) addSegWords(r.wordsOpen ??= newWords(), nid, [seg])
       Object.assign(rec, { drawn: true, text, size: r1(size), x: r1(x), w: r1(w * k), chars: mine.map(c => ({ ...c, page: pg })) })
     }
   }
@@ -1479,8 +1492,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       audit?.push({ what: 'erase', unit: f.id, figure: f.group, page: pg, box: [hid[0], hid[1], hid[0] + hid[2], hid[1] + hid[3]] })
       const x = f.x + f.ux * fit.offset, y = f.y + f.uy * fit.offset, angle = (Math.atan2(f.uy, f.ux) * 180) / Math.PI
       r.markup.push(L2.svgOfFigure({ group: f.group, text: drawn.text, x, y, angle, size: fit.size, face: drawn.face, color: f.fill > 0 ? L2.hexOf(f.fill) : null }, cssOf(pg), scale))
-      // (a level one's words in the page's text layer, as a name's; a turned one's are not selectable)
-      if (Math.abs(f.uy) < 1e-6 && f.ux > 0) textRecord(r, opsFrom, f.group, undefined, [TL.nameSeg(drawn.text, x, fit.width, y, fit.size)])
+      // (a level one's words in the page's text layer, as a name's, under its unit's id: the hover lights it and its original, which
+      // the pass anchored on the left by its band, ink-pass.mjs figureAnchors; a turned one's are not selectable: figure-rows.mjs
+      // levelRun)
+      if (levelRun(f.ux, f.uy)) {
+        const seg = TL.nameSeg(drawn.text, x, fit.width, y, fit.size)
+        textRecord(r, opsFrom, f.group, f.id, [seg])
+        if (!r.words) addSegWords(r.wordsOpen ??= newWords(), f.id, [seg])
+      }
       Object.assign(rec, { drawn: true, text, size: r1(fit.size), x: r1(x), y: r1(y), w: r1(fit.width) })
     }
     figuresDone[pg] = 2

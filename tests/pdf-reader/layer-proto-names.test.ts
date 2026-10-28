@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { indexLayout, LABEL_KINDS, LAYOUT_SCHEMA, NAME_FLAG, NAME_KEYS, parseLayout, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { openProto } from '@/pdf-reader/engine/layer-proto/run.mjs'
 import { nameInTarget } from '@/pdf-reader/engine/layer-proto/layer2.mjs'
+import { nameOccurrenceId } from '@/pdf-reader/engine/layer-proto/units.mjs'
+import { BUILTIN_RULES } from '@/pdf-reader/engine/rules/layout.mjs'
 import { withGroups } from './helpers/groups'
 
 // babel's names drawn by v0 (D1a, run.mjs paintNames): a generated heading the layout file locates (its `names`) set in
@@ -37,10 +39,11 @@ const H = 300
  *  `glue` after the dash); `bare`: no unit at all, the
  *  paragraph's line text no unit holds (a page of references alone); `column`: the name's TeX column in its row;
  *  `nameSize`: its size there (the unit's lines are 10) */
-function paper({ name = 'Abstract', x = 20, width = 40, beside = null as [string, number, number] | null, key = 'abstract', flags = 0, runIn = false, glue = 0, bare = false, column = [20, 120], nameSize = 10, text = '\u6c49\u5b57\u6c49\u5b57' } = {}) {
+function paper({ name = 'Abstract', x = 20, width = 40, beside = null as [string, number, number] | null, key = 'abstract', flags = 0, runIn = false, glue = 0, bare = false, column = [20, 120], nameSize = 10, text = '\u6c49\u5b57\u6c49\u5b57', runs = null as [string, number, number, number][] | null } = {}) {
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (px: number, py: number) => [px * scale, (H - py) * scale], convertToPdfPoint: (px: number, py: number) => [px / scale, H - py / scale] })
-  const item = (str: string, ix: number, w: number, y: number) => ({ str, transform: [10, 0, 0, 10, ix, y], width: w, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false })
-  const items = [item(name, x, width, 230), ...(beside ? [item(beside[0], beside[1], beside[2], 230)] : []), ...(runIn ? [item('\u2014', 60, 4, 230), item('Alpha beta gamma', 64 + glue, 100, 230)] : [item('Alpha beta gamma', 20, 100, 200)])]
+  const item = (str: string, ix: number, w: number, y: number, size = 10) => ({ str, transform: [size, 0, 0, size, ix, y], width: w, height: size, fontName: 'f1', dir: 'ltr', hasEOL: false })
+  // (`runs`: the name's items, each [text, x, width, size], in place of one at 10: a faked small capitals' run)
+  const items = [...(runs ? runs.map(([s, rx, w, z]) => item(s, rx, w, 230, z)) : [item(name, x, width, 230)]), ...(beside ? [item(beside[0], beside[1], beside[2], 230)] : []), ...(runIn ? [item('\u2014', 60, 4, 230), item('Alpha beta gamma', 64 + glue, 100, 230)] : [item('Alpha beta gamma', 20, 100, 200)])]
   const page = { view: [0, 0, 300, H], getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items, styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), cleanup() {}, commonObjs: { get: () => ({ name: 'NimbusRomNo9L-Regu' }) } }
   const file = {
     schema: LAYOUT_SCHEMA, lineskip: null, layout: '5', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['NimbusRomNo9L-Regu'],
@@ -67,6 +70,11 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
     expect(svg.querySelector('[data-n="1"]')?.textContent).toBe('\u6458\u8981')
     // its group hidden, the page's first operation, the unit's after it; its characters accounted, which no paste returns
     expect(run.rows[0]!.ops[0]).toMatchObject({ op: 'hidden' })
+    // (its words in the page's word table under its occurrence's hover id, where the hover lights it: one token, its box)
+    const words = run.wordsOf(1) as unknown as { spans: [number, number[]][]; tokens: { l: Float32Array; r: Float32Array } }
+    const span = words.spans.find(([id]) => id === nameOccurrenceId(1))
+    expect(span?.[1][1]).toBe(1)
+    expect(words.tokens.l[span![1][0]!]).toBeCloseTo(20, 3)
     expect([...(run.rows[0] as unknown as { off: Set<string> }).off]).toContain('n1')
     expect(run.audit.find(a => a.what === 'erase' && a.name === 1)).toBeDefined()
     expect(run.names[0]!.chars.map(c => c.ch).join('')).toBe('Abstract')
@@ -104,12 +112,49 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
     expect(fits.names[0]).toMatchObject({ drawn: true, text: 'Résumé', size: 10 })
   })
 
+  it("draws a name in faked small capitals at the size TeX was asked for, as a unit so set is drawn (2010.11929v2 p9's REFERENCES)", async () => {
+    // (ICLR's \\sc in Times: its "R" at 12, its "EFERENCES" the capitals NFSS's virtual face sets at 0.8 of it, 9.6; the file's
+    // size the most of its glyphs', 9.6; its own text "References", so a case change of the class's: CAPITALS)
+    const runs: [string, number, number, number][] = [['R', 20, 8, 12], ['EFERENCES', 28, 50, 9.6]]
+    const zh = await open({}, paper({ name: 'REFERENCES', key: 'ref', width: 58, nameSize: 9.6, flags: NAME_FLAG.CAPITALS, runs }))
+    await zh.until(1)
+    expect(zh.names[0]).toMatchObject({ drawn: true, text: '\u53c2\u8003\u6587\u732e', size: 12 })
+    // (an alphabet's word in its own case, its small capitals drawn by the layer at the capitals' size, never in capitals)
+    const de = await open({ target: 'de' }, paper({ name: 'REFERENCES', key: 'ref', width: 58, nameSize: 9.6, flags: NAME_FLAG.CAPITALS, runs, column: [20, 200] }))
+    await de.until(1)
+    expect(de.names[0]).toMatchObject({ drawn: true, text: 'Literatur', size: 12 })
+    // (a case change's capitals, all at one size: drawn at it, in the target's capitals, as before)
+    const upper = await open({ target: 'de' }, paper({ name: 'REFERENCES', key: 'ref', width: 58, flags: NAME_FLAG.CAPITALS, runs: [['REFERENCES', 20, 58, 10]], column: [20, 200] }))
+    await upper.until(1)
+    expect(upper.names[0]).toMatchObject({ drawn: true, text: 'LITERATUR', size: 10 })
+  })
+
+  it('draws a word of two scripts in runs by script, each in its face, as a unit\'s words are (the served CJK faces hold no Latin)', async () => {
+    // (zh's word for the abstract's heading with a Latin letter and a digit after its ideographs: drawn whole, one CJK run and
+    // one Latin run, never the whole in the CJK face, which a face check refuses where the CJK face's slices hold no ASCII)
+    const rules = structuredClone(BUILTIN_RULES) as unknown as { languages: Record<string, { labels: Record<string, string> }> }
+    rules.languages.zh!.labels.abstract = '\u6458\u8981 A1'
+    const zh = await open({ rules }, paper({ column: [20, 200] }))
+    await zh.until(1)
+    expect(zh.names[0]).toMatchObject({ drawn: true, text: '\u6458\u8981 A1' })
+    const spans = [...(zh.svgOf(1).querySelectorAll('[data-n="1"] tspan') ?? [])]
+    expect(spans.map(t => t.textContent)).toEqual(['\u6458\u8981', ' A1'])
+    const cls = spans.map(t => t.getAttribute('class'))
+    expect(cls[0]).not.toBe(cls[1])
+    // (one script alone: one run, in its face, as before)
+    const plain = await open({}, paper())
+    await plain.until(1)
+    expect([...(plain.svgOf(1).querySelectorAll('[data-n="1"] tspan') ?? [])].map(t => t.textContent)).toEqual(['\u6458\u8981'])
+  })
+
   it("sets a run-in name as its unit's line start whatever its width, the original's joint and glue after it", async () => {
     // IEEEtran's "Abstract—…": zh's word, narrower than "Abstract", leaves no gap before the dash
     const zh = await open({}, paper({ runIn: true }))
     await zh.until(1)
     expect(zh.names[0]).toMatchObject({ drawn: true, why: null, text: '\u6458\u8981', unit: 0, size: 10, x: 20 })
     expect(zh.svgOf(1).querySelector('[data-n]')).toBeNull()
+    // (its words its unit's: no span of the name's own)
+    expect((zh.wordsOf(1) as unknown as { spans: [number, number[]][] }).spans.some(([id]) => id === nameOccurrenceId(1))).toBe(false)
     // the dash right where the word ends, no gap: its place after the second ideograph one advance on, as the second's
     // after the first (a run of single characters, each at its own place)
     const run = [...(zh.svgOf(1).querySelectorAll('tspan') ?? [])].find(t => t.textContent?.startsWith('\u6458\u8981\u2014'))

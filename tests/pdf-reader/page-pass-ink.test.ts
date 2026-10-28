@@ -187,6 +187,29 @@ describe('the ink units in the page pass', () => {
         // (its row in the part of page 2 alone, by its id; no other part holds the key)
         const holding = got.parts.filter(p => p.figures.length)
         expect(holding.map(p => p.figures.map(f => [f.id, f.page, f.group]))).toEqual([[[id, 2, 'f0']]])
+        // (no token of arXiv's in its band: no anchor on the left, the figure's float lighting it)
+        expect(got.parts.flatMap(p => p.left).some(e => e[0] === id)).toBe(false)
+      }
+    }
+  })
+
+  it('anchors a figure unit on the left by arXiv\'s tokens in its run\'s band, whole and streamed, so that its translation lights its original', async () => {
+    const fig = { page: 2, group: 'f0', text: 'Validation loss', font: 'ABCDEF+ArialMT', size: 8, fill: 0, angle: 0, x: 100, y: 400, ux: 1, uy: 0, length: 60, ascent: 0.88, descent: -0.2, anchor: 'centre', form: true }
+    const stats = { wrapped: 3, refusedPages: 0, unhidden: { marks: 0, across: 0, spell: 0, page: 0, bounds: 0 }, split: 0, groups: 5, labelKept: 0 }
+    const wrap = { stats, unhidden: [], labelKept: [], pages: [[1, 3]], figures: { units: [fig] } }
+    // (arXiv's page 2 sets the label where the wrap drew it: its tokens in the band)
+    const withLabel = (): World => { const w = worldOf(); w.pages[1] = { runs: [...w.pages[1]!.runs, { s: 'Validation loss', x: 100, y: 400 }] }; return w }
+    for (const whole of [false, true]) {
+      for (const ink of [INK, null]) {
+        const w = withLabel()
+        const got = await passOf(w, { ours: oursOf(w, { ink, wrap }), whole })
+        const id = ink ? 5 : 3
+        const entry = got.parts.flatMap(p => p.left).find(e => e[0] === id)
+        expect(entry?.[2].map(r => r[0])).toEqual([2])
+        const [, x0, y0, x1, y1] = entry![2][0]!
+        expect([x0 <= 100, x1 >= 140, y0 <= 400, y1 >= 400]).toEqual([true, true, true, true])
+        // (the source units' anchors as before: each its own page's)
+        for (const u of [0, 1, 2]) expect([...new Set(got.parts.flatMap(p => p.left).find(e => e[0] === u)?.[2].map(r => r[0]))]).toEqual([u + 1])
       }
     }
   })

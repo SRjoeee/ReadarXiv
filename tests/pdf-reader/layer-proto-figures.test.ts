@@ -69,6 +69,14 @@ describe('the figures\' text drawn by the layer (run.mjs paintFigures)', () => {
     expect(g?.querySelector('tspan')?.getAttribute('fill')).toBe('#2040a0')
     expect(g?.querySelector('text')?.getAttribute('transform')).toBe(`translate(70 ${H - 120})`)
     expect(run.rows[0]!.ops.some(o => o.op === 'hidden')).toBe(true)
+    // (its words in the page's text layer under its unit's id, as a source unit's are: the hover lights it and its original)
+    const words = run.textOf(1).items.filter(i => i.from === 'translated' && i.str === '\u4fe1\u53f7\u5f3a\u5ea6')
+    expect(words.map(i => i.unit)).toEqual([1])
+    // (and in the page's word table under its id, one token over its box: the hover's right pane)
+    const table = run.wordsOf(1) as unknown as { spans: [number, number[]][]; tokens: { l: Float32Array } }
+    const span = table.spans.find(([id]) => id === 1)
+    expect(span?.[1][1]).toBe(1)
+    expect(table.tokens.l[span![1][0]!]).toBeCloseTo(70, 3)
   })
 
   it('off: the same row taken, nothing of the figure drawn nor hidden: its ink the original\'s', async () => {
@@ -85,6 +93,9 @@ describe('the figures\' text drawn by the layer (run.mjs paintFigures)', () => {
     // (40 of 60 from its end: its start 20 along its direction, up the page)
     expect(turned.figures[0]).toMatchObject({ drawn: true, x: 40, y: 100 })
     expect(turned.svgOf(1).querySelector('[data-f="f0"] text')?.getAttribute('transform')).toBe(`translate(40 ${H - 100}) rotate(-90)`)
+    // (its words in no text layer, which holds upright text alone: the figure's float lights it, figure-rows.mjs levelRun)
+    expect(turned.textOf(1).items.some(i => i.unit === 1)).toBe(false)
+    expect((turned.wordsOf(1) as unknown as { spans: [number, number[]][] }).spans.some(([id]) => id === 1)).toBe(false)
   })
 
   it('leaves the original\'s a translation that would pass the floor, one that says its source again, one with no group', async () => {
