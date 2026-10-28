@@ -54,11 +54,17 @@ import { CLASS_IDS } from '../rules/content-classes.mjs'
  *  classes' ledger (`ledger`); and in the same unreleased 10 (the content class `figures`, stage 5) a part may carry its
  *  pages' figure units (`figures`, figure-rows.mjs: each an ink unit of kind `inkfigures`, its place on its page), the key there
  *  only where the part has one, so that a part with none is written as before; this reader reads 9's objects unchanged (none
- *  holds any of them) */
-export const BUNDLE5 = '10'
+ *  holds any of them). 11 (the owner's rule of 2026-10-29, docs/PDF-READER.md §19.12: a figure's labels of one group at one
+ *  size, each at its original's edge, a translation into the free line beside it): a figure row carries its set and its room
+ *  (figure-rows.mjs FIGURE_ROW, three values more), which a reader of 10 refuses; a bundle of 10 is not found under 11's CTAG
+ *  and is prepared again. The head's, the left parts' and the catalog's shapes are 10's. This reader reads 10's objects too,
+ *  a row of 10's each unit its own set with no room (FIGURE_ROW_10): as 10 drew it */
+export const BUNDLE5 = '11'
 /** the formats this reader takes: its own, and 7's (a bundle drawn over arXiv's PDF, whose objects 9 reads unchanged: its
- *  head is read as `base.source` 'arxiv', with no `orig`). Every object of a bundle is of its head's format */
-export const BUNDLES_READ = Object.freeze(['7', '9', BUNDLE5])
+ *  head is read as `base.source` 'arxiv', with no `orig`), 9's and 10's. Every object of a bundle is of its head's format */
+export const BUNDLES_READ = Object.freeze(['7', '9', '10', BUNDLE5])
+/** the formats whose parts may carry figure units (`figures`, figure-rows.mjs: 10's rows without a set or a room) */
+const FIGURES_READ = Object.freeze(['10', BUNDLE5])
 /** a units chunk's own format (amendment M12): raised only by a change to the chunk's shape, so that a change to a part's
  *  shape renames no unit identity and redoes no translation */
 export const UNITS_FORMAT = '1'
@@ -1021,7 +1027,7 @@ const PART_DEF = { cap: PART_CAP, values: PART_VALUES, depth: PART_DEPTH }
  * (x0, y0, x1, y1 stride 4, layout/cell-rules.mjs checkBoxes) by page, each of pages a … b, within its view; one left-part ref for
  * each page a … b
  */
-function partShape(v, { N, unitCount }) {
+function partShape(v, { N, unitCount, format = BUNDLE5 }) {
   const K = 'part'
   digestField(K, v.head, 'head')
   if (v.prev !== null) digestField(K, v.prev, 'prev')
@@ -1128,7 +1134,7 @@ function partShape(v, { N, unitCount }) {
   // figures: its pages' figure units, where its layout is (figure-rows.mjs), none of them a left unit nor a file-only one
   // (the key there only where the part has one: a part of none is written as one before figures)
   if (Object.hasOwn(v, 'figures') && !(Array.isArray(v.figures) && v.figures.length)) throw refuse(K, 'figures', 'there only where the part has a figure unit')
-  const figures = inside(K, '', () => checkFigures(v.figures ?? [], { a, b, views, unitCount }))
+  const figures = inside(K, '', () => checkFigures(v.figures ?? [], { a, b, views, unitCount, format }))
   if (figures.length && layout === null) throw refuse(K, 'figures', 'figure units where the layout is none')
   const placed = new Set(fileOnly.map(e => e[0]))
   for (let i = 0; i < figures.length; i++) if (inLeft.has(figures[i].id) || placed.has(figures[i].id)) throw refuse(K, `figures[${i}][0]`, 'a unit of the left or of the layout')
@@ -1161,13 +1167,13 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
   const was = chain ?? initialChain(index)
   const { value: v, sha256 } = await opened(K, bytes, ref, PART_DEF, caps)
   // (a part of 7's or 9's holds no figures: 7's head is one over arXiv's PDF, which holds none of our groups, and 9 has none)
-  envelope(K, v, PART_KEYS_WIRE, head.bundle === BUNDLE5 ? PART_KEYS_OPTIONAL : [], head.bundle ?? null)
+  envelope(K, v, PART_KEYS_WIRE, FIGURES_READ.includes(head.bundle) ? PART_KEYS_OPTIONAL : [], head.bundle ?? null)
   // (what the chain says of where the part begins and what it follows, before the shape that needs the chain's counts)
   if (v.head !== index.sha256) throw refuse(K, 'head', 'not the head of the index')
   if (v.head !== was.head) throw refuse(K, 'head', 'not the head of the parts told')
   if (Array.isArray(v.pages) && v.pages.length === 2 && v.pages[0] !== was.through + 1) throw refuse(K, 'pages[0]', `not ${was.through + 1}, the page after the last part's`)
   if (v.prev !== was.last) throw refuse(K, 'prev', 'not the digest of the last part told')
-  const s = partShape(v, { N, unitCount: index.units.length })
+  const s = partShape(v, { N, unitCount: index.units.length, format: head.bundle ?? BUNDLE5 })
 
   // the ref's place, where it has one (a catalog's part refs do), is the part's pages
   if ((ref.from !== undefined && ref.from !== s.a) || (ref.to !== undefined && ref.to !== s.b)) throw refuse(K, 'ref', `the ref's pages ${ref.from ?? '?'} to ${ref.to ?? '?'} are not the part's ${s.a} to ${s.b}`)
