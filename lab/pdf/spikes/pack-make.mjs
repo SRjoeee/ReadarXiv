@@ -23,7 +23,7 @@ const names = G.outputsOf(refs)
 const layout = G.layoutVersionOf(fixtures, names, await G.layoutOfEngine(engineRoot))
 const targets = [...new Set(names.map(n => nameOf(n).target))].sort()
 const known = SCRIPTS.map(s => BUILTIN_RULES.scripts[s].cjkFaces).filter(Boolean)
-const used = [...new Map(targets.map(t => resolveRules(BUILTIN_RULES, t).cjkFaces).filter(Boolean).map(c => [`${c.group}|${c.kai}`, c])).values()]
+const used = [...new Map(targets.map(t => resolveRules(BUILTIN_RULES, t).cjkFaces).filter(Boolean).map(c => [c.group, c])).values()]
 const entries = G.entriesOf({ fixtures, records, refs, geometry, fontsDir: join(P, 'fonts'), fonts: G.fontFiles(FACES, known, used), patterns: TEX_PATTERN_FILES, texmf: join(P, 'texmf') })
 const manifest = G.makePack({ entries, out, pipeline: PIPELINE_VERSION, layout, compileImage })
 writeFileSync(jsonOut, `${JSON.stringify(G.packJsonOf(manifest), null, 1)}\n`)
