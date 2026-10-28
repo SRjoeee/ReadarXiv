@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { latin1Bytes } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { cutsOf, plainSource, plainTranslated, rehydrate, rehydrateTags, sentencesKept, sentencesOf, serialize, serializeTags, texEscape, textsShown, translateUnits, unitText, utf8 } from '@/pdf-reader/engine/translate/mt.mjs'
+import { cutsOf, decode, plainSource, plainTranslated, rehydrate, rehydrateTags, sentencesKept, sentencesOf, serialize, serializeTags, texEscape, textsShown, translateUnits, unitText, utf8 } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // A unit's plain text as the PDF shows it, which the reader locates it by (anchors.mjs)
 
@@ -275,5 +275,22 @@ describe('utf8: the source\'s bytes as the front end reads them', () => {
     const all = String.fromCharCode(...Array.from({ length: 256 }, (_, i) => i))
     for (const s of ['caf\u00c3\u00a9', 'plain', all, 'a\u{1F600}b']) expect(utf8(s)).toBe(new TextDecoder().decode(latin1Bytes(s)))
     expect(utf8('caf\u00c3\u00a9')).toBe('caf\u00e9')
+  })
+})
+
+describe("decode: a reply's entities", () => {
+  it('reads a numeric entity of a code point, decimal or hexadecimal, and the named ones', () => {
+    expect(decode('&#65;&#x42;&#X43;&#x1F600;&amp;&lt;&gt;&quot;&apos;')).toBe('ABC\u{1F600}&<>"\'')
+    expect(decode('&#1114111;')).toBe('\u{10FFFF}')
+  })
+  it('keeps a numeric entity past U+10FFFF as it stands, as the background decoder does (src/core/protector/escape.ts): never a throw', () => {
+    for (const e of ['&#1114112;', '&#x110000;', '&#99999999999999999999;', '&#xFFFFFFFFFFFF;']) expect(decode(`a ${e} b`)).toBe(`a ${e} b`)
+  })
+  it('a reply holding one is translated, not a run that throws', async () => {
+    const u = { pieces: [{ t: 'text', s: 'A unit whose reply holds a bad entity.' }] }
+    for (const format of ['markers', 'tags', 'runs'] as const) {
+      const { results } = await translateUnits([u], async (texts: string[]) => texts.map(() => ({ text: 'Eine Einheit &#1114112; mit Antwort.', by: 'g' })), format)
+      expect(results.get(u), format).toMatchObject({ state: 'whole' })
+    }
   })
 })
