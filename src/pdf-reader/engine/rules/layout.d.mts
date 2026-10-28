@@ -5,7 +5,7 @@ import type { Params } from '../layer-proto/layer2.mjs'
 import type { NameKey } from '../layout/names.mjs'
 
 /** the schema's number: the shape and how the engine reads it */
-export declare const RULES_SCHEMA: 5
+export declare const RULES_SCHEMA: 7
 /** a set's bytes at most, as received */
 export declare const RULES_CAP: 65536
 /** a set's JSON values at most, counted before JSON.parse */
@@ -42,7 +42,11 @@ export interface ScriptRules {
   fillLeadRel: number | null
   /** what the fill leaves over: at each unit's foot, or packed to its run's end */
   leftover: 'foot' | 'pack'
+  /** at the original's leading, a block's lines one pitch apart from its first, not on the original's baselines (layer2.mjs evenGridOf) */
+  evenPitch: boolean
   // breaking (layer2.mjs tokensOf2, layer1.mjs kinsokuOf)
+  /** a unit TeX set flush left or flush right (the layout file's FLUSH_LEFT, FLUSH_RIGHT) keeps that alignment */
+  keepAlign: boolean
   /** break only at spaces (Korean, the alphabets) */
   keepAll: boolean
   /** curly quotes, dashes, the ellipsis and the middle dot take the CJK class */

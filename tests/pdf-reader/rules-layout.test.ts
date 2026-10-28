@@ -29,10 +29,11 @@ const bytesOf = (s: string) => new TextEncoder().encode(s)
 // biome-ignore lint/suspicious/noExplicitAny: a set under edit has no fixed shape
 type Edit = any
 /** the fields each schema since the first removed and added (schema 2, D6: `grid` gone, every script's lines on the
- *  original's pitch while the size shrinks; `fillLead`, the page fill's top; `leftover`, where what it leaves goes); the
- *  labels schema 3 added (D1a: every babel name, at the built-in set's words); and the members of `cjkFaces` schema 6 took
- *  out (its `light` designs and its `kai`: Regular and Bold beside every English family, the ruling of 2026-10-29) */
-const REMOVED = ['grid'], ADDED = ['fillLead', 'leftover', 'fillLeadRel'], FACES_REMOVED = ['light', 'kai']
+ *  original's pitch while the size shrinks; `fillLead`, the page fill's top; `leftover`, where what it leaves goes; schema
+ *  5's `fillLeadRel`; schema 7's `evenPitch` and `keepAlign`, lane B's B1 and B2, the ruling of 2026-10-29); the labels
+ *  schema 3 added (D1a: every babel name, at the built-in set's words); and the members of `cjkFaces` schema 6 took out (its
+ *  `light` designs and its `kai`: Regular and Bold beside every English family, the ruling of 2026-10-29) */
+const REMOVED = ['grid'], ADDED = ['fillLead', 'leftover', 'fillLeadRel', 'evenPitch', 'keepAlign'], FACES_REMOVED = ['light', 'kai']
 const LABELS_ADDED = ['abstract', 'ref', 'bib', 'contents', 'listfigure', 'listtable', 'appendix', 'index', 'proof', 'preface', 'glossary']
 /** the frozen first version lifted to the current schema: its values as they were, less the fields removed since, the fields
  *  added since at the built-in set's values for each script */
@@ -70,8 +71,8 @@ afterEach(() => { vi.restoreAllMocks() })
 
 describe('the built-in set', () => {
   it('parses, is canonical (writeRules gives the file\'s bytes) and has a version of at least 1', () => {
-    expect(RULES_SCHEMA).toBe(6)
-    expect(BUILTIN_RULES.schema).toBe(6)
+    expect(RULES_SCHEMA).toBe(7)
+    expect(BUILTIN_RULES.schema).toBe(7)
     expect(BUILTIN_RULES.version).toBeGreaterThanOrEqual(1)
     expect(BUILTIN_RULES.note.length).toBeGreaterThan(0)
     expect(writeRules(BUILTIN_RULES)).toBe(text(BUILTIN_FILE))
@@ -401,8 +402,9 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     ['schema 3 (a set before 1b-C)', s => { s.schema = 3 }, 'schema'],
     ['schema 4 (a set before fillLeadRel)', s => { s.schema = 4 }, 'schema'],
     ['schema 5 (a set whose CJK faces name light designs and a Kai)', s => { s.schema = 5 }, 'schema'],
-    ['schema not 6', s => { s.schema = 7 }, 'schema'],
-    ['schema a string', s => { s.schema = '6' }, 'schema'],
+    ['schema 6 (a set before evenPitch and keepAlign)', s => { s.schema = 6 }, 'schema'],
+    ['schema not 7', s => { s.schema = 8 }, 'schema'],
+    ['schema a string', s => { s.schema = '7' }, 'schema'],
     ['labels without a heading\'s name (a schema-2 set\'s labels)', s => { s.languages.de.labels = { figure: 'Abbildung', table: 'Tabelle' } }, 'languages.de.labels.abstract'],
     ['version 0', s => { s.version = 0 }, 'version'],
     ['version not an integer', s => { s.version = 1.5 }, 'version'],
