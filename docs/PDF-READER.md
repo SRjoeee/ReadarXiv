@@ -2858,14 +2858,16 @@ translated.
   name, opens with "and", or stands before a numbered list of places is names: 2608.14893's and 2610.21880v1's second rows of
   names), a numbered list of places; IEEEtran's, acmart's, REVTeX's, elsarticle's (each key's value), llncs', ICML's and AAAI's
   forms. A later row with none of these is a place, as the classes set it: a name alone there cannot be told from a place by its
-  TeX. An e-mail, a web address and an ORCID written out stay placeholders, the original's ink. Every
+  TeX. An e-mail, a web address and an ORCID written out stay placeholders, the original's ink; so does an e-mail whose
+  local part TeX escapes (`goh\_siong\_thye@…`, one placeholder with its `\_`, 2608.11884, 2608.29778). Every author block's
   unit keeps its number: what PIPELINE 29 cut the text between two notes into (one unit of kind author, a unit the walk flushed
   inside it one more: `olderUnits`, a walk of the old cut in a shadow of the walk's context) keeps it in the first unit cut inside
   its range, of either kind, and every other unit cut there is numbered after every other unit of the source, before the entries
-  (`later`, `entriesLast`): over the local sources no unit's number moves. A place is searched on arXiv's page as a float is
+  (`later`, `entriesLast`): over the local sources no source unit's number moves for it. A place is searched on arXiv's page as a float is
   (`make.mjs`, `page-pass.mjs` FLOATING: a class sets it where it likes, amsart's addresses at the paper's end). Each row is
   marked in the layout compile as the block's one unit was (`frontMarks`), the duplicates a class compares left unmarked by the
-  command's whole argument (two equal `\affiliation{…}` of revtex's, set once), never two rows of one block (article sets
+  command's whole argument as TeX reads it, its comments, line breaks and runs of spaces aside (two equal `\affiliation{…}`
+  of revtex's, set once: 2610.21770v1's third, broken over two lines, had been marked and set again), never two rows of one block (article sets
   1706.03762v7's three "Google Brain" rows each where it stands: all 15 of its block's units laid); a row that opens with its
   first letter as a command in a group (`{\L}ukasz`) has its start mark before the group (`patch`), so that the letter is its
   own ink.
@@ -2888,10 +2890,17 @@ translated.
   author names.
 - **Measured** (`lab/pdf/spikes/classes-gate.mjs`, record `lab/pdf/records/classes-gate.md`; `lab/pdf/spikes/unit-hash-diff.mjs`
   over the local sources), against `next` 2346530d:
-  - **The units** of the 170 local sources: 105 papers' change, no unit's number moves. 2,340 names units and 2,286 entry units
-    become 2,341 whole entries; 89 author units become 124 names and 200 places. 7 paragraphs before a `\bibliography` lose a
-    trailing placeholder, 7 stored bodies of a class's own code are no units (2609.20976v1, 2610.34042v1, 2608.15334v1), and 3
-    notes' ORCIDs are placeholders. 95 of the 170 make their `.bbl` (40 ship one, 35 name no `\bibliography`).
+  - **The units** of the 170 local sources (cut before any compile, so without the `.bbl`s the pass makes):
+    - by kind: `refnames` 2,371 → 0 and `reference` 3,112 → 3,198 (each entry one unit); `author` 685 → 457 and `affiliation`
+      0 → 462; `para` 14,937 → 14,930 (7 stored bodies of a class's own code: 2609.20976v1, 2610.34042v1, 2608.15334v1);
+      `footnote` 283 → 282 (2608.29778's note that is an escaped e-mail alone);
+    - 7 paragraphs before a `\bibliography` lose a trailing placeholder; 3 notes' ORCIDs and the escaped e-mails of 2 notes
+      (2608.04322, 2608.09812) are placeholders; and 2608.11884's row of e-mails, a place of the words "goh siong" before, is
+      no unit;
+    - the numbers that move, of the 41,059 units whose hash stays: 2608.29778's 41 units after that note, #15 to #55, one down;
+      and 259 entries in 20 papers (an entry's rest keeps its hash), down by 1 to 159 where names units or a stored class body
+      went before them, up by 1 to 12 where places were cut apart before them;
+    - 95 of the 170 make their `.bbl` (40 ship one, 35 name no `\bibliography`).
   - **The classes gate** on 35 papers: the 3 of 2026-10-28, the gate pack's 7 and the 25 of `lab/pdf/data/layout`. 33 compile;
     2610.20595v1 (`texlive`) and 2610.21765v1 (`final`) are refused on both engines.
     - Every one of the 1,721 entries is located, among them 743 entries of the 16 papers whose `.bbl` the pass made (1.4 to

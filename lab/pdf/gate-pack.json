@@ -23,8 +23,8 @@
    "fmtutil": "r77314"
   }
  },
- "made": "2026-10-28T11:53:17.145Z",
- "digest": "7edfbd6f5a4838922c44c27712d1745bdebfd569d29704b7607ebf5eb3ed242b",
+ "made": "2026-10-28T13:32:54.525Z",
+ "digest": "0b3109a83b86c4adfa1b4ae9e3228faad12c87c64ef558426af48c263c513ca7",
  "bucket": "readarxiv-ci",
  "files": [
   {
@@ -1319,21 +1319,21 @@
   },
   {
    "path": "fixtures/2608.04322v1-de/base.json",
-   "sha256": "0199efa6476e6d7fb611982f301dfed24ecb6a290883a21e3512286b482cbfd4",
-   "bytes": 587,
-   "url": "r2://readarxiv-ci/gate-pack/0199efa6476e6d7fb611982f301dfed24ecb6a290883a21e3512286b482cbfd4"
+   "sha256": "d448bdbbb9d206f2be9035286e4f2002deef2b5862324202a6d60327ed23b491",
+   "bytes": 538,
+   "url": "r2://readarxiv-ci/gate-pack/d448bdbbb9d206f2be9035286e4f2002deef2b5862324202a6d60327ed23b491"
   },
   {
    "path": "fixtures/2608.04322v1-de/base.pdf",
-   "sha256": "8b3f4ac01deae2e3fa661482306d05f7515f20dab41ffb7620c22097ffe68908",
-   "bytes": 1503522,
-   "url": "r2://readarxiv-ci/gate-pack/8b3f4ac01deae2e3fa661482306d05f7515f20dab41ffb7620c22097ffe68908"
+   "sha256": "39a1097192ce777aee4b0b63f13bb59a1e82efece863b1302c2597f35a7bfad4",
+   "bytes": 1503523,
+   "url": "r2://readarxiv-ci/gate-pack/39a1097192ce777aee4b0b63f13bb59a1e82efece863b1302c2597f35a7bfad4"
   },
   {
    "path": "fixtures/2608.04322v1-de/layout.json",
-   "sha256": "063a9b762d857417fa69717b0fa40fbccde1fb781d98d856b0cf06647f5b2301",
-   "bytes": 176980,
-   "url": "r2://readarxiv-ci/gate-pack/063a9b762d857417fa69717b0fa40fbccde1fb781d98d856b0cf06647f5b2301"
+   "sha256": "fea1ccda89a44e5dd6b3f8cce6f35ff78a290bfc510b03cca86a6e56e4640968",
+   "bytes": 176960,
+   "url": "r2://readarxiv-ci/gate-pack/fea1ccda89a44e5dd6b3f8cce6f35ff78a290bfc510b03cca86a6e56e4640968"
   },
   {
    "path": "fixtures/2608.04322v1-de/record.json",
@@ -1355,21 +1355,21 @@
   },
   {
    "path": "fixtures/2608.04322v1-es/base.json",
-   "sha256": "0199efa6476e6d7fb611982f301dfed24ecb6a290883a21e3512286b482cbfd4",
-   "bytes": 587,
-   "url": "r2://readarxiv-ci/gate-pack/0199efa6476e6d7fb611982f301dfed24ecb6a290883a21e3512286b482cbfd4"
+   "sha256": "d448bdbbb9d206f2be9035286e4f2002deef2b5862324202a6d60327ed23b491",
+   "bytes": 538,
+   "url": "r2://readarxiv-ci/gate-pack/d448bdbbb9d206f2be9035286e4f2002deef2b5862324202a6d60327ed23b491"
   },
   {
    "path": "fixtures/2608.04322v1-es/base.pdf",
-   "sha256": "8b3f4ac01deae2e3fa661482306d05f7515f20dab41ffb7620c22097ffe68908",
-   "bytes": 1503522,
-   "url": "r2://readarxiv-ci/gate-pack/8b3f4ac01deae2e3fa661482306d05f7515f20dab41ffb7620c22097ffe68908"
+   "sha256": "39a1097192ce777aee4b0b63f13bb59a1e82efece863b1302c2597f35a7bfad4",
+   "bytes": 1503523,
+   "url": "r2://readarxiv-ci/gate-pack/39a1097192ce777aee4b0b63f13bb59a1e82efece863b1302c2597f35a7bfad4"
   },
   {
    "path": "fixtures/2608.04322v1-es/layout.json",
-   "sha256": "063a9b762d857417fa69717b0fa40fbccde1fb781d98d856b0cf06647f5b2301",
-   "bytes": 176980,
-   "url": "r2://readarxiv-ci/gate-pack/063a9b762d857417fa69717b0fa40fbccde1fb781d98d856b0cf06647f5b2301"
+   "sha256": "fea1ccda89a44e5dd6b3f8cce6f35ff78a290bfc510b03cca86a6e56e4640968",
+   "bytes": 176960,
+   "url": "r2://readarxiv-ci/gate-pack/fea1ccda89a44e5dd6b3f8cce6f35ff78a290bfc510b03cca86a6e56e4640968"
   },
   {
    "path": "fixtures/2608.04322v1-es/record.json",
@@ -1391,21 +1391,21 @@
   },
   {
    "path": "fixtures/2608.04322v1-fr/base.json",
-   "sha256": "0199efa6476e6d7fb611982f301dfed24ecb6a290883a21e3512286b482cbfd4",
-   "bytes": 587,
-   "url": "r2://readarxiv-ci/gate-pack/0199efa6476e6d7fb611982f301dfed24ecb6a290883a21e3512286b482cbfd4"
+   "sha256": "d448bdbbb9d206f2be9035286e4f2002deef2b5862324202a6d60327ed23b491",
+   "bytes": 538,
+   "url": "r2://readarxiv-ci/gate-pack/d448bdbbb9d206f2be9035286e4f2002deef2b5862324202a6d60327ed23b491"
   },
   {
    "path": "fixtures/2608.04322v1-fr/base.pdf",
-   "sha256": "8b3f4ac01deae2e3fa661482306d05f7515f20dab41ffb7620c22097ffe68908",
-   "bytes": 1503522,
-   "url": "r2://readarxiv-ci/gate-pack/8b3f4ac01deae2e3fa661482306d05f7515f20dab41ffb7620c22097ffe68908"
+   "sha256": "39a1097192ce777aee4b0b63f13bb59a1e82efece863b1302c2597f35a7bfad4",
+   "bytes": 1503523,
+   "url": "r2://readarxiv-ci/gate-pack/39a1097192ce777aee4b0b63f13bb59a1e82efece863b1302c2597f35a7bfad4"
   },
   {
    "path": "fixtures/2608.04322v1-fr/layout.json",
-   "sha256": "063a9b762d857417fa69717b0fa40fbccde1fb781d98d856b0cf06647f5b2301",
-   "bytes": 176980,
-   "url": "r2://readarxiv-ci/gate-pack/063a9b762d857417fa69717b0fa40fbccde1fb781d98d856b0cf06647f5b2301"
+   "sha256": "fea1ccda89a44e5dd6b3f8cce6f35ff78a290bfc510b03cca86a6e56e4640968",
+   "bytes": 176960,
+   "url": "r2://readarxiv-ci/gate-pack/fea1ccda89a44e5dd6b3f8cce6f35ff78a290bfc510b03cca86a6e56e4640968"
   },
   {
    "path": "fixtures/2608.04322v1-fr/record.json",
@@ -1427,21 +1427,21 @@
   },
   {
    "path": "fixtures/2608.04322v1-ja/base.json",
-   "sha256": "0199efa6476e6d7fb611982f301dfed24ecb6a290883a21e3512286b482cbfd4",
-   "bytes": 587,
-   "url": "r2://readarxiv-ci/gate-pack/0199efa6476e6d7fb611982f301dfed24ecb6a290883a21e3512286b482cbfd4"
+   "sha256": "d448bdbbb9d206f2be9035286e4f2002deef2b5862324202a6d60327ed23b491",
+   "bytes": 538,
+   "url": "r2://readarxiv-ci/gate-pack/d448bdbbb9d206f2be9035286e4f2002deef2b5862324202a6d60327ed23b491"
   },
   {
    "path": "fixtures/2608.04322v1-ja/base.pdf",
-   "sha256": "8b3f4ac01deae2e3fa661482306d05f7515f20dab41ffb7620c22097ffe68908",
-   "bytes": 1503522,
-   "url": "r2://readarxiv-ci/gate-pack/8b3f4ac01deae2e3fa661482306d05f7515f20dab41ffb7620c22097ffe68908"
+   "sha256": "39a1097192ce777aee4b0b63f13bb59a1e82efece863b1302c2597f35a7bfad4",
+   "bytes": 1503523,
+   "url": "r2://readarxiv-ci/gate-pack/39a1097192ce777aee4b0b63f13bb59a1e82efece863b1302c2597f35a7bfad4"
   },
   {
    "path": "fixtures/2608.04322v1-ja/layout.json",
-   "sha256": "063a9b762d857417fa69717b0fa40fbccde1fb781d98d856b0cf06647f5b2301",
-   "bytes": 176980,
-   "url": "r2://readarxiv-ci/gate-pack/063a9b762d857417fa69717b0fa40fbccde1fb781d98d856b0cf06647f5b2301"
+   "sha256": "fea1ccda89a44e5dd6b3f8cce6f35ff78a290bfc510b03cca86a6e56e4640968",
+   "bytes": 176960,
+   "url": "r2://readarxiv-ci/gate-pack/fea1ccda89a44e5dd6b3f8cce6f35ff78a290bfc510b03cca86a6e56e4640968"
   },
   {
    "path": "fixtures/2608.04322v1-ja/record.json",
@@ -1463,21 +1463,21 @@
   },
   {
    "path": "fixtures/2608.04322v1-ko/base.json",
-   "sha256": "0199efa6476e6d7fb611982f301dfed24ecb6a290883a21e3512286b482cbfd4",
-   "bytes": 587,
-   "url": "r2://readarxiv-ci/gate-pack/0199efa6476e6d7fb611982f301dfed24ecb6a290883a21e3512286b482cbfd4"
+   "sha256": "d448bdbbb9d206f2be9035286e4f2002deef2b5862324202a6d60327ed23b491",
+   "bytes": 538,
+   "url": "r2://readarxiv-ci/gate-pack/d448bdbbb9d206f2be9035286e4f2002deef2b5862324202a6d60327ed23b491"
   },
   {
    "path": "fixtures/2608.04322v1-ko/base.pdf",
-   "sha256": "8b3f4ac01deae2e3fa661482306d05f7515f20dab41ffb7620c22097ffe68908",
-   "bytes": 1503522,
-   "url": "r2://readarxiv-ci/gate-pack/8b3f4ac01deae2e3fa661482306d05f7515f20dab41ffb7620c22097ffe68908"
+   "sha256": "39a1097192ce777aee4b0b63f13bb59a1e82efece863b1302c2597f35a7bfad4",
+   "bytes": 1503523,
+   "url": "r2://readarxiv-ci/gate-pack/39a1097192ce777aee4b0b63f13bb59a1e82efece863b1302c2597f35a7bfad4"
   },
   {
    "path": "fixtures/2608.04322v1-ko/layout.json",
-   "sha256": "063a9b762d857417fa69717b0fa40fbccde1fb781d98d856b0cf06647f5b2301",
-   "bytes": 176980,
-   "url": "r2://readarxiv-ci/gate-pack/063a9b762d857417fa69717b0fa40fbccde1fb781d98d856b0cf06647f5b2301"
+   "sha256": "fea1ccda89a44e5dd6b3f8cce6f35ff78a290bfc510b03cca86a6e56e4640968",
+   "bytes": 176960,
+   "url": "r2://readarxiv-ci/gate-pack/fea1ccda89a44e5dd6b3f8cce6f35ff78a290bfc510b03cca86a6e56e4640968"
   },
   {
    "path": "fixtures/2608.04322v1-ko/record.json",
@@ -1499,21 +1499,21 @@
   },
   {
    "path": "fixtures/2608.04322v1-ru/base.json",
-   "sha256": "0199efa6476e6d7fb611982f301dfed24ecb6a290883a21e3512286b482cbfd4",
-   "bytes": 587,
-   "url": "r2://readarxiv-ci/gate-pack/0199efa6476e6d7fb611982f301dfed24ecb6a290883a21e3512286b482cbfd4"
+   "sha256": "d448bdbbb9d206f2be9035286e4f2002deef2b5862324202a6d60327ed23b491",
+   "bytes": 538,
+   "url": "r2://readarxiv-ci/gate-pack/d448bdbbb9d206f2be9035286e4f2002deef2b5862324202a6d60327ed23b491"
   },
   {
    "path": "fixtures/2608.04322v1-ru/base.pdf",
-   "sha256": "8b3f4ac01deae2e3fa661482306d05f7515f20dab41ffb7620c22097ffe68908",
-   "bytes": 1503522,
-   "url": "r2://readarxiv-ci/gate-pack/8b3f4ac01deae2e3fa661482306d05f7515f20dab41ffb7620c22097ffe68908"
+   "sha256": "39a1097192ce777aee4b0b63f13bb59a1e82efece863b1302c2597f35a7bfad4",
+   "bytes": 1503523,
+   "url": "r2://readarxiv-ci/gate-pack/39a1097192ce777aee4b0b63f13bb59a1e82efece863b1302c2597f35a7bfad4"
   },
   {
    "path": "fixtures/2608.04322v1-ru/layout.json",
-   "sha256": "063a9b762d857417fa69717b0fa40fbccde1fb781d98d856b0cf06647f5b2301",
-   "bytes": 176980,
-   "url": "r2://readarxiv-ci/gate-pack/063a9b762d857417fa69717b0fa40fbccde1fb781d98d856b0cf06647f5b2301"
+   "sha256": "fea1ccda89a44e5dd6b3f8cce6f35ff78a290bfc510b03cca86a6e56e4640968",
+   "bytes": 176960,
+   "url": "r2://readarxiv-ci/gate-pack/fea1ccda89a44e5dd6b3f8cce6f35ff78a290bfc510b03cca86a6e56e4640968"
   },
   {
    "path": "fixtures/2608.04322v1-ru/record.json",
@@ -1535,21 +1535,21 @@
   },
   {
    "path": "fixtures/2608.04322v1-zh/base.json",
-   "sha256": "0199efa6476e6d7fb611982f301dfed24ecb6a290883a21e3512286b482cbfd4",
-   "bytes": 587,
-   "url": "r2://readarxiv-ci/gate-pack/0199efa6476e6d7fb611982f301dfed24ecb6a290883a21e3512286b482cbfd4"
+   "sha256": "d448bdbbb9d206f2be9035286e4f2002deef2b5862324202a6d60327ed23b491",
+   "bytes": 538,
+   "url": "r2://readarxiv-ci/gate-pack/d448bdbbb9d206f2be9035286e4f2002deef2b5862324202a6d60327ed23b491"
   },
   {
    "path": "fixtures/2608.04322v1-zh/base.pdf",
-   "sha256": "8b3f4ac01deae2e3fa661482306d05f7515f20dab41ffb7620c22097ffe68908",
-   "bytes": 1503522,
-   "url": "r2://readarxiv-ci/gate-pack/8b3f4ac01deae2e3fa661482306d05f7515f20dab41ffb7620c22097ffe68908"
+   "sha256": "39a1097192ce777aee4b0b63f13bb59a1e82efece863b1302c2597f35a7bfad4",
+   "bytes": 1503523,
+   "url": "r2://readarxiv-ci/gate-pack/39a1097192ce777aee4b0b63f13bb59a1e82efece863b1302c2597f35a7bfad4"
   },
   {
    "path": "fixtures/2608.04322v1-zh/layout.json",
-   "sha256": "063a9b762d857417fa69717b0fa40fbccde1fb781d98d856b0cf06647f5b2301",
-   "bytes": 176980,
-   "url": "r2://readarxiv-ci/gate-pack/063a9b762d857417fa69717b0fa40fbccde1fb781d98d856b0cf06647f5b2301"
+   "sha256": "fea1ccda89a44e5dd6b3f8cce6f35ff78a290bfc510b03cca86a6e56e4640968",
+   "bytes": 176960,
+   "url": "r2://readarxiv-ci/gate-pack/fea1ccda89a44e5dd6b3f8cce6f35ff78a290bfc510b03cca86a6e56e4640968"
   },
   {
    "path": "fixtures/2608.04322v1-zh/record.json",
