@@ -2109,7 +2109,11 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   **May we draw**, per page: a page is drawable where it is the same paper's page, its words arXiv's page's (`PAGE_SAME`, 0.98:
   twice the longest common run of the two pages' words in order over their two counts, each word compared once NFKC and the
   known text-layer substitutes are applied, arXiv's "ǫ" for ε, lower case, its letters and digits alone) and none of its lines
-  found on another page of arXiv's (the carrier's partners). **A unit is laid only where every page it is on is drawable**
+  found on another page of arXiv's (the carrier's partners). Our page's words are read off the page the prepare is given, wrapped
+  by optional content, where PDF.js ends a line that ends in a hyphen with an empty item after the group closes, not with the
+  hyphen's own: the tokenizer joins the word across that item as across the hyphen's own end of line (`anchors.mjs`
+  `tokenizeDocument`, LAYOUT 23), where it read two words on our page against arXiv's one and 2610.19274v1's list of figures,
+  three hyphens a page, fell under `PAGE_SAME` on pages 67 to 69, its contents units laid nowhere. **A unit is laid only where every page it is on is drawable**
   (`layout/make.mjs` `drawable`, LAYOUT 16; `stats.units.undrawn` the others, left the original's). Over our own page a
   drawing is right by construction: a page of the same words is drawn whatever its lines' offsets, a line re-broken by a word,
   moved a point or set with other glue. On the pack and the release sweep's 50 papers it refuses 2307.16209's pages 69 to 76
