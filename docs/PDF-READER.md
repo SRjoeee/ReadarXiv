@@ -2300,8 +2300,8 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     entries with a DOI; 2608.12096v1 17; 2608.16117v1 u186, u190, u199, u202, a `\URLprefix` before its `\url` among them,
     answered now the probe knows it) and 2 paragraphs (2212.06817v2 u187's `\algname\footnote{…}` and 2608.18685v1 u9's
     `\methodname\footnote{…}`, text after the call); every base page pixel for pixel `next`'s; the entries the wrap leaves the
-    original's 134 to 78. Those left are other shapes: 2608.25210v2's 64, a `\natexlab{}` after the year that sets no ink, which
-    its .bbl defines by `\expandafter\ifx\csname natexlab\endcsname\relax\def…\fi` and not by `\providecommand`; an entry's
+    original's 134 to 78. Those left are other shapes: 2608.25210v2's 64, a `\natexlab{}` after the year the probe never asks
+    about (its body's macros fill `INK_MAX` first; not, as read then, its .bbl's `\expandafter\ifx\csname natexlab…` idiom: LAYOUT 25 below); an entry's
     `\&` LOST (2608.12606v1 3, 2610.34042v1 2); `\dodoi{…}` alone at an entry's end (2608.12606v1 u175); `{\DJ}uri…`
     (2608.16117v1 u207); 2610.20716v1's 6 by the spell check. The gate pack is `0b3109a8`'s with 2608.16117v1's two outputs'
     layout files and base pages made again (`e8e9eeb5`: their base pages' marks move, their pixels do not).
@@ -2322,6 +2322,43 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     `\EN $…$`, 2 units). The gate pack's papers write no such pair: its layout files and base pages are `690d0e19`'s byte for
     byte (32 outputs made again, 96 files), the rules gate's model tier (`rules-gate.mjs compare`: 0 worse, 0 pages moved) and
     the pixel tier the same on both engines.
+- **The mark probe past a sample TeX gives up on, and a .bbl's definitions as its styles write them, LAYOUT 25** (2026-10-29:
+  2010.11929v2's references, eight entries English on staging: the "2020a" and "2019b" entries, Polyak's with its `\doi{…}`).
+  - *Each box ends at the group level it began at* (`marks.mjs` `PROBE_LEVEL`, `PROBE_UNWIND`). The ink section asks about a
+    paper's macros one by one, as the front end cuts them; 2010.11929v2's table writes `\tikz\fill[natural] (0,0) circle (.5ex);`,
+    cut in two, and the probe asked about `\tikz` alone: it opens a picture it never closes, sixteen groups in which pgf's
+    `\selectfont` selects `\nullfont`, and every box after it was set with no character at all. Its `\natexlab{a}`, `{b}`, `{c}`
+    and `\doi{10.1137/0330046}` read as setting no ink, the marking gave them no mark and the file no row, and the layer left
+    their entries the original's (`noRow`); a look-ahead pair's boxes, all empty, compare equal and read as a mark that moves
+    nothing. So each box of the punctuation, ink and look-ahead sections saves `\currentgrouplevel` before it and, after its
+    `}`, closes each group its sample left open — a `\begingroup`'s by `\endgroup`, a group of braces' or a box's by `\egroup`,
+    chosen by `\currentgrouptype`, none of another type, so that a mismatch raises no error of its own —, and a box TeX still
+    sets a character in `\nullfont` in is an error (`TEX_ERROR`): no answer, never a box that sets no ink, nor one a mark leaves
+    as it was. Neither `\normalfont` nor the font the probe began in, saved and set again, can do it: in pgf's picture
+    `\selectfont` itself selects `\nullfont`. A probe of no such sample is the one it was: each box closes its own groups.
+  - *A .bbl's definitions as its styles write them* (`live.mjs bblProvides`): a `\providecommand`; a `\newcommand`, set as a
+    `\providecommand` (alpha's `\etalchar`: where the paper defined it, the .bbl's `\newcommand` is an error and the paper's
+    stands); a conditional on whether a name is defined, whole, both its branches, TeX taking the paper's (natbib's
+    `\expandafter\ifx\csname urlstyle\endcsname\relax \providecommand{\doi}[1]{doi: #1}\else \providecommand{\doi}{…\Url}\fi`,
+    whose first `\doi` #486 took where the paper loads url; `\ifx\bisbn\undefined`, amsplain's `\ifx\undefined\bysame`);
+    `\@ifundefined{…}{…}{…}`, whole; a `\def` or `\let` of its own, set only where its name is undefined (MNRAS's `\mn@doi`,
+    REVTeX's `\let\auto@bib@innerbib\@empty`); a harvard .bbl's head ends at its first `\harvarditem`. Anything else of the head (a
+    length, a `\renewcommand`, a group, a `\def` of a `\csname`) is passed over.
+  - Measured (`classes-gate.mjs --made --compile`, production's path, against `next` 80f52980, over 36 papers: the 35 of the
+    look-ahead and entries' measures and 2010.11929v2; again on 2010.11929v2 and 2610.21377v1 over `next` 25b498b0, #487's).
+    TeX's answers (the marks file's `marking`, dumped): on 33 of the 35 compiled the same, answer for answer (2608.23818v1
+    refused `compile` on both sides); on 2010.11929v2 the 4
+    sources above no longer inkless, their texts read ("a", "b", "c", "doi:10.1137/0330046"), the `\doi`'s box no longer
+    begun apart; on 2610.21377v1 `\and`'s row gone (`xxxxxxx0`, its call follower's 0 the one answer that now sets fewer marks):
+    jnsao.cls's `\and` ends a tabular, and TeX stops at a hundred errors in its paragraph; `next`'s probe asked it in what an
+    earlier `\and` box left open, an environment `\end{tabular}` matched, and stopped a sample later. Drawn (laid, every visible
+    piece found) gained 8, lost 0: 2010.11929v2 u306–u308, u335, u346, u347, u354, u355, the eight; every base page pixel for
+    pixel `next`'s (952 pages), its page count arXiv's; no unit's lines lost, gained or moved; the wrap (`ocg-gate.mjs`) of
+    2010.11929v2 leaves 31 units the original's where `next`'s left 32, its G1 0, its delta proved. The gate pack is
+    `ad76c514` (#487's): each layout file the same but its version, each base page byte for byte `e8e9eeb5`'s; the rules gate's
+    model tier 0 worse, 0 pages moved. Left: the ink section asks at most `INK_MAX` (64) sources, the entries' last, so a paper
+    whose body fills them asks none of its entries' (2608.25210v2's `\natexlab{}`, 13 of its 37 left; 2608.15334v1 49 of 52,
+    2608.12606v1 31 of 32, 2307.16209v1 18): the follow-up.
 - **A unit the layer leaves the original's says why** (read time, no stored artefact, no version token): each `skipped` record
   of the run (`layer-proto/run.mjs`) carries a `code` of `SKIP_CODES` beside its `why`: `unlocated` (the file holds no row of
   it, and the file's own reason beside it, `unlaid`), `pieces`, `noRow`, `lost` (a visible piece the file has no position

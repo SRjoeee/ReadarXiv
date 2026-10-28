@@ -21,7 +21,8 @@
 //     base engine's is given (`--pack`: <pack>/fixtures/<id>-zh/base.pdf, our final pass as the base engine made it), the
 //     two base pages' pixels apart on every page (marks in the bibliography move nothing: 0) and the base engine's layout file's
 //     units located against this one's, the entries taken out (`lost`: a unit the base's file locates and this one's does not);
-//   - with `--dump=<dir>`, the layout file's units, fonts, lines and placeholders written there (<id>.json), and with
+//   - with `--dump=<dir>`, the layout file's units, fonts, lines and placeholders written there (<id>.json), with TeX's answers to
+//     the mark probe (the marks file's `marking`: its switch, the macros it said set no ink, their texts, …), and with
 //     `--against=<dir>`, another run's dump (the base engine's, `--engine=<its tree>`, made over its own compiles) unit by unit
 //     against this one's, the entries taken out and each line's font by its name (`vsRun`: lost, gained, moved, placeholders
 //     moved; `--which` names them).
@@ -166,7 +167,7 @@ for (const arg of process.argv.slice(2).filter(a => !a.startsWith('--'))) {
           if (r?.length) { located[k][0]++; if (BIB.has(u.kind)) for (let j = 0; j < r.length; j += 8) entryPages.add(r[j]) }
         })
         row.located = located
-        if (DUMP) { mkdirSync(DUMP, { recursive: true }); writeFileSync(join(DUMP, `${id}.json`), JSON.stringify({ kinds: paper.units.map(u => u.kind), fonts: lm.file.fonts, lines: lm.file.lines, ph: lm.file.ph })) }
+        if (DUMP) { mkdirSync(DUMP, { recursive: true }); writeFileSync(join(DUMP, `${id}.json`), JSON.stringify({ kinds: paper.units.map(u => u.kind), fonts: lm.file.fonts, lines: lm.file.lines, ph: lm.file.ph, marking: made.marks.marking ?? null })) }
         // (another run's dump, the base engine's (--against): every unit but the entries, the base's id for each, its rows and its
         // placeholders' rows against this run's)
         // (a line's eighth number is its font's index in the file's `fonts`, which the entries' fonts, met first, move: the name)

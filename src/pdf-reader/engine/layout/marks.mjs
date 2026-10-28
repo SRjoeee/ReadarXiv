@@ -225,7 +225,7 @@ export function readProbe(log) {
  * paragraph after each sample starts TeX's error count again. Writes nothing, ships out nothing
  */
 export function punctuationSection(samples, from = 0) {
-  const box = (i, j, n, body) => `${probeRow('punct-at', i, j, n)}\\global\\setbox\\axt@qbox\\box\\voidb@x\\gdef\\axt@qn{}\\axt@qreset\\setbox\\axt@qbox\\hbox{way ${body} \\unskip\\xdef\\axt@qn{\\the\\lastnodetype\\ifinner\\ifhmode/in\\fi\\fi}}\\xdef\\axt@q${n}{\\the\\wd\\axt@qbox/\\the\\ht\\axt@qbox/\\the\\dp\\axt@qbox/\\axt@qn}`
+  const box = (i, j, n, body) => `${probeRow('punct-at', i, j, n)}\\global\\setbox\\axt@qbox\\box\\voidb@x\\gdef\\axt@qn{}\\axt@qreset${PROBE_LEVEL}\\setbox\\axt@qbox\\hbox{way ${body} \\unskip\\xdef\\axt@qn{\\the\\lastnodetype\\ifinner\\ifhmode/in\\fi\\fi}}\\axt@unwind\\xdef\\axt@q${n}{\\the\\wd\\axt@qbox/\\the\\ht\\axt@qbox/\\the\\dp\\axt@qbox/\\axt@qn}`
   const put = d => `\\xdef\\axt@qo{\\axt@qo${d}}`
   const tests = samples.map(({ src, call, glued }, n) => {
     const i = from + n, open = `\\axtpma{q${i}a}`, close = `\\axtpm{q${i}b}`
@@ -235,8 +235,19 @@ export function punctuationSection(samples, from = 0) {
       : put(0)
     return `${each}${again}${probeRow('punct', i, '\\axt@qo')}\\gdef\\axt@qo{}\\noindent\\par`
   })
-  return `\\begingroup\\newbox\\axt@qbox\\gdef\\axt@qo{}${PROBE_RESET}${tests.join('\n')}\\endgroup`
+  return `${PROBE_UNWIND}\\begingroup\\newbox\\axt@qbox\\gdef\\axt@qo{}${PROBE_RESET}${tests.join('\n')}\\endgroup`
 }
+/** each box of the punctuation, ink and look-ahead sections ends where it began: the group level before it saved
+ *  (PROBE_LEVEL), and after its `}` (PROBE_UNWIND) each group its sample left open closed — a \\begingroup's by \\endgroup, a
+ *  group of braces' or a box's by \\egroup —, so that the box after it is set as the paper sets it. A sample TeX gives up on
+ *  part way may leave its own groups open, and everything they hold in force for the rest of the probe: 2010.11929v2's
+ *  `\\tikz\\fill[natural] (0,0) circle (.5ex);`, cut in two, asks about \\tikz alone, which opens a picture it never closes,
+ *  sixteen groups in which pgf's \\selectfont selects \\nullfont, and every box after it was set with no character at all (its
+ *  \\natexlab{a} and \\doi{…} read as setting no ink, their rows none, 8 of its entries English; a pair's boxes, all empty, as
+ *  a mark that moves nothing). A box TeX still sets a character in \\nullfont in is no answer (TEX_ERROR). In a probe of no such
+ *  sample it changes nothing: each box closes its own groups */
+const PROBE_LEVEL = '\\xdef\\axt@level{\\the\\currentgrouplevel}'
+const PROBE_UNWIND = '\\gdef\\axt@unwind{\\global\\let\\axt@unwound\\relax\\ifnum\\currentgrouplevel>\\axt@level\\relax\\ifnum\\currentgrouptype=14 \\global\\let\\axt@unwound\\axt@unwind\\endgroup\\else\\ifnum\\currentgrouptype<6 \\ifnum\\currentgrouptype>0 \\global\\let\\axt@unwound\\axt@unwind\\egroup\\fi\\fi\\fi\\fi\\axt@unwound}'
 /** each box of the punctuation and look-ahead sections starts from the same state: the footnote counter as it was, biblatex's
  *  citation trackers reset (punctuationSection) */
 const PROBE_RESET = '\\edef\\axt@qfn{\\ifdefined\\c@footnote\\the\\c@footnote\\else0\\fi}\\def\\axt@qreset{\\ifdefined\\c@footnote\\global\\c@footnote=\\axt@qfn\\relax\\fi\\ifdefined\\citereset\\citereset\\fi}'
@@ -260,7 +271,7 @@ const BOXY = /^(?:\$|\\\(|\\(?:ensuremath|mbox|textsuperscript)(?![A-Za-z@]))/
  * TeX's error count again. Writes nothing, ships out nothing
  */
 export function aheadSection(samples) {
-  const box = (j, n, body) => `${probeRow('ahead-at', j, n)}\\global\\setbox\\axt@qbox\\box\\voidb@x\\gdef\\axt@qn{}\\axt@qreset\\setbox\\axt@qbox\\hbox{way ${body} \\unskip\\xdef\\axt@qn{\\the\\lastnodetype\\ifinner\\ifhmode/in\\fi\\fi}}\\xdef\\axt@q${n}{\\the\\wd\\axt@qbox/\\the\\ht\\axt@qbox/\\the\\dp\\axt@qbox/\\axt@qn}`
+  const box = (j, n, body) => `${probeRow('ahead-at', j, n)}\\global\\setbox\\axt@qbox\\box\\voidb@x\\gdef\\axt@qn{}\\axt@qreset${PROBE_LEVEL}\\setbox\\axt@qbox\\hbox{way ${body} \\unskip\\xdef\\axt@qn{\\the\\lastnodetype\\ifinner\\ifhmode/in\\fi\\fi}}\\axt@unwind\\xdef\\axt@q${n}{\\the\\wd\\axt@qbox/\\the\\ht\\axt@qbox/\\the\\dp\\axt@qbox/\\axt@qn}`
   const put = d => `\\xdef\\axt@qo{${d}}`
   const tests = samples.map(({ src, gap, follows, math }, j) => {
     const open = `\\axtpma{q${j}a}`, close = `\\axtpm{q${j}b}`, next = `\\${math ? 'axtpmm' : 'axtpma'}{q${j}c}`
@@ -271,7 +282,7 @@ export function aheadSection(samples) {
   // (what the list ends with where the placeholder's opening mark goes, by \\lastnodetype: 0 a character, 7 a ligature, 12 a kern
   // — 1; 8 a discretionary, 9 a whatsit — 2; any other — 0)
   const at = '\\def\\axt@qat{\\xdef\\axt@qend{\\ifcase\\lastnodetype 1\\or0\\or0\\or0\\or0\\or0\\or0\\or1\\or2\\or2\\or0\\or0\\or1\\else0\\fi}}'
-  return `\\begingroup\\newbox\\axt@qbox\\gdef\\axt@qo{}${PROBE_RESET}${at}${tests.join('\n')}\\endgroup`
+  return `${PROBE_UNWIND}\\begingroup\\newbox\\axt@qbox\\gdef\\axt@qo{}${PROBE_RESET}${at}${tests.join('\n')}\\endgroup`
 }
 // ---- what a paper's macro sets: TeX asked
 /** the distinct sources of the paper's macros the ink section asks about, at most */
@@ -326,8 +337,8 @@ export function leadSamples(units, asked = inkSamples(units)) {
  */
 export function inkSection(samples, from = 0) {
   const show = '\\begingroup\\showboxbreadth=100000 \\showboxdepth=100000 \\tracingonline=0 \\showbox\\axt@ibox\\endgroup'
-  const tests = samples.map((src, i) => `${probeRow('ink-at', from + i)}\\begingroup\\global\\setbox\\axt@ibox\\box\\voidb@x\\setbox\\axt@ibox\\hbox{${src}}${show}\\endgroup${probeRow('ink-end', from + i)}\\noindent\\par`)
-  return `\\begingroup\\newbox\\axt@ibox${tests.join('\n')}\\endgroup`
+  const tests = samples.map((src, i) => `${probeRow('ink-at', from + i)}\\begingroup\\global\\setbox\\axt@ibox\\box\\voidb@x${PROBE_LEVEL}\\setbox\\axt@ibox\\hbox{${src}}\\axt@unwind${show}\\endgroup${probeRow('ink-end', from + i)}\\noindent\\par`)
+  return `${PROBE_UNWIND}\\begingroup\\newbox\\axt@ibox${tests.join('\n')}\\endgroup`
 }
 /** the probe document of the layout marks: its punctuation section, then its ink section, its name section, its skip section,
  *  the punctuation section of the paper's own macros (probeSamples' `own`, numbered on from the asked ones), and last the ink
@@ -660,8 +671,10 @@ export function literalNames(text) {
 // (rules/text-symbols.mjs): the layout draws one the marking cannot mark (glued to the word before it, at a unit's head) as
 // text, where arXiv's page shows that character on the unit's line (make.mjs); symbolText, a symbol's text
 export { symbolText, TEXT_SYMBOLS } from '../rules/text-symbols.mjs'
-/** a line TeX logs for an error: `! …`, or `<file>:<line>: …` under -file-line-error */
-const TEX_ERROR = /^(?:! |[^\s:]+:\d+: )/
+/** a line TeX logs for an error: `! …`, or `<file>:<line>: …` under -file-line-error; and a character it set no glyph for in
+ *  \\nullfont, which a box is in only where a sample left TeX's state broken past what PROBE_UNWIND closes (a picture's own
+ *  \\nullfont, in its box): that box's answer is none, never a box that sets no ink, nor one a mark leaves as it was */
+const TEX_ERROR = /^(?:! |[^\s:]+:\d+: |Missing character: There is no .* in font nullfont!$)/
 /**
  * What TeX answered, from the probe's log: per sample's command, its code a follower (FOLLOWERS), for layoutMarking's
  * `switches`. A box TeX logged an error in (after its `punct-at` row, before the next row) answers nothing: an error in

@@ -19,9 +19,11 @@ export { PIPELINE_VERSION } from './versions.mjs'
  *  translation's pieces must pass (cache.mjs copyReuse) */
 export declare const PIPELINE_CARRIES: Record<string, (pieces: unknown[], unit?: { pieces: unknown[] } | null) => boolean>
 export declare const TYPESETTING_VERSION: string
-/** the font probe; with `width`, the width and size probes the typesetting rule measures the face by */
-/** the \\providecommand definitions of a paper's .bbl, before its first \\bibitem, which the mark probe sets first: '' where none */
+/** the definitions a paper's .bbl makes for itself before its first entry, which the mark probe sets first: its \\providecommand and
+ *  \\newcommand (as a \\providecommand), its conditionals on an undefined name whole, its \\@ifundefined, its own \\def and \\let
+ *  set only where the name is undefined; '' where none */
 export declare function bblProvides(fsys: { list(): string[]; read(path: string): Uint8Array | null }, main: string): string
+/** the font probe; with `width`, the width and size probes the typesetting rule measures the face by */
 export declare function probeFiles(paper: Paper, options?: { width?: boolean; marks?: boolean }): Map<string, Uint8Array>
 /** the original with unit marks; with `lines`, each unit's lines and the forced breaks in its log; `spans`, where
  *  given, gets `lines()`: each unit's lines and bytes in the files as written. `layout` null or absent: the bytes as at
