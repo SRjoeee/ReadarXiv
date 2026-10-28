@@ -54,7 +54,7 @@ export interface ScriptRules {
   latinPatterns: 'en' | 'de'
   // table cells (layer2.mjs cellBands)
   cellClear: number; cellCapMin: number
-  // faces (font-roles.mjs rolesFor): the CJK group, its Kai, the English designs beside which it takes light weights
+  // faces (font-roles.mjs rolesFor): the CJK group, drawn at Regular and Bold beside every English family
   cjkFaces: CjkFaces | null
 }
 /** a language's babel names: a float's label (figure, table) and each generated heading's (abstract, ref, …); an empty
@@ -66,7 +66,7 @@ export type LanguageRules = Partial<ScriptRules> & {
   labels: Labels | null
 }
 export interface RuleSet {
-  schema: 5
+  schema: 6
   /** an integer ≥ 1, one more than the set it replaces */
   version: number
   /** at most 1,000 characters: what changed and why */

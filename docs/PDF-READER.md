@@ -404,7 +404,9 @@ No state that tells the reader nothing is shown (no "done").
 | Settings cannot be read | storage did not answer in a page's first 1,500 ms, or its value cannot be used | the defaults in use and the PDF opened on them, not held for the storage; capsule: 设置读取失败，当前使用默认设置 · 设置, for as long as it is so, beside an address with no paper's card too; the controls that write the settings greyed, with the reason in their tooltips; the menus keep their places |
 | Narrow window | 对照 chosen, the document area under 840 px (§5) | the translation alone; capsule, once: 窗口较窄，暂只显示译文 |
 
-- Recovery is automatic where it can be: our server's wait (a 202's, a 429's) is waited and asked again; 重试 opens the
+- Recovery is automatic where it can be: our server's wait (a 202's, a 429's) is waited and asked again, a 429's three
+  times in a row at most (S-R-26: a visitor's limit lasts up to a day, and a tab left open asked every ten minutes for as
+  long as it stayed open; #88 E5); 重试 opens the
   layer again and asks only for the paragraphs that are missing, the rest coming from the cache; rate limiting never shows
   (the chain retries it, and only its final giving-up counts as a failure).
 - A failure never takes focus.
@@ -765,6 +767,34 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   kept in place as it goes far, and retired once the focus has left it (read a task after the focus moves, never in a
   microtask: a native Tab clears the focus before it arrives at the next link), so at most one far page stays in the
   document, and the focus never falls to the document.
+- **The layer's text, at the page's weight** (the maintainer's ruling of 2026-10-29; `engine.css`, `view/text-rendering.mjs`).
+  The SVG's text is drawn as PDF.js draws the page's own on its canvas. Two settings had drawn it lighter on macOS, and both
+  had to go: the `-webkit-font-smoothing: antialiased` the reader's page sets for its chrome (inherited), and
+  `text-rendering: geometricPrecision`, which Chromium on macOS draws without the system's smoothing whatever the smoothing
+  says. Measured (Chromium 153, macOS, device pixel ratio 2, the same Chinese line in Source Han Serif SC Regular at 11.96
+  px): PDF.js 7,327 units of ink, a canvas's `fillText` 7,326, the SVG with both 5,870 (80 %), with neither 7,326; over a
+  page of 2608.16117v1, Chinese and German, 79 and 80 %, and the same in the dark (79 %). WebKit (Playwright's 26.6, macOS)
+  draws geometricPrecision at full weight and only the smoothing mattered (77 % with it). So the layer's SVG takes the
+  browser's own smoothing everywhere (a no-op where there is none to take), and `text-rendering: auto` where the browser
+  lays a line out alike under both: geometricPrecision is there so that a word's glyphs advance as the engine measured them
+  on a canvas, and Chromium on Linux (headless, device pixel ratio 1 and 2 alike, fontconfig's hinting ignored for web
+  fonts) lays `auto` out on whole-pixel advances, up to 4.5 CSS px off over a page of German (mean 0.59), while there
+  geometricPrecision costs no weight (within 4 % of the canvas either way). The test is the browser's, not the platform's, and
+  it is the layer's own words that tell, in its own faces: a face the system holds is laid out with fractional advances under
+  both on Linux too, where the web fonts the layer draws in are not (a first probe in the system's serif took `auto` there,
+  and moved the page's letters by the 4.5 px above). At the commit of the first laid page that offers words drawn from one
+  place each (a Latin word: one x, its glyphs advancing as the browser lays them; a CJK run has an x a character, which no
+  rendering moves), the layer side lays up to 24 of them out again off the view, at the layer's scale, in their faces, sizes
+  and tracking, under each rendering, before the page is painted; `auto` is taken where every glyph's advance within a word
+  agrees within 0.05 CSS px (macOS's differ by a 64th of a pixel at two sizes; a whole-pixel advance by up to half a pixel)
+  over at least 16 fractional ones, once a document, written on `<html>` as `data-axt-layer-text="auto"`, which `engine.css`
+  reads; anything else keeps geometricPrecision, and a page that tells too little (no such words, or a monospaced face whose
+  advances are whole) leaves it to the next. Measured (`lab/pdf/spikes/layer-text-check.mjs`, every character of a page
+  against geometricPrecision): Chromium on Linux (Docker, device pixel ratio 1 and 2) keeps geometricPrecision, its places
+  unchanged; Chromium on macOS takes `auto`, every character of four papers' twelve pages (16,528) within 0.17 CSS px of where
+  geometricPrecision put it (mean 0.007; the ends of long words), at zooms of 0.75 to 3 and device pixel ratios of 1 and 2;
+  WebKit takes `auto`, its places the same to the pixel. Not yet seen by eye: Chrome on Windows, a Linux desktop, Safari on
+  iOS (which has no smoothing to restore).
 - **No flash coming back** (the owner's goal of 2026-10-24: a page already seen never shows the original, or an empty place,
   before its translation, coming back to it). A retired page's drawing — its copy, its SVG and its links, detached — is kept off the view,
   and put back in its place in the same task as the page comes near again (`bringBack`), one pane height before it can be
@@ -997,7 +1027,9 @@ contract §4.3), started by the host once a translated display is shown in a vis
    it has been polled for 2 minutes; given up after 10, S-R-24 with its retry; none while the tab is hidden, that time not
    counted); a 404 `not-prepared` asks the prepare, once a visit (given back where the prepare never reached our server, so
    that a retry asks it again); any other 404 is why there is none (S-R-17); a 429 waits
-   its time (S-R-24 meanwhile, whose retry waits it out too); our server out of reach (a 5xx, the network, or nothing within
+   its time (S-R-26 meanwhile, whose retry waits it out too) and asks again, three times in a row at most (`REFUSED_ASKS`;
+   the next 429 stops the look, S-R-26 staying, and a retry then asks at once), a prepare it refused given back like one that
+   never reached our server; our server out of reach (a 5xx, the network, or nothing within
    30 s, its answer and body together, `REQUEST_MS`: twice) opens a paper whose catalog this machine holds (its place in the
    store renewed), else S-R-24. A retry begins the run again where the side refused its layer (a new side, its look, its bind,
    the base's tag heard anew), and opens the service again where it stopped short (its scope bound to the chain the settings
@@ -1531,7 +1563,7 @@ The edge cases, decided:
 - **`NAMES_SHARE` (a table's groups)** is a translation rule. The workflow decides groups, and the rows a reader gets hold the decision (`state: 'kept'`), not the cells' translations. Making it a layout rule would mean rows that carry every kept cell's translation, for a threshold measured once.
 - **`authorsTranslated`** decides which units a target sends, so it is a translation rule and lives in `translate/kept.mjs`, apart from the TeX path's `scripts.mjs`.
 - **Float labels and babel's names** (the names a language gives a figure, a table and each generated heading: Abstract, References, Contents, …, and whether to use them) are layout: one language's choice at draw time. Where each name stands is extraction: the layout marks wrap the name macros' text and the layout file locates each occurrence (D1a). The layer draws the target's word wherever TeX identified the heading: by its macro, by a style's literal through the definition it sits in, and after the paper's own `\selectlanguage`; what a compile of the translation sets there (`captionsOf`) decides float labels alone (the ruling on D1a). A name TeX sets right before a unit on its first line (IEEEtran's run-in "Abstract—") is that unit's lead, flowed with its translation whatever its width, the original's joint and glue after it. A name's word is drawn in runs by script as a unit's words are: its CJK characters in the target's CJK face, every other (a Latin word, a digit, a space) in the Latin one (`layer2.mjs` `nameScriptRuns`): the CJK faces served hold no ASCII, so that one face for a word of two scripts was refused by the face check and the name left the original's (the figure labels' finding, #490). **The parked final's requirement:** if the TeX page program returns, it must name the same headings: rewrite a literal the marks wrap to its macro (`\abstractname`), and apply the target's captions again after the paper's own language switch. **Hyphenation** (which patterns a target uses, and their minimums) is layout; the pattern files are assets the host serves, and the algorithms are code.
-- **The font roles** (which CJK family and weights a script takes) are layout. The face catalog (files, licences, size corrections, coverage) and the Latin design table are facts about files and stay code. **A CJK italic run is the body's own face slanted** (the owner's ruling of 2026-10-19, Q17's row 3), in zh, zh-Hant, ja and ko alike: the same face, size correction and weight as the upright, sheared 13° about its baseline as it is drawn (an SVG skew, `layer-proto/fonts.mjs` `CJK_SLANT_DEG`, the one number; 10° was the other the owner saw). A bold italic run is the bold face sheared, no longer the bold upright. No file is fetched for it and no face is made: the run is measured in the upright's own font string, so its advance and every character's place are the upright's. The rule set's `cjkFaces.kai` is no longer read (the engines readers held before it draw emphasis in it, so the set keeps it until its schema next moves).
+- **The font roles** (which CJK family and weights a script takes) are layout. The face catalog (files, licences, size corrections, coverage) and the Latin design table are facts about files and stay code. **A CJK script is drawn at Regular, and Bold for bold, beside every English family** (the maintainer's ruling of 2026-10-29, on crops of four papers, `research/babeldoc-typography-2026-10-29/weight/`): Light, and SemiBold for bold, beside Computer Modern and Garamond read lighter than the page they sit in and than BabelDOC's Source Han Serif Regular, by 9 % of the original's stroke on 2608.16117v1's six blocks (0.86 of it against Regular's 0.95, at the canvas's weight); the rule (`cjkFaces.light`) and the eight Light and SemiBold faces went (`RULES_SCHEMA` 6, §18.2; engines of schema 5 keep the last set published for it, §18.3). **A CJK italic run is the body's own face slanted** (the owner's ruling of 2026-10-19, Q17's row 3), in zh, zh-Hant, ja and ko alike: the same face, size correction and weight as the upright, sheared 13° about its baseline as it is drawn (an SVG skew, `layer-proto/fonts.mjs` `CJK_SLANT_DEG`, the one number; 10° was the other the owner saw). A bold italic run is the bold face sheared, no longer the bold upright. No file is fetched for it and no face is made: the run is measured in the upright's own font string, so its advance and every character's place are the upright's. The rule set's `cjkFaces.kai`, which no engine read after this ruling, went with the light designs at schema 6 (§18.2): the engines readers held before it, which draw emphasis in it, read schema 5 and keep their schema-5 set (§18.3), so no set of schema 6 names it.
   - **Measured** (Chromium, dpr 2, 44 px): the shear against the outlines sheared in the file, the Oblique 13 faces the owner judged, overlap 98.1 to 99.4 % of their ink (IoU), 0.1 to 0.8 % of the ink pixels more than a quarter apart, all at glyph edges (zh regular and bold, ja, ko).
   - **Row 2, kept for later versions** (no code): the Kai matched to the body by measurement. FandolKai (zh): its ideographs' mean ink box 0.828 × 0.848 em against the body's 0.890 × 0.910, a size factor of 1.074; ink per em² 0.135 against 0.183 (−26 %), made up by an SVG stroke at drawing time. AR PL KaitiM Big5 (bkai00mp, zh-Hant): 0.821 × 0.823 against Source Han Serif TC's 0.891 × 0.913, a factor of 1.098; ink 0.155 against 0.200 (−22 %). Its limits: Chinese only (ja and ko still get no italic); the factors are per font; the stroke only emulates weight; there is no bold Kai, so bold italic stays bold upright. The comparison page as the owner saw it, rows 1 to 4 in all four languages with their measures and licences, and its README: `~/Downloads/readarxiv-test/archive/cjk-italic-2026-10-19/` (`index.html`, `README.md`), on the maintainer's machine.
 - **`textless`** is extraction, but v0 also applies it at draw time to a unit's source (only the alignment fallback reads it). A reader applying an extraction rule to a bundle's content is a defect class; it is listed for the debt pass.
@@ -1552,7 +1584,7 @@ The edge cases, decided:
 | `PIPELINE_VERSION` | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
 | `LAYOUT`, `REMOVAL` (`pipeline/versions.mjs`, `'8'`: no add-on, a part's or a bundle's cell rules in its place, our page wrapped by optional content, §11.8, §19.9; 7 the text-removed PDF's add-on) | extraction | the layout maker; how a drawn unit's ink is taken away | the R2 key | bundles made again lazily |
 | `TRANSLATE_VERSION` (`translate/version.mjs`, `'5'`: a display's own stop written after its marker and taken off the reply; `'4'`: a styled pair whose two ends stand where the wire has a marker anyway keeps its markers; `'3'`: a sentence whose words change style sent whole, the pairs inside it on no wire; `'2'`: a formula split across inline formulas sent as one marker) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
-| `RULES_SCHEMA` (`rules/layout.mjs`, `5`: `fillLeadRel` added, the fill's top relative to the original's pitch; 4 before it: `adaptiveFill.band` read against the page's own paragraphs, 1b-C) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
+| `RULES_SCHEMA` (`rules/layout.mjs`, `6`: `cjkFaces` holds its group alone, a CJK script drawn at Regular and Bold beside every English family, its `light` designs and its unread `kai` gone, the ruling of 2026-10-29; 5 before it: `fillLeadRel` added, the fill's top relative to the original's pitch; 4: `adaptiveFill.band` read against the page's own paragraphs, 1b-C) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
 | the set's `version` | layout | the values | its immutable URL | readers take it on their next load |
 | `RULES_VERSION` (`src/core/rules/latexml.ts`) | HTML extraction | the HTML page's rule file | the HTML page's per-text key only | as DESIGN §5.5 |
 | `TYPESETTING_VERSION` (`live.mjs`) | parked | the compile path | parked records | none |
@@ -1636,7 +1668,7 @@ The rule set is one schema-validated file, `rules/layout-rules.json`: configurat
 | `latinPatterns` | script | breaking | `en`, `de` | The hyphenation patterns a Latin word uses. |
 | `cellClear` | script | cells | 0 to 5, step 0.1 | The room kept between a table cell's text and a rule over or under it, in PDF units. |
 | `cellCapMin` | script | cells | 0.3 to 1, step 0.05 | The smallest share of the size a cell's text may be capped to between its rules. |
-| `cjkFaces` | script | faces | group, kai, light; or none | The CJK family the script is drawn in; empty for an alphabet. |
+| `cjkFaces` | script | faces | group; or none | The CJK family the script is drawn in, at Regular and Bold; empty for an alphabet. |
 | `labels` | language | labels | figure, table, abstract, ref, bib, contents, listfigure, listtable, appendix, index, proof, preface, glossary; or none | A float's label and each generated heading babel names (Abstract, References, Contents, …) in this language's words; an empty word, or none, keeps the original's. |
 | `hyphenation.minWord` | set | hyphenation | 2 to 20 | The shortest word, in letters, that is hyphenated. |
 | `hyphenation.en.left` | set | hyphenation | 1 to 6 | The fewest letters English leaves before a hyphen. |
@@ -2122,7 +2154,16 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   by optional content, where PDF.js ends a line that ends in a hyphen with an empty item after the group closes, not with the
   hyphen's own: the tokenizer joins the word across that item as across the hyphen's own end of line (`anchors.mjs`
   `tokenizeDocument`, LAYOUT 23), where it read two words on our page against arXiv's one and 2610.19274v1's list of figures,
-  three hyphens a page, fell under `PAGE_SAME` on pages 67 to 69, its contents units laid nowhere. **A unit is laid only where every page it is on is drawable**
+  three hyphens a page, fell under `PAGE_SAME` on pages 67 to 69, its contents units laid nowhere. The word goes on in the line
+  below, half a size to three down across the line's direction and starting no further along it than the line's item, a
+  hanging label's width aside (`HANG` 6 sizes: a bullet's, 2307.16209v1 p22's "inves-"/"tigate"), or at the next column's top,
+  above it and starting a gutter past its end at most at its size (`GUTTER` 3 sizes), within four items, those between read as
+  they are; never in text the stream gives next elsewhere (LAYOUT 25: a column's last line's "Sim-" and the next column's
+  figure's axis label "q" read as "simq", 2610.21765v1 p7, its axis's "0", 4.6 sizes past and smaller, refused as well; a folio
+  under the line, "Lucas-" and "7" on 2610.19274v1 p7, is no word's rest either). A line of ours of fewer than
+  `LINE_EVIDENCE` (4) letters and digits is never found on another page of arXiv's: a figure's one-letter axis label is no
+  evidence of where its page stands (LAYOUT 25: 2610.21765v1 p7's "q", paired with arXiv's p6, left the page undrawn and ten
+  of its units English). **A unit is laid only where every page it is on is drawable**
   (`layout/make.mjs` `drawable`, LAYOUT 16; `stats.units.undrawn` the others, left the original's). Over our own page a
   drawing is right by construction: a page of the same words is drawn whatever its lines' offsets, a line re-broken by a word,
   moved a point or set with other glue. On the pack and the release sweep's 50 papers it refuses 2307.16209's pages 69 to 76
@@ -2665,10 +2706,23 @@ feet, the contents and the lists, a note with no unit, prose the front end did n
 wrap (`layout/ink-units.mjs`), from the ledger's lines: a head's line one, a contents entry or a block one paragraph of TeX's (the
 layout compile's point `q<n>` at LaTeX's para/begin, inside the paragraph's indentation box so that no paragraph's list
 changes, which pageInk keeps apart from the marks' points as `paras`; a paragraph with no indentation carries none and reads
-as the one before), each of its
+as the one before; a paragraph's next line is followed at the paper's own leading, `PARA_DY` 3 of its size at most, where
+`BLOCK_DY` 1.75 falls short, when it starts an indent from the paragraph's first line, more than `EDGE` 0.75 of its size
+across and no more than `INDENT` 6 (a hanging line, or the run after an indented first), LAYOUT 25: a thesis's list of
+figures set double was cut line by line, each line translated alone, 2610.19274v1 pp67–69; a list's items, which no point of
+their own tells apart, start at its edge, a right-aligned label's digit (half a size) aside, and stay apart at their skip,
+single-line or not, and a list after a centred heading starts further across than any indent (2610.20266v1 p21's
+bibliography, its labels [9] and [10] half a size apart, its "REFERENCES" 20 sizes in); a script a text face sets after a formula's run is that run's placeholder, C_n²'s "2"; the ink
+units, as the figure units, are units of the paper's for PIPELINE: a translation is stored for them and found again by an output
+identity that names PIPELINE, so their cut moving raises it, PIPELINE 31, and the unit-cut golden holds their cut), each of its
 class's kind (`inkheads`, `inkcontents`, `inknotes`, `inkorphan`, after the source kinds in UNIT_KINDS; `inknames` a block
 most of whose letters are an author unit's words, of the names toggle as that unit is), its numbering, leaders
-and page number left the original's ink, its math and typewriter runs (and a web address in any face) kept placeholders, and
+and page number left the original's ink where a number stands apart from the line's text (`APART`, half its size: a folio, a
+section number's `\quad`, a page number after leaders) or is a running head's folio (the head's other words recur on another
+page with another number there: amsart's `\llap{\thepage}` after a title as wide as the line sets two digits nearer its last
+word than its words are to each other, 2610.21884v1), a number in the text's own words the unit's, translated in its flow
+(LAYOUT 25: 2010.11929v2's running head "Published as a conference paper at ICLR 2021", the same on every page, had its year
+left the original's and drawn apart from its line), its math and typewriter runs (and a web address in any face) kept placeholders, and
 each run of its words in another weight, slant or colour than most of its glyphs hold a group of the commands that set it
 (`\textbf{`, `\textmd{`, `\textit{`, `\textup{`, `\textcolor[HTML]{…}{`, rule 9, LAYOUT `'23'`), as a source unit's groups are,
 so that its translation keeps each run's style (the release sweep of 2026-10-25, (d): a theorem's bold head before its regular
@@ -2765,6 +2819,29 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   `ANCHOR_RATIO` 2 (a legend's line sample, an arrow it labels), `end` where the ink after it is, else `centre`. A unit whose
   band meets other ink inside its box (another glyph, a stroke's segment widened by its half line width, a fill's edge, an image
   or a shading not holding the band) is `crowded`, left the original's: a translation there could cover that ink.
+- **Its set and its room** (the owner's rule of 2026-10-29, after 2010.11929v2's legends in Chinese: "All" drawn smaller
+  than the other entries, "Patch size" starting further right than its column, "Head 3" smaller than "Head 1", each label
+  fitted to its own box and anchored by what it read alone; `figure-text.mjs` `setsOf`, `roomsOf`): the labels of one group are set at one size, the original's by default; each keeps the original's alignment
+  and anchor; a translation may take free space, never touching other ink nor leaving its figure; only a group that cannot
+  fit shrinks, all of it by one factor, never a label alone. A **column** is the runs of one figure, size and direction whose
+  starts, ends or middles agree within `ALIGN_TOL` 0.08 of their size, two units or more among them; its other runs, a
+  number or a "…", count for its edge (2010.11929v2's "Head 1/2/3", one length, read their end alone, the frame being
+  nearer after them than their markers before; the column's "…" shares their start alone). A unit in a column takes the
+  column's edge as its anchor — the edge the most of its runs share, a tie broken by the readings of its units, then
+  start, end, middle — whatever it read alone: a legend's longest entry with its frame right after it ("Patch size",
+  0.4 em before the frame and 0.8 em after its sample) read as centred. A number alone at a word's edge makes no column,
+  so an axis's title over a tick's label stays centred. A **set** (`set`, its first unit's k) is the units of one column of
+  one edge and those of one figure, size and direction on one baseline (an axis's words, a legend laid in a row, the two
+  panels' x titles of one figure), joined. A unit's **room** (`before`, `after`, PDF units along its direction) is the free
+  line beside its box: to the nearest ink its band meets (a glyph, a stroke, a fill's edge, an image, the edge of a ground
+  it stands on, its clip's edge where a clip cuts it short; a path's lines only as far as its box, its clip's, shows them),
+  `ROOM_CLEAR` 0.15 em short of it; on a ground whose lines are not known (a path past the page's shapes, a rounded node, a frame's stroke) a band's height inside
+  its edges, on an image's or a shading's none (2602.23285v2's caption over a screenshot); never past its figure's extent
+  (pageInk's `figures`: every box painted inside the form or the picture, with its glyphs) nor its page's box, where either
+  edge of its band leaves them (a turned label's before its box's corners project there); half the line to another unit
+  whose band its own meets, the other half that unit's; short of the band and room of a unit of another direction (each
+  against the other's room as first found: a level label and a turned one never take one place); `ROOM_MAX` 6 em at most. Crowding and the anchor read alone are
+  read within the reach as before, so the same units are drawn and the base is the same bytes.
 - **Its ink** is its own group `f<k>` (`layout/wrap.mjs`): its runs wrapped where they are shown, in the page's stream, or in the
   stream of the form an included PDF is, that form written again once in the wrap section under its own number, its dict ours but
   its stream's keys and `/Resources`, its resources its own with `/Properties` naming its groups (beside a form's own entries:
@@ -2775,8 +2852,9 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   figures, so a figure never costs a page). The proof proves each form written as it proves a page (its BDCs balanced, its
   operators, ours taken out, the form's own) and the document's graph (`graphWhy`: each form's dict and resources ours but its
   stream and `/Properties`). `wrapFinal` returns `figures` { units (the drawn ones: page, group, text, font, size, fill, angle,
-  x, y, ux, uy, length, ascent, descent, anchor, form), stats (units, drawn, each why, letters, forms) }; with `figures: false`
-  none (the lab's A/B). REMOVAL 11 (shared, unreleased, with the ink units').
+  x, y, ux, uy, length, ascent, descent, anchor, form, set, before, after), stats (units, drawn, each why, letters, forms,
+  sets, grouped, aligned) }; with `figures: false` none (the lab's A/B). REMOVAL 11 (shared, unreleased, with the ink units');
+  the sets and rooms change no byte of the base.
 - **On the wire** (BUNDLE5 10, shared with the ink units'): each drawn figure unit an ink unit of kind `inkfigures` (its class
   `figures`), after the source units' and the other ink units', in their chunk (`INK_UNITS_FORMAT`, its echo null; `page-pass.mjs
   figureUnits`: its one text piece our glyphs' text, KEPT where it is only names, as a table's cell of names is, mt.mjs isName
@@ -2784,15 +2862,25 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   pass a head's bounds: none of the paper's then, `afterFit`), so that
   it is translated as any unit is (`toTranslate` takes it; no sentence cuts, `NOT_RUNNING`); and its place a row of the part of
   its page (`figures`, `layer-proto/figure-rows.mjs`: [id, group, page, x, y, ux, uy, length, size, ascent, descent, anchor,
-  fill, font], checked by `partShape`: ids rising, each a unit of kind inkfigures, on the part's pages, within their views,
-  none where the part has no layout; the key there only where the part has one, so that a part of none is 10's as the ink units
-  write it, and none in a part of 7's or 9's). The source units and their chunks are as before, so PIPELINE stays 28. The host
-  passes `ours.wrap.figures` (the web's `ourWrap` adds `figures: r.figures`).
+  fill, font, set, before, after], checked by `partShape`: ids rising, each a unit of kind inkfigures, on the part's pages,
+  within their views, its set a group's number at most its own, its room 0 or more, none where the part has no layout; the
+  key there only where the part has one, so that a part of none is 10's as the ink units write it, and none in a part of 7's
+  or 9's). The set and the room are BUNDLE5 11's (CTAG `b11-…`: a bundle of 10 is prepared again); a part of 10's rows, 14
+  values, is read each unit its own set with no room, as 10 drew it. The source units and their chunks are as before, so
+  PIPELINE stays as it was and no translation is asked again. The host passes `ours.wrap.figures` (the web's `ourWrap` adds
+  `figures: r.figures`).
 - **Drawn** (`run.mjs paintFigures`, once a page's figures' rows are in: the page waits for them as for its units', `rowsFor`
-  ranks them with its page): its translation's text in a face of its font's family, weight and slant, in its fill, on its run's
-  baseline, turned by its angle (`layer2.mjs svgOfFigure`), by the fit rule (`layer-proto/figure-fit.mjs`): at its size, shrunk
-  to its box's length where longer, to the rules' last floor (`floorMin`, 0.6) at most, its anchor's place kept; its group set
-  OFF in render A. Left the original's: no row (`untranslated`), a translation that says its source again (`same`), no group in
+  ranks them with its page): its translation's text in runs by script (`layer2.mjs figureRuns`: its CJK characters, by the
+  rules' class, in the target's CJK face, every other, a Latin word, a digit, a space, in its font's family's Latin face, as a
+  unit's words are; the CJK faces the web serves hold no Latin letter or digit, so that one CJK face for the whole text was
+  refused, `served`, and 2010.11929v2's "Width MLP", "Head 2" and Figure 7's title stayed the original's, Microsoft's
+  translations of them keeping "MLP", "2" and "RGB" beside their Chinese), of its font's weight and slant, in its fill, on
+  its run's baseline, turned by its angle (`layer2.mjs svgOfFigure`), by the fit rule (`layer-proto/figure-fit.mjs` `fitFigureSet`), set
+  by set: each translation from its anchor's edge (a start one from the original's start, an end one to its end, a middle one
+  about its middle), into its room on the side its anchor grows to (a middle one the same either side); every unit of a set at
+  one size, the original's where each fits, else the one factor its tightest translation needs, to the rules' last floor
+  (`floorMin`, 0.6) at most; a translation that would need less is the original's (`unfit`), and the rest of its set keeps the
+  factor the others need. Its group set OFF in render A. Left the original's: no row (`untranslated`), a translation that says its source again (`same`), no group in
   the document (`unhidden`), a face's refusal, `unfit`; a label of names (`kept`). The run's `figures` lists each. A page is
   ready once its figures are painted, not while a face they wait for loads.
 - **The switch** is the toggle `figures` of the reader's toggles (§19.10: `openLayer({ classes })`, the layer side's `classes`
@@ -2812,7 +2900,13 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   within the ocg gate's allowance), hiding the figures changes pixels inside their own bands alone (G3f 0), every drawn band
   loses its ink (no double ink, D 0) and is then blank (no stroke or other glyph a translation could cover, O 0). A form written
   again is copied into the delta whole: two of the pack's deltas pass their bound with the figures and are held `full`
-  (2307.16209v1, 2609.26457v1), none of the 25-paper set's.
+  (2307.16209v1, 2609.26457v1), none of the 25-paper set's. The sets, rooms and runs by script (2026-10-29, the pack
+  `ad76c514` and 24 of the 25-paper set made again on this engine, the record's run of that day): the wrap's every count is
+  `next`'s, G1, G3f, D and O 0, and R (each drawn unit's room blank once the figures are hidden) 0; 944 of the pack's 1,030
+  units and 1,159 of the set's 1,469 are in sets of two or more, 138 and 223 of them anchored by their column. Over a model of
+  zh the labels drawn go from 589 to 830 of 846 on the pack and from 905 to 1,177 of 1,216 on the set, and the sets of mixed
+  sizes from 16 and 43 to 0; over Microsoft's answers on three papers (1512.03385v1, 1810.04805v2, 2010.11929v2) from 107 to
+  265 of 265, 80 to 224 at their full size, 6 sets of mixed sizes to 0.
 
 ### 19.13 References and names, and the reader's toggles (stages 4 and 7 of `docs/route/orphan-text.md`)
 

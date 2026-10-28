@@ -125,12 +125,18 @@ html[data-axt-dim] {
    less than PDF.js's rounding at the right and the bottom, where a page holds nothing; nothing clips it there, as nothing
    ever clipped the SVG (its overflow is visible), and a clip on the place would cut a link's focus ring at the page's
    edge. The copy is a canvas of the page, dimmed in the dark by the reader sheet's own rule for a page's canvas; the SVG's
-   text by the same filter, so that the layer's page reads as the original's beside it. Its text is drawn with fractional advances (geometricPrecision): the engine measures a word by the
-   canvas, and a system that draws SVG text with a hinted face's advances (Chromium on Linux at a pixel ratio of 1) rounds
-   each to a whole pixel. A place retired (far from the view) holds an empty one */
+   text by the same filter, so that the layer's page reads as the original's beside it. A place retired (far from the view)
+   holds an empty one.
+   Its text is drawn at the weight the page's canvas draws its own (the maintainer's ruling of 2026-10-29; docs/PDF-READER.md
+   §11.8): the browser's own font smoothing, not the antialiased the reader's page sets for its chrome, which on macOS draws
+   without the system's smoothing; and fractional advances, since the engine measures a word by the canvas: geometricPrecision
+   where a system lays a web font out on whole-pixel advances (Chromium on Linux), `auto` where the browser lays the layer's
+   own words out alike under both (text-rendering.mjs, decided at the first laid page that tells, an attribute of <html>:
+   Chromium on macOS, whose geometricPrecision draws without the smoothing, 80 % of the ink PDF.js gives the same face) */
 .axt-layer { position: absolute; inset: 0; }
 .axt-layer > .axt-layer-copy { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
-.axt-layer > svg { position: absolute; left: 0; top: 0; width: var(--axt-frame-w, 100%); height: var(--axt-frame-h, 100%); overflow: visible; font-synthesis: none; text-rendering: geometricPrecision; }
+.axt-layer > svg { position: absolute; left: 0; top: 0; width: var(--axt-frame-w, 100%); height: var(--axt-frame-h, 100%); overflow: visible; font-synthesis: none; text-rendering: geometricPrecision; -webkit-font-smoothing: auto; }
+html[data-axt-layer-text="auto"] .axt-layer > svg { text-rendering: auto; }
 .axt-layer > svg text { white-space: pre; }
 /* ----- the layer's text layer (text-layer.mjs; docs/PDF-READER.md §11.11): PDF.js's own text layer over the drawing, under the
    links, built after the commit; what a selection, a copy and a search on a laid page read, one copy of each text. The SVG's

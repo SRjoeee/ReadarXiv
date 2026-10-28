@@ -1,10 +1,12 @@
 // The endpoint's models, for the model field's list (the redesign's design, §6.3): the OpenAI-compatible `GET /models`,
 // asked from this page — an extension page with the endpoint's origin granted is not held to CORS. Only for an origin
-// already granted: asking for one takes a gesture (permissions.request), which the form's own presses give
+// already granted: asking for one takes a gesture (permissions.request), which the form's own presses give. The key goes to the
+// address given and nowhere else: a redirect is refused, not followed (`redirect: 'error'`), as the translation requests refuse
+// it (providers/model.ts; #88 E3)
 export interface ModelOption { id: string; name?: string }
 
 export async function listModels(baseURL: string, apiKey: string, signal: AbortSignal): Promise<ModelOption[]> {
-  const res = await fetch(`${baseURL.replace(/\/+$/, '')}/models`, { headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {}, signal })
+  const res = await fetch(`${baseURL.replace(/\/+$/, '')}/models`, { headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {}, redirect: 'error', signal })
   if (!res.ok) throw new Error(`the model list answered ${res.status}`)
   const body = (await res.json()) as { data?: unknown }
   if (!Array.isArray(body.data)) throw new Error('the model list holds no list')

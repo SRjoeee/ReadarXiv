@@ -51,6 +51,20 @@ export interface HandlerDeps {
 
 const messageOf = (e: unknown): string => e instanceof Error ? e.message : String(e)
 
+/**
+ * What a worker's start does of itself for the cache: its expired entries deleted. Nothing else deletes an entry nobody asks
+ * for — `get()` drops an expired one it is asked for, and only the settings page's Data section cleaned the rest — so the rows
+ * a `CACHE_KEY_VERSION` bump leaves behind, which no key reaches again, stayed until the cap evicted them (#88 E6). Swept at
+ * every start, they go once they expire (30 days), and each start has only what expired since the last to delete. A failure
+ * is a line in the log: the cache degrades to a miss, never the worker
+ */
+export function sweepAtStart(deps: Pick<HandlerDeps, 'cache' | 'diagnostics'>): Promise<void> {
+  return deps.cache.cleanup().then(
+    () => undefined,
+    (e: unknown) => deps.diagnostics.record('background', `[axt] the cache's expired entries could not be deleted at the worker's start (${e instanceof Error ? e.name : typeof e})`),
+  )
+}
+
 export function createHandlers(deps: HandlerDeps): MessageHandlers {
   const diag = (line: string) => deps.diagnostics.record('background', line)
   return {
@@ -118,8 +132,8 @@ export function createHandlers(deps: HandlerDeps): MessageHandlers {
       .catch((e: unknown) => ({ ok: false as const, message: messageOf(e) })),
 
     // The same protocol as cache-clear: “IndexedDB unusable” must not show as “the cache is empty”. Expired entries
-    // are cleaned before counting — `get()` only treats them as misses and never deletes, and uncleaned the page
-    // would keep showing a heap of unusable counts and bytes; this is also cleanup()'s only call site at run time (Codex on #52)
+    // are cleaned before counting — `get()` deletes only an expired entry it is asked for, and uncleaned the page would
+    // keep showing a heap of unusable counts and bytes (Codex on #52); the worker's start cleans too (sweepAtStart below)
     'axt:cache-stats': () => deps.cache.cleanup()
       .then(() => deps.cache.stats())
       .then(stats => ({ ok: true as const, ...stats }))

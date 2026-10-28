@@ -58,8 +58,8 @@ function checkRules(rules) {
 let opened = null
 
 /**
- * The face a host asks for first, at the open, before the paper's English family is known: the target's CJK body face,
- * light where the layout rules say so beside the family v0 opens with (OPEN_FAMILY), else null. It is the face
+ * The face a host asks for first, at the open, before the paper's English family is known: the target's CJK body face (its
+ * Regular, beside every family), else null. It is the face
  * openLayer's run warms at its open, asked through the rules (the set a host passes to openLayer, the built-in one if
  * none) rather than the role table, so that no host decides a face.
  */

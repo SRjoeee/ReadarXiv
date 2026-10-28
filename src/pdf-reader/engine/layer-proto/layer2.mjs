@@ -4375,15 +4375,31 @@ export function svgOfName({ occurrence, text, x, baseline, size, face, color = n
 /**
  * A figure's text drawn in the target's words (run.mjs paintFigures, the content class `figures`) as SVG: one <text> on its run's
  * baseline from `x`, `y` (PDF units, the place its anchor keeps), turned by `angle` (degrees anticlockwise, as the page's), its
- * words in `face` at `size`, the face's own size correction applied, in its fill (`color`, black where none). `toPx(x, y)`: PDF to
- * the SVG's CSS pixels; `scale`: CSS pixels per PDF unit
+ * runs (figureRuns: each { s, face }, one after the other along the baseline) each in its face at `size`, the face's own size
+ * correction applied, in its fill (`color`, black where none). `toPx(x, y)`: PDF to the SVG's CSS pixels; `scale`: CSS pixels
+ * per PDF unit
  */
-export function svgOfFigure({ group, text, x, y, angle, size, face, color = null }, toPx, scale) {
+export function svgOfFigure({ group, runs, x, y, angle, size, color = null }, toPx, scale) {
   const [px, py] = toPx(x, y)
   const fill = color ? ` fill="${fillAttr(color)}"` : ''
   const turn = Math.abs(angle) > 1e-6 ? ` rotate(${n2(-angle)})` : ''
-  return `<g data-f="${esc(group)}"><text transform="translate(${n2(px)} ${n2(py)})${turn}"><tspan class="${faceClass(face)}" x="0" y="0" font-size="${n2(size * scale * (face.size ?? 1))}"${fill}>${esc(text)}</tspan></text></g>`
+  const spans = runs.map((r, i) => `<tspan class="${faceClass(r.face)}"${i ? '' : ' x="0" y="0"'} font-size="${n2(size * scale * (r.face.size ?? 1))}"${fill}>${esc(r.s)}</tspan>`).join('')
+  return `<g data-f="${esc(group)}"><text transform="translate(${n2(px)} ${n2(py)})${turn}">${spans}</text></g>`
 }
+/** a figure's translation in its runs by script, each in its face (`faceOf(cls)`): its CJK characters (the rules' class,
+ *  cjkClassRe of `quotes`) in the target's CJK face, every other (a Latin word, a digit, a space) in the Latin face, as a unit's
+ *  words are drawn (tokensOf2): the CJK faces served hold no Latin, so that one face for the whole text refused it whole */
+export function figureRuns(text, faceOf, quotes) {
+  const cjkRe = cjkClassRe(quotes), runs = []
+  for (const ch of text) {
+    const cls = cjkRe.test(ch) ? 'cjk' : 'latin', last = runs.at(-1)
+    if (last?.cls === cls) last.s += ch
+    else runs.push({ cls, s: ch })
+  }
+  return runs.map(r => ({ s: r.s, face: faceOf(r.cls) }))
+}
+/** figureRuns' width at size 1 (PDF units per unit of size): each run's in its face */
+export const figureRunsWidth = runs => runs.reduce((a, r) => a + widthOf(r.s, r.face), 0)
 
 // ---- the scorer's view of a laid-out unit
 

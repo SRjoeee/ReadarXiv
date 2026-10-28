@@ -67,6 +67,21 @@ describe('the diagnostics hook (issue #156)', () => {
   })
 })
 
+describe('the console (#88 E4)', () => {
+  it('a batch failure\'s line keeps the endpoint\'s words with any key it echoed taken out', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const echo = attachRequestErrorMeta(new ProviderError('auth', 'Unauthorized: Bearer sk-proj-0123456789abcdefXYZ was refused'), { statusCode: 401, isRetryable: false })
+    const service = build({ getProvider: async () => provider(async () => { throw echo }), retired: () => false, batch: { maxRetries: 0 } })
+    expect((await service.translate(req(['a']))).ok).toBe(false)
+    const printed = warn.mock.calls.map(args => args.join(' ')).filter(line => line.includes('batch failed'))
+    expect(printed.length).toBeGreaterThanOrEqual(1)
+    for (const line of printed) {
+      expect(line).toContain('Unauthorized')
+      expect(line).not.toContain('0123456789abcdefXYZ')
+    }
+  })
+})
+
 describe('the batch record (issue #237)', () => {
   const SCOPE = 'abcdef12-3456-4789-8abc-def012345678'
   const ok = (calls: { n: number }) => provider(async r => { calls.n++; return { segments: r.segments.map(s => ({ id: s.id, text: `\u8bd1:${s.text}` })), provider: 'mock' } })

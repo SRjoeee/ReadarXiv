@@ -57,6 +57,25 @@ describe('createLocalTransport: the records (issue #237)', () => {
   })
 })
 
+describe('createLocalTransport: a probe that does not answer (#88 E1)', () => {
+  it('the status says the first choice is unavailable once PROBE_MS has passed, and names the engine that would answer instead', async () => {
+    vi.useFakeTimers()
+    const { PROBE_MS } = await import('@/providers')
+    const hung = mockProvider(async () => ({ segments: [], provider: 'hung' }), { id: 'chrome-builtin', kind: 'builtin', isAvailable: () => new Promise<boolean>(() => {}) })
+    const free = mockProvider(async () => ({ segments: [], provider: 'free' }), { id: 'google-web', kind: 'mt' })
+    const t = await createLocalTransport({ ...DEFAULT_CONFIG, provider: 'chrome-builtin' }, { cancelled: new CancelledScopeRegistry(), buildChain: async () => ({ chain: [hung, free], renderPath: 'tags' as const }) })
+    let status: Awaited<ReturnType<typeof t.status>> | undefined
+    void t.status().then(s => { status = s })
+    await vi.advanceTimersByTimeAsync(PROBE_MS - 1)
+    expect(status).toBeUndefined()
+    await vi.advanceTimersByTimeAsync(1)
+    // (the identity's digest is the platform's, on no timer)
+    vi.useRealTimers()
+    await vi.waitFor(() => expect(status).toBeDefined())
+    expect(status).toMatchObject({ providerId: 'chrome-builtin', available: false, fallback: { id: 'google-web' } })
+  })
+})
+
 describe('createLocalTransport: the records of a connection test (issue #237; Codex on #329)', () => {
   const onChain = () => ({ ...mockProvider(async r => ({ segments: r.segments, provider: SVC.id })), id: SVC.id })
 

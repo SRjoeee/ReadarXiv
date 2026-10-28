@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { ANCHOR_REACH, DRAW_BAND, figureUnitsOf, FIGURE_WHYS } from '@/pdf-reader/engine/layout/figure-text.mjs'
+import { ANCHOR_REACH, DRAW_BAND, figureUnitsOf, FIGURE_WHYS, ROOM_CLEAR, ROOM_MAX } from '@/pdf-reader/engine/layout/figure-text.mjs'
 import { pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
 import { POINTS_TEX } from '@/pdf-reader/engine/layout/marks.mjs'
 import { CLASSES, FIGURE_KIND, TOGGLE_DEFAULTS, unitClass } from '@/pdf-reader/engine/rules/content-classes.mjs'
@@ -180,6 +180,205 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
     const pg = word('label')
     expect(figureUnitsOf([{ ...pg, pictures: [] }] as never, null).units).toEqual([])
     expect(figureUnitsOf([pg] as never, { glyphs: [pg.glyphs.map(() => 'u3')] }).units).toEqual([])
+  })
+})
+
+describe('a figure\'s labels in their columns and sets, each with its room (synthetic pages; the owner\'s rule of 2026-10-29)', () => {
+  type Line = { text: string; x: number; y: number }
+  /** a picture of lines of text, one show each (10 pt, 5 a glyph), its strokes ([x0, y0, x1, y1], a segment each), its dots (small
+   *  fills: [x0, y0, x1, y1]), its frame (a stroked and filled box), and its extent as pageInk gives it (`figures`) */
+  const picture = (lines: Line[], { strokes = [] as number[][], dots = [] as number[][], grounds = [] as number[][], frame = null as number[] | null, extent = [0, 0, 300, 300], bare = [] as [number[], number][] } = {}) => {
+    const glyphs = lines.flatMap((l, n) => [...l.text].map((u, i) => ({ u, n, k: i, x0: l.x + 5 * i, x1: l.x + 5 * (i + 1), ix0: l.x + 5 * i, ix1: l.x + 5 * (i + 1), y: l.y, top: l.y + 7, bottom: l.y - 2, size: 10, font: 'ArialMT', fill: 0, ...(u === ' ' ? { blank: true } : {}) })))
+    const boxes: number[] = [], shapes = new Map()
+    const add = (b: number[], segs: number[], stroke: boolean, fill: boolean) => { shapes.set(boxes.length / 4, { segs: Float32Array.from(segs), stroke, fill, hw: 0.25 }); boxes.push(...b) }
+    for (const s of strokes) add([Math.min(s[0]!, s[2]!) - 0.25, Math.min(s[1]!, s[3]!) - 0.25, Math.max(s[0]!, s[2]!) + 0.25, Math.max(s[1]!, s[3]!) + 0.25], [s[0]!, s[1]!, s[2]!, s[3]!], true, false)
+    const rect = (b: number[]) => [b[0]!, b[1]!, b[2]!, b[1]!, b[2]!, b[1]!, b[2]!, b[3]!, b[2]!, b[3]!, b[0]!, b[3]!, b[0]!, b[3]!, b[0]!, b[1]!]
+    for (const d of [...dots, ...grounds]) add(d, rect(d), false, true)
+    if (frame) add(frame, rect(frame), true, true)
+    // (boxes of no lines known, each with its kind as pageInk's `paths` gives it: a path's place past the page's shapes, an image -3)
+    const paths = boxes.map((_, i) => i).filter(i => i % 4 === 0).map(i => i / 4)
+    for (const [b, kind] of bare) { boxes.push(...b); paths.push(kind) }
+    return { glyphs, turned: [], boxes, shapes, paths, figures: new Map([['0:0', extent]]), pictures: [{ name: 'zs', glyph: 0, box: 0 }, { name: 'ze', glyph: glyphs.length, box: boxes.length / 4 }], points: [], view: [0, 0, 300, 300] }
+  }
+  type Placed = Unit & { k: number; set: number; before: number; after: number }
+  const unitsOf = (pg: ReturnType<typeof picture>) => figureUnitsOf([pg] as never, null).units as unknown as Placed[]
+  const byText2 = (units: Placed[], text: string) => units.find(u => u.text === text)!
+  // (a legend: a line sample before each entry, 85 to 95, its entries from 100, its frame's right edge at 156: "Patch size" ends
+  // at 150, 6 before the frame and 5 after its sample, so that read alone it is set from its middle)
+  const legend = (entries = ['Models', 'All', 'Depth', 'Patch size', 'Width']) => picture(entries.map((text, i) => ({ text, x: 100, y: 200 - 14 * i })), { strokes: entries.slice(1).map((_, i) => [85, 202 - 14 * (i + 1), 95, 202 - 14 * (i + 1)]), frame: [80, 120, 156, 212], extent: [0, 0, 300, 300] })
+
+  it('a legend\'s entries are one column: each set from its start, whatever it reads alone, and one set', () => {
+    // (read alone, "Patch size" is set from its middle: its frame as near after it as its line sample before it)
+    const alone = unitsOf(picture([{ text: 'Patch size', x: 100, y: 200 }], { strokes: [[85, 202, 95, 202]], frame: [80, 190, 156, 212] }))[0]!
+    expect(alone.anchor).toBe('centre')
+    const units = unitsOf(legend())
+    expect(units.map(u => u.text)).toEqual(['Models', 'All', 'Depth', 'Patch size', 'Width'])
+    expect(units.map(u => u.anchor)).toEqual(['start', 'start', 'start', 'start', 'start'])
+    expect(new Set(units.map(u => u.set))).toEqual(new Set([units[0]!.k]))
+  })
+
+  it('a short entry\'s room is the free line after it to its frame, ROOM_CLEAR short of the frame\'s edge', () => {
+    const all = byText2(unitsOf(legend()), 'All')
+    // ("All" ends at 115; the frame's edge, a stroke of half width 0.25, at 156: 40.75 of free line, 1.5 short of it)
+    expect(all.after).toBeCloseTo(156 - 0.25 - 115 - ROOM_CLEAR * 10, 6)
+    // (before it, its line sample: 95.25, 4.75 back, 1.5 short)
+    expect(all.before).toBeCloseTo(100 - 95.25 - ROOM_CLEAR * 10, 6)
+    // (the longest entry's room after it is what is left to the frame)
+    expect(byText2(unitsOf(legend()), 'Patch size').after).toBeCloseTo(156 - 0.25 - 150 - ROOM_CLEAR * 10, 6)
+  })
+
+  it('a room never leaves its figure, nor passes ROOM_MAX of its size', () => {
+    const lone = (extent: number[]) => unitsOf(picture([{ text: 'label', x: 100, y: 100 }], { extent }))[0]!
+    expect(lone([90, 90, 140, 110])).toMatchObject({ before: 10, after: 15 })
+    expect(lone([0, 0, 300, 300])).toMatchObject({ before: ROOM_MAX * 10, after: ROOM_MAX * 10 })
+    // (a fill behind the whole band, a node's, is its ground: no ink of its box, its edges the ends of its free line)
+    const node = unitsOf(picture([{ text: 'label', x: 100, y: 100 }], { grounds: [[90, 90, 140, 115]] }))[0]!
+    expect(node.why).toBeNull()
+    expect(node.before).toBeCloseTo(10 - ROOM_CLEAR * 10, 6)
+    expect(node.after).toBeCloseTo(15 - ROOM_CLEAR * 10, 6)
+    // (a ground whose lines are not known, past the page's shapes, ends the free line a band's height inside its edges; an
+    // image behind the band leaves none: its pixels beside the box are no ground a translation may take)
+    const band = 0.88 + 0.2
+    const path = unitsOf(picture([{ text: 'label', x: 100, y: 100 }], { bare: [[[80, 90, 160, 115], 7]] }))[0]!
+    expect(path.why).toBeNull()
+    expect(path.before).toBeCloseTo(20 - band * 10 - ROOM_CLEAR * 10, 6)
+    expect(path.after).toBeCloseTo(35 - band * 10 - ROOM_CLEAR * 10, 6)
+    const image = unitsOf(picture([{ text: 'label', x: 100, y: 100 }], { bare: [[[80, 90, 160, 115], -3]] }))[0]!
+    expect(image).toMatchObject({ why: null, before: 0, after: 0 })
+  })
+
+  it('a path\'s lines past its box, its clip\'s, end no free line; a rectangle\'s edge at its box\'s edge does, a float apart', () => {
+    // (a bar from 130 to 160 right after the label, its rectangle in single floats: its left edge ends the free line at 130)
+    const bar = Float32Array.from([130.00001, 90, 160, 90, 160, 90, 160, 115, 160, 115, 130.00001, 115, 130.00001, 115, 130.00001, 90])
+    const pg = picture([{ text: 'label', x: 100, y: 100 }])
+    pg.shapes.set(pg.boxes.length / 4, { segs: bar, stroke: false, fill: true, hw: 0.25 })
+    pg.boxes.push(130, 90, 160, 115)
+    pg.paths.push(9)
+    expect(unitsOf(pg)[0]!.after).toBeCloseTo(130 - 125 - ROOM_CLEAR * 10, 4)
+    // (a line clipped to a box past the reach after the label, its segment running back under it: no ink where the clip hides it)
+    const clipped = picture([{ text: 'label', x: 100, y: 100 }])
+    clipped.shapes.set(clipped.boxes.length / 4, { segs: Float32Array.from([50, 102, 170, 102]), stroke: true, fill: false, hw: 0.25 })
+    clipped.boxes.push(150, 101.75, 170, 102.25)
+    clipped.paths.push(9)
+    expect(unitsOf(clipped)[0]).toMatchObject({ why: null })
+    // (to the clip's edge, less the 0.05 a box's edge is given for its segments' single floats)
+    expect(unitsOf(clipped)[0]!.after).toBeCloseTo(150 - 0.05 - 125 - ROOM_CLEAR * 10, 6)
+  })
+
+  it('a fill behind the band cut by its clip ends the free line at the clip\'s edge, not at its own lines (the review of #490)', () => {
+    // (a rectangle from 0 to 300 behind "label", 100 to 125, clipped to 90 to 140: its box the clip's, its segments its own)
+    const pg = picture([{ text: 'label', x: 100, y: 100 }])
+    pg.shapes.set(pg.boxes.length / 4, { segs: Float32Array.from([0, 90, 300, 90, 300, 90, 300, 115, 300, 115, 0, 115, 0, 115, 0, 90]), stroke: false, fill: true, hw: 0.25 })
+    pg.boxes.push(90, 90, 140, 115)
+    pg.paths.push(9)
+    const u = unitsOf(pg)[0]!
+    expect(u.before).toBeCloseTo(10 - ROOM_CLEAR * 10, 6)
+    expect(u.after).toBeCloseTo(15 - ROOM_CLEAR * 10, 6)
+  })
+
+  it('labels of two directions never take one place: each room stops short of the other\'s band and room (the review of #490)', () => {
+    // (a level label, 100 to 120 on y = 100, and a turned one, up x = 150 from 50 to 70, both centred with free space all round)
+    const turned: unknown[] = [], boxes: number[] = []
+    ;[...'ab', ...'cd'].forEach((uch, k) => {
+      const y0 = 50 + 5 * k
+      turned.push({ u: uch, n: 1, k, ox: 150, oy: y0, ex: 150, ey: y0 + 5, ux: 0, uy: 1, size: 10, ascent: 0.7, descent: -0.2, font: 'ArialMT', fill: 0, box: boxes.length / 4, at: 0, pt: 1 })
+      boxes.push(143, y0, 152, y0 + 5)
+    })
+    const pg = picture([{ text: 'abcd', x: 100, y: 100 }])
+    Object.assign(pg, { turned, boxes: [...pg.boxes, ...boxes], paths: [...pg.paths, ...boxes.filter((_, i) => i % 4 === 0).map(() => -4)] })
+    const [a, b] = unitsOf(pg)
+    expect([a!.angle, b!.angle]).toEqual([0, 90])
+    // (each one's widest drawing, its band from before its start to after its end, as a page box)
+    const region = (u: Placed) => {
+      const nx = -u.uy, ny = u.ux, pts = [[-u.before, u.descent * u.size], [u.length + u.after, u.descent * u.size], [-u.before, u.ascent * u.size], [u.length + u.after, u.ascent * u.size]].map(([s1, t]) => [u.x + u.ux * s1! + nx * t!, u.y + u.uy * s1! + ny * t!])
+      return [Math.min(...pts.map(p => p[0]!)), Math.min(...pts.map(p => p[1]!)), Math.max(...pts.map(p => p[0]!)), Math.max(...pts.map(p => p[1]!))]
+    }
+    const ra = region(a!), rb = region(b!)
+    const meet = ra[0]! < rb[2]! && rb[0]! < ra[2]! && ra[1]! < rb[3]! && rb[1]! < ra[3]!
+    expect(meet, JSON.stringify({ ra, rb })).toBe(false)
+    // (and neither is left with nothing: each keeps room on the side away from the other)
+    expect(a!.before).toBeGreaterThan(0)
+    expect(b!.before).toBeGreaterThan(0)
+  })
+
+  it('a turned label\'s room ends where its band leaves its figure and its page, not where the figure\'s box projects (the review of #490)', () => {
+    // (four letters, 20 long, from (280, 100) at 30 degrees, in a figure and a page of [0, 0, 300, 300])
+    const c = Math.cos(Math.PI / 6), sn = Math.sin(Math.PI / 6), turned: unknown[] = [], boxes: number[] = []
+    ;[...'abcd'].forEach((uch, k) => {
+      const x0 = 280 + c * 5 * k, y0 = 100 + sn * 5 * k
+      turned.push({ u: uch, n: 0, k, ox: x0, oy: y0, ex: x0 + c * 5, ey: y0 + sn * 5, ux: c, uy: sn, size: 10, ascent: 0.7, descent: -0.2, font: 'ArialMT', fill: 0, box: boxes.length / 4, at: 0, pt: 1 })
+      boxes.push(x0 - 7 * sn, y0 - 2 * c, x0 + c * 5 + 2 * sn, y0 + sn * 5 + 7 * c)
+    })
+    const pg = { glyphs: [], turned, boxes, shapes: new Map(), paths: boxes.filter((_, i) => i % 4 === 0).map(() => -4), figures: new Map([['0:0', [0, 0, 300, 300]]]), pictures: [{ name: 'zs', glyph: 0, box: 0 }, { name: 'ze', glyph: 0, box: boxes.length / 4 }], points: [], view: [0, 0, 300, 300] }
+    const u = unitsOf(pg as never)[0]!
+    expect(u.angle).toBe(30)
+    // (every corner of its widest drawing, its band from before its start to after its end, inside the figure and the page)
+    const nx = -u.uy, ny = u.ux
+    for (const sAlong of [-u.before, u.length + u.after]) for (const t of [u.descent * u.size, u.ascent * u.size]) {
+      const x = u.x + u.ux * sAlong + nx * t, y = u.y + u.uy * sAlong + ny * t
+      expect(x, `x at ${sAlong}, ${t}`).toBeLessThanOrEqual(300 + 1e-6)
+      expect(y, `y at ${sAlong}, ${t}`).toBeLessThanOrEqual(300 + 1e-6)
+      expect(Math.min(x, y)).toBeGreaterThanOrEqual(-1e-6)
+    }
+  })
+
+  it('two labels on one line share the line between them, half each, ROOM_CLEAR apart', () => {
+    const [a, b] = unitsOf(picture([{ text: 'left', x: 100, y: 100 }, { text: 'right', x: 150, y: 100 }]))
+    // ("left" ends at 120, "right" begins at 150: 30 between, 1.5 clear, 14.25 each; one set, on one baseline)
+    expect(a!.after).toBeCloseTo((30 - ROOM_CLEAR * 10) / 2, 6)
+    expect(b!.before).toBeCloseTo((30 - ROOM_CLEAR * 10) / 2, 6)
+    expect(a!.set).toBe(b!.set)
+  })
+
+  it('entries of one length are told their column\'s start by a shorter run in it (a legend\'s "…")', () => {
+    // (each "Head n" with its frame right after it reads alone as set from its end; the column's "..." shares their start alone)
+    const lines = ['Head 1', 'Head 2', 'Head 3'].map((text, i) => ({ text, x: 100, y: 200 - 14 * i }))
+    const frame = [80, 150, 133, 212]
+    expect(unitsOf(picture(lines, { dots: lines.map(l => [90, l.y, 93, l.y + 3]), frame })).map(u => u.anchor)).toEqual(['end', 'end', 'end'])
+    const units = unitsOf(picture([...lines, { text: '...', x: 100, y: 158 }], { dots: lines.map(l => [90, l.y, 93, l.y + 3]), frame }))
+    expect(units.map(u => u.anchor)).toEqual(['start', 'start', 'start'])
+    expect(new Set(units.map(u => u.set)).size).toBe(1)
+  })
+
+  it('a right-aligned column is set from its end, a centred one from its middle, whatever an entry reads alone', () => {
+    // (three words ending at 200; a dot right before the last, which alone reads as set from its start)
+    const right = ['Train loss', 'Validation loss', 'Test'].map((text, i) => ({ text, x: 200 - 5 * text.length, y: 200 - 14 * i }))
+    const dot = [[173, 172, 177, 176]]
+    expect(unitsOf(picture([right[2]!], { dots: dot }))[0]!.anchor).toBe('start')
+    const r = unitsOf(picture(right, { dots: dot }))
+    expect(r.map(u => u.anchor)).toEqual(['end', 'end', 'end'])
+    expect(new Set(r.map(u => u.set)).size).toBe(1)
+    // (two lines of a title centred on 150; a stroke right after the second, which alone reads as set from its end)
+    const centred = ['Attention distance', 'by layer'].map((text, i) => ({ text, x: 150 - 2.5 * text.length, y: 200 - 14 * i }))
+    const stroke = [[172, 180, 172, 195]]
+    expect(unitsOf(picture([centred[1]!], { strokes: stroke }))[0]!.anchor).toBe('end')
+    const c = unitsOf(picture(centred, { strokes: stroke }))
+    expect(c.map(u => u.anchor)).toEqual(['centre', 'centre'])
+    expect(c[0]!.set).toBe(c[1]!.set)
+  })
+
+  it('an axis\'s labels turned 30 degrees, each ending at its tick on one level line, are one column set from its end', () => {
+    // (three words of 3, 5 and 7 letters, 5 a letter along (cos 30, sin 30), ending at (100, 100), (140, 100), (180, 100))
+    const c = Math.cos(Math.PI / 6), sn = Math.sin(Math.PI / 6)
+    const turned: unknown[] = [], boxes: number[] = []
+    ;['Low', 'Mid-a', 'Highest'].forEach((word, n) => {
+      const ex = 100 + 40 * n, ey = 100, len = 5 * word.length, ox = ex - c * len, oy = ey - sn * len
+      ;[...word].forEach((u, k) => {
+        const x0 = ox + c * 5 * k, y0 = oy + sn * 5 * k
+        turned.push({ u, n, k, ox: x0, oy: y0, ex: x0 + c * 5, ey: y0 + sn * 5, ux: c, uy: sn, size: 10, ascent: 0.7, descent: -0.2, font: 'ArialMT', fill: 0, box: boxes.length / 4, at: 0, pt: 1 })
+        boxes.push(Math.min(x0, x0 + c * 5) - 7 * sn, Math.min(y0, y0 + sn * 5) - 2 * c, Math.max(x0, x0 + c * 5) + 2 * sn, Math.max(y0, y0 + sn * 5) + 7 * c)
+      })
+    })
+    const pg = { glyphs: [], turned, boxes, shapes: new Map(), figures: new Map([['0:0', [0, 0, 300, 300]]]), pictures: [{ name: 'zs', glyph: 0, box: 0 }, { name: 'ze', glyph: 0, box: boxes.length / 4 }], points: [], view: [0, 0, 300, 300] }
+    const units = unitsOf(pg as never)
+    expect(units.map(u => [u.text, u.angle])).toEqual([['Low', 30], ['Mid-a', 30], ['Highest', 30]])
+    expect(units.map(u => u.anchor)).toEqual(['end', 'end', 'end'])
+    expect(new Set(units.map(u => u.set)).size).toBe(1)
+  })
+
+  it('a number alone at a word\'s edge makes no column: an axis\'s title over a tick\'s label keeps its own reading', () => {
+    const units = unitsOf(picture([{ text: '10', x: 120, y: 120 }, { text: 'Relative compute', x: 120, y: 100 }]))
+    expect(units.map(u => [u.text, u.anchor])).toEqual([['Relative compute', 'centre']])
   })
 })
 
