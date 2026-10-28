@@ -374,6 +374,11 @@ The pack of 2026-10-29 (`ad76c514`, LAYOUT 25) is `e8e9eeb5`'s with each output'
 every base page byte for byte the one before, every layout file differing in its version alone; 2307.16209v1's `base.json` holds
 the marking's texts the probe of #486 reads (next's own maker writes them too, its only difference from `e8e9eeb5`). 14 new
 objects.
+The pack of the letter commands (`efd01632`, LAYOUT 25 still) is `ad76c514`'s with 1706.03762v7's seven outputs made again:
+its three units of Łukasz Kaiser (`{\L}ukasz`, `\L{}ukasz`) hold the letter in the word now, so the start mark of
+`\L{}ukasz Kaiser and Ilya Sutskever` stands before `\L{}` (it stood after it, the Ł outside the unit) and the placeholders after
+it are numbered anew: its layout file's rows and its base page's marks change, the base pages' pixels are `ad76c514`'s on all
+15 pages; every other output's files are its own bytes. 3 new objects.
 Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
 The wrap reads each base's units from its paper's source, so the pack holds that too: `sources/<paper>/source.gz`, one a paper
 (`gate-pack.mjs make --sources=<dir of <paper>/source.gz>`, `data/corpus` by default; a make with a base of ours and no source
