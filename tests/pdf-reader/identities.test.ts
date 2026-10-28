@@ -152,9 +152,9 @@ describe('a layout file is refused by its schema, not by its maker (decision 4)'
 
 const ENGINE = 'src/pdf-reader/engine'
 const sourcesIn = (dir: string): string[] => readdirSync(dir, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? sourcesIn(join(dir, e.name)) : e.name.endsWith('.mjs') ? [join(dir, e.name)] : []))
-/** what an identity is: the engine's `*_VERSION`s, the layout maker's, the remover's, the bundle's format, the PDF.js the
- *  geometry is read with and the rule set's schema */
-const IDENTITY = /_VERSION$|^(LAYOUT|REMOVAL|BUNDLE|PDFJS|RULES_SCHEMA)$/
+/** what an identity is: the engine's `*_VERSION`s, the layout maker's, the remover's, the bundles' formats (the one-file
+ *  bundle's and the layer route's), the PDF.js the geometry is read with and the rule set's schema */
+const IDENTITY = /_VERSION$|^(LAYOUT|REMOVAL|BUNDLE|BUNDLE5|PDFJS|RULES_SCHEMA)$/
 
 /** the names the engine exports (a `export const` or a re-export) that are identities */
 function identitiesExported(): Set<string> {
@@ -212,8 +212,20 @@ describe("docs/PDF-READER.md: the table of identities (rules as data, §9.4)", (
   it('has a row for every identity the engine exports', () => {
     const exported = identitiesExported()
     // (the ones the plan names, so that a pattern that stopped matching would fail here and not pass for want of names)
-    for (const name of ['PIPELINE_VERSION', 'TRANSLATE_VERSION', 'TYPESETTING_VERSION', 'LAYOUT', 'REMOVAL', 'BUNDLE', 'PDFJS', 'RULES_SCHEMA']) expect(exported, name).toContain(name)
+    for (const name of ['PIPELINE_VERSION', 'TRANSLATE_VERSION', 'TYPESETTING_VERSION', 'LAYOUT', 'REMOVAL', 'BUNDLE', 'BUNDLE5', 'PDFJS', 'RULES_SCHEMA']) expect(exported, name).toContain(name)
     for (const name of exported) expect(rows, `${name} is not a row of the table`).toContain(name)
+  })
+
+  it("says what the code says: each row's value the one the file it names exports", async () => {
+    // (a row names its constant's file under the engine and its value, `NAME` (`<file>`, `'value'`…: a value raised in the
+    // code and not in the table fails here, as `pnpm tokens` keeps the style tokens)
+    const cells = [...sectionOf('### 18.2').join('\n').matchAll(/`([A-Z][A-Z0-9_]+)` \(`([a-z][a-z0-9/-]*\.mjs)`, `'?([^`']+)'?`/g)].map(m => ({ name: m[1]!, file: m[2]!, value: m[3]! }))
+    expect(cells.map(c => c.name)).toEqual(expect.arrayContaining(['BUNDLE5', 'BUNDLE', 'PDFJS', 'PIPELINE_VERSION', 'LAYOUT', 'REMOVAL', 'TRANSLATE_VERSION', 'RULES_SCHEMA']))
+    for (const { name, file, value } of cells) {
+      const mod = (await import(/* @vite-ignore */ `/src/pdf-reader/engine/${file}`)) as Record<string, unknown>
+      expect(mod, `${file} exports ${name}`).toHaveProperty(name)
+      expect(String(mod[name]), `§18.2's ${name} (${file})`).toBe(value)
+    }
   })
 
   it('names no identity the code does not have', () => {
