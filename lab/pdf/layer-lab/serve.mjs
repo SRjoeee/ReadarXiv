@@ -199,7 +199,8 @@ const server = createServer((req, res) => {
   if (path.startsWith('/src/pdf-reader/engine/')) {
     const r = path.slice('/src/pdf-reader/engine/'.length)
     if (ENTRY && r === 'layer/layer.mjs') return sendFile(res, ENTRY)
-    return sendFile(res, /\.(m?js|json)$/.test(r) ? under(ENGINE, r) : null)
+    // (and the engine's view sheet, view/engine.css, which the quick view is drawn with as the readers draw it)
+    return sendFile(res, /\.(m?js|json)$/.test(r) || r === 'view/engine.css' ? under(ENGINE, r) : null)
   }
   if (path.startsWith('/zod/')) return sendFile(res, /^\/zod\/(?:mini|v4)\/[\w./-]+\.js$/.test(path) ? under(ZOD, path.slice('/zod/'.length)) : null, 'max-age=3600')
   if (path.startsWith('/pdfjs/')) {

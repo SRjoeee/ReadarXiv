@@ -73,8 +73,14 @@ const state = {
   /** the interface's language (#ui=en; Chinese by default) and whether the settings are shown (#panel=0: hidden) */
   ui: (hash.ui ?? saved.ui) === 'en' ? 'en' : 'zh',
   panel: (hash.panel ?? saved.panel ?? '1') !== '0',
+  /** how the quick view is drawn: as the readers draw it (the default: its copy and SVG in engine.css's .axt-layer, the SVG
+   *  scaled by its viewBox, its text rendered as text-rendering.mjs's probe says, layer-side.mjs drawingOf), or as the lab
+   *  drew it before (#look=lab: no viewBox, a transform, none of engine.css's rendering; the layer gate's own drawing) */
+  look: hash.look === 'lab' ? 'lab' : 'product',
 }
 L = STRINGS[state.ui]
+/** the engine's text-rendering module (view/text-rendering.mjs), which the quick view drawn as the readers draw it decides by */
+const layerText = import('/src/pdf-reader/engine/view/text-rendering.mjs').catch(e => { console.warn('text-rendering.mjs:', e); return null })
 /** the layout rule set v0 is opened with: the panel's (the worktree's file, or what the panel loaded, and the edits made
  *  to it). Null while there is none, and v0 then takes the engine's built-in set */
 const v0Rules = () => rules?.set() ?? null
@@ -84,6 +90,7 @@ function remember() {
   if (rules?.from()?.kind === 'ref') q.set('rules', rules.from().ref)
   if (state.ui === 'en') q.set('ui', 'en')
   if (!state.panel) q.set('panel', '0')
+  if (state.look === 'lab') q.set('look', 'lab')
   history.replaceState(null, '', `#${q}`)
 }
 const status = text => { $('status').textContent = text }
@@ -279,6 +286,9 @@ class Pane {
         if (token !== div._token || !parts) return
         for (const c of [...div.children]) if (!c.classList.contains('num')) c.remove()
         div.append(...parts)
+        // (drawn as the readers draw it: the layer's text rendering decided, as the readers decide it, from the first page whose
+        // words tell; text-rendering.mjs, its answer on <html> for engine.css)
+        if (this.kind === 'v0' && state.look === 'product') (await layerText)?.applyLayerText(div.querySelector('.axt-layer > svg'))
         div.dataset.rendered = '1'
       })
     } catch (e) {
@@ -396,13 +406,28 @@ async function protoPage(p, source, vp, token, div, renderMs) {
   // (the SVG at its own size, v0's CSS px, scaled to the pane's by a transform: not stretched to the page box, whose size
   // is the canvas's whole device pixels, and with no viewBox, which rasterizes the text otherwise than the gate's)
   const svg = holder.firstElementChild, css = vp.scale / devicePixelRatio / 1.25
+  const drawn = { render: renderMs, copy: performance.now() - t0, k: vp.scale }
+  if (state.look === 'product') {
+    // (as the readers draw a laid page, layer-side.mjs drawingOf and engine.css: the copy and the SVG in the copy's frame, the
+    // page's size at the pane's scale, the SVG scaled to it by its viewBox)
+    svg.setAttribute('viewBox', `0 0 ${done.w} ${done.h}`)
+    svg.setAttribute('preserveAspectRatio', 'none')
+    svg.setAttribute('aria-hidden', 'true')
+    copy.className = 'axt-layer-copy'
+    const wrap = h('div', { class: 'axt-layer' })
+    wrap.style.setProperty('--axt-frame-w', `${done.w * css}px`)
+    wrap.style.setProperty('--axt-frame-h', `${done.h * css}px`)
+    wrap.append(copy, svg)
+    ;(open.v0ms ??= new Map()).set(p, drawn)
+    if (p === state.page || !open.v0ms.has(state.page)) v0Summary(p)
+    return [wrap]
+  }
   svg.style.width = `${done.w}px`
   svg.style.height = `${done.h}px`
   svg.style.transformOrigin = '0 0'
   if (Math.abs(css - 1) > 1e-9) svg.style.transform = `scale(${css})`
   // what the page cost here: the pane's rendering of arXiv's page, v0's step (once a page), its drawing at this pane's
   // resolution (every time the page is drawn)
-  const drawn = { render: renderMs, copy: performance.now() - t0, k: vp.scale }
   ;(open.v0ms ??= new Map()).set(p, drawn)
   if (p === state.page || !open.v0ms.has(state.page)) v0Summary(p)
   return [copy, svg]
@@ -667,7 +692,7 @@ if (proto.ready) {
   try {
     const { FACES, ENGLISH_FAMILIES } = await import('/proto-engine/rules/font-roles.mjs')
     const ids = Object.keys(FACES)
-    catalog = { groups: ids.filter(id => id.endsWith('-light')).map(id => id.slice(0, -6)).filter(g => ['light', 'regular', 'semibold', 'bold'].every(w => ids.includes(`${g}-${w}`))), faces: ids, families: [...ENGLISH_FAMILIES] }
+    catalog = { groups: [...new Set(Object.values(proto.R.BUILTIN_RULES.scripts).map(s => s.cjkFaces?.group).filter(Boolean))], faces: ids, families: [...ENGLISH_FAMILIES] }
   } catch {}
   rules = createRulesPanel({ root: $('rules-root'), h, icon, t, R: proto.R, names: ENDONYMS, catalog, onChange: () => { if (open) again() } })
   await rules.start(hash.rules)
