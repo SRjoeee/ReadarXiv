@@ -119,9 +119,9 @@ export const sourceUnitsOf = bundle => sourceOf(bundle).units
 // ---------------------------------------------------------------- the ids a language translates
 /** the units a translation into any language leaves as they are: the names a table holds (the KEPT flag, nameCells). Every
  *  content class is translated once, whatever the language and whatever a reader's toggles show (the owner, 2026-10-25;
- *  rules/content-classes.mjs): the author block's names and places and a bibliography entry's names too, which a reader's
- *  "names" toggle shows or hides (TRANSLATE_VERSION 6; before it the author block was sent only where the target's script
- *  writes names its own way, translate/kept.mjs authorsTranslated, which the TeX path's keptFor still reads) */
+ *  rules/content-classes.mjs): the author block's names, which a reader's "names" toggle shows or hides, and its places, always
+ *  shown; a bibliography's entries, under "references" (TRANSLATE_VERSION 6; before it the author block was sent only where the
+ *  target's script writes names its own way, translate/kept.mjs authorsTranslated, which the TeX path's keptFor still reads) */
 const keptOf = s => s.kept
 /** the ids a language translates, rising: the units that stand, but the names kept (the KEPT flag) */
 export function toTranslate(bundle, lang) {

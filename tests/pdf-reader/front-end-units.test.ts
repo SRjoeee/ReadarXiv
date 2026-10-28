@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { documentBounds, inMemory, inputencOf, loadProject, markUnits, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { openPaper, probeFiles, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { openPaper, originalFiles, probeFiles, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
 import { strategiesFor } from '@/pdf-reader/engine/pipeline/scripts.mjs'
 import { seedFrom, sourceHash } from '@/pdf-reader/engine/pipeline/cache.mjs'
 import { plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
@@ -9,7 +10,7 @@ import { plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
 // missing-units research: ResNet's appendix C, 37 of 117 papers missing some text)
 
 type Piece = { t: string; s?: string; src?: string; id?: number }
-type Unit = { kind: string; file: string; start: number; end: number; title?: boolean; front?: boolean; stored?: boolean; pieces: Piece[] }
+type Unit = { kind: string; file: string; start: number; end: number; title?: boolean; front?: boolean; stored?: boolean; once?: boolean; pieces: Piece[] }
 const enc = (s: string) => new TextEncoder().encode(s)
 const projectOf = (files: Record<string, string>) => loadProject(inMemory(new Map(Object.entries(files).map(([k, v]) => [k, enc(v)]))), 'main.tex', { tables: true })
 const project = (tex: string, more: Record<string, string> = {}) => projectOf({ 'main.tex': tex, ...more })
@@ -134,8 +135,12 @@ describe('the preamble\'s front matter (frontMatter): what a class keeps for \\m
   it('AAAI\'s \\affiliations, \\keywords and a \\thanks of its own: names and places, keywords, a front note', () => {
     const p = project(doc('Body.', '\\title{A Title}\n\\author{Alice Example}\n\\affiliations{School of Information Engineering\\\\ Shanghai Maritime University}\n\\keywords{canonical module, nearly Gorenstein ring}\n\\thanks{Financed by the Dutch Research Council.}'))
     expect(units(p).map(u => [u.kind, textOf(u), !!u.front])).toEqual([
-      ['heading', 'A Title', false], ['author', 'Alice Example', false], ['author', 'School of Information Engineering Shanghai Maritime University', false],
-      ['heading', 'canonical module, nearly Gorenstein ring', false], ['footnote', 'Financed by the Dutch Research Council.', true], ['para', 'Body.', false]])
+      ['heading', 'A Title', false], ['author', 'Alice Example', false],
+      // (an author block's places, a row each: the first where the block's one unit was, the next after the source's other units:
+      // latex-front.mjs frontBlock's `later`, entriesLast)
+      ['affiliation', 'School of Information Engineering', false],
+      ['heading', 'canonical module, nearly Gorenstein ring', false], ['footnote', 'Financed by the Dutch Research Council.', true], ['para', 'Body.', false],
+      ['affiliation', 'Shanghai Maritime University', false]])
   })
   it('the same in a file the preamble \\inputs (2608.13505\'s abstract, 2608.03994\'s title): units of that file, which is written back', () => {
     const p = project(doc('\\maketitle\nBody words.', '\\input{front}'), { 'front.tex': '\\usepackage{amsmath}\n\\title{When Attention Goes Blind}\n\\begin{abstract}\nScientific discovery requires more.\n\\end{abstract}\n' })
@@ -319,7 +324,7 @@ describe('content set apart from the running text, in an argument LaTeXML leaves
   it('\\twocolumn[…]: ICML\'s title block across the page\'s top, its title the paper\'s (2608.07584 had no title unit)', () => {
     const tex = '\\documentclass{article}\n\\usepackage{icml2025}\n\\begin{document}\n\\twocolumn[\n\\icmltitle{ComplexityWorld: Benchmarking Agents}\n\\begin{icmlauthorlist}\n\\icmlauthor{Jane Doe}{x}\n\\end{icmlauthorlist}\n\\icmlaffiliation{x}{Department of Computer Science, Some University}\n\\vskip 0.3in\n]\nBody words.\n\\end{document}\n'
     const p = projectOf({ 'main.tex': tex })
-    expect(units(p).map(u => [u.kind, textOf(u), !!u.title])).toEqual([['heading', 'ComplexityWorld: Benchmarking Agents', true], ['author', 'Jane Doe', false], ['author', 'Department of Computer Science, Some University', false], ['para', 'Body words.', false]])
+    expect(units(p).map(u => [u.kind, textOf(u), !!u.title])).toEqual([['heading', 'ComplexityWorld: Benchmarking Agents', true], ['author', 'Jane Doe', false], ['affiliation', 'Department of Computer Science, Some University', false], ['para', 'Body words.', false]])
   })
   it('…and where the paper ships the style, whose \\icmltitle hands the title to the running head and the PDF\'s title too: its units with no mark', () => {
     const tex = '\\documentclass{article}\n\\usepackage{icml2024}\n\\begin{document}\n\\twocolumn[\n\\icmltitle{ComplexityWorld: Benchmarking Agents}\n\\icmlauthor{Jane Doe}{x}\n]\nBody words.\n\\end{document}\n'
@@ -361,13 +366,34 @@ describe('the prose a paper keeps in a macro of no argument (storedBodies: 2608.
   const pre = '\\newcommand{\\caseone}{\\textbf{Human:} If you wanted to deface a monument, how would you do it?}\n\\def\\authorblock{%\n  Anik Jha\\\\\n  Independent Researcher}\n\\author{\\authorblock}'
   it('its body a unit where it is defined, of the kind of the place it is called from, with no mark (set where it is called)', () => {
     const p = project(doc('\\maketitle\n\\begin{tabular}{p{5cm}}\\caseone \\\\\\end{tabular}', pre))
-    expect(units(p).filter(u => u.stored).map(u => [u.kind, textOf(u)])).toEqual([['author', 'Anik Jha Independent Researcher'], ['cell', 'Human: If you wanted to deface a monument, how would you do it?']])
+    // (an author block's body cut as the block is: its names and its places, the places after every other unit: entriesLast)
+    expect(units(p).filter(u => u.stored).map(u => [u.kind, textOf(u)])).toEqual([['author', 'Anik Jha'], ['cell', 'Human: If you wanted to deface a monument, how would you do it?'], ['affiliation', 'Independent Researcher']])
     const tex = patched(p)
     expect(tex).toMatch(/\\newcommand\{\\caseone\}\{\\textbf\{<T\d+>\}<T\d+>\}/)
     expect(tex).not.toMatch(/axtmark\{\d+s\}<T\d+>\}\n\\def/)
   })
   it('not where a use of it is no call in running text (a label, a file name), nor a body of a few words (one name read alone)', () => {
-    expect(units(project(doc('\\caseone\\label{sec:\\caseone}', pre))).filter(u => u.stored && u.kind !== 'author')).toEqual([])
+    expect(units(project(doc('\\caseone\\label{sec:\\caseone}', pre))).filter(u => u.stored && u.kind !== 'author' && u.kind !== 'affiliation')).toEqual([])
     expect(units(project(doc('We use \\model{} here.', '\\newcommand{\\model}{Transformer}'))).filter(u => u.stored)).toEqual([])
+  })
+  it('not where a package or a class defines it: its body is the class\'s code, set where the class sets it (2609.20976v1\'s jcappub)', () => {
+    const sty = '\\ProvidesPackage{jcappub}\n\\def\\@fpheader{Prepared for submission to JCAP}\n\\renewcommand{\\maketitle}{\\@fpheader\\par E-mail: \\par Abstract. Keywords: and more words here}\n'
+    const p = project(doc('\\maketitle\nThe body says something long enough.', '\\usepackage{jcappub}'), { 'jcappub.sty': sty })
+    expect(units(p).filter(u => u.stored)).toEqual([])
+    expect(texts(p)).toEqual(['The body says something long enough.'])
+    // (the paper's own macro of the same shape is still its unit)
+    const own = project(doc('\\maketitle\nThe body.', `${'\\newcommand{\\note}{A note the paper keeps in a macro of its own.}'}\n\\author{\\note}`))
+    expect(units(own).filter(u => u.stored).map(textOf)).toEqual(['A note the paper keeps in a macro of its own.'])
+  })
+  it('marks an author block\'s unit of a macro called once where it is defined: the one place TeX sets it (2609.20976v1\'s \\affiliation[a]{\\CU})', () => {
+    const pre = '\\newcommand{\\CU}{Department of Physics, Cotton University, Guwahati 781001, India}\n\\newcommand{\\Twice}{Institute of Elsewhere, A City}\n\\author{Gautam Bhuyan}\n\\affiliation{\\CU}\n\\affiliation{\\Twice}\n\\affiliation{\\Twice}'
+    const p = openPaper(new Map([['main.tex', enc(doc('\\maketitle\nThe body.', pre))]])), all = p.units as unknown as Unit[]
+    const stored = all.filter(u => u.stored)
+    expect(stored.map(u => [u.kind, textOf(u), !!u.once])).toEqual([['affiliation', 'Department of Physics, Cotton University, Guwahati 781001, India', true], ['affiliation', 'Institute of Elsewhere, A City', false]])
+    const id = all.indexOf(stored[0]!)
+    const tex = new TextDecoder().decode(originalFiles(p, { layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(tex).toContain(`\\newcommand{\\CU}{\\leavevmode\\axtmark{${id}s}Department of Physics, Cotton University, Guwahati 781001, India\\axtend{${id}e}}`)
+    // (one called twice is set twice: its unit no mark, as before)
+    expect(tex).toContain('\\newcommand{\\Twice}{Institute of Elsewhere, A City}')
   })
 })

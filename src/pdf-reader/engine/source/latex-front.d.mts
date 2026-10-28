@@ -10,7 +10,7 @@ export declare function inMemory(map: Map<string, Uint8Array>): { list(): string
 /** `inFloat`: the indices in `units` (rising) of the units written inside a float — figure, table (starred or not), wrapfigure,
  *  sidewaystable, algorithm, listing, and whatever they hold; a longtable is none. Beside the units, in no unit's hash, text,
  *  bundle row or patched source */
-export declare function loadProject(fsys: ReturnType<typeof inMemory>, main: string, options?: { tables?: boolean }): { units: SourceUnit[]; inFloat: number[]; inputenc: string | null; complete: [string, number][] }
+export declare function loadProject(fsys: ReturnType<typeof inMemory>, main: string, options?: { tables?: boolean }): { units: SourceUnit[]; inFloat: number[]; inputenc: string | null; complete: [string, number][]; bibliography: string[] }
 /** the paper's macros that read nothing past their own arguments, as [name, arity], from their definitions in the package's files */
 export declare function completeMacros(files: readonly { file?: string; text: string }[]): [string, number][]
 /** a main file's \begin{document} and \end{document} as TeX finds them: -1 for `begin` and `body` where it has none */
@@ -25,6 +25,8 @@ export type UnitMark = { start: string; end: string; before?: string; whole?: bo
 export declare function patch(project: { units: SourceUnit[] }, translated: Map<SourceUnit, unknown[]>, options?: { guardControlWords?: boolean; mark?: (unit: SourceUnit) => UnitMark; spans?: { file: string; unit: SourceUnit; from: number; to: number; post?: number; outer?: SourceUnit }[] | null; pastBegin?: boolean }): Map<string, Uint8Array>
 export declare function markUnits(units: SourceUnit[], translated?: Map<SourceUnit, unknown[]> | null): (unit: SourceUnit) => UnitMark
 /** the front matter's units' marks in the layout compile alone: an author block's, a front unit's (not a heading, not one a macro only stores), its text no other's */
+/** whether a unit is of an author block: its names (kind author) or its places (kind affiliation) */
+export declare function inAuthorBlock(unit: { kind?: string } | null | undefined): boolean
 export declare function frontMarks(units: readonly SourceUnit[]): (unit: SourceUnit) => UnitMark
 /** a style's abstract heading written out, made to go by \\abstractname */
 export declare function localizeNames(text: string): string

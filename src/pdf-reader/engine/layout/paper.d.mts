@@ -87,6 +87,22 @@ export declare function markedOfPaper(paper: Paper, o: MarkedCompileOptions): Pr
   | { refused: MarkedRefusal; why?: string; limit?: RefusalLimit; own?: OwnVerdict; ms: Record<string, number>; cm?: ConvergeRecord; guard?: GuardRecord }
 >
 
+/** why madeBibliography made no entries (paper.mjs madeBibliography's comment) */
+export type BibliographyKept = 'shipped' | 'none' | 'biblatex' | 'bib-missing' | 'engine' | 'compile' | 'no-files' | 'aux-jobs' | 'biber' | 'no-bbl' | 'moved'
+/**
+ * The bibliography BibTeX makes of a paper that ships none (PDF-READER §19.13): one draft pass of the unmarked original with
+ * BibTeX, its files asked, and the paper opened again with the job's .bbl it wrote (`made`, its path and bytes, which the
+ * host's every later compile and every opening of the paper must hold as the package's own file), its entries units after
+ * every other, every other unit and name the bundle's byte for byte as before; else why not (`kept`) and the paper as it was.
+ * `ms`, the call's wall. Never throws, but a failed allocation
+ */
+/** why madeBibliography would make no .bbl of a paper before any compile, or null where it asks its pass */
+export declare function bibliographyKept(paper: Paper): Extract<BibliographyKept, 'shipped' | 'none' | 'biblatex' | 'bib-missing'> | null
+export declare function madeBibliography(paper: Paper, o: { compile(req: CompileRequest): Promise<Compiled>; compilerOf?: (() => Promise<string | null>) | null; engines?: readonly string[] | null }): Promise<
+  | { paper: Paper; made: { path: string; bytes: Uint8Array }; ms: number }
+  | { kept: BibliographyKept; ms: number }
+>
+
 /**
  * The host's handover to another TeX Live tree, over a refusal's `own` (the TL2023 plan §2.3): the year of the tree to
  * compile the paper on next, or null. Where TeX failed on the paper's own source (it did not run through, or ran through

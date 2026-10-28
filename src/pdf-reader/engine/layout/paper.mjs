@@ -21,8 +21,9 @@
 //      anchored by (their words read from the same pages)
 // The compile and the opening are the caller's (a native TeX Live and PDF.js in Node, the TeX page and a worker in a
 // browser), so that this imports neither PDF.js nor a `node:*` module.
-import { jobName, lastTexLog, latin1, latin1Bytes } from '../source/latex-front.mjs'
-import { DRAFT_OPTION, listsMissing, notFound, originalFiles, probeFiles, ranThrough } from '../pipeline/live.mjs'
+import { jobName, lastTexLog, latin1, latin1Bytes, normalizePath, texText } from '../source/latex-front.mjs'
+import { DRAFT_OPTION, listsMissing, notFound, openPaper, originalFiles, probeFiles, ranThrough } from '../pipeline/live.mjs'
+import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { auxUnits, engineUnknown, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.mjs'
 import { DRIVER_OUTPUT_MARK, driverLostInk, driverOutputGiven, driverOutputTruncated, finalCheck, markTextOf } from './base.mjs'
@@ -33,6 +34,77 @@ const GUARD_EXTRA = 2
 
 /** the compilers of arXiv's routes a host may name for a paper (guard.mjs compilerOfPdf) */
 const COMPILERS = new Set(['latex', 'pdflatex', 'xelatex', 'lualatex'])
+/** a package that names no compiler has one guessed from its files (paper-meta.mjs); arXiv's PDF says how it was made —
+ *  compilerOfPdf, the host's `compilerOf` —, and that is the compiler of every compile and of the marks the probe is written
+ *  with: the paper's meta is set to it before the first. Any failure of the host's but a failed allocation leaves the guess */
+async function compilerAsked(paper, compilerOf) {
+  if (!paper.meta?.compilerGuessed || typeof compilerOf !== 'function') return
+  try {
+    const said = await compilerOf()
+    if (COMPILERS.has(said)) Object.assign(paper.meta, { compiler: said, compilerGuessed: false, compilerFrom: 'pdf' })
+  } catch (e) { if (isMemoryError(e)) throw e }
+}
+
+/** why madeBibliography would make no .bbl of a paper before any compile (`shipped`, `none`, `biblatex`, `bib-missing`), or null:
+ *  it asks its pass. For a host that orders its steps by it (the web's prepare decides the paper's tree before the pass, so that
+ *  the .bbl is the tree's that compiles it) */
+export function bibliographyKept(paper) {
+  if (paper.meta.bbl) return 'shipped'
+  const named = paper.project.bibliography ?? []
+  if (!named.length) return 'none'
+  if (paper.meta.biblatex) return 'biblatex'
+  if (named.some(n => !paper.fsys.read(normalizePath(n.endsWith('.bib') ? n : `${n}.bib`)))) return 'bib-missing'
+  return null
+}
+/** an entry's unit (latex-front.mjs bibliography: one unit an entry) */
+const ENTRY = 'reference'
+/**
+ * The bibliography BibTeX makes of a paper that ships none (PDF-READER §19.13; the owner's ruling of 2026-10-28: a .bbl the
+ * compile makes is a shipped one): where the walk met \\bibliography{…} (the front end's `bibliography`), the package holds no
+ * job's .bbl and loads no biblatex, and every .bib it names is the package's, one pass of the unmarked original (guard.mjs
+ * unmarkedFiles) as a draft, with the bibliography step (`bibtex`: BibTeX on the job's aux, CM's first draft's request), its
+ * files asked. Its `<job>.bbl`, a thebibliography, is the job's .bbl the paper is opened with again (live.mjs openPaper): its
+ * entries are units after every other (latex-front.mjs entriesLast), and every compile after this one reads it as a shipped
+ * one (`meta.bbl`: written back marked, no BibTeX run over it). The paper's other units must be the same with it and without:
+ * every unit before the entries, and the paper's names after them, the bundle's byte for byte (bundleUnitsOf), else the paper
+ * stays as it was. Gives { paper, made: { path, bytes }, ms } with the entries, else { kept, ms } with why there are none:
+ * `shipped` (the package holds the job's .bbl), `none` (no \\bibliography), `biblatex` (biber's data is no text), `bib-missing`
+ * (a .bib it names is not the package's: latexmk -norc runs no BibTeX then, and nor does the marked compile), `engine` (the
+ * host runs no such compiler), `compile` (the pass did not run through, or the host threw), `no-files` (none returned),
+ * `aux-jobs` (another job's bibliography beside the main one's: chapterbib, multibib, bibunits), `biber` (the pass wrote a
+ * .bcf), `no-bbl` (no thebibliography, or one of no \\bibitem), `moved` (another unit changed with it). `compilerOf`, as
+ * markedOfPaper's: asked before the pass, and the paper opened again keeps what it said. Never throws but a failed allocation
+ */
+export async function madeBibliography(paper, { compile, compilerOf = null, engines = null }) {
+  const t0 = performance.now()
+  const done = r => ({ ...r, ms: Math.round(performance.now() - t0) })
+  const { main } = paper.project, job = jobName(main)
+  const before = bibliographyKept(paper)
+  if (before) return done({ kept: before })
+  await compilerAsked(paper, compilerOf)
+  const engine = paper.meta.compiler
+  if (Array.isArray(engines) && !engines.includes(engine)) return done({ kept: 'engine' })
+  let c = null
+  try { c = await compile({ main, engine, rerun: false, bibtex: true, overrides: unmarkedFiles(paper), draft: true, files: true }) } catch (e) { if (isMemoryError(e)) throw e }
+  if (!ranThrough(c)) return done({ kept: 'compile' })
+  if (!c.files) return done({ kept: 'no-files' })
+  if (otherBibJobs(c.files, main)) return done({ kept: 'aux-jobs' })
+  if (bibMissing(c.files, paper.fsys)) return done({ kept: 'bib-missing' })
+  if (c.files.has(`${job}.bcf`)) return done({ kept: 'biber' })
+  const bytes = c.files.get(`${job}.bbl`)
+  if (!bytes || !/\\begin\s*\{thebibliography\}/.test(texText(bytes)) || !/\\bibitem(?![A-Za-z@])/.test(texText(bytes))) return done({ kept: 'no-bbl' })
+  const path = `${job}.bbl`
+  let again
+  try { again = openPaper(new Map([...paper.fsys.list().map(p => [p, paper.fsys.read(p)]), [path, bytes]])) } catch (e) { if (isMemoryError(e)) throw e; return done({ kept: 'moved' }) }
+  // (the units before the entries and the names after them, the bundle's as they were; the entries every one of kind ENTRY)
+  const was = bundleUnitsOf(paper), now = bundleUnitsOf(again), n = paper.units.length, k = again.units.length - n
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+  if (k <= 0 || !same(now.slice(0, n), was.slice(0, n)) || !same(now.slice(n + k), was.slice(n)) || !again.units.slice(n).every(u => u.kind === ENTRY)) return done({ kept: 'moved' })
+  if (paper.units.some((u, i) => u.file !== again.units[i].file || u.start !== again.units[i].start || u.end !== again.units[i].end)) return done({ kept: 'moved' })
+  Object.assign(again.meta, { compiler: paper.meta.compiler, compilerGuessed: paper.meta.compilerGuessed, ...(paper.meta.compilerFrom ? { compilerFrom: paper.meta.compilerFrom } : {}) })
+  return done({ paper: again, made: { path, bytes } })
+}
+
 /**
  * A paper's marked original (paper.d.mts), the layout marks' stages 1 and 2 without the reading: the marked compile's PDF, its
  * last pass's log and the options readMarked reads it with (`engine`, `classes`, the probe's answers; the units and the
@@ -93,15 +165,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     const t0 = performance.now()
     try { return await run() } catch (e) { if (isMemoryError(e)) throw e; return null } finally { ms[name] = Math.round(performance.now() - t0) }
   }
-  // (a package that names no compiler has one guessed from its files, paper-meta.mjs; arXiv's PDF says how it was made —
-  // compilerOfPdf, the host's `compilerOf` —, and that is the compiler of every compile and of the marks the probe is written
-  // with: the paper's meta is set to it before the first. Any failure of the host's but a failed allocation leaves the guess)
-  if (paper.meta?.compilerGuessed && typeof compilerOf === 'function') {
-    try {
-      const said = await compilerOf()
-      if (COMPILERS.has(said)) Object.assign(paper.meta, { compiler: said, compilerGuessed: false, compilerFrom: 'pdf' })
-    } catch (e) { if (isMemoryError(e)) throw e }
-  }
+  await compilerAsked(paper, compilerOf)
   const { main } = paper.project, engine = paper.meta.compiler
   if (Array.isArray(engines) && !engines.includes(engine)) return { refused: 'engine', why: `the paper is compiled by ${engine ?? 'no named engine'}, which the host does not run`, ms }
   // (each compile's wall as the host counts it, its `ms`, else as long as it took here — what the host's compile budget is
