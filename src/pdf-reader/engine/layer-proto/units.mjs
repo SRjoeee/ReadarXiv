@@ -19,6 +19,20 @@ export const EDGES = Object.freeze(['lead', 'trail', 'inner'])
 export const CELL = Object.freeze(['table', 'row', 'col', 'span', 'head'])
 /** a structural name's unit (bundleUnitsOf): no page's ink, a word of the target's for the layer */
 export const NAME_KIND = 'name'
+/**
+ * The hover's ids of babel's names (layout/file.mjs `names`: References, Abstract, Contents, …), which are no unit of the bundle's
+ * (they are drawn in the target's word, R.labels, never translated): one an occurrence, NAME_ID_FROM + its occurrence, from past
+ * every id a bundle holds (format.mjs UNIT_ID_MAX, 3 500 000, a chunk that comes after the head's included: no bundle id reaches
+ * one, however the bundle grows) to below 2^31 (the view's token owners are an Int32Array). The layer draws a name's words under
+ * it (run.mjs paintNames), the left lights the name's original by its box (view/shapes.mjs createShapes), as a heading
+ */
+export const NAME_ID_FROM = 2 ** 22
+/** the greatest occurrence an id is made for: past it, a name is lit nowhere */
+export const NAME_OCCURRENCE_MAX = 2 ** 31 - 1 - NAME_ID_FROM
+/** an occurrence's hover id, or null for one that is not an occurrence or is past NAME_OCCURRENCE_MAX */
+export const nameOccurrenceId = occurrence => (Number.isInteger(occurrence) && occurrence >= 0 && occurrence <= NAME_OCCURRENCE_MAX ? NAME_ID_FROM + occurrence : null)
+/** whether a hover id is a babel name's occurrence's */
+export const isNameOccurrence = id => Number.isInteger(id) && id >= NAME_ID_FROM
 /** a unit's kind, a lower-case word */
 const KIND = /^[a-z]{1,32}$/
 /** an ink unit's kind (layout/ink-units.mjs INK_KIND's): `ink` and its class */

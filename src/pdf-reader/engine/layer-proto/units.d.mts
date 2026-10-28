@@ -16,6 +16,11 @@ export type BundleUnit = [kind: string, flags: number, depth: number | null, cel
 export type InkBundleUnit = [kind: string, flags: 0, depth: null, cell: null, edges: null, pieces: BundlePiece[], echo: number | null]
 /** the structural name's unit kind (its units after the source's: bundleUnitsOf) */
 export declare const NAME_KIND: 'name'
+/** the hover's ids of babel's names: one an occurrence, past every bundle id, below 2^31 */
+export declare const NAME_ID_FROM: number
+export declare const NAME_OCCURRENCE_MAX: number
+export declare const nameOccurrenceId: (occurrence: number) => number | null
+export declare const isNameOccurrence: (id: number) => boolean
 /** the bundle's units from openPaper's paper (its `units` and `kept`, then a unit of kind `name` for each of its `names`);
  *  throws on a piece the front end does not make */
 export declare function bundleUnitsOf(paper: { units: readonly SourceUnit[]; kept: ReadonlySet<SourceUnit>; names?: readonly string[] }): BundleUnit[]

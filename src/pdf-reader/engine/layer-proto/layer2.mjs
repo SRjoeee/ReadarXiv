@@ -809,6 +809,7 @@ const NO_SMALL_CAPS = Object.freeze({ small: new Set(), upper: new Set(), lower:
  */
 function smallCapsOf(unit, uc, O, S, pair) {
   if (!pair || typeof unit?.src !== 'string') return NO_SMALL_CAPS
+  if (INK_KIND.test(unit.kind ?? '')) return inkSmallCaps(unit, uc, O, pair)
   // (a faked small capital is set at most SMALL_CAPS_SHARE of a median no larger than the unit's largest glyph, and a unit of the
   // text's capitals sets as lowercase letters fewer than half of its source's: where no capital of the unit's is that small and
   // its page sets half its source's lowercase letters or more, neither is, and the walk below is not made, the reading of nearly
@@ -868,6 +869,33 @@ function smallCapsOf(unit, uc, O, S, pair) {
   }
   // (their share of the capitals' size, to the hundredth: each glyph's size is the PDF's own, so one tells it exactly)
   return sizes.length ? { small, upper, lower, letters, src, ratio: Math.round((100 * median(sizes)) / ref) / 100 } : { small, upper, lower, letters, src }
+}
+/** an ink unit's kind (rules/content-classes.mjs: inkheads, inkorphan, …): its source our page's own text, its case as drawn */
+const INK_KIND = /^ink/
+/**
+ * An ink unit's faked small capitals, by their size alone: its source is our page's own text, its case as drawn (rows.mjs unitOf's
+ * `src`, the glyphs' characters), so no letter of it tells a case change, and smallCapsOf's walk finds none. Where every cased
+ * glyph of it is a capital (a faked small capital is one), a capital set at SMALL_CAPS_SHARE or less of the size its full letters
+ * are (those past SMALL_CAPS_SHARE of its largest) is a faked one, read as a source unit's is: its size its full letters', set in
+ * small capitals (a running head in a Times \scshape, its "R" at 12 and "EFERENCES" at 9.6, drawn at 9.6 as source headings
+ * beside it were drawn at 12). A unit with a lowercase glyph is read as before (a paragraph with a drop cap is none)
+ */
+function inkSmallCaps(unit, uc, O, pair) {
+  const letters = []
+  for (let q = 0; q < O.length; q++) {
+    if (pair[q] < 0) continue
+    for (let i = O[q].start; i <= O[q].end; i++) {
+      const c = uc[i]
+      if (c && !c.sep && !c.space && c.st && c.st.fam !== 'math' && c.size > 0 && /\S/.test(c.ch)) letters.push(c)
+    }
+  }
+  if (!letters.length || letters.some(c => cased(c.ch) && c.ch !== c.ch.toUpperCase())) return NO_SMALL_CAPS
+  let big = 0
+  for (const c of letters) if (c.size > big) big = c.size
+  const ref = median(letters.filter(c => c.size > SMALL_CAPS_SHARE * big).map(c => c.size))
+  const small = new Set(letters.filter(c => cased(c.ch) && c.size <= SMALL_CAPS_SHARE * ref))
+  if (!small.size) return NO_SMALL_CAPS
+  return { small, upper: new Set(), lower: new Set(small), letters, src: [...unit.src], ratio: Math.round((100 * median([...small].map(c => c.size))) / ref) / 100 }
 }
 /**
  * Whether `chars` ({ st, small, lower }) are set in small capitals: what most of the glyphs that can tell hold, a tie to none.
@@ -1148,6 +1176,23 @@ export function nameInTarget(name, own, labels, to) {
   if (!word) return null
   const text = name.capitals ? word.toLocaleUpperCase(to) : word
   return text.replace(/\s+/g, '') === String(own ?? '').replace(/\s+/g, '') ? null : text
+}
+/**
+ * A babel name's size and whether it is set in faked small capitals, read off its characters on the page as a unit's are
+ * (originalStyle over smallCapsOf, unitSizeOf): where the class changed its case (the file's `capitals`: its glyphs capitals, its
+ * own text not), a capital set at SMALL_CAPS_SHARE of the name's largest letter or less is a faked small capital, and the name's
+ * size is the median of its other letters', the size TeX was asked for. `name.size` (the file's: its glyphs' most) where none of
+ * its characters tells one. 2010.11929v2 p9: ICLR's \sc "REFERENCES", its "R" at 12 and "EFERENCES" at 9.6, had its Chinese
+ * drawn at 9.6, the source headings beside it ("5 CONCLUSION", "ACKNOWLEDGEMENTS") at 12
+ */
+export function nameStyleOf(chars, name) {
+  const letters = (chars ?? []).filter(c => c.size > 0 && /\S/.test(c.ch ?? '') && c.st?.fam !== 'math')
+  if (!letters.length) return { size: name.size, small: false }
+  let big = 0
+  for (const c of letters) if (c.size > big) big = c.size
+  const small = new Set(name.capitals ? letters.filter(c => cased(c.ch) && c.ch === c.ch.toUpperCase() && c.size <= SMALL_CAPS_SHARE * big) : [])
+  const rest = letters.filter(c => !small.has(c))
+  return { size: rest.length ? median(rest.map(c => c.size)) : name.size, small: small.size > 0 }
 }
 /** a label's characters as its text: in reading order, a space where two stand a fifth of their size apart (a layout file's
  *  label box gives its glyphs, and no spaces: "Definition5.1(") */
@@ -4281,8 +4326,26 @@ export function nameRuns(text, face, to) {
   const runs = caseRuns(text, SMALL_CAPS_RATIO, upperOf(to))
   return { face: { ...face, caps: false }, runs, text: runs.map(r => r.s).join('') }
 }
-/** nameRuns' word's width at size 1 (PDF units per unit of size): each run's in the face at its share */
-export const runsWidth = ({ face, runs }) => runs.reduce((a, r) => a + widthOf(r.s, face) * r.k, 0)
+/**
+ * A name's word in its runs by script, as a unit's words are drawn (tokensOf2): its CJK characters (the rules' class, cjkClassRe of
+ * `quotes`) in the target's CJK face, every other (a Latin word, a digit, a space) in the Latin face (`faceOf(cls)`, cls 'cjk' or
+ * 'latin'), each run's small capitals the layer's where its face has none (nameRuns): { face (the first run's), runs: [{ s, k,
+ * face }], text }. The CJK faces served hold no Latin letter or digit, so that one face for the whole of a word of two scripts
+ * (an ideograph's word with a letter or a digit after it) refused it whole, its name left the original's
+ */
+export function nameScriptRuns(text, faceOf, to, quotes) {
+  const re = cjkClassRe(quotes), parts = []
+  for (const ch of text) {
+    const cls = re.test(ch) ? 'cjk' : 'latin', last = parts.at(-1)
+    if (last?.cls === cls) last.s += ch
+    else parts.push({ cls, s: ch })
+  }
+  const runs = []
+  for (const p of parts) { const r = nameRuns(p.s, faceOf(p.cls), to); for (const q of r.runs) runs.push({ s: q.s, k: q.k, face: r.face }) }
+  return { face: runs[0]?.face ?? faceOf('latin'), runs, text: runs.map(r => r.s).join('') }
+}
+/** nameRuns' (or nameScriptRuns') word's width at size 1 (PDF units per unit of size): each run's in its face at its share */
+export const runsWidth = ({ face, runs }) => runs.reduce((a, r) => a + widthOf(r.s, r.face ?? face) * r.k, 0)
 /**
  * A babel name drawn in the target's word (run.mjs paintNames) as SVG: one <text> at its baseline (`baseline`, from `x`,
  * PDF units), its word in `face` at `size`, the face's own size correction applied, an oblique face skewed about its
@@ -4293,13 +4356,18 @@ export function svgOfName({ occurrence, text, x, baseline, size, face, color = n
   const [px, py] = toPx(x, baseline)
   const fill = color ? ` fill="${fillAttr(color)}"` : ''
   // (small capitals the layer draws itself, nameRuns': each run of one case a <tspan> at its own x, at its share of the size)
+  // (and its runs by script, nameScriptRuns': each in its own face, `r.face`, at its own x)
   let span = '', at = x
   if (runs?.length && !(runs.length === 1 && runs[0].k === 1)) {
     for (const r of runs) {
-      span += `<tspan class="${faceClass(face)}" x="${n2(toPx(at, baseline)[0])}" y="${n2(py)}" font-size="${n2(size * scale * (face.size ?? 1) * r.k)}"${fill}>${esc(r.s)}</tspan>`
-      at += widthOf(r.s, face) * r.k * size
+      const f = r.face ?? face
+      span += `<tspan class="${faceClass(f)}" x="${n2(toPx(at, baseline)[0])}" y="${n2(py)}" font-size="${n2(size * scale * (f.size ?? 1) * r.k)}"${fill}>${esc(r.s)}</tspan>`
+      at += widthOf(r.s, f) * r.k * size
     }
-  } else span = `<tspan class="${faceClass(face)}" x="${n2(px)}" y="${n2(py)}" font-size="${n2(size * scale * (face.size ?? 1))}"${fill}>${esc(runs?.[0]?.s ?? text)}</tspan>`
+  } else {
+    const f = runs?.[0]?.face ?? face
+    span = `<tspan class="${faceClass(f)}" x="${n2(px)}" y="${n2(py)}" font-size="${n2(size * scale * (f.size ?? 1))}"${fill}>${esc(runs?.[0]?.s ?? text)}</tspan>`
+  }
   const line = face.oblique ? `<text transform="translate(${n2(px)} ${n2(py)}) skewX(${-face.oblique}) translate(${-n2(px)} ${-n2(py)})">${span}</text>` : `<text y="${n2(py)}">${span}</text>`
   return `<g data-n="${occurrence}">${line}</g>`
 }

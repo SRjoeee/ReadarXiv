@@ -237,7 +237,9 @@
 //     after it, an empty group after it and a group around it alone none of the text (latex-front.mjs letterCommand): it went
 //     out as a marker, and the same paper's `{\\L}ukasz Kaiser` came back as "Ł ukasz Kaiser"; an \\ifmmode in a paragraph's text
 //     is its \\else, one letter there in its word (ifmmodeLetter: REVTeX's `Louren\\ifmmode~\\mbox{\\c{c}}\\else \\c{c}\\fi{}o`, read
-//     as "Louren ç ç o"), its first branch no text; the pairs such a span held spend their ids as before (pairsOf)
+//     as "Louren ç ç o"), its first branch no text; the pairs such a span held spend their ids as before (pairsOf). In the same release
+//     the left side's marks gain the figure units' (pipeline/ink-pass.mjs figureAnchors: arXiv's tokens in a level label's band),
+//     so that a figure's label lights its original on hover (the owner's report on 2010.11929v2 p9, the follow-up of #487)
 export const PIPELINE_VERSION = '31'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
