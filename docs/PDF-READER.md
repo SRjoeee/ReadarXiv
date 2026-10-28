@@ -2242,6 +2242,24 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     macro's word (a letter or a digit on its baseline at its size: its text then ended inside the word, the review of #483),
     LOST as before. The wrap is given no texts, and reads as
     it did.
+  - *A piece with text after it, and a .bbl's own macros* (2610.20848v1's elsarticle entries, `\newblock \DOIprefix\doi{…}.`:
+    `\DOIprefix` gets its opening mark alone, `\doi{…}` after it none, and with text after the `\doi` no marked piece ends their
+    ink: the wrap left 35 entries the original's). The split takes a piece followed by text, then by a piece of its unit's ends,
+    too (`followsOf`: that text as an opening's, `want`, `rest`, `ends`): its ink ends where that text begins (`textTo`, so that
+    the DOI's own dots are none of the full stop's). The piece may be a paper's macro that is no text symbol (`\doi`), and the
+    macro's text may end in punctuation ("doi:"), read character for character as before. The wrap gives `followsOf` its texts
+    and owns the two as the macro's (`through`'s reading), the maker parts them. And the mark probe sets the .bbl's own
+    `\providecommand`s first (`live.mjs bblProvides`, the .bbl's lines before its first `\bibitem`): TeX reads them only where
+    `\bibliography` stands, so the probe knew none of the entries' macros, their calls an error there and no text.
+    `\providecommand` defines only what is undefined, as it does where the .bbl is read. Measured: over the 32 papers against
+    the look-ahead pairs' head, drawn gained 2 (2212.06817v2 u187's `\algname\footnote{…}` and 2608.18685v1 u9's
+    `\methodname\footnote{…}`, text after the call), lost 0, every base page pixel for pixel the same; with the bibliography's
+    entries units (the references branch's `--made`), over 2610.20848v1, 2608.16117v1, 2608.12606v1 and 2610.34042v1, drawn
+    gained 39 (2610.20848v1's 35 entries; 2608.16117v1 u186, u190, u199, u202, a `\URLprefix` before its `\url` among them,
+    answered now the probe knows it), lost 0, the entries the wrap leaves the original's 45 to 6, every base page pixel for
+    pixel the same. The 6 are other shapes: an entry's `\&` LOST (2608.12606v1 3, 2610.34042v1 2), `\dodoi{…}` alone at an
+    entry's end (2608.12606v1 u175), `{\DJ}uri…` (2608.16117v1 u207). The gate pack's layout files and base pages are
+    `690d0e19`'s byte for byte.
   - Measured (2026-10-28, `lab/pdf/spikes/classes-gate.mjs --compile`, production's path on each paper's year, against `next`
     2346530d unit by unit (and c038d549 before it alike), over the 25 papers of 170 local sources whose units hold the shape and the gate pack's 7): drawn
     (laid, no LOST piece: `locatedWhole`'s rule) gained 22, lost 0, in 10 papers (2609.20976v1 u4, u19, u41, u46, u59, u61;
