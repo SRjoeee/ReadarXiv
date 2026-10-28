@@ -160,6 +160,21 @@ export function layoutPage(L, p, { first, table, spans }) {
 }
 
 /**
+ * Units' tokens on a page given already (`spans` [id, tokens], each rising): a unit told after its page came (a babel name's,
+ * view/shapes.mjs createShapes), its tokens made again, the page's geometry let go. False where the page is not in
+ */
+export function layoutSpans(L, p, spans) {
+  if (!L.pt[p]) return false
+  for (const [id, tokens] of spans) {
+    ;(L.spans.get(id) ?? L.spans.set(id, new Map()).get(id)).set(p, tokens)
+    const u = L.told.get(id)
+    if (u) L.anchors.get(id).tokens = tokensOf(L, id, u.stream)
+  }
+  L.cache.delete(p)
+  return true
+}
+
+/**
  * A unit's stream told again, in a layout whose units' first tokens come with their pages rather than with the parts (the
  * right's on the layer, whose tokens are a laid page's words: layerShapes): its tokens made again, its pages' geometry let go.
  * False where the unit is not told or its stream is that already

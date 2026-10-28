@@ -30,6 +30,11 @@ const r3 = v => Math.round(v * 1000) / 1000
 const r6 = v => Math.round(v * 1e6) / 1e6
 const kindOf = v => (v === null ? 'null' : Array.isArray(v) ? 'an array' : typeof v)
 
+/** whether a figure unit's run is level, read left to right (its direction (ux, uy)): its translation's words are then in the
+ *  page's text layer and lit by the hover, its original anchored on the left (pipeline/ink-pass.mjs figureAnchors); a turned one's
+ *  are not selectable, and the figure's float lights it */
+export const levelRun = (ux, uy) => Math.abs(uy) < 1e-6 && ux > 0
+
 /** a figure unit (layout/wrap.mjs wrapFinal's `figures.units`, with its unit's id) as its row; a unit of no set its own, of no
  *  room none (room rounded down, so that a row never holds more than the maker found free) */
 export function figureRow(id, u) {

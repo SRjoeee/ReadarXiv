@@ -257,6 +257,11 @@ describe('pageFloats: figures', () => {
     const heads = [{ x0: 136, y0: 653, x1: 140, y1: 657 }, { x0: 216, y0: 653, x1: 220, y1: 657 }]
     const fs = pageFloats(layout, 1, [], { rules: [hrule(120, 140, 655), hrule(200, 220, 655)], marks: [...boxes, ...heads] })
     expect(fs.map(f => [f.id, f.kind, ...r1(f.region), [...f.members]])).toEqual([[0, 'figure', 60, 640, 280, 670, [5]]])
+    // (its labels a figure unit of the wrap's, anchored on the left: held as a drawing's text, the float found, a figure — Codex
+    // on #493)
+    const ink = side(ps, [[0, words(dd, 'figure', 'pipeline')], [5, words(dd, 'input', 'output')]], { 0: 'caption', 5: 'inkfigures' })
+    const got = pageFloats(ink, 1, [], { rules: [hrule(120, 140, 655), hrule(200, 220, 655)], marks: [...boxes, ...heads] })
+    expect(got.map(f => [f.id, f.kind, ...r1(f.region), [...f.members]])).toEqual([[0, 'figure', 60, 640, 280, 670, [5]]])
   })
 
   it('a float\'s kind is its caption\'s on both sides: a drawing whose text is located on one side only is a figure on both (floatsAgree)', () => {
