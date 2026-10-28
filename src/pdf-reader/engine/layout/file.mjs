@@ -143,7 +143,15 @@ export { LayoutRefusal } from './json.mjs'
  *  a head's or an entry's number is the page's own ink only where it stands apart from the line's text (ink-units.mjs APART: a
  *  folio, a section number) or is a running head's folio (another number where its words recur), one in its own words the
  *  unit's (2010.11929v2's head "… at ICLR 2021", its year drawn apart).
- *  The rows of the units they reach change, so a file of 24 is another maker's (the file's schema is 5 still) */
+ *  The rows of the units they reach change, so a file of 24 is another maker's (the file's schema is 5 still); and in the same
+ *  unreleased 25 (the mark probe's answers past a sample TeX gives up on, and a .bbl's own definitions): each box of the probe
+ *  ends at the group level it began at, the groups its sample left open closed (marks.mjs PROBE_UNWIND: 2010.11929v2's \\tikz,
+ *  asked alone, opened a picture it never closed, in which pgf's \\selectfont selects \\nullfont, and every box after it set
+ *  no character: its \\natexlab{a} and \\doi{…} read as setting no ink and given no row, 8 of its entries English, and a pair's
+ *  boxes, all empty, read as a mark that moves nothing), a box TeX set a character in \\nullfont in no answer; and the probe
+ *  sets a .bbl's definitions as its styles write them, its conditionals whole (live.mjs bblProvides: natbib's
+ *  `\\expandafter\\ifx\\csname urlstyle\\endcsname\\relax … \\fi`, its \\doi TeX's branch). The rows of the pieces they reach change
+ *  (2010.11929v2's 8 entries; MARKS_SCHEMA 12 still) */
 export const LAYOUT = '25'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
