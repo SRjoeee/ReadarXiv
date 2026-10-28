@@ -7,7 +7,7 @@
 // auth trigger scheduler.disconnect()), the reader waiting over half a translation. Hard rule 3: a failure must be recoverable and trigger the fallback chain.
 import type { TranslateCall, TranslateMessageResponse, TranslateService } from './translate-service'
 import { isPermanentErrorKind, type ProviderErrorKind, type TranslatedSegment, type TranslationProvider } from './types'
-import { chainLine, failureLine } from '@/shared/diagnostics'
+import { chainLine, failureLine, redact } from '@/shared/diagnostics'
 import { getRequestErrorMeta } from './request/retry-policy'
 
 export interface FallbackStep {
@@ -117,7 +117,9 @@ export function createFallbackService(
       // A configuration problem does not heal itself: demoted for good this session, no request wasted on trying (PERMANENT_ERROR_KINDS)
       ...(isPermanentErrorKind(error.kind) ? {} : { until: now() + cooldownMs }),
     })
-    console.warn(`[axt] ${step.provider.id} demoted (${error.kind}): ${error.message}`)
+    // the console keeps the endpoint's words for whoever is looking, a key in any shape the log knows taken out (#88 E4): an
+    // endpoint may echo the request's key in a refusal, and a console is pasted into issues
+    console.warn(`[axt] ${step.provider.id} demoted (${error.kind}): ${redact(error.message)}`)
     opts.warn?.(`[axt] ${step.provider.id} demoted: ${failureLine(error.kind, error.message, getRequestErrorMeta(error).statusCode)}`)
   }
 

@@ -359,6 +359,7 @@ const R: Locale['R'] = {
     noPdf: "This paper can't be read as a bilingual PDF yet",
     useHtml: 'Translate HTML instead',
     notNow: "The bilingual PDF can't be loaded right now",
+    limited: 'Too many requests for bilingual PDFs; try again later',
     noPaper: "The paper can't be found",
     goToArxiv: 'Go to arXiv',
     unreadable: 'The settings could not be read, so the defaults are in use',
@@ -378,4 +379,9 @@ const REASON: Locale['REASON'] = {
   aborted: '',
 }
 
-export const en = { S, O, R, REASON }
+const REASON_KEYLESS: Locale['REASON_KEYLESS'] = {
+  'no-key': "The service isn't ready yet",
+  auth: 'The service refused access',
+}
+
+export const en = { S, O, R, REASON, REASON_KEYLESS }

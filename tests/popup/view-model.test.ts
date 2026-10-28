@@ -158,6 +158,16 @@ describe('derivePopupView (UI.md §4)', () => {
     expect(v.note).toEqual({ text: 'deepseek-v4-flash：API Key 无效或已过期。本页已改用 Google 翻译', tone: 'info', settings: true })
     expect(v.primary.action).toBe('restore')
   })
+  it('a built-in service refused (a web translator\'s 401 or 403) or stopped on is never worded as an API key: no key was sent (#88 E5)', () => {
+    // Microsoft chosen, refused, Google taking over: the note names the refusal, not a key
+    const ms = { id: 'microsoft', kind: 'auth' as const, message: '401' }
+    const handed = { ...input('P6'), config: { ...input('P6').config!, provider: 'microsoft', services: [] }, page: { ...input('P6').page!, running: { provider: 'microsoft', target: 'cmn', engine: 'google-web', revision: 'r1' } }, rejected: [], saved: input('P6').saved, session: { ...input('P6').session!, providerId: 'microsoft', chosen: 'microsoft', engine: { id: 'google-web', demoted: ms }, demotions: [{ id: 'microsoft', kind: 'auth' as const, status: 401 }] } }
+    expect(derivePopupView(handed).note).toEqual({ text: 'Microsoft 翻译：翻译服务拒绝访问。本页已改用 Google 翻译', tone: 'info', settings: true })
+    // a page stopped on a refusal while a built-in is its service: the same words
+    const stopped = { ...input('P9'), config: { ...input('P9').config!, provider: 'google-web', services: [] }, page: { ...input('P9').page!, running: { provider: 'google-web', target: 'cmn', engine: 'google-web', revision: 'r1' } } }
+    expect(derivePopupView(stopped).note?.text).toBe('翻译服务拒绝访问。请检查设置后重新翻译')
+    expect(words(derivePopupView(handed)) + words(derivePopupView(stopped))).not.toMatch(/API Key/)
+  })
   it('P7 LLM without a key, another service takes over: note says which, translate stays enabled', () => {
     const v = view('P7')
     expect(v.note).toEqual({ text: 'LLM 尚未配置 API Key，本次将使用 Microsoft 翻译', tone: 'info', settings: true })

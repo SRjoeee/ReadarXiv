@@ -103,15 +103,18 @@ describe('the states (the reader\'s design, §8)', () => {
     expect(capsuleOf(at({ phase: 'ready', available: false, languageSupported: false, htmlVersion: null }), none)).toMatchObject({ kind: 'unavailable' })
   })
 
-  it('the bilingual version not to be had now (our server out of reach, or at its limit): said, with its retry and the HTML version where there is one; not closable, before the notice of passages (the layer-only plan\'s "Offline, drafted")', () => {
-    for (const why of ['unreachable', 'refused'] as const) {
-      expect(capsuleOf(at({ phase: 'ready', unavailable: { why, retryAt: null }, htmlVersion: 'https://arxiv.org/html/x#readarxiv' }), none), why).toEqual({ kind: 'notNow', words: plain(R.status.notNow), href: 'https://arxiv.org/html/x#readarxiv' })
-      expect(capsuleOf(at({ phase: 'ready', unavailable: { why, retryAt: 9 }, htmlVersion: null, failedUnits: 2 }), none), why).toEqual({ kind: 'notNow', words: plain(R.status.notNow) })
+  it('the bilingual version not to be had now (our server out of reach, S-R-24, or at its limit, S-R-26, each in its own words): said, with its retry and the HTML version where there is one; not closable, before the notice of passages (the layer-only plan\'s "Offline, drafted")', () => {
+    for (const [why, words] of [['unreachable', R.status.notNow], ['refused', R.status.limited]] as const) {
+      expect(capsuleOf(at({ phase: 'ready', unavailable: { why, retryAt: null }, htmlVersion: 'https://arxiv.org/html/x#readarxiv' }), none), why).toEqual({ kind: 'notNow', words: plain(words), href: 'https://arxiv.org/html/x#readarxiv' })
+      expect(capsuleOf(at({ phase: 'ready', unavailable: { why, retryAt: 9 }, htmlVersion: null, failedUnits: 2 }), none), why).toEqual({ kind: 'notNow', words: plain(words) })
     }
+    // a limit is not "can't be loaded": its words are its own, and say to come back later (#88 E5)
+    expect(R.status.limited).not.toBe(R.status.notNow)
+    expect(R.status.limited).toContain('稍后再试')
     // while a prepare or a translation is under way, the line says it
     expect(capsuleOf(at({ phase: 'translating', unavailable: { why: 'unreachable', retryAt: null } }), none)).toBeNull()
     // the words name no technical path: nothing of a server, a layer or how the PDF is made
-    for (const words of [R.status.notNow, R.status.preparing]) expect(words).not.toMatch(/server|layer|engine|TeX|compil|typeset|\u670d\u52a1\u5668|\u5f15\u64ce|\u6392\u7248|\u7f16\u8bd1/i)
+    for (const words of [R.status.notNow, R.status.limited, R.status.preparing]) expect(words).not.toMatch(/server|layer|engine|TeX|compil|typeset|\u670d\u52a1\u5668|\u5f15\u64ce|\u6392\u7248|\u7f16\u8bd1/i)
   })
 
   it('settings that could not be read: a note that stays while it is so, over a load that waits for them too; a failure\'s card has none beside it (S-R-21)', () => {
@@ -143,7 +146,12 @@ describe('the states (the reader\'s design, §8)', () => {
 
   it('nothing translated: the card, with the reason; 设置 for a key, 重试 otherwise; no capsule', () => {
     expect(cardOf(at({ phase: 'failed', failure: 'network' }))).toEqual({ reason: '网络连接失败', action: 'retry' })
-    expect(cardOf(at({ phase: 'failed', failure: 'no-key' }))).toEqual({ reason: '尚未配置 API Key', action: 'settings' })
+    // a key's reason is the key's where the service chosen is the reader's own; a built-in chosen names none (#88 E5)
+    const llm = { ...DEFAULT_CONFIG, provider: 'svc-abcd1234' }
+    expect(cardOf(at({ phase: 'failed', failure: 'no-key', settings: llm }))).toEqual({ reason: '尚未配置 API Key', action: 'settings' })
+    expect(cardOf(at({ phase: 'failed', failure: 'auth', settings: llm }))).toEqual({ reason: 'API Key 无效或已过期', action: 'settings' })
+    expect(cardOf(at({ phase: 'failed', failure: 'auth' }))).toEqual({ reason: '翻译服务拒绝访问', action: 'settings' })
+    expect(cardOf(at({ phase: 'failed', failure: 'no-key', settings: { ...DEFAULT_CONFIG, provider: 'chrome-builtin' } }))).toEqual({ reason: '翻译服务尚未就绪', action: 'settings' })
     expect(cardOf(at({ phase: 'failed', failure: 'auth' }))!.action).toBe('settings')
     expect(capsuleOf(at({ phase: 'failed', failure: 'network' }), none)).toBeNull()
   })
