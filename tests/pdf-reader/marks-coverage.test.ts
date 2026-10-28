@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { completeMacros, frontMarks, inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { bblProvides, openPaper, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { AHEAD_PROBE_MAX, aheadKey, aheadSamples, completeCall, completeCalled, followsOf, layoutMarking, MARK_CLASSES, markProbeTex, probeSamples, readInkApart, readInkProbe, readInkTexts, readMarkProbe, symbolText } from '@/pdf-reader/engine/layout/marks.mjs'
+import { AHEAD_PROBE_MAX, aheadKey, aheadSamples, completeCall, completeCalled, ENTRY_INK_MAX, followsOf, INK_MAX, inkSamples, layoutMarking, leadSamples, MARK_CLASSES, markProbeTex, probeSamples, readInkAnswers, readInkApart, readInkProbe, readInkTexts, readMarkProbe, symbolText } from '@/pdf-reader/engine/layout/marks.mjs'
 import { boundsFromMarks, tokenizeDocument, uprightToken } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 
 // The layout marks a placeholder gets where what stands beside it was guessed at: the paper's own macro taken to look ahead
@@ -409,6 +409,63 @@ describe('a sample that leaves TeX\'s state broken (2010.11929v2\'s \\tikz\\fill
     expect(readMarkProbe(punct, samples)['\\cite']).toBe('0000000x')
     const ahead = ['LAYOUT-PROBE 1 ahead-at 0 w', nullfont('w'), 'LAYOUT-PROBE 1 ahead 0 0', 'LAYOUT-PROBE 1 ahead-at 1 d', nullfont('w'), 'LAYOUT-PROBE 1 ahead 1 0'].join('\n')
     expect(Object.entries(readMarkProbe(ahead, samples)).filter(([k]) => k.includes('#'))).toEqual([['\\snr# #$\\geq 50$', 'x'], ['\\name{x}##\\cite{a}', '2']])
+  })
+})
+
+describe('the ink section\'s cap and a bibliography\'s entries (2608.25210v2: its body\'s 101 macros fill INK_MAX, its entries\' \\natexlab{} never asked)', () => {
+  const body = (n: number) => Array.from({ length: n }, (_, i) => unit([text('A '), ph(`\\m${i}{}`), text(' word.')]))
+  const entry = (...srcs: string[]) => ({ ...unit(srcs.flatMap(src => [text('Author. 2020'), ph(src), text('. ')])), kind: 'reference' }) as SourceUnit
+  const lead = (src: string) => ({ ...unit([ph(src), text(' Author. A title.')]), kind: 'reference' }) as SourceUnit
+  const listing = (i: number, ...nodes: string[]) => [`LAYOUT-PROBE 1 ink-at ${i}`, '> \\box60=', ...nodes, '', '! OK.', `LAYOUT-PROBE 1 ink-end ${i}`]
+  const chars = (s: string) => ['\\hbox(6.8+0.0)x40.0', ...[...s].map(c => `.\\OT1/cmr/m/n/10 ${c}`)]
+  it('the entries get a share of their own past the body\'s INK_MAX: a body that fills it leaves them asked', () => {
+    const units = [...body(INK_MAX + 5), entry('\\natexlab{}'), entry('\\natexlab{a}')]
+    const asked = inkSamples(units)
+    expect(asked).toHaveLength(INK_MAX + 2)
+    expect(asked.slice(INK_MAX)).toEqual(['\\natexlab{}', '\\natexlab{a}'])
+    // (at most ENTRY_INK_MAX of their own)
+    const many = [...body(2), ...Array.from({ length: ENTRY_INK_MAX + 3 }, (_, i) => entry(`\\e${i}{x}`))]
+    expect(inkSamples(many)).toHaveLength(2 + ENTRY_INK_MAX)
+  })
+  it('the share asks the calls the body\'s room would have asked first, in order, so that no entry is asked less than before; then the entries\' leads; then each call in order', () => {
+    const few = [entry('\\natexlab{a}', '\\doi{10.1/x}'), entry('\\natexlab{b}', '\\doi{10.2/y}'), entry('\\natexlab{}', '\\natexlab{c}')]
+    expect(inkSamples(few)).toEqual(['\\natexlab{a}', '\\doi{10.1/x}', '\\natexlab{b}', '\\doi{10.2/y}', '\\natexlab{}', '\\natexlab{c}'])
+    // (a body of 60: next asked the first 4 calls; they are asked still, before any other — the reviews of #495)
+    const four = [...body(INK_MAX - 4), ...[1, 2, 3, 4].map(i => entry(`\\x{${i}}`)), ...Array.from({ length: ENTRY_INK_MAX + 6 }, (_, i) => entry(`\\y${i}{1}`))]
+    expect(inkSamples(four).slice(INK_MAX - 4, INK_MAX)).toEqual(['\\x{1}', '\\x{2}', '\\x{3}', '\\x{4}'])
+    // (a body that fills INK_MAX: the entries' leads first, a lead past ENTRY_INK_MAX other calls asked all the same)
+    const later = [...body(INK_MAX), ...Array.from({ length: ENTRY_INK_MAX + 2 }, (_, i) => entry(`\\y${i}{1}`)), lead('\\lead{z}')]
+    expect(inkSamples(later)).toContain('\\lead{z}')
+    expect(inkSamples(later)).toHaveLength(INK_MAX + ENTRY_INK_MAX)
+  })
+  it('a lead past the share is a lead of its own, its own text read (the reviews of #495: \\up uppercases its argument)', () => {
+    const units = [...body(INK_MAX), ...Array.from({ length: ENTRY_INK_MAX + 1 }, (_, i) => lead(`\\up{word${i}}`))]
+    const ink = inkSamples(units)
+    expect(ink).not.toContain(`\\up{word${ENTRY_INK_MAX}}`)
+    expect(leadSamples(units)).toEqual([`\\up{word${ENTRY_INK_MAX}}`])
+    const log = [...listing(INK_MAX, ...chars('WORD0')), ...listing(ink.length, ...chars(`WORD${ENTRY_INK_MAX}`))].join('\n')
+    expect(readInkAnswers(log, units).texts).toEqual([['\\up{word0}', 'WORD0'], [`\\up{word${ENTRY_INK_MAX}}`, `WORD${ENTRY_INK_MAX}`]])
+  })
+  it('a call past the share has no answer of another\'s (the reviews of #495: \\def\\pfx#1{#1:\\ifnum#1>64 extra:\\fi} sets "65:extra:" for \\pfx{65}, which no carried "65:" may split before an unmarked DOI): no split, LOST as before', () => {
+    const pfx = (i: number) => ({ ...unit([text('Author. '), ph(`\\pfx{${i}}`), ph('\\doi{10.1/x}'), text('.')]), kind: 'reference' }) as SourceUnit
+    const units = [...body(INK_MAX), ...Array.from({ length: ENTRY_INK_MAX + 1 }, (_, i) => pfx(i + 1))]
+    const ink = inkSamples(units)
+    expect(ink).not.toContain(`\\pfx{${ENTRY_INK_MAX + 1}}`)
+    const log = ink.slice(INK_MAX).flatMap((src, j) => listing(INK_MAX + j, ...chars(`${/\{(\d+)\}/.exec(src)?.[1]}:`))).join('\n')
+    const { texts, inkless, apart } = readInkAnswers(log, units)
+    expect(texts.map(([s]) => s)).not.toContain(`\\pfx{${ENTRY_INK_MAX + 1}}`)
+    expect([inkless, apart]).toEqual([[], []])
+    // (its entry alone: the macro's opening mark, the DOI unmarked, the entry's end; no text, no split — and with a carried one,
+    // "65:", the split would have been made, the DOI taking "extra:")
+    const one = [pfx(ENTRY_INK_MAX + 1)]
+    expect(followsOf(one, new Set(['p0.1a', '0s', '0e']), texts.flat())('p0.1a')?.split).toBeUndefined()
+    expect(followsOf(one, new Set(['p0.1a', '0s', '0e']), [`\\pfx{${ENTRY_INK_MAX + 1}}`, `${ENTRY_INK_MAX + 1}:`])('p0.1a')?.split).toBeDefined()
+  })
+  it('readInkAnswers: the probe\'s log read for the samples, each answer the asked source\'s own (2608.25210v2\'s \\natexlab{} no ink)', () => {
+    const units = [entry('\\natexlab{}'), entry('\\doi{10.0/x}'), entry('\\natexlab{b}')]
+    expect(inkSamples(units)).toEqual(['\\natexlab{}', '\\doi{10.0/x}', '\\natexlab{b}'])
+    const log = [...listing(0, '\\hbox(0.0+0.0)x0.0'), ...listing(1, ...chars('doi:10.0/x')), ...listing(2, ...chars('b'))].join('\n')
+    expect(readInkAnswers(log, units)).toEqual({ inkless: ['\\natexlab{}'], texts: [['\\doi{10.0/x}', 'doi:10.0/x'], ['\\natexlab{b}', 'b']], apart: [] })
   })
 })
 

@@ -151,7 +151,9 @@ export { LayoutRefusal } from './json.mjs'
  *  boxes, all empty, read as a mark that moves nothing), a box TeX set a character in \\nullfont in no answer; and the probe
  *  sets a .bbl's definitions as its styles write them, its conditionals whole (live.mjs bblProvides: natbib's
  *  `\\expandafter\\ifx\\csname urlstyle\\endcsname\\relax … \\fi`, its \\doi TeX's branch). The rows of the pieces they reach change
- *  (2010.11929v2's 8 entries; MARKS_SCHEMA 12 still);
+ *  (2010.11929v2's 8 entries); and in the same unreleased 25, the ink section's entries asked in a share of their own past the
+ *  body's INK_MAX, the calls the body's room would have asked first, then the entries' leads (marks.mjs ENTRY_INK_MAX;
+ *  MARKS_SCHEMA 13: 2608.25210v2's body filled INK_MAX, its entries' \\natexlab{} never asked, 54 entries English);
  *  and in the same unreleased 25: a math face told by its family's names (layer-proto/fonts.mjs classifyFont: Euler's EUEX,
  *  EURM and EURB, MathTime's MTMI, MTSY and MTEX, XITSMath, and XITS's text face no math face), which the ledger's math lines,
  *  the ink units' kept runs and the figure runs' words read where a paper sets them */

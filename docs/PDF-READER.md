@@ -2371,7 +2371,36 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     `ad76c514` (#487's): each layout file the same but its version, each base page byte for byte `e8e9eeb5`'s; the rules gate's
     model tier 0 worse, 0 pages moved. Left: the ink section asks at most `INK_MAX` (64) sources, the entries' last, so a paper
     whose body fills them asks none of its entries' (2608.25210v2's `\natexlab{}`, 13 of its 37 left; 2608.15334v1 49 of 52,
-    2608.12606v1 31 of 32, 2307.16209v1 18): the follow-up.
+    2608.12606v1 31 of 32, 2307.16209v1 18): the follow-up, below.
+- **The ink section's entries in a share of their own, LAYOUT 25, MARKS_SCHEMA 13** (2026-10-29: 2608.25210v2's 64 entries
+  English, their `\natexlab{}` never asked). The ink section asks a paper's macros one source at a time, the body's at most
+  `INK_MAX` (64) and the entries after them (`sampleOrder`), so a body that fills the cap leaves every entry's macro unasked:
+  no answer, no row for a `\natexlab{}` that sets no ink, the entry the original's. The cap cut 9 of the 36 papers measured
+  (2608.25210v2's body writes 101 sources). Now:
+  - *The entries' share* (`marks.mjs` `ENTRY_INK_MAX`, 64, past the body's `INK_MAX`), asked in this order: first the calls the
+    room the body leaves of `INK_MAX` would have asked, in the paper's order, so that no entry is asked less than it was; then
+    the entries' leads (a macro at an entry's head, whose ink only its own text finds: make.mjs besideMarks); then each further
+    call, in order. A bibliography the share holds is asked call by call, as before.
+  - *A call past the share is no sample, as one past `INK_MAX` was* — no answer of another call is carried to it (the reviews
+    of #495). A shape's sample (its command and its arguments' shape) proves nothing of another call's: a macro's ink may hang
+    on its argument's value (`\ifnum#1>64 #1\fi`), so that a call wrongly said to set none would lose its placeholder and its
+    entry's translation, one wrongly said apart would get a mark against the word it is glued to; and a text carried may be a
+    prefix of what the call sets (`\def\pfx#1{#1:\ifnum#1>64 extra:\fi}`: "65:" for `\pfx{65}`'s "65:extra:"), which the split
+    before an unmarked piece and a lead's read from its unit's start take as its end, both bounded on one side only, giving
+    the rest to the next piece. A lead past the share keeps a probe of its own (`leadSamples`, `LEAD_MAX`), as before. The one
+    reader of the ink answers, production's and the lab's, is `readInkAnswers`. The marks file names up to `INK_ANSWERS_MAX`
+    answers (MARKS_SCHEMA 13; a reader of 12 refuses past `INK_MAX`).
+  - Measured (`classes-gate.mjs --made --compile` against `next` 3b2aa271 over the 36 papers; TeX's answers dumped): on 30 of
+    the 35 compiled none changed; on 5 only answers gained, none lost or changed, no switch moved — 6 sources no ink, each asked
+    of its own (2608.25210v2's `\natexlab{}`, `{a}`…`{d}`, its paper's own definition setting nothing, and its `\showISSN{…}`),
+    and 72 texts, each read for its own source (2610.21377v1 64 `\nolinkurl{doi:…}`, 2608.25210v2 2, 2307.16209v1 2 of REVTeX's
+    `\href@noop`, 2608.10322v2 and 2610.21098v1 2 `\natexlab`s each; measured again on those five once no answer was carried, the
+    texts carried before, 8 of 2610.21377v1's, gone). Drawn gained 54, lost 0, all 2608.25210v2's entries; the entries the wrap leaves the
+    original's for their marks there 63 to 0; every base page pixel for pixel `next`'s (952 pages), its page count arXiv's; no
+    unit's lines lost, gained or moved. The gate pack is `8afa0824`: `efd01632` (#491's) with 2307.16209v1-zh's base record
+    made again (18 texts, 16 before), every layout file and base page byte for byte. Left: the body's own cap, `INK_MAX`, which
+    leaves unasked body sources past it (2610.21098v1 274, 2608.23517v1 127, 2608.28692v1 22, 2608.10322v2 and 2608.25210v2 8);
+    no entry's call is left unasked on these papers.
 - **A unit the layer leaves the original's says why** (read time, no stored artefact, no version token): each `skipped` record
   of the run (`layer-proto/run.mjs`) carries a `code` of `SKIP_CODES` beside its `why`: `unlocated` (the file holds no row of
   it, and the file's own reason beside it, `unlaid`), `pieces`, `noRow`, `lost` (a visible piece the file has no position

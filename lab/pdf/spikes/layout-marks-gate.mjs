@@ -50,7 +50,7 @@ import { promisify } from 'node:util'
 import { gunzipSync, gzipSync } from 'node:zlib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { latin1, latin1Bytes, MARK_DEF } from '../../../src/pdf-reader/engine/source/latex-front.mjs'
-import { askedCommands, encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarksOf, leadSamples, MARK_CLASSES, parseLayoutMarks, probeSamples, readInkProbe, readInkTexts, readMarkProbe, switchedOf } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { askedCommands, encodeLayoutMarks, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarksOf, MARK_CLASSES, parseLayoutMarks, probeSamples, readInkAnswers, readMarkProbe, switchedOf } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles, probeFiles, readingsOf } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { marksOf } from '../../../src/pdf-reader/engine/pipeline/typeset/places.mjs'
@@ -190,8 +190,8 @@ async function paperRow(id) {
   // --no-switch: the probe not asked (switches null), every mark as LAYOUT_TEX sets it; and the paper's macros TeX said
   // set no ink, which get no mark (readInkProbe)
   const switches = NO_SWITCH ? null : answered
-  const inkless = NO_SWITCH ? null : readInkProbe(probe.log ?? '', inkSamples(units))
-  const texts = NO_SWITCH ? null : readInkTexts(probe.log ?? '', [...inkSamples(units), ...leadSamples(units)])
+  const ink = NO_SWITCH ? null : readInkAnswers(probe.log ?? '', units)
+  const inkless = ink?.inkless ?? null, texts = ink?.texts ?? null
   const v1Of = classes => {
     const files = originalFiles(paper, { lines: true, layout: classes, switches, inkless })
     if (PLANT) for (const p of [project.main, ...[...files.keys()].filter(f => f !== project.main).sort()]) {
