@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { completeMacros, frontMarks, inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { AHEAD_PROBE_MAX, aheadKey, aheadSamples, completeCall, completeCalled, layoutMarking, MARK_CLASSES, markProbeTex, probeSamples, readInkApart, readMarkProbe, symbolText } from '@/pdf-reader/engine/layout/marks.mjs'
+import { AHEAD_PROBE_MAX, aheadKey, aheadSamples, completeCall, completeCalled, followsOf, layoutMarking, MARK_CLASSES, markProbeTex, probeSamples, readInkApart, readMarkProbe, symbolText } from '@/pdf-reader/engine/layout/marks.mjs'
 import { boundsFromMarks, tokenizeDocument, uprightToken } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 
 // The layout marks a placeholder gets where what stands beside it was guessed at: the paper's own macro taken to look ahead
@@ -322,6 +322,25 @@ describe('a paper\'s macro that looks ahead, before a placeholder (2609.20976\'s
     // (an author block's unit: its marks robust, `\\protect\\axtpma`, which the probe's box did not set)
     const a = { ...unit([text('Ada, with '), ph('\\snr'), text(' '), ph('$\\geq 50$'), text('.')]), kind: 'author' } as SourceUnit
     expect(layoutMarking([a], MARK_CLASSES, { lines: false, switches: sw }).units[0]?.pieces.map(p => (p as Piece).src ?? (p as Piece).s).join('')).toBe('Ada, with \\protect\\axtpma{p0.1a}\\snr $\\geq 50$.')
+  })
+})
+
+describe('a placeholder no mark may stand before (\\footnote after \\xspace, TeX\'s answer 2): the maker parts it from the macro by the macro\'s text', () => {
+  // (2609.20976v1 u19: `\\lgnrm \\footnote{\\url{…}}~\\citep{…}`, the call between a macro and a marked citation)
+  const u = unit([text('The code '), ph('\\lgnrm'), text(' '), ph('\\footnote{\\url{https://x.org}}'), ph('~'), ph('\\citep{a}'), text(', which')])
+  const names = new Set(['p0.1a', 'p0.5a', 'p0.5b'])
+  it('followsOf: the split where the macro\'s text is known, ends in a letter or a digit, and the call is the one unmarked piece before the next marked one', () => {
+    expect(followsOf([u], names, ['\\lgnrm', 'lognormal_galaxies'])('p0.1a')).toMatchObject({ blocked: true, through: 'p0.5a', split: { name: 'n0.3a', spell: 'lognormalgalaxies' } })
+    expect(followsOf([u], names, new Map([['\\lgnrm', 'lognormal_galaxies']]))('p0.1a')?.split).toEqual({ name: 'n0.3a', spell: 'lognormalgalaxies' })
+    // (no texts, as the wrap asks: the erasure's reading as it was; no text for the macro, or one ending in punctuation)
+    expect(followsOf([u], names)('p0.1a')?.split).toBeUndefined()
+    expect(followsOf([u], names, ['\\other', 'x'])('p0.1a')?.split).toBeUndefined()
+    expect(followsOf([u], names, ['\\lgnrm', 'galaxies.'])('p0.1a')?.split).toBeUndefined()
+    // (two unmarked pieces before the next marked one, or a paper's macro after it, whose text tells it: none)
+    const two = unit([ph('\\lgnrm'), text(' '), ph('\\footnote{x}'), ph('$y$'), ph('\\citep{a}')])
+    expect(followsOf([two], new Set(['p0.0a', 'p0.4a']), ['\\lgnrm', 'lognormal'])('p0.0a')?.split).toBeUndefined()
+    const macro = unit([ph('\\lgnrm'), text(' '), ph('\\mice'), text(' '), ph('\\citep{a}')])
+    expect(followsOf([macro], new Set(['p0.0a', 'p0.4a']), ['\\lgnrm', 'lognormal'])('p0.0a')?.split).toBeUndefined()
   })
 })
 

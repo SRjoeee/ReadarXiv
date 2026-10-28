@@ -221,6 +221,23 @@ describe('makeLayout', () => {
     for (const gone of ['match.mjs', 'tolerant.mjs']) expect(existsSync(`src/pdf-reader/engine/layout/${gone}`), gone).toBe(false)
   })
 
+  it('a footnote\'s call no mark may stand before, after a paper\'s macro (\\xspace sets no space before \\footnote): placed from its own ink, the macro\'s parted from it by its text (2609.20976v1 p5u19)', async () => {
+    // `\\lgnrm \\footnote{\\url{…}}~\\citep{a}`: the macro's opening mark, the citation's two, and none for the call between
+    const runs: Run[] = [{ s: 'The code ', x: 72, y: 700 }, { s: 'lognormal_galaxies', x: 117, y: 700 }, { s: '1', x: 207, y: 703.5, size: 7 }, { s: '[1], which more words here.', x: 213, y: 700 }]
+    const w: World = {
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 348, 700], ['p0.1a', 1, 117, 700], ['p0.5a', 1, 213, 700], ['p0.5b', 1, 228, 700]],
+      units: [unit('para', [text('The code '), ph('\\lgnrm'), text(' '), ph('\\footnote{\\url{https://x.org}}'), ph('~'), ph('\\citep{a}'), text(', which more words here.')])],
+    }
+    // (with the text the probe showed \\lgnrm sets: the macro's glyphs, the raised call's)
+    const { file, stats } = await made({ ...w, texts: [['\\lgnrm', 'lognormal_galaxies']] })
+    expect(phOf(file, 0, 1).slice(3)).toEqual([0, 1, 117, 700, 207, 707.5, 697.5])
+    expect(phOf(file, 0, 3).slice(2)).toEqual([PH_KINDS.indexOf('footnote'), PH_FLAG.RAISED, 1, 207, 700, 210.5, 703.5 + 5.25, 703.5 - 1.75])
+    expect(stats.ph).toMatchObject({ lost: 0 })
+    // (with none, as before: the call LOST, and the macro with it — its unit the original's)
+    const before = await made(w)
+    expect([phOf(before.file, 0, 1)[3], phOf(before.file, 0, 3)[3]]).toEqual([PH_FLAG.LOST, PH_FLAG.LOST])
+  })
   it("a macro's ink runs to the next word's first glyph", async () => {
     const runs: Run[] = [{ s: 'we use', x: 72, y: 700 }, { s: 'BERT', x: 107, y: 700 }, { s: 'models for text', x: 132, y: 700 }, { s: 'and BERT. Then more', x: 72, y: 688 }]
     const { file, stats } = await made({

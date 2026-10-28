@@ -1343,7 +1343,9 @@ export const MARKS_DEPTH = 3
  *  them as no letters and digits; 11 the class `number` (a bibliography entry's number, both its marks), which a reader of
  *  10 refuses as no class of MARK_CLASSES; 12 TeX's answers for the look-ahead pairs in the switch (`marking.switches`, keyed
  *  by aheadKey, one code each: a paper's macro and the placeholder right after it, which is marked where TeX said a mark
- *  there moves nothing), which a reader of 11 refuses as no control word */
+ *  there moves nothing), which a reader of 11 refuses as no control word; and in `owned` the ink of a placeholder no mark
+ *  could stand before, parted from the macro before it by that macro's text (followsOf `split`), by the opening mark's name
+ *  it would have had, which a maker of 11 would not read */
 export const MARKS_SCHEMA = 12
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
 const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'align', 'words', 'tokens', 'chars', 'owned', 'links']
@@ -1502,9 +1504,14 @@ const endsOf = i => [`${i}e`, `t${i}e`, `h${i}e`]
  * piece with no mark follows it with no text between. A display's group (`group`): the displays right after it, with
  * nothing visible between, that have no opening mark (TeX sets none on the empty list it resumes the paragraph with
  * after a display: LAYOUT_TEX's \axt@pmc), by their opening marks' names; the text after it and its next piece are then
- * the group's last one's
+ * the group's last one's. With `texts` (the probe's: readInkTexts' pairs, flat, or a Map), a paper's macro whose next piece has
+ * no mark of its own and is the only visible one before its unit's next marked piece, white space alone between
+ * (`through`), is `split`: that piece's opening mark's name, which no point sets, and the text TeX sets for the macro as
+ * spellOf reads it (ending in a letter or a digit), by which the maker's reading parts the two's ink (stream.mjs ownedOf):
+ * 2609.20976's `\lgnrm \footnote{…}`, before which \xspace sets no space and would before a mark (aheadSamples' answer 2)
  */
-export function followsOf(units, names) {
+export function followsOf(units, names, texts = null) {
+  const shown = texts instanceof Map ? texts : Array.isArray(texts) ? new Map(Array.from({ length: Math.floor(texts.length / 2) }, (_, j) => [texts[2 * j], texts[2 * j + 1]])) : null
   const nameOf = (i, k) => { const c = classOf(units[i]?.pieces[k]); return c ? `${c === 'footnote' ? 'n' : 'p'}${i}.${k}` : null }
   return name => {
     const m = /^([pn])(\d+)\.(\d+)a$/.exec(name)
@@ -1523,7 +1530,7 @@ export function followsOf(units, names) {
     const blocked = !!next && !names.has(`${next}a`)
     // (`through`, the erasure's: past the unmarked visible pieces right after it, nothing but white space between, the next
     // marked piece's opening; null where text or the unit's end comes first)
-    let through = null
+    let through = null, others = 0
     if (blocked && !/\S/.test(after)) {
       for (let r = q + 1; r < u.pieces.length; r++) {
         const p = u.pieces[r]
@@ -1531,12 +1538,17 @@ export function followsOf(units, names) {
         const c = classOf(p)
         if (!c) continue
         if (names.has(`${nameOf(i, r)}a`)) { through = `${nameOf(i, r)}a`; break }
+        others++
       }
     }
+    // (`split`, the maker's: the macro's text, where the one unmarked piece after it is a placeholder the maker cannot find
+    // with no mark: AHEAD_FOLLOWS)
+    const text = shown && through && !others && classOf(u.pieces[k]) === 'macro' && AHEAD_FOLLOWS.has(classOf(u.pieces[q])) ? shown.get(u.pieces[k].src) : undefined
+    const spell = typeof text === 'string' && /[\p{L}\p{N}]$/u.test(text) ? spellOf(text) : ''
     // (`rest`, the erasure's: the whole text after it up to its next visible piece, as the spell check reads one — its letters and
     // digits —, so that the text after it is told where it runs exactly to its unit's next mark, not where its first WANT
     // characters first stand: a display's \\text{for every}, a URL's dots)
-    return { closing: names.has(`${name.slice(0, -1)}b`), want, rest: spellOf(after), display, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group }
+    return { closing: names.has(`${name.slice(0, -1)}b`), want, rest: spellOf(after), display, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group, ...(spell ? { split: { name: `${next}a`, spell } } : {}) }
   }
 }
 
@@ -1738,7 +1750,7 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
   let words = 0
   // kept: whether the token before was written, so that a rest is written only after the word it is the rest of
   let kept = false
-  const follows = units ? followsOf(units, set) : null
+  const follows = units ? followsOf(units, set, marking.texts) : null
   const stream = units && OPS ? ownedPages({ follows, dropped, closing: name => destPage.get(`${name.slice(0, -1)}b`) ?? null }) : null
   let all = 0, found = []
   const seen = { warned: false, who: 'marked read' }
@@ -1873,7 +1885,7 @@ export async function readMarked(marked, log, o) {
   marks.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
   const chars = [], owned = []
   if (o.units && o.OPS) {
-    const follows = followsOf(o.units, head.set)
+    const follows = followsOf(o.units, head.set, head.marking?.texts)
     vetoTwice(rows, end.twice, follows)
     const charOf = new Map()
     for (const name of [...rows.keys()].sort()) {

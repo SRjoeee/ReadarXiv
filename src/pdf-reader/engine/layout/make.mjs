@@ -1147,8 +1147,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         if (cls === 'macro' && last >= 0 && k > last) (one.tails ??= []).push({ entry, k, src: piece.src })
       }
       // a piece the marked original gives no mark (at a unit's head, after a prefix or a control sequence's end, glued
-      // to a word): its rendering is not known
-      if (!d?.open) {
+      // to a word): its rendering is not known; but one the maker's reading parted from the paper's macro before it, whose
+      // text is known (stream.mjs ownedOf, marks.mjs followsOf `split`: a footnote's call after \\xspace), by its own ink
+      if (!d?.open && !ownInk.has(`${cls === 'footnote' ? 'n' : 'p'}${i}.${k}a`)) {
         // a LaTeX text symbol (marks.mjs TEXT_SYMBOLS) is drawn as its character where the unit's lines show it (below)
         const sym = cls === 'macro' ? symbolText(piece.src) : null
         const entry = { row: [i, k, kind, PH_FLAG.LOST], cls, state: 'unmarked' }
@@ -2137,7 +2138,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const M = mh ? mh.pages : 0
     let markedTo = mh ? 0 : Infinity, ended = !mh, finished = false, foundTo = 1
     const mViews = [], mWords = [], twiceSeen = new Set()
-    const follows = mh ? followsOf(units, mh.set) : null
+    const follows = mh ? followsOf(units, mh.set, mh.marking?.texts) : null
     // (the marks read a page at a time: none yet)
     if (mh) { at = new Map(); ours = []; carryOver(); noteLines() }
     let X = 0

@@ -316,6 +316,20 @@ describe('ownedOf for the erasure (erasure: true)', () => {
     const blocked: Follow = { ...through, through: null }
     expect(ink([page], { 'p0.1a': blocked, 'p0.3a': closed }, true)).toEqual({ 'p0.1a': 'open, an unmarked piece follows', 'p0.3a': ['donut', 0] })
   })
+  it('the maker\'s reading parts a macro\'s ink from the one unmarked piece after it by the macro\'s text (2609.20976v1 p5u19: \\lgnrm \\footnote{…}~\\citep{…})', () => {
+    // \lgnrm = \texttt{lognormal\_galaxies}\xspace before a footnote's call, which no mark may stand before; the citation after
+    // the tie marked: the macro's glyphs spell "lognormalgalaxies", the raised 1 is the call's
+    const page = pageOf(['code ', { at: 'p0.1a' }, 'lognormal_galaxies', { u: '1', x: 170, y: 703.5, size: 7 }, ' ', { at: 'p0.5a' }, '[1]', { at: 'p0.5b' }, ', which', { at: '0e' }])
+    const split: Follow = { closing: false, want: '', ends: ['n0.3a', '0e'], blocked: true, through: 'p0.5a', split: { name: 'n0.3a', spell: 'lognormalgalaxies' } }
+    expect(ink([page], { 'p0.1a': split, 'p0.5a': closed }, false)).toEqual({ 'p0.1a': ['lognormal_galaxies', 0], 'n0.3a': ['1', 0], 'p0.5a': ['[1]', 0] })
+    // (a page at a time the same: ownedPages takes the call's entry with the macro's)
+    expect(owned([page], { 'p0.1a': split, 'p0.5a': closed })).toEqual({ 'p0.1a': ['lognormal_galaxies', 0], 'n0.3a': ['1', 0], 'p0.5a': ['[1]', 0] })
+    // (the erasure's reading as before: the two's ink the macro's, its group's alike)
+    expect(ink([page], { 'p0.1a': split, 'p0.5a': closed }, true)).toEqual({ 'p0.1a': ['lognormal_galaxies1', 0], 'p0.5a': ['[1]', 0] })
+    // (a text the glyphs do not begin with, one they spell whole with nothing after it, or no split: LOST as before)
+    for (const spell of ['lognormalgalaxy', 'lognormalgalaxies1', 'xlognormal']) expect(ink([page], { 'p0.1a': { ...split, split: { name: 'n0.3a', spell } }, 'p0.5a': closed }, false)['p0.1a']).toBe('open, an unmarked piece follows')
+    expect(ink([page], { 'p0.1a': { ...split, split: undefined }, 'p0.5a': closed }, false)).toEqual({ 'p0.1a': 'open, an unmarked piece follows', 'p0.5a': ['[1]', 0] })
+  })
   it('ends a display after its unit\'s end mark at a later unit\'s opening, that unit\'s label left out (2610.20595v1 p19u153)', () => {
     const page = pageOf(['states follow', { at: '0e' }, { at: 'p0.3a' }, '\nE=mc(G9)', '\n', { u: '2', x: 72, y: 676 }, { u: '.', x: 77, y: 676 }, { at: 'p1.0a' }, { at: 'h1s' }, { u: 'T', x: 90, y: 676 }, 'riangulene', { at: 'p1.0b' }])
     const f = { 'p0.3a': open('', ['0e']), 'p1.0a': closed }

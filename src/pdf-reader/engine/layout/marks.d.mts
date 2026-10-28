@@ -248,7 +248,7 @@ export declare function markedPages(marked: unknown, log: string, o: MarkedOptio
  *  page could not be looked up), and the pages with no ink, by why */
 export declare function readMarked(marked: unknown, log: string, o: MarkedOptions): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null; dark: { timedOut: number[]; capped: number[]; degraded: number[] } }>
 /** each opening point's piece as the page stream finds it (layout/stream.mjs Follow): of the units and the destinations' names */
-export declare function followsOf(units: readonly SourceUnit[], names: ReadonlySet<string>): (name: string) => import('./stream.mjs').Follow | null
+export declare function followsOf(units: readonly SourceUnit[], names: ReadonlySet<string>, texts?: readonly string[] | ReadonlyMap<string, string> | null): (name: string) => import('./stream.mjs').Follow | null
 /** whether a destination the head names is a mark of the marks file: on a page of the paper, within its page's view (`views`
  *  the pages' read so far, stride 4) */
 export declare function markAt(views: readonly number[], pages: number, page: number | null, x: number, y: number): boolean

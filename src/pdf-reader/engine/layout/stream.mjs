@@ -263,6 +263,17 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
         const opening = erasure ? OPENING.exec(N.name) : null
         const startsAfter = id => [`${id}s`, `h${id}s`, `t${id}s`].some(n => (where.get(n) ?? []).some(([p, q]) => p === pa && q > next[1]))
         const later = START.exec(N.name) ?? (opening && startsAfter(opening[2]) ? [N.name, opening[2]] : null)
+        if (f.blocked && !erasure && f.split && f.through && N.name === f.through) {
+          // (the maker's reading of the erasure's `through`: a paper's macro and the one unmarked piece right after it, which no
+          // mark could stand before (marks.mjs followsOf `split`), their ink to the next marked piece's point, the macro's the
+          // glyphs that spell the text TeX sets for it, the piece's the rest)
+          const end = spelledTo(pages, glyphs, f.split.spell)
+          if (end > 0 && end < glyphs.length) {
+            const [p, g] = glyphs[end], from = pages[p - 1].boxAt[g]
+            out.set(f.split.name, { how: HOW["open, to its unit's next mark"], glyphs: glyphs.slice(end), boxes: boxes.filter(([q, b]) => q > p || (q === p && b >= from)) })
+            return cut(HOW["open, to its unit's next mark"], glyphs, boxes, end)
+          }
+        }
         if (f.blocked) return erasure && f.through && N.name === f.through ? { how: HOW["open, to its unit's next mark"], glyphs, boxes } : none(HOW['open, an unmarked piece follows'])
         if (f.ends.includes(N.name)) return { how: HOW["open, to its unit's next mark"], glyphs, boxes }
         if (later && Number(later[1]) > Number(m[2])) {
@@ -485,6 +496,19 @@ function textTo(pages, glyphs, want, rest, quotes) {
     if (n - at[e] === rest.length && all.endsWith(rest)) return e
   }
   return first
+}
+
+/** the glyph after the first of `glyphs` that spell `spell` (spellOf's) whole from their first, the glyph that completes it
+ *  the last (a glyph that spells nothing, an underscore, passes); -1 where they do not begin so, or spell past it */
+function spelledTo(pages, glyphs, spell) {
+  let n = 0
+  for (let j = 0; j < glyphs.length; j++) {
+    const [p, g] = glyphs[j], c = spellOf(pages[p - 1].glyphs.u[g] ?? '')
+    if (!spell.startsWith(c, n)) return -1
+    n += c.length
+    if (n === spell.length && c.length) return j + 1
+  }
+  return -1
 }
 
 /** each place textAt's text begins at, in order */
