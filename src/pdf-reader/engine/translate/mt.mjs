@@ -18,7 +18,11 @@ export { TRANSLATE_VERSION } from './version.mjs'
 // ---------------------------------------------------------------- markers wire format
 export { fromAlpha, toAlpha }
 export const escape = s => s.replace(/@/g, '@@').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-export const decode = s => s.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (m, b) => b[0] === '#' ? String.fromCodePoint(b[1].toLowerCase() === 'x' ? parseInt(b.slice(2), 16) : parseInt(b.slice(1), 10)) : { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }[b.toLowerCase()])
+/** a reply's entities read: a numeric one of a code point (U+10FFFF at most) and the named ones; a numeric entity past the last
+ *  code point kept as it stands, as the background's decoder keeps it (src/core/protector/escape.ts decodeText), where
+ *  String.fromCodePoint threw and took the run down, its cached reply giving the same throw again on every retry */
+const entityOf = (b, m) => { const c = b[1].toLowerCase() === 'x' ? Number.parseInt(b.slice(2), 16) : Number.parseInt(b.slice(1), 10); return c <= 0x10ffff ? String.fromCodePoint(c) : m }
+export const decode = s => s.replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (m, b) => b[0] === '#' ? entityOf(b, m) : { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }[b.toLowerCase()])
 // (the same function as the front end's latin1Bytes: loading a paper's front end, and the argument tables it reads, for this
 // one line would put them in every reader that translates; a test holds the two equal)
 const latin1Bytes = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff; return b }

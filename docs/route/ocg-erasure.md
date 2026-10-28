@@ -82,11 +82,46 @@ delta's catalog carrying `/OCProperties`). What stays open here:
 
 #### 3.3 Laid out for the later export (R5; nothing of it is built now)
 - Content streams name properties (`/axtu12`), never OCG objects. The page's `/Properties` maps the names.
-- The export is one more incremental update. It appends the layer (SVG text set with our font subsets) wrapped in one OCG
-  `axt:layer`. It re-points each drawn unit's names to an OCMD `<< /OCGs [axt:layer] /P /AllOff >>`. It sets
-  `/Order [(ReadarXiv) [axt:layer]]`.
+- The export is one more incremental update. It appends the layer (SVG text set with our font subsets) wrapped in a plain
+  OCG `axt:layer`, ON in `/D`. It re-points each drawn unit's property names, in `/Properties`, to a second plain OCG,
+  `axt:original`, OFF in `/D`. The two stand in one radio group, `/RBGroups [[axt:layer axt:original]]`, so that a viewer's
+  layers panel turns one off as it turns the other on. No OCMD.
+- `/Order [[(ReadarXiv) axt:layer axt:original]]`: a label is the first element of a nested array, never of `/Order`
+  itself, and both groups are listed, since a radio group turns the others off but turns none on.
 - One viewer toggle then flips between the original and the translation, with no content stream rewritten.
-- Invariant: no content stream of ours references an OCG directly.
+- Invariant: no content stream of ours references an OCG directly: the re-pointing is in `/Properties`.
+- Why no OCMD (the plan before 2026-10-29 re-pointed the names to `<< /OCGs [axt:layer] /P /AllOff >>` and set
+  `/Order [(ReadarXiv) [axt:layer]]`): PDFKit ignores an OCMD's `/P` and paints the original under the translation.
+  Measured on one page holding "ORIGINAL" under a property name, "TRANSLATED" under `axt:layer` and "CONTROL" with no
+  optional content, A the OCMD and B the two plain OCGs above (the maintainer's research, outside git:
+  `research/babeldoc/runs/pdf-output/`, scripts `probe_ocg_export.py`, `probe_ocg_variant2.py`, `pdfkit_probe.swift`, files
+  and renders in `out/ocg/`):
+
+  | Engine (what ships it) | A: original painted? | B: original painted? |
+  |---|---|---|
+  | MuPDF 1.28.5 (SumatraPDF, mutool) | no | no |
+  | poppler 26.03.0 (Evince, Okular) | no | no |
+  | PDFium 156 (Chrome, Edge) | no | no |
+  | PDFKit, macOS 27.0 (Preview, Safari) | **yes**, under the translation | no |
+  | pdf.js 6.3.289 (our reader, Firefox, Zotero) | not rendered by the probe | not rendered by the probe |
+
+  The nested `/Order` showed its label in MuPDF's layers panel. Only macOS 27.0's PDFKit was tested; Acrobat and Foxit were
+  not. A viewer's toggle of the radio group was not measured, only the state `/D` opens in. The export's gate, when it is
+  scheduled: the exported file rendered in each engine above, no double ink, and what copy and find return in each.
+- **Open, the maintainer's: cut or hide.** Hidden is not gone. In every file of the probe and under both encodings, PDFium,
+  PDFKit and pdf.js return the hidden original's text to copy and find; MuPDF and poppler do not:
+
+  | Engine | The hidden original's text in copy and find |
+  |---|---|
+  | MuPDF | no |
+  | poppler | no |
+  | PDFium (Chrome, Edge) | yes |
+  | PDFKit (Preview, Safari) | yes |
+  | pdf.js (Firefox, Zotero, our reader) | yes |
+
+  An export that only hides the original mixes it into copy and find in the viewers most readers use. Removing the drawn
+  units' runs instead keeps copy and find clean, but rewrites page streams: the remover's cut mode, deleted on next, would
+  be rebuilt, and "no content stream rewritten" would not hold for that file. Nothing is decided until the maintainer rules.
 
 
 ## 4. The reader hides exactly the units it draws: settled (the reader side, feat/ocg-reader)
@@ -204,7 +239,7 @@ Oracles: on synthetic pages, the generator emits the page without unit u's opera
 | PDF.js pin | X1. A version move passes G0–G7 in CI and the lab, and §8 on staging, both hosts on one pin |
 | Highlight, sync, links, contents | They read the layout file, the parts and the left document. Their (n,k) is the composed page's, the only one there is |
 | Text layer (`PDF-READER.md` §11.11) | Invariant: no `getTextContent` on a wrapped page, because it ignores visibility. The text layer's kept items on a wrapped page come from the layout file and units (`textOf` in the run) for units not in D(p), and from the original's (left) document for ink no unit owns. Hidden units contribute only translated items. As built (2026-10-24, before the wrap) `textOf` reads the composed page's text content as the lay reads it, split by the drawing's operations: the wrap's PR changes that input for a wrapped page |
-| Download (R5) | Today: the compiled final and arXiv's link. Future (owner's 10-08 decision, download = the instant layer exported): the composed document with drawn units' names re-pointed OFF and the layer appended as one incremental update with our font subsets (§3.3). Now: `/D` all ON and `/Order []` |
+| Download (R5) | Today: the compiled final and arXiv's link. Future (owner's 10-08 decision, download = the instant layer exported): the composed document with drawn units' names re-pointed to `axt:original` (OFF) and the layer appended in `axt:layer` (ON), one radio group, as one incremental update with our font subsets (§3.3; cut or hide still open). Now: `/D` all ON and `/Order []` |
 | Printing | The DOM is printed (canvas A + SVG). The PDF.js `print` intent is unused; if it is ever used, configs are made with that intent |
 | Prefetch (delta.md §16) | Unchanged: one byte source, and the delta is in memory |
 

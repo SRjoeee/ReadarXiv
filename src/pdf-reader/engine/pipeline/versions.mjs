@@ -239,7 +239,12 @@
 //     is its \\else, one letter there in its word (ifmmodeLetter: REVTeX's `Louren\\ifmmode~\\mbox{\\c{c}}\\else \\c{c}\\fi{}o`, read
 //     as "Louren ç ç o"), its first branch no text; the pairs such a span held spend their ids as before (pairsOf). In the same release
 //     the left side's marks gain the figure units' (pipeline/ink-pass.mjs figureAnchors: arXiv's tokens in a level label's band),
-//     so that a figure's label lights its original on hover (the owner's report on 2010.11929v2 p9, the follow-up of #487)
+//     so that a figure's label lights its original on hover (the owner's report on 2010.11929v2 p9, the follow-up of #487).
+//     And a change of what is sent in the same unreleased 31, which moves no constant: a TikZ picture's texts (the front end's
+//     units of kind `figure`, latex-front.mjs tikzText), which own no glyph and no group and were never drawn, are asked for no
+//     more, the figure ink units translating the picture's glyphs once (layer-proto/rows.mjs TIKZ_KIND, PDF-READER §19.12);
+//     an ink unit that echoed one is translated itself. Every bundle is byte for byte as it was, every unit's cut and wire and
+//     every request's shape too: only the plan, the units toTranslate and layerIds name, is smaller
 export const PIPELINE_VERSION = '31'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */

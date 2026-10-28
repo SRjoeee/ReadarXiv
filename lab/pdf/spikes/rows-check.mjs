@@ -11,8 +11,9 @@
 //      are the record's pieces, and whose trPiecesOf(…, p => p.k) equals the units file's pieces, and the result's own
 //      (trPiecesOf(result.pieces, kOfSource(source.pieces))); 2608.04322v1's cells 111 and 164 (an open that no piece of
 //      the cell closes) among them;
-//   3. toTranslate(bundle, lang) is the complement of keptFor(paper, lang), for every language;
-//   4. batchesOf(bundle, lang) is runLive's batches in source order: its batches as the real runLive cuts them (a failing
+//   3. toTranslate(bundle, lang) is the complement of keptFor(paper, lang), for every language, less a TikZ picture's texts
+//      (kind `figure`), which the layer leaves to the figure ink units that draw their glyphs (rows.mjs TIKZ_KIND);
+//   4. batchesOf(bundle, lang) is runLive's batches in source order (on a paper with no TikZ texts, which runLive still sends): its batches as the real runLive cuts them (a failing
 //      compiler and a translator that gives the wire back), and as the rule stood inline there before it was shared;
 //   5. layerRows over the record's results gives each unit its row, and keeps whole and holds the table cells groups.mjs
 //      decideGroups does over the paper's own units and the same results (the records carry no group decision: they
@@ -78,7 +79,8 @@ function resultOf(rec, src) {
 
 /** runLive's rule for a batch as it stood inline there (the unit nearest the reader first, here the source's order) */
 function inlineBatches(paper, lang) {
-  const kept = keptFor(paper, lang), todo = new Set(paper.units.map((u, i) => i).filter(i => !kept.has(paper.units[i])))
+  // (less a TikZ picture's texts, which the layer route sends no more: rows.mjs TIKZ_KIND)
+  const kept = keptFor(paper, lang), todo = new Set(paper.units.map((u, i) => i).filter(i => !kept.has(paper.units[i]) && paper.units[i].kind !== 'figure'))
   const out = []
   for (let first = true; todo.size; first = false) {
     const order = [...todo].sort((a, b) => a - b), batch = []
@@ -125,14 +127,16 @@ for (const name of [...new Set(CASES.map(c => c[0]))]) {
     for (const p of u.pieces) if (p.t === 'open' && !closes.has(p.id)) opens.push(i)
   })
   for (const lang of LANGS) {
-    const kept = keptFor(paper, lang), want = paper.units.map((u, i) => (kept.has(u) ? -1 : i)).filter(i => i >= 0)
+    const kept = keptFor(paper, lang), want = paper.units.map((u, i) => (kept.has(u) || u.kind === 'figure' ? -1 : i)).filter(i => i >= 0)
     if (!isDeepStrictEqual(toTranslate(bundle, lang), want)) mine.push(`toTranslate(${lang}) is not the complement of keptFor`)
   }
   const langs = [...new Set(CASES.filter(c => c[0] === name).map(c => c[1]))]
   for (const lang of new Set([...langs, 'zh', 'de'])) {
     const got = batchesOf(bundle, lang), inline = inlineBatches(paper, lang)
     if (!isDeepStrictEqual(got, inline)) mine.push(`batchesOf(${lang}) is not the inline rule's`)
-    if (RUNLIVE) {
+    // (runLive, the TeX path, still sends a TikZ picture's texts, which its pages set: its batches are the layer's where a paper
+    // has none)
+    if (RUNLIVE && !paper.units.some(u => u.kind === 'figure')) {
       const live = await runLiveBatches(paper, lang)
       if (!isDeepStrictEqual(got, live)) mine.push(`batchesOf(${lang}) is not runLive's (${got.length} batches, runLive ${live.length})`)
     }
@@ -166,6 +170,8 @@ for (const [name, lang] of CASES) {
       tally.kept++
       return
     }
+    // (a TikZ picture's text, translated in a record made before the layer left it to the figure ink units: no row)
+    if (!wanted.has(id) && src?.kind === 'figure') { tally.kept++; return }
     if (!wanted.has(id)) { mine.push(`unit ${id}: ${rec.state} in the record, and toTranslate keeps it`); return }
     const state = rec.state === 'kept' ? rec.translation : rec.state
     const result = state === 'whole' || state === 'partial' ? resultOf({ ...rec, state }, src) : { state }

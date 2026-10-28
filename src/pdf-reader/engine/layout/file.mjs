@@ -154,7 +154,10 @@ export { LayoutRefusal } from './json.mjs'
  *  (2010.11929v2's 8 entries); and in the same unreleased 25, the ink section's entries asked in a share of their own past the
  *  body's INK_MAX, every shape of call first, and the calls past it answered by their shape's sample (marks.mjs ENTRY_INK_MAX,
  *  inkShared, shareInk; MARKS_SCHEMA 13: 2608.25210v2's body filled INK_MAX, its entries' \\natexlab{} never asked, 54 entries
- *  English) */
+ *  English);
+ *  and in the same unreleased 25: a math face told by its family's names (layer-proto/fonts.mjs classifyFont: Euler's EUEX,
+ *  EURM and EURB, MathTime's MTMI, MTSY and MTEX, XITSMath, and XITS's text face no math face), which the ledger's math lines,
+ *  the ink units' kept runs and the figure runs' words read where a paper sets them */
 export const LAYOUT = '25'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
