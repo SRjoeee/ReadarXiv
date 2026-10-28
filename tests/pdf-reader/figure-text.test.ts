@@ -265,6 +265,42 @@ describe('a figure\'s labels in their columns and sets, each with its room (synt
     expect(unitsOf(clipped)[0]!.after).toBeCloseTo(150 - 0.05 - 125 - ROOM_CLEAR * 10, 6)
   })
 
+  it('a fill behind the band cut by its clip ends the free line at the clip\'s edge, not at its own lines (the review of #490)', () => {
+    // (a rectangle from 0 to 300 behind "label", 100 to 125, clipped to 90 to 140: its box the clip's, its segments its own)
+    const pg = picture([{ text: 'label', x: 100, y: 100 }])
+    pg.shapes.set(pg.boxes.length / 4, { segs: Float32Array.from([0, 90, 300, 90, 300, 90, 300, 115, 300, 115, 0, 115, 0, 115, 0, 90]), stroke: false, fill: true, hw: 0.25 })
+    pg.boxes.push(90, 90, 140, 115)
+    pg.paths.push(9)
+    const u = unitsOf(pg)[0]!
+    expect(u.before).toBeCloseTo(10 - ROOM_CLEAR * 10, 6)
+    expect(u.after).toBeCloseTo(15 - ROOM_CLEAR * 10, 6)
+  })
+
+  it('labels of two directions never take one place: each room stops short of the other\'s band and room (the review of #490)', () => {
+    // (a level label, 100 to 120 on y = 100, and a turned one, up x = 150 from 50 to 70, both centred with free space all round)
+    const turned: unknown[] = [], boxes: number[] = []
+    ;[...'ab', ...'cd'].forEach((uch, k) => {
+      const y0 = 50 + 5 * k
+      turned.push({ u: uch, n: 1, k, ox: 150, oy: y0, ex: 150, ey: y0 + 5, ux: 0, uy: 1, size: 10, ascent: 0.7, descent: -0.2, font: 'ArialMT', fill: 0, box: boxes.length / 4, at: 0, pt: 1 })
+      boxes.push(143, y0, 152, y0 + 5)
+    })
+    const pg = picture([{ text: 'abcd', x: 100, y: 100 }])
+    Object.assign(pg, { turned, boxes: [...pg.boxes, ...boxes], paths: [...pg.paths, ...boxes.filter((_, i) => i % 4 === 0).map(() => -4)] })
+    const [a, b] = unitsOf(pg)
+    expect([a!.angle, b!.angle]).toEqual([0, 90])
+    // (each one's widest drawing, its band from before its start to after its end, as a page box)
+    const region = (u: Placed) => {
+      const nx = -u.uy, ny = u.ux, pts = [[-u.before, u.descent * u.size], [u.length + u.after, u.descent * u.size], [-u.before, u.ascent * u.size], [u.length + u.after, u.ascent * u.size]].map(([s1, t]) => [u.x + u.ux * s1! + nx * t!, u.y + u.uy * s1! + ny * t!])
+      return [Math.min(...pts.map(p => p[0]!)), Math.min(...pts.map(p => p[1]!)), Math.max(...pts.map(p => p[0]!)), Math.max(...pts.map(p => p[1]!))]
+    }
+    const ra = region(a!), rb = region(b!)
+    const meet = ra[0]! < rb[2]! && rb[0]! < ra[2]! && ra[1]! < rb[3]! && rb[1]! < ra[3]!
+    expect(meet, JSON.stringify({ ra, rb })).toBe(false)
+    // (and neither is left with nothing: each keeps room on the side away from the other)
+    expect(a!.before).toBeGreaterThan(0)
+    expect(b!.before).toBeGreaterThan(0)
+  })
+
   it('two labels on one line share the line between them, half each, ROOM_CLEAR apart', () => {
     const [a, b] = unitsOf(picture([{ text: 'left', x: 100, y: 100 }, { text: 'right', x: 150, y: 100 }]))
     // ("left" ends at 120, "right" begins at 150: 30 between, 1.5 clear, 14.25 each; one set, on one baseline)

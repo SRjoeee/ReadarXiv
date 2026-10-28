@@ -2803,11 +2803,12 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   one edge and those of one figure, size and direction on one baseline (an axis's words, a legend laid in a row, the two
   panels' x titles of one figure), joined. A unit's **room** (`before`, `after`, PDF units along its direction) is the free
   line beside its box: to the nearest ink its band meets (a glyph, a stroke, a fill's edge, an image, the edge of a ground
-  it stands on; a path's lines only as far as its box, its clip's, shows them), `ROOM_CLEAR` 0.15 em short of it; on a
-  ground whose lines are not known (a path past the page's shapes, a rounded node, a frame's stroke) a band's height inside
+  it stands on, its clip's edge where a clip cuts it short; a path's lines only as far as its box, its clip's, shows them),
+  `ROOM_CLEAR` 0.15 em short of it; on a ground whose lines are not known (a path past the page's shapes, a rounded node, a frame's stroke) a band's height inside
   its edges, on an image's or a shading's none (2602.23285v2's caption over a screenshot); never past its figure's extent
   (pageInk's `figures`: every box painted inside the form or the picture, with its glyphs); half the line to another unit
-  whose band its own meets, the other half that unit's; `ROOM_MAX` 6 em at most. Crowding and the anchor read alone are
+  whose band its own meets, the other half that unit's; short of the band and room of a unit of another direction (each
+  against the other's room as first found: a level label and a turned one never take one place); `ROOM_MAX` 6 em at most. Crowding and the anchor read alone are
   read within the reach as before, so the same units are drawn and the base is the same bytes.
 - **Its ink** is its own group `f<k>` (`layout/wrap.mjs`): its runs wrapped where they are shown, in the page's stream, or in the
   stream of the form an included PDF is, that form written again once in the wrap section under its own number, its dict ours but

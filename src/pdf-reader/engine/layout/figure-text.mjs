@@ -44,7 +44,8 @@
 // figure, size and direction on one baseline, are one set (`set`, its first unit's k), which the layer fits at one size
 // (layer-proto/figure-fit.mjs fitFigureSet). Its room (`before`, `after`) is the free line beside its box: to the nearest ink
 // its band meets (or the edge of the ground it stands on), ROOM_CLEAR short of it, within its figure's extent (pageInk's
-// `figures` and its glyphs), half the line to another unit's band (the other half that unit's), ROOM_MAX at most.
+// `figures` and its glyphs), half the line to another unit's band (the other half that unit's), short of a unit of another
+// direction's band and room, ROOM_MAX at most.
 //
 // Pure arithmetic over the pages; an original module (no port statement).
 import { classifyFont } from '../layer-proto/fonts.mjs'
@@ -323,7 +324,8 @@ function setsOf(mine, evidence, stats) {
  * other ink, never leaving its figure): the ink its band meets nearest along its baseline (roomOf's `free`: another glyph, a
  * stroke, a fill's edge, an image) less ROOM_CLEAR of its size; never past its figure's extent (pageInk's `figures`, with its
  * figure's glyphs); half the line between it and another unit whose band its own meets (a neighbour's translation may take
- * the other half); ROOM_MAX of its size at most
+ * the other half); ROOM_MAX of its size at most; and short of the band and room of a unit of another direction (each
+ * against the other's room as first found: a level label and a turned one never take one place)
  */
 function roomsOf(pg, S, mine) {
   if (!mine.length) return
@@ -343,6 +345,12 @@ function roomsOf(pg, S, mine) {
     return [Math.min(...pts.map(p => p[0])), Math.min(...pts.map(p => p[1])), Math.max(...pts.map(p => p[0])), Math.max(...pts.map(p => p[1]))]
   }
   const bands = mine.map(({ u }) => boxOf(u))
+  // (each unit's band with its room either side, as a page box: what a unit of another direction may take, stopped short of)
+  const reachOf = u => {
+    const nx = -u.uy, ny = u.ux, lo = u.descent * u.size, hi = u.ascent * u.size
+    const pts = [[-u.before, lo], [u.length + u.after, lo], [-u.before, hi], [u.length + u.after, hi]].map(([s1, t]) => [u.x + u.ux * s1 + nx * t, u.y + u.uy * s1 + ny * t])
+    return [Math.min(...pts.map(p => p[0])), Math.min(...pts.map(p => p[1])), Math.max(...pts.map(p => p[0])), Math.max(...pts.map(p => p[1]))]
+  }
   mine.forEach(({ u, r, free }, i) => {
     const f = { ox: u.x, oy: u.y, ux: u.ux, uy: u.uy }, clear = ROOM_CLEAR * u.size, pad = CROWD_PAD * u.size
     const lo = u.descent * u.size + pad, hi = u.ascent * u.size - pad
@@ -359,6 +367,23 @@ function roomsOf(pg, S, mine) {
     u.before = Math.max(0, before)
     u.after = Math.max(0, after)
   })
+  // (then a unit of another direction: its band with its room, as just found, stops this one's room short of it, and this one's
+  // its; each against the other's first finding, so that neither takes the place the other may, the review of #490)
+  const first = mine.map(({ u }) => reachOf(u))
+  const cut = mine.map(({ u }) => [u.before, u.after])
+  mine.forEach(({ u }, i) => {
+    const f = { ox: u.x, oy: u.y, ux: u.ux, uy: u.uy }, clear = ROOM_CLEAR * u.size, pad = CROWD_PAD * u.size
+    const lo = u.descent * u.size + pad, hi = u.ascent * u.size - pad
+    mine.forEach(({ u: v }, j) => {
+      if (j === i || Math.abs(u.ux * v.uy - u.uy * v.ux) < 1e-3) return
+      const o = inFrame(f, first[j])
+      if (o[3] <= lo || o[1] >= hi) return
+      // (one across its own box is ink its crowding read, or a band its room already halved: nothing more to cut)
+      if (o[2] <= 0) cut[i][0] = Math.min(cut[i][0], Math.max(0, -o[2] - clear))
+      else if (o[0] >= u.length) cut[i][1] = Math.min(cut[i][1], Math.max(0, o[0] - u.length - clear))
+    })
+  })
+  mine.forEach(({ u }, i) => { u.before = cut[i][0]; u.after = cut[i][1] })
 }
 
 /** a run's text: its glyphs' Unicode (NFKC), a space where two stand SPACE_GAP of their size apart or more (or a blank between) */
@@ -469,7 +494,8 @@ function shapeRoom(shape, f, band, along1, free1, e) {
   const inside = parts.some(([a, b]) => b > band[0] && a < band[2])
   // (to its box within SHOWN_SLACK: its segments are single floats, a rectangle's edge a hair past the box it bounds)
   const shown = (a, b) => { const p = Math.max(a, e[0] - SHOWN_SLACK), q = Math.min(b, e[2] + SHOWN_SLACK); if (p <= q) free1(p, q) }
-  if (shape.fill && !shape.stroke && !inside && holdsPoint(shape, f, (band[0] + band[2]) / 2, (band[1] + band[3]) / 2)) { for (const [a, b] of parts) shown(a, b); return }
+  // (a ground: its lines where its box shows them, and its box's own edges, where a clip cuts it short of them)
+  if (shape.fill && !shape.stroke && !inside && holdsPoint(shape, f, (band[0] + band[2]) / 2, (band[1] + band[3]) / 2)) { for (const [a, b] of parts) shown(a, b); free1(Math.min(e[0], band[0]), Math.min(e[0], band[0])); free1(Math.max(e[2], band[2]), Math.max(e[2], band[2])); return }
   for (const [a, b] of parts) { along1?.(a, b); shown(a, b) }
 }
 
