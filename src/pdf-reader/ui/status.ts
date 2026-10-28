@@ -13,8 +13,8 @@ export type Capsule =
   /** the paper cannot be had as a bilingual PDF: said, with its HTML version (`href`) offered where there is one; not
    *  closable */
   | { kind: 'unavailable'; words: CapsuleWords; href?: string }
-  /** the bilingual version cannot be had right now (our server out of reach, or at its limit): said, with its retry and
-   *  the HTML version offered where there is one; passing, not remembered; not closable */
+  /** the bilingual version cannot be had right now (our server out of reach, S-R-24; or at its limit, a 429, S-R-26: its own
+   *  words): said, with its retry and the HTML version offered where there is one; passing, not remembered; not closable */
   | { kind: 'notNow'; words: CapsuleWords; href?: string }
   /** passages that failed (S-P-60): with its retry (S-P-61) only where the run stopped for a reason a retry mends
    *  (`failure`); the passages the typesetting left in the original fail the same way again, until a new version (I-5
@@ -61,7 +61,12 @@ export function capsuleOf(state: ReaderState, seen: Seen): Capsule | null {
   // the bilingual version not to be had now: the original stays readable, and a retry is offered with the HTML version
   // (the layer-only plan's "Offline, drafted")
   const why = state.unavailable?.why
-  if (!running(state) && (why === 'refused' || why === 'unreachable')) return state.htmlVersion ? { kind: 'notNow', words: plain(R.status.notNow), href: state.htmlVersion } : { kind: 'notNow', words: plain(R.status.notNow) }
+  // (a 429 is our server's limit, said as such: past the run's few waits it asks no more by itself, and the reader's retry is
+  // what asks again, #88 E5)
+  if (!running(state) && (why === 'refused' || why === 'unreachable')) {
+    const words = plain(why === 'refused' ? R.status.limited : R.status.notNow)
+    return state.htmlVersion ? { kind: 'notNow', words, href: state.htmlVersion } : { kind: 'notNow', words }
+  }
   // the paragraphs that failed are told once the run has ended, with its retry where a stop is there to resume
   if (!running(state) && state.failedUnits > 0 && !seen.noticeClosed) return { kind: 'notice', words: withCount(S.failed.text(state.failedUnits), state.failedUnits), action: state.failure ? 'retry' : null }
   if (state.narrow && state.display === 'bilingual' && !seen.narrowShown) return { kind: 'narrow', words: plain(R.status.narrow) }
@@ -93,6 +98,7 @@ export function cardOf(state: ReaderState): Card | null {
   if (state.noPaper) return { reason: R.status.noPaper, action: 'arxiv' }
   if (state.phase !== 'failed' || state.failure === 'aborted') return null
   const kind = state.failure ?? 'unknown'
-  // the chain's own words for a rate limit promise a retry by itself; a stopped run here waits for the reader's
-  return { reason: kind === 'rate-limit' ? R.status.rateLimited : reasonText(kind), action: KEYS.has(kind) ? 'settings' : 'retry' }
+  // the chain's own words for a rate limit promise a retry by itself; a stopped run here waits for the reader's. A key's reason
+  // is the key's only where the service chosen carries one (reasonText)
+  return { reason: kind === 'rate-limit' ? R.status.rateLimited : reasonText(kind, state.settings?.provider), action: KEYS.has(kind) ? 'settings' : 'retry' }
 }

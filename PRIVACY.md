@@ -6,7 +6,7 @@ Read arXiv is a Chrome extension that translates arXiv's papers: HTML papers in 
 
 ## What the extension reads
 
-The extension runs on `arxiv.org` pages: on HTML papers (`arxiv.org/html/…`) it reads the paper's text, structure, identifier and figures so it can translate them. On abstract and PDF pages it reads only the paper's identifier, to offer that paper's bilingual version; on a PDF page it asks arXiv itself, once, whether the paper has an HTML version. On all three it shows a small floating button, which you can hide or turn off in the settings. Nothing is translated until you ask: from that button, the extension's popup, its toolbar button, the right-click menu, the keyboard shortcut, or the link on the abstract page.
+The extension runs on `arxiv.org` pages: on HTML papers (`arxiv.org/html/…`) it reads the paper's text, structure, identifier and figures so it can translate them. On abstract and PDF pages it reads only the paper's identifier, to offer that paper's bilingual version; on a PDF page it asks arXiv itself, once each, whether the paper has an HTML version and whether its source can be read as a bilingual PDF (two `HEAD` requests). When you look a paper up in the extension's popup, by its identifier or address, the popup asks arXiv the same two questions about it. On all three it shows a small floating button, which you can hide or turn off in the settings. Nothing is translated until you ask: from that button, the extension's popup, its toolbar button, the right-click menu, the keyboard shortcut, or the link on the abstract page.
 
 The extension also runs on the pages of Read arXiv's own website (`readarxiv.com`). There it reads nothing from the page and sends nothing: it sets one mark on the page, the extension's version, so the website can tell that the extension is installed.
 
@@ -21,6 +21,8 @@ The website fetches the paper's source and PDF from arXiv itself and makes these
 
 Like any website, `readarxiv.com` and its host, Cloudflare, see ordinary network information, such as your IP address.
 
+The PDF reader also asks arXiv itself, once a visit, for the paper's abstract page (for its title and latest version) and, when the bilingual version cannot be had, whether the paper has an HTML version; neither request carries a cookie. The original PDF always comes from arXiv.
+
 The paragraphs of the PDF are translated as an HTML paper's are: by the service you chose (see below).
 
 ## Where the text goes
@@ -30,7 +32,7 @@ The paragraphs of the PDF are translated as an HTML paper's are: by the service 
 - **Microsoft's web translator** (`edge.microsoft.com`) is the default.
 - **Google's web translator** (`translate-pa.googleapis.com`) can be chosen instead.
 - **Chrome's built-in translator** translates on your computer, with language packs Chrome downloads; the text does not leave the machine.
-- **An OpenAI-compatible service you add** (OpenRouter, DeepSeek, a local Ollama or LM Studio, any other address) receives each request with your API key for authentication. With the built-in prompts every request also carries the paper's title, its abstract, the current section heading and the glossary entries that occur in the passage, as context; a prompt you write yourself decides which of these it includes. A service that forwards requests to model providers, such as OpenRouter, passes them on under its own terms.
+- **An OpenAI-compatible service you add** (OpenRouter, DeepSeek, a local Ollama or LM Studio, any other address) receives each request with your API key for authentication. Your key goes only to the address of that service, including when the settings page lists the service's models, and a request carrying it never follows a redirect to another address. With the built-in prompts every request also carries the paper's title, its abstract, the current section heading and the glossary entries that occur in the passage, as context; a prompt you write yourself decides which of these it includes. A service that forwards requests to model providers, such as OpenRouter, passes them on under its own terms.
 
 **Falling back.** If the selected service fails, the rest of the page is handed to one of the free services: Chrome's built-in translator when it can take over, otherwise Google's web translator. This is on by default, so a failure can send text to a service you did not pick — including when you chose a local one. You can turn it off in the settings; then only the selected service is used.
 
@@ -38,11 +40,12 @@ The paragraphs of the PDF are translated as an HTML paper's are: by the service 
 
 ## Figures
 
-For translating the words inside figures, vector figures are loaded from arXiv and read on your computer. Text inside bitmap figures is recognised inside the extension, in your browser, by a recognition model that is part of the extension's package: nothing is downloaded for it, and the image goes nowhere. The words found in a figure are then translated like any other text, by the services above. Images are never uploaded to a translation service.
+For translating the words inside figures, vector figures are loaded again from the address the page shows them from (arXiv's own, on arXiv's pages; usually out of the browser's cache) and read on your computer. Text inside bitmap figures is recognised inside the extension, in your browser, by a recognition model that is part of the extension's package: nothing is downloaded for it, and the image goes nowhere. The words found in a figure are then translated like any other text, by the services above. Images are never uploaded to a translation service.
 
 ## What is stored on your computer
 
-- **Settings**, in the extension's local storage: the services you added with their addresses, models and API keys, your prompts and glossary, your language, reading and appearance choices. Extension storage is not an encrypted password store.
+- **Settings**, in the extension's local storage: the services you added with their addresses, models and API keys, your prompts and glossary, your language, reading and appearance choices, and where the floating button sits and whether it shows. Extension storage is not an encrypted password store.
+- **A record of refused keys**, in the extension's local storage: for each service of yours whose key the service refused, the service's identifier and the time, so that the extension stops sending that key until you give a new one. It holds no key, and is cleared once the service accepts a request again, its key or address changes, or it is removed.
 - **A translation cache**, in the extension's IndexedDB database: translations and figure recognition results, filed under a hash of what was translated and how, so a paper you reopen appears at once. API keys are not part of the cache. Entries expire after 30 days; at most 20 000 are kept. Clearing the cache in the settings removes them; it leaves your settings as they are.
 - **PDF papers' files**, in the extension's IndexedDB database: the page files of the PDF papers you read translated, and the website's copy of a paper's PDF where one was downloaded whole, so that a paper you reopen needs less from the website, and still opens when the website cannot be reached (the original itself always comes from arXiv). At most 200 MB; the papers opened least recently go first. The settings page shows how many papers are kept and clears them.
 - **A diagnostics log**, in the browser's session storage, which ends when the browser closes: the last 500 lines about what the extension did — for example that a request failed, with the kind of failure and the HTTP status, or that the page was handed to another service — with block and paper identifiers and counts. It never contains page text, API keys or the messages services send back. It leaves your computer only if you export it from the settings page and share it yourself.
@@ -59,4 +62,4 @@ You can choose the translation service, turn falling back off, remove a service 
 
 ## Contact and changes
 
-Questions about privacy: open an issue at https://github.com/SRjoeee/ReadarXiv/issues. Issues are public, so do not include API keys or other private information. When the extension's handling of data changes, this file changes with it, and its history in the repository shows what changed and when.
+Questions about privacy: open an issue at https://github.com/SRjoeee/ReadarXiv/issues. Issues are public, so do not include API keys or other private information. A security problem, such as a way an API key could leak, is reported privately instead, as [`SECURITY.md`](SECURITY.md) says. When the extension's handling of data changes, this file changes with it, and its history in the repository shows what changed and when.

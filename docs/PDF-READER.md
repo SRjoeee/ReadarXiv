@@ -404,7 +404,9 @@ No state that tells the reader nothing is shown (no "done").
 | Settings cannot be read | storage did not answer in a page's first 1,500 ms, or its value cannot be used | the defaults in use and the PDF opened on them, not held for the storage; capsule: 设置读取失败，当前使用默认设置 · 设置, for as long as it is so, beside an address with no paper's card too; the controls that write the settings greyed, with the reason in their tooltips; the menus keep their places |
 | Narrow window | 对照 chosen, the document area under 840 px (§5) | the translation alone; capsule, once: 窗口较窄，暂只显示译文 |
 
-- Recovery is automatic where it can be: our server's wait (a 202's, a 429's) is waited and asked again; 重试 opens the
+- Recovery is automatic where it can be: our server's wait (a 202's, a 429's) is waited and asked again, a 429's three
+  times in a row at most (S-R-26: a visitor's limit lasts up to a day, and a tab left open asked every ten minutes for as
+  long as it stayed open; #88 E5); 重试 opens the
   layer again and asks only for the paragraphs that are missing, the rest coming from the cache; rate limiting never shows
   (the chain retries it, and only its final giving-up counts as a failure).
 - A failure never takes focus.
@@ -997,7 +999,9 @@ contract §4.3), started by the host once a translated display is shown in a vis
    it has been polled for 2 minutes; given up after 10, S-R-24 with its retry; none while the tab is hidden, that time not
    counted); a 404 `not-prepared` asks the prepare, once a visit (given back where the prepare never reached our server, so
    that a retry asks it again); any other 404 is why there is none (S-R-17); a 429 waits
-   its time (S-R-24 meanwhile, whose retry waits it out too); our server out of reach (a 5xx, the network, or nothing within
+   its time (S-R-26 meanwhile, whose retry waits it out too) and asks again, three times in a row at most (`REFUSED_ASKS`;
+   the next 429 stops the look, S-R-26 staying, and a retry then asks at once), a prepare it refused given back like one that
+   never reached our server; our server out of reach (a 5xx, the network, or nothing within
    30 s, its answer and body together, `REQUEST_MS`: twice) opens a paper whose catalog this machine holds (its place in the
    store renewed), else S-R-24. A retry begins the run again where the side refused its layer (a new side, its look, its bind,
    the base's tag heard anew), and opens the service again where it stopped short (its scope bound to the chain the settings
