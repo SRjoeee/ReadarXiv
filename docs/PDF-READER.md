@@ -2396,8 +2396,8 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     texts (2610.21377v1 72 `\nolinkurl{doi:…}`, 2307.16209v1 4 of REVTeX's `\href@noop`, 2608.25210v2 2, 2608.10322v2 and
     2610.21098v1 2 `\natexlab`s each). Drawn gained 54, lost 0, all 2608.25210v2's entries; the entries the wrap leaves the
     original's for their marks there 63 to 0; every base page pixel for pixel `next`'s (952 pages), its page count arXiv's; no
-    unit's lines lost, gained or moved; the wrap of the five papers (`ocg-gate.mjs`) as `next`'s. The gate pack is `f1ec0c3e`:
-    `ad76c514` with 2307.16209v1-zh's base record made again (8 more texts), every layout file and base page byte for byte.
+    unit's lines lost, gained or moved; the wrap of the five papers (`ocg-gate.mjs`) as `next`'s. The gate pack is `59ef805c`:
+    `efd01632` (#491's) with 2307.16209v1-zh's base record made again (8 more texts), every layout file and base page byte for byte.
 - **A unit the layer leaves the original's says why** (read time, no stored artefact, no version token): each `skipped` record
   of the run (`layer-proto/run.mjs`) carries a `code` of `SKIP_CODES` beside its `why`: `unlocated` (the file holds no row of
   it, and the file's own reason beside it, `unlaid`), `pieces`, `noRow`, `lost` (a visible piece the file has no position
