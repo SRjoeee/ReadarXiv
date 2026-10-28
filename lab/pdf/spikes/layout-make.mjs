@@ -20,7 +20,7 @@ import { promisify } from 'node:util'
 import { gzipSync } from 'node:zlib'
 import { getDocument, OPS, version } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { keptFor, openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
-import { classOf, LAYOUT_CLASSES, encodeLayoutMarks, inkSamples, layoutMarksOf, leadSamples, parseLayoutMarks, probeSamples, readInkProbe, readInkTexts, readMarkProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { classOf, LAYOUT_CLASSES, encodeLayoutMarks, layoutMarksOf, parseLayoutMarks, probeSamples, readInkAnswers, readMarkProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { encodeLayout, PH_FLAG } from '../../../src/pdf-reader/engine/layout/file.mjs'
 import { pageInk, unreadOf } from '../../../src/pdf-reader/engine/layout/ink.mjs'
 import { makeLayout } from '../../../src/pdf-reader/engine/layout/make.mjs'
@@ -103,9 +103,9 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
     writeFileSync(probeLog, existsSync(join(pdir, `${stem}.log`)) ? readFileSync(join(pdir, `${stem}.log`), 'latin1') : '', 'latin1')
     rmSync(pdir, { recursive: true, force: true })
   }
-  const switches = readMarkProbe(readFileSync(probeLog, 'latin1'), samples), inkless = readInkProbe(readFileSync(probeLog, 'latin1'), inkSamples(paper.units))
-  // (the macros' texts and the units' leads', asked last: as layout/paper.mjs reads them)
-  const shown = readInkTexts(readFileSync(probeLog, 'latin1'), [...inkSamples(paper.units), ...leadSamples(paper.units)])
+  // (the macros' answers, the leads' texts and the entries' carried ones, as layout/paper.mjs reads them: readInkAnswers)
+  const ink = readInkAnswers(readFileSync(probeLog, 'latin1'), paper.units)
+  const switches = readMarkProbe(readFileSync(probeLog, 'latin1'), samples), inkless = ink.inkless, shown = ink.texts
   // the layout compile, cached by what it compiles
   const build = join(dir, 'build'), marksFile = join(dir, 'marks.json'), stamp = join(dir, 'marks.key')
   const cached = key => {

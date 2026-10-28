@@ -27,7 +27,7 @@ import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { auxUnits, engineUnknown, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.mjs'
 import { DRIVER_OUTPUT_MARK, driverLostInk, driverOutputGiven, driverOutputTruncated, finalCheck, markTextOf } from './base.mjs'
-import { completeCalled, inkSamples, LAYOUT_CLASSES, leadSamples, probeSamples, readInkApart, readInkProbe, readInkTexts, readMarked, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from './marks.mjs'
+import { completeCalled, LAYOUT_CLASSES, probeSamples, readInkAnswers, readMarked, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from './marks.mjs'
 
 /** the layout guard's compiles past the marked original's, at most, the unmarked original's among them */
 const GUARD_EXTRA = 2
@@ -195,8 +195,9 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     const log = lastTexLog(c?.log)
     if (!log) return null
     // (the texts of the macros and of the units' leads, asked last: live.mjs probeFiles)
-    const ink = inkSamples(paper.units), leads = leadSamples(paper.units, ink)
-    return { switches: readMarkProbe(log, probeSamples(paper.units, paper.project?.complete)), inkless: readInkProbe(log, ink), texts: readInkTexts(log, [...ink, ...leads]), names: readNameProbe(log), lineskip: readSkipProbe(log), apart: readInkApart(log, ink) }
+    // (the body's and the entries' answers, as every reader takes them: marks.mjs readInkAnswers)
+    const { inkless, texts, apart } = readInkAnswers(log, paper.units)
+    return { switches: readMarkProbe(log, probeSamples(paper.units, paper.project?.complete)), inkless, texts, names: readNameProbe(log), lineskip: readSkipProbe(log), apart }
   })
   if (!probe) return { refused: 'probe', ms }
   // (the day the marked original and its final pass are compiled on: the host's, asked once; any failure of the host's but a
