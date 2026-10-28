@@ -237,6 +237,86 @@ export function openPaper(files) {
   return { fsys, meta, project, units: project.units, inFloat: project.inFloat, kept: nameCells(project.units), names }
 }
 
+/**
+ * The definitions a paper's .bbl makes for itself (`<job>.bbl`, the one TeX reads: shipped or made, layout/paper.mjs
+ * madeBibliography), in the lines before its first entry (`\\bibitem`, harvard's `\\harvarditem`), in their order, as the styles
+ * write them: a `\\providecommand` (an elsarticle .bbl's `\\providecommand{\\DOIprefix}{doi:}`); a `\\newcommand`, set as a
+ * `\\providecommand` (alpha's `\\etalchar`: where the paper defined it before, the .bbl's \\newcommand is an error and the paper's
+ * stands); a conditional that defines what is undefined, whole, both its branches (natbib's
+ * `\\expandafter\\ifx\\csname natexlab\\endcsname\\relax\\def\\natexlab#1{#1}\\fi`, and its
+ * `\\expandafter\\ifx\\csname urlstyle\\endcsname\\relax \\providecommand{\\doi}[1]{doi: #1}\\else \\providecommand{\\doi}{…\\Url}\\fi`,
+ * whose two \\doi TeX tells apart by whether the paper loads url; Springer's `\\ifx \\bisbn \\undefined \\def \\bisbn #1{…}\\fi`);
+ * `\\@ifundefined{X}{…}{…}`, whole; and a `\\def` or `\\let` of its own, set only where its name is undefined (MNRAS's `\\mn@doi`,
+ * REVTeX's `\\let\\auto@bib@innerbib\\@empty`), so that no definition of the paper's is replaced before the body's samples. TeX
+ * reads them where \\bibliography stands, so the mark probe, set right after \\begin{document}, knew none of the entries' own
+ * macros: their calls an error there, no answer and no text (2010.11929v2's `\\doi{…}`, 2608.25210v2's `\\natexlab{a}`). Read as
+ * TeX reads the .bbl: a comment (an unescaped `%` to its line's end) taken out with its line's end and the next line's leading
+ * blanks, so that neither a commented-out definition nor a brace in a comment counts; and one read under `\\makeatletter` given
+ * in it again, `@` a letter as it was there (the reviews of #486). Anything else of the head (a length, a \\renewcommand, which
+ * would replace the paper's own, a group, whose definitions are its own) is passed over. '' where the paper has no .bbl, or none
+ */
+export function bblProvides(fsys, main) {
+  const path = `${jobName(main)}.bbl`
+  if (!fsys.list().includes(path)) return ''
+  const text = uncommentedTex(texText(fsys.read(path))), end = text.search(/\\(?:bibitem|harvarditem)(?![A-Za-z@])/)
+  const head = end < 0 ? text : text.slice(0, end), out = []
+  /** `re` (sticky) matched at `i`, or null */
+  const at = (re, i) => { re.lastIndex = i; return re.exec(head) }
+  /** where `@` is a letter in the head: after a \\makeatletter, before the \\makeatother after it */
+  const letters = i => { const a = head.lastIndexOf('\\makeatletter', i), o = head.lastIndexOf('\\makeatother', i); return a >= 0 && a > o }
+  const put = (i, tex) => out.push(letters(i) ? `\\makeatletter${tex}\\makeatother ` : tex)
+  /** the end past the balanced group that opens at `i` (white space before it passed over), or -1 where there is none or it
+   *  runs off the head */
+  const group = i => {
+    i += at(BLANKS, i)[0].length
+    if (head[i] !== '{') return -1
+    for (let j = i, depth = 0; j < head.length; j++) {
+      if (head[j] === '\\') j++
+      else if (head[j] === '{') depth++
+      else if (head[j] === '}' && --depth === 0) return j + 1
+    }
+    return -1
+  }
+  /** the end past the conditional that opens at `i`, at its matching \\fi (the primitive conditionals nested in it counted), or -1 */
+  const conditional = i => {
+    for (let depth = 0, m; (m = at(IF_FI, i)); i = m.index + m[0].length) {
+      if (m[1] === 'fi') { if (--depth === 0) return m.index + m[0].length } else if (m[1] !== undefined) depth++
+    }
+    return -1
+  }
+  for (let i = 0, m, e; i < head.length; i = e) {
+    if ((m = at(COMMAND, i)) && (e = group(i + m[0].length)) > 0) put(i, `\\providecommand${m[1]}${head.slice(i + m[0].length - m[2].length, e)}`)
+    else if (at(CONDITIONAL, i) && (e = conditional(i)) > 0) {
+      // (one that defines nothing, or replaces a definition, passed over whole)
+      const body = head.slice(i, e)
+      if (DEFINES.test(body) && !RENEWS.test(body)) put(i, body)
+    } else if ((m = at(IFUNDEFINED, i)) && (e = [0, 1, 2].reduce(j => (j > 0 ? group(j) : j), i + m[0].length)) > 0) put(i, head.slice(i, e))
+    else if ((m = at(DEF, i)) && (e = group(i + m[0].length)) > 0) put(i, `\\ifx${m[1]}\\undefined${head.slice(i, e)}\\fi `)
+    else if ((m = at(LET, i))) put(i, `\\ifx${m[1]}\\undefined${head.slice(i, (e = i + m[0].length))}\\fi `)
+    // (anything else: a group passed over whole, a control sequence or a character one at a time)
+    else if (head[i] === '{') e = (g => (g > 0 ? g : head.length))(group(i))
+    else e = i + (at(TOKEN, i)?.[0].length ?? 1)
+  }
+  return out.join('')
+}
+const BLANKS = /\s*/y
+const TOKEN = /\\(?:[A-Za-z@]+|.)/ys
+/** a \\providecommand or \\newcommand up to its body: [1] its star, [2] its name, arity and default */
+const COMMAND = /\\(?:provide|new)command(\*?)(\s*(?:\{\s*\\(?:[A-Za-z@]+|.)\s*\}|\\(?:[A-Za-z@]+|.))\s*(?:\[\s*\d\s*\]\s*)?(?:\[[^\]]*\]\s*)?)(?=\{)/ys
+/** a conditional on whether a name is defined */
+const CONDITIONAL = /\\expandafter\s*\\ifx\s*\\csname|\\ifx\s*\\(?:[A-Za-z@]+|.)\s*\\(?:undefined|relax|@undefined)(?![A-Za-z@])|\\if(?:defined|csname)(?![A-Za-z@])/y
+/** the next primitive conditional ([1] `if…`) or \\fi ([1] `fi`), or any other control sequence passed over */
+const IF_FI = /[^\\]*\\(?:(if(?:x|cat|num|dim|odd|vmode|hmode|mmode|inner|void|hbox|vbox|eof|true|false|case|defined|csname|fontchar)?|fi)(?![A-Za-z@])|[A-Za-z@]+|.)/ys
+const DEFINES = /\\(?:providecommand|newcommand|[gex]?def|let)(?![A-Za-z@])/
+const RENEWS = /\\renewcommand(?![A-Za-z@])/
+const IFUNDEFINED = /\\@ifundefined(?![A-Za-z@])/y
+/** a \\def (\\gdef, \\edef, \\xdef) up to its body: [1] its name; the parameter text after it */
+const DEF = /\\[gex]?def(?![A-Za-z@])\s*(\\(?:[A-Za-z@]+|.))[^{}\\]*(?:\\(?:[A-Za-z@]+|.)[^{}\\]*)*?(?=\{)/ys
+/** a \\let: [1] its name, then an optional `=` and the one token it is let to */
+const LET = /\\let(?![A-Za-z@])\s*(\\(?:[A-Za-z@]+|.))\s*=?\s*(?:\\(?:[A-Za-z@]+|.)|[^\s\\{}])/ys
+/** a TeX source with its comments taken out as TeX reads them: from an unescaped `%` (an even number of backslashes before it) to
+ *  its line's end, that line's end and the next line's leading blanks with it (TeX skips the blanks a line begins with) */
+const uncommentedTex = t => t.replace(/(?<!\\)((?:\\\\)*)%[^\n]*(?:\n[ \t]*)?/g, '$1')
 /** the preamble alone, closed at once: its log names the document's font families; with `width`, also how wide the
  *  body face sets and at what sizes (typeset/density.mjs WIDTH_PROBE), which the typesetting rule measures text by;
  *  with `marks`, the layout marks' TeX (MARK_DEF, LAYOUT_TEX) first and, after the width probe, the mark probe
@@ -246,34 +326,6 @@ export function openPaper(files) {
  *  `latex` (latex-front.mjs dviEngine), each
  *  followed by its DVI marks (DVI_MARK_DEF, marks.mjs DVI_LAYOUT_TEX), so that the probe asks TeX about the marks the DVI
  *  compile sets. Without it, the bytes as before */
-/**
- * The definitions a paper's .bbl makes for itself (`<job>.bbl`, the one TeX reads: shipped or made, layout/paper.mjs
- * madeBibliography): each `\\providecommand` of the lines before its first `\\bibitem`, whole, in its order (an elsarticle .bbl's
- * `\\providecommand{\\DOIprefix}{doi:}`, `\\providecommand{\\doi}[1]{…}`). TeX reads them where \\bibliography stands, so the
- * mark probe, set right after \\begin{document}, knew none of the entries' own macros: their calls an error there, no answer and no
- * text. A \\providecommand defines only what is undefined, as it does where the .bbl is read. Read as TeX reads the .bbl: a comment
- * (an unescaped `%` to its line's end) taken out with its line's end and the next line's leading blanks, so that neither a
- * commented-out definition nor a brace in a comment counts, and the definition's tokens are TeX's; and one read under
- * `\\makeatletter` given in it again, `@` a letter as it was there (the reviews of #486). '' where the paper has no .bbl, or none
- */
-export function bblProvides(fsys, main) {
-  const path = `${jobName(main)}.bbl`
-  if (!fsys.list().includes(path)) return ''
-  const text = uncommentedTex(texText(fsys.read(path))), end = text.search(/\\bibitem(?![A-Za-z@])/)
-  const head = end < 0 ? text : text.slice(0, end), out = []
-  /** where `@` is a letter in the head: after a \\makeatletter, before the \\makeatother after it */
-  const letters = at => { const a = head.lastIndexOf('\\makeatletter', at), o = head.lastIndexOf('\\makeatother', at); return a >= 0 && a > o }
-  for (const m of head.matchAll(/\\providecommand\*?\s*(?:\{\s*\\[A-Za-z@]+\s*\}|\\[A-Za-z@]+)\s*(?:\[\d\]\s*)?(?:\[[^\]]*\]\s*)?\{/g)) {
-    // (its body, braces balanced; a body that runs off the .bbl's head is none)
-    let depth = 1, j = m.index + m[0].length
-    for (; j < head.length && depth; j++) { if (head[j] === '\\') { j++; continue } if (head[j] === '{') depth++; else if (head[j] === '}') depth-- }
-    if (!depth) out.push(letters(m.index) ? `\\makeatletter${head.slice(m.index, j)}\\makeatother ` : head.slice(m.index, j))
-  }
-  return out.join('')
-}
-/** a TeX source with its comments taken out as TeX reads them: from an unescaped `%` (an even number of backslashes before it) to
- *  its line's end, that line's end and the next line's leading blanks with it (TeX skips the blanks a line begins with) */
-const uncommentedTex = t => t.replace(/(?<!\\)((?:\\\\)*)%[^\n]*(?:\n[ \t]*)?/g, '$1')
 export function probeFiles({ fsys, project, meta }, { width = false, marks = false } = {}) {
   // (the main file as the front end reads it, its line ends TeX's: read raw, a lone-CR preamble's first comment hid its
   // \begin{document}, and the probe was the whole document and a second one)
