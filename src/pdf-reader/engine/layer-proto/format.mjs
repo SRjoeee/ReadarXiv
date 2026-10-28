@@ -1131,13 +1131,15 @@ function partShape(v, { N, unitCount, format = BUNDLE5 }) {
     }
   }
 
-  // figures: its pages' figure units, where its layout is (figure-rows.mjs), none of them a left unit nor a file-only one
-  // (the key there only where the part has one: a part of none is written as one before figures)
+  // figures: its pages' figure units, where its layout is (figure-rows.mjs), none of them a unit of the layout nor a file-only one:
+  // a figure unit is drawn by its figure row alone, never by a layout row; a left unit it may be (its left anchor, the hover's:
+  // pipeline/ink-pass.mjs figureAnchors, PIPELINE 31), which the layer's units leave to its row (run.mjs). (The key there only
+  // where the part has one: a part of none is written as one before figures)
   if (Object.hasOwn(v, 'figures') && !(Array.isArray(v.figures) && v.figures.length)) throw refuse(K, 'figures', 'there only where the part has a figure unit')
   const figures = inside(K, '', () => checkFigures(v.figures ?? [], { a, b, views, unitCount, format }))
   if (figures.length && layout === null) throw refuse(K, 'figures', 'figure units where the layout is none')
-  const placed = new Set(fileOnly.map(e => e[0]))
-  for (let i = 0; i < figures.length; i++) if (inLeft.has(figures[i].id) || placed.has(figures[i].id)) throw refuse(K, `figures[${i}][0]`, 'a unit of the left or of the layout')
+  const placed = new Set(fileOnly.map(e => e[0])), rowed = new Set((layout?.units ?? []).map(u => u[0]))
+  for (let i = 0; i < figures.length; i++) if (rowed.has(figures[i].id) || placed.has(figures[i].id)) throw refuse(K, `figures[${i}][0]`, 'a unit of the layout too')
 
   // leftParts
   const lp = v.leftParts
@@ -1151,7 +1153,7 @@ function partShape(v, { N, unitCount, format = BUNDLE5 }) {
 
 /** the chain before any part */
 function initialChain(index) {
-  return { head: index.sha256, through: 0, last: null, slot: -Infinity, id: -1, told: new Uint8Array(index.units.length), groups: new Uint8Array(indexGroups(index).count), reach: 0, ahead: [] }
+  return { head: index.sha256, through: 0, last: null, slot: -Infinity, id: -1, told: new Uint8Array(index.units.length), figured: new Uint8Array(index.units.length), groups: new Uint8Array(indexGroups(index).count), reach: 0, ahead: [] }
 }
 
 /**
@@ -1227,8 +1229,15 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
     tell(e[0], `fileOnly[${i}][0]`)
     note(e[1] + 0.5, e[0])
   }
-  // (a figure unit told once, by the part of its page; no slot of K's)
-  for (let i = 0; i < s.figures.length; i++) { const id = s.figures[i].id; if (told[id] === 1) throw refuse(K, `figures[${i}][0]`, 'a unit already told by an earlier part'); told[id] = 1 }
+  // (a figure unit's row told once, by the part of its page; no slot of K's. Its left anchor, the hover's, is told as a left unit's,
+  // by this part or an earlier one (pipeline/ink-pass.mjs figureAnchors): the two are apart, a figure unit is never a file-only
+  // unit nor a layout row (partShape), and its row is told once, `figured`)
+  const figured = (was.figured ?? new Uint8Array(index.units.length)).slice()
+  for (let i = 0; i < s.figures.length; i++) {
+    const id = s.figures[i].id
+    if (figured[id] === 1) throw refuse(K, `figures[${i}][0]`, 'a figure unit whose row an earlier part, or this one, told')
+    figured[id] = 1
+  }
   for (const g of mine) groups[g] = 1
   if (any && !(lowSlot > was.slot || (lowSlot === was.slot && lowId > was.id))) throw refuse(K, 'left', 'a unit that is not after the last one told (slot, id)')
   // (the views of the pages the last part reached past its own: those this part's views include are as told; a part whose own
@@ -1236,7 +1245,7 @@ export async function readPart(bytes, { ref, index, chain = null, caps }) {
   for (let i = 0, n = Math.min(s.views.length, was.ahead.length); i < n; i++) if (s.views[i] !== was.ahead[i]) throw refuse(K, `views[${i}]`, 'not the view told by the last part')
 
   const after = Object.freeze({
-    head: was.head, through: s.b, last: sha256, slot: highSlot, id: highId, told, groups, reach: Math.max(s.reach, was.reach),
+    head: was.head, through: s.b, last: sha256, slot: highSlot, id: highId, told, figured, groups, reach: Math.max(s.reach, was.reach),
     ahead: Object.freeze(s.reach >= was.reach ? s.views.slice(4 * (s.b - s.a + 1)) : was.ahead.slice(4 * (s.b - was.through))),
   })
   return {

@@ -170,6 +170,8 @@ export interface PartChain {
   readonly slot: number; readonly id: number
   /** a flag for each unit of the paper that a part has told (as a left unit or a file-only one): none is told twice */
   readonly told: Uint8Array
+  /** each unit whose figure row a part told (a figure unit's left anchor is told apart, in `told`) */
+  readonly figured?: Uint8Array
   /** a flag for each table group (groupsOfCells) that an earlier part told a member of: a later part tells no other member of it (amendment M18) */
   readonly groups: Uint8Array
   /** the furthest page any part's views reached (a part whose own units reach less far leaves the rest to the part that told them) */
