@@ -1450,7 +1450,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     row.base = r.base
     if (r.extra?.length) {
       row.extra = r.extra
-      for (const g of r.extra) { row.x0 = Math.min(row.x0, P.ix0[g]); row.x1 = Math.max(row.x1, P.x1[g]); row.top = Math.max(row.top, P.top[g]); row.bottom = Math.min(row.bottom, P.bottom[g]) }
+      for (const g of r.extra) { row.x0 = Math.min(row.x0, P.ix0[g]); row.x1 = Math.max(row.x1, P.ix1[g]); row.top = Math.max(row.top, P.top[g]); row.bottom = Math.min(row.bottom, P.bottom[g]) }
     }
     for (const [j, B] of one.boxes ?? []) if (j === 0) { row.x0 = Math.min(row.x0, B[0]); row.x1 = Math.max(row.x1, B[2]); row.top = Math.max(row.top, B[3]); row.bottom = Math.min(row.bottom, B[1]) }
     rows[0] = row
@@ -1730,7 +1730,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     if (!n) return 0
     const row = placedById.get(P.owner[left])?.rows.find(r => r.page === p && Math.abs(r.base - P.y[left]) < 0.5 * Math.max(r.size, P.size[left]) && r.x0 <= P.x0[left] + 0.05 && P.x1[left] <= r.x1 + 0.05)
     if (!row) return 0
-    for (const g of run.slice(0, n)) { row.gl.push(g); P.owner[g] = P.owner[left]; row.x1 = Math.max(row.x1, P.ix1[g]); row.top = Math.max(row.top, P.top[g]); row.bottom = Math.min(row.bottom, P.bottom[g]) }
+    for (const g of run.slice(0, n)) { row.gl.push(g); P.owner[g] = P.owner[left]; row.x1 = Math.max(row.x1, P.x1[g]); row.top = Math.max(row.top, P.top[g]); row.bottom = Math.min(row.bottom, P.bottom[g]) }
     return n
   }
   function labelOf(one) {

@@ -144,6 +144,13 @@ describe('the ink units in the page pass', () => {
     // (none meets: the layout as it was)
     const none = { ...layout, labels: [apart, other] }
     expect(layoutWithInk(none, got, [])).toBe(none)
+    // (an ink unit laid nowhere, its page not drawable: the original's, its ink shown in its group; the row stays — Devin on #481)
+    const off = inkOfHost({ base: 3, units: [head] }, { units: [0, 1, 2] }, [2])
+    expect(off).toBe(null)
+    const offTwo = inkOfHost({ base: 3, units: [head, { ...headUnit(4, 3), kind: 'inkorphan', cls: 'orphan' }] }, { units: [0, 1, 2] }, [2])
+    expect([...(offTwo?.off ?? [])]).toEqual([3])
+    // (the row over the laid one, on page 3, goes)
+    expect(layoutWithInk(layout, offTwo, [3, 4]).labels).toEqual([apart, over])
   })
 
   it('keeps an echo of an ink unit as the wrap made it, whether or not that unit is laid', () => {
