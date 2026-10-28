@@ -22,8 +22,8 @@ export interface StreamPage { glyphs: StreamGlyphs; boxes: number[]; points: Ink
  *  right after it with nothing visible between that have no opening point (the text after it and its next piece then
  *  the last one's) */
 /** `split` (the maker's, marks.mjs followsOf): the one unmarked piece after a paper's macro, by its opening mark's name, and the
- *  macro's text as spellOf reads it, by which the maker's reading parts their ink to `through` */
-export interface Follow { closing: boolean; want: string; rest?: string; display?: boolean; ends: string[]; blocked: boolean; through?: string | null; group?: string[]; split?: { name: string; spell: string } }
+ *  text the probe showed the macro sets, by which the maker's reading parts their ink to `through` */
+export interface Follow { closing: boolean; want: string; rest?: string; display?: boolean; ends: string[]; blocked: boolean; through?: string | null; group?: string[]; split?: { name: string; text: string } }
 /** a text's letters and digits, without their accents, lower case: the per-unit erasure's evidence that ink is a text's */
 export declare function spellOf(s: string): string
 export interface Owned { how: number; glyphs: [page: number, index: number][]; boxes: [page: number, index: number][] }

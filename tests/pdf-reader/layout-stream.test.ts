@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { type Glyph, packGlyphs } from '@/pdf-reader/engine/layout/ink.mjs'
 import { type Follow, OWNED, OWNED_HOW, ownedOf, ownedPages, STREAM_COLUMNS, type StreamPage } from '@/pdf-reader/engine/layout/stream.mjs'
+import { INK_ANY } from '@/pdf-reader/engine/layout/marks.mjs'
 
 // Each placeholder's own ink in the marked compile by content-stream order: a page here is what pageInk reads of one,
 // its glyphs and boxes in the order shown and its points among them, its glyphs packed as the marks read keeps them
@@ -320,14 +321,22 @@ describe('ownedOf for the erasure (erasure: true)', () => {
     // \lgnrm = \texttt{lognormal\_galaxies}\xspace before a footnote's call, which no mark may stand before; the citation after
     // the tie marked: the macro's glyphs spell "lognormalgalaxies", the raised 1 is the call's
     const page = pageOf(['code ', { at: 'p0.1a' }, 'lognormal_galaxies', { u: '1', x: 170, y: 703.5, size: 7 }, ' ', { at: 'p0.5a' }, '[1]', { at: 'p0.5b' }, ', which', { at: '0e' }])
-    const split: Follow = { closing: false, want: '', ends: ['n0.3a', '0e'], blocked: true, through: 'p0.5a', split: { name: 'n0.3a', spell: 'lognormalgalaxies' } }
+    const split: Follow = { closing: false, want: '', ends: ['n0.3a', '0e'], blocked: true, through: 'p0.5a', split: { name: 'n0.3a', text: 'lognormal_galaxies' } }
     expect(ink([page], { 'p0.1a': split, 'p0.5a': closed }, false)).toEqual({ 'p0.1a': ['lognormal_galaxies', 0], 'n0.3a': ['1', 0], 'p0.5a': ['[1]', 0] })
     // (a page at a time the same: ownedPages takes the call's entry with the macro's)
     expect(owned([page], { 'p0.1a': split, 'p0.5a': closed })).toEqual({ 'p0.1a': ['lognormal_galaxies', 0], 'n0.3a': ['1', 0], 'p0.5a': ['[1]', 0] })
     // (the erasure's reading as before: the two's ink the macro's, its group's alike)
     expect(ink([page], { 'p0.1a': split, 'p0.5a': closed }, true)).toEqual({ 'p0.1a': ['lognormal_galaxies1', 0], 'p0.5a': ['[1]', 0] })
-    // (a text the glyphs do not begin with, one they spell whole with nothing after it, or no split: LOST as before)
-    for (const spell of ['lognormalgalaxy', 'lognormalgalaxies1', 'xlognormal']) expect(ink([page], { 'p0.1a': { ...split, split: { name: 'n0.3a', spell } }, 'p0.5a': closed }, false)['p0.1a']).toBe('open, an unmarked piece follows')
+    // (a text the glyphs do not begin with, one they set whole with nothing after it, one they set but for a character — the
+    // underscore —, or no split: LOST as before)
+    for (const text of ['lognormal_galaxy', 'lognormal_galaxies1', 'xlognormal', 'lognormalgalaxies']) expect(ink([page], { 'p0.1a': { ...split, split: { name: 'n0.3a', text } }, 'p0.5a': closed }, false)['p0.1a']).toBe('open, an unmarked piece follows')
+    // (the macro's glyphs running on past its text, a letter on its baseline at its size — the call's ink is not all that is
+    // left: the review of #483 — none, where a split by its text's spelling alone gave the call "s1")
+    const more = pageOf(['code ', { at: 'p0.1a' }, 'lognormal_galaxiess', { u: '1', x: 175, y: 703.5, size: 7 }, ' ', { at: 'p0.5a' }, '[1]', { at: 'p0.5b' }, ', which', { at: '0e' }])
+    expect(ink([more], { 'p0.1a': split, 'p0.5a': closed }, false)['p0.1a']).toBe('open, an unmarked piece follows')
+    // (a formula's glyph of a text the probe showed, INK_ANY, is one glyph of any text)
+    const sym = pageOf(['code ', { at: 'p0.1a' }, 'd′', { u: '1', x: 120, y: 703.5, size: 7 }, ' ', { at: 'p0.5a' }, '[1]', { at: 'p0.5b' }, '.', { at: '0e' }])
+    expect(ink([sym], { 'p0.1a': { ...split, split: { name: 'n0.3a', text: `d${INK_ANY}` } }, 'p0.5a': closed }, false)).toEqual({ 'p0.1a': ['d′', 0], 'n0.3a': ['1', 0], 'p0.5a': ['[1]', 0] })
     expect(ink([page], { 'p0.1a': { ...split, split: undefined }, 'p0.5a': closed }, false)).toEqual({ 'p0.1a': 'open, an unmarked piece follows', 'p0.5a': ['[1]', 0] })
   })
   it('ends a display after its unit\'s end mark at a later unit\'s opening, that unit\'s label left out (2610.20595v1 p19u153)', () => {

@@ -342,8 +342,8 @@ describe('a placeholder no mark may stand before (\\footnote after \\xspace, TeX
   const u = unit([text('The code '), ph('\\lgnrm'), text(' '), ph('\\footnote{\\url{https://x.org}}'), ph('~'), ph('\\citep{a}'), text(', which')])
   const names = new Set(['p0.1a', 'p0.5a', 'p0.5b'])
   it('followsOf: the split where the macro\'s text is known, ends in a letter or a digit, and the call is the one unmarked piece before the next marked one', () => {
-    expect(followsOf([u], names, ['\\lgnrm', 'lognormal_galaxies'])('p0.1a')).toMatchObject({ blocked: true, through: 'p0.5a', split: { name: 'n0.3a', spell: 'lognormalgalaxies' } })
-    expect(followsOf([u], names, new Map([['\\lgnrm', 'lognormal_galaxies']]))('p0.1a')?.split).toEqual({ name: 'n0.3a', spell: 'lognormalgalaxies' })
+    expect(followsOf([u], names, ['\\lgnrm', 'lognormal_galaxies'])('p0.1a')).toMatchObject({ blocked: true, through: 'p0.5a', split: { name: 'n0.3a', text: 'lognormal_galaxies' } })
+    expect(followsOf([u], names, new Map([['\\lgnrm', 'lognormal_galaxies']]))('p0.1a')?.split).toEqual({ name: 'n0.3a', text: 'lognormal_galaxies' })
     // (no texts, as the wrap asks: the erasure's reading as it was; no text for the macro, or one ending in punctuation)
     expect(followsOf([u], names)('p0.1a')?.split).toBeUndefined()
     expect(followsOf([u], names, ['\\other', 'x'])('p0.1a')?.split).toBeUndefined()

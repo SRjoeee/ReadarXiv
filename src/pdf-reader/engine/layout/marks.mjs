@@ -1519,8 +1519,8 @@ const endsOf = i => [`${i}e`, `t${i}e`, `h${i}e`]
  * after a display: LAYOUT_TEX's \axt@pmc), by their opening marks' names; the text after it and its next piece are then
  * the group's last one's. With `texts` (the probe's: readInkTexts' pairs, flat, or a Map), a paper's macro whose next piece has
  * no mark of its own and is the only visible one before its unit's next marked piece, white space alone between
- * (`through`), is `split`: that piece's opening mark's name, which no point sets, and the text TeX sets for the macro as
- * spellOf reads it (ending in a letter or a digit), by which the maker's reading parts the two's ink (stream.mjs ownedOf):
+ * (`through`), is `split`: that piece's opening mark's name, which no point sets, and the text TeX sets for the macro (ending in
+ * a letter or a digit), by which the maker's reading parts the two's ink, character for character (stream.mjs ownedOf):
  * 2609.20976's `\lgnrm \footnote{…}`, before which \xspace sets no space and would before a mark (aheadSamples' answer 2)
  */
 export function followsOf(units, names, texts = null) {
@@ -1557,11 +1557,11 @@ export function followsOf(units, names, texts = null) {
     // (`split`, the maker's: the macro's text, where the one unmarked piece after it is a placeholder the maker cannot find
     // with no mark: AHEAD_FOLLOWS)
     const text = shown && through && !others && classOf(u.pieces[k]) === 'macro' && AHEAD_FOLLOWS.has(classOf(u.pieces[q])) ? shown.get(u.pieces[k].src) : undefined
-    const spell = typeof text === 'string' && /[\p{L}\p{N}]$/u.test(text) ? spellOf(text) : ''
+    const said = typeof text === 'string' && /[\p{L}\p{N}]$/u.test(text) ? text : ''
     // (`rest`, the erasure's: the whole text after it up to its next visible piece, as the spell check reads one — its letters and
     // digits —, so that the text after it is told where it runs exactly to its unit's next mark, not where its first WANT
     // characters first stand: a display's \\text{for every}, a URL's dots)
-    return { closing: names.has(`${name.slice(0, -1)}b`), want, rest: spellOf(after), display, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group, ...(spell ? { split: { name: `${next}a`, spell } } : {}) }
+    return { closing: names.has(`${name.slice(0, -1)}b`), want, rest: spellOf(after), display, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group, ...(said ? { split: { name: `${next}a`, text: said } } : {}) }
   }
 }
 
