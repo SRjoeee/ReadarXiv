@@ -2377,20 +2377,23 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   `INK_MAX` (64) and the entries after them (`sampleOrder`), so a body that fills the cap leaves every entry's macro unasked:
   no answer, no row for a `\natexlab{}` that sets no ink, the entry the original's. The cap cut 9 of the 36 papers measured
   (2608.25210v2's body writes 101 sources). Now:
-  - *The entries' share* (`marks.mjs` `ENTRY_INK_MAX`, 64, past the body's `INK_MAX`): asked first a sample of each shape of
-    call — its command and its arguments' shape (`entryShape`: each argument empty, plain text, or as written: `\natexlab{a}`,
-    `{b}` and `{c}` one shape, `\natexlab{}` another, REVTeX's `\href@noop {} {\emph {…}}` its own) —, so that every shape is
-    asked, then with the room left each further call of its own, in the paper's order: a bibliography the share holds is asked
-    call by call, as before.
-  - *The calls past it are answered by their shape's sample* (`inkShared`, at most `ENTRY_SHARED_MAX`, 1,024; `shareInk`,
-    `readInkAnswers`, the one reader of the ink answers production and the lab take): no ink and a box begun apart as the
-    sample's; a text only where each plain argument the two differ in stands once in the sample's text, put in the call's
-    (`carriedText`: `\natexlab{a}`'s "a" gives `\natexlab{b}` "b", `\doi{10.1/x}`'s "doi:10.1/x" gives "doi:10.2/y"), and none
-    where a macro transforms its argument (an `\uppercase`d one's text holds no argument) or the call's letters a font sets as a
-    ligature (ff, fi, fl: 2609.26457v1's "findings" in a DOI, whose glyph TeX's listing gives as no text). A carried text is
-    used only where the page's glyphs spell it (the split's `textedTo`, the leads' `leadStep`): one that does not stays LOST, as
-    an unasked call's does. The marks file names up to `INK_ANSWERS_MAX` answers (MARKS_SCHEMA 13; a reader of 12 refuses past
-    `INK_MAX`).
+  - *The entries' share* (`marks.mjs` `ENTRY_INK_MAX`, 64, past the body's `INK_MAX`), asked in this order: first the calls the
+    room the body leaves of `INK_MAX` would have asked, in the paper's order, so that no entry is asked less than it was; then
+    the entries' leads (a macro at an entry's head, whose ink only its own text finds: make.mjs besideMarks); then each further
+    call, in order. A bibliography the share holds is asked call by call, as before.
+  - *A call past the share is given a text alone* (`inkShared`, at most `ENTRY_SHARED_MAX`, 1,024; `shareInk`, `readInkAnswers`,
+    the one reader of the ink answers production and the lab take): the text of the first asked call of its shape (`entryShape`:
+    its command and each argument empty, plain text or as written — `\natexlab{a}`, `{b}` and `{c}` one shape, `\natexlab{}`
+    another), each plain argument the two differ in put in the call's where it stands once in that text (`carriedText`:
+    `\natexlab{a}`'s "a" gives `\natexlab{b}` "b", `\doi{10.1/x}`'s "doi:10.1/x" gives "doi:10.2/y"); none where a macro
+    transforms its argument (an `\uppercase`d one's text holds no argument) or where the call's letters a font sets as a ligature
+    (ff, fi, fl: 2609.26457v1's "findings" in a DOI, whose glyph TeX's listing gives as no text); a call's own text always
+    kept. A text is the one answer a wrong carry cannot misplace ink by: it is used only where the page's glyphs spell it (the
+    split's `textedTo`, the leads' `leadStep`), else the piece stays LOST, as an unasked call's does. No ink and a box begun
+    apart are never carried (the reviews of #495): a macro's ink may hang on its argument's value (`\ifnum#1>64 #1\fi`), and a
+    call wrongly said to set none would lose its placeholder and its entry's translation, one wrongly said apart would get a
+    mark against the word it is glued to. A lead past the share keeps a probe of its own (`leadSamples`, `LEAD_MAX`), as before.
+    The marks file names up to `INK_ANSWERS_MAX` answers (MARKS_SCHEMA 13; a reader of 12 refuses past `INK_MAX`).
   - Measured (`classes-gate.mjs --made --compile` against `next` 7ea4e57e, #492's tree, over the 36 papers; TeX's answers
     dumped): on 30 of the 35 compiled none changed; on 5 only answers gained, none lost or changed — 6 sources no ink
     (2608.25210v2's `\natexlab{}`, `{a}`…`{d}`, its paper's own definition setting nothing, and its `\showISSN{…}`) and 82

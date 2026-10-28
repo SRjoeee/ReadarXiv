@@ -424,32 +424,47 @@ describe('the ink section\'s cap and a bibliography\'s entries (2608.25210v2: it
     const many = [...body(2), ...Array.from({ length: ENTRY_INK_MAX + 3 }, (_, i) => entry(`\\e${i}{x}`))]
     expect(inkSamples(many)).toHaveLength(2 + ENTRY_INK_MAX)
   })
-  it('one sample a command and its arguments\' shape: \\natexlab{a}, {b} and {c} one, as written, \\natexlab{} another, an argument that is no plain text as it is written', () => {
+  it('the shape of an entry\'s call: \\natexlab{a}, {b} and {c} one, \\natexlab{} another, an argument that is no plain text as it is written', () => {
     expect(['\\natexlab{a}', '\\natexlab{b}', '\\natexlab{ c }', '\\natexlab{}', '\\natexlab{\\emph{a}}'].map(entryShape)).toEqual(['\\natexlab{\u0000}', '\\natexlab{\u0000}', '\\natexlab{\u0000}', '\\natexlab{}', '\\natexlab{\\emph{a}}'])
     // (REVTeX's \href@noop {} {…}: its arguments' shape, the second as written where it holds a command)
     expect(entryShape('\\href@noop {} {Ph.D. thesis}')).toBe('\\href@noop{}{\u0000}')
     expect(entryShape('\\href@noop {} {\\emph {J. Phys.}}')).toBe('\\href@noop{}{\\emph {J. Phys.}}')
     // (OT1's < > | " ' set other glyphs, and -- a dash: no plain text)
     expect(['\\x{a<b}', '\\x{a"b}', "\\x{a'b}", '\\x{1--2}', '\\x{10.1137/0330046}'].map(entryShape)).toEqual(['\\x{a<b}', '\\x{a"b}', "\\x{a'b}", '\\x{1--2}', '\\x{\u0000}'])
+  })
+  it('the share asks the calls the body\'s room would have asked first, in order, so that no entry is asked less than before; then the entries\' leads; then each call in order', () => {
     // (a bibliography the share holds: every call asked of its own, as before, none shared)
     const few = [entry('\\natexlab{a}', '\\doi{10.1/x}'), entry('\\natexlab{b}', '\\doi{10.2/y}'), entry('\\natexlab{}', '\\natexlab{c}')]
     expect(inkSamples(few)).toEqual(['\\natexlab{a}', '\\doi{10.1/x}', '\\natexlab{b}', '\\doi{10.2/y}', '\\natexlab{}', '\\natexlab{c}'])
     expect(inkShared(few).size).toBe(0)
-    // (one past it: each shape's first call asked before any second one — \natexlab{} after ENTRY_INK_MAX DOIs asked all the
-    // same —, the room left to the calls in their order, the last DOI answered by its shape's sample)
-    const dois = Array.from({ length: ENTRY_INK_MAX }, (_, i) => entry(`\\doi{10.${i}/x}`))
-    const big = [...dois, entry('\\natexlab{}'), entry('\\natexlab{b}')]
-    const asked = inkSamples(big)
-    expect(asked).toHaveLength(ENTRY_INK_MAX)
-    expect(asked).toContain('\\natexlab{}')
-    expect(asked).toContain('\\natexlab{b}')
-    expect(asked.slice(0, 3)).toEqual(['\\doi{10.0/x}', '\\doi{10.1/x}', '\\doi{10.2/x}'])
-    expect([...inkShared(big)]).toEqual([[`\\doi{10.${ENTRY_INK_MAX - 2}/x}`, '\\doi{10.0/x}'], [`\\doi{10.${ENTRY_INK_MAX - 1}/x}`, '\\doi{10.0/x}']])
-    // (a body's macro is asked as before, never shared; a call shared is no lead)
-    expect([...inkShared([...body(1), ...big])].map(([c]) => c)).toEqual([`\\doi{10.${ENTRY_INK_MAX - 2}/x}`, `\\doi{10.${ENTRY_INK_MAX - 1}/x}`])
-    expect(leadSamples([...dois, entry('\\natexlab{a}'), { ...unit([ph(`\\doi{10.${ENTRY_INK_MAX}/x}`), text(' and more.')]), kind: 'reference' } as SourceUnit])).toEqual([])
+    // (a body of 60: next asked the first 4 calls, \x{1}…\x{4}, one shape; they are asked still, before other shapes — the reviews
+    // of #495: an entry asked by next is never left to a shape's sample)
+    const four = [...body(INK_MAX - 4), ...[1, 2, 3, 4].map(i => entry(`\\x{${i}}`)), ...Array.from({ length: ENTRY_INK_MAX + 6 }, (_, i) => entry(`\\y${i}{1}`))]
+    expect(inkSamples(four).slice(INK_MAX - 4, INK_MAX)).toEqual(['\\x{1}', '\\x{2}', '\\x{3}', '\\x{4}'])
+    // (a body that fills INK_MAX: the entries' leads first, a lead past ENTRY_INK_MAX other calls asked all the same)
+    const lead = (src: string) => ({ ...unit([ph(src), text(' Author. A title.')]), kind: 'reference' }) as SourceUnit
+    const later = [...body(INK_MAX), ...Array.from({ length: ENTRY_INK_MAX + 2 }, (_, i) => entry(`\\y${i}{1}`)), lead('\\lead{z}')]
+    expect(inkSamples(later)).toContain('\\lead{z}')
+    expect(inkSamples(later)).toHaveLength(INK_MAX + ENTRY_INK_MAX)
+    // (past the share: a call given the text of the first asked call of its shape, where carriedText gives one)
+    const dois = Array.from({ length: ENTRY_INK_MAX + 2 }, (_, i) => entry(`\\doi{10.${i}/x}`))
+    expect([...inkShared(dois)]).toEqual([[`\\doi{10.${ENTRY_INK_MAX}/x}`, '\\doi{10.0/x}'], [`\\doi{10.${ENTRY_INK_MAX + 1}/x}`, '\\doi{10.0/x}']])
+    expect([...inkShared([...body(1), ...dois])].map(([c]) => c)).toEqual([`\\doi{10.${ENTRY_INK_MAX}/x}`, `\\doi{10.${ENTRY_INK_MAX + 1}/x}`])
     // (at most ENTRY_SHARED_MAX calls)
     expect(inkShared(Array.from({ length: ENTRY_INK_MAX + ENTRY_SHARED_MAX + 2 }, (_, i) => entry(`\\doi{10.${i}/x}`))).size).toBe(ENTRY_SHARED_MAX)
+  })
+  it('a lead past the share is a lead of its own still, its text carried or not (the reviews of #495: \\up uppercases its argument, no text carried)', () => {
+    const lead = (src: string) => ({ ...unit([ph(src), text(' Author. A title.')]), kind: 'reference' }) as SourceUnit
+    const units = [...body(INK_MAX), ...Array.from({ length: ENTRY_INK_MAX + 1 }, (_, i) => lead(`\\up{word${i}}`))]
+    expect(inkSamples(units)).not.toContain(`\\up{word${ENTRY_INK_MAX}}`)
+    expect(inkShared(units).get(`\\up{word${ENTRY_INK_MAX}}`)).toBe('\\up{word0}')
+    expect(leadSamples(units)).toEqual([`\\up{word${ENTRY_INK_MAX}}`])
+    // (its own text read, and kept: no carried one in its place)
+    const ink = inkSamples(units), leads = leadSamples(units, ink)
+    const listing = (i: number, s: string) => [`LAYOUT-PROBE 1 ink-at ${i}`, '> \\box60=', '\\hbox(6.8+0.0)x40.0', ...[...s].map(c => `.\\OT1/cmr/m/n/10 ${c}`), '', '! OK.', `LAYOUT-PROBE 1 ink-end ${i}`]
+    const log = [...listing(INK_MAX, 'WORD0'), ...listing(ink.length, `WORD${ENTRY_INK_MAX}`)].join('\n')
+    expect(leads).toHaveLength(1)
+    expect(readInkAnswers(log, units).texts).toEqual([['\\up{word0}', 'WORD0'], [`\\up{word${ENTRY_INK_MAX}}`, `WORD${ENTRY_INK_MAX}`]])
   })
   it('carriedText: the sample\'s text with each plain argument the two differ in put in place of the call\'s, where it stands once; none where a macro transforms its argument', () => {
     expect(carriedText('\\natexlab{a}', '\\natexlab{b}', 'a')).toBe('b')
@@ -464,23 +479,22 @@ describe('the ink section\'s cap and a bibliography\'s entries (2608.25210v2: it
     expect(carriedText('\\x{a}', '\\x{\\emph{b}}', 'a')).toBeNull()
     expect(carriedText('\\x{a}', '\\y{b}', 'a')).toBeNull()
   })
-  it('readInkAnswers: the probe\'s log read for the samples and carried to the calls that share one (2608.25210v2\'s \\natexlab{} no ink; a DOI past the share "doi:10.9/z")', () => {
-    const units = [entry('\\natexlab{}'), ...Array.from({ length: ENTRY_INK_MAX }, (_, i) => entry(`\\doi{10.${i}/x}`))]
-    const asked = inkSamples(units)
-    expect(asked.slice(0, 2)).toEqual(['\\natexlab{}', '\\doi{10.0/x}'])
+  it('readInkAnswers: the probe\'s log read for the samples, a DOI past the share given its shape\'s text, no ink never carried (2608.25210v2\'s \\natexlab{})', () => {
+    const units = [entry('\\natexlab{}'), ...Array.from({ length: ENTRY_INK_MAX }, (_, i) => entry(`\\doi{10.${i}/x}`)), entry('\\natexlab{b}')]
+    expect(inkSamples(units).slice(0, 2)).toEqual(['\\natexlab{}', '\\doi{10.0/x}'])
     expect([...inkShared(units)]).toEqual([[`\\doi{10.${ENTRY_INK_MAX - 1}/x}`, '\\doi{10.0/x}']])
     const listing = (i: number, ...nodes: string[]) => [`LAYOUT-PROBE 1 ink-at ${i}`, '> \\box60=', ...nodes, '', '! OK.', `LAYOUT-PROBE 1 ink-end ${i}`]
     const chars = (s: string) => [...s].map(c => `.\\OT1/cmr/m/n/10 ${c}`)
     const log = [...listing(0, '\\hbox(0.0+0.0)x0.0'), ...listing(1, '\\hbox(6.8+0.0)x40.0', ...chars('doi:10.0/x'))].join('\n')
     expect(readInkAnswers(log, units)).toEqual({ inkless: ['\\natexlab{}'], texts: [['\\doi{10.0/x}', 'doi:10.0/x'], [`\\doi{10.${ENTRY_INK_MAX - 1}/x}`, `doi:10.${ENTRY_INK_MAX - 1}/x`]], apart: [] })
   })
-  it('shareInk: a call sets no ink, or begins apart, where its sample does; its text carried where carriedText gives one; null kept null', () => {
-    const shared = new Map([['\\natexlab{b}', '\\natexlab{a}'], ['\\up{def}', '\\up{abc}'], ['\\e{y}', '\\e{x}']])
-    expect(shareInk({ inkless: ['\\e{x}'], texts: [['\\natexlab{a}', 'a'], ['\\up{abc}', 'ABC']], apart: ['\\natexlab{a}'] }, shared)).toEqual({
-      inkless: ['\\e{x}', '\\e{y}'], texts: [['\\natexlab{a}', 'a'], ['\\up{abc}', 'ABC'], ['\\natexlab{b}', 'b']], apart: ['\\natexlab{a}', '\\natexlab{b}'],
+  it('shareInk carries a text alone: no ink and a box begun apart never, whose value may hang on the argument (the reviews of #495: \\ifnum#1>64 #1\\fi); a call\'s own text kept; null kept null', () => {
+    const shared = new Map([['\\natexlab{b}', '\\natexlab{a}'], ['\\up{def}', '\\up{abc}'], ['\\e{y}', '\\e{x}'], ['\\own{2}', '\\own{1}']])
+    expect(shareInk({ inkless: ['\\e{x}'], texts: [['\\natexlab{a}', 'a'], ['\\up{abc}', 'ABC'], ['\\own{1}', '1'], ['\\own{2}', 'two']], apart: ['\\natexlab{a}'] }, shared)).toEqual({
+      inkless: ['\\e{x}'], texts: [['\\natexlab{a}', 'a'], ['\\up{abc}', 'ABC'], ['\\own{1}', '1'], ['\\own{2}', 'two'], ['\\natexlab{b}', 'b']], apart: ['\\natexlab{a}'],
     })
-    // (a call past the share whose argument holds "fi": its sample's no ink carried, no text — TeX's ligature glyph may be no text)
-    expect(shareInk({ inkless: [], texts: [['\\doi{10.1/acl}', 'doi:10.1/acl']], apart: ['\\doi{10.1/acl}'] }, new Map([['\\doi{10.1/findings}', '\\doi{10.1/acl}']]))).toEqual({ inkless: [], texts: [['\\doi{10.1/acl}', 'doi:10.1/acl']], apart: ['\\doi{10.1/acl}', '\\doi{10.1/findings}'] })
+    // (a call past the share whose argument holds "fi": no text — TeX's ligature glyph may be no text)
+    expect(shareInk({ inkless: [], texts: [['\\doi{10.1/acl}', 'doi:10.1/acl']], apart: [] }, new Map([['\\doi{10.1/findings}', '\\doi{10.1/acl}']]))).toEqual({ inkless: [], texts: [['\\doi{10.1/acl}', 'doi:10.1/acl']], apart: [] })
     expect(shareInk({ inkless: null, texts: null, apart: null }, shared)).toEqual({ inkless: null, texts: null, apart: null })
     expect(shareInk({ inkless: ['\\a'], texts: [], apart: [] }, new Map())).toEqual({ inkless: ['\\a'], texts: [], apart: [] })
   })

@@ -58,15 +58,15 @@ export declare const ENTRY_INK_MAX: number
 export declare const ENTRY_SHARED_MAX: number
 /** the sources the ink section's answers name, at most: INK_MAX + ENTRY_INK_MAX + ENTRY_SHARED_MAX */
 export declare const INK_ANSWERS_MAX: number
-/** the entries' calls no sample of their own asks about whose shape a sample shares: call → that sample */
+/** the entries' calls past the share whose shape an asked call has: call → that call, whose text may be carried to it */
 export declare function inkShared(units: readonly SourceUnit[]): Map<string, string>
 /** the shape of an entry's macro call the calls that share a sample have alike: its command, each argument empty, plain or as written */
 export declare function entryShape(src: string): string
 /** the text a call that shares a sample sets, carried from the sample's text by its plain arguments; null where it cannot be */
 export declare function carriedText(sample: string, call: string, text: string): string | null
-/** the ink section's answers from the probe's log, each carried to the entries' calls that share a sample: the one reader */
+/** the ink section's answers from the probe's log, texts carried to the entries' calls past the share: the one reader */
 export declare function readInkAnswers(log: string, units: readonly SourceUnit[]): { inkless: string[]; texts: [string, string][]; apart: string[] }
-/** the ink section's answers carried to the calls that share a sample */
+/** the ink section's answers with texts carried to the calls past the share (no ink and a box begun apart never carried) */
 export declare function shareInk<I extends string[] | null, T extends [string, string][] | null, A extends string[] | null>(answers: { inkless: I; texts: T; apart: A }, shared: Map<string, string> | null): { inkless: I; texts: T; apart: A }
 /** the leads the ink section asks about past the paper's macros inkSamples takes, at most */
 export declare const LEAD_MAX: number
