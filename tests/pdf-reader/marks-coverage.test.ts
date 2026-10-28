@@ -442,6 +442,8 @@ describe('the mark probe sets a .bbl\'s own definitions first (an elsarticle .bb
   })
   it('a conditional on \\undefined or \\relax, a nested one whole to its own \\fi (Springer\'s \\bisbn)', () => {
     expect(provides('\\ifx \\bisbn   \\undefined \\def \\bisbn  #1{ISBN #1}\\fi')).toBe('\\ifx \\bisbn   \\undefined \\def \\bisbn  #1{ISBN #1}\\fi')
+    // (amsplain's, the other way round)
+    expect(provides('\\ifx\\undefined\\bysame\n\\newcommand{\\bysame}{\\leavevmode\\hbox to3em{\\hrulefill}\\,}\n\\fi')).toBe('\\ifx\\undefined\\bysame\n\\newcommand{\\bysame}{\\leavevmode\\hbox to3em{\\hrulefill}\\,}\n\\fi')
     expect(provides('\\ifx\\a\\undefined \\ifnum1=1 \\def\\a{x}\\else\\def\\a{y}\\fi \\let\\b\\a\\fi\\ifx\\c\\relax\\def\\c{z}\\fi')).toBe('\\ifx\\a\\undefined \\ifnum1=1 \\def\\a{x}\\else\\def\\a{y}\\fi \\let\\b\\a\\fi\\ifx\\c\\relax\\def\\c{z}\\fi')
     // (one that defines nothing, or replaces a definition, passed over whole: not even the \\def in it)
     expect(provides('\\ifx\\a\\undefined \\typeout{none}\\fi\\ifx\\b\\undefined \\renewcommand{\\c}{x}\\def\\b{y}\\fi')).toBe('')
@@ -457,8 +459,8 @@ describe('the mark probe sets a .bbl\'s own definitions first (an elsarticle .bb
       '\\makeatletter\\ifx\\mn@doi@\\undefined\\def\\mn@doi@[#1]#2{\\href{http://dx.doi.org/#2}{#1}}\\fi \\makeatother \\makeatletter\\ifx\\auto@bib@innerbib\\undefined\\let\\auto@bib@innerbib\\@empty\\fi \\makeatother \\ifx\\x\\undefined\\gdef\\x{y}\\fi \\ifx\\z\\undefined\\let\\z=\\x\\fi ',
     )
   })
-  it('anything else passed over: a \\renewcommand, a length, a group with its own definitions; and a harvard .bbl\'s head ends at its first \\harvarditem', () => {
-    expect(provides('\\renewcommand{\\refname}{R}\\setlength{\\itemsep}{0pt}{\\def\\a{b}}\\baselineskip=9pt')).toBe('')
+  it('anything else passed over: a \\renewcommand, a length, a group with its own definitions, a \\def of a \\csname; and a harvard .bbl\'s head ends at its first \\harvarditem', () => {
+    expect(provides('\\renewcommand{\\refname}{R}\\setlength{\\itemsep}{0pt}{\\def\\a{b}}\\baselineskip=9pt\\expandafter\\def\\csname x@y\\endcsname{z}')).toBe('')
     const harvard = '\\begin{thebibliography}{2}\n\\providecommand{\\a}{b}\n\\harvarditem{X}{2020}{x} X. \\def\\c{d}\n\\end{thebibliography}\n'
     expect(bblProvides(inMemory(new Map([['main.tex', enc(tex)], ['main.bbl', enc(harvard)]])), 'main.tex')).toBe('\\providecommand{\\a}{b}')
   })

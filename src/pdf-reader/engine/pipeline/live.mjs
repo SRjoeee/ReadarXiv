@@ -303,17 +303,18 @@ const BLANKS = /\s*/y
 const TOKEN = /\\(?:[A-Za-z@]+|.)/ys
 /** a \\providecommand or \\newcommand up to its body: [1] its star, [2] its name, arity and default */
 const COMMAND = /\\(?:provide|new)command(\*?)(\s*(?:\{\s*\\(?:[A-Za-z@]+|.)\s*\}|\\(?:[A-Za-z@]+|.))\s*(?:\[\s*\d\s*\]\s*)?(?:\[[^\]]*\]\s*)?)(?=\{)/ys
-/** a conditional on whether a name is defined */
-const CONDITIONAL = /\\expandafter\s*\\ifx\s*\\csname|\\ifx\s*\\(?:[A-Za-z@]+|.)\s*\\(?:undefined|relax|@undefined)(?![A-Za-z@])|\\if(?:defined|csname)(?![A-Za-z@])/y
+/** a conditional on whether a name is defined: natbib's \\expandafter\\ifx\\csname, `\\ifx\\X\\undefined`, amsplain's `\\ifx\\undefined\\X`, e-TeX's */
+const CONDITIONAL = /\\expandafter\s*\\ifx\s*\\csname|\\ifx\s*\\(?:[A-Za-z@]+|.)\s*\\(?:undefined|relax|@undefined)(?![A-Za-z@])|\\ifx\s*\\(?:undefined|@undefined)\s*\\(?:[A-Za-z@]+|.)|\\if(?:defined|csname)(?![A-Za-z@])/y
 /** the next primitive conditional ([1] `if…`) or \\fi ([1] `fi`), or any other control sequence passed over */
 const IF_FI = /[^\\]*\\(?:(if(?:x|cat|num|dim|odd|vmode|hmode|mmode|inner|void|hbox|vbox|eof|true|false|case|defined|csname|fontchar)?|fi)(?![A-Za-z@])|[A-Za-z@]+|.)/ys
 const DEFINES = /\\(?:providecommand|newcommand|[gex]?def|let)(?![A-Za-z@])/
 const RENEWS = /\\renewcommand(?![A-Za-z@])/
 const IFUNDEFINED = /\\@ifundefined(?![A-Za-z@])/y
-/** a \\def (\\gdef, \\edef, \\xdef) up to its body: [1] its name; the parameter text after it */
-const DEF = /\\[gex]?def(?![A-Za-z@])\s*(\\(?:[A-Za-z@]+|.))[^{}\\]*(?:\\(?:[A-Za-z@]+|.)[^{}\\]*)*?(?=\{)/ys
+/** a \\def (\\gdef, \\edef, \\xdef) up to its body: [1] its name (not a \\csname's, whose name is no token to test); the parameter text
+ *  after it */
+const DEF = /\\[gex]?def(?![A-Za-z@])\s*(\\(?!csname(?![A-Za-z@]))(?:[A-Za-z@]+|.))[^{}\\]*(?:\\(?:[A-Za-z@]+|.)[^{}\\]*)*?(?=\{)/ys
 /** a \\let: [1] its name, then an optional `=` and the one token it is let to */
-const LET = /\\let(?![A-Za-z@])\s*(\\(?:[A-Za-z@]+|.))\s*=?\s*(?:\\(?:[A-Za-z@]+|.)|[^\s\\{}])/ys
+const LET = /\\let(?![A-Za-z@])\s*(\\(?!csname(?![A-Za-z@]))(?:[A-Za-z@]+|.))\s*=?\s*(?:\\(?:[A-Za-z@]+|.)|[^\s\\{}])/ys
 /** a TeX source with its comments taken out as TeX reads them: from an unescaped `%` (an even number of backslashes before it) to
  *  its line's end, that line's end and the next line's leading blanks with it (TeX skips the blanks a line begins with) */
 const uncommentedTex = t => t.replace(/(?<!\\)((?:\\\\)*)%[^\n]*(?:\n[ \t]*)?/g, '$1')
