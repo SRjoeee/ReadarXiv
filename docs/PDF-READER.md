@@ -2405,7 +2405,11 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   closing punctuation a head macro sets after the unit before it — right after that unit's end mark, each glyph within a fifth
   of an em of the one before, the first of the glyph right before it, which is that unit's own (its text, or a placeholder of
   that unit's set after its end mark: a note that ends in a citation, `\axthmark{h…e} \citep{…}`, whose ")." stood a
-  citation away from the end mark's glyph and was no one's, 2610.18513v1 p35) — which is that unit's text (amsthm's "(Minimum detectable
+  citation away from the end mark's glyph and was no one's, 2610.18513v1 p35) — which is that unit's text, and the layout
+  file's too (LAYOUT 23, `make.mjs` `headTail`: that unit's line takes it, so that the reader draws it after the unit's
+  translation, `layer2.mjs` `tailOf`; it was the next unit's label row, which the reader showed again from the original where
+  it stood: the ")." after the note's translation on staging, and a second one at the next line's start where the note ran
+  over two) (amsthm's "(Minimum detectable
   PDI)." after a theorem's note: as the body's label, no label's form, it was left the original's ink under the body's
   drawing, 2610.21491v1 p7; its group now hides it where the note is drawn, as the line's erase did before the wrap). Babel name
   `n<occ>`: between `n<occ>.<key>.s` and `.e`, but never over a placeholder's ink (cleveref's "Appendix" inside a `\cref` is
@@ -2570,13 +2574,23 @@ changes, which pageInk keeps apart from the marks' points as `paras`; a paragrap
 as the one before), each of its
 class's kind (`inkheads`, `inkcontents`, `inknotes`, `inkorphan`, after the source kinds in UNIT_KINDS; `inknames` a block
 most of whose letters are an author unit's words, of the names toggle as that unit is), its numbering, leaders
-and page number left the original's ink, its math and typewriter runs (and a web address in any face) kept placeholders. One
+and page number left the original's ink, its math and typewriter runs (and a web address in any face) kept placeholders, and
+each run of its words in another weight, slant or colour than most of its glyphs hold a group of the commands that set it
+(`\textbf{`, `\textmd{`, `\textit{`, `\textup{`, `\textcolor[HTML]{…}{`, rule 9, LAYOUT `'23'`), as a source unit's groups are,
+so that its translation keeps each run's style (the release sweep of 2026-10-25, (d): a theorem's bold head before its regular
+note, a reference's italic title, a coloured term, all drawn in the unit's one style). One
 whose letters and placeholders are a source unit's (a heading first), else an earlier ink unit's (a running head), echoes it: its pieces that unit's, its row that unit's row under its own id, never translated
 itself (`rows.mjs` `echoRows`, `layerIds`). Its glyphs are claimed under its own groups, `u<id>` and `u<id>.p`, so the reader
 hides it as any unit; one the wrap could not hide alone (its page not wrapped, its placeholder's group merged: `ink.off`), or on a
 page not drawable, keeps its id (which names its groups and which an echo names) and is laid nowhere. The page pass carries them (`pipeline/ink-pass.mjs`, from the host's `ours.ink`): in the bundle's units
 after the source units', in a chunk of their own (`INK_UNITS_FORMAT` `'2'`, a seventh element, the echo; the source units' chunks
-byte for byte as before), on the left by arXiv's tokens on their lines, in the layout by the wrap's rows. The reader's toggles
+byte for byte as before), on the left by arXiv's tokens on their lines, in the layout by the wrap's rows. An ink unit's text is
+its own alone (LAYOUT `'23'`): a source unit's label row that meets it goes from the layout (`layoutWithInk`). The maker reads a
+label off the glyphs left of a unit's start mark, and the wrap leaves one with no label's form in no group (`labelKept`), where
+an ink unit then claims it; the reader shows a label row its unit does not draw again from render C, every group shown, so that
+row put the original back under the ink unit's translation (the release sweep of 2026-10-25, (c): SIAM's "AMS subject
+classifications." before its codes, 2610.20266v1 p1; a theorem's head whose note is a citation, "Definition 1 ([TT])", whose
+body's label it was; 2610.11256v1's bold heads before a table's cells). The reader's toggles
 are an option of the layer's open (`classes`, `TOGGLE_DEFAULTS`); a change of them is an open again over the same documents, parts
 and rows (`layer-side.mjs` `setClasses`), each laid page kept until the new door's commits: 81 to 384 ms to the two pages in view
 over 14 page pairs (the layer gate's jump, `--perf`). The web's half is `docs/route/orphan-text.md` §8.

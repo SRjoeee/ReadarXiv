@@ -1445,6 +1445,27 @@ describe('makeLayout, a note\'s mark the first line begins with (the maker round
     expect(n.file.labels).toEqual([])
     expect(rowsOf(n.file, 0, 'lines')[1]).toBe(72)
   })
+
+  it("gives the closing punctuation a head sets after a note to the note's line, never the next unit's label (2610.18513v1 p35)", async () => {
+    // amsthm's "Lemma A.1 (" before a note that ends in a citation, its ")." after it, the theorem's text on: the ")." was the
+    // body's label row, which the reader showed again from the original where it stood, after the note's translation
+    // (the note's end mark before its citation, as the marked source sets it, `\\axthmark{h…e} \\citep{…}`; the citation in
+    // hyperref's blue, a text item of its own, as PDF.js reads a link's colour apart)
+    const head: Run = { s: 'Lemma A.1 (Bobkov inequality for measures ', x: 72, y: 700 }
+    const cite: Run = { s: '[BL09]', x: endOf(head), y: 700, fill: '#0071bc' }
+    const rest: Run = { s: '). If the measure is concave then it holds', x: endOf(cite), y: 700 }
+    const at = (r: Run, s: string) => xAt(r, r.s.indexOf(s))
+    const { file } = await made({
+      pages: [{ runs: [head, cite, rest] }],
+      marks: [['0s', 1, at(head, 'Bobkov'), 700], ['0e', 1, cite.x, 700], ['p0.1a', 1, cite.x, 700], ['p0.1b', 1, endOf(cite), 700], ['1s', 1, at(rest, 'If'), 700], ['1e', 1, endOf(rest), 700]],
+      units: [unit('heading', [text('Bobkov inequality for measures '), ph('\\cite{bl}')], { bracketed: true }), unit('theorem', [text('If the measure is concave then it holds')])],
+    })
+    expect(file.labels.map(l => [l[0], l[3], l[5]])).toEqual([[0, 72, at(head, 'Bobkov')]])
+    // the note's line runs to the full stop, its erase with it; the theorem's starts at its text
+    expect(rowsOf(file, 0, 'lines')[2]).toBe(at(rest, ' If'))
+    expect(Math.max(...chunk(rowsOf(file, 0, 'erase'), 5).map(e => e[3] as number))).toBeGreaterThanOrEqual(at(rest, ' If') - 0.01)
+    expect(rowsOf(file, 1, 'lines')[1]).toBe(at(rest, 'If'))
+  })
 })
 
 describe('makeLayout, a line by its words (the maker round)', () => {

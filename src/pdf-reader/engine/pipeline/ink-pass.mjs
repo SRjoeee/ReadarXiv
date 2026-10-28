@@ -105,13 +105,45 @@ function rowsOf(ink, ids, fonts) {
   return out
 }
 
+/** a label row and an ink unit's text box meet: across and up, by more than this (PDF units) */
+const MEET = 0.1
+
+/**
+ * The label rows (the file's [unit, kind, page, x0, baseline, x1, top, bottom]) that meet an ink unit's text: its erase boxes,
+ * every one its text glyphs' (layout/ink-units.mjs rowsOf). The maker reads a unit's label off the glyphs left of its start mark
+ * (make.mjs labelOf), and the wrap leaves those of a label that has no label's form in no group (own.mjs `labelKept`: "AMS subject
+ * classifications.", a theorem's head whose note is a citation, "Definition 1 ([TT])"), where an ink unit claims them. The reader
+ * shows a label row its unit does not draw again from render C, every group shown (layer-proto/hide.mjs), so that row brought
+ * the original back under the ink unit's translation (the release sweep of 2026-10-25, (c): 2610.20266v1 p1, 2610.11256v1 pp12-13,
+ * 2610.21037v1 p1). Their ink is the ink unit's alone: the rows go. A set of the rows, or null where none meets one
+ */
+function labelsOverInk(labels, ink) {
+  if (!labels?.length || !ink?.units?.length) return null
+  const byPage = new Map()
+  for (const u of ink.units) {
+    const L = u.rows.lines, E = u.rows.erase
+    for (let q = 0; q + 4 < E.length; q += 5) {
+      const page = L[8 * E[q]]
+      ;(byPage.get(page) ?? byPage.set(page, []).get(page)).push([E[q + 1], E[q + 2], E[q + 3], E[q + 4]])
+    }
+  }
+  let out = null
+  for (const r of labels) {
+    const boxes = byPage.get(r[2])
+    if (boxes?.some(([x0, y0, x1, y1]) => Math.min(r[5], x1) - Math.max(r[3], x0) > MEET && Math.min(r[6], y1) - Math.max(r[7], y0) > MEET)) (out ??= new Set()).add(r)
+  }
+  return out
+}
+
 /** a layout (a file, or a part's rows: make.mjs partOf's) with the ink units `ids` after its own units, rising by id as the file's
- *  tables are; `layout` is not changed */
+ *  tables are, and none of its label rows that meets an ink unit's text (labelsOverInk); `layout` is not changed */
 export function layoutWithInk(layout, ink, ids) {
-  if (!layout || !ink || !ids.length) return layout
+  if (!layout || !ink) return layout
+  const over = labelsOverInk(layout.labels, ink)
+  if (!ids.length && !over) return layout
   const fonts = layout.fonts.slice()
   const add = rowsOf(ink, ids, fonts)
-  return { ...layout, fonts, units: [...layout.units, ...add.units], lines: [...layout.lines, ...add.lines], frames: [...layout.frames, ...add.frames], erase: [...layout.erase, ...add.erase], ph: [...layout.ph, ...add.ph] }
+  return { ...layout, fonts, units: [...layout.units, ...add.units], lines: [...layout.lines, ...add.lines], frames: [...layout.frames, ...add.frames], erase: [...layout.erase, ...add.erase], ph: [...layout.ph, ...add.ph], ...(over ? { labels: layout.labels.filter(r => !over.has(r)) } : {}) }
 }
 
 /**

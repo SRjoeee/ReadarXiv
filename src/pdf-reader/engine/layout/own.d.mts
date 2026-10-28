@@ -2,6 +2,9 @@
 export { UNHIDDEN } from './delta-wire.mjs'
 import type { Unhidden } from './delta-wire.mjs'
 export declare const SPELL_LIST_MAX: number
+/** a head macro's closing punctuation after the unit before a start (MR 5), and how near it abuts the glyph before it, in ems */
+export declare const HEAD_PUNCT: RegExp
+export declare const HEAD_ABUT: number
 /** a text's evidence for the spell check: its letters and digits, without accents, lower case */
 export declare function spellOf(s: string): string
 /** whether a label's characters are a label's form (or none); `note`, a theorem's note's label, may end in the bracket its

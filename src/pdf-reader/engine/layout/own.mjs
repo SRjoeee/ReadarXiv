@@ -54,9 +54,9 @@ const END = /^([th]?)(\d+)e$/
  *  between columns are more than one) */
 const CELL_ABUT = 0.6
 /** a head macro's closing punctuation after the unit before a start (MR 5): a closing bracket or quote, a stop, a colon */
-const HEAD_PUNCT = /^[)\]}.,:;!?\u2019\u201d]$/u
+export const HEAD_PUNCT = /^[)\]}.,:;!?\u2019\u201d]$/u
 /** that punctuation abuts the glyph before it: each gap under this share of an em (a word's space is a third) */
-const HEAD_ABUT = 0.2
+export const HEAD_ABUT = 0.2
 const OPENING = /^([pn])(\d+)\.(\d+)a$/
 const CLOSING = /^([pn])(\d+)\.(\d+)b$/
 const NAME_START = /^n(\d+)\.([a-z]{1,16})\.s$/
