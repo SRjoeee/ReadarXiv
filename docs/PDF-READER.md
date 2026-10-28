@@ -2880,7 +2880,8 @@ translated.
       (2608.04322, 2608.09812) are placeholders; and 2608.11884's row of e-mails, a place of the words "goh siong" before, is
       no unit;
     - the numbers that move, of the 41,059 units whose hash stays: 2608.29778's 41 units after that note, #15 to #55, one down;
-      and 259 entries in 20 papers, whose names units are gone (an entry's rest keeps its hash);
+      and 259 entries in 20 papers (an entry's rest keeps its hash), down by 1 to 159 where names units or a stored class body
+      went before them, up by 1 to 12 where places were cut apart before them;
     - 95 of the 170 make their `.bbl` (40 ship one, 35 name no `\bibliography`).
   - **The classes gate** on 35 papers: the 3 of 2026-10-28, the gate pack's 7 and the 25 of `lab/pdf/data/layout`. 33 compile;
     2610.20595v1 (`texlive`) and 2610.21765v1 (`final`) are refused on both engines.
