@@ -255,6 +255,36 @@ describe('inkEdges: a token\'s ink reaches over the marks that touch it', () => 
     expect(joined([item('integrates depth', 50, 700), item('', 50, 688, { eol: true }), item('wise convolutions', 50, 688)])).toEqual(['integrates', 'depth', 'wise', 'convolutions'])
   })
 
+  it("joins a hyphen's word only with the line below it, never with text the stream gives next elsewhere (2610.21765v1 p7's \"simq\")", () => {
+    const joined = (items: Item[]) => tokenizeDocument([{ page: 1, items, styles: {} }]).map(t => t.t)
+    // (a caption's "sim-" at its line's end, a figure's axis label "q" above it next in the stream, the caption's line after)
+    for (const end of [[item('a sim-', 50, 300), item('', 50, 288, { eol: true })], [item('a sim-', 50, 300, { eol: true })]]) {
+      // (the label its own word; the line below, which the stream gives after it, the word's rest)
+      expect(joined([...end, item('q', 200, 420), item('ulation here', 50, 288)])).toEqual(['a', 'simulation', 'q', '', 'here'])
+      // (the line below, at a double spacing too: joined)
+      expect(joined([...end, item('ulation here', 50, 276)])).toEqual(['a', 'simulation', '', 'here'])
+      // (text below it to the right, a figure's, between it and its line below: its own words, the line below the rest — Devin
+      // on #487)
+      expect(joined([...end, item('Figure axis', 200, 276), item('ulation here', 50, 288)])).toEqual(['a', 'simulation', 'figure', 'axis', '', 'here'])
+      // (an item printed over itself to look bold, right after it: read once, the rest joined still — Codex on #487)
+      expect(joined([...end, item('a sim-', 50, 300, { eol: true }), item('ulation here', 50, 288)])).toEqual(['a', 'simulation', '', 'here'])
+    }
+    // (a list's item, its bullet starting its line, its line below hung under its text, a bullet's width in: joined —
+    // 2307.16209v1 p22's "inves-"/"tigate")
+    expect(joined([item('• In Chapter 5, we inves-', 101.1, 348.7, { size: 12, eol: true }), item('tigate the frequencies', 114.2, 330.7, { size: 12 })])).toEqual(['in', 'chapter', '5', 'we', 'investigate', '', 'the', 'frequencies'])
+    // (the word cut at a column's foot and gone on at the next column's top, a gutter past its line's end: joined — Codex on
+    // #487; a figure's label in that column, 15 sizes past it, as 2610.21765v1 p7's "q" after "Sim-": its own word, the column's
+    // line after it the word's rest still)
+    expect(joined([item('a sim-', 50, 70, { eol: true }), item('ulation here', 98, 700)])).toEqual(['a', 'simulation', '', 'here'])
+    expect(joined([item('a sim-', 50, 70, { eol: true }), item('q', 230, 582), item('ulation here', 98, 700)])).toEqual(['a', 'simulation', 'q', '', 'here'])
+    // (and its axis's tick at the column's start, smaller than the text: its own word, not the word's rest — 2610.21765v1 p7's
+    // "0" after "Sim-", 4.6 sizes past its line's end)
+    expect(joined([item('a sim-', 50, 70, { eol: true }), item('0', 126, 593, { size: 7.9 }), item('ulation here', 98, 700)])).toEqual(['a', 'simulation', '0', '', 'here'])
+    expect(joined([item('a sim-', 50, 70, { eol: true }), item('0', 98, 593, { size: 7.9 })])).toEqual(['a', 'sim', '0'])
+    // (no line below within PENDING_ITEMS items: never joined with one further on)
+    expect(joined([item('a sim-', 50, 300, { eol: true }), ...['w', 'x', 'y', 'z'].map((t, k) => item(t, 300 + 20 * k, 500)), item('ulation here', 50, 288)])).toEqual(['a', 'sim', 'w', 'x', 'y', 'z', 'ulation', 'here'])
+  })
+
   it('the words a hyphen joins: their boxes, which anchoring reads, an even share of the item; their ink a proportional face\'s widths, the hyphen with the word it follows', () => {
     // their ink where a proportional face's widths put them in the item (Times-Roman's: state- 2166, of- 1166, art 1055
     // thousandths of an em, over its 60 units), their boxes an even share as anchoring reads them
