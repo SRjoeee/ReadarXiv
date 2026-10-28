@@ -363,6 +363,9 @@ each side of the rules gate reads its own pack). Every unit the frozen records n
 block's places cut apart are numbered after them, with no translation in the pack: the entries hidden by the gates' run, the
 places not in the frozen references. The base pages are pixel for pixel `690d0e19`'s on 6 papers and 2 pixels apart on one page of
 2609.26457v1 (its text items in the same places); 2608.16117v1 gains the 81 entries of the `.bbl` BibTeX makes. 21 new objects.
+Its review round's (`0b3109a8`, LAYOUT 24 still) is `7edfbd6f`'s with 2608.04322v1's seven outputs made again: its note's e-mail,
+`zhou\_qianli@nwpu.edu.cn`, is one placeholder where its `\_` had parted it, so its layout file's rows of that note and its base
+page's marks change; the base page's pixels are `7edfbd6f`'s. 3 new objects.
 Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
 The wrap reads each base's units from its paper's source, so the pack holds that too: `sources/<paper>/source.gz`, one a paper
 (`gate-pack.mjs make --sources=<dir of <paper>/source.gz>`, `data/corpus` by default; a make with a base of ours and no source

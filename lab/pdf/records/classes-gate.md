@@ -165,3 +165,20 @@ pnpm exec tsx lab/pdf/spikes/classes-gate.mjs --base=<next's tree> --made --comp
 - **A real prepare through the web's image** (2609.20976v1, `--network none`, the container as production starts it): the
   `bib` stage 4.0 s of a 40.7 s prepare (compiles 24.2 s); 109 source units and 29 ink units; the 39 entries announced in the
   first units chunk, each sent for every target (`toTranslate`) and laid; the 4 places laid; the 3 names laid.
+
+## Again after the review round (the engine at #485's review fixes, `next` 757695fe merged in)
+
+The review round added three rules. A row of names that sets its marks after a name, or opens with "and", is names
+(2608.14893, 2608.30730, 2610.21880v1). An e-mail whose local part TeX escapes is one placeholder (2608.04322v1, 2608.09812,
+2608.11884, 2608.29778). An author block's blocks are compared as TeX reads them (2610.21770v1's third equal REVTeX
+affiliation, broken over two lines). The two gate papers these reach were run again against the same dumps of `next` 2346530d:
+
+- 2610.21880v1: entries 15/15, names 2/2 (its "and Rafael F. Schaefer" row now a name, no place); no body unit lost; the
+  wrap leaves none of its units the original's; G1 0, base pages 0 of 5 apart.
+- 2608.04322v1: entries 58/58, names 2/2; no body unit lost; one placeholder's rows moved, the note's e-mail now one
+  placeholder; base pages 0 of 13 apart, against `next`'s and against the pack's.
+
+The brief's three papers, at the head with `next` 757695fe merged in and before these rules, were run again too.
+2609.20976v1, 2610.34042v1 and 2608.12606v1 locate every entry (39, 56, 94) and lose no body unit. 2609.20976v1's abstract
+and 6 of its placeholders moved: that is #483's fix, its target paper, and the wrap now leaves none of its units the
+original's.
