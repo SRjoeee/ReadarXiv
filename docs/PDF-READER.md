@@ -2145,7 +2145,16 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   by optional content, where PDF.js ends a line that ends in a hyphen with an empty item after the group closes, not with the
   hyphen's own: the tokenizer joins the word across that item as across the hyphen's own end of line (`anchors.mjs`
   `tokenizeDocument`, LAYOUT 23), where it read two words on our page against arXiv's one and 2610.19274v1's list of figures,
-  three hyphens a page, fell under `PAGE_SAME` on pages 67 to 69, its contents units laid nowhere. **A unit is laid only where every page it is on is drawable**
+  three hyphens a page, fell under `PAGE_SAME` on pages 67 to 69, its contents units laid nowhere. The word goes on in the line
+  below, half a size to three down across the line's direction and starting no further along it than the line's item, a
+  hanging label's width aside (`HANG` 6 sizes: a bullet's, 2307.16209v1 p22's "inves-"/"tigate"), or at the next column's top,
+  above it and starting a gutter past its end at most at its size (`GUTTER` 3 sizes), within four items, those between read as
+  they are; never in text the stream gives next elsewhere (LAYOUT 25: a column's last line's "Sim-" and the next column's
+  figure's axis label "q" read as "simq", 2610.21765v1 p7, its axis's "0", 4.6 sizes past and smaller, refused as well; a folio
+  under the line, "Lucas-" and "7" on 2610.19274v1 p7, is no word's rest either). A line of ours of fewer than
+  `LINE_EVIDENCE` (4) letters and digits is never found on another page of arXiv's: a figure's one-letter axis label is no
+  evidence of where its page stands (LAYOUT 25: 2610.21765v1 p7's "q", paired with arXiv's p6, left the page undrawn and ten
+  of its units English). **A unit is laid only where every page it is on is drawable**
   (`layout/make.mjs` `drawable`, LAYOUT 16; `stats.units.undrawn` the others, left the original's). Over our own page a
   drawing is right by construction: a page of the same words is drawn whatever its lines' offsets, a line re-broken by a word,
   moved a point or set with other glue. On the pack and the release sweep's 50 papers it refuses 2307.16209's pages 69 to 76
@@ -2688,10 +2697,23 @@ feet, the contents and the lists, a note with no unit, prose the front end did n
 wrap (`layout/ink-units.mjs`), from the ledger's lines: a head's line one, a contents entry or a block one paragraph of TeX's (the
 layout compile's point `q<n>` at LaTeX's para/begin, inside the paragraph's indentation box so that no paragraph's list
 changes, which pageInk keeps apart from the marks' points as `paras`; a paragraph with no indentation carries none and reads
-as the one before), each of its
+as the one before; a paragraph's next line is followed at the paper's own leading, `PARA_DY` 3 of its size at most, where
+`BLOCK_DY` 1.75 falls short, when it starts an indent from the paragraph's first line, more than `EDGE` 0.75 of its size
+across and no more than `INDENT` 6 (a hanging line, or the run after an indented first), LAYOUT 25: a thesis's list of
+figures set double was cut line by line, each line translated alone, 2610.19274v1 pp67–69; a list's items, which no point of
+their own tells apart, start at its edge, a right-aligned label's digit (half a size) aside, and stay apart at their skip,
+single-line or not, and a list after a centred heading starts further across than any indent (2610.20266v1 p21's
+bibliography, its labels [9] and [10] half a size apart, its "REFERENCES" 20 sizes in); a script a text face sets after a formula's run is that run's placeholder, C_n²'s "2"; the ink
+units, as the figure units, are units of the paper's for PIPELINE: a translation is stored for them and found again by an output
+identity that names PIPELINE, so their cut moving raises it, PIPELINE 31, and the unit-cut golden holds their cut), each of its
 class's kind (`inkheads`, `inkcontents`, `inknotes`, `inkorphan`, after the source kinds in UNIT_KINDS; `inknames` a block
 most of whose letters are an author unit's words, of the names toggle as that unit is), its numbering, leaders
-and page number left the original's ink, its math and typewriter runs (and a web address in any face) kept placeholders, and
+and page number left the original's ink where a number stands apart from the line's text (`APART`, half its size: a folio, a
+section number's `\quad`, a page number after leaders) or is a running head's folio (the head's other words recur on another
+page with another number there: amsart's `\llap{\thepage}` after a title as wide as the line sets two digits nearer its last
+word than its words are to each other, 2610.21884v1), a number in the text's own words the unit's, translated in its flow
+(LAYOUT 25: 2010.11929v2's running head "Published as a conference paper at ICLR 2021", the same on every page, had its year
+left the original's and drawn apart from its line), its math and typewriter runs (and a web address in any face) kept placeholders, and
 each run of its words in another weight, slant or colour than most of its glyphs hold a group of the commands that set it
 (`\textbf{`, `\textmd{`, `\textit{`, `\textup{`, `\textcolor[HTML]{…}{`, rule 9, LAYOUT `'23'`), as a source unit's groups are,
 so that its translation keeps each run's style (the release sweep of 2026-10-25, (d): a theorem's bold head before its regular

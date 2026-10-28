@@ -350,6 +350,15 @@ describe('lineCheckOf: the pages that may be drawn', () => {
     expect(got.pages.map(p => [p.page, p.elsewhere, p.drawable])).toEqual([[1, 1, false], [2, 0, false]])
     expect(got.undrawable).toEqual([1, 2])
   })
+  it("but a line too short to be evidence, a figure's one-letter axis label, decides nothing (2610.21765v1 p7's \"q\" on arXiv's p6)", () => {
+    // (our page 2's "q", an axis label, is a line of its own; arXiv's page 1 has one, its page 2 none — read into the word before
+    // it — and the carrier pairs our "q" with arXiv's page 1)
+    const ours = [...page(W, 1), ...page(W.map(w => `v${w}`), 2), ...words(['q'], 2, 300, 200)]
+    const theirs = [...page(W, 1), ...words(['q'], 1, 300, 200), ...page(W.map(w => `v${w}`), 2)]
+    const got = lineCheckOf(ours, theirs)
+    expect(got.undrawable).toEqual([])
+    expect(got.pages.find(p => p.page === 2)).toMatchObject({ elsewhere: 0, drawable: true })
+  })
   it('a page past its work, or past its words\' bound, is not', () => {
     const many = Array.from({ length: 8000 }, (_, i) => tok('x', 1, 72, 790 - i * 0.09, 3, 0.1))
     const other = words(['attention', 'is', 'all', 'you', 'need'], 2, 72, 700)
