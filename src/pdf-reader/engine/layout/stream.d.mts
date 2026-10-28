@@ -21,7 +21,7 @@ export interface StreamPage { glyphs: StreamGlyphs; boxes: number[]; points: Ink
  *  reads it; `display`, the piece is a display; `group`, a display's display group: the opening marks' names of the displays
  *  right after it with nothing visible between that have no opening point (the text after it and its next piece then
  *  the last one's) */
-export interface Follow { closing: boolean; want: string; rest?: string; display?: boolean; ends: string[]; blocked: boolean; through?: string | null; group?: string[] }
+export interface Follow { closing: boolean; want: string; rest?: string; own?: string; display?: boolean; ends: string[]; blocked: boolean; through?: string | null; group?: string[] }
 /** a text's letters and digits, without their accents, lower case: the per-unit erasure's evidence that ink is a text's */
 export declare function spellOf(s: string): string
 export interface Owned { how: number; glyphs: [page: number, index: number][]; boxes: [page: number, index: number][] }

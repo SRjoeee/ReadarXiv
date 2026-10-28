@@ -303,6 +303,10 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     expect(g['u0.p']).toBe('cd')
     expect([g.u0, g.u1]).toEqual(['Surhud More,', 'The amplitude'])
     expect(Object.values(g).join('')).not.toMatch(/Department|iucaa/)
+    // (a line its own source spells on is still its: a reference's \\Eprint wrapped over two lines, 2307.16209v1 p138 u481)
+    const wrapped = [page([{ pt: '0s' }, 'See the paper', { pt: '0e' }, { pt: 'p0.1a' }, 'arXiv:gr-qc/0511111\n', '[gr-qc]\n', 'Department of Physics\n', { pt: '1s' }, 'Next one', { pt: '1e' }])]
+    const eprint = [{ kind: 'reference', pieces: [{ t: 'text', s: 'See the paper' }, { t: 'ph', src: '\\Eprint {http://arxiv.org/abs/gr-qc/0511111} {arXiv:gr-qc/0511111 [gr-qc]}' }] }, { pieces: [{ t: 'text', s: 'Next one' }] }]
+    expect(groupsOf(marked(wrapped, eprint), wrapped)['u0.p']).toBe('arXiv:gr-qc/0511111[gr-qc]')
     // (a display there owns its lines, as before: TeX sets one over many)
     const display = [page([{ pt: '0s' }, 'We have', { pt: '0e' }, { pt: 'p0.1a' }, 'E = mc\n', '+ more\n', { pt: '1s' }, 'Next one', { pt: '1e' }])]
     const shown = groupsOf(marked(display, [{ pieces: [{ t: 'text', s: 'We have' }, { t: 'ph', src: '\\[E = mc + more\\]' }] }, { pieces: [{ t: 'text', s: 'Next one' }] }]), display)
