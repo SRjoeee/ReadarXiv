@@ -517,6 +517,9 @@ describe('the mark probe sets a .bbl\'s own definitions first (an elsarticle .bb
     // (amsplain's, the other way round)
     expect(provides('\\ifx\\undefined\\bysame\n\\newcommand{\\bysame}{\\leavevmode\\hbox to3em{\\hrulefill}\\,}\n\\fi')).toBe('\\ifx\\undefined\\bysame\n\\newcommand{\\bysame}{\\leavevmode\\hbox to3em{\\hrulefill}\\,}\n\\fi')
     expect(provides('\\ifx\\a\\undefined \\ifnum1=1 \\def\\a{x}\\else\\def\\a{y}\\fi \\let\\b\\a\\fi\\ifx\\c\\relax\\def\\c{z}\\fi')).toBe('\\ifx\\a\\undefined \\ifnum1=1 \\def\\a{x}\\else\\def\\a{y}\\fi \\let\\b\\a\\fi\\ifx\\c\\relax\\def\\c{z}\\fi')
+    // (a package's conditional or a \\newif's in it, whose \\fi the head alone does not tell from the guard's: not copied whole, its
+    // definitions read one by one, each set only where undefined, and what follows read as before — the review of #492)
+    expect(provides('\\ifx\\doi\\undefined \\ifpdf \\def\\doi#1{doi: #1}\\fi \\fi\\providecommand{\\x}{y}')).toBe('\\ifx\\doi\\undefined\\def\\doi#1{doi: #1}\\fi \\providecommand{\\x}{y}')
     // (one that defines nothing, or replaces a definition, passed over whole: not even the \\def in it)
     expect(provides('\\ifx\\a\\undefined \\typeout{none}\\fi\\ifx\\b\\undefined \\renewcommand{\\c}{x}\\def\\b{y}\\fi')).toBe('')
   })
