@@ -115,12 +115,15 @@ const MEET = 0.1
  * classifications.", a theorem's head whose note is a citation, "Definition 1 ([TT])"), where an ink unit claims them. The reader
  * shows a label row its unit does not draw again from render C, every group shown (layer-proto/hide.mjs), so that row brought
  * the original back under the ink unit's translation (the release sweep of 2026-10-25, (c): 2610.20266v1 p1, 2610.11256v1 pp12-13,
- * 2610.21037v1 p1). Their ink is the ink unit's alone: the rows go. A set of the rows, or null where none meets one
+ * 2610.21037v1 p1). Their ink is the ink unit's alone: the rows go, where the ink unit is laid (one `off` is the original's, its
+ * ink shown in its group, and the row stays as it was). A set of the rows, or null where none meets one
  */
 function labelsOverInk(labels, ink) {
   if (!labels?.length || !ink?.units?.length) return null
   const byPage = new Map()
   for (const u of ink.units) {
+    // (one laid nowhere, `off`, is the original's: its ink stays shown in its group, and the source unit's row as it was)
+    if (ink.off?.has?.(u.id)) continue
     const L = u.rows.lines, E = u.rows.erase
     for (let q = 0; q + 4 < E.length; q += 5) {
       const page = L[8 * E[q]]
