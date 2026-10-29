@@ -319,6 +319,9 @@ export const PDFJS = '6.3.289'
  * of its glyphs, within their extent, no part of a frame), and an ink unit's lines take theirs too (ink-units.mjs claimInk): an
  * OT1 \_ is a rule, no glyph, and its three stood under 1512.03385v1's translated Table 1 caption (2610.19159v1's 95,
  * 2610.21924v1's 150 in its tables' cells), an \underline's line under its translation: the base's bytes change where a unit's
- * text has one
+ * text has one; 15 (2610.37668v1's "Abstract", the owner's report on staging): a level figure unit on its column's edge, or
+ * centred in it, is anchored there by the column's text lines (figure-text.mjs columnAnchorOf), no longer by the ink beside
+ * it alone, which read a heading a class sets flush in a boxed panel `centre`: the parts' figure rows change where a unit's
+ * anchor does, the base's bytes do not
  */
-export const REMOVAL = '14'
+export const REMOVAL = '15'
