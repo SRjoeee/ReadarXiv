@@ -860,6 +860,8 @@ export function createReaderView(host) {
       box: n => places.box(n),
       swap(n, content, o) { const ok = places.swap(n, content, o); if (ok) tellRightPage(); return ok },
       restore(n) { places.restore(n); tellRightPage() },
+      letAheadGo: () => places.letAheadGo(),
+      aheadHeld: () => places.aheadHeld(),
     },
     left: {
       doc: () => current?.doc ?? null, scale: () => L.viewer.currentScale,

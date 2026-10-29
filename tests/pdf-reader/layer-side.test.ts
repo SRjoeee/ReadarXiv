@@ -490,6 +490,34 @@ describe('the faces in one wave (warm.mjs, §11.8)', () => {
   })
 })
 
+describe('the places ahead of the view let go by the layer (places.mjs letAheadGo)', () => {
+  it('held until the side puts its first page in place, or shows a near page as arXiv\'s, or is refused', async () => {
+    const held = (s: Setup) => internalsOf(s.view).places.aheadHeld()
+    const a = await setup()
+    await nearOn(a, [1, 2])
+    expect(held(a)).toBe(true)
+    a.side.tell(await ALL())
+    await settle(a)
+    expect(content(a, 1)).toBe('layer')
+    expect(held(a)).toBe(false)
+    // a page of a part with no layout, the only one near: shown as arXiv's, nothing to wait for
+    const m = await M(true)
+    const b = await setup({ ours: true })
+    await nearOn(b, [4])
+    b.side.tell({ head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [0, 1, 2].map(i => jobRef(m, i)), end: { through: N } })
+    await settle(b)
+    expect(content(b, 4)).toBe('original')
+    expect(held(b)).toBe(false)
+    // the layer refused: none to wait for
+    const c = await setup({ bind: async () => false })
+    await nearOn(c, [1])
+    c.side.tell(await ALL())
+    await settle(c)
+    expect(c.events.some(e => e.type === 'layer' && (e as { state: string }).state === 'refused')).toBe(true)
+    expect(held(c)).toBe(false)
+  })
+})
+
 describe('the first page\'s faces before any part (warm.mjs firstPageUnits, §11.8)', () => {
   it('a first open\'s rows read before the head: the CJK face asked at once; rows taken after the head and before part 1 too; none once a part is read or a catalog tells the parts\' end', async () => {
     const m = await M()

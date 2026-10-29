@@ -2,6 +2,8 @@
 import type { DrawnCanvas, PdfJsKit, PlaceContent, PlaceView, ViewClock } from './reader-view.mjs'
 
 export declare const NEAR: string
+/** the most a place near the view but not in it waits to draw the original's page (ms), from the places' making */
+export declare const AHEAD_HOLD_MS: number
 /** the left's page view as a place reads it: its page box (its style is the place's), its viewport and page */
 export interface OriginalPage { div: HTMLElement; viewport: PlaceView['viewport']; pdfPage: { view: number[] } | null }
 export interface Places {
@@ -22,9 +24,13 @@ export interface Places {
    *  FOCUS_WAIT_MS; given up where the focus moves meanwhile */
   focus(n: number): void
   count(): number
+  /** the places near the view but not in it drawn from now on (the layer's first page there, or none to wait for) */
+  letAheadGo(): void
+  /** whether they still wait */
+  aheadHeld(): boolean
   views(): { get(n: number): PlaceView | null; all(): PlaceView[]; count(): number }
   rename(): void
-  probe(): { places: number; pageViews: number; skeletons: number; laidPlaces: number; nearPlaces: number; pageViewsMade: number }
+  probe(): { places: number; pageViews: number; skeletons: number; laidPlaces: number; nearPlaces: number; pageViewsMade: number; aheadHeld: boolean }
   dispose(): void
 }
 /** how long after a keyboard's jump the place jumped to may still take the focus when it comes to show its page */

@@ -18,11 +18,23 @@
 // draws nothing and lets nothing go) would otherwise be kept for the document's life. PDF.js cleans nothing up while a
 // drawing of the page is under way. A page view lives in a holder of its own inside the place, so that the --scale-factor
 // PDF.js writes on a standalone page view's container stays off the place.
+//
+// The pages ahead wait. A place near the view but not in it draws the original's page only once the layer lets the pages ahead
+// go (letAheadGo: its first page put in place, a near page shown as arXiv's by the rule, the layer refused or let go), or
+// AHEAD_HOLD_MS after the places are made. Its page view is made all the same, and a place that comes into view is drawn at once.
+// Without the hold, a page ahead read the original's bytes on the line that page 1's layer was waiting on: on 2610.31506v1 in
+// two panes (staging, 2026-10-30), the right's page 3 is near, holds eleven images and reads 5.5 MB to draw. The original was
+// read 56 times, 3.6 MB, from the layer's open to page 1 drawn, beside page 1's 3.7 MB of font slices. Only when, never what:
+// the page is drawn as before once let go.
 
 import { pageBox } from './drawn.mjs'
 
 /** how far past the view a place is near: one pane's height above and below */
 export const NEAR = '100% 0px 100% 0px'
+/** the most a place near the view but not in it waits to draw the original's page (ms), from the places' making: the web's
+ *  hold of PDF.js's own pages ahead is the same (its run.mjs AHEAD_HOLD_MS). A first open's layer comes long after it, while the
+ *  box runs: its pages ahead are drawn then */
+export const AHEAD_HOLD_MS = 15_000
 /** PDF.js's page view states (pdf_viewer.mjs RenderingStates) */
 const INITIAL = 0, FINISHED = 3
 /** the style a place copies of the left's page box: what PDF.js sizes a page box by */
@@ -81,6 +93,15 @@ export function createPlaces(o) {
   /** the page views to draw, one at a time (PDF.js's own viewer draws one page at a time) */
   const queue = []
   let drawing = null
+  /** whether the places near the view but not in it wait (letAheadGo, or AHEAD_HOLD_MS) */
+  let held = true
+  const aheadTimer = clock.later(() => letAheadGo(), AHEAD_HOLD_MS)
+  function letAheadGo() {
+    if (!held) return
+    held = false
+    clock.clear(aheadTimer)
+    pump()
+  }
   const counts = { made: 0, released: 0 }
   /** the place a keyboard's jump gives the focus to once it shows a page (`n`), within FOCUS_WAIT_MS of the jump: a far
    *  place shows nothing until it comes near, and the focus left on the link would fall to the document once that link's
@@ -98,6 +119,17 @@ export function createPlaces(o) {
       o.near(p.n, p.near)
     }
   }, { root, rootMargin: NEAR })
+  /** which places are in the view itself (no margin): while the pages ahead wait, those alone are drawn */
+  const inView = new IntersectionObserver(entries => {
+    let came = false
+    for (const e of entries) {
+      const p = list[Number(e.target.dataset.pageNumber) - 1]
+      if (!p || p.div !== e.target) continue
+      if (e.isIntersecting && !p.inView) came = true
+      p.inView = e.isIntersecting
+    }
+    if (came && held) pump()
+  }, { root, rootMargin: '0px' })
 
   /** a place's page box as the left's page n is sized now */
   function sizeOf(p) {
@@ -184,7 +216,10 @@ export function createPlaces(o) {
   }
   function pump() {
     if (drawing || disposed) return
-    const p = queue.shift()
+    // (while the pages ahead wait, the first place queued that is in the view; the others keep their turn)
+    const at = held ? queue.findIndex(q => q.inView) : 0
+    if (at < 0 || !queue.length) return
+    const p = queue.splice(at, 1)[0]
     if (!p) return
     const v = p.view
     if (!v?.pdfPage || v.renderingState !== INITIAL) return pump()
@@ -217,7 +252,7 @@ export function createPlaces(o) {
     }
   }
   function remove() {
-    for (const p of list) { near.unobserve(p.div); releaseView(p); p.div.remove() }
+    for (const p of list) { near.unobserve(p.div); inView.unobserve(p.div); releaseView(p); p.div.remove() }
     list = []
     slots = []
     queue.length = 0
@@ -239,12 +274,12 @@ export function createPlaces(o) {
         holder.className = 'axt-place-view'
         div.append(holder)
         // drawnAt: the scale its page view was last drawn at
-        return { n: i + 1, div, holder, view: null, skeleton: null, side: null, blank: false, near: false, drawnAt: 0 }
+        return { n: i + 1, div, holder, view: null, skeleton: null, side: null, blank: false, near: false, inView: false, drawnAt: 0 }
       })
       // a place as a page view is read: its element, and the left's viewport and page box for its page, as they are now
       slots = list.map(p => ({ id: p.n, div: p.div, get viewport() { return o.original(p.n)?.viewport ?? null }, get pdfPage() { return o.original(p.n)?.pdfPage ?? null } }))
       stack.append(...list.map(p => p.div))
-      for (const p of list) { sizeOf(p); near.observe(p.div) }
+      for (const p of list) { sizeOf(p); near.observe(p.div); inView.observe(p.div) }
     },
     /** every place sized again as the left's page boxes are (the pages laid out, a page's own size, its rounding) */
     size(n) {
@@ -341,6 +376,10 @@ export function createPlaces(o) {
       pending = { n, until: clock.now() + FOCUS_WAIT_MS }
     },
     count: () => list.length,
+    /** the places near the view but not in it drawn from now on (the layer's first page there, or none to wait for) */
+    letAheadGo,
+    /** whether they still wait */
+    aheadHeld: () => held,
     /** the places as page views are read: place n's element with the left's viewport and page box for page n */
     views: () => views,
     /** the names of the places that show a page, again (the interface's language changed) */
@@ -348,7 +387,7 @@ export function createPlaces(o) {
     probe() {
       let views = 0, skeletons = 0, laid = 0, near = 0
       for (const p of list) { if (p.view) views++; if (p.skeleton) skeletons++; if (p.side && !p.blank) laid++; if (p.near) near++ }
-      return { places: list.length, pageViews: views, skeletons, laidPlaces: laid, nearPlaces: near, pageViewsMade: counts.made }
+      return { places: list.length, pageViews: views, skeletons, laidPlaces: laid, nearPlaces: near, pageViewsMade: counts.made, aheadHeld: held }
     },
     dispose() {
       if (disposed) return
@@ -357,7 +396,9 @@ export function createPlaces(o) {
       document.removeEventListener('focusin', giveUp, true)
       clock.clear(redrawTimer)
       clock.clear(textTimer)
+      clock.clear(aheadTimer)
       near.disconnect()
+      inView.disconnect()
       remove()
       stack.style.removeProperty('--scale-factor')
       stack.removeAttribute('data-axt-scaling')
