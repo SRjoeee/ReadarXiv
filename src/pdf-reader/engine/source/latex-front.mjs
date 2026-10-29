@@ -361,9 +361,10 @@ function argsBySpec(s, i, spec) {
  * whole table after it (FULL_RULE; a partial \\cmidrule under a spanning heading does not end it), when fewer rows stand
  * above that rule than below it: a table with no such rule, or with its only one before the last rows, has no header,
  * and every cell of it belongs to its column (a rule-based reading, the same for every table: the bold of a heading
- * row is not read)
+ * row is not read). `rowEnds`, the paper's macros that end a row as `\\\\` does (rowEndsOf): each one ends it here too, an
+ * empty group after it with it, so that the cells after it are placed where the walk cuts them (2610.21924v1's \\tightrow)
  */
-export function tableGrid(s, from, to) {
+export function tableGrid(s, from, to, rowEnds = null) {
   const cells = [], rows = [{ rule: false, filled: false }]
   let row = 0, col = 0, span = 1, start = from, content = false
   const fill = () => { content = true; rows[row].filled = true }
@@ -377,12 +378,16 @@ export function tableGrid(s, from, to) {
     if (c === '&') { cut(i); i++; start = i; continue }
     if (c !== '\\') { if (!/\s/.test(c)) fill(); i++; continue }
     const { name, end } = commandAt(s, i)
-    if (name === '\\' || name === 'tabularnewline') {
+    const ownEnd = !!rowEnds?.has(name)
+    if (name === '\\' || name === 'tabularnewline' || ownEnd) {
       cut(i)
       let e = end
-      if (s[e] === '*') e++
-      const opt = argsAfter(s, e, 1)
-      if (opt.args[0]?.kind === 'opt') e = opt.end
+      if (ownEnd) { const k = skipSpaces(s, e); if (s.startsWith('{}', k)) e = k + 2 }
+      else {
+        if (s[e] === '*') e++
+        const opt = argsAfter(s, e, 1)
+        if (opt.args[0]?.kind === 'opt') e = opt.end
+      }
       row++; col = 0; content = false; rows[row] = { rule: false, filled: false }
       i = e; start = e; continue
     }
@@ -434,8 +439,9 @@ function skipComment(s, i) { while (i < s.length && s[i] !== '\n') i++; return i
  * A web address's `%` as TeX reads it. url.sty's \\url and \\path, hyperref's \\nolinkurl, breakurl's \\burl and the first argument
  * of hyperref's \\href (REVTeX's .bbl's too: `\\begingroup \\@sanitize@url \\@href`) read their argument with `%` a character, so
  * `\\href {https://doi.org/…?urlappend=%3Fref%3DPDF…} {…}` is one address; but only where TeX has not read those characters
- * already, as it has inside another command's argument (`\\footnote{\\url{a%b}}`: the `%` a comment there too) or in the body of
- * an environment that collects its body as one (tabularx, amsmath's alignments). Read as a comment everywhere, the address's
+ * already, as it has inside another command's argument (`\\footnote{\\url{a%b}}`: the `%` a comment there too; an optional one,
+ * `\\section[See \\url{a%b}]{…}`; a definition's body, `\\def\\x#1{\\url{a%b}}`) or in the body of an environment that collects
+ * its body as one (tabularx, amsmath's alignments). Read as a comment everywhere, the address's
  * group never closed: the rest of its line was lost, and in a .bbl every entry after it read as one (2610.21770v1's 44 to 61).
  * The text with each such `%` written as LITERAL_PERCENT, the same length, so that every reading of the walk (groups, comments,
  * a bibliography's \\bibitem) sees what TeX sees and every place stays where it is; the units take their `%` back
@@ -444,22 +450,27 @@ function skipComment(s, i) { while (i < s.length && s[i] !== '\n') i++; return i
 export function urlPercents(text) {
   if (!text.includes('%') || text.includes(LITERAL_PERCENT)) return text
   const n = text.length, out = text.split('')
-  /** each brace group open, innermost last: whether TeX reads it as a command's argument (its tokens read before it acts) */
+  /** each group open, innermost last: a brace group or an optional argument's brackets (`open`), and whether TeX reads it as a
+   *  command's argument (`arg`: its tokens read before the command acts) — a group after a command, an argument or an optional
+   *  one, a \\def's body after its parameter text, and every optional argument */
   const groups = []
   /** the environments open whose body TeX collects as an argument */
   let collected = 0
-  let changed = false, afterCommand = false
+  let changed = false, afterCommand = false, defining = false
   for (let i = 0; i < n; i++) {
     const c = text[i]
     if (c === '%') { i = skipComment(text, i); afterCommand = false; continue }
-    if (c === '{') { groups.push(afterCommand); afterCommand = false; continue }
-    if (c === '}') { groups.pop(); afterCommand = true; continue }
-    if (c === ']') { afterCommand = true; continue }
+    if (c === '{') { groups.push({ open: '{', arg: afterCommand || defining }); afterCommand = false; defining = false; continue }
+    if (c === '}') { while (groups.length && groups.pop().open !== '{'); afterCommand = true; continue }
+    if (c === '[' && afterCommand) { groups.push({ open: '[', arg: true }); afterCommand = false; continue }
+    if (c === ']') { if (groups.at(-1)?.open === '[') groups.pop(); afterCommand = true; continue }
     if (c !== '\\') { if (!/\s/.test(c)) afterCommand = false; continue }
     const m = /^\\(?:([A-Za-z@]+)|[\s\S])/.exec(text.slice(i, i + 64))
     const name = m?.[1] ?? null
     if (!m || !name) { i += m ? m[0].length - 1 : 0; afterCommand = false; continue }
     const at = i + m[0].length
+    // (a \\def's body is read as tokens where it is defined, whatever its parameter text: the first group after its name)
+    if (TEX_DEFS.test(name)) defining = true
     if (name === 'verb') { const d = text[at]; const e = d ? text.indexOf(d, at + 1) : -1; i = e < 0 ? at : e; afterCommand = false; continue }
     if (name === 'begin' || name === 'end') {
       const env = /^\s*\{([^{}]*)\}/.exec(text.slice(at, at + 64))
@@ -470,7 +481,7 @@ export function urlPercents(text) {
       if (env && COLLECTED_BODY.test(env[1].trim())) collected = Math.max(0, collected + (name === 'begin' ? 1 : -1))
       if (env) { i = at + env[0].length - 1; afterCommand = true; continue }
     }
-    if (URL_READERS.has(name) && !collected && !groups.includes(true)) {
+    if (URL_READERS.has(name) && !collected && !groups.some(g => g.arg)) {
       let k = at
       while (text[k] === ' ' || text[k] === '\t' || text[k] === '\n') k++
       if (name === 'href' && text[k] === '[') { const e = matchGroup(text, k, '[', ']'); if (e > 0) { k = e; while (text[k] === ' ' || text[k] === '\t' || text[k] === '\n') k++ } }
@@ -494,6 +505,8 @@ export function urlPercents(text) {
   }
   return changed ? out.join('') : text
 }
+/** the primitives whose body after the parameter text is read as tokens where the definition stands (urlPercents) */
+const TEX_DEFS = /^[gex]?def$/
 /** what urlPercents writes a `%` TeX reads as a character as: a code no TeX source holds */
 const LITERAL_PERCENT = '\u0000'
 /** the commands whose argument TeX reads with `%` a character (urlPercents): hyperref's \\href, its first */
@@ -1683,7 +1696,7 @@ function walk(s, from, to, b, ctx) {
         walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved; b.cellMode = savedCell
         // each cell unit's place in the table's grid (tableGrid), by which its consistency group is found (groups.mjs):
         // a table nested in a cell gives its units the outer cell's place, set after its own
-        placeCells(b.units.slice(first), b.file, tableGrid(s, argsEnd, bodyEnd), table)
+        placeCells(b.units.slice(first), b.file, tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds), table)
         // fitted to the line once translated (patch, FIT_DEF): a plain tabular, whose width is its columns'; a tabular*,
         // set to a width it cannot shrink below, measured at its columns' width first (\\axtstar) — not one with a
         // position argument, which \\axtstar does not read. tabularx and tabulary keep their width and read their own

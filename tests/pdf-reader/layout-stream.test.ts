@@ -72,6 +72,10 @@ describe('ownedOf', () => {
     expect(owned([page], { 'p0.1a': moved('.'), 'p0.3a': moved(','), 'p0.5a': moved('.') })).toEqual({ 'p0.1a': ['1', 0], 'p0.3a': ['2', 0], 'p0.5a': ['.', 0] })
     // (without it, as before: the mark is the piece's)
     expect(owned([page], { 'p0.1a': closed })).toEqual({ 'p0.1a': ['.1', 0] })
+    // (a piece whose own ink opens with that mark, the mark after its closing point as a piece of 0 has it: `\url{../data}.` keeps
+    // its first dot, the review of #501, Codex; a blank glyph after the point passed over)
+    const url = pageOf(['see', { at: 'p0.1a' }, '../data', { at: 'p0.1b' }, '. Next', { at: '0e' }])
+    expect(owned([url], { 'p0.1a': moved('.') })).toEqual({ 'p0.1a': ['../data', 0] })
   })
 
   it('nothing between its two points: a piece of nothing (EMPTY); the closing point first: out of order', () => {

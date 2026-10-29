@@ -241,6 +241,11 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     // (inside another command's argument, or an environment's body TeX collects, TeX has read the `%` as a comment already: the
     // walk reads it so too; a group no command takes is no argument, and a verbatim's text no address)
     for (const t of ['\\footnote{\\url{a%b}}', '\\newcommand{\\x}{\\url{a%b}}', '\\def\\x{\\href{a%b}{c}}', '\\begin{tabularx}{l}\\url{a%b}\\end{tabularx}', '\\begin{verbatim}\\url{a%b}\\end{verbatim}', '% \\url{a%b}']) expect(urlPercents(t), t).toBe(t)
+    // (an optional argument, and a \\def's body after its parameter text: tokens TeX has read, a `%` a comment there, the reviews of
+    // #501, Devin and Codex)
+    for (const t of ['\\section[See \\url{a% ignored\nb}]{Title}', '\\item[\\url{a%b}] x', '\\def\\foo#1{\\url{a% comment } }\nb}}', '\\def\\foo#1.#2{\\url{a%b}}']) expect(urlPercents(t), t).toBe(t)
+    for (const t of ['\\item[x] \\url{a%b}', 'see [1] \\url{a%b}', '\\def\\x#1{#1} \\url{a%b}']) expect(urlPercents(t), t).not.toBe(t)
+    expect(texts(project(doc('\\def\\foo#1{\\url{a% comment } }\nb}}\nWords after the definition.')))).toEqual(['Words after the definition.'])
     for (const t of ['\\url{a%b}', '{\\small \\url{a%b}}', '\\href [x] {a%b} {c}', '\\begin{tabularx}{l}x\\end{tabularx} \\path{a%b}']) expect(urlPercents(t), t).not.toBe(t)
     expect(urlPercents('\\href{a%3F%3D}{b%c}').split('%').length).toBe(2)
     // (a `\\` and the character after it read as the argument's boundary reads them: `\\%` the command, `\\\\%` a pair and the
@@ -250,6 +255,9 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
   it('a macro of the paper\'s whose body ends a table\'s row (\\newcommand{\\tightrow}{\\\\[-4pt]}) ends the row in a cell, as `\\\\` does (2610.21924v1\'s 30 cells ran into the next row\'s first)', () => {
     const tab = '\\begin{table}\\begin{tabular}{lrr}\nDemographic equity & 73.88\\% & 95.29\\% \\tightrow\nCapacity shortage & 86.27\\% & 89.01\\% \\tightrow\nTravel distance & 1 & 2 \\\\\n\\end{tabular}\\end{table}'
     expect(texts(project(doc(tab, '\\newcommand{\\tightrow}{\\\\[-4pt]}')))).toEqual(['Demographic equity', 'Capacity shortage', 'Travel distance'])
+    // (and the table's grid ends the row there too, each cell at its row and column: the review of #501, Devin)
+    const grid = project(doc(tab.replace('86.27\\%', 'Some words'), '\\newcommand{\\tightrow}{\\\\[-4pt]}'))
+    expect((grid.units as unknown as { cell?: { row: number; col: number } }[]).map(u => u.cell && [u.cell.row, u.cell.col])).toEqual([[0, 0], [1, 0], [1, 1], [2, 0]])
     // (a body that does more than end the row stays a placeholder, as before)
     expect(texts(project(doc(tab, '\\newcommand{\\tightrow}{\\\\[-4pt] more}')))).not.toEqual(['Demographic equity', 'Capacity shortage', 'Travel distance'])
   })

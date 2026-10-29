@@ -2223,8 +2223,8 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
 - **What a command reads past its arguments, as TeX reads it** (PIPELINE 33, `source/latex-front.mjs`). *A web address's `%`*
   (`urlPercents`): url.sty's `\url` and `\path`, hyperref's `\nolinkurl` and `\href`'s first argument (REVTeX's `.bbl`'s too:
   `\begingroup \@sanitize@url \@href`), breakurl's `\burl` read their argument with `%` a character, where TeX has not read those
-  characters already (inside another command's argument, or the body of an environment that collects it: tabularx, amsmath's
-  alignments, `%` is a comment there as anywhere). Read as a comment everywhere, the address's group never closed: the rest of
+  characters already (inside another command's argument, an optional one or a `\def`'s body after its parameter text, or the
+  body of an environment that collects it: tabularx, amsmath's alignments, `%` is a comment there as anywhere). Read as a comment everywhere, the address's group never closed: the rest of
   its line was in no unit (`\url{https://a.com/x%3Fy} and more text`), and in a `.bbl` every entry after it read as one
   (2610.21770v1's `?urlappend=%3Fref%3DPDF`, 18 entries; an MNRAS `.bbl`'s ADS links, `2017A%26A...`, 31 of 2608.18626's
   entries each read from the `\bibitem` of the entry after it, the line of `%26` lost). The walk reads each file with such a `%` written as a code no source holds, the same length, so that
@@ -2233,7 +2233,8 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   `\tikz[options]{…}`, or `\tikz[options]` and one path to its `;` outside every group, within its paragraph, one placeholder
   (2010.11929v2's `\tikz\fill[natural] (0,0) circle (.5ex);` was `\tikz`, `\fill` and the path's syntax sent as text). *A
   paper's macro that ends a table's row* (`rowEndsOf`): one of no argument whose body is `\\` (starred, with its space),
-  `\tabularnewline` or `\cr`, and rules after it, ends the row in a cell as `\\` does (2610.21924v1's
+  `\tabularnewline` or `\cr`, and rules after it, ends the row in a cell as `\\` does, and in the table's grid
+  (`tableGrid`, its cells' rows and columns, which the table groups read) (2610.21924v1's
   `\newcommand{\tightrow}{\\[-4pt]}`: the next row's first cell ran on in the cell it ended, 30 cells). *An author block's rows
   inside a conditional* (`frontEnds`): no row is cut inside an `\if…\fi`, TeX's or the paper's `\newif`, so that a conditional's
   `\if` and its `\fi` never stand in two units (Codex on #485; no corpus paper writes one)
@@ -2514,8 +2515,11 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     mark (`\axtpma{a}\cite{x}.\axtpm{b} x`); equal, TeX answers 3, and the marking sets both so, the closing one inside the
     text after the piece, past its first character. The piece's ink is then what its two marks hold but that mark first: its
     glyph the text's, which the line's erase takes and the translation's own punctuation replaces (`followsOf` names the mark
-    that opens the text after a piece of an asked class; `ownedOf` drops a closed piece's first glyph where it is that mark
-    and more follow, for the maker and the erasure alike, so that the piece's group holds the superscript alone). A paper's
+    that opens the text after a piece of an asked class; `ownedOf` drops a closed piece's first glyph where it is that mark,
+    more follow and no such mark stands right after its closing point, for the maker and the erasure alike, so that the piece's
+    group holds the superscript alone: TeX's output tells the two apart, a piece of 0 having the mark after its closing point,
+    so that `\url{../data}.` keeps its first dot — the wrap's caller holds no switch to read the decision from, the review of
+    #501). A paper's
     macro keeps its opening mark alone, as for 2. Under TeX Live 2025, `way \axtpma{a}\cite{a}.\axtpm{b} Next` is the paper's
     box to the hundredth of a point (49.76 pt), and with the closing mark before the full stop it is not (49.90 pt);
     `marks-invariant.test.ts` holds cite.sty's superscripts under hyperref and fnpct's footnote call, every text item in place.
@@ -2733,8 +2737,8 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   over placeholders of no mark of their own, nothing else between, to the next marked piece's opening
   (`\cls{circle}$\to$\cls{donut}`), and a display after its unit's end mark ending at a later unit's opening as at its start
   mark, where that unit's start mark follows the opening (an end-only title's opening may stand lines into it). A closed
-  piece's first glyph is the text's where it is the punctuation mark its command set before its own ink (`followsOf` `moved`,
-  LAYOUT 27: cite.sty's "air.¹"), in both readings, so that the piece's group holds the superscript alone. Two rules the
+  piece's first glyph is the text's where it is the punctuation mark its command set before its own ink and none stands right
+  after its closing point (`followsOf` `moved`, LAYOUT 27: cite.sty's "air.¹"), in both readings, so that the piece's group holds the superscript alone. Two rules the
   maker's reading shares since LAYOUT 20, so that the layout file's segments of a piece and the wrap's group of it are one
   reading (with the erasure's alone, a display's tail past the maker's segment was hidden with the piece and shown again from
   render B through that segment only: lost): where the text after a piece runs to its unit's next mark (its next piece's

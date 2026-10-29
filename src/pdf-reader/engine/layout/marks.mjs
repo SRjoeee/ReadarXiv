@@ -1657,7 +1657,8 @@ export function followsOf(units, names, texts = null) {
     // characters first stand: a display's \\text{for every}, a URL's dots)
     // (`moved`: the punctuation mark that opens the text after a piece of a command the probe asks about, which that command may
     // set before its own ink — cite.sty's superscripts, natmove, fnpct: `\\cite{a}.` set ".¹" — and where TeX answered so, the
-    // piece's closing mark stands after it (layoutMarking's 3): the piece's ink is what its two marks hold but that mark first)
+    // piece's closing mark stands after it (layoutMarking's 3): the piece's ink is what its two marks hold but that mark first,
+    // where none stands after them (stream.mjs ownedOf: a piece of 0 has the mark after its closing point, its own ink as it is)
     const moved = ASKED.has(classOf(u.pieces[k])) && MOVED.includes(after[0]) ? after[0] : null
     return { closing: names.has(`${name.slice(0, -1)}b`), want, rest: spellOf(after), display, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group, ...(said ? { split: { name: `${next}a`, text: said, ...(trail ?? {}) } } : {}), ...(moved ? { moved } : {}) }
   }
