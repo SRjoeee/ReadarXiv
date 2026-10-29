@@ -3228,15 +3228,21 @@ first page's way (the coordinator's word: the units come after the head and ever
 - **When**: after the maker's last part (the host's: the web's maker child, `docs/route/orphan-text.md` §8.9), over our base page,
   so that no page waits for it; its units one more units chunk, a **late chunk**, ids from the head's last on. A figure the pass
   cannot read stays the original's and is never the paper's failure: an image under OCR_MIN_SIDE (30 PDF units) or OCR_MIN_PX
-  (32 pixels) a side (`small`), one past OCR_PIXELS_MAX (40 million pixels: the lite worker's OCR opt-in, layout/pdf-lite.mjs, keeps
-  its operator and decodes none of it, `big`), one the recogniser refuses or does not answer in its host's time (`error`,
-  `timeout`), one past the paper's budget (OCR_BUDGET_MS, 60 s of the recogniser's time, `budget`: the owner's bound on the box's
-  hold); a cache that cannot be read or written is no cache.
+  (32 pixels) a side (`small`), one past OCR_PIXELS_MAX (40 million pixels) or past its page's OCR_PAGE_PIXELS_MAX (64 million
+  pixels of the page's images in all, in the order the page paints them: PDF.js decodes a page's images together, as it builds
+  the page's operator list) — the lite worker's OCR opt-in (layout/pdf-lite.mjs) keeps its operator and decodes none of it, `big`;
+  an image PDF.js keeps once for the pages that paint it is refused on all of them —, one the recogniser refuses or does not
+  answer in its host's time (`error`, `timeout`), one past the paper's budget (OCR_BUDGET_MS, 60 s of the recogniser's time,
+  `budget`: the owner's bound on the box's hold); a cache that cannot be read or written is no cache. The bounds are the box's
+  memory (the web's record of it: its `docs/research/measurements/ocr.md`).
 - **What is read** (`pipeline/ocr-pass.mjs`): each page's operator list as PDF.js gives it (`paintsOf`: every image's paint
   operator under its transform and the clip in force — a form's box, as pdfTeX trims an image so, and a rectangle's; any other
   clip `complex` — and the paths drawn after it), its text content's boxes, and each image's pixels as PDF.js decodes them. An
-  image is read once a paper whatever it is painted (its pixels' digest), and once a recogniser across papers where the host
-  gives a cache (`ocrKey`: OCR_VERSION and the digest; the value the recogniser's lines, which hold no paper's place).
+  image is read once a paper whatever it is painted (its pixels' digest, made over them as they are, no copy), and once a
+  recogniser across papers where the host gives a cache (`ocrKey`: OCR_VERSION, the host's reader and the pixels' name, their size
+  and kind and digest; the value the recogniser's lines, which hold no paper's place). Each image is let go from its page once its
+  last paint there is read (PDF.js holds a page's decoded images until the page is cleaned up), and the host's collection
+  (`collect`) is asked after each image: a server's canvases are native memory its heap does not count.
 - **Its labels** (`layout/bitmap-text.mjs labelsOf`): the recogniser's lines merged as the extension merges them
   (`core/image/boxes.ts linesToBoxes`: the same filter of numbers, letters alone and low confidence, the same merge of a label
   wrapped over lines), each label one patch, over its line or over the block its lines make: the line's box grown PATCH_PAD (0.08)
@@ -3252,21 +3258,34 @@ first page's way (the coordinator's word: the units come after the head and ever
   72 % of its thinnest line's thickness: core/renderer/image.ts fontBounds), its colours the ground's and the ink's, its anchor read
   as a vector figure's is (§19.12: `start` where ink stands right before it along its baseline, a legend's marker, `end` the other
   way, else `centre`). A label of names keeps its source, KEPT, as a table's cell of names (mt.mjs isName).
-- **On the wire** (BUNDLE5 10, shared, unreleased): each label an ink unit of kind `inkocr` (class `ocr`, toggle `figures`) in a
-  chunk of INK_UNITS_FORMAT, its tuple's eighth element its place (`layer-proto/ocr-rows.mjs`: [page, bg, fg, anchor, size, and
-  each line's quad and patch, 16 numbers, PDF units]; `units.mjs unitStands` takes an eighth element on that kind alone). The
-  index takes LATE_MAX (4) late chunks past the head's, of such units alone (`format.mjs indexOf`, `indexWithLate`: one read
-  alone, after the index), and the catalog lists them after the head's chunks. The head names the recogniser (`versions.ocr`,
-  `pipeline/versions.mjs` OCR: OCR_VERSION as a version token) and the VTAG gains `-o<OCR>`, so that a layer read by another
-  recogniser is made again; a head of 7 or 9 names none.
+- **Its set** (`layout/bitmap-text.mjs setsOf`; the owner's rule of 2026-10-29 for a figure's labels, §19.12): an image's labels of
+  one direction whose starts, ends or middles lie on one line across it (within SET_ALIGN 0.3 of their size: the recogniser's
+  boxes stand round their ink by a pixel or two either way), and its one-line labels on one baseline, are one set where their
+  sizes are within SET_SIZE 1.35 of each other; a label in a column with another takes that column's edge as its anchor. A set is
+  drawn at one size, its labels' median: the recogniser's thickness puts one figure's labels of one size apart (the Transformer's
+  "Linear" boxes read 4.4, 5.0 and 5.3), and two sizes in one legend were the owner's complaint of the vector figures.
+- **On the wire** (BUNDLE5 12): each label an ink unit of kind `inkocr` (class `ocr`, toggle `figures`) in a chunk of
+  INK_UNITS_FORMAT, its tuple's eighth element its place (`layer-proto/ocr-rows.mjs`: [page, bg, fg, anchor, size, set — the id of
+  its set's first label —, and each line's quad and patch, 16 numbers, PDF units]; `units.mjs unitStands` takes an eighth element
+  on that kind alone). The index takes LATE_MAX (4) late chunks past the head's, of such units alone (`format.mjs indexOf`,
+  `indexWithLate`: one read alone, after the index), and the catalog lists them after the head's chunks. The head names the
+  recogniser (`versions.ocr`, `pipeline/versions.mjs` OCR: OCR_VERSION as a version token) and the VTAG gains `-o<OCR>`, so that a
+  layer read by another recogniser is made again; a head of 7 to 11 names none and holds no late chunk (indexOf, indexWithLate and
+  writeCatalog refuse one past it), and this reader reads 11's objects as they are.
 - **The reader**: the feed reads a late chunk told after the index (`view/feed.mjs`), the side opens its door again over the grown
   index, as a change of the toggles does, each laid page kept until the new door's commits (`view/layer-side.mjs`), and tells a
   host that translates the units itself (the extension's run: `onIndex`), which translates the new ones. The run draws a page's
   labels where it shows figures translated (`run.mjs paintOcr`): over each line a polygon of the ground's colour, every patch of
-  the page before any label's text; the translation in its lines' boxes (`layer-proto/ocr-fit.mjs fitOcr`: its lines filled in
-  order, broken between words or between two characters of a script written without spaces, on each line's middle across it, at
-  its size or shrunk to the rules' last floor, P.floorMin), in a face of the paper's sans family, in its ink's colour. Left the
-  original's, no patch drawn: no row, kept, untranslated, `same` as its source, a face's refusal, `unfit`, `outside` its page's view.
+  the page before any label's text; the translation in its lines' boxes (`layer-proto/ocr-fit.mjs`: its lines filled in order,
+  broken between words or between two characters of a script written without spaces, on each line's middle across it), its set
+  at one size, shrunk by one factor, the least its labels need, to the rules' last floor (P.floorMin; `ocrNeed`, `ocrSetFactor`,
+  `layOcr`: never a label alone, one that would need less left the original's); its CJK characters in the target's CJK face and
+  every other in the paper's sans family's Latin face, a run each (`layer2.mjs figureRuns`, as a vector figure's: the served CJK
+  faces hold no Latin letter or digit, so one face for a label of two scripts — "宽度 MLP" — was refused whole), the face check
+  asked of each run, in its ink's colour; a line within 1 degree of level drawn level, its words in the page's text layer and its
+  word table under its unit's id (the hover lights it on the right; arXiv's bitmap holds no token, so no left anchor: its
+  figure's float lights it there, as a turned figure label's). Left the original's, no patch drawn: no row, kept, untranslated,
+  `same` as its source, a face's refusal, `unfit`, `outside` its page's view.
   A page whose labels are shown waits for their rows as for its figures'; the translating indicator marks none of them (it marks
   the parts' units alone). The labels move nothing else of the page (a test lays one with and without them). The run's `ocr`
   lists each label of the pages laid.
@@ -3274,8 +3293,11 @@ first page's way (the coordinator's word: the units come after the head and ever
   `lab/pdf/records/ocr-gate.md`): 96 images painted, 58 read by the recogniser, 33 too small (32 of 1810.04805v2's icons), 5 the
   same image painted again; 818 lines, 178 labels, 87 drawn, 91 left (68 `busy`, 22 `overlap`, 1 `crowded`); every patch inside its image (P 0), no two
   labels' lines overlapping (L 0), no patch over ink of another colour (C 0), no stroke across a patch's edge (D 0), every image
-  and label accounted for (A 0). 2608.16117v1's 41 PNGs: 23 s of the pass, 16 s of it the recogniser's. The box's own figures are
-  the web's record (`docs/route/orphan-text.md` §8.9).
+  and label accounted for (A 0). 2608.16117v1's 41 PNGs: 23 s of the pass, 16 s of it the recogniser's. Again on 2026-10-29
+  (next 8ecf231a, the box's runtime: onnxruntime-node's CPU build, `--ort-node`): P, L, C, D and A 0 on the 7; 2608.16117v1 40 of
+  its 41 images read (its page of 64.7 million pixels past OCR_PAGE_PIXELS_MAX), 11.3 s of the recogniser's; 9 sets of 23 labels
+  over 1706.03762v7, 2608.04322v1 and 2608.16117v1, 10 anchors set by their column, 20 sizes their set's median. The box's own
+  figures are the web's record (`docs/route/orphan-text.md` §8.9).
 - **Limits.** A label on a ground that is no one colour (a gradient, a photograph, a heat map) or whose box another line's ink
   meets stays the original's; so does one a plot's line crosses. The recogniser reads no orientation but a quarter turn
   (DESIGN §15.4). A figure whose text is drawn as vector over a bitmap (a TikZ node over an image) is the vector figures' (§19.12),

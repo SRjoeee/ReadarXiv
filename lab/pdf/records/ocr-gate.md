@@ -31,3 +31,22 @@ and `overlap` where its box meets another line's ink (a label over its count, "G
 the count's box). Before the patch's edge band read every pixel at its edge (a glyph's faint tip within NEAR_EDGE), two labels of
 1706.03762v7's embeddings left a descender's speck between two lines' patches; a label of several lines is now one patch over its
 block.
+
+## Run of 2026-10-29 (engine `feat/bitmap-figure-text` merged with `next` 8ecf231a; the box's runtime, `--ort-node`)
+
+The same 7 bases (pack e8e9eeb5's), the recogniser on onnxruntime-node 1.30.0's CPU build (one thread), as the web's box runs it,
+with this run's drawing rules (a set at one size, runs by script) and bounds (OCR_PAGE_PIXELS_MAX 64 million pixels a page):
+
+| Paper | Images painted | Read | Small | Big | Again | Lines | Labels | Drawn | Left (why) | Sets (labels) | Recogniser s | P | L | C | D | A |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 1512.03385v1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | — | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 1706.03762v7 | 3 | 3 | 0 | 0 | 0 | 48 | 31 | 25 | 6 busy | 4 (13) | 1.0 | 0 | 0 | 0 | 0 | 0 |
+| 1810.04805v2 | 38 | 1 | 32 | 0 | 5 | 0 | 0 | 0 | — | 0 | 0.0 | 0 | 0 | 0 | 0 | 0 |
+| 2307.16209v1 | 8 | 8 | 0 | 0 | 0 | 47 | 9 | 2 | 5 busy, 1 crowded, 1 overlap | 0 | 1.0 | 0 | 0 | 0 | 0 | 0 |
+| 2608.04322v1 | 6 | 5 | 1 | 0 | 0 | 87 | 40 | 18 | 21 busy, 1 overlap | 4 (8) | 0.8 | 0 | 0 | 0 | 0 | 0 |
+| 2608.16117v1 | 41 | 40 | 0 | 1 | 0 | 624 | 97 | 42 | 36 busy, 19 overlap | 1 (2) | 11.3 | 0 | 0 | 0 | 0 | 0 |
+| 2609.26457v1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | — | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+2608.16117v1's page of 64.7 million pixels holds the one image past OCR_PAGE_PIXELS_MAX (`big`), and its other 40 images give 624
+lines (636 with all 41). Of the sets' 23 labels, 10 took their column's edge as their anchor and 20 their set's median size. The WebAssembly
+build and the native one read the same text on all 818 lines of the 57 images both read (DESIGN §15.4).

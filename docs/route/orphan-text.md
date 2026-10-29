@@ -204,9 +204,11 @@ one more units chunk, stores the ledger, reads invariant (o) and offers the togg
    81 to 384 ms over 14 page pairs of 6 papers (2026-10-25). The labels are the owner's words, in the locale packs
    (one key a toggle). "Always" and "never" are no setting.
 9. **The late chunk** (stage 6, the bitmap figures' text, PDF-READER §19.15; the contract's one rule added, 2026-10-25). After its
-   last part the maker reads our base page's bitmap figures (the engine's `ocrPass` over a PDF.js document of the wrapped base,
-   opened with `maxImageSize: OCR_IMAGE_PIXELS`; the recogniser the host's: `core/ocr` `createRecogniser` on `onnxruntime-web`'s
-   Node build and `@napi-rs/canvas`, one thread, the package's three model files; a cache by `ocrKey`), and writes the labels as
+   last part, its documents let go, the maker reads the bitmap figures of the base its head names (our wrapped base, or arXiv's PDF
+   where the head is over it: the engine's `ocrPass` over a PDF.js document of it opened with `maxImageSize: OCR_IMAGE_PIXELS`; the
+   recogniser the host's: `core/ocr` `createRecogniser` on `onnxruntime-node`'s CPU build, one thread, and `@napi-rs/canvas`, the
+   package's three model files beside the child, loaded at the first image; no cache, the box having no network; `collect` its
+   own collection; the budget the engine's within what the maker's clock leaves), and writes the labels as
    one more units chunk, ids from the head's last on (`from`: the last chunk's `to` + 1; `before`: the head's chunks'
    `chunkTotals`). It announces them **once, after its last part**, as a `units` announcement of the maker's (role `units`, its
    chunks; LATE_MAX 4 at most; their units of kind `inkocr` alone): the service and the Worker accept it then and no other time,
