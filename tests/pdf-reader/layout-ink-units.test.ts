@@ -285,6 +285,19 @@ describe('inkUnitsOf', () => {
     expect(bare.boxes[0]).toEqual([null, null])
   })
 
+  it("gives a rule inside one of its placeholders' extent to that placeholder: an inline fraction's bar, which its crop redraws (review of #502)", () => {
+    // ("Consider the ratio x/y in this case": the numerator and the denominator a formula's glyphs, its bar between them on the
+    // line's band; the \_ of "task_spec" in the same line the text's)
+    const pg = page({ point: 'bs1' }, { para: 1 }, { glyphs: [...run('Consider the ratio', 100, 700), ...run('x', 195, 702.5, { font: 'CMMI10' }), ...run('y', 195, 697.5, { font: 'CMMI10' }), ...run('in task spec', 210, 700)] }, { point: 'be1' })
+    Object.assign(pg.page, { boxes: [194.5, 700.3, 200.5, 700.7, 260.5, 700, 264.5, 700.4], paths: [0, 1] })
+    const pages = [pg], { ink } = unitsOf(pages)
+    const own = { glyphs: pages.map(p => p.own.slice()), boxes: [[null, null] as (string | null)[]] }
+    claimInk(own, ink, pages.map(p => p.page) as never)
+    const id = ink[0]!.id
+    expect(own.glyphs[0]!.filter(g => g === `u${id}.p`)).toHaveLength(2)
+    expect(own.boxes[0]).toEqual([`u${id}.p`, `u${id}`])
+  })
+
   it('writes each as a bundle unit that stands, of its kind, with its echo', () => {
     const pg = page({ point: 'bs1' }, { point: 'n1.contents.e' }, { glyphs: run('1  Introduction . . 3', 100, 700) }, { glyphs: run('2  Other things . . 4', 100, 688) }, { point: 'be1' })
     const { ink } = unitsOf([pg], SOURCE)

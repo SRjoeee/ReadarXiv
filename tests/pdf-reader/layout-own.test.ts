@@ -105,6 +105,12 @@ describe('placeholders, labels and names (MR 4–6)', () => {
     expect(r.boxes[0]).toEqual(['u0', 'u0'])
     expect(r.units.get(0)?.unhidden).toBe(null)
   })
+  it('gives a fraction\'s bar on a text line to the placeholder whose range holds it, not to the text (review of #502)', () => {
+    // ("ratio x/y here": the formula's points around its numerator, its bar on the line's band and its denominator)
+    const pages = [page([{ pt: '0s' }, 'ratio', { pt: 'p0.1a' }, 'x', { rule: [36, 700.3, 41, 700.7] }, 'y', { pt: 'p0.1b' }, 'here', { pt: '0e' }])]
+    const r = ownOf(pages, { units: [{ pieces: [{ t: 'text', s: 'ratio' }, { t: 'ph', src: '\\frac{x}{y}' }, { t: 'text', s: 'here' }] }] })
+    expect(r.boxes[0]).toEqual(['u0.p'])
+  })
   it('leaves the page\'s what is no rule of the text\'s lines: a box as tall as a letter (an icon), a rule off them, a footnote\'s separator', () => {
     // (an ORCID mark after a name, its circle 6 pt; a rule between two of its lines, half a pitch from each; a rule past its line's end)
     const pages = [page([{ pt: '0s' }, 'Name', { rule: [32, 699, 38, 705] }, '\n', { rule: [10, 694, 30, 694.4] }, 'more', { rule: [70, 688, 200, 688.4] }, { pt: '0e' }])]

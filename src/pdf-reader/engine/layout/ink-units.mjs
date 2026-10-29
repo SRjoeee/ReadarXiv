@@ -83,6 +83,8 @@ const SEGS_INLINE = 4
 const FOOT = 36
 /** a head's line centred: its middle within this of its page's, PDF units */
 const CENTRE = 4
+/** two of a unit's placeholder glyphs are one formula's where their boxes stand within this share of their size apart */
+const PH_GAP = 0.3
 const r2 = v => Math.round(v * 100) / 100
 const PAIR = /\p{L}{2}/u
 
@@ -506,9 +508,37 @@ export function claimInk(own, ink, pages = null) {
     const r = lineRulesOf(pages, u.glyphs.text, near, left)
     left -= r.work
     if (r.over) continue
-    for (const [p, b] of r.rules) if (own.boxes[p - 1][b] == null) own.boxes[p - 1][b] = `u${u.id}`
+    // (a rule inside one of its placeholders' extent is that placeholder's, `u<id>.p`, as a source unit's placeholder takes the
+    // boxes of its range (own.mjs): an inline fraction's bar between its numerator and its denominator, which the formula's crop
+    // redraws with the text's groups hidden (layer-proto/visibility.mjs cropSourceOff))
+    const phs = placeholderBoxesOf(pages, u.glyphs.ph)
+    for (const [p, b] of r.rules) {
+      if (own.boxes[p - 1][b] != null) continue
+      const B = pages[p - 1].boxes, x0 = B[4 * b], y0 = B[4 * b + 1], x1 = B[4 * b + 2], y1 = B[4 * b + 3], mid = (y0 + y1) / 2
+      const inPh = phs.some(c => c.p === p && x0 >= c.x0 - 0.1 * c.size && x1 <= c.x1 + 0.1 * c.size && mid >= c.y0 && mid <= c.y1)
+      own.boxes[p - 1][b] = inPh ? `u${u.id}.p` : `u${u.id}`
+    }
   }
   return n
+}
+
+/** a unit's placeholder glyphs as boxes, one a formula: glyphs of a page whose boxes meet, or stand within PH_GAP of their size
+ *  apart, on one line (within a size across): [{ p, x0, y0, x1, y1, size }], by their advances and their tops and bottoms */
+function placeholderBoxesOf(pages, gs) {
+  const out = []
+  for (const [p, g] of gs) {
+    const G = pages[p - 1]?.glyphs?.[g]
+    if (!G || !(G.size > 0)) continue
+    const box = { p, x0: G.x0, y0: G.bottom, x1: G.x1, y1: G.top, size: G.size }
+    for (let i = out.length - 1; i >= 0; i--) {
+      const c = out[i], gap = PH_GAP * Math.max(c.size, box.size)
+      if (c.p !== p || box.x0 > c.x1 + gap || c.x0 > box.x1 + gap || box.y0 > c.y1 + box.size || c.y0 > box.y1 + box.size) continue
+      box.x0 = Math.min(box.x0, c.x0); box.y0 = Math.min(box.y0, c.y0); box.x1 = Math.max(box.x1, c.x1); box.y1 = Math.max(box.y1, c.y1); box.size = Math.max(box.size, c.size)
+      out.splice(i, 1)
+    }
+    out.push(box)
+  }
+  return out
 }
 
 /** each page's extent of `glyphs` (their advances, baseline to baseline), a size of its largest glyph past it on every side:
