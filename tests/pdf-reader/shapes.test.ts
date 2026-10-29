@@ -871,6 +871,42 @@ describe('a table\'s cell unit the left part does not locate is told by its layo
     expect([l.shapes.hit(...at, PAD, () => null)?.id, l.shapes.runs(9).length]).toEqual([9, 1])
   })
 
+  it('its lines come after its page, and a mirror is made after them, a page laid after them: both hold the cell\'s tokens (cloud Codex on #515)', () => {
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    const l = createShapes({ kindOf: kinds })
+    l.addParts(parts)
+    for (const p of [1, 2, 3]) l.addPage(nth(lefts, p))
+    l.floats(2)
+    l.addParts([{ pages: [2, 2], views: [], left: [], layout: { names: [], lines: [[9, [2, B.x, B.x + B.w, B.y, B.top, B.bottom, 10, 0]]] } }] as never)
+    const left = l.shapes.runs(9).map(r => r.toks?.length ?? r.rows.length)
+    const m = mirror(l)
+    expect([m.shapes.runs(9).length, m.shapes.hit(...at, PAD, () => null)?.id]).toEqual([1, 9])
+    expect(m.shapes.block(nth(m.shapes.runs(9), 0), PAD)).toEqual(l.shapes.block(nth(l.shapes.runs(9), 0), PAD))
+    // (page 2 laid after, every unit there the original's, the cell too: its copies of the left's tokens)
+    const r = layerShapes(l), left2 = nth(lefts, 2)
+    r.lay(2, { tokens: { n: 0, l: new Float32Array(), r: new Float32Array(), y: new Float32Array(), h: new Float32Array(), top: new Float32Array(), bottom: new Float32Array() }, word: new Int32Array(), at: new Int32Array(), spans: [], original: [...left2.spans.map(s => s[0]), 9] } as never)
+    expect(r.laid(2)).toBe(true)
+    expect([r.shapes.runs(9).length, r.shapes.hit(...at, PAD, () => null)?.id]).toEqual([1, 9])
+    expect(left).toEqual(l.shapes.runs(9).map(x => x.toks?.length ?? x.rows.length))
+  })
+
+  it('a cell whose lines run onto the next page keeps its words on both pages (Devin on #515)', () => {
+    // (unit 6 left out of the side, its words on page 3 free: cell 9 the beta of page 2 and the first word of page 3's lines 5-9)
+    const a6 = new Map([...anchors].filter(([id]) => id !== 6)), w6 = layoutOf(doc, views, a6, kinds)
+    const c3 = nth(doc, nth(UNITS.get(6) ?? [], 0))
+    const { parts, lefts } = cutSide(w6, a6, views)
+    const lines9 = [2, B.x, B.x + B.w, B.y, B.top, B.bottom, 10, 0, 3, c3.x, c3.x + c3.w, c3.y, c3.top, c3.bottom, 10, 0]
+    const withLines = parts.map((p, i) => (i === 0 ? { ...p, layout: { names: [], lines: [[9, lines9]] } } : p))
+    for (const order of [[1, 2, 3], [3, 2, 1]]) {
+      const l = createShapes({ kindOf: kinds })
+      l.addParts(withLines as never)
+      for (const p of order) l.addPage(nth(lefts, p))
+      expect(l.shapes.runs(9).map(r => r.page).sort()).toEqual([2, 3])
+      const m = mirror(l)
+      expect(m.shapes.runs(9).map(r => r.page).sort()).toEqual([2, 3])
+    }
+  })
+
   it('every other unit keeps its runs on both panes, though the cell\'s lines would vote its page into two columns (2610.22195v1 p18)', () => {
     // (cell 9 with eight lines a third of the page wide besides its own, four in each half of page 2: long lines the column vote counts)
     const wide = [0, 1, 2, 3].flatMap(i => [[2, 60, 260, 440 - 12 * i, 447 - 12 * i, 438 - 12 * i, 10, 0], [2, 330, 530, 440 - 12 * i, 447 - 12 * i, 438 - 12 * i, 10, 0]]).flat()
