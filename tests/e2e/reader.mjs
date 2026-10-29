@@ -1153,26 +1153,54 @@ try {
     /** the text a laid page of the right draws (its SVG's): the translation of each unit shown translated, nothing of one hidden */
     const drawn = n => page.evaluate(n => { const l = document.querySelector(`#right .axt-place[data-page-number="${n}"] .axt-place-view > .axt-layer:not(.axt-layer-retired)`); return l?.querySelector('canvas.axt-layer-copy')?.width > 0 ? l.querySelector('svg')?.textContent ?? '' : null }, n)
     /** page `n` laid and its drawing passing `test` (a door opened again keeps each page's drawing until its own commits) */
-    const until = (n, test, timeout = 30_000) => page.waitForFunction(([n, source]) => { const l = document.querySelector(`#right .axt-place[data-page-number="${n}"] .axt-place-view > .axt-layer:not(.axt-layer-retired)`); return l?.querySelector('canvas.axt-layer-copy')?.width > 0 && new RegExp(source).test(l.querySelector('svg')?.textContent ?? '') === test.want }, [n, test.source], { timeout }).then(() => true, () => false)
+    const until = (n, test, timeout = 30_000) => page.waitForFunction(([n, source, want]) => { const l = document.querySelector(`#right .axt-place[data-page-number="${n}"] .axt-place-view > .axt-layer:not(.axt-layer-retired)`); return l?.querySelector('canvas.axt-layer-copy')?.width > 0 && new RegExp(source).test(l.querySelector('svg')?.textContent ?? '') === want }, [n, test.source, test.want], { timeout }).then(() => true, () => false)
     // the sample's author (page 1, the names: off by default) and its table's head cells (page 3, the tables: on), by words of
     // theirs no other unit has (tests/fixtures/pdf/sample-1/main.tex)
     const AUTHOR = { page: sampleCut.located.find(u => sampleCut.kinds[u[0]] === 'author')?.[2][0][0], source: 'Contributors' }
     const CELLS = { page: sampleCut.located.find(u => sampleCut.kinds[u[0]] === 'cell')?.[2][0][0], source: 'Three\\s*blocked' }
     const classes = () => worker.evaluate(() => chrome.storage.local.get('config').then(r => r.config.pdfReader.classes))
-    const laid = await page.waitForFunction(() => window.__reader.side()?.probe().rowsEnded === true, null, { timeout: 60_000 }).then(() => true, () => false)
+    const laid = await page.waitForFunction(() => window.__reader?.side?.()?.probe().rowsEnded === true, null, { timeout: 60_000 }).then(() => true, () => false)
     await until(1, { source: '\\[echo\\]', want: true })
     // (the table's page laid too: brought into view, then page 1 again)
     await page.evaluate(n => window.__reader.controller.goToPage('right', n), CELLS.page)
     const cellsShown = await until(CELLS.page, { source: CELLS.source, want: true })
     await page.evaluate(() => window.__reader.controller.goToPage('right', 1))
     const authorHidden = await until(AUTHOR.page, { source: AUTHOR.source, want: false })
-    check('the defaults: the table\'s cells drawn translated, the author\'s name the original\'s (the owner\'s, 2026-10-25), every row translated', laid && cellsShown && authorHidden && AUTHOR.page === 1 && CELLS.page > 1, JSON.stringify({ laid, cellsShown, authorHidden, pages: [AUTHOR.page, CELLS.page], stored: await classes() }))
+    // (every row the target translates taken, the hidden classes' among them: the run's own count of the rows it holds)
+    const run0 = await page.evaluate(() => window.__reader.run?.probe() ?? null)
+    check('the defaults: the table\'s cells drawn translated, the author\'s name the original\'s (the owner\'s, 2026-10-25), every row translated', laid && cellsShown && authorHidden && AUTHOR.page === 1 && CELLS.page > 1 && run0?.total > 0 && run0?.rows === run0?.total, JSON.stringify({ laid, cellsShown, authorHidden, pages: [AUTHOR.page, CELLS.page], rows: [run0?.rows, run0?.total], stored: await classes() }))
     const asked0 = api.requests.length, posts0 = echo.seen.post, before = await side()
     const fetched = () => api.requests.slice(asked0).map(r => r.path).filter(x => x.startsWith('/api/v1/'))
     // the reading options' group: its rows in the owner's order; the author names' switch turned there
     await page.click('button[popovertarget="pop-options"]')
     const rows = await page.evaluate(() => [...document.querySelectorAll('[data-axt-classes] [data-axt-class]')].map(r => [r.getAttribute('data-axt-class'), r.querySelector('[role="switch"]')?.getAttribute('aria-checked')]))
     check('the reading options hold what to translate, the owner\'s five in the owner\'s order, as the settings have them', JSON.stringify(rows) === JSON.stringify([['figures', 'true'], ['tables', 'true'], ['heads', 'true'], ['references', 'false'], ['names', 'false']]), JSON.stringify(rows))
+    // (measured as the maintainer's standard asks: every drawn row of the panel, the group's heading and rows among them, its words
+    // on one leading edge and its switch on one trailing edge, each on its row's centre line within 0.5 px)
+    const align = await page.evaluate(() => {
+      const pop = document.getElementById('pop-options'), p = pop.getBoundingClientRect()
+      const rows = [...pop.querySelectorAll(':scope > .row, [data-axt-classes] > .row')].filter(r => r.getBoundingClientRect().height > 0)
+      const starts = new Set(), ends = new Set(), off = []
+      for (const r of rows) {
+        const b = r.getBoundingClientRect(), mid = b.top + b.height / 2
+        const text = [...r.childNodes].find(n => n.nodeType === 3 && n.textContent.trim())
+        if (text) {
+          const range = document.createRange()
+          range.selectNodeContents(text)
+          const t = range.getBoundingClientRect()
+          starts.add(Math.round((t.left - p.left) * 2) / 2)
+          if (Math.abs(t.top + t.height / 2 - mid) > 0.5) off.push(`${r.textContent} words`)
+        }
+        const sw = r.querySelector(':scope > [role="switch"]')
+        if (sw) {
+          const s = sw.getBoundingClientRect()
+          ends.add(Math.round((p.right - s.right) * 2) / 2)
+          if (Math.abs(s.top + s.height / 2 - mid) > 0.5) off.push(`${r.textContent} switch`)
+        }
+      }
+      return { rows: rows.length, group: pop.querySelectorAll('[data-axt-classes] > .row').length, starts: [...starts], ends: [...ends], off }
+    })
+    check('… its rows on the panel\'s lines: every row\'s words on one leading edge, every switch on one trailing edge, each on its row\'s centre line', align.group === 6 && align.starts.length === 1 && align.ends.length === 1 && align.off.length === 0, JSON.stringify(align))
     await page.click('[data-axt-class="names"] [role="switch"]')
     await page.keyboard.press('Escape')
     const authorShown = await until(AUTHOR.page, { source: AUTHOR.source, want: true })

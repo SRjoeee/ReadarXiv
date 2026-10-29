@@ -776,8 +776,8 @@ describe('provider selection', () => {
     }
   })
 
-  it('v21 leaves a pdfReader that is not an object, or an image switch that is no boolean, for the schema to name', async () => {
-    for (const [over, where] of [[{ pdfReader: 'broken' }, 'pdfReader'], [{ image: { enabled: 'yes' } }, 'image.enabled']] as const) {
+  it('v21 leaves a pdfReader that is not an object, or an image switch that is no boolean, for the schema to name: the image named, never the toggle made of it', async () => {
+    for (const [over, where] of [[{ pdfReader: 'broken' }, 'pdfReader'], [{ image: { enabled: 'yes' } }, 'image.enabled'], [{ image: 'broken' }, 'image']] as const) {
       await fakeBrowser.storage.local.set({ config: v20Stored(over), config$: { v: 20 } })
       vi.resetModules()
       const fresh = await import('@/config/storage')
