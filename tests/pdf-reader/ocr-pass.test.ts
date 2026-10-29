@@ -205,6 +205,15 @@ describe('the bitmap figures\' pass (ocrPass)', () => {
     expect(placeOfUnit(scaled.units[0])).toEqual(placeOfUnit(whole.units[0]))
   })
 
+  it('reads no window past the host\'s clock: a scaled image\'s lines and labels left as its scaled read gave them', async () => {
+    let t = 0
+    const doc = docOf([pageOf([['a', at(50, 400)]], { a: picture() })])
+    // (the clock passes as the scaled read is recognised: no window is decoded or read after it)
+    const r = await pass({ doc, OPS, paper: PAPER, reader: READER, from: 0, readPixels: 20_000, until: 100, now: () => t, recognise: async () => { t += 150; return [LINE] } })
+    expect(r.stats).toMatchObject({ reread: 0, relabelled: 0 })
+    expect(r.stats.images.read).toBe(1)
+  })
+
   it('keeps a label of names as a table\'s cell of names is: its source, the KEPT flag', async () => {
     const doc = docOf([pageOf([['a', at(50, 400)]], { a: picture() })])
     const r = await pass({ doc, OPS, paper: PAPER, reader: READER, from: 0, recognise: async () => [{ ...LINE, text: 'GPT-4o' }] })

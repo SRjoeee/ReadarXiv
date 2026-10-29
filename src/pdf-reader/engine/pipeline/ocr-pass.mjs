@@ -261,6 +261,23 @@ export async function ocrPass({ doc, OPS, objects, PL, Jpeg, paper, source = nul
       return null
     } finally { const dt = now() - t0; spent += dt; stats.recogniseMs += dt }
   }
+  /** windows of an image read at its own pixels, in passes of `readPixels` pixels in all at most, the host's clock and the
+   *  recogniser's budget asked before each: each window's pixels, or null for one the clock or the budget left unread (its
+   *  reading the scaled one's) */
+  const windowsRead = async (src, wins) => {
+    const out = wins.map(() => null)
+    for (let k = 0; k < wins.length;) {
+      if (now() >= until || spent >= budgetMs) break
+      let n = 0, j = k
+      while (j < wins.length && (j === k || n + wins[j].width * wins[j].height <= readPixels)) { n += wins[j].width * wins[j].height; j++ }
+      const t = now()
+      const got = await readOcrPixels(src, wins.slice(k, j), { Jpeg })
+      lap('decode', t)
+      got.forEach((g, i) => { out[k + i] = g })
+      k = j
+    }
+    return out
+  }
   /**
    * An image read: its pixels at OCR_READ_PIXELS at most, the recogniser's lines, each line read too small in an image read scaled
    * down read again in its window at the image's own pixels (its reading there replacing it: the lines whose middles fall in its
@@ -278,14 +295,12 @@ export async function ocrPass({ doc, OPS, objects, PL, Jpeg, paper, source = nul
       const wins = small.map(i => windowOf(lines[i], src.width, src.height, readPixels))
       const want = small.flatMap((i, k) => (wins[k] ? [[i, wins[k]]] : []))
       if (want.length) {
-        t = now()
-        const got = await readOcrPixels(src, want.map(([, w]) => w), { Jpeg })
-        lap('decode', t)
-        stats.reread += want.length
+        const got = await windowsRead(src, want.map(([, w]) => w))
         const out = lines.map(l => [l])
         for (let k = 0; k < want.length; k++) {
           const [i, w] = want[k]
-          if (spent >= budgetMs || now() >= until) break
+          if (!got[k] || spent >= budgetMs || now() >= until) continue
+          stats.reread++
           const again = await recogniseTimed(got[k])
           if (!again) continue
           // (its lines on the whole image: the window's fractions to the image's, a turned line's length and thickness too)
@@ -322,9 +337,10 @@ export async function ocrPass({ doc, OPS, objects, PL, Jpeg, paper, source = nul
     })
     const want = wins.flatMap((w, k) => (w ? [[k, w]] : []))
     if (!want.length) return
-    const got = await readOcrPixels(src, want.map(([, w]) => w), { Jpeg })
-    stats.relabelled += want.length
+    const got = await windowsRead(src, want.map(([, w]) => w))
     for (let j = 0; j < want.length; j++) {
+      if (!got[j]) continue
+      stats.relabelled++
       const [k, w] = want[j], box = labels.boxes[k], ww = w.x1 - w.x0, wh = w.y1 - w.y0
       // (the lines its window meets, in its fractions, by their indices among the image's)
       const at = lines.flatMap((l, i) => { const b = boxOfPoints(quadPx(l)); return b[0] < w.x1 && b[2] > w.x0 && b[1] < w.y1 && b[3] > w.y0 ? [i] : [] })
