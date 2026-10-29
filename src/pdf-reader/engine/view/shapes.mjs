@@ -155,14 +155,12 @@ export function createShapes({ kindOf: unitKind = () => undefined, warn = warnOn
       }
     }
     // (a page in already: told now, its spans after it as a name's)
-    for (const p of pages) { const input = state.pages.get(p); if (input) tellCells(input, true) }
+    for (const p of pages) { const input = state.pages.get(p); if (input) tellCells(p, cellsFor(input), true) }
   }
-  /** page `input`'s cells waiting, told: their part to the layout and the followers; `late` their spans after the page, else into
-   *  the page's own input before it is laid (so that the followers' copies of the page hold them) */
-  const tellCells = (input, late) => {
+  /** page `input`'s cells waiting, as told: { part, spans }, or null; nothing told yet (tellCells) */
+  const cellsFor = input => {
     const p = input.page, list = cellsOn.get(p)
-    if (!list) return
-    cellsOn.delete(p)
+    if (!list) return null
     const T = input.table, held = new Set()
     for (const [, ks] of input.spans) for (const k of ks) held.add(k)
     const boxes = new Map()
@@ -178,18 +176,25 @@ export function createShapes({ kindOf: unitKind = () => undefined, warn = warnOn
         if (bs.some(([x0, x1, top, bottom]) => mx >= x0 - NAME_SLACK && mx <= x1 + NAME_SLACK && my >= bottom - NAME_SLACK && my <= top + NAME_SLACK)) { ks.push(k); held.add(k) }
       }
       if (!ks.length) continue
-      cellsTold.add(id)
       part.left.push([id, ks[0], bs.map(([x0, x1, top, bottom]) => [p, x0, bottom, x1, top])])
       spans.push([id, Int32Array.from(ks)])
     }
-    if (!part.left.length) return
-    layoutParts(L, [part])
-    state.parts.push(part)
-    for (const f of state.followers) f.addParts([part])
+    return part.left.length ? { part, spans } : null
+  }
+  /** page p's cells told (cellsFor's), once the page is in: their part to the layout and the followers, and with `late` their
+   *  spans after the page (else they were in the page's own input, so that the followers' copies of the page hold them). A page's
+   *  boxes go with it: its tokens are final, and a box with none of them in it has none later */
+  const tellCells = (p, cells, late) => {
+    cellsOn.delete(p)
+    if (!cells) return
+    for (const [id] of cells.part.left) cellsTold.add(id)
+    layoutParts(L, [cells.part])
+    state.parts.push(cells.part)
+    for (const f of state.followers) f.addParts([cells.part])
     if (late) {
-      layoutSpans(L, p, spans)
-      for (const f of state.followers) f.addSpans(p, spans)
-    } else input.spans.push(...spans)
+      layoutSpans(L, p, cells.spans)
+      for (const f of state.followers) f.addSpans(p, cells.spans)
+    }
   }
   const tellNames = p => {
     const list = namesOn.get(p), input = state.pages.get(p)
@@ -255,13 +260,16 @@ export function createShapes({ kindOf: unitKind = () => undefined, warn = warnOn
     /** a page's left part (format.mjs ReadLeftPart): its part of the layout, and the mirrors'; false where it was in
      *  already or is refused — malformed, or its ids reach into another page's (one warning a page) */
     addPage(left) {
-      let input
+      let input, cells = null
       try {
         if (L.pt[left.page]) return false
         input = leftPageInput(left)
-        tellCells(input, false)
+        // (its cells waiting, in the page's own input before it is laid; told once it is in: a page refused tells none)
+        cells = cellsFor(input)
+        if (cells) input.spans.push(...cells.spans)
         if (!layoutPage(L, input.page, input)) return false
       } catch (e) { refuse(left?.page, e); return false }
+      tellCells(input.page, cells, false)
       state.pages.set(input.page, input)
       // (a drawing's text no layout holds, nor its pairs: highlight.mjs DRAWING)
       for (const [id, words, tokens] of input.pairs) if (!DRAWING.has(kindOf(id))) (pairsOn.get(id) ?? pairsOn.set(id, new Map()).get(id)).set(input.page, [words, tokens])

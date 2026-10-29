@@ -847,6 +847,30 @@ describe('a table\'s cell unit the left part does not locate is told by its layo
     expect([m.shapes.hit(...at, PAD, () => null)?.id, m.shapes.runs(9).length]).toEqual([9, 1])
   })
 
+  it('its lines come after its page (a part late): told then, on the left and on a mirror made before (Codex on #515, its doubt checked)', () => {
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    const l = createShapes({ kindOf: kinds }), m = mirror(l)
+    l.addParts(parts)
+    for (const p of [1, 2, 3]) l.addPage(nth(lefts, p))
+    l.floats(2)
+    expect(isTableCell(l.shapes.hit(...at, PAD, () => null)?.id ?? -1)).toBe(true)
+    l.addParts([{ pages: [2, 2], views: [], left: [], layout: { names: [], lines: [[9, [2, B.x, B.x + B.w, B.y, B.top, B.bottom, 10, 0]]] } }] as never)
+    expect([l.shapes.hit(...at, PAD, () => null)?.id, m.shapes.hit(...at, PAD, () => null)?.id, m.shapes.runs(9).length]).toEqual([9, 9, 1])
+  })
+
+  it('a left part refused tells none of its cells; the good one that comes later tells them', () => {
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    const withLines = parts.map(p => (p.pages[0] <= 2 && p.pages[1] >= 2 ? { ...p, layout: { names: [], lines: [[9, [2, B.x, B.x + B.w, B.y, B.top, B.bottom, 10, 0]]] } } : p))
+    const warn = vi.fn(), l = createShapes({ kindOf: kinds, warn })
+    l.addParts(withLines as never)
+    l.addPage(nth(lefts, 1))
+    expect(l.addPage({ ...nth(lefts, 2), first: nth(lefts, 2).first - 5 })).toBe(false)
+    expect(l.shapes.runs(9)).toEqual([])
+    expect(l.addPage(nth(lefts, 2))).toBe(true)
+    l.floats(2)
+    expect([l.shapes.hit(...at, PAD, () => null)?.id, l.shapes.runs(9).length]).toEqual([9, 1])
+  })
+
   it('every other unit keeps its runs on both panes, though the cell\'s lines would vote its page into two columns (2610.22195v1 p18)', () => {
     // (cell 9 with eight lines a third of the page wide besides its own, four in each half of page 2: long lines the column vote counts)
     const wide = [0, 1, 2, 3].flatMap(i => [[2, 60, 260, 440 - 12 * i, 447 - 12 * i, 438 - 12 * i, 10, 0], [2, 330, 530, 440 - 12 * i, 447 - 12 * i, 438 - 12 * i, 10, 0]]).flat()
