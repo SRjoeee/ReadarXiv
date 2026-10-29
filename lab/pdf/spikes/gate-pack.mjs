@@ -13,7 +13,7 @@
 //   pack/refs/<fx>/ref.json, layout.json          the frozen reference text area and the instrument's kept layout (LAYER_REFS)
 //   pack/geometry/<paper>-<target>-geometry.json  the geometry the gate resolves for each output (LAYER_GEOMETRY)
 //   pack/data/fonts/<file>                        the served faces (AXT_DATA=pack/data)
-//   pack/texmf/<tex/generic/...>                  the hyphenation patterns, en, de, fr, es and pt (TEXMF_DIST=pack/texmf)
+//   pack/texmf/<tex/generic/...>                  the hyphenation patterns of TEX_PATTERN_FILES (TEXMF_DIST=pack/texmf)
 //   pack/manifest.json                            { schema, pipeline, layout: { schema, version }, compileImage, made, digest, files: [{ path, sha256, bytes }] }
 // `compileImage` is the pack's year's entry of lab/pdf/compile-images.json (the one place the compile images are pinned, by digest and
 // TeX Live year, shared with the web container), with `year`: a make refuses to run unless the local texlive image (`docker image
