@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { documentBounds, inMemory, inputencOf, loadProject, markUnits, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { documentBounds, inMemory, inputencOf, loadProject, markUnits, patch, urlPercents } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { openPaper, originalFiles, probeFiles, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
 import { strategiesFor } from '@/pdf-reader/engine/pipeline/scripts.mjs'
@@ -221,6 +221,69 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     expect(units(p).flatMap(u => u.pieces.filter(x => x.t === 'ph').map(x => x.src))).toContain('\\cmidrule(lr){2-3}')
     expect(texts(project(doc('Set \\lstinline{x = y} and \\lstinline[language=C]|a = b| or \\mintinline{py}{f(x)} here.', '\\usepackage{listings}')))).toEqual(['Set and or here.'])
     expect(texts(project(doc('A \\ac{cnn} and \\acp*{rnn} work.', '\\usepackage{acronym}')))).toEqual(['A and work.'])
+  })
+  it('an inline \\tikz call is one placeholder to its path\'s `;` or its group: TikZ reads past its arguments (2010.11929v2\'s legend dots)', () => {
+    const p = project(doc('Text \\raisebox{0.5pt}{\\tikz\\fill[natural] (0,0) circle (.5ex);} Caltech101 words here.\n\nNext \\tikz[baseline]{\\draw (0,0) -- (1,1);} done and \\tikz \\node {a;b}; there.', '\\usepackage{tikz}'))
+    expect(texts(p)).toEqual(['Text Caltech101 words here.', 'Next done and there.'])
+    const phs = units(p).flatMap(u => u.pieces.filter(x => x.t === 'ph').map(x => x.src))
+    expect(phs).toEqual(['\\tikz\\fill[natural] (0,0) circle (.5ex);', '\\tikz[baseline]{\\draw (0,0) -- (1,1);}', '\\tikz \\node {a;b};'])
+    // (a call TeX would not end before the paragraph does stays as before: the command's placeholder alone)
+    expect(texts(project(doc('A \\tikz \\draw (0,0)\n\nWords of the next paragraph.', '\\usepackage{tikz}')))).toContain('Words of the next paragraph.')
+  })
+  it('a web address\'s `%` is a character in a .bbl\'s entries alone: \\url, \\nolinkurl, \\path and \\href\'s first argument at an entry\'s top level (2610.21770v1\'s %3F, 2608.18626v1\'s %26)', () => {
+    const bbl = (entries: string, head = '') => `\\begin{thebibliography}{9}\n\\providecommand{\\url}[1]{\\texttt{#1}}\n${head}${entries}\n\\end{thebibliography}\n`
+    const tex = '\\documentclass{article}\n\\usepackage{hyperref}\n\\begin{document}\nSee \\cite{a,b,c}.\n\\bibliographystyle{plain}\n\\bibliography{refs}\n\\end{document}\n'
+    const entries = '\\bibitem{a}\nA. Author.\n\\newblock A first title, \\href {https://doi.org/x?urlappend=%3Fref%3DPDF} {Journal 1}, 2020.\n\n\\bibitem{b}\nB. Writer.\n\\newblock A second title, \\url{https://a.org/x%3Fy}, 2021.\n\n\\bibitem{c}\nC. Third.\n\\newblock A third title, \\href {http://adsabs.harvard.edu/abs/2017A%26A...599L...3B} {599, L3}.\n'
+    const p = project(tex, { 'main.bbl': bbl(entries) })
+    // (each entry its own unit, its address one placeholder as the paper writes it, and the marked .bbl sets it so)
+    expect(texts(p).slice(-3)).toEqual(['A. Author. A first title, Journal 1, 2020.', 'B. Writer. A second title, 2021.', 'C. Third. A third title, 599, L3.'].map(t => expect.stringContaining(t.split(',')[0] as string)))
+    expect(units(p).filter(u => u.kind === 'reference').length).toBe(3)
+    const phs = units(p).flatMap(u => u.pieces.filter(x => x.t === 'ph' || x.t === 'open').map(x => x.src)).join(' ')
+    for (const a of ['https://doi.org/x?urlappend=%3Fref%3DPDF', '\\url{https://a.org/x%3Fy}', '2017A%26A...599L...3B']) expect(phs).toContain(a)
+    expect(patched(p, 'main.bbl')).toContain('\\url{https://a.org/x%3Fy}')
+    // (a .bbl's entry's top level: an address there TeX reads with its `%` a character)
+    const entry = (t: string) => bbl(`\\bibitem{a}\nSome words ${t}\n`)
+    for (const t of ['\\newblock \\url{https://a.org/x%3Fy}.', '\\newblock URL \\url{a%3F}', '\\href{https://b.org/p%20q}{The title}', '\\href [x] {a%b} {c}', '\\path{a%b}', '\\nolinkurl{a%b}', '\\burl{a%b}']) expect(urlPercents(entry(t), 'main.bbl'), t).not.toBe(entry(t))
+    expect(urlPercents(entry('\\href{a%3F%3D}{b%c}'), 'main.bbl').split('%').length).toBe(2)
+    // (anywhere else a comment, as the walk read it before: the body, whatever holds the address there — every shape the reviews
+    // of #501 raised among them, an inactive conditional's branch too —, and a .bbl's address in a group, in a field's argument,
+    // before the first \\bibitem or outside the bibliography)
+    const body = {
+      'the paragraph\'s level': ['\\url{a%b}', '\\href [x] {a%b} {c}', 'See {\\bf \\url{a%b}} now.'],
+      'an argument': ['\\footnote{\\url{a%b}}', '\\newcommand{\\x}{\\url{a%b}}', '\\textbf{x \\url{a%b}}'],
+      'an optional argument': ['\\section[See \\url{a% ignored\nb}]{Title}', '\\item[\\url{a%b}] x'],
+      'a star': ['\\section*{See \\url{a% } } x\nb} Rest}', '\\caption*{\\url{a%b}}'],
+      'a definition\'s body': ['\\def\\foo#1{\\url{a% comment } }\nb}}', '\\newcommand{\\x}[1]{\\url{a%b}}', '\\def\\foo#1.#2{\\url{a%b}}'],
+      'a comment between a command and its group': ['\\section% c\n{See \\url{a% } } x\nb} Rest}'],
+      'an inactive conditional\'s branch': ['\\iffalse\nHidden \\url{a% } \\fi Shown\n\\fi'],
+      'a collected or verbatim body, a comment': ['\\begin{tabularx}{l}\\url{a%b}\\end{tabularx}', '\\begin{verbatim}\\url{a%b}\\end{verbatim}', '% \\url{a%b}'],
+    }
+    for (const [shape, ts] of Object.entries(body)) for (const t of ts) expect(urlPercents(t, 'main.tex'), `${shape}: ${t}`).toBe(t)
+    for (const t of ['{\\em \\url{a%b}}', '\\bibinfo{note}{\\url{https://a.org/x%3Fy}}', '\\newblock \\emph{\\url{a%b}}']) expect(urlPercents(entry(t), 'main.bbl'), t).toBe(entry(t))
+    expect(urlPercents(bbl('\\bibitem{a}\nWords.\n', '\\providecommand{\\x}{\\url{a%b}}\n'), 'main.bbl')).toBe(bbl('\\bibitem{a}\nWords.\n', '\\providecommand{\\x}{\\url{a%b}}\n'))
+    expect(urlPercents(`\\url{a%b}\n${entry('x')}`, 'main.bbl')).toBe(`\\url{a%b}\n${entry('x')}`)
+    expect(texts(project(doc('\\iffalse\nHidden \\url{a% } \\fi Shown here.\n\\fi\nWords of the body here.')))).toEqual(['Words of the body here.'])
+    expect(texts(project(doc('\\section% c\n{See \\url{a% } } This is commented out.\nb} Rest of title}\nWords of the body here.')))).not.toContain('This is commented out.')
+    // (a `\\` and the character after it read as the argument's boundary reads them: `\\%` the command, `\\\\%` a pair and the
+    // character, the local Codex review)
+    const pairs = project(tex, { 'main.bbl': bbl('\\bibitem{a}\nSee \\url{a\\%b} and more one.\n\n\\bibitem{b}\nSee \\url{a\\\\%b} and more two.\n\n\\bibitem{c}\nSee \\href{x\\%20y}{the page} and more three.\n') })
+    expect(texts(pairs).slice(-3)).toEqual(['See and more one.', 'See and more two.', 'See the page and more three.'])
+  })
+  it('a macro of the paper\'s whose body ends a table\'s row (\\newcommand{\\tightrow}{\\\\[-4pt]}) ends the row in a cell, as `\\\\` does (2610.21924v1\'s 30 cells ran into the next row\'s first)', () => {
+    const tab = '\\begin{table}\\begin{tabular}{lrr}\nDemographic equity & 73.88\\% & 95.29\\% \\tightrow\nCapacity shortage & 86.27\\% & 89.01\\% \\tightrow\nTravel distance & 1 & 2 \\\\\n\\end{tabular}\\end{table}'
+    expect(texts(project(doc(tab, '\\newcommand{\\tightrow}{\\\\[-4pt]}')))).toEqual(['Demographic equity', 'Capacity shortage', 'Travel distance'])
+    // (and the table's grid ends the row there too, each cell at its row and column: the review of #501, Devin)
+    const grid = project(doc(tab.replace('86.27\\%', 'Some words'), '\\newcommand{\\tightrow}{\\\\[-4pt]}'))
+    expect((grid.units as unknown as { cell?: { row: number; col: number } }[]).map(u => u.cell && [u.cell.row, u.cell.col])).toEqual([[0, 0], [1, 0], [1, 1], [2, 0]])
+    // (a body that does more than end the row stays a placeholder, as before)
+    expect(texts(project(doc(tab, '\\newcommand{\\tightrow}{\\\\[-4pt] more}')))).not.toEqual(['Demographic equity', 'Capacity shortage', 'Travel distance'])
+    // (a row end only where every definition of the name in any form is one of no parameter: one redefined with an argument, by
+    // \\let, by xparse or with parameter text is none, Codex on the fix round; `\\def` and the starred forms of no parameter are)
+    const split = ['Demographic equity', 'Capacity shortage', 'Travel distance']
+    for (const defs of ['\\newcommand{\\tightrow}{\\\\[-4pt]}\\renewcommand{\\tightrow}[1]{\\textbf{#1}}', '\\newcommand{\\tightrow}{\\\\}\\let\\tightrow\\relax', '\\def\\tightrow#1{\\\\}', '\\NewDocumentCommand{\\tightrow}{}{\\\\}', '\\newcommand{\\tightrow}[0]{\\\\}']) expect(texts(project(doc(tab, defs))), defs).not.toEqual(split)
+    for (const defs of ['\\def\\tightrow{\\\\[-4pt]}', '\\newcommand*\\tightrow{\\\\ \\hline}', '\\providecommand{\\tightrow}{\\tabularnewline}\\renewcommand*{\\tightrow}{\\\\}']) expect(texts(project(doc(tab, defs))), defs).toEqual(split)
+    const kept = project(doc('\\begin{table}\\begin{tabular}{ll}\nFirst \\tightrow X rest & B \\\\\n\\end{tabular}\\end{table}', '\\newcommand{\\tightrow}{\\\\[-4pt]}\\renewcommand{\\tightrow}[1]{\\textbf{#1}}'))
+    expect(units(kept).flatMap(u => u.pieces.filter(x => x.t !== 'text').map(x => x.src))).toContain('\\tightrow X')
   })
   it('a command the table does not know keeps every adjacent group, as before: some prose stays, nothing breaks', () => {
     expect(texts(project(doc('Before \\unknowncmd{some words here}{and more} after.')))).toEqual(['Before after.'])

@@ -44,6 +44,8 @@ import { readAnnots } from '../layer-proto/links.mjs'
 const IN_GROUP = OWNED_HOW.indexOf('in the display before it')
 /** an ownership whose two points were both read (stream.mjs): the one in which nothing between them is no ink */
 const CLOSED = OWNED_HOW.indexOf('closed')
+/** a text the probe showed a paper's macro sets that is one mark of punctuation: drawn as that character, as a text symbol is */
+const PUNCT_TEXT = /^[.,;:!?]$/
 
 /** a page's operator list waited for at most (oplist.mjs OPS_MS: past it the page has no ink, that page alone) */
 export { OPS_MS }
@@ -1131,10 +1133,14 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const entries = ph.length
     for (let k = 0; k < u.pieces.length; k++) {
       // every visible piece has its row, found, LOST or EMPTY: no row is a piece that draws nothing (an invisible one, a
-      // group's open or close), as the layer reads the file
+      // group's open or close), as the layer reads the file. A paper's macro TeX said sets no ink (marking.inkless) is EMPTY: the
+      // layer reads a macro whose argument holds letters as a formula ('other', layer1.mjs phClass), which it draws only from a
+      // row, so with none such a unit was the original's (`\\natexlab{a}` where the class sets no label, `\\papertext{…}`: 18
+      // entries and 4 paragraphs of the release sweep's papers); EMPTY is TeX's no ink for every class alike
       const piece = u.pieces[k], cls = classOf(piece)
       if (piece.t === 'text' && /\S/.test(piece.s ?? '')) groupFound = false
-      if (!cls || (cls === 'macro' && inkless.has(piece.src))) continue
+      if (!cls) continue
+      if (cls === 'macro' && inkless.has(piece.src)) { ph.push({ row: [i, k, PH_KIND.get('macro'), PH_FLAG.EMPTY], cls, state: 'empty' }); continue }
       const wasFound = groupFound
       groupFound = false
       const kind = PH_KIND.get(cls) ?? PH_KIND.get('other')
@@ -1150,8 +1156,11 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       // to a word): its rendering is not known; but one the maker's reading parted from the paper's macro before it, whose
       // text is known (stream.mjs ownedOf, marks.mjs followsOf `split`: a footnote's call after \\xspace), by its own ink
       if (!d?.open && !ownInk.has(`${cls === 'footnote' ? 'n' : 'p'}${i}.${k}a`)) {
-        // a LaTeX text symbol (marks.mjs TEXT_SYMBOLS) is drawn as its character where the unit's lines show it (below)
-        const sym = cls === 'macro' ? symbolText(piece.src) : null
+        // a LaTeX text symbol (marks.mjs TEXT_SYMBOLS) is drawn as its character where the unit's lines show it (below); and so is a
+        // paper's macro TeX showed sets one mark of punctuation alone (the probe's text): apacite's \\BPBI, ".~" between two
+        // initials and glued to the first (`J\\BPBI E.`), whose entries stayed English, 39 of two papers'
+        const said = cls === 'macro' ? shown.get(piece.src) : undefined
+        const sym = cls === 'macro' ? symbolText(piece.src) ?? (typeof said === 'string' && PUNCT_TEXT.test(said) ? said : null) : null
         const entry = { row: [i, k, kind, PH_FLAG.LOST], cls, state: 'unmarked' }
         ph.push(entry)
         if (sym !== null) (one.symbols ??= []).push({ entry, sym })
@@ -1219,7 +1228,13 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         const onLine = part => both >= 0 && part.page === rows[both].page && part.gs.every(g => Math.abs(ink[part.page].y[g] - rows[both].base) <= rows[both].size)
         // its two points on two lines of the marked compile: TeX broke the piece over lines (wrapOf)
         const pa = dropped.has(name) ? null : at.get(name), pb = dropped.has(closeName) ? null : at.get(closeName)
-        const broken = !!pa && !!pb && (pa.page !== pb.page || Math.abs(pa.y - pb.y) > 0.5)
+        // (a piece alone at its unit's end with its opening point alone, its ink to its unit's next mark and its lines up to TeX's
+        // skip before another block (stream.mjs ownedOf): the lines it runs onto after its opening point's are TeX's breaking it
+        // over them, as two points on two lines say. A bibliography's entry ends its text before its numbers and its address,
+        // its end mark there: AAS's `\\dodoi{…}`, llncs' `\\doi{…}` after it ran onto a line of no unit's and were LOST, 33 of
+        // 2608.12606v1's entries English)
+        const tail = !pb && k > last && e[1] === OWNED_HOW.indexOf("open, to its unit's next mark")
+        const broken = (!!pa && !!pb && (pa.page !== pb.page || Math.abs(pa.y - pb.y) > 0.5)) || (!!pa && tail)
         // (the line its opening point stands on, where TeX broke the line right after it: its first part's line before)
         const openRow = broken && openAt ? (rows.find((_, j) => on(openAt, j)) ?? null) : null
         for (const [q, part] of parts.entries()) {

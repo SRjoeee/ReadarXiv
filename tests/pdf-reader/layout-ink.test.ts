@@ -109,7 +109,60 @@ describe('pageInk', () => {
     expect(only(glyphs, 'C').x0).toBe(0)
   })
 
-  it('a Type 3 font\'s glyph takes 0.75 and −0.22 of its size', () => {
+  it('a Type 3 glyph is boxed by what its procedure paints, through the font\'s matrix: a "." as a dot, an "M" as an M (#122-1)', () => {
+    // (matplotlib's glyphs: d1 and one path, minMax in glyph space; a bitmap font's: d1, a matrix and an image mask; a space: d1
+    // alone; a procedure that shows text is not read: its font's ascent and descent)
+    const path = (box: number[]) => [OPS.constructPath, [OPS.fill, [Float32Array.from([0])], Float32Array.from(box)]] as const
+    const procs = new Map<string, { fnArray: number[]; argsArray: unknown[] }>([
+      ['period', { fnArray: [OPS.setCharWidthAndBounds, path([10, 0, 30, 20])[0]], argsArray: [[40, 0, 10, 0, 30, 20], path([10, 0, 30, 20])[1]] }],
+      ['M', { fnArray: [OPS.setCharWidthAndBounds, OPS.constructPath], argsArray: [[90, 0, 10, 0, 80, 73], path([10, 0, 80, 73])[1]] }],
+      ['bitmap', { fnArray: [OPS.setCharWidthAndBounds, OPS.save, OPS.transform, OPS.paintImageMaskXObject, OPS.restore], argsArray: [[60, 0, 5, -10, 55, 50], [], [50, 0, 0, 60, 5, -10], [{}], []] }],
+      // (a small mask PDF.js compiles into its ink's outline in the unit square, rawFillPath: its minMax the bitmap's pixels)
+      ['pk', { fnArray: [OPS.setCharWidthAndBounds, OPS.save, OPS.transform, OPS.constructPath, OPS.restore], argsArray: [[50, 0, 0, 0, 40, 60], [], [40, 0, 0, 60, 0, 0], [OPS.rawFillPath, [Float32Array.from([0, 0.25, 0, 1, 1, 0, 1, 1, 0.75, 4])], Float32Array.from([0, 0, 38, 61])], []] }],
+      ['space', { fnArray: [OPS.setCharWidthAndBounds], argsArray: [[30, 0, 0, 0, 0, 0]] }],
+      ['text', { fnArray: [OPS.setCharWidth, OPS.showText], argsArray: [[50, 0], [[]]] }],
+    ])
+    FONTS.t3p = { name: 'DejaVuSans', fontMatrix: [0.01, 0, 0, 0.01, 0, 0], isType3Font: true, vertical: false, charProcOperatorList: procs }
+    try {
+      const t = (u: string, id: string, w: number) => ({ ...g(u, w), operatorListId: id })
+      const { glyphs } = ink(text('t3p', 10, [1, 0, 0, 1, 72, 700], show(t('.', 'period', 40), t('M', 'M', 90), t('b', 'bitmap', 60), t('k', 'pk', 50), t(' ', 'space', 30), t('x', 'text', 50))))
+      const box = (u: string) => { const x = only(glyphs, u); return [x.ix0, x.bottom, x.ix1, x.top].map(v => Math.round(v * 1000) / 1000) }
+      expect(box('.')).toEqual([73, 700, 75, 702])
+      expect(box('M')).toEqual([76 + 1, 700, 76 + 8, 707.3])
+      expect(box('b')).toEqual([85 + 0.5, 699, 85 + 5.5, 705])
+      // (the mask's ink, 0.25 to 1 of its 40 units across and 0 to 0.75 of its 60 up: never the bitmap's whole square)
+      expect(box('k')).toEqual([91 + 1, 700, 91 + 4, 704.5])
+      // (a space paints nothing: no ink up or down, as an outline font's)
+      expect(box(' ')).toEqual([96, 700, 96, 700])
+      // (a procedure that shows text: the font's ascent and descent, its advance)
+      expect(box('x')).toEqual([99, 697.8, 104, 707.5])
+    } finally { delete FONTS.t3p }
+  })
+
+  it('Type 3 glyphs are told apart by their procedures, not their character and width: PDF.js gives every one fontChar \'\'', () => {
+    // (a "," as wide as a "." keeps its own descender; a procedure holding an operation type3Box does not know is not read)
+    const path = (box: number[]) => [OPS.fill, [Float32Array.from([0])], Float32Array.from(box)]
+    const procs = new Map<string, { fnArray: number[]; argsArray: unknown[] }>([
+      ['period', { fnArray: [OPS.setCharWidthAndBounds, OPS.constructPath], argsArray: [[40, 0, 10, 0, 30, 20], path([10, 0, 30, 20])] }],
+      ['comma', { fnArray: [OPS.setCharWidthAndBounds, OPS.constructPath], argsArray: [[40, 0, 10, -30, 30, 20], path([10, -30, 30, 20])] }],
+      ['grouped', { fnArray: [OPS.setCharWidthAndBounds, OPS.beginGroup, OPS.constructPath, OPS.endGroup], argsArray: [[40, 0, 10, 0, 30, 20], [{}], path([10, 0, 30, 20]), [{}]] }],
+      ['coloured', { fnArray: [OPS.setCharWidth, OPS.setFillRGBColor, OPS.setLineCap, OPS.constructPath], argsArray: [[40, 0], ['#ff0000'], [1], path([10, 0, 30, 20])] }],
+    ])
+    FONTS.t3k = { name: 'DejaVuSans', fontMatrix: [0.01, 0, 0, 0.01, 0, 0], isType3Font: true, vertical: false, charProcOperatorList: procs }
+    try {
+      const t = (u: string, id: string) => ({ ...g(u, 40), fontChar: '', operatorListId: id })
+      const { glyphs } = ink(text('t3k', 10, [1, 0, 0, 1, 72, 700], show(t('.', 'period'), t(',', 'comma'), t('g', 'grouped'), t('c', 'coloured'))))
+      const box = (u: string) => { const x = only(glyphs, u); return [x.ix0, x.bottom, x.ix1, x.top].map(v => Math.round(v * 1000) / 1000) }
+      expect(box('.')).toEqual([73, 700, 75, 702])
+      expect(box(',')).toEqual([77, 697, 79, 702])
+      // (a group: the font's ascent and descent, its advance)
+      expect(box('g')).toEqual([80, 697.8, 84, 707.5])
+      // (a colour and a line cap paint nothing: the path's box)
+      expect(box('c')).toEqual([85, 700, 87, 702])
+    } finally { delete FONTS.t3k }
+  })
+
+  it('a Type 3 font\'s glyph whose procedure is not given takes 0.75 and −0.22 of its size', () => {
     const { glyphs } = ink(text('t3', 10, [1, 0, 0, 1, 72, 700], show(g('x', 50), g('y', 50))))
     const x = only(glyphs, 'x')
     expect(x.size).toBeCloseTo(10, 9)

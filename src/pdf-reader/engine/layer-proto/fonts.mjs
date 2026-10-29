@@ -87,9 +87,14 @@ export const CJK_SLANT_DEG = 13
  *  face's own letters the drawing set, which synthesizes nothing (1125 against 1187 px for one heading, Chromium). `roles`: the
  *  run's (setRoleFaces), or a role set of its own (faceWarmer's) */
 function roleFaceOf(st, cls, roles = ROLES) {
-  const id = faceFor(roles, { script: cls, cls: st.fam === 'math' ? 'serif' : st.fam, design: st.design ?? 'times', bold: !!st.bold, italic: !!st.italic, caps: !!st.caps })
+  const run = { script: cls, cls: st.fam === 'math' ? 'serif' : st.fam, design: st.design ?? 'times', bold: !!st.bold, italic: !!st.italic, caps: !!st.caps }
+  const id = faceFor(roles, run)
   const F = FACES[id]
-  const ids = [...new Set([id, ...(roles.fallbacks[id] ?? []), ...(cls !== 'cjk' && roles.cjk ? [roles.cjk.body] : [])])].filter(f => FACES[f])
+  // (a CJK run's list ends with the Latin face of its weight, upright: the copy space the drawing appends to a run (layer2.mjs
+  // lineRuns) is Basic Latin, which no CJK slice serves (they leave it to the Latin faces), so with the CJK face alone the
+  // device drew it and the canvas measured it in the device's face; #47.14, the web's layer-fonts rows 3 and 4)
+  const latin = cls === 'cjk' && roles.cjk ? [faceFor(roles, { ...run, script: 'latin', italic: false, caps: false })] : []
+  const ids = [...new Set([id, ...(roles.fallbacks[id] ?? []), ...(cls !== 'cjk' && roles.cjk ? [roles.cjk.body] : []), ...latin])].filter(f => FACES[f])
   const slant = cls === 'cjk' && !!st.italic && !!roles.cjk
   return { family: [...new Set(ids.map(f => `"${FACES[f].family}"`))].join(', '), weight: F.weight, style: F.style, oblique: slant ? CJK_SLANT_DEG : 0, stand: st.italic ? (cls === 'cjk' ? (slant ? 'oblique' : '') : 'italic') : '', caps: !!st.caps && cls !== 'cjk' && !capsLetters(id), size: F.size ?? 1, id, ids }
 }

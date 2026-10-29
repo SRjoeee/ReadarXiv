@@ -516,3 +516,24 @@ describe('the fixes of the review', () => {
     }
   })
 })
+
+describe('a CJK run\'s faces (layer-proto/fonts.mjs)', () => {
+  it('end with a Latin face of its weight that holds the copy space, after its CJK faces (#47.14: the device drew U+0020)', async () => {
+    const { faceOfRoles } = await import('@/pdf-reader/engine/layer-proto/fonts.mjs')
+    for (const to of ['zh', 'zh-Hant', 'ja', 'ko']) {
+      for (const bold of [false, true]) for (const italic of [false, true]) {
+        const roles = rolesFor(to, 'times')
+        const face = faceOfRoles(roles, { fam: 'serif', design: 'times', bold, italic, caps: false } as never, 'cjk')
+        const ids = face.ids as FaceId[]
+        // (its CJK faces first, so that every CJK character is theirs; the space no CJK slice serves is the Latin face's)
+        expect(ids[0]).toBe(bold ? roles.cjk!.bold : roles.cjk!.body)
+        const last = ids.at(-1)!
+        expect(last).not.toMatch(/^(?:shs-|haranoaji)/)
+        expect(covers(last, 0x20)).toBe(true)
+        expect(FACES[last]!.weight).toBe(FACES[ids[0]!]!.weight)
+        expect(FACES[last]!.style).toBe('normal')
+        expect(face.family.split(', ').at(-1)).toBe(`"${FACES[last]!.family}"`)
+      }
+    }
+  })
+})
