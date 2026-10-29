@@ -226,6 +226,20 @@ function putRGB(kind, v, at, out, o) {
  *  table's colour, an image mask's painted samples black), and whether each pixel is masked out by the colour key (`keyed`) */
 function pixelsOfRow(src, row, out, keyed) {
   const { width, comps, bpc, color, decode, maskKey, imageMask } = src
+  // (the rows most figures are, 8 bits a component under no /Decode and no colour key: RGB as it is, gray spread, an index its
+  // table's colour; the same values as the general reading below, a pixel's handful of operations rather than its calls)
+  if (bpc === 8 && !decode && !maskKey && !imageMask) {
+    if (color.kind === 'rgb') { out.set(row.subarray(0, width * 3)); return }
+    if (color.kind === 'gray') { for (let x = 0; x < width; x++) { const g = row[x]; out[3 * x] = g; out[3 * x + 1] = g; out[3 * x + 2] = g } return }
+    if (color.kind === 'indexed' && (color.base.kind === 'rgb' || color.base.kind === 'gray')) {
+      const t = color.table, hi = color.hival, rgb = color.base.kind === 'rgb'
+      for (let x = 0; x < width; x++) {
+        const i = row[x] > hi ? hi : row[x]
+        if (rgb) { out[3 * x] = t[3 * i]; out[3 * x + 1] = t[3 * i + 1]; out[3 * x + 2] = t[3 * i + 2] } else { const g = t[i]; out[3 * x] = g; out[3 * x + 1] = g; out[3 * x + 2] = g }
+      }
+      return
+    }
+  }
   const max = (1 << bpc) - 1, smax = bpc === 16 ? 65535 : max
   const sample = bpc === 8 ? i => row[i] : bpc === 16 ? i => (row[2 * i] << 8) | row[2 * i + 1] : i => (row[(i * bpc) >> 3] >> (8 - bpc - ((i * bpc) & 7))) & max
   const v = new Float64Array(4), base = color.kind === 'indexed' ? color.base : null, t = base ? color.table : null
@@ -273,6 +287,15 @@ export async function readOcrPixels(src, views, { Jpeg }) {
       else if (dct) { if (row.length === src.width) for (let x = 0; x < src.width; x++) rgb[3 * x] = rgb[3 * x + 1] = rgb[3 * x + 2] = row[x]; else rgb.set(row) }
       else pixelsOfRow(src, row, rgb, keyed)
       for (const o of want) {
+        // (a view at the image's own pixels: its row written as it is, a masked pixel white)
+        if (o.width === o.x1 - o.x0 && o.height === o.y1 - o.y0) {
+          const base = (y - o.y0) * o.width * 4
+          for (let x = o.x0, i = base; x < o.x1; x++, i += 4) {
+            if (keyed?.[x]) continue
+            o.data[i] = rgb[3 * x]; o.data[i + 1] = rgb[3 * x + 1]; o.data[i + 2] = rgb[3 * x + 2]
+          }
+          continue
+        }
         const oy = Math.min(o.height - 1, Math.floor(((y - o.y0) * o.height) / (o.y1 - o.y0)))
         if (oy !== o.row) { flush(o); o.row = oy }
         for (let x = o.x0; x < o.x1; x++) {

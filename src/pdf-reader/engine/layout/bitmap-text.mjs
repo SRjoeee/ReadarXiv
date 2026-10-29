@@ -256,7 +256,7 @@ export function labelsOf({ image, lines, place, others = { boxes: [], segs: [], 
  * One image's labels as its pixels give them, whatever page it is placed on (the part of labelsOf an image's reading is cached
  * with, ocr-pass.mjs: a later prepare places them with nothing decoded): { boxes, read, member }. `boxes` each { text, why } (an
  * image's own why: `busy`, `crowded`, `overlap`, `outside`, `long`) or { text, lines: [{ quad, patch (the image's fractions,
- * origin top left), bg, fg ([r, g, b]), before, after (the ink nearest the line along its band, in its thickness; null for none)
+ * origin top left), bg, fg ([r, g, b], whole numbers), before, after (the ink nearest the line along its band, in its thickness; null for none)
  * }] }, each with `members` (the indices of its lines among those given); `read` the lines given, `member` those a label holds. Fractions and ratios, so that the image's resolution is none of it.
  */
 export function imageLabelsOf({ image, lines }) {
@@ -403,7 +403,7 @@ export function imageLabelsOf({ image, lines }) {
     const frac = q => q.map(([x, y]) => [x / W, y / H])
     // (the ink's distances in the line's thickness: its anchor's evidence wherever the image is drawn, at whatever resolution)
     const inT = (v, i) => (Number.isFinite(v) ? v / (frames[i].T || 1) : null)
-    out.push({ text, members: [...bx.members], lines: read.map(({ i, patch, bg, fg, before, after }) => ({ quad: frac(lineQuads[i]), patch: frac(patch), bg: [...bg], fg: [...fg], before: inT(before, i), after: inT(after, i) })) })
+    out.push({ text, members: [...bx.members], lines: read.map(({ i, patch, bg, fg, before, after }) => ({ quad: frac(lineQuads[i]), patch: frac(patch), bg: bg.map(Math.round), fg: fg.map(Math.round), before: inT(before, i), after: inT(after, i) })) })
   }
   return { boxes: out, read: lines.length, member: member.size }
 }
