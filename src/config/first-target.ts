@@ -36,6 +36,8 @@ const NAMED_SCRIPT: Partial<Record<LangCode, { script: string; unmarked: boolean
   bos: { script: 'cyrl', unmarked: false },
   uzn: { script: 'cyrl', unmarked: false },
   azj: { script: 'cyrl', unmarked: false },
+  // Malay's two entries are its two scripts (Standard Malay, 2026-10-29): `ms-Latn-MY` names what zsm gives, `ms-Arab` zlm (Devin on #507)
+  zsm: { script: 'latn', unmarked: true },
   zlm: { script: 'arab', unmarked: false },
   jav: { script: 'java', unmarked: false },
   // Cantonese comes in Traditional characters (languages.ts, measured): `yue-Hant-HK` names what the table gives — Codex on #272

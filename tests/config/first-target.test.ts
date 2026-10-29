@@ -25,6 +25,12 @@ describe('pickTargetLanguage', () => {
     // Its Bosnian, Uzbek and Azerbaijani are named Cyrillic, and a bare tag of those means Latin; Malay has its Latin entry
     // (Standard Malay, zsm, added 2026-10-29) beside its Jawi one, and a bare `ms` is that
     expect(pickTargetLanguage(['ms-MY', 'en'])).toBe('zsm')
+    // (and named by its script: Latin is zsm's, Arabic zlm's; a script neither is is passed over — Devin on #507)
+    expect(pickTargetLanguage(['ms-Latn-MY', 'en'])).toBe('zsm')
+    expect(pickTargetLanguage(['ms', 'en'])).toBe('zsm')
+    expect(pickTargetLanguage(['ms-Arab-MY', 'en'])).toBe('zlm')
+    expect(pickTargetLanguage(['ms-Cyrl', 'ja'])).toBe('jpn')
+    expect(pickTargetLanguage(['zsm-Arab', 'ja'])).toBe('jpn')
     expect(pickTargetLanguage(['uz', 'ru-RU'])).toBe('rus')
     expect(pickTargetLanguage(['az-Latn-AZ', 'tr'])).toBe('tur')
     expect(pickTargetLanguage(['bs-Latn', 'hr'])).toBe('hrv')
