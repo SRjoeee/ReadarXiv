@@ -116,6 +116,10 @@ const SENTENCE_LEAD = /^[.!?\u3002\uff01\uff1f]/
  *  (`Options: \emph{fast}; and safe` is one sentence) */
 const CLAUSE_END = /[:;\uff1a\uff1b]["'\u201d\u2019)\]]*$/
 const CLAUSE_LEAD = /^[:;\uff1a\uff1b]/
+/** a run-in label's colon where a sentence begins past the unit's head (classOf): in it, closing quotes or brackets after it, or
+ *  right after it */
+const LABEL_END = /[:\uff1a]["'\u201d\u2019)\]]*$/
+const LABEL_LEAD = /^[:\uff1a]/
 const blank = s => !/\S/.test(s)
 const OBJ = '\ufffc'
 /** whether a unit's pieces hold what TRANSLATE_VERSION 3 changed on the wire: a pair, or a placeholder that sets no ink
@@ -153,7 +157,7 @@ function treeOf(pieces) {
  *   head, white space alone between them (2610.19159's `\textcolor{c}{\bfseries w}` round every word) —, then on
  *   markers: around the whole translation where it holds all the unit's content (`enclose`, the unit's style); kept,
  *   two markers, where it is a link or holds whole sentences, beginning where one begins and ending where one ends
- *   (`kept`: a run-in label `\textbf{Setup:}`, a styled sentence — Microsoft's sentence lengths are the one alignment the
+ *   (`kept`: a run-in label `\textbf{Setup:}`, at the unit's head or where a sentence begins past it, a styled sentence — Microsoft's sentence lengths are the one alignment the
  *   endpoint gives, and a marker between two sentences cuts none); else no marker (`flat`): its words are the
  *   sentence's, its open and close come back together, empty, before the close of its innermost kept group (the unit's
  *   back), and its attribute is lost. Microsoft read each marker as a hard boundary and gave back each piece of a
@@ -369,8 +373,15 @@ function classOf(P, e) {
   const head = a <= word, tail = b >= lastWord, inside = flat.slice(Math.max(a, b - WINDOW), b), next = nextSolid(flat, b)
   const starts = head || endsSentence(flat.slice(Math.max(0, a - WINDOW), a))
   // a run-in label at the unit's head ends with a colon, before one, or before a sentence that begins with no stop
-  // between (\textbf{Service Auto-Scaling} To accommodate)
-  const ends = tail || endsSentence(inside) || SENTENCE_LEAD.test(next) || (head && (CLAUSE_END.test(inside.trimEnd()) || CLAUSE_LEAD.test(next) || /^\p{Lu}/u.test(next)))
+  // between (\textbf{Service Auto-Scaling} To accommodate); one where a sentence begins past the head, with a colon, in it or
+  // right after it (2010.11929v2's Figure 7, `\textbf{Left:} … -L/32. \textbf{Center:} … \textbf{Right:}`, whose second and
+  // third labels went flat and lost their bold), or right after a forced break, a display or an item (2610.10069v1's
+  // `\\[1ex] \noindent \textit{JEL:} … \textit{Keywords:}`): its colon ends the label as a stop ends a sentence, and its two
+  // markers cut the text where the endpoint cuts it at the stop or the break before and the colon (a semicolon after a sentence's
+  // first words is a clause's)
+  // (never a bare group with no switch at its head, which sets nothing a reader sees: BibTeX's case protection, `{GEPA}: Reflective…`)
+  const label = !head && (starts || breaksAt(P, solidBeforeAt(flat, a))) && (LABEL_END.test(inside.trimEnd()) || LABEL_LEAD.test(next)) && (P.pieces[e.open].src !== '{' || !!headOf(P, e))
+  const ends = tail || endsSentence(inside) || SENTENCE_LEAD.test(next) || label || (head && (CLAUSE_END.test(inside.trimEnd()) || CLAUSE_LEAD.test(next) || /^\p{Lu}/u.test(next)))
   if (starts && ends) return 'kept'
   // the boundary rule (E1 of the residuals' batch R2): a pair whose two ends both stand where the wire is cut anyway — a placeholder
   // that breaks the text beside it (BREAKS: a forced break, a display, an item; never an inline formula, which the translator

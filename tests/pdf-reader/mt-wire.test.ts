@@ -224,6 +224,27 @@ describe('styled runs on the markers wire (2610.19159)', () => {
     expect(serialize(unit({ t: 'text', s: 'Options: ' }, ...pairs(1, '\\emph{', 'fast'), { t: 'text', s: '; and safe.' })).wire).toBe('Options: fast; and safe.')
   })
 
+  it('a run-in label where a sentence begins past the unit\'s head keeps its markers too: its colon in it or right after it (2010.11929v2\'s Figure 7, "Center:" and "Right:" bold no more)', () => {
+    // (the owner's case: the first label at the head kept, the two after a full stop flat, their bold back empty at the unit's end)
+    const fig7 = unit(...pairs(1, '\\textbf{', 'Left:'), { t: 'text', s: ' Filters of the embedding of ' }, { t: 'ph', src: '\\oursabbrv' }, { t: 'text', s: '-L/32.\n        ' }, ...pairs(2, '\\textbf{', 'Center:'), { t: 'text', s: ' Similarity of position embeddings.\n        ' }, ...pairs(3, '\\textbf{', 'Right:'), { t: 'text', s: ' Size of attended area by head.' })
+    expect(serialize(fig7).wire).toBe('@a# Left:@b# Filters of the embedding of @c#-L/32. @d# Center:@e# Similarity of position embeddings. @f# Right:@g# Size of attended area by head.')
+    // (its colon right after it: `\\textbf{Right}: Largest …`, unit 259)
+    expect(serialize(unit({ t: 'text', s: 'Timings of models. ' }, ...pairs(1, '\\textbf{', 'Right'), { t: 'text', s: ': Largest batch size.' })).wire).toBe('Timings of models. @a# Right @b#: Largest batch size.')
+    // (right after a forced break, past a switch that sets no ink: 2610.10069v1's `\\\\[1ex] \\noindent \\textit{JEL:}`)
+    expect(serialize(unit({ t: 'text', s: 'The class is larger than the others.' }, { t: 'ph', src: '\\\\[1ex]' }, { t: 'text', s: '\n' }, { t: 'ph', src: '\\noindent' }, { t: 'text', s: ' ' }, ...pairs(1, '\\textit{', 'JEL:'), { t: 'text', s: ' C25, C26.' })).wire).toBe('The class is larger than the others. @a# @b# JEL:@c# C25, C26.')
+    // and read back: each label's pair around its own words, none back empty at the end (Microsoft's reply to unit 84's wire, 2026-10-29)
+    const ser = serialize(fig7)
+    expect(shape(read(rehydrate('@a# \u5de6\uff1a@b# @c#-L/32 \u5d4c\u5165\u7684\u6ee4\u6ce2\u5668\u3002@d# \u4e2d\u5fc3\uff1a@e# \u4f4d\u7f6e\u5d4c\u5165\u7684\u76f8\u4f3c\u6027\u3002@f# \u53f3\uff1a@g# \u6309\u5934\u90e8\u7684\u5173\u6ce8\u533a\u57df\u5927\u5c0f\u3002', ser)))).toMatch(/<2\| \u4e2d\u5fc3\uff1a\|2>.*<3\| \u53f3\uff1a\|3>/)
+  })
+
+  it('…but none inside a sentence, nor a semicolon\'s, nor a bare group that sets nothing (BibTeX\'s case protection)', () => {
+    expect(serialize(unit({ t: 'text', s: 'We use three settings, ' }, ...pairs(1, '\\textbf{', 'namely'), { t: 'text', s: ': fast and safe.' })).wire).toBe('We use three settings, namely: fast and safe.')
+    expect(serialize(unit({ t: 'text', s: 'It ends here. ' }, ...pairs(1, '\\emph{', 'First'), { t: 'text', s: '; then the rest.' })).wire).toBe('It ends here. First; then the rest.')
+    expect(serialize(unit({ t: 'text', s: 'A. Agrawal and O. Khattab. 2026. ' }, ...pairs(1, '{', 'GEPA'), { t: 'text', s: ': Reflective prompt evolution.' })).wire).toBe('A. Agrawal and O. Khattab. 2026. GEPA: Reflective prompt evolution.')
+    // (a bare group that opens with a font switch is a style: `{\\bf Batch size}:` after a sentence)
+    expect(serialize(unit({ t: 'text', s: 'It ends here. ' }, { t: 'open', id: 1, src: '{' }, { t: 'ph', src: '\\bf' }, { t: 'text', s: ' Batch size' }, { t: 'close', id: 1, src: '}' }, { t: 'text', s: ': 16, 32.' })).wire).toBe('It ends here. @a# Batch size @b#: 16, 32.')
+  })
+
   it('the boundary rule (E1): a styled pair whose two ends stand where the wire has a marker anyway is kept; one end alone, not', () => {
     // (2610.19159's u325: after a kept run-in label, to the unit's end)
     expect(serialize(unit(...pairs(1, '\\textit{', 'Floor (must clear):'), { t: 'text', s: ' ' }, ...pairs(2, '\\textcolor{red}{', 'all of the rest to the end'))).wire).toBe('@a# Floor (must clear):@b# @c# all of the rest to the end @d#')

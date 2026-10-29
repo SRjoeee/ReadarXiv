@@ -65,4 +65,10 @@
 //    entry's sentence, and Microsoft's Chinese read its placeholder as a page number, writing the character for "page" (U+9875) before it (2610.37668v1, 5 of 41
 //    entries). It comes back after the translation with an en space before it, the \enspace backref sets (mt.mjs listOf). Every
 //    unit without one is sent as 6 sends it, byte for byte
-export const TRANSLATE_VERSION = '7'
+// 8: a run-in label where a sentence begins past the unit's head (after a full stop, a forced break, a display or an item), a
+//    style a reader sees whose colon is in it or right after it, keeps its two markers on the markers wire, as one at the head
+//    always did (mt.mjs classOf's `label`): 2010.11929v2's Figure 7, "\textbf{Left:} … -L/32. \textbf{Center:} … \textbf{Right:}",
+//    sent "Center:" and "Right:" with no marker, their bold back empty at the unit's end (the owner's report of 2026-10-29 on
+//    staging). Microsoft's and Google's Chinese kept every such label's markers around its own words, 27 of 27 over the 54 sweep
+//    papers' 16 units it changes (2026-10-29). Every other unit is sent as 7 sends it, byte for byte
+export const TRANSLATE_VERSION = '8'
