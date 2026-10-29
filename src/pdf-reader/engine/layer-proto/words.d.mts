@@ -32,6 +32,9 @@ export interface PageWords {
   /** the units with lines on the page that have no span on it, rising: skipped, unfit, withheld with their table group, refused,
    *  and untranslated (a row lost, none, kept or never come), all shown as the original's; the view copies their tokens from the left */
   original: number[]
+  /** the rows of each unit the layout lays on the page, [id, [x0, y0, x1, y1, …]] by id rising, our page's PDF units, y up: a copy
+   *  of the left's tokens of a unit shown as the original stands on no other unit's row (view/shapes.mjs layerShapes) */
+  rows?: [id: number, rects: number[]][]
 }
 /** the offsets of a unit's text in plainTranslated(pieces) */
 export declare function plainTracker(): { gap(): void; text(s: string): Int32Array; space(): number; next(): number }
@@ -56,7 +59,7 @@ export declare function addUnitWords(W: OpenWords, L: Layout, page: number, id: 
 /** the record a page keeps */
 /** a drawn thing's tokens (a babel name, a figure's label), one a segment, appended under `id` as a unit's span */
 export declare function addSegWords(W: OpenWords, id: number, segs: readonly { x: number; w: number; y: number; h: number; base: number; size: number }[]): void
-export declare function freezeWords(W: OpenWords | null, original: Iterable<number>): PageWords
+export declare function freezeWords(W: OpenWords | null, original: Iterable<number>, rows?: readonly (readonly [number, readonly number[]])[]): PageWords
 /** a copy of a kept record */
 export declare function copyWords(w: PageWords): PageWords
 export type { Token }

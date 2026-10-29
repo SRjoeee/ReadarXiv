@@ -4,6 +4,8 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a page where our copy of the paper sets a line or two on the page before or after it is now translated, as long as its text is the same. Before, such pages, and sometimes the whole first half of a paper, stayed in English.
+- Fixed: in the PDF reader, a translation that holds a symbol such as &, % or # no longer shows a backslash before it ("CAD\&CG" now reads "CAD&CG").
 - Fixed: in the PDF reader, when the pages you are looking at are ones the reader shows as the original (its own typesetting of the paper does not match arXiv's there), the progress line ends when the translation does. It had stayed on until a translated page further on was drawn.
 - Fixed: in the PDF reader, a paragraph that ends in a footnote mark, such as an abstract with a note on its last sentence, is translated; it had been left in the original language, whole.
 - Fixed: in the PDF reader, a bibliography made with biblatex follows the references switch like any other: each entry is translated only when you turn the references on, and its heading is translated on its own, no longer run into the first entry.

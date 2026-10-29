@@ -4,7 +4,7 @@ import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { type DocToken, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
-import { carrier, carrierOf, LINE_PLACE, lineCheckOf, linesOf, PAGE_SAME, tokensOfMarks } from '@/pdf-reader/engine/layout/carry.mjs'
+import { carrier, carrierOf, DRIFT_LINES, LINE_PLACE, lineCheckOf, linesOf, PAGE_SAME, tokensOfMarks } from '@/pdf-reader/engine/layout/carry.mjs'
 import { encodeLayoutMarks, layoutMarksOf, parseLayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 
 // The line check (carry.mjs): our compile's lines found on arXiv's PDF. Our compile is not arXiv's file (another TeX Live,
@@ -342,13 +342,33 @@ describe('lineCheckOf: the pages that may be drawn', () => {
     expect(lineCheckOf(title, [...title, ...words(['arxiv', 'is', 'a', 'server'], 1, 72, 600)]).pages[0]?.drawable).toBe(false)
   })
 
-  it('a page with a line found on another page of arXiv\'s is not, however many of its words are there', () => {
-    // (our page 1's last line is arXiv's page 2's first: our compile runs behind)
-    const ours = [...page(W, 1), ...page(W.map(w => `v${w}`), 2)]
-    const theirs = [...page(W.slice(0, 90), 1), ...words(W.slice(90), 2, 72, 712), ...page(W.map(w => `v${w}`), 2)]
+  it('a page whose lines moved across its breaks is drawn, at most DRIFT_LINES at each end: compile drift (2610.30854v1, the owner\'s ruling of 2026-10-30)', () => {
+    expect(DRIFT_LINES).toBe(4)
+    // (our page 1's last line is arXiv's page 2's first: our compile sets a line more on page 1, as 30854's kernel did; both
+    // pages are arXiv's but for that line, each drawn, the line alone with no partner on the page beside ours)
+    const V = W.map(w => `v${w}`)
+    const ours = [...page(W, 1), ...page(V, 2)]
+    const theirs = [...page(W.slice(0, 90), 1), ...words(W.slice(90), 2, 72, 712), ...page(V, 2)]
     const got = lineCheckOf(ours, theirs)
-    expect(got.pages.map(p => [p.page, p.elsewhere, p.drawable])).toEqual([[1, 1, false], [2, 0, false]])
-    expect(got.undrawable).toEqual([1, 2])
+    expect(got.pages.map(p => [p.page, p.elsewhere, p.drift, p.drawable])).toEqual([[1, 1, [0, 1], true], [2, 0, [1, 0], true]])
+    expect(got.undrawable).toEqual([])
+    // (arXiv's tokens of that line, which our page 1 holds: what the hover must not copy onto our page 2)
+    expect([...(got.moved.get(2) ?? [])].map(k => theirs[k]?.t)).toEqual(W.slice(90))
+    // (four lines at an end: drawn; five: not, on either side of the break)
+    const behind = (n: number) => lineCheckOf([...page(W, 1), ...page(V, 2)], [...page(W.slice(0, 100 - 10 * n), 1), ...page(W.slice(100 - 10 * n), 2, 712 + 12 * (n - 1)), ...page(V, 2)])
+    expect(behind(4).undrawable).toEqual([])
+    expect(behind(4).pages.map(p => p.drift)).toEqual([[0, 4], [4, 0]])
+    expect(behind(5).undrawable).toEqual([1, 2])
+  })
+  it('but not a page whose rest differs, nor one whose line is found two pages away', () => {
+    const V = W.map(w => `v${w}`), U = W.map(w => `u${w}`)
+    // (the moved line taken out, a line of other words besides: under PAGE_SAME)
+    const other = [...page(W.slice(0, 90), 1), ...words(W.slice(90), 2, 72, 712), ...page(V.map((w, i) => (i < 10 ? `x${i}` : w)), 2)]
+    expect(lineCheckOf([...page(W, 1), ...page(V, 2)], other).undrawable).toEqual([2])
+    // (our page 1's last line on arXiv's page 3: no drift, a paper read in another order)
+    const ours = [...page(W, 1), ...page(V, 2), ...page(U, 3)]
+    const theirs = [...page(W.slice(0, 90), 1), ...page(V, 2), ...words(W.slice(90), 3, 72, 712), ...page(U, 3)]
+    expect(lineCheckOf(ours, theirs).undrawable).toEqual([1, 3])
   })
   it("but a line too short to be evidence, a figure's one-letter axis label, decides nothing (2610.21765v1 p7's \"q\" on arXiv's p6)", () => {
     // (our page 2's "q", an axis label, is a line of its own; arXiv's page 1 has one, its page 2 none — read into the word before

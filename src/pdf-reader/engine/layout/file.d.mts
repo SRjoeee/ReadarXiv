@@ -2,7 +2,7 @@
 export { LayoutRefusal } from './json.mjs'
 /** the maker's version: raised with any change to what the maker writes under the schema; it enters a bundle's key, and a file
  *  names it as `layout`, which a reader reads for its shape alone: a file is refused by its `schema` (§9.3 of the plan) */
-export declare const LAYOUT: '30'
+export declare const LAYOUT: '31'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1) */
 export declare const LAYOUT_SCHEMA: 5

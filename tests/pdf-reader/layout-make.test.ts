@@ -558,9 +558,13 @@ describe('makeLayout', () => {
     const units = [unit('para', [text(words(0, 60))])]
     const w: World = { pages: [{ runs: p1 }, { runs: p2 }], marked: [{ runs: p1 }, { runs: p2 }], marks, units }
     expect((await made(w)).file.units.map(u => u[0])).toEqual([0])
-    // page 2's last line on arXiv's page 1 (our compile behind arXiv's): page 2 not drawable, the unit not laid
-    const behind = await make({ ...w, pages: [{ runs: [...p1, { ...(p2[2] as Run), y: 60 }] }, { runs: p2.slice(0, 2) }] })
-    expect(behind).toMatchObject({ refused: 'carry', stats: { units: { undrawn: 1 } } })
+    // page 2's last line on arXiv's page 1 (our compile behind arXiv's by a line): both pages drawn, their lines that moved alone
+    // with no partner beside them (carry.mjs DRIFT_LINES), the unit laid
+    const behind = await made({ ...w, pages: [{ runs: [...p1, { ...(p2[2] as Run), y: 60 }] }, { runs: p2.slice(0, 2) }] })
+    expect(behind.file.units.map(u => u[0])).toEqual([0])
+    // arXiv's page 2 of other words: page 2 not drawable, the unit not laid
+    const other = await make({ ...w, pages: [{ runs: p1 }, { runs: p2.map((r, j) => ({ ...r, s: words(100 + 10 * j, 10) })) }] })
+    expect(other).toMatchObject({ refused: 'carry', stats: { units: { undrawn: 1 } } })
   })
 
   it("arXiv's page count out of bounds is refused before anything is read", async () => {

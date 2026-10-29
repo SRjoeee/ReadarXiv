@@ -953,7 +953,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const addUnits = entries => {
     for (const c of entries) {
       const lu = tex.index.unit(c.id)
-      const from = [c.rects, lu ? texRects(lu).rects : null].filter(Boolean)
+      // (its own rows on our page, the layout file's lines: where its text stands there, which a copy of another unit's left
+      // tokens may not stand on, freezeWordsOf)
+      c.ownRows = lu ? texRects(lu).rects : null
+      const from = [c.rects, c.ownRows].filter(Boolean)
       c.lists = from.map(shownOf).filter(l => l.length)
       c.reach = new Set(from.flatMap(rs => rs.map(r => r[0])))
       // (and what Need reads of it besides (need.mjs NeedEntry): its placeholders' pages, its table group; its place in K, and
@@ -1026,8 +1029,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const r = rows[q - 1]
     if (!r || r.words) return
     const painted = new Set((r.wordsOpen?.spans ?? []).map(s => s[0]))
-    const original = []
+    const original = [], ownRows = []
     for (const c of K) if (!painted.has(c.id) && c.lists.some(l => l.includes(q))) original.push(c.id)
+    // (every unit's own rows on the page: a unit shown as the original lights on the right by copies of its left tokens, the left's
+    // geometry, which our page may set elsewhere — a line our compile moved across the page break, the drift the line check draws
+    // (carry.mjs DRIFT_LINES) —: no copy stands on another unit's row, so a line moved has no partner beside it, never a wrong one)
+    for (const c of K) { const rs = c.ownRows?.filter(x => x[0] === q); if (rs?.length) ownRows.push([c.id, rs.flatMap(x => [x[1], x[2], x[3], x[4]])]) }
     // (and every babel name of the page the layer did not draw — no word of the target's, its own again, a face refused, unfit,
     // no group of its own —, left the original's in its place: its hover id, lit there as the left's, view/shapes.mjs
     // layerShapes; one that leads a unit is that unit's)
@@ -1036,7 +1043,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const id = nameOccurrenceId(nm.occurrence)
       if (id !== null && !painted.has(id)) original.push(id)
     }
-    r.words = freezeWords(r.wordsOpen, original)
+    r.words = freezeWords(r.wordsOpen, original, ownRows)
     r.wordsOpen = null
   }
   /** the annotations of each page (links.mjs annotsOf; null where the read failed), read once as the page is drawn and held

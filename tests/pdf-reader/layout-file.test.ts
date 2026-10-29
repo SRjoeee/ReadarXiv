@@ -179,7 +179,7 @@ describe('a valid file', () => {
     expect([...index.unit(3)!.labels]).toEqual([0, 2, 50, 720, 66, 728.5, 717])
     expect([...index.unit(8)!.labels]).toEqual([3, 2, 66, 100, 70, 106, 98])
     expect(index.unit(8)!.ph.get(1)).toEqual({ kind: 'macro', flags: PH_FLAG.LOST, segs: new Float64Array(0), text: null, fill: null })
-    expect(LAYOUT).toBe('30')
+    expect(LAYOUT).toBe('31')
     expect(index.unit(5)!.held).toEqual([1])
     expect(index.unit(2)!.held).toEqual([])
     expect(PAGE_TEXT_KINDS).toEqual(['cite', 'ref', 'eqref'])

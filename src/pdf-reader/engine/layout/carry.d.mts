@@ -27,6 +27,8 @@ export interface Carrier {
   readonly inPlace: readonly number[]
   /** each marked token's line (no entry for a token on no line) */
   readonly tokenLine: readonly number[]
+  /** each marked line's partner's arXiv tokens, every one its line holds (null for a line of no partner), in the order added */
+  readonly partnerTokens: readonly (readonly number[] | null)[]
   /** the marked tokens `from` to `to` (`marked`'s indices), whole pages none of which was added: their lines matched */
   add(from?: number, to?: number): void
 }
@@ -35,6 +37,10 @@ export declare function carrierOf(marked: readonly DocToken[], arxiv: readonly D
 export declare const LINE_PLACE: 0.5
 /** a page is drawable where at least this share of its words are arXiv's page's, in order */
 export declare const PAGE_SAME: 0.98
+/** a page whose lines moved across its breaks (compile drift) is drawn where at most this many moved at each of its two ends */
+export declare const DRIFT_LINES: 4
+/** the letters and digits a line of ours must hold for its finding on another page of arXiv's to make our page another's */
+export declare const LINE_EVIDENCE: 4
 /** the page-and-line check: may we draw, per page (`pages`, `undrawable`), and do the panes align, per line, information alone:
  *  the carrier's counts with the lines in place, each page's [placed, total], each of our lines' partner and verdict, each of
  *  our tokens' line (-1: none), the pages past their work */
@@ -46,9 +52,12 @@ export interface LineCheck {
   tokenLine: Int32Array
   /** may we draw, per page: its words against arXiv's page's (`overlap`, in order; null past the bound), our lines found on
    *  another page (`elsewhere`), drawable or not; and the pages that are not */
-  pages: { page: number; words: [ours: number, arxiv: number]; overlap: number | null; sameWords?: true; elsewhere: number; drawable: boolean }[]
+  pages: { page: number; words: [ours: number, arxiv: number]; overlap: number | null; sameWords?: true; elsewhere: number; drift?: [start: number, end: number]; drawable: boolean }[]
   undrawable: number[]
   over: number[]
+  /** by arXiv's page, its tokens (indices into `arxiv`) whose line one of ours on another page was found on: lines moved across a
+   *  break, with no partner on our page */
+  moved: Map<number, Uint32Array>
 }
 export declare function lineCheckOf(ours: readonly DocToken[], arxiv: readonly DocToken[]): LineCheck
 /** carrierOf a page at a time: arXiv's tokens whole, the marked ones added (`add`) as their pages are read */
