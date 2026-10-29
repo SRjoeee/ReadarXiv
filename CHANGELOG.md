@@ -5,6 +5,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 ## Unreleased
 
 - Fixed: in the PDF reader, with the references turned on, the page numbers some papers print after each reference (the pages that cite it, each a link back) now follow the reference's translation, still links, instead of staying where the English reference was and showing over the translated text.
+- Fixed: in the PDF reader, a heading a paper sets against the edge of its column inside a box, such as "Abstract" over a boxed abstract, keeps that edge in the translation, where it had been drawn about a character in.
 - In the PDF reader, French, Spanish and Portuguese words are hyphenated at the end of a line by the rules of their own language, where English rules had been used.
 - Fixed: in the PDF reader, an underscore in a translated paragraph, caption or table cell ("task_spec.md", in a paper set in LaTeX's default fonts) and the line under underlined words no longer stay behind as stray dashes under the translation. In a list of figures, the full stop after a formula at the end of an entry is translated with the entry, no longer left beside it.
 - In the PDF reader, the labels of a figure made with matplotlib are measured by their own letters, so a full stop no longer counts as tall as a capital when a translated label looks for room beside the figure's lines.

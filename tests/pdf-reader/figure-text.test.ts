@@ -146,6 +146,41 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
     expect(one(word('label', [[90 - 2 * ANCHOR_REACH * 10, 102, 98 - 2 * ANCHOR_REACH * 10, 102]])).anchor).toBe('centre')
   })
 
+  it('a level line on its column\'s edge is set from that edge, centred in its column from its middle, as TeX set it (2610.37668v1\'s "Abstract")', () => {
+    // (the word in a picture at 100..140 and the column's text lines below it, a unit's own glyphs: from x0 to x1 at 85 and 73)
+    const column = (lines: [number, number][], strokes: number[][] = []) => {
+      const pg = word('Abstract', strokes)
+      const owners: (string | null)[] = pg.glyphs.map(() => null)
+      for (const [li, [x0, x1]] of lines.entries()) for (let x = x0, k = 0; x + 5 <= x1 + 1e-9; x += 5, k++) {
+        const y = 85 - 12 * li
+        pg.glyphs.push({ u: 'x', n: 1 + li, k, x0: x, x1: x + 5, ix0: x, ix1: x + 5, y, top: y + 7, bottom: y - 2, size: 10, font: 'CMR10', fill: 0 })
+        owners.push('u7')
+      }
+      return figureUnitsOf([pg] as never, { glyphs: [owners] } as never).units[0]!.anchor
+    }
+    // (nothing beside it: alone, it reads its middle; on its column's left edge, half a point in, its start)
+    expect(one(word('Abstract')).anchor).toBe('centre')
+    expect(column([[100.5, 300], [100.5, 300]])).toBe('start')
+    expect(column([[-60, 140], [-60, 140]])).toBe('end')
+    expect(column([[20, 220], [20, 220]])).toBe('centre')
+    // (off its column's edges and middle, or one line alone, the ink beside it tells, as before)
+    expect(column([[50, 300], [50, 300]], [[90, 102, 98, 102]])).toBe('start')
+    expect(column([[50, 300], [50, 300]], [[147, 95, 147, 110]])).toBe('end')
+    expect(column([[50, 300], [50, 300]])).toBe('centre')
+    expect(column([[100.5, 300]])).toBe('centre')
+    // (inside a figure the ink beside it tells first: an axis right after a label on the column's edge sets it from its end)
+    expect(column([[100.5, 300], [100.5, 300]], [[147, 95, 147, 110]])).toBe('end')
+  })
+
+  it('reads its column from the owners it is given, a page read again under other owners anew', () => {
+    const pg = word('Abstract')
+    const owners: (string | null)[] = pg.glyphs.map(() => null)
+    for (const y of [85, 73]) for (let x = 100.5, k = 0; x + 5 <= 300; x += 5, k++) { pg.glyphs.push({ u: 'x', n: 1, k, x0: x, x1: x + 5, ix0: x, ix1: x + 5, y, top: y + 7, bottom: y - 2, size: 10, font: 'CMR10', fill: 0 }); owners.push('u7') }
+    expect(figureUnitsOf([pg] as never, { glyphs: [owners] } as never).units[0]!.anchor).toBe('start')
+    // (the same page, its lines owned by no unit: no column, its middle)
+    expect(figureUnitsOf([pg] as never, { glyphs: [owners.map(() => null)] } as never).units[0]!.anchor).toBe('centre')
+  })
+
   it('a number, a letter alone or a formula\'s face is no unit; a word in a run of one font is', () => {
     expect(figureUnitsOf([word('0.25')] as never, null).units).toEqual([])
     expect(figureUnitsOf([word('x')] as never, null).units).toEqual([])
