@@ -103,7 +103,8 @@ export function diffRules(a, b) {
   }
   leaf('schema', a.schema, b.schema)
   leaf('hyphenation.minWord', a.hyphenation?.minWord, b.hyphenation?.minWord)
-  for (const lang of ['en', 'de']) for (const side of ['left', 'right']) leaf(`hyphenation.${lang}.${side}`, a.hyphenation?.[lang]?.[side], b.hyphenation?.[lang]?.[side])
+  // (every language either set gives minimums, its patterns' (rules/layout.mjs PATTERNS: en, de, fr, es, pt))
+  for (const lang of union(a.hyphenation, b.hyphenation)) if (lang !== 'minWord') for (const side of ['left', 'right']) leaf(`hyphenation.${lang}.${side}`, a.hyphenation?.[lang]?.[side], b.hyphenation?.[lang]?.[side])
   for (const script of union(a.scripts, b.scripts)) {
     if (!own(a.scripts, script) || !own(b.scripts, script)) { leaf(`scripts.${script}`, a.scripts?.[script], b.scripts?.[script]); continue }
     for (const key of union(a.scripts[script], b.scripts[script])) leaf(`scripts.${script}.${key}`, a.scripts[script][key], b.scripts[script][key])

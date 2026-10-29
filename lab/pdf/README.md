@@ -325,7 +325,8 @@ another machine is compared.
 **The pack** is everything the model tier reads for the 30 outputs and nothing else: arXiv's PDFs, the layout files
 (`layout.json`), the PIPELINE translations (`units.json`, `record.json`), the frozen reference text areas and the kept layouts
 (`refs/`), the geometry, the faces (every non-CJK face of the role table, and of each CJK group the outputs' targets use its
-Kai and the four weights the roles are built from), and the en and de hyphenation patterns. It is a file set laid out so that
+Kai and the four weights the roles are built from), and the hyphenation patterns of the engine's TEX_PATTERN_FILES (en and de;
+fr, es and pt, hyph-utf8's, since the pack `28c56b1c`). It is a file set laid out so that
 the gate's own flags and variables read it: `--fixtures=<pack>/fixtures`, `LAYER_REFS`, `LAYER_GEOMETRY`, `AXT_DATA`
 (`<pack>/data`, which holds `fonts/`) and `TEXMF_DIST`; `rules-gate.mjs run` sets them. Its manifest lists each file by path,
 digest and size; its **digest** is that of the sorted listing, the same on every make (the clock is not in it, and every file
@@ -391,6 +392,10 @@ each output's `layout.json` and `base.json` made again the same way: every base 
 file `147343b1`'s but for its version (the pack's units hold no Type 3 glyph: its matplotlib labels are figure units, which no
 layout file carries), every base record's layout digest moving with it. The faces and every other file are the instrument's own
 bytes. 14 new objects.
+The pack of #121-4 (`28c56b1c`, LAYOUT 28 still) is `be40ed94`'s with hyph-utf8's `hyph-fr.tex`, `hyph-es.tex` and
+`hyph-pt.tex` added under `texmf/tex/generic/hyph-utf8/patterns/tex/`, the pinned TeX Live 2025 image's files byte for byte: the
+rules gate draws French, Spanish and Portuguese with their own patterns, read as UTF-8. Every other file is `be40ed94`'s. 3 new
+objects.
 Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
 The wrap reads each base's units from its paper's source, so the pack holds that too: `sources/<paper>/source.gz`, one a paper
 (`gate-pack.mjs make --sources=<dir of <paper>/source.gz>`, `data/corpus` by default; a make with a base of ours and no source

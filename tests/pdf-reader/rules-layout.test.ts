@@ -34,11 +34,14 @@ type Edit = any
  *  schema 3 added (D1a: every babel name, at the built-in set's words); and the members of `cjkFaces` schema 6 took out (its
  *  `light` designs and its `kai`: Regular and Bold beside every English family, the ruling of 2026-10-29) */
 const REMOVED = ['grid'], ADDED = ['fillLead', 'leftover', 'fillLeadRel', 'evenPitch', 'keepAlign'], FACES_REMOVED = ['light', 'kai']
+/** the languages whose hyphenation minimums schema 8 added (#121-4: French, Spanish and Portuguese their own patterns) */
+const HYPHENATION_ADDED = ['fr', 'es', 'pt'] as const
 const LABELS_ADDED = ['abstract', 'ref', 'bib', 'contents', 'listfigure', 'listtable', 'appendix', 'index', 'proof', 'preface', 'glossary']
 /** the frozen first version lifted to the current schema: its values as they were, less the fields removed since, the fields
  *  added since at the built-in set's values for each script */
 const lift = (s: Edit): Edit => {
   s.schema = RULES_SCHEMA
+  for (const k of HYPHENATION_ADDED) s.hyphenation[k] = structuredClone(BUILTIN_RULES.hyphenation[k])
   for (const r of [...Object.values(s.scripts), ...Object.values(s.languages)] as Record<string, unknown>[]) for (const k of REMOVED) delete r[k]
   for (const [script, r] of Object.entries(s.scripts) as [keyof typeof BUILTIN_RULES.scripts, Record<string, unknown>][]) for (const k of ADDED) r[k] = structuredClone((BUILTIN_RULES.scripts[script] as Record<string, unknown>)[k])
   for (const r of [...Object.values(s.scripts), ...Object.values(s.languages)] as { cjkFaces?: Record<string, unknown> | null }[]) {
@@ -71,8 +74,8 @@ afterEach(() => { vi.restoreAllMocks() })
 
 describe('the built-in set', () => {
   it('parses, is canonical (writeRules gives the file\'s bytes) and has a version of at least 1', () => {
-    expect(RULES_SCHEMA).toBe(7)
-    expect(BUILTIN_RULES.schema).toBe(7)
+    expect(RULES_SCHEMA).toBe(8)
+    expect(BUILTIN_RULES.schema).toBe(8)
     expect(BUILTIN_RULES.version).toBeGreaterThanOrEqual(1)
     expect(BUILTIN_RULES.note.length).toBeGreaterThan(0)
     expect(writeRules(BUILTIN_RULES)).toBe(text(BUILTIN_FILE))
@@ -83,10 +86,11 @@ describe('the built-in set', () => {
     const lifted = writeRules(V1).split('\n')
     const labelled = Object.values(V1.languages).filter(l => l.labels).length
     const faced = Object.values(V1.scripts).filter(r => r.cjkFaces).length
-    expect(lifted.filter(l => !kept.includes(l)).map(l => l.trim().split(':')[0]).sort()).toEqual(['"schema"', ...ADDED.flatMap(k => Object.keys(V1.scripts).map(() => `"${k}"`)), ...Array.from({ length: labelled }, () => '"labels"'), ...Array.from({ length: faced }, () => '"cjkFaces"')].sort())
-    // (every line of the frozen file kept but its labels, which schema 3 lengthened, and its CJK faces, which schema 6 cut to
-    // their group)
-    expect(kept.filter(l => !l.trim().startsWith('"labels":') && !l.trim().startsWith('"cjkFaces":')).every(l => lifted.includes(l))).toBe(true)
+    // (and schema 8's hyphenation minimums after German's, whose line takes a comma)
+    expect(lifted.filter(l => !kept.includes(l)).map(l => l.trim().split(':')[0]).sort()).toEqual(['"schema"', ...ADDED.flatMap(k => Object.keys(V1.scripts).map(() => `"${k}"`)), ...Array.from({ length: labelled }, () => '"labels"'), ...Array.from({ length: faced }, () => '"cjkFaces"'), '"de"', ...HYPHENATION_ADDED.map(k => `"${k}"`)].sort())
+    // (every line of the frozen file kept but its labels, which schema 3 lengthened, its CJK faces, which schema 6 cut to
+    // their group, and German's minimums, which schema 8's follow)
+    expect(kept.filter(l => !l.trim().startsWith('"labels":') && !l.trim().startsWith('"cjkFaces":') && !l.trim().startsWith('"de": { "left"')).every(l => lifted.includes(l))).toBe(true)
     expect(lifted.filter(l => l.trim().startsWith('"cjkFaces":')).every(l => /^ {6}"cjkFaces": (?:\{ "group": "[a-z-]+" \}|null),?$/.test(l))).toBe(true)
     expect(V1.version).toBe(1)
     expect(V1.note).toBe('migrated from the engine\'s code')
@@ -159,7 +163,7 @@ describe('resolving a target (resolveRules)', () => {
       expect(params.latinPatterns, t).toBe(t === 'de' ? 'de' : 'en')
       expect(patterns, t).toEqual(t === 'de' ? ['en', 'de'] : t === 'ru' ? ['en', 'ru'] : ['en'])
       expect([params.cellClear, params.cellCapMin, params.even, params.fillSize, params.trackStart], t).toEqual([0.5, 0.6, 0, 0, null])
-      expect(params.hyphenation, t).toEqual({ minWord: 5, en: { left: 2, right: 3 }, de: { left: 2, right: 2 } })
+      expect(params.hyphenation, t).toEqual({ minWord: 5, en: { left: 2, right: 3 }, de: { left: 2, right: 2 }, fr: { left: 2, right: 3 }, es: { left: 2, right: 2 }, pt: { left: 2, right: 3 } })
     }
   })
 
@@ -403,8 +407,9 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     ['schema 4 (a set before fillLeadRel)', s => { s.schema = 4 }, 'schema'],
     ['schema 5 (a set whose CJK faces name light designs and a Kai)', s => { s.schema = 5 }, 'schema'],
     ['schema 6 (a set before evenPitch and keepAlign)', s => { s.schema = 6 }, 'schema'],
-    ['schema not 7', s => { s.schema = 8 }, 'schema'],
-    ['schema a string', s => { s.schema = '7' }, 'schema'],
+    ['schema 7 (a set before French, Spanish and Portuguese patterns)', s => { s.schema = 7 }, 'schema'],
+    ['schema not 8', s => { s.schema = 9 }, 'schema'],
+    ['schema a string', s => { s.schema = '8' }, 'schema'],
     ['labels without a heading\'s name (a schema-2 set\'s labels)', s => { s.languages.de.labels = { figure: 'Abbildung', table: 'Tabelle' } }, 'languages.de.labels.abstract'],
     ['version 0', s => { s.version = 0 }, 'version'],
     ['version not an integer', s => { s.version = 1.5 }, 'version'],
@@ -426,7 +431,7 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     ['a boolean given as a number', s => { s.scripts.Hans.leadRel = 0 }, 'scripts.Hans.leadRel'],
     ['grid out of its values', s => { s.scripts.Hans.grid = 2 }, 'scripts.Hans.grid'],
     ['compressMax out of its values', s => { s.scripts.Hans.compressMax = 3 }, 'scripts.Hans.compressMax'],
-    ['latinPatterns out of its values', s => { s.languages.de.latinPatterns = 'fr' }, 'languages.de.latinPatterns'],
+    ['latinPatterns out of its values', s => { s.languages.de.latinPatterns = 'it' }, 'languages.de.latinPatterns'],
     ['an adaptive-fill band out of range', s => { s.scripts.Hans.adaptiveFill.band = 0.6 }, 'scripts.Hans.adaptiveFill.band'],
     ['a minimum word that is not an integer', s => { s.hyphenation.minWord = 5.5 }, 'hyphenation.minWord'],
     ['a hyphenation side of zero', s => { s.hyphenation.en.left = 0 }, 'hyphenation.en.left'],
@@ -595,7 +600,7 @@ describe('the fields the lab shows (RULES_FIELDS)', () => {
     const script = RULES_FIELDS.filter(f => f.scope === 'script').map(f => f.path)
     expect(script).toEqual(Object.keys(V1.scripts.Hans))
     expect(RULES_FIELDS.filter(f => f.scope === 'language').map(f => f.path)).toEqual(['labels'])
-    expect(RULES_FIELDS.filter(f => f.scope === 'set').map(f => f.path)).toEqual(['hyphenation.minWord', 'hyphenation.en.left', 'hyphenation.en.right', 'hyphenation.de.left', 'hyphenation.de.right'])
+    expect(RULES_FIELDS.filter(f => f.scope === 'set').map(f => f.path)).toEqual(['hyphenation.minWord', 'hyphenation.en.left', 'hyphenation.en.right', 'hyphenation.de.left', 'hyphenation.de.right', 'hyphenation.fr.left', 'hyphenation.fr.right', 'hyphenation.es.left', 'hyphenation.es.right', 'hyphenation.pt.left', 'hyphenation.pt.right'])
     for (const f of RULES_FIELDS) {
       expect(f.words.length, f.path).toBeGreaterThan(10)
       expect(['fit', 'breaking', 'cells', 'faces', 'labels', 'hyphenation'], f.path).toContain(f.group)
@@ -621,7 +626,7 @@ describe('the fields the lab shows (RULES_FIELDS)', () => {
     const by = Object.fromEntries(RULES_FIELDS.map(f => [f.path, f]))
     expect(by.order!.values).toEqual(['track', 'borrow', 'lead', 'shrink'])
     expect(by.further!.values).toEqual(['widen', 'flow', 'shrink'])
-    for (const [path, ok] of [['leftover', ['foot', 'pack']], ['compressMax', [0, 1, 2]], ['even', [0, 1, 2]], ['hyphen', [0, 1]], ['borrow', [0, 1]], ['latinPatterns', ['en', 'de']]] as const) {
+    for (const [path, ok] of [['leftover', ['foot', 'pack']], ['compressMax', [0, 1, 2]], ['even', [0, 1, 2]], ['hyphen', [0, 1]], ['borrow', [0, 1]], ['latinPatterns', ['en', 'de', 'fr', 'es', 'pt']]] as const) {
       expect(by[path]!.values, path).toEqual(ok)
       for (const v of ok) expect(() => parseRules(v1(s => { s.scripts.Hans[path] = v })), `${path} = ${v}`).not.toThrow()
     }
