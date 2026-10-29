@@ -238,19 +238,34 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     expect(phs.join(' ')).toContain('https://b.org/p%20q')
     // (the units' bytes the paper's: the marked original sets the address as the paper does)
     expect(patched(p)).toContain('\\url{https://a.com/x%3Fy}')
-    // (inside another command's argument, or an environment's body TeX collects, TeX has read the `%` as a comment already: the
-    // walk reads it so too; a group no command takes is no argument, and a verbatim's text no address)
-    for (const t of ['\\footnote{\\url{a%b}}', '\\newcommand{\\x}{\\url{a%b}}', '\\def\\x{\\href{a%b}{c}}', '\\begin{tabularx}{l}\\url{a%b}\\end{tabularx}', '\\begin{verbatim}\\url{a%b}\\end{verbatim}', '% \\url{a%b}']) expect(urlPercents(t), t).toBe(t)
-    // (an optional argument, and a \\def's body after its parameter text: tokens TeX has read, a `%` a comment there, the reviews of
-    // #501, Devin and Codex)
-    // (a starred command's argument too: LaTeX's \\@ifstar reads the star, spaces before it, and the argument after it is the
-    // command's, Codex on the fix round)
-    for (const t of ['\\section[See \\url{a% ignored\nb}]{Title}', '\\item[\\url{a%b}] x', '\\def\\foo#1{\\url{a% comment } }\nb}}', '\\def\\foo#1.#2{\\url{a%b}}', '\\section*{See \\url{a% } } x\nb} Rest}', '\\section *[\\url{a%b}]{T}', '\\caption*{\\url{a%b}}']) expect(urlPercents(t), t).toBe(t)
-    for (const t of ['\\item[x] \\url{a%b}', 'see [1] \\url{a%b}', '\\def\\x#1{#1} \\url{a%b}']) expect(urlPercents(t), t).not.toBe(t)
+    // (a group is an argument unless proven plain: inside one, an optional argument, a definition's body or an environment's
+    // body TeX collects, TeX has read the `%` as a comment already, and the walk reads it so too. Every shape the reviews of #501
+    // raised: an optional argument, a star, a definition's body after `#1`, a \def after its parameter text, a comment between a
+    // command and its group; and those no command reads past: a verbatim's text, a comment's)
+    const argument = {
+      'an argument': ['\\footnote{\\url{a%b}}', '\\newcommand{\\x}{\\url{a%b}}', '\\textbf{x \\url{a%b}}'],
+      'an optional argument': ['\\section[See \\url{a% ignored\nb}]{Title}', '\\item[\\url{a%b}] x'],
+      'a star': ['\\section*{See \\url{a% } } x\nb} Rest}', '\\section *[\\url{a%b}]{T}', '\\caption*{\\url{a%b}}'],
+      'a definition after #1': ['\\def\\foo#1{\\url{a% comment } }\nb}}', '\\newcommand{\\x}[1]{\\url{a%b}}', '\\def\\x{\\href{a%b}{c}}'],
+      'a \\def after its parameter text': ['\\def\\foo#1.#2{\\url{a%b}}', '\\def\\foo#1#2 ab{\\url{a%b}}'],
+      'a comment between a command and its group': ['\\section% c\n{See \\url{a% } } x\nb} Rest}', '\\textbf % c\n {\\url{a%b}}'],
+      'a group not proven plain': ['\\newblock {\\em \\url{a%b}}', '\\foo a{\\url{a%b}}', '\\put(1,2){\\url{a%b}}', '\\only<2>{\\url{a%b}}', '\\toks0={\\url{a%b}}'],
+      'a collected or verbatim body, a comment': ['\\begin{tabularx}{l}\\url{a%b}\\end{tabularx}', '\\begin{verbatim}\\url{a%b}\\end{verbatim}', '% \\url{a%b}'],
+      'a .bbl\'s field': ['\\bibinfo{note}{\\url{https://a.org/x%3Fy}}', '\\newblock \\emph{\\url{a%b}}'],
+    }
+    for (const [shape, ts] of Object.entries(argument)) for (const t of ts) expect(urlPercents(t), `${shape}: ${t}`).toBe(t)
+    // (an address TeX reads with its `%` a character: at the paragraph's level, after an optional argument or a definition has
+    // closed, in a group proven plain — ordinary text, a math shift or nothing before its `{` —, and a .bbl's entry's own)
+    const literal = {
+      'the paragraph\'s level': ['\\url{a%b}', '\\href [x] {a%b} {c}', '\\item[x] \\url{a%b}', 'see [1] \\url{a%b}', 'a*b \\url{a%b}', '\\x{} * \\url{a%b}'],
+      'after a group closed': ['\\def\\x#1{#1} \\url{a%b}', '\\begin{tabularx}{l}x\\end{tabularx} \\path{a%b}'],
+      'a plain group': ['See {\\bf \\url{a%b}} now.', '{\\small \\url{a%b}}', 'text $x$ {\\url{a%b}}', 'one,\n% a comment\n{\\small \\url{a%b}}'],
+      'a .bbl\'s entry': ['\\newblock \\url{https://a.org/x%3Fy}.', '\\newblock URL \\url{a%3F}', '\\href{https://b.org/p%20q}{The title}'],
+    }
+    for (const [shape, ts] of Object.entries(literal)) for (const t of ts) expect(urlPercents(t), `${shape}: ${t}`).not.toBe(t)
     expect(texts(project(doc('\\def\\foo#1{\\url{a% comment } }\nb}}\nWords after the definition.')))).toEqual(['Words after the definition.'])
     expect(texts(project(doc('\\section*{See \\url{a% } } This is commented out.\nb} Rest of title}\nWords of the body here.')))).not.toContain('This is commented out.')
-    for (const t of ['a*b \\url{a%b}', '\\x{} * \\url{a%b}']) expect(urlPercents(t), t).not.toBe(t)
-    for (const t of ['\\url{a%b}', '{\\small \\url{a%b}}', '\\href [x] {a%b} {c}', '\\begin{tabularx}{l}x\\end{tabularx} \\path{a%b}']) expect(urlPercents(t), t).not.toBe(t)
+    expect(texts(project(doc('\\section% c\n{See \\url{a% } } This is commented out.\nb} Rest of title}\nWords of the body here.')))).not.toContain('This is commented out.')
     expect(urlPercents('\\href{a%3F%3D}{b%c}').split('%').length).toBe(2)
     // (a `\\` and the character after it read as the argument's boundary reads them: `\\%` the command, `\\\\%` a pair and the
     // character, the local Codex review)
@@ -264,6 +279,13 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     expect((grid.units as unknown as { cell?: { row: number; col: number } }[]).map(u => u.cell && [u.cell.row, u.cell.col])).toEqual([[0, 0], [1, 0], [1, 1], [2, 0]])
     // (a body that does more than end the row stays a placeholder, as before)
     expect(texts(project(doc(tab, '\\newcommand{\\tightrow}{\\\\[-4pt] more}')))).not.toEqual(['Demographic equity', 'Capacity shortage', 'Travel distance'])
+    // (a row end only where every definition of the name in any form is one of no parameter: one redefined with an argument, by
+    // \\let, by xparse or with parameter text is none, Codex on the fix round; `\\def` and the starred forms of no parameter are)
+    const split = ['Demographic equity', 'Capacity shortage', 'Travel distance']
+    for (const defs of ['\\newcommand{\\tightrow}{\\\\[-4pt]}\\renewcommand{\\tightrow}[1]{\\textbf{#1}}', '\\newcommand{\\tightrow}{\\\\}\\let\\tightrow\\relax', '\\def\\tightrow#1{\\\\}', '\\NewDocumentCommand{\\tightrow}{}{\\\\}', '\\newcommand{\\tightrow}[0]{\\\\}']) expect(texts(project(doc(tab, defs))), defs).not.toEqual(split)
+    for (const defs of ['\\def\\tightrow{\\\\[-4pt]}', '\\newcommand*\\tightrow{\\\\ \\hline}', '\\providecommand{\\tightrow}{\\tabularnewline}\\renewcommand*{\\tightrow}{\\\\}']) expect(texts(project(doc(tab, defs))), defs).toEqual(split)
+    const kept = project(doc('\\begin{table}\\begin{tabular}{ll}\nFirst \\tightrow X rest & B \\\\\n\\end{tabular}\\end{table}', '\\newcommand{\\tightrow}{\\\\[-4pt]}\\renewcommand{\\tightrow}[1]{\\textbf{#1}}'))
+    expect(units(kept).flatMap(u => u.pieces.filter(x => x.t !== 'text').map(x => x.src))).toContain('\\tightrow X')
   })
   it('a command the table does not know keeps every adjacent group, as before: some prose stays, nothing breaks', () => {
     expect(texts(project(doc('Before \\unknowncmd{some words here}{and more} after.')))).toEqual(['Before after.'])

@@ -439,51 +439,64 @@ function skipComment(s, i) { while (i < s.length && s[i] !== '\n') i++; return i
  * A web address's `%` as TeX reads it. url.sty's \\url and \\path, hyperref's \\nolinkurl, breakurl's \\burl and the first argument
  * of hyperref's \\href (REVTeX's .bbl's too: `\\begingroup \\@sanitize@url \\@href`) read their argument with `%` a character, so
  * `\\href {https://doi.org/…?urlappend=%3Fref%3DPDF…} {…}` is one address; but only where TeX has not read those characters
- * already, as it has inside another command's argument (`\\footnote{\\url{a%b}}`: the `%` a comment there too; an optional one,
- * `\\section[See \\url{a%b}]{…}`; a definition's body, `\\def\\x#1{\\url{a%b}}`) or in the body of an environment that collects
- * its body as one (tabularx, amsmath's alignments). Read as a comment everywhere, the address's
- * group never closed: the rest of its line was lost, and in a .bbl every entry after it read as one (2610.21770v1's 44 to 61).
- * The text with each such `%` written as LITERAL_PERCENT, the same length, so that every reading of the walk (groups, comments,
- * a bibliography's \\bibitem) sees what TeX sees and every place stays where it is; the units take their `%` back
- * (restorePercents). A text that holds LITERAL_PERCENT already, or no `%`, is returned as it is
+ * already, as it has inside any command's argument, an optional one or a definition's body, or in the body of an environment
+ * that collects its body as one (tabularx, amsmath's alignments). Read as a comment everywhere, the address's group never
+ * closed: the rest of its line was lost, and in a .bbl every entry after it read as one (2610.21770v1's 44 to 61).
+ * So a group is taken for an argument unless it is proven plain (the reviews of #501: each case found where a group was taken
+ * for plain — an optional argument, a star, a parameter, a comment between a command and its group — was one more): a group
+ * is plain only where the last token before its `{`, white space and comments passed over, is ordinary text (a letter, a digit
+ * or a sentence's punctuation, more than one character of it where a command, a group's close or a parameter stands right
+ * before: `\\foo a{…}` may be \\foo's two arguments), a math shift, or none (the file's start); never after a control sequence,
+ * `*`, `]`, `}`, `{`, a parameter `#n`, or a definition's name and parameter text. Where it is not proven, the `%` stays a
+ * comment, as the walk read it before. Each such `%` is written as LITERAL_PERCENT, the same length, so that every reading of
+ * the walk (groups, comments, a bibliography's \\bibitem) sees what TeX sees and every place stays where it is; the units take
+ * their `%` back (restorePercents). A text that holds LITERAL_PERCENT already, or no `%`, is returned as it is
  */
 export function urlPercents(text) {
   if (!text.includes('%') || text.includes(LITERAL_PERCENT)) return text
   const n = text.length, out = text.split('')
-  /** each group open, innermost last: a brace group or an optional argument's brackets (`open`), and whether TeX reads it as a
-   *  command's argument (`arg`: its tokens read before the command acts) — a group after a command, an argument or an optional
-   *  one, a \\def's body after its parameter text, and every optional argument */
+  /** each group open, innermost last: a brace group or an optional argument's brackets (`open`), and whether it may be an
+   *  argument (`arg`): every one not proven plain */
   const groups = []
   /** the environments open whose body TeX collects as an argument */
-  let collected = 0
-  let changed = false, afterCommand = false, defining = false
+  let collected = 0, changed = false, defining = false
+  /** the last token, white space and comments passed over: 'start' (none yet), 'text' (ordinary text: `run` characters of it
+   *  so far, after a token of kind `runAfter`), 'shift' (a math shift), or 'other' (a control sequence, a group's open or close,
+   *  `*`, `[`, `]`, a parameter, any other character) */
+  let prev = 'start', run = 0, runAfter = 'start'
+  const plain = () => prev === 'start' || prev === 'shift' || (prev === 'text' && (run > 1 || runAfter !== 'other'))
   for (let i = 0; i < n; i++) {
     const c = text[i]
-    if (c === '%') { i = skipComment(text, i); afterCommand = false; continue }
-    if (c === '{') { groups.push({ open: '{', arg: afterCommand || defining }); afterCommand = false; defining = false; continue }
-    if (c === '}') { while (groups.length && groups.pop().open !== '{'); afterCommand = true; continue }
-    if (c === '[' && afterCommand) { groups.push({ open: '[', arg: true }); afterCommand = false; continue }
-    if (c === ']') { if (groups.at(-1)?.open === '[') groups.pop(); afterCommand = true; continue }
-    // (a command's star, as LaTeX's \\@ifstar reads it, spaces before it: the argument after it is the command's still)
-    if (c === '*' && afterCommand) continue
-    if (c !== '\\') { if (!/\s/.test(c)) afterCommand = false; continue }
+    if (c === '%') { i = skipComment(text, i); continue }
+    if (/\s/.test(c)) continue
+    if (c === '{') { groups.push({ open: '{', arg: defining || !plain() }); defining = false; prev = 'other'; continue }
+    if (c === '}') { while (groups.length && groups.pop().open !== '{'); prev = 'other'; continue }
+    if (c === '[') { if (prev === 'other') groups.push({ open: '[', arg: true }); prev = 'other'; continue }
+    if (c === ']') { if (groups.at(-1)?.open === '[') groups.pop(); prev = 'other'; continue }
+    if (c === '#') { i++; prev = 'other'; continue }
+    if (c === '$') { prev = 'shift'; continue }
+    if (c !== '\\') {
+      if (ORDINARY.test(c)) { if (prev !== 'text') { runAfter = prev; run = 0 } run++; prev = 'text' } else prev = 'other'
+      continue
+    }
+    prev = 'other'
     const m = /^\\(?:([A-Za-z@]+)|[\s\S])/.exec(text.slice(i, i + 64))
     const name = m?.[1] ?? null
-    if (!m || !name) { i += m ? m[0].length - 1 : 0; afterCommand = false; continue }
+    if (!m || !name) { i += m ? m[0].length - 1 : 0; continue }
     const at = i + m[0].length
     // (a \\def's body is read as tokens where it is defined, whatever its parameter text: the first group after its name)
     if (TEX_DEFS.test(name)) defining = true
-    if (name === 'verb') { const d = text[at]; const e = d ? text.indexOf(d, at + 1) : -1; i = e < 0 ? at : e; afterCommand = false; continue }
+    if (name === 'verb') { const d = text[at]; const e = d ? text.indexOf(d, at + 1) : -1; i = e < 0 ? at : e; continue }
     if (name === 'begin' || name === 'end') {
       const env = /^\s*\{([^{}]*)\}/.exec(text.slice(at, at + 64))
       if (env && VERBATIM_BODY.test(env[1].trim()) && name === 'begin') {
         const close = text.indexOf(`\\end{${env[1].trim()}}`, at)
-        i = close < 0 ? n : close + 5 + env[1].trim().length + 1; afterCommand = false; continue
+        i = close < 0 ? n : close + 5 + env[1].trim().length + 1; continue
       }
       if (env && COLLECTED_BODY.test(env[1].trim())) collected = Math.max(0, collected + (name === 'begin' ? 1 : -1))
-      if (env) { i = at + env[0].length - 1; afterCommand = true; continue }
+      if (env) { i = at + env[0].length - 1; continue }
     }
-    if (URL_READERS.has(name) && !collected && !groups.some(g => g.arg)) {
+    if (URL_READERS.has(name) && !collected && !defining && !groups.some(g => g.arg)) {
       let k = at
       while (text[k] === ' ' || text[k] === '\t' || text[k] === '\n') k++
       if (name === 'href' && text[k] === '[') { const e = matchGroup(text, k, '[', ']'); if (e > 0) { k = e; while (text[k] === ' ' || text[k] === '\t' || text[k] === '\n') k++ } }
@@ -499,14 +512,17 @@ export function urlPercents(text) {
           // (read as the boundary is: a `\` and the character after it a pair, so that `\%` is the command \% and `\\%` a
           // backslash pair and then the character)
           for (let j = k; j < e; j++) { if (text[j] === '\\') { j++; continue } if (text[j] === '%') { out[j] = LITERAL_PERCENT; changed = true } }
-          i = e - 1; afterCommand = true; continue
+          i = e - 1; continue
         }
       }
     }
-    i = at - 1; afterCommand = true
+    i = at - 1
   }
   return changed ? out.join('') : text
 }
+/** ordinary text before a group (urlPercents): a letter, a digit or a sentence's punctuation, which no command reads as the
+ *  start of its argument */
+const ORDINARY = /[\p{L}\p{N}.,;:!?]/u
 /** the primitives whose body after the parameter text is read as tokens where the definition stands (urlPercents) */
 const TEX_DEFS = /^[gex]?def$/
 /** what urlPercents writes a `%` TeX reads as a character as: a code no TeX source holds */
@@ -1966,15 +1982,22 @@ function walk(s, from, to, b, ctx) {
   endText()
 }
 
-/** the paper's macros of no argument whose body ends a table's row (ROW_END), by name: `\\newcommand{\\x}{…}`, `\\def\\x{…}` and
- *  their kin, in any of the package's files, none defined otherwise too */
+/** the paper's macros of no argument whose body ends a table's row (ROW_END), by name: a name every definition of which, in any of
+ *  the package's files and in any form, takes no parameter and has such a body — `\\newcommand{\\x}{…}`, \\renewcommand,
+ *  \\providecommand, \\DeclareRobustCommand (starred or not, no `[n]` after the name), `\\def\\x{…}`, \\gdef, \\edef, \\xdef (no
+ *  parameter text). A name also defined otherwise — with parameters (`\\renewcommand{\\x}[1]{…}`, `\\def\\x#1{…}`), by \\let, by
+ *  xparse's commands, or with another body — is none (the review of #501's fix round: a row end later redefined with an argument
+ *  split its cell) */
 function rowEndsOf(texts) {
   const out = new Set(), other = new Set()
+  const DEFINITION = /\\(?:(?:(?:re)?newcommand|providecommand|DeclareRobustCommand)\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))|[egx]?def\s*\\([A-Za-z@]+)|let\s*\\([A-Za-z@]+)|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+)))/g
   for (const t of texts.map(uncommented)) {
-    for (const m of t.matchAll(/\\(?:(?:(?:re)?newcommand|providecommand|DeclareRobustCommand)\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))|[egx]?def\s*\\([A-Za-z@]+))\s*(?=\{)/g)) {
-      const name = m[1] ?? m[2] ?? m[3], k = m.index + m[0].length, e = matchGroup(t, k)
-      if (e < 0) continue
-      if (ROW_END.test(t.slice(k + 1, e - 1).trim())) out.add(name); else other.add(name)
+    for (const m of t.matchAll(DEFINITION)) {
+      if (m.index > 0 && t[m.index - 1] === '\\') continue
+      const [, nc, nb, nd, nl, nx, ny] = m, name = nc ?? nb ?? nd ?? nl ?? nx ?? ny, k = skipSpaces(t, m.index + m[0].length)
+      // (a definition of no parameter: its body's group right after the name, white space between; any other form is none)
+      const e = (nc ?? nb ?? nd) && t[k] === '{' ? matchGroup(t, k) : -1
+      if (e > 0 && ROW_END.test(t.slice(k + 1, e - 1).trim())) out.add(name); else other.add(name)
     }
   }
   for (const n of other) out.delete(n)

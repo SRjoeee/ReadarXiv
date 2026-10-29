@@ -2223,8 +2223,14 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
 - **What a command reads past its arguments, as TeX reads it** (PIPELINE 33, `source/latex-front.mjs`). *A web address's `%`*
   (`urlPercents`): url.sty's `\url` and `\path`, hyperref's `\nolinkurl` and `\href`'s first argument (REVTeX's `.bbl`'s too:
   `\begingroup \@sanitize@url \@href`), breakurl's `\burl` read their argument with `%` a character, where TeX has not read those
-  characters already (inside another command's argument, an optional one or a `\def`'s body after its parameter text, or the
-  body of an environment that collects it: tabularx, amsmath's alignments, `%` is a comment there as anywhere). Read as a comment everywhere, the address's group never closed: the rest of
+  characters already (inside any command's argument, an optional one or a definition's body, or the body of an environment that
+  collects it: tabularx, amsmath's alignments, `%` is a comment there as anywhere). A group is read as an argument unless it is
+  proven plain: the last token before its `{`, white space and comments passed over, ordinary text (letters, digits, a
+  sentence's punctuation; more than one character of it after a command, a close or a parameter: `\foo a{…}` may be two
+  arguments), a math shift, or the file's start; never a control sequence, `*`, `]`, `}`, `{`, `#n` or a definition's
+  parameter text (the reviews of #501 found one shape after another where a group was taken for plain — an optional
+  argument, a star, `#1`, a comment between a command and its group —, so the default was turned: where it is not proven,
+  the `%` stays a comment, as before PIPELINE 33). Read as a comment everywhere, the address's group never closed: the rest of
   its line was in no unit (`\url{https://a.com/x%3Fy} and more text`), and in a `.bbl` every entry after it read as one
   (2610.21770v1's `?urlappend=%3Fref%3DPDF`, 18 entries; an MNRAS `.bbl`'s ADS links, `2017A%26A...`, 31 of 2608.18626's
   entries each read from the `\bibitem` of the entry after it, the line of `%26` lost). The walk reads each file with such a `%` written as a code no source holds, the same length, so that
@@ -2232,8 +2238,10 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   units take their `%` back, and the file's own text is what is written around them. *An inline TikZ picture* (`tikzCallEnd`):
   `\tikz[options]{…}`, or `\tikz[options]` and one path to its `;` outside every group, within its paragraph, one placeholder
   (2010.11929v2's `\tikz\fill[natural] (0,0) circle (.5ex);` was `\tikz`, `\fill` and the path's syntax sent as text). *A
-  paper's macro that ends a table's row* (`rowEndsOf`): one of no argument whose body is `\\` (starred, with its space),
-  `\tabularnewline` or `\cr`, and rules after it, ends the row in a cell as `\\` does, and in the table's grid
+  paper's macro that ends a table's row* (`rowEndsOf`): one every definition of which, in any of the package's files and any
+  form (`\newcommand`, `\renewcommand`, `\providecommand`, `\DeclareRobustCommand`, `\def` and its kin), takes no parameter and
+  has a body that is `\\` (starred, with its space), `\tabularnewline` or `\cr`, and rules after it — none also defined with
+  parameters, by `\let` or by xparse —, ends the row in a cell as `\\` does, and in the table's grid
   (`tableGrid`, its cells' rows and columns, which the table groups read) (2610.21924v1's
   `\newcommand{\tightrow}{\\[-4pt]}`: the next row's first cell ran on in the cell it ended, 30 cells). *An author block's rows
   inside a conditional* (`frontEnds`): no row is cut inside an `\if…\fi`, TeX's or the paper's `\newif`, so that a conditional's
