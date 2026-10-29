@@ -25,7 +25,7 @@ import { createReaderView, type DocumentTask, type ReaderView, type ViewPrefs } 
 import { paperOf, READER_API, readerAddresses } from '../addresses'
 import { fromView, type Session } from '../controller'
 import { ASSETS, EventBus, LinkTarget, PDFLinkService, PDFPageView, PDFViewer, pdfjsLib, TextLayerBuilder } from '../pdfjs'
-import { displayOf, firstConfig, followOf, withDisplay } from '../settings'
+import { displayOf, firstConfig, followOf, sameClasses, withDisplay } from '../settings'
 import { linkNameOf } from '../ui/link-names'
 import { shownAgain, whenVisible } from '../visible'
 import type { EngineDisplay, SessionHost, SyncMode } from './events'
@@ -175,8 +175,8 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
       pdfjs: pdfjsLib,
       hidden: { now: () => document.visibilityState === 'hidden', shown: signal => shownAgain(document, signal) },
       readingPage: () => readingPage,
-      // (the figures' text: the reader's figure switch, which the HTML page's figure text shares)
-      figures: () => config.image.enabled,
+      // (what to translate: the content classes shown translated, the reader's own setting)
+      classes: () => config.pdfReader.classes,
       mayPrepare: () => { if (prepareAsked) return false; prepareAsked = true; return true },
       prepareUnsent: () => { prepareAsked = false },
       emit(e) {
@@ -223,8 +223,9 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
     if (follow.retry) void writes.then(() => run?.retry())
     if (follow.display && !(late && chosen.display)) { view.setDisplay(follow.display); mode = follow.display; wantTranslation() }
     if (follow.sync && !(late && chosen.sync)) view.setSync(follow.sync !== 'off')
-    // the figures' text shown translated or not as the figure switch lands, from here or elsewhere: in place, nothing translated again
-    if (next.image.enabled !== prev.image.enabled) run?.setFigures(next.image.enabled)
+    // the content classes shown translated or not as "What to translate" lands, from here or elsewhere (the reading options, the
+    // settings page): in place, nothing fetched or translated again
+    if (!sameClasses(next.pdfReader.classes, prev.pdfReader.classes)) run?.setClasses(next.pdfReader.classes)
   }
 
   // ---------------------------------------------------------------- the page's end
@@ -246,10 +247,6 @@ export async function openReader(host: SessionHost, io: ReaderIo = {}): Promise<
       view.setSync(m !== 'off')
       if (m === 'same' || m === 'off') save(c => ({ ...c, pdfReader: { ...c.pdfReader, sync: m === 'same' } }))
     },
-    // figure text is a question of the layer's units, which the run translates as they come whatever the switch (Stage 5 K8): the
-    // switch shows the figures' text translated or not, in place (the content class `figures`), and is the HTML page's figure
-    // text's too
-    setFigures: on => { save(c => ({ ...c, image: { ...c.image, enabled: on } })); run?.setFigures(on) },
     zoomBy: f => view.zoomBy(f),
     zoomTo: z => view.zoomTo(z),
     goToPage: (side, n) => view.goToPage(side, n),

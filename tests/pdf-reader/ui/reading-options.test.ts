@@ -27,7 +27,8 @@ describe('the reading options (the reader\'s design, §6.1)', () => {
     const { container } = await open()
     expect(container.querySelector('[popover="auto"]')!.getAttribute('role')).toBe('dialog')
     const switches = [...container.querySelectorAll('[role="switch"]')].map(s => [s.getAttribute('aria-label'), s.getAttribute('aria-checked')])
-    expect(switches).toEqual([['对照高亮', 'true'], ['图片翻译', 'true'], ['深色时调暗页面', 'true']])
+    // what to translate in the place figure text had (S-R-27): the owner's rows in the owner's order, figures, tables and heads on
+    expect(switches).toEqual([['对照高亮', 'true'], ['图中文字', 'true'], ['表中文字', 'true'], ['页眉页脚', 'true'], ['参考文献', 'false'], ['作者姓名', 'false'], ['深色时调暗页面', 'true']])
     expect(container.querySelectorAll('[data-swatch]').length).toBe(DEFAULT_CONFIG.appearance.highlights.length)
     // the appearance: the system's first, as icons named by their words, as the display switch is (the maintainer, 2026-09-26)
     expect([...container.querySelectorAll('[role="radio"]')].map(r => [r.getAttribute('aria-label'), r.getAttribute('aria-checked'), !!r.querySelector('svg'), r.textContent])).toEqual([['跟随系统', 'true', true, ''], ['浅色', 'false', true, ''], ['深色', 'false', true, '']])
@@ -66,8 +67,10 @@ describe('the reading options (the reader\'s design, §6.1)', () => {
     const { container, written } = await open()
     container.querySelector<HTMLElement>('[role="switch"][aria-label="对照高亮"]')!.click()
     expect(written().reading.sentenceHighlight).toBe(false)
-    container.querySelector<HTMLElement>('[role="switch"][aria-label="图片翻译"]')!.click()
-    expect(written().image.enabled).toBe(false)
+    container.querySelector<HTMLElement>(`[role="switch"][aria-label="${R.classes.names}"]`)!.click()
+    // one toggle of what to translate, the others and the HTML page's figure text as they were
+    expect(written().pdfReader.classes).toEqual({ ...DEFAULT_CONFIG.pdfReader.classes, names: true })
+    expect(written().image).toEqual(DEFAULT_CONFIG.image)
     const swatches = [...container.querySelectorAll<HTMLElement>('[data-swatch]')]
     swatches[1]!.click()
     expect(written().appearance.activeHighlight).toBe(DEFAULT_CONFIG.appearance.highlights[1]!.id)
@@ -90,8 +93,8 @@ describe('the reading options (the reader\'s design, §6.1)', () => {
       const { container, controller } = await mountWith({ settingsUnreadable: true })
       expect(container.querySelector('button[popovertarget]')).not.toBeNull()
       const found = controls(container)
-      // three switches, the swatches, three appearances: each greyed, and none a button the browser disables (it would take its tooltip away)
-      expect(found.length).toBe(3 + DEFAULT_CONFIG.appearance.highlights.length + 3)
+      // seven switches, the swatches, three appearances: each greyed, and none a button the browser disables (it would take its tooltip away)
+      expect(found.length).toBe(7 + DEFAULT_CONFIG.appearance.highlights.length + 3)
       for (const el of found) expect([el.getAttribute('aria-disabled'), el.hasAttribute('disabled')], el.getAttribute('aria-label') ?? '').toEqual(['true', false])
       for (const el of found) el.click()
       container.querySelector<HTMLElement>('label.row')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
@@ -105,7 +108,7 @@ describe('the reading options (the reader\'s design, §6.1)', () => {
     it('before the settings land the same controls stand in their places, greyed, and tell no reason; once they land they write', async () => {
       const { container, controller, set } = await mountWith({ settings: null })
       const found = controls(container)
-      expect(found.length).toBe(3 + DEFAULT_CONFIG.appearance.highlights.length + 3)
+      expect(found.length).toBe(7 + DEFAULT_CONFIG.appearance.highlights.length + 3)
       for (const el of found) expect([el.getAttribute('aria-disabled'), el.nextElementSibling?.textContent?.includes(R.status.unreadableHint) ?? false]).toEqual(['true', false])
       await act(async () => set({ settings: DEFAULT_CONFIG }))
       for (const el of controls(container)) expect(el.hasAttribute('aria-disabled'), el.getAttribute('aria-label') ?? '').toBe(false)
@@ -116,7 +119,7 @@ describe('the reading options (the reader\'s design, §6.1)', () => {
 
   it('a switch\'s row is its target, words and all, as the popup\'s are: a press on the words turns it (#299, Part 6\'s interface review)', async () => {
     const { container, controller, written } = await open()
-    for (const [words, read] of [[S.rows.highlight, (c: Config) => c.reading.sentenceHighlight], [S.rows.images, (c: Config) => c.image.enabled], [R.options.dim, (c: Config) => c.pdfReader.dimPages]] as const) {
+    for (const [words, read] of [[S.rows.highlight, (c: Config) => c.reading.sentenceHighlight], [R.classes.figures, (c: Config) => c.pdfReader.classes.figures], [R.classes.heads, (c: Config) => c.pdfReader.classes.heads], [R.options.dim, (c: Config) => c.pdfReader.dimPages]] as const) {
       const row = [...container.querySelectorAll<HTMLElement>('.row')].find(r => r.textContent === words && r.querySelector('[role="switch"]'))!
       expect(row.tagName).toBe('LABEL')
       const before = controller.patchSettings.mock.calls.length
@@ -125,5 +128,14 @@ describe('the reading options (the reader\'s design, §6.1)', () => {
       expect(controller.patchSettings.mock.calls.length).toBe(before + 1)
       expect(read(written())).toBe(false)
     }
+  })
+
+  it('names its group of what to translate by the heading row above it, in the second ink, as the website\'s reading options do (S-R-27)', async () => {
+    const { container } = await open()
+    const group = container.querySelector<HTMLElement>('[data-axt-classes]')!
+    expect(group.getAttribute('role')).toBe('group')
+    const head = document.getElementById(group.getAttribute('aria-labelledby')!)!
+    expect([head.textContent, head.classList.contains('row'), head.classList.contains('text-ink-2'), group.firstElementChild === head]).toEqual([R.classes.name, true, true, true])
+    expect([...group.querySelectorAll('[data-axt-class]')].map(r => r.getAttribute('data-axt-class'))).toEqual(['figures', 'tables', 'heads', 'references', 'names'])
   })
 })

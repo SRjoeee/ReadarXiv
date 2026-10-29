@@ -160,6 +160,7 @@ const O = {
       'reading/open-in': '标签页 打开 tab',
       'reading/floating': '悬浮 按钮 贴边',
       'reading/pdf': 'PDF 阅读器 查看器',
+      'reading/classes': '翻译范围 PDF 对照 图 表格 页眉 页脚 参考文献 作者 姓名',
       'data/cache': '缓存 清空 存储',
       'data/diagnostics': '日志 反馈 导出',
       'language/ui': 'language Interface 语言 界面',
@@ -317,6 +318,8 @@ const O = {
     pdfEnabled: '在 arXiv 的 PDF 上使用对照阅读器',
     pdfEnabledHint: '关掉后，PDF 用浏览器自带的查看器打开',
     syncHint: '原文和译文一起滚',
+    /** S-O-56: the PDF reader's "What to translate", its heading's aside (the group's name and rows are the reader's, R.classes) */
+    classesAside: '只对 PDF 对照生效',
     /** The names of the profiles shipped with the extension (`BUILT_IN_STYLES` / `BUILT_IN_HIGHLIGHTS`): they are ours,
      *  not the reader's writing, so they follow the interface language; once the reader renames one, the reader's name shows */
     builtInStyles: { follow: '与原文相同', green: '绿色', blue: '蓝色', amber: '琥珀', muted: '淡一档', blur: '模糊' },
@@ -377,7 +380,7 @@ const O = {
 /**
  * The PDF reader's words (the reader's design §15; docs/UI.md §3.5, S-R). Where the popup says the same thing the
  * reader takes the popup's string (S), so the two never drift apart: the service and language rows, the language
- * search, 对照高亮, 图片翻译, 设置, the failures' count and 重试, the reasons
+ * search, 对照高亮, 设置, the failures' count and 重试, the reasons
  */
 const R = {
   contents: '目录', // S-R-02
@@ -387,6 +390,9 @@ const R = {
   sync: '同步滚动', // S-R-06
   zoom: { out: '缩小', in: '放大', value: '缩放比例', width: '适合宽度', page: '适合页面', actual: '实际大小' }, // S-R-07
   options: { name: '阅读选项', color: '高亮颜色', appearance: '外观', light: '浅色', dark: '深色', system: '跟随系统', dim: '深色时调暗页面' }, // S-R-08
+  // S-R-27 (the owner's words, 2026-10-25): the reading options' "What to translate", its heading and its rows in the order they are
+  // listed; the settings page's group too (S-O-56)
+  classes: { name: '翻译范围', figures: '图中文字', tables: '表中文字', heads: '页眉页脚', references: '参考文献', names: '作者姓名' },
   download: { name: '下载', translation: '译文 PDF', original: '原文 PDF' }, // S-R-09
   leave: '在默认查看器中打开', // S-R-10
   pill: { original: '原文页码', translation: '译文页码', previous: '上一页', next: '下一页' }, // S-R-11

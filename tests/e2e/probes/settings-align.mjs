@@ -293,7 +293,7 @@ const off = []
 for (const lang of ['zh-CN', 'en']) {
   for (const theme of ['light', 'dark']) {
     const tag = `${lang}-${theme}`
-    await seed({ theme, uiLanguage: lang, services: SERVICES, provider: 'microsoft', prompts: PROMPTS, glossary: GLOSSARY, pdfReader: { enabled: true, original: false, sync: true, swapped: false, dimPages: true } })
+    await seed({ theme, uiLanguage: lang, services: SERVICES, provider: 'microsoft', prompts: PROMPTS, glossary: GLOSSARY, pdfReader: { enabled: true, original: false, sync: true, swapped: false, dimPages: true, classes: { figures: true, tables: true, heads: true, references: false, names: false } } })
     const page = await context.newPage()
     await page.setViewportSize({ width: 1300, height: 1100 })
     // a load of its own each time: a URL that differs only in its hash would stay the same document, the settings
