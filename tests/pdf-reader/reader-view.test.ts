@@ -715,6 +715,10 @@ describe('V11: the places before a layer', () => {
     await s.clock.advance(AHEAD_HOLD_MS)
     await flush(20)
     expect(drawsOf(2)).toBe(1)
+    // another document set: its pages ahead wait again (local Codex review)
+    internalsOf(s.view).places.letAheadGo()
+    await opened(s, 6)
+    expect(internalsOf(s.view).places.aheadHeld()).toBe(true)
   })
 
   it('a link out of the paper, on either pane, goes out through the host alone', async () => {

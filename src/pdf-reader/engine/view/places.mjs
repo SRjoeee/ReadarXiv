@@ -93,9 +93,15 @@ export function createPlaces(o) {
   /** the page views to draw, one at a time (PDF.js's own viewer draws one page at a time) */
   const queue = []
   let drawing = null
-  /** whether the places near the view but not in it wait (letAheadGo, or AHEAD_HOLD_MS) */
+  /** whether the places near the view but not in it wait (letAheadGo, or AHEAD_HOLD_MS): held again for each document set
+   *  (another paper's layer has its own first page) */
   let held = true
-  const aheadTimer = clock.later(() => letAheadGo(), AHEAD_HOLD_MS)
+  let aheadTimer = clock.later(() => letAheadGo(), AHEAD_HOLD_MS)
+  function holdAhead() {
+    clock.clear(aheadTimer)
+    held = true
+    aheadTimer = clock.later(() => letAheadGo(), AHEAD_HOLD_MS)
+  }
   function letAheadGo() {
     if (!held) return
     held = false
@@ -320,6 +326,8 @@ export function createPlaces(o) {
     setDocument(next) {
       if (disposed) return
       for (const p of list) releaseView(p)
+      // (another document: its pages ahead wait for its layer's first page, or the bound, again)
+      if (next && next !== doc) holdAhead()
       doc = next
       for (const p of list) if (p.near && !p.side) show(p)
     },
