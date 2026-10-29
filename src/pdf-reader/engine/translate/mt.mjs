@@ -157,8 +157,9 @@ function treeOf(pieces) {
  *   head, white space alone between them (2610.19159's `\textcolor{c}{\bfseries w}` round every word) —, then on
  *   markers: around the whole translation where it holds all the unit's content (`enclose`, the unit's style); kept,
  *   two markers, where it is a link or holds whole sentences, beginning where one begins and ending where one ends
- *   (`kept`: a run-in label `\textbf{Setup:}`, at the unit's head or where a sentence begins past it, a styled sentence — Microsoft's sentence lengths are the one alignment the
- *   endpoint gives, and a marker between two sentences cuts none); else no marker (`flat`): its words are the
+ *   (`kept`: a run-in label `\textbf{Setup:}` at the unit's head or where a sentence begins past it, a styled sentence —
+ *   Microsoft's sentence lengths are the one alignment the endpoint gives, and a marker between two sentences cuts
+ *   none); else no marker (`flat`): its words are the
  *   sentence's, its open and close come back together, empty, before the close of its innermost kept group (the unit's
  *   back), and its attribute is lost. Microsoft read each marker as a hard boundary and gave back each piece of a
  *   sentence apart, word salad (2610.19159's units 23 and 375, the owner's test of 2026-10-19). On tags every pair with
