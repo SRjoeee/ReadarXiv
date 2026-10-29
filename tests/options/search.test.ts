@@ -32,7 +32,7 @@ import { Reading } from '@/entrypoints/options/sections/Reading'
 import { Translate } from '@/entrypoints/options/sections/Translate'
 import { Card } from '@/entrypoints/options/ui/Card'
 import { Row } from '@/entrypoints/options/ui/Row'
-import { O, setLocale } from '@/ui/strings'
+import { O, R, setLocale } from '@/ui/strings'
 
 // the reading section's floating-button switch reads its own store, and the translation section the refused-key record
 vi.mock('@/entrypoints/options/floating-entry', () => ({ useFloatingEntry: () => ({ enabled: true, setEnabled: () => {} }) }))
@@ -98,7 +98,7 @@ describe('the search over the sections (Part 7\'s final review)', () => {
     await m.unmount()
   })
 
-  it('each group heading\'s words find its rows: the services, the styles, the LLM\'s prompts and glossary, the PDF reader — in both languages (B-M1)', async () => {
+  it('each group heading\'s words find its rows: the services, the styles, the LLM\'s prompts and glossary, the PDF reader, what it translates — in both languages (B-M1)', async () => {
     const whole = { translate: (d: OptionsData) => h(Translate, { data: d }), appearance: CONTENT.appearance, reading: (d: OptionsData) => h(Reading, { data: d }), data: CONTENT.data }
     for (const lang of ['zh-CN', 'en'] as const) {
       setLocale(lang)
@@ -117,7 +117,7 @@ describe('the search over the sections (Part 7\'s final review)', () => {
           groups.push([heading.querySelector('h2')!.textContent!, [...card.querySelectorAll<HTMLElement>('[data-srow]:not([data-quiet])')].map(r => r.dataset.search!)])
         }
       }
-      expect(groups.map(([title]) => title), lang).toEqual([O.services.title, 'LLM', O.appearance.styles, O.reading.pdf])
+      expect(groups.map(([title]) => title), lang).toEqual([O.services.title, 'LLM', O.appearance.styles, O.reading.pdf, R.classes.name])
       for (const [title, rows] of groups) {
         type(field, title)
         await m.flush()

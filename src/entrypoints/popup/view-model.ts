@@ -128,6 +128,11 @@ export interface PopupView {
   style: Row | null
   highlight: boolean
   images: boolean
+  /**
+   * The image switch greyed where it changes nothing: the reader, whose figure text is its own "What to translate"
+   * (S-R-27), as the style button is greyed there (S-P-03c); its value the HTML page's, as stored
+   */
+  imagesGreyed: boolean
   /** Every menu the view offers, drawn whether open or not; null before the settings are read */
   menus: { service: MenuView; language: MenuView; prompt: MenuView | null; style: MenuView | null } | null
   /** Which of them is open: the popup's own state, where the view has that menu */
@@ -161,6 +166,7 @@ const blank = (kind: PopupView['kind']): PopupView => ({
   style: null,
   highlight: true,
   images: true,
+  imagesGreyed: false,
   menus: null,
   menu: null,
   note: null,
@@ -311,6 +317,7 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
     style: null,
     highlight: config.reading.sentenceHighlight,
     images: config.image.enabled,
+    imagesGreyed: false,
     menus,
     menu: openOf(input.menu, menus),
     // The service's note first: it is why both entries are greyed, or who takes over. Then the HTML version's, which
@@ -333,7 +340,7 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
  * settings alone, which the reader follows. The rows are the ordinary ones, the language menu holds the nine the reader
  * typesets, stacked is greyed (a stored stacked shows as side by side, what the reader shows), the primary shows the
  * original or the translation, and there is no style to choose: styles do nothing on a typeset PDF (the foot greys its
- * button)
+ * button). The image switch is greyed too: it is the HTML page's, and the reader's figure text is its own setting
  */
 function readerView(entry: EntryStatus, config: Config, input: PopupInput): PopupView {
   const base = entryView(entry, config, input)
@@ -343,6 +350,8 @@ function readerView(entry: EntryStatus, config: Config, input: PopupInput): Popu
   return {
     ...base,
     kind: 'reader',
+    // the HTML page's figure text changes nothing here: the reader's own is its "What to translate" (S-R-27)
+    imagesGreyed: true,
     menus,
     menu: openOf(input.menu, menus),
     // the note of a service that cannot run; the HTML version's is not this page's matter
@@ -486,6 +495,7 @@ export function derivePopupView(input: PopupInput): PopupView {
     style,
     highlight: config.reading.sentenceHighlight,
     images: config.image.enabled,
+    imagesGreyed: false,
     menus,
     menu: openOf(input.menu, menus),
     note,

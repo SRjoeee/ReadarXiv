@@ -135,11 +135,17 @@ describe('the popup drawn (the redesign\'s design, §5)', () => {
     expect([actions.downloadPack.mock.calls.length, actions.chooseService.mock.calls.length]).toEqual([2, 0])
   })
 
-  it('PR: stacked greyed, the switches kept, the style button in its place greyed: it opens nothing and says no reason (§5.2; the maintainer, 2026-09-28)', async () => {
+  it('PR: stacked greyed, the switches kept, the image switch and the style button in their places greyed: they change nothing and say no reason (§5.2; the maintainer, 2026-09-28)', async () => {
     const { main, actions } = await draw('PR')
     const stack = [...main.querySelectorAll('[role="radio"]')].find(r => wordsOf(r) === S.mode.stack)!
     expect(stack.getAttribute('aria-disabled')).toBe('true')
     expect(main.querySelectorAll('.foot [role="switch"]').length).toBe(2)
+    // the highlight as elsewhere; the image switch, the HTML page's, greyed with its words: the reader's figure text is its own
+    // setting (S-R-27). Pressed, words or switch, it writes nothing
+    const [highlight, images] = [...main.querySelectorAll<HTMLElement>('.foot [role="switch"]')]
+    expect([highlight!.hasAttribute('aria-disabled'), images!.getAttribute('aria-disabled'), images!.closest('.toggle')!.hasAttribute('data-greyed'), images!.hasAttribute('aria-description')]).toEqual([false, 'true', true, false])
+    await act(async () => { images!.click(); images!.closest<HTMLElement>('.toggle')!.click() })
+    expect(actions.setImages).not.toHaveBeenCalled()
     // the foot as every page's: the two switches, then the style button with its words and its chevron
     const foot = main.querySelector('.foot')!
     expect([foot.className, ...[...foot.children].map(c => c.className)]).toEqual(['foot', 'toggle', 'toggle', 'tbtn style-btn'])
