@@ -71,4 +71,8 @@
 //    sent "Center:" and "Right:" with no marker, their bold back empty at the unit's end (the owner's report of 2026-10-29 on
 //    staging). Microsoft's and Google's Chinese kept every such label's markers around its own words, 27 of 27 over the 54 sweep
 //    papers' 16 units it changes (2026-10-29). Every other unit is sent as 7 sends it, byte for byte
-export const TRANSLATE_VERSION = '8'
+// 9: a caption is cut into sentences on the tags wire as a paragraph is (mt.mjs translateUnits by view/highlight.mjs bySentence),
+//    where it went whole: captions correspond sentence by sentence on every engine, as body units do (the owner's ruling of
+//    2026-10-30, docs/PDF-READER.md §17.1). Over 3 358 units of twelve papers the cuts change for their 135 captions alone, and
+//    the markers wire is 8's byte for byte, every unit's (2026-10-30)
+export const TRANSLATE_VERSION = '9'
