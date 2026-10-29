@@ -3,6 +3,8 @@
 // unit by id (bundleUnitsOf, the writer's); a reader checks one unit at a time (unitStands) and drops one that does not stand.
 // Imports the layout's parsers alone, never the run, the remover nor the front end: a reader loads it.
 import { isInteger, isObject, LayoutRefusal, STRING_MAX } from '../layout/json.mjs'
+import { OCR_KIND } from '../rules/content-classes.mjs'
+import { placeStands } from './ocr-rows.mjs'
 
 /** a unit's flags: the paper's title, the front matter, written back in the source's brackets, kept as it is (a name,
  *  live.mjs openPaper's `kept`) */
@@ -141,12 +143,17 @@ export function inkBundleUnitsOf(ink) {
   return ink.map(u => [u.kind, 0, null, null, null, u.pieces.map(p => pieceOf(p, new Map())), u.echo ?? null])
 }
 
+/** a bitmap figure's label as the bundle holds it (PDF-READER §19.15): [inkocr, flags, null, null, null, [its text], null, place],
+ *  its text the engine's (its UTF-8 bytes read latin1), `flags` KEPT where it is only names */
+export const ocrBundleUnit = (text, flags, place) => [OCR_KIND, flags, null, null, null, [[TEXT, engineText(text)]], null, place]
+
 // ---------------------------------------------------------------- the reader's
 const isText = s => typeof s === 'string' && s.length <= STRING_MAX
 
 /**
  * Whether unit `u` (the file's `units[i]`) stands: its shape [kind, flags, depth, cell, edges, pieces] (and, with `ink`, an ink
- * unit's [..., echo]: its kind an ink kind, its echo null or an earlier unit that stands), its kind a
+ * unit's [..., echo]: its kind an ink kind, its echo null or an earlier unit that stands; a bitmap figure's label's [..., null,
+ * place], ocr-rows.mjs, of kind `inkocr` alone), its kind a
  * lower-case word, every string within STRING_MAX, each piece one of the six of its tag's shape; a nested piece's unit
  * one before it that stands (`stands`), so that no unit nests itself. A group's open and close are not paired: the front
  * end makes an open with no close (`\multirow{`, whose close the next cell holds) and a close with no open before it (a
@@ -154,11 +161,14 @@ const isText = s => typeof s === 'string' && s.length <= STRING_MAX
  * takes either alone (mt.mjs serialize)
  */
 export function unitStands(u, i, stands, { ink = false } = {}) {
-  if (!Array.isArray(u) || !(u.length === 6 || (ink && u.length === 7))) return false
+  if (!Array.isArray(u) || !(u.length === 6 || (ink && (u.length === 7 || u.length === 8)))) return false
   const kind = u[0], flags = u[1], depth = u[2], cell = u[3], edges = u[4], pieces = u[5]
   if (typeof kind !== 'string' || kind.length > 32 || !KIND.test(kind)) return false
   // (an ink unit, of a chunk of INK_UNITS_FORMAT alone: its kind an ink kind, its echo null or a unit before it that stands)
-  if (u.length === 7 && !(INK_KIND.test(kind) && (u[6] === null || (isInteger(u[6], 0, i - 1) && stands[u[6]] === 1)))) return false
+  if (u.length >= 7 && !(INK_KIND.test(kind) && (u[6] === null || (isInteger(u[6], 0, i - 1) && stands[u[6]] === 1)))) return false
+  // (a bitmap figure's label, and it alone, carries its place after its echo, none: ocr-rows.mjs)
+  if ((u.length === 8) !== (kind === OCR_KIND)) return false
+  if (u.length === 8 && (u[6] !== null || !placeStands(u[7]))) return false
   if (!isInteger(flags, 0, FLAG_BITS)) return false
   if (depth !== null && !isInteger(depth, DEPTH_MIN, DEPTH_MAX)) return false
   if (cell !== null) {

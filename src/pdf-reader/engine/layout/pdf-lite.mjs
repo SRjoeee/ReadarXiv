@@ -33,6 +33,10 @@
 // once, before the first getDocument. A document whose pages' draw geometry is read (pipeline/draw-data.mjs) is opened with
 // `maxImageSize: LINK_TEXT_PIXELS` and `fontExtraProperties: true`: without the latter a font carries no ToUnicode map and every page
 // tells its draw as none (`why: 'props'`).
+// A third opt-in, `maxImageSize: OCR_IMAGE_PIXELS`, is the bitmap figures' pass's (pipeline/ocr-pass.mjs): no image decoded and
+// no link's overlaid text made, as NO_IMAGE_PIXELS, and each image's paint operator names the image's object (its id ends `~` and
+// PDF.js's ref of it, `img_p0_3~12R`: `imageRef` is buildPaintImageXObject's own, in scope at REF_ANCHOR), so that the pass reads the image
+// from the PDF's own object (pipeline/ocr-image.mjs), at the resolution it reads, keyed by its bytes.
 // Server-side only: the browser layer (the extension, run.mjs's rendering, copyOf) keeps stock
 // PDF.js, which has to decode the images it draws.
 //
@@ -52,27 +56,39 @@ export const NO_IMAGE_PIXELS = Number.MAX_SAFE_INTEGER
  *  limit" to a stock worker too */
 export const LINK_TEXT_PIXELS = Number.MAX_SAFE_INTEGER - 1
 
+/** `maxImageSize` for a document read for its images' objects (the bitmap figures' pass): no pixels, each image's paint operator
+ *  naming its object; "no limit" to a stock worker */
+export const OCR_IMAGE_PIXELS = Number.MAX_SAFE_INTEGER - 2
+
 /** the one line of buildPaintImageXObject that decodes an image's pixels, in the callback of the unawaited buildImage */
 const ANCHOR = 'imgData = await imageObj.createImageData(false, isOffscreenCanvasSupported);'
-const GUARD = `if (this.options.maxImageSize >= ${LINK_TEXT_PIXELS}) throw new Error("image pixels not decoded");\n      `
+const GUARD = `if (this.options.maxImageSize >= ${OCR_IMAGE_PIXELS}) throw new Error("image pixels not decoded");\n      `
+/** where buildPaintImageXObject names a decoded image's object id, before its paint operator takes it: the OCR opt-in folds the
+ *  image's ref into the id (`img_p0_3~12R`), so that a paint PDF.js merges into a repeat (paintImageXObjectRepeat, which keeps
+ *  the id alone) names its object too */
+const REF_ANCHOR = '    operatorList.addDependency(objId);\n    fn = OPS.paintImageXObject;\n    args = [objId, w, h];\n'
+const REF = `    if (this.options.maxImageSize === ${OCR_IMAGE_PIXELS}) objId = \`\${objId}~\${imageRef ?? ''}\`;\n`
 /** the one condition of Page.getAnnotationsData under which a Link annotation's overlaid text is made: the page's whole text
  *  extracted again, through an Intersector, for every page that holds a link. The server's readers (the marks read, the
  *  layout maker) take an annotation's rectangle and destination and find the glyphs under it themselves: for a document that
  *  opts in with NO_IMAGE_PIXELS, the condition is false and no text is extracted (`overlaidText` stays unset); the annotations are
  *  the same. LINK_TEXT_PIXELS leaves it as it stands */
 const TEXT_ANCHOR = '} else if (annotation.overlaysTextContent && isVisible) {'
-const TEXT_GUARD = `} else if (annotation.overlaysTextContent && isVisible && this.evaluatorOptions.maxImageSize !== ${NO_IMAGE_PIXELS}) {`
+const TEXT_GUARD = `} else if (annotation.overlaysTextContent && isVisible && this.evaluatorOptions.maxImageSize !== ${NO_IMAGE_PIXELS} && this.evaluatorOptions.maxImageSize !== ${OCR_IMAGE_PIXELS}) {`
 
 /**
- * The worker module's text with the guard before its image decode and the one on a link's overlaid text. `version`, where given,
- * is the PDF.js the text is of (the host's package.json) and must be LITE_PDFJS. Throws unless each anchor stands exactly once.
+ * The worker module's text with the guard before its image decode, the OCR opt-in's ref after a paint's arguments and the guard on
+ * a link's overlaid text. `version`, where given, is the PDF.js the text is of (the host's package.json) and must be LITE_PDFJS.
+ * Throws unless each anchor stands exactly once.
  */
 export function liteWorkerSource(source, { version } = {}) {
   if (typeof source !== 'string') throw new TypeError('source: the text of pdf.worker.mjs')
   if (version !== undefined && version !== LITE_PDFJS) throw new RangeError(`the image guard was made for PDF.js ${LITE_PDFJS}, not ${version}: check buildPaintImageXObject again (pdf-lite.mjs)`)
   const parts = source.split(ANCHOR)
   if (parts.length !== 2) throw new RangeError(`the worker holds the image decode ${parts.length - 1} times, not once: PDF.js changed, check buildPaintImageXObject again (pdf-lite.mjs)`)
-  const text = `${parts[0]}${GUARD}${ANCHOR}${parts[1]}`.split(TEXT_ANCHOR)
+  const before = parts[0].split(REF_ANCHOR)
+  if (before.length !== 2) throw new RangeError(`the worker holds an image paint's arguments ${before.length - 1} times, not once: PDF.js changed, check buildPaintImageXObject again (pdf-lite.mjs)`)
+  const text = `${before[0]}${REF}${REF_ANCHOR}${before[1]}${GUARD}${ANCHOR}${parts[1]}`.split(TEXT_ANCHOR)
   if (text.length !== 2) throw new RangeError(`the worker holds the overlaid text's condition ${text.length - 1} times, not once: PDF.js changed, check Page.getAnnotationsData again (pdf-lite.mjs)`)
   return `${text[0]}${TEXT_GUARD}${text[1]}`
 }

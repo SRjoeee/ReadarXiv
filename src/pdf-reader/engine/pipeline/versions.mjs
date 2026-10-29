@@ -1,7 +1,8 @@
 // The engine's versions a reader checks what it is given against, kept apart from the run (live.mjs, which re-exports
 // PIPELINE_VERSION) so that a reader loads no part of it: the layer bundle (layer-proto/bundle.mjs) names them in its
 // versions and its key. The layout file's (layout/file.mjs LAYOUT) stays beside its parser, which the readers load already.
-// Imports nothing.
+// Imports the recogniser's version alone (core/ocr/version.ts: a string, no recogniser).
+import { OCR_VERSION } from '../../../core/ocr/version.ts'
 
 /**
  * PIPELINE_VERSION, the extraction's: raised with any change to what a unit is — the units' cutting, kinds and texts
@@ -314,3 +315,10 @@ export const PDFJS = '6.3.289'
  * where a paper has such a pair
  */
 export const REMOVAL = '13'
+/**
+ * OCR, the recogniser the bitmap figures' labels were read with (PDF-READER §19.15, the head's `versions.ocr`, in the key: VTAG's
+ * `-o`): the extension's own version of it (core/ocr/version.ts OCR_VERSION: the model files, eSearch-OCR's version and anything
+ * of the shared recognise.ts and geometry.ts that changes what a figure is read as), written as a version token (its other
+ * characters points), so that a layer read by another recogniser is made again rather than found. Raised with OCR_VERSION alone
+ */
+export const OCR = OCR_VERSION.replace(/[^0-9A-Za-z.]/g, '.')

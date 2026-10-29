@@ -6,8 +6,15 @@
 // text without two consecutive letters (single-letter panel labels "B", "(a)", "E=+1") are not translated, and
 // low confidence is dropped — Apple Vision, which the rules were first set against, gave these 0.5 and real words almost all 1.0.
 // The rule parameters were set against the real coordinates in tests/fixtures/ocr/qed3d-string-breaking.json.
-import { isNumericCell } from '@/core/rules/latexml'
-import type { OcrLine, Quad } from '@/shared/ocr'
+// The PDF reader's engine reads it as its own (layout/bitmap-text.mjs: the same labels as the extension's): it names its one
+// module by relative path, and its lines by their shape (src/shared/ocr.ts OcrLine's), as scripts/check-boundary.mjs ENGINE_ALLOW asks
+import { isNumericCell } from '../rules/numeric.ts'
+
+type Corner = readonly [number, number]
+/** Normalised corners, top-left origin (src/shared/ocr.ts Quad) */
+type Quad = readonly [Corner, Corner, Corner, Corner]
+/** A recognised line, as src/shared/ocr.ts OcrLine has it: what is read of it here */
+interface OcrLine { text: string; quad: Quad; conf: number; angle?: number; len?: number; thick?: number }
 
 export interface Box {
   x: number
@@ -18,6 +25,11 @@ export interface Box {
   text: string
   /** How many lines were merged in; the font size is shared out by it */
   lines: number
+  /**
+   * The lines merged in, by their index in the lines given, in the order their text is joined: a reader that draws each
+   * line's own place (the PDF reader's layer, PDF-READER §19.15) finds them by it
+   */
+  members: number[]
   /**
    * A rotated label's own box (both as fractions of the image's **width**): `len` along the baseline, `thick` across
    * it. Only lines with an `angle` have it; the axis-aligned bounding box is both too large for a tilted label and
@@ -74,11 +86,12 @@ function adjacent(a: Box, b: { y: number; h: number }): boolean {
 export function linesToBoxes(lines: readonly OcrLine[], options: BoxOptions = {}): Box[] {
   const minConf = options.minConf ?? 0.3
   const kept = lines
-    .filter(line => line.conf >= minConf && isTranslatable(line.text))
-    .map(line => ({ ...quadBounds(line.quad), text: line.text.trim(), angle: line.angle, len: line.len, thick: line.thick }))
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => line.conf >= minConf && isTranslatable(line.text))
+    .map(({ line, index }) => ({ ...quadBounds(line.quad), text: line.text.trim(), angle: line.angle, len: line.len, thick: line.thick, index }))
     .sort((a, b) => a.y - b.y || a.x - b.x)
   const boxes: Box[] = []
-  for (const line of kept) {
+  for (const { index, ...line } of kept) {
     const host = line.angle ? undefined : boxes.find(box => !box.angle && adjacent(box, line) && aligned(box, line))
     if (host) {
       const right = Math.max(host.x + host.w, line.x + line.w)
@@ -89,8 +102,9 @@ export function linesToBoxes(lines: readonly OcrLine[], options: BoxOptions = {}
       host.h = bottom - host.y
       host.text = `${host.text} ${line.text}`
       host.lines++
+      host.members.push(index)
     } else {
-      boxes.push({ ...line, lines: 1 })
+      boxes.push({ ...line, lines: 1, members: [index] })
     }
   }
   return boxes

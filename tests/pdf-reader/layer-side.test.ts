@@ -4,7 +4,8 @@
 // the reading view's PDF.js stand-ins and a clock moved by hand (helpers/reader-fakes.ts). The real door's rows are
 // layer-side-door.test.ts's
 import { describe, expect, it, vi } from 'vitest'
-import { type Ref, writePart } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { chunkTotals, type Ref, writePart, writeUnitChunks } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { ocrBundleUnit } from '@/pdf-reader/engine/layer-proto/units.mjs'
 import { PDF_OPTIONS } from '@/pdf-reader/engine/layer-proto/run.mjs'
 import { AHEAD_IDLE_MS, AHEAD_PAGES, createLayerSide, IOS_KEEP_PIXELS, KEEP_PIXELS, keepBudget, LEFT_RETRY_MS, noLayoutPage, onIos, PAGE_MS, SPREAD_MAX, spreadPages } from '@/pdf-reader/engine/view/layer-side.mjs'
 import { type DocumentTask, internalsOf, type ViewEvent } from '@/pdf-reader/engine/view/reader-view.mjs'
@@ -1014,6 +1015,94 @@ describe("the reader's toggles (setClasses, docs/route/orphan-text.md §8)", () 
     await settle(s)
     expect(s.doors.at(-1)?.classes).toEqual({ figures: true })
     expect(s.layer()).toBe(s.doors.at(-1)?.layer)
+  })
+})
+
+describe('the late chunk: the bitmap figures\' labels told after the head and the parts (PDF-READER §19.15)', () => {
+  /** the late chunk of one label, its ids after the paper's units */
+  async function lateOf(m: Awaited<ReturnType<typeof M>>) {
+    const place = [1, 0xffffff, 0, 1, 7.2, 0, 100, 200, 140, 200, 140, 190, 100, 190, 99, 201, 141, 201, 141, 189, 99, 189]
+    const [c] = await writeUnitChunks({ paper: { id: '2608.04322', version: 1 }, units: [ocrBundleUnit('Validation loss', 0, place)] as never, start: m.index.units.length, before: chunkTotals(m.chunks) })
+    return c!
+  }
+
+  it('opens the door again over the index with it, each laid page kept until the new door commits, nothing else read again', async () => {
+    const m = await M()
+    const late = await lateOf(m)
+    const s = await setup({ door: { rows: 'gate' }, extra: [late] })
+    await nearOn(s, [1, 2])
+    s.side.tell(await ALL())
+    s.side.take(m.index.units.map((_, id) => rowOf(id)))
+    s.side.end()
+    await settle(s)
+    expect(s.opens).toBe(1)
+    expect(s.doors[0]?.options?.index?.units).toHaveLength(m.index.units.length)
+    const kept = layerOf(s, 1)?.querySelector('svg'), fetched = s.fetched.length
+    s.side.tell({ units: [...m.chunks.map(c => c.ref as Ref), late.ref as Ref] })
+    // (the drawing laid before stays in place while the new door opens: no blank, no flash)
+    await macrotask()
+    expect(layerOf(s, 1)?.querySelector('svg')).toBe(kept)
+    await settle(s)
+    expect(s.opens).toBe(2)
+    expect(s.composed.length).toBe(1)
+    // (the late chunk alone fetched)
+    expect(s.fetched.slice(fetched)).toEqual([late.sha256])
+    const index = s.doors[1]?.options?.index
+    expect(index?.units).toHaveLength(m.index.units.length + 1)
+    expect(index?.units.at(-1)?.[0]).toBe('inkocr')
+    expect(index?.late).toHaveLength(1)
+    // (the rows so far given the new door again, and their end)
+    expect(s.doors[1]?.taken.length).toBe(s.doors[0]?.taken.length)
+    expect(s.doors[1]?.ended).toBe(1)
+    expect([content(s, 1), content(s, 2)]).toEqual(['layer', 'layer'])
+    // (told again: nothing)
+    s.side.tell({ units: [late.ref as Ref] })
+    await settle(s)
+    expect(s.opens).toBe(2)
+  })
+
+  it('a host that translates the units itself, its rows ended before the late chunk: the new door takes the rows of the new units and ends at the host\'s end again', async () => {
+    const m = await M()
+    const late = await lateOf(m)
+    const grown: unknown[] = []
+    const s = await setup({ door: { rows: 'gate' }, extra: [late], onIndex: i => grown.push(i) })
+    await nearOn(s, [1, 2])
+    s.side.tell(await ALL())
+    s.side.take(m.index.units.map((_, id) => rowOf(id)))
+    s.side.end()
+    await settle(s)
+    s.side.tell({ units: [...m.chunks.map(c => c.ref as Ref), late.ref as Ref] })
+    await settle(s)
+    expect(grown).toHaveLength(1)
+    expect(s.opens).toBe(2)
+    // (not ended at its open: the host's rows of the new units are still to come)
+    expect(s.doors[1]?.ended).toBe(0)
+    const n = m.index.units.length
+    s.side.take([rowOf(n)])
+    s.side.end()
+    await settle(s)
+    expect(s.doors[1]?.taken.some(r => (r as unknown[])[0] === n)).toBe(true)
+    expect(s.doors[1]?.ended).toBe(1)
+  })
+
+  it('a late chunk told with the head is in the first index; one that cannot be read is passed over, the layer the head\'s', async () => {
+    const m = await M()
+    const late = await lateOf(m)
+    const s = await setup({ door: { rows: 'gate' }, extra: [late] })
+    await nearOn(s, [1])
+    s.side.tell({ ...(await ALL()), units: [...m.chunks.map(c => c.ref as Ref), late.ref as Ref] })
+    await settle(s)
+    expect(s.opens).toBe(1)
+    expect(s.doors[0]?.options?.index?.units).toHaveLength(m.index.units.length + 1)
+    const t = await setup({ door: { rows: 'gate' }, extra: [late] })
+    t.refuse.add(late.sha256)
+    await nearOn(t, [1])
+    t.side.tell({ ...(await ALL()), units: [...m.chunks.map(c => c.ref as Ref), late.ref as Ref] })
+    await settle(t)
+    expect(t.opens).toBe(1)
+    expect(t.doors[0]?.options?.index?.units).toHaveLength(m.index.units.length)
+    expect(t.side.probe().state).not.toBe('refused')
+    expect(t.warned().some(w => /late units/.test(w))).toBe(true)
   })
 })
 

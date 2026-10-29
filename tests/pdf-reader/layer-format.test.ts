@@ -9,12 +9,14 @@ import {
   BUILD_END_WHYS, BUNDLE5, DEPTH_NONE, KIND_NONE, RECORD_FLAG, CATALOG_CAP, CATALOG_VALUES, catalogKey, CHUNKS_MAX, CONTENT_MAX, CTAG5, END_WHYS, FINAL_END_WHYS, HEAD_CAP, HEAD_VALUES, indexOf,
   isFinalEnd, keyOf, keyParts, LAYOUT_REFUSED, LEFT_CAP, LEFT_VALUES, mergeParts, PART_CAP, PART_VALUES, partTarget, readCatalog, readHead, readLeftPart, readPart,
   readUnitsChunk, TOKENS_PAGE, UNITS_CAP, UNITS_FORMAT, UNITS_TOTAL_BYTES, UNITS_TOTAL_VALUES, UNITS_VALUES, unitsOfChunks, droppedOf, DROPPED_MAX, UNIT_ID_MAX, VTAG5, WHY_MAX, writeCatalog, writeHead, writeLeftPart, writePart, writeUnitChunks,
+  indexWithLate, LATE_MAX, INK_UNITS_FORMAT, chunkTotals,
 } from '@/pdf-reader/engine/layer-proto/format.mjs'
+import { ocrBundleUnit } from '@/pdf-reader/engine/layer-proto/units.mjs'
 import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
 import { batchesOf, sourceUnitsOf, toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { groupOf } from '@/pdf-reader/engine/translate/groups.mjs'
 import { encodeLayout, LAYOUT, LAYOUT_SCHEMA, type LayoutFile, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
-import { PDFJS, PIPELINE_VERSION, REMOVAL } from '@/pdf-reader/engine/pipeline/versions.mjs'
+import { OCR, PDFJS, PIPELINE_VERSION, REMOVAL } from '@/pdf-reader/engine/pipeline/versions.mjs'
 import { isMemoryError } from '@/pdf-reader/engine/pipeline/memory.mjs'
 import {
   BASE, forged, IMAGE, LEFT_OF, type Made, made, N, PAPER, parsed, partInputs, RULES_2, sha256Of, STREAM, textOf, TOKENS_ON_PAGE, tokenWire, UNITS, utf8, VIEWS,
@@ -107,7 +109,7 @@ describe('each writer then its reader is the identity', () => {
     const h = M.readHead
     // (BUNDLE 8: a base given with no `source` is arXiv's, written so, read as it is; no `orig` beside it)
     expect(h).toMatchObject({ kind: 'head', bundle: BUNDLE5, paper: { ...PAPER, pages: N }, base: { source: 'arxiv', ...BASE }, orig: null, lineskip: [1, 0], sha256: M.head.sha256 })
-    expect(h.versions).toEqual({ pipeline: PIPELINE_VERSION, layout: LAYOUT, removal: REMOVAL, pdfjs: PDFJS, image: IMAGE })
+    expect(h.versions).toEqual({ pipeline: PIPELINE_VERSION, layout: LAYOUT, removal: REMOVAL, pdfjs: PDFJS, image: IMAGE, ocr: OCR })
     expect(h.units).toEqual([{ kind: 'units', from: 0, to: 7, sha256: M.chunks[0]!.sha256, bytes: M.chunks[0]!.bytes.length }])
     expect(Object.keys(parsed(M.head))).toEqual(['bundle', 'kind', 'paper', 'base', 'versions', 'units', 'lineskip'])
     expect(parsed(M.head).base).toEqual({ source: 'arxiv', ...BASE })
@@ -396,8 +398,9 @@ describe('a reader\'s envelope', () => {
     expect(await refusal(read('units', o => { o.bundle = '5'; delete o.format }))).toMatchObject({ kind: 'units', path: 'format' })
     expect(UNITS_FORMAT).toBe('1')
     // (6: a part with no layout says why, `layout: { refused, why }`; 7: a draw's items carry their characters' fills; 8: the
-    // head's base says whose PDF the layer is drawn over; 11: a figure row carries its set and its room)
-    expect(BUNDLE5).toBe('11')
+    // head's base says whose PDF the layer is drawn over; 11: a figure row carries its set and its room; 12: the head names the
+    // recogniser and a layer may hold late chunks)
+    expect(BUNDLE5).toBe('12')
   })
 
   it('refuses what is not an object, and a chunk given as a part and a part given as a chunk', async () => {
@@ -1053,7 +1056,8 @@ describe('the index', () => {
     expect(indexOf(t.rh, t.read).units).toHaveLength(2600)
     expect(() => indexOf(t.rh, [...t.read].reverse())).toThrow(expect.objectContaining({ kind: 'index', path: 'units[0]' }))
     expect(() => indexOf(t.rh, t.read.slice(0, 1))).toThrow(expect.objectContaining({ kind: 'index', path: 'units' }))
-    expect(() => indexOf(t.rh, [...t.read, t.read[0]!])).toThrow(expect.objectContaining({ path: 'units' }))
+    // (a chunk past the head's is a late one, whose units are bitmap figures' labels alone: one of paragraphs is no late chunk)
+    expect(() => indexOf(t.rh, [...t.read, t.read[0]!])).toThrow(expect.objectContaining({ path: 'units[2]' }))
     // a chunk of the same ids and other bytes: not the one the head names
     const other = await twoChunks(units => { units[10] = ['para', 0, null, null, null, [[0, `${'y'.repeat(995)}0`]]] })
     expect(other.chunks[0]!.to).toBe(t.chunks[0]!.to)
@@ -1085,6 +1089,107 @@ describe('the index', () => {
     expect(() => indexOf(t.rh, t.read, { catalog: { ...cat, versions: { ...cat.versions, image: '9' } } })).toThrow(expect.objectContaining({ path: 'catalog.versions.image' }))
     expect(() => indexOf(t.rh, t.read, { catalog: { ...cat, paper: { ...cat.paper, pages: N + 1 } } })).toThrow(expect.objectContaining({ path: 'catalog.paper' }))
     expect(() => indexOf(t.rh, t.read, { catalog: { ...cat, units: [{ ...cat.units[0]!, bytes: 1 }, cat.units[1]!] } })).toThrow(expect.objectContaining({ path: 'catalog.units[0]' }))
+  })
+})
+
+// ---------------------------------------------------------------- 7b. the late chunks: the bitmap figures' labels (PDF-READER §19.15)
+describe('the late chunks', () => {
+  /** a label's place on page 1: its set (the first label's id, 30), one line, its quad and its patch */
+  const place = (x = 100) => [1, 0xffffff, 0, 1, 7.2, 30, x, 200, x + 40, 200, x + 40, 190, x, 190, x - 1, 201, x + 41, 201, x + 41, 189, x - 1, 189]
+  async function laid(late: unknown[][] = [ocrBundleUnit('Validation loss', 0, place()), ocrBundleUnit('Training', 0, place(160))]) {
+    const units: (typeof UNITS)[number][] = Array.from({ length: 30 }, (_, i) => ['para', 0, null, null, null, [[0, `unit ${i}`]]])
+    const chunks = await writeUnitChunks({ paper: PAPER, units })
+    const head = await writeHead({ paper: { ...PAPER, pages: N }, base: BASE, image: IMAGE, units: chunks, lineskip: null })
+    const rh = await readHead(head.bytes, { ref: head.ref })
+    const read: ReadUnitsChunk[] = []
+    for (const c of chunks) read.push(await readUnitsChunk(c.bytes, { ref: c.ref, before: read.at(-1) ?? null }))
+    const lateChunks = await writeUnitChunks({ paper: PAPER, units: late as never, start: units.length, before: chunkTotals(chunks) })
+    return { chunks, rh, read, lateChunks }
+  }
+
+  it('is a chunk of ink units past the head\'s, each label with its place, read after the head\'s into the index', async () => {
+    const t = await laid()
+    expect(t.lateChunks).toHaveLength(1)
+    expect(JSON.parse(new TextDecoder().decode(t.lateChunks[0]!.bytes)).format).toBe(INK_UNITS_FORMAT)
+    const late = await readUnitsChunk(t.lateChunks[0]!.bytes, { ref: t.lateChunks[0]!.ref, before: t.read.at(-1)! })
+    const index = indexOf(t.rh, [...t.read, late])
+    expect(index.units).toHaveLength(32)
+    expect(index.kinds.slice(30)).toEqual(['inkocr', 'inkocr'])
+    expect((index.units[30] as unknown[])[7]).toEqual(place())
+    expect(index.late).toEqual([{ kind: 'units', from: 30, to: 31, sha256: t.lateChunks[0]!.sha256, bytes: t.lateChunks[0]!.bytes.length }])
+    // (an index of the head's chunks alone holds none)
+    expect(indexOf(t.rh, t.read).late).toEqual([])
+  })
+
+  it('takes one told after the index: read alone, the index made anew with it, the one before unchanged', async () => {
+    const t = await laid()
+    const index = indexOf(t.rh, t.read)
+    const alone = await readUnitsChunk(t.lateChunks[0]!.bytes, { ref: t.lateChunks[0]!.ref, dropped: [...index.dropped] })
+    const grown = indexWithLate(index, alone)
+    expect(index.units).toHaveLength(30)
+    expect(grown.units).toHaveLength(32)
+    expect(grown.records.kind).toHaveLength(32)
+    expect(grown.late).toHaveLength(1)
+    // (the same index as the chunks read in one chain make)
+    const whole = indexOf(t.rh, [...t.read, await readUnitsChunk(t.lateChunks[0]!.bytes, { ref: t.lateChunks[0]!.ref, before: t.read.at(-1)! })])
+    expect(grown.units).toEqual(whole.units)
+    expect(grown.kinds).toEqual(whole.kinds)
+    expect(Array.from(grown.records.plainLength)).toEqual(Array.from(whole.records.plainLength))
+    // (not the ids after the index's: the same chunk again)
+    expect(() => indexWithLate(grown, alone)).toThrow(expect.objectContaining({ kind: 'index', path: 'units[2]' }))
+  })
+
+  it('holds bitmap figures\' labels alone, and LATE_MAX chunks at most', async () => {
+    const t = await laid([['inkfigures', 0, null, null, null, [[0, 'Loss']], null]])
+    const late = await readUnitsChunk(t.lateChunks[0]!.bytes, { ref: t.lateChunks[0]!.ref, before: t.read.at(-1)! })
+    expect(() => indexOf(t.rh, [...t.read, late])).toThrow(expect.objectContaining({ kind: 'index', path: 'units[1]', message: expect.stringMatching(/inkocr/) }))
+    expect(LATE_MAX).toBe(4)
+  })
+
+  it('past a head of 11, which names no recogniser, none: the index and the catalog refuse it', async () => {
+    const t = await laid()
+    const late = await readUnitsChunk(t.lateChunks[0]!.bytes, { ref: t.lateChunks[0]!.ref, before: t.read.at(-1)! })
+    const eleven = { ...t.rh, bundle: '11' as const }
+    expect(() => indexOf(eleven as never, [...t.read, late])).toThrow(expect.objectContaining({ kind: 'index', path: 'units' }))
+    const alone = await readUnitsChunk(t.lateChunks[0]!.bytes, { ref: t.lateChunks[0]!.ref, dropped: [] })
+    expect(() => indexWithLate(indexOf(eleven as never, t.read), alone)).toThrow(expect.objectContaining({ kind: 'index', message: expect.stringMatching(/holds none/) }))
+    const ref = (c: { from: number; to: number; sha256: string; bytes: Uint8Array }) => ({ from: c.from, to: c.to, sha256: c.sha256, bytes: c.bytes.length })
+    await expect(writeCatalog({ head: eleven as never, units: [...t.chunks.map(ref), ...t.lateChunks.map(ref)], parts: [], end: { through: 0, refused: 'bound' } })).rejects.toThrow(/late ones at most/)
+  })
+
+  it('stands only as a label with a place of its shape: a page, two colours, an anchor, a size, whole lines of numbers', async () => {
+    const stand = async (u: unknown[]) => {
+      const t = await laid([u])
+      const c = await readUnitsChunk(t.lateChunks[0]!.bytes, { ref: t.lateChunks[0]!.ref, before: t.read.at(-1)! })
+      return c.units[0] !== null
+    }
+    expect(await stand(ocrBundleUnit('Loss', 0, place()))).toBe(true)
+    // (a line short of its sixteen numbers, a page 0, a colour past 0xffffff, an anchor's code past the three, a size of 0, a set
+    // that is no id, a place of BUNDLE5 12's draft with no set)
+    await expect(laid([ocrBundleUnit('Loss', 0, place().slice(0, -1))])).rejects.toThrow(/does not stand/)
+    await expect(laid([ocrBundleUnit('Loss', 0, [0, ...place().slice(1)])])).rejects.toThrow(/does not stand/)
+    await expect(laid([ocrBundleUnit('Loss', 0, [1, 0x1000000, ...place().slice(2)])])).rejects.toThrow(/does not stand/)
+    await expect(laid([ocrBundleUnit('Loss', 0, [1, 0, 0, 3, ...place().slice(4)])])).rejects.toThrow(/does not stand/)
+    await expect(laid([ocrBundleUnit('Loss', 0, [1, 0, 0, 1, 0, ...place().slice(5)])])).rejects.toThrow(/does not stand/)
+    await expect(laid([ocrBundleUnit('Loss', 0, [1, 0, 0, 1, 7.2, -1, ...place().slice(6)])])).rejects.toThrow(/does not stand/)
+    await expect(laid([ocrBundleUnit('Loss', 0, [1, 0, 0, 1, 7.2, ...place().slice(6)])])).rejects.toThrow(/does not stand/)
+    // (a place on a unit of another kind; a label with no place)
+    await expect(laid([['inkfigures', 0, null, null, null, [[0, 'Loss']], null, place()]])).rejects.toThrow(/does not stand/)
+    await expect(laid([['inkocr', 0, null, null, null, [[0, 'Loss']], null]])).rejects.toThrow(/does not stand/)
+  })
+
+  it('goes into the catalog after the head\'s chunks, which an index with it reads', async () => {
+    const t = await laid()
+    const ref = (c: { from: number; to: number; sha256: string; bytes: Uint8Array }) => ({ from: c.from, to: c.to, sha256: c.sha256, bytes: c.bytes.length })
+    const cat = await readCatalog((await writeCatalog({ head: t.rh, units: [...t.chunks.map(ref), ...t.lateChunks.map(ref)], parts: [], end: { through: 0, refused: 'bound' } })).bytes)
+    expect(cat.units).toHaveLength(t.chunks.length + 1)
+    const late = await readUnitsChunk(t.lateChunks[0]!.bytes, { ref: t.lateChunks[0]!.ref, before: t.read.at(-1)! })
+    expect(indexOf(t.rh, [...t.read, late], { catalog: cat }).units).toHaveLength(32)
+    // (a catalog naming the late chunk, an index without it: not the catalog's)
+    expect(() => indexOf(t.rh, t.read, { catalog: cat })).toThrow(expect.objectContaining({ path: 'catalog.units' }))
+    // (more than LATE_MAX past the head's: no catalog)
+    const many = Array.from({ length: LATE_MAX + 1 }, (_, i) => ({ from: 30 + i, to: 30 + i, sha256: t.lateChunks[0]!.sha256, bytes: 10 }))
+    await expect(writeCatalog({ head: t.rh, units: [...t.chunks.map(ref), ...many], parts: [], end: { through: 0, refused: 'bound' } })).rejects.toThrow(/late ones at most/)
   })
 })
 
@@ -1657,7 +1762,9 @@ describe('the catalog', () => {
     expect(w.key).toBe(`layer/${PAPER.id}v${PAPER.version}/${VTAG5}.json`)
     expect(c.versions).toEqual(M.readHead.versions)
     const other = (vtag: string) => catalogKey(PAPER.id, PAPER.version, vtag)
-    await refused(() => {}, 'versions', { key: other(VTAG5.replace(/-r\d+$/, '-r99')) })
+    await refused(() => {}, 'versions', { key: other(VTAG5.replace(/-r\d+-o/, '-r99-o')) })
+    await refused(() => {}, 'versions', { key: other(VTAG5.replace(/-o[^-]+$/, '-o9')) })
+    await refused(() => {}, 'versions', { key: other(VTAG5.replace(/-o[^-]+$/, '')) })
     await refused(() => {}, 'versions', { key: other(VTAG5.replace('-p', '-p9')) })
     await refused(() => {}, 'paper', { key: catalogKey('2608.04323', 1, VTAG5) })
     await refused(() => {}, 'paper', { key: catalogKey(PAPER.id, 2, VTAG5) })
@@ -1672,7 +1779,7 @@ describe('the catalog', () => {
     const f = forged('head', h)
     const other = await readHead(f.bytes, { ref: f.ref })
     const w = await writeCatalog({ head: other, units: units(), parts: parts(), end: { through: 4 } })
-    expect(w.key).toBe(catalogKey(PAPER.id, PAPER.version, `b${BUNDLE5}-j${PDFJS}-p12-l7-r99`))
+    expect(w.key).toBe(catalogKey(PAPER.id, PAPER.version, `b${BUNDLE5}-j${PDFJS}-p12-l7-r99-o${OCR}`))
     expect(w.key).not.toBe(catalogKey(PAPER.id, PAPER.version, VTAG5))
     const c = await readCatalog(w.bytes, { key: w.key, paper: PAPER })
     expect(c.versions).toMatchObject({ pipeline: '12', layout: '7', removal: '99' })
@@ -1823,8 +1930,10 @@ describe('keys', () => {
   const sha = 'a'.repeat(64)
 
   it('keyOf names an object by its whole digest under the CTAG; catalogKey by the VTAG; keyParts takes them apart', () => {
-    expect(CTAG5).toBe(`b11-j${PDFJS}`)
-    expect(VTAG5).toBe(`${CTAG5}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`)
+    expect(CTAG5).toBe(`b12-j${PDFJS}`)
+    expect(VTAG5).toBe(`${CTAG5}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}-o${OCR}`)
+    // (the recogniser's version as a token: core/ocr/version.ts's, its other characters points)
+    expect(OCR).toBe('ppocr.v6.tiny.2')
     const key = keyOf('2608.04322', 3, CTAG5, sha)
     expect(key).toBe(`layer/2608.04322v3/${CTAG5}/${sha}.json`)
     expect(keyParts(key)).toEqual({ paper: '2608.04322', version: 3, ctag: CTAG5, sha256: sha })

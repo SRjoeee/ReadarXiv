@@ -15,6 +15,8 @@ export interface ClassPolicy {
 export declare const TOGGLES: readonly Toggle[]
 /** the kind of a figure's ink unit */
 export declare const FIGURE_KIND: 'inkfigures'
+/** the kind of a bitmap figure's label (layout/bitmap-text.mjs) */
+export declare const OCR_KIND: 'inkocr'
 /** each class's policy, in code order */
 export declare const CLASSES: Readonly<Record<ClassId, ClassPolicy>>
 /** the classes by their code */

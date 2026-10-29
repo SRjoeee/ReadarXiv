@@ -1,7 +1,7 @@
 // format.mjs's types: the layer's wire format, BUNDLE 4 (the prepare pipeline's bundle 4 contract)
 import type { LayoutFile, LayoutPart } from '../layout/file.mjs'
 import type { ReadBundle } from './bundle.mjs'
-import type { BundleUnit, InkBundleUnit } from './units.mjs'
+import type { BundleUnit, InkBundleUnit, OcrBundleUnit } from './units.mjs'
 import type { Draw, DrawSource } from './draw.mjs'
 
 export type { UnitWire } from './bundle.mjs'
@@ -11,11 +11,12 @@ import type { UnitWire } from './bundle.mjs'
 /** the format: raised with any change to the shape of a head, part, left part or catalog; 6, a part with no layout says why;
  *  7, a left part's draw items carry their fills; 8, the head's base says whose PDF the layer is drawn over (ours or arXiv's)
  *  and `orig` names arXiv's beside ours, the catalog names the base; 9, our base wrapped by optional content; 10, the ink units
- *  and a part's figure units; 11, a figure row's set and room */
-export declare const BUNDLE5: '11'
-/** the formats a reader takes: its own, 7's (a bundle drawn over arXiv's PDF; its head read as `base.source` 'arxiv'), 9's and
- *  10's (a figure row of 10's each unit its own set, with no room) */
-export declare const BUNDLES_READ: readonly ['7', '9', '10', '11']
+ *  and a part's figure units; 11, a figure row's set and room; 12, the head's and the catalog's recogniser (`versions.ocr`) and
+ *  the late units chunks of the bitmap figures' labels */
+export declare const BUNDLE5: '12'
+/** the formats a reader takes: its own, 7's (a bundle drawn over arXiv's PDF; its head read as `base.source` 'arxiv'), 9's,
+ *  10's (a figure row of 10's each unit its own set, with no room) and 11's (no recogniser named, no late chunk) */
+export declare const BUNDLES_READ: readonly ['7', '9', '10', '11', '12']
 /** whose PDF a layer is drawn over: our compile's final pass, or arXiv's */
 export declare const BASE_SOURCES: readonly ['ours', 'arxiv']
 export type BaseSource = (typeof BASE_SOURCES)[number]
@@ -36,7 +37,7 @@ export declare const INK_UNITS_FORMAT: '2'
 export declare const UNITS_FORMATS_READ: readonly string[]
 /** the reader's contract, `b<BUNDLE5>-j<PDFJS>`, named with the 5 beside bundle.mjs's CTAG whatever BUNDLE5's value */
 export declare const CTAG5: string
-/** the content's, `<CTAG5>-p<PIPELINE>-l<LAYOUT>-r<REMOVAL>`: a key's directory, the catalog's name */
+/** the content's, `<CTAG5>-p<PIPELINE>-l<LAYOUT>-r<REMOVAL>-o<OCR>`: a key's directory, the catalog's name */
 export declare const VTAG5: string
 /** a units chunk's bytes at most, and its values (counted before JSON.parse) */
 export declare const UNITS_CAP: number
@@ -84,7 +85,8 @@ export declare function isFinalEnd(why: string): why is 'bound' | 'part'
  *  `page` of a left part); no key, which is derived from the digest */
 export interface Ref { kind: Kind; sha256: string; bytes: number; from?: number; to?: number; page?: number }
 export interface Caps { bytes?: number; values?: number }
-export type HeadVersions = { pipeline: string; layout: string; removal: string; pdfjs: string; image: string }
+/** a head's and a catalog's versions: `ocr`, the bitmap figures' recogniser, a head of 12's alone (none of 7 to 11) */
+export type HeadVersions = { pipeline: string; layout: string; removal: string; pdfjs: string; image: string; ocr?: string }
 export type EndWhy = (typeof END_WHYS)[number]
 /** the tokens' wire for one page: `perPage` [n], and each field n integers of TOKEN_SCALE, delta-coded */
 export interface TokenWire { perPage: number[]; l: number[]; r: number[]; y: number[]; h: number[]; top: number[]; bottom: number[] }
@@ -149,6 +151,8 @@ export interface LayerIndex {
   units: readonly (BundleUnit | null)[]; kinds: readonly (string | null)[]; dropped: readonly number[]
   /** derived once from the units (amendment M15): the index's shape is frozen with it */
   records: UnitRecords
+  /** the late chunks past the head's (the bitmap figures' labels, PDF-READER §19.15), in id order; none in an index of the head's alone */
+  late?: readonly (Ref & { from: number; to: number })[]
 }
 /**
  * An index made of chunks read without bodies (amendment M24): each unit a stands flag, its kind and its piece count, the
@@ -160,6 +164,7 @@ export interface LightLayerIndex {
   head: ReadHead
   units: readonly (true | null)[]; kinds: readonly (string | null)[]; pieces: Uint32Array; dropped: readonly number[]
   records: UnitRecords
+  late?: readonly (Ref & { from: number; to: number })[]
 }
 /** what the parts told so far fix: a pure function of the parts' sequence */
 export interface PartChain {
@@ -274,11 +279,16 @@ export interface ReadUnitsLight extends Omit<ReadUnits, 'units'> { units: (true 
 export declare function unitsOfChunks(chunks: readonly ReadUnitsChunk[], o?: { bodies?: true }): ReadUnits
 /** bodies-free (M21): `units` holds `true` or null; the chunks may be read with `bodies: false` or with their bodies (a chunk read bodies-free given to the first form throws a TypeError) */
 export declare function unitsOfChunks(chunks: readonly (ReadUnitsChunk | ReadUnitsChunkLight)[], o: { bodies: false }): ReadUnitsLight
+/** the late chunks a layer may hold past its head's (the bitmap figures' labels) */
+export declare const LATE_MAX: number
 /** sync: the head and its chunks bound (each chunk's range, digest and bytes the head's ref, in order, read as one `before`
- *  chain; paper and pipeline the head's); with `catalog`, its head and units equal these */
+ *  chain; paper and pipeline the head's), LATE_MAX late chunks of bitmap figures' labels after them at most; with `catalog`, its
+ *  head and units equal these */
 export declare function indexOf(head: ReadHead, chunks: readonly ReadUnitsChunk[], o?: { catalog?: ReadCatalog }): LayerIndex
 /** chunks read with `bodies: false` give a light index (M24; chunks of the two kinds mixed, too, at runtime) */
 export declare function indexOf(head: ReadHead, chunks: readonly ReadUnitsChunkLight[], o?: { catalog?: ReadCatalog }): LightLayerIndex
+/** the index with one more late chunk, read alone (readUnitsChunk with the index's `dropped`): a new index */
+export declare function indexWithLate<I extends LayerIndex | LightLayerIndex>(index: I, chunk: I extends LightLayerIndex ? ReadUnitsChunkLight : ReadUnitsChunk): I
 /** a part against the index and the chain (null before the first part): any failure refuses the whole part */
 export declare function readPart(bytes: Uint8Array, o: { ref: Ref; index: LayerIndex | LightLayerIndex; chain?: PartChain | null; caps?: Caps }): Promise<ReadPart>
 export declare function readLeftPart(bytes: Uint8Array, o: { ref: Ref & { page: number }; streamOf(id: number): number | undefined; caps?: Caps }): Promise<ReadLeftPart>
@@ -300,7 +310,7 @@ export interface Written {
 }
 /** the units as chunks, greedy by id; a unit past either cap alone throws BundleRefusal (`kind` 'units', and `id`), and the
  *  chunks past CHUNKS_MAX, UNITS_TOTAL_BYTES or UNITS_TOTAL_VALUES `units-too-large` (its `data` { what, bound, size }) */
-export declare function writeUnitChunks(o: { paper: { id: string; version: number }; units: readonly (BundleUnit | InkBundleUnit)[]; start?: number; before?: ChunkTotals | null }): Promise<(Written & { from: number; to: number })[]>
+export declare function writeUnitChunks(o: { paper: { id: string; version: number }; units: readonly (BundleUnit | InkBundleUnit | OcrBundleUnit)[]; start?: number; before?: ChunkTotals | null; ink?: boolean }): Promise<(Written & { from: number; to: number })[]>
 export interface ChunkTotals { chunks: number; bytes: number; values: number }
 export declare function chunkTotals(chunks: readonly { bytes: Uint8Array; values: number }[]): ChunkTotals
 export declare function writeHead(o: {

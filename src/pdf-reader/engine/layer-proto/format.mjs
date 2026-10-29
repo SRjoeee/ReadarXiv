@@ -23,11 +23,11 @@ import { checkLayoutPart, checkLineskip, isPaperId, LAYOUT, LAYOUT_SCHEMA, layou
 import { COORD_MAX, countValues, isInteger, isNumber, isObject, isVersionToken, LayoutRefusal, PAGES_MAX, told } from '../layout/json.mjs'
 import { BASE_KINDS, countOf, DELTA_MAX_BYTES, deltaSection, replacedWhy, WRAP_STATS, wrapWhy } from '../layout/delta-wire.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
-import { PDFJS, PIPELINE_VERSION, REMOVAL } from '../pipeline/versions.mjs'
+import { OCR, PDFJS, PIPELINE_VERSION, REMOVAL } from '../pipeline/versions.mjs'
 import { groupOf } from '../translate/groups.mjs'
 import { plainSource } from '../translate/mt.mjs'
 import { BundleRefusal, originalUrl, segmentOf } from './bundle.mjs'
-import { FIGURE_KIND } from '../rules/content-classes.mjs'
+import { FIGURE_KIND, OCR_KIND } from '../rules/content-classes.mjs'
 import { checkDraw, DrawRefusal, wireOf } from './draw.mjs'
 import { checkFigures } from './figure-rows.mjs'
 import { sourceUnitsOf } from './rows.mjs'
@@ -58,13 +58,20 @@ import { CLASS_IDS } from '../rules/content-classes.mjs'
  *  size, each at its original's edge, a translation into the free line beside it): a figure row carries its set and its room
  *  (figure-rows.mjs FIGURE_ROW, three values more), which a reader of 10 refuses; a bundle of 10 is not found under 11's CTAG
  *  and is prepared again. The head's, the left parts' and the catalog's shapes are 10's. This reader reads 10's objects too,
- *  a row of 10's each unit its own set with no room (FIGURE_ROW_10): as 10 drew it */
-export const BUNDLE5 = '11'
+ *  a row of 10's each unit its own set with no room (FIGURE_ROW_10): as 10 drew it. 12 (the content class `ocr`, PDF-READER
+ *  §19.15: the text inside the bitmap figures): the head and the catalog name the recogniser (`versions.ocr`), and a layer may
+ *  hold LATE_MAX late units chunks past its head's, the maker's labels of kind `inkocr`, each carrying its place, written and
+ *  told after its last part (indexOf, indexWithLate); a reader of 11 refuses the head's new key, so a bundle of 11 is not found
+ *  under 12's CTAG and is prepared again. The parts' and the left parts' shapes are 11's. This reader reads 11's objects too,
+ *  which name no recogniser and hold no late chunk */
+export const BUNDLE5 = '12'
 /** the formats this reader takes: its own, and 7's (a bundle drawn over arXiv's PDF, whose objects 9 reads unchanged: its
- *  head is read as `base.source` 'arxiv', with no `orig`), 9's and 10's. Every object of a bundle is of its head's format */
-export const BUNDLES_READ = Object.freeze(['7', '9', '10', BUNDLE5])
+ *  head is read as `base.source` 'arxiv', with no `orig`), 9's, 10's and 11's. Every object of a bundle is of its head's format */
+export const BUNDLES_READ = Object.freeze(['7', '9', '10', '11', BUNDLE5])
 /** the formats whose parts may carry figure units (`figures`, figure-rows.mjs: 10's rows without a set or a room) */
-const FIGURES_READ = Object.freeze(['10', BUNDLE5])
+const FIGURES_READ = Object.freeze(['10', '11', BUNDLE5])
+/** the formats whose head names the bitmap figures' recogniser (`versions.ocr`) and whose layer may hold late chunks */
+const OCR_READ = Object.freeze([BUNDLE5])
 /** a units chunk's own format (amendment M12): raised only by a change to the chunk's shape, so that a change to a part's
  *  shape renames no unit identity and redoes no translation */
 export const UNITS_FORMAT = '1'
@@ -76,9 +83,10 @@ export const UNITS_FORMATS_READ = Object.freeze([UNITS_FORMAT, INK_UNITS_FORMAT]
 /** the reader's contract, `b<BUNDLE5>-j<PDFJS>`: what a reader asks by. Named with the 5 beside bundle.mjs's CTAG (BUNDLE
  *  3's) whatever BUNDLE5's value: the web's service and readers import BUNDLE5, CTAG5 and VTAG5 by these names */
 export const CTAG5 = `b${BUNDLE5}-j${PDFJS}`
-/** the content's: the contract, then the pipeline, the layout maker and the remover the server made it with; a key's
- *  directory (and the catalog's name). A reader reads objects of a newer maker: those three are named, never compared */
-export const VTAG5 = `${CTAG5}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`
+/** the content's: the contract, then the pipeline, the layout maker, the remover and (BUNDLE5 10's, PDF-READER §19.15) the bitmap
+ *  figures' recogniser the server made it with; a key's directory (and the catalog's name). A reader reads objects of a newer
+ *  maker: those are named, never compared */
+export const VTAG5 = `${CTAG5}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}-o${OCR}`
 
 /** a units chunk's bytes at most, its values, and its nesting: the object, `units`, a unit, its pieces, a piece */
 export const UNITS_CAP = 2 * 2 ** 20, UNITS_VALUES = 400_000
@@ -181,9 +189,12 @@ export const RECT_SLACK = 1
 const SHA256 = /^[0-9a-f]{64}$/
 const BASE_MAX = 2 ** 31
 const ID_MAX = Number.MAX_SAFE_INTEGER
-/** the version tokens of a head, in order; the reader compares `pdfjs` with its own and reads the rest as tokens */
-const VERSION_KEYS = ['pipeline', 'layout', 'removal', 'pdfjs', 'image']
-const NAMED_VERSIONS = ['pipeline', 'layout', 'removal', 'image']
+/** the version tokens of a head, in order; the reader compares `pdfjs` with its own and reads the rest as tokens. A head of 12 (and
+ *  its catalog) names the bitmap figures' recogniser too (`ocr`, pipeline/versions.mjs OCR); one of 7 to 11 does not */
+const VERSION_KEYS_9 = ['pipeline', 'layout', 'removal', 'pdfjs', 'image']
+const VERSION_KEYS = [...VERSION_KEYS_9, 'ocr']
+const versionKeysOf = bundle => (OCR_READ.includes(bundle) ? VERSION_KEYS : VERSION_KEYS_9)
+const NAMED_VERSIONS = ['pipeline', 'layout', 'removal', 'image', 'ocr']
 
 // ---------------------------------------------------------------- refusals and small checks
 const kindOf = v => (v === null ? 'null' : Array.isArray(v) ? 'an array' : typeof v)
@@ -237,11 +248,12 @@ function paperOf(kind, p, path, withPages) {
   return p
 }
 
-/** the versions of a head or a catalog: the PDF.js the reader's own, the others tokens */
-function versionsOf(kind, v, path) {
-  exactKeys(kind, v, VERSION_KEYS, path)
+/** the versions of a head or a catalog of format `bundle`: the PDF.js the reader's own, the others tokens */
+function versionsOf(kind, v, path, bundle) {
+  const keys = versionKeysOf(bundle)
+  exactKeys(kind, v, keys, path)
   if (v.pdfjs !== PDFJS) throw refuse(kind, sub(path, 'pdfjs'), `not this reader's '${PDFJS}'`)
-  for (const k of NAMED_VERSIONS) if (!isVersionToken(v[k])) throw refuse(kind, sub(path, k), `not a version, 1 to 32 letters, digits or points (${kindOf(v[k])})`)
+  for (const k of NAMED_VERSIONS) if (keys.includes(k) && !isVersionToken(v[k])) throw refuse(kind, sub(path, k), `not a version, 1 to 32 letters, digits or points (${kindOf(v[k])})`)
   return v
 }
 
@@ -342,11 +354,11 @@ const written = (kind, obj, def, paper, pos, contentOf = null, vtag = null) => f
 
 /** the VTAG the versions of a head or a catalog make, of its format (this writer's, or the catalog's as read): what names the
  *  catalog, for its writer and for its reader */
-const vtagOf = (v, bundle = BUNDLE5) => `b${bundle}-j${v.pdfjs}-p${v.pipeline}-l${v.layout}-r${v.removal}`
+const vtagOf = (v, bundle = BUNDLE5) => `b${bundle}-j${v.pdfjs}-p${v.pipeline}-l${v.layout}-r${v.removal}${v.ocr === undefined ? '' : `-o${v.ocr}`}`
 
 // ---------------------------------------------------------------- keys
 const CTAG_FORM = /^b[0-9]+-j[0-9A-Za-z.]+$/
-const VTAG_FORM = /^b[0-9]+-j[0-9A-Za-z.]+-p[0-9A-Za-z.]+-l[0-9A-Za-z.]+-r[0-9A-Za-z.]+$/
+const VTAG_FORM = /^b[0-9]+-j[0-9A-Za-z.]+-p[0-9A-Za-z.]+-l[0-9A-Za-z.]+-r[0-9A-Za-z.]+(?:-o[0-9A-Za-z.]+)?$/
 function segOf(paper, version) {
   if (!isPaperId(paper)) throw new RangeError(`not an arXiv identifier (${told(paper)})`)
   if (!isInteger(version, 1, VERSION_MAX)) throw new RangeError(`not a paper's version 1 to ${VERSION_MAX} (${told(version)})`)
@@ -491,7 +503,8 @@ function unitText(u) {
   const cell = u[3] === null ? null : Object.fromEntries(CELL.map(k => [k, u[3][k]]))
   let edges = null
   if (u[4] !== null) { edges = {}; for (const k of EDGES) if (Object.hasOwn(u[4], k)) edges[k] = u[4][k] }
-  return JSON.stringify(u.length === 7 ? [u[0], u[1], u[2], cell, edges, u[5], u[6]] : [u[0], u[1], u[2], cell, edges, u[5]])
+  // (an ink unit's echo after its pieces; a bitmap figure's label's place after that: units.mjs unitStands)
+  return JSON.stringify(u.length === 8 ? [u[0], u[1], u[2], cell, edges, u[5], u[6], u[7]] : u.length === 7 ? [u[0], u[1], u[2], cell, edges, u[5], u[6]] : [u[0], u[1], u[2], cell, edges, u[5]])
 }
 
 /** the flags of a unit's record (amendment M15): the bundle's own unit flags (UNIT_FLAG_BITS: TITLE, FRONT, BRACKETED, KEPT) and
@@ -603,15 +616,16 @@ const tooLarge = (what, bound, size) => new BundleRefusal('units-too-large', { k
  * more than CHUNKS_MAX, or their bytes or values in all past UNITS_TOTAL_BYTES or UNITS_TOTAL_VALUES. Each chunk gives its
  * `values`, as the reader counts them
  */
-export async function writeUnitChunks({ paper, units, start = 0, before = null }) {
+export async function writeUnitChunks({ paper, units, start = 0, before = null, ink = start > 0 }) {
   const K = 'units'
   // (`before`: the chunks written before these, chunkTotals', so that the bounds are of all the chunks a head lists)
   const b0 = before ?? { chunks: 0, bytes: 0, values: 0 }
   const p = { id: paper.id, version: paper.version }
   if (!isPaperId(p.id) || !isInteger(p.version, 1, VERSION_MAX)) throw new RangeError('not a paper version')
-  // (the ink units' chunks from `start`, after the source units', of INK_UNITS_FORMAT; every other one of UNITS_FORMAT, as before)
+  // (the ink units' chunks from `start`, after the source units', of INK_UNITS_FORMAT; every other one of UNITS_FORMAT, as before;
+  // `ink` a chunk of ink units whatever its first id: the bitmap figures' labels of a paper of no source unit)
   if (!isInteger(start, 0, UNIT_ID_MAX)) throw new RangeError('start: not an id')
-  const format = start > 0 ? INK_UNITS_FORMAT : UNITS_FORMAT
+  const format = ink ? INK_UNITS_FORMAT : UNITS_FORMAT
   const head = (from, to) => `{"format":"${format}","kind":"units","paper":${JSON.stringify(p)},"pipeline":${JSON.stringify(PIPELINE_VERSION)},"ids":[${start + from},${start + to}],"units":[`
   // (the envelope's values do not depend on the digits of `ids`; its bytes do)
   const envelopeBytes = (from, to) => encoder.encode(head(from, to)).length + 2
@@ -628,7 +642,7 @@ export async function writeUnitChunks({ paper, units, start = 0, before = null }
     if (b0.values + totalValues > UNITS_TOTAL_VALUES) throw tooLarge('values', UNITS_TOTAL_VALUES, b0.values + totalValues)
   }
   for (let i = 0; i < units.length; i++) {
-    if (!unitStands(units[i], start + i, stands, { ink: start > 0 })) throw Object.assign(refuse(K, '', `unit ${start + i}: does not stand (a shape the reader would drop, or a nested unit that does not stand)`), { id: start + i })
+    if (!unitStands(units[i], start + i, stands, { ink })) throw Object.assign(refuse(K, '', `unit ${start + i}: does not stand (a shape the reader would drop, or a nested unit that does not stand)`), { id: start + i })
     stands[start + i] = 1
     const text = unitText(units[i])
     const size = encoder.encode(text).length, count = inside(K, '', () => countValues(text, UNITS_VALUES, UNITS_DEPTH - 2))
@@ -920,7 +934,7 @@ function headShape(v) {
   const K = 'head'
   const paper = paperOf(K, v.paper, 'paper', true)
   const { base, orig } = baseShape(K, v, v.bundle, paper.pages)
-  const versions = versionsOf(K, v.versions, 'versions')
+  const versions = versionsOf(K, v.versions, 'versions', v.bundle)
   rangesOf(K, v.units, 'units', { refKind: 'units', lo: 0, hi: CHUNKS_MAX, first: 0, last: ID_MAX, max: UNITS_CAP })
   let total = 0
   for (const r of v.units) total += r.bytes
@@ -964,7 +978,7 @@ export async function writeHead({ paper, base, orig = null, image, units, linesk
     paper: { id: paper.id, version: paper.version, pages: paper.pages },
     base: baseWire(base),
     ...(base.source === 'ours' && orig ? { orig: base.kind === 'delta' ? { bytes: orig.bytes, sha256: orig.sha256, xref: orig.xref } : { bytes: orig.bytes, sha256: orig.sha256 } } : {}),
-    versions: { pipeline: PIPELINE_VERSION, layout: LAYOUT, removal: REMOVAL, pdfjs: PDFJS, image },
+    versions: { pipeline: PIPELINE_VERSION, layout: LAYOUT, removal: REMOVAL, pdfjs: PDFJS, image, ocr: OCR },
     units: units.map(u => ({ kind: 'units', from: u.from, to: u.to, sha256: u.sha256, bytes: u.bytes.length })),
     lineskip: lineskip === null ? null : lineskip.map(r2),
     ...(draw ? { draw: 1 } : {}),
@@ -974,23 +988,40 @@ export async function writeHead({ paper, base, orig = null, image, units, linesk
 }
 
 // ---------------------------------------------------------------- the index
+/** the late chunks a layer may hold past its head's (PDF-READER §19.15): the bitmap figures' labels, the maker's one announcement
+ *  after its parts (pipeline/ocr-pass.mjs), each chunk of them */
+export const LATE_MAX = 4
+/** a late chunk read (readUnitsChunk's) against the head and the units before it: of the head's paper and pipeline, its units
+ *  bitmap figures' labels alone (kind `inkocr`, or dropped), so that nothing a part locates or a page awaits comes late */
+function lateChecked(K, head, c, path) {
+  if (c.paper.id !== head.paper.id || c.paper.version !== head.paper.version) throw refuse(K, path, 'not the head\'s paper')
+  if (c.pipeline !== head.versions.pipeline) throw refuse(K, path, 'not the head\'s pipeline')
+  const kinds = c.part?.kinds ?? c.units.map(u => (u === null ? null : u[0]))
+  if (kinds.some(k => k !== null && k !== OCR_KIND)) throw refuse(K, path, `a late chunk holds a unit of a kind not ${OCR_KIND}`)
+}
+
 /**
  * The head and its chunks bound (sync): the chunks as many as the head names, each one's range, digest and bytes the head's
- * ref, in order, of the head's paper and pipeline, read as one chain (unitsOfChunks); with `catalog`, the catalog's head,
- * units, paper and versions the head's. Gives the index the parts are read against: every unit (null where dropped), its kind,
- * the ids dropped. Throws BundleRefusal
+ * ref, in order, of the head's paper and pipeline, read as one chain (unitsOfChunks), followed by LATE_MAX late chunks at most
+ * (the bitmap figures' labels, which the head cannot name: lateChecked); with `catalog`, the catalog's head, units (the late
+ * chunks among them), paper and versions the head's. Gives the index the parts are read against: every unit (null where
+ * dropped), its kind, the ids dropped, and `late`, the late chunks' refs. Throws BundleRefusal
  */
 export function indexOf(head, chunks, o = {}) {
   const K = 'index'
   if (head.units.length > CHUNKS_MAX) throw refuse(K, 'units', `more than ${CHUNKS_MAX} chunks`)
-  if (chunks.length !== head.units.length) throw refuse(K, 'units', `${chunks.length} chunks, not the head's ${head.units.length}`)
+  // (late chunks only past a head of a format that holds them: 12's)
+  const lateMax = OCR_READ.includes(head.bundle ?? BUNDLE5) ? LATE_MAX : 0
+  if (chunks.length < head.units.length || chunks.length > head.units.length + lateMax) throw refuse(K, 'units', `${chunks.length} chunks, not the head's ${head.units.length} and ${lateMax} late ones at most`)
   for (let i = 0; i < chunks.length; i++) {
     const c = chunks[i], r = head.units[i], path = `units[${i}]`
+    if (!r) { lateChecked(K, head, c, path); continue }
     if (c.from !== r.from || c.to !== r.to) throw refuse(K, path, `ids ${c.from} to ${c.to}, not the head's ${r.from} to ${r.to}`)
     if (c.sha256 !== r.sha256 || c.bytes !== r.bytes) throw refuse(K, path, 'not the chunk the head names (digest or bytes)')
     if (c.paper.id !== head.paper.id || c.paper.version !== head.paper.version) throw refuse(K, path, 'not the head\'s paper')
     if (c.pipeline !== head.versions.pipeline) throw refuse(K, path, 'not the head\'s pipeline')
   }
+  const late = Object.freeze(chunks.slice(head.units.length).map(c => Object.freeze({ kind: 'units', from: c.from, to: c.to, sha256: c.sha256, bytes: c.bytes })))
   // (amendment M24: chunks read without bodies make a light index, which the readers of the parts take and the door refuses)
   const light = chunks.some(c => c.part !== undefined)
   const { units, kinds, dropped, records, pieces } = light ? unitsOfChunks(chunks, { bodies: false }) : unitsOfChunks(chunks)
@@ -1001,15 +1032,44 @@ export function indexOf(head, chunks, o = {}) {
     if (cat.bundle !== undefined && head.bundle !== undefined && cat.bundle !== head.bundle) throw refuse(K, 'catalog.bundle', 'not the head\'s format')
     if (cat.base !== undefined && cat.base !== null && !sameBase(cat.base, catalogBase(head))) throw refuse(K, 'catalog.base', 'not the head\'s base')
     if (cat.paper.id !== head.paper.id || cat.paper.version !== head.paper.version || cat.paper.pages !== head.paper.pages) throw refuse(K, 'catalog.paper', 'not the head\'s')
-    for (const k of VERSION_KEYS) if (cat.versions[k] !== head.versions[k]) throw refuse(K, `catalog.versions.${k}`, 'not the head\'s')
-    if (cat.units.length !== head.units.length) throw refuse(K, 'catalog.units', 'not the head\'s chunks')
-    for (let i = 0; i < head.units.length; i++) {
-      const a = cat.units[i], b = head.units[i]
-      if (a.from !== b.from || a.to !== b.to || a.sha256 !== b.sha256 || a.bytes !== b.bytes) throw refuse(K, `catalog.units[${i}]`, 'not the head\'s chunk')
+    for (const k of versionKeysOf(head.bundle ?? BUNDLE5)) if (cat.versions[k] !== head.versions[k]) throw refuse(K, `catalog.versions.${k}`, 'not the head\'s')
+    if (cat.units.length !== chunks.length) throw refuse(K, 'catalog.units', 'not the head\'s chunks and the late ones read')
+    for (let i = 0; i < chunks.length; i++) {
+      const a = cat.units[i], b = head.units[i] ?? chunks[i]
+      if (a.from !== b.from || a.to !== b.to || a.sha256 !== b.sha256 || a.bytes !== b.bytes) throw refuse(K, `catalog.units[${i}]`, head.units[i] ? 'not the head\'s chunk' : 'not the late chunk read')
     }
   }
-  if (light) return Object.freeze({ kind: 'index', light: true, sha256: head.sha256, head, units: Object.freeze(units), kinds: Object.freeze(kinds), pieces, dropped: Object.freeze(dropped), records })
-  return Object.freeze({ kind: 'index', sha256: head.sha256, head, units: Object.freeze(units), kinds: Object.freeze(kinds), dropped: Object.freeze(dropped), records })
+  if (light) return Object.freeze({ kind: 'index', light: true, sha256: head.sha256, head, units: Object.freeze(units), kinds: Object.freeze(kinds), pieces, dropped: Object.freeze(dropped), records, late })
+  return Object.freeze({ kind: 'index', sha256: head.sha256, head, units: Object.freeze(units), kinds: Object.freeze(kinds), dropped: Object.freeze(dropped), records, late })
+}
+
+/**
+ * The index with one more late chunk (indexOf's rule: the bitmap figures' labels, told after the head, PDF-READER §19.15): `chunk`
+ * read alone (readUnitsChunk with the index's `dropped`, as a chunk read alone is), its ids the next after the index's units, of
+ * the head's paper and pipeline, its units of kind `inkocr` alone, its bodies as the index's are (light or not), and the late
+ * chunks LATE_MAX at most. A new index, the one given unchanged. Throws BundleRefusal
+ */
+export function indexWithLate(index, chunk) {
+  const K = 'index'
+  if (index?.kind !== 'index') throw new TypeError('index: a layer index (indexOf\'s)')
+  const head = index.head, was = index.late ?? [], path = `units[${head.units.length + was.length}]`
+  if (!OCR_READ.includes(head.bundle ?? BUNDLE5)) throw refuse(K, path, `a late chunk past a head of ${head.bundle}, which holds none`)
+  if (was.length >= LATE_MAX) throw refuse(K, path, `more than ${LATE_MAX} late chunks`)
+  if (chunk?.kind !== 'units') throw new TypeError('chunk: a units chunk readUnitsChunk read')
+  if (chunk.from !== index.units.length) throw refuse(K, path, `ids from ${chunk.from}, not ${index.units.length}, the one after the index's`)
+  if ((chunk.part !== undefined) !== (index.light === true)) throw new TypeError('chunk: read with its bodies where the index is, and without where it is light')
+  lateChecked(K, head, chunk, path)
+  const n = index.units.length, m = chunk.units.length
+  const r = chunk.part?.records ?? recordsOf(chunk.units, chunk.from, chunk.stands)
+  const grow = (A, B) => { const out = new A.constructor(n + m); out.set(A, 0); out.set(B, n); return out }
+  const records = { kind: grow(index.records.kind, r.kind), flags: grow(index.records.flags, r.flags), depth: grow(index.records.depth, r.depth), plainLength: grow(index.records.plainLength, r.plainLength), cells: new Map([...index.records.cells, ...r.cells]), headings: new Map([...index.records.headings, ...r.headings]) }
+  const units = Object.freeze([...index.units, ...(chunk.part !== undefined ? chunk.units.map(u => (u === null ? null : true)) : chunk.units)])
+  const kinds = Object.freeze([...index.kinds, ...(chunk.part?.kinds ?? chunk.units.map(u => (u === null ? null : u[0])))])
+  const dropped = Object.freeze([...index.dropped, ...chunk.dropped])
+  if (dropped.length > DROPPED_MAX) throw refuse(K, 'dropped', `more than ${DROPPED_MAX} units that do not stand`)
+  const late = Object.freeze([...was, Object.freeze({ kind: 'units', from: chunk.from, to: chunk.to, sha256: chunk.sha256, bytes: chunk.bytes })])
+  if (index.light === true) return Object.freeze({ kind: 'index', light: true, sha256: index.sha256, head, units, kinds, pieces: grow(index.pieces, chunk.pieces), dropped, records, late })
+  return Object.freeze({ kind: 'index', sha256: index.sha256, head, units, kinds, dropped, records, late })
 }
 
 // ---------------------------------------------------------------- the parts
@@ -1466,7 +1526,7 @@ export function catalogBase(head) {
 function catalogShape(v) {
   const K = 'catalog'
   const paper = paperOf(K, v.paper, 'paper', true), N = paper.pages
-  const versions = versionsOf(K, v.versions, 'versions')
+  const versions = versionsOf(K, v.versions, 'versions', v.bundle)
   refOf(K, v.head, 'head', 'head', 'plain', HEAD_CAP)
   let base = null
   if (v.bundle !== '7') {
@@ -1528,7 +1588,8 @@ export async function readCatalog(bytes, o = {}) {
 
 /**
  * The catalog written, by the Worker from the refs it committed (amendment M4), in order: the head as read (its paper and
- * versions are the catalog's, its base the catalog's `base`: catalogBase), the chunks (the head's) and the parts, and how far
+ * versions are the catalog's, its base the catalog's `base`: catalogBase), the chunks (the head's, then the late ones the maker
+ * announced after its parts: the bitmap figures' labels, LATE_MAX at most) and the parts, and how far
  * they go (`end`: { through }, or { through, refused } with the reason one of END_WHYS). Throws BundleRefusal for a catalog
  * its reader would refuse
  */
@@ -1538,15 +1599,17 @@ export async function writeCatalog({ head, units, parts, end }) {
   const obj = {
     bundle: BUNDLE5, kind: 'catalog',
     paper: { id: head.paper.id, version: head.paper.version, pages: head.paper.pages },
-    versions: Object.fromEntries(VERSION_KEYS.map(k => [k, head.versions[k]])),
+    versions: Object.fromEntries(versionKeysOf(head.bundle ?? BUNDLE5).map(k => [k, head.versions[k]])),
     head: { kind: 'head', sha256: head.sha256, bytes: head.bytes },
     base: catalogBase(head),
     units: refs(units, 'units'),
     parts: refs(parts, 'part'),
     end: end.refused === undefined ? { through: end.through } : { through: end.through, refused: end.refused },
   }
-  if (units.length !== head.units.length) throw refuse('catalog', 'units', 'not the head\'s chunks')
-  for (let i = 0; i < units.length; i++) {
+  // (the head's chunks, then the late ones the maker announced after its parts, LATE_MAX at most: indexOf's)
+  const lateMax = OCR_READ.includes(head.bundle ?? BUNDLE5) ? LATE_MAX : 0
+  if (units.length < head.units.length || units.length > head.units.length + lateMax) throw refuse('catalog', 'units', `not the head's chunks and ${lateMax} late ones at most`)
+  for (let i = 0; i < head.units.length; i++) {
     const a = head.units[i], b = units[i]
     if (a.from !== b.from || a.to !== b.to || a.sha256 !== b.sha256 || a.bytes !== b.bytes) throw refuse('catalog', `units[${i}]`, 'not the head\'s chunk')
   }

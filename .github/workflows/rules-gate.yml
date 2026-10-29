@@ -48,6 +48,7 @@ on:
       - 'src/pdf-reader/engine/translate/version.mjs'
       - 'src/pdf-reader/engine/view/floats.mjs'
       - 'src/pdf-reader/engine/view/highlight.mjs'
+      - 'src/core/ocr/version.ts'
       - 'src/core/protector/math-runs.ts'
       - 'src/core/protector/tokens.ts'
       - 'src/core/sentences/index.ts'

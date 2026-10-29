@@ -5,9 +5,11 @@ built (`layout/ink-units.mjs`, `pipeline/ink-pass.mjs`, paragraph points, the to
 bibliography BibTeX makes in the prepare's first pass with the ones the source holds, each entry one unit, and stage 7's names apart
 from places (settled in `docs/PDF-READER.md` §19.13, measured by `lab/pdf/spikes/classes-gate.mjs`); stage 5, the vector figures' text, built (2026-10-25: `layout/figure-text.mjs`, its groups in
 `layout/wrap.mjs`, ink units of kind `inkfigures` and BUNDLE 10's figure rows, `run.mjs paintFigures` under the toggle `figures`;
-settled in `docs/PDF-READER.md` §19.12, its gate `lab/pdf/spikes/figure-gate.mjs`); stage 8, the reader toggles in both hosts, built
-(the website's reading options in its batch 1; the extension's reading options and settings page at configuration v21, 2026-10-29:
-settled in `docs/PDF-READER.md` §9.1); stages 6 and 7's rest are the plan of §7. Engine at
+settled in `docs/PDF-READER.md` §19.12, its gate `lab/pdf/spikes/figure-gate.mjs`); stage 6, the bitmap figures' text, built
+(2026-10-25: `layout/bitmap-text.mjs`, `pipeline/ocr-pass.mjs`, the late chunk, `run.mjs paintOcr` under the toggle `figures`;
+settled in `docs/PDF-READER.md` §19.15, its gate `lab/pdf/spikes/ocr-gate.mjs`, the web's half §8.9); stage 8, the reader toggles
+in both hosts, built (the website's reading options in its batch 1; the extension's reading options and settings page at
+configuration v21, 2026-10-29: settled in `docs/PDF-READER.md` §9.1); stage 7's rest is the plan of §7. Engine at
 `next` 37d84180. The phase 1 measurement's scripts and raw rows are not
 in the tree (the session scratchpad's `orphans/`); stage 1's gate reproduces the pack's numbers from the engine itself.
 
@@ -107,7 +109,7 @@ The owner's map (2026-10-25; the settings' own words are the locale packs', thes
 | "Heads and feet" | heads (running heads and feet) | ink units by line, exact by head and foot points; a head equal to the title's or a heading's text takes its row, set in capitals for a cased target where the head is | planned | 1.5 |
 | "Tables" | tables (cells) | today's cell units; tables no unit cuts (inside a float) become ink units by row | cells built; uncut planned | 0.5 + 1 |
 | "Figure text" | figures (vector) | the glyphs of an included PDF (form XObjects) and of a TikZ or pgfplots picture (between its points), set by our compile: exact text from their fonts, exact places; ink units of kind inkfigures, each its own group, inside a form by the form written again once; a font with no usable Unicode, a form shared, a crowded band left the original's (PDF-READER §19.12); a float's other text no unit owns stays counted, not drawn | built | — |
-| "Figure text" | ocr (bitmap) | PP-OCR as the extension runs it (DESIGN §15.3), once on the server over each figure's image; places from OCR (approved); erasure by a patch of the background under each line, as the extension's image translation does | planned | 3.5 |
+| "Figure text" | ocr (bitmap) | the extension's recogniser (DESIGN §15.3: PP-OCRv6 tiny, its code and models shared, not copied), once on the server over each image our base page paints, after the head and every part; its lines merged into labels as the extension merges them; places from OCR (approved); erasure by a patch of the ground under each line, drawn by the layer over the image, never a rewritten image; a label whose ground is not flat, whose box holds other ink or whose patch would cover any left the original's (PDF-READER §19.15) | built | — |
 | "References" | references, index (proposed) | each `\bibitem` one unit, whole, its names its own, from the bibliography's TeX the compile reads (thebibliography, a shipped .bbl, or the one BibTeX makes in the prepare's first pass, a shipped one from then on), marked like the body (PDF-READER §19.13); biblatex's `\printbibliography` no TeX to mark | built (biblatex a known gap) | — |
 | "Names" | names: the author block's names under the title | author units, translated for every target (TRANSLATE 6); its places (kind affiliation) the body's, always translated | built | — |
 | Never | math, code and verbatim, symbols | kept as the original's ink | never | — |
@@ -153,7 +155,7 @@ nowhere. (A TikZ picture's texts, which the front end cuts into units of kind `f
 | 3 (built) | paragraph points (q<n> at para/begin); a contents entry and a block one paragraph of TeX's | in LAYOUT 21; base pages pixel-identical on the pack | 3 |
 | 4 (built) | references (.bbl units, the source's or the one BibTeX makes, each entry one unit); the author block for every target | PIPELINE 29 and 30, LAYOUT 22, MARKS_SCHEMA 11, TRANSLATE 6 | 4.5 |
 | 5 (built) | vector figure text: ink units of kind inkfigures, their groups, the parts' figure rows, under the toggle `figures` | in LAYOUT 21, REMOVAL 11 and BUNDLE5 10 (the key `figures` of a part, there only where it has one) | — |
-| 6 | OCR on the server | a new OCR version in the key | 3.5 |
+| 6 (built) | OCR on the server: labels of kind inkocr in a late chunk after the parts, their places in the units, the reader's patches | the head's `versions.ocr` and the VTAG's `-o<OCR>`; in BUNDLE5 10 and INK_UNITS_FORMAT 2 | — |
 | 7 | names split from places (built: PIPELINE 30, LAYOUT 23); tables no unit cuts | PIPELINE | 1 |
 | 8 (built) | reader toggles in the web and the extension | the extension's configuration v21 (no engine version: no toggle is a translation's input) | 2 |
 
@@ -203,3 +205,20 @@ one more units chunk, stores the ledger, reads invariant (o) and offers the togg
    prepared or translated. Measured (the layer gate's jump, `--perf`): the open again and the two pages in view at 1× laid in
    81 to 384 ms over 14 page pairs of 6 papers (2026-10-25). The labels are the owner's words, in the locale packs
    (one key a toggle). "Always" and "never" are no setting.
+9. **The late chunk** (stage 6, the bitmap figures' text, PDF-READER §19.15; the contract's one rule added, 2026-10-25). After its
+   last part, its documents let go, the maker reads the bitmap figures of the base its head names (our wrapped base, or arXiv's PDF
+   where the head is over it: the engine's `ocrPass` over a PDF.js document of it opened with `maxImageSize: OCR_IMAGE_PIXELS`; the
+   recogniser the host's: `core/ocr` `createRecogniser` on `onnxruntime-node`'s CPU build, one thread, and `@napi-rs/canvas`, the
+   package's three model files beside the child, loaded at the first image; no cache, the box having no network; `collect` its
+   own collection; the budget the engine's within what the maker's clock leaves), and writes the labels as
+   one more units chunk, ids from the head's last on (`from`: the last chunk's `to` + 1; `before`: the head's chunks'
+   `chunkTotals`). It announces them **once, after its last part**, as a `units` announcement of the maker's (role `units`, its
+   chunks; LATE_MAX 4 at most; their units of kind `inkocr` alone): the service and the Worker accept it then and no other time,
+   every chunk held to CHUNKS_MAX and the totals as before, and the catalog lists the head's chunks followed by the late ones
+   (`writeCatalog`). The translation extends its plan to their ids, as for the maker's chunk before the head (§8.4). A reader is
+   told the units chunks the job holds (the late one after the head) and the catalog's; the engine's side reads a late chunk
+   told after its index and opens its door again. Nothing of it may fail the paper: a pass that throws, a figure that cannot be
+   read, a cache that cannot be reached, a chunk that would pass a bound (`stats.refused`) leave the figures the original's, the
+   parts told standing, its stats in the record's note (`ocr`). The pass's time is bounded (`budgetMs`, OCR_BUDGET_MS 60 s of
+   the recogniser's) and each figure's by the host (a TimeoutError: `timeout`).
+

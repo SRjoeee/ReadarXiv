@@ -1,4 +1,4 @@
-import { LETTER, collectText, squash } from '@/core/text'
+import { LETTER, collectText } from '@/core/text'
 // The LaTeXML rules module. Every ltx_* selector lives in this file only (CLAUDE.md, the first of the two defaults).
 // Based on DESIGN.md §5.1 / §5.2 / §5.3 / §5.6 / §6.1; the measurements are in DESIGN §5.7.
 // Data tables and pure functions only, no traversal; the traversal is in src/core/extractor.
@@ -552,13 +552,5 @@ function textOf(el: Element, drop?: (el: Element) => boolean): string {
   })
 }
 
-// §5.3 numeric cells: a digit required (so that a word starting with E, like ERROR, is not taken for an exponent); symbol-only cells; N/A; blank
-const NUMERIC_CELL = /^(?=.*\d)[\s\d.,+\-±×^%()/*eE−–—:;~<>=≤≥∼]+(\s*[a-zA-Zμ°%]{1,4})?$/
-const SYMBOL_CELL = /^[✓✗✔✘–—−\-·×*]+$/
-const NA_CELL = /^N\/A$/
-
-/** The input should be visibleText's result (formulas excluded); a match is copied as it is, not translated */
-export function isNumericCell(text: string): boolean {
-  const t = squash(text)
-  return t === '' || NUMERIC_CELL.test(t) || SYMBOL_CELL.test(t) || NA_CELL.test(t)
-}
+// §5.3 numeric cells: a module of their own (numeric.ts), which the bitmap figures' labels read too, in the PDF reader's engine
+export { isNumericCell } from './numeric.ts'

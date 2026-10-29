@@ -976,6 +976,21 @@ describe('B6, R2-R4: the translation into rows', () => {
     expect(a.engine.translate).toHaveBeenCalled()
   })
 
+  it('a late chunk read after the open (the bitmap figures\' labels, told after the parts): its units translated too, with the rest', async () => {
+    const a = run({ looks: [() => new Response(catalog)] })
+    await settle(60)
+    const before = new Set(a.side.taken.map(r => r[0]))
+    expect(before.size).toBe(toTranslate(m.index, 'zh').length)
+    // (the side's index grown by one label, as indexWithLate grows it, and the side telling the host so)
+    const id = m.index.units.length
+    const label = ['inkocr', 0, null, null, null, [[0, 'Validation loss']], null, [1, 0xffffff, 0, 1, 7.2, 0, 100, 200, 140, 200, 140, 190, 100, 190, 99, 201, 141, 201, 141, 189, 99, 189]]
+    const grown = { ...m.index, units: [...m.index.units, label], kinds: [...m.index.kinds, 'inkocr'] }
+    a.side.side.index.mockImplementation(async () => ({ ...grown, head: headOf() }) as never)
+    ;(a.side.options() as unknown as { onIndex(i: unknown): void }).onIndex(grown)
+    await settle(60)
+    expect(a.side.taken.some(r => r[0] === id)).toBe(true)
+  })
+
   it('a service that fails midway: the run stops with its kind; with no row of the target held, no end is told (nothing to lay: the pages stay the original\'s)', async () => {
     const engine = echo()
     let calls = 0

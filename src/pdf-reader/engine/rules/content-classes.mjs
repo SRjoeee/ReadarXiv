@@ -26,7 +26,7 @@ export const CLASSES = Object.freeze({
   heads: Object.freeze({ toggle: 'heads', state: 'built', glyphs: true, truth: 'the output routine\'s head, shipped before the page\'s first mark, and its foot, after the last' }),
   tables: Object.freeze({ toggle: 'tables', state: 'built', glyphs: true, truth: "the source's table cells (units of kind cell)" }),
   figures: Object.freeze({ toggle: 'figures', state: 'built', glyphs: true, truth: "glyphs our compile sets in a vector figure, no unit's: an included PDF's (a form XObject) and a TikZ or pgfplots picture's (between its points), cut into ink units of kind `inkfigures` (layout/figure-text.mjs), each drawn in its run's box; a float's other text no unit owns, counted" }),
-  ocr: Object.freeze({ toggle: 'figures', state: 'planned', glyphs: false, truth: "a bitmap figure's text, read and placed by OCR (PP-OCR, as the extension's: DESIGN §15.3); the owner's OK of 2026-10-25" }),
+  ocr: Object.freeze({ toggle: 'figures', state: 'built', glyphs: false, truth: "a bitmap figure's text, read and placed by OCR (PP-OCRv6 tiny, the extension's recogniser: DESIGN §15.3; the owner's OK of 2026-10-25) over each image our compile placed, merged into labels as the extension merges them, each an ink unit of kind `inkocr` (layout/bitmap-text.mjs) its place in the unit, drawn over a patch of the ground under each of its lines; a label whose ground is not flat, whose box holds other ink or whose patch would cover any, counted" }),
   references: Object.freeze({ toggle: 'references', state: 'built', glyphs: true, truth: "the bibliography's entries, each \\bibitem's text one unit, whole, its names its own (kind reference) as the compile reads it: the paper's thebibliography, the .bbl its package holds or the one BibTeX makes in the prepare's first pass, marked like the body; its label, numbers, web addresses and formulas the original's ink. A bibliography no \\bibitem sets (biblatex's), between its name and the next unit" }),
   index: Object.freeze({ toggle: 'references', state: 'planned', glyphs: true, truth: 'an index or a glossary, between its name and the next unit (proposed: back matter, with the references)' }),
   names: Object.freeze({ toggle: 'names', state: 'built', glyphs: true, truth: "the author block's names under the title (kind author), translated once whatever the target; its places are the body's (kind affiliation), an entry's names the references'" }),
@@ -41,13 +41,15 @@ export const CLASS_CODE = Object.freeze(Object.fromEntries(CLASS_IDS.map((id, i)
 
 /** the kind of a figure's ink unit (layout/figure-text.mjs): its text our glyphs', its place its run's (the parts' figure rows) */
 export const FIGURE_KIND = 'inkfigures'
+/** the kind of a bitmap figure's label (layout/bitmap-text.mjs): its text the recogniser's, its place in the unit (layer-proto/ocr-rows.mjs) */
+export const OCR_KIND = 'inkocr'
 /** a unit's class by its kind (latex-front.mjs's kinds, and the ink units'); a kind not here is `body` */
 export const UNIT_CLASS = Object.freeze({
   para: 'body', heading: 'body', abstract: 'body', caption: 'body', footnote: 'body', cell: 'tables', author: 'names', figure: 'figures',
   // (an author block's places, latex-front.mjs frontBlock: prose, always translated; its names `author`)
   affiliation: 'body',
   // (the ink units', layout/ink-units.mjs INK_KIND: their kind names their class)
-  inkheads: 'heads', inkcontents: 'contents', inknotes: 'notes', inkorphan: 'orphan', inknames: 'names', inkgenerated: 'generated', [FIGURE_KIND]: 'figures',
+  inkheads: 'heads', inkcontents: 'contents', inknotes: 'notes', inkorphan: 'orphan', inknames: 'names', inkgenerated: 'generated', [FIGURE_KIND]: 'figures', [OCR_KIND]: 'ocr',
   // (a structural name's unit, bundleUnitsOf's: a theorem head's or a generated reference's word in the target, always
   // translated: PDF-READER §19.14)
   name: 'generated',

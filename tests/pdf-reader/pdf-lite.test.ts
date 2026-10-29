@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { LINK_TEXT_PIXELS, LITE_PDFJS, liteWorkerSource, NO_IMAGE_PIXELS } from '@/pdf-reader/engine/layout/pdf-lite.mjs'
+import { LINK_TEXT_PIXELS, LITE_PDFJS, liteWorkerSource, NO_IMAGE_PIXELS, OCR_IMAGE_PIXELS } from '@/pdf-reader/engine/layout/pdf-lite.mjs'
 import { PDFJS } from '@/pdf-reader/engine/pipeline/versions.mjs'
 import { installLiteWorker, LITE } from './helpers/lite-pdfjs'
 
@@ -13,29 +13,35 @@ import { installLiteWorker, LITE } from './helpers/lite-pdfjs'
 const require = createRequire(import.meta.url)
 const ANCHOR = 'imgData = await imageObj.createImageData(false, isOffscreenCanvasSupported);'
 const TEXT_ANCHOR = '} else if (annotation.overlaysTextContent && isVisible) {'
+const REF_ANCHOR = '    operatorList.addDependency(objId);\n    fn = OPS.paintImageXObject;\n    args = [objId, w, h];\n'
 
 describe('liteWorkerSource', () => {
   it('adds the guard before the one image decode and the one on a link\'s overlaid text, and nothing else', () => {
-    const src = `a\n${ANCHOR}\nb\n${TEXT_ANCHOR}\nc`
+    const src = `a\n${REF_ANCHOR}\n${ANCHOR}\nb\n${TEXT_ANCHOR}\nc`
     const out = liteWorkerSource(src)
     expect(out.startsWith('a\n')).toBe(true)
     expect(out.endsWith('\nc')).toBe(true)
-    expect(out).toContain(`this.options.maxImageSize >= ${LINK_TEXT_PIXELS}`)
-    expect(LINK_TEXT_PIXELS).toBe(NO_IMAGE_PIXELS - 1)
-    expect(out).toContain(`annotation.overlaysTextContent && isVisible && this.evaluatorOptions.maxImageSize !== ${NO_IMAGE_PIXELS}) {`)
+    expect(out).toContain(`this.options.maxImageSize >= ${OCR_IMAGE_PIXELS}`)
+    expect([LINK_TEXT_PIXELS, OCR_IMAGE_PIXELS]).toEqual([NO_IMAGE_PIXELS - 1, NO_IMAGE_PIXELS - 2])
+    expect(out).toContain(`annotation.overlaysTextContent && isVisible && this.evaluatorOptions.maxImageSize !== ${NO_IMAGE_PIXELS} && this.evaluatorOptions.maxImageSize !== ${OCR_IMAGE_PIXELS}) {`)
     expect(out).not.toContain(TEXT_ANCHOR)
-    expect(out.length).toBeLessThan(src.length + 300)
+    // (the bitmap figures' opt-in: the image's object named after a paint's arguments)
+    expect(out).toContain(`    if (this.options.maxImageSize === ${OCR_IMAGE_PIXELS}) objId = \`\${objId}~\${imageRef ?? ''}\`;\n${REF_ANCHOR}`)
+    expect(out.length).toBeLessThan(src.length + 600)
   })
 
   it('refuses a worker without the decode, with it twice, a source that is no string, and a PDF.js it was not made for', () => {
     expect(() => liteWorkerSource('nothing')).toThrow(/0 times/)
-    expect(() => liteWorkerSource(`${ANCHOR}\n${ANCHOR}\n${TEXT_ANCHOR}`)).toThrow(/2 times/)
+    expect(() => liteWorkerSource(`${REF_ANCHOR}${ANCHOR}\n${ANCHOR}\n${TEXT_ANCHOR}`)).toThrow(/2 times/)
+    // (a paint's arguments: none, or twice)
+    expect(() => liteWorkerSource(`${ANCHOR}\n${TEXT_ANCHOR}`)).toThrow(/an image paint's arguments 0 times/)
+    expect(() => liteWorkerSource(`${REF_ANCHOR}${REF_ANCHOR}${ANCHOR}\n${TEXT_ANCHOR}`)).toThrow(/an image paint's arguments 2 times/)
     // (the overlaid text's condition: none, or twice)
-    expect(() => liteWorkerSource(ANCHOR)).toThrow(/overlaid text's condition 0 times/)
-    expect(() => liteWorkerSource(`${ANCHOR}\n${TEXT_ANCHOR}\n${TEXT_ANCHOR}`)).toThrow(/overlaid text's condition 2 times/)
+    expect(() => liteWorkerSource(`${REF_ANCHOR}${ANCHOR}`)).toThrow(/overlaid text's condition 0 times/)
+    expect(() => liteWorkerSource(`${REF_ANCHOR}${ANCHOR}\n${TEXT_ANCHOR}\n${TEXT_ANCHOR}`)).toThrow(/overlaid text's condition 2 times/)
     expect(() => liteWorkerSource(1 as never)).toThrow(TypeError)
-    expect(() => liteWorkerSource(`${ANCHOR}${TEXT_ANCHOR}`, { version: '9.9.9' })).toThrow(/made for PDF\.js/)
-    expect(() => liteWorkerSource(`${ANCHOR}${TEXT_ANCHOR}`, { version: LITE_PDFJS })).not.toThrow()
+    expect(() => liteWorkerSource(`${REF_ANCHOR}${ANCHOR}${TEXT_ANCHOR}`, { version: '9.9.9' })).toThrow(/made for PDF\.js/)
+    expect(() => liteWorkerSource(`${REF_ANCHOR}${ANCHOR}${TEXT_ANCHOR}`, { version: LITE_PDFJS })).not.toThrow()
   })
 
   it('is pinned: the installed worker is the version the patch was made for, holds the decode once, and the engine\'s PDFJS is it', () => {
@@ -45,6 +51,7 @@ describe('liteWorkerSource', () => {
     const worker = readFileSync(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs'), 'utf8')
     expect(worker.split(ANCHOR).length - 1).toBe(1)
     expect(worker.split(TEXT_ANCHOR).length - 1).toBe(1)
+    expect(worker.split(REF_ANCHOR).length - 1).toBe(1)
     expect(liteWorkerSource(worker, { version })).toContain('image pixels not decoded')
   })
 })

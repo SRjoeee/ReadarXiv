@@ -14,6 +14,8 @@ export type BundlePiece = [0, s: string] | [0, s: string, src: string] | [1, src
 export type BundleUnit = [kind: string, flags: number, depth: number | null, cell: CellPlace | null, edges: { lead?: string; trail?: string; inner?: string } | null, pieces: BundlePiece[]]
 /** an ink unit (an ink kind, of a chunk of INK_UNITS_FORMAT alone): a unit with the source unit whose row it is drawn with, or null */
 export type InkBundleUnit = [kind: string, flags: 0, depth: null, cell: null, edges: null, pieces: BundlePiece[], echo: number | null]
+/** a bitmap figure's label (kind `inkocr`, of a chunk of INK_UNITS_FORMAT alone): one text piece, no echo, its place (ocr-rows.mjs) */
+export type OcrBundleUnit = [kind: 'inkocr', flags: number, depth: null, cell: null, edges: null, pieces: BundlePiece[], echo: null, place: number[]]
 /** the structural name's unit kind (its units after the source's: bundleUnitsOf) */
 export declare const NAME_KIND: 'name'
 /** the hover's ids of babel's names: one an occurrence, past every bundle id, below 2^31 */
@@ -29,6 +31,8 @@ export declare function bundleUnitsOf(paper: { units: readonly SourceUnit[]; kep
 export declare function unitStands(u: unknown, i: number, stands: ArrayLike<number>, o?: { ink?: boolean }): boolean
 /** the ink units as the bundle holds them (layout/wrap.mjs wrapFinal `ink.units`) */
 export declare function inkBundleUnitsOf(ink: readonly { kind: string; echo: number | null; pieces: readonly SourceUnit['pieces'][number][] }[]): InkBundleUnit[]
+/** a bitmap figure's label as the bundle holds it: its text one piece, `flags` KEPT where it is only names */
+export declare function ocrBundleUnit(text: string, flags: number, place: number[]): OcrBundleUnit
 /** bytes as base64, padded */
 export declare function toBase64(bytes: Uint8Array): string
 /** base64 as bytes: a byte at least and at most `cap`, one spelling; throws a LayoutRefusal at `path` */

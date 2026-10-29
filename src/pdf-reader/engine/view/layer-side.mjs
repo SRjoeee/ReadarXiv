@@ -288,6 +288,19 @@ export function createLayerSide(view, o) {
     if (f.refused) return refuse(f.refused)
     if (!f.index) return
     if (!index) indexed(f.index)
+    // (an index made anew with a late chunk, the bitmap figures' labels, PDF-READER §19.15: the door opened again over it, as a
+    // change of the toggles opens it, each laid page kept until the new door's commits; the shapes and the contents are of the
+    // units the parts locate, which a late chunk holds none of)
+    // A host that translates the units itself (onIndex: the extension's run) is told, and its rows of the new units come after any
+    // end it said before: the rows are not ended again until it says so (end), so that the new door takes them (a door told its end
+    // takes no row after it, run.mjs take). A host whose rows are the server's (the web's) says its end once its translation is
+    // final, which comes after the late chunk (the translation's end waits for the catalog that lists it)
+    else if (f.index !== index) {
+      index = f.index
+      reopenWanted = true
+      if (o.onIndex) { rowsEnded = false; rowsTold = false }
+      try { o.onIndex?.(index) } catch (e) { warn('onIndex', e) }
+    }
     // the original open before the first open: the places are its pages, and the extension's base check reads its bytes or
     // its end (the web's is bound by its route). Once a door is open, a dropped original stops nothing: the door reads the
     // composed document
@@ -1321,7 +1334,7 @@ export function createLayerSide(view, o) {
 
   const side = {
     tell(refs) { if (!disposed && state !== 'refused') feed.tell(refs ?? {}) },
-    index: async () => { const i = await feed.index(); return disposed || state === 'refused' ? null : i },
+    index: async () => { const i = await feed.index(); return disposed || state === 'refused' ? null : (feed.state().index ?? i) },
     take(given) {
       if (disposed || !given?.length) return
       for (const r of given) if (Array.isArray(r) && Number.isInteger(r[0])) rows.set(r[0], r)

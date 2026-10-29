@@ -15,9 +15,10 @@ import { layoutFacade } from './facade.mjs'
 import { OPEN_FAMILY } from './fonts.mjs'
 import { layerDraws, readLeftPart } from './format.mjs'
 import { echoRows, layerIds, sourceUnitsOf, unitOf } from './rows.mjs'
-import { classesOn, shownTranslated, TOGGLE_DEFAULTS, unitClass } from '../rules/content-classes.mjs'
+import { classesOn, OCR_KIND, shownTranslated, TOGGLE_DEFAULTS, unitClass } from '../rules/content-classes.mjs'
 import { openProto } from './run.mjs'
 import { NAME_KIND } from './units.mjs'
+import { placeOf } from './ocr-rows.mjs'
 import { BUILTIN_RULES, resolveRules } from '../rules/layout.mjs'
 
 export { PDF_OPTIONS, SKIP_CODES } from './run.mjs'
@@ -226,8 +227,18 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
     for (const f of x?.figures ?? []) (figuresByPage.get(f.page) ?? figuresByPage.set(f.page, []).get(f.page)).push(f)
   }
   if (!four) hear(bundle)
+  // (and the bitmap figures' labels, which the layer's late chunk carries with their places in their units, PDF-READER §19.15:
+  // drawn where the reader's toggles show figures, as the figure units are; a place of no shape, or on no page of the paper,
+  // is no label)
+  const ocrByPage = new Map()
+  source.units.forEach((b, id) => {
+    if (!Array.isArray(b) || b[0] !== OCR_KIND) return
+    const o = placeOf(b[7])
+    if (!o) return
+    ;(ocrByPage.get(o.page) ?? ocrByPage.set(o.page, []).get(o.page)).push({ id, ...o })
+  })
   // (a bundle of 3 names no lists: its base is arXiv's PDF, which holds none of our groups, so no unit is hidden over it)
-  const hiding = { unhidden: id => unhidden.get(id) ?? null, labelKept: id => labelKept.has(id), rules: pg => rulesByPage.get(pg), figures: pg => figuresByPage.get(pg) ?? [], figuresShown: shownTranslated('figures', on) }
+  const hiding = { unhidden: id => unhidden.get(id) ?? null, labelKept: id => labelKept.has(id), rules: pg => rulesByPage.get(pg), figures: pg => figuresByPage.get(pg) ?? [], ocr: pg => ocrByPage.get(pg) ?? [], figuresShown: shownTranslated('figures', on) }
   const common = { units: [], expect, classes: { ...TOGGLE_DEFAULTS, ...(classes ?? {}) }, groups, target, scale: SCALE, dpr: 1, copy: false, free: true, records: false, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, OPS, onStep: () => evaluate() }
   run = await openProto(four
     ? {
