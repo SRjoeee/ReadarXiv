@@ -63,14 +63,18 @@ describe("v0's hyphenation: TeX's pattern files read as the prototype's host rea
     // (a Latin-1 file's 0xFF is dehyphn.tex's \u00DF)
     expect(patternsOfTex(tex).patterns).toContain('1\u00DF')
   })
-  it('breaks French, Spanish and Portuguese words where TeX does under babel, with their own patterns and minimums (#121-4)', () => {
+  it('breaks each target\'s words where TeX does under babel, with its own patterns and minimums (#121-4; the ten of 2026-10-29)', () => {
     // (TeX's \showhyphens of each word under babel's language in the pinned TeX Live image, and the patterns of hyph-utf8's
-    // files there that can apply to them: tests/fixtures/hyph/README.md. English's patterns broke 7 of the 54 as TeX does)
+    // files there that can apply to them: tests/fixtures/hyph/README.md. English's patterns broke 7 of fr, es and pt's 54 as
+    // TeX does; English's and Russian's rules 26 of the ten languages' 188)
     const F = JSON.parse(readFileSync(resolve('tests/fixtures/hyph/hyph-utf8-words.json'), 'utf8')) as { tex: Record<string, string[]>; patterns: Record<string, string[]>; exceptions: Record<string, string[]> }
-    for (const to of ['fr', 'es', 'pt']) {
-      const { params } = resolveRules(BUILTIN_RULES, to)
-      const lang = params.latinPatterns
-      expect(lang, to).toBe(to)
+    const targets = ['fr', 'es', 'pt', 'it', 'nl', 'pl', 'tr', 'id', 'ms', 'cs', 'sv', 'uk', 'bg']
+    expect(Object.keys(F.tex).sort()).toEqual([...targets].sort())
+    for (const to of targets) {
+      const { script, params } = resolveRules(BUILTIN_RULES, to)
+      const lang = script === 'Cyrl' ? params.cyrillicPatterns : params.latinPatterns
+      // (Malay's are Indonesian's, as babel's malay.ldf takes them: TeX has none of Malay's own)
+      expect(lang, to).toBe(to === 'ms' ? 'id' : to)
       expect(TEX_PATTERN_ENCODINGS[lang as 'fr'], to).toBe('utf8')
       const data = hyphenationOf({ patterns: F.patterns[lang] ?? [], exceptions: F.exceptions[lang] ?? [] })
       for (const w of F.tex[to]!) {
@@ -80,6 +84,21 @@ describe("v0's hyphenation: TeX's pattern files read as the prototype's host rea
         expect(breakPoints(word, lang, data, params.hyphenation[lang as 'fr']), `${to} ${w}`).toEqual(want)
       }
     }
+  })
+})
+
+describe('a word lowered as its patterns\' language lowers it', () => {
+  it('lowers a word as its patterns\' language does: Turkish\'s I is ı and its İ is i, and a word the lower case lengthens has no break', () => {
+    const F = JSON.parse(readFileSync(resolve('tests/fixtures/hyph/hyph-utf8-words.json'), 'utf8')) as { patterns: Record<string, string[]>; exceptions: Record<string, string[]> }
+    const tr = hyphenationOf({ patterns: F.patterns.tr!, exceptions: [] })
+    const mins = resolveRules(BUILTIN_RULES, 'tr').params.hyphenation.tr
+    // (TeX's: İs-ta-tis-tik-sel, Işık-lan-dırma, İn-ce-leme)
+    expect(breakPoints('İstatistiksel', 'tr', tr, mins)).toEqual([2, 4, 7, 10])
+    expect(breakPoints('Işıklandırma', 'tr', tr, mins)).toEqual([4, 7])
+    expect(breakPoints('İnceleme', 'tr', tr, mins)).toEqual([2, 4])
+    // (in a language that lowers İ to i and a combining dot, the word's offsets would be one off past it: none is given)
+    expect('İstatistiksel'.toLocaleLowerCase('en')).toHaveLength(14)
+    expect(breakPoints('İstatistiksel', 'en', tr, mins)).toEqual([])
   })
 })
 

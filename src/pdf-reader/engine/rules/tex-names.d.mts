@@ -2,7 +2,8 @@
 /** a theorem-like head's name in the target (translator's dictionary; ctex's for Chinese), or null */
 export declare function headName(english: string, to: string, names?: ReadonlyMap<string, string> | null): string | null
 /** a generated reference's English name in the target: its head's, else cleveref's or hyperref's (ctex's for Chinese), else
- *  in a target whose names do not inflect babel's name of its counter type (`labels`, the layout rules' labels), or null */
+ *  babel's name of its counter type (`labels`, the layout rules' labels: every form in a target whose names do not inflect,
+ *  the singular alone in one that does), or null */
 export declare function refName(english: string, to: string, labels?: Readonly<Record<string, string>> | null, names?: ReadonlyMap<string, string> | null): string | null
 /** a generated reference's text in the target's names: the replacements [start, end, word] in order, an empty list where it holds
  *  no name, null where any part has no word in the target */
