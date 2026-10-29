@@ -2820,7 +2820,12 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   further, in both readings (REMOVAL 12, LAYOUT 23, `stream.mjs` `lineEnd`: the last author's `\orcidlink` of 2609.20976v1
   owned the affiliations and the e-mail below the names, to the abstract's label, which no ink unit then made a unit of; at a
   bibliography's leading a reference's `\Eprint` wrapped over lines keeps every one it held, its entry's full stop and an
-  entry TeX gave no unit of its own among them, so that no glyph is left no one's). A footnote call is its unit's `.p` too. Label `u<id>.l`: the glyphs on the start's first glyph's
+  entry TeX gave no unit of its own among them, so that no glyph is left no one's). A display past its unit's end mark (MARK_DEF
+  sets it before a display that ends the unit) ends where a heading's babel name or a biblatex entry begins after it on its page,
+  before any next mark: that text is no unit's of the source (REMOVAL 17, LAYOUT 30, `stream.mjs`; 2608.08872v1's proof ends in
+  a display, and the whole bibliography after it on the page, "References" and every entry, was that display's ink; with the
+  entries' points the display had no next mark of its unit's and was left LOST). A name before its unit's end mark is the
+  unit's own text. A footnote call is its unit's `.p` too. Label `u<id>.l`: the glyphs on the start's first glyph's
   baseline between the previous unit's end mark and the start, the placeholders' and names' ranges passed over, but the
   closing punctuation a head macro sets after the unit before it — right after that unit's end mark, each glyph within a fifth
   of an em of the one before, the first of the glyph right before it, which is that unit's own (its text, or a placeholder of
@@ -3338,8 +3343,10 @@ translated.
   entry's paragraph begun there so that a numeric style's label, which the list's `\item` sets, stands before it; a count in a
   macro), and the ledger cuts the printed bibliography by them: from each point to the next, or to the next unit's start, one
   entry, of the references' class, so that the references toggle governs it as it governs a `\bibitem`'s; its names its own; its
-  label the original's ink. What stands before the first point (biblatex's heading) is a unit of its own. No `.bbl` is read
-  (biber's is a file of fields), and nothing of the source changes. Measured: below.
+  label the original's ink; every line of an entry is its unit's whatever it holds (a URL alone in a typewriter face, as `\url`
+  breaks it, or numbers alone: left out, it stood the original's where the drawn entry ran over it), an entry of no text word
+  none. What stands before the first point (biblatex's heading) is a unit of its own. No `.bbl` is read (biber's is a file of
+  fields), and nothing of the source changes. Measured: MEASURED.
 - **Not units:** a `.bib` the TeX tree holds rather than the package (a style's IEEEabrv): no pass is made.
 - **The author block: names apart from places** (`source/latex-front.mjs` `frontBlock`, PIPELINE 30, LAYOUT 23). An author block's
   affiliations, institutions, addresses and its e-mail line are units of their own, kind `affiliation` (class body: always

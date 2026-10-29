@@ -334,6 +334,12 @@ describe('inkUnitsOf', () => {
     const lines = (u: (typeof ink)[number]) => new Set([...u.glyphs.text, ...u.glyphs.ph].map(([, g]) => pg.page.glyphs[g]!.y).sort((a, b) => b - a))
     expect([...lines(ink[0]!)]).toEqual([720, 708])
     expect([...lines(ink[1]!)]).toEqual([690, 678])
+    // (the URL's line a row of the unit's whole: its baseline, size and face its own glyphs', as a text line's are its words' —
+    // with none of them, the layout file refused the page's part, every unit on those pages left undrawn)
+    const rows = ink[0]!.rows.lines
+    expect(rows).toHaveLength(16)
+    expect(rows.every(v => typeof v === 'number' || typeof v === 'string')).toBe(true)
+    expect(rows.slice(8)).toEqual([1, 110, expect.any(Number), 708, expect.any(Number), expect.any(Number), 10, 'CMTT10'])
   })
 
   it('writes each as a bundle unit that stands, of its kind, with its echo', () => {

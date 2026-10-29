@@ -416,7 +416,9 @@ function rowsOf(id, kind, cls, lines, phs, nPieces, pages) {
     const tg = l.words.filter(w => w.fam === 'text').flatMap(w => w.gs)
     let x0 = Infinity, x1 = -Infinity, top = -Infinity, bottom = Infinity
     for (const g of gs) { const x = G[g]; x0 = Math.min(x0, x.x0, x.ix0 ?? x.x0); x1 = Math.max(x1, x.x1, x.ix1 ?? x.x1); top = Math.max(top, x.top); bottom = Math.min(bottom, x.bottom) }
-    const base = modeOf(tg.map(g => r2(G[g].y))), size = modeOf(tg.map(g => r2(G[g].size))), font = modeOf(tg.map(g => G[g].font ?? '?'))
+    // (its baseline, size and face its text words'; a line of none, an entry's URL alone, its own glyphs')
+    const set = tg.length ? tg : gs
+    const base = modeOf(set.map(g => r2(G[g].y))), size = modeOf(set.map(g => r2(G[g].size))), font = modeOf(set.map(g => G[g].font ?? '?'))
     const [a, c, b, d] = solid(view, x0, Math.min(bottom, base), x1, Math.max(top, base))
     lineRows.push(l.page, a, b, Math.min(d, Math.max(c, base)), d, c, Math.min(200, size), font)
     // the erase: the line's text glyphs' boxes, merged (layout/make.mjs rowsOf)
