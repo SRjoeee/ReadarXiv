@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { documentBounds, inMemory, inputencOf, loadProject, markUnits, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { documentBounds, inMemory, inputencOf, loadProject, markUnits, patch, urlPercents } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { openPaper, originalFiles, probeFiles, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
 import { strategiesFor } from '@/pdf-reader/engine/pipeline/scripts.mjs'
@@ -221,6 +221,37 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     expect(units(p).flatMap(u => u.pieces.filter(x => x.t === 'ph').map(x => x.src))).toContain('\\cmidrule(lr){2-3}')
     expect(texts(project(doc('Set \\lstinline{x = y} and \\lstinline[language=C]|a = b| or \\mintinline{py}{f(x)} here.', '\\usepackage{listings}')))).toEqual(['Set and or here.'])
     expect(texts(project(doc('A \\ac{cnn} and \\acp*{rnn} work.', '\\usepackage{acronym}')))).toEqual(['A and work.'])
+  })
+  it('an inline \\tikz call is one placeholder to its path\'s `;` or its group: TikZ reads past its arguments (2010.11929v2\'s legend dots)', () => {
+    const p = project(doc('Text \\raisebox{0.5pt}{\\tikz\\fill[natural] (0,0) circle (.5ex);} Caltech101 words here.\n\nNext \\tikz[baseline]{\\draw (0,0) -- (1,1);} done and \\tikz \\node {a;b}; there.', '\\usepackage{tikz}'))
+    expect(texts(p)).toEqual(['Text Caltech101 words here.', 'Next done and there.'])
+    const phs = units(p).flatMap(u => u.pieces.filter(x => x.t === 'ph').map(x => x.src))
+    expect(phs).toEqual(['\\tikz\\fill[natural] (0,0) circle (.5ex);', '\\tikz[baseline]{\\draw (0,0) -- (1,1);}', '\\tikz \\node {a;b};'])
+    // (a call TeX would not end before the paragraph does stays as before: the command's placeholder alone)
+    expect(texts(project(doc('A \\tikz \\draw (0,0)\n\nWords of the next paragraph.', '\\usepackage{tikz}')))).toContain('Words of the next paragraph.')
+  })
+  it('a web address\'s `%` is a character where TeX reads it so: \\url, \\nolinkurl, \\path and \\href\'s first argument outside any other command\'s argument (2610.21770v1\'s %3F)', () => {
+    const p = project(doc('See \\url{https://a.com/x%3Fy} and more text after it.\n\nOr \\href{https://b.org/p%20q}{the page} and the rest of it.', '\\usepackage{hyperref}'))
+    expect(texts(p)).toEqual(['See and more text after it.', 'Or the page and the rest of it.'])
+    const phs = units(p).flatMap(u => u.pieces.filter(x => x.t === 'ph' || x.t === 'open').map(x => x.src))
+    expect(phs).toContain('\\url{https://a.com/x%3Fy}')
+    expect(phs.join(' ')).toContain('https://b.org/p%20q')
+    // (the units' bytes the paper's: the marked original sets the address as the paper does)
+    expect(patched(p)).toContain('\\url{https://a.com/x%3Fy}')
+    // (inside another command's argument, or an environment's body TeX collects, TeX has read the `%` as a comment already: the
+    // walk reads it so too; a group no command takes is no argument, and a verbatim's text no address)
+    for (const t of ['\\footnote{\\url{a%b}}', '\\newcommand{\\x}{\\url{a%b}}', '\\def\\x{\\href{a%b}{c}}', '\\begin{tabularx}{l}\\url{a%b}\\end{tabularx}', '\\begin{verbatim}\\url{a%b}\\end{verbatim}', '% \\url{a%b}']) expect(urlPercents(t), t).toBe(t)
+    for (const t of ['\\url{a%b}', '{\\small \\url{a%b}}', '\\href [x] {a%b} {c}', '\\begin{tabularx}{l}x\\end{tabularx} \\path{a%b}']) expect(urlPercents(t), t).not.toBe(t)
+    expect(urlPercents('\\href{a%3F%3D}{b%c}').split('%').length).toBe(2)
+    // (a `\\` and the character after it read as the argument's boundary reads them: `\\%` the command, `\\\\%` a pair and the
+    // character, the local Codex review)
+    expect(texts(project(doc('See \\url{a\\%b} and more one.\n\nSee \\url{a\\\\%b} and more two.\n\nSee \\href{x\\%20y}{the page} and more three.', '\\usepackage{hyperref}')))).toEqual(['See and more one.', 'See and more two.', 'See the page and more three.'])
+  })
+  it('a macro of the paper\'s whose body ends a table\'s row (\\newcommand{\\tightrow}{\\\\[-4pt]}) ends the row in a cell, as `\\\\` does (2610.21924v1\'s 30 cells ran into the next row\'s first)', () => {
+    const tab = '\\begin{table}\\begin{tabular}{lrr}\nDemographic equity & 73.88\\% & 95.29\\% \\tightrow\nCapacity shortage & 86.27\\% & 89.01\\% \\tightrow\nTravel distance & 1 & 2 \\\\\n\\end{tabular}\\end{table}'
+    expect(texts(project(doc(tab, '\\newcommand{\\tightrow}{\\\\[-4pt]}')))).toEqual(['Demographic equity', 'Capacity shortage', 'Travel distance'])
+    // (a body that does more than end the row stays a placeholder, as before)
+    expect(texts(project(doc(tab, '\\newcommand{\\tightrow}{\\\\[-4pt] more}')))).not.toEqual(['Demographic equity', 'Capacity shortage', 'Travel distance'])
   })
   it('a command the table does not know keeps every adjacent group, as before: some prose stays, nothing breaks', () => {
     expect(texts(project(doc('Before \\unknowncmd{some words here}{and more} after.')))).toEqual(['Before after.'])

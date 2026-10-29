@@ -17,6 +17,8 @@ export declare function completeMacros(files: readonly { file?: string; text: st
 export declare function documentBounds(text: string, options?: { lineEnvs?: Set<string> | null; ifs?: Set<string>; ifValues?: Map<string, boolean> | null }): { begin: number; body: number; end: number }
 /** the \usepackage[…]{inputenc} TeX acts on: where it stands and its options, or null */
 export declare function inputencOf(text: string, options?: { lineEnvs?: Set<string> | null; ifs?: Set<string>; ifValues?: Map<string, boolean> | null }): { start: number; end: number; options: string } | null
+/** a file's text with each `%` TeX reads as a character (a web address's, at a paragraph's level) written as a code no source holds, the same length */
+export declare function urlPercents(text: string): string
 /** the patched files (path → bytes): each unit's range replaced by its translated pieces, the rest untouched */
 /** what goes around a unit when it is written out (markUnits): `whole` puts it around all of the unit, inside the groups that open and close it */
 export type UnitMark = { start: string; end: string; before?: string; whole?: boolean } | null

@@ -290,7 +290,13 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
       if (pb < pa || (pb === pa && qb < qa)) { out.set(name, none(HOW['marks out of order'])); continue }
       if (regions[pb - 1].at[qb] !== rA) { out.set(name, none(HOW['its marks in two regions'])); continue }
       if (pb !== pa && rA % 2 === 0) { out.set(name, none(HOW['across a page, unbracketed'])); continue }
-      const { glyphs, boxes } = takeTo([pb, qb])
+      let { glyphs, boxes } = takeTo([pb, qb])
+      // (a punctuation mark its command set before its own ink, moved from after it (marks.mjs followsOf `moved`, TeX's 3: the
+      // closing mark after that mark), the text's, not the piece's: its first glyph where that is the mark and more follow)
+      if (f.moved && glyphs.length > 1) {
+        const [p0, g0] = glyphs[0]
+        if (pages[p0 - 1].glyphs.u[g0] === f.moved) { const [p1, g1] = glyphs[1], from = pages[p1 - 1].boxAt[g1]; glyphs = glyphs.slice(1); boxes = boxes.filter(([q, b]) => q > p1 || (q === p1 && b >= from)) }
+      }
       out.set(name, jumps(glyphs) ? none(HOW['across a column, unbracketed']) : { how: HOW.closed, glyphs, boxes })
       continue
     }
