@@ -872,6 +872,18 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   to a share of the line in 29. v0's checks are unchanged: they find the slices loaded or loading, and a run the wave did
   not foresee (a bold word in a paragraph, a character only the original's text holds) asks its own as before. A slice is
   asked once.
+  Before any part, the first page's CJK slices are asked early (`firstPageUnits`, `warmEarly`). On a first open the rows come
+  while the box runs and its head and parts at the end, so the page's wave began only with part 1 and its slices were the
+  page's last wait: on staging (2e627695, 2026-10-30) the door made page 1 ready 40 to 110 ms after its last slice came in all
+  twelve visits probed, 10 to 77 slices, 0.4 to 4.4 MB at about 1.6 MB/s. Now the units' kinds are read from the units chunks
+  told at the compile (the feed's `kinds`), and the rows the host reads before any part (its deltas, `warmEarly`, or rows taken
+  between the head and part 1) give the units' texts. The estimate is the units in id order, an author's aside, up to
+  `FIRST_PAGE_CHARS` (800) CJK characters, and the author block's places whatever their ids. Their CJK characters are asked
+  alone (`cjkOnly`), in the target's CJK face, which is the same whatever the paper's family, and each with no style (a
+  heading's in the bold). On seven papers in Chinese the estimate's slices held 100 % of page 1's CJK bytes on four, 90 and
+  92 % on two, and 55 % on the seventh, whose abstract is set in bold. It asked 0 to 1.07 MB (median 0.39) of slices page 1
+  does not draw. Nothing is asked early once a part is read, or where a catalog tells the parts' end with its parts (a cached
+  translation's first page has its own wave at once).
 - **Translating** (the owner's "Field", 2026-10-25). While a near page is not laid, its place shows the original's page,
   and each paragraph the parts read so far locate on it carries a mark: a card over its box, showing its own share of one
   diagonal light that crosses the whole page. The page's overlay is a size container and carries the pass (one registered

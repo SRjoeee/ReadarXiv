@@ -20,6 +20,10 @@
 //   measures the page's own characters (run.mjs, the page's Latin faces);
 // - with `likely`, the faces v0 warms on page 1 (layer2.mjs warmFaces: one character in the body's regular, bold and italic,
 //   CJK and Latin).
+// Before any part is read (a first open: the rows come while the box lays the paper out, its head and parts at the end), a first
+// page's units are not known, nor their styles: firstPageUnits estimates them from the units' kinds and the rows read so far,
+// and the wave asks their CJK characters alone (`cjkOnly`), in the CJK face the target sets them in whatever the paper's family
+// (Regular and Bold beside every family), so that the slices come during the box's run instead of after its first part.
 // A bold or italic run inside a paragraph, a caption's label and a character only the original's text holds (its
 // punctuation measured in the target's fallback) ask their slices when v0 lays the page, as before. The paper's family,
 // which decides its Latin runs' faces (a CJK target's weights it no longer does: Regular and Bold beside every family, the
@@ -42,8 +46,39 @@ import { cjkClassRe } from './layer2.mjs'
  *  every slice in flight; the composed document reads the PDF one range after another, each waiting for the last. A few
  *  slices at a time keep the line busy across their round trips and leave those reads a share of it */
 export const WAVE_SLOTS = 4
+/** the CJK characters of a first page as firstPageUnits counts them. Measured on seven papers in Chinese (2026-10-30, staging,
+ *  each page 1's units by its layout against this estimate, in shs-sc's slices): at 800 the estimate's slices held 100 % of page
+ *  1's CJK bytes on four, 92 % (2610.31506v1), 90 % (2602.23285v2: an ink unit, told with the head) and 55 % (2610.31351v1: its
+ *  abstract set in bold, asked in the regular), and asked 0 to 1.07 MB (median 0.39) of slices page 1 does not draw; at 600 three
+ *  of the seven fell to 84-87 %, at 1600 the slices not drawn rose to 0.12-1.38 MB */
+export const FIRST_PAGE_CHARS = 800
+/** a character a first page's budget counts (FIRST_PAGE_CHARS): a Han, kana or Hangul one */
+const CJK_COUNT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u
 /** the characters v0 warms each face with on page 1 (layer2.mjs warmFaces): a CJK one and a Latin one */
 const LIKELY_CJK = '\u6c38', LIKELY_LATIN = 'a'
+
+/**
+ * Page 1's units as they can be told before any part is read, for the warmer (`warm(page, 'other', { cjkOnly: true })`): the
+ * units in id order (the source's, title and abstract first) whose texts `texts` holds (each unit's translated text by id: the
+ * rows read so far), an author's aside (never drawn), until their CJK characters reach `chars` (the unit that reaches it
+ * included); and every place of the author block (kind `affiliation`: units of their own, after every other in id order, on the
+ * first page wherever their ids stand). `kinds`: each unit's kind by id (the units chunks'; null for none). Each with no style
+ * (st null: the warmer's plain face, a heading's the bold). An estimate: a unit it misses is asked by the wave of its page once
+ * the parts locate it, a slice it asks for nothing costs its bytes alone, while the box runs
+ */
+export function firstPageUnits(kinds, texts, { chars = FIRST_PAGE_CHARS } = {}) {
+  const out = []
+  let count = 0
+  const ids = [...(texts?.keys?.() ?? [])].filter(id => Number.isSafeInteger(id)).sort((a, b) => a - b)
+  for (const id of ids) {
+    const kind = kinds?.[id] ?? null, text = texts.get(id)
+    if (kind === null || kind === 'author' || typeof text !== 'string' || !text) continue
+    if (count >= chars && kind !== 'affiliation') continue
+    out.push({ kind, text, st: null })
+    if (kind !== 'affiliation') for (const ch of text) if (CJK_COUNT.test(ch)) count++
+  }
+  return out
+}
 
 /**
  * The paper's English family as its parts' layouts set it: each font name of a part's layout weighted by the lines set in it
@@ -138,7 +173,7 @@ export function faceWarmer({ faceSources, target, rules = BUILTIN_RULES }) {
   const FS = roleFaceSet({ faceSources, keepFailed: true })
   const rolesOf = new Map()
   return {
-    async warm(page, family, { signal = null } = {}) {
+    async warm(page, family, { signal = null, cjkOnly = false } = {}) {
       let roles = rolesOf.get(family)
       if (!roles) rolesOf.set(family, (roles = rolesFor(target, family, R.cjkFaces)))
       const design = page?.likely ?? (family === 'other' ? 'times' : family)
@@ -149,13 +184,14 @@ export function faceWarmer({ faceSources, target, rules = BUILTIN_RULES }) {
         const r = runs.get(key) ?? runs.set(key, { face, chars: new Set() }).get(key)
         for (const ch of chars) r.chars.add(ch)
       }
-      const text = (st, s) => { for (const ch of s) if (!/\s/u.test(ch)) ask(st, cjkRe.test(ch) ? 'cjk' : 'latin', [ch]) }
+      // (cjkOnly: the CJK characters alone, whose face is the target's whatever the family; a Latin one's is the family's)
+      const text = (st, s) => { for (const ch of s) { if (/\s/u.test(ch)) continue; const cjk = cjkRe.test(ch); if (cjk || !cjkOnly) ask(st, cjk ? 'cjk' : 'latin', [ch]) } }
       const plain = bold => ({ fam: 'serif', bold, italic: false, caps: false, design })
       for (const u of page?.units ?? []) {
         if (u?.kind === 'author' || typeof u?.text !== 'string' || !u.text) continue
         text(u.st && u.st.fam !== 'math' ? u.st : plain(u.kind === 'heading'), u.text)
       }
-      for (const n of page?.names ?? []) {
+      for (const n of cjkOnly ? [] : page?.names ?? []) {
         const word = R.labels?.[n.key]
         if (!word) continue
         const s = n.capitals ? word.toLocaleUpperCase(target) : word
@@ -163,8 +199,8 @@ export function faceWarmer({ faceSources, target, rules = BUILTIN_RULES }) {
         const cls = [...s].some(ch => cjkRe.test(ch)) ? 'cjk' : 'latin'
         ask(n.st && n.st.fam !== 'math' ? n.st : plain(false), cls, [...s].filter(ch => !/\s/u.test(ch)))
       }
-      for (const st of page?.fonts ?? []) if (st?.known && st.fam !== 'math') ask(st, 'latin', [LIKELY_LATIN])
-      if (page?.likely) {
+      for (const st of cjkOnly ? [] : page?.fonts ?? []) if (st?.known && st.fam !== 'math') ask(st, 'latin', [LIKELY_LATIN])
+      if (page?.likely && !cjkOnly) {
         for (const x of [{ bold: false, italic: false }, { bold: true, italic: false }, { bold: false, italic: true }]) {
           const st = { fam: 'serif', caps: false, design: page.likely, ...x }
           if (R.params.cjk) ask(st, 'cjk', [LIKELY_CJK])

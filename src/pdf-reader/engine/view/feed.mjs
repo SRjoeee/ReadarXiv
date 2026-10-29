@@ -48,8 +48,9 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
   let resolveIndex
   const indexed = new Promise(r => { resolveIndex = r })
   let reading = false
-  /** the units refs told, whose bytes go with the index */
+  /** the units refs told, whose bytes go with the index; and the refs themselves, by digest, for the kinds read before it */
   const unitShas = new Set()
+  const unitRefs = new Map()
   function refuse(code, e) {
     if (refused || disposed) return
     refused = code
@@ -86,6 +87,30 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
       for (const sha of unitShas) bytes.delete(sha)
       if (!gone()) refuse(e?.axtCode ?? 'index', e)
     } finally { reading = false }
+  }
+
+  /** the kinds read before the index, by the refs they were read from (read again where more chunks are told) */
+  let kindsRead = null, kindsReadOf = ''
+  async function kindsBefore() {
+    if (index) return index.kinds
+    const refs = [...unitRefs.values()].filter(r => Number.isSafeInteger(r.from)).sort((a, b) => a.from - b.from)
+    const key = refs.map(r => r.sha256).join(',')
+    if (kindsRead && kindsReadOf === key) return kindsRead
+    kindsReadOf = key
+    kindsRead = (async () => {
+      if (refs[0]?.from !== 0) return null
+      const kinds = []
+      let before = null
+      for (const r of refs) {
+        // (a chunk that does not follow the one before: what it holds is not read before the index)
+        if (r.from !== kinds.length) break
+        const chunk = await readUnitsChunk(await fetch(r), { ref: refOf(r), before })
+        for (const u of chunk.units) kinds.push(u === null ? null : u[0])
+        before = chunk
+      }
+      return kinds
+    })().catch(() => null)
+    return kindsRead
   }
 
   // ---------------------------------------------------------------- the chain
@@ -194,7 +219,7 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
      *  the chain */
     tell({ units, head, parts, end: told1 } = {}) {
       if (disposed || refused) return
-      if (!index) for (const r of units ?? []) { unitShas.add(r.sha256); void fetch(r) }
+      if (!index) for (const r of units ?? []) { unitShas.add(r.sha256); unitRefs.set(r.sha256, r); void fetch(r) }
       if (head) {
         if (!headRef) { headRef = head; void readIndex() } else if (head.sha256 !== headRef.sha256 && !otherHead) { otherHead = true; warn('another head is passed over', new Error(head.sha256)) }
       }
@@ -233,6 +258,11 @@ export function createFeed({ fetchObject, changed = () => {}, warn = () => {} })
     },
     /** the index once read; null where it is refused, or the feed disposed */
     index: () => indexed,
+    /** the units' kinds by id before the index (a first open: its units told at the compile, its head at the layout's end), for an
+     *  early wave of the faces alone (layer-side warmEarly): the units chunks told so far, from id 0 and each following the one
+     *  before, read by the format's reader as the index reads them (readUnitsChunk), their bytes kept for the index; a unit that
+     *  does not stand null. The index's once it is read. Null where no chunk from 0 is told, or one is refused */
+    kinds: () => kindsBefore(),
     /** what is read so far: the index, the parts read in page order, how far the parts go once told, whether the parts read
      *  reach it, why the layer is refused, and how many objects' bytes are held now */
     state() {
