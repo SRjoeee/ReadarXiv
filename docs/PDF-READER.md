@@ -2799,7 +2799,10 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   stays: a footnote's separator above its lines, a class's rule above a title (MR 3 takes no box), a box as tall as a letter (an
   ORCID mark, 2610.21547v1), a logo's parts, a frame, a display's fraction bar beside a unit's glyph outside their extent
   (2610.21765v1 p10). An ink unit's lines take theirs the same way (`ink-units.mjs` `claimInk`), from the page's boxes that
-  meet its glyphs' extent and a size about it. The search is counted as it goes, its comparisons within `OWN_WORK` (a unit's
+  meet its glyphs' extent and a size about it; a rule inside one of its placeholders' extent (its glyphs within `PH_GAP` 0.3 of
+  their size of each other: an inline fraction's bar between its numerator and denominator) is that placeholder's, `u<id>.p`,
+  as a source unit's placeholder takes the boxes of its range, since the formula's crop redraws it with the text's groups
+  hidden (`visibility.mjs` `cropSourceOff`). The search is counted as it goes, its comparisons within `OWN_WORK` (a unit's
   past it is not owned, as any past it; the ink units' past theirs keep the page's): a PDF's paths are anyone's, and a line of
   20,000 rules beside 20,000 thin boxes would be 400 million comparisons. A placeholder's rules are its `.p`, claimed over the
   text's.
