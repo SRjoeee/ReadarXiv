@@ -151,6 +151,8 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
   const units = [], glyphMaps = [], turnedMaps = []
   const stats = { units: 0, crowded: 0, letters: 0, runs: 0, past: 0, clipped: 0, sets: 0, grouped: 0, aligned: 0 }
   pages.forEach((pg, pi) => {
+    // (the page's text lines a unit's column is read from, made once a page and call, of this call's owners)
+    let lines = null
     const glyphMap = new Map(), turnedMap = new Map()
     glyphMaps.push(glyphMap); turnedMaps.push(turnedMap)
     const S = streamOf(pg, own?.glyphs?.[pi])
@@ -202,9 +204,10 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       const k = units.length
       const u = { k, page: pi + 1, group: figureGroup(k), text, font: r.font, size: r.size, fill: r.fill, angle: angleOf(f), x: first.ox, y: first.oy, ux: f.ux, uy: f.uy, length: s1 - s0, ascent, descent, anchor: 'centre', form: r.form, why: null }
       const room = roomOf(pg, f, u, r.gs)
-      // (a level line on its column's edge, or centred in it, is set from there, as TeX set it: the column's text lines tell it
-      // before the ink beside the unit does; elsewhere, inside a figure, that ink, and the unit's set below)
-      u.anchor = columnAnchorOf(columnLinesOf(pg, own?.glyphs?.[pi]), u) ?? room.anchor
+      // (the ink beside it within the reach tells its anchor, inside a figure (a line sample, an axis); where none does, a level
+      // line on its column's edge, or centred in it, is set from there, as TeX set it (a heading a class sets in a boxed
+      // panel); else its middle; the unit's set below may take its column's edge over either)
+      u.anchor = room.told ? room.anchor : (columnAnchorOf((lines ??= columnLinesOf(pg, own?.glyphs?.[pi])), u) ?? room.anchor)
       if (room.crowded) { u.why = 'crowded'; stats.crowded++ }
       units.push(u)
       mine.push({ u, r, free: room })
@@ -223,16 +226,12 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
 
 /** the page's text lines a unit's column is read from: the level glyphs a unit owns (own.mjs's groups), by baseline, a line
  *  cut where two glyphs stand a size apart (two columns' lines on one baseline), each { y, x0, x1, size } by its glyphs'
- *  advances; once a page */
-const columnLines = new WeakMap()
+ *  advances */
 function columnLinesOf(pg, owners) {
   if (!owners) return []
-  let lines = columnLines.get(pg)
-  if (lines) return lines
-  const G = pg.glyphs ?? [], gs = []
+  const G = pg.glyphs ?? [], gs = [], lines = []
   for (let g = 0; g < G.length; g++) { const x = G[g]; if (owners[g] != null && x && x.size > 0 && /\S/u.test(x.u ?? '') && !x.blank) gs.push(x) }
   gs.sort((a, b) => b.y - a.y || a.x0 - b.x0)
-  lines = []
   let row = []
   const flush = () => {
     row.sort((a, b) => a.x0 - b.x0)
@@ -246,14 +245,13 @@ function columnLinesOf(pg, owners) {
   }
   for (const x of gs) { if (row.length && Math.abs(row[0].y - x.y) > RUN_DY * Math.max(row[0].size, x.size)) flush(); row.push(x) }
   flush()
-  columnLines.set(pg, lines)
   return lines
 }
 
-/** a level unit's anchor by its column (the column's text lines within COLUMN_REACH of its sizes above and below it whose
- *  extent its box meets, two at least): its start on their common start, the column's left edge, within ALIGN_TOL of its size
- *  ('start': a heading TeX set flush, 2610.37668v1's "Abstract", centred over its longer original had stood an em in); its
- *  end on their end ('end'); its middle on the column's ('centre'); else null, the ink beside it to tell */
+/** a level unit's anchor by its column, where no ink beside it tells one (the column's text lines within COLUMN_REACH of its
+ *  sizes above and below it whose extent its box meets, two at least): its start on their common start, the column's left
+ *  edge, within ALIGN_TOL of its size ('start': a heading TeX set flush, 2610.37668v1's "Abstract", centred over its longer
+ *  original had stood an em in); its end on their end ('end'); its middle on the column's ('centre'); else null */
 function columnAnchorOf(lines, u) {
   if (!lines.length || Math.abs(u.uy) > 1e-3 || u.ux <= 0) return null
   const x0 = u.x, x1 = u.x + u.length, reach = COLUMN_REACH * u.size, tol = ALIGN_TOL * u.size
@@ -544,7 +542,8 @@ function roomOf(pg, f, u, own) {
   }
   // (set from its start where the ink before it is nearer by half, from its end where the ink after it is: else from its middle)
   const anchor = Math.max(before, 0) * ANCHOR_RATIO < Math.max(after, 0) ? 'start' : Math.max(after, 0) * ANCHOR_RATIO < Math.max(before, 0) ? 'end' : 'centre'
-  return { crowded, anchor, before: freeBefore, after: freeAfter }
+  // (`told`: whether the ink within the reach told the anchor, on either side; none on both is its middle by default)
+  return { crowded, anchor, told: Number.isFinite(before) || Number.isFinite(after), before: freeBefore, after: freeAfter }
 }
 
 /** a path's lines against a unit's band (in its frame): each segment's part across the band (a stroke's widened by its half

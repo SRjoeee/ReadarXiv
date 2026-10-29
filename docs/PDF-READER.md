@@ -3089,15 +3089,15 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   read, the font's ascent and descent then; each glyph its own procedure's, for PDF.js names a Type 3 character by its glyph
   and gives every one the same empty `fontChar`, and a "," as wide as a "." is another glyph): every glyph of matplotlib's DejaVu faces had been boxed 0.75 em up and 0.22 down,
   a "." as an "M" (14 of the release sweep's 54 papers hold Type 3 glyphs, all but one in included figures), and a glyph whose
-  procedure paints nothing (`d1` alone: 2610.19159v1's figures carry an invisible text layer so) has no ink. A level unit's
-  anchor is first its column's (`columnAnchorOf`): the text lines units own within `COLUMN_REACH` 3 em above and below its
-  baseline whose extent its box meets, two at least, tell the column's edges, and a unit whose start lies on their common start
-  within `ALIGN_TOL` is `start`, whose end on their end `end`, whose middle on their middle `centre` (a heading a class sets
-  flush in a boxed panel, 2610.37668v1's "Abstract" over its two-column abstract: read alone it was `centre`, its shorter Chinese
-  set an em in from the column's edge). Else its anchor is read from the
+  procedure paints nothing (`d1` alone: 2610.19159v1's figures carry an invisible text layer so) has no ink. Its anchor is read from the
   figure's ink nearest it along its baseline within `ANCHOR_REACH` 1.5 em, a path by its segments (pageInk's `shapes`, a curve as
   eight chords, a fill's subpaths closed, at most a million numbers a page): `start` where the ink before it is nearer by
-  `ANCHOR_RATIO` 2 (a legend's line sample, an arrow it labels), `end` where the ink after it is, else `centre`. A unit whose
+  `ANCHOR_RATIO` 2 (a legend's line sample, an arrow it labels), `end` where the ink after it is, `centre` between the two. Where
+  no ink stands within the reach, a level unit's anchor is its column's (`columnAnchorOf`): the text lines units own within `COLUMN_REACH` 3 em above
+  and below its baseline whose extent its box meets, two at least, tell the column's edges, and a unit whose start lies on their
+  common start within `ALIGN_TOL` is `start`, whose end on their end `end`, whose middle on their middle `centre` (a heading a
+  class sets flush in a boxed panel, 2610.37668v1's "Abstract" over its two-column abstract: read alone it was `centre`, its
+  shorter Chinese set an em in from the column's edge); else `centre`. A unit whose
   band meets other ink inside its box (another glyph, a stroke's segment widened by its half line width, a fill's edge, an image
   or a shading not holding the band) is `crowded`, left the original's: a translation there could cover that ink.
 - **Its set and its room** (the owner's rule of 2026-10-29, after 2010.11929v2's legends in Chinese: "All" drawn smaller
