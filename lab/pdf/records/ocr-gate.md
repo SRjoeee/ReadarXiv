@@ -50,3 +50,27 @@ with this run's drawing rules (a set at one size, runs by script) and bounds (OC
 2608.16117v1's page of 64.7 million pixels holds the one image past OCR_PAGE_PIXELS_MAX (`big`), and its other 40 images give 624
 lines (636 with all 41). Of the sets' 23 labels, 10 took their column's edge as their anchor and 20 their set's median size. The WebAssembly
 build and the native one read the same text on all 818 lines of the 57 images both read (DESIGN §15.4).
+
+## Run of 2026-10-29, later (the caps at 16 million pixels; a label's lines laid as one block)
+
+The same 7 bases and runtime. OCR_PIXELS_MAX and OCR_PAGE_PIXELS_MAX at 16 million pixels each (from 40 and 64 million): the box's
+pass holds some 46 to 50 bytes a pixel of the page it reads (natively, 2610.16663v1's page of 20.6 million pixels 950 MiB over the
+pass at rest; in the website's box, 2610.19274v1's page of 14.7 million its OCR child's data size 1,364 MiB of its 1,472), so that
+a page past 16 million took the child past 70 % of its limit, and 2610.16663v1's of 55.5 million to the limit itself, where the
+child held until its clock and the paper had none of its labels. A label's lines that run one way are laid as one block
+(`ocr-fit.mjs blockOf`); the counts below do not move with it, the places of the drawn text do.
+
+| Paper | Images painted | Read | Small | Big | Again | Lines | Labels | Drawn | Left (why) | Sets (labels) | Recogniser s | P | L | C | D | A |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 1512.03385v1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | — | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 1706.03762v7 | 3 | 3 | 0 | 0 | 0 | 48 | 31 | 25 | 6 busy | 4 (13) | 1.1 | 0 | 0 | 0 | 0 | 0 |
+| 1810.04805v2 | 38 | 1 | 32 | 0 | 5 | 0 | 0 | 0 | — | 0 | 0.0 | 0 | 0 | 0 | 0 | 0 |
+| 2307.16209v1 | 8 | 8 | 0 | 0 | 0 | 47 | 9 | 2 | 5 busy, 1 crowded, 1 overlap | 0 | 1.2 | 0 | 0 | 0 | 0 | 0 |
+| 2608.04322v1 | 6 | 5 | 1 | 0 | 0 | 87 | 40 | 18 | 21 busy, 1 overlap | 4 (8) | 0.8 | 0 | 0 | 0 | 0 | 0 |
+| 2608.16117v1 | 41 | 22 | 0 | 19 | 0 | 303 | 36 | 11 | 16 busy, 9 overlap | 0 | 6.2 | 0 | 0 | 0 | 0 | 0 |
+| 2609.26457v1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | — | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+2608.16117v1 is the cost: 19 of its 41 images are past the caps (18 of them over 8 million pixels, its pages up to 64.7 million), and
+11 of its 42 labels drawn before are drawn now. In the box it drew none before: its pages hold four times what the OCR child's
+limit leaves. Of the 1,615 images the 183 surveyed papers paint, 65 (in 14 papers) are past 16 million. The caps rise when the pass
+holds less a pixel (a page's images decoded one at a time, fewer copies of each: the website's record, its OCR measurement).

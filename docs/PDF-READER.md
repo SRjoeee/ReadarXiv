@@ -3264,9 +3264,14 @@ first page's way (the coordinator's word: the units come after the head and ever
 - **When**: after the maker's last part (the host's: the web's maker child, `docs/route/orphan-text.md` §8.9), over our base page,
   so that no page waits for it; its units one more units chunk, a **late chunk**, ids from the head's last on. A figure the pass
   cannot read stays the original's and is never the paper's failure: an image under OCR_MIN_SIDE (30 PDF units) or OCR_MIN_PX
-  (32 pixels) a side (`small`), one past OCR_PIXELS_MAX (40 million pixels) or past its page's OCR_PAGE_PIXELS_MAX (64 million
+  (32 pixels) a side (`small`), one past OCR_PIXELS_MAX (16 million pixels) or past its page's OCR_PAGE_PIXELS_MAX (16 million
   pixels of the page's images in all, in the order the page paints them: PDF.js decodes a page's images together, as it builds
-  the page's operator list) — the lite worker's OCR opt-in (layout/pdf-lite.mjs) keeps its operator and decodes none of it, `big`;
+  the page's operator list) — the lite worker's OCR opt-in (layout/pdf-lite.mjs) keeps its operator and decodes none of it, `big`.
+  The pass holds some 46 to 50 bytes a pixel of the page it reads (measured 2026-10-29: natively, a page of 20.6 million pixels
+  of 2610.16663v1 950 MiB over the pass at rest; in the website's box, 2610.19274v1's page of 14.7 million its OCR child's data
+  size 1,364 MiB of 1,472), so that 16 million keeps the child within 70 % of its limit; the 40 and 64 million before let a page
+  of 55.5 take it to its limit, where it held every label of the paper and two minutes of the box. Of the 1,615 images the 183
+  surveyed papers paint, 65 (in 14 papers) are past 16 million;
   an image PDF.js keeps once for the pages that paint it is refused on all of them —, one the recogniser refuses or does not
   answer in its host's time (`error`, `timeout`), one past the paper's budget (OCR_BUDGET_MS, 60 s of the recogniser's time,
   `budget`: the owner's bound on the box's hold), one past the paper's OCR_IMAGES_MAX (200 images taken past the size floors,
@@ -3343,7 +3348,8 @@ first page's way (the coordinator's word: the units come after the head and ever
   labels' lines overlapping (L 0), no patch over ink of another colour (C 0), no stroke across a patch's edge (D 0), every image
   and label accounted for (A 0). 2608.16117v1's 41 PNGs: 23 s of the pass, 16 s of it the recogniser's. Again on 2026-10-29
   (next 8ecf231a, the box's runtime: onnxruntime-node's CPU build, `--ort-node`): P, L, C, D and A 0 on the 7; 2608.16117v1 40 of
-  its 41 images read (its page of 64.7 million pixels past OCR_PAGE_PIXELS_MAX), 11.3 s of the recogniser's; 9 sets of 23 labels
+  its 41 images read (its page of 64.7 million pixels past OCR_PAGE_PIXELS_MAX), 11.3 s of the recogniser's, under the caps of 40 and
+  64 million pixels before (22 of 41 under 16 million, 11 labels drawn of 42: lab/pdf/records/ocr-gate.md); 9 sets of 23 labels
   over 1706.03762v7, 2608.04322v1 and 2608.16117v1, 10 anchors set by their column, 20 sizes their set's median. The box's own
   figures are the web's record (`docs/route/orphan-text.md` §8.9).
 - **Limits.** A label on a ground that is no one colour (a gradient, a photograph, a heat map) or whose box another line's ink

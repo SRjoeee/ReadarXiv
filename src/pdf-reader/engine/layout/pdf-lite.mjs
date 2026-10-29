@@ -63,9 +63,13 @@ export const LINK_TEXT_PIXELS = Number.MAX_SAFE_INTEGER - 1
  *  (`big`) rather than lost with its placement as a stock worker's `maxImageSize` drops it; "no limit" to a stock worker */
 export const OCR_IMAGE_PIXELS = Number.MAX_SAFE_INTEGER - 2
 /** the pixels an image may have to be decoded for the recogniser (PDF-READER §19.15, Bounds: the box's memory) */
-export const OCR_PIXELS_MAX = 40_000_000
-/** the pixels a page's images may have in all to be decoded for the recogniser: past them its later images get none (`big`) */
-export const OCR_PAGE_PIXELS_MAX = 64_000_000
+export const OCR_PIXELS_MAX = 16_000_000
+/** the pixels a page's images may have in all to be decoded for the recogniser: past them its later images get none (`big`).
+ *  The box's pass holds some 46 to 50 bytes a pixel of the page it reads (2026-10-29, natively, 2610.16663v1: a page of 20.6
+ *  million pixels 950 MiB over the pass at rest, one of 30.3 million 1,500; in the box, 2610.19274v1's page of 14.7 million its
+ *  OCR child's data size 1,364 MiB of its 1,472), so that 16 million keeps its peak within 70 % of the child's limit (the web's
+ *  budget.ts rule); 64 million let a page of 55.5 take the child past its limit, and every label of the paper with it */
+export const OCR_PAGE_PIXELS_MAX = 16_000_000
 
 /** the one line of buildPaintImageXObject that decodes an image's pixels, in the callback of the unawaited buildImage */
 const ANCHOR = 'imgData = await imageObj.createImageData(false, isOffscreenCanvasSupported);'
