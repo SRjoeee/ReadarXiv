@@ -71,7 +71,11 @@ describe('a bitmap figure\'s labels (labelsOf)', () => {
     expect(run({ others: { boxes: [[120, 100, 140, 110]], segs: [], fills: [] } }).left).toEqual([{ text: 'Validation loss', why: 'covered' }])
     expect(run({ others: { boxes: [], segs: [[90, 108, 210, 108, 0.5]], fills: [] } }).left).toEqual([{ text: 'Validation loss', why: 'covered' }])
     const box = [[0, 0, 300, 0], [300, 0, 300, 200], [300, 200, 0, 200], [0, 200, 0, 0]]
-    expect(run({ others: { boxes: [], segs: [], fills: [box] } }).left).toEqual([{ text: 'Validation loss', why: 'covered' }])
+    for (const evenOdd of [false, true]) expect(run({ others: { boxes: [], segs: [], fills: [{ edges: box, evenOdd }] } }).left).toEqual([{ text: 'Validation loss', why: 'covered' }])
+    // (two nested rectangles of one direction round the label: nonzero fills the inner one, even-odd leaves it a hole)
+    const inner = [[80, 80, 220, 80], [220, 80, 220, 130], [220, 130, 80, 130], [80, 130, 80, 80]]
+    expect(run({ others: { boxes: [], segs: [], fills: [{ edges: [...box, ...inner], evenOdd: false }] } }).left).toEqual([{ text: 'Validation loss', why: 'covered' }])
+    expect(run({ others: { boxes: [], segs: [], fills: [{ edges: [...box, ...inner], evenOdd: true }] } }).left).toEqual([])
     expect(run({ others: null }).left).toEqual([{ text: 'Validation loss', why: 'covered' }])
     // (ink of the page apart from the patch: none of its business)
     expect(run({ others: { boxes: [[300, 10, 320, 20]], segs: [[300, 0, 300, 200, 0.5]], fills: [] } }).units).toHaveLength(1)

@@ -88,6 +88,8 @@ export function paintsOf({ fnArray, argsArray }, OPS) {
   const PAINT = new Set([OPS.stroke, OPS.closeStroke, OPS.fill, OPS.eoFill, OPS.fillStroke, OPS.eoFillStroke, OPS.closeFillStroke, OPS.closeEOFillStroke])
   const STROKES = new Set([OPS.stroke, OPS.closeStroke, OPS.fillStroke, OPS.eoFillStroke, OPS.closeFillStroke, OPS.closeEOFillStroke])
   const FILLS = new Set([OPS.fill, OPS.eoFill, OPS.fillStroke, OPS.eoFillStroke, OPS.closeFillStroke, OPS.closeEOFillStroke])
+  /** the fills by the even-odd rule; the others fill by the nonzero winding rule, PDF's default (ISO 32000 §8.5.3.3) */
+  const EVEN_ODD = new Set([OPS.eoFill, OPS.eoFillStroke, OPS.closeEOFillStroke])
   const quadOfBox = (m, x0, y0, x1, y1) => [apply(m, x0, y0), apply(m, x1, y0), apply(m, x1, y1), apply(m, x0, y1)]
   for (let k = 0; k < fnArray.length; k++) {
     const fn = fnArray[k], a = argsArray[k]
@@ -125,7 +127,7 @@ export function paintsOf({ fnArray, argsArray }, OPS) {
         const box = [Infinity, Infinity, -Infinity, -Infinity]
         for (const g of segs) { box[0] = Math.min(box[0], g[0], g[2]); box[1] = Math.min(box[1], g[1], g[3]); box[2] = Math.max(box[2], g[0], g[2]); box[3] = Math.max(box[3], g[1], g[3]) }
         box[0] -= hw; box[1] -= hw; box[2] += hw; box[3] += hw
-        paths.push({ k, segs, fill: FILLS.has(op), box })
+        paths.push({ k, segs, fill: FILLS.has(op), evenOdd: EVEN_ODD.has(op), box })
       }
     } else if (fn === OPS.paintImageXObject) images.push({ k, id: a[0], w: a[1], h: a[2], ctm, clips: complex ? 'complex' : clips })
     else if (fn === OPS.paintImageXObjectRepeat) {
@@ -295,7 +297,7 @@ export async function ocrPass({ doc, OPS, paper, source = null, from, before = n
         for (const q of near) n += q.segs.length
         // (and the images painted after it over its box: a patch over one would draw a label of what it hides)
         const over = images.filter(j => j.k > im.k).map(j => [apply(j.ctm, 0, 0), apply(j.ctm, 1, 0), apply(j.ctm, 1, 1), apply(j.ctm, 0, 1)]).filter(q => meets(boxOfPoints(q), box))
-        const others = n > OCR_SEGS_PAGE ? null : { boxes: boxes.filter(b => meets(b, box)), segs: near.flatMap(q => q.segs), fills: near.filter(q => q.fill).map(q => q.segs), images: over }
+        const others = n > OCR_SEGS_PAGE ? null : { boxes: boxes.filter(b => meets(b, box)), segs: near.flatMap(q => q.segs), fills: near.filter(q => q.fill).map(q => ({ edges: q.segs, evenOdd: q.evenOdd })), images: over }
         const limit = Math.min(OCR_UNITS_IMAGE, unitsDoc - units.length)
         t = now()
         const got = labelsOf({ image, lines, place: { page: p, ctm: im.ctm, clip: im.clips, view }, others, taken, limit })

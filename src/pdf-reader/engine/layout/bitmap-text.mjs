@@ -214,6 +214,18 @@ function holdsEvenOdd(edges, [x, y]) {
   for (const [x0, y0, x1, y1] of edges) if ((y0 > y) !== (y1 > y) && x < x0 + ((y - y0) * (x1 - x0)) / (y1 - y0)) inside = !inside
   return inside
 }
+/** …and by the nonzero winding rule (PDF's `f`, ISO 32000 §8.5.3.3.2): the edges' turns about it, not their count's parity, so that
+ *  two nested subpaths of one direction fill the inner one too */
+function holdsNonzero(edges, [x, y]) {
+  let turns = 0
+  for (const [x0, y0, x1, y1] of edges) {
+    const side = (x1 - x0) * (y - y0) - (x - x0) * (y1 - y0)
+    if (y0 <= y) { if (y1 > y && side > 0) turns++ } else if (y1 <= y && side < 0) turns--
+  }
+  return turns !== 0
+}
+/** whether a fill ({ edges, evenOdd }: by its own rule) holds a point */
+const fillHolds = (f, pt) => (f.evenOdd ? holdsEvenOdd(f.edges, pt) : holdsNonzero(f.edges, pt))
 /** whether a segment (with half a line width `w` about it) meets a convex quad */
 function segmentMeets(q, x0, y0, x1, y1, w) {
   if (w > 0) {
@@ -230,7 +242,7 @@ function segmentMeets(q, x0, y0, x1, y1, w) {
  * transform its unit square is drawn by on its page (PDF units), the clip in force there (convex quads in PDF units, each of which
  * a patch must stand in, or 'complex' for a clip no quad is), the page's view; `others` the page's ink over the image a patch must
  * not cover: { boxes: [[x0, y0, x1, y1]] (its text), segs: [[x0, y0, x1, y1, halfWidth]] (the paths drawn after the image), fills
- * ([segs] of each fill among them) }, PDF units, or null where it is more than can be read (every label `covered`); `taken` the
+ * ([{ edges: segs, evenOdd }] of each fill among them, by its rule) }, PDF units, or null where it is more than can be read (every label `covered`); `taken` the
  * patches already drawn on its page by the images before it (PDF units, each a quad), added to.
  * Returns { units, left, sets }: `units` each { text, lines (count), size, anchor, bg, fg (0xRRGGBB), quads: [line quad, patch
  * quad] per line (PDF units, ↖ ↗ ↘ ↙ in the line's reading), set (the index among `units` of its set's first: setsOf) }; `left`
@@ -399,7 +411,7 @@ export function labelsOf({ image, lines, place, others = { boxes: [], segs: [], 
       const [bx0, by0, bx1, by1] = box(p)
       // (a fill drawn over the image that holds the patch whole: its edges meet none of it)
       const mid = [(p[0][0] + p[2][0]) / 2, (p[0][1] + p[2][1]) / 2]
-      if ((others.fills ?? []).some(edges => holdsEvenOdd(edges, mid))) return true
+      if ((others.fills ?? []).some(f => fillHolds(f, mid))) return true
       if (others.boxes.some(([x0, y0, x1, y1]) => x1 > bx0 && x0 < bx1 && y1 > by0 && y0 < by1 && quadsMeet(p, [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]))) return true
       // (an image painted after this one over the patch: what the patch would label is under it)
       if ((others.images ?? []).some(q => quadsMeet(p, q))) return true
