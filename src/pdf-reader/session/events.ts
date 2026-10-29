@@ -51,8 +51,9 @@ export type SessionEvent =
   | { type: 'coming' }
   /** the layer's catalog: the paper's prepare, where there was one, is over */
   | { type: 'prepared' }
-  /** the layer's side as the view tells it: opening, open, or refused (no layer for the visit), and its pages laid */
-  | { type: 'layer'; state: 'opening' | 'open' | 'refused'; laid: number; total: number }
+  /** the layer's side as the view tells it: opening, open, or refused (no layer for the visit), its pages laid, and (none where
+   *  absent) the pages asked near the view it shows as arXiv's by the rule, never laid */
+  | { type: 'layer'; state: 'opening' | 'open' | 'refused'; laid: number; total: number; original?: number }
   /** the translation under way, and its end for the attempt (`stopped`: why it stopped short) */
   | { type: 'translating'; got: number; total: number; lost: number }
   | { type: 'translated'; got: number; total: number; lost: number; stopped: ProviderErrorKind | null }

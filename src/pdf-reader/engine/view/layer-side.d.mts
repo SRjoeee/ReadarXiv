@@ -63,8 +63,9 @@ export interface LayerSide {
   /** the ids of the units whose rows the open door's page still waits for (the door's rowsFor: its closure's, Need(page)),
    *  for a host that translates as it shows to translate first; [] with no door, out of the paper, or once the page is ready */
   rowsFor(page: number): number[]
-  /** `late` and `skipped` are the door's to tell (engine gap: not in its stats): 0 and {} until it does */
-  coverage(): { laid: number; total: number; late: number; failed: number; stalled: number; skipped: Record<string, number>; parts: { through: number; told: number } }
+  /** `late` and `skipped` are the door's to tell (engine gap: not in its stats): 0 and {} until it does; `original`, the pages asked
+   *  near the view that this door shows as arXiv's by the rule (noLayoutPage), never laid */
+  coverage(): { laid: number; original: number; total: number; late: number; failed: number; stalled: number; skipped: Record<string, number>; parts: { through: number; told: number } }
   /** the harness's hooks: counts and states, a ring of the last commits (page@ms), never a page's text */
   probe(): Readonly<Record<string, number | string | boolean | null>>
   /** the door and every composed task let go; each place back to its pre-layer content; 'layer' not emitted after */
