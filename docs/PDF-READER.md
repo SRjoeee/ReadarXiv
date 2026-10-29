@@ -1109,7 +1109,11 @@ contract §4.3), started by the host once a translated display is shown in a vis
    taken as they come, then the end. A retry is the side's `again()`, every row held taken at once, and the run again.
 
 The served faces are `session/faces.ts` (our site's static table: `/static-fonts/index.json` and `/static-fonts/<group>.json`),
-the hyphenation `<api>/hyph/<lang>.json`.
+the hyphenation `<api>/hyph/<lang>.json`: English's, German's, and French's, Spanish's and Portuguese's (#121-4, RULES_SCHEMA 8:
+hyph-utf8's `hyph-fr.tex`, `hyph-es.tex` and `hyph-pt.tex`, MIT, MIT and BSD 3-clause, read as UTF-8 by `layer-proto/hyph.mjs`
+`patternsOfTex`; each target's `latinPatterns` its own, at babel's minimums, French 2 and 3, Spanish 2 and 2, Portuguese 2 and 3,
+the `.ldf` files' `\providehyphenmins`), which the web's hyphenation builder writes from the pinned TeX Live image. On 54
+words TeX broke under babel (`tests/fixtures/hyph/`) the layer breaks every one as TeX does; English's patterns had broken 7.
 An id with no version is the latest version arXiv's abstract page lists (`session/paper.ts`: within 15 s and 2 MB, a read
 that cannot be had forgotten so that a retry reads it again). The run's rows are
 `tests/pdf-reader/run.test.ts`, `server.test.ts`, `ranges.test.ts`, `faces.test.ts` and `reader-host.test.ts`; `pnpm e2e:reader` runs the
@@ -1627,7 +1631,7 @@ The edge cases, decided:
 | `PIPELINE_VERSION` (`pipeline/versions.mjs`, `'35'`) | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
 | `LAYOUT` (`layout/file.mjs`, `'29'`: backref's list after an entry a row of its list piece's, §19.13; 28 a Type 3 glyph's ink its char procedure's paths, `layout/ink.mjs` `type3Box`, #122-1; 27 a command that sets the punctuation after it before its ink marked around the pair, a macro TeX said sets no ink EMPTY, a piece alone at an entry's end given the lines it runs onto, a macro that sets one punctuation mark drawn as it, §19.7; 26 a unit TeX set flush left or flush right flagged so, `UNIT_FLAG.FLUSH_LEFT` and `UNIT_FLAG.FLUSH_RIGHT`, and a paragraph a box's close ends read by its own skips, §18.1, §18.8; 25 the release sweep of 2026-10-29, a line too short to be evidence found on no other page, a word a hyphen cuts going on below, an ink unit's paragraph one unit, a math face told by its family's names, `layer-proto/fonts.mjs` `classifyFont`), `REMOVAL` (`pipeline/versions.mjs`, `'16'`: backref's list after an entry its list piece's ink, §19.13; 14 a unit's text owns the rules TeX painted on its own lines, an OT1 `\_`, an underline, own.mjs MR 2b, #117; 13 a punctuation mark a command set before its own ink its unit's text, not the piece's, §19.9; 12 a macro TeX said sets no ink is no placeholder of ink, an opening point alone at its unit's end owns its lines up to TeX's skip before another block; 8 no add-on, a part's or a bundle's cell rules in its place, our page wrapped by optional content, §11.8, §19.9) | extraction | the layout maker (the file's own schema is `LAYOUT_SCHEMA`, 5); how a drawn unit's ink is taken away | the R2 key | bundles made again lazily |
 | `TRANSLATE_VERSION` (`translate/version.mjs`, `'7'`: backref's list after an entry on no wire, put back after the translation with an en space before it, §19.13; `'6'`: every content class translated once whatever the language, the author block for every target and a bibliography's entries; `'5'`: a display's own stop written after its marker and taken off the reply; `'4'`: a styled pair whose two ends stand where the wire has a marker anyway keeps its markers; `'3'`: a sentence whose words change style sent whole, the pairs inside it on no wire; `'2'`: a formula split across inline formulas sent as one marker) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
-| `RULES_SCHEMA` (`rules/layout.mjs`, `7`: `evenPitch` and `keepAlign` added, lane B's B1 and B2, the ruling of 2026-10-29, §18.8; 6: `cjkFaces` holds its group alone, a CJK script drawn at Regular and Bold beside every English family, its `light` designs and its unread `kai` gone, the ruling of 2026-10-29; 5 before it: `fillLeadRel` added, the fill's top relative to the original's pitch; 4: `adaptiveFill.band` read against the page's own paragraphs, 1b-C) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
+| `RULES_SCHEMA` (`rules/layout.mjs`, `8`: `latinPatterns` takes French's, Spanish's and Portuguese's own, hyph-utf8's (the three were hyphenated with English's, #121-4), and `hyphenation` their minimums as babel sets them, French 2 and 3, Spanish 2 and 2, Portuguese 2 and 3; 7: `evenPitch` and `keepAlign` added, lane B's B1 and B2, the ruling of 2026-10-29, §18.8; 6: `cjkFaces` holds its group alone, a CJK script drawn at Regular and Bold beside every English family, its `light` designs and its unread `kai` gone, the ruling of 2026-10-29; 5 before it: `fillLeadRel` added, the fill's top relative to the original's pitch; 4: `adaptiveFill.band` read against the page's own paragraphs, 1b-C) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
 | the set's `version` | layout | the values | its immutable URL | readers take it on their next load |
 | `RULES_VERSION` (`src/core/rules/latexml.ts`) | HTML extraction | the HTML page's rule file | the HTML page's per-text key only | as DESIGN §5.5 |
 | `TYPESETTING_VERSION` (`live.mjs`) | parked | the compile path | parked records | none |
@@ -1709,7 +1713,7 @@ The rule set is one schema-validated file, `rules/layout-rules.json`: configurat
 | `noStart` | script | breaking | a list of characters | The characters no line starts with. |
 | `noEnd` | script | breaking | a list of characters | The characters no line ends with. |
 | `hyphen` | script | breaking | `0`, `1` | Whether a Latin word is hyphenated at a line's end (1) or not (0). |
-| `latinPatterns` | script | breaking | `en`, `de` | The hyphenation patterns a Latin word uses. |
+| `latinPatterns` | script | breaking | `en`, `de`, `fr`, `es`, `pt` | The hyphenation patterns a Latin word uses. |
 | `keepAlign` | script | breaking | yes or no | Whether a unit TeX set flush left (ragged right) or flush right keeps that alignment: its lines left ragged, never justified, or set to the right edge. |
 | `cellClear` | script | cells | 0 to 5, step 0.1 | The room kept between a table cell's text and a rule over or under it, in PDF units. |
 | `cellCapMin` | script | cells | 0.3 to 1, step 0.05 | The smallest share of the size a cell's text may be capped to between its rules. |
@@ -1720,6 +1724,12 @@ The rule set is one schema-validated file, `rules/layout-rules.json`: configurat
 | `hyphenation.en.right` | set | hyphenation | 1 to 6 | The fewest letters English leaves after a hyphen. |
 | `hyphenation.de.left` | set | hyphenation | 1 to 6 | The fewest letters German leaves before a hyphen. |
 | `hyphenation.de.right` | set | hyphenation | 1 to 6 | The fewest letters German leaves after a hyphen. |
+| `hyphenation.fr.left` | set | hyphenation | 1 to 6 | The fewest letters French leaves before a hyphen. |
+| `hyphenation.fr.right` | set | hyphenation | 1 to 6 | The fewest letters French leaves after a hyphen. |
+| `hyphenation.es.left` | set | hyphenation | 1 to 6 | The fewest letters Spanish leaves before a hyphen. |
+| `hyphenation.es.right` | set | hyphenation | 1 to 6 | The fewest letters Spanish leaves after a hyphen. |
+| `hyphenation.pt.left` | set | hyphenation | 1 to 6 | The fewest letters Portuguese leaves before a hyphen. |
+| `hyphenation.pt.right` | set | hyphenation | 1 to 6 | The fewest letters Portuguese leaves after a hyphen. |
 
 ### 18.6 Hosts: opening a layer with a rule set
 

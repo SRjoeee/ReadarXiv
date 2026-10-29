@@ -2,10 +2,16 @@
 
 /** a language's patterns as loaded: Liang's points by letters, the exceptions, the longest pattern */
 export interface Patterns { pats: Map<string, number[]>; exceptions: Map<string, string>; maxLen: number }
+/** the languages of TeX's pattern files the layer hyphenates with */
+export type PatternLanguage = 'en' | 'de' | 'fr' | 'es' | 'pt'
 /** TeX's pattern files under texmf-dist, by language */
-export declare const TEX_PATTERN_FILES: Readonly<Record<'en' | 'de', string>>
-/** a TeX pattern file (decoded as Latin-1) as { patterns, exceptions }: what the prototype's host served */
-export declare function patternsOfTex(latin1: string): { patterns: string[]; exceptions: string[] }
+export declare const TEX_PATTERN_FILES: Readonly<Record<PatternLanguage, string>>
+/** how each pattern file is decoded: Latin-1 (TeX's 8-bit files) or UTF-8 (hyph-utf8's) */
+export declare const TEX_PATTERN_ENCODINGS: Readonly<Record<PatternLanguage, 'latin1' | 'utf8'>>
+/** a TeX pattern file, decoded as its `encoding` (Latin-1 by default), as { patterns, exceptions }: what a host serves */
+export declare function patternsOfTex(text: string, encoding?: 'latin1' | 'utf8'): { patterns: string[]; exceptions: string[] }
+/** patternsOfTex's { patterns, exceptions } as breakPoints reads them */
+export declare function hyphenationOf(j: { patterns: readonly string[]; exceptions: readonly string[] }): Patterns
 /** a language's patterns, fetched once from `url` (patternsOfTex's JSON); null where there are none, true for Russian
  *  (its rules need none) */
 export declare function loadHyphenation(lang: string, url?: string): Promise<Patterns | true | null>

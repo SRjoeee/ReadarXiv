@@ -100,10 +100,10 @@ describe("v0's open takes every choice for its target from the rule set it is gi
 
   it('reports the set it was opened with: its schema and version', async () => {
     const run = await open()
-    expect(run.rules).toEqual({ schema: 7, version: BUILTIN_RULES.version })
+    expect(run.rules).toEqual({ schema: 8, version: BUILTIN_RULES.version })
     const set = editable()
     set.version = 4
-    expect((await open({ rules: set })).rules).toEqual({ schema: 7, version: 4 })
+    expect((await open({ rules: set })).rules).toEqual({ schema: 8, version: 4 })
   })
 
   it('takes no params option: a host sets a field in the rule set, not on the open (a type test)', () => {
@@ -138,7 +138,7 @@ describe("v0's open takes every choice for its target from the rule set it is gi
     expect(fonts.roleFaces()?.cjk).toEqual({ body: 'shs-tc-regular', bold: 'shs-tc-bold' })
     expect(asked.filter(u => u.startsWith('/hyph/')).sort()).toEqual(['/hyph/de.json', '/hyph/en.json'])
     // and the built-in set's patterns, for each target: English's for every target, the language's own, Russian's by rules
-    for (const [t, want] of [['zh', ['en']], ['de', ['de', 'en']], ['fr', ['en']], ['ru', ['en']]] as const) {
+    for (const [t, want] of [['zh', ['en']], ['de', ['de', 'en']], ['fr', ['en', 'fr']], ['es', ['en', 'es']], ['pt', ['en', 'pt']], ['ru', ['en']]] as const) {
       vi.resetModules()
       asked.length = 0
       const again = await import('@/pdf-reader/engine/layer-proto/run.mjs')

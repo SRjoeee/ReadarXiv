@@ -23,8 +23,8 @@
    "fmtutil": "r77314"
   }
  },
- "made": "2026-10-29T08:39:08.788Z",
- "digest": "60938e48277cb461708bc6349235c711eeb2a4e4754fb87091d203c0040fda4c",
+ "made": "2026-10-29T08:49:56.705Z",
+ "digest": "d4d73c0c4bb03ead70122864e5b084271466c226ecc0cd3bd061d7bfb38380fe",
  "bucket": "readarxiv-ci",
  "files": [
   {
@@ -2180,6 +2180,24 @@
    "sha256": "0bf281fd020e40ec2ae81a6bf819f2451e8cfd027e04f99c101c3da5c97b9300",
    "bytes": 51634,
    "url": "r2://readarxiv-ci/gate-pack/0bf281fd020e40ec2ae81a6bf819f2451e8cfd027e04f99c101c3da5c97b9300"
+  },
+  {
+   "path": "texmf/tex/generic/hyph-utf8/patterns/tex/hyph-es.tex",
+   "sha256": "6a2e5f39a991a23d1cd8a23dbd0f6fe96a9f07561a6695f4f3320f47030e236c",
+   "bytes": 42602,
+   "url": "r2://readarxiv-ci/gate-pack/6a2e5f39a991a23d1cd8a23dbd0f6fe96a9f07561a6695f4f3320f47030e236c"
+  },
+  {
+   "path": "texmf/tex/generic/hyph-utf8/patterns/tex/hyph-fr.tex",
+   "sha256": "526cad6fe8f52fcd3caa3fcaf667cb1740cfc14bca198680e00dc343a84594de",
+   "bytes": 30353,
+   "url": "r2://readarxiv-ci/gate-pack/526cad6fe8f52fcd3caa3fcaf667cb1740cfc14bca198680e00dc343a84594de"
+  },
+  {
+   "path": "texmf/tex/generic/hyph-utf8/patterns/tex/hyph-pt.tex",
+   "sha256": "c110a39e501db372d1d755e1c64464321a2efa7d8e9617f66001000389b941f2",
+   "bytes": 5487,
+   "url": "r2://readarxiv-ci/gate-pack/c110a39e501db372d1d755e1c64464321a2efa7d8e9617f66001000389b941f2"
   },
   {
    "path": "texmf/tex/generic/hyphen/hyphen.tex",
