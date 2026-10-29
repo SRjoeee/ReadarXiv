@@ -68,6 +68,26 @@ describe('reduce: the layer\'s states (Task 12)', () => {
     expect(fold([{ type: 'layer', state: 'refused', laid: 0, total: 4 }], done).phase).toBe('ready')
   })
 
+  it('laying ends on a page shown as arXiv\'s by the rule (the side\'s `original`: no part lays a line on it), with nothing laid: told after the end or before it; such a page draws no translation, so a run stopped short over it keeps its card', () => {
+    // 2610.30854v1 on staging 9236d8f8: our compile set pages 1 to 9 a line apart from arXiv's, the page check drew none of them,
+    // and the end was held while the reader looked at page 1, the line on until a page past 9 was laid
+    const bilingual: SessionEvent = { type: 'display', mode: 'bilingual' }
+    const start: SessionEvent = { type: 'translating', got: 0, total: 9, lost: 0 }, end: SessionEvent = { type: 'translated', got: 9, total: 9, lost: 0, stopped: null }
+    const ruled: SessionEvent = { type: 'layer', state: 'open', laid: 0, total: 13, original: 2 }
+    const done = fold([bilingual, opened, { type: 'coming' }, start, end])
+    expect(done).toMatchObject({ phase: 'translating', laying: true })
+    const after = fold([ruled], done)
+    expect(after).toMatchObject({ phase: 'ready', laying: false, layer: { laid: 0, total: 13, original: 2 } })
+    expect(lineOf(after).on).toBe(false)
+    // told before the end: the end is not held
+    expect(fold([bilingual, opened, ruled, start, end])).toMatchObject({ phase: 'ready', laying: false })
+    // stopped short over it, nothing laid: the card with the service's reason, as with no page at all
+    expect(fold([bilingual, opened, ruled, { type: 'translated', got: 0, total: 9, lost: 9, stopped: 'network' }])).toMatchObject({ phase: 'failed', failure: 'network' })
+    // the view's event passes it on, and leaves it out where there is none
+    expect(fromView({ type: 'layer', state: 'open', laid: 0, total: 13, original: 2 }, 'x')).toEqual(ruled)
+    expect(fromView({ type: 'layer', state: 'open', laid: 1, total: 13 }, 'x')).toEqual({ type: 'layer', state: 'open', laid: 1, total: 13 })
+  })
+
   it('a layer and a failing service: the card with its reason while nothing is laid; laid pages stay readable, the notice with its retry', () => {
     expect(fold([opened, { type: 'fail', event: 'service', text: '', kind: 'no-key' }])).toMatchObject({ phase: 'failed', failure: 'no-key' })
     const stopped = fold([opened, laid(2), { type: 'translated', got: 10, total: 40, lost: 30, stopped: 'network' }])

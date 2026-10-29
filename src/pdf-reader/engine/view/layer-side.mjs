@@ -352,6 +352,7 @@ export function createLayerSide(view, o) {
     rearm.clear()
     ready = 0
     failed = 0
+    ruled.clear()
     right?.reset()
     // (a page kept drawn by the door before shows what the shapes no longer hold: nothing of it lit or hit until this door's page
     // commits there, or the original's is shown)
@@ -403,6 +404,10 @@ export function createLayerSide(view, o) {
   const pages = new Map()
   const rec = n => { let P = pages.get(n); if (!P) { P = { ask: null, clock: 0, content: null, failed: false, stalled: false, copying: false, again: false }; pages.set(n, P) } return P }
   let ready = 0, failed = 0, stalls = 0
+  /** the pages asked near the view that this door shows as arXiv's by the rule (originalPageOf: no part that holds the page lays a
+   *  line on it), never asked of the door: settled, as a laid page is, so that a host waiting for the layer's first page where the
+   *  translation shows waits for none of them (its `layer` events' `original`). Not laid: `ready` counts none of them */
+  const ruled = new Set()
   const rearm = new Set()
   const counts = { asked: 0, commits: 0, retired: 0, copies: 0, composed: 0, opens: 0, added: 0, leftParts: 0, forks: 0, restored: 0, dropped: 0, ahead: 0, aheadKept: 0, texts: 0 }
   /** each text layer built: its page, its items, its spans and the main thread's time to build it (ms), the last RING */
@@ -503,6 +508,13 @@ export function createLayerSide(view, o) {
     rearm.add(n)
     warn('wait', new Error(`page ${n} was not laid within ${PAGE_MS} ms: its place shows the original's page`))
     shownOriginal(n)
+  }
+  /** a near page shown as arXiv's by the rule (originalPageOf), told the host once a door: settled (`original`), never laid */
+  function ruledOriginal(n) {
+    shownOriginal(n)
+    if (ruled.has(n)) return
+    ruled.add(n)
+    emitLayer(true)
   }
   /** a page whose layer is not coming now: its place back to its pre-layer content where it holds the layer's */
   function shownOriginal(n) {
@@ -610,7 +622,7 @@ export function createLayerSide(view, o) {
     if (P.content?.wrap && P.content.gen === gen) return
     // a page of parts with no layout is not asked: the original's page, as the owner decided (what TeX's positions do not draw is
     // arXiv's PDF)
-    if (originalPageOf(n)) { shownOriginal(n); return }
+    if (originalPageOf(n)) { ruledOriginal(n); return }
     if (P.ask) return
     const my = gen, a = new AbortController()
     P.ask = a
@@ -683,7 +695,8 @@ export function createLayerSide(view, o) {
     // (the page asked before its parts were all told, laid with nothing to draw: the original's page stays; and a page the layer draws
     // nothing of its own on, no unit translated there (its rows none, lost or not come by the end): arXiv's page stays, never our
     // base page in its place)
-    if (originalPageOf(n) || laid.hides === 0) { shownOriginal(n); return }
+    if (originalPageOf(n)) { ruledOriginal(n); return }
+    if (laid.hides === 0) { shownOriginal(n); return }
     let got
     try { got = await copyAt(d, n, k, my) } catch (e) {
       if (disposed || my !== gen || e?.name === 'AbortError') return
@@ -1310,10 +1323,10 @@ export function createLayerSide(view, o) {
   function emitLayer(soon = false) {
     if (disposed || state === 'idle') return
     const tell = () => {
-      const key = `${state}|${why}|${ready}|${total()}`
+      const key = `${state}|${why}|${ready}|${total()}|${ruled.size}`
       if (key === layerTold) return
       layerTold = key
-      V.emit({ type: 'layer', state, ...(why ? { why } : {}), laid: ready, total: total() })
+      V.emit({ type: 'layer', state, ...(why ? { why } : {}), laid: ready, total: total(), ...(ruled.size ? { original: ruled.size } : {}) })
     }
     if (!soon) { clock.cancel(layerFrame); layerFrame = 0; tell(); return }
     if (!layerFrame) layerFrame = clock.frame(() => { layerFrame = 0; if (!disposed) tell() })
@@ -1425,7 +1438,7 @@ export function createLayerSide(view, o) {
       try { return door.rowsFor(page) } catch { return [] }
     },
     coverage() {
-      return { laid: ready, total: total(), late: 0, failed, stalled: stalls, skipped: {}, parts: door?.stats().parts ?? { through: 0, told: 0 } }
+      return { laid: ready, original: ruled.size, total: total(), late: 0, failed, stalled: stalls, skipped: {}, parts: door?.stats().parts ?? { through: 0, told: 0 } }
     },
     probe() {
       let laidNow = 0, retiredNow = 0, asking = 0

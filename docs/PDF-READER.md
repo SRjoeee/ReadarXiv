@@ -787,7 +787,12 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   arXiv's. What TeX's positions do not draw is arXiv's PDF: such a page (some part holds it and every part that holds it has no
   layout, `noLayoutPage`, a unit running on from the page before can put a page in two parts) is not asked of the door and not
   committed, one the door laid before its parts were all told is not committed, and its place keeps, or returns to after a
-  fork, the original's page view. Any other head is laid as before (it draws nothing: `layerDraws`).
+  fork, the original's page view. Such a page asked near the view is told the host as settled, never as laid: the `layer`
+  events' `original` (and `coverage()`'s), once a page a door, so that a host holding the run's end for the layer's first page
+  where the translation shows (the controller's `laying`, the web's) holds it for none of them. 2610.30854v1 (staging, 2026-10-29):
+  our compile set its pages 1 to 9 a line apart from arXiv's, the page check drew none of them, and with `laid` alone told the
+  end was held while the reader looked at page 1, the progress line on until a page past 9 was laid. Any other head is laid as
+  before (it draws nothing: `layerDraws`).
 - **The document** is the side's: one composed document a head, destroyed once, at a refusal of the side (its feed's fetches
   with it, and the right's shapes the original's again) or at dispose, once no door reads it (the door's `onRetired`, told at
   the door's dispose). `again()` disposes the door and opens the next over the same document.
@@ -1004,7 +1009,8 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   titled by its row once taken (`again()` lets the rows' titles go; a fork asks the outline again for the new contents).
   `outline` is told at the index and after each change (once a frame), `heading` from the
   scroll of either pane: the last heading at or above the reading line of the pane read.
-- **What it tells**: `layer` events (`opening`, `open` with the pages laid, `refused` with its why), `coverage()` and a
+- **What it tells**: `layer` events (`opening`, `open` with the pages laid and the near pages shown as arXiv's by the rule,
+  `refused` with its why), `coverage()` and a
   bounded `probe()` (counts, states, a ring of the last 32 commits), and `rowsFor(page)`, the units whose rows the door's
   page still waits for (its closure's: the door lays a page asked by its closure alone, the newest ask first), which a host
   translating as it shows translates first. The stall clock starts at the page's `laying`, which the door tells when its

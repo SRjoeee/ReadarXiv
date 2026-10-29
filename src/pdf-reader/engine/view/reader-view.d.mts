@@ -116,7 +116,9 @@ export type ViewEvent =
   | { type: 'sync'; on: boolean; available: boolean }
   | { type: 'outline'; entries: OutlineEntry[] }
   | { type: 'heading'; id: number | null }
-  | { type: 'layer'; state: 'opening' | 'open' | 'refused'; why?: string; laid: number; total: number }
+  /** `laid`: the pages the door laid; `original` (none where 0): the pages asked near the view that the open door shows as arXiv's
+   *  by the rule (a page no part lays a line on: layer-side.mjs noLayoutPage), settled with nothing to lay */
+  | { type: 'layer'; state: 'opening' | 'open' | 'refused'; why?: string; laid: number; total: number; original?: number }
 
 // ---------------------------------------------------------------- what the view's layer side takes (not view.mjs's)
 /** a rectangle on one of a side's pages, in its PDF units */

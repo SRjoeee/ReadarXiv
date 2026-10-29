@@ -708,6 +708,35 @@ describe('L17: a layer over our own compile (the layer route, design §3.2): its
     expect(content(t, 4)).toBe('layer')
   })
 
+  it('a page shown as arXiv\'s by the rule is told settled, never laid: the `layer` events\' `original` and coverage\'s, once a page however often it comes near, apart from `laid`; none over arXiv\'s PDF', async () => {
+    // (2610.30854v1 on staging 9236d8f8: pages 1 to 9 the original\'s by the rule, the side told `laid: 0` alone, and the host
+    // waited for a first page none of them would ever be)
+    const s = await oursSetup()
+    await nearOn(s, [1, 2, 3, 4])
+    s.side.tell(await ALL(true))
+    await settle(s)
+    expect(content(s, 4)).toBe('original')
+    const layers = () => s.events.filter((e): e is Extract<ViewEvent, { type: 'layer' }> => e.type === 'layer')
+    const laid = s.side.coverage().laid
+    expect(layers().at(-1)).toEqual({ type: 'layer', state: 'open', laid, total: N, original: 1 })
+    expect(s.side.coverage()).toMatchObject({ original: 1 })
+    // (page 4 counts in `original` alone: the pages the door laid are the others)
+    expect(laid).toBe(s.side.probe().ready)
+    // near again, asked again: the same page, counted once
+    await nearOn(s, [4], false)
+    await nearOn(s, [4])
+    await settle(s)
+    expect(s.side.coverage().original).toBe(1)
+    expect(layers().filter(e => e.original !== undefined).map(e => e.original)).toEqual([1])
+    // over arXiv\'s PDF a page is laid as it was: none is the original\'s by the rule
+    const t = await arxivSetup()
+    await nearOn(t, [4])
+    t.side.tell(await ALL(false))
+    await settle(t)
+    expect(t.side.coverage().original).toBe(0)
+    expect(t.events.some(e => e.type === 'layer' && 'original' in e)).toBe(false)
+  })
+
   it('whichever comes first, the part\'s record or the page\'s ask: a page asked before its part is told waits for it, and is the original\'s when it comes', async () => {
     const m = await M(true)
     // the page asked first: its part (the last) not told yet
@@ -742,9 +771,12 @@ describe('L17: a layer over our own compile (the layer route, design §3.2): its
     s.side.take([rowOf(2)])
     await settle(s)
     for (const n of [1, 2, 3]) expect(content(s, n), `page ${n}`).toBe('layer')
+    expect(s.side.coverage().original).toBe(0)
     s.side.tell({ parts: [{ ...(refused.ref as Ref), prev: m.parts[0]!.sha256 }] })
     await settle(s)
     expect(s.side.probe().forks).toBe(1)
+    // (the fork's door counts the page it shows as arXiv's by the rule)
+    expect(s.side.coverage().original).toBe(1)
     // (page 2 stays laid: the first part\'s unit runs on onto it, its layout drawn there; page 3 is only the refused part\'s)
     for (const n of [1, 2]) expect(content(s, n), `page ${n}`).toBe('layer')
     expect(content(s, 3)).toBe('original')

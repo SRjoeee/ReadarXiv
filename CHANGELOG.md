@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, when the pages you are looking at are ones the reader shows as the original (its own typesetting of the paper does not match arXiv's there), the progress line ends when the translation does. It had stayed on until a translated page further on was drawn.
 - Fixed: in the PDF reader, a paragraph that ends in a footnote mark, such as an abstract with a note on its last sentence, is translated; it had been left in the original language, whole.
 - Fixed: in the PDF reader, a bibliography made with biblatex follows the references switch like any other: each entry is translated only when you turn the references on, and its heading is translated on its own, no longer run into the first entry.
 - Fixed: in the PDF reader, a caption or paragraph with several bold or italic labels ("Left:", "Center:", "Right:") keeps every label in that style in the translation. Before, only the first stayed bold when Microsoft translated it.

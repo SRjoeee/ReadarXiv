@@ -33,11 +33,12 @@ export interface ReaderState {
    *  take the phase back from the translation, and the line and the status region with it) */
   begun: boolean
   /** the translation done before a page of the layer is laid where the translation shows (the web's `laying`, swaps.ts): the
-   *  right pane is the original's yet, so its end is held (the phase translating, the line on) until a page is laid, the layer
-   *  is refused, or the original alone is shown */
+   *  right pane is the original's yet, so its end is held (the phase translating, the line on) until a page is laid or shown as
+   *  arXiv's by the rule (the layer's `original`: nothing to lay there), the layer is refused, or the original alone is shown */
   laying: boolean
-  /** the layer's pages laid, of the paper's */
-  layer: { laid: number; total: number }
+  /** the layer's pages laid, of the paper's; `original`, the pages asked near the view that the layer shows as arXiv's by the rule
+   *  (none laid there: a page no part lays a line on), none where absent */
+  layer: { laid: number; total: number; original?: number }
   /** no bilingual version for now (refused, unreachable: passing), or for this paper or language; null while there may be */
   unavailable: { why: Unavailable; retryAt: number | null } | null
   /** 0–1, the share of the paper's paragraphs translated */
@@ -145,6 +146,10 @@ export interface Session {
 const kindOf = (kind: string | undefined): ProviderErrorKind => (PROVIDER_ERROR_KINDS as readonly string[]).includes(kind ?? '') ? (kind as ProviderErrorKind) : 'unknown'
 /** the layer has drawn something: a failure then leaves the pages laid readable, its card not over them */
 const drawn = (state: ReaderState) => state.layer.laid > 0
+/** a page of the layer settled where the translation shows: laid, or shown as arXiv's by the rule (the side's `original`), where
+ *  nothing is to be laid: the end held for a page (laying) waits for neither. Not `drawn`: no translation is on such a page, so a
+ *  run stopped short over it still shows its card */
+const settled = (layer: ReaderState['layer']) => layer.laid > 0 || (layer.original ?? 0) > 0
 /** the original could not be opened: its card stands, whatever the run does meanwhile (its rows wait for the original),
  *  until the original opens */
 const noOriginal = (state: ReaderState) => state.failures.pdf !== null
@@ -225,13 +230,14 @@ export function reduce(state: ReaderState, event: SessionEvent): ReaderState {
     case 'coming':
       return state.unavailable === null && state.available ? state : { ...state, unavailable: null, available: true, languageSupported: true }
     case 'layer': {
-      const layer = event.laid === state.layer.laid && event.total === state.layer.total ? state.layer : { laid: event.laid, total: event.total }
+      const original = event.original ?? 0
+      const layer = event.laid === state.layer.laid && event.total === state.layer.total && original === (state.layer.original ?? 0) ? state.layer : { laid: event.laid, total: event.total, ...(original ? { original } : {}) }
       // the layer refused for the visit: no bilingual version now, the original stays
       // (a lasting word the run told already stands: a layer that draws nothing is the paper's, and its side's own refusal at the
       // base does not make it a moment's)
       if (event.state === 'refused') return { ...state, layer, preparing: null, laying: false, unavailable: state.unavailable && LASTING.has(state.unavailable.why) ? state.unavailable : { why: 'unreachable', retryAt: null }, phase: state.phase === 'failed' ? 'failed' : 'ready' }
-      // a page laid where the translation shows: the end held is told
-      if (state.laying && layer.laid > 0) return { ...state, layer, laying: false, phase: state.phase === 'translating' ? 'ready' : state.phase }
+      // a page laid where the translation shows, or one shown as arXiv's by the rule: the end held is told
+      if (state.laying && settled(layer)) return { ...state, layer, laying: false, phase: state.phase === 'translating' ? 'ready' : state.phase }
       return layer === state.layer ? state : { ...state, layer }
     }
     case 'translating':
@@ -261,8 +267,9 @@ function reduceRunFree(state: ReaderState, event: Extract<SessionEvent, { type: 
       const progress = event.total ? Math.min(1, event.got / event.total) : 1
       // stopped short with nothing laid: the card, with the service's reason; with pages laid, the notice and its retry
       if (event.stopped && !drawn(state)) return { ...withFailures(state, { ...state.failures, service: event.stopped }), phase: 'failed', begun: true, progress, failedUnits: event.lost }
-      // done with nothing laid where the translation shows: the end held until a page is (laying)
-      if (!event.stopped && !drawn(state) && state.display !== 'original') return { ...withFailures(state, { ...state.failures, service: null }), phase: 'translating', begun: true, laying: true, progress, failedUnits: event.lost }
+      // done with nothing laid where the translation shows: the end held until a page is, or one is shown as arXiv's by the rule
+      // (laying)
+      if (!event.stopped && !settled(state.layer) && state.display !== 'original') return { ...withFailures(state, { ...state.failures, service: null }), phase: 'translating', begun: true, laying: true, progress, failedUnits: event.lost }
       return { ...withFailures(state, { ...state.failures, service: event.stopped }), phase: 'ready', begun: true, laying: false, progress, failedUnits: event.lost }
     }
     case 'unavailable': {
@@ -293,7 +300,7 @@ export function fromView(event: ViewEvent, paper: string): SessionEvent | null {
     case 'sync': return { type: 'sync', on: event.on }
     case 'outline': return event
     case 'heading': return event
-    case 'layer': return { type: 'layer', state: event.state, laid: event.laid, total: event.total }
+    case 'layer': return { type: 'layer', state: event.state, laid: event.laid, total: event.total, ...(event.original ? { original: event.original } : {}) }
     default: return null
   }
 }
