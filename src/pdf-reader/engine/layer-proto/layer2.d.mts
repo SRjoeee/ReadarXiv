@@ -40,7 +40,7 @@ export interface Params {
   keepAlign: boolean
   /** breaking: lines break only at spaces, which quotes are CJK's, centred punctuation, the characters no line starts or
    *  ends with, and the hyphenation patterns of a Latin word */
-  keepAll: boolean; cjkQuotes: boolean; centredPunct: boolean; noStart: string; noEnd: string; latinPatterns: 'en' | 'de'
+  keepAll: boolean; cjkQuotes: boolean; centredPunct: boolean; noStart: string; noEnd: string; latinPatterns: 'en' | 'de' | 'fr' | 'es' | 'pt'
   /** a table cell's room to a rule (PDF units) and the least share of the size it may be capped to between its rules */
   cellClear: number; cellCapMin: number
   /** the unit's edges (run.mjs edgesOf; layer2.mjs footFloorAt): whether its first line and its last share their baseline
@@ -49,7 +49,7 @@ export interface Params {
    *  none (a table cell, a caller of its own): its lines as slotted */
   halfLead?: { head: boolean; foot: boolean; below: number } | null
   /** the shortest word hyphenated, and the fewest letters before and after a break, by language */
-  hyphenation: { minWord: number; en: { left: number; right: number }; de: { left: number; right: number } }
+  hyphenation: { minWord: number } & Record<'en' | 'de' | 'fr' | 'es' | 'pt', { left: number; right: number }>
 }
 /** a character of the original page: its box from its item (PDF units), its baseline and size, its item and place in it,
  *  its font's class */
