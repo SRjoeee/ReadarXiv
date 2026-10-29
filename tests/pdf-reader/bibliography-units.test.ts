@@ -361,6 +361,11 @@ describe('backref\'s lists after the entries (hyperref\'s pagebackref: 2610.3766
     expect(has({ 'main.tex': body, 'mystyle.sty': '% \\usepackage{backref}' })).toBe(false)
     expect(has({ 'main.tex': body, 'mystyle.sty': '\\usepackage{backref}\\backrefparscanfalse' })).toBe(false)
   })
+  it('gives it to the unit that ends the entry\'s first paragraph, where backref\'s parscan sets the list: a later paragraph is TeX\'s next entry (2608.29782\'s \\mbibitem)', () => {
+    const two = `\\begin{thebibliography}{9}\n\n\\bibitem{a}\nA. Author. A first title of words, 2020.\n\n\\mbibitem{b}\nB. Writer. A second title of words, 2021.\n\n\\bibitem{c}\nC. Third. A third title of words, 2022.\n\n\\end{thebibliography}`
+    const p = open({ 'main.tex': doc(`See \\cite{a,b,c}.\n\n${two}`, '\\usepackage[pagebackref]{hyperref}\\newcommand{\\mbibitem}[1]{\\bibitem{#1}}') })
+    expect(bib(p).map(u => [shown(u).slice(0, 9), u.pieces.at(-1)?.src === '\\axtbackref'])).toEqual([['A. Author', true], ['[\\mbibite', false], ['C. Third.', true]])
+  })
   it('writes nothing of it into any file: the marked original names the list\'s marks after the entry\'s end mark instead', () => {
     const plain = new TextDecoder().decode(originalFiles(on, {}).get('main.tex'))
     expect(plain).not.toContain('axtbackref')

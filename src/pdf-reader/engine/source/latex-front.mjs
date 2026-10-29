@@ -2190,10 +2190,16 @@ function bibliography(s, from, to, b, ctx) {
     if (shut && shut.at > a) z = shut.at
     const before = b.units.length
     b.kind = 'reference'; walk(s, a, z, b, ctx); b.flush()
-    // (the list backref sets after the entry, the pages that cite it: its last unit's own piece, after its numbers are kept, so
-    // that it is never what a number stands beside)
-    const last = b.units.length > before ? b.units.at(-1) : null
-    if (ctx.backref && last?.kind === 'reference') last.pieces.push({ t: 'ph', src: BACKREF_LIST })
+    // (the list backref sets after the entry, the pages that cite it: a piece of the unit that ends the entry's first paragraph,
+    // where backref's parscan reads the entry to (`#2\par`) and sets the list, after its numbers are kept, so that it is never
+    // what a number stands beside; an entry's later paragraphs, a paper's own \bibitem in a macro (\mbibitem), are TeX's other
+    // entries, whose lists are set after them, and their units hold no piece: their lists the page's as before)
+    if (ctx.backref) {
+      const made = b.units.slice(before).filter(u => u.kind === 'reference' && u.file === b.file).sort((x, y) => x.start - y.start)
+      const ends = (u, next) => PARAGRAPH_END.test(uncommented(s.slice(u.end, next ? next.start : z)))
+      const first = made.find((u, j) => ends(u, made[j + 1])) ?? made.at(-1)
+      first?.pieces.push({ t: 'ph', src: BACKREF_LIST })
+    }
   })
   b.kind = saved
 }
@@ -2202,12 +2208,14 @@ function bibliography(s, from, to, b, ctx) {
  * or sections that cite it, each a link back. With its default parscan, backref reads the whole entry as an argument (\bibitem
  * redefined, `\BR@@bibitem#1#2\par`), sets it, then the list (\BR@backref, through \backrefalt or \backref), so the list is
  * TeX's, after the entry's text and its end mark, in none of its pieces: left on the page where the entry is drawn translated
- * over it (2610.37668v1's "2, 25"). The entry's last unit ends in this piece: no byte of the source (patch writes none), its
+ * over it (2610.37668v1's "2, 25"). The unit that ends the entry's first paragraph ends in this piece: no byte of the source (patch writes none), its
  * marks set by LAYOUT_TEX's hook around the list itself (layout/marks.mjs layoutMarking: `\axtbrname`), so that the list is its
  * ink, which the layer draws after the entry's translation, its links with it; an entry TeX sets no list for has none there
  * (EMPTY: the maker)
  */
 export const BACKREF_LIST = '\\axtbackref'
+/** a paragraph's end in TeX's source: a blank line or \\par (the end of what backref's parscan reads of an entry) */
+const PARAGRAPH_END = /\n[ \t]*\n|\\par(?![A-Za-z@])/
 /** whether the package turns backref's lists on at a bibliography's entries: in one of its files (a class's too: myarxiv.cls,
  *  weco_paper.cls), a command that loads a package or sets its options (\\usepackage, \\RequirePackage, \\PassOptionsToPackage,
  *  \\documentclass, \\LoadClass, \\hypersetup) names backref or hyperref's option (`backref`, `pagebackref`: a word of its own, not
