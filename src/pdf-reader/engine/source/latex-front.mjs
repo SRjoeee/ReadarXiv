@@ -2208,10 +2208,10 @@ function bibliography(s, from, to, b, ctx) {
  * or sections that cite it, each a link back. With its default parscan, backref reads the whole entry as an argument (\bibitem
  * redefined, `\BR@@bibitem#1#2\par`), sets it, then the list (\BR@backref, through \backrefalt or \backref), so the list is
  * TeX's, after the entry's text and its end mark, in none of its pieces: left on the page where the entry is drawn translated
- * over it (2610.37668v1's "2, 25"). The unit that ends the entry's first paragraph ends in this piece: no byte of the source (patch writes none), its
- * marks set by LAYOUT_TEX's hook around the list itself (layout/marks.mjs layoutMarking: `\axtbrname`), so that the list is its
- * ink, which the layer draws after the entry's translation, its links with it; an entry TeX sets no list for has none there
- * (EMPTY: the maker)
+ * over it (2610.37668v1's "2, 25"). The unit that ends the entry's first paragraph ends in this piece: no byte of the source
+ * (patch writes none), its marks set by LAYOUT_TEX's hook around the list itself (layout/marks.mjs layoutMarking: `\axtbrname`),
+ * so that the list is its ink, which the layer draws after the entry's translation, its links with it; an entry TeX sets no list
+ * for has none there (EMPTY: the maker)
  */
 export const BACKREF_LIST = '\\axtbackref'
 /** a paragraph's end in TeX's source: a blank line or \\par (the end of what backref's parscan reads of an entry) */
