@@ -5,8 +5,10 @@
 // position estimated: every coordinate is a glyph's our compile set.
 //
 // The rules (each tested):
-//   1. the classes made units: heads (`inkheads`), contents (`inkcontents`), notes (`inknotes`), orphans (`inkorphan`); a line
-//      of another class is never one;
+//   1. the classes made units: heads (`inkheads`), contents (`inkcontents`), notes (`inknotes`), orphans (`inkorphan`), and a
+//      biblatex entry's lines (`inkreferences`: the references' class where the compile's point `bi<n>` stands before the entry,
+//      ledger.mjs `entry`, one entry a unit, every line of it whatever it holds, its label the original's, an entry of no text
+//      word none); a line of another class is never one;
 //   2. a line's words: its glyphs left to right, a word ended where two stand a fifth of their size apart; a head's or a list's
 //      line keeps its numbering and its page number the original's ink (a leading section number, a trailing run of leader
 //      dots and a number: no unit's, never erased), so that a contents entry's title is drawn up to its leaders, where the
@@ -45,7 +47,7 @@ import { lineRulesOf, OWN_WORK, RULE_EM } from './own.mjs'
 import { spellOf } from './stream.mjs'
 
 /** the ledger's classes made units, and each one's kind (rules/content-classes.mjs UNIT_CLASS gives the class back) */
-export const INK_KIND = Object.freeze({ heads: 'inkheads', contents: 'inkcontents', notes: 'inknotes', orphan: 'inkorphan', names: 'inknames' })
+export const INK_KIND = Object.freeze({ heads: 'inkheads', contents: 'inkcontents', notes: 'inknotes', orphan: 'inkorphan', names: 'inknames', references: 'inkreferences' })
 /** a block of the names an author unit holds: this share of its letters, at least, in words of an author unit's (rule 8) */
 export const NAMES_SHARE = 0.6
 /** a block's next line: within this many of its size below the one before */
@@ -259,15 +261,24 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
   }
   const folios = new Set([...numbersAt].filter(([, ns]) => ns.size > 1).map(([key]) => key))
   const segs = []
+  const textual = w => w.fam === 'text' && PAIR.test(w.text.normalize('NFKC'))
   for (const L of ledger.lines ?? []) {
     if (!Object.hasOwn(INK_KIND, L.cls) || L.cls === 'names') continue
+    // (a bibliography's line is a unit's only where it is a biblatex entry's, its compile's point `bi<n>` before it (ledger.mjs
+    // `entry`): a thebibliography's entries are source units, and what they leave, a label, an entry's number, the original's)
+    if (L.cls === 'references' && (L.entry === null || L.entry === undefined)) continue
     const G = pages[L.page - 1]?.glyphs ?? []
-    const [words, ended] = trimmed(G, lineWords.get(L) ?? wordsOf(G, L.gs, fams), L.cls, folios)
-    if (!words.some(w => w.fam === 'text' && PAIR.test(w.text.normalize('NFKC')))) continue
+    // (an entry's first line from its point on: its label, which the list's \item set before it, the original's ink)
+    const all = lineWords.get(L) ?? wordsOf(G, L.gs, fams)
+    const from = L.cls === 'references' && Number.isInteger(L.entryFrom) ? all.filter(w => w.gs.some(g => g >= L.entryFrom)) : all
+    const [words, ended] = trimmed(G, from, L.cls, folios)
+    // (an entry's line its unit's whatever it holds: a URL alone in a typewriter face, as \url breaks it, or numbers alone — TeX
+    // set it in that entry, and left out of the unit it stood the original's where the drawn entry ran over it, 2610.35877v1)
+    if (L.cls === 'references' ? !words.length : !words.some(textual)) continue
     segs.push({ ...L, words, ended })
   }
   // units of lines (rule 3)
-  const groups = []
+  const groups = [], entryGroups = new Map()
   for (const s of segs) {
     const last = groups.at(-1), prev = last?.at(-1)
     // (by TeX's paragraphs where the compile marked them, ink.mjs `paras`: a block one paragraph, a contents entry one; else by the
@@ -293,6 +304,10 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     // (a paragraph with no point of its own reads as the one before: a contents line ending in its page number ends its entry
     // whatever its point)
     const joins = follows && s.cls !== 'heads' && (s.cls !== 'contents' || !prev.ended) && (paras ? prev.para === s.para : s.cls === 'notes' || s.cls === 'orphan' || s.cls === 'contents')
+    // (a biblatex entry's lines its unit, by TeX's points alone: one entry over a column's or a page's break too, a running head or
+    // foot between its parts its own unit — every entry its own)
+    if (s.cls === 'references') { const g = entryGroups.get(s.entry); if (g) g.push(s); else { groups.push([s]); entryGroups.set(s.entry, groups.at(-1)) } continue }
+    if (prev?.cls === 'references') { groups.push([s]); continue }
     if (joins) last.push(s)
     else groups.push([s])
   }
@@ -309,6 +324,8 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     return all > 0 && named >= NAMES_SHARE * all
   }
   for (const lines of groups) {
+    // (an entry of no text word, a URL alone: nothing to translate, the original's)
+    if (lines[0].cls === 'references' && !lines.some(l => l.words.some(textual))) continue
     const id = base + out.length, cls = (lines[0].cls === 'orphan' || lines[0].cls === 'notes') && namesOf(lines) ? 'names' : lines[0].cls
     // pieces: text words joined, a run of math or typewriter words a placeholder (rule 4), a run of words in another weight, slant
     // or colour than the unit's a group that sets it (rule 9)
@@ -401,7 +418,9 @@ function rowsOf(id, kind, cls, lines, phs, nPieces, pages) {
     const tg = l.words.filter(w => w.fam === 'text').flatMap(w => w.gs)
     let x0 = Infinity, x1 = -Infinity, top = -Infinity, bottom = Infinity
     for (const g of gs) { const x = G[g]; x0 = Math.min(x0, x.x0, x.ix0 ?? x.x0); x1 = Math.max(x1, x.x1, x.ix1 ?? x.x1); top = Math.max(top, x.top); bottom = Math.min(bottom, x.bottom) }
-    const base = modeOf(tg.map(g => r2(G[g].y))), size = modeOf(tg.map(g => r2(G[g].size))), font = modeOf(tg.map(g => G[g].font ?? '?'))
+    // (its baseline, size and face its text words'; a line of none, an entry's URL alone, its own glyphs')
+    const set = tg.length ? tg : gs
+    const base = modeOf(set.map(g => r2(G[g].y))), size = modeOf(set.map(g => r2(G[g].size))), font = modeOf(set.map(g => G[g].font ?? '?'))
     const [a, c, b, d] = solid(view, x0, Math.min(bottom, base), x1, Math.max(top, base))
     lineRows.push(l.page, a, b, Math.min(d, Math.max(c, base)), d, c, Math.min(200, size), font)
     // the erase: the line's text glyphs' boxes, merged (layout/make.mjs rowsOf)

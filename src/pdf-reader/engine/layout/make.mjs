@@ -1170,7 +1170,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         // (a head: a paper's macro, or inline code — a cell's \\texttt{max\\_tokens}, which the probe asks about too: marks.mjs
         // leadSamples)
         else if ((cls === 'macro' || cls === 'code') && k < head) (one.heads ??= []).push({ entry, k, src: piece.src, cls, head })
-        else if (cls === 'macro' && last >= 0 && k > last) (one.tails ??= []).push({ entry, k, src: piece.src })
+        // (a tail: a paper's macro, or a footnote's call after the unit's last word, which TeX gave no mark — a mark around
+        // \\footnotemark moves the word after it, the space factor it reads: 2610.35877v1's abstract, `step.\\footnotemark`)
+        else if ((cls === 'macro' || (cls === 'footnote' && piece.t === 'ph')) && last >= 0 && k > last) (one.tails ??= []).push({ entry, k, src: piece.src, cls })
         continue
       }
       const prefix = cls === 'footnote' ? 'n' : 'p', name = `${prefix}${i}.${k}a`, e = ownInk.get(name)
@@ -1400,9 +1402,12 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const { id: i, rows } = one, M = tail ? one.E : one.S, r = tail ? rows[rows.length - 1] : rows[0]
     if (!M || M.page !== r.page || Math.abs(M.y - r.base) >= 0.5 * r.size) return
     const P = ink[M.page], [cx0, cx1] = sideOf(M.page, columnOf(M.page, M.x, M.x))
-    if (tail && [...r.gl, ...(r.extra ?? [])].some(g => mid(P, g) > M.x + 0.05)) return
+    // (what the last line took past the end mark: its closing punctuation, which ends the look; or, where the tails are footnote
+    // calls alone, their raised marks, which TeX set on the line after the last word, and which they take from it)
+    const past = tail ? new Set([...r.gl, ...(r.extra ?? [])].filter(g => mid(P, g) > M.x + 0.05)) : new Set()
+    if (past.size && !one.tails.every(t => t.cls === 'footnote')) return
     const beside = g => (tail ? P.x0[g] >= M.x - 0.05 && P.x1[g] <= cx1 + 1 : P.x1[g] <= M.x + 0.05 && P.x0[g] >= cx0 - 1)
-    const cand = band(P, M.y - 0.35 * P.most, M.y + 0.75 * Math.max(P.most, 6)).filter(g => P.y[g] > M.y - 0.35 * P.size[g] && P.y[g] < M.y + 0.75 * Math.max(P.size[g], 6) && beside(g) && P.owner[g] === -1 && !P.taken[g]).sort((a, b) => (tail ? P.x0[a] - P.x0[b] : P.x1[b] - P.x1[a]) || a - b)
+    const cand = band(P, M.y - 0.35 * P.most, M.y + 0.75 * Math.max(P.most, 6)).filter(g => P.y[g] > M.y - 0.35 * P.size[g] && P.y[g] < M.y + 0.75 * Math.max(P.size[g], 6) && beside(g) && (P.owner[g] === -1 || past.has(g)) && !P.taken[g]).sort((a, b) => (tail ? P.x0[a] - P.x0[b] : P.x1[b] - P.x1[a]) || a - b)
     // the run outwards from the mark, nearest first
     const run = []
     let edge = M.x
@@ -1414,26 +1419,37 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const found = new Set()
     for (const h of [...(tail ? one.tails : one.heads)].sort((x, y) => (tail ? x.k - y.k : y.k - x.k))) {
       const { entry } = h, kind = entry.row[2]
-      // (inline code always sets ink: none beside the mark is ink not known, never a piece that set nothing)
-      if (!run.length) { if (h.cls === 'code') return; entry.row = [i, h.k, kind, PH_FLAG.EMPTY]; entry.state = 'empty'; entry.head = true; continue }
-      const text = tail ? null : shown.get(h.src)
-      if (!text) return
-      // (a formula's glyph of no character spelled, INK_ANY, is any glyph's: read only where nothing but heads found nearer and
-      // pieces of no ink stand between this one and the mark, whose ink would stand nearer — a \\footnotemark's)
-      if (text.includes(INK_ANY) && !one.u.pieces.slice(h.k + 1, h.head).every((p, j) => found.has(h.k + 1 + j) || !classOf(p) || (classOf(p) === 'macro' && inkless.has(p.src)))) return
-      // (each glyph against the text from its end, nearest the mark first: marks.mjs leadStep)
-      const want = text.toLowerCase()
-      let end = want.length, n = 0
-      while (n < run.length && end > 0) { end = leadStep(want, end, charsOf(P.u[run[n]]).replace(/\s+/g, '')); if (end < 0) return; n++ }
-      if (end !== 0) return
+      // (inline code always sets ink, and a footnote's call its mark: none beside the mark is ink not known, never a piece that set
+      // nothing)
+      if (!run.length) { if (h.cls === 'code' || h.cls === 'footnote') return; entry.row = [i, h.k, kind, PH_FLAG.EMPTY]; entry.state = 'empty'; entry.head = true; continue }
+      let n = 0
+      if (tail && h.cls === 'footnote') {
+        // (a footnote's call after the last word: its mark, which \\@makefnmark sets raised, the raised glyphs right after the end
+        // mark; none raised there, not known)
+        while (n < run.length && P.y[run[n]] - r.base >= SHIFT * r.size) n++
+        // (every glyph the line took past the end mark this call's mark, else the line's own: not known)
+        if (!n || [...past].some(g => !run.slice(0, n).includes(g))) return
+      } else {
+        const text = tail ? null : shown.get(h.src)
+        if (!text) return
+        // (a formula's glyph of no character spelled, INK_ANY, is any glyph's: read only where nothing but heads found nearer and
+        // pieces of no ink stand between this one and the mark, whose ink would stand nearer — a \\footnotemark's)
+        if (text.includes(INK_ANY) && !one.u.pieces.slice(h.k + 1, h.head).every((p, j) => found.has(h.k + 1 + j) || !classOf(p) || (classOf(p) === 'macro' && inkless.has(p.src)))) return
+        // (each glyph against the text from its end, nearest the mark first: marks.mjs leadStep)
+        const want = text.toLowerCase()
+        let end = want.length
+        while (n < run.length && end > 0) { end = leadStep(want, end, charsOf(P.u[run[n]]).replace(/\s+/g, '')); if (end < 0) return; n++ }
+        if (end !== 0) return
+      }
       found.add(h.k)
       const gs = run.splice(0, n)
       let x0 = Infinity, x1 = -Infinity, top = -Infinity, bottom = Infinity
       for (const g of gs) { x0 = Math.min(x0, P.ix0[g]); x1 = Math.max(x1, P.ix1[g]); top = Math.max(top, P.top[g]); bottom = Math.min(bottom, P.bottom[g]) }
       const inkBase = baselineOf(P, bodyOf(P, gs, r.size), r.base)
       const flags = inkBase - r.base >= SHIFT * r.size ? PH_FLAG.RAISED : r.base - inkBase >= SHIFT * r.size ? PH_FLAG.LOWERED : 0
-      // the unit's own ink, which its first line takes in and erasing covers
+      // the unit's own ink, which its first line takes in and erasing covers (a tail's taken from the line's words, `past`)
       for (const g of gs) P.owner[g] = i
+      if (past.size) { r.gl = r.gl.filter(g => !gs.includes(g)); r.extra = (r.extra ?? []).filter(g => !gs.includes(g)) }
       r.extra = (r.extra ?? []).concat(gs)
       r.x0 = Math.min(r.x0, x0); r.x1 = Math.max(r.x1, x1); r.top = Math.max(r.top, top); r.bottom = Math.min(r.bottom, bottom)
       const view = viewAt(M.page), [sx0, sb, sx1, st] = solid(view, x0, bottom, x1, top)

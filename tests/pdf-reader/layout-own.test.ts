@@ -93,6 +93,16 @@ describe('placeholders, labels and names (MR 4–6)', () => {
     const pages = [page([{ pt: '0s' }, { pt: 'n2.proof.s' }, 'Proof', { pt: 'n2.proof.e' }, 'Easy', { pt: '0e' }])]
     expect(groupsOf(ownOf(pages, { units: units('Easy') }), pages)).toEqual({ n2: 'Proof', u0: 'Easy' })
   })
+  it('gives a footnote\'s call after the last word that TeX gave no mark its raised mark right after the end mark (2610.35877v1\'s abstract)', () => {
+    const pages = [page([{ pt: '0s' }, 'Hello.', { pt: '0e' }, '1', '\n', { pt: '1s' }, 'Next', { pt: '1e' }])]
+    const mark = pages[0]!.glyphs[6]!
+    Object.assign(mark, { y: 703.5, size: 7, top: 708.5, bottom: 702.5 })
+    const r = ownOf(pages, { units: [{ pieces: [{ t: 'text', s: 'Hello.' }, { t: 'ph', src: '\\footnotemark' }] }, ...units('Next')] })
+    expect(groupsOf(r, pages)).toEqual({ u0: 'Hello.', 'u0.p': '1', u1: 'Next' })
+    // (a glyph on the line's baseline there is no mark: the page's)
+    const level = [page([{ pt: '0s' }, 'Hello.', { pt: '0e' }, '1', '\n', { pt: '1s' }, 'Next', { pt: '1e' }])]
+    expect(groupsOf(ownOf(level, { units: [{ pieces: [{ t: 'text', s: 'Hello.' }, { t: 'ph', src: '\\footnotemark' }] }, ...units('Next')] }), level)).toEqual({ u0: 'Hello.', u1: 'Next' })
+  })
   it('leaves a rule in a unit\'s text range the page\'s, and gives its placeholders\' rules theirs', () => {
     const pages = [page([{ pt: '0s' }, 'ab', { rule: [10, 600, 60, 600.4] }, { pt: 'p0.1a' }, { rule: [10, 590, 60, 590.4] }, { pt: 'p0.1b' }, { pt: '0e' }, { rule: [10, 580, 60, 580.4] }])]
     const r = ownOf(pages, { units: units('ab') })

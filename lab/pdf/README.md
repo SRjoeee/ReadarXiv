@@ -401,6 +401,10 @@ The pack of the ten targets of 2026-10-29 (`b397d693`, LAYOUT 29 still) is `d4d7
 `hyph-bg.tex` added under `texmf/tex/generic/hyph-utf8/patterns/tex/`, the pinned TeX Live 2025 image's files byte for byte, so
 that the patterns of every language of TEX_PATTERN_FILES are the instrument's. None of the pack's outputs is in those
 languages: the rules gate's outputs are drawn as before. Every other file is `d4d73c0c`'s. 9 new objects.
+The pack of the abstract and biblatex fix (`d1c6c8ea`, LAYOUT 30: a trailing footnote call found by its raised mark, a
+biblatex entry's unit) is `b397d693`'s with each output's `layout.json` and `base.json` made again the same way: every base page
+byte for byte the one before (the layout TeX's biblatex points set nothing where no paper loads biblatex, and none of the pack's
+does), every layout file `b397d693`'s but for its version, every base record's layout digest moving with it. 14 new objects.
 Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
 The wrap reads each base's units from its paper's source, so the pack holds that too: `sources/<paper>/source.gz`, one a paper
 (`gate-pack.mjs make --sources=<dir of <paper>/source.gz>`, `data/corpus` by default; a make with a base of ours and no source
