@@ -261,8 +261,12 @@
 //     as text); a paper's macro of no argument whose body ends a table's row ends the row in a cell (rowEndsOf: 2610.21924v1's
 //     \tightrow, 30 cells); an author block's row ends inside a conditional are no rows (frontEnds); and a made .bbl is kept for an
 //     entry that runs over another \bibitem, no longer for one of no words (layout/paper.mjs madeBibliography: 2608.25210v2's
-//     four web pages kept its 64 entries no unit's): every paper is translated again
-export const PIPELINE_VERSION = '33'
+//     four web pages kept its 64 entries no unit's): every paper is translated again; 34 (batch 2's ink lane): a stop that
+//     abuts the formula before it at a contents line's end is the entry's, no leader dot (layout/ink-units.mjs trimmed: a leader is a word a word's gap from the one
+//     before it, 2610.19274v1's list of figures, "… strength $C_n^2$.", whose stop was left the original's beside the drawn entry),
+//     and two words of an ink unit's line are joined by a space only where a word's gap stands between them (no "⟦C⟧ ." for a
+//     formula's stop, no "⟦x⟧ -axis"): the ink units' texts move where either stands
+export const PIPELINE_VERSION = '34'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
@@ -311,6 +315,10 @@ export const PDFJS = '6.3.289'
  * closed piece's first glyph is its text's where it is the punctuation mark the piece's command set before its own ink (stream.mjs
  * ownedOf, marks.mjs followsOf `moved`: cite.sty's superscripts set `\cite{x}.` as ".¹", now marked around the pair, MARKS_SCHEMA
  * 14), so that the piece's group holds the superscript alone and the mark is in its unit's text group: the base's bytes change
- * where a paper has such a pair
+ * where a paper has such a pair; 14 (batch 2's ink lane, #117): a unit's text owns the rules TeX painted on its own lines, as it owns its glyphs (own.mjs MR 2b, lineRulesOf: thin across, on a baseline
+ * of its glyphs, within their extent, no part of a frame), and an ink unit's lines take theirs too (ink-units.mjs claimInk): an
+ * OT1 \_ is a rule, no glyph, and its three stood under 1512.03385v1's translated Table 1 caption (2610.19159v1's 95,
+ * 2610.21924v1's 150 in its tables' cells), an \underline's line under its translation: the base's bytes change where a unit's
+ * text has one
  */
-export const REMOVAL = '13'
+export const REMOVAL = '14'

@@ -170,8 +170,12 @@ export { LayoutRefusal } from './json.mjs'
  *  point alone, owned to the unit's next mark, given the lines it runs onto (make.mjs wrapOf: an entry's \\dodoi{…}, \\doi{…}
  *  after its end mark, 33 of 2608.12606v1's entries); and a macro whose text the probe showed is one punctuation mark drawn as
  *  that character (TEXT: apacite's \\BPBI, 39 entries of two papers). The rows of the pieces they reach change, so a file of 26
- *  is another maker's (the file's schema is 5 still) */
-export const LAYOUT = '27'
+ *  is another maker's (the file's schema is 5 still); 28 (batch 2's ink lane, #122-1): a Type 3 glyph's ink is what its
+ *  char procedure paints (layout/ink.mjs type3Box: its paths' extents, a bitmap's mask's outline, through the font's matrix), not its font's declared ascent and
+ *  descent for every glyph, a "." boxed as an "M": matplotlib's labels (2610.17024v1, 2610.20848v1, 2610.22197v1 …, drawn as
+ *  figure units since #476) take their own boxes, their room and the crowding read from them, and a glyph whose procedure
+ *  paints nothing (an invisible text layer, 2610.19159v1's figures) has none */
+export const LAYOUT = '28'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,
