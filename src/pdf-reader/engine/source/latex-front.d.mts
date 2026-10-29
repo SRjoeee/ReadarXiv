@@ -3,7 +3,7 @@
 export interface CellPlace { table: number; row: number; col: number; span: number; head: boolean }
 export interface SourceUnit { kind: string; title?: boolean; depth?: number; lead?: string; trail?: string; inner?: string; front?: boolean; held?: boolean; stored?: boolean; bracketed?: boolean; pieces: unknown[]; cell?: CellPlace }
 /** a table's body as its cells lay it out: each cell's stretch of the source, its row, first column and span, and whether its row is the header's */
-export declare function tableGrid(s: string, from: number, to: number): (Omit<CellPlace, 'table'> & { start: number; end: number })[]
+export declare function tableGrid(s: string, from: number, to: number, rowEnds?: ReadonlySet<string> | null): (Omit<CellPlace, 'table'> & { start: number; end: number })[]
 /** a source tree held in memory: path → bytes */
 export declare function inMemory(map: Map<string, Uint8Array>): { list(): string[]; read(path: string): Uint8Array | null }
 /** a paper's source read from its main file: its units, the paper's prose in reading order */
@@ -17,6 +17,8 @@ export declare function completeMacros(files: readonly { file?: string; text: st
 export declare function documentBounds(text: string, options?: { lineEnvs?: Set<string> | null; ifs?: Set<string>; ifValues?: Map<string, boolean> | null }): { begin: number; body: number; end: number }
 /** the \usepackage[…]{inputenc} TeX acts on: where it stands and its options, or null */
 export declare function inputencOf(text: string, options?: { lineEnvs?: Set<string> | null; ifs?: Set<string>; ifValues?: Map<string, boolean> | null }): { start: number; end: number; options: string } | null
+/** a .bbl's text with each `%` TeX reads as a character (a web address's at an entry's top level) written as a code no source holds, the same length; any other file's as it is */
+export declare function urlPercents(text: string, file: string): string
 /** the patched files (path → bytes): each unit's range replaced by its translated pieces, the rest untouched */
 /** what goes around a unit when it is written out (markUnits): `whole` puts it around all of the unit, inside the groups that open and close it */
 export type UnitMark = { start: string; end: string; before?: string; whole?: boolean } | null

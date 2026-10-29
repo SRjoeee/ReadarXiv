@@ -97,6 +97,10 @@ export function classOf(piece) {
  *  `glued`), that placeholder in the last's place, else nothing there (0, as every other sample's) */
 export const FOLLOWERS = Object.freeze(['.', ',', ';', ':', '!', '?', 'word', 'call'])
 const PUNCT = '.,;:!?'
+/** the punctuation marks a package may set before a citation's or a call's own ink, moved from after it (cite.sty's
+ *  \\CiteMoveChars, natmove's, fnpct's): those the probe asks about (TeX answers 3 for those it moves, layoutMarking), a piece's
+ *  closing mark after one of them holding it first (followsOf `moved`) */
+const MOVED = PUNCT
 /** the classes whose commands the probe asks about: a package may look past their closing brace (a paper's macro has its
  *  opening mark alone (LOOKS_AHEAD), but one that reads nothing past its arguments, which the probe asks about too) */
 const ASKED = new Set(['cite', 'ref', 'eqref', 'url', 'footnote'])
@@ -214,7 +218,10 @@ export function readProbe(log) {
  * (does the command look at what follows?), with its two layout marks, with its opening mark alone, the boxes compared
  * by width, height, depth and their last node; for `call`, the call before a second one with an opening mark between
  * them or none. One row a sample, `punct <i> <a code a follower>`: 0 every mark as LAYOUT_TEX sets it, 1 no
- * closing mark, 2 no mark (for `call`: 0 a mark may stand between the two calls, 2 none may); before each box a row
+ * closing mark, 2 no mark (for `call`: 0 a mark may stand between the two calls, 2 none may), 3 before a punctuation mark the
+ * command looks at (the box with `{}` another), where the pair with a word after it is set the same with the opening mark before
+ * the command and the closing mark after the mark (cite.sty's superscripts set `\\cite{x}.` as ".¹": both marks so, the mark
+ * then its ink's first glyph, followsOf `moved`); before each box a row
  * `punct-at <i> <j> <box>`, so that an error TeX logs is that box's (readMarkProbe). Each
  * box is set into a register voided first, and says whether it closed where it was meant to (\ifinner at its last
  * statement): a box an error ended early is never the box before it, still in the register (the re-review's I-new:
@@ -229,7 +236,10 @@ export function punctuationSection(samples, from = 0) {
   const put = d => `\\xdef\\axt@qo{\\axt@qo${d}}`
   const tests = samples.map(({ src, call, glued }, n) => {
     const i = from + n, open = `\\axtpma{q${i}a}`, close = `\\axtpm{q${i}b}`
-    const each = [...PUNCT, ' x'].map((f, j) => `\\begingroup${box(i, j, 'a', `${src}${f}`)}${box(i, j, 'b', `${src}{}${f}`)}${box(i, j, 'c', `${open}${src}${close}${f}`)}${box(i, j, 'd', `${open}${src}${f}`)}\\endgroup\\ifx\\axt@qa\\axt@qb\\ifx\\axt@qa\\axt@qd\\ifx\\axt@qa\\axt@qc${put(0)}\\else${put(1)}\\fi\\else${put(2)}\\fi\\else${put(2)}\\fi`).join('')
+    // (before a punctuation mark the command moves, a ≠ b: the pair as the paper sets it with a word after (m), and with the
+    // opening mark before the command and the closing one after the mark it moves (p): equal, both marks go so, 3)
+    const moved = f => (f === ' x' ? put(2) : `${box(i, PUNCT.indexOf(f), 'm', `${src}${f} x`)}${box(i, PUNCT.indexOf(f), 'p', `${open}${src}${f}${close} x`)}\\ifx\\axt@qm\\axt@qp${put(3)}\\else${put(2)}\\fi`)
+    const each = [...PUNCT, ' x'].map((f, j) => `\\begingroup${box(i, j, 'a', `${src}${f}`)}${box(i, j, 'b', `${src}{}${f}`)}${box(i, j, 'c', `${open}${src}${close}${f}`)}${box(i, j, 'd', `${open}${src}${f}`)}\\ifx\\axt@qa\\axt@qb\\endgroup\\ifx\\axt@qa\\axt@qd\\ifx\\axt@qa\\axt@qc${put(0)}\\else${put(1)}\\fi\\else${put(2)}\\fi\\else${moved(f)}\\endgroup\\fi`).join('')
     const again = call ? `\\begingroup${box(i, 7, 'a', `${src}${src}`)}${box(i, 7, 'e', `${src}\\axtpma{q${i}c}${src}`)}\\endgroup\\ifx\\axt@qa\\axt@qe${put(0)}\\else${put(2)}\\fi`
       : glued ? `\\begingroup${box(i, 7, 'a', `${src}${glued}`)}${box(i, 7, 'b', `${src}{}${glued}`)}${box(i, 7, 'c', `${open}${src}${close}${glued}`)}\\endgroup\\ifx\\axt@qa\\axt@qb\\ifx\\axt@qa\\axt@qc${put(0)}\\else${put(1)}\\fi\\else${put(2)}\\fi`
       : put(0)
@@ -706,7 +716,8 @@ const TEX_ERROR = /^(?:! |[^\s:]+:\d+: |Missing character: There is no .* in fon
  * What TeX answered, from the probe's log: per sample's command, its code a follower (FOLLOWERS), for layoutMarking's
  * `switches`. A box TeX logged an error in (after its `punct-at` row, before the next row) answers nothing: an error in
  * the box as the paper sets it or with `{}` leaves the follower no answer at all (`x`); in the box with its opening mark,
- * no mark (2); in the box with both marks, no closing mark (1); in a second call's, none between (2). A sample with no
+ * no mark (2); in the box with both marks, no closing mark (1); in a second call's, none between (2); in either box of a 3's
+ * pair, no mark (2). A sample with no
  * row (the probe stopped short of it), a row of another schema or another shape is no answer at all. layoutMarking sets
  * no mark where there is no answer. And per look-ahead pair (aheadSamples, by its rows `ahead`), its key (aheadKey) and its
  * one code: an error in the box let go or as the paper sets it no answer (`x`), in the one with the two openings or the one
@@ -731,12 +742,12 @@ export function readMarkProbe(log, samples) {
     }
     if (r.tag !== 'punct' || r.fields.length !== 2) continue
     const i = r.fields[0], s = listed[Number(i)], codes = r.fields[1]
-    if (!s || !/^[012]+$/.test(codes) || codes.length !== FOLLOWERS.length) continue
+    if (!s || !/^[0123]+$/.test(codes) || codes.length !== FOLLOWERS.length) continue
     out[s.command] = [...codes].map((c, j) => {
       const bad = errored.get(`${i}:${j}`)
       if (!bad) return c
       if (bad.has('a') || bad.has('b')) return 'x'
-      if (bad.has('d') || bad.has('e')) return '2'
+      if (bad.has('d') || bad.has('e') || c === '3') return '2'
       return c === '2' ? '2' : '1'
     }).join('')
   }
@@ -1311,6 +1322,8 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
     // \thanks were LOST, their marks gone)
     const lead = front(u) ? '\\protect' : ''
     let last = null, gap = false, beforePrefix = null, gapBefore = false
+    /** the pieces whose closing mark goes after the punctuation mark their command moves (TeX's 3), by index: that mark */
+    const movedAt = new Map()
     /** the groups open at a piece, innermost last: whether each is, or is inside, an argument read verbatim */
     const verbatim = []
     const out = u.pieces.map((p, k) => {
@@ -1348,11 +1361,17 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       // TeX's tokenizer skipping the space after it where `{}` keeps it, which says nothing of a mark before the call)
       // (TeX's answer for a paper's macro is its probed call's: a call of it the probe did not ask about, one short of its
       // arguments or with others, has its opening mark as any macro of the paper's, whatever was answered)
-      const raw = cls === 'macro' && !answered(p) ? undefined : answer(p, next), said = raw === '2' && cls === 'macro' ? '1' : raw
+      // (3, before a punctuation mark the command moves in front of its own ink — cite.sty's superscripts, natmove, fnpct —, where
+      // TeX answered that its opening mark and a closing one after that mark move nothing: both so, the closing one inside the text
+      // after it, past its first character (`movedAt`); a paper's macro keeps its opening mark alone, as for 2; a text piece whose
+      // source is not its text there (an accent's letter joined to it), none)
+      const raw = cls === 'macro' && !answered(p) ? undefined : answer(p, next)
+      const said = (raw === '2' || raw === '3') && cls === 'macro' ? '1' : raw === '3' && !(next?.t === 'text' && PUNCT.includes(next.s[0]) && (next.src === undefined || next.src[0] === next.s[0])) ? '2' : raw
       if (said === '2') return [piece]
       const name = `${cls === 'footnote' ? 'n' : 'p'}${i}.${k}`
       // (an inline formula's opening mark is set on the empty list too: \axtpmm, LAYOUT_TEX)
       const open = { t: 'ph', src: `${lead}\\${cls === 'math' ? 'axtpmm' : 'axtpma'}{${name}a}` }
+      if (said === '3') { movedAt.set(k, { t: 'ph', src: `${lead}\\axtpm{${name}b}` }); return [open, piece] }
       if (cls === 'macro') opened.add(p)
       // a complete call's closing mark, where TeX answered for what follows (`said`), only before white space or punctuation, or at
       // the unit's end: before a letter or a digit it would stand inside a word (`\\tf{}s`: TeX would break Transform-ers no
@@ -1361,6 +1380,11 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       if (said === '1' || !closes || (looks(p) && !(cls === 'footnote' && said === '0')) || ENDS_IN_CS.test(p.src) || /\s$/.test(p.src) || ENDS_ENV.test(p.src)) return [open, piece]
       return [open, piece, { t: 'ph', src: `${lead}\\axtpm{${name}b}` }]
     })
+    // (a closing mark after the punctuation mark its piece's command moves: the text after the piece cut after that mark)
+    for (const [k, close] of movedAt) {
+      const t = u.pieces[k + 1], cut = (a, b) => ({ ...t, s: t.s.slice(a, b), ...(t.src !== undefined ? { src: t.src.slice(a, b) } : {}) })
+      out[k + 1] = [cut(0, 1), close, ...(t.s.length > 1 ? [cut(1)] : [])]
+    }
     // (a paper's macro that looks ahead, with its opening mark alone, whose next piece past white space alone or none got its
     // opening mark where TeX answered 0 for the pair: its closing mark too, as TeX set it in the probe's box. Not where it ends in
     // white space, which may be a line's end before a blank one, or in an environment's \end, whose skip of the spaces after it
@@ -1410,8 +1434,10 @@ export const MARKS_DEPTH = 3
  *  could stand before, parted from the macro before it by that macro's text (followsOf `split`), by the opening mark's name
  *  it would have had, which a maker of 11 would not read; 13 the entries' own share of samples past the body's (ENTRY_INK_MAX), so
  *  that `marking.inkless`, `marking.apart` and `marking.texts` name up to INK_ANSWERS_MAX sources (and LEAD_MAX more texts),
- *  which a reader of 12 refuses past INK_MAX */
-export const MARKS_SCHEMA = 13
+ *  which a reader of 12 refuses past INK_MAX; 14 a switch's code 3 before a punctuation mark (punctuationSection: the command
+ *  sets that mark before its own ink, and its marks around the pair move nothing; layoutMarking sets its closing mark after the
+ *  mark), which a reader of 13 refuses */
+export const MARKS_SCHEMA = 14
 const ENGINES = ['pdflatex', 'latex', 'xelatex', 'lualatex']
 const KEYS = ['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'align', 'words', 'tokens', 'chars', 'owned', 'links']
 /** the keys a marks file holds: KEYS, and `colours` where a colour piece has a fill (a file of before, or of a paper with
@@ -1439,7 +1465,8 @@ const OPENING = /^[pn]\d+\.\d+a$/
 const AHEAD_KEY = new RegExp(`^\\\\[^#]{1,${COMPLETE_SRC_MAX - 1}}# ?#[^#]{1,${COMPLETE_SRC_MAX}}$`, 's')
 /** the paper's own switch as the marking takes it (readMarkProbe): null where the probe was not run (every mark as
  *  LAYOUT_TEX sets it), else at most PROBE_MAX commands of the asked classes and COMPLETE_PROBE_MAX complete macros, each a
- *  control word, its answer a code 0, 1, 2 or x (no answer) a follower, and at most AHEAD_PROBE_MAX look-ahead pairs, each by
+ *  control word, its answer a code 0, 1, 2 or x (no answer) a follower (or 3 before a punctuation mark), and at most
+ *  AHEAD_PROBE_MAX look-ahead pairs, each by
  *  its key (AHEAD_KEY), its answer one such code; else a refusal at `path` */
 function checkSwitches(v, path) {
   if (v === null) return null
@@ -1450,7 +1477,7 @@ function checkSwitches(v, path) {
   for (const k of keys) {
     if (/^\\[A-Za-z@]+$/.test(k)) {
       if (k.length > 64) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a control word')
-      if (typeof v[k] !== 'string' || v[k].length !== FOLLOWERS.length || !/^[012x]+$/.test(v[k])) throw new LayoutRefusal(`${path}.${told(k)}`, `not ${FOLLOWERS.length} codes of 0, 1, 2 or x`)
+      if (typeof v[k] !== 'string' || v[k].length !== FOLLOWERS.length || !/^[012x]+$/.test(v[k].slice(PUNCT.length)) || !/^[0123x]+$/.test(v[k].slice(0, PUNCT.length))) throw new LayoutRefusal(`${path}.${told(k)}`, `not ${FOLLOWERS.length} codes of 0, 1, 2 or x, or 3 before a punctuation mark`)
     } else {
       if (!AHEAD_KEY.test(k)) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a control word or a look-ahead pair')
       if (typeof v[k] !== 'string' || !/^[012x]$/.test(v[k])) throw new LayoutRefusal(`${path}.${told(k)}`, 'not a code of 0, 1, 2 or x')
@@ -1628,7 +1655,12 @@ export function followsOf(units, names, texts = null) {
     // (`rest`, the erasure's: the whole text after it up to its next visible piece, as the spell check reads one — its letters and
     // digits —, so that the text after it is told where it runs exactly to its unit's next mark, not where its first WANT
     // characters first stand: a display's \\text{for every}, a URL's dots)
-    return { closing: names.has(`${name.slice(0, -1)}b`), want, rest: spellOf(after), display, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group, ...(said ? { split: { name: `${next}a`, text: said, ...(trail ?? {}) } } : {}) }
+    // (`moved`: the punctuation mark that opens the text after a piece of a command the probe asks about, which that command may
+    // set before its own ink — cite.sty's superscripts, natmove, fnpct: `\\cite{a}.` set ".¹" — and where TeX answered so, the
+    // piece's closing mark stands after it (layoutMarking's 3): the piece's ink is what its two marks hold but that mark first,
+    // where none stands after them (stream.mjs ownedOf: a piece of 0 has the mark after its closing point, its own ink as it is)
+    const moved = ASKED.has(classOf(u.pieces[k])) && MOVED.includes(after[0]) ? after[0] : null
+    return { closing: names.has(`${name.slice(0, -1)}b`), want, rest: spellOf(after), display, ends: [...(next ? [`${next}a`] : []), ...endsOf(i)], blocked, through, group, ...(said ? { split: { name: `${next}a`, text: said, ...(trail ?? {}) } } : {}), ...(moved ? { moved } : {}) }
   }
 }
 
