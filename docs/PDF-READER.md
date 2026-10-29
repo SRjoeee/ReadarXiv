@@ -366,8 +366,12 @@ The states are §8's.
 - Items are 30 px rows with an 8 px radius, their words 10 px in, on the search field's words; the chosen one's check
   at the row's end, 10 px in, in a 14 px slot every row of the menu keeps, after anything else the row holds (UI.md §4).
   Until 2026-10-25 it led the row (the maintainer: 「对勾都在前方…我们应该把它放在字的后边」).
-- 目标语言: a search field, then the nine languages the reader supports, each in its own language: 日本語, 简体中文,
-  繁體中文, 한국어, Deutsch, Español, Français, Português, Русский.
+- 目标语言: a search field, then the languages the reader supports (the engine's rules TARGETS), each in its own language,
+  by script: CJK in the design's order, 日本語, 简体中文, 繁體中文, 한국어; then the Latin ones and the Cyrillic ones, each in
+  the order of their own names: Bahasa Indonesia, Bahasa Melayu, Čeština, Deutsch, Español, Français, Italiano, Nederlands,
+  Polski, Português, Svenska, Türkçe; Български, Русский, Українська. The ten after the first nine are the languages of a
+  script the engine already set (the owner's ruling of 2026-10-29): each has babel's names, TeX's hyphenation patterns and
+  minimums (rules/layout.mjs, tests/fixtures/hyph/README.md) and the letters every served face draws a translation in.
 - 翻译服务: the same list and labels as the popup's service menu.
 - They are built on the shared `Menu` once it has the fixes in §9.4.
 
@@ -399,7 +403,7 @@ No state that tells the reader nothing is shown (no "done").
 | Translating | the paper's paragraphs being translated by the service chosen | the same line on, by the share of paragraphs done; 正在翻译 said to screen readers; each page laid on the right as its paragraphs come, the original's page until then |
 | Not to be had now | Read arXiv's website out of reach, or at its limit | the original readable, the displays as they are; capsule: PDF 对照暂时无法加载 · 重试 · 改用 HTML 翻译 where arXiv has an HTML version (S-R-24); passing, not remembered; a paper whose files this machine keeps opens without it |
 | Some paragraphs failed | a translation with gaps | capsule: {n} 处翻译失败 · 重试 · close |
-| Language not supported | the shared target language is not one of the nine | 原文, with the capsule: PDF 对照暂不支持{语言} · 选择语言 (opens the language menu in place); choosing one of the nine translates |
+| Language not supported | the shared target language is not one of the reader's | 原文, with the capsule: PDF 对照暂不支持{语言} · 选择语言 (opens the language menu in place); choosing one of the reader's translates |
 | Nothing translated | a service failure with no paragraph done | card in the translation's pane: the reason (网络连接失败, API Key 无效或已过期, 尚未配置 API Key, …) · 重试, or 设置 when the reason is a key (opening the settings page at the services) |
 | Cannot be had | no bilingual version can be made of the paper (no source, no PDF, a prepare that cannot succeed, one this version of the reader cannot read) | 对照 and 译文 greyed in the switch; the reader shows 原文, with the capsule: 这篇论文暂不支持 PDF 翻译, and 改用 HTML 翻译 where arXiv has an HTML version (opened where `reading.openIn` says); no close |
 | No paper | the address names none (a hand-typed one) | the phase is ready, not loading; 对照 and 译文 greyed and 原文 selected whatever the saved display; a card in the document area: 找不到这篇论文 · 前往 arXiv (a link, opened where `reading.openIn` says) |
@@ -421,7 +425,7 @@ The reader keeps no settings of its own apart from the extension's: the popup, t
 the same values, and each follows the others through the shared configuration's subscription at once
 (`useSurfaceConfig`). There is no new message for it.
 
-**Read, as they are**: `targetLanguage` (the nine are the reader's; §8 for the others), `provider` and `services`,
+**Read, as they are**: `targetLanguage` (the reader's languages, §6.7; §8 for the others), `provider` and `services`,
 `reading.sentenceHighlight` (对照高亮), `appearance.activeHighlight` among `appearance.highlights` (高亮颜色: the swatches are
 the configured highlight profiles, the three built-in and any added), `uiLanguage` (the reader's words), `mode` (the
 display, §3). The image switch (`image.enabled`, S-P-85) is the HTML page's alone since v21: the reader's figure text is
@@ -485,7 +489,7 @@ is open. With the reader open, the popup acts on it, by the settings (the mainta
 reader cannot do is greyed or hidden):
 
 - 翻译服务: all, as elsewhere.
-- 目标语言: the nine only.
+- 目标语言: the reader's languages only (§6.7).
 - The prompt row: as elsewhere.
 - The mode bar: 左右 and 仅译文 usable; 上下 disabled, its title PDF 对照不支持上下排列 (a layout the reader can see, not
   a technical reason). A `mode` of `'stack'` shows as 左右 chosen, since that is what the reader shows.
@@ -1114,6 +1118,16 @@ hyph-utf8's `hyph-fr.tex`, `hyph-es.tex` and `hyph-pt.tex`, MIT, MIT and BSD 3-c
 `patternsOfTex`; each target's `latinPatterns` its own, at babel's minimums, French 2 and 3, Spanish 2 and 2, Portuguese 2 and 3,
 the `.ldf` files' `\providehyphenmins`), which the web's hyphenation builder writes from the pinned TeX Live image. On 54
 words TeX broke under babel (`tests/fixtures/hyph/`) the layer breaks every one as TeX does; English's patterns had broken 7.
+RULES_SCHEMA 9 (the owner's ruling of 2026-10-29) adds hyph-utf8's Italian, Dutch, Polish, Turkish, Indonesian, Czech, Swedish,
+Ukrainian and Bulgarian files (Malay takes Indonesian's, as babel's `malay.ldf` does; TeX Live has none of its own), at the
+minimums TeX applies under babel (pdfLaTeX and LuaLaTeX alike: Italian, Indonesian, Malay, Swedish and Ukrainian 2 and 2;
+Dutch, Polish, Turkish, Czech and Bulgarian 2 and 3), and `cyrillicPatterns`: Khmelev's rules, which are Russian's, read
+Bulgarian's ъ as the hard sign (Бъ-лга-рия, TeX's Бъл-га-рия) and refuse a word with і, ї, є or ґ. A word is lowered as its
+patterns' language lowers it (`String#toLocaleLowerCase`: Turkish's I is ı and its İ is i, where the root's İ is i and a
+combining dot), and a word whose lower case changes its length takes no break. On 188 words TeX broke under babel the layer
+breaks every one as TeX does; English's patterns and Russian's rules had broken 26. Indonesian's file is GPL-2.0 and
+Czech's GPL-2.0-or-later: the host serves each as a data file of its own, the original `.tex` and its notice beside it
+(the owner's ruling of 2026-10-29, as the GPL faces are served).
 An id with no version is the latest version arXiv's abstract page lists (`session/paper.ts`: within 15 s and 2 MB, a read
 that cannot be had forgotten so that a retry reads it again). The run's rows are
 `tests/pdf-reader/run.test.ts`, `server.test.ts`, `ranges.test.ts`, `faces.test.ts` and `reader-host.test.ts`; `pnpm e2e:reader` runs the
@@ -1631,7 +1645,7 @@ The edge cases, decided:
 | `PIPELINE_VERSION` (`pipeline/versions.mjs`, `'35'`) | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
 | `LAYOUT` (`layout/file.mjs`, `'29'`: backref's list after an entry a row of its list piece's, §19.13; 28 a Type 3 glyph's ink its char procedure's paths, `layout/ink.mjs` `type3Box`, #122-1; 27 a command that sets the punctuation after it before its ink marked around the pair, a macro TeX said sets no ink EMPTY, a piece alone at an entry's end given the lines it runs onto, a macro that sets one punctuation mark drawn as it, §19.7; 26 a unit TeX set flush left or flush right flagged so, `UNIT_FLAG.FLUSH_LEFT` and `UNIT_FLAG.FLUSH_RIGHT`, and a paragraph a box's close ends read by its own skips, §18.1, §18.8; 25 the release sweep of 2026-10-29, a line too short to be evidence found on no other page, a word a hyphen cuts going on below, an ink unit's paragraph one unit, a math face told by its family's names, `layer-proto/fonts.mjs` `classifyFont`), `REMOVAL` (`pipeline/versions.mjs`, `'16'`: backref's list after an entry its list piece's ink, §19.13; 15 a level figure unit on its column's edge or centred in it anchored there, `figure-text.mjs` `columnAnchorOf`, §19.12; 14 a unit's text owns the rules TeX painted on its own lines, an OT1 `\_`, an underline, own.mjs MR 2b, #117; 13 a punctuation mark a command set before its own ink its unit's text, not the piece's, §19.9; 12 a macro TeX said sets no ink is no placeholder of ink, an opening point alone at its unit's end owns its lines up to TeX's skip before another block; 8 no add-on, a part's or a bundle's cell rules in its place, our page wrapped by optional content, §11.8, §19.9) | extraction | the layout maker (the file's own schema is `LAYOUT_SCHEMA`, 5); how a drawn unit's ink is taken away | the R2 key | bundles made again lazily |
 | `TRANSLATE_VERSION` (`translate/version.mjs`, `'7'`: backref's list after an entry on no wire, put back after the translation with an en space before it, §19.13; `'6'`: every content class translated once whatever the language, the author block for every target and a bibliography's entries; `'5'`: a display's own stop written after its marker and taken off the reply; `'4'`: a styled pair whose two ends stand where the wire has a marker anyway keeps its markers; `'3'`: a sentence whose words change style sent whole, the pairs inside it on no wire; `'2'`: a formula split across inline formulas sent as one marker) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
-| `RULES_SCHEMA` (`rules/layout.mjs`, `8`: `latinPatterns` takes French's, Spanish's and Portuguese's own, hyph-utf8's (the three were hyphenated with English's, #121-4), and `hyphenation` their minimums as babel sets them, French 2 and 3, Spanish 2 and 2, Portuguese 2 and 3; 7: `evenPitch` and `keepAlign` added, lane B's B1 and B2, the ruling of 2026-10-29, §18.8; 6: `cjkFaces` holds its group alone, a CJK script drawn at Regular and Bold beside every English family, its `light` designs and its unread `kai` gone, the ruling of 2026-10-29; 5 before it: `fillLeadRel` added, the fill's top relative to the original's pitch; 4: `adaptiveFill.band` read against the page's own paragraphs, 1b-C) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
+| `RULES_SCHEMA` (`rules/layout.mjs`, `9`: the languages of a script the engine set, the owner's ruling of 2026-10-29: `latinPatterns` takes Italian's, Dutch's, Polish's, Turkish's, Indonesian's (Malay's too, as babel's malay.ldf takes them), Czech's and Swedish's, `cyrillicPatterns` added, a Cyrillic word's hyphenation, Russian's rules or Ukrainian's or Bulgarian's own patterns, and `hyphenation` their minimums as TeX applies them under babel; 8: `latinPatterns` takes French's, Spanish's and Portuguese's own, hyph-utf8's (the three were hyphenated with English's, #121-4), and `hyphenation` their minimums as babel sets them, French 2 and 3, Spanish 2 and 2, Portuguese 2 and 3; 7: `evenPitch` and `keepAlign` added, lane B's B1 and B2, the ruling of 2026-10-29, §18.8; 6: `cjkFaces` holds its group alone, a CJK script drawn at Regular and Bold beside every English family, its `light` designs and its unread `kai` gone, the ruling of 2026-10-29; 5 before it: `fillLeadRel` added, the fill's top relative to the original's pitch; 4: `adaptiveFill.band` read against the page's own paragraphs, 1b-C) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
 | the set's `version` | layout | the values | its immutable URL | readers take it on their next load |
 | `RULES_VERSION` (`src/core/rules/latexml.ts`) | HTML extraction | the HTML page's rule file | the HTML page's per-text key only | as DESIGN §5.5 |
 | `TYPESETTING_VERSION` (`live.mjs`) | parked | the compile path | parked records | none |
@@ -1713,7 +1727,8 @@ The rule set is one schema-validated file, `rules/layout-rules.json`: configurat
 | `noStart` | script | breaking | a list of characters | The characters no line starts with. |
 | `noEnd` | script | breaking | a list of characters | The characters no line ends with. |
 | `hyphen` | script | breaking | `0`, `1` | Whether a Latin word is hyphenated at a line's end (1) or not (0). |
-| `latinPatterns` | script | breaking | `en`, `de`, `fr`, `es`, `pt` | The hyphenation patterns a Latin word uses. |
+| `latinPatterns` | script | breaking | `en`, `de`, `fr`, `es`, `pt`, `it`, `nl`, `pl`, `tr`, `id`, `cs`, `sv` | The hyphenation patterns a Latin word uses. |
+| `cyrillicPatterns` | script | breaking | `ru`, `uk`, `bg` | The hyphenation a Cyrillic word uses: Russian's rules (ru), or a language's own patterns. |
 | `keepAlign` | script | breaking | yes or no | Whether a unit TeX set flush left (ragged right) or flush right keeps that alignment: its lines left ragged, never justified, or set to the right edge. |
 | `cellClear` | script | cells | 0 to 5, step 0.1 | The room kept between a table cell's text and a rule over or under it, in PDF units. |
 | `cellCapMin` | script | cells | 0.3 to 1, step 0.05 | The smallest share of the size a cell's text may be capped to between its rules. |
@@ -1730,6 +1745,24 @@ The rule set is one schema-validated file, `rules/layout-rules.json`: configurat
 | `hyphenation.es.right` | set | hyphenation | 1 to 6 | The fewest letters Spanish leaves after a hyphen. |
 | `hyphenation.pt.left` | set | hyphenation | 1 to 6 | The fewest letters Portuguese leaves before a hyphen. |
 | `hyphenation.pt.right` | set | hyphenation | 1 to 6 | The fewest letters Portuguese leaves after a hyphen. |
+| `hyphenation.it.left` | set | hyphenation | 1 to 6 | The fewest letters Italian leaves before a hyphen. |
+| `hyphenation.it.right` | set | hyphenation | 1 to 6 | The fewest letters Italian leaves after a hyphen. |
+| `hyphenation.nl.left` | set | hyphenation | 1 to 6 | The fewest letters Dutch leaves before a hyphen. |
+| `hyphenation.nl.right` | set | hyphenation | 1 to 6 | The fewest letters Dutch leaves after a hyphen. |
+| `hyphenation.pl.left` | set | hyphenation | 1 to 6 | The fewest letters Polish leaves before a hyphen. |
+| `hyphenation.pl.right` | set | hyphenation | 1 to 6 | The fewest letters Polish leaves after a hyphen. |
+| `hyphenation.tr.left` | set | hyphenation | 1 to 6 | The fewest letters Turkish leaves before a hyphen. |
+| `hyphenation.tr.right` | set | hyphenation | 1 to 6 | The fewest letters Turkish leaves after a hyphen. |
+| `hyphenation.id.left` | set | hyphenation | 1 to 6 | The fewest letters Indonesian leaves before a hyphen. |
+| `hyphenation.id.right` | set | hyphenation | 1 to 6 | The fewest letters Indonesian leaves after a hyphen. |
+| `hyphenation.cs.left` | set | hyphenation | 1 to 6 | The fewest letters Czech leaves before a hyphen. |
+| `hyphenation.cs.right` | set | hyphenation | 1 to 6 | The fewest letters Czech leaves after a hyphen. |
+| `hyphenation.sv.left` | set | hyphenation | 1 to 6 | The fewest letters Swedish leaves before a hyphen. |
+| `hyphenation.sv.right` | set | hyphenation | 1 to 6 | The fewest letters Swedish leaves after a hyphen. |
+| `hyphenation.uk.left` | set | hyphenation | 1 to 6 | The fewest letters Ukrainian leaves before a hyphen. |
+| `hyphenation.uk.right` | set | hyphenation | 1 to 6 | The fewest letters Ukrainian leaves after a hyphen. |
+| `hyphenation.bg.left` | set | hyphenation | 1 to 6 | The fewest letters Bulgarian leaves before a hyphen. |
+| `hyphenation.bg.right` | set | hyphenation | 1 to 6 | The fewest letters Bulgarian leaves after a hyphen. |
 
 ### 18.6 Hosts: opening a layer with a rule set
 

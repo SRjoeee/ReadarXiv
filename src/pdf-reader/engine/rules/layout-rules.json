@@ -1,14 +1,23 @@
 {
-  "schema": 8,
-  "version": 8,
-  "note": "French, Spanish and Portuguese hyphenated with their own patterns, hyph-utf8's, at babel's minimums (schema 8, #121-4: the three were hyphenated with English's); schema 7 added evenPitch and keepAlign",
+  "schema": 9,
+  "version": 9,
+  "note": "Italian, Dutch, Polish, Turkish, Indonesian, Malay, Czech, Swedish, Ukrainian and Bulgarian, each with babel's names, its hyph-utf8 patterns at TeX's minimums (Malay Indonesian's, as babel's malay.ldf takes them), and cyrillicPatterns (schema 9); schema 8 gave French, Spanish and Portuguese their own patterns",
   "hyphenation": {
     "minWord": 5,
     "en": { "left": 2, "right": 3 },
     "de": { "left": 2, "right": 2 },
     "fr": { "left": 2, "right": 3 },
     "es": { "left": 2, "right": 2 },
-    "pt": { "left": 2, "right": 3 }
+    "pt": { "left": 2, "right": 3 },
+    "it": { "left": 2, "right": 2 },
+    "nl": { "left": 2, "right": 3 },
+    "pl": { "left": 2, "right": 3 },
+    "tr": { "left": 2, "right": 3 },
+    "id": { "left": 2, "right": 2 },
+    "cs": { "left": 2, "right": 3 },
+    "sv": { "left": 2, "right": 2 },
+    "uk": { "left": 2, "right": 2 },
+    "bg": { "left": 2, "right": 3 }
   },
   "scripts": {
     "Hans": {
@@ -43,6 +52,7 @@
       "noEnd": "（([「『【〔〈《〘〖“‘",
       "hyphen": 1,
       "latinPatterns": "en",
+      "cyrillicPatterns": "ru",
       "keepAlign": true,
       "cellClear": 0.5,
       "cellCapMin": 0.6,
@@ -80,6 +90,7 @@
       "noEnd": "（([「『【〔〈《〘〖“‘",
       "hyphen": 1,
       "latinPatterns": "en",
+      "cyrillicPatterns": "ru",
       "keepAlign": true,
       "cellClear": 0.5,
       "cellCapMin": 0.6,
@@ -117,6 +128,7 @@
       "noEnd": "（([「『【〔〈《〘〖“‘",
       "hyphen": 1,
       "latinPatterns": "en",
+      "cyrillicPatterns": "ru",
       "keepAlign": true,
       "cellClear": 0.5,
       "cellCapMin": 0.6,
@@ -154,6 +166,7 @@
       "noEnd": "（([「『【〔〈《〘〖“‘",
       "hyphen": 1,
       "latinPatterns": "en",
+      "cyrillicPatterns": "ru",
       "keepAlign": true,
       "cellClear": 0.5,
       "cellCapMin": 0.6,
@@ -191,6 +204,7 @@
       "noEnd": "（([「『【〔〈《〘〖“‘",
       "hyphen": 1,
       "latinPatterns": "en",
+      "cyrillicPatterns": "ru",
       "keepAlign": true,
       "cellClear": 0.5,
       "cellCapMin": 0.6,
@@ -228,6 +242,7 @@
       "noEnd": "（([「『【〔〈《〘〖“‘",
       "hyphen": 1,
       "latinPatterns": "en",
+      "cyrillicPatterns": "ru",
       "keepAlign": true,
       "cellClear": 0.5,
       "cellCapMin": 0.6,
@@ -235,6 +250,14 @@
     }
   },
   "languages": {
+    "bg": {
+      "labels": { "figure": "Фигура", "table": "Таблица", "abstract": "Абстракт", "ref": "Литература", "bib": "Библиография", "contents": "Съдържание", "listfigure": "Списък на фигурите", "listtable": "Списък на таблиците", "appendix": "Приложение", "index": "Азбучен указател", "proof": "Доказателство", "preface": "Предговор", "glossary": "Притурка" },
+      "cyrillicPatterns": "bg"
+    },
+    "cs": {
+      "labels": { "figure": "Obrázek", "table": "Tabulka", "abstract": "Abstrakt", "ref": "Reference", "bib": "Literatura", "contents": "Obsah", "listfigure": "Seznam obrázků", "listtable": "Seznam tabulek", "appendix": "Příloha", "index": "Rejstřík", "proof": "Důkaz", "preface": "Předmluva", "glossary": "Slovník" },
+      "latinPatterns": "cs"
+    },
     "de": {
       "labels": { "figure": "Abbildung", "table": "Tabelle", "abstract": "Zusammenfassung", "ref": "Literatur", "bib": "Literaturverzeichnis", "contents": "Inhaltsverzeichnis", "listfigure": "Abbildungsverzeichnis", "listtable": "Tabellenverzeichnis", "appendix": "Anhang", "index": "Index", "proof": "Beweis", "preface": "Vorwort", "glossary": "Glossar" },
       "latinPatterns": "de"
@@ -247,11 +270,31 @@
       "labels": { "figure": "Figure", "table": "Table", "abstract": "Résumé", "ref": "Références", "bib": "Bibliographie", "contents": "Table des matières", "listfigure": "Table des figures", "listtable": "Liste des tableaux", "appendix": "Annexe", "index": "Index", "proof": "Démonstration", "preface": "Préface", "glossary": "Glossaire" },
       "latinPatterns": "fr"
     },
+    "id": {
+      "labels": { "figure": "Gambar", "table": "Tabel", "abstract": "Ringkasan", "ref": "Pustaka", "bib": "Bibliografi", "contents": "Daftar Isi", "listfigure": "Daftar Gambar", "listtable": "Daftar Tabel", "appendix": "Lampiran", "index": "Indeks", "proof": "Bukti", "preface": "Pendahuluan", "glossary": "Daftar Istilah" },
+      "latinPatterns": "id"
+    },
+    "it": {
+      "labels": { "figure": "Figura", "table": "Tabella", "abstract": "Sommario", "ref": "Riferimenti bibliografici", "bib": "Bibliografia", "contents": "Indice", "listfigure": "Elenco delle figure", "listtable": "Elenco delle tabelle", "appendix": "Appendice", "index": "Indice analitico", "proof": "Dimostrazione", "preface": "Prefazione", "glossary": "Glossario" },
+      "latinPatterns": "it"
+    },
     "ja": {
       "labels": { "figure": "図", "table": "表", "abstract": "概要", "ref": "参考文献", "bib": "参考文献", "contents": "目次", "listfigure": "図目次", "listtable": "表目次", "appendix": "付録", "index": "索引", "proof": "証明", "preface": "前書き", "glossary": "用語集" }
     },
     "ko": {
       "labels": { "figure": "그림", "table": "표", "abstract": "요 약", "ref": "참고 문헌", "bib": "참고 문헌", "contents": "차 례", "listfigure": "그림 차례", "listtable": "표 차례", "appendix": "부록", "index": "찾아보기", "proof": "증명", "preface": "서문", "glossary": "용어집" }
+    },
+    "ms": {
+      "labels": { "figure": "Gambar", "table": "Jadual", "abstract": "Abstrak", "ref": "Rujukan", "bib": "Bibliografi", "contents": "Kandungan", "listfigure": "Senarai Gambar", "listtable": "Senarai Jadual", "appendix": "Lampiran", "index": "Indeks", "proof": "Bukti", "preface": "Prakata", "glossary": "Istilah" },
+      "latinPatterns": "id"
+    },
+    "nl": {
+      "labels": { "figure": "Figuur", "table": "Tabel", "abstract": "Samenvatting", "ref": "Referenties", "bib": "Bibliografie", "contents": "Inhoudsopgave", "listfigure": "Lijst van figuren", "listtable": "Lijst van tabellen", "appendix": "Bijlage", "index": "Index", "proof": "Bewijs", "preface": "Voorwoord", "glossary": "Verklarende Woordenlijst" },
+      "latinPatterns": "nl"
+    },
+    "pl": {
+      "labels": { "figure": "Rysunek", "table": "Tablica", "abstract": "Streszczenie", "ref": "Literatura", "bib": "Bibliografia", "contents": "Spis treści", "listfigure": "Spis rysunków", "listtable": "Spis tablic", "appendix": "Dodatek", "index": "Indeks", "proof": "Dowód", "preface": "Przedmowa", "glossary": "Słowniczek" },
+      "latinPatterns": "pl"
     },
     "pt": {
       "labels": { "figure": "Figura", "table": "Tabela", "abstract": "Resumo", "ref": "Referências", "bib": "Bibliografia", "contents": "Índice", "listfigure": "Lista de Figuras", "listtable": "Lista de Tabelas", "appendix": "Apêndice", "index": "Índice Remissivo", "proof": "Demonstração", "preface": "Prefácio", "glossary": "Glossário" },
@@ -259,6 +302,19 @@
     },
     "ru": {
       "labels": { "figure": "Рис.", "table": "Таблица", "abstract": "Аннотация", "ref": "Список литературы", "bib": "Литература", "contents": "Содержание", "listfigure": "Список иллюстраций", "listtable": "Список таблиц", "appendix": "Приложение", "index": "Предметный указатель", "proof": "Доказательство", "preface": "Предисловие", "glossary": "Словарь терминов" }
+    },
+    "sv": {
+      "labels": { "figure": "Figur", "table": "Tabell", "abstract": "Sammanfattning", "ref": "Referenser", "bib": "Litteraturförteckning", "contents": "Innehåll", "listfigure": "Figurer", "listtable": "Tabeller", "appendix": "Bilaga", "index": "Sakregister", "proof": "Bevis", "preface": "Förord", "glossary": "Ordlista" },
+      "noStart": "、。，．,.！？!?）)]」』】〕〉》〙〗：:；;・ー〜…々ゝゞぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ%％",
+      "latinPatterns": "sv"
+    },
+    "tr": {
+      "labels": { "figure": "Şekil", "table": "Tablo", "abstract": "Özet", "ref": "Kaynaklar", "bib": "Kaynakça", "contents": "İçindekiler", "listfigure": "Şekil Listesi", "listtable": "Tablo Listesi", "appendix": "Ek", "index": "Dizin", "proof": "İspat", "preface": "Önsöz", "glossary": "Sözlükçe" },
+      "latinPatterns": "tr"
+    },
+    "uk": {
+      "labels": { "figure": "Рис.", "table": "Табл.", "abstract": "Анотація", "ref": "Література", "bib": "Бібліоґрафія", "contents": "Зміст", "listfigure": "Перелік ілюстрацій", "listtable": "Перелік таблиць", "appendix": "Додаток", "index": "Покажчик", "proof": "Доведення", "preface": "Вступ", "glossary": "Словник термінів" },
+      "cyrillicPatterns": "uk"
     },
     "zh": {
       "labels": { "figure": "图", "table": "表", "abstract": "摘要", "ref": "参考文献", "bib": "参考文献", "contents": "目录", "listfigure": "插图", "listtable": "表格", "appendix": "附录", "index": "索引", "proof": "证明", "preface": "", "glossary": "" }

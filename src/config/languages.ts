@@ -5,7 +5,9 @@
 // English name and Google's web translator takes BCP-47; both conversions go through the functions here.
 import { z } from 'zod'
 
-/** 179 ISO 639-3 codes, in Read Frog's order (the common languages first) */
+/** 180 ISO 639-3 codes, in Read Frog's order (the common languages first), and Standard Malay (zsm) before its Malay in Jawi:
+ *  Read Frog's table had Malay in the Arabic script alone, and Malay is read in Latin letters (the PDF reader's languages,
+ *  2026-10-29) */
 export const LANG_CODES = [
   "eng",
   "cmn",
@@ -54,6 +56,7 @@ export const LANG_CODES = [
   "ckb",
   "yor",
   "uzn",
+  "zsm",
   "zlm",
   "ibo",
   "npi",
@@ -241,6 +244,7 @@ export const LANG_CODE_TO_EN_NAME = {
   "ckb": "Central Kurdish",
   "yor": "Yoruba",
   "uzn": "Northern Uzbek (Cyrillic)",
+  "zsm": "Standard Malay",
   "zlm": "Malay (individual language) (Arabic)",
   "ibo": "Igbo",
   "npi": "Nepali (individual language)",
@@ -424,6 +428,7 @@ export const LANG_CODE_TO_ZH_NAME = {
   "ckb": "库尔德语（索拉尼）",
   "yor": "约鲁巴语",
   "uzn": "乌兹别克语",
+  "zsm": "马来语",
   "zlm": "马来语（爪夷文）",
   "ibo": "伊博语",
   "npi": "尼泊尔语",
@@ -607,6 +612,7 @@ export const LANG_CODE_TO_LOCALE_NAME = {
   "ckb": "کوردیی ناوەندی",
   "yor": "Yorùbá",
   "uzn": "Ўзбекча",
+  "zsm": "Bahasa Melayu",
   "zlm": "بهاس ملايو",
   "ibo": "Asụsụ Igbo",
   "npi": "नेपाली",
@@ -741,7 +747,9 @@ export const LANG_CODE_TO_LOCALE_NAME = {
   "hif": "फ़िजी हिंदी",
 } as const satisfies Record<LangCode, string>
 
-/** ISO 639-3 → BCP-47 (Google and others take the target language as BCP-47); 38 codes have no two-letter equivalent */
+/** ISO 639-3 → BCP-47 (Google and others take the target language as BCP-47); 38 codes have no two-letter equivalent. `ms` is
+ *  Standard Malay's, in Latin letters, and Malay in Jawi is `ms-Arab` (Read Frog's table gave zlm `ms`), so that a tag reads
+ *  back to the language it names (languageOfTag: `ms-MY` is zsm, `ms-Arab` zlm) */
 export const ISO6393_TO_6391 = {
   "eng": "en",
   "cmn": "zh",
@@ -788,7 +796,8 @@ export const ISO6393_TO_6391 = {
   "ckb": "ku",
   "yor": "yo",
   "uzn": "uz",
-  "zlm": "ms",
+  "zsm": "ms",
+  "zlm": "ms-Arab",
   "ibo": "ig",
   "npi": "ne",
   "tgl": "tl",
@@ -915,6 +924,7 @@ const EN_UI_OVERRIDES: Partial<Record<LangCode, string>> = {
   ell: 'Greek',
   swh: 'Swahili',
   npi: 'Nepali',
+  zsm: 'Malay',
   zlm: 'Malay (Jawi)',
   pbu: 'Pashto',
   ydd: 'Yiddish',

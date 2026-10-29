@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { headInTarget, headName, refInTarget, refName } from '@/pdf-reader/engine/rules/tex-names.mjs'
-import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
+import { BUILTIN_RULES, resolveRules, TARGETS } from '@/pdf-reader/engine/rules/layout.mjs'
 
 // The names TeX's packages give a theorem's head and a generated reference in each target (PDF-READER §19.11): translator's
 // theorem dictionaries (ctex's for Chinese), cleveref's and hyperref's language definitions, ctex's names, babel's (the layout
@@ -26,10 +26,10 @@ describe('the table is TeX Live\'s', () => {
   it('is LPPL 1.3c data throughout, each source taken under it, as docs/THIRD_PARTY.md registers it', () => {
     expect(file.licence).toMatch(/^LPPL 1\.3c: /)
     expect(file.licence).not.toMatch(/GPL|GNU/)
-    for (const f of Object.keys(file.files)) expect(file.licence.replace('{German,French,Spanish,Russian,Portuguese}', 'German'), f).toContain(f.replace(/-(?:French|Spanish|Russian|Portuguese)\.dict$/, '-German.dict'))
+    for (const f of Object.keys(file.files)) expect(file.licence.replace('{German,French,Spanish,Russian,Portuguese,Italian,Dutch,Polish,Turkish,Czech,Swedish,Bulgarian}', 'German'), f).toContain(f.replace(/-(?:French|Spanish|Russian|Portuguese|Italian|Dutch|Polish|Turkish|Czech|Swedish|Bulgarian)\.dict$/, '-German.dict'))
   })
   it('every target the readers offer has its entry', () => {
-    expect(Object.keys(file.targets).sort()).toEqual(['de', 'es', 'fr', 'ja', 'ko', 'pt', 'ru', 'zh', 'zh-TW'])
+    expect(Object.keys(file.targets).sort()).toEqual([...TARGETS].sort())
   })
 })
 
@@ -62,6 +62,29 @@ describe('headName and headInTarget: a theorem-like head\'s name in translator\'
     expect(headInTarget('Theorem 1.', 'ja')).toBeNull()
     expect(headInTarget('Theorem 1.', 'zh-TW')).toBeNull()
     expect(headInTarget('1.', 'zh')).toBeNull()
+  })
+})
+
+describe('the languages of 2026-10-29: each package\'s names where it has the language, babel\'s a float\'s and an appendix\'s singular', () => {
+  it('cleveref\'s and hyperref\'s for Italian, Dutch and Swedish, cleveref\'s alone for Ukrainian, translator\'s heads where it has them', () => {
+    expect(renamed('Figures 1 and 2', 'it')).toBe('Figure 1 e 2')
+    expect(renamed('Section 3', 'nl')).toBe('Paragraaf 3')
+    expect(renamed('Theorem 2', 'sv')).toBe('Teorem 2')
+    expect(renamed('Appendix B', 'uk')).toBe('Додаток B')
+    expect(headName('Theorem', 'pl')).toBe('Twierdzenie')
+    expect(headName('Theorem', 'cs')).toBe('Věta')
+    expect(headName('Lemma', 'bg')).toBe('Лема')
+    expect(headName('Theorem', 'id')).toBeNull()
+  })
+  it('in a target no reference package defines, its babel name for a float\'s or an appendix\'s singular, and no other form', () => {
+    expect(renamed('Figure 3', 'pl')).toBe('Rysunek 3')
+    expect(renamed('Table 2', 'tr')).toBe('Tablo 2')
+    expect(renamed('Appendix A', 'id')).toBe('Lampiran A')
+    expect(renamed('Figure 1', 'ms')).toBe('Gambar 1')
+    // (a plural or an abbreviation is a form babel has no word of: the original's whole)
+    expect(renamed('Figures 1 and 2', 'pl')).toBeNull()
+    expect(renamed('Fig. 3', 'cs')).toBeNull()
+    expect(renamed('Section 3', 'bg')).toBeNull()
   })
 })
 
@@ -148,6 +171,8 @@ describe('the paper\'s own name units (PDF-READER §19.14): a word no package na
     // (none where the name has no unit, or its translation none: the original's)
     expect(headInTarget('Assumption 1.', 'zh', new Map())).toBeNull()
     expect(headInTarget('Assumption 1.', 'zh', new Map([['Assumption', '  ']]))).toBeNull()
-    expect(refName('Assumption', 'it', null, new Map([['Assumption', 'Ipotesi']]))).toBeNull()
+    // (and none in a language the table has no entry of: Danish, no target)
+    expect(refName('Assumption', 'da', null, new Map([['Assumption', 'Antagelse']]))).toBeNull()
+    expect(refName('Assumption', 'it', null, new Map([['Assumption', 'Ipotesi']]))).toBe('Ipotesi')
   })
 })

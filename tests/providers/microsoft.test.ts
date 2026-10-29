@@ -164,7 +164,7 @@ describe('supportsTarget', () => {
     }
   })
 
-  it('target languages the endpoint does not support are false: 73 of 179 (DESIGN §8.3)', () => {
+  it('target languages the endpoint does not support are false: 73 of 180 (DESIGN §8.3)', () => {
     expect(LANG_CODES.filter(code => !supportsTarget(code))).toHaveLength(73)
     // Measured: these all return 400
     for (const code of ['ceb', 'epo', 'tgl', 'nno', 'ckb']) {
@@ -207,6 +207,8 @@ describe('supportsTarget', () => {
     // toBcp47('zlm') deliberately gives ms-Arab for Jawi; ms-Arab measured 400, only ms is 200 and Latin-script Malay,
     // and normalising to it quietly swaps the script. A generic primary-language fallback would judge it supported
     expect(supportsTarget('zlm')).toBe(false)
+    // (Malay in Latin letters is its own entry, sent as ms: measured 200, Latin, 2026-10-29)
+    expect(supportsTarget('zsm')).toBe(true)
     // The four measured aliases still hold
     for (const code of ['cmn', 'cmn-Hant', 'mon', 'srp']) {
       expect([code, supportsTarget(code)]).toEqual([code, true])

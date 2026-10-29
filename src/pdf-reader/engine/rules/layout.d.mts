@@ -3,19 +3,24 @@ import type { ZodMiniType } from 'zod/mini'
 import type { CjkFaces } from './font-roles.mjs'
 import type { Params } from '../layer-proto/layer2.mjs'
 import type { NameKey } from '../layout/names.mjs'
-/** the hyphenation patterns a Latin word may use (layer-proto/hyph.mjs TEX_PATTERN_FILES) */
-export type PatternLanguage = 'en' | 'de' | 'fr' | 'es' | 'pt'
+/** TeX's hyphenation patterns the engine reads (layer-proto/hyph.mjs TEX_PATTERN_FILES), each with its minimums in the set's `hyphenation` */
+export type PatternLanguage = 'en' | 'de' | 'fr' | 'es' | 'pt' | 'it' | 'nl' | 'pl' | 'tr' | 'id' | 'cs' | 'sv' | 'uk' | 'bg'
 /** those languages, in the set's `hyphenation` order */
 export declare const PATTERNS: readonly PatternLanguage[]
+/** the patterns a Latin word may use */
+export type LatinPatterns = Exclude<PatternLanguage, 'uk' | 'bg'>
+/** what a Cyrillic word is hyphenated by: Russian's rules (Khmelev's, no patterns), or a language's own patterns */
+export type CyrillicPatterns = 'ru' | 'uk' | 'bg'
 
 /** the schema's number: the shape and how the engine reads it */
-export declare const RULES_SCHEMA: 8
+export declare const RULES_SCHEMA: 9
 /** a set's bytes at most, as received */
 export declare const RULES_CAP: 65536
 /** a set's JSON values at most, counted before JSON.parse */
 export declare const RULES_VALUES: 20000
-/** the targets either reader offers (the web's eight and the extension's Portuguese): every one must resolve, or the set is refused */
-export declare const TARGETS: readonly ['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'ru', 'pt']
+/** the targets either reader offers (the web's first eight, Portuguese, and the languages of a script the engine set that 2026-10-29
+ *  added): every one must resolve, or the set is refused */
+export declare const TARGETS: readonly ['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'ru', 'pt', 'it', 'nl', 'pl', 'tr', 'id', 'ms', 'cs', 'sv', 'uk', 'bg']
 export declare const SCRIPTS: readonly ['Hans', 'Hant', 'Jpan', 'Kore', 'Latn', 'Cyrl']
 export type Script = (typeof SCRIPTS)[number]
 
@@ -59,7 +64,9 @@ export interface ScriptRules {
   noStart: string; noEnd: string
   hyphen: 0 | 1
   /** a Latin word's hyphenation patterns */
-  latinPatterns: PatternLanguage
+  latinPatterns: LatinPatterns
+  /** a Cyrillic word's: Russian's rules, or a language's own patterns */
+  cyrillicPatterns: CyrillicPatterns
   // table cells (layer2.mjs cellBands)
   cellClear: number; cellCapMin: number
   // faces (font-roles.mjs rolesFor): the CJK group, drawn at Regular and Bold beside every English family
@@ -74,7 +81,7 @@ export type LanguageRules = Partial<ScriptRules> & {
   labels: Labels | null
 }
 export interface RuleSet {
-  schema: 6
+  schema: 9
   /** an integer ≥ 1, one more than the set it replaces */
   version: number
   /** at most 1,000 characters: what changed and why */
@@ -95,7 +102,7 @@ export interface TargetRules {
   /** v0's own: every ScriptRules fit, breaking and cell field, `cjk` from the script, and the set's hyphenation */
   params: Params
   labels: Labels | null
-  /** the patterns to load: en, latinPatterns, and ru for Cyrl */
+  /** the patterns to load: en, latinPatterns, and cyrillicPatterns for Cyrl */
   patterns: readonly (PatternLanguage | 'ru')[]
   hyphenation: RuleSet['hyphenation']
   cjkFaces: CjkFaces | null

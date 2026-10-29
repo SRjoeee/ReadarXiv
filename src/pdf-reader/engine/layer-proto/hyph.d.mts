@@ -3,7 +3,7 @@
 /** a language's patterns as loaded: Liang's points by letters, the exceptions, the longest pattern */
 export interface Patterns { pats: Map<string, number[]>; exceptions: Map<string, string>; maxLen: number }
 /** the languages of TeX's pattern files the layer hyphenates with */
-export type PatternLanguage = 'en' | 'de' | 'fr' | 'es' | 'pt'
+export type PatternLanguage = 'en' | 'de' | 'fr' | 'es' | 'pt' | 'it' | 'nl' | 'pl' | 'tr' | 'id' | 'cs' | 'sv' | 'uk' | 'bg'
 /** TeX's pattern files under texmf-dist, by language */
 export declare const TEX_PATTERN_FILES: Readonly<Record<PatternLanguage, string>>
 /** how each pattern file is decoded: Latin-1 (TeX's 8-bit files) or UTF-8 (hyph-utf8's) */

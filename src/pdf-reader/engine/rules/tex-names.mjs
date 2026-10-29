@@ -47,9 +47,11 @@ export function headName(english, to, names = null) {
 /**
  * A generated reference's name (cleveref's or \autoref's English, "Theorem", "Sections", "Eq.") in the target, or null. A
  * theorem-like name is its head's (headName: a reference reads as the head it names); else cleveref's or hyperref's in the
- * target, ctex's for Chinese; else, in a target whose names do not inflect, babel's name of its counter type (`labels`, the
- * layout rules' labels: a float's, an appendix's); else the paper's own name unit's translation (`names`: the form itself,
- * a name the paper defines, or, in a target whose names do not inflect, its type's singular, cleveref's English)
+ * target, ctex's for Chinese; else babel's name of its counter type (`labels`, the layout rules' labels: a float's, an
+ * appendix's), for every form in a target whose names do not inflect and for the type's singular alone in one that does
+ * (Polish's "Rysunek" for "Figure", where neither cleveref nor hyperref has Polish: babel's name is the singular's
+ * nominative, a plural or a case none of its); else the paper's own name unit's translation (`names`: the form itself, a
+ * name the paper defines, or, in a target whose names do not inflect, its type's singular, cleveref's English)
  */
 export function refName(english, to, labels = null, names = null) {
   const t = NAMES.targets[to]
@@ -58,7 +60,7 @@ export function refName(english, to, labels = null, names = null) {
   if (head) return head
   if (Object.hasOwn(t.refs, english) && t.refs[english]) return t.refs[english]
   const type = Object.hasOwn(NAMES.types, english) ? NAMES.types[english] : null
-  if (UNINFLECTED.has(to) && type && BABEL_TYPES.has(type) && labels?.[type]) return unspaced(labels[type])
+  if (type && BABEL_TYPES.has(type) && labels?.[type] && (UNINFLECTED.has(to) || SINGULAR[type] === english)) return unspaced(labels[type])
   return ownName(names, english) ?? (UNINFLECTED.has(to) && type && Object.hasOwn(SINGULAR, type) ? ownName(names, SINGULAR[type]) : null)
 }
 /** a conjunction in the target: cleveref's; else one of punctuation alone as it is; else its word the paper's name unit's

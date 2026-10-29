@@ -19,7 +19,8 @@
 //       $(kpsewhich ctex-name-utf8.cfg) $(kpsewhich translator-theorem-dictionary-German.dict) \
 //       $(kpsewhich translator-theorem-dictionary-French.dict) $(kpsewhich translator-theorem-dictionary-Spanish.dict) \
 //       $(kpsewhich translator-theorem-dictionary-Russian.dict) $(kpsewhich translator-theorem-dictionary-Portuguese.dict) \
-//       $(kpsewhich translator-theorem-dictionary-ChineseUTF8.dict) /out/'
+//       $(kpsewhich translator-theorem-dictionary-ChineseUTF8.dict) /out/; \
+//       for l in Italian Dutch Polish Turkish Czech Swedish Bulgarian; do cp $(kpsewhich translator-theorem-dictionary-$l.dict) /out/; done'
 //   node lab/pdf/spikes/tex-names-make.mjs <dir> [--check]
 // --check compares with the file in the tree and exits 1 where they differ.
 import { createHash } from 'node:crypto'
@@ -29,7 +30,7 @@ import { fileURLToPath } from 'node:url'
 
 const IMAGE = 'texlive/texlive:TL2025-historic@sha256:7056390eac37715fd3e01875037ceb4016cb17d44c611f7bbbfa7a012007979f'
 /** the table's licence, as docs/THIRD_PARTY.md registers it: LPPL 1.3c data throughout, each source taken under it */
-const LICENCE = 'LPPL 1.3c: translator-theorem-dictionary-{German,French,Spanish,Russian,Portuguese}.dict (the translator package, taken under LPPL 1.3c); translator-theorem-dictionary-ChineseUTF8.dict and ctex-name-utf8.cfg (ctex, LPPL 1.3c); cleveref.sty (LPPL 1.2 or later, taken under LPPL 1.3c); hyperref.sty (LPPL 1.3 or later, taken under LPPL 1.3c); t1enc.dfu and t2aenc.dfu (LaTeX, LPPL 1.3c)'
+const LICENCE = 'LPPL 1.3c: translator-theorem-dictionary-{German,French,Spanish,Russian,Portuguese,Italian,Dutch,Polish,Turkish,Czech,Swedish,Bulgarian}.dict (the translator package, taken under LPPL 1.3c); translator-theorem-dictionary-ChineseUTF8.dict and ctex-name-utf8.cfg (ctex, LPPL 1.3c); cleveref.sty (LPPL 1.2 or later, taken under LPPL 1.3c); hyperref.sty (LPPL 1.3 or later, taken under LPPL 1.3c); t1enc.dfu and t2aenc.dfu (LaTeX, LPPL 1.3c)'
 const OUT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../src/pdf-reader/engine/rules/tex-names.json')
 const dir = process.argv[2]
 if (!dir) { console.error('usage: tex-names-make.mjs <dir of TeX Live files> [--check]'); process.exit(2) }
@@ -47,6 +48,17 @@ const TARGETS = {
   es: { cleveref: 'spanish', hyperref: 'spanish', translator: 'Spanish' },
   ru: { cleveref: 'russian', hyperref: 'russian', translator: 'Russian' },
   pt: { cleveref: 'brazilian', hyperref: 'portuges', translator: 'Portuguese' },
+  // (the languages of the owner's ruling of 2026-10-29: each package's where it has the language; Indonesian and Malay none)
+  it: { cleveref: 'italian', hyperref: 'italian', translator: 'Italian' },
+  nl: { cleveref: 'dutch', hyperref: 'dutch', translator: 'Dutch' },
+  pl: { translator: 'Polish' },
+  tr: { translator: 'Turkish' },
+  id: {},
+  ms: {},
+  cs: { translator: 'Czech' },
+  sv: { cleveref: 'swedish', hyperref: 'swedish', translator: 'Swedish' },
+  uk: { cleveref: 'ukrainian' },
+  bg: { translator: 'Bulgarian' },
 }
 
 // ---- LaTeX's text, decoded by its own tables
@@ -174,7 +186,8 @@ for (const [to, t] of Object.entries(TARGETS)) {
       if (hit) refs[form] = hit
     }
     for (const [v, macros] of Object.entries(conjOf)) { const tv = macros.map(m => tg.conj[m]).find(x => x?.trim()); if (tv) conj[v] = tv }
-    const auto = hyperrefOf(t.hyperref)
+    // (hyperref names no Ukrainian: cleveref's alone)
+    const auto = t.hyperref ? hyperrefOf(t.hyperref) : {}
     for (const [type, v] of Object.entries(enAuto)) if (auto[type] && refs[v] === undefined) refs[v] = auto[type]
   }
   if (t.ctex) for (const [form, [type]] of forms) if (ctex[type] && refs[form] === undefined) refs[form] = ctex[type]
@@ -182,12 +195,13 @@ for (const [to, t] of Object.entries(TARGETS)) {
 }
 // ---- what no package names in some target: each counter type's English \Crefname, singular (cleveref's english, outside its
 // branches), and the conjunctions, where a target the readers offer has no word for it. A paper that generates references sends
-// these to the translator once, as units of their own (source/paper-names.mjs; PDF-READER §19.14). In a target whose names do
-// not inflect (CJK), babel's names of a float and an appendix (the layout rules' labels, every target's) count as its words
+// these to the translator once, as units of their own (source/paper-names.mjs; PDF-READER §19.14). Babel's names of a float and
+// an appendix (the layout rules' labels, every target's) count as a target's words for those types' singulars (rules/tex-names.mjs
+// refName: every form of them in a target whose names do not inflect, CJK's)
 const UNINFLECTED = new Set(['zh', 'zh-TW', 'ja', 'ko']), BABEL_TYPES = new Set(['figure', 'table', 'appendix'])
 const singular = {}
 for (const [key, v] of en.names) { const [type, n, capital, path] = key.split('|'); if (n === '0' && capital === 'C' && path === '' && !(type in singular)) singular[type] = v }
-const named = (to, word) => { const t = out.targets[to]; return !!(t.heads[word] || t.refs[word] || (UNINFLECTED.has(to) && BABEL_TYPES.has(types[word]))) }
+const named = (to, word) => { const t = out.targets[to]; return !!(t.heads[word] || t.refs[word] || (BABEL_TYPES.has(types[word]) && (UNINFLECTED.has(to) || singular[types[word]] === word))) }
 out.singular = singular
 out.gaps = [...new Set(Object.values(singular))].filter(word => Object.keys(TARGETS).some(to => !named(to, word)))
 // (a conjunction of punctuation alone, ", ", is the same in every target: no word to translate; a range's, \crefrange's " to ",

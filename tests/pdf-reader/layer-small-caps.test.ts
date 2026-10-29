@@ -234,8 +234,13 @@ describe('case is each character\'s, in the target\'s case mapping', () => {
   const runsOf = (s: string, to: string) => L2.caseRuns(s, 0.8, L2.upperOf(to)).map(r => [r.s, r.k])
 
   it('every target the reader offers, one of each script: an alphabet\'s letters, a CJK script\'s Latin words', () => {
-    expect([...TARGETS].sort()).toEqual(['de', 'es', 'fr', 'ja', 'ko', 'pt', 'ru', 'zh', 'zh-TW'])
+    expect([...TARGETS].sort()).toEqual(['bg', 'cs', 'de', 'es', 'fr', 'id', 'it', 'ja', 'ko', 'ms', 'nl', 'pl', 'pt', 'ru', 'sv', 'tr', 'uk', 'zh', 'zh-TW'])
     expect(runsOf('Árbol', 'es')).toEqual([['Á', 1], ['RBOL', 0.8]])
+    // (the languages of 2026-10-29: Turkish's i is İ in capitals and its ı is I, Ukrainian's ї Ї)
+    expect(runsOf('Łódź', 'pl')).toEqual([['Ł', 1], ['ÓDŹ', 0.8]])
+    expect(runsOf('Işık istatistik', 'tr')).toEqual([['I', 1], ['ŞIK', 0.8], [' ', 1], ['İSTATİSTİK', 0.8]])
+    expect(runsOf('Їхній', 'uk')).toEqual([['Ї', 1], ['ХНІЙ', 0.8]])
+    expect(runsOf('Příloha', 'cs')).toEqual([['P', 1], ['ŘÍLOHA', 0.8]])
     expect(runsOf('Étude', 'fr')).toEqual([['É', 1], ['TUDE', 0.8]])
     expect(runsOf('Ação', 'pt')).toEqual([['A', 1], ['ÇÃO', 0.8]])
     expect(runsOf('Обсуждение', 'ru')).toEqual([['О', 1], ['БСУЖДЕНИЕ', 0.8]])

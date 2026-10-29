@@ -2392,9 +2392,9 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     if (Number.isInteger(own)) return { color: own > 0 ? hexOf(own) : undefined, colourRun: true }
     return {}
   }
-  // (the layout rules': whether lines break only at spaces, which quotes are CJK's, centred punctuation, the Latin words'
-  // hyphenation patterns and shortest hyphenated word, the line-break marks)
-  const { keepAll, cjkQuotes, centredPunct: centred, latinPatterns: latinLang, hyphenation: { minWord } } = P
+  // (the layout rules': whether lines break only at spaces, which quotes are CJK's, centred punctuation, the Latin and the
+  // Cyrillic words' hyphenation and the shortest hyphenated word, the line-break marks)
+  const { keepAll, cjkQuotes, centredPunct: centred, latinPatterns: latinLang, cyrillicPatterns: cyrLang, hyphenation: { minWord } } = P
   const cjkRe = cjkClassRe(cjkQuotes)
   const kinsoku = kinsokuOf(P.noStart, P.noEnd)
   const prevNonSpace = () => { for (let q = tokens.length - 1; q >= 0; q--) if (!tokens[q].space) return tokens[q]; return null }
@@ -2487,7 +2487,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
             if (!runs && !all && p.cls === 'latin' && P.hyphen && !extra.ph && st.fam !== 'mono' && s.length >= minWord && unit.kind !== 'heading' && !unit.title) {
               const word = s.replace(/[^A-Za-zÀ-ɏЀ-ӿ]+$/, '').replace(/^[^A-Za-zÀ-ɏЀ-ӿ]+/, '')
               const cyr = /[Ѐ-ӿ]/.test(word)
-              if (word.length >= minWord && (cyr ? /^[Ѐ-ӿ]+$/.test(word) : /^[A-Za-zÀ-ɏ][a-zà-ɏß]+$/.test(word))) t.hyph = cyr ? 'ru' : latinLang
+              if (word.length >= minWord && (cyr ? /^[Ѐ-ӿ]+$/.test(word) : /^[A-Za-zÀ-ɏ][a-zà-ɏß]+$/.test(word))) t.hyph = cyr ? cyrLang : latinLang
             }
             push(t)
           }

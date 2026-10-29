@@ -23,7 +23,8 @@ const ALSO_KNOWN_AS: Record<string, LangCode> = { fil: 'tgl', no: 'nob', iw: 'he
  * script (CLDR's likely script: Serbian is Cyrillic by default; Bosnian, Uzbek, Azerbaijani, Malay and Javanese are
  * Latin). A reader is never started in a script their browser did not ask for — `ms-MY` is not Malay in Jawi, `sr-Latn`
  * is not Cyrillic Serbian (Devin and Codex on #272): such a tag is passed over like one the table cannot place. That
- * the table has no Latin entry for these languages is the table's gap, not decided here
+ * the table has no Latin entry for these languages is the table's gap, not decided here; Malay's is Standard Malay (zsm,
+ * 2026-10-29), so that `ms-MY` is now that, and only `ms-Arab` asks for the Jawi entry
  */
 const NAMED_SCRIPT: Partial<Record<LangCode, { script: string; unmarked: boolean; elsewhere?: readonly string[]; ownCode?: true }>> = {
   // `elsewhere`: regions where an unmarked tag means another script (Serbian in Montenegro is Latin, Panjabi in
@@ -35,6 +36,8 @@ const NAMED_SCRIPT: Partial<Record<LangCode, { script: string; unmarked: boolean
   bos: { script: 'cyrl', unmarked: false },
   uzn: { script: 'cyrl', unmarked: false },
   azj: { script: 'cyrl', unmarked: false },
+  // Malay's two entries are its two scripts (Standard Malay, 2026-10-29): `ms-Latn-MY` names what zsm gives, `ms-Arab` zlm (Devin on #507)
+  zsm: { script: 'latn', unmarked: true },
   zlm: { script: 'arab', unmarked: false },
   jav: { script: 'java', unmarked: false },
   // Cantonese comes in Traditional characters (languages.ts, measured): `yue-Hant-HK` names what the table gives — Codex on #272
