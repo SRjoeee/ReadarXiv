@@ -7,9 +7,9 @@ import {
 
 // The language table is ported from @read-frog/definitions@0.4.4; guarded here are the consistency between the tables and our own conversion functions
 describe('languages', () => {
-  it('179 codes, the key sets of the three name tables exactly equal; the BCP-47 table is a subset', () => {
-    expect(LANG_CODES).toHaveLength(179)
-    expect(new Set(LANG_CODES).size).toBe(179)
+  it('180 codes (Read Frog's 179 and Standard Malay), the key sets of the three name tables exactly equal; the BCP-47 table is a subset', () => {
+    expect(LANG_CODES).toHaveLength(180)
+    expect(new Set(LANG_CODES).size).toBe(180)
     for (const table of [LANG_CODE_TO_EN_NAME, LANG_CODE_TO_ZH_NAME, LANG_CODE_TO_LOCALE_NAME]) {
       expect(Object.keys(table).sort()).toEqual([...LANG_CODES].sort())
     }
@@ -42,6 +42,9 @@ describe('languages', () => {
     expect(ISO6393_TO_6391.ckb).toBe('ku') // the table really squeezes it to ku, which is why the override matters
     // The table calls it "Malay ... (Arabic)"; sending ms gets Latin letters (measured: ms-Arab is what gives Jawi)
     expect(toBcp47('zlm')).toBe('ms-Arab')
+    // Standard Malay, in Latin letters, is `ms`, and each tag reads back to its own entry
+    expect(toBcp47('zsm')).toBe('ms')
+    for (const [tag, code] of [['ms', 'zsm'], ['ms-MY', 'zsm'], ['ms-Arab', 'zlm'], ['ms-Arab-MY', 'zlm']] as const) expect(languageOfTag(tag), tag).toBe(code)
     // The three the endpoint cannot do stay as they are (bs / uz / az return exactly the same with or without -Cyrl)
     for (const code of ['bos', 'uzn', 'azj'] as const) expect(toBcp47(code)).toBe(ISO6393_TO_6391[code])
     const noShort = LANG_CODES.find(code => !(code in ISO6393_TO_6391))!

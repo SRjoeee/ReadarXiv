@@ -22,8 +22,9 @@ describe('pickTargetLanguage', () => {
   })
 
   it('never starts a reader in a script the browser did not ask for: such a tag is passed over (Devin and Codex on #272)', () => {
-    // The table's only Malay is Jawi, its Bosnian, Uzbek and Azerbaijani are named Cyrillic; a bare tag of those means Latin
-    expect(pickTargetLanguage(['ms-MY', 'en'])).toBe('cmn')
+    // Its Bosnian, Uzbek and Azerbaijani are named Cyrillic, and a bare tag of those means Latin; Malay has its Latin entry
+    // (Standard Malay, zsm, added 2026-10-29) beside its Jawi one, and a bare `ms` is that
+    expect(pickTargetLanguage(['ms-MY', 'en'])).toBe('zsm')
     expect(pickTargetLanguage(['uz', 'ru-RU'])).toBe('rus')
     expect(pickTargetLanguage(['az-Latn-AZ', 'tr'])).toBe('tur')
     expect(pickTargetLanguage(['bs-Latn', 'hr'])).toBe('hrv')

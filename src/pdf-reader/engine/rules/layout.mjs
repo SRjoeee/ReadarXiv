@@ -45,28 +45,37 @@ import BUILTIN_JSON from './layout-rules.json' with { type: 'json' }
  *  7 (2026-10-29, the maintainer's ruling on lane B's B1 and B2): `evenPitch` added, a block's lines at the original's leading
  *  one pitch apart (layer2.mjs evenGridOf), and `keepAlign`, a unit TeX set flush left or flush right kept so (the layout
  *  file's UNIT_FLAG.FLUSH_LEFT and FLUSH_RIGHT, LAYOUT 26). 8 (#121-4): `latinPatterns` takes French's, Spanish's and
- *  Portuguese's own (hyph-utf8's), which were hyphenated with English's, and `hyphenation` their minimums as babel sets them */
-export const RULES_SCHEMA = 8
+ *  Portuguese's own (hyph-utf8's), which were hyphenated with English's, and `hyphenation` their minimums as babel sets them.
+ *  9 (the owner's ruling of 2026-10-29 on the languages of a script the engine sets): `latinPatterns` takes Italian's, Dutch's,
+ *  Polish's, Turkish's, Indonesian's (Malay's too, as babel's malay.ldf takes them), Czech's and Swedish's, and
+ *  `cyrillicPatterns` is added, a Cyrillic word's patterns: Russian's rules (Khmelev's, hyph.mjs), or Ukrainian's or
+ *  Bulgarian's own, which those rules cannot read (і, ї, є and ґ are no letters of theirs, and Bulgarian's ъ is a vowel) */
+export const RULES_SCHEMA = 9
 /** a set's bytes at most, as received (the migrated set is about 8 KB) */
 export const RULES_CAP = 65_536
 /** a set's JSON values at most, counted before JSON.parse (layout/json.mjs countValues) */
 export const RULES_VALUES = 20_000
 /** a set nests at most this deep (its deepest fields: a script's lists and objects, scripts.<script>.order and .adaptiveFill) */
 const DEPTH_MAX = 8
-/** the targets either reader offers, each of which must resolve or the set is refused: the web's eight and Portuguese, which the
- *  extension's reader offers too (its menu, ui/languages.ts READER_LANGUAGES; its tag for Traditional Chinese is zh-TW). A test
- *  holds that every language of that menu is here */
-export const TARGETS = Object.freeze(['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'ru', 'pt'])
+/** the targets either reader offers, each of which must resolve or the set is refused: the web's first eight, Portuguese, and the
+ *  languages of a script the engine already set that the owner's ruling of 2026-10-29 added (Latin: Italian, Dutch, Polish,
+ *  Turkish, Indonesian, Malay, Czech, Swedish; Cyrillic: Ukrainian, Bulgarian). The extension's reader offers every one (its
+ *  menu, ui/languages.ts READER_LANGUAGES; its tag for Traditional Chinese is zh-TW); a test holds that every language of that
+ *  menu is here */
+export const TARGETS = Object.freeze(['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'ru', 'pt', 'it', 'nl', 'pl', 'tr', 'id', 'ms', 'cs', 'sv', 'uk', 'bg'])
 export const SCRIPTS = Object.freeze(['Hans', 'Hant', 'Jpan', 'Kore', 'Latn', 'Cyrl'])
 /** the scripts whose text is set by CJK rules (cjk in the fit's parameters); each must name its CJK faces */
 const CJK_SCRIPTS = new Set(['Hans', 'Hant', 'Jpan', 'Kore'])
 const ORDER = Object.freeze(['track', 'borrow', 'lead', 'shrink'])
 const FURTHER = Object.freeze(['widen', 'flow', 'shrink'])
 const LEFTOVER = Object.freeze(['foot', 'pack'])
-/** the hyphenation patterns a Latin word may use (layer-proto/hyph.mjs TEX_PATTERN_FILES), each with its minimums in the set's
- *  `hyphenation`: English's for every target's, the language's own where it names one */
-export const PATTERNS = Object.freeze(['en', 'de', 'fr', 'es', 'pt'])
-const PATTERN_NAMES = Object.freeze({ en: 'English', de: 'German', fr: 'French', es: 'Spanish', pt: 'Portuguese' })
+/** the hyphenation patterns of TeX's (layer-proto/hyph.mjs TEX_PATTERN_FILES), each with its minimums in the set's `hyphenation`:
+ *  a Latin word's (`latinPatterns`: English's for every target's, the language's own where it names one), and a Cyrillic word's
+ *  (`cyrillicPatterns`), which may also be Russian's rules, Khmelev's, which take no patterns and hold their own minimums */
+export const PATTERNS = Object.freeze(['en', 'de', 'fr', 'es', 'pt', 'it', 'nl', 'pl', 'tr', 'id', 'cs', 'sv', 'uk', 'bg'])
+const LATIN_PATTERNS = Object.freeze(PATTERNS.filter(l => scriptOf(l) === 'Latn'))
+const CYRILLIC_PATTERNS = Object.freeze(['ru', ...PATTERNS.filter(l => scriptOf(l) === 'Cyrl')])
+const PATTERN_NAMES = Object.freeze({ en: 'English', de: 'German', fr: 'French', es: 'Spanish', pt: 'Portuguese', it: 'Italian', nl: 'Dutch', pl: 'Polish', tr: 'Turkish', id: 'Indonesian', cs: 'Czech', sv: 'Swedish', uk: 'Ukrainian', bg: 'Bulgarian' })
 /** the weights of a CJK group the role table builds its roles from (font-roles.mjs rolesFor): the body and the bold */
 const GROUP_WEIGHTS = Object.freeze(['regular', 'bold'])
 const NOTE_MAX = 1000
@@ -176,7 +185,9 @@ const SCRIPT_FIELDS = [
   { key: 'noStart', group: 'breaking', kind: 'chars', words: 'The characters no line starts with.', schema: characters },
   { key: 'noEnd', group: 'breaking', kind: 'chars', words: 'The characters no line ends with.', schema: characters },
   { key: 'hyphen', group: 'breaking', kind: 'enum', values: [0, 1], words: "Whether a Latin word is hyphenated at a line's end (1) or not (0).", schema: () => z.literal([0, 1]) },
-  { key: 'latinPatterns', group: 'breaking', kind: 'enum', values: PATTERNS, words: 'The hyphenation patterns a Latin word uses.', schema: () => z.literal([...PATTERNS]) },
+  { key: 'latinPatterns', group: 'breaking', kind: 'enum', values: LATIN_PATTERNS, words: 'The hyphenation patterns a Latin word uses.', schema: () => z.literal([...LATIN_PATTERNS]) },
+  // (schema 9: Russian's rules, which were every Cyrillic word's, or a language's own patterns)
+  { key: 'cyrillicPatterns', group: 'breaking', kind: 'enum', values: CYRILLIC_PATTERNS, words: "The hyphenation a Cyrillic word uses: Russian's rules (ru), or a language's own patterns.", schema: () => z.literal([...CYRILLIC_PATTERNS]) },
   // (lane B's B2, the maintainer's ruling of 2026-10-29: a unit TeX set flush left or flush right, as the layout file's
   // UNIT_FLAG.FLUSH_LEFT and FLUSH_RIGHT say, keeps that alignment, where it was justified or set flush left; centred units
   // follow TeX's CENTRED as before. Schema 7)
@@ -225,11 +236,7 @@ export const RULES_FIELDS = Object.freeze([
   ...SCRIPT_FIELDS.map(({ key, schema: _, ...f }) => Object.freeze({ path: key, scope: 'script', ...f })),
   Object.freeze({ path: 'labels', scope: 'language', group: 'labels', kind: 'object', nullable: true, members: Object.freeze(LABEL_KEYS.map(key => ({ key, kind: 'text', words: LABEL_WORDS[key] }))), words: "A float's label and each generated heading babel names (Abstract, References, Contents, …) in this language's words; an empty word, or none, keeps the original's." }),
   Object.freeze({ path: 'hyphenation.minWord', scope: 'set', group: 'hyphenation', kind: 'integer', min: 2, max: 20, step: 1, words: 'The shortest word, in letters, that is hyphenated.' }),
-  Object.freeze({ path: 'hyphenation.en.left', scope: 'set', group: 'hyphenation', kind: 'integer', min: 1, max: 6, step: 1, words: 'The fewest letters English leaves before a hyphen.' }),
-  Object.freeze({ path: 'hyphenation.en.right', scope: 'set', group: 'hyphenation', kind: 'integer', min: 1, max: 6, step: 1, words: 'The fewest letters English leaves after a hyphen.' }),
-  Object.freeze({ path: 'hyphenation.de.left', scope: 'set', group: 'hyphenation', kind: 'integer', min: 1, max: 6, step: 1, words: 'The fewest letters German leaves before a hyphen.' }),
-  Object.freeze({ path: 'hyphenation.de.right', scope: 'set', group: 'hyphenation', kind: 'integer', min: 1, max: 6, step: 1, words: 'The fewest letters German leaves after a hyphen.' }),
-  ...['fr', 'es', 'pt'].flatMap(l => ['left', 'right'].map(side => Object.freeze({ path: `hyphenation.${l}.${side}`, scope: 'set', group: 'hyphenation', kind: 'integer', min: 1, max: 6, step: 1, words: `The fewest letters ${PATTERN_NAMES[l]} leaves ${side === 'left' ? 'before' : 'after'} a hyphen.` }))),
+  ...PATTERNS.flatMap(l => ['left', 'right'].map(side => Object.freeze({ path: `hyphenation.${l}.${side}`, scope: 'set', group: 'hyphenation', kind: 'integer', min: 1, max: 6, step: 1, words: `The fewest letters ${PATTERN_NAMES[l]} leaves ${side === 'left' ? 'before' : 'after'} a hyphen.` }))),
 ])
 
 // ---- reading
@@ -344,7 +351,8 @@ const copy = v => (v !== null && typeof v === 'object' ? structuredClone(v) : v)
  * language's over them, field by field; an object field (adaptiveFill, cjkFaces, labels) is replaced whole, never merged.
  * `params` are v0's own Params: every fit, breaking and cell field, `cjk` from the script, and the set's hyphenation
  * minimums; fresh objects each call, a run may change its own. `patterns` are the hyphenation patterns to load: English's
- * for every target's Latin words, the language's own where `latinPatterns` names one, and Russian's for Cyrillic. Throws
+ * for every target's Latin words, the language's own where `latinPatterns` names one, and a Cyrillic target's
+ * `cyrillicPatterns` (Russian's rules, or the language's own; and these wherever a set names other than Russian's). Throws
  * for a target `languages` lacks, or a script the set has no rules for
  */
 export function resolveRules(set, target) {
@@ -359,7 +367,7 @@ export function resolveRules(set, target) {
   params.hyphenation = hyphenation
   const patterns = ['en']
   if (params.latinPatterns !== 'en') patterns.push(params.latinPatterns)
-  if (script === 'Cyrl') patterns.push('ru')
+  if (script === 'Cyrl' || params.cyrillicPatterns !== 'ru') patterns.push(params.cyrillicPatterns)
   return { target, script, params, labels: copy(lang.labels), patterns, hyphenation, cjkFaces: field('cjkFaces'), version: set.version }
 }
 

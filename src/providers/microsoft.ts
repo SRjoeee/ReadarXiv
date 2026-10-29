@@ -34,8 +34,8 @@ const ENDPOINT = 'https://edge.microsoft.com/translate/translatetext'
  *
  *     curl 'https://api.cognitive.microsofttranslator.com/languages?api-version=3.0&scope=translation'
  *
- * 106 of our 179 target languages pass `supportsTarget` and 73 do not (DESIGN §8.3; counted 2026-09-17 over every code, the
- * three script exclusions below included). Neither upstream project has
+ * 107 of our 180 target languages pass `supportsTarget` and 73 do not (DESIGN §8.3; counted 2026-09-17 over every code, the
+ * three script exclusions below included; Standard Malay's ms, added 2026-10-29, passes). Neither upstream project has
  * this layer — Read Frog throws when its `ISO6393_TO_6391` map has no entry, failing halfway through a translation.
  */
 const SUPPORTED = new Set(`

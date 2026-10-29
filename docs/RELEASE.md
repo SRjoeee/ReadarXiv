@@ -44,7 +44,7 @@ Category: Productivity. Language: English, with the Chinese description below. T
 >
 > Rest on a sentence and its counterpart lights up on the other side; in translation-only mode the original sentence floats beside the line. The words inside figures are translated and overlaid in place — vector figures read exactly, bitmaps recognised in your browser by a model that comes with the extension: nothing to install, and an image never leaves your machine.
 >
-> Microsoft's translator works out of the box with no account. Add Google's, Chrome's built-in offline translator, or any OpenAI-compatible endpoint with your own key (OpenRouter, DeepSeek, a local Ollama). When a service fails mid-paper, the rest of the page falls back to a free one and the popup says so. Prompts and a glossary keep terminology consistent on the LLM services. 179 target languages; interface in English and Chinese.
+> Microsoft's translator works out of the box with no account. Add Google's, Chrome's built-in offline translator, or any OpenAI-compatible endpoint with your own key (OpenRouter, DeepSeek, a local Ollama). When a service fails mid-paper, the rest of the page falls back to a free one and the popup says so. Prompts and a glossary keep terminology consistent on the LLM services. 180 target languages; interface in English and Chinese.
 >
 > Paragraphs are sent to the service you choose; Chrome's built-in translation and a local endpoint keep them on your machine. Your API keys stay in the browser's extension storage. Translations are cached locally so a paper reopens at once.
 >
@@ -56,7 +56,7 @@ Category: Productivity. Language: English, with the Chinese description below. T
 >
 > 鼠标停在一句话上，另一侧对应的句子同时高亮；只译文模式下，原文句子会浮在这一行旁边。图里的文字也会翻译并覆盖在原位——矢量图直接读取，位图由扩展自带的识别模型在浏览器里识别：无需安装任何东西，图片不会离开你的电脑。
 >
-> 默认使用微软翻译，无需账号。也可以用 Google 翻译、Chrome 内置的离线翻译，或者任何兼容 OpenAI 接口的服务（OpenRouter、DeepSeek、本机的 Ollama 等），填自己的密钥。翻译到一半服务失效时，剩下的页面会退到免费服务继续，弹窗会说明。提示词和术语表让 LLM 服务的术语前后一致。179 种目标语言；界面有中英文。
+> 默认使用微软翻译，无需账号。也可以用 Google 翻译、Chrome 内置的离线翻译，或者任何兼容 OpenAI 接口的服务（OpenRouter、DeepSeek、本机的 Ollama 等），填自己的密钥。翻译到一半服务失效时，剩下的页面会退到免费服务继续，弹窗会说明。提示词和术语表让 LLM 服务的术语前后一致。180 种目标语言；界面有中英文。
 >
 > 段落会发给你选定的服务；Chrome 内置翻译和本机端点让文字不出本机。API 密钥只保存在浏览器的扩展存储里。译文在本地缓存，再次打开同一篇论文即时显示。
 >

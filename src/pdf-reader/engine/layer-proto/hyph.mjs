@@ -6,23 +6,28 @@
 // imports nothing uses left out, and what is named below. The prototype's own description follows.
 //
 // Hyphenation for the layer's alphabetic runs: Liang's patterns (TeX's own: Knuth's hyphen.tex for English, dehyphn.tex
-// for German, hyph-utf8's hyph-fr, hyph-es and hyph-pt for French, Spanish and Portuguese, served by the host from TeX
-// Live as /hyph/<lang>.json), and for Russian the rule-based syllable split of Khmelev (vowel/consonant classes), which is
-// what light-weight Russian hyphenators use. Min lengths as TeX's babel sets them (English 2 and 3, German 2 and 2, French
-// 2 and 3, Spanish 2 and 2, Portuguese 2 and 3: the .ldf files' \providehyphenmins) are the layout rules' (rules/layout.mjs
-// hyphenation), given with each call; Russian's rules hold their own.
+// for German, hyph-utf8's for French, Spanish, Portuguese, Italian, Dutch, Polish, Turkish, Indonesian (Malay's too, as
+// babel's malay.ldf takes them), Czech, Swedish, Ukrainian and Bulgarian, served by the host from TeX Live as
+// /hyph/<lang>.json), and for Russian the rule-based syllable split of Khmelev (vowel/consonant classes), which is what
+// light-weight Russian hyphenators use. Min lengths as TeX's babel sets them (English 2 and 3, German 2 and 2, French 2 and
+// 3, Spanish 2 and 2, Portuguese 2 and 3: the .ldf files' \providehyphenmins; the rest as TeX reports them under babel,
+// tests/fixtures/hyph/README.md) are the layout rules' (rules/layout.mjs hyphenation), given with each call; Russian's
+// rules hold their own.
 //
 // v0's changes: loadHyphenation takes its URL from its host, and the prototype host's reading of a TeX pattern file
 // (serve.mjs hyphenation()) is here as patternsOfTex, so that any host serves the same patterns.
 
+/** hyph-utf8's languages the engine hyphenates with: French, Spanish and Portuguese (#121-4: those three were hyphenated with
+ *  English's patterns), and the languages of the owner's ruling of 2026-10-29 */
+const HYPH_UTF8 = ['fr', 'es', 'pt', 'it', 'nl', 'pl', 'tr', 'id', 'cs', 'sv', 'uk', 'bg']
 /** TeX's pattern files, by language, under texmf-dist: Knuth's hyphen.tex, dehyphn.tex (German, new orthography), and
- *  hyph-utf8's French, Spanish and Portuguese (#121-4: those three were hyphenated with English's patterns) */
+ *  hyph-utf8's */
 export const TEX_PATTERN_FILES = Object.freeze({
   en: 'tex/generic/hyphen/hyphen.tex', de: 'tex/generic/dehyph/dehyphn.tex',
-  fr: 'tex/generic/hyph-utf8/patterns/tex/hyph-fr.tex', es: 'tex/generic/hyph-utf8/patterns/tex/hyph-es.tex', pt: 'tex/generic/hyph-utf8/patterns/tex/hyph-pt.tex',
+  ...Object.fromEntries(HYPH_UTF8.map(l => [l, `tex/generic/hyph-utf8/patterns/tex/hyph-${l}.tex`])),
 })
 /** how each pattern file is decoded: Latin-1 for TeX's 8-bit files (dehyphn.tex's umlauts are T1 bytes), UTF-8 for hyph-utf8's */
-export const TEX_PATTERN_ENCODINGS = Object.freeze({ en: 'latin1', de: 'latin1', fr: 'utf8', es: 'utf8', pt: 'utf8' })
+export const TEX_PATTERN_ENCODINGS = Object.freeze({ en: 'latin1', de: 'latin1', ...Object.fromEntries(HYPH_UTF8.map(l => [l, 'utf8'])) })
 
 /**
  * A TeX pattern file as { patterns, exceptions } (serve.mjs's reading): `text` is the file decoded as its `encoding`
@@ -85,15 +90,17 @@ export function breakPoints(word, lang, data, mins) {
   const key = lang === 'ru' ? `ru|${word}` : `${lang}|${mins.left}|${mins.right}|${word}`
   let out = cache.get(key)
   if (out) return out
-  out = lang === 'ru' ? russian(word) : liang(word, data, mins)
+  out = lang === 'ru' ? russian(word) : liang(word, data, mins, lang)
   cache.set(key, out)
   return out
 }
 
-function liang(word, data, { left: lmin, right: rmin }) {
+function liang(word, data, { left: lmin, right: rmin }, lang) {
   if (!data) return []
-  const w = word.toLowerCase()
-  if (w.length < lmin + rmin) return []
+  // (lower case as the language has it, as its patterns are written: Turkish's I is ı and its İ is i, where the root's
+  // İ is i and a combining dot, a letter more; a word whose lower case is longer or shorter has no offsets to give back)
+  const w = word.toLocaleLowerCase(lang)
+  if (w.length !== word.length || w.length < lmin + rmin) return []
   const ex = data.exceptions.get(w)
   if (ex) {
     const out = []

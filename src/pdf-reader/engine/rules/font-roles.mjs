@@ -372,6 +372,10 @@ const CYRILLIC = String.fromCodePoint(...Array.from({ length: 64 }, (_, i) => 0x
 const LETTERS = {
   de: `${LATIN}ÄÖÜäöüß`, fr: `${LATIN}ÀÂÆÇÉÈÊËÎÏÔŒÙÛÜŸàâæçéèêëîïôœùûüÿ`, es: `${LATIN}ÁÉÍÑÓÚÜáéíñóúü¡¿`,
   pt: `${LATIN}ÃÕÁÂÀÇÉÊÍÓÔÚÜãõáâàçéêíóôúü`, ru: `${CYRILLIC}Ёё`,
+  // (the languages of the owner's ruling of 2026-10-29; Indonesian, Malay and Bulgarian need none beyond their script's)
+  it: `${LATIN}ÀÈÉÌÍÎÒÓÙÚàèéìíîòóùú`, nl: `${LATIN}ÁÉÍÓÚÄËÏÖÜÈáéíóúäëïöüè`, pl: `${LATIN}ĄĆĘŁŃÓŚŹŻąćęłńóśźż`,
+  tr: `${LATIN}ÇĞİÖŞÜçğıöşüÂâÎîÛû`, cs: `${LATIN}ÁČĎÉĚÍŇÓŘŠŤÚŮÝŽáčďéěíňóřšťúůýž`, sv: `${LATIN}ÅÄÖåäöÉé`,
+  uk: `${CYRILLIC}ҐґЄєІіЇї`,
 }
 // (worked out once a target: faceFor asks it for every run of every unit laid)
 const LETTERS_OF = new Map()

@@ -140,8 +140,8 @@ describe('how two sets differ', () => {
     expect(diffRules(next, BASE).at(-1)).toEqual({ path: 'languages.zh.leadBase', from: 1.35 })
   })
 
-  it('names a hyphenation minimum of every language the set gives one, French, Spanish and Portuguese as English and German (#121-4)', () => {
-    for (const lang of ['fr', 'es', 'pt']) {
+  it('names a hyphenation minimum of every language the set gives one, French, Spanish, Portuguese (#121-4) and the languages of 2026-10-29 as English and German', () => {
+    for (const lang of ['fr', 'es', 'pt', 'it', 'nl', 'pl', 'tr', 'id', 'cs', 'sv', 'uk', 'bg']) {
       const next = edit(BASE, field(`hyphenation.${lang}.left`), 'Latn', lang, 3)
       expect(diffRules(BASE, next), lang).toEqual([{ path: `hyphenation.${lang}.left`, from: 2, to: 3 }])
     }
@@ -151,8 +151,8 @@ describe('how two sets differ', () => {
     const next = edit(BASE, field('adaptiveFill'), 'Hans', 'zh', { band: 0.1, track: 0.05, size: 1.1 })
     expect(diffRules(BASE, next)).toEqual([{ path: 'languages.zh.adaptiveFill', to: { band: 0.1, track: 0.05, size: 1.1 } }])
     const more = fresh()
-    more.languages.sv = { labels: null }
-    expect(diffRules(BASE, more)).toEqual([{ path: 'languages.sv', to: { labels: null } }])
+    more.languages.da = { labels: null }
+    expect(diffRules(BASE, more)).toEqual([{ path: 'languages.da', to: { labels: null } }])
   })
 
   it('does not depend on the order of an object\'s keys', () => {

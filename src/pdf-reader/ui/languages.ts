@@ -1,5 +1,6 @@
-// The languages the reader offers (the reader's design, §6.7): the nine the layer sets (the engine's rules TARGETS,
-// tests/pdf-reader/ui/languages.test.ts holds the two equal), in the design's order, each named in its own language
+// The languages the reader offers (the reader's design, §6.7): the ones the layer sets (the engine's rules TARGETS,
+// tests/pdf-reader/ui/languages.test.ts holds the two equal), each named in its own language: by script (CJK in the design's
+// order, then Latin, then Cyrillic), each alphabet's languages in the order of their own names
 import type { MenuItem } from '@/ui/menu-item'
 import { LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME, type LangCode } from '@/config/languages'
 
@@ -12,7 +13,11 @@ export function ownName(code: string): string {
   return LANG_CODE_TO_LOCALE_NAME[code as LangCode] ?? code
 }
 
-export const READER_LANGUAGES: readonly LangCode[] = ['jpn', 'cmn', 'cmn-Hant', 'kor', 'deu', 'spa', 'fra', 'por', 'rus']
+export const READER_LANGUAGES: readonly LangCode[] = [
+  'jpn', 'cmn', 'cmn-Hant', 'kor',
+  'ind', 'zsm', 'ces', 'deu', 'spa', 'fra', 'ita', 'nld', 'pol', 'por', 'swe', 'tur',
+  'bul', 'rus', 'ukr',
+]
 
 export function languageItems(current: string): MenuItem[] {
   return READER_LANGUAGES.map(code => ({
