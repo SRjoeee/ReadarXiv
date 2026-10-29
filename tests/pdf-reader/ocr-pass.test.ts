@@ -185,6 +185,26 @@ describe('the bitmap figures\' pass (ocrPass)', () => {
     expect(() => paintsOf({ fnArray: [OPS.constructPath], argsArray: [[OPS.stroke, [new Float32Array(data)]]] }, OPS)).not.toThrow()
   })
 
+  it('reads an image past its bound scaled down: a line read too small there read again in its window at the image\'s own pixels, its labels judged there too, as an image within its bound is', async () => {
+    // (the bound a quarter of the image's pixels: read at 200 × 100, its line 12 pixels across, under OCR_LINE_MIN_PX)
+    const sizes: number[][] = []
+    const recognise = async (px: { width: number; height: number }) => {
+      sizes.push([px.width, px.height])
+      // (in a window, the line where the window holds it: its bar from x 105 to 195, y 85 to 99 of the image's own pixels)
+      if (px.width !== 200) return [{ ...LINE, quad: LINE.quad.map(([x, y]) => [x! * W, y! * H]).map(([x, y]) => [(x! - 88) / px.width, (y! - 68) / px.height]) as unknown as OcrLine['quad'] }]
+      return [LINE]
+    }
+    const doc = docOf([pageOf([['a', at(50, 400)]], { a: picture() })])
+    const scaled = await pass({ doc, OPS, paper: PAPER, reader: READER, from: 0, recognise, readPixels: 20_000 })
+    expect(sizes[0]).toEqual([200, 100])
+    expect(sizes).toHaveLength(2)
+    expect(scaled.stats).toMatchObject({ reread: 1, relabelled: 1, units: 1 })
+    // (the label as an image read whole gives it: its place the same)
+    const whole = await pass({ doc: docOf([pageOf([['a', at(50, 400)]], { a: picture() })]), OPS, paper: PAPER, reader: READER, from: 0, recognise: async () => [LINE] })
+    const placeOfUnit = (u: unknown) => ((u as unknown[])[7] as number[]).map(v => Math.round(v))
+    expect(placeOfUnit(scaled.units[0])).toEqual(placeOfUnit(whole.units[0]))
+  })
+
   it('keeps a label of names as a table\'s cell of names is: its source, the KEPT flag', async () => {
     const doc = docOf([pageOf([['a', at(50, 400)]], { a: picture() })])
     const r = await pass({ doc, OPS, paper: PAPER, reader: READER, from: 0, recognise: async () => [{ ...LINE, text: 'GPT-4o' }] })

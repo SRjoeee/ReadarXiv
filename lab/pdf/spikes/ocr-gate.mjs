@@ -23,7 +23,7 @@
 // writes each checked page's render with its patches (PNG) for the eye; `--ort-node=<file>` runs the recogniser on the
 // onnxruntime-node build the web's box runs (its dist/index.js, a package this repository does not hold: the two builds read the
 // same text, DESIGN §15.4), one thread, in place of onnxruntime-web's WebAssembly. One JSON line a paper, counts only.
-//   pnpm exec tsx lab/pdf/spikes/ocr-gate.mjs (--pack=<dir> | --bases=<dir>) [--cache=<dir>] [--shots=<dir>] [--ort-node=<file>] [--check] <id>…
+//   pnpm exec tsx lab/pdf/spikes/ocr-gate.mjs (--pack=<dir> | --bases=<dir>) [--cache=<dir>] [--shots=<dir>] [--ort-node=<file>] [--read-pixels=<n>] [--check] <id>…
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
@@ -36,6 +36,8 @@ import { ocrPass, paintsOf } from '../../../src/pdf-reader/engine/pipeline/ocr-p
 
 const argOf = name => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? null
 const PACK = argOf('pack'), BASES = argOf('bases'), CACHE = argOf('cache'), SHOTS = argOf('shots'), ORT_NODE = argOf('ort-node'), CHECK = process.argv.includes('--check')
+// (the pixels an image is read at, at most: the pass's own, OCR_READ_PIXELS, unless given — a probe of the bound)
+const READ_PIXELS = argOf('read-pixels') ? Number(argOf('read-pixels')) : undefined
 const IDS = process.argv.slice(2).filter(a => !a.startsWith('--'))
 if ((!PACK && !BASES) || !IDS.length) { console.error('usage: ocr-gate.mjs (--pack=<dir> | --bases=<dir>) [--cache=<dir>] [--shots=<dir>] [--check] <id>…'); process.exit(2) }
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../..')
@@ -114,7 +116,7 @@ for (const id of IDS) {
   const t0 = performance.now(), c0 = process.cpuUsage()
   let out
   const objects = openObjects(bytes, { PL, objectsMax: 2_000_000, decodedMax: 512 * 2 ** 20 })
-  try { out = await ocrPass({ doc, OPS, objects, PL, Jpeg: JpegImage, paper: { id: id.replace(/v\d+$/, ''), version: Number(/v(\d+)$/.exec(id)?.[1] ?? 1) }, from: 1, recognise, reader: READER, cache }) } finally { await task.destroy() }
+  try { out = await ocrPass({ doc, OPS, objects, PL, Jpeg: JpegImage, paper: { id: id.replace(/v\d+$/, ''), version: Number(/v(\d+)$/.exec(id)?.[1] ?? 1) }, from: 1, recognise, reader: READER, cache, ...(READ_PIXELS ? { readPixels: READ_PIXELS } : {}) }) } finally { await task.destroy() }
   const ms = Math.round(performance.now() - t0), cpu = process.cpuUsage(c0), s = out.stats
   const fails = { P: [], L: [], C: [], D: [], A: [] }
   // A: the images and the labels accounted for

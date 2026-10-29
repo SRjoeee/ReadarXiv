@@ -134,11 +134,12 @@ const shapeOf = src => ({ w: src.width, h: src.height, bpc: src.bpc, color: src.
 /**
  * The name of a source's pixels in the reading's key (the engine's ocrKey `pixels`): `r<OCR_READ_VERSION>.<w>x<h>.<sha256>`,
  * the digest over the reader's bound, the source's shape and the digests of its bytes and of its masks' (each its own shape and
- * bytes): the image's pixels as this reader reads them are a function of these alone
+ * bytes; `max` the pixels it is read at, OCR_READ_PIXELS by default): the image's pixels as this reader reads them are a function
+ * of these alone
  */
-export async function ocrSourceKey(src) {
+export async function ocrSourceKey(src, { max = OCR_READ_PIXELS } = {}) {
   const part = async s => (s ? { shape: shapeOf(s), data: await sha256(s.data), smask: await part(s.smask), mask: await part(s.mask) } : null)
-  const all = { read: OCR_READ_VERSION, max: OCR_READ_PIXELS, ...(await part(src)) }
+  const all = { read: OCR_READ_VERSION, max, ...(await part(src)) }
   return `r${OCR_READ_VERSION}.${src.width}x${src.height}.${await sha256(new TextEncoder().encode(JSON.stringify(all)))}`
 }
 

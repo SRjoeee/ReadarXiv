@@ -12,7 +12,7 @@ export interface OcrSource {
   data: Uint8Array; smask: OcrSource | null; mask: OcrSource | null; maskKey: number[] | null
 }
 export declare function ocrSourceOf(objects: { lookup(ref: unknown): unknown }, PL: Record<string, unknown>, ref: string): OcrSource
-export declare function ocrSourceKey(src: OcrSource): Promise<string>
+export declare function ocrSourceKey(src: OcrSource, o?: { max?: number }): Promise<string>
 export declare function readSizeOf(width: number, height: number, max?: number): { width: number; height: number; scale: number }
 export interface OcrView { x0: number; y0: number; x1: number; y1: number; width: number; height: number }
 export declare function readOcrPixels(src: OcrSource, views: readonly OcrView[], o: { Jpeg: new (o?: { colorTransform?: number }) => unknown }): Promise<{ data: Uint8ClampedArray; width: number; height: number }[]>

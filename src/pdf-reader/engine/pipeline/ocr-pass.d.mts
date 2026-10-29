@@ -35,8 +35,10 @@ export interface OcrStats {
   kept: number
   labels: Record<string, number>
   recogniseMs: number
-  /** the lines read again in their windows at full resolution (OCR_LINE_MIN_PX) */
+  /** the lines read again in their windows at full resolution (OCR_LINE_MIN_PX), and the labels of an image read scaled down read
+   *  again in theirs */
   reread: number
+  relabelled: number
   cacheFailed: number
   refused: string | null
   /** the labels' sets (layout/bitmap-text.mjs setsOf): sets of two labels or more, the labels in them, the anchors their columns
@@ -76,4 +78,6 @@ export declare function ocrPass(o: {
   unitsDoc?: number
   /** the host's collection, called after each image is read and let go */
   collect?: (() => void) | null
+  /** the pixels an image is read at, at most (pipeline/ocr-image.mjs OCR_READ_PIXELS: a test's own; a part of the key) */
+  readPixels?: number
 }): Promise<{ units: OcrBundleUnit[]; chunks: (Written & { from: number; to: number })[]; stats: OcrStats }>

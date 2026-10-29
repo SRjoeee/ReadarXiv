@@ -74,3 +74,41 @@ child held until its clock and the paper had none of its labels. A label's lines
 11 of its 42 labels drawn before are drawn now. In the box it drew none before: its pages hold four times what the OCR child's
 limit leaves. Of the 1,615 images the 183 surveyed papers paint, 65 (in 14 papers) are past 16 million. The caps rise when the pass
 holds less a pixel (a page's images decoded one at a time, fewer copies of each: the website's record, its OCR measurement).
+
+## Run of 2026-10-29, round 2 (each image read from its own object at 16 million pixels at most, keyed by its bytes)
+
+The caps of 16 million pixels an image and a page are gone. Each image is read from its own object in the PDF, keyed by its stream's
+bytes (a cached image is placed with nothing decoded), and its pixels are read at OCR_READ_PIXELS at most: a Flate stream inflated a
+row at a time, scaled down as it comes, so that what a read holds is the pixels it reads. A line read under OCR_LINE_MIN_PX pixels
+across is read again in its window at the image's own pixels, and each label of a scaled image is judged again there.
+
+The pack's 7 bases: P, L, C, D, A 0 on all 7. The images within 16 million pixels read as before, the same lines and the same labels
+(1706.03762v7 25, 2307.16209v1 2, 2608.04322v1 18). 2608.16117v1 reads all 41 of its images and draws 40 labels, against 11 under
+the caps and 42 under the 64 million of before.
+
+The 14 papers of the survey whose images pass 16 million pixels (their arXiv PDFs), `--bases`, before (the engine at 4ba61239, the
+caps) and after:
+
+| Paper | Images read, before → after (of painted) | Labels drawn, before → after |
+|---|---|---|
+| 2608.05876v1 | 3 → 4 (4) | 50 → 81 |
+| 2608.07584v1 | 3 → 4 (4) | 24 → 34 |
+| 2608.08880v1 | 6 → 7 (15) | 13 → 39 |
+| 2608.11761v1 | 21 → 22 (22) | 101 → 111 |
+| 2608.12255v1 | 10 → 12 (12) | 26 → 27 |
+| 2608.12333v1 | 7 → 8 (9) | 47 → 51 |
+| 2608.16117v1 | 22 → 41 (41) | 11 → 40 |
+| 2608.20990v1 | 0 → 3 (3) | 0 → 2 |
+| 2608.25928v1 | 16 → 24 (24) | 96 → 147 |
+| 2608.29778v1 | 1 → 4 (4) | 8 → 23 |
+| 2610.16663v1 | 0 → 29 (29) | 0 → 49 |
+| 2610.20595v1 | 5 → 6 (66) | 0 → 3 |
+| 2610.21084v1 | 17 → 18 (20) | 79 → 79 |
+| 2610.21770v1 | 1 → 5 (5) | 16 → 18 |
+| all | 112 → 187, none past a bound | 471 → 704 |
+
+The gate's failures on them are the same before and after on the images both read: 2608.08880v1 p3, 2608.11761v1 p5, p19 (its
+legend over its own plot's lines), p31, 2608.12255v1 one D each. One more is on an image only the bounded read reaches:
+2608.25928v1 p18 "Batch Q (Sample 1)", D, whose patch cuts a stroke. It is the same at the image's own pixels
+(`--read-pixels=100000000`: 146 labels, that one D), so it is the label rule's, not the read's. These are papers outside the pack;
+the gate holds the pack.

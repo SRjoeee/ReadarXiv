@@ -257,7 +257,7 @@ export function labelsOf({ image, lines, place, others = { boxes: [], segs: [], 
  * with, ocr-pass.mjs: a later prepare places them with nothing decoded): { boxes, read, member }. `boxes` each { text, why } (an
  * image's own why: `busy`, `crowded`, `overlap`, `outside`, `long`) or { text, lines: [{ quad, patch (the image's fractions,
  * origin top left), bg, fg ([r, g, b]), before, after (the ink nearest the line along its band, in its thickness; null for none)
- * }] }; `read` the lines given, `member` those a label holds. Fractions and ratios, so that the image's resolution is none of it.
+ * }] }, each with `members` (the indices of its lines among those given); `read` the lines given, `member` those a label holds. Fractions and ratios, so that the image's resolution is none of it.
  */
 export function imageLabelsOf({ image, lines }) {
   const W = image.width, H = image.height, px = pixelReader(image)
@@ -378,8 +378,8 @@ export function imageLabelsOf({ image, lines }) {
   }
   for (const bx of boxes) {
     const text = bx.text.replace(/\s+/gu, ' ').trim()
-    if (bx.members.length > OCR_LINES_MAX || text.length > OCR_TEXT_MAX) { out.push({ text, why: 'long' }); continue }
-    if (bx.members.some(i => !lineQuads[i])) { out.push({ text, why: 'outside' }); continue }
+    if (bx.members.length > OCR_LINES_MAX || text.length > OCR_TEXT_MAX) { out.push({ text, why: 'long', members: [...bx.members] }); continue }
+    if (bx.members.some(i => !lineQuads[i])) { out.push({ text, why: 'outside', members: [...bx.members] }); continue }
     const own = new Set(bx.members)
     // (one line's frame, or the block's: the box round every line of the label, upright as the extension merges them)
     const T = [...bx.members].map(i => frames[i].T).sort((x, y) => x - y)[(bx.members.length - 1) >> 1]
@@ -391,7 +391,7 @@ export function imageLabelsOf({ image, lines }) {
       area = frameOf([[x0, y0], [x1, y0], [x1, y1], [x0, y1]])
     }
     const got = readArea(area, T, own)
-    if (got.why) { out.push({ text, why: got.why }); continue }
+    if (got.why) { out.push({ text, why: got.why, members: [...bx.members] }); continue }
     let why = null
     const read = []
     for (const i of bx.members) {
@@ -399,11 +399,11 @@ export function imageLabelsOf({ image, lines }) {
       if (r.why) { why = r.why; break }
       read.push({ i, patch: got.patch, bg: got.bg, ...r })
     }
-    if (why) { out.push({ text, why }); continue }
+    if (why) { out.push({ text, why, members: [...bx.members] }); continue }
     const frac = q => q.map(([x, y]) => [x / W, y / H])
     // (the ink's distances in the line's thickness: its anchor's evidence wherever the image is drawn, at whatever resolution)
     const inT = (v, i) => (Number.isFinite(v) ? v / (frames[i].T || 1) : null)
-    out.push({ text, lines: read.map(({ i, patch, bg, fg, before, after }) => ({ quad: frac(lineQuads[i]), patch: frac(patch), bg: [...bg], fg: [...fg], before: inT(before, i), after: inT(after, i) })) })
+    out.push({ text, members: [...bx.members], lines: read.map(({ i, patch, bg, fg, before, after }) => ({ quad: frac(lineQuads[i]), patch: frac(patch), bg: [...bg], fg: [...fg], before: inT(before, i), after: inT(after, i) })) })
   }
   return { boxes: out, read: lines.length, member: member.size }
 }

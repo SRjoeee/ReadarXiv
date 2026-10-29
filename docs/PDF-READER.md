@@ -1623,6 +1623,7 @@ The edge cases, decided:
 |---|---|---|---|---|
 | `BUNDLE5` (`layer-proto/format.mjs`, `'12'`: the head and the catalog name the bitmap figures' recogniser, `versions.ocr`, and a layer may hold late units chunks of their labels, §19.15; 11 a figure row carries its set and its room, §19.12; 10 the ink units, the parts' figure units and the head's ledger; 9 a part's cell rules in place of the add-on, our page wrapped by optional content) | reader contract | the layer route's objects: a head's, a part's, a left part's and a catalog's shape, the figure rows, the late chunks past the head's (the units chunks have a format of their own, `UNITS_FORMAT`, raised only by their shape); a reader reads 7's, 9's, 10's and 11's objects too (`BUNDLES_READ`) | the request (`CTAG5`, `b<BUNDLE5>-j<PDFJS>`: §18.4) and the R2 key (`VTAG5`) | a bundle of the old format is not found under the new `CTAG5` and is prepared again; readers older than it get `unknown-versions` until they update |
 | `BUNDLE` (`layer-proto/bundle.mjs`, `'3'`: the layout file's schema 3, the paper's `\lineskip` and `\lineskiplimit`; 2 its babel names, D1a. The file's schemas 4 (`PH_FLAG.JOINED` and `PH_FLAG.OUTSIDE`) and 5 (a found placeholder's fill, its row's last number where its glyphs are not black: 0xRRGGBB, or -1 where no one colour holds more than half of them) are not a contract of their own: `b3` names schemas 3 to 5, each reader's `parseLayout` refusing the others', so only this engine's reader reads a `b3` bundle holding schema 5) | reader contract | the one-file bundle `readBundle` reads (`CTAG`, `VTAG`): its shape, the units' tuple, kinds and flags, the layout file's schema, the left geometry | its request and key (§18.4) | readers older than it refuse it until they update |
+| `OCR_READ_VERSION` (`pipeline/ocr-image.mjs`, `'1'`: an image read from its own object, at OCR_READ_PIXELS at most, area-averaged, its masks over white, §19.15) | the box's reading | how an image's pixels are read for the recogniser: the bound, the scaling, the colours and the masks | the reading's cache key (`ocrKey`'s image name, `r<version>`), so the website's readings across prepares | each cached reading is a miss once: its image decoded and read again at its next prepare |
 | `PDFJS` (`pipeline/versions.mjs`, `'6.3.289'`) | reader contract | the PDF.js whose reading the layout and the wrap are made against | as `BUNDLE` | as `BUNDLE` |
 | `PIPELINE_VERSION` (`pipeline/versions.mjs`, `'32'`) | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
 | `LAYOUT` (`layout/file.mjs`, `'26'`: a unit TeX set flush left or flush right flagged so, `UNIT_FLAG.FLUSH_LEFT` and `UNIT_FLAG.FLUSH_RIGHT`, and a paragraph a box's close ends read by its own skips, §18.1, §18.8; 25 the release sweep of 2026-10-29, a line too short to be evidence found on no other page, a word a hyphen cuts going on below, an ink unit's paragraph one unit, a math face told by its family's names, `layer-proto/fonts.mjs` `classifyFont`), `REMOVAL` (`pipeline/versions.mjs`, `'12'`: a macro TeX said sets no ink is no placeholder of ink, an opening point alone at its unit's end owns its lines up to TeX's skip before another block; 8 no add-on, a part's or a bundle's cell rules in its place, our page wrapped by optional content, §11.8, §19.9) | extraction | the layout maker (the file's own schema is `LAYOUT_SCHEMA`, 5); how a drawn unit's ink is taken away | the R2 key | bundles made again lazily |
@@ -3264,32 +3265,44 @@ first page's way (the coordinator's word: the units come after the head and ever
 - **When**: after the maker's last part (the host's: the web's maker child, `docs/route/orphan-text.md` §8.9), over our base page,
   so that no page waits for it; its units one more units chunk, a **late chunk**, ids from the head's last on. A figure the pass
   cannot read stays the original's and is never the paper's failure: an image under OCR_MIN_SIDE (30 PDF units) or OCR_MIN_PX
-  (32 pixels) a side (`small`), one past OCR_PIXELS_MAX (16 million pixels) or past its page's OCR_PAGE_PIXELS_MAX (16 million
-  pixels of the page's images in all, in the order the page paints them: PDF.js decodes a page's images together, as it builds
-  the page's operator list) — the lite worker's OCR opt-in (layout/pdf-lite.mjs) keeps its operator and decodes none of it, `big`.
-  The pass holds some 46 to 50 bytes a pixel of the page it reads (measured 2026-10-29: natively, a page of 20.6 million pixels
-  of 2610.16663v1 950 MiB over the pass at rest; in the website's box, 2610.19274v1's page of 14.7 million its OCR child's data
-  size 1,364 MiB of 1,472), so that 16 million keeps the child within 70 % of its limit; the 40 and 64 million before let a page
-  of 55.5 take it to its limit, where it held every label of the paper and two minutes of the box. Of the 1,615 images the 183
-  surveyed papers paint, 65 (in 14 papers) are past 16 million;
-  an image PDF.js keeps once for the pages that paint it is refused on all of them —, one the recogniser refuses or does not
-  answer in its host's time (`error`, `timeout`), one past the paper's budget (OCR_BUDGET_MS, 60 s of the recogniser's time,
-  `budget`: the owner's bound on the box's hold), one past the paper's OCR_IMAGES_MAX (200 images taken past the size floors,
-  each decoded, its digest made and looked up or read: `many`, and no page more read; the 183 papers surveyed on 2026-10-29 paint
-  at most 120, p99 119, median 1); a cache that cannot be read or written is no cache, and an entry of it out of a reading's
-  shape (`ocrLinesOf`: at most OCR_LINES_MAX lines, each its text, confidence and quad) is a miss, read again. The bounds are the
-  box's memory (the website repository's record of it, its OCR measurement).
-- **What is read** (`pipeline/ocr-pass.mjs`): each page's operator list as PDF.js gives it (`paintsOf`: every image's paint
-  operator under its transform and the clip in force — a form's box, as pdfTeX trims an image so, and a rectangle's; any other
-  clip `complex` — and the paths drawn after it), its text content's boxes, and each image's pixels as PDF.js decodes them. An
-  image is read once a paper whatever it is painted (its pixels' digest, made over them as they are, no copy), and once a
-  recogniser across papers where the host gives a cache (`ocrKey`: OCR_VERSION, the host's reader and the pixels' name, their size
-  and kind and digest; the value the recogniser's lines, which hold no paper's place, an image with no text among them as no
-  lines). The website's box keeps the readings of a paper's images across its prepares (another version, a prepare again after
-  PIPELINE moves, any target: the batch's cost ask of 2026-10-29), so that an image read once is a lookup after. The detector's
-  empty answer is the recogniser's first step's: an image it finds no line in is read no further (core/ocr/recognise.ts). Each image is let go from its page once its
-  last paint there is read (PDF.js holds a page's decoded images until the page is cleaned up), and the host's collection
-  (`collect`) is asked after each image: a server's canvases are native memory its heap does not count.
+  (32 pixels) a side (`small`), one whose object the reader does not read (`format`: a filter, a colour space, a depth past
+  those below; none of the 3,552 image objects the 183 surveyed papers hold) or a JPEG past OCR_JPEG_PIXELS (`big`: 40 million
+  pixels, twice the survey's largest), one the recogniser refuses or does not answer in its host's time (`error`, `timeout`),
+  one past the paper's budget (OCR_BUDGET_MS, 60 s of the recogniser's time, `budget`: the owner's bound on the box's hold), one
+  past the paper's OCR_IMAGES_MAX (200 images a paper, each read or looked up: `many`, and no page more read; the 183 papers
+  surveyed on 2026-10-29 paint at most 120, p99 119, median 1); a cache that cannot be read or written is no cache, and an entry
+  of it out of a reading's shape (`ocrReadingOf`) is a miss, read again.
+- **What is read** (`pipeline/ocr-pass.mjs`): each page's operator list as PDF.js gives it under the lite worker's OCR opt-in
+  (layout/pdf-lite.mjs OCR_IMAGE_PIXELS: no image decoded, each image's paint naming its object, its id ending `~` and PDF.js's
+  ref of it; `paintsOf`: every image's paint operator under its transform and the clip in force — a form's box, as pdfTeX trims
+  an image so, and a rectangle's; any other clip `complex` — and the paths drawn after it), its text content's boxes, and each
+  image from its own object in the PDF (`pipeline/ocr-image.mjs`, over the objects `layout/xref.mjs openObjects` reads):
+  - **its key** the digest of its stream's bytes as the PDF holds them with whatever else changes its pixels (its size, depth,
+    colour space and Indexed table, /Decode, filters and their parameters, a colour key, and its soft or explicit mask's own key):
+    `ocrSourceKey`, `r<OCR_READ_VERSION>.<w>x<h>.<sha256>`. An image is read once a paper whatever it is painted, and once a
+    recogniser across papers where the host gives a cache (`ocrKey`: OCR_VERSION, the host's reader, the image's key; the value
+    its reading, the recogniser's lines and its labels as its pixels give them, `imageLabelsOf`, which hold no paper's place).
+    The website's box keeps a paper's readings across its prepares (another version, a prepare again after PIPELINE moves, any
+    target: the batch's cost ask of 2026-10-29), so that a cached image is placed with **nothing decoded**: the pass reads its
+    page's operators, its key's bytes and the reading, and lays the labels (`placeLabels`).
+  - **its pixels** (a miss) read at OCR_READ_PIXELS at most (16 million: the image's own where it has fewer, else scaled down to
+    them, area-averaged as they are decoded), so that the memory a read holds is that of the pixels it reads, whatever the
+    image's own size: a Flate stream inflated as a stream, a row at a time (its PNG or TIFF predictor undone, its colour space,
+    depth, /Decode and colour key read), a JPEG decoded whole by PDF.js's own decoder (pdfjs-dist's JpegImage, which the host
+    gives) and scaled down; a soft mask composited over white, the ground the page shows, and an explicit mask's pixels white.
+    The detector reads at 960 pixels a side whatever it is given; the recogniser cuts each line from these, and a line read at
+    fewer than OCR_LINE_MIN_PX (24) pixels across in an image read scaled down is read again in its window (its box grown by half
+    its thickness) at the image's own pixels, the second pass of the stream reading those windows alone: the reading there
+    replaces it, its lines' fractions turned to the image's. Its labels are judged (`imageLabelsOf`) on the image read, and, for an
+    image read scaled down, each again in its window at the image's own pixels (its lines' box grown by the anchor's reach), the
+    third pass of the stream: a thin stroke by a label, which the scaling greys, is one its patch must not cut. On the 14 papers
+    whose images pass 16 million pixels (2026-10-29) the bounded read draws what a read at the images' own pixels draws:
+    2608.25928v1, 147 labels against 146, the one patch the gate's D holds against (p18) the native read's too. The pixels are let go once its labels are read, and the host's
+    collection (`collect`) is asked after each image: a server's canvases are native memory its heap does not count.
+  - Before (to 2026-10-29), PDF.js decoded each page's images whole and the pass held some 46 to 50 bytes a pixel of the page it
+    read (natively, 2610.16663v1's page of 20.6 million pixels 950 MiB over the pass at rest), under caps of 16 million pixels an
+    image and a page that left 65 of the survey's 1,615 images, in 14 papers, unread. The detector's empty answer is the
+    recogniser's first step's: an image it finds no line in is read no further (core/ocr/recognise.ts).
 - **Its labels** (`layout/bitmap-text.mjs labelsOf`): the recogniser's lines merged as the extension merges them
   (`core/image/boxes.ts linesToBoxes`: the same filter of numbers, letters alone and low confidence, the same merge of a label
   wrapped over lines), each label one patch, over its line or over the block its lines make: the line's box grown PATCH_PAD (0.08)
