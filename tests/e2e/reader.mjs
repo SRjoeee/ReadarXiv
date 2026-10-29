@@ -880,38 +880,92 @@ try {
     check('the dark look over the layer: its SVG and its copy dimmed alike, the wash screened, the links not inverted', /invert/.test(dark.svg) && dark.svg === dark.copy && dark.wash === 'screen' && dark.links === 'none', JSON.stringify(dark))
     await page.screenshot({ path: `${SHOTS}/reader-layer-dark.png` })
     await page.evaluate(() => document.documentElement.removeAttribute('data-axt-dim'))
-    // a figure: its caption lights its float whole, on both panes
-    const caption = sampleCut.located.find(u => sampleCut.kinds[u[0]] === 'caption')
-    if (caption) {
-      await page.mouse.move(5, 5)
-      await page.evaluate(n => window.__reader.controller.goToPage('right', n), caption[2][0][0])
-      await page.waitForTimeout(1500)
-      const atC = await screenOf('right', caption)
-      await page.mouse.move(atC.x, atC.y)
-      await page.waitForTimeout(150)
-      await page.mouse.move(atC.x + 1, atC.y)
-      const litC = await page.waitForFunction(id => window.__reader.view.probe().lit === id, caption[0], { timeout: 10_000 }).then(() => true, () => false)
-      const f = await page.evaluate(p => ({ left: document.querySelectorAll(`#left .page[data-page-number="${p}"] .axt-hl`).length, right: document.querySelectorAll(`#right .page[data-page-number="${p}"] .axt-hl`).length, frames: document.querySelectorAll(`.page[data-page-number="${p}"] .axt-hl-frame`).length }), caption[2][0][0])
-      check('a caption lights its float whole on both panes (the figure framed, or the table washed)', litC && f.left > 0 && f.right > 0, JSON.stringify(f))
-      await page.screenshot({ path: `${SHOTS}/reader-layer-float.png` })
+    // figures and tables (the owner, 2026-10-30, docs/PDF-READER.md §17.1): a caption lights as a paragraph does, never its float
+    // with it; a figure's picture and its labels light nothing; a table lights cell by cell, its cells of numbers too, each at its
+    // place on both panes
+    const hoverAt = async (x, y) => { await page.mouse.move(x, y); await page.waitForTimeout(150); await page.mouse.move(x + 1, y) }
+    const toPage = async n => { await page.mouse.move(5, 5); await page.evaluate(n => window.__reader.controller.goToPage('right', n), n); await page.waitForTimeout(1500) }
+    const litAt = id => page.waitForFunction(id => window.__reader.view.probe().lit === id, id, { timeout: 10_000 }).then(() => true, () => false)
+    /** what each pane paints on page `n`: its bands' boxes, as shares of the page's box (so that the two panes' compare) */
+    const paintedOn = n => page.evaluate(n => {
+      const of = pane => {
+        const pg = document.querySelector(`#${pane} .pdfViewer > .page[data-page-number="${n}"]`)?.getBoundingClientRect()
+        return [...document.querySelectorAll(`#${pane} .page[data-page-number="${n}"] .axt-hl`)].map(e => { const b = e.getBoundingClientRect(); return [(b.left - pg.left) / pg.width, (b.top - pg.top) / pg.height, (b.right - pg.left) / pg.width, (b.bottom - pg.top) / pg.height].map(v => Math.round(v * 1000) / 1000) })
+      }
+      const p = window.__reader.view.probe()
+      return { lit: p.lit, s: p.litSentence, left: of('left'), right: of('right'), frames: document.querySelectorAll('.axt-hl-frame').length }
+    }, n)
+    /** a unit's line rectangles as shares of its page's box, padded by `pad` of the page's width */
+    const shareOf = (unit, pad) => {
+      const v = sampleCut.views[unit[2][0][0] - 1], w = v[2] - v[0], h = v[3] - v[1]
+      const xs = unit[2].flatMap(r => [r[1], r[3]]), ys = unit[2].flatMap(r => [r[2], r[4]])
+      return [(Math.min(...xs) - v[0]) / w - pad, (v[3] - Math.max(...ys)) / h - pad, (Math.max(...xs) - v[0]) / w + pad, (v[3] - Math.min(...ys)) / h + pad]
     }
-    // a figure's label (the TikZ figure's "start" and "goal", figure units anchored on the left as the page pass anchors them:
-    // a left unit of its part beside its figure row, #497): its page laid from that part, and the label, hovered on the right,
-    // lights its float whole on both panes, as a float's held units do (view/floats.mjs HELD)
-    const label = sampleCut.located.find(u => sampleCut.kinds[u[0]] === 'inkfigures')
-    check('the sample\'s figure labels are figure units anchored on the left (a part that holds one, its row and its left entry)', !!label, JSON.stringify(sampleCut.located.filter(u => sampleCut.kinds[u[0]] === 'inkfigures').map(u => u[0])))
-    if (label) {
-      await page.mouse.move(5, 5)
-      await page.evaluate(n => window.__reader.controller.goToPage('right', n), label[2][0][0])
-      await page.waitForTimeout(1500)
-      const atL = await screenOf('right', label)
-      await page.mouse.move(atL.x, atL.y)
-      await page.waitForTimeout(150)
-      await page.mouse.move(atL.x + 1, atL.y)
-      const captions = sampleCut.located.filter(u => sampleCut.kinds[u[0]] === 'caption').map(u => u[0])
-      const litL = await page.waitForFunction(ids => ids.includes(window.__reader.view.probe().lit), captions, { timeout: 10_000 }).then(() => true, () => false)
-      const g = await page.evaluate(p => ({ lit: window.__reader.view.probe().lit, left: document.querySelectorAll(`#left .page[data-page-number="${p}"] .axt-hl`).length, right: document.querySelectorAll(`#right .page[data-page-number="${p}"] .axt-hl`).length }), label[2][0][0])
-      check('a figure\'s label hovered lights its float whole on both panes (by its caption\'s id)', litL && g.left > 0 && g.right > 0, JSON.stringify({ captions, ...g }))
+    const within = (bands, box) => bands.length > 0 && bands.every(b => b[0] >= box[0] && b[1] >= box[1] && b[2] <= box[2] && b[3] <= box[3])
+    /** bands on a unit's lines: within its rectangles' height (across, a caption's label before its text is its head's) */
+    const onLines = (bands, box) => bands.length > 0 && bands.every(b => b[1] >= box[1] && b[3] <= box[3])
+    const paras = sampleCut.located.filter(u => sampleCut.kinds[u[0]] === 'para')
+    /** what the floats on page `n` hold (the figure's labels, the table's cells, and its numbers: those on no unit's line, as a
+     *  caption's own digits and its label's are), their middles as shares: no band of a caption's may cover one (a laid
+     *  caption's lines are the translation's, not the original's) */
+    const onUnitLine = (n, r) => sampleCut.located.some(u => u[2].some(q => q[0] === n && (r[2] + r[4]) / 2 >= q[2] && (r[2] + r[4]) / 2 <= q[4]))
+    const heldOn = n => [...sampleCut.located.filter(u => ['inkfigures', 'cell'].includes(sampleCut.kinds[u[0]])), ...sampleCut.numbers.filter(u => !onUnitLine(n, u[2][0]))].filter(u => u[2][0][0] === n).map(u => { const b = shareOf(u, 0); return [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] })
+    const covers = (bands, pts) => bands.some(b => pts.some(([x, y]) => x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]))
+    for (const caption of sampleCut.located.filter(u => sampleCut.kinds[u[0]] === 'caption')) {
+      const n = caption[2][0][0], para = paras.find(u => u[2][0][0] === n) ?? paras[0]
+      await toPage(n)
+      // (a paragraph of its page first: how a body unit lights here)
+      const atP = await screenOf('right', para)
+      await hoverAt(atP.x, atP.y)
+      const litP = await litAt(para[0]), p = await paintedOn(n)
+      const atC = await screenOf('right', caption)
+      await hoverAt(atC.x, atC.y)
+      const litC = await litAt(caption[0]), c = await paintedOn(n), box = shareOf(caption, 0.02), held = heldOn(n)
+      check(`a caption (#${caption[0]}) lights itself on both panes as a paragraph of its page does (by sentence where it does), never its float: no frame, the left's bands on its lines, no band over what its float holds`, litP && litC && (c.s >= 0) === (p.s >= 0) && c.frames === 0 && c.right.length > 0 && onLines(c.left, box) && held.length > 0 && !covers([...c.left, ...c.right], held), JSON.stringify({ para: p, caption: c, box, held: held.length }))
+      await page.screenshot({ path: `${SHOTS}/reader-layer-caption-${caption[0]}.png` })
+    }
+    // a figure's picture and its labels (the TikZ figure's "start" and "goal": figure units the page pass anchors on the left, a
+    // left unit of its part beside its figure row, #497) light nothing: the two panes stand side by side already, and pairing the
+    // labels was measured not free (§17.1)
+    const labels = sampleCut.located.filter(u => sampleCut.kinds[u[0]] === 'inkfigures')
+    check('the sample\'s figure labels are figure units anchored on the left (a part that holds one, its row and its left entry)', labels.length > 0, JSON.stringify(labels.map(u => u[0])))
+    if (labels.length) {
+      const n = labels[0][2][0][0], para = paras.find(u => u[2][0][0] === n) ?? paras[0]
+      await toPage(n)
+      const points = []
+      for (const label of labels) points.push(await screenOf('right', label))
+      // (the picture: between its labels)
+      if (points.length > 1) points.push({ x: (points[0].x + points[1].x) / 2, y: (points[0].y + points[1].y) / 2 })
+      const got = []
+      for (const at of points) {
+        const atP = await screenOf('right', para)
+        await hoverAt(atP.x, atP.y)
+        await litAt(para[0])
+        await hoverAt(at.x, at.y)
+        const none = await litAt(null)
+        got.push({ none, ...(await paintedOn(n)) })
+      }
+      check('a figure\'s labels and its picture, hovered, light nothing on either pane', got.every(g => g.none && g.lit === null && !g.left.length && !g.right.length), JSON.stringify(got))
+    }
+    // a table cell by cell: a cell the front end made a unit (a heading of the table's), and one of numbers no unit holds, each
+    // lit alone at the same place on both panes
+    const cell = sampleCut.located.find(u => sampleCut.kinds[u[0]] === 'cell')
+    const tableCaption = sampleCut.located.find(u => sampleCut.kinds[u[0]] === 'caption' && cell && u[2][0][0] === cell[2][0][0])
+    const number = cell && sampleCut.numbers.find(u => u[0] === '126' && u[2][0][0] === cell[2][0][0])
+    check('the sample\'s table has a cell unit and a cell of numbers on its page', !!cell && !!number, JSON.stringify({ cell: cell?.[0], number: number?.[2] }))
+    if (cell && number) {
+      const n = cell[2][0][0], cells = []
+      await toPage(n)
+      for (const [what, u] of [['a cell unit', cell], ['a cell of numbers', number]]) {
+        const at = await screenOf('right', u)
+        await hoverAt(at.x, at.y)
+        const lit = await page.waitForFunction(id => { const l = window.__reader.view.probe().lit; return l != null && (id == null ? l >= 2 ** 30 : l === id) }, u[1] === null ? null : u[0], { timeout: 10_000 }).then(() => true, () => false)
+        const g = await paintedOn(n), box = shareOf(u, 0.01)
+        const same = g.left.length === 1 && g.right.length === 1 && g.left[0].every((v, k) => Math.abs(v - g.right[0][k]) <= 0.002)
+        cells.push({ what, lit, ...g, box, ok: lit && same && within(g.left, box) && g.lit !== tableCaption?.[0] })
+      }
+      check('a table lights cell by cell, a cell of numbers too: the cell alone, at the same place on both panes, never its table', cells.every(c => c.ok), JSON.stringify(cells))
+      await page.screenshot({ path: `${SHOTS}/reader-layer-cell.png` })
     }
 
     // ---- the links (3b): real links over the laid pages, in reading order, named, reached by Tab, followed by Enter

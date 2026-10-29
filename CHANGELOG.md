@@ -5,6 +5,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 ## Unreleased
 
 - In the PDF reader, the first translated page comes sooner on papers with large figures shown in two panes: the original's pages just below the view are drawn once the translation's first page is in place, so they no longer download beside it.
+- The PDF reader's highlight no longer lights a whole figure or table. A caption lights sentence by sentence, as a paragraph does, and a table one cell at a time, its numbers too, in the same place on both sides. Pointing at a figure's picture or its labels lights nothing, since the original and the translation already stand side by side.
 - Fixed: in the PDF reader, a page where our copy of the paper sets a line or two on the page before or after it is now translated, as long as its text is the same. Before, such pages, and sometimes the whole first half of a paper, stayed in English.
 - Fixed: in the PDF reader, a translation that holds a symbol such as &, % or # no longer shows a backslash before it ("CAD\&CG" now reads "CAD&CG").
 - Fixed: in the PDF reader, when the pages you are looking at are ones the reader shows as the original (its own typesetting of the paper does not match arXiv's there), the progress line ends when the translation does. It had stayed on until a translated page further on was drawn.

@@ -1,6 +1,9 @@
-// The highlight's floats: a table, an algorithm or a figure lit whole with its caption, on both sides (the maintainer's
-// decision of 2026-10-01; round 1 of the highlight, T1 and T3). Pure — no DOM — so that the reader and the Node probes
-// run the same code; the reader gives it what PDF.js draws a page by (its operator list) on the page's first drawing.
+// The highlight's floats: a table, an algorithm or a figure, found on both sides. Pure — no DOM — so that the reader and the
+// Node probes run the same code; the reader gives it what PDF.js draws a page by (its operator list) on the page's first
+// drawing. A float lit whole with its caption (the maintainer's decision of 2026-10-01, round 1 of the highlight) is no more
+// (the owner, 2026-10-30, docs/PDF-READER.md §17.1): its caption lights by sentence as a body unit does, a table cell by cell
+// (its cells of numbers too, cellsOf), and its picture nothing — the two panes stand side by side already. A float is now
+// where the pointer finds a table's cells or nothing, and what a sentence's row keeps out of (highlight.mjs reachAt).
 //
 // A page's floats are made from its geometry (highlight.mjs pageGeometry: its lines, who owns each word, each caption's
 // runs), its figures (figures.mjs figureRegions: the forms and images placed on it) and its paths (pathsOf: the rules
@@ -11,19 +14,16 @@
 // (a chart's bars, a diagram's boxes), and the rules among them; it stops at the first line that is another's (running
 // text, another caption), at another caption's figure, or at a gap, and goes no further than its own last rule: the rule
 // just past its last line is its own, one a float's skip further on is the next float's (round 1's table I reached into
-// the next column's algorithm title). A float that holds a figure or a drawing is a figure, outlined; one of text and
-// rules is a table (or an algorithm), washed. The float is the caption's: it lights by the caption's id, which both
-// sides share.
+// the next column's algorithm title). A float that holds a figure or a drawing is a figure; one of text and rules is a table
+// (or an algorithm). The float is the caption's: it is found by the caption's id, which both sides share.
 
-import { blockOf, pageGeometry } from './highlight.mjs'
-import { FIGURE_KIND } from '../rules/content-classes.mjs'
+import { blockOf, cellRunOf, pageGeometry } from './highlight.mjs'
+import { tableCellId, tableCellPage } from '../layer-proto/units.mjs'
 
-/** kinds of unit a float holds: a table's cells, a drawing's text (TikZ), a figure's labels the wrap made units (FIGURE_KIND,
- *  anchored on the left since ink-pass.mjs figureAnchors: as running text they stopped the caption's walk, a diagram of labelled
- *  boxes losing its float); its walk goes on over them, and hovering one lights its float */
-const HELD = new Set(['cell', 'figure', FIGURE_KIND])
-/** the kinds of a drawing's text: a float holding one is a figure */
-const DRAWING = new Set(['figure', FIGURE_KIND])
+/** kinds of unit a float holds: a table's cells, its walk going on over them, each lighting itself. A drawing's text (TikZ's
+ *  words, a figure's labels the wrap made units) no layout holds (highlight.mjs DRAWING): its words are free, as a table's
+ *  rows are, and where it stands makes its float a figure */
+const HELD = new Set(['cell'])
 /** a rule is a painted path at most THIN across and at least RULE_H long (horizontal) or RULE_V tall (vertical) */
 const THIN = 2, RULE_H = 20, RULE_V = 8
 /** the walk from a caption, in its lines' heights: the first item within FIRST of the caption, each next one within
@@ -39,6 +39,11 @@ const SPILL = 6
 const MIN_LINES = 2
 /** a float is a drawing when the marks outside its text cover this share of it */
 const DRAWN = 0.03
+/** two words of a table's row that no unit holds are one cell where the gap between them is at most CELL_GAP of their height (a
+ *  word space is a third of it, the gap between two columns, \tabcolsep on either side, more than one), and not past COLUMN_GAP
+ *  where the table's words no unit holds leave a column free there on every row: two columns set tight (on the ten papers, rows
+ *  of values 0.47 of their height apart), never a decimal point (0.3) or a ± (0.2) that every row sets alike */
+const CELL_GAP = 0.6, COLUMN_GAP = 0.4
 
 const mul = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]]
 
@@ -234,16 +239,77 @@ export function pageFloats(L, p, regions = [], { rules = [], marks = [] } = {}) 
     }
     if (!region) continue
     for (const q of w.got) if (!claimedBy.has(q)) claimedBy.set(q, c.id)
-    // what it holds: the cells and a drawing's text inside it
+    // what it holds: the cells inside it
     const members = new Set()
     for (const [id, runs] of g.byId) if (HELD.has(L.kindOf(id)) && runs.every(r => inside((r.x0 + r.x1) / 2, (r.top + r.bottom) / 2, region))) members.add(id)
     // a float holding a drawing's text (TikZ, set on the page with no form) is a figure: its boxes round its words and
-    // its arrows (rules) leave too little drawn outside the text to tell (the review of B4, I3)
-    const drawing = [...members].some(id => DRAWING.has(L.kindOf(id)))
-    out.push({ id: c.id, page: p, kind: drawing ? 'figure' : floatKind(w, region), region, members, parts: w.parts, lead: c.lead })
+    // its arrows (rules) leave too little drawn outside the text to tell (the review of B4, I3); no layout holds that text,
+    // only where it stands (highlight.mjs DRAWING)
+    const drawing = (L.drawings?.get(p) ?? []).some(q => inside((q.x0 + q.x1) / 2, (q.y0 + q.y1) / 2, region))
+    const kind = drawing ? 'figure' : floatKind(w, region)
+    out.push({ id: c.id, page: p, kind, region, members, parts: w.parts, lead: c.lead, cells: [] })
   }
+  // a table's cells no unit holds, each its own (cellsOf), numbered on the page in the order its floats are found
+  let n = 0
+  for (const f of out) if (f.kind === 'table') { f.cells = cellsOf(L, p, f.region, g, n); n += f.cells.length }
   known.set(p, out)
   return out
+}
+
+/**
+ * A table's cells that no unit holds (a cell of numbers, of a formula, of one letter: the front end makes no unit of fewer than two
+ * letters), each lit as a cell unit is, at its own place on both panes (the owner, 2026-10-30: a table corresponds cell to cell, its
+ * cells of numbers too): the page's words inside the table's `region` that no unit owns, in the stream's order, one cell while they
+ * stand on one line within CELL_GAP of each other. A word inside a unit's block is that unit's to the pointer (a cell unit's piece
+ * the text did not find, a mark between its words): no cell of its own. [{ id (units.mjs tableCellId: its page and its place,
+ * from `from`), run (highlight.mjs cellRunOf), toks }]
+ */
+function cellsOf(L, p, region, g, from) {
+  const { tok, owner, lineOf, lines, k0 } = g.at, P = L.page[p], lead = P?.lead?.get('cell') ?? P?.lead?.get(null) ?? 0
+  const blocks = g.runs.map(r => blockOf(r, 0)).filter(b => b.x0 < region.x1 && b.x1 > region.x0 && b.y0 < region.y1 && b.y1 > region.y0)
+  const free = i => owner[i] === -1 && inside((tok.l[i] + tok.r[i]) / 2, (tok.top[i] + tok.bottom[i]) / 2, region) && !blocks.some(b => inside((tok.l[i] + tok.r[i]) / 2, (tok.top[i] + tok.bottom[i]) / 2, b))
+  // (the columns the words no unit holds fill, every row's together: merged spans across, rising)
+  const spans = []
+  for (let i = 0; i < owner.length; i++) if (free(i)) spans.push([tok.l[i], tok.r[i]])
+  spans.sort((a, b) => a[0] - b[0])
+  const cover = []
+  for (const [a, b] of spans) { const c = cover.at(-1); if (c && a <= c[1]) { if (b > c[1]) c[1] = b } else cover.push([a, b]) }
+  /** whether the words no unit holds leave some x between a and b free on every row: no one span of them reaches across */
+  const open = (a, b) => !cover.some(([c0, c1]) => c0 <= a && c1 >= b)
+  const out = []
+  let cur = null
+  const close = () => {
+    if (!cur) return
+    const id = tableCellId(p, from + out.length)
+    if (id !== null) out.push({ id, run: cellRunOf(id, p, lines[cur.line].col, cur.box, lead), toks: cur.toks })
+    cur = null
+  }
+  for (let i = 0; i < owner.length; i++) {
+    if (owner[i] !== -1) { close(); continue }
+    const l = tok.l[i], r = tok.r[i], top = tok.top[i], bottom = tok.bottom[i]
+    if (!free(i)) { close(); continue }
+    const line = lineOf[i], gap = l - (cur?.box.x1 ?? l)
+    if (cur && cur.line === line && gap <= CELL_GAP * tok.h[i] && (gap <= COLUMN_GAP * tok.h[i] || !open(cur.box.x1, l))) {
+      const b = cur.box
+      if (l < b.x0) b.x0 = l
+      if (r > b.x1) b.x1 = r
+      if (bottom < b.y0) b.y0 = b.lo = bottom
+      if (top > b.y1) b.y1 = b.hi = top
+      cur.toks.push(k0 + i)
+    } else {
+      close()
+      cur = { line, box: { x0: l, x1: r, y0: bottom, y1: top, lo: bottom, hi: top }, toks: [k0 + i] }
+    }
+  }
+  close()
+  return out
+}
+
+/** a table's cell no unit holds, by its hover id (units.mjs tableCellId): its run on its page among the floats made, [] where the
+ *  page's are not made or hold none of that id */
+export function cellRunsOf(L, id) {
+  for (const f of L?.floats?.get(tableCellPage(id)) ?? []) for (const c of f.cells ?? []) if (c.id === id) return [c.run]
+  return []
 }
 
 /**
@@ -473,10 +539,11 @@ export function floatsAgree(L, p, O) {
 }
 
 /**
- * What a float paints (PDF units): a table one wash over it and its caption, padded as a block is (`padX` beside, half
- * the caption's leading above and below); a figure its outline (`frame`) and its caption's blocks — a wash multiplied
- * into a figure would change its colours. [{ page, x0, y0, x1, y1, frame }], kept for the pad last asked (the pointer
- * asks every frame at one zoom)
+ * A float's shape (PDF units): its body without its caption, padded as a block is (`padX` beside, half the caption's leading
+ * above and below), `frame` a figure's. No float lights whole any more (the owner, 2026-10-30: a picture lights nothing, its two
+ * panes standing side by side already; a caption lights by sentence, a table cell by cell): the shape is where the pointer finds
+ * a figure's picture or a table's cells (floatHitOf), and what a sentence's row keeps out of (highlight.mjs reachAt).
+ * [{ page, x0, y0, x1, y1, frame }], kept for the pad last asked (the pointer asks every frame at one zoom)
  */
 export function floatShapes(L, f, padX) {
   if (f.shapes?.padX === padX) return f.shapes.list
@@ -485,16 +552,16 @@ export function floatShapes(L, f, padX) {
   return list
 }
 function shapesOf(L, f, padX) {
-  const caps = (pageGeometry(L, f.page).byId.get(f.id) ?? []).map(run => blockOf(run, padX))
-  const reg = { page: f.page, x0: f.region.x0 - padX, x1: f.region.x1 + padX, y0: f.region.y0 - f.lead, y1: f.region.y1 + f.lead }
-  if (f.kind === 'table') return [{ page: f.page, ...union([reg, ...caps]), frame: false }]
-  return [{ ...reg, frame: true }, ...caps.map(b => ({ ...b, frame: false }))]
+  return [{ page: f.page, x0: f.region.x0 - padX, x1: f.region.x1 + padX, y0: f.region.y0 - f.lead, y1: f.region.y1 + f.lead, frame: f.kind === 'figure' }]
 }
 
 /**
- * What a point of a page (PDF units) lights, floats included: `hit` the unit hitOf found there; a float whose painted
- * shape holds the point takes it — over its own caption and what it holds (a cell lights its table), and over another
- * unit's block where its shape is the smaller. { id, s: -1, float } for a float (lit whole: no sentence), else `hit`
+ * What a point of a page (PDF units) lights, floats included: `hit` the unit hitOf found there. Inside a float's shape (the
+ * smallest that holds the point): its caption, where its block reaches in; a cell it holds (a cell unit: a table's, or a tabular's
+ * set in a figure over its panels), else a table's cell no unit holds under the point (cellsOf: { id, s: -1, run }), lit whole;
+ * another unit's block, where it is the smaller; else nothing
+ * — a figure's picture and its labels, a table's gap between two cells or its rules (the owner, 2026-10-30: a picture lights
+ * nothing, its two panes standing side by side already; figure labels not paired, §17.1). Outside every float, `hit`
  */
 export function floatHitOf(L, p, x, y, padX, hit) {
   const fs = L?.floats?.get(p)
@@ -506,9 +573,18 @@ export function floatHitOf(L, p, x, y, padX, hit) {
     if (a < area) { area = a; best = f }
   }
   if (!best) return hit
-  if (hit && hit.id !== best.id && !best.members.has(hit.id)) {
+  if (hit && (hit.id === best.id || best.members.has(hit.id))) return hit
+  if (hit) {
     const b = blockOf(hit.run, padX)
     if ((b.x1 - b.x0) * (b.y1 - b.y0) < area) return hit
   }
-  return { id: best.id, s: -1, float: best }
+  // (the cell whose block holds the point, the nearest to its ink where two blocks meet: rows set closer than their pads)
+  let cell = null, far = Infinity
+  if (best.kind === 'table') for (const c of best.cells ?? []) {
+    const b = blockOf(c.run, padX)
+    if (x < b.x0 || x > b.x1 || y < b.y0 || y > b.y1) continue
+    const r = c.run, d = Math.max(0, r.x0 - x, x - r.x1) + Math.max(0, r.bottom - y, y - r.top)
+    if (d < far) { far = d; cell = c }
+  }
+  return cell && { id: cell.id, s: -1, run: cell.run }
 }

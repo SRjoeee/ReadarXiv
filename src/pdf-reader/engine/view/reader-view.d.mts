@@ -124,17 +124,15 @@ export type ViewEvent =
 /** a rectangle on one of a side's pages, in its PDF units */
 export interface PageBox { page: number; x0: number; y0: number; x1: number; y1: number }
 /** what a pane paints for the highlight, in its own pages' coordinates (the shapes seam): a unit's runs (one page and one
- *  column of it each, the objects the paint keeps what it drew by), a run's block, a sentence's shape by the unit's starts,
- *  the float a unit lights whole and what it paints, whether a unit's shapes hold its words by its starts (undefined where
- *  that is not to be told in a frame), what a point lights and what a click there levels by */
-export interface Shapes<R extends { page: number } = { page: number }, F extends { page: number } = { page: number }> {
+ *  column of it each, the objects the paint keeps what it drew by; a table's cell no unit holds by its id), a run's block, a
+ *  sentence's shape by the unit's starts, whether a unit's shapes hold its words by its starts (undefined where that is not
+ *  to be told in a frame), what a point lights and what a click there levels by. No float is painted (§17.1) */
+export interface Shapes<R extends { page: number } = { page: number }> {
   runs(id: number): readonly R[]
   block(run: R, padX: number): PageBox
   sentence(run: R, starts: Int32Array, s: number, padX: number): PageBox[]
-  float(id: number): F | null
-  floatShapes(f: F, padX: number): (PageBox & { frame: boolean })[]
   fits(id: number, starts: Int32Array, now: boolean): boolean | undefined
-  hit(page: number, x: number, y: number, padX: number, startsOf: (id: number) => Int32Array | null | undefined): { id: number; s: number; float?: F } | null
+  hit(page: number, x: number, y: number, padX: number, startsOf: (id: number) => Int32Array | null | undefined): { id: number; s: number } | null
   click(page: number, x: number, y: number, padX: number, startsOf: (id: number) => Int32Array | null | undefined): { id: number; line: number; f: number } | null
 }
 /** a place as a page view is read (its element, and the original's viewport and page box for that page) */

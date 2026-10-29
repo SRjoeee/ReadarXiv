@@ -107,8 +107,6 @@ const stub = (): Shapes & { calls: string[] } => {
     runs: id => { calls.push(`runs ${id}`); return id === 1 ? [run] : [] },
     block: () => { calls.push('block'); return { page: 1, x0: 100, y0: 600, x1: 300, y1: 700 } },
     sentence: () => { calls.push('sentence'); return [] },
-    float: () => { calls.push('float'); return null },
-    floatShapes: () => [],
     fits: () => { calls.push('fits'); return false },
     hit: (page, x, y) => { calls.push(`hit ${page}`); return x >= 100 && x <= 300 && y >= 600 && y <= 700 ? { id: 1, s: -1 } : null },
     click: () => { calls.push('click'); return { id: 1, line: 0, f: 0 } },

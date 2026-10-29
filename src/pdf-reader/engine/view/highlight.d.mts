@@ -10,8 +10,12 @@ export interface Run { id: number; page: number; col: 'F' | 'L' | 'R'; x0: numbe
 /** a side's layout (layoutOf): opaque to its callers */
 export interface Layout { readonly pagesOf: Map<number, number[]> }
 
-/** whether a kind of unit may light by sentence: running text */
+/** whether a kind of unit may light by sentence: running text and captions (a heading, a cell, a drawing's text whole) */
 export declare function bySentence(kind: string | undefined): boolean
+/** the kinds of a drawing's text, which no layout holds (only where it stands, its `drawings`): none lights */
+export declare const DRAWING: ReadonlySet<string>
+/** a table's cell no unit holds as a run of its own: its words' box, one row */
+export declare function cellRunOf(id: number, page: number, col: Run['col'], box: { x0: number; y0: number; x1: number; y1: number; lo: number; hi: number }, lead: number): Run
 /** each page's columns by a rule (pageColumns, today's: from the located units' lines; columnsOfTokens': the text's alone), [null,
  *  page 1, …]; layoutOf reads a rule given for the far push alone */
 export type ColumnRule = (views: number[][], anchors: Map<number, Anchor | null>, kindOf?: (id: number) => string | undefined) => unknown[]

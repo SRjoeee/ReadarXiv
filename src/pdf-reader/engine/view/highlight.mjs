@@ -25,9 +25,23 @@ import { floatShapes } from './floats.mjs'
 
 /** kinds of unit that are no running text: what lies among their words is their float's, not theirs (a figure's ink unit, a
  *  label's: content-classes.mjs FIGURE_KIND) */
-const NOT_RUNNING = new Set(['caption', 'heading', 'cell', 'figure', FIGURE_KIND])
+const NOT_RUNNING = new Set(['heading', 'cell', 'figure', FIGURE_KIND])
+/** kinds of unit a float holds or names, whose words' gaps hold the float's own (a caption's figure's labels between its words in
+ *  the stream): nothing between two of their words is theirs (pageGeometry's filling). A caption lights by sentence, as a body unit
+ *  does (the owner, 2026-10-30, docs/PDF-READER.md §17.1), but keeps out of its float's words */
+const UNFILLED = new Set([...NOT_RUNNING, 'caption'])
 /** whether a kind of unit may light by sentence: running text (hitOf, sentencesFit) */
 export const bySentence = kind => !NOT_RUNNING.has(kind)
+/** the kinds of a drawing's text (TikZ's words, a figure's labels the wrap made units): no layout here holds one (layoutOf,
+ *  layoutParts, layoutPage), its words free, only where it stands kept (`drawings`: page → boxes), which a float takes for its
+ *  own (floats.mjs pageFloats: a float holding one is a figure). So none lights, and none costs a page's geometry or a hit
+ *  anything (the owner, 2026-10-30: a figure's labels not paired unless that is free; measured not to be, docs/PDF-READER.md
+ *  §17.1) */
+export const DRAWING = new Set(['figure', FIGURE_KIND])
+/** a drawing's text's rectangles ({ page, x0, y0, x1, y1 }) kept where it stands */
+function drawnAt(drawings, rects) {
+  for (const { page, x0, y0, x1, y1 } of rects) (drawings.get(page) ?? drawings.set(page, []).get(page)).push({ x0, y0, x1, y1 })
+}
 /** kinds of unit a float holds, which may be wider than the measure (a table, a figure and its caption): their blocks
  *  keep their ink past the column's edge, where a cell past it was clamped to nothing (the review of B1's gate) */
 const FLOATS = new Set(['caption', 'cell', 'figure'])
@@ -73,8 +87,8 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined, { edges 
     if (w.far > r[k]) far.push(k)
   }
   for (let p = pages; p >= 1; p--) if (pageStart[p] > pageStart[p + 1]) pageStart[p] = pageStart[p + 1]
-  const units = []
-  for (const [id, a] of anchors) if (a?.tokens?.length) units.push([id, a.rects])
+  const units = [], drawings = new Map()
+  for (const [id, a] of anchors) if (a?.tokens?.length) { if (DRAWING.has(kindOf(id))) drawnAt(drawings, a.rects); else units.push([id, a.rects]) }
   const part = documentOf(views, units, kindOf), { page, unitsOn, pagesOf } = part
   // a mark set apart after a token on its baseline (tokenizeDocument's `far`) is its ink where it ends at the token's
   // column's text edge: a proof's box set flush right. The columns it is read by: the document part's, or a rule's given
@@ -91,7 +105,7 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined, { edges 
     const k0 = pageStart[p], k1 = pageStart[p + 1]
     pt[p] = { k0, n: k1 - k0, l: l.subarray(k0, k1), r: r.subarray(k0, k1), y: tok.y.subarray(k0, k1), h: tok.h.subarray(k0, k1), top: tok.top.subarray(k0, k1), bottom: tok.bottom.subarray(k0, k1) }
   }
-  return { tok, pageStart, pt, page, anchors, kindOf, unitsOn, pagesOf, cache: new Map(), indents: new Map() }
+  return { tok, pageStart, pt, page, anchors, kindOf, unitsOn, pagesOf, cache: new Map(), indents: new Map(), drawings }
 }
 
 /**
@@ -103,15 +117,16 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined, { edges 
  * `first`: the side's stream, as the parts' units name their streams), rising page by page
  */
 export function pageLayout(kindOf = () => undefined) {
-  return { tok: null, pageStart: null, pt: [null], page: [null], anchors: new Map(), kindOf, unitsOn: [], pagesOf: new Map(), cache: new Map(), indents: new Map(), views: [], told: new Map(), spans: new Map() }
+  return { tok: null, pageStart: null, pt: [null], page: [null], anchors: new Map(), kindOf, unitsOn: [], pagesOf: new Map(), cache: new Map(), indents: new Map(), views: [], told: new Map(), spans: new Map(), drawings: new Map(), drawn: new Set() }
 }
 
 /**
  * The document part, as parts come (format.mjs ReadPart: its `pages` [a, b], `views` of pages a … reach, stride 4, and
  * `left`, its units [id, stream, rects], rects [page, x0, y0, x1, y1]): a page's view and a unit as first told, the
  * document part made again of every unit told so far, by id rising, and every page's geometry let go, to be made again
- * from it — the columns' edges, the half leadings and the floats' frames are the document's. Parts that tell no view
- * and no unit not told before change nothing, and keep every page's geometry (false)
+ * from it — the columns' edges, the half leadings and the floats' frames are the document's. A drawing's text (DRAWING) is
+ * told where it stands alone. Parts that tell no view and no unit not told before change nothing, and keep every page's
+ * geometry (false)
  */
 export function layoutParts(L, parts) {
   let told = false
@@ -121,8 +136,9 @@ export function layoutParts(L, parts) {
       if (!L.views[at]) { L.views[at] = views.slice(4 * i, 4 * i + 4); told = true }
     }
     for (const [id, stream, rects] of left) {
-      if (L.told.has(id)) continue
-      L.told.set(id, { stream, rects: rects.map(([page, x0, y0, x1, y1]) => ({ page, x0, y0, x1, y1 })) })
+      if (L.told.has(id) || L.drawn.has(id)) continue
+      const rs = rects.map(([page, x0, y0, x1, y1]) => ({ page, x0, y0, x1, y1 }))
+      if (DRAWING.has(L.kindOf(id))) { L.drawn.add(id); drawnAt(L.drawings, rs) } else L.told.set(id, { stream, rects: rs })
       told = true
     }
   }
@@ -151,6 +167,7 @@ export function layoutPage(L, p, { first, table, spans }) {
   for (let q = p + 1; q < L.pt.length; q++) { const t = L.pt[q]; if (!t) continue; if (first + n > t.k0) throw new RangeError(`page ${p}'s tokens to ${first + n} reach into page ${q}'s, from ${t.k0}`); break }
   L.pt[p] = { k0: first, n, l: table.l, r: table.r, y: table.y, h: table.h, top: table.top, bottom: table.bottom }
   for (const [id, tokens] of spans) {
+    if (DRAWING.has(L.kindOf(id))) continue
     ;(L.spans.get(id) ?? L.spans.set(id, new Map()).get(id)).set(p, tokens)
     const u = L.told.get(id)
     if (u) L.anchors.get(id).tokens = tokensOf(L, id, u.stream)
@@ -166,6 +183,7 @@ export function layoutPage(L, p, { first, table, spans }) {
 export function layoutSpans(L, p, spans) {
   if (!L.pt[p]) return false
   for (const [id, tokens] of spans) {
+    if (DRAWING.has(L.kindOf(id))) continue
     ;(L.spans.get(id) ?? L.spans.set(id, new Map()).get(id)).set(p, tokens)
     const u = L.told.get(id)
     if (u) L.anchors.get(id).tokens = tokensOf(L, id, u.stream)
@@ -461,7 +479,7 @@ function unitRuns(L, p, at, id, toks) {
   // the words around it (a limit under an arrow, 2608.08350). Not where another unit's words stand among them, nor on a
   // line holding another unit's words; not for a caption, a heading, a cell: their float would come with them
   let ks = toks
-  if (!NOT_RUNNING.has(L.kindOf(id))) {
+  if (!UNFILLED.has(L.kindOf(id))) {
     ks = []
     for (let i = 0; i < toks.length; i++) {
       const a = toks[i], b = toks[i + 1]
@@ -474,10 +492,12 @@ function unitRuns(L, p, at, id, toks) {
     }
   }
   // the unit's head: the words before its first on its line that are no unit's, after any other unit's there — a
-  // theorem's head, a list's label, a heading's number, a caption's label, all before the start mark
+  // theorem's head, a list's label, a heading's number, a caption's label, all before the start mark. Never a cell's: the
+  // words before it on its row are cells of their own (a table lights cell by cell, the owner's ruling of 2026-10-30;
+  // floats.mjs cellsOf)
   let head = null
   const first = L.anchors.get(id).tokens[0]
-  if (first === toks[0]) {
+  if (first === toks[0] && L.kindOf(id) !== 'cell') {
     for (let k = lines[line(first)].k0; k < first; k++) {
       if (owner[k - k0] !== -1) head = null
       else head = Math.min(head ?? Infinity, inkL[k - k0])
@@ -614,6 +634,10 @@ function runOf(id, page, col, rows, e, lead, clamp) {
   for (let i = 1; i < rows.length; i++) mids.push(Math.min((rows[i - 1].y0 + rows[i].y1) / 2, i > 1 ? mids[i - 2] : Infinity))
   return { id, page, col, x0, x1, top: rows[0].y1, bottom: rows.at(-1).y0, hi: rows[0].hi, lo: rows.at(-1).lo, lead, rows, mids, head: null, toks: null, rowOf: null, sx0: x0, sx1: x1 }
 }
+
+/** a table's cell no unit holds as a run of its own (view/floats.mjs pageFloats): its words' box, one row, lit whole as a cell unit
+ *  is, its half leading the page's cells' */
+export const cellRunOf = (id, page, col, box, lead) => runOf(id, page, col, [{ ...box, r0: null, r1: null }], { x0: -Infinity, x1: Infinity }, lead, false)
 
 /** a unit's runs on a side, page by page (each page's geometry made on its first use) */
 export function runsOf(L, id) {
@@ -857,10 +881,10 @@ function spanEnd(L, g, run, i, t, padX) {
 }
 /**
  * A row's reach on its left (`right` 0) or its right (1), past its ink at `ink`: reachOf's, or null where a float's
- * painted shape (floats.mjs floatShapes: a figure's outline, a table's wash with its caption) stands in the part past
- * the ink, across the row's band — the pointer lights the float there, and a sentence widened under it would be painted
- * where it is not lit (B3's follow-up: none on the ten papers; a figure beside a display that opens a page). The page's
- * floats come with its first drawing: until then none is seen, and the reader paints again when they come
+ * shape (floats.mjs floatShapes: a figure's picture, a table's body) stands in the part past the ink, across the row's
+ * band — the pointer finds the float's cells or nothing there, and a sentence widened under it would be painted where it
+ * is not lit (B3's follow-up: none on the ten papers; a figure beside a display that opens a page). The page's floats
+ * come with its first drawing: until then none is seen, and the reader paints again when they come
  */
 function reachAt(L, run, i, right, ink, padX) {
   const e = right ? run.rows[i].r1 : run.rows[i].r0
@@ -951,9 +975,9 @@ function outline(rects, a, b, radius) {
  * anywhere in what is painted is the unit's: in a block's pads, in the white space beside a display or between two of
  * its lines, on a float set inside a paragraph's block (a wrapfigure), and in a sentence's rows where they reach past
  * the block to the unit's text edge (the final review of the highlight, M4) — levelled by the unit, where before the
- * blocks (B1) they went by what is around them (placeAt). Null where nothing is painted. A float's wash or outline
- * (floats.mjs) is no unit's block: a click on it, off its cells' and its caption's, goes by what is around it (placeAt:
- * a figure by its twin, a table by its distance from its caption), finer than levelling the float by its caption
+ * blocks (B1) they went by what is around them (placeAt). Null where nothing is painted. A float's body (floats.mjs) is
+ * no unit's block: a click on it, off its cells' and its caption's, goes by what is around it (placeAt: a figure by its
+ * twin, a table by its distance from its caption), finer than levelling the float by its caption
  */
 export function clickOf(L, p, x, y, padX, startsOf = () => null) {
   const hit = hitOf(L, p, x, y, padX, startsOf)

@@ -272,8 +272,9 @@
 //     stored copy of 7's is taken for one of 8's; 37 (the owner's case 2610.35877v1): a biblatex bibliography's entries are units,
 //     kind `inkreferences`, one an entry, cut by the compile's points before each (marks.mjs POINTS_TEX `bi<n>`, layout/ledger.mjs
 //     `entry`), the references' class, where they were orphan text in ink units of their own grouping, always translated, its
-//     heading run into the first: every such paper's bibliography is translated again
-export const PIPELINE_VERSION = '37'
+//     heading run into the first: every such paper's bibliography is translated again; 38 with TRANSLATE_VERSION 9 (a caption cut
+//     into sentences on the tags wire), so that no stored copy of 8's is taken for one of 9's
+export const PIPELINE_VERSION = '38'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

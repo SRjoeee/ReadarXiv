@@ -27,12 +27,25 @@ export const NAME_KIND = 'name'
  * it (run.mjs paintNames), the left lights the name's original by its box (view/shapes.mjs createShapes), as a heading
  */
 export const NAME_ID_FROM = 2 ** 22
-/** the greatest occurrence an id is made for: past it, a name is lit nowhere */
-export const NAME_OCCURRENCE_MAX = 2 ** 31 - 1 - NAME_ID_FROM
+/** the greatest occurrence an id is made for: past it, a name is lit nowhere (below CELL_ID_FROM, the tables' cells' range) */
+export const NAME_OCCURRENCE_MAX = 2 ** 30 - 1 - NAME_ID_FROM
 /** an occurrence's hover id, or null for one that is not an occurrence or is past NAME_OCCURRENCE_MAX */
 export const nameOccurrenceId = occurrence => (Number.isInteger(occurrence) && occurrence >= 0 && occurrence <= NAME_OCCURRENCE_MAX ? NAME_ID_FROM + occurrence : null)
 /** whether a hover id is a babel name's occurrence's */
-export const isNameOccurrence = id => Number.isInteger(id) && id >= NAME_ID_FROM
+export const isNameOccurrence = id => Number.isInteger(id) && id >= NAME_ID_FROM && id < CELL_ID_FROM
+/**
+ * The hover's ids of a table's cells no unit holds (a cell of numbers, of a formula, of one letter: the front end makes no unit of
+ * fewer than two letters, latex-front.mjs), lit cell by cell as a cell unit is, at its own place on both panes (the owner,
+ * 2026-10-30: a table corresponds cell to cell, its cells of numbers too, docs/PDF-READER.md §17.1): CELL_ID_FROM + its page ×
+ * CELLS_PAGE + its place among its page's (view/floats.mjs pageFloats), past every name's and below 2^31 (PAGES_MAX pages of
+ * CELLS_PAGE cells at most)
+ */
+export const CELL_ID_FROM = 2 ** 30, CELLS_PAGE = 2 ** 16
+/** a cell's hover id, or null for a page or a place past the range */
+export const tableCellId = (page, k) => (Number.isInteger(page) && page >= 1 && page < 2 ** 14 && Number.isInteger(k) && k >= 0 && k < CELLS_PAGE ? CELL_ID_FROM + page * CELLS_PAGE + k : null)
+/** whether a hover id is a table's cell's, and its page */
+export const isTableCell = id => Number.isInteger(id) && id >= CELL_ID_FROM && id < 2 ** 31
+export const tableCellPage = id => Math.floor((id - CELL_ID_FROM) / CELLS_PAGE)
 /** a unit's kind, a lower-case word */
 const KIND = /^[a-z]{1,32}$/
 /** an ink unit's kind (layout/ink-units.mjs INK_KIND's): `ink` and its class */

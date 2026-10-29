@@ -1345,33 +1345,65 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
 - **The pointer lights; nothing else does.** Hovering a sentence lights it and its translation on both sides; hovering
   a unit that lights whole lights it whole on both. A click holds nothing — the pin drawn in the draft round was
   dropped by the maintainer on 2026-10-01 after a test build; a click only levels the two panes by what lies under it
-  (anywhere inside what the highlight paints is its unit's; a float's wash or outline levels by what is around it).
+  (anywhere inside what the highlight paints is its unit's; a float's body levels by what is around it).
 - **Sentences**, where a unit's sentences are known on both sides; else **the whole unit** (paragraph, theorem,
-  footnote, list item), decided for both sides together — a unit never lights by sentence on one side and whole on the
-  other. A unit of one sentence lights as a sentence shape (its first row from where its text begins).
-- **Whole, whatever their sentences**: headings, captions, table cells and a drawing's text (TikZ labels).
-- **Every drawn thing lights its original, whatever its kind** (the owner's report of 2026-10-29 on 2010.11929v2 p9: its
-  References' Chinese lit nothing on either side, its Conclusion's and Acknowledgements' did). A source unit and an ink unit (its
+  footnote, list item, caption), decided for both sides together — a unit never lights by sentence on one side and whole
+  on the other. A unit of one sentence lights as a sentence shape (its first row from where its text begins).
+- **Whole, whatever their sentences**: headings and table cells. A drawing's text lights nothing (below).
+- **Every drawn thing lights its original, whatever its kind, but a figure's text** (below; the owner's report of
+  2026-10-29 on 2010.11929v2 p9: its References' Chinese lit nothing on either side, its Conclusion's and
+  Acknowledgements' did). A source unit and an ink unit (its
   left anchor arXiv's tokens on its lines, `ink-pass.mjs` `inkAnchors`) light as units. A figure's level label is anchored by
   arXiv's tokens in its run's band (`figureAnchors`, PIPELINE 31) and its translation's words are under its unit's id
   (`run.mjs` `paintFigures`); its part holds its left anchor beside its figure row, never a layout row of it (`format.mjs`
   `partShape`; the chain tells its row once, apart from its left unit, `figured`), and the layer's units leave it to its row (the
   web's re-pin at 3b2aa271: every part with a figure unit was refused its layout, `figures[0][0]: a unit of the left or of the
-  layout`, until the check took the left anchor); it is held by its float as a drawing's TikZ text is (`floats.mjs` `HELD`: as running text it stopped
-  the caption's walk, a diagram of labelled boxes losing its float), so hovering it lights the figure whole, and one outside
-  every float lights alone; a turned label is in no text layer, and the figure's float lights it. A babel name (Abstract,
+  layout`, until the check took the left anchor). Since 2026-10-30 it lights nothing (below): the server's anchoring and the
+  layer's drawing of it stay, so that lighting it later needs no paper prepared again. A babel name (Abstract,
   References, Contents, …) is no unit of the bundle's: each occurrence lights as a heading under a hover id of its own
   (`units.mjs` `nameOccurrenceId`: from `NAME_ID_FROM`, 2^22, past every id a bundle holds, a late chunk's too, and below the
   view's Int32 owners), on the left by the tokens of its page in its box, which the parts' layouts give (`view/shapes.mjs`
   `createShapes`, with no change to the wire), on the right by the words the layer drew of it (`paintNames`), and where the
   layer left it the original's (no word of the target's, unfit, a face refused) by the left's geometry of it, the page's units
   shown as the original holding its id (`layerShapes`); one that leads a unit (RUN_IN) lights with that unit.
-- **Tables, algorithms and figures** light whole with their captions, on both sides: a table or an algorithm one wash
-  over it to its rules, with its caption; a figure outlined (1.5 px), its caption washed — a wash multiplied into a
-  figure would change its colours. Hovering the float, its caption or one of its cells lights it. A subcaption lights
-  its own panel with it; the main caption lights the whole figure, every panel and subcaption. A float lights by its
-  caption's id, which both sides share; where it is found on one side only, its caption lights alone on the other.
-  A caption's float is a figure on both sides when it is one on either (outlined on both), once both pages are drawn.
+- **Figures and tables light by what they hold, never whole** (the owner, 2026-10-30, on 2610.35877v1's Figure 4 and
+  Table 2: captions and a table's notes 「按正常的正文单元去按句子对应」; the picture 「悬停图片处不用高亮（因为左右其实已经对照了）」;
+  a figure's text labels not now, 「除非对性能开销是免费的」). This replaces the maintainer's decision of 2026-10-01, a float lit
+  whole with its caption (a table washed over to its rules, a figure outlined and its caption washed):
+  - **A caption** lights as a body unit does, by sentence where both sides have its sentences, and its float never with it;
+    a subcaption so too. On every engine: the tags path (Google, an LLM) cuts a caption into sentences as it cuts a
+    paragraph (`mt.mjs` `translateUnits` by `highlight.mjs` `bySentence`), where before it sent a caption whole, lit whole
+    on Google and on an LLM whatever the view did; the markers wire (Microsoft, whose own sentence lengths always covered
+    captions) is byte for byte what it was, every unit's (3 358 units of twelve papers, 2026-10-30, where the tags wire's
+    cuts changed for their 135 captions and nothing else). `TRANSLATE_VERSION` 9 and `PIPELINE_VERSION` 38 come with it
+    (§18.2): every paper prepared and translated again once, in the release that re-keys anyway. **A table's notes** are body
+    units already (a paragraph or a footnote under the table): they stop the caption's walk and light by sentence.
+  - **A figure's picture** lights nothing, nor its panels: the two panes stand side by side already. No outline is drawn.
+  - **A table** lights cell by cell, and a gap between two cells or a rule nothing. A cell the front end made a unit lights
+    alone; so does one it did not — a cell of numbers, of a formula, of one letter (a unit has two letters at least): the
+    table's words no unit holds, one cell while they stand on one line within 0.6 of their height of each other, and
+    within 0.4 where those words leave a column free between them on every row of the table (`floats.mjs` `cellsOf`: a
+    word space is a third of the height, two columns' `\tabcolsep` more than one; columns set tight, a decimal point or a ±
+    every row sets alike stays in its cell). On the ten papers, two numbers more than 0.4 apart stay one cell twice, both
+    on our typesetting's side (2026-10-30, the rule as Codex's review left it). Lit whole at the same
+    place on both panes under a hover id of its own (`units.mjs` `tableCellId`: from `CELL_ID_FROM`, 2^30, 2^16 a page,
+    below the view's Int32 owners and past every name's), the right's run a copy of the left's (§17.8).
+  - **A figure's text lights nothing** (TikZ's words, a figure's labels the wrap made units): no layout holds it, its words
+    free as a table's rows are, and only where it stands is kept, which makes its float a figure (`highlight.mjs`
+    `DRAWING`). Pairing it was measured, and it is not free: the production pass in Docker, its parts and left parts read
+    back, and the reader's shapes made of them with the figure units and without, medians of 9 rounds, a hit over a 4 pt
+    grid of each figure page (2026-10-30):
+
+    | Paper | Figure units (anchored) | Shapes built, with / without | A figure page's geometry | A hit | Heap |
+    |---|---|---|---|---|---|
+    | 2610.35877v1 | 101 (85), pages 3, 8, 9, 15, 18 | 1.39 / 1.07 ms | 0.79 / 0.19 ms | 0.14 / 0.07 µs | 760 / 620 KiB |
+    | 2010.11929v2 | 87 (69), pages 6–9, 16–20 | 1.88 / 1.76 ms | 0.47 / 0.34 ms | 0.12 / 0.09 µs | within the collector's noise |
+
+    A hit costs twice as much, a figure page's geometry up to four times, the shapes a third more: the labels are left
+    unlit and unheld, and they cost nothing. A turned label was in no text layer before and is in none now.
+  - A float is still found on both sides, from a page's first drawing (§17.3): it is where the pointer finds a table's
+    cells or nothing, and what a sentence's row keeps out of. A caption's float is a figure on both sides when it is one on
+    either, once both pages are drawn.
 
 ### 17.2 Where the sentences come from
 
@@ -1427,7 +1459,9 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   page of two columns, where a full-width line does (revtex's widetext); rows are lines merged where they overlap, so a
   display's numerator, denominator, limits, scripts and number are one row. What stands between two of a unit's words
   and is no unit's is its own (an inline formula's pieces), in running text only and never across another unit's line;
-  the words before its first one on its line (a theorem's head, a list's label) too.
+  the words before its first one on its line (a theorem's head, a list's label) too, but a cell's: the words before a
+  cell on its row are cells of their own (2026-10-30; before, a cell took its row's cells of numbers before it, unseen
+  while a cell lit its whole table).
 - **The column's text edges** come from every page's long lines, per page size, parity and column, so a page of
   displays takes the document's measure and a landscape page keeps its own; a run reaches up to 6 units past an edge
   (an overfull display) and snaps to it within 3. A float's cells keep their ink past the edge.
@@ -1463,15 +1497,25 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   light whole all lit wrongly before — 16 a display's line made one row with the text line where the next sentence
   begins (§17.7), 5 runs over each other, 3 the left's pairs putting a later sentence's word above an earlier one's row.
 - **The hit test is the paint**: the same shapes, the smaller unit winning where two overlap (a heading run into its
-  paragraph); a float's shape wins over a larger block, a smaller block over the float. On the ten papers 0 holes in
+  paragraph). Inside a float's body (§17.1) the pointer finds its caption where the caption's block reaches in, a table's
+  cell, or a smaller unit's block; else nothing — never the float. On the ten papers 0 holes in
   37.3 M points of painted blocks (7–16 % of points lit nothing or a neighbour before), in 25.3 M of sentence shapes and
   in 6.2 M of floats' shapes, 0 points lit as another sentence of the unit, 0 points of running text taken by a float,
-  and every anchored unit lit (1 829 of 2 553 on both sides).
+  and every anchored unit lit (1 829 of 2 553 on both sides). Under the rule of 2026-10-30 (the gate that day): 999 units
+  aligned by sentence, 83 more than before (the captions), with 0 holes and 0 points of another sentence in 24.6 M
+  points of sentence shapes and no unit more lit whole for its shapes (11, as before); of 5.26 M points of floats' bodies
+  4.18 M light nothing (a figure's picture, a table's gaps and rules), 0.79 M a cell no unit holds, 0.29 M a cell unit,
+  5 878 a caption and 250 a smaller unit; every cell lights itself at its middle (408 cell units, 4 512 cells no unit
+  holds), and no unit's point is taken by a float. A drawing's text, 28 units of two papers, lights on neither side by
+  rule. The blocks that moved are those: the drawings' (gone), the 124 cells that had taken a head (58 on the left, 66 on
+  the right; four fewer pads overlapping another block), and one heading's pad on one page of 2608.12502's right, 0.38
+  units taller on each side, a drawing's lines no longer counting toward its page's leading.
 - **Floats** (`floats.mjs`), made on a page's first drawing from the operator list it was drawn by (its figures, its
   rules, its other marks): each figure to its nearest caption only, the one just below first; from each caption a walk
   away from it over what lies across it — lines no running text owns, figures, marks, rules — stopping at another unit's
   line, another caption's figure or a gap, and at its own last rule. A float that holds a figure or a drawing (3 % of it
-  marked outside its text) is a figure; one of text and rules a table. Found on the ten papers: figures 46 of 47, tables
+  marked outside its text, or a drawing's text standing in it) is a figure; one of text and rules a table, whose words no
+  unit holds are its cells (`cellsOf`), each a run of one row. Found on the ten papers: figures 46 of 47, tables
   52 of 52, algorithms 2 of 2.
 
 ### 17.4 The pointer's path
@@ -1548,8 +1592,12 @@ within noise.
 
 - A grid of panels in several rows with the subcaptions over their panels pairs them wrongly (each subcaption is read
   with the panel under it).
-- A float found on one side only lights its caption alone on the other; a plain-word inline diagram marked under 3 % is
-  washed as a table; a caption between two tables takes the one below.
+- A table the left's floats miss lights its cell units alone, and its cells of numbers on neither pane (the right's floats
+  are the left's); a plain-word inline diagram marked under 3 % is taken for a table, its words lit as cells; a caption
+  between two tables takes the one below.
+- A cell of numbers is the words no unit holds on one line within 0.6 of their height (0.4 across a column the table leaves
+  free): one set over two lines lights as two cells, and two columns set closer than 0.4 of their height, or than 0.6 where
+  a cell no unit holds runs across the column between them on another row, light as one.
 - An equation number set on its own line below its display (2608.09746 #27) is no unit's and is not lit.
 - A table at a page's head whose first row is single letters over numbers, after a display that closed the page before,
   is taken by that display's walk: no distance tells them apart (A1, measured: lead walks' first gaps up to 19.6 pt).
@@ -1592,8 +1640,10 @@ within noise.
 - **The right, mirrored** (`mirror`): until the layer's pages bring words of their own, the right's shapes are a layout of
   the right's own over copies of the left's tokens and rectangles, following the left as it is told. Its blocks equal
   the left's from run objects of its own: the paint keeps what it drew by the run, and a run shared would move the left's
-  element into the right's pane. A float passes through (the right's floats are the left's), and the right's sentence
-  shapes keep from under it as the left's do. Where its place shows the original, the mirror's starts are the left's (the
+  element into the right's pane. The right's floats are the left's, and the right's sentence shapes keep from under them as
+  the left's do; a table's cell no unit holds is the left's run of it copied, on a page the layer laid as well (its numbers
+  are the original's ink there) where it stands on no unit's row of ours and the page's lines did not move, as a unit shown
+  as the original's is copied (`layerShapes` `make`); elsewhere it lights on the left alone. Where its place shows the original, the mirror's starts are the left's (the
   same tokens), so a unit lights by sentence on both panes as it does on the left.
 - **The left's starts** are its units' pairs (the left part's runs of words to tokens) read as `sentenceStarts` reads an
   anchor's, once every page the unit is on has come. The reader takes every pair shipped, so the producer ships them only
@@ -1667,9 +1717,9 @@ The edge cases, decided:
 | `BUNDLE5` (`layer-proto/format.mjs`, `'11'`: a figure row carries its set and its room, §19.12; 10 the ink units, the parts' figure units and the head's ledger; 9 a part's cell rules in place of the add-on, our page wrapped by optional content) | reader contract | the layer route's objects: a head's, a part's, a left part's and a catalog's shape, the figure rows (the units chunks have a format of their own, `UNITS_FORMAT`, raised only by their shape); a reader reads 7's, 9's and 10's objects too (`BUNDLES_READ`) | the request (`CTAG5`, `b<BUNDLE5>-j<PDFJS>`: §18.4) and the R2 key (`VTAG5`) | a bundle of the old format is not found under the new `CTAG5` and is prepared again; readers older than it get `unknown-versions` until they update |
 | `BUNDLE` (`layer-proto/bundle.mjs`, `'3'`: the layout file's schema 3, the paper's `\lineskip` and `\lineskiplimit`; 2 its babel names, D1a. The file's schemas 4 (`PH_FLAG.JOINED` and `PH_FLAG.OUTSIDE`) and 5 (a found placeholder's fill, its row's last number where its glyphs are not black: 0xRRGGBB, or -1 where no one colour holds more than half of them) are not a contract of their own: `b3` names schemas 3 to 5, each reader's `parseLayout` refusing the others', so only this engine's reader reads a `b3` bundle holding schema 5) | reader contract | the one-file bundle `readBundle` reads (`CTAG`, `VTAG`): its shape, the units' tuple, kinds and flags, the layout file's schema, the left geometry | its request and key (§18.4) | readers older than it refuse it until they update |
 | `PDFJS` (`pipeline/versions.mjs`, `'6.3.289'`) | reader contract | the PDF.js whose reading the layout and the wrap are made against | as `BUNDLE` | as `BUNDLE` |
-| `PIPELINE_VERSION` (`pipeline/versions.mjs`, `'37'`) | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
+| `PIPELINE_VERSION` (`pipeline/versions.mjs`, `'38'`) | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
 | `LAYOUT` (`layout/file.mjs`, `'31'`: a page whose lines moved across its breaks through compile drift drawn, `carry.mjs` `lineCheckOf`, §19.7; 30 a footnote's call after the last word found by its raised mark, a biblatex entry's unit of the new kind `inkreferences`, §19.7; 29 backref's list after an entry a row of its list piece's, §19.13; 28 a Type 3 glyph's ink its char procedure's paths, `layout/ink.mjs` `type3Box`, #122-1; 27 a command that sets the punctuation after it before its ink marked around the pair, a macro TeX said sets no ink EMPTY, a piece alone at an entry's end given the lines it runs onto, a macro that sets one punctuation mark drawn as it, §19.7; 26 a unit TeX set flush left or flush right flagged so, `UNIT_FLAG.FLUSH_LEFT` and `UNIT_FLAG.FLUSH_RIGHT`, and a paragraph a box's close ends read by its own skips, §18.1, §18.8; 25 the release sweep of 2026-10-29, a line too short to be evidence found on no other page, a word a hyphen cuts going on below, an ink unit's paragraph one unit, a math face told by its family's names, `layer-proto/fonts.mjs` `classifyFont`), `REMOVAL` (`pipeline/versions.mjs`, `'17'`: a biblatex entry's ink its unit's groups, the point before each in our page; 16 backref's list after an entry its list piece's ink, §19.13; 15 a level figure unit on its column's edge or centred in it anchored there, `figure-text.mjs` `columnAnchorOf`, §19.12; 14 a unit's text owns the rules TeX painted on its own lines, an OT1 `\_`, an underline, own.mjs MR 2b, #117; 13 a punctuation mark a command set before its own ink its unit's text, not the piece's, §19.9; 12 a macro TeX said sets no ink is no placeholder of ink, an opening point alone at its unit's end owns its lines up to TeX's skip before another block; 8 no add-on, a part's or a bundle's cell rules in its place, our page wrapped by optional content, §11.8, §19.9) | extraction | the layout maker (the file's own schema is `LAYOUT_SCHEMA`, 5); how a drawn unit's ink is taken away | the R2 key | bundles made again lazily |
-| `TRANSLATE_VERSION` (`translate/version.mjs`, `'8'`: a run-in label where a sentence begins past the unit's head keeps its markers on the markers wire (`mt.mjs` `classOf`), 2010.11929v2's "Center:" and "Right:"; `'7'`: backref's list after an entry on no wire, put back after the translation with an en space before it, §19.13; `'6'`: every content class translated once whatever the language, the author block for every target and a bibliography's entries; `'5'`: a display's own stop written after its marker and taken off the reply; `'4'`: a styled pair whose two ends stand where the wire has a marker anyway keeps its markers; `'3'`: a sentence whose words change style sent whole, the pairs inside it on no wire; `'2'`: a formula split across inline formulas sent as one marker) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
+| `TRANSLATE_VERSION` (`translate/version.mjs`, `'9'`: a caption cut into sentences on the tags wire as a paragraph is, §17.1; `'8'`: a run-in label where a sentence begins past the unit's head keeps its markers on the markers wire (`mt.mjs` `classOf`), 2010.11929v2's "Center:" and "Right:"; `'7'`: backref's list after an entry on no wire, put back after the translation with an en space before it, §19.13; `'6'`: every content class translated once whatever the language, the author block for every target and a bibliography's entries; `'5'`: a display's own stop written after its marker and taken off the reply; `'4'`: a styled pair whose two ends stand where the wire has a marker anyway keeps its markers; `'3'`: a sentence whose words change style sent whole, the pairs inside it on no wire; `'2'`: a formula split across inline formulas sent as one marker) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
 | `RULES_SCHEMA` (`rules/layout.mjs`, `9`: the languages of a script the engine set, the owner's ruling of 2026-10-29: `latinPatterns` takes Italian's, Dutch's, Polish's, Turkish's, Indonesian's (Malay's too, as babel's malay.ldf takes them), Czech's and Swedish's, `cyrillicPatterns` added, a Cyrillic word's hyphenation, Russian's rules or Ukrainian's or Bulgarian's own patterns, and `hyphenation` their minimums as TeX applies them under babel; 8: `latinPatterns` takes French's, Spanish's and Portuguese's own, hyph-utf8's (the three were hyphenated with English's, #121-4), and `hyphenation` their minimums as babel sets them, French 2 and 3, Spanish 2 and 2, Portuguese 2 and 3; 7: `evenPitch` and `keepAlign` added, lane B's B1 and B2, the ruling of 2026-10-29, §18.8; 6: `cjkFaces` holds its group alone, a CJK script drawn at Regular and Bold beside every English family, its `light` designs and its unread `kai` gone, the ruling of 2026-10-29; 5 before it: `fillLeadRel` added, the fill's top relative to the original's pitch; 4: `adaptiveFill.band` read against the page's own paragraphs, 1b-C) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
 | the set's `version` | layout | the values | its immutable URL | readers take it on their next load |
 | `RULES_VERSION` (`src/core/rules/latexml.ts`) | HTML extraction | the HTML page's rule file | the HTML page's per-text key only | as DESIGN §5.5 |

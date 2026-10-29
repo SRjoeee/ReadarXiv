@@ -6,17 +6,16 @@ import type { Layout, PageTable, PartRects, Run } from './highlight.mjs'
 /** a rectangle on one of a pane's pages, in its PDF units */
 export interface PageBox { page: number; x0: number; y0: number; x1: number; y1: number }
 /** what a pane paints for the highlight, in its own pages' coordinates (the shapes seam, lighting.mjs's): a unit's runs
- *  (the objects the paint keeps what it drew by), a run's block, a sentence's shape by the unit's starts, the float a
- *  unit lights whole and what it paints, whether a unit's shapes hold its words by its starts (undefined where that is
- *  not to be told in a frame), what a point lights and what a click there levels by */
-export interface Shapes<R extends { page: number } = { page: number }, F extends { page: number } = { page: number }> {
+ *  (the objects the paint keeps what it drew by; a table's cell no unit holds by its id, units.mjs tableCellId), a run's
+ *  block, a sentence's shape by the unit's starts, whether a unit's shapes hold its words by its starts (undefined where
+ *  that is not to be told in a frame), what a point lights and what a click there levels by. No float is painted (the
+ *  owner, 2026-10-30: docs/PDF-READER.md §17.1) */
+export interface Shapes<R extends { page: number } = { page: number }> {
   runs(id: number): readonly R[]
   block(run: R, padX: number): PageBox
   sentence(run: R, starts: Int32Array, s: number, padX: number): PageBox[]
-  float(id: number): F | null
-  floatShapes(f: F, padX: number): (PageBox & { frame: boolean })[]
   fits(id: number, starts: Int32Array, now: boolean): boolean | undefined
-  hit(page: number, x: number, y: number, padX: number, startsOf: (id: number) => Int32Array | null | undefined): { id: number; s: number; float?: F } | null
+  hit(page: number, x: number, y: number, padX: number, startsOf: (id: number) => Int32Array | null | undefined): { id: number; s: number } | null
   click(page: number, x: number, y: number, padX: number, startsOf: (id: number) => Int32Array | null | undefined): { id: number; line: number; f: number } | null
 }
 /** a left part as a page's part of a layout: the side's token ids from `first`; each unit's tokens, and its words beside
@@ -29,7 +28,7 @@ export interface LeftPageInput {
 /** a side's shapes made page by page from the layer's wire */
 export interface SideShapes {
   readonly layout: Layout
-  readonly shapes: Shapes<Run, Float>
+  readonly shapes: Shapes<Run>
   /** the document part as the parts come (format.mjs ReadPart), in page order */
   addParts(parts: readonly PartRects[]): void
   /** a page's left part (the door's leftPageOf); false where it was in already or is refused, malformed or overlapping
@@ -49,7 +48,7 @@ export interface SideShapes {
   floats(page: number, regions?: Box[], paths?: Partial<Paths>): void
 }
 /** the right's shapes, the left's mirrored over copies of its own */
-export interface MirroredShapes { readonly layout: Layout; readonly shapes: Shapes<Run, Float>; forget(page: number): void; dispose(): void }
+export interface MirroredShapes { readonly layout: Layout; readonly shapes: Shapes<Run>; forget(page: number): void; dispose(): void }
 
 /** a laid page's words as the right's shapes read them (the door's PageWords) */
 export interface LaidWords {
@@ -64,7 +63,7 @@ export interface LaidWords {
 /** the right's shapes on the layer: the left's mirrored where its place shows the original, its own over a laid page's words */
 export interface LayerShapes {
   readonly layout: Layout
-  readonly shapes: Shapes<Run, Float>
+  readonly shapes: Shapes<Run>
   /** a laid page's words (once a door): its part made once its left part is in; false where it was given already */
   lay(page: number, words: LaidWords): boolean
   laid(page: number): boolean
@@ -85,7 +84,7 @@ export interface LayerShapes {
   dispose(): void
 }
 export declare function layerShapes(source: SideShapes): LayerShapes
-export declare function pdfShapes(layout: Layout): Shapes<Run, Float>
+export declare function pdfShapes(layout: Layout): Shapes<Run>
 /** a unit's starts from its pairs (anchors.mjs sentenceStarts), each paired token's sentence by its word: the left's on the layer
  *  and a layout made whole alike */
 export declare function startsOfPairs(anchor: { tokens: readonly number[]; pairs?: ReadonlyMap<number, number>; bounded?: boolean; coverage?: number } | null | undefined, text: string, offsets: readonly number[] | undefined): Int32Array | null
