@@ -44,6 +44,11 @@ const HOW = Object.fromEntries(OWNED_HOW.map((h, i) => [h, i]))
 const BRACKET = /^([bf])([se])\d+$/
 /** a babel name's point (marks.mjs NAMES_TEX): no piece's next mark, its text no unit's */
 const NAME_POINT = /^n\d+\.[^.]+\.[se]$/
+/** where other text begins that no unit's mark opens: a babel name's start (a heading's own word, "References") and a biblatex
+ *  entry's (marks.mjs POINTS_TEX `bi<n>`): a piece alone at its unit's end owns nothing past one on its page */
+const BEGINS = /^(?:n\d+\.[^.]+\.s|bi\d+)$/
+/** a biblatex entry's point: no piece's next mark either, its entry no unit of the source */
+const BIB_ITEM = /^bi\d+$/
 /** a piece's opening point: a placeholder's (p) or a footnote call's (n), by its unit and source piece index */
 const OPENING = /^([pn])(\d+)\.(\d+)a$/
 /** a unit's start mark: MARK_DEF's, a cell's, a heading's */
@@ -190,7 +195,9 @@ export function regionsOf(page) {
  *   mark must be its unit's next one (`ends`), or a later unit's start mark — MARK_DEF sets a unit's end mark before a
  *   display that ends it — and then what stands on that mark's line before it is that unit's label (a heading's number,
  *   an item's mark), not the piece's; or, where that mark is outside the bodies (a footnote's), the column's body's end;
- *   no unmarked visible piece may come between (`blocked`). Nothing at all before the
+ *   no unmarked visible piece may come between (`blocked`). Past its unit's end mark (a display that ends its unit), it ends
+ *   where a heading's babel name or a biblatex entry begins after it on its page, before any next mark: that text is no
+ *   unit's of the source, and none of it the display's. Nothing at all before the
  *   next point is a piece of nothing; nothing before the text after it, with glyphs there, is none (REVTeX sets the
  *   punctuation after a citation before its number).
  * - Past its column's end (pastColumn): an opening point alone in a column's body whose next mark lies past that body's
@@ -232,7 +239,7 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
   pages.forEach((p, i) => p.points.forEach((pt, q) => {
     const list = where.get(pt.name)
     if (list) list.push([i + 1, q]); else where.set(pt.name, [[i + 1, q]])
-    if (!BRACKET.test(pt.name) && !NAME_POINT.test(pt.name)) seq.push([i + 1, q])
+    if (!BRACKET.test(pt.name) && !NAME_POINT.test(pt.name) && !BIB_ITEM.test(pt.name)) seq.push([i + 1, q])
   }))
   const rank = new Map()
   seq.forEach(([p, q], r) => rank.set(`${p}|${q}`, r))
@@ -307,6 +314,20 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
     if (f.closing) { out.set(name, none(HOW['closing point not read'])); continue }
     /** an opening point alone: to the next mark's point, on its page */
     const alone = () => {
+      // (past its unit's end mark — MARK_DEF sets it before a display that ends the unit —, nothing after it is its unit's: the
+      // text that begins on its page after it with no unit's mark, a heading's babel name or a biblatex entry, is another's.
+      // 2608.08872v1's proof ends in a display, and the whole bibliography after it on the page, its "References" and every
+      // entry, was that display's ink. A name before the unit's end mark is the unit's own text)
+      const past = !f.want && [`${m[2]}e`, `t${m[2]}e`, `h${m[2]}e`].some(n => (where.get(n) ?? []).some(([p, q]) => p < pa || (p === pa && q < qa)))
+      if (past) {
+        const pts = pages[pa - 1].points, next = seq[(rank.get(`${pa}|${qa}`) ?? -2) + 1]
+        for (let q = qa + 1; q < pts.length && !(next && next[0] === pa && q >= next[1]); q++) {
+          if (!BEGINS.test(pts[q].name)) continue
+          const { glyphs, boxes } = takeTo([pa, q])
+          if (jumps(glyphs)) return none(HOW['across a column, unbracketed'])
+          return f.blocked && (glyphs.length || boxes.length) ? none(HOW['open, an unmarked piece follows']) : { how: HOW["open, to its unit's next mark"], glyphs, boxes }
+        }
+      }
       const next = seq[(rank.get(`${pa}|${qa}`) ?? -2) + 1]
       if (!next || next[0] !== pa) return none(HOW['open, the next mark on another page'])
       const P = pages[pa - 1], N = P.points[next[1]]

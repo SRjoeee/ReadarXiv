@@ -63,6 +63,8 @@ const WORD = /\p{L}{3,}/gu, PAIR = /\p{L}{2,}/gu
 
 /** the line rules, in order: the first whose test holds gives the line its class */
 export const RULES = Object.freeze([
+  // (a biblatex entry's line in a column's body, whatever it holds: TeX set it in that entry — its URL alone, its numbers alone)
+  ['references', l => l.entry !== null && l.entry !== undefined && !l.outside],
   ['symbols', l => l.pairs === 0],
   ['figures', l => l.form >= FORM_SHARE * l.n],
   ['heads', l => l.outside && (l.head || l.foot)],

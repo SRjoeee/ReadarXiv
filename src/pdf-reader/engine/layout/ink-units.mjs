@@ -7,7 +7,8 @@
 // The rules (each tested):
 //   1. the classes made units: heads (`inkheads`), contents (`inkcontents`), notes (`inknotes`), orphans (`inkorphan`), and a
 //      biblatex entry's lines (`inkreferences`: the references' class where the compile's point `bi<n>` stands before the entry,
-//      ledger.mjs `entry`, one entry a unit, its label the original's); a line of another class is never one;
+//      ledger.mjs `entry`, one entry a unit, every line of it whatever it holds, its label the original's, an entry of no text
+//      word none); a line of another class is never one;
 //   2. a line's words: its glyphs left to right, a word ended where two stand a fifth of their size apart; a head's or a list's
 //      line keeps its numbering and its page number the original's ink (a leading section number, a trailing run of leader
 //      dots and a number: no unit's, never erased), so that a contents entry's title is drawn up to its leaders, where the
@@ -260,6 +261,7 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
   }
   const folios = new Set([...numbersAt].filter(([, ns]) => ns.size > 1).map(([key]) => key))
   const segs = []
+  const textual = w => w.fam === 'text' && PAIR.test(w.text.normalize('NFKC'))
   for (const L of ledger.lines ?? []) {
     if (!Object.hasOwn(INK_KIND, L.cls) || L.cls === 'names') continue
     // (a bibliography's line is a unit's only where it is a biblatex entry's, its compile's point `bi<n>` before it (ledger.mjs
@@ -270,7 +272,9 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     const all = lineWords.get(L) ?? wordsOf(G, L.gs, fams)
     const from = L.cls === 'references' && Number.isInteger(L.entryFrom) ? all.filter(w => w.gs.some(g => g >= L.entryFrom)) : all
     const [words, ended] = trimmed(G, from, L.cls, folios)
-    if (!words.some(w => w.fam === 'text' && PAIR.test(w.text.normalize('NFKC')))) continue
+    // (an entry's line its unit's whatever it holds: a URL alone in a typewriter face, as \url breaks it, or numbers alone — TeX
+    // set it in that entry, and left out of the unit it stood the original's where the drawn entry ran over it, 2610.35877v1)
+    if (L.cls === 'references' ? !words.length : !words.some(textual)) continue
     segs.push({ ...L, words, ended })
   }
   // units of lines (rule 3)
@@ -318,6 +322,8 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     return all > 0 && named >= NAMES_SHARE * all
   }
   for (const lines of groups) {
+    // (an entry of no text word, a URL alone: nothing to translate, the original's)
+    if (lines[0].cls === 'references' && !lines.some(l => l.words.some(textual))) continue
     const id = base + out.length, cls = (lines[0].cls === 'orphan' || lines[0].cls === 'notes') && namesOf(lines) ? 'names' : lines[0].cls
     // pieces: text words joined, a run of math or typewriter words a placeholder (rule 4), a run of words in another weight, slant
     // or colour than the unit's a group that sets it (rule 9)

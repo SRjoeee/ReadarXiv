@@ -319,6 +319,23 @@ describe('inkUnitsOf', () => {
     expect(ink[2]!.glyphs.text).toHaveLength('Barber,R.F.(2023).ConformalPredictionBeyond'.length)
   })
 
+  it("keeps every line of a biblatex entry in its unit, one of a URL alone or of numbers alone too (2610.35877v1's url lines)", () => {
+    // (biblatex's `url:` then the address in a typewriter face on the next line, as \url breaks it; an entry's last line of
+    // numbers alone; a line of no letter pairs past the zone is no entry's)
+    const pg = page(
+      { point: 'bs1' },
+      { point: 'bi1' }, { glyphs: run('Barber, R. F. (2023). Conformal Prediction. In: Annals 51.2. url:', 100, 720) },
+      { glyphs: run('https://doi.org/10.1214/23-AOS2276', 110, 708, { font: 'CMTT10' }) },
+      { point: 'bi2' }, { glyphs: run('Bickel, S. (2009). Covariate Shift. In: JMLR 10, pp.', 100, 690) }, { glyphs: run('2137-2155.', 110, 678) },
+      { point: 'be1' },
+    )
+    const { ink } = unitsOf([pg], SOURCE)
+    expect(ink.map(u => u.kind)).toEqual(['inkreferences', 'inkreferences'])
+    const lines = (u: (typeof ink)[number]) => new Set([...u.glyphs.text, ...u.glyphs.ph].map(([, g]) => pg.page.glyphs[g]!.y).sort((a, b) => b - a))
+    expect([...lines(ink[0]!)]).toEqual([720, 708])
+    expect([...lines(ink[1]!)]).toEqual([690, 678])
+  })
+
   it('writes each as a bundle unit that stands, of its kind, with its echo', () => {
     const pg = page({ point: 'bs1' }, { point: 'n1.contents.e' }, { glyphs: run('1  Introduction . . 3', 100, 700) }, { glyphs: run('2  Other things . . 4', 100, 688) }, { point: 'be1' })
     const { ink } = unitsOf([pg], SOURCE)
