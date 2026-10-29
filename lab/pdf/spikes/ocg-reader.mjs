@@ -73,8 +73,9 @@ if (!existsSync(wrappedPath) || !existsSync(glyphsPath)) {
 
 // ---- the server: the page, the engine, PDF.js, the fixture, the faces, TeX's patterns
 const HYPH = new Map()
-const { patternsOfTex, TEX_PATTERN_FILES } = await import(join(REPO, 'src/pdf-reader/engine/layer-proto/hyph.mjs'))
-for (const [lang, rel] of Object.entries(TEX_PATTERN_FILES)) if (existsSync(join(TEXMF, rel))) HYPH.set(lang, JSON.stringify(patternsOfTex(readFileSync(join(TEXMF, rel), 'latin1'))))
+const { patternsOfTex, TEX_PATTERN_FILES, TEX_PATTERN_ENCODINGS } = await import(join(REPO, 'src/pdf-reader/engine/layer-proto/hyph.mjs'))
+// (each file in its encoding: hyph-utf8's French, Spanish and Portuguese are UTF-8, TeX's 8-bit files Latin-1)
+for (const [lang, rel] of Object.entries(TEX_PATTERN_FILES)) if (existsSync(join(TEXMF, rel))) HYPH.set(lang, JSON.stringify(patternsOfTex(readFileSync(join(TEXMF, rel), TEX_PATTERN_ENCODINGS[lang]), TEX_PATTERN_ENCODINGS[lang])))
 const TYPES = { '.mjs': 'text/javascript', '.js': 'text/javascript', '.json': 'application/json', '.html': 'text/html', '.pdf': 'application/pdf', '.otf': 'font/otf', '.ttf': 'font/ttf', '.woff2': 'font/woff2', '.bcmap': 'application/octet-stream', '.pfb': 'application/octet-stream', '.wasm': 'application/wasm' }
 const fileOf = path => {
   const at = (root, rest) => { const f = normalize(join(root, decodeURIComponent(rest))); return f.startsWith(root) ? f : null }

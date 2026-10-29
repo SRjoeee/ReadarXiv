@@ -96,7 +96,7 @@ export interface TargetRules {
   params: Params
   labels: Labels | null
   /** the patterns to load: en, latinPatterns, and ru for Cyrl */
-  patterns: readonly ('en' | 'de' | 'ru')[]
+  patterns: readonly (PatternLanguage | 'ru')[]
   hyphenation: RuleSet['hyphenation']
   cjkFaces: CjkFaces | null
   version: number

@@ -81,8 +81,9 @@ const PAPER_SOURCES = [process.env.LAYER_SOURCES ? resolve(process.env.LAYER_SOU
 /** v0's hyphenation patterns, read from TeX's files by v0's own reading (layer-proto/hyph.mjs) */
 const HYPH = new Map()
 {
-  const { patternsOfTex, TEX_PATTERN_FILES } = await import(pathToFileURL(join(PROTO, 'layer-proto/hyph.mjs')).href)
-  for (const [lang, rel] of Object.entries(TEX_PATTERN_FILES)) if (existsSync(join(TEXMF, rel))) HYPH.set(lang, JSON.stringify(patternsOfTex(readFileSync(join(TEXMF, rel), 'latin1'))))
+  const { patternsOfTex, TEX_PATTERN_FILES, TEX_PATTERN_ENCODINGS } = await import(pathToFileURL(join(PROTO, 'layer-proto/hyph.mjs')).href)
+  // (each file in its encoding: hyph-utf8's French, Spanish and Portuguese are UTF-8, TeX's 8-bit files Latin-1)
+  for (const [lang, rel] of Object.entries(TEX_PATTERN_FILES)) if (existsSync(join(TEXMF, rel))) HYPH.set(lang, JSON.stringify(patternsOfTex(readFileSync(join(TEXMF, rel), TEX_PATTERN_ENCODINGS[lang]), TEX_PATTERN_ENCODINGS[lang])))
 }
 /** v0's geometry of a fixture's paper: its target's own, else another target's, from the gate's own folder of them
  *  (layer-gate/ref.mjs: LAYER_GEOMETRY or its default); null for a name that is no fixture's */

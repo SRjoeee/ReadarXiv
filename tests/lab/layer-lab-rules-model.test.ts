@@ -140,6 +140,13 @@ describe('how two sets differ', () => {
     expect(diffRules(next, BASE).at(-1)).toEqual({ path: 'languages.zh.leadBase', from: 1.35 })
   })
 
+  it('names a hyphenation minimum of every language the set gives one, French, Spanish and Portuguese as English and German (#121-4)', () => {
+    for (const lang of ['fr', 'es', 'pt']) {
+      const next = edit(BASE, field(`hyphenation.${lang}.left`), 'Latn', lang, 3)
+      expect(diffRules(BASE, next), lang).toEqual([{ path: `hyphenation.${lang}.left`, from: 2, to: 3 }])
+    }
+  })
+
   it('takes an object field whole, and a language only one set holds whole', () => {
     const next = edit(BASE, field('adaptiveFill'), 'Hans', 'zh', { band: 0.1, track: 0.05, size: 1.1 })
     expect(diffRules(BASE, next)).toEqual([{ path: 'languages.zh.adaptiveFill', to: { band: 0.1, track: 0.05, size: 1.1 } }])
