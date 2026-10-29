@@ -3318,8 +3318,14 @@ first page's way (the coordinator's word: the units come after the head and ever
   index, as a change of the toggles does, each laid page kept until the new door's commits (`view/layer-side.mjs`), and tells a
   host that translates the units itself (the extension's run: `onIndex`), which translates the new ones. The run draws a page's
   labels where it shows figures translated (`run.mjs paintOcr`): over each line a polygon of the ground's colour, every patch of
-  the page before any label's text; the translation in its lines' boxes (`layer-proto/ocr-fit.mjs`: its lines filled in order,
-  broken between words or between two characters of a script written without spaces, on each line's middle across it), its set
+  the page before any label's text; the translation in its lines' block (`layer-proto/ocr-fit.mjs blockOf`: a label's lines
+  that run one way, one above the other, every label of one line among them, are one block, the maker's one patch over it; the
+  translation in the fewest lines it fits in, each within the block's longest line, its breaks balanced, between words or between
+  two characters of a script written without spaces, those lines at the original's pitch centred across the block, each by the
+  label's anchor along it: a label of two lines translated short is one line in their middle — the crops of 1706.03762v7 on
+  2026-10-29 drew the Chinese of "Feed Forward" at the top of its box and broke that of "Input Embedding" after its third
+  character of four, filling the lines in their order —; lines that do not make a block filled in their order, each its own
+  length), its set
   at one size, shrunk by one factor, the least its labels need, to the rules' last floor (P.floorMin; `ocrNeed`, `ocrSetFactor`,
   `layOcr`: never a label alone, one that would need less left the original's); its CJK characters in the target's CJK face and
   every other in the paper's sans family's Latin face, a run each (`layer2.mjs figureRuns`, as a vector figure's: the served CJK

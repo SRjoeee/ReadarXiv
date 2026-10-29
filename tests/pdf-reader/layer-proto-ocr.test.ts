@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { indexLayout, LAYOUT_SCHEMA, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
 import { fitOcr, layOcr, ocrNeed, ocrSetFactor, piecesOf } from '@/pdf-reader/engine/layer-proto/ocr-fit.mjs'
+import { OCR_ANCHORS } from '@/pdf-reader/engine/layout/bitmap-text.mjs'
 import { placeOf } from '@/pdf-reader/engine/layer-proto/ocr-rows.mjs'
 import { openProto } from '@/pdf-reader/engine/layer-proto/run.mjs'
 import { withGroups } from './helpers/groups'
@@ -112,6 +113,23 @@ describe('the bitmap figures\' labels drawn by the layer (run.mjs paintOcr)', ()
     const turned = placeOf([1, 0xffffff, 0, 1, 7.2, 2, 40, 60, 40, 120, 50, 120, 50, 60, 39, 59, 39, 121, 51, 121, 51, 59])!
     const fit = fitOcr(turned, '\u4fe1\u53f7', s => [...s].length, 0.6)
     expect(fit?.lines[0]?.angle).toBe(90)
+  })
+
+  it('lays a label of lines one above the other as one block: a short translation one line in their middle, a longer one in balanced lines, each within the block\'s longest line', () => {
+    // (two centred lines, "Input" 20 long over "Embedding" 40, 10 apart; a character an em at size 7.2)
+    const two = placeOf([1, 0xffffff, 0, OCR_ANCHORS.indexOf('centre'), 7.2, 3, 70, 130, 90, 130, 90, 122, 70, 122, 69, 131, 91, 131, 91, 121, 69, 121, 60, 120, 100, 120, 100, 112, 60, 112, 59, 121, 101, 121, 101, 111, 59, 111])!
+    const em = (t: string) => [...t].length
+    // (four characters, 28.8: past "Input" but within the block's 40: one line, at the two lines' middle, centred)
+    const one = layOcr(two, '\u8f93\u5165\u5d4c\u5165', em, 1)!
+    expect(one.lines.map(l => l.text)).toEqual(['\u8f93\u5165\u5d4c\u5165'])
+    expect(one.lines[0]!.x).toBeCloseTo(80 - 28.8 / 2, 5)
+    expect(one.lines[0]!.y).toBeCloseTo(121 - 0.38 * 7.2, 5)
+    // (seven characters, 50.4: past one line; two, balanced, 4 and 3, not 5 and 2; at the lines' own middles)
+    const both = layOcr(two, '\u8f93\u51fa\uff08\u5411\u53f3\u79fb\u4f4d', em, 1)!
+    expect(both.lines.map(l => [...l.text].length)).toEqual([4, 3])
+    expect(both.lines.map(l => l.y)).toEqual([126 - 0.38 * 7.2, 116 - 0.38 * 7.2].map(v => expect.closeTo(v, 5)))
+    // (more lines than the label has: no fit at this size)
+    expect(layOcr(two, '\u4fe1'.repeat(12), em, 1)).toBeNull()
   })
 
   it('leaves the original\'s, its patches not drawn, a translation past the floor, its source again, one kept, none', async () => {
