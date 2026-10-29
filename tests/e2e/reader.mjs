@@ -895,6 +895,24 @@ try {
       check('a caption lights its float whole on both panes (the figure framed, or the table washed)', litC && f.left > 0 && f.right > 0, JSON.stringify(f))
       await page.screenshot({ path: `${SHOTS}/reader-layer-float.png` })
     }
+    // a figure's label (the TikZ figure's "start" and "goal", figure units anchored on the left as the page pass anchors them:
+    // a left unit of its part beside its figure row, #497): its page laid from that part, and the label, hovered on the right,
+    // lights its float whole on both panes, as a float's held units do (view/floats.mjs HELD)
+    const label = sampleCut.located.find(u => sampleCut.kinds[u[0]] === 'inkfigures')
+    check('the sample\'s figure labels are figure units anchored on the left (a part that holds one, its row and its left entry)', !!label, JSON.stringify(sampleCut.located.filter(u => sampleCut.kinds[u[0]] === 'inkfigures').map(u => u[0])))
+    if (label) {
+      await page.mouse.move(5, 5)
+      await page.evaluate(n => window.__reader.controller.goToPage('right', n), label[2][0][0])
+      await page.waitForTimeout(1500)
+      const atL = await screenOf('right', label)
+      await page.mouse.move(atL.x, atL.y)
+      await page.waitForTimeout(150)
+      await page.mouse.move(atL.x + 1, atL.y)
+      const captions = sampleCut.located.filter(u => sampleCut.kinds[u[0]] === 'caption').map(u => u[0])
+      const litL = await page.waitForFunction(ids => ids.includes(window.__reader.view.probe().lit), captions, { timeout: 10_000 }).then(() => true, () => false)
+      const g = await page.evaluate(p => ({ lit: window.__reader.view.probe().lit, left: document.querySelectorAll(`#left .page[data-page-number="${p}"] .axt-hl`).length, right: document.querySelectorAll(`#right .page[data-page-number="${p}"] .axt-hl`).length }), label[2][0][0])
+      check('a figure\'s label hovered lights its float whole on both panes (by its caption\'s id)', litL && g.left > 0 && g.right > 0, JSON.stringify({ captions, ...g }))
+    }
 
     // ---- the links (3b): real links over the laid pages, in reading order, named, reached by Tab, followed by Enter
     await page.mouse.move(5, 5)

@@ -80,7 +80,8 @@ export async function menuRows(page, pop, { inset = 10, edge = 14 } = {}) {
     const choice = !!menu.querySelector('[role="option"], [role="menuitemradio"]')
     for (const row of items) {
       const r = row.getBoundingClientRect(), what = (row.textContent ?? '').trim().slice(0, 20)
-      const words = row.firstElementChild?.getBoundingClientRect()
+      // (its words where they are drawn, a range over the label's text, not the label's box, which the row may stretch or pad)
+      const words = row.firstElementChild ? (r => (r.selectNodeContents(row.firstElementChild), r.getBoundingClientRect()))(document.createRange()) : null
       if (!words || !near(words.left - r.left, inset)) off.push(`${what}: its words ${words ? (words.left - r.left).toFixed(1) : '?'} px from the row's start, not ${inset}`)
       if (words) starts.add(Math.round((words.left - m.left) * 2) / 2)
       if (field !== null && words && !near(words.left, field)) off.push(`${what}: its words ${(words.left - field).toFixed(1)} px off the search field's`)

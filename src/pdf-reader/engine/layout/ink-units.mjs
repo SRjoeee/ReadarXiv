@@ -41,6 +41,7 @@
 import { classifyFont } from '../layer-proto/fonts.mjs'
 import { utf8 } from '../translate/mt.mjs'
 import { classOf } from './marks.mjs'
+import { lineRulesOf, RULE_EM } from './own.mjs'
 import { spellOf } from './stream.mjs'
 
 /** the ledger's classes made units, and each one's kind (rules/content-classes.mjs UNIT_CLASS gives the class back) */
@@ -172,6 +173,15 @@ function apart(G, w, v) {
   return l - r > APART * size
 }
 
+/** whether word `v` begins a word's gap (WORD_GAP) after word `w` before it on its line, as wordsOf cuts a word by its gap, not
+ *  by its face alone */
+function gapBefore(G, w, v) {
+  let r = -Infinity, l = Infinity, size = 0
+  for (const g of w.gs) { r = Math.max(r, G[g].x1); size = Math.max(size, G[g].size) }
+  for (const g of v.gs) { l = Math.min(l, G[g].x0); size = Math.max(size, G[g].size) }
+  return l - r > WORD_GAP * size
+}
+
 /** a head's line's number at its end (`b`) or its start (`a`), keyed by the line's other words: the numbers set there wherever
  *  those words recur */
 const folioKey = (words, side) => `${side}|${(side === 'b' ? words.slice(0, -1) : words.slice(1)).map(w => w.text).join(' ')}`
@@ -190,7 +200,10 @@ function trimmed(G, words, cls, folios = null) {
   const folio = side => cls === 'heads' && !!folios?.has(folioKey(words, side))
   // (its page number: its last word, one number, after its leaders, set apart from the text before it or a running head's folio)
   if (b - 1 > a && PAGE_NUMBER.test(words[b - 1].text) && (LEADER.test(words[b - 2].text) || apart(G, words[b - 2], words[b - 1]) || folio('b'))) { ended = true; b-- }
-  while (b > a && LEADER.test(words[b - 1].text)) b--
+  // (its leaders: dots each a word a word's gap from the one before it, \@dottedtocline's \mkern\@dotsep; a stop that abuts the
+  // word before it, a word of its own by its face alone, is the sentence's: "… strength $C_n^2$." in 2610.19274v1's list of
+  // figures, which was left the original's ink beside the drawn entry)
+  while (b > a && LEADER.test(words[b - 1].text) && (b - 1 === a || gapBefore(G, words[b - 2], words[b - 1]))) b--
   // (its numbering, set apart from the text after it: a section number, an entry's in its box; a head's even page's folio)
   while (a < b - 1 && NUMBERING.test(words[a].text) && words[a].fam === 'text' && apart(G, words[a], words[a + 1])) a++
   if (cls === 'heads' && a === 0 && a < b - 1 && PAGE_NUMBER.test(words[a].text) && folio('a')) a++
@@ -305,7 +318,9 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     const closeRun = () => { while (open.length) pieces.push({ t: 'close', id: open.pop(), src: '}' }) }
     lines.forEach((l, li) => {
       l.words.forEach((w, wi) => {
-        const space = wi > 0 || li > 0
+        // (a space between two words of a line where a word's gap stands between them: none where the face alone cuts them, a
+        // formula's stop or its "-axis" set against it)
+        const space = wi > 0 ? gapBefore(pages[l.page - 1].glyphs, l.words[wi - 1], w) : li > 0
         if (w.fam === 'text') {
           // (a hyphen ending a line before a lowercase letter: the word goes on)
           let sep = ''
@@ -455,12 +470,29 @@ function solid(view, x0, y0, x1, y1) {
 }
 
 /** the ink units' glyphs claimed in own.mjs's ownership (rule 7): `own.glyphs[p - 1][g]` set to `u<id>` (text) or `u<id>.p`
- *  (a placeholder) where no unit owns it; returns the glyphs claimed */
-export function claimInk(own, ink) {
+ *  (a placeholder) where no unit owns it; with `pages` (the wrap's: boxes and paths), each unit's text also takes the rules TeX
+ *  painted on its lines that no group holds (own.mjs lineRulesOf, MR 2b: an OT1 \_ in an orphan line, 2610.19159v1's agent
+ *  logs), `own.boxes[p - 1][b]`; returns the glyphs claimed */
+export function claimInk(own, ink, pages = null) {
   let n = 0
+  // (each page's painted boxes no group holds that could be a rule, once a page: the candidates of an ink unit's lines' rules)
+  const thin = new Map()
+  const thinOn = p => {
+    let list = thin.get(p)
+    if (list) return list
+    const pg = pages[p - 1], B = pg.boxes, O = own.boxes?.[p - 1] ?? []
+    list = []
+    for (let b = 0; b < B.length / 4; b++) if ((pg.paths[b] ?? -1) >= 0 && O[b] == null && Math.min(B[4 * b + 2] - B[4 * b], B[4 * b + 3] - B[4 * b + 1]) <= RULE_EM * 200) list.push([p, b])
+    thin.set(p, list)
+    return list
+  }
   for (const u of ink) {
     for (const [p, g] of u.glyphs.text) if (own.glyphs[p - 1] && own.glyphs[p - 1][g] == null) { own.glyphs[p - 1][g] = `u${u.id}`; n++ }
     for (const [p, g] of u.glyphs.ph) if (own.glyphs[p - 1] && own.glyphs[p - 1][g] == null) { own.glyphs[p - 1][g] = `u${u.id}.p`; n++ }
+    // (and the rules TeX painted on its lines, as a source unit's text takes them, own.mjs MR 2b: an OT1 \_ in an orphan line)
+    if (!pages || !own.boxes) continue
+    const on = [...new Set(u.glyphs.text.map(([p]) => p))].flatMap(thinOn)
+    for (const [p, b] of lineRulesOf(pages, u.glyphs.text, on).rules) if (own.boxes[p - 1][b] == null) own.boxes[p - 1][b] = `u${u.id}`
   }
   return n
 }

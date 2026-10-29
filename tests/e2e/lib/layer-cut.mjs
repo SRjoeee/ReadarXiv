@@ -28,6 +28,7 @@ import { layerRows, sourceUnitsOf, toTranslate } from '../../../src/pdf-reader/e
 import { startxrefOf } from '../../../src/pdf-reader/engine/layout/tail.mjs'
 import { createHash } from 'node:crypto'
 import { anchorUnits, tokenizeDocument } from '../../../src/pdf-reader/engine/pipeline/anchors.mjs'
+import { figureAnchors } from '../../../src/pdf-reader/engine/pipeline/ink-pass.mjs'
 import { drawDataOf } from '../../../src/pdf-reader/engine/pipeline/draw-data.mjs'
 import { leftSideOf } from '../../../src/pdf-reader/engine/pipeline/left-side.mjs'
 import { proseOf, textsShown } from '../../../src/pdf-reader/engine/translate/mt.mjs'
@@ -79,6 +80,12 @@ export async function cutSample({ pdf, bundle, wrapped, wrap }, { base: kind = '
   const units = sourceUnitsOf(read)
   const texts = textsShown(units.map(u => u ?? { kind: 'para', pieces: [] }), new Map(), () => undefined)
   const anchors = anchorUnits(doc, texts, { floating: i => FLOATING.has(units[i]?.kind ?? '') })
+  // (the figures' text the wrap drew, units after the bundle's own and their rows by page, as the page pass adds them:
+  // page-pass.mjs figureUnits over the wrap's `figures`), each anchored on the left by the stand-in's tokens in its run's band, as
+  // the page pass anchors them (ink-pass.mjs figureAnchors): a left unit of its part beside its figure row (#497)
+  const allUnits = [...raw.units]
+  const figures = figureUnits(wrap.figures, { bundle: allUnits, undrawable: [], M: read.paper.pages, prose: proseOf(units) })
+  for (const [id, a] of figureAnchors(doc, figures)) anchors.set(id, a)
   const side = leftSideOf({ doc, views: pages.map(p => p.view), anchors })
   // (our base page: the wrapped pass, its check the one a base of ours passes, its wrap's fields; `orig`, arXiv's PDF beside it)
   const N = read.paper.pages, sha256 = createHash('sha256').update(pdf).digest('hex'), oursSha = createHash('sha256').update(wrapped).digest('hex')
@@ -94,10 +101,6 @@ export async function cutSample({ pdf, bundle, wrapped, wrap }, { base: kind = '
     base = { source: 'ours', kind: 'delta', bytes: made.delta.length, sha256: made.sha256, xref: made.xref, pages: N, tree: '2025', check: { pages: [N, N], boxes: 'equal', carried: 1 }, replaced: made.replaced, stats: { ...made.stats, ...wrap.stats }, ...fields }
     delta = { bytes: made.delta.length, sha256: made.sha256, key: deltaKey(read.paper.id, read.paper.version, made.sha256), xref: made.xref, replaced: made.replaced, data: made.delta }
   }
-  // (the figures' text the wrap drew, units of kind figtext after the bundle's own and their rows by page, as the page pass adds them:
-  // page-pass.mjs figureUnits over the wrap's `figures`)
-  const allUnits = [...raw.units]
-  const figures = figureUnits(wrap.figures, { bundle: allUnits, undrawable: [], M: N, prose: proseOf(units) })
   const whole = {
     paper: read.paper, base, orig, versions: { image: read.versions.image },
     units: allUnits, left: { pages: side.pages, units: side.units }, layout: read.layout, rules: read.rules,
@@ -125,7 +128,7 @@ export async function cutSample({ pdf, bundle, wrapped, wrap }, { base: kind = '
   }
   return {
     objects, refs, catalog: catalog.bytes, index, paper: read.paper, base: delta ? null : { bytes: base.bytes, sha256: base.sha256, data: wrapped }, delta, ours, orig, leftRefs: Object.fromEntries(cut.left.map(l => [l.page, l.sha256])), stats: side.stats,
-    located: side.units, views: side.pages, kinds: units.map(u => u?.kind ?? null),
+    located: side.units, views: side.pages, kinds: [...units.map(u => u?.kind ?? null), ...allUnits.slice(units.length).map(u => (Array.isArray(u) ? u[0] : (u?.kind ?? null)))],
   }
 }
 

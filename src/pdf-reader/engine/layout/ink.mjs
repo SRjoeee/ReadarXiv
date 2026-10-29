@@ -128,9 +128,82 @@ export function outlineBox(commonObjs, font, fontChar) {
   const id = `${font.loadedName}_path_${fontChar}`
   let path = null
   try { if (commonObjs.has(id)) path = commonObjs.get(id)?.path } catch { return null }
+  // DrawOPS: moveTo 0 and lineTo 1 a point, curveTo 2 three, quadraticCurveTo 3 two, closePath 4 none
+  return pointsBox(path)
+}
+
+/** a Type 3 glyph's procedure's steps read at most (type3Box): matplotlib's glyphs are a width and one path, a bitmap font's a
+ *  width, a matrix and an image; past it the glyph is read as one of no procedure (its font's ascent and descent) */
+const TYPE3_OPS = 512
+/** each Type 3 font's glyph boxes by procedure (type3Box), read once a font */
+const type3Boxes = new WeakMap()
+/**
+ * A Type 3 glyph's own ink in em, [x0, y0, x1, y1] from its origin, y up, as outlineBox gives an outline's (#122-1: every glyph
+ * of a font was boxed alike, its declared ascent and descent, a "." as an "M"): the extent of what its char procedure paints
+ * (PDF.js's `charProcOperatorList` for the glyph's `operatorListId`, as the canvas runs it: each painted path's box, a
+ * stroke's widened by half its line width, each image's unit square, through the procedure's own transforms), carried
+ * through the font's matrix. [] for a procedure that paints nothing (a space); null where it cannot be read whole (no
+ * procedure, one past TYPE3_OPS steps, or one that shows text, paints a shading or a form, whose extent is not read here):
+ * the font's ascent and descent then, as before. Never the FontBBox, which bounds every glyph of the font. Read once a font
+ * and glyph; nothing is rendered
+ */
+export function type3Box(OPS, font, id) {
+  if (font?.isType3Font !== true || id === undefined || id === null) return null
+  let m = type3Boxes.get(font)
+  if (!m) type3Boxes.set(font, (m = new Map()))
+  if (!m.has(id)) m.set(id, procBox(OPS, font, id))
+  return m.get(id)
+}
+function procBox(OPS, font, id) {
+  const procs = font.charProcOperatorList, proc = procs instanceof Map ? procs.get(id) : procs?.[id]
+  const fns = proc?.fnArray, args = proc?.argsArray
+  if (!fns || typeof fns.length !== 'number' || fns.length > TYPE3_OPS) return null
+  const fm = matrixOf(font.fontMatrix)
+  if (fm === BROKEN) return null
+  const STROKES = new Set([OPS.stroke, OPS.closeStroke, OPS.fillStroke, OPS.eoFillStroke, OPS.closeFillStroke, OPS.closeEOFillStroke])
+  const PAINTS = new Set([...STROKES, OPS.fill, OPS.eoFill])
+  const IMAGES = new Set([OPS.paintImageXObject, OPS.paintInlineImageXObject, OPS.paintImageMaskXObject, OPS.paintSolidColorImageMask])
+  const UNREAD = new Set([OPS.showText, OPS.showSpacedText, OPS.nextLineShowText, OPS.nextLineSetSpacingShowText, OPS.shadingFill, OPS.paintFormXObjectBegin, OPS.paintImageXObjectRepeat, OPS.paintImageMaskXObjectRepeat, OPS.paintImageMaskXObjectGroup, OPS.paintInlineImageXObjectGroup])
+  let ctm = fm, lw = 1, x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+  const stack = []
+  const add = (m, a0, b0, a1, b1) => {
+    for (const [x, y] of [[a0, b0], [a1, b0], [a0, b1], [a1, b1]]) {
+      const X = m[0] * x + m[2] * y + m[4], Y = m[1] * x + m[3] * y + m[5]
+      if (!finite(X, Y)) return false
+      if (X < x0) x0 = X
+      if (X > x1) x1 = X
+      if (Y < y0) y0 = Y
+      if (Y > y1) y1 = Y
+    }
+    return true
+  }
+  for (let j = 0; j < fns.length; j++) {
+    const fn = fns[j], a = args?.[j] ?? []
+    if (UNREAD.has(fn)) return null
+    if (fn === OPS.save) { if (stack.length >= STACK_MAX) return null; stack.push([ctm, lw]) }
+    else if (fn === OPS.restore) { const t = stack.pop(); if (t) [ctm, lw] = t }
+    else if (fn === OPS.transform) { ctm = mul(ctm, matrixOf(a)); if (ctm.some(v => !Number.isFinite(v))) return null }
+    else if (fn === OPS.setLineWidth) lw = num(a[0])
+    else if (fn === OPS.setGState) { for (const e of Array.isArray(a[0]) ? a[0] : []) if (Array.isArray(e) && e[0] === 'LW') lw = num(e[1]) }
+    else if (fn === OPS.constructPath) {
+      const op = a[0], mm = a[2]
+      // (a bitmap glyph's image mask, which PDF.js compiles into a path of its ink's outline in the image's unit square
+      // (rawFillPath; its minMax is the bitmap's size in pixels, no box of the path's): the path's own points)
+      if (op === OPS.rawFillPath) { const b = pointsBox(a[1]?.[0]); if (!b || (b.length === 4 && !add(ctm, b[0], b[1], b[2], b[3]))) return null; continue }
+      if (!PAINTS.has(op)) continue
+      if (!(mm && mm.length >= 4 && finite(mm[0], mm[1], mm[2], mm[3]) && mm[2] >= mm[0] && mm[3] >= mm[1])) return null
+      const e = STROKES.has(op) ? lw / 2 : 0
+      if (!add(ctm, mm[0] - e, mm[1] - e, mm[2] + e, mm[3] + e)) return null
+    } else if (IMAGES.has(fn)) { if (!add(ctm, 0, 0, 1, 1)) return null }
+  }
+  return x0 <= x1 ? [x0, y0, x1, y1] : []
+}
+
+/** the box of a path's points (PDF.js's DrawOPS, as outlineBox reads them): [x0, y0, x1, y1], [] for none, null where it is no
+ *  such path */
+function pointsBox(path) {
   if (!path || typeof path.length !== 'number') return null
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
-  // DrawOPS: moveTo 0 and lineTo 1 a point, curveTo 2 three, quadraticCurveTo 3 two, closePath 4 none
   for (let i = 0; i < path.length;) {
     const op = path[i++], k = op === 0 || op === 1 ? 2 : op === 2 ? 6 : op === 3 ? 4 : op === 4 ? 0 : -1
     if (k < 0 || i + k > path.length) return null
@@ -357,7 +430,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   const outlineOf = g => {
     const key = `${s.fontId}|${g.fontChar}|${g.width}`
     if (!outlines.has(key)) {
-      let box = outlineBox(commonObjs, s.font, g.fontChar)
+      // (a Type 3 glyph's from its own procedure, which PDF.js gives alike in Node and in the browser)
+      let box = s.font?.isType3Font === true ? type3Box(OPS, s.font, g.operatorListId) : outlineBox(commonObjs, s.font, g.fontChar)
       if (box === null && given) box = given.get(outlineKey(s.font, s.fontId, g)) ?? null
       else if (box !== null && collect) {
         // (two glyphs of one key, rare: the box of both, which a swap covers either with)

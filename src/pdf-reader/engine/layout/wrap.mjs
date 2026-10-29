@@ -762,7 +762,7 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   // no unit owns still. None where the source is not read (units null: no id to start from, no echo)
   const classed = ledgerOf(pages, { ...own, glyphs: withFigures(true) }, { units })
   const ink = units ? inkUnitsOf(pages, classed, { units, from: inkBase }) : []
-  claimInk(own, ink)
+  claimInk(own, ink, pages)
   const ledger = ink.length ? inkLeft(classed, { ...own, glyphs: withFigures(true) }, pages) : classed
   const owners = withFigures(false)
   const plans = new Map()

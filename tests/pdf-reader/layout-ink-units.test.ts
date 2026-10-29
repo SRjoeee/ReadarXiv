@@ -97,6 +97,24 @@ describe('inkUnitsOf', () => {
     expect(ink[0]!.glyphs.text).toHaveLength('Introduction'.length)
   })
 
+  it("keeps the stop TeX set right after a formula at a contents line's end the entry's, its leaders the original's (2610.19274v1's list of figures)", () => {
+    // (the stop a word of its own by its face alone, abutting the formula: the sentence's, translated with it; a leader dot stands
+    // a word's gap from the word before it, \@dottedtocline's \mkern\@dotsep)
+    const lof = (title: string, math: string, y: number, tail: string) => {
+      const text = run(title, 125, y)
+      const x = text.at(-1)!.x1 + 3.33
+      const f = run(math, x, y, { font: 'CMMI10' })
+      return { glyphs: [...text, ...f, ...run(`.${tail}`, f.at(-1)!.x1, y)] }
+    }
+    const pg = page({ point: 'bs1' }, { point: 'n1.listfigure.e' }, { para: 12 }, { glyphs: run('12', 100, 700) }, lof('Strength', 'C', 700, ' . . . 45'), { para: 13 }, { glyphs: run('13', 100, 688) }, lof('Distance', 'L', 688, ''), { point: 'be1' })
+    const ink = unitsOf([pg]).ink
+    expect(ink.map(textOf)).toEqual(['Strength ⟦·⟧.', 'Distance ⟦·⟧.'])
+    // (each stop's glyph the unit's own, hidden with it; the leaders' dots and the page number no unit's)
+    const owned = new Set(ink.flatMap(u => u.glyphs.text.map(([, g]) => g)))
+    const stops = pg.page.glyphs.flatMap((g, i) => (g.u === '.' ? [i] : []))
+    expect(stops.map(i => owned.has(i))).toEqual([true, false, false, false, true])
+  })
+
   it("joins a contents entry's lines by TeX's paragraphs where the compile marked them, else where a line ends in no page number", () => {
     const lines = [{ glyphs: run('3  Black hole perturbations and', 100, 700) }, { glyphs: run('quasinormal modes . . . 21', 110, 688) }, { glyphs: run('4  Results . . . 30', 100, 676) }]
     const marked = page({ point: 'bs1' }, { point: 'n1.contents.e' }, { para: 7 }, lines[0]!, lines[1]!, { para: 8 }, lines[2]!, { point: 'be1' })
@@ -251,6 +269,20 @@ describe('inkUnitsOf', () => {
     expect(inkOff(ink as never, new Map([[1, { ok: true }]]))).toEqual([])
     expect(inkOff(ink as never, new Map([[1, { ok: false }]]))).toEqual([1])
     expect(inkOff(ink as never, new Map([[1, { ok: true, merged: true }]]))).toEqual([1])
+  })
+
+  it("claims the rules TeX painted on its lines, as a source unit's text does (#117: an OT1 \\_ in an orphan line, 2610.19159v1)", () => {
+    const pg = page({ point: 'bs1' }, { para: 1 }, { glyphs: run('Read task spec', 100, 700) }, { point: 'be1' })
+    // (the \\_ between "task" and "spec" on the baseline; a rule half a pitch below the line, no rule of it)
+    Object.assign(pg.page, { boxes: [145.5, 700, 149.5, 700.4, 100, 693, 160, 693.4], paths: [0, 1] })
+    const pages = [pg], { ink } = unitsOf(pages)
+    const own = { glyphs: pages.map(p => p.own.slice()), boxes: [[null, null] as (string | null)[]] }
+    claimInk(own, ink, pages.map(p => p.page) as never)
+    expect(own.boxes[0]).toEqual([`u${ink[0]!.id}`, null])
+    // (with no pages given, its glyphs alone, as before)
+    const bare = { glyphs: pages.map(p => p.own.slice()), boxes: [[null, null] as (string | null)[]] }
+    claimInk(bare, ink)
+    expect(bare.boxes[0]).toEqual([null, null])
   })
 
   it('writes each as a bundle unit that stands, of its kind, with its echo', () => {

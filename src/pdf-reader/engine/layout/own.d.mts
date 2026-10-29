@@ -15,5 +15,9 @@ export interface OwnPage { glyphs: OwnGlyph[]; boxes: ArrayLike<number>; paths: 
 export interface OwnUnit { groups: Set<string>; pages: Set<number>; unhidden: Unhidden | null; labelKept: boolean }
 export interface OwnStats { units: number; unhidden: Record<Unhidden, number>; spell: number[]; labelKept: number; leaks: { count: number; units: number[] } }
 export declare function ownOf(pages: OwnPage[], o?: { units?: unknown[] | null; follows?: ((name: string) => unknown) | null; texts?: ReadonlyMap<string, string> | null; inkless?: ReadonlySet<string> | null }): { glyphs: (string | null)[][]; boxes: (string | null)[][]; units: Map<number, OwnUnit>; stats: OwnStats }
+/** a rule on a line of a unit's text (MR 2b) is no thicker than this share of the line's size */
+export declare const RULE_EM: number
+/** the painted rules of `boxes` that stand on a line of `glyphs` (MR 2b, an ink unit's too): [page, index] each */
+export declare function lineRulesOf(pages: readonly Pick<OwnPage, 'glyphs' | 'boxes' | 'paths'>[], glyphs: readonly (readonly [number, number])[], boxes: readonly (readonly [number, number])[]): { rules: [number, number][]; work: number }
 /** the glyphs and boxes the ownership of a paper may visit */
 export declare const OWN_WORK: number

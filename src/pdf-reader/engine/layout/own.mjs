@@ -11,6 +11,8 @@
 //      inside the bodies, but 2a: a range outside the bodies from page p to page p + 1 at one depth (a footnote continued) is
 //      page p from its start to the next unit's start in that region (else the stream's end) and page p + 1 from after the last
 //      other unit's end in it (else the stream's start) to its end mark; over more pages, `across`;
+//   2b. and the rules TeX painted on the text's own lines (OT1's \_, an underline): thin, on a baseline of its glyphs and across
+//      within their extent (lineRules); any other box in the range is the page's;
 //   3. a unit with an end mark alone (a title: TeX sets no start in vertical mode): from the point before it on its page, its
 //      glyphs alone (a rule above a title is no title's); marks set twice are its first occurrence where that is an end mark
 //      alone and every later one a pair (a title its class sets again: acmart);
@@ -50,6 +52,10 @@ export const SPELL_LIST_MAX = 64
 
 const START = /^([th]?)(\d+)s$/
 const END = /^([th]?)(\d+)e$/
+/** a rule TeX paints on a line of a unit's text (MR 2b) is no thicker than this share of the line's size: its rules are a
+ *  default rule's 0.4 pt (a twentieth of an 8 pt line, a sixtieth of a 24 pt one); a letter's ink, an icon's, a logo's parts
+ *  are a quarter of a size or more */
+export const RULE_EM = 0.1
 /** a cell's lead macro's ink abuts its start: each gap under this share of an em (a word's space is a third; two \\tabcolsep
  *  between columns are more than one) */
 const CELL_ABUT = 0.6
@@ -213,9 +219,17 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       list = { glyphs: list.glyphs, boxes: [] }
     }
     textOf.set(id, { s, e })
-    // (a unit's text takes its glyphs alone: a rule in its range — a footnote's separator, an underline — is the page's, left
-    // standing; a placeholder's rules are its own, `.p`)
-    claim({ glyphs: list.glyphs, boxes: [] }, `u${id}`, 'u')
+    // (a unit's text takes its glyphs and the rules TeX painted on its own lines (MR 2b): OT1's \_, which is a rule and no
+    // glyph, an underline, a stroke through; any other box in its range — a footnote's separator above its lines, a box as tall
+    // as a letter (an icon), a rule past its lines — is the page's, left standing; a placeholder's are its own, `.p`, claimed
+    // over the text's below. MR 3's title takes no box: `list.boxes` is empty there)
+    claim({ glyphs: list.glyphs, boxes: lineRules(list) }, `u${id}`, 'u')
+  }
+  /** the rules TeX painted on the text's own lines (MR 2b): lineRulesOf over the range's glyphs and boxes, its work counted */
+  function lineRules(list) {
+    const r = lineRulesOf(pages, list.glyphs, list.boxes)
+    work += r.work
+    return r.rules
   }
   function takeToEnd(A, r) {
     const pg = pages[A[0] - 1], R = regions[A[0] - 1], glyphs = [], boxes = []
@@ -597,6 +611,47 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
   spell.sort((a, b) => a - b)
   leaks.sort((a, b) => a - b)
   return { glyphs: gOwn, boxes: bOwn, units: unitOf, stats: { units: unitOf.size, unhidden, spell: spell.slice(0, SPELL_LIST_MAX), labelKept, leaks: { count: leaks.length, units: leaks.slice(0, SPELL_LIST_MAX) } } }
+}
+
+/**
+ * The painted rules of `boxes` ([page, index] of `pages`' boxes) that stand on a line of `glyphs` ([page, index]): MR 2b's, and
+ * an ink unit's (layout/ink-units.mjs claimInk), #117 (1512.03385v1's Table 1 caption, whose three OT1 \_ rules stayed under
+ * its translation). A rule: a painted box no thicker than RULE_EM of its line's size and at least twice as long as thick, its
+ * middle within half a size of the line's baseline, across within the line's glyphs' extent and half a size past either end,
+ * and no part of a frame: no other thin box of `boxes` that is no such rule meets it within its own thickness (amsthm's
+ * \openbox, a \fbox: their upright sides; kept whole the page's; a box behind the text, thick both ways, is none). A line:
+ * the glyphs on one baseline of a page (a placeholder between them, its runs one line). Returns { rules, work }
+ */
+export function lineRulesOf(pages, glyphs, boxes) {
+  const painted = boxes.filter(([p, b]) => (pages[p - 1].paths[b] ?? -1) >= 0)
+  if (!painted.length) return { rules: [], work: 0 }
+  const lines = []
+  let last = null
+  for (const [p, g] of glyphs) {
+    const G = pages[p - 1].glyphs[g]
+    if (!/\S/.test(G.u ?? '') || !(G.size > 0)) continue
+    const on = l => l.p === p && Math.abs(l.y - G.y) < 0.5 * Math.max(l.size, G.size)
+    const l = last && on(last) ? last : lines.find(on)
+    if (l) { l.x0 = Math.min(l.x0, G.x0); l.x1 = Math.max(l.x1, G.x1); l.size = Math.max(l.size, G.size); last = l; continue }
+    last = { p, y: G.y, size: G.size, x0: G.x0, x1: G.x1 }
+    lines.push(last)
+  }
+  const box = ([p, b]) => { const B = pages[p - 1].boxes; return [B[4 * b], B[4 * b + 1], B[4 * b + 2], B[4 * b + 3]] }
+  const ruled = new Map()
+  for (const x of painted) {
+    const [x0, y0, x1, y1] = box(x), mid = (y0 + y1) / 2, w = x1 - x0, h = y1 - y0
+    const l = lines.find(l => l.p === x[0] && Math.abs(mid - l.y) < 0.5 * l.size && x0 >= l.x0 - 0.5 * l.size && x1 <= l.x1 + 0.5 * l.size && h <= RULE_EM * l.size && w >= 2 * h)
+    if (l) ruled.set(x, l.size)
+  }
+  const rules = [...ruled.keys()].filter(x => {
+    const [x0, y0, x1, y1] = box(x), e = y1 - y0, size = ruled.get(x)
+    return !painted.some(o => {
+      if (o === x || o[0] !== x[0] || ruled.has(o)) return false
+      const [a0, b0, a1, b1] = box(o)
+      return Math.min(a1 - a0, b1 - b0) <= RULE_EM * size && a0 <= x1 + e && x0 - e <= a1 && b0 <= y1 + e && y0 - e <= b1
+    })
+  })
+  return { rules, work: glyphs.length + painted.length * (lines.length + ruled.size) }
 }
 
 /** the letters a wrapper's own words may take at its slot in the spell check (sourceOf) */
