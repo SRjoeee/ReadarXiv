@@ -21,7 +21,7 @@
 import { analyze } from '../source/paper-meta.mjs'
 import { paperNames } from '../source/paper-names.mjs'
 import { DVI_LAYOUT_TEX, inkSamples, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, NAME_ENGLISH, probeSamples } from '../layout/marks.mjs'
-import { BALANCE_DEF, documentBounds, DVI_MARK_DEF, dviEngine, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1, texFilesOf, texText } from '../source/latex-front.mjs'
+import { BALANCE_DEF, documentBounds, DVI_MARK_DEF, dviEngine, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inAuthorBlock, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1, texFilesOf, texText } from '../source/latex-front.mjs'
 import { strategiesFor, typesetBy } from './scripts.mjs'
 import { authorsTranslated } from '../translate/kept.mjs'
 import { passagesInSource, translationOf } from './cache.mjs'
@@ -237,6 +237,90 @@ export function openPaper(files) {
   return { fsys, meta, project, units: project.units, inFloat: project.inFloat, kept: nameCells(project.units), names }
 }
 
+/**
+ * The definitions a paper's .bbl makes for itself (`<job>.bbl`, the one TeX reads: shipped or made, layout/paper.mjs
+ * madeBibliography), in the lines before its first entry (`\\bibitem`, harvard's `\\harvarditem`), in their order, as the styles
+ * write them: a `\\providecommand` (an elsarticle .bbl's `\\providecommand{\\DOIprefix}{doi:}`); a `\\newcommand`, set as a
+ * `\\providecommand` (alpha's `\\etalchar`: where the paper defined it before, the .bbl's \\newcommand is an error and the paper's
+ * stands); a conditional that defines what is undefined, whole, both its branches (natbib's
+ * `\\expandafter\\ifx\\csname natexlab\\endcsname\\relax\\def\\natexlab#1{#1}\\fi`, and its
+ * `\\expandafter\\ifx\\csname urlstyle\\endcsname\\relax \\providecommand{\\doi}[1]{doi: #1}\\else \\providecommand{\\doi}{…\\Url}\\fi`,
+ * whose two \\doi TeX tells apart by whether the paper loads url; Springer's `\\ifx \\bisbn \\undefined \\def \\bisbn #1{…}\\fi`);
+ * `\\@ifundefined{X}{…}{…}`, whole; and a `\\def` or `\\let` of its own, set only where its name is undefined (MNRAS's `\\mn@doi`,
+ * REVTeX's `\\let\\auto@bib@innerbib\\@empty`), so that no definition of the paper's is replaced before the body's samples. TeX
+ * reads them where \\bibliography stands, so the mark probe, set right after \\begin{document}, knew none of the entries' own
+ * macros: their calls an error there, no answer and no text (2010.11929v2's `\\doi{…}`, 2608.25210v2's `\\natexlab{a}`). Read as
+ * TeX reads the .bbl: a comment (an unescaped `%` to its line's end) taken out with its line's end and the next line's leading
+ * blanks, so that neither a commented-out definition nor a brace in a comment counts; and one read under `\\makeatletter` given
+ * in it again, `@` a letter as it was there (the reviews of #486). Anything else of the head (a length, a \\renewcommand, which
+ * would replace the paper's own, a group, whose definitions are its own) is passed over. '' where the paper has no .bbl, or none
+ */
+export function bblProvides(fsys, main) {
+  const path = `${jobName(main)}.bbl`
+  if (!fsys.list().includes(path)) return ''
+  const text = uncommentedTex(texText(fsys.read(path))), end = text.search(/\\(?:bibitem|harvarditem)(?![A-Za-z@])/)
+  const head = end < 0 ? text : text.slice(0, end), out = []
+  /** `re` (sticky) matched at `i`, or null */
+  const at = (re, i) => { re.lastIndex = i; return re.exec(head) }
+  /** where `@` is a letter in the head: after a \\makeatletter, before the \\makeatother after it */
+  const letters = i => { const a = head.lastIndexOf('\\makeatletter', i), o = head.lastIndexOf('\\makeatother', i); return a >= 0 && a > o }
+  const put = (i, tex) => out.push(letters(i) ? `\\makeatletter${tex}\\makeatother ` : tex)
+  /** the end past the balanced group that opens at `i` (white space before it passed over), or -1 where there is none or it
+   *  runs off the head */
+  const group = i => {
+    i += at(BLANKS, i)[0].length
+    if (head[i] !== '{') return -1
+    for (let j = i, depth = 0; j < head.length; j++) {
+      if (head[j] === '\\') j++
+      else if (head[j] === '{') depth++
+      else if (head[j] === '}' && --depth === 0) return j + 1
+    }
+    return -1
+  }
+  /** the end past the conditional that opens at `i`, at its matching \\fi (the primitive conditionals nested in it counted), or -1:
+   *  also where a word that may be a conditional of a package's or a \\newif's (\\ifpdf, \\if@foo) stands in it before its end, whose
+   *  \\fi no reading of the head alone tells from the guard's (the review of #492), the block then passed over head by head */
+  const conditional = i => {
+    for (let depth = 0, m; (m = at(IF_FI, i)); i = m.index + m[0].length) {
+      if (m[1] === 'fi') { if (--depth === 0) return m.index + m[0].length } else if (m[1] !== undefined) depth++
+      else if (m[2]?.startsWith('if')) return -1
+    }
+    return -1
+  }
+  for (let i = 0, m, e; i < head.length; i = e) {
+    if ((m = at(COMMAND, i)) && (e = group(i + m[0].length)) > 0) put(i, `\\providecommand${m[1]}${head.slice(i + m[0].length - m[2].length, e)}`)
+    else if (at(CONDITIONAL, i) && (e = conditional(i)) > 0) {
+      // (one that defines nothing, or replaces a definition, passed over whole)
+      const body = head.slice(i, e)
+      if (DEFINES.test(body) && !RENEWS.test(body)) put(i, body)
+    } else if ((m = at(IFUNDEFINED, i)) && (e = [0, 1, 2].reduce(j => (j > 0 ? group(j) : j), i + m[0].length)) > 0) put(i, head.slice(i, e))
+    else if ((m = at(DEF, i)) && (e = group(i + m[0].length)) > 0) put(i, `\\ifx${m[1]}\\undefined${head.slice(i, e)}\\fi `)
+    else if ((m = at(LET, i))) put(i, `\\ifx${m[1]}\\undefined${head.slice(i, (e = i + m[0].length))}\\fi `)
+    // (anything else: a group passed over whole, a control sequence or a character one at a time)
+    else if (head[i] === '{') e = (g => (g > 0 ? g : head.length))(group(i))
+    else e = i + (at(TOKEN, i)?.[0].length ?? 1)
+  }
+  return out.join('')
+}
+const BLANKS = /\s*/y
+const TOKEN = /\\(?:[A-Za-z@]+|.)/ys
+/** a \\providecommand or \\newcommand up to its body: [1] its star, [2] its name, arity and default */
+const COMMAND = /\\(?:provide|new)command(\*?)(\s*(?:\{\s*\\(?:[A-Za-z@]+|.)\s*\}|\\(?:[A-Za-z@]+|.))\s*(?:\[\s*\d\s*\]\s*)?(?:\[[^\]]*\]\s*)?)(?=\{)/ys
+/** a conditional on whether a name is defined: natbib's \\expandafter\\ifx\\csname, `\\ifx\\X\\undefined`, amsplain's `\\ifx\\undefined\\X`, e-TeX's */
+const CONDITIONAL = /\\expandafter\s*\\ifx\s*\\csname|\\ifx\s*\\(?:[A-Za-z@]+|.)\s*\\(?:undefined|relax|@undefined)(?![A-Za-z@])|\\ifx\s*\\(?:undefined|@undefined)\s*\\(?:[A-Za-z@]+|.)|\\if(?:defined|csname)(?![A-Za-z@])/y
+/** the next primitive conditional ([1] `if…`) or \\fi ([1] `fi`), or any other control sequence passed over ([2] its word) */
+const IF_FI = /[^\\]*\\(?:(if(?:x|cat|num|dim|odd|vmode|hmode|mmode|inner|void|hbox|vbox|eof|true|false|case|defined|csname|fontchar)?|fi)(?![A-Za-z@])|([A-Za-z@]+)|.)/ys
+const DEFINES = /\\(?:providecommand|newcommand|[gex]?def|let)(?![A-Za-z@])/
+const RENEWS = /\\renewcommand(?![A-Za-z@])/
+const IFUNDEFINED = /\\@ifundefined(?![A-Za-z@])/y
+/** a \\def (\\gdef, \\edef, \\xdef) up to its body: [1] its name (not a \\csname's, whose name is no token to test); the parameter text
+ *  after it */
+const DEF = /\\[gex]?def(?![A-Za-z@])\s*(\\(?!csname(?![A-Za-z@]))(?:[A-Za-z@]+|.))[^{}\\]*(?:\\(?:[A-Za-z@]+|.)[^{}\\]*)*?(?=\{)/ys
+/** a \\let: [1] its name, then an optional `=` and the one token it is let to */
+const LET = /\\let(?![A-Za-z@])\s*(\\(?!csname(?![A-Za-z@]))(?:[A-Za-z@]+|.))\s*=?\s*(?:\\(?:[A-Za-z@]+|.)|[^\s\\{}])/ys
+/** a TeX source with its comments taken out as TeX reads them: from an unescaped `%` (an even number of backslashes before it) to
+ *  its line's end, that line's end and the next line's leading blanks with it (TeX skips the blanks a line begins with) */
+const uncommentedTex = t => t.replace(/(?<!\\)((?:\\\\)*)%[^\n]*(?:\n[ \t]*)?/g, '$1')
 /** the preamble alone, closed at once: its log names the document's font families; with `width`, also how wide the
  *  body face sets and at what sizes (typeset/density.mjs WIDTH_PROBE), which the typesetting rule measures text by;
  *  with `marks`, the layout marks' TeX (MARK_DEF, LAYOUT_TEX) first and, after the width probe, the mark probe
@@ -252,7 +336,7 @@ export function probeFiles({ fsys, project, meta }, { width = false, marks = fal
   const text = texText(fsys.read(project.main))
   const at = beginDocument(text)
   const dvi = dviEngine(meta?.compiler)
-  const head = marks ? MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') : '', probe = marks ? markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units), leadSamples(project.units)) : ''
+  const head = marks ? MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') : '', probe = marks ? `${bblProvides(fsys, project.main)}${markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units), leadSamples(project.units))}` : ''
   return new Map([[project.main, latin1Bytes(`${head}${END_TEX}${text.slice(0, at)}${FONT_PROBE}\\begin{document}${width ? WIDTH_PROBE : ''}${probe}\\end{document}\n`)]])
 }
 
@@ -408,7 +492,7 @@ function unitLines(raw, patched, out, main, skip) {
 
 /** the units a translation into `lang` leaves as they are: the names a table holds (nameCells), and the author block's
  *  names and places where the target writes them as the paper does (translate/kept.mjs authorsTranslated) */
-export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : new Set([...paper.kept, ...paper.units.filter(u => u.kind === 'author')]))
+export const keptFor = (paper, lang) => (authorsTranslated(lang) ? paper.kept : new Set([...paper.kept, ...paper.units.filter(inAuthorBlock)]))
 
 /**
  * The reader's versions (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, eighteenth addendum), apart since 2026-10-02 so that a change to the typesetting never
@@ -496,6 +580,9 @@ export { PIPELINE_VERSION } from './versions.mjs'
  *   is read back: every unit whose source a copy holds is carried, and older pipelines keep their own tests
  * - 28: 29 makes a bibliography's entries units of their own (latex-front.mjs bibliography), which a copy holds no source of,
  *   and changes no other unit's cutting or text: every unit whose source a copy holds is carried, as from 23 to 27
+ * - 29: 30 makes an entry one unit (its names no unit apart), an author block's places units apart from its names, a class's own
+ *   macro body no unit, and a paragraph end at \\bibliography: each unit it cuts otherwise has a source a copy of 29 holds none
+ *   of (its hash is new, and it is asked again); no unit is read back otherwise: every unit whose source a copy holds is carried
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
 const NO_RUN = (pieces, unit = null) => (unit ? formulaRuns(unit.pieces).size === 0 : !holdsUnbalanced(pieces))
@@ -509,7 +596,7 @@ const NO_BOUNDARY = (pieces, unit = null) => (unit ? !boundaryChanges(unit) : Ar
 const NO_DISPLAY_STOP = (pieces, unit = null) => (unit ? !displayStopChanges(unit) : Array.isArray(pieces) && !pieces.some(p => p?.t === 'ph' && displayStop(p.src)))
 const andStop = test => (pieces, unit = null) => test(pieces, unit) && NO_DISPLAY_STOP(pieces, unit)
 const BOUNDARY_AND_STOP = andStop(NO_BOUNDARY)
-export const PIPELINE_CARRIES = { 7: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 8: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 9: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 10: andStop(andStyle(NO_RUN)), 11: andStop(andStyle(NO_RUN)), 12: andStop(NO_STYLE), 13: andStop(NO_STYLE), 14: andStop(NO_STYLE), 15: BOUNDARY_AND_STOP, 16: BOUNDARY_AND_STOP, 17: BOUNDARY_AND_STOP, 18: BOUNDARY_AND_STOP, 19: BOUNDARY_AND_STOP, 20: BOUNDARY_AND_STOP, 21: BOUNDARY_AND_STOP, 22: NO_DISPLAY_STOP, 23: EVERY, 24: EVERY, 25: EVERY, 26: EVERY, 27: EVERY, 28: EVERY }
+export const PIPELINE_CARRIES = { 7: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 8: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 9: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 10: andStop(andStyle(NO_RUN)), 11: andStop(andStyle(NO_RUN)), 12: andStop(NO_STYLE), 13: andStop(NO_STYLE), 14: andStop(NO_STYLE), 15: BOUNDARY_AND_STOP, 16: BOUNDARY_AND_STOP, 17: BOUNDARY_AND_STOP, 18: BOUNDARY_AND_STOP, 19: BOUNDARY_AND_STOP, 20: BOUNDARY_AND_STOP, 21: BOUNDARY_AND_STOP, 22: NO_DISPLAY_STOP, 23: EVERY, 24: EVERY, 25: EVERY, 26: EVERY, 27: EVERY, 28: EVERY, 29: EVERY }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a
@@ -898,7 +985,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
      * count: a paragraph's five footnotes are six passages, which the bound of three had counted as one — and as one
      * again while the five were still being translated
      */
-    const reverting = (found, out, at) => [...new Set(found.flatMap(withNested))].filter(u => !out.has(u) && !kept.has(u) && !(strategies[at.s].authors === false && u.kind === 'author') && (translated.has(u) || !results.has(indexOf.get(u))))
+    const reverting = (found, out, at) => [...new Set(found.flatMap(withNested))].filter(u => !out.has(u) && !kept.has(u) && !(strategies[at.s].authors === false && inAuthorBlock(u)) && (translated.has(u) || !results.has(indexOf.get(u))))
     /** whether the letters a compile (`at`) lost beyond the original's, where the log names them by code point, stand in
      *  the translation of a unit or a few — no more passages than `room`, what the strategy may still set in the source
      *  besides `out`: lost in more, they are the strategy's font's, and in none, not a unit's (a caption babel sets).
@@ -1041,7 +1128,7 @@ export async function runLive(paper, { lang, compile, compileOriginal = null, tr
     let shownPartial = null
     /** what names the floats of the translation last shown (captionsOf): the layer labels them so too */
     let captions = null
-    const passagesShown = snapshot => [...inSource].filter(u => snapshot.has(u) && u.kind !== 'author').length
+    const passagesShown = snapshot => [...inSource].filter(u => snapshot.has(u) && !inAuthorBlock(u)).length
     const planFor = snapshot => {
       if (!readings || ruleFailed.has(strategy().name)) return null
       const plan = previewTypesetting({ paper, translated: setting(snapshot), lang, strategy: strategy(), fonts, fontLog, original: readings })

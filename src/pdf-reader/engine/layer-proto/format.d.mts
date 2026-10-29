@@ -10,10 +10,12 @@ import type { UnitWire } from './bundle.mjs'
 // ---------------------------------------------------------------- the versions and the bounds
 /** the format: raised with any change to the shape of a head, part, left part or catalog; 6, a part with no layout says why;
  *  7, a left part's draw items carry their fills; 8, the head's base says whose PDF the layer is drawn over (ours or arXiv's)
- *  and `orig` names arXiv's beside ours, the catalog names the base */
-export declare const BUNDLE5: '10'
-/** the formats a reader takes: its own and 7's (a bundle drawn over arXiv's PDF; its head read as `base.source` 'arxiv') */
-export declare const BUNDLES_READ: readonly ['7', '8']
+ *  and `orig` names arXiv's beside ours, the catalog names the base; 9, our base wrapped by optional content; 10, the ink units
+ *  and a part's figure units; 11, a figure row's set and room */
+export declare const BUNDLE5: '11'
+/** the formats a reader takes: its own, 7's (a bundle drawn over arXiv's PDF; its head read as `base.source` 'arxiv'), 9's and
+ *  10's (a figure row of 10's each unit its own set, with no room) */
+export declare const BUNDLES_READ: readonly ['7', '9', '10', '11']
 /** whose PDF a layer is drawn over: our compile's final pass, or arXiv's */
 export declare const BASE_SOURCES: readonly ['ours', 'arxiv']
 export type BaseSource = (typeof BASE_SOURCES)[number]
@@ -171,6 +173,8 @@ export interface PartChain {
   readonly slot: number; readonly id: number
   /** a flag for each unit of the paper that a part has told (as a left unit or a file-only one): none is told twice */
   readonly told: Uint8Array
+  /** each unit whose figure row a part told (a figure unit's left anchor is told apart, in `told`) */
+  readonly figured?: Uint8Array
   /** a flag for each table group (groupsOfCells) that an earlier part told a member of: a later part tells no other member of it (amendment M18) */
   readonly groups: Uint8Array
   /** the furthest page any part's views reached (a part whose own units reach less far leaves the rest to the part that told them) */

@@ -1,5 +1,9 @@
 # The layout maker on the researched papers (Plan 8b, Task 6, 2026-10-06)
 
+**Historical record.** Measured from 2026-10-06 to 2026-10-19 (its last change, d203f823, LAYOUT 9), of the 0.5.2-era maker,
+which carried each unit's lines to arXiv's PDF. Next's maker lays the units over our own compile (`docs/route/design.md`, the
+decisions of 2026-10-22), and is held by the layer gates and the rules gate (`lab/pdf/README.md`); these bars are not its.
+
 The layout file (spec §4.2) made by `src/pdf-reader/engine/layout/make.mjs` from each paper's layout compile and arXiv's
 PDF, on the four papers the layout research measured (`readarxiv-research/2026-10-06-plan8/plan8-layout/report.md`,
 prototype `exp/layout-data` at `cf75cba`). The tool is `../spikes/layout-make.mjs`; the papers' sources and PDFs, the

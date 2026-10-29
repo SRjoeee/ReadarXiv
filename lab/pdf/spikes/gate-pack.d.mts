@@ -2,7 +2,6 @@
 export declare const PACK_SCHEMA: 2
 export declare const BUCKET: 'readarxiv-ci'
 export declare const KEY_PREFIX: 'gate-pack/'
-export declare const ROLE_WEIGHTS: string[]
 export declare function sha256(bytes: Uint8Array | string): string
 export interface PackFile { path: string; sha256: string; bytes: number }
 export interface LayoutVersion { schema: number; version: string }
@@ -15,7 +14,13 @@ export interface PackImage extends CompileImage { year?: string }
 export interface Manifest { schema: number; pipeline: string; layout: LayoutVersion; compileImage?: PackImage; made: string; digest: string; files: PackFile[] }
 export interface PackJson extends Manifest { bucket: string; files: (PackFile & { url: string })[] }
 export declare function listingDigest(files: PackFile[]): string
-export declare function fontFiles(faces: Record<string, { file: string }>, known: { group: string; kai: string | null }[], used: { group: string; kai: string | null }[]): string[]
+/** the CJK faces an engine's own roles draw the targets in (each English family it knows), their fallbacks, a Kai only where its roles draw one */
+export declare function cjkRoleFaces(engine: {
+  rolesFor: (target: string, family: string, cjkFaces: never) => { cjk: Record<string, unknown> | null; fallbacks?: Record<string, readonly string[]> }
+  ENGLISH_FAMILIES: readonly string[]; BUILTIN_RULES: unknown; resolveRules: (set: never, target: string) => { cjkFaces: unknown }
+}, targets: readonly string[]): Set<string>
+/** the font files the outputs can draw in: every face that is no CJK face, and the CJK faces `roleFaces` names */
+export declare function fontFiles(faces: Record<string, { file: string; family?: string }>, roleFaces: Iterable<string>): string[]
 export declare function outputsOf(dir: string): string[]
 export declare function entriesOf(o: { fixtures: string; records: string; refs: string; geometry: string; fontsDir: string; fonts: string[]; patterns: Record<string, string>; texmf: string }): { path: string; from: string }[]
 export declare function pipelineOf(records: string, names: string[]): string
@@ -30,7 +35,7 @@ export declare function baseRecordOf(dir: string): (
   | { schema: 1; source: 'arxiv'; why: string; detail?: string; layout: { sha256: string; bytes: number } }
 ) | null
 /** the record base.json holds for a fixture a make of the fixtures made */
-export declare function baseRecordOfMade(o: { made: { source: 'ours'; head: Record<string, unknown> } | { source: 'arxiv'; why: string; detail?: string }; layout: Uint8Array | null; image?: string | null; texts?: readonly string[] | null }): Record<string, unknown>
+export declare function baseRecordOfMade(o: { made: { source: 'ours'; head: Record<string, unknown> } | { source: 'arxiv'; why: string; detail?: string }; layout: Uint8Array | null; image?: string | null; texts?: readonly string[] | null; inkless?: readonly string[] | null }): Record<string, unknown>
 /** the layout file a fixture keeps where its base page of ours is refused: an older maker's, never the engine's own */
 export declare function keptLayoutOf(bytes: Uint8Array | null, engineLayout: string): Uint8Array | null
 export declare function layoutVersionOf(fixtures: string, names: string[], expected: LayoutVersion): LayoutVersion

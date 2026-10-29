@@ -61,3 +61,50 @@ export async function shootEach(page, selector, dir, name, key) {
     await element.screenshot({ path: join(dir, `${name(id)}.png`), animations: 'disabled', caret: 'hide' })
   }
 }
+
+/**
+ * A menu's rows against the trailing check (UI.md §4; the maintainer, 2026-10-25), the menu open as `pop` names it: each
+ * row's words `inset` px from the row's start, on the search field's words where there is one; in a choice, a 14 px check
+ * on every row, ending `inset` px from the row's end, after everything else the row holds (a hint, a sample, a button, a
+ * spinner), 7.5 px or more before it; the words and the checks `edge` px from the menu's edges, in every menu alike.
+ * What is off, as lines; throws when no row is drawn
+ */
+export async function menuRows(page, pop, { inset = 10, edge = 14 } = {}) {
+  const { off, rows } = await page.evaluate(({ pop, inset, edge }) => {
+    const off = [], menu = document.querySelector(pop)
+    if (!menu) return { off: [`no menu at ${pop}`], rows: 0 }
+    const m = menu.getBoundingClientRect(), near = (a, b) => Math.abs(a - b) <= 0.5, ends = new Set(), starts = new Set()
+    const search = menu.querySelector('.search')
+    const field = search && search.getBoundingClientRect().left + parseFloat(getComputedStyle(search).paddingInlineStart)
+    const items = [...menu.querySelectorAll('.item')].filter(i => i.getBoundingClientRect().height)
+    const choice = !!menu.querySelector('[role="option"], [role="menuitemradio"]')
+    for (const row of items) {
+      const r = row.getBoundingClientRect(), what = (row.textContent ?? '').trim().slice(0, 20)
+      const words = row.firstElementChild?.getBoundingClientRect()
+      if (!words || !near(words.left - r.left, inset)) off.push(`${what}: its words ${words ? (words.left - r.left).toFixed(1) : '?'} px from the row's start, not ${inset}`)
+      if (words) starts.add(Math.round((words.left - m.left) * 2) / 2)
+      if (field !== null && words && !near(words.left, field)) off.push(`${what}: its words ${(words.left - field).toFixed(1)} px off the search field's`)
+      const check = row.querySelector(':scope > svg.check')
+      if (!choice) {
+        if (check) off.push(`${what}: a check in a menu of plain items`)
+        continue
+      }
+      if (!check || row.lastElementChild !== check) { off.push(`${what}: the check is not the row's last part`); continue }
+      const c = check.getBoundingClientRect()
+      if (!near(c.width, 14)) off.push(`${what}: the check's slot ${c.width.toFixed(1)} px wide, not 14`)
+      if (!near(r.right - c.right, inset)) off.push(`${what}: the check ${(r.right - c.right).toFixed(1)} px from the row's end, not ${inset}`)
+      ends.add(Math.round((m.right - c.right) * 2) / 2)
+      for (const part of row.children) {
+        if (part === check || !part.getBoundingClientRect().width) continue
+        const gap = c.left - part.getBoundingClientRect().right
+        if (gap < 7.5) off.push(`${what}: its ${part.getAttribute('class') ?? part.tagName} ${gap.toFixed(1)} px before the check, under 8`)
+      }
+    }
+    if ([...starts].some(e => e !== edge)) off.push(`the rows' words at ${[...starts].join(', ')} px from the menu's start, not ${edge}`)
+    if ([...ends].some(e => e !== edge)) off.push(`the checks at ${[...ends].join(', ')} px from the menu's end, not ${edge}`)
+    return { off, rows: items.length }
+  }, { pop, inset, edge })
+  if (!rows) throw new Error(`menuRows: no row drawn in ${pop}`)
+  return off
+}
+

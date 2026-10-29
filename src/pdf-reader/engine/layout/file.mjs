@@ -105,8 +105,65 @@ export { LayoutRefusal } from './json.mjs'
  *  (UNIT_KINDS `reference`, and `refnames` for an entry's names, latex-front.mjs bibliography and entriesLast), marked as the
  *  body's, and an entry's numbers placeholders of their own (PH_KINDS `number`, both marks: MARKS_SCHEMA 11). A maker of 21
  *  reads neither kind, so a file of 22 is another maker's: the gate pack is made again, each side of the rules gate on its own
- *  (the file's schema is 5 still) */
-export const LAYOUT = '22'
+ *  (the file's schema is 5 still); 23 (the release sweep of 2026-10-25, (c)): a label row is its unit's only where its ink is
+ *  no other unit's, as the wrap owns it (layout/own.mjs): the closing punctuation a head sets after the unit before a start is
+ *  that unit's line (make.mjs headTail, MR 5's rule: amsthm's ")." after a note that ends in a citation, which was the body's
+ *  label row and was shown again from the original where it stood, 2610.18513v1 p35), and a label row that meets an ink unit's
+ *  text goes (pipeline/ink-pass.mjs layoutWithInk: a label the wrap left in no group and an ink unit claimed, SIAM's "AMS
+ *  subject classifications.", a theorem's head whose note is a citation, shown again under the ink unit's translation: 39
+ *  rows of 22 papers, 0 after, 30 of the sweep's 32 rows of (c)); and an ink unit's runs in another weight, slant or colour
+ *  than its own are groups of the commands that set them (layout/ink-units.mjs rule 9: the sweep's (d), its text drawn in one
+ *  style); and in the same 23 (2609.20976v1) an opening point alone at its unit's end, no display, owns its lines up to TeX's
+ *  skip before another block, in both readings (stream.mjs lineEnd: the last author's \\orcidlink had owned the affiliations
+ *  and the e-mail below the names; at a bibliography's leading a wrapped \\Eprint keeps every line it held); and in the same 23
+ *  (2610.19274v1) a word a hyphen cuts at a line's end is joined where PDF.js ends the line with an empty item after it, as on
+ *  our wrapped page (pipeline/anchors.mjs tokenizeDocument: the line check read two words against arXiv's one and left the list
+ *  of figures' pages undrawn). The rows of the units they reach change, so a file of 22 is another maker's: the stored layers are made again and
+ *  the gate pack with them; and in the same unreleased 23 (the look-ahead pairs, 2609.20976v1's abstract English) a
+ *  placeholder right after a paper's macro that may look ahead (\\xspace: 2609.20976's \\snr, `\\ac{SNR}\\xspace`, before
+ *  `$\\geq 50$`), past white space alone or none, is marked where the mark probe's look-ahead section says its opening mark there
+ *  moves nothing (marks.mjs aheadSamples, the pair asked as the paper sets it; MARKS_SCHEMA 12), and the macro closed where its
+ *  closing mark does too: that placeholder was LOST with no mark, and the macro with it ('open, an unmarked piece follows'),
+ *  its unit the original's; where no mark may stand there (\\footnote, before which \\xspace sets no space and would before a
+ *  mark), the maker parts the two's ink to the next marked piece by the text TeX sets for the macro (stream.mjs ownedOf,
+ *  marks.mjs followsOf `split`), the piece placed from its own ink (the gate pack's seven papers write no such pair: their
+ *  layout files are 23's rows); 24 (the content classes' coverage, the references and the author names decoupled:
+ *  PDF-READER §19.13): an author block's affiliations, institutions, addresses and e-mail line units of their
+ *  own (UNIT_KINDS `affiliation`, latex-front.mjs frontBlock: the body's, always translated; its names `author` as before),
+ *  every unit at the number it had, the rows cut apart after the source's other units and before the entries (entriesLast);
+ *  and a bibliography's entry one unit, whole (`refnames` kept at its index, made no more): a maker or a reader of 23 reads no
+ *  such kind, so a file of 24 is another maker's, and each side of the rules gate reads its own pack (the file's schema is 5
+ *  still); 25 (the release sweep of 2026-10-29, 24 counted released): a line of ours too short to be evidence, under
+ *  LINE_EVIDENCE letters and digits, is never found on another page of arXiv's (carry.mjs lineCheckOf: 2610.21765v1 p7's axis
+ *  label "q", matched on arXiv's p6, left the page undrawn and 10 units English), and a word a hyphen cuts at a line's end goes on
+ *  in the line below or at the next column's top alone, never in text the stream gives next elsewhere (pipeline/anchors.mjs
+ *  tokenizeDocument: "Sim-" and the next column's axis label "q" read as "simq" since #484); a contents entry, a note or an
+ *  orphan's paragraph is one unit at its own leading, set double too (layout/ink-units.mjs PARA_DY, EDGE, INDENT: 2610.19274v1's list of figures, cut line by
+ *  line and each translated alone), a script a text face sets after a formula's run is that run's placeholder (C_n²'s "2"), and
+ *  a head's or an entry's number is the page's own ink only where it stands apart from the line's text (ink-units.mjs APART: a
+ *  folio, a section number) or is a running head's folio (another number where its words recur), one in its own words the
+ *  unit's (2010.11929v2's head "… at ICLR 2021", its year drawn apart).
+ *  The rows of the units they reach change, so a file of 24 is another maker's (the file's schema is 5 still); and in the same
+ *  unreleased 25 (the mark probe's answers past a sample TeX gives up on, and a .bbl's own definitions): each box of the probe
+ *  ends at the group level it began at, the groups its sample left open closed (marks.mjs PROBE_UNWIND: 2010.11929v2's \\tikz,
+ *  asked alone, opened a picture it never closed, in which pgf's \\selectfont selects \\nullfont, and every box after it set
+ *  no character: its \\natexlab{a} and \\doi{…} read as setting no ink and given no row, 8 of its entries English, and a pair's
+ *  boxes, all empty, read as a mark that moves nothing), a box TeX set a character in \\nullfont in no answer; and the probe
+ *  sets a .bbl's definitions as its styles write them, its conditionals whole (live.mjs bblProvides: natbib's
+ *  `\\expandafter\\ifx\\csname urlstyle\\endcsname\\relax … \\fi`, its \\doi TeX's branch). The rows of the pieces they reach change
+ *  (2010.11929v2's 8 entries); and in the same unreleased 25, the ink section's entries asked in a share of their own past the
+ *  body's INK_MAX, the calls the body's room would have asked first, then the entries' leads (marks.mjs ENTRY_INK_MAX;
+ *  MARKS_SCHEMA 13: 2608.25210v2's body filled INK_MAX, its entries' \\natexlab{} never asked, 54 entries English);
+ *  and in the same unreleased 25: a math face told by its family's names (layer-proto/fonts.mjs classifyFont: Euler's EUEX,
+ *  EURM and EURB, MathTime's MTMI, MTSY and MTEX, XITSMath, and XITS's text face no math face), which the ledger's math lines,
+ *  the ink units' kept runs and the figure runs' words read where a paper sets them; 26 (the maintainer's ruling of
+ *  2026-10-29 on lane B's B2): a unit TeX set flush left or flush right is UNIT_FLAG.FLUSH_LEFT or FLUSH_RIGHT, by TeX's word
+ *  alone (marks.mjs readAlign), and that word is the paragraph's own where a box's close ended it: under a LaTeX that inserts
+ *  no \par there (TeX Live 2023), the probe's hook ran at the next paragraph's \par and told its skips (2608.16117v1's
+ *  elsarticle abstract, boxed with no \par, read as its keywords' \raggedright), now the skips at the unit's end mark
+ *  (LAYOUT_TEX watches the box). A reader of 25 refuses the new flags, so a file of 26 is another maker's (the file's schema
+ *  is 5 still) */
+export const LAYOUT = '26'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,
@@ -123,13 +180,16 @@ export const LAYOUT_VALUES = 1_000_000
 export const LAYOUT_DEPTH = 4
 /** a unit's kinds, by index: the source units', then the ink units' (layout/ink-units.mjs INK_KIND: a new kind takes the next index,
  *  so that a file of before reads as it was) */
-export const UNIT_KINDS = Object.freeze(['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author', 'inkheads', 'inkcontents', 'inknotes', 'inkorphan', 'inknames', 'reference', 'refnames'])
+export const UNIT_KINDS = Object.freeze(['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author', 'inkheads', 'inkcontents', 'inknotes', 'inkorphan', 'inknames', 'reference', 'refnames', 'affiliation'])
 export const PH_KINDS = Object.freeze(['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other', 'number'])
 export const LABEL_KINDS = Object.freeze(['number', 'item', 'caption', 'footnote'])
 /** a unit's flags. TITLE: the paper's title; FRONT: its front matter; CENTRED: its lines set centred, as TeX set its
  *  paragraph where the marked original tells it (\centering, a center environment, a class's centred heading), else as
- *  arXiv's lines show it (make.mjs): what the layer sets the translation's lines by (run.mjs) */
-export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4 })
+ *  arXiv's lines show it (make.mjs); FLUSH_LEFT, FLUSH_RIGHT: its lines set flush left (\raggedright, a flushleft
+ *  environment, ragged2e's \RaggedRight, a class's ragged heading) or flush right (\raggedleft, flushright), only where the
+ *  marked original tells it (marks.mjs readAlign), never read off arXiv's lines (LAYOUT 26). What the layer sets the
+ *  translation's lines by (run.mjs); a unit holds one of the three at most */
+export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4, FLUSH_LEFT: 8, FLUSH_RIGHT: 16 })
 /** babel's names (names.mjs), whose occurrences the file locates (`names`) */
 export { NAME_KEYS } from './names.mjs'
 /** a name's flags. CENTRED: centred in its column, as a unit is (UNIT_FLAG.CENTRED); CAPITALS: its glyphs capitals where
@@ -205,7 +265,10 @@ const NAME_ROW = 15
 const SKIP_MAX = Math.round(((16384 * 72) / 72.27) * 100) / 100
 /** a rectangle lies within its page's view by this, PDF units */
 const SLACK = 1
-const UNIT_BITS = UNIT_FLAG.TITLE | UNIT_FLAG.FRONT | UNIT_FLAG.CENTRED
+const UNIT_BITS = UNIT_FLAG.TITLE | UNIT_FLAG.FRONT | UNIT_FLAG.CENTRED | UNIT_FLAG.FLUSH_LEFT | UNIT_FLAG.FLUSH_RIGHT
+/** a unit's alignment flags, and how many of them each value of those bits holds */
+const ALIGN_BITS = UNIT_FLAG.CENTRED | UNIT_FLAG.FLUSH_LEFT | UNIT_FLAG.FLUSH_RIGHT
+const ALIGNED = Array.from({ length: ALIGN_BITS + 1 }, (_, v) => [UNIT_FLAG.CENTRED, UNIT_FLAG.FLUSH_LEFT, UNIT_FLAG.FLUSH_RIGHT].filter(b => (v & b) !== 0).length)
 const PH_BITS = 511
 const HEADING = UNIT_KINDS.indexOf('heading'), DISPLAY = PH_KINDS.indexOf('display'), MACRO = PH_KINDS.indexOf('macro')
 const PAGE_TEXT = new Set(PAGE_TEXT_KINDS.map(k => PH_KINDS.indexOf(k)))
@@ -371,6 +434,7 @@ function checkRows(f, { views, lo, hi, sized = true }) {
     if (!isInteger(kind, 0, UNIT_KINDS.length - 1)) throw refuse(`units[${i}][1]`, 'not a kind of UNIT_KINDS')
     if (!isInteger(depth, DEPTH_MIN, DEPTH_MAX) && depth !== DEPTH_NONE) throw refuse(`units[${i}][2]`, `not a depth ${DEPTH_MIN} to ${DEPTH_MAX}, or ${DEPTH_NONE}`)
     if (!isInteger(flags, 0, UNIT_BITS)) throw refuse(`units[${i}][3]`, 'not flags of UNIT_FLAG')
+    if (ALIGNED[flags & ALIGN_BITS] > 1) throw refuse(`units[${i}][3]`, 'more than one of CENTRED, FLUSH_LEFT and FLUSH_RIGHT')
     if (!isInteger(pieces, 0, PIECES_MAX)) throw refuse(`units[${i}][4]`, `not a count 0 to ${PIECES_MAX}`)
     zeroes(u)
     last = u[0]
@@ -730,6 +794,7 @@ export function indexLayout(file) {
     byId.set(id, {
       id, kind: UNIT_KINDS[kind], depth,
       title: (flags & UNIT_FLAG.TITLE) !== 0, front: (flags & UNIT_FLAG.FRONT) !== 0, centred: (flags & UNIT_FLAG.CENTRED) !== 0,
+      flush: (flags & UNIT_FLAG.FLUSH_LEFT) !== 0 ? 'left' : (flags & UNIT_FLAG.FLUSH_RIGHT) !== 0 ? 'right' : null,
       pieces, lines: NONE, frames: NONE, erase: [], ph: new Map(), labels: NONE, heading: null, held: NO_HELD, colours: NO_COLOURS,
     })
   }

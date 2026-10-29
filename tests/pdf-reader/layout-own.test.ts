@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
-import { INK_ANY } from '@/pdf-reader/engine/layout/marks.mjs'
+import { followsOf, INK_ANY } from '@/pdf-reader/engine/layout/marks.mjs'
 import { isLabelForm, ownOf, spellOf } from '@/pdf-reader/engine/layout/own.mjs'
 
 // Each unit's own ink by its marks in stream order (layout/own.mjs; design docs/route/ocg-erasure.md §1): the rules MR 1–6 on
@@ -151,6 +151,15 @@ describe('coverage: what the 2026-10-24 sweep left English', () => {
     // the original's — the review of b479095e)
     const lead = [page([{ pt: 'bs2' }, 'LLAMA-X:\n', 'Fast tuning', { pt: '0e' }])]
     expect(ownOf(lead, { units: [{ kind: 'heading', pieces: [{ t: 'ph', src: '\\sysname' }, { t: 'text', s: ': Fast tuning' }] }] }).units.get(0)?.unhidden).toBe('spell')
+    // (one that opens with a macro TeX said sets no ink, JCAP's title in \\boldmath: no placeholder of ink, as the maker reads
+    // it, so the header line TeX set before it is released, the title its own, 2609.20976v1 u0; not said, the original's as
+    // before)
+    const bold = [page([{ pt: 'bs2' }, 'Prepared for submission to JCAP\n', 'Comparing the Detectability', { pt: '0e' }])]
+    const boldmath = [{ kind: 'heading', pieces: [{ t: 'ph', src: '\\boldmath' }, { t: 'text', s: 'Comparing the Detectability' }] }]
+    const released = ownOf(bold, { units: boldmath, inkless: new Set(['\\boldmath']) })
+    expect(groupsOf(released, bold)).toEqual({ u0: 'Comparing the Detectability' })
+    expect(released.units.get(0)?.unhidden).toBe(null)
+    expect(ownOf(bold, { units: boldmath }).units.get(0)?.unhidden).toBe('spell')
     // (on the title's own line: what stands before it cannot be told from it, the title the original's)
     const one = [page([{ pt: 'bs2' }, 'JOUR ALL SERRIN BANDS', { pt: '0e' }])]
     expect(ownOf(one, { units: [{ kind: 'heading', src: 'All Serrin bands' }] }).units.get(0)?.unhidden).toBe('spell')
@@ -281,6 +290,34 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     expect(ownOf(many, { units: [{ pieces }] }).units.get(0)?.unhidden).toBe('spell')
     expect(performance.now() - t0).toBeLessThan(200)
   })
+  it("owns its lines up to TeX's skip before another block for a piece no display alone at its unit's end (2609.20976v1 u3.p)", () => {
+    // JCAP's last author, "Surhud More,^{c,d}", her \\orcidlink marked open alone after her end mark; the affiliations and the
+    // e-mail TeX set below after a skip, no unit's, then the abstract: the piece ran to the abstract's label over them all, and
+    // no ink unit was made of them
+    const pages = [page([{ pt: '0s' }, 'Surhud More,', { pt: '0e' }, { pt: 'p0.1a' }, 'cd\n', 'Department of Physics\n', 'surhud at iucaa\n', 'Abstract. ', { pt: '1s' }, 'The amplitude', { pt: '1e' }, '\nand more of it here\nand its last line'])]
+    // (the skip: the names' line apart from the lines below by two of the page's pitches)
+    pages[0]!.glyphs.forEach(g => { if (g.y < 700) { g.y -= 12; g.top -= 12; g.bottom -= 12 } })
+    const authors = [{ kind: 'author', pieces: [{ t: 'text', s: 'Surhud More,' }, { t: 'ph', src: '\\orcidlink{0000-0002-2986-2371}' }] }, { kind: 'abstract', pieces: [{ t: 'text', s: 'The amplitude' }] }]
+    // (the marking's follows, as the wrap makes them of the units and the points read)
+    const marked = (pgs: ReturnType<typeof page>[], us: unknown[]) => ownOf(pgs, { units: us, follows: followsOf(us as never, new Set(pgs.flatMap(p => p.points.map(x => x.name)))) })
+    const g = groupsOf(marked(pages, authors), pages)
+    expect(g['u0.p']).toBe('cd')
+    expect([g.u0, g.u1]).toEqual(['Surhud More,', 'The amplitude'])
+    expect(Object.values(g).join('')).not.toMatch(/Department|iucaa/)
+    // (an indented or centred block after a short line is a line apart all the same: its drop, not where it starts — Devin on #482)
+    const centred = [page([{ pt: '0s' }, 'Surhud More,', { pt: '0e' }, { pt: 'p0.1a' }, 'cd\n', { dx: 120 }, 'Department of Physics\n', 'surhud at iucaa\n', 'Abstract. ', { pt: '1s' }, 'The amplitude', { pt: '1e' }, '\nand more of it here\nand its last line'])]
+    centred[0]!.glyphs.forEach(gl => { if (gl.y < 700) { gl.y -= 12; gl.top -= 12; gl.bottom -= 12 } })
+    expect(groupsOf(marked(centred, authors), centred)['u0.p']).toBe('cd')
+    // (at the page's leading the lines are still its, whatever they hold: a reference's \\Eprint wrapped over two lines, its
+    // entry's full stop on a third, and an entry TeX gave no unit, 2307.16209v1 p138 u487 and p147 u777: none left no one's)
+    const wrapped = [page([{ pt: '0s' }, 'See the paper', { pt: '0e' }, { pt: 'p0.1a' }, 'arXiv:gr-qc/0511111\n', '[gr-qc]\n', '.\n', '[167] https://github.com/strings\n', { pt: '1s' }, 'Next one', { pt: '1e' }, '\nand a line\nand another'])]
+    const eprint = [{ kind: 'reference', pieces: [{ t: 'text', s: 'See the paper' }, { t: 'ph', src: '\\Eprint {http://arxiv.org/abs/gr-qc/0511111} {arXiv:gr-qc/0511111 [gr-qc]}' }] }, { pieces: [{ t: 'text', s: 'Next one' }] }]
+    expect(groupsOf(marked(wrapped, eprint), wrapped)['u0.p']).toBe('arXiv:gr-qc/0511111[gr-qc].[167] https://github.com/strings')
+    // (a display there owns its lines, as before: TeX sets one over many)
+    const display = [page([{ pt: '0s' }, 'We have', { pt: '0e' }, { pt: 'p0.1a' }, 'E = mc\n', '+ more\n', { pt: '1s' }, 'Next one', { pt: '1e' }])]
+    const shown = groupsOf(marked(display, [{ pieces: [{ t: 'text', s: 'We have' }, { t: 'ph', src: '\\[E = mc + more\\]' }] }, { pieces: [{ t: 'text', s: 'Next one' }] }]), display)
+    expect(shown['u0.p']).toBe('E = mc+ more')
+  })
   it('leaves the lines of their own its source does not spell the page\'s (2610.21765v1 p1u13: REVTeX\'s e-mail notes; 2610.10069v1 p7u53: a folio)', () => {
     // the paragraph's first column, the column's e-mail note at its foot, its second column
     const pages = [page([{ pt: '0s' }, 'This is a very\n', 'hard thing\n', '\n*d25062@iitmandi.ac.in\n', { dx: 300 }, 'to achieve.', { pt: '0e' }])]
@@ -297,6 +334,11 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     // (nor any line of a unit with a visible placeholder of no mark of its own, whose ink that line may be)
     const unmarked = [page([{ pt: '0s' }, 'We have\n', 'E = mc2\n', 'here.', { pt: '0e' }])]
     expect(ownOf(unmarked, { units: [{ pieces: [{ t: 'text', s: 'We have ' }, { t: 'ph', src: '\\[E=mc^2\\]' }, { t: 'text', s: ' here.' }] }] }).units.get(0)?.unhidden).toBe('spell')
+    // (a macro TeX said sets no ink, \\boldmath, is no such placeholder: the note's line released, as the maker reads it)
+    const bold = [page([{ pt: '0s' }, 'This is a very\n', 'hard thing\n', '\n*d25062@iitmandi.ac.in\n', { dx: 300 }, 'to achieve.', { pt: '0e' }])]
+    const boldUnit = [{ pieces: [{ t: 'text', s: 'This is a very ' }, { t: 'ph', src: '\\boldmath' }, { t: 'text', s: 'hard thing to achieve.' }] }]
+    expect(ownOf(bold, { units: boldUnit, inkless: new Set(['\\boldmath']) }).units.get(0)?.unhidden).toBe(null)
+    expect(ownOf(bold, { units: boldUnit }).units.get(0)?.unhidden).toBe('spell')
     // (a page's folio after a footnote run on to the next page (2a): released)
     const foot = [page([{ pt: 'bs1' }, 'body', { pt: 'be1' }, { pt: '0s' }, 'Neither estimator\n', '\n\n7']), page([{ pt: 'bs2' }, 'b', { pt: 'be2' }, 'enforces it.', { pt: '0e' }])]
     const f = ownOf(foot, { units: units('Neither estimator enforces it.') })
@@ -324,6 +366,13 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     const labelled = [page(['Lemma 2 (', { pt: 'h0s' }, 'Bound', { pt: 'h0e' }, ').', { dx: 3 }, '(i)', { dx: 3 }, { pt: '1s' }, 'Every x', { pt: '1e' }])]
     const l = ownOf(labelled, { units: [{ kind: 'heading', src: 'Bound' }, { kind: 'theorem', src: 'Every x' }] })
     expect(groupsOf(l, labelled)).toEqual({ u0: 'Bound).', u1: 'Every x', 'u1.l': '(i)' })
+    // (a note that ends in a placeholder, set after the note's end mark (a heading's marks around its text): the ")." after the
+    // placeholder abuts it, not the end mark's glyph, and is the note's all the same. 2610.18513v1 p35's "Lemma A.1 (… [Bobkov and
+    // Ledoux, 2009b])." left a stray ")." standing under the drawing)
+    const cited = [page(['Lemma A.1 (', { pt: 'h0s' }, 'Inequality', { pt: 'h0e' }, { dx: 3 }, { pt: 'p0.1a' }, '[Bobkov, 2009b]', { pt: 'p0.1b' }, ').', { dx: 3 }, { pt: '1s' }, 'If x', { pt: '1e' }])]
+    const c = ownOf(cited, { units: [{ kind: 'heading', bracketed: true, pieces: [{ t: 'text', s: 'Inequality ' }, { t: 'ph', src: '\\citep{bl}' }] }, { kind: 'theorem', src: 'If x' }] })
+    expect(groupsOf(c, cited)).toEqual({ 'u0.l': 'Lemma A.1 (', u0: 'Inequality).', 'u0.p': '[Bobkov, 2009b]', u1: 'If x' })
+    expect([c.units.get(0)?.unhidden, c.units.get(1)?.unhidden, c.units.get(1)?.labelKept]).toEqual([null, null, false])
     // (punctuation apart from the unit before, by a word's space or more, is no head's: as before, this unit's label)
     const apart = [page([{ pt: 'h0s' }, 'Bound', { pt: 'h0e' }, { dx: 4 }, '1.', { pt: '1s' }, 'Every x', { pt: '1e' }])]
     expect(groupsOf(ownOf(apart, { units: [{ kind: 'heading', src: 'Bound' }, { kind: 'theorem', src: 'Every x' }] }), apart)).toEqual({ u0: 'Bound', u1: 'Every x', 'u1.l': '1.' })

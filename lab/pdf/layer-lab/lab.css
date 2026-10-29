@@ -153,7 +153,8 @@ html[data-panel="closed"] .side { display: none; }
 .page { position: relative; margin: 0 0 12px max(0px, round(down, calc((100% - var(--w, 0px)) / 2), 1px)); background: #fff; box-shadow: var(--page-shadow); }
 .page canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .page .num { position: absolute; top: 2px; left: -34px; width: 30px; text-align: right; color: var(--ink-3); font-size: 11px; line-height: 14px; font-variant-numeric: tabular-nums; }
-.page svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+/* (a page's own SVG, its child: the quick view's SVG sits in engine.css's .axt-layer and takes that sheet's rule) */
+.page > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .page svg.layer-text { font-synthesis: none; text-spacing-trim: space-all; user-select: text; }
 .page svg.diag { pointer-events: none; }
 /* a page's notice sits over the white page in both themes, so it keeps the light theme's colours */

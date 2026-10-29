@@ -17,7 +17,7 @@ import { homedir, tmpdir } from 'node:os'
 import { basename, join, sep } from 'node:path'
 
 export const REF_SCHEMA = 1
-const UNIT_KINDS = ['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author', 'inkheads', 'inkcontents', 'inknotes', 'inkorphan', 'inknames', 'reference', 'refnames']
+const UNIT_KINDS = ['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author', 'inkheads', 'inkcontents', 'inknotes', 'inkorphan', 'inknames', 'reference', 'refnames', 'affiliation']
 /** the approved prototype's geometry (iteration 2's data, outside the repository); LAYER_GEOMETRY another (the same
  *  carried to another cut of the units: spikes/layer-cut.mjs) */
 export const PROTO_GEOMETRY = process.env.LAYER_GEOMETRY ?? join(homedir(), 'Developer/readarxiv-research/2026-10-06-plan8/instant-layer/iteration-2/data')

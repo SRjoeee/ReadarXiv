@@ -1,7 +1,7 @@
 {
-  "schema": 5,
-  "version": 5,
-  "note": "fillLeadRel: the Chinese fill may spread a loose original's lines to 1.3 times the original's own pitch where that is looser than the em top (fillLead); single-spaced originals, Japanese, Korean and the alphabets are unchanged (schema 5)",
+  "schema": 7,
+  "version": 7,
+  "note": "evenPitch and keepAlign (schema 7, the maintainer's ruling of 2026-10-29): at the original's leading a block's lines stand one pitch apart from its first, the gaps TeX opened under the original's tall lines no longer carried to the translation's; and a unit TeX set flush left or flush right keeps that alignment",
   "hyphenation": {
     "minWord": 5,
     "en": { "left": 2, "right": 3 },
@@ -33,15 +33,17 @@
       "fillLead": 2,
       "fillLeadRel": 1.3,
       "leftover": "foot",
+      "evenPitch": true,
       "keepAll": false,
       "cjkQuotes": true,
       "noStart": "、。，．,.！？!?）)]」』】〕〉》〙〗”’：:；;・ー〜…々ゝゞぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ%％",
       "noEnd": "（([「『【〔〈《〘〖“‘",
       "hyphen": 1,
       "latinPatterns": "en",
+      "keepAlign": true,
       "cellClear": 0.5,
       "cellCapMin": 0.6,
-      "cjkFaces": { "group": "shs-sc", "kai": "fandolkai", "light": ["cm", "garamond"] }
+      "cjkFaces": { "group": "shs-sc" }
     },
     "Hant": {
       "order": ["track", "borrow", "lead", "shrink"],
@@ -68,15 +70,17 @@
       "fillLead": 2,
       "fillLeadRel": 1.3,
       "leftover": "foot",
+      "evenPitch": true,
       "keepAll": false,
       "cjkQuotes": true,
       "noStart": "、。，．,.！？!?）)]」』】〕〉》〙〗”’：:；;・ー〜…々ゝゞぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ%％",
       "noEnd": "（([「『【〔〈《〘〖“‘",
       "hyphen": 1,
       "latinPatterns": "en",
+      "keepAlign": true,
       "cellClear": 0.5,
       "cellCapMin": 0.6,
-      "cjkFaces": { "group": "shs-tc", "kai": "bkai00mp", "light": ["cm", "garamond"] }
+      "cjkFaces": { "group": "shs-tc" }
     },
     "Jpan": {
       "order": ["track", "borrow", "lead", "shrink"],
@@ -103,15 +107,17 @@
       "fillLead": 1.7,
       "fillLeadRel": null,
       "leftover": "foot",
+      "evenPitch": true,
       "keepAll": false,
       "cjkQuotes": true,
       "noStart": "、。，．,.！？!?）)]」』】〕〉》〙〗”’：:；;・ー〜…々ゝゞぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ%％",
       "noEnd": "（([「『【〔〈《〘〖“‘",
       "hyphen": 1,
       "latinPatterns": "en",
+      "keepAlign": true,
       "cellClear": 0.5,
       "cellCapMin": 0.6,
-      "cjkFaces": { "group": "haranoaji", "kai": null, "light": ["cm", "garamond"] }
+      "cjkFaces": { "group": "haranoaji" }
     },
     "Kore": {
       "order": ["track", "borrow", "lead", "shrink"],
@@ -138,15 +144,17 @@
       "fillLead": 1.7,
       "fillLeadRel": null,
       "leftover": "foot",
+      "evenPitch": true,
       "keepAll": true,
       "cjkQuotes": false,
       "noStart": "、。，．,.！？!?）)]」』】〕〉》〙〗”’：:；;・ー〜…々ゝゞぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ%％",
       "noEnd": "（([「『【〔〈《〘〖“‘",
       "hyphen": 1,
       "latinPatterns": "en",
+      "keepAlign": true,
       "cellClear": 0.5,
       "cellCapMin": 0.6,
-      "cjkFaces": { "group": "shs-k", "kai": null, "light": ["cm", "garamond"] }
+      "cjkFaces": { "group": "shs-k" }
     },
     "Latn": {
       "order": ["track", "borrow", "shrink", "lead"],
@@ -173,12 +181,14 @@
       "fillLead": null,
       "fillLeadRel": null,
       "leftover": "foot",
+      "evenPitch": true,
       "keepAll": true,
       "cjkQuotes": true,
       "noStart": "、。，．,.！？!?）)]」』】〕〉》〙〗”’：:；;・ー〜…々ゝゞぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ%％",
       "noEnd": "（([「『【〔〈《〘〖“‘",
       "hyphen": 1,
       "latinPatterns": "en",
+      "keepAlign": true,
       "cellClear": 0.5,
       "cellCapMin": 0.6,
       "cjkFaces": null
@@ -208,12 +218,14 @@
       "fillLead": null,
       "fillLeadRel": null,
       "leftover": "foot",
+      "evenPitch": true,
       "keepAll": true,
       "cjkQuotes": true,
       "noStart": "、。，．,.！？!?）)]」』】〕〉》〙〗”’：:；;・ー〜…々ゝゞぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ%％",
       "noEnd": "（([「『【〔〈《〘〖“‘",
       "hyphen": 1,
       "latinPatterns": "en",
+      "keepAlign": true,
       "cellClear": 0.5,
       "cellCapMin": 0.6,
       "cjkFaces": null

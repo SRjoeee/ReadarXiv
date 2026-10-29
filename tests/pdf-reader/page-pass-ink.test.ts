@@ -131,6 +131,28 @@ describe('the ink units in the page pass', () => {
     expect(layoutWithInk(layout, got, [3, 4]).units.map(u => u[0])).toEqual([4])
   })
 
+  it("drops a unit's label row that meets an ink unit's text, which the reader would show again under its translation", () => {
+    // (SIAM's "AMS subject classifications." before the codes' unit: no label's form, left in no group by the wrap, an ink
+    // unit's; the codes' label row over it, 2610.20266v1 p1, and a row of another page, or apart on this one, kept)
+    const head = { ...headUnit(3, 2), kind: 'inkorphan', cls: 'orphan' }
+    const got = inkOfHost({ base: 3, units: [head] }, { units: [0, 1, 2] })
+    const over = [1, 1, 2, 72, 760, 80, 767.5, 757.5], other = [2, 1, 3, 72, 760, 80, 767.5, 757.5], apart = [0, 1, 2, 72, 700, 80, 707.5, 697.5]
+    const layout = { fonts: [], units: [], lines: [], frames: [], erase: [], ph: [], labels: [apart, over, other] }
+    expect(layoutWithInk(layout, got, [3]).labels).toEqual([apart, other])
+    // (in a part with none of the ink units laid as well: its rows are another part's, its label row still goes)
+    expect(layoutWithInk(layout, got, []).labels).toEqual([apart, other])
+    // (none meets: the layout as it was)
+    const none = { ...layout, labels: [apart, other] }
+    expect(layoutWithInk(none, got, [])).toBe(none)
+    // (an ink unit laid nowhere, its page not drawable: the original's, its ink shown in its group; the row stays — Devin on #481)
+    const off = inkOfHost({ base: 3, units: [head] }, { units: [0, 1, 2] }, [2])
+    expect(off).toBe(null)
+    const offTwo = inkOfHost({ base: 3, units: [head, { ...headUnit(4, 3), kind: 'inkorphan', cls: 'orphan' }] }, { units: [0, 1, 2] }, [2])
+    expect([...(offTwo?.off ?? [])]).toEqual([3])
+    // (the row over the laid one, on page 3, goes)
+    expect(layoutWithInk(layout, offTwo, [3, 4]).labels).toEqual([apart, over])
+  })
+
   it('keeps an echo of an ink unit as the wrap made it, whether or not that unit is laid', () => {
     const echoOf = (id: number, page: number, echo: number | null) => ({ ...headUnit(id, page), echo })
     const ink = { base: 3, units: [echoOf(3, 2, null), echoOf(4, 3, 3), echoOf(5, 4, 0)] }
@@ -165,6 +187,36 @@ describe('the ink units in the page pass', () => {
         // (its row in the part of page 2 alone, by its id; no other part holds the key)
         const holding = got.parts.filter(p => p.figures.length)
         expect(holding.map(p => p.figures.map(f => [f.id, f.page, f.group]))).toEqual([[[id, 2, 'f0']]])
+        // (no token of arXiv's in its band: no anchor on the left, the figure's float lighting it)
+        expect(got.parts.flatMap(p => p.left).some(e => e[0] === id)).toBe(false)
+      }
+    }
+  })
+
+  it('anchors a figure unit on the left by arXiv\'s tokens in its run\'s band, whole and streamed, so that its translation lights its original', async () => {
+    const fig = { page: 2, group: 'f0', text: 'Validation loss', font: 'ABCDEF+ArialMT', size: 8, fill: 0, angle: 0, x: 100, y: 400, ux: 1, uy: 0, length: 60, ascent: 0.88, descent: -0.2, anchor: 'centre', form: true }
+    const stats = { wrapped: 3, refusedPages: 0, unhidden: { marks: 0, across: 0, spell: 0, page: 0, bounds: 0 }, split: 0, groups: 5, labelKept: 0 }
+    const wrap = { stats, unhidden: [], labelKept: [], pages: [[1, 3]], figures: { units: [fig] } }
+    // (arXiv's page 2 sets the label where the wrap drew it: its tokens in the band)
+    const withLabel = (): World => { const w = worldOf(); w.pages[1] = { runs: [...w.pages[1]!.runs, { s: 'Validation loss', x: 100, y: 400 }] }; return w }
+    for (const whole of [false, true]) {
+      for (const ink of [INK, null]) {
+        const w = withLabel()
+        const got = await passOf(w, { ours: oursOf(w, { ink, wrap }), whole })
+        const id = ink ? 5 : 3
+        const entry = got.parts.flatMap(p => p.left).find(e => e[0] === id)
+        expect(entry?.[2].map(r => r[0])).toEqual([2])
+        const [, x0, y0, x1, y1] = entry![2][0]!
+        expect([x0 <= 100, x1 >= 140, y0 <= 400, y1 >= 400]).toEqual([true, true, true, true])
+        // (the source units' anchors as before: each its own page's)
+        for (const u of [0, 1, 2]) expect([...new Set(got.parts.flatMap(p => p.left).find(e => e[0] === u)?.[2].map(r => r[0]))]).toEqual([u + 1])
+        // every part written and read back with its layout, as the container's write path writes it: the figure unit a left unit
+        // of its part and its figure row there, never a layout row (the web's re-pin at 3b2aa271: every part with a figure unit was
+        // refused its layout, `figures[0][0]: a unit of the left or of the layout`, 2010.11929v2 pp3-22 not drawn)
+        expect(got.parts.map(p => [p.pages, p.layout !== null, p.noLayout])).toEqual(got.parts.map(p => [p.pages, true, null]))
+        const holding = got.parts.filter(p => p.figures.length)
+        expect(holding.map(p => [p.figures.map(f => f.id), p.left.some(e => e[0] === id)])).toEqual([[[id], true]])
+        expect(holding[0]!.layout && 'units' in holding[0]!.layout ? holding[0]!.layout.units.some(u => u[0] === id) : true).toBe(false)
       }
     }
   })

@@ -9,10 +9,14 @@
 //      of another class is never one;
 //   2. a line's words: its glyphs left to right, a word ended where two stand a fifth of their size apart; a head's or a list's
 //      line keeps its numbering and its page number the original's ink (a leading section number, a trailing run of leader
-//      dots and a number: no unit's, never erased), so that a contents entry's title is drawn up to its leaders;
+//      dots and a number: no unit's, never erased), so that a contents entry's title is drawn up to its leaders, where the
+//      number stands apart from the line's text (APART: a folio, a section number's \quad, after leaders) or is a running
+//      head's folio (its head's words recur on another page with another number there); a number in the text's own words is
+//      the unit's ("… at ICLR 2021", the same on every page);
 //   3. a unit: a head's line alone; the others' lines while they follow on one page and in one region, each within BLOCK_DY of
-//      its size below the one before and meeting it across, and in one paragraph of TeX's (ink.mjs `paras`: a contents entry,
-//      a note, a paragraph); where the compile marked none, a list's line with the next where it ends in no page number (an
+//      its size below the one before (PARA_DY within one of TeX's paragraphs: a list set double, an indent from the paragraph's
+//      first line where the block begins on it) and meeting it across, and in
+//      one paragraph of TeX's (ink.mjs `paras`: a contents entry, a note, a paragraph); where the compile marked none, a list's line with the next where it ends in no page number (an
 //      entry continued), a note's or an orphan's while they follow;
 //   4. inside a unit, a run of a math face's glyphs or of a typewriter face's is a placeholder (`math`, `url`): its ink kept,
 //      its source the run's characters; a word that is a web address is one in whatever face (a note of an address alone
@@ -28,7 +32,11 @@
 //   7. what it owns: its text glyphs `u<id>`, its placeholders' `u<id>.p` (own.mjs's groups), claimed in the wrap
 //      (claimInk), every one a glyph no unit owned;
 //   8. a block of notes or orphans whose letters are mostly an author unit's words (NAMES_SHARE) is its names (`inknames`): of
-//      the names toggle, as the author block is, not always translated (REVTeX's names its marks do not own).
+//      the names toggle, as the author block is, not always translated (REVTeX's names its marks do not own);
+//   9. its style: the weight, slant and fill most of its text glyphs hold is the unit's, which the reader measures on them; a
+//      run of words in another is a group of the commands that set it (`\textbf{`, `\textmd{`, `\textit{`, `\textup{`,
+//      `\textcolor[HTML]{…}{`), as a source unit's are, so that its translation keeps each run's (a theorem's bold head before
+//      its regular note, a coloured term: the release sweep of 2026-10-25, (d), drew them all in the unit's one style).
 // Pure arithmetic; an original module (no port statement).
 import { classifyFont } from '../layer-proto/fonts.mjs'
 import { utf8 } from '../translate/mt.mjs'
@@ -41,8 +49,20 @@ export const INK_KIND = Object.freeze({ heads: 'inkheads', contents: 'inkcontent
 export const NAMES_SHARE = 0.6
 /** a block's next line: within this many of its size below the one before */
 export const BLOCK_DY = 1.75
+/** a paragraph's next line, where TeX's paragraphs are marked (`paras`): within this many of its size below the one before */
+export const PARA_DY = 3
+/** a line at a paragraph's first line's edge, within this many of its size across, is the next item of a list, not the paragraph's
+ *  next line: more than a digit's width (a right-aligned label's: [9] and [10] start half a size apart, 2610.20266v1 p21), less
+ *  than an em (the narrowest indent) */
+export const EDGE = 0.75
+/** and a line further across than this many of its size from the paragraph's first starts no line of it: past the widest hanging
+ *  label or number measured (a bibliography's [26], 4 sizes; a list of figures' 2.3em), short of where a centred heading's list
+ *  starts (2610.20266v1 p21's "REFERENCES", 20 sizes) */
+export const INDENT = 6
 /** two glyphs one word: closer than this share of their size */
 const WORD_GAP = 0.12
+/** a script: a glyph set at this share of its line's text size or less */
+const SCRIPT = 0.85
 /** a word that numbers a heading or an entry: 1, 1.2, A.3, IV, (a) */
 const NUMBERING = /^\(?(?:\d{1,4}|[ivxlcdm]{1,6}|[IVXLCDM]{1,6}|[A-Z])(?:[.\-–](?:\d{1,4}|[A-Za-z]))*[.:)]?$/u
 /** a page number at a line's end: arabic or roman */
@@ -51,6 +71,9 @@ const PAGE_NUMBER = /^(?:\d{1,4}|[ivxlcdm]{1,8})$/
 const URL_WORD = /(?:https?|ftp):\/\/|^\d{0,3}www\.[^\s.]+\.[a-z]/iu
 /** a leader: dots alone */
 const LEADER = /^[.·•…]+$/u
+/** a number set apart from the word beside it, the page's own ink: more than this share of its size between them (a section
+ *  number's \quad, an entry's number box, a folio's \hfil); a word space is a quarter to a third, after a full stop under a half */
+const APART = 0.5
 /** a line's erase rectangles at most, merged where they meet (layout/make.mjs MERGE, ERASE_MAX) */
 const MERGE = 0.5, ERASE_MAX = 16
 /** a placeholder's segments at most, an inline one's (layout/file.mjs SEGS_INLINE) */
@@ -78,13 +101,60 @@ function famOf(cache, name) {
   return f
 }
 
+/** a face's weight and slant, read once a face (fonts.mjs classifyFont) */
+function faceOf(cache, name) {
+  let f = cache.get(name)
+  if (f === undefined) { const c = classifyFont(name ?? ''); f = { bold: c.bold, italic: c.italic }; cache.set(name, f) }
+  return f
+}
+/** glyphs' style (rule 9): bold and italic where more than half of them are, in their faces' names, and the fill most of those
+ *  whose fill is told hold (null where none is: a pattern, a stroke alone) */
+function styleOfGlyphs(list, faces) {
+  let bold = 0, italic = 0
+  const fills = new Map()
+  for (const x of list) {
+    const f = faceOf(faces, x.font)
+    if (f.bold) bold++
+    if (f.italic) italic++
+    if (Number.isInteger(x.fill) && x.fill >= 0) fills.set(x.fill, (fills.get(x.fill) ?? 0) + 1)
+  }
+  let fill = null, most = 0
+  for (const [v, c] of fills) if (c > most) { most = c; fill = v }
+  return { bold: 2 * bold > list.length, italic: 2 * italic > list.length, fill }
+}
+/** a word's style: its glyphs' */
+const wordStyle = (G, gs, faces) => styleOfGlyphs(gs.map(g => G[g]), faces)
+/** a unit's style: its text words' glyphs' */
+const baseStyleOf = (lines, pages, faces) => styleOfGlyphs(lines.flatMap(l => l.words.filter(w => w.fam === 'text').flatMap(w => w.gs.map(g => pages[l.page - 1].glyphs[g]))), faces)
+/** a style as a run tells it: a fill not told is the unit's */
+const styleKey = (st, base) => `${st.bold ? 1 : 0}${st.italic ? 1 : 0}${st.fill ?? base.fill}`
+/** the groups a run of words opens where its style is not the unit's, outermost first: its colour (xcolor's \textcolor, the
+ *  fill its glyphs hold, which the reader measures on them), its weight, its slant (layer2.mjs STYLE_CMDS reads each) */
+function groupsOf(st, base) {
+  const out = [], fill = st.fill ?? base.fill
+  if (fill !== null && fill !== base.fill) out.push(`\\textcolor[HTML]{${fill.toString(16).padStart(6, '0').toUpperCase()}}{`)
+  if (st.bold !== base.bold) out.push(st.bold ? '\\textbf{' : '\\textmd{')
+  if (st.italic !== base.italic) out.push(st.italic ? '\\textit{' : '\\textup{')
+  return out
+}
+
+/** a kept run's placeholder source: a formula of its characters, or an address */
+const phSource = (fam, text) => sourceView(fam === 'math' ? `$${text.replace(/[$\\{}]/g, '')}$` : `\\url{${text.replace(/[\\{}]/g, '')}}`)
 /** a line's words, left to right: { gs (glyph indices), text, fam (math, mono, or text) } */
 function wordsOf(G, gs, fams) {
   const order = [...gs].filter(g => G[g] && !G[g].blank && /\S/u.test(G[g].u ?? '')).sort((a, b) => G[a].x0 - G[b].x0)
   const out = []
+  // (the line's text size, the one most of its glyphs have: a script set smaller than it, raised or lowered, is no text of the
+  // line's but its formula's — C_n²'s "2", a text face's digit, drawn on the baseline as a word of the translation, 2610.19274v1)
+  const sizes = new Map()
+  for (const g of order) { const z = Math.round(G[g].size * 10) / 10; sizes.set(z, (sizes.get(z) ?? 0) + 1) }
+  let body = 0, most = 0
+  for (const [z, n] of sizes) if (n > most) { most = n; body = z }
   let cur = null, prev = null
   for (const g of order) {
-    const x = G[g], f = famOf(fams, x.font), fam = f === 'math' ? 'math' : f === 'mono' ? 'mono' : 'text'
+    const x = G[g], f = famOf(fams, x.font)
+    let fam = f === 'math' ? 'math' : f === 'mono' ? 'mono' : 'text'
+    if (fam === 'text' && cur?.fam === 'math' && prev !== null && x.size < SCRIPT * body && Math.abs(x.y - G[prev].y) < body && x.x0 - G[prev].x1 <= WORD_GAP * body && !/\p{L}{2}/u.test(x.u ?? '')) fam = 'math'
     if (!cur || (prev !== null && x.x0 - G[prev].x1 > WORD_GAP * Math.max(x.size, G[prev].size)) || cur.fam !== fam) { cur = { gs: [], text: '', fam }; out.push(cur) }
     cur.gs.push(g); cur.text += x.u
     prev = g
@@ -94,15 +164,36 @@ function wordsOf(G, gs, fams) {
   return out
 }
 
-/** a list's or a head's line less its numbering and its page number: [kept words, whether it ended in a page number] */
-function trimmed(words, cls) {
+/** whether two words of a line, `w` left of `v`, stand APART */
+function apart(G, w, v) {
+  let r = -Infinity, l = Infinity, size = 0
+  for (const g of w.gs) { r = Math.max(r, G[g].x1); size = Math.max(size, G[g].size) }
+  for (const g of v.gs) { l = Math.min(l, G[g].x0); size = Math.max(size, G[g].size) }
+  return l - r > APART * size
+}
+
+/** a head's line's number at its end (`b`) or its start (`a`), keyed by the line's other words: the numbers set there wherever
+ *  those words recur */
+const folioKey = (words, side) => `${side}|${(side === 'b' ? words.slice(0, -1) : words.slice(1)).map(w => w.text).join(' ')}`
+
+/** a list's or a head's line less its numbering and its page number: [kept words, whether it ended in a page number]. A number is
+ *  the page's own ink only where it stands apart from the line's text, a folio or a numbering, or is a running head's folio (its
+ *  head's words recur on another page with another number there, `folios`); one in the text's own words is the unit's, translated
+ *  in its flow ("Published as a conference paper at ICLR 2021", 2010.11929v2's head on every page: its year was left the
+ *  original's ink and drawn apart from its line) */
+function trimmed(G, words, cls, folios = null) {
   if (cls !== 'heads' && cls !== 'contents') return [words, false]
   let a = 0, b = words.length
   let ended = false
-  while (b > a && (LEADER.test(words[b - 1].text) || (PAGE_NUMBER.test(words[b - 1].text) && b - 1 > a))) { if (PAGE_NUMBER.test(words[b - 1].text)) ended = true; b-- }
-  while (a < b - 1 && NUMBERING.test(words[a].text) && words[a].fam === 'text') a++
-  // (a leading page number on a head's even page)
-  if (cls === 'heads' && a < b - 1 && PAGE_NUMBER.test(words[a].text)) a++
+  // (a running head's folio however close TeX set it: amsart's \llap{\thepage} after a title as wide as the line, its two digits
+  // nearer its last word than its words are to each other, 2610.21884v1)
+  const folio = side => cls === 'heads' && !!folios?.has(folioKey(words, side))
+  // (its page number: its last word, one number, after its leaders, set apart from the text before it or a running head's folio)
+  if (b - 1 > a && PAGE_NUMBER.test(words[b - 1].text) && (LEADER.test(words[b - 2].text) || apart(G, words[b - 2], words[b - 1]) || folio('b'))) { ended = true; b-- }
+  while (b > a && LEADER.test(words[b - 1].text)) b--
+  // (its numbering, set apart from the text after it: a section number, an entry's in its box; a head's even page's folio)
+  while (a < b - 1 && NUMBERING.test(words[a].text) && words[a].fam === 'text' && apart(G, words[a], words[a + 1])) a++
+  if (cls === 'heads' && a === 0 && a < b - 1 && PAGE_NUMBER.test(words[a].text) && folio('a')) a++
   return [words.slice(a, b), ended]
 }
 
@@ -125,7 +216,7 @@ const ECHO_ORDER = { heading: 0, caption: 1 }
  * frames, erase, ph } }]
  */
 export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
-  const fams = new Map()
+  const fams = new Map(), faces = new Map()
   const base = Number.isInteger(from) && from >= (units?.length ?? 0) ? from : units?.length ?? 0
   // the source units an ink unit may echo, by their letters
   const echoOf = new Map()
@@ -136,11 +227,27 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     if (at === undefined || (ECHO_ORDER[u.kind] ?? 9) < (ECHO_ORDER[units[at].kind] ?? 9)) echoOf.set(key, i)
   })
   // each line of a class made units, its words trimmed (rule 2)
+  const lineWords = new Map()
+  // (a running head's folio: a number at its line's end or start where the line's other words recur on another page with
+  // another number there; a number the same wherever they recur, a conference's year, is the head's)
+  const numbersAt = new Map()
+  for (const L of ledger.lines ?? []) {
+    if (L.cls !== 'heads') continue
+    const words = wordsOf(pages[L.page - 1]?.glyphs ?? [], L.gs, fams)
+    lineWords.set(L, words)
+    if (words.length < 2) continue
+    for (const [side, w] of [['b', words.at(-1)], ['a', words[0]]]) {
+      if (!PAGE_NUMBER.test(w.text)) continue
+      const key = folioKey(words, side), at = numbersAt.get(key) ?? numbersAt.set(key, new Set()).get(key)
+      at.add(w.text)
+    }
+  }
+  const folios = new Set([...numbersAt].filter(([, ns]) => ns.size > 1).map(([key]) => key))
   const segs = []
   for (const L of ledger.lines ?? []) {
     if (!Object.hasOwn(INK_KIND, L.cls) || L.cls === 'names') continue
     const G = pages[L.page - 1]?.glyphs ?? []
-    const [words, ended] = trimmed(wordsOf(G, L.gs, fams), L.cls)
+    const [words, ended] = trimmed(G, lineWords.get(L) ?? wordsOf(G, L.gs, fams), L.cls, folios)
     if (!words.some(w => w.fam === 'text' && PAIR.test(w.text.normalize('NFKC')))) continue
     segs.push({ ...L, words, ended })
   }
@@ -148,10 +255,26 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
   const groups = []
   for (const s of segs) {
     const last = groups.at(-1), prev = last?.at(-1)
-    const follows = prev && prev.page === s.page && prev.cls === s.cls && prev.region === s.region && prev.y - s.y > 0 && prev.y - s.y <= BLOCK_DY * Math.max(prev.size, s.size) && s.x0 < prev.x1 && s.x1 > prev.x0
     // (by TeX's paragraphs where the compile marked them, ink.mjs `paras`: a block one paragraph, a contents entry one; else by the
     // lines' places, as before)
     const paras = prev && prev.para !== null && prev.para !== undefined && s.para !== null && s.para !== undefined
+    // (the next line of one of TeX's paragraphs at the paper's own leading, PARA_DY of its size at most: a thesis's list of figures
+    // set double, its lines 2.4 of their size apart, was cut line by line, each translated alone, 2610.19274v1 pp67-69; never the
+    // skip between a list's items, which no point of their own tells apart: 2610.20266v1 p21's bibliography and its heading read
+    // as one paragraph; BLOCK_DY where no paragraph is marked)
+    const drop = prev ? prev.y - s.y : 0, size = prev ? Math.max(prev.size, s.size) : 0
+    // (past BLOCK_DY, within PARA_DY, a marked paragraph's line is its next only where it starts an indent from the paragraph's first
+    // line, past EDGE and within INDENT: a hanging line, or a paragraph's own run after its indented first; a line at the first's
+    // edge is the next item of a list, which no point of its own tells apart, single-line or not, and a list after a centred
+    // heading starts further across than any indent). The paragraph's first line is the block's only where its point lies on it
+    // (the ledger's `opens`): a block that begins where a paragraph runs on, at a column's or a page's top, begins at a line of
+    // its run, and a list whose items set no point of their own (REVTeX's bibliography, every entry's lines one paragraph's) has
+    // every next item's first line an indent from that run's edge; measured from it, an orphan bibliography read as a hanging
+    // paragraph a column long, each entry's start bridged over the line of its link no unit holds (2610.21770v1 p6-p7,
+    // 2610.20595v1 p20)
+    const dx = prev ? Math.abs(s.x0 - last[0].x0) : 0
+    const near = drop <= BLOCK_DY * size || (paras && prev.para === s.para && last[0].opens === true && drop <= PARA_DY * size && dx > EDGE * size && dx <= INDENT * size)
+    const follows = prev && prev.page === s.page && prev.cls === s.cls && prev.region === s.region && drop > 0 && near && s.x0 < prev.x1 && s.x1 > prev.x0
     // (a paragraph with no point of its own reads as the one before: a contents line ending in its page number ends its entry
     // whatever its point)
     const joins = follows && s.cls !== 'heads' && (s.cls !== 'contents' || !prev.ended) && (paras ? prev.para === s.para : s.cls === 'notes' || s.cls === 'orphan' || s.cls === 'contents')
@@ -171,34 +294,56 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     return all > 0 && named >= NAMES_SHARE * all
   }
   for (const lines of groups) {
-    const id = base + out.length, cls = (lines[0].cls === 'orphan' || lines[0].cls === 'notes') && namesOf(lines) ? 'names' : lines[0].cls, page = lines[0].page, P = pages[page - 1]
-    const G = P.glyphs
-    // pieces: text words joined, a run of math or typewriter words a placeholder (rule 4)
+    const id = base + out.length, cls = (lines[0].cls === 'orphan' || lines[0].cls === 'notes') && namesOf(lines) ? 'names' : lines[0].cls
+    // pieces: text words joined, a run of math or typewriter words a placeholder (rule 4), a run of words in another weight, slant
+    // or colour than the unit's a group that sets it (rule 9)
     const pieces = [], phs = []
     let text = '', plain = ''
     const flushText = () => { if (text) { pieces.push({ t: 'text', s: sourceView(text) }); plain += text; text = '' } }
+    const style0 = baseStyleOf(lines, pages, faces), open = []
+    let runKey = styleKey(style0, style0), pairs = 0
+    const closeRun = () => { while (open.length) pieces.push({ t: 'close', id: open.pop(), src: '}' }) }
     lines.forEach((l, li) => {
       l.words.forEach((w, wi) => {
         const space = wi > 0 || li > 0
         if (w.fam === 'text') {
           // (a hyphen ending a line before a lowercase letter: the word goes on)
-          if (space && !(wi === 0 && li > 0 && /-$/.test(text) && /^\p{Ll}/u.test(w.text))) text += ' '
+          let sep = ''
+          if (space && !(wi === 0 && li > 0 && /-$/.test(text) && /^\p{Ll}/u.test(w.text))) sep = ' '
           else if (wi === 0 && li > 0 && /-$/.test(text)) text = text.slice(0, -1)
+          // (a word in another style than the run's: the run closed, the space before the word outside every group, and a group
+          // of each command that sets what the word holds and the unit does not opened)
+          const st = wordStyle(pages[l.page - 1].glyphs, w.gs, faces), k = styleKey(st, style0)
+          if (k === runKey) text += sep
+          else {
+            const styled = open.length > 0
+            if (!styled) text += sep
+            flushText()
+            closeRun()
+            if (styled) text = sep
+            const groups = groupsOf(st, style0)
+            if (groups.length) flushText()
+            for (const src of groups) { open.push(++pairs); pieces.push({ t: 'open', id: pairs, src }) }
+            runKey = k
+          }
           text += w.text
         } else {
           const lastPh = phs.at(-1)
-          if (lastPh && lastPh.open && lastPh.fam === w.fam) { lastPh.gs.push(...w.gs.map(g => [l.page, g])); lastPh.src += w.text; return }
+          // (a run of one face over a gap or a line: one placeholder, its source the run's characters whole — the piece's too, which
+          // kept the first word's alone)
+          if (lastPh && lastPh.open && lastPh.fam === w.fam) { lastPh.gs.push(...w.gs.map(g => [l.page, g])); lastPh.src += w.text; pieces[lastPh.k].src = phSource(lastPh.fam, lastPh.src); return }
           if (space) text += ' '
           flushText()
           const ph = { k: pieces.length, fam: w.fam, gs: w.gs.map(g => [l.page, g]), src: w.text, open: true }
           phs.push(ph)
-          pieces.push({ t: 'ph', src: sourceView(w.fam === 'math' ? `$${w.text.replace(/[$\\{}]/g, '')}$` : `\\url{${w.text.replace(/[\\{}]/g, '')}}`) })
+          pieces.push({ t: 'ph', src: phSource(w.fam, w.text) })
           return
         }
         for (const p of phs) p.open = false
       })
     })
     flushText()
+    closeRun()
     // echo (rule 5): its letters and its placeholders' count a source unit's; its pieces then that unit's, each visible placeholder
     // of it placed by the ink unit's kept run in its turn
     let echo = null, own = pieces, kept = phs

@@ -27,6 +27,15 @@ export function textsOf(base) {
   return Array.isArray(t) ? t : null
 }
 
+/** the macros TeX said set no ink when the fixture's base page was marked (base.json's `inkless`, layer-fixtures.mjs), or null where
+ *  the record holds none (a pack of before: a unit that opens with one then reads as opening with ink of no mark) */
+export function inklessOf(base) {
+  const f = join(dirname(base), 'base.json')
+  if (!existsSync(f)) return null
+  const t = JSON.parse(readFileSync(f, 'utf8'))?.inkless
+  return Array.isArray(t) ? t : null
+}
+
 /** the engine's layout modules, digested: a change of any (the wrap, the ownership, the walk, the ink, the rules) wraps again */
 function layoutDigest(engine) {
   const dir = join(engine, 'src/pdf-reader/engine/layout')
@@ -41,7 +50,7 @@ function layoutDigest(engine) {
  */
 export function wrapOf({ engine, out, base, layoutFile, source, runs = new Map() }) {
   const bytes = readFileSync(base)
-  const key = sha256([sha256(bytes), sha256(readFileSync(layoutFile)), source ? sha256(readFileSync(source)) : 'none', JSON.stringify(textsOf(base)), layoutDigest(engine)].join('\n')).slice(0, 24)
+  const key = sha256([sha256(bytes), sha256(readFileSync(layoutFile)), source ? sha256(readFileSync(source)) : 'none', JSON.stringify(textsOf(base)), JSON.stringify(inklessOf(base)), layoutDigest(engine)].join('\n')).slice(0, 24)
   if (!runs.has(key)) runs.set(key, made(key, { engine, out, base, bytes, layoutFile, source }))
   return runs.get(key)
 }
@@ -69,7 +78,7 @@ async function made(key, { engine, out, base, bytes, layoutFile, source }) {
     const texts = textsOf(base)
     // (the ink units' ids after the bundle's units before them, the source units' and the paper's structural names', as the
     // page pass reads them: an engine of before ignores it)
-    const r = await wrapFinal(new Uint8Array(bytes), { PL, getDocument: pdfjs.getDocument, documentOptions, OPS: pdfjs.OPS, units, texts, deflate, inflate, inkFrom: bundleUnitsOf(opened).length })
+    const r = await wrapFinal(new Uint8Array(bytes), { PL, getDocument: pdfjs.getDocument, documentOptions, OPS: pdfjs.OPS, units, texts, inkless: inklessOf(base), deflate, inflate, inkFrom: bundleUnitsOf(opened).length })
     if (r.refused) head = { wrapped: false, why: `${r.refused}: ${String(r.why ?? '').slice(0, 200)}` }
     else {
       // (and the ink units the wrap made, where its engine makes them: docs/route/orphan-text.md, the gate's --ink)

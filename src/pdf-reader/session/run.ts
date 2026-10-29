@@ -5,7 +5,8 @@
 //    (a language the layer does not set is said so, and nothing is asked of our server), its failure the card's.
 // 2. The layer is looked at (server.ts lookLayer): a catalog is told whole, with its end; each 202 is the paper's prepare under
 //    way, its objects made so far told, asked again once its wait has passed (never sooner); a 404 `not-prepared` asks the
-//    prepare, once a visit; another 404 is why there is none; a 429 waits its time and asks again; our server out of reach
+//    prepare, once a visit; another 404 is why there is none; a 429 waits its time and asks again, REFUSED_ASKS times in a row at
+//    most, then waits for the reader's retry; our server out of reach
 //    (twice) opens a paper whose catalog this machine holds from it, else says the bilingual version cannot be had now.
 // 3. The side fetches each object through this run: this machine's store first (layer-store.ts, every object checked against
 //    its digest there), then our server, each object kept once read.
@@ -120,6 +121,10 @@ export const WAIT_MIN = 1000, WAIT_MAX = 600_000
 export const POLL_SLOW_AFTER_MS = 120_000, POLL_SLOW_MS = 5000
 /** a prepare polled for this long (the tab shown) is given up: the bilingual version not to be had now, a retry asks again */
 export const PREPARE_DEADLINE_MS = 600_000
+/** how many times in a row a 429 is waited out and asked again by the run itself; the next 429 stops the look, said as our
+ *  server's limit, and a retry asks at once. A visitor's limit lasts up to a day and our server names its end, but a tab left
+ *  open asked again every ten minutes at most for as long as it stayed open (#88 E5) */
+export const REFUSED_ASKS = 3
 const waitOf = (ms: number) => Math.min(WAIT_MAX, Math.max(WAIT_MIN, Number.isFinite(ms) ? ms : WAIT_MIN))
 const isAbort = (e: unknown) => (e as Error)?.name === 'AbortError'
 const kindOf = (e: unknown): ProviderErrorKind => ((e as { kind?: ProviderErrorKind })?.kind ?? 'unknown')
@@ -160,6 +165,8 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
   /** how long the prepare has been polled for, the tab shown (its deadline's); until when a limit's wait runs (a retry waits
    *  it out) */
   let preparedFor = 0, refusedUntil = 0
+  /** the 429s in a row of this beginning's look (REFUSED_ASKS) */
+  let refusals = 0
   /** where the run is: its service and its look at the layer (`state`), and its translation of the layer's units (`rowsState`) */
   let state: 'engine' | 'looking' | 'open' | 'unavailable' | 'failed' = 'engine'
   let rowsState: 'idle' | 'translating' | 'translated' | 'failed' = 'idle'
@@ -186,6 +193,18 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
   async function waited(asked: number, signal: AbortSignal) {
     await sleep(waitOf(asked), signal)
     if (host.hidden?.now()) await host.hidden.shown(signal)
+  }
+  /** a 429: said, then waited out before the look asks again (true), or, past REFUSED_ASKS in a row, the look stopped (false), its
+   *  word left for a retry, which asks at once: no wait is under way (refusedUntil 0). False too where the wait was let go */
+  async function refusedAgain(asked: number, signal: AbortSignal): Promise<boolean> {
+    if (++refusals > REFUSED_ASKS) {
+      unavailable('refused')
+      return false
+    }
+    unavailable('refused', Date.now() + waitOf(asked))
+    try { await waited(asked, signal) } catch { return false }
+    state = 'looking'
+    return true
   }
 
   // ---------------------------------------------------------------- the side's transport
@@ -376,6 +395,8 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
         return unavailable('unreachable')
       }
       if (gone()) return
+      // (an answer that moves the paper on ends a run of 429s; a 404 between a refused prepare and the next does not)
+      if (a.kind === 'catalog' || a.kind === 'preparing') refusals = 0
       switch (a.kind) {
         case 'catalog':
           tag ??= a.bound
@@ -394,9 +415,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
           try { await paced(a.preparing.retryAfterMs, signal) } catch { return }
           continue
         case 'refused':
-          unavailable('refused', Date.now() + waitOf(a.retryAfterMs))
-          try { await waited(a.retryAfterMs, signal) } catch { return }
-          state = 'looking'
+          if (!(await refusedAgain(a.retryAfterMs, signal))) return
           continue
         case 'none':
           if (a.why !== 'not-prepared') return unavailable(a.why)
@@ -407,7 +426,9 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
             const p = await askPrepare(host.api, paper, { fetch: f, signal })
             if (gone()) return
             if (p.kind === 'none') return unavailable(p.why === 'not-prepared' ? 'cannot-prepare' : p.why)
-            if (p.kind === 'refused') { unavailable('refused', Date.now() + waitOf(p.retryAfterMs)); await waited(p.retryAfterMs, signal); state = 'looking'; continue }
+            // a prepare refused (429) was not taken: the visit's one prepare given back, so that the look after the wait asks it
+            // again rather than take the paper for one that cannot be had (the rule of a prepare that never reached our server)
+            if (p.kind === 'refused') { host.prepareUnsent?.(); if (!(await refusedAgain(p.retryAfterMs, signal))) return; continue }
             if (p.kind === 'preparing') { emit({ type: 'preparing', position: p.preparing.position, progress: p.preparing.progress }); await paced(p.preparing.retryAfterMs, signal) }
           } catch (e) {
             if (gone() || isAbort(e)) return
@@ -590,6 +611,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     ac.signal.addEventListener('abort', () => begun.abort(), { once: true })
     state = 'engine'
     preparedFor = 0
+    refusals = 0
     // the original each beginning's layer is bound to, heard anew (a retry may find the layer made again over another)
     tag = null
     basis = null

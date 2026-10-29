@@ -73,13 +73,13 @@ async function compare(tex: string) {
     for (const [i, u] of paper.units.entries()) for (const [k, p] of (u.pieces as { t: string; src?: string }[]).entries()) if (p.t === 'ph' && p.src === src) return `${dests.has(`axt-p${i}.${k}a`) ? 'a' : ''}${dests.has(`axt-p${i}.${k}b`) ? 'b' : ''}`
     return null
   }
-  const options = made.options as { switches?: Record<string, string>; inkless?: string[] }
+  const options = made.options as { switches?: Record<string, string>; inkless?: string[]; texts?: [string, string][] }
   /** a unit's own marks, by its first text: 's' its start mark, 'e' its end mark */
   const unitMarksOf = (first: string) => {
     const i = paper.units.findIndex(u => (u.pieces as { t: string; s?: string }[]).some(p => p.t === 'text' && (p.s ?? '').trim().startsWith(first)))
     return i < 0 ? null : `${dests.has(`axt-${i}s`) ? 's' : ''}${dests.has(`axt-${i}e`) ? 'e' : ''}`
   }
-  return { marked: await itemsOf(made.pdf), own: await itemsOf(own.pdf as Uint8Array), marksOf, unitMarksOf, switches: options.switches ?? {}, inkless: options.inkless ?? [], pdf: made.pdf, units: paper.units }
+  return { marked: await itemsOf(made.pdf), own: await itemsOf(own.pdf as Uint8Array), marksOf, unitMarksOf, switches: options.switches ?? {}, inkless: options.inkless ?? [], texts: options.texts ?? [], pdf: made.pdf, units: paper.units }
 }
 /** a paragraph each with a few more words before `x`, so that some line ends inside the word `x` is about (never none: a
  *  paragraph that opens with a macro has its start mark after it, which an \\xspace in it sees, as before this marking) */
@@ -186,6 +186,29 @@ describe.skipIf(!docker)('the marked original sets every text item where the pap
     const r = await compare(doc('\\usepackage[super]{cite}\\usepackage{hyperref}', `${lines('work \\cite{a}.')}`))
     expect(r.marked).toEqual(r.own)
     expect(r.switches['\\cite']?.[0]).toBe('2')
+  }, 900_000)
+  it('a paper\'s macro that looks ahead before a formula, a citation or a footnote\'s call (2609.20976\'s \\snr, \\ac{SNR}\\xspace): the placeholder after it marked where TeX answered so, \\footnote not (\\xspace sets no space before it)', async () => {
+    const pre = '\\usepackage{xspace}\\usepackage{acronym}\\usepackage{url}\\newcommand{\\snr}{\\ac{SNR}\\xspace}\\newcommand{\\lgn}{\\texttt{lognormal\\allowbreak\\_galaxies}\\xspace}\\newcommand{\\nmx}{\\textsc{nm}\\xspace}'
+    const r = await compare(doc(pre, `\\begin{acronym}\\acro{SNR}{signal-to-noise ratio}\\end{acronym}\n\n${lines('high \\snr $\\geq 50$')}\n\n${lines('the \\snr \\cite{a}')}\n\n${lines('code \\lgn \\footnote{\\url{https://x.org}}')}\n\n${lines('by \\nmx{}\\cite{a}')}`))
+    expect(r.marked).toEqual(r.own)
+    const { aheadKey } = await import('@/pdf-reader/engine/layout/marks.mjs')
+    // (the formula and the citation after \\snr: its opening mark alone, theirs both — a closing mark after \\snr would make the
+    // space TeX skipped after it a second one; the footnote after \\lgn none; the citation right against \\nmx{}'s last letter
+    // none, \\xspace setting no space before the `{}`: a mark's whatsit there would let TeX hyphenate the word the citation's
+    // box keeps whole, which no box's width shows)
+    expect([r.switches[aheadKey('\\snr', ' ', '$\\geq 50$')], r.switches[aheadKey('\\snr', ' ', '\\cite{a}')], r.switches[aheadKey('\\lgn', ' ', '\\footnote{\\url{https://x.org}}')], r.switches[aheadKey('\\nmx{}', '', '\\cite{a}')]]).toEqual(['1', '1', '2', '2'])
+    expect([r.marksOf('\\snr'), r.marksOf('$\\geq 50$'), r.marksOf('\\cite{a}'), r.marksOf('\\nmx{}')]).toEqual(['a', 'ab', 'ab', 'a'])
+  }, 900_000)
+  it('a sample that leaves TeX\'s state broken (2010.11929v2\'s \\tikz\\fill, cut in two: \\tikz alone opens a picture it never closes, in which pgf\'s \\selectfont selects \\nullfont) before a letter macro and a look-ahead pair: both answered as without it', async () => {
+    const pre = '\\usepackage{tikz}\\usepackage{xspace}\\newcommand\\bert{BERT}\\newcommand{\\nmx}{\\textsc{nm}\\xspace}'
+    const body = `The \\bert{} model.\n\n${lines('by \\nmx{}\\cite{a}')}`
+    const [broken, clean] = [await compare(doc(pre, `A dot \\tikz\\fill (0,0) circle (.5ex); here.\n\n${body}`)), await compare(doc(pre, body))]
+    expect(broken.marked).toEqual(broken.own)
+    const { aheadKey } = await import('@/pdf-reader/engine/layout/marks.mjs')
+    const answers = (r: typeof clean) => ({ text: r.texts.find(([s]) => s === '\\bert{}')?.[1], inkless: r.inkless.includes('\\bert{}'), pair: r.switches[aheadKey('\\nmx{}', '', '\\cite{a}')], marks: [r.marksOf('\\bert{}'), r.marksOf('\\nmx{}'), r.marksOf('\\cite{a}')] })
+    // (\\bert{}: its text, a box with ink; the citation right against \\nmx{}: 2, its opening mark alone, none on the citation)
+    expect(answers(clean)).toEqual({ text: 'BERT', inkless: false, pair: '2', marks: ['ab', 'a', ''] })
+    expect(answers(broken)).toEqual(answers(clean))
   }, 900_000)
   it('a complete macro glued to the placeholder after it (2610.21098\'s \\HarnessLimitShare{}\\%): its closing mark where TeX answered so for that follower', async () => {
     const r = await compare(doc('\\newcommand\\share{91.5}\\newcommand\\rate{0.73}', `${lines('of \\share{}\\% each')}\n\n${lines('of \\rate{}\\S{} each')}`))

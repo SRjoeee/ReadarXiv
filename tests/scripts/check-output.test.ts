@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -159,5 +159,17 @@ describe('the layer reader\'s package', () => {
     expect(verdict('the web-accessible resources are popup.html and pdf-reader.html')).toBe('✗')
     expect(verdict('the offscreen document stays')).toBe('✗')
     expect(verdict('the extension\'s pages frame nothing')).toBe('✗')
+  })
+})
+
+describe('the store archive', () => {
+  // `wxt zip` builds again before it writes the archive, and that build was checked by nothing: `pnpm build && pnpm zip` paired
+  // the two by convention only (#88 E8). Each archive's script ends with the check of its own kind of build
+  const scripts = (JSON.parse(readFileSync(resolve('package.json'), 'utf8')) as { scripts: Record<string, string> }).scripts
+  it('is checked as its build is: the release archive as a release, the staging archive as staging', () => {
+    expect(scripts.zip).toBe('wxt zip && node scripts/check-output.mjs')
+    expect(scripts['zip:staging']).toMatch(/ wxt zip && AXT_BUILD=staging node scripts\/check-output\.mjs$/)
+    // the archive and its build ask the same server
+    expect(scripts['zip:staging']!.split(' wxt zip')[0]).toBe(scripts['build:staging']!.split(' wxt build')[0])
   })
 })

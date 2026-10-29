@@ -2,16 +2,17 @@
 // through Part 3's tests/e2e/probes/align.mjs): every state of the gallery — the popup's fixtures, light and dark side by
 // side — in both languages. Each row's items on the row's centre line within 0.5 px; the popup's blocks at 12 px from
 // both edges, the group's words at 24 and its values ending 24 from the trailing edge, the gear's glyph ending at 12;
-// then the rows hovered and measured again, and each menu opened and measured against its row and its popup. Every
-// fixture is shot at 2x (200 %) into lab/pdf/out/popup/, the menus open too. Prints what is off and
-// exits 1 if anything is. The gallery is in development builds only (wxt.config.ts DEV_PAGES):
+// then the rows hovered and measured again, and each menu opened and measured against its row and its popup, its rows
+// against the trailing check (align.mjs menuRows). Every fixture is shot at 2x (200 %) into lab/pdf/out/popup/, the
+// menus open too. Prints what is off and exits 1 if anything is. The gallery is in development builds only
+// (wxt.config.ts DEV_PAGES):
 //   pnpm exec wxt build --mode development && node tests/e2e/probes/popup-align.mjs
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
-import { edges, offCentre, shootEach } from './align.mjs'
+import { edges, menuRows, offCentre, shootEach } from './align.mjs'
 
 const EXT = fileURLToPath(new URL('../../../.output/chrome-mv3-dev', import.meta.url))
 const OUT = fileURLToPath(new URL('../../../lab/pdf/out/popup/', import.meta.url))
@@ -160,8 +161,9 @@ for (const lang of ['zh-CN', 'en']) {
   for (const row of (await page.locator('.popup button.group-row').all()).slice(0, 4)) { await row.hover(); await sleep(150) }
   await measureAll(`${lang}, the rows hovered`)
   const frameOf = state => page.locator('section', { has: page.locator('h2 span', { hasText: new RegExp(`^${state}$`) }) }).locator('[data-theme="light"] .popup')
-  // P2's services too: its Chrome row carries the pack's download, the one row of the popup with an action in it
-  for (const [state, trigger, name] of [['P1', 'button.group-row >> nth=0', 'services'], ['P2', 'button.group-row >> nth=0', 'services-download'], ['P1', 'button.group-row >> nth=1', 'languages'], ['P15', 'button.group-row >> nth=2', 'prompts'], ['P1', '.style-btn', 'styles']]) {
+  // P2's services too: its Chrome row carries the pack's download, the one row of the popup with an action in it; and
+  // P10's, where that row is chosen while its pack downloads, the check after the spinner
+  for (const [state, trigger, name] of [['P1', 'button.group-row >> nth=0', 'services'], ['P2', 'button.group-row >> nth=0', 'services-download'], ['P10', 'button.group-row >> nth=0', 'services-downloading'], ['P1', 'button.group-row >> nth=1', 'languages'], ['P15', 'button.group-row >> nth=2', 'prompts'], ['P1', '.style-btn', 'styles']]) {
     await page.keyboard.press('Escape')
     await sleep(200)
     const frame = frameOf(state)
@@ -169,6 +171,7 @@ for (const lang of ['zh-CN', 'en']) {
     await sleep(400)
     report(`${lang}, ${state}'s ${name} menu: its place`, await menuPlace())
     report(`${lang}, ${state}'s ${name} menu: its rows`, await offCentre(page, { rows: '.pop.menu:popover-open [role="option"]' }))
+    report(`${lang}, ${state}'s ${name} menu: its words and its checks (the trailing check)`, await menuRows(page, '.pop.menu:popover-open'))
     await frame.screenshot({ path: join(OUT, `${lang}-${state}-${name}.png`) })
   }
 }

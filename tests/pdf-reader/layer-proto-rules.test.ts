@@ -100,10 +100,10 @@ describe("v0's open takes every choice for its target from the rule set it is gi
 
   it('reports the set it was opened with: its schema and version', async () => {
     const run = await open()
-    expect(run.rules).toEqual({ schema: 5, version: BUILTIN_RULES.version })
+    expect(run.rules).toEqual({ schema: 7, version: BUILTIN_RULES.version })
     const set = editable()
     set.version = 4
-    expect((await open({ rules: set })).rules).toEqual({ schema: 5, version: 4 })
+    expect((await open({ rules: set })).rules).toEqual({ schema: 7, version: 4 })
   })
 
   it('takes no params option: a host sets a field in the rule set, not on the open (a type test)', () => {
@@ -129,13 +129,13 @@ describe("v0's open takes every choice for its target from the rule set it is gi
     const run1 = await import('@/pdf-reader/engine/layer-proto/run.mjs')
     const fonts = await import('@/pdf-reader/engine/layer-proto/fonts.mjs')
     const set = editable()
-    set.languages.zh = { ...set.languages.zh!, latinPatterns: 'de', cjkFaces: { group: 'shs-tc', kai: null, light: ['times', 'cm', 'garamond'] } }
+    set.languages.zh = { ...set.languages.zh!, latinPatterns: 'de', cjkFaces: { group: 'shs-tc' } }
     const run = await run1.openProto({ ...paper(), target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false, rules: set } as never)
-    // (the open's faces: Traditional Chinese's, light beside Times, as the set says; the paper's family read from its first
-    // page keeps the set's family)
-    expect(fonts.bodyFaceId()).toBe('shs-tc-light')
+    // (the open's faces: Traditional Chinese's, as the set says, at Regular; the paper's family read from its first page keeps
+    // the set's family and its weights, Regular and Bold beside every family)
+    expect(fonts.bodyFaceId()).toBe('shs-tc-regular')
     await run.until(1)
-    expect(fonts.roleFaces()?.cjk?.body).toBe('shs-tc-light')
+    expect(fonts.roleFaces()?.cjk).toEqual({ body: 'shs-tc-regular', bold: 'shs-tc-bold' })
     expect(asked.filter(u => u.startsWith('/hyph/')).sort()).toEqual(['/hyph/de.json', '/hyph/en.json'])
     // and the built-in set's patterns, for each target: English's for every target, the language's own, Russian's by rules
     for (const [t, want] of [['zh', ['en']], ['de', ['de', 'en']], ['fr', ['en']], ['ru', ['en']]] as const) {

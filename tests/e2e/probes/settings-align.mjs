@@ -12,7 +12,8 @@
 // group (Task 103b): centred at 1300 px, the interface language at the sidebar's foot; from the window's edge at 1000
 // px, narrower than the group; below 640 px the interface language at the title row's end, its menu opening downward,
 // no gap under the sidebar, and a language chosen from there with the e2e helper. Its row a search shows names the
-// place true at each width (Task 104b). Prints what is off; exits 1 when anything is.
+// place true at each width (Task 104b). The menus' rows are held to the trailing check (align.mjs menuRows): a
+// service's ⋯, the target language's, the interface language's. Prints what is off; exits 1 when anything is.
 //   pnpm build && node tests/e2e/probes/settings-align.mjs
 import { mkdirSync, rmSync } from 'node:fs'
 import { createServer } from 'node:http'
@@ -20,6 +21,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright'
 import { copyWithGrants } from '../ext-copy.mjs'
 import { chooseUiLanguage } from '../options-page.mjs'
+import { menuRows } from './align.mjs'
 
 const E2E = fileURLToPath(new URL('../', import.meta.url))
 const SRC = process.env.AXT_EXT_DIR ?? fileURLToPath(new URL('../../../.output/chrome-mv3', import.meta.url))
@@ -349,6 +351,10 @@ for (const lang of ['zh-CN', 'en']) {
     await state('translate-refused', () => service(REFUSED).click(), { shows: 'form[data-form="key"]' })
     await state('translate-keyless', () => service(KEYLESS).click(), { shows: 'form[data-form="key"]' })
     await state('translate-menu', async () => { await service(REFUSED).hover(); await service(REFUSED).locator('[data-icon-button]').click() }, { shows: ':popover-open [role="menu"]' })
+    off.push(...(await menuRows(page, '.pop:popover-open')).map(o => `${tag} translate-menu: ${o}`))
+    await page.keyboard.press('Escape')
+    await state('translate-language-menu', () => page.locator('[data-row="translate/language"]').click(), { shows: ':popover-open [role="listbox"]' })
+    off.push(...(await menuRows(page, '.pop:popover-open')).map(o => `${tag} translate-language-menu: ${o}`))
     await page.keyboard.press('Escape')
     await state('translate-add', async () => {
       await page.locator('[data-row="translate/services"] > button[data-srow]').last().click()
@@ -396,6 +402,7 @@ for (const lang of ['zh-CN', 'en']) {
     await open('translate/prompts')
     await state('deeplink', undefined, { shows: '[data-row="translate/prompts"][data-flash]' })
     await state('language-menu', () => page.locator('.o-lang').click(), { shows: ':popover-open [role="listbox"]' })
+    off.push(...(await menuRows(page, '.pop:popover-open')).map(o => `${tag} language-menu: ${o}`))
     await page.keyboard.press('Escape')
     // S-O-02 (§6.7): settings this build cannot read — the card at the top, the data section alone; then the settings put back
     const kept = await worker.evaluate(() => chrome.storage.local.get(['config', 'config$']))

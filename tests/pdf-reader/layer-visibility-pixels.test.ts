@@ -28,7 +28,7 @@ let wrapped: Uint8Array, base: Uint8Array, owned: Owned
 beforeAll(async () => {
   base = new Uint8Array(readFileSync(new URL('sample-1-final.pdf', OCG)))
   const units = openPaper(new Map(['main.tex', 'refs.bib', 'main.bbl'].map(f => [f, new Uint8Array(readFileSync(new URL(f, SAMPLE)))]))).units
-  const r = await wrapFinal(base, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, OPS, units: units as never, texts: null, deflate, inflate, keepOwned: true } as never) as unknown as { bytes: Uint8Array; owned: Owned; refused?: string }
+  const r = await wrapFinal(base, { PL: PL as never, getDocument: getDocument as never, documentOptions: DOCUMENT_OPTIONS, OPS, units: units as never, texts: null, inkless: null, deflate, inflate, keepOwned: true } as never) as unknown as { bytes: Uint8Array; owned: Owned; refused?: string }
   if (r.refused) throw new Error(r.refused)
   wrapped = r.bytes
   owned = r.owned

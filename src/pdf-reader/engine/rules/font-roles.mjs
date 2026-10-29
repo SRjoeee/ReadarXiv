@@ -16,9 +16,10 @@
 //   letters and no polytonic Greek, which CMU, FreeSerif, FreeSans and FreeMono hold whole.
 // - Tier 2, the scripts no Western family covers well (CJK, Arabic, Hebrew, the Indic scripts, Thai and the rest): the
 //   Noto superfamily, one design per script. Source Han Serif is Noto Serif CJK: zh, zh-Hant and ko in Source Han Serif
-//   SC, TC and K, ja in Harano Aji Mincho (Source Han Serif JP), at static weights that follow the paper's English family
-//   (Light beside Computer Modern and Garamond, Regular beside the rest), its real bold (SemiBold, Bold) for bold and
-//   headings, as the original's serif bold; Korean's Hangul at the size of the family's ideographs (Face.size). Emphasis
+//   SC, TC and K, ja in Harano Aji Mincho (Source Han Serif JP), at Regular beside every English family and its real bold,
+//   Bold, for bold and headings, as the original's serif bold (the maintainer's ruling of 2026-10-29: Light, and SemiBold
+//   for its bold, beside Computer Modern and Garamond read lighter than the page, docs/PDF-READER.md §18.1); Korean's
+//   Hangul at the size of the family's ideographs (Face.size). Emphasis
 //   is that same face slanted (the owner's ruling of 2026-10-19: a shear the layer draws, layer-proto/fonts.mjs
 //   CJK_SLANT_DEG), in every CJK target alike; no Kai. GNU FreeFont's own Arabic, Indic and Thai glyphs are not taken for
 //   Tier 2: their styles are not one design.
@@ -80,25 +81,17 @@ import { scriptOf } from './script.mjs'
  * Mono PS 0, its regular a quarter darker); GNU FreeSerif 3–24 and FreeSans 13–26, their advances reworked
  */
 const FACE_TABLE = `
-shs-sc-light             SourceHanSerifSC-Light.otf      hosted   shs-sc         300  normal  1      OFL-1.1                                               ofl
 shs-sc-regular           SourceHanSerifSC-Regular.otf    hosted   shs-sc         400  normal  1      OFL-1.1                                               ofl
 shs-sc-medium            SourceHanSerifSC-Medium.otf     hosted   shs-sc         500  normal  1      OFL-1.1                                               ofl
-shs-sc-semibold          SourceHanSerifSC-SemiBold.otf   hosted   shs-sc         600  normal  1      OFL-1.1                                               ofl
 shs-sc-bold              SourceHanSerifSC-Bold.otf       hosted   shs-sc         700  normal  1      OFL-1.1                                               ofl
-shs-tc-light             SourceHanSerifTC-Light.otf      hosted   shs-tc         300  normal  1      OFL-1.1                                               ofl
 shs-tc-regular           SourceHanSerifTC-Regular.otf    hosted   shs-tc         400  normal  1      OFL-1.1                                               ofl
 shs-tc-medium            SourceHanSerifTC-Medium.otf     hosted   shs-tc         500  normal  1      OFL-1.1                                               ofl
-shs-tc-semibold          SourceHanSerifTC-SemiBold.otf   hosted   shs-tc         600  normal  1      OFL-1.1                                               ofl
 shs-tc-bold              SourceHanSerifTC-Bold.otf       hosted   shs-tc         700  normal  1      OFL-1.1                                               ofl
-shs-k-light              SourceHanSerifK-Light.otf       hosted   shs-k          300  normal  0.956  OFL-1.1                                               ofl
 shs-k-regular            SourceHanSerifK-Regular.otf     hosted   shs-k          400  normal  0.959  OFL-1.1                                               ofl
 shs-k-medium             SourceHanSerifK-Medium.otf      hosted   shs-k          500  normal  0.965  OFL-1.1                                               ofl
-shs-k-semibold           SourceHanSerifK-SemiBold.otf    hosted   shs-k          600  normal  0.967  OFL-1.1                                               ofl
 shs-k-bold               SourceHanSerifK-Bold.otf        hosted   shs-k          700  normal  0.974  OFL-1.1                                               ofl
-haranoaji-light          HaranoAjiMincho-Light.otf       texlive  haranoaji      300  normal  1      OFL-1.1                                               ofl
 haranoaji-regular        HaranoAjiMincho-Regular.otf     texlive  haranoaji      400  normal  1      OFL-1.1                                               ofl
 haranoaji-medium         HaranoAjiMincho-Medium.otf      texlive  haranoaji      500  normal  1      OFL-1.1                                               ofl
-haranoaji-semibold       HaranoAjiMincho-SemiBold.otf    texlive  haranoaji      600  normal  1      OFL-1.1                                               ofl
 haranoaji-bold           HaranoAjiMincho-Bold.otf        texlive  haranoaji      700  normal  1      OFL-1.1                                               ofl
 fandolkai                FandolKai-Regular.otf           texlive  fandolkai      400  normal  1      GPL-3.0-or-later WITH Font-exception-2.0              gpl
 bkai00mp                 bkai00mp.ttf                    texlive  bkai00mp       400  normal  1      Arphic-1999                                           notice
@@ -195,6 +188,8 @@ export const FACES = Object.freeze(Object.fromEntries(FACE_TABLE.trim().split('\
 // a face by its family, weight and style
 const BY_STYLE = new Map(Object.values(FACES).map(f => [`${f.family}|${f.weight}|${f.style}`, f.id]))
 const CJK_GROUPS = /^axt-(shs-|mincho|fandolkai|bkai00mp)/
+/** whether a face of the catalog is a CJK one (Source Han Serif's, Harano Aji's, a Kai): a rule's CJK group is checked by it */
+export const isCjkFace = id => Object.hasOwn(FACES, id) && CJK_GROUPS.test(FACES[id].family)
 
 // ---------------------------------------------------------------------------------------------------------------------
 // The names. A design, its class, its NFSS family names (anchored, as \rmdefault and the rest hold them), its PostScript
@@ -225,7 +220,7 @@ const DESIGNS = [
   { design: 'garamond', cls: 'serif', nfss: /^(?:ebg|EBGaramond|ugm|mdugm|zgm|GaramondLibre|garamondx)/, ps: /^(?:EBGaramond|AGaramond|AdobeGaramond|Garamond|URWGaramond)/ },
   { design: 'utopia', cls: 'serif', nfss: /^(?:put|mdput|fut|Erewhon|Utopia)/, ps: /^(?:Utopia|Erewhon)/ },
 ]
-/** the English families a paper's body is set in, and a rule may name as one a CJK face is light beside */
+/** the English families a paper's body is set in */
 export const ENGLISH_FAMILIES = Object.freeze(['cm', 'times', 'libertine', 'palatino', 'charter', 'garamond', 'utopia', 'other'])
 const SERIF_DESIGN = new Set(ENGLISH_FAMILIES)
 
@@ -337,12 +332,10 @@ const LATIN_FALLBACKS = Object.fromEntries(Object.values(FACES).filter(f => !CJK
 
 /**
  * What a target draws in, for a paper's English family. `cjkFaces`: the target's CJK family as the layout rule set gives
- * it (rules/layout.mjs: its group, the English designs beside which it takes the light weights), null for an alphabet.
- * Which family a script takes is a layout rule, not a fact about the files: this table only builds the roles from it
- * (Light beside Computer Modern and Garamond, its bold SemiBold; Regular and Bold beside the rest, spec §4.4). The set's
- * `kai` is not read: an engine before the ruling of 2026-10-19 drew emphasis in it, and the set keeps it for those until
- * its schema next moves (docs/PDF-READER.md §18.1, the font roles). A script that is no alphabet's and is given none has
- * no roles to draw in
+ * it (rules/layout.mjs: its group), null for an alphabet. Which family a script takes is a layout rule, not a fact about
+ * the files: this table only builds the roles from it, Regular for the body and Bold for bold beside every English family
+ * (the maintainer's ruling of 2026-10-29, docs/PDF-READER.md §18.1, the font roles). A script that is no alphabet's and is
+ * given none has no roles to draw in
  */
 export function rolesFor(target, family, cjkFaces) {
   const script = scriptOf(target)
@@ -350,10 +343,9 @@ export function rolesFor(target, family, cjkFaces) {
   const fallbacks = { ...LATIN_FALLBACKS }
   if (cjkFaces) {
     const { group } = cjkFaces
-    const light = cjkFaces.light.includes(family)
-    cjk = { body: `${group}-${light ? 'light' : 'regular'}`, bold: `${group}-${light ? 'semibold' : 'bold'}` }
+    cjk = { body: `${group}-regular`, bold: `${group}-bold` }
     // Traditional Chinese's characters Source Han Serif TC lacks, from SC at the same weight
-    if (script === 'Hant') for (const w of ['light', 'regular', 'medium', 'semibold', 'bold']) fallbacks[`shs-tc-${w}`] = Object.freeze([`shs-sc-${w}`])
+    if (script === 'Hant') for (const w of ['regular', 'medium', 'bold']) fallbacks[`shs-tc-${w}`] = Object.freeze([`shs-sc-${w}`])
   } else if (!ALPHABETS.has(script)) throw new Error(`no font roles for ${target} (script ${script}) yet`)
   return Object.freeze({ target, family, cjk: cjk && Object.freeze(cjk), fallbacks: Object.freeze(fallbacks) })
 }
@@ -381,9 +373,17 @@ const LETTERS = {
   de: `${LATIN}ÄÖÜäöüß`, fr: `${LATIN}ÀÂÆÇÉÈÊËÎÏÔŒÙÛÜŸàâæçéèêëîïôœùûüÿ`, es: `${LATIN}ÁÉÍÑÓÚÜáéíñóúü¡¿`,
   pt: `${LATIN}ÃÕÁÂÀÇÉÊÍÓÔÚÜãõáâàçéêíóôúü`, ru: `${CYRILLIC}Ёё`,
 }
+// (worked out once a target: faceFor asks it for every run of every unit laid)
+const LETTERS_OF = new Map()
 const lettersOf = target => {
-  const language = new Intl.Locale(target).language
-  return Object.hasOwn(LETTERS, language) ? LETTERS[language] : scriptOf(target) === 'Cyrl' ? CYRILLIC : LATIN
+  let letters = LETTERS_OF.get(target)
+  if (letters === undefined) {
+    const language = new Intl.Locale(target).language
+    letters = Object.hasOwn(LETTERS, language) ? LETTERS[language] : scriptOf(target) === 'Cyrl' ? CYRILLIC : LATIN
+    if (LETTERS_OF.size >= 256) LETTERS_OF.clear()
+    LETTERS_OF.set(target, letters)
+  }
+  return letters
 }
 const holdsAll = new Map()
 // whether a face holds every letter (cached: a table's faces by a handful of targets)

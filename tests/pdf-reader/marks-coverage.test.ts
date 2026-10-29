@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { completeMacros, frontMarks, inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { completeCall, completeCalled, layoutMarking, MARK_CLASSES, markProbeTex, probeSamples, readInkApart, readMarkProbe, symbolText } from '@/pdf-reader/engine/layout/marks.mjs'
+import { bblProvides, openPaper, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { AHEAD_PROBE_MAX, aheadKey, aheadSamples, completeCall, completeCalled, ENTRY_INK_MAX, followsOf, INK_MAX, inkSamples, layoutMarking, leadSamples, MARK_CLASSES, markProbeTex, probeSamples, readInkAnswers, readInkApart, readInkProbe, readInkTexts, readMarkProbe, symbolText } from '@/pdf-reader/engine/layout/marks.mjs'
 import { boundsFromMarks, tokenizeDocument, uprightToken } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 
 // The layout marks a placeholder gets where what stands beside it was guessed at: the paper's own macro taken to look ahead
@@ -224,7 +225,9 @@ describe('a complete macro glued to the placeholder after it (2610.21098\'s \\Ha
   const u = unit([text('A share of '), ph('\\share{}'), ph('\\%'), text(' and '), ph('\\share{}'), ph('\\%'), text(', then '), ph('\\share{}'), ph('\\cite{a}'), text('.')])
   it('the probe asks its probed call before its glued follower, as the call follower (a percent or hash sign escaped is no comment)', () => {
     const samples = probeSamples([u], [['share', 0]])
-    expect(samples).toEqual([{ command: '\\cite', src: '\\cite{a}', call: false }, { command: '\\share', src: '\\share{}', call: false, own: true, glued: '\\%' }])
+    // (and last its call before the citation, a look-ahead pair: a call TeX answered for has its marks by its own answer, but a
+    // reader of the probe's log with no complete macros takes the pairs as numbered all the same)
+    expect(samples).toEqual([{ command: '\\cite', src: '\\cite{a}', call: false }, { command: '\\share', src: '\\share{}', call: false, own: true, glued: '\\%' }, { key: '\\share{}##\\cite{a}', src: '\\share{}', gap: '', follows: '\\cite{a}', math: false, ahead: true }])
     const tex = markProbeTex(samples)
     expect(tex).toContain('way \\share{}\\% \\unskip')
     expect(tex).toContain('way \\share{}{}\\% \\unskip')
@@ -246,6 +249,280 @@ describe('a complete macro glued to the placeholder after it (2610.21098\'s \\Ha
     // (before \\cite{a}, a follower the probe did not ask about: no closing mark)
     expect(marked('00000000')).toContain('\\axtpma{p0.7a}\\share{}\\cite{a}')
     for (const codes of ['00000001', '00000002', '0000000x']) expect(marked(codes)).toContain('\\axtpma{p0.1a}\\share{}\\%')
+  })
+})
+
+describe('a paper\'s macro that looks ahead, before a placeholder (2609.20976\'s \\snr = \\ac{SNR}\\xspace, then $\\geq 50$): the pair asked of TeX', () => {
+  // (the abstract's shape, and 2609.20976's u41, u46, u59 and u61: the macro, a space, an inline formula; u19's: the macro, a
+  // space, a footnote's call, which \\xspace sees as no other token; and a macro of an argument right against a citation)
+  const nested = { t: 'nested', pre: '\\footnote{', post: '}' } as unknown as Piece
+  const u = unit([text('with '), ph('\\snr'), text(' '), ph('$\\geq 50$'), text(' and '), ph('\\lgnrm'), text(' '), ph('\\footnote{\\url{https://x.org}}'), text(', and '), ph('\\name{x}'), ph('\\cite{a}'), text(' by '), ph('\\snr'), text('\n'), ph('$\\geq 50$'), text('.')])
+  it('aheadSamples: each pair of a paper\'s macro and the placeholder after it, past white space alone or none, once; none past text, a blank line or a tie, nor of a text symbol, a macro, a display or a nested note after it', () => {
+    expect(aheadSamples([u])).toEqual([
+      { key: '\\snr# #$\\geq 50$', src: '\\snr', gap: ' ', follows: '$\\geq 50$', math: true, ahead: true },
+      { key: '\\lgnrm# #\\footnote{\\url{https://x.org}}', src: '\\lgnrm', gap: ' ', follows: '\\footnote{\\url{https://x.org}}', math: false, ahead: true },
+      { key: '\\name{x}##\\cite{a}', src: '\\name{x}', gap: '', follows: '\\cite{a}', math: false, ahead: true },
+    ])
+    expect(aheadKey('\\snr', ' ', '$x$')).toBe('\\snr# #$x$')
+    const none = unit([ph('\\snr'), text(' is '), ph('$x$'), ph('\\snr'), text('\n\n'), ph('$x$'), ph('\\snr'), ph('~'), ph('$x$'), ph('\\S'), ph('\\ref{b}'), ph('\\snr'), ph('\\lgnrm'), ph('\\snr'), ph('\\[x\\]'), ph('\\snr'), nested, ph('\\snr'), ph('$x%y$'), ph('\\snr'), ph('\\protect'), ph('\\cite{a}')])
+    expect(aheadSamples([none])).toEqual([])
+    // (at most AHEAD_PROBE_MAX, in the paper's order)
+    const many = unit(Array.from({ length: AHEAD_PROBE_MAX + 2 }, (_, i) => [ph('\\snr'), text(' '), ph(`$${i}$`), text(' and ')]).flat())
+    expect(aheadSamples([many]).map(s => s.follows)).toEqual(Array.from({ length: AHEAD_PROBE_MAX }, (_, i) => `$${i}$`))
+  })
+  it('the probe asks each pair last, after every other section, in boxes of its own rows: the pair as the paper sets it, with every mark, with the two openings', () => {
+    const samples = probeSamples([u])
+    const tex = markProbeTex(samples, ['\\snr'], ['\\lead'])
+    const at = (row: string) => tex.indexOf(row)
+    expect(at('LAYOUT-PROBE 1 ahead-at 0 w')).toBeGreaterThan(at('LAYOUT-PROBE 1 ink-at 1'))
+    expect(at('LAYOUT-PROBE 1 ahead-at 2 d')).toBeGreaterThan(at('LAYOUT-PROBE 1 ahead-at 0 w'))
+    expect(tex).toContain('way \\snr $\\geq 50$ \\unskip')
+    expect(tex).toContain('way \\axtpma{q0a}\\snr\\axtpm{q0b} \\axtpmm{q0c}$\\geq 50$ \\unskip')
+    expect(tex).toContain('way \\axtpma{q0a}\\snr \\axtpmm{q0c}$\\geq 50$ \\unskip')
+    expect(tex).toContain('way \\axtpma{q1a}\\lgnrm \\axtpma{q1c}\\footnote{\\url{https://x.org}} \\unskip')
+    expect(tex).toContain('way \\axtpma{q2a}\\name{x}\\axtpm{q2b}\\axtpma{q2c}\\cite{a} \\unskip')
+    // (and what the list ends with where the placeholder's mark goes, which no box's width shows: a word there TeX would hyphenate
+    // with a whatsit after it, and not with a citation's box — none on the citation; on a formula, whose mark boxes itself, its
+    // opening mark alone)
+    expect(tex).toContain('way \\axtpma{q2a}\\name{x}\\axt@qat\\axtpma{q2c}\\cite{a} \\unskip')
+    const rows = tex.split('\n')
+    expect(rows.find(r => r.includes('ahead 0 '))).toContain('\\ifcase\\axt@qend\\relax\\ifx\\axt@qa\\axt@qc\\xdef\\axt@qo{0}\\else\\xdef\\axt@qo{1}\\fi\\or\\xdef\\axt@qo{1}\\else')
+    expect(rows.find(r => r.includes('ahead 2 '))).toContain('\\or\\xdef\\axt@qo{2}\\else')
+    // (a paper with no pair asks as before)
+    const plain = unit([ph('\\snr'), text(' and '), ph('\\cite{a}')])
+    expect(markProbeTex(probeSamples([plain]))).toBe(markProbeTex([{ src: '\\cite{a}', call: false }]))
+  })
+  it('readMarkProbe: each pair\'s code by its key, an error in its boxes no answer or a lesser one, whatever samples before it the reader knows', () => {
+    const samples = probeSamples([u])
+    const log = 'LAYOUT-PROBE 1 punct 0 00000000\nLAYOUT-PROBE 1 ahead 0 1\nLAYOUT-PROBE 1 ahead 1 2\nLAYOUT-PROBE 1 ahead 2 0\n'
+    expect(readMarkProbe(log, samples)).toEqual({ '\\footnote': '00000000', '\\snr# #$\\geq 50$': '1', '\\lgnrm# #\\footnote{\\url{https://x.org}}': '2', '\\name{x}##\\cite{a}': '0' })
+    // (a reader with the complete macros, whose own samples come before the pairs, reads the pairs by their own rows)
+    expect(Object.entries(readMarkProbe(log, probeSamples([u], [['name', 1]]))).filter(([k]) => k.includes('#'))).toEqual([['\\snr# #$\\geq 50$', '1'], ['\\lgnrm# #\\footnote{\\url{https://x.org}}', '2'], ['\\name{x}##\\cite{a}', '0']])
+    const err = (box: string, code: string) => readMarkProbe(`LAYOUT-PROBE 1 ahead-at 0 ${box}\n! Undefined control sequence.\nLAYOUT-PROBE 1 ahead 0 ${code}\n`, samples)['\\snr# #$\\geq 50$']
+    expect([err('w', '0'), err('a', '0'), err('d', '0'), err('g', '0'), err('c', '0'), err('c', '2')]).toEqual(['x', 'x', '2', '2', '1', '2'])
+    // (a row of no pair, or of another code, is no answer)
+    expect(readMarkProbe('LAYOUT-PROBE 1 ahead 3 0\nLAYOUT-PROBE 1 ahead 0 3\n', samples)).toEqual({})
+  })
+  it('layoutMarking: the placeholder after the macro gets its marks where TeX answered its opening mark there moves nothing, and the macro its closing mark where TeX answered 0', () => {
+    const footnote = '\\footnote{\\url{https://x.org}}'
+    const sw = (codes: string[]) => ({ ...all('\\cite', '\\footnote'), ...Object.fromEntries(aheadSamples([u]).map((s, i) => [s.key, codes[i] as string])) })
+    // (no answer, as before: the macro its opening mark alone, the placeholder after it none — it was LOST, its unit the original's)
+    expect(marksOf(u, { lines: false, switches: all('\\cite', '\\footnote') })).toEqual({ '\\snr': 'a', '$\\geq 50$': '', '\\lgnrm': 'a', [footnote]: '', '\\name{x}': 'a', '\\cite{a}': '' })
+    // (TeX's answers for 2609.20976: \\snr 1 (its closing mark before the space would set a second one), \\lgnrm before the
+    // footnote 2 (\\xspace sets no space before \\footnote, and would before a mark); a macro of an argument before a citation 0)
+    expect(marksOf(u, { lines: false, switches: sw(['1', '2', '0']) })).toEqual({ '\\snr': 'a', '$\\geq 50$': 'ab', '\\lgnrm': 'a', [footnote]: '', '\\name{x}': 'ab', '\\cite{a}': 'ab' })
+    // (the formula after the second \\snr, past a line's end, is the same pair as the first's: one space to TeX)
+    const second = (layoutMarking([u], MARK_CLASSES, { lines: false, switches: sw(['1', '2', '0']) }).units[0]?.pieces ?? []) as Piece[]
+    expect(second.map(p => p.src ?? p.s).join('')).toContain('\\axtpma{p0.12a}\\snr\n\\axtpmm{p0.14a}$\\geq 50$\\axtpm{p0.14b}')
+    // (every answer 0: the macro ending in a control word closed too, as the probe's box set it)
+    expect(marksOf(u, { lines: false, switches: sw(['0', '0', '0']) })).toEqual({ '\\snr': 'ab', '$\\geq 50$': 'ab', '\\lgnrm': 'ab', [footnote]: 'ab', '\\name{x}': 'ab', '\\cite{a}': 'ab' })
+    // (2 and no answer: none, as before)
+    expect(marksOf(u, { lines: false, switches: sw(['2', 'x', '2']) })).toEqual({ '\\snr': 'a', '$\\geq 50$': '', '\\lgnrm': 'a', [footnote]: '', '\\name{x}': 'a', '\\cite{a}': '' })
+  })
+  it('layoutMarking: none for a pair TeX was not asked about, after a macro with no opening mark of its own, or in a front unit', () => {
+    const sw = { ...all('\\cite'), '\\snr# #$\\geq 50$': '0', '\\snr# #\\cite{a}': '0' }
+    // (another formula after \\snr, the same formula after another macro, \\snr right against it)
+    const v = unit([text('A '), ph('\\snr'), text(' '), ph('$\\geq 10$'), text(' B '), ph('\\snrx'), text(' '), ph('$\\geq 50$'), text(' C '), ph('\\snr'), ph('$\\geq 50$'), text('.')])
+    expect(marksOf(v, { lines: false, switches: sw })).toEqual({ '\\snr': 'a', '$\\geq 10$': '', '\\snrx': 'a', '$\\geq 50$': '' })
+    // (a complete call TeX answered for: its closing mark its own answer's, the citation right against it as TeX answered for the
+    // pair — 2 where the call ends in a letter or a digit, the word TeX would hyphenate with a whatsit after it)
+    const z = unit([text('A '), ph('\\share{}'), ph('\\cite{a}'), text('.')])
+    const share = (code: string) => marksOf(z, { lines: false, complete: { share: 0 }, switches: { ...all('\\cite'), '\\share': '00000022', '\\share{}##\\cite{a}': code } })
+    expect([share('2'), share('1'), share('0')]).toEqual([{ '\\share{}': 'a', '\\cite{a}': '' }, { '\\share{}': 'a', '\\cite{a}': 'ab' }, { '\\share{}': 'a', '\\cite{a}': 'ab' }])
+    // (a macro glued to the word before, part of it, has no mark, and the citation after it none)
+    const w = unit([text('word'), ph('\\snr'), text(' '), ph('\\cite{a}'), text('.')])
+    expect(marksOf(w, { lines: false, switches: sw })).toEqual({ '\\snr': '', '\\cite{a}': '' })
+    // (an author block's unit: its marks robust, `\\protect\\axtpma`, which the probe's box did not set)
+    const a = { ...unit([text('Ada, with '), ph('\\snr'), text(' '), ph('$\\geq 50$'), text('.')]), kind: 'author' } as SourceUnit
+    expect(layoutMarking([a], MARK_CLASSES, { lines: false, switches: sw }).units[0]?.pieces.map(p => (p as Piece).src ?? (p as Piece).s).join('')).toBe('Ada, with \\protect\\axtpma{p0.1a}\\snr $\\geq 50$.')
+  })
+})
+
+describe('a placeholder no mark may stand before (\\footnote after \\xspace, TeX\'s answer 2): the maker parts it from the macro by the macro\'s text', () => {
+  // (2609.20976v1 u19: `\\lgnrm \\footnote{\\url{…}}~\\citep{…}`, the call between a macro and a marked citation)
+  const u = unit([text('The code '), ph('\\lgnrm'), text(' '), ph('\\footnote{\\url{https://x.org}}'), ph('~'), ph('\\citep{a}'), text(', which')])
+  const names = new Set(['p0.1a', 'p0.5a', 'p0.5b'])
+  it('followsOf: the split where the macro\'s text is known, a letter or a digit in it, and the call is the one unmarked piece before the next marked one', () => {
+    expect(followsOf([u], names, ['\\lgnrm', 'lognormal_galaxies'])('p0.1a')).toMatchObject({ blocked: true, through: 'p0.5a', split: { name: 'n0.3a', text: 'lognormal_galaxies' } })
+    expect(followsOf([u], names, new Map([['\\lgnrm', 'lognormal_galaxies']]))('p0.1a')?.split).toEqual({ name: 'n0.3a', text: 'lognormal_galaxies' })
+    // (a text ending in punctuation, read character for character: "doi:")
+    expect(followsOf([u], names, ['\\lgnrm', 'galaxies.'])('p0.1a')?.split).toEqual({ name: 'n0.3a', text: 'galaxies.' })
+    // (no texts, as the wrap asked before; no text for the macro, or one of no letter or digit)
+    expect(followsOf([u], names)('p0.1a')?.split).toBeUndefined()
+    expect(followsOf([u], names, ['\\other', 'x'])('p0.1a')?.split).toBeUndefined()
+    expect(followsOf([u], names, ['\\lgnrm', '--'])('p0.1a')?.split).toBeUndefined()
+    // (two unmarked pieces before the next marked one: none; a paper's macro after it, the one unmarked piece: as a call)
+    const two = unit([ph('\\lgnrm'), text(' '), ph('\\footnote{x}'), ph('$y$'), ph('\\citep{a}')])
+    expect(followsOf([two], new Set(['p0.0a', 'p0.4a']), ['\\lgnrm', 'lognormal'])('p0.0a')?.split).toBeUndefined()
+    const macro = unit([ph('\\lgnrm'), text(' '), ph('\\mice'), text(' '), ph('\\citep{a}')])
+    expect(followsOf([macro], new Set(['p0.0a', 'p0.4a']), ['\\lgnrm', 'lognormal'])('p0.0a')?.split).toEqual({ name: 'p0.2a', text: 'lognormal' })
+    // (a text symbol after it, which the layout draws as its character: none)
+    const sym = unit([ph('\\lgnrm'), text(' '), ph('\\%'), text(' '), ph('\\citep{a}')])
+    expect(followsOf([sym], new Set(['p0.0a', 'p0.4a']), ['\\lgnrm', 'lognormal'])('p0.0a')?.split).toBeUndefined()
+  })
+  it('followsOf: the split of a piece with text after it, to a piece of its unit\'s ends (an elsarticle .bbl\'s `\\DOIprefix\\doi{…}.` at an entry\'s end)', () => {
+    const e = { ...unit([text('Tools of Radio Astronomy. '), ph('\\newblock'), text(' '), ph('\\DOIprefix'), ph('\\doi{10.1007/978-3-642-39950-3}'), text('.')]), kind: 'reference' } as SourceUnit
+    expect(followsOf([e], new Set(['p0.3a', '0s', '0e']), ['\\DOIprefix', 'doi:'])('p0.3a')?.split).toEqual({ name: 'p0.4a', text: 'doi:', want: '.', rest: '', ends: ['0e', 't0e', 'h0e'] })
+    // (text, then another piece: its opening one of the ends)
+    const f = unit([ph('\\DOIprefix'), ph('\\doi{10.1/x}'), text(', see '), ph('\\url{https://x.org}'), text('.')])
+    expect(followsOf([f], new Set(['p0.0a', 'p0.3a']), ['\\DOIprefix', 'doi:'])('p0.0a')?.split).toEqual({ name: 'p0.1a', text: 'doi:', want: ',see', rest: 'see', ends: ['p0.3a', '0e', 't0e', 'h0e'] })
+    // (no text after it, the unit's end: no point ends its ink, none)
+    const g = unit([ph('\\DOIprefix'), ph('\\doi{10.1/x}')])
+    expect(followsOf([g], new Set(['p0.0a']), ['\\DOIprefix', 'doi:'])('p0.0a')?.split).toBeUndefined()
+  })
+})
+
+describe('a sample that leaves TeX\'s state broken (2010.11929v2\'s \\tikz\\fill, cut in two): the groups it left open closed after its box, a box in \\nullfont no answer', () => {
+  const u = unit([text('A dot '), ph('\\tikz'), ph('\\fill'), text(' then '), ph('\\natexlab{a}'), text(', with '), ph('\\snr'), text(' '), ph('$\\geq 50$'), text(' by '), ph('\\name{x}'), ph('\\cite{a}'), text('.')])
+  it('each box of the punctuation, ink and look-ahead sections ends at the group level it began at: the groups its sample left open closed after it (\\tikz alone opens a picture it never closes, in which pgf\'s \\selectfont selects \\nullfont)', () => {
+    const tex = markProbeTex(probeSamples([u]), ['\\tikz', '\\fill', '\\natexlab{a}'], ['\\lead'])
+    const boxes = tex.match(/\\setbox\\axt@[qi]box\\hbox\{/g) ?? []
+    // (the asked citation's eight followers, three boxes each and two more; four ink boxes; two pairs, five boxes each)
+    expect(boxes.length).toBeGreaterThan(40)
+    expect(tex.match(/\\xdef\\axt@level\{\\the\\currentgrouplevel\}\\setbox\\axt@[qi]box\\hbox\{/g)?.length).toBe(boxes.length)
+    expect(tex).toContain('\\xdef\\axt@level{\\the\\currentgrouplevel}\\setbox\\axt@ibox\\hbox{\\tikz}\\axt@unwind\\begingroup\\showboxbreadth')
+    expect(tex.match(/\\unskip\\xdef\\axt@qn\{\\the\\lastnodetype\\ifinner\\ifhmode\/in\\fi\\fi\}\}\\axt@unwind\\xdef\\axt@q[a-gw]\{/g)?.length).toBe(boxes.length - 4)
+    // (defined before any box: a \\begingroup's group closed by \\endgroup, a box's or a group of braces' by \\egroup, to the level saved)
+    const unwind = '\\gdef\\axt@unwind{\\global\\let\\axt@unwound\\relax\\ifnum\\currentgrouplevel>\\axt@level\\relax\\ifnum\\currentgrouptype=14 \\global\\let\\axt@unwound\\axt@unwind\\endgroup\\else\\ifnum\\currentgrouptype<6 \\ifnum\\currentgrouptype>0 \\global\\let\\axt@unwound\\axt@unwind\\egroup\\fi\\fi\\fi\\fi\\axt@unwound}'
+    expect(tex.indexOf(unwind)).toBeGreaterThan(-1)
+    expect(tex.indexOf(unwind)).toBeLessThan(tex.indexOf('\\setbox\\axt@qbox\\hbox{'))
+  })
+  // (the shape of TeX Live 2025's pdfTeX log of 2010.11929v2's probe at next, its ink section: \\fill's errors, the boxes after it
+  // in the \\nullfont the picture \\tikz opened left in force; and a box of a font of its own)
+  const nullfont = (c: string) => `Missing character: There is no ${c} in font nullfont!`
+  const listing = (i: number, ...lines: string[]) => [`LAYOUT-PROBE 1 ink-at ${i}`, ...lines, '', '! OK.', `LAYOUT-PROBE 1 ink-end ${i}`]
+  const log = [
+    ...listing(0, '! Package tikz Error: Giving up on this path. Did you forget a semicolon?.', '! Missing } inserted.', '> \\box73=void'),
+    ...listing(1, nullfont('a'), '> \\box73=', '\\hbox(0.0+0.0)x0.0'),
+    ...listing(2, nullfont('B'), nullfont('E'), '> \\box73=', '\\hbox(6.8+0.0)x4.0', '.\\kern1.0', '.\\OT1/cmr/m/n/10 R'),
+    ...listing(3, '> \\box73=', '\\hbox(6.8+0.0)x5.0', '.\\OT1/cmr/m/n/10 a'),
+  ].join('\n')
+  it('readInkProbe, readInkTexts, readInkApart: a box TeX logged a character missing from \\nullfont in has no answer — not a box that sets no ink, no text', () => {
+    const samples = ['\\fill', '\\natexlab{a}', '\\bert', '\\nx']
+    expect(readInkProbe(log, samples)).toEqual([])
+    expect(readInkTexts(log, samples)).toEqual([['\\nx', 'a']])
+    expect(readInkApart(log, samples)).toEqual([])
+  })
+  it('readMarkProbe: a box of a follower\'s or a pair\'s with a character missing from \\nullfont answers as one with an error', () => {
+    const samples = probeSamples([u])
+    const punct = ['LAYOUT-PROBE 1 punct-at 0 7 a', nullfont('w'), 'LAYOUT-PROBE 1 punct 0 00000000'].join('\n')
+    expect(readMarkProbe(punct, samples)['\\cite']).toBe('0000000x')
+    const ahead = ['LAYOUT-PROBE 1 ahead-at 0 w', nullfont('w'), 'LAYOUT-PROBE 1 ahead 0 0', 'LAYOUT-PROBE 1 ahead-at 1 d', nullfont('w'), 'LAYOUT-PROBE 1 ahead 1 0'].join('\n')
+    expect(Object.entries(readMarkProbe(ahead, samples)).filter(([k]) => k.includes('#'))).toEqual([['\\snr# #$\\geq 50$', 'x'], ['\\name{x}##\\cite{a}', '2']])
+  })
+})
+
+describe('the ink section\'s cap and a bibliography\'s entries (2608.25210v2: its body\'s 101 macros fill INK_MAX, its entries\' \\natexlab{} never asked)', () => {
+  const body = (n: number) => Array.from({ length: n }, (_, i) => unit([text('A '), ph(`\\m${i}{}`), text(' word.')]))
+  const entry = (...srcs: string[]) => ({ ...unit(srcs.flatMap(src => [text('Author. 2020'), ph(src), text('. ')])), kind: 'reference' }) as SourceUnit
+  const lead = (src: string) => ({ ...unit([ph(src), text(' Author. A title.')]), kind: 'reference' }) as SourceUnit
+  const listing = (i: number, ...nodes: string[]) => [`LAYOUT-PROBE 1 ink-at ${i}`, '> \\box60=', ...nodes, '', '! OK.', `LAYOUT-PROBE 1 ink-end ${i}`]
+  const chars = (s: string) => ['\\hbox(6.8+0.0)x40.0', ...[...s].map(c => `.\\OT1/cmr/m/n/10 ${c}`)]
+  it('the entries get a share of their own past the body\'s INK_MAX: a body that fills it leaves them asked', () => {
+    const units = [...body(INK_MAX + 5), entry('\\natexlab{}'), entry('\\natexlab{a}')]
+    const asked = inkSamples(units)
+    expect(asked).toHaveLength(INK_MAX + 2)
+    expect(asked.slice(INK_MAX)).toEqual(['\\natexlab{}', '\\natexlab{a}'])
+    // (at most ENTRY_INK_MAX of their own)
+    const many = [...body(2), ...Array.from({ length: ENTRY_INK_MAX + 3 }, (_, i) => entry(`\\e${i}{x}`))]
+    expect(inkSamples(many)).toHaveLength(2 + ENTRY_INK_MAX)
+  })
+  it('the share asks the calls the body\'s room would have asked first, in order, so that no entry is asked less than before; then the entries\' leads; then each call in order', () => {
+    const few = [entry('\\natexlab{a}', '\\doi{10.1/x}'), entry('\\natexlab{b}', '\\doi{10.2/y}'), entry('\\natexlab{}', '\\natexlab{c}')]
+    expect(inkSamples(few)).toEqual(['\\natexlab{a}', '\\doi{10.1/x}', '\\natexlab{b}', '\\doi{10.2/y}', '\\natexlab{}', '\\natexlab{c}'])
+    // (a body of 60: next asked the first 4 calls; they are asked still, before any other — the reviews of #495)
+    const four = [...body(INK_MAX - 4), ...[1, 2, 3, 4].map(i => entry(`\\x{${i}}`)), ...Array.from({ length: ENTRY_INK_MAX + 6 }, (_, i) => entry(`\\y${i}{1}`))]
+    expect(inkSamples(four).slice(INK_MAX - 4, INK_MAX)).toEqual(['\\x{1}', '\\x{2}', '\\x{3}', '\\x{4}'])
+    // (a body that fills INK_MAX: the entries' leads first, a lead past ENTRY_INK_MAX other calls asked all the same)
+    const later = [...body(INK_MAX), ...Array.from({ length: ENTRY_INK_MAX + 2 }, (_, i) => entry(`\\y${i}{1}`)), lead('\\lead{z}')]
+    expect(inkSamples(later)).toContain('\\lead{z}')
+    expect(inkSamples(later)).toHaveLength(INK_MAX + ENTRY_INK_MAX)
+  })
+  it('a lead past the share is a lead of its own, its own text read (the reviews of #495: \\up uppercases its argument)', () => {
+    const units = [...body(INK_MAX), ...Array.from({ length: ENTRY_INK_MAX + 1 }, (_, i) => lead(`\\up{word${i}}`))]
+    const ink = inkSamples(units)
+    expect(ink).not.toContain(`\\up{word${ENTRY_INK_MAX}}`)
+    expect(leadSamples(units)).toEqual([`\\up{word${ENTRY_INK_MAX}}`])
+    const log = [...listing(INK_MAX, ...chars('WORD0')), ...listing(ink.length, ...chars(`WORD${ENTRY_INK_MAX}`))].join('\n')
+    expect(readInkAnswers(log, units).texts).toEqual([['\\up{word0}', 'WORD0'], [`\\up{word${ENTRY_INK_MAX}}`, `WORD${ENTRY_INK_MAX}`]])
+  })
+  it('a call past the share has no answer of another\'s (the reviews of #495: \\def\\pfx#1{#1:\\ifnum#1>64 extra:\\fi} sets "65:extra:" for \\pfx{65}, which no carried "65:" may split before an unmarked DOI): no split, LOST as before', () => {
+    const pfx = (i: number) => ({ ...unit([text('Author. '), ph(`\\pfx{${i}}`), ph('\\doi{10.1/x}'), text('.')]), kind: 'reference' }) as SourceUnit
+    const units = [...body(INK_MAX), ...Array.from({ length: ENTRY_INK_MAX + 1 }, (_, i) => pfx(i + 1))]
+    const ink = inkSamples(units)
+    expect(ink).not.toContain(`\\pfx{${ENTRY_INK_MAX + 1}}`)
+    const log = ink.slice(INK_MAX).flatMap((src, j) => listing(INK_MAX + j, ...chars(`${/\{(\d+)\}/.exec(src)?.[1]}:`))).join('\n')
+    const { texts, inkless, apart } = readInkAnswers(log, units)
+    expect(texts.map(([s]) => s)).not.toContain(`\\pfx{${ENTRY_INK_MAX + 1}}`)
+    expect([inkless, apart]).toEqual([[], []])
+    // (its entry alone: the macro's opening mark, the DOI unmarked, the entry's end; no text, no split — and with a carried one,
+    // "65:", the split would have been made, the DOI taking "extra:")
+    const one = [pfx(ENTRY_INK_MAX + 1)]
+    expect(followsOf(one, new Set(['p0.1a', '0s', '0e']), texts.flat())('p0.1a')?.split).toBeUndefined()
+    expect(followsOf(one, new Set(['p0.1a', '0s', '0e']), [`\\pfx{${ENTRY_INK_MAX + 1}}`, `${ENTRY_INK_MAX + 1}:`])('p0.1a')?.split).toBeDefined()
+  })
+  it('readInkAnswers: the probe\'s log read for the samples, each answer the asked source\'s own (2608.25210v2\'s \\natexlab{} no ink)', () => {
+    const units = [entry('\\natexlab{}'), entry('\\doi{10.0/x}'), entry('\\natexlab{b}')]
+    expect(inkSamples(units)).toEqual(['\\natexlab{}', '\\doi{10.0/x}', '\\natexlab{b}'])
+    const log = [...listing(0, '\\hbox(0.0+0.0)x0.0'), ...listing(1, ...chars('doi:10.0/x')), ...listing(2, ...chars('b'))].join('\n')
+    expect(readInkAnswers(log, units)).toEqual({ inkless: ['\\natexlab{}'], texts: [['\\doi{10.0/x}', 'doi:10.0/x'], ['\\natexlab{b}', 'b']], apart: [] })
+  })
+})
+
+describe('the mark probe sets a .bbl\'s own definitions first (an elsarticle .bbl\'s \\DOIprefix and \\doi, 2610.20848v1)', () => {
+  const tex = '\\documentclass{article}\n\\begin{document}\nA word \\cite{a}.\n\\bibliographystyle{plain}\\bibliography{refs}\n\\end{document}\n'
+  const bbl = '\\begin{thebibliography}{1}\n\\providecommand{\\url}[1]{\\texttt{#1}}\n\\providecommand{\\DOIprefix}{doi:}\n\\providecommand{\\doi}[1]{\\href{http://dx.doi.org/#1}{\\path{#1}}}\n\\expandafter\\ifx\\csname natexlab\\endcsname\\relax\\def\\natexlab#1{#1}\\fi\n\\bibitem{a} A. Author. A title. \\newblock \\DOIprefix\\doi{10.1/x}.\n\\end{thebibliography}\n'
+  const enc = (t: string) => new TextEncoder().encode(t)
+  const probeOf = (files: [string, string][]) => new TextDecoder().decode(probeFiles(openPaper(new Map(files.map(([p, t]) => [p, enc(t)]))), { marks: true }).get('main.tex'))
+  it('each \\providecommand before its first \\bibitem, whole, right after \\begin{document}: the probe\'s ink section then knows the entries\' macros', () => {
+    expect(bblProvides(inMemory(new Map([['main.tex', enc(tex)], ['main.bbl', enc(bbl)]])), 'main.tex')).toBe('\\providecommand{\\url}[1]{\\texttt{#1}}\\providecommand{\\DOIprefix}{doi:}\\providecommand{\\doi}[1]{\\href{http://dx.doi.org/#1}{\\path{#1}}}\\expandafter\\ifx\\csname natexlab\\endcsname\\relax\\def\\natexlab#1{#1}\\fi')
+    const probe = probeOf([['main.tex', tex], ['main.bbl', bbl]])
+    expect(probe).toContain('\\begin{document}\\providecommand{\\url}[1]{\\texttt{#1}}\\providecommand{\\DOIprefix}{doi:}')
+    // (none past the first \\bibitem)
+    expect(probe).not.toContain('\\newblock \\DOIprefix')
+    // (a paper with no .bbl asks as before)
+    expect(probeOf([['main.tex', tex]])).not.toContain('\\providecommand')
+  })
+  it('read as TeX reads the .bbl: no definition or \\bibitem in a comment, no brace in one, a comment\'s line end taken with it, and one under \\makeatletter given it again (the reviews of #486)', () => {
+    const bbl2 = [
+      '\\begin{thebibliography}{2}', '% \\providecommand{\\foo}{wrong}', '% a \\bibitem in a comment', '\\providecommand{\\foo}{right}',
+      '\\providecommand{\\bar}{% closing } in a comment', '  hello}', '100\\% \\providecommand{\\pct}{5\\%}', '\\makeatletter',
+      '\\providecommand{\\baz}[1]{\\@firstofone{#1}}', '\\makeatother', '\\providecommand{\\qux}{q}', '\\bibitem{a} A. Author.', '\\end{thebibliography}',
+    ].join('\n')
+    expect(bblProvides(inMemory(new Map([['main.tex', enc(tex)], ['main.bbl', enc(bbl2)]])), 'main.tex')).toBe('\\providecommand{\\foo}{right}\\providecommand{\\bar}{hello}\\providecommand{\\pct}{5\\%}\\makeatletter\\providecommand{\\baz}[1]{\\@firstofone{#1}}\\makeatother \\providecommand{\\qux}{q}')
+  })
+  const provides = (head: string) => bblProvides(inMemory(new Map([['main.tex', enc(tex)], ['main.bbl', enc(`\\begin{thebibliography}{1}\n${head}\n\\bibitem{a} A. Author.\n\\end{thebibliography}\n`)]])), 'main.tex')
+  it('natbib\'s conditionals, whole, both branches (2608.25210v2\'s \\natexlab{a}, 2010.11929v2\'s \\doi: TeX picks the one for a paper that loads url)', () => {
+    expect(provides('\\expandafter\\ifx\\csname natexlab\\endcsname\\relax\\def\\natexlab#1{#1}\\fi')).toBe('\\expandafter\\ifx\\csname natexlab\\endcsname\\relax\\def\\natexlab#1{#1}\\fi')
+    const doi = '\\expandafter\\ifx\\csname urlstyle\\endcsname\\relax\n  \\providecommand{\\doi}[1]{doi: #1}\\else\n  \\providecommand{\\doi}{doi: \\begingroup \\urlstyle{rm}\\Url}\\fi'
+    expect(provides(`\\providecommand{\\natexlab}[1]{#1}\n${doi}`)).toBe(`\\providecommand{\\natexlab}[1]{#1}${doi}`)
+  })
+  it('a conditional on \\undefined or \\relax, a nested one whole to its own \\fi (Springer\'s \\bisbn)', () => {
+    expect(provides('\\ifx \\bisbn   \\undefined \\def \\bisbn  #1{ISBN #1}\\fi')).toBe('\\ifx \\bisbn   \\undefined \\def \\bisbn  #1{ISBN #1}\\fi')
+    // (amsplain's, the other way round)
+    expect(provides('\\ifx\\undefined\\bysame\n\\newcommand{\\bysame}{\\leavevmode\\hbox to3em{\\hrulefill}\\,}\n\\fi')).toBe('\\ifx\\undefined\\bysame\n\\newcommand{\\bysame}{\\leavevmode\\hbox to3em{\\hrulefill}\\,}\n\\fi')
+    expect(provides('\\ifx\\a\\undefined \\ifnum1=1 \\def\\a{x}\\else\\def\\a{y}\\fi \\let\\b\\a\\fi\\ifx\\c\\relax\\def\\c{z}\\fi')).toBe('\\ifx\\a\\undefined \\ifnum1=1 \\def\\a{x}\\else\\def\\a{y}\\fi \\let\\b\\a\\fi\\ifx\\c\\relax\\def\\c{z}\\fi')
+    // (a package's conditional or a \\newif's in it, whose \\fi the head alone does not tell from the guard's: not copied whole, its
+    // definitions read one by one, each set only where undefined, and what follows read as before — the review of #492)
+    expect(provides('\\ifx\\doi\\undefined \\ifpdf \\def\\doi#1{doi: #1}\\fi \\fi\\providecommand{\\x}{y}')).toBe('\\ifx\\doi\\undefined\\def\\doi#1{doi: #1}\\fi \\providecommand{\\x}{y}')
+    // (one that defines nothing, or replaces a definition, passed over whole: not even the \\def in it)
+    expect(provides('\\ifx\\a\\undefined \\typeout{none}\\fi\\ifx\\b\\undefined \\renewcommand{\\c}{x}\\def\\b{y}\\fi')).toBe('')
+  })
+  it('\\@ifundefined{X}{…}{…} whole, under \\makeatletter', () => {
+    expect(provides('\\makeatletter\n\\@ifundefined{bbl@x}{\\def\\bbl@x#1{#1}}{}\n\\makeatother')).toBe('\\makeatletter\\@ifundefined{bbl@x}{\\def\\bbl@x#1{#1}}{}\\makeatother ')
+  })
+  it('a \\newcommand, as a \\providecommand (alpha\'s \\etalchar: one the paper defined stands)', () => {
+    expect(provides('\\newcommand{\\etalchar}[1]{$^{#1}$}\\newcommand*\\x[2][a]{#1#2}')).toBe('\\providecommand{\\etalchar}[1]{$^{#1}$}\\providecommand*\\x[2][a]{#1#2}')
+  })
+  it('a \\def or \\let of its own, set only where its name is undefined (MNRAS\'s \\mn@doi under \\makeatletter, REVTeX\'s \\let)', () => {
+    expect(provides('\\makeatletter\n\\relax\n\\def\\mn@doi@[#1]#2{\\href{http://dx.doi.org/#2}{#1}}\n\\let\\auto@bib@innerbib\\@empty\n\\makeatother\n\\gdef\\x{y}\\let\\z=\\x')).toBe(
+      '\\makeatletter\\ifx\\mn@doi@\\undefined\\def\\mn@doi@[#1]#2{\\href{http://dx.doi.org/#2}{#1}}\\fi \\makeatother \\makeatletter\\ifx\\auto@bib@innerbib\\undefined\\let\\auto@bib@innerbib\\@empty\\fi \\makeatother \\ifx\\x\\undefined\\gdef\\x{y}\\fi \\ifx\\z\\undefined\\let\\z=\\x\\fi ',
+    )
+  })
+  it('anything else passed over: a \\renewcommand, a length, a group with its own definitions, a \\def of a \\csname; and a harvard .bbl\'s head ends at its first \\harvarditem', () => {
+    expect(provides('\\renewcommand{\\refname}{R}\\setlength{\\itemsep}{0pt}{\\def\\a{b}}\\baselineskip=9pt\\expandafter\\def\\csname x@y\\endcsname{z}')).toBe('')
+    const harvard = '\\begin{thebibliography}{2}\n\\providecommand{\\a}{b}\n\\harvarditem{X}{2020}{x} X. \\def\\c{d}\n\\end{thebibliography}\n'
+    expect(bblProvides(inMemory(new Map([['main.tex', enc(tex)], ['main.bbl', enc(harvard)]])), 'main.tex')).toBe('\\providecommand{\\a}{b}')
   })
 })
 

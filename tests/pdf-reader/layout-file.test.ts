@@ -130,6 +130,16 @@ describe('a valid file', () => {
     expect(index.unit(5)!.ph.get(3)).toEqual({ kind: 'display', flags: PH_FLAG.JOINED, segs: new Float64Array(0), text: null, fill: null })
     expect(index.unit(8)!.ph.get(1)?.flags).toBe(PH_FLAG.LOST | PH_FLAG.OUTSIDE)
   })
+  it('a unit TeX set flush left or flush right indexes as such (LAYOUT 26); one of before none', () => {
+    const f = made()
+    f.units[2]![3] = UNIT_FLAG.FLUSH_LEFT
+    f.units[3]![3] = UNIT_FLAG.FRONT | UNIT_FLAG.FLUSH_RIGHT
+    const index = indexLayout(parseLayout(utf8(encodeLayout(f))))
+    const id = (i: number) => f.units[i]![0] as number
+    expect([index.unit(id(2))?.flush, index.unit(id(3))?.flush, index.unit(id(3))?.front]).toEqual(['left', 'right', true])
+    expect(indexLayout(parseLayout(utf8(encodeLayout(made())))).unit(id(2))?.flush).toBeNull()
+    expect(index.unit(7)).toMatchObject({ centred: true, flush: null })
+  })
   it('a valid file parses, round-trips and indexes', () => {
     const f = made()
     const text = encodeLayout(f)
@@ -169,7 +179,7 @@ describe('a valid file', () => {
     expect([...index.unit(3)!.labels]).toEqual([0, 2, 50, 720, 66, 728.5, 717])
     expect([...index.unit(8)!.labels]).toEqual([3, 2, 66, 100, 70, 106, 98])
     expect(index.unit(8)!.ph.get(1)).toEqual({ kind: 'macro', flags: PH_FLAG.LOST, segs: new Float64Array(0), text: null, fill: null })
-    expect(LAYOUT).toBe('22')
+    expect(LAYOUT).toBe('26')
     expect(index.unit(5)!.held).toEqual([1])
     expect(index.unit(2)!.held).toEqual([])
     expect(PAGE_TEXT_KINDS).toEqual(['cite', 'ref', 'eqref'])
@@ -431,7 +441,9 @@ const ROWS: [string, Edit, string][] = [
   ['depth 6', f => { f.units[1][2] = 6 }, 'units[1][2]'],
   ['depth -2', f => { f.units[1][2] = -2 }, 'units[1][2]'],
   ['depth 8', f => { f.units[1][2] = 8 }, 'units[1][2]'],
-  ['flags 8', f => { f.units[1][3] = 8 }, 'units[1][3]'],
+  ['flags 32 (8 and 16 are FLUSH_LEFT and FLUSH_RIGHT, LAYOUT 26)', f => { f.units[1][3] = 32 }, 'units[1][3]'],
+  ['flags CENTRED and FLUSH_LEFT both', f => { f.units[1][3] = UNIT_FLAG.CENTRED | UNIT_FLAG.FLUSH_LEFT }, 'units[1][3]'],
+  ['flags FLUSH_LEFT and FLUSH_RIGHT both', f => { f.units[1][3] = UNIT_FLAG.TITLE | UNIT_FLAG.FLUSH_LEFT | UNIT_FLAG.FLUSH_RIGHT }, 'units[1][3]'],
   ['pieces 10,001', f => { f.units[1][4] = 10001 }, 'units[1][4]'],
   // lines
   ['a line row of 7 numbers', f => { f.lines[0][1].pop() }, 'lines[0][1]'],

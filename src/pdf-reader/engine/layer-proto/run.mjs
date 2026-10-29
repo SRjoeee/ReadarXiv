@@ -62,11 +62,12 @@ import * as LK from './links.mjs'
 import * as TL from './textlayer.mjs'
 import { locatedWhole, shortSkipsOf, texParts, texRects } from './tex.mjs'
 import { shown as shownPiece, trPiecesOf } from '../layer/pieces.mjs'
-import { fitFigure, sameAsSource } from './figure-fit.mjs'
+import { fitFigureSet, sameAsSource } from './figure-fit.mjs'
+import { levelRun } from './figure-rows.mjs'
 import { FIGURE_KIND, OCR_KIND } from '../rules/content-classes.mjs'
 import { fitOcr } from './ocr-fit.mjs'
-import { NAME_KIND } from './units.mjs'
-import { addUnitWords, copyWords, freezeWords, newWords, pieceOffsets, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
+import { NAME_KIND, nameOccurrenceId } from './units.mjs'
+import { addSegWords, addUnitWords, copyWords, freezeWords, newWords, pieceOffsets, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
 import { closureOf, rowLeadOf } from './need.mjs'
 import { markWork, newWork, work, WORK_KEYS } from './work.mjs'
 import { drawInputsOf } from './draw.mjs'
@@ -879,7 +880,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // the geometry's units with v0's own copy of their line rectangles: v0 grows and moves a unit's lines as it lays it,
   // and every other unit reads them as grown (its others), so the copy is shared by all of v0's reading; the geometry
   // given stays as it was (a second run over it draws as the first: the text removal's plan run and its drawing)
-  const GU = geometry.left.units.map(([id, stream, rects]) => [id, stream, rects.map(r => r.slice())])
+  // (a figure unit is no unit the layer places: its figure row draws it, paintFigures; its left anchor is the hover's alone,
+  // view/shapes.mjs, pipeline/ink-pass.mjs figureAnchors)
+  const placesUnit = id => geometry.kinds?.[id] !== FIGURE_KIND
+  const GU = geometry.left.units.filter(([id]) => placesUnit(id)).map(([id, stream, rects]) => [id, stream, rects.map(r => r.slice())])
   const placed = [], skipped = []
   const inGeometry = new Set(GU.map(u => u[0]))
   // the units as they have come (take), by id: none for one not yet arrived, or never to come; and the ids still
@@ -1026,6 +1030,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const painted = new Set((r.wordsOpen?.spans ?? []).map(s => s[0]))
     const original = []
     for (const c of K) if (!painted.has(c.id) && c.lists.some(l => l.includes(q))) original.push(c.id)
+    // (and every babel name of the page the layer did not draw — no word of the target's, its own again, a face refused, unfit,
+    // no group of its own —, left the original's in its place: its hover id, lit there as the left's, view/shapes.mjs
+    // layerShapes; one that leads a unit is that unit's)
+    for (const nm of tex?.index.names(q) ?? []) {
+      if (nm.unit >= 0) continue
+      const id = nameOccurrenceId(nm.occurrence)
+      if (id !== null && !painted.has(id)) original.push(id)
+    }
     r.words = freezeWords(r.wordsOpen, original)
     r.wordsOpen = null
   }
@@ -1383,21 +1395,28 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       names.push(rec)
       const mine = (chars2[pg - 1] ?? []).filter(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 >= nm.x0 - 0.5 && (c.x0 + c.x1) / 2 <= nm.x1 + 0.5 && Math.abs(c.yb - nm.baseline) < 0.3 * nm.size)
       if (!mine.length) { rec.why = 'unread'; continue }
-      const text = L2.nameInTarget(nm, mine.map(c => c.ch).join(''), R.labels, to)
+      // its size and its faked small capitals, read off its characters as a unit's are (layer2.mjs nameStyleOf): set in faked small
+      // capitals, it is drawn in small capitals as such a unit is, its word in its own case (the layer drawing its small capitals,
+      // a CJK target's at CJK_CAPS_SIZE of the size), never as a case change's capitals
+      const own = L2.nameStyleOf(mine, nm)
+      const text = L2.nameInTarget(own.small ? { ...nm, capitals: false } : nm, mine.map(c => c.ch).join(''), R.labels, to)
       if (text === null) { rec.why = !R.labels?.[nm.key] ? 'no word' : 'same'; continue }
       // its style: its characters' (a class's bold or italic heading, small capitals), its design the paper's
-      const st = styleOfChars(mine)
+      const st = own.small ? { ...styleOfChars(mine), caps: true } : styleOfChars(mine)
+      const at = own.small && P.cjk ? own.size * L2.CJK_CAPS_SIZE : own.size
       // (leading a unit: that unit's, once it is laid)
       if (nm.unit >= 0) {
         Object.assign(rec, { why: 'inline: its unit not drawn', text, unit: nm.unit })
         leadsOf.set(nm.unit, { nm, rec, text, st, chars: mine.map(c => ({ ...c, page: pg })) })
         continue
       }
-      // (its small capitals, where its face has none of its own, drawn by the layer: layer2.mjs nameRuns)
-      const drawn = L2.nameRuns(text, faceOf(st, /[\u2e80-\u9fff\uac00-\ud7af\u3040-\u30ff\uf900-\ufaff]/.test(text) ? 'cjk' : 'latin', to), to)
+      // (its runs by script, each in its face, as a unit's words are drawn: its CJK characters in the target's CJK face, the rest
+      // in the Latin one, the served CJK faces holding no Latin letter or digit; its small capitals, where a face has none of its
+      // own, drawn by the layer: layer2.mjs nameScriptRuns, nameRuns)
+      const drawn = L2.nameScriptRuns(text, cls => faceOf(st, cls, to), to, P.cjkQuotes)
       if (FS) {
         const tFonts = performance.now()
-        const no = await FS.check([{ face: drawn.face, text: drawn.text }])
+        const no = await FS.check(drawn.runs.map(q => ({ face: q.face, text: q.s })))
         fontWait += performance.now() - tFonts
         if (disposed) return
         if (no) { rec.why = no.why; continue }
@@ -1412,11 +1431,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         else if (c.x0 >= nm.x1 - 0.1) right = Math.min(right, c.x0 - 0.25 * nm.size)
       }
       left = Math.min(left, nm.x0); right = Math.max(right, nm.x1)
-      const w = L2.runsWidth(drawn) * nm.size, mid = (nm.x0 + nm.x1) / 2
+      const w = L2.runsWidth(drawn) * at, mid = (nm.x0 + nm.x1) / 2
       const room = nm.centred ? 2 * Math.min(mid - left, right - mid) : right - nm.x0
       const k = w > room ? room / w : 1
       if (k < P.floorMin - 1e-9) { Object.assign(rec, { why: 'unfit', text, w: r1(w), room: r1(room) }); continue }
-      const size = nm.size * k, x = nm.centred ? mid - (w * k) / 2 : nm.x0
+      const size = at * k, x = nm.centred ? mid - (w * k) / 2 : nm.x0
       // its ink hidden by its own group (`n<occ>`): a name whose group the document does not hold stays the original's
       if (!VIS.has(nameGroup(nm.occurrence))) { Object.assign(rec, { why: 'unhidden', text }); continue }
       const r = rows[pg - 1], px = pxOf(pg)
@@ -1427,18 +1446,24 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       r.ops.push({ op: 'hidden', rects: [hid] })
       audit?.push({ what: 'erase', unit: -1, name: nm.occurrence, page: pg, box: [hid[0], hid[1], hid[0] + hid[2], hid[1] + hid[3]] })
       r.markup.push(L2.svgOfName({ occurrence: nm.occurrence, text, x, baseline: nm.baseline, size, face: drawn.face, runs: drawn.runs, color: st.color ?? null }, cssOf(pg), scale))
-      textRecord(r, opsFrom, `n${nm.occurrence}`, undefined, [TL.nameSeg(text, x, w * k, nm.baseline, size)])
+      const seg = TL.nameSeg(text, x, w * k, nm.baseline, size)
+      textRecord(r, opsFrom, `n${nm.occurrence}`, undefined, [seg])
+      // (its words in the page's word table under its occurrence's hover id, which no bundle id reaches (units.mjs
+      // nameOccurrenceId): the hover lights it as a heading, and the left its original by its box, view/shapes.mjs createShapes)
+      const nid = nameOccurrenceId(nm.occurrence)
+      if (nid !== null && !r.words) addSegWords(r.wordsOpen ??= newWords(), nid, [seg])
       Object.assign(rec, { drawn: true, text, size: r1(size), x: r1(x), w: r1(w * k), chars: mine.map(c => ({ ...c, page: pg })) })
     }
   }
 
   // ---- the figures' text (the content class `figures`, docs/route/orphan-text.md stage 5): each figure unit its page's parts
-  // carry (hiding.figures: BUNDLE 10's figure rows, figure-rows.mjs), drawn in its translation where the reader shows figures
-  // translated (hiding.figuresShown), its ink hidden by its own group (`f<k>`), its words in its run's box by the fit rule
-  // (figure-fit.mjs: on its baseline, turned as it was, its anchor kept, at its size or shrunk to the rules' last floor), in a face
-  // of its font's family and weight, in its fill; else left the original's, why told (`no row`, `untranslated`, `same` as its
-  // source, `unhidden` where the document holds no group of it, a face's refusal, `unfit`). A page whose figures are shown waits
-  // for their rows as for its units' (figuresWait). `figures`: each figure unit of the pages laid, drawn or why not
+  // carry (hiding.figures: BUNDLE 11's figure rows, figure-rows.mjs), drawn in its translation where the reader shows figures
+  // translated (hiding.figuresShown), its ink hidden by its own group (`f<k>`), its words by the fit rule with the rest of its set
+  // (figure-fit.mjs fitFigureSet: on its baseline, turned as it was, from its anchor's edge, into the room beside its box, every
+  // unit of one set at one size, the original's or one factor less, to the rules' last floor), in the faces of its font's family
+  // and weight (its CJK characters in the target's CJK face, the rest in the Latin one), in its fill; else left the original's, why told (`no row`, `untranslated`, `same` as its source, `unhidden` where the
+  // document holds no group of it, a face's refusal, `unfit`). A page whose figures are shown waits for their rows as for its
+  // units' (figuresWait). `figures`: each figure unit of the pages laid, drawn or why not
   const figureRecs = []
   /** each page's figures: 1 while painted (an await of their faces under way), 2 once painted; a page is ready at 2 alone */
   const figuresDone = new Uint8Array(N + 1)
@@ -1447,6 +1472,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const paintFigures = async pg => {
     if (figuresDone[pg]) return
     figuresDone[pg] = 1
+    // (each unit's translation and face first, then each set fitted at one size, then each drawn in its rows' order)
+    const ready = []
     for (const f of figuresOn(pg)) {
       const rec = { id: f.id, group: f.group, page: pg, drawn: false, why: null }
       figureRecs.push(rec)
@@ -1455,19 +1482,28 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const text = u.pieces.map(p => (p.t === 'text' ? shownPiece(p) : ' ')).join('').replace(/\s+/g, ' ').trim()
       if (!text || sameAsSource(text, u.src ?? '')) { Object.assign(rec, { why: 'same', text }); continue }
       if (!VIS.has(f.group)) { Object.assign(rec, { why: 'unhidden', text }); continue }
-      // its face: its font's family, weight and slant, the paper's design of that family
+      // its faces: its font's family, weight and slant, the paper's design of that family; its CJK characters in the target's
+      // CJK face and every other in that family's Latin face, a run each (layer2.mjs figureRuns: one CJK face for the whole
+      // text left 2010.11929v2's "Width MLP" and "Head 2" the original's, the served CJK faces holding no Latin letter or digit)
       const cf = classifyFont(f.font)
       const fam = cf.fam === 'math' ? 'serif' : cf.fam
       const st = { fam, bold: cf.bold, italic: cf.italic, caps: false, design: designs[fam] ?? designs.serif }
-      const drawn = L2.nameRuns(text, faceOf(st, /[\u2e80-\u9fff\uac00-\ud7af\u3040-\u30ff\uf900-\ufaff]/.test(text) ? 'cjk' : 'latin', to), to)
+      const runs = L2.figureRuns(text, cls => faceOf(st, cls, to), P.cjkQuotes)
       if (FS) {
         const tFonts = performance.now()
-        const no = await FS.check([{ face: drawn.face, text: drawn.text }])
+        const no = await FS.check(runs.map(r => ({ face: r.face, text: r.s })))
         fontWait += performance.now() - tFonts
         if (disposed) return
         if (no) { Object.assign(rec, { why: no.why, text }); continue }
       }
-      const fit = fitFigure(f, L2.runsWidth(drawn), P.floorMin)
+      ready.push({ f, rec, text, runs, width1: L2.figureRunsWidth(runs) })
+    }
+    const bySet = new Map()
+    for (const c of ready) (bySet.get(c.f.set ?? c.f.group) ?? bySet.set(c.f.set ?? c.f.group, []).get(c.f.set ?? c.f.group)).push(c)
+    const fits = new Map()
+    for (const list of bySet.values()) fitFigureSet(list, P.floorMin).forEach((fit, i) => fits.set(list[i], fit))
+    for (const c of ready) {
+      const { f, rec, text, runs } = c, fit = fits.get(c)
       if (!fit) { Object.assign(rec, { why: 'unfit', text }); continue }
       const r = rows[pg - 1], px = pxOf(pg)
       r.off.add(f.group)
@@ -1480,10 +1516,16 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       r.ops.push({ op: 'hidden', rects: [hid] })
       audit?.push({ what: 'erase', unit: f.id, figure: f.group, page: pg, box: [hid[0], hid[1], hid[0] + hid[2], hid[1] + hid[3]] })
       const x = f.x + f.ux * fit.offset, y = f.y + f.uy * fit.offset, angle = (Math.atan2(f.uy, f.ux) * 180) / Math.PI
-      r.markup.push(L2.svgOfFigure({ group: f.group, text: drawn.text, x, y, angle, size: fit.size, face: drawn.face, color: f.fill > 0 ? L2.hexOf(f.fill) : null }, cssOf(pg), scale))
-      // (a level one's words in the page's text layer, as a name's; a turned one's are not selectable)
-      if (Math.abs(f.uy) < 1e-6 && f.ux > 0) textRecord(r, opsFrom, f.group, undefined, [TL.nameSeg(drawn.text, x, fit.width, y, fit.size)])
-      Object.assign(rec, { drawn: true, text, size: r1(fit.size), x: r1(x), y: r1(y), w: r1(fit.width) })
+      r.markup.push(L2.svgOfFigure({ group: f.group, runs, x, y, angle, size: fit.size, color: f.fill > 0 ? L2.hexOf(f.fill) : null }, cssOf(pg), scale))
+      // (a level one's words in the page's text layer, as a name's, under its unit's id, and in the page's word table: the hover
+      // lights it and its original, which the pass anchored on the left by its band, ink-pass.mjs figureAnchors; a turned one's
+      // are not selectable, the figure's float lighting it: figure-rows.mjs levelRun)
+      if (levelRun(f.ux, f.uy)) {
+        const seg = TL.nameSeg(runs.map(q => q.s).join(''), x, fit.width, y, fit.size)
+        textRecord(r, opsFrom, f.group, f.id, [seg])
+        if (!r.words) addSegWords(r.wordsOpen ??= newWords(), f.id, [seg])
+      }
+      Object.assign(rec, { drawn: true, text, size: r1(fit.size), x: r1(x), y: r1(y), w: r1(fit.width), set: f.set ?? f.group })
     }
     figuresDone[pg] = 2
   }
@@ -2075,6 +2117,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const carried = centredFlag === true && relabels(p.id) && !!prep.label?.chars?.length && !prep.label.drawn && !!p.rects[0] && prep.label.chars.every(c => c.page === p.rects[0][0])
     if (carried) { const r0 = p.rects[0], lx0 = Math.min(...prep.label.chars.map(c => c.x0)); if (lx0 < r0[1]) p.rects[0] = [r0[0], lx0, r0[2], r0[3], r0[4]] }
     p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced, LINESKIP, prep.breakAt, prep.joinAt, centredFlag)
+    // (a unit TeX set flush left or flush right, the layout file's UNIT_FLAG.FLUSH_LEFT or FLUSH_RIGHT, keeps that alignment
+    // where the rules keep it, P.keepAlign: its lines never justified, layer2.mjs placeItems; a cell is set by its own lines)
+    if (P.keepAlign && lu.flush && p.unit.kind !== 'cell') for (const b of p.blocks) if (!b.centred) b.flush = lu.flush
     if (p.unit.kind !== 'cell') for (const b of p.blocks) widen(b, p)
     // (a unit whose last row another unit's first continues on a shared line, where something of the page stands between the
     // two that stays (a label kept as the original's: inparaenum's "(2)" between two items, 2610.21098 page 2): the next unit's
@@ -3324,7 +3369,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         if (geometry.left.pages[q - 1] === undefined) geometry.left.pages[q - 1] = part.views.slice(4 * (q - a), 4 * (q - a + 1))
         if (!rows[q - 1]) makeRow(q)
       }
-      const entries = part.left.map(([id, stream, rects]) => ({ id, stream, rects: rects.map(r => r.slice()) }))
+      const entries = part.left.filter(([id]) => placesUnit(id)).map(([id, stream, rects]) => ({ id, stream, rects: rects.map(r => r.slice()) }))
       for (const [id, after] of part.fileOnly) entries.push({ id, stream: after + 0.5, rects: null })
       entries.sort((x, y) => x.stream - y.stream || x.id - y.id)
       for (const c of entries) { cands.push(c); if (c.rects) GU.push([c.id, c.stream, c.rects]) }

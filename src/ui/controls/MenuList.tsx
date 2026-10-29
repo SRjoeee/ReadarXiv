@@ -1,6 +1,8 @@
-// A menu's rows (the reader's design, §6.7; the redesign's design, §5.3): 30 px, an 8 px radius, the chosen one checked
-// at its start, a hint at its end; the list's behaviour is the shared one (ui/menu-nav.ts). A listbox of options (a
-// choice among values), or a menu of radios (the zoom) or of plain items (the download). Moved from the reader
+// A menu's rows (the reader's design, §6.7; the redesign's design, §5.3; UI.md §4): 30 px, an 8 px radius, the name at
+// the row's start, a hint after it and the chosen one's check at the row's very end, in a slot every row of a choice
+// keeps, so that a new choice moves nothing else (the maintainer, 2026-10-25); the list's behaviour is the shared one
+// (ui/menu-nav.ts). A listbox of options (a choice among values), or a menu of radios (the zoom) or of plain items (the
+// download). Moved from the reader
 // (pdf-reader/ui/ReaderMenu.tsx) for the extension's pages, which add these and change no row the reader draws: two
 // lines, each hint under its name (the service menu); a neutral button in a row, which picking the row presses (the
 // Chrome pack's download), a loader turning while it runs; a sample drawn in a style at a row's end (the style menu);
@@ -135,7 +137,6 @@ export function MenuList({ items, kind, label, layout = 'inline', search, noMatc
               {/* biome-ignore lint/a11y/noStaticElementInteractions: an option or a menu item, by the list's kind */}
               <div id={nav.idOf(index)} tabIndex={-1} role={role} aria-selected={kind === 'listbox' ? checked : undefined} aria-checked={kind === 'radios' ? checked : undefined} aria-disabled={(item.disabled && !item.action) || undefined} aria-busy={item.action?.busy || undefined}
                 data-active={index === nav.active || undefined} onMouseEnter={() => nav.setActive(index)} onClick={() => pick(item)} className={`item${two ? ' two' : ''}${item.manage ? ' manage' : ''}${item.disabled && item.action ? ' unavailable' : ''}`}>
-                {kind !== 'items' && <Icon node={Check} size={14} className={checked ? 'check' : 'check invisible'} />}
                 {two ? (
                   <span className="t">
                     <span lang={item.lang}>{item.name}</span>
@@ -146,6 +147,9 @@ export function MenuList({ items, kind, label, layout = 'inline', search, noMatc
                 )}
                 {item.preview ? <span className="preview" aria-hidden="true" lang={item.lang} style={item.preview}>{item.hint}</span> : !two && item.hint && <span className="hint">{item.hint}</span>}
                 {item.action && (item.action.busy ? <Icon node={Loader} size={14} className="spin" /> : <span className="act">{item.action.label}</span>)}
+                {/* the check's slot, last: after the hint, the sample and the action, which a chosen row can hold too (the Chrome
+                    row, chosen while its pack downloads, P10); drawn unseen on every other row of a choice */}
+                {kind !== 'items' && <Icon node={Check} size={14} className={checked ? 'check' : 'check invisible'} />}
               </div>
             </Fragment>
           )

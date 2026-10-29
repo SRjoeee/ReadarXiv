@@ -221,6 +221,23 @@ describe('makeLayout', () => {
     for (const gone of ['match.mjs', 'tolerant.mjs']) expect(existsSync(`src/pdf-reader/engine/layout/${gone}`), gone).toBe(false)
   })
 
+  it('a footnote\'s call no mark may stand before, after a paper\'s macro (\\xspace sets no space before \\footnote): placed from its own ink, the macro\'s parted from it by its text (2609.20976v1 p5u19)', async () => {
+    // `\\lgnrm \\footnote{\\url{…}}~\\citep{a}`: the macro's opening mark, the citation's two, and none for the call between
+    const runs: Run[] = [{ s: 'The code ', x: 72, y: 700 }, { s: 'lognormal_galaxies', x: 117, y: 700 }, { s: '1', x: 207, y: 703.5, size: 7 }, { s: '[1], which more words here.', x: 213, y: 700 }]
+    const w: World = {
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 348, 700], ['p0.1a', 1, 117, 700], ['p0.5a', 1, 213, 700], ['p0.5b', 1, 228, 700]],
+      units: [unit('para', [text('The code '), ph('\\lgnrm'), text(' '), ph('\\footnote{\\url{https://x.org}}'), ph('~'), ph('\\citep{a}'), text(', which more words here.')])],
+    }
+    // (with the text the probe showed \\lgnrm sets: the macro's glyphs, the raised call's)
+    const { file, stats } = await made({ ...w, texts: [['\\lgnrm', 'lognormal_galaxies']] })
+    expect(phOf(file, 0, 1).slice(3)).toEqual([0, 1, 117, 700, 207, 707.5, 697.5])
+    expect(phOf(file, 0, 3).slice(2)).toEqual([PH_KINDS.indexOf('footnote'), PH_FLAG.RAISED, 1, 207, 700, 210.5, 703.5 + 5.25, 703.5 - 1.75])
+    expect(stats.ph).toMatchObject({ lost: 0 })
+    // (with none, as before: the call LOST, and the macro with it — its unit the original's)
+    const before = await made(w)
+    expect([phOf(before.file, 0, 1)[3], phOf(before.file, 0, 3)[3]]).toEqual([PH_FLAG.LOST, PH_FLAG.LOST])
+  })
   it("a macro's ink runs to the next word's first glyph", async () => {
     const runs: Run[] = [{ s: 'we use', x: 72, y: 700 }, { s: 'BERT', x: 107, y: 700 }, { s: 'models for text', x: 132, y: 700 }, { s: 'and BERT. Then more', x: 72, y: 688 }]
     const { file, stats } = await made({
@@ -422,6 +439,37 @@ describe('makeLayout', () => {
     // (a caption in a box, mode h: no word, its lines read as before)
     const boxed = await made(w, 'AXT-ALIGN 1 h 0 0.0pt 0 0.0pt 1 1.0pt\n')
     expect((boxed.file.units[1]?.[3] ?? 0) & UNIT_FLAG.CENTRED).toBe(UNIT_FLAG.CENTRED)
+  })
+
+  it('a unit TeX set flush left is FLUSH_LEFT, one flush right FLUSH_RIGHT, by TeX\'s word alone, never by its lines', async () => {
+    // (a justified paragraph of 200 pt lines from 72, the column; a ragged one, its lines short of the column's edge; a quote set
+    // flush right, its lines ending on the edge from starts that vary)
+    const para = [0, 1, 2, 3].map((j): Run => ({ s: `${'abcd efgh '.repeat(3)}line${j} wxyz`, x: 72, y: 700 - 12 * j }))
+    para.push({ s: 'last line of it', x: 72, y: 652 })
+    const rag = [{ s: 'x'.repeat(30), x: 72, y: 620 }, { s: 'y'.repeat(24), x: 72, y: 608 }, { s: 'z'.repeat(16), x: 72, y: 596 }]
+    const quote = [{ s: 'q'.repeat(30), x: 122, y: 560 }, { s: 'r'.repeat(20), x: 172, y: 548 }]
+    const ws = (rs: Run[]) => rs.map(r => r.s).join(' ')
+    const w: World = {
+      pages: [{ runs: [...para, ...rag, ...quote] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(para[4] as Run), 652], ['1s', 1, 72, 620], ['1e', 1, endOf(rag[2] as Run), 596], ['2s', 1, 122, 560], ['2e', 1, endOf(quote[1] as Run), 548]],
+      units: [unit('para', [text(ws(para))]), unit('para', [text(ws(rag))]), unit('para', [text(ws(quote))])],
+    }
+    const flush = (f: { units: unknown[][] }, i: number) => ((f.units[i]?.[3] as number) ?? 0) & (UNIT_FLAG.FLUSH_LEFT | UNIT_FLAG.FLUSH_RIGHT)
+    // (\raggedright: \rightskip alone stretches; \raggedleft: \leftskip alone)
+    const LEFT = 'p 0 0.0pt 1 1.0pt 1 1.0pt', RIGHT = 'p 1 1.0pt 0 0.0pt 0 0.0pt', JUST = 'p 0 0.0pt 0 0.0pt 1 1.0pt'
+    const told = (await made(w, `AXT-ALIGN 0 ${JUST}\nAXT-ALIGN 1 ${LEFT}\nAXT-ALIGN 2 ${RIGHT}\n`)).file
+    expect([0, 1, 2].map(i => flush(told, i))).toEqual([0, UNIT_FLAG.FLUSH_LEFT, UNIT_FLAG.FLUSH_RIGHT])
+    expect([0, 1, 2].map(i => indexLayout(told).unit(i)?.flush)).toEqual([null, 'left', 'right'])
+    // (no word from TeX: neither flag, whatever the lines look like: the ragged one is not read off its short lines)
+    const none = (await made(w)).file
+    expect([0, 1, 2].map(i => flush(none, i))).toEqual([0, 0, 0])
+    // (TeX's word whatever the lines look like: a paragraph TeX set flush left whose lines but its last reach the column's edge
+    // is flush left all the same; it was the probe that misread a boxed paragraph's alignment, and it reads its own now)
+    const edge = (await made(w, `AXT-ALIGN 0 ${LEFT}\n`)).file
+    expect(flush(edge, 0)).toBe(UNIT_FLAG.FLUSH_LEFT)
+    // (a centred unit is CENTRED and neither flush flag)
+    const centred = (await made(w, `AXT-ALIGN 1 p 1 1.0pt 1 1.0pt 0 0.0pt\n`)).file
+    expect(((centred.units[1]?.[3] as number) ?? 0) & (UNIT_FLAG.CENTRED | UNIT_FLAG.FLUSH_LEFT | UNIT_FLAG.FLUSH_RIGHT)).toBe(UNIT_FLAG.CENTRED)
   })
 
   it('a one-line paragraph TeX set justified and its own glue centred (\\hfill X\\hfill) is CENTRED, off both edges by more than two ems; one nearer an edge is not', async () => {
@@ -1444,6 +1492,27 @@ describe('makeLayout, a note\'s mark the first line begins with (the maker round
     const n = await made({ pages: [{ runs: own }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(own[0] as Run), 700]], units: [unit('para', [text('3 layers of the net')])] })
     expect(n.file.labels).toEqual([])
     expect(rowsOf(n.file, 0, 'lines')[1]).toBe(72)
+  })
+
+  it("gives the closing punctuation a head sets after a note to the note's line, never the next unit's label (2610.18513v1 p35)", async () => {
+    // amsthm's "Lemma A.1 (" before a note that ends in a citation, its ")." after it, the theorem's text on: the ")." was the
+    // body's label row, which the reader showed again from the original where it stood, after the note's translation
+    // (the note's end mark before its citation, as the marked source sets it, `\\axthmark{h…e} \\citep{…}`; the citation in
+    // hyperref's blue, a text item of its own, as PDF.js reads a link's colour apart)
+    const head: Run = { s: 'Lemma A.1 (Bobkov inequality for measures ', x: 72, y: 700 }
+    const cite: Run = { s: '[BL09]', x: endOf(head), y: 700, fill: '#0071bc' }
+    const rest: Run = { s: '). If the measure is concave then it holds', x: endOf(cite), y: 700 }
+    const at = (r: Run, s: string) => xAt(r, r.s.indexOf(s))
+    const { file } = await made({
+      pages: [{ runs: [head, cite, rest] }],
+      marks: [['0s', 1, at(head, 'Bobkov'), 700], ['0e', 1, cite.x, 700], ['p0.1a', 1, cite.x, 700], ['p0.1b', 1, endOf(cite), 700], ['1s', 1, at(rest, 'If'), 700], ['1e', 1, endOf(rest), 700]],
+      units: [unit('heading', [text('Bobkov inequality for measures '), ph('\\cite{bl}')], { bracketed: true }), unit('theorem', [text('If the measure is concave then it holds')])],
+    })
+    expect(file.labels.map(l => [l[0], l[3], l[5]])).toEqual([[0, 72, at(head, 'Bobkov')]])
+    // the note's line runs to the full stop, its erase with it; the theorem's starts at its text
+    expect(rowsOf(file, 0, 'lines')[2]).toBe(at(rest, ' If'))
+    expect(Math.max(...chunk(rowsOf(file, 0, 'erase'), 5).map(e => e[3] as number))).toBeGreaterThanOrEqual(at(rest, ' If') - 0.01)
+    expect(rowsOf(file, 1, 'lines')[1]).toBe(at(rest, 'If'))
   })
 })
 

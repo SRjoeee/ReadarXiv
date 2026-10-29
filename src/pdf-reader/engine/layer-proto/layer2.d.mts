@@ -34,6 +34,10 @@ export interface Params {
   adaptiveFill: { band: number; track: number; size: number } | null; fillLead: number | null; fillLeadRel: number | null
   /** what the fill leaves over: at each unit's foot, or packed to the end of its run of paragraphs (run.mjs packPage) */
   leftover: 'foot' | 'pack'
+  /** at the original's leading, a block's lines one pitch apart, its gaps TeX's \lineskip rule opened closed (slotsAt on the blocks' `E`) */
+  evenPitch: boolean
+  /** a unit TeX set flush left or flush right keeps that alignment (run.mjs sets its blocks' `flush`, placeItems reads it) */
+  keepAlign: boolean
   /** breaking: lines break only at spaces, which quotes are CJK's, centred punctuation, the characters no line starts or
    *  ends with, and the hyphenation patterns of a Latin word */
   keepAll: boolean; cjkQuotes: boolean; centredPunct: boolean; noStart: string; noEnd: string; latinPatterns: 'en' | 'de'
@@ -208,7 +212,7 @@ export interface Layout { lines: Line[]; f: number; s: number; scale: number; st
 /** the original page's ink at a fraction of its canvas's resolution */
 export interface InkMap { w: number; h: number; ink: Uint8Array; factor: number }
 /** a unit's block with its lines' measured baselines */
-export interface Block2 extends Block { measures?: Map<string, [number, number]> | null; B: number[]; exact: boolean[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; through?: boolean; freeOf?: () => number; G?: number[]; start?: number; startY?: number; shortSkips?: readonly { x0: number; x1: number; top: number; bottom: number }[] }   // G: the grid, B with the gaps of its forced breaks closed (blocks2); start: the first line's start where a shared line sets it, startY its baseline where the line before it there stands off TeX's (run.mjs layout2); shortSkips: the unit's displays on the block's page that TeX set with its short skip (tex.mjs shortSkipsOf, slotsAt)
+export interface Block2 extends Block { measures?: Map<string, [number, number]> | null; B: number[]; exact: boolean[]; E?: number[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; through?: boolean; freeOf?: () => number; G?: number[]; start?: number; startY?: number; shortSkips?: readonly { x0: number; x1: number; top: number; bottom: number }[] }   // G: the grid, B with the gaps of its forced breaks closed (blocks2); start: the first line's start where a shared line sets it, startY its baseline where the line before it there stands off TeX's (run.mjs layout2); shortSkips: the unit's displays on the block's page that TeX set with its short skip (tex.mjs shortSkipsOf, slotsAt); E: the grid with each gap TeX's \lineskip rule opened closed to the pitch (blocks2, evenGridOf), where it has one, slotsAt's under P.evenPitch
 type ToDev = (x: number, y: number) => [number, number]
 /** of a line's size: a display whose top stands under its baseline nearer than this is in reach of its descent */
 export declare const SHORT_SKIP: number
@@ -254,8 +258,10 @@ export declare function caseRuns(s: string, ratio: number, upper: (s: string) =>
 export declare function smallCapsAt(chars: readonly { ch: string; size: number }[] | null | undefined, text: string, size: number | undefined): ((at: number) => boolean) | null
 /** a babel name's word as the layer draws it in `face`: its runs of one case where it draws the face's small capitals itself */
 export declare function nameRuns(text: string, face: Face, to: string): { face: Face; runs: { s: string; k: number }[]; text: string }
-/** nameRuns' word's width at size 1 */
-export declare const runsWidth: (drawn: { face: Face; runs: readonly { s: string; k: number }[] }) => number
+/** a name's word in its runs by script, each in its face, each run's small capitals the layer's where its face has none */
+export declare function nameScriptRuns(text: string, faceOf: (cls: 'cjk' | 'latin') => Face, to: string, quotes?: boolean): { face: Face; runs: { s: string; k: number; face: Face }[]; text: string }
+/** nameRuns' (or nameScriptRuns') word's width at size 1 */
+export declare const runsWidth: (drawn: { face: Face; runs: readonly { s: string; k: number; face?: Face }[] }) => number
 /** the size a unit set in small capitals is drawn at in a CJK target, × its nominal size (the owner's, 2026-10-24: 1) */
 export declare const CJK_CAPS_SIZE: number
 /** the size a unit is laid at: the original's, its faked small capitals aside, × CJK_CAPS_SIZE in a CJK target where its base is
@@ -327,6 +333,9 @@ export declare function labelInTarget(label: { text?: string; chars?: { ch: stri
 /** a babel name as the layer sets it in the target, wherever TeX identified the heading: the target's word for its key
  *  (capitals where the original's are); null where the target has none, or where the word is the original's */
 export declare function nameInTarget(name: { key: string; capitals: boolean }, own: string | null | undefined, labels: Readonly<Record<string, string>> | null | undefined, to: string): string | null
+/** a babel name's size and whether it is set in faked small capitals, read off its characters as a unit's are: its faked small
+ *  capitals aside where the class changed its case (`capitals`), the file's size where none of them tells one */
+export declare function nameStyleOf(chars: readonly { ch: string; size: number; st?: { fam?: string } | null }[] | null | undefined, name: { size: number; capitals: boolean }): { size: number; small: boolean }
 /** a label's characters as its text, a space where two stand a fifth of their size apart */
 export declare function spacedText(chars: readonly Pick<Char, 'ch' | 'x0' | 'x1' | 'size'>[]): string
 /** a theorem-like head's label as the target names it (its name in translator's word, its number and punctuation the original's),
@@ -345,6 +354,12 @@ export declare function renameRuns<R extends { text: string }>(runs: readonly R[
 export declare const widthOf: (s: string, face: Face) => number
 /** a babel name drawn in the target's word, as SVG markup (a <g data-n="occurrence">) */
 export declare function svgOfName(o: { occurrence: number; text: string; x: number; baseline: number; size: number; face: Face; color?: string | null; runs?: readonly { s: string; k: number }[] | null }, toPx: (x: number, y: number) => number[], scale: number): string
+/** a figure's translation in its runs by script, each in its face: its CJK characters (cjkClassRe of `quotes`) in `faceOf('cjk')`, every other in `faceOf('latin')` */
+export declare function figureRuns(text: string, faceOf: (cls: 'cjk' | 'latin') => Face, quotes: boolean): { s: string; face: Face }[]
+/** figureRuns' width at size 1 (PDF units per unit of size) */
+export declare function figureRunsWidth(runs: readonly { s: string; face: Face }[]): number
+/** a figure's text drawn as SVG: its runs one after the other on its baseline from `x`, `y`, turned by `angle` */
+export declare function svgOfFigure(o: { group: string; runs: readonly { s: string; face: Face }[]; x: number; y: number; angle: number; size: number; color?: string | null }, toPx: (x: number, y: number) => number[], scale: number): string
 /** a bitmap figure's label as SVG: its patches (the ground's colour over each line) and its text (each line it fills), apart */
 export declare function svgOfOcr(o: { id: number; place: import('./ocr-rows.mjs').OcrPlace; laid: readonly import('./ocr-fit.mjs').OcrLineLaid[]; face: Face; size: number }, toPx: (x: number, y: number) => number[], scale: number): { patches: string; text: string }
 /** a character style's colour as a run takes it: its fill where told (black: `color` undefined), nothing where not */
@@ -411,6 +426,12 @@ export declare function ink100(s: string, face: Face): { a: number; d: number }
 export declare function lineExtent(line: Pick<Line, 'items'>, f: number, scale: number): { a: number; d: number; text: { a: number; d: number } }
 /** a unit laid at one state of the fit, with no search (the page fill's): clipped where the state does not set it whole */
 export declare function layoutAt(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params, st: Layout['state']): Layout
+/** the distance TeX set between the original's line a formula's crop stands on (on its baseline, its rectangle holding the crop's
+ *  centre) and the line after it (`below`) or before it, on the unit's grid; -Infinity where the blocks hold no such line */
+export declare function texRoomOf(blocks: readonly (Pick<Block2, 'page' | 'B' | 'rects'> & { G?: readonly number[] })[] | null, r: { page: number; baseline: number; crop: readonly number[] }, below: boolean): number
+/** a grid `G` with each gap TeX's \lineskip rule opened (`opened`, a gap's) closed to the pitch `p0`, every other gap the grid's;
+ *  no line lower than the grid's own (blocks2's `E`) */
+export declare function evenGridOf(G: readonly number[], opened: readonly boolean[], p0: number): number[]
 /** the floor a page fill's state asks of a unit's last line (footFloorAt), or null where it asks none */
 export declare function footFloorOf(blocks: readonly Block2[], st: Layout['state'], P: Params, s: number): number | null
 /** a unit's shared row as its layout leaves it (need.mjs rowLeadOf's row): its page, baseline and band (an em), the block's span,

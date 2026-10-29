@@ -63,6 +63,7 @@ const patched = (p: ReturnType<typeof project>) => {
 describe('the front matter: its notes (1706.03762) and its names and places (the owner, 2026-09-28)', () => {
   const AUTHORS = '\\author{Alice\\thanks{Equal contribution. Listing order is random.}\\\\ Bob\\footnotemark[1] \\hspace{1mm}\\thanks{Work performed while at X.}}'
   const authors = (p: ReturnType<typeof project>) => (p.units as Unit[]).filter(u => u.kind === 'author').map(u => textOf(u).trim())
+  const places = (p: ReturnType<typeof project>) => (p.units as Unit[]).filter(u => u.kind === 'affiliation').map(u => textOf(u).replace(/\s+/g, ' ').trim())
 
   it('in the preamble: each \\thanks a footnote of its own, the names between them units of kind author', () => {
     const p = project(`\\documentclass{article}\\title{The Paper}${AUTHORS}\\begin{document}\\maketitle\nWords here.\\end{document}`)
@@ -84,18 +85,36 @@ describe('the front matter: its notes (1706.03762) and its names and places (the
     const units = p.units as (Unit & { title?: boolean })[]
     expect(units.filter(u => u.kind === 'footnote').map(textOf).sort()).toEqual(['Now elsewhere.', 'Supported by a grant.'])
     expect(units.filter(u => u.title).map(textOf)).toEqual(['The Paper'])
-    expect(authors(p)).toEqual(['Alice', 'Somewhere'])
+    expect(authors(p)).toEqual(['Alice'])
+    expect(places(p)).toEqual(['Somewhere'])
+  })
+
+  it('an optional argument after an author block\'s text is the command\'s: no unit, no mark between them (2610.21084v1, cas-sc)', () => {
+    // (the Elsevier classes read \\author[1]{Name}[orcid=…] by looking past the name: a unit of the bracket, its start mark between
+    // the two, hid the option from the class, which set it as text, and the marked original ran a page longer than the paper)
+    for (const where of ['preamble', 'body']) {
+      const author = '\\author[1]{Matthias Chung}[orcid=0000-0001-7822-4539]\n\\cormark[1]\n\\affiliation[1]{Emory University}[type=edu]'
+      const tex = where === 'preamble' ? `\\documentclass{article}\n${author}\n\\begin{document}\n\\maketitle\nWords here.\n\\end{document}` : `\\documentclass{article}\n\\begin{document}\n${author}\n\\maketitle\nWords here.\n\\end{document}`
+      const p = openPaper(new Map([['main.tex', new TextEncoder().encode(tex)]]))
+      // (the affiliation's place where its unit was: what was one unit keeps its number, latex-front.mjs frontBlock)
+      expect((p.units as unknown as Unit[]).map(u => textOf(u).trim()), where).toEqual(['Matthias Chung', 'Emory University', 'Words here.'])
+      const marked = new TextDecoder().decode(originalFiles(p, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+      expect(marked, where).toContain('\\axtend{0e}}[orcid=0000-0001-7822-4539]\n\\cormark[1]')
+      expect(marked, where).toMatch(/\\axtend\{1e\}\}\[type=edu\]/)
+    }
   })
 
   it('IEEEtran\'s blocks and acmart\'s parts of an affiliation are names and places; an address, a mark, a key stay', () => {
     const ieee = project('\\documentclass{article}\\begin{document}\\author{\\IEEEauthorblockN{Alice Smith\\IEEEauthorrefmark{1}}\\IEEEauthorblockA{Peking University\\\\ \\texttt{alice@pku.edu.cn}}}\\maketitle\nWords.\\end{document}')
-    expect(authors(ieee).join('|')).toMatch(/^Alice Smith.*Peking University$/)
-    expect(authors(ieee).join('|')).not.toMatch(/alice@/)
+    expect(authors(ieee)).toEqual(['Alice Smith'])
+    expect(places(ieee)).toEqual(['Peking University'])
     const acm = project('\\documentclass{article}\\begin{document}\\author{Alice}\\affiliation{\\institution{Peking University}\\city{Beijing}\\country{China}}\\email{alice@pku.edu.cn}\\maketitle\nWords.\\end{document}')
-    expect(authors(acm).join('|')).toMatch(/Alice\|Peking University.*Beijing.*China/)
-    // elsarticle's keys and values: keys an engine would translate
+    expect(authors(acm)).toEqual(['Alice'])
+    expect(places(acm)).toEqual(['Peking UniversityBeijingChina'])
+    // elsarticle's keys and values: each value of words a unit of places, the keys (an engine would translate them) as they are
     const els = project('\\documentclass{article}\\begin{document}\\author{Alice}\\affiliation{organization={Peking University}, city={Beijing}}\\maketitle\nWords.\\end{document}')
     expect(authors(els)).toEqual(['Alice'])
+    expect(places(els)).toEqual(['Peking University', 'Beijing'])
   })
 })
 
@@ -187,10 +206,10 @@ describe('a translated line of names that may not fit its box (2608.06701: Japan
     expect(marked(IEEE.replace('Somewhere\\\\ Elsewhere', 'Somewhere, \\{sl225, reyhaneh\\}@illinois.edu, or write to jatin@us.ibm.com today'))).toContain('\\{sl225, reyhaneh\\}@illinois.edu')
   })
 
-  it('a line that holds \\and is left as it is: article ends a table there, which cannot be set inside a box (2608.21180)', () => {
+  it('\\and is no unit\'s: article ends a table there, which cannot be set inside a box (2608.21180), so each author\'s block is its own', () => {
     const tex = marked('\\documentclass{article}\\author{Alice Example \\and Bob Example}\\begin{document}\\maketitle\nWords.\\end{document}')
-    expect(tex).not.toContain('\\axtwide')
-    expect(marked('\\documentclass{article}\\author{Alice Example \\And Bob Example}\\begin{document}\\maketitle\nWords.\\end{document}')).not.toContain('\\axtwide')
+    expect(tex).toMatch(/\\author\{\\axtwide\{<T\d+>\}\s*\\and\s*\\axtwide\{<T\d+>\}\}/)
+    expect(marked('\\documentclass{article}\\author{Alice Example \\And Bob Example}\\begin{document}\\maketitle\nWords.\\end{document}')).not.toMatch(/\\axtwide\{[^}]*\\And/)
   })
 
   it('nothing is wrapped where nothing is translated: the original compiles as the paper does', () => {
@@ -383,6 +402,99 @@ describe('an accent inside a word is the letter itself before translation, and t
     // the paper's own \\H and \\v, a math letter each, defined anew in its preamble; a definition commented out is none
     expect(wire(doc('The space \\H{o} and \\v{s} here.', '\\renewcommand{\\H}{\\mathcal{H}}\\def\\v{\\varphi}'))).toEqual(['The space @a# and @b# here.'])
     expect(wire(doc('The space \\H{o} and \\v{s} here.', '\n% \\def\\v{\\varphi}\n'))).toEqual(['The space ő and š here.'])
+  })
+})
+
+describe('a letter command is the letter itself in its word: TeX\'s skipped spaces, an empty group and a group around it alone none of the wire (2010.11929v2: "Ł ukasz Kaiser")', () => {
+  const doc = (body: string, defs = '') => project(`\\documentclass{article}${defs}\\begin{document}\n${body}\n\\end{document}`)
+  const wire = (p: ReturnType<typeof project>) => (p.units as never[]).map(u => serialize(u).wire)
+  const source = (p: ReturnType<typeof project>) => new TextDecoder('latin1').decode(patch(p, new Map()).get('main.tex'))
+
+  it('{\\L}ukasz, 2010.11929v2\'s entry as its .bbl writes it: one word on the wire, no marker beside it; written back byte for byte', () => {
+    const body = 'Aidan~N Gomez, {\\L}ukasz Kaiser, and Illia Polosukhin. Attention is all you need.'
+    const p = doc(body)
+    expect(wire(p)).toEqual(['Aidan @a# N Gomez, Łukasz Kaiser, and Illia Polosukhin. Attention is all you need.'])
+    expect(source(p)).toContain(body)
+  })
+
+  it('every form TeX sets as one word: the group around it, an empty group after it, the spaces after its control word', () => {
+    const forms: [string, string][] = [
+      ['{\\L}ukasz', 'Łukasz'], ['\\L{}ukasz', 'Łukasz'], ['\\L ukasz', 'Łukasz'], ['\\L\nukasz', 'Łukasz'], ['{\\L{}}ukasz', 'Łukasz'],
+      ['Bj\\o rn', 'Bjørn'], ['Bj{\\o}rn', 'Bjørn'], ['Stra\\ss e', 'Straße'], ['Stra{\\ss}e', 'Straße'], ['Ny{\\aa}rd', 'Nyård'],
+      ['\\O stergaard', 'Østergaard'], ['{\\AE}lfric', 'Ælfric'], ['C{\\ae}sar', 'Cæsar'], ['{\\OE}uvre', 'Œuvre'], ['man{\\oe}uvre', 'manœuvre'],
+      ['{\\AA}ngstr{\\"o}m', 'Ångström'], ['W\\l odek', 'Włodek'],
+    ]
+    for (const [tex, word] of forms) {
+      const p = doc(`The work of ${tex} matters.`)
+      expect(wire(p), tex).toEqual([`The work of ${word} matters.`])
+      expect(source(p), tex).toContain(`The work of ${tex} matters.`)
+      expect((p.units as Unit[])[0]?.pieces.map(x => x.t), tex).toEqual(['text'])
+    }
+  })
+
+  it('after an empty group a space is TeX\'s again, and a letter at a word\'s end keeps the punctuation after it', () => {
+    expect(wire(doc('Die Gro\\ss{} Stadt, ein Gru\\ss.'))).toEqual(['Die Groß Stadt, ein Gruß.'])
+    expect(wire(doc('Bj{\\o}rn and S{\\o}ren.'))).toEqual(['Bjørn and Søren.'])
+  })
+
+  it('only what TeX sets as one word: a blank line after the letter stays a paragraph\'s end, a star stays text, a space inside a group stays a space', () => {
+    // (TeX skips the spaces after the control word but not a blank line, its \par)
+    expect(wire(doc('Ein Gru\\ss\n\nNext paragraph here.'))).toEqual(['Ein Gruß', 'Next paragraph here.'])
+    // (none of these commands has a starred form: the star is the text's)
+    expect(wire(doc('The work of Gro\\ss* matters.'))).toEqual(['The work of Groß* matters.'])
+    // (a space after `{` or after an empty group is TeX's: the group is walked as a group, its space kept)
+    expect(wire(doc('Die Gro{\\ss{} }Stadt.'))).toEqual(['Die Groß Stadt.'])
+    const spaced = doc('The work of { \\L}ukasz matters.')
+    expect((spaced.units as Unit[])[0]?.pieces.map(x => x.t)).toEqual(['text', 'open', 'text', 'close', 'text'])
+  })
+
+  it('a bibliography entry\'s numbers are kept before its letters join their words: a year between two letters stays a placeholder', () => {
+    const p = project('\\documentclass{article}\\begin{document}\nText.\n\\begin{thebibliography}{1}\n\\bibitem{a} S{\\o}ren. 2020. The {\\O}resund study.\n\\end{thebibliography}\n\\end{document}')
+    const entry = (p.units as Unit[]).find(u => u.kind === 'reference')
+    expect(entry?.pieces.filter(x => x.t === 'ph').map(x => (x as { src?: string }).src)).toContain('2020.')
+    expect(serialize(entry as never).wire).toMatch(/^Søren\. @a# The Øresund study\.$/)
+  })
+
+  it('a group around the letter spends its pair\'s id, as a group around an accent does: the pairs after it keep theirs', () => {
+    const ids = (body: string) => ((doc(body).units as Unit[])[0]?.pieces ?? []).filter(x => x.t === 'open').map(x => (x as unknown as { id: number }).id)
+    expect(ids('The work of {\\L}ukasz and \\emph{others} matters.')).toEqual(ids('The work of {L}ukasz and \\emph{others} matters.').slice(1))
+  })
+
+  it('a placeholder still where the paper defines the command itself, and for the dotless \\i and \\j, which papers make their own', () => {
+    expect(wire(doc('The value \\o{} and \\L{} here.', '\\renewcommand{\\o}{\\omega}\\def\\L{\\mathcal{L}}'))).toEqual(['The value @a# and @b# here.'])
+    expect(wire(doc('The index \\i{} and \\j{} here.'))).toEqual(['The index @a# and @b# here.'])
+  })
+
+  it('\\ifmmode in a paragraph\'s text is its \\else: REVTeX\'s names, an accent written both ways, one word on the wire (2610.20716v1\'s "Louren ç ç o")', () => {
+    const forms: [string, string][] = [
+      ['Louren\\ifmmode~\\mbox{\\c{c}}\\else \\c{c}\\fi{}o', 'Lourenço'], ['Abell{\\ifmmode\\acute{a}\\else\\\'{a}\\fi}n', 'Abellán'],
+      ['\\ifmmode \\check{S}\\else \\v{S}\\fi{}upi\\ifmmode~\\acute{c}\\else \\\'{c}\\fi{}', 'Šupić'], ['Binicio\\ifmmode~\\breve{g}\\else \\u{g}\\fi{}lu', 'Binicioğlu'],
+      ['Kurzy\\ifmmode~\\acute{n}\\else \\\'{n}\\fi{}ski', 'Kurzyński'], ['Ta\\ifmmode~\\check{s}\\else \\v{s}\\fi{}evsk\\\'y', 'Taševský'],
+      ['Bj\\ifmmode\\varnothing\\else\\o\\fi rn', 'Bjørn'],
+    ]
+    for (const [tex, word] of forms) {
+      const p = doc(`The work of ${tex} matters.`)
+      expect(wire(p), tex).toEqual([`The work of ${word} matters.`])
+      expect(source(p), tex).toContain(`The work of ${tex} matters.`)
+    }
+    // (not under \\unless, which inverts it: read as before, neither branch made a letter of; an \\else whose letter a space
+    // follows before \\fi is no one letter alone, and its space stays a space)
+    expect(wire(doc('The work of \\unless\\ifmmode first\\else\\L\\fi{} done.'))[0]).toMatch(/first/)
+    expect(wire(doc('A caf\\ifmmode x\\else\\\'{e} \\fi next.'))[0]).not.toMatch(/énext/)
+    // (a star after \\fi is the text's: the branches end at the terminator's name, and the source is written back as it was)
+    const starred = doc('Text \\ifmmode x\\else\\L\\fi* next.')
+    expect(wire(starred)).toEqual(['Text Ł* next.'])
+    expect(source(starred)).toContain('Text \\ifmmode x\\else\\L\\fi* next.')
+    // (an \\else that is no one letter: its first branch is math, no text of TeX's, and only the \\else is walked)
+    const w = wire(doc('Text \\ifmmode x^2 squared\\else the square\\fi{} here.'))[0] ?? ''
+    expect(w).toContain('the square')
+    expect(w).not.toContain('squared')
+  })
+
+  it('the layout compile\'s marks: a unit that opens with the letter has its start mark before its group, as the source writes it', () => {
+    const p = doc('{\\L}ukasz Kaiser wrote it.')
+    const tex = new TextDecoder('latin1').decode(patch(p, new Map(), { mark: markUnits(p.units) }).get('main.tex'))
+    expect(tex).toContain('\\leavevmode\\axtmark{0s}{\\L}ukasz Kaiser wrote it.\\axtend{0e}')
   })
 })
 

@@ -8,7 +8,9 @@
 //                (latexmk in Docker's texlive/texlive:latest, no network), each compile kept by what it compiles in
 //                data/layout/<id>v<n>/compiles/; refusal.json in its place where the maker refuses the paper, or a
 //                stage of the marks fails (`refused`: probe, compile, marks or the maker's own; the reader then runs as
-//                Plan 5's there); with an engine of BUNDLE 8 made over our base page, not arXiv's PDF:
+//                Plan 5's there); a paper that ships no .bbl opened first with the job's .bbl BibTeX makes, where the engine
+//                makes one (layout/paper.mjs madeBibliography: one draft of the unmarked original, then BibTeX, as the
+//                prepare does before it announces the units); with an engine of BUNDLE 8 made over our base page, not arXiv's PDF:
 //   base.pdf     our base page (design note §3.1): the final pass of the marked original, made as production makes it (on the
 //                pinned image, SOURCE_DATE_EPOCH arXiv's day, creationEpochOf) once it passes the page pass's checks (§3.3,
 //                page-pass.mjs checkOurBase), which the layer draws over;
@@ -318,7 +320,7 @@ async function compiled(dir, name, files, paper, opts = {}) {
   }
   return c
 }
-async function compiledNow(dir, name, files, paper, { passes = null, once = false, sourceDate = null, files: keep = false } = {}) {
+async function compiledNow(dir, name, files, paper, { passes = null, once = false, bib = false, sourceDate = null, files: keep = false } = {}) {
   if (free(dir) < FREE_MIN) throw new Error(`less than 10 GiB free on ${dir}`)
   const main = paper.project.main, stem = main.split('/').pop().replace(/\.[^.]+$/, '')
   const build = join(dir, `build-${name}`)
@@ -329,7 +331,12 @@ async function compiledNow(dir, name, files, paper, { passes = null, once = fals
     const texEngine = latexmkEngine(paper.meta.compiler)
     const one = passes === 1 ? ['-e', '$max_repeat=1'] : []
     const compiler = paper.meta.compiler ?? 'pdflatex'
-    const cmd = once
+    // (madeBibliography's draft: one pass that writes no PDF and then BibTeX on the job, as the web's sandbox answers a draft
+    // with `bibtex`)
+    const draft = { pdflatex: '-draftmode', latex: '-draftmode', lualatex: '--draftmode', xelatex: '-no-pdf' }[compiler] ?? '-draftmode'
+    const cmd = bib
+      ? ['sh', '-c', `${compiler} -interaction=nonstopmode ${draft} ./${main}; bibtex ./${stem}; true`]
+      : once
       ? ['sh', '-c', `${compiler === 'latex' ? 'latex' : compiler} -interaction=nonstopmode ./${main}${compiler === 'latex' ? `; dvipdfmx -o ${stem}.pdf ${stem}.dvi` : ''}; true`]
       : ['latexmk', ...texEngine, ...one, ...(paper.meta.bbl ? ['-bibtex-'] : []), '-interaction=nonstopmode', '-f', main]
     const said = await run('docker', ['run', ...PLATFORM, '--rm', '--init', '--network', 'none', '--cpus', '2', '--memory', '3g', ...date, '-v', `${build}:/work`, '-w', '/work', COMPILE_IMAGE, 'timeout', '600', ...cmd], { maxBuffer: 1 << 26 }).then(r => `${r.stdout}${r.stderr}`, e => `${e?.stdout ?? ''}${e?.stderr ?? ''}`)
@@ -345,6 +352,26 @@ async function compiledNow(dir, name, files, paper, { passes = null, once = fals
     const driver = once && compiler === 'latex' ? `\n${mark ? `${mark}\n` : ''}${said}` : ''
     return { pdf: existsSync(pdf) ? new Uint8Array(readFileSync(pdf)) : null, log: readFileSync(log, 'latin1') + driver, ...(wrote ? { files: wrote } : {}) }
   } finally { rmSync(build, { recursive: true, force: true }) }
+}
+
+/** the paper opened again with the job's .bbl BibTeX makes, where the engine makes one (layout/paper.mjs madeBibliography, as the
+ *  prepare does before it announces the units), its draft kept by what it compiles as every compile here; else the paper */
+async function withMadeBibliography(id, paper, dir) {
+  const { madeBibliography } = await engine('layout/paper.mjs')
+  if (typeof madeBibliography !== 'function') return paper
+  const { files: source } = await unpackSource(new Uint8Array(readFileSync(join(dir, 'source.gz'))))
+  const r = await madeBibliography(paper, {
+    compile: async req => {
+      const all = new Map(source)
+      for (const [p, b] of req.overrides) all.set(p, b)
+      const hash = createHash('sha256').update(COMPILE_IDENTITY)
+      for (const [p, b] of [...all].sort((a, b) => (a[0] < b[0] ? -1 : 1))) hash.update(p).update(b)
+      const c = await compiled(dir, `bib-${hash.digest('hex').slice(0, 16)}`, all, paper, { bib: true, files: true })
+      return c ? { ok: true, pdf: null, log: c.log, ...(c.files ? { files: c.files } : {}) } : { ok: false, error: 'no log' }
+    },
+  })
+  console.log(`${id}: the job's .bbl ${'paper' in r ? `made, ${r.paper.units.length - paper.units.length} entries` : `none (${r.kept})`} (${r.ms} ms)`)
+  return 'paper' in r ? r.paper : paper
 }
 
 /** whether the engine makes our compile the base page (BUNDLE 8: layout/base.mjs's final-pass check) */
@@ -446,7 +473,7 @@ async function layoutOf(id, paper, dir) {
     out.stats.makerMs = Math.round(performance.now() - tm)
     // GATE_DBG=<dir>: the maker's own diagnostics, where it gives them
     if (out.stats.dbg && process.env.GATE_DBG) writeFileSync(join(process.env.GATE_DBG, `${id}.json`), JSON.stringify({ dbg: out.stats.dbg, u: out.stats.dbgU }))
-    return 'file' in out ? { text: encodeLayout(out.file), stats: out.stats, switched, texts: marks.marking.texts ?? null } : { refused: out.refused, stats: out.stats, switched }
+    return 'file' in out ? { text: encodeLayout(out.file), stats: out.stats, switched, texts: marks.marking.texts ?? null, inkless: marks.marking.inkless ?? null } : { refused: out.refused, stats: out.stats, switched }
   }
   try {
     const arxivDoc = await task.promise
@@ -564,8 +591,9 @@ for (const [id, target] of asked) {
   try {
     if (!papers.has(id)) {
       const dir = await paperFiles(id)
-      const paper = openPaper((await unpackSource(new Uint8Array(readFileSync(join(dir, 'source.gz'))))).files)
+      let paper = openPaper((await unpackSource(new Uint8Array(readFileSync(join(dir, 'source.gz'))))).files)
       const t0 = Date.now()
+      paper = await withMadeBibliography(id, paper, dir)
       const layout = await layoutOf(id, paper, dir)
       const hashes = await Promise.all(paper.units.map(sourceHash))
       papers.set(id, { dir, paper, layout, hashes, ms: Date.now() - t0 })
@@ -593,7 +621,7 @@ for (const [id, target] of asked) {
     if (layout.base?.source === 'ours') write(join(out, 'base.pdf'), layout.base.pdf)
     if (layout.base) {
       const made = layout.base.source === 'ours' ? { source: 'ours', head: layout.base.head } : layout.base
-      write(join(out, 'base.json'), `${JSON.stringify(baseRecordOfMade({ made, layout: layout.base.source === 'ours' ? (layout.text ? Buffer.from(layout.text) : null) : kept, image: COMPILE_IMAGE, texts: layout.base.source === 'ours' ? layout.texts ?? null : null }), null, 1)}\n`)
+      write(join(out, 'base.json'), `${JSON.stringify(baseRecordOfMade({ made, layout: layout.base.source === 'ours' ? (layout.text ? Buffer.from(layout.text) : null) : kept, image: COMPILE_IMAGE, texts: layout.base.source === 'ours' ? layout.texts ?? null : null, inkless: layout.base.source === 'ours' ? layout.inkless ?? null : null }), null, 1)}\n`)
     }
     if (LAYOUTS_ONLY) { console.log(`ok   ${id}:${target} the layout file and base page alone (--layouts-only)`); continue }
     // the translation: the record made before, where it is of this cut of the units; else staging's; else Microsoft's

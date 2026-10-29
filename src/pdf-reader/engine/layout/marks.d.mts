@@ -10,15 +10,29 @@ export declare const MARK_CLASSES: readonly MarkClass[]
 export declare const LAYOUT_CLASSES: readonly MarkClass[]
 /** what TeX answered to the mark probe, per command (`\\cite`): a code a follower (FOLLOWERS) — 0 every mark, 1 no
  *  closing mark, 2 no mark, x no answer (an error in the follower's boxes: no mark) (for `call`: 0 a mark may stand
- *  between two calls, 2 none may) */
+ *  between two calls, 2 none may); and per look-ahead pair (aheadKey), one code: 0 every mark, 1 the macro's opening mark
+ *  alone and the placeholder's, 2 none on the placeholder, x no answer */
 export type Switches = Record<string, string>
 /** what the mark probe sets after a placeholder */
 export declare const FOLLOWERS: readonly string[]
 export declare const PROBE_MAX: number
 /** a piece's leading command, or null */
 export declare const commandOf: (p: unknown) => string | null
-/** each command of the asked classes the paper writes, once, with a source TeX can set in a box */
-export declare function probeSamples(units: readonly SourceUnit[], complete?: Complete | ReadonlyMap<string, number> | readonly (readonly [string, number])[] | null): { command: string; src: string; call: boolean; own?: true; glued?: string }[]
+/** a look-ahead pair the probe asks about: a paper's macro (`src`), the white space after it (`gap`, ' ' or ''), the
+ *  placeholder it precedes (`follows`, `math` where it is an inline formula), and their key in the switch */
+export type AheadSample = { key: string; src: string; gap: '' | ' '; follows: string; math: boolean; ahead: true }
+/** each command of the asked classes the paper writes, once, with a source TeX can set in a box; the paper's complete
+ *  macros' calls (`own`); and last the look-ahead pairs (aheadSamples) */
+export declare function probeSamples(units: readonly SourceUnit[], complete?: Complete | ReadonlyMap<string, number> | readonly (readonly [string, number])[] | null): ({ command: string; src: string; call: boolean; own?: true; glued?: string } | AheadSample)[]
+/** the look-ahead pairs the probe asks about at most, a paper */
+export declare const AHEAD_PROBE_MAX: number
+/** a look-ahead pair's key in the switch: the macro's source, the white space after it and the placeholder's, joined by `#` */
+export declare const aheadKey: (src: string, gap: '' | ' ', follows: string) => string
+/** each placeholder of the paper's own macros followed, right after it or past white space alone, by a placeholder of a
+ *  class the maker cannot find unmarked, paired with it, each pair once, in the paper's order */
+export declare function aheadSamples(units: readonly SourceUnit[]): AheadSample[]
+/** the look-ahead section (`ahead`): each pair set as the paper sets it, with every mark and with the openings alone */
+export declare function aheadSection(samples: readonly AheadSample[]): string
 /** the asked classes' commands the probe asks about at most, and the complete macros apart */
 export declare const COMPLETE_PROBE_MAX: number
 /** the probe's schema: a new section adds rows of a tag of its own */
@@ -33,11 +47,17 @@ export declare function readProbe(log: string): { schema: number; tag: string; f
 export declare function punctuationSection(samples: readonly { src: string; call: boolean; glued?: string }[], from?: number): string
 /** the layout marks' probe document, after \\begin{document} of the font probe: the punctuation section, then the ink
  *  section where `ink` holds samples, and last an ink section of `leads` (leadSamples), numbered on from `ink` */
-export declare function markProbeTex(samples: readonly { src: string; call: boolean; own?: true; glued?: string }[], ink?: readonly string[], leads?: readonly string[]): string
+export declare function markProbeTex(samples: readonly ({ src: string; call: boolean; own?: true; glued?: string } | AheadSample)[], ink?: readonly string[], leads?: readonly string[]): string
 /** the distinct sources of the paper's macros the ink section asks about, at most */
 export declare const INK_MAX: number
 /** the ink section's samples: each macro's source once, in the paper's order, that TeX can set in a box of its own */
 export declare function inkSamples(units: readonly SourceUnit[]): string[]
+/** the distinct samples the ink section asks about a bibliography's entries, past the body's INK_MAX */
+export declare const ENTRY_INK_MAX: number
+/** the sources the ink section's answers name, at most: INK_MAX + ENTRY_INK_MAX */
+export declare const INK_ANSWERS_MAX: number
+/** the ink section's answers from the probe's log, each the asked source's own: the one reader */
+export declare function readInkAnswers(log: string, units: readonly SourceUnit[]): { inkless: string[]; texts: [string, string][]; apart: string[] }
 /** the leads the ink section asks about past the paper's macros inkSamples takes, at most */
 export declare const LEAD_MAX: number
 /** the leads' samples: the placeholders at a unit's head (headEnd) of inline code or a paper's macro that `asked` does not
@@ -88,7 +108,7 @@ export declare function headEnd(pieces: readonly unknown[], from?: number): numb
 /** LaTeX's text symbols, each the one character it sets, and a symbol's text: the table the layer reads too */
 export { symbolText, TEXT_SYMBOLS } from '../rules/text-symbols.mjs'
 /** TeX's answers from the probe's `punct` rows, per sample's command */
-export declare function readMarkProbe(log: string, samples: readonly { command: string }[]): Switches
+export declare function readMarkProbe(log: string, samples: readonly ({ command: string } | AheadSample)[]): Switches
 /** the commands whose marks the answers take off anywhere but between two calls */
 export declare const switchedOf: (switches: Switches | null) => string[]
 /** the commands of the asked classes a paper writes */
@@ -129,7 +149,7 @@ export declare function layoutMarking(units: readonly SourceUnit[], classes: rea
 
 /** the marks file (internal, prep/<mid>/marks-<sha>.json): what the layout maker reads from the marked original */
 export interface LayoutMarks {
-  schema: 11
+  schema: 13
   /** the engine that compiled it (meta.compiler) */
   engine: string
   /** what the marked original was marked with: layoutMarking's classes and the paper's own switch (TeX's answers to the
@@ -184,7 +204,7 @@ export declare function destRect(a: unknown): [x0: number, y0: number, x1: numbe
 export declare const MARKS_CAP: number
 export declare const MARKS_VALUES: number
 export declare const MARKS_DEPTH: number
-export declare const MARKS_SCHEMA: 11
+export declare const MARKS_SCHEMA: 13
 /** a unit's alignment code (readAlign) */
 export type AlignCode = 'c' | 'l' | 'r' | 'j'
 export declare const ALIGN_CODES: readonly AlignCode[]
@@ -234,7 +254,7 @@ export declare function markedPages(marked: unknown, log: string, o: MarkedOptio
  *  page could not be looked up), and the pages with no ink, by why */
 export declare function readMarked(marked: unknown, log: string, o: MarkedOptions): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null; dark: { timedOut: number[]; capped: number[]; degraded: number[] } }>
 /** each opening point's piece as the page stream finds it (layout/stream.mjs Follow): of the units and the destinations' names */
-export declare function followsOf(units: readonly SourceUnit[], names: ReadonlySet<string>): (name: string) => import('./stream.mjs').Follow | null
+export declare function followsOf(units: readonly SourceUnit[], names: ReadonlySet<string>, texts?: readonly string[] | ReadonlyMap<string, string> | null): (name: string) => import('./stream.mjs').Follow | null
 /** whether a destination the head names is a mark of the marks file: on a page of the paper, within its page's view (`views`
  *  the pages' read so far, stride 4) */
 export declare function markAt(views: readonly number[], pages: number, page: number | null, x: number, y: number): boolean

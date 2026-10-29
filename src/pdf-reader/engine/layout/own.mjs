@@ -54,9 +54,9 @@ const END = /^([th]?)(\d+)e$/
  *  between columns are more than one) */
 const CELL_ABUT = 0.6
 /** a head macro's closing punctuation after the unit before a start (MR 5): a closing bracket or quote, a stop, a colon */
-const HEAD_PUNCT = /^[)\]}.,:;!?\u2019\u201d]$/u
+export const HEAD_PUNCT = /^[)\]}.,:;!?\u2019\u201d]$/u
 /** that punctuation abuts the glyph before it: each gap under this share of an em (a word's space is a third) */
-const HEAD_ABUT = 0.2
+export const HEAD_ABUT = 0.2
 const OPENING = /^([pn])(\d+)\.(\d+)a$/
 const CLOSING = /^([pn])(\d+)\.(\d+)b$/
 const NAME_START = /^n(\d+)\.([a-z]{1,16})\.s$/
@@ -88,12 +88,14 @@ export const isLabelForm = (s, note = false) => { const t = labelText(s); const 
  * is { glyphs: [], boxes: [], paths: [], points: [], boxAt: [] }. `units` the paper's units (their ids their indices; each its
  * source text `src`, else layout/../translate/mt.mjs plainSource of its pieces); `follows` (layout/marks.mjs followsOf over the
  * units and the points' names) where the marking is known, else null; `texts` (a Map, a macro's source -> the text the
- * marking's probe showed it sets: the marks file's `marking.texts`) where known, else null.
+ * marking's probe showed it sets: the marks file's `marking.texts`) where known, else null; `inkless` (a Set, the macros TeX
+ * said set no ink: the marks file's `marking.inkless`) where known, else null: such a macro is no placeholder of ink, as the
+ * maker reads it (make.mjs), so a unit that opens with one (a title's `\\boldmath`) opens with its text.
  * Returns { glyphs, boxes, units, stats }: `glyphs[p - 1][g]`, `boxes[p - 1][b]` the group a page's glyph or painted rule is
  * hidden with, or null; `units` Map id -> { groups: Set, pages: Set, unhidden: a code of UNHIDDEN or null, labelKept }; `stats`
  * { units, unhidden: { marks, across, spell, page: 0, bounds: 0 }, spell: [ids, at most SPELL_LIST_MAX], labelKept }
  */
-export function ownOf(pages, { units = null, follows = null, texts = null } = {}) {
+export function ownOf(pages, { units = null, follows = null, texts = null, inkless = null } = {}) {
   const P = pages.length
   // (the glyphs and boxes visited: real ranges never overlap and cost the paper's ink once; past OWN_WORK a unit is not owned)
   let work = 0
@@ -144,13 +146,15 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
     }
   }
 
+  /** a placeholder's class, none for a macro TeX said sets no ink (`inkless`, as the maker reads the marking: make.mjs) */
+  const inkClassOf = piece => { const c = classOf(piece); return c === 'macro' && inkless?.has(piece.src) ? null : c }
   /** whether a unit's pieces open (before any text but white space) with a placeholder of ink that has no mark of its own */
   function opensUnmarked(u, id) {
     if (!Array.isArray(u?.pieces)) return false
     for (let k = 0; k < u.pieces.length; k++) {
       const piece = u.pieces[k]
       if (piece?.t === 'text') { if (/\S/.test(typeof piece.s === 'string' ? piece.s : '')) return false; continue }
-      const c = classOf(piece)
+      const c = inkClassOf(piece)
       if (c && c !== 'footnote' && !where.has(`p${id}.${k}a`) && !where.has(`p${id}.${k}b`)) return true
     }
     return false
@@ -240,6 +244,9 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
     work += S.glyph + q
     const glyphAt = i => { if (R.glyph[i] !== r || gOwn[p - 1][i] !== null) return; const G = pg.glyphs[i]; if (Math.abs(G.y - F.y) < 0.5 * Math.max(G.size, F.size)) lead.glyphs.push([p, i]) }
     let qq = q - 1
+    // (the placeholders the walk passed over, each its unit and the glyphs between its points: not yet claimed, this pass
+    // running before the placeholders')
+    const passed = []
     for (; qq >= 0; qq--) {
       const X = pg.points[qq]
       for (; g >= X.glyph; g--) glyphAt(g)
@@ -247,6 +254,7 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
       const c = CLOSING.exec(X.name), nm = NAME_END.exec(X.name)
       const open = c ? `${c[1]}${c[2]}.${c[3]}a` : nm ? `n${nm[1]}.${nm[2]}.s` : null
       const o = open ? (where.get(open) ?? []).find(([op, oq]) => op === p && oq < qq) : null
+      if (o && c) passed.push({ unit: Number(c[2]), from: pg.points[o[1]].glyph, to: X.glyph })
       if (o) { qq = o[1]; g = Math.min(g, pg.points[qq].glyph - 1) }
       // (a babel name passed over: what stands between it and the start is the head's joint, amsthm's "." after "Proof")
       if (o && nm) afterName.add(id)
@@ -261,11 +269,15 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
     // the closing punctuation a head macro sets after the unit before it, right after that unit's end mark and abutting its
     // last glyph on this line (amsthm's "(Note)." after a theorem's note, a run-in heading's \\@addpunct), is that unit's text:
     // its group hides it where that unit is drawn, as the line's erase did before the wrap (2610.21491v1 p7u71), and no label
-    // of this unit's, which would leave it standing under this unit's drawing
+    // of this unit's, which would leave it standing under this unit's drawing. Its last glyph is the one right before the
+    // punctuation, the unit's text or a placeholder of its set after its end mark (a note that ends in a citation: a heading's
+    // marks stand around its text, `\\axthmark{h…e} \\citep{…}`), which the walk back passed over: measured against the end
+    // mark's glyph, the ")." after 2610.18513v1 p35's "[Bobkov and Ledoux, 2009b]" stood a citation away and was no one's
     const prev = qq >= 0 ? END.exec(pg.points[qq].name) : null
     if (prev && Number(prev[2]) !== id) {
-      const mine = `u${prev[2]}`, E = pg.points[qq].glyph
-      let k = 0, left = E > 0 && gOwn[p - 1][E - 1] === mine ? pg.glyphs[E - 1] : null
+      const mine = `u${prev[2]}`, L = lead.glyphs[0][1], before = L > 0 ? gOwn[p - 1][L - 1] : null
+      const its = before === mine || (before === null && passed.some(x => x.unit === Number(prev[2]) && L - 1 >= x.from && L - 1 < x.to))
+      let k = 0, left = its ? pg.glyphs[L - 1] : null
       while (left && k < lead.glyphs.length) {
         const G = pg.glyphs[lead.glyphs[k][1]]
         if (!HEAD_PUNCT.test((G.u ?? '').normalize('NFKC')) || G.x0 - left.x1 >= HEAD_ABUT * Math.max(G.size, left.size) || Math.abs(G.y - left.y) >= 0.5 * Math.max(G.size, left.size)) break
@@ -560,7 +572,7 @@ export function ownOf(pages, { units = null, follows = null, texts = null } = {}
   function unmarkedPiece(u, id) {
     if (!Array.isArray(u?.pieces)) return false
     return u.pieces.some((piece, k) => {
-      const c = classOf(piece)
+      const c = inkClassOf(piece)
       if (!c || symbolText(piece.src) !== null) return false
       const n = c === 'footnote' ? 'n' : 'p'
       return !where.has(`${n}${id}.${k}a`) && !where.has(`${n}${id}.${k}b`)

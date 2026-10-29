@@ -7,7 +7,7 @@
 import type { Config } from '@/config/schema'
 import { chosenService, serviceOf, type Service } from '@/config/services'
 import { translationIdentity, type RenderPath } from '@/cache/key'
-import { buildChain } from '.'
+import { availableWithin, buildChain } from '.'
 import { createOpenAICompatProvider } from './openai-compat'
 import { createFallbackService, type DemotedInfo } from './fallback'
 import type { CancelledScopeRegistry } from './request/cancellation'
@@ -212,12 +212,14 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
   }
 
   const status = async (): Promise<ProviderStatus> => {
-    const available = !deps.rejected?.has(primary.id) && await primary.isAvailable()
+    // every probe bounded (availableWithin, #88 E1): a probe that hangs answers "unavailable" in time, rather than the status
+    // answering nobody until its deadline
+    const available = !deps.rejected?.has(primary.id) && await availableWithin(primary)
     // The first choice unavailable, look for a usable one on the chain: with one the translation runs as usual, on the fallback engine
     let fallback: ProviderStatus['fallback']
     if (!available) {
       for (const engine of chain.slice(1)) {
-        if (await engine.isAvailable()) {
+        if (await availableWithin(engine)) {
           fallback = { id: engine.id }
           break
         }
@@ -232,7 +234,7 @@ export async function createLocalTransport(config: Config, deps: LocalTransportD
     let serving = active
     for (const engine of chain) {
       if (demoted.has(engine.id)) continue
-      if (engine === primary ? available : await engine.isAvailable()) {
+      if (engine === primary ? available : await availableWithin(engine)) {
         serving = engine
         break
       }

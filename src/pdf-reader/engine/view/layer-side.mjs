@@ -43,6 +43,7 @@ import { pathsOf, wantsFloats } from './floats.mjs'
 import { internalsOf } from './reader-view.mjs'
 import { bySentence } from './highlight.mjs'
 import { createShapes, layerShapes } from './shapes.mjs'
+import { applyLayerText } from './text-rendering.mjs'
 import { classesOn, unitShown } from '../rules/content-classes.mjs'
 
 /** how long a page asked for, once told `laying`, may take to be laid before its place shows the original (the web's D5-R7d) */
@@ -170,6 +171,8 @@ export function createLayerSide(view, o) {
   const clock = V.clock
   const ac = new AbortController()
   let disposed = false
+  /** whether this document's layer text rendering is decided (text-rendering.mjs applyLayerText, at a commit) */
+  let textDecided = false
   const detach = V.attach({ dispose: () => side.dispose() })
   const warned = new Set()
   const warn = (what, e) => { if (warned.has(what)) return; warned.add(what); console.warn(`[reader] the layer's ${what}:`, e?.message ?? e) }
@@ -715,6 +718,10 @@ export function createLayerSide(view, o) {
     dropDrawing(n)
     P.content = content
     P.failed = false
+    // (the layer's text rendering, decided once a document from the first laid page whose words tell, before it is painted:
+    // `auto` where the browser lays them out alike under geometricPrecision and under it, text-rendering.mjs; until then, and
+    // where they differ, engine.css's geometricPrecision)
+    if (!textDecided) textDecided = applyLayerText(content.svg) !== null
     // its text layer, once the main thread is idle: never on the commit's path
     textSoon(n, content, door)
     counts.commits++

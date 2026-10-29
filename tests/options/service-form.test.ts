@@ -1,5 +1,6 @@
 // The service forms (the redesign's design, §6.3): a suggestion fills the address alone and asks for its origin at once;
-// the model list loads by itself only for an origin already granted, and a press on the field asks for one that is
+// the model list loads by itself only for an origin already granted that is this service's when a key goes with it (#88 E3:
+// a suggestion's, the model field's, the edited service's own), and a press on the field asks for one that is
 // not; checked when submitted, the first field at fault taking the focus; connected before anything is handed over,
 // with a stable id; editing keeps the saved key unless one is typed or it is cleared; the refused key's form. Task 65:
 // a permission the browser grants only after the form is gone is given back, and a form gone loads no list; both
@@ -108,11 +109,13 @@ describe('ServiceForm (§6.3)', () => {
     await m.unmount()
   })
 
-  it('the list loads by itself for an origin already granted, once the address and the key have been still', async () => {
+  it('the list loads by itself for the origin a suggestion asked for, once the address and the key have been still', async () => {
     const { element } = form()
     const m = await mountElement(element)
     const [address, key, model] = inputs(m.container)
-    type(address!, 'https://openrouter.ai/api/v1')
+    button(m.container, 'OpenRouter').click()
+    await m.flush()
+    expect(address!.value).toBe('https://openrouter.ai/api/v1')
     type(key!, 'sk-or-1')
     await m.flush()
     expect(model!.getAttribute('placeholder')).toBe(O.services.modelEmpty)
@@ -120,6 +123,42 @@ describe('ServiceForm (§6.3)', () => {
     await m.flush()
     expect(wire.listed).toEqual(['https://openrouter.ai/api/v1'])
     expect(model!.getAttribute('placeholder')).toBe(O.services.modelSearch(2))
+    expect(wire.asked).toEqual(['https://openrouter.ai/api/v1'])
+    await m.unmount()
+  })
+
+  // #88 E3: granted is not chosen. The manifest grants origins no reader picked for a service, and a key typed before the
+  // address was edited through one of them went there by itself (readarxiv.com's own /models, against PRIVACY.md)
+  it('a key goes by itself to no granted origin this form did not ask for: the manifest\'s, another service\'s; a press on the model field asks, then lists', async () => {
+    origins.granted.add('https://readarxiv.com/*')
+    store({ ...SVC, id: 'svc-other123' })
+    const { element } = form()
+    const m = await mountElement(element)
+    const [address, key, model] = inputs(m.container)
+    type(key!, 'sk-typed-first')
+    for (const to of ['https://readarxiv.com/x', 'https://openrouter.ai/api/v1', SVC.baseURL]) {
+      type(address!, to)
+      await vi.advanceTimersByTimeAsync(STILL_MS * 2)
+      await m.flush()
+    }
+    expect([wire.listed, wire.asked]).toEqual([[], []])
+    // the reader's own press names the address the key is for
+    model!.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+    await m.flush()
+    await m.flush()
+    expect(wire.asked).toEqual([SVC.baseURL])
+    expect(wire.listed).toEqual([SVC.baseURL])
+    await m.unmount()
+  })
+
+  it('editing, the list loads by itself at the service\'s own origin, with the key saved for it', async () => {
+    store(SVC)
+    const { element } = form({ service: SVC })
+    const m = await mountElement(element)
+    await vi.advanceTimersByTimeAsync(STILL_MS)
+    await m.flush()
+    expect(wire.listed).toEqual([SVC.baseURL])
+    expect(vi.mocked(listModels).mock.calls.at(-1)?.[1]).toBe('sk-saved')
     expect(wire.asked).toEqual([])
     await m.unmount()
   })
@@ -180,8 +219,9 @@ describe('ServiceForm (§6.3)', () => {
   it('connects before anything is handed over: a failure says why beside the button and keeps the form, the id stays the same', async () => {
     const { element, done } = form()
     const m = await mountElement(element)
-    const [address, key, model] = inputs(m.container)
-    type(address!, 'https://openrouter.ai/api/v1')
+    const [, key, model] = inputs(m.container)
+    button(m.container, 'OpenRouter').click()
+    await m.flush()
     type(key!, 'sk-or-bad')
     await vi.advanceTimersByTimeAsync(STILL_MS)
     await m.flush()
@@ -510,8 +550,9 @@ describe('ServiceForm (§6.3)', () => {
     vi.mocked(listModels).mockRejectedValueOnce(new Error('down'))
     const { element } = form()
     const m = await mountElement(element)
-    const [address, key, model] = inputs(m.container)
-    type(address!, 'https://openrouter.ai/api/v1')
+    const [, key, model] = inputs(m.container)
+    button(m.container, 'OpenRouter').click()
+    await m.flush()
     type(key!, 'sk-1')
     await vi.advanceTimersByTimeAsync(STILL_MS)
     await m.flush()

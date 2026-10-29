@@ -406,7 +406,8 @@ const R = {
     rateLimited: '请求过于频繁', // S-R-16: a stopped run does not retry by itself, so the card promises no retry
     noPdf: '这篇论文暂不支持 PDF 翻译', // S-R-17: no source, or nothing typeset (the maintainer, 2026-09-26)
     useHtml: '改用 HTML 翻译', // S-R-18: the capsule's action, where the paper has an HTML version
-    notNow: 'PDF 对照暂时无法加载', // S-R-24 (the owner's words, 2026-10-17): our server out of reach or at its limit; the original stays, with a retry and the HTML version
+    notNow: 'PDF 对照暂时无法加载', // S-R-24 (the owner's words, 2026-10-17): our server out of reach; the original stays, with a retry and the HTML version
+    limited: 'PDF 对照请求过于频繁，请稍后再试', // S-R-26: our server's limit (a 429), its own words since the run stops asking by itself (#88 E5); with the same retry and HTML version
     noPaper: '找不到这篇论文', // S-R-20: an address that names no paper
     goToArxiv: '前往 arXiv', // S-R-20's action
     unreadable: '设置读取失败，当前使用默认设置', // S-R-21: the note while the settings cannot be read, as S-O-02 words it
@@ -425,4 +426,12 @@ const REASON: Record<ProviderErrorKind, string> = {
   unknown: '翻译失败',
   aborted: '',
 }
-export const zh = { S, O, R, REASON } as const
+/**
+ * S-E's two key reasons for an engine that carries no key (#88 E5): a built-in service — Microsoft's or Google's web translator,
+ * Chrome's own — refused or not ready is never the reader's API key, and an engine not known says it without naming one
+ */
+const REASON_KEYLESS: Record<'no-key' | 'auth', string> = {
+  'no-key': '翻译服务尚未就绪',
+  auth: '翻译服务拒绝访问',
+}
+export const zh = { S, O, R, REASON, REASON_KEYLESS } as const

@@ -20,7 +20,7 @@ import { dirname, join, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { layoutMarksOfPaper } from '../../../src/pdf-reader/engine/layout/paper.mjs'
-import { encodeLayoutMarks, inkSamples, LAYOUT_CLASSES, layoutMarksOf, leadSamples, marksFile, probeSamples, readInkProbe, readInkTexts, readMarkProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
+import { encodeLayoutMarks, LAYOUT_CLASSES, layoutMarksOf, marksFile, probeSamples, readInkAnswers, readMarkProbe } from '../../../src/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles, probeFiles } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { LITE } from './lite-pdfjs.mjs'
@@ -100,7 +100,7 @@ async function referenceMarks(paper, source, at) {
   const probe = probeFiles(paper, { marks: true })
   const c0 = await kept(at, null, `probe-${keyOf(source, probe)}`, withSource(probe), paper, { once: true, bibtex: false }, false)
   const switches = readMarkProbe(c0?.log ?? '', probeSamples(paper.units, paper.project.complete))
-  const inkless = readInkProbe(c0?.log ?? '', inkSamples(paper.units)), texts = readInkTexts(c0?.log ?? '', [...inkSamples(paper.units), ...leadSamples(paper.units)])
+  const { inkless, texts } = readInkAnswers(c0?.log ?? '', paper.units)
   const marked = originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, ...(inkless ? { inkless } : {}) })
   const c = await kept(at, null, keyOf(source, marked), withSource(marked), paper, { once: false, bibtex: !paper.meta.bbl }, false)
   if (!c?.pdf) return null

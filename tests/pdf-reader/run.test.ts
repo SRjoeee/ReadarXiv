@@ -8,7 +8,7 @@ import type { LayerStore } from '@/cache/layer-store'
 import { CTAG5, writeCatalog } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import type { Row } from '@/pdf-reader/engine/layer-proto/rows.mjs'
-import { POLL_SLOW_AFTER_MS, POLL_SLOW_MS, PREPARE_DEADLINE_MS, type RunEvent, type RunHost, startRun, WAIT_MIN } from '@/pdf-reader/session/run'
+import { POLL_SLOW_AFTER_MS, POLL_SLOW_MS, PREPARE_DEADLINE_MS, REFUSED_ASKS, type RunEvent, type RunHost, startRun, WAIT_MAX, WAIT_MIN } from '@/pdf-reader/session/run'
 import { readFileSync } from 'node:fs'
 import * as PL from '@cantoo/pdf-lib'
 import { deltaOf } from '@/pdf-reader/engine/layout/delta.mjs'
@@ -220,6 +220,55 @@ describe('Review Focus 1: our server\'s every answer', () => {
     expect(a.s.layerLooks()).toBe(1)
     await vi.advanceTimersByTimeAsync(1_000)
     expect(a.s.layerLooks()).toBe(2)
+    a.r.dispose()
+  })
+
+  it('a limit that lasts: waited out and asked again REFUSED_ASKS times in a row, then the look stops, said as the limit with no wait under way; a retry asks at once (#88 E5)', async () => {
+    vi.useFakeTimers()
+    // a visitor's day limit: our server names the end of its window, hours away; each wait is ten minutes at most
+    const a = run({ looks: [() => json(429, { retryAfterMs: 5 * 3600_000 })] })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(a.s.layerLooks()).toBe(1)
+    await vi.advanceTimersByTimeAsync(WAIT_MAX * REFUSED_ASKS)
+    expect(a.s.layerLooks()).toBe(1 + REFUSED_ASKS)
+    // the last 429 ends it: said, and no time named, since nothing is waited for any more
+    expect(a.events.at(-1)).toEqual({ type: 'unavailable', why: 'refused', retryAt: null })
+    await vi.advanceTimersByTimeAsync(24 * 3600_000)
+    expect(a.s.layerLooks()).toBe(1 + REFUSED_ASKS)
+    // the reader's retry asks at once, and its own run of 429s is capped again
+    a.r.retry()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(a.s.layerLooks()).toBe(2 + REFUSED_ASKS)
+    await vi.advanceTimersByTimeAsync(24 * 3600_000)
+    expect(a.s.layerLooks()).toBe(2 + 2 * REFUSED_ASKS)
+    a.r.dispose()
+  })
+
+  it('a limit that passes within the waits: the catalog comes, and a later 429 starts its count afresh', async () => {
+    vi.useFakeTimers()
+    const answers = [() => json(429, { retryAfterMs: 1000 }), () => json(429, { retryAfterMs: 1000 }), () => json(202, { position: 1, stage: null, progress: 0.1, retryAfterMs: 1000 }), () => json(429, { retryAfterMs: 1000 }), () => json(429, { retryAfterMs: 1000 }), () => json(429, { retryAfterMs: 1000 }), () => new Response(catalog)]
+    const a = run({ looks: answers })
+    await vi.advanceTimersByTimeAsync(WAIT_MIN * answers.length)
+    await vi.waitFor(() => expect(kinds(a.events).slice(-2)).toEqual(['layer', 'prepared']))
+    expect(a.s.layerLooks()).toBe(answers.length)
+    a.r.dispose()
+  })
+
+  it('a prepare refused (429) was not taken: the visit\'s prepare is given back and asked again after the wait, never taken for a paper that cannot be had', async () => {
+    vi.useFakeTimers()
+    let token = true, posts = 0
+    const a = run({
+      looks: [() => (posts >= 2 ? json(202, { position: 1, stage: null, progress: 0.1, retryAfterMs: 1000 }) : json(404, { why: 'not-prepared' }))],
+      prepare: () => (++posts === 1 ? json(429, { retryAfterMs: 2000 }) : json(202, { position: 1, stage: null, progress: 0, retryAfterMs: 1000 })),
+      may: () => { const t = token; token = false; return t },
+      unsent: () => { token = true },
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(a.events.at(-1)).toMatchObject({ type: 'unavailable', why: 'refused' })
+    await vi.advanceTimersByTimeAsync(2000 + WAIT_MIN * 2)
+    expect(posts).toBe(2)
+    expect(a.events.some(e => e.type === 'unavailable' && e.why === 'cannot-prepare')).toBe(false)
+    expect(a.events.at(-1)?.type).toBe('preparing')
     a.r.dispose()
   })
 

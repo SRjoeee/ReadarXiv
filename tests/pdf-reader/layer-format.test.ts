@@ -140,7 +140,7 @@ describe('each writer then its reader is the identity', () => {
     expect(p1.leftParts).toEqual([M.lefts[1]!.ref])
     expect(p2.leftParts).toEqual([M.lefts[2]!.ref, M.lefts[3]!.ref])
     expect(p1.chain).toEqual({
-      head: M.head.sha256, through: 1, last: M.parts[0]!.sha256, slot: 12, id: 2, told: Uint8Array.of(1, 0, 1, 0, 0, 0, 0, 0), groups: Uint8Array.of(0, 0, 0), reach: 2, ahead: VIEWS[1],
+      head: M.head.sha256, through: 1, last: M.parts[0]!.sha256, slot: 12, id: 2, told: Uint8Array.of(1, 0, 1, 0, 0, 0, 0, 0), figured: Uint8Array.of(0, 0, 0, 0, 0, 0, 0, 0), groups: Uint8Array.of(0, 0, 0), reach: 2, ahead: VIEWS[1],
     })
     expect(p2.chain).toMatchObject({ through: 3, slot: 41.5, id: 5, reach: 4, ahead: VIEWS[3] })
     expect(p3.chain).toMatchObject({ through: 4, slot: 70, id: 7, reach: 4, ahead: [] })
@@ -398,8 +398,8 @@ describe('a reader\'s envelope', () => {
     expect(await refusal(read('units', o => { o.bundle = '5'; delete o.format }))).toMatchObject({ kind: 'units', path: 'format' })
     expect(UNITS_FORMAT).toBe('1')
     // (6: a part with no layout says why, `layout: { refused, why }`; 7: a draw's items carry their characters' fills; 8: the
-    // head's base says whose PDF the layer is drawn over)
-    expect(BUNDLE5).toBe('10')
+    // head's base says whose PDF the layer is drawn over; 11: a figure row carries its set and its room)
+    expect(BUNDLE5).toBe('11')
   })
 
   it('refuses what is not an object, and a chunk given as a part and a part given as a chunk', async () => {
@@ -1473,9 +1473,9 @@ describe('a part against the chain', () => {
     expect(await partWith(1, p => { (p as Any).rules = { 2: [72, 500, 700, 500.4], 3: [72, 300, 200, 300.3] } })).toMatchObject({ rules: { 2: [72, 500, 700, 500.4], 3: [72, 300, 200, 300.3] } })
   })
 
-  it('refuses figure rows (BUNDLE 10, the content class `figures`) of no shape, on a page outside the part\'s own, of a unit not a figure\'s, or where the layout is none', async () => {
-    // (a row: [id, group, page, x, y, ux, uy, length, size, ascent, descent, anchor, fill, font])
-    const row = (o: Record<number, unknown> = {}) => Object.assign([1, 0, 2, 100, 400, 1, 0, 60, 8, 0.88, -0.2, 1, 0, 'ArialMT'], o)
+  it('refuses figure rows (BUNDLE 10, the content class `figures`; their set and room since 11) of no shape, on a page outside the part\'s own, of a unit not a figure\'s, or where the layout is none', async () => {
+    // (a row: [id, group, page, x, y, ux, uy, length, size, ascent, descent, anchor, fill, font, set, before, after])
+    const row = (o: Record<number, unknown> = {}) => Object.assign([1, 0, 2, 100, 400, 1, 0, 60, 8, 0.88, -0.2, 1, 0, 'ArialMT', 0, 4, 12.5], o)
     await refused(1, p => { (p as Any).figures = [row()] }, 'figures[0][0]')
     await refused(1, p => { (p as Any).figures = [row({ 0: 99_999 })] }, 'figures[0][0]')
     await refused(1, p => { (p as Any).figures = [row({ 0: 0 })] }, 'figures[0][0]')
@@ -1484,11 +1484,23 @@ describe('a part against the chain', () => {
     await refused(1, p => { (p as Any).figures = [row({ 5: 0.5 })] }, 'figures[0][5]')
     await refused(1, p => { (p as Any).figures = [row({ 11: 3 })] }, 'figures[0][11]')
     await refused(1, p => { (p as Any).figures = [row().slice(1)] }, 'figures[0]')
+    // (a row of 10's, no set and no room, is no row of 11's)
+    await refused(1, p => { (p as Any).figures = [row().slice(0, 14)] }, 'figures[0]')
+    // (its set a group's number at most its own; its room 0 or more)
+    await refused(1, p => { (p as Any).figures = [row({ 1: 3, 14: 4 })] }, 'figures[0][14]')
+    await refused(1, p => { (p as Any).figures = [row({ 14: -1 })] }, 'figures[0][14]')
+    await refused(1, p => { (p as Any).figures = [row({ 15: -0.5 })] }, 'figures[0][15]')
+    await refused(1, p => { (p as Any).figures = [row({ 16: Number.NaN })] }, 'figures[0][16]')
     await refused(1, p => { (p as Any).figures = {} }, 'figures')
     // (the key there only where the part has a figure unit: a part of none is written as one before figures)
     await refused(1, p => { (p as Any).figures = [] }, 'figures')
     await refused(2, p => { (p as Any).layout = null; (p as Any).rules = null; (p as Any).fileOnly = []; (p as Any).figures = [row({ 2: 4 })] }, 'figures')
     expect(await partWith(1, p => { delete (p as Any).figures })).toMatchObject({ figures: [] })
+    // (a figure unit is never a layout row of its part: its figure row alone draws it; a left unit it may be, its hover's anchor,
+    // pipeline/ink-pass.mjs figureAnchors)
+    const e = await refusal(partWith(1, p => { (p as Any).figures = [row({ 0: (p as Any).layout.units[0][0] })] }))
+    expect(e).toMatchObject({ kind: 'part', path: 'figures[0][0]' })
+    expect(String(e?.message)).toMatch(/a unit of the layout too/)
   })
 
   it('a layout with no cell rules is a part (`rules: null`), as the writer writes one given none or an empty table', async () => {
@@ -1819,8 +1831,9 @@ describe('records (amendment M15): derived once, the engine\'s own predicates', 
       const bundle = { units }
       expect(units.length).toBeGreaterThan(5)
       for (const lang of LANGS) {
-        // (the names a table holds alone: the author block is translated for every target, TRANSLATE_VERSION 6)
-        const kept = (i: number) => (r.flags[i]! & RECORD_FLAG.KEPT) !== 0
+        // (the names a table holds alone: the author block is translated for every target, TRANSLATE_VERSION 6; and a TikZ
+        // picture's texts, kind `figure`, whose glyphs the figure ink units translate: rows.mjs TIKZ_KIND)
+        const kept = (i: number) => (r.flags[i]! & RECORD_FLAG.KEPT) !== 0 || kinds[i] === 'figure'
         const derived = [...units.keys()].filter(i => units[i] !== null && !kept(i))
         expect(derived, lang).toEqual(toTranslate(bundle, lang))
         // the batches: the same cuts from the records' lengths as batchesOf makes from the plain source, the paper's structural
@@ -1902,7 +1915,7 @@ describe('keys', () => {
   const sha = 'a'.repeat(64)
 
   it('keyOf names an object by its whole digest under the CTAG; catalogKey by the VTAG; keyParts takes them apart', () => {
-    expect(CTAG5).toBe(`b10-j${PDFJS}`)
+    expect(CTAG5).toBe(`b11-j${PDFJS}`)
     expect(VTAG5).toBe(`${CTAG5}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}-o${OCR}`)
     // (the recogniser's version as a token: core/ocr/version.ts's, its other characters points)
     expect(OCR).toBe('ppocr.v6.tiny.2')

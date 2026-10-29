@@ -58,4 +58,7 @@
 //    author block's names and places are sent for every target, not only where its script writes names its own way
 //    (layer-proto/rows.mjs toTranslate, layerRows), and a bibliography entry's units (PIPELINE 29) with them; a reader's
 //    toggles show or hide them. Every other unit's wire is 5's byte for byte
+// (No version since 6: a reply holding a numeric entity past U+10FFFF, whose reading threw and stopped the run, is read with
+// that entity as it stands, as the background's decoder reads it (mt.mjs decode); every reply read before is read the same,
+// and none was read so before. A TikZ picture's texts no longer sent is the plan's, not the wire's: versions.mjs, PIPELINE 31)
 export const TRANSLATE_VERSION = '6'

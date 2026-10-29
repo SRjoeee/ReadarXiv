@@ -37,6 +37,7 @@ import { drawDataOf } from '../pipeline/draw-data.mjs'
 import { DRAW_HELD_MAX } from '../layer-proto/draw.mjs'
 import { classOf, colourPieceOf, followsOf, headEnd, INK_ANY, layoutMarking, leadStep, markAt, symbolText, vetoTwice } from './marks.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
+import { HEAD_ABUT, HEAD_PUNCT } from './own.mjs'
 import { readAnnots } from '../layer-proto/links.mjs'
 
 /** the how of a later display of a display group (stream.mjs): its ink is the group's first display's */
@@ -48,7 +49,7 @@ const CLOSED = OWNED_HOW.indexOf('closed')
 export { OPS_MS }
 const PAGES_MAX = 10_000, COORD_MAX = 14_400
 /** units TeX sets away from where the source has them (anchors.mjs `floating`) */
-const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure'])
+const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure', 'affiliation'])
 /** a line's body glyphs: within this share of its median size */
 const BODY = 0.15
 /** a glyph on a line, scripts included: its baseline within this of the line's (and a placeholder's of its mark's) */
@@ -1146,8 +1147,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         if (cls === 'macro' && last >= 0 && k > last) (one.tails ??= []).push({ entry, k, src: piece.src })
       }
       // a piece the marked original gives no mark (at a unit's head, after a prefix or a control sequence's end, glued
-      // to a word): its rendering is not known
-      if (!d?.open) {
+      // to a word): its rendering is not known; but one the maker's reading parted from the paper's macro before it, whose
+      // text is known (stream.mjs ownedOf, marks.mjs followsOf `split`: a footnote's call after \\xspace), by its own ink
+      if (!d?.open && !ownInk.has(`${cls === 'footnote' ? 'n' : 'p'}${i}.${k}a`)) {
         // a LaTeX text symbol (marks.mjs TEXT_SYMBOLS) is drawn as its character where the unit's lines show it (below)
         const sym = cls === 'macro' ? symbolText(piece.src) : null
         const entry = { row: [i, k, kind, PH_FLAG.LOST], cls, state: 'unmarked' }
@@ -1708,6 +1710,30 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   }
   const labels = [], labelAt = new Map(), labelRows = new Map()
   const owned = (p, g, unit) => ink[p].owner[g] !== -1 && ink[p].owner[g] !== unit
+  /**
+   * How many of `run`'s first glyphs (page p, left to right, before unit i's start) are the closing punctuation a head sets
+   * after the unit before i (own.mjs MR 5): each of HEAD_PUNCT, the first within HEAD_ABUT of an em right of a glyph of another
+   * unit's on its baseline, each next within it of the one before. They are given to that unit's line there (its glyphs, its
+   * box): none where it has no line holding that glyph
+   */
+  function headTail(p, i, run) {
+    const P = ink[p]
+    if (!run.length) return 0
+    const f = run[0], near = (a, b) => Math.abs(P.y[a] - P.y[b]) < 0.5 * Math.max(P.size[a], P.size[b])
+    let left = -1
+    for (const g of band(P, P.y[f] - 0.5 * P.size[f], P.y[f] + 0.5 * P.size[f])) if (P.owner[g] >= 0 && P.owner[g] !== i && P.x1[g] <= P.x0[f] + 0.05 && near(g, f) && (left < 0 || P.x1[g] > P.x1[left])) left = g
+    if (left < 0) return 0
+    let n = 0
+    for (let prev = left; n < run.length; prev = run[n++]) {
+      const g = run[n]
+      if (!HEAD_PUNCT.test((P.u[g] ?? '').normalize('NFKC')) || P.x0[g] - P.x1[prev] >= HEAD_ABUT * Math.max(P.size[g], P.size[prev]) || !near(g, prev)) break
+    }
+    if (!n) return 0
+    const row = placedById.get(P.owner[left])?.rows.find(r => r.page === p && Math.abs(r.base - P.y[left]) < 0.5 * Math.max(r.size, P.size[left]) && r.x0 <= P.x0[left] + 0.05 && P.x1[left] <= r.x1 + 0.05)
+    if (!row) return 0
+    for (const g of run.slice(0, n)) { row.gl.push(g); P.owner[g] = P.owner[left]; row.x1 = Math.max(row.x1, P.x1[g]); row.top = Math.max(row.top, P.top[g]); row.bottom = Math.min(row.bottom, P.bottom[g]) }
+    return n
+  }
   function labelOf(one) {
     const { id: i, u, rows, S } = one
     const r0 = rows[0]
@@ -1722,6 +1748,12 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const run = []
     let edge = S.x
     for (let q = cand.length - 1; q >= 0; q--) { const g = cand[q]; if (edge - P.x1[g] > LABEL_EM * P.size[g]) break; run.unshift(g); edge = Math.min(edge, P.x0[g]) }
+    // the closing punctuation a head sets right after the unit before this one is that unit's, as the wrap reads it (own.mjs
+    // MR 5: HEAD_PUNCT, each within HEAD_ABUT of an em of the glyph before it, the first of that unit's own): its line takes it,
+    // so that the reader draws it after that unit's translation (layer2.mjs tailOf) and its group's ink is that line's, never
+    // this unit's label, which the reader would show again from the original over the unit before's drawing (amsthm's ")."
+    // after a note that ends in a citation, 2610.18513v1 p35: u315's label row was u314's ").", shown where it stood)
+    run.splice(0, headTail(S.page, i, run))
     // wholly left of the unit's first line
     const mine = run.filter(g => P.x1[g] <= r0.x0 + 0.01)
     // or the class's own mark that the first line begins with, the unit's start mark set before it
@@ -1815,12 +1847,12 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       const below = Math.min(H, Math.max(0, r2(lastRow.bottom - (Number.isFinite(next) ? next : view[1] + FOOT))))
       frames.push(f.page, f.col, f.first, f.n, q === 0 ? -1 : share, below)
     }
-    // flags: centred as TeX set the unit's paragraph, where the marked original's log tells it (marks.mjs readAlign: its
-    // \leftskip, \rightskip and \parfillskip when it ended; the author's own alignment). Where it does not (a caption
-    // \@makecaption centres in an \hbox on one line, the title and front matter, which carry no marks, a cell): centred where
-    // every line's centre is its column's and one line at least is short of it by an em; the first line from its label on
-    // (a caption's "Figure 1." centred with its text), a line across both columns of a page of two by the text block
-    // (blockEdges: the pool of such lines is a few, and 1810.04805's title read 8.7 pt off by its own). A justified one-line
+    // flags: centred, flush left or flush right as TeX set the unit's paragraph, where the marked original's log tells it
+    // (marks.mjs readAlign: its \leftskip, \rightskip and \parfillskip when it ended; the author's own alignment). Where it
+    // does not (a caption \@makecaption centres in an \hbox on one line, the title and front matter, which carry no marks, a
+    // cell): centred where every line's centre is its column's and one line at least is short of it by an em; the first line
+    // from its label on (a caption's "Figure 1." centred with its text), a line across both columns of a page of two by the
+    // text block (blockEdges: the pool of such lines is a few, and 1810.04805's title read 8.7 pt off by its own). A justified one-line
     // paragraph centred by its own glue (\noindent\hfill X\hfill\null, whose skips are the paper's) is centred where its
     // line is on its column's middle and stands off both edges by more than INSET ems
     const told = alignTeX.get(i)
@@ -1834,7 +1866,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (!(x0 - e[0] > INSET * em && e[1] - r.x1 > INSET * em)) inset = false
     })
     const isCentred = told === undefined ? centred && short : told === 'c' || (told === 'j' && centred && inset)
-    const flags = (u.title ? UNIT_FLAG.TITLE : 0) | (u.front ? UNIT_FLAG.FRONT : 0) | (isCentred ? UNIT_FLAG.CENTRED : 0)
+    // (flush left or flush right only as TeX told it, never read off arXiv's lines: a ragged paragraph's lines can all reach
+    // near its edge, and a justified one's can stop short of it; a unit TeX does not tell keeps neither)
+    const flags = (u.title ? UNIT_FLAG.TITLE : 0) | (u.front ? UNIT_FLAG.FRONT : 0) | (isCentred ? UNIT_FLAG.CENTRED : 0) | (told === 'l' ? UNIT_FLAG.FLUSH_LEFT : 0) | (told === 'r' ? UNIT_FLAG.FLUSH_RIGHT : 0)
     const depth = Number.isInteger(u.depth) && u.depth >= -1 && u.depth <= 5 ? u.depth : 9
     one.out = { unit: [i, KIND.get(u.kind), depth, flags, u.pieces.length], lines, frames, erase, splits: fs.length > 1 }
   }
@@ -2106,7 +2140,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const M = mh ? mh.pages : 0
     let markedTo = mh ? 0 : Infinity, ended = !mh, finished = false, foundTo = 1
     const mViews = [], mWords = [], twiceSeen = new Set()
-    const follows = mh ? followsOf(units, mh.set) : null
+    const follows = mh ? followsOf(units, mh.set, mh.marking?.texts) : null
     // (the marks read a page at a time: none yet)
     if (mh) { at = new Map(); ours = []; carryOver(); noteLines() }
     let X = 0

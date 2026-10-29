@@ -22,11 +22,24 @@ const SERVICES: MenuListItem[] = [
 ]
 
 describe('MenuList', () => {
-  it('draws the reader\'s rows by default, as they were: the check, the name, the hint at the end', async () => {
+  it('draws the reader\'s rows by default: the name, the hint, and the check last, in a slot every row of a choice keeps (the maintainer, 2026-10-25)', async () => {
     const { rows } = await mount([{ id: 'a', name: 'A', hint: '100%', checked: true }, { id: 'b', name: 'B' }])
     expect(rows.map(r => r.className)).toEqual(['item', 'item'])
-    expect([...rows[0]!.children].map(c => c.getAttribute('class'))).toEqual(['check', 'min-w-0 flex-1 truncate', 'hint'])
-    expect([...rows[1]!.children].map(c => c.getAttribute('class'))).toEqual(['check invisible', 'min-w-0 flex-1 truncate'])
+    expect([...rows[0]!.children].map(c => c.getAttribute('class'))).toEqual(['min-w-0 flex-1 truncate', 'hint', 'check'])
+    expect([...rows[1]!.children].map(c => c.getAttribute('class'))).toEqual(['min-w-0 flex-1 truncate', 'check invisible'])
+  })
+
+  it('puts the check after a row\'s action: the Chrome row chosen while its pack is to be downloaded, or downloads (P10)', async () => {
+    const { rows } = await mount([
+      { id: 'chrome', name: 'Chrome', hint: 'Built in', checked: true, disabled: true, action: { label: 'Download' } },
+      { id: 'chrome-busy', name: 'Chrome', hint: 'Downloading', disabled: true, action: { label: 'Download', busy: true } },
+    ], { layout: 'two-line' })
+    expect(rows.map(r => [...r.children].map(c => c.getAttribute('class')))).toEqual([['t', 'act', 'check'], ['t', 'spin', 'check invisible']])
+  })
+
+  it('draws no check and keeps no slot for one in a menu of plain items', async () => {
+    const { container } = await mountElement(createElement(MenuList, { items: [{ id: 'a', name: 'A' }], kind: 'items', label: 'Download', onPick: () => {}, onClose: () => {} }))
+    expect([...container.querySelector('[role="menuitem"]')!.children].map(c => c.getAttribute('class'))).toEqual(['min-w-0 flex-1 truncate'])
   })
 
   it('two lines: each hint under its name; a row without one keeps one line', async () => {

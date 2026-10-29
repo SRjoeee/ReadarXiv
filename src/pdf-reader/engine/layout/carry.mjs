@@ -389,6 +389,8 @@ export function carrier(marked, arxiv) {
  *  token, are at 0.99 and over; 2307.16209's pages 69 to 76, where our TeX Live 2023 compile runs behind arXiv's build by up to
  *  half a page, at 0.44 to 0.93 */
 export const PAGE_SAME = 0.98
+/** the letters and digits a line of ours must hold for its finding on another page of arXiv's to make our page another's */
+export const LINE_EVIDENCE = 4
 /** a page's longest common run of words is had for at most this many cells (its two counts' product): a page past it (8,000
  *  words alike, a crafted page's) is not drawable, that page alone. The heaviest real pages hold 2,000 to 3,000 words */
 const PAGE_CELLS = 25_000_000
@@ -457,10 +459,14 @@ export function lineCheckOf(ours, arxiv) {
   // (arXiv's stamp stands on the first page alone, where our page has not its words; the text layer gives no rotation or margin
   // flag a token could be told by, and its words are as plain as the paper's)
   if (theirs.has(1)) theirs.set(1, unstamped(theirs.get(1), mine.get(1) ?? []))
+  // (a line of fewer than LINE_EVIDENCE letters and digits is no evidence of where it stands: a figure's axis label, "q", is found
+  // on another page wherever that page has the letter, 2610.21765v1 p7's matched on arXiv's p6, its page left undrawn)
+  const letters = new Map()
+  for (const k of ours.keys()) { const l = tokenLine[k]; if (l >= 0 && ours[k]) letters.set(l, (letters.get(l) ?? 0) + pageWord(ours[k].t ?? '').length) }
   const elsewhere = new Map()
   for (const k of ours.keys()) {
     const l = tokenLine[k]
-    if (l < 0 || !ours[k]) continue
+    if (l < 0 || !ours[k] || (letters.get(l) ?? 0) < LINE_EVIDENCE) continue
     const p = c.lineAt[l]
     if (p && p.page !== ours[k].page) (elsewhere.get(ours[k].page) ?? elsewhere.set(ours[k].page, new Set()).get(ours[k].page)).add(l)
   }

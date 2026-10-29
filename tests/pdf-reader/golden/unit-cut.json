@@ -1,5 +1,5 @@
 {
- "pipeline": "29",
+ "pipeline": "32",
  "units": {
   "sample-1": [
    "heading: text",
@@ -47,12 +47,9 @@
    "para: text,ph,text,ph,text,ph,ph,text",
    "heading: text",
    "para: text,ph,text,open,text,close,text",
-   "refnames: text",
-   "reference: ph,text,open,ph,text,close,text,ph,ph,text,ph,text,ph",
-   "refnames: text,ph,text",
-   "reference: ph,text,open,ph,text,ph,close,text,ph,text,ph",
-   "refnames: text,ph,text",
-   "reference: ph,text,open,ph,text,close,text,ph,ph,text,ph,text,ph",
+   "reference: text,ph,text,open,ph,text,close,text,ph,ph,text,ph,text,ph",
+   "reference: text,ph,text,ph,text,open,ph,text,ph,close,text,ph,text,ph",
+   "reference: text,ph,text,ph,text,open,ph,text,close,text,ph,ph,text,ph,text,ph",
    "name: Theorem",
    "name: Lemma",
    "name: Definition"
@@ -103,12 +100,66 @@
   ],
   "bibliography": [
    "para: text,ph,text,ph,text",
-   "refnames: text,ph,text,ph,text",
-   "reference: ph,text,ph,text,open,text,close,text",
-   "refnames: text,ph,text,ph,text",
-   "reference: text,open,text,close,text,ph,text,ph",
-   "refnames: open,open,open,text,close,ph,open,text,close,close,text,ph,close",
-   "reference: open,text,close,ph,open,open,ph,close,close,text,open,ph,close,text"
+   "reference: text,ph,text,ph,text,ph,text,ph,text,open,text,close,text",
+   "reference: text,ph,text,ph,text,open,text,close,text,ph,text,ph",
+   "reference: open,open,open,text,close,ph,open,text,close,close,text,ph,close,open,text,close,ph,open,open,ph,close,close,text,open,ph,close,text"
+  ],
+  "authors": [
+   "author: text",
+   "footnote: text",
+   "affiliation: text",
+   "affiliation: text",
+   "para: ph,text",
+   "author: text,ph,text",
+   "affiliation: ph,text"
+  ],
+  "authors-box": [
+   "para: ph,text",
+   "author: open,text,ph,text,ph,close,text,ph",
+   "author: open,open,text,ph,close,close,text",
+   "affiliation: open,ph,text,close,text",
+   "affiliation: open,text,close,text"
+  ],
+  "made-bbl": [
+   "para: text,ph,text,ph,text"
+  ]
+ },
+ "ink": {
+  "contents": [
+   "inkcontents<0: \"Introduction\"",
+   "inkcontents: \"Black hole perturbations and quasinormal modes\""
+  ],
+  "double": [
+   "inkcontents: \"Internal structure of the depthwise convolutions and the module shown here\"",
+   "inkcontents: \"Turbulence strength \",ph($Cn2$)"
+  ],
+  "heads": [
+   "inkheads: \"Published as a conference paper at ICLR 2021\""
+  ],
+  "styles": [
+   "inkorphan: open(\\textbf{),\"Definition 1\",close,\" ([TT]) \",open(\\textcolor[HTML]{0071BC}{),\"holds\",close,\" \",open(\\textit{),\"here and now\",close"
+  ],
+  "column": [
+   "inkorphan: \"The data are available on request.\"",
+   "inkorphan: \"transport phenomena in junctions of a compensated ferrimagnet and a normal metal, Phys. Rev. B\"",
+   "inkorphan: \"[21] Y. Liu, S.-D. Guo, Two-dimensional fully compensated ferrimagnetism, Phys. Rev. Lett.\"",
+   "inkorphan: \"[22] Z. Zhang, Y. Wei, Fully compensated\""
+  ]
+ },
+ "figures": {
+  "figures": [
+   "figure: Training steps",
+   "figure: Validation loss",
+   "figure: Learning curve",
+   "figure: Baseline model",
+   "figure: Our method",
+   "figure: First ablation",
+   "figure: Second ablation",
+   "figure: Encoder block",
+   "figure: Decoder block",
+   "figure: hidden state",
+   "figure: Signal strength",
+   "figure: Noise floor"
   ]
  }
 }

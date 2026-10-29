@@ -209,8 +209,53 @@ import { OCR_VERSION } from '../../../core/ocr/version.ts'
 //     words some target has no package word for (rules/tex-names.mjs NAME_GAPS, CONJUNCTION_GAPS). Translated with the
 //     paper's units, the first batch's (rows.mjs batchesOf, runRows), cached by their text as any unit; the layer draws a
 //     head's or a generated reference's name in that translation where no package gives the target one. Over 168 local
-//     sources 923 name units in 85 papers (32 at most; 19 papers call cleveref or \autoref); they change no source unit
-export const PIPELINE_VERSION = '29'
+//     sources 923 name units in 85 papers (32 at most; 19 papers call cleveref or \autoref); they change no source unit.
+//     And in the same unreleased 29 (the release sweep of 2026-10-25): a front matter command's optional arguments after its
+//     text are the command's (latex-front.mjs frontArgs), as its class reads them by looking past the text: the Elsevier
+//     classes' and ceurart's \author[1]{Name}[orcid=…], read short by 28's form, made the bracket a unit of its own, whose start
+//     mark stood between the call and the option, so that the class set the option as text and 2610.21084v1's marked original
+//     ran to 50 pages against arXiv's 49, refused whole (its names marks' fallback could not reach it: no mark of the names'
+//     was at fault, nor any the errors blamed). Over 157 local sources two papers' units change (2610.21084v1's three
+//     [orcid=…] and 2608.12096's two [email=…] gone), every other unit's hash kept; the marked compile of the gate pack's 7
+//     papers and the 25 of lab/pdf/data/layout makes arXiv's pages on every one TeX compiles
+// 30 (the content classes' coverage, shared, unreleased; the owner's rulings of 2026-10-28: the references and the author names
+//     decoupled, each its own toggle's): a bibliography's entry is one unit of kind `reference`, whole, its names its own (no
+//     `refnames` unit: latex-front.mjs bibliography); an author block's affiliations, institutions, addresses and e-mail line
+//     are units of their own, kind `affiliation`, always translated, numbered after the source's other units and before the
+//     entries (frontBlock, entriesLast; its names kind `author` keep the block's number); \\bibliography ends the unit before
+//     it whether the .bbl is there or not, so that a paper's units are the same before BibTeX writes its .bbl and after
+//     (layout/paper.mjs madeBibliography: the job's .bbl the prepare's first pass makes is a shipped one); and a macro's body
+//     is no unit where a .sty or a .cls defines it (storedBodies: a class's own \\maketitle, jcappub's), an author block's
+//     unit of a macro called once marked in its definition (2609.20976v1's \\affiliation[a]{\\CU}); 31 (the units a paper's
+//     bundle holds after its source units are units too: its ink units and figure units, which the wrap cuts of our pages, their
+//     number, kinds and pieces, are what a translation is stored for and found again by, the output identity naming PIPELINE and not
+//     LAYOUT): LAYOUT 23 changed the ink units' pieces (their style groups) and LAYOUT 25 their cut (a list's entry one unit at
+//     its leading, 2610.19274v1's 68 to 32; a formula's script its placeholder's; a head's or an entry's number in its own words
+//     the unit's, a folio alone the page's own ink: 2010.11929v2's "ICLR 2021"), both under PIPELINE 30, so that a translation
+//     stored for the old ink units could be given to the new ones; every paper is translated again. The unit-cut golden holds
+//     the ink units' and the figure units' cut beside the source units' (tests/pdf-reader/unit-cut.test.ts); and in the same 31,
+//     a letter command of the kernel's (\\L, \\o, \\ss, \\ae, \\aa…) is the letter itself in its word, the spaces TeX skips
+//     after it, an empty group after it and a group around it alone none of the text (latex-front.mjs letterCommand): it went
+//     out as a marker, and the same paper's `{\\L}ukasz Kaiser` came back as "Ł ukasz Kaiser"; an \\ifmmode in a paragraph's text
+//     is its \\else, one letter there in its word (ifmmodeLetter: REVTeX's `Louren\\ifmmode~\\mbox{\\c{c}}\\else \\c{c}\\fi{}o`, read
+//     as "Louren ç ç o"), its first branch no text; the pairs such a span held spend their ids as before (pairsOf). In the same release
+//     the left side's marks gain the figure units' (pipeline/ink-pass.mjs figureAnchors: arXiv's tokens in a level label's band),
+//     so that a figure's label lights its original on hover (the owner's report on 2010.11929v2 p9, the follow-up of #487).
+//     And a change of what is sent in the same unreleased 31, which moves no constant: a TikZ picture's texts (the front end's
+//     units of kind `figure`, latex-front.mjs tikzText), which own no glyph and no group and were never drawn, are asked for no
+//     more, the figure ink units translating the picture's glyphs once (layer-proto/rows.mjs TIKZ_KIND, PDF-READER §19.12);
+//     an ink unit that echoed one is translated itself. Every bundle is byte for byte as it was, every unit's cut and wire and
+//     every request's shape too: only the plan, the units toTranslate and layerIds name, is smaller; 32 (the release sweep of
+//     staging 4b3c4ae9, engine a30a53ba, 31 counted released): a .bib the bibliography's pass wrote itself is no .bib the paper
+//     lacks (layout/paper.mjs bibMissing: REVTeX 4.x's <job>Notes.bib, named in \\bibdata before the paper's own), so a REVTeX
+//     paper that ships its .bib and no .bbl has its entries units of kind `reference`, one an entry, where its bibliography was
+//     text no unit owned (2610.20595v1's 56 entries, 2610.21770v1's 61); an ink unit's hanging line is measured from its
+//     paragraph's first line only where the block begins on it (layout/ledger.mjs `opens`, layout/ink-units.mjs: a block from a
+//     column's top had every next entry of an orphan bibliography joined to it, a column one unit, since #487's PARA_DY); and an
+//     author block's row set in a \\centerline is its text (latex-front.mjs FRONT_BOXES: 2010.11929v2's block no unit before, its
+//     names, notes and places one ink unit of orphan text), each unit it cuts numbered after the others, so that no unit before
+//     the entries moves; every paper is translated again
+export const PIPELINE_VERSION = '32'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
@@ -248,9 +293,16 @@ export const PDFJS = '6.3.289'
  * stage 5, PDF-READER §19.12) each figure unit's ink (layout/figure-text.mjs) its own group, `f<k>`, its runs wrapped where they
  * are shown — in the page's stream, or in the stream of the form XObject an included PDF is, that form written again once with
  * /Properties of its own (layout/wrap.mjs wrapPage, proveForm) —, and a font with no Unicode a reader can trust leaving its figure
- * the original's (remove.mjs unicodeOf): the base's bytes change where a figure has text
+ * the original's (remove.mjs unicodeOf): the base's bytes change where a figure has text; 12 (2609.20976v1, shared with the
+ * other owners of this release): a macro TeX said sets no ink (the marks file's `marking.inkless`, wrapFinal's `inkless`, as the
+ * maker reads it) is no placeholder of ink in own.mjs, so that a unit that opens with one (a title in `\boldmath`) opens with its
+ * text and its lead's lines of their own are released (JCAP's header line had left the title the original's, `spell`); and an
+ * opening point alone at its unit's end, no display, owns its lines up to TeX's skip before another block, no further
+ * (stream.mjs lineEnd, BLOCK_GAP of the page's line pitch: the last author's `\orcidlink` had owned the affiliations and the
+ * e-mail below the names, to the abstract's label, which no ink unit then made a unit of; at a bibliography's leading a wrapped
+ * `\Eprint` keeps every line it held): the base's bytes change where a paper has either
  */
-export const REMOVAL = '11'
+export const REMOVAL = '12'
 /**
  * OCR, the recogniser the bitmap figures' labels were read with (PDF-READER §19.15, the head's `versions.ocr`, in the key: VTAG's
  * `-o`): the extension's own version of it (core/ocr/version.ts OCR_VERSION: the model files, eSearch-OCR's version and anything

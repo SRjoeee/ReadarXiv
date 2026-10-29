@@ -338,6 +338,51 @@ describe('toTranslate', () => {
     const b = bundleOf([BASE[0] as BundleUnit, null, BASE[1] as BundleUnit, ['para', UNIT_FLAG_BITS.KEPT, null, null, null, [[0, 'Kept']]]])
     expect(toTranslate(b, 'de')).toEqual([0, 2])
   })
+  // (a TikZ picture's texts, which the front end cuts into units of kind `figure`, latex-front.mjs tikzText: the layout compile
+  // marks none of them and the layer draws none, the picture's glyphs being the figure ink units' (kind `inkfigures`,
+  // layout/figure-text.mjs), translated once. They stay in the bundle at their ids, the left pane's floats reading them)
+  describe("a TikZ picture's texts", () => {
+    const tikz = '\\documentclass{article}\n\\usepackage{tikz}\n\\usepackage{pgfplots}\n\\begin{document}\nThe prose before the figure, a sentence.\n\n\\begin{figure}\n\\begin{tikzpicture}\n\\node[draw] (a) at (0,0) {Input layer};\n\\draw (0,1) node {Hidden units};\n\\begin{axis}[xlabel={Training steps}, title={Loss curve}]\n\\addplot coordinates {(0,1) (1,0)};\n\\addlegendentry{Validation loss}\n\\end{axis}\n\\end{tikzpicture}\n\\caption{A picture drawn with TikZ.}\n\\end{figure}\n\nThe prose after it, another sentence.\n\\end{document}\n'
+    const paper = openPaper(new Map([['main.tex', enc(tikz)]]))
+    const bundle = bundleOf(bundleUnitsOf(paper))
+    const figures = paper.units.flatMap((u, i) => (u.kind === 'figure' ? [i] : []))
+    it('are units of the bundle, at their ids, every unit after them at its own', () => {
+      expect(figures.map(i => plainSource(paper.units[i] as never))).toEqual(['Input layer', 'Hidden units', 'Training steps', 'Loss curve', 'Validation loss'])
+      expect(bundle.units.length).toBe(paper.units.length)
+      for (const i of figures) expect(bundle.units[i]?.[0]).toBe('figure')
+    })
+    for (const lang of ['zh', 'ja', 'ko', 'de', 'fr', 'ru']) {
+      it(`are none of the units a language translates, its batches or the rows it awaits (${lang})`, () => {
+        const ids = toTranslate(bundle, lang)
+        expect(ids.filter(i => figures.includes(i))).toEqual([])
+        // (every other unit is translated: the prose and the caption)
+        expect(ids).toEqual(paper.units.flatMap((u, i) => (u.kind === 'figure' || paper.kept.has(u) ? [] : [i])))
+        expect(ids.map(i => paper.units[i]!.kind)).toEqual(expect.arrayContaining(['para', 'caption']))
+        expect(batchesOf(bundle, lang).flat().filter(i => figures.includes(i))).toEqual([])
+        expect(layerIds(bundle, lang).filter(i => figures.includes(i))).toEqual([])
+      })
+    }
+    it('leave an ink unit that repeats one its own translation: it echoes none, and one that echoes it takes its row', () => {
+      // (a TikZ label, a running head of the same words the maker made an ink unit echoing it, and a contents entry echoing that
+      // head: layout/ink-units.mjs echo, rule 5, whose chain unitFrom follows)
+      const b = bundleOf([
+        ['para', 0, null, null, null, [[0, 'Prose before the figure.']]],
+        ['figure', 0, null, null, null, [[0, 'Input layer']]],
+        ['inkheads', 0, null, null, null, [[0, 'Input layer']], 1],
+        ['inkcontents', 0, null, null, null, [[0, 'Input layer']], 2],
+      ] as never)
+      for (const lang of ['zh', 'de']) {
+        expect(toTranslate(b, lang), lang).toEqual([0, 2])
+        expect(layerIds(b, lang), lang).toEqual([0, 2, 3])
+      }
+      expect(echoRows(b, [[2, ['x'], 'whole', 'g', null]] as never).map(r => r[0])).toEqual([3])
+      expect(echoRows(b, [[1, ['x'], 'whole', 'g', null]] as never)).toEqual([])
+    })
+    it('take no row, whatever results a caller holds for them', () => {
+      const results = new Map(figures.map(i => [i, { state: 'whole', pieces: [{ t: 'text', tr: true, s: 'x' }] }]))
+      expect(layerRows(bundle, results as never, 'de').rows.map(r => r[0]).filter(i => figures.includes(i))).toEqual([])
+    })
+  })
 })
 
 describe('batchesOf', () => {

@@ -70,7 +70,8 @@ export function tokens(s) {
 /**
  * The document as one stream of tokens in content order, each with its page and box in PDF units (origin at the
  * bottom left). `pages` is [{ page, items, styles }] from getTextContent. A word the text layer gives in two parts is
- * joined back into the first part's token — cut by a hyphen at a line end, or cut on its line where the font changes
+ * joined back into the first part's token — cut by a hyphen at a line end (the end an item's own, or an empty item's after
+ * it: PDF.js's where marked content closes), or cut on its line where the font changes
  * inside it (a heading's small capitals after its capital letter: E + XPERIMENTAL), the second part beginning where
  * the first ends with no space between; the second part keeps its own box with no text, so a line's box still starts
  * where its text does. An item's width is shared evenly between its characters, so a Latin word's box is approximate.
@@ -88,6 +89,18 @@ export function tokens(s) {
  * against the word (its ink, which inkEdges reads across alone, is its box); the carry of an item of marks alone, read along
  * x, is that of text whose baseline runs rightwards alone
  */
+/** how many items on a word a hyphen cut at its line's end waits for its line below */
+const PENDING_ITEMS = 4
+/** and how many of its size further along than its line's item its line below may start: a hanging label's width in (a list's
+ *  bullet, 1.1 sizes, 2307.16209v1 p22's "inves-"/"tigate"; a list of figures' number, 2.3; a bibliography's label, 4), never a
+ *  figure's text set to the right */
+const HANG = 6
+/** and how many past its line's end, above it, the next column's first line may start: a column's gutter (2.7 sizes at most in the
+ *  two-column classes: ACM's 2pc at 9 pt), at its line's size within SAME_SIZE; never a figure's label in that column (2610.21765v1
+ *  p7's "q", 15 sizes past "Sim-", and its axis's "0", 4.6, both smaller than the text) */
+const GUTTER = 3, SAME_SIZE = 0.1
+/** a hyphen's word waiting for its line below: the token, and where its item ended, along which direction, at what size */
+const pendingOf = (token, at) => ({ token, x: at.x, y: at.y, ex: at.ex, ey: at.ey, ux: at.ux, uy: at.uy, size: at.size, left: PENDING_ITEMS })
 export function tokenizeDocument(pages) {
   const doc = []
   const WORD_END = /[\p{L}\p{N}]$/u, WORD_START = /^[\p{L}\p{N}]/u
@@ -97,12 +110,30 @@ export function tokenizeDocument(pages) {
     // carry: the token the next one joins; last: the token holding the last word's text; prev: the last item's end;
     // inkOpen, inkEnd: whether an item of marks alone may still carry the last token's ink on, and from where; lastAcross:
     // whether the last token's item is read along x
-    let carry = null, last = null, prev = null, inkOpen = false, inkEnd = 0, lastAcross = true
+    let carry = null, last = null, prev = null, inkOpen = false, inkEnd = 0, lastAcross = true, hyphened = null, pending = null
     for (const it of items) {
-      if (!it.str) continue
+      // (an empty item that ends a line ends the item before's: PDF.js gives the line's end so where marked content closes after
+      // the item, our wrapped page's groups, so that a word a hyphen cut there was read as two on our page and one on arXiv's,
+      // and 2610.19274v1's list of figures fell under the line check's PAGE_SAME, its pages not drawn)
+      if (!it.str) { if (it.hasEOL && prev) { if (hyphened) pending = pendingOf(hyphened, prev); prev.word = false } continue }
       const [a, b, c, d, x, y] = it.transform
       const along = Math.hypot(a, b), size = along || it.height || Math.abs(d)
       if (prev && Math.abs(x - prev.x) < 0.1 * size && Math.abs(y - prev.y) < 0.05 * size && it.str === prev.str) continue
+      // (a word a hyphen cut at its line's end goes on in the line below, or at the next column's top, never in text set elsewhere
+      // that the stream gives next: a figure's axis label in the next column, "Sim-" and "q" read as "simq" on 2610.21765v1 p7,
+      // its page then another's to the line check; within PENDING_ITEMS items, those between read as they are)
+      if (pending) {
+        const z = Math.max(size, pending.size)
+        const off = (y - pending.ey) * pending.ux - (x - pending.ex) * pending.uy, along = (x - pending.x) * pending.ux + (y - pending.y) * pending.uy
+        const past = (x - pending.ex) * pending.ux + (y - pending.ey) * pending.uy
+        // (below it by half a size to three across the line's direction, starting no further along it than its line's item did,
+        // HANG sizes of slack: a line's start, a hanging label's width in at most; or above it, starting past its end by a
+        // column's gutter at most, at its size: the next column's first line)
+        const below = off < -0.5 * size && off > -3 * z && along <= HANG * z
+        const column = off > 0.5 * size && past >= -size && past <= GUTTER * z && Math.abs(size - pending.size) <= SAME_SIZE * z
+        if (below || column) { carry = pending.token; pending = null }
+        else if (--pending.left <= 0) pending = null
+      }
       const st = styles?.[it.fontName], asc = st?.ascent > 0 ? st.ascent : 0.75, desc = st?.descent < 0 ? st.descent : -0.22
       const perChar = it.str.length ? it.width / it.str.length : 0
       const toks = tokens(it.str)
@@ -160,12 +191,14 @@ export function tokenizeDocument(pages) {
         }
       }
       const tail = it.str.trimEnd()
-      carry = it.hasEOL && /[-­]$/.test(tail) && toks.length && !CJK.test(tail.at(-2) ?? '') ? last : null
+      hyphened = /[-­]$/.test(tail) && toks.length && !CJK.test(tail.at(-2) ?? '') ? last : null
+      carry = null
       // (one object a page, set again for every item: a heavy paper's every item made one more, of more fields, cost its
       // tokenizing a twentieth more)
       prev ??= { str: '', x: 0, y: 0, ex: 0, ey: 0, ux: 1, uy: 0, size: 0, square: true, word: false }
       prev.str = it.str; prev.x = x; prev.y = y; prev.ex = ex; prev.ey = ey; prev.ux = ux; prev.uy = uy; prev.size = size; prev.square = square
       prev.word = !it.hasEOL && toks.length > 0 && WORD_END.test(it.str) && !CJK.test(it.str.at(-1))
+      if (it.hasEOL && hyphened) pending = pendingOf(hyphened, prev)
     }
   }
   return doc

@@ -8,7 +8,7 @@ import type { TrPiece } from '../layer/pieces.mjs'
 
 /** a paper's files (path → bytes) → what the pipeline works on */
 /** `inFloat`: the indices in `units` (rising) of the units written inside a float (latex-front.mjs loadProject's) */
-export interface Paper { fsys: ReturnType<typeof inMemory>; meta: ReturnType<typeof analyze>; project: { main: string; units: SourceUnit[]; inFloat: number[] }; units: SourceUnit[]; inFloat: number[]; kept: Set<SourceUnit>; /** the structural names its TeX prints that no package names in every target (source/paper-names.mjs): units of kind `name` in its bundle, after its source's */ names: string[] }
+export interface Paper { fsys: ReturnType<typeof inMemory>; meta: ReturnType<typeof analyze>; project: { main: string; units: SourceUnit[]; inFloat: number[]; /** the bibliographies \\bibliography reads, by the names it gives (latex-front.mjs) */ bibliography?: string[] }; units: SourceUnit[]; inFloat: number[]; kept: Set<SourceUnit>; /** the structural names its TeX prints that no package names in every target (source/paper-names.mjs): units of kind `name` in its bundle, after its source's */ names: string[] }
 export declare function openPaper(files: Map<string, Uint8Array>): Paper
 /** the translation so far, with unit marks, set by one of strategiesFor: the files that differ from the paper's */
 /** `spans`, where given, gets `lines()`: each unit's lines and bytes in the files as written, worked out when asked */
@@ -19,6 +19,10 @@ export { PIPELINE_VERSION } from './versions.mjs'
  *  translation's pieces must pass (cache.mjs copyReuse) */
 export declare const PIPELINE_CARRIES: Record<string, (pieces: unknown[], unit?: { pieces: unknown[] } | null) => boolean>
 export declare const TYPESETTING_VERSION: string
+/** the definitions a paper's .bbl makes for itself before its first entry, which the mark probe sets first: its \\providecommand and
+ *  \\newcommand (as a \\providecommand), its conditionals on an undefined name whole, its \\@ifundefined, its own \\def and \\let
+ *  set only where the name is undefined; '' where none */
+export declare function bblProvides(fsys: { list(): string[]; read(path: string): Uint8Array | null }, main: string): string
 /** the font probe; with `width`, the width and size probes the typesetting rule measures the face by */
 export declare function probeFiles(paper: Paper, options?: { width?: boolean; marks?: boolean }): Map<string, Uint8Array>
 /** the original with unit marks; with `lines`, each unit's lines and the forced breaks in its log; `spans`, where

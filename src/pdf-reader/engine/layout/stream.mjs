@@ -52,6 +52,55 @@ const START = /^[th]?(\d+)s$/
  *  low on a page to high on it, and right by this share of the page's width and up by this share of its height, crossed
  *  into the next column: what TeX shipped between is in it, and cannot be told apart */
 const JUMP_X = 0.25, JUMP_Y = 0.25
+/** a piece alone at its unit's end owns its lines up to a gap this many of the page's line pitches deep, or more: TeX's skip
+ *  before another block (an author block's affiliations below its names), never the leading of the lines a piece wraps over */
+const BLOCK_GAP = 1.5
+/** the baseline most of a line's glyphs stand on (to a tenth), the first met on a tie: its text's, not a mark's raised over it */
+function lineBase(G, glyphs, from, to) {
+  const n = new Map()
+  let best = G.y[glyphs[from][1]], most = 0
+  for (let q = from; q < to; q++) { const y = Math.round(G.y[glyphs[q][1]] * 10) / 10, c = (n.get(y) ?? 0) + 1; n.set(y, c); if (c > most) { most = c; best = y } }
+  return best
+}
+/** a page's line pitch: the drop between consecutive lines' baselines that most of them have (to a half), where its glyphs run on
+ *  a line's start (left by an em, down by half its size) and the drop is under three of its size; null where none */
+function pitchOf(G) {
+  const n = new Map()
+  let best = null, most = 0, prev = -1
+  for (let g = 0; g < G.n; g++) {
+    if (prev >= 0) {
+      const em = Math.min(G.size[prev], G.size[g]), drop = G.y[prev] - G.y[g]
+      if (G.x0[g] < G.x0[prev] - em && drop > 0.5 * em && drop < 3 * Math.max(G.size[prev], G.size[g])) {
+        const d = Math.round(drop * 2) / 2, c = (n.get(d) ?? 0) + 1
+        n.set(d, c)
+        if (c > most) { most = c; best = d }
+      }
+    }
+    prev = g
+  }
+  return best
+}
+/** how many of `glyphs` ([page, g], stream order, one page) a piece alone at its unit's end owns: its lines up to the first that
+ *  starts a gap BLOCK_GAP of the page's pitch or more below the line before (`anchor`, the baseline of its unit's line it opens
+ *  on, the first line's where it opens on a line of its own), or all; a new line is one TeX set below the glyph before by half
+ *  its size, at or left of where that glyph starts, or below it by a size or more wherever it starts (an indented block) */
+function lineEnd(G, glyphs, anchor, pitch) {
+  if (!pitch) return glyphs.length
+  let from = 0, base = anchor
+  for (let j = 1; j <= glyphs.length; j++) {
+    const a = glyphs[j - 1][1], b = glyphs[j]?.[1]
+    if (b !== undefined) {
+      const em = Math.min(G.size[a], G.size[b]), drop = G.y[a] - G.y[b]
+      // (a drop of a size or more is a line apart, wherever it starts: an indented or centred block after a short line)
+      if (!(drop > 0.5 * em && (G.x0[b] <= G.x0[a] || drop > Math.max(G.size[a], G.size[b])))) continue
+    }
+    const y = lineBase(G, glyphs, from, j)
+    if (from > 0 && base - y >= BLOCK_GAP * pitch) return from
+    base = from === 0 && anchor !== null ? anchor : y
+    from = j
+  }
+  return glyphs.length
+}
 /** the characters of the text after an opening point alone that it is found by */
 export const WANT = 8
 /** the glyph visits a paper's ownership may cost: real ranges never overlap, and cost the glyphs once */
@@ -162,6 +211,11 @@ export function regionsOf(page) {
  * alone followed by placeholders with no mark of their own and nothing else up to the next marked piece's opening
  * (`through`, marks.mjs followsOf), what stands between the two its own and theirs; and a later unit's opening next, as a
  * later unit's start mark is (that unit's label on its line left out). The sweep of 2026-10-24.
+ * The maker's reading takes `through` too where the marking gives a `split` (marks.mjs followsOf: a paper's macro and the one
+ * placeholder after it no mark could stand before, \\footnote after \\xspace, the macro's text known): the glyphs to the next
+ * marked piece's point parted, the macro's those that set its text from the first, character for character (textedTo), the
+ * placeholder's the rest, under the opening mark's name it would have had; where they do not set it, leave nothing, or the rest
+ * runs on as the macro's word (runsOn), LOST as before.
  * - A display that ends a footnote (footEnd: a display, its unit's last visible piece, after the unit's end mark, outside the
  *   bodies, no mark after it on its page): what its region holds from it to the page's folio (folioOf), each of its lines
  *   indented from the footnote's own and near the one before; with no folio, a line at the footnote's edge (a note after it
@@ -171,6 +225,8 @@ export function regionsOf(page) {
 export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
   const twice = new Set(dropped)
   const regions = pages.map(regionsOf)
+  /** each page's line pitch (pitchOf), read once where a piece alone at its unit's end asks for it */
+  const pitches = new Map()
   // every point by its name, in stream order: [page, index]; the mark points in stream order (brackets and names apart)
   const where = new Map(), seq = []
   pages.forEach((p, i) => p.points.forEach((pt, q) => {
@@ -254,7 +310,7 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
           return f.blocked && (glyphs.length || boxes.length) ? none(HOW['open, an unmarked piece follows']) : { how: HOW["open, to its column's end"], glyphs, boxes }
         }
       }
-      const { glyphs, boxes } = takeTo(next)
+      let { glyphs, boxes } = takeTo(next)
       if (jumps(glyphs)) return none(HOW['across a column, unbracketed'])
       if (!glyphs.length && !boxes.length) return { how: HOW[f.want ? 'open, to the text after it' : "open, to its unit's next mark"], glyphs, boxes }
       if (!f.want) {
@@ -263,11 +319,40 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
         const opening = erasure ? OPENING.exec(N.name) : null
         const startsAfter = id => [`${id}s`, `h${id}s`, `t${id}s`].some(n => (where.get(n) ?? []).some(([p, q]) => p === pa && q > next[1]))
         const later = START.exec(N.name) ?? (opening && startsAfter(opening[2]) ? [N.name, opening[2]] : null)
+        const S = f.blocked ? f.split : null
+        if (S && (S.ends ? S.ends.includes(N.name) : f.through && N.name === f.through)) {
+          // (a paper's macro and the one unmarked piece right after it, which no mark could stand before (marks.mjs followsOf
+          // `split`), their ink to the next marked piece's point — or, text after that piece, to where that text begins, as an
+          // opening's ink runs to the text after it: a .bbl's `\\DOIprefix\\doi{…}.` at an entry's end —, the macro's the glyphs
+          // that set the text TeX sets for it, character for character, the piece's the rest; but where the rest runs on as the
+          // macro's word, which its text then did not hold whole, none. The maker's reading parts the two; the erasure's owns them
+          // as the macro's, one ink of its unit's as `through` reads it)
+          const end = textedTo(pages, glyphs, S.text)
+          const stop = end > 0 && end < glyphs.length && !runsOn(pages, glyphs, end) ? (S.ends ? afterText(pages, glyphs, end, S, erasure) : glyphs.length) : -1
+          if (stop > end) {
+            if (erasure) return cut(HOW[S.ends ? 'open, to the text after it' : "open, to its unit's next mark"], glyphs, boxes, stop)
+            const [p, g] = glyphs[end], from = pages[p - 1].boxAt[g], piece = cut(HOW["open, to its unit's next mark"], glyphs, boxes, stop)
+            out.set(S.name, { how: piece.how, glyphs: piece.glyphs.slice(end), boxes: piece.boxes.filter(([q, b]) => q > p || (q === p && b >= from)) })
+            return cut(HOW["open, to its unit's next mark"], glyphs, boxes, end)
+          }
+        }
         if (f.blocked) return erasure && f.through && N.name === f.through ? { how: HOW["open, to its unit's next mark"], glyphs, boxes } : none(HOW['open, an unmarked piece follows'])
         if (f.ends.includes(N.name)) return { how: HOW["open, to its unit's next mark"], glyphs, boxes }
         if (later && Number(later[1]) > Number(m[2])) {
           // the next unit's label: the glyphs on its start mark's line before it, the boxes after the first of them
           const G = P.glyphs, after = N.glyph
+          // (a piece that is no display, alone at its unit's end, owns its lines up to TeX's skip before another block, no further:
+          // the next unit may start many lines on — the last author's \\orcidlink of 2609.20976v1 ran to the abstract's label over
+          // the affiliations and the e-mail below the names, which no unit then owned and no ink unit was made of; a reference's
+          // \\Eprint wrapped over two lines, its entry's full stop on a third, keeps them, at the bibliography's leading)
+          let line = glyphs.length
+          if (!f.display && glyphs.length) {
+            // (the unit's line it opens on: the glyph before its first, on that glyph's line)
+            const g0 = glyphs[0][1], before = g0 - 1
+            const anchor = before >= 0 && Math.abs(G.y[before] - G.y[g0]) < Math.max(G.size[before], G.size[g0]) ? G.y[before] : null
+            line = lineEnd(G, glyphs, anchor, pitches.get(pa) ?? pitches.set(pa, pitchOf(G)).get(pa))
+          }
+          if (line < glyphs.length) { const upTo = P.boxAt[glyphs[line][1]]; glyphs = glyphs.slice(0, line); boxes = boxes.filter(([, b]) => b < upTo) }
           let end = glyphs.length
           while (after < G.n && end > 0 && Math.abs(G.y[glyphs[end - 1][1]] - G.y[after]) < 0.5 * Math.max(G.size[glyphs[end - 1][1]], G.size[after])) end--
           const upTo = end < glyphs.length ? P.boxAt[glyphs[end][1]] : N.box
@@ -485,6 +570,44 @@ function textTo(pages, glyphs, want, rest, quotes) {
     if (n - at[e] === rest.length && all.endsWith(rest)) return e
   }
   return first
+}
+
+/** one glyph of any text but none in a text the probe showed (marks.mjs INK_ANY: a formula's glyph no character spells) */
+const INK_ANY = '\uFFFC'
+/** a glyph's or a text's characters as the split reads them: NFKC, white space out */
+const setAs = s => s.normalize('NFKC').replace(/\s/g, '')
+/** the glyph after the first of `glyphs` that set `text` whole from their first, character for character (a glyph's own
+ *  characters a run of the text's, a blank glyph passed over, INK_ANY one glyph of any text but none), the glyph that completes
+ *  it the last; -1 where they do not begin so */
+function textedTo(pages, glyphs, text) {
+  const want = setAs(text)
+  let n = 0
+  for (let j = 0; j < glyphs.length && n < want.length; j++) {
+    const [p, g] = glyphs[j], t = setAs(pages[p - 1].glyphs.u[g] ?? '')
+    if (want[n] === INK_ANY) { if (!t) return -1; n++ } else if (!t) continue
+    else if (want.startsWith(t, n) && !want.slice(n, n + t.length).includes(INK_ANY)) n += t.length
+    else return -1
+    if (n === want.length) return j + 1
+  }
+  return -1
+}
+/** where the text after a split's piece begins among `glyphs` from `end` on (textTo with its `rest`, the glyphs running to a
+ *  piece of its unit's ends), as an index into `glyphs`; -1 where it is not found, or the piece would own nothing */
+function afterText(pages, glyphs, end, S, quotes) {
+  const e = textTo(pages, glyphs.slice(end), S.want, S.rest, quotes)
+  return e > 0 ? end + e : -1
+}
+/** whether the glyph at `end` (the first not blank from it) runs on as the word the glyph before it ends: both a letter or a
+ *  digit, on one page, on one baseline and at one size (within a twentieth of it) — the macro's text then ended inside its word
+ *  (a state its probe's call did not have), and what follows is no other piece's ink alone */
+function runsOn(pages, glyphs, end) {
+  const word = /[\p{L}\p{N}]/u
+  const [p0, g0] = glyphs[end - 1], G0 = pages[p0 - 1].glyphs
+  let j = end
+  while (j < glyphs.length && !setAs(pages[glyphs[j][0] - 1].glyphs.u[glyphs[j][1]] ?? '')) j++
+  if (j >= glyphs.length) return false
+  const [p1, g1] = glyphs[j], G1 = pages[p1 - 1].glyphs, a = setAs(G0.u[g0] ?? ''), b = setAs(G1.u[g1] ?? '')
+  return p0 === p1 && word.test(a.at(-1) ?? '') && word.test(b[0] ?? '') && Math.abs(G0.y[g0] - G1.y[g1]) < 0.05 * G0.size[g0] && Math.abs(G0.size[g0] - G1.size[g1]) < 0.05 * G0.size[g0]
 }
 
 /** each place textAt's text begins at, in order */

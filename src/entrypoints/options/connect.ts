@@ -39,5 +39,6 @@ export async function connectService(candidate: Service, target: LangCode): Prom
     request: { segments: [{ id: 'sample', text: wireFormatOfProvider(candidate.id) === 'markers' ? SAMPLE_MARKERS : SAMPLE_TAGS }], source: 'en', target, context: { sectionTitle: O.services.connect } },
   }).catch((e: unknown) => ({ ok: false as const, error: { kind: 'unknown' as const, message: e instanceof Error ? e.message : String(e), isolatable: false } }))
   if (res.ok) return { ok: true, ms: Math.round(performance.now() - t0) }
-  return { ok: false, field: FIELD_OF[res.error.kind] ?? null, reason: O.services.failed(reasonText(res.error.kind) || res.error.message) }
+  // (the candidate is one of the reader's services: a key's reason is its key's)
+  return { ok: false, field: FIELD_OF[res.error.kind] ?? null, reason: O.services.failed(reasonText(res.error.kind, candidate.id) || res.error.message) }
 }

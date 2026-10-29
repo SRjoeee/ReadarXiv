@@ -2,7 +2,7 @@
 export { LayoutRefusal } from './json.mjs'
 /** the maker's version: raised with any change to what the maker writes under the schema; it enters a bundle's key, and a file
  *  names it as `layout`, which a reader reads for its shape alone: a file is refused by its `schema` (§9.3 of the plan) */
-export declare const LAYOUT: '22'
+export declare const LAYOUT: '26'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1) */
 export declare const LAYOUT_SCHEMA: 5
@@ -17,10 +17,10 @@ export declare const LAYOUT_CAP: number
 export declare const LAYOUT_VALUES: number
 /** the deepest the file nests: 4 */
 export declare const LAYOUT_DEPTH: number
-export declare const UNIT_KINDS: readonly ['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author', 'inkheads', 'inkcontents', 'inknotes', 'inkorphan', 'inknames', 'reference', 'refnames']
+export declare const UNIT_KINDS: readonly ['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author', 'inkheads', 'inkcontents', 'inknotes', 'inkorphan', 'inknames', 'reference', 'refnames', 'affiliation']
 export declare const PH_KINDS: readonly ['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other', 'number']
 export declare const LABEL_KINDS: readonly ['number', 'item', 'caption', 'footnote']
-export declare const UNIT_FLAG: { readonly TITLE: 1; readonly FRONT: 2; readonly CENTRED: 4 }
+export declare const UNIT_FLAG: { readonly TITLE: 1; readonly FRONT: 2; readonly CENTRED: 4; readonly FLUSH_LEFT: 8; readonly FLUSH_RIGHT: 16 }
 export { NAME_KEYS, type NameKey } from './names.mjs'
 import type { NameKey } from './names.mjs'
 /** a name's flags: centred in its column; its glyphs capitals where its macro's own text is not */
@@ -108,6 +108,8 @@ export declare function mergeLayout(parts: readonly LayoutPart[]): LayoutPart
 /** one located unit as the layer reads it */
 export interface LayoutUnit {
   id: number; kind: (typeof UNIT_KINDS)[number]; depth: number; title: boolean; front: boolean; centred: boolean; pieces: number
+  /** set flush left or flush right as TeX set its paragraph (UNIT_FLAG.FLUSH_LEFT, FLUSH_RIGHT); null: justified, centred or not told */
+  flush: 'left' | 'right' | null
   lines: Float64Array                      // stride 8, as the file
   frames: Float64Array                     // stride 6
   erase: Float64Array[]                    // per line: x0, y0, x1, y1 (stride 4)

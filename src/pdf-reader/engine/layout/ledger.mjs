@@ -90,7 +90,8 @@ const ownerClass = (group, units) => {
  * Returns { classes: per page a Uint8Array, each glyph's class code (CLASS_IDS); counts: { [class]: { glyphs, letters } } over
  * the glyphs that are no blank, a glyph's letters those it spells (a ligature's each); lines, every line of glyphs no unit owns in
  * stream order, { page, cls, gs (its glyphs' indices on its page), region, zone, para (its paragraph's number, ink.mjs `paras`, or
- * null), y, size, x0, x1, letters } (the ink units'
+ * null), opens (whether its paragraph's point lies on it: the paragraph's first line, never a line it runs on to), y, size, x0, x1,
+ * letters } (the ink units'
  * input: layout/ink-units.mjs); letters, the letters of the document; orphanLetters; orphans: the orphan lines, at most
  * ORPHAN_LINES_MAX, each { page, text, letters, x0, x1, y } }
  */
@@ -124,11 +125,11 @@ export function ledgerOf(pages, own, { units = null } = {}) {
     }
     // each glyph's paragraph: the number of the last paragraph point at or before it (ink.mjs `paras`, marks.mjs POINTS_TEX q<n>),
     // a paragraph going on across a page from the page before; null where the compile set none (a base of before)
-    const paraAt = new Array(n)
+    const paraAt = new Array(n), opensAt = new Uint8Array(n)
     {
       const Q = (pg.paras ?? []).slice().sort((a, b) => a.glyph - b.glyph)
       for (let q = 0, g = 0; g < n; g++) {
-        for (; q < Q.length && Q[q].glyph <= g; q++) para = Number(Q[q].name.slice(1))
+        for (; q < Q.length && Q[q].glyph <= g; q++) { para = Number(Q[q].name.slice(1)); opensAt[g] = 1 }
         paraAt[g] = para
       }
     }
@@ -138,7 +139,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
       Object.assign(line, wordsOf(line.gs.map(g => G[g]), famOf))
       const rule = RULES.find(r => r.test(line))
       for (const g of line.gs) out[g] = rule.code
-      lines.push({ page: pi + 1, cls: rule.cls, gs: line.gs, region: line.region, zone: line.zone, para: line.para, y: line.y, size: line.size, x0: line.x0, x1: line.x1, letters: line.letters })
+      lines.push({ page: pi + 1, cls: rule.cls, gs: line.gs, region: line.region, zone: line.zone, para: line.para, opens: line.opens, y: line.y, size: line.size, x0: line.x0, x1: line.x1, letters: line.letters })
       if (rule.cls === 'orphan') {
         orphanLetters += line.letters
         if (orphans.length < ORPHAN_LINES_MAX) orphans.push({ page: pi + 1, text: textOf(line.gs.map(g => G[g])).slice(0, TEXT_MAX), letters: line.letters, x0: line.x0, x1: line.x1, y: line.y })
@@ -152,9 +153,10 @@ export function ledgerOf(pages, own, { units = null } = {}) {
       if (line && !(line.region === region && line.zone === zones[g] && Math.abs(x.y - line.y) <= LINE_DY * Math.max(size, line.size) && x.x0 >= line.x0 - size && x.x0 - line.x1 <= LINE_GAP * size)) close()
       if (!line) {
         const depth = region >> 1, body = (region & 1) === 1
-        line = { gs: [], region, zone: zones[g], para: paraAt[g], y: x.y, size, x0: x.x0, x1: x.x1, n: 0, letters: 0, words: 0, pairs: 0, math: 0, mono: 0, form: 0, relation: false, depth, outside: bracketed && !body && depth === 0, head: g < first, foot: g >= footFrom }
+        line = { gs: [], region, zone: zones[g], para: paraAt[g], opens: false, y: x.y, size, x0: x.x0, x1: x.x1, n: 0, letters: 0, words: 0, pairs: 0, math: 0, mono: 0, form: 0, relation: false, depth, outside: bracketed && !body && depth === 0, head: g < first, foot: g >= footFrom }
       }
       line.gs.push(g); line.x1 = Math.max(line.x1, x.x1); line.size = Math.max(line.size, size)
+      if (opensAt[g]) line.opens = true
       if (x.blank || !/\S/u.test(x.u ?? '')) continue
       const f = famOf(x.font)
       line.n++

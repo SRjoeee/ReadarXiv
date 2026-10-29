@@ -322,7 +322,7 @@ describe('a slice that does not load', () => {
   // (a face never selected by the load is no failure: a fallback family's face the browser did not need, or another weight's)
   const roleSet = async (bold: boolean, cls: 'latin' | 'cjk') => {
     const F = await import('@/pdf-reader/engine/layer-proto/fonts.mjs')
-    F.setRoleFaces('zh', 'times', { group: 'shs-sc', kai: null, light: [] } as never)
+    F.setRoleFaces('zh', 'times', { group: 'shs-sc' })
     return { set: F.roleFaceSet({ faceSources: slicesOfAll }), face: F.faceOf({ fam: 'serif', design: 'times', bold, italic: false, caps: false } as never, cls, 'zh') }
   }
   it('does not fail a unit whose primary face loaded because a fallback face the load did not select stays unloaded', async () => {
@@ -351,7 +351,7 @@ describe('a slice that does not load', () => {
     // (the bold CJK face is served in one slice, U+5B57 alone; U+6C49 is in the regular body's slice 0x6000, which fails)
     const sources = async (id: string) => (id === 'shs-sc-bold' ? [{ url: '/s/shs-sc-bold-5.woff2', ranges: [0x5b57, 0x5b57] }] : slicesOfAll(id))
     const F = await import('@/pdf-reader/engine/layer-proto/fonts.mjs')
-    F.setRoleFaces('zh', 'times', { group: 'shs-sc', kai: null, light: [] } as never)
+    F.setRoleFaces('zh', 'times', { group: 'shs-sc' })
     const set = F.roleFaceSet({ faceSources: sources })
     const style = { fam: 'serif', design: 'times', bold: true, italic: false, caps: false } as never
     expect(await set.check([{ face: F.faceOf(style, 'cjk', 'zh'), text: '\u5b57' }] as never)).toBeNull()

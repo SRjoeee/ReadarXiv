@@ -71,8 +71,8 @@ async function child() {
   const m = /^(.+)v(\d+)$/.exec(meta.id), paper = { id: m[1], version: Number(m[2]) }
   let t = at()
   const source = live.openPaper((await tar.unpackSource(new Uint8Array(readFileSync(meta.source)))).files)
-  const plog = front.lastTexLog(readFileSync(join(dir, 'P', `${meta.stem}.log`), 'latin1')), ink = mk.inkSamples(source.units)
-  const options = { engine: source.meta.compiler, classes: mk.LAYOUT_CLASSES, switches: mk.readMarkProbe(plog, mk.probeSamples(source.units)), inkless: mk.readInkProbe(plog, ink), texts: mk.readInkTexts(plog, [...ink, ...mk.leadSamples(source.units, ink)]), names: mk.readNameProbe(plog), lineskip: mk.readSkipProbe(plog) }
+  const plog = front.lastTexLog(readFileSync(join(dir, 'P', `${meta.stem}.log`), 'latin1')), ink = mk.readInkAnswers(plog, source.units)
+  const options = { engine: source.meta.compiler, classes: mk.LAYOUT_CLASSES, switches: mk.readMarkProbe(plog, mk.probeSamples(source.units)), inkless: ink.inkless, texts: ink.texts, names: mk.readNameProbe(plog), lineskip: mk.readSkipProbe(plog) }
   const markedBytes = new Uint8Array(readFileSync(join(dir, 'L', `${meta.stem}.pdf`))), log = front.lastTexLog(readFileSync(join(dir, 'L', `${meta.stem}.log`), 'latin1'))
   const arxivBytes = new Uint8Array(readFileSync(meta.arxiv))
   ms.source = at() - t
@@ -96,7 +96,7 @@ async function child() {
   let oursBytes = finalBytes, wrap = null
   if (finalBytes && wrapMod) {
     t = at()
-    const w = await wrapMod.wrapFinal(finalBytes, { PL, getDocument, documentOptions: { cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: 0, useSystemFonts: false }, OPS, units: source.units, texts: marks?.marking?.texts ?? options.texts?.flat() ?? null, deflate, inflate })
+    const w = await wrapMod.wrapFinal(finalBytes, { PL, getDocument, documentOptions: { cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: 0, useSystemFonts: false }, OPS, units: source.units, texts: marks?.marking?.texts ?? options.texts?.flat() ?? null, inkless: marks?.marking?.inkless ?? options.inkless ?? null, deflate, inflate })
     ms.wrap = at() - t
     if (!w.refused) { oursBytes = w.bytes; wrap = { stats: w.stats, unhidden: w.unhidden, labelKept: w.labelKept, pages: w.pages, figures: w.figures } }
   }
