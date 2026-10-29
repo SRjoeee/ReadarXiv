@@ -215,6 +215,8 @@ function itemBox(it) {
  *  read again from the image's own pixels in its window, at its own resolution: the recogniser cuts a line out at 48 pixels across
  *  (core/ocr/geometry.ts LINE_HEIGHT_PX), and text read at half that or less loses its strokes */
 export const OCR_LINE_MIN_PX = 24
+/** …and the window's lines take its place only where they are this share of its length at least */
+export const OCR_REREAD_COVER = 0.6
 const dist = (a, b) => Math.hypot(b[0] - a[0], b[1] - a[1])
 /** a line's thickness in the pixels of an image of `w` × `h` (its quad in fractions of it) */
 const thickOf = (l, w, h) => dist([l.quad[0][0] * w, l.quad[0][1] * h], [l.quad[3][0] * w, l.quad[3][1] * h])
@@ -313,7 +315,10 @@ export async function ocrPass({ doc, OPS, objects, PL, Jpeg, paper, source = nul
           const back = again.map(l => ({ ...l, quad: l.quad.map(([x, y]) => [(w.x0 + x * W0) / src.width, (w.y0 + y * H0) / src.height]), ...(l.len !== undefined ? { len: (l.len * W0) / src.width, thick: (l.thick * W0) / src.width } : {}) }))
           const [bx0, by0, bx1, by1] = boxOfPoints(mine.quad.map(([x, y]) => [x * src.width, y * src.height]))
           const inside = back.filter(l => { const cx = ((l.quad[0][0] + l.quad[2][0]) / 2) * src.width, cy = ((l.quad[0][1] + l.quad[2][1]) / 2) * src.height; return cx >= bx0 && cx <= bx1 && cy >= by0 && cy <= by1 })
-          if (inside.length) out[i] = inside
+          // (the window's reading takes the line's place only where it reads most of it: a piece of a neighbour's glyphs the window's
+          // edge cut, read alone — "De" in 2608.20990v1 — is none of the line's)
+          const lengthOf = l => dist([l.quad[0][0] * src.width, l.quad[0][1] * src.height], [l.quad[1][0] * src.width, l.quad[1][1] * src.height])
+          if (inside.length && inside.reduce((n, l) => n + lengthOf(l), 0) >= OCR_REREAD_COVER * lengthOf(mine)) out[i] = inside
         }
         lines = out.flat()
       }

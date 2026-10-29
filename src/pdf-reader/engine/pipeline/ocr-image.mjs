@@ -17,11 +17,12 @@
 export const OCR_READ_VERSION = '1'
 /** the pixels an image is read at, at most: one larger is read scaled down to them, area-averaged. The detector works at 960
  *  pixels a side whatever it is given; the recogniser cuts each line from these, and a line read too small here is read again
- *  from the image's own pixels (ocr-pass.mjs OCR_LINE_MIN_PX), so that the bound is the box's memory and not the text's: an image
- *  is held as these pixels, the canvas's copy of them and its surface while it is recognised. 8 million (2026-10-29, the box under
- *  emulation): at 16 million, 2610.16663v1's OCR child reached its data limit; natively, 8 million against 16 drew 144 labels
- *  of 147 on 2608.25928v1 and 39 of 40 on 2608.16117v1, some 300 MiB the less */
-export const OCR_READ_PIXELS = 8_000_000
+ *  from the image's own pixels (ocr-pass.mjs OCR_LINE_MIN_PX). An image is held as these pixels, the canvas's copy of them and
+ *  its surface while it is recognised, beside the runtime's own working memory for the detector, which is the most of an OCR
+ *  child's (2026-10-29, the box under emulation: VmHWM 922 MiB on 2610.19274v1, whose images are all under 7.4 million pixels,
+ *  its V8 heap 86 at its peak). 8 million against 16 took 2608.16117v1's VmHWM from 954 MiB to 851 and drew 690 labels of
+ *  704 on the 14 surveyed papers past 16 million, so the bound stays 16 */
+export const OCR_READ_PIXELS = 16_000_000
 /** a JPEG's own pixels, at most: PDF.js's decoder holds some 6 bytes a pixel while it decodes (3 a component plane, 3 its RGB),
  *  so 40 million are some 240 MB at their peak, twice the largest of the survey; one past it is no source (`big`) */
 export const OCR_JPEG_PIXELS = 40_000_000

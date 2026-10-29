@@ -3285,11 +3285,11 @@ first page's way (the coordinator's word: the units come after the head and ever
     The website's box keeps a paper's readings across its prepares (another version, a prepare again after PIPELINE moves, any
     target: the batch's cost ask of 2026-10-29), so that a cached image is placed with **nothing decoded**: the pass reads its
     page's operators, its key's bytes and the reading, and lays the labels (`placeLabels`).
-  - **its pixels** (a miss) read at OCR_READ_PIXELS at most (8 million: the image's own where it has fewer, else scaled down to
+  - **its pixels** (a miss) read at OCR_READ_PIXELS at most (16 million: the image's own where it has fewer, else scaled down to
     them, area-averaged as they are decoded), so that the memory a read holds is that of the pixels it reads, whatever the
-    image's own size (the bound is the box's memory: an image is held as these pixels, the canvas's copy and its surface while
-    it is recognised; at 16 million, 2610.16663v1's OCR child reached its data limit under the box's emulation, and natively 8
-    million against 16 drew 144 labels of 147 on 2608.25928v1 and 39 of 40 on 2608.16117v1, some 300 MiB the less): a Flate stream inflated as a stream, a row at a time (its PNG or TIFF predictor undone, its colour space,
+    image's own size (an image is held as these pixels, the canvas's copy and its surface while it is recognised, beside the
+    runtime's working memory for the detector, which is the most of the box's OCR child: 8 million against 16 took
+    2608.16117v1's VmHWM from 954 MiB to 851 and drew 690 labels of 704 on the 14 papers past 16 million, so the bound stays): a Flate stream inflated as a stream, a row at a time (its PNG or TIFF predictor undone, its colour space,
     depth, /Decode and colour key read), a JPEG decoded whole by PDF.js's own decoder (pdfjs-dist's JpegImage, which the host
     gives) and scaled down; a soft mask composited over white, the ground the page shows, and an explicit mask's pixels white.
     The detector reads at 960 pixels a side whatever it is given; the recogniser cuts each line from these, and a line read at

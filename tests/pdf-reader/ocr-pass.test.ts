@@ -205,6 +205,19 @@ describe('the bitmap figures\' pass (ocrPass)', () => {
     expect(placeOfUnit(scaled.units[0])).toEqual(placeOfUnit(whole.units[0]))
   })
 
+  it('keeps a line\'s scaled reading where its window reads only a piece of it (a neighbour\'s glyphs the window\'s edge cut)', async () => {
+    let calls = 0
+    const recognise = async (px: { width: number; height: number }) => {
+      calls++
+      // (in the window, a reading of a fifth of the line alone)
+      if (px.width !== 200) return [{ ...LINE, text: 'De', quad: [[0.45, 0.4], [0.55, 0.4], [0.55, 0.6], [0.45, 0.6]] as unknown as OcrLine['quad'] }]
+      return [LINE]
+    }
+    const r = await pass({ doc: docOf([pageOf([['a', at(50, 400)]], { a: picture() })]), OPS, paper: PAPER, reader: READER, from: 0, readPixels: 20_000, recognise })
+    expect(calls).toBe(2)
+    expect(r.units.map(u => (u as unknown as [unknown, unknown, unknown, unknown, unknown, [number, string][]])[5][0]![1])).toEqual(['Validation loss'])
+  })
+
   it('reads no window past the host\'s clock: a scaled image\'s lines and labels left as its scaled read gave them', async () => {
     let t = 0
     const doc = docOf([pageOf([['a', at(50, 400)]], { a: picture() })])

@@ -12,6 +12,8 @@ export declare const OCR_LINES_MAX: number
 export declare const OCR_IMAGE_WHYS: readonly ['small', 'big', 'format', 'error', 'timeout', 'budget', 'many']
 /** a line read in an image read scaled down at fewer pixels than this across is read again in its window at full resolution */
 export declare const OCR_LINE_MIN_PX: number
+/** the share of a line's length its window's reading must cover to take its place */
+export declare const OCR_REREAD_COVER: number
 /** a cache's answer as an image's reading (its lines and its labels as its pixels give them), or null where it is out of shape */
 export declare function ocrReadingOf(v: unknown): { lines: readonly OcrCachedLine[]; labels: unknown } | null
 /** a cache's answer as a reading (the recogniser's lines), or null where it is out of shape (a miss) */
