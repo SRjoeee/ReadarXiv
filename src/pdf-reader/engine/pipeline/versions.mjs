@@ -254,9 +254,9 @@
 //     author block's row set in a \\centerline is its text (latex-front.mjs FRONT_BOXES: 2010.11929v2's block no unit before, its
 //     names, notes and places one ink unit of orphan text), each unit it cuts numbered after the others, so that no unit before
 //     the entries moves; every paper is translated again; 33 (the coverage lane of batch 2, the release sweep of staging
-//     4b3c4ae9): a web address's `%` is a character where TeX reads it so (latex-front.mjs urlPercents: \url, \path, \nolinkurl,
-//     \burl and \href's first argument outside another command's argument), so that the rest of its line is text again and a
-//     .bbl's entries after such an address are entries of their own (2610.21770v1's 18, 2608.18626's 31); an inline \tikz call is
+//     4b3c4ae9): a web address's `%` in a .bbl's entries is a character, as TeX reads it (latex-front.mjs urlPercents: \url, \path,
+//     \nolinkurl, \burl and \href's first argument at an entry's top level; the body's `%` a comment as before), so that the
+//     entries after such an address are entries of their own (2610.21770v1's 18, 2608.18626's 31); an inline \tikz call is
 //     one placeholder to its path's `;` or its group (tikzCallEnd: 2010.11929v2's legend dots were \tikz, \fill and the path sent
 //     as text); a paper's macro of no argument whose body ends a table's row ends the row in a cell (rowEndsOf: 2610.21924v1's
 //     \tightrow, 30 cells); an author block's row ends inside a conditional are no rows (frontEnds); and a made .bbl is kept for an
@@ -265,8 +265,11 @@
 //     abuts the formula before it at a contents line's end is the entry's, no leader dot (layout/ink-units.mjs trimmed: a leader is a word a word's gap from the one
 //     before it, 2610.19274v1's list of figures, "… strength $C_n^2$.", whose stop was left the original's beside the drawn entry),
 //     and two words of an ink unit's line are joined by a space only where a word's gap stands between them (no "⟦C⟧ ." for a
-//     formula's stop, no "⟦x⟧ -axis"): the ink units' texts move where either stands
-export const PIPELINE_VERSION = '34'
+//     formula's stop, no "⟦x⟧ -axis"): the ink units' texts move where either stands; 35 (the owner's case 2610.37668v1): under
+//     backref's lists (hyperref's pagebackref), the unit that ends each entry's first paragraph ends in the list's placeholder
+//     (latex-front.mjs BACKREF_LIST), so that the list TeX sets after the entry is that unit's ink: every such paper's entries are
+//     translated again
+export const PIPELINE_VERSION = '35'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
@@ -322,6 +325,8 @@ export const PDFJS = '6.3.289'
  * text has one; 15 (2610.37668v1's "Abstract", the owner's report on staging): a level figure unit on its column's edge, or
  * centred in it, is anchored there by the column's text lines (figure-text.mjs columnAnchorOf), no longer by the ink beside
  * it alone, which read a heading a class sets flush in a boxed panel `centre`: the parts' figure rows change where a unit's
- * anchor does, the base's bytes do not
+ * anchor does, the base's bytes do not; 16 (the owner's case 2610.37668v1): backref's list after an entry is its list piece's own
+ * ink (`u<id>.p`), between the marks LAYOUT_TEX's hook sets around it (marks.mjs BACKREF_TEX), where it was no one's: the base's
+ * bytes change where a paper turns backref's lists on
  */
-export const REMOVAL = '15'
+export const REMOVAL = '16'

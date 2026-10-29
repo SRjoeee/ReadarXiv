@@ -119,6 +119,8 @@ export declare const INVISIBLE: RegExp
 export declare const DISPLAY: RegExp
 /** a piece's class, or null where it is not marked (text, a group's open or close, an invisible placeholder) */
 export declare function classOf(piece: { t: string; src?: string }): MarkClass | null
+/** whether a piece is the list backref sets after a bibliography entry (latex-front.mjs BACKREF_LIST), its marks LAYOUT_TEX's around the list */
+export declare function backrefPiece(piece: { t?: string; src?: string } | null | undefined): boolean
 /** the TeX that goes after MARK_DEF in the marked original: the gate and the marks' macros, the names, the points last */
 export declare const LAYOUT_TEX: string
 /** the control sequences \\axt@unmark takes out of a title's copy with their arguments: the regex's alternation and the

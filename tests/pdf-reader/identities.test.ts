@@ -43,7 +43,7 @@ describe('the declared literal constants', () => {
 describe('TRANSLATE_VERSION', () => {
   it('is exported by translate/, and mt.mjs re-exports that one constant', async () => {
     const { TRANSLATE_VERSION } = await import('@/pdf-reader/engine/translate/version.mjs')
-    expect(TRANSLATE_VERSION).toBe('6')
+    expect(TRANSLATE_VERSION).toBe('7')
     // (a token of the form the web's identity and a bundle's versions take)
     expect(TRANSLATE_VERSION).toMatch(/^[0-9a-z.]{1,16}$/)
     const mt = await import('@/pdf-reader/engine/translate/mt.mjs')

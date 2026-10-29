@@ -221,4 +221,23 @@ describe.skipIf(!docker)('the marked original sets every text item where the pap
     expect(r.marked).toEqual(r.own)
     expect([r.switches['\\share'], r.marksOf('\\share{}'), r.marksOf('\\rate{}')]).toEqual(['00000000', 'ab', 'ab'])
   }, 900_000)
+  it('backref\'s lists after the entries under hyperref\'s pagebackref, the class\'s \\backrefalt and backref\'s own printer (2610.37668v1): the list marked around where TeX sets it, every item where the paper sets it', async () => {
+    const bib = '\\begin{thebibliography}{9}\n\n\\bibitem{a}\nA. Author and B. Writer.\n\\newblock A title of the work, 2020.\n\n\\bibitem{b}\nC. Third and D. Fourth.\n\\newblock Another title of a work here, 2021.\n\n\\bibitem{c}\nE. Never Cited.\n\\newblock A work no page cites, 2019.\n\n\\end{thebibliography}'
+    const body = `${lines('see \\cite{a}', 20)}\n\n\\clearpage\nAlso \\cite{a,b} on another page.\n\n${bib}`
+    for (const pre of ['\\usepackage{xcolor}\\usepackage[numbers]{natbib}\\usepackage[pagebackref]{hyperref}\\renewcommand*{\\backref}[1]{}\\renewcommand*{\\backrefalt}[4]{{\\color{gray}\\enspace#2}}', '\\usepackage[pagebackref]{hyperref}']) {
+      const r = await compare(`\\documentclass{article}\n${pre}\n\\begin{document}\n${body}\n\\end{document}\n`)
+      expect(r.marked, pre).toEqual(r.own)
+      // (each entry's list piece has both its marks, the uncited one's around nothing; no other piece's or unit's moved)
+      const entries = (r.units as { kind: string; pieces: { t: string; src?: string }[] }[]).map((u, i) => [u, i] as const).filter(([u]) => u.kind === 'reference')
+      expect(entries.length, pre).toBe(3)
+      const dests = await (async () => { const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs'); const d = await getDocument({ data: r.pdf.slice(), verbosity: 0 }).promise; const all = await d.getDestinations(); await d.loadingTask.destroy(); return new Set(all instanceof Map ? all.keys() : Object.keys(all ?? {})) })()
+      for (const [u, i] of entries) {
+        const k = u.pieces.length - 1
+        expect(u.pieces[k]?.src).toBe('\\axtbackref')
+        expect([dests.has(`axt-p${i}.${k}a`), dests.has(`axt-p${i}.${k}b`)], `${pre} ${i}`).toEqual([true, true])
+      }
+      // (the list's page numbers are on the page, after the entries' text: "1, 2" for a, "2" for b)
+      expect(r.own.join('\n')).toMatch(/2021\./)
+    }
+  }, 900_000)
 })
