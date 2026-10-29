@@ -456,7 +456,7 @@ whose value is the layer's `classes` option as it is (§19.10, §19.13).
 
 | Key | Default | Row (§15) | What it shows translated |
 |---|---|---|---|
-| `figures` | true | Text in figures | the text inside a paper's drawn figures (§19.12) |
+| `figures` | true | Text in figures | the text inside a paper's figures: drawn (§19.12) or in a picture, read by the server (§19.15) |
 | `tables` | true | Text in tables | the table cells |
 | `heads` | true | Headers and footers | the running heads and feet |
 | `references` | false | References | the bibliography, each entry whole, the names inside it included |
@@ -3269,14 +3269,20 @@ first page's way (the coordinator's word: the units come after the head and ever
   the page's operator list) — the lite worker's OCR opt-in (layout/pdf-lite.mjs) keeps its operator and decodes none of it, `big`;
   an image PDF.js keeps once for the pages that paint it is refused on all of them —, one the recogniser refuses or does not
   answer in its host's time (`error`, `timeout`), one past the paper's budget (OCR_BUDGET_MS, 60 s of the recogniser's time,
-  `budget`: the owner's bound on the box's hold); a cache that cannot be read or written is no cache. The bounds are the box's
-  memory (the website repository's record of it, its OCR measurement).
+  `budget`: the owner's bound on the box's hold), one past the paper's OCR_IMAGES_MAX (200 images taken past the size floors,
+  each decoded, its digest made and looked up or read: `many`, and no page more read; the 183 papers surveyed on 2026-10-29 paint
+  at most 120, p99 119, median 1); a cache that cannot be read or written is no cache, and an entry of it out of a reading's
+  shape (`ocrLinesOf`: at most OCR_LINES_MAX lines, each its text, confidence and quad) is a miss, read again. The bounds are the
+  box's memory (the website repository's record of it, its OCR measurement).
 - **What is read** (`pipeline/ocr-pass.mjs`): each page's operator list as PDF.js gives it (`paintsOf`: every image's paint
   operator under its transform and the clip in force — a form's box, as pdfTeX trims an image so, and a rectangle's; any other
   clip `complex` — and the paths drawn after it), its text content's boxes, and each image's pixels as PDF.js decodes them. An
   image is read once a paper whatever it is painted (its pixels' digest, made over them as they are, no copy), and once a
   recogniser across papers where the host gives a cache (`ocrKey`: OCR_VERSION, the host's reader and the pixels' name, their size
-  and kind and digest; the value the recogniser's lines, which hold no paper's place). Each image is let go from its page once its
+  and kind and digest; the value the recogniser's lines, which hold no paper's place, an image with no text among them as no
+  lines). The website's box keeps the readings of a paper's images across its prepares (another version, a prepare again after
+  PIPELINE moves, any target: the batch's cost ask of 2026-10-29), so that an image read once is a lookup after. The detector's
+  empty answer is the recogniser's first step's: an image it finds no line in is read no further (core/ocr/recognise.ts). Each image is let go from its page once its
   last paint there is read (PDF.js holds a page's decoded images until the page is cleaned up), and the host's collection
   (`collect`) is asked after each image: a server's canvases are native memory its heap does not count.
 - **Its labels** (`layout/bitmap-text.mjs labelsOf`): the recogniser's lines merged as the extension merges them

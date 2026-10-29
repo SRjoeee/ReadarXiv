@@ -7,7 +7,12 @@ export declare const OCR_BUDGET_MS: number
 export declare const OCR_MIN_SIDE: number
 export declare const OCR_MIN_PX: number
 export declare const OCR_SEGS_PAGE: number
-export declare const OCR_IMAGE_WHYS: readonly ['small', 'big', 'error', 'timeout', 'budget']
+export declare const OCR_IMAGES_MAX: number
+export declare const OCR_LINES_MAX: number
+export declare const OCR_IMAGE_WHYS: readonly ['small', 'big', 'error', 'timeout', 'budget', 'many']
+/** a cache's answer as a reading (the recogniser's lines), or null where it is out of shape (a miss) */
+export declare function ocrLinesOf(v: unknown): readonly OcrCachedLine[] | null
+export interface OcrCachedLine { text: string; conf: number; quad: readonly (readonly [number, number])[]; angle?: number; len?: number; thick?: number }
 /** the cache key of an image's reading: the recogniser's version, the host's reader (its runtime and canvas) and the pixels' name
  *  (their size and kind, then their SHA-256: `<w>x<h>k<kind>.<hex>`) */
 export declare function ocrKey(pixels: string, reader: string): string
@@ -18,7 +23,7 @@ export interface OcrStats {
   /** the pages left unread past the host's clock (`until`), and those that could not be read (their images the original's) */
   pagesLeft: number
   pagesFailed: number
-  images: { painted: number; read: number; cached: number; again: number; small: number; big: number; error: number; timeout: number; budget: number }
+  images: { painted: number; read: number; cached: number; again: number; small: number; big: number; error: number; timeout: number; budget: number; many: number }
   lines: number
   /** the labels the extension's merge made of the lines: each drawn (`units`) or left with its why (`labels`) */
   boxes: number
@@ -51,7 +56,7 @@ export declare function ocrPass(o: {
   recognise(pixels: { data: Uint8ClampedArray; width: number; height: number }): Promise<OcrLine[]>
   /** what the recogniser runs on, its runtime's and its canvas's packages and versions (onnxruntime-node@1.30.0+napi-canvas@1.0.10) */
   reader: string
-  cache?: { get(key: string): Promise<OcrLine[] | null>; put(key: string, lines: OcrLine[]): Promise<void> } | null
+  cache?: { get(key: string): Promise<unknown>; put(key: string, lines: OcrLine[]): Promise<void> } | null
   budgetMs?: number
   /** the time by `now` past which no page is read and no image decoded or read (the host's clock on the whole pass) */
   until?: number

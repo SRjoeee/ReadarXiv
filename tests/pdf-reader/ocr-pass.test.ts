@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { OCR_VERSION } from '@/core/ocr/version'
 import type { OcrLine } from '@/shared/ocr'
 import { readUnitsChunk } from '@/pdf-reader/engine/layer-proto/format.mjs'
-import { ocrKey, ocrPass, paintsOf } from '@/pdf-reader/engine/pipeline/ocr-pass.mjs'
+import { OCR_IMAGES_MAX, OCR_LINES_MAX, ocrKey, ocrLinesOf, ocrPass, paintsOf } from '@/pdf-reader/engine/pipeline/ocr-pass.mjs'
 
 const OPS = { save: 10, restore: 11, transform: 12, setLineWidth: 2, setGState: 9, paintFormXObjectBegin: 74, paintFormXObjectEnd: 75, beginGroup: 76, clip: 29, eoClip: 30, constructPath: 91, stroke: 20, closeStroke: 21, fill: 22, eoFill: 23, fillStroke: 24, eoFillStroke: 25, closeFillStroke: 26, closeEOFillStroke: 27, endPath: 28, paintImageXObject: 85, paintImageXObjectRepeat: 88 }
 const W = 400, H = 200
@@ -93,6 +93,30 @@ describe('the bitmap figures\' pass (ocrPass)', () => {
     const broken = { get: async () => { throw new Error('no cache') }, put: async () => { throw new Error('no cache') } }
     const r = await ocrPass({ doc: doc(), OPS, paper: PAPER, reader: READER, from: 0, recognise, cache: broken })
     expect(r.stats).toMatchObject({ cacheFailed: 2, units: 1 })
+    // (an empty reading is a reading: an image with no text is looked up, never read again)
+    const none = { get: async () => [], put: async () => {} }
+    reads = 0
+    const empty = await ocrPass({ doc: doc(), OPS, paper: PAPER, reader: READER, from: 0, recognise, cache: none })
+    expect([reads, empty.stats.images.cached, empty.stats.units]).toEqual([0, 1, 0])
+    // (an entry out of shape is a miss: read again, the cache's failure counted, never lines the labels are made of)
+    for (const bad of [[{ text: 'x', conf: 0.9, quad: [[0, 0], [1, 0], [1, 1]] }], [{ text: '', conf: 0.9, quad: LINE.quad }], [{ ...LINE, conf: 'high' }], { lines: [LINE] }, [{ ...LINE, angle: Number.NaN }]]) {
+      reads = 0
+      const out = await ocrPass({ doc: doc(), OPS, paper: PAPER, reader: READER, from: 0, recognise, cache: { get: async () => bad, put: async () => {} } })
+      expect([reads, out.stats.cacheFailed, out.stats.images.cached, out.stats.units]).toEqual([1, 1, 0, 1])
+    }
+    expect(ocrLinesOf([LINE])).toEqual([LINE])
+    expect(ocrLinesOf(Array.from({ length: OCR_LINES_MAX + 1 }, () => LINE))).toBeNull()
+  })
+
+  it('takes OCR_IMAGES_MAX images a paper: past them the images met on its page are `many`, and no page more is read', async () => {
+    // (one image a page, then a page of three, the bound met at its first; a page after it)
+    const pages = Array.from({ length: OCR_IMAGES_MAX - 1 }, (_, k) => pageOf([['a', at(50, 400)]], { a: picture(k) }))
+    pages.push(pageOf([['a', at(50, 400)], ['b', at(50, 250)], ['c', at(50, 100)]], { a: picture(201), b: picture(202), c: picture(203) }), pageOf([['a', at(50, 400)]], { a: picture(204) }))
+    let reads = 0
+    const r = await ocrPass({ doc: docOf(pages), OPS, paper: PAPER, reader: READER, from: 0, budgetMs: 1e9, recognise: async () => { reads++; return [] } })
+    expect(r.stats.images).toMatchObject({ painted: OCR_IMAGES_MAX + 2, read: OCR_IMAGES_MAX, many: 2 })
+    expect(reads).toBe(OCR_IMAGES_MAX)
+    expect([r.stats.pages, r.stats.pagesLeft]).toEqual([OCR_IMAGES_MAX, 1])
   })
 
   it('names each label\'s set by the id of its first: two images\' labels on one page, each image\'s sets its own', async () => {

@@ -38,14 +38,35 @@ export const OCR_MIN_SIDE = 30
 export const OCR_MIN_PX = 32
 /** the path segments a page may hold over its images at most; past them its images' labels are all `covered` */
 export const OCR_SEGS_PAGE = 250_000
+/** the images a paper's pass takes at most (past the size floors: each decoded, its digest made, looked up or read): past them
+ *  the pass reads no more pages, and the image it meets is `many`. Above every paper of the 183 surveyed (2026-10-29: at most 120,
+ *  p99 119, median 1), so that it bounds a PDF of thousands of tiles and no paper's figures */
+export const OCR_IMAGES_MAX = 200
+/** a reading's lines at most, as a cache gives it back (a reading of more is no reading: the recogniser's own are far fewer) */
+export const OCR_LINES_MAX = 2000
 /** why an image is not read */
-export const OCR_IMAGE_WHYS = Object.freeze(['small', 'big', 'error', 'timeout', 'budget'])
+export const OCR_IMAGE_WHYS = Object.freeze(['small', 'big', 'error', 'timeout', 'budget', 'many'])
 /** the cache key of an image's reading: the recogniser's version, the host's reader (its runtime and its canvas, whose
  *  resampling the reading turns on: the same figure read in Chromium and in Node agreed on 431 of 484 lines, DESIGN §15.4, so
  *  that a canvas upgraded re-keys the cache rather than mixing two readings in it) and its pixels' name (digestOf) */
 export const ocrKey = (pixels, reader) => `${OCR_VERSION}|${reader}|${pixels}`
 /** a host's reader as the cache key names it: 1 to 64 characters of letters, digits and `.+-_@/` */
 const READER = /^[0-9A-Za-z.+\-_@/]{1,64}$/
+const unit = v => typeof v === 'number' && Number.isFinite(v)
+/**
+ * A cache's answer as a reading, or null where it is none (the recogniser's lines, core/ocr/recognise.ts: each its text, its
+ * confidence, its quad in the image's fraction, and a turned line's angle, length and thickness): a cache is the host's store,
+ * read back across prepares, and an entry out of shape is a miss, read again, never lines the labels are made of
+ */
+export function ocrLinesOf(v) {
+  if (!Array.isArray(v) || v.length > OCR_LINES_MAX) return null
+  for (const l of v) {
+    if (!l || typeof l !== 'object' || typeof l.text !== 'string' || !l.text || l.text.length > 1000 || !unit(l.conf)) return null
+    if (!Array.isArray(l.quad) || l.quad.length !== 4 || !l.quad.every(c => Array.isArray(c) && c.length === 2 && unit(c[0]) && unit(c[1]))) return null
+    if (['angle', 'len', 'thick'].some(k => l[k] !== undefined && !unit(l[k]))) return null
+  }
+  return v
+}
 
 const mul = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]]
 const apply = (m, x, y) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]]
@@ -213,10 +234,11 @@ export async function ocrPass({ doc, OPS, paper, source = null, from, before = n
   const lap = (k, t0) => { stats.ms[k] += now() - t0 }
   const units = []
   const seen = new Map()
-  let spent = 0
+  let spent = 0, took = 0
   for (let p = 1; p <= doc.numPages; p++) {
-    // (past the host's clock no page is read: its images, each counted as past the budget once its operators are known, are not)
-    if (now() >= until) { stats.pagesLeft++; continue }
+    // (past the host's clock, or the images a paper takes, no page is read: its images, each counted once its operators are
+    // known, are not)
+    if (now() >= until || took >= OCR_IMAGES_MAX) { stats.pagesLeft++; continue }
     let t = now()
     let page
     try { page = await doc.getPage(p) } catch { stats.pagesFailed++; continue }
@@ -240,6 +262,8 @@ export async function ocrPass({ doc, OPS, paper, source = null, from, before = n
         lap('decode', t)
         if (!image?.data || !(image.width > 0) || !(image.height > 0)) { stats.images.big++; return }
         if (image.width < OCR_MIN_PX || image.height < OCR_MIN_PX) { stats.images.small++; return }
+        if (took >= OCR_IMAGES_MAX) { stats.images.many++; return }
+        took++
         t = now()
         const sha = await digestOf(image)
         lap('digest', t)
@@ -248,6 +272,7 @@ export async function ocrPass({ doc, OPS, paper, source = null, from, before = n
         else {
           const key = ocrKey(sha, reader)
           try { lines = cache ? await cache.get(key) : null } catch { stats.cacheFailed++; lines = null }
+          if (lines !== null && lines !== undefined && !ocrLinesOf(lines)) { stats.cacheFailed++; lines = null }
           if (Array.isArray(lines)) stats.images.cached++
           else {
             if (spent >= budgetMs || now() >= until) { stats.images.budget++; return }
