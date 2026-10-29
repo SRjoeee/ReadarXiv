@@ -35,7 +35,7 @@ import { checkBoxes, pageRules } from './cell-rules.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { drawDataOf } from '../pipeline/draw-data.mjs'
 import { DRAW_HELD_MAX } from '../layer-proto/draw.mjs'
-import { classOf, colourPieceOf, followsOf, headEnd, INK_ANY, layoutMarking, leadStep, markAt, symbolText, vetoTwice } from './marks.mjs'
+import { backrefPiece, classOf, colourPieceOf, followsOf, headEnd, INK_ANY, layoutMarking, leadStep, markAt, symbolText, vetoTwice } from './marks.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
 import { HEAD_ABUT, HEAD_PUNCT } from './own.mjs'
 import { readAnnots } from '../layer-proto/links.mjs'
@@ -939,6 +939,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       for (const p of c.pieces) {
         // (a front matter unit's marks robust: \protect before each, marks.mjs layoutMarking)
         const m = p.t === 'ph' && /^(?:\\protect)?\\axtpm[am]?\{[pn](\d+)\.(\d+)([ab])\}$/.exec(p.src ?? '')
+        // (backref's list: both its marks, which LAYOUT_TEX's hook sets around the list by the name the entry gives it)
+        const named = p.t === 'ph' && /^\\axtbrname\{p(\d+)\.(\d+)\}$/.exec(p.src ?? '')
+        if (named && Number(named[1]) === i) { design.set(`${i}.${named[2]}`, { open: true, close: true }); continue }
         if (!m || Number(m[1]) !== i) continue
         const key = `${i}.${m[2]}`, d = design.get(key) ?? design.set(key, { open: false, close: false }).get(key)
         if (m[3] === 'a') d.open = true; else d.close = true
@@ -1171,6 +1174,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         continue
       }
       const prefix = cls === 'footnote' ? 'n' : 'p', name = `${prefix}${i}.${k}a`, e = ownInk.get(name)
+      // (backref's list with no point: TeX set no list there — the package not loaded, or this entry not one it prints a list
+      // after —, nothing of it on the page: EMPTY, as the entry was before it had the piece)
+      if (!e && backrefPiece(piece)) { ph.push({ row: [i, k, kind, PH_FLAG.EMPTY], cls, state: 'empty' }); continue }
       // its own ink by its points in the marked compile's content stream (layout/stream.mjs), or why none is known
       if (!e) { lost('no own ink known'); continue }
       // a later display of a display group, which TeX gives no point (the empty paragraph after a display): its ink is the

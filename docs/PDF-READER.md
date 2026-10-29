@@ -3185,6 +3185,23 @@ translated.
   unit's number (the gate pack's frozen ones) is still its unit's. The probe asks about an entry's commands after every other
   unit's, so the body's marks are what they were. A bundle of 29 a reader still reads keeps its `refnames` units: their class is
   the references' (`UNIT_CLASS`), the entry's two halves shown or hidden together, and "names" the author block's alone.
+- **backref's lists travel with their entries** (`source/latex-front.mjs` `BACKREF_LIST`, `layout/marks.mjs` `BACKREF_TEX`;
+  PIPELINE 34, LAYOUT 28, REMOVAL 14). Under hyperref's `backref` or `pagebackref` (or backref.sty itself), each entry is
+  followed by the pages or sections that cite it, each a link back (2610.37668v1's grey "2, 25"). With its default parscan
+  backref reads the whole entry as an argument (`\bibitem` redefined as `\BR@@bibitem#1#2\par`), sets it, then the list
+  (`\BR@backref`, through `\backrefalt` or `\backref`): TeX's own text, after the entry's end mark, in none of its pieces. Its
+  ink was no unit's, left on the page where the entry was drawn translated over it (the owner's case of 2026-10-29, References
+  on). Where one of the package's files (its classes too) names the package or the option, never `=false`, and none says
+  `\backrefparscanfalse`, each entry's last unit ends in a placeholder of no source (`\axtbackref`: patch writes nothing for it,
+  the probe never asks about it), so that the translator keeps it at the entry's end. In the marked original the entry names
+  its marks after its end mark (`\axtbrname{p<i>.<k>}`, an assignment), and LAYOUT_TEX wraps both printers where the document
+  begins (begindocument/end, after the class's own `\backrefalt`), so that the list has that piece's opening mark before it
+  and its closing mark after it; `\backrefalt` only where a package or the paper defined one (backref calls `\backref` while
+  `\backrefalt` is its own unused one, which it tells by `\ifx` at `\thebibliography`). The list is then the piece's ink: its
+  group's (`u<id>.p`), hidden with the entry, and drawn after the entry's translation as its page text, in its colour, its
+  links with it. An entry TeX sets no list for (an option that turns nothing on, a package not loaded) has no point of the
+  piece's: EMPTY, drawn as nothing, as the entry was before. The marks change no item on the page (the invariant test's two
+  documents: the class's `\backrefalt` under natbib, and backref's own printer). Measured: below.
 - **A bibliography BibTeX makes is a shipped one** (`layout/paper.mjs` `madeBibliography`, `bibliographyKept`; the owner's ruling of
   2026-10-28). A paper that names `\bibliography{…}` over `.bib` files its package holds, loads no biblatex and ships no job's
   `.bbl` (102 of the local sources) had no entry unit: the units were cut before any compile, and the `.bbl` was first written

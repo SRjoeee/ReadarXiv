@@ -1288,6 +1288,31 @@ describe('makeLayout, the maker round (Fix 1): text symbols and the macros TeX s
   })
 })
 
+describe('makeLayout: backref\'s list after an entry (latex-front.mjs BACKREF_LIST)', () => {
+  it('owns the list\'s ink between the marks LAYOUT_TEX\'s hook sets around it, after the entry\'s end mark: found, its segment on the entry\'s line (2610.37668v1\'s "2, 25")', async () => {
+    const entry: Run = { s: 'Jimmy Ba and Jamie Kiros. Layer normalization, 2016.', x: 72, y: 700 }, end = endOf(entry)
+    const list: Run = { s: '2, 25', x: end + 6, y: 700 }
+    const units = [unit('reference', [text('Jimmy Ba and Jamie Kiros. Layer normalization, 2016.'), ph('\\axtbackref')])]
+    const marks: Mark[] = [['0s', 1, 72, 700], ['0e', 1, end, 700], ['p0.1a', 1, end, 700], ['p0.1b', 1, endOf(list), 700]]
+    const { file } = await made({ pages: [{ runs: [entry, list] }], marks, units })
+    const row = phOf(file, 0, 1)
+    expect(row.slice(0, 4)).toEqual([0, 1, PH_KINDS.indexOf('macro'), 0])
+    // (one segment, the list's own glyphs: from its first to its last, on the entry's baseline)
+    expect(row[4]).toBe(1)
+    expect(row[5]).toBeCloseTo(list.x, 1)
+    expect(row[7]).toBeCloseTo(endOf(list), 1)
+  })
+  it('is EMPTY where TeX set no list (no point of its marks): an entry no page cites, or backref not loaded', async () => {
+    const entry: Run = { s: 'Jimmy Ba and Jamie Kiros. Layer normalization, 2016.', x: 72, y: 700 }
+    const units = [unit('reference', [text('Jimmy Ba and Jamie Kiros. Layer normalization, 2016.'), ph('\\axtbackref')])]
+    const { file } = await made({ pages: [{ runs: [entry] }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(entry), 700]], units })
+    expect(phOf(file, 0, 1)).toEqual([0, 1, PH_KINDS.indexOf('macro'), PH_FLAG.EMPTY])
+    // (and its two points with nothing between them: EMPTY too, as any closed piece of no ink)
+    const both = await made({ pages: [{ runs: [entry] }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(entry), 700], ['p0.1a', 1, endOf(entry), 700], ['p0.1b', 1, endOf(entry), 700]], units })
+    expect(phOf(both.file, 0, 1)).toEqual([0, 1, PH_KINDS.indexOf('macro'), PH_FLAG.EMPTY])
+  })
+})
+
 describe('makeLayout, the maker round (Fix 2): crops and erases from the glyphs\' own ink', () => {
   // a calligraphic F of CMSY10, which declares a descent of 0.96 em: its own outline reaches 0.03 em below its baseline
   FONTS.F3 = { name: 'ABCDEF+CMSY10', loadedName: 'F3L', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.775, descent: -0.96, isType3Font: false, vertical: false }

@@ -1515,6 +1515,32 @@ describe("the marked compile's links (the link-anchor locator's)", () => {
 })
 
 
+describe("backref's list after an entry (latex-front.mjs BACKREF_LIST): its marks LAYOUT_TEX's, around the list where TeX sets it", () => {
+  const entry = (pieces: Piece[]) => unit('reference', pieces)
+  it('the marking writes the name of its marks in its place, nothing of its own source, and no mark around it: whatever stands before it', () => {
+    for (const before of [text('Layer normalization, 2016.'), ph('\\url{https://a.org}'), ph('\\cite{a}'), ph('\\doi{10.1/x}')]) {
+      const u = entry([text('Ba and Kiros. '), before, ph('\\axtbackref')])
+      const marked = layoutMarking([u], MARK_CLASSES, { lines: false, switches: { '\\cite': '22222222', '\\url': '22222222' } }).units[0]?.pieces as Piece[]
+      expect(marked.at(-1), JSON.stringify(before)).toEqual({ t: 'ph', src: '\\axtbrname{p0.2}' })
+      expect(marked.some(p => p.t === 'ph' && /axtbackref|p0\.2[ab]/.test(p.src ?? '')), JSON.stringify(before)).toBe(false)
+    }
+    // (a unit of no mark of its own, or the paper's macros unmarked: nothing at all)
+    expect(srcs(layoutMarking([entry([text('Ba and Kiros.'), ph('\\axtbackref')])], MARK_CLASSES.filter(c => c !== 'macro'), { lines: false }).units[0])).toEqual(['text'])
+  })
+  it('is no sample of the probe\'s: TeX is never asked what a command of no source sets', () => {
+    const units = [entry([text('Ba and Kiros. '), ph('\\natexlab{a}'), text(' more words'), ph('\\axtbackref')])]
+    expect(inkSamples(units)).toEqual(['\\natexlab{a}'])
+    expect(leadSamples(units)).toEqual([])
+    expect(probeSamples(units).map(s => s.src)).not.toContain('\\axtbackref')
+  })
+  it('LAYOUT_TEX wraps both of backref\'s printers where the document begins, each handing its arguments on as it read them, and lets the name go after the list', () => {
+    expect(LAYOUT_TEX).toContain('\\gdef\\axt@brname{}\\protected\\def\\axtbrname#1{\\gdef\\axt@brname{#1}}')
+    expect(LAYOUT_TEX).toContain('\\long\\def\\axt@brAltW#1#2#3#4{\\axt@bra\\axt@brAlt{#1}{#2}{#3}{#4}\\axt@brb}\\long\\def\\axt@brOneW#1{\\axt@bra\\axt@brOne#1\\axt@brb}')
+    expect(LAYOUT_TEX).toContain('\\AddToHook{begindocument/end}{\\ifdefined\\BR@backref\\ifdefined\\backrefalt\\ifx\\backrefalt\\BR@BackrefAltUnused\\else')
+    expect(LAYOUT_TEX).toContain('\\global\\let\\axt@brname\\@empty')
+  })
+})
+
 describe("each colour piece's fill, as TeX set its run in the marked original (PR-C)", () => {
   const unit = (pieces: unknown[]) => ({ kind: 'para', pieces }) as unknown as SourceUnit
   const text = (s: string) => ({ t: 'text', s }), ph = (src: string) => ({ t: 'ph', src })
