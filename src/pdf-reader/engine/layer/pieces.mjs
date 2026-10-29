@@ -54,6 +54,11 @@ const SPACING = /^(?:~|\\[ ,;:]|\\(?:q?quad|enspace|thinspace|nobreakspace)(?![A
 const utf8 = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff; return new TextDecoder().decode(b) }
 /** mt.mjs shown: a text piece as the compiled PDF shows it, a translation's TeX escapes undone, a source's bytes as UTF-8 */
 export const shown = p => (p.tr ? p.s.replace(/\\(textbackslash|textasciitilde|textasciicircum)\{\}/g, ' ').replace(/\\([#$%&_{}])/g, '$1') : utf8(p.s))
+const DRAWN = { textbackslash: '\\', textasciitilde: '~', textasciicircum: '^' }
+/** a text piece as the layer draws it: a translation's TeX escapes (mt.mjs texEscape) undone in one pass, each its own character
+ *  (`\\%` a percent sign, `\\textbackslash{}` a backslash, which `shown` gives as a space), as many characters as `shown`'s; a
+ *  source's text as it is (2610.30854v1's affiliation, Microsoft's "CAD&CG" escaped for TeX, was drawn "CAD\\&CG") */
+export const drawnText = p => (p.tr ? p.s.replace(/\\(?:(textbackslash|textasciitilde|textasciicircum)\{\}|([#$%&_{}]))/g, (_, n, c) => c ?? DRAWN[n]) : p.s)
 
 /** a piece's key for finding an equal one: its kind, its source and, an open's or a close's, its pair; null where it has
  *  not their shape */

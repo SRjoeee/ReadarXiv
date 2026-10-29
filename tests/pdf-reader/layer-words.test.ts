@@ -136,18 +136,22 @@ describe('W1: a token lies within its drawn run, on its line\'s baseline', () =>
     expect(next).toBe(words.length)
   })
 
-  it('maps a translated piece through TeX\'s escapes, and tags a source piece drawn other than shown with none', () => {
-    // `\\%` is shown as `%` and `\\textbackslash{}` as a space; the raw text is what is drawn
+  it('draws a translated piece with TeX\'s escapes undone and maps it through them, and tags a source piece drawn other than shown with none', () => {
+    // `\\%` is drawn and shown as `%`; `\\textbackslash{}` drawn as a backslash, shown as a space (2610.30854v1's affiliation:
+    // Microsoft's "CAD&CG", escaped for TeX as every translation is, was drawn "CAD\\&CG")
     const l = lay([text('Alpha 50\\% and \\textbackslash{} beta'), { t: 'text', s: ' caf\u00c3\u00a9 gamma' }], 'de', block(2), { hyphen: 0 })
     expect(l.plain).toBe('Alpha 50% and beta caf\u00e9 gamma')
     const toks = l.tokens.filter(t => t.s)
     const at = (s: string) => toks.find(t => t.s === s)
-    expect([at('50\\%')!.at, at('50\\%')!.end]).toEqual([6, 9])
+    expect([at('50%')!.at, at('50%')!.end]).toEqual([6, 9])
     expect([at('beta')!.at, at('beta')!.end]).toEqual([l.plain.indexOf('beta'), l.plain.indexOf('beta') + 4])
     // the word of the escaped number is the number (word 1), the rest follow in the translation's order
     const W = tableOf(l)
     const drawn = l.layout.lines.flatMap(line => line.items.filter(it => !it.t.space)).map(it => it.t.s)
-    expect(drawn.slice(0, 2)).toEqual(['Alpha', '50\\%'])
+    expect(drawn.slice(0, 4)).toEqual(['Alpha', '50%', 'and', '\\'])
+    expect(lay([text('\u56fd\u5bb6\u91cd\u70b9\u5b9e\u9a8c\u5ba4 CAD\\&CG')], 'zh', block(2)).tokens.filter(t => t.s).map(t => t.s).join('')).toBe('\u56fd\u5bb6\u91cd\u70b9\u5b9e\u9a8c\u5ba4CAD&CG')
+    // (an escape's backslash drawn is no escape again: `\\textbackslash{}\\%` is a backslash and a percent sign)
+    expect(lay([text('a \\textbackslash{}\\% b')], 'de', block(2)).tokens.filter(t => t.s).map(t => t.s)).toEqual(['a', '\\%', 'b'])
     expect([...W.word.slice(0, 2)]).toEqual([0, 1])
     // (the source piece's bytes are drawn as they are, which is not what the PDF shows: none of its tokens is tagged)
     expect(toks.filter(t => /caf|gamma/.test(t.s!)).every(t => t.at === undefined)).toBe(true)
@@ -159,7 +163,7 @@ describe('W1: a token lies within its drawn run, on its line\'s baseline', () =>
     for (const [raw, shown] of [['\\textbackslash{}', ' '], ['\\textasciitilde{}', ' '], ['\\textasciicircum{}', ' ']] as const) {
       const l = lay([text(`end. ${raw} Next`)], 'de', block(2), { hyphen: 0 })
       expect(l.plain, shown).toBe('end. Next')
-      const lone = l.tokens.find(t => t.s === raw)!
+      const lone = l.tokens.find(t => t.s === { '\\textbackslash{}': '\\', '\\textasciitilde{}': '~', '\\textasciicircum{}': '^' }[raw])!
       expect([lone.at, lone.end]).toEqual([undefined, undefined])
       const W = tableOf(l)
       expect([...W.word.slice(0, W.n)], raw).toEqual([0, -1, 1])
@@ -458,6 +462,13 @@ describe('the record', () => {
     const empty = freezeWords(null, [])
     expect(copy.at).not.toBe(rec.at)
     expect([...rec.at]).toEqual([0, 4, 8])
-    expect(empty).toEqual({ tokens: { n: 0, l: new Float32Array(0), r: new Float32Array(0), y: new Float32Array(0), h: new Float32Array(0), top: new Float32Array(0), bottom: new Float32Array(0) }, word: new Int32Array(0), at: new Int32Array(0), spans: [], original: [] })
+    expect(empty).toEqual({ tokens: { n: 0, l: new Float32Array(0), r: new Float32Array(0), y: new Float32Array(0), h: new Float32Array(0), top: new Float32Array(0), bottom: new Float32Array(0) }, word: new Int32Array(0), at: new Int32Array(0), spans: [], original: [], rows: [], drift: false })
+    // (the rows of each unit the layout lays on the page, by id, each a copy: where a copy of the left's tokens may stand)
+    const withRows = freezeWords(W, [], [[9, [1, 2, 3, 4]], [3, [0, 0, 5, 5, 0, 6, 5, 11]]])
+    expect(withRows.rows).toEqual([[3, [0, 0, 5, 5, 0, 6, 5, 11]], [9, [1, 2, 3, 4]]])
+    expect(copyWords(withRows).rows).toEqual(withRows.rows)
+    expect(copyWords(withRows).rows?.[0]?.[1]).not.toBe(withRows.rows?.[0]?.[1])
+    expect(freezeWords(W, [], [], true).drift).toBe(true)
+    expect(copyWords(freezeWords(W, [], [], true)).drift).toBe(true)
   })
 })

@@ -561,6 +561,31 @@ describe('SH5: the right\'s laid pages, from the layer\'s words (layerShapes)', 
     expect(r.lay(3, wordsOf(3, [5]))).toBe(false)
   })
 
+  it('a copy of the left\'s tokens stands on no other unit\'s row on our page: a line our compile moved across the break lights nothing there, never another unit (the drift the line check draws, 2610.30854v1)', () => {
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    const l = createShapes({ kindOf })
+    l.addParts(parts)
+    for (const p of [1, 2, 3]) l.addPage(nth(lefts, p))
+    // (unit 6's left tokens on page 3, their box: where our page holds unit 5's row in the first case)
+    const left3 = nth(lefts, 3), T = left3.table, ranges = left3.spans.find(([id]) => id === 6)?.[1] ?? []
+    const ks: number[] = []
+    for (let j = 0; j < ranges.length; j += 2) for (let t = nth(ranges, j); t < nth(ranges, j) + nth(ranges, j + 1); t++) ks.push(t)
+    const box = [Math.min(...ks.map(k => nth([...T.l], k))) - 1, Math.min(...ks.map(k => nth([...T.bottom], k))) - 1, Math.max(...ks.map(k => nth([...T.r], k))) + 1, Math.max(...ks.map(k => nth([...T.top], k))) + 1]
+    const laid = (rows: [number, number[]][]) => { const r = layerShapes(l); r.lay(3, { ...wordsOf(3, [5]), rows } as never); return r.shapes.runs(6).filter(x => x.page === 3) }
+    const all = l.shapes.runs(6).filter(x => x.page === 3).length
+    expect(all).toBeGreaterThan(0)
+    // (no rows told: every copy, as before; on its own row: kept; on another unit's row alone: none)
+    expect(laid([]).length).toBe(all)
+    expect(laid([[5, box], [6, box]]).length).toBe(all)
+    expect(laid([[5, box]])).toEqual([])
+    // (a unit whose rows are all on other pages of ours: its text is not on this one, no copy over the space it leaves either;
+    // a unit with no rows on a page whose lines moved: none; on a page whose did not, where no other unit's row stands — Devin on #511)
+    expect(laid([[6, []]])).toEqual([])
+    const drifted = (rows: [number, number[]][], drift: boolean) => { const r = layerShapes(l); r.lay(3, { ...wordsOf(3, [5]), rows, drift } as never); return r.shapes.runs(6).filter(x => x.page === 3) }
+    expect(drifted([], true)).toEqual([])
+    expect(drifted([], false).length).toBe(all)
+  })
+
   it('a muted page (another target\'s layer kept there) lights and hits nothing, its float included; unmuted, as before', () => {
     const l = built([1, 2, 3])
     l.floats(2)

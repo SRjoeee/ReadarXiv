@@ -253,8 +253,11 @@ export function addSegWords(W, id, segs) {
   W.spans.push([id, W.n > first ? [first, W.n - first] : []])
 }
 
-/** the record a page keeps: the table's columns cut to its tokens, its spans, and the units left the original's, rising */
-export function freezeWords(W, original) {
+/** the record a page keeps: the table's columns cut to its tokens, its spans, the units left the original's, rising, the rows
+ *  on the page of each unit the layout lays (`rows`, [id, [x0, y0, x1, y1, …]] by id rising, our page's PDF units, y up; an
+ *  empty list for one laid only on other pages), and whether the page's lines moved (`drift`): where a copy of the left's
+ *  tokens may stand (view/shapes.mjs layerShapes) */
+export function freezeWords(W, original, rows = [], drift = false) {
   const n = W?.n ?? 0
   const col = (f, T) => (W ? W[f].slice(0, n) : new T(0))
   return {
@@ -263,6 +266,8 @@ export function freezeWords(W, original) {
     at: col('at', Int32Array),
     spans: W ? W.spans : [],
     original: [...original].sort((a, b) => a - b),
+    rows: rows.map(([id, rs]) => [id, [...rs]]).sort((a, b) => a[0] - b[0]),
+    drift,
   }
 }
 
@@ -275,5 +280,7 @@ export function copyWords(w) {
     at: w.at.slice(),
     spans: w.spans.map(([id, ranges]) => [id, ranges.slice()]),
     original: w.original.slice(),
+    rows: (w.rows ?? []).map(([id, rs]) => [id, rs.slice()]),
+    drift: !!w.drift,
   }
 }

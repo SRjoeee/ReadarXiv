@@ -68,8 +68,8 @@ import { sourceRepeats, stutterCuts } from './stutter.mjs'
 import { blocksOf, CITE, kinsokuOf, lcsPairs, median, norm, phClass, texToText, wordsOf } from './layer1.mjs'
 import { faceOf, fontString, roleFaces, styleKey } from './fonts.mjs'
 import { breakPoints } from './hyph.mjs'
-import { shown } from '../layer/pieces.mjs'
-import { escapeMap, plainOfPieces, plainTracker, transformMap } from './words.mjs'
+import { drawnText, shown } from '../layer/pieces.mjs'
+import { plainOfPieces, plainTracker, transformMap } from './words.mjs'
 import { ownSmallCaps } from '../rules/font-roles.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { textPieceOf } from '../rules/text-piece.mjs'
@@ -2550,20 +2550,22 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
   }
   unit.pieces.forEach((p, k) => {
     if (p.t === 'text') {
-      let s = p.s
+      // (a translated piece holds TeX's escapes: drawn undone, each its own character, layer/pieces.mjs drawnText)
+      const raw = drawnText(p)
+      let s = raw
       // (the plain text's offsets of the piece's characters, as the PDF shows it; a piece whose shown text is not the one drawn
       // from, or whose transformed text the map cannot follow, is tagged with none)
       const sh = plain ? shown(p) : null, at = plain?.text(sh)
       if (after && /\S/.test(s)) { s = dropped(s); after = null }
       const text = s.replace(/\n/g, ' ').replace(/---/g, '—').replace(/--/g, '–').replace(/``/g, '“').replace(/''/g, '”')
-      // (a translated piece holds TeX's escapes, which `shown` undoes: its characters are mapped through them; a source piece must
-      // be drawn as it is shown)
-      const sm = at ? (p.tr ? escapeMap(p.s, sh) : sh === p.s ? true : null) : null
+      // (a translation's drawn text is shown's character for character, but an escape shown as white space, which its index map
+      // reads so that a token of it has no place; a source piece must be drawn as it is shown)
+      const sm = at ? (sh === raw ? true : p.tr && sh.length === raw.length ? Int32Array.from({ length: raw.length }, (_, i) => i) : null) : null
       const map = sm ? transformMap(s, text) : null
       // (a stutter's second word left out of a translated piece, each character left keeping its place: the word table's offsets
       // stay the translation's own)
       const cut = tidy && p.tr ? cutOut(text, stutterCuts(text), map) : null
-      pushText(cut?.text ?? text, style(), {}, (cut ? cut.map : map) && { at, sh, base: p.s.length - s.length, map: cut ? cut.map : map, sm: sm === true ? null : sm })
+      pushText(cut?.text ?? text, style(), {}, (cut ? cut.map : map) && { at, sh, base: raw.length - s.length, map: cut ? cut.map : map, sm: sm === true ? null : sm })
       return
     }
     plain?.gap()
