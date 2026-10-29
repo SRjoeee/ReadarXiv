@@ -321,7 +321,7 @@ describe('styled runs on the markers wire (2610.19159)', () => {
 })
 
 // backref's list after a bibliography entry (latex-front.mjs BACKREF_LIST): no word of the entry's sentence. On the wire Microsoft's
-// Chinese read it as a page number and wrote 页 before it ("…2024.页26", 2610.37668v1); it goes on no wire, and comes back after the
+// Chinese read it as a page number and wrote the character for "page" (U+9875) before it (2610.37668v1); it goes on no wire, and comes back after the
 // translation with an en space before it, the \enspace backref sets (a kern, no ink of the list's)
 describe('backref\'s list: on no wire, after the translation, an en space before it', () => {
   const list = { t: 'ph', src: '\\axtbackref' }
@@ -339,13 +339,13 @@ describe('backref\'s list: on no wire, after the translation, an en space before
   })
   it('comes back last, the en space before it, on both wires and as runs', async () => {
     for (const u of [plainEntry, styledEntry]) {
-      const m = serialize(u), back = rehydrate(m.wire.replace('A title of the work', '作品标题').replace('A title', '标题'), m)
+      const m = serialize(u), back = rehydrate(m.wire.replace('A title of the work', 'Der Titel des Werks').replace('A title', 'Ein Titel'), m)
       expect('pieces' in back && back.pieces.slice(-2), JSON.stringify(u)).toEqual([{ t: 'text', tr: true, s: ' ' }, list])
       const t = serializeTags(u), backT = rehydrateTags(t.wire, t)
       expect('pieces' in backT && backT.pieces.slice(-2)).toEqual([{ t: 'text', tr: true, s: ' ' }, list])
     }
     // (as runs, where the markers cannot come back: the list after the runs too)
-    const { results } = await translateUnits([plainEntry], async texts => texts.map((t: string) => ({ text: t.includes('@') ? '' : '作品', by: 'x' })), 'markers')
+    const { results } = await translateUnits([plainEntry], async texts => texts.map((t: string) => ({ text: t.includes('@') ? '' : 'Das Werk', by: 'x' })), 'markers')
     const r = results.get(plainEntry) as { pieces?: unknown[] }
     expect(r.pieces?.slice(-2)).toEqual([{ t: 'text', tr: true, s: ' ' }, list])
   })

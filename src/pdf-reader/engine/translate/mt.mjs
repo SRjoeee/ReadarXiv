@@ -524,8 +524,8 @@ function wireText(pieces, it, wire, esc, texts = null) {
 export const BACKREF_LIST = '\\axtbackref'
 /** a unit whose last piece is backref's list, as the wire takes it: the unit before the list, and what goes on no wire after the
  *  translation — an en space, the \enspace backref sets before the list (a kern, no ink of the list's), then the list. The list
- *  is no word of the entry's sentence: on the wire a translator read it as one, a page number, and wrote 页 before it (Microsoft's
- *  Chinese, "…2024.页26"); after the translation it is drawn where TeX set it, after the entry's text, its gap before it.
+ *  is no word of the entry's sentence: on the wire a translator read it as one, a page number, and wrote the character for
+ *  "page" (U+9875) before it (Microsoft's Chinese, 2610.37668v1: the year, that character, the list); after the translation it is drawn where TeX set it, after the entry's text, its gap before it.
  *  Null for any other unit */
 function listOf(u) {
   const last = u.pieces?.at(-1)
