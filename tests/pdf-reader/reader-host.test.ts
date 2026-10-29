@@ -43,7 +43,7 @@ const flush = async (n = 8) => { for (let i = 0; i < n; i++) await Promise.resol
 async function opened(query = 'paper=2600.00001v1', o: { config?: Config; refuse?: boolean; fetch?: typeof fetch } = {}) {
   const view = fakeView(), surface = fakeSurface(o.config ?? DEFAULT_CONFIG, o)
   const events: SessionEvent[] = []
-  const run = vi.fn(() => ({ retry: vi.fn(), retarget: vi.fn(), dispose: vi.fn(), side: null, probe: () => ({ state: 'looking', lost: 0 }) }))
+  const run = vi.fn(() => ({ retry: vi.fn(), retarget: vi.fn(), setClasses: vi.fn(), dispose: vi.fn(), side: null, probe: () => ({ state: 'looking', lost: 0 }) }))
   const session = await openReader(
     { left: document.createElement('div'), right: document.createElement('div'), params: new URLSearchParams(query), emit: e => events.push(e), reading: { config: o.config ?? DEFAULT_CONFIG, fallbackReason: null } },
     { view: view.make as never, surface: surface.make as never, store: null, run: run as never, fetch: o.fetch ?? (vi.fn(async () => new Response('', { status: 404 })) as never) },
@@ -285,5 +285,30 @@ describe('the settings, written and followed', () => {
     await flush(20)
     expect(rb.retarget).not.toHaveBeenCalled()
     expect(b.view.setDisplay).toHaveBeenLastCalledWith('original')
+  })
+
+  it('what to translate is the run\'s from its start, and a change of it, here or elsewhere, is told the run in place, once a change: nothing written to the image switch (S-R-27)', async () => {
+    const a = await opened()
+    await flush()
+    const host = (a.run.mock.calls[0] as unknown[])[2] as { classes(): Config['pdfReader']['classes'] }
+    expect(host.classes()).toEqual(DEFAULT_CONFIG.pdfReader.classes)
+    const r = a.run.mock.results[0]?.value as { setClasses: ReturnType<typeof vi.fn> }
+    // from the reading options: written through the surface, and followed as it lands
+    a.session.patchSettings(c => ({ ...c, pdfReader: { ...c.pdfReader, classes: { ...c.pdfReader.classes, names: true } } }))
+    await flush(20)
+    const names = { ...DEFAULT_CONFIG.pdfReader.classes, names: true }
+    expect(r.setClasses.mock.calls).toEqual([[names]])
+    expect(a.surface.writes.at(-1)?.image).toEqual(DEFAULT_CONFIG.image)
+    expect(host.classes()).toEqual(names)
+    // from the settings page: the same; a landing that changes something else tells the run nothing more
+    const back = { ...DEFAULT_CONFIG, pdfReader: { ...DEFAULT_CONFIG.pdfReader, classes: { ...names, tables: false } } }
+    a.surface.land(back)
+    a.surface.land({ ...back, reading: { ...back.reading, sentenceHighlight: false } })
+    await flush(20)
+    expect(r.setClasses.mock.calls).toEqual([[names], [back.pdfReader.classes]])
+    // and the HTML page's figure switch is no toggle of the reader's
+    a.surface.land({ ...back, image: { enabled: false } })
+    await flush(20)
+    expect(r.setClasses).toHaveBeenCalledTimes(2)
   })
 })
