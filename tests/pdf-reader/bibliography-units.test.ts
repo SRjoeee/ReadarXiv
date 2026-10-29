@@ -260,6 +260,18 @@ L.~A. Agrawal and O.~Khattab, \`\`{GEPA}: Reflective prompt evolution,'' 2026.
   })
 })
 
+describe('an entry whose web address holds a `%` (2610.21770v1: REVTeX\'s \\href reads it as a character, `%3Fref%3DPDF`)', () => {
+  it('reads the address whole, and every entry after it an entry of its own: read as a comment, entry 43\'s ate the next 18', () => {
+    const entry = (k: string, extra = '') => `\\bibitem [{\\citenamefont {A}(2025)}]{${k}}%\n  \\BibitemOpen\n  \\bibfield  {author} {\\bibinfo {author} {\\bibfnamefont {X.}~\\bibnamefont {Jiang}},\\ }\\bibfield  {title} {\\bibinfo {title} {Nonlinear photocurrent of ${k}},\\ }${extra}\\BibitemShut {NoStop}%\n`
+    const bbl = `\\begin{thebibliography}{3}%\n\\providecommand \\href [0]{\\begingroup \\@sanitize@url \\@href}%\n${entry('a', '\\href\n  {https://doi.org/10.1021/acsnano.5c01421?urlappend=%3Fref%3DPDF&jav=VoR&rel=cite-as}\n  {\\bibfield  {journal} {\\bibinfo  {journal} {ACS Nano}\\ }}')}${entry('b')}${entry('c')}\\end{thebibliography}%\n`
+    const p = open({ 'main.tex': doc('Light \\cite{a,b,c}.\n\n\\bibliography{refs}', '\\usepackage{natbib}'), 'main.bbl': bbl })
+    expect(bib(p).map(u => plainSource(u as never).match(/photocurrent of (\w)/)?.[1])).toEqual(['a', 'b', 'c'])
+    expect(bib(p)[0]!.pieces.some(x => x.t === 'open' && x.src?.includes('urlappend=%3Fref%3DPDF&jav=VoR&rel=cite-as}'))).toBe(true)
+    // (the marked original writes the address as the paper does)
+    expect(marked(p, 'main.bbl')).toContain('?urlappend=%3Fref%3DPDF&jav=VoR&rel=cite-as}')
+  })
+})
+
 describe('REVTeX\'s and ACM\'s fields (apsrev4-2, ACM-Reference-Format)', () => {
   const BBL = `\\begin{thebibliography}{170}%
 \\providecommand \\bibnamefont  [1]{#1}%

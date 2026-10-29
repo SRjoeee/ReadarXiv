@@ -149,7 +149,7 @@ export declare function layoutMarking(units: readonly SourceUnit[], classes: rea
 
 /** the marks file (internal, prep/<mid>/marks-<sha>.json): what the layout maker reads from the marked original */
 export interface LayoutMarks {
-  schema: 13
+  schema: 14
   /** the engine that compiled it (meta.compiler) */
   engine: string
   /** what the marked original was marked with: layoutMarking's classes and the paper's own switch (TeX's answers to the
@@ -204,7 +204,7 @@ export declare function destRect(a: unknown): [x0: number, y0: number, x1: numbe
 export declare const MARKS_CAP: number
 export declare const MARKS_VALUES: number
 export declare const MARKS_DEPTH: number
-export declare const MARKS_SCHEMA: 13
+export declare const MARKS_SCHEMA: 14
 /** a unit's alignment code (readAlign) */
 export type AlignCode = 'c' | 'l' | 'r' | 'j'
 export declare const ALIGN_CODES: readonly AlignCode[]

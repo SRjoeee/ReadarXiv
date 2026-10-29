@@ -129,6 +129,18 @@ describe('an author block\'s names and its places, by the TeX that sets them', (
   })
 })
 
+describe('an author block\'s rows inside a conditional (Codex on #485: no corpus instance)', () => {
+  it('cuts no row inside an \\if…\\fi: the conditional stays in the one unit, its \\if and \\fi together', () => {
+    const p = open('\\maketitle\nWords of the body.', '\\newif\\ifanon\n\\author{\\ifanon Anonymous Author \\\\ Anonymous Institution \\else Jane Roe \\\\ Real University \\fi}')
+    for (const u of units(p).filter(u => u.kind === 'author' || u.kind === 'affiliation')) {
+      const src = u.pieces.map(x => x.src ?? x.s ?? '').join('')
+      expect((src.match(/\\ifanon(?![A-Za-z])/g) ?? []).length, src).toBe((src.match(/\\fi(?![A-Za-z])/g) ?? []).length)
+    }
+    // (outside a conditional, as before: names, then places)
+    expect(places(open('\\maketitle\nWords.', '\\author{Jane Roe \\\\ Real University}'))).toEqual(['Real University'])
+  })
+})
+
 describe('the places\' units: their number, their class, their marks', () => {
   const BIB = '\\begin{thebibliography}{9}\n\\bibitem{a} A.~Author.\n\\newblock A title of a paper.\n\\newblock 2020.\n\\end{thebibliography}'
   const p = open(`\\maketitle\nThe first paragraph.\n\nThe second paragraph.\n\n${BIB}`, '\\title{A Title}\n\\author{Alice Smith \\\\ University of Somewhere}')

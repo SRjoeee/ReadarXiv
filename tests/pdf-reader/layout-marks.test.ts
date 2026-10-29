@@ -330,6 +330,9 @@ describe('the paper\'s own switch: TeX asked what a mark does before what follow
       expect(tex).toContain(`\\hbox{way \\cite{a}{}${f} \\unskip`)
       expect(tex).toContain(`\\hbox{way \\axtpma{q0a}\\cite{a}\\axtpm{q0b}${f} \\unskip`)
       expect(tex).toContain(`\\hbox{way \\axtpma{q0a}\\cite{a}${f} \\unskip`)
+      // (and where the command looks at the mark, the pair with a word after it, as set and with its closing mark after the mark)
+      expect(tex).toContain(`\\hbox{way \\cite{a}${f} x \\unskip`)
+      expect(tex).toContain(`\\hbox{way \\axtpma{q0a}\\cite{a}${f}\\axtpm{q0b} x \\unskip`)
     }
     expect(tex).toContain('\\hbox{way \\cite{a} x \\unskip')
     expect(tex).toContain('\\hbox{way \\footnote{A note.}\\axtpma{q1c}\\footnote{A note.} \\unskip')
@@ -337,11 +340,11 @@ describe('the paper\'s own switch: TeX asked what a mark does before what follow
     // every box set into a register voided first, from the same state (the footnote counter as it was, biblatex's
     // trackers reset), saying at its last statement whether it closed where it was meant to
     const boxes = (tex.match(/\\hbox\{way /g) ?? []).length
-    expect(boxes).toBe(2 * 7 * 4 + 2)
+    expect(boxes).toBe(2 * 7 * 4 + 2 * 6 * 2 + 2)
     expect((tex.match(/\\global\\setbox\\axt@qbox\\box\\voidb@x\\gdef\\axt@qn\{\}\\axt@qreset\\xdef\\axt@level\{\\the\\currentgrouplevel\}\\setbox\\axt@qbox\\hbox\{way /g) ?? []).length).toBe(boxes)
     expect((tex.match(/\\xdef\\axt@qn\{\\the\\lastnodetype\\ifinner\\ifhmode\/in\\fi\\fi\}/g) ?? []).length).toBe(boxes)
     // a row before each box, for the errors TeX logs in it
-    expect(tex.match(/\\typeout\{LAYOUT-PROBE 1 punct-at \d+ \d+ [a-e]\}/g)).toHaveLength(boxes)
+    expect(tex.match(/\\typeout\{LAYOUT-PROBE 1 punct-at \d+ \d+ [a-emp]\}/g)).toHaveLength(boxes)
     expect(tex).toContain('\\global\\c@footnote=\\axt@qfn')
     expect(tex).toContain('\\ifdefined\\citereset\\citereset\\fi')
     // it writes nothing to a file and no line the run takes for a reading
@@ -1142,18 +1145,19 @@ describe('the marks file', () => {
     parse.mockRestore()
     expect(refusal(new Uint8Array([0x7b, 0xc3, 0x28, 0x7d]))).toBe('')
     const rows: [string, (m: LayoutMarks & Record<string, unknown>) => void, string][] = [
-      ['schema 1, a file before the stream', m => { m.schema = 1 as 13 }, 'schema'],
-      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 13 }, 'schema'],
-      ['schema 3, a file before the babel names', m => { m.schema = 3 as 13 }, 'schema'],
-      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 13 }, 'schema'],
-      ['schema 5, a file before the empty-list marks, the column ends and the display groups', m => { m.schema = 5 as 13 }, 'schema'],
-      ['schema 6, a file before the link annotations', m => { m.schema = 6 as 13 }, 'schema'],
-      ['schema 7, a file before the alignment', m => { m.schema = 7 as 13 }, 'schema'],
-      ['schema 8, a file before the complete macros and the boxes apart (its maker would replay a marking it was not made with)', m => { m.schema = 8 as 13 }, 'schema'],
-      ['schema 9, a file before the texts as TeX sets them (its maker would find no lead of punctuation, code or a formula)', m => { m.schema = 9 as 13 }, 'schema'],
-      ['schema 10, a file before the numbers a bibliography entry keeps (its maker would read no class `number`)', m => { m.schema = 10 as 13 }, 'schema'],
-      ['schema 11, a file before the look-ahead pairs (its maker would replay a marking with no mark after a paper\'s macro)', m => { m.schema = 11 as 13 }, 'schema'],
-      ['schema 12, a file before the entries\' own share (its reader refuses more than INK_MAX answers)', m => { m.schema = 12 as 13 }, 'schema'],
+      ['schema 1, a file before the stream', m => { m.schema = 1 as 14 }, 'schema'],
+      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 14 }, 'schema'],
+      ['schema 3, a file before the babel names', m => { m.schema = 3 as 14 }, 'schema'],
+      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 14 }, 'schema'],
+      ['schema 5, a file before the empty-list marks, the column ends and the display groups', m => { m.schema = 5 as 14 }, 'schema'],
+      ['schema 6, a file before the link annotations', m => { m.schema = 6 as 14 }, 'schema'],
+      ['schema 7, a file before the alignment', m => { m.schema = 7 as 14 }, 'schema'],
+      ['schema 8, a file before the complete macros and the boxes apart (its maker would replay a marking it was not made with)', m => { m.schema = 8 as 14 }, 'schema'],
+      ['schema 9, a file before the texts as TeX sets them (its maker would find no lead of punctuation, code or a formula)', m => { m.schema = 9 as 14 }, 'schema'],
+      ['schema 10, a file before the numbers a bibliography entry keeps (its maker would read no class `number`)', m => { m.schema = 10 as 14 }, 'schema'],
+      ['schema 11, a file before the look-ahead pairs (its maker would replay a marking with no mark after a paper\'s macro)', m => { m.schema = 11 as 14 }, 'schema'],
+      ['schema 12, a file before the entries\' own share (its reader refuses more than INK_MAX answers)', m => { m.schema = 12 as 14 }, 'schema'],
+      ['schema 13, a file before a switch\'s 3 (its maker would replay no closing mark after a punctuation mark a command moves)', m => { m.schema = 13 as 14 }, 'schema'],
       ['complete macros of no object', m => { (m.marking as Record<string, unknown>).complete = ['bert', 0] }, 'marking.complete'],
       ['a complete macro\'s name with its backslash', m => { (m.marking as Record<string, unknown>).complete = { '\\bert': 0 } }, 'marking.complete.\\\\bert'],
       ['a complete macro of arity 10', m => { (m.marking as Record<string, unknown>).complete = { bert: 10 } }, 'marking.complete.bert'],
@@ -1170,7 +1174,7 @@ describe('the marks file', () => {
       ['the switch an array', m => { (m.marking as Record<string, unknown>).switches = ['\\cite'] }, 'marking.switches'],
       ['a switch of no command', m => { (m.marking.switches as Record<string, string>).cite = '00000000' }, 'marking.switches.cite'],
       ['a switch of 7 codes', m => { (m.marking.switches as Record<string, string>)['\\cite'] = '2222000' }, 'marking.switches.\\\\cite'],
-      ['a switch of a code 3', m => { (m.marking.switches as Record<string, string>)['\\cite'] = '22223000' }, 'marking.switches.\\\\cite'],
+      ['a switch of a code 3 past the punctuation marks', m => { (m.marking.switches as Record<string, string>)['\\cite'] = '22222230' }, 'marking.switches.\\\\cite'],
       // (the asked classes' commands and the paper's own complete macros, PROBE_MAX + COMPLETE_PROBE_MAX: one past them)
       ['a switch of 529 commands', m => { m.marking.switches = switchOf(529) }, 'marking.switches'],
       // (the look-ahead pairs, keyed by aheadKey: a macro's source, the white space after it, the placeholder's, joined by #)

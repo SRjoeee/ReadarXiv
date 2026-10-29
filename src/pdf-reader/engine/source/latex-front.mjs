@@ -361,9 +361,10 @@ function argsBySpec(s, i, spec) {
  * whole table after it (FULL_RULE; a partial \\cmidrule under a spanning heading does not end it), when fewer rows stand
  * above that rule than below it: a table with no such rule, or with its only one before the last rows, has no header,
  * and every cell of it belongs to its column (a rule-based reading, the same for every table: the bold of a heading
- * row is not read)
+ * row is not read). `rowEnds`, the paper's macros that end a row as `\\\\` does (rowEndsOf): each one ends it here too, an
+ * empty group after it with it, so that the cells after it are placed where the walk cuts them (2610.21924v1's \\tightrow)
  */
-export function tableGrid(s, from, to) {
+export function tableGrid(s, from, to, rowEnds = null) {
   const cells = [], rows = [{ rule: false, filled: false }]
   let row = 0, col = 0, span = 1, start = from, content = false
   const fill = () => { content = true; rows[row].filled = true }
@@ -377,12 +378,16 @@ export function tableGrid(s, from, to) {
     if (c === '&') { cut(i); i++; start = i; continue }
     if (c !== '\\') { if (!/\s/.test(c)) fill(); i++; continue }
     const { name, end } = commandAt(s, i)
-    if (name === '\\' || name === 'tabularnewline') {
+    const ownEnd = !!rowEnds?.has(name)
+    if (name === '\\' || name === 'tabularnewline' || ownEnd) {
       cut(i)
       let e = end
-      if (s[e] === '*') e++
-      const opt = argsAfter(s, e, 1)
-      if (opt.args[0]?.kind === 'opt') e = opt.end
+      if (ownEnd) { const k = skipSpaces(s, e); if (s.startsWith('{}', k)) e = k + 2 }
+      else {
+        if (s[e] === '*') e++
+        const opt = argsAfter(s, e, 1)
+        if (opt.args[0]?.kind === 'opt') e = opt.end
+      }
       row++; col = 0; content = false; rows[row] = { rule: false, filled: false }
       i = e; start = e; continue
     }
@@ -430,6 +435,66 @@ function commandAt(s, i) { // s[i] === '\\'
   return { name: s[j] ?? '', end: j + 1 }
 }
 function skipComment(s, i) { while (i < s.length && s[i] !== '\n') i++; return i }
+/**
+ * A web address's `%` as TeX reads it in a `.bbl`'s entries. url.sty's \\url and \\path, hyperref's \\nolinkurl, breakurl's \\burl
+ * and the first argument of hyperref's \\href (REVTeX's .bbl's too: `\\begingroup \\@sanitize@url \\@href`) read their argument
+ * with `%` a character where TeX has not read those characters already, so `\\href {https://doi.org/…?urlappend=%3Fref%3DPDF…}
+ * {…}` is one address. Read as a comment, the address's group never closed, and in a .bbl every entry after it read as one
+ * (2610.21770v1's 44 to 61; an MNRAS .bbl's `\\href {…2017A%26A…}`, 2608.18626v1). Only there: a BibTeX-written .bbl's entries,
+ * whose structure is the style's, from each \\bibitem of its thebibliography on, an address at the entry's top level (in no
+ * group: \\href's own first argument, as both papers have it). Anywhere else, the body included, the `%` stays a comment as the
+ * walk read it before: body text can hold any of TeX's constructs (an argument, a definition, a conditional, a verbatim), and
+ * no local source writes such an address there (none of 183 papers' .tex, .sty and .cls files). Each such `%` is written as
+ * LITERAL_PERCENT, the same length, so that every reading of the walk (groups, comments, a bibliography's \\bibitem) sees what
+ * TeX sees and every place stays where it is; the units take their `%` back (restorePercents). A file of another name, a text
+ * that holds LITERAL_PERCENT already, or no `%`, is returned as it is
+ */
+export function urlPercents(text, file) {
+  if (!/\.bbl$/i.test(file ?? '') || !text.includes('%') || text.includes(LITERAL_PERCENT)) return text
+  const begin = /\\begin\s*\{thebibliography\}/.exec(text)
+  if (!begin) return text
+  const end = text.indexOf('\\end{thebibliography}', begin.index), to = end < 0 ? text.length : end
+  const n = text.length, out = text.split('')
+  let changed = false, depth = 0, entry = false
+  for (let i = begin.index + begin[0].length; i < to; i++) {
+    const c = text[i]
+    if (c === '%') { i = skipComment(text, i); continue }
+    if (c === '{') { depth++; continue }
+    if (c === '}') { depth = Math.max(0, depth - 1); continue }
+    if (c !== '\\') continue
+    const m = /^\\(?:([A-Za-z@]+)|[\s\S])/.exec(text.slice(i, i + 64))
+    const name = m?.[1] ?? null, at = i + (m?.[0].length ?? 1)
+    i = at - 1
+    if (name === 'bibitem') { entry = true; depth = 0; continue }
+    if (!entry || depth > 0 || !URL_READERS.has(name)) continue
+    let k = at
+    while (text[k] === ' ' || text[k] === '\t' || text[k] === '\n') k++
+    if (name === 'href' && text[k] === '[') { const e = matchGroup(text, k, '[', ']'); if (e > 0) { k = e; while (text[k] === ' ' || text[k] === '\t' || text[k] === '\n') k++ } }
+    if (text[k] !== '{') continue
+    // (the argument as these commands read it: braces counted, `%` a character, `\\` before any character escaping it)
+    let d = 0, e = -1
+    for (let j = k; j < n; j++) {
+      if (text[j] === '\\') { j++; continue }
+      if (text[j] === '{') d++
+      else if (text[j] === '}' && --d === 0) { e = j + 1; break }
+    }
+    if (e < 0) continue
+    // (read as the boundary is: a `\` and the character after it a pair, so that `\%` is the command \% and `\\%` a backslash
+    // pair and then the character)
+    for (let j = k; j < e; j++) { if (text[j] === '\\') { j++; continue } if (text[j] === '%') { out[j] = LITERAL_PERCENT; changed = true } }
+    i = e - 1
+  }
+  return changed ? out.join('') : text
+}
+/** what urlPercents writes a `%` TeX reads as a character as: a code no TeX source holds */
+const LITERAL_PERCENT = '\u0000'
+/** the commands whose argument TeX reads with `%` a character (urlPercents): hyperref's \\href, its first */
+const URL_READERS = new Set(['url', 'nolinkurl', 'path', 'burl', 'href'])
+/** a unit's strings and its pieces' with each LITERAL_PERCENT a `%` again, as the paper writes it (urlPercents) */
+function restorePercents(units) {
+  const fix = o => { for (const k of Object.keys(o)) if (typeof o[k] === 'string' && o[k].includes(LITERAL_PERCENT)) o[k] = o[k].replaceAll(LITERAL_PERCENT, '%') }
+  for (const u of units) { fix(u); for (const p of u.pieces ?? []) fix(p) }
+}
 function matchGroup(s, i, open = '{', close = '}') { // s[i] === open; returns index after the matching close, or -1
   let depth = 0
   for (let j = i; j < s.length; j++) {
@@ -1247,8 +1312,10 @@ function rowText(src) {
 /** whether a row of an author block opens with an affiliation's mark (MARK_FIRST), what stands before its text aside */
 function markFirst(src) { return MARK_FIRST.test(rowText(src)) }
 /** an author block's row and block ends at its top level ({ at, end, and }), in order: no group, formula or environment is
- *  looked into (a row TeX ends inside a tabular of the block's own is that tabular's) */
-function frontEnds(s, from, to) {
+ *  looked into (a row TeX ends inside a tabular of the block's own is that tabular's), nor a conditional (`ifs`, the paper's
+ *  \\newif names; TeX's own): a row's end in one of its branches (`\\ifanonymous … \\\\ … \\else … \\fi`) is that branch's, and a
+ *  cut there would part the \\if from its \\fi over two units, each written back with its own marks */
+function frontEnds(s, from, to, ifs = new Set()) {
   const out = []
   for (let k = from; k < to;) {
     const c = s[k]
@@ -1257,6 +1324,7 @@ function frontEnds(s, from, to) {
     if (c === '$') { const e = mathEnd(s, k); k = e < 0 || e > to ? k + 1 : e; continue }
     if (c !== '\\') { k++; continue }
     const { name, end } = commandAt(s, k)
+    if (isConditional(name, ifs)) { const e = branchEnd(s, end, to, ifs, { toFi: true }); k = e < 0 ? end : e; continue }
     if (name === '(' || name === '[') { const e = mathEnd(s, k); k = e < 0 || e > to ? end : e; continue }
     if (name === 'begin') { const m = /^\s*\{([^}]+)\}/.exec(s.slice(end, to)); if (m) { const [, after] = endOfEnv(s, end + m[0].length, m[1].trim()); k = Math.min(Math.max(after, end), to); continue } }
     if (FRONT_ROW.test(name)) {
@@ -1294,7 +1362,7 @@ function frontBlock(s, from, to, b, ctx, role = 'names') {
     const { args, end } = argsOfForm(s, at + m[0].length, unitForm(m[0].slice(1), ctx))
     if (args.some(a => a.kind === 'req')) notes.push({ at, end })
   }
-  const ends = frontEnds(s, from, to).filter(e => !notes.some(n => e.at >= n.at && e.at < n.end))
+  const ends = frontEnds(s, from, to, ctx.ifs).filter(e => !notes.some(n => e.at >= n.at && e.at < n.end))
   // each block's rows and each row's kind
   const blocks = [[]]
   let start = from
@@ -1603,7 +1671,7 @@ function walk(s, from, to, b, ctx) {
         walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved; b.cellMode = savedCell
         // each cell unit's place in the table's grid (tableGrid), by which its consistency group is found (groups.mjs):
         // a table nested in a cell gives its units the outer cell's place, set after its own
-        placeCells(b.units.slice(first), b.file, tableGrid(s, argsEnd, bodyEnd), table)
+        placeCells(b.units.slice(first), b.file, tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds), table)
         // fitted to the line once translated (patch, FIT_DEF): a plain tabular, whose width is its columns'; a tabular*,
         // set to a width it cannot shrink below, measured at its columns' width first (\\axtstar) — not one with a
         // position argument, which \\axtstar does not read. tabularx and tabulary keep their width and read their own
@@ -1753,6 +1821,10 @@ function walk(s, from, to, b, ctx) {
       const { args, end: e } = argsAfter(s, end, 1)
       if (args[0]?.kind === 'req') { endText(); const id = b.open(s.slice(i, args[0].start + 1), i); walk(s, args[0].start + 1, args[0].end - 1, b, ctx); b.close(id, '}', e); i = e; continue }
     }
+    // a macro of the paper's whose body ends a table's row, in a cell (\\newcommand{\\tightrow}{\\\\[-4pt]}: rowEndsOf): the row's end,
+    // as `\\\\` is there, an empty group after it with it. Read as a placeholder, the next row's first cell ran on in the cell it
+    // ends (2610.21924v1's 30 cells)
+    if (b.cellMode && ctx.rowEnds?.has(name)) { endText(); b.flush(); const k = skipSpaces(s, end); i = s.startsWith('{}', k) && k + 2 <= to ? k + 2 : end; continue }
     // (an accent the paper defines anew as a macro of no argument stays the accent's placeholder with its letter, below)
     const macro = ctx.macros.get(name), own = macro && !(macro.params === 0 && ACCENTS.has(name))
     const call = own && macroArgs(s, end, macro, to)
@@ -1810,6 +1882,11 @@ function walk(s, from, to, b, ctx) {
     // listings' and minted's inline code, read as \verb is: its keys, minted's language, then a brace group or a
     // delimiter (\lstinline|x = y|, \lstinline{x = y}, \mintinline{py}|x|) — code, never the translator's
     if (name === 'lstinline' || name === 'mintinline') { const stop = inlineCodeEnd(s, end, name); if (stop > 0 && stop <= to) { endText(); b.ph(s.slice(i, stop), i, stop); i = stop; continue } }
+    // an inline TikZ picture, read as TikZ reads it: \tikz[options]{…}, or \tikz[options] and one path to its `;` (tikzCallEnd):
+    // one placeholder, the drawing's. Read as a command, \tikz\fill[natural] (0,0) circle (.5ex); was \tikz, \fill and the
+    // path's own syntax sent as text, and the mark probe asked about \tikz alone, which opens a picture it never closes
+    // (2010.11929v2's legend dots)
+    if (name === 'tikz') { const stop = tikzCallEnd(s, end, to); if (stop > 0) { endText(); b.ph(s.slice(i, stop), i, stop); i = stop; continue } }
     if (name === 'par') { endText(); b.flush(); i = end; continue }
     // an accent and its letter: the letter itself in its word where it is one every strategy sets (accentLetter), else
     // one opaque piece, \'o, \'{o}, \"\i, \v c. Left as text, the letter would be translated away and the accent put on
@@ -1862,6 +1939,48 @@ function walk(s, from, to, b, ctx) {
   endText()
 }
 
+/** the paper's macros of no argument whose body ends a table's row (ROW_END), by name: a name every definition of which, in any of
+ *  the package's files and in any form, takes no parameter and has such a body — `\\newcommand{\\x}{…}`, \\renewcommand,
+ *  \\providecommand, \\DeclareRobustCommand (starred or not, no `[n]` after the name), `\\def\\x{…}`, \\gdef, \\edef, \\xdef (no
+ *  parameter text). A name also defined otherwise — with parameters (`\\renewcommand{\\x}[1]{…}`, `\\def\\x#1{…}`), by \\let, by
+ *  xparse's commands, or with another body — is none (the review of #501's fix round: a row end later redefined with an argument
+ *  split its cell) */
+function rowEndsOf(texts) {
+  const out = new Set(), other = new Set()
+  const DEFINITION = /\\(?:(?:(?:re)?newcommand|providecommand|DeclareRobustCommand)\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))|[egx]?def\s*\\([A-Za-z@]+)|let\s*\\([A-Za-z@]+)|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+)))/g
+  for (const t of texts.map(uncommented)) {
+    for (const m of t.matchAll(DEFINITION)) {
+      if (m.index > 0 && t[m.index - 1] === '\\') continue
+      const [, nc, nb, nd, nl, nx, ny] = m, name = nc ?? nb ?? nd ?? nl ?? nx ?? ny, k = skipSpaces(t, m.index + m[0].length)
+      // (a definition of no parameter: its body's group right after the name, white space between; any other form is none)
+      const e = (nc ?? nb ?? nd) && t[k] === '{' ? matchGroup(t, k) : -1
+      if (e > 0 && ROW_END.test(t.slice(k + 1, e - 1).trim())) out.add(name); else other.add(name)
+    }
+  }
+  for (const n of other) out.delete(n)
+  return out
+}
+/** a macro's body that ends a table's row and does nothing else but draw its rules: `\\\\` (starred, with its space), \\tabularnewline,
+ *  \\cr, a rule of booktabs' or LaTeX's after it */
+const ROW_END = /^(?:\\\\\*?\s*(?:\[[^\]]*\])?|\\tabularnewline|\\cr)\s*(?:\\(?:hline|midrule|toprule|bottomrule|cline\s*\{[^}]*\}|cmidrule\s*(?:\([^)]*\))?\s*\{[^}]*\}|addlinespace(?:\s*\[[^\]]*\])?)\s*)*$/
+/** where an inline TikZ picture that starts at s[at], after \\tikz, ends, as TikZ reads it: past its options (`[…]`), its
+ *  group where one follows, else past the first `;` outside every group (a node's text in braces may hold one), within the
+ *  paragraph (no blank line) and `to`; -1 where it does not */
+function tikzCallEnd(s, at, to) {
+  let k = skipSpaces(s, at)
+  if (s[k] === '[') { const e = matchGroup(s, k, '[', ']'); if (e < 0 || e > to) return -1; k = skipSpaces(s, e) }
+  if (s[k] === '{') { const e = matchGroup(s, k); return e < 0 || e > to ? -1 : e }
+  for (let j = k, depth = 0; j < to; j++) {
+    const c = s[j]
+    if (c === '\\') { j++; continue }
+    if (c === '%') { j = skipComment(s, j); continue }
+    if (c === '\n' && /^\n[ \t]*\n/.test(s.slice(j, j + 40))) return -1
+    if (c === '{') depth++
+    else if (c === '}') { if (--depth < 0) return -1 }
+    else if (c === ';' && depth === 0) return j + 1
+  }
+  return -1
+}
 /** where an inline listing that starts at s[at], after its command's name, ends: past its optional keys, minted's
  *  language, and its code in a brace group or between two of a delimiter; -1 where it does not */
 function inlineCodeEnd(s, at, name) {
@@ -2303,7 +2422,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   // which is biblatex's data — \\entry, \\field — and no text, which \\bibliography, biblatex's alias of \\addbibresource, never reads)
   const bblName = `${jobName(mainFile.rel)}.bbl`, bblBytes = fsys.read(bblName)
   const bbl = bblBytes && /\\begin\s*\{thebibliography\}/.test(texText(bblBytes)) ? bblName : null
-  const ctx = { bbl, tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], ...tblrOf(sources.map(sourceText)) }
+  const ctx = { rowEnds: rowEndsOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], ...tblrOf(sources.map(sourceText)) }
   const scan = { lineEnvs, ifs, ifValues }
   let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;
@@ -2311,23 +2430,26 @@ function readProject(fsys, main, tables, sourceText, own) {
   function visit(rel, dirs = [], inFloat = false) {
     const f = read(rel, dirs); if (!f || seen.has(f.rel)) return
     seen.add(f.rel); files.set(f.rel, f.text)
-    const b = new Builder(f.rel, units, f.text, ctx.bodies, ctx.floats), outer = ctx.dirs
+    // (the file as the walk reads it: a .bbl entry's web address's `%` a character, as TeX reads it, urlPercents; the file's own
+    // text is what patch writes around the units)
+    const text = urlPercents(f.text, f.rel)
+    const b = new Builder(f.rel, units, text, ctx.bodies, ctx.floats), outer = ctx.dirs
     if (inFloat) b.inFloat = true
     ctx.dirs = dirs
     // the file as TeX reads it: up to the line of an \endinput it acts on; its \end{document}s, where the walk stops,
     // those it surely reaches (documentEnds)
-    const cmds = texCommands(f.text, scan)
+    const cmds = texCommands(text, scan)
     if (f.rel === mainFile.rel) mainCmds = cmds
-    let from = 0, to = endinputCut(cmds, f.text)
+    let from = 0, to = endinputCut(cmds, text)
     ctx.ends.set(f.rel, documentEnds(cmds))
     if (f.rel === mainFile.rel) {
       // the document as TeX finds it (documentBounds): its preamble's front matter (frontMatter), then its body up to
       // the \end{document} TeX acts on, where the walk stops too
-      const bounds = boundsOf(cmds, f.text)
-      if (bounds.begin >= 0) { frontMatter(f.text, 0, bounds.begin, b, ctx); from = bounds.body }
+      const bounds = boundsOf(cmds, text)
+      if (bounds.begin >= 0) { frontMatter(text, 0, bounds.begin, b, ctx); from = bounds.body }
       to = Math.min(to, bounds.end)
     }
-    walk(f.text, from, to, b, ctx); b.flush()
+    walk(text, from, to, b, ctx); b.flush()
     ctx.dirs = outer
   }
   /** a file the preamble \inputs, read as the preamble is (frontMatter): its front matter's units, the file among the
@@ -2335,8 +2457,8 @@ function readProject(fsys, main, tables, sourceText, own) {
   function visitFront(rel, dirs = []) {
     const f = read(rel, dirs); if (!f || seen.has(f.rel)) return
     seen.add(f.rel)
-    const before = units.length, b = new Builder(f.rel, units, f.text, ctx.bodies, ctx.floats)
-    frontMatter(f.text, 0, f.text.length, b, ctx); b.flush()
+    const text = urlPercents(f.text, f.rel), before = units.length, b = new Builder(f.rel, units, text, ctx.bodies, ctx.floats)
+    frontMatter(text, 0, text.length, b, ctx); b.flush()
     if (units.length > before) files.set(f.rel, f.text)
   }
   ctx.visitFront = visitFront
@@ -2344,6 +2466,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   ctx.called = (name, kind) => { const c = calls.get(name) ?? calls.set(name, { n: 0, kinds: new Set() }).get(name); c.n++; c.kinds.add(kind ?? 'para') }
   visit(mainFile.rel)
   storedBodies(calls, { ctx, files, units, own })
+  restorePercents(units)
   entriesLast(units)
   // a source declared in a Latin-1 family encoding: its bytes read as latin1 are already the right characters
   const enc = inputencFrom(mainCmds ?? texCommands(all, scan), all)?.options.split(',').map(x => x.trim()).find(x => /^(latin1|latin9|ansinew|cp1252|cp1250|latin2|applemac|decmulti)$/.test(x))
