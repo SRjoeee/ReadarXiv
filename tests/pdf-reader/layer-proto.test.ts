@@ -1,6 +1,8 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { beforeAll, describe, expect, it } from 'vitest'
 import type { Audit } from '@/pdf-reader/engine/layer-proto/check.mjs'
-import { breakPoints, patternsOfTex } from '@/pdf-reader/engine/layer-proto/hyph.mjs'
+import { breakPoints, hyphenationOf, patternsOfTex, TEX_PATTERN_ENCODINGS } from '@/pdf-reader/engine/layer-proto/hyph.mjs'
 import { layGroups, layOrder } from '@/pdf-reader/engine/layer-proto/run.mjs'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
@@ -54,6 +56,30 @@ describe("v0's hyphenation: TeX's pattern files read as the prototype's host rea
     expect(() => breakPoints('table', 'en', data, { left: 2 } as never)).toThrow(/mins/)
     // Russian by its rules: never a single letter left (and needs no minimums)
     for (const at of breakPoints('\u043F\u0440\u043E\u0433\u0440\u0430\u043C\u043C\u0430', 'ru', true)) expect(at >= 2 && at <= 7).toBe(true)
+  })
+  it("reads hyph-utf8's files as UTF-8, its letters as they are (French's \u00FF too), never TeX's 8-bit escapes", () => {
+    const tex = '% hyph-fr\n\\patterns{\n.\u00E9l1ec \u00E83 1\u00FF \'a4 % a comment\n}\n'
+    expect(patternsOfTex(tex, 'utf8').patterns).toEqual(['.\u00E9l1ec', '\u00E83', '1\u00FF', "'a4"])
+    // (a Latin-1 file's 0xFF is dehyphn.tex's \u00DF)
+    expect(patternsOfTex(tex).patterns).toContain('1\u00DF')
+  })
+  it('breaks French, Spanish and Portuguese words where TeX does under babel, with their own patterns and minimums (#121-4)', () => {
+    // (TeX's \showhyphens of each word under babel's language in the pinned TeX Live image, and the patterns of hyph-utf8's
+    // files there that can apply to them: tests/fixtures/hyph/README.md. English's patterns broke 7 of the 54 as TeX does)
+    const F = JSON.parse(readFileSync(resolve('tests/fixtures/hyph/hyph-utf8-words.json'), 'utf8')) as { tex: Record<string, string[]>; patterns: Record<string, string[]>; exceptions: Record<string, string[]> }
+    for (const to of ['fr', 'es', 'pt']) {
+      const { params } = resolveRules(BUILTIN_RULES, to)
+      const lang = params.latinPatterns
+      expect(lang, to).toBe(to)
+      expect(TEX_PATTERN_ENCODINGS[lang as 'fr'], to).toBe('utf8')
+      const data = hyphenationOf({ patterns: F.patterns[lang] ?? [], exceptions: F.exceptions[lang] ?? [] })
+      for (const w of F.tex[to]!) {
+        const word = w.replaceAll('-', ''), want: number[] = []
+        let k = 0
+        for (const ch of w) { if (ch === '-') want.push(k); else k++ }
+        expect(breakPoints(word, lang, data, params.hyphenation[lang as 'fr']), `${to} ${w}`).toEqual(want)
+      }
+    }
   })
 })
 

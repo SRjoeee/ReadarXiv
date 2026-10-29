@@ -3,9 +3,13 @@ import type { ZodMiniType } from 'zod/mini'
 import type { CjkFaces } from './font-roles.mjs'
 import type { Params } from '../layer-proto/layer2.mjs'
 import type { NameKey } from '../layout/names.mjs'
+/** the hyphenation patterns a Latin word may use (layer-proto/hyph.mjs TEX_PATTERN_FILES) */
+export type PatternLanguage = 'en' | 'de' | 'fr' | 'es' | 'pt'
+/** those languages, in the set's `hyphenation` order */
+export declare const PATTERNS: readonly PatternLanguage[]
 
 /** the schema's number: the shape and how the engine reads it */
-export declare const RULES_SCHEMA: 7
+export declare const RULES_SCHEMA: 8
 /** a set's bytes at most, as received */
 export declare const RULES_CAP: 65536
 /** a set's JSON values at most, counted before JSON.parse */
@@ -55,7 +59,7 @@ export interface ScriptRules {
   noStart: string; noEnd: string
   hyphen: 0 | 1
   /** a Latin word's hyphenation patterns */
-  latinPatterns: 'en' | 'de'
+  latinPatterns: PatternLanguage
   // table cells (layer2.mjs cellBands)
   cellClear: number; cellCapMin: number
   // faces (font-roles.mjs rolesFor): the CJK group, drawn at Regular and Bold beside every English family
@@ -75,7 +79,7 @@ export interface RuleSet {
   version: number
   /** at most 1,000 characters: what changed and why */
   note: string
-  hyphenation: { minWord: number; en: { left: number; right: number }; de: { left: number; right: number } }
+  hyphenation: { minWord: number } & Record<PatternLanguage, { left: number; right: number }>
   scripts: Record<Script, ScriptRules>
   /** BCP 47 tags; every TARGETS member present, others allowed (the language wave) */
   languages: Record<string, LanguageRules>

@@ -423,8 +423,14 @@ const protoUnitsOf = name => { const { paper, target } = nameOf(name); const f =
 /** v0's hyphenation patterns, read from TeX's files by the engine's own reading (layer-proto/hyph.mjs), once */
 const HYPH = new Map()
 if (PROTO) {
-  const { patternsOfTex, TEX_PATTERN_FILES } = await import(join(ENGINE, 'src/pdf-reader/engine/layer-proto/hyph.mjs'))
-  for (const [lang, rel] of Object.entries(TEX_PATTERN_FILES)) if (existsSync(join(TEXMF, rel))) HYPH.set(lang, JSON.stringify(patternsOfTex(readFileSync(join(TEXMF, rel), 'latin1'))))
+  const H = await import(join(ENGINE, 'src/pdf-reader/engine/layer-proto/hyph.mjs'))
+  // (each file in its encoding, the engine's TEX_PATTERN_ENCODINGS: hyph-utf8's French, Spanish and Portuguese are UTF-8, TeX's
+  // 8-bit files Latin-1; an engine that names none reads its two as Latin-1, as before)
+  for (const [lang, rel] of Object.entries(H.TEX_PATTERN_FILES)) {
+    if (!existsSync(join(TEXMF, rel))) continue
+    const encoding = H.TEX_PATTERN_ENCODINGS?.[lang] ?? 'latin1'
+    HYPH.set(lang, JSON.stringify(H.patternsOfTex(readFileSync(join(TEXMF, rel), encoding), encoding)))
+  }
 }
 function fileFor(path) {
   if (path.startsWith('/gate/')) return ['page.html', 'page.mjs', 'proto.mjs', 'measure.mjs', 'links.mjs', ...(DOOR !== null ? ['door.mjs'] : []), ...(DOOR_PARTS !== null ? ['door-parts.mjs'] : []), ...(DOOR_ORDER !== null || DOOR_JUMP !== null ? ['door-common.mjs', 'door-order.mjs'] : []), ...(DOOR_JUMP !== null ? ['door-jump.mjs'] : []), ...(DOOR_DRAW !== null ? ['door-common.mjs', 'door-draw.mjs'] : [])].includes(path.slice(6)) ? join(GATE, path.slice(6)) : null

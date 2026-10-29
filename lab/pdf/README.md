@@ -325,7 +325,8 @@ another machine is compared.
 **The pack** is everything the model tier reads for the 30 outputs and nothing else: arXiv's PDFs, the layout files
 (`layout.json`), the PIPELINE translations (`units.json`, `record.json`), the frozen reference text areas and the kept layouts
 (`refs/`), the geometry, the faces (every non-CJK face of the role table, and of each CJK group the outputs' targets use its
-Kai and the four weights the roles are built from), and the en and de hyphenation patterns. It is a file set laid out so that
+Kai and the four weights the roles are built from), and the hyphenation patterns of the engine's TEX_PATTERN_FILES (en and de;
+fr, es and pt, hyph-utf8's, since the pack `50ae6cc0`). It is a file set laid out so that
 the gate's own flags and variables read it: `--fixtures=<pack>/fixtures`, `LAYER_REFS`, `LAYER_GEOMETRY`, `AXT_DATA`
 (`<pack>/data`, which holds `fonts/`) and `TEXMF_DIST`; `rules-gate.mjs run` sets them. Its manifest lists each file by path,
 digest and size; its **digest** is that of the sorted listing, the same on every make (the clock is not in it, and every file
