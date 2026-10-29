@@ -252,6 +252,8 @@ export function createLayerSide(view, o) {
     if (disposed || state === 'refused') return
     state = 'refused'
     why = w
+    // (no layer for the visit: nothing for the places ahead to wait for)
+    V.places.letAheadGo?.()
     unmarkAll()
     warn(`open (${w})`, e ?? new Error(w))
     const was = door
@@ -518,6 +520,9 @@ export function createLayerSide(view, o) {
   }
   /** a page whose layer is not coming now: its place back to its pre-layer content where it holds the layer's */
   function shownOriginal(n) {
+    // (a near page settled as the original's: by the rule, a failure, a stall, nothing of its own to draw: the places ahead wait
+    // for it no more)
+    if (V.places.near(n)) V.places.letAheadGo?.()
     // (a page that failed, or that ended with nothing of the layer to draw, is the original's: no paragraph of it is coming, and
     // no mark comes back to it this attempt, whatever rows another page takes; again() lets it be marked once more)
     unmark(n)
@@ -734,6 +739,8 @@ export function createLayerSide(view, o) {
     // its text layer, once the main thread is idle: never on the commit's path
     textSoon(n, content, door)
     counts.commits++
+    // (the layer's first page in place: the places ahead draw the original's pages now)
+    V.places.letAheadGo?.()
     ring.push(`${n}@${Math.round(clock.now())}`)
     if (ring.length > RING) ring.shift()
     shapesOf(n, laid)
@@ -1510,6 +1517,8 @@ export function createLayerSide(view, o) {
     dispose() {
       if (disposed) return
       disposed = true
+      // (the side let go: no first page of it for the places ahead to wait for)
+      V.places.letAheadGo?.()
       detach()
       feed.dispose()
       ac.abort()

@@ -158,6 +158,11 @@ export interface Internals {
     swap(n: number, content: HTMLElement, o?: { blank?: boolean }): boolean
     /** place n back to its pre-layer content */
     restore(n: number): void
+    /** the places near the view but not in it drawn from now on: the layer side's word that its first page is there, or that
+     *  there is none (places.mjs AHEAD_HOLD_MS bounds the wait where nothing says so) */
+    letAheadGo(): void
+    /** whether they still wait */
+    aheadHeld(): boolean
   }
   left: {
     doc(): ViewDocument | null

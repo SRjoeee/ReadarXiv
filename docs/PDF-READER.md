@@ -721,6 +721,13 @@ PDF.js is the host's kit, so every PDF.js type the view names is structural.
   from the left's document by PDF.js's own page view (canvas, text layer, links through the view's jump), else, with no
   original, the skeleton. A far place is an empty box: its page view goes, canvas and all. The places borrow the left's
   document and never clean its pages up.
+  A place near the view but not in it waits to draw the original's page until the layer lets the pages ahead go, or until
+  `AHEAD_HOLD_MS` (15 s) after the places are made. The layer lets them go once it puts its first page in place, shows a
+  near page as the original's (by the rule, a failure, a stall), is refused or is let go (`letAheadGo`). Its page view is made
+  all the same, and a place that comes into view is drawn at once: only when a page is drawn changes, never what. On
+  2610.31506v1 in two panes (staging, 2026-10-30), the right's page 3 is near and holds eleven images, 5.5 MB to draw. Drawn
+  at once, it read the original 56 times (3.6 MB) from the layer's open to page 1 drawn, on the line page 1's 3.7 MB of font
+  slices were waiting on. The web holds PDF.js's own pages ahead on the left alike (its `holdAhead`).
 - **The sync is the identity follower** (`sync.mjs` `createFollower`). Both panes hold the same pages, so the other pane moves
   by the reader's own steps (on the compositor, by a ScrollTimeline, where the browser has one) and is levelled at rest by
   the same point of the same page; a click levels the same point at the click's height. It is available once the places

@@ -4,7 +4,7 @@
 // The real PDF.js, in a real browser, is pnpm e2e:reader's (its development entry, ?layer=1).
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFollower } from '@/pdf-reader/engine/view/sync.mjs'
-import { TEXT_BACK_MS } from '@/pdf-reader/engine/view/places.mjs'
+import { AHEAD_HOLD_MS, NEAR, TEXT_BACK_MS } from '@/pdf-reader/engine/view/places.mjs'
 import { createReaderView, type DocumentTask, internalsOf, type ReaderHost, type ReaderView, type Shapes, type ViewEvent, type ViewPrefs } from '@/pdf-reader/engine/view/reader-view.mjs'
 import { clientOf, drawPanes, FakeEventBus, FakeIO, FakeLinkService, FakePDFPageView, FakePDFViewer, FakeRO, fakeDoc, fakeKit, fakeTask, flush, installLayout, type ManualClock, manualClock, reads, resetFakes } from './helpers/reader-fakes'
 
@@ -669,6 +669,54 @@ describe('V11: the places before a layer', () => {
     links.pdfViewer.scrollPageIntoView({ pageNumber: 5, destArray: [null, { name: 'XYZ' }, 0, 792] })
     await flush()
     expect(s.panes.right.scrollTop).toBe((places(s)[4] as HTMLElement).offsetTop)
+  })
+
+  it('a place near the view but not in it waits to draw the original\'s page until the layer lets the pages ahead go (letAheadGo) or AHEAD_HOLD_MS: one in view drawn at once, the page views made all the same (2610.31506v1: the right\'s page 3, near, read 5.5 MB of images while page 1\'s layer waited)', async () => {
+    const s = setup()
+    await opened(s, 6)
+    // pages 1 and 2 in view, page 3 near alone (its near observer told, not its in-view one)
+    await nearOn(s, [1, 2])
+    const p3 = places(s)[2] as HTMLElement
+    for (const io of [...FakeIO.live]) if ((io.options as { rootMargin?: string } | undefined)?.rootMargin === NEAR && io.targets.has(p3)) io.cb([{ target: p3, isIntersecting: true }])
+    await flush(20)
+    const drawsOf = (n: number) => FakePDFPageView.made.filter(v => v.id === n).reduce((a, v) => a + v.draws, 0)
+    expect(FakePDFPageView.made.map(v => v.id)).toEqual([1, 2, 3])
+    expect([drawsOf(1), drawsOf(2), drawsOf(3)]).toEqual([1, 1, 0])
+    expect(internalsOf(s.view).places.aheadHeld()).toBe(true)
+    // let go (the layer's first page drawn, or no layer): page 3 drawn
+    internalsOf(s.view).places.letAheadGo()
+    await flush(20)
+    expect(drawsOf(3)).toBe(1)
+    expect(internalsOf(s.view).places.aheadHeld()).toBe(false)
+    // a place that comes into view while held is drawn at once
+    const t = setup()
+    await opened(t, 6)
+    await nearOn(t, [1])
+    const q2 = places(t)[1] as HTMLElement
+    for (const io of [...FakeIO.live]) if ((io.options as { rootMargin?: string } | undefined)?.rootMargin === NEAR && io.targets.has(q2)) io.cb([{ target: q2, isIntersecting: true }])
+    await flush(20)
+    const drawsIn = (n: number) => FakePDFPageView.made.filter(v => v.id === n && (t.panes.right as HTMLElement).contains(v.div)).reduce((a, v) => a + v.draws, 0)
+    expect(drawsIn(2)).toBe(0)
+    await nearOn(t, [2])
+    expect(drawsIn(2)).toBe(1)
+  })
+
+  it('the hold of the pages ahead ends by itself AHEAD_HOLD_MS after the places are made, where nothing lets it go (no layer for the visit)', async () => {
+    const s = setup()
+    await opened(s, 6)
+    await nearOn(s, [1])
+    const p2 = places(s)[1] as HTMLElement
+    for (const io of [...FakeIO.live]) if ((io.options as { rootMargin?: string } | undefined)?.rootMargin === NEAR && io.targets.has(p2)) io.cb([{ target: p2, isIntersecting: true }])
+    await flush(20)
+    const drawsOf = (n: number) => FakePDFPageView.made.filter(v => v.id === n).reduce((a, v) => a + v.draws, 0)
+    expect(drawsOf(2)).toBe(0)
+    await s.clock.advance(AHEAD_HOLD_MS)
+    await flush(20)
+    expect(drawsOf(2)).toBe(1)
+    // another document set: its pages ahead wait again (local Codex review)
+    internalsOf(s.view).places.letAheadGo()
+    await opened(s, 6)
+    expect(internalsOf(s.view).places.aheadHeld()).toBe(true)
   })
 
   it('a link out of the paper, on either pane, goes out through the host alone', async () => {
