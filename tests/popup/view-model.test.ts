@@ -337,9 +337,9 @@ describe('the core strings seam (DESIGN §4.2)', () => {
     const reader = (config = input('P17').config!, over = {}) => derivePopupView({ ...input('P17'), config, entry: { ...input('P17').entry!, kind: 'pdf', readerOpen: true }, ...over })
     const withConfig = (patch: Record<string, unknown>) => ({ ...input('P17').config!, ...patch }) as NonNullable<ReturnType<typeof input>['config']>
 
-    it('lists the nine languages the reader typesets, alone', () => {
+    it('lists the languages the reader typesets, alone', () => {
       const v = reader(undefined, { menu: 'language' })
-      expect(v.menus?.language.items.map(i => i.id)).toEqual(['jpn', 'cmn', 'cmn-Hant', 'kor', 'deu', 'spa', 'fra', 'por', 'rus'])
+      expect(v.menus?.language.items.map(i => i.id)).toEqual(['jpn', 'cmn', 'cmn-Hant', 'kor', 'ind', 'zsm', 'ces', 'deu', 'spa', 'fra', 'ita', 'nld', 'pol', 'por', 'swe', 'tur', 'bul', 'rus', 'ukr'])
     })
 
     it('greys stacked with its reason, and shows a stored stacked as side by side, what the reader shows', () => {

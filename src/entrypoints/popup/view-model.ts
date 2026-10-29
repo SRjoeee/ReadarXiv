@@ -233,7 +233,7 @@ function serviceNote(config: Config, { pack, saved, rejected }: PopupInput): Not
 }
 
 /**
- * Every menu of a view, built from the settings (§5.3): the reader open lists the nine languages it typesets and has no
+ * Every menu of a view, built from the settings (§5.3): the reader open lists the languages it typesets and has no
  * styles; an entry page shows no styles either
  */
 function menusOf(config: Config, { pack, rejected }: PopupInput, { reader = false, style = !reader }: { reader?: boolean; style?: boolean } = {}): NonNullable<PopupView['menus']> {
@@ -246,7 +246,7 @@ function menusOf(config: Config, { pack, rejected }: PopupInput, { reader = fals
     language: {
       label: S.rows.language,
       search: true,
-      // the reader's nine are named in their own languages, and say so (`lang`, round 3); the full list names each in the
+      // the reader's languages are named in their own languages, and say so (`lang`, round 3); the full list names each in the
       // interface's language with its own after it, one string of two languages, which no single `lang` fits
       items: reader
         ? languageItems(config.targetLanguage).map(({ selected, ...item }) => ({ ...item, checked: selected, lang: toBcp47(item.id) }))
@@ -337,7 +337,7 @@ function entryView(entry: EntryStatus, config: Config, input: PopupInput): Popup
 
 /**
  * The popup while the PDF reader is laid over a PDF page (the reader's design, §9.2): it acts on the reader through the
- * settings alone, which the reader follows. The rows are the ordinary ones, the language menu holds the nine the reader
+ * settings alone, which the reader follows. The rows are the ordinary ones, the language menu holds the ones the reader
  * typesets, stacked is greyed (a stored stacked shows as side by side, what the reader shows), the primary shows the
  * original or the translation, and there is no style to choose: styles do nothing on a typeset PDF (the foot greys its
  * button). The image switch is greyed too: it is the HTML page's, and the reader's figure text is its own setting

@@ -206,7 +206,8 @@ describe('resolving a target (resolveRules)', () => {
         expect([script, params.latinPatterns, params.cyrillicPatterns, patterns], t).toEqual(['Cyrl', 'en', t, ['en', t]])
       }
       // (the minimums TeX applies under babel: tests/fixtures/hyph/README.md)
-      expect(params.hyphenation[latin[t] ?? t as 'uk'], t).toEqual(BUILTIN_RULES.hyphenation[latin[t] ?? t as 'uk'])
+      const lang = (latin[t] ?? t) as 'uk'
+      expect(params.hyphenation[lang], t).toEqual(BUILTIN_RULES.hyphenation[lang])
     }
     expect(resolveRules(BUILTIN_RULES, 'ru').patterns).toEqual(['en', 'ru'])
     // (a set that names another language's patterns for a script that is not Cyrillic loads them: none is named without its file)
