@@ -96,7 +96,8 @@ describe('the drawing of a stutter', () => {
   it('keeps the offsets through the TeX escapes and the dashes a piece is drawn through', () => {
     const pieces = [text('Gewinn von 5\\,\\% -- Ergebnisse Ergebnisse --- und mehr')]
     const { words, index } = lay(pieces, 'a gain of 5% -- results --- and more')
-    expect(words).toEqual(['Gewinn', 'von', '5\\,\\%', '–', 'Ergebnisse', '—', 'und', 'mehr'])
+    // (the translation's escape drawn undone, `\\%` a percent sign; a TeX command it holds besides, drawn as it is)
+    expect(words).toEqual(['Gewinn', 'von', '5\\,%', '–', 'Ergebnisse', '—', 'und', 'mehr'])
     const plain = plainOfPieces(pieces as never)
     const at = wordIndexer(plain)
     // (the drawn "und" is the plain text's own "und", after the second "Ergebnisse")
