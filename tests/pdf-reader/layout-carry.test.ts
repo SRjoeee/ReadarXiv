@@ -360,6 +360,20 @@ describe('lineCheckOf: the pages that may be drawn', () => {
     expect(behind(4).pages.map(p => p.drift)).toEqual([[0, 4], [4, 0]])
     expect(behind(5).undrawable).toEqual([1, 2])
   })
+  it('a moved line takes out only its words matched: a word it changed stays in the comparison (Codex on #511)', () => {
+    const A = W.slice(0, 10), B = W.slice(20, 30), L = W.slice(10, 20), L2 = L.map((w, i) => (i === 5 ? 'fifty' : w))
+    // (our page 1's last line is arXiv's page 2's first but for one word: found by 9 of its 10 words, the pages short)
+    const ours = [...words(A, 1, 72, 700), ...words(L, 1, 72, 688), ...words(B, 2, 72, 700)]
+    const theirs = [...words(A, 1, 72, 700), ...words(L2, 2, 72, 712), ...words(B, 2, 72, 700)]
+    expect(lineCheckOf(ours, theirs).undrawable).toEqual([1, 2])
+    // (the same words: drawn)
+    expect(lineCheckOf(ours, [...words(A, 1, 72, 700), ...words(L, 2, 72, 712), ...words(B, 2, 72, 700)]).undrawable).toEqual([])
+  })
+  it('nor a page whose lines all moved: what stays of it must be at least half of it, on both sides (two short pages swapped, Devin on #511)', () => {
+    // (two lines a page, each found on the page beside: two at each end, within DRIFT_LINES, and nothing of either page left)
+    const lines = (from: number, p: number) => Array.from({ length: 2 }, (_, j) => words(W.slice(from + 10 * j, from + 10 * j + 10), p, 72, 700 - 12 * j)).flat()
+    expect(lineCheckOf([...lines(40, 1), ...lines(0, 2)], [...lines(0, 1), ...lines(40, 2)]).undrawable).toEqual([1, 2])
+  })
   it('but not a page whose rest differs, nor one whose line is found two pages away', () => {
     const V = W.map(w => `v${w}`), U = W.map(w => `u${w}`)
     // (the moved line taken out, a line of other words besides: under PAGE_SAME)

@@ -2327,18 +2327,22 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   evidence of where its page stands (LAYOUT 25: 2610.21765v1 p7's "q", paired with arXiv's p6, left the page undrawn and ten
   of its units English). **A page whose lines moved across its breaks is drawn** (LAYOUT 31, the owner's ruling of 2026-10-30:
   content right before pages alike, a 1 % difference for engineering that is simple, general and lasting): where the rule above
-  refuses it, each of our lines found on another page of arXiv's takes its words out of our page and its partner's out of
-  arXiv's, and the page is drawn where no evidence line of it is found two pages away or more, at most `DRIFT_LINES` (4) lines
-  moved at each of its two ends (counted on both sides of each break), and the rest of its words are arXiv's page's as a bag, in
-  any order (`driftSame`, `PAGE_SAME`: the drawing is over our own page, and a float set elsewhere in a page's reading order is
-  the same page). 2610.30854v1, whose 1 mm skip TeX Live 2025's 2025-11-01 kernel drops (a no-argument `\newcommand` short, so
+  refuses it, each of our lines found on another page of arXiv's takes the words it matched there out of both pages' comparison
+  (a word its partner does not hold stays in, on its side: the carrier finds a line by 80 % of its words, Codex on #511), and
+  the page is drawn where no evidence line of it is found two pages away or more, at most `DRIFT_LINES` (4) lines moved at each
+  of its two ends (counted on both sides of each break), what stays at least half of its words on each side (two short pages
+  that traded their lines are not drawn, Devin on #511), and the rest of its words arXiv's page's as a bag, in any order
+  (`driftSame`, `PAGE_SAME`: the drawing is over our own page, and a float set elsewhere in a page's reading order is the same
+  page). 2610.30854v1, whose 1 mm skip TeX Live 2025's 2025-11-01 kernel drops (a no-argument `\newcommand` short, so
   the class's `\ifx\PaperLinks\empty` true) and arXiv's TeX Live 2025 of 2025-08-03 sets, moves 1 to 4 lines a page on its pages
   1 to 9, all drawn now (460 of its units laid, 189 before); 2307.16209's pages 69 and 70 (1 and 2 lines) too, its pages 71 to 76
   (5 to 15) not; nothing else of the release sweep's 53 papers, the five first-open papers and the pack changes. Still refused:
   the rest's words not arXiv's, a page past its work, a line two pages away, more lines moved at an end. A line moved has no
   partner on the page beside ours: the hover lights a unit by its own shapes on each pane, and where the right copies the left's
-  tokens (a unit shown as the original on a laid page, `view/shapes.mjs` `layerShapes`), no copy stands on another unit's row on
-  our page (`words.rows`, the layout's rows of each unit on the page, `run.mjs` `freezeWordsOf`): never a wrong partner.
+  tokens (a unit shown as the original on a laid page, `view/shapes.mjs` `layerShapes`), a unit the layout lays keeps a copy
+  only on its own rows on that page (`words.rows`, `run.mjs` `freezeWordsOf`: none where its rows are all on other pages, so
+  none over the space a moved line leaves), and one it lays nowhere none on a page whose lines moved (`words.drift`: a unit's
+  pages on the left not its rows' pages there) and elsewhere none on another unit's row: never a wrong partner.
   **A unit is laid only where every page it is on is drawable**
   (`layout/make.mjs` `drawable`, LAYOUT 16; `stats.units.undrawn` the others, left the original's). Over our own page a
   drawing is right by construction: a page of the same words is drawn whatever its lines' offsets, a line re-broken by a word,

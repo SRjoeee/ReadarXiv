@@ -578,6 +578,12 @@ describe('SH5: the right\'s laid pages, from the layer\'s words (layerShapes)', 
     expect(laid([]).length).toBe(all)
     expect(laid([[5, box], [6, box]]).length).toBe(all)
     expect(laid([[5, box]])).toEqual([])
+    // (a unit whose rows are all on other pages of ours: its text is not on this one, no copy over the space it leaves either;
+    // a unit with no rows on a page whose lines moved: none; on a page whose did not, where no other unit's row stands — Devin on #511)
+    expect(laid([[6, []]])).toEqual([])
+    const drifted = (rows: [number, number[]][], drift: boolean) => { const r = layerShapes(l); r.lay(3, { ...wordsOf(3, [5]), rows, drift } as never); return r.shapes.runs(6).filter(x => x.page === 3) }
+    expect(drifted([], true)).toEqual([])
+    expect(drifted([], false).length).toBe(all)
   })
 
   it('a muted page (another target\'s layer kept there) lights and hits nothing, its float included; unmuted, as before', () => {

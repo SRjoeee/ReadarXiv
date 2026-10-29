@@ -27,8 +27,8 @@ export interface Carrier {
   readonly inPlace: readonly number[]
   /** each marked token's line (no entry for a token on no line) */
   readonly tokenLine: readonly number[]
-  /** each marked line's partner's arXiv tokens, every one its line holds (null for a line of no partner), in the order added */
-  readonly partnerTokens: readonly (readonly number[] | null)[]
+  /** each marked line's words matched to its partner's, [ours, arXiv's] token indices (null for a line of no partner), in the order added */
+  readonly partnerTokens: readonly (readonly [ours: readonly number[], arxiv: readonly number[]] | null)[]
   /** the marked tokens `from` to `to` (`marked`'s indices), whole pages none of which was added: their lines matched */
   add(from?: number, to?: number): void
 }
@@ -55,8 +55,8 @@ export interface LineCheck {
   pages: { page: number; words: [ours: number, arxiv: number]; overlap: number | null; sameWords?: true; elsewhere: number; drift?: [start: number, end: number]; drawable: boolean }[]
   undrawable: number[]
   over: number[]
-  /** by arXiv's page, its tokens (indices into `arxiv`) whose line one of ours on another page was found on: lines moved across a
-   *  break, with no partner on our page */
+  /** by arXiv's page, its tokens (indices into `arxiv`) a line of ours on another page was matched to: lines moved across a break,
+   *  with no partner on our page */
   moved: Map<number, Uint32Array>
 }
 export declare function lineCheckOf(ours: readonly DocToken[], arxiv: readonly DocToken[]): LineCheck

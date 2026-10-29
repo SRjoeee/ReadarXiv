@@ -335,16 +335,19 @@ export function layerShapes(source) {
     const w = words.get(p), left = state.pages.get(p)
     if (made.has(p) || !w || !left) return false
     const original = new Set(w.original)
-    // (a copy of a unit's left tokens stands where the left has it, which our page may not: a token whose middle lies on another
-    // unit's row on our page and on none of its own is left out — a line our compile set on the page beside, with no partner here)
+    // (a copy of a unit's left tokens stands where the left has it, which our page may not — a line our compile set on the page
+    // beside, the drift the line check draws —: a unit the layout lays somewhere (`rows` holds it, its rows on this page, maybe
+    // none) keeps a copy only on its own rows here; one it lays nowhere keeps none on a page whose lines moved (`drift`), and
+    // elsewhere none on another unit's row. A line moved has no partner beside it, never a wrong one)
     const rowsOf = new Map(w.rows ?? []), all = w.rows ?? []
     const inRow = (rs, x, y) => { for (let j = 0; j + 3 < rs.length; j += 4) if (x >= rs[j] && x <= rs[j + 2] && y >= rs[j + 1] && y <= rs[j + 3]) return true; return false }
     const T0 = left.table
     const standsFor = (id, k) => {
-      if (!all.length) return true
       const x = (T0.l[k] + T0.r[k]) / 2, y = (T0.top[k] + T0.bottom[k]) / 2
-      if (inRow(rowsOf.get(id) ?? [], x, y)) return true
-      for (const [other, rs] of all) if (other !== id && inRow(rs, x, y)) return false
+      const own = rowsOf.get(id)
+      if (own) return inRow(own, x, y)
+      if (w.drift) return false
+      for (const [, rs] of all) if (inRow(rs, x, y)) return false
       return true
     }
     const copied = left.spans.filter(([id]) => original.has(id)).map(([id, ts]) => [id, ts.filter(t => standsFor(id, t - left.first))])

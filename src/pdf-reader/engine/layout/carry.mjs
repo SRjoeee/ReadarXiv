@@ -16,9 +16,10 @@
 // on another page of arXiv's; over our own page a drawing is right by construction, so a page of the same words is drawn
 // whatever its lines' offsets, a line re-broken by a word, a line moved or set with other glue. A page whose lines moved across
 // its breaks (compile drift: another kernel, package or font moving a line or a display onto the page beside) is drawn too,
-// those lines taken out of both sides, where at most DRIFT_LINES moved at each end and the rest is arXiv's page's words
-// (driftSame): content right before pages alike, the owner's ruling of 2026-10-30. The layout maker draws a unit
-// only where every page it is on is drawable (make.mjs). **Do the panes align**, per line, information alone: each of our lines
+// those lines' matched words taken out of both sides, where at most DRIFT_LINES moved at each end, at least half of the page
+// stays and the rest is arXiv's page's words (driftSame): content right before pages alike, the owner's ruling of 2026-10-30.
+// The layout maker draws a unit only where every page it is on is drawable (make.mjs). **Do the panes align**, per line,
+// information alone: each of our lines
 // in place or not, found on its own page with the median of its matched words' offsets within LINE_PLACE, or standing where its
 // twin stands (the same words but for a known substitute); the paper's share the head's `carried`. A line found on another page
 // is another TeX Live running behind arXiv's build (2307.16209 pp. 69 to 76 on TeX Live 2023, up to half a page). No position
@@ -190,7 +191,8 @@ export function carrier(marked, arxiv) {
   let placed = 0
   // (each marked line's partner and verdict, in the order added; each marked token's line)
   const lineAt = [], inPlace = [], tokenLine = []
-  // (each marked line's partner's arXiv tokens, every one it holds: what a line moved to another page takes from that page)
+  // (each marked line's words matched to its partner's, [ours, arXiv's] token indices: what a line moved to another page takes
+  // out of both pages' comparison, a word the partner does not hold left in)
   const partnerTokens = []
 
   /** the median of the offsets of line `l`'s words from their partners' (`best`'s pairs, else all its words in order), kept on it */
@@ -242,7 +244,7 @@ export function carrier(marked, arxiv) {
         else lines.moved++
         const { dx, dy } = offsetOf(l, best), i = index.get(l)
         lineAt[i] = { page: best.page, dx, dy, whole: best.whole, fuzzy: best.fuzzy, pairs: best.pairs, ...(best.twin ? { twin: true } : {}) }
-        partnerTokens[i] = best.to.all
+        partnerTokens[i] = best.pairs ? [best.pairs.map(([a]) => l.tokens[a]), best.pairs.map(([, b]) => best.to.tokens[b])] : [l.tokens.slice(), best.to.tokens.slice()]
         if (placedBy(l, best)) { inPlace[i] = 1; here++ }
       }
       pagePlaced.set(page, [here, oursOn.get(page).length])
@@ -431,18 +433,21 @@ function unstamped(ws, mine) {
   }
   return ws
 }
-/** whether page `page`'s words are arXiv's page's but for the lines that moved across its breaks: our words less those of our
- *  lines found on another page (`out`, lines), arXiv's less the tokens our other pages' lines were found on (`into`, arXiv's
- *  token indices), as many of each in common, in any order (the drawing is over our own page: a block a float set elsewhere in
- *  the page's reading order is the same page), at least PAGE_SAME of the two; arXiv's stamp out of its first page as the page
- *  check takes it (`mine`, our page's words) */
-function driftSame(ours, arxiv, page, tokenLine, out, into, mine) {
+/** whether page `page`'s words are arXiv's page's but for the lines that moved across its breaks: our words less those our
+ *  lines found on another page matched there (`out`, our token indices), arXiv's less the words our other pages' lines matched on
+ *  it (`into`, arXiv's token indices) — a word a moved line's partner does not hold stays in, on its side —, as many of each in
+ *  common, in any order (the drawing is over our own page: a block a float set elsewhere in the page's reading order is the same
+ *  page), at least PAGE_SAME of the two; and what stays at least half of the page's words on each side, so that the page is its
+ *  own page still (two short pages that traded their lines are not); arXiv's stamp out of its first page as the page check takes
+ *  it (`mine`, our page's words) */
+function driftSame(ours, arxiv, page, out, into, mine) {
   const a = [], b = []
-  for (const k of ours.keys()) { const t = ours[k]; if (!t || t.page !== page || typeof t.t !== 'string' || out?.has(tokenLine[k])) continue; const w = pageWord(t.t); if (w) a.push(w) }
-  for (const k of arxiv.keys()) { const t = arxiv[k]; if (!t || t.page !== page || typeof t.t !== 'string' || into?.has(k)) continue; const w = pageWord(t.t); if (w) b.push(w) }
+  let ourAll = 0, theirAll = 0
+  for (const k of ours.keys()) { const t = ours[k]; if (!t || t.page !== page || typeof t.t !== 'string') continue; const w = pageWord(t.t); if (!w) continue; ourAll++; if (!out?.has(k)) a.push(w) }
+  for (const k of arxiv.keys()) { const t = arxiv[k]; if (!t || t.page !== page || typeof t.t !== 'string') continue; const w = pageWord(t.t); if (!w) continue; theirAll++; if (!into?.has(k)) b.push(w) }
   const theirs = page === 1 ? unstamped(b, mine ?? []) : b
   const n = a.length + theirs.length
-  if (!n) return true
+  if (2 * a.length < ourAll || 2 * b.length < theirAll || !n) return false
   const m = new Map()
   for (const w of a) m.set(w, (m.get(w) ?? 0) + 1)
   let common = 0
@@ -513,9 +518,11 @@ export function lineCheckOf(ours, arxiv) {
   for (const [l, page] of pageOfLine) {
     const p = c.lineAt[l]
     if (!p || p.page === page) continue
-    ;(outOf.get(page) ?? outOf.set(page, new Set()).get(page)).add(l)
+    const [mineK, theirsK] = c.partnerTokens[l] ?? [[], []]
+    const out = outOf.get(page) ?? outOf.set(page, new Set()).get(page)
+    for (const k of mineK) out.add(k)
     const into = moved.get(p.page) ?? moved.set(p.page, new Set()).get(p.page)
-    for (const k of c.partnerTokens[l] ?? []) into.add(k)
+    for (const k of theirsK) into.add(k)
     if ((letters.get(l) ?? 0) < LINE_EVIDENCE) continue
     if (Math.abs(p.page - page) !== 1) { far.add(page); continue }
     // (a line of arXiv's previous page at our page's start: our previous page lacks it at its end; and the other way)
@@ -534,7 +541,7 @@ export function lineCheckOf(ours, arxiv) {
     // (else a page of the same words but the lines that moved across its two breaks, at most DRIFT_LINES at each, none found
     // further away: drawn, those lines alone with no partner on the page beside ours)
     const e = ends.get(page) ?? [0, 0]
-    const drift = !kept && !over.has(page) && overlap !== null && !far.has(page) && (e[0] > 0 || e[1] > 0) && e[0] <= DRIFT_LINES && e[1] <= DRIFT_LINES && driftSame(ours, arxiv, page, tokenLine, outOf.get(page), moved.get(page), mine.get(page))
+    const drift = !kept && !over.has(page) && overlap !== null && !far.has(page) && (e[0] > 0 || e[1] > 0) && e[0] <= DRIFT_LINES && e[1] <= DRIFT_LINES && driftSame(ours, arxiv, page, outOf.get(page), moved.get(page), mine.get(page))
     const drawable = kept || drift
     pages.push({ page, words: [a.length, b.length], overlap: overlap === null ? null : Math.round(overlap * 10000) / 10000, ...(same ? { sameWords: true } : {}), elsewhere: away, ...(drift ? { drift: e.slice() } : {}), drawable })
     if (!drawable) undrawable.push(page)
