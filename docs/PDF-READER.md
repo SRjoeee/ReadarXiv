@@ -3281,7 +3281,7 @@ first page's way (the coordinator's word: the units come after the head and ever
   at one size, shrunk by one factor, the least its labels need, to the rules' last floor (P.floorMin; `ocrNeed`, `ocrSetFactor`,
   `layOcr`: never a label alone, one that would need less left the original's); its CJK characters in the target's CJK face and
   every other in the paper's sans family's Latin face, a run each (`layer2.mjs figureRuns`, as a vector figure's: the served CJK
-  faces hold no Latin letter or digit, so one face for a label of two scripts — "宽度 MLP" — was refused whole), the face check
+  faces hold no Latin letter or digit, so one face for a label of two scripts — "Width MLP" in Chinese — was refused whole), the face check
   asked of each run, in its ink's colour; a line within 1 degree of level drawn level, its words in the page's text layer and its
   word table under its unit's id (the hover lights it on the right; arXiv's bitmap holds no token, so no left anchor: its
   figure's float lights it there, as a turned figure label's). Left the original's, no patch drawn: no row, kept, untranslated,
