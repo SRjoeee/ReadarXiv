@@ -1387,7 +1387,8 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
     every row sets alike stays in its cell). On the ten papers, two numbers more than 0.4 apart stay one cell twice, both
     on our typesetting's side (2026-10-30, the rule as Codex's review left it). Lit whole at the same
     place on both panes under a hover id of its own (`units.mjs` `tableCellId`: from `CELL_ID_FROM`, 2^30, 2^16 a page,
-    below the view's Int32 owners and past every name's), the right's run a copy of the left's (§17.8).
+    below the view's Int32 owners and past every name's), the right's run a copy of the left's (§17.8). A cell unit the
+    left part does not locate is told by where the layout lays it (§17.8), so that a cell pairs with its translation.
   - **A figure's text lights nothing** (TikZ's words, a figure's labels the wrap made units): no layout holds it, its words
     free as a table's rows are, and only where it stands is kept, which makes its float a figure (`highlight.mjs`
     `DRAWING`). Pairing it was measured, and it is not free: the production pass in Docker, its parts and left parts read
@@ -1663,6 +1664,16 @@ within noise.
   it lights whole. The page's word table is in the order of its units' text (`words.mjs addUnitWords`): a display's kept
   lines where the line walk passed its region (`breakLines`' `past`), a kept line no placeholder holds before the block that
   follows it in the unit's rectangles.
+- **A cell unit the left part does not locate** (`createShapes`): the producer locates few cells on arXiv's PDF (on the
+  sweep's 64 cached papers, 1 113 of 5 094; 7 of 2010.11929v2's 165, 2 of 2610.35877v1's 71), since a cell carries no unit
+  mark of its own (`latex-front.mjs`: a heading, a cell or a figure has none), so it is found by its text alone between its
+  located neighbours (`anchors.mjs`: one or two words only where they stand in a row once in that gap, more by 3-grams there). Each one the parts' layouts lay (`lines`, arXiv's page's)
+  is told on the left, as a babel name is, by the tokens of its page whose middle stands in one of its lines' boxes and that
+  no unit told there holds, its part `quiet`: on its pages, no part of their columns, edges or leadings (`layoutParts`). The
+  right tells what the left tells, the laid page's words of it its own. Before, the left's words of it were a cell of the
+  page's and the right had none: the two panes never shared its id (the release sweep of ba433da8, Table 2 of 2610.35877v1,
+  Table 1 of 2010.11929v2), hidden until 2026-10-30 by the table lit whole. On the 64 papers' 1 644 pages, 3 917 cells are now
+  told, and the 24 600 units the parts locate keep their runs on both panes, every one (2026-10-30).
 - **Floats and the view's window**: a page's floats are made of what its drawing gives (its figures and paths,
   `floats`), and again on the page's first use after a part moves the document part — never in the part's task, which
   would make every such page's geometry again at once. A page leaving the window (`forget`) lets its geometry, its

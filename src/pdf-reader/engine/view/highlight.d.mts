@@ -29,8 +29,8 @@ export declare function layoutOf(doc: DocToken[], views: number[][], anchors: Ma
 /** a page's tokens as a layout keeps them (format.mjs ReadLeftPart's table): ink across, baseline, size, the glyphs' top and foot */
 export interface PageTable { n: number; l: Float32Array; r: Float32Array; y: Float32Array; h: Float32Array; top: Float32Array; bottom: Float32Array }
 /** what the document part reads of a part (format.mjs ReadPart): its pages, the views of pages from its first (stride 4)
- *  and its units, their line rectangles */
-export interface PartRects { readonly pages: readonly [number, number]; readonly views: readonly number[]; readonly left: readonly UnitWire[] }
+ *  and its units, their line rectangles; `quiet` units told by where the layout lays them, no part of the pages' columns */
+export interface PartRects { readonly pages: readonly [number, number]; readonly views: readonly number[]; readonly left: readonly UnitWire[]; readonly quiet?: boolean }
 /** a side's layout made page by page: empty until told (layoutParts, layoutPage) */
 export declare function pageLayout(kindOf?: (id: number) => string | undefined): Layout
 /** the document part made again with these parts' views and units, every page's geometry let go; false where they told

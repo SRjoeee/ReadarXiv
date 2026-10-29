@@ -817,3 +817,120 @@ describe("babel's names light as headings on both panes, under ids no bundle id 
     }
   })
 })
+
+describe('a table\'s cell unit the left part does not locate is told by its layout lines, and pairs on both panes (the release sweep of ba433da8)', () => {
+  // (production locates few cells on arXiv's PDF, their text too short for the anchors: 7 of 2010.11929v2's 165, 2 of
+  // 2610.35877v1's 71; while a cell lit its whole table nothing showed it, and since #513 its pane's words were a cell of their
+  // own on the left, a page's id, and nothing on the right, which tells the units the left tells)
+  const beta = doc.findIndex(t => t.page === 2 && t.t === 'beta' && Math.abs(t.y - 560) < 1)
+  const B = nth(doc, beta)
+  const kinds = (id: number) => (id === 9 ? 'cell' : kindOf(id))
+  /** the parts as the wire carries them, the part of page 2 with the layout's lines of cell 9 (page, x0, x1, baseline, top,
+   *  bottom, size, font), which its left does not hold */
+  function side() {
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    const withLines = parts.map(p => (p.pages[0] <= 2 && p.pages[1] >= 2 ? { ...p, layout: { names: [], lines: [[9, [2, B.x, B.x + B.w, B.y, B.top, B.bottom, 10, 0]]] } } : p))
+    const l = createShapes({ kindOf: kinds })
+    l.addParts(withLines as never)
+    for (const p of [1, 2, 3]) l.addPage(nth(lefts, p))
+    l.floats(2)
+    return { l, left2: nth(lefts, 2) }
+  }
+  const at = [2, B.x + 2, (B.top + B.bottom) / 2] as const
+
+  it('the left: the tokens of its page in its lines\' boxes, its id under the pointer, never a cell of the page\'s', () => {
+    const { l } = side()
+    expect(l.shapes.hit(...at, PAD, () => null)?.id).toBe(9)
+    expect(l.shapes.runs(9).map(r => r.page)).toEqual([2])
+    // (the mirror too: the right where its page shows the original)
+    const m = mirror(l)
+    expect([m.shapes.hit(...at, PAD, () => null)?.id, m.shapes.runs(9).length]).toEqual([9, 1])
+  })
+
+  it('its lines come after its page (a part late): told then, on the left and on a mirror made before (Codex on #515, its doubt checked)', () => {
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    const l = createShapes({ kindOf: kinds }), m = mirror(l)
+    l.addParts(parts)
+    for (const p of [1, 2, 3]) l.addPage(nth(lefts, p))
+    l.floats(2)
+    expect(isTableCell(l.shapes.hit(...at, PAD, () => null)?.id ?? -1)).toBe(true)
+    l.addParts([{ pages: [2, 2], views: [], left: [], layout: { names: [], lines: [[9, [2, B.x, B.x + B.w, B.y, B.top, B.bottom, 10, 0]]] } }] as never)
+    expect([l.shapes.hit(...at, PAD, () => null)?.id, m.shapes.hit(...at, PAD, () => null)?.id, m.shapes.runs(9).length]).toEqual([9, 9, 1])
+  })
+
+  it('a left part refused tells none of its cells; the good one that comes later tells them', () => {
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    const withLines = parts.map(p => (p.pages[0] <= 2 && p.pages[1] >= 2 ? { ...p, layout: { names: [], lines: [[9, [2, B.x, B.x + B.w, B.y, B.top, B.bottom, 10, 0]]] } } : p))
+    const warn = vi.fn(), l = createShapes({ kindOf: kinds, warn })
+    l.addParts(withLines as never)
+    l.addPage(nth(lefts, 1))
+    expect(l.addPage({ ...nth(lefts, 2), first: nth(lefts, 2).first - 5 })).toBe(false)
+    expect(l.shapes.runs(9)).toEqual([])
+    expect(l.addPage(nth(lefts, 2))).toBe(true)
+    l.floats(2)
+    expect([l.shapes.hit(...at, PAD, () => null)?.id, l.shapes.runs(9).length]).toEqual([9, 1])
+  })
+
+  it('its lines come after its page, and a mirror is made after them, a page laid after them: both hold the cell\'s tokens (cloud Codex on #515)', () => {
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    const l = createShapes({ kindOf: kinds })
+    l.addParts(parts)
+    for (const p of [1, 2, 3]) l.addPage(nth(lefts, p))
+    l.floats(2)
+    l.addParts([{ pages: [2, 2], views: [], left: [], layout: { names: [], lines: [[9, [2, B.x, B.x + B.w, B.y, B.top, B.bottom, 10, 0]]] } }] as never)
+    const left = l.shapes.runs(9).map(r => r.toks?.length ?? r.rows.length)
+    const m = mirror(l)
+    expect([m.shapes.runs(9).length, m.shapes.hit(...at, PAD, () => null)?.id]).toEqual([1, 9])
+    expect(m.shapes.block(nth(m.shapes.runs(9), 0), PAD)).toEqual(l.shapes.block(nth(l.shapes.runs(9), 0), PAD))
+    // (page 2 laid after, every unit there the original's, the cell too: its copies of the left's tokens)
+    const r = layerShapes(l), left2 = nth(lefts, 2)
+    r.lay(2, { tokens: { n: 0, l: new Float32Array(), r: new Float32Array(), y: new Float32Array(), h: new Float32Array(), top: new Float32Array(), bottom: new Float32Array() }, word: new Int32Array(), at: new Int32Array(), spans: [], original: [...left2.spans.map(s => s[0]), 9] } as never)
+    expect(r.laid(2)).toBe(true)
+    expect([r.shapes.runs(9).length, r.shapes.hit(...at, PAD, () => null)?.id]).toEqual([1, 9])
+    expect(left).toEqual(l.shapes.runs(9).map(x => x.toks?.length ?? x.rows.length))
+  })
+
+  it('a cell whose lines run onto the next page keeps its words on both pages (Devin on #515)', () => {
+    // (unit 6 left out of the side, its words on page 3 free: cell 9 the beta of page 2 and the first word of page 3's lines 5-9)
+    const a6 = new Map([...anchors].filter(([id]) => id !== 6)), w6 = layoutOf(doc, views, a6, kinds)
+    const c3 = nth(doc, nth(UNITS.get(6) ?? [], 0))
+    const { parts, lefts } = cutSide(w6, a6, views)
+    const lines9 = [2, B.x, B.x + B.w, B.y, B.top, B.bottom, 10, 0, 3, c3.x, c3.x + c3.w, c3.y, c3.top, c3.bottom, 10, 0]
+    const withLines = parts.map((p, i) => (i === 0 ? { ...p, layout: { names: [], lines: [[9, lines9]] } } : p))
+    for (const order of [[1, 2, 3], [3, 2, 1]]) {
+      const l = createShapes({ kindOf: kinds })
+      l.addParts(withLines as never)
+      for (const p of order) l.addPage(nth(lefts, p))
+      expect(l.shapes.runs(9).map(r => r.page).sort()).toEqual([2, 3])
+      const m = mirror(l)
+      expect(m.shapes.runs(9).map(r => r.page).sort()).toEqual([2, 3])
+    }
+  })
+
+  it('every other unit keeps its runs on both panes, though the cell\'s lines would vote its page into two columns (2610.22195v1 p18)', () => {
+    // (cell 9 with eight lines a third of the page wide besides its own, four in each half of page 2: long lines the column vote counts)
+    const wide = [0, 1, 2, 3].flatMap(i => [[2, 60, 260, 440 - 12 * i, 447 - 12 * i, 438 - 12 * i, 10, 0], [2, 330, 530, 440 - 12 * i, 447 - 12 * i, 438 - 12 * i, 10, 0]]).flat()
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    const withLines = parts.map(p => (p.pages[0] <= 2 && p.pages[1] >= 2 ? { ...p, layout: { names: [], lines: [[9, [2, B.x, B.x + B.w, B.y, B.top, B.bottom, 10, 0, ...wide]]] } } : p))
+    const l = createShapes({ kindOf: kinds }), m = mirror(l)
+    l.addParts(withLines as never)
+    for (const p of [1, 2, 3]) l.addPage(nth(lefts, p))
+    expect(l.shapes.runs(9).length).toBeGreaterThan(0)
+    const plain = built([1, 2, 3])
+    for (const id of [0, 1, 2, 3, 4, 5, 6]) {
+      expect(l.shapes.runs(id).map(r => blockOf(r, PAD))).toEqual(plain.shapes.runs(id).map(r => blockOf(r, PAD)))
+      expect(m.shapes.runs(id).map(r => blockOf(r, PAD))).toEqual(plain.shapes.runs(id).map(r => blockOf(r, PAD)))
+    }
+  })
+
+  it('the right on a laid page: the words the layer drew of it, its id under the pointer, so either pane lights both', () => {
+    const { l, left2 } = side()
+    const r = layerShapes(l)
+    // (page 2 laid with the cell's word drawn, its token the left's copied 3 lower, the other units the original's)
+    const k = beta - left2.first, T = left2.table, f = (a: Float32Array, d = 0) => Float32Array.from([nth([...a], k) + d])
+    r.lay(2, { tokens: { n: 1, l: f(T.l), r: f(T.r), y: f(T.y, -3), h: f(T.h), top: f(T.top, -3), bottom: f(T.bottom, -3) }, word: Int32Array.from([0]), at: Int32Array.from([0]), spans: [[9, [0, 1]]], original: left2.spans.map(s => s[0]) } as never)
+    expect(r.laid(2)).toBe(true)
+    expect(r.shapes.hit(2, B.x + 2, (B.top + B.bottom) / 2 - 3, PAD, () => null)?.id).toBe(9)
+    expect(r.shapes.runs(9).length).toBe(1)
+  })
+})
