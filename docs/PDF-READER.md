@@ -2820,12 +2820,13 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   further, in both readings (REMOVAL 12, LAYOUT 23, `stream.mjs` `lineEnd`: the last author's `\orcidlink` of 2609.20976v1
   owned the affiliations and the e-mail below the names, to the abstract's label, which no ink unit then made a unit of; at a
   bibliography's leading a reference's `\Eprint` wrapped over lines keeps every one it held, its entry's full stop and an
-  entry TeX gave no unit of its own among them, so that no glyph is left no one's). A display past its unit's end mark (MARK_DEF
-  sets it before a display that ends the unit) ends where a heading's babel name or a biblatex entry begins after it on its page,
-  before any next mark: that text is no unit's of the source (REMOVAL 17, LAYOUT 30, `stream.mjs`; 2608.08872v1's proof ends in
-  a display, and the whole bibliography after it on the page, "References" and every entry, was that display's ink; with the
-  entries' points the display had no next mark of its unit's and was left LOST). A name before its unit's end mark is the
-  unit's own text. A footnote call is its unit's `.p` too. Label `u<id>.l`: the glyphs on the start's first glyph's
+  entry TeX gave no unit of its own among them, so that no glyph is left no one's). An opening point alone past its unit's end
+  mark (MARK_DEF sets it before a display that ends the unit) ends where a heading's babel name or a biblatex entry begins after
+  it on its page, before any next mark, as at a later unit's start (its label, a numeric entry's `[1]`, not the piece's; a piece
+  that is no display, its lines to TeX's skip before another block): that text is no unit's of the source (REMOVAL 17, LAYOUT
+  30, `stream.mjs`; 2608.08872v1's proof ends in a display, and the whole bibliography after it on the page, "References" and
+  every entry, was that display's ink; with the entries' points the display had no next mark of its unit's and was left LOST).
+  A name before its unit's end mark is the unit's own text. A footnote call is its unit's `.p` too. Label `u<id>.l`: the glyphs on the start's first glyph's
   baseline between the previous unit's end mark and the start, the placeholders' and names' ranges passed over, but the
   closing punctuation a head macro sets after the unit before it — right after that unit's end mark, each glyph within a fifth
   of an em of the one before, the first of the glyph right before it, which is that unit's own (its text, or a placeholder of
