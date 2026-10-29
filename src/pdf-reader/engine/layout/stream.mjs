@@ -44,11 +44,13 @@ const HOW = Object.fromEntries(OWNED_HOW.map((h, i) => [h, i]))
 const BRACKET = /^([bf])([se])\d+$/
 /** a babel name's point (marks.mjs NAMES_TEX): no piece's next mark, its text no unit's */
 const NAME_POINT = /^n\d+\.[^.]+\.[se]$/
-/** where other text begins that no unit's mark opens: a babel name's start (a heading's own word, "References") and a biblatex
- *  entry's (marks.mjs POINTS_TEX `bi<n>`): a piece alone at its unit's end owns nothing past one on its page */
-const BEGINS = /^(?:n\d+\.[^.]+\.s|bi\d+)$/
-/** a biblatex entry's point: no piece's next mark either, its entry no unit of the source */
-const BIB_ITEM = /^bi\d+$/
+/** where other text begins that no unit's mark opens: the start of a babel name that heads a block of its own ("References",
+ *  "Abstract", "Proof", marks.mjs NAME_MACROS; not a figure's or a table's, which a caption or a formula sets inside its own text:
+ *  `\[x=\text{\figurename}\,1\]`), its key in any case (a primitive \uppercase's capitals), and a biblatex entry's (marks.mjs
+ *  POINTS_TEX `bi<n>`): a piece alone past its unit's end owns nothing past one on its page */
+const BEGINS = /^(?:n\d+\.(?:abstract|ref|bib|contents|listfigure|listtable|appendix|index|proof|preface|glossary)\.s|bi\d+)$/i
+/** a biblatex entry's point, and its bibliography's end: no piece's next mark either, its entry no unit of the source */
+const BIB_ITEM = /^b[iz]\d+$/
 /** a piece's opening point: a placeholder's (p) or a footnote call's (n), by its unit and source piece index */
 const OPENING = /^([pn])(\d+)\.(\d+)a$/
 /** a unit's start mark: MARK_DEF's, a cell's, a heading's */
@@ -196,7 +198,7 @@ export function regionsOf(page) {
  *   display that ends it — and then what stands on that mark's line before it is that unit's label (a heading's number,
  *   an item's mark), not the piece's; or, where that mark is outside the bodies (a footnote's), the column's body's end;
  *   no unmarked visible piece may come between (`blocked`). Past its unit's end mark (a display that ends its unit), it ends
- *   where a heading's babel name or a biblatex entry begins after it on its page, before any next mark, as at a later unit's
+ *   where a block's babel name (BEGINS) or a biblatex entry begins after it on its page, before any next mark, as at a later unit's
  *   start: that text is no unit's of the source, and none of it the piece's. Nothing at all before the
  *   next point is a piece of nothing; nothing before the text after it, with glyphs there, is none (REVTeX sets the
  *   punctuation after a citation before its number).
@@ -336,7 +338,7 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
     }
     const alone = () => {
       // (past its unit's end mark — MARK_DEF sets it before a display that ends the unit —, nothing after it is its unit's: the
-      // text that begins on its page after it with no unit's mark, a heading's babel name or a biblatex entry, is another's.
+      // text that begins on its page after it with no unit's mark, a block's babel name or a biblatex entry, is another's.
       // 2608.08872v1's proof ends in a display, and the whole bibliography after it on the page, its "References" and every
       // entry, was that display's ink. A name before the unit's end mark is the unit's own text)
       const past = !f.want && [`${m[2]}e`, `t${m[2]}e`, `h${m[2]}e`].some(n => (where.get(n) ?? []).some(([p, q]) => p < pa || (p === pa && q < qa)))

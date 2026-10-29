@@ -48,8 +48,11 @@ const ZONE_OF = Object.freeze({ contents: 'contents', listfigure: 'contents', li
 const NAME_END = /^n\d+\.([a-z]{1,16})\.e$/
 const UNIT_START = /^[th]?(\d+)s$/
 /** a biblatex entry's start (marks.mjs POINTS_TEX: `bi<n>`, biblatex's per-entry hook): it opens the references' zone, its entry
- *  the glyphs from it to the next one's, or to the next unit's start, which ends the zone */
+ *  the glyphs from it to the next one's, to its bibliography's end (`bz<n>`) or to the next unit's start, which end the zone */
 const BIB_ITEM = /^bi(\d+)$/
+/** a biblatex bibliography's end (marks.mjs POINTS_TEX: `bz<n>`, after its last entry): it ends the zone, so that what follows —
+ *  the next bibliography's heading of a title of its own (`\printbibliography[type=book,title={Books}]`) — is no entry's */
+const BIB_END = /^bz\d+$/
 /** the units a bibliography's entry is (latex-front.mjs bibliography): an entry's start opens the references' zone, whatever
  *  name opened it or none did (REVTeX's, whose \\refname no heading sets), and the start of any other unit ends it */
 const ENTRY_KINDS = new Set(['reference', 'refnames'])
@@ -130,6 +133,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
         if (m && Object.hasOwn(ZONE_OF, m[1])) { zone = ZONE_OF[m[1]]; entry = null }
         else if (start) { const u = units?.[Number(start[1])]; zone = ENTRY_KINDS.has(Array.isArray(u) ? u[0] : u?.kind) ? 'references' : null; entry = null }
         else if (item) { zone = 'references'; entry = Number(item[1]); if (g < n) entryAt[g] = 1 }
+        else if (BIB_END.test(P[q].name)) { zone = null; entry = null }
       }
       if (g < n) { zones[g] = zone; entries[g] = entry }
     }

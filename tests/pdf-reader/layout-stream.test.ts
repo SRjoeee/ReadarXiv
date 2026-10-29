@@ -221,6 +221,9 @@ describe('ownedOf', () => {
     // (a numeric entry's label, which the list's \item set before its point, is the entry's, as a later unit's label is its own)
     const numeric = pageOf(['proof ', { at: '0e' }, { at: 'p0.1a' }, '\na=b(1)', '\n[1] ', { at: 'bi1' }, 'Entry one.'])
     expect(owned([numeric], { 'p0.1a': open('', ['0e']) })).toEqual({ 'p0.1a': ['a=b(1)', 0] })
+    // (a name that begins no block, set inside the display — `\[x=\text{\figurename}\,1\]` —, the display's own text: Codex on #509)
+    const inside = pageOf(['text ', { at: '0e' }, { at: 'p0.1a' }, '\nx=', { at: 'n1.figure.s' }, 'Figure', { at: 'n1.figure.e' }, '1', '\n', { at: '1s' }, 'Next unit'])
+    expect(owned([inside], { 'p0.1a': open('', ['0e']) })).toEqual({ 'p0.1a': ['x=Figure1', 0] })
     // (a piece that is no display, past its unit's end mark — an affiliation's e-mail —, its lines to TeX's skip before another
     // block, as to a later unit's start: the block before "Abstract" no piece's)
     const email = pageOf(['Univ. of X ', { at: '0e' }, { at: 'p0.1a' }, 'a@b.it', '\nmore', '\n\n\nOther block', '\n', { at: 'n1.abstract.s' }, 'Abstract', { at: 'n1.abstract.e' }])

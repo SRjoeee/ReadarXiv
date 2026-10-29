@@ -2821,8 +2821,9 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   owned the affiliations and the e-mail below the names, to the abstract's label, which no ink unit then made a unit of; at a
   bibliography's leading a reference's `\Eprint` wrapped over lines keeps every one it held, its entry's full stop and an
   entry TeX gave no unit of its own among them, so that no glyph is left no one's). An opening point alone past its unit's end
-  mark (MARK_DEF sets it before a display that ends the unit) ends where a heading's babel name or a biblatex entry begins after
-  it on its page, before any next mark, as at a later unit's start (its label, a numeric entry's `[1]`, not the piece's; a piece
+  mark (MARK_DEF sets it before a display that ends the unit) ends where a babel name that heads a block of its own
+  ("References", "Abstract", "Proof"; not a figure's or a table's, which a formula may set: `\[x=\text{\figurename}\,1\]`) or a
+  biblatex entry begins after it on its page, before any next mark, as at a later unit's start (its label, a numeric entry's `[1]`, not the piece's; a piece
   that is no display, its lines to TeX's skip before another block): that text is no unit's of the source (REMOVAL 17, LAYOUT
   30, `stream.mjs`; 2608.08872v1's proof ends in a display, and the whole bibliography after it on the page, "References" and
   every entry, was that display's ink; with the entries' points the display had no next mark of its unit's and was left LOST).
@@ -3342,8 +3343,11 @@ translated.
   prints its entries from biber's fields (`\printbibliography`), no TeX of the source the front end could mark, and they were
   orphan text, always translated. The marked compile now sets a point before each entry (`bi<n>`: biblatex's per-entry hook, the
   entry's paragraph begun there so that a numeric style's label, which the list's `\item` sets, stands before it; a count in a
-  macro), and the ledger cuts the printed bibliography by them: from each point to the next, or to the next unit's start, one
-  entry, of the references' class, so that the references toggle governs it as it governs a `\bibitem`'s; its names its own; its
+  macro), and one after each bibliography's last entry (`bz<n>`: biblatex's `\blx@endbibliography`, the entry's last glues taken
+  before it, as `\endtrivlist` and the paragraph's end would take them), and the ledger cuts the printed bibliography by them:
+  from each point to the next, to the bibliography's end or to the next unit's start, one entry (one unit over a column's or a
+  page's break, a running head between its parts a unit of its own; the next bibliography's heading of a title of its own,
+  `\printbibliography[type=book,title={Books}]`, no entry's), of the references' class, so that the references toggle governs it as it governs a `\bibitem`'s; its names its own; its
   label the original's ink; every line of an entry is its unit's whatever it holds (a URL alone in a typewriter face, as `\url`
   breaks it, or numbers alone: left out, it stood the original's where the drawn entry ran over it), an entry of no text word
   none. What stands before the first point (biblatex's heading) is a unit of its own. No `.bbl` is read (biber's is a file of

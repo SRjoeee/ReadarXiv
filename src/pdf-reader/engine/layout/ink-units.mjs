@@ -278,7 +278,7 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     segs.push({ ...L, words, ended })
   }
   // units of lines (rule 3)
-  const groups = []
+  const groups = [], entryGroups = new Map()
   for (const s of segs) {
     const last = groups.at(-1), prev = last?.at(-1)
     // (by TeX's paragraphs where the compile marked them, ink.mjs `paras`: a block one paragraph, a contents entry one; else by the
@@ -304,8 +304,10 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     // (a paragraph with no point of its own reads as the one before: a contents line ending in its page number ends its entry
     // whatever its point)
     const joins = follows && s.cls !== 'heads' && (s.cls !== 'contents' || !prev.ended) && (paras ? prev.para === s.para : s.cls === 'notes' || s.cls === 'orphan' || s.cls === 'contents')
-    // (a biblatex entry's lines its unit, by TeX's points alone: one entry over a column's or a page's break too, every entry its own)
-    if (s.cls === 'references' || prev?.cls === 'references') { if (prev && prev.cls === s.cls && prev.entry === s.entry) last.push(s); else groups.push([s]); continue }
+    // (a biblatex entry's lines its unit, by TeX's points alone: one entry over a column's or a page's break too, a running head or
+    // foot between its parts its own unit — every entry its own)
+    if (s.cls === 'references') { const g = entryGroups.get(s.entry); if (g) g.push(s); else { groups.push([s]); entryGroups.set(s.entry, groups.at(-1)) } continue }
+    if (prev?.cls === 'references') { groups.push([s]); continue }
     if (joins) last.push(s)
     else groups.push([s])
   }
