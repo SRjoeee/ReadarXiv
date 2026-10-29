@@ -1373,7 +1373,12 @@ export function createLayerSide(view, o) {
   }
 
   const side = {
-    tell(refs) { if (!disposed && state !== 'refused') feed.tell(refs ?? {}) },
+    tell(refs) {
+      if (disposed || state === 'refused') return
+      feed.tell(refs ?? {})
+      // (units told after rows read early: their kinds now to be had, the early wave asked again)
+      if (refs?.units?.length && earlyTexts.size && beforeParts()) warmEarlySoon()
+    },
     index: async () => { const i = await feed.index(); return disposed || state === 'refused' ? null : i },
     take(given) {
       if (disposed || !given?.length) return

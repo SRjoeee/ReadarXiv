@@ -503,6 +503,15 @@ describe('the first page\'s faces before any part (warm.mjs firstPageUnits, §11
     // (the CJK face's set asked: which of its slices load, its CJK characters' alone, is warm.test.ts's)
     expect(asked).toContain('shs-sc-regular')
     expect(a.opens).toBe(0)
+    // rows read early before the units are told (another source first): the wave asked once the units are
+    const later: string[] = []
+    const u = await setup({ faceSources: async id => { later.push(id); return null } })
+    u.side.warmEarly(m.index.units.map((_, id) => cjk(id)))
+    await settle(u, 10)
+    expect(later).toEqual([])
+    u.side.tell({ units: m.chunks.map(c => c.ref) })
+    await settle(u, 10)
+    expect(later).toContain('shs-sc-regular')
     // the head told, no part yet: rows taken are the early wave's too
     const after: string[] = []
     const b = await setup({ faceSources: async id => { after.push(id); return null } })
