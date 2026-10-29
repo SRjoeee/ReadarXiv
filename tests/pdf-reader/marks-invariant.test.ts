@@ -107,6 +107,11 @@ describe.skipIf(!docker)('the marked original sets every text item where the pap
     // (TeX's answers: a closing mark before the full stop moves it under cite's superscripts, under fnpct and after the V)
     for (const c of ['\\rc', '\\kv']) expect(r.switches[c]?.[0], c).not.toBe('0')
   }, 900_000)
+  it('a footnote\'s call under fnpct before the full stop it moves in front of the call: the call\'s closing mark after it', async () => {
+    const r = await compare(doc('\\usepackage{fnpct}', `${lines('a site\\footnote{A note of words.}.')}`))
+    expect(r.marked).toEqual(r.own)
+    expect(r.switches['\\footnote']?.[0]).toBe('3')
+  }, 900_000)
   it('a box, a formula or a rule glued to a word (TeX hyphenates no word a box follows), and the shapes the marking now marks', async () => {
     const r = await compare(doc('\\newcommand\\st{\\mbox{$\\star$}}\\newcommand\\sq{\\textsuperscript{2}}\\newcommand\\ru{\\rule{1pt}{1ex}}\\newcommand\\pp{\\,pp}', `${lines('characterization\\st{}')}\n\n${lines('representation\\sq{}')}\n\n${lines('representation\\ru{}')}\n\n${lines('a gap of 0.58\\pp{} or')}\n\nA F\\o lner sequence, and\\slash or a code, by Zhou\\textsuperscript{1} and others.`))
     expect(r.marked).toEqual(r.own)
@@ -182,10 +187,11 @@ describe.skipIf(!docker)('the marked original sets every text item where the pap
       expect(names.map(n => n[1]), `page ${p}`).toEqual(['s', 'e'])
     }
   }, 900_000)
-  it('cite.sty\'s superscripts under hyperref: no mark before the punctuation it moves', async () => {
-    const r = await compare(doc('\\usepackage[super]{cite}\\usepackage{hyperref}', `${lines('work \\cite{a}.')}`))
+  it('cite.sty\'s superscripts under hyperref: no mark between the citation and the punctuation it moves before its number, its closing mark after that punctuation (2610.19274v1)', async () => {
+    const r = await compare(doc('\\usepackage[super]{cite}\\usepackage{hyperref}', `${lines('work \\cite{a}.')}\n\n${lines('et al.~\\cite{a}, which')}`))
     expect(r.marked).toEqual(r.own)
-    expect(r.switches['\\cite']?.[0]).toBe('2')
+    expect(r.switches['\\cite']?.slice(0, 4)).toBe('3333')
+    expect(r.marksOf('\\cite{a}')).toBe('ab')
   }, 900_000)
   it('a paper\'s macro that looks ahead before a formula, a citation or a footnote\'s call (2609.20976\'s \\snr, \\ac{SNR}\\xspace): the placeholder after it marked where TeX answered so, \\footnote not (\\xspace sets no space before it)', async () => {
     const pre = '\\usepackage{xspace}\\usepackage{acronym}\\usepackage{url}\\newcommand{\\snr}{\\ac{SNR}\\xspace}\\newcommand{\\lgn}{\\texttt{lognormal\\allowbreak\\_galaxies}\\xspace}\\newcommand{\\nmx}{\\textsc{nm}\\xspace}'

@@ -66,6 +66,18 @@ describe('ownedOf', () => {
     expect(OWNED_HOW[OWNED - 1]).toBe('open, with the displays after it')
   })
 
+  it('a closed piece whose command set the punctuation mark after it before its own ink (`moved`, cite.sty\'s ".¹"): that mark is the text\'s, not the piece\'s', () => {
+    const moved = (m: string): Follow => ({ ...closed, moved: m })
+    const page = pageOf(['in the air', { at: 'p0.1a' }, '.', { u: '1', x: 200, y: 704, size: 7 }, { at: 'p0.1b' }, ' Next, ', { at: 'p0.3a' }, { u: '2', x: 260, y: 704, size: 7 }, { at: 'p0.3b' }, ', more', { at: 'p0.5a' }, '.', { at: 'p0.5b' }])
+    expect(owned([page], { 'p0.1a': moved('.'), 'p0.3a': moved(','), 'p0.5a': moved('.') })).toEqual({ 'p0.1a': ['1', 0], 'p0.3a': ['2', 0], 'p0.5a': ['.', 0] })
+    // (without it, as before: the mark is the piece's)
+    expect(owned([page], { 'p0.1a': closed })).toEqual({ 'p0.1a': ['.1', 0] })
+    // (a piece whose own ink opens with that mark, the mark after its closing point as a piece of 0 has it: `\url{../data}.` keeps
+    // its first dot, the review of #501, Codex; a blank glyph after the point passed over)
+    const url = pageOf(['see', { at: 'p0.1a' }, '../data', { at: 'p0.1b' }, '. Next', { at: '0e' }])
+    expect(owned([url], { 'p0.1a': moved('.') })).toEqual({ 'p0.1a': ['../data', 0] })
+  })
+
   it('nothing between its two points: a piece of nothing (EMPTY); the closing point first: out of order', () => {
     const page = pageOf(['one ', { at: 'p0.1a' }, { at: 'p0.1b' }, 'two ', { at: 'p0.3b' }, 'three ', { at: 'p0.3a' }, 'four'])
     expect(owned([page], { 'p0.1a': closed, 'p0.3a': closed })).toEqual({ 'p0.1a': ['', 0], 'p0.3a': 'marks out of order' })
@@ -291,6 +303,12 @@ describe('ownedOf for the erasure (erasure: true)', () => {
     const f = { 'p0.6a': open('"heldfix') }
     expect(ink([page], f, false)).toEqual({ 'p0.6a': 'open, the text after it not found' })
     expect(ink([page], f, true)).toEqual({ 'p0.6a': ['§', 0] })
+  })
+  it('reads a closed piece whose command moved the punctuation after it before its ink as the maker does: the mark the text\'s (its group none of it)', () => {
+    const page = pageOf(['in the air', { at: 'p0.1a' }, '.', { u: '1', x: 200, y: 704, size: 7 }, { at: 'p0.1b' }, ' Next', { at: '0e' }])
+    const f = { 'p0.1a': { ...closed, moved: '.' } }
+    expect(ink([page], f, true)).toEqual({ 'p0.1a': ['1', 0] })
+    expect(ink([page], f, false)).toEqual(ink([page], f, true))
   })
   it('owns a piece whose ink is a rule alone before the text after it (2610.19159v1 p151u1677: \\_ before \\allowbreak); a swap still none', () => {
     const page = pageOf(['the compute', { at: 'p0.2a' }, { rule: [126, 699, 131, 699.4] }, { u: 's', x: 132, y: 700 }, 'star function', { at: '0e' }])

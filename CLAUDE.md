@@ -42,6 +42,7 @@ WXT + React + TypeScript with pnpm · Vercel AI SDK for LLM providers (structure
 - **Wait for CI and every reviewer's terminal signal before merging**: Codex and CodeRabbit review each pull request on open; a terminal signal is a 👍 reaction, a review with comments, or a usage-limit notice (👀 means still reviewing); after a fix round, comment `@codex review` once (`docs/agents/review.md`). Verify every review comment against a fixture, a probe or the code before adopting it, and write down what was declined and why. Merge with a merge commit, never squash. Nothing merges into `main` and no version is released without the maintainer's explicit request.
 - **Measure before deciding**: a performance claim comes with a probe or a measurement (`tests/e2e/probes/`, `AXT_MEASURE=1 pnpm vitest run tests/perf`); a claim in a document or an old comment is a hypothesis until checked.
 - **Ported code**: keep only what is called; when a ported module is touched, its unused parts go.
+- **UI copy**: avoid unnecessary secondary labels and descriptions. Let the layout do the explaining.
 
 ## Language
 
