@@ -129,6 +129,9 @@ export async function cutSample({ pdf, bundle, wrapped, wrap }, { base: kind = '
   return {
     objects, refs, catalog: catalog.bytes, index, paper: read.paper, base: delta ? null : { bytes: base.bytes, sha256: base.sha256, data: wrapped }, delta, ours, orig, leftRefs: Object.fromEntries(cut.left.map(l => [l.page, l.sha256])), stats: side.stats,
     located: side.units, views: side.pages, kinds: [...units.map(u => u?.kind ?? null), ...allUnits.slice(units.length).map(u => (Array.isArray(u) ? u[0] : (u?.kind ?? null)))],
+    // (the original's numbers, no unit's — a table's cells of numbers among them — as located units are given: [text, null, [[page,
+    // x0, y0, x1, y1]]])
+    numbers: doc.flatMap(t => (/^\d+$/.test(t.t) ? [[t.t, null, [[t.page, t.x, t.bottom, t.x + t.w, t.top]]]] : [])),
   }
 }
 

@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type Anchor, type DocToken, lineRects, sentenceStarts, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { readLeftPart, UNIT_ID_MAX, writeLeftPart } from '@/pdf-reader/engine/layer-proto/format.mjs'
-import { isNameOccurrence, NAME_ID_FROM, NAME_OCCURRENCE_MAX, nameOccurrenceId } from '@/pdf-reader/engine/layer-proto/units.mjs'
+import { CELL_ID_FROM, CELLS_PAGE, isNameOccurrence, isTableCell, NAME_ID_FROM, NAME_OCCURRENCE_MAX, nameOccurrenceId, tableCellId, tableCellPage } from '@/pdf-reader/engine/layer-proto/units.mjs'
+import { PAGES_MAX } from '@/pdf-reader/engine/layout/json.mjs'
 import { NAME_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
-import { type Box, pageFloats } from '@/pdf-reader/engine/view/floats.mjs'
-import { blockOf, clickOf, layoutOf, pageGeometry, runsOf, sentenceOf } from '@/pdf-reader/engine/view/highlight.mjs'
+import { type Box, floatOf, pageFloats } from '@/pdf-reader/engine/view/floats.mjs'
+import { blockOf, clickOf, type Layout, layoutOf, pageGeometry, runsOf, sentenceOf } from '@/pdf-reader/engine/view/highlight.mjs'
 import { createShapes, layerShapes, leftPageInput, mirror, pdfShapes } from '@/pdf-reader/engine/view/shapes.mjs'
 // the gate's own harness (SH1 on the ten papers), here on a paper of the test's
 import { cutSide, pagesAgree } from '../../lab/pdf/spikes/highlight-pages.mjs'
@@ -25,6 +26,12 @@ const prose = (y: number, n: number, x0: number, x1: number) => Array.from({ len
 const row = (y: number) => [item('alpha', 160, y), item('beta', 260, y), item('gamma', 360, y, { eol: true })]
 const VIEW = [0, 0, 600, 800]
 const PAD = 2.25
+/** a unit's float as a pane holds it, its pages' floats made as the seam makes them: on a point asked there (no float is
+ *  painted, docs/PDF-READER.md §17.1: the seam tells none) */
+const floatThere = (s: { layout: Layout; shapes: { hit: (p: number, x: number, y: number, padX: number, startsOf: () => null) => unknown } }, id: number) => {
+  for (const p of s.layout.pagesOf.get(id) ?? []) s.shapes.hit(p, 0, 0, PAD, () => null)
+  return floatOf(s.layout, id)
+}
 
 const pages: Item[][] = [
   [item('1', 50, 752), item('Introduction', 62, 752, { eol: true }), ...prose(740, 30, 50, 290), ...prose(752, 31, 310, 550)],
@@ -227,19 +234,25 @@ describe('SH2 (trap 1): the right\'s shapes are its own layout over its own copi
     expect(m.shapes.runs(3)).toEqual(b)
   })
 
-  it('a float passes through; what a point lights and what a click levels by are the right\'s own, equal to the left\'s', () => {
-    const f = left.shapes.float(4)
+  it('the right\'s floats are the left\'s; what a point lights and what a click levels by are the right\'s own, equal to the left\'s', () => {
+    const f = floatThere(left, 4)
     expect(f).toMatchObject({ id: 4, page: 2, kind: 'table' })
-    expect(right.shapes.float(4)).toBe(f)
-    expect(right.shapes.floatShapes(f as NonNullable<typeof f>, PAD)).toBe(left.shapes.floatShapes(f as NonNullable<typeof f>, PAD))
+    expect(floatThere(right, 4)).toBe(f)
     const run = nth(right.shapes.runs(1), 0), b = blockOf(run, PAD), x = (b.x0 + b.x1) / 2, y = (b.y0 + b.y1) / 2
     const hit = right.shapes.hit(1, x, y, PAD, () => null)
     expect(hit).toMatchObject({ id: 1, s: -1 })
     expect((hit as { run?: object }).run).not.toBe((left.shapes.hit(1, x, y, PAD, () => null) as { run?: object }).run)
     expect(right.shapes.click(1, x, b.y1 - 1, PAD, () => null)).toEqual(left.shapes.click(1, x, b.y1 - 1, PAD, () => null))
-    // a point on the table lights its float on both, the same float
-    const s = nth(right.shapes.floatShapes(f as NonNullable<typeof f>, PAD), 0)
-    expect(right.shapes.hit(2, (s.x0 + s.x1) / 2, (s.y0 + s.y1) / 2, PAD, () => null)).toMatchObject({ id: 4, s: -1, float: f })
+    // a point on the table lights its cell, the same on both panes, never the float (the owner, 2026-10-30); its runs the
+    // right's own copies (trap 1)
+    const t = nth(doc, doc.findIndex(d => d.page === 2 && d.t === 'beta'))
+    const lh = left.shapes.hit(2, t.x + 2, t.y + 3, PAD, () => null), rh = right.shapes.hit(2, t.x + 2, t.y + 3, PAD, () => null)
+    expect(lh).toMatchObject({ id: rh?.id, s: -1 })
+    expect(isTableCell(lh?.id ?? -1)).toBe(true)
+    const [lr] = left.shapes.runs(lh!.id), [rr] = right.shapes.runs(lh!.id)
+    expect(rr).not.toBe(lr)
+    expect(right.shapes.block(rr!, PAD)).toEqual(left.shapes.block(lr!, PAD))
+    expect(right.shapes.runs(lh!.id)[0]).toBe(rr)
   })
 })
 
@@ -274,9 +287,13 @@ describe('SH3: sentences through the same calls', () => {
     expect(all.starts(3, textOf(3), offsetsOf(3))).toEqual(wholeStarts.get(3))
   })
 
-  it('headings and captions light whole, whatever starts they are given', () => {
-    const cap = nth(h.shapes.runs(4), 0), c = h.shapes.block(cap, PAD)
-    expect(h.shapes.hit(2, (c.x0 + c.x1) / 2, (c.y0 + c.y1) / 2, PAD, () => Int32Array.of(nth(UNITS.get(4) ?? [], 2)))).toMatchObject({ id: 4, s: -1 })
+  it('headings light whole, whatever starts they are given; a caption by sentence, as a body unit (the owner, 2026-10-30)', () => {
+    const head = nth(h.shapes.runs(0), 0), b = h.shapes.block(head, PAD)
+    expect(h.shapes.hit(1, (b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, PAD, () => Int32Array.of(nth(UNITS.get(0) ?? [], 0)))).toMatchObject({ id: 0, s: -1 })
+    // (the caption's second word a sentence's start: its first word lights the first sentence, the rest the second)
+    const cap = nth(h.shapes.runs(4), 0), first = nth(cap.rows, 0), st = Int32Array.of(nth(UNITS.get(4) ?? [], 1))
+    expect(h.shapes.hit(2, cap.x0 + 2, (first.y0 + first.y1) / 2, PAD, () => st)).toMatchObject({ id: 4, s: 0 })
+    expect(h.shapes.hit(2, cap.x1 - 2, (first.y0 + first.y1) / 2, PAD, () => st)).toMatchObject({ id: 4, s: 1 })
   })
 
   it('a unit short of a page lights whole where a point lights it, whatever starts it is given', () => {
@@ -304,13 +321,13 @@ describe('the feed: pages and parts told again, a left part malformed, floats on
   it('a page given again changes nothing (false); a part told again changes nothing either: every page\'s runs and floats kept, the same objects, the mirror told nothing', () => {
     const h = built([1, 2, 3]), m = mirror(h), runs = h.shapes.runs(5), mine = m.shapes.runs(5)
     h.floats(2)
-    const f = h.shapes.float(4)
+    const f = floatThere(h, 4)
     expect(h.addPage(nth(lefts, 2))).toBe(false)
     expect(nth(h.shapes.runs(5), 0)).toBe(nth(runs, 0))
     h.addParts(parts)
     h.addParts([nth(parts, 1)])
     expect(nth(h.shapes.runs(5), 0)).toBe(nth(runs, 0))
-    expect(h.shapes.float(4)).toBe(f)
+    expect(floatThere(h, 4)).toBe(f)
     expect(nth(m.shapes.runs(5), 0)).toBe(nth(mine, 0))
   })
 
@@ -336,7 +353,7 @@ describe('the feed: pages and parts told again, a left part malformed, floats on
     const cap = nth(l.shapes.runs(4), 0), c = blockOf(cap, PAD), x = (c.x0 + c.x1) / 2, y = (c.y0 + c.y1) / 2
     expect(() => l.shapes.hit(2, x, y, PAD, () => null)).not.toThrow()
     expect(() => r.shapes.hit(2, x, y, PAD, () => null)).not.toThrow()
-    expect(l.shapes.float(4)).toBeNull()
+    expect(floatThere(l, 4)).toBeNull()
     expect(warn).toHaveBeenCalledTimes(1)
     // the later part and pages reached the mirror; the bad inputs are gone, so a later part rethrows nothing
     l.addPage(nth(lefts, 3))
@@ -346,34 +363,35 @@ describe('the feed: pages and parts told again, a left part malformed, floats on
     expect(warn).toHaveBeenCalledTimes(1)
     // the page's floats given again, made of good paths
     l.floats(2)
-    expect(l.shapes.float(4)).toMatchObject({ id: 4, kind: 'table' })
+    expect(floatThere(l, 4)).toMatchObject({ id: 4, kind: 'table' })
   })
 
   it('a part makes no page again in its own task: floats come back on their next use, from the page\'s geometry made then', () => {
     const h = builtLate()
     h.floats(2)
-    expect(h.shapes.float(4)).toMatchObject({ id: 4, kind: 'table' })
+    expect(floatThere(h, 4)).toMatchObject({ id: 4, kind: 'table' })
     h.addParts([late])
     expect(cacheOf(h.layout).size).toBe(0)
-    expect(h.shapes.float(4)).toMatchObject({ id: 4, kind: 'table' })
+    expect(floatThere(h, 4)).toMatchObject({ id: 4, kind: 'table' })
     expect(cacheOf(h.layout).has(2)).toBe(true)
     // the float the whole layout makes of the same page; the unit told late lit from its page's tokens given before
     const W = layoutOf(doc, views, anchors, kindOf), [f] = pageFloats(W, 2)
-    expect(h.shapes.float(4)).toEqual(f)
+    // (its shapes, which the point asked made, aside)
+    expect({ ...floatThere(h, 4), shapes: undefined }).toEqual(f)
     expect(h.shapes.runs(6)).toEqual(runsOf(whole, 6))
   })
 
   it('forget lets a page\'s floats and their inputs go: no part makes them again, the caller gives them again on its redraw', () => {
     const h = builtLate()
     h.floats(2)
-    expect(h.shapes.float(4)).not.toBeNull()
+    expect(floatThere(h, 4)).not.toBeNull()
     h.forget(2)
-    expect(h.shapes.float(4)).toBeNull()
+    expect(floatThere(h, 4)).toBeNull()
     h.addParts([late])
-    expect(h.shapes.float(4)).toBeNull()
     expect(cacheOf(h.layout).has(2)).toBe(false)
+    expect(floatThere(h, 4)).toBeNull()
     h.floats(2)
-    expect(h.shapes.float(4)).toMatchObject({ id: 4, kind: 'table' })
+    expect(floatThere(h, 4)).toMatchObject({ id: 4, kind: 'table' })
   })
 })
 
@@ -503,7 +521,7 @@ describe('SH4: an empty or refused left part', () => {
     expect(h.shapes.runs(1)).toEqual([])
     expect(h.shapes.hit(1, 100, 700, PAD, () => null)).toBeNull()
     expect(h.shapes.click(1, 100, 700, PAD, () => null)).toBeNull()
-    expect(h.shapes.float(4)).toBeNull()
+    expect(floatThere(h, 4)).toBeNull()
     expect(pdfShapes(h.layout).runs(1)).toEqual([])
   })
 })
@@ -586,23 +604,45 @@ describe('SH5: the right\'s laid pages, from the layer\'s words (layerShapes)', 
     expect(drifted([], false).length).toBe(all)
   })
 
-  it('a muted page (another target\'s layer kept there) lights and hits nothing, its float included; unmuted, as before', () => {
+  it('a table\'s cell no unit holds on a laid page: the left\'s copy where it stands on no unit\'s row of ours and the page\'s lines did not move; else nothing there, hit nor run', () => {
+    const l = built([1, 2, 3])
+    l.floats(2)
+    const t = nth(doc, doc.findIndex(d => d.page === 2 && d.t === 'beta')), at = [2, t.x + 2, t.y + 3] as const
+    const cellOf = (r: ReturnType<typeof layerShapes>) => r.shapes.hit(...at, PAD, () => null)
+    const id = cellOf(layerShapes(l))?.id ?? -1
+    expect(isTableCell(id)).toBe(true)
+    const laid = (o: { rows?: [number, number[]][]; drift?: boolean }) => { const r = layerShapes(l); r.lay(2, { ...wordsOf(2, [3]), ...o } as never); return r }
+    // (laid, its rows elsewhere: the copy, hit and run)
+    const plain = laid({ rows: [[3, [50, 700, 550, 740]]] })
+    expect([plain.laid(2), cellOf(plain)?.id, plain.shapes.runs(id).length]).toEqual([true, id, 1])
+    // (our page's lines moved: none; another unit's row over it: none)
+    const drift = laid({ rows: [], drift: true }), over = laid({ rows: [[3, [t.x - 5, t.y - 5, t.x + 30, t.y + 15]]] })
+    expect([drift.laid(2), over.laid(2)]).toEqual([true, true])
+    expect([cellOf(drift), drift.shapes.runs(id), cellOf(over), over.shapes.runs(id)]).toEqual([null, [], null, []])
+  })
+
+  it('a muted page (another target\'s layer kept there) lights and hits nothing, its table\'s cells included; unmuted, as before', () => {
     const l = built([1, 2, 3])
     l.floats(2)
     const r = layerShapes(l)
-    const f = r.shapes.float(4)
-    expect(f).toMatchObject({ id: 4, page: 2 })
+    const t = nth(doc, doc.findIndex(d => d.page === 2 && d.t === 'beta')), cellAt = () => r.shapes.hit(2, t.x + 2, t.y + 3, PAD, () => null)
+    const cell = cellAt()
+    expect(isTableCell(cell?.id ?? -1)).toBe(true)
+    const [own] = r.shapes.runs(cell!.id)
+    // (the hit's run the right's own, as the paint's: never the left's, trap 1)
+    expect((cell as { run?: object }).run).toBe(own)
+    expect(own).not.toBe(l.shapes.runs(cell!.id)[0])
     const run1 = nth(r.shapes.runs(1), 0), b = blockOf(run1, PAD)
     expect(r.mute(2, true)).toBe(true)
     expect(r.mute(1, true)).toBe(true)
     expect(r.muted()).toEqual([1, 2])
-    expect(r.shapes.float(4)).toBeNull()
-    expect(r.shapes.floatShapes(f as NonNullable<typeof f>, PAD)).toEqual([])
+    expect(cellAt()).toBeNull()
+    expect(r.shapes.runs(cell!.id)).toEqual([])
     expect(r.shapes.runs(1)).toEqual([])
     expect(r.shapes.hit(1, (b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, PAD, () => null)).toBeNull()
     expect(r.mute(2, false)).toBe(true)
-    expect(r.shapes.float(4)).toBe(f)
-    expect(r.shapes.floatShapes(f as NonNullable<typeof f>, PAD).length).toBeGreaterThan(0)
+    expect(cellAt()).toEqual(cell)
+    expect(r.shapes.runs(cell!.id)).toEqual([own])
   })
 
   it('gives the right\'s starts of a unit all on laid pages from its words, the left\'s of a unit on none, none of a unit on both', () => {
@@ -646,6 +686,25 @@ describe('SH5: the right\'s laid pages, from the layer\'s words (layerShapes)', 
   })
 })
 
+describe('a drawing\'s text (a figure\'s labels) no layout holds: its pairing measured not free (the owner, 2026-10-30)', () => {
+  it('its left entries and its spans left out, where it stands kept for its float; the mirror and a laid page hold none either; the whole layout the same (SH1)', () => {
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    const kinds = (id: number) => (id === 6 ? 'inkfigures' : kindOf(id))
+    const l = createShapes({ kindOf: kinds })
+    l.addParts(parts)
+    for (const p of [1, 2, 3]) l.addPage(nth(lefts, p))
+    const r = layerShapes(l)
+    expect([l.shapes.runs(6), mirror(l).shapes.runs(6), r.shapes.runs(6)]).toEqual([[], [], []])
+    expect((l.layout as unknown as { told: Map<number, unknown> }).told.has(6)).toBe(false)
+    const drawings = (l.layout as unknown as { drawings?: Map<number, Box[]> }).drawings
+    expect(drawings?.get(3)?.length).toBeGreaterThan(0)
+    // (every unit as the whole layout of the same kinds has it, the drawing's text none there either)
+    const same = layoutOf(doc, views, anchors, kinds)
+    expect((same as unknown as { drawings: Map<number, Box[]> }).drawings).toEqual(drawings)
+    for (const id of [0, 1, 2, 3, 4, 5, 6]) expect(l.shapes.runs(id).map(x => l.shapes.block(x, PAD))).toEqual(runsOf(same, id).map(x => blockOf(x, PAD)))
+  })
+})
+
 describe("babel's names light as headings on both panes, under ids no bundle id reaches (2010.11929v2 p9's References, whose Chinese lit nothing)", () => {
   // (a name the layout file locates on page 2 — its occurrence 7, its box over the table's first "alpha", a word no unit holds —
   // carried in a part's layout as the wire carries it: [occurrence, key, page, x0, baseline, x1, top, bottom, size, font, flags,
@@ -660,7 +719,12 @@ describe("babel's names light as headings on both panes, under ids no bundle id 
   it('an occurrence\'s id is past every id a bundle holds, a late chunk\'s included, and below the view\'s Int32 owners', () => {
     expect(NAME_ID_FROM).toBeGreaterThan(UNIT_ID_MAX)
     expect(nameOccurrenceId(0)).toBe(NAME_ID_FROM)
-    expect(nameOccurrenceId(NAME_OCCURRENCE_MAX)).toBe(2 ** 31 - 1)
+    expect(nameOccurrenceId(NAME_OCCURRENCE_MAX)).toBe(CELL_ID_FROM - 1)
+    // (and the tables' cells' range after it, to 2^31: neither meets the other)
+    expect([isNameOccurrence(CELL_ID_FROM), isTableCell(CELL_ID_FROM - 1), tableCellId(PAGES_MAX, CELLS_PAGE - 1)! < 2 ** 31]).toEqual([false, false, true])
+    // (every page the id takes decodes to itself, the last one too: 2^14 − 1 pages past PAGES_MAX, below 2^31)
+    for (const [p, k] of [[1, 0], [PAGES_MAX, CELLS_PAGE - 1], [2 ** 14 - 1, CELLS_PAGE - 1]] as const) { const id = tableCellId(p, k)!; expect([isTableCell(id), tableCellPage(id), id < 2 ** 31]).toEqual([true, p, true]) }
+    expect([tableCellId(2 ** 14, 0), tableCellId(0, 0), tableCellId(1, CELLS_PAGE)]).toEqual([null, null, null])
     for (const bad of [-1, 1.5, NAME_OCCURRENCE_MAX + 1, Number.NaN]) expect(nameOccurrenceId(bad)).toBeNull()
     expect(isNameOccurrence(UNIT_ID_MAX)).toBe(false)
   })

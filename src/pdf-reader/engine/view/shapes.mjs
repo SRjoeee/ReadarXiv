@@ -1,7 +1,7 @@
 // The highlight's shapes on the shared reader view's two panes (the view's contract §2.7; docs/PDF-READER.md §17.8). What
-// a pane paints and where the pointer lights it are read through one seam, its Shapes — a unit's runs, a run's block and
-// a sentence's shape, the float a unit lights whole, whether a unit's shapes hold its words by its sentence starts, what
-// a point lights and what a click there levels by — in its own pages' coordinates (lighting.mjs reads a pane through it
+// a pane paints and where the pointer lights it are read through one seam, its Shapes — a unit's runs (a table's cell no
+// unit holds by its own id), a run's block and a sentence's shape, whether a unit's shapes hold its words by its sentence
+// starts, what a point lights and what a click there levels by — in its own pages' coordinates (lighting.mjs reads a pane through it
 // alone). The PDF side's are its layout's (pdfShapes, lifted from the web's session/layouts.ts: highlight.mjs and
 // floats.mjs as the extension paints them).
 //
@@ -10,17 +10,18 @@
 // lands, through leftPageInput. The right's shapes, until the layer's pages bring words of their own, are the left's
 // mirrored (mirror): a layout of the right's own over its own copies of the left's tokens and rectangles, so that no run
 // object of the left reaches the right — the paint keeps what it drew by the run, and a run shared would move the left's
-// element into the right's pane (the contract's trap 1). A float passes through: the right's floats are the left's.
+// element into the right's pane (the contract's trap 1). The right's floats are the left's: where a point finds a table's
+// cell or nothing (a figure's picture), and what a sentence keeps out of. No float lights whole (docs/PDF-READER.md §17.1).
 //
 // Sentences come through the same calls: a unit lights by sentence where both panes have its starts and its shapes hold
 // its words (lighting.mjs startsOf, by the panes' starts and their shapes' fits), else whole. The left's starts are its
 // units' pairs read as anchors.mjs sentenceStarts reads an anchor's (createShapes starts), once every page the unit is on
 // has come; the right has none until its pages bring their words, and every unit lights whole meanwhile — on the one path.
 import { sentenceStarts, tokens as wordsOfText } from '../pipeline/anchors.mjs'
-import { floatHitOf, floatOf, floatShapes, pageFloats } from './floats.mjs'
-import { blockOf, clickOf, hitOf, layoutPage, layoutParts, layoutSpans, layoutStream, pageGeometry, pageLayout, runsOf, sentenceOf, sentencesFit, tokensIn, withSentences } from './highlight.mjs'
+import { cellRunsOf, floatHitOf, pageFloats } from './floats.mjs'
+import { blockOf, clickOf, DRAWING, hitOf, layoutPage, layoutParts, layoutSpans, layoutStream, pageGeometry, pageLayout, runsOf, sentenceOf, sentencesFit, tokensIn, withSentences } from './highlight.mjs'
 import { NAME_FLAG } from '../layout/file.mjs'
-import { isNameOccurrence, nameOccurrenceId } from '../layer-proto/units.mjs'
+import { isNameOccurrence, isTableCell, nameOccurrenceId, tableCellPage } from '../layer-proto/units.mjs'
 
 /** how far past a name's box a token's middle may stand and be the name's, PDF units (pipeline/ink-pass.mjs SLACK) */
 const NAME_SLACK = 1
@@ -57,14 +58,21 @@ export function startsOfPairs(anchor, text, offsets) {
   })
 }
 
+/** a hit of a table's cell no unit holds with the pane's own run of it (floats.mjs floatHitOf gives the side's whose floats
+ *  they are: the left's, trap 1); none where the pane has no run of it */
+const ownCell = (h, runs) => {
+  if (!h || !isTableCell(h.id)) return h
+  const run = runs(h.id)[0]
+  return run ? { ...h, run } : null
+}
+
 /** a PDF side's shapes, of its layout: highlight.mjs and floats.mjs, as the extension paints them */
 export function pdfShapes(L) {
   return {
-    runs: id => runsOf(L, id),
+    // (a table's cell no unit holds: its float's run, floats.mjs cellsOf)
+    runs: id => (isTableCell(id) ? cellRunsOf(L, id) : runsOf(L, id)),
     block: (run, padX) => blockOf(run, padX),
     sentence: (run, starts, s, padX) => sentenceOf(L, run, starts, s, padX),
-    float: id => floatOf(L, id),
-    floatShapes: (f, padX) => floatShapes(L, f, padX),
     fits: (id, starts, now) => sentencesFit(L, id, starts, !now),
     hit: (page, x, y, padX, startsOf) => floatHitOf(L, page, x, y, padX, hitOf(L, page, x, y, padX, startsOf)),
     click: (page, x, y, padX, startsOf) => clickOf(L, page, x, y, padX, startsOf),
@@ -107,7 +115,7 @@ const told = new WeakMap()
  */
 export function createShapes({ kindOf: unitKind = () => undefined, warn = warnOnce } = {}) {
   // (a babel name's occurrence lit as a heading: its id no bundle id reaches, units.mjs nameOccurrenceId)
-  const kindOf = id => (isNameOccurrence(id) ? 'heading' : unitKind(id))
+  const kindOf = id => (isNameOccurrence(id) ? 'heading' : isTableCell(id) ? 'cell' : unitKind(id))
   const L = pageLayout(kindOf), base = pdfShapes(L)
   /** each unit's pairs, page by page ([words, tokens]); their map made once the unit's tokens are all in */
   const pairsOn = new Map(), pairsOf = new Map()
@@ -163,13 +171,14 @@ export function createShapes({ kindOf: unitKind = () => undefined, warn = warnOn
     }
     for (const p of pages) tellNames(p)
   }
-  // the float a unit lights, what a point lights or a click levels by and a sentence's shape (which keeps from under a
+  // a table's cell no unit holds, what a point lights or a click levels by and a sentence's shape (which keeps from under a
   // float, highlight.mjs reachAt) read their pages' floats, made then
   const atPage = f => (page, x, y, padX, startsOf) => { floatsOn(page); return f(page, x, y, padX, startsOf) }
   const shapes = {
     ...base,
+    // (a table's cell no unit holds is its page's float's: made then)
+    runs: id => { if (isTableCell(id)) floatsOn(tableCellPage(id)); return base.runs(id) },
     sentence: (run, starts, s, padX) => { floatsOn(run.page); return base.sentence(run, starts, s, padX) },
-    float: id => { for (const p of L.pagesOf.get(id) ?? []) floatsOn(p); return base.float(id) },
     hit: atPage(base.hit),
     click: atPage(base.click),
   }
@@ -199,7 +208,8 @@ export function createShapes({ kindOf: unitKind = () => undefined, warn = warnOn
         if (!layoutPage(L, input.page, input)) return false
       } catch (e) { refuse(left?.page, e); return false }
       state.pages.set(input.page, input)
-      for (const [id, words, tokens] of input.pairs) (pairsOn.get(id) ?? pairsOn.set(id, new Map()).get(id)).set(input.page, [words, tokens])
+      // (a drawing's text no layout holds, nor its pairs: highlight.mjs DRAWING)
+      for (const [id, words, tokens] of input.pairs) if (!DRAWING.has(kindOf(id))) (pairsOn.get(id) ?? pairsOn.set(id, new Map()).get(id)).set(input.page, [words, tokens])
       for (const f of state.followers) f.addPage(input)
       tellNames(input.page)
       return true
@@ -257,15 +267,14 @@ const copyPart = part => ({ pages: [...part.pages], views: [...part.views], left
 /**
  * The right's shapes, the left's mirrored (trap 1): { layout, shapes, forget, dispose }. A layout of its own over its own copies
  * of what `source` (createShapes) was told and is told from now on — each part's rectangles and each page's tokens —, so
- * that its runs, blocks and sentence shapes equal the left's from objects of its own. A float, and its shapes, pass
- * through (the right's floats are the left's: lighting a float on the right lights the left's); what a point lights is
- * the right's own runs, the floats the left's; a sentence keeps from under the left's floats, as the left's sentence
- * does. `dispose` stops following the source
+ * that its runs, blocks and sentence shapes equal the left's from objects of its own; a table's cell no unit holds is the
+ * left's run of it copied. What a point lights is the right's own runs, the floats the left's; a sentence keeps from under
+ * the left's floats, as the left's sentence does. `dispose` stops following the source
  */
 export function mirror(source) {
   const state = told.get(source.shapes)
   if (!state) throw new TypeError('not a side\'s shapes (createShapes)')
-  const R = pageLayout(state.kindOf), own = pdfShapes(R), from = source.shapes
+  const R = pageLayout(state.kindOf), own = pdfShapes(R)
   const follower = {
     addParts: parts => layoutParts(R, parts.map(copyPart)),
     addPage: input => layoutPage(R, input.page, copyPage(input)),
@@ -278,15 +287,24 @@ export function mirror(source) {
   // layout reads the left's floats, made then, as they are now (their map is let go and made again with the left's)
   const floatsOf = p => { state.floatsOn(p); R.floats = source.layout.floats }
   const atPage = f => (page, x, y, padX, startsOf) => { floatsOf(page); return f(page, x, y, padX, startsOf) }
+  // (a table's cell no unit holds, at its place on both panes: the left's run of it copied, the right's own (trap 1), made again
+  // where the left's float is made again)
+  const cellCopies = new Map()
+  const cellRuns = id => {
+    floatsOf(tableCellPage(id))
+    const src = cellRunsOf(source.layout, id)[0]
+    if (!src) return []
+    let c = cellCopies.get(id)
+    if (c?.src !== src) { c = { src, run: { ...src, rows: src.rows.map(r => ({ ...r })), mids: [...src.mids] } }; cellCopies.set(id, c) }
+    return [c.run]
+  }
   const shapes = {
-    runs: own.runs,
+    runs: id => (isTableCell(id) ? cellRuns(id) : own.runs(id)),
     block: own.block,
     sentence: (run, starts, s, padX) => { floatsOf(run.page); return own.sentence(run, starts, s, padX) },
     fits: own.fits,
     click: atPage(own.click),
-    float: from.float,
-    floatShapes: from.floatShapes,
-    hit: atPage((page, x, y, padX, startsOf) => floatHitOf(source.layout, page, x, y, padX, hitOf(R, page, x, y, padX, startsOf))),
+    hit: atPage((page, x, y, padX, startsOf) => ownCell(floatHitOf(source.layout, page, x, y, padX, hitOf(R, page, x, y, padX, startsOf)), cellRuns)),
   }
   return { layout: R, shapes, forget: p => { R.cache.delete(p) }, dispose: () => { state.followers.delete(follower) } }
 }
@@ -317,7 +335,7 @@ export function layerShapes(source) {
   const state = told.get(source.shapes)
   if (!state) throw new TypeError('not a side\'s shapes (createShapes)')
   const M = mirror(source)
-  let L, words, made, wordAt, placeAt, noPlaces, hidden, namesKept
+  let L, words, made, wordAt, placeAt, noPlaces, hidden, namesKept, ours
   /** the pages that show another target's layer (mute): none of their geometry is the drawing's */
   const muted = new Set()
   /** the laid layout, told the parts as copies, each unit's stream just before its first page's tokens until that page lays */
@@ -328,6 +346,7 @@ export function layerShapes(source) {
   function reset() {
     L = pageLayout(state.kindOf)
     words = new Map(); made = new Set(); wordAt = new Map(); placeAt = new Map(); noPlaces = new Set(); hidden = new Set(); namesKept = new Map()
+    ours = new Map()
     if (state.parts.length) tellParts(state.parts)
   }
   /** page p's part of the laid layout, where its words and its left part are in */
@@ -340,6 +359,8 @@ export function layerShapes(source) {
     // none) keeps a copy only on its own rows here; one it lays nowhere keeps none on a page whose lines moved (`drift`), and
     // elsewhere none on another unit's row. A line moved has no partner beside it, never a wrong one)
     const rowsOf = new Map(w.rows ?? []), all = w.rows ?? []
+    // (and what a table's cell no unit holds is copied by, cellRuns: the words themselves are let go once the page is made)
+    ours.set(p, { drift: !!w.drift, rows: all })
     const inRow = (rs, x, y) => { for (let j = 0; j + 3 < rs.length; j += 4) if (x >= rs[j] && x <= rs[j + 2] && y >= rs[j + 1] && y <= rs[j + 3]) return true; return false }
     const T0 = left.table
     const standsFor = (id, k) => {
@@ -408,19 +429,29 @@ export function layerShapes(source) {
   const mode = id => { const ps = pagesOf(id), n = ps.filter(p => laidFor(p, id)).length; return !n ? 'mirror' : n === ps.length ? 'laid' : 'mixed' }
   // a laid page's floats are the left's, as the mirror's are (made then)
   const floatsOf = p => { state.floatsOn(p); L.floats = source.layout.floats }
+  // a table's cell no unit holds: the mirror's copy of the left's run, which stands where the left has it — on a laid page, as
+  // a unit shown as the original's copy does (make), none where the page's lines moved (`drift`) or another unit's row of ours
+  // stands at its middle; its numbers are the original's ink there
+  const cellRuns = id => {
+    const p = tableCellPage(id)
+    if (muted.has(p)) return []
+    const rs = M.shapes.runs(id), w = laid(p) ? ours.get(p) : null
+    if (!w || !rs.length) return rs
+    if (w.drift) return []
+    const r = rs[0], x = (r.x0 + r.x1) / 2, y = (r.top + r.bottom) / 2
+    for (const [, b] of w.rows ?? []) for (let j = 0; j + 3 < b.length; j += 4) if (x >= b[j] && x <= b[j + 2] && y >= b[j + 1] && y <= b[j + 3]) return []
+    return rs
+  }
   const shapes = {
-    runs: id => pagesOf(id).filter(p => !muted.has(p)).flatMap(p => pageGeometry(laidFor(p, id) ? L : M.layout, p).byId.get(id) ?? []),
+    runs: id => (isTableCell(id) ? cellRuns(id) : pagesOf(id).filter(p => !muted.has(p)).flatMap(p => pageGeometry(laidFor(p, id) ? L : M.layout, p).byId.get(id) ?? [])),
     block: (run, padX) => blockOf(run, padX),
     sentence: (run, starts, s, padX) => { if (!laid(run.page)) return M.shapes.sentence(run, starts, s, padX); floatsOf(run.page); return sentenceOf(L, run, starts, s, padX) },
     fits: (id, starts, now) => { const m = mode(id); return m === 'laid' ? sentencesFit(L, id, starts, !now) : m === 'mirror' ? M.shapes.fits(id, starts, now) : false },
-    // (a float on a muted page lights nothing there, as its text does not: its shapes are not the drawing's)
-    float: id => { const f = M.shapes.float(id); return f && muted.has(f.page) ? null : f },
-    floatShapes: (f, padX) => (muted.has(f.page) ? [] : M.shapes.floatShapes(f, padX)),
     hit: (page, x, y, padX, startsOf) => {
       if (muted.has(page)) return null
       if (!laid(page)) return M.shapes.hit(page, x, y, padX, startsOf)
       floatsOf(page)
-      const h = floatHitOf(source.layout, page, x, y, padX, hitOf(L, page, x, y, padX, startsOf))
+      const h = ownCell(floatHitOf(source.layout, page, x, y, padX, hitOf(L, page, x, y, padX, startsOf)), cellRuns)
       if (h || !namesKept.has(page)) return h
       // (nothing of the laid drawing there: a name kept the original's, by the mirror's)
       const m = M.shapes.hit(page, x, y, padX, startsOf)

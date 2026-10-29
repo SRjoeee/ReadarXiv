@@ -23,6 +23,8 @@ export interface SampleCut {
   located: [id: number, stream: number, rects: [page: number, x0: number, y0: number, x1: number, y1: number][]][]
   views: [number, number, number, number][]
   kinds: (string | null)[]
+  /** the original's numbers no unit holds (a table's cells of numbers among them), as located units are given */
+  numbers: [text: string, stream: null, rects: [page: number, x0: number, y0: number, x1: number, y1: number][]][]
 }
 /** the wrap's head fields of the sample's wrapped pass (tests/fixtures/pdf/ocg/sample-1-wrapped.json) */
 export interface SampleWrap { bytes: number; sha256: string; xref: number; stats: Record<string, unknown>; unhidden: [id: number, why: string][]; labelKept: number[]; figures: { units: object[]; stats: Record<string, number> } }

@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { type Anchor, type DocToken, lineRects, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { type Box, captionFor, floatHitOf, floatOf, floatsAgree, floatShapes, floatsOn, pageFloats, pathsOf, wantsFloats } from '@/pdf-reader/engine/view/floats.mjs'
+import { isTableCell } from '@/pdf-reader/engine/layer-proto/units.mjs'
 import { inkEdges } from '@/pdf-reader/engine/pipeline/anchors.mjs'
-import { blockOf, hitOf, layoutOf, runsOf, sentenceOf } from '@/pdf-reader/engine/view/highlight.mjs'
+import { hitOf, layoutOf, runsOf, sentenceOf } from '@/pdf-reader/engine/view/highlight.mjs'
 
-// A page's floats (floats.mjs): tables, algorithms and figures lit whole with their captions. Pages as PDF.js's text
+// A page's floats (floats.mjs): tables, algorithms and figures, where the pointer finds a table's cells or nothing (no float
+// lights whole since the owner's ruling of 2026-10-30, docs/PDF-READER.md §17.1). Pages as PDF.js's text
 // items, as highlight.test.ts has them: 600 × 800, body text 10 high on lines 12 apart, its glyphs from 2.2 under the
 // baseline to 7.5 over it. The prose ("text text …") is running text, one unit a page; the other words are free (a
 // table's rows, an algorithm's) unless a test gives them to a unit (a caption, a cell)
@@ -91,21 +93,70 @@ describe('pageFloats: a table from its caption to its rules', () => {
     expect([...(pageFloats(L(), 1, [], { rules }).find(f => f.id === 0)?.members ?? [])]).toEqual([5])
   })
 
-  it('one wash over the table and its caption, padded as a block is', () => {
-    const layout = L(), f = pageFloats(layout, 1, [], { rules })[0]!, cap = blockOf(runsOf(layout, 0)[0]!, 2)
+  it('its shape is its body alone, padded as a block is: its caption is a unit of its own (the owner, 2026-10-30)', () => {
+    const layout = L(), f = pageFloats(layout, 1, [], { rules })[0]!
     const [s] = floatShapes(layout, f, 2)
     expect(floatShapes(layout, f, 2).length).toBe(1)
     expect(s?.frame).toBe(false)
-    expect(r1(s!)).toEqual(r1({ x0: 53, x1: 297, y0: 544.8 - f.lead, y1: cap.y1 }))
+    expect(r1(s!)).toEqual(r1({ x0: 53, x1: 297, y0: 544.8 - f.lead, y1: 598.2 + f.lead }))
   })
 
-  it('a table\'s cell lights the table; a point of the wash between its words, too; the prose around it its own', () => {
+  it('a table lights cell by cell: a cell its own, a cell of numbers (no unit\'s) its own box, the same on both panes; a gap or a rule nothing; its caption its own (the owner, 2026-10-30)', () => {
     const layout = L(), pad = 2
-    pageFloats(layout, 1, [], { rules })
-    const hit = (x: number, y: number) => floatHitOf(layout, 1, x, y, pad, hitOf(layout, 1, x, y, pad))?.id
-    expect(hitOf(layout, 1, 70, 577, pad)?.id).toBe(5)
-    expect([hit(70, 577), hit(200, 568), hit(290, 598), hit(150, 612)]).toEqual([0, 0, 0, 0])
-    expect([hit(150, 520), hit(150, 700)]).toEqual([1000, 1000])
+    const f = pageFloats(layout, 1, [], { rules })[0]!
+    const hit = (x: number, y: number) => floatHitOf(layout, 1, x, y, pad, hitOf(layout, 1, x, y, pad))
+    // (the cell unit "alpha": itself, never the table)
+    expect(hit(70, 577)?.id).toBe(5)
+    // ("12" and "3", no unit's: a cell each, its box its words', lit whole)
+    const twelve = hit(165, 577), three = hit(242, 577)
+    expect([isTableCell(twelve?.id ?? -1), isTableCell(three?.id ?? -1), twelve?.s, twelve?.id === three?.id]).toEqual([true, true, -1, false])
+    const run = f.cells.find(c => c.id === twelve!.id)!.run
+    expect([run.page, run.x0, run.x1]).toEqual([1, 160, 170])
+    // (between two cells, on a rule: nothing; the caption, the prose: their own)
+    expect([hit(200, 568), hit(290, 598)]).toEqual([null, null])
+    expect([hit(150, 612)?.id, hit(150, 520)?.id, hit(150, 700)?.id]).toEqual([0, 1000, 1000])
+    // (each cell of numbers once, by its place: the head's words, which no unit holds here, cells as well)
+    expect(f.cells.length).toBe(12 - 1)
+  })
+
+  it('a cell unit in a figure (a tabular of the panels\' names set over them) lights itself; the figure\'s picture nothing', () => {
+    const ps = [[...prose(780, 4), ...row(700, 'input', 'ours', 'truth'), line('Figure 1: the panels compared', 560, 80, 270), ...prose(530, 10)]]
+    const dd = docOf(ps), layout = side(ps, [[0, words(dd, 'figure', 'compared')], [5, [at(dd, 'input')]], [6, [at(dd, 'ours')]]], { 0: 'caption', 5: 'cell', 6: 'cell' }, [at(dd, 'truth')])
+    const [f] = pageFloats(layout, 1, [{ x0: 55, y0: 580, x1: 295, y1: 690 }], {})
+    expect([f?.kind, [...(f?.members ?? [])]]).toEqual(['figure', [5, 6]])
+    const hit = (x: number, y: number) => floatHitOf(layout, 1, x, y, 2, hitOf(layout, 1, x, y, 2))
+    expect([hit(70, 703)?.id, hit(165, 703)?.id, hit(245, 703), hit(150, 640)]).toEqual([5, 6, null, null])
+  })
+
+  it('a cell unit takes no head: the cells no unit holds before it on its row are cells of their own, not its words (e2e:reader, the sample\'s table)', () => {
+    const ps = [[...prose(740, 10), line('Table 1: scores of the runs', 610, 80, 270), item('3x3', 60, 588), item('method', 160, 588), item('time', 240, 588, { eol: true }), ...row(574, 'alpha', '12', '3'), ...prose(530, 10)]]
+    const dd = docOf(ps), layout = side(ps, [[0, words(dd, 'table', 'runs')], [5, [at(dd, 'method')]], [6, [at(dd, 'time')]]], { 0: 'caption', 5: 'cell', 6: 'cell' }, [at(dd, '3x3'), at(dd, 'alpha')])
+    expect(runsOf(layout, 5).map(r => r.x0)).toEqual([160])
+    const f = pageFloats(layout, 1, [], { rules: [hrule(55, 295, 598), hrule(55, 295, 584), hrule(55, 295, 569)] })[0]!
+    const hit = (x: number, y: number) => floatHitOf(layout, 1, x, y, 2, hitOf(layout, 1, x, y, 2))
+    expect([hit(165, 591)?.id, hit(65, 591) && isTableCell(hit(65, 591)!.id)]).toEqual([5, true])
+    expect(f.cells.some(c => c.run.x0 === 60 && c.run.top > 588)).toBe(true)
+  })
+
+  it('two columns of numbers set closer than a cell\'s gap are two cells where the table leaves a column between them on every row; a decimal point, a ± stay in their cell (Codex on this change; on the ten papers a row of ten values had been one cell)', () => {
+    // (a column at 160–175 and one at 180–195: 5 apart, under 0.6 of the words' height; in each row "1" "2" around a decimal
+    // point 3 wide, and a ± with 2 either side)
+    const num = (y: number) => [item('m', 60, y), item('1', 160, y, { width: 5 }), item('2', 168, y, { width: 7 }), item('3', 180, y, { width: 6 }), item('4', 189, y, { width: 6 }), item('5', 240, y, { width: 5 }), item('±', 247, y, { width: 5 }), item('6', 254, y, { width: 5, eol: true })]
+    const ps = [[...prose(740, 10), line('Table 1: scores of the runs', 610, 80, 270), ...row(588, 'method', 'score', 'time'), ...num(574), ...num(562), ...num(550), ...prose(530, 10)]]
+    const dd = docOf(ps), ids = ['m'].flatMap(t => dd.flatMap((d, k) => (d.t === t ? [k] : [])))
+    const layout = side(ps, [[0, words(dd, 'table', 'runs')], [5, [at(dd, 'method')]], [6, [at(dd, 'score')]], [7, [at(dd, 'time')]]], { 0: 'caption', 5: 'cell', 6: 'cell', 7: 'cell' }, ids)
+    const f = pageFloats(layout, 1, [], { rules: [hrule(55, 295, 598), hrule(55, 295, 584), hrule(55, 295, 545)] })[0]!
+    const on574 = f.cells.filter(c => c.run.top > 574 && c.run.bottom < 580).map(c => [Math.round(c.run.x0), Math.round(c.run.x1)])
+    expect(on574).toEqual([[60, 65], [160, 175], [180, 195], [240, 259]])
+  })
+
+  it('a word no unit holds inside a cell unit\'s block (a piece its text did not find) is that cell\'s to the pointer, no cell of its own', () => {
+    const ps = [[...prose(740, 10), line('Table 1: scores of the runs', 610, 80, 270), ...row(588, 'method', 'score', 'time'), item('alpha', 60, 574), item('(a)', 87, 574), item('mix', 105, 574), item('12', 160, 574), item('3', 240, 574, { eol: true }), ...row(562, 'beta', '14', '5'), ...prose(530, 10)]]
+    const dd = docOf(ps), layout = side(ps, [[0, words(dd, 'table', 'runs')], [5, [at(dd, 'alpha'), at(dd, 'mix')]]], { 0: 'caption', 5: 'cell' }, [at(dd, '(a)')])
+    const f = pageFloats(layout, 1, [], { rules: [hrule(55, 295, 598), hrule(55, 295, 584), hrule(55, 295, 557)] })[0]!
+    const hit = (x: number, y: number) => floatHitOf(layout, 1, x, y, 2, hitOf(layout, 1, x, y, 2))
+    expect([hit(94, 577)?.id, hit(165, 577) && isTableCell(hit(165, 577)!.id)]).toEqual([5, true])
+    expect(f.cells.some(c => c.run.x0 < 120 && c.run.x1 > 87 && c.run.top > 570 && c.run.bottom < 580)).toBe(false)
   })
 
   it('a cell finds its table, a caption its own; a unit of no float none', () => {
@@ -224,11 +275,24 @@ describe('pageFloats: figures', () => {
     const f = pageFloats(layout, 1, [{ x0: 80, y0: 632, x1: 280, y1: 720 }])[0]!
     expect([f.kind, ...r1(f.region)]).toEqual(['figure', 80, 632, 280, 720])
     const shapes = floatShapes(layout, f, 2)
-    expect(shapes.map(s => s.frame)).toEqual([true, false])
+    expect(shapes.map(s => s.frame)).toEqual([true])
     expect(r1(shapes[0]!)).toEqual(r1({ x0: 78, x1: 282, y0: 632 - f.lead, y1: 720 + f.lead }))
-    // the figure's inside and its caption light it; a label inside it too
-    const hit = (x: number, y: number) => floatHitOf(layout, 1, x, y, 2, hitOf(layout, 1, x, y, 2))?.id
-    expect([hit(180, 700), hit(125, 652), hit(150, 622)]).toEqual([0, 0, 0])
+    // the figure's inside lights nothing, a label inside it neither (their two panes stand side by side already: the owner,
+    // 2026-10-30); its caption its own
+    const hit = (x: number, y: number) => floatHitOf(layout, 1, x, y, 2, hitOf(layout, 1, x, y, 2))?.id ?? null
+    expect([hit(180, 700), hit(125, 652), hit(150, 622)]).toEqual([null, null, 0])
+  })
+
+  it('a caption lights by sentence, as a body unit does: its figure with neither (the owner, 2026-10-30)', () => {
+    const ps = [[...prose(780, 4), line('Figure 1: the chart is here. It has two bars and a line.', 620, 60, 300), ...prose(590, 10)]]
+    const dd = docOf(ps)
+    const layout = side(ps, [[0, words(dd, 'figure', 'line')]], { 0: 'caption' })
+    pageFloats(layout, 1, [{ x0: 80, y0: 632, x1: 280, y1: 720 }])
+    const starts = Int32Array.from([at(dd, 'it')]), startsOf = (i: number) => (i === 0 ? starts : null)
+    const lights = (x: number, y: number) => floatHitOf(layout, 1, x, y, 2, hitOf(layout, 1, x, y, 2, startsOf))
+    const mid = (t: string) => dd[at(dd, t)]!.x + 1
+    expect([lights(mid('chart'), 622), lights(mid('bars'), 622)]).toMatchObject([{ id: 0, s: 0 }, { id: 0, s: 1 }])
+    expect(lights(180, 700)).toBeNull()
   })
 
   it('a grid of images, a row\'s space between them: one figure (2608.12502\'s figure 5)', () => {
@@ -256,12 +320,30 @@ describe('pageFloats: figures', () => {
     const boxes = [{ x0: 60, y0: 640, x1: 120, y1: 670 }, { x0: 140, y0: 640, x1: 200, y1: 670 }, { x0: 220, y0: 640, x1: 280, y1: 670 }]
     const heads = [{ x0: 136, y0: 653, x1: 140, y1: 657 }, { x0: 216, y0: 653, x1: 220, y1: 657 }]
     const fs = pageFloats(layout, 1, [], { rules: [hrule(120, 140, 655), hrule(200, 220, 655)], marks: [...boxes, ...heads] })
-    expect(fs.map(f => [f.id, f.kind, ...r1(f.region), [...f.members]])).toEqual([[0, 'figure', 60, 640, 280, 670, [5]]])
-    // (its labels a figure unit of the wrap's, anchored on the left: held as a drawing's text, the float found, a figure — Codex
+    // (the drawing's text no layout holds, its words free: no member, the float a figure by where that text stands)
+    expect(fs.map(f => [f.id, f.kind, ...r1(f.region), [...f.members]])).toEqual([[0, 'figure', 60, 640, 280, 670, []]])
+    // (its labels a figure unit of the wrap's, anchored on the left: a drawing's text too, the float found, a figure — Codex
     // on #493)
     const ink = side(ps, [[0, words(dd, 'figure', 'pipeline')], [5, words(dd, 'input', 'output')]], { 0: 'caption', 5: 'inkfigures' })
     const got = pageFloats(ink, 1, [], { rules: [hrule(120, 140, 655), hrule(200, 220, 655)], marks: [...boxes, ...heads] })
-    expect(got.map(f => [f.id, f.kind, ...r1(f.region), [...f.members]])).toEqual([[0, 'figure', 60, 640, 280, 670, [5]]])
+    expect(got.map(f => [f.id, f.kind, ...r1(f.region), [...f.members]])).toEqual([[0, 'figure', 60, 640, 280, 670, []]])
+  })
+
+  it('a drawing\'s text no layout holds (its labels unpaired, their pairing measured not free): a figure by where it stands, lighting nothing, inside or out (the owner, 2026-10-30)', () => {
+    const ps = [[...prose(780, 4), item('input', 70, 652), item('model', 150, 652), item('output', 230, 652, { eol: true }), line('Figure 2: the pipeline', 620, 100, 250), ...prose(590, 10)]]
+    const dd = docOf(ps), text = words(dd, 'input', 'output')
+    const boxes = [{ x0: 60, y0: 640, x1: 120, y1: 670 }, { x0: 140, y0: 640, x1: 200, y1: 670 }, { x0: 220, y0: 640, x1: 280, y1: 670 }]
+    const paths = { rules: [hrule(120, 140, 655), hrule(200, 220, 655)], marks: [...boxes, { x0: 136, y0: 653, x1: 140, y1: 657 }, { x0: 216, y0: 653, x1: 220, y1: 657 }] }
+    // (a figure's labels the wrap made a unit: no layout holds it, its words free, where it stands kept, `drawings`)
+    const L = side(ps, [[0, words(dd, 'figure', 'pipeline')], [5, text]], { 0: 'caption', 5: 'inkfigures' }) as ReturnType<typeof side> & { drawings: Map<number, Box[]> }
+    expect([runsOf(L, 5), L.drawings.get(1)?.length]).toEqual([[], 1])
+    const [f] = pageFloats(L, 1, [], paths)
+    expect([f?.kind, f?.cells.length, f?.members.size]).toEqual(['figure', 0, 0])
+    expect([hitOf(L, 1, 72, 654, 2), floatHitOf(L, 1, 72, 654, 2, hitOf(L, 1, 72, 654, 2))]).toEqual([null, null])
+    // (TikZ's words, a unit of kind figure: the same, inside its float or outside every float)
+    const tikz = side(ps, [[0, words(dd, 'figure', 'pipeline')], [5, text]], { 0: 'caption', 5: 'figure' })
+    expect([hitOf(tikz, 1, 72, 654, 2), runsOf(tikz, 5)]).toEqual([null, []])
+    expect(pageFloats(tikz, 1, [], paths)[0]?.kind).toBe('figure')
   })
 
   it('a float\'s kind is its caption\'s on both sides: a drawing whose text is located on one side only is a figure on both (floatsAgree)', () => {
@@ -277,11 +359,11 @@ describe('pageFloats: figures', () => {
       pageFloats(a, 1, [], paths)
       // the side made first agrees with nothing yet (the other's page not drawn); its shapes made (the pointer asked)
       expect(floatsAgree(a, 1, b)).toEqual([])
-      expect(kinds(a)).toEqual(rightFirst ? ['table', [false]] : ['figure', [true, false]])
+      expect(kinds(a)).toEqual(rightFirst ? ['table', [false]] : ['figure', [true]])
       pageFloats(b, 1, [], paths)
-      // the side made second: the right's float takes the figure's kind, its shapes made again (outlined, its caption washed)
+      // the side made second: the right's float takes the figure's kind, its shapes made again (its body a figure's)
       expect(floatsAgree(b, 1, a)).toEqual([floatOf(R, 0)])
-      expect([kinds(L), kinds(R)]).toEqual([['figure', [true, false]], ['figure', [true, false]]])
+      expect([kinds(L), kinds(R)]).toEqual([['figure', [true]], ['figure', [true]]])
     }
     // a table on both sides stays one; a side without the float changes nothing
     const T = [[...prose(780, 4), line('Table 1: the scores', 690, 100, 250), ...row(670, 'one', 'two', 'six'), ...row(658, 'ten', 'red', 'tan'), ...prose(630, 10)]]
@@ -356,7 +438,7 @@ describe('pageFloats: figures side by side, subfigures (the review of B4)', () =
     const fs = pageFloats(layout, 1, [{ x0: 60, y0: 617, x1: 170, y1: 720 }, { x0: 190, y0: 617, x1: 300, y1: 720 }])
     expect(fs.map(f => [f.id, f.kind, ...r1(f.region)]).sort()).toEqual([[0, 'figure', 60, 617, 170, 720], [1, 'figure', 190, 617, 300, 720]])
     const hit = hitter(layout)
-    expect([hit(100, 680), hit(250, 680)]).toEqual([0, 1])
+    expect([hit(100, 680), hit(250, 680)]).toEqual([null, null])
   })
 
   it('subfigures over their subcaptions, the main caption under them: each subcaption its panel; the main caption the whole figure, panels and subcaptions', () => {
@@ -365,12 +447,12 @@ describe('pageFloats: figures side by side, subfigures (the review of B4)', () =
     const layout = side(ps, [[0, words(dd, 'a', 'one')], [1, words(dd, 'b', 'one')], [2, words(dd, 'figure', 'them')]], { 0: 'caption', 1: 'caption', 2: 'caption' })
     const fs = pageFloats(layout, 1, [{ x0: 60, y0: 617, x1: 170, y1: 720 }, { x0: 190, y0: 617, x1: 300, y1: 720 }])
     expect(fs.map(f => [f.id, f.kind, ...r1(f.region)]).sort()).toEqual([[0, 'figure', 60, 617, 170, 720], [1, 'figure', 190, 617, 300, 720], [2, 'figure', 60, 602.8, 300, 720]])
-    // a panel or its subcaption lights the subfigure (the finer, where the source says so), the main caption the whole
+    // a panel lights nothing, a subcaption itself, the main caption itself: no caption lights a picture (the owner, 2026-10-30)
     const hit = hitter(layout)
-    expect([hit(100, 680), hit(250, 680), hit(240, 607), hit(150, 587)]).toEqual([0, 1, 1, 2])
-    // the whole is outlined, its main caption washed
+    expect([hit(100, 680), hit(250, 680), hit(240, 607), hit(150, 587)]).toEqual([null, null, 1, 2])
+    // the whole is its body alone, no caption's block: a figure's
     const main = fs.find(f => f.id === 2)!
-    expect(floatShapes(layout, main, 2).map(s => s.frame)).toEqual([true, false])
+    expect(floatShapes(layout, main, 2).map(s => s.frame)).toEqual([true])
   })
 
   it('captionFor: of captions in a row the one over the figure, of captions stacked under it the nearest', () => {
@@ -403,7 +485,7 @@ describe('pageFloats: at a page\'s head and foot (the review of B4)', () => {
 })
 
 describe('sentences beside a float: a row that goes on reaches its unit\'s text edge, but not under a float', () => {
-  it('a display beside a figure at the head of a page, inside a sentence from the page before: the row keeps to its ink there, and the figure lights the figure', () => {
+  it('a display beside a figure at the head of a page, inside a sentence from the page before: the row keeps to its ink there, and the figure lights nothing', () => {
     // the paragraph's sentence goes on from page 1 through a display at the head of page 2 (x 60–85) beside a figure
     // (160–300) whose caption is under it; then the paragraph goes on under the caption
     const ps = [
@@ -423,7 +505,7 @@ describe('sentences beside a float: a row that goes on reaches its unit\'s text 
     expect(row!.x1).toBeCloseTo(inkEdges(d).r[at2('a')]! + px)
     // what is painted lights what is painted: the sentence on its row, the figure beside it
     const lights = (x: number, y: number) => floatHitOf(layout, 2, x, y, px, hitOf(layout, 2, x, y, px, startsOf))
-    expect(lights(200, 762)).toMatchObject({ id: 1, s: -1 })
+    expect(lights(200, 762)).toBeNull()
     const shapes = [0, 1, 2].map(s => runsOf(layout, 0).filter(r => r.page === 2).flatMap(r => sentenceOf(layout, r, starts, s, px)))
     const bad: string[] = []
     for (let x = 40.25; x < 320; x += 1.5) for (let y = 690.25; y < 790; y += 1.5) {

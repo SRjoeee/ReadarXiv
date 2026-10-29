@@ -1081,7 +1081,8 @@ export async function translateUnits(units, send, format = 'markers') {
   if (wire.serialize) {
     const sers = units.map(wire.serialize)
     // the cuts of the units that may light by sentence: on Google each marked sentence is translated apart (B3b: the
-    // wording changed in 79 of 85 units), so a unit lit whole (a heading, a caption, a cell) goes as it would unmarked
+    // wording changed in 79 of 85 units), so a unit lit whole (a heading, a cell) goes as it would unmarked; a caption is
+    // cut as a paragraph is (the owner, 2026-10-30: captions correspond by sentence as body units do, on every engine)
     const cuts = format === 'tags' ? units.map((u, i) => (bySentence(u.kind) ? cutsOf(u, sers[i]) : undefined)) : undefined
     const { texts, lost } = await ask(sers.map(s => s.wire), cuts)
     units.forEach((u, i) => {

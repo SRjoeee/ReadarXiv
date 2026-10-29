@@ -944,8 +944,9 @@ only how it meets the rest of the extension.
   set after a marker came back moved before it (0 of 4,825).
 - **The highlight** (`reading.sentenceHighlight`, §7.7's switch): the pointer alone lights — no pin — the sentence under
   it and its translation on both sides, where both sides know the unit's sentences, else the whole unit, decided for
-  both sides together; headings, captions and cells whole; tables, algorithms and figures whole with their captions (a
-  table washed to its rules, a figure outlined). The sentences come from the same two mechanisms as the HTML page's
+  both sides together; captions as body units, by sentence; headings and table cells whole; a table cell by cell, its
+  cells of numbers too, and a figure's picture and its labels not at all (the owner's ruling of 2026-10-30, which ended
+  floats lit whole with their captions). The sentences come from the same two mechanisms as the HTML page's
   (§8.6): Microsoft's own lengths, which the engine passes on from the service; Google's and an LLM's markers, at cuts
   the reader makes on its own wire with the shared splitter and a split context that reads LaTeX placeholders (units
   that light whole are sent without cuts). Each sentence's first word is found on the page inside the unit's marks, or
