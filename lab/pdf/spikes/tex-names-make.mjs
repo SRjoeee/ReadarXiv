@@ -19,7 +19,8 @@
 //       $(kpsewhich ctex-name-utf8.cfg) $(kpsewhich translator-theorem-dictionary-German.dict) \
 //       $(kpsewhich translator-theorem-dictionary-French.dict) $(kpsewhich translator-theorem-dictionary-Spanish.dict) \
 //       $(kpsewhich translator-theorem-dictionary-Russian.dict) $(kpsewhich translator-theorem-dictionary-Portuguese.dict) \
-//       $(kpsewhich translator-theorem-dictionary-ChineseUTF8.dict) /out/'
+//       $(kpsewhich translator-theorem-dictionary-ChineseUTF8.dict) /out/; \
+//       for l in Italian Dutch Polish Turkish Czech Swedish Bulgarian; do cp $(kpsewhich translator-theorem-dictionary-$l.dict) /out/; done'
 //   node lab/pdf/spikes/tex-names-make.mjs <dir> [--check]
 // --check compares with the file in the tree and exits 1 where they differ.
 import { createHash } from 'node:crypto'
@@ -29,7 +30,7 @@ import { fileURLToPath } from 'node:url'
 
 const IMAGE = 'texlive/texlive:TL2025-historic@sha256:7056390eac37715fd3e01875037ceb4016cb17d44c611f7bbbfa7a012007979f'
 /** the table's licence, as docs/THIRD_PARTY.md registers it: LPPL 1.3c data throughout, each source taken under it */
-const LICENCE = 'LPPL 1.3c: translator-theorem-dictionary-{German,French,Spanish,Russian,Portuguese}.dict (the translator package, taken under LPPL 1.3c); translator-theorem-dictionary-ChineseUTF8.dict and ctex-name-utf8.cfg (ctex, LPPL 1.3c); cleveref.sty (LPPL 1.2 or later, taken under LPPL 1.3c); hyperref.sty (LPPL 1.3 or later, taken under LPPL 1.3c); t1enc.dfu and t2aenc.dfu (LaTeX, LPPL 1.3c)'
+const LICENCE = 'LPPL 1.3c: translator-theorem-dictionary-{German,French,Spanish,Russian,Portuguese,Italian,Dutch,Polish,Turkish,Czech,Swedish,Bulgarian}.dict (the translator package, taken under LPPL 1.3c); translator-theorem-dictionary-ChineseUTF8.dict and ctex-name-utf8.cfg (ctex, LPPL 1.3c); cleveref.sty (LPPL 1.2 or later, taken under LPPL 1.3c); hyperref.sty (LPPL 1.3 or later, taken under LPPL 1.3c); t1enc.dfu and t2aenc.dfu (LaTeX, LPPL 1.3c)'
 const OUT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../src/pdf-reader/engine/rules/tex-names.json')
 const dir = process.argv[2]
 if (!dir) { console.error('usage: tex-names-make.mjs <dir of TeX Live files> [--check]'); process.exit(2) }

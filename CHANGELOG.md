@@ -4,6 +4,8 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- The PDF reader now translates into Italian, Dutch, Polish, Turkish, Indonesian, Malay, Czech, Swedish, Ukrainian and Bulgarian. Each language uses its own words for figures, tables and headings, and breaks words at the end of a line by its own rules.
+- Malay in Latin letters is now a target language. Until now, Malay was offered only in Jawi script.
 - Fixed: in the PDF reader, with the references turned on, the page numbers some papers print after each reference (the pages that cite it, each a link back) now follow the reference's translation, still links, instead of staying where the English reference was and showing over the translated text.
 - Fixed: in the PDF reader, a heading a paper sets against the edge of its column inside a box, such as "Abstract" over a boxed abstract, keeps that edge in the translation, where it had been drawn about a character in.
 - In the PDF reader, French, Spanish and Portuguese words are hyphenated at the end of a line by the rules of their own language, where English rules had been used.
