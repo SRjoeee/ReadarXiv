@@ -41,6 +41,7 @@
 import { classifyFont } from '../layer-proto/fonts.mjs'
 import { utf8 } from '../translate/mt.mjs'
 import { classOf } from './marks.mjs'
+import { lineRulesOf, OWN_WORK, RULE_EM } from './own.mjs'
 import { spellOf } from './stream.mjs'
 
 /** the ledger's classes made units, and each one's kind (rules/content-classes.mjs UNIT_CLASS gives the class back) */
@@ -82,6 +83,8 @@ const SEGS_INLINE = 4
 const FOOT = 36
 /** a head's line centred: its middle within this of its page's, PDF units */
 const CENTRE = 4
+/** two of a unit's placeholder glyphs are one formula's where their boxes stand within this share of their size apart */
+const PH_GAP = 0.3
 const r2 = v => Math.round(v * 100) / 100
 const PAIR = /\p{L}{2}/u
 
@@ -172,6 +175,15 @@ function apart(G, w, v) {
   return l - r > APART * size
 }
 
+/** whether word `v` begins a word's gap (WORD_GAP) after word `w` before it on its line, as wordsOf cuts a word by its gap, not
+ *  by its face alone */
+function gapBefore(G, w, v) {
+  let r = -Infinity, l = Infinity, size = 0
+  for (const g of w.gs) { r = Math.max(r, G[g].x1); size = Math.max(size, G[g].size) }
+  for (const g of v.gs) { l = Math.min(l, G[g].x0); size = Math.max(size, G[g].size) }
+  return l - r > WORD_GAP * size
+}
+
 /** a head's line's number at its end (`b`) or its start (`a`), keyed by the line's other words: the numbers set there wherever
  *  those words recur */
 const folioKey = (words, side) => `${side}|${(side === 'b' ? words.slice(0, -1) : words.slice(1)).map(w => w.text).join(' ')}`
@@ -190,7 +202,10 @@ function trimmed(G, words, cls, folios = null) {
   const folio = side => cls === 'heads' && !!folios?.has(folioKey(words, side))
   // (its page number: its last word, one number, after its leaders, set apart from the text before it or a running head's folio)
   if (b - 1 > a && PAGE_NUMBER.test(words[b - 1].text) && (LEADER.test(words[b - 2].text) || apart(G, words[b - 2], words[b - 1]) || folio('b'))) { ended = true; b-- }
-  while (b > a && LEADER.test(words[b - 1].text)) b--
+  // (its leaders: dots each a word a word's gap from the one before it, \@dottedtocline's \mkern\@dotsep; a stop that abuts the
+  // word before it, a word of its own by its face alone, is the sentence's: "… strength $C_n^2$." in 2610.19274v1's list of
+  // figures, which was left the original's ink beside the drawn entry)
+  while (b > a && LEADER.test(words[b - 1].text) && (b - 1 === a || gapBefore(G, words[b - 2], words[b - 1]))) b--
   // (its numbering, set apart from the text after it: a section number, an entry's in its box; a head's even page's folio)
   while (a < b - 1 && NUMBERING.test(words[a].text) && words[a].fam === 'text' && apart(G, words[a], words[a + 1])) a++
   if (cls === 'heads' && a === 0 && a < b - 1 && PAGE_NUMBER.test(words[a].text) && folio('a')) a++
@@ -305,7 +320,9 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     const closeRun = () => { while (open.length) pieces.push({ t: 'close', id: open.pop(), src: '}' }) }
     lines.forEach((l, li) => {
       l.words.forEach((w, wi) => {
-        const space = wi > 0 || li > 0
+        // (a space between two words of a line where a word's gap stands between them: none where the face alone cuts them, a
+        // formula's stop or its "-axis" set against it)
+        const space = wi > 0 ? gapBefore(pages[l.page - 1].glyphs, l.words[wi - 1], w) : li > 0
         if (w.fam === 'text') {
           // (a hyphen ending a line before a lowercase letter: the word goes on)
           let sep = ''
@@ -455,14 +472,87 @@ function solid(view, x0, y0, x1, y1) {
 }
 
 /** the ink units' glyphs claimed in own.mjs's ownership (rule 7): `own.glyphs[p - 1][g]` set to `u<id>` (text) or `u<id>.p`
- *  (a placeholder) where no unit owns it; returns the glyphs claimed */
-export function claimInk(own, ink) {
+ *  (a placeholder) where no unit owns it; with `pages` (the wrap's: boxes and paths), each unit's text also takes the rules TeX
+ *  painted on its lines that no group holds (own.mjs lineRulesOf, MR 2b: an OT1 \_ in an orphan line, 2610.19159v1's agent
+ *  logs), `own.boxes[p - 1][b]`; returns the glyphs claimed */
+export function claimInk(own, ink, pages = null) {
   let n = 0
+  // (the rules' search of every ink unit together, each page's boxes read once and each unit's near ones: OWN_WORK, past which
+  // the rest keep theirs the page's)
+  let left = OWN_WORK
+  // (each page's painted boxes no group holds that could be a rule or a frame's side, once a page)
+  const thin = new Map()
+  const thinOn = p => {
+    let list = thin.get(p)
+    if (list) return list
+    const pg = pages[p - 1], B = pg.boxes, O = own.boxes?.[p - 1] ?? []
+    list = []
+    for (let b = 0; b < B.length / 4; b++) if ((pg.paths[b] ?? -1) >= 0 && O[b] == null && Math.min(B[4 * b + 2] - B[4 * b], B[4 * b + 3] - B[4 * b + 1]) <= RULE_EM * 200) list.push(b)
+    left -= B.length / 4
+    thin.set(p, list)
+    return list
+  }
   for (const u of ink) {
     for (const [p, g] of u.glyphs.text) if (own.glyphs[p - 1] && own.glyphs[p - 1][g] == null) { own.glyphs[p - 1][g] = `u${u.id}`; n++ }
     for (const [p, g] of u.glyphs.ph) if (own.glyphs[p - 1] && own.glyphs[p - 1][g] == null) { own.glyphs[p - 1][g] = `u${u.id}.p`; n++ }
+    // (and the rules TeX painted on its lines, as a source unit's text takes them, own.mjs MR 2b: an OT1 \_ in an orphan line)
+    if (!pages || !own.boxes || left <= 0) continue
+    const near = []
+    for (const [p, box] of extentsOf(pages, u.glyphs.text)) {
+      const B = pages[p - 1].boxes, list = thinOn(p)
+      left -= list.length
+      // (those that meet its glyphs' extent, a size about it: a rule on its lines and any frame it is part of stand there)
+      for (const b of list) if (B[4 * b] <= box[2] && box[0] <= B[4 * b + 2] && B[4 * b + 1] <= box[3] && box[1] <= B[4 * b + 3]) near.push([p, b])
+    }
+    if (left <= 0) continue
+    const r = lineRulesOf(pages, u.glyphs.text, near, left)
+    left -= r.work
+    if (r.over) continue
+    // (a rule inside one of its placeholders' extent is that placeholder's, `u<id>.p`, as a source unit's placeholder takes the
+    // boxes of its range (own.mjs): an inline fraction's bar between its numerator and its denominator, which the formula's crop
+    // redraws with the text's groups hidden (layer-proto/visibility.mjs cropSourceOff))
+    const phs = placeholderBoxesOf(pages, u.glyphs.ph)
+    for (const [p, b] of r.rules) {
+      if (own.boxes[p - 1][b] != null) continue
+      const B = pages[p - 1].boxes, x0 = B[4 * b], y0 = B[4 * b + 1], x1 = B[4 * b + 2], y1 = B[4 * b + 3], mid = (y0 + y1) / 2
+      const inPh = phs.some(c => c.p === p && x0 >= c.x0 - 0.1 * c.size && x1 <= c.x1 + 0.1 * c.size && mid >= c.y0 && mid <= c.y1)
+      own.boxes[p - 1][b] = inPh ? `u${u.id}.p` : `u${u.id}`
+    }
   }
   return n
+}
+
+/** a unit's placeholder glyphs as boxes, one a formula: glyphs of a page whose boxes meet, or stand within PH_GAP of their size
+ *  apart, on one line (within a size across): [{ p, x0, y0, x1, y1, size }], by their advances and their tops and bottoms */
+function placeholderBoxesOf(pages, gs) {
+  const out = []
+  for (const [p, g] of gs) {
+    const G = pages[p - 1]?.glyphs?.[g]
+    if (!G || !(G.size > 0)) continue
+    const box = { p, x0: G.x0, y0: G.bottom, x1: G.x1, y1: G.top, size: G.size }
+    for (let i = out.length - 1; i >= 0; i--) {
+      const c = out[i], gap = PH_GAP * Math.max(c.size, box.size)
+      if (c.p !== p || box.x0 > c.x1 + gap || c.x0 > box.x1 + gap || box.y0 > c.y1 + box.size || c.y0 > box.y1 + box.size) continue
+      box.x0 = Math.min(box.x0, c.x0); box.y0 = Math.min(box.y0, c.y0); box.x1 = Math.max(box.x1, c.x1); box.y1 = Math.max(box.y1, c.y1); box.size = Math.max(box.size, c.size)
+      out.splice(i, 1)
+    }
+    out.push(box)
+  }
+  return out
+}
+
+/** each page's extent of `glyphs` (their advances, baseline to baseline), a size of its largest glyph past it on every side:
+ *  page -> [x0, y0, x1, y1] */
+function extentsOf(pages, glyphs) {
+  const out = new Map()
+  for (const [p, g] of glyphs) {
+    const G = pages[p - 1].glyphs[g]
+    if (!(G?.size > 0)) continue
+    const e = out.get(p)
+    if (!e) { out.set(p, [G.x0, G.y, G.x1, G.y, G.size]); continue }
+    e[0] = Math.min(e[0], G.x0); e[1] = Math.min(e[1], G.y); e[2] = Math.max(e[2], G.x1); e[3] = Math.max(e[3], G.y); e[4] = Math.max(e[4], G.size)
+  }
+  return [...out].map(([p, [x0, y0, x1, y1, s]]) => [p, [x0 - s, y0 - s, x1 + s, y1 + s]])
 }
 
 /** the ink units the wrap could not hide alone, as it reads a source unit (wrap.mjs `unhidden`): one with a glyph on a page it did

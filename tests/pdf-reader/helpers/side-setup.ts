@@ -1,6 +1,7 @@
 // The layer side's tests' setup (layer-side.test.ts with the fake door, layer-side-door.test.ts with the real one): the reading
 // view over its PDF.js stand-ins and a clock moved by hand (reader-fakes.ts), the original's four pages shown, and its layer side
 // over a door and the format test's small paper (format-paper.ts) served by digest; what the side asked of each door recorded
+import { createHash } from 'node:crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, expect, vi } from 'vitest'
 import { BundleRefusal } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import type { Ref } from '@/pdf-reader/engine/layer-proto/format.mjs'
@@ -13,7 +14,20 @@ import { made, type Made, N } from './format-paper'
 import { drawPanes, FakeIO, FakeRO, fakeDoc, fakeKit, fakeTask, type FakeTask, flush, installLayout, type ManualClock, manualClock, resetFakes } from './reader-fakes'
 import { withGroups } from './groups'
 
-/** the hooks every side test file runs: the layout model, the observers, a console that keeps the warnings, the views disposed */
+/** a SHA-256 answered in the turn it is asked, the bytes hashed all the same (node:crypto): Web Crypto's digest runs on the thread
+ *  pool and answers when the machine lets it, so that the objects the side's feed checks (format.mjs digestOf) were read in a
+ *  number of a test's steps no count bounds under load (CI's run of layer-side.test.ts had read none of the paper's parts after
+ *  10, the indicator's "none for a paragraph whose rows ended" failing); a test's clock is the hand's, its turns too */
+async function digestNow(algorithm: AlgorithmIdentifier, data: BufferSource): Promise<ArrayBuffer> {
+  const name = typeof algorithm === 'string' ? algorithm : algorithm.name
+  if (name.toUpperCase() !== 'SHA-256') throw new Error(`digestNow: ${name}`)
+  const bytes = ArrayBuffer.isView(data) ? new Uint8Array(data.buffer, data.byteOffset, data.byteLength) : new Uint8Array(data)
+  const d = createHash('sha256').update(bytes).digest()
+  return d.buffer.slice(d.byteOffset, d.byteOffset + d.byteLength) as ArrayBuffer
+}
+
+/** the hooks every side test file runs: the layout model, the observers, a console that keeps the warnings, the views disposed, a
+ *  digest answered in its turn (digestNow) */
 export function installSideFakes() {
   let restoreLayout: () => void
   beforeAll(() => { restoreLayout = installLayout() })
@@ -24,6 +38,7 @@ export function installSideFakes() {
     vi.stubGlobal('IntersectionObserver', FakeIO)
     vi.stubGlobal('ResizeObserver', FakeRO)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(globalThis.crypto.subtle, 'digest').mockImplementation(digestNow as never)
   })
   afterEach(() => {
     for (const v of views.splice(0)) v.dispose()

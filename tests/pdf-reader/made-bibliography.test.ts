@@ -106,15 +106,27 @@ describe('madeBibliography: the job\'s .bbl BibTeX makes in the prepare\'s first
       [[{ 'main.aux': AUX, 'main.bbl': '\\begin{thebibliography}{0}\n\\end{thebibliography}\n' }], 'no-bbl'],
       // (a .bbl that is more than a bibliography: a heading of its own among the source's units moves the units after it)
       [[{ 'main.aux': AUX, 'main.bbl': `\\section*{Notes}\nA note BibTeX never writes.\n\n${BBL}` }], 'moved'],
-      // (an entry the front end reads past its end: a URL's percent sign, which TeX's \\href reads as a character and the front end as
-      // a comment, leaves its group open over the next entry, whose \\bibitem would then no longer define its citation: 2610.21770v1)
-      [[{ 'main.aux': AUX, 'main.bbl': '\\begin{thebibliography}{2}\n\\bibitem{ba2016}%\n  Jimmy~Lei Ba, \\href\n  {https://a.org/x?u=%3Fref}\n  {Layer normalization}, 2016.%\n\\bibitem{b}%\n  Another Author, A title of a paper, 2017.%\n\\end{thebibliography}\n' }], 'entries'],
+      // (an entry the front end reads past its end: a percent sign inside a command's argument, a comment there to TeX and to the
+      // front end, leaves the argument's group open over the next entry, whose \\bibitem would then no longer define its citation)
+      [[{ 'main.aux': AUX, 'main.bbl': '\\begin{thebibliography}{2}\n\\bibitem{ba2016}%\n  Jimmy~Lei Ba, \\bibinfo{note}{\\url\n  {https://a.org/x?u=%3Fref}}\n  {Layer normalization}, 2016.%\n\\bibitem{b}%\n  Another Author, A title of a paper, 2017.%\n\\end{thebibliography}\n' }], 'entries'],
     ]
     for (const [args, why] of cases) {
       const paper = source(), { compile } = host(...args)
       const r = await madeBibliography(paper, { compile })
       expect(r, why).toMatchObject({ kept: why })
       expect(paper.meta.bbl, why).toBe(false)
+    }
+  })
+  it('makes the entries where a web address in an entry holds a percent sign TeX\'s \\href reads as a character (2610.21770v1\'s %3F), and where an entry of no words is no unit (2608.25210v2\'s ACM web pages)', async () => {
+    const ok = [
+      '\\begin{thebibliography}{2}\n\\bibitem{ba2016}%\n  Jimmy~Lei Ba, \\href\n  {https://a.org/x?u=%3Fref}\n  {Layer normalization}, 2016.%\n\\bibitem{b}%\n  Another Author, A title of a paper, 2017.%\n\\end{thebibliography}\n',
+      '\\begin{thebibliography}{2}\n\\bibitem[\\protect\\citeauthoryear{??}{dec}{2025}]%\n        {dec}\n \\bibinfo{year}{2025}\\natexlab{}.\n\\newblock\n  \\bibinfo{booktitle}{\\emph{\\url{https://huggingface.co/blog/x}}}.\n\n\\bibitem{ba2016}\nJimmy~Lei Ba.\n\\newblock Layer normalization.\n\\newblock 2016.\n\\end{thebibliography}\n',
+    ]
+    for (const bbl of ok) {
+      const paper = source(), { compile } = host({ 'main.aux': AUX, 'main.bbl': bbl })
+      const r = await madeBibliography(paper, { compile })
+      expect('paper' in r, bbl.slice(0, 80)).toBe(true)
+      if ('paper' in r) expect(kinds(r.paper).filter(k => k === 'reference').length).toBe(bbl.includes('Another Author') ? 2 : 1)
     }
   })
   it('makes the entries where the .bib the aux names first is one the pass wrote itself: REVTeX\'s <job>Notes.bib (2610.20595v1, 2610.21770v1)', async () => {

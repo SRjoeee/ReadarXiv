@@ -253,8 +253,20 @@
 //     column's top had every next entry of an orphan bibliography joined to it, a column one unit, since #487's PARA_DY); and an
 //     author block's row set in a \\centerline is its text (latex-front.mjs FRONT_BOXES: 2010.11929v2's block no unit before, its
 //     names, notes and places one ink unit of orphan text), each unit it cuts numbered after the others, so that no unit before
-//     the entries moves; every paper is translated again
-export const PIPELINE_VERSION = '32'
+//     the entries moves; every paper is translated again; 33 (the coverage lane of batch 2, the release sweep of staging
+//     4b3c4ae9): a web address's `%` is a character where TeX reads it so (latex-front.mjs urlPercents: \url, \path, \nolinkurl,
+//     \burl and \href's first argument outside another command's argument), so that the rest of its line is text again and a
+//     .bbl's entries after such an address are entries of their own (2610.21770v1's 18, 2608.18626's 31); an inline \tikz call is
+//     one placeholder to its path's `;` or its group (tikzCallEnd: 2010.11929v2's legend dots were \tikz, \fill and the path sent
+//     as text); a paper's macro of no argument whose body ends a table's row ends the row in a cell (rowEndsOf: 2610.21924v1's
+//     \tightrow, 30 cells); an author block's row ends inside a conditional are no rows (frontEnds); and a made .bbl is kept for an
+//     entry that runs over another \bibitem, no longer for one of no words (layout/paper.mjs madeBibliography: 2608.25210v2's
+//     four web pages kept its 64 entries no unit's): every paper is translated again; 34 (batch 2's ink lane): a stop that
+//     abuts the formula before it at a contents line's end is the entry's, no leader dot (layout/ink-units.mjs trimmed: a leader is a word a word's gap from the one
+//     before it, 2610.19274v1's list of figures, "… strength $C_n^2$.", whose stop was left the original's beside the drawn entry),
+//     and two words of an ink unit's line are joined by a space only where a word's gap stands between them (no "⟦C⟧ ." for a
+//     formula's stop, no "⟦x⟧ -axis"): the ink units' texts move where either stands
+export const PIPELINE_VERSION = '34'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
@@ -299,6 +311,14 @@ export const PDFJS = '6.3.289'
  * opening point alone at its unit's end, no display, owns its lines up to TeX's skip before another block, no further
  * (stream.mjs lineEnd, BLOCK_GAP of the page's line pitch: the last author's `\orcidlink` had owned the affiliations and the
  * e-mail below the names, to the abstract's label, which no ink unit then made a unit of; at a bibliography's leading a wrapped
- * `\Eprint` keeps every line it held): the base's bytes change where a paper has either
+ * `\Eprint` keeps every line it held): the base's bytes change where a paper has either; 13 (the coverage lane of batch 2): a
+ * closed piece's first glyph is its text's where it is the punctuation mark the piece's command set before its own ink (stream.mjs
+ * ownedOf, marks.mjs followsOf `moved`: cite.sty's superscripts set `\cite{x}.` as ".¹", now marked around the pair, MARKS_SCHEMA
+ * 14), so that the piece's group holds the superscript alone and the mark is in its unit's text group: the base's bytes change
+ * where a paper has such a pair; 14 (batch 2's ink lane, #117): a unit's text owns the rules TeX painted on its own lines, as it owns its glyphs (own.mjs MR 2b, lineRulesOf: thin across, on a baseline
+ * of its glyphs, within their extent, no part of a frame), and an ink unit's lines take theirs too (ink-units.mjs claimInk): an
+ * OT1 \_ is a rule, no glyph, and its three stood under 1512.03385v1's translated Table 1 caption (2610.19159v1's 95,
+ * 2610.21924v1's 150 in its tables' cells), an \underline's line under its translation: the base's bytes change where a unit's
+ * text has one
  */
-export const REMOVAL = '12'
+export const REMOVAL = '14'

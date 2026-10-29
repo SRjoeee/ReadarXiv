@@ -1243,6 +1243,16 @@ describe('makeLayout, the maker round (Fix 1): text symbols and the macros TeX s
     expect(phOf(lost.file, 0, 1)).toEqual([0, 1, 6, PH_FLAG.LOST])
     expect(lost.stats.ph).toMatchObject({ symbols: 0, unmarked: 1 })
   })
+  it('a paper\'s macro TeX showed sets one mark of punctuation (apacite\'s \\BPBI, ".~" between initials), glued to the initial before it: TEXT where its line shows that mark', async () => {
+    const runs: Run[] = [{ s: 'Harrington, J. E., Jr. A study.', x: 72, y: 700 }]
+    const w: World = { pages: [{ runs }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[0] as Run), 700]], units: [unit('reference', [text('Harrington, J'), ph('\\BPBI'), text(' E., Jr. A study.')])] }
+    const said = await made({ ...w, texts: [['\\BPBI', '.']] })
+    expect(phOf(said.file, 0, 1)).toEqual([0, 1, 6, PH_FLAG.TEXT])
+    expect(pt(said.file, 0, 1)).toBe('.')
+    // (with no text from TeX, or one of letters, as before: its rendering not found)
+    expect(phOf((await made(w)).file, 0, 1)).toEqual([0, 1, 6, PH_FLAG.LOST])
+    expect(phOf((await made({ ...w, texts: [['\\BPBI', 'and']] })).file, 0, 1)).toEqual([0, 1, 6, PH_FLAG.LOST])
+  })
   it('a \\# at a unit\'s head, before its start mark: its glyph right before the first word is the unit\'s, TEXT', async () => {
     const runs: Run[] = [{ s: '#', x: 72, y: 700 }, { s: 'layers of the net', x: 78, y: 700 }]
     const { file } = await made({ pages: [{ runs }], marks: [['0s', 1, 78, 700], ['0e', 1, endOf(runs[1] as Run), 700]], units: [unit('para', [ph('\\#'), text(' layers of the net')])] })
@@ -1261,12 +1271,17 @@ describe('makeLayout, the maker round (Fix 1): text symbols and the macros TeX s
     expect(pt(file, 0, 1)).toBe('_')
     expect(chunk(rowsOf(file, 0, 'erase'), 5).some(([, x0, y0, x1, y1]) => x0! <= 97.6 && x1! >= 100.6 && y0! <= 700 && y1! >= 700.4)).toBe(true)
   })
-  it('a macro TeX said sets no ink (marking.inkless) gets no row, marked or not; one TeX did not say so is a head piece', async () => {
+  it('a macro TeX said sets no ink (marking.inkless) gets an EMPTY row, marked or not, whatever class the layer reads it as; one TeX did not say so is a head piece', async () => {
     const runs: Run[] = [{ s: 'Table rows of text', x: 72, y: 700 }]
     const marks: Mark[] = [['0s', 1, 72, 700], ['0e', 1, endOf(runs[0] as Run), 700]]
     const units = [unit('para', [ph('\\rule{0pt}{2ex}'), text('Table rows of text')])]
     const said = await made({ pages: [{ runs }], marks, units, inkless: ['\\rule{0pt}{2ex}'] })
-    expect(said.file.ph.find(r => r[0] === 0 && r[1] === 0)).toBeUndefined()
+    expect(phOf(said.file, 0, 0)).toEqual([0, 0, 6, PH_FLAG.EMPTY])
+    // (a macro whose argument holds letters, which the layer reads as a formula it draws from its row alone: 2608.02163v1's
+    // `2025{\\natexlab{a}}` under a class that sets no label, its entry the original's with no row)
+    const entry = [unit('para', [text('Wu, J. 2025'), ph('\\natexlab{a}'), text('. Table rows of text')])]
+    const natexlab = await made({ pages: [{ runs: [{ s: 'Wu, J. 2025. Table rows of text', x: 72, y: 700 }] }], marks: [['0s', 1, 72, 700], ['0e', 1, 230, 700]], units: entry, inkless: ['\\natexlab{a}'] })
+    expect(phOf(natexlab.file, 0, 1)).toEqual([0, 1, 6, PH_FLAG.EMPTY])
     // at the unit's head, nothing on its line before the start mark: EMPTY (headsOf)
     const not = await made({ pages: [{ runs }], marks, units })
     expect(phOf(not.file, 0, 0)).toEqual([0, 0, 6, PH_FLAG.EMPTY])

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { followsOf, INK_ANY } from '@/pdf-reader/engine/layout/marks.mjs'
-import { isLabelForm, ownOf, spellOf } from '@/pdf-reader/engine/layout/own.mjs'
+import { isLabelForm, lineRulesOf, ownOf, spellOf } from '@/pdf-reader/engine/layout/own.mjs'
 
 // Each unit's own ink by its marks in stream order (layout/own.mjs; design docs/route/ocg-erasure.md §1): the rules MR 1–6 on
 // pages written as a stream of points and glyphs, the spell check and the label kept
@@ -97,6 +97,61 @@ describe('placeholders, labels and names (MR 4–6)', () => {
     const pages = [page([{ pt: '0s' }, 'ab', { rule: [10, 600, 60, 600.4] }, { pt: 'p0.1a' }, { rule: [10, 590, 60, 590.4] }, { pt: 'p0.1b' }, { pt: '0e' }, { rule: [10, 580, 60, 580.4] }])]
     const r = ownOf(pages, { units: units('ab') })
     expect(r.boxes[0]).toEqual([null, 'u0.p', null])
+  })
+  it('gives a rule TeX painted on a line of a unit\'s text to that text: OT1\'s \\_, an underline (#117: 1512.03385v1\'s Table 1 caption)', () => {
+    // (OT1 has no underscore: \\_ is \\vbox{\\hrule width.3em} on the baseline, between the text's glyphs; an underline below them)
+    const pages = [page([{ pt: '0s' }, 'conv3', { rule: [36, 700, 39, 700.4] }, '1 and', { rule: [40, 698.2, 65, 698.6] }, ' x', { pt: '0e' }])]
+    const r = ownOf(pages, { units: [{ pieces: [{ t: 'text', s: 'conv3' }, { t: 'ph', src: '\\_' }, { t: 'text', s: '1 and x' }] }] })
+    expect(r.boxes[0]).toEqual(['u0', 'u0'])
+    expect(r.units.get(0)?.unhidden).toBe(null)
+  })
+  it('gives a fraction\'s bar on a text line to the placeholder whose range holds it, not to the text (review of #502)', () => {
+    // ("ratio x/y here": the formula's points around its numerator, its bar on the line's band and its denominator)
+    const pages = [page([{ pt: '0s' }, 'ratio', { pt: 'p0.1a' }, 'x', { rule: [36, 700.3, 41, 700.7] }, 'y', { pt: 'p0.1b' }, 'here', { pt: '0e' }])]
+    const r = ownOf(pages, { units: [{ pieces: [{ t: 'text', s: 'ratio' }, { t: 'ph', src: '\\frac{x}{y}' }, { t: 'text', s: 'here' }] }] })
+    expect(r.boxes[0]).toEqual(['u0.p'])
+  })
+  it('leaves the page\'s what is no rule of the text\'s lines: a box as tall as a letter (an icon), a rule off them, a footnote\'s separator', () => {
+    // (an ORCID mark after a name, its circle 6 pt; a rule between two of its lines, half a pitch from each; a rule past its line's end)
+    const pages = [page([{ pt: '0s' }, 'Name', { rule: [32, 699, 38, 705] }, '\n', { rule: [10, 694, 30, 694.4] }, 'more', { rule: [70, 688, 200, 688.4] }, { pt: '0e' }])]
+    const r = ownOf(pages, { units: units('Namemore') })
+    expect(r.boxes[0]).toEqual([null, null, null])
+    // (a footnote continued on the next page: the separator TeX sets above it, in its range there, stays the page's)
+    const two = [page([{ pt: 'bs1' }, 'body', { pt: 'be1' }, '\n', { pt: '0s' }, 'Foot']), page([{ pt: 'bs2' }, 'b', { pt: 'be2' }, '\n', { rule: [10, 691.5, 60, 691.9] }, '\n', 'note', { pt: '0e' }])]
+    const f = ownOf(two, { units: units('Footnote') })
+    expect(f.boxes[1]).toEqual([null])
+    expect(groupsOf(f, two)).toEqual({ u0: 'Footnote' })
+    // (amsthm's \openbox at a proof's end, four rules: its top and bottom thin, but sides meet them, a frame; a dot of a logo)
+    const qed = [page([{ pt: '0s' }, 'Proof done', { rule: [60, 700, 65, 700.4] }, { rule: [60, 700, 60.4, 706.4] }, { rule: [64.6, 700, 65, 706.4] }, { rule: [60, 706, 65, 706.4] }, { rule: [20, 702, 20.1, 702.09] }, { pt: '0e' }])]
+    expect(ownOf(qed, { units: units('Proof done') }).boxes[0]).toEqual([null, null, null, null, null])
+  })
+})
+
+describe('the rules of a text\'s lines (lineRulesOf, MR 2b)', () => {
+  /** one line of text and `n` rules on it, then `m` thin upright boxes off it (no frame of a rule): [page, index] lists */
+  const lineOf = (n: number, m: number) => {
+    const items: Item[] = ['abcdefghij']
+    for (let i = 0; i < n; i++) items.push({ rule: [10 + (i % 10) * 4, 700, 13 + (i % 10) * 4, 700.4] })
+    for (let i = 0; i < m; i++) items.push({ rule: [300, 100 + i * 0.01, 300.4, 140 + i * 0.01] })
+    const pg = page(items)
+    return { pages: [pg], glyphs: pg.glyphs.map((_, g) => [1, g] as [number, number]), boxes: Array.from({ length: n + m }, (_, b) => [1, b] as [number, number]) }
+  }
+  it('reads 20,000 rules of one line in work linear in them, every one the text\'s', () => {
+    const { pages, glyphs, boxes } = lineOf(20_000, 0)
+    const r = lineRulesOf(pages, glyphs, boxes)
+    expect(r.over).toBe(false)
+    expect(r.rules).toHaveLength(20_000)
+    expect(r.work).toBeLessThan(100_000)
+  })
+  it('stops past its budget with no rule: 2,000 rules beside 2,000 other thin boxes are 4 million comparisons', () => {
+    const { pages, glyphs, boxes } = lineOf(2_000, 2_000)
+    const r = lineRulesOf(pages, glyphs, boxes, 100_000)
+    expect(r.over).toBe(true)
+    expect(r.rules).toEqual([])
+    expect(r.work).toBeLessThan(110_000)
+    // (with the budget for it, the same reading: none of the upright boxes meets a rule)
+    const all = lineRulesOf(pages, glyphs, boxes)
+    expect([all.over, all.rules.length]).toEqual([false, 2_000])
   })
 })
 

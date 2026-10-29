@@ -252,6 +252,37 @@ describe('a complete macro glued to the placeholder after it (2610.21098\'s \\Ha
   })
 })
 
+describe('a command that sets the punctuation mark after it before its own ink (cite.sty\'s superscripts: `\\cite{a}.` set ".¹", 2610.19274v1\'s 19 paragraphs): its marks around the pair', () => {
+  const u = unit([text('in the air '), ph('\\cite{a}'), text('. Next words, '), ph('\\cite{b}'), text(', more '), ph('\\ref{c}'), text('; and '), ph('\\cite{d}'), text(' x.')])
+  it('the probe sets each such follower\'s pair with a word after it, as the paper sets it and with its opening mark before the command and its closing one after the mark', () => {
+    const tex = markProbeTex(probeSamples([u]))
+    expect(tex).toContain('way \\cite{a}. x \\unskip')
+    expect(tex).toContain('way \\axtpma{q0a}\\cite{a}.\\axtpm{q0b} x \\unskip')
+    expect(tex).toContain('way \\axtpma{q0a}\\cite{a};\\axtpm{q0b} x \\unskip')
+    // (a word after it: no such box)
+    expect(tex).not.toContain('\\cite{a} x\\axtpm{q0b}')
+  })
+  it('readMarkProbe: 3 where the two are equal, an error in either box 2', () => {
+    const samples = probeSamples([u])
+    expect(readMarkProbe('LAYOUT-PROBE 1 punct 0 33330000\n', samples)).toEqual({ '\\cite': '33330000' })
+    for (const box of ['m', 'p']) expect(readMarkProbe(`LAYOUT-PROBE 1 punct-at 0 0 ${box}\n! Undefined control sequence.\nLAYOUT-PROBE 1 punct 0 33330000\n`, samples)['\\cite']).toBe('23330000')
+  })
+  it('layoutMarking: on 3, the opening mark before the command and the closing one after the mark it moves, inside the text after it', () => {
+    const marked = (switches: Record<string, string>) => ((layoutMarking([u], MARK_CLASSES, { lines: false, switches }).units[0]?.pieces ?? []) as Piece[]).map(p => p.src ?? p.s).join('')
+    const got = marked({ '\\cite': '33330000', '\\ref': '00000000' })
+    expect(got).toContain('in the air \\axtpma{p0.1a}\\cite{a}.\\axtpm{p0.1b} Next words, \\axtpma{p0.3a}\\cite{b},\\axtpm{p0.3b} more \\axtpma{p0.5a}\\ref{c}\\axtpm{p0.5b}; and \\axtpma{p0.7a}\\cite{d}\\axtpm{p0.7b} x.')
+    // (2: no mark, as before)
+    expect(marked({ '\\cite': '22220000', '\\ref': '00000000' })).toContain('in the air \\cite{a}. Next words, \\cite{b}, more')
+    // (a text piece whose source is the text's at its head, an accent's letter joined after it: cut there all the same)
+    const v = unit([text('the air '), ph('\\cite{a}'), { t: 'text', s: '.é', src: '.\\\'e' } as Piece])
+    expect(((layoutMarking([v], MARK_CLASSES, { lines: false, switches: { '\\cite': '33330000' } }).units[0]?.pieces ?? []) as Piece[]).map(p => p.src ?? p.s).join('')).toContain('\\axtpma{p0.1a}\\cite{a}.\\axtpm{p0.1b}\\\'e')
+  })
+  it('followsOf: the mark that opens the text after a piece of an asked class, which its closed ink holds first', () => {
+    const f = followsOf([u], new Set(['p0.1a', 'p0.1b', 'p0.3a', 'p0.3b', 'p0.5a', 'p0.5b', 'p0.7a', 'p0.7b']))
+    expect(['p0.1a', 'p0.3a', 'p0.5a', 'p0.7a'].map(n => f(n)?.moved ?? null)).toEqual(['.', ',', ';', null])
+  })
+})
+
 describe('a paper\'s macro that looks ahead, before a placeholder (2609.20976\'s \\snr = \\ac{SNR}\\xspace, then $\\geq 50$): the pair asked of TeX', () => {
   // (the abstract's shape, and 2609.20976's u41, u46, u59 and u61: the macro, a space, an inline formula; u19's: the macro, a
   // space, a footnote's call, which \\xspace sees as no other token; and a macro of an argument right against a citation)
@@ -381,7 +412,7 @@ describe('a sample that leaves TeX\'s state broken (2010.11929v2\'s \\tikz\\fill
     expect(boxes.length).toBeGreaterThan(40)
     expect(tex.match(/\\xdef\\axt@level\{\\the\\currentgrouplevel\}\\setbox\\axt@[qi]box\\hbox\{/g)?.length).toBe(boxes.length)
     expect(tex).toContain('\\xdef\\axt@level{\\the\\currentgrouplevel}\\setbox\\axt@ibox\\hbox{\\tikz}\\axt@unwind\\begingroup\\showboxbreadth')
-    expect(tex.match(/\\unskip\\xdef\\axt@qn\{\\the\\lastnodetype\\ifinner\\ifhmode\/in\\fi\\fi\}\}\\axt@unwind\\xdef\\axt@q[a-gw]\{/g)?.length).toBe(boxes.length - 4)
+    expect(tex.match(/\\unskip\\xdef\\axt@qn\{\\the\\lastnodetype\\ifinner\\ifhmode\/in\\fi\\fi\}\}\\axt@unwind\\xdef\\axt@q[a-gmpw]\{/g)?.length).toBe(boxes.length - 4)
     // (defined before any box: a \\begingroup's group closed by \\endgroup, a box's or a group of braces' by \\egroup, to the level saved)
     const unwind = '\\gdef\\axt@unwind{\\global\\let\\axt@unwound\\relax\\ifnum\\currentgrouplevel>\\axt@level\\relax\\ifnum\\currentgrouptype=14 \\global\\let\\axt@unwound\\axt@unwind\\endgroup\\else\\ifnum\\currentgrouptype<6 \\ifnum\\currentgrouptype>0 \\global\\let\\axt@unwound\\axt@unwind\\egroup\\fi\\fi\\fi\\fi\\axt@unwound}'
     expect(tex.indexOf(unwind)).toBeGreaterThan(-1)
