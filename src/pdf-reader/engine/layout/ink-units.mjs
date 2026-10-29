@@ -41,7 +41,7 @@
 import { classifyFont } from '../layer-proto/fonts.mjs'
 import { utf8 } from '../translate/mt.mjs'
 import { classOf } from './marks.mjs'
-import { lineRulesOf, RULE_EM } from './own.mjs'
+import { lineRulesOf, OWN_WORK, RULE_EM } from './own.mjs'
 import { spellOf } from './stream.mjs'
 
 /** the ledger's classes made units, and each one's kind (rules/content-classes.mjs UNIT_CLASS gives the class back) */
@@ -475,14 +475,18 @@ function solid(view, x0, y0, x1, y1) {
  *  logs), `own.boxes[p - 1][b]`; returns the glyphs claimed */
 export function claimInk(own, ink, pages = null) {
   let n = 0
-  // (each page's painted boxes no group holds that could be a rule, once a page: the candidates of an ink unit's lines' rules)
+  // (the rules' search of every ink unit together, each page's boxes read once and each unit's near ones: OWN_WORK, past which
+  // the rest keep theirs the page's)
+  let left = OWN_WORK
+  // (each page's painted boxes no group holds that could be a rule or a frame's side, once a page)
   const thin = new Map()
   const thinOn = p => {
     let list = thin.get(p)
     if (list) return list
     const pg = pages[p - 1], B = pg.boxes, O = own.boxes?.[p - 1] ?? []
     list = []
-    for (let b = 0; b < B.length / 4; b++) if ((pg.paths[b] ?? -1) >= 0 && O[b] == null && Math.min(B[4 * b + 2] - B[4 * b], B[4 * b + 3] - B[4 * b + 1]) <= RULE_EM * 200) list.push([p, b])
+    for (let b = 0; b < B.length / 4; b++) if ((pg.paths[b] ?? -1) >= 0 && O[b] == null && Math.min(B[4 * b + 2] - B[4 * b], B[4 * b + 3] - B[4 * b + 1]) <= RULE_EM * 200) list.push(b)
+    left -= B.length / 4
     thin.set(p, list)
     return list
   }
@@ -490,11 +494,35 @@ export function claimInk(own, ink, pages = null) {
     for (const [p, g] of u.glyphs.text) if (own.glyphs[p - 1] && own.glyphs[p - 1][g] == null) { own.glyphs[p - 1][g] = `u${u.id}`; n++ }
     for (const [p, g] of u.glyphs.ph) if (own.glyphs[p - 1] && own.glyphs[p - 1][g] == null) { own.glyphs[p - 1][g] = `u${u.id}.p`; n++ }
     // (and the rules TeX painted on its lines, as a source unit's text takes them, own.mjs MR 2b: an OT1 \_ in an orphan line)
-    if (!pages || !own.boxes) continue
-    const on = [...new Set(u.glyphs.text.map(([p]) => p))].flatMap(thinOn)
-    for (const [p, b] of lineRulesOf(pages, u.glyphs.text, on).rules) if (own.boxes[p - 1][b] == null) own.boxes[p - 1][b] = `u${u.id}`
+    if (!pages || !own.boxes || left <= 0) continue
+    const near = []
+    for (const [p, box] of extentsOf(pages, u.glyphs.text)) {
+      const B = pages[p - 1].boxes, list = thinOn(p)
+      left -= list.length
+      // (those that meet its glyphs' extent, a size about it: a rule on its lines and any frame it is part of stand there)
+      for (const b of list) if (B[4 * b] <= box[2] && box[0] <= B[4 * b + 2] && B[4 * b + 1] <= box[3] && box[1] <= B[4 * b + 3]) near.push([p, b])
+    }
+    if (left <= 0) continue
+    const r = lineRulesOf(pages, u.glyphs.text, near, left)
+    left -= r.work
+    if (r.over) continue
+    for (const [p, b] of r.rules) if (own.boxes[p - 1][b] == null) own.boxes[p - 1][b] = `u${u.id}`
   }
   return n
+}
+
+/** each page's extent of `glyphs` (their advances, baseline to baseline), a size of its largest glyph past it on every side:
+ *  page -> [x0, y0, x1, y1] */
+function extentsOf(pages, glyphs) {
+  const out = new Map()
+  for (const [p, g] of glyphs) {
+    const G = pages[p - 1].glyphs[g]
+    if (!(G?.size > 0)) continue
+    const e = out.get(p)
+    if (!e) { out.set(p, [G.x0, G.y, G.x1, G.y, G.size]); continue }
+    e[0] = Math.min(e[0], G.x0); e[1] = Math.min(e[1], G.y); e[2] = Math.max(e[2], G.x1); e[3] = Math.max(e[3], G.y); e[4] = Math.max(e[4], G.size)
+  }
+  return [...out].map(([p, [x0, y0, x1, y1, s]]) => [p, [x0 - s, y0 - s, x1 + s, y1 + s]])
 }
 
 /** the ink units the wrap could not hide alone, as it reads a source unit (wrap.mjs `unhidden`): one with a glyph on a page it did

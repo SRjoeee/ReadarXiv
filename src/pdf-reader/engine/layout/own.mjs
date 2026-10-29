@@ -218,18 +218,22 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       list = prev ? take(prev, e, at(e)) : takeFromStart(e, at(e))
       list = { glyphs: list.glyphs, boxes: [] }
     }
-    textOf.set(id, { s, e })
     // (a unit's text takes its glyphs and the rules TeX painted on its own lines (MR 2b): OT1's \_, which is a rule and no
     // glyph, an underline, a stroke through; any other box in its range — a footnote's separator above its lines, a box as tall
     // as a letter (an icon), a rule past its lines — is the page's, left standing; a placeholder's are its own, `.p`, claimed
-    // over the text's below. MR 3's title takes no box: `list.boxes` is empty there)
-    claim({ glyphs: list.glyphs, boxes: lineRules(list) }, `u${id}`, 'u')
+    // over the text's below. MR 3's title takes no box: `list.boxes` is empty there. Their search past OWN_WORK: the unit
+    // not owned, as any past it)
+    const rules = lineRules(list)
+    if (!rules) { u.unhidden = 'marks'; continue }
+    textOf.set(id, { s, e })
+    claim({ glyphs: list.glyphs, boxes: rules }, `u${id}`, 'u')
   }
-  /** the rules TeX painted on the text's own lines (MR 2b): lineRulesOf over the range's glyphs and boxes, its work counted */
+  /** the rules TeX painted on the text's own lines (MR 2b): lineRulesOf over the range's glyphs and boxes, its work counted;
+   *  null where it would pass OWN_WORK */
   function lineRules(list) {
-    const r = lineRulesOf(pages, list.glyphs, list.boxes)
+    const r = lineRulesOf(pages, list.glyphs, list.boxes, OWN_WORK - work)
     work += r.work
-    return r.rules
+    return r.over ? null : r.rules
   }
   function takeToEnd(A, r) {
     const pg = pages[A[0] - 1], R = regions[A[0] - 1], glyphs = [], boxes = []
@@ -620,38 +624,64 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
  * middle within half a size of the line's baseline, across within the line's glyphs' extent and half a size past either end,
  * and no part of a frame: no other thin box of `boxes` that is no such rule meets it within its own thickness (amsthm's
  * \openbox, a \fbox: their upright sides; kept whole the page's; a box behind the text, thick both ways, is none). A line:
- * the glyphs on one baseline of a page (a placeholder between them, its runs one line). Returns { rules, work }
+ * the glyphs on one baseline of a page (a placeholder between them, its runs one line). The work is counted as it is done
+ * (each glyph and box read, each line and box compared): past `max` the reading stops, `over`, with no rule (a PDF's
+ * content is anyone's: a line of 20,000 rules beside 20,000 thin boxes would be 400 million comparisons). Returns
+ * { rules, work, over }
  */
-export function lineRulesOf(pages, glyphs, boxes) {
+export function lineRulesOf(pages, glyphs, boxes, max = Infinity) {
+  let work = boxes.length
+  const over = () => ({ rules: [], work, over: true })
   const painted = boxes.filter(([p, b]) => (pages[p - 1].paths[b] ?? -1) >= 0)
-  if (!painted.length) return { rules: [], work: 0 }
+  if (!painted.length) return { rules: [], work, over: work > max }
   const lines = []
   let last = null
   for (const [p, g] of glyphs) {
+    work++
     const G = pages[p - 1].glyphs[g]
     if (!/\S/.test(G.u ?? '') || !(G.size > 0)) continue
     const on = l => l.p === p && Math.abs(l.y - G.y) < 0.5 * Math.max(l.size, G.size)
-    const l = last && on(last) ? last : lines.find(on)
+    let l = last && on(last) ? last : null
+    if (!l) {
+      work += lines.length
+      if (work > max) return over()
+      l = lines.find(on) ?? null
+    }
     if (l) { l.x0 = Math.min(l.x0, G.x0); l.x1 = Math.max(l.x1, G.x1); l.size = Math.max(l.size, G.size); last = l; continue }
     last = { p, y: G.y, size: G.size, x0: G.x0, x1: G.x1 }
     lines.push(last)
   }
   const box = ([p, b]) => { const B = pages[p - 1].boxes; return [B[4 * b], B[4 * b + 1], B[4 * b + 2], B[4 * b + 3]] }
   const ruled = new Map()
+  let most = 0
   for (const x of painted) {
+    work += lines.length
+    if (work > max) return over()
     const [x0, y0, x1, y1] = box(x), mid = (y0 + y1) / 2, w = x1 - x0, h = y1 - y0
     const l = lines.find(l => l.p === x[0] && Math.abs(mid - l.y) < 0.5 * l.size && x0 >= l.x0 - 0.5 * l.size && x1 <= l.x1 + 0.5 * l.size && h <= RULE_EM * l.size && w >= 2 * h)
-    if (l) ruled.set(x, l.size)
+    if (l) { ruled.set(x, l.size); most = Math.max(most, l.size) }
   }
-  const rules = [...ruled.keys()].filter(x => {
-    const [x0, y0, x1, y1] = box(x), e = y1 - y0, size = ruled.get(x)
-    return !painted.some(o => {
-      if (o === x || o[0] !== x[0] || ruled.has(o)) return false
+  if (!ruled.size) return { rules: [], work, over: false }
+  // (a frame's part: a thin box of the range that is no such rule, thin at the largest size a rule stands at — each rule then
+  // asks it at its own)
+  const others = painted.filter(o => {
+    if (ruled.has(o)) return false
+    const [a0, b0, a1, b1] = box(o)
+    return Math.min(a1 - a0, b1 - b0) <= RULE_EM * most
+  })
+  const rules = []
+  for (const [x, size] of ruled) {
+    work += others.length
+    if (work > max) return over()
+    const [x0, y0, x1, y1] = box(x), e = y1 - y0
+    const framed = others.some(o => {
+      if (o[0] !== x[0]) return false
       const [a0, b0, a1, b1] = box(o)
       return Math.min(a1 - a0, b1 - b0) <= RULE_EM * size && a0 <= x1 + e && x0 - e <= a1 && b0 <= y1 + e && y0 - e <= b1
     })
-  })
-  return { rules, work: glyphs.length + painted.length * (lines.length + ruled.size) }
+    if (!framed) rules.push(x)
+  }
+  return { rules, work, over: false }
 }
 
 /** the letters a wrapper's own words may take at its slot in the spell check (sourceOf) */

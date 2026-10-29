@@ -18,6 +18,6 @@ export declare function ownOf(pages: OwnPage[], o?: { units?: unknown[] | null; 
 /** a rule on a line of a unit's text (MR 2b) is no thicker than this share of the line's size */
 export declare const RULE_EM: number
 /** the painted rules of `boxes` that stand on a line of `glyphs` (MR 2b, an ink unit's too): [page, index] each */
-export declare function lineRulesOf(pages: readonly Pick<OwnPage, 'glyphs' | 'boxes' | 'paths'>[], glyphs: readonly (readonly [number, number])[], boxes: readonly (readonly [number, number])[]): { rules: [number, number][]; work: number }
+export declare function lineRulesOf(pages: readonly Pick<OwnPage, 'glyphs' | 'boxes' | 'paths'>[], glyphs: readonly (readonly [number, number])[], boxes: readonly (readonly [number, number])[], max?: number): { rules: [number, number][]; work: number; over: boolean }
 /** the glyphs and boxes the ownership of a paper may visit */
 export declare const OWN_WORK: number

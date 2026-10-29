@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { followsOf, INK_ANY } from '@/pdf-reader/engine/layout/marks.mjs'
-import { isLabelForm, ownOf, spellOf } from '@/pdf-reader/engine/layout/own.mjs'
+import { isLabelForm, lineRulesOf, ownOf, spellOf } from '@/pdf-reader/engine/layout/own.mjs'
 
 // Each unit's own ink by its marks in stream order (layout/own.mjs; design docs/route/ocg-erasure.md §1): the rules MR 1–6 on
 // pages written as a stream of points and glyphs, the spell check and the label kept
@@ -118,6 +118,34 @@ describe('placeholders, labels and names (MR 4–6)', () => {
     // (amsthm's \openbox at a proof's end, four rules: its top and bottom thin, but sides meet them, a frame; a dot of a logo)
     const qed = [page([{ pt: '0s' }, 'Proof done', { rule: [60, 700, 65, 700.4] }, { rule: [60, 700, 60.4, 706.4] }, { rule: [64.6, 700, 65, 706.4] }, { rule: [60, 706, 65, 706.4] }, { rule: [20, 702, 20.1, 702.09] }, { pt: '0e' }])]
     expect(ownOf(qed, { units: units('Proof done') }).boxes[0]).toEqual([null, null, null, null, null])
+  })
+})
+
+describe('the rules of a text\'s lines (lineRulesOf, MR 2b)', () => {
+  /** one line of text and `n` rules on it, then `m` thin upright boxes off it (no frame of a rule): [page, index] lists */
+  const lineOf = (n: number, m: number) => {
+    const items: Item[] = ['abcdefghij']
+    for (let i = 0; i < n; i++) items.push({ rule: [10 + (i % 10) * 4, 700, 13 + (i % 10) * 4, 700.4] })
+    for (let i = 0; i < m; i++) items.push({ rule: [300, 100 + i * 0.01, 300.4, 140 + i * 0.01] })
+    const pg = page(items)
+    return { pages: [pg], glyphs: pg.glyphs.map((_, g) => [1, g] as [number, number]), boxes: Array.from({ length: n + m }, (_, b) => [1, b] as [number, number]) }
+  }
+  it('reads 20,000 rules of one line in work linear in them, every one the text\'s', () => {
+    const { pages, glyphs, boxes } = lineOf(20_000, 0)
+    const r = lineRulesOf(pages, glyphs, boxes)
+    expect(r.over).toBe(false)
+    expect(r.rules).toHaveLength(20_000)
+    expect(r.work).toBeLessThan(100_000)
+  })
+  it('stops past its budget with no rule: 2,000 rules beside 2,000 other thin boxes are 4 million comparisons', () => {
+    const { pages, glyphs, boxes } = lineOf(2_000, 2_000)
+    const r = lineRulesOf(pages, glyphs, boxes, 100_000)
+    expect(r.over).toBe(true)
+    expect(r.rules).toEqual([])
+    expect(r.work).toBeLessThan(110_000)
+    // (with the budget for it, the same reading: none of the upright boxes meets a rule)
+    const all = lineRulesOf(pages, glyphs, boxes)
+    expect([all.over, all.rules.length]).toEqual([false, 2_000])
   })
 })
 

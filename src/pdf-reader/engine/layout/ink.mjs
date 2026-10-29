@@ -143,7 +143,8 @@ const type3Boxes = new WeakMap()
  * (PDF.js's `charProcOperatorList` for the glyph's `operatorListId`, as the canvas runs it: each painted path's box, a
  * stroke's widened by half its line width, each image's unit square, through the procedure's own transforms), carried
  * through the font's matrix. [] for a procedure that paints nothing (a space); null where it cannot be read whole (no
- * procedure, one past TYPE3_OPS steps, or one that shows text, paints a shading or a form, whose extent is not read here):
+ * procedure, one past TYPE3_OPS steps, or one holding any operation but a path, an image and those that paint nothing
+ * (QUIET_NAMES): text shown, a shading, a form, a group, whose extent is not read here):
  * the font's ascent and descent then, as before. Never the FontBBox, which bounds every glyph of the font. Read once a font
  * and glyph; nothing is rendered
  */
@@ -163,7 +164,7 @@ function procBox(OPS, font, id) {
   const STROKES = new Set([OPS.stroke, OPS.closeStroke, OPS.fillStroke, OPS.eoFillStroke, OPS.closeFillStroke, OPS.closeEOFillStroke])
   const PAINTS = new Set([...STROKES, OPS.fill, OPS.eoFill])
   const IMAGES = new Set([OPS.paintImageXObject, OPS.paintInlineImageXObject, OPS.paintImageMaskXObject, OPS.paintSolidColorImageMask])
-  const UNREAD = new Set([OPS.showText, OPS.showSpacedText, OPS.nextLineShowText, OPS.nextLineSetSpacingShowText, OPS.shadingFill, OPS.paintFormXObjectBegin, OPS.paintImageXObjectRepeat, OPS.paintImageMaskXObjectRepeat, OPS.paintImageMaskXObjectGroup, OPS.paintInlineImageXObjectGroup])
+  const QUIET = quietOps(OPS)
   let ctm = fm, lw = 1, x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
   const stack = []
   const add = (m, a0, b0, a1, b1) => {
@@ -179,7 +180,7 @@ function procBox(OPS, font, id) {
   }
   for (let j = 0; j < fns.length; j++) {
     const fn = fns[j], a = args?.[j] ?? []
-    if (UNREAD.has(fn)) return null
+    if (QUIET.has(fn)) continue
     if (fn === OPS.save) { if (stack.length >= STACK_MAX) return null; stack.push([ctm, lw]) }
     else if (fn === OPS.restore) { const t = stack.pop(); if (t) [ctm, lw] = t }
     else if (fn === OPS.transform) { ctm = mul(ctm, matrixOf(a)); if (ctm.some(v => !Number.isFinite(v))) return null }
@@ -195,8 +196,19 @@ function procBox(OPS, font, id) {
       const e = STROKES.has(op) ? lw / 2 : 0
       if (!add(ctm, mm[0] - e, mm[1] - e, mm[2] + e, mm[3] + e)) return null
     } else if (IMAGES.has(fn)) { if (!add(ctm, 0, 0, 1, 1)) return null }
+    // (anything else — text shown, a shading, a form, a group, a repeat, an operation PDF.js may add — is not read here)
+    else return null
   }
   return x0 <= x1 ? [x0, y0, x1, y1] : []
+}
+/** the operations a char procedure may hold that paint nothing and change no extent type3Box reads: the line's style, a
+ *  colour, a clip (which only cuts ink), the glyph's width, the text state with nothing shown, a mark; by name, once a table */
+const QUIET_NAMES = ['dependency', 'setLineCap', 'setLineJoin', 'setMiterLimit', 'setDash', 'setRenderingIntent', 'setFlatness', 'endPath', 'clip', 'eoClip', 'beginText', 'endText', 'setCharSpacing', 'setWordSpacing', 'setHScale', 'setLeading', 'setFont', 'setTextRenderingMode', 'setTextRise', 'moveText', 'setLeadingMoveText', 'setTextMatrix', 'nextLine', 'setCharWidth', 'setCharWidthAndBounds', 'setStrokeColorSpace', 'setFillColorSpace', 'setStrokeColor', 'setStrokeColorN', 'setFillColor', 'setFillColorN', 'setStrokeGray', 'setFillGray', 'setStrokeRGBColor', 'setFillRGBColor', 'setStrokeCMYKColor', 'setFillCMYKColor', 'markPoint', 'markPointProps', 'beginMarkedContent', 'beginMarkedContentProps', 'endMarkedContent', 'beginCompat', 'endCompat', 'setStrokeTransparent', 'setFillTransparent']
+const quietTables = new WeakMap()
+function quietOps(OPS) {
+  let q = quietTables.get(OPS)
+  if (!q) quietTables.set(OPS, (q = new Set(QUIET_NAMES.map(n => OPS[n]).filter(v => v !== undefined))))
+  return q
 }
 
 /** the box of a path's points (PDF.js's DrawOPS, as outlineBox reads them): [x0, y0, x1, y1], [] for none, null where it is no
@@ -428,12 +440,15 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   const outlines = new Map()
   /** a glyph's outline box in em (outlineBox), once a font and character; else the given table's */
   const outlineOf = g => {
-    const key = `${s.fontId}|${g.fontChar}|${g.width}`
+    // (a Type 3 glyph's from its own procedure, which PDF.js gives alike in Node and in the browser, by its procedure: PDF.js
+    // maps a Type 3 character to a glyph name, so its fontChar is '' for every glyph, and a "," as wide as a "." is another
+    // glyph. Never an outline table's, whose key tells such glyphs not apart)
+    const t3 = s.font?.isType3Font === true
+    const key = t3 ? `${s.fontId}|t3|${g.operatorListId}` : `${s.fontId}|${g.fontChar}|${g.width}`
     if (!outlines.has(key)) {
-      // (a Type 3 glyph's from its own procedure, which PDF.js gives alike in Node and in the browser)
-      let box = s.font?.isType3Font === true ? type3Box(OPS, s.font, g.operatorListId) : outlineBox(commonObjs, s.font, g.fontChar)
-      if (box === null && given) box = given.get(outlineKey(s.font, s.fontId, g)) ?? null
-      else if (box !== null && collect) {
+      let box = t3 ? type3Box(OPS, s.font, g.operatorListId) : outlineBox(commonObjs, s.font, g.fontChar)
+      if (!t3 && box === null && given) box = given.get(outlineKey(s.font, s.fontId, g)) ?? null
+      else if (!t3 && box !== null && collect) {
         // (two glyphs of one key, rare: the box of both, which a swap covers either with)
         const k = outlineKey(s.font, s.fontId, g), had = collect.get(k)
         collect.set(k, had && had.length === 4 && box.length === 4 ? [Math.min(had[0], box[0]), Math.min(had[1], box[1]), Math.max(had[2], box[2]), Math.max(had[3], box[3])] : had?.length === 4 ? had : box)

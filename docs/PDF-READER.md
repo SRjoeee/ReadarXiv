@@ -2717,8 +2717,11 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   underline's line (2610.20581v1's "Section N:", 2610.18513v1's run-in headings). Any other box in the range is the page's and
   stays: a footnote's separator above its lines, a class's rule above a title (MR 3 takes no box), a box as tall as a letter (an
   ORCID mark, 2610.21547v1), a logo's parts, a frame, a display's fraction bar beside a unit's glyph outside their extent
-  (2610.21765v1 p10). An ink unit's lines take theirs the same way (`ink-units.mjs` `claimInk`). A placeholder's rules are its
-  `.p`, claimed over the text's.
+  (2610.21765v1 p10). An ink unit's lines take theirs the same way (`ink-units.mjs` `claimInk`), from the page's boxes that
+  meet its glyphs' extent and a size about it. The search is counted as it goes, its comparisons within `OWN_WORK` (a unit's
+  past it is not owned, as any past it; the ink units' past theirs keep the page's): a PDF's paths are anyone's, and a line of
+  20,000 rules beside 20,000 thin boxes would be 400 million comparisons. A placeholder's rules are its `.p`, claimed over the
+  text's.
   A table cell (`t<id>s`) takes no label (what stands before it on its line is another cell's); a cell that opens with a
   placeholder of no mark of its own (`\CompletionTokenCap{}`, `\texttt{max\_tokens}`, `\dprime{}`, `\#`) has that ink before
   its start mark, told by its text alone, never by a gap (an unmarked number cell may stand 0.4 em or nothing before it:
@@ -2987,8 +2990,10 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   (its glyphs', at least `DRAW_BAND` [-0.15, 0.88] em: the line a CJK translation is drawn in). A Type 3 glyph's ink is what its
   char procedure paints (LAYOUT 27, #122-1: `ink.mjs` `type3Box`, PDF.js's `charProcOperatorList`, each painted path's box, a
   stroke widened by half its width, an image's unit square, a small bitmap mask PDF.js compiles into a path (`rawFillPath`) by
-  its points, through the procedure's transforms and the font's matrix; a procedure that shows text, a shading or a form is not
-  read, the font's ascent and descent then): every glyph of matplotlib's DejaVu faces had been boxed 0.75 em up and 0.22 down,
+  its points, through the procedure's transforms and the font's matrix; a procedure holding any other operation but those that
+  paint nothing (a colour, a line's style, a clip, a mark: `QUIET_NAMES`) — text shown, a shading, a form, a group — is not
+  read, the font's ascent and descent then; each glyph its own procedure's, for PDF.js names a Type 3 character by its glyph
+  and gives every one the same empty `fontChar`, and a "," as wide as a "." is another glyph): every glyph of matplotlib's DejaVu faces had been boxed 0.75 em up and 0.22 down,
   a "." as an "M" (14 of the release sweep's 54 papers hold Type 3 glyphs, all but one in included figures), and a glyph whose
   procedure paints nothing (`d1` alone: 2610.19159v1's figures carry an invisible text layer so) has no ink. Its anchor is read from the
   figure's ink nearest it along its baseline within `ANCHOR_REACH` 1.5 em, a path by its segments (pageInk's `shapes`, a curve as

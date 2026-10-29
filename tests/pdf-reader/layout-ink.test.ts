@@ -139,6 +139,29 @@ describe('pageInk', () => {
     } finally { delete FONTS.t3p }
   })
 
+  it('Type 3 glyphs are told apart by their procedures, not their character and width: PDF.js gives every one fontChar \'\'', () => {
+    // (a "," as wide as a "." keeps its own descender; a procedure holding an operation type3Box does not know is not read)
+    const path = (box: number[]) => [OPS.fill, [Float32Array.from([0])], Float32Array.from(box)]
+    const procs = new Map<string, { fnArray: number[]; argsArray: unknown[] }>([
+      ['period', { fnArray: [OPS.setCharWidthAndBounds, OPS.constructPath], argsArray: [[40, 0, 10, 0, 30, 20], path([10, 0, 30, 20])] }],
+      ['comma', { fnArray: [OPS.setCharWidthAndBounds, OPS.constructPath], argsArray: [[40, 0, 10, -30, 30, 20], path([10, -30, 30, 20])] }],
+      ['grouped', { fnArray: [OPS.setCharWidthAndBounds, OPS.beginGroup, OPS.constructPath, OPS.endGroup], argsArray: [[40, 0, 10, 0, 30, 20], [{}], path([10, 0, 30, 20]), [{}]] }],
+      ['coloured', { fnArray: [OPS.setCharWidth, OPS.setFillRGBColor, OPS.setLineCap, OPS.constructPath], argsArray: [[40, 0], ['#ff0000'], [1], path([10, 0, 30, 20])] }],
+    ])
+    FONTS.t3k = { name: 'DejaVuSans', fontMatrix: [0.01, 0, 0, 0.01, 0, 0], isType3Font: true, vertical: false, charProcOperatorList: procs }
+    try {
+      const t = (u: string, id: string) => ({ ...g(u, 40), fontChar: '', operatorListId: id })
+      const { glyphs } = ink(text('t3k', 10, [1, 0, 0, 1, 72, 700], show(t('.', 'period'), t(',', 'comma'), t('g', 'grouped'), t('c', 'coloured'))))
+      const box = (u: string) => { const x = only(glyphs, u); return [x.ix0, x.bottom, x.ix1, x.top].map(v => Math.round(v * 1000) / 1000) }
+      expect(box('.')).toEqual([73, 700, 75, 702])
+      expect(box(',')).toEqual([77, 697, 79, 702])
+      // (a group: the font's ascent and descent, its advance)
+      expect(box('g')).toEqual([80, 697.8, 84, 707.5])
+      // (a colour and a line cap paint nothing: the path's box)
+      expect(box('c')).toEqual([85, 700, 87, 702])
+    } finally { delete FONTS.t3k }
+  })
+
   it('a Type 3 font\'s glyph whose procedure is not given takes 0.75 and −0.22 of its size', () => {
     const { glyphs } = ink(text('t3', 10, [1, 0, 0, 1, 72, 700], show(g('x', 50), g('y', 50))))
     const x = only(glyphs, 'x')
