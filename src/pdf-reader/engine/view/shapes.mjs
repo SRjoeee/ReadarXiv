@@ -59,8 +59,12 @@ export function startsOfPairs(anchor, text, offsets) {
 }
 
 /** a hit of a table's cell no unit holds with the pane's own run of it (floats.mjs floatHitOf gives the side's whose floats
- *  they are: the left's, trap 1) */
-const ownCell = (h, runs) => (h && isTableCell(h.id) ? { ...h, run: runs(h.id)[0] } : h)
+ *  they are: the left's, trap 1); none where the pane has no run of it */
+const ownCell = (h, runs) => {
+  if (!h || !isTableCell(h.id)) return h
+  const run = runs(h.id)[0]
+  return run ? { ...h, run } : null
+}
 
 /** a PDF side's shapes, of its layout: highlight.mjs and floats.mjs, as the extension paints them */
 export function pdfShapes(L) {
@@ -331,7 +335,7 @@ export function layerShapes(source) {
   const state = told.get(source.shapes)
   if (!state) throw new TypeError('not a side\'s shapes (createShapes)')
   const M = mirror(source)
-  let L, words, made, wordAt, placeAt, noPlaces, hidden, namesKept
+  let L, words, made, wordAt, placeAt, noPlaces, hidden, namesKept, ours
   /** the pages that show another target's layer (mute): none of their geometry is the drawing's */
   const muted = new Set()
   /** the laid layout, told the parts as copies, each unit's stream just before its first page's tokens until that page lays */
@@ -342,6 +346,7 @@ export function layerShapes(source) {
   function reset() {
     L = pageLayout(state.kindOf)
     words = new Map(); made = new Set(); wordAt = new Map(); placeAt = new Map(); noPlaces = new Set(); hidden = new Set(); namesKept = new Map()
+    ours = new Map()
     if (state.parts.length) tellParts(state.parts)
   }
   /** page p's part of the laid layout, where its words and its left part are in */
@@ -354,6 +359,8 @@ export function layerShapes(source) {
     // none) keeps a copy only on its own rows here; one it lays nowhere keeps none on a page whose lines moved (`drift`), and
     // elsewhere none on another unit's row. A line moved has no partner beside it, never a wrong one)
     const rowsOf = new Map(w.rows ?? []), all = w.rows ?? []
+    // (and what a table's cell no unit holds is copied by, cellRuns: the words themselves are let go once the page is made)
+    ours.set(p, { drift: !!w.drift, rows: all })
     const inRow = (rs, x, y) => { for (let j = 0; j + 3 < rs.length; j += 4) if (x >= rs[j] && x <= rs[j + 2] && y >= rs[j + 1] && y <= rs[j + 3]) return true; return false }
     const T0 = left.table
     const standsFor = (id, k) => {
@@ -422,9 +429,21 @@ export function layerShapes(source) {
   const mode = id => { const ps = pagesOf(id), n = ps.filter(p => laidFor(p, id)).length; return !n ? 'mirror' : n === ps.length ? 'laid' : 'mixed' }
   // a laid page's floats are the left's, as the mirror's are (made then)
   const floatsOf = p => { state.floatsOn(p); L.floats = source.layout.floats }
+  // a table's cell no unit holds: the mirror's copy of the left's run, which stands where the left has it — on a laid page, as
+  // a unit shown as the original's copy does (make), none where the page's lines moved (`drift`) or another unit's row of ours
+  // stands at its middle; its numbers are the original's ink there
+  const cellRuns = id => {
+    const p = tableCellPage(id)
+    if (muted.has(p)) return []
+    const rs = M.shapes.runs(id), w = laid(p) ? ours.get(p) : null
+    if (!w || !rs.length) return rs
+    if (w.drift) return []
+    const r = rs[0], x = (r.x0 + r.x1) / 2, y = (r.top + r.bottom) / 2
+    for (const [, b] of w.rows ?? []) for (let j = 0; j + 3 < b.length; j += 4) if (x >= b[j] && x <= b[j + 2] && y >= b[j + 1] && y <= b[j + 3]) return []
+    return rs
+  }
   const shapes = {
-    // (a table's cell no unit holds keeps its place on a laid page too, its numbers the original's ink there: the mirror's copy)
-    runs: id => (isTableCell(id) ? (muted.has(tableCellPage(id)) ? [] : M.shapes.runs(id)) : pagesOf(id).filter(p => !muted.has(p)).flatMap(p => pageGeometry(laidFor(p, id) ? L : M.layout, p).byId.get(id) ?? [])),
+    runs: id => (isTableCell(id) ? cellRuns(id) : pagesOf(id).filter(p => !muted.has(p)).flatMap(p => pageGeometry(laidFor(p, id) ? L : M.layout, p).byId.get(id) ?? [])),
     block: (run, padX) => blockOf(run, padX),
     sentence: (run, starts, s, padX) => { if (!laid(run.page)) return M.shapes.sentence(run, starts, s, padX); floatsOf(run.page); return sentenceOf(L, run, starts, s, padX) },
     fits: (id, starts, now) => { const m = mode(id); return m === 'laid' ? sentencesFit(L, id, starts, !now) : m === 'mirror' ? M.shapes.fits(id, starts, now) : false },
@@ -432,7 +451,7 @@ export function layerShapes(source) {
       if (muted.has(page)) return null
       if (!laid(page)) return M.shapes.hit(page, x, y, padX, startsOf)
       floatsOf(page)
-      const h = ownCell(floatHitOf(source.layout, page, x, y, padX, hitOf(L, page, x, y, padX, startsOf)), M.shapes.runs)
+      const h = ownCell(floatHitOf(source.layout, page, x, y, padX, hitOf(L, page, x, y, padX, startsOf)), cellRuns)
       if (h || !namesKept.has(page)) return h
       // (nothing of the laid drawing there: a name kept the original's, by the mirror's)
       const m = M.shapes.hit(page, x, y, padX, startsOf)

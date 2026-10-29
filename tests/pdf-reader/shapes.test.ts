@@ -604,6 +604,23 @@ describe('SH5: the right\'s laid pages, from the layer\'s words (layerShapes)', 
     expect(drifted([], false).length).toBe(all)
   })
 
+  it('a table\'s cell no unit holds on a laid page: the left\'s copy where it stands on no unit\'s row of ours and the page\'s lines did not move; else nothing there, hit nor run', () => {
+    const l = built([1, 2, 3])
+    l.floats(2)
+    const t = nth(doc, doc.findIndex(d => d.page === 2 && d.t === 'beta')), at = [2, t.x + 2, t.y + 3] as const
+    const cellOf = (r: ReturnType<typeof layerShapes>) => r.shapes.hit(...at, PAD, () => null)
+    const id = cellOf(layerShapes(l))?.id ?? -1
+    expect(isTableCell(id)).toBe(true)
+    const laid = (o: { rows?: [number, number[]][]; drift?: boolean }) => { const r = layerShapes(l); r.lay(2, { ...wordsOf(2, [3]), ...o } as never); return r }
+    // (laid, its rows elsewhere: the copy, hit and run)
+    const plain = laid({ rows: [[3, [50, 700, 550, 740]]] })
+    expect([plain.laid(2), cellOf(plain)?.id, plain.shapes.runs(id).length]).toEqual([true, id, 1])
+    // (our page's lines moved: none; another unit's row over it: none)
+    const drift = laid({ rows: [], drift: true }), over = laid({ rows: [[3, [t.x - 5, t.y - 5, t.x + 30, t.y + 15]]] })
+    expect([drift.laid(2), over.laid(2)]).toEqual([true, true])
+    expect([cellOf(drift), drift.shapes.runs(id), cellOf(over), over.shapes.runs(id)]).toEqual([null, [], null, []])
+  })
+
   it('a muted page (another target\'s layer kept there) lights and hits nothing, its table\'s cells included; unmuted, as before', () => {
     const l = built([1, 2, 3])
     l.floats(2)

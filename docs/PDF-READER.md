@@ -1631,7 +1631,8 @@ within noise.
   the left's from run objects of its own: the paint keeps what it drew by the run, and a run shared would move the left's
   element into the right's pane. The right's floats are the left's, and the right's sentence shapes keep from under them as
   the left's do; a table's cell no unit holds is the left's run of it copied, on a page the layer laid as well (its numbers
-  are the original's ink there). Where its place shows the original, the mirror's starts are the left's (the
+  are the original's ink there) where it stands on no unit's row of ours and the page's lines did not move, as a unit shown
+  as the original's is copied (`layerShapes` `make`); elsewhere it lights on the left alone. Where its place shows the original, the mirror's starts are the left's (the
   same tokens), so a unit lights by sentence on both panes as it does on the left.
 - **The left's starts** are its units' pairs (the left part's runs of words to tokens) read as `sentenceStarts` reads an
   anchor's, once every page the unit is on has come. The reader takes every pair shipped, so the producer ships them only
