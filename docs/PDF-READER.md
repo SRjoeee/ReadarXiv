@@ -2220,20 +2220,26 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   fallbacks cannot mend such a cause: no mark of the names' is at fault and no error names a unit, so the units it unmarks are
   others; a mis-cut is mended where the units are cut. Over 157 local sources two papers change (2610.21084v1, and 2608.12096's
   ceurart `[email=…]`), every other unit's hash kept
-- **What a command reads past its arguments, as TeX reads it** (PIPELINE 33, `source/latex-front.mjs`). *A web address's `%`*
-  (`urlPercents`): url.sty's `\url` and `\path`, hyperref's `\nolinkurl` and `\href`'s first argument (REVTeX's `.bbl`'s too:
-  `\begingroup \@sanitize@url \@href`), breakurl's `\burl` read their argument with `%` a character, where TeX has not read those
-  characters already (inside another command's argument, an optional one or a `\def`'s body after its parameter text, or the
-  body of an environment that collects it: tabularx, amsmath's alignments, `%` is a comment there as anywhere). Read as a comment everywhere, the address's group never closed: the rest of
-  its line was in no unit (`\url{https://a.com/x%3Fy} and more text`), and in a `.bbl` every entry after it read as one
-  (2610.21770v1's `?urlappend=%3Fref%3DPDF`, 18 entries; an MNRAS `.bbl`'s ADS links, `2017A%26A...`, 31 of 2608.18626's
+- **What a command reads past its arguments, as TeX reads it** (PIPELINE 33, `source/latex-front.mjs`). *A web address's `%`
+  in a `.bbl`'s entries* (`urlPercents`): url.sty's `\url` and `\path`, hyperref's `\nolinkurl` and `\href`'s first argument
+  (REVTeX's `.bbl`'s too: `\begingroup \@sanitize@url \@href`), breakurl's `\burl` read their argument with `%` a character,
+  where TeX has not read those characters already. The front end reads so in a BibTeX-written `.bbl` alone, whose structure is
+  the style's: from each `\bibitem` of its thebibliography on, an address at the entry's top level (in no group: `\href`'s own
+  first argument, as both papers below have it). Anywhere else, the body included, the `%` stays a comment as before: body
+  text can hold any of TeX's constructs, and the reviews of #501 found one more after another where a scanner imitating TeX's
+  reading took a `%` for a character that TeX had read as a comment (an optional argument, a star, `#1`, a comment between a
+  command and its group, an inactive conditional's branch); no local source writes such an address in its body (none in
+  183 papers' `.tex`, `.sty` and `.cls` files), so the body's reading was dropped (the controller's ruling of 2026-10-29).
+  Read as a comment in an entry, the address's group never closed, and every entry after it read as one (2610.21770v1's `?urlappend=%3Fref%3DPDF`, 18 entries; an MNRAS `.bbl`'s ADS links, `2017A%26A...`, 31 of 2608.18626's
   entries each read from the `\bibitem` of the entry after it, the line of `%26` lost). The walk reads each file with such a `%` written as a code no source holds, the same length, so that
   every reading (a group, a comment, a bibliography's `\bibitem`) sees what TeX sees and every place stays where it is; the
   units take their `%` back, and the file's own text is what is written around them. *An inline TikZ picture* (`tikzCallEnd`):
   `\tikz[options]{…}`, or `\tikz[options]` and one path to its `;` outside every group, within its paragraph, one placeholder
   (2010.11929v2's `\tikz\fill[natural] (0,0) circle (.5ex);` was `\tikz`, `\fill` and the path's syntax sent as text). *A
-  paper's macro that ends a table's row* (`rowEndsOf`): one of no argument whose body is `\\` (starred, with its space),
-  `\tabularnewline` or `\cr`, and rules after it, ends the row in a cell as `\\` does, and in the table's grid
+  paper's macro that ends a table's row* (`rowEndsOf`): one every definition of which, in any of the package's files and any
+  form (`\newcommand`, `\renewcommand`, `\providecommand`, `\DeclareRobustCommand`, `\def` and its kin), takes no parameter and
+  has a body that is `\\` (starred, with its space), `\tabularnewline` or `\cr`, and rules after it — none also defined with
+  parameters, by `\let` or by xparse —, ends the row in a cell as `\\` does, and in the table's grid
   (`tableGrid`, its cells' rows and columns, which the table groups read) (2610.21924v1's
   `\newcommand{\tightrow}{\\[-4pt]}`: the next row's first cell ran on in the cell it ended, 30 cells). *An author block's rows
   inside a conditional* (`frontEnds`): no row is cut inside an `\if…\fi`, TeX's or the paper's `\newif`, so that a conditional's

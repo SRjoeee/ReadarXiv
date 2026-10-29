@@ -17,8 +17,8 @@ export declare function completeMacros(files: readonly { file?: string; text: st
 export declare function documentBounds(text: string, options?: { lineEnvs?: Set<string> | null; ifs?: Set<string>; ifValues?: Map<string, boolean> | null }): { begin: number; body: number; end: number }
 /** the \usepackage[…]{inputenc} TeX acts on: where it stands and its options, or null */
 export declare function inputencOf(text: string, options?: { lineEnvs?: Set<string> | null; ifs?: Set<string>; ifValues?: Map<string, boolean> | null }): { start: number; end: number; options: string } | null
-/** a file's text with each `%` TeX reads as a character (a web address's, at a paragraph's level) written as a code no source holds, the same length */
-export declare function urlPercents(text: string): string
+/** a .bbl's text with each `%` TeX reads as a character (a web address's at an entry's top level) written as a code no source holds, the same length; any other file's as it is */
+export declare function urlPercents(text: string, file: string): string
 /** the placeholder of the list backref sets after a bibliography entry (the pages citing it): an entry's last piece where the package turns the lists on; patch writes nothing for it */
 export declare const BACKREF_LIST: '\\axtbackref'
 /** the patched files (path → bytes): each unit's range replaced by its translated pieces, the rest untouched */
