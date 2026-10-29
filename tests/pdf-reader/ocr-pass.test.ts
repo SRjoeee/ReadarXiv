@@ -114,6 +114,21 @@ describe('the bitmap figures\' pass (ocrPass)', () => {
     expect(events).toEqual(['read', 'collect', 'read', 'delete b', 'collect', 'delete a', 'collect'])
   })
 
+  it('covers a label an image painted after it hides; skips a page that cannot be read; reads a path of a hundred thousand segments', async () => {
+    // (two opaque images at one place: the first's label is under the second, none drawn of it)
+    const same = await ocrPass({ doc: docOf([pageOf([['a', at(50, 400)], ['b', at(50, 400)]], { a: picture(), b: picture(9) })]), OPS, paper: PAPER, reader: READER, from: 0, recognise: async () => [LINE] })
+    expect(same.stats.labels).toMatchObject({ covered: 1 })
+    expect(same.stats.units).toBe(1)
+    // (a page whose operators throw: skipped, the next read)
+    const broken = { ...pageOf([], {}), getOperatorList: async () => { throw new Error('a stream PDF.js cannot read') } }
+    const skipped = await ocrPass({ doc: docOf([broken as never, pageOf([['a', at(50, 400)]], { a: picture() })]), OPS, paper: PAPER, reader: READER, from: 0, recognise: async () => [LINE] })
+    expect([skipped.stats.pagesFailed, skipped.stats.units]).toEqual([1, 1])
+    // (one path of 130,000 segments: its box by a loop, no arguments' list past the stack)
+    const data = [0, 0, 0]
+    for (let i = 1; i <= 130_000; i++) data.push(1, i % 500, i % 700)
+    expect(() => paintsOf({ fnArray: [OPS.constructPath], argsArray: [[OPS.stroke, [new Float32Array(data)]]] }, OPS)).not.toThrow()
+  })
+
   it('keeps a label of names as a table\'s cell of names is: its source, the KEPT flag', async () => {
     const doc = docOf([pageOf([['a', at(50, 400)]], { a: picture() })])
     const r = await ocrPass({ doc, OPS, paper: PAPER, reader: READER, from: 0, recognise: async () => [{ ...LINE, text: 'GPT-4o' }] })

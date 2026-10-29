@@ -1061,6 +1061,30 @@ describe('the late chunk: the bitmap figures\' labels told after the head and th
     expect(s.opens).toBe(2)
   })
 
+  it('a host that translates the units itself, its rows ended before the late chunk: the new door takes the rows of the new units and ends at the host\'s end again', async () => {
+    const m = await M()
+    const late = await lateOf(m)
+    const grown: unknown[] = []
+    const s = await setup({ door: { rows: 'gate' }, extra: [late], onIndex: i => grown.push(i) })
+    await nearOn(s, [1, 2])
+    s.side.tell(await ALL())
+    s.side.take(m.index.units.map((_, id) => rowOf(id)))
+    s.side.end()
+    await settle(s)
+    s.side.tell({ units: [...m.chunks.map(c => c.ref as Ref), late.ref as Ref] })
+    await settle(s)
+    expect(grown).toHaveLength(1)
+    expect(s.opens).toBe(2)
+    // (not ended at its open: the host's rows of the new units are still to come)
+    expect(s.doors[1]?.ended).toBe(0)
+    const n = m.index.units.length
+    s.side.take([rowOf(n)])
+    s.side.end()
+    await settle(s)
+    expect(s.doors[1]?.taken.some(r => (r as unknown[])[0] === n)).toBe(true)
+    expect(s.doors[1]?.ended).toBe(1)
+  })
+
   it('a late chunk told with the head is in the first index; one that cannot be read is passed over, the layer the head\'s', async () => {
     const m = await M()
     const late = await lateOf(m)

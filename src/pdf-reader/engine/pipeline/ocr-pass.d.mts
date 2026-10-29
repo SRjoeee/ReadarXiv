@@ -15,8 +15,9 @@ export declare function ocrKey(pixels: string, reader: string): string
  *  read; the labels drawn and kept, and each why one is left; the recogniser's time; the cache's failures; why no chunk */
 export interface OcrStats {
   pages: number
-  /** the pages left unread past the host's clock (`until`) */
+  /** the pages left unread past the host's clock (`until`), and those that could not be read (their images the original's) */
   pagesLeft: number
+  pagesFailed: number
   images: { painted: number; read: number; cached: number; again: number; small: number; big: number; error: number; timeout: number; budget: number }
   lines: number
   /** the labels the extension's merge made of the lines: each drawn (`units`) or left with its why (`labels`) */

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { indexLayout, LAYOUT_SCHEMA, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
-import { fitOcr, layOcr, ocrSetFactor, piecesOf } from '@/pdf-reader/engine/layer-proto/ocr-fit.mjs'
+import { fitOcr, layOcr, ocrNeed, ocrSetFactor, piecesOf } from '@/pdf-reader/engine/layer-proto/ocr-fit.mjs'
 import { placeOf } from '@/pdf-reader/engine/layer-proto/ocr-rows.mjs'
 import { openProto } from '@/pdf-reader/engine/layer-proto/run.mjs'
 import { withGroups } from './helpers/groups'
@@ -76,8 +76,10 @@ describe('the bitmap figures\' labels drawn by the layer (run.mjs paintOcr)', ()
     expect(text?.querySelector('tspan')?.getAttribute('fill')).toBe('#203040')
     // (on the line's middle across it, the em box's middle 0.38 em above the baseline: 130 - 5 - 2.736)
     expect(text?.querySelector('text')?.getAttribute('transform')).toBe(`translate(75.6 ${H - 122.26})`)
-    // (the image's ink is never hidden by a group: it is covered)
+    // (the image's ink is never hidden by a group: it is covered; the label is what the page's copy shows of the layer's own, so that
+    // a page whose only translation is a bitmap label is shown laid, not as arXiv's page: run.hides)
     expect([...(run.rows[0] as unknown as { off: Set<string> }).off]).toEqual([])
+    expect((run as unknown as { hides(pg: number): number }).hides(1)).toBe(1)
   })
 
   it('off: nothing of the label drawn, its image the original\'s', async () => {
@@ -85,6 +87,7 @@ describe('the bitmap figures\' labels drawn by the layer (run.mjs paintOcr)', ()
     await run.until(1)
     expect(run.ocr).toEqual([])
     expect(run.svgOf(1).querySelector('[data-o]')).toBeNull()
+    expect((run as unknown as { hides(pg: number): number }).hides(1)).toBe(0)
   })
 
   it('every patch of a page before any label\'s text: no patch covers a translation', async () => {
@@ -183,6 +186,12 @@ describe('the bitmap figures\' labels drawn by the layer (run.mjs paintOcr)', ()
     // (the set's factor the least need of those that fit: one past the floor alone is left, the rest kept at theirs)
     expect(ocrSetFactor([1, 0.8, null])).toBe(0.8)
     expect(ocrSetFactor([null])).toBe(1)
+    // (a floor off the steps' grid is tested itself: a text that fits at 0.65 and not at 0.68 fits at a floor of 0.65, where the
+    // steps from 1 go from 0.68 to 0.64)
+    const one = placeOf([1, 0xffffff, 0, 1, 10, 1, 0, 110, 100, 110, 100, 100, 0, 100, 0, 110, 100, 110, 100, 100, 0, 100])!
+    const wide = (t: string) => t.length * 0.1
+    expect(ocrNeed(one, 'x'.repeat(142), wide, 0.65)).toBe(0.65)
+    expect(ocrNeed(one, 'x'.repeat(142), wide, 0.7)).toBeNull()
   })
 
   it('cuts a text between words, and between two characters of a script written without spaces, its closing marks kept', () => {

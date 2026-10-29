@@ -109,6 +109,8 @@ export interface Options {
   ahead?: number
   /** the reader's toggles (LayerSideOptions `classes`), none by default: the door's defaults */
   classes?: Partial<Record<'heads' | 'tables' | 'figures' | 'references' | 'names', boolean>>
+  /** a host that translates the units itself, told of an index grown by a late chunk (LayerSideOptions `onIndex`) */
+  onIndex?: (index: unknown) => void
 }
 /** the view over the original (its four pages), its layer side over the door and the paper's objects served by digest */
 export async function setup(o: Options = {}): Promise<Setup> {
@@ -156,7 +158,7 @@ export async function setup(o: Options = {}): Promise<Setup> {
   const doors: Setup['doors'] = []
   const side = createLayerSide(view, {
     paper: { id: '2608.04322', version: 1 }, target: 'zh', faceSources: o.faceSources ?? (async () => null), hyphUrl: () => '',
-    ...(o.keepPixels === undefined ? {} : { keepPixels: o.keepPixels }), ...(o.ahead === undefined ? {} : { ahead: o.ahead }), ...(o.classes === undefined ? {} : { classes: o.classes }),
+    ...(o.keepPixels === undefined ? {} : { keepPixels: o.keepPixels }), ...(o.ahead === undefined ? {} : { ahead: o.ahead }), ...(o.classes === undefined ? {} : { classes: o.classes }), ...(o.onIndex ? { onIndex: o.onIndex } : {}),
     fetchObject, bind: (o.bind ?? (async () => true)) as never,
     composed: (tail, options) => {
       const task = fakeTask(destroyed, `composed ${composed.length}`)

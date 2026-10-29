@@ -61,8 +61,9 @@ function fill(m, size) {
 export function ocrNeed(place, text, measure, floor) {
   const m = prepared(place, text, measure)
   if (!m) return null
-  for (let k = 1; k >= floor - 1e-9; k -= STEP) if (fill(m, place.size * k)) return k
-  return null
+  for (let k = 1; k > floor + 1e-9; k -= STEP) if (fill(m, place.size * k)) return k
+  // (the floor itself, where the steps from 1 do not land on it: a floor of 0.65 is tested, not only 0.68 and 0.64)
+  return floor > 0 && fill(m, place.size * floor) ? floor : null
 }
 
 /** a set's one factor: the least need of its labels that fit (ocrNeed's, null for one that fits at none), 1 where none does */

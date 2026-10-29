@@ -22,8 +22,8 @@
 //     alone, another label's text: kept);
 //   - each line's box holds that line's ink alone: no more than CROWD of its pixels off the colours between the ground's and the
 //     ink's (a marker of another colour, a line of the plot through the label);
-//   - it is clear of the page's own ink over the image (its text, a path drawn after it, a fill holding it), which a patch would
-//     cover, and of a patch another image drew on its page; inside the clip in force and the page; its frame not mirrored by its
+//   - it is clear of the page's own ink over the image (its text, a path drawn after it, a fill holding it, an image painted after
+//     it), which a patch would cover, and of a patch another image drew on its page; inside the clip in force and the page; its frame not mirrored by its
 //     placement.
 // Else it stays the original's, its reason told (`busy`, `crowded`, `overlap`, `covered`, `clipped`, `mirrored`, `outside`,
 // `long`, `past`). Its text size is the extension's (core/renderer/image.ts fontBounds: 72 % of its thinnest line's thickness),
@@ -401,6 +401,8 @@ export function labelsOf({ image, lines, place, others = { boxes: [], segs: [], 
       const mid = [(p[0][0] + p[2][0]) / 2, (p[0][1] + p[2][1]) / 2]
       if ((others.fills ?? []).some(edges => holdsEvenOdd(edges, mid))) return true
       if (others.boxes.some(([x0, y0, x1, y1]) => x1 > bx0 && x0 < bx1 && y1 > by0 && y0 < by1 && quadsMeet(p, [[x0, y0], [x1, y0], [x1, y1], [x0, y1]]))) return true
+      // (an image painted after this one over the patch: what the patch would label is under it)
+      if ((others.images ?? []).some(q => quadsMeet(p, q))) return true
       return others.segs.some(([x0, y0, x1, y1, w]) => Math.max(x0, x1) + w > bx0 && Math.min(x0, x1) - w < bx1 && Math.max(y0, y1) + w > by0 && Math.min(y0, y1) - w < by1 && segmentMeets(p, x0, y0, x1, y1, w))
     })
     if (covered) { left.push({ text, why: 'covered' }); continue }

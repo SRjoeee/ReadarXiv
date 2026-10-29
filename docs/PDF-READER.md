@@ -3234,7 +3234,7 @@ first page's way (the coordinator's word: the units come after the head and ever
   an image PDF.js keeps once for the pages that paint it is refused on all of them —, one the recogniser refuses or does not
   answer in its host's time (`error`, `timeout`), one past the paper's budget (OCR_BUDGET_MS, 60 s of the recogniser's time,
   `budget`: the owner's bound on the box's hold); a cache that cannot be read or written is no cache. The bounds are the box's
-  memory (the web's record of it: its `docs/research/measurements/ocr.md`).
+  memory (the website repository's record of it, its OCR measurement).
 - **What is read** (`pipeline/ocr-pass.mjs`): each page's operator list as PDF.js gives it (`paintsOf`: every image's paint
   operator under its transform and the clip in force — a form's box, as pdfTeX trims an image so, and a rectangle's; any other
   clip `complex` — and the paths drawn after it), its text content's boxes, and each image's pixels as PDF.js decodes them. An

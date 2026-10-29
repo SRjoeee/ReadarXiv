@@ -34,7 +34,7 @@ export declare function labelsOf(o: {
   image: DecodedImage
   lines: readonly OcrLine[]
   place: { page: number; ctm: readonly number[]; clip: readonly (readonly Pt[])[] | 'complex' | null; view: readonly number[] | null }
-  others?: { boxes: readonly (readonly number[])[]; segs: readonly (readonly number[])[]; fills?: readonly (readonly (readonly number[])[])[] } | null
+  others?: { boxes: readonly (readonly number[])[]; segs: readonly (readonly number[])[]; fills?: readonly (readonly (readonly number[])[])[]; images?: readonly Pt[][] } | null
   taken?: Pt[][]
   limit?: number
 }): { units: OcrLabel[]; left: { text: string; why: OcrWhy }[]; read: number; member: number; sets: OcrSets }

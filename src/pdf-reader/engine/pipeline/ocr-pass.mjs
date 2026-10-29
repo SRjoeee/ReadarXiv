@@ -100,7 +100,10 @@ export function paintsOf({ fnArray, argsArray }, OPS) {
         const scale = Math.sqrt(Math.abs(ctm[0] * ctm[3] - ctm[1] * ctm[2]))
         const hw = STROKES.has(op) ? Math.max(lw * scale, 0.1) / 2 : 0
         const segs = pieces.map(([x0, y0, x1, y1]) => [x0, y0, x1, y1, hw])
-        const box = [Math.min(...segs.map(s => Math.min(s[0], s[2]))) - hw, Math.min(...segs.map(s => Math.min(s[1], s[3]))) - hw, Math.max(...segs.map(s => Math.max(s[0], s[2]))) + hw, Math.max(...segs.map(s => Math.max(s[1], s[3]))) + hw]
+        // (the extrema by a loop: a dense path's segments, a hundred thousand and more, are no arguments' list)
+        const box = [Infinity, Infinity, -Infinity, -Infinity]
+        for (const g of segs) { box[0] = Math.min(box[0], g[0], g[2]); box[1] = Math.min(box[1], g[1], g[3]); box[2] = Math.max(box[2], g[0], g[2]); box[3] = Math.max(box[3], g[1], g[3]) }
+        box[0] -= hw; box[1] -= hw; box[2] += hw; box[3] += hw
         paths.push({ k, segs, fill: FILLS.has(op), box })
       }
     } else if (fn === OPS.paintImageXObject) images.push({ k, id: a[0], w: a[1], h: a[2], ctm, clips: complex ? 'complex' : clips })
@@ -206,7 +209,7 @@ export async function ocrPass({ doc, OPS, paper, source = null, from, before = n
   // (images: those painted, read by the recogniser, from the cache, the same as one read before, and each why one is not read)
   // (the labels the extension's merge made of the lines, `boxes`: each a unit drawn or left with its why, `labels`; and the time
   // each step took, ms by `now`: the pages' reading, the images' decoding, their digests, the recogniser, the labels)
-  const stats = { pages: 0, pagesLeft: 0, images: { painted: 0, read: 0, cached: 0, again: 0, ...Object.fromEntries(OCR_IMAGE_WHYS.map(w => [w, 0])) }, lines: 0, boxes: 0, units: 0, kept: 0, labels: {}, recogniseMs: 0, cacheFailed: 0, refused: null, sets: { sets: 0, grouped: 0, aligned: 0, sized: 0 }, ms: { pages: 0, decode: 0, digest: 0, labels: 0 } }
+  const stats = { pages: 0, pagesLeft: 0, pagesFailed: 0, images: { painted: 0, read: 0, cached: 0, again: 0, ...Object.fromEntries(OCR_IMAGE_WHYS.map(w => [w, 0])) }, lines: 0, boxes: 0, units: 0, kept: 0, labels: {}, recogniseMs: 0, cacheFailed: 0, refused: null, sets: { sets: 0, grouped: 0, aligned: 0, sized: 0 }, ms: { pages: 0, decode: 0, digest: 0, labels: 0 } }
   const lap = (k, t0) => { stats.ms[k] += now() - t0 }
   const units = []
   const seen = new Map()
@@ -215,7 +218,8 @@ export async function ocrPass({ doc, OPS, paper, source = null, from, before = n
     // (past the host's clock no page is read: its images, each counted as past the budget once its operators are known, are not)
     if (now() >= until) { stats.pagesLeft++; continue }
     let t = now()
-    const page = await doc.getPage(p)
+    let page
+    try { page = await doc.getPage(p) } catch { stats.pagesFailed++; continue }
     try {
       const { images, paths } = paintsOf(await page.getOperatorList(), OPS)
       lap('pages', t)
@@ -262,8 +266,11 @@ export async function ocrPass({ doc, OPS, paper, source = null, from, before = n
         // (the page's own ink over the image: its text's boxes, read once a page, and the paths drawn after it that meet its box)
         boxes ??= (await page.getTextContent()).items.filter(it => it.str?.trim() && Array.isArray(it.transform)).map(itemBox)
         const near = paths.filter(q => q.k > im.k && meets(q.box, box))
-        const segs = near.flatMap(q => q.segs)
-        const others = segs.length > OCR_SEGS_PAGE ? null : { boxes: boxes.filter(b => meets(b, box)), segs, fills: near.filter(q => q.fill).map(q => q.segs) }
+        let n = 0
+        for (const q of near) n += q.segs.length
+        // (and the images painted after it over its box: a patch over one would draw a label of what it hides)
+        const over = images.filter(j => j.k > im.k).map(j => [apply(j.ctm, 0, 0), apply(j.ctm, 1, 0), apply(j.ctm, 1, 1), apply(j.ctm, 0, 1)]).filter(q => meets(boxOfPoints(q), box))
+        const others = n > OCR_SEGS_PAGE ? null : { boxes: boxes.filter(b => meets(b, box)), segs: near.flatMap(q => q.segs), fills: near.filter(q => q.fill).map(q => q.segs), images: over }
         const limit = Math.min(OCR_UNITS_IMAGE, unitsDoc - units.length)
         t = now()
         const got = labelsOf({ image, lines, place: { page: p, ctm: im.ctm, clip: im.clips, view }, others, taken, limit })
@@ -291,6 +298,9 @@ export async function ocrPass({ doc, OPS, paper, source = null, from, before = n
           if (collect) { try { collect() } catch { /* (a collection is the host's, never the pass's) */ } }
         }
       }
+    } catch {
+      // (a page whose operators, text or images cannot be read is skipped, its images the original's: never the pass's end)
+      stats.pagesFailed++
     } finally {
       page.cleanup()
     }
