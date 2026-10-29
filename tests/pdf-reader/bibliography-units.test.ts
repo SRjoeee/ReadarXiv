@@ -351,6 +351,12 @@ describe('backref\'s lists after the entries (hyperref\'s pagebackref: 2610.3766
     expect(has({ 'main.tex': doc(`See \\cite{layernorm2016}.\n\n${PLAIN}`).replace('{article}', '{myclass}'), 'myclass.cls': '\\LoadClass{article}\\RequirePackage[pagebackref=true]{hyperref}' })).toBe(true)
     expect(has({ 'main.tex': body, 'mystyle.sty': '\\RequirePackage[pagebackref=false, colorlinks]{hyperref}' })).toBe(false)
     expect(has({ 'main.tex': body, 'mystyle.sty': '\\hypersetup{backref = false}' })).toBe(false)
+    // (only in a command that loads a package or sets its options, over lines too; never prose or a test of the option, and an
+    // assignment to false split over a line is false: the local Codex review)
+    expect(has({ 'main.tex': body, 'mystyle.sty': '\\RequirePackage[\n  colorlinks,\n  pagebackref\n]{hyperref}' })).toBe(true)
+    expect(has({ 'main.tex': body, 'mystyle.sty': '\\hypersetup{colorlinks, backref =\n false}' })).toBe(false)
+    expect(has({ 'main.tex': body.replace('See ', 'Each backref is a link back. See '), 'mystyle.sty': '' })).toBe(false)
+    expect(has({ 'main.tex': body, 'mystyle.sty': '\\@ifpackagewith{hyperref}{pagebackref}{}{\\relax}' })).toBe(false)
     expect(has({ 'main.tex': body, 'mystyle.sty': '\\renewcommand*{\\backrefalt}[4]{#2}' })).toBe(false)
     expect(has({ 'main.tex': body, 'mystyle.sty': '% \\usepackage{backref}' })).toBe(false)
     expect(has({ 'main.tex': body, 'mystyle.sty': '\\usepackage{backref}\\backrefparscanfalse' })).toBe(false)

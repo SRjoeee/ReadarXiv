@@ -2208,15 +2208,35 @@ function bibliography(s, from, to, b, ctx) {
  * (EMPTY: the maker)
  */
 export const BACKREF_LIST = '\\axtbackref'
-/** whether the package turns backref's lists on at a bibliography's entries: one of its files (a class's too: myarxiv.cls,
- *  weco_paper.cls) names the package or hyperref's option (`backref`, `pagebackref`: a word of its own, not a command's name,
- *  \backrefalt; not `=false`), and none says \backrefparscanfalse,
- *  under which the list is set where the entry's \backrefprint stands, inside its text. A mention that turns nothing on gives
- *  each entry a piece TeX sets nothing for (EMPTY) */
+/** whether the package turns backref's lists on at a bibliography's entries: in one of its files (a class's too: myarxiv.cls,
+ *  weco_paper.cls), a command that loads a package or sets its options (\\usepackage, \\RequirePackage, \\PassOptionsToPackage,
+ *  \\documentclass, \\LoadClass, \\hypersetup) names backref or hyperref's option (`backref`, `pagebackref`: a word of its own, not
+ *  `=false`) in its arguments, and none says \\backrefparscanfalse, under which the list is set where the entry's \\backrefprint
+ *  stands, inside its text. A mention elsewhere (prose, a test such as \\@ifpackagewith) turns nothing on, and one that turns
+ *  nothing on all the same gives each entry a piece TeX sets nothing for (EMPTY) */
 function backrefOf(texts) {
   const t = texts.map(uncommented).join('\n')
-  return /(?<![A-Za-z@\\])(?:page)?backref(?![A-Za-z@]|\s*=\s*false\b)/.test(t) && !/\\backrefparscanfalse(?![A-Za-z@])/.test(t)
+  if (/\\backrefparscanfalse(?![A-Za-z@])/.test(t)) return false
+  for (const m of t.matchAll(BACKREF_SETTERS)) {
+    // (the command's arguments, optional and braced, as many as follow it: white space between)
+    let k = m.index + m[0].length, args = ''
+    for (;;) {
+      k = skipSpaces(t, k)
+      const close = t[k] === '[' ? ']' : t[k] === '{' ? '}' : null
+      if (!close) break
+      const e = matchGroup(t, k, t[k], close)
+      if (e < 0) break
+      args += ` ${t.slice(k + 1, e - 1)}`
+      k = e
+    }
+    if (BACKREF_WORD.test(args)) return true
+  }
+  return false
 }
+/** the commands that load a package or set its options (backrefOf) */
+const BACKREF_SETTERS = /\\(?:usepackage|RequirePackage|PassOptionsToPackage|documentclass|LoadClass|hypersetup)(?![A-Za-z@])/g
+/** backref's name, or hyperref's option that loads it, as a word of an argument, not set false */
+const BACKREF_WORD = /(?<![A-Za-z@\\])(?:page)?backref(?![A-Za-z@]|\s*=\s*false\b)/
 /** a token of an entry's text that is a number and no word — a year, pages, a volume and its issue: "1994.", "157--166,",
  *  "5(2):157--166" — a digit in it, no letter, white space or a piece that sets none on either side; or a DOI written out,
  *  letters and all ("10.1007/s00125-020-05190-9."), whose left may be any character but a letter or a digit ("doi:10.…") */
