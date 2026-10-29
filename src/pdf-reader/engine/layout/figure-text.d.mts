@@ -40,6 +40,8 @@ export declare const SPACE_GAP: number
 export declare const ANCHOR_REACH: number
 export declare const DRAW_BAND: readonly [number, number]
 export declare const ALIGN_TOL: number
+/** a level unit's column: the text lines within this many of its sizes above and below its baseline (columnAnchorOf) */
+export declare const COLUMN_REACH: number
 export declare const ROOM_MAX: number
 export declare const ROOM_CLEAR: number
 export declare const FIGURE_UNITS_PAGE: number

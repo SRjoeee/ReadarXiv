@@ -73,6 +73,8 @@ const CROWD_PAD = 0.04
 /** two runs of one figure, one size and one direction share an edge (a column's start, end or middle) where theirs lie on one
  *  line within this share of their size (a legend's entries, an axis's labels set against it) */
 export const ALIGN_TOL = 0.08
+/** a level unit's column: the text lines within this many of its sizes above and below its baseline (columnAnchorOf) */
+export const COLUMN_REACH = 3
 /** a unit's room, the free line before and after its box that a longer translation may take: at most this many of its sizes a
  *  side, and this share of its size short of other ink (a translation never touches another's ink) */
 export const ROOM_MAX = 6, ROOM_CLEAR = 0.15
@@ -149,6 +151,8 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
   const units = [], glyphMaps = [], turnedMaps = []
   const stats = { units: 0, crowded: 0, letters: 0, runs: 0, past: 0, clipped: 0, sets: 0, grouped: 0, aligned: 0 }
   pages.forEach((pg, pi) => {
+    // (the page's text lines a unit's column is read from, made once a page and call, of this call's owners)
+    let lines = null
     const glyphMap = new Map(), turnedMap = new Map()
     glyphMaps.push(glyphMap); turnedMaps.push(turnedMap)
     const S = streamOf(pg, own?.glyphs?.[pi])
@@ -200,7 +204,10 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       const k = units.length
       const u = { k, page: pi + 1, group: figureGroup(k), text, font: r.font, size: r.size, fill: r.fill, angle: angleOf(f), x: first.ox, y: first.oy, ux: f.ux, uy: f.uy, length: s1 - s0, ascent, descent, anchor: 'centre', form: r.form, why: null }
       const room = roomOf(pg, f, u, r.gs)
-      u.anchor = room.anchor
+      // (the ink beside it within the reach tells its anchor, inside a figure (a line sample, an axis); where none does, a level
+      // line on its column's edge, or centred in it, is set from there, as TeX set it (a heading a class sets in a boxed
+      // panel); else its middle; the unit's set below may take its column's edge over either)
+      u.anchor = room.told ? room.anchor : (columnAnchorOf((lines ??= columnLinesOf(pg, own?.glyphs?.[pi])), u) ?? room.anchor)
       if (room.crowded) { u.why = 'crowded'; stats.crowded++ }
       units.push(u)
       mine.push({ u, r, free: room })
@@ -215,6 +222,51 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
     roomsOf(pg, S, mine)
   })
   return { units, glyphs: glyphMaps, turned: turnedMaps, stats }
+}
+
+/** the page's text lines a unit's column is read from: the level glyphs a unit owns (own.mjs's groups), by baseline, a line
+ *  cut where two glyphs stand a size apart (two columns' lines on one baseline), each { y, x0, x1, size } by its glyphs'
+ *  advances */
+function columnLinesOf(pg, owners) {
+  if (!owners) return []
+  const G = pg.glyphs ?? [], gs = [], lines = []
+  for (let g = 0; g < G.length; g++) { const x = G[g]; if (owners[g] != null && x && x.size > 0 && /\S/u.test(x.u ?? '') && !x.blank) gs.push(x) }
+  gs.sort((a, b) => b.y - a.y || a.x0 - b.x0)
+  let row = []
+  const flush = () => {
+    row.sort((a, b) => a.x0 - b.x0)
+    let cur = null
+    for (const x of row) {
+      if (cur && x.x0 - cur.x1 <= cur.size) { cur.x1 = Math.max(cur.x1, x.x1); cur.size = Math.max(cur.size, x.size); continue }
+      cur = { y: x.y, x0: x.x0, x1: x.x1, size: x.size }
+      lines.push(cur)
+    }
+    row = []
+  }
+  for (const x of gs) { if (row.length && Math.abs(row[0].y - x.y) > RUN_DY * Math.max(row[0].size, x.size)) flush(); row.push(x) }
+  flush()
+  return lines
+}
+
+/** a level unit's anchor by its column, where no ink beside it tells one (the column's text lines within COLUMN_REACH of its
+ *  sizes above and below it whose extent its box meets, two at least): its start on their common start, the column's left
+ *  edge, within ALIGN_TOL of its size ('start': a heading TeX set flush, 2610.37668v1's "Abstract", centred over its longer
+ *  original had stood an em in); its end on their end ('end'); its middle on the column's ('centre'); else null */
+function columnAnchorOf(lines, u) {
+  if (!lines.length || Math.abs(u.uy) > 1e-3 || u.ux <= 0) return null
+  const x0 = u.x, x1 = u.x + u.length, reach = COLUMN_REACH * u.size, tol = ALIGN_TOL * u.size
+  let n = 0, left = Infinity, right = -Infinity
+  for (const l of lines) {
+    if (Math.abs(l.y - u.y) > reach || l.x1 <= x0 || l.x0 >= x1) continue
+    n++
+    left = Math.min(left, l.x0)
+    right = Math.max(right, l.x1)
+  }
+  if (n < 2) return null
+  if (Math.abs(x0 - left) <= tol) return 'start'
+  if (Math.abs(x1 - right) <= tol) return 'end'
+  if (Math.abs((x0 + x1) / 2 - (left + right) / 2) <= tol) return 'centre'
+  return null
 }
 
 /** the stretch along a unit's direction, from its origin, over which both edges of its band stay inside box `b` [x0, y0, x1,
@@ -490,7 +542,8 @@ function roomOf(pg, f, u, own) {
   }
   // (set from its start where the ink before it is nearer by half, from its end where the ink after it is: else from its middle)
   const anchor = Math.max(before, 0) * ANCHOR_RATIO < Math.max(after, 0) ? 'start' : Math.max(after, 0) * ANCHOR_RATIO < Math.max(before, 0) ? 'end' : 'centre'
-  return { crowded, anchor, before: freeBefore, after: freeAfter }
+  // (`told`: whether the ink within the reach told the anchor, on either side; none on both is its middle by default)
+  return { crowded, anchor, told: Number.isFinite(before) || Number.isFinite(after), before: freeBefore, after: freeAfter }
 }
 
 /** a path's lines against a unit's band (in its frame): each segment's part across the band (a stroke's widened by its half
