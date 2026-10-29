@@ -1374,8 +1374,11 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   - **A figure's picture** lights nothing, nor its panels: the two panes stand side by side already. No outline is drawn.
   - **A table** lights cell by cell, and a gap between two cells or a rule nothing. A cell the front end made a unit lights
     alone; so does one it did not — a cell of numbers, of a formula, of one letter (a unit has two letters at least): the
-    table's words no unit holds, one cell while they stand on one line within 0.6 of their height of each other
-    (`floats.mjs` `cellsOf`; a word space is a third of it, two columns' `\tabcolsep` more than one), lit whole at the same
+    table's words no unit holds, one cell while they stand on one line within 0.6 of their height of each other, and
+    within 0.4 where those words leave a column free between them on every row of the table (`floats.mjs` `cellsOf`: a
+    word space is a third of the height, two columns' `\tabcolsep` more than one; columns set tight, a decimal point or a ±
+    every row sets alike stays in its cell). On the ten papers, two numbers more than 0.4 apart stay one cell twice, both
+    on our typesetting's side (2026-10-30, the rule as Codex's review left it). Lit whole at the same
     place on both panes under a hover id of its own (`units.mjs` `tableCellId`: from `CELL_ID_FROM`, 2^30, 2^16 a page,
     below the view's Int32 owners and past every name's), the right's run a copy of the left's (§17.8).
   - **A figure's text lights nothing** (TikZ's words, a figure's labels the wrap made units): no layout holds it, its words
@@ -1495,7 +1498,7 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   aligned by sentence, 83 more than before (the captions), with 0 holes and 0 points of another sentence in 24.6 M
   points of sentence shapes and no unit more lit whole for its shapes (11, as before); of 5.26 M points of floats' bodies
   4.18 M light nothing (a figure's picture, a table's gaps and rules), 0.79 M a cell no unit holds, 0.29 M a cell unit,
-  5 878 a caption and 250 a smaller unit; every cell lights itself at its middle (408 cell units, 4 492 cells no unit
+  5 878 a caption and 250 a smaller unit; every cell lights itself at its middle (408 cell units, 4 512 cells no unit
   holds), and no unit's point is taken by a float. A drawing's text, 28 units of two papers, lights on neither side by
   rule. The blocks that moved are those: the drawings' (gone), the 124 cells that had taken a head (58 on the left, 66 on
   the right; four fewer pads overlapping another block), and one heading's pad on one page of 2608.12502's right, 0.38
@@ -1585,8 +1588,9 @@ within noise.
 - A table the left's floats miss lights its cell units alone, and its cells of numbers on neither pane (the right's floats
   are the left's); a plain-word inline diagram marked under 3 % is taken for a table, its words lit as cells; a caption
   between two tables takes the one below.
-- A cell of numbers is the words no unit holds on one line within 0.6 of their height: one set over two lines lights as two
-  cells, and two columns set closer than that (`\tabcolsep` made small) light as one.
+- A cell of numbers is the words no unit holds on one line within 0.6 of their height (0.4 across a column the table leaves
+  free): one set over two lines lights as two cells, and two columns set closer than 0.4 of their height, or than 0.6 where
+  a cell no unit holds runs across the column between them on another row, light as one.
 - An equation number set on its own line below its display (2608.09746 #27) is no unit's and is not lit.
 - A table at a page's head whose first row is single letters over numbers, after a display that closed the page before,
   is taken by that display's walk: no distance tells them apart (A1, measured: lead walks' first gaps up to 19.6 pt).

@@ -39,9 +39,11 @@ const SPILL = 6
 const MIN_LINES = 2
 /** a float is a drawing when the marks outside its text cover this share of it */
 const DRAWN = 0.03
-/** two words of a table's row that no unit holds are one cell where the gap between them is at most this share of their height:
- *  a word space is a third of it, the gap between two columns (\tabcolsep on either side) more than one */
-const CELL_GAP = 0.6
+/** two words of a table's row that no unit holds are one cell where the gap between them is at most CELL_GAP of their height (a
+ *  word space is a third of it, the gap between two columns, \tabcolsep on either side, more than one), and not past COLUMN_GAP
+ *  where the table's words no unit holds leave a column free there on every row: two columns set tight (on the ten papers, rows
+ *  of values 0.47 of their height apart), never a decimal point (0.3) or a ± (0.2) that every row sets alike */
+const CELL_GAP = 0.6, COLUMN_GAP = 0.4
 
 const mul = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]]
 
@@ -265,6 +267,15 @@ export function pageFloats(L, p, regions = [], { rules = [], marks = [] } = {}) 
 function cellsOf(L, p, region, g, from) {
   const { tok, owner, lineOf, lines, k0 } = g.at, P = L.page[p], lead = P?.lead?.get('cell') ?? P?.lead?.get(null) ?? 0
   const blocks = g.runs.map(r => blockOf(r, 0)).filter(b => b.x0 < region.x1 && b.x1 > region.x0 && b.y0 < region.y1 && b.y1 > region.y0)
+  const free = i => owner[i] === -1 && inside((tok.l[i] + tok.r[i]) / 2, (tok.top[i] + tok.bottom[i]) / 2, region) && !blocks.some(b => inside((tok.l[i] + tok.r[i]) / 2, (tok.top[i] + tok.bottom[i]) / 2, b))
+  // (the columns the words no unit holds fill, every row's together: merged spans across, rising)
+  const spans = []
+  for (let i = 0; i < owner.length; i++) if (free(i)) spans.push([tok.l[i], tok.r[i]])
+  spans.sort((a, b) => a[0] - b[0])
+  const cover = []
+  for (const [a, b] of spans) { const c = cover.at(-1); if (c && a <= c[1]) { if (b > c[1]) c[1] = b } else cover.push([a, b]) }
+  /** whether the words no unit holds leave some x between a and b free on every row: no one span of them reaches across */
+  const open = (a, b) => !cover.some(([c0, c1]) => c0 <= a && c1 >= b)
   const out = []
   let cur = null
   const close = () => {
@@ -275,10 +286,10 @@ function cellsOf(L, p, region, g, from) {
   }
   for (let i = 0; i < owner.length; i++) {
     if (owner[i] !== -1) { close(); continue }
-    const l = tok.l[i], r = tok.r[i], top = tok.top[i], bottom = tok.bottom[i], mx = (l + r) / 2, my = (top + bottom) / 2
-    if (!inside(mx, my, region) || blocks.some(b => inside(mx, my, b))) { close(); continue }
-    const line = lineOf[i]
-    if (cur && cur.line === line && l - cur.box.x1 <= CELL_GAP * tok.h[i]) {
+    const l = tok.l[i], r = tok.r[i], top = tok.top[i], bottom = tok.bottom[i]
+    if (!free(i)) { close(); continue }
+    const line = lineOf[i], gap = l - (cur?.box.x1 ?? l)
+    if (cur && cur.line === line && gap <= CELL_GAP * tok.h[i] && (gap <= COLUMN_GAP * tok.h[i] || !open(cur.box.x1, l))) {
       const b = cur.box
       if (l < b.x0) b.x0 = l
       if (r > b.x1) b.x1 = r

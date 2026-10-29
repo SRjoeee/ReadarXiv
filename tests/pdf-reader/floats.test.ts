@@ -138,6 +138,18 @@ describe('pageFloats: a table from its caption to its rules', () => {
     expect(f.cells.some(c => c.run.x0 === 60 && c.run.top > 588)).toBe(true)
   })
 
+  it('two columns of numbers set closer than a cell\'s gap are two cells where the table leaves a column between them on every row; a decimal point, a ± stay in their cell (Codex on this change; on the ten papers a row of ten values had been one cell)', () => {
+    // (a column at 160–175 and one at 180–195: 5 apart, under 0.6 of the words' height; in each row "1" "2" around a decimal
+    // point 3 wide, and a ± with 2 either side)
+    const num = (y: number) => [item('m', 60, y), item('1', 160, y, { width: 5 }), item('2', 168, y, { width: 7 }), item('3', 180, y, { width: 6 }), item('4', 189, y, { width: 6 }), item('5', 240, y, { width: 5 }), item('±', 247, y, { width: 5 }), item('6', 254, y, { width: 5, eol: true })]
+    const ps = [[...prose(740, 10), line('Table 1: scores of the runs', 610, 80, 270), ...row(588, 'method', 'score', 'time'), ...num(574), ...num(562), ...num(550), ...prose(530, 10)]]
+    const dd = docOf(ps), ids = ['m'].flatMap(t => dd.flatMap((d, k) => (d.t === t ? [k] : [])))
+    const layout = side(ps, [[0, words(dd, 'table', 'runs')], [5, [at(dd, 'method')]], [6, [at(dd, 'score')]], [7, [at(dd, 'time')]]], { 0: 'caption', 5: 'cell', 6: 'cell', 7: 'cell' }, ids)
+    const f = pageFloats(layout, 1, [], { rules: [hrule(55, 295, 598), hrule(55, 295, 584), hrule(55, 295, 545)] })[0]!
+    const on574 = f.cells.filter(c => c.run.top > 574 && c.run.bottom < 580).map(c => [Math.round(c.run.x0), Math.round(c.run.x1)])
+    expect(on574).toEqual([[60, 65], [160, 175], [180, 195], [240, 259]])
+  })
+
   it('a word no unit holds inside a cell unit\'s block (a piece its text did not find) is that cell\'s to the pointer, no cell of its own', () => {
     const ps = [[...prose(740, 10), line('Table 1: scores of the runs', 610, 80, 270), ...row(588, 'method', 'score', 'time'), item('alpha', 60, 574), item('(a)', 87, 574), item('mix', 105, 574), item('12', 160, 574), item('3', 240, 574, { eol: true }), ...row(562, 'beta', '14', '5'), ...prose(530, 10)]]
     const dd = docOf(ps), layout = side(ps, [[0, words(dd, 'table', 'runs')], [5, [at(dd, 'alpha'), at(dd, 'mix')]]], { 0: 'caption', 5: 'cell' }, [at(dd, '(a)')])

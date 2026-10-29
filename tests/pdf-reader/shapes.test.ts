@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type Anchor, type DocToken, lineRects, sentenceStarts, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { readLeftPart, UNIT_ID_MAX, writeLeftPart } from '@/pdf-reader/engine/layer-proto/format.mjs'
-import { CELL_ID_FROM, CELLS_PAGE, isNameOccurrence, isTableCell, NAME_ID_FROM, NAME_OCCURRENCE_MAX, nameOccurrenceId, tableCellId } from '@/pdf-reader/engine/layer-proto/units.mjs'
+import { CELL_ID_FROM, CELLS_PAGE, isNameOccurrence, isTableCell, NAME_ID_FROM, NAME_OCCURRENCE_MAX, nameOccurrenceId, tableCellId, tableCellPage } from '@/pdf-reader/engine/layer-proto/units.mjs'
 import { PAGES_MAX } from '@/pdf-reader/engine/layout/json.mjs'
 import { NAME_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { type Box, floatOf, pageFloats } from '@/pdf-reader/engine/view/floats.mjs'
@@ -722,6 +722,9 @@ describe("babel's names light as headings on both panes, under ids no bundle id 
     expect(nameOccurrenceId(NAME_OCCURRENCE_MAX)).toBe(CELL_ID_FROM - 1)
     // (and the tables' cells' range after it, to 2^31: neither meets the other)
     expect([isNameOccurrence(CELL_ID_FROM), isTableCell(CELL_ID_FROM - 1), tableCellId(PAGES_MAX, CELLS_PAGE - 1)! < 2 ** 31]).toEqual([false, false, true])
+    // (every page the id takes decodes to itself, the last one too: 2^14 − 1 pages past PAGES_MAX, below 2^31)
+    for (const [p, k] of [[1, 0], [PAGES_MAX, CELLS_PAGE - 1], [2 ** 14 - 1, CELLS_PAGE - 1]] as const) { const id = tableCellId(p, k)!; expect([isTableCell(id), tableCellPage(id), id < 2 ** 31]).toEqual([true, p, true]) }
+    expect([tableCellId(2 ** 14, 0), tableCellId(0, 0), tableCellId(1, CELLS_PAGE)]).toEqual([null, null, null])
     for (const bad of [-1, 1.5, NAME_OCCURRENCE_MAX + 1, Number.NaN]) expect(nameOccurrenceId(bad)).toBeNull()
     expect(isNameOccurrence(UNIT_ID_MAX)).toBe(false)
   })
