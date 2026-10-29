@@ -386,6 +386,11 @@ same way: every base page byte for byte the one before (the alignment probe sets
 abstract, which the probe read as its keywords' `\raggedright` under TeX Live 2023, has neither. The faces and every other file are
 the instrument's own bytes (a make by `pack-make.mjs` would take the faces of this engine's roles, Regular and Bold alone: that
 change of the instrument waits for a pull request of its own, as the pack's section says). 14 new objects.
+The pack of batch 2's ink lane (`be40ed94`, LAYOUT 28: a Type 3 glyph boxed by its char procedure's ink) is `147343b1`'s with
+each output's `layout.json` and `base.json` made again the same way: every base page byte for byte the one before, every layout
+file `147343b1`'s but for its version (the pack's units hold no Type 3 glyph: its matplotlib labels are figure units, which no
+layout file carries), every base record's layout digest moving with it. The faces and every other file are the instrument's own
+bytes. 14 new objects.
 Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
 The wrap reads each base's units from its paper's source, so the pack holds that too: `sources/<paper>/source.gz`, one a paper
 (`gate-pack.mjs make --sources=<dir of <paper>/source.gz>`, `data/corpus` by default; a make with a base of ours and no source
