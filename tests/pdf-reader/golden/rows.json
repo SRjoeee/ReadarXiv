@@ -4,8 +4,8 @@
   "runRows into zh over markers, lossy": "617a247f4cebe144a717efd7a5c2a9c94edfeeb2ed12380203349dd7f1a072c8",
   "runRows into de over markers, faithful": "617a247f4cebe144a717efd7a5c2a9c94edfeeb2ed12380203349dd7f1a072c8",
   "runRows into de over markers, lossy": "617a247f4cebe144a717efd7a5c2a9c94edfeeb2ed12380203349dd7f1a072c8",
-  "runRows into zh over tags, faithful": "c0fc39ef4d2e62fbb449f0b372cd200fbcce9941e2bad21dd32348f2a8b0c3be",
-  "runRows into zh over tags, lossy": "64615d3db4c08d9dd639f06dc81912a9e33504e4e3e209eba1a374125de4377e",
+  "runRows into zh over tags, faithful": "82163fc732bfc5d0c55d8c242827d9f528334eadf3de65e9fd933babb1ecdf69",
+  "runRows into zh over tags, lossy": "d159e5eedb380e8f19ddde7220c87da6e0be2590bfde987f74b342c10e1a4bd4",
   "runRows into zh over runs, faithful": "6bc0a332e695969bb0ca3194250259155a6b46a9a08c5c66f8aa74c983298c79",
   "runRows into zh over runs, lossy": "6bc0a332e695969bb0ca3194250259155a6b46a9a08c5c66f8aa74c983298c79",
   "layerRows over every result at once, and as the batches fill": "6e19cf2e9c7263324f49059ee1902eaf680ca6d1516ce56eb2e48106ff7ba106"

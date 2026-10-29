@@ -21,6 +21,12 @@ export declare const NAME_ID_FROM: number
 export declare const NAME_OCCURRENCE_MAX: number
 export declare const nameOccurrenceId: (occurrence: number) => number | null
 export declare const isNameOccurrence: (id: number) => boolean
+/** the hover's ids of a table's cells no unit holds: one a cell, by its page and its place among its page's */
+export declare const CELL_ID_FROM: number
+export declare const CELLS_PAGE: number
+export declare const tableCellId: (page: number, k: number) => number | null
+export declare const isTableCell: (id: number) => boolean
+export declare const tableCellPage: (id: number) => number
 /** the bundle's units from openPaper's paper (its `units` and `kept`, then a unit of kind `name` for each of its `names`);
  *  throws on a piece the front end does not make */
 export declare function bundleUnitsOf(paper: { units: readonly SourceUnit[]; kept: ReadonlySet<SourceUnit>; names?: readonly string[] }): BundleUnit[]

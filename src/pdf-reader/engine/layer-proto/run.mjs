@@ -1515,14 +1515,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       audit?.push({ what: 'erase', unit: f.id, figure: f.group, page: pg, box: [hid[0], hid[1], hid[0] + hid[2], hid[1] + hid[3]] })
       const x = f.x + f.ux * fit.offset, y = f.y + f.uy * fit.offset, angle = (Math.atan2(f.uy, f.ux) * 180) / Math.PI
       r.markup.push(L2.svgOfFigure({ group: f.group, runs, x, y, angle, size: fit.size, color: f.fill > 0 ? L2.hexOf(f.fill) : null }, cssOf(pg), scale))
-      // (a level one's words in the page's text layer, as a name's, under its unit's id, and in the page's word table: the hover
-      // lights it and its original, which the pass anchored on the left by its band, ink-pass.mjs figureAnchors; a turned one's
-      // are not selectable, the figure's float lighting it: figure-rows.mjs levelRun)
-      if (levelRun(f.ux, f.uy)) {
-        const seg = TL.nameSeg(runs.map(q => q.s).join(''), x, fit.width, y, fit.size)
-        textRecord(r, opsFrom, f.group, f.id, [seg])
-        if (!r.words) addSegWords(r.wordsOpen ??= newWords(), f.id, [seg])
-      }
+      // (a level one's words in the page's text layer, as a name's, under its unit's id; a turned one's are not selectable:
+      // figure-rows.mjs levelRun. None in the page's word table: a figure's labels are not paired on the hover, their two panes
+      // standing side by side, and their pairing measured not free (the owner, 2026-10-30; docs/PDF-READER.md §17.1))
+      if (levelRun(f.ux, f.uy)) textRecord(r, opsFrom, f.group, f.id, [TL.nameSeg(runs.map(q => q.s).join(''), x, fit.width, y, fit.size)])
       Object.assign(rec, { drawn: true, text, size: r1(fit.size), x: r1(x), y: r1(y), w: r1(fit.width), set: f.set ?? f.group })
     }
     figuresDone[pg] = 2

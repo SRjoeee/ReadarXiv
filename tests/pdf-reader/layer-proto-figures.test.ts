@@ -75,11 +75,10 @@ describe('the figures\' text drawn by the layer (run.mjs paintFigures)', () => {
     // (its words in the page's text layer under its unit's id, as a source unit's are: the hover lights it and its original)
     const words = run.textOf(1).items.filter(i => i.from === 'translated' && i.str === '\u4fe1\u53f7\u5f3a\u5ea6')
     expect(words.map(i => i.unit)).toEqual([1])
-    // (and in the page's word table under its id, one token over its box: the hover's right pane)
-    const table = run.wordsOf(1) as unknown as { spans: [number, number[]][]; tokens: { l: Float32Array } }
-    const span = table.spans.find(([id]) => id === 1)
-    expect(span?.[1][1]).toBe(1)
-    expect(table.tokens.l[span![1][0]!]).toBeCloseTo(70, 3)
+    // (and in no word table: a figure's labels are not paired on the hover, their pairing measured not free — the owner,
+    // 2026-10-30, docs/PDF-READER.md §17.1)
+    const table = run.wordsOf(1) as unknown as { spans: [number, number[]][] }
+    expect(table.spans.some(([id]) => id === 1)).toBe(false)
   })
 
   it('off: the same row taken, nothing of the figure drawn nor hidden: its ink the original\'s', async () => {

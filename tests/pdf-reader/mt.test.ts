@@ -228,6 +228,24 @@ describe('the tags path (Google, an LLM): the sentence cuts sent, and the senten
     await translateUnits([u], async (texts: string[], cuts?: unknown) => { told.push(cuts); return texts.map(() => ({ text: 'Wir untersuchen Flüsse @a#. Sie konvergieren, wenn @b# wächst.', by: 'ms' })) })
     expect(told).toEqual([undefined])
   })
+
+  it('a caption is cut as a body unit is, on the tags path alone; the markers path\'s wire is the same for every kind (the owner, 2026-10-30)', async () => {
+    // (a caption's sentences correspond as a paragraph's do, "as an ordinary body unit, sentence by sentence" (the owner,
+    // 2026-10-30, docs/PDF-READER.md §17.1); a heading and a cell still go whole)
+    const kinds = ['para', 'caption', 'heading', 'cell', 'footnote', 'figure']
+    const two = (kind: string) => ({ kind, pieces: [{ t: 'text', s: 'The first sentence is here. The second one follows.' }] })
+    const units = kinds.map(two)
+    const tags: (number[] | undefined)[][] = []
+    await translateUnits(units, async (texts: string[], cuts?: (number[] | undefined)[]) => { tags.push(cuts ?? []); return texts.map(t => ({ text: t, by: 'g' })) }, 'tags')
+    const at = serializeTags(units[0]!).wire.indexOf('The second')
+    expect(tags).toEqual([[[at], [at], undefined, undefined, [at], undefined]])
+    // (the markers path, Microsoft's, which reports its own sentences for every unit: no cuts, and each unit's wire the
+    // markers' serialisation of its pieces, whatever its kind)
+    const wires: string[][] = [], told: unknown[] = []
+    await translateUnits(units, async (texts: string[], cuts?: unknown) => { wires.push(texts); told.push(cuts); return texts.map(t => ({ text: t, by: 'ms' })) })
+    expect(told).toEqual([undefined])
+    expect(wires).toEqual([units.map(u => serialize(u).wire)])
+  })
 })
 
 describe('sentencesKept: a record\'s sentences used only when they are of their shape (the review of B3, minor 5)', () => {

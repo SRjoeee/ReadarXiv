@@ -42,7 +42,7 @@
 // Sentences (B3: plans/2026-10-01-pdf-highlight.md), from each run's sentences (spikes/highlight-sentences.mjs:
 // Microsoft's sentence lengths for the very wires the reader sends, cut as mt.mjs sentencesOf cuts them), each side's
 // starts found as the reader finds them (anchors.mjs sentenceStarts) and a unit lit by sentence where both found all
-// of its (running text only). The files are first made again by the reader's own path (sentences-path.mjs: the
+// of its (running text and, since the owner's ruling of 2026-10-30, captions: highlight.mjs bySentence). The files are first made again by the reader's own path (sentences-path.mjs: the
 // Microsoft answers kept, out/highlight/B3/ms-cache-zh-<auto|en>.json, through the extension's Microsoft provider, the
 // service's check, engine.mjs and mt.mjs translateUnits, no request made), and any unit whose sentences differ fails
 // the gate: a change to that path meant is recorded by making the files again (highlight-sentences.mjs,
@@ -62,9 +62,9 @@
 //  - the left's starts by its text alone, no marks (B3c: arXiv's PDF before our marked original's marks come), against
 //    those found with the marks: units both found, by one alone, the starts on the marks' token and line; and on the
 //    ground truth, arXiv's PDF by its text alone (AXtext) beside it with the marks (AX)
-//  - with the floats made (highlight-gate-floats.mjs), each sentence's rows over a float's painted shape (a figure's
-//    outline, a table's wash), and the points of them where the pointer finds the float: painted as the sentence, lit as
-//    the float (a row past its ink keeps from under a float, highlight.mjs reachAt)
+//  - with the floats made (highlight-gate-floats.mjs), each sentence's rows over a float's shape (a figure's picture, a
+//    table's body), and the points of them where the pointer finds the sentence's unit but the float gives another or
+//    nothing: painted as the sentence, lit otherwise (a row past its ink keeps from under a float, highlight.mjs reachAt)
 //  - the starts' cost on each side (findSentences: every unit's, as the reader does with the layout)
 // and on investigator B's ground truth (report-B §2(c, d): data/runs/highlight-gt, the four papers compiled with a
 // named destination at every sentence's start, O2 and T2, and without, O1 and T1), each start found on O1, T1 and
@@ -88,7 +88,8 @@
 // (2608.02785 both sides, 2608.12502's right: moved). The sentences against the floats (B3's follow-up): a float winning
 // over every block (100 points of 2608.06701 #227's second sentence, a word on a table's caption line, lit as the
 // table; on the ten papers no row past its ink comes under a float, so the guard itself is held by
-// tests/pdf-reader/floats.test.ts).
+// tests/pdf-reader/floats.test.ts). Under the owner's rule of 2026-10-30 (no float lit whole, a caption by sentence): a
+// float taking every point it holds (5 564 points of sentences taken on 2608.06701 and 2608.29181).
 // The layout made page by page (the shared reader view's contract §2.7, SH1: highlight-pages.mjs): each side cut as the
 // layer's wire carries it — parts by the doubling schedule with their views and units' rectangles, each page's left part
 // with its tokens, spans and pairs — and made again through the view's shapes (shapes.mjs createShapes), the pages
@@ -142,7 +143,7 @@ import { anchorUnits, boundsFromMarks, markWords, sentenceStarts, startsAnchor, 
 import { readLeftPart, writeLeftPart } from '../../../src/pdf-reader/engine/layer-proto/format.mjs'
 import { leftSideOf } from '../../../src/pdf-reader/engine/pipeline/left-side.mjs'
 import { floatHitOf, floatShapes } from '../../../src/pdf-reader/engine/view/floats.mjs'
-import { blockOf, hitOf, layoutOf, pageGeometry, runsOf, sentenceOf, sentencesFit } from '../../../src/pdf-reader/engine/view/highlight.mjs'
+import { blockOf, bySentence, DRAWING, hitOf, layoutOf, pageGeometry, runsOf, sentenceOf, sentencesFit } from '../../../src/pdf-reader/engine/view/highlight.mjs'
 import { startsOfPairs } from '../../../src/pdf-reader/engine/view/shapes.mjs'
 import { displayEdges, plainTranslated, serialize, unitText } from '../../../src/pdf-reader/engine/translate/mt.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
@@ -157,8 +158,6 @@ const ids = process.argv.slice(2).length ? process.argv.slice(2) : TEN
 /** the units TeX sets away from where the source has them (session.mjs FLOATING) */
 const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure'])
 const PAD = 3 / (96 / 72), STEP = 1.5, OVERHANG = 6 // highlight.mjs OVERHANG
-/** the kinds lit whole, whatever sentences they have (highlight.mjs NOT_RUNNING) */
-const WHOLE = new Set(['caption', 'heading', 'cell', 'figure'])
 const GT = process.env.GT ?? join(root, 'data/runs/highlight-gt')
 const GT_IDS = ['2608.02785', '2608.04322', '2608.02163', '2608.02459']
 const BASELINE = new URL('highlight-gate.baseline.json', import.meta.url).pathname
@@ -277,8 +276,9 @@ for (const id of ids) {
     for (let r = 0; r < ROUNDS; r++) {
       const t0 = performance.now()
       starts = new Map()
-      // (each paired token's sentence by its word, as the reader's left reads it: shapes.mjs startsOfPairs, the page-made side's too)
-      for (const [i, s] of Object.entries(sents)) { const st = startsOfPairs(anchors.get(+i), textOf.get(+i) ?? '', S === 'L' ? s.src : s.tr); if (st) starts.set(+i, st) }
+      // (each paired token's sentence by its word, as the reader's left reads it: shapes.mjs startsOfPairs, the page-made side's too;
+      // none of a drawing's text, which no layout holds: highlight.mjs DRAWING)
+      for (const [i, s] of Object.entries(sents)) { if (DRAWING.has(kind.get(+i))) continue; const st = startsOfPairs(anchors.get(+i), textOf.get(+i) ?? '', S === 'L' ? s.src : s.tr); if (st) starts.set(+i, st) }
       startsMs.push(performance.now() - t0)
     }
     cost[`${id} ${S}`] = { pages: pdf.views.length, tokens: doc.length, layoutMs: +median(layoutMs).toFixed(2), allPagesMs: +median(pagesMs).toFixed(2), perPageMs: +(median(pagesMs) / pdf.views.length).toFixed(3), pageMaxMs: +median(pageMax).toFixed(2), startsMs: +median(startsMs).toFixed(2) }
@@ -297,6 +297,8 @@ for (const id of ids) {
       }
       const row = (layerRow[id] = { units: 0, same: 0, differ: 0, emptied: lefts.filter(l => l.emptied).length, unplaced: 0 })
       for (const [i, sn] of Object.entries(sents)) {
+        // (a drawing's text has no starts on the reader's side: no layout holds it, highlight.mjs DRAWING)
+        if (DRAWING.has(kind.get(+i))) continue
         const a = anchors.get(+i), want = starts.get(+i) ?? null
         if (!a || !streams.has(+i)) { row.unplaced++; if (want) row.differ++; continue }
         if (a.rects.some(r => lefts[r.page - 1].emptied)) continue
@@ -320,7 +322,7 @@ for (const id of ids) {
     const { doc } = sides.L, plain = anchorUnits(doc, src, { bounds: new Map(), floating }), textOf = new Map(src.map(t => [t.id, t.text]))
     const r = (textOnly[id] = { units: 0, both: 0, onlyText: 0, onlyMarks: 0, starts: 0, sameToken: 0, sameLine: 0 })
     for (const [i, s] of Object.entries(sents)) {
-      if (!s.src.length || WHOLE.has(kind.get(+i))) continue
+      if (!s.src.length || !bySentence(kind.get(+i))) continue
       r.units++
       const X = sentenceStarts(plain.get(+i), textOf.get(+i) ?? '', s.src), M = sides.L.starts.get(+i)
       if (X && M) { r.both++; X.forEach((k, j) => { r.starts++; if (k === M[j]) r.sameToken++; if (doc[k].page === doc[M[j]].page && Math.abs(doc[k].y - doc[M[j]].y) < Math.min(doc[k].h, doc[M[j]].h) * 0.5) r.sameLine++ }) } else if (X) r.onlyText++
@@ -333,10 +335,10 @@ for (const id of ids) {
   let unfit = 0
   for (const [i, a] of sides.L.starts) {
     const b = sides.R.starts.get(i)
-    if (!b || a.length !== b.length || WHOLE.has(kind.get(i))) continue
+    if (!b || a.length !== b.length || !bySentence(kind.get(i))) continue
     if (sentencesFit(sides.L.layout, i, a) && sentencesFit(sides.R.layout, i, b)) both.set(i, a.length); else { unfit++; if (process.env.UNFIT) console.error(`unfit ${id}#${i} L ${sentencesFit(sides.L.layout, i, a)} R ${sentencesFit(sides.R.layout, i, b)}`) }
   }
-  const running = Object.entries(sents).filter(([i]) => !WHOLE.has(kind.get(+i)))
+  const running = Object.entries(sents).filter(([i]) => bySentence(kind.get(+i)))
   const sc = (sentences[id] = { units: running.length, multi: running.filter(([, s]) => s.src.length).length, foundL: running.filter(([i]) => sides.L.starts.has(+i)).length, foundR: running.filter(([i]) => sides.R.starts.has(+i)).length, unfit, aligned: both.size, alignedMulti: [...both.values()].filter(n => n > 0).length, sentences: [...both.values()].reduce((a, n) => a + n + 1, 0), points: 0, holes: 0, otherSentence: 0, smaller: 0, words: 0, wordsOutside: 0, heads: 0, headsOutside: 0, shapes: 0, sharedRows: 0, gaps: 0, overlaps: 0, throughInk: 0, goesOn: 0, goesOnShort: 0, goesOnBeside: 0, underFloat: 0, takenByFloat: 0 })
   units.forEach((u, i) => {
     const k = kindOf(paper, u)
@@ -346,11 +348,13 @@ for (const id of ids) {
       const { anchors, doc, layout } = sides[S], runs = runsOf(layout, i)
       const c = (((counts[id] ??= {})[S] ??= {})[k] ??= { anchored: 0, lit: 0 })
       if (anchors.get(i)) { count(k, `anchored${S}`); c.anchored++ }
-      if (runs.length) { count(k, `lit${S}`); c.lit++; lit++ } else if (anchors.get(i)) count(k, 'unlitAnchored')
+      // (a drawing's text lights nothing, by rule: highlight.mjs DRAWING, the owner's ruling of 2026-10-30; its ink none's)
+      const drawing = DRAWING.has(u.kind)
+      if (runs.length) { count(k, `lit${S}`); c.lit++; lit++ } else if (anchors.get(i) && !drawing) count(k, 'unlitAnchored')
       // ink holes: each of the unit's words at its ink's centre, in one of its blocks on its page
       const blocks = runs.map(run => blockOf(run, PAD)), { tok } = layout
       let holed = 0
-      for (const t of anchors.get(i)?.tokens ?? []) {
+      for (const t of drawing ? [] : (anchors.get(i)?.tokens ?? [])) {
         const page = doc[t].page, x = (tok.l[t] + tok.r[t]) / 2, y = (tok.top[t] + tok.bottom[t]) / 2
         count(k, 'inkPoints')
         if (blocks.some(b => b.page === page && inside(b, x, y))) continue
@@ -490,10 +494,11 @@ for (const id of ids) {
     }
     t.blocks = { n: nBlocks, digest: digest.digest('hex').slice(0, 16) }
   }
-  // the floats (B4: tables, algorithms and figures lit whole), on the sides as anchored (highlight-gate-floats.mjs)
+  // the floats (B4: tables, algorithms and figures; none lit whole since 2026-10-30), on the sides as anchored
+  // (highlight-gate-floats.mjs)
   await floatsOfPaper({ id, paper, units, kind, sides, files: { L: join(root, 'data/corpus', id, 'arxiv.pdf'), R: join(RUNS, id, 'final.pdf') }, rounds: ROUNDS, pad: PAD, step: STEP, cmaps: CMAPS, fonts: FONTS })
-  // the sentences against the floats, now made (B3's follow-up): a sentence's shape over a float's painted one, and the
-  // points of it where the pointer finds the float — painted as the sentence, lit as the float
+  // the sentences against the floats, now made (B3's follow-up): a sentence's shape over a float's, and the points of it
+  // where the float takes the pointer from the sentence's unit — painted as the sentence, lit otherwise
   const area = (a, b) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0))
   for (const S of ['L', 'R']) {
     const { layout, starts } = sides[S], startsOf = i => (both.has(i) ? starts.get(i) : null)
@@ -504,7 +509,7 @@ for (const id of ids) {
         if (!shapes.some(f => area(r, f) > 0.25)) continue
         sc.underFloat++
         let taken = 0
-        for (let x = r.x0 + STEP / 2; x < r.x1; x += STEP) for (let y = r.y0 + STEP / 2; y < r.y1; y += STEP) { const h = floatHitOf(layout, run.page, x, y, PAD, hitOf(layout, run.page, x, y, PAD, startsOf)); if (h?.float && h.id !== i) taken++ }
+        for (let x = r.x0 + STEP / 2; x < r.x1; x += STEP) for (let y = r.y0 + STEP / 2; y < r.y1; y += STEP) { const u = hitOf(layout, run.page, x, y, PAD, startsOf); if (u?.id === i && floatHitOf(layout, run.page, x, y, PAD, u)?.id !== i) taken++ }
         if (taken) { sc.takenByFloat += taken; if (floatTaken.length < 20) floatTaken.push(`${id}#${i}.${s} ${S} p${run.page} ×${taken}`) }
       }
     }
@@ -560,7 +565,7 @@ async function groundTruth() {
       const same = truthDoc !== doc && truthDoc.length === doc.length
       for (const [i, s] of Object.entries(sents)) {
         const offs = s[on], bu = b.get(+i), bs = bu?.[S === 'T' ? 'tgtStarts' : 'srcStarts']
-        if (!offs.length || !bs?.length || WHOLE.has(kind.get(+i))) continue
+        if (!offs.length || !bs?.length || !bySentence(kind.get(+i))) continue
         r.starts += offs.length
         const st = sentenceStarts(anchors.get(+i), textOf.get(+i) ?? '', offs)
         if (!st) continue
@@ -584,7 +589,7 @@ async function groundTruth() {
       }
     }
     // the reader's pair, arXiv's PDF and our translation: units of more than one sentence found on both
-    const multi = Object.entries(sents).filter(([i, s]) => s.src.length && b.get(+i)?.srcStarts?.length && !WHOLE.has(kind.get(+i))).map(([i]) => +i)
+    const multi = Object.entries(sents).filter(([i, s]) => s.src.length && b.get(+i)?.srcStarts?.length && bySentence(kind.get(+i))).map(([i]) => +i)
     out.pair = { multi: multi.length, both: multi.filter(i => foundOn.AX?.has(i) && foundOn.T?.has(i)).length }
     console.error(id, 'ground truth done')
   }
