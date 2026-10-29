@@ -3087,7 +3087,10 @@ translated.
   named in `\bibdata` before the paper's own, read as missing until PIPELINE 32, so that every REVTeX paper that ships no `.bbl`
   had its bibliography no unit's, ink units cut a column long, 2610.20595v1 and 2610.21770v1);
   nor is its `.bbl` taken where the pass does not run through or returns no files, writes another job's bibliography beside the
-  main one's (chapterbib, multibib, bibunits), writes a `.bcf` (biber's), or writes no `\bibitem`. The paper's other units must be
+  main one's (chapterbib, multibib, bibunits), writes a `.bcf` (biber's), or writes no `\bibitem`; nor where a `\bibitem` it wrote
+  (one at each entry's first line, as every style writes it) is no entry of its own in the paper opened again (`entries`: a
+  URL's `%3F` in an entry's `\href`, a character to TeX and a comment to the front end, left that entry's group open over the
+  18 after it, 2610.21770v1, whose marked `.bbl` no longer defined their citations: "[41? ? ? –43]" on our page). The paper's other units must be
   the same with the `.bbl` and without (every unit before the entries and every name after them, the bundle's byte for byte,
   their spans too), else it stays as it was (`moved`): so `\bibliography` ends the paragraph before it whether the `.bbl` is there
   or not (TeX's `thebibliography` is a heading's paragraph end, and a `\bibliography` with no `.bbl` sets nothing), which moved 7

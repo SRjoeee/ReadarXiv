@@ -106,6 +106,9 @@ describe('madeBibliography: the job\'s .bbl BibTeX makes in the prepare\'s first
       [[{ 'main.aux': AUX, 'main.bbl': '\\begin{thebibliography}{0}\n\\end{thebibliography}\n' }], 'no-bbl'],
       // (a .bbl that is more than a bibliography: a heading of its own among the source's units moves the units after it)
       [[{ 'main.aux': AUX, 'main.bbl': `\\section*{Notes}\nA note BibTeX never writes.\n\n${BBL}` }], 'moved'],
+      // (an entry the front end reads past its end: a URL's percent sign, which TeX's \\href reads as a character and the front end as
+      // a comment, leaves its group open over the next entry, whose \\bibitem would then no longer define its citation: 2610.21770v1)
+      [[{ 'main.aux': AUX, 'main.bbl': '\\begin{thebibliography}{2}\n\\bibitem{ba2016}%\n  Jimmy~Lei Ba, \\href\n  {https://a.org/x?u=%3Fref}\n  {Layer normalization}, 2016.%\n\\bibitem{b}%\n  Another Author, A title of a paper, 2017.%\n\\end{thebibliography}\n' }], 'entries'],
     ]
     for (const [args, why] of cases) {
       const paper = source(), { compile } = host(...args)
