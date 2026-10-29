@@ -60,6 +60,15 @@ describe('the bitmap figures\' pass (ocrPass)', () => {
     expect(r.stats.units).toBe(1)
   })
 
+  it('reads no page and no image past the host\'s clock (`until`), whatever the recogniser\'s budget: those images past it (`budget`), those pages unread', async () => {
+    let t = 0
+    const doc = docOf([pageOf([['a', at(50, 400)], ['b', at(50, 100)]], { a: picture(), b: picture(5) }), pageOf([['c', at(50, 400)]], { c: picture(7) })])
+    const r = await ocrPass({ doc, OPS, paper: PAPER, reader: READER, from: 0, until: 100, now: () => t, recognise: async () => { t += 150; return [LINE] } })
+    expect(r.stats.images).toMatchObject({ painted: 2, read: 1, budget: 1 })
+    expect([r.stats.pages, r.stats.pagesLeft]).toEqual([1, 1])
+    expect(r.stats.units).toBe(1)
+  })
+
   it('takes a reading from the cache by its key, the recogniser\'s version and the pixels\' digest, and puts what it reads; a cache that fails is none', async () => {
     const puts = new Map<string, unknown>()
     const cache = { get: async (k: string) => (puts.get(k) as never) ?? null, put: async (k: string, v: unknown) => { puts.set(k, v) } }

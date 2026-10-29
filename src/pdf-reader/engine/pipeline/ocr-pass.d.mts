@@ -15,6 +15,8 @@ export declare function ocrKey(pixels: string, reader: string): string
  *  read; the labels drawn and kept, and each why one is left; the recogniser's time; the cache's failures; why no chunk */
 export interface OcrStats {
   pages: number
+  /** the pages left unread past the host's clock (`until`) */
+  pagesLeft: number
   images: { painted: number; read: number; cached: number; again: number; small: number; big: number; error: number; timeout: number; budget: number }
   lines: number
   /** the labels the extension's merge made of the lines: each drawn (`units`) or left with its why (`labels`) */
@@ -50,6 +52,8 @@ export declare function ocrPass(o: {
   reader: string
   cache?: { get(key: string): Promise<OcrLine[] | null>; put(key: string, lines: OcrLine[]): Promise<void> } | null
   budgetMs?: number
+  /** the time by `now` past which no page is read and no image decoded or read (the host's clock on the whole pass) */
+  until?: number
   now?: () => number
   unitsDoc?: number
   /** the host's collection, called after each image is read and let go */

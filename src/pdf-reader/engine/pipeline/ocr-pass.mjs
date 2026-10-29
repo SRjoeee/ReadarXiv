@@ -192,23 +192,28 @@ const isTimeout = e => e?.name === 'TimeoutError' || e?.code === 'timeout' || e?
  * (format.mjs chunkTotals), so that the chunk keeps every chunk of the paper within the bounds a head's are read by;
  * `recognise(pixels)` the host's recogniser ({ data RGBA, width, height } → src/shared/ocr.ts OcrLine[]; a TimeoutError where its
  * host gave up on it), `reader` what it runs on (its runtime's and its canvas's packages and versions: the cache key's); `cache` { get(key) → lines | null, put(key, lines) } or null (either may reject: no cache then);
- * `budgetMs` the recogniser's time the paper may take, by `now`; `collect` the host's collection, called after each image is read
+ * `budgetMs` the recogniser's time the paper may take, by `now`; `until` the time by `now` past which no page is read and no image
+ * decoded or read (`budget`: the host's clock on the whole pass, whose decoding and reading of a page's images the recogniser's
+ * budget does not count — 2610.16663v1's 29 images of 16 to 30 million pixels, decoded under emulation, passed a box's clock);
+ * `collect` the host's collection, called after each image is read
  * and let go (the box's maker child has one: an image's canvases are a server's native memory, which its heap does not count).
  * Returns { units (the bundle's tuples), chunks (written, ids from
  * `from`; none where there is no label, or where the chunk would pass a bound: `stats.refused`), stats }
  */
-export async function ocrPass({ doc, OPS, paper, source = null, from, before = null, recognise, reader, cache = null, budgetMs = OCR_BUDGET_MS, now = () => performance.now(), unitsDoc = OCR_UNITS_DOC, collect = null }) {
+export async function ocrPass({ doc, OPS, paper, source = null, from, before = null, recognise, reader, cache = null, budgetMs = OCR_BUDGET_MS, until = Infinity, now = () => performance.now(), unitsDoc = OCR_UNITS_DOC, collect = null }) {
   if (typeof reader !== 'string' || !READER.test(reader)) throw new TypeError('reader: the host\'s recogniser, its runtime and canvas (onnxruntime-node@1.30.0+napi-canvas@1.0.10)')
   const prose = source?.units ? proseOf(source.units) : ''
   // (images: those painted, read by the recogniser, from the cache, the same as one read before, and each why one is not read)
   // (the labels the extension's merge made of the lines, `boxes`: each a unit drawn or left with its why, `labels`; and the time
   // each step took, ms by `now`: the pages' reading, the images' decoding, their digests, the recogniser, the labels)
-  const stats = { pages: 0, images: { painted: 0, read: 0, cached: 0, again: 0, ...Object.fromEntries(OCR_IMAGE_WHYS.map(w => [w, 0])) }, lines: 0, boxes: 0, units: 0, kept: 0, labels: {}, recogniseMs: 0, cacheFailed: 0, refused: null, sets: { sets: 0, grouped: 0, aligned: 0, sized: 0 }, ms: { pages: 0, decode: 0, digest: 0, labels: 0 } }
+  const stats = { pages: 0, pagesLeft: 0, images: { painted: 0, read: 0, cached: 0, again: 0, ...Object.fromEntries(OCR_IMAGE_WHYS.map(w => [w, 0])) }, lines: 0, boxes: 0, units: 0, kept: 0, labels: {}, recogniseMs: 0, cacheFailed: 0, refused: null, sets: { sets: 0, grouped: 0, aligned: 0, sized: 0 }, ms: { pages: 0, decode: 0, digest: 0, labels: 0 } }
   const lap = (k, t0) => { stats.ms[k] += now() - t0 }
   const units = []
   const seen = new Map()
   let spent = 0
   for (let p = 1; p <= doc.numPages; p++) {
+    // (past the host's clock no page is read: its images, each counted as past the budget once its operators are known, are not)
+    if (now() >= until) { stats.pagesLeft++; continue }
     let t = now()
     const page = await doc.getPage(p)
     try {
@@ -225,6 +230,7 @@ export async function ocrPass({ doc, OPS, paper, source = null, from, before = n
         const corners = [apply(im.ctm, 0, 0), apply(im.ctm, 1, 0), apply(im.ctm, 1, 1), apply(im.ctm, 0, 1)]
         const box = boxOfPoints(corners)
         if (Math.min(Math.hypot(corners[1][0] - corners[0][0], corners[1][1] - corners[0][1]), Math.hypot(corners[3][0] - corners[0][0], corners[3][1] - corners[0][1])) < OCR_MIN_SIDE) { stats.images.small++; return }
+        if (now() >= until) { stats.images.budget++; return }
         t = now()
         const image = await imageOf(page, im.id)
         lap('decode', t)
@@ -240,7 +246,7 @@ export async function ocrPass({ doc, OPS, paper, source = null, from, before = n
           try { lines = cache ? await cache.get(key) : null } catch { stats.cacheFailed++; lines = null }
           if (Array.isArray(lines)) stats.images.cached++
           else {
-            if (spent >= budgetMs) { stats.images.budget++; return }
+            if (spent >= budgetMs || now() >= until) { stats.images.budget++; return }
             const t0 = now()
             try { lines = await recognise({ data: rgbaOf(image), width: image.width, height: image.height }) } catch (e) {
               stats.images[isTimeout(e) ? 'timeout' : 'error']++
