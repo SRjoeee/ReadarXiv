@@ -137,7 +137,8 @@ export function paintsOf({ fnArray, argsArray }, OPS) {
     else if (fn === OPS.constructPath) {
       const [op, wrapped] = a
       const data = wrapped?.[0] ?? wrapped
-      const pieces = segmentsOf(data, ctm)
+      // (a fill's subpaths closed as PDF closes them, ISO 32000 §8.5.3.1: its edges a closed set its rule is tested over)
+      const pieces = segmentsOf(data, ctm, FILLS.has(op))
       if (pending) {
         // (a clip by a rectangle, under any transform, is a convex quad: TikZ's and pdfTeX's clips are; any other is `complex`)
         const rect = rectOf(data)
@@ -166,14 +167,15 @@ export function paintsOf({ fnArray, argsArray }, OPS) {
 }
 
 /** a path's data (PDF.js 6's: an operation's code, then its coordinates) as segments under `m`, PDF units: a curve as eight chords */
-function segmentsOf(data, m) {
+function segmentsOf(data, m, close = false) {
   const out = []
   if (!data || typeof data.length !== 'number') return out
-  let x = 0, y = 0, sx = 0, sy = 0
-  const line = (x1, y1) => { const [a, b] = apply(m, x, y), [c, d] = apply(m, x1, y1); out.push([a, b, c, d]); x = x1; y = y1 }
+  let x = 0, y = 0, sx = 0, sy = 0, open = false
+  const line = (x1, y1) => { const [a, b] = apply(m, x, y), [c, d] = apply(m, x1, y1); out.push([a, b, c, d]); x = x1; y = y1; open = true }
+  const shut = () => { if (close && open && (x !== sx || y !== sy)) line(sx, sy); open = false }
   for (let i = 0; i < data.length;) {
     const op = data[i++]
-    if (op === 0) { x = sx = data[i++]; y = sy = data[i++] }
+    if (op === 0) { shut(); x = sx = data[i++]; y = sy = data[i++] }
     else if (op === 1) line(data[i++], data[i++])
     else if (op === 2 || op === 3) {
       const n = op === 2 ? 3 : 2, ps = []
@@ -183,9 +185,10 @@ function segmentsOf(data, m) {
         const u = t / 8, v = 1 - u
         line(v * v * v * p0[0] + 3 * v * v * u * c1[0] + 3 * v * u * u * c2[0] + u * u * u * p3[0], v * v * v * p0[1] + 3 * v * v * u * c1[1] + 3 * v * u * u * c2[1] + u * u * u * p3[1])
       }
-    } else if (op === 4) { if (x !== sx || y !== sy) line(sx, sy) }
+    } else if (op === 4) { if (x !== sx || y !== sy) line(sx, sy); open = false }
     else break
   }
+  shut()
   return out
 }
 /** a path that is one rectangle (a move, three lines, a close; or a fourth line back): its [x0, y0, x1, y1] in its own space */
@@ -410,6 +413,14 @@ export async function ocrPass({ doc, OPS, objects, PL, Jpeg, paper, source = nul
         }
         stats.lines += reading.lines.length
         if (!reading.labels.boxes.length) return
+        // (an image of a mask, read over white, painted over a fill or an image before it: what shows through it is the page's,
+        // not white, so that a patch of its ground's colour would draw a ground the page does not show — its labels the
+        // original's, `covered`)
+        if ((src.smask || src.mask || src.maskKey) && (paths.some(q => q.k < im.k && q.fill && meets(q.box, box)) || images.some(j => j.k < im.k && meets(boxOfPoints([apply(j.ctm, 0, 0), apply(j.ctm, 1, 0), apply(j.ctm, 1, 1), apply(j.ctm, 0, 1)]), box)))) {
+          for (const b of reading.labels.boxes) stats.labels[b.why ?? 'covered'] = (stats.labels[b.why ?? 'covered'] ?? 0) + 1
+          stats.boxes += reading.labels.boxes.length
+          return
+        }
         // (the page's own ink over the image: its text's boxes, read once a page, and the paths drawn after it that meet its box)
         boxes ??= (await page.getTextContent()).items.filter(it => it.str?.trim() && Array.isArray(it.transform)).map(itemBox)
         const near = paths.filter(q => q.k > im.k && meets(q.box, box))

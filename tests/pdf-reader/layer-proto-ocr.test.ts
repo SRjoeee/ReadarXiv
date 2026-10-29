@@ -132,6 +132,19 @@ describe('the bitmap figures\' labels drawn by the layer (run.mjs paintOcr)', ()
     expect(layOcr(two, '\u4fe1'.repeat(12), em, 1)).toBeNull()
   })
 
+  it('lays a label of a frame not quite square where its quad is, far from the page\'s origin: by the frame\'s own coordinates', () => {
+    // (a line at x 500 whose across leans 0.04 off square: its translation starts on the line's start, a third of the way down
+    // across it plus the em's middle, wherever on the page)
+    const ux = 1, uy = 0, dx = 0.04, dy = -Math.sqrt(1 - 0.04 ** 2), L = 40, T = 10
+    const p0: [number, number] = [500, 700], q = [p0, [p0[0] + ux * L, p0[1] + uy * L], [p0[0] + ux * L + dx * T, p0[1] + uy * L + dy * T], [p0[0] + dx * T, p0[1] + dy * T]]
+    const flat = q.flat()
+    const lean = placeOf([1, 0xffffff, 0, OCR_ANCHORS.indexOf('start'), 7.2, 4, ...flat, ...flat])!
+    const fit = layOcr(lean, '\u4fe1\u53f7', s => [...s].length, 1)!
+    const at = T / 2 + 0.38 * 7.2
+    expect(fit.lines[0]!.x).toBeCloseTo(p0[0] + dx * at, 6)
+    expect(fit.lines[0]!.y).toBeCloseTo(p0[1] + dy * at, 6)
+  })
+
   it('leaves the original\'s, its patches not drawn, a translation past the floor, its source again, one kept, none', async () => {
     const long = await open({ hiding: hiding(true) }, paper({ text: '\u4fe1'.repeat(16) })) as Run
     await long.until(1)

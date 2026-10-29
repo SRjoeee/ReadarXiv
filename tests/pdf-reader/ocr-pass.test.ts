@@ -214,6 +214,26 @@ describe('the bitmap figures\' pass (ocrPass)', () => {
     expect(r.stats.images.read).toBe(1)
   })
 
+  it('leaves the labels of an image of a mask painted over other ink the original\'s: what shows through it is not the white it was read over', async () => {
+    // (a soft mask, gray: opaque where its value is 255)
+    const n = next++, m = next++
+    streams.set(m, PL.PDFRawStream.of(ctx.obj({ Width: W, Height: H, ColorSpace: 'DeviceGray', BitsPerComponent: 8 }) as unknown as PL.PDFDict, new Uint8Array(W * H).fill(255)))
+    const pic = picture(), rgb = new Uint8Array(W * H * 3)
+    for (let i = 0; i < W * H; i++) { rgb[3 * i] = pic.data[4 * i]!; rgb[3 * i + 1] = pic.data[4 * i + 1]!; rgb[3 * i + 2] = pic.data[4 * i + 2]! }
+    streams.set(n, PL.PDFRawStream.of(ctx.obj({ Width: W, Height: H, ColorSpace: 'DeviceRGB', BitsPerComponent: 8, SMask: PL.PDFRef.of(m) }) as unknown as PL.PDFDict, rgb))
+    const page = (under: boolean) => {
+      const fnArray: number[] = [], argsArray: unknown[] = []
+      if (under) { fnArray.push(OPS.constructPath); argsArray.push([OPS.fill, [new Float32Array([0, 40, 390, 1, 460, 390, 1, 460, 610, 1, 40, 610, 4])], null]) }
+      fnArray.push(OPS.save, OPS.transform, OPS.paintImageXObject, OPS.restore)
+      argsArray.push(null, at(50, 400), [`a~${n}R`, W, H], null)
+      return { view: [0, 0, 612, 792], getOperatorList: async () => ({ fnArray, argsArray }), getTextContent: async () => ({ items: [] }), cleanup() {} }
+    }
+    const over = await pass({ doc: docOf([page(true)]), OPS, paper: PAPER, reader: READER, from: 0, recognise: async () => [LINE] })
+    expect([over.stats.units, over.stats.labels]).toEqual([0, { covered: 1 }])
+    const alone = await pass({ doc: docOf([page(false)]), OPS, paper: PAPER, reader: READER, from: 0, recognise: async () => [LINE] })
+    expect(alone.stats.units).toBe(1)
+  })
+
   it('keeps a label of names as a table\'s cell of names is: its source, the KEPT flag', async () => {
     const doc = docOf([pageOf([['a', at(50, 400)]], { a: picture() })])
     const r = await pass({ doc, OPS, paper: PAPER, reader: READER, from: 0, recognise: async () => [{ ...LINE, text: 'GPT-4o' }] })
@@ -241,5 +261,12 @@ describe('a page\'s paints (paintsOf)', () => {
     expect(paths).toHaveLength(1)
     expect(paths[0]!.k).toBe(14)
     expect(paths[0]!.segs).toHaveLength(4)
+  })
+  it('closes a fill\'s subpaths as PDF does, and leaves a stroke\'s open', () => {
+    const open = new Float32Array([0, 0, 0, 1, 10, 0, 1, 10, 10])
+    const fill = paintsOf({ fnArray: [OPS.constructPath], argsArray: [[OPS.fill, [open], null]] }, OPS).paths[0]!
+    expect(fill.segs).toHaveLength(3)
+    expect(fill.segs[2]!.slice(0, 4)).toEqual([10, 10, 0, 0])
+    expect(paintsOf({ fnArray: [OPS.constructPath], argsArray: [[OPS.stroke, [open], null]] }, OPS).paths[0]!.segs).toHaveLength(2)
   })
 })

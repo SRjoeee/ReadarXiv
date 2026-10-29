@@ -55,8 +55,12 @@ function prepared(place, text, measure) {
  * where they do not
  */
 function blockOf(lines) {
-  const { ux, uy, dx, dy } = lines[0]
-  if (Math.abs(ux * dx + uy * dy) > BLOCK_SQUARE) return null
+  const { ux, uy, dx, dy, p0: o } = lines[0]
+  // (the frame's own coordinates of a point, from the first line's start: by the frame's inverse, exact for a frame not square —
+  // a turned line of an image scaled unevenly — and small numbers, the block's own extent)
+  const det = ux * dy - uy * dx
+  if (Math.abs(ux * dx + uy * dy) > BLOCK_SQUARE || Math.abs(det) < 1e-9) return null
+  const coords = (x, y) => { const vx = x - o[0], vy = y - o[1]; return [(vx * dy - vy * dx) / det, (ux * vy - uy * vx) / det] }
   let S0 = Infinity, S1 = -Infinity, T0 = Infinity, T1 = -Infinity
   const mids = []
   for (const l of lines) {
@@ -64,14 +68,14 @@ function blockOf(lines) {
     const corners = [l.p0, [l.p0[0] + l.ux * l.L, l.p0[1] + l.uy * l.L], [l.p0[0] + l.dx * l.T, l.p0[1] + l.dy * l.T], [l.p0[0] + l.ux * l.L + l.dx * l.T, l.p0[1] + l.uy * l.L + l.dy * l.T]]
     let t = 0
     for (const [x, y] of corners) {
-      const a = x * ux + y * uy, b = x * dx + y * dy
+      const [a, b] = coords(x, y)
       S0 = Math.min(S0, a); S1 = Math.max(S1, a); T0 = Math.min(T0, b); T1 = Math.max(T1, b); t += b / 4
     }
     mids.push(t)
   }
   mids.sort((a, b) => a - b)
   const pitch = mids.length > 1 ? (mids.at(-1) - mids[0]) / (mids.length - 1) : T1 - T0
-  return { ux, uy, dx, dy, S0, S1, mid: (T0 + T1) / 2, pitch }
+  return { ux, uy, dx, dy, o, S0, S1, mid: (T0 + T1) / 2, pitch }
 }
 /** the pieces from `from` set in rows of `room` at most at `size`, greedily: each row's run and its width; null where a piece
  *  alone is past it */
@@ -147,7 +151,7 @@ export function layOcr(place, text, measure, k) {
       lines: set.map(({ text: t, width, across }) => {
         const along = place.anchor === 'start' ? b.S0 : place.anchor === 'end' ? b.S1 - width : (b.S0 + b.S1 - width) / 2
         const at = across + MIDDLE * size
-        return { text: t, x: b.ux * along + b.dx * at, y: b.uy * along + b.dy * at, angle: Math.abs(angle) < LEVEL ? 0 : angle, width }
+        return { text: t, x: b.o[0] + b.ux * along + b.dx * at, y: b.o[1] + b.uy * along + b.dy * at, angle: Math.abs(angle) < LEVEL ? 0 : angle, width }
       }),
     }
   }
