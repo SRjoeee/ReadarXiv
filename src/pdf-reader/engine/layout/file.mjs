@@ -174,8 +174,10 @@ export { LayoutRefusal } from './json.mjs'
  *  char procedure paints (layout/ink.mjs type3Box: its paths' extents, a bitmap's mask's outline, through the font's matrix), not its font's declared ascent and
  *  descent for every glyph, a "." boxed as an "M": matplotlib's labels (2610.17024v1, 2610.20848v1, 2610.22197v1 …, drawn as
  *  figure units since #476) take their own boxes, their room and the crowding read from them, and a glyph whose procedure
- *  paints nothing (an invisible text layer, 2610.19159v1's figures) has none */
-export const LAYOUT = '28'
+ *  paints nothing (an invisible text layer, 2610.19159v1's figures) has none; 29 (the owner's case 2610.37668v1): backref's list
+ *  after an entry a row of its own, its list piece's (latex-front.mjs BACKREF_LIST), its segments the list's ink between the marks
+ *  LAYOUT_TEX sets around it, EMPTY where TeX set none: a file of 28 has no row for that piece */
+export const LAYOUT = '29'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,

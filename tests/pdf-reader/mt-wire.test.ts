@@ -319,3 +319,38 @@ describe('styled runs on the markers wire (2610.19159)', () => {
     expect(carry([{ t: 'open', id: 1, src: '\\textbf{' }, { t: 'text', tr: true, s: '\u4e4b\u524d' }, { t: 'close', id: 1, src: '}' }])).toBe(false)
   })
 })
+
+// backref's list after a bibliography entry (latex-front.mjs BACKREF_LIST): no word of the entry's sentence. On the wire Microsoft's
+// Chinese read it as a page number and wrote the character for "page" (U+9875) before it (2610.37668v1); it goes on no wire, and comes back after the
+// translation with an en space before it, the \enspace backref sets (a kern, no ink of the list's)
+describe('backref\'s list: on no wire, after the translation, an en space before it', () => {
+  const list = { t: 'ph', src: '\\axtbackref' }
+  const entry = (...pieces: { t: string; s?: string; src?: string; id?: number }[]) => ({ kind: 'reference', pieces: [...pieces, list] })
+  const plainEntry = entry({ t: 'text', s: 'A. Author. A title of the work, ' }, { t: 'ph', src: '2022.' })
+  const styledEntry = entry({ t: 'text', s: 'A. Author. ' }, { t: 'open', id: 1, src: '\\emph{' }, { t: 'text', s: 'A title' }, { t: 'close', id: 1, src: '}' }, { t: 'text', s: ', ' }, { t: 'ph', src: '2022.' })
+  it('is on neither wire, nor the runs\'', async () => {
+    for (const u of [plainEntry, styledEntry]) {
+      expect(serialize(u).slots.some(s => JSON.stringify(s).includes('axtbackref')), JSON.stringify(u)).toBe(false)
+      expect(serializeTags(u).slots.some(s => JSON.stringify(s).includes('axtbackref'))).toBe(false)
+      expect(serialize(u).wire).toBe(serialize({ ...u, pieces: u.pieces.slice(0, -1) }).wire)
+    }
+    // (a unit with no list is serialised as before)
+    expect(serialize({ ...plainEntry, pieces: plainEntry.pieces.slice(0, -1) }).back).toBeUndefined()
+  })
+  it('comes back last, the en space before it, on both wires and as runs', async () => {
+    for (const u of [plainEntry, styledEntry]) {
+      const m = serialize(u), back = rehydrate(m.wire.replace('A title of the work', 'Der Titel des Werks').replace('A title', 'Ein Titel'), m)
+      expect('pieces' in back && back.pieces.slice(-2), JSON.stringify(u)).toEqual([{ t: 'text', tr: true, s: ' ' }, list])
+      const t = serializeTags(u), backT = rehydrateTags(t.wire, t)
+      expect('pieces' in backT && backT.pieces.slice(-2)).toEqual([{ t: 'text', tr: true, s: ' ' }, list])
+    }
+    // (as runs, where the markers cannot come back: the list after the runs too)
+    const { results } = await translateUnits([plainEntry], async texts => texts.map((t: string) => ({ text: t.includes('@') ? '' : 'Das Werk', by: 'x' })), 'markers')
+    const r = results.get(plainEntry) as { pieces?: unknown[] }
+    expect(r.pieces?.slice(-2)).toEqual([{ t: 'text', tr: true, s: ' ' }, list])
+  })
+  it('is the front end\'s own source, written once in each module', async () => {
+    const [{ BACKREF_LIST: front }, { BACKREF_LIST: wire }] = await Promise.all([import('@/pdf-reader/engine/source/latex-front.mjs'), import('@/pdf-reader/engine/translate/mt.mjs')])
+    expect(wire).toBe(front)
+  })
+})

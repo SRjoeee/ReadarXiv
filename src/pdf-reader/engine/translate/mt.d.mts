@@ -12,6 +12,8 @@ export declare function plainTranslated(pieces: Piece[]): string
 export declare const shown: (p: Piece) => string
 /** a piece a space never goes before: one that is a space itself (a tie, a control space, a kern), a group's end */
 export declare const SPACING: RegExp
+/** backref's list after a bibliography entry (latex-front.mjs BACKREF_LIST): on no wire, put back after the translation with an en space before it */
+export declare const BACKREF_LIST: string
 /** a unit's plain text (the translation's where the pieces are translated) and the offsets in it where a placeholder stood */
 export declare function unitText(pieces: Piece[]): { text: string; gaps?: number[] }
 /** an engine's plain text as TeX sets it: its invisible characters dropped, TeX's special characters escaped */

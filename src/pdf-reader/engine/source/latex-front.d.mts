@@ -19,6 +19,8 @@ export declare function documentBounds(text: string, options?: { lineEnvs?: Set<
 export declare function inputencOf(text: string, options?: { lineEnvs?: Set<string> | null; ifs?: Set<string>; ifValues?: Map<string, boolean> | null }): { start: number; end: number; options: string } | null
 /** a .bbl's text with each `%` TeX reads as a character (a web address's at an entry's top level) written as a code no source holds, the same length; any other file's as it is */
 export declare function urlPercents(text: string, file: string): string
+/** the placeholder of the list backref sets after a bibliography entry (the pages citing it): an entry's last piece where the package turns the lists on; patch writes nothing for it */
+export declare const BACKREF_LIST: string
 /** the patched files (path → bytes): each unit's range replaced by its translated pieces, the rest untouched */
 /** what goes around a unit when it is written out (markUnits): `whole` puts it around all of the unit, inside the groups that open and close it */
 export type UnitMark = { start: string; end: string; before?: string; whole?: boolean } | null

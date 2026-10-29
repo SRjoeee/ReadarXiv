@@ -2188,10 +2188,63 @@ function bibliography(s, from, to, b, ctx) {
     const open = cmds.find(x => x.name === 'BibitemOpen'), shut = cmds.find(x => x.name === 'BibitemShut')
     if (open && !/\S/.test(s.slice(a, open.at).replace(/%.*$/gm, ''))) a = open.end
     if (shut && shut.at > a) z = shut.at
+    const before = b.units.length
     b.kind = 'reference'; walk(s, a, z, b, ctx); b.flush()
+    // (the list backref sets after the entry, the pages that cite it: a piece of the unit that ends the entry's first paragraph,
+    // where backref's parscan reads the entry to (`#2\par`) and sets the list, after its numbers are kept, so that it is never
+    // what a number stands beside; an entry's later paragraphs, a paper's own \bibitem in a macro (\mbibitem), are TeX's other
+    // entries, whose lists are set after them, and their units hold no piece: their lists the page's as before)
+    if (ctx.backref) {
+      const made = b.units.slice(before).filter(u => u.kind === 'reference' && u.file === b.file).sort((x, y) => x.start - y.start)
+      const ends = (u, next) => PARAGRAPH_END.test(uncommented(s.slice(u.end, next ? next.start : z)))
+      const first = made.find((u, j) => ends(u, made[j + 1])) ?? made.at(-1)
+      first?.pieces.push({ t: 'ph', src: BACKREF_LIST })
+    }
   })
   b.kind = saved
 }
+/**
+ * The placeholder of the list backref.sty sets at a bibliography entry's end (hyperref's `backref` and `pagebackref`): the pages
+ * or sections that cite it, each a link back. With its default parscan, backref reads the whole entry as an argument (\bibitem
+ * redefined, `\BR@@bibitem#1#2\par`), sets it, then the list (\BR@backref, through \backrefalt or \backref), so the list is
+ * TeX's, after the entry's text and its end mark, in none of its pieces: left on the page where the entry is drawn translated
+ * over it (2610.37668v1's "2, 25"). The unit that ends the entry's first paragraph ends in this piece: no byte of the source
+ * (patch writes none), its marks set by LAYOUT_TEX's hook around the list itself (layout/marks.mjs layoutMarking: `\axtbrname`),
+ * so that the list is its ink, which the layer draws after the entry's translation, its links with it; an entry TeX sets no list
+ * for has none there (EMPTY: the maker)
+ */
+export const BACKREF_LIST = '\\axtbackref'
+/** a paragraph's end in TeX's source: a blank line or \\par (the end of what backref's parscan reads of an entry) */
+const PARAGRAPH_END = /\n[ \t]*\n|\\par(?![A-Za-z@])/
+/** whether the package turns backref's lists on at a bibliography's entries: in one of its files (a class's too: myarxiv.cls,
+ *  weco_paper.cls), a command that loads a package or sets its options (\\usepackage, \\RequirePackage, \\PassOptionsToPackage,
+ *  \\documentclass, \\LoadClass, \\hypersetup) names backref or hyperref's option (`backref`, `pagebackref`: a word of its own, not
+ *  `=false`) in its arguments, and none says \\backrefparscanfalse, under which the list is set where the entry's \\backrefprint
+ *  stands, inside its text. A mention elsewhere (prose, a test such as \\@ifpackagewith) turns nothing on, and one that turns
+ *  nothing on all the same gives each entry a piece TeX sets nothing for (EMPTY) */
+function backrefOf(texts) {
+  const t = texts.map(uncommented).join('\n')
+  if (/\\backrefparscanfalse(?![A-Za-z@])/.test(t)) return false
+  for (const m of t.matchAll(BACKREF_SETTERS)) {
+    // (the command's arguments, optional and braced, as many as follow it: white space between)
+    let k = m.index + m[0].length, args = ''
+    for (;;) {
+      k = skipSpaces(t, k)
+      const close = t[k] === '[' ? ']' : t[k] === '{' ? '}' : null
+      if (!close) break
+      const e = matchGroup(t, k, t[k], close)
+      if (e < 0) break
+      args += ` ${t.slice(k + 1, e - 1)}`
+      k = e
+    }
+    if (BACKREF_WORD.test(args)) return true
+  }
+  return false
+}
+/** the commands that load a package or set its options (backrefOf) */
+const BACKREF_SETTERS = /\\(?:usepackage|RequirePackage|PassOptionsToPackage|documentclass|LoadClass|hypersetup)(?![A-Za-z@])/g
+/** backref's name, or hyperref's option that loads it, as a word of an argument, not set false */
+const BACKREF_WORD = /(?<![A-Za-z@\\])(?:page)?backref(?![A-Za-z@]|\s*=\s*false\b)/
 /** a token of an entry's text that is a number and no word — a year, pages, a volume and its issue: "1994.", "157--166,",
  *  "5(2):157--166" — a digit in it, no letter, white space or a piece that sets none on either side; or a DOI written out,
  *  letters and all ("10.1007/s00125-020-05190-9."), whose left may be any character but a letter or a digit ("doi:10.…") */
@@ -2422,7 +2475,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   // which is biblatex's data — \\entry, \\field — and no text, which \\bibliography, biblatex's alias of \\addbibresource, never reads)
   const bblName = `${jobName(mainFile.rel)}.bbl`, bblBytes = fsys.read(bblName)
   const bbl = bblBytes && /\\begin\s*\{thebibliography\}/.test(texText(bblBytes)) ? bblName : null
-  const ctx = { rowEnds: rowEndsOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], ...tblrOf(sources.map(sourceText)) }
+  const ctx = { rowEnds: rowEndsOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], backref: backrefOf(ownTexts), ...tblrOf(sources.map(sourceText)) }
   const scan = { lineEnvs, ifs, ifValues }
   let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;
@@ -2569,7 +2622,8 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
   const render = (u, inner = null) => {
     const srcEnc = project.transcode?.has(u.file) ? 'utf8' : 'latin1'
     // a source's text as the source writes it: a letter an accent made (Builder.letter) is the accent again
-    const pieces = (translated.get(u) ?? u.pieces).map(p => (p.t === 'text' && !p.tr && p.src !== undefined ? { ...p, s: p.src } : p))
+    // (backref's list, BACKREF_LIST, is no byte of the source: written as nothing; the marked original's copy holds its marks instead)
+    const pieces = (translated.get(u) ?? u.pieces).filter(p => !(p.t === 'ph' && p.src === BACKREF_LIST)).map(p => (p.t === 'text' && !p.tr && p.src !== undefined ? { ...p, s: p.src } : p))
     const m = mark?.(u)
     // before the first word, inside any font command's group (nothing precedes it there to kern with); before an
     // inline formula or citation that comes first; before the macro when the word is glued to one (\\name's: between

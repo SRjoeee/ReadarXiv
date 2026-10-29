@@ -13,7 +13,7 @@
 // into, and sets nothing there. The native cases (lab/pdf/spikes/
 // layout-marks-cases.mjs) hold every text item of the page in place; the corpus check (Task 2) measures the layout
 // lines they carry and lose, and fails on a loss of no accepted cause.
-import { frontMarks, lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
+import { BACKREF_LIST, frontMarks, lastTexLog, markUnits, NO_ARG_COMMANDS } from '../source/latex-front.mjs'
 import { textless } from '../rules/arg-roles.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { INK_FREE_LEAD, prefixWord } from '../rules/tex-kernel.mjs'
@@ -63,6 +63,9 @@ const NUMBER = /^(?:[^\s\p{L}\\{}$%#&^_~]*\d[^\s\p{L}\\{}$%#&^_~]*|10\.\d{4,9}\/
  *  number, a link) — a call all the same, which the layer places by its mark */
 const FOOTNOTE_MARK = /^\\footnote(?:mark)?(?![A-Za-z@])/
 
+/** whether a piece is the list backref sets after a bibliography entry (latex-front.mjs BACKREF_LIST): no source of its own, its
+ *  marks LAYOUT_TEX's around the list (layoutMarking's `\\axtbrname`), never a sample of the probe's */
+export const backrefPiece = p => p?.t === 'ph' && p.src === BACKREF_LIST
 /** a piece's class, or null where it is not marked (text, a group's open or close, an invisible placeholder) */
 /** \\rule's call: what TeX's ink section measures, not the role table (a strut, \\rule{0pt}{2ex}, none; a bar, ink) */
 export const RULE = /^\s*\\rule\b/
@@ -318,7 +321,7 @@ export function inkSamples(units) {
   for (const u of sampleOrder(units)) {
     const head = BIB(u) ? headEnd(u.pieces ?? [], 0) : 0
     u.pieces.forEach((p, k) => {
-      if (p.t !== 'ph' || classOf(p) !== 'macro' || body.has(p.src) || symbolText(p.src) !== null || !boxable(p.src)) return
+      if (p.t !== 'ph' || classOf(p) !== 'macro' || backrefPiece(p) || body.has(p.src) || symbolText(p.src) !== null || !boxable(p.src)) return
       if (!BIB(u)) { if (body.size < INK_MAX && !seen.has(p.src)) body.add(p.src); return }
       if (k < head) leads.add(p.src)
       if (seen.has(p.src)) return
@@ -982,6 +985,26 @@ const UNMARK_TEX = [
   '\\ExplSyntaxOff\\fi',
 ].join('')
 
+/**
+ * backref's lists marked (LAYOUT_TEX's part): an entry's text names its list's piece (`\axtbrname{p<i>.<k>}`, layoutMarking, after
+ * the entry's end mark: an assignment, no node), and the list backref sets after the entry (\BR@backref, through \backrefalt or
+ * \backref, whichever it calls) has that piece's opening mark before it and its closing mark after it, then the name is let go,
+ * so that a list no entry named is marked by nobody's. Both printers are wrapped where the document begins, after every
+ * package's and the class's own definitions (begindocument/end: myarxiv.cls redefines \backrefalt after hyperref loads backref),
+ * each reading what it read (\backrefalt four arguments, \backref the list's macro after it) and handing it on as it was: the
+ * list is set as before, the marks no node of its but the two whatsits each mark is. \backrefalt only where a package or the
+ * paper defined one: backref tells which printer it calls by \backrefalt's being its own unused one (\BR@starttoc, at
+ * \thebibliography), and wrapped, that one would be taken for the paper's and called, which sets nothing. Nothing where
+ * backref is not loaded
+ */
+const BACKREF_TEX = [
+  '\\gdef\\axt@brname{}\\protected\\def\\axtbrname#1{\\gdef\\axt@brname{#1}}',
+  '\\def\\axt@bra{\\ifx\\axt@brname\\@empty\\else\\expandafter\\axt@brgo\\fi}\\def\\axt@brgo{\\expandafter\\axtpma\\expandafter{\\axt@brname a}}',
+  '\\def\\axt@brb{\\ifx\\axt@brname\\@empty\\else\\expandafter\\axt@brend\\fi}\\def\\axt@brend{\\expandafter\\axtpm\\expandafter{\\axt@brname b}\\global\\let\\axt@brname\\@empty}',
+  '\\long\\def\\axt@brAltW#1#2#3#4{\\axt@bra\\axt@brAlt{#1}{#2}{#3}{#4}\\axt@brb}\\long\\def\\axt@brOneW#1{\\axt@bra\\axt@brOne#1\\axt@brb}',
+  '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\ifdefined\\BR@backref\\ifdefined\\backrefalt\\ifx\\backrefalt\\BR@BackrefAltUnused\\else\\let\\axt@brAlt\\backrefalt\\let\\backrefalt\\axt@brAltW\\fi\\fi\\ifdefined\\backref\\let\\axt@brOne\\backref\\let\\backref\\axt@brOneW\\fi\\fi}\\fi',
+].join('')
+
 export const LAYOUT_TEX = [
   '\\makeatletter\\newif\\ifaxt@off\\newif\\ifaxt@hold\\global\\let\\axt@pend\\@empty\\let\\axt@icr\\/\\def\\axt@icv{0pt}\\newif\\ifaxt@sig',
   '\\ifdefined\\XeTeXrevision\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{\\pdfextension dest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax}\\else\\ifdefined\\pdfdest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax\\fi}\\fi\\fi\\fi',
@@ -1034,6 +1057,7 @@ export const LAYOUT_TEX = [
   '\\AddToHook{package/nameref/after}{\\ifdefined\\NR@sanitize@labelname\\let\\axt@NRsanitize\\NR@sanitize@labelname\\def\\NR@sanitize@labelname{\\axt@unmark\\@currentlabelname\\axt@NRsanitize}\\fi}\\fi',
   '\\AtBeginDocument{\\ifdefined\\pdfstringdefDisableCommands\\pdfstringdefDisableCommands{\\let\\axtmark\\@gobble\\let\\axtend\\@gobble\\let\\axtpma\\@gobble\\let\\axtpmm\\@gobble\\let\\axtpm\\@gobble\\let\\axthmark\\@gobble\\let\\axtcolour\\@gobble\\let\\axtnma\\@gobble\\let\\axtnmb\\@gobble\\let\\axt@nma\\@gobble\\let\\axt@nmb\\@gobble}\\fi}',
   '\\ifcsname l_text_case_exclude_arg_tl\\endcsname\\expandafter\\g@addto@macro\\csname l_text_case_exclude_arg_tl\\endcsname{\\axtmark\\axtend\\axt@pma\\axt@pmm\\axt@pm\\axt@hm\\axtcolour\\axt@colour\\axtnma\\axtnmb\\axt@nma\\axt@nmb}\\fi',
+  BACKREF_TEX,
   UNMARK_TEX,
   NAMES_TEX,
   POINTS_TEX,
@@ -1328,6 +1352,9 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
     const verbatim = []
     const out = u.pieces.map((p, k) => {
       const piece = p.t === 'nested' ? { ...p, unit: copyOf.get(p.unit) ?? p.unit } : p
+      // (backref's list after an entry, no byte of the source: the name of its marks, which LAYOUT_TEX's hook sets around the list
+      // where TeX sets it, after the entry's end mark; none in a unit of no mark, nor with the paper's macros unmarked)
+      if (backrefPiece(p)) return own(u) && on.has('macro') ? [{ t: 'ph', src: `\\axtbrname{p${i}.${k}}` }] : []
       // (`spaced`: white space alone between the piece before and this one; after a prefix (PREFIX_WORDS: \protect), the piece
       // before the prefix's, the pair one command whose marks stand before the prefix)
       const prefixed = k > 0 && prefixWord(u.pieces[k - 1].t === 'ph' ? u.pieces[k - 1].src : null)
