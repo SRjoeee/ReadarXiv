@@ -243,9 +243,13 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     for (const t of ['\\footnote{\\url{a%b}}', '\\newcommand{\\x}{\\url{a%b}}', '\\def\\x{\\href{a%b}{c}}', '\\begin{tabularx}{l}\\url{a%b}\\end{tabularx}', '\\begin{verbatim}\\url{a%b}\\end{verbatim}', '% \\url{a%b}']) expect(urlPercents(t), t).toBe(t)
     // (an optional argument, and a \\def's body after its parameter text: tokens TeX has read, a `%` a comment there, the reviews of
     // #501, Devin and Codex)
-    for (const t of ['\\section[See \\url{a% ignored\nb}]{Title}', '\\item[\\url{a%b}] x', '\\def\\foo#1{\\url{a% comment } }\nb}}', '\\def\\foo#1.#2{\\url{a%b}}']) expect(urlPercents(t), t).toBe(t)
+    // (a starred command's argument too: LaTeX's \\@ifstar reads the star, spaces before it, and the argument after it is the
+    // command's, Codex on the fix round)
+    for (const t of ['\\section[See \\url{a% ignored\nb}]{Title}', '\\item[\\url{a%b}] x', '\\def\\foo#1{\\url{a% comment } }\nb}}', '\\def\\foo#1.#2{\\url{a%b}}', '\\section*{See \\url{a% } } x\nb} Rest}', '\\section *[\\url{a%b}]{T}', '\\caption*{\\url{a%b}}']) expect(urlPercents(t), t).toBe(t)
     for (const t of ['\\item[x] \\url{a%b}', 'see [1] \\url{a%b}', '\\def\\x#1{#1} \\url{a%b}']) expect(urlPercents(t), t).not.toBe(t)
     expect(texts(project(doc('\\def\\foo#1{\\url{a% comment } }\nb}}\nWords after the definition.')))).toEqual(['Words after the definition.'])
+    expect(texts(project(doc('\\section*{See \\url{a% } } This is commented out.\nb} Rest of title}\nWords of the body here.')))).not.toContain('This is commented out.')
+    for (const t of ['a*b \\url{a%b}', '\\x{} * \\url{a%b}']) expect(urlPercents(t), t).not.toBe(t)
     for (const t of ['\\url{a%b}', '{\\small \\url{a%b}}', '\\href [x] {a%b} {c}', '\\begin{tabularx}{l}x\\end{tabularx} \\path{a%b}']) expect(urlPercents(t), t).not.toBe(t)
     expect(urlPercents('\\href{a%3F%3D}{b%c}').split('%').length).toBe(2)
     // (a `\\` and the character after it read as the argument's boundary reads them: `\\%` the command, `\\\\%` a pair and the

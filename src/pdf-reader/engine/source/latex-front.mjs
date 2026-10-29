@@ -464,6 +464,8 @@ export function urlPercents(text) {
     if (c === '}') { while (groups.length && groups.pop().open !== '{'); afterCommand = true; continue }
     if (c === '[' && afterCommand) { groups.push({ open: '[', arg: true }); afterCommand = false; continue }
     if (c === ']') { if (groups.at(-1)?.open === '[') groups.pop(); afterCommand = true; continue }
+    // (a command's star, as LaTeX's \\@ifstar reads it, spaces before it: the argument after it is the command's still)
+    if (c === '*' && afterCommand) continue
     if (c !== '\\') { if (!/\s/.test(c)) afterCommand = false; continue }
     const m = /^\\(?:([A-Za-z@]+)|[\s\S])/.exec(text.slice(i, i + 64))
     const name = m?.[1] ?? null
