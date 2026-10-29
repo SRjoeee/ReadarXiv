@@ -292,6 +292,8 @@ export async function ocrPass({ doc, OPS, objects, PL, Jpeg, paper, source = nul
     let [pixels] = await readOcrPixels(src, [{ x0: 0, y0: 0, x1: src.width, y1: src.height, width: size.width, height: size.height }], { Jpeg })
     lap('decode', t)
     let lines = await recogniseTimed(pixels)
+    // (the recogniser's canvases let go before the windows are read: a server's are native memory its heap does not count)
+    if (collect) { try { collect() } catch { /* (the host's) */ } }
     if (!lines) return null
     if (size.scale < 1) {
       const small = lines.flatMap((l, i) => (thickOf(l, pixels.width, pixels.height) < OCR_LINE_MIN_PX ? [i] : []))

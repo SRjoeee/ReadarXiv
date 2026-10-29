@@ -161,13 +161,13 @@ describe('the bitmap figures\' pass (ocrPass)', () => {
     expect(r.stats.sets).toMatchObject({ sets: 2, grouped: 4 })
   })
 
-  it('asks the host\'s collection after each image, an image painted twice read once', async () => {
+  it('asks the host\'s collection after each image is recognised and after each image, an image painted twice read once', async () => {
     const events: string[] = []
     const a = picture(), b = picture(4)
     const page = pageOf([['a', at(50, 450)], ['b', at(300, 450)], ['a', at(50, 100)]], { a, b })
     const r = await pass({ doc: docOf([page]), OPS, paper: PAPER, reader: READER, from: 0, recognise: async () => { events.push('read'); return [LINE] }, collect: () => { events.push('collect') } })
     expect(r.stats.images).toMatchObject({ painted: 3, read: 2, again: 1 })
-    expect(events).toEqual(['read', 'collect', 'read', 'collect', 'collect'])
+    expect(events).toEqual(['read', 'collect', 'collect', 'read', 'collect', 'collect', 'collect'])
   })
 
   it('covers a label an image painted after it hides; skips a page that cannot be read; reads a path of a hundred thousand segments', async () => {
