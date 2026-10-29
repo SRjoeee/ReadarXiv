@@ -85,7 +85,8 @@ export declare function isFinalEnd(why: string): why is 'bound' | 'part'
  *  `page` of a left part); no key, which is derived from the digest */
 export interface Ref { kind: Kind; sha256: string; bytes: number; from?: number; to?: number; page?: number }
 export interface Caps { bytes?: number; values?: number }
-export type HeadVersions = { pipeline: string; layout: string; removal: string; pdfjs: string; image: string }
+/** a head's and a catalog's versions: `ocr`, the bitmap figures' recogniser, a head of 12's alone (none of 7 to 11) */
+export type HeadVersions = { pipeline: string; layout: string; removal: string; pdfjs: string; image: string; ocr?: string }
 export type EndWhy = (typeof END_WHYS)[number]
 /** the tokens' wire for one page: `perPage` [n], and each field n integers of TOKEN_SCALE, delta-coded */
 export interface TokenWire { perPage: number[]; l: number[]; r: number[]; y: number[]; h: number[]; top: number[]; bottom: number[] }
