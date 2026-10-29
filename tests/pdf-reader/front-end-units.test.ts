@@ -230,46 +230,44 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     // (a call TeX would not end before the paragraph does stays as before: the command's placeholder alone)
     expect(texts(project(doc('A \\tikz \\draw (0,0)\n\nWords of the next paragraph.', '\\usepackage{tikz}')))).toContain('Words of the next paragraph.')
   })
-  it('a web address\'s `%` is a character where TeX reads it so: \\url, \\nolinkurl, \\path and \\href\'s first argument outside any other command\'s argument (2610.21770v1\'s %3F)', () => {
-    const p = project(doc('See \\url{https://a.com/x%3Fy} and more text after it.\n\nOr \\href{https://b.org/p%20q}{the page} and the rest of it.', '\\usepackage{hyperref}'))
-    expect(texts(p)).toEqual(['See and more text after it.', 'Or the page and the rest of it.'])
-    const phs = units(p).flatMap(u => u.pieces.filter(x => x.t === 'ph' || x.t === 'open').map(x => x.src))
-    expect(phs).toContain('\\url{https://a.com/x%3Fy}')
-    expect(phs.join(' ')).toContain('https://b.org/p%20q')
-    // (the units' bytes the paper's: the marked original sets the address as the paper does)
-    expect(patched(p)).toContain('\\url{https://a.com/x%3Fy}')
-    // (a group is an argument unless proven plain: inside one, an optional argument, a definition's body or an environment's
-    // body TeX collects, TeX has read the `%` as a comment already, and the walk reads it so too. Every shape the reviews of #501
-    // raised: an optional argument, a star, a definition's body after `#1`, a \def after its parameter text, a comment between a
-    // command and its group; and those no command reads past: a verbatim's text, a comment's)
-    const argument = {
+  it('a web address\'s `%` is a character in a .bbl\'s entries alone: \\url, \\nolinkurl, \\path and \\href\'s first argument at an entry\'s top level (2610.21770v1\'s %3F, 2608.18626v1\'s %26)', () => {
+    const bbl = (entries: string, head = '') => `\\begin{thebibliography}{9}\n\\providecommand{\\url}[1]{\\texttt{#1}}\n${head}${entries}\n\\end{thebibliography}\n`
+    const tex = '\\documentclass{article}\n\\usepackage{hyperref}\n\\begin{document}\nSee \\cite{a,b,c}.\n\\bibliographystyle{plain}\n\\bibliography{refs}\n\\end{document}\n'
+    const entries = '\\bibitem{a}\nA. Author.\n\\newblock A first title, \\href {https://doi.org/x?urlappend=%3Fref%3DPDF} {Journal 1}, 2020.\n\n\\bibitem{b}\nB. Writer.\n\\newblock A second title, \\url{https://a.org/x%3Fy}, 2021.\n\n\\bibitem{c}\nC. Third.\n\\newblock A third title, \\href {http://adsabs.harvard.edu/abs/2017A%26A...599L...3B} {599, L3}.\n'
+    const p = project(tex, { 'main.bbl': bbl(entries) })
+    // (each entry its own unit, its address one placeholder as the paper writes it, and the marked .bbl sets it so)
+    expect(texts(p).slice(-3)).toEqual(['A. Author. A first title, Journal 1, 2020.', 'B. Writer. A second title, 2021.', 'C. Third. A third title, 599, L3.'].map(t => expect.stringContaining(t.split(',')[0] as string)))
+    expect(units(p).filter(u => u.kind === 'reference').length).toBe(3)
+    const phs = units(p).flatMap(u => u.pieces.filter(x => x.t === 'ph' || x.t === 'open').map(x => x.src)).join(' ')
+    for (const a of ['https://doi.org/x?urlappend=%3Fref%3DPDF', '\\url{https://a.org/x%3Fy}', '2017A%26A...599L...3B']) expect(phs).toContain(a)
+    expect(patched(p, 'main.bbl')).toContain('\\url{https://a.org/x%3Fy}')
+    // (a .bbl's entry's top level: an address there TeX reads with its `%` a character)
+    const entry = (t: string) => bbl(`\\bibitem{a}\nSome words ${t}\n`)
+    for (const t of ['\\newblock \\url{https://a.org/x%3Fy}.', '\\newblock URL \\url{a%3F}', '\\href{https://b.org/p%20q}{The title}', '\\href [x] {a%b} {c}', '\\path{a%b}', '\\nolinkurl{a%b}', '\\burl{a%b}']) expect(urlPercents(entry(t), 'main.bbl'), t).not.toBe(entry(t))
+    expect(urlPercents(entry('\\href{a%3F%3D}{b%c}'), 'main.bbl').split('%').length).toBe(2)
+    // (anywhere else a comment, as the walk read it before: the body, whatever holds the address there — every shape the reviews
+    // of #501 raised among them, an inactive conditional's branch too —, and a .bbl's address in a group, in a field's argument,
+    // before the first \\bibitem or outside the bibliography)
+    const body = {
+      'the paragraph\'s level': ['\\url{a%b}', '\\href [x] {a%b} {c}', 'See {\\bf \\url{a%b}} now.'],
       'an argument': ['\\footnote{\\url{a%b}}', '\\newcommand{\\x}{\\url{a%b}}', '\\textbf{x \\url{a%b}}'],
       'an optional argument': ['\\section[See \\url{a% ignored\nb}]{Title}', '\\item[\\url{a%b}] x'],
-      'a star': ['\\section*{See \\url{a% } } x\nb} Rest}', '\\section *[\\url{a%b}]{T}', '\\caption*{\\url{a%b}}'],
-      'a definition after #1': ['\\def\\foo#1{\\url{a% comment } }\nb}}', '\\newcommand{\\x}[1]{\\url{a%b}}', '\\def\\x{\\href{a%b}{c}}'],
-      'a \\def after its parameter text': ['\\def\\foo#1.#2{\\url{a%b}}', '\\def\\foo#1#2 ab{\\url{a%b}}'],
-      'a comment between a command and its group': ['\\section% c\n{See \\url{a% } } x\nb} Rest}', '\\textbf % c\n {\\url{a%b}}'],
-      'a group not proven plain': ['\\newblock {\\em \\url{a%b}}', '\\foo a{\\url{a%b}}', '\\put(1,2){\\url{a%b}}', '\\only<2>{\\url{a%b}}', '\\toks0={\\url{a%b}}'],
+      'a star': ['\\section*{See \\url{a% } } x\nb} Rest}', '\\caption*{\\url{a%b}}'],
+      'a definition\'s body': ['\\def\\foo#1{\\url{a% comment } }\nb}}', '\\newcommand{\\x}[1]{\\url{a%b}}', '\\def\\foo#1.#2{\\url{a%b}}'],
+      'a comment between a command and its group': ['\\section% c\n{See \\url{a% } } x\nb} Rest}'],
+      'an inactive conditional\'s branch': ['\\iffalse\nHidden \\url{a% } \\fi Shown\n\\fi'],
       'a collected or verbatim body, a comment': ['\\begin{tabularx}{l}\\url{a%b}\\end{tabularx}', '\\begin{verbatim}\\url{a%b}\\end{verbatim}', '% \\url{a%b}'],
-      'a .bbl\'s field': ['\\bibinfo{note}{\\url{https://a.org/x%3Fy}}', '\\newblock \\emph{\\url{a%b}}'],
     }
-    for (const [shape, ts] of Object.entries(argument)) for (const t of ts) expect(urlPercents(t), `${shape}: ${t}`).toBe(t)
-    // (an address TeX reads with its `%` a character: at the paragraph's level, after an optional argument or a definition has
-    // closed, in a group proven plain — ordinary text, a math shift or nothing before its `{` —, and a .bbl's entry's own)
-    const literal = {
-      'the paragraph\'s level': ['\\url{a%b}', '\\href [x] {a%b} {c}', '\\item[x] \\url{a%b}', 'see [1] \\url{a%b}', 'a*b \\url{a%b}', '\\x{} * \\url{a%b}'],
-      'after a group closed': ['\\def\\x#1{#1} \\url{a%b}', '\\begin{tabularx}{l}x\\end{tabularx} \\path{a%b}'],
-      'a plain group': ['See {\\bf \\url{a%b}} now.', '{\\small \\url{a%b}}', 'text $x$ {\\url{a%b}}', 'one,\n% a comment\n{\\small \\url{a%b}}'],
-      'a .bbl\'s entry': ['\\newblock \\url{https://a.org/x%3Fy}.', '\\newblock URL \\url{a%3F}', '\\href{https://b.org/p%20q}{The title}'],
-    }
-    for (const [shape, ts] of Object.entries(literal)) for (const t of ts) expect(urlPercents(t), `${shape}: ${t}`).not.toBe(t)
-    expect(texts(project(doc('\\def\\foo#1{\\url{a% comment } }\nb}}\nWords after the definition.')))).toEqual(['Words after the definition.'])
-    expect(texts(project(doc('\\section*{See \\url{a% } } This is commented out.\nb} Rest of title}\nWords of the body here.')))).not.toContain('This is commented out.')
+    for (const [shape, ts] of Object.entries(body)) for (const t of ts) expect(urlPercents(t, 'main.tex'), `${shape}: ${t}`).toBe(t)
+    for (const t of ['{\\em \\url{a%b}}', '\\bibinfo{note}{\\url{https://a.org/x%3Fy}}', '\\newblock \\emph{\\url{a%b}}']) expect(urlPercents(entry(t), 'main.bbl'), t).toBe(entry(t))
+    expect(urlPercents(bbl('\\bibitem{a}\nWords.\n', '\\providecommand{\\x}{\\url{a%b}}\n'), 'main.bbl')).toBe(bbl('\\bibitem{a}\nWords.\n', '\\providecommand{\\x}{\\url{a%b}}\n'))
+    expect(urlPercents(`\\url{a%b}\n${entry('x')}`, 'main.bbl')).toBe(`\\url{a%b}\n${entry('x')}`)
+    expect(texts(project(doc('\\iffalse\nHidden \\url{a% } \\fi Shown here.\n\\fi\nWords of the body here.')))).toEqual(['Words of the body here.'])
     expect(texts(project(doc('\\section% c\n{See \\url{a% } } This is commented out.\nb} Rest of title}\nWords of the body here.')))).not.toContain('This is commented out.')
-    expect(urlPercents('\\href{a%3F%3D}{b%c}').split('%').length).toBe(2)
     // (a `\\` and the character after it read as the argument's boundary reads them: `\\%` the command, `\\\\%` a pair and the
     // character, the local Codex review)
-    expect(texts(project(doc('See \\url{a\\%b} and more one.\n\nSee \\url{a\\\\%b} and more two.\n\nSee \\href{x\\%20y}{the page} and more three.', '\\usepackage{hyperref}')))).toEqual(['See and more one.', 'See and more two.', 'See the page and more three.'])
+    const pairs = project(tex, { 'main.bbl': bbl('\\bibitem{a}\nSee \\url{a\\%b} and more one.\n\n\\bibitem{b}\nSee \\url{a\\\\%b} and more two.\n\n\\bibitem{c}\nSee \\href{x\\%20y}{the page} and more three.\n') })
+    expect(texts(pairs).slice(-3)).toEqual(['See and more one.', 'See and more two.', 'See the page and more three.'])
   })
   it('a macro of the paper\'s whose body ends a table\'s row (\\newcommand{\\tightrow}{\\\\[-4pt]}) ends the row in a cell, as `\\\\` does (2610.21924v1\'s 30 cells ran into the next row\'s first)', () => {
     const tab = '\\begin{table}\\begin{tabular}{lrr}\nDemographic equity & 73.88\\% & 95.29\\% \\tightrow\nCapacity shortage & 86.27\\% & 89.01\\% \\tightrow\nTravel distance & 1 & 2 \\\\\n\\end{tabular}\\end{table}'

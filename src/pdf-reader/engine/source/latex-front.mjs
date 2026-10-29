@@ -436,103 +436,60 @@ function commandAt(s, i) { // s[i] === '\\'
 }
 function skipComment(s, i) { while (i < s.length && s[i] !== '\n') i++; return i }
 /**
- * A web address's `%` as TeX reads it. url.sty's \\url and \\path, hyperref's \\nolinkurl, breakurl's \\burl and the first argument
- * of hyperref's \\href (REVTeX's .bbl's too: `\\begingroup \\@sanitize@url \\@href`) read their argument with `%` a character, so
- * `\\href {https://doi.org/…?urlappend=%3Fref%3DPDF…} {…}` is one address; but only where TeX has not read those characters
- * already, as it has inside any command's argument, an optional one or a definition's body, or in the body of an environment
- * that collects its body as one (tabularx, amsmath's alignments). Read as a comment everywhere, the address's group never
- * closed: the rest of its line was lost, and in a .bbl every entry after it read as one (2610.21770v1's 44 to 61).
- * So a group is taken for an argument unless it is proven plain (the reviews of #501: each case found where a group was taken
- * for plain — an optional argument, a star, a parameter, a comment between a command and its group — was one more): a group
- * is plain only where the last token before its `{`, white space and comments passed over, is ordinary text (a letter, a digit
- * or a sentence's punctuation, more than one character of it where a command, a group's close or a parameter stands right
- * before: `\\foo a{…}` may be \\foo's two arguments), a math shift, or none (the file's start); never after a control sequence,
- * `*`, `]`, `}`, `{`, a parameter `#n`, or a definition's name and parameter text. Where it is not proven, the `%` stays a
- * comment, as the walk read it before. Each such `%` is written as LITERAL_PERCENT, the same length, so that every reading of
- * the walk (groups, comments, a bibliography's \\bibitem) sees what TeX sees and every place stays where it is; the units take
- * their `%` back (restorePercents). A text that holds LITERAL_PERCENT already, or no `%`, is returned as it is
+ * A web address's `%` as TeX reads it in a `.bbl`'s entries. url.sty's \\url and \\path, hyperref's \\nolinkurl, breakurl's \\burl
+ * and the first argument of hyperref's \\href (REVTeX's .bbl's too: `\\begingroup \\@sanitize@url \\@href`) read their argument
+ * with `%` a character where TeX has not read those characters already, so `\\href {https://doi.org/…?urlappend=%3Fref%3DPDF…}
+ * {…}` is one address. Read as a comment, the address's group never closed, and in a .bbl every entry after it read as one
+ * (2610.21770v1's 44 to 61; an MNRAS .bbl's `\\href {…2017A%26A…}`, 2608.18626v1). Only there: a BibTeX-written .bbl's entries,
+ * whose structure is the style's, from each \\bibitem of its thebibliography on, an address at the entry's top level (in no
+ * group: \\href's own first argument, as both papers have it). Anywhere else, the body included, the `%` stays a comment as the
+ * walk read it before: body text can hold any of TeX's constructs (an argument, a definition, a conditional, a verbatim), and
+ * no local source writes such an address there (none of 183 papers' .tex, .sty and .cls files). Each such `%` is written as
+ * LITERAL_PERCENT, the same length, so that every reading of the walk (groups, comments, a bibliography's \\bibitem) sees what
+ * TeX sees and every place stays where it is; the units take their `%` back (restorePercents). A file of another name, a text
+ * that holds LITERAL_PERCENT already, or no `%`, is returned as it is
  */
-export function urlPercents(text) {
-  if (!text.includes('%') || text.includes(LITERAL_PERCENT)) return text
+export function urlPercents(text, file) {
+  if (!/\.bbl$/i.test(file ?? '') || !text.includes('%') || text.includes(LITERAL_PERCENT)) return text
+  const begin = /\\begin\s*\{thebibliography\}/.exec(text)
+  if (!begin) return text
+  const end = text.indexOf('\\end{thebibliography}', begin.index), to = end < 0 ? text.length : end
   const n = text.length, out = text.split('')
-  /** each group open, innermost last: a brace group or an optional argument's brackets (`open`), and whether it may be an
-   *  argument (`arg`): every one not proven plain */
-  const groups = []
-  /** the environments open whose body TeX collects as an argument */
-  let collected = 0, changed = false, defining = false
-  /** the last token, white space and comments passed over: 'start' (none yet), 'text' (ordinary text: `run` characters of it
-   *  so far, after a token of kind `runAfter`), 'shift' (a math shift), or 'other' (a control sequence, a group's open or close,
-   *  `*`, `[`, `]`, a parameter, any other character) */
-  let prev = 'start', run = 0, runAfter = 'start'
-  const plain = () => prev === 'start' || prev === 'shift' || (prev === 'text' && (run > 1 || runAfter !== 'other'))
-  for (let i = 0; i < n; i++) {
+  let changed = false, depth = 0, entry = false
+  for (let i = begin.index + begin[0].length; i < to; i++) {
     const c = text[i]
     if (c === '%') { i = skipComment(text, i); continue }
-    if (/\s/.test(c)) continue
-    if (c === '{') { groups.push({ open: '{', arg: defining || !plain() }); defining = false; prev = 'other'; continue }
-    if (c === '}') { while (groups.length && groups.pop().open !== '{'); prev = 'other'; continue }
-    if (c === '[') { if (prev === 'other') groups.push({ open: '[', arg: true }); prev = 'other'; continue }
-    if (c === ']') { if (groups.at(-1)?.open === '[') groups.pop(); prev = 'other'; continue }
-    if (c === '#') { i++; prev = 'other'; continue }
-    if (c === '$') { prev = 'shift'; continue }
-    if (c !== '\\') {
-      if (ORDINARY.test(c)) { if (prev !== 'text') { runAfter = prev; run = 0 } run++; prev = 'text' } else prev = 'other'
-      continue
-    }
-    prev = 'other'
+    if (c === '{') { depth++; continue }
+    if (c === '}') { depth = Math.max(0, depth - 1); continue }
+    if (c !== '\\') continue
     const m = /^\\(?:([A-Za-z@]+)|[\s\S])/.exec(text.slice(i, i + 64))
-    const name = m?.[1] ?? null
-    if (!m || !name) { i += m ? m[0].length - 1 : 0; continue }
-    const at = i + m[0].length
-    // (a \\def's body is read as tokens where it is defined, whatever its parameter text: the first group after its name)
-    if (TEX_DEFS.test(name)) defining = true
-    if (name === 'verb') { const d = text[at]; const e = d ? text.indexOf(d, at + 1) : -1; i = e < 0 ? at : e; continue }
-    if (name === 'begin' || name === 'end') {
-      const env = /^\s*\{([^{}]*)\}/.exec(text.slice(at, at + 64))
-      if (env && VERBATIM_BODY.test(env[1].trim()) && name === 'begin') {
-        const close = text.indexOf(`\\end{${env[1].trim()}}`, at)
-        i = close < 0 ? n : close + 5 + env[1].trim().length + 1; continue
-      }
-      if (env && COLLECTED_BODY.test(env[1].trim())) collected = Math.max(0, collected + (name === 'begin' ? 1 : -1))
-      if (env) { i = at + env[0].length - 1; continue }
-    }
-    if (URL_READERS.has(name) && !collected && !defining && !groups.some(g => g.arg)) {
-      let k = at
-      while (text[k] === ' ' || text[k] === '\t' || text[k] === '\n') k++
-      if (name === 'href' && text[k] === '[') { const e = matchGroup(text, k, '[', ']'); if (e > 0) { k = e; while (text[k] === ' ' || text[k] === '\t' || text[k] === '\n') k++ } }
-      if (text[k] === '{') {
-        // (the argument as these commands read it: braces counted, `%` a character, `\\` before any character escaping it)
-        let depth = 0, e = -1
-        for (let j = k; j < n; j++) {
-          if (text[j] === '\\') { j++; continue }
-          if (text[j] === '{') depth++
-          else if (text[j] === '}' && --depth === 0) { e = j + 1; break }
-        }
-        if (e > 0) {
-          // (read as the boundary is: a `\` and the character after it a pair, so that `\%` is the command \% and `\\%` a
-          // backslash pair and then the character)
-          for (let j = k; j < e; j++) { if (text[j] === '\\') { j++; continue } if (text[j] === '%') { out[j] = LITERAL_PERCENT; changed = true } }
-          i = e - 1; continue
-        }
-      }
-    }
+    const name = m?.[1] ?? null, at = i + (m?.[0].length ?? 1)
     i = at - 1
+    if (name === 'bibitem') { entry = true; depth = 0; continue }
+    if (!entry || depth > 0 || !URL_READERS.has(name)) continue
+    let k = at
+    while (text[k] === ' ' || text[k] === '\t' || text[k] === '\n') k++
+    if (name === 'href' && text[k] === '[') { const e = matchGroup(text, k, '[', ']'); if (e > 0) { k = e; while (text[k] === ' ' || text[k] === '\t' || text[k] === '\n') k++ } }
+    if (text[k] !== '{') continue
+    // (the argument as these commands read it: braces counted, `%` a character, `\\` before any character escaping it)
+    let d = 0, e = -1
+    for (let j = k; j < n; j++) {
+      if (text[j] === '\\') { j++; continue }
+      if (text[j] === '{') d++
+      else if (text[j] === '}' && --d === 0) { e = j + 1; break }
+    }
+    if (e < 0) continue
+    // (read as the boundary is: a `\` and the character after it a pair, so that `\%` is the command \% and `\\%` a backslash
+    // pair and then the character)
+    for (let j = k; j < e; j++) { if (text[j] === '\\') { j++; continue } if (text[j] === '%') { out[j] = LITERAL_PERCENT; changed = true } }
+    i = e - 1
   }
   return changed ? out.join('') : text
 }
-/** ordinary text before a group (urlPercents): a letter, a digit or a sentence's punctuation, which no command reads as the
- *  start of its argument */
-const ORDINARY = /[\p{L}\p{N}.,;:!?]/u
-/** the primitives whose body after the parameter text is read as tokens where the definition stands (urlPercents) */
-const TEX_DEFS = /^[gex]?def$/
 /** what urlPercents writes a `%` TeX reads as a character as: a code no TeX source holds */
 const LITERAL_PERCENT = '\u0000'
 /** the commands whose argument TeX reads with `%` a character (urlPercents): hyperref's \\href, its first */
 const URL_READERS = new Set(['url', 'nolinkurl', 'path', 'burl', 'href'])
-/** the environments whose body is read character for character (no `\\url` of theirs reads anything), and those whose body TeX
- *  collects as an argument before it acts on it (tabularx, tabulary, amsmath's alignments and gathers) */
-const VERBATIM_BODY = /^(?:verbatim|Verbatim|BVerbatim|LVerbatim|lstlisting|minted|comment|alltt)\*?$/
-const COLLECTED_BODY = /^(?:tabularx|tabulary|align|alignat|flalign|gather|multline|xalignat|xxalignat)\*?$/
 /** a unit's strings and its pieces' with each LITERAL_PERCENT a `%` again, as the paper writes it (urlPercents) */
 function restorePercents(units) {
   const fix = o => { for (const k of Object.keys(o)) if (typeof o[k] === 'string' && o[k].includes(LITERAL_PERCENT)) o[k] = o[k].replaceAll(LITERAL_PERCENT, '%') }
@@ -2473,9 +2430,9 @@ function readProject(fsys, main, tables, sourceText, own) {
   function visit(rel, dirs = [], inFloat = false) {
     const f = read(rel, dirs); if (!f || seen.has(f.rel)) return
     seen.add(f.rel); files.set(f.rel, f.text)
-    // (the file as the walk reads it: a web address's `%` a character where TeX reads it so, urlPercents; the file's own text
-    // is what patch writes around the units)
-    const text = urlPercents(f.text)
+    // (the file as the walk reads it: a .bbl entry's web address's `%` a character, as TeX reads it, urlPercents; the file's own
+    // text is what patch writes around the units)
+    const text = urlPercents(f.text, f.rel)
     const b = new Builder(f.rel, units, text, ctx.bodies, ctx.floats), outer = ctx.dirs
     if (inFloat) b.inFloat = true
     ctx.dirs = dirs
@@ -2500,7 +2457,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   function visitFront(rel, dirs = []) {
     const f = read(rel, dirs); if (!f || seen.has(f.rel)) return
     seen.add(f.rel)
-    const text = urlPercents(f.text), before = units.length, b = new Builder(f.rel, units, text, ctx.bodies, ctx.floats)
+    const text = urlPercents(f.text, f.rel), before = units.length, b = new Builder(f.rel, units, text, ctx.bodies, ctx.floats)
     frontMatter(text, 0, text.length, b, ctx); b.flush()
     if (units.length > before) files.set(f.rel, f.text)
   }

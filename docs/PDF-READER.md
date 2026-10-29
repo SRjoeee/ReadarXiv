@@ -2220,19 +2220,17 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   fallbacks cannot mend such a cause: no mark of the names' is at fault and no error names a unit, so the units it unmarks are
   others; a mis-cut is mended where the units are cut. Over 157 local sources two papers change (2610.21084v1, and 2608.12096's
   ceurart `[email=…]`), every other unit's hash kept
-- **What a command reads past its arguments, as TeX reads it** (PIPELINE 33, `source/latex-front.mjs`). *A web address's `%`*
-  (`urlPercents`): url.sty's `\url` and `\path`, hyperref's `\nolinkurl` and `\href`'s first argument (REVTeX's `.bbl`'s too:
-  `\begingroup \@sanitize@url \@href`), breakurl's `\burl` read their argument with `%` a character, where TeX has not read those
-  characters already (inside any command's argument, an optional one or a definition's body, or the body of an environment that
-  collects it: tabularx, amsmath's alignments, `%` is a comment there as anywhere). A group is read as an argument unless it is
-  proven plain: the last token before its `{`, white space and comments passed over, ordinary text (letters, digits, a
-  sentence's punctuation; more than one character of it after a command, a close or a parameter: `\foo a{…}` may be two
-  arguments), a math shift, or the file's start; never a control sequence, `*`, `]`, `}`, `{`, `#n` or a definition's
-  parameter text (the reviews of #501 found one shape after another where a group was taken for plain — an optional
-  argument, a star, `#1`, a comment between a command and its group —, so the default was turned: where it is not proven,
-  the `%` stays a comment, as before PIPELINE 33). Read as a comment everywhere, the address's group never closed: the rest of
-  its line was in no unit (`\url{https://a.com/x%3Fy} and more text`), and in a `.bbl` every entry after it read as one
-  (2610.21770v1's `?urlappend=%3Fref%3DPDF`, 18 entries; an MNRAS `.bbl`'s ADS links, `2017A%26A...`, 31 of 2608.18626's
+- **What a command reads past its arguments, as TeX reads it** (PIPELINE 33, `source/latex-front.mjs`). *A web address's `%`
+  in a `.bbl`'s entries* (`urlPercents`): url.sty's `\url` and `\path`, hyperref's `\nolinkurl` and `\href`'s first argument
+  (REVTeX's `.bbl`'s too: `\begingroup \@sanitize@url \@href`), breakurl's `\burl` read their argument with `%` a character,
+  where TeX has not read those characters already. The front end reads so in a BibTeX-written `.bbl` alone, whose structure is
+  the style's: from each `\bibitem` of its thebibliography on, an address at the entry's top level (in no group: `\href`'s own
+  first argument, as both papers below have it). Anywhere else, the body included, the `%` stays a comment as before: body
+  text can hold any of TeX's constructs, and the reviews of #501 found one more after another where a scanner imitating TeX's
+  reading took a `%` for a character that TeX had read as a comment (an optional argument, a star, `#1`, a comment between a
+  command and its group, an inactive conditional's branch); no local source writes such an address in its body (none in
+  183 papers' `.tex`, `.sty` and `.cls` files), so the body's reading was dropped (the controller's ruling of 2026-10-29).
+  Read as a comment in an entry, the address's group never closed, and every entry after it read as one (2610.21770v1's `?urlappend=%3Fref%3DPDF`, 18 entries; an MNRAS `.bbl`'s ADS links, `2017A%26A...`, 31 of 2608.18626's
   entries each read from the `\bibitem` of the entry after it, the line of `%26` lost). The walk reads each file with such a `%` written as a code no source holds, the same length, so that
   every reading (a group, a comment, a bibliography's `\bibitem`) sees what TeX sees and every place stays where it is; the
   units take their `%` back, and the file's own text is what is written around them. *An inline TikZ picture* (`tikzCallEnd`):
