@@ -1,5 +1,5 @@
 // The reader's settings are the extension's (the reader's design, §3, §9.1): these say which display they ask for,
-// what a display chosen in the reader writes back, and whether figure text shows in a display
+// what a display chosen in the reader writes back, and the order and sameness of what it translates
 import { chainConfigChanged } from '@/config/revision'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { ConfigReading, FallbackReason } from '@/config/storage'
@@ -46,10 +46,13 @@ export function withDisplay(config: Config, display: EngineDisplay): Config {
   return { ...config, mode: modeOf(config, display), pdfReader: { ...config.pdfReader, original: false } }
 }
 
-/** figure text in a display: every translated display, while the switch is on (the redesign's design, §4) */
-export function figuresShown(config: Config, display: EngineDisplay): boolean {
-  return display !== 'original' && config.image.enabled
-}
+/** the reader's "What to translate" (`pdfReader.classes`, v21) in the order its rows are listed, the reading options' and the
+ *  settings page's alike (the owner's, 2026-10-25: the text in figures and in tables first, then the heads and feet, the
+ *  references and the author names) */
+export const CLASS_ROWS = ['figures', 'tables', 'heads', 'references', 'names'] as const satisfies readonly (keyof Config['pdfReader']['classes'])[]
+
+/** whether two "What to translate" show the same classes */
+export const sameClasses = (a: Config['pdfReader']['classes'], b: Config['pdfReader']['classes']): boolean => CLASS_ROWS.every(t => a[t] === b[t])
 
 export interface Follow {
   /** the translation in the new target language, in place, once a translation has started (the run's retarget: the left, the

@@ -1144,6 +1144,105 @@ try {
     await sleep(300)
   }
 
+  // ------------------------------------------------------------------------------------------------ what to translate
+  section('what to translate: a toggle shows or hides a class in place, from the reading options or the settings page; nothing fetched or translated again (S-R-27, S-O-56)')
+  {
+    const stored = await worker.evaluate(() => chrome.storage.local.get('config').then(r => r.config))
+    const page = await openReader({ mode: 'bilingual' })
+    const side = () => page.evaluate(() => window.__reader.side()?.probe() ?? null)
+    /** the text a laid page of the right draws (its SVG's): the translation of each unit shown translated, nothing of one hidden */
+    const drawn = n => page.evaluate(n => { const l = document.querySelector(`#right .axt-place[data-page-number="${n}"] .axt-place-view > .axt-layer:not(.axt-layer-retired)`); return l?.querySelector('canvas.axt-layer-copy')?.width > 0 ? l.querySelector('svg')?.textContent ?? '' : null }, n)
+    /** page `n` laid and its drawing passing `test` (a door opened again keeps each page's drawing until its own commits) */
+    const until = (n, test, timeout = 30_000) => page.waitForFunction(([n, source, want]) => { const l = document.querySelector(`#right .axt-place[data-page-number="${n}"] .axt-place-view > .axt-layer:not(.axt-layer-retired)`); return l?.querySelector('canvas.axt-layer-copy')?.width > 0 && new RegExp(source).test(l.querySelector('svg')?.textContent ?? '') === want }, [n, test.source, test.want], { timeout }).then(() => true, () => false)
+    // the sample's author (page 1, the names: off by default) and its table's head cells (page 3, the tables: on), by words of
+    // theirs no other unit has (tests/fixtures/pdf/sample-1/main.tex)
+    const AUTHOR = { page: sampleCut.located.find(u => sampleCut.kinds[u[0]] === 'author')?.[2][0][0], source: 'Contributors' }
+    const CELLS = { page: sampleCut.located.find(u => sampleCut.kinds[u[0]] === 'cell')?.[2][0][0], source: 'Three\\s*blocked' }
+    const classes = () => worker.evaluate(() => chrome.storage.local.get('config').then(r => r.config.pdfReader.classes))
+    const laid = await page.waitForFunction(() => window.__reader?.side?.()?.probe().rowsEnded === true, null, { timeout: 60_000 }).then(() => true, () => false)
+    await until(1, { source: '\\[echo\\]', want: true })
+    // (the table's page laid too: brought into view, then page 1 again)
+    await page.evaluate(n => window.__reader.controller.goToPage('right', n), CELLS.page)
+    const cellsShown = await until(CELLS.page, { source: CELLS.source, want: true })
+    await page.evaluate(() => window.__reader.controller.goToPage('right', 1))
+    const authorHidden = await until(AUTHOR.page, { source: AUTHOR.source, want: false })
+    // (every row the target translates taken, the hidden classes' among them: the run's own count of the rows it holds)
+    const run0 = await page.evaluate(() => window.__reader.run?.probe() ?? null)
+    check('the defaults: the table\'s cells drawn translated, the author\'s name the original\'s (the owner\'s, 2026-10-25), every row translated', laid && cellsShown && authorHidden && AUTHOR.page === 1 && CELLS.page > 1 && run0?.total > 0 && run0?.rows === run0?.total, JSON.stringify({ laid, cellsShown, authorHidden, pages: [AUTHOR.page, CELLS.page], rows: [run0?.rows, run0?.total], stored: await classes() }))
+    const asked0 = api.requests.length, posts0 = echo.seen.post, before = await side()
+    const fetched = () => api.requests.slice(asked0).map(r => r.path).filter(x => x.startsWith('/api/v1/'))
+    // the reading options' group: its rows in the owner's order; the author names' switch turned there
+    await page.click('button[popovertarget="pop-options"]')
+    const rows = await page.evaluate(() => [...document.querySelectorAll('[data-axt-classes] [data-axt-class]')].map(r => [r.getAttribute('data-axt-class'), r.querySelector('[role="switch"]')?.getAttribute('aria-checked')]))
+    check('the reading options hold what to translate, the owner\'s five in the owner\'s order, as the settings have them', JSON.stringify(rows) === JSON.stringify([['figures', 'true'], ['tables', 'true'], ['heads', 'true'], ['references', 'false'], ['names', 'false']]), JSON.stringify(rows))
+    // (measured as the maintainer's standard asks: every drawn row of the panel, the group's heading and rows among them, its words
+    // on one leading edge and its switch on one trailing edge, each on its row's centre line within 0.5 px)
+    const align = await page.evaluate(() => {
+      const pop = document.getElementById('pop-options'), p = pop.getBoundingClientRect()
+      const rows = [...pop.querySelectorAll(':scope > .row, [data-axt-classes] > .row')].filter(r => r.getBoundingClientRect().height > 0)
+      const starts = new Set(), ends = new Set(), off = []
+      for (const r of rows) {
+        const b = r.getBoundingClientRect(), mid = b.top + b.height / 2
+        const text = [...r.childNodes].find(n => n.nodeType === 3 && n.textContent.trim())
+        if (text) {
+          const range = document.createRange()
+          range.selectNodeContents(text)
+          const t = range.getBoundingClientRect()
+          starts.add(Math.round((t.left - p.left) * 2) / 2)
+          if (Math.abs(t.top + t.height / 2 - mid) > 0.5) off.push(`${r.textContent} words`)
+        }
+        const sw = r.querySelector(':scope > [role="switch"]')
+        if (sw) {
+          const s = sw.getBoundingClientRect()
+          ends.add(Math.round((p.right - s.right) * 2) / 2)
+          if (Math.abs(s.top + s.height / 2 - mid) > 0.5) off.push(`${r.textContent} switch`)
+        }
+      }
+      return { rows: rows.length, group: pop.querySelectorAll('[data-axt-classes] > .row').length, starts: [...starts], ends: [...ends], off }
+    })
+    check('… its rows on the panel\'s lines: every row\'s words on one leading edge, every switch on one trailing edge, each on its row\'s centre line', align.group === 6 && align.starts.length === 1 && align.ends.length === 1 && align.off.length === 0, JSON.stringify(align))
+    await page.click('[data-axt-class="names"] [role="switch"]')
+    await page.keyboard.press('Escape')
+    const authorShown = await until(AUTHOR.page, { source: AUTHOR.source, want: true })
+    const p1 = await side(), c1 = await classes()
+    check('the author names turned on in the reading options: written, and the author\'s name drawn translated on page 1, in place', authorShown && c1.names === true && c1.tables === true && (await drawn(1))?.includes('Contributors'), JSON.stringify({ authorShown, stored: c1 }))
+    check('… from the rows already there: the door opened once more over the same documents, nothing asked of our server, nothing sent to the service', p1?.opens === (before?.opens ?? 0) + 1 && p1?.composed === before?.composed && p1?.docs === before?.docs && fetched().length === 0 && echo.seen.post === posts0, JSON.stringify({ opens: [before?.opens, p1?.opens], composed: [before?.composed, p1?.composed], docs: [before?.docs, p1?.docs], fetched: fetched(), posts: echo.seen.post - posts0 }))
+    // the tables turned off on the settings page, the switch the reader's row names: the reader follows, in place
+    const tablesName = await page.evaluate(() => document.querySelector('[data-axt-class="tables"]')?.textContent ?? '')
+    // (the settings page at the group's deep link, S-O-06: its section opened, whatever the interface's language)
+    const options = track(await context.newPage())
+    await options.goto(`chrome-extension://${id}/options.html#reading/classes`)
+    const settingsSwitch = options.locator('[data-row="reading/classes"]').getByRole('switch', { name: tablesName, exact: true })
+    const shownOff = await settingsSwitch.getAttribute('aria-checked')
+    await settingsSwitch.click()
+    let written = false
+    for (let i = 0; i < 50 && !written; i++) { written = (await settingsSwitch.getAttribute('aria-checked')) === 'false'; if (!written) await sleep(100) }
+    await page.evaluate(n => window.__reader.controller.goToPage('right', n), CELLS.page)
+    const cellsHidden = await until(CELLS.page, { source: CELLS.source, want: false })
+    const p2 = await side(), c2 = await classes()
+    check('the tables turned off on the settings page (its switch showing the reader\'s setting): the reader follows, the table\'s cells the original\'s on their page', shownOff === 'true' && written && cellsHidden && c2.tables === false && c2.names === true, JSON.stringify({ shownOff, written, cellsHidden, stored: c2 }))
+    check('… again from the rows there: one more open, nothing asked of our server, nothing sent to the service', p2?.opens === (p1?.opens ?? 0) + 1 && p2?.composed === before?.composed && fetched().length === 0 && echo.seen.post === posts0, JSON.stringify({ opens: [p1?.opens, p2?.opens], fetched: fetched(), posts: echo.seen.post - posts0 }))
+    // and back: the cells drawn translated again, and the same classes once more change nothing
+    await settingsSwitch.click()
+    const cellsBack = await until(CELLS.page, { source: CELLS.source, want: true })
+    const p3 = await side()
+    await setConfig({ pdfReader: { ...(await worker.evaluate(() => chrome.storage.local.get('config').then(r => r.config.pdfReader))), classes: { ...(await classes()) } } })
+    await sleep(1000)
+    const p4 = await side()
+    check('turned on again, the cells are drawn translated again; the same classes written again open nothing', cellsBack && p3?.opens === (p2?.opens ?? 0) + 1 && p4?.opens === p3?.opens && echo.seen.post === posts0, JSON.stringify({ cellsBack, opens: [p2?.opens, p3?.opens, p4?.opens], posts: echo.seen.post - posts0 }))
+    control('the probe words are the classes\' own: with the author names off again (storage, as another tab writes it), page 1 draws no author\'s name, so the check of shown fails', await (async () => {
+      await setConfig({ pdfReader: { ...(await worker.evaluate(() => chrome.storage.local.get('config').then(r => r.config.pdfReader))), classes: { ...(await classes()), names: false } } })
+      await page.evaluate(() => window.__reader.controller.goToPage('right', 1))
+      const gone = await until(AUTHOR.page, { source: AUTHOR.source, want: false })
+      const text = await drawn(AUTHOR.page)
+      return { ok: !gone || /Contributors/.test(text ?? ''), detail: `hidden again: ${gone}; page 1 draws ${text?.length ?? 0} characters` }
+    })())
+    await options.close()
+    await page.close()
+    await worker.evaluate(c => chrome.storage.local.set({ config: c }), stored)
+    await sleep(300)
+  }
+
   // --------------------------------------------------------------------------------- the reader's states on the layer
   section('the reader\'s states on the layer: none for the paper, refused, unreachable, a retry, arXiv\'s bytes not the base (Task 12)')
   {
