@@ -244,8 +244,17 @@
 //     units of kind `figure`, latex-front.mjs tikzText), which own no glyph and no group and were never drawn, are asked for no
 //     more, the figure ink units translating the picture's glyphs once (layer-proto/rows.mjs TIKZ_KIND, PDF-READER §19.12);
 //     an ink unit that echoed one is translated itself. Every bundle is byte for byte as it was, every unit's cut and wire and
-//     every request's shape too: only the plan, the units toTranslate and layerIds name, is smaller
-export const PIPELINE_VERSION = '31'
+//     every request's shape too: only the plan, the units toTranslate and layerIds name, is smaller; 32 (the release sweep of
+//     staging 4b3c4ae9, engine a30a53ba, 31 counted released): a .bib the bibliography's pass wrote itself is no .bib the paper
+//     lacks (layout/paper.mjs bibMissing: REVTeX 4.x's <job>Notes.bib, named in \\bibdata before the paper's own), so a REVTeX
+//     paper that ships its .bib and no .bbl has its entries units of kind `reference`, one an entry, where its bibliography was
+//     text no unit owned (2610.20595v1's 56 entries, 2610.21770v1's 61); an ink unit's hanging line is measured from its
+//     paragraph's first line only where the block begins on it (layout/ledger.mjs `opens`, layout/ink-units.mjs: a block from a
+//     column's top had every next entry of an orphan bibliography joined to it, a column one unit, since #487's PARA_DY); and an
+//     author block's row set in a \\centerline is its text (latex-front.mjs FRONT_BOXES: 2010.11929v2's block no unit before, its
+//     names, notes and places one ink unit of orphan text), each unit it cuts numbered after the others, so that no unit before
+//     the entries moves; every paper is translated again
+export const PIPELINE_VERSION = '32'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

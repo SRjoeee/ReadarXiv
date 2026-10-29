@@ -583,17 +583,20 @@ const bibInput = files => [...files].filter(([p]) => /\.(?:aux|bcf)$/.test(p)).s
 /** whether a pass wrote a bibliography job beside the main one's (an aux of another name holding a \bibdata: chapterbib, multibib,
  *  bibunits), which latexmk runs BibTeX on and a one-pass request (the main job's bibliography step alone) never does */
 const otherBibJobs = (files, main) => [...files].some(([p, b]) => /\.aux$/.test(p) && p !== `${jobName(main)}.aux` && /^\\bibdata\{/m.test(latin1(b)))
-/** whether a bibliography the pass names has no .bib file in the project (a \bibdata name in an aux, a datasource of a .bcf): the
- *  bibliography step's tool would run, but latexmk -norc (bibtex_use 1) skips BibTeX and biber when any .bib is missing, and
- *  BibTeX writes an empty thebibliography none of L's passes has. Over-broad for a .bib of the TeX tree (IEEEabrv): only
- *  today's compile is asked then */
+/** whether a bibliography the pass names has no .bib file in the project nor among the files the pass wrote (a \bibdata name in an
+ *  aux, a datasource of a .bcf): the bibliography step's tool would run, but latexmk -norc (bibtex_use 1) skips BibTeX and biber
+ *  when any .bib is missing, and BibTeX writes an empty thebibliography none of L's passes has. A .bib the pass writes itself is
+ *  on the disk latexmk looks at when it decides: REVTeX 4.x writes `<job>Notes.bib` (its notes as entries) and names it in
+ *  \bibdata before the paper's own, so every REVTeX paper that ships its .bib and no .bbl read as one that lacks a .bib, its
+ *  entries no units and its bibliography text no unit owns (2610.20595v1, 2610.21770v1: their entries cut a column at a time).
+ *  Over-broad for a .bib of the TeX tree (IEEEabrv): only today's compile is asked then */
 const bibMissing = (files, fsys) => {
   const names = []
   for (const [p, b] of files) {
     if (p.endsWith('.aux')) for (const m of latin1(b).matchAll(/^\\bibdata\{([^}]*)\}/gm)) names.push(...m[1].split(','))
     else if (p.endsWith('.bcf')) for (const m of latin1(b).matchAll(/<bcf:datasource\b[^>]*>([^<]*)</g)) names.push(m[1])
   }
-  return names.map(n => n.trim()).filter(Boolean).some(n => !fsys.read(n.endsWith('.bib') ? n : `${n}.bib`))
+  return names.map(n => n.trim()).filter(Boolean).some(n => { const bib = normalizePath(n.endsWith('.bib') ? n : `${n}.bib`); return !fsys.read(bib) && !files.has(bib) })
 }
 
 /**

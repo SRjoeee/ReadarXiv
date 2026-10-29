@@ -35,6 +35,7 @@ import { wrapped } from './helpers/ocg-pdfs'
 //                a numbered list of places, an \affil; what was one unit numbered as it was, the rows cut from it after the others
 //   made-bbl     PIPELINE 30's \bibliography (made-bibliography.test.ts): the paragraph that runs into it ends there, the job's
 //                .bbl BibTeX makes or none
+//   authors-box  PIPELINE 32's author block of \centerline rows (author-places.test.ts, 2010.11929v2)
 // A source's structural names are its units too (bundleUnitsOf, after the source's): each recorded as `name: <its text>`.
 // So are the units the wrap cuts of our pages after them (PIPELINE 31): the ink units (layout/ink-units.mjs) of a few pages written
 // here, each recorded whole (kind, echo, its pieces' text and sources), and the figure units of the figures fixture
@@ -83,6 +84,10 @@ C.~Wang and S.~Shang, ${QUOTES}Building pipelines,'' in \emph{Proc. ACM}, 2025, 
   authors: () => new Map([
     ['main.tex', enc('\\documentclass{article}\n\\author{Alice Smith\\thanks{Equal.} \\\\ Google Brain \\\\ \\texttt{alice@g.com} \\And Bob Jones$^{1}$ \\\\ $^{1}$University of Somewhere}\n\\affil{Institute of Elsewhere}\n\\begin{document}\n\\maketitle\nThe body.\n\\end{document}\n')],
   ]),
+  // PIPELINE 32's: ICLR 2021's author block, each row a \\centerline (2010.11929v2): names, then places, all after the others
+  'authors-box': () => new Map([
+    ['main.tex', enc('\\documentclass{article}\n\\author{\\centerline{Alexey Dosovitskiy$^{*}$, Lucas Beyer$^{*}$} \\vspace{1mm}\\\\\n\\centerline{\\textbf{Xiaohua Zhai$^{*}$}} \\\\\n\\centerline{$^*$equal technical contribution} \\\\\n\\centerline{Google Research, Brain Team} \\\\\n\\centerline{\\texttt{a@google.com}} \\\\\n}\n\\begin{document}\n\\maketitle\nThe body.\n\\end{document}\n')],
+  ]),
   'made-bbl': () => new Map([
     ['main.tex', enc('\\documentclass{article}\n\\begin{document}\nNormalization helps \\cite{ba}.\nThe paragraph runs into it.\n\\bibliographystyle{plain}\n\\bibliography{refs}\n\\end{document}\n')],
     ['refs.bib', enc('@article{ba, author={Jimmy Lei Ba}, title={Layer normalization}, year={2016}}\n')],
@@ -118,6 +123,14 @@ const INK_CUT_SOURCES: Record<string, () => { pages: ReturnType<typeof inkPage>[
   heads: () => ({ units: HEADING, pages: [inkPage({ point: 'c1-2' }, { glyphs: inkRun('Published as a conference paper at ICLR 2021', 100, 760, { space: 3.33 }) }, { glyphs: inkRun('12', 520, 760) }, { point: 'bs1' }, { point: 'be1' })] }),
   // LAYOUT 23's: an orphan's runs of another weight, colour and slant
   styles: () => ({ units: [], pages: [inkPage({ point: 'bs1' }, { para: 1 }, { glyphs: [...inkRun('Definition 1', 100, 700, { font: 'CMBX10' }), ...inkRun('([TT])', 165, 700), ...inkRun('holds', 200, 700, { fill: 0x0071bc }), ...inkRun('here and now', 230, 700, { font: 'CMTI10' })] }, { point: 'be1' })] }),
+  // PIPELINE 32's: an orphan bibliography whose entries set no point (REVTeX's, 2610.21770v1), a column begun where an entry runs
+  // on, each entry's link a line of numbers no unit holds: each run of entries a unit of its own, never the column one
+  column: () => ({ units: [], pages: [inkPage(
+    { point: 'bs1' }, { para: 50 }, { glyphs: inkRun('The data are available on request.', 100, 760, { size: 9 }) },
+    { glyphs: inkRun('transport phenomena in junctions of a compensated', 110, 700, { size: 9 }) }, { glyphs: inkRun('ferrimagnet and a normal metal, Phys. Rev. B', 110, 690, { size: 9 }) }, { glyphs: inkRun('113, 094425 (2026).', 110, 680, { size: 9 }) },
+    { glyphs: inkRun('[21] Y. Liu, S.-D. Guo, Two-dimensional fully', 100, 670, { size: 9 }) }, { glyphs: inkRun('compensated ferrimagnetism, Phys. Rev. Lett.', 110, 660, { size: 9 }) }, { glyphs: inkRun('134, 106703 (2025).', 110, 650, { size: 9 }) },
+    { glyphs: inkRun('[22] Z. Zhang, Y. Wei, Fully compensated', 100, 640, { size: 9 }) }, { point: 'be1' },
+  )] }),
 }
 /** each ink unit of a source page as `kind<echo: pieces`, each piece its text, a placeholder its source, a group its command */
 const inkCutOf = (): Cut => Object.fromEntries(Object.entries(INK_CUT_SOURCES).map(([name, make]) => {
@@ -188,6 +201,8 @@ describe('the unit cut is recorded under the PIPELINE_VERSION it was cut by', ()
     // (and its \\bibliography: the paragraph before it ends there, no placeholder of it; \\bibliographystyle before it the
     // paragraph's, with the .bbl or without)
     expect(now['made-bbl']).toEqual(['para: text,ph,text,ph,text'])
+    // (PIPELINE 32's \\centerline rows: the body keeps its number, the names and the places after it)
+    expect(now['authors-box']?.map(u => u.split(':')[0])).toEqual(['para', 'author', 'author', 'affiliation', 'affiliation'])
     // (the ink units' sources hold what they are here for: an echo, a contents entry whole, a list set double one unit, a script
     // in its placeholder, style groups; the figures fixture its figure units)
     const ink = inkCutOf()
@@ -195,6 +210,7 @@ describe('the unit cut is recorded under the PIPELINE_VERSION it was cut by', ()
     expect(ink['double']).toHaveLength(2)
     expect(ink['double']?.[1]).toContain('ph($Cn2$)')
     expect(ink['styles']?.[0]).toContain('open(\\textbf{)')
+    expect(ink['column']).toHaveLength(4)
     expect((await figureCutOf()).figures?.length).toBeGreaterThan(3)
   })
 })
