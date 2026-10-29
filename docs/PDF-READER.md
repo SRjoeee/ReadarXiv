@@ -3348,7 +3348,7 @@ translated.
   breaks it, or numbers alone: left out, it stood the original's where the drawn entry ran over it), an entry of no text word
   none. What stands before the first point (biblatex's heading) is a unit of its own. No `.bbl` is read (biber's is a file of
   fields), and nothing of the source changes. Measured over 59 papers (the sweep's 54 and every biblatex paper of the local corpus,
-  six of 185): 378 entries now units of their own in the six, under the toggle (121 `inkorphan` units of the entries gone; in
+  six of 185): 378 entries now units of their own in the six, under the toggle (141 `inkorphan` units of the entries gone; in
   three of the six the entries had been no unit's at all, never translated), 236 more units laid and none fewer, units left
   LOST 163 → 160 (none new), every base page pixel-identical (1606).
 - **Not units:** a `.bib` the TeX tree holds rather than the package (a style's IEEEabrv): no pass is made.
