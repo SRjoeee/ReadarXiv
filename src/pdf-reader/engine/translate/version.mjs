@@ -61,4 +61,8 @@
 // (No version since 6: a reply holding a numeric entity past U+10FFFF, whose reading threw and stopped the run, is read with
 // that entity as it stands, as the background's decoder reads it (mt.mjs decode); every reply read before is read the same,
 // and none was read so before. A TikZ picture's texts no longer sent is the plan's, not the wire's: versions.mjs, PIPELINE 31)
-export const TRANSLATE_VERSION = '6'
+// 7: backref's list after a bibliography entry (latex-front.mjs BACKREF_LIST, PIPELINE 35) goes on no wire: it is no word of the
+//    entry's sentence, and Microsoft's Chinese read its placeholder as a page number, writing 页 before it (2610.37668v1, 5 of 41
+//    entries). It comes back after the translation with an en space before it, the \enspace backref sets (mt.mjs listOf). Every
+//    unit without one is sent as 6 sends it, byte for byte
+export const TRANSLATE_VERSION = '7'

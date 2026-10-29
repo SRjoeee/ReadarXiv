@@ -519,10 +519,28 @@ function wireText(pieces, it, wire, esc, texts = null) {
   return out
 }
 
+/** backref's list after a bibliography entry, a placeholder of no source the front end ends the entry's unit in (latex-front.mjs
+ *  BACKREF_LIST, written again here: this module may not import the front end; a test holds the two equal) */
+export const BACKREF_LIST = '\\axtbackref'
+/** a unit whose last piece is backref's list, as the wire takes it: the unit before the list, and what goes on no wire after the
+ *  translation — an en space, the \enspace backref sets before the list (a kern, no ink of the list's), then the list. The list
+ *  is no word of the entry's sentence: on the wire a translator read it as one, a page number, and wrote 页 before it (Microsoft's
+ *  Chinese, "…2024.页26"); after the translation it is drawn where TeX set it, after the entry's text, its gap before it.
+ *  Null for any other unit */
+function listOf(u) {
+  const last = u.pieces?.at(-1)
+  if (last?.t !== 'ph' || last.src !== BACKREF_LIST) return null
+  return { u: { ...u, pieces: u.pieces.slice(0, -1) }, after: [{ t: 'text', tr: true, s: ' ' }, last] }
+}
+/** a wire's plan with what goes after the translation on no wire put after the rest (`back`) */
+const afterList = (made, list) => ({ ...made, back: [...(made.back ?? []), ...list.after] })
+
 /** a unit as runs (translateUnits' last way): the markers wire's parts in order, each stretch of text between two of
  *  its markers one part (`text`, as the wire writes it, and its pieces `ks`), each marker one (`slot`), and what goes on
  *  no wire (`front`, `back`). A unit with no pair and no placeholder that sets no ink has a part for each of its pieces */
 function runsOf(u) {
+  const list = listOf(u)
+  if (list) return afterList(runsOf(list.u), list)
   const { items, front, back } = planOf(u, 'markers')
   const parts = items.map(it => (it.t === 'text' ? { text: wireText(u.pieces, it, '', s => s).trim(), ks: it.ks } : { slot: it.t === 'void' ? it.slot : edgeOf(u.pieces, it) }))
   return { parts, front: placed(u.pieces, front), back: placed(u.pieces, back) }
@@ -550,6 +568,8 @@ function runPieces(u, { parts, front, back }, trOf) {
  *  stop and its offset in the wire, `at`), after which rehydrate takes the reply's marks off again, and which
  *  sentencesOf counts nowhere */
 export function serialize(u) {
+  const list = listOf(u)
+  if (list) return afterList(serialize(list.u), list)
   const slots = [], stops = new Set(), numbers = new Set(), numbersAfter = new Set(), hidden = new Map(), kept = new Map(), own = new Map()
   let wire = ''
   const lead = u.pieces[0]?.t === 'text' ? u.pieces[0].s.match(/^\s*/)[0] : ''
@@ -838,6 +858,8 @@ const escapeTags = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/
  *  same-style neighbours one pair, what sets no ink off the wire (planOf: `head` and `tail` what rides inside a pair's
  *  open and close, `front`, `back` and `refill` as serialize's) */
 export function serializeTags(u) {
+  const list = listOf(u)
+  if (list) return afterList(serializeTags(list.u), list)
   const slots = [], hidden = new Map(), kept = [], own = new Map()
   let wire = ''
   const lead = u.pieces[0]?.t === 'text' ? u.pieces[0].s.match(/^\s*/)[0] : ''
