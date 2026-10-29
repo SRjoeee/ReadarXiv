@@ -3,7 +3,7 @@
 // merged into labels as the extension merges them, each drawn over a patch of its ground or left the original's with its reason.
 // Synthetic images: a white ground, a line's ink a dark bar inside its box, so that each rule is one shape
 import { describe, expect, it } from 'vitest'
-import { labelsOf, OCR_SIZE, PATCH_PAD } from '@/pdf-reader/engine/layout/bitmap-text.mjs'
+import { labelsOf, OCR_SIZE, PATCH_PAD, SET_SIZE, setsOf } from '@/pdf-reader/engine/layout/bitmap-text.mjs'
 
 const W = 400, H = 200
 /** a white RGBA image with dark bars ([x0, y0, x1, y1, rgb]) drawn in it, image pixels, origin top left */
@@ -97,5 +97,45 @@ describe('a bitmap figure\'s labels (labelsOf)', () => {
   it('holds a patch drawn by an image before on its page apart (`overlap`)', () => {
     const taken = [[[90, 125], [210, 125], [210, 90], [90, 90]]]
     expect(run({ taken: taken as never }).left).toEqual([{ text: 'Validation loss', why: 'overlap' }])
+  })
+})
+
+describe('an image\'s labels in their sets (setsOf: the owner\'s rule of 2026-10-29 for a figure\'s labels)', () => {
+  /** a label on the page (PDF units, y up): one line per [x, top, length], `size` thick by OCR_SIZE */
+  const lab = (lines: [number, number, number][], size = 5, anchor: 'start' | 'centre' | 'end' = 'centre', turned = false) => ({
+    text: 'Linear', lines: lines.length, size, anchor, bg: 0xffffff, fg: 0, set: -1,
+    quads: lines.map(([x, top, len]) => {
+      const T = size / OCR_SIZE
+      const q = turned ? [[x, top], [x, top + len], [x - T, top + len], [x - T, top]] : [[x, top], [x + len, top], [x + len, top - T], [x, top - T]]
+      return [q, q] as never
+    }),
+  })
+  it('a column of labels sharing their start: one set, at its sizes\' median, set from its start whatever each read alone', () => {
+    // (the Transformer's decoder stack, its "Linear" boxes read 4.4, 5.0 and 5.3 by their lines' thickness)
+    const units = [lab([[100, 300, 30]], 4.4, 'start'), lab([[100.8, 280, 50]], 5.3, 'centre'), lab([[99.6, 260, 22]], 5.0, 'start'), lab([[300, 100, 40]], 5.2)]
+    const r = setsOf(units)
+    expect(units.map(u => u.set)).toEqual([0, 0, 0, 3])
+    expect(units.map(u => u.size)).toEqual([5, 5, 5, 5.2])
+    expect(units.map(u => u.anchor)).toEqual(['start', 'start', 'start', 'centre'])
+    expect(r).toEqual({ sets: 1, grouped: 3, aligned: 1, sized: 2 })
+  })
+  it('a row of one-line labels on one baseline is one set; a centred column too', () => {
+    const row = [lab([[50, 100, 20]]), lab([[90, 100.5, 30]]), lab([[150, 99.6, 25]])]
+    expect(setsOf(row).sets).toBe(1)
+    expect(row.map(u => u.set)).toEqual([0, 0, 0])
+    const col = [lab([[90, 300, 20]]), lab([[80, 270, 40]]), lab([[85, 240, 30]])]
+    setsOf(col)
+    expect(col.map(u => [u.set, u.anchor])).toEqual([[0, 'centre'], [0, 'centre'], [0, 'centre']])
+  })
+  it('joins no labels of sizes apart past SET_SIZE, of two directions, or a label of several lines on a baseline', () => {
+    const title = [lab([[100, 300, 60]], 9), lab([[100, 280, 30]], 9 / SET_SIZE - 0.5)]
+    setsOf(title)
+    expect(title.map(u => u.set)).toEqual([0, 1])
+    const turned = [lab([[100, 300, 30]]), lab([[100, 200, 30]], 5, 'centre', true)]
+    setsOf(turned)
+    expect(turned.map(u => u.set)).toEqual([0, 1])
+    const two = [lab([[50, 100, 20], [50, 92, 20]]), lab([[200, 100, 20]])]
+    setsOf(two)
+    expect(two.map(u => u.set)).toEqual([0, 1])
   })
 })

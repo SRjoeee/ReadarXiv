@@ -65,7 +65,7 @@ import { shown as shownPiece, trPiecesOf } from '../layer/pieces.mjs'
 import { fitFigureSet, sameAsSource } from './figure-fit.mjs'
 import { levelRun } from './figure-rows.mjs'
 import { FIGURE_KIND, OCR_KIND } from '../rules/content-classes.mjs'
-import { fitOcr } from './ocr-fit.mjs'
+import { layOcr, ocrNeed, ocrSetFactor } from './ocr-fit.mjs'
 import { NAME_KIND, nameOccurrenceId } from './units.mjs'
 import { addSegWords, addUnitWords, copyWords, freezeWords, newWords, pieceOffsets, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
 import { closureOf, rowLeadOf } from './need.mjs'
@@ -1533,11 +1533,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // ---- the bitmap figures' labels (the content class `ocr`, PDF-READER §19.15): each label of a page's images the layer's late
   // chunk carries (hiding.ocr: its place in its unit, ocr-rows.mjs), drawn where the reader shows figures translated
   // (hiding.figuresShown): over each of its lines a patch of the ground's colour, then its translation in its lines' boxes by the
-  // fit rule (ocr-fit.mjs: on each line's middle along its direction, its anchor kept, at its size or shrunk to the rules' last
-  // floor), in a face of the paper's sans family, in its ink's colour; every patch of the page before any label's text. Else
-  // left the original's, its patches not drawn, why told (`no row`, `kept`, `untranslated`, `same` as its source, a face's
-  // refusal, `unfit`, `outside` its page's view). A page whose labels are shown waits for their rows as for its figures'.
-  // `ocr`: each label of the pages laid, drawn or why not
+  // fit rule (ocr-fit.mjs: on each line's middle along its direction, its anchor kept, its set at one size, shrunk by one factor
+  // to the rules' last floor), its CJK characters in the target's CJK face and every other in the paper's sans family's Latin
+  // face, a run each (layer2.mjs figureRuns, as a vector figure's: the served CJK faces hold no Latin letter or digit), in its
+  // ink's colour; every patch of the page before any label's text. Else left the original's, its patches not drawn, why told
+  // (`no row`, `kept`, `untranslated`, `same` as its source, a face's refusal, `unfit`, `outside` its page's view). A level line's
+  // words are in the page's text layer and its word table under its unit's id, which the hover lights (arXiv's bitmap holds no
+  // token, so none is anchored on the left: the figure's float lights it there). A page whose labels are shown waits for their
+  // rows as for its figures'. `ocr`: each label of the pages laid, drawn or why not
   const ocrRecs = []
   /** each page's labels: 1 while painted, 2 once painted; a page is ready at 2 alone */
   const ocrDone = new Uint8Array(N + 1)
@@ -1546,10 +1549,15 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const paintOcr = async pg => {
     if (ocrDone[pg]) return
     ocrDone[pg] = 1
-    const patches = [], texts = [], vw = views[pg - 1]
+    const vw = views[pg - 1]
     // (the page's view, which a patch's corners stand in: a place the maker gave for another page's box is the original's)
     const view = vw?.viewBox ?? null
     const inView = ([x, y]) => !view || (x >= Math.min(view[0], view[2]) - 1 && x <= Math.max(view[0], view[2]) + 1 && y >= Math.min(view[1], view[3]) - 1 && y <= Math.max(view[1], view[3]) + 1)
+    const st = { fam: 'sans', bold: false, italic: false, caps: false, design: designs.sans ?? designs.serif }
+    const facesOf = cls => faceOf(st, cls, to)
+    const measure = t => L2.figureRunsWidth(L2.figureRuns(t, facesOf, P.cjkQuotes))
+    // (each label's translation and faces first, then each set's one factor, then each drawn in its place's order)
+    const ready = []
     for (const o of ocrOn(pg)) {
       const rec = { id: o.id, page: pg, drawn: false, why: null }
       ocrRecs.push(rec)
@@ -1558,17 +1566,21 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const text = u.pieces.map(p => (p.t === 'text' ? shownPiece(p) : ' ')).join('').replace(/\s+/g, ' ').trim()
       if (!text || sameAsSource(text, u.src ?? '')) { Object.assign(rec, { why: 'same', text }); continue }
       if (!o.lines.every(l => l.patch.every(inView))) { Object.assign(rec, { why: 'outside', text }); continue }
-      const st = { fam: 'sans', bold: false, italic: false, caps: false, design: designs.sans ?? designs.serif }
-      const face = faceOf(st, /[\u2e80-\u9fff\uac00-\ud7af\u3040-\u30ff\uf900-\ufaff]/.test(text) ? 'cjk' : 'latin', to)
-      const drawn = L2.nameRuns(text, face, to)
       if (FS) {
         const tFonts = performance.now()
-        const no = await FS.check([{ face: drawn.face, text: drawn.text }])
+        const no = await FS.check(L2.figureRuns(text, facesOf, P.cjkQuotes).map(r => ({ face: r.face, text: r.s })))
         fontWait += performance.now() - tFonts
         if (disposed) return
         if (no) { Object.assign(rec, { why: no.why, text }); continue }
       }
-      const fit = fitOcr(o, drawn.text, s => L2.runsWidth(L2.nameRuns(s, drawn.face, to)), P.floorMin)
+      ready.push({ o, rec, text, need: ocrNeed(o, text, measure, P.floorMin) })
+    }
+    const bySet = new Map()
+    for (const c of ready) (bySet.get(c.o.set) ?? bySet.set(c.o.set, []).get(c.o.set)).push(c)
+    const factor = new Map([...bySet].map(([set, list]) => [set, ocrSetFactor(list.map(c => c.need))]))
+    const patches = [], texts = []
+    for (const { o, rec, text, need } of ready) {
+      const fit = need === null ? null : layOcr(o, text, measure, factor.get(o.set))
       if (!fit) { Object.assign(rec, { why: 'unfit', text }); continue }
       const r = rows[pg - 1], px = pxOf(pg)
       // (the patches' box on the page: where the original's text was covered, for the links' and the text layer's question)
@@ -1577,13 +1589,18 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const opsFrom = r.ops.length
       r.ops.push({ op: 'hidden', rects: [[Math.min(...xs), Math.min(...ys), Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)]] })
       audit?.push({ what: 'erase', unit: o.id, ocr: true, page: pg, box: [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] })
-      const svg = L2.svgOfOcr({ id: o.id, place: o, laid: fit.lines, face: drawn.face, size: fit.size }, cssOf(pg), scale)
+      const laid = fit.lines.map(l => ({ ...l, runs: L2.figureRuns(l.text, facesOf, P.cjkQuotes) }))
+      const svg = L2.svgOfOcr({ id: o.id, place: o, laid, size: fit.size }, cssOf(pg), scale)
       patches.push(svg.patches)
       texts.push(svg.text)
-      // (a level line's words in the page's text layer, as a figure's; a turned one's are not selectable)
-      const level = fit.lines.filter(l => Math.abs(l.angle) < 1e-6)
-      if (level.length) textRecord(r, opsFrom, `o${o.id}`, undefined, level.map(l => TL.nameSeg(l.text, l.x, l.width, l.y, fit.size)))
-      Object.assign(rec, { drawn: true, text, size: r1(fit.size), lines: fit.lines.length })
+      // (a level line's words in the page's text layer and its word table, under the unit's id: the hover lights them; a turned
+      // one's are not selectable)
+      const segs = laid.filter(l => l.angle === 0).map(l => TL.nameSeg(l.text, l.x, l.width, l.y, fit.size))
+      if (segs.length) {
+        textRecord(r, opsFrom, `o${o.id}`, o.id, segs)
+        if (!r.words) addSegWords(r.wordsOpen ??= newWords(), o.id, segs)
+      }
+      Object.assign(rec, { drawn: true, text, size: r1(fit.size), lines: fit.lines.length, set: o.set })
     }
     if (patches.length) rows[pg - 1].markup.push(...patches, ...texts)
     ocrDone[pg] = 2

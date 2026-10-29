@@ -6,7 +6,10 @@ export interface OcrLine { text: string; quad: readonly (readonly [number, numbe
 export type Pt = [number, number]
 /** a label drawn: its text, its lines' count, its size (PDF units), its anchor, its ground's colour and its ink's (0xRRGGBB), and
  *  each line's quad and patch on the page (PDF units, ↖ ↗ ↘ ↙ in the line's reading) */
-export interface OcrLabel { text: string; lines: number; size: number; anchor: 'start' | 'centre' | 'end'; bg: number; fg: number; quads: [Pt[], Pt[]][] }
+export interface OcrLabel { text: string; lines: number; size: number; anchor: 'start' | 'centre' | 'end'; bg: number; fg: number; quads: [Pt[], Pt[]][]; set: number }
+/** an image's sets' counts: sets of two labels or more, the labels in them, the anchors their columns changed, the sizes their
+ *  medians changed */
+export interface OcrSets { sets: number; grouped: number; aligned: number; sized: number }
 export type OcrWhy = 'busy' | 'crowded' | 'overlap' | 'covered' | 'clipped' | 'mirrored' | 'outside' | 'long' | 'past'
 /** an image as PDF.js decodes one: kind 1 a bit a pixel, 2 RGB, 3 RGBA */
 export interface DecodedImage { data: Uint8Array | Uint8ClampedArray; width: number; height: number; kind: number }
@@ -34,4 +37,8 @@ export declare function labelsOf(o: {
   others?: { boxes: readonly (readonly number[])[]; segs: readonly (readonly number[])[]; fills?: readonly (readonly (readonly number[])[])[] } | null
   taken?: Pt[][]
   limit?: number
-}): { units: OcrLabel[]; left: { text: string; why: OcrWhy }[]; read: number; member: number }
+}): { units: OcrLabel[]; left: { text: string; why: OcrWhy }[]; read: number; member: number; sets: OcrSets }
+export declare const SET_ALIGN: number
+export declare const SET_SIZE: number
+/** an image's labels in their sets: each one's `set` (its set's first label's index), `anchor` and `size` set */
+export declare function setsOf(units: Omit<OcrLabel, 'set'>[]): OcrSets

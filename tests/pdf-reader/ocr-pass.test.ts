@@ -70,6 +70,8 @@ describe('the bitmap figures\' pass (ocrPass)', () => {
     const [key] = [...puts.keys()]
     expect(key).toBe(ocrKey(key!.split('|')[2]!, READER))
     expect(key!.startsWith(`${OCR_VERSION}|${READER}|`)).toBe(true)
+    // (the pixels named by their size and kind, then their own digest: no copy of them made to hash them)
+    expect(key!.split('|')[2]).toMatch(new RegExp(`^${W}x${H}k3\\.[0-9a-f]{64}$`))
     // (another canvas, another key: two readings never mixed)
     const other = await ocrPass({ doc: doc(), OPS, paper: PAPER, reader: 'onnxruntime-web@1.30.0+napi-canvas@1.0.11', from: 0, recognise, cache })
     expect(other.stats.images).toMatchObject({ read: 1, cached: 0 })
@@ -82,6 +84,25 @@ describe('the bitmap figures\' pass (ocrPass)', () => {
     const broken = { get: async () => { throw new Error('no cache') }, put: async () => { throw new Error('no cache') } }
     const r = await ocrPass({ doc: doc(), OPS, paper: PAPER, reader: READER, from: 0, recognise, cache: broken })
     expect(r.stats).toMatchObject({ cacheFailed: 2, units: 1 })
+  })
+
+  it('names each label\'s set by the id of its first: two images\' labels on one page, each image\'s sets its own', async () => {
+    const LOW: OcrLine = { ...LINE, text: 'Training loss', quad: [[100 / W, 150 / H], [200 / W, 150 / H], [200 / W, 174 / H], [100 / W, 174 / H]] }
+    const two = (seed: number) => { const p = picture(seed); for (let y = 155; y < 169; y++) for (let x = 105; x < 195; x++) { const i = 4 * (y * W + x); p.data[i] = p.data[i + 1] = p.data[i + 2] = 32 + seed } return p }
+    const doc = docOf([pageOf([['a', at(50, 450)], ['b', at(50, 100)]], { a: two(0), b: two(3) })])
+    const r = await ocrPass({ doc, OPS, paper: PAPER, reader: READER, from: 40, recognise: async () => [LINE, LOW] })
+    expect(r.stats.units).toBe(4)
+    expect(r.units.map(u => ((u as unknown[])[7] as number[])[5])).toEqual([40, 40, 42, 42])
+    expect(r.stats.sets).toMatchObject({ sets: 2, grouped: 4 })
+  })
+
+  it('lets each image of a page go after its last paint is read, and asks the host\'s collection after each image', async () => {
+    const events: string[] = []
+    const page = pageOf([['a', at(50, 450)], ['b', at(300, 450)], ['a', at(50, 100)]], { a: picture(), b: picture(4) })
+    ;(page.objs as unknown as { delete: (id: string) => boolean }).delete = (id: string) => { events.push(`delete ${id}`); return true }
+    const r = await ocrPass({ doc: docOf([page]), OPS, paper: PAPER, reader: READER, from: 0, recognise: async () => { events.push('read'); return [LINE] }, collect: () => { events.push('collect') } })
+    expect(r.stats.images).toMatchObject({ painted: 3, read: 2, again: 1 })
+    expect(events).toEqual(['read', 'collect', 'read', 'delete b', 'collect', 'delete a', 'collect'])
   })
 
   it('keeps a label of names as a table\'s cell of names is: its source, the KEPT flag', async () => {

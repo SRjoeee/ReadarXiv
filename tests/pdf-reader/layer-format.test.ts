@@ -398,8 +398,9 @@ describe('a reader\'s envelope', () => {
     expect(await refusal(read('units', o => { o.bundle = '5'; delete o.format }))).toMatchObject({ kind: 'units', path: 'format' })
     expect(UNITS_FORMAT).toBe('1')
     // (6: a part with no layout says why, `layout: { refused, why }`; 7: a draw's items carry their characters' fills; 8: the
-    // head's base says whose PDF the layer is drawn over; 11: a figure row carries its set and its room)
-    expect(BUNDLE5).toBe('11')
+    // head's base says whose PDF the layer is drawn over; 11: a figure row carries its set and its room; 12: the head names the
+    // recogniser and a layer may hold late chunks)
+    expect(BUNDLE5).toBe('12')
   })
 
   it('refuses what is not an object, and a chunk given as a part and a part given as a chunk', async () => {
@@ -1093,8 +1094,8 @@ describe('the index', () => {
 
 // ---------------------------------------------------------------- 7b. the late chunks: the bitmap figures' labels (PDF-READER §19.15)
 describe('the late chunks', () => {
-  /** a label's place on page 1: one line, its quad and its patch */
-  const place = (x = 100) => [1, 0xffffff, 0, 1, 7.2, x, 200, x + 40, 200, x + 40, 190, x, 190, x - 1, 201, x + 41, 201, x + 41, 189, x - 1, 189]
+  /** a label's place on page 1: its set (the first label's id, 30), one line, its quad and its patch */
+  const place = (x = 100) => [1, 0xffffff, 0, 1, 7.2, 30, x, 200, x + 40, 200, x + 40, 190, x, 190, x - 1, 201, x + 41, 201, x + 41, 189, x - 1, 189]
   async function laid(late: unknown[][] = [ocrBundleUnit('Validation loss', 0, place()), ocrBundleUnit('Training', 0, place(160))]) {
     const units: (typeof UNITS)[number][] = Array.from({ length: 30 }, (_, i) => ['para', 0, null, null, null, [[0, `unit ${i}`]]])
     const chunks = await writeUnitChunks({ paper: PAPER, units })
@@ -1145,6 +1146,17 @@ describe('the late chunks', () => {
     expect(LATE_MAX).toBe(4)
   })
 
+  it('past a head of 11, which names no recogniser, none: the index and the catalog refuse it', async () => {
+    const t = await laid()
+    const late = await readUnitsChunk(t.lateChunks[0]!.bytes, { ref: t.lateChunks[0]!.ref, before: t.read.at(-1)! })
+    const eleven = { ...t.rh, bundle: '11' as const }
+    expect(() => indexOf(eleven as never, [...t.read, late])).toThrow(expect.objectContaining({ kind: 'index', path: 'units' }))
+    const alone = await readUnitsChunk(t.lateChunks[0]!.bytes, { ref: t.lateChunks[0]!.ref, dropped: [] })
+    expect(() => indexWithLate(indexOf(eleven as never, t.read), alone)).toThrow(expect.objectContaining({ kind: 'index', message: expect.stringMatching(/holds none/) }))
+    const ref = (c: { from: number; to: number; sha256: string; bytes: Uint8Array }) => ({ from: c.from, to: c.to, sha256: c.sha256, bytes: c.bytes.length })
+    await expect(writeCatalog({ head: eleven as never, units: [...t.chunks.map(ref), ...t.lateChunks.map(ref)], parts: [], end: { through: 0, refused: 'bound' } })).rejects.toThrow(/late ones at most/)
+  })
+
   it('stands only as a label with a place of its shape: a page, two colours, an anchor, a size, whole lines of numbers', async () => {
     const stand = async (u: unknown[]) => {
       const t = await laid([u])
@@ -1152,12 +1164,15 @@ describe('the late chunks', () => {
       return c.units[0] !== null
     }
     expect(await stand(ocrBundleUnit('Loss', 0, place()))).toBe(true)
-    // (a line short of its sixteen numbers, a page 0, a colour past 0xffffff, an anchor's code past the three, a size of 0)
+    // (a line short of its sixteen numbers, a page 0, a colour past 0xffffff, an anchor's code past the three, a size of 0, a set
+    // that is no id, a place of BUNDLE5 12's draft with no set)
     await expect(laid([ocrBundleUnit('Loss', 0, place().slice(0, -1))])).rejects.toThrow(/does not stand/)
     await expect(laid([ocrBundleUnit('Loss', 0, [0, ...place().slice(1)])])).rejects.toThrow(/does not stand/)
     await expect(laid([ocrBundleUnit('Loss', 0, [1, 0x1000000, ...place().slice(2)])])).rejects.toThrow(/does not stand/)
     await expect(laid([ocrBundleUnit('Loss', 0, [1, 0, 0, 3, ...place().slice(4)])])).rejects.toThrow(/does not stand/)
     await expect(laid([ocrBundleUnit('Loss', 0, [1, 0, 0, 1, 0, ...place().slice(5)])])).rejects.toThrow(/does not stand/)
+    await expect(laid([ocrBundleUnit('Loss', 0, [1, 0, 0, 1, 7.2, -1, ...place().slice(6)])])).rejects.toThrow(/does not stand/)
+    await expect(laid([ocrBundleUnit('Loss', 0, [1, 0, 0, 1, 7.2, ...place().slice(6)])])).rejects.toThrow(/does not stand/)
     // (a place on a unit of another kind; a label with no place)
     await expect(laid([['inkfigures', 0, null, null, null, [[0, 'Loss']], null, place()]])).rejects.toThrow(/does not stand/)
     await expect(laid([['inkocr', 0, null, null, null, [[0, 'Loss']], null]])).rejects.toThrow(/does not stand/)
@@ -1915,7 +1930,7 @@ describe('keys', () => {
   const sha = 'a'.repeat(64)
 
   it('keyOf names an object by its whole digest under the CTAG; catalogKey by the VTAG; keyParts takes them apart', () => {
-    expect(CTAG5).toBe(`b11-j${PDFJS}`)
+    expect(CTAG5).toBe(`b12-j${PDFJS}`)
     expect(VTAG5).toBe(`${CTAG5}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}-o${OCR}`)
     // (the recogniser's version as a token: core/ocr/version.ts's, its other characters points)
     expect(OCR).toBe('ppocr.v6.tiny.2')

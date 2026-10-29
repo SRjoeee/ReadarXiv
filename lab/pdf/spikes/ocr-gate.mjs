@@ -20,8 +20,10 @@
 // Each is counted and its failures listed by paper, page and label; `--check` exits 1 on any. Reads the gate pack's fixtures
 // (`--pack`, <dir>/<id>-zh/base.pdf) or bases given (`--bases`, <dir>/<id>/base.pdf), each a PDF of our final pass (or, for the
 // pass alone, any PDF); `--cache=<dir>` keeps each image's reading by its key, so that a run again reads nothing; `--shots=<dir>`
-// writes each checked page's render with its patches (PNG) for the eye. One JSON line a paper, counts only.
-//   pnpm exec tsx lab/pdf/spikes/ocr-gate.mjs (--pack=<dir> | --bases=<dir>) [--cache=<dir>] [--shots=<dir>] [--check] <id>…
+// writes each checked page's render with its patches (PNG) for the eye; `--ort-node=<file>` runs the recogniser on the
+// onnxruntime-node build the web's box runs (its dist/index.js, a package this repository does not hold: the two builds read the
+// same text, DESIGN §15.4), one thread, in place of onnxruntime-web's WebAssembly. One JSON line a paper, counts only.
+//   pnpm exec tsx lab/pdf/spikes/ocr-gate.mjs (--pack=<dir> | --bases=<dir>) [--cache=<dir>] [--shots=<dir>] [--ort-node=<file>] [--check] <id>…
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
@@ -32,7 +34,7 @@ import { placeOf } from '../../../src/pdf-reader/engine/layer-proto/ocr-rows.mjs
 import { ocrPass, paintsOf } from '../../../src/pdf-reader/engine/pipeline/ocr-pass.mjs'
 
 const argOf = name => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? null
-const PACK = argOf('pack'), BASES = argOf('bases'), CACHE = argOf('cache'), SHOTS = argOf('shots'), CHECK = process.argv.includes('--check')
+const PACK = argOf('pack'), BASES = argOf('bases'), CACHE = argOf('cache'), SHOTS = argOf('shots'), ORT_NODE = argOf('ort-node'), CHECK = process.argv.includes('--check')
 const IDS = process.argv.slice(2).filter(a => !a.startsWith('--'))
 if ((!PACK && !BASES) || !IDS.length) { console.error('usage: ocr-gate.mjs (--pack=<dir> | --bases=<dir>) [--cache=<dir>] [--shots=<dir>] [--check] <id>…'); process.exit(2) }
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../..')
@@ -42,19 +44,22 @@ const canvas = require('@napi-rs/canvas')
 // (PDF.js's worker made lite in memory, as the box's: an image past OCR_PIXELS_MAX keeps its operator and gets no pixels)
 globalThis.pdfjsWorker = await import(`data:text/javascript;base64,${Buffer.from(liteWorkerSource(readFileSync(join(PDFJS, 'legacy/build/pdf.worker.mjs'), 'utf8'))).toString('base64')}`)
 const { getDocument, OPS } = await import(join(PDFJS, 'legacy/build/pdf.mjs'))
-// (onnxruntime-web's Node build: the extension's own WebAssembly, its one .wasm read from the package)
-const ort = await import('onnxruntime-web')
-ort.env.wasm.numThreads = 1
+// (onnxruntime-web's Node build, the extension's own WebAssembly, its one .wasm read from the package; or the box's native build)
+const ort = ORT_NODE ? await import(ORT_NODE).then(m => m.default ?? m) : await import('onnxruntime-web')
+if (!ORT_NODE) ort.env.wasm.numThreads = 1
+const SESSION = ORT_NODE ? { executionProviders: ['cpu'], intraOpNumThreads: 1, interOpNumThreads: 1 } : undefined
 // (what the recogniser runs on, the cache key's: the runtime's and the canvas's versions, read from their packages)
 const versionOf = name => JSON.parse(readFileSync(join(dirname(require.resolve(name)), name === 'onnxruntime-web' ? '..' : '.', 'package.json'), 'utf8')).version
-const READER = `onnxruntime-web@${ort.env.versions?.web ?? versionOf('onnxruntime-web')}+napi-canvas@${versionOf('@napi-rs/canvas')}`
+const READER = ORT_NODE
+  ? `onnxruntime-node@${JSON.parse(readFileSync(join(dirname(ORT_NODE), '..', 'package.json'), 'utf8')).version}+napi-canvas@${versionOf('@napi-rs/canvas')}`
+  : `onnxruntime-web@${ort.env.versions?.web ?? versionOf('onnxruntime-web')}+napi-canvas@${versionOf('@napi-rs/canvas')}`
 const OPTIONS = { cMapUrl: join(PDFJS, 'cmaps/'), cMapPacked: true, standardFontDataUrl: join(PDFJS, 'standard_fonts/'), verbosity: 0, useSystemFonts: false, isImageDecoderSupported: false }
 const SCALE = 2, NEAR = 32, CROWD = 0.03, STEP = 0.5, CROSS_ALLOW = 2
 
 let recogniser = null
 const recognise = async pixels => {
   recogniser ??= createRecogniser({
-    ort, canvas: (w, h) => canvas.createCanvas(w, h), imageData: (d, w, h) => new canvas.ImageData(d, w, h),
+    ort, session: SESSION, canvas: (w, h) => canvas.createCanvas(w, h), imageData: (d, w, h) => new canvas.ImageData(d, w, h),
     detection: readFileSync(join(ROOT, 'public/ocr/PP-OCRv6_tiny_det.onnx')), recognition: readFileSync(join(ROOT, 'public/ocr/PP-OCRv6_tiny_rec.onnx')), dictionary: readFileSync(join(ROOT, 'public/ocr/PP-OCRv6_tiny_dict.txt'), 'utf8'),
   })
   return (await recogniser).recognisePixels(pixels)
@@ -183,7 +188,7 @@ for (const id of IDS) {
       page.cleanup()
     }
   } finally { await render.destroy() }
-  console.log(JSON.stringify({ id, reader: READER, ms, cpuMs: Math.round((cpu.user + cpu.system) / 1000), images: im, lines: s.lines, labels: s.boxes, drawn: s.units, kept: s.kept, left: s.labels, recogniseMs: Math.round(s.recogniseMs), steps: Object.fromEntries(Object.entries(s.ms).map(([k, v]) => [k, Math.round(v)])), pages: byPage.size, P: fails.P.length, L: fails.L.length, C: fails.C.length, D: fails.D.length, A: fails.A.length }))
+  console.log(JSON.stringify({ id, reader: READER, ms, cpuMs: Math.round((cpu.user + cpu.system) / 1000), images: im, lines: s.lines, labels: s.boxes, drawn: s.units, kept: s.kept, left: s.labels, recogniseMs: Math.round(s.recogniseMs), sets: s.sets, steps: Object.fromEntries(Object.entries(s.ms).map(([k, v]) => [k, Math.round(v)])), pages: byPage.size, P: fails.P.length, L: fails.L.length, C: fails.C.length, D: fails.D.length, A: fails.A.length }))
   for (const [k, list] of Object.entries(fails)) for (const f of list.slice(0, 10)) console.log(`  ${k} ${f}`)
   if (CHECK && Object.values(fails).some(l => l.length)) failed = true
 }

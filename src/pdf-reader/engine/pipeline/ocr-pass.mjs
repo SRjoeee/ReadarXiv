@@ -42,8 +42,8 @@ export const OCR_SEGS_PAGE = 250_000
 export const OCR_IMAGE_WHYS = Object.freeze(['small', 'big', 'error', 'timeout', 'budget'])
 /** the cache key of an image's reading: the recogniser's version, the host's reader (its runtime and its canvas, whose
  *  resampling the reading turns on: the same figure read in Chromium and in Node agreed on 431 of 484 lines, DESIGN §15.4, so
- *  that a canvas upgraded re-keys the cache rather than mixing two readings in it) and its pixels' digest */
-export const ocrKey = (sha256, reader) => `${OCR_VERSION}|${reader}|${sha256}`
+ *  that a canvas upgraded re-keys the cache rather than mixing two readings in it) and its pixels' name (digestOf) */
+export const ocrKey = (pixels, reader) => `${OCR_VERSION}|${reader}|${pixels}`
 /** a host's reader as the cache key names it: 1 to 64 characters of letters, digits and `.+-_@/` */
 const READER = /^[0-9A-Za-z.+\-_@/]{1,64}$/
 
@@ -171,14 +171,11 @@ export function rgbaOf({ data, width, height, kind }) {
   return out
 }
 
-/** the digest of an image's pixels as PDF.js decodes them, their size and kind before them */
+/** an image's pixels as PDF.js decodes them, named: their size and kind, then the SHA-256 of the pixels as they are (no copy of
+ *  them made here: an image is held at its whole size several times over between its decoding and its reading) */
 async function digestOf({ data, width, height, kind }) {
-  const head = new TextEncoder().encode(`${width}x${height}:${kind}\n`)
-  const all = new Uint8Array(head.length + data.byteLength)
-  all.set(head, 0)
-  all.set(new Uint8Array(data.buffer, data.byteOffset, data.byteLength), head.length)
-  const d = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', all))
-  return Array.from(d, b => b.toString(16).padStart(2, '0')).join('')
+  const d = new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', new Uint8Array(data.buffer, data.byteOffset, data.byteLength)))
+  return `${width}x${height}k${kind}.${Array.from(d, b => b.toString(16).padStart(2, '0')).join('')}`
 }
 
 /** an image object of a page's, as PDF.js resolves it once decoded (null where it was not: past the cap, or failed) */
@@ -195,16 +192,18 @@ const isTimeout = e => e?.name === 'TimeoutError' || e?.code === 'timeout' || e?
  * (format.mjs chunkTotals), so that the chunk keeps every chunk of the paper within the bounds a head's are read by;
  * `recognise(pixels)` the host's recogniser ({ data RGBA, width, height } → src/shared/ocr.ts OcrLine[]; a TimeoutError where its
  * host gave up on it), `reader` what it runs on (its runtime's and its canvas's packages and versions: the cache key's); `cache` { get(key) → lines | null, put(key, lines) } or null (either may reject: no cache then);
- * `budgetMs` the recogniser's time the paper may take, by `now`. Returns { units (the bundle's tuples), chunks (written, ids from
+ * `budgetMs` the recogniser's time the paper may take, by `now`; `collect` the host's collection, called after each image is read
+ * and let go (the box's maker child has one: an image's canvases are a server's native memory, which its heap does not count).
+ * Returns { units (the bundle's tuples), chunks (written, ids from
  * `from`; none where there is no label, or where the chunk would pass a bound: `stats.refused`), stats }
  */
-export async function ocrPass({ doc, OPS, paper, source = null, from, before = null, recognise, reader, cache = null, budgetMs = OCR_BUDGET_MS, now = () => performance.now(), unitsDoc = OCR_UNITS_DOC }) {
-  if (typeof reader !== 'string' || !READER.test(reader)) throw new TypeError('reader: the host\'s recogniser, its runtime and canvas (onnxruntime-web@1.30.0+napi-canvas@1.0.10)')
+export async function ocrPass({ doc, OPS, paper, source = null, from, before = null, recognise, reader, cache = null, budgetMs = OCR_BUDGET_MS, now = () => performance.now(), unitsDoc = OCR_UNITS_DOC, collect = null }) {
+  if (typeof reader !== 'string' || !READER.test(reader)) throw new TypeError('reader: the host\'s recogniser, its runtime and canvas (onnxruntime-node@1.30.0+napi-canvas@1.0.10)')
   const prose = source?.units ? proseOf(source.units) : ''
   // (images: those painted, read by the recogniser, from the cache, the same as one read before, and each why one is not read)
   // (the labels the extension's merge made of the lines, `boxes`: each a unit drawn or left with its why, `labels`; and the time
   // each step took, ms by `now`: the pages' reading, the images' decoding, their digests, the recogniser, the labels)
-  const stats = { pages: 0, images: { painted: 0, read: 0, cached: 0, again: 0, ...Object.fromEntries(OCR_IMAGE_WHYS.map(w => [w, 0])) }, lines: 0, boxes: 0, units: 0, kept: 0, labels: {}, recogniseMs: 0, cacheFailed: 0, refused: null, ms: { pages: 0, decode: 0, digest: 0, labels: 0 } }
+  const stats = { pages: 0, images: { painted: 0, read: 0, cached: 0, again: 0, ...Object.fromEntries(OCR_IMAGE_WHYS.map(w => [w, 0])) }, lines: 0, boxes: 0, units: 0, kept: 0, labels: {}, recogniseMs: 0, cacheFailed: 0, refused: null, sets: { sets: 0, grouped: 0, aligned: 0, sized: 0 }, ms: { pages: 0, decode: 0, digest: 0, labels: 0 } }
   const lap = (k, t0) => { stats.ms[k] += now() - t0 }
   const units = []
   const seen = new Map()
@@ -220,16 +219,17 @@ export async function ocrPass({ doc, OPS, paper, source = null, from, before = n
       const view = page.view
       let boxes = null
       const taken = []
-      for (const im of images) {
+      /** one painted image read: its pixels, its reading, its labels */
+      const readImage = async im => {
         stats.images.painted++
         const corners = [apply(im.ctm, 0, 0), apply(im.ctm, 1, 0), apply(im.ctm, 1, 1), apply(im.ctm, 0, 1)]
         const box = boxOfPoints(corners)
-        if (Math.min(Math.hypot(corners[1][0] - corners[0][0], corners[1][1] - corners[0][1]), Math.hypot(corners[3][0] - corners[0][0], corners[3][1] - corners[0][1])) < OCR_MIN_SIDE) { stats.images.small++; continue }
+        if (Math.min(Math.hypot(corners[1][0] - corners[0][0], corners[1][1] - corners[0][1]), Math.hypot(corners[3][0] - corners[0][0], corners[3][1] - corners[0][1])) < OCR_MIN_SIDE) { stats.images.small++; return }
         t = now()
         const image = await imageOf(page, im.id)
         lap('decode', t)
-        if (!image?.data || !(image.width > 0) || !(image.height > 0)) { stats.images.big++; continue }
-        if (image.width < OCR_MIN_PX || image.height < OCR_MIN_PX) { stats.images.small++; continue }
+        if (!image?.data || !(image.width > 0) || !(image.height > 0)) { stats.images.big++; return }
+        if (image.width < OCR_MIN_PX || image.height < OCR_MIN_PX) { stats.images.small++; return }
         t = now()
         const sha = await digestOf(image)
         lap('digest', t)
@@ -240,11 +240,11 @@ export async function ocrPass({ doc, OPS, paper, source = null, from, before = n
           try { lines = cache ? await cache.get(key) : null } catch { stats.cacheFailed++; lines = null }
           if (Array.isArray(lines)) stats.images.cached++
           else {
-            if (spent >= budgetMs) { stats.images.budget++; continue }
+            if (spent >= budgetMs) { stats.images.budget++; return }
             const t0 = now()
             try { lines = await recognise({ data: rgbaOf(image), width: image.width, height: image.height }) } catch (e) {
               stats.images[isTimeout(e) ? 'timeout' : 'error']++
-              continue
+              return
             } finally { const dt = now() - t0; spent += dt; stats.recogniseMs += dt }
             stats.images.read++
             if (cache) { try { await cache.put(key, lines) } catch { stats.cacheFailed++ } }
@@ -252,7 +252,7 @@ export async function ocrPass({ doc, OPS, paper, source = null, from, before = n
           seen.set(sha, lines)
         }
         stats.lines += lines.length
-        if (!lines.length) continue
+        if (!lines.length) return
         // (the page's own ink over the image: its text's boxes, read once a page, and the paths drawn after it that meet its box)
         boxes ??= (await page.getTextContent()).items.filter(it => it.str?.trim() && Array.isArray(it.transform)).map(itemBox)
         const near = paths.filter(q => q.k > im.k && meets(q.box, box))
@@ -264,11 +264,25 @@ export async function ocrPass({ doc, OPS, paper, source = null, from, before = n
         lap('labels', t)
         stats.boxes += got.units.length + got.left.length
         for (const l of got.left) stats.labels[l.why] = (stats.labels[l.why] ?? 0) + 1
+        // (each label's set the id of its set's first: its image's labels are written in order, from `from` on)
+        const at = from + units.length
+        for (const k of ['sets', 'grouped', 'aligned', 'sized']) stats.sets[k] += got.sets[k]
         for (const u of got.units) {
           const kept = isName(u.text, prose)
           if (kept) stats.kept++
-          units.push(ocrBundleUnit(u.text, kept ? UNIT_FLAG_BITS.KEPT : 0, ocrPlace(p, u)))
+          units.push(ocrBundleUnit(u.text, kept ? UNIT_FLAG_BITS.KEPT : 0, ocrPlace(p, u, at + u.set)))
           stats.units++
+        }
+      }
+      // (each image's last paint on the page, after which its pixels are let go: PDF.js decodes a page's images together, and holds
+      // them until the page is cleaned up. An image of the document's, `g_`, which PDF.js keeps once for the pages that paint it,
+      // is the document's to let go)
+      const last = new Map(images.map((im, k) => [im.id, k]))
+      for (let k = 0; k < images.length; k++) {
+        const im = images[k]
+        try { await readImage(im) } finally {
+          if (last.get(im.id) === k && !String(im.id).startsWith('g_')) { try { page.objs.delete?.(im.id) } catch { /* (a page's objects are PDF.js's to keep) */ } }
+          if (collect) { try { collect() } catch { /* (a collection is the host's, never the pass's) */ } }
         }
       }
     } finally {

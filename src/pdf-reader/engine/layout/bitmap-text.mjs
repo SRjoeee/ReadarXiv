@@ -232,8 +232,9 @@ function segmentMeets(q, x0, y0, x1, y1, w) {
  * not cover: { boxes: [[x0, y0, x1, y1]] (its text), segs: [[x0, y0, x1, y1, halfWidth]] (the paths drawn after the image), fills
  * ([segs] of each fill among them) }, PDF units, or null where it is more than can be read (every label `covered`); `taken` the
  * patches already drawn on its page by the images before it (PDF units, each a quad), added to.
- * Returns { units, left }: `units` each { text, lines (count), size, anchor, bg, fg (0xRRGGBB), quads: [line quad, patch quad]
- * per line (PDF units, ↖ ↗ ↘ ↙ in the line's reading) }; `left` each { text, why } (OCR_WHYS)
+ * Returns { units, left, sets }: `units` each { text, lines (count), size, anchor, bg, fg (0xRRGGBB), quads: [line quad, patch
+ * quad] per line (PDF units, ↖ ↗ ↘ ↙ in the line's reading), set (the index among `units` of its set's first: setsOf) }; `left`
+ * each { text, why } (OCR_WHYS); `sets` setsOf's counts
  */
 export function labelsOf({ image, lines, place, others = { boxes: [], segs: [], fills: [] }, taken = [], limit = OCR_UNITS_IMAGE }) {
   const W = image.width, H = image.height, px = pixelReader(image)
@@ -416,5 +417,89 @@ export function labelsOf({ image, lines, place, others = { boxes: [], segs: [], 
     units.push({ text, lines: read.length, size, anchor, bg: rgbOf(read[0].bg), fg: rgbOf(read[0].fg), quads })
     for (const [, p] of quads) taken.push(p)
   }
-  return { units, left, read: lines.length, member: member.size }
+  const sets = setsOf(units)
+  return { units, left, read: lines.length, member: member.size, sets }
+}
+
+/** labels share a column where their starts, ends or middles along their direction lie within this share of their size (the
+ *  recogniser's boxes stand round their ink by a margin of their own, a pixel or two either way) */
+export const SET_ALIGN = 0.3
+/** …and lie on one baseline within it; labels join a set only where their sizes (the recogniser's lines' thickness, which a
+ *  descender or a capital moves) are within this ratio of each other */
+export const SET_SIZE = 1.35
+/** two labels of one direction: their directions within this (radians' sine) */
+const SET_TURN = 0.05
+/** the edges a column may share, in the order a tie between them is broken (a column is read from its start) */
+const SET_EDGES = Object.freeze(['start', 'end', 'centre'])
+
+/**
+ * One image's labels in their sets (the owner's rule of 2026-10-29 for a figure's labels, PDF-READER §19.12, as layout/
+ * figure-text.mjs setsOf reads a vector figure's): a column is the labels of one direction whose starts, ends or middles along
+ * it lie on one line across it, within SET_ALIGN of their size, sizes within SET_SIZE; a label in a column with another keeps
+ * that column's edge as its anchor (the edge the most labels share; a tie, the one the most of them read alone, else the first
+ * of SET_EDGES), whatever it read alone; a set is the labels of one column of one edge and the one-line labels on one baseline,
+ * joined. A set's labels are drawn at one size, the median of their sizes (the recogniser's thickness puts one figure's labels
+ * of one size apart: the Transformer's "Linear" boxes read 4.4, 5.0 and 5.3), and shrunk by one factor (layer-proto/ocr-fit.mjs).
+ * Sets each unit's `set` (its set's first unit's index), `anchor` and `size`; returns { sets (of two labels or more), grouped
+ * (labels in them), aligned (anchors the column changed), sized (sizes the median changed) }
+ */
+export function setsOf(units) {
+  const out = { sets: 0, grouped: 0, aligned: 0, sized: 0 }
+  units.forEach((u, i) => { u.set = i })
+  if (units.length < 2) return out
+  const geo = units.map(u => {
+    const q = u.quads[0][0], L = Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]) || 1, ux = (q[1][0] - q[0][0]) / L, uy = (q[1][1] - q[0][1]) / L
+    const along = u.quads.flatMap(([l]) => l.map(([x, y]) => x * ux + y * uy))
+    const start = Math.min(...along), end = Math.max(...along)
+    // (a line's baseline across its direction: its bottom edge's, the quad's fourth corner)
+    return { ux, uy, start, end, centre: (start + end) / 2, base: q[3][1] * ux - q[3][0] * uy, one: u.quads.length === 1, size: u.size }
+  })
+  const like = (a, b) => Math.abs(geo[a].ux * geo[b].uy - geo[a].uy * geo[b].ux) < SET_TURN && geo[a].ux * geo[b].ux + geo[a].uy * geo[b].uy > 0 && Math.max(geo[a].size, geo[b].size) <= SET_SIZE * Math.min(geo[a].size, geo[b].size)
+  const tol = (a, b) => SET_ALIGN * Math.min(geo[a].size, geo[b].size)
+  const find = (parent, i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i] } return i }
+  // (each edge's columns: every two labels alike on that edge joined)
+  const cols = SET_EDGES.map(edge => {
+    const parent = Int32Array.from(units, (_, i) => i)
+    for (let a = 0; a < units.length; a++) for (let b = a + 1; b < units.length; b++) if (like(a, b) && Math.abs(geo[a][edge] - geo[b][edge]) <= tol(a, b)) parent[find(parent, b)] = find(parent, a)
+    const size = new Map(), votes = new Map()
+    units.forEach((u, i) => {
+      const c = find(parent, i)
+      size.set(c, (size.get(c) ?? 0) + 1)
+      const v = votes.get(c) ?? votes.set(c, { start: 0, end: 0, centre: 0 }).get(c)
+      v[u.anchor]++
+    })
+    return { edge, parent, size, votes }
+  })
+  // (each label's column: of those it shares with another, the one of the most labels; a tie, by its labels' readings alone of
+  // that edge, then SET_EDGES' order)
+  const chosen = units.map((_, i) => {
+    let best = null
+    for (const c of cols) {
+      const r = find(c.parent, i), n = c.size.get(r)
+      if (n < 2) continue
+      const vote = c.votes.get(r)[c.edge]
+      if (!best || n > best.n || (n === best.n && vote > best.vote)) best = { n, vote, edge: c.edge, id: `${c.edge}:${r}` }
+    }
+    return best
+  })
+  const parent = Int32Array.from(units, (_, i) => i)
+  const join = (a, b) => { const x = find(parent, a), y = find(parent, b); if (x !== y) parent[Math.max(x, y)] = Math.min(x, y) }
+  const firstOf = new Map()
+  chosen.forEach((c, i) => { if (c) { if (firstOf.has(c.id)) join(firstOf.get(c.id), i); else firstOf.set(c.id, i) } })
+  for (let a = 0; a < units.length; a++) for (let b = a + 1; b < units.length; b++) if (geo[a].one && geo[b].one && like(a, b) && Math.abs(geo[a].base - geo[b].base) <= tol(a, b)) join(a, b)
+  const members = new Map()
+  units.forEach((u, i) => {
+    const c = chosen[i]
+    if (c && c.edge !== u.anchor) { u.anchor = c.edge; out.aligned++ }
+    u.set = find(parent, i)
+    ;(members.get(u.set) ?? members.set(u.set, []).get(u.set)).push(u)
+  })
+  for (const list of members.values()) {
+    if (list.length < 2) continue
+    out.sets++; out.grouped += list.length
+    const sizes = list.map(u => u.size).sort((a, b) => a - b), mid = sizes.length >> 1
+    const median = sizes.length % 2 ? sizes[mid] : (sizes[mid - 1] + sizes[mid]) / 2
+    for (const u of list) if (Math.abs(u.size - median) > 1e-9) { u.size = median; out.sized++ }
+  }
+  return out
 }

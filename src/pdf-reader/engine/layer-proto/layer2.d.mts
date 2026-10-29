@@ -360,8 +360,8 @@ export declare function figureRuns(text: string, faceOf: (cls: 'cjk' | 'latin') 
 export declare function figureRunsWidth(runs: readonly { s: string; face: Face }[]): number
 /** a figure's text drawn as SVG: its runs one after the other on its baseline from `x`, `y`, turned by `angle` */
 export declare function svgOfFigure(o: { group: string; runs: readonly { s: string; face: Face }[]; x: number; y: number; angle: number; size: number; color?: string | null }, toPx: (x: number, y: number) => number[], scale: number): string
-/** a bitmap figure's label as SVG: its patches (the ground's colour over each line) and its text (each line it fills), apart */
-export declare function svgOfOcr(o: { id: number; place: import('./ocr-rows.mjs').OcrPlace; laid: readonly import('./ocr-fit.mjs').OcrLineLaid[]; face: Face; size: number }, toPx: (x: number, y: number) => number[], scale: number): { patches: string; text: string }
+/** a bitmap figure's label as SVG: its patches (the ground's colour over each line) and its text (each line it fills, in its runs by script), apart */
+export declare function svgOfOcr(o: { id: number; place: import('./ocr-rows.mjs').OcrPlace; laid: readonly (import('./ocr-fit.mjs').OcrLineLaid & { runs: readonly { s: string; face: Face }[] })[]; size: number }, toPx: (x: number, y: number) => number[], scale: number): { patches: string; text: string }
 /** a character style's colour as a run takes it: its fill where told (black: `color` undefined), nothing where not */
 export declare function colourOfStyle(st: { fill?: number } | null | undefined): { color?: string }
 /** a character style's font class, its fill aside (the class itself where no fill was set on it) */

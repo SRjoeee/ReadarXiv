@@ -9,6 +9,8 @@ export declare const LINK_TEXT_PIXELS: number
 export declare const OCR_IMAGE_PIXELS: number
 /** the pixels an image may have to be decoded for the recogniser */
 export declare const OCR_PIXELS_MAX: number
+/** the pixels a page's images may have in all to be decoded for the recogniser, in the order the page paints them */
+export declare const OCR_PAGE_PIXELS_MAX: number
 /** the text of pdf.worker.mjs with the guard before its image decode; `version` (the host's pdfjs-dist) must be LITE_PDFJS; throws
  *  a RangeError unless the decode stands exactly once, a TypeError for a source that is no string */
-export declare function liteWorkerSource(source: string, o?: { version?: string }): string
+export declare function liteWorkerSource(source: string, o?: { version?: string; ocr?: { image: number; page: number } }): string

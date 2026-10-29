@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { indexLayout, LAYOUT_SCHEMA, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
-import { fitOcr, piecesOf } from '@/pdf-reader/engine/layer-proto/ocr-fit.mjs'
+import { fitOcr, layOcr, ocrSetFactor, piecesOf } from '@/pdf-reader/engine/layer-proto/ocr-fit.mjs'
 import { placeOf } from '@/pdf-reader/engine/layer-proto/ocr-rows.mjs'
 import { openProto } from '@/pdf-reader/engine/layer-proto/run.mjs'
 import { withGroups } from './helpers/groups'
@@ -33,8 +33,8 @@ vi.hoisted(() => {
 
 const H = 300
 /** a label's place on page 1 (ocr-rows.mjs's numbers): its lines, each [quad, patch], 10 thick and `len` long from (x, top) */
-function place({ lines = [[60, 130]], len = 60, bg = 0xfafafa, fg = 0x203040, anchor = 1 }: { lines?: number[][]; len?: number; bg?: number; fg?: number; anchor?: number } = {}) {
-  const out = [1, bg, fg, anchor, 7.2]
+function place({ lines = [[60, 130]], len = 60, bg = 0xfafafa, fg = 0x203040, anchor = 1, set = 1 }: { lines?: number[][]; len?: number; bg?: number; fg?: number; anchor?: number; set?: number } = {}) {
+  const out = [1, bg, fg, anchor, 7.2, set]
   for (const [x, top] of lines) out.push(x!, top!, x! + len, top!, x! + len, top! - 10, x!, top! - 10, x! - 1, top! + 1, x! + len + 1, top! + 1, x! + len + 1, top! - 11, x! - 1, top! - 11)
   return out
 }
@@ -106,7 +106,7 @@ describe('the bitmap figures\' labels drawn by the layer (run.mjs paintOcr)', ()
     expect(run.ocr[0]).toMatchObject({ drawn: true, lines: 2 })
     const lines = [...run.svgOf(1).querySelectorAll('[data-o="1"] text')].map(t => t.textContent)
     expect(lines).toEqual(['alpha beta', 'gamma delta'])
-    const turned = placeOf([1, 0xffffff, 0, 1, 7.2, 40, 60, 40, 120, 50, 120, 50, 60, 39, 59, 39, 121, 51, 121, 51, 59])!
+    const turned = placeOf([1, 0xffffff, 0, 1, 7.2, 2, 40, 60, 40, 120, 50, 120, 50, 60, 39, 59, 39, 121, 51, 121, 51, 59])!
     const fit = fitOcr(turned, '\u4fe1\u53f7', s => [...s].length, 0.6)
     expect(fit?.lines[0]?.angle).toBe(90)
   })
@@ -138,6 +138,51 @@ describe('the bitmap figures\' labels drawn by the layer (run.mjs paintOcr)', ()
     expect(rest(withLabel)).toBe(rest(without))
     const ops = (run: Run) => JSON.stringify(run.rows[0]!.ops.filter(o => o.op !== 'hidden'))
     expect(ops(withLabel)).toBe(ops(without))
+  })
+
+  it('a level line\'s words in the page\'s text layer and word table under its unit\'s id (the hover); a line leaning under a degree drawn level', async () => {
+    const run = await open({ hiding: hiding(true) }) as Run
+    await run.until(1)
+    expect(run.textOf(1).items.filter(i => i.from === 'translated' && i.str === '\u4fe1\u53f7\u5f3a\u5ea6').map(i => i.unit)).toEqual([1])
+    const table = run.wordsOf(1) as unknown as { spans: [number, number[]][]; tokens: { l: Float32Array } }
+    const span = table.spans.find(([id]) => id === 1)
+    expect(span?.[1][1]).toBe(1)
+    expect(table.tokens.l[span![1][0]!]).toBeCloseTo(75.6, 3)
+    // (the recogniser's quad of a level line leans by its pixels: 0.3 over 60, a third of a degree)
+    const lean = placeOf([1, 0xffffff, 0, 1, 7.2, 1, 60, 130, 120, 130.3, 120, 120.3, 60, 120, 59, 131, 121, 131.3, 121, 119.3, 59, 119])!
+    expect(layOcr(lean, '\u4fe1\u53f7', s => [...s].length, 1)?.lines[0]?.angle).toBe(0)
+    const steep = placeOf([1, 0xffffff, 0, 1, 7.2, 1, 60, 130, 120, 132, 120, 122, 60, 120, 59, 131, 121, 133, 121, 121, 59, 119])!
+    expect(Math.abs(layOcr(steep, '\u4fe1\u53f7', s => [...s].length, 1)?.lines[0]?.angle ?? 0)).toBeGreaterThan(1)
+  })
+
+  it('a translation of two scripts is drawn in runs, its CJK in the CJK face and the rest in the Latin face (the served CJK faces hold no Latin letter)', async () => {
+    const faceSources = async (id: string) => [id.startsWith('shs-') ? { url: 'https://faces.invalid/cjk.woff2', ranges: [0x3000, 0x9fff, 0xff00, 0xffef] } : { url: 'https://faces.invalid/latin.woff2', ranges: [32, 126] }]
+    const run = await open({ hiding: hiding(true), faceSources }, paper({ text: '\u5bbd\u5ea6 MLP', src: 'Width MLP' })) as Run
+    await run.until(1)
+    expect(run.ocr[0]).toMatchObject({ drawn: true, why: null, text: '\u5bbd\u5ea6 MLP' })
+    const spans = [...run.svgOf(1).querySelectorAll('[data-o="1"] tspan')]
+    expect(spans.map(t => t.textContent)).toEqual(['\u5bbd\u5ea6', ' MLP'])
+    expect(new Set(spans.map(t => t.getAttribute('class'))).size).toBe(2)
+    expect(spans.map(t => t.getAttribute('x'))).toEqual(['0', null])
+  })
+
+  it('a set\'s labels at one size: the factor its tightest translation needs, a label of another set its own', async () => {
+    // (three labels 40 long: 1 and 2 one set, 3 its own; four CJK characters, 28.8 at 7.2, fit 38.4; eight need 0.66 of it)
+    const three = [label({ len: 40, set: 1 }), { ...label({ len: 40, lines: [[60, 150]], set: 1 }), id: 2 }, { ...label({ len: 40, lines: [[60, 170]], set: 3 }), id: 3 }]
+    const p = paper()
+    p.units.push({ kind: 'inkocr', src: 'Second', state: 'whole', pieces: [{ t: 'text', tr: true, s: '\u4fe1'.repeat(8) }] })
+    p.units.push({ kind: 'inkocr', src: 'Third', state: 'whole', pieces: [{ t: 'text', tr: true, s: '\u7b2c\u4e09' }] })
+    p.geometry.kinds.push('inkocr', 'inkocr')
+    const run = await open({ hiding: hiding(true, three) }, p) as Run
+    await run.until(1)
+    const size = (id: number) => run.ocr.find(o => o.id === id)?.size
+    expect(run.ocr.every(o => o.drawn)).toBe(true)
+    expect(size(1)).toBe(size(2))
+    expect(size(1)).toBeLessThan(7.2 * 0.7)
+    expect(size(3)).toBe(7.2)
+    // (the set's factor the least need of those that fit: one past the floor alone is left, the rest kept at theirs)
+    expect(ocrSetFactor([1, 0.8, null])).toBe(0.8)
+    expect(ocrSetFactor([null])).toBe(1)
   })
 
   it('cuts a text between words, and between two characters of a script written without spaces, its closing marks kept', () => {

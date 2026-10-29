@@ -1021,7 +1021,7 @@ describe("the reader's toggles (setClasses, docs/route/orphan-text.md §8)", () 
 describe('the late chunk: the bitmap figures\' labels told after the head and the parts (PDF-READER §19.15)', () => {
   /** the late chunk of one label, its ids after the paper's units */
   async function lateOf(m: Awaited<ReturnType<typeof M>>) {
-    const place = [1, 0xffffff, 0, 1, 7.2, 100, 200, 140, 200, 140, 190, 100, 190, 99, 201, 141, 201, 141, 189, 99, 189]
+    const place = [1, 0xffffff, 0, 1, 7.2, 0, 100, 200, 140, 200, 140, 190, 100, 190, 99, 201, 141, 201, 141, 189, 99, 189]
     const [c] = await writeUnitChunks({ paper: { id: '2608.04322', version: 1 }, units: [ocrBundleUnit('Validation loss', 0, place)] as never, start: m.index.units.length, before: chunkTotals(m.chunks) })
     return c!
   }

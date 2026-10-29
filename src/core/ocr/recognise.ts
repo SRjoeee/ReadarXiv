@@ -1,8 +1,8 @@
-// The recogniser of bitmap figures (DESIGN §15.3): PP-OCRv6 tiny on ONNX Runtime's WebAssembly build, in whatever
-// worker the host gives it — the extension's offscreen document, and the web's compile box, whose maker child runs the
-// same WebAssembly build of the same runtime under Node over the same three model files (PDF-READER §19.15), so that both
-// hosts read a figure alike. No extension API here (hard rule 8): the runtime, the three model files and the host's
-// canvases are handed in.
+// The recogniser of bitmap figures (DESIGN §15.3): PP-OCRv6 tiny on ONNX Runtime, in whatever worker the host gives it —
+// the extension's offscreen document, on the runtime's WebAssembly build, and the web's compile box, whose maker child runs
+// the runtime's native CPU build under Node over the same three model files (PDF-READER §19.15; the two builds read the same
+// text on 818 of 818 lines, DESIGN §15.4). No extension API here (hard rule 8): the runtime, its session options, the three
+// model files and the host's canvases are handed in.
 //
 // Detection's postprocess and the decoding are eSearch-OCR's (`esearch-ocr`, Apache-2.0); two things are ours, both
 // measured over 39 figures of 7 papers against Apple Vision (`research/browser-ocr/NOTES.md`, 2026-09-21):
@@ -16,6 +16,7 @@ import type { OcrLine } from '@/shared/ocr'
 import { cutOf, detectScale, isTall, normalise, type PixelQuad, sideways, turned } from './geometry'
 
 type Ort = Parameters<typeof init>[0]['ort']
+type SessionOptions = NonNullable<Parameters<typeof init>[0]['ortOption']>
 
 /** A 2D canvas of the host's: the browser's OffscreenCanvas, or one a server's canvas library makes (@napi-rs/canvas) */
 export type Surface = Pick<OffscreenCanvas, 'width' | 'height' | 'getContext'>
@@ -25,6 +26,11 @@ export type Drawable = CanvasImageSource & { readonly width: number; readonly he
 export interface RecogniserAssets {
   /** ONNX Runtime, its WebAssembly paths and thread count already set by the host */
   ort: Ort
+  /**
+   * The sessions' options: the execution providers and threads of the runtime the host gives. Absent: the WebAssembly build's
+   * (`wasm`, its threads set on `ort.env`), the extension's. The web's box gives onnxruntime-node's CPU provider, one thread
+   */
+  session?: SessionOptions
   detection: ArrayBuffer | Uint8Array
   recognition: ArrayBuffer | Uint8Array
   /** The recognition model's characters, one a line */
@@ -105,7 +111,7 @@ export async function createRecogniser(assets: RecogniserAssets): Promise<Recogn
   const canvas = assets.canvas ?? browserCanvas
   const models = await init({
     ort: assets.ort,
-    ortOption: { executionProviders: ['wasm'] },
+    ortOption: assets.session ?? { executionProviders: ['wasm'] },
     det: { input: assets.detection },
     // The library's space recovery is for older models: over the 233 multi-word lines of the sample it changed nothing
     rec: { input: assets.recognition, decodeDic: assets.dictionary, optimize: { space: false } },

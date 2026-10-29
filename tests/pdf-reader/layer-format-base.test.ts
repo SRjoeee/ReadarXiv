@@ -28,8 +28,8 @@ async function headOf(base: unknown, orig: unknown = null) {
 
 describe('the head of BUNDLE 8', () => {
   it('names the format and its sources and whys', () => {
-    expect(BUNDLE5).toBe('11')
-    expect(BUNDLES_READ).toEqual(['7', '9', '10', '11'])
+    expect(BUNDLE5).toBe('12')
+    expect(BUNDLES_READ).toEqual(['7', '9', '10', '11', '12'])
     expect(BASE_SOURCES).toEqual(['ours', 'arxiv'])
     expect(BASE_WHYS).toEqual(LAYOUT_REFUSED)
     expect(BASE_WHYS).toEqual(['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes', 'wrap'])
@@ -41,7 +41,7 @@ describe('the head of BUNDLE 8', () => {
     expect(Object.keys(wire)).toEqual(['bundle', 'kind', 'paper', 'base', 'orig', 'versions', 'units', 'lineskip'])
     expect(Object.keys(wire.base)).toEqual(['source', 'bytes', 'sha256', 'xref', 'pages', 'tree', 'check'])
     expect(wire.base.check).toEqual({ pages: [N, N], boxes: 'equal', carried: 0.9951 })
-    expect(read).toMatchObject({ bundle: '11', base: { ...OURS, check: { ...OURS.check, carried: 0.9951 } }, orig: ORIG })
+    expect(read).toMatchObject({ bundle: '12', base: { ...OURS, check: { ...OURS.check, carried: 0.9951 } }, orig: ORIG })
   })
 
   it('a base of arXiv\'s: a fallback says why, a producer of no base of its own none; no `orig`', async () => {
@@ -145,7 +145,7 @@ describe('the catalog of BUNDLE 8 names the base', () => {
     expect(catalogBase(read)).toEqual({ source: 'ours', key: baseKey(PAPER.id, PAPER.version, sha), sha256: sha, bytes: OURS.bytes })
     const w = await writeCatalog({ head: read, units: refs(chunks), parts: [], end: { through: 0, refused: 'bound' } })
     const c = await readCatalog(w.bytes, { key: w.key, paper: PAPER })
-    expect(c).toMatchObject({ bundle: '11', base: { source: 'ours', key: baseKey(PAPER.id, PAPER.version, sha), sha256: sha, bytes: OURS.bytes } })
+    expect(c).toMatchObject({ bundle: '12', base: { source: 'ours', key: baseKey(PAPER.id, PAPER.version, sha), sha256: sha, bytes: OURS.bytes } })
     expect(catalogBase(M.readHead)).toEqual({ source: 'arxiv', sha256: BASE.sha256, bytes: BASE.bytes })
   })
 

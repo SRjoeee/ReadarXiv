@@ -8,8 +8,9 @@ export declare const OCR_MIN_SIDE: number
 export declare const OCR_MIN_PX: number
 export declare const OCR_SEGS_PAGE: number
 export declare const OCR_IMAGE_WHYS: readonly ['small', 'big', 'error', 'timeout', 'budget']
-/** the cache key of an image's reading: the recogniser's version, the host's reader (its runtime and canvas) and the pixels' digest */
-export declare function ocrKey(sha256: string, reader: string): string
+/** the cache key of an image's reading: the recogniser's version, the host's reader (its runtime and canvas) and the pixels' name
+ *  (their size and kind, then their SHA-256: `<w>x<h>k<kind>.<hex>`) */
+export declare function ocrKey(pixels: string, reader: string): string
 /** what the pass counts: images painted, read, from the cache, the same as one before, and each why one is not read; the lines
  *  read; the labels drawn and kept, and each why one is left; the recogniser's time; the cache's failures; why no chunk */
 export interface OcrStats {
@@ -24,6 +25,9 @@ export interface OcrStats {
   recogniseMs: number
   cacheFailed: number
   refused: string | null
+  /** the labels' sets (layout/bitmap-text.mjs setsOf): sets of two labels or more, the labels in them, the anchors their columns
+   *  changed, the sizes their medians changed */
+  sets: { sets: number; grouped: number; aligned: number; sized: number }
   /** ms each step took by `now`: the pages' operator lists, the images' decoding, their digests, the labels */
   ms: { pages: number; decode: number; digest: number; labels: number }
 }
@@ -42,10 +46,12 @@ export declare function ocrPass(o: {
   from: number
   before?: ChunkTotals | null
   recognise(pixels: { data: Uint8ClampedArray; width: number; height: number }): Promise<OcrLine[]>
-  /** what the recogniser runs on, its runtime's and its canvas's packages and versions (onnxruntime-web@1.30.0+napi-canvas@1.0.10) */
+  /** what the recogniser runs on, its runtime's and its canvas's packages and versions (onnxruntime-node@1.30.0+napi-canvas@1.0.10) */
   reader: string
   cache?: { get(key: string): Promise<OcrLine[] | null>; put(key: string, lines: OcrLine[]): Promise<void> } | null
   budgetMs?: number
   now?: () => number
   unitsDoc?: number
+  /** the host's collection, called after each image is read and let go */
+  collect?: (() => void) | null
 }): Promise<{ units: OcrBundleUnit[]; chunks: (Written & { from: number; to: number })[]; stats: OcrStats }>
