@@ -170,8 +170,10 @@ export { LayoutRefusal } from './json.mjs'
  *  point alone, owned to the unit's next mark, given the lines it runs onto (make.mjs wrapOf: an entry's \\dodoi{…}, \\doi{…}
  *  after its end mark, 33 of 2608.12606v1's entries); and a macro whose text the probe showed is one punctuation mark drawn as
  *  that character (TEXT: apacite's \\BPBI, 39 entries of two papers). The rows of the pieces they reach change, so a file of 26
- *  is another maker's (the file's schema is 5 still) */
-export const LAYOUT = '27'
+ *  is another maker's (the file's schema is 5 still); 29 (the owner's case 2610.37668v1): backref's list after an entry a row of
+ *  its own, its list piece's (latex-front.mjs BACKREF_LIST), its segments the list's ink between the marks LAYOUT_TEX sets around
+ *  it, EMPTY where TeX set none: a file of 28 has no row for that piece */
+export const LAYOUT = '29'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,
