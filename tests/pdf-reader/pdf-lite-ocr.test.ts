@@ -1,8 +1,7 @@
 // @vitest-environment node
-// The recogniser's opt-in to PDF.js's lite worker (layout/pdf-lite.mjs OCR_IMAGE_PIXELS, PDF-READER §19.15 Bounds): an image of
-// its cap's pixels at most decoded, a page's images up to the page's cap in all, in the order the page paints them, each later one
-// kept as an operator with no pixels; a page's sum its own. A worker of small caps, this file's alone (each test file its own
-// process): two images of 600 × 600 (360,000 pixels), a cap of 400,000 an image and 500,000 a page
+// The bitmap figures' opt-in to PDF.js's lite worker (layout/pdf-lite.mjs OCR_IMAGE_PIXELS, PDF-READER §19.15): no image's pixels
+// decoded, and each image's paint operator naming its object (its id ending `~` and PDF.js's ref), the one shared across pages too,
+// so that the pass reads each image from the PDF's own object (pipeline/ocr-image.mjs). A document opened without it is as it was.
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
@@ -37,32 +36,30 @@ const PDF = pdfOf([
 ])
 
 beforeAll(async () => {
-  const source = liteWorkerSource(readFileSync(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs'), 'utf8'), { ocr: { image: 400_000, page: 500_000 } })
+  const source = liteWorkerSource(readFileSync(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs'), 'utf8'))
   ;(globalThis as { pdfjsWorker?: unknown }).pdfjsWorker = await import(/* @vite-ignore */ `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)
 })
 
-/** each page's images painted, in order, by whether their pixels came */
-async function decoded(maxImageSize: number) {
+/** each page's images painted, in order: the object each names, and whether its pixels came */
+async function painted(maxImageSize: number) {
   const task = getDocument({ data: PDF.slice(), verbosity: 0, maxImageSize })
   const doc = await task.promise
-  const out: (boolean | null)[][] = []
+  const out: [string | null, boolean | null][][] = []
   for (let p = 1; p <= doc.numPages; p++) {
     const page = await doc.getPage(p)
     const { fnArray, argsArray } = await page.getOperatorList()
-    const ids = fnArray.flatMap((f, i) => (f === OPS.paintImageXObject ? [(argsArray[i] as [string])[0]] : []))
-    out.push(await Promise.all(ids.map(id => new Promise<boolean | null>(r => (id.startsWith('g_') ? page.commonObjs : page.objs).get(id, (v: { data?: unknown } | null) => r(v?.data ? true : null))))))
+    const args = fnArray.flatMap((f, i) => (f === OPS.paintImageXObject ? [argsArray[i] as [string, number, number]] : []))
+    out.push(await Promise.all(args.map(([id]) => new Promise<[string | null, boolean | null]>(r => (id.startsWith('g_') ? page.commonObjs : page.objs).get(id, (v: { data?: unknown } | null) => r([id.includes('~') ? id.slice(id.lastIndexOf('~') + 1) : null, v?.data ? true : null]))))))
   }
   await task.destroy()
   return out
 }
 
-describe('the recogniser\'s opt-in (OCR_IMAGE_PIXELS)', () => {
-  it('decodes an image within its cap and a page\'s images within the page\'s, in the order painted; the next page\'s sum its own', async () => {
-    // (page 1: A 360,000, B would make 720,000 past 500,000, C 490,000 past 400,000 alone; page 2: B again, the image PDF.js keeps
-    // once for the two pages that paint it, refused on the first and so on both; D 360,000, page 2's sum its own)
-    expect(await decoded(OCR_IMAGE_PIXELS)).toEqual([[true, null, null], [null, true]])
+describe('the bitmap figures\' opt-in (OCR_IMAGE_PIXELS)', () => {
+  it('decodes no image, and names each painted image\'s object, the one two pages paint on both', async () => {
+    expect(await painted(OCR_IMAGE_PIXELS)).toEqual([[['5R', null], ['6R', null], ['7R', null]], [['6R', null], ['10R', null]]])
   })
-  it('leaves a document opened without it as it was: every image decoded', async () => {
-    expect(await decoded(-1)).toEqual([[true, true, true], [true, true]])
+  it('leaves a document opened without it as it was: every image decoded, no object named', async () => {
+    expect(await painted(-1)).toEqual([[[null, true], [null, true], [null, true]], [[null, true], [null, true]]])
   })
 })

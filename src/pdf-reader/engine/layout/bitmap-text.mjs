@@ -249,10 +249,18 @@ function segmentMeets(q, x0, y0, x1, y1, w) {
  * each { text, why } (OCR_WHYS); `sets` setsOf's counts
  */
 export function labelsOf({ image, lines, place, others = { boxes: [], segs: [], fills: [] }, taken = [], limit = OCR_UNITS_IMAGE }) {
+  return placeLabels({ labels: imageLabelsOf({ image, lines }), place, others, taken, limit })
+}
+
+/**
+ * One image's labels as its pixels give them, whatever page it is placed on (the part of labelsOf an image's reading is cached
+ * with, ocr-pass.mjs: a later prepare places them with nothing decoded): { boxes, read, member }. `boxes` each { text, why } (an
+ * image's own why: `busy`, `crowded`, `overlap`, `outside`, `long`) or { text, lines: [{ quad, patch (the image's fractions,
+ * origin top left), bg, fg ([r, g, b]), before, after (the ink nearest the line along its band, in its thickness; null for none)
+ * }] }; `read` the lines given, `member` those a label holds. Fractions and ratios, so that the image's resolution is none of it.
+ */
+export function imageLabelsOf({ image, lines }) {
   const W = image.width, H = image.height, px = pixelReader(image)
-  const [a, b, c, d, e, f0] = place.ctm
-  // (an image pixel's place on the page: its unit square from the image's bottom row up, PDF's)
-  const toPage = ([x, y]) => [a * (x / W) + c * (1 - y / H) + e, b * (x / W) + d * (1 - y / H) + f0]
   const boxes = linesToBoxes(lines)
   const frames = lines.map(l => frameOf(l.quad.map(([x, y]) => [x * W, y * H])))
   const ok = f => f.L > 0 && f.T > 0 && Math.abs(f.det) > 1e-6
@@ -261,7 +269,7 @@ export function labelsOf({ image, lines, place, others = { boxes: [], segs: [], 
   const lineQuads = frames.map(f => (ok(f) ? quadOf(f, [0, 0, f.L, f.T]) : null))
   const lineBounds = lineQuads.map(q => (q ? boundsOf(q, W, H) : null))
   const member = new Set(boxes.flatMap(bx => bx.members))
-  const units = [], left = []
+  const out = []
   /** the lines but `own` whose boxes meet bounds `b` */
   const near = (own, b) => lineBounds.flatMap((lb, j) => (!own.has(j) && lb && lb[0] < b[2] && lb[2] > b[0] && lb[1] < b[3] && lb[3] > b[1] ? [j] : []))
   const inLine = (js, x, y) => {
@@ -370,9 +378,8 @@ export function labelsOf({ image, lines, place, others = { boxes: [], segs: [], 
   }
   for (const bx of boxes) {
     const text = bx.text.replace(/\s+/gu, ' ').trim()
-    if (bx.members.length > OCR_LINES_MAX || text.length > OCR_TEXT_MAX) { left.push({ text, why: 'long' }); continue }
-    if (units.length >= limit) { left.push({ text, why: 'past' }); continue }
-    if (bx.members.some(i => !lineQuads[i])) { left.push({ text, why: 'outside' }); continue }
+    if (bx.members.length > OCR_LINES_MAX || text.length > OCR_TEXT_MAX) { out.push({ text, why: 'long' }); continue }
+    if (bx.members.some(i => !lineQuads[i])) { out.push({ text, why: 'outside' }); continue }
     const own = new Set(bx.members)
     // (one line's frame, or the block's: the box round every line of the label, upright as the extension merges them)
     const T = [...bx.members].map(i => frames[i].T).sort((x, y) => x - y)[(bx.members.length - 1) >> 1]
@@ -384,7 +391,7 @@ export function labelsOf({ image, lines, place, others = { boxes: [], segs: [], 
       area = frameOf([[x0, y0], [x1, y0], [x1, y1], [x0, y1]])
     }
     const got = readArea(area, T, own)
-    if (got.why) { left.push({ text, why: got.why }); continue }
+    if (got.why) { out.push({ text, why: got.why }); continue }
     let why = null
     const read = []
     for (const i of bx.members) {
@@ -392,9 +399,32 @@ export function labelsOf({ image, lines, place, others = { boxes: [], segs: [], 
       if (r.why) { why = r.why; break }
       read.push({ i, patch: got.patch, bg: got.bg, ...r })
     }
-    if (why) { left.push({ text, why }); continue }
+    if (why) { out.push({ text, why }); continue }
+    const frac = q => q.map(([x, y]) => [x / W, y / H])
+    // (the ink's distances in the line's thickness: its anchor's evidence wherever the image is drawn, at whatever resolution)
+    const inT = (v, i) => (Number.isFinite(v) ? v / (frames[i].T || 1) : null)
+    out.push({ text, lines: read.map(({ i, patch, bg, fg, before, after }) => ({ quad: frac(lineQuads[i]), patch: frac(patch), bg: [...bg], fg: [...fg], before: inT(before, i), after: inT(after, i) })) })
+  }
+  return { boxes: out, read: lines.length, member: member.size }
+}
+
+/**
+ * An image's labels (imageLabelsOf's) on its page: `place`, `others`, `taken` and `limit` as labelsOf's. Each label drawn is one
+ * whose patches its page lets it draw: not mirrored, within the clip and the view, clear of the patches drawn before it and of
+ * the page's own ink over the image. Returns labelsOf's { units, left, read, member, sets }.
+ */
+export function placeLabels({ labels, place, others = { boxes: [], segs: [], fills: [] }, taken = [], limit = OCR_UNITS_IMAGE }) {
+  const [a, b, c, d, e, f0] = place.ctm
+  // (a point of the image's unit square, origin top left, on the page: from the image's bottom row up, PDF's)
+  const toPage = ([x, y]) => [a * x + c * (1 - y) + e, b * x + d * (1 - y) + f0]
+  const units = [], left = []
+  for (const bx of labels.boxes) {
+    const text = bx.text
+    if (bx.why) { left.push({ text, why: bx.why }); continue }
+    if (units.length >= limit) { left.push({ text, why: 'past' }); continue }
+    const read = bx.lines
     // (on the page: each line's quad and its patch, by its placement)
-    const quads = read.map(({ i, patch }) => [lineQuads[i].map(toPage), patch.map(toPage)])
+    const quads = read.map(({ quad, patch }) => [quad.map(toPage), patch.map(toPage)])
     // (a placement that mirrors the image turns its text over: its frame's across no longer at its along's right hand)
     const mirrored = quads.some(([q]) => { const ux = q[1][0] - q[0][0], uy = q[1][1] - q[0][1], dx = q[3][0] - q[0][0], dy = q[3][1] - q[0][1]; return ux * dy - uy * dx > 0 })
     if (mirrored) { left.push({ text, why: 'mirrored' }); continue }
@@ -420,10 +450,10 @@ export function labelsOf({ image, lines, place, others = { boxes: [], segs: [], 
     if (covered) { left.push({ text, why: 'covered' }); continue }
     // (its size the extension's share of its thinnest line on the page; its anchor its lines' where they agree, else the middle)
     const size = OCR_SIZE * Math.min(...quads.map(([q]) => Math.hypot(q[3][0] - q[0][0], q[3][1] - q[0][1])))
-    const anchors = read.map(({ i, before, after }, k) => {
-      // (the ink's distances on the page: the line's pixels to PDF units across its thickness)
-      const [q] = quads[k], scale = Math.hypot(q[3][0] - q[0][0], q[3][1] - q[0][1]) / (frames[i].T || 1)
-      const b0 = before * scale, a0 = after * scale
+    const anchors = read.map(({ before, after }, k) => {
+      // (the ink's distances on the page: in the line's thickness, to PDF units across it)
+      const [q] = quads[k], scale = Math.hypot(q[3][0] - q[0][0], q[3][1] - q[0][1])
+      const b0 = before === null ? Infinity : before * scale, a0 = after === null ? Infinity : after * scale
       return Math.max(b0, 0) * ANCHOR_RATIO < Math.max(a0, 0) ? 'start' : Math.max(a0, 0) * ANCHOR_RATIO < Math.max(b0, 0) ? 'end' : 'centre'
     })
     const anchor = anchors.every(x => x === anchors[0]) ? anchors[0] : 'centre'
@@ -432,7 +462,7 @@ export function labelsOf({ image, lines, place, others = { boxes: [], segs: [], 
     for (const [, p] of quads) taken.push(p)
   }
   const sets = setsOf(units)
-  return { units, left, read: lines.length, member: member.size, sets }
+  return { units, left, read: labels.read, member: labels.member, sets }
 }
 
 /** labels share a column where their starts, ends or middles along their direction lie within this share of their size (the

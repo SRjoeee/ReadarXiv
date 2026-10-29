@@ -38,6 +38,21 @@ export declare function labelsOf(o: {
   taken?: Pt[][]
   limit?: number
 }): { units: OcrLabel[]; left: { text: string; why: OcrWhy }[]; read: number; member: number; sets: OcrSets }
+/** an image's labels as its pixels give them, whatever page it is placed on: fractions and ratios, cacheable */
+export interface ImageLabels {
+  boxes: ({ text: string; why: OcrWhy } | { text: string; why?: undefined; lines: { quad: Pt[]; patch: Pt[]; bg: number[]; fg: number[]; before: number | null; after: number | null }[] })[]
+  read: number
+  member: number
+}
+export declare function imageLabelsOf(o: { image: DecodedImage; lines: readonly OcrLine[] }): ImageLabels
+/** an image's labels (imageLabelsOf's) placed on its page: those drawn, and those left the original's with why */
+export declare function placeLabels(o: {
+  labels: ImageLabels
+  place: { page: number; ctm: readonly number[]; clip: readonly (readonly Pt[])[] | 'complex' | null; view: readonly number[] | null }
+  others?: { boxes: readonly (readonly number[])[]; segs: readonly (readonly number[])[]; fills?: readonly { edges: readonly (readonly number[])[]; evenOdd: boolean }[]; images?: readonly Pt[][] } | null
+  taken?: Pt[][]
+  limit?: number
+}): { units: OcrLabel[]; left: { text: string; why: OcrWhy }[]; read: number; member: number; sets: OcrSets }
 export declare const SET_ALIGN: number
 export declare const SET_SIZE: number
 /** an image's labels in their sets: each one's `set` (its set's first label's index), `anchor` and `size` set */

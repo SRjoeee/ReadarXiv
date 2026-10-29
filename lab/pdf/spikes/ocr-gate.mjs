@@ -30,6 +30,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createRecogniser } from '../../../src/core/ocr/recognise.ts'
 import { liteWorkerSource, OCR_IMAGE_PIXELS } from '../../../src/pdf-reader/engine/layout/pdf-lite.mjs'
+import { openObjects } from '../../../src/pdf-reader/engine/layout/xref.mjs'
 import { placeOf } from '../../../src/pdf-reader/engine/layer-proto/ocr-rows.mjs'
 import { ocrPass, paintsOf } from '../../../src/pdf-reader/engine/pipeline/ocr-pass.mjs'
 
@@ -41,7 +42,10 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '../../..')
 const require = createRequire(join(ROOT, 'package.json'))
 const PDFJS = dirname(require.resolve('pdfjs-dist/package.json'))
 const canvas = require('@napi-rs/canvas')
-// (PDF.js's worker made lite in memory, as the box's: an image past OCR_PIXELS_MAX keeps its operator and gets no pixels)
+// (the PDF's own objects, each image read from its own, as the box reads them: @cantoo/pdf-lib's object layer, PDF.js's JPEG decoder)
+const PL = require('@cantoo/pdf-lib')
+const { JpegImage } = await import(join(PDFJS, 'legacy/image_decoders/pdf.image_decoders.mjs'))
+// (PDF.js's worker made lite in memory, as the box's: under the OCR opt-in no image decoded, each paint naming its object)
 globalThis.pdfjsWorker = await import(`data:text/javascript;base64,${Buffer.from(liteWorkerSource(readFileSync(join(PDFJS, 'legacy/build/pdf.worker.mjs'), 'utf8'))).toString('base64')}`)
 const { getDocument, OPS } = await import(join(PDFJS, 'legacy/build/pdf.mjs'))
 // (onnxruntime-web's Node build, the extension's own WebAssembly, its one .wasm read from the package; or the box's native build)
@@ -109,7 +113,8 @@ for (const id of IDS) {
   const doc = await task.promise
   const t0 = performance.now(), c0 = process.cpuUsage()
   let out
-  try { out = await ocrPass({ doc, OPS, paper: { id: id.replace(/v\d+$/, ''), version: Number(/v(\d+)$/.exec(id)?.[1] ?? 1) }, from: 1, recognise, reader: READER, cache }) } finally { await task.destroy() }
+  const objects = openObjects(bytes, { PL, objectsMax: 2_000_000, decodedMax: 512 * 2 ** 20 })
+  try { out = await ocrPass({ doc, OPS, objects, PL, Jpeg: JpegImage, paper: { id: id.replace(/v\d+$/, ''), version: Number(/v(\d+)$/.exec(id)?.[1] ?? 1) }, from: 1, recognise, reader: READER, cache }) } finally { await task.destroy() }
   const ms = Math.round(performance.now() - t0), cpu = process.cpuUsage(c0), s = out.stats
   const fails = { P: [], L: [], C: [], D: [], A: [] }
   // A: the images and the labels accounted for
