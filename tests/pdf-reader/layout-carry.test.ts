@@ -369,6 +369,13 @@ describe('lineCheckOf: the pages that may be drawn', () => {
     // (the same words: drawn)
     expect(lineCheckOf(ours, [...words(A, 1, 72, 700), ...words(L, 2, 72, 712), ...words(B, 2, 72, 700)]).undrawable).toEqual([])
   })
+  it('nor a page whose moved line takes an arXiv line another line of ours took already: one partner a line (Codex on #511)', () => {
+    const V = W.map(w => `v${w}`), U = W.map(w => `u${w}`), S = W.map(w => `s${w}`).slice(0, 10)
+    // (a sentence once on arXiv's page 2, and on our pages 1 and 3 both: the second a sentence too many, page 3 refused)
+    const ours = [...page(W, 1), ...words(S, 1, 72, 568), ...page(V, 2), ...words(S, 3, 72, 712), ...page(U, 3)]
+    const theirs = [...page(W, 1), ...words(S, 2, 72, 712), ...page(V, 2), ...page(U, 3)]
+    expect(lineCheckOf(ours, theirs).undrawable).toEqual([3])
+  })
   it('nor a page whose lines all moved: what stays of it must be at least half of it, on both sides (two short pages swapped, Devin on #511)', () => {
     // (two lines a page, each found on the page beside: two at each end, within DRIFT_LINES, and nothing of either page left)
     const lines = (from: number, p: number) => Array.from({ length: 2 }, (_, j) => words(W.slice(from + 10 * j, from + 10 * j + 10), p, 72, 700 - 12 * j)).flat()

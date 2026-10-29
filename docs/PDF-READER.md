@@ -2329,7 +2329,9 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   content right before pages alike, a 1 % difference for engineering that is simple, general and lasting): where the rule above
   refuses it, each of our lines found on another page of arXiv's takes the words it matched there out of both pages' comparison
   (a word its partner does not hold stays in, on its side: the carrier finds a line by 80 % of its words, Codex on #511), and
-  the page is drawn where no evidence line of it is found two pages away or more, at most `DRIFT_LINES` (4) lines moved at each
+  the page is drawn where no evidence line of it is found two pages away or more nor on an arXiv line another line of ours took
+  already (one partner a line: a sentence on two of our pages and once on arXiv's is a sentence too many, Codex on #511), at
+  most `DRIFT_LINES` (4) lines moved at each
   of its two ends (counted on both sides of each break), what stays at least half of its words on each side (two short pages
   that traded their lines are not drawn, Devin on #511), and the rest of its words arXiv's page's as a bag, in any order
   (`driftSame`, `PAGE_SAME`: the drawing is over our own page, and a float set elsewhere in a page's reading order is the same

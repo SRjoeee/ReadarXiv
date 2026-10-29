@@ -515,10 +515,16 @@ export function lineCheckOf(ours, arxiv) {
   for (const k of ours.keys()) { const l = tokenLine[k]; if (l >= 0 && ours[k] && !pageOfLine.has(l)) pageOfLine.set(l, ours[k].page) }
   const outOf = new Map(), moved = new Map(), ends = new Map(), far = new Set()
   const end = (page, i) => { const e = ends.get(page) ?? ends.set(page, [0, 0]).get(page); e[i]++ }
+  // (one partner a line: arXiv's words a line of ours on their page took, then those a moved line took, none taken twice — a
+  // sentence on two of our pages and once on arXiv's is a sentence too many, its second page no drift's)
+  const taken = new Set()
+  for (const [l, page] of pageOfLine) if (c.lineAt[l]?.page === page) for (const k of c.partnerTokens[l]?.[1] ?? []) taken.add(k)
   for (const [l, page] of pageOfLine) {
     const p = c.lineAt[l]
     if (!p || p.page === page) continue
     const [mineK, theirsK] = c.partnerTokens[l] ?? [[], []]
+    if (theirsK.some(k => taken.has(k))) { far.add(page); continue }
+    for (const k of theirsK) taken.add(k)
     const out = outOf.get(page) ?? outOf.set(page, new Set()).get(page)
     for (const k of mineK) out.add(k)
     const into = moved.get(p.page) ?? moved.set(p.page, new Set()).get(p.page)
