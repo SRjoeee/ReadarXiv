@@ -1,12 +1,13 @@
-// The reading options (the reader's design, §6.1): the highlight and its colour, figure text, the appearance and the
+// The reading options (the reader's design, §6.1): the highlight and its colour, what to translate, the appearance and the
 // dark pages — all settings, the same values the popup and the settings page change, each written at once. In a narrow
 // window they hold what leaves the bar too, first (§5): below 900 px the language and the service, below 500 px the
 // download, the settings and the way back
 import { type IconNode, LogOut, Monitor, Moon, Settings, SlidersHorizontal, Sun } from 'lucide'
-import { useRef } from 'react'
-import { DEFAULT_CONFIG } from '@/config/schema'
+import { useId, useRef } from 'react'
+import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { R, S, profileName } from '@/ui/strings'
 import type { ReaderController } from '../controller'
+import { CLASS_ROWS } from '../settings'
 import { Icon } from '@/ui/controls/Icon'
 import { leaveReader, settingsUrl } from './links'
 import { DownloadMenu, LanguageMenu, ServiceMenu } from './Menus'
@@ -86,11 +87,7 @@ export function ReadingOptions({ controller, embedded = false }: { controller: R
           </span>
         </div>
         <div className="sep" />
-        {/* biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through */}
-        <label className="row">
-          {S.rows.images}
-          <Switch label={S.rows.images} checked={config.image.enabled} disabled={lock.locked} why={lock.why} onChange={on => controller.patchSettings(c => ({ ...c, image: { ...c.image, enabled: on } }))} />
-        </label>
+        <ClassToggles controller={controller} config={config} lock={lock} />
         <div className="sep" />
         <div className="row">
           {R.options.appearance}
@@ -109,6 +106,32 @@ export function ReadingOptions({ controller, embedded = false }: { controller: R
         </label>
       </Popover>
     </>
+  )
+}
+
+/**
+ * What to translate (S-R-27; docs/PDF-READER.md §9.1, docs/route/orphan-text.md §8.7): the parts of a paper beside its body a
+ * reader shows translated or as the original — the text in figures and in tables, the running heads and feet, the references,
+ * the author names under the title —, each translated once whatever they are, so that a toggle shows or hides what was made
+ * and never translates again (the layer opened again over the same documents and rows: session/host.ts follows the setting as
+ * it lands, from here or the settings page). The website's group, in the same words and order: its heading a row of the panel
+ * in the second ink, naming the rows under it, each a switch's row in the panel's own pattern
+ */
+function ClassToggles({ controller, config, lock }: { controller: ReaderController; config: Config; lock: ReturnType<typeof useSettingsLock> }) {
+  const head = useId()
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: the popover's rows named by the heading row above them; a fieldset's legend lays out as no row of the panel
+    <div role="group" aria-labelledby={head} data-axt-classes="">
+      <div id={head} className="row text-ink-2">{R.classes.name}</div>
+      {CLASS_ROWS.map(t => (
+        // biome-ignore lint/a11y/noLabelWithoutControl: the control is the switch button inside it, which the rule cannot see through
+        <label key={t} className="row" data-axt-class={t}>
+          {R.classes[t]}
+          <Switch label={R.classes[t]} checked={config.pdfReader.classes[t]} disabled={lock.locked} why={lock.why}
+            onChange={on => controller.patchSettings(c => ({ ...c, pdfReader: { ...c.pdfReader, classes: { ...c.pdfReader.classes, [t]: on } } }))} />
+        </label>
+      ))}
+    </div>
   )
 }
 

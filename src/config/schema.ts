@@ -6,7 +6,7 @@ import { DEFAULT_APPEARANCE, appearanceSchema } from './appearance'
 import { BUILT_IN_SERVICES, SERVICE_ID_RE, serviceSchema } from './services'
 import { DEFAULT_LANG_CODE, langCodeSchema } from './languages'
 
-export const CONFIG_VERSION = 20
+export const CONFIG_VERSION = 21
 
 /** The three reading modes (DESIGN §7); `mode` is shared with the image translation's mode gate */
 export const MODE_VALUES = ['stack', 'side', 'only'] as const
@@ -49,6 +49,17 @@ export function normalizeGlossary(value: unknown): { term: string; translation: 
  * one setting for every surface the extension draws, not the reader's alone
  */
 export const DEFAULT_PDF_READER = { enabled: true, original: false, sync: true, swapped: false, dimPages: true } as const
+
+/**
+ * The PDF reader's "What to translate" (v21; docs/PDF-READER.md §9.1, docs/route/orphan-text.md §8.7): which of a paper's
+ * parts beside its body are shown translated — the text in figures, in tables, the running heads and feet, the references,
+ * the author names under the title. The keys are the engine's toggles (rules/content-classes.mjs TOGGLES, `always` and
+ * `never` aside), and the value is its layer's `classes` option as it is. Every class is translated once whatever they
+ * are: a toggle shows or hides what was made, and never translates again. The defaults are the owner's (2026-10-25), the
+ * engine's TOGGLE_DEFAULTS, restated so that the configuration stays free of the engine; tests/config/storage.test.ts
+ * holds the two equal, and the keys to the engine's toggles
+ */
+export const DEFAULT_PDF_CLASSES = { figures: true, tables: true, heads: true, references: false, names: false } as const
 
 export const configSchema = z.object({
   version: z.literal(CONFIG_VERSION),
@@ -121,6 +132,8 @@ export const configSchema = z.object({
     sync: z.boolean(),
     swapped: z.boolean(),
     dimPages: z.boolean(),
+    /** "What to translate" (v21; DEFAULT_PDF_CLASSES says what it is) */
+    classes: z.object({ figures: z.boolean(), tables: z.boolean(), heads: z.boolean(), references: z.boolean(), names: z.boolean() }),
   }),
   /**
    * The appearance of every surface the extension draws (v20; the redesign's design, §3): the popup, the settings page,
@@ -149,6 +162,6 @@ export const DEFAULT_CONFIG: Config = {
   reading: { sentenceHighlight: true, openIn: 'new-tab' },
   image: { enabled: true },
   uiLanguage: 'auto',
-  pdfReader: { ...DEFAULT_PDF_READER },
+  pdfReader: { ...DEFAULT_PDF_READER, classes: { ...DEFAULT_PDF_CLASSES } },
   theme: 'system',
 }

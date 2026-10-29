@@ -1,6 +1,6 @@
 // The reading section (the redesign's design, §6.5): the way to translate with its description following the choice, figure text, where
 // translations open, the floating button (asked of the background, its state's only writer), and the PDF group with
-// its sub-row while the reader is on. Every control writes at once
+// its sub-row while the reader is on, and what the PDF reader translates (S-O-56). Every control writes at once
 import { createElement as h, useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
@@ -100,6 +100,28 @@ describe('the reading section (§6.5)', () => {
     expect(patches.at(-1)?.pdfReader.enabled).toBe(false)
     expect(sync().closest('[inert]')).not.toBeNull()
     expect(rowOf(m.container, 'reading/pdf').querySelectorAll('[role="switch"]')).toHaveLength(2)
+    await m.unmount()
+  })
+
+  it('what the PDF reader translates: its own group after the PDF\'s, said to be the PDF\'s alone, the reading options\' five in their order, each written at once (S-O-56)', async () => {
+    const patches: Config[] = []
+    const m = await mountElement(h(Harness, { start: { ...DEFAULT_CONFIG, pdfReader: { ...DEFAULT_CONFIG.pdfReader, enabled: false } }, patches }))
+    const headings = [...m.container.querySelectorAll<HTMLElement>('[data-heading]')]
+    expect(headings.map(x => [x.querySelector('h2')?.textContent, x.querySelector('.o-aside')?.textContent ?? null])).toEqual([[O.reading.pdf, null], [R.classes.name, O.reading.classesAside]])
+    const card = rowOf(m.container, 'reading/classes')
+    expect(headings[1]!.nextElementSibling).toBe(card)
+    // shown with the reader off as well (#readarxiv opens it either way), nothing inert
+    const switches = [...card.querySelectorAll<HTMLElement>('[role="switch"]')]
+    expect(switches.map(x => [x.getAttribute('aria-label'), x.getAttribute('aria-checked'), !!x.closest('[inert]')])).toEqual([
+      [R.classes.figures, 'true', false], [R.classes.tables, 'true', false], [R.classes.heads, 'true', false], [R.classes.references, 'false', false], [R.classes.names, 'false', false],
+    ])
+    // a row's words turn its switch, as every switch row's do; the image switch, the HTML page's, is another setting
+    ;[...card.querySelectorAll<HTMLElement>('.o-label')].find(x => x.textContent === R.classes.references)!.click()
+    await m.flush()
+    expect(patches.at(-1)?.pdfReader.classes).toEqual({ ...DEFAULT_CONFIG.pdfReader.classes, references: true })
+    switchOf(m.container, R.classes.figures).click()
+    await m.flush()
+    expect([patches.at(-1)?.pdfReader.classes.figures, patches.at(-1)?.image.enabled]).toEqual([false, true])
     await m.unmount()
   })
 })

@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeBrowser } from 'wxt/testing/fake-browser'
 import { z } from 'zod'
 import { appearanceSchema } from '@/config/appearance'
-import { CONFIG_VERSION, type Config, DEFAULT_CONFIG, GLOSSARY_LIMITS, configSchema, normalizeGlossary } from '@/config/schema'
+import { CONFIG_VERSION, type Config, DEFAULT_CONFIG, DEFAULT_PDF_CLASSES, DEFAULT_PDF_READER, GLOSSARY_LIMITS, configSchema, normalizeGlossary } from '@/config/schema'
+import { TOGGLE_DEFAULTS, TOGGLES } from '@/pdf-reader/engine/rules/content-classes.mjs'
 import { serviceSchema } from '@/config/services'
 import { chooseFirstTarget, configItem, getConfig, readConfig, resetConfig, setConfig, watchConfigChange } from '@/config/storage'
 
@@ -11,8 +12,8 @@ const SVC = { id: 'svc-abcd1234', kind: 'openai-compat' as const, name: 'Mine', 
 
 /**
  * What v19 stored, literally: today's DEFAULT_CONFIG carries v20's shapes (`preload` a word, `image` without its list,
- * `pdfReader` without its appearance, a `theme`), and a fixture spreading it would test a migration from a shape no
- * v19 ever held. v18 stored the same `preload` and `image`, and no `pdfReader`
+ * `pdfReader` without its appearance, a `theme`) and v21's (`pdfReader.classes`), and a fixture spreading it would test a
+ * migration from a shape no v19 ever held. v18 stored the same `preload` and `image`, and no `pdfReader`
  */
 function v19Stored(over: Record<string, unknown> = {}): Record<string, unknown> {
   const { theme: _v20, ...rest } = DEFAULT_CONFIG
@@ -20,10 +21,16 @@ function v19Stored(over: Record<string, unknown> = {}): Record<string, unknown> 
     ...rest, version: 19,
     preload: { margin: 1000, threshold: 0 },
     image: { enabled: true, modes: ['stack', 'side', 'only'] },
-    pdfReader: { ...DEFAULT_CONFIG.pdfReader, appearance: 'system' },
+    pdfReader: { ...DEFAULT_PDF_READER, appearance: 'system' },
     ...over,
   }
 }
+/** What v20 stored: today's shapes but the reader's "What to translate" (`pdfReader.classes`, v21) */
+function v20Stored(over: Record<string, unknown> = {}): Record<string, unknown> {
+  return { ...DEFAULT_CONFIG, version: 20, pdfReader: { ...DEFAULT_PDF_READER }, ...over }
+}
+/** what migration 21 writes for a reader whose image switch was `figures` */
+const v21Classes = (figures: boolean) => ({ figures, tables: true, heads: true, references: false, names: false })
 
 describe('config storage', () => {
   beforeEach(() => {
@@ -706,7 +713,7 @@ describe('provider selection', () => {
     expect((await fresh.readConfig()).fallbackReason).toBeNull()
     expect(config.version).toBe(CONFIG_VERSION)
     // a configuration from before v19 has no appearance, and reaches v20 following the system
-    expect(config.pdfReader).toEqual({ enabled: true, original: false, sync: true, swapped: false, dimPages: true })
+    expect(config.pdfReader).toEqual({ enabled: true, original: false, sync: true, swapped: false, dimPages: true, classes: v21Classes(true) })
     expect(config.theme).toBe('system')
     // the whole value, so that "nothing else" is held: what the reader had, and v20's own preload and figure switch
     expect(config).toEqual({ ...DEFAULT_CONFIG, mode: 'only', targetLanguage: 'jpn', reading: { sentenceHighlight: false, openIn: 'same-tab' }, preload: 'on-demand', image: { enabled: true } })
@@ -720,7 +727,7 @@ describe('provider selection', () => {
     const config = await fresh.getConfig()
     expect((await fresh.readConfig()).fallbackReason).toBeNull()
     expect(config.theme).toBe('dark')
-    expect(config.pdfReader).toEqual({ enabled: false, original: true, sync: false, swapped: true, dimPages: false })
+    expect(config.pdfReader).toEqual({ enabled: false, original: true, sync: false, swapped: true, dimPages: false, classes: v21Classes(true) })
     // the whole value, so that "nothing else" is held: what the reader had, and v20's own preload and figure switch
     expect(config).toEqual({ ...DEFAULT_CONFIG, mode: 'only', targetLanguage: 'jpn', theme: 'dark', pdfReader: config.pdfReader, preload: 'on-demand', image: { enabled: true } })
   })
@@ -737,20 +744,56 @@ describe('provider selection', () => {
 
   it('v20 carries a light or a system appearance to the theme as well, and leaves one no theme holds for the schema to name', async () => {
     for (const appearance of ['light', 'system'] as const) {
-      await fakeBrowser.storage.local.set({ config: v19Stored({ pdfReader: { ...DEFAULT_CONFIG.pdfReader, appearance } }), config$: { v: 19 } })
+      await fakeBrowser.storage.local.set({ config: v19Stored({ pdfReader: { ...DEFAULT_PDF_READER, appearance } }), config$: { v: 19 } })
       vi.resetModules()
       const fresh = await import('@/config/storage')
       const reading = await fresh.readConfig()
       expect(reading.config.theme).toBe(appearance)
       expect(reading.fallbackReason).toBeNull()
     }
-    await fakeBrowser.storage.local.set({ config: v19Stored({ pdfReader: { ...DEFAULT_CONFIG.pdfReader, appearance: 'sepia' } }), config$: { v: 19 } })
+    await fakeBrowser.storage.local.set({ config: v19Stored({ pdfReader: { ...DEFAULT_PDF_READER, appearance: 'sepia' } }), config$: { v: 19 } })
     vi.resetModules()
     const fresh = await import('@/config/storage')
     // no throw: the defaults in use, and the reason names the field (S-O-02 shows it)
     const reading = await fresh.readConfig()
     expect(reading.config).toEqual(DEFAULT_CONFIG)
     expect(reading.fallbackReason).toMatchObject({ kind: 'invalid', where: 'theme' })
+  })
+
+  it('v21 adds the reader\'s "What to translate" as it showed them: the figures by the image switch, the rest by the engine\'s defaults, and touches nothing else', async () => {
+    for (const enabled of [true, false]) {
+      const v20 = v20Stored({ mode: 'only', targetLanguage: 'jpn', image: { enabled }, pdfReader: { ...DEFAULT_PDF_READER, swapped: true, dimPages: false } })
+      await fakeBrowser.storage.local.set({ config: v20, config$: { v: 20 } })
+      vi.resetModules()
+      const fresh = await import('@/config/storage')
+      const config = await fresh.getConfig()
+      expect((await fresh.readConfig()).fallbackReason).toBeNull()
+      expect(config.version).toBe(CONFIG_VERSION)
+      expect(config.pdfReader.classes).toEqual(v21Classes(enabled))
+      // the whole value, so that "nothing else" is held: the image switch stays the HTML page's, as it was
+      expect(config).toEqual({ ...DEFAULT_CONFIG, mode: 'only', targetLanguage: 'jpn', image: { enabled }, pdfReader: { ...DEFAULT_PDF_READER, swapped: true, dimPages: false, classes: v21Classes(enabled) } })
+      fakeBrowser.reset()
+    }
+  })
+
+  it('v21 leaves a pdfReader that is not an object, or an image switch that is no boolean, for the schema to name: the image named, never the toggle made of it', async () => {
+    for (const [over, where] of [[{ pdfReader: 'broken' }, 'pdfReader'], [{ image: { enabled: 'yes' } }, 'image.enabled'], [{ image: 'broken' }, 'image']] as const) {
+      await fakeBrowser.storage.local.set({ config: v20Stored(over), config$: { v: 20 } })
+      vi.resetModules()
+      const fresh = await import('@/config/storage')
+      // no throw: the defaults in use, and the reason names the field (S-O-02 shows it)
+      const reading = await fresh.readConfig()
+      expect(reading.config).toEqual(DEFAULT_CONFIG)
+      expect(reading.fallbackReason).toMatchObject({ kind: 'invalid', where })
+      fakeBrowser.reset()
+    }
+  })
+
+  it('the reader\'s "What to translate" defaults are the engine\'s, under the engine\'s toggles (rules/content-classes.mjs)', () => {
+    expect(DEFAULT_PDF_CLASSES).toEqual(TOGGLE_DEFAULTS)
+    expect(Object.keys(DEFAULT_CONFIG.pdfReader.classes).sort()).toEqual(TOGGLES.filter(t => t !== 'always' && t !== 'never').sort())
+    // a toggle the schema lacks would be stripped from what the reader saves, and one it has that the engine lacks refused by the layer's open
+    expect(Object.keys(configSchema.shape.pdfReader.shape.classes.shape).sort()).toEqual(Object.keys(TOGGLE_DEFAULTS).sort())
   })
 
   it('a v12 configuration climbs to the latest: services and profiles as stored, the interface language following the browser, a stored preload margin becoming on demand', async () => {

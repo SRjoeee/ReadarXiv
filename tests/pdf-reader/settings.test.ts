@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { createSurfaceConfig } from '@/shared/surface-config'
 import * as configStorage from '@/config/storage'
 import { DEFAULT_CONFIG, type Config } from '@/config/schema'
-import { displayOf, figuresShown, firstConfig, followOf, withDisplay } from '@/pdf-reader/settings'
+import { CLASS_ROWS, displayOf, firstConfig, followOf, sameClasses, withDisplay } from '@/pdf-reader/settings'
 
 const with_ = (patch: Partial<Config>, reader: Partial<Config['pdfReader']> = {}): Config => ({ ...DEFAULT_CONFIG, ...patch, pdfReader: { ...DEFAULT_CONFIG.pdfReader, ...reader } })
 
@@ -39,15 +39,16 @@ describe('withDisplay: what a display chosen in the reader writes', () => {
   })
 })
 
-describe('figuresShown: figure text in a display', () => {
-  it('follows the switch alone: figure text shows in every translated display (the redesign\'s design, §4)', () => {
-    expect(figuresShown(with_({}), 'bilingual')).toBe(true)
-    expect(figuresShown(with_({}), 'translation')).toBe(true)
-    expect(figuresShown(with_({ image: { enabled: false } }), 'bilingual')).toBe(false)
+describe('what to translate: its rows and their sameness', () => {
+  it('lists the five toggles in the owner\'s order, every one the configuration holds (2026-10-25)', () => {
+    expect([...CLASS_ROWS]).toEqual(['figures', 'tables', 'heads', 'references', 'names'])
+    expect([...CLASS_ROWS].sort()).toEqual(Object.keys(DEFAULT_CONFIG.pdfReader.classes).sort())
   })
 
-  it('is off for the original alone, which has no figure text to show', () => {
-    expect(figuresShown(with_({}), 'original')).toBe(false)
+  it('tells two settings apart by any one toggle, and nothing else', () => {
+    const base = DEFAULT_CONFIG.pdfReader.classes
+    expect(sameClasses(base, { ...base })).toBe(true)
+    for (const t of CLASS_ROWS) expect(sameClasses(base, { ...base, [t]: !base[t] })).toBe(false)
   })
 })
 

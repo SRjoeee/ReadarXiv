@@ -125,7 +125,6 @@ export const INITIAL: ReaderState = {
 export interface Session {
   setDisplay(mode: EngineDisplay): void
   setSyncMode(mode: SyncMode): void
-  setFigures(on: boolean): void
   zoomBy(factor: number): void
   zoomTo(value: number | 'page-width' | 'page-fit' | 'page-actual'): void
   goToPage(side: Side, page: number): void
@@ -312,7 +311,6 @@ export interface ReaderController {
   attach(panes: { left: HTMLElement; right: HTMLElement }): Promise<Session>
   setDisplay(display: Display): void
   setSync(on: boolean): void
-  setFigures(on: boolean): void
   zoomBy(factor: number): void
   zoomTo(value: number | 'page-width' | 'page-fit' | 'page-actual'): void
   goToPage(side: Side, page: number): void
@@ -390,7 +388,6 @@ export function createController({ open, params, reading }: { open: (host: Sessi
     setDisplay: display => later(s => s.setDisplay(display)),
     // the interface's switch is the owner's design or nothing (exp-freeze-2026-10-07:experiments/pdf-bilingual/REPORT.md, sixteenth addendum): top alignment, or off
     setSync: on => later(s => s.setSyncMode(on ? 'same' : 'off')),
-    setFigures: on => later(s => s.setFigures(on)),
     zoomBy: factor => { set({ zoom: null }); later(s => s.zoomBy(factor)) },
     zoomTo: value => { set({ zoom: value }); later(s => s.zoomTo(value)) },
     goToPage: (side, page) => later(s => s.goToPage(side, page)),

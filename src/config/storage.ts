@@ -139,6 +139,21 @@ export const configItem = storage.defineItem<Config>(CONFIG_KEY, {
       }
       return out
     },
+    // v20 -> v21: the PDF reader's "What to translate" (`pdfReader.classes`, docs/PDF-READER.md §9.1), each toggle as the
+    // reader had it in effect: until v21 the reader gave the layer its figures from the image switch, which the HTML page
+    // shares, and the engine's defaults for the rest (heads and tables shown, references and names not). Written here as
+    // they were then, not as DEFAULT_PDF_CLASSES may say later. A `pdfReader` that is not an object, or an `image` whose
+    // switch is no boolean, passes through for the schema to name, as every migration here does
+    21: (v20: (Omit<Config, 'version' | 'pdfReader' | 'image'> & { version: 20; pdfReader?: unknown; image?: unknown }) | null) => {
+      if (typeof v20 !== 'object' || v20 === null) return v20
+      const out: Record<string, unknown> = { ...v20, version: 21 as const }
+      const reader = v20.pdfReader
+      if (reader !== null && typeof reader === 'object' && !Array.isArray(reader)) {
+        const figures = (v20.image as { enabled?: unknown } | null | undefined)?.enabled
+        out.pdfReader = { ...reader, classes: { figures, tables: true, heads: true, references: false, names: false } }
+      }
+      return out
+    },
   },
 })
 

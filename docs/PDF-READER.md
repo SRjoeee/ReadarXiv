@@ -199,8 +199,10 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
 3. The target language (its name and a chevron, **no icon**: the translation mark belongs to the display switch alone,
    and the name says what the menu is) and the service (its name and a chevron). Their menus are §6.7's.
 4. 阅读选项 (`sliders-horizontal`), a popover: 对照高亮 (switch), 高亮颜色 (a swatch for each highlight profile: the
-   three built-in, 柔和绿, 淡黄, 淡蓝, and any added in the settings), a separator, 图片翻译 (switch; the popup's word,
-   the maintainer's ruling of 2026-09-25), a separator, 外观 (a small segmented control of three icons, equal whatever
+   three built-in, 柔和绿, 淡黄, 淡蓝, and any added in the settings), a separator, what to translate (UI.md S-R-27, §9.1:
+   a heading row in the second ink naming the five switches under it, the website's group in its words and order, the
+   owner's of 2026-10-25; until v21 the HTML page's image switch, S-P-85, the maintainer's ruling of 2026-09-25), a
+   separator, 外观 (a small segmented control of three icons, equal whatever
    the language — 跟随系统 a monitor, 浅色 a sun, 深色 a moon, in that order — their words in tooltips and to screen
    readers; the maintainer, 2026-09-26: words ran off the thumb in English),
    深色时调暗页面 (switch). All are settings (§9.1), the same values the popup and the settings page change; a change
@@ -421,10 +423,9 @@ the same values, and each follows the others through the shared configuration's 
 
 **Read, as they are**: `targetLanguage` (the nine are the reader's; §8 for the others), `provider` and `services`,
 `reading.sentenceHighlight` (对照高亮), `appearance.activeHighlight` among `appearance.highlights` (高亮颜色: the swatches are
-the configured highlight profiles, the three built-in and any added), `image.enabled` with `image.modes` (图片翻译:
-figure text is shown when it is on and the display's mode, §3, is among the modes, as on the HTML page) (since v20 the
-switch alone: figure text in every display; and on the layer the vector figures' text, §19.12, shown or hidden in place), `uiLanguage`
-(the reader's words), `mode` (the display, §3).
+the configured highlight profiles, the three built-in and any added), `uiLanguage` (the reader's words), `mode` (the
+display, §3). The image switch (`image.enabled`, S-P-85) is the HTML page's alone since v21: the reader's figure text is
+its own toggle, below; until then the switch showed or hid it too.
 
 - **Writing the display**: 对照 writes `mode: 'side'`, unless it is `'stack'` (a side-by-side choice already for the
   reader); 译文 writes `'only'`; both clear `pdfReader.original`. 原文 sets `pdfReader.original` and leaves `mode` alone.
@@ -449,6 +450,34 @@ switch alone: figure text in every display; and on the layer the vector figures'
 The experiment's own `axtPdfReader` storage key goes, without a migration: it was never released (rule 7 is about what a
 released version left on a machine).
 
+**What to translate** (UI.md S-R-27, S-O-56; `CONFIG_VERSION` 20 → 21, the owner's rulings of 2026-10-25 and 2026-10-28): `pdfReader.classes`,
+five booleans whose keys are the engine's toggles (`rules/content-classes.mjs` `TOGGLES`, `always` and `never` aside) and
+whose value is the layer's `classes` option as it is (§19.10, §19.13).
+
+| Key | Default | Row (§15) | What it shows translated |
+|---|---|---|---|
+| `figures` | true | Text in figures | the text inside a paper's drawn figures (§19.12) |
+| `tables` | true | Text in tables | the table cells |
+| `heads` | true | Headers and footers | the running heads and feet |
+| `references` | false | References | the bibliography, each entry whole, the names inside it included |
+| `names` | false | Author names | the author names under the title, and nothing else: the affiliations, addresses and e-mail line are always translated |
+
+- **A toggle shows or hides; it never translates.** Every class is translated once whatever the toggles say (the run sends
+  every unit `toTranslate` names, the hidden classes' among them), and a change is the layer side's `setClasses`: the door
+  opened again over the same documents, parts and rows, each laid page kept until the new door's commits, nothing fetched
+  from our server and nothing sent to the service (`session/host.ts` follows the setting as it lands, from the reading
+  options or the settings page: `sameClasses`, `run.setClasses`). The cache key does not move: no toggle is an input of a
+  translation (hard rule 4).
+- **Figure text is its own setting**, no longer the image switch: the HTML page's switch (S-P-85) decides whether a figure is read
+  and translated at all, which spends the reader's service, and a toggle here only shows or hides what was made. One row,
+  one setting, one name. The migration writes each toggle as the reader had it in effect at v20: `figures` the image
+  switch's value (the reader gave the layer its figures from it), the rest the engine's defaults then (heads and tables
+  shown, references and names not), written as literals so that a later default does not move what v21 wrote.
+- **The rows' order** (`CLASS_ROWS`, `pdf-reader/settings.ts`): the text in figures and in tables first, then the heads and
+  feet, the references and the author names (the owner's, 2026-10-25), in the reading options (S-R-27) and on the settings
+  page (S-O-56) alike. The defaults are restated in `config/schema.ts` (`DEFAULT_PDF_CLASSES`), the configuration free of the
+  engine, and held equal to `TOGGLE_DEFAULTS` by `tests/config/storage.test.ts`.
+
 ### 9.2 The popup while the reader is open
 
 The entry message's answer (`EntryStatus`) gains the page's kind, `'abs' | 'pdf'`, and on a PDF page whether the reader
@@ -461,7 +490,8 @@ reader cannot do is greyed or hidden):
 - The mode bar: 左右 and 仅译文 usable; 上下 disabled, its title PDF 对照不支持上下排列 (a layout the reader can see, not
   a technical reason). A `mode` of `'stack'` shows as 左右 chosen, since that is what the reader shows.
 - The primary button: 翻译本页 / 显示原文, clearing or setting `pdfReader.original`.
-- 对照高亮 and 图片翻译: as elsewhere.
+- 对照高亮: as elsewhere. The image switch greyed in its place, as the style menu is (it is the HTML page's since v21, and
+  changes nothing in the reader, whose figure text is its own toggle, §9.1); its value the stored one.
 - The style menu: greyed, in its place (it has no effect on a typeset PDF; greyed, not explained — the maintainer, 2026-09-28: the foot stays the same on every page).
 
 With the reader closed, a PDF page gets the abstract page's entry view: the two buttons.
@@ -471,6 +501,10 @@ With the reader closed, a PDF page gets the abstract page's entry view: the two 
 - A new section **PDF 阅读器** (`#pdf-reader`, after 阅读): 在 arXiv 的 PDF 上使用对照阅读器, 同步滚动, 外观, 深色时调暗页面
   (since the redesign: the PDF group of the Reading section at `#reading/pdf`, the appearance and the dimming under
   Appearance; `#pdf-reader` still leads there). The reader's 设置 button opens the settings page there.
+- **What to translate** (v21, `#reading/classes`, UI.md S-O-56): a group of its own after the PDF group, its heading's aside
+  saying it is the bilingual PDF's alone (the HTML page translates every part, and its figure text is the Reading card's
+  image switch), its five switches the reading options' (S-R-27) in their words and order. Shown whether the reader opens
+  arXiv's PDFs or not: `#readarxiv` opens it either way.
 - **数据** gains a line for the PDF translations kept on this machine, `{n} 篇 · {size}`, and 清除 through the existing
   `Confirm` (two presses; it disarms after 4 s), beside the HTML translations' line (the maintainer: 「其他暂时这样」 on
   the proposal). The settings page is on the extension's origin and calls the store's `usage()` and `clear()` directly.
@@ -1237,7 +1271,8 @@ the same thing, its string is reused (marked).
 | | 缩小 · 放大 · 缩放比例 · 适合宽度 · 适合页面 · 实际大小 | Zoom out · Zoom in · Zoom · Fit width · Fit page · Actual size |
 | | 目标语言 · 搜索语言 · 翻译服务 | Target language · Search languages · Translation service |
 | | 阅读选项 | Reading options |
-| | 对照高亮 (S-P-80, reused) · 高亮颜色 · 图片翻译 (S-P-85, reused) | Hover highlight · Highlight colour · Images |
+| | 对照高亮 (S-P-80, reused) · 高亮颜色 | Hover highlight · Highlight colour |
+| | 翻译范围 · 图中文字 · 表中文字 · 页眉页脚 · 参考文献 · 作者姓名 (the owner's, 2026-10-25; the website's words; the settings' group's aside 只对 PDF 对照生效) | What to translate · Text in figures · Text in tables · Headers and footers · References · Author names (Applies to bilingual PDFs only) |
 | | 外观 · 跟随系统 · 浅色 · 深色 · 深色时调暗页面 | Appearance · System · Light · Dark · Dim pages in dark mode |
 | | 下载 · 译文 PDF · 原文 PDF | Download · Translation PDF · Original PDF |
 | | 设置 (S-P-02, reused) · 在默认查看器中打开 | Settings · Open in the default viewer |
@@ -3045,8 +3080,9 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   or translated again): a figure unit's row is taken, and its figure drawn, where it is on; off, it is the original's, as any
   unit of a class not shown. Its default, `TOGGLE_DEFAULTS.figures`, is on (the owner's, 2026-10-25, having seen the web's
   settings: a figure's text is shown translated, and a label that does not fit stays the original's). The extension's reader passes
-  its figure switch (`image.enabled`, the reading options' image switch, §9.1, which the HTML page's figure text shares) as
-  `classes.figures`, and follows the switch as it lands, from here or elsewhere. A form one page wrote again and another paints: the other
+  its "What to translate" (`pdfReader.classes`, §9.1: Text in figures the figures' row) as the layer's `classes`, and follows it as it
+  lands, from the reading options or the settings page; until configuration v21 it passed the image switch, which the HTML
+  page's figure text shares, as `classes.figures`. A form one page wrote again and another paints: the other
   page's figures in it are `shared`, the original's, and its render shows the form's groups ON, since each render sets the
   visibility of its own page's drawn groups alone (visibility.mjs).
 - **Measured** (2026-10-25, `lab/pdf/spikes/figure-gate.mjs`, record `lab/pdf/records/figure-gate.md`): on the gate pack's 7

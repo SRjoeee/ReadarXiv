@@ -69,7 +69,7 @@ function fakeSide(first: ReturnType<typeof headOf> | null = null) {
   let ended = 0, agains = 0, options: Record<string, unknown> | null = null, head = first
   const side = {
     tell: vi.fn((r: unknown) => { told.push(r) }), index: vi.fn(async () => ({ ...m.index, head: head ?? headOf() })), take: vi.fn((rows: Row[]) => { taken.push(...rows) }),
-    end: vi.fn(() => { ended++ }), again: vi.fn(() => { agains++ }), retarget: vi.fn(), dropOthers: vi.fn(), rowsFor: vi.fn(() => [] as number[]), coverage: vi.fn(), probe: vi.fn(() => ({})), dispose: vi.fn(),
+    end: vi.fn(() => { ended++ }), again: vi.fn(() => { agains++ }), retarget: vi.fn(), setClasses: vi.fn(), dropOthers: vi.fn(), rowsFor: vi.fn(() => [] as number[]), coverage: vi.fn(), probe: vi.fn(() => ({})), dispose: vi.fn(),
   }
   return { side, told, taken, setHead: (next: ReturnType<typeof headOf>) => { head = next }, ended: () => ended, agains: () => agains, options: () => options as never as { fetchObject(r: unknown, s: AbortSignal): Promise<Uint8Array>; bind(b: { bytes: number; sha256: string; xref: number }): Promise<boolean>; composed(t: Uint8Array | null, o: object): { promise: Promise<unknown> } }, make: vi.fn((_v: unknown, o: Record<string, unknown>) => { options = o; return side }) }
 }
@@ -99,7 +99,7 @@ function pdfjs() {
   const getDocument = vi.fn((p: Record<string, unknown>) => { docs.push(p); return { promise: Promise.resolve({ numPages: N }), destroy: async () => {}, onProgress: null } })
   return { lib: { getDocument, PDFDataRangeTransport } as never, docs, given }
 }
-function run(o: { head?: Parameters<typeof headOf>[0]; looks: (() => Response)[]; engine?: ReturnType<typeof echo> | (() => Promise<never>) | (() => Promise<ReturnType<typeof echo>>); store?: LayerStore | null; prepare?: () => Response; original?: Uint8Array; base?: Uint8Array; objects?: Map<string, Uint8Array>; view?: ReturnType<typeof view>; may?: () => boolean; unsent?: () => void; tag?: string; originalTag?: string; arxiv?: Uint8Array | 'whole'; ranged?: boolean; hidden?: RunHost['hidden'] }) {
+function run(o: { classes?: RunHost['classes']; head?: Parameters<typeof headOf>[0]; looks: (() => Response)[]; engine?: ReturnType<typeof echo> | (() => Promise<never>) | (() => Promise<ReturnType<typeof echo>>); store?: LayerStore | null; prepare?: () => Response; original?: Uint8Array; base?: Uint8Array; objects?: Map<string, Uint8Array>; view?: ReturnType<typeof view>; may?: () => boolean; unsent?: () => void; tag?: string; originalTag?: string; arxiv?: Uint8Array | 'whole'; ranged?: boolean; hidden?: RunHost['hidden'] }) {
   const s = server(o.looks, o), side = fakeSide(headOf(o.head)), v = o.view ?? view(), events: RunEvent[] = []
   const engine = o.engine ?? echo()
   const opened: Uint8Array[] = []
@@ -110,6 +110,7 @@ function run(o: { head?: Parameters<typeof headOf>[0]; looks: (() => Response)[]
     openPdf: (data: Uint8Array) => { opened.push(data); return { promise: Promise.resolve({ numPages: N }), destroy: async () => {}, onProgress: null } as never },
     ...(o.ranged ? { pdfjs: lib.lib } : {}),
     ...(o.hidden ? { hidden: o.hidden } : {}),
+    ...(o.classes ? { classes: o.classes } : {}),
     readingPage: () => 1, mayPrepare: o.may ?? (() => true), ...(o.unsent ? { prepareUnsent: o.unsent } : {}), emit: e => events.push(e), faces: async () => null, createSide: side.make as never,
   }
   const r = startRun(v as never, PAPER, host)
@@ -1097,5 +1098,32 @@ describe('B6, R2-R4: the translation into rows', () => {
     await vi.waitFor(() => expect(kinds(a.events)).toContain('layer'))
     expect(a.s.layerLooks()).toBe(2)
     expect(a.side.make).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('what to translate (the reader\'s "What to translate", the layer\'s classes)', () => {
+  const shown = { figures: false, tables: false, heads: true, references: true, names: false }
+  it('the side is made with the reader\'s classes as they are when it is made, and each unit translated whatever they hide', async () => {
+    const a = run({ looks: [() => new Response(catalog)], classes: () => shown })
+    await vi.waitFor(() => expect(kinds(a.events)).toContain('translated'))
+    expect((a.side.make.mock.calls[0]?.[1] as { classes?: unknown } | undefined)?.classes).toEqual(shown)
+    // a row for every unit the target translates (toTranslate), the classes it hides among them (the paper's cells and its author's
+    // name): a toggle never translates again
+    const kindOf = (m.index as unknown as { kinds: string[] }).kinds
+    expect(new Set(a.side.taken.map(r => kindOf[r[0]]))).toEqual(new Set(toTranslate(m.index, 'zh').map(id => kindOf[id])))
+    expect(['cell', 'author'].every(k => a.side.taken.some(r => kindOf[r[0]] === k))).toBe(true)
+    expect(a.side.taken.length).toBe(toTranslate(m.index, 'zh').length)
+  })
+
+  it('a change of them is the side\'s, in place: nothing looked at, made or translated again', async () => {
+    const a = run({ looks: [() => new Response(catalog)] })
+    await vi.waitFor(() => expect(kinds(a.events)).toContain('translated'))
+    // (no classes from the host: the engine's defaults, none given)
+    expect((a.side.make.mock.calls[0]?.[1] as { classes?: unknown } | undefined)?.classes).toBeUndefined()
+    const looks = a.s.layerLooks(), sent = a.engine.translate.mock.calls.length
+    a.r.setClasses(shown)
+    expect(a.side.side.setClasses).toHaveBeenCalledWith(shown)
+    await settle()
+    expect([a.s.layerLooks(), a.side.make.mock.calls.length, a.engine.translate.mock.calls.length, a.side.agains()]).toEqual([looks, 1, sent, 0])
   })
 })

@@ -5,7 +5,9 @@ built (`layout/ink-units.mjs`, `pipeline/ink-pass.mjs`, paragraph points, the to
 bibliography BibTeX makes in the prepare's first pass with the ones the source holds, each entry one unit, and stage 7's names apart
 from places (settled in `docs/PDF-READER.md` §19.13, measured by `lab/pdf/spikes/classes-gate.mjs`); stage 5, the vector figures' text, built (2026-10-25: `layout/figure-text.mjs`, its groups in
 `layout/wrap.mjs`, ink units of kind `inkfigures` and BUNDLE 10's figure rows, `run.mjs paintFigures` under the toggle `figures`;
-settled in `docs/PDF-READER.md` §19.12, its gate `lab/pdf/spikes/figure-gate.mjs`); stages 6–8 are the plan of §7. Engine at
+settled in `docs/PDF-READER.md` §19.12, its gate `lab/pdf/spikes/figure-gate.mjs`); stage 8, the reader toggles in both hosts, built
+(the website's reading options in its batch 1; the extension's reading options and settings page at configuration v21, 2026-10-29:
+settled in `docs/PDF-READER.md` §9.1); stages 6 and 7's rest are the plan of §7. Engine at
 `next` 37d84180. The phase 1 measurement's scripts and raw rows are not
 in the tree (the session scratchpad's `orphans/`); stage 1's gate reproduces the pack's numbers from the engine itself.
 
@@ -109,7 +111,7 @@ The owner's map (2026-10-25; the settings' own words are the locale packs', thes
 | "References" | references, index (proposed) | each `\bibitem` one unit, whole, its names its own, from the bibliography's TeX the compile reads (thebibliography, a shipped .bbl, or the one BibTeX makes in the prepare's first pass, a shipped one from then on), marked like the body (PDF-READER §19.13); biblatex's `\printbibliography` no TeX to mark | built (biblatex a known gap) | — |
 | "Names" | names: the author block's names under the title | author units, translated for every target (TRANSLATE 6); its places (kind affiliation) the body's, always translated | built | — |
 | Never | math, code and verbatim, symbols | kept as the original's ink | never | — |
-| — | reader toggles in both hosts | a class's units drawn or not (and its groups ON or OFF) by the settings: the door's and the layer side's `classes`, the side's `setClasses`, the hosts' settings to wire | engine built; hosts planned | 2 |
+| — | reader toggles in both hosts | a class's units drawn or not (and its groups ON or OFF) by the settings: the door's and the layer side's `classes`, the side's `setClasses`, the hosts' settings (the extension's `pdfReader.classes`, `docs/PDF-READER.md` §9.1) | built | — |
 
 **Names, plainly** (the owner's ruling of 2026-10-28: the two toggles decoupled). "Names" is an author block's names alone (their
 own units, by TeX's marks); the names inside a bibliography's entry are the entry's, under "References". Names written inside body
@@ -153,7 +155,7 @@ nowhere. (A TikZ picture's texts, which the front end cuts into units of kind `f
 | 5 (built) | vector figure text: ink units of kind inkfigures, their groups, the parts' figure rows, under the toggle `figures` | in LAYOUT 21, REMOVAL 11 and BUNDLE5 10 (the key `figures` of a part, there only where it has one) | — |
 | 6 | OCR on the server | a new OCR version in the key | 3.5 |
 | 7 | names split from places (built: PIPELINE 30, LAYOUT 23); tables no unit cuts | PIPELINE | 1 |
-| 8 | reader toggles in the web and the extension | — | 2 |
+| 8 (built) | reader toggles in the web and the extension | the extension's configuration v21 (no engine version: no toggle is a translation's input) | 2 |
 
 About 23 agent-days in all. The web sweep reads invariant (o) once the engine is pinned (`scripts/sweep/invariants.mjs`), and the
 container stores `wrapFinal`'s `ledger` in the record (a web change). This design touches `latex-front.mjs` only in stages 4 and
