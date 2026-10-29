@@ -4,6 +4,8 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a paragraph that ends in a footnote mark, such as an abstract with a note on its last sentence, is translated; it had been left in the original language, whole.
+- Fixed: in the PDF reader, a bibliography made with biblatex follows the references switch like any other: each entry is translated only when you turn the references on, and its heading is translated on its own, no longer run into the first entry.
 - The PDF reader now translates into Italian, Dutch, Polish, Turkish, Indonesian, Malay, Czech, Swedish, Ukrainian and Bulgarian. Each language uses its own words for figures, tables and headings, and breaks words at the end of a line by its own rules.
 - Malay in Latin letters is now a target language. Until now, Malay was offered only in Jawi script.
 - Fixed: in the PDF reader, with the references turned on, the page numbers some papers print after each reference (the pages that cite it, each a link back) now follow the reference's translation, still links, instead of staying where the English reference was and showing over the translated text.

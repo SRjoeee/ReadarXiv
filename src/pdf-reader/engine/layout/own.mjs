@@ -19,6 +19,8 @@
 //   4. a placeholder (`p<id>.<j>a`/`b`, a footnote call `n<id>.<j>a`/`b`): stream.mjs ownedOf's entry where the marking is
 //      given (`follows`), else the pair, or an opening alone to the next point in its region; nothing of another unit's range
 //      its opening point stands in (a run-in heading);
+//   4b. a footnote's call after the unit's last word that TeX gave no mark: the raised glyphs right after its end mark, on that
+//      line, in no group;
 //   5. a label: the glyphs on the start's first glyph's baseline between the previous unit's end mark and the start, the
 //      placeholders' and names' ranges passed over — but the closing punctuation a head sets abutting the unit before it, that
 //      unit's text (amsthm's "(Note).") —; none for a table cell;
@@ -59,6 +61,8 @@ export const RULE_EM = 0.1
 /** a cell's lead macro's ink abuts its start: each gap under this share of an em (a word's space is a third; two \\tabcolsep
  *  between columns are more than one) */
 const CELL_ABUT = 0.6
+/** a footnote's mark after a unit's last word stands at least this share of the line's size above its baseline (make.mjs SHIFT) */
+const RAISED = 0.2
 /** a head macro's closing punctuation after the unit before a start (MR 5): a closing bracket or quote, a stop, a colon */
 export const HEAD_PUNCT = /^[)\]}.,:;!?\u2019\u201d]$/u
 /** that punctuation abuts the glyph before it: each gap under this share of an em (a word's space is a third) */
@@ -440,6 +444,31 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
     // a placeholder whose ink cannot be told apart is in the text's range: hidden with it, it could not be kept in place, and the
     // spell check reads no symbol (=, ×, †): its unit is the original's
     else if (lost && unitOf.has(id) && !unitOf.get(id).unhidden && textOf.has(id)) unit(id).unhidden = 'marks'
+  }
+
+  // ---- a footnote's call after the unit's last word that TeX gave no mark (MR 4b): its mark, the raised glyphs right after the
+  // unit's end mark, on the end mark's line, in its region, in no group — `u<id>.p`, as the maker finds it (make.mjs besideMarks):
+  // 2610.35877v1's abstract ends `step.\footnotemark`, TeX's answer for the call `00000020` (a mark around it moves the word after
+  // it), and the "1" its translation draws again stood under it
+  for (const [id, { e }] of textOf) {
+    const pieces = units?.[id]?.pieces
+    if (!e || !Array.isArray(pieces)) continue
+    const last = pieces.findLastIndex(q => q.t === 'text' && /\S/.test(typeof q.s === 'string' ? q.s : ''))
+    const tails = pieces.map((q, k) => [q, k]).filter(([q, k]) => k > last && classOf(q) !== null)
+    if (last < 0 || !tails.length || !tails.every(([q, k]) => q.t === 'ph' && classOf(q) === 'footnote' && !where.has(`n${id}.${k}a`) && !where.has(`n${id}.${k}b`))) continue
+    if (work > OWN_WORK) break
+    const [p] = e, pg = pages[p - 1], E = pt(e), r = at(e), R = regions[p - 1], L = pg.glyphs[E.glyph - 1]
+    if (!L) continue
+    const run = []
+    let edge = L.x1
+    for (let g = E.glyph; g < pg.glyphs.length; g++) {
+      const G = pg.glyphs[g]
+      work++
+      if (R.glyph[g] !== r || gOwn[p - 1][g] !== null || !(G.y - L.y >= RAISED * L.size) || G.y - L.y > L.size || G.x0 - edge > CELL_ABUT * L.size) break
+      run.push([p, g])
+      edge = G.x1
+    }
+    if (run.length) claim({ glyphs: run }, `u${id}.p`, 'p')
   }
 
   // ---- the names (MR 6)

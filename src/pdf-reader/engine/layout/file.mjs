@@ -176,8 +176,11 @@ export { LayoutRefusal } from './json.mjs'
  *  figure units since #476) take their own boxes, their room and the crowding read from them, and a glyph whose procedure
  *  paints nothing (an invisible text layer, 2610.19159v1's figures) has none; 29 (the owner's case 2610.37668v1): backref's list
  *  after an entry a row of its own, its list piece's (latex-front.mjs BACKREF_LIST), its segments the list's ink between the marks
- *  LAYOUT_TEX sets around it, EMPTY where TeX set none: a file of 28 has no row for that piece */
-export const LAYOUT = '29'
+ *  LAYOUT_TEX sets around it, EMPTY where TeX set none: a file of 28 has no row for that piece; 30 (the owner's case
+ *  2610.35877v1): a footnote's call after its unit's last word, which TeX gave no mark, its raised run right after the end mark
+ *  (make.mjs besideMarks), where it was LOST and its unit the original's whole (the abstract); and a biblatex entry's unit, of
+ *  the new kind `inkreferences` (UNIT_KINDS): a reader of 29 refuses that kind's index */
+export const LAYOUT = '30'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,
