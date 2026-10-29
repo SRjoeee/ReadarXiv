@@ -269,8 +269,11 @@
 //     backref's lists (hyperref's pagebackref), the unit that ends each entry's first paragraph ends in the list's placeholder
 //     (latex-front.mjs BACKREF_LIST), so that the list TeX sets after the entry is that unit's ink: every such paper's entries are
 //     translated again; 36 with TRANSLATE_VERSION 8 (a run-in label past a unit's head keeps its markers on the wire), so that no
-//     stored copy of 7's is taken for one of 8's
-export const PIPELINE_VERSION = '36'
+//     stored copy of 7's is taken for one of 8's; 37 (the owner's case 2610.35877v1): a biblatex bibliography's entries are units,
+//     kind `inkreferences`, one an entry, cut by the compile's points before each (marks.mjs POINTS_TEX `bi<n>`, layout/ledger.mjs
+//     `entry`), the references' class, where they were orphan text in ink units of their own grouping, always translated, its
+//     heading run into the first: every such paper's bibliography is translated again
+export const PIPELINE_VERSION = '37'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
@@ -328,6 +331,8 @@ export const PDFJS = '6.3.289'
  * it alone, which read a heading a class sets flush in a boxed panel `centre`: the parts' figure rows change where a unit's
  * anchor does, the base's bytes do not; 16 (the owner's case 2610.37668v1): backref's list after an entry is its list piece's own
  * ink (`u<id>.p`), between the marks LAYOUT_TEX's hook sets around it (marks.mjs BACKREF_TEX), where it was no one's: the base's
- * bytes change where a paper turns backref's lists on
+ * bytes change where a paper turns backref's lists on; 17 (the owner's case 2610.35877v1): a biblatex entry's ink its unit's
+ * groups (an ink unit of kind `inkreferences`, ink-units.mjs claimInk), the point before each a rendering intent in our page
+ * (marks.mjs POINTS_TEX `bi<n>`): the base's bytes change where a paper loads biblatex
  */
-export const REMOVAL = '16'
+export const REMOVAL = '17'

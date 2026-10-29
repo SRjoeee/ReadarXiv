@@ -829,6 +829,26 @@ describe('makeLayout, the review of 2026-10-06', () => {
     expect(alone.stats.ph.why).toEqual({ 'open, the next mark on another page': 1 })
   })
 
+  it("a footnote's call after its unit's last word, which TeX gave no mark, is the raised run right after the end mark (2610.35877v1's abstract)", async () => {
+    // (the abstract ends `step.\footnotemark`: TeX said a mark around the call moves the word after it, so it has none; the end
+    // mark after "w9." and the call's raised "1" right after it. LOST, the abstract was the original's whole)
+    const line: Run = { s: `${words(0, 9)} w9.`, x: 72, y: 700 }, mark: Run = { s: '1', x: endOf(line), y: 703.5, size: 7 }, next: Run = { s: words(10, 10), x: 72, y: 660 }
+    const w: World = {
+      pages: [{ runs: [line, mark, next] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(line), 700], ['1s', 1, 72, 660], ['1e', 1, endOf(next), 660]],
+      units: [unit('abstract', [text(`${words(0, 9)} w9.`), ph('\\footnotemark')]), unit('para', [text(words(10, 10))])],
+      // (TeX's answers in that paper: a word after the call moves under a mark, '2', so the call has none)
+      switches: { '\\footnotemark': '00000020' },
+    }
+    const { file } = await made(w)
+    const r = phOf(file, 0, 1)
+    expect(r[3]).toBe(PH_FLAG.RAISED)
+    expect(r.slice(4, 6)).toEqual([1, endOf(line)])
+    // (a run right after the mark that is no raised mark, the next words on the line: not the call's, LOST as before)
+    const level = await made({ ...w, pages: [{ runs: [line, { ...mark, y: 700, size: 10 }, next] }] })
+    expect(phOf(level.file, 0, 1)[3]).toBe(PH_FLAG.LOST)
+  })
+
   it('a caption centred whole, its label with it, is CENTRED', async () => {
     const para = [0, 1, 2, 3].map((j): Run => ({ s: `${'abcd efgh '.repeat(3)}line${j} wxyz`, x: 72, y: 700 - 12 * j }))
     // "Fig. 1." and its text, centred together on 172

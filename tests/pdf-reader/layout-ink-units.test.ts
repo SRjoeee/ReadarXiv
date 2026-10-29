@@ -298,6 +298,86 @@ describe('inkUnitsOf', () => {
     expect(own.boxes[0]).toEqual([`u${id}.p`, `u${id}`])
   })
 
+  it("cuts a biblatex bibliography one entry a unit of the references' class, by the compile's points, each entry's label the original's (2610.35877v1)", () => {
+    // ("References" set by \printbibliography, then two entries, each after its point bi<n>: the first over two lines, the second
+    // after its label [2], which the list's \item set before the point; a line after the zone's next unit is no entry's)
+    const pg = page(
+      { point: 'bs1' },
+      { glyphs: run('References', 100, 740, { size: 12 }) },
+      { point: 'bi1' }, { glyphs: run('Assran, M. and A. Bardes (2025). Self-Supervised Video Models', 100, 720) }, { glyphs: run('Enable Understanding and Planning.', 110, 708) },
+      { glyphs: run('[2]', 100, 690) }, { point: 'bi2' }, { glyphs: run('Barber, R. F. (2023). Conformal Prediction Beyond', 118, 690) },
+      { point: 'be1' },
+    )
+    const { ink } = unitsOf([pg], SOURCE)
+    expect(ink.map(u => [u.kind, textOf(u)])).toEqual([
+      ['inkorphan', 'References'],
+      ['inkreferences', 'Assran, M. and A. Bardes (2025). Self-Supervised Video Models Enable Understanding and Planning.'],
+      ['inkreferences', 'Barber, R. F. (2023). Conformal Prediction Beyond'],
+    ])
+    expect(ink.map(u => unitClass(u.kind))).toEqual(['orphan', 'references', 'references'])
+    // (the label's glyphs no unit's: the original's ink, as a \bibitem's)
+    expect(ink[2]!.glyphs.text).toHaveLength('Barber,R.F.(2023).ConformalPredictionBeyond'.length)
+  })
+
+  it("keeps every line of a biblatex entry in its unit, one of a URL alone or of numbers alone too (2610.35877v1's url lines)", () => {
+    // (biblatex's `url:` then the address in a typewriter face on the next line, as \url breaks it; an entry's last line of
+    // numbers alone; a line of no letter pairs past the zone is no entry's)
+    const pg = page(
+      { point: 'bs1' },
+      { point: 'bi1' }, { glyphs: run('Barber, R. F. (2023). Conformal Prediction. In: Annals 51.2. url:', 100, 720) },
+      { glyphs: run('https://doi.org/10.1214/23-AOS2276', 110, 708, { font: 'CMTT10' }) },
+      { point: 'bi2' }, { glyphs: run('Bickel, S. (2009). Covariate Shift. In: JMLR 10, pp.', 100, 690) }, { glyphs: run('2137-2155.', 110, 678) },
+      { point: 'be1' },
+    )
+    const { ink } = unitsOf([pg], SOURCE)
+    expect(ink.map(u => u.kind)).toEqual(['inkreferences', 'inkreferences'])
+    const lines = (u: (typeof ink)[number]) => new Set([...u.glyphs.text, ...u.glyphs.ph].map(([, g]) => pg.page.glyphs[g]!.y).sort((a, b) => b - a))
+    expect([...lines(ink[0]!)]).toEqual([720, 708])
+    expect([...lines(ink[1]!)]).toEqual([690, 678])
+    // (the URL's line a row of the unit's whole: its baseline, size and face its own glyphs', as a text line's are its words' —
+    // with none of them, the layout file refused the page's part, every unit on those pages left undrawn)
+    const rows = ink[0]!.rows.lines
+    expect(rows).toHaveLength(16)
+    expect(rows.every(v => typeof v === 'number' || typeof v === 'string')).toBe(true)
+    expect(rows.slice(8)).toEqual([1, 110, expect.any(Number), 708, expect.any(Number), expect.any(Number), 10, 'CMTT10'])
+  })
+
+  it("keeps an entry one unit over a page whose running head stands between its parts, a URL alone its continuation (Codex on #509)", () => {
+    const p1 = page({ point: 'bs1' }, { point: 'bi1' }, { glyphs: run('Barber, R. F. (2023). Conformal Prediction. In: Annals 51.2. url:', 100, 120) }, { point: 'be1' })
+    const p2 = page(
+      { point: 'c1-2' }, { glyphs: run('CALIBRATION UNDER SHIFT', 200, 760) },
+      { point: 'bs2' }, { glyphs: run('https://doi.org/10.1214/23-AOS2276', 110, 700, { font: 'CMTT10' }) },
+      { point: 'bi2' }, { glyphs: run('Bickel, S. (2009). Covariate Shift. In: JMLR 10.', 100, 688) }, { point: 'be2' },
+    )
+    const { ink } = unitsOf([p1, p2], SOURCE)
+    expect(ink.map(u => [u.kind, textOf(u)])).toEqual([
+      ['inkreferences', 'Barber, R. F. (2023). Conformal Prediction. In: Annals 51.2. url: ⟦·⟧'],
+      ['inkheads', 'CALIBRATION UNDER SHIFT'],
+      ['inkreferences', 'Bickel, S. (2009). Covariate Shift. In: JMLR 10.'],
+    ])
+    // (the URL on the second page the first entry's: a row of its own there)
+    expect(ink[0]!.rows.lines.filter((_, k) => k % 8 === 0)).toEqual([1, 2])
+  })
+
+  it("ends an entry where its bibliography ends, so that the next one's heading of a title of its own is no entry's (Codex on #509)", () => {
+    // (\printbibliography[type=article,title={Articles}] then [type=book,title={Books}]: biblatex's \blx@endbibliography sets bz<n>)
+    const pg = page(
+      { point: 'bs1' },
+      { glyphs: run('Articles', 100, 740, { size: 12 }) },
+      { point: 'bi1' }, { glyphs: run('Assran, M. (2025). Video Models. In: arXiv.', 100, 720) }, { point: 'bz1' },
+      { glyphs: run('Books', 100, 690, { size: 12 }) },
+      { point: 'bi2' }, { glyphs: run('Bauschke, H. H. (2017). Convex Analysis. Springer.', 100, 670) }, { point: 'bz2' },
+      { point: 'be1' },
+    )
+    const { ink } = unitsOf([pg], SOURCE)
+    expect(ink.map(u => [u.kind, textOf(u)])).toEqual([
+      ['inkorphan', 'Articles'],
+      ['inkreferences', 'Assran, M. (2025). Video Models. In: arXiv.'],
+      ['inkorphan', 'Books'],
+      ['inkreferences', 'Bauschke, H. H. (2017). Convex Analysis. Springer.'],
+    ])
+  })
+
   it('writes each as a bundle unit that stands, of its kind, with its echo', () => {
     const pg = page({ point: 'bs1' }, { point: 'n1.contents.e' }, { glyphs: run('1  Introduction . . 3', 100, 700) }, { glyphs: run('2  Other things . . 4', 100, 688) }, { point: 'be1' })
     const { ink } = unitsOf([pg], SOURCE)

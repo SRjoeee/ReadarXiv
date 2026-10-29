@@ -44,6 +44,13 @@ const HOW = Object.fromEntries(OWNED_HOW.map((h, i) => [h, i]))
 const BRACKET = /^([bf])([se])\d+$/
 /** a babel name's point (marks.mjs NAMES_TEX): no piece's next mark, its text no unit's */
 const NAME_POINT = /^n\d+\.[^.]+\.[se]$/
+/** where other text begins that no unit's mark opens: the start of a babel name that heads a block of its own ("References",
+ *  "Abstract", "Proof", marks.mjs NAME_MACROS; not a figure's or a table's, which a caption or a formula sets inside its own text:
+ *  `\[x=\text{\figurename}\,1\]`), its key in any case (a primitive \uppercase's capitals), and a biblatex entry's (marks.mjs
+ *  POINTS_TEX `bi<n>`): a piece alone past its unit's end owns nothing past one on its page */
+const BEGINS = /^(?:n\d+\.(?:abstract|ref|bib|contents|listfigure|listtable|appendix|index|proof|preface|glossary)\.s|bi\d+)$/i
+/** a biblatex entry's point, and its bibliography's end: no piece's next mark either, its entry no unit of the source */
+const BIB_ITEM = /^b[iz]\d+$/
 /** a piece's opening point: a placeholder's (p) or a footnote call's (n), by its unit and source piece index */
 const OPENING = /^([pn])(\d+)\.(\d+)a$/
 /** a unit's start mark: MARK_DEF's, a cell's, a heading's */
@@ -190,7 +197,9 @@ export function regionsOf(page) {
  *   mark must be its unit's next one (`ends`), or a later unit's start mark — MARK_DEF sets a unit's end mark before a
  *   display that ends it — and then what stands on that mark's line before it is that unit's label (a heading's number,
  *   an item's mark), not the piece's; or, where that mark is outside the bodies (a footnote's), the column's body's end;
- *   no unmarked visible piece may come between (`blocked`). Nothing at all before the
+ *   no unmarked visible piece may come between (`blocked`). Past its unit's end mark (a display that ends its unit), it ends
+ *   where a block's babel name (BEGINS) or a biblatex entry begins after it on its page, before any next mark, as at a later unit's
+ *   start: that text is no unit's of the source, and none of it the piece's. Nothing at all before the
  *   next point is a piece of nothing; nothing before the text after it, with glyphs there, is none (REVTeX sets the
  *   punctuation after a citation before its number).
  * - Past its column's end (pastColumn): an opening point alone in a column's body whose next mark lies past that body's
@@ -232,7 +241,7 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
   pages.forEach((p, i) => p.points.forEach((pt, q) => {
     const list = where.get(pt.name)
     if (list) list.push([i + 1, q]); else where.set(pt.name, [[i + 1, q]])
-    if (!BRACKET.test(pt.name) && !NAME_POINT.test(pt.name)) seq.push([i + 1, q])
+    if (!BRACKET.test(pt.name) && !NAME_POINT.test(pt.name) && !BIB_ITEM.test(pt.name)) seq.push([i + 1, q])
   }))
   const rank = new Map()
   seq.forEach(([p, q], r) => rank.set(`${p}|${q}`, r))
@@ -306,7 +315,45 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
     }
     if (f.closing) { out.set(name, none(HOW['closing point not read'])); continue }
     /** an opening point alone: to the next mark's point, on its page */
+    /** the piece's ink up to the point N where other text begins on its page, a later unit's start: that text's label not the
+     *  piece's — the glyphs on N's line before it, the boxes after the first of them */
+    const toStart = (glyphs, boxes, N) => {
+      const P = pages[pa - 1], G = P.glyphs, after = N.glyph
+      // (a piece that is no display, alone at its unit's end, owns its lines up to TeX's skip before another block, no further:
+      // the next unit may start many lines on — the last author's \\orcidlink of 2609.20976v1 ran to the abstract's label over
+      // the affiliations and the e-mail below the names, which no unit then owned and no ink unit was made of; a reference's
+      // \\Eprint wrapped over two lines, its entry's full stop on a third, keeps them, at the bibliography's leading)
+      let line = glyphs.length
+      if (!f.display && glyphs.length) {
+        // (the unit's line it opens on: the glyph before its first, on that glyph's line)
+        const g0 = glyphs[0][1], before = g0 - 1
+        const anchor = before >= 0 && Math.abs(G.y[before] - G.y[g0]) < Math.max(G.size[before], G.size[g0]) ? G.y[before] : null
+        line = lineEnd(G, glyphs, anchor, pitches.get(pa) ?? pitches.set(pa, pitchOf(G)).get(pa))
+      }
+      if (line < glyphs.length) { const upTo = P.boxAt[glyphs[line][1]]; glyphs = glyphs.slice(0, line); boxes = boxes.filter(([, b]) => b < upTo) }
+      let end = glyphs.length
+      while (after < G.n && end > 0 && Math.abs(G.y[glyphs[end - 1][1]] - G.y[after]) < 0.5 * Math.max(G.size[glyphs[end - 1][1]], G.size[after])) end--
+      const upTo = end < glyphs.length ? P.boxAt[glyphs[end][1]] : N.box
+      return { how: HOW["open, to its unit's next mark"], glyphs: glyphs.slice(0, end), boxes: boxes.filter(([, b]) => b < upTo) }
+    }
     const alone = () => {
+      // (past its unit's end mark — MARK_DEF sets it before a display that ends the unit —, nothing after it is its unit's: the
+      // text that begins on its page after it with no unit's mark, a block's babel name or a biblatex entry, is another's.
+      // 2608.08872v1's proof ends in a display, and the whole bibliography after it on the page, its "References" and every
+      // entry, was that display's ink. A name before the unit's end mark is the unit's own text)
+      const past = !f.want && [`${m[2]}e`, `t${m[2]}e`, `h${m[2]}e`].some(n => (where.get(n) ?? []).some(([p, q]) => p < pa || (p === pa && q < qa)))
+      if (past) {
+        const pts = pages[pa - 1].points, next = seq[(rank.get(`${pa}|${qa}`) ?? -2) + 1]
+        for (let q = qa + 1; q < pts.length && !(next && next[0] === pa && q >= next[1]); q++) {
+          if (!BEGINS.test(pts[q].name)) continue
+          const { glyphs, boxes } = takeTo([pa, q])
+          if (jumps(glyphs)) return none(HOW['across a column, unbracketed'])
+          if (f.blocked && (glyphs.length || boxes.length)) return none(HOW['open, an unmarked piece follows'])
+          // (as to a later unit's start: a numeric entry's label, which the list's \\item set before its point, the entry's; a piece
+          // that is no display, its lines to TeX's skip before another block)
+          return toStart(glyphs, boxes, pts[q])
+        }
+      }
       const next = seq[(rank.get(`${pa}|${qa}`) ?? -2) + 1]
       if (!next || next[0] !== pa) return none(HOW['open, the next mark on another page'])
       const P = pages[pa - 1], N = P.points[next[1]]
@@ -348,26 +395,7 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
         }
         if (f.blocked) return erasure && f.through && N.name === f.through ? { how: HOW["open, to its unit's next mark"], glyphs, boxes } : none(HOW['open, an unmarked piece follows'])
         if (f.ends.includes(N.name)) return { how: HOW["open, to its unit's next mark"], glyphs, boxes }
-        if (later && Number(later[1]) > Number(m[2])) {
-          // the next unit's label: the glyphs on its start mark's line before it, the boxes after the first of them
-          const G = P.glyphs, after = N.glyph
-          // (a piece that is no display, alone at its unit's end, owns its lines up to TeX's skip before another block, no further:
-          // the next unit may start many lines on — the last author's \\orcidlink of 2609.20976v1 ran to the abstract's label over
-          // the affiliations and the e-mail below the names, which no unit then owned and no ink unit was made of; a reference's
-          // \\Eprint wrapped over two lines, its entry's full stop on a third, keeps them, at the bibliography's leading)
-          let line = glyphs.length
-          if (!f.display && glyphs.length) {
-            // (the unit's line it opens on: the glyph before its first, on that glyph's line)
-            const g0 = glyphs[0][1], before = g0 - 1
-            const anchor = before >= 0 && Math.abs(G.y[before] - G.y[g0]) < Math.max(G.size[before], G.size[g0]) ? G.y[before] : null
-            line = lineEnd(G, glyphs, anchor, pitches.get(pa) ?? pitches.set(pa, pitchOf(G)).get(pa))
-          }
-          if (line < glyphs.length) { const upTo = P.boxAt[glyphs[line][1]]; glyphs = glyphs.slice(0, line); boxes = boxes.filter(([, b]) => b < upTo) }
-          let end = glyphs.length
-          while (after < G.n && end > 0 && Math.abs(G.y[glyphs[end - 1][1]] - G.y[after]) < 0.5 * Math.max(G.size[glyphs[end - 1][1]], G.size[after])) end--
-          const upTo = end < glyphs.length ? P.boxAt[glyphs[end][1]] : N.box
-          return { how: HOW["open, to its unit's next mark"], glyphs: glyphs.slice(0, end), boxes: boxes.filter(([, b]) => b < upTo) }
-        }
+        if (later && Number(later[1]) > Number(m[2])) return toStart(glyphs, boxes, N)
         return none(HOW["open, the next mark not its unit's"])
       }
       const end = textEnd(glyphs, N.name)

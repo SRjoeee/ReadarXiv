@@ -1,13 +1,13 @@
 // ink-units.mjs's types
 import type { Ledger, LedgerPage } from './ledger.mjs'
 /** the ledger's classes made units, and each one's kind */
-export declare const INK_KIND: Readonly<{ heads: 'inkheads'; contents: 'inkcontents'; notes: 'inknotes'; orphan: 'inkorphan'; names: 'inknames' }>
+export declare const INK_KIND: Readonly<{ heads: 'inkheads'; contents: 'inkcontents'; notes: 'inknotes'; orphan: 'inkorphan'; names: 'inknames'; references: 'inkreferences' }>
 export declare const NAMES_SHARE: number
 export declare const BLOCK_DY: number
 export declare const PARA_DY: number
 export declare const EDGE: number
 export declare const INDENT: number
-export type InkKind = 'inkheads' | 'inkcontents' | 'inknotes' | 'inkorphan' | 'inknames'
+export type InkKind = 'inkheads' | 'inkcontents' | 'inknotes' | 'inkorphan' | 'inknames' | 'inkreferences'
 /** an ink unit's piece: the front end's shapes (a text, a placeholder, a style run's group open and close, rule 9; an echo's its
  *  source unit's pieces) */
 export type InkPiece = { t: 'text'; s: string; src?: string } | { t: 'ph'; src: string } | { t: 'open' | 'close'; id: number; src: string }
