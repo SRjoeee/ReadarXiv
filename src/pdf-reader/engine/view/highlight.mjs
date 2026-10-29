@@ -130,7 +130,7 @@ export function pageLayout(kindOf = () => undefined) {
  */
 export function layoutParts(L, parts) {
   let told = false
-  for (const { pages, views, left } of parts) {
+  for (const { pages, views, left, quiet = false } of parts) {
     for (let i = 0; 4 * i < views.length; i++) {
       const at = pages[0] - 1 + i
       if (!L.views[at]) { L.views[at] = views.slice(4 * i, 4 * i + 4); told = true }
@@ -138,13 +138,13 @@ export function layoutParts(L, parts) {
     for (const [id, stream, rects] of left) {
       if (L.told.has(id) || L.drawn.has(id)) continue
       const rs = rects.map(([page, x0, y0, x1, y1]) => ({ page, x0, y0, x1, y1 }))
-      if (DRAWING.has(L.kindOf(id))) { L.drawn.add(id); drawnAt(L.drawings, rs) } else L.told.set(id, { stream, rects: rs })
+      if (DRAWING.has(L.kindOf(id))) { L.drawn.add(id); drawnAt(L.drawings, rs) } else L.told.set(id, { stream, rects: rs, ...(quiet ? { quiet } : {}) })
       told = true
     }
   }
   if (!told) return false
   const units = [...L.told].sort((a, b) => a[0] - b[0])
-  Object.assign(L, documentOf(Array.from(L.views, v => v ?? null), units.map(([id, u]) => [id, u.rects]), L.kindOf))
+  Object.assign(L, documentOf(Array.from(L.views, v => v ?? null), units.map(([id, u]) => [id, u.rects, u.quiet === true]), L.kindOf))
   for (const [id, u] of units) if (!L.anchors.has(id)) L.anchors.set(id, { rects: u.rects, tokens: tokensOf(L, id, u.stream) })
   L.cache.clear()
   L.indents.clear()
@@ -293,12 +293,15 @@ function documentOf(views, units, kindOf, { vote = false } = {}) {
   const long = []
   const unitsOn = Array.from({ length: pages + 2 }, () => [])
   const pagesOf = new Map()
-  for (const [id, rects] of units) {
+  for (const [id, rects, quiet] of units) {
     const ps = [], kind = kindOf(id) ?? ''
     rects.forEach((r, i) => {
       const P = page[r.page]
       if (!P) return
       if (ps.at(-1) !== r.page) { ps.push(r.page); unitsOn[r.page].push(id) }
+      // (a unit told by where the layout lays it, not located on the side — view/shapes.mjs's cells —: on its pages, no part of
+      // their columns, edges or leadings, which are the located units' as before it came)
+      if (quiet) return
       if (r.x0 < P.x0) P.x0 = r.x0
       if (r.x1 > P.x1) P.x1 = r.x1
       // the leading: the space between a unit's consecutive lines of one size, less than a line apart

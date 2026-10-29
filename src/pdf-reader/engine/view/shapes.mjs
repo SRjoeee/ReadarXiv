@@ -138,6 +138,59 @@ export function createShapes({ kindOf: unitKind = () => undefined, warn = warnOn
   // the same id (run.mjs paintNames). One that leads a unit (RUN_IN) is that unit's, lit with it. `namesOn` the rows waiting for
   // their page: [id, x0, x1, top, bottom] by page; `namesTold` the ids told
   const namesOn = new Map(), namesTold = new Set()
+  // a table's cell unit the parts' left does not locate (the producer locates few on arXiv's PDF, a cell's text too short for the
+  // anchors: 7 of 2010.11929v2's 165, 2 of 2610.35877v1's 71), whose lines the parts' layouts lay (layout/file.mjs `lines`, arXiv's
+  // page's units): told on the left as a unit of its own by the tokens of its page whose middle stands in one of its lines' boxes
+  // and that no unit told there holds, as a babel name is, so that it lights cell to cell on both panes (the owner, 2026-10-30) —
+  // the right tells what the left tells, and the left's words of it were else a cell of the page's (floats.mjs cellsOf). `cellsOn`
+  // the boxes waiting for their page: [id, x0, x1, top, bottom] by page; `cellsTold` the ids told
+  const cellsOn = new Map(), cellsTold = new Set()
+  const takeCells = parts => {
+    const pages = new Set()
+    for (const part of parts) for (const [id, rows] of part.layout?.lines ?? []) {
+      if (kindOf(id) !== 'cell' || L.told.has(id) || cellsTold.has(id)) continue
+      for (let j = 0; j + 7 < rows.length; j += 8) {
+        ;(cellsOn.get(rows[j]) ?? cellsOn.set(rows[j], []).get(rows[j])).push([id, rows[j + 1], rows[j + 2], rows[j + 4], rows[j + 5]])
+        pages.add(rows[j])
+      }
+    }
+    // (a page in already: told now, its spans after it as a name's)
+    for (const p of pages) { const input = state.pages.get(p); if (input) tellCells(input, true) }
+  }
+  /** page `input`'s cells waiting, told: their part to the layout and the followers; `late` their spans after the page, else into
+   *  the page's own input before it is laid (so that the followers' copies of the page hold them) */
+  const tellCells = (input, late) => {
+    const p = input.page, list = cellsOn.get(p)
+    if (!list) return
+    cellsOn.delete(p)
+    const T = input.table, held = new Set()
+    for (const [, ks] of input.spans) for (const k of ks) held.add(k)
+    const boxes = new Map()
+    for (const [id, x0, x1, top, bottom] of list) if (!cellsTold.has(id) && !L.told.has(id)) (boxes.get(id) ?? boxes.set(id, []).get(id)).push([x0, x1, top, bottom])
+    // (quiet: no part of the page's columns, edges or leadings, which stay the located units', highlight.mjs layoutParts)
+    const part = { pages: [p], views: [], left: [], quiet: true }, spans = []
+    for (const [id, bs] of boxes) {
+      const ks = []
+      for (let t = 0; t < T.n; t++) {
+        const k = input.first + t
+        if (held.has(k)) continue
+        const mx = (T.l[t] + T.r[t]) / 2, my = (T.top[t] + T.bottom[t]) / 2
+        if (bs.some(([x0, x1, top, bottom]) => mx >= x0 - NAME_SLACK && mx <= x1 + NAME_SLACK && my >= bottom - NAME_SLACK && my <= top + NAME_SLACK)) { ks.push(k); held.add(k) }
+      }
+      if (!ks.length) continue
+      cellsTold.add(id)
+      part.left.push([id, ks[0], bs.map(([x0, x1, top, bottom]) => [p, x0, bottom, x1, top])])
+      spans.push([id, Int32Array.from(ks)])
+    }
+    if (!part.left.length) return
+    layoutParts(L, [part])
+    state.parts.push(part)
+    for (const f of state.followers) f.addParts([part])
+    if (late) {
+      layoutSpans(L, p, spans)
+      for (const f of state.followers) f.addSpans(p, spans)
+    } else input.spans.push(...spans)
+  }
   const tellNames = p => {
     const list = namesOn.get(p), input = state.pages.get(p)
     if (!list || !input) return
@@ -197,6 +250,7 @@ export function createShapes({ kindOf: unitKind = () => undefined, warn = warnOn
         for (const f of state.followers) f.addParts(parts)
       }
       takeNames(parts)
+      takeCells(parts)
     },
     /** a page's left part (format.mjs ReadLeftPart): its part of the layout, and the mirrors'; false where it was in
      *  already or is refused — malformed, or its ids reach into another page's (one warning a page) */
@@ -205,6 +259,7 @@ export function createShapes({ kindOf: unitKind = () => undefined, warn = warnOn
       try {
         if (L.pt[left.page]) return false
         input = leftPageInput(left)
+        tellCells(input, false)
         if (!layoutPage(L, input.page, input)) return false
       } catch (e) { refuse(left?.page, e); return false }
       state.pages.set(input.page, input)
@@ -262,7 +317,7 @@ const copyPage = input => ({
   table: { n: input.table.n, l: input.table.l.slice(), r: input.table.r.slice(), y: input.table.y.slice(), h: input.table.h.slice(), top: input.table.top.slice(), bottom: input.table.bottom.slice() },
   spans: input.spans.map(([id, tokens]) => [id, tokens.slice()]),
 })
-const copyPart = part => ({ pages: [...part.pages], views: [...part.views], left: part.left.map(([id, stream, rects]) => [id, stream, rects.map(r => [...r])]) })
+const copyPart = part => ({ pages: [...part.pages], views: [...part.views], left: part.left.map(([id, stream, rects]) => [id, stream, rects.map(r => [...r])]), ...(part.quiet ? { quiet: true } : {}) })
 
 /**
  * The right's shapes, the left's mirrored (trap 1): { layout, shapes, forget, dispose }. A layout of its own over its own copies
@@ -342,6 +397,7 @@ export function layerShapes(source) {
   const tellParts = parts => layoutParts(L, parts.map(part => ({
     pages: [...part.pages], views: [...part.views],
     left: part.left.map(([id, , rects]) => [id, BASE * Math.min(...rects.map(r => r[0])) - 1, rects.map(r => [...r])]),
+    ...(part.quiet ? { quiet: true } : {}),
   })))
   function reset() {
     L = pageLayout(state.kindOf)

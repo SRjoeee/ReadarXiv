@@ -817,3 +817,60 @@ describe("babel's names light as headings on both panes, under ids no bundle id 
     }
   })
 })
+
+describe('a table\'s cell unit the left part does not locate is told by its layout lines, and pairs on both panes (the release sweep of ba433da8)', () => {
+  // (production locates few cells on arXiv's PDF, their text too short for the anchors: 7 of 2010.11929v2's 165, 2 of
+  // 2610.35877v1's 71; while a cell lit its whole table nothing showed it, and since #513 its pane's words were a cell of their
+  // own on the left, a page's id, and nothing on the right, which tells the units the left tells)
+  const beta = doc.findIndex(t => t.page === 2 && t.t === 'beta' && Math.abs(t.y - 560) < 1)
+  const B = nth(doc, beta)
+  const kinds = (id: number) => (id === 9 ? 'cell' : kindOf(id))
+  /** the parts as the wire carries them, the part of page 2 with the layout's lines of cell 9 (page, x0, x1, baseline, top,
+   *  bottom, size, font), which its left does not hold */
+  function side() {
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    const withLines = parts.map(p => (p.pages[0] <= 2 && p.pages[1] >= 2 ? { ...p, layout: { names: [], lines: [[9, [2, B.x, B.x + B.w, B.y, B.top, B.bottom, 10, 0]]] } } : p))
+    const l = createShapes({ kindOf: kinds })
+    l.addParts(withLines as never)
+    for (const p of [1, 2, 3]) l.addPage(nth(lefts, p))
+    l.floats(2)
+    return { l, left2: nth(lefts, 2) }
+  }
+  const at = [2, B.x + 2, (B.top + B.bottom) / 2] as const
+
+  it('the left: the tokens of its page in its lines\' boxes, its id under the pointer, never a cell of the page\'s', () => {
+    const { l } = side()
+    expect(l.shapes.hit(...at, PAD, () => null)?.id).toBe(9)
+    expect(l.shapes.runs(9).map(r => r.page)).toEqual([2])
+    // (the mirror too: the right where its page shows the original)
+    const m = mirror(l)
+    expect([m.shapes.hit(...at, PAD, () => null)?.id, m.shapes.runs(9).length]).toEqual([9, 1])
+  })
+
+  it('every other unit keeps its runs on both panes, though the cell\'s lines would vote its page into two columns (2610.22195v1 p18)', () => {
+    // (cell 9 with eight lines a third of the page wide besides its own, four in each half of page 2: long lines the column vote counts)
+    const wide = [0, 1, 2, 3].flatMap(i => [[2, 60, 260, 440 - 12 * i, 447 - 12 * i, 438 - 12 * i, 10, 0], [2, 330, 530, 440 - 12 * i, 447 - 12 * i, 438 - 12 * i, 10, 0]]).flat()
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    const withLines = parts.map(p => (p.pages[0] <= 2 && p.pages[1] >= 2 ? { ...p, layout: { names: [], lines: [[9, [2, B.x, B.x + B.w, B.y, B.top, B.bottom, 10, 0, ...wide]]] } } : p))
+    const l = createShapes({ kindOf: kinds }), m = mirror(l)
+    l.addParts(withLines as never)
+    for (const p of [1, 2, 3]) l.addPage(nth(lefts, p))
+    expect(l.shapes.runs(9).length).toBeGreaterThan(0)
+    const plain = built([1, 2, 3])
+    for (const id of [0, 1, 2, 3, 4, 5, 6]) {
+      expect(l.shapes.runs(id).map(r => blockOf(r, PAD))).toEqual(plain.shapes.runs(id).map(r => blockOf(r, PAD)))
+      expect(m.shapes.runs(id).map(r => blockOf(r, PAD))).toEqual(plain.shapes.runs(id).map(r => blockOf(r, PAD)))
+    }
+  })
+
+  it('the right on a laid page: the words the layer drew of it, its id under the pointer, so either pane lights both', () => {
+    const { l, left2 } = side()
+    const r = layerShapes(l)
+    // (page 2 laid with the cell's word drawn, its token the left's copied 3 lower, the other units the original's)
+    const k = beta - left2.first, T = left2.table, f = (a: Float32Array, d = 0) => Float32Array.from([nth([...a], k) + d])
+    r.lay(2, { tokens: { n: 1, l: f(T.l), r: f(T.r), y: f(T.y, -3), h: f(T.h), top: f(T.top, -3), bottom: f(T.bottom, -3) }, word: Int32Array.from([0]), at: Int32Array.from([0]), spans: [[9, [0, 1]]], original: left2.spans.map(s => s[0]) } as never)
+    expect(r.laid(2)).toBe(true)
+    expect(r.shapes.hit(2, B.x + 2, (B.top + B.bottom) / 2 - 3, PAD, () => null)?.id).toBe(9)
+    expect(r.shapes.runs(9).length).toBe(1)
+  })
+})
