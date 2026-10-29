@@ -14,7 +14,8 @@
 //      head's folio (its head's words recur on another page with another number there); a number in the text's own words is
 //      the unit's ("… at ICLR 2021", the same on every page);
 //   3. a unit: a head's line alone; the others' lines while they follow on one page and in one region, each within BLOCK_DY of
-//      its size below the one before (PARA_DY within one of TeX's paragraphs: a list set double) and meeting it across, and in
+//      its size below the one before (PARA_DY within one of TeX's paragraphs: a list set double, an indent from the paragraph's
+//      first line where the block begins on it) and meeting it across, and in
 //      one paragraph of TeX's (ink.mjs `paras`: a contents entry, a note, a paragraph); where the compile marked none, a list's line with the next where it ends in no page number (an
 //      entry continued), a note's or an orphan's while they follow;
 //   4. inside a unit, a run of a math face's glyphs or of a typewriter face's is a placeholder (`math`, `url`): its ink kept,
@@ -265,9 +266,14 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     // (past BLOCK_DY, within PARA_DY, a marked paragraph's line is its next only where it starts an indent from the paragraph's first
     // line, past EDGE and within INDENT: a hanging line, or a paragraph's own run after its indented first; a line at the first's
     // edge is the next item of a list, which no point of its own tells apart, single-line or not, and a list after a centred
-    // heading starts further across than any indent)
+    // heading starts further across than any indent). The paragraph's first line is the block's only where its point lies on it
+    // (the ledger's `opens`): a block that begins where a paragraph runs on, at a column's or a page's top, begins at a line of
+    // its run, and a list whose items set no point of their own (REVTeX's bibliography, every entry's lines one paragraph's) has
+    // every next item's first line an indent from that run's edge; measured from it, an orphan bibliography read as a hanging
+    // paragraph a column long, each entry's start bridged over the line of its link no unit holds (2610.21770v1 p6-p7,
+    // 2610.20595v1 p20)
     const dx = prev ? Math.abs(s.x0 - last[0].x0) : 0
-    const near = drop <= BLOCK_DY * size || (paras && prev.para === s.para && drop <= PARA_DY * size && dx > EDGE * size && dx <= INDENT * size)
+    const near = drop <= BLOCK_DY * size || (paras && prev.para === s.para && last[0].opens === true && drop <= PARA_DY * size && dx > EDGE * size && dx <= INDENT * size)
     const follows = prev && prev.page === s.page && prev.cls === s.cls && prev.region === s.region && drop > 0 && near && s.x0 < prev.x1 && s.x1 > prev.x0
     // (a paragraph with no point of its own reads as the one before: a contents line ending in its page number ends its entry
     // whatever its point)

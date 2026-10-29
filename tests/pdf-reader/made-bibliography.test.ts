@@ -106,6 +106,9 @@ describe('madeBibliography: the job\'s .bbl BibTeX makes in the prepare\'s first
       [[{ 'main.aux': AUX, 'main.bbl': '\\begin{thebibliography}{0}\n\\end{thebibliography}\n' }], 'no-bbl'],
       // (a .bbl that is more than a bibliography: a heading of its own among the source's units moves the units after it)
       [[{ 'main.aux': AUX, 'main.bbl': `\\section*{Notes}\nA note BibTeX never writes.\n\n${BBL}` }], 'moved'],
+      // (an entry the front end reads past its end: a URL's percent sign, which TeX's \\href reads as a character and the front end as
+      // a comment, leaves its group open over the next entry, whose \\bibitem would then no longer define its citation: 2610.21770v1)
+      [[{ 'main.aux': AUX, 'main.bbl': '\\begin{thebibliography}{2}\n\\bibitem{ba2016}%\n  Jimmy~Lei Ba, \\href\n  {https://a.org/x?u=%3Fref}\n  {Layer normalization}, 2016.%\n\\bibitem{b}%\n  Another Author, A title of a paper, 2017.%\n\\end{thebibliography}\n' }], 'entries'],
     ]
     for (const [args, why] of cases) {
       const paper = source(), { compile } = host(...args)
@@ -113,6 +116,18 @@ describe('madeBibliography: the job\'s .bbl BibTeX makes in the prepare\'s first
       expect(r, why).toMatchObject({ kept: why })
       expect(paper.meta.bbl, why).toBe(false)
     }
+  })
+  it('makes the entries where the .bib the aux names first is one the pass wrote itself: REVTeX\'s <job>Notes.bib (2610.20595v1, 2610.21770v1)', async () => {
+    // (REVTeX 4.x writes its notes as entries of `<job>Notes.bib` during the pass and names it in \\bibdata before the paper's own:
+    // on the disk latexmk decides by, so its BibTeX runs; read as a .bib the package lacks, every REVTeX paper that ships no .bbl
+    // had no entry units, its bibliography text no unit's, cut into ink units a column long)
+    const aux = '\\relax\n\\citation{ba2016}\n\\bibstyle{apsrev4-2}\n\\citation{REVTEX42Control}\n\\bibdata{mainNotes,refs}\n'
+    const paper = source(), { compile } = host({ 'main.aux': aux, 'mainNotes.bib': '@CONTROL{REVTEX42Control}\n', 'main.bbl': BBL })
+    const r = await madeBibliography(paper, { compile })
+    expect('paper' in r && kinds(r.paper).slice(paper.units.length)).toEqual(['reference'])
+    // (a .bib neither the package's nor the pass's is missing still)
+    const other = await madeBibliography(source(), { compile: host({ 'main.aux': '\\citation{ba2016}\n\\bibdata{mainNotes,refs,other}\n', 'mainNotes.bib': '', 'main.bbl': BBL }).compile })
+    expect(other).toMatchObject({ kept: 'bib-missing' })
   })
   it('takes a host\'s throw for the pass\'s failure, and a host that runs no such compiler for none', async () => {
     const paper = source()

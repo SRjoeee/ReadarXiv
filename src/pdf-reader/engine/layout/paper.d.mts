@@ -88,7 +88,7 @@ export declare function markedOfPaper(paper: Paper, o: MarkedCompileOptions): Pr
 >
 
 /** why madeBibliography made no entries (paper.mjs madeBibliography's comment) */
-export type BibliographyKept = 'shipped' | 'none' | 'biblatex' | 'bib-missing' | 'engine' | 'compile' | 'no-files' | 'aux-jobs' | 'biber' | 'no-bbl' | 'moved'
+export type BibliographyKept = 'shipped' | 'none' | 'biblatex' | 'bib-missing' | 'engine' | 'compile' | 'no-files' | 'aux-jobs' | 'biber' | 'no-bbl' | 'moved' | 'entries'
 /**
  * The bibliography BibTeX makes of a paper that ships none (PDF-READER §19.13): one draft pass of the unmarked original with
  * BibTeX, its files asked, and the paper opened again with the job's .bbl it wrote (`made`, its path and bytes, which the

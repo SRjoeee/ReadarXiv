@@ -58,6 +58,8 @@ export function bibliographyKept(paper) {
 }
 /** an entry's unit (latex-front.mjs bibliography: one unit an entry) */
 const ENTRY = 'reference'
+/** the \\bibitem a .bbl BibTeX wrote holds: one at the start of each entry's first line, as every style writes it */
+const bibitemsOf = bytes => (texText(bytes).match(/^[ \t]*\\bibitem(?![A-Za-z@])/gm) ?? []).length
 /**
  * The bibliography BibTeX makes of a paper that ships none (PDF-READER §19.13; the owner's ruling of 2026-10-28: a .bbl the
  * compile makes is a shipped one): where the walk met \\bibliography{…} (the front end's `bibliography`), the package holds no
@@ -72,7 +74,9 @@ const ENTRY = 'reference'
  * (a .bib it names is not the package's: latexmk -norc runs no BibTeX then, and nor does the marked compile), `engine` (the
  * host runs no such compiler), `compile` (the pass did not run through, or the host threw), `no-files` (none returned),
  * `aux-jobs` (another job's bibliography beside the main one's: chapterbib, multibib, bibunits), `biber` (the pass wrote a
- * .bcf), `no-bbl` (no thebibliography, or one of no \\bibitem), `moved` (another unit changed with it). `compilerOf`, as
+ * .bcf), `no-bbl` (no thebibliography, or one of no \\bibitem), `moved` (another unit changed with it), `entries` (a \\bibitem the
+ * paper opened again reads as no entry of its own: 2610.21770v1's entry whose \\href holds a URL's `%3F`, which the front end reads
+ * as a comment and TeX does not, ran over the 18 entries after it, and marked so their citations were undefined). `compilerOf`, as
  * markedOfPaper's: asked before the pass, and the paper opened again keeps what it said. Never throws but a failed allocation
  */
 export async function madeBibliography(paper, { compile, compilerOf = null, engines = null }) {
@@ -101,6 +105,9 @@ export async function madeBibliography(paper, { compile, compilerOf = null, engi
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
   if (k <= 0 || !same(now.slice(0, n), was.slice(0, n)) || !same(now.slice(n + k), was.slice(n)) || !again.units.slice(n).every(u => u.kind === ENTRY)) return done({ kept: 'moved' })
   if (paper.units.some((u, i) => u.file !== again.units[i].file || u.start !== again.units[i].start || u.end !== again.units[i].end)) return done({ kept: 'moved' })
+  // (every \\bibitem BibTeX wrote, each at a line's start, one entry: an entry the front end reads past its end takes the next ones
+  // in, and marked so, their \\bibitem no longer define their citations)
+  if (bibitemsOf(bytes) !== k) return done({ kept: 'entries' })
   Object.assign(again.meta, { compiler: paper.meta.compiler, compilerGuessed: paper.meta.compilerGuessed, ...(paper.meta.compilerFrom ? { compilerFrom: paper.meta.compilerFrom } : {}) })
   return done({ paper: again, made: { path, bytes } })
 }
@@ -583,17 +590,20 @@ const bibInput = files => [...files].filter(([p]) => /\.(?:aux|bcf)$/.test(p)).s
 /** whether a pass wrote a bibliography job beside the main one's (an aux of another name holding a \bibdata: chapterbib, multibib,
  *  bibunits), which latexmk runs BibTeX on and a one-pass request (the main job's bibliography step alone) never does */
 const otherBibJobs = (files, main) => [...files].some(([p, b]) => /\.aux$/.test(p) && p !== `${jobName(main)}.aux` && /^\\bibdata\{/m.test(latin1(b)))
-/** whether a bibliography the pass names has no .bib file in the project (a \bibdata name in an aux, a datasource of a .bcf): the
- *  bibliography step's tool would run, but latexmk -norc (bibtex_use 1) skips BibTeX and biber when any .bib is missing, and
- *  BibTeX writes an empty thebibliography none of L's passes has. Over-broad for a .bib of the TeX tree (IEEEabrv): only
- *  today's compile is asked then */
+/** whether a bibliography the pass names has no .bib file in the project nor among the files the pass wrote (a \bibdata name in an
+ *  aux, a datasource of a .bcf): the bibliography step's tool would run, but latexmk -norc (bibtex_use 1) skips BibTeX and biber
+ *  when any .bib is missing, and BibTeX writes an empty thebibliography none of L's passes has. A .bib the pass writes itself is
+ *  on the disk latexmk looks at when it decides: REVTeX 4.x writes `<job>Notes.bib` (its notes as entries) and names it in
+ *  \bibdata before the paper's own, so every REVTeX paper that ships its .bib and no .bbl read as one that lacks a .bib, its
+ *  entries no units and its bibliography text no unit owns (2610.20595v1, 2610.21770v1: their entries cut a column at a time).
+ *  Over-broad for a .bib of the TeX tree (IEEEabrv): only today's compile is asked then */
 const bibMissing = (files, fsys) => {
   const names = []
   for (const [p, b] of files) {
     if (p.endsWith('.aux')) for (const m of latin1(b).matchAll(/^\\bibdata\{([^}]*)\}/gm)) names.push(...m[1].split(','))
     else if (p.endsWith('.bcf')) for (const m of latin1(b).matchAll(/<bcf:datasource\b[^>]*>([^<]*)</g)) names.push(m[1])
   }
-  return names.map(n => n.trim()).filter(Boolean).some(n => !fsys.read(n.endsWith('.bib') ? n : `${n}.bib`))
+  return names.map(n => n.trim()).filter(Boolean).some(n => { const bib = normalizePath(n.endsWith('.bib') ? n : `${n}.bib`); return !fsys.read(bib) && !files.has(bib) })
 }
 
 /**

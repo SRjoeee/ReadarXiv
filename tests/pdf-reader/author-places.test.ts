@@ -108,6 +108,19 @@ describe('an author block\'s names and its places, by the TeX that sets them', (
     const aaai = open('\\maketitle\nWords.', '\\author{Alice Example}\n\\affiliations{School of Information Engineering\\\\ Shanghai Maritime University}')
     expect(places(aaai)).toEqual(['School of Information Engineering', 'Shanghai Maritime University'])
   })
+  it('ICLR 2021\'s rows each set in a \\centerline: the rows before the one its mark opens names, that one and the rest places (2010.11929v2)', () => {
+    // (each row one \\centerline, read as one placeholder: the block had no unit, its names, notes and places one orphan's ink
+    // unit, always translated and set in the names' bold)
+    const p = open('\\maketitle\nWords of the body.', '\\title{A Title}\n\\author{\n\\centerline{Alexey Dosovitskiy$^{*,\\dagger}$, Lucas Beyer$^{*}$,} \\vspace{1mm}\\\\\n\\centerline{\\textbf{Xiaohua Zhai$^{*}$, Thomas Unterthiner,}} \\vspace{0.5mm} \\\\\n\\centerline{$^*$equal technical contribution, $^\\dagger$equal advising}  \\vspace{0.7mm} \\\\\n\\centerline{Google Research, Brain Team}  \\vspace{0.8mm} \\\\\n\\centerline{\\texttt{\\{adosovitskiy, neilhoulsby\\}@google.com}} \\\\\n}')
+    expect(names(p)).toEqual(['Alexey Dosovitskiy, Lucas Beyer,', 'Xiaohua Zhai, Thomas Unterthiner,'])
+    expect(places(p)).toEqual(['equal technical contribution, equal advising', 'Google Research, Brain Team'])
+    expect(units(p).map(textOf).join('|')).not.toMatch(/google\.com/)
+    // (every unit cut there numbered after the others: the body's paragraph keeps its number; a \\centerline outside an author
+    // block one placeholder, as before)
+    expect(units(p).map(u => u.kind)).toEqual(['heading', 'para', 'author', 'author', 'affiliation', 'affiliation'])
+    const body = open('Before it.\n\n\\centerline{A centred line of words.}\n\nAfter it.')
+    expect(units(body).map(textOf)).toEqual(['Before it.', 'After it.'])
+  })
   it('an e-mail, a web address and an ORCID written out stay the original\'s ink: placeholders of the place they stand in', () => {
     const p = open('\\maketitle\nWords.', '\\author{Alice Smith \\\\ University of Somewhere, alice@some.edu, ORCID 0000-0002-1825-0097, see https://some.edu/alice}')
     expect(places(p)).toEqual(['University of Somewhere, , ORCID , see'])

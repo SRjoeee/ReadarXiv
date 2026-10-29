@@ -1,5 +1,5 @@
 {
- "pipeline": "31",
+ "pipeline": "32",
  "units": {
   "sample-1": [
    "heading: text",
@@ -113,6 +113,13 @@
    "author: text,ph,text",
    "affiliation: ph,text"
   ],
+  "authors-box": [
+   "para: ph,text",
+   "author: open,text,ph,text,ph,close,text,ph",
+   "author: open,open,text,ph,close,close,text",
+   "affiliation: open,ph,text,close,text",
+   "affiliation: open,text,close,text"
+  ],
   "made-bbl": [
    "para: text,ph,text,ph,text"
   ]
@@ -131,6 +138,12 @@
   ],
   "styles": [
    "inkorphan: open(\\textbf{),\"Definition 1\",close,\" ([TT]) \",open(\\textcolor[HTML]{0071BC}{),\"holds\",close,\" \",open(\\textit{),\"here and now\",close"
+  ],
+  "column": [
+   "inkorphan: \"The data are available on request.\"",
+   "inkorphan: \"transport phenomena in junctions of a compensated ferrimagnet and a normal metal, Phys. Rev. B\"",
+   "inkorphan: \"[21] Y. Liu, S.-D. Guo, Two-dimensional fully compensated ferrimagnetism, Phys. Rev. Lett.\"",
+   "inkorphan: \"[22] Z. Zhang, Y. Wei, Fully compensated\""
   ]
  },
  "figures": {

@@ -1589,7 +1589,7 @@ The edge cases, decided:
 | `BUNDLE5` (`layer-proto/format.mjs`, `'11'`: a figure row carries its set and its room, §19.12; 10 the ink units, the parts' figure units and the head's ledger; 9 a part's cell rules in place of the add-on, our page wrapped by optional content) | reader contract | the layer route's objects: a head's, a part's, a left part's and a catalog's shape, the figure rows (the units chunks have a format of their own, `UNITS_FORMAT`, raised only by their shape); a reader reads 7's, 9's and 10's objects too (`BUNDLES_READ`) | the request (`CTAG5`, `b<BUNDLE5>-j<PDFJS>`: §18.4) and the R2 key (`VTAG5`) | a bundle of the old format is not found under the new `CTAG5` and is prepared again; readers older than it get `unknown-versions` until they update |
 | `BUNDLE` (`layer-proto/bundle.mjs`, `'3'`: the layout file's schema 3, the paper's `\lineskip` and `\lineskiplimit`; 2 its babel names, D1a. The file's schemas 4 (`PH_FLAG.JOINED` and `PH_FLAG.OUTSIDE`) and 5 (a found placeholder's fill, its row's last number where its glyphs are not black: 0xRRGGBB, or -1 where no one colour holds more than half of them) are not a contract of their own: `b3` names schemas 3 to 5, each reader's `parseLayout` refusing the others', so only this engine's reader reads a `b3` bundle holding schema 5) | reader contract | the one-file bundle `readBundle` reads (`CTAG`, `VTAG`): its shape, the units' tuple, kinds and flags, the layout file's schema, the left geometry | its request and key (§18.4) | readers older than it refuse it until they update |
 | `PDFJS` (`pipeline/versions.mjs`, `'6.3.289'`) | reader contract | the PDF.js whose reading the layout and the wrap are made against | as `BUNDLE` | as `BUNDLE` |
-| `PIPELINE_VERSION` (`pipeline/versions.mjs`, `'31'`) | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
+| `PIPELINE_VERSION` (`pipeline/versions.mjs`, `'32'`) | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
 | `LAYOUT` (`layout/file.mjs`, `'26'`: a unit TeX set flush left or flush right flagged so, `UNIT_FLAG.FLUSH_LEFT` and `UNIT_FLAG.FLUSH_RIGHT`, and a paragraph a box's close ends read by its own skips, §18.1, §18.8; 25 the release sweep of 2026-10-29, a line too short to be evidence found on no other page, a word a hyphen cuts going on below, an ink unit's paragraph one unit, a math face told by its family's names, `layer-proto/fonts.mjs` `classifyFont`), `REMOVAL` (`pipeline/versions.mjs`, `'12'`: a macro TeX said sets no ink is no placeholder of ink, an opening point alone at its unit's end owns its lines up to TeX's skip before another block; 8 no add-on, a part's or a bundle's cell rules in its place, our page wrapped by optional content, §11.8, §19.9) | extraction | the layout maker (the file's own schema is `LAYOUT_SCHEMA`, 5); how a drawn unit's ink is taken away | the R2 key | bundles made again lazily |
 | `TRANSLATE_VERSION` (`translate/version.mjs`, `'6'`: every content class translated once whatever the language, the author block for every target and a bibliography's entries; `'5'`: a display's own stop written after its marker and taken off the reply; `'4'`: a styled pair whose two ends stand where the wire has a marker anyway keeps its markers; `'3'`: a sentence whose words change style sent whole, the pairs inside it on no wire; `'2'`: a formula split across inline formulas sent as one marker) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
 | `RULES_SCHEMA` (`rules/layout.mjs`, `7`: `evenPitch` and `keepAlign` added, lane B's B1 and B2, the ruling of 2026-10-29, §18.8; 6: `cjkFaces` holds its group alone, a CJK script drawn at Regular and Bold beside every English family, its `light` designs and its unread `kai` gone, the ruling of 2026-10-29; 5 before it: `fillLeadRel` added, the fill's top relative to the original's pitch; 4: `adaptiveFill.band` read against the page's own paragraphs, 1b-C) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
@@ -2828,7 +2828,11 @@ layout compile's point `q<n>` at LaTeX's para/begin, inside the paragraph's inde
 changes, which pageInk keeps apart from the marks' points as `paras`; a paragraph with no indentation carries none and reads
 as the one before; a paragraph's next line is followed at the paper's own leading, `PARA_DY` 3 of its size at most, where
 `BLOCK_DY` 1.75 falls short, when it starts an indent from the paragraph's first line, more than `EDGE` 0.75 of its size
-across and no more than `INDENT` 6 (a hanging line, or the run after an indented first), LAYOUT 25: a thesis's list of
+across and no more than `INDENT` 6 (a hanging line, or the run after an indented first), measured only from a block whose first
+line holds its paragraph's point (the ledger's `opens`, PIPELINE 32: a block that begins at a column's or a page's top where a
+paragraph runs on begins at a line of that run, and REVTeX's bibliography, whose entries set no point and so read as one
+paragraph, had every next entry's label an indent from it: 2610.21770v1's and 2610.20595v1's orphan entries joined over each
+entry's link line, a column one unit), LAYOUT 25: a thesis's list of
 figures set double was cut line by line, each line translated alone, 2610.19274v1 pp67–69; a list's items, which no point of
 their own tells apart, start at its edge, a right-aligned label's digit (half a size) aside, and stay apart at their skip,
 single-line or not, and a list after a centred heading starts further across than any indent (2610.20266v1 p21's
@@ -3078,9 +3082,15 @@ translated.
   request: BibTeX on the job's aux), its files returned; the `<job>.bbl` it wrote, a `thebibliography` with a `\bibitem`, is the
   job's `.bbl` the paper is opened again with (`live.mjs openPaper`), and from then on it is a shipped one (`meta.bbl`): written
   back marked, no BibTeX in the marked compile. No pass is made, and the paper stays as it was, where it ships its `.bbl`, names no
-  `\bibliography`, loads biblatex, or lacks a `.bib` it names (latexmk -norc runs no BibTeX then, nor does the marked compile);
+  `\bibliography`, loads biblatex, or lacks a `.bib` it names (latexmk -norc runs no BibTeX then, nor does the marked compile; a
+  `.bib` the pass wrote itself is no lack, on the disk latexmk decides by: REVTeX 4.x's `<job>Notes.bib`, its notes as entries,
+  named in `\bibdata` before the paper's own, read as missing until PIPELINE 32, so that every REVTeX paper that ships no `.bbl`
+  had its bibliography no unit's, ink units cut a column long, 2610.20595v1 and 2610.21770v1);
   nor is its `.bbl` taken where the pass does not run through or returns no files, writes another job's bibliography beside the
-  main one's (chapterbib, multibib, bibunits), writes a `.bcf` (biber's), or writes no `\bibitem`. The paper's other units must be
+  main one's (chapterbib, multibib, bibunits), writes a `.bcf` (biber's), or writes no `\bibitem`; nor where a `\bibitem` it wrote
+  (one at each entry's first line, as every style writes it) is no entry of its own in the paper opened again (`entries`: a
+  URL's `%3F` in an entry's `\href`, a character to TeX and a comment to the front end, left that entry's group open over the
+  18 after it, 2610.21770v1, whose marked `.bbl` no longer defined their citations: "[41? ? ? –43]" on our page). The paper's other units must be
   the same with the `.bbl` and without (every unit before the entries and every name after them, the bundle's byte for byte,
   their spans too), else it stays as it was (`moved`): so `\bibliography` ends the paragraph before it whether the `.bbl` is there
   or not (TeX's `thebibliography` is a heading's paragraph end, and a `\bibliography` with no `.bbl` sets nothing), which moved 7
@@ -3098,7 +3108,10 @@ translated.
   `\author` in (its first row names, the rest places, but a row that holds an author's note, sets an affiliation's mark after a
   name, opens with "and", or stands before a numbered list of places is names: 2608.14893's and 2610.21880v1's second rows of
   names), a numbered list of places; IEEEtran's, acmart's, REVTeX's, elsarticle's (each key's value), llncs', ICML's and AAAI's
-  forms. A later row with none of these is a place, as the classes set it: a name alone there cannot be told from a place by its
+  forms; a row set in a `\centerline` of its own (FRONT_BOXES, ICLR 2021's block, 2010.11929v2: its argument the row's text, read
+  through for the row's mark, its block before PIPELINE 32 no unit and its names, notes and places one orphan's ink unit, always
+  translated and set in the names' bold; outside an author block `\centerline` is one placeholder as before). A later row with
+  none of these is a place, as the classes set it: a name alone there cannot be told from a place by its
   TeX. An e-mail, a web address and an ORCID written out stay placeholders, the original's ink; so does an e-mail whose
   local part TeX escapes (`goh\_siong\_thye@…`, one placeholder with its `\_`, 2608.11884, 2608.29778). Every author block's
   unit keeps its number: what PIPELINE 29 cut the text between two notes into (one unit of kind author, a unit the walk flushed

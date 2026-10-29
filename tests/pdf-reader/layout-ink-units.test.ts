@@ -142,6 +142,33 @@ describe('inkUnitsOf', () => {
     ])
   })
 
+  it("measures a hanging line from its paragraph's first line, never from a column's top where the paragraph runs on (2610.21770v1 p6)", () => {
+    // (REVTeX's bibliography as 2610.21770v1 sets it when no unit owns it: its entries set no point of their own, so every line is
+    // the paragraph before's; each entry's label at the column's edge, its lines after it hung 10 pt in, its journal's line a link
+    // of numbers no unit holds, 20 pt above the next entry. The column begins with a line an entry runs on to: measured from it,
+    // each next entry's label line read as a hanging line, and the column was one unit, every entry's link drawn inside it)
+    const at = (s: string, x: number, y: number) => ({ glyphs: run(s, x, y, { size: 9 }) })
+    const column = page(
+      { point: 'bs1' }, { para: 50 }, { glyphs: run('The data are available on request.', 100, 760), owner: 'u7' },
+      at('transport phenomena in junctions of a compensated', 110, 700), at('ferrimagnet and a normal metal, Phys. Rev. B', 110, 690), at('113, 094425 (2026).', 110, 680),
+      at('[21] Y. Liu, S.-D. Guo, Two-dimensional fully', 100, 670), at('compensated ferrimagnetism, Phys. Rev. Lett.', 110, 660), at('134, 106703 (2025).', 110, 650),
+      at('[22] Z. Zhang, Y. Wei, Fully compensated', 100, 640), at('ferrimagnetism in a monolayer, Nanoscale', 110, 630),
+      { point: 'be1' },
+    )
+    expect(unitsOf([column]).ink.map(textOf)).toEqual([
+      'transport phenomena in junctions of a compensated ferrimagnet and a normal metal, Phys. Rev. B',
+      '[21] Y. Liu, S.-D. Guo, Two-dimensional fully compensated ferrimagnetism, Phys. Rev. Lett.',
+      '[22] Z. Zhang, Y. Wei, Fully compensated ferrimagnetism in a monolayer, Nanoscale',
+    ])
+    // (the same lines where the paragraph's point is on the column's first line: a paragraph hung from its first, one unit, as
+    // the thesis's list of figures above)
+    const opened = page(
+      { point: 'bs1' }, { para: 50 }, at('transport phenomena in junctions of a compensated', 110, 700), at('ferrimagnet and a normal metal, Phys. Rev. B', 110, 690),
+      at('113, 094425 (2026).', 110, 680), at('[21] Y. Liu, S.-D. Guo, Two-dimensional fully', 100, 670), { point: 'be1' },
+    )
+    expect(unitsOf([opened]).ink.length).toBe(1)
+  })
+
   it("makes an orphan's block a unit, a paragraph of TeX's apart from the next, and its math a placeholder whose ink stays", () => {
     const pg = page(
       { point: 'bs1' }, { para: 1 }, { glyphs: [...run('Assume that there exist', 100, 700), ...run('x', 220, 700, { font: 'CMMI10' }), ...run('in the closed set', 230, 700)] },

@@ -82,6 +82,13 @@ export const inAuthorBlock = u => AUTHOR_KINDS.has(u?.kind)
 /** commands inside an author block whose argument is a name or a place: IEEEtran's blocks, acmart's parts of an
  *  affiliation. Anything else there — \\email, \\orcid, \\inst{1}, \\textsuperscript — stays as it is */
 const FRONT_PROSE = new Set(['IEEEauthorblockN', 'IEEEauthorblockA', 'institution', 'department', 'city', 'state', 'country'])
+/** the boxes a row of an author block is set in, a line of its own: plain TeX's and LaTeX's \\centerline (\\line{\\hss#1\\hss}),
+ *  its argument the row's text, a name or a place (ICLR 2021's `\\author{\\centerline{Alexey Dosovitskiy$^{*,\\dagger}$, …}
+ *  \\vspace{1mm}\\\\ … \\centerline{$^*$equal technical contribution, …}\\\\ \\centerline{Google Research, Brain Team}\\\\ …}`,
+ *  2010.11929v2: read as one placeholder a row, its block had no unit, and its names, notes and places were one orphan's ink unit,
+ *  translated and set in the names' bold). Walked as FRONT_PROSE is, inside an author block alone; elsewhere one placeholder, as
+ *  before. Its row is read through it (rowText), so that a row it opens with a mark is a place */
+const FRONT_BOXES = new Set(['centerline'])
 /** IEEEtran's blocks, each a group of lines the class sets on its own in a cell of a table: a unit each, so that a
  *  line of names is fitted to its box alone (AUTHOR_WIDE), apart from the places' block and its line breaks; the block of
  *  names (\\IEEEauthorblockN) every line of it names, the block of places (\\IEEEauthorblockA) every line places */
@@ -1231,7 +1238,8 @@ function rowText(src) {
   let t = src
   for (;;) {
     const m = ROW_LEAD.exec(t)
-    if (!m || (m[1] !== undefined && !NO_ARGS.has(m[1]))) break
+    // (a row's box, FRONT_BOXES, and its brace taken off as what stands before the text: `\\centerline{$^*$equal …` opens with its mark)
+    if (!m || (m[1] !== undefined && !NO_ARGS.has(m[1]) && !FRONT_BOXES.has(m[1]))) break
     t = t.slice(m[0].length)
   }
   return t
@@ -1357,7 +1365,9 @@ function pairsOf(s, from, to, b, ctx) {
  *  paper's macro, a table's number, a file) is counted twice */
 function olderUnits(s, from, to, b, ctx) {
   if (to <= from) return []
-  const shadow = { ...ctx, called: null, fits: [], bibliography: [], floats: new Set(), visit: () => {}, visitFront: () => {}, ends: new Map(ctx.ends), skipped: { ...ctx.skipped }, dirs: [...ctx.dirs] }
+  // (`boxesUnread`: PIPELINE 29's walk read no row's box, FRONT_BOXES, so that the units a \\centerline row is cut into now are
+  // all `later`, every other unit keeping its number: 2010.11929v2's footnote stays u1)
+  const shadow = { ...ctx, called: null, fits: [], bibliography: [], floats: new Set(), visit: () => {}, visitFront: () => {}, ends: new Map(ctx.ends), skipped: { ...ctx.skipped }, dirs: [...ctx.dirs], boxesUnread: true }
   const out = [], sb = new Builder(b.file, out, s, ctx.bodies, shadow.floats)
   if (b.inFloat) sb.inFloat = true
   sb.kind = 'author'; walk(s, from, to, sb, shadow); sb.flush()
@@ -1722,7 +1732,7 @@ function walk(s, from, to, b, ctx) {
       for (const a of args) { if (a.kind === 'req') frontBlock(s, a.start + 1, a.end - 1, b, ctx, roleOf(name)); else frontNotes(s, a.start + 1, a.end - 1, b, ctx) }
       i = e; continue
     }
-    if (FRONT_PROSE.has(name) && AUTHOR_KINDS.has(b.kind)) {
+    if ((FRONT_PROSE.has(name) || (FRONT_BOXES.has(name) && !ctx.boxesUnread)) && AUTHOR_KINDS.has(b.kind)) {
       const { args, end: e } = argsAfter(s, end, 1)
       if (args[0]?.kind === 'req') {
         endText()
