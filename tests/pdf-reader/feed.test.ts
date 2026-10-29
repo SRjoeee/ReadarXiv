@@ -43,6 +43,27 @@ describe('the feed: the index', () => {
     }
   })
 
+  it('tells the units\' kinds before the head, from the chunks told (an early wave\'s, layer-side warmEarly), the index\'s once it is read; none with no chunk from id 0', async () => {
+    const M = await made()
+    const s = server(M)
+    const f = createFeed({ fetchObject: s.fetchObject })
+    expect(await f.kinds()).toBeNull()
+    f.tell({ units: M.chunks.map(c => c.ref) })
+    expect(await f.kinds()).toEqual(M.index.kinds)
+    // (the chunks' bytes kept for the index, read with the head as before)
+    const index = await (f.tell({ head: M.head.ref }), f.index())
+    expect(index?.sha256).toBe(M.index.sha256)
+    expect(await f.kinds()).toBe(index?.kinds)
+    f.dispose()
+    // a chunk refused: none, and the index refuses it as before
+    const r = server(M)
+    r.objects.set(M.chunks[0]!.sha256, new Uint8Array([1, 2, 3]))
+    const g = createFeed({ fetchObject: r.fetchObject })
+    g.tell({ units: M.chunks.map(c => c.ref) })
+    expect(await g.kinds()).toBeNull()
+    g.dispose()
+  })
+
   it('refuses a units chunk or a head that is not its ref\'s: no index, the why told', async () => {
     const M = await made()
     for (const [what, sha] of [['units', M.chunks[0]!.sha256], ['head', M.head.sha256]] as const) {

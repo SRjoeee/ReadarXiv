@@ -33,7 +33,7 @@ import { layerDraws } from '../layer-proto/format.mjs'
 import { pagesOf } from '../layout/delta-wire.mjs'
 import { openLayer as theDoor, PDF_OPTIONS } from '../layer-proto/reader.mjs'
 import { visibilityOf } from '../layer-proto/visibility.mjs'
-import { faceWarmer, familyOfParts, pagesOfParts } from '../layer-proto/warm.mjs'
+import { faceWarmer, familyOfParts, firstPageUnits, pagesOfParts } from '../layer-proto/warm.mjs'
 import { unitOf } from '../layer-proto/rows.mjs'
 import { plainTranslated } from '../translate/mt.mjs'
 import { createContents } from './contents.mjs'
@@ -871,12 +871,17 @@ export function createLayerSide(view, o) {
    *  awaited before the next's), as soon as the index, their rows and the parts that locate them are in, whether or not a door
    *  is open: v0's checks then find them loaded or loading (warm.mjs). A unit asked once in a target and a family is not asked
    *  again, nor are a page's names and fonts once its part is read */
-  async function warmPages(qs) {
-    if (disposed || state === 'refused' || !index || !rows.size) return
+  /** the target's warmer, made again for another target */
+  const warmerNow = () => {
     if (!warmer || warmerOf !== target) {
       warmer = faceWarmer({ faceSources: o.faceSources, target, ...(o.rules ? { rules: o.rules } : {}) })
       warmerOf = target
     }
+    return warmer
+  }
+  async function warmPages(qs) {
+    if (disposed || state === 'refused' || !index || !rows.size) return
+    warmerNow()
     const parts = feed.state().parts, family = familyOfParts(parts), pages = pagesNow()
     const signal = warmAc.signal
     for (const q of qs) {
@@ -903,6 +908,41 @@ export function createLayerSide(view, o) {
   }
   /** the warm-ups in turn, so that a page's wave waits for the one asked before it, whoever asked it */
   let warmChain = Promise.resolve()
+  /** the rows a host read before any part (warmEarly), and those taken while no part is read (take): their texts by id, for the
+   *  first page's early wave alone */
+  const earlyTexts = new Map()
+  /** whether the first page's units are still unknown: no part read, and the parts' end not told (a catalog tells it with its
+   *  parts, which come at once: a cached translation's first page has its own wave at once, and no estimate is asked beside it) */
+  const beforeParts = () => { const f = feed.state(); return !f.parts.length && !f.end }
+  /** the texts of rows `given` kept for the early wave; whether any is new */
+  function keepEarly(given) {
+    let added = false
+    for (const r of given ?? []) {
+      if (!Array.isArray(r) || !Number.isSafeInteger(r[0])) continue
+      const text = textOf(r)
+      if (text && earlyTexts.get(r[0]) !== text) { earlyTexts.set(r[0], text); added = true }
+    }
+    return added
+  }
+  let earlyQueued = false
+  /** before any part is read (a first open: the rows come while the box lays the paper out, its head and parts at the end), the
+   *  CJK characters of the first page's units as firstPageUnits estimates them (the units' kinds read before the head: the feed's
+   *  kinds), in the target's CJK face whatever the family (warm.mjs `cjkOnly`), so that its slices come during the box's run; once
+   *  a part is read the page's own wave asks what it draws. In turn with the other waves (warmChain), once a task */
+  function warmEarlySoon() {
+    if (earlyQueued || disposed) return
+    earlyQueued = true
+    queueMicrotask(() => {
+      earlyQueued = false
+      warmChain = warmChain.then(async () => {
+        if (disposed || state === 'refused' || !beforeParts() || !earlyTexts.size) return
+        const kinds = await feed.kinds()
+        if (!kinds || disposed || state === 'refused' || !beforeParts()) return
+        const units = firstPageUnits(kinds, earlyTexts)
+        if (units.length) await warmerNow().warm({ units }, 'other', { signal: warmAc.signal, cjkOnly: true })
+      }).catch(e => warn('faces', e))
+    })
+  }
   /** the near pages warmed (warmPages), the page in the middle of the view first (before the places are laid out, no original open
    *  yet, page 1, where a paper opens), and the others only once a page has been put in place: until the first page is shown, its
    *  own wave alone shares the line with what that page waits for besides (the composed document's bytes, its delta), and no other
@@ -1338,6 +1378,8 @@ export function createLayerSide(view, o) {
     take(given) {
       if (disposed || !given?.length) return
       for (const r of given) if (Array.isArray(r) && Number.isInteger(r[0])) rows.set(r[0], r)
+      // (taken while no part is read, a first open's head told before its first part: the early wave's too)
+      if (state !== 'refused' && beforeParts() && keepEarly(given)) warmEarlySoon()
       if (door) { try { door.take(given) } catch (e) { warn('rows', e) } }
       if (contents?.take(given)) outlineSoon()
       if (left) startsFor(given.filter(r => r?.[4]).map(r => r[0]))
@@ -1416,11 +1458,18 @@ export function createLayerSide(view, o) {
       }
       if (hid) startsFor([...rows.keys()])
     },
+    /** rows the host read before any part, for the first page's early wave of faces alone (warmEarlySoon): not taken, nothing
+     *  laid of them; nothing once a part is read. Rows of another target are dropped with it (retarget, again) */
+    warmEarly(given) {
+      if (disposed || state === 'refused' || !beforeParts()) return
+      if (keepEarly(given)) warmEarlySoon()
+    },
     again() {
       if (disposed || state === 'refused') return
       marksOff = false
       for (const P of pages.values()) P.originalShown = false
       rows.clear()
+      earlyTexts.clear()
       rowsEnded = false
       stopAhead()
       leftStarts.clear(); rightStarts.clear()

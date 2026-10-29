@@ -116,6 +116,41 @@ describe('pagesOfParts: what each page sets, by the parts read so far', () => {
   })
 })
 
+describe('firstPageUnits: page 1\'s units before any part (a first open\'s rows told while the box runs)', () => {
+  it('the units in id order to the budget of CJK characters, an author aside, every place of the author block whatever its id, no style', async () => {
+    const { firstPageUnits } = await import('@/pdf-reader/engine/layer-proto/warm.mjs')
+    const kinds = ['heading', 'author', 'abstract', 'para', 'para', null, 'para', 'affiliation']
+    const texts = new Map([[0, '\u6807\u9898'], [1, '\u5f20\u4e09'], [2, '\u6458\u8981\u6587\u5b57'], [3, 'Transformer \u4e2d'], [4, '\u7b2c\u4e8c\u6bb5'], [5, '\u65e0'], [6, '\u7b2c\u4e09\u6bb5'], [7, '\u5927\u5b66']])
+    // (budget 7: the heading's 2, the abstract's 4, the first paragraph's 1 reach it; the paragraphs after are not asked, the author
+    // block's place is, and a unit that does not stand is not)
+    expect(firstPageUnits(kinds, texts, { chars: 7 })).toEqual([
+      { kind: 'heading', text: '\u6807\u9898', st: null },
+      { kind: 'abstract', text: '\u6458\u8981\u6587\u5b57', st: null },
+      { kind: 'para', text: 'Transformer \u4e2d', st: null },
+      { kind: 'affiliation', text: '\u5927\u5b66', st: null },
+    ])
+    // (a unit whose row has not come is passed over; none held, none)
+    expect(firstPageUnits(kinds, new Map([[3, '\u4e2d']]))).toEqual([{ kind: 'para', text: '\u4e2d', st: null }])
+    expect(firstPageUnits(kinds, new Map())).toEqual([])
+    expect(firstPageUnits(null, texts)).toEqual([])
+  })
+
+  it('the wave of them asks their CJK characters alone (cjkOnly): no Latin face, no names, fonts or likely faces; a heading\'s in the bold', async () => {
+    const { faceWarmer, firstPageUnits } = await import('@/pdf-reader/engine/layer-proto/warm.mjs')
+    const asked: string[] = []
+    const units = firstPageUnits(['heading', 'para'], new Map([[0, '\u7b80\u4ecb'], [1, 'Transformer \u4e2d\u6587']]))
+    await faceWarmer({ faceSources: host(asked), target: 'zh' }).warm({ units, names: [{ key: 'abstract', capitals: false, st: BOLD }], fonts: [REGULAR], likely: 'times' }, 'other', { cjkOnly: true })
+    // (the faces' sets are asked whole, a CJK face beside its Latin one; only the CJK characters' slices load)
+    expect(asked).toEqual(expect.arrayContaining(['shs-sc-bold', 'shs-sc-regular']))
+    expect(loaded()).toEqual(['shs-sc-bold-A', 'shs-sc-regular-A'])
+    // (an alphabet's target: nothing CJK to ask, nothing asked)
+    loads = []
+    const none: string[] = []
+    await faceWarmer({ faceSources: host(none), target: 'fr' }).warm({ units: firstPageUnits(['para'], new Map([[0, 'Le mod\u00e8le']])) }, 'other', { cjkOnly: true })
+    expect([none, loads]).toEqual([[], []])
+  })
+})
+
 describe('faceWarmer: the slices of what v0 will draw of a page, loaded before v0 checks it', () => {
   it('a Times paper in Chinese: each unit in its original\'s style, a heading with none in the bold, an author\'s never; the Latin ones in Nimbus Roman', async () => {
     const { faceWarmer } = await import('@/pdf-reader/engine/layer-proto/warm.mjs')

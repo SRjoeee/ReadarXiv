@@ -490,6 +490,38 @@ describe('the faces in one wave (warm.mjs, §11.8)', () => {
   })
 })
 
+describe('the first page\'s faces before any part (warm.mjs firstPageUnits, §11.8)', () => {
+  it('a first open\'s rows read before the head: the CJK face asked at once; rows taken after the head and before part 1 too; none once a part is read or a catalog tells the parts\' end', async () => {
+    const m = await M()
+    const cjk = (id: number) => rowOf(id, `\u4e2d\u6587\u6bb5\u843d ${id}`)
+    // (the units told at the compile, the rows read as the job tells them: no head, no part)
+    const asked: string[] = []
+    const a = await setup({ faceSources: async id => { asked.push(id); return null } })
+    a.side.tell({ units: m.chunks.map(c => c.ref) })
+    a.side.warmEarly(m.index.units.map((_, id) => cjk(id)))
+    await settle(a, 10)
+    // (the CJK face's set asked: which of its slices load, its CJK characters' alone, is warm.test.ts's)
+    expect(asked).toContain('shs-sc-regular')
+    expect(a.opens).toBe(0)
+    // the head told, no part yet: rows taken are the early wave's too
+    const after: string[] = []
+    const b = await setup({ faceSources: async id => { after.push(id); return null } })
+    b.side.tell({ units: m.chunks.map(c => c.ref), head: m.head.ref })
+    await settle(b, 10)
+    b.side.take(m.index.units.map((_, id) => cjk(id)))
+    await settle(b, 10)
+    expect(after).toContain('shs-sc-regular')
+    // a catalog's parts and end told: its pages have their own wave, and rows read early ask nothing (none taken: no wave at all)
+    const none: string[] = []
+    const c = await setup({ faceSources: async id => { none.push(id); return null } })
+    c.side.tell(await ALL())
+    await settle(c, 10)
+    c.side.warmEarly(m.index.units.map((_, id) => cjk(id)))
+    await settle(c, 10)
+    expect(none).toEqual([])
+  })
+})
+
 describe('a copy that fails, and the original dropped', () => {
   it('a page whose copy fails shows the original and is asked again on the next scroll', async () => {
     const s = await setup({ copyFails: [1] })

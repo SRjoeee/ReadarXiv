@@ -42,6 +42,10 @@ export interface LayerSide {
   tell(refs: { units?: readonly TellRef[]; head?: TellRef | null; parts?: readonly TellRef[]; end?: { through: number; refused?: string } | null }): void
   /** the index once read; null where the layer is refused or the side disposed. The rows' parsers read it */
   index(): Promise<LayerIndex | null>
+  /** rows the host read before any part (a first open's deltas, told while the box lays the paper out), for the first page's
+   *  early wave of faces alone: their CJK characters, of the units warm.mjs firstPageUnits estimates on page 1, asked of the
+   *  target's CJK face; not taken, nothing laid of them, nothing once a part is read or the parts' end told */
+  warmEarly(rows: readonly Row[]): void
   /** rows: before the door opens held (latest per unit id); kept for the contents, the sentences and a fork's open again */
   take(rows: readonly Row[]): void
   /** no more rows this attempt */

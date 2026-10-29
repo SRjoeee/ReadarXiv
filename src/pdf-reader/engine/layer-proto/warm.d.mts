@@ -26,8 +26,13 @@ export interface FaceWarmer {
   /** the slices that hold what v0 will draw of `page` in the target's faces for the paper's English `family`, loaded
    *  WAVE_SLOTS at a time, no more begun once `signal` is aborted; resolves once each has loaded or failed or the signal has
    *  stopped it, never rejects */
-  warm(page: WarmPage, family: EnglishFamily, o?: { signal?: AbortSignal | null }): Promise<void>
+  warm(page: WarmPage, family: EnglishFamily, o?: { signal?: AbortSignal | null; cjkOnly?: boolean }): Promise<void>
 }
+/** the CJK characters of a first page as firstPageUnits counts them */
+export declare const FIRST_PAGE_CHARS: number
+/** page 1's units as they can be told before any part is read: the units in id order whose texts are held, an author's aside,
+ *  until their CJK characters reach `chars`, and every place of the author block; each with no style */
+export declare function firstPageUnits(kinds: readonly (string | null)[] | null | undefined, texts: ReadonlyMap<number, string> | null | undefined, o?: { chars?: number }): WarmUnit[]
 /** the slices the wave loads at a time */
 export declare const WAVE_SLOTS: number
 /** a warmer of one target's faces over the host's served slices */
