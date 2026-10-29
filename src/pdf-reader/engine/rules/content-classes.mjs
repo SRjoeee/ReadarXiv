@@ -27,7 +27,7 @@ export const CLASSES = Object.freeze({
   tables: Object.freeze({ toggle: 'tables', state: 'built', glyphs: true, truth: "the source's table cells (units of kind cell)" }),
   figures: Object.freeze({ toggle: 'figures', state: 'built', glyphs: true, truth: "glyphs our compile sets in a vector figure, no unit's: an included PDF's (a form XObject) and a TikZ or pgfplots picture's (between its points), cut into ink units of kind `inkfigures` (layout/figure-text.mjs), each drawn in its run's box; a float's other text no unit owns, counted" }),
   ocr: Object.freeze({ toggle: 'figures', state: 'planned', glyphs: false, truth: "a bitmap figure's text, read and placed by OCR (PP-OCR, as the extension's: DESIGN §15.3); the owner's OK of 2026-10-25" }),
-  references: Object.freeze({ toggle: 'references', state: 'built', glyphs: true, truth: "the bibliography's entries, each \\bibitem's text one unit, whole, its names its own (kind reference) as the compile reads it: the paper's thebibliography, the .bbl its package holds or the one BibTeX makes in the prepare's first pass, marked like the body; its label, numbers, web addresses and formulas the original's ink. A bibliography no \\bibitem sets (biblatex's), between its name and the next unit" }),
+  references: Object.freeze({ toggle: 'references', state: 'built', glyphs: true, truth: "the bibliography's entries, each \\bibitem's text one unit, whole, its names its own (kind reference) as the compile reads it: the paper's thebibliography, the .bbl its package holds or the one BibTeX makes in the prepare's first pass, marked like the body; its label, numbers, web addresses and formulas the original's ink. A bibliography biblatex prints (biber's data, no text of the source): each entry one unit of kind inkreferences, whole, its names its own, cut where the compile's point (bi<n>, biblatex's per-entry hook) stands before it, its label the original's" }),
   index: Object.freeze({ toggle: 'references', state: 'planned', glyphs: true, truth: 'an index or a glossary, between its name and the next unit (proposed: back matter, with the references)' }),
   names: Object.freeze({ toggle: 'names', state: 'built', glyphs: true, truth: "the author block's names under the title (kind author), translated once whatever the target; its places are the body's (kind affiliation), an entry's names the references'" }),
   math: Object.freeze({ toggle: 'never', state: 'never', glyphs: true, truth: 'a math font\'s glyphs, a formula\'s line no unit owns' }),
@@ -48,6 +48,8 @@ export const UNIT_CLASS = Object.freeze({
   affiliation: 'body',
   // (the ink units', layout/ink-units.mjs INK_KIND: their kind names their class)
   inkheads: 'heads', inkcontents: 'contents', inknotes: 'notes', inkorphan: 'orphan', inknames: 'names', inkgenerated: 'generated', [FIGURE_KIND]: 'figures',
+  // (a biblatex entry, the printed bibliography cut one entry a unit by the compile's points: the references', as a \bibitem's)
+  inkreferences: 'references',
   // (a structural name's unit, bundleUnitsOf's: a theorem head's or a generated reference's word in the target, always
   // translated: PDF-READER §19.14)
   name: 'generated',

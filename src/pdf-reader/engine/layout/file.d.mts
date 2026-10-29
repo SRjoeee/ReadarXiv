@@ -17,7 +17,7 @@ export declare const LAYOUT_CAP: number
 export declare const LAYOUT_VALUES: number
 /** the deepest the file nests: 4 */
 export declare const LAYOUT_DEPTH: number
-export declare const UNIT_KINDS: readonly ['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author', 'inkheads', 'inkcontents', 'inknotes', 'inkorphan', 'inknames', 'reference', 'refnames', 'affiliation']
+export declare const UNIT_KINDS: readonly ['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author', 'inkheads', 'inkcontents', 'inknotes', 'inkorphan', 'inknames', 'reference', 'refnames', 'affiliation', 'inkreferences']
 export declare const PH_KINDS: readonly ['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other', 'number']
 export declare const LABEL_KINDS: readonly ['number', 'item', 'caption', 'footnote']
 export declare const UNIT_FLAG: { readonly TITLE: 1; readonly FRONT: 2; readonly CENTRED: 4; readonly FLUSH_LEFT: 8; readonly FLUSH_RIGHT: 16 }

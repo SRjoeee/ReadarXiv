@@ -5,8 +5,9 @@
 // position estimated: every coordinate is a glyph's our compile set.
 //
 // The rules (each tested):
-//   1. the classes made units: heads (`inkheads`), contents (`inkcontents`), notes (`inknotes`), orphans (`inkorphan`); a line
-//      of another class is never one;
+//   1. the classes made units: heads (`inkheads`), contents (`inkcontents`), notes (`inknotes`), orphans (`inkorphan`), and a
+//      biblatex entry's lines (`inkreferences`: the references' class where the compile's point `bi<n>` stands before the entry,
+//      ledger.mjs `entry`, one entry a unit, its label the original's); a line of another class is never one;
 //   2. a line's words: its glyphs left to right, a word ended where two stand a fifth of their size apart; a head's or a list's
 //      line keeps its numbering and its page number the original's ink (a leading section number, a trailing run of leader
 //      dots and a number: no unit's, never erased), so that a contents entry's title is drawn up to its leaders, where the
@@ -45,7 +46,7 @@ import { lineRulesOf, OWN_WORK, RULE_EM } from './own.mjs'
 import { spellOf } from './stream.mjs'
 
 /** the ledger's classes made units, and each one's kind (rules/content-classes.mjs UNIT_CLASS gives the class back) */
-export const INK_KIND = Object.freeze({ heads: 'inkheads', contents: 'inkcontents', notes: 'inknotes', orphan: 'inkorphan', names: 'inknames' })
+export const INK_KIND = Object.freeze({ heads: 'inkheads', contents: 'inkcontents', notes: 'inknotes', orphan: 'inkorphan', names: 'inknames', references: 'inkreferences' })
 /** a block of the names an author unit holds: this share of its letters, at least, in words of an author unit's (rule 8) */
 export const NAMES_SHARE = 0.6
 /** a block's next line: within this many of its size below the one before */
@@ -261,8 +262,14 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
   const segs = []
   for (const L of ledger.lines ?? []) {
     if (!Object.hasOwn(INK_KIND, L.cls) || L.cls === 'names') continue
+    // (a bibliography's line is a unit's only where it is a biblatex entry's, its compile's point `bi<n>` before it (ledger.mjs
+    // `entry`): a thebibliography's entries are source units, and what they leave, a label, an entry's number, the original's)
+    if (L.cls === 'references' && (L.entry === null || L.entry === undefined)) continue
     const G = pages[L.page - 1]?.glyphs ?? []
-    const [words, ended] = trimmed(G, lineWords.get(L) ?? wordsOf(G, L.gs, fams), L.cls, folios)
+    // (an entry's first line from its point on: its label, which the list's \item set before it, the original's ink)
+    const all = lineWords.get(L) ?? wordsOf(G, L.gs, fams)
+    const from = L.cls === 'references' && Number.isInteger(L.entryFrom) ? all.filter(w => w.gs.some(g => g >= L.entryFrom)) : all
+    const [words, ended] = trimmed(G, from, L.cls, folios)
     if (!words.some(w => w.fam === 'text' && PAIR.test(w.text.normalize('NFKC')))) continue
     segs.push({ ...L, words, ended })
   }
@@ -293,6 +300,8 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     // (a paragraph with no point of its own reads as the one before: a contents line ending in its page number ends its entry
     // whatever its point)
     const joins = follows && s.cls !== 'heads' && (s.cls !== 'contents' || !prev.ended) && (paras ? prev.para === s.para : s.cls === 'notes' || s.cls === 'orphan' || s.cls === 'contents')
+    // (a biblatex entry's lines its unit, by TeX's points alone: one entry over a column's or a page's break too, every entry its own)
+    if (s.cls === 'references' || prev?.cls === 'references') { if (prev && prev.cls === s.cls && prev.entry === s.entry) last.push(s); else groups.push([s]); continue }
     if (joins) last.push(s)
     else groups.push([s])
   }

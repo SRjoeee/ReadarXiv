@@ -47,6 +47,9 @@ const TEXT_MAX = 160
 const ZONE_OF = Object.freeze({ contents: 'contents', listfigure: 'contents', listtable: 'contents', ref: 'references', bib: 'references', index: 'index', glossary: 'index' })
 const NAME_END = /^n\d+\.([a-z]{1,16})\.e$/
 const UNIT_START = /^[th]?(\d+)s$/
+/** a biblatex entry's start (marks.mjs POINTS_TEX: `bi<n>`, biblatex's per-entry hook): it opens the references' zone, its entry
+ *  the glyphs from it to the next one's, or to the next unit's start, which ends the zone */
+const BIB_ITEM = /^bi(\d+)$/
 /** the units a bibliography's entry is (latex-front.mjs bibliography): an entry's start opens the references' zone, whatever
  *  name opened it or none did (REVTeX's, whose \\refname no heading sets), and the start of any other unit ends it */
 const ENTRY_KINDS = new Set(['reference', 'refnames'])
@@ -90,7 +93,9 @@ const ownerClass = (group, units) => {
  * Returns { classes: per page a Uint8Array, each glyph's class code (CLASS_IDS); counts: { [class]: { glyphs, letters } } over
  * the glyphs that are no blank, a glyph's letters those it spells (a ligature's each); lines, every line of glyphs no unit owns in
  * stream order, { page, cls, gs (its glyphs' indices on its page), region, zone, para (its paragraph's number, ink.mjs `paras`, or
- * null), opens (whether its paragraph's point lies on it: the paragraph's first line, never a line it runs on to), y, size, x0, x1,
+ * null), opens (whether its paragraph's point lies on it: the paragraph's first line, never a line it runs on to), entry (its
+ * biblatex entry's number, marks.mjs POINTS_TEX `bi<n>`, or null), entryFrom (on an entry's first line, the glyph its point
+ * stands before: what precedes it, the entry's label; else null), y, size, x0, x1,
  * letters } (the ink units'
  * input: layout/ink-units.mjs); letters, the letters of the document; orphanLetters; orphans: the orphan lines, at most
  * ORPHAN_LINES_MAX, each { page, text, letters, x0, x1, y } }
@@ -100,7 +105,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
   const fam = new Map()
   const famOf = name => { let f = fam.get(name); if (f === undefined) { f = classifyFont(name ?? '').fam; fam.set(name, f) } return f }
   const classes = [], orphans = [], lines = []
-  let zone = null, letters = 0, orphanLetters = 0, para = null
+  let zone = null, letters = 0, orphanLetters = 0, para = null, entry = null
   pages.forEach((pg, pi) => {
     const G = pg.glyphs ?? [], n = G.length, P = pg.points ?? [], O = own?.glyphs?.[pi] ?? []
     const out = new Uint8Array(n).fill(CLASS_CODE.symbols)
@@ -112,16 +117,19 @@ export function ledgerOf(pages, own, { units = null } = {}) {
     for (const pt of P) if (!COLUMN.test(pt.name)) { first = Math.min(first, pt.glyph); last = Math.max(last, pt.glyph) }
     const bracketed = P.some(pt => BRACKET.test(pt.name))
     const footFrom = bracketed ? footOf(G, R, O, last) : n
-    // each glyph's zone, in stream order (a zone goes on across pages: the contents over three)
-    const zones = new Array(n)
+    // each glyph's zone, in stream order (a zone goes on across pages: the contents over three), and its biblatex entry where the
+    // compile marked one (`bi<n>`: the entry's number, and where its point stands, `entryAt`)
+    const zones = new Array(n), entries = new Array(n), entryAt = new Uint8Array(n)
     for (let q = 0, g = 0; g <= n; g++) {
       for (; q < P.length && P[q].glyph <= g; q++) {
         const m = NAME_END.exec(P[q].name)
         const start = m ? null : UNIT_START.exec(P[q].name)
-        if (m && Object.hasOwn(ZONE_OF, m[1])) zone = ZONE_OF[m[1]]
-        else if (start) { const u = units?.[Number(start[1])]; zone = ENTRY_KINDS.has(Array.isArray(u) ? u[0] : u?.kind) ? 'references' : null }
+        const item = m || start ? null : BIB_ITEM.exec(P[q].name)
+        if (m && Object.hasOwn(ZONE_OF, m[1])) { zone = ZONE_OF[m[1]]; entry = null }
+        else if (start) { const u = units?.[Number(start[1])]; zone = ENTRY_KINDS.has(Array.isArray(u) ? u[0] : u?.kind) ? 'references' : null; entry = null }
+        else if (item) { zone = 'references'; entry = Number(item[1]); if (g < n) entryAt[g] = 1 }
       }
-      if (g < n) zones[g] = zone
+      if (g < n) { zones[g] = zone; entries[g] = entry }
     }
     // each glyph's paragraph: the number of the last paragraph point at or before it (ink.mjs `paras`, marks.mjs POINTS_TEX q<n>),
     // a paragraph going on across a page from the page before; null where the compile set none (a base of before)
@@ -139,7 +147,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
       Object.assign(line, wordsOf(line.gs.map(g => G[g]), famOf))
       const rule = RULES.find(r => r.test(line))
       for (const g of line.gs) out[g] = rule.code
-      lines.push({ page: pi + 1, cls: rule.cls, gs: line.gs, region: line.region, zone: line.zone, para: line.para, opens: line.opens, y: line.y, size: line.size, x0: line.x0, x1: line.x1, letters: line.letters })
+      lines.push({ page: pi + 1, cls: rule.cls, gs: line.gs, region: line.region, zone: line.zone, para: line.para, opens: line.opens, entry: line.entry, entryFrom: line.entryFrom, y: line.y, size: line.size, x0: line.x0, x1: line.x1, letters: line.letters })
       if (rule.cls === 'orphan') {
         orphanLetters += line.letters
         if (orphans.length < ORPHAN_LINES_MAX) orphans.push({ page: pi + 1, text: textOf(line.gs.map(g => G[g])).slice(0, TEXT_MAX), letters: line.letters, x0: line.x0, x1: line.x1, y: line.y })
@@ -150,13 +158,17 @@ export function ledgerOf(pages, own, { units = null } = {}) {
       const x = G[g], group = O[g]
       if (group) { close(); out[g] = CLASS_CODE[ownerClass(group, units)]; continue }
       const region = R.glyph[g], size = Math.max(x.size || 0, 1e-6)
-      if (line && !(line.region === region && line.zone === zones[g] && Math.abs(x.y - line.y) <= LINE_DY * Math.max(size, line.size) && x.x0 >= line.x0 - size && x.x0 - line.x1 <= LINE_GAP * size)) close()
+      // (a biblatex entry's label, a numeric style's [n], which the list's \item set right before the entry's point: the entry's
+      // first line, the label before its point, `entryFrom`)
+      if (line && entryAt[g] && line.entry !== entries[g] && line.region === region && Math.abs(x.y - line.y) <= LINE_DY * Math.max(size, line.size) && x.x0 - line.x1 <= LINE_GAP * size) { line.entry = entries[g]; line.zone = zones[g] }
+      if (line && !(line.region === region && line.zone === zones[g] && line.entry === entries[g] && Math.abs(x.y - line.y) <= LINE_DY * Math.max(size, line.size) && x.x0 >= line.x0 - size && x.x0 - line.x1 <= LINE_GAP * size)) close()
       if (!line) {
         const depth = region >> 1, body = (region & 1) === 1
-        line = { gs: [], region, zone: zones[g], para: paraAt[g], opens: false, y: x.y, size, x0: x.x0, x1: x.x1, n: 0, letters: 0, words: 0, pairs: 0, math: 0, mono: 0, form: 0, relation: false, depth, outside: bracketed && !body && depth === 0, head: g < first, foot: g >= footFrom }
+        line = { gs: [], region, zone: zones[g], para: paraAt[g], opens: false, entry: entries[g], entryFrom: null, y: x.y, size, x0: x.x0, x1: x.x1, n: 0, letters: 0, words: 0, pairs: 0, math: 0, mono: 0, form: 0, relation: false, depth, outside: bracketed && !body && depth === 0, head: g < first, foot: g >= footFrom }
       }
       line.gs.push(g); line.x1 = Math.max(line.x1, x.x1); line.size = Math.max(line.size, size)
       if (opensAt[g]) line.opens = true
+      if (entryAt[g] && line.entryFrom === null) line.entryFrom = g
       if (x.blank || !/\S/u.test(x.u ?? '')) continue
       const f = famOf(x.font)
       line.n++

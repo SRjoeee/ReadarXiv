@@ -886,6 +886,11 @@ export const POINTS_TEX = [
   '\\ifdefined\\AddToHook\\AddToHook{cmd/@outputpage/before}{\\ifaxt@bodied\\else\\ifvoid\\@outputbox\\else\\axt@bump\\begingroup\\ifvbox\\@outputbox\\boxmaxdepth\\dp\\@outputbox\\global\\setbox\\@outputbox\\vbox to\\ht\\@outputbox{\\axt@point{bs\\axt@bn}\\penalty\\@M\\unvbox\\@outputbox\\let\\axt@vback\\@empty\\axt@vtake\\axt@point{be\\axt@bn}\\axt@vback}\\else\\global\\setbox\\@outputbox\\hbox to\\wd\\@outputbox{\\axt@point{bs\\axt@bn}\\unhbox\\@outputbox\\axt@point{be\\axt@bn}}\\fi\\endgroup\\fi\\fi\\global\\axt@bodiedfalse}\\fi',
   '\\AtBeginDocument{\\ifdefined\\@endfloatbox\\let\\axt@efb\\@endfloatbox\\def\\@endfloatbox{\\axt@efb\\ifvoid\\@currbox\\else\\axt@bump\\begingroup\\boxmaxdepth\\dp\\@currbox\\global\\setbox\\@currbox\\vbox to\\ht\\@currbox{\\axt@point{fs\\axt@bn}\\unvbox\\@currbox\\axt@point{fe\\axt@bn}}\\endgroup\\fi}\\fi}',
   '\\AtBeginDocument{\\ifdefined\\pgfsys@beginpicture\\let\\axt@pgfbp\\pgfsys@beginpicture\\def\\pgfsys@beginpicture{\\axt@pgfbp\\axt@point{zs}}\\let\\axt@pgfep\\pgfsys@endpicture\\def\\pgfsys@endpicture{\\axt@point{ze}\\axt@pgfep}\\fi}',
+  // (each biblatex entry's start, `bi<n>` where \\printbibliography sets it: biblatex's per-entry hook, run after the list's \\item,
+  // the entry's paragraph begun there first, so that a numeric style's label, which the \\item sets, stands before the point, a count
+  // kept in a macro. The printed bibliography is biber's data and no text of the source: the ledger cuts it one entry a unit by
+  // these (layout/ledger.mjs), whose class the references' toggle governs; 2610.35877v1's was orphan text, always translated)
+  '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\ifdefined\\blx@bibitem\\gdef\\axt@bi{0}\\gappto\\blx@hook@bibitem{\\axt@bipt}\\fi}\\fi\\def\\axt@bipt{\\leavevmode\\xdef\\axt@bi{\\the\\numexpr\\axt@bi+1\\relax}\\axt@point{bi\\axt@bi}}',
   // (each paragraph's start, q<n> at LaTeX's para/begin, inside its indentation box: \\IndentBox, not yet put back, wrapped
   // whole with the point before it, of its size; never a node of the paragraph's own, which would make a paragraph whose
   // indent a \\lastbox takes (wrapfig's \\WF@floathand, then \\@@par) or a \\noindent before $$ no longer empty, a line

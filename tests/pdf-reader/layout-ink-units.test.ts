@@ -298,6 +298,27 @@ describe('inkUnitsOf', () => {
     expect(own.boxes[0]).toEqual([`u${id}.p`, `u${id}`])
   })
 
+  it("cuts a biblatex bibliography one entry a unit of the references' class, by the compile's points, each entry's label the original's (2610.35877v1)", () => {
+    // ("References" set by \printbibliography, then two entries, each after its point bi<n>: the first over two lines, the second
+    // after its label [2], which the list's \item set before the point; a line after the zone's next unit is no entry's)
+    const pg = page(
+      { point: 'bs1' },
+      { glyphs: run('References', 100, 740, { size: 12 }) },
+      { point: 'bi1' }, { glyphs: run('Assran, M. and A. Bardes (2025). Self-Supervised Video Models', 100, 720) }, { glyphs: run('Enable Understanding and Planning.', 110, 708) },
+      { glyphs: run('[2]', 100, 690) }, { point: 'bi2' }, { glyphs: run('Barber, R. F. (2023). Conformal Prediction Beyond', 118, 690) },
+      { point: 'be1' },
+    )
+    const { ink } = unitsOf([pg], SOURCE)
+    expect(ink.map(u => [u.kind, textOf(u)])).toEqual([
+      ['inkorphan', 'References'],
+      ['inkreferences', 'Assran, M. and A. Bardes (2025). Self-Supervised Video Models Enable Understanding and Planning.'],
+      ['inkreferences', 'Barber, R. F. (2023). Conformal Prediction Beyond'],
+    ])
+    expect(ink.map(u => unitClass(u.kind))).toEqual(['orphan', 'references', 'references'])
+    // (the label's glyphs no unit's: the original's ink, as a \bibitem's)
+    expect(ink[2]!.glyphs.text).toHaveLength('Barber,R.F.(2023).ConformalPredictionBeyond'.length)
+  })
+
   it('writes each as a bundle unit that stands, of its kind, with its echo', () => {
     const pg = page({ point: 'bs1' }, { point: 'n1.contents.e' }, { glyphs: run('1  Introduction . . 3', 100, 700) }, { glyphs: run('2  Other things . . 4', 100, 688) }, { point: 'be1' })
     const { ink } = unitsOf([pg], SOURCE)
