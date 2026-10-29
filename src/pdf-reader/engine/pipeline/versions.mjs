@@ -268,11 +268,12 @@
 //     formula's stop, no "⟦x⟧ -axis"): the ink units' texts move where either stands; 35 (the owner's case 2610.37668v1): under
 //     backref's lists (hyperref's pagebackref), the unit that ends each entry's first paragraph ends in the list's placeholder
 //     (latex-front.mjs BACKREF_LIST), so that the list TeX sets after the entry is that unit's ink: every such paper's entries are
-//     translated again; 36 (the owner's case 2610.35877v1): a biblatex bibliography's entries are units, kind `inkreferences`, one
-//     an entry, cut by the compile's points before each (marks.mjs POINTS_TEX `bi<n>`, layout/ledger.mjs `entry`), the references'
-//     class, where they were orphan text in ink units of their own grouping, always translated, its heading run into the first:
-//     every such paper's bibliography is translated again
-export const PIPELINE_VERSION = '36'
+//     translated again; 36 with TRANSLATE_VERSION 8 (a run-in label past a unit's head keeps its markers on the wire), so that no
+//     stored copy of 7's is taken for one of 8's; 37 (the owner's case 2610.35877v1): a biblatex bibliography's entries are units,
+//     kind `inkreferences`, one an entry, cut by the compile's points before each (marks.mjs POINTS_TEX `bi<n>`, layout/ledger.mjs
+//     `entry`), the references' class, where they were orphan text in ink units of their own grouping, always translated, its
+//     heading run into the first: every such paper's bibliography is translated again
+export const PIPELINE_VERSION = '37'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
