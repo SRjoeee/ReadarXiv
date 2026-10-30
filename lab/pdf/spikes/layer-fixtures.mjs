@@ -469,7 +469,7 @@ async function layoutOf(id, paper, dir) {
   /** the maker over `doc` (its text and line check where the base page's check gave them), with its times */
   const made = async (doc, more = {}) => {
     const tm = performance.now()
-    const out = await makeLayout({ units: paper.units, marks, arxiv: doc, OPS, paper: ofPaper, left: '', pdfjs: PDFJS, ...more })
+    const out = await makeLayout({ units: paper.units, texOrder: paper.texOrder, marks, arxiv: doc, OPS, paper: ofPaper, left: '', pdfjs: PDFJS, ...more })
     // (the maker's own time, and its operator lists' within it)
     out.stats.makerMs = Math.round(performance.now() - tm)
     // GATE_DBG=<dir>: the maker's own diagnostics, where it gives them

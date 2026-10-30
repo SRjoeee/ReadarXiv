@@ -2154,14 +2154,21 @@ const BIB_KINDS = new Set(['reference'])
  * first unit cut from it), and the units a host cuts before the job's .bbl is made keep their numbers when the entries come
  * after it (layout/paper.mjs madeBibliography). Nothing reads a place or an entry by its place among the units: their marks place
  * them on the page, a place is searched on arXiv's page as a float is (it is set where the class sets it: amsart's addresses at
- * the paper's end; make.mjs FLOATING), the ledger's zone reads the entries' marks
+ * the paper's end; make.mjs FLOATING), the ledger's zone reads the entries' marks. But for the anchoring, which reads the text's
+ * order: a unit without marks is searched between its marked neighbours in the order TeX sets the text (anchors.mjs matchUnits),
+ * so the order the walk met the units in is given beside them. Returns it, the units' new indices in that order (`texOrder`),
+ * or null where nothing moved: 1810.04805v2's appendix comes after its bibliography, whose entries, numbered last, were the
+ * appendix's last paragraphs' next neighbour, on page 10, and those of its page 16 the marks did not bound were found nowhere
  */
 function entriesLast(units) {
   const later = units.filter(u => u.later && !BIB_KINDS.has(u.kind)), entries = units.filter(u => BIB_KINDS.has(u.kind))
-  if (!later.length && !entries.length) return
+  if (!later.length && !entries.length) return null
+  const walked = units.slice()
   const rest = units.filter(u => !u.later && !BIB_KINDS.has(u.kind))
   units.length = 0
   units.push(...rest, ...later, ...entries)
+  const index = new Map(units.map((u, i) => [u, i]))
+  return walked.map(u => index.get(u))
 }
 /** the commands of a bibliography that set their last argument as text, by how many arguments come before it: REVTeX's and
  *  acmart's fields (\\bibinfo{title}{…}, \\bibfield{author}{…}), REVTeX's name fonts, a quoted or shown title, IEEEtran's
@@ -2527,7 +2534,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   visit(mainFile.rel)
   storedBodies(calls, { ctx, files, units, own })
   restorePercents(units)
-  entriesLast(units)
+  const texOrder = entriesLast(units)
   // a source declared in a Latin-1 family encoding: its bytes read as latin1 are already the right characters
   const enc = inputencFrom(mainCmds ?? texCommands(all, scan), all)?.options.split(',').map(x => x.trim()).find(x => /^(latin1|latin9|ansinew|cp1252|cp1250|latin2|applemac|decmulti)$/.test(x))
   const isUtf8 = t => { try { new TextDecoder('utf-8', { fatal: true }).decode(latin1Bytes(t)); return true } catch { return false } }
@@ -2536,7 +2543,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   const inFloat = units.flatMap((u, i) => (ctx.floats.has(u) ? [i] : []))
   // (the paper's macros that read nothing past their arguments: the layout marking's, layout/marks.mjs layoutMarking `complete`)
   // (the bibliographies \\bibliography reads, by the names it gives, where the walk met it: what BibTeX writes the job's .bbl of)
-  return { main: mainFile.rel, files, units, inFloat, skipped, fits: ctx.fits, lineEnvs, inputenc: enc ?? null, transcode, complete: completeMacros(own), bibliography: ctx.bibliography }
+  return { main: mainFile.rel, files, units, inFloat, texOrder, skipped, fits: ctx.fits, lineEnvs, inputenc: enc ?? null, transcode, complete: completeMacros(own), bibliography: ctx.bibliography }
 }
 
 /** whether bytes of TeX hold a ] outside every group and not escaped: one that would close an optional argument */

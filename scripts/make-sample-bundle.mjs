@@ -197,7 +197,7 @@ if (argOf('final')) {
 
 // 5. the layout file and its cell rules
 step(5, 'the layout file')
-const layoutMade = await makeLayout({ units: paper.units, marks: made.marks, arxiv: arxivDoc, OPS, paper: PAPER, left: '', pdfjs: PDFJS, cellRules: true })
+const layoutMade = await makeLayout({ units: paper.units, texOrder: paper.texOrder, marks: made.marks, arxiv: arxivDoc, OPS, paper: PAPER, left: '', pdfjs: PDFJS, cellRules: true })
 if (!('file' in layoutMade)) throw new Error(`the layout maker refused the paper (${layoutMade.refused})`)
 const layoutText = encodeLayout(layoutMade.file)
 const layoutBytes = new TextEncoder().encode(layoutText)

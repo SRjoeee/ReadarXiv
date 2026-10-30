@@ -40,6 +40,10 @@ export interface UnitMatch { m: number[]; coverage: number; bounded: [number, nu
  *  whole document then begins at the page of its last body neighbour (a unit not in it), `floatMatch` unread */
 export interface MatchOptions { minCoverage?: number; bounds?: Map<string, [number, number]>; floating?: (id: number) => boolean; floatMatch?: Map<number, number[] | null> | null; forward?: ReadonlySet<number> | null }
 export declare function anchorUnits(doc: DocToken[], units: UnitText[], options?: MatchOptions & { frame?: FrameRule }): Map<number, Anchor | null>
+/** the units' order TeX sets them in (openPaper's `texOrder`), or null where it is their own; a TypeError where it is no order of `n` */
+export declare function orderOf(texOrder: readonly number[] | null | undefined, n: number): readonly number[] | null
+/** the units of `ids` (their indices) as places in `order` (null: their own) */
+export declare function placesIn(ids: readonly number[], order: readonly number[] | null): Set<number>
 /** every floating unit's match over the whole document (id → its tokens, or null), from the document and the words alone */
 export declare function floatMatches(doc: DocToken[], units: UnitText[], floating?: (id: number) => boolean): Map<number, number[] | null>
 /** anchorUnits' first half: each unit's match by the units' order (null: not found, or not in `only`) */

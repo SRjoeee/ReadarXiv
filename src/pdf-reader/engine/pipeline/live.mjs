@@ -225,7 +225,9 @@ export function compilerKeeper(open) {
 }
 
 /** a paper's files (Map path → bytes) → what the pipeline works on: its units, and beside them which of them are written inside a
- *  float (`inFloat`, their indices, latex-front.mjs loadProject's) */
+ *  float (`inFloat`, their indices, latex-front.mjs loadProject's) and the order TeX sets them in where it is not theirs
+ *  (`texOrder`, their indices in that order, or null: an author block's later units and the bibliography's entries are numbered
+ *  after the rest, latex-front.mjs entriesLast) */
 export function openPaper(files) {
   const fsys = inMemory(files)
   const meta = analyze(fsys)
@@ -234,7 +236,7 @@ export function openPaper(files) {
   // (the structural names its TeX prints that no package names in every target: units of their own in the bundle, after its
   // source's, sent to the translator once: source/paper-names.mjs, bundleUnitsOf)
   const names = paperNames(texFilesOf(fsys, meta.main))
-  return { fsys, meta, project, units: project.units, inFloat: project.inFloat, kept: nameCells(project.units), names }
+  return { fsys, meta, project, units: project.units, inFloat: project.inFloat, texOrder: project.texOrder ?? null, kept: nameCells(project.units), names }
 }
 
 /**
