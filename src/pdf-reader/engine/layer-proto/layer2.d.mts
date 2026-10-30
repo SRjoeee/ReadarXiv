@@ -381,12 +381,12 @@ export declare function cropOfBox(box: { x0: number; x1: number; top: number; bo
 export declare function cropPartsOfSegments(segs: ArrayLike<number> | null | undefined): CropPart[] | null
 /** a crop resolution's own fields from its parts: the first's page, rectangle and baseline, and the parts where there are more than one */
 export declare function cropFields(parts: CropPart[]): { mode: 'crop'; page: number; crop: number[]; baseline: number; parts?: CropPart[] }
-/** where the fit's lay of a unit breaks for each later page: each run over pages cut at the nearest line end to that page's share of the run's height (its source lines), the token the page's text begins with */
-export declare function pageCutsOf(lines: readonly Pick<Line, 'page' | 'from' | 'block'>[], blocks: readonly Block2[], tokens: readonly Token[], P: { noStart?: string; noEnd?: string }): { page: number; at: number }[]
-/** a unit laid over its page breaks: as without them, and once more at that layout's state with a page break at each page's share by height, kept where it fits there; each break ends the line that holds it where the breaker ends it, and where that line is its run's last the breaker lays it on the break's page */
+/** where the fit's lay of a unit breaks for each later frame (a page's or a column's): each run over frames cut at the line end a token opens nearest that frame's share of the run's height (its source lines), the frame (the unit's block it begins with) and the token its text begins with */
+export declare function pageCutsOf(lines: readonly { page: number; from: number; block: number }[], blocks: readonly Block2[], tokens: readonly Token[], P: { noStart?: string; noEnd?: string }): { page: number; frame: number; at: number }[]
+/** a unit laid over its frame breaks (a page's, a column's): as without them, and once more at that layout's state with a break at each frame's share by height, kept where it fits there; each break ends the line that holds it where the breaker ends it, and where that line is its run's last the breaker lays it on the break's page */
 export declare function layoutCut(tokens: Token[] & { base?: unknown }, blocks: readonly Block2[], s: number, P: Params): { layout: Layout; tokens: Token[] & { base?: unknown } }
 /** the tokens with a page-break token before each cut's token */
-export declare function withPageBreaks(tokens: Token[] & { base?: unknown }, cuts: readonly { page: number; at: number }[]): Token[] & { base?: unknown }
+export declare function withPageBreaks(tokens: Token[] & { base?: unknown }, cuts: readonly { page: number; frame?: number; at: number }[]): Token[] & { base?: unknown }
 /** a crop resolution as its readers take it, one a part: itself, or each part as a crop of its own (its index `part`, the copy text on the first alone) */
 export declare function cropPartsOf(r: Resolved): Resolved[]
 /** whether a placeholder is a formula, drawn only as crops of its ink: v0's 'other' that is no text piece */

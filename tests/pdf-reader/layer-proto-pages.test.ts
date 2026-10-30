@@ -41,37 +41,76 @@ describe("the cut by height: each page's share of the paragraph, at the nearest 
     // the source: three lines on page 3, one on page 4 (a share of 3/4); the fit lays four lines, all on page 3: three of them
     // stay there, page 4 opens with the fourth
     const blocks = [block(3, 500, 3), block(4, 700, 1)] as never
-    expect(L2.pageCutsOf(L([3, 0, 0], [3, 16, 0], [3, 32, 0], [3, 48, 0]), blocks, tokens as never, P('de') as never)).toEqual([{ page: 4, at: 48 }])
+    expect(L2.pageCutsOf(L([3, 0, 0], [3, 16, 0], [3, 32, 0], [3, 48, 0]), blocks, tokens as never, P('de') as never)).toEqual([{ page: 4, frame: 1, at: 48 }])
     // three lines: 2.25, two stay; two lines: 1.5, half up, but one line at least on page 4: one stays
-    expect(L2.pageCutsOf(L([3, 0, 0], [3, 16, 0], [3, 32, 0]), blocks, tokens as never, P('de') as never)).toEqual([{ page: 4, at: 32 }])
-    expect(L2.pageCutsOf(L([3, 0, 0], [3, 16, 0]), blocks, tokens as never, P('de') as never)).toEqual([{ page: 4, at: 16 }])
+    expect(L2.pageCutsOf(L([3, 0, 0], [3, 16, 0], [3, 32, 0]), blocks, tokens as never, P('de') as never)).toEqual([{ page: 4, frame: 1, at: 32 }])
+    expect(L2.pageCutsOf(L([3, 0, 0], [3, 16, 0]), blocks, tokens as never, P('de') as never)).toEqual([{ page: 4, frame: 1, at: 16 }])
     // (an even split, 2 of 4: the third line opens page 4)
-    expect(L2.pageCutsOf(L([3, 0, 0], [3, 16, 0], [3, 32, 0], [3, 48, 0]), [block(3, 500, 2), block(4, 700, 2)] as never, tokens as never, P('de') as never)).toEqual([{ page: 4, at: 32 }])
+    expect(L2.pageCutsOf(L([3, 0, 0], [3, 16, 0], [3, 32, 0], [3, 48, 0]), [block(3, 500, 2), block(4, 700, 2)] as never, tokens as never, P('de') as never)).toEqual([{ page: 4, frame: 1, at: 32 }])
   })
   it('is none where the fit sets that line on the page already (its page A holds no more than its share), and never at the first token', () => {
     const blocks = [block(3, 500, 3), block(4, 700, 1)] as never
     expect(L2.pageCutsOf(L([3, 0, 0], [3, 16, 0], [3, 32, 0], [4, 48, 1]), blocks, tokens as never, P('de') as never)).toEqual([])
     // (a share under half a line: one line stays on page 3 all the same)
-    expect(L2.pageCutsOf(L([3, 0, 0], [3, 16, 0], [3, 32, 0]), [block(3, 500, 1), block(4, 700, 9)] as never, tokens as never, P('de') as never)).toEqual([{ page: 4, at: 16 }])
+    expect(L2.pageCutsOf(L([3, 0, 0], [3, 16, 0], [3, 32, 0]), [block(3, 500, 1), block(4, 700, 9)] as never, tokens as never, P('de') as never)).toEqual([{ page: 4, frame: 1, at: 16 }])
   })
   it("is each run's own: a run on one page has none, a run over two is cut by its own lines", () => {
     // run 0 (after no display) on page 3 alone; run 1 over pages 3 and 4, its source two lines on each
     const blocks = [block(3, 500, 2), block(3, 460, 2, 1), block(4, 700, 2, 1)] as never
     const lines = L([3, 0, 0], [3, 10, 0], [3, 20, 1], [3, 30, 1])
-    expect(L2.pageCutsOf(lines, blocks, tokens as never, P('de') as never)).toEqual([{ page: 4, at: 30 }])
+    expect(L2.pageCutsOf(lines, blocks, tokens as never, P('de') as never)).toEqual([{ page: 4, frame: 2, at: 30 }])
   })
   it('over three pages: each later page at its share, rising', () => {
     // the source's lines 2, 1, 2 on pages 1, 2, 3; five lines laid on page 1: two stay (2/5 of five), the third opens page 2,
     // the fourth page 3 (3/5)
     const blocks = [block(1, 500, 2), block(2, 700, 1), block(3, 700, 2)] as never
     const lines = L([1, 0, 0], [1, 8, 0], [1, 16, 0], [1, 24, 0], [1, 32, 0])
-    expect(L2.pageCutsOf(lines, blocks, tokens as never, P('de') as never)).toEqual([{ page: 2, at: 16 }, { page: 3, at: 24 }])
+    expect(L2.pageCutsOf(lines, blocks, tokens as never, P('de') as never)).toEqual([{ page: 2, frame: 1, at: 16 }, { page: 3, frame: 2, at: 24 }])
   })
   it("a run laid in one line is cut in it, at the share of its tokens, on one a line may open with: the one short line", () => {
     const blocks = [block(3, 500, 1), block(4, 700, 1)] as never
     // ten words in one line on page 3: the sixth word (half of them, past the fifth) opens page 4
     const ten = words(10)
-    expect(L2.pageCutsOf(L([3, 0, 0]), blocks, ten as never, P('de') as never)).toEqual([{ page: 4, at: 10 }])
+    expect(L2.pageCutsOf(L([3, 0, 0]), blocks, ten as never, P('de') as never)).toEqual([{ page: 4, frame: 1, at: 10 }])
+    // (over three pages, three source lines on each: six words in one line, two on each page; the cloud review of #519: the
+    // first cut ended the walk, and page 3 got none)
+    const three = [block(1, 500, 3), block(2, 700, 3), block(3, 700, 3)] as never
+    expect(L2.pageCutsOf(L([1, 0, 0]), three, words(6) as never, P('de') as never)).toEqual([{ page: 2, frame: 1, at: 4 }, { page: 3, frame: 2, at: 8 }])
+  })
+  it('is a column break on one page as a page break is: a frame is a column of a page (the owner, 2026-10-30)', () => {
+    // 1810.04805's Chinese MRPC paragraph: three source lines at the left column's foot, two at the right column's head; four
+    // lines laid, three of them in the left column: two stay (4 × 3/5 = 2.4), the third opens the right column
+    const left = block(15, 106, 3), right = { ...block(15, 346, 2), x0: 120, x1: 220, rects: [[15, 120, 344, 220, 354], [15, 120, 332, 220, 342]] }
+    expect(L2.pageCutsOf(L([15, 0, 0], [15, 16, 0], [15, 32, 0], [15, 48, 1]), [left, right] as never, tokens as never, P('de') as never)).toEqual([{ page: 15, frame: 1, at: 32 }])
+    // (two blocks of one column, a gap between them, are one frame: no cut between them)
+    expect(L2.pageCutsOf(L([3, 0, 0], [3, 16, 0], [3, 32, 1]), [block(3, 500, 2), block(3, 460, 2)] as never, tokens as never, P('de') as never)).toEqual([])
+  })
+  it("counts a source line its rectangles cut in two once (originalLines: the cloud review of #519)", () => {
+    // page 3's two lines, the first cut in two by a formula (two baselines at 500), page 4's one: a share of 2/3, four of six
+    // lines laid on page 3 (counted by rectangles, 3/4: 4.5, five)
+    const cutIn2 = { ...block(3, 500, 2), B: [500, 500, 488], rects: [[3, 0, 498, 40, 508], [3, 60, 498, 100, 508], [3, 0, 486, 100, 496]] }
+    const six = L([3, 0, 0], [3, 8, 0], [3, 16, 0], [3, 24, 0], [3, 32, 0], [3, 40, 0])
+    expect(L2.pageCutsOf(six, [cutIn2, block(4, 700, 1)] as never, tokens as never, P('de') as never)).toEqual([{ page: 4, frame: 1, at: 32 }])
+  })
+  it("cuts only where a line opens at a token's start: never inside a long token cut over lines (the cloud review of #519)", () => {
+    // a word of two letters, then one of 38 in a measure of 20: its head on the second line and its tail on the third, both
+    // lines opening at the same token. Five source lines on each page: half of three lines is 1.5, but the third line opens
+    // inside the long word, so the cut is after the first line, and the lay keeps it: one line on page 3, the long word's two
+    // on page 4
+    const tokens = [word(2, 0), space, word(38, 3)]
+    const blocks = [block(3, 500, 5), block(4, 700, 5)] as never
+    const plain = L2.layoutUnit2(tokens as never, blocks, 10, P('de') as never)
+    expect(plain.lines.map(l => [l.page, l.from])).toEqual([[3, 0], [3, 2], [3, 2]])
+    expect(L2.pageCutsOf(plain.lines as never, blocks, tokens as never, P('de') as never)).toEqual([{ page: 4, frame: 1, at: 2 }])
+    expect(L2.layoutCut(tokens as never, blocks, 10, P('de') as never).layout.lines.map(l => l.page)).toEqual([3, 4, 4])
+    // (with a fourth line after the tail, half of four is 2, which opens inside the long word: the nearest line ends a token
+    // opens are after the first line and after the third, equally near, and the later is taken; the cut there kept the long
+    // word whole on page 3, where the old index of the second line's token moved it whole to page 4)
+    const more = [word(2, 0), space, word(38, 3), space, word(2, 42), space, word(2, 45)]
+    const plain4 = L2.layoutUnit2(more as never, blocks, 10, P('de') as never)
+    expect(plain4.lines.map(l => l.from)).toEqual([0, 2, 2, 4])
+    expect(L2.pageCutsOf(plain4.lines as never, blocks, more as never, P('de') as never)).toEqual([{ page: 4, frame: 1, at: 4 }])
+    expect(L2.layoutCut(more as never, blocks, 10, P('de') as never).layout.lines.map(l => l.page)).toEqual([3, 3, 3, 4])
   })
 })
 
@@ -180,6 +219,22 @@ describe("the owner's cases of 2026-10-30: a Chinese paragraph over a page break
     expect(again.clipped).toBe(false)
     expect(again.lines.filter(l => l.page === 4).every(l => l.mode === 'just')).toBe(true)
     expect(again.lines.filter(l => l.page === 5).length).toBeGreaterThan(0)
+  })
+})
+
+describe("the owner's case of 2026-10-30 at a column break: 1810.04805's Chinese MRPC paragraph", () => {
+  // Appendix B's GLUE list, page 15: the MRPC paragraph runs from the left column's foot (three source lines) to the right
+  // column's head (two). The translation, laid at the fit's state in four lines, filled the left column's three and left the
+  // right column one short line ("Brockett, 2005)." and the room under it empty). A column break is a frame break as a page
+  // break is: two lines stay in the left column (4 × 3/5 = 2.4), full, and the right column takes two
+  const han = (n: number) => Array.from({ length: n }, (_, k) => ({ s: String.fromCodePoint(0x4e00 + k), cls: 'cjk', w100: 100, st: {}, face, at: k, end: k + 1 }))
+  const right = () => ({ ...block(15, 346, 2), x0: 120, x1: 220, rects: [[15, 120, 344, 220, 354], [15, 120, 332, 220, 342]] })
+  it('lays the left part and the right part by their height, the break at a line end', () => {
+    const blocks = [block(15, 106, 3), right()] as never
+    const plain = L2.layoutUnit2(han(35) as never, blocks, 10, P('zh') as never)
+    expect(plain.lines.map(l => [l.block, l.from])).toEqual([[0, 0], [0, 10], [0, 20], [1, 30]])
+    const r = L2.layoutCut(han(35) as never, blocks, 10, P('zh') as never)
+    expect(r.layout.lines.map(l => [l.block, l.mode, l.items.length])).toEqual([[0, 'just', 10], [0, 'just', 10], [1, 'just', 10], [1, 'last', 5]])
   })
 })
 

@@ -3281,26 +3281,33 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     const prev = lines[k]
     return !!prev && prev.page === sl.page && sl.baseline > prev.baseline + 0.05 && Math.min(prev.x1, sl.x1) > Math.max(prev.x0, sl.x0)
   }
-  // (the page breaks the lines hold (the pageBreak token, below), in the text's order: { pg, at, line, sent }, `at` the
-  // token's index and `line` the line that holds it, `sent` once the line after it opened on its page. Two in one line: the
-  // first sends the next line, which then holds the second. `immediate`: the breaks laid at their token (strand). `runFrom`:
-  // the index in `lines` of the current run's first line, the line a display's break opened)
+  // (the frame breaks the lines hold (the pageBreak token, below: a page's or a column's), in the text's order: { pg, fr, at,
+  // line, sent }, `fr` the frame it sends the text to (the unit's block it begins with, `blockBase` the run's first block's
+  // place in the unit: a run laid alone), `pg` its page, `at` the token's index and `line` the line that holds it, `sent` once
+  // the line after it opened in its frame. Two in one line: the first sends the next line, which then holds the second.
+  // `immediate`: the breaks laid at their token (strand). `runFrom`: the index in `lines` of the current run's first line, the
+  // line a display's break opened)
   const held = [], immediate = new Set()
   let runFrom = 0
-  /** the first slot of page `pg` past slot `from`, where the text may go on there (`past` the regions it has passed): none past
-   *  a display not passed */
-  const pageSlot = (pg, from = li, past = consumed) => {
+  const base = P.blockBase ?? 0
+  /** whether slot or line `sl` is in break `h`'s frame or past it */
+  const reaches = (sl, h) => (h.fr !== null && h.fr !== undefined ? sl.block + base >= h.fr : sl.page >= h.pg)
+  /** whether two lines stand in one frame: one page, one column */
+  const oneFrame = (a, b) => a.page === b.page && Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0)
+  /** break `h`'s frame's first slot past slot `from`, where the text may go on there (`past` the regions it has passed): none
+   *  past a display not passed */
+  const pageSlot = (h, from = li, past = consumed) => {
     let q = from + 1
-    while (q < slots.length && slots[q].page < pg) q++
+    while (q < slots.length && !reaches(slots[q], h)) q++
     return q < slots.length && !((slots[q].after ?? 0) > past) ? slots[q] : null
   }
   /** the lines after line `was` hold the breaks `was` held and has not sent */
   const carry = was => { for (const h of held) if (h.line === was && !h.sent) h.line = line }
   /**
-   * A held break whose page got no text of its run: the run's text ended on the line that holds it, or on the line after it
+   * A held break whose frame got no text of its run: the run's text ended on the line that holds it, or on the line after it
    * that a forced break left empty (a display's break, the unit's end). That line is laid again from its first token on the
-   * page's first slot, whole, and the line before it ends the earlier page, full; where no line of its run stands before it
-   * on its page (page A would keep none of the run), it is laid again on its own slot with the break at its token, short
+   * frame's first slot, whole, and the line before it ends the earlier frame, full; where no line of its run stands before it
+   * in its frame (that frame would keep none of the run), it is laid again on its own slot with the break at its token, short
    * there (`immediate`); a break the line after the one that held it carried, which has no token on its line, is let go.
    * The one place a held break's fate is decided, in every lay of the unit (the fit's, the page fill's, a run's alone).
    * True where it laid a line again, the walk going on from its first token
@@ -3308,12 +3315,12 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
   const strand = () => {
     for (let k = 0; k < held.length; k++) {
       const h = held[k], at = lines.indexOf(h.line), L = h.line
-      if (at < 0 || lines.slice(at + 1).some(l => l.items.length && l.page >= h.pg)) { held.splice(k--, 1); continue }
+      if (at < 0 || lines.slice(at + 1).some(l => l.items.length && reaches(l, h))) { held.splice(k--, 1); continue }
       let p = at - 1
       while (p >= runFrom && !lines[p].items.length) p--
-      const first = p < runFrom || lines[p].page !== L.page
+      const first = p < runFrom || !oneFrame(lines[p], L)
       const own = slots.indexOf(slotOf.get(L))
-      const to = own < 0 || (first && h.at < L.from) ? null : first ? slots[own] : pageSlot(h.pg, own, L.past)
+      const to = own < 0 || (first && h.at < L.from) ? null : first ? slots[own] : pageSlot(h, own, L.past)
       if (!to) { held.splice(k--, 1); continue }
       // (the breaks whose token is before the line, carried to it or past it: held again by the line laid again; the rest are
       // reached again)
@@ -3333,7 +3340,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
   const advance = () => {
     // (the line holds a page break: the next line opens on that page's first slot, where the text may still go on there)
     let k = -1, to = null
-    while ((k = held.findIndex(h => h.line === line && !h.sent)) >= 0 && !(to = pageSlot(held[k].pg))) held.splice(k, 1)
+    while ((k = held.findIndex(h => h.line === line && !h.sent)) >= 0 && !(to = pageSlot(held[k]))) held.splice(k, 1)
     settle()
     if (stop) return
     if (to) {
@@ -3472,21 +3479,21 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
       open()
       continue
     }
-    // a page break of the source's (withPageBreaks): reached on an earlier page, the line that holds it ends where the breaker
-    // ends it, and the text goes on on the page's first slot (`held`, advance): a paragraph over a page break leaves no short
-    // line before it, as TeX never does (the owner, 2026-10-30: 1706.03762's Chinese §3.2.2 ended page 4 half a line short,
-    // the word for "output" split over pages 4 and 5). The page's text begins up to a line from where its source's does, at
-    // the next line's start; reached at a line's start (or one `immediate`, strand's fallback), there. Where the run's text
-    // ends on the line that holds it, so that its page would get none, strand lays that line there whole. Reached on that page
-    // or later (the earlier page already full), or where that page's first slot lies after a display the text has not passed
+    // a frame break of the paragraph's (withPageBreaks, pageCutsOf: a page's or a column's, `frame` the unit's block the frame
+    // begins with): reached in an earlier frame, the line that holds it ends where the breaker ends it, and the text goes on on
+    // the frame's first slot (`held`, advance): a paragraph over a page break leaves no short line before it, as TeX never does
+    // (the owner, 2026-10-30: 1706.03762's Chinese §3.2.2 ended page 4 half a line short, the word for "output" split over
+    // pages 4 and 5); reached at a line's start (or one `immediate`, strand's fallback), there. Where the run's text ends on
+    // the line that holds it, so that its frame would get none, strand lays that line there whole. Reached in that frame or
+    // later (the earlier one already full), or where that frame's first slot lies after a display the text has not passed
     // (the source sets the text before the display: the display's own break places it), nothing
     if (tokens[i].pageBreak !== undefined) {
-      const pg = tokens[i].pageBreak, at = i
+      const h = { pg: tokens[i].pageBreak, fr: tokens[i].frame ?? null, at: i, sent: false }
       i++
-      if (!(line.page < pg)) continue
-      const to = pageSlot(pg)
+      if (reaches(line, h)) continue
+      const to = pageSlot(h)
       if (!to) continue
-      if (line.items.length && !immediate.has(at)) { held.push({ pg, at, line, sent: false }); continue }
+      if (line.items.length && !immediate.has(h.at)) { held.push({ ...h, line }); continue }
       if (line.items.length) trim(line)
       settle()
       if (stop) break
@@ -3666,70 +3673,85 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
   return { lines: lines.filter(l => l.items.length), rest: over ?? i, total: tokens.length, tokens, spilled }
 }
 
-// ---- a unit over a page break (E3c, 2026-10-20; by height, 2026-10-30): each page holds its share of the paragraph
+// ---- a unit over a frame break (E3c, 2026-10-20; by height, 2026-10-30): each frame holds its share of the paragraph
 
 /**
  * Where the fit's lay of a unit (`lines`, breakLines' at the fit's state, each with its first token `from` and its block)
- * breaks for each later page: a paragraph's lines go over its pages as its region does, by height. Each run of the unit
- * (its blocks of one `after`: the text between two displays, set on its own slots) whose source lines (its blocks' `B`) stand
- * on more than one page is cut before each later page at the nearest line end of its laid lines to that page's share of
- * the run's height, k of its n lines on the pages before it, k = n × the source's lines before that page over all of them,
- * rounded (half up: the earlier page the fuller, as TeX fills a page), one line at least on each side; no sentence, no
- * word of the alignment (the owner, 2026-10-30: blocks keep their place, sentences need not, the page changes at a natural
- * line end). A run laid in one line is cut in that line, at the share of its tokens, the one short line a page break
- * leaves. Only where the fit sets that line on an earlier page than the page (its page A holds more than its share): else
- * the fit's own flow keeps it. Returns [{ page, at }], `at` the token the page's text begins with, rising
+ * breaks for each later frame: a paragraph's lines go over its frames as its region does, by height. A frame is a column of a
+ * page (the unit's consecutive blocks of one run on one page whose columns meet), so a column break is one as a page break
+ * is. Each run of the unit (its blocks of one `after`: the text between two displays, set on its own slots) whose source
+ * lines (originalLines: a line its rectangles cut in two one) stand in more than one frame is cut before each later frame at
+ * the line end of its laid lines nearest that frame's share of the run's height, k of its n lines in the frames before it,
+ * k = n × the source's lines before that frame over all of them (half up: the earlier frame the fuller, as TeX fills a
+ * column), one line at least on each side. Only a line that opens at a token's start is a place to cut: one a long token's
+ * cut opens (a URL cut by its characters, a hyphenated word's tail) begins inside the token the line before ends in. No
+ * sentence, no word of the alignment (the owner, 2026-10-30: blocks keep their place, sentences need not, the frame changes at
+ * a natural line end). A run laid in one line is cut in it, at the share of its tokens, the one short line a break leaves.
+ * Only where the fit sets that line in an earlier frame (its frame before holds more than its share): else the fit's own
+ * flow keeps it. Returns [{ page, frame, at }], `frame` the unit's block the frame begins with, `at` the token its text
+ * begins with, rising
  */
 export function pageCutsOf(lines, blocks, tokens, P) {
-  const runs = new Map()
-  for (const b of blocks) {
-    const r = runs.get(b.after ?? 0) ?? runs.set(b.after ?? 0, new Map()).get(b.after ?? 0)
-    r.set(b.page, (r.get(b.page) ?? 0) + (b.B?.length ?? 0))
-  }
+  const frames = []
+  blocks.forEach((b, bi) => {
+    const f = frames.at(-1), after = b.after ?? 0
+    if (f && f.after === after && f.page === b.page && Math.min(f.x1, b.x1) > Math.max(f.x0, b.x0)) {
+      f.lines += originalLines(b)
+      f.x0 = Math.min(f.x0, b.x0)
+      f.x1 = Math.max(f.x1, b.x1)
+    } else frames.push({ after, page: b.page, x0: b.x0, x1: b.x1, first: bi, lines: originalLines(b) })
+  })
   const kinsoku = kinsokuOf(P.noStart ?? '', P.noEnd ?? '')
-  const opens = t => !t.space && !t.glue && t.blockTo === undefined && t.newline === undefined && !(typeof t.s === 'string' && t.s !== '' && (noStart(t.s) || kinsoku.starts(t.s)))
+  const opens = t => !textless(t) && !t.glue && !(typeof t.s === 'string' && t.s !== '' && (noStart(t.s) || kinsoku.starts(t.s)))
   const out = []
-  for (const [after, byPage] of runs) {
-    const pages = [...byPage.keys()].sort((a, b) => a - b), total = [...byPage.values()].reduce((a, b) => a + b, 0)
-    if (pages.length < 2 || !(total > 0)) continue
+  for (const after of new Set(frames.map(f => f.after))) {
+    const fs = frames.filter(f => f.after === after), total = fs.reduce((a, f) => a + f.lines, 0)
+    if (fs.length < 2 || !(total > 0)) continue
     const rl = lines.filter(l => (blocks[l.block]?.after ?? 0) === after)
     if (!rl.length) continue
-    let before = 0, k0 = 0
-    for (const page of pages.slice(1)) {
-      before += byPage.get(pages[pages.indexOf(page) - 1])
-      const share = before / total
+    // (one line: its tokens that set text, each frame's cut at its share of them, past the first, on one a line may open with)
+    const l0 = rl[0], ix = []
+    if (rl.length === 1) for (let i = l0.from, end = lines[lines.indexOf(l0) + 1]?.from ?? tokens.length; i < end; i++) if (!textless(tokens[i])) ix.push(i)
+    let before = 0, k0 = 0, q0 = 0
+    for (let f = 1; f < fs.length; f++) {
+      before += fs[f - 1].lines
+      const share = before / total, frame = fs[f]
       if (rl.length === 1) {
-        // (one line: cut in it at the share of its tokens that set text, on one a line may open with, past its first)
-        const l = rl[0], end = lines[lines.indexOf(l) + 1]?.from ?? tokens.length
-        const ix = []
-        for (let i = l.from; i < end; i++) if (!textless(tokens[i])) ix.push(i)
-        let q = Math.max(1, Math.round(ix.length * share))
+        let q = Math.max(q0 + 1, Math.round(ix.length * share))
         while (q < ix.length && !opens(tokens[ix[q]])) q++
-        if (q < ix.length && l.page < page && !(out.length && out.at(-1).at >= ix[q])) out.push({ page, at: ix[q] })
-        break
+        if (q >= ix.length) break
+        q0 = q
+        if (l0.block < frame.first) out.push({ page: frame.page, frame: frame.first, at: ix[q] })
+        continue
       }
-      const k = Math.min(rl.length - 1, Math.max(k0 + 1, Math.floor(rl.length * share + 0.5)))
-      if (k <= k0) break
+      // (the line ends a cut may stand at: past the last cut, short of the run's last line, each line one a token opens)
+      const want = rl.length * share
+      let k = -1
+      for (let j = k0 + 1; j < rl.length; j++) {
+        if (!(rl[j].from > rl[j - 1].from)) continue
+        const d = Math.abs(j - want), dk = k < 0 ? Infinity : Math.abs(k - want)
+        if (d < dk || (d === dk && j > k)) k = j
+      }
+      if (k < 0) break
       k0 = k
-      // (the fit's own flow already sets that line on the page or later: its page A full)
-      if (!(rl[k].page < page) || !(rl[k].from > 0)) continue
-      if (!(out.length && out.at(-1).at >= rl[k].from)) out.push({ page, at: rl[k].from })
+      // (the fit's own flow already sets that line in the frame or later: its frame before full)
+      if (rl[k].block < frame.first && rl[k].from > 0) out.push({ page: frame.page, frame: frame.first, at: rl[k].from })
     }
   }
   return out.sort((a, b) => a.at - b.at)
 }
 
 /**
- * A unit laid over its page breaks: as without them, the fit's states searched once; where that layout sets more of a run's
- * lines on a page than its share (pageCutsOf), laid once more with the page breaks (withPageBreaks) at that layout's own
- * state, and kept where it fits there. Else as without them: a cut never costs a unit its fit, nor a second search of the
+ * A unit laid over its frame breaks (a page's, a column's): as without them, the fit's states searched once; where that
+ * layout sets more of a run's lines in a frame than its share (pageCutsOf), laid once more with the breaks (withPageBreaks)
+ * at that layout's own state, and kept where it fits there. Else as without them: a cut never costs a unit its fit, nor a second search of the
  * fit's states. A break ends the line that holds it where the breaker ends that line, and where that line is its run's last
  * the breaker lays it on the break's page (breakLines' strand), in this lay and in every later one of the tokens it returns.
  * Returns { layout, tokens }, the tokens it was laid from
  */
 export function layoutCut(tokens, blocks, s, P) {
   const plain = layoutUnit2(tokens, blocks, s, P)
-  if (plain.clipped || plain.spilled || new Set(blocks.map(b => b.page)).size < 2) return { layout: plain, tokens }
+  if (plain.clipped || plain.spilled || blocks.length < 2) return { layout: plain, tokens }
   const cuts = pageCutsOf(plain.lines, blocks, plain.tokens ?? tokens, P)
   if (!cuts.length) return { layout: plain, tokens }
   const broken = withPageBreaks(tokens, cuts)
@@ -3745,7 +3767,7 @@ export function withPageBreaks(tokens, cuts) {
   const out = []
   let c = 0
   tokens.forEach((t, i) => {
-    while (c < cuts.length && cuts[c].at === i) out.push({ pageBreak: cuts[c++].page, w100: 0 })
+    while (c < cuts.length && cuts[c].at === i) { const { page, frame } = cuts[c++]; out.push({ pageBreak: page, ...(frame !== undefined ? { frame } : {}), w100: 0 }) }
     out.push(t)
   })
   return Object.assign(out, { base: tokens.base })
