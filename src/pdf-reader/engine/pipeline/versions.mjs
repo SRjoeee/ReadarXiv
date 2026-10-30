@@ -274,8 +274,13 @@
 //     kind `inkreferences`, one an entry, cut by the compile's points before each (marks.mjs POINTS_TEX `bi<n>`, layout/ledger.mjs
 //     `entry`), the references' class, where they were orphan text in ink units of their own grouping, always translated, its
 //     heading run into the first: every such paper's bibliography is translated again; 38 with TRANSLATE_VERSION 9 (a caption cut
-//     into sentences on the tags wire), so that no stored copy of 8's is taken for one of 9's
-export const PIPELINE_VERSION = '38'
+//     into sentences on the tags wire), so that no stored copy of 8's is taken for one of 9's; 39 (the owner's ruling of
+//     2026-10-30, the names toggle the whole author block, and his case 2610.35877v1): a unit cut inside an author block is the
+//     block's, its names or its places as frontBlock cuts them, whatever environment TeX sets it in (latex-front.mjs blockKind): a
+//     tabular's cells there (2610.35877v1's two names, 2608.06007v1's row of places, 2610.22214v1's block) are units of kind
+//     author or affiliation, each at its number with its text, no table's cell and no table's kept name, where they were cells
+//     of the tables' toggle; 3 of the 190 sources on disk, 8 units, every other unit and every kept name as it was
+export const PIPELINE_VERSION = '39'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

@@ -80,6 +80,11 @@ const roleOf = name => (FRONT_NAMES.has(name) ? 'names' : 'places')
 const AUTHOR_KINDS = new Set(['author', 'affiliation'])
 /** whether a unit is of an author block (AUTHOR_KINDS): what the TeX path sets and keeps as one block, names and places alike */
 export const inAuthorBlock = u => AUTHOR_KINDS.has(u?.kind)
+/** the kind of the units an environment makes, `kind` (a table's cells, an abstract, a theorem), but inside an author block:
+ *  there every unit is the block's own, its names or its places as frontBlock cuts them, whatever environment TeX sets it in
+ *  (2610.35877v1's `\author{\begin{tabular}{cc} Ayush Mittal & Dhruv Gupta\\ …\end{tabular}}`: its names were table
+ *  cells, of the tables' toggle, translated with the author block's off) */
+const blockKind = (b, kind) => (AUTHOR_KINDS.has(b.kind) ? b.kind : kind)
 /** commands inside an author block whose argument is a name or a place: IEEEtran's blocks, acmart's parts of an
  *  affiliation. Anything else there — \\email, \\orcid, \\inst{1}, \\textsuperscript — stays as it is */
 const FRONT_PROSE = new Set(['IEEEauthorblockN', 'IEEEauthorblockA', 'institution', 'department', 'city', 'state', 'country'])
@@ -1663,12 +1668,13 @@ function walk(s, from, to, b, ctx) {
       if (ctx.tblrEnvs.has(env) && (ctx.tblrMath || argsOfForm(s, afterBegin, '[{').args.some(a => TBLR_MATH.test(uncommented(s.slice(a.start, a.end)))))) { ctx.skipped[env] = (ctx.skipped[env] ?? 0) + 1; i = afterEnd; continue }
       if (TABLE_ENVS.test(env)) {
         if (!ctx.tables) { ctx.skipped[env] = (ctx.skipped[env] ?? 0) + 1; i = afterEnd; continue }
-        // a table: each cell is a unit of its own; & and \\ end it. The column specification and width stay as they are
+        // a table: each cell is a unit of its own; & and \\ end it. The column specification and width stay as they are. In an
+        // author block its cells are the block's units, cut at & and \\ as cells are (blockKind), placed in no grid
         const tp = ctx.ownEnvs.has(env) ? null : environmentParams(env, paper?.bindings ?? null), tr = tp && readArgs(s, afterBegin, tp, bodyEnd)
         // (one the table does not know by its form: tabularx's, tabular*'s and tabulary's {width}[pos]{spec}, else [pos]{spec})
         const argsEnd = tr?.complete ? tr.end : argsOfForm(s, afterBegin, env.startsWith('tabularx') || env === 'tabular*' || env === 'tabulary' ? '{[{' : '[{').end
         // (the paper's tables numbered in the order they begin, a table nested in a cell after the one it is in)
-        const saved = b.kind, savedCell = b.cellMode, first = b.units.length, table = (ctx.tableCount = (ctx.tableCount ?? 0) + 1); b.kind = 'cell'; b.cellMode = true
+        const saved = b.kind, savedCell = b.cellMode, first = b.units.length, table = (ctx.tableCount = (ctx.tableCount ?? 0) + 1); b.kind = blockKind(b, 'cell'); b.cellMode = true
         walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved; b.cellMode = savedCell
         // each cell unit's place in the table's grid (tableGrid), by which its consistency group is found (groups.mjs):
         // a table nested in a cell gives its units the outer cell's place, set after its own
@@ -1696,7 +1702,7 @@ function walk(s, from, to, b, ctx) {
       if (FLOAT_ENVS.test(env)) b.inFloat = true
       // (its units `bracketed`: written back in its brackets, a translation's own ] would end them, patch)
       if (title) { const saved = b.kind, before = b.units.length; b.kind = 'heading'; walk(s, title.start + 1, title.end - 1, b, ctx); b.flush(); b.kind = saved; for (const u of b.units.slice(before)) u.bracketed = true }
-      const saved = b.kind; b.kind = env === 'abstract' ? 'abstract' : ctx.theorems.has(env) ? 'theorem' : saved
+      const saved = b.kind; b.kind = blockKind(b, env === 'abstract' ? 'abstract' : ctx.theorems.has(env) ? 'theorem' : saved)
       walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved
       b.inFloat = outside
       i = afterEnd; continue
