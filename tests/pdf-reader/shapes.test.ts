@@ -621,6 +621,79 @@ describe('SH5: the right\'s laid pages, from the layer\'s words (layerShapes)', 
     expect([cellOf(drift), drift.shapes.runs(id), cellOf(over), over.shapes.runs(id)]).toEqual([null, [], null, []])
   })
 
+  it('a laid page whose lines moved (its line map: 1810.04805v2\'s page 16, our table 30 pt higher than arXiv\'s): its table\'s cells and its copies of the left\'s tokens stand where our page sets them, hit and lit there', () => {
+    // (our page 2 every line DY above arXiv's: the line map of arXiv's page 2, an entry a line, [our page, x0, x1, bottom, top,
+    // arXiv's page, dx, dy]; the right's drawn words of unit 3 DY above the left's too)
+    const DY = 24
+    const ys = [...new Set(doc.filter(t => t.page === 2).map(t => t.y))]
+    const E = Float64Array.from(ys.flatMap(y => {
+      const ts = doc.filter(t => t.page === 2 && t.y === y)
+      return [2, Math.min(...ts.map(t => t.x)), Math.max(...ts.map(t => t.x + t.w)), y - 2.2 + DY, y + 7.5 + DY, 2, 0, -DY]
+    }))
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    const l = createShapes({ kindOf })
+    l.addParts(parts)
+    for (const p of [1, 2, 3]) l.addPage(p === 2 ? { ...nth(lefts, 2), lines: E } as never : nth(lefts, p))
+    l.floats(2)
+    const beta = (y: number) => nth(doc, doc.findIndex(d => d.page === 2 && d.t === 'beta' && d.y === y))
+    const first = beta(560), last = beta(536)
+    const id = l.shapes.hit(2, first.x + 2, first.y + 3, PAD, () => null)?.id ?? -1, id3 = l.shapes.hit(2, last.x + 2, last.y + 3, PAD, () => null)?.id ?? -1
+    expect([isTableCell(id), isTableCell(id3), id === id3]).toEqual([true, true, false])
+    const r = layerShapes(l)
+    r.lay(2, { ...wordsOf(2, [3], -DY), rows: [[3, [50, 680 - 2.2 + DY, 550, 740 + 7.5 + DY]]] } as never)
+    expect(r.laid(2)).toBe(true)
+    // (the first row's cell: hit where our page has it, its run there; at arXiv's place of it, our third row stands: its cell)
+    expect(r.shapes.hit(2, first.x + 2, first.y + 3 + DY, PAD, () => null)?.id).toBe(id)
+    expect(nth(r.shapes.runs(id), 0).top).toBeCloseTo(nth(l.shapes.runs(id), 0).top + DY, 4)
+    expect(r.shapes.hit(2, first.x + 2, first.y + 3, PAD, () => null)?.id).toBe(id3)
+    expect(nth(r.shapes.runs(id3), 0).top).toBeCloseTo(nth(l.shapes.runs(id3), 0).top + DY, 4)
+    // (unit 5, shown as the original with no boxes of its own on page 2: its copies of the left's tokens where our page sets them)
+    const a = l.shapes.runs(5).filter(x => x.page === 2), b = r.shapes.runs(5).filter(x => x.page === 2)
+    expect(b.length).toBe(a.length)
+    for (let i = 0; i < a.length; i++) expect(nth(b, i).top).toBeCloseTo(nth(a, i).top + DY, 4)
+    // (without the map, or with an empty one, the page in place: the left's places, as before)
+    for (const lines of [null, new Float64Array(0)]) {
+      const l0 = createShapes({ kindOf })
+      l0.addParts(parts)
+      for (const p of [1, 2, 3]) l0.addPage(p === 2 ? { ...nth(lefts, 2), lines } as never : nth(lefts, p))
+      l0.floats(2)
+      const r0 = layerShapes(l0)
+      r0.lay(2, { ...wordsOf(2, [3], -DY), rows: [[3, [50, 680 - 2.2 + DY, 550, 740 + 7.5 + DY]]] } as never)
+      expect(r0.shapes.hit(2, first.x + 2, first.y + 3, PAD, () => null)?.id, `${lines}`).toBe(id)
+      expect(nth(r0.shapes.runs(id), 0).top, `${lines}`).toBeCloseTo(nth(l0.shapes.runs(id), 0).top, 4)
+    }
+    // (the float moves whole, as most of its cells' lines did: one row's line found elsewhere moves none of it apart; the table's
+    // lines in place, the prose's moved: the table stays)
+    const rowAt = (m: Float64Array, ok: (top: number) => boolean, f: (m: Float64Array, j: number) => void) => { for (let j = 0; j < m.length; j += 8) if (ok(nth([...m], j + 4) - DY)) f(m, j) }
+    const second = beta(548)
+    const odd = E.slice()
+    rowAt(odd, t => t > 550 && t < 560, (m, j) => { m[j + 7] = -DY - 6 })
+    const kept = Float64Array.from([...E].filter((_, i) => { const j = i - (i % 8); return !(nth([...E], j + 4) - DY > 530 && nth([...E], j + 4) - DY < 570) }))
+    for (const [m, dy] of [[odd, DY], [kept, 0]] as const) {
+      const lm = createShapes({ kindOf })
+      lm.addParts(parts)
+      for (const p of [1, 2, 3]) lm.addPage(p === 2 ? { ...nth(lefts, 2), lines: m } as never : nth(lefts, p))
+      lm.floats(2)
+      const rm = layerShapes(lm)
+      rm.lay(2, { ...wordsOf(2, [3], -DY), rows: [[3, [50, 680 - 2.2 + DY, 550, 740 + 7.5 + DY]]] } as never)
+      const id2 = lm.shapes.hit(2, second.x + 2, second.y + 3, PAD, () => null)?.id ?? -1
+      expect(isTableCell(id2)).toBe(true)
+      expect(nth(rm.shapes.runs(id2), 0).top, `${dy}`).toBeCloseTo(nth(lm.shapes.runs(id2), 0).top + dy, 4)
+      expect(rm.shapes.hit(2, second.x + 2, second.y + 3 + dy, PAD, () => null)?.id, `${dy}`).toBe(id2)
+    }
+    // (the table's lines our page 3's, by the map: none of the float on our page 2, its cells lit on the left alone, never a wrong place)
+    const away = E.slice()
+    for (let j = 0; j < away.length; j += 8) if (nth([...away], j + 4) - DY > 530 && nth([...away], j + 4) - DY < 570) away[j] = 3
+    const l3 = createShapes({ kindOf })
+    l3.addParts(parts)
+    for (const p of [1, 2, 3]) l3.addPage(p === 2 ? { ...nth(lefts, 2), lines: away } as never : nth(lefts, p))
+    l3.floats(2)
+    const r3 = layerShapes(l3)
+    r3.lay(2, { ...wordsOf(2, [3], -DY), rows: [[3, [50, 680 - 2.2 + DY, 550, 740 + 7.5 + DY]]] } as never)
+    expect(l3.shapes.hit(2, first.x + 2, first.y + 3, PAD, () => null)?.id).toBe(id)
+    expect([r3.shapes.runs(id), isTableCell(r3.shapes.hit(2, first.x + 2, first.y + 3 + DY, PAD, () => null)?.id ?? -1), isTableCell(r3.shapes.hit(2, first.x + 2, first.y + 3, PAD, () => null)?.id ?? -1)]).toEqual([[], false, false])
+  })
+
   it('a muted page (another target\'s layer kept there) lights and hits nothing, its table\'s cells included; unmuted, as before', () => {
     const l = built([1, 2, 3])
     l.floats(2)
