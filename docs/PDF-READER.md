@@ -1349,7 +1349,44 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
 - **Sentences**, where a unit's sentences are known on both sides; else **the whole unit** (paragraph, theorem,
   footnote, list item, caption), decided for both sides together — a unit never lights by sentence on one side and whole
   on the other. A unit of one sentence lights as a sentence shape (its first row from where its text begins).
-- **Whole, whatever their sentences**: headings and table cells. A drawing's text lights nothing (below).
+- **One light map for both panes** (the owner, 2026-10-30: 「请确保我们一定要从最底层、最长期、最通用的方式去解决」): every block
+  TeX sets as text or math lights, the same block on both panes; graphics, and a figure's own labels, never. A block's members are
+  the maker's own boxes of it on our page, which the parts' layouts carry already (each unit's `lines`, its placeholders' segments
+  `ph`, its `labels`: `layout/file.mjs`, TeX's ownership by its marks, `layout/own.mjs`), and each pane resolves them to its own
+  tokens. The right (our page) lights what the door drew of the block and what it kept of our page's ink there
+  (`layer-proto/hide.mjs` `unitHiding`'s `shown`, written into the page's word table by `words.mjs` `addUnitWords`; a unit the layer
+  shows as the original's by its own boxes, `addBoxWords`, no longer by copies of the left's tokens, which it had none of where
+  the left did not locate it). The left (arXiv's page) lights what its left part locates and, where the page is *in place* (90 % of
+  our page's lines hold a token of arXiv's at their middle row: our compile set it as arXiv's), the tokens under the block's boxes
+  (`view/shapes.mjs` `createShapes`: only tokens no span holds, which is where the left part and TeX's marks disagree for 86
+  tokens of 800 000 on the 54 papers below; a label or a kept piece that has no text token, a bullet TeX draws as a mark, widens
+  its unit's row instead, `highlight.mjs` unitRuns). So:
+  - **A display formula is a block of its own**, paired on both panes, its equation numbers included: one display placeholder of
+    a unit (an equation, an align of several lines, every segment of it) one block, lit whole, under an id of its own
+    (`units.mjs` `displayBlockId`: the unit's id and the display's place among its unit's, so that the door and the view number it
+    alike). Its tokens are never its unit's, on either pane (a kept line on its rows is its ink, `words.mjs`; on the left it takes
+    its own unit's tokens and the free ones in its segments, never another unit's: an array's cells set in a display keep theirs).
+    Its unit lights around it, and a sentence across it lights whole, every piece of it, as across a column or a page break (the
+    owner: 「第 1 条就用这个，推进吧」). Inline math stays in its sentence.
+  - **A block's label lights with its first sentence**, on both panes, and hovering the label lights that sentence: a heading's
+    number, a list's bullet or number, a caption's "Figure 4:", a theorem's head (the owner's case: 1810.04805v2 A.3/A.4's bullets
+    lit on neither pane; its headings 4.2–5 lit the number on the left alone).
+  - **A block lights whole, its kept pieces included**: a citation kept where it stands, a reference's numbers-only last line
+    (1810.04805v2's Zhu et al., "19–27.").
+  - **A unit the left does not locate** lights by its boxes on a page in place, whatever its kind (a cell's lines did since #515).
+  - Measured on the release sweep's 53 papers and 2010.11929v2 (1 453 pages, every one laid by the door, both panes' shapes made as
+    the reader makes them, the pages in place: `readarxiv-lab-data/unified-light`, 2026-10-30), before and after: displays lit as
+    their own block on both panes 0 → 2 995 of 3 016 (20 more in part on the left; before, 2 553 lit with their unit on both and
+    428 with it on the left alone); labels unlit on a pane 2 702 of 4 805 → 7; kept pieces unlit on a pane 972 of 43 068 → 16;
+    text lines unlit on a pane 396 → 74; units dark on both panes 35 → 21, on the right alone 20 → 1; arXiv's text of a unit that no
+    block lit 295 lines → 9. The sentences the sweep's invariant checks keep their faults (2 units, as before); 4 456 → 4 461
+    units lit by sentence.
+  - Not yet (the next maker's): text no unit owns — page numbers and feet, a listing or an algorithm, an e-mail line, a note that
+    is an address alone, a bibliography the front end did not cut into entries, a display no unit holds: 5 406 lines on 47 of the
+    54 papers, which the owner rules light as kept blocks at the same place on both panes, a listing one block (2026-10-30). And a
+    page moved (our lines elsewhere than arXiv's: 20 of the 1 453) lights what the left part locates, until the producer ships its
+    lines' pairs.
+- **Whole, whatever their sentences**: headings, table cells and displays. A drawing's text lights nothing (below).
 - **Every drawn thing lights its original, whatever its kind, but a figure's text** (below; the owner's report of
   2026-10-29 on 2010.11929v2 p9: its References' Chinese lit nothing on either side, its Conclusion's and
   Acknowledgements' did). A source unit and an ink unit (its
@@ -1599,7 +1636,12 @@ within noise.
 - A cell of numbers is the words no unit holds on one line within 0.6 of their height (0.4 across a column the table leaves
   free): one set over two lines lights as two cells, and two columns set closer than 0.4 of their height, or than 0.6 where
   a cell no unit holds runs across the column between them on another row, light as one.
-- An equation number set on its own line below its display (2608.09746 #27) is no unit's and is not lit.
+- An equation number set on its own line below its display (2608.09746 #27) is no unit's and is not lit, but where the maker holds
+  it among its display's segments, which light it with the display (§17.1).
+- A page our compile set otherwise than arXiv's (its lines moved: 20 of 1 453 pages on the 54 papers of 2026-10-30) lights on the
+  left what the left part locates: its displays with their units there, its labels and kept pieces where the anchors reach, while
+  the right lights every block; and text no unit owns (page numbers, feet, listings, an e-mail line, a note of an address alone)
+  lights on neither pane: both are the maker's to give (§17.1).
 - A table at a page's head whose first row is single letters over numbers, after a display that closed the page before,
   is taken by that display's walk: no distance tells them apart (A1, measured: lead walks' first gaps up to 19.6 pt).
 - Two lines of text made one row by a tall formula, with a sentence beginning on the second, light their unit whole (12
@@ -1655,15 +1697,24 @@ within noise.
   into a page already in is refused, and the first of the two keeps its place: a bogus page that comes first leaves its
   true neighbour refused, since nothing in the two tells which is wrong.
 - **The right on a laid page** (`layerShapes`): where its place shows the layer, the right's shapes are a layout of its own
-  over the page's words (the door's `LaidPage.words`: the tokens it drew, in the page's PDF units, each unit's spans in
-  paint order), its token ids the page's (page · 2^16 + its index), the units it shows as the original's over copies of
-  the left's tokens of them, made once the page's left part is in too; elsewhere the left's mirrored. A unit's stream on
+  over the page's words (the door's `LaidPage.words`: the tokens it drew and what it kept of our page's ink, in the page's PDF
+  units, each unit's spans in paint order, then each display's under its own id, then each unit shown as the original's by its
+  own boxes), its token ids the page's (page · 2^16 + its index); a unit shown as the original's that the door gave no boxes over
+  copies of the left's tokens of it, made once the page's left part is in too; elsewhere the left's mirrored. A unit's stream on
   the right is its first token on its first page, told when that page lays. The right's starts of a unit all on laid
   pages are the tokens carrying its sentences' first words (`words.word` against the row's `sentences.tr`), each token's
   sentence its word's or its place's (`words.at`, §17.3); of a unit on no laid page, the left's; of one on both, none, and
   it lights whole. The page's word table is in the order of its units' text (`words.mjs addUnitWords`): a display's kept
   lines where the line walk passed its region (`breakLines`' `past`), a kept line no placeholder holds before the block that
   follows it in the unit's rectangles.
+- **Every block told by its boxes** (`createShapes` takeInventory, tellBoxes; the owner's rule of 2026-10-30, §17.1): the parts'
+  layouts give each unit's lines, labels and placeholders' segments on our page. Every display, and every unit the left part does
+  not locate, is told from them on every page (`quiet`, as below), so that the right, which lights it by its own table, holds it;
+  on a page in place, once both its left part and its boxes are in, whichever first, a display takes the tokens of its segments
+  (its own unit's span gives them up) and every unit the free tokens in its boxes, its spans changed in the page's kept input
+  before it is laid and in the layout and the mirrors after; a unit told so begins at its first token on its first page. A located
+  telling that comes after a quiet one takes its place. This made the cells' telling below a case of it, now on pages in place
+  alone.
 - **A cell unit the left part does not locate** (`createShapes`): the producer locates few cells on arXiv's PDF (on the
   sweep's 64 cached papers, 1 113 of 5 094; 7 of 2010.11929v2's 165, 2 of 2610.35877v1's 71), since a cell carries no unit
   mark of its own (`latex-front.mjs`: a heading, a cell or a figure has none), so it is found by its text alone between its

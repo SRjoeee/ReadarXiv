@@ -21,6 +21,13 @@ export declare const NAME_ID_FROM: number
 export declare const NAME_OCCURRENCE_MAX: number
 export declare const nameOccurrenceId: (occurrence: number) => number | null
 export declare const isNameOccurrence: (id: number) => boolean
+/** the hover's ids of display formulas, each a block of its own: one a unit's display, by its unit and its place among them */
+export declare const DISPLAY_ID_FROM: number
+export declare const DISPLAYS_UNIT: number
+export declare const displayBlockId: (unit: number, j: number) => number | null
+export declare const isDisplayBlock: (id: number) => boolean
+export declare const displayBlockUnit: (id: number) => number
+export declare function displayIdsOf(unit: number, ks: Iterable<number>): Map<number, number>
 /** the hover's ids of a table's cells no unit holds: one a cell, by its page and its place among its page's */
 export declare const CELL_ID_FROM: number
 export declare const CELLS_PAGE: number

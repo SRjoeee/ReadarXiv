@@ -58,7 +58,9 @@ export declare function newWords(): OpenWords
 export declare function tokenBand(t: Token, L: Layout, by: number): { y: number; h: number; top: number; bottom: number }
 /** a unit's tokens on a page appended to the table in its text's order, as one span; `kept`: the original's lines it keeps
  *  (layer2.mjs keptLines), each written where the text passes it; `pieceAt`: each piece's place in the translation (pieceOffsets) */
-export declare function addUnitWords(W: OpenWords, L: Layout, page: number, id: number, wordOf: ((at: number, end: number) => number) | null, kept?: readonly KeptLine[], drawnCrop?: (crop: { page: number }) => boolean, pieceAt?: ArrayLike<number> | null): void
+export declare function addUnitWords(W: OpenWords, L: Layout, page: number, id: number, wordOf: ((at: number, end: number) => number) | null, kept?: readonly KeptLine[], drawnCrop?: (crop: { page: number }) => boolean, pieceAt?: ArrayLike<number> | null, shown?: readonly import('./hide.mjs').ShownInk[]): void
+/** a unit the layer shows as the original's: its layout boxes on the page as its tokens, its displays under their hover ids */
+export declare function addBoxWords(W: OpenWords, page: number, id: number, lu: { lines?: ArrayLike<number>; labels?: ArrayLike<number>; ph?: Map<number, { kind: string; segs: ArrayLike<number> }> } | null, displayIds?: Map<number, number>): void
 /** the record a page keeps */
 /** a drawn thing's tokens (a babel name, a figure's label), one a segment, appended under `id` as a unit's span */
 export declare function addSegWords(W: OpenWords, id: number, segs: readonly { x: number; w: number; y: number; h: number; base: number; size: number }[]): void

@@ -65,8 +65,8 @@ import { shown as shownPiece, trPiecesOf } from '../layer/pieces.mjs'
 import { fitFigureSet, sameAsSource } from './figure-fit.mjs'
 import { levelRun } from './figure-rows.mjs'
 import { FIGURE_KIND } from '../rules/content-classes.mjs'
-import { NAME_KIND, nameOccurrenceId } from './units.mjs'
-import { addSegWords, addUnitWords, copyWords, freezeWords, newWords, pieceOffsets, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
+import { displayIdsOf, NAME_KIND, nameOccurrenceId } from './units.mjs'
+import { addBoxWords, addSegWords, addUnitWords, copyWords, freezeWords, newWords, pieceOffsets, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
 import { closureOf, rowLeadOf } from './need.mjs'
 import { markWork, newWork, work, WORK_KEYS } from './work.mjs'
 import { drawInputsOf } from './draw.mjs'
@@ -1035,6 +1035,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // elsewhere — a line our compile moved across the page break, the drift the line check draws (carry.mjs DRIFT_LINES) —: each
     // unit the layout lays its rows on the page (none where they are all on other pages), and whether the page's lines moved,
     // a unit's pages on the left not its rows' pages here; view/shapes.mjs layerShapes copies by them)
+    // (a unit shown as the original lights by its own boxes on our page, the layout file's — its lines, its label, its pieces, its
+    // displays under their ids —, where the file holds it: what the page shows of it is its own ink, whether or not the left located it)
+    for (const id of original) {
+      const lu = tex?.index.unit(id)
+      if (!lu) continue
+      const ds = displayIdsOf(id, [...lu.ph].filter(([, row]) => row.kind === 'display' && row.segs.length >= 6).map(([k]) => k))
+      addBoxWords(r.wordsOpen ??= newWords(), q, id, lu, ds)
+    }
     const shownOn = new Set(original)
     let drift = false
     for (const c of K) {
@@ -1371,7 +1379,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const tWords = performance.now()
     // (the page's word table, beside the markup: the unit's words in its text's order, its kept lines where the text passes them,
     // each token's place in its translation; a page whose table is frozen is final)
-    if (!r.words) addUnitWords(r.wordsOpen ??= newWords(), p.layout, pg, p.id, (at, end) => (p.wordOf ??= wordIndexer(plainOfPieces(p.unit.pieces)))(at, end), L2.keptLines(p.rects, p.prep, pg, p.blocks), crop => hasSource(crop.page), p.pieceAt ??= pieceOffsets(p.unit.pieces))
+    // (and its own ink the page keeps, its label, its kept pieces, its displays each under its own id: hide.mjs `shown`)
+    if (!r.words) addUnitWords(r.wordsOpen ??= newWords(), p.layout, pg, p.id, (at, end) => (p.wordOf ??= wordIndexer(plainOfPieces(p.unit.pieces)))(at, end), L2.keptLines(p.rects, p.prep, pg, p.blocks), crop => hasSource(crop.page), p.pieceAt ??= pieceOffsets(p.unit.pieces), h.shown)
     // (and its text layer's: the operations it appended, and its drawn lines as segments, read by textOf once the page is final)
     textRecord(r, opsFrom, `u${p.id}`, p.id, TL.segsOfUnit(p.layout, pg, crop => hasSource(crop.page)))
     workOf(pg).ops += ops.length
