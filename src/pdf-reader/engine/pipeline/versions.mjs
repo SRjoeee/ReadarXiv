@@ -289,8 +289,17 @@
 //     gate pack's 7, the production pass on both engines): 17,804 units located on the left of 1,868 pages, 18,383 now, none
 //     lost but two cells that moved to the page they are on (2010.11929v2's 296, 297, from page 13 to 22); the maker lays 34
 //     more units on 7 papers (none in the pack, whose made files are byte for byte the same). Every unit, its pieces and its wire
-//     are 39's: a copy of 39 carries every unit (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '40'
+//     are 39's: a copy of 39 carries every unit (live.mjs PIPELINE_CARRIES); 41 with BUNDLE 12 (the moved pages' line map, the
+//     owner's ruling of 2026-10-30): the left part of every page the line check read and drew carries our lines that stand elsewhere
+//     on arXiv's page (pipeline/moved-lines.mjs, layer-proto/format.mjs `lines`), so that the reader tells a moved page's blocks by
+//     their boxes carried onto arXiv's page as it tells a page in place (view/shapes.mjs), and a page the check found in place by
+//     its boxes whatever ink its tokens give; a page has a list only where 90 % of its lines found a partner (moved-lines.mjs
+//     MAP_FOUND, #524's review). Over the same 70 papers (the production pass on both engines, 1 873 pages): the 21 pages moved
+//     (1810.04805v2's 16 among them) light 541 of their 542 items on the left, 439 before; one-sided items on every
+//     page 123 -> 7, each a display line whose word before the formula is lit and the blank between not; the units located on
+//     the left and laid are 40's (18 383 located), every units chunk 40's but its version; the bundles +0.54 % gzipped. Every
+//     unit, its pieces and its wire are 40's: a copy of 40 carries every unit (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '41'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
