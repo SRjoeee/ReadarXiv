@@ -7,6 +7,8 @@ export declare const BLOCK_DY: number
 export declare const PARA_DY: number
 export declare const EDGE: number
 export declare const INDENT: number
+/** a kept block's next line: within this many of its size below the block's lowest (rule 10) */
+export declare const KEPT_DY: number
 export type InkKind = 'inkheads' | 'inkcontents' | 'inknotes' | 'inkorphan' | 'inknames' | 'inkreferences'
 /** an ink unit's piece: the front end's shapes (a text, a placeholder, a style run's group open and close, rule 9; an echo's its
  *  source unit's pieces) */
@@ -22,13 +24,18 @@ export interface InkRows {
   ph: [k: number, kind: 'math' | 'url', flags: number, ...segments: number[]][]
 }
 export interface InkUnit {
-  id: number; kind: InkKind; cls: 'heads' | 'contents' | 'notes' | 'orphan' | 'names'; echo: number | null; pieces: InkPiece[]
+  id: number; kind: InkKind; cls: 'heads' | 'contents' | 'notes' | 'orphan' | 'names' | 'references' | 'code' | 'math' | 'symbols' | 'index'; echo: number | null; pieces: InkPiece[]
   glyphs: { text: [page: number, glyph: number][]; ph: [page: number, glyph: number][] }
   rows: InkRows
+  /** a kept block (rule 10): never translated, no pieces, its rows its lines' boxes alone */
+  kept?: true
 }
 /** the ink units as the wrap gives them on (`ours.ink`): their ids from `base` */
 export interface InkOfWrap { base: number; units: Omit<InkUnit, 'glyphs'>[]; off?: number[] }
 export declare function inkUnitsOf(pages: (LedgerPage & { view: number[] })[], ledger: Ledger, o?: { units?: readonly { kind?: string; pieces?: readonly InkPiece[] }[] | null; from?: number | null }): InkUnit[]
+/** the kept blocks (rule 10): units of the ledger's lines no unit owns once the ink units have claimed theirs, never translated;
+ *  `owner(page, glyph)` the group that owns a glyph (null: none); ids from `from` on, after the ink units */
+export declare function keptUnitsOf(pages: (LedgerPage & { view: number[] })[], ledger: Ledger, owner: (page: number, glyph: number) => string | null | undefined, o: { from: number }): (InkUnit & { kept: true })[]
 /** the ink units' glyphs claimed in `own` (each one no unit owned), and with `pages` (the wrap's, their boxes and paths) the
  *  rules TeX painted on their lines (own.mjs lineRulesOf, MR 2b) in `own.boxes`; returns the glyphs claimed */
 export declare function claimInk(own: { glyphs: (string | null)[][]; boxes?: (string | null)[][] }, ink: readonly InkUnit[], pages?: readonly { glyphs: readonly { u?: string; x0: number; x1: number; y: number; size: number }[]; boxes: ArrayLike<number>; paths: ArrayLike<number> }[] | null): number

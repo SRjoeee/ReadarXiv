@@ -298,8 +298,17 @@
 //     (1810.04805v2's 16 among them) light 541 of their 542 items on the left, 439 before; one-sided items on every
 //     page 123 -> 7, each a display line whose word before the formula is lit and the blank between not; the units located on
 //     the left and laid are 40's (18 383 located), every units chunk 40's but its version; the bundles +0.54 % gzipped. Every
-//     unit, its pieces and its wire are 40's: a copy of 40 carries every unit (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '41'
+//     unit, its pieces and its wire are 40's: a copy of 40 carries every unit (live.mjs PIPELINE_CARRIES); 42 (the owner's ruling of 2026-10-30, the text no
+//     block owns lights as one block on both panes): the text no unit owns once the ink units have claimed theirs — a code
+//     listing, an address or a URL alone in a note, a page number, a bibliography not cut into entries — is kept blocks, ink units
+//     of the KEPT flag after the others (layout/ink-units.mjs rule 10, keptUnitsOf: a run of such lines in TeX's stream with
+//     nothing a unit owns between them, in one column and one class), no pieces, never translated nor awaited (rows.mjs
+//     toTranslate), on the left by their lines' tokens and in the layout by their lines' boxes alone; their glyphs in no group, so
+//     that our wrapped page and its ledger are as they were. A figure unit's id moves past them (its translation found again by
+//     its source, cache.mjs seedFrom). Over the 54 papers of the release sweep: 1,920 blocks of 5,871 lines on 49 papers, the
+//     bundle 0.6 % larger (a paper's median 0.22 %, 2610.19159v1's agent logs 3.9 %); arXiv's lines no block lit 5,399 -> 1,357. Every other unit, its pieces and its wire
+//     are 41's: a copy of 41 carries every unit (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '42'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
