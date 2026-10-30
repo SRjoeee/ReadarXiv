@@ -58,13 +58,18 @@ import { CLASS_IDS } from '../rules/content-classes.mjs'
  *  size, each at its original's edge, a translation into the free line beside it): a figure row carries its set and its room
  *  (figure-rows.mjs FIGURE_ROW, three values more), which a reader of 10 refuses; a bundle of 10 is not found under 11's CTAG
  *  and is prepared again. The head's, the left parts' and the catalog's shapes are 10's. This reader reads 10's objects too,
- *  a row of 10's each unit its own set with no room (FIGURE_ROW_10): as 10 drew it */
-export const BUNDLE5 = '11'
+ *  a row of 10's each unit its own set with no room (FIGURE_ROW_10): as 10 drew it. 12 (the moved pages' line map, the owner's
+ *  ruling of 2026-10-30): a left part may carry our page's lines that stand elsewhere on arXiv's page (`lines`, pipeline/moved-lines.mjs:
+ *  each our page, our line's box, the arXiv page it stands on and its offset there), the key there only where the page has one, so
+ *  that the reader tells a moved page's blocks by their boxes carried onto arXiv's, as a page in place; a reader of 11 refuses the
+ *  key, and a bundle of 11 is not found under 12's CTAG and is prepared again. Every other shape is 11's, and this reader reads
+ *  11's objects too: a left part of 11 has no line map */
+export const BUNDLE5 = '12'
 /** the formats this reader takes: its own, and 7's (a bundle drawn over arXiv's PDF, whose objects 9 reads unchanged: its
  *  head is read as `base.source` 'arxiv', with no `orig`), 9's and 10's. Every object of a bundle is of its head's format */
-export const BUNDLES_READ = Object.freeze(['7', '9', '10', BUNDLE5])
+export const BUNDLES_READ = Object.freeze(['7', '9', '10', '11', BUNDLE5])
 /** the formats whose parts may carry figure units (`figures`, figure-rows.mjs: 10's rows without a set or a room) */
-const FIGURES_READ = Object.freeze(['10', BUNDLE5])
+const FIGURES_READ = Object.freeze(['10', '11', BUNDLE5])
 /** a units chunk's own format (amendment M12): raised only by a change to the chunk's shape, so that a change to a part's
  *  shape renames no unit identity and redoes no translation */
 export const UNITS_FORMAT = '1'
@@ -1282,6 +1287,13 @@ export async function writePart({ paper, head, prev, pages, views, left, fileOnl
 
 // ---------------------------------------------------------------- the left parts
 const LEFT_KEYS = ['bundle', 'kind', 'page', 'first', 'tokens', 'spans', 'pairs', 'draw']
+/** a line map's entry (BUNDLE 12, pipeline/moved-lines.mjs): our page, our line's box (x0, x1, bottom, top), the arXiv page it stands
+ *  on, its offset there (dx, dy) */
+export const MOVED_STRIDE = 8
+/** BUNDLE 12's: the page's line map, there only where it has one */
+const LEFT_OPTIONAL = ['lines']
+/** the line map's entries a left part holds at most: a page's lines, ten times the densest page's */
+export const LINES_MAX = 4096
 const TOKEN_KEYS = ['perPage', 'l', 'r', 'y', 'h', 'top', 'bottom']
 /** the six coded fields of a left part's tokens, in the wire's order */
 export const TOKEN_FIELDS = ['l', 'r', 'y', 'h', 'top', 'bottom']
@@ -1361,7 +1373,23 @@ function leftShape(v) {
       throw e
     }
   }
-  return { page: v.page, first: v.first, table, spans, pairs, draw }
+  return { page: v.page, first: v.first, table, spans, pairs, lines: linesOf(K, v.lines), draw }
+}
+
+/** a left part's line map (BUNDLE 12, pipeline/moved-lines.mjs MOVED_STRIDE values an entry: our page, our line's box x0, x1,
+ *  bottom, top, the arXiv page it stands on, its offset dx, dy), as a Float64Array, empty where the page was checked and none of its
+ *  lines moved; null where the part has none (a page the line check did not read whole, a layer over arXiv's PDF, a part of 11).
+ *  Each page a page, each box a box within the token bound, at most LINES_MAX entries */
+function linesOf(K, lines) {
+  if (lines === undefined) return null
+  if (!Array.isArray(lines) || lines.length % MOVED_STRIDE !== 0) throw refuse(K, 'lines', `not entries of ${MOVED_STRIDE} values (${kindOf(lines)})`)
+  if (lines.length / MOVED_STRIDE > LINES_MAX) throw refuse(K, 'lines', `more than ${LINES_MAX} entries`)
+  for (let j = 0; j < lines.length; j += MOVED_STRIDE) {
+    for (const o of [0, 5]) if (!isInteger(lines[j + o], 1, PAGES_MAX)) throw refuse(K, `lines[${j + o}]`, `not a page 1 to ${PAGES_MAX}`)
+    for (let o = 1; o < MOVED_STRIDE; o++) if (o !== 5 && !(Number.isFinite(lines[j + o]) && Math.abs(lines[j + o]) <= TOKEN_LIMIT)) throw refuse(K, `lines[${j + o}]`, `not a number within ±${TOKEN_LIMIT}`)
+    if (!(lines[j + 1] <= lines[j + 2] && lines[j + 3] <= lines[j + 4])) throw refuse(K, `lines[${j}]`, 'not a box: its ends out of order')
+  }
+  return Float64Array.from(lines)
 }
 
 /**
@@ -1373,7 +1401,7 @@ function leftShape(v) {
 export async function readLeftPart(bytes, { ref, streamOf, caps }) {
   const K = 'left'
   const { value: v, sha256 } = await opened(K, bytes, ref, LEFT_DEF, caps)
-  envelope(K, v, LEFT_KEYS)
+  envelope(K, v, LEFT_KEYS, isObject(v) && v.bundle === BUNDLE5 ? LEFT_OPTIONAL : [])
   const s = leftShape(v)
   if (s.page !== ref.page) throw refuse(K, 'page', `not page ${ref.page}, the part's`)
   for (let i = 0; i < s.spans.length; i++) {
@@ -1382,7 +1410,7 @@ export async function readLeftPart(bytes, { ref, streamOf, caps }) {
     const rel = stream - s.first
     if (rel >= 0 && rel < s.table.n && ranges[0] !== rel) throw refuse(K, `spans[${i}][1][0]`, `not the unit's stream, ${rel} on this page`)
   }
-  return { kind: 'left', sha256, bytes: bytes.length, page: s.page, first: s.first, table: s.table, spans: s.spans, pairs: s.pairs, draw: s.draw }
+  return { kind: 'left', sha256, bytes: bytes.length, page: s.page, first: s.first, table: s.table, spans: s.spans, pairs: s.pairs, lines: s.lines, draw: s.draw }
 }
 
 /** the left part of a page with no tokens (n = 0, no spans, no pairs): what a page whose part would pass its caps ships */
@@ -1392,12 +1420,14 @@ const emptyLeft = (page, first) => ({
 })
 
 /**
- * A left part written: the page's tokens (the wire, `perPage` [n], delta-coded fields), spans and pairs. A page whose part
+ * A left part written: the page's tokens (the wire, `perPage` [n], delta-coded fields), spans and pairs, and its line map where
+ * it has one (`lines`, BUNDLE 12: pipeline/moved-lines.mjs movedLinesOf's entries of the page, empty for a page checked where none
+ * moved; none written where null). A page whose part
  * would pass LEFT_CAP, LEFT_VALUES or TOKENS_PAGE ships the empty part instead (amendment M8: left parts are leaves, and a
  * page without its tokens loses its highlight and nothing else), and the result says so (`emptied`); it never throws for
  * size. It throws BundleRefusal for what its reader would refuse of it for another reason
  */
-export async function writeLeftPart({ paper, page, first, tokens, spans, pairs, draw = null, drawText = null }) {
+export async function writeLeftPart({ paper, page, first, tokens, spans, pairs, lines = null, draw = null, drawText = null }) {
   // (a draw given as wireText's JSON is checked already: it stands in the part's text as it is, neither parsed, wired nor checked
   // again; one given as an object is wired here)
   const spliced = drawText !== null
@@ -1406,6 +1436,8 @@ export async function writeLeftPart({ paper, page, first, tokens, spans, pairs, 
     tokens: { perPage: [...tokens.perPage], l: [...tokens.l], r: [...tokens.r], y: [...tokens.y], h: [...tokens.h], top: [...tokens.top], bottom: [...tokens.bottom] },
     spans: spans.map(([id, ranges]) => [id, [...ranges]]),
     pairs: pairs.map(([id, runs]) => [id, [...runs]]),
+    // (the line map, before the draw: the draw is the object's last key; empty, a page checked where none of its lines moved)
+    ...(lines ? { lines: [...lines] } : {}),
     // (the draw geometry: shed to null for any reason its reader would refuse it, never thrown)
     draw: spliced ? null : wireOf(draw),
   }

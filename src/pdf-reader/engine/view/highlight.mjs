@@ -134,7 +134,8 @@ export function pageLayout(kindOf = () => undefined) {
  */
 export function layoutParts(L, parts) {
   let told = false
-  for (const { pages, views, left, quiet = false } of parts) {
+  const carriedIds = new Set()
+  for (const { pages, views, left, quiet = false, carried } of parts) {
     for (let i = 0; 4 * i < views.length; i++) {
       const at = pages[0] - 1 + i
       if (!L.views[at]) { L.views[at] = views.slice(4 * i, 4 * i + 4); told = true }
@@ -143,9 +144,25 @@ export function layoutParts(L, parts) {
       // (a unit told from its boxes alone, quiet, gives way to its located telling, whichever comes first: view/shapes.mjs)
       const was = L.told.get(id)
       const rs = rects.map(([page, x0, y0, x1, y1]) => ({ page, x0, y0, x1, y1 }))
+      // (a moved page's boxes carried onto arXiv's page `carried` (view/shapes.mjs carryPage): the rectangles there of a block told
+      // from its boxes these, in their place among its pages', and none where they all left it; a unit located there keeps arXiv's)
+      if (carried !== undefined) {
+        if (L.drawn.has(id) || (!was && !rs.length)) continue
+        if (!was) { L.told.set(id, { stream, rects: rs, quiet: true }); carriedIds.add(id); continue }
+        if (!was.quiet && was.rects.some(r => r.page === carried && !r.quiet)) continue
+        if (!was.quiet) for (const r of rs) r.quiet = true
+        const stale = r => r.page === carried && (was.quiet || r.quiet), first = was.rects.findIndex(stale), kept = was.rects.filter(r => !stale(r))
+        const k = first >= 0 ? was.rects.slice(0, first).filter(r => !stale(r)).length : (i => (i < 0 ? kept.length : i))(kept.findIndex(r => r.page > carried))
+        const next = [...kept.slice(0, k), ...rs, ...kept.slice(k)]
+        if (next.length === was.rects.length && next.every((r, j) => { const o = was.rects[j]; return r.page === o.page && r.x0 === o.x0 && r.y0 === o.y0 && r.x1 === o.x1 && r.y1 === o.y1 })) continue
+        was.rects = next
+        carriedIds.add(id)
+        continue
+      }
       // (a located unit's boxes on a page it is not located on: that page its own too, its rectangles there quiet — no part of the
-      // page's columns, edges or leadings; view/shapes.mjs)
-      if (was && quiet && !was.quiet && !L.drawn.has(id)) {
+      // page's columns, edges or leadings; view/shapes.mjs. And a unit told from its boxes, its boxes carried onto another page of
+      // arXiv's, a moved line's: that page its own too)
+      if (was && quiet && !L.drawn.has(id)) {
         const have = new Set(was.rects.map(r => r.page)), add = rs.filter(r => !have.has(r.page))
         if (!add.length) continue
         for (const r of add) r.quiet = true
@@ -162,6 +179,9 @@ export function layoutParts(L, parts) {
       told = true
     }
   }
+  // (only quiet rectangles changed, a moved page's carried ones: no part of the columns, edges or leadings, so the document stands
+  // and only those units' pages and anchors are told again; their pages' geometry and floats, the frames let go)
+  if (!told && carriedIds.size) { retellQuiet(L, carriedIds); return true }
   if (!told) return false
   const units = [...L.told].sort((a, b) => a[0] - b[0])
   Object.assign(L, documentOf(Array.from(L.views, v => v ?? null), units.map(([id, u]) => [id, u.rects, u.quiet === true]), L.kindOf))
@@ -171,6 +191,23 @@ export function layoutParts(L, parts) {
   L.frames = undefined
   L.floats = undefined
   return true
+}
+
+/** units whose quiet rectangles alone changed (layoutParts, a part `carried`) told again as documentOf tells them: each one's pages
+ *  (`pagesOf`, those with a view) and its place among each page's units (`unitsOn`, by id), its anchor; every page it was or is on
+ *  made again, with its floats and indents, and the frames (floats.mjs frameOf, which reads every rectangle) */
+function retellQuiet(L, ids) {
+  for (const id of ids) {
+    const u = L.told.get(id), old = L.pagesOf.get(id) ?? []
+    const ps = [...new Set(u.rects.filter(r => L.page[r.page]).map(r => r.page))].sort((a, b) => a - b)
+    for (const p of old) if (!ps.includes(p)) { const on = L.unitsOn[p], i = on?.indexOf(id) ?? -1; if (i >= 0) on.splice(i, 1) }
+    for (const p of ps) if (!old.includes(p)) { const on = L.unitsOn[p]; if (!on) continue; let i = 0; while (i < on.length && on[i] < id) i++; on.splice(i, 0, id) }
+    for (const p of new Set([...old, ...ps])) { L.cache.delete(p); L.floats?.delete(p) }
+    L.pagesOf.set(id, ps)
+    L.anchors.set(id, { rects: u.rects, tokens: tokensOf(L, id, u.stream) })
+    L.indents.delete(id)
+  }
+  L.frames = undefined
 }
 
 /**

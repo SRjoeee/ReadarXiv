@@ -1386,12 +1386,17 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   - **Text no unit owns is a kept block** (the owner's ruling of 2026-10-30: at the same place on both panes, a listing one block):
     a page number, a listing, an e-mail line, a note that is an address alone, a bibliography the front end did not cut into
     entries, a display no unit holds — what no unit owns once the ink units have claimed theirs — is a unit the bundle keeps
-    (`layout/ink-units.mjs` rule 10, PIPELINE 41): an ink unit of the KEPT flag, never translated nor awaited, its rows its lines'
+    (`layout/ink-units.mjs` rule 10, PIPELINE 42): an ink unit of the KEPT flag, never translated nor awaited, its rows its lines'
     boxes, on the left the tokens on its lines, so that the rule above lights it as any block. A block is a run of such lines in
     TeX's stream with nothing a unit owns between them, in one column and one class (a listing's brace in it). A float's text is
     none (a figure's labels light nothing), nor a line beside a unit's text on its baseline (its label or its number, lit with
-    the unit). Its glyphs are in no group: our page and its ledger are as they were. And a page moved (our lines elsewhere than
-    arXiv's: 20 of the 1 453) lights what the left part locates, until the producer ships its lines' pairs.
+    the unit). Its glyphs are in no group: our page and its ledger are as they were. Over the 54 papers: 1 920 blocks of
+    5 871 lines on 49 papers, every one lit on the left; arXiv's lines in the frame no block lit 5 399 → 1 357, every other
+    count of the probe as it was; the bundle +0.6 % (a paper's median +0.22 %, 2610.19159v1's agent logs +3.9 %), a paper's
+    left made 8.7 → 8.5 ms (median of 7), a page's geometry 0.070 → 0.079 ms; 2610.19159v1 44 → 58 ms and 0.047 → 0.094 ms.
+    The 1 357 left: 2610.19159v1's framed transcripts, which the figures' text takes (1 016), algorithms inside floats, arXiv's
+    stamp, lines our compile sets elsewhere. A page
+    moved (our lines elsewhere than arXiv's) lights as a page in place since BUNDLE 12 (below).
   - **A block lights on both panes or on neither** (the owner, 2026-10-30: 「为什么修改后还有一边不亮的情况？我们可以从根本上解决吗？
     …如果实在分不出来，我们就两边统一亮，或者划成一整块亮」): on a page in place a block's area on each pane is its boxes. On the left
     each box lights the tokens of arXiv's page under it where they are and itself where none is (a display or a formula drawn as
@@ -1407,6 +1412,49 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
     one paragraph whose translation ends on the page before, so that nothing of it is drawn on the page its original's last line is
     on (2610.19159v1 p119: lighting it there would light blank paper); six lines of a display with a word before it on its baseline,
     where only the blank between the word and the formula is unlit, every token of the line lit.
+  - **A page our compile set otherwise lights as a page in place** (the owner's ruling of 2026-10-30; `PIPELINE_VERSION` 41,
+    `BUNDLE5` 12). Another TeX Live's glue moves our lines a point or a few, a line goes over a column's or a page's break
+    (1810.04805v2's page 16, every line 3 to 27 pt above arXiv's): the maker's boxes stand beside arXiv's ink, and the left lit only
+    what its left part located (Table 8's header cells "RND", "Mask", "Same" lit on the right alone). The page pass's line check
+    pairs each of our lines with arXiv's already (`layout/carry.mjs` `lineCheckOf`: the partner's page and the median offset of the
+    words matched), and the producer ships the pairs: the left part of each page a line leaves or lands on holds them (`lines`,
+    `pipeline/moved-lines.mjs`: a line's page of ours, its box, arXiv's page and the offset), every line of a page with one moved
+    past half a point (a line with no partner takes the offset of its column's nearest line that has one, never of a line given
+    one so; one in place carries nothing), and an empty list on every other page the check placed. Only a page the check placed
+    has a list: 90 % of its lines found a partner (`MAP_FOUND`, the reader's own share), the page read whole and drawn; a page
+    whose words are arXiv's but whose lines our compile rebroke has none, and is judged by its tokens (#524's review: an empty list
+    there had lit blank paper at our lines' places). The reader carries each box by the line it stands on onto arXiv's page,
+    another page's too; a box beside its line's words, which the line's tokens do not reach (a heading's number drawn as a mark, a
+    piece drawn as paths), by its own block's line on its row; and tells the page by its boxes as a page in place
+    (`view/shapes.mjs`), a block told from its boxes there by its carried rectangles too, so that a click finds the line under it.
+    A page with a list, an empty one too, is in place whatever its tokens give: 2610.16663v1's page 15, its displays leaving
+    arXiv's text layer few tokens, was read as moved by them though 41 of its 43 lines stand in place. A left part of 11 has none,
+    and its page is judged by its tokens as before.
+    Measured over 70 papers (the release sweep's 63 cached papers and the gate pack's 7, the production pass on both engines over
+    the same compiles, next 44c3a36d before, `readarxiv-lab-data/moved-lines`, 2026-10-30, after #524's review), every item of the
+    maker's inventory judged lit on the left at its place on arXiv's page (a box beside its line's words at its block's line's):
+    - 1 873 left parts: 1 550 carry entries (9 667, 8 of them a line over a page break, on both its pages), 301 an empty list, 22
+      none (a page the check did not read whole or draw: 2307.16209v1's 71–76, whose lines our compile set across its pages).
+      Every page found 90 % of its lines' partners (the least 87 of 95, 2610.37668v1 p21): `MAP_FOUND` takes no page's list on
+      these papers, and guards the rebroken one. Our lines holding a token of arXiv's at their middle row, as they stand and
+      carried: on the moved pages below 222 → 296 of 299, on every page 85 101 → 85 180 of 85 302.
+    - The pages moved by the in-place test (under 90 %, or under 3 lines: the unified-light probe's rule): 21 on 9 papers, 542
+      items. Lit on the left 439 → 541; one-sided 103 → 1 (lines 27 → 0, kept pieces 25 → 0, labels 2 → 0, displays 40 → 0,
+      display lines 9 → 1). 1810.04805v2 p16 lights 92 of 92, its Table 8 cells with them. On every page one-sided
+      items 123 → 7 of 152 266, each a display line with a word before the formula on its baseline, the word and the formula
+      lit and only the blank between them not (the case above; 2610.16663v1 p15's joins it now that the page is in place); 400
+      boxes beside their line's words go with their block's line (the first round, by the map's line alone, left 3 labels and a
+      display of them one-sided).
+    - The producer's units, cut and laid, are 40's: 18 383 units located on the left on both, the laid sets equal, every units
+      chunk equal but its version (33 068 units). The bundles grow 0.28 % (0.54 % gzipped; the left parts 0.71 %; a paper's
+      median 0.53 %, its largest 1.13 %, 1810.04805v2).
+    - The reader, every part and page made as it makes them, best of 3, both orders: a paper's left 6.8–6.9 → 6.9–7.1 ms median
+      (all 70: 550–553 → 552–567 ms), a page's geometry 0.074–0.075 → 0.077–0.078 ms median, a hit 0.102–0.103 → 0.104 µs. A
+      moved page's rectangles are told again without the document made again (quiet rectangles are no part of its columns,
+      edges or leadings: highlight.mjs retellQuiet, only their units' pages and anchors), its carried inventory kept until the
+      inventory or a map changes, the map read by our page; told whole each time, they cost 552 → 697 ms.
+    The unified-light probe's 20 moved pages were staging's layers of 2026-10-30 (PIPELINE 38, BUNDLE 11), which hold no line
+    map: its 8 papers give 12 here (2610.20030v1 falls back to arXiv's PDF in this pass), and the 21 above are this pass's.
 - **Whole, whatever their sentences**: headings, table cells and displays. A drawing's text lights nothing (below).
 - **Every drawn thing lights its original, whatever its kind, but a figure's text** (below; the owner's report of
   2026-10-29 on 2010.11929v2 p9: its References' Chinese lit nothing on either side, its Conclusion's and
@@ -1659,10 +1707,9 @@ within noise.
   a cell no unit holds runs across the column between them on another row, light as one.
 - An equation number set on its own line below its display (2608.09746 #27) is no unit's and is not lit, but where the maker holds
   it among its display's segments, which light it with the display (§17.1).
-- A page our compile set otherwise than arXiv's (its lines moved: 20 of 1 453 pages on the 54 papers of 2026-10-30) lights on the
-  left what the left part locates: its displays with their units there, its labels and kept pieces where the anchors reach, while
-  the right lights every block; and a kept block lights on the left the tokens its lines' boxes meet there, which on such a page
-  are not its own: both are the maker's to give (§17.1).
+- A page our compile set otherwise than arXiv's lights as a page in place by its line map (§17.1); one whose
+  lines the line check did not find (90 %), did not read whole, or whose layer stands over arXiv's PDF, has none, and lights on
+  the left what its left part locates.
 - A table at a page's head whose first row is single letters over numbers, after a display that closed the page before,
   is taken by that display's walk: no distance tells them apart (A1, measured: lead walks' first gaps up to 19.6 pt).
 - Two lines of text made one row by a tall formula, with a sentence beginning on the second, light their unit whole (12
@@ -1735,7 +1782,12 @@ within noise.
   (its own unit's span gives them up) and every unit the free tokens in its boxes, its spans changed in the page's kept input
   before it is laid and in the layout and the mirrors after; a unit told so begins at its first token on its first page. A located
   telling that comes after a quiet one takes its place; a quiet telling of a located unit's boxes on a page it is not located on
-  adds that page, its rectangles there quiet. This made the cells' telling below a case of it, now on pages in place alone. The
+  adds that page, its rectangles there quiet. On a page with a line map (§17.1) the boxes are carried first: our page's and those of
+  the pages beside it that the map brings there (`invAt`), the layout's boxes of the page the carried ones, and the rectangles
+  there of every block told from its boxes (`carryPage`: a part `carried`, highlight.mjs layoutParts, in their place among the
+  block's pages; a block brought from another page of ours told there, one whose boxes all left the page no longer on it; a unit
+  the left part locates there keeps arXiv's), whichever of the page's left part and the parts comes first, in any order the same
+  (`tests/pdf-reader/moved-lines.test.ts`: every order of two parts and two pages, the mirror alike); such a page is in place. This made the cells' telling below a case of it, now on pages in place alone. The
   layout keeps every block's boxes (`boxes`) and the pages in place (`inPlace`), which the mirror reads too; a laid page's layout
   keeps none of them (its table holds every token the page shows of a unit) and clamps none of its tokens (`unclamped`).
 - **A cell unit the left part does not locate** (`createShapes`): the producer locates few cells on arXiv's PDF (on the
@@ -1799,10 +1851,10 @@ The edge cases, decided:
 
 | Identity | Kind | Covers | Enters | A bump means |
 |---|---|---|---|---|
-| `BUNDLE5` (`layer-proto/format.mjs`, `'11'`: a figure row carries its set and its room, §19.12; 10 the ink units, the parts' figure units and the head's ledger; 9 a part's cell rules in place of the add-on, our page wrapped by optional content) | reader contract | the layer route's objects: a head's, a part's, a left part's and a catalog's shape, the figure rows (the units chunks have a format of their own, `UNITS_FORMAT`, raised only by their shape); a reader reads 7's, 9's and 10's objects too (`BUNDLES_READ`) | the request (`CTAG5`, `b<BUNDLE5>-j<PDFJS>`: §18.4) and the R2 key (`VTAG5`) | a bundle of the old format is not found under the new `CTAG5` and is prepared again; readers older than it get `unknown-versions` until they update |
+| `BUNDLE5` (`layer-proto/format.mjs`, `'12'`: a left part carries its page's line map, §17.1; 11 a figure row carries its set and its room, §19.12; 10 the ink units, the parts' figure units and the head's ledger; 9 a part's cell rules in place of the add-on, our page wrapped by optional content) | reader contract | the layer route's objects: a head's, a part's, a left part's and a catalog's shape, the figure rows (the units chunks have a format of their own, `UNITS_FORMAT`, raised only by their shape); a reader reads 7's, 9's, 10's and 11's objects too (`BUNDLES_READ`) | the request (`CTAG5`, `b<BUNDLE5>-j<PDFJS>`: §18.4) and the R2 key (`VTAG5`) | a bundle of the old format is not found under the new `CTAG5` and is prepared again; readers older than it get `unknown-versions` until they update |
 | `BUNDLE` (`layer-proto/bundle.mjs`, `'3'`: the layout file's schema 3, the paper's `\lineskip` and `\lineskiplimit`; 2 its babel names, D1a. The file's schemas 4 (`PH_FLAG.JOINED` and `PH_FLAG.OUTSIDE`) and 5 (a found placeholder's fill, its row's last number where its glyphs are not black: 0xRRGGBB, or -1 where no one colour holds more than half of them) are not a contract of their own: `b3` names schemas 3 to 5, each reader's `parseLayout` refusing the others', so only this engine's reader reads a `b3` bundle holding schema 5) | reader contract | the one-file bundle `readBundle` reads (`CTAG`, `VTAG`): its shape, the units' tuple, kinds and flags, the layout file's schema, the left geometry | its request and key (§18.4) | readers older than it refuse it until they update |
 | `PDFJS` (`pipeline/versions.mjs`, `'6.3.289'`) | reader contract | the PDF.js whose reading the layout and the wrap are made against | as `BUNDLE` | as `BUNDLE` |
-| `PIPELINE_VERSION` (`pipeline/versions.mjs`, `'41'`) | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
+| `PIPELINE_VERSION` (`pipeline/versions.mjs`, `'42'`) | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
 | `LAYOUT` (`layout/file.mjs`, `'31'`: a page whose lines moved across its breaks through compile drift drawn, `carry.mjs` `lineCheckOf`, §19.7; 30 a footnote's call after the last word found by its raised mark, a biblatex entry's unit of the new kind `inkreferences`, §19.7; 29 backref's list after an entry a row of its list piece's, §19.13; 28 a Type 3 glyph's ink its char procedure's paths, `layout/ink.mjs` `type3Box`, #122-1; 27 a command that sets the punctuation after it before its ink marked around the pair, a macro TeX said sets no ink EMPTY, a piece alone at an entry's end given the lines it runs onto, a macro that sets one punctuation mark drawn as it, §19.7; 26 a unit TeX set flush left or flush right flagged so, `UNIT_FLAG.FLUSH_LEFT` and `UNIT_FLAG.FLUSH_RIGHT`, and a paragraph a box's close ends read by its own skips, §18.1, §18.8; 25 the release sweep of 2026-10-29, a line too short to be evidence found on no other page, a word a hyphen cuts going on below, an ink unit's paragraph one unit, a math face told by its family's names, `layer-proto/fonts.mjs` `classifyFont`), `REMOVAL` (`pipeline/versions.mjs`, `'17'`: a biblatex entry's ink its unit's groups, the point before each in our page; 16 backref's list after an entry its list piece's ink, §19.13; 15 a level figure unit on its column's edge or centred in it anchored there, `figure-text.mjs` `columnAnchorOf`, §19.12; 14 a unit's text owns the rules TeX painted on its own lines, an OT1 `\_`, an underline, own.mjs MR 2b, #117; 13 a punctuation mark a command set before its own ink its unit's text, not the piece's, §19.9; 12 a macro TeX said sets no ink is no placeholder of ink, an opening point alone at its unit's end owns its lines up to TeX's skip before another block; 8 no add-on, a part's or a bundle's cell rules in its place, our page wrapped by optional content, §11.8, §19.9) | extraction | the layout maker (the file's own schema is `LAYOUT_SCHEMA`, 5); how a drawn unit's ink is taken away | the R2 key | bundles made again lazily |
 | `TRANSLATE_VERSION` (`translate/version.mjs`, `'9'`: a caption cut into sentences on the tags wire as a paragraph is, §17.1; `'8'`: a run-in label where a sentence begins past the unit's head keeps its markers on the markers wire (`mt.mjs` `classOf`), 2010.11929v2's "Center:" and "Right:"; `'7'`: backref's list after an entry on no wire, put back after the translation with an en space before it, §19.13; `'6'`: every content class translated once whatever the language, the author block for every target and a bibliography's entries; `'5'`: a display's own stop written after its marker and taken off the reply; `'4'`: a styled pair whose two ends stand where the wire has a marker anyway keeps its markers; `'3'`: a sentence whose words change style sent whole, the pairs inside it on no wire; `'2'`: a formula split across inline formulas sent as one marker) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
 | `RULES_SCHEMA` (`rules/layout.mjs`, `9`: the languages of a script the engine set, the owner's ruling of 2026-10-29: `latinPatterns` takes Italian's, Dutch's, Polish's, Turkish's, Indonesian's (Malay's too, as babel's malay.ldf takes them), Czech's and Swedish's, `cyrillicPatterns` added, a Cyrillic word's hyphenation, Russian's rules or Ukrainian's or Bulgarian's own patterns, and `hyphenation` their minimums as TeX applies them under babel; 8: `latinPatterns` takes French's, Spanish's and Portuguese's own, hyph-utf8's (the three were hyphenated with English's, #121-4), and `hyphenation` their minimums as babel sets them, French 2 and 3, Spanish 2 and 2, Portuguese 2 and 3; 7: `evenPitch` and `keepAlign` added, lane B's B1 and B2, the ruling of 2026-10-29, §18.8; 6: `cjkFaces` holds its group alone, a CJK script drawn at Regular and Bold beside every English family, its `light` designs and its unread `kai` gone, the ruling of 2026-10-29; 5 before it: `fillLeadRel` added, the fill's top relative to the original's pitch; 4: `adaptiveFill.band` read against the page's own paragraphs, 1b-C) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
