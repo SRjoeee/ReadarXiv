@@ -1578,7 +1578,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     return Math.max(...widths) - Math.min(...widths) > 4 ? true : null
   }
   // every unit's rectangles by page, for growing a unit's lines over what no other unit holds (with the file's lines of
-  // the units the file holds that the geometry does not, as each is placed)
+  // the units the file holds that the geometry does not, as each is placed, or as each is decided not placed: consume)
   const rectsByPage = new Map()
   const addRects = (id, rects) => {
     for (const r of rects) {
@@ -2827,7 +2827,17 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       else if (!read.has(u.group)) readGroup(u.group, membersOf.get(u.group) ?? [])
       if (split.has(u.group)) { skipped.push({ id: p.id, kind: u.kind, why: 'group: a cell not drawn', code: 'group', chars: trCharsOf(u), pages: p.pages }); p = null }
     }
-    if (!p) { dropReads(c); return }
+    if (!p) {
+      // (a unit the left does not locate, the file's alone (most of a table's cells), left the original's (a row kept, a unit
+      // skipped or withheld with its group): its ink stays where TeX set it, so its file lines are among the page's rectangles,
+      // which no neighbour's line may grow over, as a located unit's left rectangles are whether it is laid or not. Told here,
+      // as it is decided: a unit is laid, and grows, only once every entry on its pages is decided. 1810.04805v2's Table 8:
+      // NER's "Fine-tune" grew over MNLI's kept "Fine-tune" beside it, the same words, and its translation was laid over that
+      // ink, its own place left erased)
+      if (!c.rects && c.ownRows) addRects(c.id, c.ownRows)
+      dropReads(c)
+      return
+    }
     p.k = c.k
     inStream(laidOut, p)
     inStream(placed, p)
