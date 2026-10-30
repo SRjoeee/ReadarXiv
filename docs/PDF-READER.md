@@ -1365,7 +1365,13 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
     a unit (an equation, an align of several lines, every segment of it) one block, lit whole, under an id of its own
     (`units.mjs` `displayBlockId`: the unit's id and the display's place among its unit's, so that the door and the view number it
     alike). Its tokens are never its unit's, on either pane (a kept line on its rows is its ink, `words.mjs`; on the left it takes
-    its own unit's tokens and the free ones in its segments, never another unit's: an array's cells set in a display keep theirs).
+    its own unit's tokens and the free ones in its segments, never another unit's: an array's cells set in a display keep theirs;
+    and those of its unit's between two of its own in the page's stream whose box meets its segments' extent, as TeX sets a
+    display's glyphs together. arXiv's text layer draws a token's box from its font's ascent and descent, and a math extension
+    font's (cmex10's, txexs's) hang under the baseline: a wide accent's box stands under its ink, a big delimiter's reaches far past
+    it, its middle out of the segments. 2610.35877v1 p5's hat on the w of display (4)'s denominator, 1.9 pt under the display,
+    had lit with the sentence before it, a band in the formula, the owner's report of 2026-10-31. On the 70 papers of #524's
+    measure, 3 648 displays: 10 such glyphs in 7 displays of 5 papers, now 0).
     Its unit lights around it, and a sentence across it lights whole, every piece of it, as across a column or a page break (the
     owner: 「第 1 条就用这个，推进吧」). Inline math stays in its sentence.
   - **A block's label lights with its first sentence**, on both panes, and hovering the label lights that sentence: a heading's

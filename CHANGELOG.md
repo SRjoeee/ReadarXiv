@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, pointing at the sentence before a formula no longer also lights a small patch inside the formula. It happened where a wide accent, such as a hat, or a large bracket stood in the formula's bottom row.
 - Fixed: in the PDF reader, the letters under the highlight keep their own colour. Before, its green lay over them: black text looked grey, and light text on a dark page looked dim.
 - In the PDF reader, a translated paragraph that runs on into the next column or page fills its line before the break and splits where the original does, its share of the text following the original's share of the height. Before, the last line before a break could stop half empty.
 - Fixed: in the PDF reader, on a page where its own typesetting of the paper sets the lines a little higher or lower than arXiv's, pointing at a short table cell or a formula lights it on the original's side too. Before, only the translation's side lit.
