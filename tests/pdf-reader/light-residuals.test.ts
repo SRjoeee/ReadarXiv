@@ -120,7 +120,7 @@ describe('a block lights on both panes or on neither (view/shapes.mjs, highlight
   it('hovering every point of a page whose displays have no token throws nothing, in any order the parts and pages come (Devin on #523)', () => {
     const { parts, lefts } = cutSide(whole, anchors, views)
     const withLay = parts.map(p => (p.pages[0] === 1 ? { ...p, layout: layout() } : p))
-    const sweep = (S: { shapes: { hit: (p: number, x: number, y: number, pad: number, st: () => null) => unknown; runs: (id: number) => unknown[] } }) => { for (let y = 520; y < 780; y += 3) for (let x = 40; x < 560; x += 6) S.shapes.hit(1, x, y, PAD, () => null); S.shapes.runs(displayBlockId(1, 0)!) }
+    const sweep = (S: ReturnType<typeof createShapes> | ReturnType<typeof mirror>) => { for (let y = 520; y < 780; y += 3) for (let x = 40; x < 560; x += 6) S.shapes.hit(1, x, y, PAD, () => null); S.shapes.runs(displayBlockId(1, 0)!) }
     for (const order of ['parts, pages', 'pages, parts', 'page 1, parts, page 2']) {
       const l = createShapes({ kindOf }), m = mirror(l)
       if (order === 'parts, pages') { l.addParts(withLay as never); l.addPage(lefts[1]!); l.addPage(lefts[2]!) }
