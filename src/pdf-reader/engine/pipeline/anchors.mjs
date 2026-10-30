@@ -1075,11 +1075,12 @@ function placeLines(doc) {
  * parts is the next page's column: 1810.04805v2's footnote 1, over pages 3 and 4, owned page 4's left column, and the three
  * headings there that no mark bounds, matched inside it, were the footnote's words and placed nowhere. The same for every unit
  * that runs over a break (a paragraph owns no more of its next page's head than its own first line on): `f` matchUnits' match
- * of the unit ({ bounded, m }), `line` and `lineSize` placeLines'
+ * of the unit ({ bounded, m }), `line` and `lineSize` placeLines'. { ranges, own }: `own(k)` whether token k stands on one of the
+ * unit's own lines (null for a unit on one page)
  */
 function rangeOnPages(doc, f, line, lineSize) {
   const [a, b] = f.bounded
-  if (doc[a].page === doc[b].page) return [[a, b]]
+  if (doc[a].page === doc[b].page) return { ranges: [[a, b]], own: null }
   const per = new Map()
   for (const k of f.m) if (k >= a && k <= b) per.set(line[k], (per.get(line[k]) ?? 0) + 1)
   const most = l => per.get(l) >= Math.min(3, lineSize.get(l)) * 0.5 && per.get(l) / lineSize.get(l) >= 0.4
@@ -1091,6 +1092,39 @@ function rangeOnPages(doc, f, line, lineSize) {
     if (own(line[k])) { if (lo < 0) lo = k; hi = k }
   }
   if (lo >= 0) out.push([lo, hi])
+  return { ranges: out, own: k => own(line[k]) }
+}
+
+/**
+ * Every marked unit's ranges (rangeOnPages'), as [[first, last], unit], none of those over a page break begun or ended inside
+ * another's range it would cross: a range its own lines shrank stops short of a range whose start it would hold and not its end,
+ * or begins after one whose end it would hold and not its start. A unit's lines are its matched words' lines, and a caption set
+ * above a paragraph's next lines may repeat its words densely enough to count as one of them: 2307.16209v1's paragraph 408, over
+ * pages 114 and 115, began its page-115 range at the second line of caption 396 above it and took that line, where its whole
+ * range held the caption's inside it. Shrunk so, it holds what its whole range held there, the caption the caption's
+ */
+function rangesOf(doc, found, line, lineSize) {
+  const per = found.map(f => (f?.bounded ? rangeOnPages(doc, f, line, lineSize) : null))
+  const all = per.flatMap((o, u) => (o ? o.ranges.map(r => [r, u]) : []))
+  const out = []
+  per.forEach((o, u) => {
+    if (!o) return
+    if (!o.own) { out.push([o.ranges[0], u]); return }
+    for (let [lo, hi] of o.ranges) {
+      // (a range of another unit's that this one would cross, its first token inside it and its last past it, or the reverse:
+      // the nearest end of it moved past it, onto this one's own line beyond, until none crosses; none left, none)
+      for (let moved = true; moved && lo <= hi;) {
+        moved = false
+        for (const [[c, d], v] of all) {
+          if (v === u || c > hi || d < lo) continue
+          if (c < lo && lo <= d && hi > d) { lo = d + 1; moved = true }
+          else if (c <= hi && hi < d && lo < c) { hi = c - 1; moved = true }
+          if (moved) { while (lo <= hi && !o.own(lo)) lo++; while (hi >= lo && !o.own(hi)) hi--; break }
+        }
+      }
+      if (lo <= hi) out.push([[lo, hi], u])
+    }
+  })
   return out
 }
 /** placeUnits' owners of a document's tokens and of its lines (-1: none), kept a document and -1 throughout between calls
@@ -1127,7 +1161,7 @@ function placeWith(doc, units, found, frame, only, line, lineSize, owner, lineOw
   // who owns each token: a marked unit its range, the innermost range winning (a footnote inside a paragraph is the
   // footnote's); an unmarked unit its matched words. A range on each page it reaches holds the unit's own lines there and
   // what stands between them, never the page's text past them (rangeOnPages)
-  const ranged = found.flatMap((f, u) => (f?.bounded ? rangeOnPages(doc, f, line, lineSize).map(r => [r, u]) : [])).sort((x, y) => (y[0][1] - y[0][0]) - (x[0][1] - x[0][0]))
+  const ranged = rangesOf(doc, found, line, lineSize).sort((x, y) => (y[0][1] - y[0][0]) - (x[0][1] - x[0][0]))
   for (const [[a, b], u] of ranged) { owner.fill(u, a, b + 1); ranges.push([a, b]) }
   // two ranges that cross (neither apart nor one inside the other): a paragraph and a footnote both going on over a page,
   // the stream's order u's lines, v's first lines (the page's foot), u's next lines (the next page's head), v's last lines.

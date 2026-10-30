@@ -110,3 +110,22 @@ describe('a marked unit over a page break owns its own lines on each page, not t
     expect(words(doc, found.get(3))).toEqual(['unlike', 'earlier', 'work', 'we', 'train', 'here'])
   })
 })
+
+describe('a range shrunk to its own lines never crosses another marked unit\'s range', () => {
+  // (2307.16209v1 p115: a paragraph over a page break goes on below a caption set at the next page's head, whose second line
+  // repeats the paragraph's words; its whole range held the caption's inside it)
+  const pages = [
+    pageOf(1, [['the paragraph begins here and goes', 700]]),
+    pageOf(2, [['figure two shows the layout', 700], ['on and on and goes further', 688], ['to the end of the figure', 676], ['on and on and goes further still', 400], ['to its very last words', 388]]),
+  ]
+  const doc = tokenizeDocument(pages)
+  const F = frameOfTokens(doc)
+  const units: UnitText[] = [{ id: 0, text: 'the paragraph begins here and goes on and on and goes further still to its very last words' }, { id: 1, text: 'figure two shows the layout on and on and goes further to the end of the figure' }]
+  const at = (t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
+  const b = new Map([['0', [at('the'), at('words')]], ['1', [at('figure'), at('figure', at('figure') + 1)]]] as [string, [number, number]][])
+  it('the caption keeps every line of its own, the paragraph its lines below it', () => {
+    const found = anchorUnits(doc, units, { bounds: b, floating: id => id === 1, frame: () => F })
+    expect(words(doc, found.get(1))).toEqual(['figure', 'two', 'shows', 'the', 'layout', 'on', 'and', 'on', 'and', 'goes', 'further', 'to', 'the', 'end', 'of', 'the', 'figure'])
+    expect(words(doc, found.get(0))).toEqual(['the', 'paragraph', 'begins', 'here', 'and', 'goes', 'on', 'and', 'on', 'and', 'goes', 'further', 'still', 'to', 'its', 'very', 'last', 'words'])
+  })
+})
