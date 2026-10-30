@@ -4,8 +4,16 @@
  "quote": "明明有空间，但我们却强行把内容挤到了下一行，导致这个地方直接空着。按空间预估来说下一行大概只显示“..图2所示”的几个字，其他文字填满上一行。（the costs below laid before him:）好 同意",
  "english": "There is clearly room, yet we forced the text onto the next line, so the place is left empty. By the space, the next line should show only the few characters of “…as shown in Figure 2”, and the rest should fill the line before. (Shown the costs below:) OK, agreed.",
  "on": "a paragraph over a page break ends its earlier page with a full line (pull request 517, fix/page-cut-line): the line that holds the page cut ends where the breaker ends it, and page B opens at the next line",
- "measures": ["frames with a blank line", "blank lines / frame", "paragraph gaps a pitch or more wider", "pitch spread", "frames past the right edge"],
- "targets": ["zh", "ko", "ja"],
- "scope": "the rules gate on the pack 608b7e87 against next 8fcdca28: zh frames with a blank line 0.22 to 0.237, blank lines / frame 0.533 to 0.555, paragraph gaps a pitch or more wider 0.22 to 0.229, pitch spread 0.433 to 0.489, frames past the right edge 0.07 to 0.074; ko frames with a blank line 0.055 to 0.063, paragraph gaps 0.038 to 0.043; ja paragraph gaps 0.024 to 0.029; de, es, fr and ru unchanged. 142 units reach a cut: 106 end page A at the end of the line that holds it, 19 keep a cut the old one lost to the fit, 11 lay their run's last line on page B, 3 keep the short line (a run of one line on page A)",
+ "measures": [
+  "frames with a blank line",
+  "paragraph gaps a pitch or more wider",
+  "pitch spread"
+ ],
+ "targets": [
+  "zh",
+  "ko",
+  "ja"
+ ],
+ "scope": "the rules gate on the pack 608b7e87 against next 8fcdca28, at 5a50651e: zh frames with a blank line 0.22 to 0.233, paragraph gaps a pitch or more wider 0.22 to 0.227, pitch spread 0.433 to 0.483 (blank lines / frame and frames past the right edge no longer worse); ko frames with a blank line 0.055 to 0.063, paragraph gaps 0.038 to 0.043; ja paragraph gaps 0.024 to 0.029; de, es, fr and ru unchanged. 142 units reach a cut: 106 end page A at the end of the line that holds it, 19 keep a cut the old one lost to the fit, 11 lay their run's last line on page B, 3 keep the short line (a run of one line on page A), 3 are laid without the cut on both engines. The owner accepted the larger costs first laid before him (pitch spread 0.433 to 0.489, frames with a blank line 0.22 to 0.237, blank lines / frame 0.533 to 0.555, frames past the right edge 0.07 to 0.074)",
  "why": "page A's last line is full and page B opens at a line's start, as TeX sets a paragraph over a page break; a half-empty line before the break read as the paragraph's end and split words across the pages (1706.03762v7 p4 and p8). The room a shorter translation leaves is now at the end of the paragraph's page B part (a line shorter), or, where a line goes whole to page B so that page B is not left empty, at page A's foot"
 }
