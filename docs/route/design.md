@@ -196,7 +196,8 @@ cache this rule costs 1 refused part of 210 (1 page of 1,457), which v0 draws to
   `displayCover`/`heldRendering` (~150); v0's own reading in layer2.mjs (~400); the hybrid v0 placement in run.mjs (~45);
   the `proof` switch in reader.mjs (~6).
 - **Unchanged**: the fitting rules (`fillPage`, `breakLines`, slots, `layoutUnit2`), the B′ start rule (no-start.mjs,
-  break-room.mjs), the page-break cuts (`pageStartsOf`, `pageCutsOf`), colour, weight and slant (now read from our glyphs;
+  break-room.mjs), the page-break cuts (`pageStartsOf`, `pageCutsOf`; since 2026-10-30 the line that holds a cut ends where
+  the breaker ends it, PDF-READER §18.9), colour, weight and slant (now read from our glyphs;
   the file's TeX `colours` win), CJK italic at 13°, the highlight word table, and links.mjs (it reads our base's
   annotations: equal to arXiv's but the stamp's link, §2.2).
 
