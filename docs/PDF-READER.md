@@ -1624,6 +1624,16 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   marked outside its text, or a drawing's text standing in it) is a figure; one of text and rules a table, whose words no
   unit holds are its cells (`cellsOf`), each a run of one row. Found on the ten papers: figures 46 of 47, tables
   52 of 52, algorithms 2 of 2.
+- **The wash** (`engine.css`): the band's colour at its strength over the page, multiplied into it (screened over a
+  dimmed page, `reader.css`), so the paper takes the wash and the letters keep their own colour, as a band behind the text
+  looks on an HTML page. The highlight layer blends, not its bands: its z-index, which keeps it over the text layer and the
+  figures, makes it a stacking context, an isolated group, and a band's own blend mode mixed with nothing but the layer's
+  empty ground, the wash lying over the letters (the owner's report, 2026-10-31: the letters looked grey under it). Measured
+  on staging that day, 1810.04805v2 p1's abstract, the mean of the ink under a band: black (9, 9, 9) read (8, 44, 32) and
+  reads (8, 9, 8) blended by the layer; on a dimmed page the light letters (216, 216, 216) read (174, 210, 198) and read
+  (216, 222, 220); the paper's wash the same either way, (208, 242, 231) and (29, 59, 49). Scrolling a pane a frame at a time
+  with a block lit and the layers of all 16 pages made, every frame 16.7 ms with the bands blending, the layer blending, or
+  only a lit layer blending, the main thread's time alike (521–565 ms a run of 145 frames).
 
 ### 17.4 The pointer's path
 

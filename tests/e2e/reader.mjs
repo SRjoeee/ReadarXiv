@@ -874,9 +874,9 @@ try {
     await page.evaluate(() => getSelection().removeAllRanges())
     await page.evaluate(z => window.__reader.controller.zoomTo(z), zoom0)
     await page.waitForTimeout(900)
-    // the dark look: the layer's text dimmed by the reader's filter, its copy by the page canvas's, the wash over the layer screened
+    // the dark look: the layer's text dimmed by the reader's filter, its copy by the page canvas's, the wash over the layer screened (by its band layer)
     await page.evaluate(() => document.documentElement.setAttribute('data-axt-dim', ''))
-    const dark = await page.evaluate(() => { const css = sel => (document.querySelector(sel) ? getComputedStyle(document.querySelector(sel)) : null); return { svg: css('#right .axt-layer > svg')?.filter ?? null, copy: css('#right .axt-layer > canvas')?.filter ?? null, wash: css('#right .axt-hl')?.mixBlendMode ?? null, links: css('#right .axt-layer > .axt-links')?.filter ?? null } })
+    const dark = await page.evaluate(() => { const css = sel => (document.querySelector(sel) ? getComputedStyle(document.querySelector(sel)) : null); return { svg: css('#right .axt-layer > svg')?.filter ?? null, copy: css('#right .axt-layer > canvas')?.filter ?? null, wash: css('#right .axt-hl-layer')?.mixBlendMode ?? null, links: css('#right .axt-layer > .axt-links')?.filter ?? null } })
     check('the dark look over the layer: its SVG and its copy dimmed alike, the wash screened, the links not inverted', /invert/.test(dark.svg) && dark.svg === dark.copy && dark.wash === 'screen' && dark.links === 'none', JSON.stringify(dark))
     await page.screenshot({ path: `${SHOTS}/reader-layer-dark.png` })
     await page.evaluate(() => document.documentElement.removeAttribute('data-axt-dim'))

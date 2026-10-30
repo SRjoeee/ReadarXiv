@@ -91,10 +91,11 @@ html[data-axt-pdf-mode="bilingual"][data-axt-swapped] .pane[data-side="left"] { 
    foot is negative, give way (as in the harness the maintainer approved) ----- */
 .pdfViewer .page { border: 0 !important; margin-block: 14px !important; box-shadow: var(--page-shadow); }
 /* dark pages (§4.3): the canvas alone inverted, a page not drawn yet already its colour, so nothing flashes white; the
-   highlight and the figures keep their colours, the band screened over the dark page as it is multiplied over a white one */
+   highlight and the figures keep their colours, the band screened over the dark page as it is multiplied over a white one
+   (by its layer, as engine.css multiplies it: a band's own blend mode mixes inside the layer alone) */
 html[data-axt-dim] .pdfViewer .page { background-color: rgb(29 29 29) !important; }
 html[data-axt-dim] .pdfViewer .page canvas { filter: invert(88.8%) hue-rotate(180deg); }
-html[data-axt-dim] .axt-hl { mix-blend-mode: screen; }
+html[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
 /* the appearance changes as one crossfade of the whole page (the View Transitions API) */
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 260ms; animation-timing-function: var(--ease); }
 /* ----- the controls (§6, §7): component classes, the layout around them in utilities ----- */
