@@ -167,6 +167,57 @@ function carriedBox(E, r, q, b, own) {
   out[0] += dx; out[1] += dx; out[2] += dy; out[3] += dy
   return out
 }
+/** box `b` [x0, x1, top, bottom, …] of arXiv's page `q` carried back onto our page `q` by q's line map `E`, the way back of
+ *  carriedBox: the offset to add, [dx, dy], as the line it stands on moved — the line whose band, carried onto q, holds its middle
+ *  and whose extent there meets it, the most of its height where several do —; undefined where no line of the map holds it (a
+ *  line in place carries nothing), null where that line is another page's of ours */
+function backOf(E, q, [x0, x1, top, bottom]) {
+  const cy = (top + bottom) / 2
+  let at = -1, most = -Infinity
+  for (let j = 0; j + MOVED_STRIDE - 1 < E.length; j += MOVED_STRIDE) {
+    if (E[j + 5] !== q) continue
+    const dx = E[j + 6], dy = E[j + 7], lo = E[j + 3] + dy, hi = E[j + 4] + dy
+    if (cy < lo - BOX_SLACK || cy > hi + BOX_SLACK || Math.min(x1, E[j + 2] + dx) <= Math.max(x0, E[j + 1] + dx)) continue
+    const over = Math.min(top, hi) - Math.max(bottom, lo)
+    if (over > most) { most = over; at = j }
+  }
+  if (at < 0) return undefined
+  return E[at] === q ? [-E[at + 6], -E[at + 7]] : null
+}
+/** backOf's offset of a box that stays where it stands */
+const NO_MOVE = Object.freeze([0, 0])
+/** run `r` moved by dx, dy: a copy, its rows copies (trap 1) */
+function movedRun(r, dx, dy) {
+  const x = v => (v == null ? v : v + dx), y = v => (v == null ? v : v + dy)
+  return {
+    ...r, x0: r.x0 + dx, x1: r.x1 + dx, sx0: x(r.sx0), sx1: x(r.sx1), top: r.top + dy, bottom: r.bottom + dy, hi: y(r.hi), lo: y(r.lo),
+    rows: r.rows.map(w => ({ ...w, x0: w.x0 + dx, x1: w.x1 + dx, r0: x(w.r0), r1: x(w.r1), y0: w.y0 + dy, y1: w.y1 + dy, lo: y(w.lo), hi: y(w.hi) })),
+    mids: r.mids.map(m => m + dy),
+  }
+}
+/** float `f` of arXiv's page `q` where our page `q` sets it, by q's line map `E` (backOf): moved whole, as TeX sets a float, as most
+ *  of its cells' lines moved (a cell no line of the map holds stays), or, a float of no cell, as its caption's line moved (`caption`,
+ *  the left's run of it on q): a copy, its cells' runs copies (trap 1), its shape made again; `f` itself where it did not move,
+ *  null where those lines are another page's of ours (none of the float on our page) */
+function floatBack(E, q, f, caption) {
+  const offsetOf = r => backOf(E, q, [r.x0, r.x1, r.top, r.bottom])
+  let d
+  if (f.cells?.length) {
+    const votes = new Map()
+    for (const c of f.cells) {
+      const b = offsetOf(c.run), o = b === undefined ? NO_MOVE : b, key = o ? `${o[0]} ${o[1]}` : ''
+      const v = votes.get(key) ?? votes.set(key, { o, n: 0 }).get(key)
+      v.n++
+    }
+    let most = 0
+    for (const v of votes.values()) if (v.n > most) { most = v.n; d = v.o }
+  } else if (caption) d = offsetOf(caption)
+  if (d === null) return null
+  if (d === undefined || (!d[0] && !d[1])) return f
+  const [dx, dy] = d
+  const region = { ...f.region, x0: f.region.x0 + dx, x1: f.region.x1 + dx, y0: f.region.y0 + dy, y1: f.region.y1 + dy }
+  return { ...f, region, cells: (f.cells ?? []).map(c => ({ ...c, run: movedRun(c.run, dx, dy) })), shapes: undefined }
+}
 /** a line map's entries by our page they are of (MOVED_STRIDE each) */
 function byOurPage(E) {
   const out = new Map()
@@ -609,15 +660,19 @@ const FIELDS = ['l', 'r', 'y', 'h', 'top', 'bottom']
  * back to the mirror (a door opened again); `mute(page, on)` a page that shows another target's layer, whose drawing neither the
  * laid layout nor the mirror describes: nothing of it lit or hit until it is unmuted (its new target's page laid, or the original's
  * shown), whatever reset() does;
- * `forget(page)` its geometry let go; `dispose()` stops following the source
+ * `forget(page)` its geometry let go, and its floats as our page sets them (made again from the left's on the next use);
+ * `dispose()` stops following the source
  */
 export function layerShapes(source) {
   const state = told.get(source.shapes)
   if (!state) throw new TypeError('not a side\'s shapes (createShapes)')
   const M = mirror(source)
-  let L, words, made, wordAt, placeAt, noPlaces, hidden, namesKept, ours
+  let L, words, made, wordAt, placeAt, noPlaces, hidden, namesKept, ours, backs
   /** the pages that show another target's layer (mute): none of their geometry is the drawing's */
   const muted = new Set()
+  /** page p's line map, its left part's, where it carries a line: our page's lines where arXiv's page sets them (none: our page
+   *  stands where arXiv's does, its boxes on arXiv's ink) */
+  const mapOf = p => { const E = state.pages.get(p)?.lines; return E?.length ? E : null }
   /** the laid layout, told the parts as copies, each unit's stream just before its first page's tokens until that page lays */
   const tellParts = parts => layoutParts(L, parts.map(part => ({
     pages: [...part.pages], views: [...part.views],
@@ -631,7 +686,7 @@ export function layerShapes(source) {
     L = pageLayout(state.kindOf)
     L.unclamped = true
     words = new Map(); made = new Set(); wordAt = new Map(); placeAt = new Map(); noPlaces = new Set(); hidden = new Set(); namesKept = new Map()
-    ours = new Map()
+    ours = new Map(); backs = new Map()
     if (state.parts.length) tellParts(state.parts)
   }
   /** page p's part of the laid layout, where its words and its left part are in */
@@ -647,9 +702,12 @@ export function layerShapes(source) {
     // (and what a table's cell no unit holds is copied by, cellRuns: the words themselves are let go once the page is made)
     ours.set(p, { drift: !!w.drift, rows: all })
     const inRow = (rs, x, y) => { for (let j = 0; j + 3 < rs.length; j += 4) if (x >= rs[j] && x <= rs[j + 2] && y >= rs[j + 1] && y <= rs[j + 3]) return true; return false }
-    const T0 = left.table
-    const standsFor = (id, k) => {
-      const x = (T0.l[k] + T0.r[k]) / 2, y = (T0.top[k] + T0.bottom[k]) / 2
+    const T0 = left.table, E = mapOf(p)
+    // (and on a page whose lines moved within it, the line map's — another TeX Live's glue: 1810.04805v2's page 16 —, each copy
+    // stands where our page sets its line, carried back by it (backOf); none where that line is another page's of ours)
+    const backAt = k => { const d = E ? backOf(E, p, [T0.l[k], T0.r[k], T0.top[k], T0.bottom[k]]) : undefined; return d === undefined ? NO_MOVE : d }
+    const standsFor = (id, k, [dx, dy]) => {
+      const x = (T0.l[k] + T0.r[k]) / 2 + dx, y = (T0.top[k] + T0.bottom[k]) / 2 + dy
       const own = rowsOf.get(id)
       if (own) return inRow(own, x, y)
       if (w.drift) return false
@@ -658,10 +716,14 @@ export function layerShapes(source) {
     }
     // (a unit shown as the original the door gave its own boxes, words.mjs addBoxWords, lights by them: copies for one it gave none)
     const spanned = new Set(w.spans.map(([id]) => id))
-    const copied = left.spans.filter(([id]) => original.has(id) && !spanned.has(id)).map(([id, ts]) => [id, ts.filter(t => standsFor(id, t - left.first))])
+    const copied = left.spans.filter(([id]) => original.has(id) && !spanned.has(id)).map(([id, ts]) => {
+      const kept = []
+      for (const t of ts) { const k = t - left.first, d = backAt(k); if (d && standsFor(id, k, d)) kept.push([k, d]) }
+      return [id, kept]
+    })
     const n0 = w.tokens.n
     let n = n0
-    for (const [, ts] of copied) n += ts.length
+    for (const [, kept] of copied) n += kept.length
     const T = { n }
     for (const f of FIELDS) { T[f] = new Float32Array(n); T[f].set(w.tokens[f].subarray(0, n0)) }
     const word = new Int32Array(n).fill(-1), place = new Int32Array(n).fill(-1)
@@ -675,11 +737,12 @@ export function layerShapes(source) {
       spans.push([id, Int32Array.from(ks).sort()])
     }
     let at = n0
-    for (const [id, ts] of copied) {
-      const ks = new Int32Array(ts.length)
-      for (let i = 0; i < ts.length; i++, at++) {
-        const k = ts[i] - left.first
+    for (const [id, kept] of copied) {
+      const ks = new Int32Array(kept.length)
+      for (let i = 0; i < kept.length; i++, at++) {
+        const [k, [dx, dy]] = kept[i]
         for (const f of FIELDS) T[f][at] = left.table[f][k]
+        T.l[at] += dx; T.r[at] += dx; T.y[at] += dy; T.top[at] += dy; T.bottom[at] += dy
         ks[i] = base + at
       }
       spans.push([id, ks])
@@ -714,17 +777,45 @@ export function layerShapes(source) {
   const laidFor = (p, id) => laid(p) && !keptName(p, id)
   const pagesOf = id => L.pagesOf.get(id) ?? M.layout.pagesOf.get(id) ?? []
   const mode = id => { const ps = pagesOf(id), n = ps.filter(p => laidFor(p, id)).length; return !n ? 'mirror' : n === ps.length ? 'laid' : 'mixed' }
-  // a laid page's floats are the left's, as the mirror's are (made then)
-  const floatsOf = p => { state.floatsOn(p); L.floats = source.layout.floats }
+  // a laid page's floats are the left's, as the mirror's are (made then); on a page whose lines moved within it (its line map),
+  // each where our page sets it (floatBack, by the left's run of its caption there), the same copies while the left's are the same
+  const floatsAt = p => {
+    const src = source.layout.floats?.get(p), E = src && laid(p) ? mapOf(p) : null
+    if (!E) return src
+    let b = backs.get(p)
+    if (b?.src !== src) {
+      const g = pageGeometry(source.layout, p)
+      b = { src, list: src.flatMap(f => floatBack(E, p, f, g.byId.get(f.id)?.[0]) ?? []) }
+      backs.set(p, b)
+    }
+    return b.list
+  }
+  const floatsOf = p => {
+    state.floatsOn(p)
+    const fs = floatsAt(p)
+    // (the laid layout's own map of them, page by page as each is asked: never the left's map, which the parts told to the laid
+    // layout would let go of, highlight.mjs layoutParts)
+    L.floats ??= new Map()
+    if (fs) L.floats.set(p, fs); else L.floats.delete(p)
+  }
   // a table's cell no unit holds: the mirror's copy of the left's run, which stands where the left has it — on a laid page, as
-  // a unit shown as the original's copy does (make), none where the page's lines moved (`drift`) or another unit's row of ours
-  // stands at its middle; its numbers are the original's ink there
+  // a unit shown as the original's copy does (make), where our page sets it on a page whose lines moved within it (its float's,
+  // floatsAt; none where the float is another page's of ours), none where they moved across its break (`drift`) or another
+  // unit's row of ours stands at its middle; its numbers are our page's ink there (arXiv's place of them where our page stands
+  // as arXiv's)
   const cellRuns = id => {
     const p = tableCellPage(id)
     if (muted.has(p)) return []
-    const rs = M.shapes.runs(id), w = laid(p) ? ours.get(p) : null
+    let rs = M.shapes.runs(id)
+    const w = laid(p) ? ours.get(p) : null
     if (!w || !rs.length) return rs
     if (w.drift) return []
+    if (mapOf(p)) {
+      let c = null
+      for (const f of floatsAt(p) ?? []) for (const x of f.cells ?? []) if (x.id === id) c = x
+      if (!c) return []
+      if (c.run !== cellRunsOf(source.layout, id)[0]) rs = [c.run]
+    }
     const r = rs[0], x = (r.x0 + r.x1) / 2, y = (r.top + r.bottom) / 2
     for (const [, b] of w.rows ?? []) for (let j = 0; j + 3 < b.length; j += 4) if (x >= b[j] && x <= b[j + 2] && y >= b[j + 1] && y <= b[j + 3]) return []
     return rs
@@ -738,7 +829,7 @@ export function layerShapes(source) {
       if (muted.has(page)) return null
       if (!laid(page)) return M.shapes.hit(page, x, y, padX, startsOf)
       floatsOf(page)
-      const h = ownCell(floatHitOf(source.layout, page, x, y, padX, hitOf(L, page, x, y, padX, startsOf)), cellRuns)
+      const h = ownCell(floatHitOf(L, page, x, y, padX, hitOf(L, page, x, y, padX, startsOf)), cellRuns)
       if (h || !namesKept.has(page)) return h
       // (nothing of the laid drawing there: a name kept the original's, by the mirror's)
       const m = M.shapes.hit(page, x, y, padX, startsOf)
@@ -792,7 +883,7 @@ export function layerShapes(source) {
       })
     },
     reset,
-    forget: p => { L.cache.delete(p); M.forget(p) },
+    forget: p => { L.cache.delete(p); L.floats?.delete(p); backs.delete(p); M.forget(p) },
     dispose: () => { state.followers.delete(follower); M.dispose() },
   }
 }
