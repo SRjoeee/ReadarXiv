@@ -1923,10 +1923,10 @@ experiment vetoed a flag where arXiv's lines contradicted it (a unit told flush 
 ### 18.9 Layout decisions of 2026-10-30
 
 **A paragraph over a page break ends the earlier page with a full line.** Since E3c (2026-10-20) a unit over a page break
-holds on each page the text its source sets there: where the source's page B begins (`layer2.mjs` `pageStartsOf`, the
-alignment's first source word there), the translation is cut at the share of the sentence the source sets before the break
-(`pageCutsOf`), and a page-break token there sends the text on to page B (`layoutCut`, laid at the fit's own state, kept
-where it fits). The line ended at the cut wherever the share fell in it, so page A's last line stood short with the rest of
+holds on each page its share of the paragraph. Until the follow-up below, that share was read off the alignment and the
+row's sentences (the first source word on page B, `pageStartsOf`, and the share of the sentence the source sets before the
+break), and a page-break token at that cut sent the text on to page B (`layoutCut`, laid at the fit's own state, kept where
+it fits). The line ended at the cut wherever the share fell in it, so page A's last line stood short with the rest of
 its measure empty, and a word could be split over the two pages: 1706.03762v7 in Chinese, §3.2.2, ended page 4 half a line
 short and opened page 5 with the second half of the word for "output"; §6.2 ended page 8 a few characters into its second
 line, the language pair split over pages 8 and 9. The owner, 2026-10-30: 「明明有空间，但我们却强行把内容挤到了下一行，导致这个地方直接空着。按空间预估来说下一行大概只显示"..图2所示"的几个字，其他文字填满上一行。」
@@ -1953,7 +1953,31 @@ first token, and a cut never costs the unit its fit (laid at the fit's state, el
 break stand on the break's page: the tail of the line that holds it goes there at a looser state, and it is that page's text
 in the source.
 
-Measured on the gate pack (`608b7e87`, 32 outputs) against `next` (`8fcdca28`): 142 units reach a cut (their fit sets page
+**By the paragraph's height, not its sentences (the owner's follow-up, 2026-10-30).** The owner, looking at the result:
+「整个段落级语块在高度上覆盖得自不自然、有没有填满…位置对应上…不是追求做到 100% 精确匹配…最后一行有没有 100% 占满…其实并不重要」, and then 「好，就按这个做」
+("What matters is whether the paragraph-level block covers its height naturally and fills it, and whether the positions
+correspond; it is not about a 100 % exact match, nor whether the last line is 100 % full. OK, do it this way."): blocks stay
+aligned, sentences need not, and the page changes at a natural line end, as LaTeX sets it. So the cut is the paragraph's
+height alone (`pageCutsOf`, from the fit's own lay): each run of the unit (its blocks between two displays) whose source
+lines stand on more than one page keeps on the pages before each later page k of its n laid lines, k = n × the source's
+lines before that page over all of them, rounded half up (the earlier page the fuller), one line at least on each side; the
+page-break token then stands at line k's first token, at a line end of the fit's own lay, and only where the fit sets that
+line on an earlier page (where it does not, the page's slots are full already). A run laid in one line is cut in it at the
+share of its tokens, the one short line. The breaker's held break, `strand` and `keepsPages` are as above. Nothing of the
+alignment or the row's sentences is read for it any more: `pageStartsOf`, the sentence share and the row's sentences on the
+unit the layer lays (`rows.mjs` `unitOf`) are gone. On the gate pack against `next` (`f98fa527`, the rule above): 24 units
+over a page break are drawn otherwise, and 23 units on the pages that hold them through the page fill's reads; the owner's two
+paragraphs are as above (1706.03762v7-zh unit 40, three full lines on page 4 and the last characters on page 5; unit 128, two
+full lines on page 8, one on page 9). The rules gate: de, es, fr, ja and ru unmoved; zh frames with a blank line 23.3 % to
+23.6 % and ko paragraph gaps tighter than the lines beside them 12 to 13 (0.17 to 0.18 a thousand cells) worse, zh and ko
+paragraph gaps a pitch or more wider better (22.7 % to 22.4 %, 4.3 % to 3.3 %). The zh measures that the rule above made worse
+than before it (frames with a blank line 0.22, paragraph gaps 0.22, pitch spread 0.433 at `8fcdca28`) do not come back: they
+follow from the page change at a line end, which this keeps, not from the sentence share. The sweep's invariant (i) cannot hold
+a sentence to its source's page under this rule: the first k lines stay on page A whatever sentences they hold. Its smallest
+tolerance that matches is the break itself: for a unit drawn over a page break, a sentence drawn on either page of the break
+is not a violation; a sentence drawn two pages or more from its source, or in a unit on one page, is as before.
+
+Measured for the rule above (pull request 517) on the gate pack (`608b7e87`, 32 outputs) against `next` (`8fcdca28`): 142 units reach a cut (their fit sets page
 B's text on page A). 106 end page A at the end of the line that holds the cut, each checked against the fit's own lines (page
 A's lines are the fit's through that line, page B opens at the fit's next line, or at the cut where it is a line's first
 token); 19 more now keep their cut, where the old one cost them their fit and was dropped, page B's text drawn on page A
