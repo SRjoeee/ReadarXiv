@@ -4,7 +4,7 @@ import { LINES_MAX, MOVED_STRIDE, readLeftPart, writeLeftPart } from '@/pdf-read
 import { LABEL_KINDS, PH_FLAG, PH_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { type Anchor, type DocToken, lineRects, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { MAP_FOUND, movedLinesOf } from '@/pdf-reader/engine/pipeline/moved-lines.mjs'
-import { layoutOf } from '@/pdf-reader/engine/view/highlight.mjs'
+import { blockOf, layoutOf } from '@/pdf-reader/engine/view/highlight.mjs'
 import { createShapes, mirror } from '@/pdf-reader/engine/view/shapes.mjs'
 import { cutSide } from '../../lab/pdf/spikes/highlight-pages.mjs'
 
@@ -144,17 +144,28 @@ const layoutOf2 = (dy: number) => ({
   ph: [[1, 3, DK, PH_FLAG.NUMBERED, 1, 250, 700 + dy, 550, 707.5 + dy, 697.8 + dy]],
   labels: [[0, LN, 1, 50, 760 + dy, 58, 767.5 + dy, 757.8 + dy]],
 })
-/** the line map of our page 1 as the producer makes it: each of its lines `dy` off (its box, then -dy), and unit 4's line onto page 2 */
+/** the line map of our page 1 as the producer makes it: each of its lines `dy` off (its box, of its tokens: the heading's from its
+ *  text, its number a mark; then -dy), and unit 4's line onto page 2 */
 const mapOf = (dy: number, q: number) => {
   const out: number[] = []
-  for (const y of [760, 740, 728, 700, 600, 588]) if (q === 1) out.push(1, y === 760 ? 50 : y === 700 ? 250 : 50, y === 760 ? 122 : 550, y - 2.2 + dy, y + 7.5 + dy, 1, 0, -dy)
+  for (const y of [760, 740, 728, 700, 600, 588]) if (q === 1) out.push(1, y === 760 ? 62 : y === 700 ? 250 : 50, y === 760 ? 122 : 550, y - 2.2 + dy, y + 7.5 + dy, 1, 0, -dy)
   out.push(1, 50, 250, 57.8, 67.5, 2, 0, 690)
   return Float64Array.from(out)
+}
+type Step = 'parts' | 'A' | 'B' | 1 | 2
+/** the left made of the parts (both, 'parts'; the first, which holds the layout, 'A'; the second, 'B') and the two pages' left
+ *  parts in the order `steps` gives them, and a mirror of it made first */
+function sideIn(dy: number, steps: Step[]) {
+  const { parts, lefts } = cutSide(whole, anchors, views)
+  const l = createShapes({ kindOf: id => (id === 4 || id === 3 ? 'para' : kindOf(id)) }), m = mirror(l)
+  const lay = parts.map((p, i) => ({ ...p, layout: i === 0 ? layoutOf2(dy) : null }))
+  for (const s of steps) if (s === 'parts') l.addParts(lay as never); else if (s === 'A' || s === 'B') l.addParts([lay[s === 'A' ? 0 : 1]] as never); else l.addPage({ ...lefts[s]!, lines: mapOf(dy, s) } as never)
+  return { l, m }
 }
 function side(dy: number, mapped: boolean, partsFirst = true) {
   const { parts, lefts } = cutSide(whole, anchors, views)
   const l = createShapes({ kindOf: id => (id === 4 || id === 3 ? 'para' : kindOf(id)) }), m = mirror(l)
-  const lay = parts.map(p => ({ ...p, layout: layoutOf2(dy) }))
+  const lay = parts.map((p, i) => ({ ...p, layout: i === 0 ? layoutOf2(dy) : null }))
   const page = (q: number) => ({ ...lefts[q]!, lines: mapped ? mapOf(dy, q) : null })
   if (partsFirst) { l.addParts(lay as never); l.addPage(page(1) as never); l.addPage(page(2) as never) } else { l.addParts(parts as never); l.addPage(page(1) as never); l.addPage(page(2) as never); l.addParts([{ pages: [1, 2], views: [], left: [], layout: layoutOf2(dy) }] as never) }
   return { l, m }
@@ -168,6 +179,9 @@ describe('the reader: a moved page\'s boxes carried onto arXiv\'s page by the li
         expect(S.shapes.hit(1, 300, mid(700), PAD, () => null)?.id, `display, ${partsFirst}`).toBe(DID)
         expect(S.shapes.hit(1, 300, mid(600), PAD, () => null)?.id, `unlocated, ${partsFirst}`).toBe(3)
         expect(S.shapes.hit(1, 54, mid(760), PAD, () => null)?.id, `label, ${partsFirst}`).toBe(0)
+        // (the number, a mark beside the heading's words, which the map's line does not reach: carried with its heading's line,
+        // nothing left where our page sets it)
+        expect(S.shapes.hit(1, 54, mid(800), PAD, () => null), `label left behind, ${partsFirst}`).toBeNull()
       }
     }
   })
@@ -176,6 +190,33 @@ describe('the reader: a moved page\'s boxes carried onto arXiv\'s page by the li
     expect(l.shapes.hit(2, 100, mid(750), PAD, () => null)?.id).toBe(4)
     expect(l.shapes.hit(1, 100, mid(60), PAD, () => null)).toBeNull()
     expect(l.shapes.runs(4).every(r => r.page === 2)).toBe(true)
+  })
+  it('a block\'s rectangles on the moved page are its carried boxes: a click finds the line under it, never our page\'s', () => {
+    for (const partsFirst of [true, false]) {
+      const { l, m } = side(40, true, partsFirst)
+      for (const S of [l, m]) {
+        const at = (y: number) => S.shapes.click(1, 300, mid(y), PAD, () => null)
+        expect(at(600), `first line, ${partsFirst}`).toMatchObject({ id: 3, line: 0 })
+        expect(at(588), `second line, ${partsFirst}`).toMatchObject({ id: 3, line: 1 })
+        expect(at(588)!.f, `within the line, ${partsFirst}`).toBeGreaterThan(0.2)
+        expect(at(588)!.f).toBeLessThan(0.8)
+        // (unit 4's line left page 1 for page 2: its rectangle there, none on page 1)
+        expect((S.layout as unknown as { anchors: Map<number, { rects: { page: number }[] }> }).anchors.get(4)?.rects.map(r => r.page), `unit 4, ${partsFirst}`).toEqual([2])
+      }
+    }
+  })
+  it('whatever order the parts and the pages come in, each pane lights and clicks alike (and as the mirror)', () => {
+    // (every order of the two parts and the two pages, and the parts together: a page opened before the boxes its neighbour brings)
+    const perms = (xs: Step[]): Step[][] => (xs.length ? xs.flatMap((x, i) => perms([...xs.slice(0, i), ...xs.slice(i + 1)]).map(r => [x, ...r])) : [[]])
+    const orders: Step[][] = [['parts', 1, 2], ['parts', 2, 1], [1, 'parts', 2], [2, 'parts', 1], [1, 2, 'parts'], [2, 1, 'parts'], ...perms(['A', 'B', 1, 2])]
+    const read = (S: { shapes: ReturnType<typeof sideIn>['m']['shapes'] }) => {
+      const out: unknown[] = []
+      for (const id of [0, 1, 3, 4, DID]) out.push(id, S.shapes.runs(id).map(r => { const b = blockOf(r, PAD); return [r.page, ...[b.x0, b.x1, b.y0, b.y1].map(v => Math.round(v * 100) / 100)] }))
+      for (const [p, y] of [[1, 760], [1, 740], [1, 700], [1, 600], [1, 588], [1, 100], [2, 750], [2, 700]] as const) out.push(p, y, S.shapes.hit(p, 300, mid(y), PAD, () => null)?.id ?? null, S.shapes.hit(p, 54, mid(y), PAD, () => null)?.id ?? null, S.shapes.click(p, 300, mid(y), PAD, () => null))
+      return out
+    }
+    const want = read(sideIn(40, orders[0]!).l)
+    for (const o of orders) { const { l, m } = sideIn(40, o); expect(read(l), o.join(' ')).toEqual(want); expect(read(m), `mirror, ${o.join(' ')}`).toEqual(want) }
   })
   it('without the map, as before: a moved page lights what the left part locates alone', () => {
     const { l } = side(40, false)

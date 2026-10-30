@@ -134,7 +134,7 @@ export function pageLayout(kindOf = () => undefined) {
  */
 export function layoutParts(L, parts) {
   let told = false
-  for (const { pages, views, left, quiet = false } of parts) {
+  for (const { pages, views, left, quiet = false, carried } of parts) {
     for (let i = 0; 4 * i < views.length; i++) {
       const at = pages[0] - 1 + i
       if (!L.views[at]) { L.views[at] = views.slice(4 * i, 4 * i + 4); told = true }
@@ -143,6 +143,22 @@ export function layoutParts(L, parts) {
       // (a unit told from its boxes alone, quiet, gives way to its located telling, whichever comes first: view/shapes.mjs)
       const was = L.told.get(id)
       const rs = rects.map(([page, x0, y0, x1, y1]) => ({ page, x0, y0, x1, y1 }))
+      // (a moved page's boxes carried onto arXiv's page `carried` (view/shapes.mjs carryPage): the rectangles there of a block told
+      // from its boxes these, in their place among its pages', and none where they all left it; a unit located there keeps arXiv's)
+      if (carried !== undefined) {
+        if (L.drawn.has(id) || (!was && !rs.length)) continue
+        if (!was) { L.told.set(id, { stream, rects: rs, quiet: true }); told = true; continue }
+        if (!was.quiet && was.rects.some(r => r.page === carried && !r.quiet)) continue
+        if (!was.quiet) for (const r of rs) r.quiet = true
+        const stale = r => r.page === carried && (was.quiet || r.quiet), first = was.rects.findIndex(stale), kept = was.rects.filter(r => !stale(r))
+        const k = first >= 0 ? was.rects.slice(0, first).filter(r => !stale(r)).length : (i => (i < 0 ? kept.length : i))(kept.findIndex(r => r.page > carried))
+        const next = [...kept.slice(0, k), ...rs, ...kept.slice(k)]
+        if (next.length === was.rects.length && next.every((r, j) => { const o = was.rects[j]; return r.page === o.page && r.x0 === o.x0 && r.y0 === o.y0 && r.x1 === o.x1 && r.y1 === o.y1 })) continue
+        was.rects = next
+        L.anchors.delete(id)
+        told = true
+        continue
+      }
       // (a located unit's boxes on a page it is not located on: that page its own too, its rectangles there quiet — no part of the
       // page's columns, edges or leadings; view/shapes.mjs. And a unit told from its boxes, its boxes carried onto another page of
       // arXiv's, a moved line's: that page its own too)
