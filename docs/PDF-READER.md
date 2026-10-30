@@ -1366,8 +1366,8 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
     (`units.mjs` `displayBlockId`: the unit's id and the display's place among its unit's, so that the door and the view number it
     alike). Its tokens are never its unit's, on either pane (a kept line on its rows is its ink, `words.mjs`; on the left it takes
     its own unit's tokens and the free ones in its segments, never another unit's: an array's cells set in a display keep theirs;
-    and those of its unit's between two of its own in the page's stream whose box meets its segments' extent, as TeX sets a
-    display's glyphs together. arXiv's text layer draws a token's box from its font's ascent and descent, and a math extension
+    and those of its unit's between two of its own in the page's stream whose box meets one of its segments, as TeX sets a
+    display's glyphs together (never one in the room between them: a paragraph's word there, an align's \intertext, stays). arXiv's text layer draws a token's box from its font's ascent and descent, and a math extension
     font's (cmex10's, txexs's) hang under the baseline: a wide accent's box stands under its ink, a big delimiter's reaches far past
     it, its middle out of the segments. 2610.35877v1 p5's hat on the w of display (4)'s denominator, 1.9 pt under the display,
     had lit with the sentence before it, a band in the formula, the owner's report of 2026-10-31. On the 70 papers of #524's

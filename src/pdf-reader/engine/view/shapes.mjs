@@ -444,7 +444,8 @@ export function createShapes({ kindOf: unitKind = () => undefined, warn = warnOn
     // (and a glyph of a display whose text-layer box stands off its ink — drawn from its font's ascent and descent: a math
     // extension font's, cmex10's or txexs's, hang under the baseline, while a wide accent's ink stands over it and a big
     // delimiter's box reaches far past its own —, its middle out of the display's boxes: one of its unit's span between two of the
-    // display's own in the page's stream, as TeX sets a display's glyphs together, whose box meets the display's boxes' extent.
+    // display's own in the page's stream, as TeX sets a display's glyphs together, whose box meets one of its boxes (not the room
+    // between them: a paragraph's words between two rows, an align's \intertext, stay the paragraph's).
     // 2610.35877v1 p5's hat on the w of display (4)'s denominator, 1.9 pt under it, had lit with the sentence before the display)
     const T = input.table
     for (const [id, boxes] of at.displays) {
@@ -452,12 +453,10 @@ export function createShapes({ kindOf: unitKind = () => undefined, warn = warnOn
       if (!own.size) continue
       let lo = Infinity, hi = -Infinity
       for (const k of own) { if (k < lo) lo = k; if (k > hi) hi = k }
-      let x0 = Infinity, x1 = -Infinity, top = -Infinity, bottom = Infinity
-      for (const b of boxes) { if (b[0] < x0) x0 = b[0]; if (b[1] > x1) x1 = b[1]; if (b[2] > top) top = b[2]; if (b[3] < bottom) bottom = b[3] }
       for (const k of [...setOf(u)]) {
         if (k <= lo || k >= hi || owner.get(k) !== u) continue
         const t = k - first
-        if (T.l[t] >= x1 || T.r[t] <= x0 || T.bottom[t] >= top || T.top[t] <= bottom) continue
+        if (!boxes.some(([x0, x1, top, bottom]) => T.l[t] < x1 && T.r[t] > x0 && T.bottom[t] < top && T.top[t] > bottom)) continue
         setOf(u).delete(k)
         setOf(id).add(k)
         owner.set(k, id)

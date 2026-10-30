@@ -14,15 +14,16 @@ import { cutSide } from '../../lab/pdf/spikes/highlight-pages.mjs'
 type Item = { str: string; transform: number[]; width: number; height: number; hasEOL: boolean; fontName: string }
 const item = (str: string, x: number, y: number, width = str.length * 5, eol = false): Item => ({ str, transform: [10, 0, 0, 10, x, y], width, height: 10, hasEOL: eol, fontName: 'f' })
 const WORDS = 'text text text text text text text text'
-/** a paragraph line, the display "x = y (1)" with a hat drawn between its x and its = in the stream, its baseline 6 under the
- *  display's (its box 691.8–701.5, the display's 697.8–707.5: its middle out by 1.15 past the slack, its box meeting), a line on;
- *  and a word set apart from the display under it, in the stream between the display's glyphs too, whose box meets nothing */
-const P1: Item[] = [item(WORDS, 50, 740, 500, true), item('x', 250, 700, 10), item('b', 252, 694, 6), item('=', 265, 700, 10), item('away', 400, 600, 20), item('y', 280, 700, 10), item('(1)', 535, 700, 15, true), item(WORDS, 50, 660, 500, true)]
+/** a paragraph line, the display "x = y (1)" — its formula's segment 250–300 and its number's 535–550 — with a hat drawn between
+ *  its x and its = in the stream, its baseline 6 under the display's (its box 691.8–701.5, the formula's 697.8–707.5: its middle out
+ *  by 1.15 past the slack, its box meeting), a line on; and, in the stream between the display's glyphs too, a word set apart under
+ *  it and a word in the room between the formula and its number (Devin on #528), neither box meeting a segment */
+const P1: Item[] = [item(WORDS, 50, 740, 500, true), item('x', 250, 700, 10), item('b', 252, 694, 6), item('=', 265, 700, 10), item('away', 400, 600, 20), item('y', 280, 700, 10), item('gap', 400, 700, 15), item('(1)', 535, 700, 15, true), item(WORDS, 50, 660, 500, true)]
 const doc: DocToken[] = tokenizeDocument([{ page: 1, items: P1, styles: {} }])
 const at = (y: number) => doc.flatMap((t, k) => (Math.abs(t.y - y) < 1 ? [k] : []))
-const HAT = at(694), AWAY = at(600), DISPLAY = [...at(700), ...HAT]
-const UNIT = [...at(740), ...DISPLAY, ...AWAY, ...at(660)].sort((a, b) => a - b)
-const anchors = new Map<number, Anchor | null>([[1, { tokens: UNIT, rects: lineRects(doc, UNIT), coverage: 1, bounded: true, pairs: new Map(UNIT.filter(k => !DISPLAY.includes(k) && !AWAY.includes(k)).map((k, w) => [w, k])) }]])
+const HAT = at(694), AWAY = at(600), GAP = doc.flatMap((t, k) => (t.t === 'gap' ? [k] : [])), DISPLAY = [...at(700).filter(k => !GAP.includes(k)), ...HAT]
+const UNIT = [...at(740), ...DISPLAY, ...AWAY, ...GAP, ...at(660)].sort((a, b) => a - b)
+const anchors = new Map<number, Anchor | null>([[1, { tokens: UNIT, rects: lineRects(doc, UNIT), coverage: 1, bounded: true, pairs: new Map(UNIT.filter(k => !DISPLAY.includes(k) && !AWAY.includes(k) && !GAP.includes(k)).map((k, w) => [w, k])) }]])
 const views = [[0, 0, 600, 800]]
 const whole = layoutOf(doc, views, anchors, () => 'para')
 const DK = PH_KINDS.indexOf('display'), DID = displayBlockId(1, 0)!
@@ -31,7 +32,7 @@ const row = (x0: number, x1: number, y: number) => [1, x0, x1, y, y + 7.5, y - 2
 const LAYOUT = {
   names: [],
   lines: [[1, [...row(50, 550, 740), ...row(250, 550, 700), ...row(50, 550, 660)]]],
-  ph: [[1, 1, DK, PH_FLAG.NUMBERED, 1, 250, 700, 550, 707.5, 697.8]],
+  ph: [[1, 1, DK, PH_FLAG.NUMBERED, 1, 250, 700, 300, 707.5, 697.8, 1, 535, 700, 550, 707.5, 697.8]],
   labels: [],
 }
 function side() {
@@ -57,11 +58,13 @@ describe('a display\'s glyph whose text-layer box stands off its ink is the disp
       expect(S.shapes.runs(1).flatMap(r => r.rows).some(w => w.x0 >= 250 && w.x1 <= 260)).toBe(false)
     }
   })
-  it('a word between the display\'s glyphs in the stream whose box meets none of the display\'s stays its paragraph\'s', () => {
+  it('a word between the display\'s glyphs in the stream whose box meets none of its segments stays its paragraph\'s, under it or in the room between them', () => {
     const { l } = side()
     const display = spansOf(l, DID), unit = spansOf(l, 1)
     const first = Math.min(...display, ...unit) - Math.min(...UNIT)
-    expect(unit).toContain(first + AWAY[0]!)
-    expect(display).not.toContain(first + AWAY[0]!)
+    for (const k of [AWAY[0]!, GAP[0]!]) {
+      expect(unit, `${k}`).toContain(first + k)
+      expect(display, `${k}`).not.toContain(first + k)
+    }
   })
 })
