@@ -136,10 +136,21 @@ function inPlace(rows, lines) {
   for (const [x0, x1, top, bottom] of lines) { const cy = (top + bottom) / 2, dy = 0.3 * (top - bottom); if (rows([[x0 - 1, x1 + 1, cy + dy, cy - dy]]).length) found++ }
   return lines.length >= IN_PLACE_LINES ? found >= IN_PLACE * lines.length : found === lines.length
 }
-/** each unit told with no stream of its own (from its boxes: `-1`) begins at its first token on its first page, once that page's
- *  spans are in: as a cell #515 told did */
+/** each unit's stream as page `p`'s spans tell it, once they are in: a unit told with no stream of its own (from its boxes: `-1`)
+ *  begins at its first token on its first page, as a cell #515 told did; a located unit whose first token its display took (a
+ *  paragraph that opens with a display) at its next token, on this page or a later one's in, none where it has none (Codex on #522:
+ *  else highlight.mjs tokensOf put the stream back among its tokens, the display's first token both blocks') */
 function streamsOn(Lay, p, spans) {
-  for (const [id, ks] of spans) if (ks.length && Lay.told?.get(id)?.stream === -1 && Lay.pagesOf.get(id)?.[0] === p) layoutStream(Lay, id, ks[0])
+  const T = Lay.pt?.[p]
+  for (const [id, ks] of spans) {
+    const u = Lay.told?.get(id)
+    if (!u) continue
+    if (u.stream === -1) { if (ks.length && Lay.pagesOf.get(id)?.[0] === p) layoutStream(Lay, id, ks[0]); continue }
+    if (!T || u.stream < T.k0 || u.stream >= T.k0 + T.n || ks.includes(u.stream)) continue
+    let next = ks.length ? ks[0] : -1
+    if (next < 0) for (const [q, ts] of [...(Lay.spans.get(id) ?? [])].sort((a, b) => a[0] - b[0])) if (q > p && ts.length) { next = ts[0]; break }
+    layoutStream(Lay, id, next)
+  }
 }
 /** what each side made by createShapes was told, in order, for a mirror made of it later, and the mirrors that follow it */
 const told = new WeakMap()
@@ -493,9 +504,9 @@ export function layerShapes(source) {
     ...(part.quiet ? { quiet: true } : {}),
   })))
   function reset() {
+    // (no box of our page widens a laid row: the door's table holds every token the page shows of a unit, its kept label and
+    // pieces among them, and a piece or a label it drew elsewhere left that box empty: Devin on #522)
     L = pageLayout(state.kindOf)
-    L.labelBoxes = source.layout.labelBoxes
-    L.pieceBoxes = source.layout.pieceBoxes
     words = new Map(); made = new Set(); wordAt = new Map(); placeAt = new Map(); noPlaces = new Set(); hidden = new Set(); namesKept = new Map()
     ours = new Map()
     if (state.parts.length) tellParts(state.parts)

@@ -156,6 +156,27 @@ describe('the left: blocks told by the inventory\'s boxes on a page in place (vi
     expect([l.shapes.hit(1, 542, mid(700), PAD, () => null)?.id, l.shapes.hit(1, 270, mid(700), PAD, () => null)?.id]).toEqual([6, DID])
   })
 
+  it('a located unit that begins with its display begins after it: the display\'s first token is the display\'s alone (Codex on #522)', () => {
+    // (unit 1 the three lines above; unit 7 a paragraph that opens with the display, its stream the display's first token)
+    const a7 = new Map([...anchors, [1, anchorOf([...at(740), ...at(728), ...at(716)])], [7, anchorOf([...DISPLAY, ...at(684), ...at(672)])]])
+    const w7 = layoutOf(doc, views, a7, kindOf)
+    const lay = layoutOf1()
+    const lines7 = lay.lines.map(([id, rows]) => (id === 1 ? [1, (rows as number[]).slice(0, 24)] : [id, rows])) as typeof lay.lines
+    lines7.push([7, [...row(250, 550, 700), ...row(50, 550, 684), ...row(50, 550, 672)]])
+    const ly7 = { ...lay, lines: lines7, ph: [[7, 0, DK, PH_FLAG.NUMBERED, 1, 250, 700, 550, 707.5, 697.8]] }
+    const D7 = displayBlockId(7, 0)!
+    for (const order of ['parts first', 'page first'] as const) {
+      const { parts, lefts } = cutSide(w7, a7, views)
+      const l = createShapes({ kindOf }), m = mirror(l)
+      if (order === 'parts first') { l.addParts(parts.map(p => ({ ...p, layout: ly7 })) as never); l.addPage(lefts[1]!) } else { l.addParts(parts as never); l.addPage(lefts[1]!); l.addParts([{ pages: [1, 1], views: [], left: [], layout: ly7 }] as never) }
+      for (const S of [l, m]) {
+        expect(S.layout.anchors.get(7)!.tokens.some(k => DISPLAY.includes(k)), order).toBe(false)
+        expect(S.shapes.hit(1, 255, mid(700), PAD, () => null)?.id, order).toBe(D7)
+        for (const r of S.shapes.runs(7)) { const b = blockOf(r, PAD); expect(b.y0 > 707.5 || b.y1 < 697.8, order).toBe(true) }
+      }
+    }
+  })
+
   it('a page moved (our lines elsewhere than arXiv\'s): nothing told by the boxes, what the left part locates lights as before', () => {
     const l = side(40)
     expect(l.shapes.hit(1, 300, mid(700), PAD, () => null)?.id).toBe(1)
@@ -193,7 +214,7 @@ describe('the right: what the door drew and what it kept of our page (layer-prot
       ['label', null, null, [80, 698, 95, 710]],
     ])
     // (no piece moved: every piece shown where it stands; a label drawn anew: not shown, it is drawn)
-    const kept = unitHiding({ page: 1, id: 5, lu: lu({ ph: new Map([[0, seg('cite', 120)]]), labels: [0, 1, 80, 700, 95, 710, 698] }) as never, kOf: [0], lines: lines as never, prep: reading({ res: [[0, { mode: 'kept', k: 0 }]], label: { drawn: '第一', chars: [] } }) as never })
+    const kept = unitHiding({ page: 1, id: 5, lu: lu({ ph: new Map([[0, seg('cite', 120)]]), labels: [0, 1, 80, 700, 95, 710, 698] }) as never, kOf: [0], lines: lines as never, prep: reading({ res: [[0, { mode: 'kept', k: 0 }]], label: { drawn: 'One', chars: [] } }) as never })
     expect(kept.shown.map(s => s.kind)).toEqual(['piece'])
   })
 
@@ -243,6 +264,22 @@ describe('the right: what the door drew and what it kept of our page (layer-prot
     expect(W.spans).toEqual([[9, [0, 3]], [displayBlockId(9, 0), [3, 1]]])
     addBoxWords(W, 3, 9, unit as never)
     expect(W.spans.length).toBe(2)
+    // (a page where its only line is its display's: its span is empty, so that the right copies none of the left's tokens of it,
+    // its display lit once, as itself: Devin on #522)
+    const V = newWords(), alone = { lines: [1, 100, 300, 680, 688, 678, 10, 0], labels: [], ph: new Map([[3, { kind: 'display', segs: [1, 100, 680, 300, 688, 678] }]]) }
+    addBoxWords(V, 1, 9, alone as never, displayIdsOf(9, [3]))
+    expect(V.spans).toEqual([[9, []], [displayBlockId(9, 0), [0, 1]]])
+  })
+
+  it('a laid page lights what the door drew and kept, never the original\'s places of a label or a piece it moved (Devin on #522)', () => {
+    const l = side(), r = layerShapes(l)
+    // (the heading drawn at 80-120, its number drawn anew elsewhere and its piece moved: neither box of our page there any more)
+    const T = { n: 1, l: Float32Array.from([80]), r: Float32Array.from([120]), y: Float32Array.from([760]), h: Float32Array.from([10]), top: Float32Array.from([767.5]), bottom: Float32Array.from([757.8]) }
+    r.lay(1, { tokens: T, word: Int32Array.from([0]), at: Int32Array.from([0]), spans: [[0, [0, 1]]], original: [] } as never)
+    const b = blockOf(r.shapes.runs(0)[0]!, PAD)
+    expect([b.x0 > 75, b.x1 < 125]).toEqual([true, true])
+    // (the mirror, arXiv's page, keeps them: the left's geometry)
+    expect(mirror(l).shapes.hit(1, 54, mid(760), PAD, () => null)?.id).toBe(0)
   })
 
   it('a laid page lights the display, the label and a unit shown as the original from its own table, as the left does', () => {
