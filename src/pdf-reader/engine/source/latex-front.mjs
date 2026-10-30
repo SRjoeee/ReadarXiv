@@ -65,9 +65,10 @@ const OWN_UNIT_ARG = new Set(['caption', 'subcaption', 'subcaptionbox', 'caption
 const CAPTIONS = new Set(['caption', 'subcaption', 'subcaptionbox', 'captionof', 'tablecaption'])
 /** the front matter's blocks of names and places: their notes (\\thanks, \\footnote) each a footnote of its own
  *  (1706.03762's author block: its footnotes stayed in English, the whole block one opaque command), and the names and
- *  places between them units of their own (frontBlock): the authors' names of kind 'author' (the reader's "names"), the
- *  affiliations, institutions and addresses of kind 'affiliation' (prose, always translated: docs/route/orphan-text.md §5,
- *  the owner's ruling of 2026-10-25); the marks, e-mail and web addresses, ORCIDs and spacing stay */
+ *  places between them units of their own (frontBlock): the authors' names of kind 'author', the affiliations,
+ *  institutions and addresses of kind 'affiliation', both the reader's "names" (the whole block one toggle:
+ *  docs/route/orphan-text.md §5, the owner's ruling of 2026-10-30); the marks, e-mail and web addresses, ORCIDs and spacing
+ *  stay */
 const FRONT_MATTER = new Set(['author', 'affil', 'affiliation', 'institute', 'address'])
 /** the author blocks whose text opens with the authors' names (frontBlock's `names`): LaTeX's \\author and its kin of the role
  *  table (FRONT_ROLES' `author`); every other such block — \\affil, \\affiliation, \\institute, \\address, ICML's
@@ -2167,7 +2168,7 @@ const BIB_KEPT_FIELD = /^(?:doi|url|eprint|isbn|issn|archive|archiveprefix|prima
  * A bibliography (thebibliography's body, `from` after its \\begin, `to` its \\end): each \\bibitem's entry, from its key's
  * group to the next \\bibitem or the end, is one unit of kind `reference` (the reader's "References"), whole: the names it
  * opens with are the entry's, never a unit of their own nor of the "names" toggle (the owner's ruling of 2026-10-28: the
- * references and the author names are each their own toggle's, decoupled — "names" is the author block under the title alone —,
+ * references and the author block are each their own toggle's, decoupled — "names" is the author block under the title alone —,
  * and an entry is never set in two pieces styled apart). Its label (\\bibitem's optional argument, set in the list's label
  * box) and its key are no piece of it; what precedes the first \\bibitem (the style's \\providecommand's) is no unit, nor is
  * REVTeX's \\BibitemOpen and \\BibitemShut. In an entry its numbers stay the original's ink (keepNumbers), its web addresses

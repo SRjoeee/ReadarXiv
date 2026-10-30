@@ -109,12 +109,14 @@ The owner's map (2026-10-25; the settings' own words are the locale packs', thes
 | "Figure text" | figures (vector) | the glyphs of an included PDF (form XObjects) and of a TikZ or pgfplots picture (between its points), set by our compile: exact text from their fonts, exact places; ink units of kind inkfigures, each its own group, inside a form by the form written again once; a font with no usable Unicode, a form shared, a crowded band left the original's (PDF-READER §19.12); a float's other text no unit owns stays counted, not drawn | built | — |
 | "Figure text" | ocr (bitmap) | PP-OCR as the extension runs it (DESIGN §15.3), once on the server over each figure's image; places from OCR (approved); erasure by a patch of the background under each line, as the extension's image translation does | planned | 3.5 |
 | "References" | references, index (proposed) | each `\bibitem` one unit, whole, its names its own, from the bibliography's TeX the compile reads (thebibliography, a shipped .bbl, or the one BibTeX makes in the prepare's first pass, a shipped one from then on), marked like the body (PDF-READER §19.13); biblatex's `\printbibliography` no TeX to mark | built (biblatex a known gap) | — |
-| "Names" | names: the author block's names under the title | author units, translated for every target (TRANSLATE 6); its places (kind affiliation) the body's, always translated | built | — |
+| "Names" ("Authors and affiliations") | names: the whole author block under the title | author units and its places (kind affiliation: affiliations, institutions, addresses, e-mail line), translated for every target (TRANSLATE 6), one toggle (the owner's ruling of 2026-10-30); an affiliation line no source unit owns is an ink unit still always translated (ink-units.mjs rule 8: the maker's, next) | built | — |
 | Never | math, code and verbatim, symbols | kept as the original's ink | never | — |
 | — | reader toggles in both hosts | a class's units drawn or not (and its groups ON or OFF) by the settings: the door's and the layer side's `classes`, the side's `setClasses`, the hosts' settings (the extension's `pdfReader.classes`, `docs/PDF-READER.md` §9.1) | built | — |
 
-**Names, plainly** (the owner's ruling of 2026-10-28: the two toggles decoupled). "Names" is an author block's names alone (their
-own units, by TeX's marks); the names inside a bibliography's entry are the entry's, under "References". Names written inside body
+**Names, plainly** (the owner's ruling of 2026-10-28: the two toggles decoupled; and of 2026-10-30: the whole block). "Names" is an
+author block under the title, its names and its places, the affiliations, institutions, addresses and e-mail line (their own
+units, by TeX's marks), translated together or the original's together; an author's note at the page's foot (`\thanks`) is a
+footnote, always translated. The names inside a bibliography's entry are the entry's, under "References". Names written inside body
 prose ("as Smith showed") are part of that unit; an author-year citation's names are its placeholder's ink, kept as the original's
 either way; a running head typed by the author with the names follows "Heads and feet" (and "Names" too where it equals the author
 units' text and takes their row).
@@ -123,8 +125,8 @@ units' text and takes their row).
 - Algorithms and pseudocode: under "Figure text" (they sit in a float like a figure): steps and comments translated, keywords and
   math kept. Stage 1 counts them as figures; telling them apart needs the float's type at its point (`\@captype` at
   `\@endfloatbox`).
-- Affiliations, addresses and the e-mail line (built: kind affiliation, PDF-READER §19.13), dates, keywords, acknowledgements, a
-  thesis's title page, an epigraph: always (body).
+- Dates, keywords, acknowledgements, a thesis's title page, an epigraph: always (body). Affiliations, addresses and the e-mail
+  line (built: kind affiliation, PDF-READER §19.13) are "Names" since the owner's ruling of 2026-10-30 (always, from 2026-10-28).
 - Index and glossary: under "References", as back matter (the ledger's `index` class).
 - URLs, e-mail addresses, DOIs, ORCIDs: never (kept runs wherever they stand).
 - Equation tags, folios, numbers: never (`symbols`).

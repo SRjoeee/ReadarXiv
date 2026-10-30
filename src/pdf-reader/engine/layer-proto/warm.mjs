@@ -62,17 +62,20 @@ const LIKELY_CJK = '\u6c38', LIKELY_LATIN = 'a'
  * units in id order (the source's, title and abstract first) whose texts `texts` holds (each unit's translated text by id: the
  * rows read so far), an author's aside (never drawn), until their CJK characters reach `chars` (the unit that reaches it
  * included); and every place of the author block (kind `affiliation`: units of their own, after every other in id order, on the
- * first page wherever their ids stand). `kinds`: each unit's kind by id (the units chunks'; null for none). Each with no style
- * (st null: the warmer's plain face, a heading's the bold). An estimate: a unit it misses is asked by the wave of its page once
- * the parts locate it, a slice it asks for nothing costs its bytes alone, while the box runs
+ * first page wherever their ids stand). `kinds`: each unit's kind by id (the units chunks'; null for none); `shown`, whether
+ * the reader's toggles show a kind translated (layer-side's, rules/content-classes.mjs unitShown; null: every kind): a unit of
+ * a kind they hide is never drawn, and is passed over, counted in no budget (the author block's places with the names toggle
+ * off, its default since the owner's ruling of 2026-10-30). Each with no style (st null: the warmer's plain face, a heading's
+ * the bold). An estimate: a unit it misses is asked by the wave of its page once the parts locate it, a slice it asks for
+ * nothing costs its bytes alone, while the box runs
  */
-export function firstPageUnits(kinds, texts, { chars = FIRST_PAGE_CHARS } = {}) {
+export function firstPageUnits(kinds, texts, { chars = FIRST_PAGE_CHARS, shown = null } = {}) {
   const out = []
   let count = 0
   const ids = [...(texts?.keys?.() ?? [])].filter(id => Number.isSafeInteger(id)).sort((a, b) => a - b)
   for (const id of ids) {
     const kind = kinds?.[id] ?? null, text = texts.get(id)
-    if (kind === null || kind === 'author' || typeof text !== 'string' || !text) continue
+    if (kind === null || kind === 'author' || typeof text !== 'string' || !text || (shown && !shown(kind))) continue
     if (count >= chars && kind !== 'affiliation') continue
     out.push({ kind, text, st: null })
     if (kind !== 'affiliation') for (const ch of text) if (CJK_COUNT.test(ch)) count++

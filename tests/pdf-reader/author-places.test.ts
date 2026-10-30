@@ -5,10 +5,10 @@ import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
 import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { classesOn, unitClass, unitShown } from '@/pdf-reader/engine/rules/content-classes.mjs'
 
-// The author block's names split from its places (docs/route/orphan-text.md §5, "Names"; the owner's rulings of 2026-10-25 and
-// 2026-10-28: "names" is the author names under the title alone; affiliations, addresses and the e-mail line are always
-// translated): the authors' names stay units of kind `author` (the reader's "names", off by default), the affiliations,
-// institutions and addresses become units of kind `affiliation`, prose of the body, always translated. Read from the TeX the
+// The author block's names split from its places (docs/route/orphan-text.md §5, "Names"; the owner's rulings of 2026-10-25,
+// 2026-10-28 and 2026-10-30: "names" is the whole author block under the title, its names, affiliations, addresses and e-mail
+// line, one toggle): the authors' names stay units of kind `author`, the affiliations, institutions and addresses become units
+// of kind `affiliation`, each placed by its own marks, both the reader's "names" (off by default). Read from the TeX the
 // source holds (latex-front.mjs frontBlock): which command holds the text, the rows of the tabular LaTeX sets an \author in, the
 // numbered list of places, an author's note; an e-mail, a web address and an ORCID stay the original's ink. Each shape a paper
 // writes, one test.
@@ -155,10 +155,15 @@ describe('the places\' units: their number, their class, their marks', () => {
     const ieee = open('\\maketitle\nThe body.', '\\author{\\IEEEauthorblockN{Daniel W}\n\\IEEEauthorblockA{Dept. of Computer Science \\\\ Some University}\n\\and\n\\IEEEauthorblockN{Brian E}\n\\IEEEauthorblockA{Dept. of Neurology \\\\ A Hospital}}', 'IEEEtran')
     expect(units(ieee).map(u => u.kind)).toEqual(['author', 'affiliation', 'author', 'affiliation', 'para'])
   })
-  it('a place is the body\'s, always translated and shown; a name the names\', shown with that toggle alone', () => {
-    expect(['author', 'affiliation'].map(k => unitClass(k))).toEqual(['names', 'body'])
-    const on = classesOn(null)
-    expect(units(p).filter(u => u.kind === 'author' || u.kind === 'affiliation').map(u => unitShown(u, on))).toEqual([false, true])
+  it('a place and a name are both the names\', the whole block shown with that toggle and hidden without it', () => {
+    expect(['author', 'affiliation'].map(k => unitClass(k))).toEqual(['names', 'names'])
+    const block = units(p).filter(u => u.kind === 'author' || u.kind === 'affiliation')
+    // (the defaults, names off: the whole block the original's, its institution too)
+    expect(block.map(u => unitShown(u, classesOn(null)))).toEqual([false, false])
+    expect(block.map(u => unitShown(u, classesOn({ names: false })))).toEqual([false, false])
+    // (names on: the whole block translated; another toggle shows none of it)
+    expect(block.map(u => unitShown(u, classesOn({ names: true })))).toEqual([true, true])
+    expect(block.map(u => unitShown(u, classesOn({ references: true, tables: true, heads: true, figures: true })))).toEqual([false, false])
     // (both sent, once, whatever the toggles)
     const bundle = { units: bundleUnitsOf(p) }
     expect(toTranslate(bundle, 'zh')).toEqual(expect.arrayContaining([1, 4]))

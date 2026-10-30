@@ -131,8 +131,8 @@ export const sourceUnitsOf = bundle => sourceOf(bundle).units
 /** the units a translation into any language leaves as they are: the names a table holds (the KEPT flag, nameCells), and a
  *  TikZ picture's texts, whose glyphs the figure ink units translate (TIKZ_KIND). Every
  *  content class is translated once, whatever the language and whatever a reader's toggles show (the owner, 2026-10-25;
- *  rules/content-classes.mjs): the author block's names, which a reader's "names" toggle shows or hides, and its places, always
- *  shown; a bibliography's entries, under "references" (TRANSLATE_VERSION 6; before it the author block was sent only where the
+ *  rules/content-classes.mjs): the author block, its names and its places, which a reader's "names" toggle shows or hides
+ *  (the owner's ruling of 2026-10-30: its places were always shown from 2026-10-28); a bibliography's entries, under "references" (TRANSLATE_VERSION 6; before it the author block was sent only where the
  *  target's script writes names its own way, translate/kept.mjs authorsTranslated, which the TeX path's keptFor still reads) */
 const keptOf = s => s.kept
 /** the ids a language translates, rising: the units that stand, but the names kept (the KEPT flag) and a TikZ picture's texts */

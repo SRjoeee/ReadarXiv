@@ -129,6 +129,16 @@ describe('firstPageUnits: page 1\'s units before any part (a first open\'s rows 
       { kind: 'para', text: 'Transformer \u4e2d', st: null },
       { kind: 'affiliation', text: '\u5927\u5b66', st: null },
     ])
+    // (a kind the reader's toggles hide is never drawn: passed over, counted in no budget. The author block's place with the
+    // names toggle off, its default since 2026-10-30; a paragraph is shown, so the budget's paragraph after it is reached)
+    const shown = (kind: string) => kind !== 'affiliation' && kind !== 'abstract'
+    expect(firstPageUnits(kinds, texts, { chars: 7, shown })).toEqual([
+      { kind: 'heading', text: '\u6807\u9898', st: null },
+      { kind: 'para', text: 'Transformer \u4e2d', st: null },
+      { kind: 'para', text: '\u7b2c\u4e8c\u6bb5', st: null },
+      { kind: 'para', text: '\u7b2c\u4e09\u6bb5', st: null },
+    ])
+    expect(firstPageUnits(kinds, texts, { chars: 7, shown: null })).toEqual(firstPageUnits(kinds, texts, { chars: 7 }))
     // (a unit whose row has not come is passed over; none held, none)
     expect(firstPageUnits(kinds, new Map([[3, '\u4e2d']]))).toEqual([{ kind: 'para', text: '\u4e2d', st: null }])
     expect(firstPageUnits(kinds, new Map())).toEqual([])

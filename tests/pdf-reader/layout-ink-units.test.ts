@@ -250,6 +250,9 @@ describe('inkUnitsOf', () => {
     expect(unitsOf([pg]).ink).toEqual([])
   })
 
+  // (an affiliation no source unit owns stays an orphan's ink unit, always translated: rule 8 reads an author unit's words alone.
+  // The names toggle is the whole author block since 2026-10-30, so such a line is the maker's to class as names, with a
+  // PIPELINE of its own: not yet)
   it("gives a block of an author unit's names the names toggle's kind, and leaves its affiliation the always translated", () => {
     const authors = [{ kind: 'author', pieces: [{ t: 'text', s: 'Jose Agustin Lozano Torres and Axel de la Macorra' }] }]
     const pg = page({ point: 'bs1' }, { para: 1 }, { glyphs: run('Jose Agustin Lozano Torres and Axel de la Macorra', 100, 740) }, { para: 2 }, { glyphs: run('Instituto de Fisica, Universidad Nacional', 100, 720) }, { point: 'be1' })

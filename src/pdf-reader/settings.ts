@@ -48,7 +48,7 @@ export function withDisplay(config: Config, display: EngineDisplay): Config {
 
 /** the reader's "What to translate" (`pdfReader.classes`, v21) in the order its rows are listed, the reading options' and the
  *  settings page's alike (the owner's, 2026-10-25: the text in figures and in tables first, then the heads and feet, the
- *  references and the author names) */
+ *  references and the author block) */
 export const CLASS_ROWS = ['figures', 'tables', 'heads', 'references', 'names'] as const satisfies readonly (keyof Config['pdfReader']['classes'])[]
 
 /** whether two "What to translate" show the same classes */

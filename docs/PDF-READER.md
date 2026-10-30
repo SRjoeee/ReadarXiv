@@ -454,7 +454,7 @@ its own toggle, below; until then the switch showed or hid it too.
 The experiment's own `axtPdfReader` storage key goes, without a migration: it was never released (rule 7 is about what a
 released version left on a machine).
 
-**What to translate** (UI.md S-R-27, S-O-56; `CONFIG_VERSION` 20 → 21, the owner's rulings of 2026-10-25 and 2026-10-28): `pdfReader.classes`,
+**What to translate** (UI.md S-R-27, S-O-56; `CONFIG_VERSION` 20 → 21, the owner's rulings of 2026-10-25, 2026-10-28 and 2026-10-30): `pdfReader.classes`,
 five booleans whose keys are the engine's toggles (`rules/content-classes.mjs` `TOGGLES`, `always` and `never` aside) and
 whose value is the layer's `classes` option as it is (§19.10, §19.13).
 
@@ -464,7 +464,7 @@ whose value is the layer's `classes` option as it is (§19.10, §19.13).
 | `tables` | true | Text in tables | the table cells |
 | `heads` | true | Headers and footers | the running heads and feet |
 | `references` | false | References | the bibliography, each entry whole, the names inside it included |
-| `names` | false | Author names | the author names under the title, and nothing else: the affiliations, addresses and e-mail line are always translated |
+| `names` | false | Authors and affiliations | the whole author block under the title: its names, affiliations, institutions, addresses and e-mail line (the owner, 2026-10-30; from 2026-10-28 to then the names alone, "Author names", the rest always translated). The key and its default are as they were: no migration, and by default the whole block is the original's |
 
 - **A toggle shows or hides; it never translates.** Every class is translated once whatever the toggles say (the run sends
   every unit `toTranslate` names, the hidden classes' among them), and a change is the layer side's `setClasses`: the door
@@ -1315,7 +1315,7 @@ the same thing, its string is reused (marked).
 | | 目标语言 · 搜索语言 · 翻译服务 | Target language · Search languages · Translation service |
 | | 阅读选项 | Reading options |
 | | 对照高亮 (S-P-80, reused) · 高亮颜色 | Hover highlight · Highlight colour |
-| | 翻译范围 · 图中文字 · 表中文字 · 页眉页脚 · 参考文献 · 作者姓名 (the owner's, 2026-10-25; the website's words; the settings' group's aside 只对 PDF 对照生效) | What to translate · Text in figures · Text in tables · Headers and footers · References · Author names (Applies to bilingual PDFs only) |
+| | 翻译范围 · 图中文字 · 表中文字 · 页眉页脚 · 参考文献 · 作者信息 (the owner's, 2026-10-25, the last row's 2026-10-30; the website's words; the settings' group's aside 只对 PDF 对照生效) | What to translate · Text in figures · Text in tables · Headers and footers · References · Authors and affiliations (Applies to bilingual PDFs only) |
 | | 外观 · 跟随系统 · 浅色 · 深色 · 深色时调暗页面 | Appearance · System · Light · Dark · Dim pages in dark mode |
 | | 下载 · 译文 PDF · 原文 PDF | Download · Translation PDF · Original PDF |
 | | 设置 (S-P-02, reused) · 在默认查看器中打开 | Settings · Open in the default viewer |
@@ -3367,7 +3367,11 @@ groups, line fit, no double ink, structure kept) and the provider owns translati
 server, into the shared cache, and a reader's settings only show or hide it. And of 2026-10-28, the references and the author names
 decoupled, each toggle's duty its own: "references" governs the bibliography alone, each entry whole, the names inside an entry
 its own; "names" governs the author names under the title alone; the affiliations, addresses and the e-mail line are always
-translated.
+translated. And of 2026-10-30, which reverses that last part: "names" governs the whole author block under the title, its names,
+affiliations, institutions, addresses and e-mail line, translated together or the original's together (the row "Authors and
+affiliations"; the key `names` and its default, off, kept, so that by default the whole block is the original's). It moves no
+version: a unit's class is the reader's, read from the kind the bundle carries (`UNIT_CLASS`), so a paper prepared before it is
+read so as it is; every class was already translated whatever the toggles say.
 
 - **Entries are units, each whole** (`source/latex-front.mjs` `bibliography`; PIPELINE 29, and PIPELINE 30 one unit an entry). The
   ground truth is the bibliography's TeX the compile reads: the paper's `thebibliography`, or the job's `.bbl` where
@@ -3463,8 +3467,8 @@ translated.
   LOST 163 → 160 (none new), every base page pixel-identical (1606).
 - **Not units:** a `.bib` the TeX tree holds rather than the package (a style's IEEEabrv): no pass is made.
 - **The author block: names apart from places** (`source/latex-front.mjs` `frontBlock`, PIPELINE 30, LAYOUT 23). An author block's
-  affiliations, institutions, addresses and its e-mail line are units of their own, kind `affiliation` (class body: always
-  translated), its names kind `author` (class names: the names toggle). Read from the TeX the source holds: the command (`\author`
+  affiliations, institutions, addresses and its e-mail line are units of their own, kind `affiliation`, its names kind `author`,
+  both of the class names, the names toggle (2026-10-30; the places were the body's, always translated, from 2026-10-28). Read from the TeX the source holds: the command (`\author`
   and its kin names, `\affil`, `\affiliation`, `\institute`, `\address` and their kin places), the rows of the tabular LaTeX sets an
   `\author` in (its first row names, the rest places, but a row that holds an author's note, sets an affiliation's mark after a
   name, opens with "and", or stands before a numbered list of places is names: 2608.14893's and 2610.21880v1's second rows of
@@ -3497,12 +3501,18 @@ translated.
   are sent whatever the language, as every unit is but a table's kept names; they are laid as any unit, and stay the original's
   where the wrap cannot hide their ink (`unhidden`).
 - **The toggles** are stage 2's (`classes` at the door's open and the layer side's, `setClasses`, TOGGLE_DEFAULTS: references and
-  names off, heads, tables and figures on): an entry's unit is of the class `references`, the author block's names of `names`, its
-  places of the body's (UNIT_CLASS), so that with their toggle off no page awaits their rows, the door takes none, and the
+  names off, heads, tables and figures on): an entry's unit is of the class `references`, the author block's names and its places of
+  `names` (UNIT_CLASS, 2026-10-30), so that with their toggle off no page awaits their rows, the door takes none, and the
   translating indicator marks none (it reads the same `classes`); the door gives the run its classes resolved over TOGGLE_DEFAULTS,
   and a direct open of v0 (run.mjs openProto, the lab's and the tests') given none takes the same defaults: every class but the
   names and the references. A reader's stored setting keeps its keys and its meaning: "references" the bibliography, "names" the
-  author names.
+  author block (its places with its names since 2026-10-30: a reader who had turned it on sees them translated as before, one
+  who had left it off sees them the original's). The ledger (layout/ledger.mjs) counts a place's glyphs under `names` in a base
+  made since (they were `body`'s): diagnostic counts, which no reader, gate or sweep holds to a class. The face waves ask no slice
+  of a unit the toggles hide (view/layer-side.mjs `shownNow`, warm.mjs `firstPageUnits` `shown`): the first page's wave asked the
+  places outside its budget as always drawn. An affiliation no source unit owns, made an orphan's or a note's ink unit
+  (layout/ink-units.mjs rule 8 reads an author unit's words alone), stays always translated: classing it as names is the maker's
+  change, with a PIPELINE of its own, not yet made.
 - **Measured** (`lab/pdf/spikes/classes-gate.mjs`, record `lab/pdf/records/classes-gate.md`; `lab/pdf/spikes/unit-hash-diff.mjs`
   over the local sources), against `next` 2346530d:
   - **The units** of the 170 local sources (cut before any compile, so without the `.bbl`s the pass makes):

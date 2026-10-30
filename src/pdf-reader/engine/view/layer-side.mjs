@@ -872,6 +872,10 @@ export function createLayerSide(view, o) {
     if (pagesReadOf !== parts || !pagesRead) { pagesReadOf = parts; pagesRead = pagesOfParts(parts) }
     return pagesRead
   }
+  /** whether the reader's toggles, as they are now, show a unit's kind translated (rules/content-classes.mjs unitShown, as
+   *  markPage and the door read them): a unit of a kind they hide is never drawn, so no wave asks its faces (the author block's
+   *  places with the names toggle off, its default; a bibliography's entries), and one shown later is asked then */
+  const shownNow = () => { const on = classesOn(classes); return kind => unitShown(kind ?? '', on) }
   /** a row's translated text (its strings; a placeholder's piece is the source's, drawn as it is) */
   const textOf = row => (Array.isArray(row?.[1]) ? row[1].filter(x => typeof x === 'string').join('') : '')
   /** the faces of what v0 will draw of pages `qs` asked of the host at once, page by page in that order (each page's wave
@@ -889,7 +893,7 @@ export function createLayerSide(view, o) {
   async function warmPages(qs) {
     if (disposed || state === 'refused' || !index || !rows.size) return
     warmerNow()
-    const parts = feed.state().parts, family = familyOfParts(parts), pages = pagesNow()
+    const parts = feed.state().parts, family = familyOfParts(parts), pages = pagesNow(), shown = shownNow()
     const signal = warmAc.signal
     for (const q of qs) {
       if (signal.aborted) return
@@ -898,7 +902,7 @@ export function createLayerSide(view, o) {
       const units = []
       for (const [id, st] of pg.units) {
         const key = `${target}|${family}|${id}`, row = rows.get(id)
-        if (warmedUnits.has(key) || !row) continue
+        if (warmedUnits.has(key) || !row || !shown(index.kinds[id])) continue
         warmedUnits.add(key)
         const text = textOf(row)
         if (text) units.push({ kind: index.kinds[id] ?? null, text, st })
@@ -945,7 +949,7 @@ export function createLayerSide(view, o) {
         if (disposed || state === 'refused' || !beforeParts() || !earlyTexts.size) return
         const kinds = await feed.kinds()
         if (!kinds || disposed || state === 'refused' || !beforeParts()) return
-        const units = firstPageUnits(kinds, earlyTexts)
+        const units = firstPageUnits(kinds, earlyTexts, { shown: shownNow() })
         if (units.length) await warmerNow().warm({ units }, 'other', { signal: warmAc.signal, cjkOnly: true })
       }).catch(e => warn('faces', e))
     })
@@ -996,7 +1000,7 @@ export function createLayerSide(view, o) {
   /**
    * Page n's indicator: over each paragraph the parts read so far locate on it (its rectangles there, the union of them),
    * while the page is not laid and can still be (the layer open or opening, the page not failed): none for a unit whose class
-   * the reader's toggles hide (never drawn: the author block's names and a bibliography's entries by default,
+   * the reader's toggles hide (never drawn: the author block, its names and places, and a bibliography's entries by default,
    * rules/content-classes.mjs), nor for one whose rows have ended with no row of it (it stays the original's). Its box in shares
    * of the page's view, so that no zoom moves it
    */
