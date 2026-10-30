@@ -152,3 +152,4 @@ docs/route/design.md 5  # 2026-10-23: the owner's three route rulings quoted ver
 docs/route/delta.md 1  # 2026-10-23: the owner's word for prefetch, quoted beside the English heading
 docs/route/block-level-audit.md 6  # 2026-10-23: the owner's block-level fidelity standard quoted verbatim, the audit's measure
 tests/pdf-reader/layer-design-font.test.ts 3  # 2026-10-25: the design font test measures a Chinese and a Japanese character under each target's role set (multilingual test input)
+lab/pdf/rulings/2026-10-30-page-cut-line.json 1  # 2026-10-30: the owner's report and acceptance quoted verbatim in the ruling, as the rulings README asks (its English beside it)
