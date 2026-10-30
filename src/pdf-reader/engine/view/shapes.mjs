@@ -660,7 +660,8 @@ const FIELDS = ['l', 'r', 'y', 'h', 'top', 'bottom']
  * back to the mirror (a door opened again); `mute(page, on)` a page that shows another target's layer, whose drawing neither the
  * laid layout nor the mirror describes: nothing of it lit or hit until it is unmuted (its new target's page laid, or the original's
  * shown), whatever reset() does;
- * `forget(page)` its geometry let go; `dispose()` stops following the source
+ * `forget(page)` its geometry let go, and its floats as our page sets them (made again from the left's on the next use);
+ * `dispose()` stops following the source
  */
 export function layerShapes(source) {
   const state = told.get(source.shapes)
@@ -882,7 +883,7 @@ export function layerShapes(source) {
       })
     },
     reset,
-    forget: p => { L.cache.delete(p); M.forget(p) },
+    forget: p => { L.cache.delete(p); L.floats?.delete(p); backs.delete(p); M.forget(p) },
     dispose: () => { state.followers.delete(follower); M.dispose() },
   }
 }

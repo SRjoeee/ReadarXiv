@@ -647,6 +647,13 @@ describe('SH5: the right\'s laid pages, from the layer\'s words (layerShapes)', 
     expect(nth(r.shapes.runs(id), 0).top).toBeCloseTo(nth(l.shapes.runs(id), 0).top + DY, 4)
     expect(r.shapes.hit(2, first.x + 2, first.y + 3, PAD, () => null)?.id).toBe(id3)
     expect(nth(r.shapes.runs(id3), 0).top).toBeCloseTo(nth(l.shapes.runs(id3), 0).top + DY, 4)
+    // (a page let go of: its floats as our page sets them with it, made again from the left's on the next point asked)
+    const floatsIn = () => (r.layout as unknown as { floats?: Map<number, unknown> }).floats?.has(2) ?? false
+    expect(floatsIn()).toBe(true)
+    r.forget(2)
+    expect(floatsIn()).toBe(false)
+    expect(r.shapes.hit(2, first.x + 2, first.y + 3 + DY, PAD, () => null)?.id).toBe(id)
+    expect(floatsIn()).toBe(true)
     // (unit 5, shown as the original with no boxes of its own on page 2: its copies of the left's tokens where our page sets them)
     const a = l.shapes.runs(5).filter(x => x.page === 2), b = r.shapes.runs(5).filter(x => x.page === 2)
     expect(b.length).toBe(a.length)
