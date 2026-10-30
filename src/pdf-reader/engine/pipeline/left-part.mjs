@@ -389,6 +389,9 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
   // (a unit's place in `units` by its id, and its id by its place: every call takes and gives the id)
   const placeOf = id => { const u = unitOf.get(String(id)); if (u === undefined) throw new RangeError(`rangedAnchors: no unit ${id}`); return u }
   const settle = (u, f) => { if (settled[u]) return; settled[u] = 1; f(units[u].id) }
+  // (the places by their units' ids rising: a range's units, and those settled with none, are told in their ids' order, whatever
+  // order the units are given in, so that a caller who decides them as told (the layout maker) decides them as it did before)
+  const byIds = Int32Array.from(units.keys()).sort((x, y) => units[x].id - units[y].id)
   // (whether a mark, a bound or a unit's own pages changed since a run found nothing more ready: what a run reads is that alone)
   let dirty = true
   // (each unit's match once made: a range reads only units whose matches are final)
@@ -415,7 +418,7 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
     isSettled: id => settled[placeOf(id)] === 1,
     run(onAnchor, onSettle) {
       if (am > lastPage || !(bounds.size > 0 || (boundsKnown ? boundsKnown() : markedCount === n))) {
-        if (am > lastPage) for (let u = 0; u < n; u++) settle(u, onSettle)
+        if (am > lastPage) for (const u of byIds) settle(u, onSettle)
         return
       }
       if (!dirty || stillWaits()) return
@@ -433,11 +436,11 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
         // (a range's units are final: their neighbours are the scans', fixed since they became so)
         const got = leftOfSets(doc, units, { bounds, floating, floatMatch, frame, forward, wholeIndex, known: { hard, before, after, body: forward ? bodyEnd : null } }, [am, to], C, V2, matched)
         for (const id of got.before) if (!settled[placeOf(id)]) throw new Error(`the page stream passed over unit ${id}: placed before page ${am}, never anchored`)
-        for (const [id, an] of got.anchors) settle(placeOf(id), i => onAnchor(i, an))
+        for (const [id, an] of [...got.anchors].sort((x, y) => x[0] - y[0])) settle(placeOf(id), i => onAnchor(i, an))
         am = to + 1
-        for (let u = 0; u < n; u++) if (!settled[u] && fin[u] && maxB[u] < am) settle(u, onSettle)
+        for (const u of byIds) if (!settled[u] && fin[u] && maxB[u] < am) settle(u, onSettle)
       }
-      for (let u = 0; u < n; u++) settle(u, onSettle)
+      for (const u of byIds) settle(u, onSettle)
     },
   }
 }
