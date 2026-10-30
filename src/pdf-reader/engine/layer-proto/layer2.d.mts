@@ -208,9 +208,8 @@ export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'lat
 export interface Line { block: number; page: number; x0: number; x1: number; baseline: number; target: number | null; mode: string; used: number; cap: number; items: { t: Token; x: number; w: number; kern?: number }[]; past?: number; after?: number; seg?: { f: number; scale: number; state: Layout['state'] }; [more: string]: unknown }   // an item's w: its own width; kern: the explicit glue after it, an advance apart from w (0 once a line's end drops it)
 /** layoutUnit2's answer */
 /** a unit laid: its lines and the state that set them; `opened`, the lines TeX's rule opened (P.lineskip), `unopened` the
- *  lines it would have opened where it has no values (none read: they stay nearer the line before than nothing); `stranded`,
- *  the pages of the page breaks whose line was its run's last (they sent nothing to their page: layoutCut) */
-export interface Layout { lines: Line[]; f: number; s: number; scale: number; state: { lead: number; scale: number; track: number; trackLatin?: number; compress: number; borrow: number; knob: string; box?: boolean; next?: number }; knob: string; clipped: boolean; lostChars: number; chars: number; tried: number; spilled: boolean; opened: number; unopened: number; stranded?: number[]; extents?: Map<string, number[]> }
+ *  lines it would have opened where it has no values (none read: they stay nearer the line before than nothing) */
+export interface Layout { lines: Line[]; f: number; s: number; scale: number; state: { lead: number; scale: number; track: number; trackLatin?: number; compress: number; borrow: number; knob: string; box?: boolean; next?: number }; knob: string; clipped: boolean; lostChars: number; chars: number; tried: number; spilled: boolean; opened: number; unopened: number; extents?: Map<string, number[]> }
 /** the original page's ink at a fraction of its canvas's resolution */
 export interface InkMap { w: number; h: number; ink: Uint8Array; factor: number }
 /** a unit's block with its lines' measured baselines */
@@ -388,10 +387,10 @@ export declare function cropFields(parts: CropPart[]): { mode: 'crop'; page: num
 export declare function pageStartsOf(uc: readonly Char[], O: readonly { start: number }[], S: readonly { start: number }[], pair: ArrayLike<number>, src: string): Map<number, number>
 /** the translation's cut at each later page's start: the token the page's text begins with */
 export declare function pageCutsOf(tokens: readonly Token[], unit: { src?: string; pieces?: readonly unknown[]; sentences?: { src: number[]; tr: number[] } | null }, starts: ReadonlyMap<number, number> | null | undefined, P: { noStart?: string; noEnd?: string }): { page: number; at: number }[]
-/** a unit laid with its page cuts: as without them, and once more with them at that layout's state where it sets a cut's token on an earlier page, kept where it fits there; each break ends the line that holds it where the breaker ends it, and one whose line was its run's last is laid again whole (that line on its page) */
+/** a unit laid with its page cuts: as without them, and once more with them at that layout's state where it sets a cut's token on an earlier page, kept where it fits there; each break ends the line that holds it where the breaker ends it, and where that line is its run's last the breaker lays it on the break's page */
 export declare function layoutCut(tokens: Token[] & { base?: unknown }, cuts: readonly { page: number; at: number }[], blocks: readonly Block2[], s: number, P: Params): { layout: Layout; tokens: Token[] & { base?: unknown } }
-/** the tokens with a page-break token before each cut's token (`whole`: the line that holds it goes to the page whole) */
-export declare function withPageBreaks(tokens: Token[] & { base?: unknown }, cuts: readonly { page: number; at: number; whole?: boolean }[]): Token[] & { base?: unknown }
+/** the tokens with a page-break token before each cut's token */
+export declare function withPageBreaks(tokens: Token[] & { base?: unknown }, cuts: readonly { page: number; at: number }[]): Token[] & { base?: unknown }
 /** a crop resolution as its readers take it, one a part: itself, or each part as a crop of its own (its index `part`, the copy text on the first alone) */
 export declare function cropPartsOf(r: Resolved): Resolved[]
 /** whether a placeholder is a formula, drawn only as crops of its ink: v0's 'other' that is no text piece */

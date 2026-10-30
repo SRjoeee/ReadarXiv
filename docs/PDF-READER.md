@@ -1939,12 +1939,15 @@ up to a line from where its source's does, and no further; a cut that falls on a
 the breaker (`breakLines`: a page-break token reached on an earlier page is held by the line in hand and sends the next line
 to its page's first slot when that line closes), not in a token index fixed from the fit's lines, because every later lay of
 the unit's tokens moves the line ends: the page fill's leading, tracking and the page's one size, and a unit's runs laid
-apart. Where the line that holds the cut is its run's last (the run's text ends on it, at a display or at the unit's end),
-page B would get none of the run though the source sets some there (the sweep's invariant (i)): the breaker says so
-(`stranded`), and `layoutCut` lays the unit once more at the same state with that break `whole`, the line moved to page B and
-the line before it ending page A, full. Where that line is also the first of its run on page A, moving it would leave page A
-none of the run: the break stays at the token, as before, the one place a short line still stands before a page break (a run
-of one line split over two pages). Every guard stays: no break before a display the text has not passed, none at a unit's
+apart. Where the line that holds the cut is its run's last (the run's text ends on it, or on the empty line a forced break
+leaves after it, at a display or at the unit's end), page B would get none of the run though the source sets some there
+(the sweep's invariant (i)): the breaker lays that line again on page B's first slot, whole, and the line before it ends page
+A, full (`breakLines` `strand`, the one place a held break's fate is decided, so in every lay of the unit, the page fill's
+included). Where that line is also the first of its run on page A, moving it would leave page A none of the run: the line is
+laid again with the break at its token, as before, the one place a short line still stands before a page break (a run of one
+line split over two pages). Two cuts in one line (a unit over three pages whose middle page holds less than a line of it):
+the first sends the next line to its page, and that line holds the second; where no text is left after it, the third page
+gets none. Every guard stays: no break before a display the text has not passed, none at a unit's
 first token, and a cut never costs the unit its fit (laid at the fit's state, else as without it). The page fill's guard,
 `keepsPages`, which refuses a state of a unit's run that sets text on a later page than its fit, lets a line after a page
 break stand on the break's page: the tail of the line that holds it goes there at a looser state, and it is that page's text
