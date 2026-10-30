@@ -3438,12 +3438,12 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     // ends it, and the text goes on on the page's first slot (`held`, advance): a paragraph over a page break leaves no short
     // line before it, as TeX never does (the owner, 2026-10-30: 1706.03762's Chinese §3.2.2 ended page 4 half a line short,
     // the word for "output" split over pages 4 and 5). The page's text begins up to a line from where its source's does, at
-    // the next line's start; reached at a line's start, there. A `whole` one (layoutCut: the line that held it was its run's last, and the
-    // page got none of the run): that line goes to the page whole, so that the page holds text where its source sets some,
-    // and the line before it ends the earlier page, full; where no line of its run stands before it on its page (the run
-    // would leave that page), the line ends at the token, short. Reached on that page or later (the earlier page already
-    // full), or where that page's first slot lies after a display the text has not passed (the source sets the text before
-    // the display: the display's own break places it), nothing
+    // the next line's start; reached at a line's start, there. A `whole` one (layoutCut: the line that held it was its run's
+    // last, and the page got none of the run): that line goes to the page whole, so that the page holds text where its
+    // source sets some, and the line before it ends the earlier page, full; where no line of its run stands before it on its
+    // page (the run would leave that page), the line ends at the token, short. Reached on that page or later (the earlier
+    // page already full), or where that page's first slot lies after a display the text has not passed (the source sets the
+    // text before the display: the display's own break places it), nothing
     if (tokens[i].pageBreak !== undefined) {
       const pg = tokens[i].pageBreak, whole = !!tokens[i].whole
       i++
