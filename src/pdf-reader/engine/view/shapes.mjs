@@ -138,8 +138,8 @@ function inPlace(rows, lines) {
 }
 /** each unit's stream as page `p`'s spans tell it, once they are in: a unit told with no stream of its own (from its boxes: `-1`)
  *  begins at its first token on its first page, as a cell #515 told did; a located unit whose first token its display took (a
- *  paragraph that opens with a display) at its next token, on this page or a later one's in, none where it has none (Codex on #522:
- *  else highlight.mjs tokensOf put the stream back among its tokens, the display's first token both blocks') */
+ *  paragraph that opens with a display) at its next token, on this page or a later one's in, none where it has none (else
+ *  highlight.mjs tokensOf put the stream back among its tokens, the display's first token both blocks') */
 function streamsOn(Lay, p, spans) {
   const T = Lay.pt?.[p]
   for (const [id, ks] of spans) {
@@ -505,7 +505,7 @@ export function layerShapes(source) {
   })))
   function reset() {
     // (no box of our page widens a laid row: the door's table holds every token the page shows of a unit, its kept label and
-    // pieces among them, and a piece or a label it drew elsewhere left that box empty: Devin on #522)
+    // pieces among them, and a piece or a label it drew elsewhere left that box empty)
     L = pageLayout(state.kindOf)
     words = new Map(); made = new Set(); wordAt = new Map(); placeAt = new Map(); noPlaces = new Set(); hidden = new Set(); namesKept = new Map()
     ours = new Map()

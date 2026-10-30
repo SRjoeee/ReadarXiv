@@ -170,7 +170,7 @@ describe('the left: blocks told by the inventory\'s boxes on a page in place (vi
       const l = createShapes({ kindOf }), m = mirror(l)
       if (order === 'parts first') { l.addParts(parts.map(p => ({ ...p, layout: ly7 })) as never); l.addPage(lefts[1]!) } else { l.addParts(parts as never); l.addPage(lefts[1]!); l.addParts([{ pages: [1, 1], views: [], left: [], layout: ly7 }] as never) }
       for (const S of [l, m]) {
-        expect(S.layout.anchors.get(7)!.tokens.some(k => DISPLAY.includes(k)), order).toBe(false)
+        expect((S.layout as unknown as { anchors: Map<number, { tokens: number[] }> }).anchors.get(7)!.tokens.some(k => DISPLAY.includes(k)), order).toBe(false)
         expect(S.shapes.hit(1, 255, mid(700), PAD, () => null)?.id, order).toBe(D7)
         for (const r of S.shapes.runs(7)) { const b = blockOf(r, PAD); expect(b.y0 > 707.5 || b.y1 < 697.8, order).toBe(true) }
       }

@@ -314,7 +314,7 @@ export function addBoxWords(W, page, id, lu, displayIds = new Map()) {
   for (let j = 0; j + 7 < ln.length; j += 8) if (ln[j] === page && !onDisplay(displays, ln[j + 1], ln[j + 5], ln[j + 2], ln[j + 4])) pushBox(W, { box: [ln[j + 1], ln[j + 5], ln[j + 2], ln[j + 4]], base: ln[j + 3] }, 0)
   for (const box of pieces) pushBox(W, box, 0)
   // (its span even where none of its boxes is but a display's, empty: the view copies the left's tokens only of a unit given none,
-  // which would light its display as its own too: Devin on #522)
+  // which would light its display as its own too)
   if (W.n > first || displays.length) W.spans.push([id, W.n > first ? [first, W.n - first] : []])
   addDisplayWords(W, displays)
 }
