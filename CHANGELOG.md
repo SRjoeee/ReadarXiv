@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a table cell's translation is no longer drawn over the words of the cell beside it, which had left the cell's own place empty.
 - In the PDF reader, the first translated page comes sooner on papers with large figures shown in two panes: the original's pages just below the view are drawn once the translation's first page is in place, so they no longer download beside it.
 - The PDF reader's highlight no longer lights a whole figure or table. A caption lights sentence by sentence, as a paragraph does, and a table one cell at a time, its numbers too, in the same place on both sides. Pointing at a figure's picture or its labels lights nothing, since the original and the translation already stand side by side.
 - Fixed: in the PDF reader, a page where our copy of the paper sets a line or two on the page before or after it is now translated, as long as its text is the same. Before, such pages, and sometimes the whole first half of a paper, stayed in English.

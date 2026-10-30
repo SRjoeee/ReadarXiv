@@ -1971,6 +1971,20 @@ invariant (i) reads a sentence as drawn on another page only where none of its d
 moves no sentence so but one the source sets wholly on page B that ends inside the rest of the line that holds the cut, and,
 where a line goes whole, one wholly inside that line that the source sets wholly on page A.
 
+**A cell left the original's keeps its place from its neighbours.** A unit's line grows over what no other unit holds
+(`run.mjs` `growOn`, `layer2.mjs` `extendRects`: within 1.2 em, over characters that read the unit's own words), and what
+another unit holds is the page's rectangles of every unit (`rectsByPage`). A unit the left locates stands there by its
+left's rectangles from the moment it is added, laid or not; one the left does not locate, the layout file's alone (most of a
+table's cells: §17.1), stood there only once it was placed, so a cell left the original's (its row kept, or skipped) stood in
+none and its ink was free to a neighbour. 1810.04805v2's Table 8 (the owner, 2026-10-30: 「在 MNLI fine-tune 的地方，文字出现了重叠」,
+"where MNLI's fine-tune is, the text overlaps"): MNLI's "Fine-tune" kept, NER's "Fine-tune" beside it 6.5 pt away grew over
+the same words to MNLI's start, and its translation was laid from there over MNLI's original, its own place left erased and
+empty. Such a unit now stands there by its file lines from the moment it is added, laid or not; one placed adds the
+rectangles its growth moves as before. Measured on the pack's 32 outputs, every page (647, the layer gate's model tier with
+v0's records): of 5,962 unit records one moves, that cell in each language; in Spanish, French, Korean and Chinese it is laid
+on its own line, and in German, Japanese and Russian its translation does not fit its own cell, so it is the original's (it
+fitted only by taking MNLI's room).
+
 ## 19. The engine's contract
 
 `src/pdf-reader/engine/` is what the web imports, and nothing else of the reader is. The directory is the boundary: a gate
