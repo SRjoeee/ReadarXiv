@@ -36,7 +36,7 @@ import { isMemoryError } from '../pipeline/memory.mjs'
 import { DELTA_OBJECTS_MAX, deltaSection, rangesOf, UNHIDDEN_MAX } from './delta-wire.mjs'
 import { figureUnitsOf, FIGURE_WHYS } from './figure-text.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, pageInk } from './ink.mjs'
-import { claimInk, inkOff, inkUnitsOf } from './ink-units.mjs'
+import { claimInk, inkOff, inkUnitsOf, keptUnitsOf } from './ink-units.mjs'
 import { inkLeft, ledgerOf, ledgerSummary } from './ledger.mjs'
 import { followsOf } from './marks.mjs'
 import { ownOf, UNHIDDEN } from './own.mjs'
@@ -764,6 +764,10 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   const ink = units ? inkUnitsOf(pages, classed, { units, from: inkBase }) : []
   claimInk(own, ink, pages)
   const ledger = ink.length ? inkLeft(classed, { ...own, glyphs: withFigures(true) }, pages) : classed
+  // (and the text no unit owns still, kept blocks after the ink units: never translated, lit as any unit is; their glyphs in no
+  // group, so that the wrap and the ledger are as they were, and none is off where a page is not wrapped: nothing of it is hidden;
+  // layout/ink-units.mjs rule 10)
+  const kept = units ? keptUnitsOf(pages, classed, (p, g) => own.glyphs[p - 1]?.[g] ?? (fig.glyphs[p - 1]?.has(g) ? 'f' : null), { from: inkBase + ink.length }) : []
   const owners = withFigures(false)
   const plans = new Map()
   pages.forEach((pg, i) => {
@@ -810,7 +814,7 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   if (unhidden.length > UNHIDDEN_MAX || labelKept.length > UNHIDDEN_MAX) return { refused: 'wrap-bound', why: `${unhidden.length} units the original's, past ${UNHIDDEN_MAX}` }
   const stats = { ...made.stats, unhidden: counts, labelKept: labelKept.length }
   const wrappedPages = rangesOf([...made.pages].filter(([, x]) => x.ok).map(([p]) => p))
-  return { bytes: made.bytes, xref: made.xref, sha256: made.sha256, stats, unhidden, labelKept, pages: wrappedPages, own: { ...own.stats, unhidden: counts }, ledger: ledgerSummary(ledger), ink: { base: inkBase, units: ink.map(({ id, kind, cls, echo, pieces, rows }) => ({ id, kind, cls, echo, pieces, rows })), off: inkOff(ink, made.pages) }, figures, ...(keepOwned ? { owned: own, ledgerWhole: ledger, figureUnits: fig.units } : {}) }
+  return { bytes: made.bytes, xref: made.xref, sha256: made.sha256, stats, unhidden, labelKept, pages: wrappedPages, own: { ...own.stats, unhidden: counts }, ledger: ledgerSummary(ledger), ink: { base: inkBase, units: [...ink, ...kept].map(({ id, kind, cls, echo, pieces, rows, kept: k }) => ({ id, kind, cls, echo, pieces, rows, ...(k ? { kept: true } : {}) })), off: inkOff(ink, made.pages) }, figures, ...(keepOwned ? { owned: own, ledgerWhole: ledger, figureUnits: fig.units } : {}) }
 }
 
 /** the figure units as the page pass takes them: those drawn (their group in the document, `why` null), each { page, group,

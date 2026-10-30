@@ -169,11 +169,12 @@ export function bundleUnitsOf(paper) {
 /**
  * The ink units as the bundle holds them (docs/route/orphan-text.md §8): each [kind, flags, depth, cell, edges, pieces, echo], its
  * kind INK_KIND's, its echo the source unit whose row it is drawn with (null: a translation of its own); written in a chunk of
- * INK_UNITS_FORMAT after the source units' (format.mjs writeUnitChunks `start`). `ink` the wrap's (layout/wrap.mjs wrapFinal
- * `ink.units`): no nested piece
+ * INK_UNITS_FORMAT after the source units' (format.mjs writeUnitChunks `start`); its flags KEPT for a kept block (`kept`:
+ * layout/ink-units.mjs rule 10, never translated), else none. `ink` the wrap's (layout/wrap.mjs wrapFinal `ink.units`): no
+ * nested piece
  */
 export function inkBundleUnitsOf(ink) {
-  return ink.map(u => [u.kind, 0, null, null, null, u.pieces.map(p => pieceOf(p, new Map())), u.echo ?? null])
+  return ink.map(u => [u.kind, u.kept === true ? UNIT_FLAG_BITS.KEPT : 0, null, null, null, u.pieces.map(p => pieceOf(p, new Map())), u.echo ?? null])
 }
 
 // ---------------------------------------------------------------- the reader's

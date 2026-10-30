@@ -289,8 +289,17 @@
 //     gate pack's 7, the production pass on both engines): 17,804 units located on the left of 1,868 pages, 18,383 now, none
 //     lost but two cells that moved to the page they are on (2010.11929v2's 296, 297, from page 13 to 22); the maker lays 34
 //     more units on 7 papers (none in the pack, whose made files are byte for byte the same). Every unit, its pieces and its wire
-//     are 39's: a copy of 39 carries every unit (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '40'
+//     are 39's: a copy of 39 carries every unit (live.mjs PIPELINE_CARRIES); 41 (the owner's ruling of 2026-10-30, the text no
+//     block owns lights as one block on both panes): the text no unit owns once the ink units have claimed theirs — a code
+//     listing, an address or a URL alone in a note, a page number, a bibliography not cut into entries — is kept blocks, ink units
+//     of the KEPT flag after the others (layout/ink-units.mjs rule 10, keptUnitsOf: a run of such lines in TeX's stream with
+//     nothing a unit owns between them, in one column and one class), no pieces, never translated nor awaited (rows.mjs
+//     toTranslate), on the left by their lines' tokens and in the layout by their lines' boxes alone; their glyphs in no group, so
+//     that our wrapped page and its ledger are as they were. A figure unit's id moves past them (its translation found again by
+//     its source, cache.mjs seedFrom). Over the 54 papers of the release sweep: 1,928 blocks of 5,879 lines on 50 papers, the
+//     bundle 0.6 % larger (a paper's median 0.22 %, 2610.19159v1's agent logs 3.9 %). Every other unit, its pieces and its wire
+//     are 40's: a copy of 40 carries every unit (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '41'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

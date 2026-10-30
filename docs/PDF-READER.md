@@ -1383,11 +1383,15 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
     alone 20 → 1 (the nine dark on the left alone after were dark on both before); arXiv's text of a unit that no block lit 305
     lines → 9. The sentences the sweep's invariant checks keep their faults (2 units, as before); 4 456 → 4 461
     units lit by sentence.
-  - Not yet (the next maker's): text no unit owns — page numbers and feet, a listing or an algorithm, an e-mail line, a note that
-    is an address alone, a bibliography the front end did not cut into entries, a display no unit holds: 5 406 lines on 47 of the
-    54 papers, which the owner rules light as kept blocks at the same place on both panes, a listing one block (2026-10-30). And a
-    page moved (our lines elsewhere than arXiv's: 20 of the 1 453) lights what the left part locates, until the producer ships its
-    lines' pairs.
+  - **Text no unit owns is a kept block** (the owner's ruling of 2026-10-30: at the same place on both panes, a listing one block):
+    a page number, a listing, an e-mail line, a note that is an address alone, a bibliography the front end did not cut into
+    entries, a display no unit holds — what no unit owns once the ink units have claimed theirs — is a unit the bundle keeps
+    (`layout/ink-units.mjs` rule 10, PIPELINE 41): an ink unit of the KEPT flag, never translated nor awaited, its rows its lines'
+    boxes, on the left the tokens on its lines, so that the rule above lights it as any block. A block is a run of such lines in
+    TeX's stream with nothing a unit owns between them, in one column and one class (a listing's brace in it). A float's text is
+    none (a figure's labels light nothing), nor a line beside a unit's text on its baseline (its label or its number, lit with
+    the unit). Its glyphs are in no group: our page and its ledger are as they were. And a page moved (our lines elsewhere than
+    arXiv's: 20 of the 1 453) lights what the left part locates, until the producer ships its lines' pairs.
   - **A block lights on both panes or on neither** (the owner, 2026-10-30: 「为什么修改后还有一边不亮的情况？我们可以从根本上解决吗？
     …如果实在分不出来，我们就两边统一亮，或者划成一整块亮」): on a page in place a block's area on each pane is its boxes. On the left
     each box lights the tokens of arXiv's page under it where they are and itself where none is (a display or a formula drawn as
@@ -1657,8 +1661,8 @@ within noise.
   it among its display's segments, which light it with the display (§17.1).
 - A page our compile set otherwise than arXiv's (its lines moved: 20 of 1 453 pages on the 54 papers of 2026-10-30) lights on the
   left what the left part locates: its displays with their units there, its labels and kept pieces where the anchors reach, while
-  the right lights every block; and text no unit owns (page numbers, feet, listings, an e-mail line, a note of an address alone)
-  lights on neither pane: both are the maker's to give (§17.1).
+  the right lights every block; and a kept block lights on the left the tokens its lines' boxes meet there, which on such a page
+  are not its own: both are the maker's to give (§17.1).
 - A table at a page's head whose first row is single letters over numbers, after a display that closed the page before,
   is taken by that display's walk: no distance tells them apart (A1, measured: lead walks' first gaps up to 19.6 pt).
 - Two lines of text made one row by a tall formula, with a sentence beginning on the second, light their unit whole (12

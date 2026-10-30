@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { claimInk, inkOff, inkUnitsOf } from '@/pdf-reader/engine/layout/ink-units.mjs'
+import { claimInk, inkOff, inkUnitsOf, KEPT_DY, keptUnitsOf } from '@/pdf-reader/engine/layout/ink-units.mjs'
 import { inkLeft, type LedgerPage, ledgerOf } from '@/pdf-reader/engine/layout/ledger.mjs'
-import { inkBundleUnitsOf, unitStands } from '@/pdf-reader/engine/layer-proto/units.mjs'
+import { inkBundleUnitsOf, UNIT_FLAG_BITS, unitStands } from '@/pdf-reader/engine/layer-proto/units.mjs'
+import { toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { unitClass } from '@/pdf-reader/engine/rules/content-classes.mjs'
 
 // The ink units (docs/route/orphan-text.md §4, stage 2): text no source unit owns made units of our own glyphs, each of its
@@ -390,5 +391,66 @@ describe('inkUnitsOf', () => {
     expect(units.map((u, i) => unitStands(u, 2 + i, stands, { ink: true }))).toEqual([true, true])
     // (not in a chunk of the source units' format)
     expect(unitStands(units[0], 2, stands)).toBe(false)
+  })
+})
+
+// The kept blocks (rule 10, the owner's ruling of 2026-10-30): the text no unit owns once the ink units have claimed theirs, a
+// unit never translated that lights as one block on both panes
+describe('keptUnitsOf', () => {
+  /** the kept blocks of pages after the ink units, the ink units' glyphs claimed */
+  const keptOf = (pages: ReturnType<typeof page>[], units: { kind: string; pieces: unknown[] }[] = SOURCE) => {
+    const { ledger, ink } = unitsOf(pages, units)
+    const own = { glyphs: pages.map(p => p.own.slice()) }
+    claimInk(own, ink)
+    const kept = keptUnitsOf(pages.map(p => p.page) as never, ledger, (p: number, g: number) => own.glyphs[p - 1]?.[g] ?? null, { from: units.length + ink.length })
+    return { ink, kept }
+  }
+  const TT = { font: 'CMTT10' }
+  const body = (y = 720) => ({ glyphs: run('Body words of the paper here', 100, y), owner: 'u1' })
+
+  it("makes a listing's lines one kept block, its brace and its blank line in it: no pieces, its rows the lines' boxes, never sent", () => {
+    const pg = page({ point: 'bs1' }, body(), { glyphs: run('def f(x):', 100, 700, TT) }, { glyphs: run('return x', 120, 688, TT) }, { glyphs: run('}', 100, 676, TT) }, { glyphs: run('print(f(1))', 100, 652, TT) }, { point: 'be1' })
+    const { ink, kept } = keptOf([pg])
+    expect(ink).toEqual([])
+    expect(kept.map(u => [u.id, u.kind, u.cls, u.kept, u.pieces, u.echo])).toEqual([[2, 'inkorphan', 'code', true, [], null]])
+    const r = kept[0]!.rows
+    expect(r.unit).toEqual([2, 'inkorphan', 9, 0, 0])
+    expect(r.lines.filter((_, j) => j % 8 === 0)).toEqual([1, 1, 1, 1])
+    expect(r.lines.slice(0, 8)).toEqual([1, 100, 145, 700, 707, 698, 10, 'CMTT10'])
+    expect([r.erase, r.ph]).toEqual([[], []])
+    expect(r.frames).toEqual([1, 0, 0, 4, -1, expect.any(Number)])
+    // (a bundle unit of the KEPT flag that stands, which no language translates)
+    const units = inkBundleUnitsOf(kept as never)
+    expect(units).toEqual([['inkorphan', UNIT_FLAG_BITS.KEPT, null, null, null, [], null]])
+    expect(unitStands(units[0], 2, new Uint8Array(3).fill(1, 0, 2), { ink: true })).toBe(true)
+    const bundle = { units: [['heading', 0, null, null, null, [[0, 'Introduction']]], ['para', 0, null, null, null, [[0, 'Body words']]], ...units] }
+    expect(toTranslate(bundle as never, 'zh')).toEqual([0, 1])
+  })
+
+  it('ends a block where a unit owns text between its lines, past KEPT_DY below it, or across in another column', () => {
+    const lines = (...ys: number[]) => ys.map((y, j) => ({ glyphs: run(`foo${j} = bar`, 100, y, TT) }))
+    const blocks = (...parts: Part[]) => keptOf([page({ point: 'bs1' }, ...parts, { point: 'be1' })]).kept.map(u => u.rows.lines.length / 8)
+    expect(blocks(...lines(700, 688, 676))).toEqual([3])
+    expect(blocks(...lines(700, 688), body(676), ...lines(664))).toEqual([2, 1])
+    expect(blocks(...lines(700, 700 - KEPT_DY * 10 - 1))).toEqual([1, 1])
+    // (the next column's top: up the page again, and across)
+    expect(blocks(...lines(700, 688), { glyphs: run('baz = 1', 320, 700, TT) })).toEqual([2, 1])
+  })
+
+  it("makes none of a brace alone, a float's text, or a line beside a unit's text on its baseline: its label, its number", () => {
+    const none = (...parts: Part[]) => keptOf([page({ point: 'bs1' }, body(), ...parts, { point: 'be1' })]).kept
+    expect(none({ glyphs: run('}', 100, 700, TT) })).toEqual([])
+    expect(none({ point: 'fs1' }, { glyphs: run('print hello world', 100, 700, TT) }, { glyphs: run('Axis label', 100, 690) }, { point: 'fe1' })).toEqual([])
+    expect(none({ glyphs: run('[ref]', 100, 700, TT) }, { glyphs: run('A. Author. A title.', 130, 700), owner: 'u1' })).toEqual([])
+    // (the same line on a baseline of its own: kept)
+    expect(none({ glyphs: run('[ref]', 100, 700, TT) }, { glyphs: run('A. Author. A title.', 130, 680), owner: 'u1' })).toHaveLength(1)
+  })
+
+  it('makes a page number at the foot and a note of an address alone each a kept block of its own, beside the ink units', () => {
+    const pg = page({ point: 'bs1' }, body(), { point: 'be1' }, { glyphs: run('1https://github.com/tensorflow/tensor2tensor', 100, 120, { size: 8 }) }, { glyphs: run('2Code at https://example.org/x and data', 100, 110, { size: 8 }) }, { glyphs: run('7', 300, 40) })
+    const { ink, kept } = keptOf([pg])
+    // (the note of a sentence an ink unit, translated; the address alone and the folio kept, numbered after it)
+    expect(ink.map(u => [u.id, u.kind])).toEqual([[2, 'inknotes']])
+    expect(kept.map(u => [u.id, u.kind, u.cls, u.rows.lines.length / 8])).toEqual([[3, 'inknotes', 'notes', 1], [4, 'inkheads', 'symbols', 1]])
   })
 })
