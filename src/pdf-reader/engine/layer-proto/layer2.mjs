@@ -3280,9 +3280,32 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     const prev = lines[k]
     return !!prev && prev.page === sl.page && sl.baseline > prev.baseline + 0.05 && Math.min(prev.x1, sl.x1) > Math.max(prev.x0, sl.x0)
   }
+  // (a page break the line in hand holds (the pageBreak token, below): the page it sends the next line to, or null)
+  let held = null
+  /** the first slot of page `pg` past the line in hand's, where the text may go on there: none past a display not passed */
+  const pageSlot = pg => {
+    let q = li + 1
+    while (q < slots.length && slots[q].page < pg) q++
+    return q < slots.length && !((slots[q].after ?? 0) > consumed) ? slots[q] : null
+  }
+  /** whether no line of its run stands before line `l` on its page (no display between them: its `past`) */
+  const runOpens = l => {
+    let k = lines.indexOf(l) - 1
+    while (k >= 0 && !lines[k].items.length) k--
+    return k < 0 || lines[k].page !== l.page || lines[k].past !== l.past
+  }
   const advance = () => {
+    // (the line held a page break: the next line opens on that page's first slot, where the text may still go on there)
+    const to = held === null ? null : pageSlot(held)
+    held = null
     settle()
     if (stop) return
+    if (to) {
+      li = slots.indexOf(to)
+      if (li < 0) { stop = true; return }
+      open()
+      return
+    }
     li++
     while (li < slots.length && overLast(slots[li])) li++
     if (li >= slots.length) return
@@ -3407,19 +3430,32 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
       open()
       continue
     }
-    // a page break of the source's (withPageBreaks): reached on an earlier page, the line ends there and the text goes on on
-    // the page's first slot. The line is set as any other (placeItems: justified where it is full enough, else ragged by
-    // its spacing caps): the source's line before a page break is justified, its paragraph goes on. Reached on that page or
-    // later (the earlier page already full), or where that page's first slot lies after a display the text has not passed
-    // (the source sets the text before the display: the display's own break places it), nothing
+    // a page break of the source's (withPageBreaks): reached on an earlier page, the line that holds it ends where the breaker
+    // ends it, and the text goes on on the page's first slot (`held`, advance): a paragraph over a page break leaves no short
+    // line before it, as TeX never does (the owner, 2026-10-30: 1706.03762's Chinese §3.2.2 ended page 4 half a line short,
+    // the word for "output" split over pages 4 and 5). The page's text begins up to a line from where its source's does, at
+    // the next line's start; reached at a line's start, there. A `whole` one (layoutCut: the line that held it was its run's last, and the
+    // page got none of the run): that line goes to the page whole, so that the page holds text where its source sets some,
+    // and the line before it ends the earlier page, full; where no line of its run stands before it on its page (the run
+    // would leave that page), the line ends at the token, short. Reached on that page or later (the earlier page already
+    // full), or where that page's first slot lies after a display the text has not passed (the source sets the text before
+    // the display: the display's own break places it), nothing
     if (tokens[i].pageBreak !== undefined) {
-      const pg = tokens[i].pageBreak
+      const pg = tokens[i].pageBreak, whole = !!tokens[i].whole
       i++
       if (!(line.page < pg)) continue
-      let q = li + 1
-      while (q < slots.length && slots[q].page < pg) q++
-      if (q >= slots.length || (slots[q].after ?? 0) > consumed) continue
-      const to = slots[q]
+      const to = pageSlot(pg)
+      if (!to) continue
+      if (line.items.length && !whole) { held = pg; continue }
+      if (line.items.length && !runOpens(line)) {
+        // (laid again from its first token on that page's slot: it is still open, nothing of it settled)
+        lines.pop()
+        i = line.from
+        consumed = line.past
+        li = slots.indexOf(to)
+        open()
+        continue
+      }
       if (line.items.length) trim(line)
       settle()
       if (stop) break
@@ -3447,8 +3483,10 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
           // it; the slot below the display is of another flow, which settle never moves)
           const to = slots[q]
           trim(line)
-          // (the part of the paragraph before a display ends with TeX's \parfillskip: its last line ragged, placeItems)
+          // (the part of the paragraph before a display ends with TeX's \parfillskip: its last line ragged, placeItems; a page
+          // break it held places nothing, the display's own break placing what follows)
           line.ends = true
+          held = null
           settle()
           if (stop) break
           li = slots.indexOf(to)
@@ -3656,16 +3694,37 @@ export function pageCutsOf(tokens, unit, starts, P) {
  * A unit laid with its page cuts (pageCutsOf's `cuts`): as without them, the fit's states searched once; where that layout
  * sets a cut's token on a page before the cut's (its page B text on page A), laid once more with the page breaks
  * (withPageBreaks) at that layout's own state, and kept where it fits there. Else as without them: a cut never costs a
- * unit its fit, nor a second search of the fit's states. Returns { layout, tokens }, the tokens it was laid from
+ * unit its fit, nor a second search of the fit's states. A break ends the line that holds it where the breaker ends that
+ * line (breakLines); where that line was its run's last, so that the break's page got none of the run though its source
+ * sets some there (`stranded`), the break is made `whole`, that line laid on the page, and the unit laid once more at the
+ * same state. Returns { layout, tokens }, the tokens it was laid from
  */
 export function layoutCut(tokens, cuts, blocks, s, P) {
   const plain = layoutUnit2(tokens, blocks, s, P)
   if (!cuts.length || plain.clipped || plain.spilled || !cutsReached(plain.lines, cuts)) return { layout: plain, tokens }
-  const broken = withPageBreaks(tokens, cuts)
-  const cut = layoutAt(broken, blocks, s, P, plain.state)
+  let broken = withPageBreaks(tokens, cuts)
+  let cut = layoutAt(broken, blocks, s, P, plain.state)
+  const left = cut.clipped ? [] : stranded(cut.lines, broken, cuts)
+  if (left.length) {
+    broken = withPageBreaks(tokens, cuts.map((c, k) => (left.includes(k) ? { ...c, whole: true } : c)))
+    cut = layoutAt(broken, blocks, s, P, plain.state)
+  }
   if (cut.clipped) return { layout: plain, tokens }
   cut.tried = plain.tried
   return { layout: cut, tokens: broken }
+}
+/** the cuts (their indices) a layout laid from withPageBreaks' tokens (`broken`) leaves on the line that holds the break,
+ *  on a page before the cut's, with no line after it in its run: the run's text ended on that line */
+function stranded(lines, broken, cuts) {
+  const out = []
+  cuts.forEach((c, k) => {
+    // (the break's token in `broken`: after the k breaks before it)
+    const at = c.at + k, n = lines.findIndex(l => l.from > at)
+    const line = n < 0 ? lines.at(-1) : lines[n - 1], next = n < 0 ? null : lines[n]
+    if (!line || line.page >= c.page) return
+    if (!next || broken.slice(at, next.from).some(t => t.blockTo !== undefined)) out.push(k)
+  })
+  return out
 }
 /** whether a layout's lines (breakLines', each with its first token `from`) set a cut's token on a page before the cut's */
 function cutsReached(lines, cuts) {
@@ -3676,13 +3735,14 @@ function cutsReached(lines, cuts) {
   })
 }
 
-/** the tokens with a page-break token (`{ pageBreak: page }`, breakLines') before each cut's token (pageCutsOf's) */
+/** the tokens with a page-break token (`{ pageBreak: page }`, breakLines'; `whole` where the cut is) before each cut's token
+ *  (pageCutsOf's) */
 export function withPageBreaks(tokens, cuts) {
   if (!cuts.length) return tokens
   const out = []
   let c = 0
   tokens.forEach((t, i) => {
-    while (c < cuts.length && cuts[c].at === i) out.push({ pageBreak: cuts[c++].page, w100: 0 })
+    while (c < cuts.length && cuts[c].at === i) { const { page, whole } = cuts[c++]; out.push({ pageBreak: page, w100: 0, ...(whole ? { whole: true } : {}) }) }
     out.push(t)
   })
   return Object.assign(out, { base: tokens.base })
