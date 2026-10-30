@@ -199,56 +199,68 @@ export function createShapes({ kindOf: unitKind = () => undefined, warn = warnOn
   const inv = new Map(), boxedTold = new Set()
   const invOn = p => inv.get(p) ?? inv.set(p, { units: new Map(), displays: new Map(), lines: [] }).get(p)
   const push = (m, id, box) => { (m.get(id) ?? m.set(id, []).get(id)).push(box) }
+  /** a block's box of our page, by its kind, for the layout's geometry where the page is in place (highlight.mjs pageGeometry: the
+   *  box lights where no token of the page is) */
+  const boxOf = (id, p, [x0, x1, top, bottom], kind) => { const m = L.boxes.get(id) ?? L.boxes.set(id, new Map()).get(id); push(m, p, [x0, x1, top, bottom, kind]); L.cache.delete(p) }
   const takeInventory = parts => {
     const pages = new Set(), rectsOf = new Map(), part = { pages: [1], views: [], left: [], quiet: true }
     const rect = (id, p, [x0, x1, top, bottom]) => { (rectsOf.get(id) ?? rectsOf.set(id, []).get(id)).push([p, x0, bottom, x1, top]); pages.add(p) }
     for (const { layout: lay } of parts) {
       if (!lay || lay.refused) continue
+      const displays = new Map(), segsOf = new Map()
+      for (const r of lay.ph ?? []) if (r[2] === DISPLAY_KIND && r.length >= 10) for (let o = 4; o + 5 < r.length; o += 6) (segsOf.get(r[0]) ?? segsOf.set(r[0], []).get(r[0])).push([r[o], r[o + 1], r[o + 3], r[o + 4], r[o + 5]])
+      // (a unit's line on one of its displays' rows is the display's ink, never the unit's box: a display stands on rows of its own)
+      const onDisplay = (id, p, [x0, x1, top, bottom]) => (segsOf.get(id) ?? []).some(([q, a0, a1, b1, b0]) => q === p && Math.min(x1, a1) > Math.max(x0, a0) && Math.min(top, b1) - Math.max(bottom, b0) > 0.5 * (top - bottom))
       for (const [id, rows] of lay.lines ?? []) {
         if (DRAWING.has(kindOf(id))) continue
-        for (let j = 0; j + 7 < rows.length; j += 8) { const p = rows[j], box = [rows[j + 1], rows[j + 2], rows[j + 4], rows[j + 5]], at = invOn(p); push(at.units, id, box); at.lines.push(box); rect(id, p, box) }
+        for (let j = 0; j + 7 < rows.length; j += 8) {
+          const p = rows[j], box = [rows[j + 1], rows[j + 2], rows[j + 4], rows[j + 5]], at = invOn(p)
+          at.lines.push(box)
+          rect(id, p, box)
+          if (onDisplay(id, p, box)) continue
+          push(at.units, id, box)
+          boxOf(id, p, box, 'line')
+        }
       }
-      const displays = new Map()
       for (const r of lay.ph ?? []) {
         const id = r[0]
         if (DRAWING.has(kindOf(id)) || r.length < 10) continue
         const segs = []
         for (let o = 4; o + 5 < r.length; o += 6) segs.push([r[o], [r[o + 1], r[o + 3], r[o + 4], r[o + 5]]])
         if (r[2] === DISPLAY_KIND) (displays.get(id) ?? displays.set(id, []).get(id)).push([r[1], segs])
-        else for (const [p, box] of segs) {
-          push(invOn(p).units, id, box)
-          const m = L.pieceBoxes.get(id) ?? L.pieceBoxes.set(id, new Map()).get(id)
-          push(m, p, box)
-          L.cache.delete(p)
-          pages.add(p)
-        }
+        else for (const [p, box] of segs) { push(invOn(p).units, id, box); boxOf(id, p, box, 'piece'); pages.add(p) }
       }
       // (a display past the ids' range stays its unit's, as every display was before)
       for (const [u, list] of displays) {
         const ids = displayIdsOf(u, list.map(([k]) => k))
         for (const [k, segs] of list) {
           const id = ids.get(k)
-          for (const [p, box] of segs) { if (id === undefined) push(invOn(p).units, u, box); else { push(invOn(p).displays, id, box); rect(id, p, box) } pages.add(p) }
+          for (const [p, box] of segs) { if (id === undefined) { push(invOn(p).units, u, box); boxOf(u, p, box, 'piece') } else { push(invOn(p).displays, id, box); rect(id, p, box); boxOf(id, p, box, 'display') } pages.add(p) }
         }
       }
       for (const r of lay.labels ?? []) {
         const id = r[0], p = r[2], box = [r[3], r[5], r[6], r[7]]
         if (DRAWING.has(kindOf(id))) continue
         push(invOn(p).units, id, box)
-        const m = L.labelBoxes.get(id) ?? L.labelBoxes.set(id, new Map()).get(id)
-        push(m, p, box)
-        L.cache.delete(p)
+        boxOf(id, p, box, 'label')
         pages.add(p)
       }
     }
-    for (const [id, rects] of rectsOf) if (!L.told.has(id) && !boxedTold.has(id)) { part.left.push([id, -1, rects]); boxedTold.add(id) }
+    // (and a unit the left part locates elsewhere than our page holds it — a repeated header matched on another page —: its boxes'
+    // pages its own too, told quietly beside its located ones, highlight.mjs layoutParts)
+    for (const [id, rects] of rectsOf) {
+      const was = L.told.get(id)
+      if (was && !was.quiet) { const have = new Set(was.rects.map(r => r.page)); if (rects.some(r => !have.has(r[0]))) part.left.push([id, -1, rects]); continue }
+      if (!was && !boxedTold.has(id)) { part.left.push([id, -1, rects]); boxedTold.add(id) }
+    }
     if (part.left.length) {
       layoutParts(L, [part])
       state.parts.push(part)
       for (const f of state.followers) f.addParts([part])
     }
-    // (a page in already: told now, its spans after it, and into its kept input, which a mirror or a laid page made later reads)
-    for (const p of pages) { const input = state.pages.get(p); if (input) tellBoxes(input, true) }
+    // (a page in already: told now, its spans after it, and into its kept input, which a mirror or a laid page made later reads; its
+    // geometry let go on the mirrors too, which read the boxes and made it before they came)
+    for (const p of pages) { const input = state.pages.get(p); if (!input) continue; tellBoxes(input, true); for (const f of state.followers) f.addSpans(p, []) }
   }
   /** page `input`'s blocks told by their boxes where the page is in place: its spans changed in the input (before the page is laid),
    *  and with `late` in the layout and the followers too, each quiet unit beginning at its first token on its first page. Taken again
@@ -256,8 +268,14 @@ export function createShapes({ kindOf: unitKind = () => undefined, warn = warnOn
   function tellBoxes(input, late) {
     const p = input.page, at = inv.get(p)
     if (!at) return
-    const inBoxes = byRow(input.table)
-    if (!inPlace(inBoxes, at.lines)) return
+    const inBoxes = byRow(input.table), here = inPlace(inBoxes, at.lines)
+    // (whether the page's boxes stand on arXiv's ink, for its geometry: a change lets the page's geometry go, the mirrors' too)
+    if (here !== L.inPlace.has(p)) {
+      if (here) L.inPlace.add(p); else L.inPlace.delete(p)
+      L.cache.delete(p)
+      if (late) for (const f of state.followers) f.addSpans(p, [])
+    }
+    if (!here) return
     const first = input.first, owner = new Map(), spanOf = new Map()
     for (const [id, ts] of input.spans) { spanOf.set(id, ts); for (const k of ts) if (!owner.has(k)) owner.set(k, id) }
     const changed = new Map()
@@ -431,9 +449,9 @@ export function mirror(source) {
   const state = told.get(source.shapes)
   if (!state) throw new TypeError('not a side\'s shapes (createShapes)')
   const R = pageLayout(state.kindOf), own = pdfShapes(R)
-  // (the units' labels' and kept pieces' boxes, the left's: read alone, as its floats are)
-  R.labelBoxes = source.layout.labelBoxes
-  R.pieceBoxes = source.layout.pieceBoxes
+  // (the blocks' boxes of our page and the pages in place, the left's: read alone, as its floats are; the mirror shows arXiv's page)
+  R.boxes = source.layout.boxes
+  R.inPlace = source.layout.inPlace
   const follower = {
     addParts: parts => layoutParts(R, parts.map(copyPart)),
     addPage: input => { const c = copyPage(input), ok = layoutPage(R, input.page, c); if (ok) streamsOn(R, input.page, c.spans); return ok },
@@ -505,8 +523,10 @@ export function layerShapes(source) {
   })))
   function reset() {
     // (no box of our page widens a laid row: the door's table holds every token the page shows of a unit, its kept label and
-    // pieces among them, and a piece or a label it drew elsewhere left that box empty)
+    // pieces among them, and a piece or a label it drew elsewhere left that box empty; and none of its tokens is clamped at the
+    // column's edge: each is the door's own ink, drawn or kept, never a stray token)
     L = pageLayout(state.kindOf)
+    L.unclamped = true
     words = new Map(); made = new Set(); wordAt = new Map(); placeAt = new Map(); noPlaces = new Set(); hidden = new Set(); namesKept = new Map()
     ours = new Map()
     if (state.parts.length) tellParts(state.parts)

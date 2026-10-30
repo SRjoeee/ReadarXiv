@@ -83,7 +83,8 @@ export function unitHiding({ page, id, lu, kOf, lines, prep, nm = null, has = ()
   const displayIds = displayIdsOf(id, [...lu.ph].filter(([, row]) => row.kind === 'display' && row.segs.length >= 6).map(([k]) => k))
   for (const [k, row] of rowsOn) {
     if (row.kind === 'display') for (const s of segsWithBase(row, page)) shown.push({ kind: 'display', k, id: displayIds.get(k) ?? null, ...s })
-    else if (!moved || keptK.has(k)) for (const s of segsWithBase(row, page)) shown.push({ kind: 'piece', k, ...s })
+    // (a piece whose group the document does not hold stays shown however it is drawn: the wrap could not part its ink)
+    else if (!moved || keptK.has(k) || !has(placeholderGroup(id))) for (const s of segsWithBase(row, page)) shown.push({ kind: 'piece', k, ...s })
   }
   // its label: hidden where it is drawn in the target's form, a lead's name with it
   // (a label whose group the page does not hold, merged into the text's past the page's bounds, goes with the text: shown again
