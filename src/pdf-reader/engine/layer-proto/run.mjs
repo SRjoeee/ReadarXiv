@@ -368,7 +368,7 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [], voter
   // reads (fillLeadsOf); the page's one size is chosen as before, and a unit it would move there keeps its own. Each try is
   // settled (settleLayout: a cell's lines in their bands) before anything is read of it, as the fit's share was: the row is
   // kept as it is drawn)
-  const free = (p, st) => { const l = L2.layoutAt(p.tokens, p.blocks, p.s, p.P, st); if (l.clipped || (p.parent && !L2.keepsPages(p.layout.lines, l.lines))) return null; settleLayout(p, l); return l }
+  const free = (p, st) => { const l = L2.layoutAt(p.tokens, p.blocks, p.s, p.P, st); if (l.clipped || (p.parent && !L2.keepsPages(p.layout.lines, l.lines, p.tokens))) return null; settleLayout(p, l); return l }
   const at = (p, st) => { const l = free(p, st); return l && L2.keepsShare(p.share, l.lines) ? l : null }
   // (a unit's fill leading is its fit's (fillLeadsOf), set as it is laid: computed here only for a unit given without it)
   for (const p of units) if (p.fillLead === undefined) fillLeadsOf(p, P)
@@ -495,7 +495,7 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [], voter
  */
 function fillLeadsOf(p, P) {
   const r3 = x => Math.round(x * 1000) / 1000
-  const at = (q, st) => { const l = L2.layoutAt(q.tokens, q.blocks, q.s, q.P, st); return l.clipped || (q.parent && !L2.keepsPages(q.layout.lines, l.lines)) ? null : l }
+  const at = (q, st) => { const l = L2.layoutAt(q.tokens, q.blocks, q.s, q.P, st); return l.clipped || (q.parent && !L2.keepsPages(q.layout.lines, l.lines, q.tokens)) ? null : l }
   if (P.fillLead === null) p.fillTop = 1
   else {
     const pitches = p.blocks.map(b => b.pitch0).filter(v => v > 0).sort((a, b) => a - b)

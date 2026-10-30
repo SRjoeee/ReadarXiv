@@ -128,4 +128,14 @@ describe('the page fill keeps a unit\'s text on the pages its fit set it', () =>
     expect(L2.keepsPages(fit as never, [{ from: 0, page: 1 }, { from: 4, page: 1 }, { from: 8, page: 1 }, { from: 9, page: 2 }] as never)).toBe(true)
     expect(L2.keepsPages(fit as never, [{ from: 0, page: 1 }, { from: 6, page: 1 }, { from: 9, page: 1 }] as never)).toBe(true)
   })
+  it("a line after a page break of the source's may stand on the break's page: its text is that page's in the source", () => {
+    // (the break token at 6, in the fit's second line, which ends where the breaker ends it: at a looser state sooner, and its
+    // tail, tokens 7 and 8, goes on to page 2; the break at 9 or later sends nothing before it)
+    const tokens = Array.from({ length: 12 }, (_, i) => (i === 6 ? { pageBreak: 2, w100: 0 } : { s: 'x', w100: 50 }))
+    const looser = [{ from: 0, page: 1 }, { from: 4, page: 1 }, { from: 7, page: 2 }]
+    expect(L2.keepsPages(fit as never, looser as never, tokens as never)).toBe(true)
+    expect(L2.keepsPages(fit as never, looser as never)).toBe(false)
+    // (a line before the break, on page 2, is still refused)
+    expect(L2.keepsPages(fit as never, [{ from: 0, page: 1 }, { from: 3, page: 2 }, { from: 7, page: 2 }] as never, tokens as never)).toBe(false)
+  })
 })

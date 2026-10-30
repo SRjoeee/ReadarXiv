@@ -442,8 +442,8 @@ export declare function shareOf(layout: Pick<Layout, 'lines'>, blocks: readonly 
 /** whether a layout's lines keep a shared row as the fit left it (no text there further right; none where the fit set none; its
  *  line there on the fit's baseline) */
 export declare function keepsShare(share: Share | null | undefined, lines: readonly Line[]): boolean
-/** whether `lines` set no token on a later page than the fit's lines (`fit`) set it (the page fill's guard) */
-export declare function keepsPages(fit: readonly Pick<Line, 'from' | 'page'>[], lines: readonly Pick<Line, 'from' | 'page'>[]): boolean
+/** whether `lines` set no token on a later page than the fit's lines (`fit`) set it (the page fill's guard); a line after a page-break token of `tokens` may stand on its page */
+export declare function keepsPages(fit: readonly Pick<Line, 'from' | 'page'>[], lines: readonly Pick<Line, 'from' | 'page'>[], tokens?: readonly Token[] | null): boolean
 /** a box in v0's device pixels on the page: [x, y, w, h] */
 export type DevBox = [number, number, number, number]
 /** one of the layer's drawing operations over render A (hideOps'): where a unit's hidden ink lies (nothing drawn), a plane of the

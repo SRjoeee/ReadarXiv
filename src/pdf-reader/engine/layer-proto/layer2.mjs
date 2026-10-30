@@ -4013,7 +4013,7 @@ export function layoutRuns(tokens, blocks, s, P, fit = null) {
   // (no run sets a token on a later page than the unit's fit did (`fit`, its lines; keepsPages): a run set larger holds
   // fewer lines on a page's frame, and the page cuts keep text only from the page before. Where one would, the unit is laid
   // as one)
-  if (fit && !runs.every(r => keepsPages(fit, r.layout.lines.map(l => ({ from: r.idx[l.from] ?? r.idx.at(-1), page: l.page }))))) return null
+  if (fit && !runs.every(r => keepsPages(fit, r.layout.lines.map(l => ({ from: r.idx[l.from] ?? r.idx.at(-1), page: l.page })), tokens))) return null
   return { layout: joinRuns(runs), runs }
 }
 /**
@@ -4116,13 +4116,18 @@ export function shareOf(layout, blocks, row) {
  * 2610.21884v1's unit 10 in Chinese, a paragraph over pages 1 and 2: its last run filled to 1.61 set a sentence of page 1 at
  * the top of page 2 (the sweep's (i)). Read for a unit's runs (run.mjs fillPage, fillLeadsOf): a unit of one run is filled as
  * before, byte for byte, though the same can befall it (34 pages of 19 Chinese papers move where it is read for every unit;
- * left to its own change)
+ * left to its own change). A line after a page break of the source's (`tokens`, the lines' own: withPageBreaks' token) may
+ * stand on the break's page: its text is that page's in the source, and the line that holds the break ends where the
+ * breaker ends it, sooner at a looser state (breakLines), so that the tail of that line goes on to the page it belongs to
  */
-export function keepsPages(fit, lines) {
+export function keepsPages(fit, lines, tokens = null) {
+  const breaks = []
+  tokens?.forEach((t, i) => { if (t.pageBreak !== undefined) breaks.push([i, t.pageBreak]) })
+  const sent = from => breaks.reduce((pg, [i, b]) => (i < from ? Math.max(pg, b) : pg), -Infinity)
   let j = 0
   for (const l of lines) {
     while (j + 1 < fit.length && fit[j + 1].from <= l.from) j++
-    if (fit[j] && l.page > fit[j].page) return false
+    if (fit[j] && l.page > fit[j].page && !(l.page <= sent(l.from))) return false
   }
   return true
 }
