@@ -2142,9 +2142,6 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       prep.label = { ...prep.label, drawn: prep.label.text }
       for (const c of cs) prep.cat?.set(L2.charKey(c), 'acc')
     }
-    // (each later page's text where its source sets it: the translation cut at the source's page breaks, E3c, laid where that
-    // costs the unit nothing of its fit: layoutCut, below)
-    const cuts = prep.pageStarts?.size ? L2.pageCutsOf(tokens, p.unit, prep.pageStarts, P) : []
     const t3 = lap()
     // (the unit's leading relative to the original's own pitch, step 3: leadOf)
     p.tokens = tokens
@@ -2167,9 +2164,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       p.P.leadBase = L2.leadOf(p.blocks, s, { ...P, leadRel: true })
       p.P.growTo = 0
     }
-    // (laid as without its cuts, the fit's states searched once, and again with them at that state where that layout sets a
-    // later page's text on an earlier page, kept where it fits: its further steps and passes then lay the tokens it holds)
-    ;({ layout: p.layout, tokens: p.tokens } = L2.layoutCut(tokens, cuts, p.blocks, s, p.P))
+    // (a unit over a page break: laid as without its cuts, the fit's states searched once, and again at that state with a page
+    // break before each later page at its share of the paragraph's height, at a line end (E3c by height, layoutCut), kept
+    // where it fits: its further steps and passes then lay the tokens it holds)
+    ;({ layout: p.layout, tokens: p.tokens } = L2.layoutCut(tokens, p.blocks, s, p.P))
     // a numbered heading set in fewer lines than the original's: laid again on the original's last lines with its number as
     // its first line's start, the number's own ink copied there (a crop: its face, its colour, the space its class set after
     // it, as the original's) and erased where it was. Where that does not fit, or moves it nowhere, as it was

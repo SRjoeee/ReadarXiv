@@ -69,7 +69,7 @@ import { blocksOf, CITE, kinsokuOf, lcsPairs, median, norm, phClass, texToText, 
 import { faceOf, fontString, roleFaces, styleKey } from './fonts.mjs'
 import { breakPoints } from './hyph.mjs'
 import { drawnText, shown } from '../layer/pieces.mjs'
-import { plainOfPieces, plainTracker, transformMap } from './words.mjs'
+import { plainTracker, transformMap } from './words.mjs'
 import { ownSmallCaps } from '../rules/font-roles.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { textPieceOf } from '../rules/text-piece.mjs'
@@ -1071,8 +1071,6 @@ function alignUnit(out, unit, rects, deny) {
     if (out.orig && sc.upper.size > 0 && 2 * sc.upper.size > sc.lower.size) out.orig = { ...out.orig, st: { ...out.orig.st, upper: true } }
     // (its base style and its pieces' colours as its glyphs hold them, where its source pieces tell what each word is inside: E1)
     out.measured = measuredOf(unit, uc, O, gapsOf2.last.S, gapsOf2.last.pair, sc)
-    // (where each later page of the unit begins in its source: its translation's page breaks, E3c)
-    out.pageStarts = pageStartsOf(uc, O, gapsOf2.last.S, gapsOf2.last.pair, unit.src)
     // where the unit's first word starts on the page: its line is erased from there (the anchors share an item's
     // width evenly between its characters, so a line's rectangle may start inside its first glyph: "1. Introduction")
     const q0 = matched.findIndex(m => m)
@@ -3668,92 +3666,77 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
   return { lines: lines.filter(l => l.items.length), rest: over ?? i, total: tokens.length, tokens, spilled }
 }
 
-// ---- a unit over a page break (E3c, 2026-10-20): each page holds the text its source sets there
+// ---- a unit over a page break (E3c, 2026-10-20; by height, 2026-10-30): each page holds its share of the paragraph
 
 /**
- * Where each later page of a unit begins in its source: the plain source's UTF-16 offset of the first source word the
- * alignment takes on that page (gapsOf2's `last`: the page's words `O`, by their first character in the unit's characters
- * `uc`, each one's source word in `S` by `pair`, -1 for none; S's `start` a code point of `src`), by page. A page none of
- * whose words the alignment takes, or whose first taken word is no later in the source than the page before's, has none;
- * nor has any page while the unit's first page has no word the alignment takes (its start there would be the unit's).
- * Returns a Map page -> offset
+ * Where the fit's lay of a unit (`lines`, breakLines' at the fit's state, each with its first token `from` and its block)
+ * breaks for each later page: a paragraph's lines go over its pages as its region does, by height. Each run of the unit
+ * (its blocks of one `after`: the text between two displays, set on its own slots) whose source lines (its blocks' `B`) stand
+ * on more than one page is cut before each later page at the nearest line end of its laid lines to that page's share of
+ * the run's height, k of its n lines on the pages before it, k = n × the source's lines before that page over all of them,
+ * rounded (half up: the earlier page the fuller, as TeX fills a page), one line at least on each side; no sentence, no
+ * word of the alignment (the owner, 2026-10-30: blocks keep their place, sentences need not, the page changes at a natural
+ * line end). A run laid in one line is cut in that line, at the share of its tokens, the one short line a page break
+ * leaves. Only where the fit sets that line on an earlier page than the page (its page A holds more than its share): else
+ * the fit's own flow keeps it. Returns [{ page, at }], `at` the token the page's text begins with, rising
  */
-export function pageStartsOf(uc, O, S, pair, src) {
-  const cps = [...(src ?? '')], u16 = new Int32Array(cps.length + 1)
-  for (let i = 0; i < cps.length; i++) u16[i + 1] = u16[i] + cps[i].length
-  const out = new Map()
-  let first = null, last = -1, anchored = false
-  O.forEach((o, q) => {
-    const page = uc[o.start]?.page
-    if (first === null) first = page
-    if (!(pair[q] >= 0)) return
-    if (page === first) { anchored = true; return }
-    if (!anchored || out.has(page)) return
-    const at = u16[Math.min(S[pair[q]].start, cps.length)]
-    if (at > last) { out.set(page, at); last = at }
-  })
-  return out
-}
-
-/**
- * The translation's cut at each later page's start (`starts`, pageStartsOf's): in the sentence of the unit's row that holds
- * the source's break (`unit.sentences`: each sentence's start after the first in the plain source and the plain
- * translation, UTF-16), at the share of that sentence the source sets before the break; without sentences at the unit's
- * own share. The cut is the first token from that place (by the tokens' `at`, tokensOf2's tagWords), moved on past a token
- * no line may open with (a mark UAX 14 or the rules' noStart keep from a line's start) and past one glued to the token
- * before it, so that page B opens where a line may. Returns [{ page, at }], `at` the token the page's text begins with
- */
-export function pageCutsOf(tokens, unit, starts, P) {
-  if (!starts?.size) return []
-  const src = unit.src ?? '', trLen = plainOfPieces(unit.pieces ?? []).length
-  const sen = unit.sentences, S0 = sen ? [0, ...sen.src, src.length] : null, T0 = sen ? [0, ...sen.tr, trLen] : null
-  const kinsoku = kinsokuOf(P.noStart ?? '', P.noEnd ?? '')
-  const barred = t => typeof t.s === 'string' && t.s !== '' && (noStart(t.s) || kinsoku.starts(t.s))
-  const out = []
-  for (const [page, o] of [...starts].sort((a, b) => a[0] - b[0])) {
-    let cut
-    if (S0) {
-      let k = 0
-      while (k + 2 < S0.length && S0[k + 1] <= o) k++
-      cut = T0[k] + ((o - S0[k]) / Math.max(1, S0[k + 1] - S0[k])) * (T0[k + 1] - T0[k])
-    } else cut = (o / Math.max(1, src.length)) * trLen
-    let i = 0, at = 0
-    for (; i < tokens.length; i++) {
-      const t = tokens[i]
-      if (t.at !== undefined) at = t.at
-      if (!t.space && at >= cut - 1e-9) break
-    }
-    while (i < tokens.length && (barred(tokens[i]) || tokens[i].glue)) i++
-    // (never at the first token: a break there would move none of the text and leave page A empty)
-    if (i > 0 && i < tokens.length && !(out.length && out.at(-1).at >= i)) out.push({ page, at: i })
+export function pageCutsOf(lines, blocks, tokens, P) {
+  const runs = new Map()
+  for (const b of blocks) {
+    const r = runs.get(b.after ?? 0) ?? runs.set(b.after ?? 0, new Map()).get(b.after ?? 0)
+    r.set(b.page, (r.get(b.page) ?? 0) + (b.B?.length ?? 0))
   }
-  return out
+  const kinsoku = kinsokuOf(P.noStart ?? '', P.noEnd ?? '')
+  const opens = t => !t.space && !t.glue && t.blockTo === undefined && t.newline === undefined && !(typeof t.s === 'string' && t.s !== '' && (noStart(t.s) || kinsoku.starts(t.s)))
+  const out = []
+  for (const [after, byPage] of runs) {
+    const pages = [...byPage.keys()].sort((a, b) => a - b), total = [...byPage.values()].reduce((a, b) => a + b, 0)
+    if (pages.length < 2 || !(total > 0)) continue
+    const rl = lines.filter(l => (blocks[l.block]?.after ?? 0) === after)
+    if (!rl.length) continue
+    let before = 0, k0 = 0
+    for (const page of pages.slice(1)) {
+      before += byPage.get(pages[pages.indexOf(page) - 1])
+      const share = before / total
+      if (rl.length === 1) {
+        // (one line: cut in it at the share of its tokens that set text, on one a line may open with, past its first)
+        const l = rl[0], end = lines[lines.indexOf(l) + 1]?.from ?? tokens.length
+        const ix = []
+        for (let i = l.from; i < end; i++) if (!textless(tokens[i])) ix.push(i)
+        let q = Math.max(1, Math.round(ix.length * share))
+        while (q < ix.length && !opens(tokens[ix[q]])) q++
+        if (q < ix.length && l.page < page && !(out.length && out.at(-1).at >= ix[q])) out.push({ page, at: ix[q] })
+        break
+      }
+      const k = Math.min(rl.length - 1, Math.max(k0 + 1, Math.floor(rl.length * share + 0.5)))
+      if (k <= k0) break
+      k0 = k
+      // (the fit's own flow already sets that line on the page or later: its page A full)
+      if (!(rl[k].page < page) || !(rl[k].from > 0)) continue
+      if (!(out.length && out.at(-1).at >= rl[k].from)) out.push({ page, at: rl[k].from })
+    }
+  }
+  return out.sort((a, b) => a.at - b.at)
 }
 
 /**
- * A unit laid with its page cuts (pageCutsOf's `cuts`): as without them, the fit's states searched once; where that layout
- * sets a cut's token on a page before the cut's (its page B text on page A), laid once more with the page breaks
- * (withPageBreaks) at that layout's own state, and kept where it fits there. Else as without them: a cut never costs a
- * unit its fit, nor a second search of the fit's states. A break ends the line that holds it where the breaker ends that
- * line, and where that line is its run's last the breaker lays it on the break's page (breakLines' strand), in this lay
- * and in every later one of the tokens it returns. Returns { layout, tokens }, the tokens it was laid from
+ * A unit laid over its page breaks: as without them, the fit's states searched once; where that layout sets more of a run's
+ * lines on a page than its share (pageCutsOf), laid once more with the page breaks (withPageBreaks) at that layout's own
+ * state, and kept where it fits there. Else as without them: a cut never costs a unit its fit, nor a second search of the
+ * fit's states. A break ends the line that holds it where the breaker ends that line, and where that line is its run's last
+ * the breaker lays it on the break's page (breakLines' strand), in this lay and in every later one of the tokens it returns.
+ * Returns { layout, tokens }, the tokens it was laid from
  */
-export function layoutCut(tokens, cuts, blocks, s, P) {
+export function layoutCut(tokens, blocks, s, P) {
   const plain = layoutUnit2(tokens, blocks, s, P)
-  if (!cuts.length || plain.clipped || plain.spilled || !cutsReached(plain.lines, cuts)) return { layout: plain, tokens }
+  if (plain.clipped || plain.spilled || new Set(blocks.map(b => b.page)).size < 2) return { layout: plain, tokens }
+  const cuts = pageCutsOf(plain.lines, blocks, plain.tokens ?? tokens, P)
+  if (!cuts.length) return { layout: plain, tokens }
   const broken = withPageBreaks(tokens, cuts)
   const cut = layoutAt(broken, blocks, s, P, plain.state)
   if (cut.clipped) return { layout: plain, tokens }
   cut.tried = plain.tried
   return { layout: cut, tokens: broken }
-}
-/** whether a layout's lines (breakLines', each with its first token `from`) set a cut's token on a page before the cut's */
-function cutsReached(lines, cuts) {
-  return cuts.some(c => {
-    let l = null
-    for (const x of lines) { if (x.from > c.at) break; l = x }
-    return !!l && l.page < c.page
-  })
 }
 
 /** the tokens with a page-break token (`{ pageBreak: page }`, breakLines') before each cut's token (pageCutsOf's) */

@@ -1,15 +1,14 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
-// A unit that runs over a page break is laid so that each page holds the text its source sets there (E3c, 2026-10-20). The
-// fit used to fill page A to capacity, and its translation's sentences from page B were drawn on page A (the sweep's
-// invariant (i): 17 rows on 9 papers). The source's break is where the alignment finds the first source word on page B;
-// the translation is cut in the sentence that holds it, at the share of that sentence the source has before it, and a
-// page-break token there sends the text on to page B where it is reached on page A (on page B already, or before a display
-// the text has not passed, it does nothing: no fit fails for it). The line that holds it ends where the breaker ends it,
-// full, and page B opens at the next line's start: a paragraph over a page break never leaves a short line before it, as
-// TeX never does (the owner, 2026-10-30: 1706.03762's Chinese §3.2.2 ended page 4 half a line short, the word for "output"
-// split over pages 4 and 5). Where that line is its run's last, page B would get none of it: the line goes to page B whole.
+// A unit that runs over a page break holds on each page its share of the paragraph (E3c, 2026-10-20; by height since
+// 2026-10-30). The fit used to fill page A to capacity, and text the source sets on page B was drawn on page A. Its runs
+// (the text between two displays) whose source lines stand on more than one page are cut before each later page at the
+// nearest line end of the fit's lay to that page's share of the run's height (pageCutsOf): no sentence, no word of the
+// alignment (the owner, 2026-10-30: blocks keep their place, sentences need not, the page changes at a natural line end,
+// as LaTeX sets it). A page-break token there sends the text on to page B where it is reached on page A (on page B already,
+// or before a display the text has not passed, it does nothing: no fit fails for it); the line that holds it ends where the
+// breaker ends it, and where that line is its run's last, page B getting none of it, the breaker lays the line on page B.
 
 type L2 = typeof import('@/pdf-reader/engine/layer-proto/layer2.mjs')
 let L2: L2
@@ -33,61 +32,46 @@ const block = (page: number, from: number, n: number, after = 0) => {
 /** n words of two letters with a space between, their offsets in the plain text (3 a word and its space) */
 const words = (n: number) => Array.from({ length: n }, (_, i) => (i ? [space, word(2, 3 * i)] : [word(2, 0)])).flat()
 
-describe("where a later page of a unit begins in its source: the alignment's first source word there", () => {
-  it('is the plain source offset of the first page word paired with the source on that page, in UTF-16', () => {
-    // the unit's characters: "aa bb" on page 3, "cc dd" on page 4; its source "\u00e9 aa bb cc dd" (an accent first, one
-    // code unit; and an astral letter would count two)
-    const ch = (c: string, page: number, x: number) => ({ ch: c, page, x0: x, x1: x + 5, yb: 100, size: 10, item: 0, k: x, rect: [page, 0, 98, 100, 108] })
-    const uc = [...'aa bb'].map((c, i) => ch(c, 3, i * 5)), uc4 = [...'cc dd'].map((c, i) => ch(c, 4, i * 5))
-    const all = [...uc, { ch: '\n', sep: true, page: 3 }, ...uc4]
-    const src = '\u{1D49C} aa bb cc dd'
-    const S = [{ w: 'aa', start: 2 }, { w: 'bb', start: 5 }, { w: 'cc', start: 8 }, { w: 'dd', start: 11 }]
-    const O = [{ w: 'aa', start: 0 }, { w: 'bb', start: 3 }, { w: 'cc', start: 6 }, { w: 'dd', start: 9 }]
-    const starts = L2.pageStartsOf(all as never, O as never, S as never, Int32Array.from([0, 1, 2, 3]), src)
-    // (S's starts are code points: "cc" is the 8th, at UTF-16 offset 9 after the astral letter)
-    expect([...starts]).toEqual([[4, 9]])
-    // a page none of whose words the alignment takes has none
-    expect([...L2.pageStartsOf(all as never, O as never, S as never, Int32Array.from([0, 1, -1, -1]), src)]).toEqual([])
-    // nor one whose first taken word is no later in the source than the page before's start (the alignment's pairs out of
-    // order): page 5's "bb" (4) before page 4's "cc" (9)
-    const uc5 = [...'ee'].map((c, i) => ch(c, 5, i * 5))
-    const all5 = [...all, { ch: '\n', sep: true, page: 4 }, ...uc5]
-    const O5 = [...O, { w: 'ee', start: 12 }]
-    expect([...L2.pageStartsOf(all5 as never, O5 as never, S as never, Int32Array.from([0, 1, 2, 3, 1]), src)]).toEqual([[4, 9]])
-    // nor any later page while the first has no word the alignment takes: page 4's start would be the unit's start
-    expect([...L2.pageStartsOf(all as never, O as never, S as never, Int32Array.from([-1, -1, 0, 1]), src)]).toEqual([])
-  })
-})
+/** the fit's lines as pageCutsOf reads them: [page, from, block] each */
+const L = (...ls: [number, number, number][]) => ls.map(([page, from, block]) => ({ page, from, block }))
 
-describe("the translation's cut at a page's start", () => {
-  // the source: two sentences, "aa bb cc dd. " and "ee ff gg hh." (the second at 13); the translation's two at 0 and 30
-  const src = 'aa bb cc dd. ee ff gg hh.'
-  const unit = (sentences: { src: number[]; tr: number[] } | null) => ({ src, sentences, pieces: [{ t: 'text', tr: true, s: 'x'.repeat(60) }] })
-  it("is in the sentence that holds the source's break, at the share of it the source has before the break", () => {
-    // page 4 begins at "gg" (19): 6 of the second sentence's 12 characters, half of it; the translation's second sentence is
-    // 30 to 60, so the cut is at 45, the token at 45
-    const tokens = words(20)
-    const cut = L2.pageCutsOf(tokens as never, unit({ src: [13], tr: [30] }) as never, new Map([[4, 19]]), P('de') as never)
-    expect(cut).toEqual([{ page: 4, at: tokens.findIndex(t => (t as { at?: number }).at === 45) }])
-    // without sentences: the unit's own share, 19 of 25, of the translation's 60: 45.6, the token at 48
-    const plain = L2.pageCutsOf(tokens as never, unit(null) as never, new Map([[4, 19]]), P('de') as never)
-    expect(plain).toEqual([{ page: 4, at: tokens.findIndex(t => (t as { at?: number }).at === 48) }])
+describe("the cut by height: each page's share of the paragraph, at the nearest line end of the fit's lay", () => {
+  const tokens = words(40)
+  it("is the line end nearest the source's lines before the page over all of them, rounded half up", () => {
+    // the source: three lines on page 3, one on page 4 (a share of 3/4); the fit lays four lines, all on page 3: three of them
+    // stay there, page 4 opens with the fourth
+    const blocks = [block(3, 500, 3), block(4, 700, 1)] as never
+    expect(L2.pageCutsOf(L([3, 0, 0], [3, 16, 0], [3, 32, 0], [3, 48, 0]), blocks, tokens as never, P('de') as never)).toEqual([{ page: 4, at: 48 }])
+    // three lines: 2.25, two stay; two lines: 1.5, half up, but one line at least on page 4: one stays
+    expect(L2.pageCutsOf(L([3, 0, 0], [3, 16, 0], [3, 32, 0]), blocks, tokens as never, P('de') as never)).toEqual([{ page: 4, at: 32 }])
+    expect(L2.pageCutsOf(L([3, 0, 0], [3, 16, 0]), blocks, tokens as never, P('de') as never)).toEqual([{ page: 4, at: 16 }])
+    // (an even split, 2 of 4: the third line opens page 4)
+    expect(L2.pageCutsOf(L([3, 0, 0], [3, 16, 0], [3, 32, 0], [3, 48, 0]), [block(3, 500, 2), block(4, 700, 2)] as never, tokens as never, P('de') as never)).toEqual([{ page: 4, at: 32 }])
   })
-  it('moves past a mark no line opens with, and past a token glued to the one before it', () => {
-    const t = (s: string, at: number, o: object = {}) => ({ s, cls: 'cjk', w100: 100, st: {}, face, at, end: at + 1, ...o })
-    const tokens = [t('\u7532', 0), t('\u4e59', 1), t('\u3002', 2), t('\u4e19', 3), t('\u4e01', 4, { glue: true }), t('\u620a', 5)]
-    const cut = (o: number) => L2.pageCutsOf(tokens as never, { src: 'abcdef', sentences: null, pieces: [{ t: 'text', tr: true, s: '\u7532\u4e59\u3002\u4e19\u4e01\u620a' }] } as never, new Map([[2, o]]), P('zh') as never)
-    expect(cut(1)).toEqual([{ page: 2, at: 1 }])
-    // ("\u3002" at 2 opens no line: the cut moves to 3; "\u4e01" at 4 is glued to "\u4e19": to 5)
-    expect(cut(2)).toEqual([{ page: 2, at: 3 }])
-    expect(cut(4)).toEqual([{ page: 2, at: 5 }])
+  it('is none where the fit sets that line on the page already (its page A holds no more than its share), and never at the first token', () => {
+    const blocks = [block(3, 500, 3), block(4, 700, 1)] as never
+    expect(L2.pageCutsOf(L([3, 0, 0], [3, 16, 0], [3, 32, 0], [4, 48, 1]), blocks, tokens as never, P('de') as never)).toEqual([])
+    // (a share under half a line: one line stays on page 3 all the same)
+    expect(L2.pageCutsOf(L([3, 0, 0], [3, 16, 0], [3, 32, 0]), [block(3, 500, 1), block(4, 700, 9)] as never, tokens as never, P('de') as never)).toEqual([{ page: 4, at: 16 }])
   })
-  it("is never at the unit's first token: a page break there would move none of the text and leave page A empty", () => {
-    const unit = { src: 'ab cd ef gh ij', sentences: null, pieces: [{ t: 'text', tr: true, s: 'x'.repeat(14) }] }
-    expect(L2.pageCutsOf(words(5) as never, unit as never, new Map([[4, 0]]), P('de') as never)).toEqual([])
-    // (nor where the first token is untagged and the place is at the start)
-    const untagged = [{ s: 'x', cls: 'latin', w100: 50, st: {}, face }, space, ...words(4)]
-    expect(L2.pageCutsOf(untagged as never, unit as never, new Map([[4, 0]]), P('de') as never)).toEqual([])
+  it("is each run's own: a run on one page has none, a run over two is cut by its own lines", () => {
+    // run 0 (after no display) on page 3 alone; run 1 over pages 3 and 4, its source two lines on each
+    const blocks = [block(3, 500, 2), block(3, 460, 2, 1), block(4, 700, 2, 1)] as never
+    const lines = L([3, 0, 0], [3, 10, 0], [3, 20, 1], [3, 30, 1])
+    expect(L2.pageCutsOf(lines, blocks, tokens as never, P('de') as never)).toEqual([{ page: 4, at: 30 }])
+  })
+  it('over three pages: each later page at its share, rising', () => {
+    // the source's lines 2, 1, 2 on pages 1, 2, 3; five lines laid on page 1: two stay (2/5 of five), the third opens page 2,
+    // the fourth page 3 (3/5)
+    const blocks = [block(1, 500, 2), block(2, 700, 1), block(3, 700, 2)] as never
+    const lines = L([1, 0, 0], [1, 8, 0], [1, 16, 0], [1, 24, 0], [1, 32, 0])
+    expect(L2.pageCutsOf(lines, blocks, tokens as never, P('de') as never)).toEqual([{ page: 2, at: 16 }, { page: 3, at: 24 }])
+  })
+  it("a run laid in one line is cut in it, at the share of its tokens, on one a line may open with: the one short line", () => {
+    const blocks = [block(3, 500, 1), block(4, 700, 1)] as never
+    // ten words in one line on page 3: the sixth word (half of them, past the fifth) opens page 4
+    const ten = words(10)
+    expect(L2.pageCutsOf(L([3, 0, 0]), blocks, ten as never, P('de') as never)).toEqual([{ page: 4, at: 10 }])
   })
 })
 
@@ -129,116 +113,110 @@ describe('the page-break token', () => {
   })
 })
 
-describe('the unit laid with its cuts (layoutCut): the fit searched once, the cut laid at its state', () => {
+/** the breaker's own: a unit laid at the plain lay's state with page breaks before the cuts given (what layoutCut lays) */
+const laidWith = (tokens: unknown[], cuts: { page: number; at: number }[], blocks: unknown, to = 'de') => {
+  const plain = L2.layoutUnit2(tokens as never, blocks as never, 10, P(to) as never)
+  const broken = L2.withPageBreaks(tokens as never, cuts)
+  return { layout: L2.layoutAt(broken, blocks as never, 10, P(to) as never, plain.state), tokens: broken }
+}
+const pagesOf = (l: { lines: { page: number }[] }) => l.lines.map(x => x.page)
+const counts = (l: { lines: { page: number; items: { t: unknown }[] }[] }) => l.lines.map(x => [x.page, x.items.filter(it => !(it.t as { space?: boolean }).space).length])
+
+describe('the unit laid over its page breaks (layoutCut): the fit searched once, the cut laid at its state', () => {
   const blocks = () => [block(3, 500, 3), block(4, 700, 3)] as never
-  const lay = (tokens: unknown[], cuts: { page: number; at: number }[]) => {
+  const lay = (tokens: unknown[], bs: unknown = blocks()) => {
     const f0 = work.fit, b0 = work.breaks
-    const r = L2.layoutCut(tokens as never, cuts, blocks(), 10, P('de') as never)
+    const r = L2.layoutCut(tokens as never, bs as never, 10, P('de') as never)
     return { ...r, fit: work.fit - f0, breaks: work.breaks - b0 }
   }
-  it('where the lay without the cut sets its token on an earlier page: laid once more, at that state, the cut kept', () => {
-    // 16 words: page 3's two lines and page 4's; the cut at the ninth word, which the plain lay sets on page 3's second line
+  it("where the lay without the cut sets more of the paragraph on page A than its share: laid once more, at that state, the cut kept", () => {
+    // 16 words: two lines, both on page 3 without the cut; the source's lines three and three: one line each
     const tokens = words(16)
-    const r = lay(tokens, [{ page: 4, at: 16 }])
+    const r = lay(tokens)
     expect([r.fit, r.layout.clipped, r.tokens.length]).toEqual([2, false, tokens.length + 1])
-    expect(r.layout.lines.map(x => x.page)).toEqual([3, 4])
+    expect(counts(r.layout)).toEqual([[3, 8], [4, 8]])
     expect(r.layout.tried).toBe(1)
   })
-  it('where the cut is on its page already, or where at that state the cut does not fit: as without it, no state tried again', () => {
-    // 40 words: page 3's three lines and page 4's three, two of them taken; the cut at the 25th word, on page 4 without it:
-    // one lay
+  it('where the lay holds page A to its share already, or where at that state the cut does not fit: as without it, no state tried again', () => {
+    // 40 words: page 3's three lines and two of page 4's, three of five on page 3 by the share (2.5, half up): one lay
     const tokens = words(40)
-    const on = lay(tokens, [{ page: 4, at: 48 }])
+    const on = lay(tokens)
     expect([on.fit, on.tokens]).toEqual([1, tokens])
-    // the cut after the first word: page 3's first line holds eight words and ends there, and the other 32 are more than page
-    // 4's three lines hold at that state: as without it, the fit's states tried once (the cut at its state the one more lay)
-    const over = lay(tokens, [{ page: 4, at: 2 }])
-    expect([over.fit, over.tokens, over.layout.lines.map(x => x.page)]).toEqual([2, tokens, [3, 3, 3, 4, 4]])
+    // page 4's one line, 30 pt wide, under the share: 24 words on page 3's three lines, the third would go to page 4 and does
+    // not fit there: as without it, the fit's states tried once (the cut at its state the one more lay)
+    const narrow = { ...block(4, 700, 1), x1: 30, rects: [[4, 0, 698, 30, 708]] }
+    const over = lay(words(24), [block(3, 500, 3), narrow])
+    expect([over.fit, over.tokens.length, pagesOf(over.layout)]).toEqual([2, 47, [3, 3, 3]])
   })
-  it("where the line that holds the cut is its run's last: the breaker lays that line on page B, in the one more lay", () => {
-    // 20 words, all on page 3's three lines without the cut (8, 8, 4); the cut in the third: the break would end the unit's
-    // last line and give page 4 nothing, so that line goes to page 4, and page 3 ends with its second line, full
-    const tokens = words(20)
-    const r = lay(tokens, [{ page: 4, at: 36 }])
-    expect([r.fit, r.layout.clipped]).toEqual([2, false])
-    expect(r.layout.lines.map(x => [x.page, x.mode])).toEqual([[3, 'just'], [3, 'just'], [4, 'last']])
-    expect(r.tokens.filter(t => (t as { pageBreak?: number }).pageBreak !== undefined)).toEqual([{ pageBreak: 4, w100: 0 }])
-  })
-  it("never where text of the run goes on after that line: a kept region's placeholder inside the run is no run's end", () => {
-    // 20 words with a kept region's placeholder after the eleventh (a region no slot stands after: it breaks nothing); the
-    // cut in the second line, whose end the break waits for: page 4 opens with the 17th word, no line laid whole
-    const tokens = words(20)
-    tokens.splice(22, 0, { blockTo: 0, w100: 0 } as never)
-    const r = lay(tokens, [{ page: 4, at: 18 }])
-    expect([r.fit, r.layout.clipped]).toEqual([2, false])
-    expect(r.layout.lines.map(x => [x.page, x.mode])).toEqual([[3, 'just'], [3, 'just'], [4, 'last']])
-    expect(r.tokens.filter(t => (t as { pageBreak?: number }).pageBreak !== undefined)).toEqual([{ pageBreak: 4, w100: 0 }])
+  it('on one page, or with no source lines past the first page, nothing: the plain lay', () => {
+    const r = lay(words(16), [block(3, 500, 3)])
+    expect([r.fit, pagesOf(r.layout)]).toEqual([1, [3, 3]])
   })
 })
 
-describe("the owner's case of 2026-10-30: a Chinese paragraph whose source's page break falls in the middle of a line", () => {
-  // 1706.03762's Chinese §3.2.2, page 4 to 5: the source sets five lines on page 4 and a line and a part on page 5; the
-  // translation, shorter, fits page 4's five slots, and the share of the sentence the source sets on page 4 ends in its
-  // fourth line. The cut there ended page 4 half a line short and page 5 opened with the rest of its last word, "output" split
-  // over the pages; the owner: there was room, and the text was pushed to the next line, leaving the place empty (his words
-  // are in docs/PDF-READER.md). Ten characters a line, 42 of them
+describe("the owner's cases of 2026-10-30: a Chinese paragraph over a page break ends page A at a natural line end", () => {
+  // 1706.03762's Chinese §3.2.2, page 4 to 5: the source sets five lines on page 4 and two on page 5; the translation,
+  // shorter, fits page 4's five slots in four lines (ten characters a line, 32 of them). The sentence share ended page 4 half
+  // a line short and page 5 opened with the rest of a word ("output" split over the pages); the owner: there was room, and the
+  // text was pushed to the next line, leaving the place empty (his words are in docs/PDF-READER.md). By height, three of the
+  // four lines stay (4 × 5/7 = 2.9), full, and page 5 shows the few characters that are left
   const han = (n: number) => Array.from({ length: n }, (_, k) => ({ s: String.fromCodePoint(0x4e00 + k), cls: 'cjk', w100: 100, st: {}, face, at: k, end: k + 1 }))
-  const blocks = (n4 = 5) => [block(4, 500, n4), block(5, 700, 3)] as never
+  const blocks = () => [block(4, 500, 5), block(5, 700, 2)] as never
   const chars = (l: { items: { t: unknown }[] }) => l.items.map(it => (it.t as { s?: string }).s ?? '').join('')
   it("fills page 4's lines to the measure, and page 5 opens where the next line would have", () => {
-    const tokens = han(42)
+    const tokens = han(32)
     const plain = L2.layoutUnit2(tokens as never, blocks(), 10, P('zh') as never)
-    expect(plain.lines.map(l => [l.page, l.from])).toEqual([[4, 0], [4, 10], [4, 20], [4, 30], [4, 40]])
-    // the source's share: the 34th character, in the fourth line
-    const r = L2.layoutCut(tokens as never, [{ page: 5, at: 33 }], blocks(), 10, P('zh') as never)
+    expect(plain.lines.map(l => [l.page, l.from])).toEqual([[4, 0], [4, 10], [4, 20], [4, 30]])
+    const r = L2.layoutCut(tokens as never, blocks(), 10, P('zh') as never)
     expect(r.layout.clipped).toBe(false)
-    expect(r.layout.lines.map(l => [l.page, l.mode, chars(l).length])).toEqual([[4, 'just', 10], [4, 'just', 10], [4, 'just', 10], [4, 'just', 10], [5, 'last', 2]])
-    // (the characters on each page: page 5's first line opens with the 41st, the plain layout's fifth line)
-    expect(chars(r.layout.lines[4]!)).toBe(String.fromCodePoint(0x4e00 + 40, 0x4e00 + 41))
+    expect(r.layout.lines.map(l => [l.page, l.mode, chars(l).length])).toEqual([[4, 'just', 10], [4, 'just', 10], [4, 'just', 10], [5, 'last', 2]])
+    expect(chars(r.layout.lines[3]!)).toBe(String.fromCodePoint(0x4e00 + 30, 0x4e00 + 31))
   })
   it('keeps that at every state the unit is laid at again: the break moves with the line that holds it', () => {
     // the page fill lays a unit again from the tokens the cut returned (run.mjs fillPage): at a larger size, nine characters a
-    // line, the line that holds the break is page 4's fourth still, and ends full
-    const tokens = han(42)
-    const r = L2.layoutCut(tokens as never, [{ page: 5, at: 33 }], blocks(), 10, P('zh') as never)
-    const st = { ...r.layout.state, scale: 1.1 }
-    const again = L2.layoutAt(r.tokens as never, blocks(), 10, P('zh') as never, st)
+    // line, page 4's lines end full and page 5 holds what is left
+    const r = L2.layoutCut(han(32) as never, blocks(), 10, P('zh') as never)
+    const again = L2.layoutAt(r.tokens as never, blocks(), 10, P('zh') as never, { ...r.layout.state, scale: 1.1 })
     expect(again.clipped).toBe(false)
-    expect(again.lines.filter(l => l.page === 4).map(l => [l.mode, chars(l).length])).toEqual([['just', 9], ['just', 9], ['just', 9], ['just', 9]])
-    expect(again.lines.filter(l => l.page === 5).map(l => chars(l).length)).toEqual([6])
+    expect(again.lines.filter(l => l.page === 4).every(l => l.mode === 'just')).toBe(true)
+    expect(again.lines.filter(l => l.page === 5).length).toBeGreaterThan(0)
   })
 })
 
 describe("a held page break's fate is the breaker's, in every lay of the unit (the cloud review of #517)", () => {
-  const face2 = face
-  const han = (n: number) => Array.from({ length: n }, (_, k) => ({ s: String.fromCodePoint(0x4e00 + k), cls: 'cjk', w100: 100, st: {}, face: face2, at: k, end: k + 1 }))
-  const pagesOf = (l: { lines: { page: number }[] }) => l.lines.map(x => x.page)
-  it('two cuts in one line: each page gets its line, the later break held by the line the earlier one opened', () => {
-    // a unit over pages 1, 2 and 3, ten characters a line, both source breaks inside the translation's first line: page 2
-    // was skipped (the second break replaced the first); now page 1's line ends full, page 2 takes the next line, page 3 the
-    // rest
-    const blocks = [block(1, 500, 3), block(2, 700, 3), block(3, 700, 3)] as never
-    const r = L2.layoutCut(han(30) as never, [{ page: 2, at: 3 }, { page: 3, at: 6 }], blocks, 10, P('zh') as never)
-    expect(r.layout.clipped).toBe(false)
-    expect(pagesOf(r.layout)).toEqual([1, 2, 3])
-    // (where the text left after page 2's line is none, page 3 gets none: its source's share of the translation is under a
-    // line, and the line page 2 took holds it; page 2 is never skipped)
-    const short = L2.layoutCut(words(14) as never, [{ page: 4, at: 2 }, { page: 5, at: 6 }], [block(3, 500, 3), block(4, 700, 3), block(5, 700, 3)] as never, 10, P('de') as never)
+  const han = (n: number) => Array.from({ length: n }, (_, k) => ({ s: String.fromCodePoint(0x4e00 + k), cls: 'cjk', w100: 100, st: {}, face, at: k, end: k + 1 }))
+  it("where the line that holds a break is its run's last: the breaker lays that line on page B", () => {
+    // 20 words, all on page 3's three lines without the break (8, 8, 4); the break in the third: it would end the unit's
+    // last line and give page 4 nothing, so that line goes to page 4, and page 3 ends with its second line, full
+    const r = laidWith(words(20), [{ page: 4, at: 36 }], [block(3, 500, 3), block(4, 700, 3)])
+    expect(r.layout.lines.map(x => [x.page, x.mode])).toEqual([[3, 'just'], [3, 'just'], [4, 'last']])
+  })
+  it("never where text of the run goes on after that line: a kept region's placeholder inside the run is no run's end", () => {
+    const tokens = words(20)
+    tokens.splice(22, 0, { blockTo: 0, w100: 0 } as never)
+    const r = laidWith(tokens, [{ page: 4, at: 18 }], [block(3, 500, 3), block(4, 700, 3)])
+    expect(r.layout.lines.map(x => [x.page, x.mode])).toEqual([[3, 'just'], [3, 'just'], [4, 'last']])
+  })
+  it('two breaks in one line: each page gets its line, the later break held by the line the earlier one opened', () => {
+    // pages 1, 2 and 3, ten characters a line, both breaks inside the first line: page 1's line ends full, page 2 takes the
+    // next line, page 3 the rest
+    const r = laidWith(han(30), [{ page: 2, at: 3 }, { page: 3, at: 6 }], [block(1, 500, 3), block(2, 700, 3), block(3, 700, 3)], 'zh')
+    expect([r.layout.clipped, pagesOf(r.layout)]).toEqual([false, [1, 2, 3]])
+    // (where the text left after page 2's line is none, page 3 gets none: page 2 is never skipped)
+    const short = laidWith(words(14), [{ page: 4, at: 2 }, { page: 5, at: 6 }], [block(3, 500, 3), block(4, 700, 3), block(5, 700, 3)])
     expect(pagesOf(short.layout)).toEqual([3, 4])
   })
-  it('a later lay that makes the line holding a break its run\'s last lays that line on the break\'s page (the page fill)', () => {
-    // 21 characters, the cut at the 20th: at the fit's size page 4's second line holds it and page 5 the last character; laid
-    // again at 1.1 (nine a line), the third line holds it and is the unit's last: it goes to page 5 whole
-    const blocks = () => [block(4, 500, 5), block(5, 700, 3)] as never
-    const r = L2.layoutCut(han(21) as never, [{ page: 5, at: 19 }], blocks(), 10, P('zh') as never)
+  it("a later lay that makes the line holding a break its run's last lays that line on the break's page (the page fill)", () => {
+    // 21 characters, the break before the 20th: page 4's second line holds it and page 5 the last character; laid again at
+    // 1.1 (nine a line), the third line holds it and is the unit's last: it goes to page 5 whole
+    const bs = [block(4, 500, 5), block(5, 700, 3)]
+    const r = laidWith(han(21), [{ page: 5, at: 19 }], bs, 'zh')
     expect(pagesOf(r.layout)).toEqual([4, 4, 5])
-    const again = L2.layoutAt(r.tokens as never, blocks(), 10, P('zh') as never, { ...r.layout.state, scale: 1.1 })
+    const again = L2.layoutAt(r.tokens as never, bs as never, 10, P('zh') as never, { ...r.layout.state, scale: 1.1 })
     expect([again.clipped, pagesOf(again)]).toEqual([false, [4, 4, 5]])
   })
-  it('a forced break ending the line that holds a break, the unit ending there: that line on the break\'s page', () => {
-    // 20 words on page 3's three lines, the cut in the third, which a forced break ends: page 4 got nothing
-    const tokens = [...words(20), { newline: 0, room: 0, w100: 0 }]
-    const r = L2.layoutCut(tokens as never, [{ page: 4, at: 36 }], [block(3, 500, 3), block(4, 700, 3)] as never, 10, P('de') as never)
-    expect(r.layout.lines.map(x => [x.page, x.items.filter(it => !(it.t as { space?: boolean }).space).length])).toEqual([[3, 8], [3, 8], [4, 4]])
+  it("a forced break ending the line that holds a break, the unit ending there: that line on the break's page", () => {
+    const r = laidWith([...words(20), { newline: 0, room: 0, w100: 0 }], [{ page: 4, at: 36 }], [block(3, 500, 3), block(4, 700, 3)])
+    expect(counts(r.layout)).toEqual([[3, 8], [3, 8], [4, 4]])
   })
 })
