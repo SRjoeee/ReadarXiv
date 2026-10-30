@@ -23,7 +23,7 @@
 // clock, its operator list not given within OPS_MS (`stats.timedOut`) or its ink's walk past its backstop (ink.mjs INK_MS,
 // `stats.inkTimedOut`). No real page comes near either (the walk's own bound is counted, STEPS_MAX), and a page past one is
 // dark, its units the original's: a slower machine may show a hostile page untranslated where a faster one reads it.
-import { anchorUnits, boundsFromMarks, frameOfTokens, markWords, pageFrame, pageIndex, tokenAtMark, tokens, uprightToken } from '../pipeline/anchors.mjs'
+import { anchorUnits, boundsFromMarks, frameOfTokens, markWords, orderOf, pageFrame, pageIndex, placesIn, tokenAtMark, tokens, uprightToken } from '../pipeline/anchors.mjs'
 import { rangedAnchors } from '../pipeline/left-part.mjs'
 import { readArxivText } from './arxiv.mjs'
 import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
@@ -450,11 +450,14 @@ export async function makeLayout(o) {
  * at most `drawHeldMax` at a time; none for a page the read fails on, a font a host would read
  * differently, or past the budget. It reads no ink and writes none: the layout file is the same bytes with it on or off
  */
-export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, lineCheck = null, floatMatch = null, frame: frameGiven = null, cellRules: wantRules = false, parts = false, columnEdges = null, check = false, rules: rulesGiven = null, inFloat = null, draw: wantDraw = false, drawHeldMax = DRAW_HELD_MAX }) {
+export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, lineCheck = null, floatMatch = null, frame: frameGiven = null, cellRules: wantRules = false, parts = false, columnEdges = null, check = false, rules: rulesGiven = null, inFloat = null, texOrder = null, draw: wantDraw = false, drawHeldMax = DRAW_HELD_MAX }) {
   const rules = rulesOf(rulesGiven)
   // (rule 5: the units written inside a float, the source parse's, no body neighbour of a float's)
   if (rules.floatSearch === 'forward' && !Array.isArray(inFloat)) throw new TypeError('inFloat: the indices of the units written inside a float, for rules.floatSearch \'forward\'')
-  const forward = rules.floatSearch === 'forward' ? new Set(inFloat) : null
+  // (the units in the order TeX sets them, which the anchoring reads as the text's: anchors.mjs orderOf, openPaper's texOrder;
+  // rule 5's units written inside a float as places in that order)
+  const order = orderOf(texOrder, units.length)
+  const forward = rules.floatSearch === 'forward' ? placesIn(inFloat, order) : null
   const stats = blank(units)
   for (const u of units) { const k = u.kind; stats.units.byKind[k] ??= [0, 0]; stats.units.byKind[k][1]++ }
   const pages = arxiv?.numPages
@@ -581,6 +584,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   }
 
   const texts = units.map((u, i) => ({ id: i, ...unitText(u.pieces), ...displayEdges(u) }))
+  const anchorTexts = order ? order.map(i => texts[i]) : texts
   /** a line's column: 0 or 1 on a page of two columns, 2 for a line across both, 0 on a page of one */
   const twoCols = p => marks.columns[p - 1] === 2
   const middle = p => { const v = viewAt(p); return (v[0] + v[2]) / 2 }
@@ -713,7 +717,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (own.length && (own.some(k => !carriedUnit.has(k)) || (own.length === 2 && !bounds.has(String(i))))) unplaced.add(i)
     }
     linesTeX = new Map(marks.lines); alignTeX = new Map(marks.align ?? []); coloursBy = coloursOf(marks.colours)
-    anchors = anchorUnits(doc, texts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch, frame: frame ?? pageFrame, forward })
+    anchors = anchorUnits(doc, anchorTexts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch, frame: frame ?? pageFrame, forward })
     stats.ms.anchor = now() - t
   }
 
@@ -2207,7 +2211,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (NAME_START.test(nm)) nameList.push(nm)
     })
     // ---- each unit: its keys (final once every name of them is read), its pieces' own ink and marks (known once found)
-    const R = rangedAnchors(doc, texts, { floating, floatMatch, frame, forward })
+    const R = rangedAnchors(doc, anchorTexts, { floating, floatMatch, frame, forward })
     const keyLeft = new Map([...keyNames].map(([k, list]) => [k, mh ? list.length : 0]))
     const keysLeft = new Int32Array(n), rowsLeft = new Int32Array(n), known = new Uint8Array(n), wantDecide = new Uint8Array(n), phRan = new Uint8Array(n)
     for (const k of keyNames.keys()) keysLeft[Number(k.slice(0, -1))]++

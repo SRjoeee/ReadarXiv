@@ -34,6 +34,8 @@ export interface MakeInput {
   rules?: Partial<PageStreamRules> | null
   /** the indices of the units written inside a float (the source parse's), for rules.floatSearch 'forward' */
   inFloat?: readonly number[] | null
+  /** the units in the order TeX sets them (openPaper's `texOrder`), which the anchoring reads as the text's; null: their own */
+  texOrder?: readonly number[] | null
   /** the columns' text edges the names, the displays' numbers and the centred flag read (`page|column`,
    *  `twoCols|parity|column`, `twoCols|column` to [x0, x1]), given; else made of the placed units' body lines (rules.edges') */
   columnEdges?: ReadonlyMap<string, [number, number]> | null

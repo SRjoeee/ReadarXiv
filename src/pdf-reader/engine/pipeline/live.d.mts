@@ -7,8 +7,9 @@ import type { Readings } from './cache.mjs'
 import type { TrPiece } from '../layer/pieces.mjs'
 
 /** a paper's files (path → bytes) → what the pipeline works on */
-/** `inFloat`: the indices in `units` (rising) of the units written inside a float (latex-front.mjs loadProject's) */
-export interface Paper { fsys: ReturnType<typeof inMemory>; meta: ReturnType<typeof analyze>; project: { main: string; units: SourceUnit[]; inFloat: number[]; /** the bibliographies \\bibliography reads, by the names it gives (latex-front.mjs) */ bibliography?: string[] }; units: SourceUnit[]; inFloat: number[]; kept: Set<SourceUnit>; /** the structural names its TeX prints that no package names in every target (source/paper-names.mjs): units of kind `name` in its bundle, after its source's */ names: string[] }
+/** `inFloat`: the indices in `units` (rising) of the units written inside a float (latex-front.mjs loadProject's); `texOrder`: the
+ *  indices in `units` in the order TeX sets them, where it is not theirs, else null (loadProject's) */
+export interface Paper { fsys: ReturnType<typeof inMemory>; meta: ReturnType<typeof analyze>; project: { main: string; units: SourceUnit[]; inFloat: number[]; /** the bibliographies \\bibliography reads, by the names it gives (latex-front.mjs) */ bibliography?: string[] }; units: SourceUnit[]; inFloat: number[]; texOrder?: number[] | null; kept: Set<SourceUnit>; /** the structural names its TeX prints that no package names in every target (source/paper-names.mjs): units of kind `name` in its bundle, after its source's */ names: string[] }
 export declare function openPaper(files: Map<string, Uint8Array>): Paper
 /** the translation so far, with unit marks, set by one of strategiesFor: the files that differ from the paper's */
 /** `spans`, where given, gets `lines()`: each unit's lines and bytes in the files as written, worked out when asked */

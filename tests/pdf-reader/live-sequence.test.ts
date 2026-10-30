@@ -570,10 +570,10 @@ describe('a copy made under pipeline 21, reopened under 22 (and on)', () => {
 // units are not; 30 makes an entry one unit, an author block's places units apart from its names, a class's own macro body no
 // unit and a paragraph end at \\bibliography, which this paper has none of: every unit is the copy's by its hash, carried as it
 // has it, and nothing is sent
-describe('a copy made under pipeline 23 to 29, reopened under 30', () => {
+describe('a copy made under pipeline 23 to 29, or 39, reopened under 40', () => {
   const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
-  it.each(['23', '24', '25', '26', '27', '28', '29'])('takes every unit as the copy of %s has it: nothing is sent again', async pipeline => {
-    expect(PIPELINE_VERSION).toBe('39')
+  it.each(['23', '24', '25', '26', '27', '28', '29', '39'])('takes every unit as the copy of %s has it: nothing is sent again', async pipeline => {
+    expect(PIPELINE_VERSION).toBe('40')
     const p = paper(), n = p.units.length
     const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
     const record = JSON.parse(JSON.stringify({ pipeline, format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))

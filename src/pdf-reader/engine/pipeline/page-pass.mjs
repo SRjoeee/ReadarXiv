@@ -28,7 +28,7 @@ import { markedPages, marksOfHead, readMarked } from '../layout/marks.mjs'
 import { FIGURE_KIND } from '../rules/content-classes.mjs'
 import { displayEdges, isName, proseOf, unitText } from '../translate/mt.mjs'
 import { columnsOfTokens, pageColumns } from '../view/highlight.mjs'
-import { anchorUnits, boundsFromMarks, floatMatches, frameOfTokens, pageFrame, pageIndex } from './anchors.mjs'
+import { anchorUnits, boundsFromMarks, floatMatches, frameOfTokens, orderOf, pageFrame, pageIndex, placesIn } from './anchors.mjs'
 import { rangedAnchors } from './left-part.mjs'
 import { leftSideOf, leftSideStream } from './left-side.mjs'
 import { bundleWithInk, figureAnchors, inkAnchors, inkOfHost, inkWithinChunks, layoutWithInk, streamWithInk } from './ink-pass.mjs'
@@ -339,6 +339,11 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   const units = source.units
   const texts = units.map((u, i) => ({ id: i, ...unitText(u.pieces), ...displayEdges(u) }))
   const floating = id => FLOATING.has(units[id]?.kind ?? '')
+  // (the units in the order TeX sets them, which the left's anchoring reads as the text's: a unit without marks is searched
+  // between its marked neighbours in it, anchors.mjs matchUnits; the front end numbers an author block's later units and the
+  // bibliography's entries after the rest, latex-front.mjs entriesLast)
+  const texOrder = orderOf(source.texOrder, units.length)
+  const leftTexts = texOrder ? texOrder.map(i => texts[i]) : texts
 
   // our base page and its checks (design §3.3), each in turn before anything is told: the first that fails is the paper's
   // fallback, the marks' refusal with its why (no maker, every part with no layout), its head's base arXiv's PDF
@@ -417,7 +422,9 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   const columns = rules.columns === 'tokens' ? views => columnsOfTokens(left.tokens, views) : columnsGiven
   // (rule 5: the units written inside a float, the source parse's, no body neighbour of a float's)
   if (rules.floatSearch === 'forward' && !Array.isArray(source.inFloat)) throw new TypeError('source.inFloat: the indices of the units written inside a float, for rules.floatSearch \'forward\'')
-  const inFloat = rules.floatSearch === 'forward' ? source.inFloat : null, forward = inFloat ? new Set(inFloat) : null
+  const inFloat = rules.floatSearch === 'forward' ? source.inFloat : null
+  // (rule 5's units written inside a float, as places in leftTexts)
+  const forward = inFloat ? placesIn(inFloat, texOrder) : null
   // (the marked original to be read here: a page at a time beside arXiv's in a stream, else whole first, readMarked as the
   // prepare's marks stage reads it, its refusal or throw the marks' refusal)
   const markedOptions = marked ? { ...marked.options, units, OPS } : null
@@ -425,7 +432,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   const given = oracle ? { makerFrame: () => oracle.frame, columnEdges: oracle.columnEdges, leftFrame: () => oracle.leftFrame, columns: () => oracle.columns } : { makerFrame: frame, columnEdges: null, leftFrame: leftFrameRule, columns }
   if (marked && streams) {
     if (oracle) for (const k of ['frame', 'columnEdges', 'leftFrame', 'columns']) if (oracle[k] === undefined) throw new TypeError(`oracle.${k}: a whole run's (capture), for the marked original read a page at a time`)
-    const r = await markedStream({ draw, paper, units, texts, names, floating, text, baseText, left, leftFloats, floatMatch, bundle, ink, inkLeft, figureLeft, figureIds, inkFrom, figures, marked, markedOptions, doc: baseDoc, N, OPS, pdfjs, bases: { ours: oursHead, orig: origRef }, deltaStat, lineCheck, image, onHead, onLeft, onPart, verdicts, given, rules, inFloat, forward, several })
+    const r = await markedStream({ draw, paper, units, texts: leftTexts, texOrder, names, floating, text, baseText, left, leftFloats, floatMatch, bundle, ink, inkLeft, figureLeft, figureIds, inkFrom, figures, marked, markedOptions, doc: baseDoc, N, OPS, pdfjs, bases: { ours: oursHead, orig: origRef }, deltaStat, lineCheck, image, onHead, onLeft, onPart, verdicts, given, rules, inFloat, forward, several })
     if (r) return r
     marks = { refused: 'marks' }
   } else if (marked) {
@@ -436,7 +443,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   }
   const unitMarks = marks && 'marks' in marks ? marks.unitMarks : null
   const leftFrame = capture ? (d, ms) => { capture.leftFrame = leftFrameRule(d, ms); return capture.leftFrame } : leftFrameRule
-  const anchors = anchorUnits(left.tokens, texts, { ...(unitMarks ? { bounds: boundsFromMarks(left.tokens, unitMarks) } : {}), floating, floatMatch: leftFloats, frame: leftFrame, forward })
+  const anchors = anchorUnits(left.tokens, leftTexts, { ...(unitMarks ? { bounds: boundsFromMarks(left.tokens, unitMarks) } : {}), floating, floatMatch: leftFloats, frame: leftFrame, forward })
   if (inkLeft) for (const [id, a] of inkLeft) anchors.set(id, a)
   if (figureLeft) for (const [id, a] of figureLeft) anchors.set(id, a)
   const leftColumns = capture ? (v, a, k) => { capture.columns = (columns ?? pageColumns)(v, a, k); return capture.columns } : columns
@@ -449,7 +456,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   if (marks && 'marks' in marks) {
     const makerFrame = streams ? given.makerFrame : capture ? (d, ms) => { capture.frame = frame(d, ms); return capture.frame } : frame
     try {
-      maker = await makerOf({ units, marks: marks.marks, arxiv: baseDoc, OPS, paper, left: '', pdfjs, text: baseText, lineCheck, floatMatch, frame: makerFrame, cellRules: true, parts: true, draw, rules, inFloat, ...(streams && given.columnEdges ? { columnEdges: given.columnEdges } : {}) })
+      maker = await makerOf({ units, marks: marks.marks, arxiv: baseDoc, OPS, paper, left: '', pdfjs, text: baseText, lineCheck, floatMatch, frame: makerFrame, cellRules: true, parts: true, draw, rules, inFloat, texOrder, ...(streams && given.columnEdges ? { columnEdges: given.columnEdges } : {}) })
       if (maker.refused) { made = { refused: maker.refused, stats: maker.stats }; maker = null }
     } catch (e) {
       if (isMemoryError(e)) throw e
@@ -861,7 +868,7 @@ function streamingLeft({ doc, views, edges, texts, names = 0, floating, floatMat
  * going on with the unit marks read (the whole path refuses the marks then, its left placed without them: not this one's)
  */
 async function markedStream(o) {
-  const { paper, units, texts, names, floating, text, baseText, left, leftFloats, floatMatch, bundle, ink, inkLeft, figureLeft, figureIds, inkFrom, figures, marked, markedOptions, doc, N, OPS, pdfjs, bases, deltaStat, lineCheck, image, onHead, onLeft, onPart, verdicts, given, rules, inFloat, forward, several } = o
+  const { paper, units, texts, texOrder, names, floating, text, baseText, left, leftFloats, floatMatch, bundle, ink, inkLeft, figureLeft, figureIds, inkFrom, figures, marked, markedOptions, doc, N, OPS, pdfjs, bases, deltaStat, lineCheck, image, onHead, onLeft, onPart, verdicts, given, rules, inFloat, forward, several } = o
   const events = markedPages(marked.doc, marked.log, markedOptions)
   let head = null
   try { head = (await events.next()).value?.head ?? null } catch (e) { if (isMemoryError(e)) throw e }
@@ -869,7 +876,7 @@ async function markedStream(o) {
   const L = streamingLeft({ doc: left.tokens, views: text.views, edges: left.edges, texts, names, floating, floatMatch: leftFloats, frame: given.leftFrame, columns: given.columns, unitMarks: head.unitMarks, forward, ink, inkLeft, figureLeft, figureIds })
   let maker = null, st = null, made = null
   try {
-    maker = await makerOf({ units, marks: marksOfHead(head, markedOptions.engine), arxiv: doc, OPS, paper, left: '', pdfjs, text: baseText ?? text, lineCheck, floatMatch, frame: given.makerFrame, cellRules: true, parts: true, draw: o.draw, rules, inFloat, ...(given.columnEdges ? { columnEdges: given.columnEdges } : {}) })
+    maker = await makerOf({ units, marks: marksOfHead(head, markedOptions.engine), arxiv: doc, OPS, paper, left: '', pdfjs, text: baseText ?? text, lineCheck, floatMatch, frame: given.makerFrame, cellRules: true, parts: true, draw: o.draw, rules, inFloat, texOrder, ...(given.columnEdges ? { columnEdges: given.columnEdges } : {}) })
     if (maker.refused) { made = { refused: maker.refused, stats: maker.stats }; maker = null } else st = streamWithInk(maker.stream({ marked: head }), ink)
   } catch (e) {
     if (isMemoryError(e)) throw e

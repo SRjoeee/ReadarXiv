@@ -207,7 +207,7 @@ async function layoutOf(paper, marks, arxivPdf, id) {
   const m = /^(\d{4}\.\d{4,5}|[a-z-]+\/\d{7})(?:v(\d+))?$/.exec(id)
   const task = pdfOf(arxivPdf)
   try {
-    const out = await makeLayout({ units: paper.units, marks: parseLayoutMarks(marks), arxiv: await task.promise, OPS, paper: { id: m?.[1] ?? '0000.00000', version: Number(m?.[2] ?? 1) }, left: '', pdfjs: version })
+    const out = await makeLayout({ units: paper.units, texOrder: paper.texOrder, marks: parseLayoutMarks(marks), arxiv: await task.promise, OPS, paper: { id: m?.[1] ?? '0000.00000', version: Number(m?.[2] ?? 1) }, left: '', pdfjs: version })
     return 'file' in out ? { text: encodeLayout(out.file), timedOut: out.stats.timedOut.length } : { refused: out.refused }
   } finally { await task.destroy() }
 }

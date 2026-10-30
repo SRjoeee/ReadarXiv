@@ -145,9 +145,11 @@ export function partSets(doc, units, [a, b], reach, ivs = pageReach(doc, reach))
  * bounds' order), with its MARGIN, and a float's match over the whole document (leftReach's). `boundsKnown()`: whether every
  * bound the paper may have is known (matchUnits' switch between a whole-document search and one between neighbours; by
  * default every unit marked). `run(onAnchor, onSettle)`: the ranges anchored while ready, each unit first framed on the page
- * given to onAnchor(id, anchor), each unit whose match is final and reaches no later page settled without one (onSettle(u));
+ * given to onAnchor(id, anchor), each unit whose match is final and reaches no later page settled without one (onSettle(id));
  * past the last page every unit left is settled. A unit placed before the page anchored and not settled is a defect of the
- * readiness: thrown. The units' ids are their indices
+ * readiness: thrown. `units` in the order TeX sets them (the text's: a unit's neighbours are read in it, as anchors.mjs
+ * matchUnits reads them), each by its id in every call (`mark`, `own`, `isMarked`, `isSettled`, onAnchor's and onSettle's), its
+ * place in `units` within; `forward` the places of the units written inside a float
  */
 export function rangedAnchors(doc, units, { floating = () => false, floatMatch = null, frame, boundsKnown = null, forward = null } = {}) {
   if (typeof frame !== 'function') throw new TypeError('rangedAnchors: `frame`, the whole document\'s frame rule (leftOfPart\'s)')
@@ -384,7 +386,12 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
     for (let p = 1; p <= P; p++) L[p] = L[p - 1] + (F0[p] | F1[p] | F2[p])
     for (let u = 0; u < n; u++) if (waits(L, u)) { witness = { am, u, L }; return }
   }
-  const settle = (u, f) => { if (settled[u]) return; settled[u] = 1; f(u) }
+  // (a unit's place in `units` by its id, and its id by its place: every call takes and gives the id)
+  const placeOf = id => { const u = unitOf.get(String(id)); if (u === undefined) throw new RangeError(`rangedAnchors: no unit ${id}`); return u }
+  const settle = (u, f) => { if (settled[u]) return; settled[u] = 1; f(units[u].id) }
+  // (the places by their units' ids rising: a range's units, and those settled with none, are told in their ids' order, whatever
+  // order the units are given in, so that a caller who decides them as told (the layout maker) decides them as it did before)
+  const byIds = Int32Array.from(units.keys()).sort((x, y) => units[x].id - units[y].id)
   // (whether a mark, a bound or a unit's own pages changed since a run found nothing more ready: what a run reads is that alone)
   let dirty = true
   // (each unit's match once made: a range reads only units whose matches are final)
@@ -395,10 +402,11 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
     bound(key, b) { setBounds(key, b); dirty = true },
     /** the first page not anchored yet */
     get am() { return am },
-    /** unit u's own marks' pages while its bounds are not final: the least and the last (0: it has none) */
-    own(u, low, high) { if (ownLow[u] !== low || ownHigh[u] !== high) dirty = true; ownLow[u] = low; ownHigh[u] = high },
-    /** unit u's bounds final: [first token, last token], or null for none */
-    mark(u, b) {
+    /** unit `id`'s own marks' pages while its bounds are not final: the least and the last (0: it has none) */
+    own(id, low, high) { const u = placeOf(id); if (ownLow[u] !== low || ownHigh[u] !== high) dirty = true; ownLow[u] = low; ownHigh[u] = high },
+    /** unit `id`'s bounds final: [first token, last token], or null for none */
+    mark(id, b) {
+      const u = placeOf(id)
       if (marked[u]) return
       if (b) setBounds(String(units[u].id), b)
       marked[u] = 1
@@ -406,11 +414,11 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
       markedCount++
       dirty = true
     },
-    isMarked: u => marked[u] === 1,
-    isSettled: u => settled[u] === 1,
+    isMarked: id => marked[placeOf(id)] === 1,
+    isSettled: id => settled[placeOf(id)] === 1,
     run(onAnchor, onSettle) {
       if (am > lastPage || !(bounds.size > 0 || (boundsKnown ? boundsKnown() : markedCount === n))) {
-        if (am > lastPage) for (let u = 0; u < n; u++) settle(u, onSettle)
+        if (am > lastPage) for (const u of byIds) settle(u, onSettle)
         return
       }
       if (!dirty || stillWaits()) return
@@ -427,12 +435,12 @@ export function rangedAnchors(doc, units, { floating = () => false, floatMatch =
         const [C, V2] = setsOf(am, to)
         // (a range's units are final: their neighbours are the scans', fixed since they became so)
         const got = leftOfSets(doc, units, { bounds, floating, floatMatch, frame, forward, wholeIndex, known: { hard, before, after, body: forward ? bodyEnd : null } }, [am, to], C, V2, matched)
-        for (const id of got.before) if (!settled[id]) throw new Error(`the page stream passed over unit ${id}: placed before page ${am}, never anchored`)
-        for (const [id, an] of got.anchors) settle(id, u => onAnchor(u, an))
+        for (const id of got.before) if (!settled[placeOf(id)]) throw new Error(`the page stream passed over unit ${id}: placed before page ${am}, never anchored`)
+        for (const [id, an] of [...got.anchors].sort((x, y) => x[0] - y[0])) settle(placeOf(id), i => onAnchor(i, an))
         am = to + 1
-        for (let u = 0; u < n; u++) if (!settled[u] && fin[u] && maxB[u] < am) settle(u, onSettle)
+        for (const u of byIds) if (!settled[u] && fin[u] && maxB[u] < am) settle(u, onSettle)
       }
-      for (let u = 0; u < n; u++) settle(u, onSettle)
+      for (const u of byIds) settle(u, onSettle)
     },
   }
 }

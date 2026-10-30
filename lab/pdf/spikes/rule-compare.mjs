@@ -53,7 +53,7 @@ const REPO = resolve(root, '../..')
 const argOf = name => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? null
 const ENGINE = resolve(argOf('engine') ?? REPO)
 const engine = path => import(pathToFileURL(join(ENGINE, 'src/pdf-reader/engine', path)).href)
-const { anchorUnits, boundsFromMarks, floatMatches, frameOfTokens, pageFrame } = await engine('pipeline/anchors.mjs')
+const { anchorUnits, boundsFromMarks, floatMatches, frameOfTokens, orderOf, pageFrame, placesIn } = await engine('pipeline/anchors.mjs')
 const { columnsOfTokens } = await engine('view/highlight.mjs')
 if (typeof frameOfTokens !== 'function' || typeof columnsOfTokens !== 'function') throw new Error(`${ENGINE}: its engine has no frameOfTokens or columnsOfTokens`)
 const { leftSideOf } = await engine('pipeline/left-side.mjs')
@@ -180,8 +180,10 @@ for (const id of papers) {
           const rule1 = frame ? () => F : pageFrame
           // (every rule named: the defaults are the page stream's, rules 1, 3 and 4; the frame is given)
           const rules = { edges: edges ? 'earlier' : 'all', floatSearch: float ? 'forward' : 'whole' }
-          const out = made ? await makeLayout({ units: paper.units, marks: made.marks, arxiv, OPS, paper: { id: m[1], version: Number(m[2]) }, left: '', pdfjs: PDFJS, text, floatMatch, frame: rule1, rules, inFloat: paper.inFloat }) : null
-          const left = anchorUnits(doc, texts, { bounds, floating, floatMatch, frame: rule1, ...(float ? { forward: new Set(paper.inFloat) } : {}) })
+          const out = made ? await makeLayout({ units: paper.units, texOrder: paper.texOrder, marks: made.marks, arxiv, OPS, paper: { id: m[1], version: Number(m[2]) }, left: '', pdfjs: PDFJS, text, floatMatch, frame: rule1, rules, inFloat: paper.inFloat }) : null
+          // (the left as the page pass anchors it: the units in the order TeX sets them, anchors.mjs orderOf, where the engine has it)
+          const order = orderOf ? orderOf(paper.texOrder, texts.length) : null
+          const left = anchorUnits(doc, order ? order.map(i => texts[i]) : texts, { bounds, floating, floatMatch, frame: rule1, ...(float ? { forward: order ? placesIn(paper.inFloat, order) : new Set(paper.inFloat) } : {}) })
           byFrame.set(key, { layout: out && 'file' in out ? encodeLayout(out.file) : null, refused: !out ? 'text only' : 'file' in out ? null : out.refused, stats: out?.stats ?? null, left })
         }
         const f = byFrame.get(key)

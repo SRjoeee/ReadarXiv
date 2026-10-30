@@ -139,7 +139,7 @@ for (const id of process.argv.slice(2).length ? process.argv.slice(2) : Object.k
   const task = open(new Uint8Array(readFileSync(join(dir, 'arxiv.pdf'))))
   const arxiv = await task.promise
   const t0 = performance.now()
-  const out = await makeLayout({ units: paper.units, marks, arxiv, OPS, paper: { id: m[1], version: Number(m[2]) }, left: '', pdfjs: version })
+  const out = await makeLayout({ units: paper.units, texOrder: paper.texOrder, marks, arxiv, OPS, paper: { id: m[1], version: Number(m[2]) }, left: '', pdfjs: version })
   const wall = performance.now() - t0
   await task.destroy()
   const { stats } = out
