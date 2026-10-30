@@ -3280,19 +3280,23 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     const prev = lines[k]
     return !!prev && prev.page === sl.page && sl.baseline > prev.baseline + 0.05 && Math.min(prev.x1, sl.x1) > Math.max(prev.x0, sl.x0)
   }
-  // (a page break the line in hand holds (the pageBreak token, below): the page it sends the next line to, or null)
-  let held = null
+  // (a page break the line in hand holds (the pageBreak token, below): the page it sends the next line to, or null; `stranded`,
+  // the pages of those whose line was its run's last, the run's text ending on it (a display's break, the unit's end), so that
+  // they sent nothing there: layoutCut lays them whole. `runFrom`: the index in `lines` of the current run's first line, the
+  // line a display's break opened)
+  let held = null, runFrom = 0
+  const stranded = []
   /** the first slot of page `pg` past the line in hand's, where the text may go on there: none past a display not passed */
   const pageSlot = pg => {
     let q = li + 1
     while (q < slots.length && slots[q].page < pg) q++
     return q < slots.length && !((slots[q].after ?? 0) > consumed) ? slots[q] : null
   }
-  /** whether no line of its run stands before line `l` on its page (no display between them: its `past`) */
+  /** whether no line of its run stands before line `l`, the last laid, on its page */
   const runOpens = l => {
-    let k = lines.indexOf(l) - 1
-    while (k >= 0 && !lines[k].items.length) k--
-    return k < 0 || lines[k].page !== l.page || lines[k].past !== l.past
+    let k = lines.length - 2
+    while (k >= runFrom && !lines[k].items.length) k--
+    return k < runFrom || lines[k].page !== l.page
   }
   const advance = () => {
     // (the line held a page break: the next line opens on that page's first slot, where the text may still go on there)
@@ -3486,11 +3490,12 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
           // (the part of the paragraph before a display ends with TeX's \parfillskip: its last line ragged, placeItems; a page
           // break it held places nothing, the display's own break placing what follows)
           line.ends = true
-          held = null
+          if (held !== null) { stranded.push(held); held = null }
           settle()
           if (stop) break
           li = slots.indexOf(to)
           open()
+          if (!tokens[i].brk) runFrom = lines.length - 1
         }
       }
       i++
@@ -3621,11 +3626,12 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     advance()
   }
   for (const l of lines) trim(l)
+  if (held !== null) stranded.push(held)
   // (the last line, settled as the others were when they closed)
   if (!stop) settle()
   // break tokens left at the end place nothing
   while (i < tokens.length && (tokens[i].blockTo !== undefined || tokens[i].newline !== undefined || tokens[i].pageBreak !== undefined)) i++
-  return { lines: lines.filter(l => l.items.length), rest: over ?? i, total: tokens.length, tokens, spilled }
+  return { lines: lines.filter(l => l.items.length), rest: over ?? i, total: tokens.length, tokens, spilled, stranded }
 }
 
 // ---- a unit over a page break (E3c, 2026-10-20): each page holds the text its source sets there
@@ -3696,35 +3702,22 @@ export function pageCutsOf(tokens, unit, starts, P) {
  * (withPageBreaks) at that layout's own state, and kept where it fits there. Else as without them: a cut never costs a
  * unit its fit, nor a second search of the fit's states. A break ends the line that holds it where the breaker ends that
  * line (breakLines); where that line was its run's last, so that the break's page got none of the run though its source
- * sets some there (`stranded`), the break is made `whole`, that line laid on the page, and the unit laid once more at the
- * same state. Returns { layout, tokens }, the tokens it was laid from
+ * sets some there (breakLines' `stranded`), the break is made `whole`, that line laid on the page, and the unit laid once
+ * more at the same state. Returns { layout, tokens }, the tokens it was laid from
  */
 export function layoutCut(tokens, cuts, blocks, s, P) {
   const plain = layoutUnit2(tokens, blocks, s, P)
   if (!cuts.length || plain.clipped || plain.spilled || !cutsReached(plain.lines, cuts)) return { layout: plain, tokens }
   let broken = withPageBreaks(tokens, cuts)
   let cut = layoutAt(broken, blocks, s, P, plain.state)
-  const left = cut.clipped ? [] : stranded(cut.lines, broken, cuts)
+  const left = cut.clipped ? [] : (cut.stranded ?? [])
   if (left.length) {
-    broken = withPageBreaks(tokens, cuts.map((c, k) => (left.includes(k) ? { ...c, whole: true } : c)))
+    broken = withPageBreaks(tokens, cuts.map(c => (left.includes(c.page) ? { ...c, whole: true } : c)))
     cut = layoutAt(broken, blocks, s, P, plain.state)
   }
   if (cut.clipped) return { layout: plain, tokens }
   cut.tried = plain.tried
   return { layout: cut, tokens: broken }
-}
-/** the cuts (their indices) a layout laid from withPageBreaks' tokens (`broken`) leaves on the line that holds the break,
- *  on a page before the cut's, with no line after it in its run: the run's text ended on that line */
-function stranded(lines, broken, cuts) {
-  const out = []
-  cuts.forEach((c, k) => {
-    // (the break's token in `broken`: after the k breaks before it)
-    const at = c.at + k, n = lines.findIndex(l => l.from > at)
-    const line = n < 0 ? lines.at(-1) : lines[n - 1], next = n < 0 ? null : lines[n]
-    if (!line || line.page >= c.page) return
-    if (!next || broken.slice(at, next.from).some(t => t.blockTo !== undefined)) out.push(k)
-  })
-  return out
 }
 /** whether a layout's lines (breakLines', each with its first token `from`) set a cut's token on a page before the cut's */
 function cutsReached(lines, cuts) {
@@ -3932,7 +3925,7 @@ function laidOut({ r, st, f }, s, P, tried, blocks) {
   // (`fitTrack`: the tracking the fit set the unit at, which a state made from this one keeps (run.mjs fillPage's): a line
   // squeezes at no tracking above it, breakLines' squeezes)
   const state = st.fitTrack === undefined ? { ...st, fitTrack: st.track } : st
-  return { lines: r.lines, f, s, scale: st.scale, state, knob: clipped ? 'clip' : st.knob, clipped, lostChars: Math.max(0, allChars - drawn), chars: allChars, tried, spilled: !!r.spilled, opened: r.lines.filter(l => l.opened > 0).length, unopened }
+  return { lines: r.lines, f, s, scale: st.scale, state, knob: clipped ? 'clip' : st.knob, clipped, lostChars: Math.max(0, allChars - drawn), chars: allChars, tried, spilled: !!r.spilled, opened: r.lines.filter(l => l.opened > 0).length, unopened, ...(r.stranded?.length ? { stranded: r.stranded } : {}) }
 }
 
 // ---- a unit's runs between its displays, each its own text block (the per-block state, 2026-10-24)

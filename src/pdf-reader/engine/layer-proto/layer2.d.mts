@@ -208,8 +208,9 @@ export interface Token { s?: string; st?: Style; face?: Face; cls?: 'cjk' | 'lat
 export interface Line { block: number; page: number; x0: number; x1: number; baseline: number; target: number | null; mode: string; used: number; cap: number; items: { t: Token; x: number; w: number; kern?: number }[]; past?: number; after?: number; seg?: { f: number; scale: number; state: Layout['state'] }; [more: string]: unknown }   // an item's w: its own width; kern: the explicit glue after it, an advance apart from w (0 once a line's end drops it)
 /** layoutUnit2's answer */
 /** a unit laid: its lines and the state that set them; `opened`, the lines TeX's rule opened (P.lineskip), `unopened` the
- *  lines it would have opened where it has no values (none read: they stay nearer the line before than nothing) */
-export interface Layout { lines: Line[]; f: number; s: number; scale: number; state: { lead: number; scale: number; track: number; trackLatin?: number; compress: number; borrow: number; knob: string; box?: boolean; next?: number }; knob: string; clipped: boolean; lostChars: number; chars: number; tried: number; spilled: boolean; opened: number; unopened: number; extents?: Map<string, number[]> }
+ *  lines it would have opened where it has no values (none read: they stay nearer the line before than nothing); `stranded`,
+ *  the pages of the page breaks whose line was its run's last (they sent nothing to their page: layoutCut) */
+export interface Layout { lines: Line[]; f: number; s: number; scale: number; state: { lead: number; scale: number; track: number; trackLatin?: number; compress: number; borrow: number; knob: string; box?: boolean; next?: number }; knob: string; clipped: boolean; lostChars: number; chars: number; tried: number; spilled: boolean; opened: number; unopened: number; stranded?: number[]; extents?: Map<string, number[]> }
 /** the original page's ink at a fraction of its canvas's resolution */
 export interface InkMap { w: number; h: number; ink: Uint8Array; factor: number }
 /** a unit's block with its lines' measured baselines */

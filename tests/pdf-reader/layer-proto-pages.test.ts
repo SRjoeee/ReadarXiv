@@ -164,6 +164,16 @@ describe('the unit laid with its cuts (layoutCut): the fit searched once, the cu
     expect(r.layout.lines.map(x => [x.page, x.mode])).toEqual([[3, 'just'], [3, 'just'], [4, 'last']])
     expect(r.tokens.filter(t => (t as { pageBreak?: number }).pageBreak !== undefined)).toEqual([{ pageBreak: 4, whole: true, w100: 0 }])
   })
+  it("never where text of the run goes on after that line: a kept region's placeholder inside the run is no run's end", () => {
+    // 20 words with a kept region's placeholder after the eleventh (a region no slot stands after: it breaks nothing); the
+    // cut in the second line, whose end the break waits for: page 4 opens with the 17th word, no line laid whole
+    const tokens = words(20)
+    tokens.splice(22, 0, { blockTo: 0, w100: 0 } as never)
+    const r = lay(tokens, [{ page: 4, at: 18 }])
+    expect([r.fit, r.layout.clipped]).toEqual([2, false])
+    expect(r.layout.lines.map(x => [x.page, x.mode])).toEqual([[3, 'just'], [3, 'just'], [4, 'last']])
+    expect(r.tokens.filter(t => (t as { pageBreak?: number }).pageBreak !== undefined)).toEqual([{ pageBreak: 4, w100: 0 }])
+  })
 })
 
 describe("the owner's case of 2026-10-30: a Chinese paragraph whose source's page break falls in the middle of a line", () => {
