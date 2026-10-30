@@ -2338,6 +2338,29 @@ own), each part carrying its pages' cell rules (`rules`).
   next's spread but 2310.20360's with the draw (1709 MiB against 1578 to 1653), inside a job whose compile takes about 100 s.
   The draw moves no first part by more than 0.2 s. Rule 5 (a float searched from the page of its last body neighbour on)
   stays off: it is no accuracy rule.
+- **The left in the order TeX sets the text, and a range its own lines on each page (PIPELINE 40).** The owner, 2026-10-30, on
+  1810.04805v2's Appendix C page: 「这一页的段落高亮标记基本上都失败了」 ("almost every paragraph's highlight on this page failed"),
+  and on page 4 §3.1's heading and the run-in "Task #1: Masked LM", lit on neither pane. Two roots, both in the anchoring
+  (`anchors.mjs`). A unit its marks do not bound (a heading, a cell, a paragraph whose marks land on no word of arXiv's where our
+  compile sets the page otherwise: page 16 up to 27 pt higher) is searched between its marked neighbours, which were read in the
+  units' numbers' order; the front end numbers an author block's later units and the bibliography's entries after the rest
+  (`latex-front.mjs` `entriesLast`), so an appendix after the references had an entry pages before it as its last paragraphs'
+  next neighbour, and the window between them was empty (page 16: 4 of 27 units located). The front end gives the order the walk
+  met the units in (`texOrder`, beside the units as `inFloat` is), and the page pass and the layout maker anchor their units in
+  it (`orderOf`; `left-part.mjs` `rangedAnchors` takes and gives unit ids, its units in any order, told in their ids' order). And a
+  marked unit's range owned every token from its first mark to its last: a footnote over a page break held the next page's
+  column between its two parts, and the headings matched there were its words (page 4: footnote 1 over pages 3 and 4). A range
+  over a page break owns, on each page, from the unit's first own line there to its last (the lines its matched words are most
+  of, or next to one, and its marks'), never crossing another unit's range (`rangeOnPages`, `rangesOf`: a caption above a
+  paragraph's next lines that repeats its words, 2307.16209v1 page 115, would have lost a line to it). Measured over 70 papers
+  (the 63 cached layers' and the gate pack's 7; the production pass, both engines, the same compiles): the units the left
+  locates on 1,868 pages, 17,804 before and 18,383 now, on 108 pages, and none lost but two cells that moved to the page TeX
+  set them on (2010.11929v2's "ViT-H/14 (JFT)" and "ViT-L/16 (JFT)", found in another table on page 13, now on page 22).
+  1810.04805v2: page 16, 4 of its 24 units with lines located before, 18 now (its cells of one or two words are found only
+  where they stand once in a row); page 4, 12 of 15 before, every one now; 2610.10069v1's page 8, under its own footnote over
+  a break, 7 of 9 before, every one now. The layout maker anchors in the same order and lays 34 more units on 7 papers (figure
+  texts, a footnote, a cell), none less; the gate pack's made files are byte for byte the same. No unit's text or number moves
+  (the 190 local sources, both engines' units compared one by one): a copy of 39 carries every unit (`PIPELINE_CARRIES`)
 - **The draw geometry (E-C), on by default (`draw`).** Each left part carries its page's draw (`layer-proto/draw.mjs`: the text
   items, the fonts, the Link annotations), read with the page's operator list (`pipeline/draw-data.mjs`): its text step T's
   own read (`readArxivText(doc, { draw: true })`, taken once a page), its annotations the page's one read, shared with the

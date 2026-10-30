@@ -279,8 +279,18 @@
 //     block's, its names or its places as frontBlock cuts them, whatever environment TeX sets it in (latex-front.mjs blockKind): a
 //     tabular's cells there (2610.35877v1's two names, 2608.06007v1's row of places, 2610.22214v1's block) are units of kind
 //     author or affiliation, each at its number with its text, no table's cell and no table's kept name, where they were cells
-//     of the tables' toggle; 3 of the 190 sources on disk, 8 units, every other unit and every kept name as it was
-export const PIPELINE_VERSION = '39'
+//     of the tables' toggle; 3 of the 190 sources on disk, 8 units, every other unit and every kept name as it was; 40 (the
+//     owner's report on 1810.04805v2, 2026-10-30: hovering lit nothing on Appendix C's page, nor §3.1's heading and "Task #1"):
+//     the left changes, no unit. A unit without marks is searched between its marked neighbours in the order TeX sets the text
+//     (latex-front.mjs entriesLast's `texOrder`, anchors.mjs orderOf), never the units' numbers' (the bibliography's entries
+//     numbered after an appendix were its last paragraphs' next neighbour, pages before them: an empty window); and a marked
+//     unit over a page break owns on each page its own lines alone (anchors.mjs rangeOnPages: a footnote over pages 3 and 4
+//     owned page 4's column, and the headings matched there were the footnote's). Over 70 papers (the 63 cached layers' and the
+//     gate pack's 7, the production pass on both engines): 17,804 units located on the left of 1,868 pages, 18,383 now, none
+//     lost but two cells that moved to the page they are on (2010.11929v2's 296, 297, from page 13 to 22); the maker lays 34
+//     more units on 7 papers (none in the pack, whose made files are byte for byte the same). Every unit, its pieces and its wire
+//     are 39's: a copy of 39 carries every unit (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '40'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

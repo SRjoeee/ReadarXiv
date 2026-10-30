@@ -145,7 +145,7 @@ export function partSets(doc, units, [a, b], reach, ivs = pageReach(doc, reach))
  * bounds' order), with its MARGIN, and a float's match over the whole document (leftReach's). `boundsKnown()`: whether every
  * bound the paper may have is known (matchUnits' switch between a whole-document search and one between neighbours; by
  * default every unit marked). `run(onAnchor, onSettle)`: the ranges anchored while ready, each unit first framed on the page
- * given to onAnchor(id, anchor), each unit whose match is final and reaches no later page settled without one (onSettle(u));
+ * given to onAnchor(id, anchor), each unit whose match is final and reaches no later page settled without one (onSettle(id));
  * past the last page every unit left is settled. A unit placed before the page anchored and not settled is a defect of the
  * readiness: thrown. `units` in the order TeX sets them (the text's: a unit's neighbours are read in it, as anchors.mjs
  * matchUnits reads them), each by its id in every call (`mark`, `own`, `isMarked`, `isSettled`, onAnchor's and onSettle's), its
