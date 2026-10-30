@@ -243,10 +243,6 @@ export function unitOf(bundle, row) {
   // (whether its box is other cells' too, of its source unit — its span, a \\multirow among its source pieces —, which a
   // translated row's pieces may not keep: run.mjs readGroup reads it; never written to a row)
   if (src.cell) Object.defineProperty(unit, 'spans', { value: cellSpans(src), enumerable: false })
-  // (its row's sentences, each one's start after the first in the plain source and translation, where the row has them: where
-  // the layer cuts the translation at a page break, layer2.mjs pageCutsOf; never written to a row)
-  const n = row[4]
-  if (isObject(n) && Array.isArray(n.src) && Array.isArray(n.tr) && n.src.length === n.tr.length && n.src.every(Number.isInteger) && n.tr.every(Number.isInteger)) Object.defineProperty(unit, 'sentences', { value: { src: n.src, tr: n.tr }, enumerable: false })
   if (state !== 'whole' && state !== 'partial') return unit
   if (!Array.isArray(pieces) || pieces.length > PIECES_MAX) return null
   const out = []
