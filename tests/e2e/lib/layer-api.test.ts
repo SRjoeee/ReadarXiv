@@ -512,11 +512,14 @@ describe('BUNDLE 8 held as a delta: the stand-in PDF the original, our page a de
     expect(chain).toMatchObject({ through: N })
   })
 
-  it('serves the delta at the layer\'s object route by its digest, immutable, as bytes; no base PDF of ours; the original as before', () => {
+  it('serves the delta at the layer\'s object route by its digest and `.delta` (the web\'s deltaPath), immutable, as bytes; the bare digest a 404, as the web answers it; no base PDF of ours; the original as before', () => {
     const api = layerApi({ sample, layer4: cut })
-    const a = get(api, `${PATH}/o/${delta.sha256}`)
+    const a = get(api, `${PATH}/o/${delta.sha256}.delta`)
     expect(a).toMatchObject({ status: 200, headers: { 'content-type': 'application/octet-stream', 'cache-control': 'public, max-age=31536000, immutable', 'access-control-allow-origin': '*' } })
     expect((a as { body: Uint8Array }).body).toEqual(delta.data)
+    const bare = get(api, `${PATH}/o/${delta.sha256}`)
+    expect([bare.status, jsonOf(bare)]).toEqual([404, { why: 'not-prepared' }])
+    expect(get(api, `${PATH}/o/${'0'.repeat(64)}.delta`).status).toBe(404)
     expect(get(api, `/api/v1/base/${sample.segment}/${delta.sha256}`).status).toBe(404)
     expect(get(api, `/api/v1/original/${sample.segment}`)).toMatchObject({ status: 200 })
     expect((get(api, `/api/v1/original/${sample.segment}`) as { body: Uint8Array }).body).toEqual(sample.pdf)

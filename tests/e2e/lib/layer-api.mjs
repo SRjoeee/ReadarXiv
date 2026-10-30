@@ -16,9 +16,11 @@
 //                                               catalog | 202 { position, stage, progress, retryAfterMs, layer: { units, head,
 //                                               parts } }, the objects made so far (every part's `prev`), parts given as the
 //                                               preparation's progress passes their share | 404, 429, faults as above
-//   GET  /api/v1/layer/<id>v<n>/<ctag>/o/<sha256>  200 an object of the layer, by its whole digest (immutable; a delta's,
-//                                               layer-cut.mjs cutSample's `delta`, application/octet-stream) | 404
+//   GET  /api/v1/layer/<id>v<n>/<ctag>/o/<sha256>  200 an object of the layer, by its whole digest (immutable) | 404
 //                                               { why: 'not-prepared' } for a digest it does not hold
+//   GET  /api/v1/layer/<id>v<n>/<ctag>/o/<sha256>.delta  200 the delta (layer-cut.mjs cutSample's `delta`) by its digest,
+//                                               application/octet-stream, as the web serves it (its deltaPath) | 404 { why:
+//                                               'not-prepared' } for any other digest; the delta's digest without the suffix is 404 too
 //   GET  /api/v1/base/<id>v<n>/<sha256>         our base page a head of ours names (BUNDLE 8, `layer4`: layer-cut.mjs cutSample's
 //                                               `base`), by its digest, no suffix: 200 application/pdf, 206 a range, 416 a range
 //                                               it does not hold, a strong ETag, immutable | 404 { why: 'no-base' } for another
@@ -100,7 +102,7 @@ const ORIGINAL_ROUTE = /^\/api\/v1\/original\/([^/]+)$/
 /** our base page by its digest (the capture groups: the segment, the digest; no suffix: the Worker's route) */
 const BASE_ROUTE = /^\/api\/v1\/base\/([^/]+)\/([0-9a-f]{64})$/
 /** an object of BUNDLE 4's layer by its digest (the capture groups: the segment, the ctag, the digest) */
-const OBJECT_ROUTE = /^\/api\/v1\/layer\/([^/]+)\/([^/]+)\/o\/([0-9a-f]{64})$/
+const OBJECT_ROUTE = /^\/api\/v1\/layer\/([^/]+)\/([^/]+)\/o\/([0-9a-f]{64})(\.delta)?$/
 /** the served faces' table and its files (`/static-fonts/index.json`, `/static-fonts/<group>.json`, a slice's
  *  file `/static-fonts/<16 hex>.woff2`), and the hyphenation patterns (`/hyph/<lang>.json`) */
 const FACES_ROUTE = /^\/static-fonts\/(index|[a-z0-9-]+)\.json$/
@@ -203,10 +205,14 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
     if (prepare) return json(200, { ready: true }, NO_STORE)
     return { status: 200, headers: { ...COMMON, 'content-type': 'application/json', 'content-security-policy': 'sandbox', 'cache-control': IMMUTABLE, ...(four ? baseTag : {}) }, body: four ? layer4.catalog : sample.bundle }
   }
-  function objectAnswer(segment, tag, sha) {
+  function objectAnswer(segment, tag, sha, delta) {
     const mine = segment === sample.segment && tag === CTAG5
-    // (a delta, BUNDLE 8's base of ours as an update over the original: a bundle object by its digest, PDF bytes, not JSON)
-    if (mine && layer4?.delta && sha === layer4.delta.sha256) return { status: 200, headers: { ...COMMON, 'content-type': 'application/octet-stream', 'cache-control': IMMUTABLE, ...baseTag }, body: layer4.delta.data }
+    // (a delta, BUNDLE 8's base of ours as an update over the original: a bundle object by its digest and the suffix the web's
+    // route names it by, PDF bytes, not JSON; under the bare digest, or the suffix on any other digest, nothing, as the web answers)
+    if (delta) {
+      if (mine && layer4?.delta && sha === layer4.delta.sha256) return { status: 200, headers: { ...COMMON, 'content-type': 'application/octet-stream', 'cache-control': IMMUTABLE, ...baseTag }, body: layer4.delta.data }
+      return missing('not-prepared')
+    }
     const bytes = mine ? layer4?.objects.get(sha) : null
     if (!bytes) return missing('not-prepared')
     return { status: 200, headers: { ...COMMON, 'content-type': 'application/json', 'content-security-policy': 'sandbox', 'cache-control': IMMUTABLE, ...baseTag }, body: bytes }
@@ -258,7 +264,7 @@ export function layerApi({ sample = loadSample(), vtag = VTAG, pollMs = 500, now
     if (target?.kind === 'error') return json(target.status, { why: 'unavailable' }, NO_STORE)
     if (objectRoute) {
       if (method !== 'GET') return json(405, { why: 'method-not-allowed' }, NO_STORE, { allow: 'GET' })
-      return objectAnswer(objectRoute[1], objectRoute[2], objectRoute[3])
+      return objectAnswer(objectRoute[1], objectRoute[2], objectRoute[3], objectRoute[4] === '.delta')
     }
     if (layerRoute) {
       const prepare = layerRoute[3] === '/prepare'
