@@ -3,7 +3,7 @@ import { displayBlockId } from '@/pdf-reader/engine/layer-proto/units.mjs'
 import { LINES_MAX, MOVED_STRIDE, readLeftPart, writeLeftPart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { LABEL_KINDS, PH_FLAG, PH_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { type Anchor, type DocToken, lineRects, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
-import { movedLinesOf } from '@/pdf-reader/engine/pipeline/moved-lines.mjs'
+import { MAP_FOUND, movedLinesOf } from '@/pdf-reader/engine/pipeline/moved-lines.mjs'
 import { layoutOf } from '@/pdf-reader/engine/view/highlight.mjs'
 import { createShapes, mirror } from '@/pdf-reader/engine/view/shapes.mjs'
 import { cutSide } from '../../lab/pdf/spikes/highlight-pages.mjs'
@@ -17,31 +17,57 @@ import { cutSide } from '../../lab/pdf/spikes/highlight-pages.mjs'
 // ---------------------------------------------------------------- the producer: the line map of the line check
 describe('movedLinesOf: our lines that stand elsewhere on arXiv\'s page', () => {
   const tok = (page: number, x: number, y: number, t = 'w'): DocToken => ({ t, page, x, y, w: 40, h: 10, top: y + 8, bottom: y - 2 })
-  // (page 1: two lines in place; page 2: a line in place, a line 12 pt off, a line of no partner below it in its column, a line
-  // in the other column of no partner and no placed neighbour; page 3: a line carried onto arXiv's page 4)
-  const ours = [tok(1, 50, 700), tok(1, 50, 688), tok(2, 50, 700), tok(2, 50, 688), tok(2, 50, 676), tok(2, 400, 500), tok(3, 50, 100)]
-  const lineAt = [{ page: 1, dx: 0, dy: 0 }, { page: 1, dx: 0.2, dy: 0 }, { page: 2, dx: 0, dy: 0 }, { page: 2, dx: 0.5, dy: -12 }, null, null, { page: 4, dx: 0, dy: 600 }]
-  const check = { lineAt, inPlace: Uint8Array.from([1, 1, 1, 0, 0, 0, 0]), tokenLine: Int32Array.from([0, 1, 2, 3, 4, 5, 6]) }
+  type Partner = { page: number; dx: number; dy: number } | null
+  const ours: DocToken[] = [], lineAt: Partner[] = []
+  const line = (page: number, x: number, y: number, p: Partner) => { ours.push(tok(page, x, y)); lineAt.push(p) }
+  // (page 1: two lines in place. Page 2: a column of 30 lines, the first 10 pt off, the next two of no partner, the rest 30 pt off,
+  // and a line in the other column of no partner and no neighbour found: 28 of 31 found. Page 3: a line arXiv sets on page 4,
+  // whose line stands in place; page 5: one arXiv sets on page 6, where our compile set none. Page 7: four lines the check found
+  // no partner for, their words arXiv's but rebroken)
+  line(1, 50, 700, { page: 1, dx: 0, dy: 0 }); line(1, 50, 688, { page: 1, dx: 0.2, dy: 0 })
+  for (let i = 0; i < 30; i++) line(2, 50, 700 - 10 * i, i === 1 || i === 2 ? null : { page: 2, dx: 0.5, dy: i === 0 ? -10 : -30 })
+  line(2, 400, 500, null)
+  line(3, 50, 100, { page: 4, dx: 0, dy: 600 }); line(4, 50, 500, { page: 4, dx: 0, dy: 0 }); line(5, 50, 100, { page: 6, dx: 0, dy: 600 })
+  for (let i = 0; i < 4; i++) line(7, 50, 700 - 20 * i, null)
+  const check = { lineAt, inPlace: Uint8Array.from(lineAt.map((p, l) => (p && p.page === ours[l]!.page && Math.abs(p.dx) <= 0.5 && Math.abs(p.dy) <= 0.5 ? 1 : 0))), tokenLine: Int32Array.from(ours.map((_, k) => k)) }
   const map = movedLinesOf(check, ours)
   const entries = (q: number) => { const e = map.get(q) ?? []; return Array.from({ length: e.length / MOVED_STRIDE }, (_, j) => e.slice(j * MOVED_STRIDE, (j + 1) * MOVED_STRIDE)) }
+  const dyOf = (q: number, y: number) => entries(q).find(e => e[3] === y - 2)?.[7]
 
-  it('a page in place has none; a moved line its offset, a line of no partner its column\'s nearest placed line\'s', () => {
-    expect(map.has(1)).toBe(false)
-    expect(entries(2)).toEqual([[2, 50, 90, 686, 696, 2, 0.5, -12], [2, 50, 90, 674, 684, 2, 0.5, -12]])
+  it('a page in place has an empty list; a moved line its offset, a line of no partner its column\'s nearest found line\'s', () => {
+    expect(map.get(1)).toEqual([])
+    expect(entries(2).length).toBe(30)
+    expect(entries(2)[0]).toEqual([2, 50, 90, 698, 708, 2, 0.5, -10])
+    expect(dyOf(2, 690)).toBe(-10)
+    // (the second line of no partner is nearer the line 30 pt off than the one 10 pt off: never the offset its neighbour took)
+    expect(dyOf(2, 680)).toBe(-30)
+    expect(entries(2).some(e => e[1] === 400)).toBe(false)
   })
-  it('a line carried onto another page is on both pages\' lists: where it lands, and where it leaves', () => {
+  it('a line carried onto another page is on both pages\' lists where that page has one; on its own alone where it has none', () => {
     expect(entries(3)).toEqual([[3, 50, 90, 98, 108, 4, 0, 600]])
     expect(entries(4)).toEqual(entries(3))
+    expect(entries(5)).toEqual([[5, 50, 90, 98, 108, 6, 0, 600]])
+    expect(map.has(6)).toBe(false)
+  })
+  it('a page whose lines the check did not find has none: its words arXiv\'s, its lines rebroken (judged by its tokens)', () => {
+    expect(map.has(7)).toBe(false)
   })
   it('no line check, no map', () => {
     expect(movedLinesOf(null, ours).size).toBe(0)
   })
-  it('every page the check read whole and drew has a list, empty where nothing moved; one past its work or not drawn has none', () => {
-    const pages = [{ page: 1, drawable: true }, { page: 2, drawable: true }, { page: 3, drawable: false }]
+  it('a page past the check\'s work, or not drawn, has none', () => {
+    const pages = [1, 2, 3, 4, 5, 7].map(page => ({ page, drawable: page !== 3 }))
     const m = movedLinesOf({ ...check, pages, over: [2] }, ours)
-    expect(m.get(1)).toEqual([])
-    expect(m.get(2)?.length).toBe(2 * MOVED_STRIDE)
-    expect([...m.keys()].sort()).toEqual([1, 2, 3, 4])
+    expect([...m.keys()].sort()).toEqual([1, 4, 5])
+    expect(m.get(4)).toEqual([])
+  })
+  it(`a page has a list where ${MAP_FOUND * 100} % of its lines found a partner, and none under`, () => {
+    const at = (n: number, found: number) => {
+      const o = Array.from({ length: n }, (_, i) => tok(1, 50, 700 - 12 * i))
+      return movedLinesOf({ lineAt: o.map((_, i) => (i < found ? { page: 1, dx: 0, dy: 0 } : null)), inPlace: Uint8Array.from(o.map((_, i) => (i < found ? 1 : 0))), tokenLine: Int32Array.from(o.map((_, k) => k)) }, o).has(1)
+    }
+    expect(at(10, 9)).toBe(true)
+    expect(at(10, 8)).toBe(false)
   })
 })
 
