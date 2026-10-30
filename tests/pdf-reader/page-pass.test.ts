@@ -12,6 +12,7 @@ import { leftSideOf } from '@/pdf-reader/engine/pipeline/left-side.mjs'
 import { layerOfPaper, layoutRecordOf } from '@/pdf-reader/engine/pipeline/page-pass.mjs'
 import { displayEdges, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
 import { lineCheckOf } from '@/pdf-reader/engine/layout/carry.mjs'
+import { movedLinesOf } from '@/pdf-reader/engine/pipeline/moved-lines.mjs'
 import { deltaOf } from './helpers/delta-pdfs'
 import { arxivOf, basePagesOf, endOf, type Mark, markedOf, type Run, text, unit, words, type World } from './helpers/make-world'
 
@@ -68,7 +69,10 @@ async function cutOf(w: World) {
   const made = await makeLayout({ units: w.units, marks: read.marks, arxiv: doc, OPS, paper: PAPER, left: '', pdfjs: '6.3.289', text: baseText, lineCheck, floatMatch: floatMatches(baseText.tokens, texts, floating) })
   if (!('file' in made)) throw new Error('refused')
   const N = w.pages.length, base = { source: 'ours' as const, ...OURS, pages: N, tree: '2025', check: { pages: [N, N] as [number, number], boxes: 'equal' as const, carried: L.placed / L.total } }
-  return cutBundle({ paper: { ...PAPER, pages: N }, base, units: bundleUnitsOf(source(w)), left: { pages: side.pages, units: side.units }, layout: made.file }, { leftPages: side.leftPages, base, orig: BASE, image: '1', draw: true })
+  // (each left part with its page's line map, as the page pass writes it: pipeline/moved-lines.mjs, an empty list on a page in place)
+  const moved = movedLinesOf(lineCheck, baseText.tokens)
+  const leftPages = async (p: number) => { const l = await side.leftPages(p), e = moved.get(p); return l && e ? { ...l, lines: e } : l }
+  return cutBundle({ paper: { ...PAPER, pages: N }, base, units: bundleUnitsOf(source(w)), left: { pages: side.pages, units: side.units }, layout: made.file }, { leftPages, base, orig: BASE, image: '1', draw: true })
 }
 const shas = (ws: readonly Written[]) => ws.map(x => x.sha256)
 

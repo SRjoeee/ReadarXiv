@@ -11,11 +11,11 @@ import type { UnitWire } from './bundle.mjs'
 /** the format: raised with any change to the shape of a head, part, left part or catalog; 6, a part with no layout says why;
  *  7, a left part's draw items carry their fills; 8, the head's base says whose PDF the layer is drawn over (ours or arXiv's)
  *  and `orig` names arXiv's beside ours, the catalog names the base; 9, our base wrapped by optional content; 10, the ink units
- *  and a part's figure units; 11, a figure row's set and room */
-export declare const BUNDLE5: '11'
-/** the formats a reader takes: its own, 7's (a bundle drawn over arXiv's PDF; its head read as `base.source` 'arxiv'), 9's and
- *  10's (a figure row of 10's each unit its own set, with no room) */
-export declare const BUNDLES_READ: readonly ['7', '9', '10', '11']
+ *  and a part's figure units; 11, a figure row's set and room; 12, a left part's line map (`lines`) */
+export declare const BUNDLE5: '12'
+/** the formats a reader takes: its own, 7's (a bundle drawn over arXiv's PDF; its head read as `base.source` 'arxiv'), 9's,
+ *  10's (a figure row of 10's each unit its own set, with no room) and 11's (a left part with no line map) */
+export declare const BUNDLES_READ: readonly ['7', '9', '10', '11', '12']
 /** whose PDF a layer is drawn over: our compile's final pass, or arXiv's */
 export declare const BASE_SOURCES: readonly ['ours', 'arxiv']
 export type BaseSource = (typeof BASE_SOURCES)[number]
@@ -204,10 +204,17 @@ export interface ReadPart {
   /** the state after this part */
   chain: PartChain
 }
+/** a line map's entry (BUNDLE 12): our page, our line's box (x0, x1, bottom, top), the arXiv page it stands on, its offset (dx, dy) */
+export declare const MOVED_STRIDE: 8
+/** the line map's entries a left part holds at most */
+export declare const LINES_MAX: number
 export interface ReadLeftPart {
   kind: 'left'; sha256: string; bytes: number; page: number; first: number
   table: { n: number; l: Float32Array; r: Float32Array; y: Float32Array; h: Float32Array; top: Float32Array; bottom: Float32Array }
   spans: [id: number, ranges: number[]][]; pairs: [id: number, runs: number[]][]
+  /** the page's line map (BUNDLE 12, pipeline/moved-lines.mjs): entries of MOVED_STRIDE values, our lines that stand elsewhere on
+   *  arXiv's page; null where it has none (and in a part of 11) */
+  lines: Float64Array | null
   /** the page's draw geometry (E-C), checked; null: the browser reads the page itself */
   draw: Draw | null
 }
@@ -317,6 +324,8 @@ export declare function writeHead(o: {
 export declare function writeLeftPart(o: {
   paper: { id: string; version: number }; page: number; first: number; tokens: TokenWire
   spans: readonly (readonly [number, readonly number[]])[]; pairs: readonly (readonly [number, readonly number[]])[]
+  /** the page's line map (pipeline/moved-lines.mjs movedLinesOf's entries of it); none written where empty */
+  lines?: readonly number[] | null
   /** the page's draw geometry in PDF.js's shapes (draw.mjs wireOf): shed to null, never thrown, for any reason the reader would refuse it */
   draw?: DrawSource | Draw | null
   /** or as its JSON, as draw.mjs wireText made it (checked): it stands in the part's text as it is, neither parsed nor checked again */

@@ -144,8 +144,9 @@ export function layoutParts(L, parts) {
       const was = L.told.get(id)
       const rs = rects.map(([page, x0, y0, x1, y1]) => ({ page, x0, y0, x1, y1 }))
       // (a located unit's boxes on a page it is not located on: that page its own too, its rectangles there quiet — no part of the
-      // page's columns, edges or leadings; view/shapes.mjs)
-      if (was && quiet && !was.quiet && !L.drawn.has(id)) {
+      // page's columns, edges or leadings; view/shapes.mjs. And a unit told from its boxes, its boxes carried onto another page of
+      // arXiv's, a moved line's: that page its own too)
+      if (was && quiet && !L.drawn.has(id)) {
         const have = new Set(was.rects.map(r => r.page)), add = rs.filter(r => !have.has(r.page))
         if (!add.length) continue
         for (const r of add) r.quiet = true

@@ -113,7 +113,7 @@ const empty = { perPage: [0], l: [], r: [], y: [], h: [], top: [], bottom: [] }
  * and the fields of a base of ours with it, `orig` beside it: format.mjs writeHead), `units` (none
  * dropped), `left` { pages, units }, `layout` (the layout file or null) and, if `o.image` is not given, `versions.image`.
  * `o.target(a, N)`: the last page the part that begins at `a` is cut to, 'a' to N (default partTarget, the doubling
- * schedule); a harness cuts at any split with it. `o.leftPages(page)`: the page's { first, tokens, spans, pairs? } in the left part's input (null: a page with no tokens);
+ * schedule); a harness cuts at any split with it. `o.leftPages(page)`: the page's { first, tokens, spans, pairs?, lines? } in the left part's input (null: a page with no tokens);
  * called once for each page, in page order, as the parts that cover it are cut. `o.frontier(K, N)`: F as an array indexed by
  * page 0 to N of indices into K (-1 for none), default needFrontier. `whole.rules` (or `o.rules`): the rules near the paper's
  * table cells by page, which each part with a layout carries for its own pages. `o.verdict`, `o.recordOf`: partCutter's; `o.noLayout`
@@ -222,7 +222,7 @@ export function partCutter({ paper, N, head, views, leftPages, rules = null, fig
       // (a page with no tokens may come with its draw alone: its first token is the next page's, its tokens none)
       const first = got?.first ?? tokens
       const t = got?.tokens ?? empty
-      const w = await writeLeftPart({ paper, page, first, tokens: t, spans: got?.spans ?? [], pairs: got?.pairs ?? [], draw: got?.draw ?? null, drawText: got?.drawText ?? null })
+      const w = await writeLeftPart({ paper, page, first, tokens: t, spans: got?.spans ?? [], pairs: got?.pairs ?? [], lines: got?.lines ?? null, draw: got?.draw ?? null, drawText: got?.drawText ?? null })
       lefts.push(w)
       tokens = first + t.perPage[0]
     }
