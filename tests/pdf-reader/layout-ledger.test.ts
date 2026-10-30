@@ -48,8 +48,8 @@ describe('the content classes', () => {
     // names cut apart, which a bundle of 29 still holds, the references' too: "names" is the author block's alone, 2026-10-28)
     expect(unitClass({ kind: 'reference' })).toBe('references')
     expect(unitClass(['refnames', 0, null, null, null, []])).toBe('references')
-    // (an author block's places, the body's: always translated)
-    expect(unitClass({ kind: 'affiliation' })).toBe('body')
+    // (an author block's places, the names' with its names: the whole block one toggle, the owner's ruling of 2026-10-30)
+    expect(unitClass({ kind: 'affiliation' })).toBe('names')
     // (a kind the table does not name is the body's; no kind, no class)
     expect(unitClass({ kind: 'list' })).toBe('body')
     expect(unitClass(null)).toBeNull()
@@ -57,14 +57,14 @@ describe('the content classes', () => {
     for (const cls of Object.values(UNIT_CLASS)) expect(CLASS_IDS).toContain(cls)
   })
 
-  it('turns references and names on only where a reader\'s classes say so (an entry whole under references, the author block\'s names under names)', () => {
+  it('turns references and names on only where a reader\'s classes say so (an entry whole under references, the author block whole under names)', () => {
     expect(TOGGLE_DEFAULTS.references).toBe(false)
     expect(TOGGLE_DEFAULTS.names).toBe(false)
     expect([...classesOn(null)].sort()).toEqual(Object.keys(TOGGLE_DEFAULTS).filter(t => TOGGLE_DEFAULTS[t as keyof typeof TOGGLE_DEFAULTS]).sort())
-    // (a unit by its class: the body always, the author block's places too, a cell under tables, an entry (and a 29's entry's
-    // names) under references, the author block's names under names)
+    // (a unit by its class: the body always, a cell under tables, an entry (and a 29's entry's names) under references, the
+    // author block, its names and its places, under names)
     const on = classesOn({ references: true, tables: false })
-    expect(['para', 'affiliation', 'cell', 'reference', 'refnames', 'author'].map(kind => unitShown({ kind }, on))).toEqual([true, true, false, true, true, false])
+    expect(['para', 'affiliation', 'cell', 'reference', 'refnames', 'author'].map(kind => unitShown({ kind }, on))).toEqual([true, false, false, true, true, false])
     expect(['reference', 'refnames', 'author', 'affiliation'].map(kind => unitShown({ kind }, classesOn({ names: true })))).toEqual([false, false, true, true])
     expect(unitShown(null, on)).toBe(false)
   })

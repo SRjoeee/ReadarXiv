@@ -65,9 +65,10 @@ const OWN_UNIT_ARG = new Set(['caption', 'subcaption', 'subcaptionbox', 'caption
 const CAPTIONS = new Set(['caption', 'subcaption', 'subcaptionbox', 'captionof', 'tablecaption'])
 /** the front matter's blocks of names and places: their notes (\\thanks, \\footnote) each a footnote of its own
  *  (1706.03762's author block: its footnotes stayed in English, the whole block one opaque command), and the names and
- *  places between them units of their own (frontBlock): the authors' names of kind 'author' (the reader's "names"), the
- *  affiliations, institutions and addresses of kind 'affiliation' (prose, always translated: docs/route/orphan-text.md §5,
- *  the owner's ruling of 2026-10-25); the marks, e-mail and web addresses, ORCIDs and spacing stay */
+ *  places between them units of their own (frontBlock): the authors' names of kind 'author', the affiliations,
+ *  institutions and addresses of kind 'affiliation', both the reader's "names" (the whole block one toggle:
+ *  docs/route/orphan-text.md §5, the owner's ruling of 2026-10-30); the marks, e-mail and web addresses, ORCIDs and spacing
+ *  stay */
 const FRONT_MATTER = new Set(['author', 'affil', 'affiliation', 'institute', 'address'])
 /** the author blocks whose text opens with the authors' names (frontBlock's `names`): LaTeX's \\author and its kin of the role
  *  table (FRONT_ROLES' `author`); every other such block — \\affil, \\affiliation, \\institute, \\address, ICML's
@@ -79,6 +80,11 @@ const roleOf = name => (FRONT_NAMES.has(name) ? 'names' : 'places')
 const AUTHOR_KINDS = new Set(['author', 'affiliation'])
 /** whether a unit is of an author block (AUTHOR_KINDS): what the TeX path sets and keeps as one block, names and places alike */
 export const inAuthorBlock = u => AUTHOR_KINDS.has(u?.kind)
+/** the kind of the units an environment makes, `kind` (a table's cells, an abstract, a theorem), but inside an author block:
+ *  there every unit is the block's own, its names or its places as frontBlock cuts them, whatever environment TeX sets it in
+ *  (2610.35877v1's `\author{\begin{tabular}{cc} Ayush Mittal & Dhruv Gupta\\ …\end{tabular}}`: its names were table
+ *  cells, of the tables' toggle, translated with the author block's off) */
+const blockKind = (b, kind) => (AUTHOR_KINDS.has(b.kind) ? b.kind : kind)
 /** commands inside an author block whose argument is a name or a place: IEEEtran's blocks, acmart's parts of an
  *  affiliation. Anything else there — \\email, \\orcid, \\inst{1}, \\textsuperscript — stays as it is */
 const FRONT_PROSE = new Set(['IEEEauthorblockN', 'IEEEauthorblockA', 'institution', 'department', 'city', 'state', 'country'])
@@ -1662,12 +1668,13 @@ function walk(s, from, to, b, ctx) {
       if (ctx.tblrEnvs.has(env) && (ctx.tblrMath || argsOfForm(s, afterBegin, '[{').args.some(a => TBLR_MATH.test(uncommented(s.slice(a.start, a.end)))))) { ctx.skipped[env] = (ctx.skipped[env] ?? 0) + 1; i = afterEnd; continue }
       if (TABLE_ENVS.test(env)) {
         if (!ctx.tables) { ctx.skipped[env] = (ctx.skipped[env] ?? 0) + 1; i = afterEnd; continue }
-        // a table: each cell is a unit of its own; & and \\ end it. The column specification and width stay as they are
+        // a table: each cell is a unit of its own; & and \\ end it. The column specification and width stay as they are. In an
+        // author block its cells are the block's units, cut at & and \\ as cells are (blockKind), placed in no grid
         const tp = ctx.ownEnvs.has(env) ? null : environmentParams(env, paper?.bindings ?? null), tr = tp && readArgs(s, afterBegin, tp, bodyEnd)
         // (one the table does not know by its form: tabularx's, tabular*'s and tabulary's {width}[pos]{spec}, else [pos]{spec})
         const argsEnd = tr?.complete ? tr.end : argsOfForm(s, afterBegin, env.startsWith('tabularx') || env === 'tabular*' || env === 'tabulary' ? '{[{' : '[{').end
         // (the paper's tables numbered in the order they begin, a table nested in a cell after the one it is in)
-        const saved = b.kind, savedCell = b.cellMode, first = b.units.length, table = (ctx.tableCount = (ctx.tableCount ?? 0) + 1); b.kind = 'cell'; b.cellMode = true
+        const saved = b.kind, savedCell = b.cellMode, first = b.units.length, table = (ctx.tableCount = (ctx.tableCount ?? 0) + 1); b.kind = blockKind(b, 'cell'); b.cellMode = true
         walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved; b.cellMode = savedCell
         // each cell unit's place in the table's grid (tableGrid), by which its consistency group is found (groups.mjs):
         // a table nested in a cell gives its units the outer cell's place, set after its own
@@ -1695,7 +1702,7 @@ function walk(s, from, to, b, ctx) {
       if (FLOAT_ENVS.test(env)) b.inFloat = true
       // (its units `bracketed`: written back in its brackets, a translation's own ] would end them, patch)
       if (title) { const saved = b.kind, before = b.units.length; b.kind = 'heading'; walk(s, title.start + 1, title.end - 1, b, ctx); b.flush(); b.kind = saved; for (const u of b.units.slice(before)) u.bracketed = true }
-      const saved = b.kind; b.kind = env === 'abstract' ? 'abstract' : ctx.theorems.has(env) ? 'theorem' : saved
+      const saved = b.kind; b.kind = blockKind(b, env === 'abstract' ? 'abstract' : ctx.theorems.has(env) ? 'theorem' : saved)
       walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved
       b.inFloat = outside
       i = afterEnd; continue
@@ -2167,7 +2174,7 @@ const BIB_KEPT_FIELD = /^(?:doi|url|eprint|isbn|issn|archive|archiveprefix|prima
  * A bibliography (thebibliography's body, `from` after its \\begin, `to` its \\end): each \\bibitem's entry, from its key's
  * group to the next \\bibitem or the end, is one unit of kind `reference` (the reader's "References"), whole: the names it
  * opens with are the entry's, never a unit of their own nor of the "names" toggle (the owner's ruling of 2026-10-28: the
- * references and the author names are each their own toggle's, decoupled — "names" is the author block under the title alone —,
+ * references and the author block are each their own toggle's, decoupled — "names" is the author block under the title alone —,
  * and an entry is never set in two pieces styled apart). Its label (\\bibitem's optional argument, set in the list's label
  * box) and its key are no piece of it; what precedes the first \\bibitem (the style's \\providecommand's) is no unit, nor is
  * REVTeX's \\BibitemOpen and \\BibitemShut. In an entry its numbers stay the original's ink (keepNumbers), its web addresses

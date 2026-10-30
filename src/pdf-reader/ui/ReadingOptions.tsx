@@ -112,7 +112,7 @@ export function ReadingOptions({ controller, embedded = false }: { controller: R
 /**
  * What to translate (S-R-27; docs/PDF-READER.md §9.1, docs/route/orphan-text.md §8.7): the parts of a paper beside its body a
  * reader shows translated or as the original — the text in figures and in tables, the running heads and feet, the references,
- * the author names under the title —, each translated once whatever they are, so that a toggle shows or hides what was made
+ * the author block under the title (its names, affiliations and e-mail line) —, each translated once whatever they are, so that a toggle shows or hides what was made
  * and never translates again (the layer opened again over the same documents and rows: session/host.ts follows the setting as
  * it lands, from here or the settings page). The website's group, in the same words and order: its heading a row of the panel
  * in the second ink, naming the rows under it, each a switch's row in the panel's own pattern

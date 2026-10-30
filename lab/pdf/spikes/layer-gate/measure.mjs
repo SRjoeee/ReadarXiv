@@ -29,9 +29,9 @@
 import { naturalOf, pitchOf, roomOf } from '../../../../src/pdf-reader/engine/layer-proto/break-room.mjs'
 import { noStart } from '../../../../src/pdf-reader/engine/layer-proto/no-start.mjs'
 /** the kinds no unit of is measured as text left the original's or drawn: a figure's text, and the classes the reader's default
- *  toggles hide (rules/content-classes.mjs TOGGLE_DEFAULTS: the author block's names, a bibliography's entries), which it never
- *  draws */
-const UNMEASURED = new Set(['figure', 'author', 'reference', 'refnames'])
+ *  toggles hide (rules/content-classes.mjs TOGGLE_DEFAULTS: the author block, its names and its places since 2026-10-30, a
+ *  bibliography's entries), which it never draws */
+const UNMEASURED = new Set(['figure', 'author', 'affiliation', 'reference', 'refnames'])
 
 const lum = (a, i) => a[i] * 0.299 + a[i + 1] * 0.587 + a[i + 2] * 0.114
 /** a value to d decimals, as the parity harness's toFixed */

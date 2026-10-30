@@ -305,7 +305,7 @@ describe('REVTeX\'s empty number field opening an entry (2610.20716v1)', () => {
   })
 })
 
-describe('an author block with affiliations and \\thanks: its names the class names, its places the body\'s, translated for every target', () => {
+describe('an author block with affiliations and \\thanks: its names and its places the class names, its note the body\'s, translated for every target', () => {
   const tex = doc('\\maketitle\n\nThe body of the paper says something.', '\\title{A Title}\n\\author{Ada Lovelace\\thanks{Supported by the Analytical Society.}\\\\\nUniversity of London\n\\and\nCharles Babbage\\\\\nCambridge}')
   const p = open({ 'main.tex': tex })
   const bundle = { units: bundleUnitsOf(p) }
@@ -319,13 +319,13 @@ describe('an author block with affiliations and \\thanks: its names the class na
     expect(note).toBeGreaterThanOrEqual(0)
     expect(toTranslate(bundle as never, 'de')).toContain(note)
   })
-  it('shows the names translated under the names toggle alone; the places, the note and the body always', () => {
+  it('shows the names and the places translated under the names toggle alone (the whole block, 2026-10-30); the note and the body always', () => {
     const author = units(p).find(u => u.kind === 'author')!, note = units(p).find(u => u.kind === 'footnote')!, place = units(p).find(u => u.kind === 'affiliation')!
-    expect([unitClass(author), unitClass(note), unitClass(place)]).toEqual(['names', 'body', 'body'])
-    expect([unitShown(place, classesOn(null)), unitShown(place, classesOn({ names: false, references: false }))]).toEqual([true, true])
+    expect([unitClass(author), unitClass(note), unitClass(place)]).toEqual(['names', 'body', 'names'])
+    expect([unitShown(place, classesOn(null)), unitShown(place, classesOn({ names: false, references: false }))]).toEqual([false, false])
     expect(shownTranslated('names', classesOn(null))).toBe(false)
-    expect(unitShown(author, classesOn({ names: true }))).toBe(true)
-    expect(unitShown(author, classesOn({ references: true }))).toBe(false)
+    expect([unitShown(author, classesOn({ names: true })), unitShown(place, classesOn({ names: true }))]).toEqual([true, true])
+    expect([unitShown(author, classesOn({ references: true })), unitShown(place, classesOn({ references: true }))]).toEqual([false, false])
     expect(unitShown(note, classesOn(null))).toBe(true)
   })
 })

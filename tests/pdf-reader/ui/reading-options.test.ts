@@ -28,7 +28,7 @@ describe('the reading options (the reader\'s design, §6.1)', () => {
     expect(container.querySelector('[popover="auto"]')!.getAttribute('role')).toBe('dialog')
     const switches = [...container.querySelectorAll('[role="switch"]')].map(s => [s.getAttribute('aria-label'), s.getAttribute('aria-checked')])
     // what to translate in the place figure text had (S-R-27): the owner's rows in the owner's order, figures, tables and heads on
-    expect(switches).toEqual([['对照高亮', 'true'], ['图中文字', 'true'], ['表中文字', 'true'], ['页眉页脚', 'true'], ['参考文献', 'false'], ['作者姓名', 'false'], ['深色时调暗页面', 'true']])
+    expect(switches).toEqual([['对照高亮', 'true'], ['图中文字', 'true'], ['表中文字', 'true'], ['页眉页脚', 'true'], ['参考文献', 'false'], ['作者信息', 'false'], ['深色时调暗页面', 'true']])
     expect(container.querySelectorAll('[data-swatch]').length).toBe(DEFAULT_CONFIG.appearance.highlights.length)
     // the appearance: the system's first, as icons named by their words, as the display switch is (the maintainer, 2026-09-26)
     expect([...container.querySelectorAll('[role="radio"]')].map(r => [r.getAttribute('aria-label'), r.getAttribute('aria-checked'), !!r.querySelector('svg'), r.textContent])).toEqual([['跟随系统', 'true', true, ''], ['浅色', 'false', true, ''], ['深色', 'false', true, '']])

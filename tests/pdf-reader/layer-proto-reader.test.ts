@@ -137,6 +137,25 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     await expect(openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl, classes: { margins: true } } as never)).rejects.toThrow(/classes/)
   })
 
+  it('awaits the author block whole under "names": its names and its places the original\'s with the toggle off, its default, both with it on', async () => {
+    // (the owner's ruling of 2026-10-30: the toggle is the whole block, an institution too; a bundle made before it, its places
+    // kind `affiliation`, is read so as it is, the class being the reader's, of the kind)
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const parts = partsOf(), place = SPECS.length
+    parts.units = bundleUnitsOf({ units: [...sourceUnits().units, { kind: 'affiliation', pieces: [{ t: 'text', s: 'Some University' }] } as SourceUnit], kept: new Set() })
+    parts.left.kinds.push('affiliation')
+    parts.left.units.push([place, place, [rectOf([1, 20, 160, 225])]])
+    const bundle = readBundle(writeBundle(parts)), doc = docOf()
+    const all = toTranslate(bundle, 'zh')
+    expect(all).toEqual(expect.arrayContaining([1, place]))
+    const block = new Set([1, place])
+    for (const [classes, want] of [[null, all.filter(id => !block.has(id))], [{ names: false, tables: true }, all.filter(id => !block.has(id))], [{ names: true }, all]] as const) {
+      const layer = await openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl, classes })
+      expect((seen.opens.at(-1) as unknown as Opened).expect, JSON.stringify(classes)).toEqual(want)
+      layer.dispose()
+    }
+  })
+
   it('draws the figures\' text translated where the toggle `figures` is on, as it is by default, and the original\'s where it is off', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const bundle = bundleOf(), doc = docOf()

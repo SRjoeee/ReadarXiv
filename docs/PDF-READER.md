@@ -454,7 +454,7 @@ its own toggle, below; until then the switch showed or hid it too.
 The experiment's own `axtPdfReader` storage key goes, without a migration: it was never released (rule 7 is about what a
 released version left on a machine).
 
-**What to translate** (UI.md S-R-27, S-O-56; `CONFIG_VERSION` 20 → 21, the owner's rulings of 2026-10-25 and 2026-10-28): `pdfReader.classes`,
+**What to translate** (UI.md S-R-27, S-O-56; `CONFIG_VERSION` 20 → 21, the owner's rulings of 2026-10-25, 2026-10-28 and 2026-10-30): `pdfReader.classes`,
 five booleans whose keys are the engine's toggles (`rules/content-classes.mjs` `TOGGLES`, `always` and `never` aside) and
 whose value is the layer's `classes` option as it is (§19.10, §19.13).
 
@@ -464,7 +464,7 @@ whose value is the layer's `classes` option as it is (§19.10, §19.13).
 | `tables` | true | Text in tables | the table cells |
 | `heads` | true | Headers and footers | the running heads and feet |
 | `references` | false | References | the bibliography, each entry whole, the names inside it included |
-| `names` | false | Author names | the author names under the title, and nothing else: the affiliations, addresses and e-mail line are always translated |
+| `names` | false | Authors and affiliations | the whole author block under the title: its names, affiliations, institutions, addresses and e-mail line (the owner, 2026-10-30; from 2026-10-28 to then the names alone, "Author names", the rest always translated). The key and its default are as they were: no migration, and by default the whole block is the original's |
 
 - **A toggle shows or hides; it never translates.** Every class is translated once whatever the toggles say (the run sends
   every unit `toTranslate` names, the hidden classes' among them), and a change is the layer side's `setClasses`: the door
@@ -1315,7 +1315,7 @@ the same thing, its string is reused (marked).
 | | 目标语言 · 搜索语言 · 翻译服务 | Target language · Search languages · Translation service |
 | | 阅读选项 | Reading options |
 | | 对照高亮 (S-P-80, reused) · 高亮颜色 | Hover highlight · Highlight colour |
-| | 翻译范围 · 图中文字 · 表中文字 · 页眉页脚 · 参考文献 · 作者姓名 (the owner's, 2026-10-25; the website's words; the settings' group's aside 只对 PDF 对照生效) | What to translate · Text in figures · Text in tables · Headers and footers · References · Author names (Applies to bilingual PDFs only) |
+| | 翻译范围 · 图中文字 · 表中文字 · 页眉页脚 · 参考文献 · 作者信息 (the owner's, 2026-10-25, the last row's 2026-10-30; the website's words; the settings' group's aside 只对 PDF 对照生效) | What to translate · Text in figures · Text in tables · Headers and footers · References · Authors and affiliations (Applies to bilingual PDFs only) |
 | | 外观 · 跟随系统 · 浅色 · 深色 · 深色时调暗页面 | Appearance · System · Light · Dark · Dim pages in dark mode |
 | | 下载 · 译文 PDF · 原文 PDF | Download · Translation PDF · Original PDF |
 | | 设置 (S-P-02, reused) · 在默认查看器中打开 | Settings · Open in the default viewer |
@@ -1728,7 +1728,7 @@ The edge cases, decided:
 | `BUNDLE5` (`layer-proto/format.mjs`, `'11'`: a figure row carries its set and its room, §19.12; 10 the ink units, the parts' figure units and the head's ledger; 9 a part's cell rules in place of the add-on, our page wrapped by optional content) | reader contract | the layer route's objects: a head's, a part's, a left part's and a catalog's shape, the figure rows (the units chunks have a format of their own, `UNITS_FORMAT`, raised only by their shape); a reader reads 7's, 9's and 10's objects too (`BUNDLES_READ`) | the request (`CTAG5`, `b<BUNDLE5>-j<PDFJS>`: §18.4) and the R2 key (`VTAG5`) | a bundle of the old format is not found under the new `CTAG5` and is prepared again; readers older than it get `unknown-versions` until they update |
 | `BUNDLE` (`layer-proto/bundle.mjs`, `'3'`: the layout file's schema 3, the paper's `\lineskip` and `\lineskiplimit`; 2 its babel names, D1a. The file's schemas 4 (`PH_FLAG.JOINED` and `PH_FLAG.OUTSIDE`) and 5 (a found placeholder's fill, its row's last number where its glyphs are not black: 0xRRGGBB, or -1 where no one colour holds more than half of them) are not a contract of their own: `b3` names schemas 3 to 5, each reader's `parseLayout` refusing the others', so only this engine's reader reads a `b3` bundle holding schema 5) | reader contract | the one-file bundle `readBundle` reads (`CTAG`, `VTAG`): its shape, the units' tuple, kinds and flags, the layout file's schema, the left geometry | its request and key (§18.4) | readers older than it refuse it until they update |
 | `PDFJS` (`pipeline/versions.mjs`, `'6.3.289'`) | reader contract | the PDF.js whose reading the layout and the wrap are made against | as `BUNDLE` | as `BUNDLE` |
-| `PIPELINE_VERSION` (`pipeline/versions.mjs`, `'38'`) | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
+| `PIPELINE_VERSION` (`pipeline/versions.mjs`, `'39'`) | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
 | `LAYOUT` (`layout/file.mjs`, `'31'`: a page whose lines moved across its breaks through compile drift drawn, `carry.mjs` `lineCheckOf`, §19.7; 30 a footnote's call after the last word found by its raised mark, a biblatex entry's unit of the new kind `inkreferences`, §19.7; 29 backref's list after an entry a row of its list piece's, §19.13; 28 a Type 3 glyph's ink its char procedure's paths, `layout/ink.mjs` `type3Box`, #122-1; 27 a command that sets the punctuation after it before its ink marked around the pair, a macro TeX said sets no ink EMPTY, a piece alone at an entry's end given the lines it runs onto, a macro that sets one punctuation mark drawn as it, §19.7; 26 a unit TeX set flush left or flush right flagged so, `UNIT_FLAG.FLUSH_LEFT` and `UNIT_FLAG.FLUSH_RIGHT`, and a paragraph a box's close ends read by its own skips, §18.1, §18.8; 25 the release sweep of 2026-10-29, a line too short to be evidence found on no other page, a word a hyphen cuts going on below, an ink unit's paragraph one unit, a math face told by its family's names, `layer-proto/fonts.mjs` `classifyFont`), `REMOVAL` (`pipeline/versions.mjs`, `'17'`: a biblatex entry's ink its unit's groups, the point before each in our page; 16 backref's list after an entry its list piece's ink, §19.13; 15 a level figure unit on its column's edge or centred in it anchored there, `figure-text.mjs` `columnAnchorOf`, §19.12; 14 a unit's text owns the rules TeX painted on its own lines, an OT1 `\_`, an underline, own.mjs MR 2b, #117; 13 a punctuation mark a command set before its own ink its unit's text, not the piece's, §19.9; 12 a macro TeX said sets no ink is no placeholder of ink, an opening point alone at its unit's end owns its lines up to TeX's skip before another block; 8 no add-on, a part's or a bundle's cell rules in its place, our page wrapped by optional content, §11.8, §19.9) | extraction | the layout maker (the file's own schema is `LAYOUT_SCHEMA`, 5); how a drawn unit's ink is taken away | the R2 key | bundles made again lazily |
 | `TRANSLATE_VERSION` (`translate/version.mjs`, `'9'`: a caption cut into sentences on the tags wire as a paragraph is, §17.1; `'8'`: a run-in label where a sentence begins past the unit's head keeps its markers on the markers wire (`mt.mjs` `classOf`), 2010.11929v2's "Center:" and "Right:"; `'7'`: backref's list after an entry on no wire, put back after the translation with an en space before it, §19.13; `'6'`: every content class translated once whatever the language, the author block for every target and a bibliography's entries; `'5'`: a display's own stop written after its marker and taken off the reply; `'4'`: a styled pair whose two ends stand where the wire has a marker anyway keeps its markers; `'3'`: a sentence whose words change style sent whole, the pairs inside it on no wire; `'2'`: a formula split across inline formulas sent as one marker) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
 | `RULES_SCHEMA` (`rules/layout.mjs`, `9`: the languages of a script the engine set, the owner's ruling of 2026-10-29: `latinPatterns` takes Italian's, Dutch's, Polish's, Turkish's, Indonesian's (Malay's too, as babel's malay.ldf takes them), Czech's and Swedish's, `cyrillicPatterns` added, a Cyrillic word's hyphenation, Russian's rules or Ukrainian's or Bulgarian's own patterns, and `hyphenation` their minimums as TeX applies them under babel; 8: `latinPatterns` takes French's, Spanish's and Portuguese's own, hyph-utf8's (the three were hyphenated with English's, #121-4), and `hyphenation` their minimums as babel sets them, French 2 and 3, Spanish 2 and 2, Portuguese 2 and 3; 7: `evenPitch` and `keepAlign` added, lane B's B1 and B2, the ruling of 2026-10-29, §18.8; 6: `cjkFaces` holds its group alone, a CJK script drawn at Regular and Bold beside every English family, its `light` designs and its unread `kai` gone, the ruling of 2026-10-29; 5 before it: `fillLeadRel` added, the fill's top relative to the original's pitch; 4: `adaptiveFill.band` read against the page's own paragraphs, 1b-C) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
@@ -3367,7 +3367,12 @@ groups, line fit, no double ink, structure kept) and the provider owns translati
 server, into the shared cache, and a reader's settings only show or hide it. And of 2026-10-28, the references and the author names
 decoupled, each toggle's duty its own: "references" governs the bibliography alone, each entry whole, the names inside an entry
 its own; "names" governs the author names under the title alone; the affiliations, addresses and the e-mail line are always
-translated.
+translated. And of 2026-10-30, which reverses that last part: "names" governs the whole author block under the title, its names,
+affiliations, institutions, addresses and e-mail line, translated together or the original's together (the row "Authors and
+affiliations"; the key `names` and its default, off, kept, so that by default the whole block is the original's). The toggle
+moves no version: a unit's class is the reader's, read from the kind the bundle carries (`UNIT_CLASS`), so a paper prepared
+before it is read so as it is; every class was already translated whatever the toggles say. What moves PIPELINE 39 is the
+block's units, below: whatever TeX sets an author block in, its units are the block's.
 
 - **Entries are units, each whole** (`source/latex-front.mjs` `bibliography`; PIPELINE 29, and PIPELINE 30 one unit an entry). The
   ground truth is the bibliography's TeX the compile reads: the paper's `thebibliography`, or the job's `.bbl` where
@@ -3463,8 +3468,15 @@ translated.
   LOST 163 → 160 (none new), every base page pixel-identical (1606).
 - **Not units:** a `.bib` the TeX tree holds rather than the package (a style's IEEEabrv): no pass is made.
 - **The author block: names apart from places** (`source/latex-front.mjs` `frontBlock`, PIPELINE 30, LAYOUT 23). An author block's
-  affiliations, institutions, addresses and its e-mail line are units of their own, kind `affiliation` (class body: always
-  translated), its names kind `author` (class names: the names toggle). Read from the TeX the source holds: the command (`\author`
+  affiliations, institutions, addresses and its e-mail line are units of their own, kind `affiliation`, its names kind `author`,
+  both of the class names, the names toggle (2026-10-30; the places were the body's, always translated, from 2026-10-28).
+  Whatever environment TeX sets a block's text in, a unit cut there is the block's, of its row's kind (`blockKind`, PIPELINE
+  39): a tabular inside `\author` is cut at its `&` and `\\` as a table's cells are, so that no unit spans an alignment's
+  cell, but its units are names or places, placed in no table's grid and never a table's kept name (2610.35877v1's
+  `\author{\begin{tabular}{cc} Ayush Mittal & Dhruv Gupta\\ …}`: its names were cells, of the tables' toggle, translated with
+  the block's off; 2608.06007v1's row of places and 2610.22214v1's whole block too: 3 of the 190 sources on disk, 8 units,
+  each at its number with its text, every other unit and every kept name as it was; compiled, each located, none left the
+  original's by the wrap, their layout rows next's). A block in a center, a minipage or a theorem keeps its kind as well. Read from the TeX the source holds: the command (`\author`
   and its kin names, `\affil`, `\affiliation`, `\institute`, `\address` and their kin places), the rows of the tabular LaTeX sets an
   `\author` in (its first row names, the rest places, but a row that holds an author's note, sets an affiliation's mark after a
   name, opens with "and", or stands before a numbered list of places is names: 2608.14893's and 2610.21880v1's second rows of
@@ -3497,12 +3509,20 @@ translated.
   are sent whatever the language, as every unit is but a table's kept names; they are laid as any unit, and stay the original's
   where the wrap cannot hide their ink (`unhidden`).
 - **The toggles** are stage 2's (`classes` at the door's open and the layer side's, `setClasses`, TOGGLE_DEFAULTS: references and
-  names off, heads, tables and figures on): an entry's unit is of the class `references`, the author block's names of `names`, its
-  places of the body's (UNIT_CLASS), so that with their toggle off no page awaits their rows, the door takes none, and the
+  names off, heads, tables and figures on): an entry's unit is of the class `references`, the author block's names and its places of
+  `names` (UNIT_CLASS, 2026-10-30), so that with their toggle off no page awaits their rows, the door takes none, and the
   translating indicator marks none (it reads the same `classes`); the door gives the run its classes resolved over TOGGLE_DEFAULTS,
   and a direct open of v0 (run.mjs openProto, the lab's and the tests') given none takes the same defaults: every class but the
   names and the references. A reader's stored setting keeps its keys and its meaning: "references" the bibliography, "names" the
-  author names.
+  author block (its places with its names since 2026-10-30: a reader who had turned it on sees them translated as before, one
+  who had left it off sees them the original's). The ledger (layout/ledger.mjs) counts a place's glyphs under `names` in a base
+  made since (they were `body`'s): diagnostic counts, which no reader, gate or sweep holds to a class. The face waves ask no slice
+  of a unit the toggles hide (view/layer-side.mjs `shownNow`, warm.mjs `firstPageUnits` `shown`): the first page's wave asked the
+  places outside its budget as always drawn. An affiliation no source unit owns, made an orphan's or a note's ink unit
+  (layout/ink-units.mjs rule 8 reads an author unit's words alone), stays always translated: classing it as names is the maker's
+  change, with a PIPELINE of its own, not yet made. A paper whose own style sets its title block from macros of its own, no
+  `\author` at all (2610.30854v1's `\MakeJointTitle` in its `.sty`, from `\PaperAuthors` and `\PaperAffiliations`), has no
+  author unit: its lines are ink notes, always translated, which no rule over the block's words can reach. Next.
 - **Measured** (`lab/pdf/spikes/classes-gate.mjs`, record `lab/pdf/records/classes-gate.md`; `lab/pdf/spikes/unit-hash-diff.mjs`
   over the local sources), against `next` 2346530d:
   - **The units** of the 170 local sources (cut before any compile, so without the `.bbl`s the pass makes):

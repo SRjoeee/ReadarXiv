@@ -129,7 +129,8 @@ export { LayoutRefusal } from './json.mjs'
  *  marks.mjs followsOf `split`), the piece placed from its own ink (the gate pack's seven papers write no such pair: their
  *  layout files are 23's rows); 24 (the content classes' coverage, the references and the author names decoupled:
  *  PDF-READER §19.13): an author block's affiliations, institutions, addresses and e-mail line units of their
- *  own (UNIT_KINDS `affiliation`, latex-front.mjs frontBlock: the body's, always translated; its names `author` as before),
+ *  own (UNIT_KINDS `affiliation`, latex-front.mjs frontBlock: the body's, always translated, then the names' toggle's from
+ *  2026-10-30; its names `author` as before),
  *  every unit at the number it had, the rows cut apart after the source's other units and before the entries (entriesLast);
  *  and a bibliography's entry one unit, whole (`refnames` kept at its index, made no more): a maker or a reader of 23 reads no
  *  such kind, so a file of 24 is another maker's, and each side of the rules gate reads its own pack (the file's schema is 5

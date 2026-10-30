@@ -53,7 +53,7 @@ export const DEFAULT_PDF_READER = { enabled: true, original: false, sync: true, 
 /**
  * The PDF reader's "What to translate" (v21; docs/PDF-READER.md §9.1, docs/route/orphan-text.md §8.7): which of a paper's
  * parts beside its body are shown translated — the text in figures, in tables, the running heads and feet, the references,
- * the author names under the title. The keys are the engine's toggles (rules/content-classes.mjs TOGGLES, `always` and
+ * the author block under the title (the names, affiliations and e-mail line: the owner's ruling of 2026-10-30). The keys are the engine's toggles (rules/content-classes.mjs TOGGLES, `always` and
  * `never` aside), and the value is its layer's `classes` option as it is. Every class is translated once whatever they
  * are: a toggle shows or hides what was made, and never translates again. The defaults are the owner's (2026-10-25), the
  * engine's TOGGLE_DEFAULTS, restated so that the configuration stays free of the engine; tests/config/storage.test.ts

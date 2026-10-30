@@ -32,7 +32,7 @@ export interface FaceWarmer {
 export declare const FIRST_PAGE_CHARS: number
 /** page 1's units as they can be told before any part is read: the units in id order whose texts are held, an author's aside,
  *  until their CJK characters reach `chars`, and every place of the author block; each with no style */
-export declare function firstPageUnits(kinds: readonly (string | null)[] | null | undefined, texts: ReadonlyMap<number, string> | null | undefined, o?: { chars?: number }): WarmUnit[]
+export declare function firstPageUnits(kinds: readonly (string | null)[] | null | undefined, texts: ReadonlyMap<number, string> | null | undefined, o?: { chars?: number; shown?: ((kind: string) => boolean) | null }): WarmUnit[]
 /** the slices the wave loads at a time */
 export declare const WAVE_SLOTS: number
 /** a warmer of one target's faces over the host's served slices */
