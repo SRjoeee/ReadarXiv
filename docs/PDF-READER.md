@@ -1958,16 +1958,15 @@ B's text on page A). 106 end page A at the end of the line that holds the cut, e
 A's lines are the fit's through that line, page B opens at the fit's next line, or at the cut where it is a line's first
 token); 19 more now keep their cut, where the old one cost them their fit and was dropped, page B's text drawn on page A
 (1810.04805v2-ko unit 47); 11 lay their run's last line on page B, 3 keep the short line (a run of one line on page A), and 3
-are laid as without the cut in both. 96 of them are drawn otherwise, and 34 units on 11 pages that hold one, through the
+are laid as without the cut in both. 93 of them are drawn otherwise, and 31 units on 9 pages that hold one, through the
 page fill's reads of it: the page's target leading (1810.04805v2-ko page 4, 8 units from 1.11 to 1.05, unit 47's cut kept;
 2608.16117v1-zh pages 24, 25 and 27, 15 units looser by 0.08 to 0.12, their cut units' page B parts a line shorter) and the
-page's one size (2307.16209v1-zh, 6 pages, 5 of them where a line went whole). The rules gate: de, es, fr and ru unmoved; ja,
-ko and zh worse on the measures of the room the rule frees, which is the rule's own outcome: a paragraph's page B part up to
-a line shorter (zh frames with a blank line 0.22 to 0.237, blank lines a frame 0.533 to 0.555, paragraph gaps a pitch or more
-wider 0.22 to 0.229; ko 0.055 to 0.063 and 0.038 to 0.043; ja's gaps 0.024 to 0.029), a page A a line shorter where a line
-went whole, the fill's leadings that follow (zh pitch spread 0.433 to 0.489), and a line laid whole on page B running past
-the end of the source's last line there, which was short (zh frames past the right edge 0.07 to 0.074: 2307.16209 and
-2608.04322, where the paragraph's page B part in the source is its short last line). The sweep's
+page's one size (2307.16209v1-zh, 4 pages, 3 of them where a line went whole). The rules gate: de, es, fr and ru unmoved; ja,
+ko and zh worse on the measures of the room the rule frees, which is the rule's own outcome, accepted by the owner's ruling
+(`lab/pdf/rulings/2026-10-30-page-cut-line.json`): a paragraph's page B part up to a line shorter (zh frames with a blank
+line 0.22 to 0.233, paragraph gaps a pitch or more wider 0.22 to 0.227; ko 0.055 to 0.063 and 0.038 to 0.043; ja's gaps 0.024
+to 0.029), a page A a line shorter where a line went whole, and the fill's leadings that follow (zh pitch spread 0.433 to
+0.483). The sweep's
 invariant (i) reads a sentence as drawn on another page only where none of its drawn pages is among its source's: the rule
 moves no sentence so but one the source sets wholly on page B that ends inside the rest of the line that holds the cut, and,
 where a line goes whole, one wholly inside that line that the source sets wholly on page A.
