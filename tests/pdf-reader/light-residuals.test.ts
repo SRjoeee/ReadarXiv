@@ -117,6 +117,52 @@ describe('a block lights on both panes or on neither (view/shapes.mjs, highlight
     expect(r.shapes.hit(2, 550, mid(656), PAD, () => null)?.id).toBe(5)
   })
 
+  it('hovering every point of a page whose displays have no token throws nothing, in any order the parts and pages come (Devin on #523)', () => {
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    const withLay = parts.map(p => (p.pages[0] === 1 ? { ...p, layout: layout() } : p))
+    const sweep = (S: { shapes: { hit: (p: number, x: number, y: number, pad: number, st: () => null) => unknown; runs: (id: number) => unknown[] } }) => { for (let y = 520; y < 780; y += 3) for (let x = 40; x < 560; x += 6) S.shapes.hit(1, x, y, PAD, () => null); S.shapes.runs(displayBlockId(1, 0)!) }
+    for (const order of ['parts, pages', 'pages, parts', 'page 1, parts, page 2']) {
+      const l = createShapes({ kindOf }), m = mirror(l)
+      if (order === 'parts, pages') { l.addParts(withLay as never); l.addPage(lefts[1]!); l.addPage(lefts[2]!) }
+      else if (order === 'pages, parts') { l.addParts(parts as never); l.addPage(lefts[1]!); l.addPage(lefts[2]!); l.addParts([{ pages: [1, 1], views: [], left: [], layout: layout() }] as never) }
+      else { l.addParts(parts as never); l.addPage(lefts[1]!); l.addParts([{ pages: [1, 1], views: [], left: [], layout: layout() }] as never); l.addPage(lefts[2]!) }
+      for (const S of [l, m]) expect(() => sweep(S), order).not.toThrow()
+    }
+  })
+
+  it('a unit whose boxes come in one part and its location on another page in a later one lights on both pages, in either order and read whole (Devin on #523)', () => {
+    // (unit 9: its line on page 1 in part A, no location there; part B locates it on page 2, by a repeated word)
+    const word = at(2, 700)
+    const a9 = new Map([...anchors, [9, { tokens: word, rects: lineRects(doc, word), coverage: 1, bounded: true, pairs: new Map(word.map((k, w) => [w, k])) }]]) as Map<number, Anchor | null>
+    a9.delete(3)
+    const w9 = layoutOf(doc, views, a9, kindOf)
+    const { parts, lefts } = cutSide(w9, a9, views)
+    const A = { pages: [1, 1], views: [], left: [], layout: { names: [], lines: [[9, row(1, 200, 230, 600)]], ph: [], labels: [] } }
+    const runsOf = (order: string) => {
+      const l = createShapes({ kindOf })
+      const located = parts.map(p => ({ ...p, left: p.left }))
+      if (order === 'A, then B') { l.addParts([A] as never); l.addParts(located as never) } else if (order === 'B, then A') { l.addParts(located as never); l.addParts([A] as never) } else l.addParts([A, ...located] as never)
+      l.addPage(lefts[1]!); l.addPage(lefts[2]!)
+      return { pages: l.shapes.runs(9).map(r => r.page).sort(), hit: l.shapes.hit(1, 215, mid(600), PAD, () => null)?.id, mirror: mirror(l).shapes.hit(1, 215, mid(600), PAD, () => null)?.id }
+    }
+    const together = runsOf('A and B together')
+    expect(together).toEqual({ pages: [1, 2], hit: 9, mirror: 9 })
+    for (const order of ['A, then B', 'B, then A']) expect(runsOf(order), order).toEqual(together)
+  })
+
+  it('a mirror made before a part brings a box of a located unit lights it too: the box\'s page drawn anew there (Devin on #523)', () => {
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    const l = createShapes({ kindOf }), m = mirror(l)
+    // (the page in place by a first part's lines, then a later part's box: a formula of unit 4 drawn as paths past its run's edge, at
+    // 529-534, inside the column's overhang)
+    const base = layout(), first = { ...base, lines: base.lines.map(([id, rows]) => (id === 4 ? [4, [...row(1, 72, 528, 560), ...row(1, 72, 492, 548), ...row(1, 72, 528, 536)]] : [id, rows])), ph: base.ph.filter(r => r[0] !== 4) }, later = { names: [], lines: [], ph: [[4, 0, PH_KINDS.indexOf('math'), 0, 1, 529, 548, 534, 555.5, 545.8]], labels: [] }
+    l.addParts(parts.map(p => (p.pages[0] === 1 ? { ...p, layout: first } : p)) as never)
+    l.addPage(lefts[1]!); l.addPage(lefts[2]!)
+    expect(m.shapes.hit(1, 532.5, mid(548), PAD, () => null)?.id).not.toBe(4)
+    l.addParts([{ pages: [1, 1], views: [], left: [], layout: later }] as never)
+    expect([l.shapes.hit(1, 532.5, mid(548), PAD, () => null)?.id, m.shapes.hit(1, 532.5, mid(548), PAD, () => null)?.id]).toEqual([4, 4])
+  })
+
   it('a placeholder whose ink the wrap could not hide (no group of its own) stays shown, though drawn as a crop: lit with its unit', () => {
     const seg = { kind: 'math', flags: 0, segs: [1, 420, 660, 426, 668, 658] }
     const lu = { erase: [[100, 658, 300, 670]], ph: new Map([[0, seg]]), labels: [] }

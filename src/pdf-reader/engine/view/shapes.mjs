@@ -258,8 +258,9 @@ export function createShapes({ kindOf: unitKind = () => undefined, warn = warnOn
       state.parts.push(part)
       for (const f of state.followers) f.addParts([part])
     }
-    // (a page in already: told now, its spans after it, and into its kept input, which a mirror or a laid page made later reads)
-    for (const p of pages) { const input = state.pages.get(p); if (input) tellBoxes(input, true) }
+    // (a page in already: told now, its spans after it, and into its kept input, which a mirror or a laid page made later reads; its
+    // geometry let go on the mirrors too, which read the boxes and made it before they came)
+    for (const p of pages) { const input = state.pages.get(p); if (!input) continue; tellBoxes(input, true); for (const f of state.followers) f.addSpans(p, []) }
   }
   /** page `input`'s blocks told by their boxes where the page is in place: its spans changed in the input (before the page is laid),
    *  and with `late` in the layout and the followers too, each quiet unit beginning at its first token on its first page. Taken again

@@ -155,7 +155,9 @@ export function layoutParts(L, parts) {
         continue
       }
       if (L.drawn.has(id) || (was && (quiet || !was.quiet))) continue
-      if (was) L.anchors.delete(id)
+      // (a located telling in place of a quiet one keeps the quiet one's pages it does not hold, quiet, in whatever order the parts
+      // came: a unit's boxes in one part and its location on another page in a later one light on both pages, as read whole)
+      if (was) { const have = new Set(rs.map(r => r.page)); for (const r of was.rects) if (!have.has(r.page)) rs.push({ ...r, quiet: true }); L.anchors.delete(id) }
       if (DRAWING.has(L.kindOf(id))) { L.drawn.add(id); drawnAt(L.drawings, rs) } else L.told.set(id, { stream, rects: rs, ...(quiet ? { quiet } : {}) })
       told = true
     }
@@ -536,8 +538,10 @@ function unitRuns(L, p, at, id, toks) {
   // words before it on its row are cells of their own (a table lights cell by cell, the owner's ruling of 2026-10-30;
   // floats.mjs cellsOf)
   let head = null
+  // (a head only where the unit has a token of its own on the page: a block of boxes alone — a display drawn as paths — has none, its
+  // boxes being what it is there)
   const first = L.anchors.get(id).tokens[0]
-  if (first === toks[0] && L.kindOf(id) !== 'cell') {
+  if (toks.length && first === toks[0] && L.kindOf(id) !== 'cell') {
     for (let k = lines[line(first)].k0; k < first; k++) {
       if (owner[k - k0] !== -1) head = null
       else head = Math.min(head ?? Infinity, inkL[k - k0])
