@@ -24,16 +24,17 @@ export interface RangedAnchors {
   lastPage: number
   /** the first page not anchored yet */
   readonly am: number
-  /** unit u's own marks' pages while its bounds are not final: the least and the last (0: none) */
-  own(u: number, low: number, high: number): void
-  /** unit u's bounds final: [first token, last token], or null for none */
-  mark(u: number, bounds: [number, number] | null): void
+  /** unit `id`'s own marks' pages while its bounds are not final: the least and the last (0: none) */
+  own(id: number, low: number, high: number): void
+  /** unit `id`'s bounds final: [first token, last token], or null for none */
+  mark(id: number, bounds: [number, number] | null): void
   /** a bound of a pair of marks no unit's (bounds.size, matchUnits' switch) */
   bound(key: string, bounds: [number, number]): void
-  isMarked(u: number): boolean
-  isSettled(u: number): boolean
+  isMarked(id: number): boolean
+  isSettled(id: number): boolean
   /** the ranges anchored while ready: each unit first framed on the page to onAnchor, each final one reaching no later page
-   *  settled without one; past the last page every unit left settled */
-  run(onAnchor: (id: number, anchor: Anchor) => void, onSettle: (u: number) => void): void
+   *  settled without one; past the last page every unit left settled; each told by its id, in their ids' order */
+  run(onAnchor: (id: number, anchor: Anchor) => void, onSettle: (id: number) => void): void
 }
+/** `units` in the order TeX sets them (the text's: anchors.mjs orderOf), each called by its id; `forward` their places */
 export declare function rangedAnchors(doc: readonly DocToken[], units: readonly UnitText[], o: Omit<LeftPartOptions, 'bounds' | 'minCoverage' | 'frame' | 'wholeIndex'> & { frame: FrameRule; boundsKnown?: (() => boolean) | null }): RangedAnchors
