@@ -1377,9 +1377,11 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   - Measured on the release sweep's 53 papers and 2010.11929v2 (1 453 pages, every one laid by the door, both panes' shapes made as
     the reader makes them, the pages in place: `readarxiv-lab-data/unified-light`, 2026-10-30), before and after: displays lit as
     their own block on both panes 0 → 2 995 of 3 016 (20 more in part on the left; before, 2 553 lit with their unit on both and
-    428 with it on the left alone); labels unlit on a pane 2 702 of 4 805 → 7; kept pieces unlit on a pane 972 of 43 068 → 16;
-    text lines unlit on a pane 396 → 74; units dark on both panes 35 → 21, on the right alone 20 → 1; arXiv's text of a unit that no
-    block lit 295 lines → 9. The sentences the sweep's invariant checks keep their faults (2 units, as before); 4 456 → 4 461
+    428 with it on the left alone); labels unlit on a pane 2 678 of 4 805 → 5; kept pieces unlit on a pane 958 of 43 068 → 18;
+    text lines unlit on a pane 336 of 60 516 → 18 (ink our page shows under an item's box that the unit's lit area meets counts as
+    lit: a crop the door drew a little aside, a label drawn anew in a centred line); units dark on both panes 35 → 21, on the right
+    alone 20 → 1 (the nine dark on the left alone after were dark on both before); arXiv's text of a unit that no block lit 305
+    lines → 9. The sentences the sweep's invariant checks keep their faults (2 units, as before); 4 456 → 4 461
     units lit by sentence.
   - Not yet (the next maker's): text no unit owns — page numbers and feet, a listing or an algorithm, an e-mail line, a note that
     is an address alone, a bibliography the front end did not cut into entries, a display no unit holds: 5 406 lines on 47 of the
