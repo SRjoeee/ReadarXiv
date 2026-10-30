@@ -387,7 +387,7 @@ export declare function cropFields(parts: CropPart[]): { mode: 'crop'; page: num
 export declare function pageStartsOf(uc: readonly Char[], O: readonly { start: number }[], S: readonly { start: number }[], pair: ArrayLike<number>, src: string): Map<number, number>
 /** the translation's cut at each later page's start: the token the page's text begins with */
 export declare function pageCutsOf(tokens: readonly Token[], unit: { src?: string; pieces?: readonly unknown[]; sentences?: { src: number[]; tr: number[] } | null }, starts: ReadonlyMap<number, number> | null | undefined, P: { noStart?: string; noEnd?: string }): { page: number; at: number }[]
-/** a unit laid with its page cuts: as without them, and once more with them at that layout's state where it sets a cut's token on an earlier page, kept where it fits there */
+/** a unit laid with its page cuts: as without them, and once more with them at that layout's state where it sets a cut's token on an earlier page, kept where it fits there; each break ends the line that holds it where the breaker ends it, and where that line is its run's last the breaker lays it on the break's page */
 export declare function layoutCut(tokens: Token[] & { base?: unknown }, cuts: readonly { page: number; at: number }[], blocks: readonly Block2[], s: number, P: Params): { layout: Layout; tokens: Token[] & { base?: unknown } }
 /** the tokens with a page-break token before each cut's token */
 export declare function withPageBreaks(tokens: Token[] & { base?: unknown }, cuts: readonly { page: number; at: number }[]): Token[] & { base?: unknown }
@@ -441,8 +441,8 @@ export declare function shareOf(layout: Pick<Layout, 'lines'>, blocks: readonly 
 /** whether a layout's lines keep a shared row as the fit left it (no text there further right; none where the fit set none; its
  *  line there on the fit's baseline) */
 export declare function keepsShare(share: Share | null | undefined, lines: readonly Line[]): boolean
-/** whether `lines` set no token on a later page than the fit's lines (`fit`) set it (the page fill's guard) */
-export declare function keepsPages(fit: readonly Pick<Line, 'from' | 'page'>[], lines: readonly Pick<Line, 'from' | 'page'>[]): boolean
+/** whether `lines` set no token on a later page than the fit's lines (`fit`) set it (the page fill's guard); a line after a page-break token of `tokens` may stand on its page */
+export declare function keepsPages(fit: readonly Pick<Line, 'from' | 'page'>[], lines: readonly Pick<Line, 'from' | 'page'>[], tokens?: readonly Token[] | null): boolean
 /** a box in v0's device pixels on the page: [x, y, w, h] */
 export type DevBox = [number, number, number, number]
 /** one of the layer's drawing operations over render A (hideOps'): where a unit's hidden ink lies (nothing drawn), a plane of the

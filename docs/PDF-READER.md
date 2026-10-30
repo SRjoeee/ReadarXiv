@@ -1920,6 +1920,57 @@ experiment vetoed a flag where arXiv's lines contradicted it (a unit told flush 
 2608.16117's abstract); the cause was the probe's, which read a boxed paragraph by the next one's `\par` under TeX Live 2023
 (§18.1), and it reads the paragraph's own skips now: no flag is read off arXiv's lines.
 
+### 18.9 Layout decisions of 2026-10-30
+
+**A paragraph over a page break ends the earlier page with a full line.** Since E3c (2026-10-20) a unit over a page break
+holds on each page the text its source sets there: where the source's page B begins (`layer2.mjs` `pageStartsOf`, the
+alignment's first source word there), the translation is cut at the share of the sentence the source sets before the break
+(`pageCutsOf`), and a page-break token there sends the text on to page B (`layoutCut`, laid at the fit's own state, kept
+where it fits). The line ended at the cut wherever the share fell in it, so page A's last line stood short with the rest of
+its measure empty, and a word could be split over the two pages: 1706.03762v7 in Chinese, §3.2.2, ended page 4 half a line
+short and opened page 5 with the second half of the word for "output"; §6.2 ended page 8 a few characters into its second
+line, the language pair split over pages 8 and 9. The owner, 2026-10-30: 「明明有空间，但我们却强行把内容挤到了下一行，导致这个地方直接空着。按空间预估来说下一行大概只显示"..图2所示"的几个字，其他文字填满上一行。」
+("There was room, yet we forced the text onto the next line and left the place empty. By the room, the next line should
+show only the few characters of '…as depicted in Figure 2', and the rest should fill the line above.")
+
+The rule, as TeX never leaves a short line before a page break: the line that holds the cut ends where the breaker ends it
+(full, set as any line: justified where it is full enough), and page B opens at the next line's start. A page's text begins
+up to a line from where its source's does, and no further; a cut that falls on a line's first token breaks there. It lives in
+the breaker (`breakLines`: a page-break token reached on an earlier page is held by the line in hand and sends the next line
+to its page's first slot when that line closes), not in a token index fixed from the fit's lines, because every later lay of
+the unit's tokens moves the line ends: the page fill's leading, tracking and the page's one size, and a unit's runs laid
+apart. Where the line that holds the cut is its run's last (the run's text ends on it, or on the empty line a forced break
+leaves after it, at a display or at the unit's end), page B would get none of the run though the source sets some there
+(the sweep's invariant (i)): the breaker lays that line again on page B's first slot, whole, and the line before it ends page
+A, full (`breakLines` `strand`, the one place a held break's fate is decided, so in every lay of the unit, the page fill's
+included). Where that line is also the first of its run on page A, moving it would leave page A none of the run: the line is
+laid again with the break at its token, as before, the one place a short line still stands before a page break (a run of one
+line split over two pages). Two cuts in one line (a unit over three pages whose middle page holds less than a line of it):
+the first sends the next line to its page, and that line holds the second; where no text is left after it, the third page
+gets none. Every guard stays: no break before a display the text has not passed, none at a unit's
+first token, and a cut never costs the unit its fit (laid at the fit's state, else as without it). The page fill's guard,
+`keepsPages`, which refuses a state of a unit's run that sets text on a later page than its fit, lets a line after a page
+break stand on the break's page: the tail of the line that holds it goes there at a looser state, and it is that page's text
+in the source.
+
+Measured on the gate pack (`608b7e87`, 32 outputs) against `next` (`8fcdca28`): 142 units reach a cut (their fit sets page
+B's text on page A). 106 end page A at the end of the line that holds the cut, each checked against the fit's own lines (page
+A's lines are the fit's through that line, page B opens at the fit's next line, or at the cut where it is a line's first
+token); 19 more now keep their cut, where the old one cost them their fit and was dropped, page B's text drawn on page A
+(1810.04805v2-ko unit 47); 11 lay their run's last line on page B, 3 keep the short line (a run of one line on page A), and 3
+are laid as without the cut in both. 93 of them are drawn otherwise, and 31 units on 9 pages that hold one, through the
+page fill's reads of it: the page's target leading (1810.04805v2-ko page 4, 8 units from 1.11 to 1.05, unit 47's cut kept;
+2608.16117v1-zh pages 24, 25 and 27, 15 units looser by 0.08 to 0.12, their cut units' page B parts a line shorter) and the
+page's one size (2307.16209v1-zh, 4 pages, 3 of them where a line went whole). The rules gate: de, es, fr and ru unmoved; ja,
+ko and zh worse on the measures of the room the rule frees, which is the rule's own outcome, accepted by the owner's ruling
+(`lab/pdf/rulings/2026-10-30-page-cut-line.json`): a paragraph's page B part up to a line shorter (zh frames with a blank
+line 0.22 to 0.233, paragraph gaps a pitch or more wider 0.22 to 0.227; ko 0.055 to 0.063 and 0.038 to 0.043; ja's gaps 0.024
+to 0.029), a page A a line shorter where a line went whole, and the fill's leadings that follow (zh pitch spread 0.433 to
+0.483). The sweep's
+invariant (i) reads a sentence as drawn on another page only where none of its drawn pages is among its source's: the rule
+moves no sentence so but one the source sets wholly on page B that ends inside the rest of the line that holds the cut, and,
+where a line goes whole, one wholly inside that line that the source sets wholly on page A.
+
 ## 19. The engine's contract
 
 `src/pdf-reader/engine/` is what the web imports, and nothing else of the reader is. The directory is the boundary: a gate
