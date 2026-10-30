@@ -185,9 +185,10 @@ describe('the door: three opens, the same pages', () => {
       // (the pages carry links: each page's margin link at least, in place)
       expect(want.links.every(l => JSON.parse(l).length > 0), `${ends}: links`).toBe(true)
       // (each page's text layer: the drawn units' lines translated, each with its unit's id, in the composed page's text order; the
-      // units left the original's (the table's cells withheld) kept as the page gives them; no erased text of the original)
+      // units left the original's (the table's cells withheld) kept as the page gives them; no erased text of the original; unit 1,
+      // a line on page 1 and one on page 2 in the source, laid in one line, split between them by its height: on both)
       const layers = want.texts.map(t => JSON.parse(t) as { items: { str: string; from: string; unit?: number }[] })
-      expect(layers.map(l => l.items.map(i => `${i.from[0]}${i.unit ?? ''}`)), `${ends}: texts`).toEqual([['t0', 't1'], ['t3', 'k', 't8'], ['t2', 'k', 't6', 't7']])
+      expect(layers.map(l => l.items.map(i => `${i.from[0]}${i.unit ?? ''}`)), `${ends}: texts`).toEqual([['t0', 't1'], ['t1', 't3', 'k', 't8'], ['t2', 'k', 't6', 't7']])
       expect(layers.map(l => l.items.filter(i => i.from === 'kept').map(i => i.str)), `${ends}: kept`).toEqual([[], ['Upper'], ['Lower']])
       whole.dispose()
       // warm
