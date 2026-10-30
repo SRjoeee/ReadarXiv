@@ -980,7 +980,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       holdReads(c)
       K.push(c)
       candOf.set(c.id, c)
-      if (!c.rects) continue
+      // (a unit the left does not locate, the file's alone (most of a table's cells), stands among the page's rectangles by its
+      // file lines from here, laid or not, as a located unit does by its left's: one left the original's (a row kept, a unit
+      // skipped) keeps its ink where TeX set it, which no neighbour's line may grow over. 1810.04805v2's Table 8: NER's
+      // "Fine-tune" grew over MNLI's kept "Fine-tune" beside it, the same words, and its translation was laid over that ink,
+      // its own place left erased. One placed adds, as it is placed, the rectangles its growth moves)
+      if (!c.rects) { if (c.ownRows) addRects(c.id, c.ownRows); continue }
       // the lowest unit line of each page: no unit borrows below it (the page's text area)
       for (const r of c.rects) pageBottom[r[0]] = Math.min(pageBottom[r[0]] ?? Infinity, r[2] + 0.24 * (r[4] - r[2]))
       if (geometry.kinds[c.id] === 'para') for (const r of c.rects) (cols[r[0]] ??= []).push([r[1], r[3]])
@@ -1578,7 +1583,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     return Math.max(...widths) - Math.min(...widths) > 4 ? true : null
   }
   // every unit's rectangles by page, for growing a unit's lines over what no other unit holds (with the file's lines of
-  // the units the file holds that the geometry does not, as each is placed)
+  // the units the file holds that the geometry does not, as each is added, laid or not, and its rectangles as each is placed)
   const rectsByPage = new Map()
   const addRects = (id, rects) => {
     for (const r of rects) {
