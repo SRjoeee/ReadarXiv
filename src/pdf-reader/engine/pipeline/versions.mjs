@@ -293,7 +293,11 @@
 //     owner's ruling of 2026-10-30): the left part of every page the line check read and drew carries our lines that stand elsewhere
 //     on arXiv's page (pipeline/moved-lines.mjs, layer-proto/format.mjs `lines`), so that the reader tells a moved page's blocks by
 //     their boxes carried onto arXiv's page as it tells a page in place (view/shapes.mjs), and a page the check found in place by
-//     its boxes whatever ink its tokens give. MEASURE. Every unit, its pieces and its wire are 40's: a copy of 40 carries every unit
+//     its boxes whatever ink its tokens give. Over the same 70 papers (the production pass on both engines, 1 873 pages): the 21
+//     pages moved (1810.04805v2's 16 among them) light 541 of their 542 items on the left, 439 before; one-sided items on every
+//     page 116 -> 7, each a display line whose word before the formula is lit and the blank between not; the units located on
+//     the left and laid are 40's (18 383 located), every units chunk 40's but its version; the bundles +0.56 % gzipped. Every
+//     unit, its pieces and its wire are 40's: a copy of 40 carries every unit (live.mjs PIPELINE_CARRIES)
 export const PIPELINE_VERSION = '41'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */

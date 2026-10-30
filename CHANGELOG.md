@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, on a page where its own typesetting of the paper sets the lines a little higher or lower than arXiv's, pointing at a short table cell or a formula lights it on the original's side too. Before, only the translation's side lit.
 - The PDF reader's highlight lights the same thing on both sides, and all of it. A formula set on lines of its own lights as one piece with its equation numbers, apart from the sentence around it, and a sentence lights whole even where a formula, a column or a page splits it. A heading's number, a list's bullet and a caption's "Figure 1:" light with the first sentence, and a reference lights down to its last line.
 - Fixed: in the PDF reader, pointing at a paragraph or heading highlights it on both sides on pages where nothing lit before: an appendix that comes after the references, and a page where a footnote continues from the page before.
 - Fixed: in the PDF reader, a table cell's translation is no longer drawn over the words of the cell beside it, which had left the cell's own place empty.

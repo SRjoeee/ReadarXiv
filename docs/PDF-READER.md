@@ -1385,9 +1385,8 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
     units lit by sentence.
   - Not yet (the next maker's): text no unit owns — page numbers and feet, a listing or an algorithm, an e-mail line, a note that
     is an address alone, a bibliography the front end did not cut into entries, a display no unit holds: 5 406 lines on 47 of the
-    54 papers, which the owner rules light as kept blocks at the same place on both panes, a listing one block (2026-10-30). And a
-    page moved (our lines elsewhere than arXiv's: 20 of the 1 453) lights what the left part locates, until the producer ships its
-    lines' pairs.
+    54 papers, which the owner rules light as kept blocks at the same place on both panes, a listing one block (2026-10-30). A page
+    moved (our lines elsewhere than arXiv's) lights as a page in place since BUNDLE 12 (below).
   - **A block lights on both panes or on neither** (the owner, 2026-10-30: 「为什么修改后还有一边不亮的情况？我们可以从根本上解决吗？
     …如果实在分不出来，我们就两边统一亮，或者划成一整块亮」): on a page in place a block's area on each pane is its boxes. On the left
     each box lights the tokens of arXiv's page under it where they are and itself where none is (a display or a formula drawn as
@@ -1403,6 +1402,37 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
     one paragraph whose translation ends on the page before, so that nothing of it is drawn on the page its original's last line is
     on (2610.19159v1 p119: lighting it there would light blank paper); six lines of a display with a word before it on its baseline,
     where only the blank between the word and the formula is unlit, every token of the line lit.
+  - **A page our compile set otherwise lights as a page in place** (the owner's ruling of 2026-10-30; `PIPELINE_VERSION` 41,
+    `BUNDLE5` 12). Another TeX Live's glue moves our lines a point or a few, a line goes over a column's or a page's break
+    (1810.04805v2's page 16, every line 3 to 27 pt above arXiv's): the maker's boxes stand beside arXiv's ink, and the left lit only
+    what its left part located (Table 8's header cells "RND", "Mask", "Same" lit on the right alone). The page pass's line check
+    pairs each of our lines with arXiv's already (`layout/carry.mjs` `lineCheckOf`: the partner's page and the median offset of the
+    words matched), and the producer ships the pairs: the left part of each page a line leaves or lands on holds them (`lines`,
+    `pipeline/moved-lines.mjs`: a line's page of ours, its box, arXiv's page and the offset), every line of a page with one moved
+    past half a point (a line with no partner takes its column's nearest; one in place carries nothing), and an empty list on every
+    other page the check read and drew. The reader carries each box by the line it stands on onto arXiv's page, another page's
+    too, and tells the page by its boxes as a page in place (`view/shapes.mjs`). A page with a list, an empty one too, is in
+    place whatever its tokens give: 2610.16663v1's page 15, its displays leaving arXiv's text layer few tokens, was read as moved
+    by them though 41 of its 43 lines stand in place. A left part of 11 has none, and its page is judged by its tokens as before.
+    Measured over 70 papers (the release sweep's 63 cached papers and the gate pack's 7, the production pass on both engines over
+    the same compiles, next 44c3a36d before, `readarxiv-lab-data/moved-lines`, 2026-10-30), every item of the maker's inventory
+    judged lit on the left at its place on arXiv's page:
+    - 1 873 left parts: 1 556 carry entries (10 362, 294 of them a line over a page break, on both its pages), 301 an empty
+      list, 16 none (a page the check did not read whole or draw). Our lines holding a token of arXiv's at their middle row, as
+      they stand and carried: on the moved pages below 222 → 296 of 299, on every page 85 101 → 85 180 of 85 302.
+    - The pages moved by the in-place test (under 90 %, or under 3 lines: the unified-light probe's rule): 21 on 9 papers, 542
+      items. Lit on the left 439 → 541; one-sided 103 → 1 (lines 27 → 0, kept pieces 25 → 0, labels 2 → 0, displays 40 → 0,
+      display lines 9 → 1). 1810.04805v2 p16 lights 92 of 92, its Table 8 cells with them. On every page one-sided
+      items 116 → 7 of 152 266, each a display line with a word before the formula on its baseline, the word and the formula
+      lit and only the blank between them not (the case above; 2610.16663v1 p15's joins it now that the page is in place).
+    - The producer's units, cut and laid, are 40's: 18 383 units located on the left on both, the laid sets equal, every units
+      chunk equal but its version (33 068 units). The bundles grow 0.30 % (0.56 % gzipped; the left parts 0.74 %; a paper's
+      median 0.53 %, its largest 1.13 %, 1810.04805v2).
+    - The reader, every part and page made as it makes them, best of 3, both orders: a paper's left 6.7–6.9 → 7.3–7.5 ms median
+      (all 70: 555–562 → 603–623 ms, 0.03 ms a page), a page's geometry 0.078 → 0.078–0.083 ms median (p95 0.24 → 0.25), a hit
+      0.103 → 0.104 µs.
+    The unified-light probe's 20 moved pages were staging's layers of 2026-10-30 (PIPELINE 38, BUNDLE 11), which hold no line
+    map: its 8 papers give 12 here (2610.20030v1 falls back to arXiv's PDF in this pass), and the 21 above are this pass's.
 - **Whole, whatever their sentences**: headings, table cells and displays. A drawing's text lights nothing (below).
 - **Every drawn thing lights its original, whatever its kind, but a figure's text** (below; the owner's report of
   2026-10-29 on 2010.11929v2 p9: its References' Chinese lit nothing on either side, its Conclusion's and
@@ -1655,10 +1685,9 @@ within noise.
   a cell no unit holds runs across the column between them on another row, light as one.
 - An equation number set on its own line below its display (2608.09746 #27) is no unit's and is not lit, but where the maker holds
   it among its display's segments, which light it with the display (§17.1).
-- A page our compile set otherwise than arXiv's (its lines moved: 20 of 1 453 pages on the 54 papers of 2026-10-30) lights on the
-  left what the left part locates: its displays with their units there, its labels and kept pieces where the anchors reach, while
-  the right lights every block; and text no unit owns (page numbers, feet, listings, an e-mail line, a note of an address alone)
-  lights on neither pane: both are the maker's to give (§17.1).
+- Text no unit owns (page numbers, feet, listings, an e-mail line, a note of an address alone) lights on neither pane: the maker's
+  to give (§17.1). A page our compile set otherwise than arXiv's lights as a page in place by its line map (§17.1); one the line
+  check did not read whole, or whose layer stands over arXiv's PDF, has none, and lights on the left what its left part locates.
 - A table at a page's head whose first row is single letters over numbers, after a display that closed the page before,
   is taken by that display's walk: no distance tells them apart (A1, measured: lead walks' first gaps up to 19.6 pt).
 - Two lines of text made one row by a tall formula, with a sentence beginning on the second, light their unit whole (12
@@ -1731,7 +1760,10 @@ within noise.
   (its own unit's span gives them up) and every unit the free tokens in its boxes, its spans changed in the page's kept input
   before it is laid and in the layout and the mirrors after; a unit told so begins at its first token on its first page. A located
   telling that comes after a quiet one takes its place; a quiet telling of a located unit's boxes on a page it is not located on
-  adds that page, its rectangles there quiet. This made the cells' telling below a case of it, now on pages in place alone. The
+  adds that page, its rectangles there quiet. On a page with a line map (§17.1) the boxes are carried first: our page's and those of
+  the pages beside it that the map brings there (`invAt`), the layout's boxes of the page the carried ones and a unit brought from
+  another page of ours told there quietly (`carryPage`), whichever of the page's left part and the parts comes first; such a page
+  is in place. This made the cells' telling below a case of it, now on pages in place alone. The
   layout keeps every block's boxes (`boxes`) and the pages in place (`inPlace`), which the mirror reads too; a laid page's layout
   keeps none of them (its table holds every token the page shows of a unit) and clamps none of its tokens (`unclamped`).
 - **A cell unit the left part does not locate** (`createShapes`): the producer locates few cells on arXiv's PDF (on the
