@@ -7,8 +7,8 @@ import { createShapes, layerShapes, mirror } from '@/pdf-reader/engine/view/shap
 import { displayBlockId } from '@/pdf-reader/engine/layer-proto/units.mjs'
 import { cutSide } from '../../lab/pdf/spikes/highlight-pages.mjs'
 
-// A block lights on both panes or on neither, never on one (the owner, 2026-10-30: 「为什么修改后还有一边不亮的情况？我们可以从根本上
-// 解决吗？」): its area on each pane is its maker's boxes on our page — on the left the tokens of arXiv's page under a box, and the box itself
+// A block lights on both panes or on neither, never on one (the owner, 2026-10-30, asking why one side still stayed dark and for the
+// root of it, docs/PDF-READER.md §17.1): its area on each pane is its maker's boxes on our page — on the left the tokens of arXiv's page under a box, and the box itself
 // where none is (a formula drawn as paths, a bullet drawn as a mark); on the right what the door drew and what it left of our page.
 
 type Item = { str: string; transform: number[]; width: number; height: number; hasEOL: boolean; fontName: string }
@@ -98,6 +98,23 @@ describe('a block lights on both panes or on neither (view/shapes.mjs, highlight
     expect(Math.max(...s1.map(r => r.x1))).toBeGreaterThan(520)
     expect(s0.every(r => !(r.y0 < mid(548) && r.y1 > mid(548)) || r.x1 < 400)).toBe(true)
     expect(l.shapes.hit(1, 510, mid(548), PAD, () => starts)).toMatchObject({ id: 4, s: 1 })
+  })
+
+  it('a block\'s own box past the column\'s edge lights to its end on both panes (an overfull line, a reference\'s numbers)', () => {
+    // (unit 5 on page 2 with a number of no token at 540-556, past the column's edge at 528, on its last line)
+    const lay = layout()
+    lay.ph.push([5, 0, PH_KINDS.indexOf('number'), 0, 2, 540, 656, 556, 663.5, 653.8])
+    const { parts, lefts } = cutSide(whole, anchors, views)
+    const l = createShapes({ kindOf })
+    l.addParts(parts.map(p => (p.pages[0] === 1 ? { ...p, layout: lay } : p)) as never)
+    l.addPage(lefts[1]!)
+    l.addPage(lefts[2]!)
+    expect(l.shapes.hit(2, 550, mid(656), PAD, () => null)?.id).toBe(5)
+    // (the right: unit 5 shown as the original's, its boxes the door's tokens, the number's among them)
+    const r = layerShapes(l)
+    const T = { n: 2, l: Float32Array.from([72, 540]), r: Float32Array.from([528, 556]), y: Float32Array.from([656, 656]), h: Float32Array.from([10, 10]), top: Float32Array.from([663.5, 663.5]), bottom: Float32Array.from([653.8, 653.8]) }
+    r.lay(2, { tokens: T, word: Int32Array.from([-1, -1]), at: Int32Array.from([0, 0]), spans: [[5, [0, 2]]], original: [5] } as never)
+    expect(r.shapes.hit(2, 550, mid(656), PAD, () => null)?.id).toBe(5)
   })
 
   it('a placeholder whose ink the wrap could not hide (no group of its own) stays shown, though drawn as a crop: lit with its unit', () => {

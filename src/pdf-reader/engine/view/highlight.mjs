@@ -51,6 +51,9 @@ const FLOATS = new Set(['caption', 'cell', 'figure'])
 const LONG = 0.25, COLUMN_LINES = 4, EDGE_LINES = 3, EDGE_SHARE = 0.05
 /** how far past the column's edge a run's rows may reach (an overfull display), and within how far of it they are the edge's */
 const OVERHANG = 6, SNAP = 3
+/** how far before its line's start a label's box may stand and be on that line (PDF units: a list's or a theorem's label set apart
+ *  by a few spaces, an outdented number) */
+const LABEL_GAP = 24
 /** lines overlapping by more than this (PDF units) are one row */
 const OVERLAP = 0.5
 
@@ -462,7 +465,17 @@ export function pageGeometry(L, p) {
   // tokens under it where they are, and itself where none is — a formula drawn as paths, a bullet drawn as a mark. Apart from the
   // page's lines, which the floats walk (floats.mjs)
   const boxLines = []
-  if (L.inPlace?.has(p)) for (const id of L.unitsOn[p] ?? []) for (const [x0, x1, top, bottom, kind] of L.boxes?.get(id)?.get(p) ?? []) boxLines.push({ id, kind, x0, x1, y0: bottom, y1: top, lo: bottom, hi: top, col: colOf(P, x0, x1) })
+  if (L.inPlace?.has(p)) for (const id of L.unitsOn[p] ?? []) {
+    const bs = L.boxes?.get(id)?.get(p) ?? []
+    // (a label's or a piece's box takes the column of the unit's line it stands on: a short box in a column's half is no column of its
+    // own, whatever its place across a full-width line)
+    const own = bs.filter(b => b[4] === 'line').map(([x0, x1, top, bottom]) => ({ x0, x1, top, bottom, col: colOf(P, x0, x1) }))
+    for (const [x0, x1, top, bottom, kind] of bs) {
+      // (a label stands before its line, on its baseline: within LABEL_GAP of the line's start)
+      const cy = (top + bottom) / 2, on = kind === 'line' ? null : own.find(l => cy >= l.bottom - 1 && cy <= l.top + 1 && x0 < l.x1 + 1 && x1 > l.x0 - LABEL_GAP)
+      boxLines.push({ id, kind, x0, x1, y0: bottom, y1: top, lo: bottom, hi: top, col: on ? on.col : colOf(P, x0, x1) })
+    }
+  }
   const boxed = new Set(boxLines.map(b => b.id))
   // who owns each of the page's tokens, and each of its lines: -1 none, a unit, -2 several
   const owner = new Int32Array(k1 - k0).fill(-1), mine = new Map()
@@ -539,17 +552,36 @@ function unitRuns(L, p, at, id, toks) {
     const a = inkL[k - k0], b = inkR[k - k0]
     if (x) { if (a < x.x0) x.x0 = a; if (b > x.x1) x.x1 = b } else m.set(ln, { x0: a, x1: b })
   }
-  // its boxes on the page (view/shapes.mjs, the page in place): each a line of its own in its column, merged with the tokens' it
-  // stands on; a label's (a heading's number, a list's bullet, a caption's name: layout/file.mjs `labels`) the head where it stands on
-  // the unit's first line, the first sentence's (the owner, 2026-10-30)
+  // its boxes on the page (view/shapes.mjs, the page in place): a box on one of its token lines (its middle in the line's band, in its
+  // column) widens that line and gives its row what the tokens leave of it (segsOf); any other box is a line of its own in its
+  // column — a display or a formula drawn as paths, a line of numbers alone —, so that the tokens' rows stay what they were (a line's
+  // box holds its tall formulas, and as a line of its own would join the rows above and below it). A label's box on the unit's first
+  // line is the head there, the first sentence's (the owner, 2026-10-30)
+  const attached = []
   boxLines.forEach((b, j) => {
     if (b.id !== id) return
-    const m = byCol.get(b.col) ?? byCol.set(b.col, new Map()).get(b.col)
-    m.set(-1 - j, { x0: b.x0, x1: b.x1 })
-    if (b.kind === 'label' && first === toks[0] && toks.length) {
-      const l = lines[line(first)], cy = (b.y0 + b.y1) / 2
-      if (cy >= l.y0 - 1 && cy <= l.y1 + 1) head = Math.min(head ?? Infinity, b.x0)
+    // (the token line it overlaps most, by a third of the shorter's height at least: a tall formula between two lines is the one it
+    // stands on most, never a row joining them)
+    const m = byCol.get(b.col)
+    let on = -1, most = 0
+    if (m) for (const [ln] of m) {
+      if (ln < 0) continue
+      const l = lines[ln], o = Math.min(b.y1, l.y1) - Math.max(b.y0, l.y0)
+      if (o > most && o > 0.3 * Math.min(b.y1 - b.y0, l.y1 - l.y0)) { most = o; on = ln }
     }
+    if (on >= 0) {
+      // (across, and up and down as ink past the line's own, `lo`/`hi`, which the row's paint reaches over but never joins rows by)
+      const x = m.get(on)
+      if (b.x0 < x.x0) x.x0 = b.x0
+      if (b.x1 > x.x1) x.x1 = b.x1
+      if (b.y0 < (x.lo ?? Infinity)) x.lo = b.y0
+      if (b.y1 > (x.hi ?? -Infinity)) x.hi = b.y1
+      attached.push([on, b])
+      if (b.kind === 'label' && first === toks[0] && toks.length && on === line(first)) head = Math.min(head ?? Infinity, b.x0)
+      return
+    }
+    const mm = byCol.get(b.col) ?? byCol.set(b.col, new Map()).get(b.col)
+    mm.set(-1 - j, { x0: b.x0, x1: b.x1 })
   })
   let headAt = null
   if (head !== null) { const x = byCol.get(lines[line(first)].col)?.get(line(first)); if (x && head < x.x0) { x.x0 = head; at.heads.push(id); headAt = line(first) } }
@@ -568,9 +600,9 @@ function unitRuns(L, p, at, id, toks) {
         if (l.y1 > row.y1) row.y1 = l.y1
         if (x.x0 < row.x0) row.x0 = x.x0
         if (x.x1 > row.x1) row.x1 = x.x1
-        if (l.lo < row.lo) row.lo = l.lo
-        if (l.hi > row.hi) row.hi = l.hi
-      } else rows.push({ y0: l.y0, y1: l.y1, x0: x.x0, x1: x.x1, lo: l.lo, hi: l.hi, r0: null, r1: null })
+        if (Math.min(l.lo, x.lo ?? Infinity) < row.lo) row.lo = Math.min(l.lo, x.lo ?? Infinity)
+        if (Math.max(l.hi, x.hi ?? -Infinity) > row.hi) row.hi = Math.max(l.hi, x.hi ?? -Infinity)
+      } else rows.push({ y0: l.y0, y1: l.y1, x0: x.x0, x1: x.x1, lo: Math.min(l.lo, x.lo ?? Infinity), hi: Math.max(l.hi, x.hi ?? -Infinity), r0: null, r1: null })
       rowOf.set(i, rows.length - 1)
     }
     // how far each row's sentences may reach across where they go on from the row before or to the row after (segsOf,
@@ -590,13 +622,19 @@ function unitRuns(L, p, at, id, toks) {
       // (the unit's first row on its first page may hang past the column's edge by its label or its head: a list's or a theorem's item
       // set in the margin lights with it, on both panes alike)
       const hang = start === 0 && toks.length && first === toks[0] && lines[line(first)].col === col ? rows[0].x0 : null
-      const run = runOf(id, p, col, rows.slice(start, r), e, P.lead.get(L.kindOf(id) ?? '') ?? P.lead.get(null), !FLOATS.has(L.kindOf(id)), hang)
+      // (and as far as its own boxes reach, which are our page's ink of it, never a stray token: an overfull line, a reference's
+      // numbers past the measure; a laid page's tokens are the door's own, unclamped, view/shapes.mjs layerShapes)
+      let bx0 = Infinity, bx1 = -Infinity
+      for (const [ln, x] of m) if (ln < 0) { const w = rowOf.get(ln); if (w >= start && w < r) { if (x.x0 < bx0) bx0 = x.x0; if (x.x1 > bx1) bx1 = x.x1 } }
+      for (const [ln, b] of attached) { const w = rowOf.get(ln); if (w !== undefined && w >= start && w < r && m.has(ln)) { if (b.x0 < bx0) bx0 = b.x0; if (b.x1 > bx1) bx1 = b.x1 } }
+      const run = runOf(id, p, col, rows.slice(start, r), e, P.lead.get(L.kindOf(id) ?? '') ?? P.lead.get(null), !FLOATS.has(L.kindOf(id)) && !L.unclamped, Math.min(hang ?? Infinity, bx0), bx1)
       // where its unit's head begins on it, and (below) its tokens and the row each is on: its sentences' rows (segsOf)
       run.head = headAt !== null && rowOf.get(headAt) >= start && rowOf.get(headAt) < r ? head : null
       run.toks = []; run.rowOf = []; run.boxes = []
       // its sentences' reach across, the hit test's bounds for them (hitOf)
       for (const row of run.rows) { if (row.r0 != null && row.r0 < run.sx0) run.sx0 = row.r0; if (row.r1 != null && row.r1 > run.sx1) run.sx1 = row.r1 }
       for (const ln of m.keys()) { const w = rowOf.get(ln); if (w < start || w >= r) continue; if (ln >= 0) lineAt.set(ln, { run, w: w - start }); else { const b = boxLines[-1 - ln]; run.boxes.push({ w: w - start, x0: b.x0, x1: b.x1, kind: b.kind }) } }
+      for (const [ln, b] of attached) { const w = rowOf.get(ln); if (w !== undefined && w >= start && w < r && m.has(ln)) run.boxes.push({ w: w - start, x0: b.x0, x1: b.x1, kind: b.kind }) }
       runs.push(run)
       start = r
     }
@@ -678,10 +716,10 @@ function interrupted(lines, lineOwner, col, id, above, below, boxLines = []) {
 
 /** a run: its rows' extent across, inside the column's text edges — up to OVERHANG past them (`clamp`: running text),
  *  and within SNAP of them on them — and down; the boundaries between its rows halfway between them, never rising */
-function runOf(id, page, col, rows, e, lead, clamp, hang = null) {
+function runOf(id, page, col, rows, e, lead, clamp, hang = Infinity, reach = -Infinity) {
   let x0 = Infinity, x1 = -Infinity
   for (const r of rows) { if (r.x0 < x0) x0 = r.x0; if (r.x1 > x1) x1 = r.x1 }
-  if (clamp) { x0 = Math.max(x0, Math.min(e.x0 - OVERHANG, hang ?? Infinity)); x1 = Math.min(x1, e.x1 + OVERHANG) }
+  if (clamp) { x0 = Math.max(x0, Math.min(e.x0 - OVERHANG, hang ?? Infinity)); x1 = Math.min(x1, Math.max(e.x1 + OVERHANG, reach)) }
   if (Math.abs(x0 - e.x0) < SNAP) x0 = e.x0
   if (Math.abs(x1 - e.x1) < SNAP) x1 = e.x1
   const mids = []
@@ -771,8 +809,25 @@ function segsOf(L, run, starts) {
   const made = segsMade.get(run)
   if (made?.starts === starts) return made
   // the run's page's tokens: token k's at k - k0
-  // (a run of boxes alone, no token of the page in it, has no sentences: its unit lights whole, on both panes, sentencesFit)
-  if (!run.toks?.length) { const none = { starts, rows: run.rows.map(() => []), first: [], last: [], from: -1, on: -1, of: new Int32Array(0), fits: false }; segsMade.set(run, none); return none }
+  // (a run of boxes alone, no token of the page in it — a line of a formula drawn as paths set apart —: in the sentence its unit's text
+  // is in there, the one the run before it in the unit's order ends in, else the one the run after it begins with; none where its unit
+  // has no token run: it lights whole then, on both panes, sentencesFit)
+  if (!run.toks?.length) {
+    const runs = runsOf(L, run.id), at = runs.indexOf(run)
+    let t = -1
+    for (let i = at - 1; i >= 0 && t < 0; i--) if (runs[i].toks?.length) { const g = segsOf(L, runs[i], starts); for (let w = g.rows.length - 1; w >= 0 && t < 0; w--) if (g.rows[w].length) t = Math.max(...g.rows[w].map(q => q.s)) }
+    for (let i = at + 1; i < runs.length && t < 0; i++) if (runs[i].toks?.length) { const g = segsOf(L, runs[i], starts); for (let w = 0; w < g.rows.length && t < 0; w++) if (g.rows[w].length) t = Math.min(...g.rows[w].map(q => q.s)) }
+    const rows = run.rows.map(() => []), first = [], last = []
+    if (t >= 0) for (const b of run.boxes ?? []) {
+      const row = rows[b.w], g = row.find(q => q.s === t)
+      if (g) { if (b.x0 < g.x0) g.x0 = b.x0; if (b.x1 > g.x1) g.x1 = b.x1 } else row.push({ s: t, x0: b.x0, x1: b.x1 })
+      if (first[t] === undefined || b.w < first[t]) first[t] = b.w
+      if (last[t] === undefined || b.w > last[t]) last[t] = b.w
+    }
+    const out = { starts, rows, first, last, from: -1, on: -1, of: new Int32Array(0), fits: t >= 0 }
+    segsMade.set(run, out)
+    return out
+  }
   const T = L.pt[run.page], k0 = T.k0, { l, r } = T, rows = run.rows.map(() => []), first = [], last = []
   const byText = bySentenceText.get(starts) ?? null
   /** a token's sentence by the stream's order: the starts at or before it */

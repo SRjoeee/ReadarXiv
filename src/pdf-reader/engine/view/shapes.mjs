@@ -522,8 +522,10 @@ export function layerShapes(source) {
   })))
   function reset() {
     // (no box of our page widens a laid row: the door's table holds every token the page shows of a unit, its kept label and
-    // pieces among them, and a piece or a label it drew elsewhere left that box empty)
+    // pieces among them, and a piece or a label it drew elsewhere left that box empty; and none of its tokens is clamped at the
+    // column's edge: each is the door's own ink, drawn or kept, never a stray token)
     L = pageLayout(state.kindOf)
+    L.unclamped = true
     words = new Map(); made = new Set(); wordAt = new Map(); placeAt = new Map(); noPlaces = new Set(); hidden = new Set(); namesKept = new Map()
     ours = new Map()
     if (state.parts.length) tellParts(state.parts)

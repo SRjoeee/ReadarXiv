@@ -1388,6 +1388,21 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
     54 papers, which the owner rules light as kept blocks at the same place on both panes, a listing one block (2026-10-30). And a
     page moved (our lines elsewhere than arXiv's: 20 of the 1 453) lights what the left part locates, until the producer ships its
     lines' pairs.
+  - **A block lights on both panes or on neither** (the owner, 2026-10-30: 「为什么修改后还有一边不亮的情况？我们可以从根本上解决吗？
+    …如果实在分不出来，我们就两边统一亮，或者划成一整块亮」): on a page in place a block's area on each pane is its boxes. On the left
+    each box lights the tokens of arXiv's page under it where they are and itself where none is (a display or a formula drawn as
+    paths, a bullet drawn as a mark: `highlight.mjs` pageGeometry's box lines, the floats' walk never reading them); a box on one of
+    its unit's token lines widens that line, up and down as ink, and gives its row what the tokens leave of it, in the sentence of the
+    token beside it (a label the first's); a box on no token line of its unit is a row of its own, in the sentence the unit's text is
+    in there. A unit's line on its display's rows is the display's; a unit the left part locates on another page than ours lights
+    on ours too; a label or a head hanging before the first row, and a block's own box past the column's edge (an overfull line), are
+    never clamped; a laid page's tokens are the door's own ink and never clamped. On the right, a placeholder whose ink the wrap could
+    not part (its group missing from the document) stays shown, lit with its unit. Measured on the same 54 papers, before and after:
+    units dark on both panes 21 → 0, on one 1 → 1; labels lit on one pane alone 5 → 0, pieces 5 → 0 (and 2 dark on both → 0), text
+    lines 17 → 1, displays lit in part 21 → 0; units lit by sentence 4 461 → 4 461, their faults 2 units → 0. What stays one-sided:
+    one paragraph whose translation ends on the page before, so that nothing of it is drawn on the page its original's last line is
+    on (2610.19159v1 p119: lighting it there would light blank paper); six lines of a display with a word before it on its baseline,
+    where only the blank between the word and the formula is unlit, every token of the line lit.
 - **Whole, whatever their sentences**: headings, table cells and displays. A drawing's text lights nothing (below).
 - **Every drawn thing lights its original, whatever its kind, but a figure's text** (below; the owner's report of
   2026-10-29 on 2010.11929v2 p9: its References' Chinese lit nothing on either side, its Conclusion's and
@@ -1715,8 +1730,10 @@ within noise.
   on a page in place, once both its left part and its boxes are in, whichever first, a display takes the tokens of its segments
   (its own unit's span gives them up) and every unit the free tokens in its boxes, its spans changed in the page's kept input
   before it is laid and in the layout and the mirrors after; a unit told so begins at its first token on its first page. A located
-  telling that comes after a quiet one takes its place. This made the cells' telling below a case of it, now on pages in place
-  alone.
+  telling that comes after a quiet one takes its place; a quiet telling of a located unit's boxes on a page it is not located on
+  adds that page, its rectangles there quiet. This made the cells' telling below a case of it, now on pages in place alone. The
+  layout keeps every block's boxes (`boxes`) and the pages in place (`inPlace`), which the mirror reads too; a laid page's layout
+  keeps none of them (its table holds every token the page shows of a unit) and clamps none of its tokens (`unclamped`).
 - **A cell unit the left part does not locate** (`createShapes`): the producer locates few cells on arXiv's PDF (on the
   sweep's 64 cached papers, 1 113 of 5 094; 7 of 2010.11929v2's 165, 2 of 2610.35877v1's 71), since a cell carries no unit
   mark of its own (`latex-front.mjs`: a heading, a cell or a figure has none), so it is found by its text alone between its
