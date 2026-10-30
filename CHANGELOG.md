@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- The PDF reader's highlight lights the same thing on both sides, and all of it. A formula set on lines of its own lights as one piece with its equation numbers, apart from the sentence around it, and a sentence lights whole even where a formula, a column or a page splits it. A heading's number, a list's bullet and a caption's "Figure 1:" light with the first sentence, and a reference lights down to its last line.
 - Fixed: in the PDF reader, pointing at a paragraph or heading highlights it on both sides on pages where nothing lit before: an appendix that comes after the references, and a page where a footnote continues from the page before.
 - Fixed: in the PDF reader, a table cell's translation is no longer drawn over the words of the cell beside it, which had left the cell's own place empty.
 - In the PDF reader, the first translated page comes sooner on papers with large figures shown in two panes: the original's pages just below the view are drawn once the translation's first page is in place, so they no longer download beside it.

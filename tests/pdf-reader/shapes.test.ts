@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type Anchor, type DocToken, lineRects, sentenceStarts, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { readLeftPart, UNIT_ID_MAX, writeLeftPart } from '@/pdf-reader/engine/layer-proto/format.mjs'
-import { CELL_ID_FROM, CELLS_PAGE, isNameOccurrence, isTableCell, NAME_ID_FROM, NAME_OCCURRENCE_MAX, nameOccurrenceId, tableCellId, tableCellPage } from '@/pdf-reader/engine/layer-proto/units.mjs'
+import { CELL_ID_FROM, CELLS_PAGE, DISPLAY_ID_FROM, isDisplayBlock, isNameOccurrence, isTableCell, NAME_ID_FROM, NAME_OCCURRENCE_MAX, nameOccurrenceId, tableCellId, tableCellPage } from '@/pdf-reader/engine/layer-proto/units.mjs'
 import { PAGES_MAX } from '@/pdf-reader/engine/layout/json.mjs'
 import { NAME_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { type Box, floatOf, pageFloats } from '@/pdf-reader/engine/view/floats.mjs'
@@ -719,9 +719,9 @@ describe("babel's names light as headings on both panes, under ids no bundle id 
   it('an occurrence\'s id is past every id a bundle holds, a late chunk\'s included, and below the view\'s Int32 owners', () => {
     expect(NAME_ID_FROM).toBeGreaterThan(UNIT_ID_MAX)
     expect(nameOccurrenceId(0)).toBe(NAME_ID_FROM)
-    expect(nameOccurrenceId(NAME_OCCURRENCE_MAX)).toBe(CELL_ID_FROM - 1)
-    // (and the tables' cells' range after it, to 2^31: neither meets the other)
-    expect([isNameOccurrence(CELL_ID_FROM), isTableCell(CELL_ID_FROM - 1), tableCellId(PAGES_MAX, CELLS_PAGE - 1)! < 2 ** 31]).toEqual([false, false, true])
+    expect(nameOccurrenceId(NAME_OCCURRENCE_MAX)).toBe(DISPLAY_ID_FROM - 1)
+    // (and the displays' range after it, then the tables' cells' to 2^31: none meets another)
+    expect([isNameOccurrence(DISPLAY_ID_FROM), isDisplayBlock(DISPLAY_ID_FROM - 1), isDisplayBlock(CELL_ID_FROM), isTableCell(CELL_ID_FROM - 1), tableCellId(PAGES_MAX, CELLS_PAGE - 1)! < 2 ** 31]).toEqual([false, false, false, false, true])
     // (every page the id takes decodes to itself, the last one too: 2^14 − 1 pages past PAGES_MAX, below 2^31)
     for (const [p, k] of [[1, 0], [PAGES_MAX, CELLS_PAGE - 1], [2 ** 14 - 1, CELLS_PAGE - 1]] as const) { const id = tableCellId(p, k)!; expect([isTableCell(id), tableCellPage(id), id < 2 ** 31]).toEqual([true, p, true]) }
     expect([tableCellId(2 ** 14, 0), tableCellId(0, 0), tableCellId(1, CELLS_PAGE)]).toEqual([null, null, null])
@@ -908,8 +908,9 @@ describe('a table\'s cell unit the left part does not locate is told by its layo
   })
 
   it('every other unit keeps its runs on both panes, though the cell\'s lines would vote its page into two columns (2610.22195v1 p18)', () => {
-    // (cell 9 with eight lines a third of the page wide besides its own, four in each half of page 2: long lines the column vote counts)
-    const wide = [0, 1, 2, 3].flatMap(i => [[2, 60, 260, 440 - 12 * i, 447 - 12 * i, 438 - 12 * i, 10, 0], [2, 330, 530, 440 - 12 * i, 447 - 12 * i, 438 - 12 * i, 10, 0]]).flat()
+    // (cell 9 with eight lines a third of the page wide besides its own, four in each half of page 2: long lines the column vote counts;
+    // on the page's own rows, so that the page is in place, the cell told by its boxes)
+    const wide = [0, 1, 2, 3].flatMap(i => [[2, 60, 260, 436 - 12 * i, 443.5 - 12 * i, 433.8 - 12 * i, 10, 0], [2, 330, 530, 436 - 12 * i, 443.5 - 12 * i, 433.8 - 12 * i, 10, 0]]).flat()
     const { parts, lefts } = cutSide(whole, anchors, views)
     const withLines = parts.map(p => (p.pages[0] <= 2 && p.pages[1] >= 2 ? { ...p, layout: { names: [], lines: [[9, [2, B.x, B.x + B.w, B.y, B.top, B.bottom, 10, 0, ...wide]]] } } : p))
     const l = createShapes({ kindOf: kinds }), m = mirror(l)

@@ -24,8 +24,9 @@ import { FIGURE_KIND } from '../rules/content-classes.mjs'
 import { floatShapes } from './floats.mjs'
 
 /** kinds of unit that are no running text: what lies among their words is their float's, not theirs (a figure's ink unit, a
- *  label's: content-classes.mjs FIGURE_KIND) */
-const NOT_RUNNING = new Set(['heading', 'cell', 'figure', FIGURE_KIND])
+ *  label's: content-classes.mjs FIGURE_KIND); and a display, a block of its own lit whole (view/shapes.mjs: its segments' tokens,
+ *  layer-proto/units.mjs displayBlockId; the owner, 2026-10-30) */
+const NOT_RUNNING = new Set(['heading', 'cell', 'figure', FIGURE_KIND, 'display'])
 /** kinds of unit a float holds or names, whose words' gaps hold the float's own (a caption's figure's labels between its words in
  *  the stream): nothing between two of their words is theirs (pageGeometry's filling). A caption lights by sentence, as a body unit
  *  does (the owner, 2026-10-30, docs/PDF-READER.md §17.1), but keeps out of its float's words */
@@ -117,7 +118,7 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined, { edges 
  * `first`: the side's stream, as the parts' units name their streams), rising page by page
  */
 export function pageLayout(kindOf = () => undefined) {
-  return { tok: null, pageStart: null, pt: [null], page: [null], anchors: new Map(), kindOf, unitsOn: [], pagesOf: new Map(), cache: new Map(), indents: new Map(), views: [], told: new Map(), spans: new Map(), drawings: new Map(), drawn: new Set() }
+  return { tok: null, pageStart: null, pt: [null], page: [null], anchors: new Map(), kindOf, unitsOn: [], pagesOf: new Map(), cache: new Map(), indents: new Map(), views: [], told: new Map(), spans: new Map(), drawings: new Map(), drawn: new Set(), labelBoxes: new Map(), pieceBoxes: new Map() }
 }
 
 /**
@@ -136,7 +137,10 @@ export function layoutParts(L, parts) {
       if (!L.views[at]) { L.views[at] = views.slice(4 * i, 4 * i + 4); told = true }
     }
     for (const [id, stream, rects] of left) {
-      if (L.told.has(id) || L.drawn.has(id)) continue
+      // (a unit told from its boxes alone, quiet, gives way to its located telling, whichever comes first: view/shapes.mjs)
+      const was = L.told.get(id)
+      if (L.drawn.has(id) || (was && (quiet || !was.quiet))) continue
+      if (was) L.anchors.delete(id)
       const rs = rects.map(([page, x0, y0, x1, y1]) => ({ page, x0, y0, x1, y1 }))
       if (DRAWING.has(L.kindOf(id))) { L.drawn.add(id); drawnAt(L.drawings, rs) } else L.told.set(id, { stream, rects: rs, ...(quiet ? { quiet } : {}) })
       told = true
@@ -514,6 +518,21 @@ function unitRuns(L, p, at, id, toks) {
     const x = m.get(ln)
     const a = inkL[k - k0], b = inkR[k - k0]
     if (x) { if (a < x.x0) x.x0 = a; if (b > x.x1) x.x1 = b } else m.set(ln, { x0: a, x1: b })
+  }
+  // its labels the layout holds on the page (a heading's number, a list's bullet or number, a caption's name, a theorem's head:
+  // layout/file.mjs `labels`, view/shapes.mjs) are its own, the first sentence's (the owner, 2026-10-30): a label's box widens the row
+  // its middle stands on, the head where that is the unit's first line, though no token of the page is there (a bullet TeX draws as a
+  // mark has no text)
+  // (and so its kept pieces the layout holds, layout/file.mjs `ph`: a formula's glyph or a number the page's text gives no token for
+  // widens the row it stands on, never the head)
+  for (const [boxes, label] of [[L.labelBoxes?.get(id)?.get(p), true], [L.pieceBoxes?.get(id)?.get(p), false]]) for (const [x0, x1, top, bottom] of boxes ?? []) {
+    const cy = (top + bottom) / 2
+    for (const [, m] of byCol) for (const [ln, x] of m) {
+      const l = lines[ln]
+      if (cy < l.y0 - 1 || cy > l.y1 + 1) continue
+      if (label && first === toks[0] && ln === line(first)) head = Math.min(head ?? Infinity, x0)
+      else { if (x0 < x.x0) x.x0 = x0; if (x1 > x.x1) x.x1 = x1 }
+    }
   }
   let headAt = null
   if (head !== null) { const x = byCol.get(lines[line(first)].col)?.get(line(first)); if (x && head < x.x0) { x.x0 = head; at.heads.push(id); headAt = line(first) } }
