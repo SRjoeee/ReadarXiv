@@ -45,8 +45,10 @@
 //      block a run of such lines one after the other in TeX's stream with nothing a unit owns between them, on one page, in one
 //      region, in one column (each line meeting the block across), one class, each within KEPT_DY of its size below the
 //      block's lowest line; a line of no letter pair in a column's body (`symbols`: a listing's brace) joins a block and starts
-//      none, a float's text (a figure's, which lights none) and an included graphic's never one, nor a line beside a unit's
-//      text on its baseline (its label, its number). Its rows the lines' boxes alone (no erase, no placeholder: nothing is
+//      none; a float's text (a figure's, which lights none) never one, nor a glyph of an included graphic by where it sits (in a
+//      form XObject, on an image) whatever its line's class, nor a line beside a unit's text on its baseline, within BESIDE of
+//      its size across in its column (its label, its number); a line part an ink unit claimed keeps its other runs (a running
+//      head's folio). Its rows the lines' boxes alone (no erase, no placeholder: nothing is
 //      drawn over it), no pieces (nothing is sent), its glyphs in no group (the wrap and its ledger as before).
 // Pure arithmetic; an original module (no port statement).
 import { classifyFont } from '../layer-proto/fonts.mjs'
@@ -419,19 +421,36 @@ const BASELINE = 0.6
  * `kept`, no pieces, its rows its lines' boxes and frames alone
  */
 export function keptUnitsOf(pages, ledger, owner, { from }) {
-  const fams = new Map()
+  const fams = new Map(), images = new Map()
+  // (a glyph of an included graphic, by where it sits whatever its line's class: inside a form XObject, or on an image placed on
+  // its page — a picture's number, a tick of a plot, which no unit owns and which lights nothing)
+  const imagesOf = p => {
+    let list = images.get(p)
+    if (list) return list
+    const pg = pages[p - 1], B = pg?.boxes ?? [], P = pg?.paths ?? []
+    list = []
+    for (let b = 0; 4 * b + 3 < B.length; b++) if (P[b] === IMAGE_BOX) list.push(B.slice(4 * b, 4 * b + 4))
+    images.set(p, list)
+    return list
+  }
+  const graphic = (p, x) => x.form === true || imagesOf(p).some(([x0, y0, x1, y1]) => { const mx = (x.x0 + x.x1) / 2, my = (x.top + x.bottom) / 2; return mx >= x0 && mx <= x1 && my >= y0 && my <= y1 })
   const lines = []
   for (const L of ledger.lines ?? []) {
     const depth = L.region >> 1, body = (L.region & 1) === 1
     if (depth !== 0 || L.cls === 'figures') continue
-    if (L.gs.some(g => owner(L.page, g) != null)) continue
     const G = pages[L.page - 1]?.glyphs ?? []
-    const words = wordsOf(G, L.gs, fams)
-    if (!words.length) continue
-    // (beside a unit's text on its baseline, its stream's neighbour a unit's glyph: that unit's label or number, the original's
-    // ink its unit lights)
-    if (besideUnit(G, L, owner)) continue
-    lines.push({ ...L, words, body, lo: Math.min(...L.gs), hi: Math.max(...L.gs) })
+    // (its glyphs no unit owns and no graphic holds, in runs along the line: a running head's folio its own run beside the head
+    // an ink unit claimed, never cut from its line with it)
+    const out = new Set(L.gs.filter(g => !G[g] || owner(L.page, g) != null || graphic(L.page, G[g])))
+    for (const run of runsOf(G, L.gs, out)) {
+      const words = wordsOf(G, run, fams)
+      if (!words.length) continue
+      const part = { ...L, gs: run, x0: Math.min(...run.map(g => G[g].x0)), x1: Math.max(...run.map(g => G[g].x1)) }
+      // (beside a unit's text on its baseline, its stream's neighbour a unit's glyph close across: that unit's label or number,
+      // the original's ink its unit lights)
+      if (besideUnit(pages[L.page - 1], part, owner)) continue
+      lines.push({ ...part, words, body, lo: Math.min(...run), hi: Math.max(...run) })
+    }
   }
   const blocks = []
   for (const s of lines) {
@@ -451,10 +470,39 @@ export function keptUnitsOf(pages, ledger, owner, { from }) {
   })
 }
 
-/** whether a ledger line's stream neighbour, the first glyph with ink before it or after it, is a unit's on its baseline */
-function besideUnit(G, L, owner) {
+/** a box an image placed (layout/ink.mjs `paths`: -3) */
+const IMAGE_BOX = -3
+/** a unit's glyph is a line's neighbour within this many of its size across (a label's \labelsep, a section number's \quad) */
+const BESIDE = 2
+
+/** a ledger line's glyphs `gs` less those of `out`, in runs: two glyphs one run where no glyph of `out` stands between them along
+ *  the line */
+function runsOf(G, gs, out) {
+  const keep = gs.filter(g => !out.has(g)).sort((a, b) => G[a].x0 - G[b].x0)
+  if (!keep.length) return []
+  if (!out.size) return [gs]
+  const cuts = [...out].filter(g => G[g]).map(g => (G[g].x0 + G[g].x1) / 2)
+  const runs = [[keep[0]]]
+  for (let k = 1; k < keep.length; k++) {
+    const a = G[keep[k - 1]], b = G[keep[k]]
+    if (cuts.some(x => x > (a.x0 + a.x1) / 2 && x < (b.x0 + b.x1) / 2)) runs.push([keep[k]])
+    else runs.at(-1).push(keep[k])
+  }
+  return runs
+}
+
+/** whether a line's stream neighbour, the first glyph with ink before it or after it, is a unit's on its baseline, close across
+ *  (within BESIDE of its size) and in its column on a page of two */
+function besideUnit(page, L, owner) {
+  const G = page?.glyphs ?? []
   const lo = Math.min(...L.gs), hi = Math.max(...L.gs)
-  const near = g => !!G[g] && owner(L.page, g) != null && Math.abs(G[g].y - L.y) <= BASELINE * Math.max(G[g].size, L.size)
+  const two = columnsOf(page ?? {}) === 2, mid = page?.view ? (page.view[0] + page.view[2]) / 2 : 0
+  const side = x => (x < mid ? 0 : 1)
+  const near = g => {
+    const x = G[g], size = Math.max(x?.size ?? 0, L.size)
+    if (!x || owner(L.page, g) == null || Math.abs(x.y - L.y) > BASELINE * size || Math.max(L.x0 - x.x1, x.x0 - L.x1) > BESIDE * size) return false
+    return !two || side((x.x0 + x.x1) / 2) === side((L.x0 + L.x1) / 2)
+  }
   let a = lo - 1
   while (a >= 0 && (G[a]?.blank || !/\S/u.test(G[a]?.u ?? ''))) a--
   let b = hi + 1

@@ -453,4 +453,30 @@ describe('keptUnitsOf', () => {
     expect(ink.map(u => [u.id, u.kind])).toEqual([[2, 'inknotes']])
     expect(kept.map(u => [u.id, u.kind, u.cls, u.rows.lines.length / 8])).toEqual([[3, 'inknotes', 'notes', 1], [4, 'inkheads', 'symbols', 1]])
   })
+
+  it("keeps a running head's folio a block of its own where the head's ink unit claimed the rest of its line (review of #525)", () => {
+    const pg = page({ point: 'c1-2' }, { glyphs: run('1.1.  HISTORICAL OVERVIEW', 100, 760) }, { glyphs: run('17', 255, 760) }, { point: 'bs1' }, body(600), { point: 'be1' })
+    const { ink, kept } = keptOf([pg])
+    expect(ink.map(u => u.kind)).toEqual(['inkheads'])
+    // (one ledger line, the folio three sizes after the title: its own block past BESIDE; the section number at the title's
+    // \quad its heading's, as before)
+    expect(kept.map(u => [u.kind, u.cls, u.rows.lines.slice(1, 3)])).toEqual([['inkheads', 'heads', [255, 265]]])
+  })
+
+  it("makes no block of an included graphic's glyph, by where it sits: in a form XObject, on an image (review of #525)", () => {
+    const digit = (more: Partial<G>) => run('3', 300, 40).map(g => ({ ...g, ...more }))
+    expect(keptOf([page({ point: 'bs1' }, body(), { point: 'be1' }, { glyphs: digit({ form: true }) })]).kept).toEqual([])
+    const onImage = page({ point: 'bs1' }, body(), { point: 'be1' }, { glyphs: digit({}) })
+    Object.assign(onImage.page, { boxes: [290, 30, 320, 60], paths: [-3] })
+    expect(keptOf([onImage]).kept).toEqual([])
+    // (the same digit on no graphic: a page number, kept)
+    expect(keptOf([page({ point: 'bs1' }, body(), { point: 'be1' }, { glyphs: digit({}) })]).kept).toHaveLength(1)
+  })
+
+  it("keeps a line beside a unit's text on its baseline where it stands far across or in the other column (review of #525)", () => {
+    const listing = (x: number) => keptOf([page({ point: 'c2-1' }, { point: 'bs1' }, { glyphs: run('Body words', 72, 700), owner: 'u1' }, { glyphs: run('print hello', x, 700, TT) }, { point: 'be1' })]).kept
+    expect(listing(330)).toHaveLength(1)
+    // (right after it, at a word's space: the unit's own, as before)
+    expect(listing(127)).toEqual([])
+  })
 })
