@@ -8,7 +8,7 @@
  "compileImage": {
   "texlive": "texlive/texlive@sha256:7056390eac37715fd3e01875037ceb4016cb17d44c611f7bbbfa7a012007979f",
   "base": "debian:trixie-slim@sha256:7792b1f7702a86946cd518db72b6a407302c3e9bc1635634368b878189e8221c",
-  "node": "node:22-trixie-slim@sha256:6f851b42f05219411b716d43be5525cad33f872ee4d7808fbcb57616f00b6d57",
+  "node": "node:26-trixie-slim@sha256:18f03e4b532a63baf09809fe8349c2171807f1818cb6c5230fb12aecd5beda65",
   "aptSnapshot": "20261017T000000Z",
   "texFormat": {
    "texlive": 2025,

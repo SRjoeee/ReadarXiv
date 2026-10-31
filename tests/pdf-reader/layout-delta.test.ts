@@ -376,6 +376,79 @@ describe('overlapping proofs in one process (CodeRabbit on #439)', () => {
   })
 })
 
+describe('a message PDF.js gives each document under its own id (2610.31506v1)', () => {
+  // (a Type 3 font whose glyph paints an image PDF.js cannot decode, on page 2, which the delta leaves arXiv's: PDF.js names the
+  // image by the document's own id, `g_d<n>_type3_img_p1_1`, and warns of it in each document it reads, the composed one too)
+  const bad = 'not a JPEG'
+  const glyph = '1 0 d0\nq 1 0 0 1 0 0 cm /Im0 Do Q'
+  const type3 = (font: number): [number, Obj][] => [
+    [font, { text: `<< /Type /Font /Subtype /Type3 /FontBBox [0 0 1 1] /FontMatrix [0.001 0 0 0.001 0 0] /CharProcs << /a ${font + 1} 0 R >> /Encoding << /Type /Encoding /Differences [97 /a] >> /FirstChar 97 /LastChar 97 /Widths [1000] /Resources << /XObject << /Im0 ${font + 2} 0 R >> >> >>` }],
+    [font + 1, stream(glyph)],
+    [font + 2, { dict: ' /Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode', data: enc(bad) }],
+  ]
+  const page2 = (helv: number, t3: number, contents: number) => `<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 ${helv} 0 R /T3 ${t3} 0 R >> >> /Contents ${contents} 0 R >>`
+  const body2 = `${line('Page two')}BT /T3 12 Tf 20 60 Td (a) Tj ET\n`
+  const both = () => {
+    const o = new Map<number, Obj>([
+      [1, { text: '<< /Type /Catalog /Pages 2 0 R >>' }],
+      [2, { text: '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 /MediaBox [0 0 200 200] >>' }],
+      [3, { text: '<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 10 0 R >> >> /Contents 7 0 R >>' }],
+      [4, { text: page2(10, 50, 8) }],
+      [7, stream(line('Original one'))], [8, stream(body2)], [10, { text: HELV }], ...type3(50),
+    ])
+    const u = new Map<number, Obj>([
+      [1, { text: '<< /Type /Catalog /Pages 2 0 R >>' }],
+      [2, { text: '<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 /MediaBox [0 0 200 200] >>' }],
+      [3, { text: '<< /Type /Page /Parent 2 0 R /Resources << /Font << /F7 20 0 R >> >> /Contents 22 0 R >>' }],
+      [4, { text: page2(20, 60, 23) }],
+      [20, { text: HELV }], [22, stream(line('Our one', 100, 'F7'))], [23, stream(body2)], ...type3(60),
+    ])
+    return { orig: pdfOf(o, { root: 1 }), ours: pdfOf(u, { root: 1 }) }
+  }
+  /** the messages PDF.js gives of a document read as the proof reads it, and the document's id */
+  const heard = async (bytes: Uint8Array) => {
+    const said: string[] = [], log0 = console.log, warn0 = console.warn
+    console.log = console.warn = (...a: unknown[]) => { said.push(a.map(String).join(' ')) }
+    const task = getDocument({ data: bytes.slice(), verbosity: 1 })
+    try {
+      const doc = await task.promise
+      for (let p = 1; p <= doc.numPages; p++) await (await doc.getPage(p)).getTextContent()
+    } finally {
+      console.log = log0
+      console.warn = warn0
+      await task.destroy()
+    }
+    return { said, id: task.docId }
+  }
+
+  it('one message of one glyph\'s image, under three ids, is no message of the composed document alone: the delta proves', async () => {
+    const { orig, ours } = both()
+    const r = await built(orig, ours)
+    expect(r.replaced).toEqual([[1, 1]])
+    // (each document, read alone, gives it under its own id)
+    for (const bytes of [orig, ours, concat([orig, r.delta])]) {
+      const { said, id } = await heard(bytes)
+      expect(said.filter(m => m.includes('_type3_img_'))).toEqual([`Warning: Unable to decode image "g_${id}_type3_img_p1_1": "JpegError: SOI not found".`])
+    }
+    expect(await prove(orig, r.delta, ours, r.replaced)).toMatchObject({ ok: true })
+  })
+
+  it('a message of the composed document\'s own id about another object, or of another document\'s id, still fails', async () => {
+    const { orig, ours } = both()
+    const r = await built(orig, ours)
+    const composedSays = (say: (id: string) => string) => ((o: Record<string, unknown>) => {
+      const task = getDocument(o as never) as unknown as { docId: string; promise: Promise<unknown> }
+      if ((o.data as Uint8Array).length === orig.length + r.delta.length) task.promise = task.promise.then(doc => { console.log(say(task.docId)); return doc })
+      return task
+    }) as never
+    const other = (id: string) => `d${Number(id.slice(1)) + 1000}`
+    for (const say of [(id: string) => `Warning: Unable to decode image "g_${id}_type3_img_p1_2": "JpegError: SOI not found".`, (id: string) => `Warning: Unable to decode image "g_${other(id)}_type3_img_p1_1": "JpegError: SOI not found".`]) {
+      const got = await proveDelta(orig, r.delta, ours, { PL, getDocument: composedSays(say), documentOptions: { useSystemFonts: false }, replaced: r.replaced })
+      expect(got).toMatchObject({ ok: false, code: 'delta-proof', why: /says of the composed document alone: Warning: Unable to decode image "g_d\d+_type3_img_p1_[12]"/ })
+    }
+  })
+})
+
 describe('the page geometry a replaced page keeps (Codex on #439)', () => {
   it('a page of ours of another /UserUnit, /Rotate or box than arXiv\'s is no delta (`delta-boxes`), and a delta over it fails the proof', async () => {
     const withPage = (dict: string) => { const u = oursObjects(); u.set(3, { text: dict }); return pdfOf(u, { root: 1 }) }

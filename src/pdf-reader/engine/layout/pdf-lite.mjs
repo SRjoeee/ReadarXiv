@@ -26,23 +26,38 @@
 // overlaid text exactly as a stock worker makes it). The one extraction cannot be shared with the page's getTextContent: through an
 // Intersector PDF.js builds no item's string, and its whitespace reads an item's string's length.
 //
+// GLYPH OUTLINES IN FLOAT32. Where PDF.js draws a glyph as a path (in Node, whose font face it disables), the worker compiles the
+// glyph's outline into a typed array and the API side views the bytes it is sent as one (`<font>_path_<char>`, a FontPathInfo,
+// which layout/ink.mjs reads for a glyph's own ink). PDF.js 6.3.289 takes a Float16Array on each side where the runtime has one
+// (FeatureTest.isFloat16ArraySupported: Node 24 on, every current browser), else a Float32Array (Node 22). Half precision moves
+// an outline's points (0.291 is 0.291016), a glyph's ink in its last places and so a rounded coordinate of the layout (494.89 is
+// 494.9 on 1706.03762v7), so the engine's output would depend on the runtime. `float32Outlines(api, worker)` makes the choice
+// the engine's, Float32 on both sides whatever the runtime: it answers PDF.js's question with no on the host's API module and on
+// the lite worker's module, which exports its FeatureTest for it (the third change). Both sides or neither: a worker that
+// compiled in one precision viewed in the other would be read as other numbers.
+//
 // HOW A HOST USES IT (Node: PDF.js runs its worker on the main thread, taking `globalThis.pdfjsWorker` when one is set):
 //   const source = readFileSync(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs'), 'utf8')
-//   globalThis.pdfjsWorker = await import(`data:text/javascript;base64,${Buffer.from(liteWorkerSource(source, { version })).toString('base64')}`)
+//   const worker = await import(`data:text/javascript;base64,${Buffer.from(liteWorkerSource(source, { version })).toString('base64')}`)
+//   float32Outlines(api, worker)
+//   globalThis.pdfjsWorker = worker
 //   const doc = await getDocument({ data, maxImageSize: NO_IMAGE_PIXELS, ... }).promise
-// once, before the first getDocument. A document whose pages' draw geometry is read (pipeline/draw-data.mjs) is opened with
-// `maxImageSize: LINK_TEXT_PIXELS` and `fontExtraProperties: true`: without the latter a font carries no ToUnicode map and every page
-// tells its draw as none (`why: 'props'`).
+// once, before the first getDocument (a file of liteWorkerSource's text, imported, is the same module). A document whose pages'
+// draw geometry is read (pipeline/draw-data.mjs) is opened with `maxImageSize: LINK_TEXT_PIXELS` and `fontExtraProperties: true`:
+// without the latter a font carries no ToUnicode map and every page tells its draw as none (`why: 'props'`).
 // Server-side only: the browser layer (the extension, run.mjs's rendering, copyOf) keeps stock
 // PDF.js, which has to decode the images it draws.
 //
 // BUMPING PDFJS (layout versions.mjs): the anchor is one line of the worker. Install the new version, run
 // tests/pdf-reader/pdf-lite.test.ts: it counts the anchor in the installed worker and compares an operator list's digest with and
 // without the guard. If the line moved, read buildPaintImageXObject again (is the decode still unawaited, and is `this.options` still
-// the evaluator's?), change ANCHOR and GUARD (TEXT_ANCHOR and TEXT_GUARD: read Page.getAnnotationsData again) together, and set LITE_PDFJS. Nothing else in the engine knows of the patch.
+// the evaluator's?), change ANCHOR and GUARD (TEXT_ANCHOR and TEXT_GUARD: read Page.getAnnotationsData again) together, and set LITE_PDFJS.
+// Read again where PDF.js asks isFloat16ArraySupported (Commands.getPath, CompiledFont.NOOP, FontPathInfo.path: still the only
+// readers of a glyph's outline?) and that the worker module still ends with EXPORT_ANCHOR (tests/pdf-reader/pdf-lite-outlines.test.ts).
+// Nothing else in the engine knows of the patch.
 //
-// An original module (no port statement). PDF.js is Apache-2.0 (Mozilla); the host patches a copy of it in memory at run time and
-// ships none.
+// An original module (no port statement). PDF.js is Apache-2.0 (Mozilla); the host patches a copy of it (in memory at run time, or
+// into a file of its own server's image) and the engine ships none.
 
 /** the PDF.js this patch was made for */
 export const LITE_PDFJS = '6.3.289'
@@ -62,10 +77,14 @@ const GUARD = `if (this.options.maxImageSize >= ${LINK_TEXT_PIXELS}) throw new E
  *  the same. LINK_TEXT_PIXELS leaves it as it stands */
 const TEXT_ANCHOR = '} else if (annotation.overlaysTextContent && isVisible) {'
 const TEXT_GUARD = `} else if (annotation.overlaysTextContent && isVisible && this.evaluatorOptions.maxImageSize !== ${NO_IMAGE_PIXELS}) {`
+/** the worker module's one export statement, its last: the lite worker exports its FeatureTest beside it, for float32Outlines */
+const EXPORT_ANCHOR = 'export { WorkerMessageHandler };'
+const EXPORT = 'export { FeatureTest, WorkerMessageHandler };'
 
 /**
- * The worker module's text with the guard before its image decode and the one on a link's overlaid text. `version`, where given,
- * is the PDF.js the text is of (the host's package.json) and must be LITE_PDFJS. Throws unless each anchor stands exactly once.
+ * The worker module's text with the guard before its image decode and the one on a link's overlaid text, and its FeatureTest
+ * exported (float32Outlines). `version`, where given, is the PDF.js the text is of (the host's package.json) and must be
+ * LITE_PDFJS. Throws unless each anchor stands exactly once.
  */
 export function liteWorkerSource(source, { version } = {}) {
   if (typeof source !== 'string') throw new TypeError('source: the text of pdf.worker.mjs')
@@ -74,5 +93,22 @@ export function liteWorkerSource(source, { version } = {}) {
   if (parts.length !== 2) throw new RangeError(`the worker holds the image decode ${parts.length - 1} times, not once: PDF.js changed, check buildPaintImageXObject again (pdf-lite.mjs)`)
   const text = `${parts[0]}${GUARD}${ANCHOR}${parts[1]}`.split(TEXT_ANCHOR)
   if (text.length !== 2) throw new RangeError(`the worker holds the overlaid text's condition ${text.length - 1} times, not once: PDF.js changed, check Page.getAnnotationsData again (pdf-lite.mjs)`)
-  return `${text[0]}${TEXT_GUARD}${text[1]}`
+  const out = `${text[0]}${TEXT_GUARD}${text[1]}`.split(EXPORT_ANCHOR)
+  if (out.length !== 2) throw new RangeError(`the worker holds its export statement ${out.length - 1} times, not once: PDF.js changed, check the worker module's end again (pdf-lite.mjs)`)
+  return `${out[0]}${EXPORT}${out[1]}`
+}
+
+/**
+ * PDF.js's glyph outlines in Float32 on both sides of the process's PDF.js, whatever the runtime (GLYPH OUTLINES IN FLOAT32,
+ * above): `api` the host's PDF.js API module (pdfjs-dist/legacy/build/pdf.mjs), `worker` the module of liteWorkerSource's text,
+ * which the host makes its worker; each one's FeatureTest answers isFloat16ArraySupported with false, as PDF.js's own `shadow`
+ * answers it once asked (a fixed value of the class). Once, before the first document is opened. Throws a TypeError, and changes
+ * neither, unless both export a FeatureTest that asks it
+ */
+export function float32Outlines(api, worker) {
+  const sides = [['api', api?.FeatureTest], ['worker', worker?.FeatureTest]]
+  for (const [what, F] of sides) {
+    if (typeof F !== 'function' || !('isFloat16ArraySupported' in F)) throw new TypeError(`${what}: a PDF.js module whose FeatureTest asks isFloat16ArraySupported (${what === 'worker' ? 'the module of liteWorkerSource\'s text' : 'pdfjs-dist/legacy/build/pdf.mjs'})`)
+  }
+  for (const [, F] of sides) Object.defineProperty(F, 'isFloat16ArraySupported', { value: false, enumerable: true, configurable: true, writable: false })
 }

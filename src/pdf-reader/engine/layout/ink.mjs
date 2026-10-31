@@ -118,7 +118,8 @@ const fillOf = a => (typeof a?.[0] === 'string' && /^#[0-9a-f]{6}$/i.test(a[0]) 
 /**
  * A glyph's own ink in em, [x0, y0, x1, y1] from its origin, y up: the extremes of its outline, as PDF.js gives it where
  * it draws glyphs as paths (`<font's loadedName>_path_<fontChar>` in the common objects, a FontPathInfo: in Node, where
- * the font face is disabled by default, or wherever the document is opened with `disableFontFace`). The outline's points
+ * the font face is disabled by default, or wherever the document is opened with `disableFontFace`; Float32 whatever the runtime
+ * where the host made it so, layout/pdf-lite.mjs float32Outlines). The outline's points
  * and its curves' control points bound it, and a font's outline has a point at each extreme (TrueType's and CFF's own
  * rule), so the box is its ink. [] for a glyph of no outline (a space drawn); null where no outline is given (a Type 3
  * font, the browser's default): the font's declared ascent and descent then
