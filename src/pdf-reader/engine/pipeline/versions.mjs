@@ -320,8 +320,20 @@
 //     2608.25210v2's and 2610.22065v1's flags, no line moved). Over 72 papers the other 65's guard, layout file and base page are
 //     42's byte for byte, the gate pack's 7 among them. Raised so that the bundle of a paper whose marked original now stands at
 //     once is made again under a new key (VTAG). Every unit, its pieces and its wire are 42's: a copy of 42 carries every unit
-//     (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '43'
+//     (live.mjs PIPELINE_CARRIES); 44 (the driver's group, 2026-10-31): the final pass begins with hooks that switch off the
+//     transparency group graphics-def's pdftex.def 1.2d and luatex.def 1.2f (8d691483be, 2025-09-20) write on every included PDF,
+//     which arXiv's TeX Live 2025, the state of 2025-08-03, predates (live.mjs NO_DRIVER_GROUP, layout/paper.mjs finalPass): our
+//     figure forms are arXiv's again, which the delta copies (2610.30034v1's base a proved delta of 196,579 bytes, its 5.46 MB
+//     shipped whole before; 2610.30875v1's 3.73 MB delta 0.30 MB) and poppler draws as arXiv's. The base's bytes change where a
+//     TeX Live 2025 paper compiled by pdfLaTeX or LuaLaTeX includes a PDF, and nowhere else (TeX Live 2023, XeLaTeX, latex: byte
+//     for byte); the marked compile and the source units do not. A unit cut moves with it: PDF.js gives a grouped form no box to
+//     clip by, so layout/ink.mjs read a figure's text past its form's BBox, and the wrap cut figure units of that text, which no
+//     page shows (the gate pack: 1512.03385v1's figures 181 -> 176 units, 2608.04322v1's 237 -> 218; the lane's six papers'
+//     maker units byte for byte). A stored translation is found by an identity naming the pipeline, and its rows by their units'
+//     ids, so a translation of the old cut must not be given to the new one (PDF-READER §18.3). Raised so; and so that a bundle
+//     made over a base with the group is made again under a new key (VTAG). Every source unit, its pieces and its wire are 43's: a
+//     copy of 43 carries every unit (live.mjs PIPELINE_CARRIES), a figure unit found again by its source (cache.mjs seedFrom)
+export const PIPELINE_VERSION = '44'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
@@ -381,15 +393,6 @@ export const PDFJS = '6.3.289'
  * ink (`u<id>.p`), between the marks LAYOUT_TEX's hook sets around it (marks.mjs BACKREF_TEX), where it was no one's: the base's
  * bytes change where a paper turns backref's lists on; 17 (the owner's case 2610.35877v1): a biblatex entry's ink its unit's
  * groups (an ink unit of kind `inkreferences`, ink-units.mjs claimInk), the point before each a rendering intent in our page
- * (marks.mjs POINTS_TEX `bi<n>`): the base's bytes change where a paper loads biblatex; 18 (the driver's group, 2026-10-31): the
- * final pass begins with hooks that switch off the transparency group graphics-def's pdftex.def 1.2d and luatex.def 1.2f
- * (8d691483be, 2025-09-20) write on every included PDF, which arXiv's TeX Live 2025, the state of 2025-08-03, predates (live.mjs
- * NO_DRIVER_GROUP, layout/paper.mjs finalPass): our figure forms are arXiv's again, which the delta copies (2610.30034v1's base a
- * proved delta of 196,579 bytes, its 5.46 MB shipped whole before; 2610.30875v1's 3.73 MB delta 0.30 MB) and poppler draws as
- * arXiv's. The base's bytes change where a TeX Live 2025 paper compiled by pdfLaTeX or LuaLaTeX includes a PDF, and nowhere
- * else (TeX Live 2023, XeLaTeX, latex: byte for byte); the marked compile and the units do not, and a layout file only where a
- * figure draws past its box (PDF.js gives a grouped form no box to clip by: 1512.03385v1's one frame, 0.07 pt more room). Raised
- * so that a bundle made over a base with the group is made again under a new key (VTAG): REMOVAL is the version of the key that
- * names the base's bytes, the wrapped final pass the head heads, where PIPELINE names the units and LAYOUT the layout maker
+ * (marks.mjs POINTS_TEX `bi<n>`): the base's bytes change where a paper loads biblatex
  */
-export const REMOVAL = '18'
+export const REMOVAL = '17'

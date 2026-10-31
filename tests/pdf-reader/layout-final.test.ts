@@ -85,7 +85,7 @@ describe('the final pass', () => {
 
   it('heads its main file with one line that turns the pdfTeX and LuaTeX drivers\' transparency group off, whatever the engine; the marked compile keeps the draft option', async () => {
     // (the line as TeX reads it, written out: another line is another base page wherever a TeX Live 2025 paper includes a PDF,
-    // graphics-def's 8d691483be after arXiv's tree of 2025-08-03, REMOVAL 18)
+    // graphics-def's 8d691483be after arXiv's tree of 2025-08-03, PIPELINE 44)
     const HEAD = String.raw`\AddToHook{file/pdftex.def/after}{\ifcsname Gread@transgroupfalse\endcsname\expandafter\let\csname Gread@transgrouptrue\expandafter\endcsname\csname Gread@transgroupfalse\endcsname\fi}` +
       String.raw`\AddToHook{file/luatex.def/after}{\ifcsname Gread@transgroupfalse\endcsname\expandafter\let\csname Gread@transgrouptrue\expandafter\endcsname\csname Gread@transgroupfalse\endcsname\fi}`
     expect(NO_DRIVER_GROUP).toBe(HEAD)
