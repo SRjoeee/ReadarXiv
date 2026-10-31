@@ -2246,7 +2246,10 @@ extension's compile client (`parked/extension-compile/`).
   has one (Node 24 on; Node 22 has none), and half precision moves a rounded coordinate of the layout (494.89 is 494.9 on
   1706.03762v7). A host that makes the lite worker its PDF.js worker calls `float32Outlines(api, worker)` (`layout/pdf-lite.mjs`)
   before its first document: both sides Float32, whatever the runtime (`tests/pdf-reader/pdf-lite-outlines.test.ts`). The
-  extension and the browser layer run stock PDF.js and read no glyph's outline for the layout.
+  extension and the browser layer run stock PDF.js and read no glyph's outline for the layout. A failed allocation is one on
+  every Node: from Node 24 on, `Buffer.allocUnsafe` and what is made of it (`Buffer.concat`, zlib's output) throw a RangeError of
+  Node's own words, `Failed to allocate memory`, with the code ERR_MEMORY_ALLOCATION_FAILED, where Node 22 threw V8's `Array buffer
+  allocation failed`; `pipeline/memory.mjs` `isMemoryError` reads the code first.
 
 ### 19.4 The layer API, as the web defines it
 

@@ -7,17 +7,22 @@
 
 /** V8's words for a backing store it could not allocate */
 export const ALLOCATION_FAILED = 'Array buffer allocation failed'
+/** Node's words for one it could not allocate itself, with its code ERR_MEMORY_ALLOCATION_FAILED: from Node 24 on,
+ *  Buffer.allocUnsafe and what is made of it (Buffer.allocUnsafeSlow, Buffer.concat, zlib's output) throw a RangeError of these
+ *  words where Node 22 threw V8's ALLOCATION_FAILED (measured under RLIMIT_DATA on 22.23, 24.22 and 26.13) */
+const NODE_ALLOCATION_FAILED = 'Failed to allocate memory'
 
 /**
- * Whether `e` is a failed allocation: V8's RangeError of its exact words, PDF.js's wrapping of one from its worker (pdf.mjs
- * wrapReason: an UnknownErrorException of its message and its `toString()`), or Node's own ERR_MEMORY_ALLOCATION_FAILED. A
- * length no array may have (`Invalid typed array length`, `Invalid array buffer length`, `Invalid string length`), Node's
- * ERR_STRING_TOO_LONG and ERR_BUFFER_TOO_LARGE (a bounded inflate's refusal), a stack overflow, or the words in any other
- * error are none
+ * Whether `e` is a failed allocation: V8's RangeError of its exact words, Node's own ERR_MEMORY_ALLOCATION_FAILED (an Error on
+ * Node 22, a RangeError of NODE_ALLOCATION_FAILED from Node 24 on, which its code tells, not its words), or PDF.js's wrapping of
+ * either from its worker (pdf.mjs wrapReason: an UnknownErrorException of its message and its `toString()`). A length no array
+ * may have (`Invalid typed array length`, `Invalid array buffer length`, `Invalid string length`), Node's ERR_STRING_TOO_LONG and
+ * ERR_BUFFER_TOO_LARGE (a bounded inflate's refusal), a stack overflow, or the words in any other error are none
  */
 export function isMemoryError(e) {
-  if (e instanceof RangeError) return e.message === ALLOCATION_FAILED
   if (typeof e !== 'object' || e === null) return false
   if (e.code === 'ERR_MEMORY_ALLOCATION_FAILED') return true
-  return e.name === 'UnknownErrorException' && e.message === ALLOCATION_FAILED && e.details === `RangeError: ${ALLOCATION_FAILED}`
+  if (e instanceof RangeError) return e.message === ALLOCATION_FAILED
+  if (e.name !== 'UnknownErrorException') return false
+  return [ALLOCATION_FAILED, NODE_ALLOCATION_FAILED].some(words => e.message === words && e.details === `RangeError: ${words}`)
 }

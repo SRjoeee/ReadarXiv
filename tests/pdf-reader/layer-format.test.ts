@@ -72,6 +72,16 @@ describe('isMemoryError (the web\'s truth table)', () => {
     expect(isMemoryError(Object.assign(new Error('Failed to allocate memory'), { code: 'ERR_MEMORY_ALLOCATION_FAILED' }))).toBe(true)
   })
 
+  it('Node 24 on: Buffer.allocUnsafe\'s RangeError of Node\'s own words and code, and PDF.js\'s wrapping of it, are a failed allocation', () => {
+    // (as Node 26.13 throws it under RLIMIT_DATA: `RangeError: Failed to allocate memory`, `code: 'ERR_MEMORY_ALLOCATION_FAILED'`)
+    const node = Object.assign(new RangeError('Failed to allocate memory'), { code: 'ERR_MEMORY_ALLOCATION_FAILED' })
+    expect(isMemoryError(node)).toBe(true)
+    expect(isMemoryError(pdfjsWrapped(node))).toBe(true)
+    // (its words without its code, or wrapped from another error, are none)
+    expect(isMemoryError(new RangeError('Failed to allocate memory'))).toBe(false)
+    expect(isMemoryError(Object.assign(new Error('Failed to allocate memory'), { name: 'UnknownErrorException', details: 'FormatError: Failed to allocate memory' }))).toBe(false)
+  })
+
   it('nothing else is: a stack overflow, a length no array may have, the words without V8\'s error, PDF.js\'s other failures', () => {
     let overflow: unknown
     const deep = (n: number): number => deep(n + 1) + 1
