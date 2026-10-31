@@ -96,8 +96,12 @@ export interface PartCutter {
   /** the page the next part begins at */
   readonly from: number
 }
+/** what an entry of K holds of its unit alone, kept from one wholeFrontier to the next by the page stream (pipeline/frontier.mjs):
+ *  `entries` by id, each under the left rectangles and the rows (`rows(id)`, the caller's object of them) it was read from;
+ *  `built`, the count of those read */
+export interface EntryCache { entries: Map<number, unknown>; rows(id: number): object | null; built: number }
 /** K over the whole paper and its frontier closed over the table groups: what partCutter cuts a paper made whole on */
-export declare function wholeFrontier(whole: WholePaper, frontier?: CutOptions['frontier'], grouped?: TableGroups): { K: CutKnown['K']; F: number[] }
+export declare function wholeFrontier(whole: WholePaper, frontier?: CutOptions['frontier'], grouped?: TableGroups, cache?: EntryCache | null): { K: CutKnown['K']; F: number[] }
 export declare function partCutter(o: {
   paper: { id: string; version: number }; N: number; head: Written; views: readonly Box[]
   leftPages: CutOptions['leftPages']; rules?: WholePaper['rules']; figures?: CutOptions['figures']

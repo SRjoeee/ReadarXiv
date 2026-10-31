@@ -34,6 +34,7 @@ import { leftSideOf, leftSideStream } from './left-side.mjs'
 import { movedLinesOf } from './moved-lines.mjs'
 import { bundleWithInk, figureAnchors, inkAnchors, inkOfHost, inkWithinChunks, layoutWithInk, streamWithInk } from './ink-pass.mjs'
 import { isMemoryError } from './memory.mjs'
+import { frontierStream } from './frontier.mjs'
 
 /** units TeX sets away from where the source has them (anchors.mjs `floating`), as the maker and the web's left take them */
 const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure', 'affiliation'])
@@ -648,6 +649,8 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
   /** whether unit i is in K for good: its left anchor final and its rows made (or none) */
   const inK = i => left.done(i) && settled(i)
   const kIds = () => { const out = []; for (let i = 0; i < n; i++) if (inK(i) && !isName(i)) out.push(i); return out }
+  // (K, F and NB over those, made again only from what changed since the last try: pipeline/frontier.mjs)
+  const frontiers = frontierStream({ paper, N, bundle, grouped, left, st })
   /** where the left stands: the least slot in K each unit may get, and the smallest unit whose left anchor is not final */
   let nowAt = -1, nowLeft = null
   const leftNow = () => {
@@ -696,11 +699,11 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
       const H = final ? N : frontier()
       if (!final && Math.min(partTarget(a, N), a + PART_PAGES_MAX - 1) > H) return
       const now = leftNow()
-      const layout = st ? st.layout(kIds()) : null
-      const whole = { paper: { ...paper, pages: N }, units: bundle, left: { pages: left.pages, units: left.units() }, layout }
-      const { K, F } = wholeFrontier(whole, undefined, grouped)
-      const NB = needBound(K, N)
+      const ids = kIds()
+      const { K, F, NB } = frontiers.of(ids)
       if (!final && !closable(K, F, NB, a, H, now)) return
+      // (the rows the part is cut with: those K was made of, and the names taken in by now)
+      const layout = st ? st.layout(ids) : null
       state.read = null
       const part = await cutter.next({ K, F, NB, layout, noLayout: st ? null : layoutRecordOf(ctx.made) })
       if (part === null) return
@@ -710,7 +713,9 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
       // are counted before they go)
       if (st) {
         for (const [pg] of st.cellRules ?? []) if (pg <= part.to) ruled++
-        st.tell(K.slice(0, (part.to === N ? K.length - 1 : F[part.to]) + 1).map(e => e.id), part.to)
+        const told = K.slice(0, (part.to === N ? K.length - 1 : F[part.to]) + 1).map(e => e.id)
+        st.tell(told, part.to)
+        frontiers.told(told)
       }
     }
   }

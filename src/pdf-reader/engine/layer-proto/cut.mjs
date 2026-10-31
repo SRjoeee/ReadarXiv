@@ -21,9 +21,12 @@ function pagesAt(rows, at, stride, into) {
 /**
  * K over the whole paper (C3b): one entry for each unit v0 may place, a left unit at its stream and a layout-only unit at
  * `after + 0.5`, ordered by (slot, id). `after` is today's `before` (run.mjs): the largest stream of a left unit with a smaller
- * id over the whole paper, -1 for none. An entry is what needsOf reads (`lists`, `reach`, `rects`) and what the part is cut from
+ * id over the whole paper, -1 for none. An entry is what needsOf reads (`lists`, `reach`, `rects`) and what the part is cut from.
+ * `cache` (the page stream's, pipeline/frontier.mjs): what an entry holds of its unit alone (its pages, by its left rectangles and
+ * its rows) kept from one call to the next, `entries` by id, under the left rectangles it was read from and `rows(id)`, the
+ * caller's object of the unit's rows (a new one whenever they change); `built` counts those read
  */
-function entriesOf(whole, N, grouped) {
+function entriesOf(whole, N, grouped, cache = null) {
   const left = new Map(whole.left.units.map(w => [w[0], w]))
   const layout = whole.layout ?? null
   const luOf = new Map(layout ? layout.units.map(u => [u[0], u]) : [])
@@ -41,23 +44,36 @@ function entriesOf(whole, N, grouped) {
   const shown = pages => [...new Set(pages.filter(p => p <= N))]
   const entries = []
   let before = -1
-  for (const id of ids) {
-    const w = left.get(id) ?? null, lu = luOf.get(id) ?? null
+  /** what the entry of unit `id` holds of the unit alone: its left rectangles' pages and its rows' */
+  const ownOf = (id, w, lu) => {
     const rectPages = w ? w[2].map(r => r[0]) : []
     const lines = lu ? linePages.get(id) ?? [] : []
     const everything = lu ? [...rectPages, ...(allPages.get(id) ?? [])] : rectPages
-    const lists = [shown(rectPages), shown(lines)].filter(l => l.length)
+    return {
+      lists: [shown(rectPages), shown(lines)].filter(l => l.length), reach: new Set([...rectPages, ...lines]),
+      reads: lu ? [...new Set((segPages.get(id) ?? []).filter(q => q >= 1 && q <= N))] : [],
+      first: Math.min(...rectPages, ...lines), lastLeft: rectPages.length ? Math.max(...rectPages) : 0, last: everything.length ? Math.max(...everything) : 0,
+    }
+  }
+  for (const id of ids) {
+    const w = left.get(id) ?? null, lu = luOf.get(id) ?? null
+    let own
+    if (cache) {
+      const rects = w ? w[2] : null, rows = cache.rows(id), was = cache.entries.get(id)
+      if (was && was.rects === rects && was.rows === rows) own = was.own
+      else { own = ownOf(id, w, lu); cache.entries.set(id, { rects, rows, own }); cache.built++ }
+    } else own = ownOf(id, w, lu)
     const e = {
       id, slot: w ? w[1] : before + 0.5, after: w ? null : before, rects: w ? w[2] : null, left: w, lu,
-      lists, reach: new Set([...rectPages, ...lines]),
+      lists: own.lists, reach: own.reach,
       // (and what Need reads of it besides, as the door's K has it (run.mjs addUnits): its placeholders' segments' pages and its table group)
-      reads: lu ? [...new Set((segPages.get(id) ?? []).filter(q => q >= 1 && q <= N))] : [], group: grouped.of[id] >= 0 ? grouped.of[id] : null,
+      reads: own.reads, group: grouped.of[id] >= 0 ? grouped.of[id] : null,
       // (set once K is in order, below)
       follows: null,
       // the least page of its rects and its lines: where the reader says a part may no longer tell it
-      first: Math.min(...rectPages, ...lines),
+      first: own.first,
       // the last page its left rects reach, and the last page any of its rows does (what the part's views must reach)
-      lastLeft: rectPages.length ? Math.max(...rectPages) : 0, last: everything.length ? Math.max(...everything) : 0,
+      lastLeft: own.lastLeft, last: own.last,
     }
     entries.push(e)
     if (w && w[1] > before) before = w[1]
@@ -169,11 +185,11 @@ export async function wholeCutter(whole, o) {
  * K over the whole paper and its frontier closed over the table groups (what partCutter cuts a paper made whole on): `whole`
  * cutBundle's, `frontier(K, N)` F as an array of pages 0 to N (needFrontier's by default), checked: a TypeError or a
  * RangeError for one that is not an index of K for each page, rising from -1. `grouped` groupsOfUnits(whole.units), made by a
- * caller that asks for K more than once (the page stream: a function of the units alone)
+ * caller that asks for K more than once (the page stream: a function of the units alone), and `cache` entriesOf's, its own
  */
-export function wholeFrontier(whole, frontier = needFrontier, grouped = groupsOfUnits(whole.units)) {
+export function wholeFrontier(whole, frontier = needFrontier, grouped = groupsOfUnits(whole.units), cache = null) {
   const N = whole.paper.pages
-  const K = entriesOf(whole, N, grouped)
+  const K = entriesOf(whole, N, grouped, cache)
   const given = frontier(K, N)
   if (!Array.isArray(given) || given.length !== N + 1) throw new TypeError(`frontier: an array of the ${N + 1} indices of pages 0 to ${N}`)
   for (let b = 0; b <= N; b++) if (!Number.isInteger(given[b]) || given[b] < -1 || given[b] >= K.length || (b > 0 && given[b] < given[b - 1])) throw new RangeError(`frontier: page ${b} is not an index of K, rising`)
