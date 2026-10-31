@@ -387,8 +387,9 @@ export const PDFJS = '6.3.289'
  * NO_DRIVER_GROUP, layout/paper.mjs finalPass): our figure forms are arXiv's again, which the delta copies (2610.30034v1's base a
  * proved delta of 196,579 bytes, its 5.46 MB shipped whole before; 2610.30875v1's 3.73 MB delta 0.30 MB) and poppler draws as
  * arXiv's. The base's bytes change where a TeX Live 2025 paper compiled by pdfLaTeX or LuaLaTeX includes a PDF, and nowhere
- * else (TeX Live 2023, XeLaTeX, latex: byte for byte); the marked compile, the units and the layout files do not. Raised so that
- * a bundle made over a base with the group is made again under a new key (VTAG): REMOVAL is the version of the key that names
- * the base's bytes, the wrapped final pass the head heads, where PIPELINE names the units and LAYOUT the layout file
+ * else (TeX Live 2023, XeLaTeX, latex: byte for byte); the marked compile and the units do not, and a layout file only where a
+ * figure draws past its box (PDF.js gives a grouped form no box to clip by: 1512.03385v1's one frame, 0.07 pt more room). Raised
+ * so that a bundle made over a base with the group is made again under a new key (VTAG): REMOVAL is the version of the key that
+ * names the base's bytes, the wrapped final pass the head heads, where PIPELINE names the units and LAYOUT the layout maker
  */
 export const REMOVAL = '18'

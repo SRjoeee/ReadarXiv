@@ -2620,29 +2620,37 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
 - **A PDF figure as arXiv includes one** (`live.mjs` `NO_DRIVER_GROUP`, REMOVAL 18, 2026-10-31). graphics-def's pdftex.def 1.2d
   and luatex.def 1.2f (8d691483be, 2025-09-20, on CTAN 2025-09-30) write a transparency group,
   `/Group<</S/Transparency/K false/I false>>`, on every PDF page `\includegraphics` includes. The pinned TeX Live 2025 tree has
-  them; arXiv's TeX Live 2025 is the state of 2025-08-03, not updated since (info.arxiv.org), and its 1.2c and 1.2d write none:
-  none of the 98 arXiv PDFs on disk carries the group, and every TeX Live 2025 final pass that included a PDF did (53 of the
-  census's 85 hand-offs). pdfTeX is not the cause: arXiv's PDFs name the same pdfTeX, 1.40.28, and a `\pdfximage` of its own
-  writes no group. With the group every figure form of ours differed from arXiv's, so the delta copied none: 2610.30034v1
-  shipped its whole 5.46 MB base where a proved delta of 0.20 MB now stands, 2610.30875v1 3.73 MB where 0.30 MB does, and the
-  46 delta papers of the census 3.61 MB less in all. Under poppler the group drew the figures' lines heavier than arXiv's (17
-  of the five papers' 23 figure pages differed from arXiv's, none without it but one whose images differ); PDF.js drew single
-  glyph or edge pixels apart. The final pass's first line, which was empty, is now two hooks, one a driver: once
-  `pdftex.def` or `luatex.def` is read, where it has the switch (`\Gread@transgroupfalse` defined), the include's
-  `\Gread@transgrouptrue` is made its `\Gread@transgroupfalse`. Measured on the pinned trees (the lane's matrix,
-  `pdftex-group/ndg/` beside the lane's report): under TeX Live 2025 pdfLaTeX's and LuaLaTeX's final pass is byte for byte
-  the compile of the driver with its group taken out, and of arXiv's own drivers (pdftex.def 1.2c, luatex.def 1.2d); with
-  `xcolor` loading the driver first, and under `\DocumentMetadata`, no group either; a figure that has a page group of its own
-  keeps it, where pdfTeX wrote two `/Group` keys in its form before (13 of the 53 papers). XeLaTeX's `xetex.def` has no group,
-  and under `latex` the DVI's drivers are left alone (dvips.def; dvipdfmx.def 5.0n has the switch, but arXiv draws a `latex`
-  paper with dvips, which includes no PDF): their final pass is byte for byte as before, and so is every TeX Live 2023 one,
-  whose drivers (pdftex.def 1.2b, luatex.def 1.2d) have no switch. A driver that grouped the figure by a switch of its own
-  would escape the hooks: graphics-def's PR #48, open since 2026-05-05, wraps the image in a form that carries the group, on
-  the same switch, which the hooks still turn off; the web's Docker suite holds each tree to it. The marked compile keeps its
-  drivers as they are: its pages are read for their marks and never shipped, and a group, in a figure's form, moves no mark;
-  so the units and the layout files are as they were, and only the base's bytes change (REMOVAL 18, §18.2). Option B, the
-  driver file swapped in the image, gives the same bytes but breaks the tree's identity with the full image file for file
-  (the image test), and a tree of 2025-08-03 exists in no published image (the lane's report, §5).
+  them. arXiv's TeX Live 2025 is the state of 2025-08-03, not updated since (info.arxiv.org), and its pdftex.def 1.2c and
+  luatex.def 1.2d write none: none of the 98 arXiv PDFs on disk carries the group, and every TeX Live 2025 final pass that
+  included a PDF did (53 of the speed lane's 85 hand-offs). pdfTeX is not the cause: arXiv's PDFs name the same pdfTeX, 1.40.28,
+  and a `\pdfximage` of its own writes no group. With the group no figure form of ours was arXiv's, so the delta copied none:
+  2610.30034v1 shipped its whole 5.46 MB base where a proved delta of 0.20 MB now stands, 2610.30875v1 a delta of 3.73 MB where
+  0.30 MB does. Under poppler the group drew the figures' lines heavier (17 of five papers' 23 figure pages differed from
+  arXiv's with it; without it all equal arXiv's but the stamp and one page whose images differ); PDF.js drew single glyph or
+  edge pixels apart.
+  - **The line.** The final pass's first line, empty before, is two hooks, one for each driver: once `pdftex.def` or
+    `luatex.def` is read, where it has the switch (`\Gread@transgroupfalse` defined), the include's `\Gread@transgrouptrue` is
+    made its `\Gread@transgroupfalse`. One line for one, so that no TeX line number moves; every name in `\csname`, since the
+    line runs before `\makeatletter`.
+  - **Measured on the pinned trees** (a compile matrix, one pass as the box runs a final pass, `readarxiv-lab-data/pdftex-group/ndg/`
+    on the maintainer's machine). Under TeX Live 2025, pdfLaTeX's and LuaLaTeX's final pass is byte for byte the compile of the
+    driver with its group's lines taken out, and of arXiv's own drivers. With `xcolor` loading the driver first, and under
+    `\DocumentMetadata`, it has no group either. A figure with a page group of its own keeps that one, where pdfTeX wrote two
+    `/Group` keys in its form before (13 of the 53 papers). XeLaTeX's `xetex.def` has no switch; under `latex` the DVI's drivers
+    are not hooked (dvips.def has no switch, and dvipdfmx.def 5.0n's writes no group in this dvipdfmx; arXiv draws a `latex`
+    paper with dvips anyway). Their final pass is byte for byte as before, and so is every TeX Live 2023 one, whose drivers
+    (pdftex.def 1.2b, luatex.def 1.2d) have no switch.
+  - **A driver of another shape.** graphics-def's PR #48 (open since 2026-05-05) puts the group on a form that wraps the image.
+    It keeps the include's switch, which the hooks still turn off: the final pass is the plain driver's byte for byte. A driver
+    that set the group by a switch of its own would escape them; the web's `container/tests/driver-group.docker.test.ts` holds
+    each tree to no group, and sees one put there so.
+  - **The marked compile keeps its drivers as they are.** Its pages are read for their marks and never shipped, and a group, in
+    a figure's form, moves no mark. So the units and the marks are as they were, and the base's bytes change (REMOVAL 18,
+    §18.2). The layout file changes only where a figure draws past its box: PDF.js gives a grouped form's
+    `paintFormXObjectBegin` no box and puts it on the group, which `layout/ink.mjs` does not clip by, so such a figure's ink was
+    read past its BBox; it is now clipped as on arXiv's page (the gate pack: one frame of 1512.03385v1, its room below 29.36 pt,
+    now 29.43). Swapping the driver file in the image gives the same bytes but breaks the tree's identity with the full image
+    file for file, and no published image holds a tree of 2025-08-03.
 - **The day.** Every compile after the probe carries `sourceDate` (the host sets `SOURCE_DATE_EPOCH` and `FORCE_SOURCE_DATE=1`):
   arXiv's PDF's day, `creationEpochOf` — its `/CreationDate`, else its XMP's `xmp:CreateDate`, else `xmp:MetadataDate`. arXiv's
   PDFs of 2026, rewritten by pikepdf, carry only the last (the rewrite's time, within a day of the compile): 2609.26457 prints

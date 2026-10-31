@@ -405,6 +405,15 @@ The pack of the abstract and biblatex fix (`d1c6c8ea`, LAYOUT 30: a trailing foo
 biblatex entry's unit) is `b397d693`'s with each output's `layout.json` and `base.json` made again the same way: every base page
 byte for byte the one before (the layout TeX's biblatex points set nothing where no paper loads biblatex, and none of the pack's
 does), every layout file `b397d693`'s but for its version, every base record's layout digest moving with it. 14 new objects.
+The pack of the driver's group (`c9a45bd9`, LAYOUT 31 still, REMOVAL 18: the final pass includes a PDF with no transparency
+group of the driver's) is `608b7e87`'s with each output's `layout.json`, `base.pdf` and `base.json` made again the same way
+(`layer-fixtures.mjs --offline --layouts-only`, each paper on its base record's year). The four TeX Live 2025 papers' base pages
+(1512.03385v1, 1706.03762v7, 1810.04805v2, 2608.04322v1) are the ones before with their 4 to 8 groups taken out, byte for byte up
+to the cross-reference stream; the three TeX Live 2023 ones are the ones before. Every layout file is `608b7e87`'s but
+1512.03385v1's, one frame of which has 0.07 pt more room below it (a figure's ink read inside its box: `docs/PDF-READER.md`
+§19.7). 9 new objects. `make` refuses the frozen translations' stamps (PIPELINE 10, 12 and 13: `pipelineOf`), so the pack was
+made by its own steps (`entriesOf`, `makePack`) with the committed manifest's `pipeline` and faces carried; made so from
+`608b7e87`'s own fixtures, they give `608b7e87` again, digest for digest.
 Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
 The wrap reads each base's units from its paper's source, so the pack holds that too: `sources/<paper>/source.gz`, one a paper
 (`gate-pack.mjs make --sources=<dir of <paper>/source.gz>`, `data/corpus` by default; a make with a base of ours and no source
