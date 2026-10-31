@@ -20,7 +20,7 @@
 // cannot be made, the translation is set as today, and the reason noted
 import { analyze } from '../source/paper-meta.mjs'
 import { paperNames } from '../source/paper-names.mjs'
-import { DVI_LAYOUT_TEX, inkSamples, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, NAME_ENGLISH, probeSamples } from '../layout/marks.mjs'
+import { DVI_LAYOUT_TEX, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, NAME_ENGLISH, probeSamples } from '../layout/marks.mjs'
 import { BALANCE_DEF, documentBounds, DVI_MARK_DEF, dviEngine, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inAuthorBlock, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1, texFilesOf, texText } from '../source/latex-front.mjs'
 import { strategiesFor, typesetBy } from './scripts.mjs'
 import { authorsTranslated } from '../translate/kept.mjs'
@@ -32,6 +32,7 @@ import { kOfSource, trPiecesOf } from '../layer/pieces.mjs'
 import { WIDTH_PROBE } from './typeset/density.mjs'
 import { finalTypesetting, previewTypesetting } from './typeset/plan.mjs'
 import { completeLog, END_TEX, LINES_TEX } from './typeset/tex.mjs'
+import { unbalancedUnits } from '../layout/guard.mjs'
 
 /** The characters a compile could not set, as its log names them: a glyph a font lacks (TeX logs it and goes on) or a
  *  letter no encoding holds (LaTeX's error; pdfTeX goes on without it). By code point where the log gives one, so that
@@ -332,14 +333,43 @@ const uncommentedTex = t => t.replace(/(?<!\\)((?:\\\\)*)%[^\n]*(?:\n[ \t]*)?/g,
  *  `latex` (latex-front.mjs dviEngine), each
  *  followed by its DVI marks (DVI_MARK_DEF, marks.mjs DVI_LAYOUT_TEX), so that the probe asks TeX about the marks the DVI
  *  compile sets. Without it, the bytes as before */
-export function probeFiles({ fsys, project, meta }, { width = false, marks = false } = {}) {
+export function probeFiles({ fsys, project, meta }, { width = false, marks = false, preamble = null } = {}) {
   // (the main file as the front end reads it, its line ends TeX's: read raw, a lone-CR preamble's first comment hid its
   // \begin{document}, and the probe was the whole document and a second one)
   const text = texText(fsys.read(project.main))
   const at = beginDocument(text)
   const dvi = dviEngine(meta?.compiler)
-  const head = marks ? MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') : '', probe = marks ? `${bblProvides(fsys, project.main)}${markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units), leadSamples(project.units))}` : ''
-  return new Map([[project.main, latin1Bytes(`${head}${END_TEX}${text.slice(0, at)}${FONT_PROBE}\\begin{document}${width ? WIDTH_PROBE : ''}${probe}\\end{document}\n`)]])
+  // (with the marked preamble, its line probes inert: \axtlines is LINES_TEX's, which the probe does not load, and the preamble
+  // only stores the text it marks)
+  const head = marks ? MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + (preamble === null ? '' : PREAMBLE_LINES) : '', probe = marks ? `${bblProvides(fsys, project.main)}${markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units), leadSamples(project.units))}` : ''
+  return new Map([[project.main, latin1Bytes(`${head}${END_TEX}${marks && preamble !== null ? preamble : text.slice(0, at)}${FONT_PROBE}\\begin{document}${width ? WIDTH_PROBE : ''}${probe}\\end{document}\n`)]])
+}
+/** \axtlines in the mark probe over the marked preamble: a protected macro, as LINES_TEX's is, that sets nothing. One line */
+const PREAMBLE_LINES = '\\protected\\def\\axtlines#1{}'
+/**
+ * The paper's preamble as the marked original writes it, for the mark probe (probeFiles `preamble`): the main file's text up to its
+ * \begin{document} with the layout marks and their line probes (originalFiles `layout`, `lines`), every class marked as no probe's
+ * answer takes one off, `complete` as the marked original's, no babel name wrapped, a unit whose writing changes its file's brace
+ * balance written as the paper's own (layout/guard.mjs unbalancedUnits) — so that TeX reads the units the preamble holds, marked,
+ * where the marked compile will, before it: a class's command that reads its argument as data raises its errors at our marks
+ * there (2610.37668v1's myarxiv `\author`, a name's initials taken through a `\csname`). With the line of the probe's main file it
+ * begins on (`first`: the probe's head before it) and its last (`last`). Null where no unit of the main file stands in its preamble:
+ * the probe is the paper's own preamble's, byte for byte as before
+ */
+export function markedPreamble(paper, { complete = null } = {}) {
+  const { project, meta } = paper
+  // (no unit of the main file before its \begin{document} as the front end read it: nothing to write)
+  const own = project.files?.get(project.main)
+  if (typeof own === 'string') { const end = beginDocument(own); if (!project.units.some(u => u.file === project.main && u.start < end)) return null }
+  const write = unmarked => { const sp = {}; return { files: originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, complete, names: false, ...(unmarked?.size ? { unmarked } : {}), spans: sp }), sp } }
+  let { files, sp } = write(null)
+  const balance = unbalancedUnits(paper, files, sp.lines(), sp.skip)
+  if (balance.units.size) ({ files, sp } = write(balance.units))
+  const text = latin1(files.get(project.main)), body = text.slice(sp.skip), at = beginDocument(body)
+  if (!sp.lines().some(x => x.file === project.main && x.from !== undefined && x.from - sp.skip < at)) return null
+  const preamble = body.slice(0, at), dvi = dviEngine(meta?.compiler)
+  const first = (MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + PREAMBLE_LINES + END_TEX).split('\n').length
+  return { text: preamble, first, last: first + preamble.replace(/\n$/, '').split('\n').length - 1 }
 }
 
 /** the original with unit marks, as its own engine sets it (images as frames change no place on the page); with
@@ -603,7 +633,7 @@ const NO_BOUNDARY = (pieces, unit = null) => (unit ? !boundaryChanges(unit) : Ar
 const NO_DISPLAY_STOP = (pieces, unit = null) => (unit ? !displayStopChanges(unit) : Array.isArray(pieces) && !pieces.some(p => p?.t === 'ph' && displayStop(p.src)))
 const andStop = test => (pieces, unit = null) => test(pieces, unit) && NO_DISPLAY_STOP(pieces, unit)
 const BOUNDARY_AND_STOP = andStop(NO_BOUNDARY)
-export const PIPELINE_CARRIES = { 7: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 8: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 9: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 10: andStop(andStyle(NO_RUN)), 11: andStop(andStyle(NO_RUN)), 12: andStop(NO_STYLE), 13: andStop(NO_STYLE), 14: andStop(NO_STYLE), 15: BOUNDARY_AND_STOP, 16: BOUNDARY_AND_STOP, 17: BOUNDARY_AND_STOP, 18: BOUNDARY_AND_STOP, 19: BOUNDARY_AND_STOP, 20: BOUNDARY_AND_STOP, 21: BOUNDARY_AND_STOP, 22: NO_DISPLAY_STOP, 23: EVERY, 24: EVERY, 25: EVERY, 26: EVERY, 27: EVERY, 28: EVERY, 29: EVERY, 39: EVERY, 40: EVERY, 41: EVERY }
+export const PIPELINE_CARRIES = { 7: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 8: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 9: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 10: andStop(andStyle(NO_RUN)), 11: andStop(andStyle(NO_RUN)), 12: andStop(NO_STYLE), 13: andStop(NO_STYLE), 14: andStop(NO_STYLE), 15: BOUNDARY_AND_STOP, 16: BOUNDARY_AND_STOP, 17: BOUNDARY_AND_STOP, 18: BOUNDARY_AND_STOP, 19: BOUNDARY_AND_STOP, 20: BOUNDARY_AND_STOP, 21: BOUNDARY_AND_STOP, 22: NO_DISPLAY_STOP, 23: EVERY, 24: EVERY, 25: EVERY, 26: EVERY, 27: EVERY, 28: EVERY, 29: EVERY, 39: EVERY, 40: EVERY, 41: EVERY, 42: EVERY }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a

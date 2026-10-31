@@ -24,8 +24,12 @@ export declare const TYPESETTING_VERSION: string
  *  \\newcommand (as a \\providecommand), its conditionals on an undefined name whole, its \\@ifundefined, its own \\def and \\let
  *  set only where the name is undefined; '' where none */
 export declare function bblProvides(fsys: { list(): string[]; read(path: string): Uint8Array | null }, main: string): string
-/** the font probe; with `width`, the width and size probes the typesetting rule measures the face by */
-export declare function probeFiles(paper: Paper, options?: { width?: boolean; marks?: boolean }): Map<string, Uint8Array>
+/** the font probe; with `width`, the width and size probes the typesetting rule measures the face by; with `marks` and
+ *  `preamble` (markedPreamble's text), that preamble in place of the paper's own */
+export declare function probeFiles(paper: Paper, options?: { width?: boolean; marks?: boolean; preamble?: string | null }): Map<string, Uint8Array>
+/** the main file's preamble as the marked original writes it, for the mark probe, with its first and last lines in the probe's
+ *  main file; null where no unit of the main file stands in its preamble */
+export declare function markedPreamble(paper: Paper, options?: { complete?: Complete | null }): { text: string; first: number; last: number } | null
 /** the original with unit marks; with `lines`, each unit's lines and the forced breaks in its log; `spans`, where
  *  given, gets `lines()`: each unit's lines and bytes in the files as written. `layout` null or absent: the bytes as at
  *  3cb5a733; else the units marked by layoutMarking (layout/marks.mjs) with those classes, and LAYOUT_TEX after MARK_DEF;
@@ -122,6 +126,7 @@ export interface BatchReport {
 /** what names a compile's floats and its generated headings, by babel's key (names.mjs) */
 export type { Captions } from '../layout/names.mjs'
 import type { Captions } from '../layout/names.mjs'
+import type { Complete } from '../layout/marks.mjs'
 /** the TeX that writes what names the floats and the headings to the log, at the document's end, in every compile of the translation */
 export declare const CAPTIONS_PROBE: string
 /** whether a compile named each float and each generated heading with the target's names, from its log; null with no such row */

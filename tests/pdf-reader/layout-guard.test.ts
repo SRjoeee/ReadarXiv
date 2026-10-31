@@ -1,12 +1,12 @@
 import * as PL from '@cantoo/pdf-lib'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { auxUnits, braceBalance, compilerOfPdf, errorCount, errorUnits, firstError, marksOutOfPlace, ownErrors, pagesOfLog, texLiveOf, texLiveOfPdf, unbalancedUnits, unmarkedFiles } from '@/pdf-reader/engine/layout/guard.mjs'
+import { auxUnits, braceBalance, compilerOfPdf, errorCount, errorUnits, firstError, marksOutOfPlace, ownErrors, pagesOfLog, preambleUnits, tellsTwice, texLiveOf, texLiveOfPdf, unbalancedUnits, unmarkedFiles } from '@/pdf-reader/engine/layout/guard.mjs'
 import { WHY_MAX } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
 import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readMarkProbe } from '@/pdf-reader/engine/layout/marks.mjs'
 import { handoverOf, layoutMarksOfPaper, markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
-import { type Compiled, type CompileRequest, openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { type Compiled, type CompileRequest, markedPreamble, openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
 
@@ -30,6 +30,9 @@ const out = (pages: number) => `Output written on main.pdf (${pages} pages, 9999
 const PDF = enc('%PDF-1.7 the marked original'), PDF1 = enc('%PDF-1.7 the first again'), PDF2 = enc('%PDF-1.7 the second again'), UNMARKED = enc('%PDF-1.7 the paper alone')
 /** a compile that ran through: its banner, `body` (errors), AXT-END and its pages */
 const ran = (pdf: Uint8Array, body = '', pages = 3, more: Partial<Compiled> = {}): Compiled => ({ ok: true, pdf, log: `${TEX}${body}${END}${out(pages)}`, ...more })
+/** the same compile with its PDF written by its driver (XeTeX's .xdv made a PDF by xdvipdfmx): its log tells no destination of
+ *  ours set twice, so a mark of ours in a file it wrote is out of place whatever else it shows (guard.mjs copiesOutOfPlace) */
+const viaDriver = (c: Compiled): Compiled => ({ ...c, log: (c.log ?? '').replace(/Output written on main\.pdf/, 'Output written on main.xdv') })
 /** a compile TeX ran that stopped short of the document's end */
 const stopped = (body: string): Compiled => ({ ok: true, pdf: PDF, log: `${TEX}${body}! Emergency stop.\n*** (job aborted, no legal \\end found)\n` })
 
@@ -63,6 +66,8 @@ function errorAt(unit: number, at: string, message = 'Undefined control sequence
   return { log: `! ${message}\n<recently read> \\foo \n\nl.${x.last} ${line.slice(0, k)}\n${' '.repeat(k + 5)}${line.slice(k)}\n`, line: x.last }
 }
 const has = (req: CompileRequest | undefined, s: string) => dec(req?.overrides.get('main.tex')).includes(s)
+/** a host's `textOf` that read a compile's pages and found no mark of ours printed there */
+const unshown = async () => ['Notes 1 Another paragraph']
 const NAMES_OFF = '\\let\\axt@nmall\\relax'
 
 describe('braceBalance: a text\'s braces outside comments and verbatim', () => {
@@ -162,6 +167,98 @@ describe('marksOutOfPlace and auxUnits: a mark of ours a compile wrote where no 
   })
 })
 
+describe('tellsTwice: a log that names every destination of ours set twice', () => {
+  it('is TeX\'s own PDF\'s (pdfTeX, LuaTeX), never one its driver writes (XeTeX\'s .xdv, a DVI)', () => {
+    expect(tellsTwice(`${TEX}${out(3)}`)).toBe(true)
+    expect(tellsTwice(`${TEX}Output written on\nmain.pdf (3 pages, 9 bytes).\n`)).toBe(false)
+    expect(tellsTwice(`${TEX}Output written on main.xdv (3 pages, 9 bytes).\n`)).toBe(false)
+    expect(tellsTwice(`${TEX}Output written on main.dvi (3 pages, 9 bytes).\n`)).toBe(false)
+    expect(tellsTwice(`${TEX}! Emergency stop.\n`)).toBe(false)
+    expect(tellsTwice(null)).toBe(false)
+  })
+})
+
+describe('the preamble as the marked original writes it, read by the mark probe: the units TeX\'s errors there stand at', () => {
+  const FRONT = '\\documentclass{article}\n\\title{A Title}\n\\author{Ann Lee}\n\\begin{document}\n\\maketitle\nWe use words here.\n\\end{document}\n'
+  const front = () => paperOf(FRONT)
+
+  it('marks the units the main file\'s preamble holds; none there, no marked preamble (the probe byte for byte as before)', () => {
+    expect(markedPreamble(paperOf())).toBeNull()
+    const p = front(), mp = markedPreamble(p)
+    if (!mp) throw new Error('no marked preamble')
+    expect(p.units.slice(0, 2).map(u => u.kind)).toEqual(['heading', 'author'])
+    expect(mp.text).toContain('\\title{\\axthmark{h0s}A Title\\axthmark{h0e}}')
+    expect(mp.text).toContain('\\author{\\leavevmode\\axtmark{1s}Ann Lee\\axtend{1e}}')
+    expect(mp.text).not.toContain('\\begin{document}')
+    // (the probe over it: the paper's own preamble in its place, the line probes inert, and its lines where `first` says)
+    const probe = new TextDecoder().decode(probeFiles(p, { marks: true, preamble: mp.text }).get('main.tex'))
+    expect(probe).toContain(`${mp.text}`)
+    expect(probe).toContain('\\protected\\def\\axtlines#1{}')
+    expect(probe.split('\n')[mp.first - 1]).toBe('\\documentclass{article}')
+    expect(probe.split('\n')[mp.last - 1]).toBe('\\author{\\leavevmode\\axtmark{1s}Ann Lee\\axtend{1e}}')
+    expect(new TextDecoder().decode(probeFiles(p, { marks: true }).get('main.tex'))).not.toContain('\\axtmark{1s}')
+    // (under `latex`, the probe's head holds the DVI marks too: `first` counts them)
+    const readme = JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], process: { compiler: 'latex' } })
+    const dvi = paperOf(FRONT, [['00README.json', readme]]), dmp = markedPreamble(dvi)
+    if (!dmp) throw new Error('no marked preamble')
+    expect(new TextDecoder().decode(probeFiles(dvi, { marks: true, preamble: dmp.text }).get('main.tex')).split('\n')[dmp.first - 1]).toBe('\\documentclass{article}')
+  })
+
+  it('preambleUnits: an error on a line of the preamble whose text holds a mark of ours names its unit; no other', () => {
+    const range = { first: 10, last: 20 }
+    const csname = (line: number, at: string) => `! Missing \\endcsname inserted.\n<to be read again> \n                   \\unhbox \nl.${line} ${at}\n\n`
+    expect(preambleUnits(csname(12, '...ode\\axtmark{1s}Ann Lee\\axtend{1e}}'), 5, range)).toEqual(new Set([1]))
+    expect(preambleUnits(csname(12, '\\author{\\axtlines{3}\\leavevmode'), 5, range)).toEqual(new Set([3]))
+    // (past the preamble, a line of another file, no mark in its text, a unit past the paper's)
+    expect(preambleUnits(csname(25, '\\axtmark{1s}Ann Lee'), 5, range)).toEqual(new Set())
+    expect(preambleUnits(csname(12, '\\author{Ann Lee}'), 5, range)).toEqual(new Set())
+    expect(preambleUnits(csname(12, '\\axtmark{9s}Ann Lee'), 5, range)).toEqual(new Set())
+    // (a title on the author's line: the error stands in the author's group, closed just before its place or open at it, its
+    // opening brace cut off by the log or not; an error in no group names none)
+    const at = (line: number, before: string, after: string) => `! Missing \\endcsname inserted.\n<to be read again> \n                   \\unhbox \nl.${line} ${before}\n${' '.repeat(before.length + 5)}${after}\n\n`
+    const title = '\\title{\\axtmark{0s}A Title\\axtend{0e}}'
+    expect(preambleUnits(csname(12, `${title}\\author{\\axtmark{1s}Ann Lee\\axtend{1e}}`), 5, range)).toEqual(new Set([1]))
+    expect(preambleUnits(at(12, `${title}\\author{\\leavevmode\\axtmark`, '{1s}Ann Lee\\axtend{1e}}'), 5, range)).toEqual(new Set([1]))
+    expect(preambleUnits(at(12, 'ode\\axtmark', '{1s}Ann Lee\\axtend{1e}}'), 5, range)).toEqual(new Set([1]))
+    expect(preambleUnits(at(12, `${title} \\foo`, '\\author{\\axtmark{1s}Ann Lee\\axtend{1e}}'), 5, range)).toEqual(new Set())
+  })
+
+  it('in markedOfPaper: units TeX raised errors at in the probe\'s preamble unmarked before the marked compile, no compile more (2610.37668v1)', async () => {
+    const p = front(), mp = markedPreamble(p)
+    if (!mp) throw new Error('no marked preamble')
+    const line = mp.first + mp.text.split('\n').findIndex(l => l.includes('\\axtmark{1s}'))
+    const err = `! Missing \\endcsname inserted.\n<to be read again> \n                   \\unhbox \nl.${line} ...ode\\axtmark{1s}Ann Lee\\axtend{1e}}\n\n`
+    const blamed = compiler([{ ok: false, log: `${PROBE_LOG.replace('This is pdfTeX', `${TEX}${err}`)}AXT-END\n` }, PROBE, ran(PDF, '', 3)])
+    const made = await markedOfPaper(p, { final: false, compile: blamed.compile, pages: 3 })
+    expect(made).toMatchObject({ pdf: PDF, guard: { extra: 0, unmarked: [1], names: true, failed: ['preamble'] } })
+    expect(blamed.asked).toHaveLength(3)
+    // (the first probe over the marked preamble, the second over the paper's own, whose answers are taken)
+    expect(has(blamed.asked[0], '\\axtmark{1s}')).toBe(true)
+    expect(dec(blamed.asked[1]?.overrides.get('main.tex'))).toBe(dec(probeFiles(p, { marks: true }).get('main.tex')))
+    expect([has(blamed.asked[2], '\\axtmark{1s}'), has(blamed.asked[2], '\\axthmark{h0s}')]).toEqual([false, true])
+    // (a probe over the marked preamble that ran through with no error of ours there: its answers, one probe, every unit marked)
+    const clean = compiler([{ ok: false, log: `${PROBE_LOG}AXT-END\n` }, ran(PDF, '', 3)])
+    expect(await markedOfPaper(p, { final: false, compile: clean.compile, pages: 3 })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+    expect(clean.asked).toHaveLength(2)
+    expect(has(clean.asked[1], '\\axtmark{1s}')).toBe(true)
+    // (one that stopped before its body wrote a row: asked again over the paper's own preamble, nothing blamed, the guard as before)
+    const short = compiler([{ ok: false, log: `${TEX}! Emergency stop.\n` }, PROBE, ran(PDF, '', 3)])
+    expect(await markedOfPaper(p, { final: false, compile: short.compile, pages: 3 })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+    expect(short.asked).toHaveLength(3)
+    expect(has(short.asked[2], '\\axtmark{1s}')).toBe(true)
+    // (one that stopped there after an error at a mark of ours: its unit named all the same, no compile more)
+    const stopped = compiler([{ ok: false, log: `${TEX}${err}! Emergency stop.\n` }, PROBE, ran(PDF, '', 3)])
+    expect(await markedOfPaper(p, { final: false, compile: stopped.compile, pages: 3 })).toMatchObject({ pdf: PDF, guard: { extra: 0, unmarked: [1], failed: ['preamble'] } })
+    expect(stopped.asked).toHaveLength(3)
+    expect(has(stopped.asked[2], '\\axtmark{1s}')).toBe(false)
+    // (one that stopped in its body, in a sample of its own (2610.21884v1's \ar@{-} in the ink section): the paper's own preamble's
+    // probe stops there too, and its rows are taken as they are; one probe)
+    const body = compiler([{ ok: false, log: `${PROBE_LOG}! TeX capacity exceeded, sorry [input stack size=10000].\n` }, ran(PDF, '', 3)])
+    expect(await markedOfPaper(p, { final: false, compile: body.compile, pages: 3 })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+    expect(body.asked).toHaveLength(2)
+  })
+})
+
 describe('errorUnits: the units the marked compile\'s errors stand in', () => {
   it('places an error by its line and context, less the paper\'s own, and the unit at the line TeX ignored all text after', () => {
     const { files, spans, paper } = markedFiles()
@@ -207,7 +304,7 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
 
   it('a mark out of place: the units it names unmarked, the names kept, one compile more', async () => {
     const aux = '\\@writefile{toc}{\\etoc@depthtag {main\\axtend {2e}}}\n'
-    for (const answer of [ran(PDF, '', 3, { aux }), ran(PDF, '', 3, { files: new Map([['main.toc', enc('\\etoc@depthtag {main\\axtend {2e}}\n')]]) })]) {
+    for (const answer of [viaDriver(ran(PDF, '', 3, { aux })), viaDriver(ran(PDF, '', 3, { files: new Map([['main.toc', enc('\\etoc@depthtag {main\\axtend {2e}}\n')]]) }))]) {
       const c = compiler([PROBE, answer, ran(PDF1)])
       const made = await markedOfPaper(paperOf(), { compile: c.compile })
       expect(made).toMatchObject({ pdf: PDF1, ms: { guard: expect.any(Number) }, guard: { extra: 1, unmarked: [2], names: true, failed: ['aux'] } })
@@ -217,14 +314,65 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     }
     // (with an error in another unit: both unmarked, then the error's unit marked again, the smaller remedy, where it holds)
     const e = errorAt(1, 'here.')
-    const both = compiler([PROBE, ran(PDF, e.log, 3, { aux }), ran(PDF1), ran(PDF2)])
+    const both = compiler([PROBE, viaDriver(ran(PDF, e.log, 3, { aux })), ran(PDF1), ran(PDF2)])
     expect(await markedOfPaper(paperOf(), { compile: both.compile })).toMatchObject({ pdf: PDF2, guard: { extra: 2, unmarked: [2], names: true, failed: ['aux', 'errors'] } })
     expect([has(both.asked[2], '\\axtmark{1s}'), has(both.asked[2], '\\axtmark{2s}')]).toEqual([false, false])
     expect([has(both.asked[3], '\\axtmark{1s}'), has(both.asked[3], '\\axtmark{2s}')]).toEqual([true, false])
     // (mended by neither: the units unmarked, then the names off too; the best that ran stands, as before the guard)
-    const c = compiler([PROBE, ran(PDF, '', 3, { aux }), ran(PDF1, '', 3, { aux }), ran(PDF2, '', 3, { aux })])
+    const c = compiler([PROBE, viaDriver(ran(PDF, '', 3, { aux })), viaDriver(ran(PDF1, '', 3, { aux })), viaDriver(ran(PDF2, '', 3, { aux }))])
     expect(await markedOfPaper(paperOf(), { compile: c.compile })).toMatchObject({ pdf: PDF, guard: { extra: 2, failed: ['aux'] } })
     expect(has(c.asked[3], NAMES_OFF)).toBe(true)
+  })
+
+  it('a mark a file holds that TeX set once where the paper sets its text, or never: no compile more, the unit marked (2609.36054v2, 2610.21201v1)', async () => {
+    // (an endnote package writes each note's text into the aux and prints it from there: its marks are set once, at the notes;
+    // a class that writes an author's name into the aux and discards it sets it never: both the paper's, and TeX's own log, which
+    // names every destination it set twice, names none)
+    for (const aux of [
+      '\\enotez@note {1}{1}{0}{0}{0}{a}{\\axtlines {2}\\leavevmode \\axtmark {2s}Another paragraph of words.\\axtend {2e}}\n',
+      '\\jmlr@author{\\leavevmode \\axtmark {1s}We use\\axtend {1e}}{\\leavevmode \\axtmark {1s}We use\\axtend {1e}}\n',
+    ]) {
+      for (const answer of [ran(PDF, '', 3, { aux }), ran(PDF, '', 3, { files: new Map([['main.aux', enc(aux)]]) })]) {
+        const c = compiler([PROBE, answer])
+        expect(await markedOfPaper(paperOf(), { final: false, compile: c.compile, pages: 3, textOf: unshown })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+        expect(c.asked).toHaveLength(2)
+      }
+    }
+  })
+
+  it('a mark a file holds that TeX set twice stands: its log names it, the reading drops it, the unit the original\'s (2610.21084v1)', async () => {
+    // (a class that sets an author's name again in the e-mail footnote: pdfTeX keeps the first destination and names the other)
+    const aux = '\\emailauthor{a@b.c}{\\leavevmode \\axtmark {2s}Another paragraph of words.\\axtend {2e}}\n'
+    const twice = 'pdfTeX warning (ext4): destination with the same identifier (name{axt-2e}) has been already used, duplicate ignored\n'
+    const c = compiler([PROBE, ran(PDF, twice, 3, { aux })])
+    const made = await markedOfPaper(paperOf(), { final: false, compile: c.compile, pages: 3, textOf: unshown })
+    expect(made).toEqual({ pdf: PDF, log: expect.stringContaining('name{axt-2e}'), options: expect.any(Object), ms: expect.any(Object) })
+    expect(c.asked).toHaveLength(2)
+  })
+
+  it('a mark a file holds stays out of place where the compile shows anything else, or its log cannot tell a destination set twice', async () => {
+    const aux = '\\enotez@note {1}{1}{0}{0}{0}{a}{\\axtlines {2}\\leavevmode \\axtmark {2s}Another paragraph of words.\\axtend {2e}}\n'
+    // (its PDF written by its driver: XeTeX's xdvipdfmx, the DVI driver latexmk runs, tell no log the host returns)
+    const xe = compiler([PROBE, viaDriver(ran(PDF, '', 3, { aux })), ran(PDF1)])
+    expect(await markedOfPaper(paperOf(), { final: false, compile: xe.compile, pages: 3 })).toMatchObject({ pdf: PDF1, guard: { extra: 1, unmarked: [2], names: true, failed: ['aux'] } })
+    expect(has(xe.asked[2], '\\axtmark{2s}')).toBe(false)
+    // (a TeX error, wherever it stands: 2610.21201's etoc depth tag inside a \csname of its contents)
+    const csname = '! Missing \\endcsname inserted.\n<to be read again> \n                   \\axtend \nl.1 \\etoc@depthtag {main\\axtend {2e}}\n\n'
+    const err = compiler([PROBE, ran(PDF, csname, 3, { aux: '\\@writefile{toc}{\\etoc@depthtag {main\\axtend {2e}}}\n' }), ran(PDF1)])
+    expect(await markedOfPaper(paperOf(), { final: false, compile: err.compile, pages: 3 })).toMatchObject({ pdf: PDF1, guard: { extra: 1, unmarked: [2], failed: ['aux', 'errors'] } })
+    // (other pages than arXiv's)
+    const long = compiler([PROBE, ran(PDF, '', 4, { aux }), ran(PDF1, '', 3)])
+    expect(await markedOfPaper(paperOf(), { final: false, compile: long.compile, pages: 3 })).toMatchObject({ pdf: PDF1, guard: { extra: 1, unmarked: [2], failed: ['pages', 'aux'] } })
+    // (a mark of ours printed on a page)
+    const shown = compiler([PROBE, ran(PDF, '', 3, { aux }), ran(PDF1)])
+    const textOf = async (pdf: Uint8Array) => [pdf === PDF ? 'Notes 1 \\axtmark {2s}Another paragraph' : 'Notes 1 Another paragraph']
+    expect(await markedOfPaper(paperOf(), { final: false, compile: shown.compile, pages: 3, textOf })).toMatchObject({ pdf: PDF1, guard: { extra: 1, failed: ['aux', 'text'] } })
+    // (its pages' text not read — no `textOf`, or one that failed —: a mark printed is not known absent, `\\detokenize`'s copy
+    // sets no destination twice and raises no error)
+    for (const textOf of [undefined, async () => { throw new Error('no text') }]) {
+      const unread = compiler([PROBE, ran(PDF, '', 3, { aux }), ran(PDF1)])
+      expect(await markedOfPaper(paperOf(), { final: false, compile: unread.compile, pages: 3, ...(textOf ? { textOf } : {}) })).toMatchObject({ pdf: PDF1, guard: { extra: 1, unmarked: [2], failed: ['aux'] } })
+    }
   })
 
   it('errors above the unmarked original\'s: the original compiled, the units its other errors stand in unmarked', async () => {
@@ -295,14 +443,14 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     const aux = '\\@writefile{toc}{\\etoc@depthtag {main\\axtend {2e}}}\n'
     const timed = (c: Compiled, ms: number): Compiled => ({ ...c, ms })
     // (probe 10, marked 100: 50 left is under 1.2 x 100)
-    const thin = compiler([timed(PROBE, 10), timed(ran(PDF, '', 3, { aux }), 100), ran(PDF1)])
+    const thin = compiler([timed(PROBE, 10), timed(viaDriver(ran(PDF, '', 3, { aux })), 100), ran(PDF1)])
     expect(await markedOfPaper(paperOf(), { compile: thin.compile, compileBudgetMs: 160 })).toMatchObject({ pdf: PDF, guard: { extra: 0, judged: 'no compile left' } })
     expect(thin.asked).toHaveLength(2)
     const short = compiler([timed(PROBE, 10), timed(stopped('! Undefined control sequence.\nl.3 x\n'), 100)])
     expect(await markedOfPaper(paperOf(), { compile: short.compile, compileBudgetMs: 160 })).toMatchObject({ refused: 'compile', why: expect.stringContaining('the paper\'s own source was not compiled') })
     expect(short.asked).toHaveLength(2)
     // (room for one: the remedy, and no more)
-    const one = compiler([timed(PROBE, 10), timed(ran(PDF, '', 3, { aux }), 100), timed(ran(PDF1, '', 3, { aux }), 100), ran(PDF2)])
+    const one = compiler([timed(PROBE, 10), timed(viaDriver(ran(PDF, '', 3, { aux })), 100), timed(viaDriver(ran(PDF1, '', 3, { aux })), 100), ran(PDF2)])
     expect(await markedOfPaper(paperOf(), { compile: one.compile, compileBudgetMs: 240 })).toMatchObject({ pdf: PDF, guard: { extra: 1 } })
     expect(one.asked).toHaveLength(3)
     // (TeX never ran: `engine` only where the host names the engine unknown; any other answer with no TeX in it, the web's over-cap
