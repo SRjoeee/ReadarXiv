@@ -114,7 +114,11 @@ const NO_ARGS = new Set(['centering', 'raggedright', 'raggedleft', 'noindent', '
 export const NO_ARG_COMMANDS = NO_ARGS
 const OPT_ONLY = new Set(['toprule', 'midrule', 'bottomrule'])
 const MATH_ENVS = /^(equation|align|alignat|gather|multline|flalign|eqnarray|math|displaymath|dmath|IEEEeqnarray|subequations)\*?$/
-const SKIP_ENVS = /^(verbatim|Verbatim|lstlisting|minted|comment|tcblisting|tcboutputlisting|alltt|BVerbatim|LVerbatim|tikzpicture|pgfpicture|forest|array|algorithmic|algorithm2e|thebibliography|bibdiv|biblist|filecontents|picture|asy|pspicture|axis|circuitikz|dot2tex|pythontex|sagesilent)\*?$/
+/** environments whose body is no prose, kept as the paper has it: code, a bibliography's own form, and the drawings, whose body
+ *  a package reads with its own parser (TikZ's, PSTricks', xy-pic's: a mark of ours there is a parse error). Which environment
+ *  is one shows in no source but by its name, so each is named: xy-pic's `xy` since 2610.21884v1, whose table cells of
+ *  `\\ar@{-}(0,0)*++!D{…}` were four cell units, 46 TeX errors at their marks and two compiles of the guard's */
+const SKIP_ENVS = /^(verbatim|Verbatim|lstlisting|minted|comment|tcblisting|tcboutputlisting|alltt|BVerbatim|LVerbatim|tikzpicture|pgfpicture|forest|array|algorithmic|algorithm2e|thebibliography|bibdiv|biblist|filecontents|picture|asy|pspicture|axis|circuitikz|xy|dot2tex|pythontex|sagesilent)\*?$/
 /**
  * Environments TeX reads line by line until a line that holds their \\end: the verbatim kind (the kernel's and
  * verbatim.sty's, fancyvrb's, listings', minted's, moreverb's), filecontents, those of the packages that write their
