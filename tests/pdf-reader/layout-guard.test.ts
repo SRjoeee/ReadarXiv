@@ -251,7 +251,8 @@ describe('the preamble as the marked original writes it, read by the mark probe:
     expect(await markedOfPaper(p, { final: false, compile: stopped.compile, pages: 3 })).toMatchObject({ pdf: PDF, guard: { extra: 0, unmarked: [1], failed: ['preamble'] } })
     expect(stopped.asked).toHaveLength(3)
     expect(has(stopped.asked[2], '\\axtmark{1s}')).toBe(false)
-    // (one that stopped in its body, in a sample of its own (2610.21884v1's \ar@{-} in the ink section): the paper's own preamble's
+    // (one that stopped in its body, in a sample of its own (2610.21884v1's \ar@{-} in the ink section, a cell of xy-pic's syntax a
+    // unit until PIPELINE 45 kept its diagrams as the paper has them; 2610.21377v1's still): the paper's own preamble's
     // probe stops there too, and its rows are taken as they are; one probe)
     const body = compiler([{ ok: false, log: `${PROBE_LOG}! TeX capacity exceeded, sorry [input stack size=10000].\n` }, ran(PDF, '', 3)])
     expect(await markedOfPaper(p, { final: false, compile: body.compile, pages: 3 })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })

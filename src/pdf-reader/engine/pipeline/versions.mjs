@@ -332,8 +332,16 @@
 //     maker units byte for byte). A stored translation is found by an identity naming the pipeline, and its rows by their units'
 //     ids, so a translation of the old cut must not be given to the new one (PDF-READER §18.3). Raised so; and so that a bundle
 //     made over a base with the group is made again under a new key (VTAG). Every source unit, its pieces and its wire are 43's: a
-//     copy of 43 carries every unit (live.mjs PIPELINE_CARRIES), a figure unit found again by its source (cache.mjs seedFrom)
-export const PIPELINE_VERSION = '44'
+//     copy of 43 carries every unit (live.mjs PIPELINE_CARRIES), a figure unit found again by its source (cache.mjs seedFrom); 45
+//     (xy-pic's diagram, 2026-11-01): the front end keeps a `\begin{xy}…\end{xy}` as the paper has it, a drawing whose body
+//     xy-pic reads with its own parser, as it keeps a TikZ or PSTricks picture (latex-front.mjs SKIP_ENVS). 2610.21884v1's four
+//     table cells of xy-pic syntax were units, our marks in them 46 TeX errors, and the guard spent two compiles (the unmarked
+//     original's, then the attempt) finding them the paper's own; its marked original now stands at once. Of 215 local sources
+//     it is the one that begins an xy environment: the other 214's units are 44's hash for hash, and its own lose the four
+//     cells, the 20 after them in its file the same but for their pairs' numbers. Raised so; and so that the bundle of a paper
+//     whose marked original now stands at once is made again under a new key (VTAG). A copy of 44 carries every unit it holds
+//     the source of (live.mjs PIPELINE_CARRIES), a unit renumbered by the cells' pairs found again (cache.mjs seedFrom)
+export const PIPELINE_VERSION = '45'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

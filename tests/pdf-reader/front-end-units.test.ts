@@ -460,3 +460,20 @@ describe('the prose a paper keeps in a macro of no argument (storedBodies: 2608.
     expect(tex).toContain('\\newcommand{\\Twice}{Institute of Elsewhere, A City}')
   })
 })
+
+describe('xy-pic\'s diagram is a drawing, as a TikZ or PSTricks picture is (SKIP_ENVS): its body is no unit', () => {
+  // 2610.21884v1's table of Satake diagrams: each cell a \\begin{xy}…\\end{xy} that xy-pic reads token by token, cut into four
+  // cell units of its own syntax (\\ar@{-}(0,0)*++!D{…}) and marked; the marks inside it were 46 TeX errors, and the guard
+  // spent two compiles finding the four cells the paper's own
+  const XY = '\\begin{xy}\n\\ar@{-}(0,0)*++!D{\\alpha_{1}}*{\\circ};(10,0)*++!D{\\alpha_{2}}*{\\bullet}="a2"\n\\ar@{-}"a2";(15,0)*{}\n\\end{xy}'
+  it('a cell holding one is no unit; the table\'s other cells are, and the diagram is written back as the paper has it', () => {
+    const p = project(doc(`Some words before the table.\n\n\\begin{tabular}{cc}\nSatake diagram $S_{1}$ & Satake diagram $S_{2}$\\\\\n${XY}\n&\n${XY}\\\\\n\\end{tabular}`, '\\usepackage[all]{xy}'))
+    expect(texts(p)).toEqual(['Some words before the table.', 'Satake diagram', 'Satake diagram'])
+    expect(patched(p)).toContain(`${XY}\n&\n${XY}\\\\`)
+  })
+  it('one between paragraphs ends the paragraph before it and is no unit; the prose around it is', () => {
+    const p = project(doc(`The diagram below is of type A.\n${XY}\nIts nodes are the simple roots.`, '\\usepackage[all]{xy}'))
+    expect(texts(p)).toEqual(['The diagram below is of type A.', 'Its nodes are the simple roots.'])
+    expect(units(p).some(u => u.pieces.some(x => (x.src ?? x.s ?? '').includes('\\ar@')))).toBe(false)
+  })
+})
