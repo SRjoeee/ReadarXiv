@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { layoutMarksOfPaper, markedOfPaper } from '@/pdf-reader/engine/layout/paper.mjs'
 import { baseRefusalRetryable, RETRY_LIMITS } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { DRIVER_OUTPUT_MARK, DRIVER_OUTPUT_TRUNCATED, driverOutputGiven, driverOutputTruncated } from '@/pdf-reader/engine/layout/base.mjs'
-import { type Compiled, type CompileRequest, DRAFT_OPTION, openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { type Compiled, type CompileRequest, DRAFT_OPTION, NO_DRIVER_GROUP, openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
 
 // Our compile as the base page (layout/paper.mjs markedOfPaper `base`, design note §3.1 and §3.3.2): once the guard accepts a
-// marked compile, the final pass — its files with graphicx's draft option made an empty line, over what it wrote, one pass with
-// no bibliography step, within the budget; every compile after the probe on arXiv's day; and no mark of ours printed as text.
+// marked compile, the final pass — its files with graphicx's draft option's line made the drivers' hooks (NO_DRIVER_GROUP), over
+// what it wrote, one pass with no bibliography step, within the budget; every compile after the probe on arXiv's day; and no
+// mark of ours printed as text.
 
 const enc = (s: string) => new TextEncoder().encode(s)
 const dec = (b: Uint8Array | undefined) => new TextDecoder().decode(b ?? new Uint8Array(0))
@@ -60,7 +61,7 @@ function compiler(answers: (Compiled | Error)[]) {
 }
 
 describe('the final pass', () => {
-  it('asks the marked compile for its files, then one pass of the paper\'s compiler over them: the draft line empty, no BibTeX', async () => {
+  it('asks the marked compile for its files, then one pass of the paper\'s compiler over them: the draft line the drivers\' hooks, no BibTeX', async () => {
     const c = compiler([PROBE, marked(), finalAnswer()])
     const made = await markedOfPaper(paperOf(), { compile: c.compile })
     expect(made).toMatchObject({ pdf: DRAFT, base: { pdf: FINAL, log: expect.stringContaining('AXT-END') }, ms: { final: expect.any(Number) } })
@@ -70,15 +71,43 @@ describe('the final pass', () => {
     expect(f).toMatchObject({ main: 'main.tex', engine: 'pdflatex', rerun: false, bibtex: false })
     expect(f.files).toBeUndefined()
     expect(f.draft).toBeUndefined()
-    // (the marked files with the draft option's line made empty: no line moves)
+    // (the marked files with the draft option's line made the drivers' hooks, one line for one: no line moves)
     const before = dec(m.overrides.get('main.tex')), after = dec(f.overrides.get('main.tex'))
     expect(before.startsWith(`${DRAFT_OPTION}\n`)).toBe(true)
-    expect(after).toBe(`\n${before.slice(DRAFT_OPTION.length + 1)}`)
+    expect(after).toBe(`${NO_DRIVER_GROUP}\n${before.slice(DRAFT_OPTION.length + 1)}`)
     expect(after.split('\n')).toHaveLength(before.split('\n').length)
+    expect(after.split('\n').slice(1)).toEqual(before.split('\n').slice(1))
     expect(after).toContain('\\Gin@setfile')
     // (over what the marked compile wrote, its own outputs aside)
     expect([...f.overrides.keys()].sort()).toEqual(['main.aux', 'main.bbl', 'main.tex', 'main.toc'])
     expect(dec(f.overrides.get('main.bbl'))).toContain('thebibliography')
+  })
+
+  it('heads its main file with one line that turns the pdfTeX and LuaTeX drivers\' transparency group off, whatever the engine; the marked compile keeps the draft option', async () => {
+    // (the line as TeX reads it, written out: another line is another base page wherever a TeX Live 2025 paper includes a PDF,
+    // graphics-def's 8d691483be after arXiv's tree of 2025-08-03, REMOVAL 18)
+    const HEAD = String.raw`\AddToHook{file/pdftex.def/after}{\ifcsname Gread@transgroupfalse\endcsname\expandafter\let\csname Gread@transgrouptrue\expandafter\endcsname\csname Gread@transgroupfalse\endcsname\fi}` +
+      String.raw`\AddToHook{file/luatex.def/after}{\ifcsname Gread@transgroupfalse\endcsname\expandafter\let\csname Gread@transgrouptrue\expandafter\endcsname\csname Gread@transgroupfalse\endcsname\fi}`
+    expect(NO_DRIVER_GROUP).toBe(HEAD)
+    // (one line, nothing TeX would read past it or as a comment, its groups closed, every @-name inside \csname: the line runs
+    // before \makeatletter, where @ is no letter)
+    expect(NO_DRIVER_GROUP).not.toMatch(/[\r\n%]/)
+    expect(NO_DRIVER_GROUP.split('{').length).toBe(NO_DRIVER_GROUP.split('}').length)
+    expect(NO_DRIVER_GROUP.replace(/\\(?:if)?csname [A-Za-z@]+/g, '')).not.toContain('@')
+    // a main file of a hundred lines and a CRLF source: the final pass's has as many lines, each but the first the marked one's
+    const long = `${SOURCE.replace('\\begin{document}\n', `\\begin{document}\n${'A line of words.\n'.repeat(100)}`)}`
+    for (const [source, compiler_] of [[SOURCE, 'pdflatex'], [SOURCE, 'lualatex'], [SOURCE, 'xelatex'], [long, 'pdflatex'], [SOURCE.replace(/\n/g, '\r\n'), 'pdflatex']] as const) {
+      const readme = JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], process: { compiler: compiler_ } })
+      const c = compiler([PROBE, marked(), finalAnswer()])
+      expect(await markedOfPaper(openPaper(new Map([['main.tex', enc(source)], ['00README.json', enc(readme)]])), { compile: c.compile }), compiler_).toMatchObject({ base: { pdf: FINAL } })
+      const [, m, f] = c.asked as [CompileRequest, CompileRequest, CompileRequest]
+      const before = dec(m.overrides.get('main.tex')).split('\n'), after = dec(f.overrides.get('main.tex')).split('\n')
+      expect(before[0], compiler_).toBe(DRAFT_OPTION)
+      expect(after[0], compiler_).toBe(HEAD)
+      expect(after, compiler_).toHaveLength(before.length)
+      expect(after.slice(1), compiler_).toEqual(before.slice(1))
+      expect(f, compiler_).toMatchObject({ engine: compiler_, rerun: false, bibtex: false })
+    }
   })
 
   it('is the engine\'s: xelatex and latex alike, one pass of that compiler', async () => {

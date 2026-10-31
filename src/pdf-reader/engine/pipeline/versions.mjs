@@ -381,6 +381,14 @@ export const PDFJS = '6.3.289'
  * ink (`u<id>.p`), between the marks LAYOUT_TEX's hook sets around it (marks.mjs BACKREF_TEX), where it was no one's: the base's
  * bytes change where a paper turns backref's lists on; 17 (the owner's case 2610.35877v1): a biblatex entry's ink its unit's
  * groups (an ink unit of kind `inkreferences`, ink-units.mjs claimInk), the point before each a rendering intent in our page
- * (marks.mjs POINTS_TEX `bi<n>`): the base's bytes change where a paper loads biblatex
+ * (marks.mjs POINTS_TEX `bi<n>`): the base's bytes change where a paper loads biblatex; 18 (the driver's group, 2026-10-31): the
+ * final pass begins with hooks that switch off the transparency group graphics-def's pdftex.def 1.2d and luatex.def 1.2f
+ * (8d691483be, 2025-09-20) write on every included PDF, which arXiv's TeX Live 2025, the state of 2025-08-03, predates (live.mjs
+ * NO_DRIVER_GROUP, layout/paper.mjs finalPass): our figure forms are arXiv's again, which the delta copies (2610.30034v1's base a
+ * proved delta of 196,579 bytes, its 5.46 MB shipped whole before; 2610.30875v1's 3.73 MB delta 0.30 MB) and poppler draws as
+ * arXiv's. The base's bytes change where a TeX Live 2025 paper compiled by pdfLaTeX or LuaLaTeX includes a PDF, and nowhere
+ * else (TeX Live 2023, XeLaTeX, latex: byte for byte); the marked compile, the units and the layout files do not. Raised so that
+ * a bundle made over a base with the group is made again under a new key (VTAG): REMOVAL is the version of the key that names
+ * the base's bytes, the wrapped final pass the head heads, where PIPELINE names the units and LAYOUT the layout file
  */
-export const REMOVAL = '17'
+export const REMOVAL = '18'

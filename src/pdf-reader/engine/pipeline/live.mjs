@@ -76,8 +76,21 @@ export const ranThrough = c => !!c?.ok && !stoppedShort(c.log) && completeLog(c.
 /** a compile that did not run through is one that failed, as the TeX page's is: its PDF not taken */
 const finished = r => (r.ok && !ranThrough(r) ? { ...r, ok: false, pdf: null } : r)
 /** DRAFT's first line, graphicx's draft option alone: the final pass of the marked original (layout/paper.mjs markedOfPaper
- *  `base`) is its files with this line made empty, so that no line of them moves */
+ *  `base`) is its files with this line made NO_DRIVER_GROUP, one line, so that no line of them moves */
 export const DRAFT_OPTION = '\\PassOptionsToPackage{draft}{graphicx}'
+/** The final pass's first line, in DRAFT_OPTION's place: graphicx's drivers for pdfTeX and LuaTeX made to include a PDF as
+ *  arXiv's do. pdftex.def 1.2d and luatex.def 1.2f (graphics-def 8d691483be, 2025-09-20; CTAN 2025-09-30) write a
+ *  transparency group, /Group<</S/Transparency/K false/I false>>, on every PDF page they include; arXiv's TeX Live 2025 is the
+ *  state of 2025-08-03 (info.arxiv.org, no tlmgr update since), whose pdftex.def 1.2c and luatex.def 1.2d write none, and the
+ *  pinned tree's are the later ones. With the group every figure form of ours differs from arXiv's, so that the delta copies
+ *  none of them (2610.30034v1 shipped its whole 5.46 MB base, 0.20 MB as a delta without it; 2610.30875v1 3.73 MB, 0.30 MB),
+ *  and poppler draws the figures' lines heavier than arXiv's PDF. Each hook runs once its driver is read and, where the driver
+ *  has the switch (\Gread@transgroupfalse defined), makes the include's \Gread@transgrouptrue its \Gread@transgroupfalse: the
+ *  final pass is then the compile of the driver with no group, byte for byte. Where the driver has none (TeX Live 2023's) or
+ *  is another (XeTeX's xetex.def, the DVI drivers under `latex`), nothing is defined and nothing changes. A name in \csname
+ *  needs no \makeatletter, which this line runs before. The marked compile keeps the drivers as they are: its pages are read
+ *  for their marks and never shipped, and a group sits in a figure's form, where it moves no mark */
+export const NO_DRIVER_GROUP = ['pdftex.def', 'luatex.def'].map(def => `\\AddToHook{file/${def}/after}{\\ifcsname Gread@transgroupfalse\\endcsname\\expandafter\\let\\csname Gread@transgrouptrue\\expandafter\\endcsname\\csname Gread@transgroupfalse\\endcsname\\fi}`).join('')
 /** images as frames of their own size (graphicx's draft), each frame's corners marked — g<n>a and g<n>b at its left and
  *  right ends on its baseline, g<n>t at its top right, n counting \includegraphics in the order TeX runs them — so that
  *  the reader lays the left's figure over its frame (session.mjs leftFor). A transformed include (\rotatebox or
