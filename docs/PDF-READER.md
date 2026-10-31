@@ -3368,7 +3368,13 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   paper): its new stream lexed again within the page's bounds, every BDC of ours named by its groups, none inside another and
   closed at its depth and state, none left open (the page's own marked content need not balance: our runs lie in none of it);
   its operators, ours taken out and each split show's chunks joined, the unwrapped page's (operators, operands, codes and
-  numbers in order); and the deflated bytes written inflated back to that stream. Of the paper: the section read back
+  numbers in order); and the deflated bytes written inflated back to that stream. The unwrapped page is read again for the
+  proof: each of its content streams decoded and lexed whole, every operator kept, under a budget of its own, so that what it
+  compares is read from the bytes by the proof itself. What it takes from the wrap is the list of those streams alone (`provePage`:
+  the wrap's walk's pieces, the page's `/Contents` as the object layer parsed them, which nothing changes: the wrap writes its
+  objects after the file), as a form the page's figures were wrapped in is read by the stream of the wrap's walk's container: a
+  second walk of the page found the same list, at the cost of every form on it walked again (2.7 s of 2610.21924v1's wrap on one
+  core, its 15,338 forms; 2026-10-31). Of the paper: the section read back
   (`deltaSection`: each entry at its `n g obj`, `/Prev` our startxref) and the wrapped document read again by the object layer
   (catalog, page dicts and resources ours but `/OCProperties`, `/Contents` and `/Properties`; each page's own `/Properties`
   entries kept as they were and ours beside them; every group listed and ON). A failed wrap is the paper's: `wrapFinal` gives `{ refused: 'wrap-parse' |
