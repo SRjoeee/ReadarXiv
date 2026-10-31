@@ -512,9 +512,9 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   /** a glyph set turned (`turned`, layout/figure-text.mjs: a figure's y-axis title), as a TurnedGlyph: its baseline from its
    *  origin (ox, oy) to its advance's end (ex, ey), its direction (ux, uy), its size and its font's ascent and descent in em, a
    *  rotation of the page's axes alone (no mirror, no shear past TURN_SKEW); its box's index among the page's boxes (-1 where
-   *  its clip left none), the level glyphs and the points before it in the stream (`at`, `pt`). A glyph mirrored or sheared is
-   *  a box alone, as before */
-  const turnedGlyph = (g, M, hs, xa, xb, ty, ascent, descent, box) => {
+   *  its clip left none), the level glyphs and the points before it in the stream (`at`, `pt`); `clipped` where its own ink is
+   *  not wholly inside the clip in force. A glyph mirrored or sheared is a box alone, as before */
+  const turnedGlyph =(g, M, hs, xa, xb, ty, ascent, descent, box) => {
     const ax = M[0] * hs, ay = M[1] * hs, upx = M[2], upy = M[3]
     const la = Math.hypot(ax, ay), lu = Math.hypot(upx, upy)
     if (!(la > 0 && lu > 0) || ax * upy - ay * upx <= 0 || Math.abs(ax * upx + ay * upy) > TURN_SKEW * la * lu) return
@@ -526,7 +526,26 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     if (s.form > 0) t.form = true
     if (s.formId) t.fid = s.formId
     if (pictureIds.length) t.pid = pictureIds.at(-1)
-    if (outsideClip(Math.min(ox, ex) - Math.abs(upx) * s.size, Math.min(oy, ey) - Math.abs(upy) * s.size, Math.max(ox, ex) + Math.abs(upx) * s.size, Math.max(oy, ey) + Math.abs(upy) * s.size)) t.clipped = true
+    // (not shown whole where its own ink is not wholly inside the clip in force, as a level glyph (emit): its advance and its
+    // outline across it, its outline's bottom to its top, else its font's descent to its ascent; the four corners of that box
+    // turned with it. Never a box of its whole size on both sides of its baseline: a y-axis title or a colour bar's title set at
+    // its figure's edge, inside the form's box, read as cut and was no unit (2610.35877v1 p8, 2610.22065v1 p3: the sweep of
+    // 6e0a8d1c, once the final pass drew its figures with no group, whose box PDF.js gives no form))
+    if (s.clip) {
+      const o = outlineOf(g), has = o?.length === 4
+      const ia = has ? xa + o[0] * s.size * hs : xa, ib = has ? xa + o[2] * s.size * hs : xb
+      const a0 = Math.min(xa, xb, ia, ib), a1 = Math.max(xa, xb, ia, ib)
+      const b0 = ty + (has ? o[1] : descent) * s.size, b1 = ty + (has ? o[3] : ascent) * s.size
+      let X0 = Infinity, Y0 = Infinity, X1 = -Infinity, Y1 = -Infinity
+      for (const [x, y] of [[a0, b0], [a1, b0], [a0, b1], [a1, b1]]) {
+        const X = M[0] * x + M[2] * y + M[4], Y = M[1] * x + M[3] * y + M[5]
+        if (X < X0) X0 = X
+        if (X > X1) X1 = X
+        if (Y < Y0) Y0 = Y
+        if (Y > Y1) Y1 = Y
+      }
+      if (outsideClip(X0, Y0, X1, Y1)) t.clipped = true
+    }
     if (finite(ox, oy, ex, ey, sz) && turnedOut.length < glyphsMax) turnedOut.push(t)
   }
   /** a figure's painted path as its lines (`turned`): inside a form or a TikZ picture (between the points `zs` and `ze`), its

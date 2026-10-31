@@ -413,6 +413,52 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
     const declared = only(pageInk(OPS, list(text('cmsy', 10, [1, 0, 0, 1, 72, 700], show(g('F', 600)))), commonObjs, { rotate: 0 }).glyphs, 'F')
     expect(declared.bottom).toBeCloseTo(700 - 9.6, 6)
   })
+
+  // An included figure's box clips what it draws (a form's BBox, which PDF.js gives paintFormXObjectBegin where the form has no
+  // transparency group: every included PDF of arXiv's TeX Live 2025, and of our final pass since PIPELINE 44). A glyph set turned
+  // is cut by it where its own ink passes it, as a level glyph is: its outline across its advance, up to its top, down to its
+  // bottom. A y-axis title or a colour bar's title set at its figure's edge (matplotlib's tight box: 2610.35877v1 p8,
+  // 2610.20967v1 p4, 2610.22065v1 p3) stands inside it and is shown whole; a box of its whole size on both sides of its baseline
+  // read it as cut and its unit was lost (the sweep of 6e0a8d1c)
+  const form = (...inner: Op[]): Op[] => [[OPS.paintFormXObjectBegin, [Float32Array.from([1, 0, 0, 1, 0, 0]), Float32Array.from([0, 0, 100, 100])]], ...inner, [OPS.paintFormXObjectEnd, []]]
+  /** "F" set at a quarter turn (its baseline up the page, its top to the left), its baseline across at `x` */
+  const up = (font: string, x: number) => text(font, 10, [0, 1, -1, 0, x, 40], show(g('F', 600)))
+  const turnedIn = (ops: Op[], o: { get(id: string): unknown; has?(id: string): boolean }) => {
+    const r = pageInk(OPS, list(ops), o, { rotate: 0, turned: true })
+    expect(r.turned).toHaveLength(1)
+    return r.turned![0]!
+  }
+  it('a glyph set turned is cut by the clip where its own ink passes it, not where a box of its size on both sides would', () => {
+    const o = objs(sy)
+    // its top 6.91 to the left of its baseline: from 8, its ink starts at 1.09, inside the box (a box of its size: at -2)
+    expect(turnedIn(form(...up('cmsy', 8)), o).clipped).toBeUndefined()
+    // from 5, its top at -1.91: past the box, cut (its letters' tops are not shown)
+    expect(turnedIn(form(...up('cmsy', 5)), o).clipped).toBe(true)
+    // the colour bar's title at the right edge: its bottom 0.32 to the right of its baseline at 99, inside (a box of its size: 109)
+    expect(turnedIn(form(...up('cmsy', 99)), o).clipped).toBeUndefined()
+    expect(turnedIn(form(...up('cmsy', 99.8)), o).clipped).toBe(true)
+    // along its baseline, its advance and its ink: from 40 to 46 up the page, inside; past the box's top, cut
+    expect(turnedIn(form(...text('cmsy', 10, [0, 1, -1, 0, 50, 95], show(g('F', 600)))), o).clipped).toBe(true)
+    // no outline given: its font's declared ascent (0.7) and descent (0.2), as a level glyph's
+    expect(turnedIn(form(...up('f1', 7.5)), commonObjs).clipped).toBeUndefined()
+    expect(turnedIn(form(...up('f1', 6.5)), commonObjs).clipped).toBe(true)
+    expect(turnedIn(form(...up('f1', 98)), commonObjs).clipped).toBeUndefined()
+    expect(turnedIn(form(...up('f1', 98.5)), commonObjs).clipped).toBe(true)
+    // no clip in force: never cut
+    expect(turnedIn(up('cmsy', -50), o).clipped).toBeUndefined()
+  })
+  it('a slanted label is cut by where its own ink\'s corners fall, its band turned with it', () => {
+    const o = objs(sy)
+    // 30 degrees: its ink's lowest corner is its outline's bottom left, 0.02 along and 0.032 below, turned
+    const c = Math.cos(Math.PI / 6), s = Math.sin(Math.PI / 6)
+    const at = (y: number) => form(...text('cmsy', 10, [c, s, -s, c, 30, y], show(g('F', 600))))
+    const low = (y: number) => y + 10 * (0.02 * s - 0.032 * c)
+    // (its ink's lowest point a hair above the box's bottom, then a point below it)
+    expect(low(0.3)).toBeGreaterThan(0)
+    expect(turnedIn(at(0.3), o).clipped).toBeUndefined()
+    expect(low(-0.2)).toBeLessThan(-0.05)
+    expect(turnedIn(at(-0.2), o).clipped).toBe(true)
+  })
 })
 
 // The walk's guards (the census of 2026-10-16: the 2,793 pages of the 124 papers of data/corpus): each an abuse guard twenty

@@ -45,7 +45,8 @@ export interface InkPoint { name: string; glyph: number; box: number }
 export declare const PARA_POINT: RegExp
 export declare function pageInk(OPS: Record<string, number>, ops: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }, commonObjs: { get(id: string): unknown }, o: { rotate: number; indices?: boolean; outlines?: ReadonlyMap<string, number[]> | null; collect?: Map<string, number[]> | null; glyphsMax?: number; boxesMax?: number; stepsMax?: number; msMax?: number; glyphsOnly?: boolean; turned?: boolean }): { glyphs: Glyph[]; boxes: number[]; points: InkPoint[]; boxAt: number[]; paras: InkPoint[]; paths?: number[]; shows?: number; turned?: TurnedGlyph[]; shapes?: Map<number, Shape>; pictures?: InkPoint[]; figures?: Map<string, [number, number, number, number]>; capped: boolean; timedOut: boolean; degraded: boolean; mergedAt: number | null; rotated: boolean }
 /** a glyph set turned (pageInk's `turned`): its baseline from its origin to its advance's end, its direction, its size, its
- *  font's band in em, its box's index (-1 for none), the level glyphs and the pictures' points before it */
+ *  font's band in em, its box's index (-1 for none), the level glyphs and the pictures' points before it; `clipped` where its
+ *  own ink (its outline, else its font's band, across its advance) is not wholly inside the clip in force */
 export interface TurnedGlyph { u: string; n: number; k: number; ox: number; oy: number; ex: number; ey: number; ux: number; uy: number; size: number; ascent: number; descent: number; font: string; fill: number; box: number; at: number; pt: number; blank?: true; form?: true; clipped?: true; fid?: number; pid?: number }
 /** a figure's painted path as its lines (pageInk's `turned`): its segments on the page (x0, y0, x1, y1 stride 4), whether it strokes
  *  and fills, its half line width on the page */
