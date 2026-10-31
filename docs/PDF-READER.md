@@ -2408,7 +2408,7 @@ own), each part carrying its pages' cell rules (`rules`).
     our marks inside it (46 errors, none of them the paper's). Whether an environment's body is set as text or read token by
     token by its own parser shows in no source without naming the environment, and before the marked compile TeX reads only the
     preamble and the probe's samples, out of the cell's context; a probe of each such cell in its environment, marked and not,
-    would be a section of its own for one construct seen once in 80 papers. The units are a diagram's code, no prose: the guard's
+    would be a section of its own for one construct seen once in the 72 papers swept. The units are a diagram's code, no prose: the guard's
     verdict, those cells the paper's own, is the right end state, at its two compiles (the unmarked original's, then the attempt).
   - *The web host* passes `compileBudgetMs` with CM alone today, and neither `pages` nor `engines`: its budget's answer past
     the budget (a `budget` limit) ends the guard as any limit, and the page check is the page pass's alone until it passes
