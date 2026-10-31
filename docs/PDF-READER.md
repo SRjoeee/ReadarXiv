@@ -1875,7 +1875,7 @@ The edge cases, decided:
 | `BUNDLE5` (`layer-proto/format.mjs`, `'12'`: a left part carries its page's line map, §17.1; 11 a figure row carries its set and its room, §19.12; 10 the ink units, the parts' figure units and the head's ledger; 9 a part's cell rules in place of the add-on, our page wrapped by optional content) | reader contract | the layer route's objects: a head's, a part's, a left part's and a catalog's shape, the figure rows (the units chunks have a format of their own, `UNITS_FORMAT`, raised only by their shape); a reader reads 7's, 9's, 10's and 11's objects too (`BUNDLES_READ`) | the request (`CTAG5`, `b<BUNDLE5>-j<PDFJS>`: §18.4) and the R2 key (`VTAG5`) | a bundle of the old format is not found under the new `CTAG5` and is prepared again; readers older than it get `unknown-versions` until they update |
 | `BUNDLE` (`layer-proto/bundle.mjs`, `'3'`: the layout file's schema 3, the paper's `\lineskip` and `\lineskiplimit`; 2 its babel names, D1a. The file's schemas 4 (`PH_FLAG.JOINED` and `PH_FLAG.OUTSIDE`) and 5 (a found placeholder's fill, its row's last number where its glyphs are not black: 0xRRGGBB, or -1 where no one colour holds more than half of them) are not a contract of their own: `b3` names schemas 3 to 5, each reader's `parseLayout` refusing the others', so only this engine's reader reads a `b3` bundle holding schema 5) | reader contract | the one-file bundle `readBundle` reads (`CTAG`, `VTAG`): its shape, the units' tuple, kinds and flags, the layout file's schema, the left geometry | its request and key (§18.4) | readers older than it refuse it until they update |
 | `PDFJS` (`pipeline/versions.mjs`, `'6.3.289'`) | reader contract | the PDF.js whose reading the layout and the wrap are made against | as `BUNDLE` | as `BUNDLE` |
-| `PIPELINE_VERSION` (`pipeline/versions.mjs`, `'45'`: a glyph set turned is cut by the clip in force where its own ink passes it, as a level glyph is, so that a y-axis title at its figure's edge is a figure unit again, §19.12; 44 the final pass with no transparency group of the driver's on an included PDF, as arXiv's TeX Live 2025 of 2025-08-03 includes one, §19.7) | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
+| `PIPELINE_VERSION` (`pipeline/versions.mjs`, `'46'`: a glyph set turned is cut by the clip in force where its own ink passes it, as a level glyph is, so that a y-axis title at its figure's edge is a figure unit again, §19.12; 45 xy-pic's diagram kept as the paper has it, a drawing as a TikZ picture is, so that its cells are no units and no mark of ours goes into xy-pic's syntax, §19.6; 44 the final pass with no transparency group of the driver's on an included PDF, as arXiv's TeX Live 2025 of 2025-08-03 includes one, §19.7) | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
 | `LAYOUT` (`layout/file.mjs`, `'31'`: a page whose lines moved across its breaks through compile drift drawn, `carry.mjs` `lineCheckOf`, §19.7; 30 a footnote's call after the last word found by its raised mark, a biblatex entry's unit of the new kind `inkreferences`, §19.7; 29 backref's list after an entry a row of its list piece's, §19.13; 28 a Type 3 glyph's ink its char procedure's paths, `layout/ink.mjs` `type3Box`, #122-1; 27 a command that sets the punctuation after it before its ink marked around the pair, a macro TeX said sets no ink EMPTY, a piece alone at an entry's end given the lines it runs onto, a macro that sets one punctuation mark drawn as it, §19.7; 26 a unit TeX set flush left or flush right flagged so, `UNIT_FLAG.FLUSH_LEFT` and `UNIT_FLAG.FLUSH_RIGHT`, and a paragraph a box's close ends read by its own skips, §18.1, §18.8; 25 the release sweep of 2026-10-29, a line too short to be evidence found on no other page, a word a hyphen cuts going on below, an ink unit's paragraph one unit, a math face told by its family's names, `layer-proto/fonts.mjs` `classifyFont`), `REMOVAL` (`pipeline/versions.mjs`, `'17'`: a biblatex entry's ink its unit's groups, the point before each in our page; 16 backref's list after an entry its list piece's ink, §19.13; 15 a level figure unit on its column's edge or centred in it anchored there, `figure-text.mjs` `columnAnchorOf`, §19.12; 14 a unit's text owns the rules TeX painted on its own lines, an OT1 `\_`, an underline, own.mjs MR 2b, #117; 13 a punctuation mark a command set before its own ink its unit's text, not the piece's, §19.9; 12 a macro TeX said sets no ink is no placeholder of ink, an opening point alone at its unit's end owns its lines up to TeX's skip before another block; 8 no add-on, a part's or a bundle's cell rules in its place, our page wrapped by optional content, §11.8, §19.9) | extraction | the layout maker (the file's own schema is `LAYOUT_SCHEMA`, 5); how a drawn unit's ink is taken away | the R2 key | bundles made again lazily |
 | `TRANSLATE_VERSION` (`translate/version.mjs`, `'9'`: a caption cut into sentences on the tags wire as a paragraph is, §17.1; `'8'`: a run-in label where a sentence begins past the unit's head keeps its markers on the markers wire (`mt.mjs` `classOf`), 2010.11929v2's "Center:" and "Right:"; `'7'`: backref's list after an entry on no wire, put back after the translation with an en space before it, §19.13; `'6'`: every content class translated once whatever the language, the author block for every target and a bibliography's entries; `'5'`: a display's own stop written after its marker and taken off the reply; `'4'`: a styled pair whose two ends stand where the wire has a marker anyway keeps its markers; `'3'`: a sentence whose words change style sent whole, the pairs inside it on no wire; `'2'`: a formula split across inline formulas sent as one marker) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
 | `RULES_SCHEMA` (`rules/layout.mjs`, `9`: the languages of a script the engine set, the owner's ruling of 2026-10-29: `latinPatterns` takes Italian's, Dutch's, Polish's, Turkish's, Indonesian's (Malay's too, as babel's malay.ldf takes them), Czech's and Swedish's, `cyrillicPatterns` added, a Cyrillic word's hyphenation, Russian's rules or Ukrainian's or Bulgarian's own patterns, and `hyphenation` their minimums as TeX applies them under babel; 8: `latinPatterns` takes French's, Spanish's and Portuguese's own, hyph-utf8's (the three were hyphenated with English's, #121-4), and `hyphenation` their minimums as babel sets them, French 2 and 3, Spanish 2 and 2, Portuguese 2 and 3; 7: `evenPitch` and `keepAlign` added, lane B's B1 and B2, the ruling of 2026-10-29, §18.8; 6: `cjkFaces` holds its group alone, a CJK script drawn at Regular and Bold beside every English family, its `light` designs and its unread `kai` gone, the ruling of 2026-10-29; 5 before it: `fillLeadRel` added, the fill's top relative to the original's pitch; 4: `adaptiveFill.band` read against the page's own paragraphs, 1b-C) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
@@ -2344,7 +2344,8 @@ own), each part carrying its pages' cell rules (`rules`).
     mark was that token (nine errors, 36 pages to arXiv's 35, two compiles more; now none, the babel names kept). Then, or where
     that probe stopped before its body wrote a row (TeX stopped in the preamble), the probe is asked again over the paper's own
     preamble, whose answers no error of ours came before; one that stopped in its body, in a sample of its own, stopped where
-    the paper's own preamble's stops (2610.21377v1, 2610.21884v1: the same errors and rows), and stands. A paper whose preamble
+    the paper's own preamble's stops (2610.21377v1: the same errors and rows; 2610.21884v1's too, at a sample of xy-pic's syntax,
+    until PIPELINE 45 kept its diagrams as the paper has them, below), and stands. A paper whose preamble
     holds no unit has the probe it had, byte for byte. Over 72 papers, 34 hold a unit in the preamble: on each, the probe's
     answers over the marked preamble are the paper's own preamble's (switches, macros that set no ink, their texts, the names,
     `\lineskip`, the boxes begun apart), at the same time (37.9 s against 37.8 s locally over the 34), and only 2610.37668v1's
@@ -2416,13 +2417,32 @@ own), each part carrying its pages' cell rules (`rules`).
     back to `\def\url#1{#1}`, and under its hyperref, read as `\url`'s own, it made each `\url`'s argument a group, inside
     which a mark was printed. Over 183 local sources
     one unit changes (that paper's unit 176: one placeholder, not a group holding one; no text piece and no kind).
-  - *Left to the guard: a parser's body read as text* (2610.21884v1). The front end reads an environment it does not know as text,
-    and a table cell holding xy-pic's `\begin{xy}…\end{xy}` was four cell units of xy-pic's own syntax (`\ar@{-}(0,0)*++!D{…}`),
-    our marks inside it (46 errors, none of them the paper's). Whether an environment's body is set as text or read token by
-    token by its own parser shows in no source without naming the environment, and before the marked compile TeX reads only the
-    preamble and the probe's samples, out of the cell's context; a probe of each such cell in its environment, marked and not,
-    would be a section of its own for one construct seen once in the 72 papers swept. The units are a diagram's code, no prose: the guard's
-    verdict, those cells the paper's own, is the right end state, at its two compiles (the unmarked original's, then the attempt).
+  - *A drawing read as text: named* (PIPELINE 45, 2026-11-01; 2610.21884v1). The front end reads an environment it does not know
+    as text, and a table cell holding xy-pic's `\begin{xy}…\end{xy}` was four cell units of xy-pic's own syntax
+    (`\ar@{-}(0,0)*++!D{…}`), our marks inside it: 46 TeX errors, none of them the paper's, and two compiles of the guard's (the
+    unmarked original's, then the attempt) to find those cells the paper's own. Whether an environment's body is set as text or
+    read token by token by its own parser shows in no source but by the environment's name, so the drawings are named, as
+    TikZ's, PSTricks', pgfplots', circuitikz's, forest's and LaTeX's own picture were (`latex-front.mjs` `SKIP_ENVS`), and
+    xy-pic's `xy` is one of them: kept as the paper has it, no unit, no mark. This is a name, not a rule TeX judges: one would be
+    a probe of each environment the front end does not know, its body marked and not in its context, about a day's work for
+    the one paper of the 215 local sources that begins an `xy` (no other environment of the kind is walked as text in them, nor
+    xy-pic's plain `\xy … \endxy` written in any). 2610.21884v1's marked original now stands at once: five compiles (14 TeX
+    passes) are three (6), its local TeX from 9.1 s to 3.8 s (the box's guard compiles were 7.0 s and 8.1 s); its mark probe
+    raises no error (11 at a sample of xy-pic's syntax before); its 259 other units are located and laid as before, line for
+    line, and its base page is pixel for pixel the one the guard's attempt made. The other 214 sources' units are the same hash for hash,
+    and its own after the four cells the same but for their pairs' numbers (`cache.mjs` `seedFrom` renumbers them).
+  - *Left as they are: a name read as data, and a fault of pdfTeX's own.* 2610.37668v1's myarxiv `\author` takes each word's
+    first token as an initial (`\tl_head:n`) and defines a command by that name, so a mark at a name's start is a "Missing
+    \endcsname" whatever the mark is: the probe over the marked preamble finds those units a compile ahead (above), they stay
+    unmarked (the original's in the layer, as an unmarked unit is), and the probe is asked again over the paper's own preamble
+    (2.1 s on the box). 2610.30769v1's `\citep` that TeX breaks over a page break ("[Lorenz" ends page 1) leaves pdfTeX a link
+    ended at another nesting level than it began (`\pdfendlink ended up in different nesting level than \pdfstartlink`, its own
+    compile warns so too), and with our marks every pass that reads a full
+    `.out` (hyperref's bookmarks) dies of a segmentation fault, so latexmk runs its five passes (the paper's own source three, of
+    0.65 s each), the marked compile fails natively (staging, 2026-10-31: five passes, no PDF), and the guard compiles once
+    more; the final pass ran there, and the paper has its layout (locally, under Rosetta, the final pass dies too). Taking
+    either of our two marks around that citation away ends it, and taking both away brings it back: the fault follows the memory
+    pdfTeX lays its nodes in, not what a mark means, so no change to our marks removes it, and the guard is the net it is there for.
   - *The web host* passes `compileBudgetMs` with CM alone today, and neither `pages` nor `engines`: its budget's answer past
     the budget (a `budget` limit) ends the guard as any limit, and the page check is the page pass's alone until it passes
     arXiv's page count.
@@ -2661,7 +2681,7 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     1512.03385v1, its room below 29.36 pt, now 29.43). The wrap's figure units moved with it (the gate pack: 1512.03385v1's
     181 → 176, 2608.04322v1's 237 → 218), which 44 read as text past the box; it was not. Every one of those units was a title
     set turned at its figure's edge and shown whole on arXiv's page, which `turnedGlyph` read as cut by a box of its whole size
-    on both sides of its baseline (§19.12, PIPELINE 45: the units are back, 181 and 237, and the release sweep's 45 lost
+    on both sides of its baseline (§19.12, PIPELINE 46: the units are back, 181 and 237, and the release sweep's 45 lost
     figure units on 9 papers with them). Figure units are units, which a stored translation's rows name by their ids, so the
     cut's move raises PIPELINE (44, §18.2, §18.3), which also makes every bundle made over a base with the group again; a copy
     of 43 carries every unit, a figure unit found again by its source. Swapping the driver file in the image gives the same
@@ -3619,14 +3639,19 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   (an included figure's viewport: pageInk's `clipped`; 1706.03762v7's cropped attention figures held two such titles) or inside
   its page's box (a row's origin off its page is one no part's reader takes, `checkFigures`). A glyph is wholly inside where its
   own ink is: its outline (else its font's ascent and descent) up and down, its advance and its outline across, a glyph set
-  turned with that box turned (PIPELINE 45, the release sweep of 2026-11-01). The box of a turned glyph's whole size on both
+  turned with that box turned (PIPELINE 46, the release sweep of 2026-11-01). The box of a turned glyph's whole size on both
   sides of its baseline, read before, passed a form's BBox wherever matplotlib's tight box set a y-axis title, a colour bar's
   title or a slanted tick label at the figure's edge, and once our final pass gave its included figures no group (PIPELINE 44,
   §19.7) the form's box clipped them: 45 figure units of 9 of the sweep's papers, 40 translated before, stood English though
-  arXiv's page shows them whole (2610.35877v1 p8, 2610.22065v1 p3, 2610.17108v1 p4's slanted bar labels). Measured on the
-  sweep's 13 papers whose units moved and arXiv's PDFs of the corpus on disk: every unit 44 lost is back, and a turned title
-  the box does cut stays the original's (2610.21312v1 p12's "Spearman(lr_std, bulk1)", its tops 1.7 pt past the box;
-  2610.22065v1 p3's "Relative Accuracy Drop (%", its parenthesis past it).
+  arXiv's page shows them whole (2610.35877v1 p8, 2610.22065v1 p3, 2610.17108v1 p4's slanted bar labels). Measured by the
+  production pass on the 16 papers the sweep and PIPELINE 44 name (ba433da8's engine, 6e0a8d1c's and this one): every figure unit
+  44 lost is back, drawn as before; the only units beside them are two titles 44's clip uncrowded (2610.22195v1 p8: the ink past
+  a neighbour panel's box that had crowded them is cut away); and the three deltas 44 gained are byte for byte 44's
+  (2610.30034v1 196,579 bytes, 2610.30875v1 304,787, 2610.31506v1 248,653). Over arXiv's PDFs of the 108 papers on disk, which
+  carry no group (81 with figure text): 327 units on 47 papers that 44's reading cut are units again, none lost, and the 236 on
+  16 papers whose glyphs a clip does cut stay the original's (2610.21312v1 p12's "Spearman(lr_std, bulk1)", its tops 1.7 pt
+  past its box; 2610.22065v1 p3's "Relative Accuracy Drop (%", its parenthesis past it; a multi-panel figure drawn once a panel,
+  each clipped to its own: 2608.12606v1 p5).
 - **Its place**, our glyphs' and nothing estimated: its first glyph's origin, its direction, its box's length along it, its band
   (its glyphs', at least `DRAW_BAND` [-0.15, 0.88] em: the line a CJK translation is drawn in). A Type 3 glyph's ink is what its
   char procedure paints (LAYOUT 28, #122-1: `ink.mjs` `type3Box`, PDF.js's `charProcOperatorList`, each painted path's box, a
