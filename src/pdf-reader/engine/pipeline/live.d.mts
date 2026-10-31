@@ -44,8 +44,11 @@ export declare function originalFiles(paper: Paper, options?: { lines?: boolean;
 export declare function keptFor(paper: Paper, lang: string): Set<SourceUnit>
 /** whether a compile's last TeX pass stopped short of the document's end (a fatal error), whatever PDF it left: such a
  *  compile is one that failed */
-/** graphicx's draft option, the first line of every marked original's main file: the final pass makes it an empty line */
+/** graphicx's draft option, the first line of every marked original's main file: the final pass makes it NO_DRIVER_GROUP */
 export declare const DRAFT_OPTION: string
+/** the final pass's first line: hooks that switch the transparency group pdftex.def 1.2d and luatex.def 1.2f write on an
+ *  included PDF off, as arXiv's TeX Live 2025 (2025-08-03) includes one; nothing where a driver has no such group */
+export declare const NO_DRIVER_GROUP: string
 export declare const stoppedShort: (log: string | null | undefined) => boolean
 /** whether a compile ran through, the one test of a compile's success: `ok`, and its last TeX pass neither stopped short
  *  (stoppedShort) nor ended before END_TEX's AXT-END (completeLog). Whether it gave a PDF is the caller's to ask */
