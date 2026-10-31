@@ -24,5 +24,8 @@ export function isMemoryError(e) {
   if (e.code === 'ERR_MEMORY_ALLOCATION_FAILED') return true
   if (e instanceof RangeError) return e.message === ALLOCATION_FAILED
   if (e.name !== 'UnknownErrorException') return false
-  return [ALLOCATION_FAILED, NODE_ALLOCATION_FAILED].some(words => e.message === words && e.details === `RangeError: ${words}`)
+  // (the wrapping keeps an error's words and its toString(), not its code: V8's is a RangeError, Node's own an Error on Node 22
+  // and a RangeError from Node 24 on)
+  if (e.message === ALLOCATION_FAILED) return e.details === `RangeError: ${ALLOCATION_FAILED}`
+  return e.message === NODE_ALLOCATION_FAILED && (e.details === `RangeError: ${NODE_ALLOCATION_FAILED}` || e.details === `Error: ${NODE_ALLOCATION_FAILED}`)
 }
