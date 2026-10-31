@@ -216,11 +216,12 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     let c = await ask(preamble), blamed = new Set()
     if (preamble) {
       // (TeX's errors at our marks where it read the marked preamble name their units, left unmarked before the marked compile
-      // (guard.mjs preambleUnits); then, or where that probe stopped before its body wrote a row (TeX stopped in the preamble), the
-      // probe asked again over the paper's own preamble, whose answers no error of ours came before. One that stopped in its body,
-      // in a sample of its own, stopped where the paper's own preamble's stops: its body is that one's, and so are its rows)
+      // (guard.mjs preambleUnits), TeX stopped there or not; then, or where that probe stopped before its body wrote a row (TeX
+      // stopped in the preamble), the probe asked again over the paper's own preamble, whose answers no error of ours came before.
+      // One that stopped in its body, in a sample of its own, stopped where the paper's own preamble's stops: its body is that
+      // one's, and so are its rows)
       const past = !!c && ((completeLog(c.log) && !stoppedShort(c.log)) || /^LAYOUT-PROBE /m.test(lastTexLog(c.log)))
-      blamed = past ? preambleUnits(c.log, paper.units.length, preamble) : new Set()
+      blamed = c ? preambleUnits(c.log, paper.units.length, preamble) : new Set()
       if (!past || blamed.size) c = await ask(null)
     }
     const log = lastTexLog(c?.log)
@@ -370,8 +371,9 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
       const shown = ran ? await markText(c.pdf) : null
       const short = ran && N !== null && M !== null && M < N && !several, long = ran && N !== null && M !== null && M > N
       const text = shown ? shown.pages.length > 0 : false, errors = c ? errorCount(c.log) : 0
-      // (a mark a file it wrote holds, judged by what TeX did with it where the compile shows it: guard.mjs copiesOutOfPlace)
-      const aux = ran ? copiesOutOfPlace(auxUnits(c, count, job), { clean: !short && !long && !text && errors === 0, log: c.log }) : new Set()
+      // (a mark a file it wrote holds, judged by what TeX did with it where the compile shows it: guard.mjs copiesOutOfPlace; its
+      // pages' text read, so that no mark printed is known, not assumed: no `textOf`, or one that failed, shows nothing)
+      const aux = ran ? copiesOutOfPlace(auxUnits(c, count, job), { clean: shown !== null && !short && !long && !text && errors === 0, log: c.log }) : new Set()
       return { c, files: f, spans: sp, ran, pages: M, short, long, aux, text, textUnits: new Set(shown ? [...shown.units].filter(u => u < count) : []), errors }
     }
     /** whether it stands: ran through, arXiv's pages, nothing out of place, and no errors (or no more than the paper's own) */

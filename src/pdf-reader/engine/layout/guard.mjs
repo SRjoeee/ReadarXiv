@@ -174,9 +174,47 @@ const unitOfMark = arg => { const m = /^(?:[pnht]?(\d+)|c(\d+)\.)/.exec(arg); re
 /** a mark of ours with its argument as TeX's log shows a line of input (MARK_CS) */
 const MARK_IN_LINE = new RegExp(String.raw`\\(?:${[...MARK_CS].join('|')})\s*\{([^{}\s]*)\}`, 'g')
 /**
+ * The marks of ours an error stands among, on its line of input as TeX's log shows it around the error's place (`before` read,
+ * `after` not yet): those of the brace group TeX closed just before the place (a command that read its argument whole and
+ * raised the error over it: 2610.37668v1's `\author`), else of the group open at the place, to its close. A group whose opening
+ * brace the log cut off begins where its text does; a place in no group has none. Another unit's marks on the line — a title
+ * set on the author's line — are not the error's: what the place cannot tell is left to the marked compile's guard (a mark's
+ * own argument is no group)
+ */
+const marksAtError = (before, after) => {
+  const text = `${before}\n${after}`, at = before.length, marks = [...text.matchAll(MARK_IN_LINE)], flat = text.split('')
+  for (const m of marks) { flat[m.index + m[0].indexOf('{')] = ' '; flat[m.index + m[0].length - 1] = ' ' }
+  /** the brace that opens the group around `i`, before it, or -1 */
+  const opener = i => {
+    for (let d = 0; --i >= 0;) {
+      if (flat[i] === '}') d++
+      else if (flat[i] === '{') { if (d === 0) return i; d-- }
+    }
+    return -1
+  }
+  /** the brace that closes the group around `i`, after it, or -1 */
+  const closer = i => {
+    for (let d = 0; i < flat.length; i++) {
+      if (flat[i] === '{') d++
+      else if (flat[i] === '}') { if (d === 0) return i; d-- }
+    }
+    return -1
+  }
+  let last = at - 1
+  while (last >= 0 && /\s/.test(flat[last])) last--
+  let from, to
+  if (last >= 0 && flat[last] === '}') [from, to] = [Math.max(0, opener(last)), last]
+  else {
+    const o = opener(at), c = closer(at)
+    if (o < 0 && c < 0) return []
+    ;[from, to] = [Math.max(0, o), c < 0 ? flat.length : c]
+  }
+  return marks.filter(m => m.index > from && m.index < to)
+}
+/**
  * The units the mark probe's errors stand at where TeX read the marked preamble (live.mjs markedPreamble, probeFiles `preamble`):
- * an error TeX raised on a line of input of the probe's main file from `first` to `last` (the preamble's) whose text, as the log
- * shows it around the error's place, holds a mark of ours names that mark's unit (unitOfMark), ids below `count`. TeX reads a
+ * an error TeX raised on a line of input of the probe's main file from `first` to `last` (the preamble's) names the units of the
+ * marks of ours it stands among (marksAtError, unitOfMark), ids below `count`. TeX reads a
  * class's command in the preamble as the class defines it, and one that reads its argument as data raises its errors there, at
  * our marks: 2610.37668v1's myarxiv `\author` takes a name's initials, the first token of each word, through a `\csname`, and our
  * start mark is that token ("Missing \endcsname inserted", the page count one more than arXiv's)
@@ -185,7 +223,7 @@ export function preambleUnits(log, count, { first, last }) {
   const out = new Set()
   for (const e of texErrors(log ?? '')) {
     if (e.line < first || e.line > last) continue
-    for (const m of `${e.before}\n${e.after}`.matchAll(MARK_IN_LINE)) { const u = unitOfMark(m[1]); if (u !== null && u < count) out.add(u) }
+    for (const m of marksAtError(e.before, e.after)) { const u = unitOfMark(m[1]); if (u !== null && u < count) out.add(u) }
   }
   return out
 }
@@ -215,7 +253,8 @@ const unwrapped = log => log.replace(/^(.{79})\n/gm, '$1')
 export const tellsTwice = log => /^Output written on .*\.pdf \(\d+ pages?\b/m.test(unwrapped(lastTexLog(log ?? '')))
 /**
  * The units a compile's marks out of place in a file it wrote name (auxUnits), judged by what TeX did with each: out of place,
- * unless the compile is otherwise the paper's (`clean`: it ran through to arXiv's pages, no mark printed on a page, no TeX error)
+ * unless the compile is otherwise the paper's (`clean`: it ran through to arXiv's pages, its pages' text read and no mark printed
+ * there — a host that reads none, or failed to, shows nothing — and no TeX error)
  * and its log names every destination set twice (tellsTwice). TeX then read each such mark back where the paper's own TeX sets
  * its unit's text, once (an endnote package prints each note from the aux: 2609.36054v2's enotez, `\enotez@note{…}{text}`), or
  * never (a class's macro that discards it: 2610.21201v1's `\jmlr@author`), and the unit is located there; or it set it twice (a

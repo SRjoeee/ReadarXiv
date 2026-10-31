@@ -66,6 +66,8 @@ function errorAt(unit: number, at: string, message = 'Undefined control sequence
   return { log: `! ${message}\n<recently read> \\foo \n\nl.${x.last} ${line.slice(0, k)}\n${' '.repeat(k + 5)}${line.slice(k)}\n`, line: x.last }
 }
 const has = (req: CompileRequest | undefined, s: string) => dec(req?.overrides.get('main.tex')).includes(s)
+/** a host's `textOf` that read a compile's pages and found no mark of ours printed there */
+const unshown = async () => ['Notes 1 Another paragraph']
 const NAMES_OFF = '\\let\\axt@nmall\\relax'
 
 describe('braceBalance: a text\'s braces outside comments and verbatim', () => {
@@ -211,6 +213,14 @@ describe('the preamble as the marked original writes it, read by the mark probe:
     expect(preambleUnits(csname(25, '\\axtmark{1s}Ann Lee'), 5, range)).toEqual(new Set())
     expect(preambleUnits(csname(12, '\\author{Ann Lee}'), 5, range)).toEqual(new Set())
     expect(preambleUnits(csname(12, '\\axtmark{9s}Ann Lee'), 5, range)).toEqual(new Set())
+    // (a title on the author's line: the error stands in the author's group, closed just before its place or open at it, its
+    // opening brace cut off by the log or not; an error in no group names none)
+    const at = (line: number, before: string, after: string) => `! Missing \\endcsname inserted.\n<to be read again> \n                   \\unhbox \nl.${line} ${before}\n${' '.repeat(before.length + 5)}${after}\n\n`
+    const title = '\\title{\\axtmark{0s}A Title\\axtend{0e}}'
+    expect(preambleUnits(csname(12, `${title}\\author{\\axtmark{1s}Ann Lee\\axtend{1e}}`), 5, range)).toEqual(new Set([1]))
+    expect(preambleUnits(at(12, `${title}\\author{\\leavevmode\\axtmark`, '{1s}Ann Lee\\axtend{1e}}'), 5, range)).toEqual(new Set([1]))
+    expect(preambleUnits(at(12, 'ode\\axtmark', '{1s}Ann Lee\\axtend{1e}}'), 5, range)).toEqual(new Set([1]))
+    expect(preambleUnits(at(12, `${title} \\foo`, '\\author{\\axtmark{1s}Ann Lee\\axtend{1e}}'), 5, range)).toEqual(new Set())
   })
 
   it('in markedOfPaper: units TeX raised errors at in the probe\'s preamble unmarked before the marked compile, no compile more (2610.37668v1)', async () => {
@@ -236,6 +246,11 @@ describe('the preamble as the marked original writes it, read by the mark probe:
     expect(await markedOfPaper(p, { final: false, compile: short.compile, pages: 3 })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
     expect(short.asked).toHaveLength(3)
     expect(has(short.asked[2], '\\axtmark{1s}')).toBe(true)
+    // (one that stopped there after an error at a mark of ours: its unit named all the same, no compile more)
+    const stopped = compiler([{ ok: false, log: `${TEX}${err}! Emergency stop.\n` }, PROBE, ran(PDF, '', 3)])
+    expect(await markedOfPaper(p, { final: false, compile: stopped.compile, pages: 3 })).toMatchObject({ pdf: PDF, guard: { extra: 0, unmarked: [1], failed: ['preamble'] } })
+    expect(stopped.asked).toHaveLength(3)
+    expect(has(stopped.asked[2], '\\axtmark{1s}')).toBe(false)
     // (one that stopped in its body, in a sample of its own (2610.21884v1's \ar@{-} in the ink section): the paper's own preamble's
     // probe stops there too, and its rows are taken as they are; one probe)
     const body = compiler([{ ok: false, log: `${PROBE_LOG}! TeX capacity exceeded, sorry [input stack size=10000].\n` }, ran(PDF, '', 3)])
@@ -319,7 +334,7 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     ]) {
       for (const answer of [ran(PDF, '', 3, { aux }), ran(PDF, '', 3, { files: new Map([['main.aux', enc(aux)]]) })]) {
         const c = compiler([PROBE, answer])
-        expect(await markedOfPaper(paperOf(), { final: false, compile: c.compile, pages: 3 })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
+        expect(await markedOfPaper(paperOf(), { final: false, compile: c.compile, pages: 3, textOf: unshown })).toEqual({ pdf: PDF, log: expect.any(String), options: expect.any(Object), ms: expect.any(Object) })
         expect(c.asked).toHaveLength(2)
       }
     }
@@ -330,7 +345,7 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     const aux = '\\emailauthor{a@b.c}{\\leavevmode \\axtmark {2s}Another paragraph of words.\\axtend {2e}}\n'
     const twice = 'pdfTeX warning (ext4): destination with the same identifier (name{axt-2e}) has been already used, duplicate ignored\n'
     const c = compiler([PROBE, ran(PDF, twice, 3, { aux })])
-    const made = await markedOfPaper(paperOf(), { final: false, compile: c.compile, pages: 3 })
+    const made = await markedOfPaper(paperOf(), { final: false, compile: c.compile, pages: 3, textOf: unshown })
     expect(made).toEqual({ pdf: PDF, log: expect.stringContaining('name{axt-2e}'), options: expect.any(Object), ms: expect.any(Object) })
     expect(c.asked).toHaveLength(2)
   })
@@ -352,6 +367,12 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     const shown = compiler([PROBE, ran(PDF, '', 3, { aux }), ran(PDF1)])
     const textOf = async (pdf: Uint8Array) => [pdf === PDF ? 'Notes 1 \\axtmark {2s}Another paragraph' : 'Notes 1 Another paragraph']
     expect(await markedOfPaper(paperOf(), { final: false, compile: shown.compile, pages: 3, textOf })).toMatchObject({ pdf: PDF1, guard: { extra: 1, failed: ['aux', 'text'] } })
+    // (its pages' text not read — no `textOf`, or one that failed —: a mark printed is not known absent, `\\detokenize`'s copy
+    // sets no destination twice and raises no error)
+    for (const textOf of [undefined, async () => { throw new Error('no text') }]) {
+      const unread = compiler([PROBE, ran(PDF, '', 3, { aux }), ran(PDF1)])
+      expect(await markedOfPaper(paperOf(), { final: false, compile: unread.compile, pages: 3, ...(textOf ? { textOf } : {}) })).toMatchObject({ pdf: PDF1, guard: { extra: 1, unmarked: [2], failed: ['aux'] } })
+    }
   })
 
   it('errors above the unmarked original\'s: the original compiled, the units its other errors stand in unmarked', async () => {

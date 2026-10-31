@@ -2325,8 +2325,11 @@ own), each part carrying its pages' cell rules (`rules`).
     the preamble as the marked original writes it (`live.mjs` `markedPreamble`: the layout marks and their line probes, every
     class, no babel name wrapped, a unit whose writing unbalances its braces as the paper's own; `probeFiles` `preamble`, and
     `\axtlines` a protected macro that sets nothing there), so that TeX reads our marks in the preamble where the marked compile
-    will, a compile before it. An error TeX raises on a line of that preamble whose text, as the log shows it, holds a mark of
-    ours names that mark's unit (`guard.mjs` `preambleUnits`), and the units so named are left unmarked before the marked compile
+    will, a compile before it. An error TeX raises on a line of that preamble names the units of the marks of ours it stands
+    among (`guard.mjs` `preambleUnits`, `marksAtError`): on the line as the log shows it, those of the brace group TeX closed just
+    before the error's place (a command that read its argument whole), else of the group open at it — never another unit's on
+    the same line, a title set on the author's line, and none where the place is in no group (the marked compile's guard judges
+    what is left) —, and the units so named are left unmarked before the marked compile
     (the record's `failed: ['preamble']`, `extra` 0). A class's command that reads its argument as data raises its errors there:
     2610.37668v1's myarxiv `\author` takes a name's initials, the first token of each word, through a `\csname`, and our start
     mark was that token (nine errors, 36 pages to arXiv's 35, two compiles more; now none, the babel names kept). Then, or where
@@ -2348,7 +2351,8 @@ own), each part carrying its pages' cell rules (`rules`).
     no text is set: anywhere but a list entry's text (`\contentsline`'s second argument) and nameref's title (`\newlabel`'s
     third group), where LaTeX writes a caption's or a heading's text by design, unless TeX shows what it did with the mark
     (PIPELINE 43, `guard.mjs` `copiesOutOfPlace`): where the compile is otherwise the paper's (it ran through to arXiv's pages,
-    no mark printed on a page, no TeX error) and TeX wrote the PDF itself (`tellsTwice`: pdfTeX's and LuaTeX's log names every
+    its pages' text read through the host's `textOf` with no mark printed — a host that reads none, or failed to, shows nothing,
+    and the marks stay out of place —, no TeX error) and TeX wrote the PDF itself (`tellsTwice`: pdfTeX's and LuaTeX's log names every
     destination set twice, XeTeX's driver and the DVI driver latexmk runs tell no log the host returns), each such mark was set
     once where the paper's TeX sets its unit's text — enotez prints each endnote from its `\enotez@note{…}{text}` line at
     `\printendnotes` (2609.36054v2: 16 notes, unmarked and English before, one compile of 34 s more) —, or never — jmlr's
