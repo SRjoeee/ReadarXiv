@@ -169,8 +169,9 @@ describe('the page stream\'s K, F and need bounds as its pages come', () => {
   })
 
   it('reads each unit\'s rows and pages once a state when its units come in every page, however many tries', () => {
-    // every page settles more units and every third page tells a part: K is made on each try that follows a page, but each unit's
-    // rows are asked once settled and once told, its entry's pages read as often; from scratch, 160 tries over a growing K
+    // every page settles more units and every third page tells a part: K is made on the first try after each page and the one after
+    // each part, but each unit's rows are asked once settled and once told, its entry's pages read as often; from scratch, every
+    // one of the 320 tries made K of every unit
     const spec = paperOf(160, 8, 11)
     const r = drive(spec, { leftTo: t => t, settledTo: t => t - 1, cutEvery: 3, check: false })
     expect(r.work.made).toBeLessThanOrEqual(2 * spec.pages)
