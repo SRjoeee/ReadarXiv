@@ -340,8 +340,19 @@
 //     it is the one that begins an xy environment: the other 214's units are 44's hash for hash, and its own lose the four
 //     cells, the 20 after them in its file the same but for their pairs' numbers. Raised so; and so that the bundle of a paper
 //     whose marked original now stands at once is made again under a new key (VTAG). A copy of 44 carries every unit it holds
-//     the source of (live.mjs PIPELINE_CARRIES), a unit renumbered by the cells' pairs found again (cache.mjs seedFrom)
-export const PIPELINE_VERSION = '45'
+//     the source of (live.mjs PIPELINE_CARRIES), a unit renumbered by the cells' pairs found again (cache.mjs seedFrom);
+// 46 (the release sweep of 6e0a8d1c, 2026-11-01): a glyph set turned is cut by the clip in force where its own ink passes it, as
+//     a level glyph is (layout/ink.mjs turnedGlyph: its outline across its advance, its outline's bottom to its top, else its
+//     font's band), not where a box of its whole size on both sides of its baseline would. Under 44 the form's box clips a
+//     figure's text (PDF.js gives a form with no group its BBox), and the old box read every y-axis title, colour bar's title and
+//     slanted tick label set at its figure's edge (matplotlib's tight box) as cut: 45 figure units of 9 papers of the sweep, 40 of
+//     them translated before, were the original's again though arXiv's page shows them whole (2610.35877v1 p8, 2610.22065v1 p3,
+//     2610.17108v1 p4), and the measure 44 named (the gate pack's 1512.03385v1 181 -> 176, 2608.04322v1 237 -> 218) was these
+//     titles, not text past the box. Every unit 44 lost is a unit again; a glyph whose ink the box does cut stays the original's
+//     (2610.21312v1 p12's "Spearman(lr_std, bulk1)", 2610.22065v1 p3's "Relative Accuracy Drop (%"). The figure units' cut
+//     moves, so the rows' identities: raised so. Every source unit, its pieces and its wire are 45's: a copy of 45 carries every
+//     unit (live.mjs PIPELINE_CARRIES), a figure unit found again by its source (cache.mjs seedFrom)
+export const PIPELINE_VERSION = '46'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
