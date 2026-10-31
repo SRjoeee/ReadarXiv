@@ -444,6 +444,11 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
     expect(turnedIn(form(...up('f1', 6.5)), commonObjs).clipped).toBe(true)
     expect(turnedIn(form(...up('f1', 98)), commonObjs).clipped).toBeUndefined()
     expect(turnedIn(form(...up('f1', 98.5)), commonObjs).clipped).toBe(true)
+    // a glyph that draws nothing (an outline of none: a Type 3 procedure that paints nothing, an invisible text layer): its
+    // baseline alone, as a level glyph's, never its font's band
+    const blankInk = objs({ ...sy, D: [] })
+    expect(turnedIn(form(...text('cmsy', 10, [0, 1, -1, 0, 1, 40], show(g('D', 600)))), blankInk).clipped).toBeUndefined()
+    expect(turnedIn(form(...text('cmsy', 10, [0, 1, -1, 0, -1, 40], show(g('D', 600)))), blankInk).clipped).toBe(true)
     // no clip in force: never cut
     expect(turnedIn(up('cmsy', -50), o).clipped).toBeUndefined()
   })
