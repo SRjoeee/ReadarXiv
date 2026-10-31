@@ -16,7 +16,44 @@ const WS = new Uint8Array(256)
 for (const c of [0, 9, 10, 12, 13, 32]) WS[c] = 1
 const DL = new Uint8Array(256)
 for (const c of '()<>[]{}/%') DL[c.charCodeAt(0)] = 1
-const isNumTok = t => /^[+-]?(\d+\.?\d*|\.\d+)$/.test(t)
+/** the powers of ten a number of at most 15 digits divides by, each exact */
+const POW10 = Array.from({ length: 16 }, (_, k) => 10 ** k)
+/**
+ * The number a token is ([+-]? then digits with at most one point, a digit at least: what PDF.js reads as one), or undefined
+ * for any other token: its value read from its bytes, as Number reads its text. A token of at most 15 digits is an integer m
+ * below 2^53 over 10^k (k at most 15), both exact, and IEEE division rounds m / 10^k correctly, as Number's reading of the text
+ * is; a longer one is read by Number
+ */
+function numberAt(b, i, j) {
+  let k = i, neg = false
+  if (b[k] === 43 || b[k] === 45) { neg = b[k] === 45; k++ }
+  let m = 0, digits = 0, frac = 0, point = false
+  for (; k < j; k++) {
+    const c = b[k]
+    if (c >= 48 && c <= 57) { m = m * 10 + (c - 48); digits++; if (point) frac++ } else if (c === 46 && !point) point = true
+    else return undefined
+  }
+  if (digits === 0) return undefined
+  if (digits > 15) return Number(latin1(b.subarray(i, j)))
+  const v = frac ? m / POW10[frac] : m
+  return neg ? -v : v
+}
+/** the keywords a content stream is made of that are at most three bytes long (PDF 32000-1 Annex A), by their bytes packed (a
+ *  token holds no byte 0, white space), so that reading one makes no string */
+const SHORT = new Map()
+for (const t of ['b', 'B', 'b*', 'B*', 'BDC', 'BI', 'BMC', 'BT', 'BX', 'c', 'cm', 'CS', 'cs', 'd', 'd0', 'd1', 'Do', 'DP', 'EI', 'EMC', 'ET', 'EX', 'f', 'F', 'f*', 'G', 'g', 'gs', 'h', 'i', 'ID', 'j', 'J', 'K', 'k', 'l', 'm', 'M', 'MP', 'n', 'q', 'Q', 're', 'RG', 'rg', 'ri', 's', 'S', 'SC', 'sc', 'SCN', 'scn', 'sh', 'T*', 'Tc', 'Td', 'TD', 'Tf', 'Tj', 'TJ', 'TL', 'Tm', 'Tr', 'Ts', 'Tw', 'Tz', 'v', 'w', 'W', 'W*', 'y', "'", '"']) {
+  let key = 0
+  for (let x = t.length - 1; x >= 0; x--) key = key * 256 + t.charCodeAt(x)
+  SHORT.set(key, t)
+}
+/** a token's text: a short keyword's own string, any other short token's made from its bytes with no view of them */
+function wordAt(b, i, j) {
+  const len = j - i
+  if (len > 3) return latin1(b.subarray(i, j))
+  if (len === 0) return ''
+  const key = len === 1 ? b[i] : len === 2 ? b[i] + 256 * b[i + 1] : b[i] + 256 * b[i + 1] + 65536 * b[i + 2]
+  return SHORT.get(key) ?? (len === 1 ? String.fromCharCode(b[i]) : len === 2 ? String.fromCharCode(b[i], b[i + 1]) : String.fromCharCode(b[i], b[i + 1], b[i + 2]))
+}
 /** a hex digit's value by its byte, -1 for any other */
 const DIGIT = new Int8Array(256).fill(-1)
 for (let c = 0; c < 10; c++) DIGIT[48 + c] = c
@@ -124,7 +161,7 @@ export function lex(b, limit = Infinity, keep = null) {
     if (c === 47) {
       const j = tokenEnd(i + 1)
       take(COST.name + (j - i))
-      const raw = latin1(b.subarray(i + 1, j))
+      const raw = wordAt(b, i + 1, j)
       i = j
       if (start < 0) start = s0
       const v = { t: 'name', v: raw.includes('#') ? raw.replace(/#([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16))) : raw }
@@ -134,10 +171,15 @@ export function lex(b, limit = Infinity, keep = null) {
     if (c === 123 || c === 125) { i++; continue }
     const j = tokenEnd(i)
     if (j === i) { i++; continue }
-    // (a token too long for any operator or number is an unknown one: not read whole)
-    const t = j - i > TOKEN_MAX ? '?' : latin1(b.subarray(i, j))
+    // (a token too long for any operator or number is an unknown one: not read whole; a number read from its bytes, no string
+    // made of it)
+    let t = '?'
+    if (j - i <= TOKEN_MAX) {
+      const v = numberAt(b, i, j)
+      if (v !== undefined) { i = j; push(v, s0, COST.num); continue }
+      t = wordAt(b, i, j)
+    }
     i = j
-    if (t !== '?' && isNumTok(t)) { push(Number(t), s0, COST.num); continue }
     if (t === 'true' || t === 'false' || t === 'null') { push(t === 'true' ? true : t === 'false' ? false : null, s0, COST.atom); continue }
     if (marks.length) { take(COST.kw); marks.at(-1).items.push({ t: 'kw', v: t }); continue }
     if (t === 'BI') {
@@ -222,8 +264,10 @@ const CODE_MAX = 0xffff
  * alignPage, decode }.
  */
 export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MAX, heldMax = HELD_MAX, bytesMax = BYTES_MAX }) {
-  const { PDFDocument, PDFName, PDFRef, PDFArray, PDFDict, PDFRawStream, PDFNumber, PDFStream, decodePDFRawStream } = PL
-  const doc = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false, throwOnInvalidObject: false })
+  const { PDFDocument, PDFName, PDFRef, PDFArray, PDFDict, PDFRawStream, PDFNumber, PDFStream, decodePDFRawStream, ParseSpeeds } = PL
+  // (parsed in one go: the object layer's default, ParseSpeeds.Slow, waits for a timer every 100 objects, a yield that keeps a
+  // page's events going; the maker child that wraps our pages has none to keep, and only waited, 50 to 320 ms a paper on one core)
+  const doc = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false, throwOnInvalidObject: false, parseSpeed: ParseSpeeds.Fastest })
   const ctx = doc.context
   const encrypted = !!ctx.trailerInfo.Encrypt
   const look = v => (v instanceof PDFRef ? ctx.lookup(v) : v)

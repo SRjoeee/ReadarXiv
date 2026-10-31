@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Long papers, and papers whose figures are drawn from very many points, are ready in the PDF reader sooner: by five to seven seconds on the slowest we measured.
 - Fixed: in the PDF reader, the endnotes of papers that print their notes together at the end, rather than at the foot of each page, are translated. They had stayed in English. Some papers also open sooner: those whose template repeats each author's name in a footnote or reads it in a way of its own no longer need the paper typeset a second or third time before the first translated page.
 - Fixed: in the PDF reader, pointing at the sentence before a formula no longer also lights a small patch inside the formula. It happened where a wide accent, such as a hat, or a large bracket stood in the formula's bottom row.
 - Fixed: in the PDF reader, the letters under the highlight keep their own colour. Before, its green lay over them: black text looked grey, and light text on a dark page looked dim.

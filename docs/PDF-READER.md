@@ -2516,7 +2516,16 @@ own), each part carrying its pages' cell rules (`rules`).
   maker's columns' edges of the pages before a page and its own (rule 3). The maker is made a page at a time and the marked
   original read beside arXiv's (its page p + 1 before arXiv's page p), the left anchored by ranges as the unit marks' pages
   arrive, and each part cut as soon as everything it reads is final: the same parts as the whole path's under the same rules,
-  byte for byte (the six gate papers, verdicts on; the books' digests), told early (`stats.closed`). Against the whole run's
+  byte for byte (the six gate papers, verdicts on; the books' digests), told early (`stats.closed`). A part is tried after
+  every page, on K, F and the need bounds over the units in K for good and the left as they stand (`pipeline/frontier.mjs`),
+  made again only from what changed since the try before: the same units with the same rows and the same left give the last
+  try's K, F and NB, each a function of them alone; a unit's rows are asked of the maker once in each state (settled, then a
+  stub once told) and its entry's own pages are read once in each (`cut.mjs` entriesOf's cache), so that a try that changed
+  something makes again over the whole paper only the cheap rest (K's order, the shared lines' leads, F and NB). 2610.19159v1
+  tries 161 times for its 6 parts, 152 times over a K that had not changed, each made from scratch before: its maker took
+  16.4 s on one core, now 10.5 s, K made 9 times (2026-10-31; both ways on every try of 60 papers' hand-offs, 676 tries, the
+  same K, F and NB and the same parts byte for byte; `tests/pdf-reader/frontier-stream.test.ts` holds a stream's tries to K
+  made from scratch and counts the work). Against the whole run's
   rules the rules move none of the gate's 30 outputs and 10 far pushes of the 124-paper corpus (each judged right). The
   maintainer's reason is the reader's wait: the first part comes about three times sooner — 3.3 s at arXiv's page 12 against
   10.9 s on 2106.10165 (471 pages), 4.2 s at page 5 against 13.2 s on 2310.20360 (737 pages), 1.8 s against 4.5 s on
@@ -3368,7 +3377,13 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   paper): its new stream lexed again within the page's bounds, every BDC of ours named by its groups, none inside another and
   closed at its depth and state, none left open (the page's own marked content need not balance: our runs lie in none of it);
   its operators, ours taken out and each split show's chunks joined, the unwrapped page's (operators, operands, codes and
-  numbers in order); and the deflated bytes written inflated back to that stream. Of the paper: the section read back
+  numbers in order); and the deflated bytes written inflated back to that stream. The unwrapped page is read again for the
+  proof: each of its content streams decoded and lexed whole, every operator kept, under a budget of its own, so that what it
+  compares is read from the bytes by the proof itself. What it takes from the wrap is the list of those streams alone (`provePage`:
+  the wrap's walk's pieces, the page's `/Contents` as the object layer parsed them, which nothing changes: the wrap writes its
+  objects after the file), as a form the page's figures were wrapped in is read by the stream of the wrap's walk's container: a
+  second walk of the page found the same list, at the cost of every form on it walked again (2.7 s of 2610.21924v1's wrap on one
+  core, its 15,338 forms; 2026-10-31). Of the paper: the section read back
   (`deltaSection`: each entry at its `n g obj`, `/Prev` our startxref) and the wrapped document read again by the object layer
   (catalog, page dicts and resources ours but `/OCProperties`, `/Contents` and `/Properties`; each page's own `/Properties`
   entries kept as they were and ours beside them; every group listed and ON). A failed wrap is the paper's: `wrapFinal` gives `{ refused: 'wrap-parse' |
