@@ -33,7 +33,7 @@ export { handoverOf, layoutMarksOfPaper, markedOfPaper } from './layout/paper.mj
 export { compilerOfPdf, texLiveOfPdf } from './layout/guard.mjs'
 // our compile as the base page (BUNDLE 8): the checks the final pass and our pages pass, and arXiv's date the compiles take
 export { BOX_TOL, DRIVER_OUTPUT_MARK, DRIVER_OUTPUT_TRUNCATED, MARK_TOL, boxesCheck, boxesOfPdf, prefixDoc, creationEpochOf, driverLostInk, driverOutputGiven, driverOutputTruncated, finalCheck, hasMarkText, markTextOf, marksOfPdf, pageTextOf, pdfDateEpoch, textOfPdf } from './layout/base.mjs'
-export { LINK_TEXT_PIXELS, LITE_PDFJS, NO_IMAGE_PIXELS, liteWorkerSource } from './layout/pdf-lite.mjs'
+export { float32Outlines, LINK_TEXT_PIXELS, LITE_PDFJS, NO_IMAGE_PIXELS, liteWorkerSource } from './layout/pdf-lite.mjs'
 export { REMOVAL } from './pipeline/versions.mjs'
 // the rules near a table's cells, which a part carries (layer2.mjs cellBands)
 export { checkBoxes, pageRules } from './layout/cell-rules.mjs'

@@ -2241,6 +2241,15 @@ extension's compile client (`parked/extension-compile/`).
   the web sees it as a change of the surface it pins.
 - **Behaviour.** `tests/pdf-reader/engine-golden.test.ts` holds, as SHA-256 values, what the engine makes of inputs the
   repository wrote itself (units, wires, the files of every compile, the bundle, the layout file, the rows). A move or a refactor leaves every hash as it is.
+- **Runtime.** What the server's reads make does not depend on the Node they run on. PDF.js 6.3.289 keeps a glyph's outline,
+  which the ink reading takes a glyph's own extent from (`layout/ink.mjs` `outlineBox`), in a Float16Array where the runtime
+  has one (Node 24 on; Node 22 has none), and half precision moves a rounded coordinate of the layout (494.89 is 494.9 on
+  1706.03762v7). A host that makes the lite worker its PDF.js worker calls `float32Outlines(api, worker)` (`layout/pdf-lite.mjs`)
+  before its first document: both sides Float32, whatever the runtime (`tests/pdf-reader/pdf-lite-outlines.test.ts`). The
+  extension and the browser layer run stock PDF.js and read no glyph's outline for the layout. A failed allocation is one on
+  every Node: from Node 24 on, `Buffer.allocUnsafe` and what is made of it (`Buffer.concat`, zlib's output) throw a RangeError of
+  Node's own words, `Failed to allocate memory`, with the code ERR_MEMORY_ALLOCATION_FAILED, where Node 22 threw V8's `Array buffer
+  allocation failed`; `pipeline/memory.mjs` `isMemoryError` reads the code first.
 
 ### 19.4 The layer API, as the web defines it
 
@@ -3175,7 +3184,11 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   `deltaSection`), `/Prev` the original's startxref, the composed startxref the section's; the composed page graphs, read again
   by the object layer, ours on replaced pages (the page dict's other keys the original's) and the original's elsewhere (a
   pairwise graph comparison: cycles compare as the graphs they make); PDF.js opening the composed bytes with no message neither
-  source alone gives (its console captured, each document read in turn, the composed one first); the original's page count;
+  source alone gives (its console captured, each document read in turn, the composed one first; each message one of a source's,
+  one for one, but for the document's own id, which each document opened takes anew, the loading task's `docId`, and which
+  PDF.js writes into the name of an object it shares across the document's pages, `g_<id>_`: a Type 3 glyph's image, an image
+  on several pages, a font. 2610.31506v1's Type 3 glyph image gave one warning in all three documents, under three ids, and
+  its delta, 0.25 MB against a 6.58 MB base, was refused until 2026-10-31); the original's page count;
   every page's box (within 0.01), rotation and user unit, and its text items exactly, every field of every item (`page-text.mjs`
   `textRecordOf`: one SHA-256 of their exact values a page; before 2026-10-24 within 0.01 — the pack's composed pages are ours
   item for item, 290 pages and 97,702 items, 106,763 wrapped; a string by its UTF-16 code units, so that a lone surrogate is never

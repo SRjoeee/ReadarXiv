@@ -69,7 +69,20 @@ describe('isMemoryError (the web\'s truth table)', () => {
     expect(real).toBeInstanceOf(RangeError)
     expect(isMemoryError(real)).toBe(true)
     expect(isMemoryError(pdfjsWrapped(real as Error))).toBe(true)
-    expect(isMemoryError(Object.assign(new Error('Failed to allocate memory'), { code: 'ERR_MEMORY_ALLOCATION_FAILED' }))).toBe(true)
+    const node22 = Object.assign(new Error('Failed to allocate memory'), { code: 'ERR_MEMORY_ALLOCATION_FAILED' })
+    expect(isMemoryError(node22)).toBe(true)
+    // (Node 22's is an Error, so PDF.js's wrapping of it says `Error: Failed to allocate memory`: CodeRabbit on #531)
+    expect(isMemoryError(pdfjsWrapped(node22))).toBe(true)
+  })
+
+  it('Node 24 on: Buffer.allocUnsafe\'s RangeError of Node\'s own words and code, and PDF.js\'s wrapping of it, are a failed allocation', () => {
+    // (as Node 26.13 throws it under RLIMIT_DATA: `RangeError: Failed to allocate memory`, `code: 'ERR_MEMORY_ALLOCATION_FAILED'`)
+    const node = Object.assign(new RangeError('Failed to allocate memory'), { code: 'ERR_MEMORY_ALLOCATION_FAILED' })
+    expect(isMemoryError(node)).toBe(true)
+    expect(isMemoryError(pdfjsWrapped(node))).toBe(true)
+    // (its words without its code, or wrapped from another error, are none)
+    expect(isMemoryError(new RangeError('Failed to allocate memory'))).toBe(false)
+    expect(isMemoryError(Object.assign(new Error('Failed to allocate memory'), { name: 'UnknownErrorException', details: 'FormatError: Failed to allocate memory' }))).toBe(false)
   })
 
   it('nothing else is: a stack overflow, a length no array may have, the words without V8\'s error, PDF.js\'s other failures', () => {

@@ -22,9 +22,10 @@
 // proveDelta: the structural proof the box runs before a head names a delta (the contract's §14.2), with the engine's PDF.js:
 // the delta's section exact (deltaSection: every entry at its `n g obj`, /Prev the original's startxref, startxref at the
 // section), the composed page graphs canonically ours on replaced pages and the original's elsewhere (a second, independent
-// parse), PDF.js opening the composed bytes with no message neither source gives alone, the page count the original's, every
-// page box and every page's text items (layout/page-text.mjs: exactly, every field of every item) ours on replaced pages and the
-// original's elsewhere. The two sources' texts are the host's own readings where it gives them (`readers`: documents the proof
+// parse), PDF.js opening the composed bytes with no message neither source gives alone (a message read with its document's own
+// id set aside, where PDF.js writes it into an object's name: each document opened takes the process's next), the page count
+// the original's, every page box and every page's text items (layout/page-text.mjs: exactly, every field of every item) ours
+// on replaced pages and the original's elsewhere. The two sources' texts are the host's own readings where it gives them (`readers`: documents the proof
 // opens of its own bytes and hands to the host, which reads them and keeps them for the page pass, so that each is read once),
 // else read here; the composed document is always read here. No operator list and no pixel: those are the lab's gate.
 //
@@ -630,8 +631,9 @@ const RECOVERY = /Indexing all PDF objects|XRef|xref|startxref|trailer/
  * (delta-wire.mjs deltaSection) and the composed document's startxref the section's; (f) the composed page graphs, read by
  * the object layer, canonically ours on replaced pages (the page dict's other keys the original's) and the original's elsewhere;
  * (a, d, e) PDF.js opens the composed bytes with no message that neither source alone gives (its console captured, each
- * document read in turn), the original's page count, every page's box and text items (layout/page-text.mjs textRecordDiffers:
- * the box within 0.01, the items exactly) ours on replaced pages and the original's elsewhere. `readers` { orig?, ours? }: the
+ * document read in turn; each message one of a source's, one for one, a document's own id set aside where PDF.js writes it into
+ * the name of an object it shares across pages, `g_<id>_`), the original's page count, every page's box and text items
+ * (layout/page-text.mjs textRecordDiffers: the box within 0.01, the items exactly) ours on replaced pages and the original's elsewhere. `readers` { orig?, ours? }: the
  * host's own readings of arXiv's PDF and of our final pass, each { options, own?, read(doc) } in place of the proof's own reading
  * of that document: in the same turn and under the same capture of the console, the proof opens the document itself, of a copy of
  * its own bytes (ours of the bytes themselves where `own`), at PDF.js's verbosity 1, with the reader's options over
@@ -731,6 +733,15 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
   // reading let go before a reader's document, which the host keeps, is opened); then arXiv's PDF and ours, by the host's readers
   // where it gives them, else here
   const said = { orig: new Set(), ours: new Set(), composed: new Set() }
+  /** each document's own id (its loading task's `docId`, `d<n>`, the next of the process's at each opening), which PDF.js writes
+   *  into the names of the objects it shares across a document's pages (`g_<id>_`: a Type 3 glyph's image, an image used on
+   *  several pages, a font) and so into its messages of them; null where the opening gives none */
+  const ids = { orig: null, ours: null, composed: null }
+  const idOf = (tag, task) => { ids[tag] = typeof task?.docId === 'string' && /^d\d+$/.test(task.docId) ? task.docId : null }
+  /** a message as its document gave it, but for that document's own id where PDF.js writes it into an object's name: three
+   *  documents saying one thing of one object say it under three ids (2610.31506v1: "Unable to decode image
+   *  g_d1_type3_img_p2_1", the same image of the same glyph, read in the composed document, in arXiv's PDF and in ours) */
+  const heardAs = (tag, m) => (ids[tag] === null ? m : m.replaceAll(`g_${ids[tag]}_`, 'g_<document>_'))
   /** `fn` with the console's messages kept as `tag`'s (the console restored on every path: a read may throw before its task exists,
    *  the task reject, its destroy throw) */
   const heard = async (tag, fn) => {
@@ -753,6 +764,7 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
     let task = null, failed = false
     try {
       task = getDocument({ ...documentOptions, data: bytes, verbosity: 1 })
+      idOf(tag, task)
       const doc = await task.promise
       const pages = []
       for (let p = 1; p <= doc.numPages; p++) {
@@ -776,6 +788,7 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
     let task = null, doc
     try {
       task = getDocument({ ...documentOptions, ...(reader.options ?? {}), data: bytes, verbosity: 1 })
+      idOf(tag, task)
       doc = await task.promise
     } catch (e) {
       await destroyed(task, true)
@@ -849,7 +862,9 @@ export async function proveDelta(origBytes, deltaBytes, finalBytes, { PL, getDoc
   // cross-reference's, and its own message would hide the composed document's)
   const recovered = [...said.orig].find(m => RECOVERY.test(m))
   if (recovered) return no(`PDF.js recovers the original's cross-reference alone: ${recovered}`, 'delta-xref')
-  const novel = [...said.composed].filter(m => !said.orig.has(m) && !said.ours.has(m))
+  // (each message of the composed document's one of arXiv's PDF's or ours, one for one: only a document's own id is set aside)
+  const sources = new Set([...[...said.orig].map(m => heardAs('orig', m)), ...[...said.ours].map(m => heardAs('ours', m))])
+  const novel = [...said.composed].filter(m => !sources.has(heardAs('composed', m)))
   if (novel.length) return no(`PDF.js says of the composed document alone: ${novel[0]}`)
   if (comp.length !== orig.length) return no(`PDF.js reads ${comp.length} pages of the composed document, ${orig.length} of arXiv's`)
   for (let p = 1; p <= comp.length; p++) {

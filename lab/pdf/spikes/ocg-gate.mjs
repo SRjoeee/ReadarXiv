@@ -23,10 +23,10 @@ import { fileURLToPath } from 'node:url'
 import { deflateSync, inflateSync } from 'node:zlib'
 import * as PL from '@cantoo/pdf-lib'
 import { chromium } from 'playwright'
-import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import { FeatureTest, getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { deltaOf, proveDelta } from '../../../src/pdf-reader/engine/layout/delta.mjs'
 import { pageInk } from '../../../src/pdf-reader/engine/layout/ink.mjs'
-import { liteWorkerSource, NO_IMAGE_PIXELS } from '../../../src/pdf-reader/engine/layout/pdf-lite.mjs'
+import { float32Outlines, liteWorkerSource, NO_IMAGE_PIXELS } from '../../../src/pdf-reader/engine/layout/pdf-lite.mjs'
 import { wrapFinal } from '../../../src/pdf-reader/engine/layout/wrap.mjs'
 import { openPaper } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
@@ -39,8 +39,10 @@ const PAIRS = new Map(process.argv.filter(a => a.startsWith('--pair=')).map(a =>
 const IDS = process.argv.slice(2).filter(a => !a.startsWith('--'))
 if (!IDS.length) { console.error('usage: ocg-gate.mjs [options] <id>…'); process.exit(2) }
 const PDFJS = dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'))
-// (the box's PDF.js: its worker lite, no image's pixels decoded, as the container reads our pass)
-globalThis.pdfjsWorker = await import(`data:text/javascript;base64,${Buffer.from(liteWorkerSource(readFileSync(join(PDFJS, 'legacy/build/pdf.worker.mjs'), 'utf8'), { version: JSON.parse(readFileSync(join(PDFJS, 'package.json'), 'utf8')).version })).toString('base64')}`)
+// (the box's PDF.js: its worker lite, no image's pixels decoded, its glyph outlines in Float32, as the container reads our pass)
+const worker = await import(`data:text/javascript;base64,${Buffer.from(liteWorkerSource(readFileSync(join(PDFJS, 'legacy/build/pdf.worker.mjs'), 'utf8'), { version: JSON.parse(readFileSync(join(PDFJS, 'package.json'), 'utf8')).version })).toString('base64')}`)
+float32Outlines({ FeatureTest }, worker)
+globalThis.pdfjsWorker = worker
 const OPTIONS = { cMapUrl: join(PDFJS, 'cmaps/'), cMapPacked: true, standardFontDataUrl: join(PDFJS, 'standard_fonts/'), verbosity: 0, useSystemFonts: false, maxImageSize: NO_IMAGE_PIXELS }
 const deflate = b => deflateSync(b, { level: 6 }), inflate = (b, l) => inflateSync(b, { maxOutputLength: l + 1 })
 

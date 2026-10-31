@@ -19,9 +19,13 @@ if (!engine || !pdf || !out) throw new Error('usage: draws.mjs <engine worktree>
 const require = createRequire(import.meta.url)
 const E = f => join(engine, 'src/pdf-reader/engine', f)
 const version = JSON.parse(readFileSync(require.resolve('pdfjs-dist/package.json'), 'utf8')).version
-const { liteWorkerSource, NO_IMAGE_PIXELS, LINK_TEXT_PIXELS } = await import(E('layout/pdf-lite.mjs'))
-globalThis.pdfjsWorker = await import(`data:text/javascript;base64,${Buffer.from(liteWorkerSource(readFileSync(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs'), 'utf8'), { version })).toString('base64')}`)
-const { getDocument, OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+const { liteWorkerSource, NO_IMAGE_PIXELS, LINK_TEXT_PIXELS, float32Outlines } = await import(E('layout/pdf-lite.mjs'))
+const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+const worker = await import(`data:text/javascript;base64,${Buffer.from(liteWorkerSource(readFileSync(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs'), 'utf8'), { version })).toString('base64')}`)
+// (the glyph outlines in Float32 on both sides, as the container makes them, where the measured engine has the choice: pdf-lite.mjs)
+float32Outlines?.(pdfjs, worker)
+globalThis.pdfjsWorker = worker
+const { getDocument, OPS } = pdfjs
 const { drawDataOf } = await import(E('pipeline/draw-data.mjs'))
 const { BOXES_PAGE, GLYPHS_PAGE, pageInk } = await import(E('layout/ink.mjs'))
 const NM = dirname(require.resolve('pdfjs-dist/package.json'))

@@ -1,17 +1,13 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs'
-import { createRequire } from 'node:module'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { LINK_TEXT_PIXELS, liteWorkerSource, NO_IMAGE_PIXELS } from '@/pdf-reader/engine/layout/pdf-lite.mjs'
+import { LINK_TEXT_PIXELS, NO_IMAGE_PIXELS } from '@/pdf-reader/engine/layout/pdf-lite.mjs'
 import { textRecordDiffers, textRecordOf, textItemsBytes } from '@/pdf-reader/engine/layout/page-text.mjs'
+import { installLiteWorker } from './helpers/lite-pdfjs'
 
 // the box's worker, made lite (pdf-lite.mjs: no image's pixels decoded), before this file's first document is opened
-{
-  const require = createRequire(import.meta.url)
-  const version = (JSON.parse(readFileSync(require.resolve('pdfjs-dist/package.json'), 'utf8')) as { version: string }).version
-  ;(globalThis as { pdfjsWorker?: unknown }).pdfjsWorker = await import(`data:text/javascript;base64,${Buffer.from(liteWorkerSource(readFileSync(require.resolve('pdfjs-dist/legacy/build/pdf.worker.mjs'), 'utf8'), { version })).toString('base64')}`)
-}
+await installLiteWorker()
 
 // A page's text as the delta's proof compares it (layout/page-text.mjs): the page's box and one digest of its text items' exact
 // values, so that a reading made once (readArxivText's `pageTexts`) stands in for the proof's own of the same document. Any bit of
