@@ -22,7 +22,7 @@
 // The compile and the opening are the caller's (a native TeX Live and PDF.js in Node, the TeX page and a worker in a
 // browser), so that this imports neither PDF.js nor a `node:*` module.
 import { jobName, lastTexLog, latin1, latin1Bytes, normalizePath, texText } from '../source/latex-front.mjs'
-import { DRAFT_OPTION, listsMissing, markedPreamble, notFound, openPaper, originalFiles, probeFiles, ranThrough, stoppedShort } from '../pipeline/live.mjs'
+import { DRAFT_OPTION, listsMissing, markedPreamble, NO_DRIVER_GROUP, notFound, openPaper, originalFiles, probeFiles, ranThrough, stoppedShort } from '../pipeline/live.mjs'
 import { completeLog } from '../pipeline/typeset/tex.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
@@ -307,12 +307,15 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
   return 'pdf' in made && wantFinal ? { ...made, base: await finalPass(accepted) } : made
 
   /**
-   * The final pass (design §3.1): the files of the compile that stands with graphicx's draft option made an empty line (no line
-   * moves), over what that compile wrote — its aux, bibliography, lists and index, the job's own outputs aside — and in place of
-   * none of its own files, one pass of the paper's compiler with no bibliography step, on the marked original's day. Within the
-   * compile budget, as the guard's compiles are (a compile as long as the longest so far, and a fifth). The marks are read
-   * from the draft; this pass is the base page, its marks where the draft has them (base.mjs finalCheck, the host's to ask):
-   * { pdf, log }, or { refused: 'final', why }
+   * The final pass (design §3.1): the files of the compile that stands with graphicx's draft option's line made NO_DRIVER_GROUP's
+   * (one line for one: no line moves), over what that compile wrote — its aux, bibliography, lists and index, the job's own
+   * outputs aside — and in place of none of its own files, one pass of the paper's compiler with no bibliography step, on the
+   * marked original's day. Within the compile budget, as the guard's compiles are (a compile as long as the longest so far, and
+   * a fifth). The marks are read from the draft; this pass is the base page, its marks where the draft has them (base.mjs
+   * finalCheck, the host's to ask): { pdf, log }, or { refused: 'final', why }. The line was empty before 2026-10-31; it now
+   * includes a PDF figure as arXiv's TeX Live 2025, the state of 2025-08-03, does, with no transparency group of the driver's
+   * (graphics-def 8d691483be came after it): our figure forms are then arXiv's, which the delta copies, and drawn as arXiv's
+   * are. The marked compile is left as it is, so that its marks and the units read from it are what they were
    */
   async function finalPass(e) {
     const t0 = performance.now()
@@ -327,7 +330,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     if (!text.startsWith(`${DRAFT_OPTION}\n`)) return no('the marked original\'s main file does not begin with graphicx\'s draft option')
     const outputs = outputsOf(job), over = new Map()
     for (const [p, b] of [...req.overrides, ...e.c.files]) if (e.files.has(p) || !outputs.test(p)) over.set(p, e.files.get(p) ?? b)
-    over.set(main, latin1Bytes(`\n${text.slice(DRAFT_OPTION.length + 1)}`))
+    over.set(main, latin1Bytes(`${NO_DRIVER_GROUP}\n${text.slice(DRAFT_OPTION.length + 1)}`))
     let c = null
     try { c = await asked({ main, engine, rerun: false, bibtex: false, overrides: over }) } catch (x) {
       if (isMemoryError(x)) throw x
