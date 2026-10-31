@@ -3,7 +3,7 @@
 // bounds and by its status's shape, only the paper's id and version leaving the machine
 import { describe, expect, it, vi } from 'vitest'
 import { CATALOG_CAP, CTAG5, writeCatalog } from '@/pdf-reader/engine/layer-proto/format.mjs'
-import { askPrepare, basePath, bodyWithin, fetchObject, fetchOriginal, LayerUnreachable, layerPath, lookLayer, OBJECT_MARGIN, paperSegment, REQUEST_MS, RETRY_MS, sha256Of } from '@/pdf-reader/session/server'
+import { askPrepare, basePath, bodyWithin, deltaPath, fetchObject, fetchOriginal, LayerUnreachable, layerPath, lookLayer, OBJECT_MARGIN, paperSegment, REQUEST_MS, RETRY_MS, sha256Of } from '@/pdf-reader/session/server'
 import { made, N, PAPER } from './helpers/format-paper'
 
 const API = 'https://readarxiv.com'
@@ -57,6 +57,18 @@ describe('B2: only the paper\'s id and version leave the machine', () => {
     expect(basePath(API, { id: 'hep-th/9711200', version: 2 }, sha)).toBe(`${API}/api/v1/base/hep-th_9711200v2/${sha}`)
     for (const bad of ['', sha.slice(1), `${sha}0`, sha.toUpperCase(), '../x', `${sha.slice(2)}/x`]) expect(() => basePath(API, PAPER, bad), bad).toThrow(TypeError)
     expect(() => basePath(API, { id: '../x', version: 1 }, sha)).toThrow(TypeError)
+  })
+
+  it('our base as a delta over arXiv\'s PDF: the object route with the delta\'s own suffix (the web\'s deltaPath, the engine\'s deltaKey), held to its ref like any object', async () => {
+    const sha = 'e'.repeat(64)
+    const { f, calls } = recording(url => (url.endsWith('.delta') ? new Response(new Uint8Array(10)) : json(404, { why: 'not-prepared' })))
+    expect(deltaPath(API, PAPER, sha)).toBe(`${API}/api/v1/layer/${PAPER.id}v${PAPER.version}/${CTAG5}/o/${sha}.delta`)
+    expect((await fetchObject(API, PAPER, { sha256: sha, bytes: 10 }, { fetch: f, delta: true })).bytes.length).toBe(10)
+    expect(calls.map(c => c.url)).toEqual([deltaPath(API, PAPER, sha)])
+    // (the bare digest is no delta at the web's route: a 404 `not-prepared`, measured on readarxiv.com 2026-10-30)
+    await expect(fetchObject(API, PAPER, { sha256: sha, bytes: 10 }, { fetch: f })).rejects.toThrow(/404/)
+    for (const bad of ['../evil', 'A'.repeat(64)]) await expect(fetchObject(API, PAPER, { sha256: bad, bytes: 10 }, { fetch: f, delta: true })).rejects.toThrow(TypeError)
+    expect(calls).toHaveLength(2)
   })
 
   it('the catalog is asked by the engine\'s own CTAG, the contract of BUNDLE 8: no request names the CTAG of a bundle of 7', () => {

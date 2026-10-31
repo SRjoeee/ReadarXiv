@@ -1398,10 +1398,10 @@ try {
     check(`the tab's PDF the one the check ran over: the left stays the tab's own, no whole copy of the original fetched, the layer's document read ${DELTA ? 'from the original by ranges, the delta after it (no /api/v1/base)' : 'from our base page by ranges'}`, sameOk, `${JSON.stringify(sameRun && { ours: sameRun.ours, basis: sameRun.basis })}, base ${sameReads.base.length} reads, the original ${sameReads.copy.length} (${sameReads.whole.length} whole, ${sameReads.ranged.length} by range)`)
     // (the same assertion on the other PDF fails: ours, and a whole copy fetched)
     control('the same assertion, on the PDF that is not the head\'s orig', { ok: ran?.ours === false && reads.whole.length === 0, detail: `${JSON.stringify(ran && { ours: ran.ours })}, the original ${reads.whole.length} fetched whole` })
-    // the delta object fetched by its digest at the layer's object route, once a visit, never as a base page
+    // the delta object fetched by its digest and its suffix at the layer's object route (the web's deltaPath), once a visit, never as a base page
     if (DELTA) {
-      const asked = api.requests.filter(r => r.path.endsWith(`/o/${sampleCut.delta.sha256}`))
-      check('the delta is a bundle object: fetched by its digest at the layer\'s object route, once for each visit that read it (this machine\'s store keeps it), as bytes', asked.length >= 1 && asked.every(r => r.answered === 200), `${asked.length} asks`)
+      const asked = api.requests.filter(r => r.path.includes(`/o/${sampleCut.delta.sha256}`))
+      check('the delta is a bundle object: fetched by its digest and `.delta` at the layer\'s object route, once for each visit that read it (this machine\'s store keeps it), as bytes', asked.length >= 1 && asked.every(r => r.path.endsWith('.delta') && r.answered === 200), `${asked.length} asks: ${[...new Set(asked.map(r => `${r.path.slice(-12)} ${r.answered}`))].join(', ')}`)
     }
     await same.close()
   }
