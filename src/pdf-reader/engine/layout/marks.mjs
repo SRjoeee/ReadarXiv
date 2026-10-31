@@ -1102,20 +1102,24 @@ const alignCode = (lo, ls, ro, rs, po, ps) => {
  * last pass's: lastTexLog): [[unit, code]], ids rising, the code ALIGN_CODES'. A unit's last line counts (a caption measured
  * in a box and then set as a paragraph: the paragraph's). One TeX set in an \hbox (mode h: a caption \@makecaption centres
  * on one line, \centerline, a table's cell) tells nothing of its alignment, and has no entry; nor has one with no line. A
- * line not of the form is passed over: a log cut short or a template that redefines what the marks sit in gives fewer
- * entries, never a refusal
+ * unit whose paragraphs TeX set in two alignments has none: its text set again elsewhere, from a file TeX wrote (an author's
+ * name in an e-mail footnote, layout/guard.mjs copiesOutOfPlace), and the log does not say which paragraph is the unit's own,
+ * as readColours takes a piece set in two colours. A line not of the form is passed over: a log cut short or a template that
+ * redefines what the marks sit in gives fewer entries, never a refusal
  */
 export function readAlign(log) {
-  const last = new Map()
+  const last = new Map(), told = new Map()
   // (a line TeX wrapped at its 79 characters, max_print_line, joined back: the message starts a line of its own)
   const text = lastTexLog(typeof log === 'string' ? log : '').replace(/^(AXT-ALIGN .{69})\n/gm, '$1')
   // (an order 0 to 3 in pdfTeX and XeTeX, normal to filll; 0 to 4 in LuaTeX, whose fi is 1 and fil 2)
   for (const m of text.matchAll(/^AXT-ALIGN h?(\d{1,9}) ([phv]) ([0-4]) (-?[\d.]+)pt ([0-4]) (-?[\d.]+)pt ([0-4]) (-?[\d.]+)pt$/gm)) {
     const v = [m[3], m[4], m[5], m[6], m[7], m[8]].map(Number)
     if (!v.every(Number.isFinite)) continue
-    last.set(Number(m[1]), m[2] === 'h' ? null : alignCode(...v))
+    const id = Number(m[1]), code = m[2] === 'h' ? null : alignCode(...v)
+    last.set(id, code)
+    if (code !== null) told.set(id, told.has(id) && told.get(id) !== code ? false : code)
   }
-  return [...last].filter(([, c]) => c !== null).sort((a, b) => a[0] - b[0])
+  return [...last].filter(([id, c]) => c !== null && told.get(id) !== false).sort((a, b) => a[0] - b[0])
 }
 
 /** a colour piece's name in the log, `c<unit>.<k>` */

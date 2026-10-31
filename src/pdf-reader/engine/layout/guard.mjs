@@ -171,6 +171,24 @@ export function marksOutOfPlace(text) {
 /** a mark's unit, by the index its argument begins with: a unit's own (`216s`, `2e`, `14`), a cell's (`t…`), a heading's
  *  (`h…`), a placeholder's or a footnote call's (`p…`, `n…`), a colour piece's (`c…`); none for a frame's (`g…`) */
 const unitOfMark = arg => { const m = /^(?:[pnht]?(\d+)|c(\d+)\.)/.exec(arg); return m ? Number(m[1] ?? m[2]) : null }
+/** a mark of ours with its argument as TeX's log shows a line of input (MARK_CS) */
+const MARK_IN_LINE = new RegExp(String.raw`\\(?:${[...MARK_CS].join('|')})\s*\{([^{}\s]*)\}`, 'g')
+/**
+ * The units the mark probe's errors stand at where TeX read the marked preamble (live.mjs markedPreamble, probeFiles `preamble`):
+ * an error TeX raised on a line of input of the probe's main file from `first` to `last` (the preamble's) whose text, as the log
+ * shows it around the error's place, holds a mark of ours names that mark's unit (unitOfMark), ids below `count`. TeX reads a
+ * class's command in the preamble as the class defines it, and one that reads its argument as data raises its errors there, at
+ * our marks: 2610.37668v1's myarxiv `\author` takes a name's initials, the first token of each word, through a `\csname`, and our
+ * start mark is that token ("Missing \endcsname inserted", the page count one more than arXiv's)
+ */
+export function preambleUnits(log, count, { first, last }) {
+  const out = new Set()
+  for (const e of texErrors(log ?? '')) {
+    if (e.line < first || e.line > last) continue
+    for (const m of `${e.before}\n${e.after}`.matchAll(MARK_IN_LINE)) { const u = unitOfMark(m[1]); if (u !== null && u < count) out.add(u) }
+  }
+  return out
+}
 /** the files TeX writes of a pass and reads back, which a mark of ours may stand in: the aux, the lists, hyperref's outlines,
  *  the index's and the glossaries' entries, the slides' navigation, pdfx's metadata */
 const AUX_FILE = /\.(?:aux|toc|lof|lot|loa|lol|lop|loe|thm|out|brf|nav|snm|vrb|idx|glo|acn|nlo|xmpdata)$/i
@@ -191,6 +209,23 @@ export function auxUnits(c, count, job) {
 
 /** a log as TeX wrote it, its lines of 79 characters joined again (live.mjs unwrapped) */
 const unwrapped = log => log.replace(/^(.{79})\n/gm, '$1')
+/** whether a compile's last pass wrote its PDF itself (pdfTeX's or LuaTeX's "Output written on <job>.pdf"): its log then names
+ *  every destination of ours TeX set twice, its own warning at the second (marks.mjs duplicatesIn). XeTeX's xdvipdfmx and the DVI
+ *  driver latexmk runs tell theirs to no log the host returns */
+export const tellsTwice = log => /^Output written on .*\.pdf \(\d+ pages?\b/m.test(unwrapped(lastTexLog(log ?? '')))
+/**
+ * The units a compile's marks out of place in a file it wrote name (auxUnits), judged by what TeX did with each: out of place,
+ * unless the compile is otherwise the paper's (`clean`: it ran through to arXiv's pages, no mark printed on a page, no TeX error)
+ * and its log names every destination set twice (tellsTwice). TeX then read each such mark back where the paper's own TeX sets
+ * its unit's text, once (an endnote package prints each note from the aux: 2609.36054v2's enotez, `\enotez@note{…}{text}`), or
+ * never (a class's macro that discards it: 2610.21201v1's `\jmlr@author`), and the unit is located there; or it set it twice (a
+ * class that sets an author's name again in the e-mail footnote: elsarticle's `\emailauthor`, 2610.21084v1), and the reading drops
+ * every destination the log names (marks.mjs readMarked `dropped`), the unit the original's as an unmarked one is. A mark read
+ * back where no text is set — in a `\csname`, a number, a key — raises an error, and every unit stays out of place as before
+ * (2610.21201v1's etoc depth tags); a compile whose driver wrote the PDF cannot tell, and stays so too. A list entry's text and
+ * nameref's title are never out of place (marksOutOfPlace)
+ */
+export const copiesOutOfPlace = (units, { clean, log }) => (clean && tellsTwice(log) ? new Set() : units)
 /** the TeX errors of a compile's last pass: its `! ` lines */
 export const errorCount = log => (lastTexLog(log ?? '').match(/^! /gm) ?? []).length
 /** the pages TeX says the last pass wrote ("Output written on main.pdf (36 pages, …)", the .xdv's under XeTeX), else null */

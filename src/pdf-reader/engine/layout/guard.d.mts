@@ -14,6 +14,13 @@ export declare function unbalancedUnits(paper: Paper, files: Map<string, Uint8Ar
 export declare function marksOutOfPlace(text: string): string[]
 /** the units those marks name, in the files a compile returned (`files`), else its main aux (`aux`), ids below `count` */
 export declare function auxUnits(c: Compiled | null | undefined, count: number, job: string): Set<number>
+/** the units the mark probe's errors stand at where TeX read the marked preamble: an error on a line from `first` to `last` whose
+ *  text holds a mark of ours names its unit, ids below `count` */
+export declare function preambleUnits(log: string | null | undefined, count: number, range: { first: number; last: number }): Set<number>
+/** whether a compile's last pass wrote its PDF itself, so that its log names every destination of ours set twice */
+export declare const tellsTwice: (log: string | null | undefined) => boolean
+/** auxUnits' units judged by what TeX did with each: none where the compile is otherwise the paper's and its log tells twice */
+export declare const copiesOutOfPlace: (units: Set<number>, o: { clean: boolean; log: string | null | undefined }) => Set<number>
 /** the TeX errors of a compile's last pass */
 export declare const errorCount: (log: string | null | undefined) => number
 /** the pages the last pass wrote, as TeX says, else null */

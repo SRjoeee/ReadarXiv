@@ -56,6 +56,14 @@ describe('readAlign: the alignment TeX set a unit\'s paragraph by', () => {
     expect(readAlign('AXT-ALIGN 4 p 1 1.0pt 1 1.0pt 1 1.0pt\n')).toEqual([[4, 'j']])
   })
 
+  it('a unit TeX set as two paragraphs of two alignments tells none: its text set again from a file it wrote (2610.21084v1)', () => {
+    // (an author's name centred in the title block and set again flush left in the e-mail footnote: which is the unit's own the
+    // log does not say)
+    expect(readAlign('AXT-ALIGN 1 p 1 1.0pt 1 1.0pt 0 0.0pt\nAXT-ALIGN 2 p 1 1.0pt 1 1.0pt 0 0.0pt\nAXT-ALIGN 1 p 0 0.0pt 1 1.0pt 1 1.0pt\n')).toEqual([[2, 'c']])
+    // (set twice in one alignment: that one, whichever was the unit's; a box between them tells nothing either way)
+    expect(readAlign('AXT-ALIGN 1 p 0 0.0pt 1 1.0pt 1 1.0pt\nAXT-ALIGN 1 h 0 0.0pt 0 0.0pt 1 1.0pt\nAXT-ALIGN 1 p 0 0.0pt 1 1.0pt 1 1.0pt\n')).toEqual([[1, 'l']])
+  })
+
   it('reads the last pass alone, and passes over a line not of its form: a log cut short or a template\'s, never a refusal', () => {
     const passes = `$ pdflatex main\nLOG:\nAXT-ALIGN 1 p 1 1.0pt 1 1.0pt 0 0.0pt\n==\nSTDOUT:\n$ pdflatex main\nLOG:\nAXT-ALIGN 1 p 0 0.0pt 0 0.0pt 1 1.0pt\n==\nSTDOUT:\n`
     expect(readAlign(passes)).toEqual([[1, 'j']])

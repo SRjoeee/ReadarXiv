@@ -307,8 +307,21 @@
 //     that our wrapped page and its ledger are as they were. A figure unit's id moves past them (its translation found again by
 //     its source, cache.mjs seedFrom). Over the 54 papers of the release sweep: 1,920 blocks of 5,871 lines on 49 papers, the
 //     bundle 0.6 % larger (a paper's median 0.22 %, 2610.19159v1's agent logs 3.9 %); arXiv's lines no block lit 5,399 -> 1,357. Every other unit, its pieces and its wire
-//     are 41's: a copy of 41 carries every unit (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '42'
+//     are 41's: a copy of 41 carries every unit (live.mjs PIPELINE_CARRIES); 43 (the marks at their source, 2026-10-31: every
+//     compile the layout guard added on the new papers of 2026-10-27 to 30 came from our marks): a mark of ours a file TeX wrote
+//     holds is judged by what TeX did with it (layout/guard.mjs copiesOutOfPlace: where the compile is otherwise the paper's and TeX
+//     wrote the PDF itself, whose log names every destination set twice, it was set once where its unit's text is, twice and
+//     dropped by the reading, or never), so that enotez's endnotes printed from the aux (2609.36054v2's 16 notes, English before),
+//     jmlr's discarded \jmlr@author and elsarticle's \emailauthor (2610.21201v1, 2610.21084v1, 2610.20848v1) cost no compile
+//     more; and the mark probe reads the main file's preamble as the marked original writes it (live.mjs markedPreamble), the
+//     units TeX's errors stand at there left unmarked before the marked compile (guard.mjs preambleUnits: 2610.37668v1's myarxiv
+//     \author, a name's initials through a \csname, two compiles more before); and a unit whose paragraphs TeX set in two
+//     alignments tells none (marks.mjs readAlign: a copy's, or acmart's title and authors set again in its reference block,
+//     2608.25210v2's and 2610.22065v1's flags, no line moved). Over 72 papers the other 65's guard, layout file and base page are
+//     42's byte for byte, the gate pack's 7 among them. Raised so that the bundle of a paper whose marked original now stands at
+//     once is made again under a new key (VTAG). Every unit, its pieces and its wire are 42's: a copy of 42 carries every unit
+//     (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '43'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

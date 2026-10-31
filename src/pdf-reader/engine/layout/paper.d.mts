@@ -62,9 +62,10 @@ export interface OwnVerdict { ran: boolean; short: boolean; limit: string | null
 
 /** the layout guard's record (layout/guard.mjs, markedOfPaper), where it did anything: the compiles it asked past the marked
  *  original's (`extra`, GUARD_EXTRA at most, the unmarked original's among them), the units left the paper's own, whether
- *  the babel names stayed marked, the checks the marked original failed ('braces' before its compile; 'ran', 'pages', 'aux',
+ *  the babel names stayed marked, the checks the marked original failed ('preamble' and 'braces' before its compile: TeX's errors
+ *  at our marks where the mark probe read the marked preamble, a unit's writing against its braces; 'ran', 'pages', 'aux', 'text',
  *  'errors' after), and why a check was left as it stood (`judged`) */
-export interface GuardRecord { extra: number; unmarked: number[]; names: boolean; failed: ('braces' | 'ran' | 'pages' | 'aux' | 'text' | 'errors')[]; judged?: string }
+export interface GuardRecord { extra: number; unmarked: number[]; names: boolean; failed: ('preamble' | 'braces' | 'ran' | 'pages' | 'aux' | 'text' | 'errors')[]; judged?: string }
 /** why a paper's marked original is refused: its probe (no log); TeX's own ('compile': the paper's own source does not make
  *  arXiv's pages here, a host's limit, a compile that threw or ran no TeX, or a fault nothing told the guard was ours;
  *  'texlive', as 'compile' with the paper declaring another TeX Live year than the box's; 'engine', a compiler the host does
