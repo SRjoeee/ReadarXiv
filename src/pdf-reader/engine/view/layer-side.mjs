@@ -1240,6 +1240,9 @@ export function createLayerSide(view, o) {
     } catch {
       // (given up: its wait for an idle period aborted)
     } finally {
+      // (whatever ended it, nothing of the run is left asked: an ask it did not await, ended by a hidden document or another
+      // door, is let go, and so is what its wave has not begun)
+      ac.abort()
       if (aheadAc === ac) { aheadAc = null; aheadOn = [] }
     }
   }
