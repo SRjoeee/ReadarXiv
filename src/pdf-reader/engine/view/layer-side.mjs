@@ -112,9 +112,9 @@ export const AHEAD_PAGES = 2
 /** how long the view rests (no scroll, no page asked, nothing laid) before the pages ahead are laid */
 export const AHEAD_IDLE_MS = 600
 /** the translating card's padding, CSS pixels at the reader's 100 % (engine.css --axt-tr-pad-x and -pad-y, where the sheet gives
- *  none: the owner's of 2026-10-25) */
-export const PAD_X = 14
-export const PAD_Y = 4
+ *  none: Glint's, the owner's of 2026-11-01) */
+export const PAD_X = 4
+export const PAD_Y = 2
 /** the pages wanted last whose geometry is kept beside the near ones (§3.2) */
 const WANTED_KEPT = 20
 /** the commits the probe keeps */
@@ -992,7 +992,7 @@ export function createLayerSide(view, o) {
     })
   }
   /** whether the light can pass: a registered property animated (@property) and a size container's units, which the readers'
-   *  floors before Firefox 128 lack the first of; else the marks are a still ground */
+   *  floors before Firefox 128 lack the first of; else the marks are still (engine.css --axt-tr-still) */
   function moves() {
     const C = globalThis.CSS
     return typeof C?.registerProperty === 'function' && typeof C.supports === 'function' && C.supports('width', '1cqh')
