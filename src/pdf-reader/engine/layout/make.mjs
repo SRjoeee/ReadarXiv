@@ -12,7 +12,7 @@
 // nothing, LOST where our compile gives it no own ink of its own (no mark, an open ownership); a display group's later
 // displays, which TeX gives no point, JOINED to its first, which owns the group's ink; a LOST piece outside the unit's lines
 // (before its start mark, a display after its end mark) OUTSIDE — but a display its unit opens with, which the marking passes over,
-// found by its unit's start mark (stream.mjs headInk: what TeX shipped between the point before that mark and the mark), and one
+// found by its unit's start mark (stream.mjs headInk: what TeX shipped from the paragraph it begins to that mark), and one
 // past its unit's end mark that runs to a later unit's opening as to its start mark; a citation's or a reference's own text with it, for the
 // layer to set in the page's face. What cannot be placed is left out, and the layer leaves that unit as the original's: a
 // unit on a page whose ink is not whole (its operator list too long, too slow, its walk too deep or too long), a placeholder

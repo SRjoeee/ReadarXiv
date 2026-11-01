@@ -1467,9 +1467,12 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
     mode, would begin a paragraph of its own), so the maker left the display LOST and OUTSIDE, no box of it in the light map: the
     left part, which locates the unit by its text and its lead, kept the display's tokens in the unit's span, lit with its first
     sentence, the stop after its matrix too; our page's ink of it, in no group, lit nothing but the kept blocks the ink units had cut
-    of its lines with letters (three there, each lit alone on both panes). TeX ships such a display right before the start mark:
-    what the start's region holds between the point before that mark and the mark, the line of that point and the start's own
-    aside, is its ink (`layout/stream.mjs` `headInk`, asked by the unit's start mark: `marks.mjs` `headsOf`). The maker reads it as
+    of its lines with letters (three there, each lit alone on both panes). TeX ships such a display right before the start mark,
+    in the paragraph it begins: what the start's region holds from that paragraph's point (`q<n>`) or the mark before to the start
+    mark is its ink, but the line before that point, the start's own line and a label of a name above it all ("Theorem 5.",
+    "Proof.", which `\everypar` sets on the paragraph's first line), and none where no point stands before the start mark on its
+    page (a display TeX broke over the page) (`layout/stream.mjs` `headInk`, asked by the unit's start mark: `marks.mjs`
+    `headsOf`; a babel name inside the display is the display's). The maker reads it as
     any display's (its segments), and the wrap gives it to its unit for the ledger alone (`own.mjs` `leads`), so that no ink unit
     nor kept block is made of it; its glyphs stay in no group, never erased, as before. A display past its unit's end mark that runs
     to a later unit's opening the maker now finds as the erasure did (2610.20595v1 p19u153, hidden with its unit's placeholders

@@ -410,9 +410,10 @@
 //     PIPELINE_CARRIES), a unit renumbered by the pairs found again (cache.mjs seedFrom)
 // 52 (the owner's report of 2026-11-02 on 2501.14787v1 p24: the display before "In order to understand why …" lit with that
 //     sentence on arXiv's pane and with nothing on ours): a display its unit opens with, which the marking passes over (no point
-//     at a unit's head, marks.mjs headEnd), is found by its unit's start mark — what TeX shipped in the start's region between
-//     the point before that mark and the mark, the line of that point and the start's own aside (layout/stream.mjs headInk,
-//     marks.mjs headsOf) —, and one past its unit's end mark that runs to a later unit's opening as the erasure found it: the
+//     at a unit's head, marks.mjs headEnd), is found by its unit's start mark — what TeX shipped in the start's region from the
+//     paragraph's point the display begins, or the mark before, to the start mark, the line before, the start's own and a label
+//     of a name above it all aside, none with no point before it on its page (layout/stream.mjs headInk, marks.mjs headsOf) —,
+//     and one past its unit's end mark that runs to a later unit's opening as the erasure found it: the
 //     layout file's segments of each (the maker's change rides this version, as 48's did), where they were LOST and OUTSIDE, no box of them in the light map; and the
 //     same ink its unit's for the ledger (layout/own.mjs `leads`, REMOVAL 20), in no group still, so that no ink unit nor kept
 //     block is made of it. Over 66 local papers (the gate pack's 7 among them, the production pass on both engines over the

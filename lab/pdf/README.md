@@ -193,8 +193,8 @@ ones moved. The measures read the new flags as TeX's file says: a `JOINED` displ
 in its group's first display's, which `contentLost` and `textInDisplay` read), and an `OUTSIDE` piece is LOST
 (`contentUnknown`). A unit that opens with a display has its rows before its start mark's line taken off as no line of
 it (as the held rows at its end), so that an `OUTSIDE` piece is outside every line of its unit. Since PIPELINE 52 that display
-is found, as one past its unit's end mark that runs to a later unit's opening is: by the ink TeX shipped between the point
-before its unit's start mark and the mark (`layout/stream.mjs` `headInk`), its segments outside its unit's lines, its
+is found, as one past its unit's end mark that runs to a later unit's opening is: by the ink TeX shipped from the paragraph
+it begins (its point, or the mark before) to its unit's start mark (`layout/stream.mjs` `headInk`), its segments outside its unit's lines, its
 ink shown where it stands; `OUTSIDE` where that ink cannot be told. The prototype's checker
 counts a placeholder shown when it is drawn or left intact where it stands (`inPlace`: an `OUTSIDE` piece, which the
 drawing never erases), never `missing`. The layer's safe rule is one place (`layer-proto/tex.mjs` `cropsOf`, after `locatedWhole`): a

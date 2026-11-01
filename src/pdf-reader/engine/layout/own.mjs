@@ -670,8 +670,8 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
   for (const u of unitOf.values()) if (u.unhidden) unhidden[u.unhidden]++
   spell.sort((a, b) => a - b)
   leaks.sort((a, b) => a - b)
-  // ---- a display its unit opens with, which the marking passes over (marks.mjs headsOf): TeX ships it between the point before its
-  // unit's start mark and that mark (stream.mjs headInk). Its glyphs no group's, the wrap's as before — the layer draws such a
+  // ---- a display its unit opens with, which the marking passes over (marks.mjs headsOf): TeX ships it in the paragraph it begins, right
+  // before its unit's start mark (stream.mjs headInk). Its glyphs no group's, the wrap's as before — the layer draws such a
   // display as the original's ink, never erasing it, which a group hidden with its unit's placeholders would — but its unit's
   // placeholders' for the ledger (`leads`: per page, glyph -> `u<id>.p`), so that no ink unit nor kept block is made of it: it is
   // its unit's display, a block of its own in the light map (2501.14787v1 p24u193 had three kept blocks of it)
