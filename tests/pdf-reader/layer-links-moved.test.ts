@@ -468,6 +468,17 @@ describe('LK15: a link round a unit\'s whole text (a contents entry, 2610.40645v
     expect(m.groups.map(g => [g.to.draw, g.annots.map(c => c.tier)])).toEqual([['text', ['geometry']]])
     expect(placeUnit({ groups: m.groups, ...placing(L1) }).records.length).toBe(1)
   })
+  it('reads the unit\'s characters only where an annotation is left for it: a list made of them where one is', () => {
+    let calls = 0
+    const lazy = (): LinkTarget => ({ ord: null, kind: null, gap: null, segs: null, draw: 'whole', own: () => { calls++; return own(5) } })
+    const a = ann(0, { dest: 'cite.a' }, '21', ['5|1', '5|2'])
+    matchUnit({ cands: [cand(a)], targets: [target(1, { kind: 'cite', keys: ['a'], gap: gapOf(1, 5, 4) }), lazy()] })
+    expect(calls).toBe(0)
+    const T = lazy()
+    const m = matchUnit({ cands: [cand(entry(0, 'section.1', 5), 2)], targets: [T] })
+    expect([calls, Array.isArray(T.own), m.groups.length]).toEqual([1, true, 1])
+    expect(placeUnit({ groups: m.groups, ...placing(L()) }).records[0]!.rec.name).toBe('1 はじめに')
+  })
 })
 
 describe('what the match never does', () => {

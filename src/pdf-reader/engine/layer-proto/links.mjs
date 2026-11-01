@@ -363,7 +363,7 @@ const within = (x, y, s) => x >= s[1] - 0.5 && x <= s[3] + 0.5 && y >= s[5] - 0.
  * no source index to order it by. `cands`: [{ q, a }] in page then PDF order; `targets`: [{ ord (its piece's index in the
  * source, or null), k | pair, kind, keys, url, name (a `\hyperlink`'s destination), single (its source names one target), gap
  * (Set of `page|item|k`) | null, segs ([page, x0, baseline, x1, top, bottom] ...) | null, draw ('text' | 'crop' | 'pair' |
- * 'whole' | null), own (the whole target's: [{ key, page, x0, x1, yb }]) }]; `budget` ({ left }): the tests it may spend, past which an annotation is `unplaced`. Returns { groups: [{ to:
+ * 'whole' | null), own (the whole target's: [{ key, page, x0, x1, yb }], or a function that makes it) }]; `budget` ({ left }): the tests it may spend, past which an annotation is `unplaced`. Returns { groups: [{ to:
  * target, annots: [{ q, a, tier }] }], tried: [{ q, i, why }] }
  */
 export function matchUnit({ cands, targets, budget = { left: WORK_MAX } }) {
@@ -423,12 +423,14 @@ export function matchUnit({ cands, targets, budget = { left: WORK_MAX } }) {
     // (a \hyperlink, which names its destination, is matched by it alone)
     assign(anns, drawn.filter(T => T.kind === kind && T.name === undefined && !tookOf(T, a => kindOfAnnot(a) === kind)), 'order')
   }
-  // 5. whole: the annotations of one target that hold, together, every character of the unit's own the drawing replaces
-  const whole = drawn.find(T => T.draw === 'whole' && T.own?.length)
-  if (whole) {
+  // 5. whole: the annotations of one target that hold, together, every character of the unit's own the drawing replaces (its
+  // `own`, a list or the function that makes it, read only where an annotation is left: most units' are all taken above)
+  const whole = drawn.find(T => T.draw === 'whole')
+  const rest = whole ? left.filter(c => !done.has(c)) : []
+  if (rest.length && typeof whole.own === 'function') whole.own = whole.own()
+  if (rest.length && whole.own?.length) {
     const byTarget = []
-    for (const c of left) {
-      if (done.has(c)) continue
+    for (const c of rest) {
       const g = byTarget.find(x => sameTarget(x[0].a, c.a))
       if (g) g.push(c); else byTarget.push([c])
     }

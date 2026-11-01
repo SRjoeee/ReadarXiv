@@ -87,8 +87,9 @@ export interface LinkTarget {
   /** how it is drawn: as text in the page's face, as a crop, as a pair's tokens, as the unit's whole drawing, or not (kept,
    *  nothing, not drawn) */
   draw: 'text' | 'crop' | 'pair' | 'whole' | null
-  /** the whole drawing's: the unit's own characters the drawing replaces, by key `page|item|k`, and where each stands */
-  own?: readonly { key: string; page: number; x0: number; x1: number; yb: number }[]
+  /** the whole drawing's: the unit's own characters the drawing replaces, by key `page|item|k`, and where each stands; or the
+   *  function that reads them, called only where an annotation is left for the whole tier (the list then put in its place) */
+  own?: readonly { key: string; page: number; x0: number; x1: number; yb: number }[] | (() => readonly { key: string; page: number; x0: number; x1: number; yb: number }[])
 }
 /** an annotation a unit owns, on its page */
 export interface LinkCandidate { q: number; a: Annot }
