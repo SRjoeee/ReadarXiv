@@ -362,7 +362,17 @@
 //     parts keep their layout. The figure units' cut moves, so the rows' identities: raised so. Every source unit, its pieces and
 //     its wire are 46's: a copy of 46 carries every unit (live.mjs PIPELINE_CARRIES), a figure unit found again by its source
 //     (cache.mjs seedFrom)
-export const PIPELINE_VERSION = '47'
+// 48 (the owner's report of 2026-11-01 on 2610.40645v1, staging at PIPELINE 46): a unit's own lines, a marked range's over a page
+//     break and the words it keeps, count a placeholder's tokens between two of its words that are next to each other in its text
+//     as its own (pipeline/anchors.mjs ownOnLines, read by rangeOnPages and placeWith's `keep`), as `between` takes them. u9's
+//     first line on page 3, "boundary segment: equip $\D_+ = \{…\}$ with the Riemannian metric", held 7 of its words among 18
+//     tokens, the formula's 11, under the 40 % a line needs; its neighbours were page 2's number and its display, and the walk over
+//     the display stopped short of it (the display's tallest glyphs give no token): the line was no one's on either PDF, its
+//     formula LOST, the paragraph left in English and its first line lit by no block on either pane. The left anchors and the
+//     layout move: over 65 local papers, on 6, 16 units' rows, LOST pieces 316 -> 286, 7 units located whole again, none laid
+//     less (PDF-READER §19.6). No unit's text, pieces or wire changes: every source unit is 47's, a copy of 47 carries every unit
+//     (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '48'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
