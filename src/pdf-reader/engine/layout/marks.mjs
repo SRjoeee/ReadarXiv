@@ -1729,8 +1729,8 @@ export function headsOf(units, names) {
       if (c !== 'display' || names.has(`p${i}.${q}a`)) break
       group.push(`p${i}.${q}a`)
     }
-    // (`whole`: no row break in any of them, `\\`, which TeX alone breaks a display at over a page)
-    const whole = [k, ...group.map(g => Number(g.slice(g.indexOf('.') + 1, -1)))].every(q => !/\\\\/.test(pieces[q].src ?? ''))
+    // (`whole`: one display of no row break, `\\`, which TeX never breaks over a page; a group may break between its displays)
+    const whole = group.length === 0 && !/\\\\/.test(pieces[k].src ?? '')
     return { name: `p${i}.${k}a`, group, whole }
   }
 }

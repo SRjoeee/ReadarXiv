@@ -292,8 +292,8 @@ describe('headsOf: the display a unit opens with, which the marking passes over 
     expect([heads('t1s'), heads('h1s'), heads('1e'), heads('0s'), heads('2s'), heads('p1.1a')]).toEqual([null, null, null, null, null, null])
     // two displays, nothing visible between: one group
     const two = unit([ph('\\[a\\]'), text('\n'), ph('\\begin{equation}b\\end{equation}'), text('\nwhere x.')])
-    expect(headsOf([two], new Set())('0s')).toEqual({ name: 'p0.0a', group: ['p0.2a'], whole: true })
-    // (a row break in one: TeX may break it over a page)
+    expect(headsOf([two], new Set())('0s')).toEqual({ name: 'p0.0a', group: ['p0.2a'], whole: false })
+    // (a group, which TeX may break between its displays, or a row break in one: either may begin on the page before, Codex on #550)
     expect(headsOf([unit([ph('\\begin{align}a\\\\b\\end{align}'), text('\nwhere x.')])], new Set())('0s')?.whole).toBe(false)
   })
   it('none where the unit opens with text or another piece, or the display has a mark of its own', () => {
