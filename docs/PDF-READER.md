@@ -1099,7 +1099,10 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   `refused` with its why), `coverage()` and a
   bounded `probe()` (counts, states, a ring of the last 32 commits), and `rowsFor(page)`, the units whose rows the door's
   page still waits for (its closure's: the door lays a page asked by its closure alone, the newest ask first), which a host
-  translating as it shows translates first. The stall clock starts at the page's `laying`, which the door tells when its
+  translating as it shows translates first. A page is laid once the rows its closure reads are in, in whatever order they
+  come: no id watermark, no prefix, and the rows' end (`end()`) only for a unit whose row has not come by then, which the
+  run then leaves the original's (`layer-door.test.ts`: the Translation Workflow's page order, a page's first unit after
+  every other row). The stall clock starts at the page's `laying`, which the door tells when its
   drive takes the page, not at the ask. The door's stats tell no late rows and no skipped
   units yet: `coverage()` gives 0 and {} for them.
 
