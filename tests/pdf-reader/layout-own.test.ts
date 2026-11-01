@@ -137,6 +137,25 @@ describe('placeholders, labels and names (MR 4–6)', () => {
   })
 })
 
+describe('a display its unit opens with, which the marking passes over (stream.mjs headInk)', () => {
+  // (2501.14787v1 p24u193: \\[ vec f'(A)[dA] = … \\] after a blank line, then "In order to understand …"; no point of its own, its
+  // ink between 192e and 193s in no group, made three kept blocks by the ink units, and lit with its unit's first sentence on the left)
+  const opens = [{ src: 'after vectorization to' }, { pieces: [{ t: 'text', s: '\n' }, { t: 'ph', src: '\\[\nvec f=Mx.\n\\]' }, { t: 'text', s: '\nIn order to' }] }]
+  const pages = [page([{ pt: 'bs1' }, { pt: '0s' }, 'after vectorization to', { pt: '0e' }, ':', '\nvecf=Mx', '\nunder.', { pt: '1s' }, '\nIn order to', { pt: '1e' }, { pt: 'be1' }])]
+  it('leaves its ink in no group, the wrap as before, and gives it to its unit for the ledger (`leads`)', () => {
+    const follows = followsOf(opens as never, new Set(['0s', '0e', '1s', '1e']))
+    const r = ownOf(pages, { units: opens, follows })
+    expect(groupsOf(r, pages)).toEqual({ u0: 'after vectorization to:', u1: 'In order to' })
+    const leads = [...(r.leads[0] ?? new Map())].map(([g, grp]) => `${pages[0]!.glyphs[g]!.u}${grp}`).join(' ')
+    expect(leads).toBe(['v', 'e', 'c', 'f', '=', 'M', 'x', 'u', 'n', 'd', 'e', 'r', '.'].map(c => `${c}u1.p`).join(' '))
+    // (the unit before's stop after its end mark on its line is none of it: MR 4c's; with no marking known, the same)
+    expect(r.leads[0]?.has(pages[0]!.points.find(x => x.name === '0e')!.glyph)).toBe(false)
+    expect([...(ownOf(pages, { units: opens }).leads[0] ?? new Map()).keys()]).toEqual([...(r.leads[0] ?? new Map()).keys()])
+    // (a unit that opens with text has none)
+    expect(ownOf(pages, { units: units('after vectorization to', 'In order to') }).leads[0]?.size ?? 0).toBe(0)
+  })
+})
+
 describe('the rules of a text\'s lines (lineRulesOf, MR 2b)', () => {
   /** one line of text and `n` rules on it, then `m` thin upright boxes off it (no frame of a rule): [page, index] lists */
   const lineOf = (n: number, m: number) => {

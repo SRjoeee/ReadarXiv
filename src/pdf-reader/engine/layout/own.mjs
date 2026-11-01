@@ -46,10 +46,13 @@
 import { utf8 } from '../translate/mt.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { UNHIDDEN } from './delta-wire.mjs'
-import { classOf, INK_ANY, leadStep } from './marks.mjs'
+import { classOf, headsOf, INK_ANY, leadStep } from './marks.mjs'
 import { OWNED, ownedOf, regionsOf, spellOf } from './stream.mjs'
+import { isLabelForm, labelFormOf, labelText } from './label-form.mjs'
 
 export { UNHIDDEN }
+/** a label's form, the paper's theorem names beside the standard ones: layout/label-form.mjs */
+export { isLabelForm, labelFormOf }
 /** the glyphs and boxes the ownership of a paper may visit (real ranges never overlap: they cost its ink once) */
 export const OWN_WORK = 20_000_000
 /** the unit ids a record lists the spell check's refusals of, at most */
@@ -81,33 +84,8 @@ const BRACKET = /^[bf][se]\d+$/
 
 /** a text's evidence for the spell check: its letters and digits, without their accents, lower case (stream.mjs's) */
 export { spellOf }
-/** a label's form (§1.3): a number or an item's mark, maybe a caption's or a section's name before it, in brackets or with a
- *  stop after it — of its characters, NFKC, lower case, no white space */
-const LABEL_NAME = '(?:figure|fig\\.?|table|tab\\.?|algorithm|alg\\.?|listing|section|sec\\.?|chapter|appendix|part|step|case|example|definition|lemma|theorem|proposition|corollary|remark|claim|note|assumption|exercise|problem|equation|eq\\.?|proof|keywords?|index ?terms)'
-const LABEL_NUMBER = '[([]?(?:\\d{1,4}|[a-z]|[ivxlcdm]{1,6})(?:[.\\-–](?:\\d{1,4}|[a-z]))*'
-// (after a name, a number may take a letter before it: a supplement's or an appendix's, "Table S3:", "Figure A1", the letter
-// before a digit alone, so that two letters are no number, "Figure AB"; alone, a letter and a number are a model's or a
-// product's name, "A100", no label)
-const formOf = name => new RegExp(`^(?:(?:${name}(?:(?:[a-z](?=\\d))?${LABEL_NUMBER})?|${LABEL_NUMBER})[)\\].:–—|]{0,2}|[•◦▪▫‣⁃∙·∗*–—\\-+○●■□►▸▹➢✓✔])$`, 'u')
-const LABEL_FORM = formOf(LABEL_NAME)
-const labelText = s => s.normalize('NFKC').toLowerCase().replace(/\s/gu, '')
-/**
- * The label's form with the paper's own theorem names beside LABEL_NAME (`names`: source/paper-names.mjs theoremNames, the
- * printed names of the theorem-like environments its files define — thmtools' "Recall", "Notation", a \newtheorem's
- * "Conjecture"), each as a label holds it (NFKC, lower case, no white space); LABEL_FORM where it gives none. A head TeX sets of
- * such a name ("Recall 7 (") is then its unit's label, in its label group, which the layer draws in the paper's name unit's
- * word for it (rules/tex-names.mjs: one word a name, every head of it), where it was left the original's ink (`labelKept`)
- */
-export function labelFormOf(names) {
-  const own = [...new Set((names ?? []).map(n => labelText(String(n))).filter(n => /\p{L}/u.test(n)))].map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-  return own.length ? formOf(`(?:${LABEL_NAME}|${own.join('|')})`) : LABEL_FORM
-}
 /** a head's joint between a babel name and its unit's text, as a label holds it: its punctuation alone */
 const JOINT = /^[.:;,\u2013\u2014-]{1,2}$/u
-/** (`note`: the label of a theorem's note, a unit the front end read in a head's brackets (latex-front.mjs `bracketed`): the head
- *  macro sets the bracket that opens the note after its name and number, amsthm's "Definition 5.1 (", which is the head's own,
- *  and so the label's) */
-export const isLabelForm = (s, note = false, form = LABEL_FORM) => { const t = labelText(s); const u = note ? t.replace(/[([]$/u, '') : t; return u === '' || form.test(u) }
 
 /**
  * Each unit's own ink of a document, by its marks. `pages` (page p at index p - 1): what pageInk read of each page with
@@ -420,8 +398,11 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
   }
 
   // ---- the placeholders (MR 4)
-  // (the erasure's reading: stream.mjs ownedOf `erasure`, a piece's ink found exactly where the maker's reading leaves it LOST)
-  const owned = follows ? ownedOf(pages.map((pg, i) => streamPage(pg, i)), { follows, erasure: true }) : null
+  // (the erasure's reading: stream.mjs ownedOf `erasure`, a piece's ink found exactly where the maker's reading leaves it LOST;
+  // and the displays units open with, by their start marks, `leads` below)
+  const heads = units ? headsOf(units, new Set(where.keys())) : null
+  const streamed = follows || heads ? pages.map((pg, i) => streamPage(pg, i)) : null
+  const owned = follows ? ownedOf(streamed, { follows, erasure: true, heads }) : null
   // (each page's units whose start and end marks both stand on it: [id, start, end])
   const spansOn = new Map()
   for (const [id, { s, e }] of textOf) if (s && s[0] === e[0]) (spansOn.get(s[0]) ?? spansOn.set(s[0], []).get(s[0])).push([id, s, e])
@@ -689,7 +670,19 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
   for (const u of unitOf.values()) if (u.unhidden) unhidden[u.unhidden]++
   spell.sort((a, b) => a - b)
   leaks.sort((a, b) => a - b)
-  return { glyphs: gOwn, boxes: bOwn, units: unitOf, stats: { units: unitOf.size, unhidden, spell: spell.slice(0, SPELL_LIST_MAX), labelKept, leaks: { count: leaks.length, units: leaks.slice(0, SPELL_LIST_MAX) } } }
+  // ---- a display its unit opens with, which the marking passes over (marks.mjs headsOf): TeX ships it in the paragraph it begins, right
+  // before its unit's start mark (stream.mjs headInk). Its glyphs no group's, the wrap's as before — the layer draws such a
+  // display as the original's ink, never erasing it, which a group hidden with its unit's placeholders would — but its unit's
+  // placeholders' for the ledger (`leads`: per page, glyph -> `u<id>.p`), so that no ink unit nor kept block is made of it: it is
+  // its unit's display, a block of its own in the light map (2501.14787v1 p24u193 had three kept blocks of it)
+  const leads = pages.map(() => new Map())
+  const found = heads ? owned ?? ownedOf(streamed, { follows: () => null, heads }) : null
+  for (const [name, e] of found ?? []) {
+    const m = OPENING.exec(name)
+    if (!m || where.has(name) || e.how >= OWNED) continue
+    for (const [p, g] of e.glyphs) if (gOwn[p - 1][g] === null) leads[p - 1].set(g, `u${m[2]}.p`)
+  }
+  return { glyphs: gOwn, boxes: bOwn, units: unitOf, leads, stats: { units: unitOf.size, unhidden, spell: spell.slice(0, SPELL_LIST_MAX), labelKept, leaks: { count: leaks.length, units: leaks.slice(0, SPELL_LIST_MAX) } } }
 }
 
 /**
@@ -810,5 +803,5 @@ function streamPage(pg) {
   const n = pg.glyphs.length
   const x0 = new Float64Array(n), y = new Float64Array(n), size = new Float64Array(n), u = new Array(n)
   pg.glyphs.forEach((g, i) => { x0[i] = g.x0; y[i] = g.y; size[i] = g.size; u[i] = g.u ?? '' })
-  return { glyphs: { n, x0, y, size, u }, boxes: pg.boxes, points: pg.points, boxAt: Int32Array.from(pg.boxAt ?? []), view: pg.view ?? [0, 0, 0, 0] }
+  return { glyphs: { n, x0, y, size, u }, boxes: pg.boxes, points: pg.points, boxAt: Int32Array.from(pg.boxAt ?? []), view: pg.view ?? [0, 0, 0, 0], paras: pg.paras ?? [] }
 }

@@ -433,7 +433,21 @@
 //     p2, a figure 1.25 pt off on p7), their base pages with them; 2608.22687v1's and 2610.21377v1's (a space before \item, and
 //     one at the start of an author's group) set what they did. Raised so that the bundles of the two are made again under a new
 //     key (VTAG). Every source unit, its pieces and its wire are 52's: a copy of 52 carries every unit (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '53'
+// 54 (the owner's report of 2026-11-02 on 2501.14787v1 p24: the display before "In order to understand why …" lit with that
+//     sentence on arXiv's pane and with nothing on ours): a display its unit opens with, which the marking passes over (no point
+//     at a unit's head, marks.mjs headEnd), is found by its unit's start mark — what TeX shipped in the start's region from the
+//     paragraph's point the display begins, or the mark before, to the start mark, the line before, the start's own and a label
+//     of a name above it all aside, none with no point before it on its page (layout/stream.mjs headInk, marks.mjs headsOf) —,
+//     and one past its unit's end mark that runs to a later unit's opening as the erasure found it: the
+//     layout file's segments of each (the maker's change rides this version, as 48's did), where they were LOST and OUTSIDE, no box of them in the light map; and the
+//     same ink its unit's for the ledger (layout/own.mjs `leads`, REMOVAL 20), in no group still, so that no ink unit nor kept
+//     block is made of it. Over 66 local papers (the gate pack's 7 among them, the production pass on both engines over the
+//     same compiles): 22 of 24 such displays found, on 9 papers, every other placeholder row of every unit as it was; 19 ink
+//     units gone, 17 kept blocks cut of their lines with letters and 2 orphans translated over them (2610.22299v1 p1's
+//     \text{any two adjacent vertices …} inside its equation, 2610.30854v1 p4's glyphs), none made, the ink and figure units
+//     after them numbered on. No source unit's text, pieces or wire changes: a copy of 53 carries every unit (live.mjs
+//     PIPELINE_CARRIES), an ink unit or a figure unit found again by its source (cache.mjs seedFrom)
+export const PIPELINE_VERSION = '54'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
@@ -505,6 +519,9 @@ export const PDFJS = '6.3.289'
  * maker did not locate, whose glyphs the wrap already gave the unit: the base's bytes change where a paper has such a mark; 19
  * (the follow-up of #541): a head of a theorem-like name the paper defines is its unit's label (own.mjs labelFormOf over the
  * wrap's `names`, required as `texts` is: openPaper's theoremNames), where it was left the original's ink in no group: the
- * base's bytes and the head's `labelKept` change where a paper's head names one (4 of 66 local papers, 9 labels)
+ * base's bytes and the head's `labelKept` change where a paper's head names one (4 of 66 local papers, 9 labels); 20
+ * (the owner's report of 2026-11-02 on 2501.14787v1 p24): the ink of a display its unit opens with, which the marking passes over
+ * (stream.mjs headInk), is its unit's for the ledger (own.mjs `leads`, wrap.mjs), in no group: no ink unit nor kept block is made
+ * of it, where three kept blocks of 2501.14787v1 p24's display each lit alone; the base's bytes do not change
  */
-export const REMOVAL = '19'
+export const REMOVAL = '20'

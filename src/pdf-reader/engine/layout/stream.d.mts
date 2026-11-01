@@ -12,7 +12,7 @@ export type StreamGlyphs = Pick<PackedGlyphs, 'n' | 'x0' | 'y' | 'size' | 'u'>
 export declare const WANT: number
 /** a page of the marked compile as pageInk read it, its glyphs packed in stream order (packGlyphs), with its view (x0,
  *  y0, x1, y1) */
-export interface StreamPage { glyphs: StreamGlyphs; boxes: number[]; points: InkPoint[]; boxAt: ArrayLike<number>; view: number[] }
+export interface StreamPage { glyphs: StreamGlyphs; boxes: number[]; points: InkPoint[]; boxAt: ArrayLike<number>; view: number[]; /** its paragraphs' points (marks.mjs POINTS_TEX q<n>), where a display a unit opens with begins */ paras?: InkPoint[] }
 /** what the marking says of a piece with an opening point: `closing`, it has a closing mark; `want`, the first WANT
  *  characters of the text after it in its unit (NFKC, lower case, no white space), '' for none; `ends`, the names of
  *  its unit's next marks (the next marked piece's opening mark, the unit's end marks); `blocked`, a visible piece with no
@@ -30,12 +30,16 @@ export interface Follow { closing: boolean; want: string; rest?: string; display
 /** a text's letters and digits, without their accents, lower case: the per-unit erasure's evidence that ink is a text's */
 export declare function spellOf(s: string): string
 export interface Owned { how: number; glyphs: [page: number, index: number][]; boxes: [page: number, index: number][] }
-/** each piece's own glyphs and rules in the marked compile, by its opening point's name */
-export declare function ownedOf(pages: readonly StreamPage[], o: { follows: (name: string) => Follow | null; dropped?: readonly string[]; erasure?: boolean }): Map<string, Owned>
+/** a display a unit opens with, which the marking passes over (marks.mjs headsOf), by its unit's start mark: the opening mark's
+ *  name it would have had, and its display group's later displays' (none of them a point) */
+export interface Head { name: string; group: string[]; /** one display, no group, of no row break in its source (`\\`): TeX never breaks it over a page */ whole?: boolean }
+/** each piece's own glyphs and rules in the marked compile, by its opening point's name; `heads(start)` the display a unit opens
+ *  with, by its start mark's name, found between the point before that mark and the mark */
+export declare function ownedOf(pages: readonly StreamPage[], o: { follows: (name: string) => Follow | null; dropped?: readonly string[]; erasure?: boolean; heads?: ((start: string) => Head | null) | null }): Map<string, Owned>
 /** ownedOf a page at a time: the pages added in order (`add`), each piece found once every page it may read is in (`take`,
  *  over the window held: `pages[p - 1]` page p), the rest at `end`; `twice()` the point names read more than once (the
  *  caller's 'a mark set twice'). `closing(name)`: the page of an opening point's piece's closing destination, or null */
-export declare function ownedPages(o: { follows: (name: string) => Follow | null; dropped?: readonly string[]; closing?: (name: string) => number | null }): {
+export declare function ownedPages(o: { follows: (name: string) => Follow | null; dropped?: readonly string[]; closing?: (name: string) => number | null; heads?: ((start: string) => Head | null) | null }): {
   add(p: number, page: StreamPage, take: (name: string, e: Owned, pages: readonly StreamPage[]) => void): void
   end(take: (name: string, e: Owned, pages: readonly StreamPage[]) => void): void
   twice(): Set<string>

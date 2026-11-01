@@ -1085,29 +1085,36 @@ describe('makeLayout, the LOST survey (2026-10-15): a display group, a piece out
     const none = await made({ pages: [{ runs: runs.slice(0, 3) }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[0] as Run), 700], ['p0.1a', 1, endOf(runs[0] as Run), 700]], units: [unit('para', [text(`${words(0, 10)} `), ph('\\[a=b\\]'), text('\n'), ph('\\[c=d\\]'), text(' where x holds')])] })
     expect((phOf(none.file, 0, 3)[3] ?? 0) & PH_FLAG.LOST).toBe(PH_FLAG.LOST)
   })
-  it("a display opening a unit, its start mark on the unit's first line, is OUTSIDE (the rows before the mark are no line of the unit's: the thesis's u69, u113, u432, u445)", async () => {
-    // the start mark at the first text below the display; the unit's lines from it
+  it("a display opening a unit, its start mark on the unit's first line, is found between the point before that mark and the mark, outside the unit's lines (the thesis's u69, u113, u432, u445; 2501.14787v1 p24u193)", async () => {
+    // the start mark at the first text below the display; the unit's lines from it. The marking sets no point at a unit's head
+    // (marks.mjs headEnd): TeX ships the display right before the start mark, and what the start's region holds before it, on
+    // lines of its own, is its ink (stream.mjs headInk). LOST and OUTSIDE before (LAYOUT 31), its light no block's
     const runs: Run[] = [{ s: 'x=y+1', x: 150, y: 700 }, { s: words(0, 10), x: 72, y: 680 }, { s: words(10, 10), x: 72, y: 668 }]
     for (const lead of [{}, { lead: 'xy ' }]) {
       // (with the display's letters, latex-front's `lead`, the anchor gives the unit the display's row too, and the head
       // drop takes it away)
+      // (the paragraph the display begins, its point q<n> right before it: with none on the page before the start mark, the display
+      // may have begun on the page before, and it stays LOST and OUTSIDE, below)
       const { file, stats } = await made({
-        pages: [{ runs }],
+        pages: [{ runs, points: { q1: [0, 0] } }],
         marks: [['0s', 1, 72, 680], ['0e', 1, endOf(runs[2] as Run), 668]],
         units: [unit('para', [ph('\\[x=y+1\\]'), text(`\n${words(0, 20)}`)], lead)],
       })
       expect(stats.lines.held).toBe('lead' in lead ? 1 : 0)
       expect(chunk(rowsOf(file, 0, 'lines'), 8).map(l => l[3])).toEqual([680, 668])
-      expect(phOf(file, 0, 0)).toEqual([0, 0, 1, PH_FLAG.LOST | PH_FLAG.OUTSIDE])
-      // what makes it OUTSIDE: the first line begins at the start mark or past it, so no line of the unit's holds the display
+      // (its segment its row, whether or not the anchor gave the unit that row: the stream finds it, not the text)
+      expect(phOf(file, 0, 0)).toEqual([0, 0, 1, 0, 1, 150, 700, 175, 707.5, 697.5])
+      // the first line begins at the start mark or past it, so no line of the unit's holds the display: never erased with them
       expect(chunk(rowsOf(file, 0, 'lines'), 8)[0]?.[1]).toBeGreaterThanOrEqual(72)
     }
+    const none = await made({ pages: [{ runs }], marks: [['0s', 1, 72, 680], ['0e', 1, endOf(runs[2] as Run), 668]], units: [unit('para', [ph('\\[x=y+1\\]'), text(`\n${words(0, 20)}`)])] })
+    expect(phOf(none.file, 0, 0)).toEqual([0, 0, 1, PH_FLAG.LOST | PH_FLAG.OUTSIDE])
   })
   it("the first line the head drop leaves is cut at the start mark: a head glued to the first word is no glyph of it, and is looked for beside the mark", async () => {
     // a display, then \\bert's "BERT" glued to the first word (1.5 pt, under GLUE's 0.2 em), the start mark between them
     const runs: Run[] = [{ s: 'x=y+1', x: 150, y: 700 }, { s: 'BERT', x: 72, y: 680 }, { s: words(0, 10), x: 93.5, y: 680 }, { s: words(10, 10), x: 72, y: 668 }]
     const w: World = {
-      pages: [{ runs }],
+      pages: [{ runs, points: { q1: [0, 0] } }],
       marks: [['0s', 1, 93.5, 680], ['0e', 1, endOf(runs[3] as Run), 668]],
       // (the display's letters, latex-front's `lead`: the anchor's lead walk gives the unit the display's row, which the
       // head drop takes away)
@@ -1125,14 +1132,15 @@ describe('makeLayout, the LOST survey (2026-10-15): a display group, a piece out
     const found = await made({ ...w, texts: [['\\bert', 'BERT']] })
     expect(phOf(found.file, 0, 1).slice(3, 8)).toEqual([0, 1, 72, 680, 92])
     expect(chunk(rowsOf(found.file, 0, 'lines'), 8)[0]?.[1]).toBe(72)
-    expect(phOf(found.file, 0, 0)).toEqual([0, 0, 1, PH_FLAG.LOST | PH_FLAG.OUTSIDE])
+    // (the display before it found by the stream, its row alone: "BERT" on the start mark's line is none of it)
+    expect(phOf(found.file, 0, 0)).toEqual([0, 0, 1, 0, 1, 150, 700, 175, 707.5, 697.5])
   })
   it('a head text symbol drawn as its character keeps its glyph in the first line the head drop leaves: erased once, drawn once', async () => {
     // a display, then \\#'s "#" glued to the first word (1 pt), the start mark between them: symbolsOf counted the "#" on
     // that line (TEXT) before the drop, and the cut at the mark keeps it, so the erase takes it in
     const runs: Run[] = [{ s: 'x=y+1', x: 150, y: 700 }, { s: '#', x: 72, y: 680 }, { s: words(0, 10), x: 78, y: 680 }, { s: words(10, 10), x: 72, y: 668 }]
     const { file, stats } = await made({
-      pages: [{ runs }],
+      pages: [{ runs, points: { q1: [0, 0] } }],
       marks: [['0s', 1, 78, 680], ['0e', 1, endOf(runs[3] as Run), 668]],
       units: [unit('para', [ph('\\[x=y+1\\]'), ph('\\#'), text(` ${words(0, 20)}`)], { lead: 'xy ' })],
     })
@@ -1140,7 +1148,7 @@ describe('makeLayout, the LOST survey (2026-10-15): a display group, a piece out
     expect(phOf(file, 0, 1)[3]).toBe(PH_FLAG.TEXT)
     expect(chunk(rowsOf(file, 0, 'lines'), 8)[0]?.slice(1, 4)).toEqual([72, 223, 680])
     expect(chunk(rowsOf(file, 0, 'erase'), 5)[0]?.[1]).toBe(72)
-    expect(phOf(file, 0, 0)).toEqual([0, 0, 1, PH_FLAG.LOST | PH_FLAG.OUTSIDE])
+    expect(phOf(file, 0, 0)).toEqual([0, 0, 1, 0, 1, 150, 700, 175, 707.5, 697.5])
   })
   it("an inline part on no line goes to the line both its marks stand on, within the line's size of its baseline (2608.16117's \\frac)", async () => {
     // a fraction's numerator 7.6 pt over its line's baseline, past the part rule's reach

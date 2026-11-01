@@ -7,7 +7,8 @@
 // not the piece's — a page's footnotes and their rule, its running foot and the next page's head, a float shipped in
 // mid-paragraph or at a column's head — lies outside the region of its opening point, and is cut: a region is in a
 // column's body or not, at a depth of floats.
-// Imports nothing: pure arithmetic over what pageInk read.
+// Imports a label's form alone (label-form.mjs): pure arithmetic over what pageInk read.
+import { isLabelForm, LABEL_NAME, labelText } from './label-form.mjs'
 
 /** how a piece's ink was found, or why none was: the first OWNED are owned (its glyphs and rules, maybe none), the rest
  *  are not, and the maker writes the piece LOST — but 'in the display before it', a later display of a display group,
@@ -179,6 +180,92 @@ export function regionsOf(page) {
   return { glyph, box, at, bodies }
 }
 
+/** a unit's start mark as MARK_DEF sets it: a paragraph's, a theorem's, an item's (not a cell's `t`, nor a heading's `h`) */
+const MARK_START = /^\d+s$/
+/** a glyph's line, as two glyphs on one baseline are: within half the larger size */
+const onLine = (G, g, y, size) => Math.abs(G.y[g] - y) < 0.5 * Math.max(G.size[g], size)
+/** a rule on a glyph's line: its middle within that line's body, from its descenders to its ascenders */
+const ruleOnLine = (box, y, size) => { const m = (box[1] + box[3]) / 2; return m >= y - 0.35 * size && m <= y + 0.75 * size }
+/** a label of a name (a theorem's, a proof's, a definition's …), not a number or a mark alone: what \\everypar sets before a display */
+const NAMED_LABEL = new RegExp(`^${LABEL_NAME}`, 'u')
+/**
+ * The ink of a display its unit opens with, which the marking passes over (`heads`, marks.mjs headsOf: no mark goes before a
+ * unit's start mark at its head, marks.mjs headEnd, so the display has no point of its own): TeX ships it right before the unit's
+ * start mark, in the paragraph it begins (\\[ or $$ in vertical mode begins one), so what the start mark's region holds on its page
+ * from that paragraph's point (`paras`, marks.mjs POINTS_TEX q<n>) — or, with none after it, from the last mark before the start
+ * mark — to the start mark is the display's: a listing or any text no mark bounds before it stays out; none where neither stands
+ * on the start mark's page before it in its region (the display may have begun on the page before, TeX breaking it over the page),
+ * but for a display of no row break (`whole`), from where its region begins on the page. A babel
+ * name's points are passed over, a name TeX sets inside a display being the display's (`\text{\figurename}`). Out
+ * of it: what stands on the line of the region's glyph before that point (the closing punctuation the unit before set after its
+ * end mark, own.mjs MR 4c; a rule under that line) and on the start mark's own line (the unit's label, MR 5); and the paragraph's
+ * first line where it stands above all the rest and is a label of a name (label-form.mjs: "Theorem 5.", "Proof.", which
+ * \\everypar sets on that line before the display; never a number, a letter or a mark alone, which a display's top row may be).
+ * Page `P`, its regions `R`, the start mark at `q`. Null where it cannot be
+ * told: the mark before is a piece's opening point (its ink runs to the next mark, this start mark: the two would share it), or no
+ * glyph is left
+ */
+function headInk(P, R, q, whole = false) {
+  const S = P.points[q], r = R.at[q], G = P.glyphs
+  // (in the start mark's region alone: a float's caption marks shipped among the display's rows are another region's)
+  let A = null
+  for (let k = q - 1; k >= 0 && !A; k--) { const n = P.points[k].name; if (R.at[k] === r && !BRACKET.test(n) && !NAME_POINT.test(n) && !BIB_ITEM.test(n)) A = P.points[k] }
+  if (A && OPENING.test(A.name)) return null
+  // (the paragraph the display begins: its point, the last before the start mark and at or after the mark before, in its region —
+  // a paragraph point's the region of the glyph it stands before)
+  let Q = null
+  for (const x of P.paras ?? []) if (x.glyph < S.glyph && x.box <= S.box && R.glyph[x.glyph] === r && (!A || x.glyph >= A.glyph) && (!Q || x.glyph >= Q.glyph)) Q = x
+  // (none on its page before the start mark in its region: the display may have begun on the page before, TeX breaking it between
+  // two of its rows, and what this page holds of it is no whole display — but a display of no row break, which TeX never breaks,
+  // from where its region begins on the page, a column's body after a float at its top: 2610.21084v1 p19u177)
+  let from = Q ?? A
+  if (!from && whole) for (let k = q - 1; k >= 0 && !from; k--) if (R.at[k] === r && /^bs\d+$/.test(P.points[k].name)) from = P.points[k]
+  if (!from) return null
+  const g0 = from.glyph, b0 = from.box
+  let glyphs = [], boxes = []
+  for (let g = g0; g < S.glyph; g++) if (R.glyph[g] === r) glyphs.push(g)
+  for (let b = b0; b < S.box; b++) if (R.box[b] === r) boxes.push(b)
+  // (the line of the region's glyph before that point, and the start mark's: the region's glyph at or after it)
+  let before = -1, after = -1
+  for (let g = g0 - 1; g >= 0 && before < 0; g--) if (R.glyph[g] === r) before = g
+  for (let g = S.glyph; g < G.n && after < 0; g++) if (R.glyph[g] === r) after = g
+  const box = b => P.boxes.slice(4 * b, 4 * b + 4)
+  for (const g of before < 0 ? [] : [before]) {
+    while (glyphs.length && onLine(G, glyphs[0], G.y[g], G.size[g])) glyphs.shift()
+    boxes = boxes.filter(b => !ruleOnLine(box(b), G.y[g], G.size[g]))
+  }
+  for (const g of after < 0 ? [] : [after]) {
+    while (glyphs.length && onLine(G, glyphs.at(-1), G.y[g], G.size[g])) glyphs.pop()
+    boxes = boxes.filter(b => !ruleOnLine(box(b), G.y[g], G.size[g]))
+  }
+  // (the paragraph's first line, where it stands above all the rest — a display's run of glyphs on one baseline goes on above or
+  // beside it, a fraction's, a script's — and is a label of a name: none of the display's)
+  if (glyphs.length) {
+    const g = glyphs[0]
+    let n = 0
+    while (n < glyphs.length && onLine(G, glyphs[n], G.y[g], G.size[g])) n++
+    const text = glyphs.slice(0, n).map(k => G.u[k] ?? '').join('')
+    let above = n < glyphs.length
+    for (let k = n; k < glyphs.length && above; k++) above = G.y[glyphs[k]] < G.y[g] - 0.5 * Math.max(G.size[g], G.size[glyphs[k]])
+    if (above && NAMED_LABEL.test(labelText(text)) && isLabelForm(text, true)) {
+      const upTo = P.boxAt[glyphs[n]]
+      boxes = boxes.filter(b => b >= upTo || !ruleOnLine(box(b), G.y[g], G.size[g]))
+      glyphs = glyphs.slice(n)
+    }
+  }
+  return glyphs.length ? { glyphs, boxes } : null
+}
+/** the head displays' entries a start mark at (p, q) gives (`out`'s, in ownedOf's shape): the display's ink (headInk), `closed`
+ *  between the point before and the start mark, its group's later displays (none with a point of its own: `has`) in it; none
+ *  where `head` names a display with a point of its own, or its ink cannot be told */
+function headEntries(head, P, R, p, q, has, put) {
+  if (!head || has(head.name)) return
+  const ink = headInk(P, R, q, head.whole === true)
+  if (!ink) return
+  put(head.name, { how: HOW[head.group?.length ? 'open, with the displays after it' : 'closed'], glyphs: ink.glyphs.map(g => [p, g]), boxes: ink.boxes.map(b => [p, b]) })
+  for (const g of head.group ?? []) if (!has(g)) put(g, { how: HOW['in the display before it'], glyphs: [], boxes: [] })
+}
+
 /**
  * Each piece's own glyphs and rules in the marked compile, by its opening point's name: Map name → { how, glyphs, boxes }
  * (OWNED_HOW; glyphs and boxes [page, index] into the pages, in stream order, none where it is not owned). `pages`, page
@@ -213,6 +300,10 @@ export function regionsOf(page) {
  *   opening point, since TeX sets none on the empty list it resumes the paragraph with (a whatsit there would keep the
  *   empty paragraph between two displays a line). The first owns the whole group's ink, to the text after the last
  *   ('open, with the displays after it'); each later one is 'in the display before it'. Their split is not TeX's to give.
+ * - A display its unit opens with (`heads(start)`, the start mark's name to { name, group }: marks.mjs headsOf), which has
+ *   no point, since the marking sets none at a unit's head: what the start mark's region holds on its page from the paragraph's
+ *   point the display begins (a page's `paras`) or the mark before to the start mark, on lines of its own (headInk), 'closed'; its
+ *   group's later displays in it. A start mark set twice gives none.
  * A name set twice owns nothing, nor where the work is past its bound.
  * `erasure` (own.mjs's, the per-unit erasure's reading; the maker's is without it, its layouts unchanged): a piece is found
  * where its ink is told exactly though the maker leaves it LOST — the text after it compared with TeX's quotes as one (`"`
@@ -231,7 +322,7 @@ export function regionsOf(page) {
  *   with no mark) or one apart (the page's foot), none (the release sweep of 2026-10-24, 2610.16663v1 p16u58: the maker left
  *   it LOST, the erasure the unit the original's).
  */
-export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
+export function ownedOf(pages, { follows, dropped = [], erasure = false, heads = null }) {
   const twice = new Set(dropped)
   const regions = pages.map(regionsOf)
   /** each page's line pitch (pitchOf), read once where a piece alone at its unit's end asks for it */
@@ -372,8 +463,11 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
       if (!glyphs.length && !boxes.length) return { how: HOW[f.want ? 'open, to the text after it' : "open, to its unit's next mark"], glyphs, boxes }
       if (!f.want) {
         // (the erasure's: a later unit's opening as its start mark only where that unit's start mark follows it on the page — the
-        // opening is its lead placeholder's, on its first line; an end-only unit's opening may stand lines into it)
-        const opening = erasure ? OPENING.exec(N.name) : null
+        // opening is its lead placeholder's, on its first line; an end-only unit's opening may stand lines into it. And the maker's
+        // for a display past its unit's end mark, which ends the unit: its ink found where the erasure's is, so that its light is a
+        // block of its own, never LOST outside its unit's lines while the wrap hides it with its unit's placeholders, 2610.20595v1
+        // p19u153)
+        const opening = erasure || (f.display && past) ? OPENING.exec(N.name) : null
         const startsAfter = id => [`${id}s`, `h${id}s`, `t${id}s`].some(n => (where.get(n) ?? []).some(([p, q]) => p === pa && q > next[1]))
         const later = START.exec(N.name) ?? (opening && startsAfter(opening[2]) ? [N.name, opening[2]] : null)
         const S = f.blocked ? f.split : null
@@ -481,6 +575,12 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false }) {
     }
     out.set(name, e)
   }
+  // a display its unit opens with, no point of its own (headEntries): by its unit's start mark, set once
+  if (heads) for (const [name, list] of where) {
+    if (!MARK_START.test(name) || list.length > 1 || twice.has(name)) continue
+    const [p, q] = list[0]
+    headEntries(heads(name), pages[p - 1], regions[p - 1], p, q, n => where.has(n) || out.has(n), (n, e) => out.set(n, e))
+  }
   return out
 }
 
@@ -503,7 +603,7 @@ const EMPTY = Object.freeze({ glyphs: Object.freeze({ n: 0 }), boxes: Object.fre
  * e, pages)` is called for each piece found, `e` ownedOf's entry, `pages` the window (pages[p - 1] page p) while it is
  * held. `end(take)`: no page after; every piece left is found
  */
-export function ownedPages({ follows, dropped = [], closing = () => null }) {
+export function ownedPages({ follows, dropped = [], closing = () => null, heads = null }) {
   const held = new Map(), regions = new Map(), counts = new Map(), opened = new Set(), early = new Map()
   /** the point names read a second time since `repeats()` was last asked */
   let fresh = []
@@ -571,6 +671,16 @@ export function ownedPages({ follows, dropped = [], closing = () => null }) {
       for (const entry of [...queue, { p, pieces }]) for (const x of entry.pieces) if (x.stop === false && stopFrom(entry.p, x.q, x.r)) x.stop = true
       queue.push({ p, pieces })
       drain(take)
+      // (a display its unit opens with, by the start mark: its own page alone, so found with it; a start mark read again later is
+      // told by twice(), the caller's to apply as for any point)
+      if (heads) {
+        let W = null
+        const window = () => { if (!W) { W = new Array(p).fill(EMPTY); W[p - 1] = page } return W }
+        page.points.forEach((pt, q) => {
+          if (!MARK_START.test(pt.name) || counts.get(pt.name) > 1 || dropped.includes(pt.name)) return
+          headEntries(heads(pt.name), page, R, p, q, n => opened.has(n), (n, e) => take(n, e, window()))
+        })
+      }
     },
     end(take) { drain(take, true) },
     /** the point names read more than once, on every page added */
