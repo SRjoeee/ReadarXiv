@@ -1153,8 +1153,18 @@ export function createLayerSide(view, o) {
       aheadSoon()
     })
   }
-  /** whether the view's own pages hold the door: a near page asked of it, or one answered and being put in place */
-  const viewBusy = () => committing > 0 || [...pages.values()].some(P => P.ask)
+  /** whether the view's own pages hold the door or the thread: a near page asked of the door, or one answered and being put in
+   *  place; or a near page PDF.js is drawing, on the left or as the original's in its place (a page view running or paused,
+   *  RenderingStates 1 and 2: a property read, no layout). On a fling over 1706.03762v7's figure pages (fast link, 1x, two runs
+   *  each, 2026-11-01) a window laid while the left drew the pages come into view kept its page 14 blank 392 and 489 ms, against
+   *  158 and 163 with none laid */
+  function viewBusy() {
+    if (committing > 0) return true
+    for (const P of pages.values()) if (P.ask) return true
+    const [lo, hi] = nearSpan()
+    for (let n = lo; n && n <= hi; n++) if (V.left.drawing?.(n) || [1, 2].includes(V.places.view(n)?.renderingState)) return true
+    return false
+  }
   /** whether pages may be laid ahead now: this attempt's rows ended (a host that translates as it shows is asked for nothing it has
    *  not translated), the door open, the document visible, the host's bound above 0 */
   const aheadOk = () => !disposed && !!door && state === 'open' && rowsEnded && aheadPages > 0 && globalThis.document?.visibilityState !== 'hidden'
@@ -1192,7 +1202,8 @@ export function createLayerSide(view, o) {
    * The AHEAD_PAGES pages past the near ones, the way the reader moves (nearMoved), while the reader scrolls as at rest: each laid
    * by the door and drawn at its place's k, kept as a drawing off the view (keepPixels) and put back as it comes near (bringBack),
    * so that a page comes into view translated. Background work: the window begun in a turn of the main thread at background
-   * priority (backgroundTurn), and only while no page of the view is asked of the door or being put in place; its pages' faces
+   * priority (backgroundTurn), and only while the view's own pages hold nothing (viewBusy: none asked of the door, put in place
+   * or drawn by PDF.js on either pane); its pages' faces
    * asked in one wave and the pages asked of the door at once (the nearest laid first), each copy drawn in a background turn; a page of the view asked gives the run up at
    * once (ask: stopAhead), its wave, its asks and its copy with it, and it begins again once the view's pages are in place. The
    * window read again once its pages are laid, so a reader who moves on moves it. Only with the right pane shown (V.centre) and the
@@ -1228,7 +1239,7 @@ export function createLayerSide(view, o) {
           if (V.places.near(m)) { await commit(m, laid, my); continue }
           if (originalPageOf(m) || laid.hides === 0) { aheadNothing.add(m); continue }
           await backgroundTurn(ac.signal)
-          if (!live()) return
+          if (!live() || viewBusy()) return
           const k = kOf(m)
           if (k === null) { aheadNothing.add(m); continue }
           let got
@@ -1288,8 +1299,10 @@ export function createLayerSide(view, o) {
       }, RECOPY_MS)
     }),
     V.onPageDrawn((s, n, error) => {
-      if (s !== 'left' || disposed) return
-      floatsFor(n, error)
+      if (disposed) return
+      if (s === 'left') floatsFor(n, error)
+      // (a page of the view drawn: the pages ahead may go on)
+      aheadSoon()
     }),
     V.onScrolled(() => {
       if (disposed) return

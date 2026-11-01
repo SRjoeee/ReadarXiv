@@ -520,6 +520,20 @@ describe('the pages ahead: laid the way the reader moves, while it scrolls as at
     expect(content(s, 3)).toBe('none')
   })
 
+  it('a page of the view PDF.js is drawing holds the pages ahead: they are laid once it is drawn', async () => {
+    const s = await setup({ door: { rows: 'gate' } })
+    await rows(s, [1], false)
+    expect(content(s, 1)).toBe('layer')
+    // (the left draws page 1, near the view, again)
+    leftViewer().startRender(1)
+    s.side.end()
+    await settle(s, 60)
+    expect(s.side.probe().ahead).toBe(0)
+    leftViewer().finishRender(1)
+    await settle(s, 60)
+    expect(s.side.probe()).toMatchObject({ ahead: AHEAD_PAGES, aheadKept: AHEAD_PAGES })
+  })
+
   it('a page ahead whose copy fails is not laid ahead again by the door; coming near it is asked as a page of the view', async () => {
     const s = await setup({ door: { rows: 'gate' }, ahead: 1, copyFails: [2] })
     await rows(s, [1])

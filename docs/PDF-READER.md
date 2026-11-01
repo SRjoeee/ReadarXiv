@@ -968,12 +968,32 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   that later moves), and all its marks go in the same task its drawing is put in place. An author's unit has none (it is
   never drawn), nor has a paragraph whose rows ended with no row of it, nor has a page that failed (the original's).
 - **The pages ahead** (the prefetch on the layer). Once the rows of the attempt have ended (a host that translates as it shows
-  is asked for nothing it has not translated), the door is open, no page of the view is asked of it, the right pane is shown
-  and the document visible, and the view has rested `AHEAD_IDLE_MS` (600 ms: no scroll, nothing asked, the last near page
-  committed), the side lays the `AHEAD_PAGES` (2) pages after the last near page past the middle of the view, one at a time,
-  each after its faces' wave, and draws each at its place's k into a drawing kept off the view: the reader reaching it finds
-  it put back at once. A scroll gives the window up (its ask and its copy under way aborted) until the view rests again; a
-  page come near meanwhile is committed as any near page. A host may lay none (`ahead: 0`). A page that fails, or whose copy fails, shows the
+  is asked for nothing it has not translated), the door is open, the right pane is shown and the document visible, the side
+  lays the `AHEAD_PAGES` (2) pages past the near ones the way the reader moves, while the reader scrolls as at rest, one at a
+  time on the main thread, and draws each at its place's k into a drawing kept off the view: the reader reaching it finds it
+  put back at once. The way the reader moves is read from the near places alone (an IntersectionObserver's run, no
+  layout read in the scroll's path): the edge of the run that moved past where it was, down by default; a run that shares no
+  page with the one before (a jump) reads on forward. The window is read again once its pages are laid, so a reader who moves
+  on moves it, and a run whose pages are no longer ahead, or that lays the other way, is given up. It is background work, by the
+  lesson of `WAVE_SLOTS` above (work the reader is not waiting on must not take the line or the thread from a page the reader
+  is waiting on): the window is begun in a turn of the main thread at background priority (`scheduler.postTask`'s
+  `background`, run once nothing of a higher priority waits; a task where the browser has no scheduler), and only while no
+  page of the view is asked of the door or being put in place; its pages' faces are asked in one wave and its pages of the
+  door at once, the nearest laid first, as the near pages are, and each copy is drawn in a background turn of its own. A page
+  of the view asked gives the run up at once (its wave's slices not begun, its asks, its copy under way), and the run begins
+  again once the view's pages are in place. Not an idle callback: Chromium gives a page no idle period while the reader
+  scrolls (`requestIdleCallback`, asked at the scroll's start on 1706.03762v7, fired only once the 6 s scroll had ended),
+  which is the very time the pages ahead are for. A page the door had begun to lay for the run is laid all the same, once (a page told
+  `laying` never goes back; the view's ask overtakes it, the door's `OVERTAKEN`), and a wave stopped before its end asks its
+  page's faces again next time. A scroll gives nothing up. A page come near while it is laid ahead is committed as any near
+  page; one whose lay or copy fails, or that draws nothing of the layer, is not laid ahead again by the same door. A host may
+  lay none (`ahead: 0`).
+  MEASURED-HERE
+  Until 2026-11-01 the pages ahead were laid only once the view had rested 600 ms (`AHEAD_IDLE_MS`: no scroll, nothing asked,
+  the last near page committed), and a scroll gave the window up: a reader who kept scrolling never had them. On staging
+  (2026-11-01, the comparison with hjfy.top's reader, 1706.03762v7 and 2501.14787v1), 2 of the 10 right pages of a steady
+  10-page scroll first showed arXiv's page, the translation 49 to 1,052 ms after it came into view, and up to 4.2 s (p95)
+  with the CPU four times slower. A page that fails, or whose copy fails, shows the
   original and is asked again on a zoom, on coming near or (a copy) on the next scroll; one asked, told `laying` and not
   laid within 30 s (`PAGE_MS`) shows the original, warns once a side and is asked again on the next scroll, its late
   `ready` taken. A page still `waiting` (its part, its closure or its rows) is never a stall. After a reopen a laid page
