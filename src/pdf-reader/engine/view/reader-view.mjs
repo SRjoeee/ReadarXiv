@@ -885,7 +885,7 @@ export function createReaderView(host) {
   handles.set(view, {
     pane: R.container,
     places: {
-      count: () => places.count(), page: n => places.page(n), view: n => places.views().get(n), near: n => places.near(n),
+      count: () => places.count(), page: n => places.page(n), view: n => places.views().get(n), near: n => places.near(n), drawing: n => places.drawing(n),
       contentOf: n => places.contentOf(n),
       box: n => places.box(n),
       swap(n, content, o) { const ok = places.swap(n, content, o); if (ok) tellRightPage(); return ok },

@@ -550,6 +550,37 @@ describe('the pages ahead: laid the way the reader moves, while it scrolls as at
     expect(s.side.probe()).toMatchObject({ ahead: AHEAD_PAGES, aheadKept: AHEAD_PAGES })
   })
 
+  it('a near place drawing the original\'s page holds the pages ahead too (places.drawing): told by the places, not their slots', async () => {
+    // the places tell which place they are drawing on: a place's draw held at page 2
+    let release = () => {}
+    const held = new Promise<void>(ok => { release = ok })
+    const draw = FakePDFPageView.prototype.draw
+    vi.spyOn(FakePDFPageView.prototype, 'draw').mockImplementation(async function (this: FakePDFPageView) { if (this.id === 2) await held; return draw.call(this) })
+    const a = await setup()
+    await nearOn(a, [2])
+    await flush(10)
+    const I = internalsOf(a.view)
+    expect(I.places.drawing(2)).toBe(true)
+    expect(I.places.drawing(1)).toBe(false)
+    release()
+    await flush(10)
+    expect(I.places.drawing(2)).toBe(false)
+    vi.restoreAllMocks()
+    // and the side waits while one is drawing
+    const s = await setup({ door: { rows: 'gate' } })
+    await rows(s, [1], false)
+    const places = internalsOf(s.view).places, real = places.drawing
+    places.drawing = (n: number) => n === 1
+    s.side.end()
+    await settle(s, 60)
+    expect(s.side.probe().ahead).toBe(0)
+    places.drawing = real
+    // (a page drawn: the side asked again, as the right's pagerendered tells it)
+    s.side.end()
+    await settle(s, 60)
+    expect(s.side.probe()).toMatchObject({ ahead: AHEAD_PAGES, aheadKept: AHEAD_PAGES })
+  })
+
   it('a page ahead whose copy fails is not laid ahead again by the door; coming near it is asked as a page of the view', async () => {
     const s = await setup({ door: { rows: 'gate' }, ahead: 1, copyFails: [2] })
     await rows(s, [1])

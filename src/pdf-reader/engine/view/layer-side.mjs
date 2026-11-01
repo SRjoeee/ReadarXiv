@@ -1160,15 +1160,15 @@ export function createLayerSide(view, o) {
     })
   }
   /** whether the view's own pages hold the door or the thread: a near page asked of the door, or one answered and being put in
-   *  place; or a near page PDF.js is drawing, on the left or as the original's in its place (a page view running or paused,
-   *  RenderingStates 1 and 2: a property read, no layout). On a fling over 1706.03762v7's figure pages (fast link, 1x, two runs
+   *  place; or a near page PDF.js is drawing, on the left (its page view running or paused, RenderingStates 1 and 2) or as the
+   *  original's in its place (the places' own drawing, one at a time): property reads, no layout. On a fling over 1706.03762v7's figure pages (fast link, 1x, two runs
    *  each, 2026-11-01) a window laid while the left drew the pages come into view kept its page 14 blank 392 and 489 ms, against
    *  158 and 163 with none laid */
   function viewBusy() {
     if (committing > 0) return true
     for (const P of pages.values()) if (P.ask) return true
     const [lo, hi] = nearSpan()
-    for (let n = lo; n && n <= hi; n++) if (V.left.drawing?.(n) || [1, 2].includes(V.places.view(n)?.renderingState)) return true
+    for (let n = lo; n && n <= hi; n++) if (V.left.drawing?.(n) || V.places.drawing?.(n)) return true
     return false
   }
   /** whether pages may be laid ahead now: this attempt's rows ended (a host that translates as it shows is asked for nothing it has
