@@ -118,6 +118,18 @@ Prose after a closed table.
     // (a body that sets two cells: its call as the paper's macro was read before, the rows after it where they were)
     expect(cells(t('\\both{Left text here}{Right text here}\nNext cell words & Value words\\\\')).map(c => [c.text, c.row, c.col])).toEqual([['Next cell words', 0, 0], ['Value words', 0, 1]])
   })
+  it('…nor one defined otherwise too, nor one that stores its text (Codex on #549)', () => {
+    const t = (more: string, rows: string) => `\\documentclass{article}\n${more}\n\\begin{document}\n\\begin{tabular}{lll}\n${rows}\n\\end{tabular}\n\\end{document}\n`
+    // (a \def after the \newcommand is the definition TeX uses: no row's end)
+    const def = t(String.raw`\newcommand{\celltext}[1]{#1\\}\def\celltext#1{#1}`, 'First column & \\celltext{Second column} & Third column\\\\')
+    expect(cells(def).map(c => [c.text, c.row, c.col])).toEqual([['First column', 0, 0], ['Second column', 0, 1], ['Third column', 0, 2]])
+    // (its text kept for elsewhere: a front unit with no mark, as before, the row still ended after the call)
+    const stored = t(String.raw`\newcommand{\saverow}[1]{\gdef\saved{#1}Visible words\\}`, '\\saverow{Kept row words here}\nNext cell words & More words & Last\\\\')
+    const paper = openPaper(new Map([['main.tex', enc(stored)]]))
+    const marked = new TextDecoder().decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(marked).toContain('\\saverow{Kept row words here}')
+    expect(cells(stored).filter(c => c.text.startsWith('Next')).map(c => [c.row, c.col])).toEqual([[1, 0]])
+  })
   it('no mark of ours between a row\'s end and the next row', () => {
     const paper = openPaper(new Map([['main.tex', enc(tex)]]))
     const marked = new TextDecoder().decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))

@@ -1869,7 +1869,8 @@ function walk(s, from, to, b, ctx) {
     const call = own && macroArgs(s, end, macro, to)
     // (one whose body ends the row after its arguments, in a cell (rowEndsAfterOf): a row of its own, its text a cell inside
     // its argument's group, the row ended after the call. Read as a pair, its text ran on into the next row's first cell)
-    if (call && b.cellMode && ctx.rowEndsAfter?.has(name)) {
+    // (not one that stores its text, which the paper sets elsewhere: a front unit with no mark, below)
+    if (call && b.cellMode && ctx.rowEndsAfter?.has(name) && !macro.stores) {
       // (the pair's id spent as the call's pair spent it: the pairs after it keep theirs, and their units their hashes)
       endText(); b.flush(); b.pairId++
       const arg = macro.prose ? call.reqs[macro.prose - 1 - (macro.opt ? 1 : 0)] : null
@@ -1993,9 +1994,10 @@ function walk(s, from, to, b, ctx) {
  *  parameter text). A name also defined otherwise — with parameters (`\\renewcommand{\\x}[1]{…}`, `\\def\\x#1{…}`), by \\let, by
  *  xparse's commands, or with another body — is none (the review of #501's fix round: a row end later redefined with an argument
  *  split its cell) */
+/** a definition of a command in any form the walk reads: LaTeX's, TeX's, a \\let, a document command's (its name the first group set) */
+const DEFINITION = /\\(?:(?:(?:re)?newcommand|providecommand|DeclareRobustCommand)\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))|[egx]?def\s*\\([A-Za-z@]+)|let\s*\\([A-Za-z@]+)|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+)))/g
 function rowEndsOf(texts) {
   const out = new Set(), other = new Set()
-  const DEFINITION = /\\(?:(?:(?:re)?newcommand|providecommand|DeclareRobustCommand)\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))|[egx]?def\s*\\([A-Za-z@]+)|let\s*\\([A-Za-z@]+)|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+)))/g
   for (const t of texts.map(uncommented)) {
     for (const m of t.matchAll(DEFINITION)) {
       if (m.index > 0 && t[m.index - 1] === '\\') continue
@@ -2017,13 +2019,18 @@ function rowEndsOf(texts) {
 function rowEndsAfterOf(texts) {
   const out = new Map(), other = new Set()
   for (const t of texts.map(uncommented)) {
-    for (const m of t.matchAll(/\\(?:(?:re)?newcommand|providecommand)\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(\[\s*(\d)\s*\])?\s*(\[[^\]]*\])?\s*/g)) {
-      if (m.index > 0 && t[m.index - 1] === '\\') continue
-      const name = m[1] ?? m[2], n = Number(m[4] ?? 0), k = m.index + m[0].length, e = t[k] === '{' ? matchGroup(t, k) : -1
+    // (every definition of a name, in any form (DEFINITION): one of LaTeX's with arguments and no optional one may be a row's
+    // end; any other makes the name none, as a later \\def of it is TeX's)
+    for (const d of t.matchAll(DEFINITION)) {
+      if (d.index > 0 && t[d.index - 1] === '\\') continue
+      const name = d[1] ?? d[2] ?? d[3] ?? d[4] ?? d[5] ?? d[6]
+      const m = (d[1] ?? d[2]) ? /^\s*\[\s*(\d)\s*\]\s*(\[[^\]]*\])?\s*/.exec(t.slice(d.index + d[0].length)) : null
+      if (!m) { other.add(name); continue }
+      const n = Number(m[1]), k = d.index + d[0].length + m[0].length, e = t[k] === '{' ? matchGroup(t, k) : -1
       // (one whose body sets cells of its own, `&` between them, is read as the paper's macro is anywhere: its arguments' cells
       // are not known here)
       const body = e > 0 ? t.slice(k + 1, e - 1).trim() : ''
-      if (n > 0 && !m[5] && e > 0 && ROW_END_TAIL.test(body) && !/(?:^|[^\\])&/.test(body)) out.set(name, n); else other.add(name)
+      if (n > 0 && !m[2] && e > 0 && ROW_END_TAIL.test(body) && !/(?:^|[^\\])&/.test(body)) out.set(name, n); else other.add(name)
     }
   }
   for (const n of other) out.delete(n)
