@@ -438,7 +438,9 @@ is taken only over the pages. The overlays follow the pinch exactly (§10.1).
   three times at 4x (hjfy-compare's gesture, 1440×900), 84–91 frames dropped against 1. The commit costs one step's layout
   (a 15 ms task at 1x, up to 185 ms at 4x for a threefold zoom, against next's redraw of 139–150 ms). Shown as a layer at its
   first scale, the pages are soft while the fingers grow them and sharp from the commit; drawn again at every step's scale
-  instead, the GPU spent three times next's and a pinch out dropped frames for it (0 → 14 % at 1x).
+  instead, the GPU spent three times next's and a pinch out dropped frames for it (0 → 14 % at 1x). The owner watched the
+  same gestures side by side at 1x and 4x and accepted both costs, the softness while the pages grow and the frames a pinch
+  out drops at 1x (2026-11-02: 「能接受」).
 - **Why** (the owner's recording on 1706.03762v7, 2026-11-01, the handles jittering through a pinch; the probe's frames): the right pane was kept
   only where a page lay under the pointer, and a pointer beside a page at a small zoom kept nothing, so that the pane stood
   still while its pages grew about its top — its thumb jumping 10–14 px a step, the pair drifting two pages apart, levelled

@@ -4,7 +4,6 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
-- The PDF reader's pinch to zoom follows the fingers more smoothly, most of all on long papers and slower computers: while the fingers move, the pages are scaled as a picture, and they are laid out and drawn once, a moment after the fingers stop. Before, every step of a pinch laid out every page of both sides again, so the zoom moved in jumps. While the pages grow they look a little soft, and they sharpen as the fingers stop.
 - Fixed: in the PDF reader, pinching to zoom keeps both sides on the same page and the scroll handles steady. The side under the pointer had stood still while its pages grew or shrank whenever the pointer was beside a page rather than on one, so the two sides drifted pages apart and slid back together afterwards, and the handles jumped up and down at every step. A slow pinch at a small zoom also zooms now; it had done nothing.
 - Fixed: in the PDF reader, a theorem's text now follows its translated head where the head holds a citation; a paragraph whose first line on a new page is mostly a formula is translated, not left in English; the translated contents keep their links; a sentence's highlight no longer runs over the blank TeX leaves before a display.
 - In the PDF reader, a page still being translated shows a soft light passing through its text, with nothing drawn over the paper. With reduced motion turned on, the waiting paragraphs are only a little lighter, and nothing moves.
