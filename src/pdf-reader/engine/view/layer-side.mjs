@@ -629,20 +629,22 @@ export function createLayerSide(view, o) {
     // arXiv's PDF)
     if (originalPageOf(n)) { ruledOriginal(n); return }
     if (P.ask) return
-    const my = gen, a = new AbortController()
+    const my = gen, a = new AbortController(), d = door
     P.ask = a
     counts.asked++
     let st
-    try { st = door.pageState(n) } catch { P.ask = null; return }
+    try { st = d.pageState(n) } catch { P.ask = null; return }
     if (st === 'laying') clockOn(n)
-    door.pageOf(n, { lang: doorTarget, signal: a.signal }).then(laid => {
+    d.pageOf(n, { lang: doorTarget, signal: a.signal }).then(laid => {
       if (P.ask === a) P.ask = null
       clockOff(n)
       if (disposed || my !== gen) return
       P.stalled = false
       rearm.delete(n)
       if (!V.places.near(n)) { retire(n); return }
-      void commit(n, laid, my)
+      // (the door lays no other page until this one is in place, door.hold: the copy's frames are not shared with the next page's
+      // reading and lay, so that the page the reader waits on is shown first)
+      d.hold(commit(n, laid, my).catch(e => warn('commit', e)))
     }, e => {
       if (P.ask === a) P.ask = null
       if (disposed || my !== gen || isAbort(e)) return

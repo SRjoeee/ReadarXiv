@@ -95,6 +95,27 @@ describe('L11: laid in place', () => {
     expect(content(s, 1)).toBe('layer')
   })
 
+  it('holds the door from a near page\'s answer until its copy and SVG are in place, a hold a page put in place (door.hold)', async () => {
+    let release = () => {}
+    const held = new Promise<void>(ok => { release = ok })
+    const s = await setup({ copyHold: n => (n === 1 ? held : null) })
+    await nearOn(s, [1, 2])
+    s.side.tell(await ALL())
+    await settle(s)
+    // (page 2 in place, its hold settled; page 1's copy under way, its hold not)
+    const holds = s.doors[0]?.holds ?? []
+    expect(content(s, 2)).toBe('layer')
+    expect(content(s, 1)).not.toBe('layer')
+    expect(holds.map(h => h.settled).sort()).toEqual([false, true])
+    const one = holds.find(h => !h.settled) as (typeof holds)[number]
+    // (settled once the page is in place, never at its copy alone)
+    const at = one.promise.then(() => content(s, 1))
+    release()
+    await settle(s)
+    expect(await at).toBe('layer')
+    expect(holds.length).toBe(2)
+  })
+
   it('dispose brings the original\'s page back to every laid place near the view, and leaves no copy', async () => {
     const s = await setup()
     await nearOn(s, [1, 2])

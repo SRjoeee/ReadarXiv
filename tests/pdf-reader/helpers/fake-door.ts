@@ -352,6 +352,12 @@ class FakeLayer implements Layer {
   }
 
   // ---------------------------------------------------------------- the rest
+  /** the holds the host asked, each its promise: kept, never waited on (the fake lays when the test says, `advance`) */
+  readonly holds: PromiseLike<unknown>[] = []
+  hold(promise: PromiseLike<unknown>): void {
+    if (this.disposed) return
+    this.holds.push(promise)
+  }
   /** as the real door: render A of the composed document's page (its render told, with the host's annotation mode), on a canvas of
    *  the size asked */
   copyOf(page: number, o: { k: number; width: number; height: number; context?: CanvasRenderingContext2DSettings | null; annotationMode?: number; signal?: AbortSignal | null }): Promise<HTMLCanvasElement> {

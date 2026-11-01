@@ -429,6 +429,67 @@ describe('the door: three opens, the same pages', () => {
     } finally { delete g.scheduler; performance.now = was; layer.dispose() }
   })
 
+  it('holds the drive while its host puts a page answered in place (hold): no other page read or told until the hold settles, then laid as with none', async () => {
+    const want = await cascadeInOrder()
+    const { layer, doc, told } = await cascadeDoor({ end: false, rows: false })
+    try {
+      let release = () => {}
+      const commit = new Promise<void>(ok => { release = ok })
+      // (page 6 asked, then page 1, the newest, laid first once the rows are in; its host holds the drive in its answer's reaction,
+      // as the side does)
+      const six = layer.pageOf(6, { lang: 'zh' })
+      const one = layer.pageOf(1, { lang: 'zh' }).then(p => { layer.hold(commit); return p })
+      layer.take(cascadeRows)
+      layer.end()
+      await one
+      await settleDown(layer, CASCADE.pages)
+      // (a page asked during the hold waits as well, never told laying meanwhile)
+      const four = layer.pageOf(4, { lang: 'zh' })
+      await settleDown(layer, CASCADE.pages)
+      expect(doc.reads.every(n => n <= 2)).toBe(true)
+      expect(told.filter(e => /:[3-6]$/.test(e))).toEqual([])
+      expect([4, 6].map(p => layer.pageState(p))).toEqual(['waiting', 'waiting'])
+      release()
+      const [p6, p4] = await Promise.all([six, four])
+      // (then the newest ask first, as the door lays with no hold, each page as laid in order)
+      expect(told.indexOf('ready:4')).toBeLessThan(told.indexOf('ready:6'))
+      const strip = (svg: string) => svg.replace(' lang="zh"', '')
+      expect([strip(p4.svg.outerHTML), strip(p6.svg.outerHTML)]).toEqual([strip(want[3]!), strip(want[5]!)])
+    } finally { layer.dispose() }
+  })
+
+  it('ends a hold 2 s after it at most: a host whose promise never settles keeps the next page waiting no longer', async () => {
+    const real = globalThis.setTimeout
+    // (the bound's timer, the one set by the hold, run at once: no test waits for it)
+    const long: (number | undefined)[] = []
+    let holding = false
+    const spy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: () => void, ms?: number, ...rest: unknown[]) => {
+      if (!holding) return real(fn, ms, ...rest)
+      long.push(ms)
+      return real(fn, 0, ...rest)
+    }) as typeof setTimeout)
+    const { layer, told } = await cascadeDoor()
+    try {
+      const six = layer.pageOf(6, { lang: 'zh' })
+      await layer.pageOf(1, { lang: 'zh' }).then(p => { holding = true; try { layer.hold(new Promise(() => {})) } finally { holding = false } return p })
+      await six
+      expect(told).toContain('ready:6')
+      expect(long).toEqual([2000])
+    } finally { spy.mockRestore(); layer.dispose() }
+  })
+
+  it('lets a hold go at dispose: the pages waiting behind it rejected, nothing more read; a hold asked after it is nothing', async () => {
+    const { layer, doc } = await cascadeDoor()
+    const six = layer.pageOf(6, { lang: 'zh' }).then(() => 'value', (e: Error) => e.message)
+    await layer.pageOf(1, { lang: 'zh' }).then(p => { layer.hold(new Promise(() => {})); return p })
+    await settleDown(layer, CASCADE.pages)
+    layer.dispose()
+    expect(await six).toMatch(/let go/)
+    for (let i = 0; i < 5; i++) await tick()
+    expect(doc.reads.every(n => n <= 2)).toBe(true)
+    expect(() => layer.hold(Promise.resolve())).not.toThrow()
+  })
+
   it('F2: a page asked that fails rejects its asks, and the next page asked is laid', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const c = await cutSpec(SPEC)
