@@ -1230,8 +1230,10 @@ export function createLayerSide(view, o) {
         keepFar(m, drawingOf(m, laid, got, my), laid)
         if (drawings.has(m)) counts.aheadKept++
       }
-    } catch {
-      // (given up, its ask or copy aborted; or a page or its copy failed: it shows the original as it comes near, asked again there)
+    } catch (e) {
+      // (given up, its ask or copy aborted; or a page or its copy failed: not laid ahead again by this door, asked again as it comes
+      // near, where it shows the original if it fails there too)
+      if (!isAbort(e) && my === gen && aheadAt) aheadNothing.add(aheadAt)
     } finally {
       if (aheadAc === ac) { aheadAc = null; aheadAt = 0 }
     }
