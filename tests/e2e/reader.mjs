@@ -665,10 +665,10 @@ try {
     check('a pinch over the right scales the left\'s viewer, the places with it; the zoom then none', pz.scale > before * 1.15 && pz.zoom === null && sameBoxes(bp), JSON.stringify({ from: before, to: pz.scale, zoom: pz.zoom }))
 
     // a trackpad's pinch as Chromium sends it, Ctrl-wheels of 1 to 3 %, over the right at a small zoom with the pointer beside
-    // the page, where no page holds the point (§6.8): read in every frame after its layout, the pair stands level and shows
-    // the same page at its middle, and each pane's thumb has the length that frame's scroll asks (§6.5; its place is the
-    // browser's scroll timeline's). The owner's recording of 2026-11-01: the right pane kept nothing there, and both thumbs
-    // took their length a frame after their place
+    // the page, where no page holds the point (§6.8): read in every frame after its layout, through the steps shown by
+    // transform and the commit, the pair stands level and shows the same page at its middle, and each pane's thumb has the
+    // length that frame's scroll asks (§6.5; its place is the browser's scroll timeline's). The owner's recording of
+    // 2026-11-01: the right pane kept nothing there, and both thumbs took their length a frame after their place
     await page.evaluate(() => window.__reader.controller.zoomTo(0.3))
     await page.waitForTimeout(900)
     await page.mouse.move(R0.x + R0.width / 2, R0.y + R0.height / 2)
@@ -702,7 +702,9 @@ try {
       await cdp.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: pinchAt[0], y: pinchAt[1], deltaX: 0, deltaY: -1 - (i % 3), modifiers: 2 })
       await page.waitForTimeout(16)
     }
-    // read before the rest's wait after the last step is over: what the steps left, not what a level after them mended
+    // read through the commit (PINCH_COMMIT_MS after the last step), and before the rest's wait after it is over: what the
+    // pinch left, not what a level after it mended
+    await page.waitForFunction(() => window.__reader.view.probe().pinching === null, null, { timeout: 5000 })
     await page.waitForTimeout(60)
     const pinchFrames = await page.evaluate(() => { const f = window.__pinchFrames; window.__pinchFrames = null; return f })
     await cdp.detach()
@@ -903,8 +905,9 @@ try {
     const tree = await place.ariaSnapshot()
     const once = ['[echo] Introduction', 'The Read arXiv Contributors'].map(w => ({ w, n: tree.split(w).length - 1 }))
     check('the accessibility tree holds each text of the laid page once (the text layer\'s; the SVG\'s hidden)', once.every(x => x.n === 1), JSON.stringify(once))
-    // a pinch over the laid page: while its steps last the text layer is out of style and layout (engine.css, the stack marked
-    // scaling: no step makes its spans again), and once the page is drawn again it is back, the same spans, the selection kept
+    // a pinch over the laid page: while its steps last it is shown by transform, its text layer untouched; from its commit the
+    // text layer is out of style and layout (engine.css, the stack marked scaling) until the page is drawn again, and then
+    // back, the same spans, the selection kept
     const pinchAt = await page.evaluate(sel => { const r = document.querySelector(sel).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 3] }, P1)
     const kept = await page.evaluate(sel => {
       const spans = [...document.querySelectorAll(`${sel} .axt-layer > .textLayer > span`)]
@@ -915,10 +918,13 @@ try {
     }, P1)
     const z0 = await probe(), zoom0 = z0.zoom ?? z0.scale
     await page.evaluate(([x, y]) => { window.__reader.controller.pinch('right', 1.05, [x, y]); window.__reader.controller.pinch('right', 1.05, [x, y]) }, pinchAt)
-    const during = await page.evaluate(sel => { const t = document.querySelector(`${sel} .axt-layer > .textLayer`); const c = t ? getComputedStyle(t) : null; return { out: c ? c.display === 'none' || c.contentVisibility === 'hidden' : null, marked: !!t?.closest('[data-axt-scaling]') } }, P1)
+    const textNow = sel => { const t = document.querySelector(`${sel} .axt-layer > .textLayer`); const c = t ? getComputedStyle(t) : null; return { out: c ? c.display === 'none' || c.contentVisibility === 'hidden' : null, marked: !!t?.closest('[data-axt-scaling]'), shown: document.getElementById('right').style.transform } }
+    const during = await page.evaluate(textNow, P1)
+    await page.waitForFunction(() => window.__reader.view.probe().pinching === null, null, { timeout: 5000 })
+    const committed = await page.evaluate(textNow, P1)
     await page.waitForTimeout(1200)
     const settled = await page.evaluate(sel => { const t = document.querySelector(`${sel} .axt-layer > .textLayer`); const c = t ? getComputedStyle(t) : null; return { out: c ? c.display === 'none' || c.contentVisibility === 'hidden' : null, marked: !!document.querySelector('#right [data-axt-scaling]'), spans: t?.querySelectorAll(':scope > span').length ?? 0, selected: getSelection().toString() } }, P1)
-    check('a pinch over the laid page: its text layer out of style and layout while the steps last, back once it is drawn again, the same spans, the selection kept', during.out === true && during.marked && settled.out === false && !settled.marked && settled.spans === kept.spans && kept.selected.length > 0 && settled.selected === kept.selected, JSON.stringify({ kept, during, settled }))
+    check('a pinch over the laid page: shown by transform while its steps last, its text layer untouched; out of style and layout from its commit, back once it is drawn again, the same spans, the selection kept', during.out === false && !during.marked && /scale\(/.test(during.shown) && committed.out === true && committed.marked && committed.shown === '' && settled.out === false && !settled.marked && settled.spans === kept.spans && kept.selected.length > 0 && settled.selected === kept.selected, JSON.stringify({ kept, during, committed, settled }))
     await page.evaluate(() => getSelection().removeAllRanges())
     await page.evaluate(z => window.__reader.controller.zoomTo(z), zoom0)
     await page.waitForTimeout(900)

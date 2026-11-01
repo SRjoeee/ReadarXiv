@@ -102,6 +102,8 @@ export interface ReaderView {
   dispose(): void
 }
 export declare function createReaderView(host: ReaderHost): ReaderView
+/** how long after a pinch's last step it is committed: shown by transform until then (docs/PDF-READER.md §6.8) */
+export declare const PINCH_COMMIT_MS: number
 export type ViewEvent =
   | { type: 'loading'; loaded: number; total: number }
   | { type: 'opened'; pages: number }

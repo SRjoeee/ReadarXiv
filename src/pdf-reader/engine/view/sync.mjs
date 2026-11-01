@@ -189,6 +189,8 @@ export function createFollower(o) {
   const clock = o.clock
   const endMs = o.timer ? SCROLL_END_MS.timer : SCROLL_END_MS.native
   let driver = null, step = 0, touching = false, zoomRest = 0, zoomGen = 0, stopped = false
+  /** a zoom under way (zooming, until zoomed): nothing is bound, so that no transform of the follower's meets the zoom's */
+  let zoomHeld = false
   /** `pos`: the follower's position, fractional (scrollTop rounds to device pixels, and steps of one size must not drift
    *  by it); `lastD`: the driver's position last seen, null to read afresh; `rest`: the wait after the scroll's end;
    *  `spring`: the glide by script under way; `moving`: the driver scrolling, from its first step to its scroll's end;
@@ -250,7 +252,7 @@ export function createFollower(o) {
    *  the driver's steps since the positions it goes on from, within the follower's ends — as keyframes of a ScrollTimeline
    *  on the driver, linear between */
   function arm() {
-    if (!onCompositor() || !driver || glass.anim) return
+    if (!onCompositor() || !driver || glass.anim || zoomHeld) return
     const d = driver, f = other(d), dc = d.container, tc = f.container
     const Dmax = dc.scrollHeight - dc.clientHeight, Fmax = tc.scrollHeight - tc.clientHeight, F0 = tc.scrollTop
     if (Dmax < 1 || !dc.clientHeight || !tc.clientHeight) return
@@ -418,6 +420,7 @@ export function createFollower(o) {
     /** the pair levelled once a zoom settles: its last step, REST_MS more, both stacks laid out at the new scale, then by
      *  the driver as at a rest, or by the left where neither has been read. Not while a scroll or its rest is under way */
     zoomed() {
+      zoomHeld = false
       const mine = ++zoomGen
       clock.clear(zoomRest)
       zoomRest = clock.later(async () => {
@@ -439,6 +442,7 @@ export function createFollower(o) {
      *  had moved the other pane one way while the next step moved it back */
     zooming(side) {
       if (side) take(side)
+      zoomHeld = true
       bake(); stopSpring(); clearRest(); clearFallback()
       follow.moving = false
       follow.lastD = null
