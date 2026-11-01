@@ -1,8 +1,9 @@
 // The translating indicator's look (engine/view/engine.css, docs/PDF-READER.md §11.8): the owner's Glint, a light of the
 // paper's own colour over no ground. Held here: the light is the page's paper in both looks and laid with no blend (the
 // overlay is a stacking context, so a mark's own blend would mix with nothing but its empty ground: measured 2026-11-01);
-// a look with no ground still shows a mark where the light cannot pass (reduced motion, or a browser that cannot animate it);
-// and the code's fallback padding is the sheet's
+// a look with no ground still shows a mark where the light cannot pass (reduced motion, or a browser that cannot size a
+// container); the pass is the compositor's (a transform, nothing animated on the page's thread); and the code's fallback
+// padding is the sheet's
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -43,8 +44,21 @@ describe('the translating look: Glint (the owner, 2026-11-01)', () => {
     }
     expect(value(rulesOf(engine, '.axt-translating-still .axt-translating-mark'), 'background')).toBe('var(--axt-tr-still, var(--axt-tr-ground))')
     const rm = reducedMotion(engine)
-    expect(rm).toMatch(/\.axt-translating\s*\{\s*animation:\s*none;?\s*\}/)
+    expect(value(rulesOf(rm, '.axt-translating .axt-translating-mark::before'), 'content')).toBe('none')
     expect(value(rulesOf(rm, '.axt-translating .axt-translating-mark'), 'background')).toBe('var(--axt-tr-still, var(--axt-tr-ground))')
+    expect(value(rulesOf(engine, '.axt-translating-still .axt-translating-mark::before'), 'content')).toBe('none')
+  })
+
+  it('the pass runs on the compositor: a transform of each mark\'s picture of the light, no property animated on the page\'s thread', () => {
+    // (the light's picture clipped by its mark, moved by a transform: no style, layout or paint while it runs, measured 2026-11-01)
+    expect(value(rulesOf(engine, '.axt-translating .axt-translating-mark'), 'overflow')).toBe('hidden')
+    expect(value(rulesOf(engine, '.axt-translating .axt-translating-mark::before'), 'animation')).toMatch(/^axt-tr-pass /)
+    const pass = /@keyframes\s+axt-tr-pass\s*\{([\s\S]*?\})\s*\}/.exec(engine)?.[1] ?? ''
+    expect([...pass.matchAll(/\{([^}]*)\}/g)].flatMap(m => (m[1] ?? '').split(';').map(d => d.split(':')[0]?.trim()).filter(Boolean))).toEqual(['transform', 'transform'])
+    // (nothing registered to animate, and no keyframes of a custom property: either would restyle every mark each frame)
+    expect(engine).not.toMatch(/@property\s+--axt-tr-/)
+    expect([...engine.matchAll(/@keyframes\s+axt-tr-[\w-]+\s*\{([\s\S]*?\})\s*\}/g)].some(m => /--axt-/.test(m[1] ?? ''))).toBe(false)
+    expect(value(rulesOf(engine, '.axt-translating'), 'animation')).toBeNull()
   })
 
   it('the card\'s padding the code falls back on is the sheet\'s', () => {
