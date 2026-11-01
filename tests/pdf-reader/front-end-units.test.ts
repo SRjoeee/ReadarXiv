@@ -248,6 +248,13 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     }
     expect(marked('A hyphen-%\n  ated word of the paper.', [['custom.cls', '\\LoadClass{article}\\AtBeginDocument{\\obeyspaces}']], 'custom')).toContain('hyphen-  ated')
   })
+  it('…a symbolic active space too, and a control word inside a joined piece keeps its end (Codex on #552)', () => {
+    const marked = (body: string, pre = '') => new TextDecoder().decode(originalFiles(openPaper(new Map([['main.tex', enc(doc(body, pre))]])), { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(marked('A hyphen-%\n  ated word of the paper.', '\\catcode32=\\active\\def {\\space}')).toContain('hyphen-  ated')
+    const pre = '\\newcommand{\\prefix}[1]{Foo#1}'
+    const plain = new TextDecoder().decode(patch(project(doc('Words with \\prefix\\L%\n  ukasz are here.', pre)), new Map()).get('main.tex'))
+    for (const out of [plain, marked('Words with \\prefix\\L%\n  ukasz are here.', pre)]) expect(out).not.toContain('\\Lukasz')
+  })
   it('…and in an entry, cut around its year (Devin on #552)', () => {
     const tex = '\\documentclass{article}\n\\begin{document}\nText.\n\\begin{thebibliography}{1}\n\\bibitem{a} A. Author. Alpha words%\n  2020 nearby words of the title.\n\\end{thebibliography}\n\\end{document}\n'
     const out = new TextDecoder().decode(originalFiles(openPaper(new Map([['main.tex', enc(tex)]])), { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))

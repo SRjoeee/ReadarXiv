@@ -1015,8 +1015,9 @@ function displayOutside(pieces, displays, macros) {
  */
 const SKIPPED = new WeakMap()
 /** whether a paper makes the space character active anywhere (\\obeyspaces, a \\catcode of the space set to 13): there TeX reads
- *  a line's indent after a comment as active spaces, not as nothing, and the walk keeps every indent (SKIPPED stays empty) */
-const activeSpacesIn = texts => texts.some(t => /\\obeyspaces(?![A-Za-z@])|\\catcode\s*(?:`\\? |32\b|"20\b|'40\b)\s*=?\s*13\b/.test(uncommented(t)))
+ *  a line's indent after a comment as active spaces, not as nothing, and the walk keeps every indent (SKIPPED stays empty).
+ *  `\\catcode32=13` or `=\\active`, in any of the paper's own files */
+const activeSpacesIn = texts => texts.some(t => /\\obeyspaces(?![A-Za-z@])|\\catcode\s*(?:`\\? |32\b|"20\b|'40\b)\s*=?\s*(?:13\b|\\active(?![A-Za-z@]))/.test(uncommented(t)))
 /** the text patch writes of a piece */
 const written = p => p.src ?? p.s
 /** `q`, the text `p` writes from `from` to `to` (written), keeps the indents TeX skips there (SKIPPED) */
@@ -2800,7 +2801,9 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
       const q = p.t === 'text' && !p.tr && p.src !== undefined ? { ...p, s: p.src } : p, r = p.t === 'text' && !p.tr ? SKIPPED.get(p) : null
       if (!r) { pieces.push(bare ? { ...q, bared: true } : q); bare = false; continue }
       let t = q.s
-      for (const [o, n] of [...r].sort((x, y) => y[0] - x[0])) t = t.slice(0, o) + t.slice(o + n)
+      // (an indent right after a control word in the piece, before a letter, becomes one space, which TeX skips there: the
+      // name ends where the source ended it)
+      for (const [o, n] of [...r].sort((x, y) => y[0] - x[0])) t = t.slice(0, o) + (/\\[A-Za-z@]+$/.test(t.slice(0, o)) && /^[A-Za-z@\u0080-\uffff]/.test(t.slice(o + n)) ? ' ' : '') + t.slice(o + n)
       if (!t) { bare = true; continue }
       pieces.push({ ...q, s: t, ...(bare || r.some(([o]) => o === 0) ? { bared: true } : {}) })
       bare = false
