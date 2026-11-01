@@ -910,7 +910,8 @@ describe("the class's own marks after a unit's text: a theorem's note (2610.2108
   const lu = unitOf([L], [], [0, 1, 10, 500, 48, 507, 498])
   const bold = { fam: 'serif', bold: true, italic: false, caps: false, known: true } as never
   const page = [...item('Def (', 10, 500, 10, 0, bold), ...item('Latent transition error', 50, 500, 4, 1), ...item(')', 96, 500, 4, 2), ...item('.', 98, 500, 4, 3, bold)]
-  const unit = (s: string, src = 'Latent transition error') => ({ kind: 'para', src, pieces: [{ t: 'text', tr: true, s }] }) as never
+  /** the layer's unit of a translation `s` (its source pieces, rows.mjs unitOf's `source`, one text piece of its source text) */
+  const unit = (s: string, src = 'Latent transition error') => { const u = { kind: 'para', src, pieces: [{ t: 'text', tr: true, s }] }; Object.defineProperty(u, 'source', { value: [{ t: 'text', s: src }] }); return u as never }
   const P = { ...resolveRules(BUILTIN_RULES, 'zh').params, autospace: 0, compressMax: -1, hyphen: 0 }
   const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
   const drawn = (u: never) => {
@@ -1001,8 +1002,8 @@ describe("the class's own marks after a unit's text: a theorem's note (2610.2108
     // (one that sets no ink is passed over)
     expect(of([text('the end.'), { t: 'ph', src: '\\label{x}' }])).toEqual(['.'])
     expect(of([text('a'), { t: 'open', id: 1, src: '\\textbf{' }, text('b).'), { t: 'close', id: 1, src: '}' }])).toEqual([')', '.'])
-    // (a unit read without its source pieces: its source text)
-    expect(L2.sourceEndMarks({ src: 'Latent transition error.' } as never)).toEqual(['.'])
+    // (a unit read without its source pieces: none after a source text that ends in a letter or a digit, else not known, null)
+    expect(L2.sourceEndMarks({ src: 'Latent transition error.' } as never)).toBeNull()
     expect(L2.sourceEndMarks({ src: 'Latent transition error' } as never)).toEqual([])
   })
 })

@@ -1552,11 +1552,12 @@ function textEndMarks(s) {
  * after its year, a sentence's ".", a quotation's "\u201d.". The translation writes these in the target's; whatever the page sets
  * after them on the unit's last line is the class's own (tailOf). Null where a placeholder whose rendering is no letter or
  * digit stands among them (phClass `symbol`, "\\%": never looked for on the page, its ink is among the page's marks there, as
- * many as its source does not tell)
+ * many as its source does not tell); and, for a unit read without its source pieces, where its source text ends in anything but a
+ * letter or a digit (its placeholders are spaces there: what stands among its end marks is not known)
  */
 export function sourceEndMarks(unit) {
   const pieces = unit?.source
-  if (!Array.isArray(pieces)) return textEndMarks(unit?.src ?? '').marks
+  if (!Array.isArray(pieces)) return /[\p{L}\p{N}]\s*$/u.test(unit?.src ?? '') ? [] : null
   const out = []
   for (let k = pieces.length - 1; k >= 0; k--) {
     const p = pieces[k]
