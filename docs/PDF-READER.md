@@ -317,7 +317,9 @@ scroll area keeps it (the maintainer turned down mirroring the left one to the o
   pages' stack, whose callback runs after that frame's layout and before its paint. The place is the scroll's share of the
   track the length leaves, so the two must change in one frame: set a frame later (a React effect on the zoom's state, then
   a frame), every step of a pinch drew the thumb at the new share of the old length and moved it again the next frame, up
-  and down through the whole gesture (measured 2026-11-01, `tests/e2e/probes/pinch-jitter.mjs`).
+  and down through the whole gesture (measured 2026-11-01, `tests/e2e/probes/pinch-jitter.mjs`). A pinch shown by transform
+  (§6.8) leaves the scroll and its range alone: the thumb, hidden, holds still until the commit, and then takes its new
+  place and length in one frame.
 
 ### 6.6 The status capsule and the card
 
@@ -391,21 +393,59 @@ The states are §8's.
 ### 6.8 Pinch zoom
 
 A trackpad pinch (or Ctrl/⌘ with the wheel) over the pages zooms both panes together around the pointer, as EmbedPDF
-does (「直接双指捏合滑动就可以放大缩小」): a trackpad's small deltas zoom continuously, a mouse notch steps a tenth. PDF.js
-scales the pages by CSS while the pinch lasts and draws them once, 400 ms after it ends
-(`updateScale({ scaleFactor, drawingDelay: 400 })`). The browser's own zoom is taken only over the pages. The
-overlays follow the pinch exactly (§10.1).
+does (「直接双指捏合滑动就可以放大缩小」): a trackpad's small deltas zoom continuously, a mouse notch steps a tenth. While
+the fingers move the pinch is shown by transform; `PINCH_COMMIT_MS` (200 ms) after its last step it is committed: the scale
+written once (`updateScale({ scaleFactor, drawingDelay: 0 })`), both panes put, the pages drawn once. The browser's own zoom
+is taken only over the pages. The overlays follow the pinch exactly (§10.1).
 
-- **One frame a step, both panes about the gesture's point.** Each step writes the scale and both panes' scrolls in one
-  task: each pane shown keeps the point at the pointer's place in its view (on the other pane, the same place in its
-  view: the same point of the same page while the pair is level), wherever it lies — on a page, in the gap between two,
-  beside one. The point is read on the page box it is level with (a share of the box, or px from its edge where it is
-  outside: the gaps and margins do not scale), and the box read again at the new scale. The pair stays level through the
-  gesture, and its rest finds nothing to level.
-- **The follower stands aside.** A wheel with Ctrl or ⌘ is no scroll input; a step's scrolls are the view's own puts; each
-  step ends whatever the follower moves and calls its rest off, and the pair is levelled only once the zoom settles.
-- **Small steps add up.** PDF.js rounds each scale to a hundredth; the part of the fingers' factor it has not applied is
-  carried to the next step while the gesture keeps its direction, as PDF.js's own viewer carries it.
+- **No step lays anything out.** From the page boxes read at the gesture's first step, a step works out the layout the
+  commit will make at its scale — each page box scaled, the gaps between them not, a page narrower than the view centred,
+  the scroll put so that the point under the gesture stays under it, then held within the scroll's ends — and shows it by
+  transform: the view scaled about the page that holds the point (growing, the scroller, which the pane clips; shrinking,
+  the pages' stack, so that the pages around the view show), each other page near the view moved by what is left over,
+  and a box of the scroll's size at the gesture's start holding its range. Nothing scrolls, nothing is clamped, the handles
+  hold still, and the commit lands on the layout the last step showed. A step shows the scale PDF.js will set (its
+  hundredth), so that the commit does not snap.
+- **Nothing is made or drawn meanwhile.** The scaled view is a layer of its own (`will-change: transform` while the
+  gesture lasts), drawn at the gesture's first scale and scaled on the compositor: growing, the pages show soft until the
+  commit draws them sharp (a step had drawn the original's canvas soft too, and the translation's text sharp, at the cost
+  below). The places' near window is held until the commit, so that no place is made, laid or drawn at a scale the commit
+  replaces; a pinch out of up to three times shows only places the window held already (it reaches a pane's height above
+  and below).
+- **Both panes about the gesture's point.** Each pane shown keeps the point at the pointer's place in its view (on the
+  other pane, the same place in its view: the same point of the same page while the pair is level), wherever it lies — on a
+  page, in the gap between two, beside one: a share of the page box it is level with, or px from its edge where it is
+  outside (the gaps and margins do not scale). The pair stays level through the gesture, and its rest finds nothing to level.
+- **The follower stands aside.** A wheel with Ctrl or ⌘ is no scroll input; the pinch's first step ends whatever the
+  follower moves, calls its rest off (and a zoom's before it still to be levelled: this one's end levels the pair) and holds
+  it from binding until the commit; the commit's scrolls are the view's own puts, and the pair is levelled only once the
+  zoom settles.
+- **Anything else commits first.** Another input on a pane (a wheel without Ctrl, a key, a press, a touch), a scroll the view
+  did not make, and every command that reads or moves the panes (a zoom from the menu or the keys, a jump, a page, a
+  heading, a display, a click's level, the original let go) commit the pinch before they run; a pane another has scrolled
+  (the find bar, a script) keeps the place that scroll took it to, the pinch committed about the point it shows there at
+  the gesture's place. The pointer's highlight finds the page under it through the preview's transform, looked at again
+  at each step as a scroll had it.
+- **The scroll's ends are the paper's.** The range the preview keeps the point within is the one the commit lays: the paper
+  at the step's scale and its margin below the last page, never the empty foot of a pane the paper does not fill.
+- **Small steps add up.** PDF.js rounds each scale to a hundredth; the fingers' factor is carried whole through the gesture,
+  and what the commit's rounding leaves is carried to the next pinch while it keeps its direction, as PDF.js's own viewer
+  carries it.
+- **Why a transform** (measured 2026-11-02 offline on 2501.14787v1, 101 pages, its layer laid; the reader as `pnpm e2e:reader`
+  opens it, staging's recorded layer served by the stand-in; next against this, two runs each, in a slot of its own): each
+  step had written the scale, and PDF.js's `update()` then read every page box of both panes, laying them out again — 25–52
+  ms a step on staging, 85 % of a pinch's layout, the zoom moving in lumps 106 ms apart at 1x and 300 ms at 4x. On the
+  owner's gestures (1093×892, the pointer at 21.5 % across and 61 % down the right pane, out by 0.5 then in by 2.1), the
+  layout during the gesture fell from 298–357 to 103–107 ms at 1x and from 1442–1813 to 492–577 ms at 4x, forced layout from
+  349–389 to 42–64 ms (1x), tasks over 50 ms from 27–31 to 2–17 (4x) and the longest from 130–158 to 66–79 ms; frames
+  dropped zooming in 8 → 1–2 (1x) and 55–63 → 1–35 (4x), zooming out 49–57 → 29 (4x). Zooming out at 1x it drops 7 single
+  frames where next dropped 1–2 (the GPU scales the larger view it shows: 155 against 125–130 ms). With 60 Ctrl-wheels to
+  three times at 4x (hjfy-compare's gesture, 1440×900), 84–91 frames dropped against 1. The commit costs one step's layout
+  (a 15 ms task at 1x, up to 185 ms at 4x for a threefold zoom, against next's redraw of 139–150 ms). Shown as a layer at its
+  first scale, the pages are soft while the fingers grow them and sharp from the commit; drawn again at every step's scale
+  instead, the GPU spent three times next's and a pinch out dropped frames for it (0 → 14 % at 1x). The owner watched the
+  same gestures side by side at 1x and 4x and accepted both costs, the softness while the pages grow and the frames a pinch
+  out drops at 1x (2026-11-02: 「能接受」).
 - **Why** (the owner's recording on 1706.03762v7, 2026-11-01, the handles jittering through a pinch; the probe's frames): the right pane was kept
   only where a page lay under the pointer, and a pointer beside a page at a small zoom kept nothing, so that the pane stood
   still while its pages grew about its top — its thumb jumping 10–14 px a step, the pair drifting two pages apart, levelled
@@ -765,8 +805,9 @@ PDF.js is the host's kit, so every PDF.js type the view names is structural.
   a finger is held, a rest an input called off armed again, a glide baked on input, a click's level calling off the rest
   and the timer's end, the pair levelled once a zoom settles.
 - **The right zoomed through the left.** A zoom, a fit or a pinch over either pane scales the left's viewer, which the
-  places follow; the right shown alone is fitted to its own pane. A step and a pinch are drawn 400 ms after the last one
-  (one redraw a burst), the places' page views with them. A zoom and a display's change keep the reading place (the page and
+  places follow; the right shown alone is fitted to its own pane. A step is drawn 400 ms after the last one (one redraw a
+  burst), the places' page views with them; a pinch is shown by transform and drawn once it is committed (§6.8). A zoom
+  and a display's change keep the reading place (the page and
   the point at the reading line); a pinch keeps the point under the gesture on both panes (§6.8).
 - **The highlight** (`lighting.mjs`) reads a pane through its shapes alone (`Shapes`, the seam the shapes' PR builds); a
   pointer over a page of either pane is a want of that page. The highlight's layer follows a pinch by transform and is kept
@@ -1360,7 +1401,8 @@ Decided 2026-10-24 (the owner's request of 2026-10-23; the route note that draft
   so it is there the moment the page is near; one that arrives while its page is kept goes into the kept drawing. It goes when
   its drawing goes (retired with no drawing kept, let go past the keep's budget, failed back to the original, replaced, another
   target's or door's, disposed), cancelled from PDF.js's registry of its selection listener; one that comes after its page was
-  let go is put nowhere. Its translated spans carry the language of the target their drawing was laid in. Through a zoom's or a pinch's steps
+  let go is put nowhere. Its translated spans carry the language of the target their drawing was laid in. A pinch's preview
+  (a transform, §6.8) leaves them as they are. Through a zoom's steps, and from a pinch's commit,
   (CSS alone until PDF.js draws again, places.mjs) the text layers are out of style and layout (display: none): each span's size
   is a calc of --total-scale-factor, which every step changes, so a step made every span of every near page again (the web's
   zoom check: twice main's frames over budget in a pinch). The stack is marked `data-axt-scaling` from the first step to
