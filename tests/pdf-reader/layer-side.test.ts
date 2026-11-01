@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type Ref, writePart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { PDF_OPTIONS } from '@/pdf-reader/engine/layer-proto/run.mjs'
-import { AHEAD_PAGES, createLayerSide, IOS_KEEP_PIXELS, KEEP_PIXELS, keepBudget, LEFT_RETRY_MS, noLayoutPage, onIos, PAGE_MS, SPREAD_MAX, spreadPages } from '@/pdf-reader/engine/view/layer-side.mjs'
+import { AHEAD_PAGES, AHEAD_SETTLE_MS, createLayerSide, IOS_KEEP_PIXELS, KEEP_PIXELS, keepBudget, LEFT_RETRY_MS, noLayoutPage, onIos, PAGE_MS, SPREAD_MAX, spreadPages } from '@/pdf-reader/engine/view/layer-side.mjs'
 import { type DocumentTask, internalsOf, type ViewEvent } from '@/pdf-reader/engine/view/reader-view.mjs'
 import { made, N, ORIG, partInputs } from './helpers/format-paper'
 import { ASSETS, clientOf, FakeIO, FakePDFPageView, FakePDFViewer, fakeDoc, fakeTask, flush } from './helpers/reader-fakes'
@@ -478,6 +478,22 @@ describe('the pages ahead: laid the way the reader moves, while it scrolls as at
     expect(content(s, 3)).toBe('layer')
     await settle(s)
     expect(s.side.probe().asked).toBe(asked)
+  })
+
+  it('a window is begun once the near places have stayed put AHEAD_SETTLE_MS: a fling\'s pages pass by first', async () => {
+    const s = await setup({ door: { rows: 'gate' }, ahead: 1 })
+    await rows(s, [1])
+    await settle(s, 30)
+    expect(s.side.probe().ahead).toBe(1)
+    // the reader moves down a page: within AHEAD_SETTLE_MS nothing more is asked ahead, after it page 3 is
+    await nearOn(s, [2])
+    await nearOn(s, [1], false)
+    // (every task run, the clock moved to AHEAD_SETTLE_MS - 50 and no further)
+    await s.clock.advance(Math.max(0, AHEAD_SETTLE_MS - 50))
+    for (let i = 0; i < 20; i++) { await macrotask(); await s.door.advance(); await s.clock.advance(0) }
+    expect(s.side.probe().ahead).toBe(1)
+    await settle(s, 30)
+    expect(s.side.probe().ahead).toBe(2)
   })
 
   it('the reader moving up: the pages above the near ones are laid', async () => {

@@ -94,6 +94,8 @@ export declare function onIos(nav?: { userAgent?: string; maxTouchPoints?: numbe
 /** how many pages past the near ones are laid ahead, the way the reader moves, once the rows have ended: in the main thread's idle
  *  periods, while no page of the view is asked of the door */
 export declare const AHEAD_PAGES: number
+/** how long the near places stay where they are before a window ahead is begun, ms */
+export declare const AHEAD_SETTLE_MS: number
 /** the translating card's padding where the sheet gives none (engine.css --axt-tr-pad-x and -pad-y), CSS pixels at the reader's 100 % */
 export declare const PAD_X: number
 export declare const PAD_Y: number

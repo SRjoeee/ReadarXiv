@@ -110,6 +110,10 @@ export const onIos = (nav = globalThis.navigator) => !!nav && (/\biP(?:hone|ad|o
  *  rest (the prefetch extended to the layer: the pages' rows, faces, layout and copy made before the reader reaches them, kept as
  *  drawings off the view; docs/PDF-READER.md §11.8, "The pages ahead") */
 export const AHEAD_PAGES = 2
+/** how long the near places stay where they are before a window ahead is begun (ms): a page of a steady scroll comes near every
+ *  half second or so (1,500 px/s), a fling's every tenth; begun within one, a window's lay ran beside the left drawing the pages
+ *  the fling brought into view, and 1706.03762v7's page 14 stayed blank 232 to 312 ms where it had 100 to 174 */
+export const AHEAD_SETTLE_MS = 150
 /** the translating card's padding, CSS pixels at the reader's 100 % (engine.css --axt-tr-pad-x and -pad-y, where the sheet gives
  *  none: Glint's, the owner's of 2026-11-01) */
 export const PAD_X = 4
@@ -1119,7 +1123,7 @@ export function createLayerSide(view, o) {
   let aheadAc = null, aheadOn = []
   const aheadNothing = new Set()
   /** the way the reader moves through the paper: 1 down, -1 up; and the near places' first and last when it was last read */
-  let aheadDir = 1, nearLo = 0, nearHi = 0, nearQueued = false
+  let aheadDir = 1, nearLo = 0, nearHi = 0, nearQueued = false, nearAt = 0
   /** the near places' first and last page (the places near are a run of pages about the view: an IntersectionObserver's, no
    *  layout read); [0, 0] with none */
   function nearSpan() {
@@ -1146,6 +1150,7 @@ export function createLayerSide(view, o) {
       const [lo, hi] = nearSpan()
       if (!lo) return
       const dir = !nearLo || lo > nearHi || hi < nearLo ? 1 : hi > nearHi ? 1 : lo < nearLo ? -1 : aheadDir
+      if (lo !== nearLo || hi !== nearHi) nearAt = clock.now()
       nearLo = lo
       nearHi = hi
       const turned = dir !== aheadDir
@@ -1182,6 +1187,16 @@ export function createLayerSide(view, o) {
     aheadAc = null
     aheadOn = []
   }
+  /** resolves `ms` later on the view's clock, or rejects with an AbortError once `signal` aborts */
+  function later(ms, signal) {
+    return new Promise((ok, no) => {
+      const gone = () => no(Object.assign(new Error('the pages ahead were given up'), { name: 'AbortError' }))
+      if (signal.aborted) { gone(); return }
+      const stop = () => { clock.clear(timer); gone() }
+      const timer = clock.later(() => { signal.removeEventListener('abort', stop); ok() }, ms)
+      signal.addEventListener('abort', stop, { once: true })
+    })
+  }
   /** resolves in a turn of the main thread at background priority (scheduler.postTask's `background`: run once nothing of a higher
    *  priority waits; a task where the browser has no scheduler, the tests'), or rejects with an AbortError once `signal` aborts.
    *  Not an idle callback: Chromium gives a page no idle period while the reader scrolls (requestIdleCallback did not fire in
@@ -1216,6 +1231,8 @@ export function createLayerSide(view, o) {
     const live = () => !ac.signal.aborted && !disposed && my === gen && aheadOk()
     try {
       for (;;) {
+        // (the near places still a moment first: a fling's pages pass by, and the left draws those it stops on)
+        for (let wait = nearAt + AHEAD_SETTLE_MS - clock.now(); wait > 0; wait = nearAt + AHEAD_SETTLE_MS - clock.now()) await later(wait, ac.signal)
         await backgroundTurn(ac.signal)
         if (!live() || viewBusy() || !V.centre()) return
         const ms = aheadWindow().filter(q => {
