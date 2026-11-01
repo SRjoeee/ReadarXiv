@@ -1034,7 +1034,8 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   window waits while the view's last pages are drawn. Three pages ahead (`ahead: 3`, an earlier build) left 1 and 5 of 10 at
   4x, the same none on the slow link, for 0.45 MB more at the stop and as much more kept: not taken.
   On a delta head the composed document reads the original's own source, so a page laid ahead reads the original's bytes of
-  that page into the store the left reads: on 2602.23285v2 the left's pages 5 to 7 were no longer blank as they came into view.
+  that page into the store the left reads: on 2602.23285v2 the left's pages 5 to 7 were no longer blank as they came into view
+  (an earlier build, which did not wait for the places' drawing).
   The web's own prefetch of arXiv's bytes (`?prefetch=1`, off by default, at rest only) asked nothing more in these runs (the
   same requests, the same pages blank), and a left page blank on a fling (1706.03762v7's figure pages 13 and 14, 50 to 250 ms at
   1x, 170 to 770 ms at 4x) is PDF.js drawing it on the main thread after its bytes are in: a prefetch of bytes, at rest or while
