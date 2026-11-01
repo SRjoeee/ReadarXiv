@@ -9,6 +9,22 @@ band loses its ink: no double ink), O (each band then one colour: nothing a tran
 (`figure-text.mjs` setsOf) and the fit rule's counts, label by label as BUNDLE 10 drew them against set by set (`figure-fit.mjs`
 fitFigureSet), over a model of zh translations or Microsoft's. Counts and ids only.
 
+## Run of 2026-11-01, the pack c9a45bd9 and 2608.08481v1 (engine `fix/layout-08481` against `next` 0c6aa7352, PIPELINE 47)
+
+A run a glyph of which stands past `BAND_MAX` (4) of its size from its baseline, by its own ink, is no figure unit
+(`layout/figure-text.mjs`, `outsized`; `docs/PDF-READER.md` §19.12). On the pack's 7 papers both sides are identical, field
+for field: 181/166, 244/171, 146/119, 56/56, 237/180, 0/0 and 172/158 units/drawn, every measure 0. On 2608.08481v1's final
+pass (`figure-final.mjs`, TeX Live 2023 by digest; `--bases`), whose OriginLab figures set Type 3 faces at a tenth of their
+glyphs' size:
+
+| | Units | Drawn | Crowded | G1 | G3f | D | O | R |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| next | 51 | 48 | 3 | 0 | 4 | 0 | 0 | 0 |
+| head | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+
+next's G3f is pp3-6: the turned titles' bands, their font's 0.88 em, are a seventh of their ink. Over arXiv's PDFs of the 124
+papers on disk (no ownership), the head leaves out that paper's 51 units and no other.
+
 ## Run of 2026-11-01, the pack c9a45bd9 (engine `fix/sweep-6e0a` against `next` 8b4203856, PIPELINE 46)
 
 A glyph set turned is cut by the clip where its own ink passes it (`layout/ink.mjs` `turnedGlyph`, `docs/PDF-READER.md` §19.12).
