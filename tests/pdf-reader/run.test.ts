@@ -45,7 +45,8 @@ function server(looks: (() => Response)[], o: { prepare?: () => Response; origin
     calls.push({ url, init })
     if (url === ARXIV) return o.arxiv === 'whole' || !o.arxiv ? new Response((o.arxiv === 'whole' ? o.original : null) as BodyInit) : ranges(o.arxiv, init, '"sha256:arxiv-s"')
     if (url.endsWith('/prepare')) return (o.prepare ?? (() => json(202, { position: 1, stage: null, progress: 0, retryAfterMs: 0 })))()
-    if (url.includes('/o/')) { const b = o.objects?.get(url.slice(-64)); return b ? new Response(b as BodyInit, { headers: o.tag ? { 'x-axt-base-etag': o.tag } : {} }) : new Response('', { status: 404 }) }
+    // (an object by its name at the route, as the web serves it: its digest, a delta's digest and `.delta`; the bare digest of a delta is a 404)
+    if (url.includes('/o/')) { const b = o.objects?.get(url.slice(url.lastIndexOf('/o/') + 3)); return b ? new Response(b as BodyInit, { headers: o.tag ? { 'x-axt-base-etag': o.tag } : {} }) : new Response('', { status: 404 }) }
     // our base page (the layer route): by ranges, its own tag (the run is bound to its length alone)
     if (url.includes('/api/v1/base/')) return o.base ? ranges(o.base, init, '"base-tag"') : new Response('', { status: 404 })
     if (url.includes('/original/')) return o.original ? ((o.originalTag ?? o.tag) ? ranges(o.original, init, (o.originalTag ?? o.tag) as string) : new Response(o.original as BodyInit)) : new Response('', { status: 404 })
@@ -588,7 +589,7 @@ describe('the layer over a delta (the delta route): one byte source, the origina
   const O = original.length, TAGO = '"orig-tag"'
   const baseOf = (over: Record<string, unknown> = {}) => ({ ...cut.index.head.base, ...over })
   const deltaHead = (over: { base?: object; orig?: { bytes: number; sha256: string; xref?: number } | null } = {}) => ({ base: baseOf(), orig: cut.index.head.orig as { bytes: number; sha256: string; xref?: number }, ...over })
-  const objects = (bytes: Uint8Array = delta.data) => new Map([[delta.sha256, bytes]])
+  const objects = (bytes: Uint8Array = delta.data) => new Map([[`${delta.sha256}.delta`, bytes]])
   const go = (o: { tab?: Uint8Array; head?: Parameters<typeof headOf>[0]; bytes?: Uint8Array; store?: LayerStore | null; ranged?: boolean } = {}) =>
     run({ looks: [() => new Response(catalog)], view: view((o.tab ?? original) as Uint8Array<ArrayBuffer>), original, tag: TAGO, objects: objects(o.bytes), ranged: o.ranged ?? true, head: o.head ?? deltaHead(), ...(o.store !== undefined ? { store: o.store } : {}) })
   const bindOf = (a: ReturnType<typeof run>) => a.side.options().bind as unknown as (b: unknown) => Promise<boolean>
@@ -600,7 +601,7 @@ describe('the layer over a delta (the delta route): one byte source, the origina
     const a = go()
     await settle()
     expect(await bindOf(a)(cut.index.head.base)).toBe(true)
-    expect(a.s.calls.filter(c => c.url.endsWith(`/o/${delta.sha256}`))).toHaveLength(1)
+    expect(a.s.calls.filter(c => c.url.includes(`/o/${delta.sha256}`)).map(c => c.url.slice(-6))).toEqual(['.delta'])
     await a.side.options().composed(null, { x: 1 }).promise
     const doc = a.docs[0] as { range: { length: number; initialData: Uint8Array; requestDataRange(b: number, e: number): void } }
     // one document: the original's O bytes, then the delta's D
@@ -693,7 +694,7 @@ describe('the layer over a delta (the delta route): one byte source, the origina
     if ('refused' in made) throw new Error(made.why)
     const head2 = deltaHead({ base: baseOf({ bytes: made.delta.length, sha256: made.sha256, xref: made.xref }), orig: { bytes: other.length, sha256: hex(other), xref: startxrefOf(other) ?? undefined } })
     const a = go({ tab: new Uint8Array(O).fill(7) })
-    a.opts.objects?.set(made.sha256, made.delta)
+    a.opts.objects?.set(`${made.sha256}.delta`, made.delta)
     await settle()
     expect(await bindOf(a)(cut.index.head.base)).toBe(true)
     await settle(60)

@@ -1128,7 +1128,8 @@ contract §4.3), started by the host once a translated display is shown in a vis
    head's orig, which a retry may change: the same, nothing is fetched; another, the newly named original is shown before the
    layer is used (none to be had: no layer), never the new layer over the old PDF.
    **A base held as a delta** (`base.kind` 'delta', §19.8): `bindOurs` fetches the delta object by the head's digest through the
-   layer's object route (`objectBytes`, this machine's store first, `DELTA_MS` for the ask, `DELTA_MAX_BYTES` the bound) and holds it
+   layer's object route with the delta's own suffix, `…/o/<sha256>.delta` (`objectBytes` with `delta`, server.ts `deltaPath`, the
+   web's own: the bare digest of a delta is a 404 there; this machine's store first, `DELTA_MS` for the ask, `DELTA_MAX_BYTES` the bound) and holds it
    to `checkDelta(head, bytes)` (length, digest, its section over `orig`, its startxref the head's) before it is used; a delta that
    does not check, or past the bound, is no layer. Pages `check.pages` [M, N] with M at most N (a paper of several toplevel
    sources) bind; the pages past M are the original's and the layer draws none there. The composed document is then ONE byte
@@ -2278,7 +2279,8 @@ tags they ask by (`layer-proto/bundle.mjs`).
   `{ retryAfterMs }`; `POST …/<tag>/prepare` (JSON body `{}`) answers 202, 200 `{ ready: true }`, 404 or 429; `GET
   /api/v1/original/<id>v<n>` is `base.url`, our copy of arXiv's bytes; `GET /api/v1/base/<id>v<n>/<sha256>` (no suffix) is our
   base page a head of ours names (§19.7), by its digest, by ranges, a strong `ETag`, any origin, immutable; a head held as a delta (§19.8) names no
-  such page: its delta is a bundle object, `GET /api/v1/layer/<id>v<n>/<ctag>/o/<sha256>` as bytes (`application/octet-stream`), and its
+  such page: its delta is a bundle object, `GET /api/v1/layer/<id>v<n>/<ctag>/o/<sha256>.delta` as bytes (`application/octet-stream`;
+  the suffix the engine's `deltaKey` names it by, the web's `deltaPath`), and its
   composed document reads `/api/v1/original` by ranges. The tag is the engine's `VTAG`, or its contract
   tag `CTAG` where the server redirects to the newest bundle made under it (§18.4). The public GETs answer CORS `*`; the prepare
   POST relies on the extension's host permission.

@@ -7,6 +7,7 @@
 //   GET  /api/v1/layer/<id>v<n>/<CTAG5>             200 the catalog | 202 Preparing | 404 { why } | 429 { retryAfterMs }
 //   POST /api/v1/layer/<id>v<n>/<CTAG5>/prepare     (application/json, body {}) 202 Preparing | 200 { ready: true } | 404 | 429
 //   GET  /api/v1/layer/<id>v<n>/<CTAG5>/o/<sha256>  200 the object, immutable
+//   GET  /api/v1/layer/<id>v<n>/<CTAG5>/o/<sha256>.delta  200 our base as a delta over arXiv's PDF, immutable (the web's deltaPath)
 //   GET  /api/v1/original/<id>v<n>                  200 application/pdf, or 206 for a range (ranges.ts)
 //   GET  /api/v1/base/<id>v<n>/<sha256>             200 application/pdf, or 206 for a range: our base page, where a head says it is ours
 //
@@ -81,6 +82,9 @@ export function paperSegment(p: Paper): string {
 }
 export const layerPath = (api: string, p: Paper) => `${api}${API_ROOT}layer/${paperSegment(p)}/${CTAG5}`
 export const objectPath = (api: string, p: Paper, sha256: string) => `${layerPath(api, p)}/o/${sha256}`
+/** our base as a delta over arXiv's PDF, by its digest: the object route with the delta's own suffix, as the web serves it (its
+ *  src/shared/layer-api.ts deltaPath; the engine's deltaKey names it so). The bare digest of a delta is a 404 there */
+export const deltaPath = (api: string, p: Paper, sha256: string) => `${objectPath(api, p, sha256)}.delta`
 export const originalPath = (api: string, p: Paper) => `${api}${API_ROOT}original/${paperSegment(p)}`
 /** our base page of the version, where a head says its base is ours: the final pass of our compile, named by the SHA-256 of its
  *  bytes (so the address is the object and never another), read by ranges from any origin. A digest that is not 64 lower-case
@@ -246,12 +250,13 @@ export async function askPrepare(api: string, p: Paper, o: { fetch?: typeof fetc
   void r.body?.cancel().catch(() => {})
   throw new LayerUnreachable(`the prepare's route answered ${r.status}`)
 }
-/** an object of the layer by its ref (`ms`: how long its ask may take, REQUEST_MS by default: a delta's is longer), no more of it read than its ref's bytes and OBJECT_MARGIN (the side's readers check
+/** an object of the layer by its ref (`ms`: how long its ask may take, REQUEST_MS by default: a delta's is longer; `delta`: the
+ *  ref is the head's delta, asked at deltaPath), no more of it read than its ref's bytes and OBJECT_MARGIN (the side's readers check
  *  its digest, values and shape), and the original its answer names it bound to (boundOf); a ref that is no ref refused
  *  before any request, any answer but a 200 refused */
-export async function fetchObject(api: string, p: Paper, ref: Pick<Ref, 'sha256' | 'bytes'>, o: { fetch?: typeof fetch; signal?: AbortSignal; ms?: number } = {}): Promise<{ bytes: Uint8Array; bound: string | null }> {
+export async function fetchObject(api: string, p: Paper, ref: Pick<Ref, 'sha256' | 'bytes'>, o: { fetch?: typeof fetch; signal?: AbortSignal; ms?: number; delta?: boolean } = {}): Promise<{ bytes: Uint8Array; bound: string | null }> {
   if (typeof ref?.sha256 !== 'string' || !DIGEST.test(ref.sha256) || !Number.isSafeInteger(ref.bytes) || ref.bytes < 1) throw new TypeError(`the layer's object: not a ref (${String(ref?.sha256).slice(0, 80)})`)
-  const r = await fetched(o.fetch ?? fetch, objectPath(api, p, ref.sha256), { signal: o.signal ?? null }, o.ms ?? REQUEST_MS)
+  const r = await fetched(o.fetch ?? fetch, (o.delta ? deltaPath : objectPath)(api, p, ref.sha256), { signal: o.signal ?? null }, o.ms ?? REQUEST_MS)
   if (r.status !== 200) { void r.body?.cancel().catch(() => {}); throw new Error(`the layer's object ${ref.sha256}: ${r.status}`) }
   return { bytes: await bodyWithin(r, ref.bytes + OBJECT_MARGIN), bound: boundOf(r) }
 }

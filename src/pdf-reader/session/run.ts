@@ -292,7 +292,7 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
       if (!Number.isSafeInteger(base.bytes) || base.bytes < 1 || base.bytes > DELTA_MAX_BYTES) return false
       let bytes: Uint8Array
       try {
-        bytes = await objectBytes({ sha256: base.sha256, bytes: base.bytes }, begun.signal, DELTA_MS)
+        bytes = await objectBytes({ sha256: base.sha256, bytes: base.bytes }, begun.signal, { ms: DELTA_MS, delta: true })
       } catch (e) {
         if (!isAbort(e)) console.warn('[reader] the layer\'s delta:', (e as Error)?.message ?? e)
         return false
@@ -344,12 +344,13 @@ export function startRun(view: ReaderView, paper: Paper, host: RunHost): Run {
     side = null
     unavailable('unreachable')
   }
-  /** an object of the layer by its ref: this machine's store first, then our server (`ms` how long its ask may take), each kept once
-   *  read; the layer's objects are of one original, so one whose answer names another is no object of this layer */
-  async function objectBytes(ref: Pick<Ref, 'sha256' | 'bytes'>, signal: AbortSignal, ms?: number): Promise<Uint8Array> {
+  /** an object of the layer by its ref: this machine's store first, then our server (`ms` how long its ask may take; `delta`, the
+   *  head's delta, at its own route), each kept once read; the layer's objects are of one original, so one whose answer names
+   *  another is no object of this layer */
+  async function objectBytes(ref: Pick<Ref, 'sha256' | 'bytes'>, signal: AbortSignal, o: { ms?: number; delta?: boolean } = {}): Promise<Uint8Array> {
     const kept = await host.store?.object(ref.sha256)
     if (kept && kept.length === ref.bytes) return kept
-    const got = await fetchObject(host.api, paper, ref, { fetch: f, signal, ...(ms ? { ms } : {}) })
+    const got = await fetchObject(host.api, paper, ref, { fetch: f, signal, ...o })
     if (got.bound !== null) {
       tag ??= got.bound
       if (got.bound !== tag) throw new Error(`the layer's object ${ref.sha256} is bound to the original ${got.bound}, not ${tag}`)
