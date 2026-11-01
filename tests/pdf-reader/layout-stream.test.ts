@@ -316,17 +316,21 @@ describe('ownedOf: a display its unit opens with, which the marking passes over 
 
   it('passes over a babel name TeX sets inside the display (Codex on #550: \\text{\\figurename}), and leaves a label the paragraph begins with out', () => {
     const named = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { para: 'q2' }, '\nx=', { at: 'n0.listfigure.s' }, 'Figure', { at: 'n0.listfigure.e' }, '1', '\ny=2', { at: '1s' }, '\ntext'])
-    expect(owned([named], {}, [], { '1s': { ...head, src: 'xtextfigurenamey' } })).toEqual({ 'p1.0a': ['x=Figure1y=2', 0] })
-    // (a theorem's head, which \\everypar sets on the paragraph's first line before the display: no word of the display's source)
-    const theorem = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { para: 'q3' }, '\nTheorem 5.', '\nvec f=M x', '\nunder', { at: '1s' }, '\ntext'])
-    expect(owned([theorem], {}, [], { '1s': { ...head, src: 'vecmfmxunderbrace' } })).toEqual({ 'p1.0a': ['vecf=Mxunder', 0] })
-    // (a first line of the display spells some of its source, its glyphs' words run together though they are: "vecf" for \\vecm f)
-    const own = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { para: 'q3' }, '\nvecf=Mx dA', '\nunder', { at: '1s' }, '\ntext'])
-    expect(owned([own], {}, [], { '1s': { ...head, src: 'vecmfmxdaunderbrace' } })).toEqual({ 'p1.0a': ['vecf=MxdAunder', 0] })
-    // (nor one that goes on above it, a fraction's numerator, though its letters spell apart from its source's: 2610.19274v1 p24's
-    // L_MSE(x,y), \\mathcal{L}_{\\text{MSE}})
-    const frac = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { para: 'q3' }, '\nLMSE(x,y)=', { u: '1', x: 140, y: 694 }, { u: 'N', x: 140, y: 681 }, { u: 'z', x: 150, y: 688 }, { at: '1s' }, '\ntext'])
-    expect(owned([frac], {}, [], { '1s': { ...head, src: 'mathcalltextmsexyfracnz' } })).toEqual({ 'p1.0a': ['LMSE(x,y)=1Nz', 0] })
+    expect(owned([named], {}, [], { '1s': head })).toEqual({ 'p1.0a': ['x=Figure1y=2', 0] })
+    // (a theorem's head or a proof's, which \\everypar sets on the paragraph's first line before the display, above all of it: a
+    // label of a name)
+    for (const label of ['Theorem 5.', 'Proof.', 'Lemma 3.2 (']) {
+      const theorem = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { para: 'q3' }, `\n${label}`, '\nvec f=M x', '\nunder', { at: '1s' }, '\ntext'])
+      expect(owned([theorem], {}, [], { '1s': head }), label).toEqual({ 'p1.0a': ['vecf=Mxunder', 0] })
+    }
+    // (but a first line of the display's own: a row of letters no label's form holds (Codex on #550: \\alpha\\beta's αβ), a number or a
+    // letter alone above the rest (a fraction's numerator), or a line the rest goes on above or beside (2610.19274v1 p24's L_MSE(x,y))
+    for (const [row, want] of [['αβ=1', 'αβ=1x=2'], ['x', 'xx=2'], ['(a)', '(a)x=2']] as const) {
+      const page = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { para: 'q3' }, `\n${row}`, '\nx=2', { at: '1s' }, '\ntext'])
+      expect(owned([page], {}, [], { '1s': head }), row).toEqual({ 'p1.0a': [want, 0] })
+    }
+    const frac = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { para: 'q3' }, '\nTheorem=', { u: '1', x: 140, y: 694 }, { u: 'N', x: 140, y: 681 }, { u: 'z', x: 150, y: 688 }, { at: '1s' }, '\ntext'])
+    expect(owned([frac], {}, [], { '1s': head })).toEqual({ 'p1.0a': ['Theorem=1Nz', 0] })
   })
 
   it('a display with a point of its own is found by it, as before', () => {

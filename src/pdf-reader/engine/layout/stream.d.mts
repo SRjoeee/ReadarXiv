@@ -32,7 +32,7 @@ export declare function spellOf(s: string): string
 export interface Owned { how: number; glyphs: [page: number, index: number][]; boxes: [page: number, index: number][] }
 /** a display a unit opens with, which the marking passes over (marks.mjs headsOf), by its unit's start mark: the opening mark's
  *  name it would have had, and its display group's later displays' (none of them a point) */
-export interface Head { name: string; group: string[]; /** the displays' sources, their letters alone, lower case: a label on the paragraph's first line holds no word of them */ src?: string }
+export interface Head { name: string; group: string[] }
 /** each piece's own glyphs and rules in the marked compile, by its opening point's name; `heads(start)` the display a unit opens
  *  with, by its start mark's name, found between the point before that mark and the mark */
 export declare function ownedOf(pages: readonly StreamPage[], o: { follows: (name: string) => Follow | null; dropped?: readonly string[]; erasure?: boolean; heads?: ((start: string) => Head | null) | null }): Map<string, Owned>

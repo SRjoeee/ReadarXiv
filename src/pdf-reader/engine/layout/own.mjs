@@ -48,8 +48,11 @@ import { symbolText } from '../rules/text-symbols.mjs'
 import { UNHIDDEN } from './delta-wire.mjs'
 import { classOf, headsOf, INK_ANY, leadStep } from './marks.mjs'
 import { OWNED, ownedOf, regionsOf, spellOf } from './stream.mjs'
+import { isLabelForm, labelFormOf, labelText } from './label-form.mjs'
 
 export { UNHIDDEN }
+/** a label's form, the paper's theorem names beside the standard ones: layout/label-form.mjs */
+export { isLabelForm, labelFormOf }
 /** the glyphs and boxes the ownership of a paper may visit (real ranges never overlap: they cost its ink once) */
 export const OWN_WORK = 20_000_000
 /** the unit ids a record lists the spell check's refusals of, at most */
@@ -81,33 +84,8 @@ const BRACKET = /^[bf][se]\d+$/
 
 /** a text's evidence for the spell check: its letters and digits, without their accents, lower case (stream.mjs's) */
 export { spellOf }
-/** a label's form (§1.3): a number or an item's mark, maybe a caption's or a section's name before it, in brackets or with a
- *  stop after it — of its characters, NFKC, lower case, no white space */
-const LABEL_NAME = '(?:figure|fig\\.?|table|tab\\.?|algorithm|alg\\.?|listing|section|sec\\.?|chapter|appendix|part|step|case|example|definition|lemma|theorem|proposition|corollary|remark|claim|note|assumption|exercise|problem|equation|eq\\.?|proof|keywords?|index ?terms)'
-const LABEL_NUMBER = '[([]?(?:\\d{1,4}|[a-z]|[ivxlcdm]{1,6})(?:[.\\-–](?:\\d{1,4}|[a-z]))*'
-// (after a name, a number may take a letter before it: a supplement's or an appendix's, "Table S3:", "Figure A1", the letter
-// before a digit alone, so that two letters are no number, "Figure AB"; alone, a letter and a number are a model's or a
-// product's name, "A100", no label)
-const formOf = name => new RegExp(`^(?:(?:${name}(?:(?:[a-z](?=\\d))?${LABEL_NUMBER})?|${LABEL_NUMBER})[)\\].:–—|]{0,2}|[•◦▪▫‣⁃∙·∗*–—\\-+○●■□►▸▹➢✓✔])$`, 'u')
-const LABEL_FORM = formOf(LABEL_NAME)
-const labelText = s => s.normalize('NFKC').toLowerCase().replace(/\s/gu, '')
-/**
- * The label's form with the paper's own theorem names beside LABEL_NAME (`names`: source/paper-names.mjs theoremNames, the
- * printed names of the theorem-like environments its files define — thmtools' "Recall", "Notation", a \newtheorem's
- * "Conjecture"), each as a label holds it (NFKC, lower case, no white space); LABEL_FORM where it gives none. A head TeX sets of
- * such a name ("Recall 7 (") is then its unit's label, in its label group, which the layer draws in the paper's name unit's
- * word for it (rules/tex-names.mjs: one word a name, every head of it), where it was left the original's ink (`labelKept`)
- */
-export function labelFormOf(names) {
-  const own = [...new Set((names ?? []).map(n => labelText(String(n))).filter(n => /\p{L}/u.test(n)))].map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-  return own.length ? formOf(`(?:${LABEL_NAME}|${own.join('|')})`) : LABEL_FORM
-}
 /** a head's joint between a babel name and its unit's text, as a label holds it: its punctuation alone */
 const JOINT = /^[.:;,\u2013\u2014-]{1,2}$/u
-/** (`note`: the label of a theorem's note, a unit the front end read in a head's brackets (latex-front.mjs `bracketed`): the head
- *  macro sets the bracket that opens the note after its name and number, amsthm's "Definition 5.1 (", which is the head's own,
- *  and so the label's) */
-export const isLabelForm = (s, note = false, form = LABEL_FORM) => { const t = labelText(s); const u = note ? t.replace(/[([]$/u, '') : t; return u === '' || form.test(u) }
 
 /**
  * Each unit's own ink of a document, by its marks. `pages` (page p at index p - 1): what pageInk read of each page with

@@ -1729,9 +1729,7 @@ export function headsOf(units, names) {
       if (c !== 'display' || names.has(`p${i}.${q}a`)) break
       group.push(`p${i}.${q}a`)
     }
-    // (the displays' sources, their letters alone, lower case: a label TeX sets on the paragraph's first line holds no word of them)
-    const src = [k, ...group.map(g => Number(g.slice(g.indexOf('.') + 1, -1)))].map(q => pieces[q].src ?? '').join('').normalize('NFKC').toLowerCase().replace(/[^\p{L}]/gu, '')
-    return { name: `p${i}.${k}a`, group, src }
+    return { name: `p${i}.${k}a`, group }
   }
 }
 

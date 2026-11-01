@@ -7,7 +7,8 @@
 // not the piece's — a page's footnotes and their rule, its running foot and the next page's head, a float shipped in
 // mid-paragraph or at a column's head — lies outside the region of its opening point, and is cut: a region is in a
 // column's body or not, at a depth of floats.
-// Imports nothing: pure arithmetic over what pageInk read.
+// Imports a label's form alone (label-form.mjs): pure arithmetic over what pageInk read.
+import { isLabelForm, LABEL_NAME, labelText } from './label-form.mjs'
 
 /** how a piece's ink was found, or why none was: the first OWNED are owned (its glyphs and rules, maybe none), the rest
  *  are not, and the maker writes the piece LOST — but 'in the display before it', a later display of a display group,
@@ -185,8 +186,8 @@ const MARK_START = /^\d+s$/
 const onLine = (G, g, y, size) => Math.abs(G.y[g] - y) < 0.5 * Math.max(G.size[g], size)
 /** a rule on a glyph's line: its middle within that line's body, from its descenders to its ascenders */
 const ruleOnLine = (box, y, size) => { const m = (box[1] + box[3]) / 2; return m >= y - 0.35 * size && m <= y + 0.75 * size }
-/** a run of letters a line's glyphs spell (two or more): a label's words, none of which its display's source holds */
-const WORDS = /\p{L}{2,}/gu
+/** a label of a name (a theorem's, a proof's, a definition's …), not a number or a mark alone: what \\everypar sets before a display */
+const NAMED_LABEL = new RegExp(`^${LABEL_NAME}`, 'u')
 /**
  * The ink of a display its unit opens with, which the marking passes over (`heads`, marks.mjs headsOf: no mark goes before a
  * unit's start mark at its head, marks.mjs headEnd, so the display has no point of its own): TeX ships it right before the unit's
@@ -196,14 +197,13 @@ const WORDS = /\p{L}{2,}/gu
  * name's points are passed over, a name TeX sets inside a display being the display's (`\text{\figurename}`). Out
  * of it: what stands on the line of the region's glyph before that point (the closing punctuation the unit before set after its
  * end mark, own.mjs MR 4c; a rule under that line) and on the start mark's own line (the unit's label, MR 5); and the paragraph's
- * first line where it stands above all the rest and no word of it is the display's source's (`src`, its letters alone, lower
- * case: a theorem's head, "Proof.", which \\everypar sets on that line before the display; a line of the display spells some of
- * its source, though its glyphs run words together, or goes on above or beside its first baseline). Page `P`, its regions `R`, the
- * start mark at `q`. Null where it cannot be
+ * first line where it stands above all the rest and is a label of a name (label-form.mjs: "Theorem 5.", "Proof.", which
+ * \\everypar sets on that line before the display; never a number, a letter or a mark alone, which a display's top row may be).
+ * Page `P`, its regions `R`, the start mark at `q`. Null where it cannot be
  * told: the mark before is a piece's opening point (its ink runs to the next mark, this start mark: the two would share it), or no
  * glyph is left
  */
-function headInk(P, R, q, src = null) {
+function headInk(P, R, q) {
   const S = P.points[q], r = R.at[q], G = P.glyphs
   let A = null
   for (let k = q - 1; k >= 0 && !A; k--) { const n = P.points[k].name; if (!BRACKET.test(n) && !NAME_POINT.test(n) && !BIB_ITEM.test(n)) A = P.points[k] }
@@ -229,17 +229,16 @@ function headInk(P, R, q, src = null) {
     while (glyphs.length && onLine(G, glyphs.at(-1), G.y[g], G.size[g])) glyphs.pop()
     boxes = boxes.filter(b => !ruleOnLine(box(b), G.y[g], G.size[g]))
   }
-  // (the paragraph's first line, where a line follows it: a label of no word the display's source holds is none of the display's)
-  if (Q && src !== null && glyphs.length) {
+  // (the paragraph's first line, where it stands above all the rest — a display's run of glyphs on one baseline goes on above or
+  // beside it, a fraction's, a script's — and is a label of a name: none of the display's)
+  if (Q && glyphs.length) {
     const g = glyphs[0]
     let n = 0
     while (n < glyphs.length && onLine(G, glyphs[n], G.y[g], G.size[g])) n++
-    const words = glyphs.slice(0, n).map(k => G.u[k] ?? '').join('').normalize('NFKC').toLowerCase().match(WORDS) ?? []
-    // (a line of its own above all the rest: a display's run of glyphs on one baseline goes on above or beside it, a fraction's,
-    // a script's — 2610.19274v1 p24's L_MSE(x,y), whose letters its source spells apart, \mathcal{L}_{\text{MSE}})
+    const text = glyphs.slice(0, n).map(k => G.u[k] ?? '').join('')
     let above = n < glyphs.length
     for (let k = n; k < glyphs.length && above; k++) above = G.y[glyphs[k]] < G.y[g] - 0.5 * Math.max(G.size[g], G.size[glyphs[k]])
-    if (above && words.length && !words.some(w => src.includes(w))) {
+    if (above && NAMED_LABEL.test(labelText(text)) && isLabelForm(text, true)) {
       const upTo = P.boxAt[glyphs[n]]
       boxes = boxes.filter(b => b >= upTo || !ruleOnLine(box(b), G.y[g], G.size[g]))
       glyphs = glyphs.slice(n)
@@ -252,7 +251,7 @@ function headInk(P, R, q, src = null) {
  *  where `head` names a display with a point of its own, or its ink cannot be told */
 function headEntries(head, P, R, p, q, has, put) {
   if (!head || has(head.name)) return
-  const ink = headInk(P, R, q, typeof head.src === 'string' ? head.src : null)
+  const ink = headInk(P, R, q)
   if (!ink) return
   put(head.name, { how: HOW[head.group?.length ? 'open, with the displays after it' : 'closed'], glyphs: ink.glyphs.map(g => [p, g]), boxes: ink.boxes.map(b => [p, b]) })
   for (const g of head.group ?? []) if (!has(g)) put(g, { how: HOW['in the display before it'], glyphs: [], boxes: [] })
@@ -292,7 +291,7 @@ function headEntries(head, P, R, p, q, has, put) {
  *   opening point, since TeX sets none on the empty list it resumes the paragraph with (a whatsit there would keep the
  *   empty paragraph between two displays a line). The first owns the whole group's ink, to the text after the last
  *   ('open, with the displays after it'); each later one is 'in the display before it'. Their split is not TeX's to give.
- * - A display its unit opens with (`heads(start)`, the start mark's name to { name, group, src }: marks.mjs headsOf), which has
+ * - A display its unit opens with (`heads(start)`, the start mark's name to { name, group }: marks.mjs headsOf), which has
  *   no point, since the marking sets none at a unit's head: what the start mark's region holds on its page from the paragraph's
  *   point the display begins (a page's `paras`) or the mark before to the start mark, on lines of its own (headInk), 'closed'; its
  *   group's later displays in it. A start mark set twice gives none.
