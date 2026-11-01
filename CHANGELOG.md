@@ -4,7 +4,11 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a theorem's text now follows its translated head where the head holds a citation; a paragraph whose first line on a new page is mostly a formula is translated, not left in English; the translated contents keep their links; a sentence's highlight no longer runs over the blank TeX leaves before a display.
+- In the PDF reader, a page still being translated shows a soft light passing through its text, with nothing drawn over the paper. With reduced motion turned on, the waiting paragraphs are only a little lighter, and nothing moves.
+- Fixed: in the PDF reader, a paper whose figures write their labels in fonts drawn much larger than their stated size (as some plotting programs export them) is translated on every page. One such label had left the whole paper in English; those labels now stay in English, as other figure labels the reader cannot redraw do.
 - The PDF reader shows the page you are looking at a little sooner: it finishes drawing that page before it starts on the next one, which it had begun between the frames of the first. By up to a fifth of a second on a fast computer and up to half a second on a slower one. Every page also spends less time checking its fonts.
+- In the PDF reader, papers with xy-pic diagrams prepare faster, and the diagrams' code is no longer sent for translation.
 - In the PDF reader, a few more papers download only what their translation changes, not a whole copy of the paper: a paper whose fonts draw some letters as small pictures had been sent whole, 6.6 MB where 0.25 MB was needed.
 - Fixed: in the PDF reader, a figure a paper includes as a PDF file is drawn as arXiv's PDF draws it. Our typesetting of most recent papers had marked every such figure for transparency, which arXiv's does not, so some PDF viewers drew its lines heavier and the reader could not reuse arXiv's copy of it: the translated version of such a paper now downloads much less, one paper 0.2 MB where it had been 5.5 MB.
 - Long papers, and papers whose figures are drawn from very many points, are ready in the PDF reader sooner: by five to seven seconds on the slowest we measured.
