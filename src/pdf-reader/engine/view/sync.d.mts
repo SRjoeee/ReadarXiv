@@ -31,6 +31,7 @@ export interface Follower<P extends FollowPane = FollowPane> {
   touches(fingers: number): void
   level(from: P, y: number, there: number): number
   zoomed(): void
+  zooming(side: P | null): void
   take(side: P): void
   put(container: HTMLElement, top: number): void
   bake(): void

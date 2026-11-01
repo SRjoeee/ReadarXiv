@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, pinching to zoom keeps both sides on the same page and the scroll handles steady. The side under the pointer had stood still while its pages grew or shrank whenever the pointer was beside a page rather than on one, so the two sides drifted pages apart and slid back together afterwards, and the handles jumped up and down at every step. A slow pinch at a small zoom also zooms now; it had done nothing.
 - Fixed: in the PDF reader, a theorem's text now follows its translated head where the head holds a citation; a paragraph whose first line on a new page is mostly a formula is translated, not left in English; the translated contents keep their links; a sentence's highlight no longer runs over the blank TeX leaves before a display.
 - In the PDF reader, a page still being translated shows a soft light passing through its text, with nothing drawn over the paper. With reduced motion turned on, the waiting paragraphs are only a little lighter, and nothing moves.
 - Fixed: in the PDF reader, a paper whose figures write their labels in fonts drawn much larger than their stated size (as some plotting programs export them) is translated on every page. One such label had left the whole paper in English; those labels now stay in English, as other figure labels the reader cannot redraw do.

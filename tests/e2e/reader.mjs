@@ -663,6 +663,54 @@ try {
     await page.waitForTimeout(1000)
     const pz = await probe(), bp = await boxes()
     check('a pinch over the right scales the left\'s viewer, the places with it; the zoom then none', pz.scale > before * 1.15 && pz.zoom === null && sameBoxes(bp), JSON.stringify({ from: before, to: pz.scale, zoom: pz.zoom }))
+
+    // a trackpad's pinch as Chromium sends it, Ctrl-wheels of 1 to 3 %, over the right at a small zoom with the pointer beside
+    // the page, where no page holds the point (§6.8): read in every frame after its layout, the pair stands level and shows
+    // the same page at its middle, and each pane's thumb has the length that frame's scroll asks (§6.5; its place is the
+    // browser's scroll timeline's). The owner's recording of 2026-11-01: the right pane kept nothing there, and both thumbs
+    // took their length a frame after their place
+    await page.evaluate(() => window.__reader.controller.zoomTo(0.3))
+    await page.waitForTimeout(900)
+    await page.mouse.move(R0.x + R0.width / 2, R0.y + R0.height / 2)
+    await page.mouse.wheel(0, 300)
+    await restAfter()
+    const pinchAt = [R0.x + R0.width * 0.12, R0.y + R0.height * 0.6]
+    await page.evaluate(() => {
+      const panes = ['left', 'right'].map(id => document.getElementById(id))
+      const pageAtMiddle = pane => {
+        const r = pane.getBoundingClientRect(), y = r.top + r.height / 2
+        return [...pane.querySelectorAll(':scope > .pdfViewer > .page')].find(p => p.getBoundingClientRect().bottom > y)?.dataset.pageNumber ?? null
+      }
+      const frames = []
+      window.__pinchFrames = frames
+      const sentinel = Object.assign(document.createElement('div'), { style: 'position:fixed;left:0;top:0;width:1px;height:1px;pointer-events:none' })
+      document.body.append(sentinel)
+      let n = 0
+      // one record a frame, after its layout: a ResizeObserver over an element each frame resizes
+      const ro = new ResizeObserver(() => frames.push(panes.map(c => {
+        const track = c.parentElement.querySelector('.indicator'), t = track.getBoundingClientRect(), th = track.querySelector('i').getBoundingClientRect()
+        const share = c.scrollTop / Math.max(1, c.scrollHeight - c.clientHeight), length = Math.min(t.height, Math.max(32, Math.round((t.height * c.clientHeight) / c.scrollHeight)))
+        return { top: c.scrollTop, height: c.scrollHeight, middle: pageAtMiddle(c), length: th.height, wants: length, thumb: th.top - t.top, owed: share * (t.height - length) }
+      })))
+      ro.observe(sentinel)
+      const tick = () => { if (!window.__pinchFrames) { ro.disconnect(); sentinel.remove(); return } sentinel.style.width = `${1 + (++n % 2)}px`; requestAnimationFrame(tick) }
+      requestAnimationFrame(tick)
+    })
+    const cdp = await context.newCDPSession(page)
+    const s0 = (await probe()).scale
+    for (let i = 0; i < 24; i++) {
+      await cdp.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: pinchAt[0], y: pinchAt[1], deltaX: 0, deltaY: -1 - (i % 3), modifiers: 2 })
+      await page.waitForTimeout(16)
+    }
+    // read before the rest's wait after the last step is over: what the steps left, not what a level after them mended
+    await page.waitForTimeout(60)
+    const pinchFrames = await page.evaluate(() => { const f = window.__pinchFrames; window.__pinchFrames = null; return f })
+    await cdp.detach()
+    const s1 = (await probe()).scale
+    const apart = pinchFrames.filter(([l, r]) => Math.abs(l.top - r.top) > 2 || l.middle !== r.middle)
+    const astray = pinchFrames.flatMap((f, i) => f.map((p, k) => ({ i, side: k ? 'right' : 'left', ...p })).filter(p => Math.abs(p.length - p.wants) > 0.6))
+    check('a trackpad\'s pinch with the pointer beside the page: in every frame the pair level, the same page at its middle, each thumb the length the frame\'s scroll asks', s1 > s0 * 1.4 && pinchFrames.length > 10 && apart.length === 0 && astray.length === 0,
+      JSON.stringify({ scale: [s0, s1], frames: pinchFrames.length, apart: apart.length, firstApart: apart[0] ?? null, astray: astray.length, astrayFrames: astray.slice(0, 6) }))
     await page.evaluate(() => window.__reader.controller.zoomTo('page-width'))
     await page.waitForTimeout(600)
 
