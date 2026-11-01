@@ -3454,7 +3454,10 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   units the mark stands in the unit's erase boxes of the layout file, on 4 references beside a last line the maker did not
   locate, whose glyphs the wrap already gave the unit. The reader draws such marks after the translation past the marks the
   source writes at its end itself (`layer2.mjs` `sourceEndMarks`: after its last letter, digit or placeholder, as TeX prints
-  them, a style group's braces no ink; `tailOf`), in place of the translation's own marks of their kinds beyond the source's
+  them, a style group's braces and a placeholder of no ink none, a straight double quote the closing one; none read where a
+  placeholder of no letter or digit stands among them, "14.4\%.", whose ink is among the page's marks there, nor for a unit
+  without its source pieces, the gate's proto run's, but after a source text that ends in a letter or a digit; `tailOf`, the
+  class's alone held to be punctuation), in place of the translation's own marks of their kinds beyond the source's
   (`tokensOf2`: a note's own "." stays the translation's ideographic full stop before amsthm's ")."), where it drew them only after a source
   that ends in a letter or a digit: 193 of 196 reference entries checked end in their year's ")", and their style's stop was
   hidden and drawn nowhere (the follow-up of #541). Laid by the door with the sweep's zh rows and the references shown, 376 of
