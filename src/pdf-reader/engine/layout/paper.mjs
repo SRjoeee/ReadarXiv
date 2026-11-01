@@ -26,7 +26,7 @@ import { DRAFT_OPTION, listsMissing, markedPreamble, NO_DRIVER_GROUP, notFound, 
 import { completeLog } from '../pipeline/typeset/tex.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
-import { auxUnits, copiesOutOfPlace, engineUnknown, preambleUnits, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.mjs'
+import { auxUnits, contextUnits, copiesOutOfPlace, engineUnknown, preambleUnits, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.mjs'
 import { DRIVER_OUTPUT_MARK, driverLostInk, driverOutputGiven, driverOutputTruncated, finalCheck, markTextOf } from './base.mjs'
 import { completeCalled, LAYOUT_CLASSES, probeSamples, readInkAnswers, readMarked, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from './marks.mjs'
 
@@ -142,12 +142,14 @@ export async function madeBibliography(paper, { compile, compilerOf = null, engi
  *     names the engine unknown, else 'compile': a host's own failure, its cap on a compile's result)
  *   - errors alone (it ran through to arXiv's pages, nothing out of place): the unmarked original compiled; errors no more
  *     than its are the paper's own and the marked original stands; else the units its other errors stand in unmarked
- *     (errorUnits less ownErrors), or, none, the name marks off
+ *     (errorUnits less ownErrors), or, none, those whose marks TeX's context shows it reading at the errors (contextUnits:
+ *     each error's innermost level that shows a mark of ours, the mark nearest before its place; none where a name mark shows),
+ *     or, none, the name marks off
  *   - a mark out of place (strong evidence): those units, and those its errors stand in, unmarked (passing, the latter
  *     marked again where a compile is left: the smaller remedy, kept where it passes with no more errors); failing, the name
  *     marks off too
  *   - else (it did not run through, or its pages are not arXiv's): the units its errors stand in, and the units at the line
- *     TeX ignored all text after, unmarked with the name marks off; passing, the units marked again with the names off where
+ *     TeX ignored all text after (or, none, those of contextUnits, as above), unmarked with the name marks off; passing, the units marked again with the names off where
  *     a compile is left (the smaller remedy, kept where it passes with no more errors: 2610.21288's name marks alone); failing, the unmarked
  *     original compiled, whose failure is TeX's ('texlive' where the paper declares another TeX Live year than the box's,
  *     'engine', 'compile'), else ours ('marks')
@@ -438,6 +440,12 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     const rank = e => (e.aux.size || e.text ? 2e9 : 0) + (e.long ? 1e9 : 0) + e.errors
     const union = (...sets) => { const out = new Set(); for (const s of sets) for (const x of s) out.add(x); return out }
     const blamedBy = (e, own = null) => (e.c && texRan(e.c.log) ? errorUnits(paper, e.c.log, e.files, e.spans.lines(), own) : new Set())
+    /** the units an attempt's errors blame: those their lines of input stand in (blamedBy), else, where they stand in none, those
+     *  TeX's context shows it reading (guard.mjs contextUnits) — before the names off, the remedy of no unit blamed */
+    const weakOf = (e, own = null) => {
+      const lines = [...blamedBy(e, own)].filter(i => !g.unmarked.has(i))
+      return lines.length || !e.c || !texRan(e.c.log) ? lines : [...contextUnits(e.c.log, count, own)].filter(i => !g.unmarked.has(i))
+    }
     /** TeX's own failure, as the unmarked original shows it: the category and why, every tree tried named (the host's
      *  `tried`, then the box's); 'texlive' where the paper declares a year none of them is */
     const texs = u => {
@@ -470,12 +478,12 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
       if (!u.ran || u.short) { g.judged = 'the paper\'s own source does not make arXiv\'s pages here'; return take(e0) }
       if (e0.errors <= u.errors) { g.judged = 'its errors are the paper\'s own'; return take(e0) }
       if (!afford()) { g.judged = 'no compile left'; return take(e0) }
-      const blamed = [...blamedBy(e0, u.own)].filter(i => !g.unmarked.has(i))
+      const blamed = weakOf(e0, u.own)
       const e1 = await attempt(union(g.unmarked, blamed), blamed.length ? g.names : false)
       if (clean(e1, u)) return take(e1)
       return take(best([e0, e1]))
     }
-    const strong = [...union(e0.aux, e0.textUnits)].filter(i => !g.unmarked.has(i)), weak = [...blamedBy(e0)].filter(i => !g.unmarked.has(i))
+    const strong = [...union(e0.aux, e0.textUnits)].filter(i => !g.unmarked.has(i)), weak = weakOf(e0)
     /** an attempt that fits, its errors judged against the unmarked original's where it has any and a compile is left */
     const judged = async (e1, also) => {
       if (e1.errors === 0) return e1

@@ -354,6 +354,61 @@ export function errorUnits(paper, log, files, lines, own = null) {
   return out
 }
 
+/** a name mark of ours as TeX's log shows it (layout/marks.mjs NAMES_TEX: \\axtnma{key}, \\axtnmb{key} and their inner forms) */
+const NAME_MARK = /\\axt@?nm[ab]\b/
+/** a mark of ours in a line of TeX's context: MARK_IN_LINE's, or one whose argument the log cut at the line's end (`\\axtpmm {p1.3...`),
+ *  which keeps its unit's number */
+const MARK_IN_CONTEXT = new RegExp(String.raw`\\(?:${[...MARK_CS].join('|')})\s*\{([^{}\s]*?)(?:\}|\.\.\.$)`, 'g')
+/**
+ * Each error of a log as texErrors reads it (its message, its line of input, the text before and after its place there),
+ * with the levels of context TeX shows above the line of input: what it was reading when it raised the error, the
+ * innermost first — an argument, a macro's expansion, text to be read again —, each a line up to the place (`before`) and
+ * the next, indented to it, the rest (`after`). An error TeX raised in an output routine or a \\write is none, as texErrors
+ * takes none
+ */
+function errorContexts(log) {
+  const lines = lastTexLog(log ?? '').split('\n'), byLine = texErrors(log ?? ''), out = []
+  let n = 0
+  for (let k = 0; k < lines.length && n < byLine.length; k++) {
+    if (!lines[k].startsWith('! ')) continue
+    const levels = []
+    let input = false, elsewhere = false
+    for (let j = k + 1; j < Math.min(lines.length, k + 40) && !lines[j].startsWith('! '); j++) {
+      if (/^l\.\d+/.test(lines[j])) { input = true; break }
+      if (/^<(?:output|write)>/.test(lines[j])) elsewhere = true
+      // (a level: its line, and the next, white space to where the first ends, then the rest)
+      const next = lines[j + 1] ?? '', pad = /^ +/.exec(next)?.[0].length ?? 0
+      if (lines[j] && !/^\s/.test(lines[j]) && pad > 0 && pad >= lines[j].length - 1) { levels.push({ before: lines[j], after: next.trim() }); j++ }
+    }
+    if (!input || elsewhere) continue
+    out.push({ ...byLine[n++], levels })
+  }
+  return out
+}
+/**
+ * The units of the marked compile's errors that no unit's line stands at: for each error but the paper's own (`own`,
+ * ownErrors) and those of no letter TeX could set, in the innermost level of its context (errorContexts) that shows a mark
+ * of ours, the mark nearest before the error's place, else the first after it (unitOfMark), ids below `count`. TeX reads a
+ * command's argument whole and raises its errors where it uses it, so the line of input names no unit while the context shows
+ * the one TeX was reading: 2610.40394v1's author block, `\\axtmark {1s}\\bfseriesYouqing`, its error on the block's closing
+ * brace. An error whose context shows a name mark of ours is the names' (the guard's names off), and the line of input itself
+ * is errorUnits' to read: neither names a unit here. Gives unit indices
+ */
+export function contextUnits(log, count, own = null) {
+  const out = new Set()
+  for (const e of errorContexts(log)) {
+    if (e.char !== undefined || own?.has(errorKey(e)) || e.levels.some(l => NAME_MARK.test(l.before) || NAME_MARK.test(l.after))) continue
+    for (const l of e.levels) {
+      const m = [...l.before.matchAll(MARK_IN_CONTEXT)].at(-1) ?? [...l.after.matchAll(MARK_IN_CONTEXT)][0]
+      if (!m) continue
+      const u = unitOfMark(m[1])
+      if (u !== null && u < count) out.add(u)
+      break
+    }
+  }
+  return out
+}
+
 /** the unmarked original: the paper's own files, its main one with graphicx's draft (the marked original's frames, which
  *  set no other place) and END_TEX (AXT-END, by which a compile ran through: live.mjs ranThrough) on one line before its
  *  first, nothing else of ours */

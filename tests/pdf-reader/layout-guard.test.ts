@@ -1,7 +1,7 @@
 import * as PL from '@cantoo/pdf-lib'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
-import { auxUnits, braceBalance, compilerOfPdf, errorCount, errorUnits, firstError, marksOutOfPlace, ownErrors, pagesOfLog, preambleUnits, tellsTwice, texLiveOf, texLiveOfPdf, unbalancedUnits, unmarkedFiles } from '@/pdf-reader/engine/layout/guard.mjs'
+import { auxUnits, braceBalance, compilerOfPdf, contextUnits, errorCount, errorUnits, firstError, marksOutOfPlace, ownErrors, pagesOfLog, preambleUnits, tellsTwice, texLiveOf, texLiveOfPdf, unbalancedUnits, unmarkedFiles } from '@/pdf-reader/engine/layout/guard.mjs'
 import { WHY_MAX } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
 import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readMarkProbe } from '@/pdf-reader/engine/layout/marks.mjs'
@@ -386,6 +386,34 @@ describe('markedOfPaper: the checks after the marked compile, each remedy, and t
     expect(has(c.asked[2], '\\axtmark')).toBe(false)
     expect(has(c.asked[3], '\\axtmark{2s}')).toBe(false)
     expect(has(c.asked[3], '\\axtmark{1s}')).toBe(true)
+  })
+
+  it('errors no unit\'s line stands at: the unit whose mark TeX shows just before the error\'s place, inside what it read, unmarked, the names kept (2610.40394v1)', async () => {
+    // (TeX read an author block as a command's argument and raised the error in it: the input line is the block's closing
+    // brace, in no unit, and the argument's context shows our start mark before the undefined name)
+    const ctx = (place: string, rest: string) => `! Undefined control sequence.\n<argument> ...${place}\n${' '.repeat(place.length + 14)}${rest}\nl.7 }\n\n`
+    const log = `${TEX}${ctx('vmode \\axtmark {1s}\\bfseriesYouqing ', 'Fang\\protect \\axtpmm {p1.3...')}${END}${out(3)}`
+    const c = compiler([PROBE, ran(PDF, log.slice(TEX.length, log.indexOf(END))), ran(UNMARKED), ran(PDF1)])
+    const made = await markedOfPaper(paperOf(), { compile: c.compile })
+    expect(made).toMatchObject({ pdf: PDF1, guard: { extra: 2, unmarked: [1], names: true, failed: ['errors'] } })
+    expect([has(c.asked[3], '\\axtmark{1s}'), has(c.asked[3], '\\axtmark{2s}'), has(c.asked[3], NAMES_OFF)]).toEqual([false, true, false])
+  })
+
+  it('contextUnits: the mark of ours nearest before the place in the innermost context that holds one; none for the paper\'s own error, a name mark\'s or the input line\'s', () => {
+    const ctx = (level: string, place: string, rest: string, line = 'l.7 }') => `! Undefined control sequence.\n${level}${place}\n${' '.repeat(level.length + place.length)}${rest}\n${line}\n\n`
+    const one = ctx('<argument> ', '...vmode \\axtmark {1s}\\bfseriesYouqing ', 'Fang\\protect \\axtpmm {p1.3...')
+    expect(contextUnits(one, 5)).toEqual(new Set([1]))
+    // (a placeholder's pair mark, a cell's; the first after the place where none is before it; one past the paper's units)
+    expect(contextUnits(ctx('<argument> ', '... \\axtpm {p3.11b}, \\authorcr \\bfseriesBin ', ''), 5)).toEqual(new Set([3]))
+    // (a mark the log cut at the line's end keeps its unit's number; one cut at the line's start, `...pm {p3.11b}`, is no mark)
+    expect(contextUnits(ctx('<argument> ', '...pm {p3.11b}, \\authorcr \\bfseriesBin ', 'Liu\\protect \\axtpmm {p2.17...'), 5)).toEqual(new Set([2]))
+    expect(contextUnits(ctx('\\@author ->', '\\foo ', '\\leavevmode \\axtmark {t4s}Words'), 5)).toEqual(new Set([4]))
+    expect(contextUnits(ctx('<argument> ', '...\\axtmark {9s}\\foo ', ''), 5)).toEqual(new Set())
+    // (the paper's own error, as the unmarked original has it; a name mark of ours in its context, the names' remedy; marks on
+    // the input line alone, which errorUnits reads)
+    expect(contextUnits(one, 5, ownErrors(ctx('<argument> ', '...vmode \\bfseriesYouqing ', 'Fang')))).toEqual(new Set())
+    expect(contextUnits(ctx('<argument> ', '...\\axtmark {1s}\\relax \\axtnma {appendix}\\foo ', ''), 5)).toEqual(new Set())
+    expect(contextUnits(`! Undefined control sequence.\nl.7 \\axtmark{1s}\\foo\n          bar\n\n`, 5)).toEqual(new Set())
   })
 
   it('errors no more than the unmarked original\'s are the paper\'s own: the marked original stands, one compile more', async () => {
