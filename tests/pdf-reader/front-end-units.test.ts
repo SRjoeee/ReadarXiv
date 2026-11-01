@@ -216,6 +216,50 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     const marked = new TextDecoder().decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
     expect(marked).toContain('\\rowcolor{gray!15}[0pt][0pt]\n\\multicolumn{2}{l}{')
   })
+  it('a comment\'s line end the walk passes over: the next line\'s indent TeX skips is not written back either, the units as they were (2608.30640v1, 2610.39617v1)', () => {
+    // (TeX ends the line at the comment and skips the next line's leading spaces; written back from the pieces, the indent
+    // stood where the line end was, a space TeX set where the paper has none: `hyphen-  ated`, `performance.    }`)
+    const body = 'Some words here, a hyphen-%\n  ated word and \\emph{more}%\n   text after a group, written by \\LaTeX%\n written, then a figure {%\n    \\fbox{x} of words}.\n'
+    const paper = openPaper(new Map([['main.tex', enc(doc(body))]])), all = paper.units as unknown as Unit[]
+    const marked = new TextDecoder().decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(marked).toContain('a hyphen-ated word and \\emph{more}text after a group, written by \\axtpma')
+    expect(marked).toMatch(/\\LaTeX(?:\\axtpm\{[^}]*\})? written, then a figure \{\\fbox\{x\} of words\}/)
+    // (the units' pieces, and so their hashes and the translator's text, are the walk's as before: the indent is in them)
+    expect(all.map(u => u.pieces.filter(p => p.t === 'text').map(p => p.s).join(''))[0]).toContain('hyphen-  ated')
+  })
+  it('…through every piece flush makes anew of it, and none left between a control word and a word (Devin and Codex on #552)', () => {
+    const marked = (body: string, pre = '') => new TextDecoder().decode(originalFiles(openPaper(new Map([['main.tex', enc(doc(body, pre))]])), { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    // (cut around an address, a letter joined to the word before the line end, a second comment line in between)
+    expect(marked('Write to the alpha words%\n  test@example.com for more words.')).toMatch(/alpha words(?:\\axtpma\{[^}]*\})?test@example\.com/)
+    expect(marked('Words of a caf\\\'e%\n  continued words here.')).toMatch(/caf\\'econtinued words here/)
+    expect(marked('Set by \\LaTeX% first\n  % second\nwritten here, in words.')).toMatch(/\\LaTeX(?:\\axtpm\{[^}]*\})? written here/)
+  })
+  it('…but not in a paper that makes spaces active, where TeX reads the indent (CodeRabbit on #552)', () => {
+    const marked = (body: string, pre: string) => new TextDecoder().decode(originalFiles(openPaper(new Map([['main.tex', enc(doc(body, pre))]])), { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    for (const pre of ['\\newcommand{\\code}{\\obeyspaces}', '\\catcode`\\ =13 \\def {\\space}']) expect(marked('A hyphen-%\n  ated word of the paper.', pre)).toContain('hyphen-  ated')
+  })
+  it('…a control word met by an address or a word of letters past ASCII once its indent is gone; a class of active spaces too (Codex and CodeRabbit on #552)', () => {
+    const marked = (body: string, more: [string, string][] = [], cls = 'article') => new TextDecoder().decode(originalFiles(openPaper(new Map([['main.tex', enc(`\\documentclass{${cls}}\n\\begin{document}\n${body}\n\\end{document}\n`)], ...more.map(([f, t]): [string, Uint8Array] => [f, enc(t)])])), { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    // (written with no mark of ours too, where nothing else stands between them)
+    const plain = (body: string) => new TextDecoder().decode(patch(project(doc(body)), new Map()).get('main.tex'))
+    for (const write of [marked, plain]) {
+      expect(write('Words set with \\bfseries%\n  test@example.com for more words.')).not.toContain('\\bfseriestest')
+      expect(write('Words set with \\bfseries%\n  École normale words.')).not.toContain('\\bfseriesÉcole')
+    }
+    expect(marked('A hyphen-%\n  ated word of the paper.', [['custom.cls', '\\LoadClass{article}\\AtBeginDocument{\\obeyspaces}']], 'custom')).toContain('hyphen-  ated')
+  })
+  it('…a symbolic active space too, and a control word inside a joined piece keeps its end (Codex on #552)', () => {
+    const marked = (body: string, pre = '') => new TextDecoder().decode(originalFiles(openPaper(new Map([['main.tex', enc(doc(body, pre))]])), { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(marked('A hyphen-%\n  ated word of the paper.', '\\catcode32=\\active\\def {\\space}')).toContain('hyphen-  ated')
+    const pre = '\\newcommand{\\prefix}[1]{Foo#1}'
+    const plain = new TextDecoder().decode(patch(project(doc('Words with \\prefix\\L%\n  ukasz are here.', pre)), new Map()).get('main.tex'))
+    for (const out of [plain, marked('Words with \\prefix\\L%\n  ukasz are here.', pre)]) expect(out).not.toContain('\\Lukasz')
+  })
+  it('…and in an entry, cut around its year (Devin on #552)', () => {
+    const tex = '\\documentclass{article}\n\\begin{document}\nText.\n\\begin{thebibliography}{1}\n\\bibitem{a} A. Author. Alpha words%\n  2020 nearby words of the title.\n\\end{thebibliography}\n\\end{document}\n'
+    const out = new TextDecoder().decode(originalFiles(openPaper(new Map([['main.tex', enc(tex)]])), { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(out.slice(out.indexOf('Alpha words'), out.indexOf('nearby'))).toMatch(/^Alpha words(?:\\axt\w+\{[^}]*\})*2020(?:\\axt\w+\{[^}]*\})* $/)
+  })
   it('a control word the source ends with a comment before a word is ended by a space where a unit is written back (2610.40394v1\'s author block)', () => {
     // (the walk passes over the comment, and the two were written as one name, \bfseriesYouqing: four TeX errors, the names
     // gone from the base page, and the guard's two compiles found no unit to blame)

@@ -192,7 +192,7 @@ from it (`gate-pack.mjs make --fixtures=<that folder>`). Every placeholder the o
 ones moved. The measures read the new flags as TeX's file says: a `JOINED` display has no segments of its own (its ink is
 in its group's first display's, which `contentLost` and `textInDisplay` read), and an `OUTSIDE` piece is LOST
 (`contentUnknown`). A unit that opens with a display has its rows before its start mark's line taken off as no line of
-it (as the held rows at its end), so that an `OUTSIDE` piece is outside every line of its unit. Since PIPELINE 53 that display
+it (as the held rows at its end), so that an `OUTSIDE` piece is outside every line of its unit. Since PIPELINE 54 that display
 is found, as one past its unit's end mark that runs to a later unit's opening is: by the ink TeX shipped from the paragraph
 it begins (its point, or the mark before) to its unit's start mark (`layout/stream.mjs` `headInk`), its segments outside its unit's lines, its
 ink shown where it stands; `OUTSIDE` where that ink cannot be told. The prototype's checker

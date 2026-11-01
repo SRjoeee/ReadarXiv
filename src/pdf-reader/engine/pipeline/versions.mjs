@@ -421,7 +421,19 @@
 //     byte for byte, and the three others' marked compiles set the same text on every page. 2610.40576v1's marked original now has
 //     no error, its text page for page its own source's, and costs no guard compile. Raised so. A copy of 51 carries every unit
 //     it holds the source of (live.mjs PIPELINE_CARRIES)
-// 53 (the owner's report of 2026-11-02 on 2501.14787v1 p24: the display before "In order to understand why …" lit with that
+// 53 (the last of #546's notes, 2026-11-02): a comment's line end the walk passes over is written back as TeX reads it. TeX ends a
+//     line at its comment and skips the next line's indent (state N); the walk's next text piece holds that indent, and written
+//     back from the pieces it was a space where the paper has none. The pieces stay as they are, so that no unit's hash moves
+//     (latex-front.mjs SKIPPED: the indent's length beside the piece, kept through flush; patch writes the piece without it;
+//     none in a paper that makes the space active).
+//     Of 231 local sources every unit is 52's hash for hash; the marked originals of 55 change, 272 runs of spaces and tabs
+//     written no more, of which 265 TeX read as nothing (after white space, a control word, or at a line's end) and 7, on 4
+//     papers, as a space. Compiled: 2608.30640v1's (`performance.%⏎    }`) and 2610.39617v1's (`{%⏎    \includegraphics`) marked
+//     originals now set their own source's words, box for box, where one page of each did not (a caption's line 0.38 pt off on
+//     p2, a figure 1.25 pt off on p7), their base pages with them; 2608.22687v1's and 2610.21377v1's (a space before \item, and
+//     one at the start of an author's group) set what they did. Raised so that the bundles of the two are made again under a new
+//     key (VTAG). Every source unit, its pieces and its wire are 52's: a copy of 52 carries every unit (live.mjs PIPELINE_CARRIES)
+// 54 (the owner's report of 2026-11-02 on 2501.14787v1 p24: the display before "In order to understand why …" lit with that
 //     sentence on arXiv's pane and with nothing on ours): a display its unit opens with, which the marking passes over (no point
 //     at a unit's head, marks.mjs headEnd), is found by its unit's start mark — what TeX shipped in the start's region from the
 //     paragraph's point the display begins, or the mark before, to the start mark, the line before, the start's own and a label
@@ -433,9 +445,9 @@
 //     same compiles): 22 of 24 such displays found, on 9 papers, every other placeholder row of every unit as it was; 19 ink
 //     units gone, 17 kept blocks cut of their lines with letters and 2 orphans translated over them (2610.22299v1 p1's
 //     \text{any two adjacent vertices …} inside its equation, 2610.30854v1 p4's glyphs), none made, the ink and figure units
-//     after them numbered on. No source unit's text, pieces or wire changes: a copy of 52 carries every unit (live.mjs
+//     after them numbered on. No source unit's text, pieces or wire changes: a copy of 53 carries every unit (live.mjs
 //     PIPELINE_CARRIES), an ink unit or a figure unit found again by its source (cache.mjs seedFrom)
-export const PIPELINE_VERSION = '53'
+export const PIPELINE_VERSION = '54'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
