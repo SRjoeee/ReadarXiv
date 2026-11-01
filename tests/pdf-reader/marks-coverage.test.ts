@@ -287,12 +287,14 @@ describe('headsOf: the display a unit opens with, which the marking passes over 
   const opens = unit([text('\n'), ph('\\[\nx=y.\n\\]'), text('\nIn order to understand '), ph('$z$'), text(' more.')])
   it('names it by its unit\'s start mark: the opening mark it would have had, and its group\'s later displays', () => {
     const heads = headsOf([unit([text('Before.')]), opens], new Set(['p1.3a', 'p1.3b']))
-    expect(heads('1s')).toEqual({ name: 'p1.1a', group: [] })
+    expect(heads('1s')).toEqual({ name: 'p1.1a', group: [], whole: true })
     // (a cell's, a heading's, an end mark, another unit: none)
     expect([heads('t1s'), heads('h1s'), heads('1e'), heads('0s'), heads('2s'), heads('p1.1a')]).toEqual([null, null, null, null, null, null])
     // two displays, nothing visible between: one group
     const two = unit([ph('\\[a\\]'), text('\n'), ph('\\begin{equation}b\\end{equation}'), text('\nwhere x.')])
-    expect(headsOf([two], new Set())('0s')).toEqual({ name: 'p0.0a', group: ['p0.2a'] })
+    expect(headsOf([two], new Set())('0s')).toEqual({ name: 'p0.0a', group: ['p0.2a'], whole: true })
+    // (a row break in one: TeX may break it over a page)
+    expect(headsOf([unit([ph('\\begin{align}a\\\\b\\end{align}'), text('\nwhere x.')])], new Set())('0s')?.whole).toBe(false)
   })
   it('none where the unit opens with text or another piece, or the display has a mark of its own', () => {
     expect(headsOf([unit([text('Then '), ph('\\[x\\]'), text(' more.')])], new Set())('0s')).toBeNull()

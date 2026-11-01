@@ -194,7 +194,8 @@ const NAMED_LABEL = new RegExp(`^${LABEL_NAME}`, 'u')
  * start mark, in the paragraph it begins (\\[ or $$ in vertical mode begins one), so what the start mark's region holds on its page
  * from that paragraph's point (`paras`, marks.mjs POINTS_TEX q<n>) — or, with none after it, from the last mark before the start
  * mark — to the start mark is the display's: a listing or any text no mark bounds before it stays out; none where neither stands
- * on the start mark's page before it (the display may have begun on the page before, TeX breaking it over the page). A babel
+ * on the start mark's page before it in its region (the display may have begun on the page before, TeX breaking it over the page),
+ * but for a display of no row break (`whole`), from where its region begins on the page. A babel
  * name's points are passed over, a name TeX sets inside a display being the display's (`\text{\figurename}`). Out
  * of it: what stands on the line of the region's glyph before that point (the closing punctuation the unit before set after its
  * end mark, own.mjs MR 4c; a rule under that line) and on the start mark's own line (the unit's label, MR 5); and the paragraph's
@@ -204,17 +205,21 @@ const NAMED_LABEL = new RegExp(`^${LABEL_NAME}`, 'u')
  * told: the mark before is a piece's opening point (its ink runs to the next mark, this start mark: the two would share it), or no
  * glyph is left
  */
-function headInk(P, R, q) {
+function headInk(P, R, q, whole = false) {
   const S = P.points[q], r = R.at[q], G = P.glyphs
+  // (in the start mark's region alone: a float's caption marks shipped among the display's rows are another region's)
   let A = null
-  for (let k = q - 1; k >= 0 && !A; k--) { const n = P.points[k].name; if (!BRACKET.test(n) && !NAME_POINT.test(n) && !BIB_ITEM.test(n)) A = P.points[k] }
+  for (let k = q - 1; k >= 0 && !A; k--) { const n = P.points[k].name; if (R.at[k] === r && !BRACKET.test(n) && !NAME_POINT.test(n) && !BIB_ITEM.test(n)) A = P.points[k] }
   if (A && OPENING.test(A.name)) return null
-  // (the paragraph the display begins: its point, the last before the start mark and at or after the mark before)
+  // (the paragraph the display begins: its point, the last before the start mark and at or after the mark before, in its region —
+  // a paragraph point's the region of the glyph it stands before)
   let Q = null
-  for (const x of P.paras ?? []) if (x.glyph <= S.glyph && x.box <= S.box && (!A || x.glyph >= A.glyph) && (!Q || x.glyph >= Q.glyph)) Q = x
-  const from = Q ?? A
-  // (none on its page before the start mark: the display may have begun on the page before, a display TeX broke over the page,
-  // and what this page holds of it is no whole display)
+  for (const x of P.paras ?? []) if (x.glyph < S.glyph && x.box <= S.box && R.glyph[x.glyph] === r && (!A || x.glyph >= A.glyph) && (!Q || x.glyph >= Q.glyph)) Q = x
+  // (none on its page before the start mark in its region: the display may have begun on the page before, TeX breaking it between
+  // two of its rows, and what this page holds of it is no whole display — but a display of no row break, which TeX never breaks,
+  // from where its region begins on the page, a column's body after a float at its top: 2610.21084v1 p19u177)
+  let from = Q ?? A
+  if (!from && whole) for (let k = q - 1; k >= 0 && !from; k--) if (R.at[k] === r && /^bs\d+$/.test(P.points[k].name)) from = P.points[k]
   if (!from) return null
   const g0 = from.glyph, b0 = from.box
   let glyphs = [], boxes = []
@@ -255,7 +260,7 @@ function headInk(P, R, q) {
  *  where `head` names a display with a point of its own, or its ink cannot be told */
 function headEntries(head, P, R, p, q, has, put) {
   if (!head || has(head.name)) return
-  const ink = headInk(P, R, q)
+  const ink = headInk(P, R, q, head.whole === true)
   if (!ink) return
   put(head.name, { how: HOW[head.group?.length ? 'open, with the displays after it' : 'closed'], glyphs: ink.glyphs.map(g => [p, g]), boxes: ink.boxes.map(b => [p, b]) })
   for (const g of head.group ?? []) if (!has(g)) put(g, { how: HOW['in the display before it'], glyphs: [], boxes: [] })

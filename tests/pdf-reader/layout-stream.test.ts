@@ -286,6 +286,14 @@ describe('ownedOf: a display its unit opens with, which the marking passes over 
     expect(owned([begun], {}, [], { '1s': head })).toEqual({ 'p1.0a': ['x=y', 0] })
     const broken = [pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, '\nx=1', { at: 'be1' }]), pageOf([{ at: 'bs2' }, 'y=2', { at: '1s' }, '\ntext'])]
     expect(owned(broken, {}, [], { '1s': head })).toEqual({})
+    // (a display of no row break TeX never breaks over a page: from where its region begins, a body after a float at the page's
+    // top, the caption's marks the float's region's — 2610.21084v1 p19u177)
+    const atTop = pageOf([{ at: 'fs1' }, { at: '9s' }, 'Figure 3: caption', { at: '9e' }, { at: 'fe1' }, { at: 'bs1' }, '\nx=y(48)', { at: '1s' }, '\nwhich'])
+    expect(owned([atTop], {}, [], { '1s': { ...head, whole: true } })).toEqual({ 'p1.0a': ['x=y(48)', 0] })
+    expect(owned([atTop], {}, [], { '1s': head })).toEqual({})
+    // (a float's caption marks shipped among the display's rows are another region's: no bound of it, Codex on #550)
+    const floated = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { para: 'q1' }, '\nx=1', { at: 'fs2' }, { at: '9s' }, '\nCaption', { at: '9e' }, { at: 'fe2' }, '\ny=2', { at: '1s' }, '\ntext'])
+    expect(owned([floated], {}, [], { '1s': head })).toEqual({ 'p1.0a': ['x=1y=2', 0] })
   })
 
   it('owns nothing where it cannot be told: an opening point alone before it, nothing between, a start mark set twice', () => {
