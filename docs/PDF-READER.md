@@ -318,8 +318,8 @@ scroll area keeps it (the maintainer turned down mirroring the left one to the o
   track the length leaves, so the two must change in one frame: set a frame later (a React effect on the zoom's state, then
   a frame), every step of a pinch drew the thumb at the new share of the old length and moved it again the next frame, up
   and down through the whole gesture (measured 2026-11-01, `tests/e2e/probes/pinch-jitter.mjs`). A pinch shown by transform
-  (§6.8) leaves the scroll and its range alone: the thumb holds still until the commit, and then takes its new place and
-  length in one frame.
+  (§6.8) leaves the scroll and its range alone: the thumb, hidden, holds still until the commit, and then takes its new
+  place and length in one frame.
 
 ### 6.6 The status capsule and the card
 
@@ -431,14 +431,14 @@ is taken only over the pages. The overlays follow the pinch exactly (§10.1).
   step had written the scale, and PDF.js's `update()` then read every page box of both panes, laying them out again — 25–52
   ms a step on staging, 85 % of a pinch's layout, the zoom moving in lumps 106 ms apart at 1x and 300 ms at 4x. On the
   owner's gestures (1093×892, the pointer at 21.5 % across and 61 % down the right pane, out by 0.5 then in by 2.1), the
-  layout during the gesture fell from 298–349 to 103–106 ms at 1x and from 1442–1629 to 492–518 ms at 4x, forced layout from
-  349–378 to 42–62 ms (1x), tasks over 50 ms from 27–31 to 2–5 (4x) and the longest from 130–152 to 66–74 ms; frames
+  layout during the gesture fell from 298–357 to 103–107 ms at 1x and from 1442–1813 to 492–577 ms at 4x, forced layout from
+  349–389 to 42–64 ms (1x), tasks over 50 ms from 27–31 to 2–17 (4x) and the longest from 130–158 to 66–79 ms; frames
   dropped zooming in 8 → 1–2 (1x) and 55–63 → 1–35 (4x), zooming out 49–57 → 29 (4x). Zooming out at 1x it drops 7 single
-  frames where next dropped 1–2 (the GPU scales the larger view it shows: 155 against 125 ms). With Chromium's own pinch
-  over 101 pages at 4x, 84–91 frames dropped against 1. The commit costs one step's layout (a 15 ms task at 1x, up to 185 ms
-  at 4x for a threefold zoom, against next's redraw of 139–150 ms). Shown as a layer at its first scale, the pages are soft
-  while the fingers grow them and sharp from the commit; drawn again at every step's scale instead, the GPU spent three
-  times next's and a pinch out dropped frames for it (0 → 14 % at 1x).
+  frames where next dropped 1–2 (the GPU scales the larger view it shows: 155 against 125–130 ms). With 60 Ctrl-wheels to
+  three times at 4x (hjfy-compare's gesture, 1440×900), 84–91 frames dropped against 1. The commit costs one step's layout
+  (a 15 ms task at 1x, up to 185 ms at 4x for a threefold zoom, against next's redraw of 139–150 ms). Shown as a layer at its
+  first scale, the pages are soft while the fingers grow them and sharp from the commit; drawn again at every step's scale
+  instead, the GPU spent three times next's and a pinch out dropped frames for it (0 → 14 % at 1x).
 - **Why** (the owner's recording on 1706.03762v7, 2026-11-01, the handles jittering through a pinch; the probe's frames): the right pane was kept
   only where a page lay under the pointer, and a pointer beside a page at a small zoom kept nothing, so that the pane stood
   still while its pages grew about its top — its thumb jumping 10–14 px a step, the pair drifting two pages apart, levelled
