@@ -1912,10 +1912,10 @@ describe('translating: the indicator over a near page\'s paragraphs not laid yet
     expect(marksOf(s, 1)).toBeLessThan(before)
   })
 
-  it('each mark its box in the page\'s shares as the overlay\'s container units; a still ground where the browser cannot pass the light', async () => {
+  it('each mark its box in the page\'s shares as the overlay\'s container units; a still mark where the browser cannot size a container', async () => {
     try {
       for (const can of [false, true]) {
-        vi.stubGlobal('CSS', can ? { registerProperty: () => {}, supports: () => true } : { supports: () => true })
+        vi.stubGlobal('CSS', { supports: (p: string, v: string) => can || !(p === 'width' && /cq/.test(v)) })
         const s = await setup({ door: { rows: 'gate' } })
         await nearOn(s, [1])
         s.side.tell(await ALL())
@@ -1935,6 +1935,48 @@ describe('translating: the indicator over a near page\'s paragraphs not laid yet
         expect(el?.classList.contains('axt-translating-still')).toBe(!can)
       }
     } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('one light for the page: each mark\'s pass starts when its page\'s indicator did, a mark a later part brings too', async () => {
+    const m = await M()
+    const timeline = { currentTime: 1000 }
+    const own = Object.getOwnPropertyDescriptor(document, 'timeline')
+    Object.defineProperty(document, 'timeline', { configurable: true, get: () => timeline })
+    // (the browser's animations as the overlay reads them: each mark's fade and its pass, which starts as the mark is styled)
+    type Anim = { animationName: string; startTime: number | null }
+    const kept = new WeakMap<Element, Anim[]>()
+    const spy = vi.spyOn(HTMLElement.prototype, 'getAnimations').mockImplementation(function (this: HTMLElement) {
+      return [...this.querySelectorAll('.axt-translating-mark')].flatMap(e => {
+        let a = kept.get(e)
+        if (!a) { a = [{ animationName: 'axt-tr-in', startTime: null }, { animationName: 'axt-tr-pass', startTime: timeline.currentTime + 16 }]; kept.set(e, a) }
+        return a
+      }) as unknown as Animation[]
+    })
+    vi.stubGlobal('CSS', { supports: () => true })
+    try {
+      const s = await setup({ door: { rows: 'gate' } })
+      await nearOn(s, [2])
+      // (the first part alone, which reaches page 2: its marks, their passes set to the indicator's start)
+      s.side.tell({ head: m.head.ref, units: m.chunks.map(c => c.ref), parts: [jobRef(m, 0)] })
+      await settle(s, 10, false)
+      const passes = () => [...(places(s)[1]?.querySelectorAll('.axt-translating-mark') ?? [])].map(e => kept.get(e))
+      const first = passes()
+      expect(first.length).toBeGreaterThan(0)
+      expect(first.map(a => a?.[1]?.startTime)).toEqual(first.map(() => 1000))
+      // (the rest later: the new marks' passes started at their own styling, set back to the page's, the fades untouched)
+      timeline.currentTime = 5000
+      s.side.tell(await ALL())
+      await settle(s, 10, false)
+      const all = passes()
+      expect(all.length).toBeGreaterThan(first.length)
+      expect(all.map(a => a?.[1]?.startTime)).toEqual(all.map(() => 1000))
+      expect(all.map(a => a?.[0]?.startTime)).toEqual(all.map(() => null))
+    } finally {
+      spy.mockRestore()
+      if (own) Object.defineProperty(document, 'timeline', own)
+      else delete (document as unknown as { timeline?: unknown }).timeline
       vi.unstubAllGlobals()
     }
   })

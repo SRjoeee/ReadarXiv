@@ -58,17 +58,16 @@ html[data-axt-dim] { --axt-sk: oklch(0.275 0.004 255); --axt-sk-paper: rgb(29 29
 /* ----- translating (layer-side.mjs markPage): over a near page whose place shows the original's page, one mark a paragraph not
    laid yet, above the page and under nothing the reader acts on (no pointer). The shape is the owner's "Field" (2026-10-25): one
    diagonal light crossing the whole page, each mark showing its own share of it; the look is his "Glint" (2026-11-01): the
-   light passes through the glyphs, the paper untouched, no ground and almost no margin. The page's overlay is a size container
-   and carries the pass (--axt-tr-p, one value for the page); a mark's background is three pages wide (300cqw), set back by the
-   mark's own place in the page (--axt-tr-x, -y, written by the code in the page's shares, less the card's padding --axt-tr-px,
-   -py). Every value of the look is a custom property below: the ground and the light (its two shoulders and its peak), where
-   they stand in the band, the band's angle, the blend, a filter, the card's padding and corner, the still mark, the pass's
-   length and easing, the drift of a look that moves on its own (--axt-tr-t, Aurora's), the delay before a mark shows and its
-   fade. A look of another shape (Aurora's fields) sets --axt-tr-image, -size and -position on .axt-translating-mark. Still, the
-   still mark alone (--axt-tr-still: a look with no ground has its own), where the reader asks for less motion, and where the
-   browser cannot animate a registered property or size a container (markPage: axt-translating-still) */
-@property --axt-tr-p { syntax: '<number>'; inherits: true; initial-value: 0; }
-@property --axt-tr-t { syntax: '<number>'; inherits: true; initial-value: 0; }
+   light passes through the glyphs, the paper untouched, no ground and almost no margin. The page's overlay is a size container.
+   The light is a picture three pages wide (300cqw) in the page's frame, and each mark clips (its own box and corners) its slice
+   of it, set in the page's frame by the mark's own place (--axt-tr-x, -y, written by the code in the page's shares, and its
+   padding --axt-tr-px, -py), which a transform moves across the page: the compositor runs the pass, with no style, layout or
+   paint on the page's thread while it runs, and every mark's pass starts when its page's indicator did (markPage), so that the
+   marks show one light. The light lies over the mark's ground. Every value of the look is a custom property below: the ground
+   and the light (its two shoulders and its peak), where they stand in the band, the band's angle, the blend, a filter, the
+   mark's padding and corner, the still mark, the pass's length and easing, the delay before a mark shows and its fade; a light
+   of another shape sets --axt-tr-image and -size. Still, the still mark alone (--axt-tr-still: a look with no ground has its
+   own), where the reader asks for less motion, and where the browser cannot size a container (markPage: axt-translating-still) */
 :root {
   /* Glint: the light is the paper's own colour (the page's, --axt-sk-paper, in both looks) at 78 %, over no ground. Laid as it
      is, with no blend: the overlay is a stacking context (its z-index), so a mark's own blend mode mixes with nothing but the
@@ -93,7 +92,6 @@ html[data-axt-dim] { --axt-sk: oklch(0.275 0.004 255); --axt-sk-paper: rgb(29 29
   --axt-tr-still: color-mix(in oklab, var(--axt-sk-paper) 10%, transparent);
   --axt-tr-run: 3.4s;
   --axt-tr-easing: cubic-bezier(0.65, 0, 0.35, 1);
-  --axt-tr-drift: 11s;
   --axt-tr-delay: 0.3s;
   --axt-tr-fade: 0.4s;
 }
@@ -101,26 +99,30 @@ html[data-axt-dim] {
   --axt-tr-light: color-mix(in oklab, var(--axt-sk-paper) 80%, transparent);
   --axt-tr-still: color-mix(in oklab, var(--axt-sk-paper) 14%, transparent);
 }
-.axt-translating { position: absolute; inset: 0; pointer-events: none; z-index: 1; container-type: size;
-  animation: axt-tr-pass var(--axt-tr-run) var(--axt-tr-easing) infinite, axt-tr-drift var(--axt-tr-drift) linear infinite; }
-/* (the last 20 % of each pass is a pause) */
-@keyframes axt-tr-pass { 0% { --axt-tr-p: 0; } 80%, 100% { --axt-tr-p: 1; } }
-@keyframes axt-tr-drift { to { --axt-tr-t: 1; } }
-.axt-translating .axt-translating-mark { position: absolute; display: block;
+.axt-translating { position: absolute; inset: 0; pointer-events: none; z-index: 1; container-type: size; }
+.axt-translating .axt-translating-mark { position: absolute; display: block; overflow: hidden;
   left: calc(var(--axt-tr-x) - var(--axt-tr-px)); top: calc(var(--axt-tr-y) - var(--axt-tr-py));
   width: calc(var(--axt-tr-w) + 2 * var(--axt-tr-px)); height: calc(var(--axt-tr-h) + 2 * var(--axt-tr-py));
   border-radius: calc(var(--axt-tr-radius) * var(--axt-tr-u, 0.1cqw)); mix-blend-mode: var(--axt-tr-blend); filter: var(--axt-tr-filter);
-  background-image: var(--axt-tr-image, linear-gradient(var(--axt-tr-angle), var(--axt-tr-ground) 0 var(--axt-tr-edge), var(--axt-tr-light-a) var(--axt-tr-shoulder), var(--axt-tr-light) 50%, var(--axt-tr-light-b) calc(100% - var(--axt-tr-shoulder)), var(--axt-tr-ground) calc(100% - var(--axt-tr-edge)) 100%));
+  background: var(--axt-tr-ground); animation: axt-tr-in var(--axt-tr-fade) ease var(--axt-tr-delay) both; }
+/* (the mark's slice of the light's picture: one page wide, the picture's middle third, where the band lies on any page up to
+   about twice as tall as it is wide; as high as the mark, its rows the page's; the light alone, over the mark's ground) */
+.axt-translating .axt-translating-mark::before { content: ""; position: absolute; top: 0; height: 100%;
+  left: calc(var(--axt-tr-px) - var(--axt-tr-x)); width: 100cqw;
+  background-image: var(--axt-tr-image, linear-gradient(var(--axt-tr-angle), transparent 0 var(--axt-tr-edge), var(--axt-tr-light-a) var(--axt-tr-shoulder), var(--axt-tr-light) 50%, var(--axt-tr-light-b) calc(100% - var(--axt-tr-shoulder)), transparent calc(100% - var(--axt-tr-edge)) 100%));
   background-size: var(--axt-tr-size, 300cqw 100cqh); background-repeat: no-repeat;
-  background-position: var(--axt-tr-position, calc((var(--axt-tr-p) * 2 - 2) * 100cqw - (var(--axt-tr-x) - var(--axt-tr-px))) calc(0px - (var(--axt-tr-y) - var(--axt-tr-py))));
-  animation: axt-tr-in var(--axt-tr-fade) ease var(--axt-tr-delay) both; }
+  background-position: -100cqw calc(var(--axt-tr-py) - var(--axt-tr-y));
+  animation: axt-tr-pass var(--axt-tr-run) var(--axt-tr-easing) infinite; }
+/* (the slice a page to the left of the page, then a page to its right: the band crosses the page; the last 20 % of each pass is
+   a pause) */
+@keyframes axt-tr-pass { 0% { transform: translateX(-100%); } 80%, 100% { transform: translateX(100%); } }
 @keyframes axt-tr-in { from { opacity: 0; } to { opacity: 1; } }
-.axt-translating-still, .axt-translating-still .axt-translating-mark { animation: none; }
-.axt-translating-still .axt-translating-mark { background: var(--axt-tr-still, var(--axt-tr-ground)); }
+.axt-translating-still .axt-translating-mark { animation: none; background: var(--axt-tr-still, var(--axt-tr-ground)); }
+.axt-translating-still .axt-translating-mark::before { content: none; }
 @media (prefers-reduced-motion: reduce) {
-  .axt-translating { animation: none; }
   /* (still shown only after the delay, at once: a fast page shows no mark at all) */
   .axt-translating .axt-translating-mark { animation: axt-tr-in 0s linear var(--axt-tr-delay) both; background: var(--axt-tr-still, var(--axt-tr-ground)); }
+  .axt-translating .axt-translating-mark::before { content: none; }
 }
 /* ----- the layer drawn in a place (layer-side.mjs; the web's placeholders.css as it drew it): the page's copy fills the
    place, and the engine's SVG and the page's links are laid over it in the copy's frame. The copy is the composed page drawn as

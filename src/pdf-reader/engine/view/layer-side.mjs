@@ -991,13 +991,28 @@ export function createLayerSide(view, o) {
       for (let n = 1; n <= V.places.count(); n++) if (V.places.near(n)) markPage(n)
     })
   }
-  /** whether the light can pass: a registered property animated (@property) and a size container's units, which the readers'
-   *  floors before Firefox 128 lack the first of; else the marks are still (engine.css --axt-tr-still) */
+  /** each indicator's start on the document's timeline, ms, by page: every pass of its marks starts there (alignPasses) */
+  const passStarts = new Map()
+  /** whether the light can pass: a size container's units, which the light's picture is sized and placed in (the readers' floors
+   *  before Firefox 110 and Safari 16 lack them); else the marks are still (engine.css --axt-tr-still) */
   function moves() {
     const C = globalThis.CSS
-    return typeof C?.registerProperty === 'function' && typeof C.supports === 'function' && C.supports('width', '1cqh')
+    return typeof C?.supports === 'function' && C.supports('width', '1cqh')
   }
-  function unmark(n) { const el = marks.get(n); if (el) { el.remove(); marks.delete(n) } }
+  /**
+   * One light for the page: each mark's pass (engine.css axt-tr-pass, a CSS animation of the mark's ::before, run by the
+   * compositor) set to start when its page's indicator did, so that a mark put in with a later batch of rows shows its share of
+   * the same light rather than a pass of its own. Where the browser gives no animations to read, each pass starts as its mark is
+   * styled
+   */
+  function alignPasses(n, el) {
+    const t0 = passStarts.get(n)
+    if (typeof t0 !== 'number' || typeof el.getAnimations !== 'function') return
+    try {
+      for (const a of el.getAnimations({ subtree: true })) if (a.animationName === 'axt-tr-pass' && a.startTime !== t0) a.startTime = t0
+    } catch { /* the browser's own: the passes left as they started */ }
+  }
+  function unmark(n) { const el = marks.get(n); if (el) { el.remove(); marks.delete(n); passStarts.delete(n) } }
   function unmarkAll() { for (const n of [...marks.keys()]) unmark(n) }
   /**
    * Page n's indicator: over each paragraph the parts read so far locate on it (its rectangles there, the union of them),
@@ -1035,6 +1050,8 @@ export function createLayerSide(view, o) {
       el.className = moves() ? 'axt-translating' : 'axt-translating axt-translating-still'
       el.setAttribute('aria-hidden', 'true')
       marks.set(n, el)
+      const t0 = globalThis.document?.timeline?.currentTime
+      if (typeof t0 === 'number') passStarts.set(n, t0)
     }
     if (el.parentNode !== place) place.append(el)
     // (the card's padding and corner are CSS pixels at the reader's 100 %, the sheet's --axt-tr-pad-x, -pad-y and -radius, scaled
@@ -1073,6 +1090,7 @@ export function createLayerSide(view, o) {
       if (m.getAttribute('style') !== style) m.setAttribute('style', style)
     })
     for (const [key, c] of had) if (!want.has(key)) c.remove()
+    alignPasses(n, el)
   }
 
   // ---------------------------------------------------------------- the pages ahead (the prefetch, on the layer; §11.8)

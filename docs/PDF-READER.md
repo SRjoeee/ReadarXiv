@@ -893,15 +893,19 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   translation's first page has its own wave at once).
 - **Translating** (the owner's "Field", 2026-10-25, in his "Glint", 2026-11-01). While a near page is not laid, its place
   shows the original's page, and each paragraph the parts read so far locate on it carries a mark over its box, showing its
-  own share of one diagonal light that crosses the whole page. The page's overlay is a size container and carries the pass
-  (one registered property, `--axt-tr-p`, for the page); a mark's background is three pages wide, set back by the mark's
-  place in the page, so the light is one surface whatever the paragraphs. The light passes through the glyphs and leaves the
-  paper untouched: a band at 100° of the paper's own colour, 78 % at its middle (80 % on a dimmed page), fading to nothing
-  over a tenth of the three-page background on either side, over no ground, so that the letters it crosses fade toward the paper and nothing
-  else changes. A mark shows after 300 ms (a fast page shows none) and fades in over 0.4 s; a pass takes 3.4 s, its last 20 %
-  a pause. A mark stands out from its paragraph by 4 CSS pixels inline and 2 block, with 4-pixel corners, at the reader's
-  100 %, scaled with the page so a zoom keeps it in proportion; each side's padding is at most half the gap to the nearest
-  mark beside it, so no two marks meet. The Field's first look was Graphite (2026-10-25: a faint graphite card, 14 by 4
+  own share of one diagonal light that crosses the whole page. The light is one picture three pages wide in the page's frame
+  (the page's overlay is a size container), and each mark clips its own slice of it: one page wide, the picture's middle third,
+  where the band lies on any page up to about twice as tall as it is wide, and as high as the mark, set in the page's frame by
+  the mark's place, so the light is one surface whatever the paragraphs. A transform moves each slice across the page, so the
+  compositor runs the pass: nothing is restyled, laid out or painted on the page's thread while it runs. Each mark's pass
+  starts when its page's indicator did (`markPage` sets its `startTime`, Web Animations, as marks come), so a mark a later
+  batch of rows brings shows its share of the same light, not a pass of its own. The light passes through the glyphs and
+  leaves the paper untouched: a band at 100° of the paper's own colour, 78 % at its middle (80 % on a dimmed page), fading to
+  nothing over a tenth of the three-page picture on either side, over no ground, so that the letters it crosses fade toward
+  the paper and nothing else changes. A mark shows after 300 ms (a fast page shows none) and fades in over 0.4 s; a pass
+  takes 3.4 s, its last 20 % a pause. A mark stands out from its paragraph by 4 CSS pixels inline and 2 block, with 4-pixel
+  corners, at the reader's 100 %, scaled with the page so a zoom keeps it in proportion; each side's padding is at most half
+  the gap to the nearest mark beside it, so no two marks meet. The Field's first look was Graphite (2026-10-25: a faint graphite card, 14 by 4
   pixels out from its paragraph, which the light cleared); the owner chose Glint on 2026-11-01, having seen both on the
   reader's own pages, a Glint with no margin and its still state lighter: 「不带边距的 glint」，「用 Glint，减少动态那一态调淡一些」.
   The band is laid as it is, with no blend mode. The overlay is a stacking context (its z-index), an isolated group, so a
@@ -913,11 +917,27 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   1.36 ms of the main thread a frame against Graphite's 1.39 with 10 marks, 7.4 against 7.7 ms with 16 marks under a CPU
   four times slower, no frame dropped in any run; a blend on the overlay would have doubled the frame's draw (0.13 ms against
   0.07), the only difference it made.
+  Until 2026-11-01 the pass was a registered property animated on the page's overlay, and the main thread restyled and
+  repainted every mark at every frame, while the same thread lays the page the reader waits on. In the reader at 4x, on the
+  sample's first page (10 marks; nine interleaved runs each, medians and the middle half), page 1 went in place 363 ms (355
+  to 367) after its rows were let go with the light moving, against 297 (290 to 307) with the marks still and 294 (285 to 298)
+  with none: 66 ms later, a tenth of it in the lay and the rest before the rows reached the layer, on the same thread. On the
+  compositor, with the look the same pixel for pixel (within one level in light and dark at three points of the pass, the
+  still marks identical), a frame's work on the main thread with the light moving is 0.79 ms at 4x where it was 4.71 (its
+  style 0.37 where it was 2.81, no paint where it was 0.75), the main thread busy 81 ms a second where it was 318, and the
+  GPU 3.6 where it was 37; at 1x, 0.25 ms a frame where it was 1.39. Each slice is a layer of the compositor's: the reader's
+  tiles hold 10 MB more than the marks painted with the page did (48.7 MB against 38.3 at 2x), where slices three pages wide
+  and a page high had held 67 MB more. The light moving no longer delays page 1: over 22 rounds alternating the two builds on
+  a busy machine, it had put page 1 in place a median 24 ms later than still marks (later in 14 rounds of 22), and now 10 ms
+  sooner (later in 9). The compositor draws a frame only where the light changes something on screen, at the display's
+  rate: none while the band is off the page at either end of its pass, where the registered property's light had drawn
+  every frame.
   Every value of the look is a custom property of `engine.css` (`--axt-tr-*`: the ground, the light and its shoulders and
   where they stand, the angle, the blend, a filter, the mark's padding and corner, the still mark, the pass and its easing,
-  the drift, the delay and the fade; a look of another shape sets `--axt-tr-image`, `-size` and `-position` on the mark), so
-  that a look is a change of values, no code. With reduced motion asked, and where the browser cannot animate a registered
-  property or size a container (Firefox before 128 among the reader's browsers), the mark is still: a veil of the paper over
+  the delay and the fade; a light of another shape sets `--axt-tr-image` and `-size`), so that a look is a change of values,
+  no code. The light lies over the mark's ground (a light that cleared its ground, as Graphite's did, would be a picture of
+  its own). With reduced motion asked, and where the browser cannot size a container (before Firefox 110 and Safari 16), the
+  mark is still: a veil of the paper over
   the paragraph, 10 % (14 % on a dimmed page), `--axt-tr-still`, which a look with no ground needs (the ground alone would show
   no mark at all). It lightens the letters by 26 levels of luminance at most (28 dimmed), where Graphite's still ground moved
   them by 10 (11): a page that waits, calmly; the 30 % of Glint's sketch moved them by 76 (59), and the owner asked for less.
