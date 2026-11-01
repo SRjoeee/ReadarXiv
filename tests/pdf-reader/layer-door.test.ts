@@ -303,6 +303,48 @@ describe('the door: three opens, the same pages', () => {
     return out
   }
 
+  it('lays a page once the rows it reads are in, whatever order the rows come in: after rows of higher-numbered units, with no end()', async () => {
+    const want = await cascadeInOrder()
+    const strip = (svg: string) => svg.replace(' lang="zh"', '')
+    // The rows as the Translation Workflow tells them: deltas, each one's rows rising by id (worker/src/jobs/windows.ts rowsOf), the
+    // deltas in any order. (a) Page 1's paragraph, unit 0, after every other row (a retried batch, a row a delta had no room for);
+    // (b) by pages' closures, the page in view first, page 6, then pages 1 to 5 (windows.ts pageBatches): the rows of units 5 to
+    // 10 first. Pages 6, 2 and 1 asked, page 1 last, as the side asks the pages near the view (page 1 in view)
+    for (const order of ['unit 0 last', 'page 6 first'] as const) {
+      const { layer, told, run } = await cascadeDoor({ end: false, rows: false })
+      try {
+        const byId = new Map(cascadeRows.map(r => [r[0], r]))
+        // (page 6's closure reads units 5 to 10, page 1's units 0 to 3 (its paragraph running on to page 2 is ranked there among
+        // page 2's), page 2's units 0 to 5)
+        expect([6, 1, 2].map(p => run.rowsFor(p))).toEqual([[5, 6, 7, 8, 9, 10], [0, 1, 2, 3], [0, 1, 2, 3, 4, 5]])
+        const told0 = new Set<number>(), byPage: number[][] = []
+        for (const q of [6, 1, 2, 3, 4, 5]) {
+          const mine = run.rowsFor(q).filter(id => !told0.has(id))
+          for (const id of mine) told0.add(id)
+          if (mine.length) byPage.push(mine)
+        }
+        const deltas = order === 'unit 0 last' ? [[7, 8, 9, 10], [3, 4, 5, 6], [1, 2], [0]] : byPage
+        if (order === 'page 6 first') expect(deltas).toEqual([[5, 6, 7, 8, 9, 10], [0, 1, 2, 3], [4]])
+        const asked = [6, 2, 1].map(p => layer.pageOf(p, { lang: 'zh' }).then(page => [p, page.svg.outerHTML] as const))
+        const states: string[] = []
+        for (const [i, d] of deltas.entries()) {
+          layer.take(d.map(id => byId.get(id)!))
+          // (after each delta, each page asked is laid where every row it reads is in, and only there: each complete page awaited,
+          // within a bound, since the run draws the pages its closure reads over more than a few macrotasks)
+          for (const p of [1, 2, 6]) for (let k = 0; k < 2000 && run.complete(p) && layer.pageState(p) !== 'ready'; k++) await tick()
+          await settleDown(layer, CASCADE.pages)
+          states.push([1, 2, 6].map(p => layer.pageState(p)[0]).join(''))
+          for (const p of [1, 2, 6]) expect(layer.pageState(p) === 'ready', `${order}, delta ${i + 1}, page ${p}`).toBe(run.complete(p))
+        }
+        // (pages 1, 2 and 6 by state after each delta: page 6 laid by its closure's rows, pages 1 and 2 by theirs, whichever came
+        // first; every page laid by the last delta, with no end(), each drawn as with every row in at once: no provisional fit)
+        expect(states, order).toEqual(order === 'unit 0 last' ? ['www', 'wwr', 'wwr', 'rrr'] : ['wwr', 'rwr', 'rrr'])
+        expect(told.slice(0, 2), order).toEqual(['laying:6', 'ready:6'])
+        for (const [p, svg] of await Promise.all(asked)) expect(strip(svg), `${order}: page ${p}`).toBe(strip(want[p - 1]!))
+      } finally { layer.dispose() }
+    }
+  })
+
   it('A1: an ask aborted before the drive turns to it commits nothing: never told, nothing of its closure drawn', async () => {
     const { layer, doc, told, run } = await cascadeDoor()
     try {
