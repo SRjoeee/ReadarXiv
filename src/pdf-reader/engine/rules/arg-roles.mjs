@@ -56,6 +56,9 @@ const CURATED = {
   mbox: '{c', makebox: '[d[n{c', framebox: '[d[n{c', fbox: '{c', parbox: '[n[d[n{d{c', raisebox: '{d[d[d{c',
   resizebox: '*s{d{d{c', scalebox: '{d[d{c', rotatebox: '[k{d{c', reflectbox: '{c', colorbox: '[n{n{c', fcolorbox: '[n{n{n{c',
   textcolor: '[n{n{c', color: '[n{n', adjustbox: '{k{c', smash: '[n{c', phantom: '{x', hphantom: '{x', vphantom: '{x',
+  // (colortbl's row colour and its overhangs, \rowcolor[model]{colour}[left][right]; LaTeXML's form stops at the colour, and
+  // 2610.40394v1's `[0pt][0pt]` began its row's unit, the start mark before them and before the row's \multicolumn)
+  rowcolor: '[n{n[d[d',
   // space, rules and the rows of a table
   vspace: '*s{d', hspace: '*s{d', addvspace: '{d', rule: '[d{d{d', specialrule: '{d{d{d', addlinespace: '[d', toprule: '[d',
   midrule: '[d', bottomrule: '[d', cline: '{n', hhline: '{n', noalign: '{x', tabularnewline: '[d', linespread: '{d', fontsize: '{d{d',
