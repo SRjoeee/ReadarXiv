@@ -2663,8 +2663,10 @@ own), each part carrying its pages' cell rules (`rules`).
     2608.22687v1's (a space before `\item`, which `\par` takes away) and 2610.21377v1's (one at the start of an author's
     group) set what they did, box for box. The indent is carried through every piece flush makes anew (a letter's join, a cut
     around an address or an entry's number), and a piece it leaves empty is no piece, so that a control word before it still
-    meets the word after it with a space (`\LaTeX% a⏎  % b⏎word`). A paper that makes the space active anywhere
-    (`\obeyspaces`, a `\catcode` of the space set to 13) keeps every indent, which TeX reads there; none of the 231 does.
+    meets the word after it with a space (`\LaTeX% a⏎  % b⏎word`), and so does one an indent alone stood before, where an
+    address's placeholder or a letter past ASCII (a letter of the name to XeTeX and LuaTeX) follows it. A paper that makes the
+    space active anywhere, its class's files among its own (`\obeyspaces`, a `\catcode` of the space set to 13), keeps every
+    indent, which TeX reads there; none of the 231 does.
   - *What the guard's retries bought* (staging, PIPELINE 46 to 48, 82 prepares of 60 papers): it compiled more than the
     marked original on three, 160 s of the box's CPU, and saved none, for on none did it find a unit to blame, and its last
     remedy, the name marks off, changed nothing where it ran: 2610.37818v1 above (the name marks off, the unmarked original, refused: 114 s);

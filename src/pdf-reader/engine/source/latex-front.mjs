@@ -2643,7 +2643,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   // which is biblatex's data — \\entry, \\field — and no text, which \\bibliography, biblatex's alias of \\addbibresource, never reads)
   const bblName = `${jobName(mainFile.rel)}.bbl`, bblBytes = fsys.read(bblName)
   const bbl = bblBytes && /\\begin\s*\{thebibliography\}/.test(texText(bblBytes)) ? bblName : null
-  const ctx = { rowEnds: rowEndsOf(sources.map(sourceText)), rowEndsAfter: rowEndsAfterOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), tableWraps: tableWrapsOf(ownTexts), activeSpaces: activeSpacesIn(sources.map(sourceText)), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], backref: backrefOf(ownTexts), ...tblrOf(sources.map(sourceText)) }
+  const ctx = { rowEnds: rowEndsOf(sources.map(sourceText)), rowEndsAfter: rowEndsAfterOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), tableWraps: tableWrapsOf(ownTexts), activeSpaces: activeSpacesIn([...sources.map(sourceText), ...ownTexts]), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], backref: backrefOf(ownTexts), ...tblrOf(sources.map(sourceText)) }
   const scan = { lineEnvs, ifs, ifValues }
   let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;
@@ -2792,14 +2792,19 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     // a source's text as the source writes it: a letter an accent made (Builder.letter) is the accent again
     // (backref's list, BACKREF_LIST, is no byte of the source: written as nothing; the marked original's copy holds its marks instead)
     // (and a piece that begins a line after a comment's line end without the indent TeX skips there: SKIPPED)
-    // (a piece the indents leave empty writes nothing and is no piece: the control word before it meets the text after it)
-    const pieces = (translated.get(u) ?? u.pieces).filter(p => !(p.t === 'ph' && p.src === BACKREF_LIST)).flatMap(p => {
+    // (a piece the indents leave empty writes nothing and is no piece: the control word before it meets the text after it.
+    // `bared`, the piece an indent stood before where it stands now: the control word guard below reads it)
+    const pieces = []
+    let bare = false
+    for (const p of (translated.get(u) ?? u.pieces).filter(x => !(x.t === 'ph' && x.src === BACKREF_LIST))) {
       const q = p.t === 'text' && !p.tr && p.src !== undefined ? { ...p, s: p.src } : p, r = p.t === 'text' && !p.tr ? SKIPPED.get(p) : null
-      if (!r) return [q]
+      if (!r) { pieces.push(bare ? { ...q, bared: true } : q); bare = false; continue }
       let t = q.s
       for (const [o, n] of [...r].sort((x, y) => y[0] - x[0])) t = t.slice(0, o) + t.slice(o + n)
-      return t ? [{ ...q, s: t }] : []
-    })
+      if (!t) { bare = true; continue }
+      pieces.push({ ...q, s: t, ...(bare || r.some(([o]) => o === 0) ? { bared: true } : {}) })
+      bare = false
+    }
     const m = mark?.(u)
     // before the first word, inside any font command's group (nothing precedes it there to kern with); before an
     // inline formula or citation that comes first; before the macro when the word is glued to one (\\name's: between
@@ -2897,7 +2902,11 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
       // (the source's own word right after a control word: in the source a comment stood between them, which ends the name and
       // which the walk passes over — `\\bfseries%⏎Youqing`, written \\bfseriesYouqing, one undefined name: 2610.40394v1's author
       // block, four TeX errors and its names gone from the base page. A space ends it as the comment did; TeX skips it)
+      // the same where an indent TeX skips was all that stood between them (SKIPPED, `bared`): before an address a placeholder
+      // holds, and before a letter past ASCII, which XeTeX and LuaTeX read as a letter of the name. Only there: a source that
+      // writes \\fooé itself has TeX read the name it reads)
       else if (/\\[A-Za-z@]+$/.test(p.src) && next?.t === 'text' && !next.tr && /^[A-Za-z@]/.test(next.s)) parts.push(utf8Bytes(' '))
+      else if (/\\[A-Za-z@]+$/.test(p.src) && next?.bared && /^[A-Za-z@\u0080-\uffff]/.test(next.t === 'text' ? next.s : next.src ?? '')) parts.push(utf8Bytes(' '))
     }
     if (m?.before && beforeAt === pieces.length && beforeCut === -1) parts.push(utf8Bytes(m.before))
     if (nested?.length) {
