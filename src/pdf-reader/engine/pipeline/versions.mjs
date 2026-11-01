@@ -382,6 +382,15 @@
 //     ink units lose a leading mark (", PSR J1744–1134" and ". 2027. ABNAT: …" of 2610.20848v1 and 2610.22065v1). No source
 //     unit's text, pieces or wire changes (216 of 216 local sources hash for hash): a copy of 48 carries every unit (live.mjs
 //     PIPELINE_CARRIES), an ink unit found again by its source where it is the same
+// 50 (the follow-up of #541, 2026-11-01): a head of a theorem-like name the paper defines (thmtools' \declaretheorem, a
+//     \newtheorem's printed name: "Recall", "Notation", "Question", "Setting", "Result") is a label's form, its unit's label
+//     group (REMOVAL 19, layout/own.mjs labelFormOf, the wrap's `names`: openPaper's theoremNames), drawn in the paper's name
+//     unit's word for it, one word on every head of the name. It was left in no group (`labelKept`), and a figure unit or an
+//     ink unit took it, translated alone each time: 2501.14787v1's "Recall" one way on p10's first box and another on its
+//     second. Over 66 local papers, 34 define theorem names and 4 change: 9 heads labelled, 3 figure units and 6 ink units
+//     gone (the ink units after them numbered one on), 9 label rows kept that #541's rule dropped under them, no source unit's
+//     text group moved; 216 of 216 local sources hash for hash. A copy of 49 carries every unit (live.mjs PIPELINE_CARRIES), a
+//     figure unit or an ink unit found again by its source (cache.mjs seedFrom)
 export const PIPELINE_VERSION = '50'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
@@ -451,6 +460,9 @@ export const PDFJS = '6.3.289'
  * end mark, the references off by default), 43 marks of 35 heads (11 papers: a note's ")" or ").", a run-in head's "." where
  * the body begins below), 2 paragraphs' and 2 authors' commas and stops, 2 of them an ink unit's first mark before; on 384 of
  * the units the mark stands inside their erase boxes of the layout file, on the other 4 (references) beside a last line the
- * maker did not locate, whose glyphs the wrap already gave the unit: the base's bytes change where a paper has such a mark
+ * maker did not locate, whose glyphs the wrap already gave the unit: the base's bytes change where a paper has such a mark; 19
+ * (the follow-up of #541): a head of a theorem-like name the paper defines is its unit's label (own.mjs labelFormOf over the
+ * wrap's `names`, required as `texts` is: openPaper's theoremNames), where it was left the original's ink in no group: the
+ * base's bytes and the head's `labelKept` change where a paper's head names one (4 of 66 local papers, 9 labels)
  */
 export const REMOVAL = '19'
