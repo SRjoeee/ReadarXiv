@@ -4,7 +4,9 @@
 # head, 3 head then base). Both runs use HEAD's gate scripts and instrument, and --engine names the engine each measures.
 # Run it in a quiet window: these are timings. One job at a time, workers 1 (the flag forces it). No --record.
 #   run-speed.sh <head worktree> <base worktree> [repetitions, default 3]
-# Environment: PACK  the fixture pack folder, required (read only; rules-gate.mjs's pack);
+# Environment: PACK  the fixture pack folder, required (read only; rules-gate.mjs's pack), its sources passed as the rules gate
+#                    passes them (without them every base page is drawn unwrapped, every unit the original's: a run that lays
+#                    nothing);
 #              AXT_DATA, TEXMF_DIST as the gate reads them (default the pack's own data and texmf);
 #              SPEED_LOGS  the logs folder (default <head>/lab/pdf/out/speed).
 # Then: node lab/pdf/spikes/layer-gate/speed.mjs <logs folder>
@@ -23,7 +25,7 @@ for r in $(seq 1 $reps); do
     echo "$(date '+%H:%M:%S') model-$s-r$r"
     LAYER_REFS=$PACK/refs LAYER_GEOMETRY=$PACK/geometry AXT_DATA=${AXT_DATA:-$PACK/data} TEXMF_DIST=${TEXMF_DIST:-$PACK/texmf} \
       node_modules/.bin/tsx lab/pdf/spikes/layer-gate.mjs --tier=model --engine-kind=proto --proto-tex=lines --layouts=fixed \
-      --fixtures=$PACK/fixtures --engine=$eng --perf --workers=1 --no-progress > $LOGS/model-$s-r$r.log 2>&1
+      --fixtures=$PACK/fixtures --sources=$PACK/sources --engine=$eng --perf --workers=1 --no-progress > $LOGS/model-$s-r$r.log 2>&1
     echo "exit $?" >> $LOGS/model-$s-r$r.log
   done
 done
