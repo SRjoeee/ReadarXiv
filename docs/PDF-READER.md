@@ -2581,8 +2581,9 @@ own), each part carrying its pages' cell rules (`rules`).
     changed nothing. A paper's environment whose begin code begins a table of the tabular family it does not end (either
     spelling: `\begin{tabularx}{…}` or `\tabularx{…}`) and whose end code ends it is read as that table (`latex-front.mjs`
     `tableWrapsOf`): its own arguments as its definition takes them, its body's cells units of their own in its grid, never
-    fitted (the table is in the definition). And a macro of the paper's with parameters whose body ends a row after what it
-    sets (`rowEndsAfterOf`: casetable's `\cseg{…}{…}`, a rule, a `\multicolumn` of its text and `\\[4pt]`) is a row of its own,
+    fitted (the table is in the definition). And a macro of the paper's with parameters whose body ends a row after the one
+    cell it sets (`rowEndsAfterOf`: casetable's `\cseg{…}{…}`, a rule, a `\multicolumn` of its text and `\\[4pt]`; one whose body
+    sets cells of its own, `&` between them, is read as before) is a row of its own, its arguments read as TeX reads them,
     its text a cell inside its group, the row ended after the call, in the walk and in `tableGrid`; before, its text ran on into
     the next row's first cell. 2610.40576v1's marked original now has no error, its text page for page its own source's, and
     costs no guard compile (three compiles, five before). Of 231 local sources four change, 56 units: 2610.40576v1's
