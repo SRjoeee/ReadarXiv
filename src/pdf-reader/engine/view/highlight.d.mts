@@ -5,8 +5,9 @@ import type { Anchor, DocToken } from '../pipeline/anchors.mjs'
 /** a run's row: lines merged where they overlap, and the unit's reach across them (PDF units); lo, hi: its glyphs' */
 export interface Row { y0: number; y1: number; x0: number; x1: number; lo: number; hi: number; r0: number | null; r1: number | null }
 /** a unit's run: one page and one column of it, its extent inside the column's text edges, its rows, the boundaries
- *  between them, and the page's half leading; its tokens, the row each is on, and where the unit's head begins on it */
-export interface Run { id: number; page: number; col: 'F' | 'L' | 'R'; x0: number; x1: number; top: number; bottom: number; hi: number; lo: number; lead: number; rows: Row[]; mids: number[]; toks: number[]; rowOf: number[]; head: number | null; sx0: number; sx1: number }
+ *  between them, and the page's half leading; its tokens, the row each is on, where the unit's head begins on it, and whether
+ *  the unit's own display stands right above it or right below it */
+export interface Run { id: number; page: number; col: 'F' | 'L' | 'R'; x0: number; x1: number; top: number; bottom: number; hi: number; lo: number; lead: number; rows: Row[]; mids: number[]; toks: number[]; rowOf: number[]; head: number | null; sx0: number; sx1: number; afterDisplay: boolean; beforeDisplay: boolean }
 /** a side's layout (layoutOf): opaque to its callers */
 export interface Layout { readonly pagesOf: Map<number, number[]> }
 

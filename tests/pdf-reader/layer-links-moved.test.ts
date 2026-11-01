@@ -428,6 +428,59 @@ describe('a link over the number alone of a reference drawn with its name (cleve
   })
 })
 
+describe('LK15: a link round a unit\'s whole text (a contents entry, 2610.40645v1 p1)', () => {
+  // (the entry "1 Introduction", hyperref's one link over its number and its title; the unit the title alone, an ink unit of no
+  // placeholder: drawn in Japanese on page 2's line from x 100, its number kept where TeX set it, 80 to 90)
+  const own = (n: number, page = 2, from = 100) => Array.from({ length: n }, (_, i) => ({ key: `${page}|3|${i}`, page, x0: from + 10 * i, x1: from + 10 * i + 9, yb: 500 }))
+  const whole = (chars: ReturnType<typeof own>): LinkTarget => ({ ord: null, kind: null, gap: null, segs: null, draw: 'whole', own: chars })
+  /** an annotation of page 2 over the number at 85 and the title's characters `keys` (`item|k` of item 3) */
+  const entry = (i: number, dest: string, n: number, rect = [80, 497, 150, 509]) => {
+    const keys = ['2|0', ...Array.from({ length: n }, (_, k) => `3|${k}`)], x = [85, ...Array.from({ length: n }, (_, k) => 104.5 + 10 * k)]
+    return { ...ann(i, { dest }, `1Intro`.slice(0, n + 1), keys, rect, `1 ${'Intro'.slice(0, n)}`), g2: { x, y: x.map(() => 500), ch: [...'1Intro'.slice(0, n + 1)], key: keys } }
+  }
+  const L = () => lay([text('\u306f\u3058\u3081\u306b')], {}, [block(1)])
+
+  it('moves to the unit\'s drawing, one record a box a drawn line, with the number it holds where it stands, named by both', () => {
+    const m = matchUnit({ cands: [cand(entry(0, 'section.1', 5), 2)], targets: [whole(own(5))] })
+    expect(m.groups.map(g => [g.to.draw, g.annots.map(c => [c.a.i, c.tier])])).toEqual([['whole', [[0, 'whole']]]])
+    const l = L()
+    const { records, tried } = placeUnit({ groups: m.groups, ...placing(l) })
+    expect(tried).toEqual([])
+    expect(records.map(r => [r.rec.dest, r.rec.moved, r.page, r.rec.name, r.sources])).toEqual([['section.1', true, 2, '1 \u306f\u3058\u3081\u306b', { annots: [[2, 0]], tier: 'whole' }]])
+    const b = records[0]!.rec.boxes
+    // (the number's part of the annotation, to the title's first character, then the drawn line)
+    expect(b.slice(0, 4)).toEqual([80, 497, 100, 509])
+    expect(b.length).toBe(8)
+    expect(drawnBetween(l, 2, b.slice(4))).toBe('\u306f\u3058\u3081\u306b')
+  })
+  it('takes none that holds a part of the unit\'s text alone, nor two targets that both hold it all, nor a unit of two pages one holds a page of', () => {
+    const part = matchUnit({ cands: [cand(entry(0, 'section.1', 3), 2)], targets: [whole(own(5))] })
+    expect([part.groups, part.tried]).toEqual([[], []])
+    const two = matchUnit({ cands: [cand(entry(0, 'section.1', 5), 2), cand(entry(1, 'section.2', 5), 2)], targets: [whole(own(5))] })
+    expect([two.groups, two.tried]).toEqual([[], [{ q: 2, i: 0, why: 'ambiguous' }, { q: 2, i: 1, why: 'ambiguous' }]])
+    const pages = matchUnit({ cands: [cand(entry(0, 'section.1', 5), 2)], targets: [whole([...own(5), ...own(2, 3)])] })
+    expect(pages.groups).toEqual([])
+  })
+  it('leaves to the tiers before it what they take: a citation the unit draws keeps its annotation', () => {
+    const L1 = lay([text('\u89c1'), ph('\\cite{a}'), text('\u3002')], { 1: { mode: 'orig-text', text: '[21]' } })
+    const a = ann(0, { dest: 'cite.a' }, '21', ['5|1', '5|2'])
+    const m = matchUnit({ cands: [cand(a)], targets: [target(1, { kind: 'cite', keys: ['a'], gap: gapOf(1, 5, 4) }), whole([{ key: '1|5|1', page: 1, x0: 0, x1: 1, yb: 0 }, { key: '1|5|2', page: 1, x0: 1, x1: 2, yb: 0 }])] })
+    expect(m.groups.map(g => [g.to.draw, g.annots.map(c => c.tier)])).toEqual([['text', ['geometry']]])
+    expect(placeUnit({ groups: m.groups, ...placing(L1) }).records.length).toBe(1)
+  })
+  it('reads the unit\'s characters only where an annotation is left for it: a list made of them where one is', () => {
+    let calls = 0
+    const lazy = (): LinkTarget => ({ ord: null, kind: null, gap: null, segs: null, draw: 'whole', own: () => { calls++; return own(5) } })
+    const a = ann(0, { dest: 'cite.a' }, '21', ['5|1', '5|2'])
+    matchUnit({ cands: [cand(a)], targets: [target(1, { kind: 'cite', keys: ['a'], gap: gapOf(1, 5, 4) }), lazy()] })
+    expect(calls).toBe(0)
+    const T = lazy()
+    const m = matchUnit({ cands: [cand(entry(0, 'section.1', 5), 2)], targets: [T] })
+    expect([calls, Array.isArray(T.own), m.groups.length]).toEqual([1, true, 1])
+    expect(placeUnit({ groups: m.groups, ...placing(L()) }).records[0]!.rec.name).toBe('1 はじめに')
+  })
+})
+
 describe('what the match never does', () => {
   it('gives an annotation whose glyphs are a kept piece\'s to no other piece: it stays the freeze\'s', () => {
     // (an \eqref inside a display kept where it stands, and a reference of the unit drawn from its source: order would pair them)

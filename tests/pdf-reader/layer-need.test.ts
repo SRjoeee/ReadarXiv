@@ -303,4 +303,15 @@ describe('rowLeadOf: the unit a unit\'s first row continues on one of TeX\'s lin
     // (and none where nothing before it in K is on the row)
     expect(rowLeadOf(whole, 3, () => false)).toBe(null)
   })
+  it('with `before`, the lay order alone: an ink unit, numbered after every source unit, that heads a theorem on its row (2610.40645v1 p15)', () => {
+    // (u380, "Theorem 3.3 ([Ang, Theorem 1.1]).", a theorem's head whose note is a citation, left by the wrap to an ink unit; u110
+    // the theorem's text on the row from 252.75. Before u110 in K (the stream), after it by id: its text was laid where the
+    // English head ended, a blank after the translated head)
+    const I = indexOf([[110, 'theorem', [[15, 252.75, 539.58, 317.11], [15, 72, 539.94, 303.56]]], [380, 'para', [[15, 71.56, 247.77, 317.11]]]])
+    expect(rowLeadOf(I, 110, id => id === 380)).toEqual({ id: 380, page: 15, baseline: 317.11, x0: 71.56, x1: 247.77, size: 10 })
+    // (by the ids alone, with no lay order given, none)
+    expect(rowLeadOf(I, 110)).toBe(null)
+    // (and never one after it in K, whatever its id)
+    expect(rowLeadOf(I, 110, () => false)).toBe(null)
+  })
 })

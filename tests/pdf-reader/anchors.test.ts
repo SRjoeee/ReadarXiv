@@ -612,6 +612,46 @@ describe('anchorUnits: two marked units both going on over a page (2610.10069 p8
   })
 })
 
+describe('anchorUnits: a unit\'s line after a page break that an inline formula fills (2610.40645v1 p3, u9)', () => {
+  const line = (s: string, x: number, y: number, width = 400) => [item(s, x, y, { width, eol: true })]
+  const pageOf = (n: number, lines: Item[][]) => ({ page: n, items: [...lines.flat(), item(String(n), 150, 62, { eol: true })], styles: {} })
+  const words = (doc: DocToken[], f: { tokens: number[] } | null | undefined) => f?.tokens.map(k => doc[k]?.t)
+
+  it('a formula\'s tokens between two of its words that are next to each other in its text are the unit\'s, and its line with them, with the display under it', () => {
+    // (page 3's first line: 7 words of the unit's text and the 11 tokens of the formula between two of them, 7 of 18, under
+    // the 40 % a line of a unit over a break needs; the page's number before it on page 2, the display's rows after it: no
+    // neighbour of its own. Taken from the walk up from "distinguish" over the display neither: its tallest glyphs give no token)
+    const pages = [
+      pageOf(1, [line('the paragraph before it', 50, 700), line('ferrari proposed that suitable models', 50, 100)]),
+      pageOf(2, [
+        line('boundary segment equip d z re iθ 0 r 1 and 0 θ π with the riemannian metric', 50, 700),
+        line('exp 2 n 1 cos', 120, 668, 120), line('dz 2 gn i i d n 0 1 1 1', 200, 660, 200), line('1 z2', 140, 652, 40),
+        line('distinguish 1 1 as its base', 50, 640), line('another paragraph after', 50, 610),
+      ]),
+    ]
+    const doc = tokenizeDocument(pages)
+    const at = (t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'ferrari proposed that suitable models boundary segment equip with the riemannian metric distinguish as its base', inner: 'exp cos dz gn iid' }, { id: 2, text: 'another paragraph after' }]
+    const found = anchorUnits(doc, units, { bounds: new Map([['0', [at('the'), at('it')]], ['1', [at('ferrari'), at('base')]], ['2', [at('another'), at('after')]]]) })
+    expect(words(doc, found.get(1))?.slice(5, 23)).toEqual(['boundary', 'segment', 'equip', 'd', 'z', 're', 'iθ', '0', 'r', '1', 'and', '0', 'θ', 'π', 'with', 'the', 'riemannian', 'metric'])
+    expect(found.get(1)?.rects.filter(r => r.page === 2).length).toBe(5)
+  })
+
+  it('words of the unit\'s text that are not next to each other in it give the tokens between them nothing: a row at the next page\'s head sharing two of its words is not its own', () => {
+    // ("results" and "the" are matched there; the text has "final" between them, so what stands between them is no
+    // placeholder's)
+    const pages = [
+      pageOf(1, [line('the paragraph before it', 50, 700), line('long paragraph that ends with the final results and', 50, 100)]),
+      pageOf(2, [line('results 12 34 56 78 90 the', 50, 740), line('the model is better', 50, 700), line('another paragraph after', 50, 676)]),
+    ]
+    const doc = tokenizeDocument(pages)
+    const at = (t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
+    const units = [{ id: 0, text: 'the paragraph before it' }, { id: 1, text: 'long paragraph that ends with the final results and the model is better' }, { id: 2, text: 'another paragraph after' }]
+    const found = anchorUnits(doc, units, { bounds: new Map([['0', [at('the'), at('it')]], ['1', [at('long'), at('better')]], ['2', [at('another'), at('after')]]]) })
+    expect(words(doc, found.get(1))).not.toContain('12')
+  })
+})
+
 describe('anchorUnits: a unit\'s display across a page break', () => {
   it('a unit with a display between its words fills the break with the display\'s lines and its own words, not a table\'s row whose words the paragraph uses (the re-review of A1, m2)', () => {
     const b12 = (str: string, x: number, y: number, eol = false, width = str.length * 6) => ({ str, transform: [12, 0, 0, 12, x, y], width, height: 12, hasEOL: eol, fontName: 'f' })

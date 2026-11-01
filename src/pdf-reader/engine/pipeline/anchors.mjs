@@ -1070,19 +1070,38 @@ function placeLines(doc) {
 /**
  * A marked unit's range as it owns tokens (placeWith): on one page, its marks' [first, last]; over a page break, on each page it
  * reaches, from its first own line there to its last, its marks' tokens on their own pages — never the page's text past its lines.
- * Its own lines are those its matched words are most of, or next to one that they are most of (placeWith's `keep`, the words it
- * keeps), and its marks' lines. A footnote over a page break is set at the foot of both pages, and the stream between its two
+ * Its own lines are those its tokens are most of (ownOnLines: its matched words and a placeholder's tokens between two of them), or
+ * next to one that they are most of (placeWith's `keep`, the words it keeps), and its marks' lines. A footnote over a page break is set at the foot of both pages, and the stream between its two
  * parts is the next page's column: 1810.04805v2's footnote 1, over pages 3 and 4, owned page 4's left column, and the three
  * headings there that no mark bounds, matched inside it, were the footnote's words and placed nowhere. The same for every unit
  * that runs over a break (a paragraph owns no more of its next page's head than its own first line on): `f` matchUnits' match
  * of the unit ({ bounded, m }), `line` and `lineSize` placeLines'. { ranges, own }: `own(k)` whether token k stands on one of the
  * unit's own lines (null for a unit on one page)
  */
+/**
+ * How many of a unit's tokens each line holds, as its own lines are told (rangeOnPages, placeWith's `keep`): its matched words
+ * `ks`, and the tokens between two of them on one line that are words next to each other in its text (`pairs`, the match's map
+ * of a word's place in the text to its token), which no word of its text stands between: its placeholder's, a formula's or a
+ * citation's, as `between` takes them. A line a formula fills holds more of its tokens than of its words: 2610.40645v1's u9,
+ * over pages 2 and 3, had 7 of the 18 tokens of its first line on page 3 matched, under the 40 % a line needs, its neighbours
+ * the page's number and its display, and the line was no one's (its formula LOST, the unit the original's). Map line -> count
+ */
+function ownOnLines(ks, pairs, line) {
+  const per = new Map()
+  for (const k of ks) per.set(line[k], (per.get(line[k]) ?? 0) + 1)
+  if (!pairs) return per
+  const mine = new Set(ks)
+  for (const [w, k] of pairs) {
+    const next = pairs.get(w + 1)
+    if (next === undefined || next - k < 2 || !mine.has(k) || !mine.has(next) || line[k] !== line[next]) continue
+    per.set(line[k], per.get(line[k]) + next - k - 1)
+  }
+  return per
+}
 function rangeOnPages(doc, f, line, lineSize) {
   const [a, b] = f.bounded
   if (doc[a].page === doc[b].page) return { ranges: [[a, b]], own: null }
-  const per = new Map()
-  for (const k of f.m) if (k >= a && k <= b) per.set(line[k], (per.get(line[k]) ?? 0) + 1)
+  const per = ownOnLines(f.m.filter(k => k >= a && k <= b), f.pairs, line)
   const most = l => per.get(l) >= Math.min(3, lineSize.get(l)) * 0.5 && per.get(l) / lineSize.get(l) >= 0.4
   const own = l => l === line[a] || l === line[b] || (per.has(l) && (most(l) || (per.has(l - 1) && most(l - 1)) || (per.has(l + 1) && most(l + 1))))
   const out = []
@@ -1202,8 +1221,7 @@ function placeWith(doc, units, found, frame, only, line, lineSize, owner, lineOw
     const f = found[u]
     if (!f) return null
     const mine = f.m.filter(k => owner[k] === u || (!f.bounded && owner[k] === -1))
-    const perLine = new Map()
-    for (const k of mine) perLine.set(line[k], (perLine.get(line[k]) ?? 0) + 1)
+    const perLine = ownOnLines(mine, f.pairs ?? f.textPairs, line)
     const most = l => perLine.get(l) >= Math.min(3, lineSize.get(l)) * 0.5 && perLine.get(l) / lineSize.get(l) >= 0.4
     const keep = l => most(l) || (perLine.has(l - 1) && most(l - 1)) || (perLine.has(l + 1) && most(l + 1))
     let kept = mine.filter(k => keep(line[k]))

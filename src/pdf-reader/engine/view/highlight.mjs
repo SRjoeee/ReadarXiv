@@ -20,6 +20,7 @@
 
 import { bodyMax, frameOfTokens, inkEdges } from '../pipeline/anchors.mjs'
 import { FIGURE_KIND } from '../rules/content-classes.mjs'
+import { displayBlockUnit, isDisplayBlock } from '../layer-proto/units.mjs'
 // floats.mjs imports this module's geometry; its shapes are read here only when a sentence is drawn (reachAt)
 import { floatShapes } from './floats.mjs'
 
@@ -657,9 +658,10 @@ function unitRuns(L, p, at, id, toks) {
     // paragraph, a footnote), and in a column of two where a line across both does, the unit's own too (a paragraph
     // around a full-width display, revtex's widetext: one run above and one below it, not one over it); a gap alone
     // is the unit's (a display)
-    let start = 0
+    let start = 0, cut = false
     for (let r = 1; r <= rows.length; r++) {
-      if (r < rows.length && !interrupted(lines, lineOwner, col, id, rows[r - 1], rows[r], boxLines)) continue
+      const at = r < rows.length ? interrupted(lines, lineOwner, col, id, rows[r - 1], rows[r], boxLines) : false
+      if (r < rows.length && !at) continue
       // (the unit's first row on its first page may hang past the column's edge by its label or its head: a list's or a theorem's item
       // set in the margin lights with it, on both panes alike)
       const hang = start === 0 && toks.length && first === toks[0] && lines[line(first)].col === col ? rows[0].x0 : null
@@ -672,6 +674,10 @@ function unitRuns(L, p, at, id, toks) {
       // where its unit's head begins on it, and (below) its tokens and the row each is on: its sentences' rows (segsOf)
       run.head = headAt !== null && rowOf.get(headAt) >= start && rowOf.get(headAt) < r ? head : null
       run.toks = []; run.rowOf = []; run.boxes = []
+      // (whether its unit's own display stands above it, below it: a sentence across it reaches no edge there, segsOf)
+      run.afterDisplay = cut === DISPLAY
+      run.beforeDisplay = at === DISPLAY
+      cut = at
       // its sentences' reach across, the hit test's bounds for them (hitOf)
       for (const row of run.rows) { if (row.r0 != null && row.r0 < run.sx0) run.sx0 = row.r0; if (row.r1 != null && row.r1 > run.sx1) run.sx1 = row.r1 }
       for (const ln of m.keys()) { const w = rowOf.get(ln); if (w < start || w >= r) continue; if (ln >= 0) lineAt.set(ln, { run, w: w - start }); else { const b = boxLines[-1 - ln]; run.boxes.push({ w: w - start, x0: b.x0, x1: b.x1, kind: b.kind }) } }
@@ -737,23 +743,31 @@ function bands(lines, lineOwner) {
 }
 
 /** whether a line stands between two rows of a run in `col`, one above the other (its middle between them): another
- *  unit's in the column, or in a column of two any line across both */
+ *  unit's in the column, or in a column of two any line across both. DISPLAY where what stands there is the unit's own
+ *  displays alone (layer-proto/units.mjs displayBlockId: a block of its own, under its unit's id) */
 function interrupted(lines, lineOwner, col, id, above, below, boxLines = []) {
   if (above.y0 - below.y1 < Math.min(above.y1 - above.y0, below.y1 - below.y0)) return false
+  let own = false
+  const between = y => y < above.y0 && y > below.y1
   for (let i = 0; i < lines.length; i++) {
     const o = lineOwner[i], l = lines[i]
     if (!(l.col === col ? o !== -1 && o !== id : col !== 'F' && l.col === 'F')) continue
-    const y = (l.y0 + l.y1) / 2
-    if (y < above.y0 && y > below.y1) return true
+    if (!between((l.y0 + l.y1) / 2)) continue
+    if (isDisplayBlock(o) && displayBlockUnit(o) === id) own = true
+    else return true
   }
   // (another block's box between them: a display drawn as paths, no token of it)
   for (const b of boxLines) {
     if (b.id === id || !(b.col === col || (col !== 'F' && b.col === 'F'))) continue
-    const y = (b.y0 + b.y1) / 2
-    if (y < above.y0 && y > below.y1) return true
+    if (!between((b.y0 + b.y1) / 2)) continue
+    if (isDisplayBlock(b.id) && displayBlockUnit(b.id) === id) own = true
+    else return true
   }
-  return false
+  return own ? DISPLAY : false
 }
+/** a run cut by its unit's own display (interrupted), on that side of it: TeX set the display on lines of its own, and the line
+ *  before it ends where its text ends (the text after it begins at the column's start) */
+const DISPLAY = 'display'
 
 /** a run: its rows' extent across, inside the column's text edges — up to OVERHANG past them (`clamp`: running text),
  *  and within SNAP of them on them — and down; the boundaries between its rows halfway between them, never rising */
@@ -765,7 +779,7 @@ function runOf(id, page, col, rows, e, lead, clamp, hang = Infinity, reach = -In
   if (Math.abs(x1 - e.x1) < SNAP) x1 = e.x1
   const mids = []
   for (let i = 1; i < rows.length; i++) mids.push(Math.min((rows[i - 1].y0 + rows[i].y1) / 2, i > 1 ? mids[i - 2] : Infinity))
-  return { id, page, col, x0, x1, top: rows[0].y1, bottom: rows.at(-1).y0, hi: rows[0].hi, lo: rows.at(-1).lo, lead, rows, mids, head: null, toks: null, rowOf: null, boxes: [], sx0: x0, sx1: x1 }
+  return { id, page, col, x0, x1, top: rows[0].y1, bottom: rows.at(-1).y0, hi: rows[0].hi, lo: rows.at(-1).lo, lead, rows, mids, head: null, toks: null, rowOf: null, boxes: [], sx0: x0, sx1: x1, afterDisplay: false, beforeDisplay: false }
 }
 
 /** a table's cell no unit holds as a run of its own (view/floats.mjs pageFloats): its words' box, one row, lit whole as a cell unit
@@ -940,11 +954,14 @@ function segsOf(L, run, starts) {
   for (const row of rows) { row.sort((a, b) => a.s - b.s); for (const g of row) { g.x0 = inside(g.x0); g.x1 = inside(g.x1) } }
   // the sentence that began before the run (in a run before it in the stream: the column or the page before) and the
   // one that goes on after it, or -1: their rows here are rows between, their first's start and last's end beyond. The
-  // unit's token before the run is in the sentence of the run's first, or the one after the run in that of its last
+  // unit's token before the run is in the sentence of the run's first, or the one after the run in that of its last. Not across
+  // the unit's own display (unitRuns' afterDisplay, beforeDisplay): TeX ends the line before a display where its text ends and
+  // begins the one after it at the column's start, so a sentence there reaches no edge past its ink (2610.40645v1 p14: "We
+  // define the partition functions² [display] ." in Japanese, its verb after the display, lit to the margin past its words)
   const ts = L.anchors.get(run.id).tokens, t0 = run.toks[0], t1 = run.toks.at(-1)
   const s0 = sentenceOf(t0), s1 = sentenceOf(t1), at0 = lowerBound(ts, t0)
   const prev = at0 > 0 ? ts[at0 - 1] : undefined, next = ts[lowerBound(ts, t1 + 1)]
-  const from = prev !== undefined && sentenceOf(prev) === s0 ? s0 : -1, on = next !== undefined && sentenceOf(next) === s1 ? s1 : -1
+  const from = prev !== undefined && !run.afterDisplay && sentenceOf(prev) === s0 ? s0 : -1, on = next !== undefined && !run.beforeDisplay && sentenceOf(next) === s1 ? s1 : -1
   const out = { starts, rows, first, last, from, on, of, fits: true }
   segsMade.set(run, out)
   // whether the shapes hold their words: each sentence's rows one after the other — a later sentence never begins above

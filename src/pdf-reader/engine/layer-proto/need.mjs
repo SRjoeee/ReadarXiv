@@ -21,15 +21,18 @@ function columnOf(u, j) {
 }
 /**
  * The unit a unit's first row continues on one of TeX's lines, by the layout file (`index`: layout/file.mjs indexLayout's, or
- * the door's facade over it): of the units framed on that row's page before it in the paper (a smaller id) and, with
- * `before`, before it in the lay order (`before(aid)`: an entry of K before its own), the one whose last row is on the row's
+ * the door's facade over it): of the units framed on that row's page before it in the lay order (`before(aid)`: an entry of K
+ * before its own; with none given, before it in the paper, a smaller id), the one whose last row is on the row's
  * baseline in its column (the frames'), ends at or before its start and no more than SHARED_SEP em of its size from it, the
  * nearest. Neither unit a table's cell or a figure's text (OWN_PLACE), and neither row held (its ink stays the original's: a
  * translation set over it would cover it). Returns the lead's last row { id, page, baseline, x0, x1, size }, or null.
  * 1810.04805's "Model Architecture" and its text, 10.9 pt apart on one row (a \quad of 10.91 pt type). The run and the cut
  * pass `before`: the entries of K before a unit's are all told with it (a part tells a prefix of K, each entry with its
  * layout rows), so the door's facade answers as the whole layout does however the parts come, where a smaller id told by a
- * later part would have changed the answer between a streamed and a whole opening
+ * later part would have changed the answer between a streamed and a whole opening. The order is K's alone then, not the ids':
+ * an ink unit is numbered after every source unit, and a theorem's head whose note is a citation is one (own.mjs `labelKept`,
+ * ink-pass.mjs labelsOverInk), before its text in the stream: 2610.40645v1 p15's "Theorem 3.3 ([Ang, Theorem 1.1]).", u380,
+ * and u110's text after it on the row, which was laid where the English head ended, a blank after the translated head
  */
 export function rowLeadOf(index, id, before = null) {
   const b = index?.unit(id)
@@ -37,7 +40,7 @@ export function rowLeadOf(index, id, before = null) {
   const L = b.lines, page = L[0], x0 = L[1], base = L[3], size = L[6], col = columnOf(b, 0)
   let best = null
   for (const aid of index.onPage(page)) {
-    if (!(aid < id) || (before && !before(aid))) continue
+    if (before ? !before(aid) : !(aid < id)) continue
     const a = index.unit(aid)
     if (!a?.lines.length || OWN_PLACE.has(a.kind)) continue
     const j = a.lines.length / 8 - 1, o = 8 * j, A = a.lines

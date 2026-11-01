@@ -1170,6 +1170,17 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const draw = r && TEXT_MODES.has(r.mode) && drawnText.has(k) ? 'text' : r?.mode === 'crop' && drawnCrop.has(k) ? 'crop' : null
       targets.push({ ord: ordOf(k), k, ...(kind ?? { kind: null }), single: LK.singleTarget(piece, kind), gap, segs: segs.length ? segs : null, draw })
     })
+    // (and the unit's whole drawing, which a link round all of the unit's own characters the drawing replaces takes, where no
+    // piece took it: a contents entry's title, an ink unit of no placeholder, whose link was dropped with the ink it erased;
+    // links.mjs matchUnit's tier 5, 2610.40645v1 p1)
+    // (its characters read only where the match leaves an annotation: the speed check's heap grew 0.1 % a laid page where every
+    // unit with a link read them)
+    const ownOf = () => {
+      const own = []
+      for (const c of p.prep.uc ?? []) if (!c.sep && !c.space && /\S/.test(c.ch) && p.prep.cat?.get(L2.charKey(c)) === 'acc') own.push({ key: L2.charKey(c), page: c.page, x0: c.x0, x1: c.x1, yb: c.yb })
+      return own
+    }
+    if (L.lines.some(line => line.items.some(it => typeof it.t.s === 'string' && !it.t.space && !it.t.crop))) targets.push({ ord: null, kind: null, gap: null, segs: null, draw: 'whole', own: ownOf })
     const m = LK.matchUnit({ cands, targets, budget })
     const lines = L.lines.map(line => ({ line, runs: L2.lineRuns(line, L) }))
     const placed = LK.placeUnit({ groups: m.groups, lines, edge: (line, run, at) => L2.runEdge(run, at, line, L), band: (t, line) => tokenBand(t, line.seg ?? L, line.baseline), scale: L.scale, budget })
