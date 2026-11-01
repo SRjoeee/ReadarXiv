@@ -347,11 +347,12 @@ const TBLR_ENVS = ['tblr', 'longtblr', 'talltblr']
 const FULL_RULE = /^(?:hline|hdashline|firsthline|lasthline|Hline|toprule|midrule|bottomrule|specialrule|Xhline|thickhline|hhline|tabucline|endhead|endfirsthead)$/
 /** the commands that stand in a cell without being its content — rules, spacing, colour, a strut — each with the
  *  arguments it takes: `o` an optional [..], `p` an optional (..), a digit that many required {..}. Read by their own
- *  arity, so that a cell's first group after them (\\hline {\\bf Parser}) stays the cell's */
+ *  arity, so that a cell's first group after them (\\hline {\\bf Parser}) stays the cell's; colortbl's \\rowcolor with its
+ *  overhangs after its colour, as the role table reads it (arg-roles.mjs) */
 const NOT_CONTENT = new Map(Object.entries({
   hline: '', hdashline: '', firsthline: '', lasthline: '', Hline: '', thickhline: '', endhead: '', endfirsthead: '', morecmidrules: '',
   toprule: 'o', midrule: 'o', bottomrule: 'o', addlinespace: 'o', specialrule: '3', Xhline: '1', hhline: '1', tabucline: 'o1',
-  cline: '1', cdashline: '1', cmidrule: 'op1', vspace: '1', noalign: '1', rowcolor: 'o1', arrayrulecolor: 'o1', rule: 'o2',
+  cline: '1', cdashline: '1', cmidrule: 'op1', vspace: '1', noalign: '1', rowcolor: 'o1oo', arrayrulecolor: 'o1', rule: 'o2',
   centering: '', raggedright: '', raggedleft: '', relax: '', noindent: '', strut: '', nopagebreak: 'o', pagebreak: 'o', newpage: '',
 }))
 /** past a command's arguments by its spec (NOT_CONTENT) */
@@ -1485,6 +1486,12 @@ function walkArgs(s, i, end, walked, b, ctx) {
   }
   let from = i
   walked.forEach((a, k) => {
+    // (an argument after one whose walk ended the paragraph — an \\input in it, read as a file of its own — is walked as a
+    // body is: a pair opened there would begin a unit between two of the command's arguments, where the marked original
+    // writes the unit's line probe, which TeX then reads as the next argument. 2610.37818v1's
+    // \\IfFileExists{…}{\\input{…}}{\\figph{…}}: the probe was the branch TeX drops, the placeholder it never sets was set,
+    // Figure 6 grew by its box and the paper by a page)
+    if (k > 0 && !b.cur) { walk(s, a.start + 1, a.end - 1, b, ctx); b.flush(); from = a.end; return }
     const id = b.open(s.slice(from, a.start + 1), from)
     walk(s, a.start + 1, a.end - 1, b, ctx)
     const last = k === walked.length - 1
@@ -2373,14 +2380,36 @@ const theoremsOf = texts => {
 const OWN_ENVS = /\\(?:(?:re)?newenvironment|provideenvironment|(?:New|Renew|Provide|Declare)DocumentEnvironment|(?:re)?newtcolorbox|(?:New|Renew|Declare|Provide)TColorBox|newtcbtheorem|newmdenv|newlist|DeclareFloatingEnvironment|newfloat|lstnewenvironment|(?:exclude|include|special|general|process)comment|newtheorem|declaretheorem|spnewtheorem|newmdtheoremenv|DefineVerbatimEnvironment|newminted|NewTblrEnviron)\s*\*?\s*(?:\[[^\]]*\]\s*)?\{([^}]+)\}/g
 const ownEnvsOf = texts => new Set([...texts.map(uncommented).join('\n').matchAll(OWN_ENVS)].flatMap(m => m[1].split(',').map(x => x.trim())))
 /** the paper's own environments' parameters, as its files define them: \\newenvironment{name}[n][default] takes n
- *  arguments, the first optional where it has a default; one defined twice, the last */
+ *  arguments, the first optional where it has a default; one defined twice, the last (a \\provideenvironment only where it
+ *  is not defined yet) */
 const envDefs = texts => {
-  const out = new Map()
+  const out = new Map(), begins = new Map()
   for (const t of texts) for (const m of t.matchAll(/\\(?:(?:re)?newenvironment|provideenvironment)\s*\*?\s*\{([^}]+)\}\s*(?:\[\s*(\d)\s*\])?\s*(\[)?/g)) {
     if (inComment(t, m.index)) continue
-    const n = Number(m[2] ?? 0), opt = !!m[3] && n > 0
-    out.set(m[1].trim(), paramsOf((opt ? '[a' : '') + '{a'.repeat(n - (opt ? 1 : 0))))
+    const n = Number(m[2] ?? 0), opt = !!m[3] && n > 0, name = m[1].trim()
+    // (a \\provideenvironment of one defined already, by the paper's files or a package the role table knows, is one TeX does
+    // not act on)
+    if (m[0].startsWith('\\provide') && (out.has(name) || environmentParams(name, paper?.bindings ?? null))) continue
+    out.set(name, paramsOf((opt ? '[a' : '') + '{a'.repeat(n - (opt ? 1 : 0))))
+    begins.delete(name)
+    // (one of no parameter whose begin code ends by beginning another environment: that one reads its arguments from what
+    // follows \\begin{name}, so they are this one's — ieeecolor's \\newenvironment{IEEEbiography}{\\begin{biography}}{…}, whose
+    // biography takes [photo]{name}: 2610.30034v1's names were read as the body's text, and the line probe written before
+    // each was the argument the class set as the name)
+    if (n) continue
+    const k = skipSpaces(t, m.index + m[0].length - (m[3] ? 1 : 0)), e = t[k] === '{' ? matchGroup(t, k) : -1
+    const inner = e > 0 ? /\\begin\s*\{([^{}]+)\}$/.exec(uncommented(t.slice(k + 1, e - 1)).trim()) : null
+    if (inner) begins.set(name, inner[1].trim())
   }
+  // (the begun environment's parameters as the walk reads it: the paper's own definition, else the role table's; a chain of
+  // such environments followed to its end, a cycle to none)
+  const paramsAt = (name, seen = new Set()) => {
+    if (!begins.has(name)) return out.get(name) ?? environmentParams(name, paper?.bindings ?? null)
+    if (seen.has(name)) return null
+    seen.add(name)
+    return paramsAt(begins.get(name), seen)
+  }
+  for (const name of begins.keys()) { const p = paramsAt(name); if (p?.length) out.set(name, p) }
   return out
 }
 
@@ -2736,6 +2765,10 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
       // XeTeX reads CJK characters as letters: \method后 would be one control word. {} ends the name
       const next = pieces[k + 1]
       if (guardControlWords && /\\[A-Za-z@]+\*?$/.test(p.src) && next?.t === 'text' && next.tr && /^[^\s{[]/.test(next.s)) parts.push(utf8Bytes('{}'))
+      // (the source's own word right after a control word: in the source a comment stood between them, which ends the name and
+      // which the walk passes over — `\\bfseries%⏎Youqing`, written \\bfseriesYouqing, one undefined name: 2610.40394v1's author
+      // block, four TeX errors and its names gone from the base page. A space ends it as the comment did; TeX skips it)
+      else if (/\\[A-Za-z@]+$/.test(p.src) && next?.t === 'text' && !next.tr && /^[A-Za-z@]/.test(next.s)) parts.push(utf8Bytes(' '))
     }
     if (m?.before && beforeAt === pieces.length && beforeCut === -1) parts.push(utf8Bytes(m.before))
     if (nested?.length) {
