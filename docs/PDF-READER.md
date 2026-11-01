@@ -1018,12 +1018,69 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   that later moves), and all its marks go in the same task its drawing is put in place. An author's unit has none (it is
   never drawn), nor has a paragraph whose rows ended with no row of it, nor has a page that failed (the original's).
 - **The pages ahead** (the prefetch on the layer). Once the rows of the attempt have ended (a host that translates as it shows
-  is asked for nothing it has not translated), the door is open, no page of the view is asked of it, the right pane is shown
-  and the document visible, and the view has rested `AHEAD_IDLE_MS` (600 ms: no scroll, nothing asked, the last near page
-  committed), the side lays the `AHEAD_PAGES` (2) pages after the last near page past the middle of the view, one at a time,
-  each after its faces' wave, and draws each at its place's k into a drawing kept off the view: the reader reaching it finds
-  it put back at once. A scroll gives the window up (its ask and its copy under way aborted) until the view rests again; a
-  page come near meanwhile is committed as any near page. A host may lay none (`ahead: 0`). A page that fails, or whose copy fails, shows the
+  is asked for nothing it has not translated), the door is open, the right pane is shown and the document visible, the side
+  lays the `AHEAD_PAGES` (2) pages past the near ones the way the reader moves, while the reader scrolls as at rest, and draws
+  each at its place's k into a drawing kept off the view: the reader reaching it finds it put back at once, never arXiv's page
+  first. The way the reader moves is read from the near places alone (an IntersectionObserver's run, no layout read in the
+  scroll's path): the edge of the run that moved past where it was, down by default; a run that shares no page with the one
+  before (a jump) reads on forward. The window is read again once its pages are laid, so a reader who moves on moves it, and a
+  run whose pages are no longer ahead, or that lays the other way, is given up. It is background work, by the lesson of
+  `WAVE_SLOTS` above (work the reader is not waiting on must not take the line or the thread from a page the reader is waiting
+  on). The window is begun once the near places have stayed where they are `AHEAD_SETTLE_MS` (150 ms: a page of a steady
+  scroll comes near every half second or so, a fling's every tenth), in a turn of the main thread at background priority
+  (`scheduler.postTask`'s `background`, run once nothing of a higher priority waits; a task where the browser has no
+  scheduler), and only while the view's own pages hold nothing: no near page asked of the door or being put in place, and none
+  PDF.js is drawing, on the left or as the original's in its place. Its pages' faces are asked in one wave and its pages of
+  the door at once, the nearest laid first, as the near pages are; each copy is drawn in a background turn of its own. A page
+  of the view asked gives the run up at once (its wave's slices not begun, its asks, its copy under way), and the run begins
+  again once the view's pages are in place or drawn. A page the
+  door had begun to lay for the run is laid all the same, once (a page told `laying` never goes back; the view's ask overtakes
+  it, the door's `OVERTAKEN`), and a wave stopped before its end asks its page's faces again next time. A scroll gives nothing
+  up. A page come near as the door answers it is left to the view's own ask, which puts it in place under the door's hold as
+  any near page; one whose lay or copy fails, that draws nothing of the layer, or whose drawing the keep budget cannot hold (a
+  page past it, or a window wider than it), is not laid ahead again by the same door, so a window that stays is not drawn
+  again and again. A host may lay none (`ahead: 0`).
+  Until 2026-11-01 the pages ahead were laid only once the view had rested 600 ms (`AHEAD_IDLE_MS`: no scroll, nothing asked,
+  the last near page committed), and a scroll gave the window up: a reader who kept scrolling never had them. On staging
+  (2026-11-01, the comparison with hjfy.top's reader on 1706.03762v7 and 2501.14787v1), 2 of the 10 right pages of a steady
+  10-page scroll first showed arXiv's page, the translation 49 to 1,052 ms after it came into view, and up to 4.2 s (p95) with
+  the CPU four times slower. Three things were measured on the way, offline: the web's reader at next (5d1a5dcf) against the
+  same with this change, the web's played-run stand-in serving a staged layer and the font slices, the comparison's own probe
+  and scroll (Playwright's Chromium, 1440 × 900 at a pixel ratio of 2, a fresh profile a run, a steady scroll of 10 pages at
+  1,500 px/s, its rest, then a fling of 2,600 px), the link shaped by the browser, every run begun with the machine's load
+  under 20. An idle callback is no turn for it: Chromium gives a page no idle period while the reader scrolls, and
+  `requestIdleCallback`, asked as the scroll began, fired only once it had ended (6 s), so the window laid nothing while it was
+  needed. One page at a time, each after its whole faces' wave, a page took its round trips in a row, longer than a page of the
+  scroll on a slow link. And a window laid while the left drew the pages a fling brought into view kept the left's page 14 of
+  1706.03762v7 blank 392 and 489 ms, against 158 and 163 with none laid; a page PDF.js is drawing holding the window, 232 to 312
+  ms against 100 to 174 (the window begun as the fling's pages came near, its lay beside the left's drawing of the page the
+  fling stopped on); the settle as well, 158 to 192 against 159 to 226: as before. Until the window also waited for a near
+  place drawing the original's page (the places' own drawing, `places.drawing`: the slot `view(n)` the side first read holds
+  no page view, so that check held nothing), it cost the fast link at 1x, where nothing is gained, some 8 ms at p95 on every
+  frame of the scroll and 1.4 to 1.6 % of the compositor's frames dropped; with it, nothing measurable.
+  With all of it (2026-11-02, 1706.03762v7 in Chinese, 15 pages; the before 5d1a5dcf, the after 2c506199 and 5cec45df, which
+  differ by the retry a task after a page is drawn alone; four runs each, interleaved, at loads of 6 to 20): on a slow link
+  (150 ms, 10 Mbit/s) at 1x, 3 of the 10 right pages first showed arXiv's page before in every run, for 53 to 502 ms, and none
+  after; with the CPU four times slower on a fast link (40 ms, 40 Mbit/s), 6 of 10 before in every run (415 to 1,390 ms) and
+  4 or 5 after (294 to 1,252 ms), the main thread then too short for the view's own pages to leave a turn; on the fast link at
+  1x none either way. On 2602.23285v2 (19 pages, figures of several MB) on the slow link, 3 of the 7 pages the layer lays
+  showed arXiv's page for 684 to 1,128 ms before, 2 for 76 and 119 ms after (one run each, an earlier build). No cost was
+  measured on what is in view: during the scroll's gesture the main thread's frames took 34 to 37 ms at p95 after, 34 to 46
+  before, on the fast link at 1x (the frames over 50 ms 1 to 8 of some 310 after, 4 to 11 before; the longest task 56 to 64
+  ms after, 61 to 68 before; the compositor's dropped frames 0 to 0.6 % either way); 34 to 47 after and 34 to 35 before on the
+  slow link; at 4x 146 to 231 after and 167 to 262 before, the thread full either way. A left page blank on the fling: 49 to
+  568 ms after and 50 to 541 before at 1x, 214 to 784 after and 167 to 709 before at 4x. The bytes fetched during the gesture
+  and during the rest are the same as before at both links (1.56 MB and 1.34 MB over 1706.03762v7's scroll): the pages ahead
+  move what is fetched no earlier than the near pages did, and the two pages past the stop are fetched in the rest, as the
+  window waits while the view's last pages are drawn. Three pages ahead (`ahead: 3`, an earlier build) left 1 and 5 of 10 at
+  4x, the same none on the slow link, for 0.45 MB more at the stop and as much more kept: not taken.
+  On a delta head the composed document reads the original's own source, so a page laid ahead reads the original's bytes of
+  that page into the store the left reads: on 2602.23285v2 the left's pages 5 to 7 were no longer blank as they came into view
+  (an earlier build, which did not wait for the places' drawing).
+  The web's own prefetch of arXiv's bytes (`?prefetch=1`, off by default, at rest only) asked nothing more in these runs (the
+  same requests, the same pages blank), and a left page blank on a fling (1706.03762v7's figure pages 13 and 14, 50 to 250 ms at
+  1x, 170 to 770 ms at 4x) is PDF.js drawing it on the main thread after its bytes are in: a prefetch of bytes, at rest or while
+  scrolling, does not shorten it. A page that fails, or whose copy fails, shows the
   original and is asked again on a zoom, on coming near or (a copy) on the next scroll; one asked, told `laying` and not
   laid within 30 s (`PAGE_MS`) shows the original, warns once a side and is asked again on the next scroll, its late
   `ready` taken. A page still `waiting` (its part, its closure or its rows) is never a stall. After a reopen a laid page

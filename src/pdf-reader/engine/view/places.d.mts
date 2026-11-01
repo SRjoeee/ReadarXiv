@@ -19,6 +19,8 @@ export interface Places {
   /** place n's box in CSS px as PDF.js sizes the left's page n; null with no viewport */
   box(n: number): { width: number; height: number } | null
   near(n: number): boolean
+  /** whether place n's page view is the one the places are drawing the original's page on now */
+  drawing(n: number): boolean
   page(n: number): HTMLElement | null
   /** the focus given to place n (a keyboard's jump to it): at once where it shows a page, else once it does, within
    *  FOCUS_WAIT_MS; given up where the focus moves meanwhile */

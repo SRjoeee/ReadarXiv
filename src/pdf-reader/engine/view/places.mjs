@@ -380,6 +380,8 @@ export function createPlaces(o) {
       return !p ? 'none' : p.side ? (p.blank ? 'none' : 'layer') : p.view ? 'original' : p.skeleton ? 'skeleton' : 'none'
     },
     near: n => !!list[n - 1]?.near,
+    /** whether place n's page view is the one the places are drawing the original's page on now (one at a time: pump) */
+    drawing: n => !!drawing && list[n - 1]?.view === drawing,
     page: n => list[n - 1]?.div ?? null,
     /** the focus given to place n (a keyboard's jump to it): at once where it shows a page, else once it does, within
      *  FOCUS_WAIT_MS */
