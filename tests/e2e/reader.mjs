@@ -713,6 +713,51 @@ try {
     const astray = pinchFrames.flatMap((f, i) => f.map((p, k) => ({ i, side: k ? 'right' : 'left', ...p })).filter(p => Math.abs(p.length - p.wants) > 0.6))
     check('a trackpad\'s pinch with the pointer beside the page: in every frame the pair level, the same page at its middle, each thumb the length the frame\'s scroll asks', s1 > s0 * 1.4 && pinchFrames.length > 10 && apart.length === 0 && astray.length === 0,
       JSON.stringify({ scale: [s0, s1], frames: pinchFrames.length, apart: apart.length, firstApart: apart[0] ?? null, astray: astray.length, astrayFrames: astray.slice(0, 6) }))
+
+    // the handles through a zoom (§6.5, the owner's decision of 2026-11-01): shown by a wheel first, then a pinch's
+    // Ctrl-wheels over the right — read in every frame after its layout from the first of them, both handles unseen, the
+    // zoom's own scrolls included — and then the reader's next wheel shows the right one, in its first frame at the length
+    // that frame's scroll asks
+    await page.mouse.move(R0.x + R0.width / 2, R0.y + R0.height / 2)
+    await page.mouse.wheel(0, 200)
+    await page.waitForTimeout(200)
+    const shownBefore = await page.evaluate(() => Number(getComputedStyle(document.querySelector('.pane[data-side="right"] .indicator')).opacity))
+    await page.evaluate(() => {
+      const panes = ['left', 'right'].map(id => document.getElementById(id))
+      const frames = []
+      window.__handleFrames = frames
+      window.__firstZoomWheel = null
+      document.addEventListener('wheel', e => { if ((e.ctrlKey || e.metaKey) && window.__firstZoomWheel === null) window.__firstZoomWheel = performance.now() }, { capture: true, passive: true })
+      const sentinel = Object.assign(document.createElement('div'), { style: 'position:fixed;left:0;top:0;width:1px;height:1px;pointer-events:none' })
+      document.body.append(sentinel)
+      let n = 0
+      const ro = new ResizeObserver(() => frames.push({ t: performance.now(), panes: panes.map(c => {
+        const track = c.parentElement.querySelector('.indicator'), t = track.getBoundingClientRect(), th = track.querySelector('i').getBoundingClientRect()
+        const length = Math.min(t.height, Math.max(32, Math.round((t.height * c.clientHeight) / c.scrollHeight)))
+        return { opacity: Number(getComputedStyle(track).opacity), zoom: track.hasAttribute('data-zoomed'), length: th.height, wants: length, top: c.scrollTop }
+      }) }))
+      ro.observe(sentinel)
+      const tick = () => { if (!window.__handleFrames) { ro.disconnect(); sentinel.remove(); return } sentinel.style.width = `${1 + (++n % 2)}px`; requestAnimationFrame(tick) }
+      requestAnimationFrame(tick)
+    })
+    const cdp2 = await context.newCDPSession(page)
+    for (let i = 0; i < 12; i++) {
+      await cdp2.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: pinchAt[0], y: pinchAt[1], deltaX: 0, deltaY: -2, modifiers: 2 })
+      await page.waitForTimeout(16)
+    }
+    await page.waitForTimeout(60)
+    await cdp2.detach()
+    const zoomEnd = await page.evaluate(() => performance.now())
+    await page.mouse.move(R0.x + R0.width / 2, R0.y + R0.height / 2)
+    await page.mouse.wheel(0, 150)
+    await page.waitForTimeout(400)
+    const handleRun = await page.evaluate(() => { const f = window.__handleFrames; window.__handleFrames = null; return { frames: f, first: window.__firstZoomWheel } })
+    const during = handleRun.frames.filter(f => f.t > handleRun.first && f.t <= zoomEnd)
+    const seen = during.filter(f => f.panes.some(p => p.opacity > 0))
+    const after = handleRun.frames.filter(f => f.t > zoomEnd)
+    const back = after.find(f => f.panes[1].opacity > 0)
+    check('the handles through a zoom: unseen in every frame of a pinch from its first wheel, the zoom\'s own scrolls included; the reader\'s next wheel shows the right one, at the length its frame asks', shownBefore > 0 && during.length > 5 && seen.length === 0 && !!back && !back.panes[1].zoom && Math.abs(back.panes[1].length - back.panes[1].wants) <= 0.6 && after.at(-1).panes[1].opacity === 1,
+      JSON.stringify({ shownBefore, frames: during.length, seen: seen.length, firstSeen: seen[0]?.panes ?? null, back: back?.panes[1] ?? null, settled: after.at(-1)?.panes[1].opacity ?? null }))
     await page.evaluate(() => window.__reader.controller.zoomTo('page-width'))
     await page.waitForTimeout(600)
 

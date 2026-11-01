@@ -4,8 +4,10 @@ import { describe, expect, it } from 'vitest'
 
 // Every caller of the wrap (layout/wrap.mjs wrapFinal) says the marking's texts and inkless macros: the marks file's
 // `marking.texts` and `marking.inkless` where it holds the marks (a cell's lead macro is owned by its texts alone, a unit that opens
-// with a macro TeX said sets no ink opens with its text: layout/own.mjs), null where it does not. wrapFinal refuses a call
-// without them at run time; this holds the callers the unit tests never run (the lab's spikes, the scripts) to it as well
+// with a macro TeX said sets no ink opens with its text: layout/own.mjs), null where it does not; and the paper's theorem-like
+// environments' printed names (openPaper's `theoremNames`: a head of one of them is its unit's label), null where it reads no
+// source. wrapFinal refuses a call without them at run time; this holds the callers the unit tests never run (the lab's spikes,
+// the scripts) to it as well
 
 const ROOT = process.cwd()
 const files = (dir: string): string[] => readdirSync(join(ROOT, dir)).flatMap(f => { const p = join(dir, f); return statSync(join(ROOT, p)).isDirectory() ? (f === 'node_modules' || f.startsWith('.') ? [] : files(p)) : /\.(?:mjs|ts)$/.test(f) && !/\.tmp\./.test(f) ? [p] : [] })
@@ -21,7 +23,7 @@ const callsIn = (text: string) => {
 }
 
 describe('the wrap\'s callers', () => {
-  it('each pass `texts` and `inkless` (null said where the marks are not in hand)', () => {
+  it('each pass `texts`, `inkless` and `names` (null said where the marks or the source are not in hand)', () => {
     const found: string[] = []
     for (const f of [...files('lab/pdf'), ...files('scripts'), ...files('src/pdf-reader'), ...files('tests/pdf-reader')]) {
       const text = readFileSync(join(ROOT, f), 'utf8')
@@ -31,6 +33,7 @@ describe('the wrap\'s callers', () => {
         found.push(f)
         expect(/\btexts\b/.test(call), `${f}: ${call.slice(0, 120)}`).toBe(true)
         expect(/\binkless\b/.test(call), `${f}: ${call.slice(0, 120)}`).toBe(true)
+        expect(/\bnames\b/.test(call), `${f}: ${call.slice(0, 120)}`).toBe(true)
       }
     }
     expect(found.length).toBeGreaterThanOrEqual(6)

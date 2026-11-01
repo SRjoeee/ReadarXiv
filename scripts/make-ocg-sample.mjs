@@ -14,8 +14,8 @@ import { openPaper } from '../src/pdf-reader/engine/pipeline/live.mjs'
 import { wrapped } from '../tests/pdf-reader/helpers/ocg-pdfs.ts'
 
 const dir = new URL('../tests/fixtures/pdf/ocg/', import.meta.url), sample = new URL('../tests/fixtures/pdf/sample-1/', import.meta.url)
-const units = openPaper(new Map(['main.tex', 'refs.bib', 'main.bbl'].map(f => [f, new Uint8Array(readFileSync(new URL(f, sample)))]))).units
-const r = await wrapped(new Uint8Array(readFileSync(new URL('sample-1-final.pdf', dir))), { units, follows: undefined })
+const paper = openPaper(new Map(['main.tex', 'refs.bib', 'main.bbl'].map(f => [f, new Uint8Array(readFileSync(new URL(f, sample)))]))), units = paper.units
+const r = await wrapped(new Uint8Array(readFileSync(new URL('sample-1-final.pdf', dir))), { units, follows: undefined, names: paper.theoremNames })
 if ('refused' in r) throw new Error(`${r.refused}: ${r.why}`)
 const head = `${JSON.stringify({ bytes: r.bytes.length, sha256: r.sha256, xref: r.xref, stats: r.stats, unhidden: r.unhidden, labelKept: r.labelKept, figures: r.figures }, null, 1)}\n`
 if (process.argv.includes('--check')) {

@@ -96,7 +96,7 @@ async function child() {
   let oursBytes = finalBytes, wrap = null
   if (finalBytes && wrapMod) {
     t = at()
-    const w = await wrapMod.wrapFinal(finalBytes, { PL, getDocument, documentOptions: { cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: 0, useSystemFonts: false }, OPS, units: source.units, texts: marks?.marking?.texts ?? options.texts?.flat() ?? null, inkless: marks?.marking?.inkless ?? options.inkless ?? null, deflate, inflate })
+    const w = await wrapMod.wrapFinal(finalBytes, { PL, getDocument, documentOptions: { cMapUrl: `${NM}cmaps/`, cMapPacked: true, standardFontDataUrl: `${NM}standard_fonts/`, verbosity: 0, useSystemFonts: false }, OPS, units: source.units, texts: marks?.marking?.texts ?? options.texts?.flat() ?? null, inkless: marks?.marking?.inkless ?? options.inkless ?? null, names: source.theoremNames ?? null, deflate, inflate })
     ms.wrap = at() - t
     if (!w.refused) { oursBytes = w.bytes; wrap = { stats: w.stats, unhidden: w.unhidden, labelKept: w.labelKept, pages: w.pages, figures: w.figures } }
   }
