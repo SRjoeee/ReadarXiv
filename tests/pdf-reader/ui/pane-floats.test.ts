@@ -123,7 +123,13 @@ describe('a scroll indicator\'s thumb (§6.5)', () => {
       // a press on it (its drag, its track) shows it at once
       track.dispatchEvent(new Event('pointerdown', { bubbles: true }))
       states.push(['a press on it', hidden()])
-      expect(states).toEqual([['at rest', false], ['the scale changed', true], ['the zoom\'s own scrolls', true], ['the reader scrolls', false], ['a pinch\'s first wheel', true], ['a plain wheel, before its scroll', true], ['a press on it', false]])
+      // the reader scrolls at once after a step, within the two frames: the plain wheel came after the scale, so its scroll
+      // is the reader's (CodeRabbit on #545)
+      await act(async () => { fake.set({ scale: 1.2 }) })
+      scroller.dispatchEvent(new WheelEvent('wheel', { deltaY: 40, bubbles: true }))
+      scroll()
+      states.push(['the reader scrolls at once after a step', hidden()])
+      expect(states).toEqual([['at rest', false], ['the scale changed', true], ['the zoom\'s own scrolls', true], ['the reader scrolls', false], ['a pinch\'s first wheel', true], ['a plain wheel, before its scroll', true], ['a press on it', false], ['the reader scrolls at once after a step', false]])
     } finally { vi.unstubAllGlobals() }
   })
 })

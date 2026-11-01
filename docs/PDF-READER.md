@@ -304,9 +304,10 @@ scroll area keeps it (the maintainer turned down mirroring the left one to the o
   A zoom moves each pane's scroll to keep its point under the pointer, but that is not the reader scrolling. Both handles go
   at once, with no fade, from the zoom's first Ctrl or ⌘ wheel over the pages or its first change of scale, whatever asked
   it: a pinch, a key, the menu or a fit. The zoom's own scrolls (each step's, told in the frame after its scale or the one
-  after that, and a commit's) leave them hidden. Any other scroll of the pane shows its handle again, already at its length
-  and place, and on the auto-hide timing above; a press on the handle shows it too, so its drag always works, and so does
-  the pointer resting on it.
+  after that, and a commit's) leave them hidden, unless the reader's own input (a wheel or a key without Ctrl or ⌘, a touch)
+  came after the change: a scroll begun at once after a zoom shows from its first frame. Any other scroll of the pane shows
+  its handle again, already at its length and place, and on the auto-hide timing above; a press on the handle shows it
+  too, so its drag always works, and so does the pointer resting on it.
 - The thumb drags (the pane follows; the other side follows through sync as for any scroll); a press on the track turns a
   screen towards it. A press on an indicator makes its pane the leading side, as a press in the pane does.
 - The thumb's position is a CSS scroll-driven animation on the pane's scroll timeline (`scroll-timeline` on the
