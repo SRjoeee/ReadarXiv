@@ -520,6 +520,20 @@ describe('the pages ahead: laid the way the reader moves, while it scrolls as at
     expect(content(s, 3)).toBe('none')
   })
 
+  it('a page ahead whose copy fails is not laid ahead again by the door; coming near it is asked as a page of the view', async () => {
+    const s = await setup({ door: { rows: 'gate' }, ahead: 1, copyFails: [2] })
+    await rows(s, [1])
+    await settle(s, 30)
+    expect(s.side.probe()).toMatchObject({ ahead: 1, aheadKept: 0, drawings: 0 })
+    // (the pages ahead asked for again, the window the same: page 2 not laid ahead again)
+    s.side.end()
+    await settle(s, 30)
+    expect(s.side.probe().ahead).toBe(1)
+    await nearOn(s, [2])
+    await settle(s)
+    expect(content(s, 2)).toBe('layer')
+  })
+
   it('ahead: 0 lays none', async () => {
     const s = await setup({ door: { rows: 'gate' }, ahead: 0 })
     await rows(s, [1])
