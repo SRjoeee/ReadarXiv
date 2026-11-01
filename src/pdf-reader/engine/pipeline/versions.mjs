@@ -408,7 +408,20 @@
 //     its own source's text, its final pass's page ends arXiv's on all 26 pages, in three compiles. Raised so: 13 units change,
 //     and 23 the same but for their pairs' numbers. A copy of 50 carries every unit it holds the source of (live.mjs
 //     PIPELINE_CARRIES), a unit renumbered by the pairs found again (cache.mjs seedFrom)
-// 52 (the owner's report of 2026-11-02 on 2501.14787v1 p24: the display before "In order to understand why …" lit with that
+// 52 (the follow-ups of #546, 2026-11-02): a paper's environment whose begin code begins a table it does not end, and whose end
+//     code ends it, is that table (latex-front.mjs tableWrapsOf: the tabular family in either spelling, \begin{tabularx}{…} or
+//     \tabularx{…}): its body's cells units of their own in its grid, as a table's are. 2610.40576v1's casetable begins a tabularx
+//     and its header row; read as a container, its body was one paragraph across its rows, our marks between a row's end and the
+//     next row's \specialrule: 18 TeX errors, two guard compiles a prepare that changed nothing, and three of its 19 pages set
+//     otherwise than its own source sets them. And a macro of the paper's with parameters whose body ends a row after the one cell it sets
+//     (rowEndsAfterOf, a body of no `&`: casetable's \cseg{…}{…}, 2608.13505v1's \SubTableTitle, 2608.30782v1's \resultgroup, 2610.39467v1's
+//     \categorysectionrow) is a row of its own, its text a cell inside its group, the row ended after the call (the walk,
+//     tableGrid): its text ran on into the next row's first cell before ("Multi-step / flexible-step methods StableSR"). Of 231
+//     local sources these four change, 56 units, 36 of them casetable's cells; the other 227's units and marked originals are 51's
+//     byte for byte, and the three others' marked compiles set the same text on every page. 2610.40576v1's marked original now has
+//     no error, its text page for page its own source's, and costs no guard compile. Raised so. A copy of 51 carries every unit
+//     it holds the source of (live.mjs PIPELINE_CARRIES)
+// 53 (the owner's report of 2026-11-02 on 2501.14787v1 p24: the display before "In order to understand why …" lit with that
 //     sentence on arXiv's pane and with nothing on ours): a display its unit opens with, which the marking passes over (no point
 //     at a unit's head, marks.mjs headEnd), is found by its unit's start mark — what TeX shipped in the start's region from the
 //     paragraph's point the display begins, or the mark before, to the start mark, the line before, the start's own and a label
@@ -420,9 +433,9 @@
 //     same compiles): 22 of 24 such displays found, on 9 papers, every other placeholder row of every unit as it was; 19 ink
 //     units gone, 17 kept blocks cut of their lines with letters and 2 orphans translated over them (2610.22299v1 p1's
 //     \text{any two adjacent vertices …} inside its equation, 2610.30854v1 p4's glyphs), none made, the ink and figure units
-//     after them numbered on. No source unit's text, pieces or wire changes: a copy of 51 carries every unit (live.mjs
+//     after them numbered on. No source unit's text, pieces or wire changes: a copy of 52 carries every unit (live.mjs
 //     PIPELINE_CARRIES), an ink unit or a figure unit found again by its source (cache.mjs seedFrom)
-export const PIPELINE_VERSION = '52'
+export const PIPELINE_VERSION = '53'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

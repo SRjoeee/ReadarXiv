@@ -317,7 +317,9 @@ scroll area keeps it (the maintainer turned down mirroring the left one to the o
   pages' stack, whose callback runs after that frame's layout and before its paint. The place is the scroll's share of the
   track the length leaves, so the two must change in one frame: set a frame later (a React effect on the zoom's state, then
   a frame), every step of a pinch drew the thumb at the new share of the old length and moved it again the next frame, up
-  and down through the whole gesture (measured 2026-11-01, `tests/e2e/probes/pinch-jitter.mjs`).
+  and down through the whole gesture (measured 2026-11-01, `tests/e2e/probes/pinch-jitter.mjs`). A pinch shown by transform
+  (§6.8) leaves the scroll and its range alone: the thumb, hidden, holds still until the commit, and then takes its new
+  place and length in one frame.
 
 ### 6.6 The status capsule and the card
 
@@ -391,21 +393,59 @@ The states are §8's.
 ### 6.8 Pinch zoom
 
 A trackpad pinch (or Ctrl/⌘ with the wheel) over the pages zooms both panes together around the pointer, as EmbedPDF
-does (「直接双指捏合滑动就可以放大缩小」): a trackpad's small deltas zoom continuously, a mouse notch steps a tenth. PDF.js
-scales the pages by CSS while the pinch lasts and draws them once, 400 ms after it ends
-(`updateScale({ scaleFactor, drawingDelay: 400 })`). The browser's own zoom is taken only over the pages. The
-overlays follow the pinch exactly (§10.1).
+does (「直接双指捏合滑动就可以放大缩小」): a trackpad's small deltas zoom continuously, a mouse notch steps a tenth. While
+the fingers move the pinch is shown by transform; `PINCH_COMMIT_MS` (200 ms) after its last step it is committed: the scale
+written once (`updateScale({ scaleFactor, drawingDelay: 0 })`), both panes put, the pages drawn once. The browser's own zoom
+is taken only over the pages. The overlays follow the pinch exactly (§10.1).
 
-- **One frame a step, both panes about the gesture's point.** Each step writes the scale and both panes' scrolls in one
-  task: each pane shown keeps the point at the pointer's place in its view (on the other pane, the same place in its
-  view: the same point of the same page while the pair is level), wherever it lies — on a page, in the gap between two,
-  beside one. The point is read on the page box it is level with (a share of the box, or px from its edge where it is
-  outside: the gaps and margins do not scale), and the box read again at the new scale. The pair stays level through the
-  gesture, and its rest finds nothing to level.
-- **The follower stands aside.** A wheel with Ctrl or ⌘ is no scroll input; a step's scrolls are the view's own puts; each
-  step ends whatever the follower moves and calls its rest off, and the pair is levelled only once the zoom settles.
-- **Small steps add up.** PDF.js rounds each scale to a hundredth; the part of the fingers' factor it has not applied is
-  carried to the next step while the gesture keeps its direction, as PDF.js's own viewer carries it.
+- **No step lays anything out.** From the page boxes read at the gesture's first step, a step works out the layout the
+  commit will make at its scale — each page box scaled, the gaps between them not, a page narrower than the view centred,
+  the scroll put so that the point under the gesture stays under it, then held within the scroll's ends — and shows it by
+  transform: the view scaled about the page that holds the point (growing, the scroller, which the pane clips; shrinking,
+  the pages' stack, so that the pages around the view show), each other page near the view moved by what is left over,
+  and a box of the scroll's size at the gesture's start holding its range. Nothing scrolls, nothing is clamped, the handles
+  hold still, and the commit lands on the layout the last step showed. A step shows the scale PDF.js will set (its
+  hundredth), so that the commit does not snap.
+- **Nothing is made or drawn meanwhile.** The scaled view is a layer of its own (`will-change: transform` while the
+  gesture lasts), drawn at the gesture's first scale and scaled on the compositor: growing, the pages show soft until the
+  commit draws them sharp (a step had drawn the original's canvas soft too, and the translation's text sharp, at the cost
+  below). The places' near window is held until the commit, so that no place is made, laid or drawn at a scale the commit
+  replaces; a pinch out of up to three times shows only places the window held already (it reaches a pane's height above
+  and below).
+- **Both panes about the gesture's point.** Each pane shown keeps the point at the pointer's place in its view (on the
+  other pane, the same place in its view: the same point of the same page while the pair is level), wherever it lies — on a
+  page, in the gap between two, beside one: a share of the page box it is level with, or px from its edge where it is
+  outside (the gaps and margins do not scale). The pair stays level through the gesture, and its rest finds nothing to level.
+- **The follower stands aside.** A wheel with Ctrl or ⌘ is no scroll input; the pinch's first step ends whatever the
+  follower moves, calls its rest off (and a zoom's before it still to be levelled: this one's end levels the pair) and holds
+  it from binding until the commit; the commit's scrolls are the view's own puts, and the pair is levelled only once the
+  zoom settles.
+- **Anything else commits first.** Another input on a pane (a wheel without Ctrl, a key, a press, a touch), a scroll the view
+  did not make, and every command that reads or moves the panes (a zoom from the menu or the keys, a jump, a page, a
+  heading, a display, a click's level, the original let go) commit the pinch before they run; a pane another has scrolled
+  (the find bar, a script) keeps the place that scroll took it to, the pinch committed about the point it shows there at
+  the gesture's place. The pointer's highlight finds the page under it through the preview's transform, looked at again
+  at each step as a scroll had it.
+- **The scroll's ends are the paper's.** The range the preview keeps the point within is the one the commit lays: the paper
+  at the step's scale and its margin below the last page, never the empty foot of a pane the paper does not fill.
+- **Small steps add up.** PDF.js rounds each scale to a hundredth; the fingers' factor is carried whole through the gesture,
+  and what the commit's rounding leaves is carried to the next pinch while it keeps its direction, as PDF.js's own viewer
+  carries it.
+- **Why a transform** (measured 2026-11-02 offline on 2501.14787v1, 101 pages, its layer laid; the reader as `pnpm e2e:reader`
+  opens it, staging's recorded layer served by the stand-in; next against this, two runs each, in a slot of its own): each
+  step had written the scale, and PDF.js's `update()` then read every page box of both panes, laying them out again — 25–52
+  ms a step on staging, 85 % of a pinch's layout, the zoom moving in lumps 106 ms apart at 1x and 300 ms at 4x. On the
+  owner's gestures (1093×892, the pointer at 21.5 % across and 61 % down the right pane, out by 0.5 then in by 2.1), the
+  layout during the gesture fell from 298–357 to 103–107 ms at 1x and from 1442–1813 to 492–577 ms at 4x, forced layout from
+  349–389 to 42–64 ms (1x), tasks over 50 ms from 27–31 to 2–17 (4x) and the longest from 130–158 to 66–79 ms; frames
+  dropped zooming in 8 → 1–2 (1x) and 55–63 → 1–35 (4x), zooming out 49–57 → 29 (4x). Zooming out at 1x it drops 7 single
+  frames where next dropped 1–2 (the GPU scales the larger view it shows: 155 against 125–130 ms). With 60 Ctrl-wheels to
+  three times at 4x (hjfy-compare's gesture, 1440×900), 84–91 frames dropped against 1. The commit costs one step's layout
+  (a 15 ms task at 1x, up to 185 ms at 4x for a threefold zoom, against next's redraw of 139–150 ms). Shown as a layer at its
+  first scale, the pages are soft while the fingers grow them and sharp from the commit; drawn again at every step's scale
+  instead, the GPU spent three times next's and a pinch out dropped frames for it (0 → 14 % at 1x). The owner watched the
+  same gestures side by side at 1x and 4x and accepted both costs, the softness while the pages grow and the frames a pinch
+  out drops at 1x (2026-11-02: 「能接受」).
 - **Why** (the owner's recording on 1706.03762v7, 2026-11-01, the handles jittering through a pinch; the probe's frames): the right pane was kept
   only where a page lay under the pointer, and a pointer beside a page at a small zoom kept nothing, so that the pane stood
   still while its pages grew about its top — its thumb jumping 10–14 px a step, the pair drifting two pages apart, levelled
@@ -765,8 +805,9 @@ PDF.js is the host's kit, so every PDF.js type the view names is structural.
   a finger is held, a rest an input called off armed again, a glide baked on input, a click's level calling off the rest
   and the timer's end, the pair levelled once a zoom settles.
 - **The right zoomed through the left.** A zoom, a fit or a pinch over either pane scales the left's viewer, which the
-  places follow; the right shown alone is fitted to its own pane. A step and a pinch are drawn 400 ms after the last one
-  (one redraw a burst), the places' page views with them. A zoom and a display's change keep the reading place (the page and
+  places follow; the right shown alone is fitted to its own pane. A step is drawn 400 ms after the last one (one redraw a
+  burst), the places' page views with them; a pinch is shown by transform and drawn once it is committed (§6.8). A zoom
+  and a display's change keep the reading place (the page and
   the point at the reading line); a pinch keeps the point under the gesture on both panes (§6.8).
 - **The highlight** (`lighting.mjs`) reads a pane through its shapes alone (`Shapes`, the seam the shapes' PR builds); a
   pointer over a page of either pane is a want of that page. The highlight's layer follows a pinch by transform and is kept
@@ -977,12 +1018,69 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   that later moves), and all its marks go in the same task its drawing is put in place. An author's unit has none (it is
   never drawn), nor has a paragraph whose rows ended with no row of it, nor has a page that failed (the original's).
 - **The pages ahead** (the prefetch on the layer). Once the rows of the attempt have ended (a host that translates as it shows
-  is asked for nothing it has not translated), the door is open, no page of the view is asked of it, the right pane is shown
-  and the document visible, and the view has rested `AHEAD_IDLE_MS` (600 ms: no scroll, nothing asked, the last near page
-  committed), the side lays the `AHEAD_PAGES` (2) pages after the last near page past the middle of the view, one at a time,
-  each after its faces' wave, and draws each at its place's k into a drawing kept off the view: the reader reaching it finds
-  it put back at once. A scroll gives the window up (its ask and its copy under way aborted) until the view rests again; a
-  page come near meanwhile is committed as any near page. A host may lay none (`ahead: 0`). A page that fails, or whose copy fails, shows the
+  is asked for nothing it has not translated), the door is open, the right pane is shown and the document visible, the side
+  lays the `AHEAD_PAGES` (2) pages past the near ones the way the reader moves, while the reader scrolls as at rest, and draws
+  each at its place's k into a drawing kept off the view: the reader reaching it finds it put back at once, never arXiv's page
+  first. The way the reader moves is read from the near places alone (an IntersectionObserver's run, no layout read in the
+  scroll's path): the edge of the run that moved past where it was, down by default; a run that shares no page with the one
+  before (a jump) reads on forward. The window is read again once its pages are laid, so a reader who moves on moves it, and a
+  run whose pages are no longer ahead, or that lays the other way, is given up. It is background work, by the lesson of
+  `WAVE_SLOTS` above (work the reader is not waiting on must not take the line or the thread from a page the reader is waiting
+  on). The window is begun once the near places have stayed where they are `AHEAD_SETTLE_MS` (150 ms: a page of a steady
+  scroll comes near every half second or so, a fling's every tenth), in a turn of the main thread at background priority
+  (`scheduler.postTask`'s `background`, run once nothing of a higher priority waits; a task where the browser has no
+  scheduler), and only while the view's own pages hold nothing: no near page asked of the door or being put in place, and none
+  PDF.js is drawing, on the left or as the original's in its place. Its pages' faces are asked in one wave and its pages of
+  the door at once, the nearest laid first, as the near pages are; each copy is drawn in a background turn of its own. A page
+  of the view asked gives the run up at once (its wave's slices not begun, its asks, its copy under way), and the run begins
+  again once the view's pages are in place or drawn. A page the
+  door had begun to lay for the run is laid all the same, once (a page told `laying` never goes back; the view's ask overtakes
+  it, the door's `OVERTAKEN`), and a wave stopped before its end asks its page's faces again next time. A scroll gives nothing
+  up. A page come near as the door answers it is left to the view's own ask, which puts it in place under the door's hold as
+  any near page; one whose lay or copy fails, that draws nothing of the layer, or whose drawing the keep budget cannot hold (a
+  page past it, or a window wider than it), is not laid ahead again by the same door, so a window that stays is not drawn
+  again and again. A host may lay none (`ahead: 0`).
+  Until 2026-11-01 the pages ahead were laid only once the view had rested 600 ms (`AHEAD_IDLE_MS`: no scroll, nothing asked,
+  the last near page committed), and a scroll gave the window up: a reader who kept scrolling never had them. On staging
+  (2026-11-01, the comparison with hjfy.top's reader on 1706.03762v7 and 2501.14787v1), 2 of the 10 right pages of a steady
+  10-page scroll first showed arXiv's page, the translation 49 to 1,052 ms after it came into view, and up to 4.2 s (p95) with
+  the CPU four times slower. Three things were measured on the way, offline: the web's reader at next (5d1a5dcf) against the
+  same with this change, the web's played-run stand-in serving a staged layer and the font slices, the comparison's own probe
+  and scroll (Playwright's Chromium, 1440 × 900 at a pixel ratio of 2, a fresh profile a run, a steady scroll of 10 pages at
+  1,500 px/s, its rest, then a fling of 2,600 px), the link shaped by the browser, every run begun with the machine's load
+  under 20. An idle callback is no turn for it: Chromium gives a page no idle period while the reader scrolls, and
+  `requestIdleCallback`, asked as the scroll began, fired only once it had ended (6 s), so the window laid nothing while it was
+  needed. One page at a time, each after its whole faces' wave, a page took its round trips in a row, longer than a page of the
+  scroll on a slow link. And a window laid while the left drew the pages a fling brought into view kept the left's page 14 of
+  1706.03762v7 blank 392 and 489 ms, against 158 and 163 with none laid; a page PDF.js is drawing holding the window, 232 to 312
+  ms against 100 to 174 (the window begun as the fling's pages came near, its lay beside the left's drawing of the page the
+  fling stopped on); the settle as well, 158 to 192 against 159 to 226: as before. Until the window also waited for a near
+  place drawing the original's page (the places' own drawing, `places.drawing`: the slot `view(n)` the side first read holds
+  no page view, so that check held nothing), it cost the fast link at 1x, where nothing is gained, some 8 ms at p95 on every
+  frame of the scroll and 1.4 to 1.6 % of the compositor's frames dropped; with it, nothing measurable.
+  With all of it (2026-11-02, 1706.03762v7 in Chinese, 15 pages; the before 5d1a5dcf, the after 2c506199 and 5cec45df, which
+  differ by the retry a task after a page is drawn alone; four runs each, interleaved, at loads of 6 to 20): on a slow link
+  (150 ms, 10 Mbit/s) at 1x, 3 of the 10 right pages first showed arXiv's page before in every run, for 53 to 502 ms, and none
+  after; with the CPU four times slower on a fast link (40 ms, 40 Mbit/s), 6 of 10 before in every run (415 to 1,390 ms) and
+  4 or 5 after (294 to 1,252 ms), the main thread then too short for the view's own pages to leave a turn; on the fast link at
+  1x none either way. On 2602.23285v2 (19 pages, figures of several MB) on the slow link, 3 of the 7 pages the layer lays
+  showed arXiv's page for 684 to 1,128 ms before, 2 for 76 and 119 ms after (one run each, an earlier build). No cost was
+  measured on what is in view: during the scroll's gesture the main thread's frames took 34 to 37 ms at p95 after, 34 to 46
+  before, on the fast link at 1x (the frames over 50 ms 1 to 8 of some 310 after, 4 to 11 before; the longest task 56 to 64
+  ms after, 61 to 68 before; the compositor's dropped frames 0 to 0.6 % either way); 34 to 47 after and 34 to 35 before on the
+  slow link; at 4x 146 to 231 after and 167 to 262 before, the thread full either way. A left page blank on the fling: 49 to
+  568 ms after and 50 to 541 before at 1x, 214 to 784 after and 167 to 709 before at 4x. The bytes fetched during the gesture
+  and during the rest are the same as before at both links (1.56 MB and 1.34 MB over 1706.03762v7's scroll): the pages ahead
+  move what is fetched no earlier than the near pages did, and the two pages past the stop are fetched in the rest, as the
+  window waits while the view's last pages are drawn. Three pages ahead (`ahead: 3`, an earlier build) left 1 and 5 of 10 at
+  4x, the same none on the slow link, for 0.45 MB more at the stop and as much more kept: not taken.
+  On a delta head the composed document reads the original's own source, so a page laid ahead reads the original's bytes of
+  that page into the store the left reads: on 2602.23285v2 the left's pages 5 to 7 were no longer blank as they came into view
+  (an earlier build, which did not wait for the places' drawing).
+  The web's own prefetch of arXiv's bytes (`?prefetch=1`, off by default, at rest only) asked nothing more in these runs (the
+  same requests, the same pages blank), and a left page blank on a fling (1706.03762v7's figure pages 13 and 14, 50 to 250 ms at
+  1x, 170 to 770 ms at 4x) is PDF.js drawing it on the main thread after its bytes are in: a prefetch of bytes, at rest or while
+  scrolling, does not shorten it. A page that fails, or whose copy fails, shows the
   original and is asked again on a zoom, on coming near or (a copy) on the next scroll; one asked, told `laying` and not
   laid within 30 s (`PAGE_MS`) shows the original, warns once a side and is asked again on the next scroll, its late
   `ready` taken. A page still `waiting` (its part, its closure or its rows) is never a stall. After a reopen a laid page
@@ -1303,7 +1401,8 @@ Decided 2026-10-24 (the owner's request of 2026-10-23; the route note that draft
   so it is there the moment the page is near; one that arrives while its page is kept goes into the kept drawing. It goes when
   its drawing goes (retired with no drawing kept, let go past the keep's budget, failed back to the original, replaced, another
   target's or door's, disposed), cancelled from PDF.js's registry of its selection listener; one that comes after its page was
-  let go is put nowhere. Its translated spans carry the language of the target their drawing was laid in. Through a zoom's or a pinch's steps
+  let go is put nowhere. Its translated spans carry the language of the target their drawing was laid in. A pinch's preview
+  (a transform, §6.8) leaves them as they are. Through a zoom's steps, and from a pinch's commit,
   (CSS alone until PDF.js draws again, places.mjs) the text layers are out of style and layout (display: none): each span's size
   is a calc of --total-scale-factor, which every step changes, so a step made every span of every near page again (the web's
   zoom check: twice main's frames over budget in a pinch). The stack is marked `data-axt-scaling` from the first step to
@@ -1990,7 +2089,7 @@ The edge cases, decided:
 | `BUNDLE5` (`layer-proto/format.mjs`, `'12'`: a left part carries its page's line map, §17.1; 11 a figure row carries its set and its room, §19.12; 10 the ink units, the parts' figure units and the head's ledger; 9 a part's cell rules in place of the add-on, our page wrapped by optional content) | reader contract | the layer route's objects: a head's, a part's, a left part's and a catalog's shape, the figure rows (the units chunks have a format of their own, `UNITS_FORMAT`, raised only by their shape); a reader reads 7's, 9's, 10's and 11's objects too (`BUNDLES_READ`) | the request (`CTAG5`, `b<BUNDLE5>-j<PDFJS>`: §18.4) and the R2 key (`VTAG5`) | a bundle of the old format is not found under the new `CTAG5` and is prepared again; readers older than it get `unknown-versions` until they update |
 | `BUNDLE` (`layer-proto/bundle.mjs`, `'3'`: the layout file's schema 3, the paper's `\lineskip` and `\lineskiplimit`; 2 its babel names, D1a. The file's schemas 4 (`PH_FLAG.JOINED` and `PH_FLAG.OUTSIDE`) and 5 (a found placeholder's fill, its row's last number where its glyphs are not black: 0xRRGGBB, or -1 where no one colour holds more than half of them) are not a contract of their own: `b3` names schemas 3 to 5, each reader's `parseLayout` refusing the others', so only this engine's reader reads a `b3` bundle holding schema 5) | reader contract | the one-file bundle `readBundle` reads (`CTAG`, `VTAG`): its shape, the units' tuple, kinds and flags, the layout file's schema, the left geometry | its request and key (§18.4) | readers older than it refuse it until they update |
 | `PDFJS` (`pipeline/versions.mjs`, `'6.3.289'`) | reader contract | the PDF.js whose reading the layout and the wrap are made against | as `BUNDLE` | as `BUNDLE` |
-| `PIPELINE_VERSION` (`pipeline/versions.mjs`, `'52'`: a display its unit opens with found by its unit's start mark, and one past its end mark that runs to a later unit's opening, its ink no kept block's nor orphan's, so that it is a block of its own on both panes, §17.1; 51 nothing of ours written where TeX reads it as an argument of the paper's, an argument after one that ended the walk's paragraph walked as a body, an environment that begins another taking that one's parameters, colortbl's `\rowcolor` overhangs read, a control word a comment ended written back with a space after it, so that no line probe or mark is set as a branch, a name or a cell's lead, §19.6; 50 a head of a theorem-like name the paper defines its unit's label, no figure or ink unit's, so that every head of the name is drawn in one word, §19.14; 49 a unit's label row that meets a figure unit's run goes from the parts' layout, so that a head the wrap left in no group and the figure text cut is drawn once, its translation alone, §19.12; 48 a placeholder's tokens between two of a unit's words its own on its lines over a page break, so that a line a formula fills is the unit's, §19.6; 47 a figure unit cut of glyphs set at its size alone, and none whose row a part's reader would refuse, so that one label's row never costs its part's layout, §19.12; 46 a glyph set turned is cut by the clip in force where its own ink passes it, as a level glyph is, so that a y-axis title at its figure's edge is a figure unit again, §19.12; 45 xy-pic's diagram kept as the paper has it, a drawing as a TikZ picture is, so that its cells are no units and no mark of ours goes into xy-pic's syntax, §19.6; 44 the final pass with no transparency group of the driver's on an included PDF, as arXiv's TeX Live 2025 of 2025-08-03 includes one, §19.7) | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
+| `PIPELINE_VERSION` (`pipeline/versions.mjs`, `'53'`: a display its unit opens with found by its unit's start mark, and one past its end mark that runs to a later unit's opening, its ink no kept block's nor orphan's, so that it is a block of its own on both panes, §17.1; 52 a paper's environment that begins a table read as that table, and a macro that ends a row after its arguments as a row of its own, so that no mark of ours stands between a row's end and the next row's rule, §19.6; 51 nothing of ours written where TeX reads it as an argument of the paper's, an argument after one that ended the walk's paragraph walked as a body, an environment that begins another taking that one's parameters, colortbl's `\rowcolor` overhangs read, a control word a comment ended written back with a space after it, so that no line probe or mark is set as a branch, a name or a cell's lead, §19.6; 50 a head of a theorem-like name the paper defines its unit's label, no figure or ink unit's, so that every head of the name is drawn in one word, §19.14; 49 a unit's label row that meets a figure unit's run goes from the parts' layout, so that a head the wrap left in no group and the figure text cut is drawn once, its translation alone, §19.12; 48 a placeholder's tokens between two of a unit's words its own on its lines over a page break, so that a line a formula fills is the unit's, §19.6; 47 a figure unit cut of glyphs set at its size alone, and none whose row a part's reader would refuse, so that one label's row never costs its part's layout, §19.12; 46 a glyph set turned is cut by the clip in force where its own ink passes it, as a level glyph is, so that a y-axis title at its figure's edge is a figure unit again, §19.12; 45 xy-pic's diagram kept as the paper has it, a drawing as a TikZ picture is, so that its cells are no units and no mark of ours goes into xy-pic's syntax, §19.6; 44 the final pass with no transparency group of the driver's on an included PDF, as arXiv's TeX Live 2025 of 2025-08-03 includes one, §19.7) | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
 | `LAYOUT` (`layout/file.mjs`, `'31'`: a page whose lines moved across its breaks through compile drift drawn, `carry.mjs` `lineCheckOf`, §19.7; 30 a footnote's call after the last word found by its raised mark, a biblatex entry's unit of the new kind `inkreferences`, §19.7; 29 backref's list after an entry a row of its list piece's, §19.13; 28 a Type 3 glyph's ink its char procedure's paths, `layout/ink.mjs` `type3Box`, #122-1; 27 a command that sets the punctuation after it before its ink marked around the pair, a macro TeX said sets no ink EMPTY, a piece alone at an entry's end given the lines it runs onto, a macro that sets one punctuation mark drawn as it, §19.7; 26 a unit TeX set flush left or flush right flagged so, `UNIT_FLAG.FLUSH_LEFT` and `UNIT_FLAG.FLUSH_RIGHT`, and a paragraph a box's close ends read by its own skips, §18.1, §18.8; 25 the release sweep of 2026-10-29, a line too short to be evidence found on no other page, a word a hyphen cuts going on below, an ink unit's paragraph one unit, a math face told by its family's names, `layer-proto/fonts.mjs` `classifyFont`), `REMOVAL` (`pipeline/versions.mjs`, `'20'`: the ink of a display its unit opens with its unit's for the ledger, in no group, so that no ink unit nor kept block is made of it, `own.mjs` `leads`, §17.1; 19 a head of a theorem-like name the paper defines in its unit's label group, own.mjs labelFormOf over the wrap's `names`, §19.9; 18 the closing punctuation glued past a unit's end mark on its line its text, as the maker's line takes it, own.mjs MR 4c, §19.9; 17 a biblatex entry's ink its unit's groups, the point before each in our page; 16 backref's list after an entry its list piece's ink, §19.13; 15 a level figure unit on its column's edge or centred in it anchored there, `figure-text.mjs` `columnAnchorOf`, §19.12; 14 a unit's text owns the rules TeX painted on its own lines, an OT1 `\_`, an underline, own.mjs MR 2b, #117; 13 a punctuation mark a command set before its own ink its unit's text, not the piece's, §19.9; 12 a macro TeX said sets no ink is no placeholder of ink, an opening point alone at its unit's end owns its lines up to TeX's skip before another block; 8 no add-on, a part's or a bundle's cell rules in its place, our page wrapped by optional content, §11.8, §19.9) | extraction | the layout maker (the file's own schema is `LAYOUT_SCHEMA`, 5); how a drawn unit's ink is taken away | the R2 key | bundles made again lazily |
 | `TRANSLATE_VERSION` (`translate/version.mjs`, `'9'`: a caption cut into sentences on the tags wire as a paragraph is, §17.1; `'8'`: a run-in label where a sentence begins past the unit's head keeps its markers on the markers wire (`mt.mjs` `classOf`), 2010.11929v2's "Center:" and "Right:"; `'7'`: backref's list after an entry on no wire, put back after the translation with an en space before it, §19.13; `'6'`: every content class translated once whatever the language, the author block for every target and a bibliography's entries; `'5'`: a display's own stop written after its marker and taken off the reply; `'4'`: a styled pair whose two ends stand where the wire has a marker anyway keeps its markers; `'3'`: a sentence whose words change style sent whole, the pairs inside it on no wire; `'2'`: a formula split across inline formulas sent as one marker) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
 | `RULES_SCHEMA` (`rules/layout.mjs`, `9`: the languages of a script the engine set, the owner's ruling of 2026-10-29: `latinPatterns` takes Italian's, Dutch's, Polish's, Turkish's, Indonesian's (Malay's too, as babel's malay.ldf takes them), Czech's and Swedish's, `cyrillicPatterns` added, a Cyrillic word's hyphenation, Russian's rules or Ukrainian's or Bulgarian's own patterns, and `hyphenation` their minimums as TeX applies them under babel; 8: `latinPatterns` takes French's, Spanish's and Portuguese's own, hyph-utf8's (the three were hyphenated with English's, #121-4), and `hyphenation` their minimums as babel sets them, French 2 and 3, Spanish 2 and 2, Portuguese 2 and 3; 7: `evenPitch` and `keepAlign` added, lane B's B1 and B2, the ruling of 2026-10-29, §18.8; 6: `cjkFaces` holds its group alone, a CJK script drawn at Regular and Bold beside every English family, its `light` designs and its unread `kai` gone, the ruling of 2026-10-29; 5 before it: `fillLeadRel` added, the fill's top relative to the original's pitch; 4: `adaptiveFill.band` read against the page's own paragraphs, 1b-C) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
@@ -2501,7 +2600,9 @@ own), each part carrying its pages' cell rules (`rules`).
     limit is refused at once (`engine` where the host names the engine unknown, else `compile`: a host's own failure, its cap
     on a compile's result); errors alone: the unmarked original compiled, its count the paper's own
     (the marked original stands), else the units the other errors stand in left unmarked (tex-errors.mjs `unitsAtErrors`, as
-    runLive's remedy places a translation's, less the errors the unmarked original has at the same text); a mark out of
+    runLive's remedy places a translation's, less the errors the unmarked original has at the same text), or, where their lines
+    stand in no unit, the units whose marks TeX's context shows it reading at them (`guard.mjs` `contextUnits`, below), the
+    names kept; a mark out of
     place: the units it names and those its errors stand in unmarked (passing, the latter marked again, kept with no more
     errors), failing, the names' marks off too; any other failure: the units its errors stand in and
     the unit at the line TeX ignored all text after ("Incomplete \iffalse; all text was ignored after line N") unmarked with
@@ -2578,11 +2679,42 @@ own), each part carrying its pages' cell rules (`rules`).
     remedy, the name marks off, changed nothing where it ran: 2610.37818v1 above (the name marks off, the unmarked original, refused: 114 s);
     2610.40394v1 (the unmarked original, 9.8 s; at `next` locally the name marks off too, and its marked original kept with
     its seven errors as the best it had); 2610.40576v1 (the unmarked original and the name marks off, 17 to 19 s a prepare,
-    its 18 errors kept: its `casetable`, an environment whose begin code begins a `tabularx`, read as one paragraph, our marks
-    between its rows' `\\` and its `\specialrule`, "Misplaced \noalign"). The first two are the front end's faults above, now
-    mended at their source; the third is open. The only compile there certain to end refused is the unmarked original after a
-    page count the name marks off did not mend, and it is what names whose fault it is and gives a host its verdict for another
-    TeX Live tree (`handoverOf`): it is kept.
+    its 18 errors kept). All three were the front end's faults, now mended at their source (PIPELINE 51 and 52). The only
+    compile there certain to end refused is the unmarked original after a page count the name marks off did not mend, and it
+    is what names whose fault it is and gives a host its verdict for another TeX Live tree (`handoverOf`): it is kept.
+  - *A unit blamed by what TeX was reading* (2026-11-02). TeX reads a command's argument whole and raises an error where it
+    uses it, so the line of input it names can stand in no unit while the levels of context above it show the unit it was
+    reading: 2610.40394v1's author block, its error on the block's closing brace, `<argument> ...vmode \axtmark {1s}\bfseriesYouqing`
+    above it. Where an error's line of input stands in no unit (`errorUnits`), `contextUnits` reads its context's levels, the
+    innermost first, and blames the unit of the mark of ours nearest before the error's place in the first level that shows one
+    (else the first after it; a mark whose argument the log cut at the line's end keeps its unit's number), never for the paper's
+    own error (`ownErrors`), never where a name mark of ours shows (the names' remedy is the names off), and never from the line
+    of input itself, which `errorUnits` reads. Then the guard's attempt leaves those units unmarked with the names kept, in
+    place of the names off. Over the 6,432 compile logs in the lab's caches, 1,082 of them marked compiles with errors of any
+    engine, it names a unit on two papers' logs and nowhere else: 2610.40394v1's unit 1 (its author block, four of its seven
+    errors) and a lab engine's run of 2608.18626v1 (its unit 91, whose end mark called a macro that engine never defined).
+    Both are the units the errors stand in. On the engine before PIPELINE 51, 2610.40394v1's attempt now leaves unit 1 unmarked
+    and keeps the names: its errors 7 to 3 (the rows' colours, PIPELINE 51's), its authors' names back on the base page, in the
+    same two guard compiles that before changed nothing. No paper the guard saved before is lost: where the lines of input name
+    a unit, nothing changes, and on no log does a paper's errors' context name a unit where the names off had mended it.
+  - *An environment that begins a table is that table* (PIPELINE 52, 2026-11-02). 2610.40576v1's `casetable` begins a
+    `tabularx` and its header row in its definition and ends it in its end code; read as a container, its body was one
+    paragraph across its rows, our marks between a row's `\\` and the next row's `\specialrule`: 18 "Misplaced \noalign" and
+    "Misplaced \omit", three of its 19 pages set otherwise than its own source sets them, and two guard compiles a prepare that
+    changed nothing. A paper's environment whose begin code begins a table of the tabular family it does not end (either
+    spelling: `\begin{tabularx}{…}` or `\tabularx{…}`) and whose end code ends it is read as that table (`latex-front.mjs`
+    `tableWrapsOf`): its own arguments as its definition takes them, its body's cells units of their own in its grid, never
+    fitted (the table is in the definition). And a macro of the paper's with parameters whose body ends a row after the one
+    cell it sets (`rowEndsAfterOf`: casetable's `\cseg{…}{…}`, a rule, a `\multicolumn` of its text and `\\[4pt]`; one whose body
+    sets cells of its own, `&` between them, is read as before) is a row of its own, its arguments read as TeX reads them,
+    its text a cell inside its group, the row ended after the call, in the walk and in `tableGrid`; before, its text ran on into
+    the next row's first cell. 2610.40576v1's marked original now has no error, its text page for page its own source's, and
+    costs no guard compile (three compiles, five before). Of 231 local sources four change, 56 units: 2610.40576v1's
+    casetable, 36 cells where a paragraph was, and three papers' title rows, a macro that ends its row
+    (2608.13505v1's `\SubTableTitle`, 2608.30782v1's `\resultgroup`, 2610.39467v1's `\categorysectionrow`), whose titles had
+    run on into the next row's first cell ("Multi-step / flexible-step methods StableSR"); their marked compiles and base
+    pages set the same text on every page as before. The other 227 sources' units and marked originals are byte for byte as
+    before.
   - *Left as they are: a name read as data, and a fault of pdfTeX's own.* 2610.37668v1's myarxiv `\author` takes each word's
     first token as an initial (`\tl_head:n`) and defines a command by that name, so a mark at a name's start is a "Missing
     \endcsname" whatever the mark is: the probe over the marked preamble finds those units a compile ahead (above), they stay

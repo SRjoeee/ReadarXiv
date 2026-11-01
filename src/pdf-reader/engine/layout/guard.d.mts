@@ -40,5 +40,8 @@ export declare function firstError(log: string | null | undefined): string | nul
 export declare const ownErrors: (log: string | null | undefined) => Set<string>
 /** the units a marked compile's errors stand in, less the paper's own (`own`), and those at the line TeX ignored all text after */
 export declare function errorUnits(paper: Paper, log: string | null | undefined, files: Map<string, Uint8Array>, lines: UnitLines<unknown>[], own?: Set<string> | null): Set<number>
+/** the units the marked compile's errors stand in where no unit's line does: the mark of ours nearest before each error's place in
+ *  the innermost level of TeX's context that shows one, but the paper's own errors (`own`) and those a name mark of ours stands in */
+export declare function contextUnits(log: string | null | undefined, count: number, own?: Set<string> | null): Set<number>
 /** the unmarked original's files: the main one with graphicx's draft and END_TEX on one line before its first */
 export declare const unmarkedFiles: (paper: Paper) => Map<string, Uint8Array>

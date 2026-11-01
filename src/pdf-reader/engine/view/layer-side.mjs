@@ -106,11 +106,14 @@ export function keepBudget({ deviceMemory, screenPixels, ios = false } = {}) {
 }
 /** whether the browser runs on iOS or iPadOS (an iPad says it is a Mac, with a touch screen): its WebKit, whatever its name */
 export const onIos = (nav = globalThis.navigator) => !!nav && (/\biP(?:hone|ad|od)\b/.test(nav.userAgent ?? '') || (/\bMacintosh\b/.test(nav.userAgent ?? '') && (nav.maxTouchPoints ?? 0) > 1))
-/** how many pages past the near ones the side lays ahead while the reader rests, the next first (the prefetch extended to the
- *  layer: the pages' rows, faces, layout and copy made before the reader reaches them, kept as drawings off the view) */
+/** how many pages past the near ones the side lays ahead, the way the reader moves, the next first, while the reader scrolls as at
+ *  rest (the prefetch extended to the layer: the pages' rows, faces, layout and copy made before the reader reaches them, kept as
+ *  drawings off the view; docs/PDF-READER.md §11.8, "The pages ahead") */
 export const AHEAD_PAGES = 2
-/** how long the view rests (no scroll, no page asked, nothing laid) before the pages ahead are laid */
-export const AHEAD_IDLE_MS = 600
+/** how long the near places stay where they are before a window ahead is begun (ms): a page of a steady scroll comes near every
+ *  half second or so (1,500 px/s), a fling's every tenth; begun within one, a window's lay ran beside the left drawing the pages
+ *  the fling brought into view, and 1706.03762v7's page 14 stayed blank 232 to 312 ms where it had 100 to 174 */
+export const AHEAD_SETTLE_MS = 150
 /** the translating card's padding, CSS pixels at the reader's 100 % (engine.css --axt-tr-pad-x and -pad-y, where the sheet gives
  *  none: Glint's, the owner's of 2026-11-01) */
 export const PAD_X = 4
@@ -342,6 +345,7 @@ export function createLayerSide(view, o) {
     if (was) { try { was.dispose() } catch (e) { warn('dispose', e) } }
     // (the drawings kept off the view are the door before's: the new door's pages are laid again as they come near)
     stopAhead()
+    aheadNothing.clear()
     dropDrawings()
     leftAc.abort()
     leftAc = new AbortController()
@@ -411,6 +415,8 @@ export function createLayerSide(view, o) {
    *  translation shows waits for none of them (its `layer` events' `original`). Not laid: `ready` counts none of them */
   const ruled = new Set()
   const rearm = new Set()
+  /** the near pages answered and being put in place (commit): the pages ahead wait for them */
+  let committing = 0
   const counts = { asked: 0, commits: 0, retired: 0, copies: 0, composed: 0, opens: 0, added: 0, leftParts: 0, forks: 0, restored: 0, dropped: 0, ahead: 0, aheadKept: 0, texts: 0 }
   /** each text layer built: its page, its items, its spans and the main thread's time to build it (ms), the last RING */
   const textRing = []
@@ -632,6 +638,9 @@ export function createLayerSide(view, o) {
     const my = gen, a = new AbortController(), d = door
     P.ask = a
     counts.asked++
+    // (a page of the view asked: the pages ahead give the door, the main thread and the line up to it, and are laid again once the
+    // view's pages are in place)
+    stopAhead()
     let st
     try { st = d.pageState(n) } catch { P.ask = null; return }
     if (st === 'laying') clockOn(n)
@@ -641,10 +650,11 @@ export function createLayerSide(view, o) {
       if (disposed || my !== gen) return
       P.stalled = false
       rearm.delete(n)
-      if (!V.places.near(n)) { retire(n); return }
+      if (!V.places.near(n)) { retire(n); aheadSoon(); return }
       // (the door lays no other page until this one is in place, door.hold: the copy's frames are not shared with the next page's
-      // reading and lay, so that the page the reader waits on is shown first)
-      d.hold(commit(n, laid, my).catch(e => warn('commit', e)))
+      // reading and lay, so that the page the reader waits on is shown first; the pages ahead wait for it too)
+      committing++
+      d.hold(commit(n, laid, my).catch(e => warn('commit', e)).finally(() => { committing--; aheadSoon() }))
     }, e => {
       if (P.ask === a) P.ask = null
       if (disposed || my !== gen || isAbort(e)) return
@@ -652,6 +662,7 @@ export function createLayerSide(view, o) {
       P.failed = true
       warn('page', e)
       shownOriginal(n)
+      aheadSoon()
     })
   }
 
@@ -892,32 +903,44 @@ export function createLayerSide(view, o) {
     }
     return warmer
   }
-  async function warmPages(qs) {
+  async function warmPages(qs, stop = null) {
     if (disposed || state === 'refused' || !index || !rows.size) return
     warmerNow()
     const parts = feed.state().parts, family = familyOfParts(parts), pages = pagesNow(), shown = shownNow()
-    const signal = warmAc.signal
-    for (const q of qs) {
-      if (signal.aborted) return
-      const pg = pages.get(q)
-      if (!pg) continue
-      const units = []
-      for (const [id, st] of pg.units) {
-        const key = `${target}|${family}|${id}`, row = rows.get(id)
-        if (warmedUnits.has(key) || !row || !shown(index.kinds[id])) continue
-        warmedUnits.add(key)
-        const text = textOf(row)
-        if (text) units.push({ kind: index.kinds[id] ?? null, text, st })
-      }
-      const pageKey = `${target}|${family}|page ${q}`, likelyKey = `${target}|${family}|likely`
-      // (a page's names and fonts asked once its own part is read: one only a unit running on to it reaches has more to come)
-      const extras = !warmedUnits.has(pageKey)
-      if (pg.covered) warmedUnits.add(pageKey)
-      // (v0 warms its likely faces on page 1, in the serif design most of page 1's characters are set in)
-      const likely = q === 1 && !warmedUnits.has(likelyKey) ? (warmedUnits.add(likelyKey), pg.serif ?? (family === 'other' ? 'times' : family)) : null
-      if (units.length || extras || likely) await warmer.warm({ units, names: extras ? pg.names : [], fonts: extras ? pg.fonts : [], likely }, family, { signal })
-      if (disposed) return
+    // (the side's stop, and the caller's where it gives one: the pages ahead's, which a page of the view asked aborts)
+    let signal = warmAc.signal, unhook = () => {}
+    if (stop) {
+      const both = new AbortController(), off = () => both.abort()
+      for (const s of [warmAc.signal, stop]) { if (s.aborted) both.abort(); else s.addEventListener('abort', off, { once: true }) }
+      unhook = () => { warmAc.signal.removeEventListener('abort', off); stop.removeEventListener('abort', off) }
+      signal = both.signal
     }
+    try {
+      for (const q of qs) {
+        if (signal.aborted) return
+        const pg = pages.get(q)
+        if (!pg) continue
+        const units = [], added = []
+        const mark = key => { warmedUnits.add(key); added.push(key) }
+        for (const [id, st] of pg.units) {
+          const key = `${target}|${family}|${id}`, row = rows.get(id)
+          if (warmedUnits.has(key) || !row || !shown(index.kinds[id])) continue
+          mark(key)
+          const text = textOf(row)
+          if (text) units.push({ kind: index.kinds[id] ?? null, text, st })
+        }
+        const pageKey = `${target}|${family}|page ${q}`, likelyKey = `${target}|${family}|likely`
+        // (a page's names and fonts asked once its own part is read: one only a unit running on to it reaches has more to come)
+        const extras = !warmedUnits.has(pageKey)
+        if (pg.covered) mark(pageKey)
+        // (v0 warms its likely faces on page 1, in the serif design most of page 1's characters are set in)
+        const likely = q === 1 && !warmedUnits.has(likelyKey) ? (mark(likelyKey), pg.serif ?? (family === 'other' ? 'times' : family)) : null
+        if (units.length || extras || likely) await warmer.warm({ units, names: extras ? pg.names : [], fonts: extras ? pg.fonts : [], likely }, family, { signal })
+        if (disposed) return
+        // (a wave stopped before its end asks its page's faces again next time: its slices not begun are still to load)
+        if (signal.aborted) { for (const key of added) warmedUnits.delete(key); return }
+      }
+    } finally { unhook() }
   }
   /** the warm-ups in turn, so that a page's wave waits for the one asked before it, whoever asked it */
   let warmChain = Promise.resolve()
@@ -1094,64 +1117,169 @@ export function createLayerSide(view, o) {
   }
 
   // ---------------------------------------------------------------- the pages ahead (the prefetch, on the layer; §11.8)
-  let aheadTimer = 0, aheadAc = null
-  /** the pages ahead laid once the view has rested AHEAD_IDLE_MS (layAhead), the wait begun again at each call */
-  function aheadSoon() {
-    if (disposed || !rowsEnded) return
-    clock.clear(aheadTimer)
-    aheadTimer = clock.later(() => { aheadTimer = 0; void layAhead().catch(e => warn('ahead', e)) }, AHEAD_IDLE_MS)
+  /** the pages ahead's run (its stop), the pages it is laying, and the pages it laid this door that draw nothing of the layer,
+   *  failed, or whose drawing the keep budget could not hold (not laid ahead again each time the window moves: each is asked as it
+   *  comes near) */
+  let aheadAc = null, aheadOn = []
+  const aheadNothing = new Set()
+  /** the way the reader moves through the paper: 1 down, -1 up; and the near places' first and last when it was last read */
+  let aheadDir = 1, nearLo = 0, nearHi = 0, nearQueued = false, nearAt = 0
+  /** the near places' first and last page (the places near are a run of pages about the view: an IntersectionObserver's, no
+   *  layout read); [0, 0] with none */
+  function nearSpan() {
+    let lo = 0, hi = 0
+    for (let n = 1, count = V.places.count(); n <= count; n++) if (V.places.near(n)) { if (!lo) lo = n; hi = n }
+    return [lo, hi]
   }
-  /** the pages ahead given up: their wait, their ask and their copy under way */
+  /** the pages ahead now: the AHEAD_PAGES places past the near ones the way the reader moves, the nearest first */
+  function aheadWindow() {
+    const [lo, hi] = nearSpan(), count = V.places.count(), out = []
+    if (!lo) return out
+    for (let k = 1; k <= aheadPages; k++) { const m = aheadDir > 0 ? hi + k : lo - k; if (m >= 1 && m <= count) out.push(m) }
+    return out
+  }
+  /** the near places moved (onNear, read once a task): the way the reader moves told by them, the last edge of the near run that
+   *  moved past where it was (a run that shares no page with the one before is a jump, read on forward); a run under way whose page
+   *  is no longer ahead, or that lays the other way, given up; the pages ahead asked for */
+  function nearMoved() {
+    if (nearQueued || disposed) return
+    nearQueued = true
+    queueMicrotask(() => {
+      nearQueued = false
+      if (disposed) return
+      const [lo, hi] = nearSpan()
+      if (!lo) return
+      const dir = !nearLo || lo > nearHi || hi < nearLo ? 1 : hi > nearHi ? 1 : lo < nearLo ? -1 : aheadDir
+      if (lo !== nearLo || hi !== nearHi) nearAt = clock.now()
+      nearLo = lo
+      nearHi = hi
+      const turned = dir !== aheadDir
+      aheadDir = dir
+      if (aheadAc && (turned || aheadOn.some(q => !V.places.near(q) && !aheadWindow().includes(q)))) stopAhead()
+      aheadSoon()
+    })
+  }
+  /** whether the view's own pages hold the door or the thread: a near page asked of the door, or one answered and being put in
+   *  place; or a near page PDF.js is drawing, on the left (its page view running or paused, RenderingStates 1 and 2) or as the
+   *  original's in its place (the places' own drawing, one at a time): property reads, no layout. On a fling over 1706.03762v7's figure pages (fast link, 1x, two runs
+   *  each, 2026-11-01) a window laid while the left drew the pages come into view kept its page 14 blank 392 and 489 ms, against
+   *  158 and 163 with none laid */
+  function viewBusy() {
+    if (committing > 0) return true
+    for (const P of pages.values()) if (P.ask) return true
+    const [lo, hi] = nearSpan()
+    for (let n = lo; n && n <= hi; n++) if (V.left.drawing?.(n) || V.places.drawing?.(n)) return true
+    return false
+  }
+  /** whether pages may be laid ahead now: this attempt's rows ended (a host that translates as it shows is asked for nothing it has
+   *  not translated), the door open, the document visible, the host's bound above 0 */
+  const aheadOk = () => !disposed && !!door && state === 'open' && rowsEnded && aheadPages > 0 && globalThis.document?.visibilityState !== 'hidden'
+  /** the pages ahead laid (layAhead), where no run of them is under way and the view's own pages hold nothing */
+  function aheadSoon() {
+    if (aheadAc || !aheadOk() || viewBusy()) return
+    void layAhead().catch(e => warn('ahead', e))
+  }
+  /** the pages ahead given up: their wait, their faces' wave, their ask and their copy under way */
   function stopAhead() {
-    clock.clear(aheadTimer)
-    aheadTimer = 0
-    // (the pages ahead's own asks and copy let go, which aheadAc's signal reaches; a copy of the same page that a commit began, the
-    // page come near meanwhile, is the commit's and goes on)
+    // (the pages ahead's own asks, wave and copy let go, which aheadAc's signal reaches; a copy of the same page that a commit
+    // began, the page come near meanwhile, is the commit's and goes on)
     aheadAc?.abort()
     aheadAc = null
+    aheadOn = []
+  }
+  /** resolves `ms` later on the view's clock, or rejects with an AbortError once `signal` aborts */
+  function later(ms, signal) {
+    return new Promise((ok, no) => {
+      const gone = () => no(Object.assign(new Error('the pages ahead were given up'), { name: 'AbortError' }))
+      if (signal.aborted) { gone(); return }
+      const stop = () => { clock.clear(timer); gone() }
+      const timer = clock.later(() => { signal.removeEventListener('abort', stop); ok() }, ms)
+      signal.addEventListener('abort', stop, { once: true })
+    })
+  }
+  /** resolves in a turn of the main thread at background priority (scheduler.postTask's `background`: run once nothing of a higher
+   *  priority waits; a task where the browser has no scheduler, the tests'), or rejects with an AbortError once `signal` aborts.
+   *  Not an idle callback: Chromium gives a page no idle period while the reader scrolls (requestIdleCallback did not fire in
+   *  the 6 s of a steady scroll, 2026-11-01, 1706.03762v7), the very time the pages ahead are for */
+  function backgroundTurn(signal) {
+    return new Promise((ok, no) => {
+      const gone = () => no(Object.assign(new Error('the pages ahead were given up'), { name: 'AbortError' }))
+      if (signal.aborted) { gone(); return }
+      let timer = 0
+      const S = globalThis.scheduler
+      const stop = () => { clock.clear(timer); gone() }
+      const done = () => { signal.removeEventListener('abort', stop); ok() }
+      signal.addEventListener('abort', stop, { once: true })
+      if (typeof S?.postTask === 'function') S.postTask(done, { priority: 'background', signal }).catch(() => {})
+      else timer = clock.later(done, 0)
+    })
   }
   /**
-   * The AHEAD_PAGES pages after the last near page past the middle of the view, each laid by the door and drawn at its place's k,
-   * kept as a drawing off the view (KEEP_PIXELS) and put back as it comes near (bringBack): the next page ready before the reader
-   * reaches it. Only once this attempt's rows have ended (a host that translates as it shows is asked for nothing it has not
-   * translated), the door open, no page of the view asked of it, the right pane shown (V.centre) and the document visible; one
-   * page at a time, each after its faces' wave; the window given up at the next scroll (stopAhead). A page near by the time it is
-   * laid is committed as any near page
+   * The AHEAD_PAGES pages past the near ones, the way the reader moves (nearMoved), while the reader scrolls as at rest: each laid
+   * by the door and drawn at its place's k, kept as a drawing off the view (keepPixels) and put back as it comes near (bringBack),
+   * so that a page comes into view translated. Background work: the window begun in a turn of the main thread at background
+   * priority (backgroundTurn), and only while the view's own pages hold nothing (viewBusy: none asked of the door, put in place
+   * or drawn by PDF.js on either pane); its pages' faces
+   * asked in one wave and the pages asked of the door at once (the nearest laid first), each copy drawn in a background turn; a page of the view asked gives the run up at
+   * once (ask: stopAhead), its wave, its asks and its copy with it, and it begins again once the view's pages are in place. The
+   * window read again once its pages are laid, so a reader who moves on moves it. Only with the right pane shown (V.centre) and the
+   * document visible. A page near by the time it is laid is committed as any near page
    */
   async function layAhead() {
-    if (disposed || !door || state !== 'open' || !rowsEnded || aheadAc || !aheadPages) return
-    if (globalThis.document?.visibilityState === 'hidden') return
-    for (const P of pages.values()) if (P.ask) { aheadSoon(); return }
-    const c = V.centre(), count = V.places.count()
-    if (!c || !count) return
-    let last = c
-    while (last < count && V.places.near(last + 1)) last++
+    if (aheadAc || !aheadOk() || viewBusy()) return
     const ac = (aheadAc = new AbortController()), my = gen, d = door
+    const live = () => !ac.signal.aborted && !disposed && my === gen && aheadOk()
     try {
-      for (let m = last + 1; m <= Math.min(count, last + aheadPages); m++) {
-        const P = rec(m)
-        if (V.places.near(m) || drawings.has(m) || P.content?.wrap || P.failed || originalPageOf(m)) continue
-        await (warmChain = warmChain.then(() => warmPages([m])).catch(e => warn('faces', e)))
-        if (ac.signal.aborted || disposed || my !== gen) return
-        counts.ahead++
-        let laid
-        try { laid = await d.pageOf(m, { lang: doorTarget, signal: ac.signal }) } catch { return }
-        if (ac.signal.aborted || disposed || my !== gen) return
-        // (come near while it was laid: committed as any near page is)
-        if (V.places.near(m)) { await commit(m, laid, my); continue }
-        if (originalPageOf(m) || laid.hides === 0) continue
-        const k = kOf(m)
-        if (k === null) continue
-        let got
-        try { got = await copyAt(d, m, k, my, ac.signal) } catch { return }
-        if (!got) return
-        if (ac.signal.aborted || disposed || my !== gen) { release(got.canvas); return }
-        if (V.places.near(m)) { if (!(P.content?.gen === my && P.content.wrap)) putInPlace(m, drawingOf(m, laid, got, my), laid); else release(got.canvas); continue }
-        keepFar(m, drawingOf(m, laid, got, my), laid)
-        if (drawings.has(m)) counts.aheadKept++
+      for (;;) {
+        // (the near places still a moment first: a fling's pages pass by, and the left draws those it stops on)
+        for (let wait = nearAt + AHEAD_SETTLE_MS - clock.now(); wait > 0; wait = nearAt + AHEAD_SETTLE_MS - clock.now()) await later(wait, ac.signal)
+        await backgroundTurn(ac.signal)
+        if (!live() || viewBusy() || !V.centre()) return
+        const ms = aheadWindow().filter(q => {
+          const P = rec(q)
+          return !V.places.near(q) && !drawings.has(q) && !P.content?.wrap && !P.failed && !aheadNothing.has(q) && !originalPageOf(q)
+        })
+        if (!ms.length) return
+        aheadOn = ms
+        // (the window's faces in one wave, the nearest page's first, and its pages asked of the door at once, the nearest last: the
+        // door lays the newest ask first and one page at a time, so the line and the door work on the window while the main
+        // thread lays each in turn; v0's checks find the wave's slices loaded or loading)
+        void (warmChain = warmChain.then(() => warmPages(ms, ac.signal)).catch(e => warn('faces', e)))
+        const asks = new Map([...ms].reverse().map(m => [m, d.pageOf(m, { lang: doorTarget, signal: ac.signal })]))
+        for (const a of asks.values()) a.catch(() => {})
+        counts.ahead += ms.length
+        for (const m of ms) {
+          const P = rec(m)
+          let laid
+          try { laid = await asks.get(m) } catch (e) { if (isAbort(e) || !live()) return; aheadNothing.add(m); continue }
+          if (!live()) return
+          // (come near as the door answered it: the view's own ask puts it in place, under the door's hold as any near page, and
+          // gives this run up; the window's other asks stay queued no more)
+          if (V.places.near(m)) { askSoon(m); return }
+          if (originalPageOf(m) || laid.hides === 0) { aheadNothing.add(m); continue }
+          await backgroundTurn(ac.signal)
+          if (!live() || viewBusy()) return
+          const k = kOf(m)
+          if (k === null) { aheadNothing.add(m); continue }
+          let got
+          try { got = await copyAt(d, m, k, my, ac.signal) } catch (e) { if (isAbort(e) || !live()) return; aheadNothing.add(m); continue }
+          if (!got) return
+          if (!live()) { release(got.canvas); return }
+          if (V.places.near(m)) { if (!(P.content?.gen === my && P.content.wrap)) putInPlace(m, drawingOf(m, laid, got, my), laid); else release(got.canvas); continue }
+          keepFar(m, drawingOf(m, laid, got, my), laid)
+          // (a drawing the keep budget let go, the page past it or the window wider than it: not laid ahead again while the
+          // window stays, which would draw it again and again; it is asked as it comes near)
+          if (drawings.has(m)) counts.aheadKept++
+          else aheadNothing.add(m)
+        }
       }
+    } catch {
+      // (given up: its wait for a turn aborted)
     } finally {
-      if (aheadAc === ac) aheadAc = null
+      // (whatever ended it, nothing of the run is left asked: an ask it did not await, ended by a hidden document or another
+      // door, is let go, and so is what its wave has not begun)
+      ac.abort()
+      if (aheadAc === ac) { aheadAc = null; aheadOn = [] }
     }
   }
 
@@ -1176,6 +1304,8 @@ export function createLayerSide(view, o) {
         farGone(n)
       }
       windowed()
+      // (the window ahead moves with the near places, the way the reader moves)
+      nearMoved()
     }),
     V.onScale(() => {
       clock.clear(recopyTimer)
@@ -1191,17 +1321,17 @@ export function createLayerSide(view, o) {
       }, RECOPY_MS)
     }),
     V.onPageDrawn((s, n, error) => {
-      if (s !== 'left' || disposed) return
-      floatsFor(n, error)
+      if (disposed) return
+      if (s === 'left') floatsFor(n, error)
+      // (a page of the view drawn: the pages ahead may go on, asked a task on: PDF.js tells pagerendered inside its draw, before
+      // the places let that draw go, so that they still say they are drawing now)
+      clock.later(() => { if (!disposed) aheadSoon() }, 0)
     }),
     V.onScrolled(() => {
       if (disposed) return
       // the pages given up at PAGE_MS asked again, where they are near
       if (rearm.size) { const again = [...rearm]; rearm.clear(); for (const n of again) { abortAsk(n); askSoon(n) } }
       headingSoon()
-      // (the reader moves: the pages ahead wait for the next rest)
-      stopAhead()
-      aheadSoon()
     }),
     V.onOriginal(s => {
       if (disposed || s !== 'opened') return

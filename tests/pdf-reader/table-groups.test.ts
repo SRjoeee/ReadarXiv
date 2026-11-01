@@ -3,7 +3,8 @@ import { copyTexts, decideWrite, reusable, seedFrom, sourceHash, unitsOf } from 
 import { decideGroups, groupOf, NAMES_SHARE, unchanged } from '@/pdf-reader/engine/translate/groups.mjs'
 import { inMemory, loadProject, type SourceUnit, tableGrid } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
-import { CAPTIONS_PROBE, captionsOf, type Compiled, keptFor, openPaper, runLive, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { CAPTIONS_PROBE, captionsOf, type Compiled, keptFor, openPaper, originalFiles, runLive, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
 import { plainSource as plainOf } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // A table's consistency groups (the table-groups brief, 2026-10-07): the grid the TeX front end reads, each cell's
@@ -70,6 +71,71 @@ describe('loadProject: each cell unit carries its place in its table', () => {
       ['The prose names AlphaNet and BetaNet in running text.', null],
       ['Aa', '1:h'], ['Bb', '1:h'], ['Cc', '1:h'], ['x1 one', '1:c0'], ['spanning text', '1:c1+2'], ['x2 two', '1:c0'], ['three', '1:c1'], ['four', '1:c2'], ['x3 six', '1:c0'], ['seven', '1:c1'], ['eight', '1:c2'],
     ])
+  })
+})
+
+describe('loadProject: an environment whose begin code begins a table is a table (2610.40576v1\'s casetable)', () => {
+  // (read as a paragraph, its body was one unit across its rows, and our marks stood between a row's end and the next row's
+  // rule: "Misplaced \noalign" eighteen times, and two guard compiles a prepare)
+  const pre = String.raw`\newenvironment{casetable}{%
+  \setlength{\tabcolsep}{0pt}%
+  \tabularx{\linewidth}{lX}
+  \textsc{trajectory excerpts} & \textsc{observations}\\[3pt]
+}{\endtabularx}
+\newenvironment{pairs}[1]{\begin{center}\begin{tabular}{#1}}{\end{tabular}\end{center}}
+\newenvironment{plain}{\begin{center}\begin{tabular}{l}x\end{tabular}}{\end{center}}
+\newcommand{\cseg}[2]{\specialrule{.4pt}{5pt}{3pt}\multicolumn{2}{l}{\textcolor{#2}{\bfseries #1}}\\[4pt]}
+\newcommand{\crow}{\\[6pt]}
+`
+  const body = String.raw`\begin{casetable}
+\cseg{Student continuation words}{red}
+A first cell of words & a second cell of words\crow
+A third cell of words & a fourth cell of words\\
+\end{casetable}
+
+\begin{pairs}{ll}
+Left cell words & right cell words \\
+\end{pairs}
+
+\begin{plain}
+Prose after a closed table.
+\end{plain}`
+  const tex = `\\documentclass{article}\n${pre}\\begin{document}\n${body}\n\\end{document}\n`
+  it('its body\'s cells are units of their own, placed in its grid; one whose begin code closes its table is a container', () => {
+    expect(unitsOf_(tex).map(u => [u.kind, plainSource(u)])).toEqual([
+      ['cell', 'Student continuation words'], ['cell', 'A first cell of words'], ['cell', 'a second cell of words'],
+      ['cell', 'A third cell of words'], ['cell', 'a fourth cell of words'],
+      ['cell', 'Left cell words'], ['cell', 'right cell words'],
+      ['para', 'Prose after a closed table.'],
+    ])
+    expect(cells(tex).slice(1, 3).map(c => [c.row, c.col])).toEqual([[1, 0], [1, 1]])
+  })
+  it('a row-ending macro read as TeX reads its arguments, a group or one token; one whose body holds cells (`&`) as before (Devin on #549)', () => {
+    const more = String.raw`\newcommand{\rowtitle}[1]{\multicolumn{2}{c}{#1}\\}\newcommand{\Title}{Some title words}\newcommand{\both}[2]{\textbf{#1} & \textit{#2}\\}`
+    const t = (rows: string) => `\\documentclass{article}\n${more}\n\\begin{document}\n\\begin{tabular}{ll}\n${rows}\n\\end{tabular}\n\\end{document}\n`
+    // (an unbraced argument: the row ended after it in the grid as in the walk)
+    expect(cells(t('\\rowtitle\\Title\nAfter the title & More words\\\\')).map(c => [c.text, c.row, c.col])).toEqual([['After the title', 1, 0], ['More words', 1, 1]])
+    // (a body that sets two cells: its call as the paper's macro was read before, the rows after it where they were)
+    expect(cells(t('\\both{Left text here}{Right text here}\nNext cell words & Value words\\\\')).map(c => [c.text, c.row, c.col])).toEqual([['Next cell words', 0, 0], ['Value words', 0, 1]])
+  })
+  it('…nor one defined otherwise too, nor one that stores its text (Codex on #549)', () => {
+    const t = (more: string, rows: string) => `\\documentclass{article}\n${more}\n\\begin{document}\n\\begin{tabular}{lll}\n${rows}\n\\end{tabular}\n\\end{document}\n`
+    // (a \def after the \newcommand is the definition TeX uses: no row's end)
+    const def = t(String.raw`\newcommand{\celltext}[1]{#1\\}\def\celltext#1{#1}`, 'First column & \\celltext{Second column} & Third column\\\\')
+    expect(cells(def).map(c => [c.text, c.row, c.col])).toEqual([['First column', 0, 0], ['Second column', 0, 1], ['Third column', 0, 2]])
+    // (its text kept for elsewhere: a front unit with no mark, as before, the row still ended after the call)
+    const stored = t(String.raw`\newcommand{\saverow}[1]{\gdef\saved{#1}Visible words\\}`, '\\saverow{Kept row words here}\nNext cell words & More words & Last\\\\')
+    const paper = openPaper(new Map([['main.tex', enc(stored)]]))
+    const marked = new TextDecoder().decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(marked).toContain('\\saverow{Kept row words here}')
+    expect(cells(stored).filter(c => c.text.startsWith('Next')).map(c => [c.row, c.col])).toEqual([[1, 0]])
+  })
+  it('no mark of ours between a row\'s end and the next row', () => {
+    const paper = openPaper(new Map([['main.tex', enc(tex)]]))
+    const marked = new TextDecoder().decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(marked).toMatch(/\\crow\nA third|\\crow\n\\leavevmode\\axtmark\{t\d+s\}A third/)
+    expect(marked).not.toMatch(/\\axtpm\{[^}]*\}\\crow|\\crow\\axt/)
+    expect(marked).toMatch(/\\begin\{casetable\}\n\\cseg\{/)
   })
 })
 

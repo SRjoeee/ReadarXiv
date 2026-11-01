@@ -375,7 +375,7 @@ function argsBySpec(s, i, spec) {
  * row is not read). `rowEnds`, the paper's macros that end a row as `\\\\` does (rowEndsOf): each one ends it here too, an
  * empty group after it with it, so that the cells after it are placed where the walk cuts them (2610.21924v1's \\tightrow)
  */
-export function tableGrid(s, from, to, rowEnds = null) {
+export function tableGrid(s, from, to, rowEnds = null, rowEndsAfter = null) {
   const cells = [], rows = [{ rule: false, filled: false }]
   let row = 0, col = 0, span = 1, start = from, content = false
   const fill = () => { content = true; rows[row].filled = true }
@@ -389,6 +389,17 @@ export function tableGrid(s, from, to, rowEnds = null) {
     if (c === '&') { cut(i); i++; start = i; continue }
     if (c !== '\\') { if (!/\s/.test(c)) fill(); i++; continue }
     const { name, end } = commandAt(s, i)
+    // (a macro that ends the row after its arguments, rowEndsAfterOf: the call the row's last cell's, the row ended after it)
+    if (rowEndsAfter?.has(name)) {
+      // (its arguments as TeX reads them, and the walk (macroArgs): a group, or one token)
+      const call = macroArgs(s, end, { params: rowEndsAfter.get(name), opt: false }, to)
+      if (call) {
+        const e = call.end
+        fill(); cut(e)
+        row++; col = 0; content = false; rows[row] = { rule: false, filled: false }
+        i = e; start = e; continue
+      }
+    }
     const ownEnd = !!rowEnds?.has(name)
     if (name === '\\' || name === 'tabularnewline' || ownEnd) {
       cut(i)
@@ -1689,7 +1700,7 @@ function walk(s, from, to, b, ctx) {
         walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved; b.cellMode = savedCell
         // each cell unit's place in the table's grid (tableGrid), by which its consistency group is found (groups.mjs):
         // a table nested in a cell gives its units the outer cell's place, set after its own
-        placeCells(b.units.slice(first), b.file, tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds), table)
+        placeCells(b.units.slice(first), b.file, tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter), table)
         // fitted to the line once translated (patch, FIT_DEF): a plain tabular, whose width is its columns'; a tabular*,
         // set to a width it cannot shrink below, measured at its columns' width first (\\axtstar) — not one with a
         // position argument, which \\axtstar does not read. tabularx and tabulary keep their width and read their own
@@ -1701,6 +1712,16 @@ function walk(s, from, to, b, ctx) {
         const verbatim = [...body.matchAll(/\\(?:verb|lstinline|mintinline)(?![A-Za-z])/g)].some(read) || [...body.matchAll(/\\begin\s*\{([^}]+)\}/g)].some(m => isLineEnv(m[1].trim(), ctx.lineEnvs) && read(m))
         if (/^tabu(lar)?$/.test(env) && !verbatim) ctx.fits.push({ file: b.file, start: i, end: afterEnd })
         if (env === 'tabular*' && !verbatim && !/^\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}\s*\[/.test(s.slice(afterBegin).trimStart())) ctx.fits.push({ file: b.file, start: i, end: afterEnd, star: bodyEnd })
+        i = afterEnd; continue
+      }
+      // the paper's environment that begins a table in its begin code (tableWrapsOf): its own arguments as its definition takes
+      // them, its body the table's rows, each cell a unit placed in its grid. Never fitted: the table is in the definition
+      if (ctx.tableWraps?.has(env)) {
+        if (!ctx.tables) { ctx.skipped[env] = (ctx.skipped[env] ?? 0) + 1; i = afterEnd; continue }
+        const { end: argsEnd } = envArgs(s, afterBegin, bodyEnd, env, ctx)
+        const saved = b.kind, savedCell = b.cellMode, first = b.units.length, table = (ctx.tableCount = (ctx.tableCount ?? 0) + 1); b.kind = blockKind(b, 'cell'); b.cellMode = true
+        walk(s, argsEnd, bodyEnd, b, ctx); b.flush(); b.kind = saved; b.cellMode = savedCell
+        placeCells(b.units.slice(first), b.file, tableGrid(s, argsEnd, bodyEnd, ctx.rowEnds, ctx.rowEndsAfter), table)
         i = afterEnd; continue
       }
       // everything else is a container: its body is walked, its own arguments stay ({width} of a minipage, a list's
@@ -1846,6 +1867,16 @@ function walk(s, from, to, b, ctx) {
     // (an accent the paper defines anew as a macro of no argument stays the accent's placeholder with its letter, below)
     const macro = ctx.macros.get(name), own = macro && !(macro.params === 0 && ACCENTS.has(name))
     const call = own && macroArgs(s, end, macro, to)
+    // (one whose body ends the row after its arguments, in a cell (rowEndsAfterOf): a row of its own, its text a cell inside
+    // its argument's group, the row ended after the call. Read as a pair, its text ran on into the next row's first cell)
+    // (not one that stores its text, which the paper sets elsewhere: a front unit with no mark, below)
+    if (call && b.cellMode && ctx.rowEndsAfter?.has(name) && !macro.stores) {
+      // (the pair's id spent as the call's pair spent it: the pairs after it keep theirs, and their units their hashes)
+      endText(); b.flush(); b.pairId++
+      const arg = macro.prose ? call.reqs[macro.prose - 1 - (macro.opt ? 1 : 0)] : null
+      if (arg?.group) { walk(s, arg.start + 1, arg.end - 1, b, ctx); b.flush() }
+      i = call.end; continue
+    }
     // a front matter command the paper's own class defines, its text handed elsewhere too (icml2024.sty's \\icmltitle:
     // the running head and the PDF's title): a unit of what it is, with no mark, which would be set wherever the class
     // sets it (2608.07584 had no title). The text before it ends where the command begins (endText first): the
@@ -1963,9 +1994,10 @@ function walk(s, from, to, b, ctx) {
  *  parameter text). A name also defined otherwise — with parameters (`\\renewcommand{\\x}[1]{…}`, `\\def\\x#1{…}`), by \\let, by
  *  xparse's commands, or with another body — is none (the review of #501's fix round: a row end later redefined with an argument
  *  split its cell) */
+/** a definition of a command in any form the walk reads: LaTeX's, TeX's, a \\let, a document command's (its name the first group set) */
+const DEFINITION = /\\(?:(?:(?:re)?newcommand|providecommand|DeclareRobustCommand)\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))|[egx]?def\s*\\([A-Za-z@]+)|let\s*\\([A-Za-z@]+)|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+)))/g
 function rowEndsOf(texts) {
   const out = new Set(), other = new Set()
-  const DEFINITION = /\\(?:(?:(?:re)?newcommand|providecommand|DeclareRobustCommand)\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))|[egx]?def\s*\\([A-Za-z@]+)|let\s*\\([A-Za-z@]+)|(?:New|Renew|Provide|Declare)(?:Expandable)?DocumentCommand\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+)))/g
   for (const t of texts.map(uncommented)) {
     for (const m of t.matchAll(DEFINITION)) {
       if (m.index > 0 && t[m.index - 1] === '\\') continue
@@ -1978,6 +2010,35 @@ function rowEndsOf(texts) {
   for (const n of other) out.delete(n)
   return out
 }
+/**
+ * The paper's macros of parameters whose body ends a table's row after what it sets (2610.40576v1's
+ * \\cseg[2]{\\specialrule{…}\\multicolumn{2}{…}{\\textcolor{#2}{\\bfseries #1}}\\\\[4pt]}): name → its arguments' count, \\newcommand's
+ * and \\renewcommand's form with no optional one, whose body sets one cell (no `&`). Read in a table as a row of its own: its
+ * text a cell, the row ended after its arguments (tableGrid, the walk). A name defined otherwise as well is none
+ */
+function rowEndsAfterOf(texts) {
+  const out = new Map(), other = new Set()
+  for (const t of texts.map(uncommented)) {
+    // (every definition of a name, in any form (DEFINITION): one of LaTeX's with arguments and no optional one may be a row's
+    // end; any other makes the name none, as a later \\def of it is TeX's)
+    for (const d of t.matchAll(DEFINITION)) {
+      if (d.index > 0 && t[d.index - 1] === '\\') continue
+      const name = d[1] ?? d[2] ?? d[3] ?? d[4] ?? d[5] ?? d[6]
+      const m = (d[1] ?? d[2]) ? /^\s*\[\s*(\d)\s*\]\s*(\[[^\]]*\])?\s*/.exec(t.slice(d.index + d[0].length)) : null
+      if (!m) { other.add(name); continue }
+      const n = Number(m[1]), k = d.index + d[0].length + m[0].length, e = t[k] === '{' ? matchGroup(t, k) : -1
+      // (one whose body sets cells of its own, `&` between them, is read as the paper's macro is anywhere: its arguments' cells
+      // are not known here)
+      const body = e > 0 ? t.slice(k + 1, e - 1).trim() : ''
+      if (n > 0 && !m[2] && e > 0 && ROW_END_TAIL.test(body) && !/(?:^|[^\\])&/.test(body)) out.set(name, n); else other.add(name)
+    }
+  }
+  for (const n of other) out.delete(n)
+  return out
+}
+/** a body's end that ends a table's row, as ROW_END reads a whole body: `\\\\` (starred, its space and option), \\tabularnewline
+ *  or \\cr, the rules after it, not a `\\\\\\\\` that is a line end's own backslash */
+const ROW_END_TAIL = /(?:^|[^\\])(?:\\\\\*?\s*(?:\[[^\]]*\])?|\\tabularnewline|\\cr)\s*(?:\\(?:hline|midrule|toprule|bottomrule|cline\s*\{[^}]*\}|cmidrule\s*(?:\([^)]*\))?\s*\{[^}]*\}|addlinespace(?:\s*\[[^\]]*\])?)\s*)*$/
 /** a macro's body that ends a table's row and does nothing else but draw its rules: `\\\\` (starred, with its space), \\tabularnewline,
  *  \\cr, a rule of booktabs' or LaTeX's after it */
 const ROW_END = /^(?:\\\\\*?\s*(?:\[[^\]]*\])?|\\tabularnewline|\\cr)\s*(?:\\(?:hline|midrule|toprule|bottomrule|cline\s*\{[^}]*\}|cmidrule\s*(?:\([^)]*\))?\s*\{[^}]*\}|addlinespace(?:\s*\[[^\]]*\])?)\s*)*$/
@@ -2413,6 +2474,30 @@ const envDefs = texts => {
   return out
 }
 
+/** a table environment begun or ended in TeX's two spellings: \begin{tabularx} and \tabularx, \end{tabularx} and \endtabularx */
+const TABLE_BEGIN = /\\begin\s*\{\s*((?:tabular|tabularx|longtable|tabu|tabulary|supertabular|xtabular)\*?)\s*\}|\\(tabular|tabularx|longtable|tabu|tabulary|supertabular|xtabular)(?![A-Za-z@*])/g
+const TABLE_END = /\\end\s*\{\s*((?:tabular|tabularx|longtable|tabu|tabulary|supertabular|xtabular)\*?)\s*\}|\\end(tabular|tabularx|longtable|tabu|tabulary|supertabular|xtabular)(?![A-Za-z@*])/g
+/**
+ * The paper's own environments whose begin code begins a table it does not end, and whose end code ends it (the table's
+ * family, TABLE_ENVS, in either spelling: \\begin{tabularx}{…}{…} or \\tabularx{…}{…}): their body is that table's rows,
+ * read as a table's are. 2610.40576v1's casetable begins a tabularx and its header row; read as a container, its body was one
+ * paragraph across its rows, our marks between a row's end and the next row's \\specialrule ("Misplaced \\noalign" eighteen
+ * times). By name, from \\newenvironment's and \\renewenvironment's two groups; the last definition of a name counts
+ */
+const tableWrapsOf = texts => {
+  const out = new Set(), count = (code, re) => [...code.matchAll(re)].length
+  for (const t of texts) for (const m of t.matchAll(/\\(?:re)?newenvironment\s*\*?\s*\{([^}]+)\}\s*(?:\[\s*\d\s*\])?\s*(?:\[[^\]]*\])?\s*(?=\{)/g)) {
+    if (inComment(t, m.index)) continue
+    const name = m[1].trim(), k = m.index + m[0].length, e = matchGroup(t, k), k2 = e > 0 ? skipSpaces(t, e) : -1, e2 = t[k2] === '{' ? matchGroup(t, k2) : -1
+    out.delete(name)
+    if (e2 < 0) continue
+    const begin = uncommented(t.slice(k + 1, e - 1)), end = uncommented(t.slice(k2 + 1, e2 - 1))
+    const open = count(begin, TABLE_BEGIN) - count(begin, TABLE_END)
+    if (open > 0 && count(end, TABLE_END) - count(end, TABLE_BEGIN) >= open) out.add(name)
+  }
+  return out
+}
+
 /**
  * The prose a paper keeps in a macro of no argument, set wherever it is called (2608.04322's case-study table, each cell
  * a \\newcommand of paragraphs; 2608.16190's \\def\\cpanauthor{…} in its \\author{…}): its body walked where it is
@@ -2522,7 +2607,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   // which is biblatex's data — \\entry, \\field — and no text, which \\bibliography, biblatex's alias of \\addbibresource, never reads)
   const bblName = `${jobName(mainFile.rel)}.bbl`, bblBytes = fsys.read(bblName)
   const bbl = bblBytes && /\\begin\s*\{thebibliography\}/.test(texText(bblBytes)) ? bblName : null
-  const ctx = { rowEnds: rowEndsOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], backref: backrefOf(ownTexts), ...tblrOf(sources.map(sourceText)) }
+  const ctx = { rowEnds: rowEndsOf(sources.map(sourceText)), rowEndsAfter: rowEndsAfterOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), tableWraps: tableWrapsOf(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], backref: backrefOf(ownTexts), ...tblrOf(sources.map(sourceText)) }
   const scan = { lineEnvs, ifs, ifValues }
   let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;

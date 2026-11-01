@@ -4,6 +4,11 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- In the PDF reader, pages come into view already translated while you keep scrolling. The next pages are prepared as you move, not only once you stop, and the preparing waits whenever the pages in view need the computer. On a slow connection, none of the ten pages of a steady scroll showed the English page first, where two to four had, for up to half a second.
+- Fixed: in the PDF reader, papers whose LaTeX tests for a file, sets an IEEE biography or colours a table row in certain ways are translated again, and their original pages no longer show stray text.
+- In the PDF reader, the scroll handles stay out of sight while you zoom, and come back the next time you scroll.
+- Fixed: in the PDF reader, a translated reference keeps the full stop that ends it, and a theorem box's title that a paper names itself (such as "Recall" or "Notation") is translated with the same word on every box.
+- Fixed: in the PDF reader, the titles of framed theorem boxes no longer show the English heading under its translation, and the closing bracket of a theorem's title is no longer left standing after the translated title.
 - Fixed: in the PDF reader, pinching to zoom keeps both sides on the same page and the scroll handles steady. The side under the pointer had stood still while its pages grew or shrank whenever the pointer was beside a page rather than on one, so the two sides drifted pages apart and slid back together afterwards, and the handles jumped up and down at every step. A slow pinch at a small zoom also zooms now; it had done nothing.
 - Fixed: in the PDF reader, a theorem's text now follows its translated head where the head holds a citation; a paragraph whose first line on a new page is mostly a formula is translated, not left in English; the translated contents keep their links; a sentence's highlight no longer runs over the blank TeX leaves before a display.
 - In the PDF reader, a page still being translated shows a soft light passing through its text, with nothing drawn over the paper. With reduced motion turned on, the waiting paragraphs are only a little lighter, and nothing moves.

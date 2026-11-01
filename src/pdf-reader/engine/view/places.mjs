@@ -116,7 +116,13 @@ export function createPlaces(o) {
   const giveUp = e => { if (pending && e.target !== list[pending.n - 1]?.div) pending = null }
   document.addEventListener('focusin', giveUp, true)
 
+  /** while a pinch is shown by transform (holdNear): what the near window says of each place, kept to be told at its end */
+  let nearHeld = null
   const near = new IntersectionObserver(entries => {
+    if (nearHeld) { for (const e of entries) nearHeld.set(e.target, e.isIntersecting); return }
+    nearEntries(entries)
+  }, { root, rootMargin: NEAR })
+  function nearEntries(entries) {
     for (const e of [...entries].sort((a, b) => Number(a.target.dataset.pageNumber) - Number(b.target.dataset.pageNumber))) {
       const p = list[Number(e.target.dataset.pageNumber) - 1]
       if (!p || p.div !== e.target || p.near === e.isIntersecting) continue
@@ -124,7 +130,7 @@ export function createPlaces(o) {
       if (p.near) show(p); else letGo(p)
       o.near(p.n, p.near)
     }
-  }, { root, rootMargin: NEAR })
+  }
   /** which places are in the view itself (no margin): while the pages ahead wait, those alone are drawn */
   const inView = new IntersectionObserver(entries => {
     let came = false
@@ -374,6 +380,8 @@ export function createPlaces(o) {
       return !p ? 'none' : p.side ? (p.blank ? 'none' : 'layer') : p.view ? 'original' : p.skeleton ? 'skeleton' : 'none'
     },
     near: n => !!list[n - 1]?.near,
+    /** whether place n's page view is the one the places are drawing the original's page on now (one at a time: pump) */
+    drawing: n => !!drawing && list[n - 1]?.view === drawing,
     page: n => list[n - 1]?.div ?? null,
     /** the focus given to place n (a keyboard's jump to it): at once where it shows a page, else once it does, within
      *  FOCUS_WAIT_MS */
@@ -386,6 +394,15 @@ export function createPlaces(o) {
     count: () => list.length,
     /** the places near the view but not in it drawn from now on (the layer's first page there, or none to wait for) */
     letAheadGo,
+    /** a pinch shown by transform (on) and its end (off): the near window's word on each place held meanwhile — the places it
+     *  shows by transform are near-tested where they show, and would be made, laid and drawn at a scale the commit replaces —
+     *  and told at the end, as it stands then */
+    holdNear(on) {
+      if (on) { nearHeld ??= new Map(); return }
+      const held = nearHeld
+      nearHeld = null
+      if (held?.size) nearEntries([...held].map(([target, isIntersecting]) => ({ target, isIntersecting })))
+    },
     /** whether they still wait */
     aheadHeld: () => held,
     /** the places as page views are read: place n's element with the left's viewport and page box for page n */
