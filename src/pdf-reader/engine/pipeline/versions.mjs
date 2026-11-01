@@ -352,7 +352,17 @@
 //     (2610.21312v1 p12's "Spearman(lr_std, bulk1)", 2610.22065v1 p3's "Relative Accuracy Drop (%"). The figure units' cut
 //     moves, so the rows' identities: raised so. Every source unit, its pieces and its wire are 45's: a copy of 45 carries every
 //     unit (live.mjs PIPELINE_CARRIES), a figure unit found again by its source (cache.mjs seedFrom)
-export const PIPELINE_VERSION = '46'
+// 47 (the release sweep of 5514953c, 2026-11-01): a figure unit is cut of glyphs set at its size alone (layout/figure-text.mjs: a
+//     run a glyph of which stands past BAND_MAX of its size from its baseline, its own ink, level or turned, is the original's),
+//     and a unit whose row a part's reader would refuse is none (page-pass.mjs figureUnits). 2608.08481v1's figures are OriginLab
+//     EPS whose Type 3 faces, glyphs of 2048 units an em under a font matrix of 10/2048, are shown at a size of about 1: each
+//     capital stands 7.2 of its size tall, its level labels' bands passed the row's 4 em, and the part's writer laid both of its
+//     parts (pp1-5, pp6-10) with no layout at all for that one row: 142 translations, none drawn. Its turned titles, whose band is
+//     their font's, would have been drawn at a tenth of their size. Its 48 drawn figure units are now the original's, and its
+//     parts keep their layout. The figure units' cut moves, so the rows' identities: raised so. Every source unit, its pieces and
+//     its wire are 46's: a copy of 46 carries every unit (live.mjs PIPELINE_CARRIES), a figure unit found again by its source
+//     (cache.mjs seedFrom)
+export const PIPELINE_VERSION = '47'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

@@ -452,6 +452,28 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
     // no clip in force: never cut
     expect(turnedIn(up('cmsy', -50), o).clipped).toBeUndefined()
   })
+  it('a glyph set turned carries its own ink up and down from its baseline in em, clip or none: its outline\'s, else its font\'s band', () => {
+    const o = objs(sy)
+    // (CMSY10's F: its outline, -0.032 to 0.691 em, never its declared descent of 0.96)
+    const f = turnedIn(up('cmsy', 50), o)
+    expect([f.down, f.up]).toEqual([expect.closeTo(-0.032, 5), expect.closeTo(0.691, 5)])
+    // (a glyph that draws nothing: its baseline alone)
+    const blank = turnedIn(text('cmsy', 10, [0, 1, -1, 0, 50, 40], show(g(' ', 600))), o)
+    expect([blank.down, blank.up]).toEqual([0, 0])
+    // (no outline given: its font's declared descent and ascent)
+    const d = turnedIn(form(...up('f1', 50)), commonObjs)
+    expect([d.down, d.up]).toEqual([-0.2, 0.7])
+    // (a Type 3 glyph: what its procedure paints, through the font's matrix. OriginLab's faces: glyphs of 2048 units an em under a
+    // matrix of 10/2048, an "A" 1466 units tall, so 7.158 of the size it is shown at, its font declaring no band: 2608.08481v1)
+    const procs = new Map([['A', { fnArray: [OPS.setCharWidthAndBounds, OPS.constructPath], argsArray: [[1366, 0, -3, 0, 1369, 1466], [OPS.fill, [Float32Array.from([0])], Float32Array.from([-3, 0, 1369, 1466])]] }]])
+    FONTS.t3o = { name: 'Type3', fontMatrix: [10 / 2048, 0, 0, 10 / 2048, 0, 0], isType3Font: true, vertical: false, charProcOperatorList: procs }
+    try {
+      const a = turnedIn(text('t3o', 1.2, [0, 1, -1, 0, 50, 40], show({ ...g('A', 1366), operatorListId: 'A' })), commonObjs)
+      expect(a.size).toBeCloseTo(1.2, 9)
+      expect([a.ascent, a.descent]).toEqual([0.75, -0.22])
+      expect([a.down, a.up]).toEqual([0, expect.closeTo(7.158, 3)])
+    } finally { delete FONTS.t3o }
+  })
   it('a slanted label is cut by where its own ink\'s corners fall, its band turned with it', () => {
     const o = objs(sy)
     // 30 degrees: its ink's lowest corner is its outline's bottom left, 0.02 along and 0.032 below, turned

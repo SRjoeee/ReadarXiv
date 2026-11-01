@@ -14,15 +14,16 @@
 // An original module (no port statement). It imports the engine's own modules alone, by relative path.
 import { BundleRefusal } from '../layer-proto/bundle.mjs'
 import { PART_PAGES_MAX, partCutter, wholeCutter, wholeFrontier } from '../layer-proto/cut.mjs'
-import { chunkTotals, deltaBaseWhy, groupsOfUnits, indexOf, layerDraws, partTarget, readHead, readPart, readUnitsChunk, TOKEN_LIMIT, whyText, writeHead, writeUnitChunks } from '../layer-proto/format.mjs'
+import { chunkTotals, deltaBaseWhy, groupsOfUnits, indexOf, layerDraws, onGrid, partTarget, readHead, readPart, readUnitsChunk, TOKEN_LIMIT, whyText, writeHead, writeUnitChunks } from '../layer-proto/format.mjs'
 import { needBound } from '../layer-proto/need.mjs'
-import { figureRow } from '../layer-proto/figure-rows.mjs'
+import { checkFigures, figureRow } from '../layer-proto/figure-rows.mjs'
 import { bundleUnitsOf, NAME_KIND, UNIT_FLAG_BITS } from '../layer-proto/units.mjs'
 import { readArxivText } from '../layout/arxiv.mjs'
 import { boxesCheck, finalCheck, markTextBeyond, markTextOf, pageTextAt, prefixDoc, textOfPdf } from '../layout/base.mjs'
 import { lineCheckOf } from '../layout/carry.mjs'
 import { countOf, DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_WHYS, deltaSection, pagesOf, replacedWhy, wrapWhy } from '../layout/delta-wire.mjs'
 import { texLiveOf } from '../layout/guard.mjs'
+import { LayoutRefusal } from '../layout/json.mjs'
 import { makerOf, rulesOf } from '../layout/make.mjs'
 import { markedPages, marksOfHead, readMarked } from '../layout/marks.mjs'
 import { FIGURE_KIND } from '../rules/content-classes.mjs'
@@ -77,19 +78,28 @@ export function layoutRecordOf(r) {
  * end holds a source's (its UTF-8 bytes), KEPT where it is only names (mt.mjs isName against `prose`, the paper's running text: a
  * dataset's or a model's name keeps its source, as a table's cell of names does), and its row (layer-proto/figure-rows.mjs
  * figureRow) in a Map by page; none on a page
- * past our `M` pages or that the line check says is not drawn (`undrawable`: its units the original's, so are its figures)
+ * past our `M` pages or that the line check says is not drawn (`undrawable`: its units the original's, so are its figures), and
+ * none whose row a part's reader would refuse (checkFigures, on its page's view of `views`, arXiv's views as a part carries them:
+ * the left's grid, left-side.mjs): its label the original's, as a unit the maker cannot place is, where the part's writer would
+ * otherwise lay every page of its part with no layout for that one row (2608.08481v1's band of 7 em: 142 translations drawn on
+ * none of its 10 pages)
  */
-export function figureUnits(given, { bundle, undrawable, M, prose = '' }) {
+export function figureUnits(given, { bundle, undrawable, M, views, prose = '' }) {
   const byPage = new Map()
   if (!given || !Array.isArray(given.units)) return byPage
   const skip = new Set(undrawable ?? [])
   for (const u of given.units) {
     if (!u || typeof u !== 'object' || !Number.isInteger(u.page) || u.page < 1 || u.page > M || skip.has(u.page) || typeof u.text !== 'string' || !/\S/u.test(u.text)) continue
-    const id = bundle.length
+    const id = bundle.length, row = figureRow(id, u), view = views?.[u.page - 1]
+    if (!view) continue
+    try { checkFigures([row], { a: u.page, b: u.page, views: view.map(onGrid), unitCount: id + 1 }) } catch (e) {
+      if (e instanceof LayoutRefusal) continue
+      throw e
+    }
     // (a label that is only names, a dataset's, a model's, keeps its source, as a table's cell of names does: mt.mjs isName)
     bundle.push([FIGURE_KIND, isName(u.text, prose) ? UNIT_FLAG_BITS.KEPT : 0, null, null, null, [[0, latin1Of(u.text)]], null])
     const list = byPage.get(u.page) ?? byPage.set(u.page, []).get(u.page)
-    list.push(figureRow(id, u))
+    list.push(row)
   }
   return byPage
 }
@@ -409,7 +419,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   // other ink units', their rows by page; none over arXiv's base, on a page our base does not draw, or where their chunks would not
   // fit beside the others' within a head's bounds: none of the paper's then, its figures the original's)
   const withoutFigures = bundle.length
-  let figures = oursHead ? figureUnits(wrap?.figures, { bundle, undrawable: lineCheck?.undrawable, M: oursDoc?.numPages ?? 0, prose: proseOf(source.units) }) : new Map()
+  let figures = oursHead ? figureUnits(wrap?.figures, { bundle, undrawable: lineCheck?.undrawable, M: oursDoc?.numPages ?? 0, views: text.views, prose: proseOf(source.units) }) : new Map()
   if (figures.size && !(await afterFit(paper, bundle, sourceCount))) { bundle.length = withoutFigures; figures = new Map() }
   // (each figure unit anchored on the left by arXiv's tokens in its run's band, as an ink unit by its lines: its translation lights
   // its original, PIPELINE 31; ink-pass.mjs figureAnchors)

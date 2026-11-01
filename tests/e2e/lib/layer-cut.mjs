@@ -84,7 +84,7 @@ export async function cutSample({ pdf, bundle, wrapped, wrap }, { base: kind = '
   // page-pass.mjs figureUnits over the wrap's `figures`), each anchored on the left by the stand-in's tokens in its run's band, as
   // the page pass anchors them (ink-pass.mjs figureAnchors): a left unit of its part beside its figure row (#497)
   const allUnits = [...raw.units]
-  const figures = figureUnits(wrap.figures, { bundle: allUnits, undrawable: [], M: read.paper.pages, prose: proseOf(units) })
+  const figures = figureUnits(wrap.figures, { bundle: allUnits, undrawable: [], M: read.paper.pages, views: pages.map(p => p.view), prose: proseOf(units) })
   for (const [id, a] of figureAnchors(doc, figures)) anchors.set(id, a)
   const side = leftSideOf({ doc, views: pages.map(p => p.view), anchors })
   // (our base page: the wrapped pass, its check the one a base of ours passes, its wrap's fields; `orig`, arXiv's PDF beside it)
