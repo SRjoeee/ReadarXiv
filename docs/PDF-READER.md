@@ -300,6 +300,13 @@ scroll area keeps it (the maintainer turned down mirroring the left one to the o
 - A 14 px track, a 4 px round thumb in ink at 30 %; its length is the pane's visible share (at least 32 px).
 - Hidden at rest; shown while the pane scrolls and for 0.9 s after, and while the pointer is on it; the thumb widens to
   7 px and darkens to 45 % under the pointer.
+- **Hidden through a zoom**, until the reader next scrolls (the owner's decision of 2026-11-01: 「缩放时让它直接消失行不行？因为在缩放的行为路径中，用户本来就不能上下滑动，这时候手柄消失、等滑动时再出现也是可以的…我们完全可以用这种更直接的解法」).
+  A zoom moves each pane's scroll to keep its point under the pointer, but that is not the reader scrolling. Both handles go
+  at once, with no fade, from the zoom's first Ctrl or ⌘ wheel over the pages or its first change of scale, whatever asked
+  it: a pinch, a key, the menu or a fit. The zoom's own scrolls (each step's, told in the frame after its scale or the one
+  after that, and a commit's) leave them hidden. Any other scroll of the pane shows its handle again, already at its length
+  and place, and on the auto-hide timing above; a press on the handle shows it too, so its drag always works, and so does
+  the pointer resting on it.
 - The thumb drags (the pane follows; the other side follows through sync as for any scroll); a press on the track turns a
   screen towards it. A press on an indicator makes its pane the leading side, as a press in the pane does.
 - The thumb's position is a CSS scroll-driven animation on the pane's scroll timeline (`scroll-timeline` on the

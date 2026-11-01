@@ -1,7 +1,8 @@
 // A pane's scroll indicator (the reader's design, §6.5): the native scrollbar is off; on the pane's right edge a 14 px
 // track and a 4 px thumb whose place follows the scroll on the compositor (a scroll-driven animation, reader.css) and
 // whose length is set here, in the frame the pane's size or its pages' height changes — never on a scroll. Hidden at
-// rest; the thumb drags, a press on the track turns a screen towards it, and a press makes its pane the leading side
+// rest, and through a zoom until the reader next scrolls; the thumb drags, a press on the track turns a screen towards it,
+// and a press makes its pane the leading side
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import type { ReaderController, Side } from '../controller'
 
@@ -38,6 +39,38 @@ export const ScrollIndicator = forwardRef<HTMLDivElement, { controller: ReaderCo
     if (stack) observer.observe(stack)
     return () => observer.disconnect()
   }, [])
+  // Hidden through a zoom (the owner's decision of 2026-11-01, §6.5): from the zoom's first Ctrl or ⌘ wheel over the pages,
+  // or its first change of scale, whatever asked it (a pinch, a key, the menu, a fit), at once and with no fade, until the
+  // reader next scrolls. The zoom's own scrolls — each step's anchoring, told in the frame after its scale, and a commit's —
+  // are no scroll of the reader's: a scroll within two frames of a change of scale leaves it hidden. Any other scroll shows
+  // it again (at its length and place: both are kept through the zoom), and so does a press on it: its drag always works
+  useEffect(() => {
+    const t = track.current, pane = t?.parentElement
+    if (!t || !pane) return
+    let scale = controller.getState().scale, quiet = 0
+    const hide = () => t.toggleAttribute('data-zoomed', true)
+    const unsubscribe = controller.subscribe(() => {
+      const now = controller.getState().scale
+      if (now === scale) return
+      scale = now
+      hide()
+      cancelAnimationFrame(quiet)
+      quiet = requestAnimationFrame(() => { quiet = requestAnimationFrame(() => { quiet = 0 }) })
+    })
+    const onWheel = (e: WheelEvent) => { if ((e.ctrlKey || e.metaKey) && (e.target as Element | null)?.closest?.('.pane')) hide() }
+    const onScroll = () => { if (!quiet) t.removeAttribute('data-zoomed') }
+    const onPress = () => t.removeAttribute('data-zoomed')
+    window.addEventListener('wheel', onWheel, { capture: true, passive: true })
+    pane.addEventListener('scroll', onScroll, { capture: true, passive: true })
+    t.addEventListener('pointerdown', onPress)
+    return () => {
+      unsubscribe()
+      cancelAnimationFrame(quiet)
+      window.removeEventListener('wheel', onWheel, { capture: true })
+      pane.removeEventListener('scroll', onScroll, { capture: true })
+      t.removeEventListener('pointerdown', onPress)
+    }
+  }, [controller])
   const onDown = (e: React.PointerEvent<HTMLDivElement>) => {
     const t = track.current, c = scrollerOf(t)
     if (!t || !c) return

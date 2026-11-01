@@ -86,4 +86,44 @@ describe('a scroll indicator\'s thumb (§6.5)', () => {
       expect([track.style.getPropertyValue('--thumb'), frames.length]).toEqual(['160px', 0])
     } finally { vi.unstubAllGlobals() }
   })
+
+  it('is hidden through a zoom, the zoom\'s own scrolls included, and shown again by the reader\'s next scroll or a press on it (the owner\'s decision of 2026-11-01)', async () => {
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => frames.push(cb))
+    vi.stubGlobal('cancelAnimationFrame', () => {})
+    vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
+    try {
+      const fake = fakeController({ scale: 1 })
+      const Pane = () => createElement('section', { className: 'pane', 'data-side': 'right' }, createElement('div', { className: 'viewerContainer' }, createElement('div', { className: 'pdfViewer' })), createElement(ScrollIndicator, { controller: fake.controller, side: 'right' }))
+      const { container } = await mountElement(createElement(Pane))
+      const scroller = container.querySelector<HTMLElement>('.viewerContainer')!, track = container.querySelector<HTMLElement>('.indicator')!
+      const frame = () => { for (const cb of frames.splice(0)) cb(0) }
+      const scroll = () => scroller.dispatchEvent(new Event('scroll'))
+      const hidden = () => track.hasAttribute('data-zoomed')
+      const states: [string, boolean][] = []
+      states.push(['at rest', hidden()])
+      // a step of a zoom, whatever asked it: the scale changes, and the handle goes at once
+      await act(async () => { fake.set({ scale: 1.1 }) })
+      states.push(['the scale changed', hidden()])
+      // the step's anchoring scrolls the pane: told in the frame after the scale, or the one after that
+      scroll()
+      frame()
+      scroll()
+      states.push(['the zoom\'s own scrolls', hidden()])
+      frame()
+      // the reader scrolls
+      scroll()
+      states.push(['the reader scrolls', hidden()])
+      // a pinch's first wheel over the pages, before any scale has changed (a wheel with Ctrl; happy-dom's WheelEvent
+      // leaves `ctrlKey` out of its init)
+      scroller.dispatchEvent(Object.defineProperty(new WheelEvent('wheel', { deltaY: -2, bubbles: true }), 'ctrlKey', { value: true }))
+      states.push(['a pinch\'s first wheel', hidden()])
+      scroller.dispatchEvent(new WheelEvent('wheel', { deltaY: 40, bubbles: true }))
+      states.push(['a plain wheel, before its scroll', hidden()])
+      // a press on it (its drag, its track) shows it at once
+      track.dispatchEvent(new Event('pointerdown', { bubbles: true }))
+      states.push(['a press on it', hidden()])
+      expect(states).toEqual([['at rest', false], ['the scale changed', true], ['the zoom\'s own scrolls', true], ['the reader scrolls', false], ['a pinch\'s first wheel', true], ['a plain wheel, before its scroll', true], ['a press on it', false]])
+    } finally { vi.unstubAllGlobals() }
+  })
 })
