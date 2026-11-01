@@ -1323,8 +1323,9 @@ export function createLayerSide(view, o) {
     V.onPageDrawn((s, n, error) => {
       if (disposed) return
       if (s === 'left') floatsFor(n, error)
-      // (a page of the view drawn: the pages ahead may go on)
-      aheadSoon()
+      // (a page of the view drawn: the pages ahead may go on, asked a task on: PDF.js tells pagerendered inside its draw, before
+      // the places let that draw go, so that they still say they are drawing now)
+      clock.later(() => { if (!disposed) aheadSoon() }, 0)
     }),
     V.onScrolled(() => {
       if (disposed) return
