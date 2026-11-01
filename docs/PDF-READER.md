@@ -1013,24 +1013,26 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   scroll on a slow link. And a window laid while the left drew the pages a fling brought into view kept the left's page 14 of
   1706.03762v7 blank 392 and 489 ms, against 158 and 163 with none laid; a page PDF.js is drawing holding the window, 232 to 312
   ms against 100 to 174 (the window begun as the fling's pages came near, its lay beside the left's drawing of the page the
-  fling stopped on); the settle as well, 158 to 192 against 159 to 226: as before.
-  With all of it (2026-11-02, 1706.03762v7 in Chinese, 15 pages; the before 5d1a5dcf, the after a0603a01, three runs each,
-  interleaved, at loads of 5 to 19): on a slow link (150 ms, 10 Mbit/s) at 1x, 2 or 3 of the 10 right pages first showed arXiv's
-  page before, for 54 to 535 ms, and none after; with the CPU four times slower on a fast link (40 ms, 40 Mbit/s), 6 of 10 before
-  in every run (322 to 1,379 ms) and 3 to 5 after (171 to 1,152 ms), the main thread then too short for the view's own pages to
-  leave a turn; on the fast link at 1x none either way. On 2602.23285v2 (19 pages, figures of several MB) on the slow link, 3 of
-  the 7 pages the layer lays showed arXiv's page for 684 to 1,128 ms before, 2 for 76 and 119 ms after (one run each, without
-  the settle). The cost is the work of the pages ahead done while the reader scrolls, where it was done at rest; it shows where
-  nothing is gained, on the fast link at 1x: during the gesture the main thread's frames took 42 ms at p95 where they took 33 to
-  35, 5 to 8 frames of some 300 more than 50 ms where 2 to 4 did, the longest task 66 to 98 ms where 54 to 65 did, and the
-  compositor dropped 1.4 to 1.6 % of the scroll's frames where it dropped none. On the slow link 36 to 38 ms at p95 where 34 to
-  38 (one run of each loaded, 51 and 48), at 4x the same (137 to 186 against 164 to 236: the thread full either way). A left
-  page blank on the fling, before and after: 50 to 226 ms at 1x, 190 to 735 before and 202 to 930 after at 4x. The bytes are the
-  same by the end of the rest (2.9 MB over the scroll's 10 pages), fetched sooner: by the stop the two pages past it, 0.6 MB on
-  the slow link and 1.3 MB on the fast one (1706.03762v7's figure pages 13 and 14), which the build before fetched in the
-  rest's first second: what a reader who stops and leaves at once did not use. Three pages ahead (`ahead: 3`, without the
-  settle) left 1 and 5 of 10 at 4x, the same none on the slow link, for 0.45 MB more at the stop and as much more kept: not
-  taken.
+  fling stopped on); the settle as well, 158 to 192 against 159 to 226: as before. Until the window also waited for a near
+  place drawing the original's page (the places' own drawing, `places.drawing`: the slot `view(n)` the side first read holds
+  no page view, so that check held nothing), it cost the fast link at 1x, where nothing is gained, some 8 ms at p95 on every
+  frame of the scroll and 1.4 to 1.6 % of the compositor's frames dropped; with it, nothing measurable.
+  With all of it (2026-11-02, 1706.03762v7 in Chinese, 15 pages; the before 5d1a5dcf, the after 2c506199 and 5cec45df, which
+  differ by the retry a task after a page is drawn alone; four runs each, interleaved, at loads of 6 to 20): on a slow link
+  (150 ms, 10 Mbit/s) at 1x, 3 of the 10 right pages first showed arXiv's page before in every run, for 53 to 502 ms, and none
+  after; with the CPU four times slower on a fast link (40 ms, 40 Mbit/s), 6 of 10 before in every run (415 to 1,390 ms) and
+  4 or 5 after (294 to 1,252 ms), the main thread then too short for the view's own pages to leave a turn; on the fast link at
+  1x none either way. On 2602.23285v2 (19 pages, figures of several MB) on the slow link, 3 of the 7 pages the layer lays
+  showed arXiv's page for 684 to 1,128 ms before, 2 for 76 and 119 ms after (one run each, an earlier build). No cost was
+  measured on what is in view: during the scroll's gesture the main thread's frames took 34 to 37 ms at p95 after, 34 to 46
+  before, on the fast link at 1x (the frames over 50 ms 1 to 8 of some 310 after, 4 to 11 before; the longest task 56 to 64
+  ms after, 61 to 68 before; the compositor's dropped frames 0 to 0.6 % either way); 34 to 47 after and 34 to 35 before on the
+  slow link; at 4x 146 to 231 after and 167 to 262 before, the thread full either way. A left page blank on the fling: 49 to
+  568 ms after and 50 to 541 before at 1x, 214 to 784 after and 167 to 709 before at 4x. The bytes fetched during the gesture
+  and during the rest are the same as before at both links (1.56 MB and 1.34 MB over 1706.03762v7's scroll): the pages ahead
+  move what is fetched no earlier than the near pages did, and the two pages past the stop are fetched in the rest, as the
+  window waits while the view's last pages are drawn. Three pages ahead (`ahead: 3`, an earlier build) left 1 and 5 of 10 at
+  4x, the same none on the slow link, for 0.45 MB more at the stop and as much more kept: not taken.
   On a delta head the composed document reads the original's own source, so a page laid ahead reads the original's bytes of
   that page into the store the left reads: on 2602.23285v2 the left's pages 5 to 7 were no longer blank as they came into view.
   The web's own prefetch of arXiv's bytes (`?prefetch=1`, off by default, at rest only) asked nothing more in these runs (the
