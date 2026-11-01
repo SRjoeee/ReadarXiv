@@ -50,4 +50,4 @@ export declare const FIGURE_TEXT_MAX: number
 export declare const FIGURE_WHYS: readonly FigureWhy[]
 export declare function figureGroup(k: number): string
 /** the figure units of a document: each unit, and by page which glyph (level, and turned) is whose */
-export declare function figureUnitsOf(pages: readonly object[], own: { glyphs: readonly (readonly (string | null)[])[] } | null, o?: { unitsPage?: number; unitsDoc?: number }): { units: FigureUnit[]; glyphs: Map<number, number>[]; turned: Map<number, number>[]; stats: { units: number; crowded: number; letters: number; runs: number; past: number; clipped: number; sets: number; grouped: number; aligned: number } }
+export declare function figureUnitsOf(pages: readonly object[], own: { glyphs: readonly (readonly (string | null)[])[] } | null, o?: { unitsPage?: number; unitsDoc?: number }): { units: FigureUnit[]; glyphs: Map<number, number>[]; turned: Map<number, number>[]; stats: { units: number; crowded: number; letters: number; runs: number; past: number; clipped: number; outsized: number; sets: number; grouped: number; aligned: number } }

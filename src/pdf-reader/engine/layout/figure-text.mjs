@@ -22,8 +22,11 @@
 // reader can trust (UNREAD); its text the glyphs' Unicode (NFKC) with a space where two stand apart by SPACE_GAP of their size.
 // What it is not, a number, a tick's label, a letter alone, a formula's, stays the original's ink; so does a run a glyph of which
 // is not wholly inside the clip in force (an included figure's viewport cuts off what it does not show: pageInk's `clipped`) or
-// inside its page's box. A font that gives no Unicode a reader can trust leaves its unit the original's too, which the wrap
-// tells from the font's own dict (remove.mjs unicodeOf).
+// inside its page's box, and one a glyph of which stands past BAND_MAX of its size from its baseline (its own ink, level or
+// turned): its size is not its glyphs' (OriginLab's Type 3 faces, glyphs of 2048 units an em under a font matrix of 10/2048,
+// shown at a size of about 1, stand 7 of it tall), so that a translation drawn at its size would be a tenth of the original,
+// and its row's band is one no part's reader takes (layer-proto/figure-rows.mjs checkFigures). A font that gives no Unicode a
+// reader can trust leaves its unit the original's too, which the wrap tells from the font's own dict (remove.mjs unicodeOf).
 //
 // Each unit's place, in its own frame (its first glyph's origin, along its direction, up across it): its box from its first
 // glyph's start to its last glyph's end, its band from its descent to its ascent, at least DRAW_BAND (the line a translation is
@@ -48,6 +51,7 @@
 // direction's band and room, ROOM_MAX at most.
 //
 // Pure arithmetic over the pages; an original module (no port statement).
+import { BAND_MAX } from '../layer-proto/figure-rows.mjs'
 import { classifyFont } from '../layer-proto/fonts.mjs'
 import { PICTURE_END, PICTURE_START } from './ink.mjs'
 
@@ -95,8 +99,10 @@ const UNREAD = /[\uE000-\uF8FF\uFFFD\p{Cc}]|[\u{F0000}-\u{10FFFF}]/u
 
 /**
  * A page's glyphs as one stream, level and turned, in the order the content shows them (by show and place in it), each with its
- * frame: origin (ox, oy), end (ex, ey), direction (ux, uy), size, its band's ascent and descent in em, its font, fill, whether
- * it is shown in a form, its picture depth, and its owner's group (level glyphs alone are owned: own.mjs reads no turned glyph)
+ * frame: origin (ox, oy), end (ex, ey), direction (ux, uy), size, its band's ascent and descent in em, its own ink up and down
+ * from its baseline in em (`up`, `down`: a level glyph's band is its ink; a turned glyph's band is its font's, its ink pageInk's
+ * `up` and `down`), its font, fill, whether it is shown in a form, its picture depth, and its owner's group (level glyphs alone
+ * are owned: own.mjs reads no turned glyph)
  */
 function streamOf(pg, owners) {
   const G = pg.glyphs ?? [], T = pg.turned ?? [], P = pg.pictures ?? []
@@ -109,12 +115,13 @@ function streamOf(pg, owners) {
     for (; q < P.length && P[q].glyph <= g; q++) { const nm = P[q].name; if (nm === PICTURE_START) d++; else if (nm === PICTURE_END) d = Math.max(0, d - 1) }
     const x = G[g]
     if (!(x.n >= 0)) continue
-    out.push({ i: g, turned: false, n: x.n, k: x.k, u: x.u ?? '', blank: !!x.blank || !/\S/u.test(x.u ?? ''), ox: x.x0, oy: x.y, ex: x.x1, ey: x.y, ux: 1, uy: 0, size: x.size, ascent: (x.top - x.y) / Math.max(x.size, 1e-6), descent: (x.bottom - x.y) / Math.max(x.size, 1e-6), font: x.font, fill: x.fill ?? 0, form: !!x.form, picture: d, owner: owners?.[g] ?? null, ink: [x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top], clipped: !!x.clipped, fid: x.fid ?? 0, pid: x.pid ?? 0 })
+    const ascent = (x.top - x.y) / Math.max(x.size, 1e-6), descent = (x.bottom - x.y) / Math.max(x.size, 1e-6)
+    out.push({ i: g, turned: false, n: x.n, k: x.k, u: x.u ?? '', blank: !!x.blank || !/\S/u.test(x.u ?? ''), ox: x.x0, oy: x.y, ex: x.x1, ey: x.y, ux: 1, uy: 0, size: x.size, ascent, descent, up: ascent, down: descent, font: x.font, fill: x.fill ?? 0, form: !!x.form, picture: d, owner: owners?.[g] ?? null, ink: [x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top], clipped: !!x.clipped, fid: x.fid ?? 0, pid: x.pid ?? 0 })
   }
   T.forEach((t, j) => {
     if (!(t.n >= 0)) return
     const picture = depthAtPoint[Math.min(Math.max(t.pt ?? 0, 0), P.length)]
-    out.push({ i: j, turned: true, n: t.n, k: t.k, u: t.u ?? '', blank: !!t.blank || !/\S/u.test(t.u ?? ''), ox: t.ox, oy: t.oy, ex: t.ex, ey: t.ey, ux: t.ux, uy: t.uy, size: t.size, ascent: t.ascent, descent: t.descent, font: t.font, fill: t.fill ?? 0, form: !!t.form, picture, owner: null, box: t.box, clipped: !!t.clipped, fid: t.fid ?? 0, pid: t.pid ?? 0 })
+    out.push({ i: j, turned: true, n: t.n, k: t.k, u: t.u ?? '', blank: !!t.blank || !/\S/u.test(t.u ?? ''), ox: t.ox, oy: t.oy, ex: t.ex, ey: t.ey, ux: t.ux, uy: t.uy, size: t.size, ascent: t.ascent, descent: t.descent, up: Number.isFinite(t.up) ? t.up : t.ascent, down: Number.isFinite(t.down) ? t.down : t.descent, font: t.font, fill: t.fill ?? 0, form: !!t.form, picture, owner: null, box: t.box, clipped: !!t.clipped, fid: t.fid ?? 0, pid: t.pid ?? 0 })
   })
   out.sort((a, b) => a.n - b.n || a.k - b.k)
   return out
@@ -143,13 +150,14 @@ function inFrame(f, b) {
  * anticlockwise), x, y (its first glyph's origin), ux, uy, length (its box along its direction), ascent, descent (its band, em),
  * anchor ('start' | 'centre' | 'end'), form, why (null, or 'crowded') }; `glyphs[p - 1]` a Map of a level glyph's index to its
  * unit's k and `turned[p - 1]` of a turned glyph's, and each unit's set and room (setsOf, roomsOf: `set`, its set's first
- * unit's k; `before`, `after`, PDF units); `stats` { units, crowded, letters, runs, sets, grouped, aligned }
+ * unit's k; `before`, `after`, PDF units); `stats` { units, crowded, letters, runs, past, clipped, outsized, sets, grouped,
+ * aligned }
  */
 export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, unitsDoc = FIGURE_UNITS_DOC } = {}) {
   const fam = new Map()
   const famOf = name => { let f = fam.get(name); if (f === undefined) { f = classifyFont(name ?? '').fam; fam.set(name, f) } return f }
   const units = [], glyphMaps = [], turnedMaps = []
-  const stats = { units: 0, crowded: 0, letters: 0, runs: 0, past: 0, clipped: 0, sets: 0, grouped: 0, aligned: 0 }
+  const stats = { units: 0, crowded: 0, letters: 0, runs: 0, past: 0, clipped: 0, outsized: 0, sets: 0, grouped: 0, aligned: 0 }
   pages.forEach((pg, pi) => {
     // (the page's text lines a unit's column is read from, made once a page and call, of this call's owners)
     let lines = null
@@ -196,6 +204,10 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       // (a run its clip cuts, or its page's edge, whole or in part, is not shown whole: no text a translation could stand for,
       // and a row whose origin is off its page no part's reader takes, figure-rows.mjs checkFigures)
       if (r.clipped || gs.some(x => offPage(x.ox, x.oy) || offPage(x.ex, x.ey))) { stats.clipped++; continue }
+      // (a run a glyph of which stands past BAND_MAX of its size from its baseline is not set at its size: its glyphs are drawn at a
+      // scale its size does not tell (2608.08481v1's OriginLab faces, 7 of it tall), a translation drawn at its size would be a
+      // tenth of the original, and its row's band no part's reader takes, figure-rows.mjs checkFigures)
+      if (gs.some(x => !(x.up <= BAND_MAX && x.down >= -BAND_MAX))) { stats.outsized++; continue }
       if (onPage >= unitsPage || units.length >= unitsDoc) { stats.past++; continue }
       const f = r.frame, first = gs[0]
       const s0 = 0, s1 = Math.max(...gs.map(x => along(f, x.ex, x.ey)))

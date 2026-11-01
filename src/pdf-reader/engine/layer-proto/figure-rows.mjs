@@ -22,8 +22,11 @@ const GROUP_MAX = 1_000_000
 export const ANCHORS = Object.freeze(['start', 'centre', 'end'])
 /** a font's name in a row at most, in code units */
 export const FONT_NAME_MAX = 64
-/** a unit's size at most, PDF units, and its band's ascent and descent at most, em */
-const SIZE_MAX = 1000, BAND_MAX = 4
+/** a unit's size at most, PDF units */
+const SIZE_MAX = 1000
+/** a unit's band's ascent and descent at most, em: past it no glyph stands at the size the unit is drawn at (layout/figure-text.mjs
+ *  cuts no unit of such glyphs) */
+export const BAND_MAX = 4
 /** an origin lies within its page's view by this, PDF units */
 const SLACK = 1
 const r3 = v => Math.round(v * 1000) / 1000

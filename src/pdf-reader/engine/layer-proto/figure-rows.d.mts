@@ -9,6 +9,8 @@ export declare const FIGURE_ROW: number
 export declare const FIGURE_ROW_10: number
 export declare const ANCHORS: readonly ['start', 'centre', 'end']
 export declare const FONT_NAME_MAX: number
+/** a unit's band's ascent and descent at most, em */
+export declare const BAND_MAX: number
 export declare function figureGroupOf(k: number): string
 export declare function figureRow(id: number, u: Pick<FigureUnit, 'group' | 'page' | 'x' | 'y' | 'ux' | 'uy' | 'length' | 'size' | 'ascent' | 'descent' | 'anchor' | 'fill' | 'font'> & Partial<Pick<FigureUnit, 'set' | 'before' | 'after'>>): FigureRowWire
 export declare function checkFigures(rows: unknown, o: { a: number; b: number; views: readonly number[]; unitCount: number; format?: string | null }): readonly FigureRow[]
