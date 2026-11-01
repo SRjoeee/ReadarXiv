@@ -408,7 +408,20 @@
 //     its own source's text, its final pass's page ends arXiv's on all 26 pages, in three compiles. Raised so: 13 units change,
 //     and 23 the same but for their pairs' numbers. A copy of 50 carries every unit it holds the source of (live.mjs
 //     PIPELINE_CARRIES), a unit renumbered by the pairs found again (cache.mjs seedFrom)
-export const PIPELINE_VERSION = '51'
+// 52 (the follow-ups of #546, 2026-11-02): a paper's environment whose begin code begins a table it does not end, and whose end
+//     code ends it, is that table (latex-front.mjs tableWrapsOf: the tabular family in either spelling, \begin{tabularx}{…} or
+//     \tabularx{…}): its body's cells units of their own in its grid, as a table's are. 2610.40576v1's casetable begins a tabularx
+//     and its header row; read as a container, its body was one paragraph across its rows, our marks between a row's end and the
+//     next row's \specialrule: 18 TeX errors, two guard compiles a prepare that changed nothing, and three of its 19 pages set
+//     otherwise than its own source sets them. And a macro of the paper's with parameters whose body ends a row after what it sets
+//     (rowEndsAfterOf: casetable's \cseg{…}{…}, 2608.13505v1's \SubTableTitle, 2608.30782v1's \resultgroup, 2610.39467v1's
+//     \categorysectionrow) is a row of its own, its text a cell inside its group, the row ended after the call (the walk,
+//     tableGrid): its text ran on into the next row's first cell before ("Multi-step / flexible-step methods StableSR"). Of 231
+//     local sources these four change, 56 units, 36 of them casetable's cells; the other 227's units and marked originals are 51's
+//     byte for byte, and the three others' marked compiles set the same text on every page. 2610.40576v1's marked original now has
+//     no error, its text page for page its own source's, and costs no guard compile. Raised so. A copy of 51 carries every unit
+//     it holds the source of (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '52'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
