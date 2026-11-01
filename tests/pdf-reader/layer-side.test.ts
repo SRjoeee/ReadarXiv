@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { type Ref, writePart } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { PDF_OPTIONS } from '@/pdf-reader/engine/layer-proto/run.mjs'
-import { AHEAD_IDLE_MS, AHEAD_PAGES, createLayerSide, IOS_KEEP_PIXELS, KEEP_PIXELS, keepBudget, LEFT_RETRY_MS, noLayoutPage, onIos, PAGE_MS, SPREAD_MAX, spreadPages } from '@/pdf-reader/engine/view/layer-side.mjs'
+import { AHEAD_PAGES, createLayerSide, IOS_KEEP_PIXELS, KEEP_PIXELS, keepBudget, LEFT_RETRY_MS, noLayoutPage, onIos, PAGE_MS, SPREAD_MAX, spreadPages } from '@/pdf-reader/engine/view/layer-side.mjs'
 import { type DocumentTask, internalsOf, type ViewEvent } from '@/pdf-reader/engine/view/reader-view.mjs'
 import { made, N, ORIG, partInputs } from './helpers/format-paper'
 import { ASSETS, clientOf, FakeIO, FakePDFPageView, FakePDFViewer, fakeDoc, fakeTask, flush } from './helpers/reader-fakes'
@@ -428,22 +428,26 @@ describe('no flash coming back: the drawings kept off the view (KEEP_PIXELS, §1
   })
 })
 
-describe('the pages ahead: laid while the reader rests, kept off the view (AHEAD_PAGES, §11.8)', () => {
-  it('once the rows have ended and the view rests AHEAD_IDLE_MS, the pages after the near ones are laid and drawn off the view; coming near they are put back at once', async () => {
-    const s = await setup({ door: { rows: 'gate' } })
+describe('the pages ahead: laid the way the reader moves, while it scrolls as at rest, kept off the view (AHEAD_PAGES, §11.8)', () => {
+  /** the view's pages laid, the rows taken and ended (`end`), the pages ahead not asked yet */
+  async function rows(s: Setup, near: number[], end = true) {
     const m = await M()
-    await nearOn(s, [1])
+    await nearOn(s, near)
     s.side.tell(await ALL())
     s.side.take(m.index.units.map((_, id) => rowOf(id)))
+    if (end) s.side.end()
     await settle(s)
+  }
+  const scroll = (s: Setup) => { s.panes.right.scrollTop += 10; s.panes.right.dispatchEvent(new Event('scroll')) }
+
+  it('once the rows have ended, the pages past the near ones are laid in idle time and drawn off the view; coming near they are put back at once', async () => {
+    const s = await setup({ door: { rows: 'gate' } })
+    await rows(s, [1], false)
     expect(content(s, 1)).toBe('layer')
     // (no lay ahead before the rows end: a host that translates as it shows is asked for nothing)
-    await s.clock.advance(AHEAD_IDLE_MS + 100)
-    await settle(s)
+    await settle(s, 60)
     expect(s.side.probe().ahead).toBe(0)
     s.side.end()
-    await settle(s, 4)
-    await s.clock.advance(AHEAD_IDLE_MS + 100)
     await settle(s, 60)
     expect(s.side.probe()).toMatchObject({ ahead: AHEAD_PAGES, aheadKept: AHEAD_PAGES, drawings: AHEAD_PAGES })
     expect(content(s, 2)).toBe('none')
@@ -454,36 +458,71 @@ describe('the pages ahead: laid while the reader rests, kept off the view (AHEAD
     expect(s.side.probe().asked).toBe(asked)
   })
 
-  it('a scroll during the rest puts the pages ahead off: none is asked until the view rests again', async () => {
-    const s = await setup({ door: { rows: 'gate' } })
-    const m = await M()
-    await nearOn(s, [1])
-    s.side.tell(await ALL())
-    s.side.take(m.index.units.map((_, id) => rowOf(id)))
+  it('a scroll gives nothing up: the pages ahead are laid while the reader scrolls, and the window moves on with the near places', async () => {
+    // (one page ahead: the format paper's page 4 is the original's, no part laying it, so the window is page 2, then page 3)
+    const s = await setup({ door: { rows: 'gate' }, ahead: 1 })
+    await rows(s, [1], false)
     s.side.end()
+    // (scrolled all the while: the page ahead laid all the same)
+    for (let i = 0; i < 20; i++) { scroll(s); await settle(s, 3) }
+    expect(s.side.probe()).toMatchObject({ ahead: 1, aheadKept: 1 })
+    // the reader moves down a page: page 2 put back as it was, page 1 gone far; the window is page 3 now
+    await nearOn(s, [2])
+    await nearOn(s, [1], false)
+    for (let i = 0; i < 20; i++) { scroll(s); await settle(s, 3) }
+    expect(content(s, 2)).toBe('layer')
+    expect(s.side.probe()).toMatchObject({ ahead: 2, aheadKept: 2 })
+    // page 3 comes near laid: no page of the view asked of the door
+    const asked = s.side.probe().asked as number
+    await nearOn(s, [3])
+    expect(content(s, 3)).toBe('layer')
     await settle(s)
-    const ahead = s.side.probe().ahead as number
-    expect(ahead).toBe(0)
-    for (let i = 0; i < 4; i++) {
-      s.panes.right.scrollTop = 10 + i
-      s.panes.right.dispatchEvent(new Event('scroll'))
-      await s.clock.advance(AHEAD_IDLE_MS / 2)
-    }
-    expect(s.side.probe().ahead).toBe(ahead)
-    await s.clock.advance(AHEAD_IDLE_MS + 100)
+    expect(s.side.probe().asked).toBe(asked)
+  })
+
+  it('the reader moving up: the pages above the near ones are laid', async () => {
+    const s = await setup({ door: { rows: 'gate' } })
+    await rows(s, [3, 4])
+    // (down the paper by default: nothing past page 4)
+    await settle(s, 30)
+    expect(s.side.probe().ahead).toBe(0)
+    // page 2 comes near and page 4 goes far: the reader moves up; page 2 laid as a page of the view, then page 1 ahead
+    await nearOn(s, [2])
+    await nearOn(s, [4], false)
     await settle(s, 60)
-    expect(s.side.probe().ahead as number).toBeGreaterThan(0)
+    expect(content(s, 2)).toBe('layer')
+    expect(s.side.probe()).toMatchObject({ ahead: 1, aheadKept: 1 })
+    expect(content(s, 1)).toBe('none')
+    await nearOn(s, [1])
+    expect(content(s, 1)).toBe('layer')
+  })
+
+  it('a page of the view asked gives the pages ahead up, their copy under way let go; they are laid again once the view\'s pages are in place', async () => {
+    let release = () => {}
+    const held = new Promise<void>(ok => { release = ok })
+    const s = await setup({ door: { rows: 'gate' }, ahead: 1, copyHold: n => (n === 2 ? held : null) })
+    await rows(s, [1])
+    // page 2's copy ahead under way (held)
+    await settle(s, 30)
+    expect(s.side.probe()).toMatchObject({ ahead: 1, aheadKept: 0 })
+    expect(s.doors[0]?.copies.filter(c => c[0] === 2).length).toBe(1)
+    // page 2 comes near before its copy is drawn: asked of the door as a page of the view, the copy ahead given up
+    const asked = s.side.probe().asked as number
+    await nearOn(s, [2])
+    expect(s.side.probe().asked).toBe(asked + 1)
+    release()
+    await settle(s, 60)
+    expect(content(s, 2)).toBe('layer')
+    // (its copy ahead let go, never kept: the page's own commit drew the one in place)
+    expect(s.doors[0]?.copies.filter(c => c[0] === 2).length).toBe(2)
+    // and the pages ahead laid again once it is in place: page 3
+    expect(s.side.probe()).toMatchObject({ ahead: 2, aheadKept: 1 })
+    expect(content(s, 3)).toBe('none')
   })
 
   it('ahead: 0 lays none', async () => {
     const s = await setup({ door: { rows: 'gate' }, ahead: 0 })
-    const m = await M()
-    await nearOn(s, [1])
-    s.side.tell(await ALL())
-    s.side.take(m.index.units.map((_, id) => rowOf(id)))
-    s.side.end()
-    await settle(s)
-    await s.clock.advance(AHEAD_IDLE_MS + 100)
+    await rows(s, [1])
     await settle(s, 60)
     expect(s.side.probe()).toMatchObject({ ahead: 0, drawings: 0 })
   })
@@ -1141,9 +1180,10 @@ describe("the reader's toggles (setClasses, docs/route/orphan-text.md §8)", () 
 
 describe('another target over the same layer (retarget)', () => {
   const svgLang = (s: Setup, n: number) => layerOf(s, n)?.querySelector('svg')?.getAttribute('lang') ?? null
-  /** the side open on its first target (zh), pages 1 and 2 near and laid with its rows */
-  async function laid() {
-    const s = await setup({ door: { rows: 'gate' } })
+  /** the side open on its first target (zh), pages 1 and 2 near and laid with its rows (`ahead`: the pages laid ahead, the side's
+   *  own by default) */
+  async function laid(ahead?: number) {
+    const s = await setup({ door: { rows: 'gate' }, ...(ahead === undefined ? {} : { ahead }) })
     const m = await M()
     await nearOn(s, [1, 2])
     s.side.tell(await ALL())
@@ -1178,7 +1218,8 @@ describe('another target over the same layer (retarget)', () => {
   })
 
   it('lets the door before go at once: a copy of it under way is aborted and never put in place', async () => {
-    const { s, m } = await laid()
+    // (none laid ahead: page 3 is asked as it comes near, its copy drawn then)
+    const { s, m } = await laid(0)
     // (page 3's copy by the first door held at its render)
     const doc = (await s.composed[0]!.task.promise) as unknown as { getPage(n: number): Promise<object> }
     const get = doc.getPage.bind(doc)

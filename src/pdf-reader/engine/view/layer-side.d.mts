@@ -32,7 +32,8 @@ export interface LayerSideOptions {
   openLayer?: typeof openLayer
   /** the most device pixels of laid pages' drawings kept off the view (this device's keepBudget by default; 0 keeps none) */
   keepPixels?: number
-  /** how many pages past the near ones are laid ahead while the reader rests (AHEAD_PAGES by default; 0 lays none) */
+  /** how many pages past the near ones are laid ahead, the way the reader moves, while it scrolls as at rest (AHEAD_PAGES by
+   *  default; 0 lays none) */
   ahead?: number
 }
 export interface LayerSide {
@@ -90,10 +91,9 @@ export declare function keepBudget(o?: { deviceMemory?: number; screenPixels?: n
 export declare const IOS_KEEP_PIXELS: number
 /** whether the browser runs on iOS or iPadOS */
 export declare function onIos(nav?: { userAgent?: string; maxTouchPoints?: number } | null): boolean
-/** how many pages past the near ones are laid ahead while the reader rests, once the rows have ended */
+/** how many pages past the near ones are laid ahead, the way the reader moves, once the rows have ended: in the main thread's idle
+ *  periods, while no page of the view is asked of the door */
 export declare const AHEAD_PAGES: number
-/** how long the view rests before the pages ahead are laid, ms */
-export declare const AHEAD_IDLE_MS: number
 /** the translating card's padding where the sheet gives none (engine.css --axt-tr-pad-x and -pad-y), CSS pixels at the reader's 100 % */
 export declare const PAD_X: number
 export declare const PAD_Y: number
