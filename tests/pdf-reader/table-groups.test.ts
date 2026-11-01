@@ -35,6 +35,10 @@ describe('tableGrid: a table body as its cells lay it out', () => {
     const body = '\\specialrule{1pt}{-1pt}{0pt}\n{\\bf Parser} & {\\bf F1} \\\\ \\cmidrule(lr){1-2}\nA & 1 \\\\\n\\hline\nB & 2 \\\\ C & 3 \\\\ D & 4'
     expect(grid(body).filter(c => c.head).map(c => c.row)).toEqual([0, 0, 1, 1])
   })
+  it('colortbl\'s \\rowcolor is a row\'s colour with its overhangs, no cell: a row of it alone holds nothing, and the header is the rows above the rule that hold any (2610.40394v1)', () => {
+    const body = '\\rowcolor{gray!15}[0pt][0pt]\n\\multicolumn{2}{l}{Head words} \\\\\n\\rowcolor{gray!15}[0pt][0pt]\n\\\\\n\\hline\nA & B \\\\\nC & D \\\\\nE & F \\\\'
+    expect(grid(body).filter(c => c.head).map(c => [c.row, c.col])).toEqual([[0, 0]])
+  })
   it('no rule after the first rows, or one with no fewer rows below it than above: no header', () => {
     expect(grid('A & B \\\\ c & d \\\\ e & f').some(c => c.head)).toBe(false)
     expect(grid('\\toprule A & B \\\\ c & d \\\\ \\midrule e & f \\\\ \\bottomrule').some(c => c.head)).toBe(false)

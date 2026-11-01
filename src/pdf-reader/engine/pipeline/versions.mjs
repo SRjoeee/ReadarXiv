@@ -391,7 +391,24 @@
 //     gone (the ink units after them numbered one on), 9 label rows kept that #541's rule dropped under them, no source unit's
 //     text group moved; 216 of 216 local sources hash for hash. A copy of 49 carries every unit (live.mjs PIPELINE_CARRIES), a
 //     figure unit or an ink unit found again by its source (cache.mjs seedFrom)
-export const PIPELINE_VERSION = '50'
+// 51 (2610.37818v1 on staging, 2026-11-01: refused whole, its marked original 27 pages to arXiv's 26, after four compiles of
+//     171 s of the box's CPU): nothing of ours is written where TeX reads it as an argument of the paper's. An argument after one
+//     whose walk ended the paragraph is walked as a body is (latex-front.mjs walkArgs): the \input in \IfFileExists{…}{\input{…}}{…}'s
+//     second argument ended it, and the third began a unit at its brace, whose line probe TeX took for the branch it drops, so
+//     that it set the one the paper never sets: 2610.37818v1's \figph placeholder under Figure 6, the figure a box taller and on
+//     the next page, the paper a page longer; 2608.23393v1's "[run experiments]" five times on its base page, its lines moved on
+//     8 of 20 pages, its page count arXiv's, so that nothing refused it. An environment of no parameter whose begin code ends by
+//     beginning another takes that one's parameters (envDefs: ieeecolor's IEEEbiography begins its biography[2][], and
+//     2610.30034v1's three biographies set digits before their names). colortbl's \rowcolor takes its overhangs
+//     (arg-roles.mjs CURATED: 2610.40394v1's `[0pt][0pt]` began its rows' units, three "Misplaced \omit"). And a control word the
+//     source ends with a comment before a word is written back with a space after it (patch: 2610.40394v1's
+//     `\bfseries%⏎Youqing`, written \bfseriesYouqing, four TeX errors and its authors' names gone from the base page; the
+//     guard's two compiles found no unit to blame either). Of 231 local sources these four change; the other 227's units,
+//     marked originals and probe files are 50's byte for byte. 2610.37818v1's marked original now stands at once, page for page
+//     its own source's text, its final pass's page ends arXiv's on all 26 pages, in three compiles. Raised so: 13 units change,
+//     and 23 the same but for their pairs' numbers. A copy of 50 carries every unit it holds the source of (live.mjs
+//     PIPELINE_CARRIES), a unit renumbered by the pairs found again (cache.mjs seedFrom)
+export const PIPELINE_VERSION = '51'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
