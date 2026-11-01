@@ -424,7 +424,8 @@
 // 53 (the last of #546's notes, 2026-11-02): a comment's line end the walk passes over is written back as TeX reads it. TeX ends a
 //     line at its comment and skips the next line's indent (state N); the walk's next text piece holds that indent, and written
 //     back from the pieces it was a space where the paper has none. The pieces stay as they are, so that no unit's hash moves
-//     (latex-front.mjs SKIPPED: the indent's length beside the piece, kept through flush; patch writes the piece without it).
+//     (latex-front.mjs SKIPPED: the indent's length beside the piece, kept through flush; patch writes the piece without it;
+//     none in a paper that makes the space active).
 //     Of 231 local sources every unit is 52's hash for hash; the marked originals of 55 change, 272 runs of spaces and tabs
 //     written no more, of which 265 TeX read as nothing (after white space, a control word, or at a line's end) and 7, on 4
 //     papers, as a space. Compiled: 2608.30640v1's (`performance.%⏎    }`) and 2610.39617v1's (`{%⏎    \includegraphics`) marked

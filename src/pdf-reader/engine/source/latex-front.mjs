@@ -1009,17 +1009,36 @@ function displayOutside(pieces, displays, macros) {
  * the comment, so a piece's text holds that indent where the line end was, and written back from the pieces the indent
  * was a space TeX set where the paper has none (`hyphen-%⏎  ated` written `hyphen-  ated`; 2608.30640v1's `performance.%⏎    }`,
  * 2610.39617v1's `{%⏎    \\includegraphics`). Kept beside the pieces, never in them, so that no unit's pieces and no hash move:
- * patch writes such a piece without its indent. Keyed by the piece object, carried where flush makes a piece anew of it
+ * patch writes such a piece without its indents. Keyed by the piece object, each indent [offset, length] in the text patch
+ * writes of it (its `src` where it has one, else its `s`), carried where flush makes pieces anew of it: a piece joined with
+ * a letter's (joinLetters), cut around an address or a number (keepAddresses, escapedLocals, keepNumbers), transcoded
  */
 const SKIPPED = new WeakMap()
-/** `q`, made of `p`, keeps the indent TeX skips at `p`'s start (SKIPPED) */
-const skipsAsBefore = (p, q) => { const k = SKIPPED.get(p); if (k && q !== p) SKIPPED.set(q, k); return q }
+/** whether a paper makes the space character active anywhere (\\obeyspaces, a \\catcode of the space set to 13): there TeX reads
+ *  a line's indent after a comment as active spaces, not as nothing, and the walk keeps every indent (SKIPPED stays empty) */
+const activeSpacesIn = texts => texts.some(t => /\\obeyspaces(?![A-Za-z@])|\\catcode\s*(?:`\\? |32\b|"20\b|'40\b)\s*=?\s*13\b/.test(uncommented(t)))
+/** the text patch writes of a piece */
+const written = p => p.src ?? p.s
+/** `q`, the text `p` writes from `from` to `to` (written), keeps the indents TeX skips there (SKIPPED) */
+const sliceSkips = (p, q, from = 0, to = written(p).length) => {
+  const r = SKIPPED.get(p)
+  if (!r || q === p) return q
+  const kept = r.filter(([o, n]) => o >= from && o + n <= to).map(([o, n]) => [o - from, n])
+  if (kept.length) SKIPPED.set(q, kept)
+  return q
+}
+/** `q`, the text of `a` and then `b` (joinLetters), keeps the indents TeX skips in either */
+const joinSkips = (a, b, q) => {
+  const r = [...(SKIPPED.get(a) ?? []), ...(SKIPPED.get(b) ?? []).map(([o, n]) => [o + written(a).length, n])]
+  if (r.length) SKIPPED.set(q, r)
+  return q
+}
 class Builder {
   constructor(file, units, src = '', macros = new Map(), floats = null) { this.file = file; this.units = units; this.src = src; this.macros = macros; this.floats = floats; this.cur = null; this.pairId = 0; this.displays = new WeakSet() }
   text(s, start, end) {
     if (!this.cur) { if (!s.trim()) return; this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] } }
     const p = { t: 'text', s }, skip = start === this.lineAfterComment ? /^[ \t]*/.exec(s)[0].length : 0
-    if (skip) SKIPPED.set(p, skip)
+    if (skip) SKIPPED.set(p, [[0, skip]])
     this.cur.pieces.push(p); this.cur.end = end
   }
   /** `display`: a formula set on lines of its own (displayOutside) */
@@ -1037,7 +1056,7 @@ class Builder {
     // (a file that is not UTF-8: each text piece as UTF-8, `src` its own bytes, which patch writes back, before its letters join it)
     // (an entry's numbers kept before its letters join their words: a number between two letters of a kernel's command or an
     // accent, `S{\\o}ren. 2020. The {\\O}resund study.`, stands in a joined piece whose source keepNumbers cannot cut)
-    const read = keepAddresses(u.pieces).map(p => { if (p.t !== 'text' || p.src !== undefined) return p; const t = asEngineText(this.file, p.s); return t === p.s ? p : skipsAsBefore(p, { t: 'text', s: t, src: p.s }) })
+    const read = keepAddresses(u.pieces).map(p => { if (p.t !== 'text' || p.src !== undefined) return p; const t = asEngineText(this.file, p.s); return t === p.s ? p : sliceSkips(p, { t: 'text', s: t, src: p.s }) })
     u.pieces = joinLetters(BIB_KINDS.has(u.kind) ? keepNumbers(read) : read)
     // trim placeholders and whitespace at both ends out of the unit: they stay in the source untouched
     const letters = u.pieces.filter(p => p.t === 'text').map(p => p.s).join('')
@@ -1069,7 +1088,7 @@ const joinLetters = pieces => {
   const out = []
   for (const p of pieces) {
     const last = out.at(-1)
-    if (p.t === 'text' && last?.t === 'text' && (p.src !== undefined || last.src !== undefined)) out[out.length - 1] = skipsAsBefore(last, { t: 'text', s: last.s + p.s, src: (last.src ?? last.s) + (p.src ?? p.s) })
+    if (p.t === 'text' && last?.t === 'text' && (p.src !== undefined || last.src !== undefined)) out[out.length - 1] = joinSkips(last, p, { t: 'text', s: last.s + p.s, src: (last.src ?? last.s) + (p.src ?? p.s) })
     else out.push(p)
   }
   return out
@@ -1094,9 +1113,9 @@ function escapedLocals(pieces) {
       const rest = tail?.t === 'text' && tail.src === undefined ? /^[\w.+-]*@[\w-]+(?:\.[\w-]+)+/.exec(tail.s)?.[0] : null
       if (rest) {
         const before = out.pop(), head = /[\w.+-]+$/.exec(before.s)[0]
-        if (before.s.length > head.length) out.push({ ...before, s: before.s.slice(0, -head.length) })
+        if (before.s.length > head.length) out.push(sliceSkips(before, { ...before, s: before.s.slice(0, -head.length) }, 0, before.s.length - head.length))
         out.push({ t: 'ph', src: head + pieces.slice(k, j + 1).map(x => x.src ?? x.s).join('') + rest })
-        if (tail.s.length > rest.length) out.push({ ...tail, s: tail.s.slice(rest.length) })
+        if (tail.s.length > rest.length) out.push(sliceSkips(tail, { ...tail, s: tail.s.slice(rest.length) }, rest.length))
         k = j + 1
         continue
       }
@@ -1118,7 +1137,7 @@ function keepAddresses(pieces) {
     const domain = after?.t === 'text' && AT_DOMAIN.exec(after.s)?.[0]
     if (p.t === 'ph' && p.src === '\\{' && names?.t === 'text' && shut?.t === 'ph' && shut.src === '\\}' && domain) {
       lists.push({ t: 'ph', src: p.src + names.s + shut.src + domain })
-      if (after.s.length > domain.length) lists.push({ ...after, s: after.s.slice(domain.length) })
+      if (after.s.length > domain.length) lists.push(sliceSkips(after, { ...after, s: after.s.slice(domain.length) }, domain.length))
       k += 3
     } else lists.push(p)
   }
@@ -1127,11 +1146,11 @@ function keepAddresses(pieces) {
     const out = []
     let at = 0
     for (const m of p.s.matchAll(EMAIL)) {
-      if (m.index > at) out.push({ ...p, s: p.s.slice(at, m.index) })
+      if (m.index > at) out.push(sliceSkips(p, { ...p, s: p.s.slice(at, m.index) }, at, m.index))
       out.push({ t: 'ph', src: m[0] })
       at = m.index + m[0].length
     }
-    if (at < p.s.length) out.push({ ...p, s: p.s.slice(at) })
+    if (at < p.s.length) out.push(sliceSkips(p, { ...p, s: p.s.slice(at) }, at))
     return out
   })
 }
@@ -1611,7 +1630,7 @@ function walk(s, from, to, b, ctx) {
     // a comment takes its line's end with it; a blank line after it is still \\par, as TeX reads it (`text % note`, then
     // an empty line: two paragraphs, which one unit set as one)
     // (where the next line begins, the indent TeX skips there: Builder.text, SKIPPED)
-    if (c === '%') { endText(); i = skipComment(s, i) + 1; b.lineAfterComment = i; let k = i; while (k < to && (s[k] === ' ' || s[k] === '\t')) k++; if (k < to && s[k] === '\n' && b.cur) { b.flush(); i = k + 1 } continue }
+    if (c === '%') { endText(); i = skipComment(s, i) + 1; if (!ctx.activeSpaces) b.lineAfterComment = i; let k = i; while (k < to && (s[k] === ' ' || s[k] === '\t')) k++; if (k < to && s[k] === '\n' && b.cur) { b.flush(); i = k + 1 } continue }
     if (c === '\n') {
       // blank line: paragraph break
       let k = i + 1; while (k < to && (s[k] === ' ' || s[k] === '\t')) k++
@@ -2383,7 +2402,7 @@ function keepNumbers(pieces) {
     const at = i => (i <= head ? i : i >= n - tail ? i + d : -1)
     const part = (x, y) => {
       const t = p.s.slice(x, y), from = src.slice(at(x), at(y)), { src: _, ...plain } = p
-      return from === t ? { ...plain, s: t } : { ...p, s: t, src: from }
+      return sliceSkips(p, from === t ? { ...plain, s: t } : { ...p, s: t, src: from }, at(x), at(y))
     }
     const out = []
     let last = 0
@@ -2624,7 +2643,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   // which is biblatex's data — \\entry, \\field — and no text, which \\bibliography, biblatex's alias of \\addbibresource, never reads)
   const bblName = `${jobName(mainFile.rel)}.bbl`, bblBytes = fsys.read(bblName)
   const bbl = bblBytes && /\\begin\s*\{thebibliography\}/.test(texText(bblBytes)) ? bblName : null
-  const ctx = { rowEnds: rowEndsOf(sources.map(sourceText)), rowEndsAfter: rowEndsAfterOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), tableWraps: tableWrapsOf(ownTexts), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], backref: backrefOf(ownTexts), ...tblrOf(sources.map(sourceText)) }
+  const ctx = { rowEnds: rowEndsOf(sources.map(sourceText)), rowEndsAfter: rowEndsAfterOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), tableWraps: tableWrapsOf(ownTexts), activeSpaces: activeSpacesIn(sources.map(sourceText)), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], backref: backrefOf(ownTexts), ...tblrOf(sources.map(sourceText)) }
   const scan = { lineEnvs, ifs, ifValues }
   let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;
@@ -2773,9 +2792,13 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
     // a source's text as the source writes it: a letter an accent made (Builder.letter) is the accent again
     // (backref's list, BACKREF_LIST, is no byte of the source: written as nothing; the marked original's copy holds its marks instead)
     // (and a piece that begins a line after a comment's line end without the indent TeX skips there: SKIPPED)
-    const pieces = (translated.get(u) ?? u.pieces).filter(p => !(p.t === 'ph' && p.src === BACKREF_LIST)).map(p => {
-      const q = p.t === 'text' && !p.tr && p.src !== undefined ? { ...p, s: p.src } : p, k = p.t === 'text' && !p.tr ? SKIPPED.get(p) : 0
-      return k ? { ...q, s: q.s.slice(k) } : q
+    // (a piece the indents leave empty writes nothing and is no piece: the control word before it meets the text after it)
+    const pieces = (translated.get(u) ?? u.pieces).filter(p => !(p.t === 'ph' && p.src === BACKREF_LIST)).flatMap(p => {
+      const q = p.t === 'text' && !p.tr && p.src !== undefined ? { ...p, s: p.src } : p, r = p.t === 'text' && !p.tr ? SKIPPED.get(p) : null
+      if (!r) return [q]
+      let t = q.s
+      for (const [o, n] of [...r].sort((x, y) => y[0] - x[0])) t = t.slice(0, o) + t.slice(o + n)
+      return t ? [{ ...q, s: t }] : []
     })
     const m = mark?.(u)
     // before the first word, inside any font command's group (nothing precedes it there to kern with); before an
