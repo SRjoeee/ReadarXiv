@@ -993,6 +993,13 @@ describe("the class's own marks after a unit's text: a theorem's note (2610.2108
     expect(of([text('a value~\\%).')])).toEqual(['%', ')', '.'])
     expect(of([text('see '), { t: 'open', id: 1, src: '\\emph{' }, text('this'), { t: 'close', id: 1, src: '}' }, text(' ')])).toEqual([])
     expect(of([text('Theorem.'), ph])).toEqual([])
+    // (a placeholder whose rendering is no letter or digit, never looked for on the page ("\\%"): its ink stands among the marks
+    // after the unit's last content, as many as its source does not tell; no tail is read after it, null: 1512.03385v1's
+    // "14.4\\%." and "(\\%)" would have drawn the source's own stop or bracket a second time)
+    expect(of([text('error is 14.4'), { t: 'ph', src: '\\%' }, text('.')])).toBeNull()
+    expect(of([text('error ('), { t: 'ph', src: '\\%' }, text(') ')])).toBeNull()
+    // (one that sets no ink is passed over)
+    expect(of([text('the end.'), { t: 'ph', src: '\\label{x}' }])).toEqual(['.'])
     expect(of([text('a'), { t: 'open', id: 1, src: '\\textbf{' }, text('b).'), { t: 'close', id: 1, src: '}' }])).toEqual([')', '.'])
     // (a unit read without its source pieces: its source text)
     expect(L2.sourceEndMarks({ src: 'Latent transition error.' } as never)).toEqual(['.'])

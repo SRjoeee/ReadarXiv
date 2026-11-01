@@ -1547,9 +1547,12 @@ function textEndMarks(s) {
 }
 /**
  * The marks a unit's source writes at its end, after its last letter, digit or placeholder (its source pieces `unit.source`,
- * rows.mjs unitOf's: a style group's braces are no ink, a placeholder or a nested unit is content; else its source text), as
- * TeX prints them: an entry's ")" after its year, a sentence's ".", a quotation's "\u201d.". The translation writes these in the
- * target's; whatever the page sets after them on the unit's last line is the class's own (tailOf)
+ * rows.mjs unitOf's: a style group's braces are no ink, a placeholder that sets none (layer1.mjs phClass `zero`, `space`) is
+ * passed over, any other placeholder or a nested unit is content; else its source text), as TeX prints them: an entry's ")"
+ * after its year, a sentence's ".", a quotation's "\u201d.". The translation writes these in the target's; whatever the page sets
+ * after them on the unit's last line is the class's own (tailOf). Null where a placeholder whose rendering is no letter or
+ * digit stands among them (phClass `symbol`, "\\%": never looked for on the page, its ink is among the page's marks there, as
+ * many as its source does not tell)
  */
 export function sourceEndMarks(unit) {
   const pieces = unit?.source
@@ -1558,6 +1561,11 @@ export function sourceEndMarks(unit) {
   for (let k = pieces.length - 1; k >= 0; k--) {
     const p = pieces[k]
     if (p?.t === 'open' || p?.t === 'close') continue
+    if (p?.t === 'ph') {
+      const cls = phClass(String(p.src ?? ''))
+      if (cls === 'zero' || cls === 'space') continue
+      if (cls === 'symbol') return null
+    }
     if (p?.t !== 'text') break
     const r = textEndMarks(utf8(p.s ?? ''))
     out.unshift(...r.marks)
@@ -1587,6 +1595,7 @@ function tailOf(out, unit, keepSet, ownEnds = sourceEndMarks(unit)) {
   uc.forEach((c, i) => { if (real(c) && (rendered.has(charKey(c)) || (own.has(charKey(c)) && /[\p{L}\p{N}]/u.test(c.ch)))) last = i })
   if (last < 0) return null
   const line = lineOf(uc[last])
+  if (ownEnds === null) return null
   const after = uc.slice(last + 1).filter(real), ends = ownEnds.length
   if (after.length <= ends) return null
   const rest = after.slice(ends)
