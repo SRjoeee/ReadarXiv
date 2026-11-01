@@ -257,6 +257,9 @@ export declare function markedPages(marked: unknown, log: string, o: MarkedOptio
 export declare function readMarked(marked: unknown, log: string, o: MarkedOptions): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null; dark: { timedOut: number[]; capped: number[]; degraded: number[] } }>
 /** each opening point's piece as the page stream finds it (layout/stream.mjs Follow): of the units and the destinations' names */
 export declare function followsOf(units: readonly SourceUnit[], names: ReadonlySet<string>, texts?: readonly string[] | ReadonlyMap<string, string> | null): (name: string) => import('./stream.mjs').Follow | null
+/** the display a unit opens with, which the marking passes over, by the unit's start mark's name (`<i>s`): the opening mark's name
+ *  it would have had and its group's later displays', none of them a destination set (`names`); null for any other */
+export declare function headsOf(units: readonly SourceUnit[], names: ReadonlySet<string>): (start: string) => import('./stream.mjs').Head | null
 /** whether a destination the head names is a mark of the marks file: on a page of the paper, within its page's view (`views`
  *  the pages' read so far, stride 4) */
 export declare function markAt(views: readonly number[], pages: number, page: number | null, x: number, y: number): boolean
@@ -265,7 +268,7 @@ export declare function columnsOf(head: MarkedHead): number[]
 /** the marks of a marked original whose pages are still to be read: its head's marking, columns, dropped names and line counts */
 export declare function marksOfHead(head: MarkedHead, engine: string): LayoutMarks & { linkCount: number; linkDests: string[] }
 /** a point read twice on pages apart: its piece 'a mark set twice', nor the displays of its group, on `rows` in place */
-export declare function vetoTwice(rows: Map<string, OwnedRow>, twice: ReadonlySet<string>, follows: (name: string) => { group?: string[] } | null): void
+export declare function vetoTwice(rows: Map<string, OwnedRow>, twice: ReadonlySet<string>, follows: (name: string) => { group?: string[] } | null, heads?: ((start: string) => import('./stream.mjs').Head | null) | null): void
 /** the marks file as the lab writes it of the marks in memory: encodeLayoutMarks of them as they are, which its parser reads back
  *  as them; marks past one of the file's own bounds throw the parser's LayoutRefusal (no file is trimmed to other marks) */
 export declare function marksFile(m: LayoutMarks): string

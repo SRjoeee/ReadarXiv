@@ -35,7 +35,7 @@ import { checkBoxes, pageRules } from './cell-rules.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { drawDataOf } from '../pipeline/draw-data.mjs'
 import { DRAW_HELD_MAX } from '../layer-proto/draw.mjs'
-import { backrefPiece, classOf, colourPieceOf, followsOf, headEnd, INK_ANY, layoutMarking, leadStep, markAt, symbolText, vetoTwice } from './marks.mjs'
+import { backrefPiece, classOf, colourPieceOf, followsOf, headEnd, headsOf, INK_ANY, layoutMarking, leadStep, markAt, symbolText, vetoTwice } from './marks.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
 import { HEAD_ABUT, HEAD_PUNCT, TAIL_PUNCT } from './own.mjs'
 import { readAnnots } from '../layer-proto/links.mjs'
@@ -1667,7 +1667,10 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       }
       return { n, hits }
     }
-    const free = r => { const P = ink[r.page]; for (const g of r.gl) if (P.owner[g] === i) P.owner[g] = -1 }
+    // (a glyph of a piece of the unit's found stays its: a display it opens with, found by its unit's start mark, stream.mjs headInk)
+    const pieceGlyphs = new Set()
+    for (const [key, gs] of matchedBy) if (key.startsWith(`${i}.`)) for (const [p, g] of gs) pieceGlyphs.add(`${p}|${g}`)
+    const free = r => { const P = ink[r.page]; for (const g of r.gl) if (P.owner[g] === i && !pieceGlyphs.has(`${r.page}|${g}`)) P.owner[g] = -1 }
     // at the unit's head: the rows before its start mark's line (a display that opens it, before patch's start mark at
     // its first text) that carry none of its source's words and no ink of its found pieces are no line of the unit's
     // either, as the held rows at its end; then its start mark stands on its first line, which is cut at it as a first
@@ -2183,6 +2186,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     let markedTo = mh ? 0 : Infinity, ended = !mh, finished = false, foundTo = 1
     const mViews = [], mWords = [], twiceSeen = new Set()
     const follows = mh ? followsOf(units, mh.set, mh.marking?.texts) : null
+    // (the displays units open with, found by their units' start marks: marks.mjs headsOf)
+    const heads = mh ? headsOf(units, mh.set) : null
     // (the marks read a page at a time: none yet)
     if (mh) { at = new Map(); ours = []; carryOver(); noteLines() }
     let X = 0
@@ -2583,13 +2588,15 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const veto = names => {
       for (const r of names) {
         twiceSeen.add(r)
-        const o = /^[pn]\d+\.\d+b$/.test(r) ? `${r.slice(0, -1)}a` : r, m = OPENING_ROW.exec(o), i = m ? Number(m[1]) : -1
+        // (a start mark set twice takes the ink of the display its unit opens with: marks.mjs headsOf)
+        const h = /^\d+s$/.test(r) ? heads(r) : null
+        const o = h ? h.name : /^[pn]\d+\.\d+b$/.test(r) ? `${r.slice(0, -1)}a` : r, m = OPENING_ROW.exec(o), i = m ? Number(m[1]) : -1
         if (i >= 0 && i < n && phRan[i]) stats.late.vetoes++
         // (the carried pages of its unit and of its group's displays' made again: their ink taken)
         if (i >= 0) carriedKnown.delete(i)
         for (const g of follows(o)?.group ?? []) { const x = OPENING_ROW.exec(g); if (x) carriedKnown.delete(Number(x[1])) }
       }
-      vetoTwice(ownInk, twiceSeen, follows)
+      vetoTwice(ownInk, twiceSeen, follows, heads)
     }
     /** the marked original's page p (markedPages' page, pages in order) */
     function markedPage(page) {
@@ -2610,7 +2617,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       // the pieces found once it was read, and the points read again
       for (const [name, row] of page.owned) takeRow(name, row)
       if (page.repeats.length) veto(page.repeats)
-      else if (twiceSeen.size && page.owned.length) vetoTwice(ownInk, twiceSeen, follows)
+      else if (twiceSeen.size && page.owned.length) vetoTwice(ownInk, twiceSeen, follows, heads)
       // what is known now: each key whose names are all read, the pieces' marks on it, the pieces before `found`
       for (const [k, c] of keysOn.get(p) ?? []) { const left = keyLeft.get(k) - c; keyLeft.set(k, left); if (left === 0) finalKey(k) }
       for (const i of abAt.get(p) ?? []) rowDone(i)
@@ -2630,7 +2637,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       for (const [name, row] of end.owned) takeRow(name, row)
       const more = [...end.twice].filter(r => !twiceSeen.has(r))
       if (more.length) veto(more)
-      else if (twiceSeen.size && end.owned.length) vetoTwice(ownInk, twiceSeen, follows)
+      else if (twiceSeen.size && end.owned.length) vetoTwice(ownInk, twiceSeen, follows, heads)
       for (; foundTo <= M; foundTo++) for (const i of rowsAt.get(foundTo) ?? []) rowDone(i)
       resolveNames()
       stats.ms.carry += now() - t

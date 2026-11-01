@@ -18,7 +18,7 @@ export interface OwnGlyph { n: number; k: number; u: string; x0: number; x1: num
 export interface OwnPage { glyphs: OwnGlyph[]; boxes: ArrayLike<number>; paths: ArrayLike<number>; points: { name: string; glyph: number; box: number }[]; boxAt: ArrayLike<number>; view?: number[] }
 export interface OwnUnit { groups: Set<string>; pages: Set<number>; unhidden: Unhidden | null; labelKept: boolean }
 export interface OwnStats { units: number; unhidden: Record<Unhidden, number>; spell: number[]; labelKept: number; leaks: { count: number; units: number[] } }
-export declare function ownOf(pages: OwnPage[], o?: { units?: unknown[] | null; follows?: ((name: string) => unknown) | null; texts?: ReadonlyMap<string, string> | null; inkless?: ReadonlySet<string> | null; names?: readonly string[] | null }): { glyphs: (string | null)[][]; boxes: (string | null)[][]; units: Map<number, OwnUnit>; stats: OwnStats }
+export declare function ownOf(pages: OwnPage[], o?: { units?: unknown[] | null; follows?: ((name: string) => unknown) | null; texts?: ReadonlyMap<string, string> | null; inkless?: ReadonlySet<string> | null; names?: readonly string[] | null }): { glyphs: (string | null)[][]; boxes: (string | null)[][]; units: Map<number, OwnUnit>; /** per page, the glyphs of a display its unit opens with, in no group: its unit's placeholders' (`u<id>.p`) for the ledger */ leads: Map<number, string>[]; stats: OwnStats }
 /** a rule on a line of a unit's text (MR 2b) is no thicker than this share of the line's size */
 export declare const RULE_EM: number
 /** the painted rules of `boxes` that stand on a line of `glyphs` (MR 2b, an ink unit's too): [page, index] each */

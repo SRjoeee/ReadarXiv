@@ -30,12 +30,16 @@ export interface Follow { closing: boolean; want: string; rest?: string; display
 /** a text's letters and digits, without their accents, lower case: the per-unit erasure's evidence that ink is a text's */
 export declare function spellOf(s: string): string
 export interface Owned { how: number; glyphs: [page: number, index: number][]; boxes: [page: number, index: number][] }
-/** each piece's own glyphs and rules in the marked compile, by its opening point's name */
-export declare function ownedOf(pages: readonly StreamPage[], o: { follows: (name: string) => Follow | null; dropped?: readonly string[]; erasure?: boolean }): Map<string, Owned>
+/** a display a unit opens with, which the marking passes over (marks.mjs headsOf), by its unit's start mark: the opening mark's
+ *  name it would have had, and its display group's later displays' (none of them a point) */
+export interface Head { name: string; group: string[] }
+/** each piece's own glyphs and rules in the marked compile, by its opening point's name; `heads(start)` the display a unit opens
+ *  with, by its start mark's name, found between the point before that mark and the mark */
+export declare function ownedOf(pages: readonly StreamPage[], o: { follows: (name: string) => Follow | null; dropped?: readonly string[]; erasure?: boolean; heads?: ((start: string) => Head | null) | null }): Map<string, Owned>
 /** ownedOf a page at a time: the pages added in order (`add`), each piece found once every page it may read is in (`take`,
  *  over the window held: `pages[p - 1]` page p), the rest at `end`; `twice()` the point names read more than once (the
  *  caller's 'a mark set twice'). `closing(name)`: the page of an opening point's piece's closing destination, or null */
-export declare function ownedPages(o: { follows: (name: string) => Follow | null; dropped?: readonly string[]; closing?: (name: string) => number | null }): {
+export declare function ownedPages(o: { follows: (name: string) => Follow | null; dropped?: readonly string[]; closing?: (name: string) => number | null; heads?: ((start: string) => Head | null) | null }): {
   add(p: number, page: StreamPage, take: (name: string, e: Owned, pages: readonly StreamPage[]) => void): void
   end(take: (name: string, e: Owned, pages: readonly StreamPage[]) => void): void
   twice(): Set<string>

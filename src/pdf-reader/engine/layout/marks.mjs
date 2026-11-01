@@ -1704,6 +1704,36 @@ export function followsOf(units, names, texts = null) {
 }
 
 /**
+ * The display a unit opens with, which the marking passes over (headEnd: no mark goes before a unit's start mark at its head, where
+ * one in vertical mode would begin a paragraph of its own), by the unit's start mark's name (MARK_DEF's, `<i>s`): the opening mark's
+ * name the display would have had, and those of the displays right after it with nothing visible between (its group), none of
+ * them a destination set (`names`); null for any other name, a unit whose first visible piece is not such a display, or one the
+ * marking marked. TeX ships it right before the start mark: stream.mjs ownedOf reads its ink between the point before that mark
+ * and the mark (headInk), where it was LOST, OUTSIDE its unit's lines, and its light no block's (2501.14787v1 p24u193)
+ */
+export function headsOf(units, names) {
+  const textOf = p => (!p.tr && p.src !== undefined ? p.src : p.s) ?? ''
+  return start => {
+    const m = /^(\d+)s$/.exec(start), i = m ? Number(m[1]) : -1, pieces = units[i]?.pieces
+    if (!Array.isArray(pieces)) return null
+    const head = headEnd(pieces, 0)
+    let k = 0
+    for (; k < head; k++) { const p = pieces[k]; if (p.t === 'text' ? /\S/.test(textOf(p)) : classOf(p)) break }
+    if (k >= head || classOf(pieces[k]) !== 'display' || names.has(`p${i}.${k}a`) || names.has(`p${i}.${k}b`)) return null
+    const group = []
+    for (let q = k + 1; q < head; q++) {
+      const p = pieces[q]
+      if (p.t === 'text') { if (/\S/.test(textOf(p))) break; continue }
+      const c = classOf(p)
+      if (!c) continue
+      if (c !== 'display' || names.has(`p${i}.${q}a`)) break
+      group.push(`p${i}.${q}a`)
+    }
+    return { name: `p${i}.${k}a`, group }
+  }
+}
+
+/**
  * The marks file (internal, prep/<mid>/marks-<sha>.json) from a PDF.js document of the marked original and its last
  * TeX pass's log; the caller opens and destroys the document, each of its pages cleaned up once read (page.cleanup: its
  * operator list let go), so that a caller that reads its operator lists again pays a parse again. Every destination
@@ -1902,7 +1932,7 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
   // kept: whether the token before was written, so that a rest is written only after the word it is the rest of
   let kept = false
   const follows = units ? followsOf(units, set, marking.texts) : null
-  const stream = units && OPS ? ownedPages({ follows, dropped, closing: name => destPage.get(`${name.slice(0, -1)}b`) ?? null }) : null
+  const stream = units && OPS ? ownedPages({ follows, dropped, heads: headsOf(units, set), closing: name => destPage.get(`${name.slice(0, -1)}b`) ?? null }) : null
   let all = 0, found = []
   const seen = { warned: false, who: 'marked read' }
   const take = (name, e, W) => {
@@ -2037,7 +2067,7 @@ export async function readMarked(marked, log, o) {
   const chars = [], owned = []
   if (o.units && o.OPS) {
     const follows = followsOf(o.units, head.set, head.marking?.texts)
-    vetoTwice(rows, end.twice, follows)
+    vetoTwice(rows, end.twice, follows, headsOf(o.units, head.set))
     const charOf = new Map()
     for (const name of [...rows.keys()].sort()) {
       const row = rows.get(name)
@@ -2089,12 +2119,20 @@ export function marksOfHead(head, engine) {
 
 /** a point read twice on pages apart (markedPages' `twice`): its piece 'a mark set twice', owning nothing, nor the displays
  *  of its group (ownedOf's rule over the whole), on `rows` (name → row) in place */
-export function vetoTwice(rows, twice, follows) {
+export function vetoTwice(rows, twice, follows, heads = null) {
   const set2 = OWNED_HOW.indexOf('a mark set twice'), inGroup = OWNED_HOW.indexOf('in the display before it')
   for (const name of [...rows.keys()]) {
     if (!OPENING.test(name) || !(twice.has(name) || twice.has(`${name.slice(0, -1)}b`))) continue
     rows.set(name, [name, set2])
     for (const g of follows(name)?.group ?? []) if (rows.get(g)?.[1] === inGroup) rows.delete(g)
+  }
+  // (a display a unit opens with, found between the point before its start mark and that mark (headsOf): none where the mark was
+  // set twice, as ownedOf over the whole finds none)
+  if (heads) for (const start of twice) {
+    const h = /^\d+s$/.test(start) ? heads(start) : null
+    if (!h || !rows.has(h.name) || rows.get(h.name)[1] >= OWNED) continue
+    rows.delete(h.name)
+    for (const g of h.group) if (rows.get(g)?.[1] === inGroup) rows.delete(g)
   }
 }
 

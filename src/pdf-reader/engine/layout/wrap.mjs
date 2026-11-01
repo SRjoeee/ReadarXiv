@@ -766,14 +766,23 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   // figures', crowded or not), then the ink units, the text no unit owns made units of our glyphs (layout/ink-units.mjs), their
   // glyphs claimed before the wrap is planned, so that each is hidden by its own groups as any unit is; the ledger's orphans those
   // no unit owns still. None where the source is not read (units null: no id to start from, no echo)
-  const classed = ledgerOf(pages, { ...own, glyphs: withFigures(true) }, { units })
+  // (a display a unit opens with, which the marking passes over, in no group: its unit's for the ledger, so that no ink unit nor
+  // kept block is made of it, own.mjs `leads`)
+  const withLeads = rows => rows.map((row, i) => {
+    const m = own.leads?.[i]
+    if (!m?.size) return row
+    const out = Array.from(row)
+    for (const [g, group] of m) out[g] ??= group
+    return out
+  })
+  const classed = ledgerOf(pages, { ...own, glyphs: withLeads(withFigures(true)) }, { units })
   const ink = units ? inkUnitsOf(pages, classed, { units, from: inkBase }) : []
   claimInk(own, ink, pages)
-  const ledger = ink.length ? inkLeft(classed, { ...own, glyphs: withFigures(true) }, pages) : classed
+  const ledger = ink.length ? inkLeft(classed, { ...own, glyphs: withLeads(withFigures(true)) }, pages) : classed
   // (and the text no unit owns still, kept blocks after the ink units: never translated, lit as any unit is; their glyphs in no
   // group, so that the wrap and the ledger are as they were, and none is off where a page is not wrapped: nothing of it is hidden;
   // layout/ink-units.mjs rule 10)
-  const kept = units ? keptUnitsOf(pages, classed, (p, g) => own.glyphs[p - 1]?.[g] ?? (fig.glyphs[p - 1]?.has(g) ? 'f' : null), { from: inkBase + ink.length }) : []
+  const kept = units ? keptUnitsOf(pages, classed, (p, g) => own.glyphs[p - 1]?.[g] ?? (fig.glyphs[p - 1]?.has(g) ? 'f' : null) ?? own.leads?.[p - 1]?.get(g) ?? null, { from: inkBase + ink.length }) : []
   const owners = withFigures(false)
   const plans = new Map()
   pages.forEach((pg, i) => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { type Glyph, packGlyphs } from '@/pdf-reader/engine/layout/ink.mjs'
-import { type Follow, OWNED, OWNED_HOW, ownedOf, ownedPages, STREAM_COLUMNS, type StreamPage } from '@/pdf-reader/engine/layout/stream.mjs'
+import { type Follow, type Head, OWNED, OWNED_HOW, ownedOf, ownedPages, STREAM_COLUMNS, type StreamPage } from '@/pdf-reader/engine/layout/stream.mjs'
 import { INK_ANY } from '@/pdf-reader/engine/layout/marks.mjs'
 
 // Each placeholder's own ink in the marked compile by content-stream order: a page here is what pageInk reads of one,
@@ -43,12 +43,13 @@ const shown = (pages: readonly StreamPage[], e: { how: number; glyphs: [number, 
 /** each owned piece's glyphs as a string and its rule count, or its how where it is not owned: ownedOf's over the whole, and
  *  the same a page at a time (ownedPages, the page stream: each case holds both), its closing points' pages as their
  *  destinations would give them, a point read twice told at the end */
-function owned(pages: StreamPage[], follows: Record<string, Follow>, dropped: string[] = []) {
+function owned(pages: StreamPage[], follows: Record<string, Follow>, dropped: string[] = [], heads: Record<string, Head> = {}) {
   const out: Record<string, string | [string, number]> = {}
-  for (const [name, e] of ownedOf(pages, { follows: n => follows[n] ?? null, dropped })) out[name] = shown(pages, e)
+  const headOf = (n: string) => heads[n] ?? null
+  for (const [name, e] of ownedOf(pages, { follows: n => follows[n] ?? null, dropped, heads: headOf })) out[name] = shown(pages, e)
   const pageOfPoint = (name: string) => { const i = pages.findIndex(p => p.points.some(pt => pt.name === name)); return i < 0 ? null : i + 1 }
   const paged: Record<string, string | [string, number]> = {}
-  const s = ownedPages({ follows: n => follows[n] ?? null, dropped, closing: n => pageOfPoint(`${n.slice(0, -1)}b`) })
+  const s = ownedPages({ follows: n => follows[n] ?? null, dropped, heads: headOf, closing: n => pageOfPoint(`${n.slice(0, -1)}b`) })
   const take = (name: string, e: { how: number; glyphs: [number, number][]; boxes: unknown[] }, W: readonly StreamPage[]) => { paged[name] = shown(W, e) }
   pages.forEach((page, i) => { s.add(i + 1, page, take) })
   s.end(take)
@@ -249,6 +250,63 @@ describe('ownedOf', () => {
   it('a name the caller does not know, and a bracket, own nothing and are no piece', () => {
     const page = pageOf([{ at: 'bs1' }, { at: 'p9.9a' }, 'x', { at: 'p9.9b' }, { at: '3s' }, { at: 'be1' }])
     expect(owned([page], {})).toEqual({})
+  })
+})
+
+describe('ownedOf: a display its unit opens with, which the marking passes over (`heads`)', () => {
+  // A paragraph that opens with a display (a blank line, then \\[ … \\], then its text): no mark goes before its start mark there
+  // (marks.mjs headEnd: a mark in vertical mode would begin a paragraph of its own), so the display has no point. TeX ships it
+  // right before the unit's start mark: what the start's region holds from the point before it, on lines of their own, is its ink
+  // (2501.14787v1 p24u193: vec f'(A)[dA] = … its matrix, its braces and its stop, between 192e and 193s; LOST and OUTSIDE before)
+  const head: Head = { name: 'p1.0a', group: [] }
+  it('owns what its unit\'s start region holds between the point before the start mark and the mark, its lines alone', () => {
+    const page = pageOf([{ at: 'bs1' }, 'after vectorization, to:', { at: '0e' }, '\nvec f=M x', { rule: [150, 655, 170, 655.4] }, '\nunder.', { at: '1s' }, '\nIn order to'])
+    expect(owned([page], {}, [], { '1s': head })).toEqual({ 'p1.0a': ['vecf=Mxunder.', 1] })
+    expect(ownedOf([page], { follows: () => null, heads: n => (n === '1s' ? head : null) }).get('p1.0a')?.how).toBe(how('closed'))
+    // (with no heads, as before: no entry, the maker's piece LOST)
+    expect(owned([page], {})).toEqual({})
+  })
+
+  it('leaves out what stands on the line of the point before it and on the start mark\'s line: the unit before\'s stop, this one\'s label', () => {
+    // the closing punctuation the unit before set after its end mark (own.mjs MR 4c), a rule under its line; an item's bullet before
+    // the start mark on the text's line (MR 5)
+    const page = pageOf([{ at: 'bs1' }, 'to', { at: '0e' }, ':', { rule: [72, 698, 90, 698.4] }, '\nx=y', '\n', { u: '•', x: 72, y: 676 }, { at: '1s' }, { u: 'T', x: 85, y: 676 }, 'ext'])
+    expect(owned([page], {}, [], { '1s': head })).toEqual({ 'p1.0a': ['x=y', 0] })
+  })
+
+  it('reads its own region alone: a float shipped between, a footnote below, a running head before the body', () => {
+    const page = pageOf(['Head', { at: 'bs1' }, 'words', { at: '0e' }, { at: 'fs1' }, '\nFigure 1', { at: 'fe1' }, '\nx=y', { at: '1s' }, '\ntext', { at: 'be1' }, '\nnote'])
+    expect(owned([page], {}, [], { '1s': head })).toEqual({ 'p1.0a': ['x=y', 0] })
+    // the display the body's first line, no point before the start mark but the body's own: from the body's start
+    const top = pageOf(['Head', { at: 'bs1' }, 'x=y', { at: '1s' }, '\ntext'])
+    expect(owned([top], {}, [], { '1s': head })).toEqual({ 'p1.0a': ['x=y', 0] })
+  })
+
+  it('owns nothing where it cannot be told: an opening point alone before it, nothing between, a start mark set twice', () => {
+    // (the piece before runs to the next point, this start mark: the two would share their ink)
+    const alone = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { at: 'p0.2a' }, '\na=b', '\nx=y', { at: '1s' }, '\ntext'])
+    expect(owned([alone], {}, [], { '1s': head })).toEqual({})
+    const nothing = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { at: '1s' }, '\ntext'])
+    expect(owned([nothing], {}, [], { '1s': head })).toEqual({})
+    const page = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, '\nx=y', { at: '1s' }, '\ntext'])
+    expect(owned([page], {}, ['1s'], { '1s': head })).toEqual({})
+    const twice = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, '\nx=y', { at: '1s' }, '\ntext', { at: '1s' }, ' more'])
+    expect(ownedOf([twice], { follows: () => null, heads: n => (n === '1s' ? head : null) }).size).toBe(0)
+    // (a cell's or a heading's start mark is no MARK_DEF's: none asked)
+    const cell = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, '\nx=y', { at: 'h1s' }, '\ntext'])
+    expect(owned([cell], {}, [], { 'h1s': head })).toEqual({})
+  })
+
+  it('a display group at the head: the first owns the group\'s ink, each later one is in it', () => {
+    const page = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, '\na=b', '\nc=d', { at: '1s' }, '\ntext'])
+    const group: Head = { name: 'p1.0a', group: ['p1.1a'] }
+    expect(owned([page], {}, [], { '1s': group })).toEqual({ 'p1.0a': ['a=bc=d', 0], 'p1.1a': 'in the display before it' })
+    expect(ownedOf([page], { follows: () => null, heads: n => (n === '1s' ? group : null) }).get('p1.0a')?.how).toBe(how('open, with the displays after it'))
+  })
+
+  it('a display with a point of its own is found by it, as before', () => {
+    const page = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { at: 'p1.0a' }, '\nx=y', { at: 'p1.0b' }, { at: '1s' }, '\ntext'])
+    expect(owned([page], { 'p1.0a': closed }, [], { '1s': head })).toEqual({ 'p1.0a': ['x=y', 0] })
   })
 })
 

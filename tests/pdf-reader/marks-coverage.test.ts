@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { completeMacros, frontMarks, inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { bblProvides, openPaper, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { AHEAD_PROBE_MAX, aheadKey, aheadSamples, completeCall, completeCalled, ENTRY_INK_MAX, followsOf, INK_MAX, inkSamples, layoutMarking, leadSamples, MARK_CLASSES, markProbeTex, probeSamples, readInkAnswers, readInkApart, readInkProbe, readInkTexts, readMarkProbe, symbolText } from '@/pdf-reader/engine/layout/marks.mjs'
+import { AHEAD_PROBE_MAX, aheadKey, aheadSamples, completeCall, completeCalled, ENTRY_INK_MAX, followsOf, headsOf, INK_MAX, inkSamples, layoutMarking, leadSamples, MARK_CLASSES, markProbeTex, probeSamples, readInkAnswers, readInkApart, readInkProbe, readInkTexts, readMarkProbe, symbolText } from '@/pdf-reader/engine/layout/marks.mjs'
 import { boundsFromMarks, tokenizeDocument, uprightToken } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 
 // The layout marks a placeholder gets where what stands beside it was guessed at: the paper's own macro taken to look ahead
@@ -280,6 +280,24 @@ describe('a command that sets the punctuation mark after it before its own ink (
   it('followsOf: the mark that opens the text after a piece of an asked class, which its closed ink holds first', () => {
     const f = followsOf([u], new Set(['p0.1a', 'p0.1b', 'p0.3a', 'p0.3b', 'p0.5a', 'p0.5b', 'p0.7a', 'p0.7b']))
     expect(['p0.1a', 'p0.3a', 'p0.5a', 'p0.7a'].map(n => f(n)?.moved ?? null)).toEqual(['.', ',', ';', null])
+  })})
+
+describe('headsOf: the display a unit opens with, which the marking passes over (no mark at a unit\'s head, headEnd)', () => {
+  // (2501.14787v1 u193: a blank line, then \\[ … \\], then "In order to understand …"; its start mark at its first text)
+  const opens = unit([text('\n'), ph('\\[\nx=y.\n\\]'), text('\nIn order to understand '), ph('$z$'), text(' more.')])
+  it('names it by its unit\'s start mark: the opening mark it would have had, and its group\'s later displays', () => {
+    const heads = headsOf([unit([text('Before.')]), opens], new Set(['p1.3a', 'p1.3b']))
+    expect(heads('1s')).toEqual({ name: 'p1.1a', group: [] })
+    // (a cell's, a heading's, an end mark, another unit: none)
+    expect([heads('t1s'), heads('h1s'), heads('1e'), heads('0s'), heads('2s'), heads('p1.1a')]).toEqual([null, null, null, null, null, null])
+    // two displays, nothing visible between: one group
+    const two = unit([ph('\\[a\\]'), text('\n'), ph('\\begin{equation}b\\end{equation}'), text('\nwhere x.')])
+    expect(headsOf([two], new Set())('0s')).toEqual({ name: 'p0.0a', group: ['p0.2a'] })
+  })
+  it('none where the unit opens with text or another piece, or the display has a mark of its own', () => {
+    expect(headsOf([unit([text('Then '), ph('\\[x\\]'), text(' more.')])], new Set())('0s')).toBeNull()
+    expect(headsOf([unit([ph('$x$'), text(' is '), ph('\\[x\\]')])], new Set())('0s')).toBeNull()
+    expect(headsOf([opens], new Set(['p0.1a']))('0s')).toBeNull()
   })
 })
 

@@ -46,7 +46,7 @@
 import { utf8 } from '../translate/mt.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { UNHIDDEN } from './delta-wire.mjs'
-import { classOf, INK_ANY, leadStep } from './marks.mjs'
+import { classOf, headsOf, INK_ANY, leadStep } from './marks.mjs'
 import { OWNED, ownedOf, regionsOf, spellOf } from './stream.mjs'
 
 export { UNHIDDEN }
@@ -420,8 +420,11 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
   }
 
   // ---- the placeholders (MR 4)
-  // (the erasure's reading: stream.mjs ownedOf `erasure`, a piece's ink found exactly where the maker's reading leaves it LOST)
-  const owned = follows ? ownedOf(pages.map((pg, i) => streamPage(pg, i)), { follows, erasure: true }) : null
+  // (the erasure's reading: stream.mjs ownedOf `erasure`, a piece's ink found exactly where the maker's reading leaves it LOST;
+  // and the displays units open with, by their start marks, `leads` below)
+  const heads = units ? headsOf(units, new Set(where.keys())) : null
+  const streamed = follows || heads ? pages.map((pg, i) => streamPage(pg, i)) : null
+  const owned = follows ? ownedOf(streamed, { follows, erasure: true, heads }) : null
   // (each page's units whose start and end marks both stand on it: [id, start, end])
   const spansOn = new Map()
   for (const [id, { s, e }] of textOf) if (s && s[0] === e[0]) (spansOn.get(s[0]) ?? spansOn.set(s[0], []).get(s[0])).push([id, s, e])
@@ -689,7 +692,19 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
   for (const u of unitOf.values()) if (u.unhidden) unhidden[u.unhidden]++
   spell.sort((a, b) => a - b)
   leaks.sort((a, b) => a - b)
-  return { glyphs: gOwn, boxes: bOwn, units: unitOf, stats: { units: unitOf.size, unhidden, spell: spell.slice(0, SPELL_LIST_MAX), labelKept, leaks: { count: leaks.length, units: leaks.slice(0, SPELL_LIST_MAX) } } }
+  // ---- a display its unit opens with, which the marking passes over (marks.mjs headsOf): TeX ships it between the point before its
+  // unit's start mark and that mark (stream.mjs headInk). Its glyphs no group's, the wrap's as before — the layer draws such a
+  // display as the original's ink, never erasing it, which a group hidden with its unit's placeholders would — but its unit's
+  // placeholders' for the ledger (`leads`: per page, glyph -> `u<id>.p`), so that no ink unit nor kept block is made of it: it is
+  // its unit's display, a block of its own in the light map (2501.14787v1 p24u193 had three kept blocks of it)
+  const leads = pages.map(() => new Map())
+  const found = heads ? owned ?? ownedOf(streamed, { follows: () => null, heads }) : null
+  for (const [name, e] of found ?? []) {
+    const m = OPENING.exec(name)
+    if (!m || where.has(name) || e.how >= OWNED) continue
+    for (const [p, g] of e.glyphs) if (gOwn[p - 1][g] === null) leads[p - 1].set(g, `u${m[2]}.p`)
+  }
+  return { glyphs: gOwn, boxes: bOwn, units: unitOf, leads, stats: { units: unitOf.size, unhidden, spell: spell.slice(0, SPELL_LIST_MAX), labelKept, leaks: { count: leaks.length, units: leaks.slice(0, SPELL_LIST_MAX) } } }
 }
 
 /**
