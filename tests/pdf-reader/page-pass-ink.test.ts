@@ -175,6 +175,33 @@ describe('the ink units in the page pass', () => {
     expect(layoutWithInk(layout, offTwo, [3, 4]).labels).toEqual([apart, over])
   })
 
+  it("drops a unit's label row that meets a figure unit's run, which the reader would show again under its translation (2501.14787v1 p10)", () => {
+    // (mdframed's TikZ frame around a thmtools theorem: "Recall 7 (" before its note's unit, no label's form, left in no group by
+    // the wrap and cut by the figure text as "Recall 7", a figure unit's (page-pass.mjs figureUnits' rows by page); the note's
+    // label row over it showed the original under its translation. A row apart on that page, a row of another page, stay)
+    const fig = [1024, 7, 10, 66.955, 408.971, 1, 0, 36.405, 9.963, 0.88, -0.15, 0, 14647328, 'AEPRJL+SFSX1000', 7, 7.01, 2.969]
+    const turned = [1025, 8, 10, 40, 300, 0, 1, 50, 10, 0.88, -0.15, 1, -1, 'ABCDEF+CMR10', 8, 0, 0]
+    const over = [78, 0, 10, 66.96, 408.97, 110.89, 416.45, 406.49], below = [83, 0, 10, 66.96, 236.11, 110.89, 243.59, 233.63]
+    const across = [90, 0, 10, 36, 320, 46, 327.5, 317.5], other = [86, 0, 11, 66.96, 408.97, 123.89, 416.45, 406.49]
+    const layout = { fonts: [], units: [], lines: [], frames: [], erase: [], ph: [], labels: [over, across, below, other] }
+    const figures = new Map([[10, [fig, turned]]])
+    // (a paper with no ink unit of the other kinds: its figure units alone)
+    expect(layoutWithInk(layout, null, [], figures).labels).toEqual([below, other])
+    // (and beside an ink unit's: both go)
+    const got = inkOfHost({ base: 3, units: [{ ...headUnit(3, 2), kind: 'inkorphan', cls: 'orphan' }] }, { units: [0, 1, 2] })
+    const ink = [1, 1, 2, 72, 760, 80, 767.5, 757.5]
+    expect(layoutWithInk({ ...layout, labels: [ink, ...layout.labels] }, got, [3], figures).labels).toEqual([below, other])
+    // (none meets: the layout as it was)
+    const none = { ...layout, labels: [below, other] }
+    expect(layoutWithInk(none, null, [], figures)).toBe(none)
+    expect(layoutWithInk(none, null, [], new Map())).toBe(none)
+    // (a slanted run is met by its own band, not by the box around it: a row in that box's empty corner stays, one across the
+    // run goes — Devin and CodeRabbit on #541)
+    const r = Math.SQRT1_2, slanted = [1030, 12, 10, 100, 100, r, r, 50, 10, 0.88, -0.15, 0, -1, 'ABCDEF+CMR10', 12, 0, 0]
+    const corner = [91, 0, 10, 125, 101, 135, 108, 100], crossing = [92, 0, 10, 110, 113, 120, 120, 112]
+    expect(layoutWithInk({ ...layout, labels: [corner, crossing] }, null, [], new Map([[10, [slanted]]])).labels).toEqual([corner])
+  })
+
   it('keeps an echo of an ink unit as the wrap made it, whether or not that unit is laid', () => {
     const echoOf = (id: number, page: number, echo: number | null) => ({ ...headUnit(id, page), echo })
     const ink = { base: 3, units: [echoOf(3, 2, null), echoOf(4, 3, 3), echoOf(5, 4, 0)] }

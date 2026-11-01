@@ -490,7 +490,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
       if (isMemoryError(e)) throw e
       ctx.made = { refused: 'failed', why: why(e) }
     }
-    if (st) return streamed(ctx, { maker, st: streamWithInk(st, ink), lineskip: marks.marks.marking.lineskip ?? null, left: wholeLeft(side), drive: arxivDrive(maker, st, N) })
+    if (st) return streamed(ctx, { maker, st: streamWithInk(st, ink, figures), lineskip: marks.marks.marking.lineskip ?? null, left: wholeLeft(side), drive: arxivDrive(maker, st, N) })
     return cutWhole(ctx, null)
   }
   // (stage 1: the whole made first)
@@ -507,7 +507,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
       r = null
     }
   }
-  return cutWhole(ctx, r && 'file' in r ? { ...r, file: layoutWithInk(r.file, ink, ink ? ink.units.map(u => u.id) : []) } : null)
+  return cutWhole(ctx, r && 'file' in r ? { ...r, file: layoutWithInk(r.file, ink, ink ? ink.units.map(u => u.id) : [], figures) } : null)
 }
 
 /** our lines in place on arXiv's PDF of marked pages a to b of N (to the marked original's end with the paper's last), and
@@ -903,7 +903,7 @@ async function markedStream(o) {
   let maker = null, st = null, made = null
   try {
     maker = await makerOf({ units, marks: marksOfHead(head, markedOptions.engine), arxiv: doc, OPS, paper, left: '', pdfjs, text: baseText ?? text, lineCheck, floatMatch, frame: given.makerFrame, cellRules: true, parts: true, draw: o.draw, rules, inFloat, texOrder, ...(given.columnEdges ? { columnEdges: given.columnEdges } : {}) })
-    if (maker.refused) { made = { refused: maker.refused, stats: maker.stats }; maker = null } else st = streamWithInk(maker.stream({ marked: head }), ink)
+    if (maker.refused) { made = { refused: maker.refused, stats: maker.stats }; maker = null } else st = streamWithInk(maker.stream({ marked: head }), ink, figures)
   } catch (e) {
     if (isMemoryError(e)) throw e
     made = { refused: 'failed', why: why(e) }

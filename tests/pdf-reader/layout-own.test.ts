@@ -442,6 +442,35 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     const apart = [page([{ pt: 'h0s' }, 'Bound', { pt: 'h0e' }, { dx: 4 }, '1.', { pt: '1s' }, 'Every x', { pt: '1e' }])]
     expect(groupsOf(ownOf(apart, { units: [{ kind: 'heading', src: 'Bound' }, { kind: 'theorem', src: 'Every x' }] }), apart)).toEqual({ u0: 'Bound', u1: 'Every x', 'u1.l': '1.' })
   })
+  it('gives the punctuation a head sets after its note to the note where the body starts on a line of its own (2501.14787v1 p10u78)', () => {
+    // thmtools' headpunct `\\`: "Recall 7 (Vector Space)", then the body on the next line. The ")" stood on no line of the body's
+    // start, so no label walk reached it: in no group, it stayed where it was while the maker's line of the note took it and the
+    // layer drew it again after the note's translation
+    const pages = [page(['Recall 7 (', { pt: 'h0s' }, 'Vector Space', { pt: 'h0e' }, ')', '\n', { pt: '1s' }, 'Loosely', { pt: '1e' }])]
+    const r = ownOf(pages, { units: [{ kind: 'heading', bracketed: true, src: 'Vector Space' }, { kind: 'theorem', src: 'Loosely' }] })
+    expect(groupsOf(r, pages)).toEqual({ u0: 'Vector Space)', u1: 'Loosely' })
+    expect([r.units.get(0)?.labelKept, r.units.get(1)?.labelKept]).toEqual([true, false])
+    // (a head of a label's form keeps its label; a note that ends in a placeholder set before its end mark, the ")" after it)
+    const theorem = [page(['Theorem 7 (', { pt: 'h0s' }, 'Bound ', { pt: 'p0.1a' }, 'x', { pt: 'p0.1b' }, { pt: 'h0e' }, ').', '\n', { pt: '1s' }, 'Every x', { pt: '1e' }])]
+    const t = ownOf(theorem, { units: [{ kind: 'heading', bracketed: true, pieces: [{ t: 'text', s: 'Bound ' }, { t: 'ph', src: '$x$' }] }, { kind: 'theorem', src: 'Every x' }] })
+    expect(groupsOf(t, theorem)).toEqual({ 'u0.l': 'Theorem 7 (', u0: 'Bound ).', 'u0.p': 'x', u1: 'Every x' })
+    // (punctuation a word's space or more after the end mark, or what is no closing punctuation, is no head's: the page's, as before)
+    const apart = [page([{ pt: 'h0s' }, 'Bound', { pt: 'h0e' }, { dx: 4 }, ')', '\n', { pt: '1s' }, 'Every x', { pt: '1e' }])]
+    expect(groupsOf(ownOf(apart, { units: [{ kind: 'heading', src: 'Bound' }, { kind: 'theorem', src: 'Every x' }] }), apart)).toEqual({ u0: 'Bound', u1: 'Every x' })
+    const word = [page([{ pt: 'h0s' }, 'Bound', { pt: 'h0e' }, '(', '\n', { pt: '1s' }, 'Every x', { pt: '1e' }])]
+    expect(groupsOf(ownOf(word, { units: [{ kind: 'heading', src: 'Bound' }, { kind: 'theorem', src: 'Every x' }] }), word)).toEqual({ u0: 'Bound', u1: 'Every x' })
+    // (a mark TeX shows next in the stream but left of the glyph before it, on that baseline, is no mark after the unit: the
+    // maker's line takes none left of the end mark — CodeRabbit on #541)
+    const back = [page([{ pt: 'h0s' }, 'Bound', { pt: 'h0e' }, { dx: -40 }, ')', '\n', { pt: '1s' }, 'Every x', { pt: '1e' }])]
+    expect(groupsOf(ownOf(back, { units: [{ kind: 'heading', src: 'Bound' }, { kind: 'theorem', src: 'Every x' }] }), back)).toEqual({ u0: 'Bound', u1: 'Every x' })
+    // (the gap measured at the mark's own size, as the maker's glue is the line's: a placeholder set large before it widens
+    // nothing — CodeRabbit on #541)
+    const big = page([{ pt: 'h0s' }, 'Bound ', { pt: 'p0.1a' }, 'X', { pt: 'p0.1b' }, { pt: 'h0e' }, { dx: 3 }, ')', '\n', { pt: '1s' }, 'Every x', { pt: '1e' }])
+    const X = big.glyphs.find(g => g.u === 'X')!
+    Object.assign(X, { size: 30, top: X.y + 21, bottom: X.y - 6 })
+    const units2 = [{ kind: 'heading', pieces: [{ t: 'text', s: 'Bound ' }, { t: 'ph', src: '$X$' }] }, { kind: 'theorem', src: 'Every x' }]
+    expect(groupsOf(ownOf([big], { units: units2 }), [big])).toEqual({ u0: 'Bound ', 'u0.p': 'X', u1: 'Every x' })
+  })
   it('takes a theorem\'s head before its note, the bracket the head opens the note with, as the note\'s label (2610.18513v1 p18u150)', () => {
     // amsthm: "Definition 5.1 (s-conductance). For …": the head's name, number and "(" before the note's start mark were no
     // label's form, left the original's ink in no group, and the head stayed English under the note's translation

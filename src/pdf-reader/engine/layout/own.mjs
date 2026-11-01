@@ -21,6 +21,9 @@
 //      its opening point stands in (a run-in heading);
 //   4b. a footnote's call after the unit's last word that TeX gave no mark: the raised glyphs right after its end mark, on that
 //      line, in no group;
+//   4c. the closing punctuation TeX sets after the unit's end mark (amsthm's ")" after a theorem's note where the body begins on
+//      a line of its own, a bibliography style's stop after an entry): the glyphs right after the mark, on that line, in no
+//      group, each TAIL_PUNCT abutting the one before it — the unit's text, as the maker's line takes them (make.mjs lineOf);
 //   5. a label: the glyphs on the start's first glyph's baseline between the previous unit's end mark and the start, the
 //      placeholders' and names' ranges passed over — but the closing punctuation a head sets abutting the unit before it, that
 //      unit's text (amsthm's "(Note).") —; none for a table cell;
@@ -67,6 +70,9 @@ const RAISED = 0.2
 export const HEAD_PUNCT = /^[)\]}.,:;!?\u2019\u201d]$/u
 /** that punctuation abuts the glyph before it: each gap under this share of an em (a word's space is a third) */
 export const HEAD_ABUT = 0.2
+/** the closing punctuation glued past a unit's end mark on its line that is the unit's text (MR 4c), as the maker's line takes it
+ *  (make.mjs lineOf): a stop, a comma, a colon, a closing bracket */
+export const TAIL_PUNCT = /^[.,;:!?)\]]$/
 const OPENING = /^([pn])(\d+)\.(\d+)a$/
 const CLOSING = /^([pn])(\d+)\.(\d+)b$/
 const NAME_START = /^n(\d+)\.([a-z]{1,16})\.s$/
@@ -469,6 +475,32 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       edge = G.x1
     }
     if (run.length) claim({ glyphs: run }, `u${id}.p`, 'p')
+  }
+
+  // ---- the closing punctuation TeX sets after a unit's end mark (MR 4c): the glyphs right after the mark, on its line, in its
+  // region, in no group, each of TAIL_PUNCT right of the glyph before it and within HEAD_ABUT of its own em of it, the first
+  // after the unit's own (its text's or a placeholder's): the unit's text, as the maker's line takes them past its end mark
+  // (make.mjs lineOf), so that its group hides what the layer draws again after the translation (layer2.mjs tailOf). MR 5 gives
+  // them to it where the next unit begins on that line; where the head breaks its line after the note (thmtools' headpunct
+  // `\\`), none reached them, and 2501.14787v1 p10's ")" after "Vector Space" stood beside the note's translation drawn with
+  // its own. After the labels and the placeholders, so that a mark MR 5 gave a unit or a label stays theirs, and the glyph
+  // before it may be a placeholder's
+  for (const [id, { e }] of textOf) {
+    if (!e || work > OWN_WORK) continue
+    const [p] = e, pg = pages[p - 1], E = pt(e), r = at(e), R = regions[p - 1], G = gOwn[p - 1], mine = `u${id}`
+    let left = E.glyph - 1
+    if (left < 0 || (G[left] !== mine && G[left] !== `${mine}.p`)) continue
+    const run = []
+    for (let g = E.glyph; g < pg.glyphs.length; g++) {
+      const A = pg.glyphs[g], L = pg.glyphs[left]
+      work++
+      // (right of the glyph before it, as the maker's line takes none left of the end mark, and within the gap at its own size,
+      // as the maker's glue is the line's: a placeholder set large before it widens nothing)
+      if (R.glyph[g] !== r || G[g] !== null || !TAIL_PUNCT.test(A.u ?? '') || (A.x0 + A.x1) / 2 <= L.x1 || A.x0 - L.x1 >= HEAD_ABUT * A.size || Math.abs(A.y - L.y) >= 0.5 * Math.max(A.size, L.size)) break
+      run.push([p, g])
+      left = g
+    }
+    if (run.length) claim({ glyphs: run }, mine, 'u')
   }
 
   // ---- the names (MR 6)

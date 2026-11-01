@@ -372,7 +372,17 @@
 //     layout move: over 65 local papers, on 6, 16 units' rows, LOST pieces 316 -> 286, 7 units located whole again, none laid
 //     less (PDF-READER §19.6). No unit's text, pieces or wire changes: every source unit is 47's, a copy of 47 carries every unit
 //     (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '48'
+// 49 (the owner's report of 2026-11-01 on 2501.14787v1, staging at PIPELINE 48): a unit's label row that meets a figure unit's run
+//     goes from the parts' layout (pipeline/ink-pass.mjs layoutWithInk, as one that meets an ink unit's text since LAYOUT 23).
+//     mdframed's TikZ frame sets a whole thmtools theorem inside a picture; its head "Recall 7 (", no label's form, was left in no
+//     group (`labelKept`) and cut as the figure unit "Recall 7", drawn translated over its hidden ink, while the note's label row
+//     was shown again from render C, every group shown: the original's head came back under its translation on pp10-11. And the
+//     wrap gives a unit the closing punctuation glued past its end mark (REMOVAL 18, own.mjs MR 4c), which an ink unit no longer
+//     takes. Over 66 local papers: 3 label rows go (this paper's three boxes), no figure unit and no unit laid changes, and 2
+//     ink units lose a leading mark (", PSR J1744–1134" and ". 2027. ABNAT: …" of 2610.20848v1 and 2610.22065v1). No source
+//     unit's text, pieces or wire changes (216 of 216 local sources hash for hash): a copy of 48 carries every unit (live.mjs
+//     PIPELINE_CARRIES), an ink unit found again by its source where it is the same
+export const PIPELINE_VERSION = '49'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
@@ -432,6 +442,15 @@ export const PDFJS = '6.3.289'
  * ink (`u<id>.p`), between the marks LAYOUT_TEX's hook sets around it (marks.mjs BACKREF_TEX), where it was no one's: the base's
  * bytes change where a paper turns backref's lists on; 17 (the owner's case 2610.35877v1): a biblatex entry's ink its unit's
  * groups (an ink unit of kind `inkreferences`, ink-units.mjs claimInk), the point before each a rendering intent in our page
- * (marks.mjs POINTS_TEX `bi<n>`): the base's bytes change where a paper loads biblatex
+ * (marks.mjs POINTS_TEX `bi<n>`): the base's bytes change where a paper loads biblatex; 18 (the owner's report of 2026-11-01 on
+ * 2501.14787v1): the closing punctuation glued past a unit's end mark on its line, in no group, is the unit's text (own.mjs MR
+ * 4c), as the maker's line takes it (make.mjs lineOf: one table, TAIL_PUNCT) and the layer draws it again after the translation
+ * (layer2.mjs tailOf). MR 5 gave it to the unit only where the next unit begins on that line: a thmtools head that breaks its line
+ * after the note left its ")" standing after the note's translation, which drew its own. Over 66 local papers, 20 change: 396
+ * glyphs to 388 units — 349 reference entries' final stops (7 papers; natbib's and REVTeX's styles set them after the entry's
+ * end mark, the references off by default), 43 marks of 35 heads (11 papers: a note's ")" or ").", a run-in head's "." where
+ * the body begins below), 2 paragraphs' and 2 authors' commas and stops, 2 of them an ink unit's first mark before; on 384 of
+ * the units the mark stands inside their erase boxes of the layout file, on the other 4 (references) beside a last line the
+ * maker did not locate, whose glyphs the wrap already gave the unit: the base's bytes change where a paper has such a mark
  */
-export const REMOVAL = '17'
+export const REMOVAL = '18'
