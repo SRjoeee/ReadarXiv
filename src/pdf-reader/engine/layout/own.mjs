@@ -825,5 +825,5 @@ function streamPage(pg) {
   const n = pg.glyphs.length
   const x0 = new Float64Array(n), y = new Float64Array(n), size = new Float64Array(n), u = new Array(n)
   pg.glyphs.forEach((g, i) => { x0[i] = g.x0; y[i] = g.y; size[i] = g.size; u[i] = g.u ?? '' })
-  return { glyphs: { n, x0, y, size, u }, boxes: pg.boxes, points: pg.points, boxAt: Int32Array.from(pg.boxAt ?? []), view: pg.view ?? [0, 0, 0, 0] }
+  return { glyphs: { n, x0, y, size, u }, boxes: pg.boxes, points: pg.points, boxAt: Int32Array.from(pg.boxAt ?? []), view: pg.view ?? [0, 0, 0, 0], paras: pg.paras ?? [] }
 }

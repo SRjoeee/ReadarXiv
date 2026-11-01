@@ -1729,7 +1729,9 @@ export function headsOf(units, names) {
       if (c !== 'display' || names.has(`p${i}.${q}a`)) break
       group.push(`p${i}.${q}a`)
     }
-    return { name: `p${i}.${k}a`, group }
+    // (the displays' sources, their letters alone, lower case: a label TeX sets on the paragraph's first line holds no word of them)
+    const src = [k, ...group.map(g => Number(g.slice(g.indexOf('.') + 1, -1)))].map(q => pieces[q].src ?? '').join('').normalize('NFKC').toLowerCase().replace(/[^\p{L}]/gu, '')
+    return { name: `p${i}.${k}a`, group, src }
   }
 }
 
@@ -1987,8 +1989,9 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
       else if (got.capped) dark = 'capped'
       else if (got.timedOut) dark = 'timedOut'
       else if (got.degraded) dark = 'degraded'
-      const { glyphs, boxes, points, boxAt } = dark ? { glyphs: [], boxes: [], points: [], boxAt: [] } : got
-      ink = { glyphs: packGlyphs(glyphs, { columns: STREAM_COLUMNS }), boxes, points, boxAt: Int32Array.from(boxAt), view: page.view.slice(0, 4) }
+      const { glyphs, boxes, points, boxAt, paras = [] } = dark ? { glyphs: [], boxes: [], points: [], boxAt: [] } : got
+      // (and its paragraphs' points, where a display a unit opens with begins: stream.mjs headInk)
+      ink = { glyphs: packGlyphs(glyphs, { columns: STREAM_COLUMNS }), boxes, points, boxAt: Int32Array.from(boxAt), view: page.view.slice(0, 4), paras }
       // its links, by the glyphs under them (linksOfPage): read where the operator list is
       links = linksOfPage(raw, glyphs, p)
     }

@@ -9,10 +9,10 @@ import { INK_ANY } from '@/pdf-reader/engine/layout/marks.mjs'
 // here), each glyph's boxes before it as 32-bit integers. A glyph is written as its character and place, every glyph
 // 5 pt wide at 10 pt
 
-type Item = string | { u: string; x: number; y: number; size?: number } | { rule: [number, number, number, number] } | { at: string }
+type Item = string | { u: string; x: number; y: number; size?: number } | { rule: [number, number, number, number] } | { at: string } | { para: string }
 /** a page from the items in stream order: a string is a run of glyphs on the current line, `{ at }` a point */
 function pageOf(items: Item[], view = [0, 0, 612, 792]): StreamPage {
-  const glyphs: Glyph[] = [], boxes: number[] = [], points: StreamPage['points'] = [], boxAt: number[] = []
+  const glyphs: Glyph[] = [], boxes: number[] = [], points: StreamPage['points'] = [], boxAt: number[] = [], paras: StreamPage['points'] = []
   let x = 72, y = 700
   for (const it of items) {
     if (typeof it === 'string') {
@@ -24,6 +24,7 @@ function pageOf(items: Item[], view = [0, 0, 612, 792]): StreamPage {
         x += 5
       }
     } else if ('at' in it) points.push({ name: it.at, glyph: glyphs.length, box: boxes.length / 4 })
+    else if ('para' in it) paras.push({ name: it.para, glyph: glyphs.length, box: boxes.length / 4 })
     else if ('rule' in it) boxes.push(...it.rule)
     else {
       const size = it.size ?? 10
@@ -33,7 +34,7 @@ function pageOf(items: Item[], view = [0, 0, 612, 792]): StreamPage {
       y = it.y
     }
   }
-  return { glyphs: packGlyphs(glyphs, { columns: STREAM_COLUMNS }), boxes, points, boxAt: Int32Array.from(boxAt), view }
+  return { glyphs: packGlyphs(glyphs, { columns: STREAM_COLUMNS }), boxes, points, boxAt: Int32Array.from(boxAt), view, ...(paras.length ? { paras } : {}) }
 }
 const closed: Follow = { closing: true, want: '', ends: [], blocked: false }
 const open = (want: string, ends: string[] = [], blocked = false): Follow => ({ closing: false, want, ends, blocked })
@@ -302,6 +303,30 @@ describe('ownedOf: a display its unit opens with, which the marking passes over 
     const group: Head = { name: 'p1.0a', group: ['p1.1a'] }
     expect(owned([page], {}, [], { '1s': group })).toEqual({ 'p1.0a': ['a=bc=d', 0], 'p1.1a': 'in the display before it' })
     expect(ownedOf([page], { follows: () => null, heads: n => (n === '1s' ? group : null) }).get('p1.0a')?.how).toBe(how('open, with the displays after it'))
+  })
+
+  it('begins at the paragraph the display begins: what no mark bounds before it stays out (Devin on #550: an unmarked listing)', () => {
+    // (a listing's lines no unit owns between the unit before and the display's paragraph, TeX's paragraph point q<n> at its start)
+    const page = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { para: 'q7' }, '\nlisting one', { para: 'q8' }, '\nlisting two', { para: 'q9' }, '\nx=y', { at: '1s' }, '\ntext'])
+    expect(owned([page], {}, [], { '1s': head })).toEqual({ 'p1.0a': ['x=y', 0] })
+    // (a paragraph point before the mark before it is no bound: the mark is)
+    const early = pageOf([{ at: 'bs1' }, { para: 'q1' }, 'words', { at: '0e' }, '\nx=y', { at: '1s' }, '\ntext'])
+    expect(owned([early], {}, [], { '1s': head })).toEqual({ 'p1.0a': ['x=y', 0] })
+  })
+
+  it('passes over a babel name TeX sets inside the display (Codex on #550: \\text{\\figurename}), and leaves a label the paragraph begins with out', () => {
+    const named = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { para: 'q2' }, '\nx=', { at: 'n0.listfigure.s' }, 'Figure', { at: 'n0.listfigure.e' }, '1', '\ny=2', { at: '1s' }, '\ntext'])
+    expect(owned([named], {}, [], { '1s': { ...head, src: 'xtextfigurenamey' } })).toEqual({ 'p1.0a': ['x=Figure1y=2', 0] })
+    // (a theorem's head, which \\everypar sets on the paragraph's first line before the display: no word of the display's source)
+    const theorem = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { para: 'q3' }, '\nTheorem 5.', '\nvec f=M x', '\nunder', { at: '1s' }, '\ntext'])
+    expect(owned([theorem], {}, [], { '1s': { ...head, src: 'vecmfmxunderbrace' } })).toEqual({ 'p1.0a': ['vecf=Mxunder', 0] })
+    // (a first line of the display spells some of its source, its glyphs' words run together though they are: "vecf" for \\vecm f)
+    const own = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { para: 'q3' }, '\nvecf=Mx dA', '\nunder', { at: '1s' }, '\ntext'])
+    expect(owned([own], {}, [], { '1s': { ...head, src: 'vecmfmxdaunderbrace' } })).toEqual({ 'p1.0a': ['vecf=MxdAunder', 0] })
+    // (nor one that goes on above it, a fraction's numerator, though its letters spell apart from its source's: 2610.19274v1 p24's
+    // L_MSE(x,y), \\mathcal{L}_{\\text{MSE}})
+    const frac = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { para: 'q3' }, '\nLMSE(x,y)=', { u: '1', x: 140, y: 694 }, { u: 'N', x: 140, y: 681 }, { u: 'z', x: 150, y: 688 }, { at: '1s' }, '\ntext'])
+    expect(owned([frac], {}, [], { '1s': { ...head, src: 'mathcalltextmsexyfracnz' } })).toEqual({ 'p1.0a': ['LMSE(x,y)=1Nz', 0] })
   })
 
   it('a display with a point of its own is found by it, as before', () => {
