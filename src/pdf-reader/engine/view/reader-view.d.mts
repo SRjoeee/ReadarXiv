@@ -150,6 +150,8 @@ export interface Internals {
     page(n: number): HTMLElement | null
     view(n: number): PlaceView | null
     near(n: number): boolean
+    /** whether place n's page view is the one the places are drawing the original's page on now */
+    drawing(n: number): boolean
     contentOf(n: number): PlaceContent
     /** place n's box in CSS px as PDF.js sizes the left's page n (its viewport floored to the place's rounding), else null */
     box(n: number): { width: number; height: number } | null

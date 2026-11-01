@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest'
 import type { TextLayerData } from '@/pdf-reader/engine/layer-proto/reader.mjs'
 import { ITEMS_MAX, STR_MAX, textContentOf, textItems, textLayer } from '@/pdf-reader/engine/view/text-layer.mjs'
-import { AHEAD_IDLE_MS, AHEAD_PAGES, TEXT_IDLE_MS } from '@/pdf-reader/engine/view/layer-side.mjs'
+import { AHEAD_PAGES, TEXT_IDLE_MS } from '@/pdf-reader/engine/view/layer-side.mjs'
 import { FakeIO, FakeTextLayerBuilder, flush } from './helpers/reader-fakes'
 import { ALL, content, installSideFakes, layerOf, M, nearOn, places, rowOf, settle, setup } from './helpers/side-setup'
 
@@ -177,7 +177,6 @@ describe('the layer side: the text layer with the laid page (the fake door)', ()
     s.side.take(m.index.units.map((_, id) => rowOf(id)))
     s.side.end()
     await settle(s, 4)
-    await s.clock.advance(AHEAD_IDLE_MS + 100)
     await settle(s, 60)
     expect(s.side.probe()).toMatchObject({ aheadKept: AHEAD_PAGES, texts: 1 + AHEAD_PAGES })
     FakeIO.tell([places(s)[1] as HTMLElement], true)
