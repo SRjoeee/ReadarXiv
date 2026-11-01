@@ -110,6 +110,14 @@ Prose after a closed table.
     ])
     expect(cells(tex).slice(1, 3).map(c => [c.row, c.col])).toEqual([[1, 0], [1, 1]])
   })
+  it('a row-ending macro read as TeX reads its arguments, a group or one token; one whose body holds cells (`&`) as before (Devin on #549)', () => {
+    const more = String.raw`\newcommand{\rowtitle}[1]{\multicolumn{2}{c}{#1}\\}\newcommand{\Title}{Some title words}\newcommand{\both}[2]{\textbf{#1} & \textit{#2}\\}`
+    const t = (rows: string) => `\\documentclass{article}\n${more}\n\\begin{document}\n\\begin{tabular}{ll}\n${rows}\n\\end{tabular}\n\\end{document}\n`
+    // (an unbraced argument: the row ended after it in the grid as in the walk)
+    expect(cells(t('\\rowtitle\\Title\nAfter the title & More words\\\\')).map(c => [c.text, c.row, c.col])).toEqual([['After the title', 1, 0], ['More words', 1, 1]])
+    // (a body that sets two cells: its call as the paper's macro was read before, the rows after it where they were)
+    expect(cells(t('\\both{Left text here}{Right text here}\nNext cell words & Value words\\\\')).map(c => [c.text, c.row, c.col])).toEqual([['Next cell words', 0, 0], ['Value words', 0, 1]])
+  })
   it('no mark of ours between a row\'s end and the next row', () => {
     const paper = openPaper(new Map([['main.tex', enc(tex)]]))
     const marked = new TextDecoder().decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))

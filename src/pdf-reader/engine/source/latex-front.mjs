@@ -391,8 +391,10 @@ export function tableGrid(s, from, to, rowEnds = null, rowEndsAfter = null) {
     const { name, end } = commandAt(s, i)
     // (a macro that ends the row after its arguments, rowEndsAfterOf: the call the row's last cell's, the row ended after it)
     if (rowEndsAfter?.has(name)) {
-      const { args, end: e } = argsAfter(s, end, rowEndsAfter.get(name))
-      if (args.length === rowEndsAfter.get(name) && args.every(a => a.kind === 'req')) {
+      // (its arguments as TeX reads them, and the walk (macroArgs): a group, or one token)
+      const call = macroArgs(s, end, { params: rowEndsAfter.get(name), opt: false }, to)
+      if (call) {
+        const e = call.end
         fill(); cut(e)
         row++; col = 0; content = false; rows[row] = { rule: false, filled: false }
         i = e; start = e; continue
@@ -2009,8 +2011,8 @@ function rowEndsOf(texts) {
 /**
  * The paper's macros of parameters whose body ends a table's row after what it sets (2610.40576v1's
  * \\cseg[2]{\\specialrule{…}\\multicolumn{2}{…}{\\textcolor{#2}{\\bfseries #1}}\\\\[4pt]}): name → its arguments' count, \\newcommand's
- * and \\renewcommand's form with no optional one. Read in a table as a row of its own: its text a cell, the row ended after
- * its arguments (tableGrid, the walk). A name defined otherwise as well is none
+ * and \\renewcommand's form with no optional one, whose body sets one cell (no `&`). Read in a table as a row of its own: its
+ * text a cell, the row ended after its arguments (tableGrid, the walk). A name defined otherwise as well is none
  */
 function rowEndsAfterOf(texts) {
   const out = new Map(), other = new Set()
@@ -2018,7 +2020,10 @@ function rowEndsAfterOf(texts) {
     for (const m of t.matchAll(/\\(?:(?:re)?newcommand|providecommand)\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(\[\s*(\d)\s*\])?\s*(\[[^\]]*\])?\s*/g)) {
       if (m.index > 0 && t[m.index - 1] === '\\') continue
       const name = m[1] ?? m[2], n = Number(m[4] ?? 0), k = m.index + m[0].length, e = t[k] === '{' ? matchGroup(t, k) : -1
-      if (n > 0 && !m[5] && e > 0 && ROW_END_TAIL.test(t.slice(k + 1, e - 1).trim())) out.set(name, n); else other.add(name)
+      // (one whose body sets cells of its own, `&` between them, is read as the paper's macro is anywhere: its arguments' cells
+      // are not known here)
+      const body = e > 0 ? t.slice(k + 1, e - 1).trim() : ''
+      if (n > 0 && !m[5] && e > 0 && ROW_END_TAIL.test(body) && !/(?:^|[^\\])&/.test(body)) out.set(name, n); else other.add(name)
     }
   }
   for (const n of other) out.delete(n)
