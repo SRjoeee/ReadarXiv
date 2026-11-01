@@ -169,6 +169,59 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     expect(texts(p)).toEqual(['Illustrative multi-group fluid channels.', 'After it.'])
     expect(patched(p)).toContain('\\IfFileExists{figures/a.png}{\\begin{figure}\\centering\\includegraphics{figures/a.png}\\caption{')
   })
+  it('an argument after one whose walk ended the paragraph is walked as a block: no unit begins between two of the command\'s arguments (2610.37818v1)', () => {
+    // (\IfFileExists{…}{\input{…}}{placeholder}: the \input ended the paragraph inside the second argument, and the third
+    // began a unit at its brace, whose line probe the marked original wrote between the two: TeX took it for the third
+    // argument and set the placeholder the paper never sets, a figure one box taller, the paper one page longer)
+    const body = 'Before it.\n\\IfFileExists{part.tex}{\\input{part}}{%\n  \\fbox{Placeholder words of the figure.}}\nAfter it.'
+    const files = new Map([['main.tex', enc(doc(body))], ['part.tex', enc('Inside the part.\n')]])
+    const paper = openPaper(files), all = paper.units as unknown as Unit[], tex = new TextDecoder().decode(files.get('main.tex'))
+    expect(all.map(textOf)).toEqual(['Before it.', 'Inside the part.', 'Placeholder words of the figure.', 'After it.'])
+    const third = tex.indexOf('{%\n  \\fbox')
+    for (const u of all.filter(x => x.file === 'main.tex')) expect(u.start <= third || u.start > third).toBe(true)
+    const placeholder = all.find(u => textOf(u).startsWith('Placeholder'))!
+    expect(placeholder.start).toBeGreaterThan(third)
+    expect(placeholder.end).toBeLessThan(tex.indexOf('\nAfter it.'))
+    // (the command's arguments as the paper writes them, every file the marked original writes, and a translation's)
+    const marked = new TextDecoder().decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(marked).toContain('\\IfFileExists{part.tex}{\\input{part}}{')
+    expect(patched(project(doc(body), { 'part.tex': 'Inside the part.\n' }))).toContain('\\IfFileExists{part.tex}{\\input{part}}{')
+  })
+  it('an environment whose begin code ends by beginning another takes that one\'s arguments (2610.30034v1\'s IEEEbiography, ieeecolor\'s alias of its biography)', () => {
+    // (read as one of no argument, the name in braces was the body's text, and the marked original wrote the unit's line probe
+    // between the photo and the name: the class took the probe for the name and printed digits before it on the base page)
+    const cls = '\\LoadClass{article}\n\\newenvironment{biography}[2][]{\\par\\noindent\\textbf{#2} }{\\par}\n\\newenvironment{IEEEbiography}{\\begin{biography}}{\\end{biography}}\n\\newenvironment{shortbio}[1]{\\par\\textbf{#1} }{\\par}\n\\newenvironment{bio}{%\n  \\begin{shortbio}}{\\end{shortbio}}\n\\newenvironment{bios}{\\begin{bio}}{\\end{bio}}\n'
+    const body = '\\begin{IEEEbiography}[{\\includegraphics{a.png}}] {Ying Wang} received the degree in automation.\n\\end{IEEEbiography}\n\n\\begin{bio}{Yue Ju} received the degree in engineering.\n\\end{bio}\n\n\\begin{bios}{H\\r{a}kan} was born in 1962.\n\\end{bios}'
+    const tex = `\\documentclass{bioclass}\n\\usepackage{graphicx}\n\\begin{document}\n${body}\n\\end{document}\n`
+    const files = new Map([['main.tex', enc(tex)], ['bioclass.cls', enc(cls)]])
+    const paper = openPaper(files), all = paper.units as unknown as Unit[]
+    expect(all.map(textOf)).toEqual(['received the degree in automation.', 'received the degree in engineering.', 'was born in 1962.'])
+    const marked = new TextDecoder().decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(marked).toContain('[{\\includegraphics{a.png}}] {Ying Wang}')
+    expect(marked).toContain('\\begin{bio}{Yue Ju}')
+    expect(marked).toContain('\\begin{bios}{H\\r{a}kan}')
+  })
+  it('colortbl\'s \\rowcolor takes its overhangs, [left][right], after its colour: no unit of them, no mark before them (2610.40394v1\'s table)', () => {
+    // (read as text, `[0pt][0pt]` began the row's unit, whose start mark went between the colour and its overhangs: the
+    // overhangs set as text, and the mark before the row's \multicolumn, "Misplaced \omit" three times)
+    const body = '\\begin{tabular}{ll}\nA cell of words & another cell \\\\\n\\rowcolor{gray!15}[0pt][0pt]\n\\multicolumn{2}{l}{\\textit{A heading row of words}} \\\\\n\\end{tabular}'
+    const paper = openPaper(new Map([['main.tex', enc(doc(body, '\\usepackage[table]{xcolor}'))]])), all = paper.units as unknown as Unit[]
+    expect(all.map(textOf)).toEqual(['A cell of words', 'another cell', 'A heading row of words'])
+    const marked = new TextDecoder().decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(marked).toContain('\\rowcolor{gray!15}[0pt][0pt]\n\\multicolumn{2}{l}{')
+  })
+  it('a control word the source ends with a comment before a word is ended by a space where a unit is written back (2610.40394v1\'s author block)', () => {
+    // (the walk passes over the comment, and the two were written as one name, \bfseriesYouqing: seven TeX errors, the names
+    // gone from the base page, and the guard's two compiles found no unit to blame)
+    const body = '\\author{%\n\\normalfont\\bfseries%\nYouqing Fang$^{1}$, \\authorcr\n\\bfseries%\nBin Liu$^{2}$}\n\\maketitle\nThe body of words.'
+    const paper = openPaper(new Map([['main.tex', enc(doc(body, '\\providecommand\\authorcr{\\\\}'))]]))
+    const marked = new TextDecoder().decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(marked).not.toMatch(/\\bfseries(?:Youqing|Bin)/)
+    expect(marked).toMatch(/\\bfseries Youqing/)
+    expect(marked).toMatch(/\\bfseries Bin/)
+    // (a translation's text after the control word keeps its empty group, which ends the name under XeTeX's letters too)
+    expect(patched(project(doc(body, '\\providecommand\\authorcr{\\\\}')))).not.toMatch(/\\bfseries<T/)
+  })
   it('a group right after \\begin{env} is the body\'s where the environment takes none (2608.25304\'s proofs, 1810.04805\'s appendix title) or fewer (a tabular\'s first cell)', () => {
     expect(texts(project(doc('\\begin{proof}\n{Iterating and summing gives the bound.}\n\\end{proof}')))).toEqual(['Iterating and summing gives the bound.'])
     expect(texts(project(doc('\\begin{center}{\\Large Appendix for the Paper}\\end{center}')))).toEqual(['Appendix for the Paper'])
