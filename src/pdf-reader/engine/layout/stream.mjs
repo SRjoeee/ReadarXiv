@@ -636,11 +636,11 @@ export function ownedPages({ follows, dropped = [], closing = () => null, heads 
       // (a display its unit opens with, by the start mark: its own page alone, so found with it; a start mark read again later is
       // told by twice(), the caller's to apply as for any point)
       if (heads) {
-        const W = new Array(p).fill(EMPTY)
-        W[p - 1] = page
+        let W = null
+        const window = () => { if (!W) { W = new Array(p).fill(EMPTY); W[p - 1] = page } return W }
         page.points.forEach((pt, q) => {
           if (!MARK_START.test(pt.name) || counts.get(pt.name) > 1 || dropped.includes(pt.name)) return
-          headEntries(heads(pt.name), page, R, p, q, n => opened.has(n), (n, e) => take(n, e, W))
+          headEntries(heads(pt.name), page, R, p, q, n => opened.has(n), (n, e) => take(n, e, window()))
         })
       }
     },
