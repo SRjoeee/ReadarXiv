@@ -347,11 +347,12 @@ const TBLR_ENVS = ['tblr', 'longtblr', 'talltblr']
 const FULL_RULE = /^(?:hline|hdashline|firsthline|lasthline|Hline|toprule|midrule|bottomrule|specialrule|Xhline|thickhline|hhline|tabucline|endhead|endfirsthead)$/
 /** the commands that stand in a cell without being its content — rules, spacing, colour, a strut — each with the
  *  arguments it takes: `o` an optional [..], `p` an optional (..), a digit that many required {..}. Read by their own
- *  arity, so that a cell's first group after them (\\hline {\\bf Parser}) stays the cell's */
+ *  arity, so that a cell's first group after them (\\hline {\\bf Parser}) stays the cell's; colortbl's \\rowcolor with its
+ *  overhangs after its colour, as the role table reads it (arg-roles.mjs) */
 const NOT_CONTENT = new Map(Object.entries({
   hline: '', hdashline: '', firsthline: '', lasthline: '', Hline: '', thickhline: '', endhead: '', endfirsthead: '', morecmidrules: '',
   toprule: 'o', midrule: 'o', bottomrule: 'o', addlinespace: 'o', specialrule: '3', Xhline: '1', hhline: '1', tabucline: 'o1',
-  cline: '1', cdashline: '1', cmidrule: 'op1', vspace: '1', noalign: '1', rowcolor: 'o1', arrayrulecolor: 'o1', rule: 'o2',
+  cline: '1', cdashline: '1', cmidrule: 'op1', vspace: '1', noalign: '1', rowcolor: 'o1oo', arrayrulecolor: 'o1', rule: 'o2',
   centering: '', raggedright: '', raggedleft: '', relax: '', noindent: '', strut: '', nopagebreak: 'o', pagebreak: 'o', newpage: '',
 }))
 /** past a command's arguments by its spec (NOT_CONTENT) */

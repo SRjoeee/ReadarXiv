@@ -178,7 +178,7 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     const paper = openPaper(files), all = paper.units as unknown as Unit[], tex = new TextDecoder().decode(files.get('main.tex'))
     expect(all.map(textOf)).toEqual(['Before it.', 'Inside the part.', 'Placeholder words of the figure.', 'After it.'])
     const third = tex.indexOf('{%\n  \\fbox')
-    for (const u of all.filter(x => x.file === 'main.tex')) expect(u.start <= third || u.start > third).toBe(true)
+    expect(all.filter(x => x.file === 'main.tex').map(u => u.start)).not.toContain(third)
     const placeholder = all.find(u => textOf(u).startsWith('Placeholder'))!
     expect(placeholder.start).toBeGreaterThan(third)
     expect(placeholder.end).toBeLessThan(tex.indexOf('\nAfter it.'))
