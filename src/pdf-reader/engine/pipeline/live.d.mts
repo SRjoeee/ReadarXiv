@@ -7,8 +7,9 @@ import type { Readings } from './cache.mjs'
 import type { TrPiece } from '../layer/pieces.mjs'
 
 /** a paper's files (path → bytes) → what the pipeline works on */
-/** `inFloat`: the indices in `units` (rising) of the units written inside a float (latex-front.mjs loadProject's) */
-export interface Paper { fsys: ReturnType<typeof inMemory>; meta: ReturnType<typeof analyze>; project: { main: string; units: SourceUnit[]; inFloat: number[]; /** the bibliographies \\bibliography reads, by the names it gives (latex-front.mjs) */ bibliography?: string[] }; units: SourceUnit[]; inFloat: number[]; kept: Set<SourceUnit>; /** the structural names its TeX prints that no package names in every target (source/paper-names.mjs): units of kind `name` in its bundle, after its source's */ names: string[] }
+/** `inFloat`: the indices in `units` (rising) of the units written inside a float (latex-front.mjs loadProject's); `texOrder`: the
+ *  indices in `units` in the order TeX sets them, where it is not theirs, else null (loadProject's) */
+export interface Paper { fsys: ReturnType<typeof inMemory>; meta: ReturnType<typeof analyze>; project: { main: string; units: SourceUnit[]; inFloat: number[]; /** the bibliographies \\bibliography reads, by the names it gives (latex-front.mjs) */ bibliography?: string[] }; units: SourceUnit[]; inFloat: number[]; texOrder?: number[] | null; kept: Set<SourceUnit>; /** the structural names its TeX prints that no package names in every target (source/paper-names.mjs): units of kind `name` in its bundle, after its source's */ names: string[] }
 export declare function openPaper(files: Map<string, Uint8Array>): Paper
 /** the translation so far, with unit marks, set by one of strategiesFor: the files that differ from the paper's */
 /** `spans`, where given, gets `lines()`: each unit's lines and bytes in the files as written, worked out when asked */
@@ -23,8 +24,12 @@ export declare const TYPESETTING_VERSION: string
  *  \\newcommand (as a \\providecommand), its conditionals on an undefined name whole, its \\@ifundefined, its own \\def and \\let
  *  set only where the name is undefined; '' where none */
 export declare function bblProvides(fsys: { list(): string[]; read(path: string): Uint8Array | null }, main: string): string
-/** the font probe; with `width`, the width and size probes the typesetting rule measures the face by */
-export declare function probeFiles(paper: Paper, options?: { width?: boolean; marks?: boolean }): Map<string, Uint8Array>
+/** the font probe; with `width`, the width and size probes the typesetting rule measures the face by; with `marks` and
+ *  `preamble` (markedPreamble's text), that preamble in place of the paper's own */
+export declare function probeFiles(paper: Paper, options?: { width?: boolean; marks?: boolean; preamble?: string | null }): Map<string, Uint8Array>
+/** the main file's preamble as the marked original writes it, for the mark probe, with its first and last lines in the probe's
+ *  main file; null where no unit of the main file stands in its preamble */
+export declare function markedPreamble(paper: Paper, options?: { complete?: Complete | null }): { text: string; first: number; last: number } | null
 /** the original with unit marks; with `lines`, each unit's lines and the forced breaks in its log; `spans`, where
  *  given, gets `lines()`: each unit's lines and bytes in the files as written. `layout` null or absent: the bytes as at
  *  3cb5a733; else the units marked by layoutMarking (layout/marks.mjs) with those classes, and LAYOUT_TEX after MARK_DEF;
@@ -39,8 +44,11 @@ export declare function originalFiles(paper: Paper, options?: { lines?: boolean;
 export declare function keptFor(paper: Paper, lang: string): Set<SourceUnit>
 /** whether a compile's last TeX pass stopped short of the document's end (a fatal error), whatever PDF it left: such a
  *  compile is one that failed */
-/** graphicx's draft option, the first line of every marked original's main file: the final pass makes it an empty line */
+/** graphicx's draft option, the first line of every marked original's main file: the final pass makes it NO_DRIVER_GROUP */
 export declare const DRAFT_OPTION: string
+/** the final pass's first line: hooks that switch the transparency group pdftex.def 1.2d and luatex.def 1.2f write on an
+ *  included PDF off, as arXiv's TeX Live 2025 (2025-08-03) includes one; nothing where a driver has no such group */
+export declare const NO_DRIVER_GROUP: string
 export declare const stoppedShort: (log: string | null | undefined) => boolean
 /** whether a compile ran through, the one test of a compile's success: `ok`, and its last TeX pass neither stopped short
  *  (stoppedShort) nor ended before END_TEX's AXT-END (completeLog). Whether it gave a PDF is the caller's to ask */
@@ -121,6 +129,7 @@ export interface BatchReport {
 /** what names a compile's floats and its generated headings, by babel's key (names.mjs) */
 export type { Captions } from '../layout/names.mjs'
 import type { Captions } from '../layout/names.mjs'
+import type { Complete } from '../layout/marks.mjs'
 /** the TeX that writes what names the floats and the headings to the log, at the document's end, in every compile of the translation */
 export declare const CAPTIONS_PROBE: string
 /** whether a compile named each float and each generated heading with the target's names, from its log; null with no such row */

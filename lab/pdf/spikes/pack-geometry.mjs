@@ -15,7 +15,7 @@ import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { readArxivText } from '../../../src/pdf-reader/engine/layout/arxiv.mjs'
 import { createHash } from 'node:crypto'
 import { layoutMarksOfPaper } from '../../../src/pdf-reader/engine/layout/paper.mjs'
-import { anchorUnits, boundsFromMarks, floatMatches } from '../../../src/pdf-reader/engine/pipeline/anchors.mjs'
+import { anchorUnits, boundsFromMarks, floatMatches, orderOf } from '../../../src/pdf-reader/engine/pipeline/anchors.mjs'
 import { leftSideOf } from '../../../src/pdf-reader/engine/pipeline/left-side.mjs'
 import { displayEdges, unitText } from '../../../src/pdf-reader/engine/translate/mt.mjs'
 const [sourceGz, pdf, out, compiles] = process.argv.slice(2)
@@ -42,7 +42,9 @@ if (compiles) {
   if (!made.unitMarks) throw new Error('no unit marks: ' + JSON.stringify(made.refused))
   bounds = boundsFromMarks(text.tokens, made.unitMarks)
 }
-const anchors = anchorUnits(text.tokens, texts, { ...(bounds ? { bounds } : {}), floating, floatMatch })
+// (in the order TeX sets the units, as the page pass anchors them: anchors.mjs orderOf)
+const order = orderOf(paper.texOrder, texts.length)
+const anchors = anchorUnits(text.tokens, order ? order.map(i => texts[i]) : texts, { ...(bounds ? { bounds } : {}), floating, floatMatch })
 const side = leftSideOf({ doc: text.tokens, views: text.views, anchors, edges: text.edges })
 writeFileSync(out, `${JSON.stringify({ schema: 1, pdfjs: PDFJS_V, kinds: paper.units.map(u => u.kind), left: { pages: side.pages, units: side.units } })}\n`)
 console.log(out, paper.units.length, 'units', side.units.length, 'located')

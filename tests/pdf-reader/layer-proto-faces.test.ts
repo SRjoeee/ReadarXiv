@@ -114,13 +114,13 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks() })
 
 type Slices = { url: string; ranges: number[] }[]
-/** a face's coverage cut at every 0x1000 code points, a slice each (the lowest first): the cut of any host */
-function cut(id: string, name = (n: number) => `/s/${id}-${n.toString(16)}.woff2`): Slices {
+/** a face's coverage cut at every 0x1000 code points (2^`bits`), a slice each (the lowest first): the cut of any host */
+function cut(id: string, name = (n: number) => `/s/${id}-${n.toString(16)}.woff2`, bits = 12): Slices {
   const by = new Map<number, number[]>()
   const r = COVERAGE[id] as unknown as number[]
   for (let i = 0; i < r.length; i += 2) {
     for (let a = r[i]!; a <= r[i + 1]!;) {
-      const chunk = a >> 12, z = Math.min(r[i + 1]!, ((chunk + 1) << 12) - 1)
+      const chunk = a >> bits, z = Math.min(r[i + 1]!, ((chunk + 1) << bits) - 1)
       const list = by.get(chunk) ?? by.set(chunk, []).get(chunk)!
       list.push(a, z)
       a = z + 1
@@ -393,6 +393,43 @@ describe('a slice that does not load', () => {
       expect(run.skipped.map(s => `${s.id}:${s.why}`), what).toEqual(['0:face'])
       expect(faces.some(f => f.src.includes('local(') || f.url.includes('x.woff2')), what).toBe(false)
     }
+  })
+})
+
+describe('the faces a unit checks, none failed', () => {
+  it('reads their statuses alone, walking no declared face for each of its characters (a CJK body in hundreds of slices); one failed, the walk finds it', async () => {
+    // (each FontFace's family read counted: the walk for a failed face reads every declared face's, for each character)
+    let reads = 0
+    const Stubbed = g.FontFace as new (family: string, src: string, d?: object) => object
+    g.FontFace = class extends Stubbed {
+      constructor(family: string, src: string, d?: object) {
+        super(family, src, d)
+        Object.defineProperty(this, 'family', { get: () => { reads++; return family }, enumerable: true })
+      }
+    }
+    // (a load of the faces whose ranges hold the text's characters, chosen by their ranges alone; fulfilled with those that
+    // loaded, as WebKit's: the statuses are the verdict, never the promise)
+    ;(document.fonts as unknown as { load: (font: string, text: string) => Promise<unknown> }).load = async (_font, text) => {
+      const want = faces.filter(f => [...text].some(ch => inRanges(rangesOf(f.unicodeRange), ch.codePointAt(0)!)))
+      await Promise.allSettled(want.map(f => (f as unknown as { load(): Promise<unknown> }).load()))
+      return want.filter(f => f.status === 'loaded')
+    }
+    const F = await import('@/pdf-reader/engine/layer-proto/fonts.mjs')
+    F.setRoleFaces('zh', 'times', { group: 'shs-sc' })
+    // (every face cut at every 0x100 code points: the body's coverage in over a hundred slices, as a host serves it in ranks)
+    const set = F.roleFaceSet({ faceSources: async (id: string) => cut(id, n => `/s/${id}-${n.toString(16)}.woff2`, 8) })
+    const face = F.faceOf({ fam: 'serif', design: 'times', bold: false, italic: false, caps: false } as never, 'cjk', 'zh')
+    // (the run's tables asked and their slices declared by a first unit)
+    expect(await set.check([{ face, text: '\u4e00' }] as never)).toBeNull()
+    expect(faces.filter(f => f.url.includes('shs-sc-regular-')).length).toBeGreaterThan(100)
+    reads = 0
+    expect(await set.check([{ face, text: '\u6c49\u5b57\u4e2d\u6587' }] as never)).toBeNull()
+    expect(reads).toBe(0)
+    // (a slice that fails: the unit with a character of it is left the original, the walk run as before)
+    rejects = src => src.includes('shs-sc-regular-8b.woff2')
+    expect(await set.check([{ face, text: '\u8bed' }] as never)).toEqual({ why: 'face' })
+    expect(reads).toBeGreaterThan(0)
+    expect(await set.check([{ face, text: '\u5c71' }] as never)).toBeNull()
   })
 })
 

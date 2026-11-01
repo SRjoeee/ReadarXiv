@@ -22,10 +22,11 @@
 // The compile and the opening are the caller's (a native TeX Live and PDF.js in Node, the TeX page and a worker in a
 // browser), so that this imports neither PDF.js nor a `node:*` module.
 import { jobName, lastTexLog, latin1, latin1Bytes, normalizePath, texText } from '../source/latex-front.mjs'
-import { DRAFT_OPTION, listsMissing, notFound, openPaper, originalFiles, probeFiles, ranThrough } from '../pipeline/live.mjs'
+import { DRAFT_OPTION, listsMissing, markedPreamble, NO_DRIVER_GROUP, notFound, openPaper, originalFiles, probeFiles, ranThrough, stoppedShort } from '../pipeline/live.mjs'
+import { completeLog } from '../pipeline/typeset/tex.mjs'
 import { bundleUnitsOf } from '../layer-proto/units.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
-import { auxUnits, engineUnknown, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.mjs'
+import { auxUnits, copiesOutOfPlace, engineUnknown, preambleUnits, errorCount, errorUnits, firstError, limitOf, ownErrors, pagesOfLog, texLiveOf, texRan, unbalancedUnits, unmarkedFiles, whyText } from './guard.mjs'
 import { DRIVER_OUTPUT_MARK, driverLostInk, driverOutputGiven, driverOutputTruncated, finalCheck, markTextOf } from './base.mjs'
 import { completeCalled, LAYOUT_CLASSES, probeSamples, readInkAnswers, readMarked, readMarkProbe, readNameProbe, readSkipProbe, NAME_MARK_FILE, withoutNameMarks } from './marks.mjs'
 
@@ -124,12 +125,15 @@ export async function madeBibliography(paper, { compile, compilerOf = null, engi
  * time). Never throws: a throw of the guard's own skips its brace check, or after the compile takes the marked original as
  * before the guard (one that ran through with a PDF, else the compile's refusal); a failed allocation goes on as itself.
  *
- * The marked original must be the paper (the layout guard, layout/guard.mjs; R1 of 2026-10-19). Before its compile, a unit
- * whose writing changes its file's brace balance outside comments and verbatim is left unmarked (unbalancedUnits; our other
+ * The marked original must be the paper (the layout guard, layout/guard.mjs; R1 of 2026-10-19). Before its compile, the units
+ * TeX's errors stand at where the mark probe read the main file's preamble as the marked original writes it are left unmarked
+ * (live.mjs markedPreamble, guard.mjs preambleUnits: 'preamble', the probe then asked again over the paper's own preamble for its
+ * answers), and a unit whose writing changes its file's brace balance outside comments and verbatim is (unbalancedUnits; our other
  * edits unbalancing a file: the name marks off). After it, every check must hold: it ran through (live.mjs ranThrough); its
  * page count is arXiv's (`pages`, where the host gives it: a number, or a function asked once for it; with several toplevel
  * sources, `meta.toplevels`, at most arXiv's: the first file's pages are arXiv's first); no auxiliary file it wrote holds a
- * mark of ours where no text is set (auxUnits); its TeX errors are no more than the unmarked original's (an unmarked compile
+ * mark of ours where no text is set (auxUnits), unless TeX shows what it did with each (copiesOutOfPlace: the compile otherwise
+ * the paper's, its log naming every destination set twice); its TeX errors are no more than the unmarked original's (an unmarked compile
  * only where it has any). A paper whose marked original passes costs no compile more. On a check that fails, the units the
  * evidence blames are left unmarked and the marked original compiled again, at most GUARD_EXTRA compiles in all, the
  * unmarked original's among them, none where `compileBudgetMs` (the host's budget across every compile of the paper, as
@@ -200,15 +204,32 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     if (typeof textOf !== 'function' || !pdf?.length) return null
     try { const pages = await textOf(pdf); return Array.isArray(pages) ? markTextOf(pages) : null } catch (e) { if (isMemoryError(e)) throw e; return null }
   }
+  // (the paper's macros that read nothing past their arguments, from their definitions: the front end's, those its units call)
+  const complete = completeCalled(paper.units, paper.project?.complete)
+  // (the preamble as the marked original writes it, where a unit of the main file stands in it: live.mjs markedPreamble. A throw
+  // of its own leaves the probe the paper's own preamble's, as before)
+  let preamble = null
+  try { preamble = markedPreamble(paper, { complete }) } catch (e) { if (isMemoryError(e)) throw e; preamble = null }
   const probe = await stage('probe', async () => {
     // (runLive's request for its font probe)
-    const c = await asked({ main, engine, rerun: false, bibtex: false, overrides: probeFiles(paper, { marks: true }) })
+    const ask = pre => asked({ main, engine, rerun: false, bibtex: false, overrides: probeFiles(paper, { marks: true, ...(pre ? { preamble: pre.text } : {}) }) })
+    let c = await ask(preamble), blamed = new Set()
+    if (preamble) {
+      // (TeX's errors at our marks where it read the marked preamble name their units, left unmarked before the marked compile
+      // (guard.mjs preambleUnits), TeX stopped there or not; then, or where that probe stopped before its body wrote a row (TeX
+      // stopped in the preamble), the probe asked again over the paper's own preamble, whose answers no error of ours came before.
+      // One that stopped in its body, in a sample of its own, stopped where the paper's own preamble's stops: its body is that
+      // one's, and so are its rows)
+      const past = !!c && ((completeLog(c.log) && !stoppedShort(c.log)) || /^LAYOUT-PROBE /m.test(lastTexLog(c.log)))
+      blamed = c ? preambleUnits(c.log, paper.units.length, preamble) : new Set()
+      if (!past || blamed.size) c = await ask(null)
+    }
     const log = lastTexLog(c?.log)
     if (!log) return null
     // (the texts of the macros and of the units' leads, asked last: live.mjs probeFiles)
     // (the body's and the entries' answers, as every reader takes them: marks.mjs readInkAnswers)
     const { inkless, texts, apart } = readInkAnswers(log, paper.units)
-    return { switches: readMarkProbe(log, probeSamples(paper.units, paper.project?.complete)), inkless, texts, names: readNameProbe(log), lineskip: readSkipProbe(log), apart }
+    return { switches: readMarkProbe(log, probeSamples(paper.units, paper.project?.complete)), inkless, texts, names: readNameProbe(log), lineskip: readSkipProbe(log), apart, blamed }
   })
   if (!probe) return { refused: 'probe', ms }
   // (the day the marked original and its final pass are compiled on: the host's, asked once; any failure of the host's but a
@@ -216,17 +237,17 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
   if (sourceDate !== null && sourceDate !== undefined) {
     try { const d = typeof sourceDate === 'function' ? await sourceDate() : sourceDate; if (Number.isSafeInteger(d) && d >= 0) date = d } catch (e) { if (isMemoryError(e)) throw e }
   }
-  const { switches, inkless, texts, names, lineskip, apart } = probe
-  // (the paper's macros that read nothing past their arguments, from their definitions: the front end's, those its units call)
-  const complete = completeCalled(paper.units, paper.project?.complete)
+  const { switches, inkless, texts, names, lineskip, apart, blamed } = probe
   const cm = converge ? { drafts: 0, marked: 0, settled: false } : null
   /** the result, with CM's record where it ran */
   const result = r => (cm ? { ...r, cm } : r)
   const job = jobName(main), count = paper.units.length, bibtex = paper.meta.bbl ? false : null
   /** the marked original's files, the units of `unmarked` as the paper's own and the babel names marked or not */
   const filesOf = (unmarked, named, spans) => originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, switches, inkless, complete, apart, ...(unmarked.size ? { unmarked } : {}), ...(named ? {} : { names: false }), spans })
-  // (before the compile: each unit's writing against its source's braces; our other edits unbalancing a file, no names)
-  const g = { extra: 0, unmarked: new Set(), names: true, failed: [] }
+  // (before the compile: the units the probe's preamble blamed (`preamble`); each unit's writing against its source's braces; our
+  // other edits unbalancing a file, no names)
+  const before = () => ({ unmarked: new Set(blamed), failed: blamed.size ? ['preamble'] : [] })
+  const g = { extra: 0, ...before(), names: true }
   // (a throw of the check's own skips it: the marked original as before; the files written in the compile's stage then, whose
   // throw is the compile's refusal as before the guard)
   let spans = {}, files = null
@@ -235,14 +256,13 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     const balance = unbalancedUnits(paper, f, sp.lines(), sp.skip)
     if (balance.units.size || balance.other) {
       g.failed.push('braces')
-      g.unmarked = balance.units
+      g.unmarked = new Set([...blamed, ...balance.units])
       g.names = !balance.other
       files = filesOf(g.unmarked, g.names, spans)
     } else { spans = sp; files = f }
   } catch (e) {
     if (isMemoryError(e)) throw e
-    g.failed = []
-    g.unmarked = new Set()
+    Object.assign(g, before())
     g.names = true
     spans = {}
     files = null
@@ -287,12 +307,15 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
   return 'pdf' in made && wantFinal ? { ...made, base: await finalPass(accepted) } : made
 
   /**
-   * The final pass (design §3.1): the files of the compile that stands with graphicx's draft option made an empty line (no line
-   * moves), over what that compile wrote — its aux, bibliography, lists and index, the job's own outputs aside — and in place of
-   * none of its own files, one pass of the paper's compiler with no bibliography step, on the marked original's day. Within the
-   * compile budget, as the guard's compiles are (a compile as long as the longest so far, and a fifth). The marks are read
-   * from the draft; this pass is the base page, its marks where the draft has them (base.mjs finalCheck, the host's to ask):
-   * { pdf, log }, or { refused: 'final', why }
+   * The final pass (design §3.1): the files of the compile that stands with graphicx's draft option's line made NO_DRIVER_GROUP's
+   * (one line for one: no line moves), over what that compile wrote — its aux, bibliography, lists and index, the job's own
+   * outputs aside — and in place of none of its own files, one pass of the paper's compiler with no bibliography step, on the
+   * marked original's day. Within the compile budget, as the guard's compiles are (a compile as long as the longest so far, and
+   * a fifth). The marks are read from the draft; this pass is the base page, its marks where the draft has them (base.mjs
+   * finalCheck, the host's to ask): { pdf, log }, or { refused: 'final', why }. The line was empty before 2026-10-31; it now
+   * includes a PDF figure as arXiv's TeX Live 2025, the state of 2025-08-03, does, with no transparency group of the driver's
+   * (graphics-def 8d691483be came after it): our figure forms are then arXiv's, which the delta copies, and drawn as arXiv's
+   * are. The marked compile is left as it is, so that its marks and the units read from it are what they were
    */
   async function finalPass(e) {
     const t0 = performance.now()
@@ -307,7 +330,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     if (!text.startsWith(`${DRAFT_OPTION}\n`)) return no('the marked original\'s main file does not begin with graphicx\'s draft option')
     const outputs = outputsOf(job), over = new Map()
     for (const [p, b] of [...req.overrides, ...e.c.files]) if (e.files.has(p) || !outputs.test(p)) over.set(p, e.files.get(p) ?? b)
-    over.set(main, latin1Bytes(`\n${text.slice(DRAFT_OPTION.length + 1)}`))
+    over.set(main, latin1Bytes(`${NO_DRIVER_GROUP}\n${text.slice(DRAFT_OPTION.length + 1)}`))
     let c = null
     try { c = await asked({ main, engine, rerun: false, bibtex: false, overrides: over }) } catch (x) {
       if (isMemoryError(x)) throw x
@@ -349,7 +372,12 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
     const evidence = async (c, f, sp) => {
       const ran = ranThrough(c) && !!c?.pdf?.length, M = c ? pagesOfLog(c.log) : null
       const shown = ran ? await markText(c.pdf) : null
-      return { c, files: f, spans: sp, ran, pages: M, short: ran && N !== null && M !== null && M < N && !several, long: ran && N !== null && M !== null && M > N, aux: ran ? auxUnits(c, count, job) : new Set(), text: shown ? shown.pages.length > 0 : false, textUnits: new Set(shown ? [...shown.units].filter(u => u < count) : []), errors: c ? errorCount(c.log) : 0 }
+      const short = ran && N !== null && M !== null && M < N && !several, long = ran && N !== null && M !== null && M > N
+      const text = shown ? shown.pages.length > 0 : false, errors = c ? errorCount(c.log) : 0
+      // (a mark a file it wrote holds, judged by what TeX did with it where the compile shows it: guard.mjs copiesOutOfPlace; its
+      // pages' text read, so that no mark printed is known, not assumed: no `textOf`, or one that failed, shows nothing)
+      const aux = ran ? copiesOutOfPlace(auxUnits(c, count, job), { clean: shown !== null && !short && !long && !text && errors === 0, log: c.log }) : new Set()
+      return { c, files: f, spans: sp, ran, pages: M, short, long, aux, text, textUnits: new Set(shown ? [...shown.units].filter(u => u < count) : []), errors }
     }
     /** whether it stands: ran through, arXiv's pages, nothing out of place, and no errors (or no more than the paper's own) */
     const fits = e => e.ran && !e.short && !e.long && e.aux.size === 0 && !e.text

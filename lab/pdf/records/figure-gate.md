@@ -9,6 +9,28 @@ band loses its ink: no double ink), O (each band then one colour: nothing a tran
 (`figure-text.mjs` setsOf) and the fit rule's counts, label by label as BUNDLE 10 drew them against set by set (`figure-fit.mjs`
 fitFigureSet), over a model of zh translations or Microsoft's. Counts and ids only.
 
+## Run of 2026-11-01, the pack c9a45bd9 (engine `fix/sweep-6e0a` against `next` 8b4203856, PIPELINE 46)
+
+A glyph set turned is cut by the clip where its own ink passes it (`layout/ink.mjs` `turnedGlyph`, `docs/PDF-READER.md` §19.12).
+The pack's base pages hold no driver group since PIPELINE 44, so their forms clip by their BBox; `next`'s reading cut every
+turned title at a figure's edge. The model's translations, both sides on the pack as it is (the change moves no layout file and
+no base page):
+
+| Paper | Units next → head | Drawn next → head | G1 | G3f | D | O | R |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 1512.03385v1 | 176 → 181 | 164 → 166 | 0 | 0 | 0 | 0 | 0 |
+| 1706.03762v7 | 240 → 244 | 169 → 171 | 0 | 0 | 0 | 0 | 0 |
+| 1810.04805v2 | 146 → 146 | 119 → 119 | 0 | 0 | 0 | 0 | 0 |
+| 2307.16209v1 | 56 → 56 | 56 → 56 | 0 | 0 | 0 | 0 | 0 |
+| 2608.04322v1 | 218 → 237 | 174 → 180 | 0 | 0 | 0 | 0 | 0 |
+| 2609.26457v1 | 170 → 172 | 156 → 158 | 0 | 0 | 0 | 0 | 0 |
+
+1512.03385v1 and 2608.04322v1 are back at the counts of the run of 2026-10-29 below (181 and 166, 237 and 180), made over the
+bases with the group. 1706.03762v7 gains p13 and p14's `<pad>` labels at its attention figures' right edge, shown whole on
+arXiv's page; its cropped "Input-Input Layer5" titles stay the original's. `ocg-gate.mjs` (GPU) on the four TeX Live 2025
+papers: the proof passes, G1 0 but one run of 2608.04322v1 p9 at 18 px, 0 when run again on the GPU and the CPU canvas (the page
+of §19.9 on which Chromium differs from itself).
+
 ## Run of 2026-10-29, the pack ad76c514 (engine `fix/figure-text-groups` merged with `next` 25b498b0, LAYOUT 25)
 
 The owner's rule of 2026-10-29 (`docs/PDF-READER.md` §19.12, its set and its room): a figure's labels of one group at one size,

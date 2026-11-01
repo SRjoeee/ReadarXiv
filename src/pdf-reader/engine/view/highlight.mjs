@@ -24,8 +24,9 @@ import { FIGURE_KIND } from '../rules/content-classes.mjs'
 import { floatShapes } from './floats.mjs'
 
 /** kinds of unit that are no running text: what lies among their words is their float's, not theirs (a figure's ink unit, a
- *  label's: content-classes.mjs FIGURE_KIND) */
-const NOT_RUNNING = new Set(['heading', 'cell', 'figure', FIGURE_KIND])
+ *  label's: content-classes.mjs FIGURE_KIND); and a display, a block of its own lit whole (view/shapes.mjs: its segments' tokens,
+ *  layer-proto/units.mjs displayBlockId; the owner, 2026-10-30) */
+const NOT_RUNNING = new Set(['heading', 'cell', 'figure', FIGURE_KIND, 'display'])
 /** kinds of unit a float holds or names, whose words' gaps hold the float's own (a caption's figure's labels between its words in
  *  the stream): nothing between two of their words is theirs (pageGeometry's filling). A caption lights by sentence, as a body unit
  *  does (the owner, 2026-10-30, docs/PDF-READER.md §17.1), but keeps out of its float's words */
@@ -50,6 +51,9 @@ const FLOATS = new Set(['caption', 'cell', 'figure'])
 const LONG = 0.25, COLUMN_LINES = 4, EDGE_LINES = 3, EDGE_SHARE = 0.05
 /** how far past the column's edge a run's rows may reach (an overfull display), and within how far of it they are the edge's */
 const OVERHANG = 6, SNAP = 3
+/** how far before its line's start a label's box may stand and be on that line (PDF units: a list's or a theorem's label set apart
+ *  by a few spaces, an outdented number) */
+const LABEL_GAP = 24
 /** lines overlapping by more than this (PDF units) are one row */
 const OVERLAP = 0.5
 
@@ -117,7 +121,7 @@ export function layoutOf(doc, views, anchors, kindOf = () => undefined, { edges 
  * `first`: the side's stream, as the parts' units name their streams), rising page by page
  */
 export function pageLayout(kindOf = () => undefined) {
-  return { tok: null, pageStart: null, pt: [null], page: [null], anchors: new Map(), kindOf, unitsOn: [], pagesOf: new Map(), cache: new Map(), indents: new Map(), views: [], told: new Map(), spans: new Map(), drawings: new Map(), drawn: new Set() }
+  return { tok: null, pageStart: null, pt: [null], page: [null], anchors: new Map(), kindOf, unitsOn: [], pagesOf: new Map(), cache: new Map(), indents: new Map(), views: [], told: new Map(), spans: new Map(), drawings: new Map(), drawn: new Set(), boxes: new Map(), inPlace: new Set() }
 }
 
 /**
@@ -130,18 +134,54 @@ export function pageLayout(kindOf = () => undefined) {
  */
 export function layoutParts(L, parts) {
   let told = false
-  for (const { pages, views, left, quiet = false } of parts) {
+  const carriedIds = new Set()
+  for (const { pages, views, left, quiet = false, carried } of parts) {
     for (let i = 0; 4 * i < views.length; i++) {
       const at = pages[0] - 1 + i
       if (!L.views[at]) { L.views[at] = views.slice(4 * i, 4 * i + 4); told = true }
     }
     for (const [id, stream, rects] of left) {
-      if (L.told.has(id) || L.drawn.has(id)) continue
+      // (a unit told from its boxes alone, quiet, gives way to its located telling, whichever comes first: view/shapes.mjs)
+      const was = L.told.get(id)
       const rs = rects.map(([page, x0, y0, x1, y1]) => ({ page, x0, y0, x1, y1 }))
+      // (a moved page's boxes carried onto arXiv's page `carried` (view/shapes.mjs carryPage): the rectangles there of a block told
+      // from its boxes these, in their place among its pages', and none where they all left it; a unit located there keeps arXiv's)
+      if (carried !== undefined) {
+        if (L.drawn.has(id) || (!was && !rs.length)) continue
+        if (!was) { L.told.set(id, { stream, rects: rs, quiet: true }); carriedIds.add(id); continue }
+        if (!was.quiet && was.rects.some(r => r.page === carried && !r.quiet)) continue
+        if (!was.quiet) for (const r of rs) r.quiet = true
+        const stale = r => r.page === carried && (was.quiet || r.quiet), first = was.rects.findIndex(stale), kept = was.rects.filter(r => !stale(r))
+        const k = first >= 0 ? was.rects.slice(0, first).filter(r => !stale(r)).length : (i => (i < 0 ? kept.length : i))(kept.findIndex(r => r.page > carried))
+        const next = [...kept.slice(0, k), ...rs, ...kept.slice(k)]
+        if (next.length === was.rects.length && next.every((r, j) => { const o = was.rects[j]; return r.page === o.page && r.x0 === o.x0 && r.y0 === o.y0 && r.x1 === o.x1 && r.y1 === o.y1 })) continue
+        was.rects = next
+        carriedIds.add(id)
+        continue
+      }
+      // (a located unit's boxes on a page it is not located on: that page its own too, its rectangles there quiet — no part of the
+      // page's columns, edges or leadings; view/shapes.mjs. And a unit told from its boxes, its boxes carried onto another page of
+      // arXiv's, a moved line's: that page its own too)
+      if (was && quiet && !L.drawn.has(id)) {
+        const have = new Set(was.rects.map(r => r.page)), add = rs.filter(r => !have.has(r.page))
+        if (!add.length) continue
+        for (const r of add) r.quiet = true
+        was.rects = [...was.rects, ...add]
+        L.anchors.delete(id)
+        told = true
+        continue
+      }
+      if (L.drawn.has(id) || (was && (quiet || !was.quiet))) continue
+      // (a located telling in place of a quiet one keeps the quiet one's pages it does not hold, quiet, in whatever order the parts
+      // came: a unit's boxes in one part and its location on another page in a later one light on both pages, as read whole)
+      if (was) { const have = new Set(rs.map(r => r.page)); for (const r of was.rects) if (!have.has(r.page)) rs.push({ ...r, quiet: true }); L.anchors.delete(id) }
       if (DRAWING.has(L.kindOf(id))) { L.drawn.add(id); drawnAt(L.drawings, rs) } else L.told.set(id, { stream, rects: rs, ...(quiet ? { quiet } : {}) })
       told = true
     }
   }
+  // (only quiet rectangles changed, a moved page's carried ones: no part of the columns, edges or leadings, so the document stands
+  // and only those units' pages and anchors are told again; their pages' geometry and floats, the frames let go)
+  if (!told && carriedIds.size) { retellQuiet(L, carriedIds); return true }
   if (!told) return false
   const units = [...L.told].sort((a, b) => a[0] - b[0])
   Object.assign(L, documentOf(Array.from(L.views, v => v ?? null), units.map(([id, u]) => [id, u.rects, u.quiet === true]), L.kindOf))
@@ -151,6 +191,23 @@ export function layoutParts(L, parts) {
   L.frames = undefined
   L.floats = undefined
   return true
+}
+
+/** units whose quiet rectangles alone changed (layoutParts, a part `carried`) told again as documentOf tells them: each one's pages
+ *  (`pagesOf`, those with a view) and its place among each page's units (`unitsOn`, by id), its anchor; every page it was or is on
+ *  made again, with its floats and indents, and the frames (floats.mjs frameOf, which reads every rectangle) */
+function retellQuiet(L, ids) {
+  for (const id of ids) {
+    const u = L.told.get(id), old = L.pagesOf.get(id) ?? []
+    const ps = [...new Set(u.rects.filter(r => L.page[r.page]).map(r => r.page))].sort((a, b) => a - b)
+    for (const p of old) if (!ps.includes(p)) { const on = L.unitsOn[p], i = on?.indexOf(id) ?? -1; if (i >= 0) on.splice(i, 1) }
+    for (const p of ps) if (!old.includes(p)) { const on = L.unitsOn[p]; if (!on) continue; let i = 0; while (i < on.length && on[i] < id) i++; on.splice(i, 0, id) }
+    for (const p of new Set([...old, ...ps])) { L.cache.delete(p); L.floats?.delete(p) }
+    L.pagesOf.set(id, ps)
+    L.anchors.set(id, { rects: u.rects, tokens: tokensOf(L, id, u.stream) })
+    L.indents.delete(id)
+  }
+  L.frames = undefined
 }
 
 /**
@@ -301,7 +358,7 @@ function documentOf(views, units, kindOf, { vote = false } = {}) {
       if (ps.at(-1) !== r.page) { ps.push(r.page); unitsOn[r.page].push(id) }
       // (a unit told by where the layout lays it, not located on the side — view/shapes.mjs's cells —: on its pages, no part of
       // their columns, edges or leadings, which are the located units' as before it came)
-      if (quiet) return
+      if (quiet || r.quiet) return
       if (r.x0 < P.x0) P.x0 = r.x0
       if (r.x1 > P.x1) P.x1 = r.x1
       // the leading: the space between a unit's consecutive lines of one size, less than a line apart
@@ -442,11 +499,28 @@ export function pageGeometry(L, p) {
     lineOf[k - k0] = lines.length - 1
   }
   for (const l of lines) l.col = colOf(P, l.x0, l.x1)
+  // each block's boxes of our page, where the page is in place (view/shapes.mjs: our compile set it as arXiv's), as lines of the
+  // block's own beside the tokens' (the owner's rule of 2026-10-30: a block lights on both panes or on neither): a box lights the
+  // tokens under it where they are, and itself where none is — a formula drawn as paths, a bullet drawn as a mark. Apart from the
+  // page's lines, which the floats walk (floats.mjs)
+  const boxLines = []
+  if (L.inPlace?.has(p)) for (const id of L.unitsOn[p] ?? []) {
+    const bs = L.boxes?.get(id)?.get(p) ?? []
+    // (a label's or a piece's box takes the column of the unit's line it stands on: a short box in a column's half is no column of its
+    // own, whatever its place across a full-width line)
+    const own = bs.filter(b => b[4] === 'line').map(([x0, x1, top, bottom]) => ({ x0, x1, top, bottom, col: colOf(P, x0, x1) }))
+    for (const [x0, x1, top, bottom, kind] of bs) {
+      // (a label stands before its line, on its baseline: within LABEL_GAP of the line's start)
+      const cy = (top + bottom) / 2, on = kind === 'line' ? null : own.find(l => cy >= l.bottom - 1 && cy <= l.top + 1 && x0 < l.x1 + 1 && x1 > l.x0 - LABEL_GAP)
+      boxLines.push({ id, kind, x0, x1, y0: bottom, y1: top, lo: bottom, hi: top, col: on ? on.col : colOf(P, x0, x1) })
+    }
+  }
+  const boxed = new Set(boxLines.map(b => b.id))
   // who owns each of the page's tokens, and each of its lines: -1 none, a unit, -2 several
   const owner = new Int32Array(k1 - k0).fill(-1), mine = new Map()
   for (const id of L.unitsOn[p] ?? []) {
     const ts = L.anchors.get(id).tokens, on = ts.slice(lowerBound(ts, k0), lowerBound(ts, k1))
-    if (!on.length) continue
+    if (!on.length && !boxed.has(id)) continue
     mine.set(id, on)
     for (const k of on) if (owner[k - k0] === -1) owner[k - k0] = id
   }
@@ -455,7 +529,7 @@ export function pageGeometry(L, p) {
     const o = owner[i], j = lineOf[i]
     if (o !== -1) lineOwner[j] = lineOwner[j] === -1 || lineOwner[j] === o ? o : -2
   }
-  const at = { k0, tok, lines, lineOf, owner, lineOwner, heads: [], filled: 0 }
+  const at = { k0, tok, lines, lineOf, owner, lineOwner, boxLines, heads: [], filled: 0 }
   const runs = [], byId = new Map()
   for (const [id, toks] of mine) {
     const rs = unitRuns(L, p, at, id, toks)
@@ -468,11 +542,13 @@ export function pageGeometry(L, p) {
   return g
 }
 /** the geometry of a page with no tokens yet: no line, no run */
-const emptyGeometry = () => ({ runs: [], byId: new Map(), heads: [], filled: 0, at: { k0: 0, tok: null, lines: [], lineOf: new Int32Array(0), owner: new Int32Array(0), lineOwner: new Int32Array(0), heads: [], filled: 0 } })
+const emptyGeometry = () => ({ runs: [], byId: new Map(), heads: [], filled: 0, at: { k0: 0, tok: null, lines: [], lineOf: new Int32Array(0), owner: new Int32Array(0), lineOwner: new Int32Array(0), boxLines: [], heads: [], filled: 0 } })
 
 /** a unit's runs on page p, from its tokens there */
 function unitRuns(L, p, at, id, toks) {
-  const { k0, lines, lineOf, owner, lineOwner } = at
+  const { k0, lines, lineOf, owner, lineOwner, boxLines } = at
+  // a line of the page's (its index) or one of a block's boxes (-1 - its index among the box lines)
+  const lineBy = i => (i >= 0 ? lines[i] : boxLines[-1 - i])
   // the page's own: token k's at k - k0
   const { l: inkL, r: inkR } = at.tok, P = L.page[p]
   const line = k => lineOf[k - k0]
@@ -499,8 +575,10 @@ function unitRuns(L, p, at, id, toks) {
   // words before it on its row are cells of their own (a table lights cell by cell, the owner's ruling of 2026-10-30;
   // floats.mjs cellsOf)
   let head = null
+  // (a head only where the unit has a token of its own on the page: a block of boxes alone — a display drawn as paths — has none, its
+  // boxes being what it is there)
   const first = L.anchors.get(id).tokens[0]
-  if (first === toks[0] && L.kindOf(id) !== 'cell') {
+  if (toks.length && first === toks[0] && L.kindOf(id) !== 'cell') {
     for (let k = lines[line(first)].k0; k < first; k++) {
       if (owner[k - k0] !== -1) head = null
       else head = Math.min(head ?? Infinity, inkL[k - k0])
@@ -515,6 +593,37 @@ function unitRuns(L, p, at, id, toks) {
     const a = inkL[k - k0], b = inkR[k - k0]
     if (x) { if (a < x.x0) x.x0 = a; if (b > x.x1) x.x1 = b } else m.set(ln, { x0: a, x1: b })
   }
+  // its boxes on the page (view/shapes.mjs, the page in place): a box on one of its token lines (its middle in the line's band, in its
+  // column) widens that line and gives its row what the tokens leave of it (segsOf); any other box is a line of its own in its
+  // column — a display or a formula drawn as paths, a line of numbers alone —, so that the tokens' rows stay what they were (a line's
+  // box holds its tall formulas, and as a line of its own would join the rows above and below it). A label's box on the unit's first
+  // line is the head there, the first sentence's (the owner, 2026-10-30)
+  const attached = []
+  boxLines.forEach((b, j) => {
+    if (b.id !== id) return
+    // (the token line it overlaps most, by a third of the shorter's height at least: a tall formula between two lines is the one it
+    // stands on most, never a row joining them)
+    const m = byCol.get(b.col)
+    let on = -1, most = 0
+    if (m) for (const [ln] of m) {
+      if (ln < 0) continue
+      const l = lines[ln], o = Math.min(b.y1, l.y1) - Math.max(b.y0, l.y0)
+      if (o > most && o > 0.3 * Math.min(b.y1 - b.y0, l.y1 - l.y0)) { most = o; on = ln }
+    }
+    if (on >= 0) {
+      // (across, and up and down as ink past the line's own, `lo`/`hi`, which the row's paint reaches over but never joins rows by)
+      const x = m.get(on)
+      if (b.x0 < x.x0) x.x0 = b.x0
+      if (b.x1 > x.x1) x.x1 = b.x1
+      if (b.y0 < (x.lo ?? Infinity)) x.lo = b.y0
+      if (b.y1 > (x.hi ?? -Infinity)) x.hi = b.y1
+      attached.push([on, b])
+      if (b.kind === 'label' && first === toks[0] && toks.length && on === line(first)) head = Math.min(head ?? Infinity, b.x0)
+      return
+    }
+    const mm = byCol.get(b.col) ?? byCol.set(b.col, new Map()).get(b.col)
+    mm.set(-1 - j, { x0: b.x0, x1: b.x1 })
+  })
   let headAt = null
   if (head !== null) { const x = byCol.get(lines[line(first)].col)?.get(line(first)); if (x && head < x.x0) { x.x0 = head; at.heads.push(id); headAt = line(first) } }
   const runs = []
@@ -523,18 +632,18 @@ function unitRuns(L, p, at, id, toks) {
   for (const [col, m] of byCol) {
     const e = P.cols[col] ?? P.cols.F
     // rows: the lines from the top, merged where they overlap
-    const ls = [...m.keys()].sort((a, b) => lines[b].y1 - lines[a].y1)
+    const ls = [...m.keys()].sort((a, b) => lineBy(b).y1 - lineBy(a).y1)
     const rows = [], rowOf = new Map()
     for (const i of ls) {
-      const l = lines[i], x = m.get(i), row = rows.at(-1)
+      const l = lineBy(i), x = m.get(i), row = rows.at(-1)
       if (row && l.y1 > row.y0 + OVERLAP) {
         if (l.y0 < row.y0) row.y0 = l.y0
         if (l.y1 > row.y1) row.y1 = l.y1
         if (x.x0 < row.x0) row.x0 = x.x0
         if (x.x1 > row.x1) row.x1 = x.x1
-        if (l.lo < row.lo) row.lo = l.lo
-        if (l.hi > row.hi) row.hi = l.hi
-      } else rows.push({ y0: l.y0, y1: l.y1, x0: x.x0, x1: x.x1, lo: l.lo, hi: l.hi, r0: null, r1: null })
+        if (Math.min(l.lo, x.lo ?? Infinity) < row.lo) row.lo = Math.min(l.lo, x.lo ?? Infinity)
+        if (Math.max(l.hi, x.hi ?? -Infinity) > row.hi) row.hi = Math.max(l.hi, x.hi ?? -Infinity)
+      } else rows.push({ y0: l.y0, y1: l.y1, x0: x.x0, x1: x.x1, lo: Math.min(l.lo, x.lo ?? Infinity), hi: Math.max(l.hi, x.hi ?? -Infinity), r0: null, r1: null })
       rowOf.set(i, rows.length - 1)
     }
     // how far each row's sentences may reach across where they go on from the row before or to the row after (segsOf,
@@ -550,14 +659,23 @@ function unitRuns(L, p, at, id, toks) {
     // is the unit's (a display)
     let start = 0
     for (let r = 1; r <= rows.length; r++) {
-      if (r < rows.length && !interrupted(lines, lineOwner, col, id, rows[r - 1], rows[r])) continue
-      const run = runOf(id, p, col, rows.slice(start, r), e, P.lead.get(L.kindOf(id) ?? '') ?? P.lead.get(null), !FLOATS.has(L.kindOf(id)))
+      if (r < rows.length && !interrupted(lines, lineOwner, col, id, rows[r - 1], rows[r], boxLines)) continue
+      // (the unit's first row on its first page may hang past the column's edge by its label or its head: a list's or a theorem's item
+      // set in the margin lights with it, on both panes alike)
+      const hang = start === 0 && toks.length && first === toks[0] && lines[line(first)].col === col ? rows[0].x0 : null
+      // (and as far as its own boxes reach, which are our page's ink of it, never a stray token: an overfull line, a reference's
+      // numbers past the measure; a laid page's tokens are the door's own, unclamped, view/shapes.mjs layerShapes)
+      let bx0 = Infinity, bx1 = -Infinity
+      for (const [ln, x] of m) if (ln < 0) { const w = rowOf.get(ln); if (w >= start && w < r) { if (x.x0 < bx0) bx0 = x.x0; if (x.x1 > bx1) bx1 = x.x1 } }
+      for (const [ln, b] of attached) { const w = rowOf.get(ln); if (w !== undefined && w >= start && w < r && m.has(ln)) { if (b.x0 < bx0) bx0 = b.x0; if (b.x1 > bx1) bx1 = b.x1 } }
+      const run = runOf(id, p, col, rows.slice(start, r), e, P.lead.get(L.kindOf(id) ?? '') ?? P.lead.get(null), !FLOATS.has(L.kindOf(id)) && !L.unclamped, Math.min(hang ?? Infinity, bx0), bx1)
       // where its unit's head begins on it, and (below) its tokens and the row each is on: its sentences' rows (segsOf)
       run.head = headAt !== null && rowOf.get(headAt) >= start && rowOf.get(headAt) < r ? head : null
-      run.toks = []; run.rowOf = []
+      run.toks = []; run.rowOf = []; run.boxes = []
       // its sentences' reach across, the hit test's bounds for them (hitOf)
       for (const row of run.rows) { if (row.r0 != null && row.r0 < run.sx0) run.sx0 = row.r0; if (row.r1 != null && row.r1 > run.sx1) run.sx1 = row.r1 }
-      for (const ln of m.keys()) { const w = rowOf.get(ln); if (w >= start && w < r) lineAt.set(ln, { run, w: w - start }) }
+      for (const ln of m.keys()) { const w = rowOf.get(ln); if (w < start || w >= r) continue; if (ln >= 0) lineAt.set(ln, { run, w: w - start }); else { const b = boxLines[-1 - ln]; run.boxes.push({ w: w - start, x0: b.x0, x1: b.x1, kind: b.kind }) } }
+      for (const [ln, b] of attached) { const w = rowOf.get(ln); if (w !== undefined && w >= start && w < r && m.has(ln)) run.boxes.push({ w: w - start, x0: b.x0, x1: b.x1, kind: b.kind }) }
       runs.push(run)
       start = r
     }
@@ -588,6 +706,12 @@ function reachOf(at, id, row, tx0, tx1) {
     if (o >= 0) { other(l.x0, l.x1); continue }
     for (let k = l.k0, end = lines[j + 1]?.k0 ?? k0 + owner.length; k < end; k++) { const w = owner[k - k0]; if (w !== -1 && w !== id) other(inkL[k - k0], inkR[k - k0]) }
   }
+  // (and another block's boxes on the row: its ink where no token of the page is)
+  for (const b of at.boxLines ?? []) {
+    if (row.r0 === null && row.r1 === null) break
+    if (b.id === id || Math.min(b.y1, row.y1) - Math.max(b.y0, row.y0) <= OVERLAP || b.x1 < tx0 - OVERHANG || b.x0 > tx1 + OVERHANG) continue
+    other(b.x0, b.x1)
+  }
 }
 
 /** the band of a line's foot (reachOf), PDF units */
@@ -614,7 +738,7 @@ function bands(lines, lineOwner) {
 
 /** whether a line stands between two rows of a run in `col`, one above the other (its middle between them): another
  *  unit's in the column, or in a column of two any line across both */
-function interrupted(lines, lineOwner, col, id, above, below) {
+function interrupted(lines, lineOwner, col, id, above, below, boxLines = []) {
   if (above.y0 - below.y1 < Math.min(above.y1 - above.y0, below.y1 - below.y0)) return false
   for (let i = 0; i < lines.length; i++) {
     const o = lineOwner[i], l = lines[i]
@@ -622,20 +746,26 @@ function interrupted(lines, lineOwner, col, id, above, below) {
     const y = (l.y0 + l.y1) / 2
     if (y < above.y0 && y > below.y1) return true
   }
+  // (another block's box between them: a display drawn as paths, no token of it)
+  for (const b of boxLines) {
+    if (b.id === id || !(b.col === col || (col !== 'F' && b.col === 'F'))) continue
+    const y = (b.y0 + b.y1) / 2
+    if (y < above.y0 && y > below.y1) return true
+  }
   return false
 }
 
 /** a run: its rows' extent across, inside the column's text edges — up to OVERHANG past them (`clamp`: running text),
  *  and within SNAP of them on them — and down; the boundaries between its rows halfway between them, never rising */
-function runOf(id, page, col, rows, e, lead, clamp) {
+function runOf(id, page, col, rows, e, lead, clamp, hang = Infinity, reach = -Infinity) {
   let x0 = Infinity, x1 = -Infinity
   for (const r of rows) { if (r.x0 < x0) x0 = r.x0; if (r.x1 > x1) x1 = r.x1 }
-  if (clamp) { x0 = Math.max(x0, e.x0 - OVERHANG); x1 = Math.min(x1, e.x1 + OVERHANG) }
+  if (clamp) { x0 = Math.max(x0, Math.min(e.x0 - OVERHANG, hang ?? Infinity)); x1 = Math.min(x1, Math.max(e.x1 + OVERHANG, reach)) }
   if (Math.abs(x0 - e.x0) < SNAP) x0 = e.x0
   if (Math.abs(x1 - e.x1) < SNAP) x1 = e.x1
   const mids = []
   for (let i = 1; i < rows.length; i++) mids.push(Math.min((rows[i - 1].y0 + rows[i].y1) / 2, i > 1 ? mids[i - 2] : Infinity))
-  return { id, page, col, x0, x1, top: rows[0].y1, bottom: rows.at(-1).y0, hi: rows[0].hi, lo: rows.at(-1).lo, lead, rows, mids, head: null, toks: null, rowOf: null, sx0: x0, sx1: x1 }
+  return { id, page, col, x0, x1, top: rows[0].y1, bottom: rows.at(-1).y0, hi: rows[0].hi, lo: rows.at(-1).lo, lead, rows, mids, head: null, toks: null, rowOf: null, boxes: [], sx0: x0, sx1: x1 }
 }
 
 /** a table's cell no unit holds as a run of its own (view/floats.mjs pageFloats): its words' box, one row, lit whole as a cell unit
@@ -720,6 +850,25 @@ function segsOf(L, run, starts) {
   const made = segsMade.get(run)
   if (made?.starts === starts) return made
   // the run's page's tokens: token k's at k - k0
+  // (a run of boxes alone, no token of the page in it — a line of a formula drawn as paths set apart —: in the sentence its unit's text
+  // is in there, the one the run before it in the unit's order ends in, else the one the run after it begins with; none where its unit
+  // has no token run: it lights whole then, on both panes, sentencesFit)
+  if (!run.toks?.length) {
+    const runs = runsOf(L, run.id), at = runs.indexOf(run)
+    let t = -1
+    for (let i = at - 1; i >= 0 && t < 0; i--) if (runs[i].toks?.length) { const g = segsOf(L, runs[i], starts); for (let w = g.rows.length - 1; w >= 0 && t < 0; w--) if (g.rows[w].length) t = Math.max(...g.rows[w].map(q => q.s)) }
+    for (let i = at + 1; i < runs.length && t < 0; i++) if (runs[i].toks?.length) { const g = segsOf(L, runs[i], starts); for (let w = 0; w < g.rows.length && t < 0; w++) if (g.rows[w].length) t = Math.min(...g.rows[w].map(q => q.s)) }
+    const rows = run.rows.map(() => []), first = [], last = []
+    if (t >= 0) for (const b of run.boxes ?? []) {
+      const row = rows[b.w], g = row.find(q => q.s === t)
+      if (g) { if (b.x0 < g.x0) g.x0 = b.x0; if (b.x1 > g.x1) g.x1 = b.x1 } else row.push({ s: t, x0: b.x0, x1: b.x1 })
+      if (first[t] === undefined || b.w < first[t]) first[t] = b.w
+      if (last[t] === undefined || b.w > last[t]) last[t] = b.w
+    }
+    const out = { starts, rows, first, last, from: -1, on: -1, of: new Int32Array(0), fits: t >= 0 }
+    segsMade.set(run, out)
+    return out
+  }
   const T = L.pt[run.page], k0 = T.k0, { l, r } = T, rows = run.rows.map(() => []), first = [], last = []
   const byText = bySentenceText.get(starts) ?? null
   /** a token's sentence by the stream's order: the starts at or before it */
@@ -752,6 +901,40 @@ function segsOf(L, run, starts) {
     floor = top
   })
   if (run.head !== null) { const g = rows[run.rowOf[0]].find(q => q.s === 0); if (g && run.head < g.x0) g.x0 = run.head }
+  // each box of the block's on the row, where no token of the page is under it (a formula drawn as paths, a bullet drawn as a mark,
+  // a number set alone on a line): the parts of it its row's tokens leave, each the sentence of the token beside it — the one before
+  // it across, else the one after it; a label's the first sentence's; on a row of no token, the sentence the rows before it end in,
+  // else the one the rows after it begin with. Where the tokens are, they light (the owner's rule of 2026-10-30: a box lights the
+  // tokens under it where they are, itself where none is), so that two sentences on a row keep meeting between their words
+  // (the row's tokens' sentences as they stand before any box is added: the neighbours a box's part takes its sentence from)
+  const covered = rows.map(row => row.map(g => [g.x0, g.x1, g.s]).sort((p, q) => p[0] - q[0]))
+  const lastBefore = w => { for (let i = w - 1; i >= 0; i--) if (covered[i].length) return covered[i].reduce((x, c) => (c[1] > x[1] ? c : x))[2]; return -1 }
+  const firstAfter = w => { for (let i = w + 1; i < rows.length; i++) if (covered[i].length) return covered[i][0][2]; return -1 }
+  const add = (w, t, x0, x1) => {
+    const row = rows[w], g = row.find(q => q.s === t)
+    if (g) { if (x0 < g.x0) g.x0 = x0; if (x1 > g.x1) g.x1 = x1 } else row.push({ s: t, x0, x1 })
+    if (first[t] === undefined || w < first[t]) first[t] = w
+    if (last[t] === undefined || w > last[t]) last[t] = w
+  }
+  for (const b of run.boxes ?? []) {
+    const cov = covered[b.w]
+    // (the box less what its row's tokens cover, to a point)
+    const gaps = []
+    let x = b.x0
+    for (const [c0, c1] of cov) { if (c1 <= x) continue; if (c0 >= b.x1) break; if (c0 - x > 1) gaps.push([x, c0]); x = Math.max(x, c1) }
+    if (b.x1 - x > 1) gaps.push([x, b.x1])
+    for (const [g0, g1] of gaps) {
+      let t = b.kind === 'label' && run.head !== null ? 0 : -1
+      if (t < 0 && cov.length) {
+        let before = null, after = null
+        for (const c of cov) { if (c[1] <= g0 + 0.5 && (!before || c[1] > before[1])) before = c; if (c[0] >= g1 - 0.5 && (!after || c[0] < after[0])) after = c }
+        t = (before ?? after ?? cov[0])[2]
+      }
+      if (t < 0) t = lastBefore(b.w)
+      if (t < 0) t = firstAfter(b.w)
+      if (t >= 0) add(b.w, t, g0, g1)
+    }
+  }
   // inside the run's extent, both ends: a word past the column's edge and the clamp (an overfull line's) is at the edge
   const inside = x => Math.min(run.x1, Math.max(run.x0, x))
   for (const row of rows) { row.sort((a, b) => a.s - b.s); for (const g of row) { g.x0 = inside(g.x0); g.x1 = inside(g.x1) } }

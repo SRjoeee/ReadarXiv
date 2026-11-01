@@ -180,6 +180,7 @@
     "encodeLayout",
     "encodeLayoutMarks",
     "finalCheck",
+    "float32Outlines",
     "floatMatches",
     "folder",
     "fontName",

@@ -1016,6 +1016,16 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
     `LEFT_WAIT_MS`) and is put in place in the task the left's page is told drawn in. Chromium, 2602.23285v2 p8 at k 2, asked to
     both painted, three runs: 3,275 to 3,324 ms before (the right 2,031 to 2,083 ms after the left), 1,260 to 1,272 ms now (0 to
     38 ms apart), against 1,211 to 1,238 ms for the left alone.
+  - **A page in place before the next is laid.** From a near page's answer until its commit ends (its copy drawn, the wait for
+    the left's page, the swap) the side holds the door (`hold`, the commit's promise): the door's drive finishes the closure in
+    hand and takes and lays no other page meanwhile, whichever is asked, 2 s at most (`reader.mjs` `HOLD_MS`), then the newest
+    ask first as before. A copy is drawn over several frames (PDF.js continues a render in animation frames), and the drive had
+    gone on to the next page asked between them (the run's `scheduler.yield` continuations), so that page 1 was in place only
+    after page 2's ink was read and its first units laid: 0.08 to 0.13 s later at 1x CPU, 0.26 to 0.40 s at 4x, on three of four
+    papers (replays of staging 6e0a8d1c, 2026-11-01). The page the reader waits on is now shown first, the pages after it laid
+    once it is. Replayed on the same recorded visits (six papers, a returning reader on a 40 ms link, two repetitions, staging's
+    engine with and without the hold): page 1 in place a median 68 ms sooner at 1x CPU (19 to 170 ms by paper) and 163 ms at 4x
+    (48 to 511); page 2, which had been laid in the frames page 1's copy left free, a median 15 ms later at 1x and 224 ms at 4x.
   - **Failures.** A group the document does not hold: the unit is the original's. A render that throws: the page shows the
     original (`shownOriginal`) and is asked again on the next scroll or zoom.
 - **The highlight's data** (§17.8): the left's shapes from the parts' rectangles as they come and, on the first want of a
@@ -1350,7 +1360,119 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
 - **Sentences**, where a unit's sentences are known on both sides; else **the whole unit** (paragraph, theorem,
   footnote, list item, caption), decided for both sides together — a unit never lights by sentence on one side and whole
   on the other. A unit of one sentence lights as a sentence shape (its first row from where its text begins).
-- **Whole, whatever their sentences**: headings and table cells. A drawing's text lights nothing (below).
+- **One light map for both panes** (the owner, 2026-10-30: 「请确保我们一定要从最底层、最长期、最通用的方式去解决」): every block
+  TeX sets as text or math lights, the same block on both panes; graphics, and a figure's own labels, never. A block's members are
+  the maker's own boxes of it on our page, which the parts' layouts carry already (each unit's `lines`, its placeholders' segments
+  `ph`, its `labels`: `layout/file.mjs`, TeX's ownership by its marks, `layout/own.mjs`), and each pane resolves them to its own
+  tokens. The right (our page) lights what the door drew of the block and what it kept of our page's ink there
+  (`layer-proto/hide.mjs` `unitHiding`'s `shown`, written into the page's word table by `words.mjs` `addUnitWords`; a unit the layer
+  shows as the original's by its own boxes, `addBoxWords`, no longer by copies of the left's tokens, which it had none of where
+  the left did not locate it). The left (arXiv's page) lights what its left part locates and, where the page is *in place* (90 % of
+  our page's lines hold a token of arXiv's at their middle row: our compile set it as arXiv's), the tokens under the block's boxes
+  (`view/shapes.mjs` `createShapes`: only tokens no span holds, which is where the left part and TeX's marks disagree for 86
+  tokens of 800 000 on the 54 papers below; a label or a kept piece that has no text token, a bullet TeX draws as a mark, widens
+  its unit's row instead, `highlight.mjs` unitRuns). So:
+  - **A display formula is a block of its own**, paired on both panes, its equation numbers included: one display placeholder of
+    a unit (an equation, an align of several lines, every segment of it) one block, lit whole, under an id of its own
+    (`units.mjs` `displayBlockId`: the unit's id and the display's place among its unit's, so that the door and the view number it
+    alike). Its tokens are never its unit's, on either pane (a kept line on its rows is its ink, `words.mjs`; on the left it takes
+    its own unit's tokens and the free ones in its segments, never another unit's: an array's cells set in a display keep theirs;
+    and those of its unit's between two of its own in the page's stream whose box meets one of its segments, as TeX sets a
+    display's glyphs together (never one in the room between them: a paragraph's word there, an align's \intertext, stays). arXiv's text layer draws a token's box from its font's ascent and descent, and a math extension
+    font's (cmex10's, txexs's) hang under the baseline: a wide accent's box stands under its ink, a big delimiter's reaches far past
+    it, its middle out of the segments. 2610.35877v1 p5's hat on the w of display (4)'s denominator, 1.9 pt under the display,
+    had lit with the sentence before it, a band in the formula, the owner's report of 2026-10-31. On the 70 papers of #524's
+    measure, 3 648 displays: 10 such glyphs in 7 displays of 5 papers, now 0).
+    Its unit lights around it, and a sentence across it lights whole, every piece of it, as across a column or a page break (the
+    owner: 「第 1 条就用这个，推进吧」). Inline math stays in its sentence.
+  - **A block's label lights with its first sentence**, on both panes, and hovering the label lights that sentence: a heading's
+    number, a list's bullet or number, a caption's "Figure 4:", a theorem's head (the owner's case: 1810.04805v2 A.3/A.4's bullets
+    lit on neither pane; its headings 4.2–5 lit the number on the left alone).
+  - **A block lights whole, its kept pieces included**: a citation kept where it stands, a reference's numbers-only last line
+    (1810.04805v2's Zhu et al., "19–27.").
+  - **A unit the left does not locate** lights by its boxes on a page in place, whatever its kind (a cell's lines did since #515).
+  - Measured on the release sweep's 53 papers and 2010.11929v2 (1 453 pages, every one laid by the door, both panes' shapes made as
+    the reader makes them, the pages in place: `readarxiv-lab-data/unified-light`, 2026-10-30), before and after: displays lit as
+    their own block on both panes 0 → 2 995 of 3 016 (20 more in part on the left; before, 2 553 lit with their unit on both and
+    428 with it on the left alone); labels unlit on a pane 2 678 of 4 805 → 5; kept pieces unlit on a pane 958 of 43 068 → 18;
+    text lines unlit on a pane 336 of 60 516 → 18 (ink our page shows under an item's box that the unit's lit area meets counts as
+    lit: a crop the door drew a little aside, a label drawn anew in a centred line); units dark on both panes 35 → 21, on the right
+    alone 20 → 1 (the nine dark on the left alone after were dark on both before); arXiv's text of a unit that no block lit 305
+    lines → 9. The sentences the sweep's invariant checks keep their faults (2 units, as before); 4 456 → 4 461
+    units lit by sentence.
+  - **Text no unit owns is a kept block** (the owner's ruling of 2026-10-30: at the same place on both panes, a listing one block):
+    a page number, a listing, an e-mail line, a note that is an address alone, a bibliography the front end did not cut into
+    entries, a display no unit holds — what no unit owns once the ink units have claimed theirs — is a unit the bundle keeps
+    (`layout/ink-units.mjs` rule 10, PIPELINE 42): an ink unit of the KEPT flag, never translated nor awaited, its rows its lines'
+    boxes, on the left the tokens on its lines, so that the rule above lights it as any block. A block is a run of such lines in
+    TeX's stream with nothing a unit owns between them, in one column and one class (a listing's brace in it). A float's text is
+    none (a figure's labels light nothing), nor a line beside a unit's text on its baseline (its label or its number, lit with
+    the unit). Its glyphs are in no group: our page and its ledger are as they were. Over the 54 papers: 1 920 blocks of
+    5 871 lines on 49 papers, every one lit on the left; arXiv's lines in the frame no block lit 5 399 → 1 357, every other
+    count of the probe as it was; the bundle +0.6 % (a paper's median +0.22 %, 2610.19159v1's agent logs +3.9 %), a paper's
+    left made 8.7 → 8.5 ms (median of 7), a page's geometry 0.070 → 0.079 ms; 2610.19159v1 44 → 58 ms and 0.047 → 0.094 ms.
+    The 1 357 left: 2610.19159v1's framed transcripts, which the figures' text takes (1 016), algorithms inside floats, arXiv's
+    stamp, lines our compile sets elsewhere. A page
+    moved (our lines elsewhere than arXiv's) lights as a page in place since BUNDLE 12 (below).
+  - **A block lights on both panes or on neither** (the owner, 2026-10-30: 「为什么修改后还有一边不亮的情况？我们可以从根本上解决吗？
+    …如果实在分不出来，我们就两边统一亮，或者划成一整块亮」): on a page in place a block's area on each pane is its boxes. On the left
+    each box lights the tokens of arXiv's page under it where they are and itself where none is (a display or a formula drawn as
+    paths, a bullet drawn as a mark: `highlight.mjs` pageGeometry's box lines, the floats' walk never reading them); a box on one of
+    its unit's token lines widens that line, up and down as ink, and gives its row what the tokens leave of it, in the sentence of the
+    token beside it (a label the first's); a box on no token line of its unit is a row of its own, in the sentence the unit's text is
+    in there. A unit's line on its display's rows is the display's; a unit the left part locates on another page than ours lights
+    on ours too; a label or a head hanging before the first row, and a block's own box past the column's edge (an overfull line), are
+    never clamped; a laid page's tokens are the door's own ink and never clamped. On the right, a placeholder whose ink the wrap could
+    not part (its group missing from the document) stays shown, lit with its unit. Measured on the same 54 papers, before and after:
+    units dark on both panes 21 → 0, on one 1 → 1; labels lit on one pane alone 5 → 0, pieces 5 → 0 (and 2 dark on both → 0), text
+    lines 17 → 1, displays lit in part 21 → 0; units lit by sentence 4 461 → 4 461, their faults 2 units → 0. What stays one-sided:
+    one paragraph whose translation ends on the page before, so that nothing of it is drawn on the page its original's last line is
+    on (2610.19159v1 p119: lighting it there would light blank paper); six lines of a display with a word before it on its baseline,
+    where only the blank between the word and the formula is unlit, every token of the line lit.
+  - **A page our compile set otherwise lights as a page in place** (the owner's ruling of 2026-10-30; `PIPELINE_VERSION` 41,
+    `BUNDLE5` 12). Another TeX Live's glue moves our lines a point or a few, a line goes over a column's or a page's break
+    (1810.04805v2's page 16, every line 3 to 27 pt above arXiv's): the maker's boxes stand beside arXiv's ink, and the left lit only
+    what its left part located (Table 8's header cells "RND", "Mask", "Same" lit on the right alone). The page pass's line check
+    pairs each of our lines with arXiv's already (`layout/carry.mjs` `lineCheckOf`: the partner's page and the median offset of the
+    words matched), and the producer ships the pairs: the left part of each page a line leaves or lands on holds them (`lines`,
+    `pipeline/moved-lines.mjs`: a line's page of ours, its box, arXiv's page and the offset), every line of a page with one moved
+    past half a point (a line with no partner takes the offset of its column's nearest line that has one, never of a line given
+    one so; one in place carries nothing), and an empty list on every other page the check placed. Only a page the check placed
+    has a list: 90 % of its lines found a partner (`MAP_FOUND`, the reader's own share), the page read whole and drawn; a page
+    whose words are arXiv's but whose lines our compile rebroke has none, and is judged by its tokens (#524's review: an empty list
+    there had lit blank paper at our lines' places). The reader carries each box by the line it stands on onto arXiv's page,
+    another page's too; a box beside its line's words, which the line's tokens do not reach (a heading's number drawn as a mark, a
+    piece drawn as paths), by its own block's line on its row; and tells the page by its boxes as a page in place
+    (`view/shapes.mjs`), a block told from its boxes there by its carried rectangles too, so that a click finds the line under it.
+    A page with a list, an empty one too, is in place whatever its tokens give: 2610.16663v1's page 15, its displays leaving
+    arXiv's text layer few tokens, was read as moved by them though 41 of its 43 lines stand in place. A left part of 11 has none,
+    and its page is judged by its tokens as before.
+    Measured over 70 papers (the release sweep's 63 cached papers and the gate pack's 7, the production pass on both engines over
+    the same compiles, next 44c3a36d before, `readarxiv-lab-data/moved-lines`, 2026-10-30, after #524's review), every item of the
+    maker's inventory judged lit on the left at its place on arXiv's page (a box beside its line's words at its block's line's):
+    - 1 873 left parts: 1 550 carry entries (9 667, 8 of them a line over a page break, on both its pages), 301 an empty list, 22
+      none (a page the check did not read whole or draw: 2307.16209v1's 71–76, whose lines our compile set across its pages).
+      Every page found 90 % of its lines' partners (the least 87 of 95, 2610.37668v1 p21): `MAP_FOUND` takes no page's list on
+      these papers, and guards the rebroken one. Our lines holding a token of arXiv's at their middle row, as they stand and
+      carried: on the moved pages below 222 → 296 of 299, on every page 85 101 → 85 180 of 85 302.
+    - The pages moved by the in-place test (under 90 %, or under 3 lines: the unified-light probe's rule): 21 on 9 papers, 542
+      items. Lit on the left 439 → 541; one-sided 103 → 1 (lines 27 → 0, kept pieces 25 → 0, labels 2 → 0, displays 40 → 0,
+      display lines 9 → 1). 1810.04805v2 p16 lights 92 of 92, its Table 8 cells with them. On every page one-sided
+      items 123 → 7 of 152 266, each a display line with a word before the formula on its baseline, the word and the formula
+      lit and only the blank between them not (the case above; 2610.16663v1 p15's joins it now that the page is in place); 400
+      boxes beside their line's words go with their block's line (the first round, by the map's line alone, left 3 labels and a
+      display of them one-sided).
+    - The producer's units, cut and laid, are 40's: 18 383 units located on the left on both, the laid sets equal, every units
+      chunk equal but its version (33 068 units). The bundles grow 0.28 % (0.54 % gzipped; the left parts 0.71 %; a paper's
+      median 0.53 %, its largest 1.13 %, 1810.04805v2).
+    - The reader, every part and page made as it makes them, best of 3, both orders: a paper's left 6.8–6.9 → 6.9–7.1 ms median
+      (all 70: 550–553 → 552–567 ms), a page's geometry 0.074–0.075 → 0.077–0.078 ms median, a hit 0.102–0.103 → 0.104 µs. A
+      moved page's rectangles are told again without the document made again (quiet rectangles are no part of its columns,
+      edges or leadings: highlight.mjs retellQuiet, only their units' pages and anchors), its carried inventory kept until the
+      inventory or a map changes, the map read by our page; told whole each time, they cost 552 → 697 ms.
+    The unified-light probe's 20 moved pages were staging's layers of 2026-10-30 (PIPELINE 38, BUNDLE 11), which hold no line
+    map: its 8 papers give 12 here (2610.20030v1 falls back to arXiv's PDF in this pass), and the 21 above are this pass's.
+- **Whole, whatever their sentences**: headings, table cells and displays. A drawing's text lights nothing (below).
 - **Every drawn thing lights its original, whatever its kind, but a figure's text** (below; the owner's report of
   2026-10-29 on 2010.11929v2 p9: its References' Chinese lit nothing on either side, its Conclusion's and
   Acknowledgements' did). A source unit and an ink unit (its
@@ -1519,6 +1641,16 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   marked outside its text, or a drawing's text standing in it) is a figure; one of text and rules a table, whose words no
   unit holds are its cells (`cellsOf`), each a run of one row. Found on the ten papers: figures 46 of 47, tables
   52 of 52, algorithms 2 of 2.
+- **The wash** (`engine.css`): the band's colour at its strength over the page, multiplied into it (screened over a
+  dimmed page, `reader.css`), so the paper takes the wash and the letters keep their own colour, as a band behind the text
+  looks on an HTML page. The highlight layer blends, not its bands: its z-index, which keeps it over the text layer and the
+  figures, makes it a stacking context, an isolated group, and a band's own blend mode mixed with nothing but the layer's
+  empty ground, the wash lying over the letters (the owner's report, 2026-10-31: the letters looked grey under it). Measured
+  on staging that day, 1810.04805v2 p1's abstract, the mean of the ink under a band: black (9, 9, 9) read (8, 44, 32) and
+  reads (8, 9, 8) blended by the layer; on a dimmed page the light letters (216, 216, 216) read (174, 210, 198) and read
+  (216, 222, 220); the paper's wash the same either way, (208, 242, 231) and (29, 59, 49). Scrolling a pane a frame at a time
+  with a block lit and the layers of all 16 pages made, every frame 16.7 ms with the bands blending, the layer blending, or
+  only a lit layer blending, the main thread's time alike (521–565 ms a run of 145 frames).
 
 ### 17.4 The pointer's path
 
@@ -1600,7 +1732,11 @@ within noise.
 - A cell of numbers is the words no unit holds on one line within 0.6 of their height (0.4 across a column the table leaves
   free): one set over two lines lights as two cells, and two columns set closer than 0.4 of their height, or than 0.6 where
   a cell no unit holds runs across the column between them on another row, light as one.
-- An equation number set on its own line below its display (2608.09746 #27) is no unit's and is not lit.
+- An equation number set on its own line below its display (2608.09746 #27) is no unit's and is not lit, but where the maker holds
+  it among its display's segments, which light it with the display (§17.1).
+- A page our compile set otherwise than arXiv's lights as a page in place by its line map (§17.1); one whose
+  lines the line check did not find (90 %), did not read whole, or whose layer stands over arXiv's PDF, has none, and lights on
+  the left what its left part locates.
 - A table at a page's head whose first row is single letters over numbers, after a display that closed the page before,
   is taken by that display's walk: no distance tells them apart (A1, measured: lead walks' first gaps up to 19.6 pt).
 - Two lines of text made one row by a tall formula, with a sentence beginning on the second, light their unit whole (12
@@ -1644,8 +1780,13 @@ within noise.
   the left's from run objects of its own: the paint keeps what it drew by the run, and a run shared would move the left's
   element into the right's pane. The right's floats are the left's, and the right's sentence shapes keep from under them as
   the left's do; a table's cell no unit holds is the left's run of it copied, on a page the layer laid as well (its numbers
-  are the original's ink there) where it stands on no unit's row of ours and the page's lines did not move, as a unit shown
-  as the original's is copied (`layerShapes` `make`); elsewhere it lights on the left alone. Where its place shows the original, the mirror's starts are the left's (the
+  are our page's ink there) where it stands on no unit's row of ours and the page's lines did not move across its break, as
+  a unit shown as the original's is copied (`layerShapes` `make`); elsewhere it lights on the left alone. On a laid page
+  whose lines moved within it (its line map, §17.1) the left's floats and those copies stand where our page sets them, the
+  map read back (`backOf`): a float moved whole, as TeX sets it, as most of its cells' lines moved (one of no cell as its
+  caption's line), its cells with it (`floatBack`), a copy as its token's line; none of a float whose lines are another
+  page's of ours. Before, 1810.04805v2 p16's Table 8, set 30 pt higher on ours, lit a cell three rows off on the right (the
+  staging check of 2026-10-31). Where its place shows the original, the mirror's starts are the left's (the
   same tokens), so a unit lights by sentence on both panes as it does on the left.
 - **The left's starts** are its units' pairs (the left part's runs of words to tokens) read as `sentenceStarts` reads an
   anchor's, once every page the unit is on has come. The reader takes every pair shipped, so the producer ships them only
@@ -1656,15 +1797,31 @@ within noise.
   into a page already in is refused, and the first of the two keeps its place: a bogus page that comes first leaves its
   true neighbour refused, since nothing in the two tells which is wrong.
 - **The right on a laid page** (`layerShapes`): where its place shows the layer, the right's shapes are a layout of its own
-  over the page's words (the door's `LaidPage.words`: the tokens it drew, in the page's PDF units, each unit's spans in
-  paint order), its token ids the page's (page · 2^16 + its index), the units it shows as the original's over copies of
-  the left's tokens of them, made once the page's left part is in too; elsewhere the left's mirrored. A unit's stream on
+  over the page's words (the door's `LaidPage.words`: the tokens it drew and what it kept of our page's ink, in the page's PDF
+  units, each unit's spans in paint order, then each display's under its own id, then each unit shown as the original's by its
+  own boxes), its token ids the page's (page · 2^16 + its index); a unit shown as the original's that the door gave no boxes over
+  copies of the left's tokens of it, made once the page's left part is in too; elsewhere the left's mirrored. A unit's stream on
   the right is its first token on its first page, told when that page lays. The right's starts of a unit all on laid
   pages are the tokens carrying its sentences' first words (`words.word` against the row's `sentences.tr`), each token's
   sentence its word's or its place's (`words.at`, §17.3); of a unit on no laid page, the left's; of one on both, none, and
   it lights whole. The page's word table is in the order of its units' text (`words.mjs addUnitWords`): a display's kept
   lines where the line walk passed its region (`breakLines`' `past`), a kept line no placeholder holds before the block that
   follows it in the unit's rectangles.
+- **Every block told by its boxes** (`createShapes` takeInventory, tellBoxes; the owner's rule of 2026-10-30, §17.1): the parts'
+  layouts give each unit's lines, labels and placeholders' segments on our page. Every display, and every unit the left part does
+  not locate, is told from them on every page (`quiet`, as below), so that the right, which lights it by its own table, holds it;
+  on a page in place, once both its left part and its boxes are in, whichever first, a display takes the tokens of its segments
+  (its own unit's span gives them up) and every unit the free tokens in its boxes, its spans changed in the page's kept input
+  before it is laid and in the layout and the mirrors after; a unit told so begins at its first token on its first page. A located
+  telling that comes after a quiet one takes its place; a quiet telling of a located unit's boxes on a page it is not located on
+  adds that page, its rectangles there quiet. On a page with a line map (§17.1) the boxes are carried first: our page's and those of
+  the pages beside it that the map brings there (`invAt`), the layout's boxes of the page the carried ones, and the rectangles
+  there of every block told from its boxes (`carryPage`: a part `carried`, highlight.mjs layoutParts, in their place among the
+  block's pages; a block brought from another page of ours told there, one whose boxes all left the page no longer on it; a unit
+  the left part locates there keeps arXiv's), whichever of the page's left part and the parts comes first, in any order the same
+  (`tests/pdf-reader/moved-lines.test.ts`: every order of two parts and two pages, the mirror alike); such a page is in place. This made the cells' telling below a case of it, now on pages in place alone. The
+  layout keeps every block's boxes (`boxes`) and the pages in place (`inPlace`), which the mirror reads too; a laid page's layout
+  keeps none of them (its table holds every token the page shows of a unit) and clamps none of its tokens (`unclamped`).
 - **A cell unit the left part does not locate** (`createShapes`): the producer locates few cells on arXiv's PDF (on the
   sweep's 64 cached papers, 1 113 of 5 094; 7 of 2010.11929v2's 165, 2 of 2610.35877v1's 71), since a cell carries no unit
   mark of its own (`latex-front.mjs`: a heading, a cell or a figure has none), so it is found by its text alone between its
@@ -1715,7 +1872,7 @@ The edge cases, decided:
   - **Row 2, kept for later versions** (no code): the Kai matched to the body by measurement. FandolKai (zh): its ideographs' mean ink box 0.828 × 0.848 em against the body's 0.890 × 0.910, a size factor of 1.074; ink per em² 0.135 against 0.183 (−26 %), made up by an SVG stroke at drawing time. AR PL KaitiM Big5 (bkai00mp, zh-Hant): 0.821 × 0.823 against Source Han Serif TC's 0.891 × 0.913, a factor of 1.098; ink 0.155 against 0.200 (−22 %). Its limits: Chinese only (ja and ko still get no italic); the factors are per font; the stroke only emulates weight; there is no bold Kai, so bold italic stays bold upright. The comparison page as the owner saw it, rows 1 to 4 in all four languages with their measures and licences, and its README: `~/Downloads/readarxiv-test/archive/cjk-italic-2026-10-19/` (`index.html`, `README.md`), on the maintainer's machine.
 - **`textless`** is extraction, but v0 also applies it at draw time to a unit's source (only the alignment fallback reads it). A reader applying an extraction rule to a bundle's content is a defect class; it is listed for the debt pass.
 - **Cell membership** (`groupOf`, from `tableGrid`) is extraction: the bundle carries each cell's place.
-- **A unit's alignment** (whether its lines are centred, flush left or flush right) is extraction, and TeX's own: the marked original writes, for a unit's or a heading's end mark, the stretch of `\leftskip`, `\rightskip` and `\parfillskip` its paragraph was broken with, read once the paragraph ended (`AXT-ALIGN`, `layout/marks.mjs` `readAlign`: centred, flush left, flush right or justified; `{\centering text}` and a blank line is justified, its group closed before its paragraph ended), and the layout maker sets `UNIT_FLAG.CENTRED`, `FLUSH_LEFT` or `FLUSH_RIGHT` from it (the last two by TeX's word alone, LAYOUT 26, never read off arXiv's lines). A paragraph a box's close ends (a `\vbox`, `\vtop`, `\insert` or `\vcenter` closed in horizontal mode) is read by its own skips: TeX ends it there with no `\par` where LaTeX sets no `\partokencontext` (TeX Live 2023's LaTeX; 2025's sets 2, and inserts one), so no `para/after` hook runs for it, and the probe watches the box it is set in and, where the box closes before a `\par` told its skips, writes the skips at the end mark, nothing of the unit set after it; each end mark's reading is written once, so the hook that runs later at another paragraph's `\par` writes nothing. Before it, 2608.16117v1's elsarticle abstract (`\global\setbox\absbox=\vbox\bgroup … \egroup`, TeX Live 2023) was read as its keywords' `\raggedright` (`lab/pdf/spikes/layout-align-cases.mjs`: 15 documents in pdfLaTeX, XeLaTeX and LuaLaTeX under both years read as TeX set them, each PDF byte for byte the one before). A unit TeX set in a box (a one-line caption `\@makecaption` centres, `\centerline`) or whose line the log lacks is read from arXiv's lines instead: every line's centre on its column's (the text block's for a full-width row), one line short of it by more than an em; and a one-line paragraph TeX set justified that its own glue centres (`\noindent\hfill X\hfill\null`) is centred where its line is on its column's middle and more than two ems off both edges. The layer draws by the flag. A table cell, which the probe does not read, it decides by the cell's own lines (several centred: a makecell's) or its table's column on the page (a single line: centred where the column's cells' middles are all within 2 pt of each other and their widths are not, so a column whose cells share a start or an end never is; a cell its column cannot decide, alone in it, a header's or of widths alike, as the layout file's flag says); a unit of a part with no layout by its lines and the page's column, as before the file had a flag (2026-10-19: the layer's own guess had centred 1810.04805's "C.1" and "5.3" headings and missed IEEEtran's centred ones).
+- **A unit's alignment** (whether its lines are centred, flush left or flush right) is extraction, and TeX's own: the marked original writes, for a unit's or a heading's end mark, the stretch of `\leftskip`, `\rightskip` and `\parfillskip` its paragraph was broken with, read once the paragraph ended (`AXT-ALIGN`, `layout/marks.mjs` `readAlign`: centred, flush left, flush right or justified; `{\centering text}` and a blank line is justified, its group closed before its paragraph ended), and the layout maker sets `UNIT_FLAG.CENTRED`, `FLUSH_LEFT` or `FLUSH_RIGHT` from it (the last two by TeX's word alone, LAYOUT 26, never read off arXiv's lines). A unit whose paragraphs TeX set in two alignments (its text set again elsewhere, a class's footnote or reference block) tells none, as a piece set in two colours tells no colour (PIPELINE 43, §19.6's guard). A paragraph a box's close ends (a `\vbox`, `\vtop`, `\insert` or `\vcenter` closed in horizontal mode) is read by its own skips: TeX ends it there with no `\par` where LaTeX sets no `\partokencontext` (TeX Live 2023's LaTeX; 2025's sets 2, and inserts one), so no `para/after` hook runs for it, and the probe watches the box it is set in and, where the box closes before a `\par` told its skips, writes the skips at the end mark, nothing of the unit set after it; each end mark's reading is written once, so the hook that runs later at another paragraph's `\par` writes nothing. Before it, 2608.16117v1's elsarticle abstract (`\global\setbox\absbox=\vbox\bgroup … \egroup`, TeX Live 2023) was read as its keywords' `\raggedright` (`lab/pdf/spikes/layout-align-cases.mjs`: 15 documents in pdfLaTeX, XeLaTeX and LuaLaTeX under both years read as TeX set them, each PDF byte for byte the one before). A unit TeX set in a box (a one-line caption `\@makecaption` centres, `\centerline`) or whose line the log lacks is read from arXiv's lines instead: every line's centre on its column's (the text block's for a full-width row), one line short of it by more than an em; and a one-line paragraph TeX set justified that its own glue centres (`\noindent\hfill X\hfill\null`) is centred where its line is on its column's middle and more than two ems off both edges. The layer draws by the flag. A table cell, which the probe does not read, it decides by the cell's own lines (several centred: a makecell's) or its table's column on the page (a single line: centred where the column's cells' middles are all within 2 pt of each other and their widths are not, so a column whose cells share a start or an end never is; a cell its column cannot decide, alone in it, a header's or of widths alike, as the layout file's flag says); a unit of a part with no layout by its lines and the page's column, as before the file had a flag (2026-10-19: the layer's own guess had centred 1810.04805's "C.1" and "5.3" headings and missed IEEEtran's centred ones).
 - **A placeholder's colour** (its glyphs' fill: hyperref's coloured links and citations, a coloured formula) is extraction: the layout file's placeholder row ends with the colour more than half its inked glyphs are filled with, where that is not black (`0xRRGGBB`; `MIXED_FILL`, -1, where no one colour holds more than half), read from arXiv's operator list (`layout/ink.mjs`, every colour space as PDF.js turns it to RGB; a pattern's fill counts as none).
 - **A character's colour** is an attribute of the original's glyphs, as its font is (E1 of the residuals' batch R2, 2026-10-19). Each text item of a page's draw carries its characters' fills (`layout/fills.mjs` `itemFills`: the glyphs of the page's ink on the item's baseline within its extent, read in order as the item's own text; an item they do not spell exactly — turned, a glyph too many or too few, a combined accent set as two glyphs, a right-to-left run — tells none, nor does a Type 3 glyph whose procedure paints its own colours), and a page read live tells the same from the list PDF.js drew it by, its render's or its early pixel read's, with no second parse: a walk of the glyphs alone, `LIVE_FILLS_MS` at most, past which the page tells none (`run.mjs` `liveFillsOf`, with the host's `OPS`). The reader's character holds it as `st.fill`. The drawing reads it three ways. A unit's base weight, slant, small capitals, family and colour are those most of its matched glyphs hold outside every piece that may set that attribute (a style pair or switch in any spelling, `{\bf …}` too; a colour piece, a link, a paper's own macro), and of all its glyphs only where none lies outside; a tie goes to regular, upright, serif and black, else to the unit's first glyph (`layer2.mjs` `measuredStyle`). A glyph's slant is read as it would be without the `\emph` and `\em` toggles around it, so that a unit wholly inside one is drawn as the original. A piece that may set colour and that no `colours` row tells takes its own glyphs' colour; a row (TeX's, PR-C) wins. A unit read without its source pieces (a lab record, not a reader's) keeps the reading before: the majority, its groups' share taken off (`baseOf`), and a colour only where every glyph whose fill is told holds the same one. A rendering of the page's own characters (a citation, a reference, an equation's number) is drawn in runs of its characters' fills: `[16]` keeps its black brackets and blue digits. The placeholder's row fill above stays only for a character whose fill is not told. Word-level colour inside a sentence stays a limit: no majority paints a unit. On the wire, a styled pair whose two ends stand where the wire is cut anyway (a forced break, a display or an item beside it, never an inline formula, which the translator moves as a word; a kept pair's edge; the unit's end) keeps its markers (`translate/mt.mjs` `classOf`, the boundary rule). The draw's item rows carry the fills as their tenth value (`BUNDLE5` `'7'`); the boundary rule raises `TRANSLATE_VERSION` to `'4'` and `PIPELINE_VERSION` to `'22'`, whose copies carry every unit whose wire it leaves alone (`mt.mjs` `boundaryChanges`): over 137 papers' sources 126 of 36,136 units, in 29 papers, are asked again.
 - **A unit's size and its small capitals, where NFSS fakes them** (the owner's report of 2026-10-24 on staging: 2602.23285v2's appendix headings, page 15, drawn far smaller than the original in zh, es and de, and in es and de with no small capitals) are read from the original's glyphs as its other attributes are. The Times family has no small capitals of its own, nor have PSNFSS's other base-35 families: NFSS sets `\scshape` in a virtual face (`ptmrc8t` and its kind) that draws each lowercase letter as the upright face's capital at 0.8 of the size, in the same PDF font as the capitals, so that no font name says small capitals, and the `\sc` of a class's heading (ICLR's and ICML's subsections, IEEEtran's sections and table captions) is in no piece of the unit's source. The alignment pairs each page letter with the source letter it spells (case-blind): a capital paired with a lowercase source letter, set at most `SMALL_CAPS_SHARE` (0.9) of the median size of the unit's letters and digits whose case TeX kept, is a faked small capital (`layer2.mjs` `smallCapsOf`), and their median size over the capitals' is the share the unit sets them at (`capsRatio`, to the hundredth: 0.80 on 1711 of the 1747 faked capitals of the 32 papers of the corpus that set any, 0.71 on the other 36, one table's at 7 pt in 2608.27181; a unit's own, never a paper's). The unit's size is the median of its glyphs with those set aside: its capitals', the size TeX was asked for (2602.23285v2's "A.2 DYNAMIC SPECTRAL GRAPH STRUCTURE", 21 of its 25 letters at 7.97 pt, is read at 9.96 where it was read at 7.97, the median its small capitals made). It is set in small capitals where most of its glyphs that can tell say so (`capsVote`: a faked small capital says so, a lowercase source letter drawn as itself says not, and where the unit has faked ones a capital or a digit of a face that names no small capitals says nothing, since NFSS draws it alike in either shape), of the glyphs outside every piece that may set them as `measuredStyle` reads every attribute; a unit read without its source pieces (the gate's, the lab's) of all its letters, its `\textsc` groups' share taken off as `baseOf` takes off its other groups'. A capital paired with a lowercase source letter at the others' size is a capital of the text's: a class's `\MakeTextUppercase` (REVTeX's section titles, 2610.21288v1's "I. INTRODUCTION", drawn "I. INTRODUCCIÓN" in Spanish where it was "Introducción"), the unit set in them (`upper`) where most of its letters that can tell are, and its translation drawn in the target's capitals at its size. A face of real small capitals (cmcsc10, LM Roman Caps, a face with an SC name) draws its lowercase letters as themselves, and a unit with no letter of the source's own case to read the sizes against reads as before. In a CJK target, which has no case, a unit set in small capitals is laid at its nominal size × `CJK_CAPS_SIZE` (`layer2.mjs` `unitSizeOf`; 1, the owner's of 2026-10-24). **Every drawn thing is read so, whatever its kind** (the owner's report of 2026-10-29 on 2010.11929v2 p9: ICLR's `\sc` "REFERENCES" drawn in Chinese smaller than the Conclusion's and Acknowledgements' headings beside it). A babel name's size is its characters' with its faked small capitals set aside, where the class changed its case (the file's `CAPITALS`: a capital at `SMALL_CAPS_SHARE` of its largest letter or less), and it is drawn in small capitals as such a unit is, its word in its own case, never as a case change's capitals (`layer2.mjs` `nameStyleOf`; it was drawn at the file's size, the most of its glyphs', 9.6 against its capitals' 12). An ink unit's source is our page's own text, its case as drawn, so no letter of it tells a case change: where every cased glyph of it is a capital, a capital at `SMALL_CAPS_SHARE` or less of its full letters' size is a faked small capital by its size alone (`inkSmallCaps`), and a unit with a lowercase glyph reads as before (a paragraph with a drop cap is none).
@@ -1726,10 +1883,10 @@ The edge cases, decided:
 
 | Identity | Kind | Covers | Enters | A bump means |
 |---|---|---|---|---|
-| `BUNDLE5` (`layer-proto/format.mjs`, `'11'`: a figure row carries its set and its room, §19.12; 10 the ink units, the parts' figure units and the head's ledger; 9 a part's cell rules in place of the add-on, our page wrapped by optional content) | reader contract | the layer route's objects: a head's, a part's, a left part's and a catalog's shape, the figure rows (the units chunks have a format of their own, `UNITS_FORMAT`, raised only by their shape); a reader reads 7's, 9's and 10's objects too (`BUNDLES_READ`) | the request (`CTAG5`, `b<BUNDLE5>-j<PDFJS>`: §18.4) and the R2 key (`VTAG5`) | a bundle of the old format is not found under the new `CTAG5` and is prepared again; readers older than it get `unknown-versions` until they update |
+| `BUNDLE5` (`layer-proto/format.mjs`, `'12'`: a left part carries its page's line map, §17.1; 11 a figure row carries its set and its room, §19.12; 10 the ink units, the parts' figure units and the head's ledger; 9 a part's cell rules in place of the add-on, our page wrapped by optional content) | reader contract | the layer route's objects: a head's, a part's, a left part's and a catalog's shape, the figure rows (the units chunks have a format of their own, `UNITS_FORMAT`, raised only by their shape); a reader reads 7's, 9's, 10's and 11's objects too (`BUNDLES_READ`) | the request (`CTAG5`, `b<BUNDLE5>-j<PDFJS>`: §18.4) and the R2 key (`VTAG5`) | a bundle of the old format is not found under the new `CTAG5` and is prepared again; readers older than it get `unknown-versions` until they update |
 | `BUNDLE` (`layer-proto/bundle.mjs`, `'3'`: the layout file's schema 3, the paper's `\lineskip` and `\lineskiplimit`; 2 its babel names, D1a. The file's schemas 4 (`PH_FLAG.JOINED` and `PH_FLAG.OUTSIDE`) and 5 (a found placeholder's fill, its row's last number where its glyphs are not black: 0xRRGGBB, or -1 where no one colour holds more than half of them) are not a contract of their own: `b3` names schemas 3 to 5, each reader's `parseLayout` refusing the others', so only this engine's reader reads a `b3` bundle holding schema 5) | reader contract | the one-file bundle `readBundle` reads (`CTAG`, `VTAG`): its shape, the units' tuple, kinds and flags, the layout file's schema, the left geometry | its request and key (§18.4) | readers older than it refuse it until they update |
 | `PDFJS` (`pipeline/versions.mjs`, `'6.3.289'`) | reader contract | the PDF.js whose reading the layout and the wrap are made against | as `BUNDLE` | as `BUNDLE` |
-| `PIPELINE_VERSION` (`pipeline/versions.mjs`, `'39'`) | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
+| `PIPELINE_VERSION` (`pipeline/versions.mjs`, `'46'`: a glyph set turned is cut by the clip in force where its own ink passes it, as a level glyph is, so that a y-axis title at its figure's edge is a figure unit again, §19.12; 45 xy-pic's diagram kept as the paper has it, a drawing as a TikZ picture is, so that its cells are no units and no mark of ours goes into xy-pic's syntax, §19.6; 44 the final pass with no transparency group of the driver's on an included PDF, as arXiv's TeX Live 2025 of 2025-08-03 includes one, §19.7) | extraction | the units' cutting, kinds and texts, the cells' places, the left side's marks. **Not** the wire, its reading back or the paper's context, though it is raised with `TRANSLATE_VERSION` while the extension's stored copies are judged by it alone (`translate/version.mjs`; 22 and 23 so) | the R2 key; the rows' identities | bundles made again lazily; rows again |
 | `LAYOUT` (`layout/file.mjs`, `'31'`: a page whose lines moved across its breaks through compile drift drawn, `carry.mjs` `lineCheckOf`, §19.7; 30 a footnote's call after the last word found by its raised mark, a biblatex entry's unit of the new kind `inkreferences`, §19.7; 29 backref's list after an entry a row of its list piece's, §19.13; 28 a Type 3 glyph's ink its char procedure's paths, `layout/ink.mjs` `type3Box`, #122-1; 27 a command that sets the punctuation after it before its ink marked around the pair, a macro TeX said sets no ink EMPTY, a piece alone at an entry's end given the lines it runs onto, a macro that sets one punctuation mark drawn as it, §19.7; 26 a unit TeX set flush left or flush right flagged so, `UNIT_FLAG.FLUSH_LEFT` and `UNIT_FLAG.FLUSH_RIGHT`, and a paragraph a box's close ends read by its own skips, §18.1, §18.8; 25 the release sweep of 2026-10-29, a line too short to be evidence found on no other page, a word a hyphen cuts going on below, an ink unit's paragraph one unit, a math face told by its family's names, `layer-proto/fonts.mjs` `classifyFont`), `REMOVAL` (`pipeline/versions.mjs`, `'17'`: a biblatex entry's ink its unit's groups, the point before each in our page; 16 backref's list after an entry its list piece's ink, §19.13; 15 a level figure unit on its column's edge or centred in it anchored there, `figure-text.mjs` `columnAnchorOf`, §19.12; 14 a unit's text owns the rules TeX painted on its own lines, an OT1 `\_`, an underline, own.mjs MR 2b, #117; 13 a punctuation mark a command set before its own ink its unit's text, not the piece's, §19.9; 12 a macro TeX said sets no ink is no placeholder of ink, an opening point alone at its unit's end owns its lines up to TeX's skip before another block; 8 no add-on, a part's or a bundle's cell rules in its place, our page wrapped by optional content, §11.8, §19.9) | extraction | the layout maker (the file's own schema is `LAYOUT_SCHEMA`, 5); how a drawn unit's ink is taken away | the R2 key | bundles made again lazily |
 | `TRANSLATE_VERSION` (`translate/version.mjs`, `'9'`: a caption cut into sentences on the tags wire as a paragraph is, §17.1; `'8'`: a run-in label where a sentence begins past the unit's head keeps its markers on the markers wire (`mt.mjs` `classOf`), 2010.11929v2's "Center:" and "Right:"; `'7'`: backref's list after an entry on no wire, put back after the translation with an en space before it, §19.13; `'6'`: every content class translated once whatever the language, the author block for every target and a bibliography's entries; `'5'`: a display's own stop written after its marker and taken off the reply; `'4'`: a styled pair whose two ends stand where the wire has a marker anyway keeps its markers; `'3'`: a sentence whose words change style sent whole, the pairs inside it on no wire; `'2'`: a formula split across inline formulas sent as one marker) | translation | `serialize`, the three wires, `rehydrate` (strict and tolerant), `translateUnits`' fallbacks, `keptFor` and `authorsTranslated`, `decideGroups` and `NAMES_SHARE`, `batchesOf`, and the paper's context each reader builds (`paperContext`: the extension's is `session/translate.mjs`, the web has its own, since it cuts the abstract as the HTML page does, which the engine does not hold) | the web's translation identity, the extension's rows cache, never a bundle key | rows translated again on open |
 | `RULES_SCHEMA` (`rules/layout.mjs`, `9`: the languages of a script the engine set, the owner's ruling of 2026-10-29: `latinPatterns` takes Italian's, Dutch's, Polish's, Turkish's, Indonesian's (Malay's too, as babel's malay.ldf takes them), Czech's and Swedish's, `cyrillicPatterns` added, a Cyrillic word's hyphenation, Russian's rules or Ukrainian's or Bulgarian's own patterns, and `hyphenation` their minimums as TeX applies them under babel; 8: `latinPatterns` takes French's, Spanish's and Portuguese's own, hyph-utf8's (the three were hyphenated with English's, #121-4), and `hyphenation` their minimums as babel sets them, French 2 and 3, Spanish 2 and 2, Portuguese 2 and 3; 7: `evenPitch` and `keepAlign` added, lane B's B1 and B2, the ruling of 2026-10-29, §18.8; 6: `cjkFaces` holds its group alone, a CJK script drawn at Regular and Bold beside every English family, its `light` designs and its unread `kai` gone, the ruling of 2026-10-29; 5 before it: `fillLeadRel` added, the fill's top relative to the original's pitch; 4: `adaptiveFill.band` read against the page's own paragraphs, 1b-C) | layout | the rule set's fields, ranges and how the engine reads them | the rules route (`/s<n>`) | a new pointer; engines of the old schema keep the last set published for it |
@@ -1924,10 +2081,10 @@ experiment vetoed a flag where arXiv's lines contradicted it (a unit told flush 
 ### 18.9 Layout decisions of 2026-10-30
 
 **A paragraph over a page break ends the earlier page with a full line.** Since E3c (2026-10-20) a unit over a page break
-holds on each page the text its source sets there: where the source's page B begins (`layer2.mjs` `pageStartsOf`, the
-alignment's first source word there), the translation is cut at the share of the sentence the source sets before the break
-(`pageCutsOf`), and a page-break token there sends the text on to page B (`layoutCut`, laid at the fit's own state, kept
-where it fits). The line ended at the cut wherever the share fell in it, so page A's last line stood short with the rest of
+holds on each page its share of the paragraph. Until the follow-up below, that share was read off the alignment and the
+row's sentences (the first source word on page B, `pageStartsOf`, and the share of the sentence the source sets before the
+break), and a page-break token at that cut sent the text on to page B (`layoutCut`, laid at the fit's own state, kept where
+it fits). The line ended at the cut wherever the share fell in it, so page A's last line stood short with the rest of
 its measure empty, and a word could be split over the two pages: 1706.03762v7 in Chinese, §3.2.2, ended page 4 half a line
 short and opened page 5 with the second half of the word for "output"; §6.2 ended page 8 a few characters into its second
 line, the language pair split over pages 8 and 9. The owner, 2026-10-30: 「明明有空间，但我们却强行把内容挤到了下一行，导致这个地方直接空着。按空间预估来说下一行大概只显示"..图2所示"的几个字，其他文字填满上一行。」
@@ -1954,7 +2111,44 @@ first token, and a cut never costs the unit its fit (laid at the fit's state, el
 break stand on the break's page: the tail of the line that holds it goes there at a looser state, and it is that page's text
 in the source.
 
-Measured on the gate pack (`608b7e87`, 32 outputs) against `next` (`8fcdca28`): 142 units reach a cut (their fit sets page
+**By the paragraph's height, not its sentences (the owner's follow-up, 2026-10-30).** The owner, looking at the result:
+「整个段落级语块在高度上覆盖得自不自然、有没有填满…位置对应上…不是追求做到 100% 精确匹配…最后一行有没有 100% 占满…其实并不重要」, and then 「好，就按这个做」
+("What matters is whether the paragraph-level block covers its height naturally and fills it, and whether the positions
+correspond; it is not about a 100 % exact match, nor whether the last line is 100 % full. OK, do it this way."): blocks stay
+aligned, sentences need not, and the page changes at a natural line end, as LaTeX sets it. He holds a column break to the
+same (1810.04805v2-zh, Appendix B's MRPC paragraph, unit 251 on page 15: three dense lines at the left column's foot, and
+the right column only its last few characters, the room under them empty). So the cut is the paragraph's height alone
+(`pageCutsOf`, from the fit's own lay), at every frame break: a frame is a column of a page (the unit's consecutive blocks
+of one run on one page whose columns meet). Each run of the unit (its blocks between two displays) whose source lines
+(`originalLines`: a line its rectangles cut in two is one) stand in more than one frame keeps in the frames before each
+later frame k of its n laid lines, k = n × the source's lines before that frame over all of them, at the line end nearest
+it that a token opens (a line a long token's cut opens, a URL's or a hyphenated word's tail, begins inside a token; ties the
+later, the earlier frame the fuller), one line at least on each side; the break token (`frame`: the unit's block the frame
+begins with) then stands at that line's first token, and only where the fit sets that line in an earlier frame (where it
+does not, the frame's slots are full already). A run laid in one line is cut in it at each frame's share of its tokens, the
+one short line. The breaker reaches a frame by its block (`blockBase` for a run laid alone), so a column break is laid,
+held and stranded as a page break is. The breaker's held break, `strand` and `keepsPages` are as above. Nothing of the
+alignment or the row's sentences is read for it any more: `pageStartsOf`, the sentence share and the row's sentences on the
+unit the layer lays (`rows.mjs` `unitOf`) are gone. On the gate pack against `next` (`f98fa527`, the rule above): 55 units
+are drawn otherwise, 25 over a page break, the column breaks' and those on the pages that hold them through the page fill's
+reads; the owner's two paragraphs are as above (1706.03762v7-zh unit 40, three full lines on page 4 and the last characters
+on page 5; unit 128, two full lines on page 8, one on page 9), and the MRPC paragraph (all of the paper's pages laid) is two
+justified lines in the left column and two in the right, at the one state of the unit. The rules gate: de, es, fr and ru
+unmoved; worse, zh frames with a blank line 23.3 % to 23.6 % and paragraph gaps tighter than the lines beside them 45 to 46
+(0.17 to 0.174 a thousand cells), ko frames with a blank line 6.3 % to 6.8 % and paragraph gaps tighter 12 to 13 (0.17 to
+0.18); better, paragraph gaps a pitch or more wider in zh (22.7 % to 22.0 %), ko (4.3 % to 2.4 %) and ja (2.9 % to 2.4 %).
+The MRPC paragraph stays dense in both parts: its state is the fit's (leading 1.0, the original's pitch, where its
+neighbours are filled to 1.6; tracking -0.03 em, punctuation compressed), because its two frames are its source's own five
+lines, which hold its four lines only at the original's pitch, and the fit walks tracking and compression to their floors
+before the leading, and keeps them once the leading fits, whether or not the leading alone would. That is the walk's order, not the split,
+and is left to its own change. The zh measures that the rule above made worse
+than before it (frames with a blank line 0.22, paragraph gaps 0.22, pitch spread 0.433 at `8fcdca28`) do not come back: they
+follow from the page change at a line end, which this keeps, not from the sentence share. The sweep's invariant (i) cannot hold
+a sentence to its source's page under this rule: the first k lines stay on page A whatever sentences they hold. Its smallest
+tolerance that matches is the break itself: for a unit drawn over a page break, a sentence drawn on either page of the break
+is not a violation; a sentence drawn two pages or more from its source, or in a unit on one page, is as before.
+
+Measured for the rule above (pull request 517) on the gate pack (`608b7e87`, 32 outputs) against `next` (`8fcdca28`): 142 units reach a cut (their fit sets page
 B's text on page A). 106 end page A at the end of the line that holds the cut, each checked against the fit's own lines (page
 A's lines are the fit's through that line, page B opens at the fit's next line, or at the cut where it is a line's first
 token); 19 more now keep their cut, where the old one cost them their fit and was dropped, page B's text drawn on page A
@@ -1971,6 +2165,20 @@ to 0.029), a page A a line shorter where a line went whole, and the fill's leadi
 invariant (i) reads a sentence as drawn on another page only where none of its drawn pages is among its source's: the rule
 moves no sentence so but one the source sets wholly on page B that ends inside the rest of the line that holds the cut, and,
 where a line goes whole, one wholly inside that line that the source sets wholly on page A.
+
+**A cell left the original's keeps its place from its neighbours.** A unit's line grows over what no other unit holds
+(`run.mjs` `growOn`, `layer2.mjs` `extendRects`: within 1.2 em, over characters that read the unit's own words), and what
+another unit holds is the page's rectangles of every unit (`rectsByPage`). A unit the left locates stands there by its
+left's rectangles from the moment it is added, laid or not; one the left does not locate, the layout file's alone (most of a
+table's cells: §17.1), stood there only once it was placed, so a cell left the original's (its row kept, or skipped) stood in
+none and its ink was free to a neighbour. 1810.04805v2's Table 8 (the owner, 2026-10-30: 「在 MNLI fine-tune 的地方，文字出现了重叠」,
+"where MNLI's fine-tune is, the text overlaps"): MNLI's "Fine-tune" kept, NER's "Fine-tune" beside it 6.5 pt away grew over
+the same words to MNLI's start, and its translation was laid from there over MNLI's original, its own place left erased and
+empty. Such a unit now stands there by its file lines from the moment it is added, laid or not; one placed adds the
+rectangles its growth moves as before. Measured on the pack's 32 outputs, every page (647, the layer gate's model tier with
+v0's records): of 5,962 unit records one moves, that cell in each language; in Spanish, French, Korean and Chinese it is laid
+on its own line, and in German, Japanese and Russian its translation does not fit its own cell, so it is the original's (it
+fitted only by taking MNLI's room).
 
 ## 19. The engine's contract
 
@@ -2044,6 +2252,15 @@ extension's compile client (`parked/extension-compile/`).
   the web sees it as a change of the surface it pins.
 - **Behaviour.** `tests/pdf-reader/engine-golden.test.ts` holds, as SHA-256 values, what the engine makes of inputs the
   repository wrote itself (units, wires, the files of every compile, the bundle, the layout file, the rows). A move or a refactor leaves every hash as it is.
+- **Runtime.** What the server's reads make does not depend on the Node they run on. PDF.js 6.3.289 keeps a glyph's outline,
+  which the ink reading takes a glyph's own extent from (`layout/ink.mjs` `outlineBox`), in a Float16Array where the runtime
+  has one (Node 24 on; Node 22 has none), and half precision moves a rounded coordinate of the layout (494.89 is 494.9 on
+  1706.03762v7). A host that makes the lite worker its PDF.js worker calls `float32Outlines(api, worker)` (`layout/pdf-lite.mjs`)
+  before its first document: both sides Float32, whatever the runtime (`tests/pdf-reader/pdf-lite-outlines.test.ts`). The
+  extension and the browser layer run stock PDF.js and read no glyph's outline for the layout. A failed allocation is one on
+  every Node: from Node 24 on, `Buffer.allocUnsafe` and what is made of it (`Buffer.concat`, zlib's output) throw a RangeError of
+  Node's own words, `Failed to allocate memory`, with the code ERR_MEMORY_ALLOCATION_FAILED, where Node 22 threw V8's `Array buffer
+  allocation failed`; `pipeline/memory.mjs` `isMemoryError` reads the code first.
 
 ### 19.4 The layer API, as the web defines it
 
@@ -2125,6 +2342,26 @@ own), each part carrying its pages' cell rules (`rules`).
   etoc depth tag whose end mark TeX wrote into the contents inside a `\csname` (ten errors, 36 pages to arXiv's 34),
   2610.21288's `\appendixname` wrapped by the babel names' marks under revtex4-2 and the appendix package (the job aborted).
   Each check holds for any paper:
+  - *Before the compile, in the mark probe* (PIPELINE 43): where a unit of the main file stands in its preamble, the probe sets
+    the preamble as the marked original writes it (`live.mjs` `markedPreamble`: the layout marks and their line probes, every
+    class, no babel name wrapped, a unit whose writing unbalances its braces as the paper's own; `probeFiles` `preamble`, and
+    `\axtlines` a protected macro that sets nothing there), so that TeX reads our marks in the preamble where the marked compile
+    will, a compile before it. An error TeX raises on a line of that preamble names the units of the marks of ours it stands
+    among (`guard.mjs` `preambleUnits`, `marksAtError`): on the line as the log shows it, those of the brace group TeX closed just
+    before the error's place (a command that read its argument whole), else of the group open at it — never another unit's on
+    the same line, a title set on the author's line, and none where the place is in no group (the marked compile's guard judges
+    what is left) —, and the units so named are left unmarked before the marked compile
+    (the record's `failed: ['preamble']`, `extra` 0). A class's command that reads its argument as data raises its errors there:
+    2610.37668v1's myarxiv `\author` takes a name's initials, the first token of each word, through a `\csname`, and our start
+    mark was that token (nine errors, 36 pages to arXiv's 35, two compiles more; now none, the babel names kept). Then, or where
+    that probe stopped before its body wrote a row (TeX stopped in the preamble), the probe is asked again over the paper's own
+    preamble, whose answers no error of ours came before; one that stopped in its body, in a sample of its own, stopped where
+    the paper's own preamble's stops (2610.21377v1: the same errors and rows; 2610.21884v1's too, at a sample of xy-pic's syntax,
+    until PIPELINE 45 kept its diagrams as the paper has them, below), and stands. A paper whose preamble
+    holds no unit has the probe it had, byte for byte. Over 72 papers, 34 hold a unit in the preamble: on each, the probe's
+    answers over the marked preamble are the paper's own preamble's (switches, macros that set no ink, their texts, the names,
+    `\lineskip`, the boxes begun apart), at the same time (37.9 s against 37.8 s locally over the 34), and only 2610.37668v1's
+    names a unit.
   - *Before the compile*: each unit's writing in the marked file against its source, by its brace balance outside comments,
     `\verb` and verbatim environments (the innermost unit that changes it); such a unit is written as the paper's own bytes
     (latex-front.mjs `patch` `asSource`: no mark, no span), and a file whose balance our other edits move (a style's literal
@@ -2134,7 +2371,24 @@ own), each part carrying its pages' cell rules (`rules`).
     function asked once; with several toplevel sources, at most arXiv's); no auxiliary file it wrote (the files a host
     returns, else its main aux, which holds every list entry LaTeX writes through `\@writefile`) holds a mark of ours where
     no text is set: anywhere but a list entry's text (`\contentsline`'s second argument) and nameref's title (`\newlabel`'s
-    third group), where LaTeX writes a caption's or a heading's text by design; its TeX errors are no more than the unmarked
+    third group), where LaTeX writes a caption's or a heading's text by design, unless TeX shows what it did with the mark
+    (PIPELINE 43, `guard.mjs` `copiesOutOfPlace`): where the compile is otherwise the paper's (it ran through to arXiv's pages,
+    its pages' text read through the host's `textOf` with no mark printed — a host that reads none, or failed to, shows nothing,
+    and the marks stay out of place —, no TeX error) and TeX wrote the PDF itself (`tellsTwice`: pdfTeX's and LuaTeX's log names every
+    destination set twice, XeTeX's driver and the DVI driver latexmk runs tell no log the host returns), each such mark was set
+    once where the paper's TeX sets its unit's text — enotez prints each endnote from its `\enotez@note{…}{text}` line at
+    `\printendnotes` (2609.36054v2: 16 notes, unmarked and English before, one compile of 34 s more) —, or never — jmlr's
+    `\jmlr@author{…}{…}` discards both arguments (2610.21201v1) —, and its unit is located there; or twice — elsarticle's
+    `\emailauthor{…}{name}` sets an author's name again in the e-mail footnote (2610.21084v1, 2610.20848v1) — and the reading
+    drops every destination the log names (`marks.mjs` `readMarked` `dropped`), the unit then laid as an unmarked one is, never
+    at the copy's place; nor does it take its alignment from the copy: a unit whose paragraphs TeX set in two alignments tells
+    none (`marks.mjs` `readAlign`), as a piece set in two colours tells no colour (`readColours`). 2610.20848v1's name, set again
+    flush left in its footnote, has the file it had before; 2610.21084v1's, flush left in its block and in each footnote, keeps
+    TeX's word. The same rule mends two papers whose class sets the title and the authors again (acmart's "ACM Reference Format"),
+    whose flags were the second setting's: 2608.25210v2's centred title and authors, read flush left (the title now no flag, the
+    middle author centred), and 2610.22065v1's centred title, read justified (now centred); no line of either moves. A mark read
+    back where no text is set (a `\csname`, a number, a key) raises an error, and every unit stays out of place as before
+    (2610.21201's etoc depth tags); its TeX errors are no more than the unmarked
     original's (the paper's own files, graphicx's draft and END_TEX alone), which is compiled only where the marked one has
     any. A paper whose marked original passes costs no compile more and its marked original and layout are as before: the
     gate pack's 32 outputs byte for byte, the sample's bundle but its pipeline token.
@@ -2175,6 +2429,32 @@ own), each part carrying its pages' cell rules (`rules`).
     back to `\def\url#1{#1}`, and under its hyperref, read as `\url`'s own, it made each `\url`'s argument a group, inside
     which a mark was printed. Over 183 local sources
     one unit changes (that paper's unit 176: one placeholder, not a group holding one; no text piece and no kind).
+  - *A drawing read as text: named* (PIPELINE 45, 2026-11-01; 2610.21884v1). The front end reads an environment it does not know
+    as text, and a table cell holding xy-pic's `\begin{xy}…\end{xy}` was four cell units of xy-pic's own syntax
+    (`\ar@{-}(0,0)*++!D{…}`), our marks inside it: 46 TeX errors, none of them the paper's, and two compiles of the guard's (the
+    unmarked original's, then the attempt) to find those cells the paper's own. Whether an environment's body is set as text or
+    read token by token by its own parser shows in no source but by the environment's name, so the drawings are named, as
+    TikZ's, PSTricks', pgfplots', circuitikz's, forest's and LaTeX's own picture were (`latex-front.mjs` `SKIP_ENVS`), and
+    xy-pic's `xy` is one of them: kept as the paper has it, no unit, no mark. This is a name, not a rule TeX judges: one would be
+    a probe of each environment the front end does not know, its body marked and not in its context, about a day's work for
+    the one paper of the 215 local sources that begins an `xy` (no other environment of the kind is walked as text in them, nor
+    xy-pic's plain `\xy … \endxy` written in any). 2610.21884v1's marked original now stands at once: five compiles (14 TeX
+    passes) are three (6), its local TeX from 9.1 s to 3.8 s (the box's guard compiles were 7.0 s and 8.1 s); its mark probe
+    raises no error (11 at a sample of xy-pic's syntax before); its 259 other units are located and laid as before, line for
+    line, and its base page is pixel for pixel the one the guard's attempt made. The other 214 sources' units are the same hash for hash,
+    and its own after the four cells the same but for their pairs' numbers (`cache.mjs` `seedFrom` renumbers them).
+  - *Left as they are: a name read as data, and a fault of pdfTeX's own.* 2610.37668v1's myarxiv `\author` takes each word's
+    first token as an initial (`\tl_head:n`) and defines a command by that name, so a mark at a name's start is a "Missing
+    \endcsname" whatever the mark is: the probe over the marked preamble finds those units a compile ahead (above), they stay
+    unmarked (the original's in the layer, as an unmarked unit is), and the probe is asked again over the paper's own preamble
+    (2.1 s on the box). 2610.30769v1's `\citep` that TeX breaks over a page break ("[Lorenz" ends page 1) leaves pdfTeX a link
+    ended at another nesting level than it began (`\pdfendlink ended up in different nesting level than \pdfstartlink`, its own
+    compile warns so too), and with our marks every pass that reads a full
+    `.out` (hyperref's bookmarks) dies of a segmentation fault, so latexmk runs its five passes (the paper's own source three, of
+    0.65 s each), the marked compile fails natively (staging, 2026-10-31: five passes, no PDF), and the guard compiles once
+    more; the final pass ran there, and the paper has its layout (locally, under Rosetta, the final pass dies too). Taking
+    either of our two marks around that citation away ends it, and taking both away brings it back: the fault follows the memory
+    pdfTeX lays its nodes in, not what a mark means, so no change to our marks removes it, and the guard is the net it is there for.
   - *The web host* passes `compileBudgetMs` with CM alone today, and neither `pages` nor `engines`: its budget's answer past
     the budget (a `budget` limit) ends the guard as any limit, and the page check is the page pass's alone until it passes
     arXiv's page count.
@@ -2277,7 +2557,16 @@ own), each part carrying its pages' cell rules (`rules`).
   maker's columns' edges of the pages before a page and its own (rule 3). The maker is made a page at a time and the marked
   original read beside arXiv's (its page p + 1 before arXiv's page p), the left anchored by ranges as the unit marks' pages
   arrive, and each part cut as soon as everything it reads is final: the same parts as the whole path's under the same rules,
-  byte for byte (the six gate papers, verdicts on; the books' digests), told early (`stats.closed`). Against the whole run's
+  byte for byte (the six gate papers, verdicts on; the books' digests), told early (`stats.closed`). A part is tried after
+  every page, on K, F and the need bounds over the units in K for good and the left as they stand (`pipeline/frontier.mjs`),
+  made again only from what changed since the try before: the same units with the same rows and the same left give the last
+  try's K, F and NB, each a function of them alone; a unit's rows are asked of the maker once in each state (settled, then a
+  stub once told) and its entry's own pages are read once in each (`cut.mjs` entriesOf's cache), so that a try that changed
+  something makes again over the whole paper only the cheap rest (K's order, the shared lines' leads, F and NB). 2610.19159v1
+  tries 161 times for its 6 parts, 152 times over a K that had not changed, each made from scratch before: its maker took
+  16.4 s on one core, now 10.5 s, K made 9 times (2026-10-31; both ways on every try of 60 papers' hand-offs, 676 tries, the
+  same K, F and NB and the same parts byte for byte; `tests/pdf-reader/frontier-stream.test.ts` holds a stream's tries to K
+  made from scratch and counts the work). Against the whole run's
   rules the rules move none of the gate's 30 outputs and 10 far pushes of the 124-paper corpus (each judged right). The
   maintainer's reason is the reader's wait: the first part comes about three times sooner — 3.3 s at arXiv's page 12 against
   10.9 s on 2106.10165 (471 pages), 4.2 s at page 5 against 13.2 s on 2310.20360 (737 pages), 1.8 s against 4.5 s on
@@ -2289,6 +2578,29 @@ own), each part carrying its pages' cell rules (`rules`).
   next's spread but 2310.20360's with the draw (1709 MiB against 1578 to 1653), inside a job whose compile takes about 100 s.
   The draw moves no first part by more than 0.2 s. Rule 5 (a float searched from the page of its last body neighbour on)
   stays off: it is no accuracy rule.
+- **The left in the order TeX sets the text, and a range its own lines on each page (PIPELINE 40).** The owner, 2026-10-30, on
+  1810.04805v2's Appendix C page: 「这一页的段落高亮标记基本上都失败了」 ("almost every paragraph's highlight on this page failed"),
+  and on page 4 §3.1's heading and the run-in "Task #1: Masked LM", lit on neither pane. Two roots, both in the anchoring
+  (`anchors.mjs`). A unit its marks do not bound (a heading, a cell, a paragraph whose marks land on no word of arXiv's where our
+  compile sets the page otherwise: page 16 up to 27 pt higher) is searched between its marked neighbours, which were read in the
+  units' numbers' order; the front end numbers an author block's later units and the bibliography's entries after the rest
+  (`latex-front.mjs` `entriesLast`), so an appendix after the references had an entry pages before it as its last paragraphs'
+  next neighbour, and the window between them was empty (page 16: 4 of 27 units located). The front end gives the order the walk
+  met the units in (`texOrder`, beside the units as `inFloat` is), and the page pass and the layout maker anchor their units in
+  it (`orderOf`; `left-part.mjs` `rangedAnchors` takes and gives unit ids, its units in any order, told in their ids' order). And a
+  marked unit's range owned every token from its first mark to its last: a footnote over a page break held the next page's
+  column between its two parts, and the headings matched there were its words (page 4: footnote 1 over pages 3 and 4). A range
+  over a page break owns, on each page, from the unit's first own line there to its last (the lines its matched words are most
+  of, or next to one, and its marks'), never crossing another unit's range (`rangeOnPages`, `rangesOf`: a caption above a
+  paragraph's next lines that repeats its words, 2307.16209v1 page 115, would have lost a line to it). Measured over 70 papers
+  (the 63 cached layers' and the gate pack's 7; the production pass, both engines, the same compiles): the units the left
+  locates on 1,868 pages, 17,804 before and 18,383 now, on 108 pages, and none lost but two cells that moved to the page TeX
+  set them on (2010.11929v2's "ViT-H/14 (JFT)" and "ViT-L/16 (JFT)", found in another table on page 13, now on page 22).
+  1810.04805v2: page 16, 4 of its 24 units with lines located before, 18 now (its cells of one or two words are found only
+  where they stand once in a row); page 4, 12 of 15 before, every one now; 2610.10069v1's page 8, under its own footnote over
+  a break, 7 of 9 before, every one now. The layout maker anchors in the same order and lays 34 more units on 7 papers (figure
+  texts, a footnote, a cell), none less; the gate pack's made files are byte for byte the same. No unit's text or number moves
+  (the 190 local sources, both engines' units compared one by one): a copy of 39 carries every unit (`PIPELINE_CARRIES`)
 - **The draw geometry (E-C), on by default (`draw`).** Each left part carries its page's draw (`layer-proto/draw.mjs`: the text
   items, the fonts, the Link annotations), read with the page's operator list (`pipeline/draw-data.mjs`): its text step T's
   own read (`readArxivText(doc, { draw: true })`, taken once a page), its annotations the page's one read, shared with the
@@ -2340,12 +2652,52 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
 
 - **The final pass** (`layout/paper.mjs` `markedOfPaper`, `final` on by default). Once the guard accepts a marked compile
   (asked for the files it wrote, `files: true`), one more request: the accepted files with `DRAFT_OPTION`'s line (graphicx's
-  draft option) made an empty line, so that no line moves, over the aux, bibliography, lists and index that compile wrote;
-  `rerun: false`, `bibtex: false`; the paper's own engine (pdflatex, xelatex, lualatex; `latex` then dvipdfmx). It is asked only
-  where the compile budget holds a compile as long as the longest so far and a fifth. `base` is `{ pdf, log, check: { marks } }`
-  once `layout/base.mjs` `finalCheck` finds its `axt-` destinations the draft's (each by name, page and place within
-  `MARK_TOL`, 0.01 pt) and its page count, boxes and rotations the draft's; else `{ refused: 'final', why }`. The marks are read
-  from the draft as before.
+  draft option) made `NO_DRIVER_GROUP`'s, one line for one, so that no line moves, over the aux, bibliography, lists and index
+  that compile wrote; `rerun: false`, `bibtex: false`; the paper's own engine (pdflatex, xelatex, lualatex; `latex` then
+  dvipdfmx). It is asked only where the compile budget holds a compile as long as the longest so far and a fifth. `base` is
+  `{ pdf, log, check: { marks } }` once `layout/base.mjs` `finalCheck` finds its `axt-` destinations the draft's (each by name,
+  page and place within `MARK_TOL`, 0.01 pt) and its page count, boxes and rotations the draft's; else `{ refused: 'final',
+  why }`. The marks are read from the draft as before.
+- **A PDF figure as arXiv includes one** (`live.mjs` `NO_DRIVER_GROUP`, PIPELINE 44, 2026-10-31). graphics-def's pdftex.def 1.2d
+  and luatex.def 1.2f (8d691483be, 2025-09-20, on CTAN 2025-09-30) write a transparency group,
+  `/Group<</S/Transparency/K false/I false>>`, on every PDF page `\includegraphics` includes. The pinned TeX Live 2025 tree has
+  them. arXiv's TeX Live 2025 is the state of 2025-08-03, not updated since (info.arxiv.org), and its pdftex.def 1.2c and
+  luatex.def 1.2d write none: none of the 98 arXiv PDFs on disk carries the group, and every TeX Live 2025 final pass that
+  included a PDF did (53 of the speed lane's 85 hand-offs). pdfTeX is not the cause: arXiv's PDFs name the same pdfTeX, 1.40.28,
+  and a `\pdfximage` of its own writes no group. With the group no figure form of ours was arXiv's, so the delta copied none:
+  2610.30034v1 shipped its whole 5.46 MB base where a proved delta of 0.20 MB now stands, 2610.30875v1 a delta of 3.73 MB where
+  0.30 MB does. Under poppler the group drew the figures' lines heavier (17 of five papers' 23 figure pages differed from
+  arXiv's with it; without it all equal arXiv's but the stamp and one page whose images differ); PDF.js drew single glyph or
+  edge pixels apart.
+  - **The line.** The final pass's first line, empty before, is two hooks, one for each driver: once `pdftex.def` or
+    `luatex.def` is read, where it has the switch (`\Gread@transgroupfalse` defined), the include's `\Gread@transgrouptrue` is
+    made its `\Gread@transgroupfalse`. One line for one, so that no TeX line number moves; every name in `\csname`, since the
+    line runs before `\makeatletter`.
+  - **Measured on the pinned trees** (a compile matrix, one pass as the box runs a final pass, `readarxiv-lab-data/pdftex-group/ndg/`
+    on the maintainer's machine). Under TeX Live 2025, pdfLaTeX's and LuaLaTeX's final pass is byte for byte the compile of the
+    driver with its group's lines taken out, and of arXiv's own drivers. With `xcolor` loading the driver first, and under
+    `\DocumentMetadata`, it has no group either. A figure with a page group of its own keeps that one, where pdfTeX wrote two
+    `/Group` keys in its form before (13 of the 53 papers). XeLaTeX's `xetex.def` has no switch; under `latex` the DVI's drivers
+    are not hooked (dvips.def has no switch; dvipdfmx.def 5.0n has one, but the tree's dvipdfmx writes no group by it; and arXiv
+    draws a `latex` paper with dvips anyway). Their final pass is byte for byte as before, and so is every TeX Live 2023 one, whose drivers
+    (pdftex.def 1.2b, luatex.def 1.2d) have no switch.
+  - **A driver of another shape.** graphics-def's PR #48 (open since 2026-05-05) puts the group on a form that wraps the image.
+    It keeps the include's switch, which the hooks still turn off: the final pass is the plain driver's byte for byte. A driver
+    that set the group by a switch of its own would escape them; the web's `container/tests/driver-group.docker.test.ts` (with
+    the pin that takes this engine) holds each tree to no group, and sees one put there so.
+  - **The marked compile keeps its drivers as they are.** Its pages are read for their marks and never shipped, and a group, in
+    a figure's form, moves no mark: the source units and the marks are as they were, and the base's bytes change.
+  - **What our page's reading gains: a figure's ink inside its box.** PDF.js gives a grouped form's `paintFormXObjectBegin` no
+    box and puts it on the group, which `layout/ink.mjs` does not clip by, so a figure's ink and text past its form's BBox, which
+    no page shows, were read as on the page; they are now clipped as on arXiv's page, and a layout file can move (one frame of
+    1512.03385v1, its room below 29.36 pt, now 29.43). The wrap's figure units moved with it (the gate pack: 1512.03385v1's
+    181 → 176, 2608.04322v1's 237 → 218), which 44 read as text past the box; it was not. Every one of those units was a title
+    set turned at its figure's edge and shown whole on arXiv's page, which `turnedGlyph` read as cut by a box of its whole size
+    on both sides of its baseline (§19.12, PIPELINE 46: the units are back, 181 and 237, and the release sweep's 45 lost
+    figure units on 9 papers with them). Figure units are units, which a stored translation's rows name by their ids, so the
+    cut's move raises PIPELINE (44, §18.2, §18.3), which also makes every bundle made over a base with the group again; a copy
+    of 43 carries every unit, a figure unit found again by its source. Swapping the driver file in the image gives the same
+    bytes but breaks the tree's identity with the full image file for file, and no published image holds a tree of 2025-08-03.
 - **The day.** Every compile after the probe carries `sourceDate` (the host sets `SOURCE_DATE_EPOCH` and `FORCE_SOURCE_DATE=1`):
   arXiv's PDF's day, `creationEpochOf` — its `/CreationDate`, else its XMP's `xmp:CreateDate`, else `xmp:MetadataDate`. arXiv's
   PDFs of 2026, rewritten by pikepdf, carry only the last (the rewrite's time, within a day of the compile): 2609.26457 prints
@@ -2866,7 +3218,11 @@ fallback. BUNDLE stays 8 (unreleased: its readers in this repository read both),
   `deltaSection`), `/Prev` the original's startxref, the composed startxref the section's; the composed page graphs, read again
   by the object layer, ours on replaced pages (the page dict's other keys the original's) and the original's elsewhere (a
   pairwise graph comparison: cycles compare as the graphs they make); PDF.js opening the composed bytes with no message neither
-  source alone gives (its console captured, each document read in turn, the composed one first); the original's page count;
+  source alone gives (its console captured, each document read in turn, the composed one first; each message one of a source's,
+  one for one, but for the document's own id, which each document opened takes anew, the loading task's `docId`, and which
+  PDF.js writes into the name of an object it shares across the document's pages, `g_<id>_`: a Type 3 glyph's image, an image
+  on several pages, a font. 2610.31506v1's Type 3 glyph image gave one warning in all three documents, under three ids, and
+  its delta, 0.25 MB against a 6.58 MB base, was refused until 2026-10-31); the original's page count;
   every page's box (within 0.01), rotation and user unit, and its text items exactly, every field of every item (`page-text.mjs`
   `textRecordOf`: one SHA-256 of their exact values a page; before 2026-10-24 within 0.01 — the pack's composed pages are ours
   item for item, 290 pages and 97,702 items, 106,763 wrapped; a string by its UTF-16 code units, so that a lone surrogate is never
@@ -3106,7 +3462,13 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   paper): its new stream lexed again within the page's bounds, every BDC of ours named by its groups, none inside another and
   closed at its depth and state, none left open (the page's own marked content need not balance: our runs lie in none of it);
   its operators, ours taken out and each split show's chunks joined, the unwrapped page's (operators, operands, codes and
-  numbers in order); and the deflated bytes written inflated back to that stream. Of the paper: the section read back
+  numbers in order); and the deflated bytes written inflated back to that stream. The unwrapped page is read again for the
+  proof: each of its content streams decoded and lexed whole, every operator kept, under a budget of its own, so that what it
+  compares is read from the bytes by the proof itself. What it takes from the wrap is the list of those streams alone (`provePage`:
+  the wrap's walk's pieces, the page's `/Contents` as the object layer parsed them, which nothing changes: the wrap writes its
+  objects after the file), as a form the page's figures were wrapped in is read by the stream of the wrap's walk's container: a
+  second walk of the page found the same list, at the cost of every form on it walked again (2.7 s of 2610.21924v1's wrap on one
+  core, its 15,338 forms; 2026-10-31). Of the paper: the section read back
   (`deltaSection`: each entry at its `n g obj`, `/Prev` our startxref) and the wrapped document read again by the object layer
   (catalog, page dicts and resources ours but `/OCProperties`, `/Contents` and `/Properties`; each page's own `/Properties`
   entries kept as they were and ours beside them; every group listed and ON). A failed wrap is the paper's: `wrapFinal` gives `{ refused: 'wrap-parse' |
@@ -3287,7 +3649,21 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   in no math face is a unit, its text the glyphs' Unicode (NFKC), a space at a gap of `SPACE_GAP` 0.15 em. A number, a tick's
   label, a letter alone or a formula stays the original's; so does a run a glyph of which is not wholly inside the clip in force
   (an included figure's viewport: pageInk's `clipped`; 1706.03762v7's cropped attention figures held two such titles) or inside
-  its page's box (a row's origin off its page is one no part's reader takes, `checkFigures`).
+  its page's box (a row's origin off its page is one no part's reader takes, `checkFigures`). A glyph is wholly inside where its
+  own ink is: its outline (else its font's ascent and descent) up and down, its advance and its outline across, a glyph set
+  turned with that box turned (PIPELINE 46, the release sweep of 2026-11-01). The box of a turned glyph's whole size on both
+  sides of its baseline, read before, passed a form's BBox wherever matplotlib's tight box set a y-axis title, a colour bar's
+  title or a slanted tick label at the figure's edge, and once our final pass gave its included figures no group (PIPELINE 44,
+  §19.7) the form's box clipped them: 45 figure units of 9 of the sweep's papers, 40 translated before, stood English though
+  arXiv's page shows them whole (2610.35877v1 p8, 2610.22065v1 p3, 2610.17108v1 p4's slanted bar labels). Measured by the
+  production pass on the 16 papers the sweep and PIPELINE 44 name (ba433da8's engine, 6e0a8d1c's and this one): every figure unit
+  44 lost is back, drawn as before; the only units beside them are two titles 44's clip uncrowded (2610.22195v1 p8: the ink past
+  a neighbour panel's box that had crowded them is cut away); and the three deltas 44 gained are byte for byte 44's
+  (2610.30034v1 196,579 bytes, 2610.30875v1 304,787, 2610.31506v1 248,653). Over arXiv's PDFs of the 108 papers on disk, which
+  carry no group (81 with figure text): 327 units on 47 papers that 44's reading cut are units again, none lost, and the 236 on
+  16 papers whose glyphs a clip does cut stay the original's (2610.21312v1 p12's "Spearman(lr_std, bulk1)", its tops 1.7 pt
+  past its box; 2610.22065v1 p3's "Relative Accuracy Drop (%", its parenthesis past it; a multi-panel figure drawn once a panel,
+  each clipped to its own: 2608.12606v1 p5).
 - **Its place**, our glyphs' and nothing estimated: its first glyph's origin, its direction, its box's length along it, its band
   (its glyphs', at least `DRAW_BAND` [-0.15, 0.88] em: the line a CJK translation is drawn in). A Type 3 glyph's ink is what its
   char procedure paints (LAYOUT 28, #122-1: `ink.mjs` `type3Box`, PDF.js's `charProcOperatorList`, each painted path's box, a

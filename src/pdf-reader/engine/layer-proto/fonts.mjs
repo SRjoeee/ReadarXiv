@@ -122,6 +122,12 @@ function selectedFailed(family, style, ch, weight) {
   const pick = ws.includes(weight) ? weight : weight > 500 ? [...up, ...down][0] : weight < 400 ? [...down, ...up][0] : [...up.filter(x => x <= 500), ...down, ...up][0]
   return mine.some(f => Number(f.weight) === pick && f.status === 'error')
 }
+/** whether any declared face has failed, its status as it stands now: one read a face, where selectedFailed walks every declared
+ *  face (a slice each: hundreds, a CJK body's) for each character of each family. Where none has, no face a load selects has */
+function anyFailed() {
+  for (const f of added.values()) if (f.status === 'error') return true
+  return false
+}
 const hex = n => n.toString(16).toUpperCase()
 /** a slice's unicode-range descriptor from its [start, end] pairs */
 const unicodeRangeOf = ranges => {
@@ -252,7 +258,8 @@ export function roleFaceSet({ faceSources = null, faceUrl = file => `/fonts/${en
   /** whether a face the load selects for a glyph of `v` has failed. The promise of document.fonts.load is not the verdict: a
    *  browser that has seen a face fail (on an earlier character) fulfils a later load that matches it with just the faces
    *  that did load. A face never selected (a fallback family's, another weight's) stays unloaded and is no failure, only an
-   *  errored one is, and an errored one stays errored, so the answer for a unit does not depend on which unit asked first */
+   *  errored one is, and an errored one stays errored, so the answer for a unit does not depend on which unit asked first. Asked
+   *  only once some declared face has failed (anyFailed): until then its answer is no */
   const errored = v => {
     const families = new Map(v.got.flatMap(t => (t ? t.faces : [])).map(f => [`${f.family}|${f.style}`, f]))
     return v.need.some(ch => [...families.values()].some(f => selectedFailed(f.family, f.style, ch, v.weight)))
@@ -266,9 +273,11 @@ export function roleFaceSet({ faceSources = null, faceUrl = file => `/fonts/${en
         if (v.fresh) plan.push(v)
       }
       const results = await Promise.allSettled(plan.map(async v => document.fonts.load(v.font, v.fresh)))
+      // (the statuses read once, in this task: none failed, no character is walked through the faces for its own)
+      const failing = plan.length > 0 && anyFailed()
       let failed = false
       results.forEach((r, n) => {
-        if (r.status === 'fulfilled' && !errored(plan[n])) for (const ch of plan[n].fresh) setOf(drawn, plan[n].font).add(ch)
+        if (r.status === 'fulfilled' && !(failing && errored(plan[n]))) for (const ch of plan[n].fresh) setOf(drawn, plan[n].font).add(ch)
         else failed = true
       })
       return failed ? { why: 'face' } : null

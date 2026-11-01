@@ -279,8 +279,80 @@
 //     block's, its names or its places as frontBlock cuts them, whatever environment TeX sets it in (latex-front.mjs blockKind): a
 //     tabular's cells there (2610.35877v1's two names, 2608.06007v1's row of places, 2610.22214v1's block) are units of kind
 //     author or affiliation, each at its number with its text, no table's cell and no table's kept name, where they were cells
-//     of the tables' toggle; 3 of the 190 sources on disk, 8 units, every other unit and every kept name as it was
-export const PIPELINE_VERSION = '39'
+//     of the tables' toggle; 3 of the 190 sources on disk, 8 units, every other unit and every kept name as it was; 40 (the
+//     owner's report on 1810.04805v2, 2026-10-30: hovering lit nothing on Appendix C's page, nor §3.1's heading and "Task #1"):
+//     the left changes, no unit. A unit without marks is searched between its marked neighbours in the order TeX sets the text
+//     (latex-front.mjs entriesLast's `texOrder`, anchors.mjs orderOf), never the units' numbers' (the bibliography's entries
+//     numbered after an appendix were its last paragraphs' next neighbour, pages before them: an empty window); and a marked
+//     unit over a page break owns on each page its own lines alone (anchors.mjs rangeOnPages: a footnote over pages 3 and 4
+//     owned page 4's column, and the headings matched there were the footnote's). Over 70 papers (the 63 cached layers' and the
+//     gate pack's 7, the production pass on both engines): 17,804 units located on the left of 1,868 pages, 18,383 now, none
+//     lost but two cells that moved to the page they are on (2010.11929v2's 296, 297, from page 13 to 22); the maker lays 34
+//     more units on 7 papers (none in the pack, whose made files are byte for byte the same). Every unit, its pieces and its wire
+//     are 39's: a copy of 39 carries every unit (live.mjs PIPELINE_CARRIES); 41 with BUNDLE 12 (the moved pages' line map, the
+//     owner's ruling of 2026-10-30): the left part of every page the line check read and drew carries our lines that stand elsewhere
+//     on arXiv's page (pipeline/moved-lines.mjs, layer-proto/format.mjs `lines`), so that the reader tells a moved page's blocks by
+//     their boxes carried onto arXiv's page as it tells a page in place (view/shapes.mjs), and a page the check found in place by
+//     its boxes whatever ink its tokens give; a page has a list only where 90 % of its lines found a partner (moved-lines.mjs
+//     MAP_FOUND, #524's review). Over the same 70 papers (the production pass on both engines, 1 873 pages): the 21 pages moved
+//     (1810.04805v2's 16 among them) light 541 of their 542 items on the left, 439 before; one-sided items on every
+//     page 123 -> 7, each a display line whose word before the formula is lit and the blank between not; the units located on
+//     the left and laid are 40's (18 383 located), every units chunk 40's but its version; the bundles +0.54 % gzipped. Every
+//     unit, its pieces and its wire are 40's: a copy of 40 carries every unit (live.mjs PIPELINE_CARRIES); 42 (the owner's ruling of 2026-10-30, the text no
+//     block owns lights as one block on both panes): the text no unit owns once the ink units have claimed theirs — a code
+//     listing, an address or a URL alone in a note, a page number, a bibliography not cut into entries — is kept blocks, ink units
+//     of the KEPT flag after the others (layout/ink-units.mjs rule 10, keptUnitsOf: a run of such lines in TeX's stream with
+//     nothing a unit owns between them, in one column and one class), no pieces, never translated nor awaited (rows.mjs
+//     toTranslate), on the left by their lines' tokens and in the layout by their lines' boxes alone; their glyphs in no group, so
+//     that our wrapped page and its ledger are as they were. A figure unit's id moves past them (its translation found again by
+//     its source, cache.mjs seedFrom). Over the 54 papers of the release sweep: 1,920 blocks of 5,871 lines on 49 papers, the
+//     bundle 0.6 % larger (a paper's median 0.22 %, 2610.19159v1's agent logs 3.9 %); arXiv's lines no block lit 5,399 -> 1,357. Every other unit, its pieces and its wire
+//     are 41's: a copy of 41 carries every unit (live.mjs PIPELINE_CARRIES); 43 (the marks at their source, 2026-10-31: every
+//     compile the layout guard added on the new papers of 2026-10-27 to 30 came from our marks): a mark of ours a file TeX wrote
+//     holds is judged by what TeX did with it (layout/guard.mjs copiesOutOfPlace: where the compile is otherwise the paper's and TeX
+//     wrote the PDF itself, whose log names every destination set twice, it was set once where its unit's text is, twice and
+//     dropped by the reading, or never), so that enotez's endnotes printed from the aux (2609.36054v2's 16 notes, English before),
+//     jmlr's discarded \jmlr@author and elsarticle's \emailauthor (2610.21201v1, 2610.21084v1, 2610.20848v1) cost no compile
+//     more; and the mark probe reads the main file's preamble as the marked original writes it (live.mjs markedPreamble), the
+//     units TeX's errors stand at there left unmarked before the marked compile (guard.mjs preambleUnits: 2610.37668v1's myarxiv
+//     \author, a name's initials through a \csname, two compiles more before); and a unit whose paragraphs TeX set in two
+//     alignments tells none (marks.mjs readAlign: a copy's, or acmart's title and authors set again in its reference block,
+//     2608.25210v2's and 2610.22065v1's flags, no line moved). Over 72 papers the other 65's guard, layout file and base page are
+//     42's byte for byte, the gate pack's 7 among them. Raised so that the bundle of a paper whose marked original now stands at
+//     once is made again under a new key (VTAG). Every unit, its pieces and its wire are 42's: a copy of 42 carries every unit
+//     (live.mjs PIPELINE_CARRIES); 44 (the driver's group, 2026-10-31): the final pass begins with hooks that switch off the
+//     transparency group graphics-def's pdftex.def 1.2d and luatex.def 1.2f (8d691483be, 2025-09-20) write on every included PDF,
+//     which arXiv's TeX Live 2025, the state of 2025-08-03, predates (live.mjs NO_DRIVER_GROUP, layout/paper.mjs finalPass): our
+//     figure forms are arXiv's again, which the delta copies (2610.30034v1's base a proved delta of 196,579 bytes, its 5.46 MB
+//     shipped whole before; 2610.30875v1's 3.73 MB delta 0.30 MB) and poppler draws as arXiv's. The base's bytes change where a
+//     TeX Live 2025 paper compiled by pdfLaTeX or LuaLaTeX includes a PDF, and nowhere else (TeX Live 2023, XeLaTeX, latex: byte
+//     for byte); the marked compile and the source units do not. A unit cut moves with it: PDF.js gives a grouped form no box to
+//     clip by, so layout/ink.mjs read a figure's text past its form's BBox, and the wrap cut figure units of that text, which no
+//     page shows (the gate pack: 1512.03385v1's figures 181 -> 176 units, 2608.04322v1's 237 -> 218; the lane's six papers'
+//     maker units byte for byte). A stored translation is found by an identity naming the pipeline, and its rows by their units'
+//     ids, so a translation of the old cut must not be given to the new one (PDF-READER §18.3). Raised so; and so that a bundle
+//     made over a base with the group is made again under a new key (VTAG). Every source unit, its pieces and its wire are 43's: a
+//     copy of 43 carries every unit (live.mjs PIPELINE_CARRIES), a figure unit found again by its source (cache.mjs seedFrom); 45
+//     (xy-pic's diagram, 2026-11-01): the front end keeps a `\begin{xy}…\end{xy}` as the paper has it, a drawing whose body
+//     xy-pic reads with its own parser, as it keeps a TikZ or PSTricks picture (latex-front.mjs SKIP_ENVS). 2610.21884v1's four
+//     table cells of xy-pic syntax were units, our marks in them 46 TeX errors, and the guard spent two compiles (the unmarked
+//     original's, then the attempt) finding them the paper's own; its marked original now stands at once. Of 215 local sources
+//     it is the one that begins an xy environment: the other 214's units are 44's hash for hash, and its own lose the four
+//     cells, the 20 after them in its file the same but for their pairs' numbers. Raised so; and so that the bundle of a paper
+//     whose marked original now stands at once is made again under a new key (VTAG). A copy of 44 carries every unit it holds
+//     the source of (live.mjs PIPELINE_CARRIES), a unit renumbered by the cells' pairs found again (cache.mjs seedFrom);
+// 46 (the release sweep of 6e0a8d1c, 2026-11-01): a glyph set turned is cut by the clip in force where its own ink passes it, as
+//     a level glyph is (layout/ink.mjs turnedGlyph: its outline across its advance, its outline's bottom to its top, else its
+//     font's band), not where a box of its whole size on both sides of its baseline would. Under 44 the form's box clips a
+//     figure's text (PDF.js gives a form with no group its BBox), and the old box read every y-axis title, colour bar's title and
+//     slanted tick label set at its figure's edge (matplotlib's tight box) as cut: 45 figure units of 9 papers of the sweep, 40 of
+//     them translated before, were the original's again though arXiv's page shows them whole (2610.35877v1 p8, 2610.22065v1 p3,
+//     2610.17108v1 p4), and the measure 44 named (the gate pack's 1512.03385v1 181 -> 176, 2608.04322v1 237 -> 218) was these
+//     titles, not text past the box. Every unit 44 lost is a unit again; a glyph whose ink the box does cut stays the original's
+//     (2610.21312v1 p12's "Spearman(lr_std, bulk1)", 2610.22065v1 p3's "Relative Accuracy Drop (%"). The figure units' cut
+//     moves, so the rows' identities: raised so. Every source unit, its pieces and its wire are 45's: a copy of 45 carries every
+//     unit (live.mjs PIPELINE_CARRIES), a figure unit found again by its source (cache.mjs seedFrom)
+export const PIPELINE_VERSION = '46'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

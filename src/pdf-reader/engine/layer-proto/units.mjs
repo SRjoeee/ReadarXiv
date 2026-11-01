@@ -27,12 +27,34 @@ export const NAME_KIND = 'name'
  * it (run.mjs paintNames), the left lights the name's original by its box (view/shapes.mjs createShapes), as a heading
  */
 export const NAME_ID_FROM = 2 ** 22
-/** the greatest occurrence an id is made for: past it, a name is lit nowhere (below CELL_ID_FROM, the tables' cells' range) */
-export const NAME_OCCURRENCE_MAX = 2 ** 30 - 1 - NAME_ID_FROM
+/**
+ * The hover's ids of display formulas, each a block of its own (the owner, 2026-10-30: a display lights like text, its own block,
+ * paired on both panes; one display — an equation, an align of several lines — one block, its numbers included; docs/PDF-READER.md
+ * §17.1): one a display placeholder of a unit (the layout file's `ph` of kind `display` with segments: every line and number TeX
+ * set for it), DISPLAY_ID_FROM + its unit × DISPLAYS_UNIT + its place among its unit's displays (k rising). Unit-local, so the
+ * door (the layout's unit) and the view (a part's rows) number a display alike, in whatever order the parts come; below the
+ * tables' cells' range, past every bundle id and every name's
+ */
+export const DISPLAY_ID_FROM = 2 ** 29, DISPLAYS_UNIT = 2 ** 7
+/** the greatest occurrence an id is made for: past it, a name is lit nowhere (below DISPLAY_ID_FROM, the displays' range) */
+export const NAME_OCCURRENCE_MAX = DISPLAY_ID_FROM - 1 - NAME_ID_FROM
 /** an occurrence's hover id, or null for one that is not an occurrence or is past NAME_OCCURRENCE_MAX */
 export const nameOccurrenceId = occurrence => (Number.isInteger(occurrence) && occurrence >= 0 && occurrence <= NAME_OCCURRENCE_MAX ? NAME_ID_FROM + occurrence : null)
 /** whether a hover id is a babel name's occurrence's */
-export const isNameOccurrence = id => Number.isInteger(id) && id >= NAME_ID_FROM && id < CELL_ID_FROM
+export const isNameOccurrence = id => Number.isInteger(id) && id >= NAME_ID_FROM && id < DISPLAY_ID_FROM
+/** a display's hover id by its unit and its place `j` among the unit's displays, or null past the range (a unit past NAME_ID_FROM,
+ *  a display past DISPLAYS_UNIT of its unit's: it lights with its unit, as before) */
+export const displayBlockId = (unit, j) => (Number.isInteger(unit) && unit >= 0 && unit < NAME_ID_FROM && Number.isInteger(j) && j >= 0 && j < DISPLAYS_UNIT ? DISPLAY_ID_FROM + unit * DISPLAYS_UNIT + j : null)
+/** whether a hover id is a display's, and its unit */
+export const isDisplayBlock = id => Number.isInteger(id) && id >= DISPLAY_ID_FROM && id < CELL_ID_FROM
+export const displayBlockUnit = id => Math.floor((id - DISPLAY_ID_FROM) / DISPLAYS_UNIT)
+/** the hover id of each display of a unit, by its piece k: `ks` the unit's display placeholders with segments, any order (the
+ *  layout file's `ph` rows of kind display that are neither EMPTY, LOST nor JOINED). A Map k -> id; a display past the range none */
+export function displayIdsOf(unit, ks) {
+  const out = new Map()
+  ;[...new Set(ks)].sort((a, b) => a - b).forEach((k, j) => { const id = displayBlockId(unit, j); if (id !== null) out.set(k, id) })
+  return out
+}
 /**
  * The hover's ids of a table's cells no unit holds (a cell of numbers, of a formula, of one letter: the front end makes no unit of
  * fewer than two letters, latex-front.mjs), lit cell by cell as a cell unit is, at its own place on both panes (the owner,
@@ -147,11 +169,12 @@ export function bundleUnitsOf(paper) {
 /**
  * The ink units as the bundle holds them (docs/route/orphan-text.md §8): each [kind, flags, depth, cell, edges, pieces, echo], its
  * kind INK_KIND's, its echo the source unit whose row it is drawn with (null: a translation of its own); written in a chunk of
- * INK_UNITS_FORMAT after the source units' (format.mjs writeUnitChunks `start`). `ink` the wrap's (layout/wrap.mjs wrapFinal
- * `ink.units`): no nested piece
+ * INK_UNITS_FORMAT after the source units' (format.mjs writeUnitChunks `start`); its flags KEPT for a kept block (`kept`:
+ * layout/ink-units.mjs rule 10, never translated), else none. `ink` the wrap's (layout/wrap.mjs wrapFinal `ink.units`): no
+ * nested piece
  */
 export function inkBundleUnitsOf(ink) {
-  return ink.map(u => [u.kind, 0, null, null, null, u.pieces.map(p => pieceOf(p, new Map())), u.echo ?? null])
+  return ink.map(u => [u.kind, u.kept === true ? UNIT_FLAG_BITS.KEPT : 0, null, null, null, u.pieces.map(p => pieceOf(p, new Map())), u.echo ?? null])
 }
 
 // ---------------------------------------------------------------- the reader's

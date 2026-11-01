@@ -38,7 +38,18 @@
 //   9. its style: the weight, slant and fill most of its text glyphs hold is the unit's, which the reader measures on them; a
 //      run of words in another is a group of the commands that set it (`\textbf{`, `\textmd{`, `\textit{`, `\textup{`,
 //      `\textcolor[HTML]{…}{`), as a source unit's are, so that its translation keeps each run's (a theorem's bold head before
-//      its regular note, a coloured term: the release sweep of 2026-10-25, (d), drew them all in the unit's one style).
+//      its regular note, a coloured term: the release sweep of 2026-10-25, (d), drew them all in the unit's one style);
+//  10. kept blocks (keptUnitsOf): the text no unit owns still once the ink units have claimed theirs — a code listing, an
+//      address or a URL alone, a page number, a bibliography not cut into entries — a unit that is never translated (the
+//      bundle's KEPT flag), so that it lights as one block on both panes as any unit does (the owner's ruling of 2026-10-30): a
+//      block a run of such lines one after the other in TeX's stream with nothing a unit owns between them, on one page, in one
+//      region, in one column (each line meeting the block across), one class, each within KEPT_DY of its size below the
+//      block's lowest line; a line of no letter pair in a column's body (`symbols`: a listing's brace) joins a block and starts
+//      none; a float's text (a figure's, which lights none) never one, nor a glyph of an included graphic by where it sits (in a
+//      form XObject, on an image) whatever its line's class, nor a line beside a unit's text on its baseline, within BESIDE of
+//      its size across in its column (its label, its number); a line part an ink unit claimed keeps its other runs (a running
+//      head's folio). Its rows the lines' boxes alone (no erase, no placeholder: nothing is
+//      drawn over it), no pieces (nothing is sent), its glyphs in no group (the wrap and its ledger as before).
 // Pure arithmetic; an original module (no port statement).
 import { classifyFont } from '../layer-proto/fonts.mjs'
 import { utf8 } from '../translate/mt.mjs'
@@ -395,6 +406,116 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     out.push({ id, kind: INK_KIND[cls], cls, echo, pieces: own, glyphs: { text: textGlyphs, ph: kept.flatMap(p => p.gs) }, rows: rowsOf(id, INK_KIND[cls], cls, lines, kept, own.length, pages) })
   }
   return out
+}
+
+/** a kept block's next line: within this many of its size below the block's lowest (a listing's blank line, two of its
+ *  leading; the skip before a paragraph or a float a unit's text fills) */
+export const KEPT_DY = PARA_DY
+/** two glyphs on one baseline: within this share of the larger size (ledger.mjs LINE_DY) */
+const BASELINE = 0.6
+
+/**
+ * The kept blocks of a document (rule 10): units of the ledger's lines no unit owns once the ink units have claimed theirs.
+ * `pages` and `ledger` inkUnitsOf's; `owner(page, glyph)` the group that owns a glyph, null where none does (own.mjs's after
+ * claimInk, and the figure units'); ids from `from` on (after the ink units). Returns ink units of inkUnitsOf's shape, each
+ * `kept`, no pieces, its rows its lines' boxes and frames alone
+ */
+export function keptUnitsOf(pages, ledger, owner, { from }) {
+  const fams = new Map(), images = new Map()
+  // (a glyph of an included graphic, by where it sits whatever its line's class: inside a form XObject, or on an image placed on
+  // its page — a picture's number, a tick of a plot, which no unit owns and which lights nothing)
+  const imagesOf = p => {
+    let list = images.get(p)
+    if (list) return list
+    const pg = pages[p - 1], B = pg?.boxes ?? [], P = pg?.paths ?? []
+    list = []
+    for (let b = 0; 4 * b + 3 < B.length; b++) if (P[b] === IMAGE_BOX) list.push(B.slice(4 * b, 4 * b + 4))
+    images.set(p, list)
+    return list
+  }
+  const graphic = (p, x) => x.form === true || imagesOf(p).some(([x0, y0, x1, y1]) => { const mx = (x.x0 + x.x1) / 2, my = (x.top + x.bottom) / 2; return mx >= x0 && mx <= x1 && my >= y0 && my <= y1 })
+  const lines = []
+  for (const L of ledger.lines ?? []) {
+    const depth = L.region >> 1, body = (L.region & 1) === 1
+    if (depth !== 0 || L.cls === 'figures') continue
+    const G = pages[L.page - 1]?.glyphs ?? []
+    // (its glyphs no unit owns and no graphic holds, in runs along the line: a running head's folio its own run beside the head
+    // an ink unit claimed, never cut from its line with it)
+    const out = new Set(L.gs.filter(g => !G[g] || owner(L.page, g) != null || graphic(L.page, G[g])))
+    for (const run of runsOf(G, L.gs, out)) {
+      const words = wordsOf(G, run, fams)
+      if (!words.length) continue
+      const part = { ...L, gs: run, x0: Math.min(...run.map(g => G[g].x0)), x1: Math.max(...run.map(g => G[g].x1)) }
+      // (beside a unit's text on its baseline, its stream's neighbour a unit's glyph close across: that unit's label or number,
+      // the original's ink its unit lights)
+      if (besideUnit(pages[L.page - 1], part, owner)) continue
+      lines.push({ ...part, words, body, lo: Math.min(...run), hi: Math.max(...run) })
+    }
+  }
+  const blocks = []
+  for (const s of lines) {
+    const b = blocks.at(-1), prev = b?.lines.at(-1)
+    const joins = !!b && prev.page === s.page && prev.region === s.region && (s.cls === b.cls || s.cls === 'symbols') &&
+      s.y <= b.low + BASELINE * s.size && b.low - s.y <= KEPT_DY * Math.max(s.size, prev.size) && s.x0 < b.x1 && s.x1 > b.x0 &&
+      nothingOwnedBetween(s.page, prev.hi, s.lo, owner, pages)
+    if (joins) { b.lines.push(s); b.low = Math.min(b.low, s.y); b.x0 = Math.min(b.x0, s.x0); b.x1 = Math.max(b.x1, s.x1); continue }
+    // (a line of no letter pair in a column's body starts no block: a brace, a mark beside the text)
+    if (s.cls === 'symbols' && s.body) continue
+    blocks.push({ cls: s.cls, body: s.body, lines: [s], low: s.y, x0: s.x0, x1: s.x1 })
+  }
+  return blocks.map((b, j) => {
+    const id = from + j, kind = INK_KIND[b.cls] ?? (b.body ? INK_KIND.orphan : INK_KIND.heads)
+    const rows = rowsOf(id, kind, b.cls, b.lines, [], 0, pages)
+    return { id, kind, cls: b.cls, echo: null, kept: true, pieces: [], glyphs: { text: b.lines.flatMap(l => l.gs.map(g => [l.page, g])), ph: [] }, rows: { ...rows, erase: [] } }
+  })
+}
+
+/** a box an image placed (layout/ink.mjs `paths`: -3) */
+const IMAGE_BOX = -3
+/** a unit's glyph is a line's neighbour within this many of its size across (a label's \labelsep, a section number's \quad) */
+const BESIDE = 2
+
+/** a ledger line's glyphs `gs` less those of `out`, in runs: two glyphs one run where no glyph of `out` stands between them along
+ *  the line */
+function runsOf(G, gs, out) {
+  const keep = gs.filter(g => !out.has(g)).sort((a, b) => G[a].x0 - G[b].x0)
+  if (!keep.length) return []
+  if (!out.size) return [gs]
+  const cuts = [...out].filter(g => G[g]).map(g => (G[g].x0 + G[g].x1) / 2)
+  const runs = [[keep[0]]]
+  for (let k = 1; k < keep.length; k++) {
+    const a = G[keep[k - 1]], b = G[keep[k]]
+    if (cuts.some(x => x > (a.x0 + a.x1) / 2 && x < (b.x0 + b.x1) / 2)) runs.push([keep[k]])
+    else runs.at(-1).push(keep[k])
+  }
+  return runs
+}
+
+/** whether a line's stream neighbour, the first glyph with ink before it or after it, is a unit's on its baseline, close across
+ *  (within BESIDE of its size) and in its column on a page of two */
+function besideUnit(page, L, owner) {
+  const G = page?.glyphs ?? []
+  const lo = Math.min(...L.gs), hi = Math.max(...L.gs)
+  const two = columnsOf(page ?? {}) === 2, mid = page?.view ? (page.view[0] + page.view[2]) / 2 : 0
+  const side = x => (x < mid ? 0 : 1)
+  const near = g => {
+    const x = G[g], size = Math.max(x?.size ?? 0, L.size)
+    if (!x || owner(L.page, g) == null || Math.abs(x.y - L.y) > BASELINE * size || Math.max(L.x0 - x.x1, x.x0 - L.x1) > BESIDE * size) return false
+    return !two || side((x.x0 + x.x1) / 2) === side((L.x0 + L.x1) / 2)
+  }
+  let a = lo - 1
+  while (a >= 0 && (G[a]?.blank || !/\S/u.test(G[a]?.u ?? ''))) a--
+  let b = hi + 1
+  while (b < G.length && (G[b]?.blank || !/\S/u.test(G[b]?.u ?? ''))) b++
+  return (a >= 0 && near(a)) || (b < G.length && near(b))
+}
+
+/** whether no glyph between two of a page's stream places (exclusive) is a unit's; false where they are not in stream order */
+function nothingOwnedBetween(page, a, b, owner, pages) {
+  if (b <= a) return false
+  const G = pages[page - 1]?.glyphs ?? []
+  for (let g = a + 1; g < b; g++) if (G[g] && owner(page, g) != null) return false
+  return true
 }
 
 /** the most frequent of values */

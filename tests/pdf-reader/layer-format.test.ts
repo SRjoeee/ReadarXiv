@@ -69,7 +69,20 @@ describe('isMemoryError (the web\'s truth table)', () => {
     expect(real).toBeInstanceOf(RangeError)
     expect(isMemoryError(real)).toBe(true)
     expect(isMemoryError(pdfjsWrapped(real as Error))).toBe(true)
-    expect(isMemoryError(Object.assign(new Error('Failed to allocate memory'), { code: 'ERR_MEMORY_ALLOCATION_FAILED' }))).toBe(true)
+    const node22 = Object.assign(new Error('Failed to allocate memory'), { code: 'ERR_MEMORY_ALLOCATION_FAILED' })
+    expect(isMemoryError(node22)).toBe(true)
+    // (Node 22's is an Error, so PDF.js's wrapping of it says `Error: Failed to allocate memory`: CodeRabbit on #531)
+    expect(isMemoryError(pdfjsWrapped(node22))).toBe(true)
+  })
+
+  it('Node 24 on: Buffer.allocUnsafe\'s RangeError of Node\'s own words and code, and PDF.js\'s wrapping of it, are a failed allocation', () => {
+    // (as Node 26.13 throws it under RLIMIT_DATA: `RangeError: Failed to allocate memory`, `code: 'ERR_MEMORY_ALLOCATION_FAILED'`)
+    const node = Object.assign(new RangeError('Failed to allocate memory'), { code: 'ERR_MEMORY_ALLOCATION_FAILED' })
+    expect(isMemoryError(node)).toBe(true)
+    expect(isMemoryError(pdfjsWrapped(node))).toBe(true)
+    // (its words without its code, or wrapped from another error, are none)
+    expect(isMemoryError(new RangeError('Failed to allocate memory'))).toBe(false)
+    expect(isMemoryError(Object.assign(new Error('Failed to allocate memory'), { name: 'UnknownErrorException', details: 'FormatError: Failed to allocate memory' }))).toBe(false)
   })
 
   it('nothing else is: a stack overflow, a length no array may have, the words without V8\'s error, PDF.js\'s other failures', () => {
@@ -396,8 +409,8 @@ describe('a reader\'s envelope', () => {
     expect(await refusal(read('units', o => { o.bundle = '5'; delete o.format }))).toMatchObject({ kind: 'units', path: 'format' })
     expect(UNITS_FORMAT).toBe('1')
     // (6: a part with no layout says why, `layout: { refused, why }`; 7: a draw's items carry their characters' fills; 8: the
-    // head's base says whose PDF the layer is drawn over; 11: a figure row carries its set and its room)
-    expect(BUNDLE5).toBe('11')
+    // head's base says whose PDF the layer is drawn over; 11: a figure row carries its set and its room; 12: a left part its line map)
+    expect(BUNDLE5).toBe('12')
   })
 
   it('refuses what is not an object, and a chunk given as a part and a part given as a chunk', async () => {
@@ -1823,7 +1836,7 @@ describe('keys', () => {
   const sha = 'a'.repeat(64)
 
   it('keyOf names an object by its whole digest under the CTAG; catalogKey by the VTAG; keyParts takes them apart', () => {
-    expect(CTAG5).toBe(`b11-j${PDFJS}`)
+    expect(CTAG5).toBe(`b12-j${PDFJS}`)
     expect(VTAG5).toBe(`${CTAG5}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`)
     const key = keyOf('2608.04322', 3, CTAG5, sha)
     expect(key).toBe(`layer/2608.04322v3/${CTAG5}/${sha}.json`)

@@ -32,7 +32,7 @@ import { dirname, join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { getDocument, OPS, version as PDFJS_INSTALLED } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { anchorUnits, boundsFromMarks, markWords, tokenizeDocument } from '../src/pdf-reader/engine/pipeline/anchors.mjs'
+import { anchorUnits, boundsFromMarks, markWords, orderOf, tokenizeDocument } from '../src/pdf-reader/engine/pipeline/anchors.mjs'
 import { bundleUnitsOf, readBundle, writeBundle } from '../src/pdf-reader/engine/layer-proto/bundle.mjs'
 import { openPaper, originalFiles } from '../src/pdf-reader/engine/pipeline/live.mjs'
 import { encodeLayout, parseLayout } from '../src/pdf-reader/engine/layout/file.mjs'
@@ -156,7 +156,9 @@ const left = await (async () => {
   const doc = tokenizeDocument(here.pages)
   const carried = markWords(tokenizeDocument((await textPages(markedDoc)).pages), await unitMarks(markedDoc))
   const texts = paper.units.map((u, id) => ({ id, ...unitText(u.pieces), ...displayEdges(u) }))
-  const anchors = anchorUnits(doc, texts, { bounds: boundsFromMarks(doc, carried), floating: id => FLOATING.has(kinds[id]) })
+  // (in the order TeX sets the units, as the page pass anchors them: anchors.mjs orderOf)
+  const order = orderOf(paper.texOrder, texts.length)
+  const anchors = anchorUnits(doc, order ? order.map(i => texts[i]) : texts, { bounds: boundsFromMarks(doc, carried), floating: id => FLOATING.has(kinds[id]) })
   const located = []
   for (const [id, anchor] of [...anchors].sort((a, b) => a[0] - b[0])) {
     if (!anchor?.rects.length) continue
@@ -197,7 +199,7 @@ if (argOf('final')) {
 
 // 5. the layout file and its cell rules
 step(5, 'the layout file')
-const layoutMade = await makeLayout({ units: paper.units, marks: made.marks, arxiv: arxivDoc, OPS, paper: PAPER, left: '', pdfjs: PDFJS, cellRules: true })
+const layoutMade = await makeLayout({ units: paper.units, texOrder: paper.texOrder, marks: made.marks, arxiv: arxivDoc, OPS, paper: PAPER, left: '', pdfjs: PDFJS, cellRules: true })
 if (!('file' in layoutMade)) throw new Error(`the layout maker refused the paper (${layoutMade.refused})`)
 const layoutText = encodeLayout(layoutMade.file)
 const layoutBytes = new TextEncoder().encode(layoutText)

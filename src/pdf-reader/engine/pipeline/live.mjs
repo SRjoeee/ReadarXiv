@@ -20,7 +20,7 @@
 // cannot be made, the translation is set as today, and the reason noted
 import { analyze } from '../source/paper-meta.mjs'
 import { paperNames } from '../source/paper-names.mjs'
-import { DVI_LAYOUT_TEX, inkSamples, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, NAME_ENGLISH, probeSamples } from '../layout/marks.mjs'
+import { DVI_LAYOUT_TEX, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, NAME_ENGLISH, probeSamples } from '../layout/marks.mjs'
 import { BALANCE_DEF, documentBounds, DVI_MARK_DEF, dviEngine, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inAuthorBlock, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1, texFilesOf, texText } from '../source/latex-front.mjs'
 import { strategiesFor, typesetBy } from './scripts.mjs'
 import { authorsTranslated } from '../translate/kept.mjs'
@@ -32,6 +32,7 @@ import { kOfSource, trPiecesOf } from '../layer/pieces.mjs'
 import { WIDTH_PROBE } from './typeset/density.mjs'
 import { finalTypesetting, previewTypesetting } from './typeset/plan.mjs'
 import { completeLog, END_TEX, LINES_TEX } from './typeset/tex.mjs'
+import { unbalancedUnits } from '../layout/guard.mjs'
 
 /** The characters a compile could not set, as its log names them: a glyph a font lacks (TeX logs it and goes on) or a
  *  letter no encoding holds (LaTeX's error; pdfTeX goes on without it). By code point where the log gives one, so that
@@ -75,8 +76,21 @@ export const ranThrough = c => !!c?.ok && !stoppedShort(c.log) && completeLog(c.
 /** a compile that did not run through is one that failed, as the TeX page's is: its PDF not taken */
 const finished = r => (r.ok && !ranThrough(r) ? { ...r, ok: false, pdf: null } : r)
 /** DRAFT's first line, graphicx's draft option alone: the final pass of the marked original (layout/paper.mjs markedOfPaper
- *  `base`) is its files with this line made empty, so that no line of them moves */
+ *  `base`) is its files with this line made NO_DRIVER_GROUP, one line, so that no line of them moves */
 export const DRAFT_OPTION = '\\PassOptionsToPackage{draft}{graphicx}'
+/** The final pass's first line, in DRAFT_OPTION's place: graphicx's drivers for pdfTeX and LuaTeX made to include a PDF as
+ *  arXiv's do. pdftex.def 1.2d and luatex.def 1.2f (graphics-def 8d691483be, 2025-09-20; CTAN 2025-09-30) write a
+ *  transparency group, /Group<</S/Transparency/K false/I false>>, on every PDF page they include; arXiv's TeX Live 2025 is the
+ *  state of 2025-08-03 (info.arxiv.org, no tlmgr update since), whose pdftex.def 1.2c and luatex.def 1.2d write none, and the
+ *  pinned tree's are the later ones. With the group every figure form of ours differs from arXiv's, so that the delta copies
+ *  none of them (2610.30034v1 shipped its whole 5.46 MB base, 0.20 MB as a delta without it; 2610.30875v1 3.73 MB, 0.30 MB),
+ *  and poppler draws the figures' lines heavier than arXiv's PDF. Each hook runs once its driver is read and, where the driver
+ *  has the switch (\Gread@transgroupfalse defined), makes the include's \Gread@transgrouptrue its \Gread@transgroupfalse: the
+ *  final pass is then the compile of the driver with no group, byte for byte. Where the driver has none (TeX Live 2023's) or
+ *  is another (XeTeX's xetex.def, the DVI drivers under `latex`), nothing is defined and nothing changes. A name in \csname
+ *  needs no \makeatletter, which this line runs before. The marked compile keeps the drivers as they are: its pages are read
+ *  for their marks and never shipped, and a group sits in a figure's form, where it moves no mark */
+export const NO_DRIVER_GROUP = ['pdftex.def', 'luatex.def'].map(def => `\\AddToHook{file/${def}/after}{\\ifcsname Gread@transgroupfalse\\endcsname\\expandafter\\let\\csname Gread@transgrouptrue\\expandafter\\endcsname\\csname Gread@transgroupfalse\\endcsname\\fi}`).join('')
 /** images as frames of their own size (graphicx's draft), each frame's corners marked — g<n>a and g<n>b at its left and
  *  right ends on its baseline, g<n>t at its top right, n counting \includegraphics in the order TeX runs them — so that
  *  the reader lays the left's figure over its frame (session.mjs leftFor). A transformed include (\rotatebox or
@@ -225,7 +239,9 @@ export function compilerKeeper(open) {
 }
 
 /** a paper's files (Map path → bytes) → what the pipeline works on: its units, and beside them which of them are written inside a
- *  float (`inFloat`, their indices, latex-front.mjs loadProject's) */
+ *  float (`inFloat`, their indices, latex-front.mjs loadProject's) and the order TeX sets them in where it is not theirs
+ *  (`texOrder`, their indices in that order, or null: an author block's later units and the bibliography's entries are numbered
+ *  after the rest, latex-front.mjs entriesLast) */
 export function openPaper(files) {
   const fsys = inMemory(files)
   const meta = analyze(fsys)
@@ -234,7 +250,7 @@ export function openPaper(files) {
   // (the structural names its TeX prints that no package names in every target: units of their own in the bundle, after its
   // source's, sent to the translator once: source/paper-names.mjs, bundleUnitsOf)
   const names = paperNames(texFilesOf(fsys, meta.main))
-  return { fsys, meta, project, units: project.units, inFloat: project.inFloat, kept: nameCells(project.units), names }
+  return { fsys, meta, project, units: project.units, inFloat: project.inFloat, texOrder: project.texOrder ?? null, kept: nameCells(project.units), names }
 }
 
 /**
@@ -330,14 +346,43 @@ const uncommentedTex = t => t.replace(/(?<!\\)((?:\\\\)*)%[^\n]*(?:\n[ \t]*)?/g,
  *  `latex` (latex-front.mjs dviEngine), each
  *  followed by its DVI marks (DVI_MARK_DEF, marks.mjs DVI_LAYOUT_TEX), so that the probe asks TeX about the marks the DVI
  *  compile sets. Without it, the bytes as before */
-export function probeFiles({ fsys, project, meta }, { width = false, marks = false } = {}) {
+export function probeFiles({ fsys, project, meta }, { width = false, marks = false, preamble = null } = {}) {
   // (the main file as the front end reads it, its line ends TeX's: read raw, a lone-CR preamble's first comment hid its
   // \begin{document}, and the probe was the whole document and a second one)
   const text = texText(fsys.read(project.main))
   const at = beginDocument(text)
   const dvi = dviEngine(meta?.compiler)
-  const head = marks ? MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') : '', probe = marks ? `${bblProvides(fsys, project.main)}${markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units), leadSamples(project.units))}` : ''
-  return new Map([[project.main, latin1Bytes(`${head}${END_TEX}${text.slice(0, at)}${FONT_PROBE}\\begin{document}${width ? WIDTH_PROBE : ''}${probe}\\end{document}\n`)]])
+  // (with the marked preamble, its line probes inert: \axtlines is LINES_TEX's, which the probe does not load, and the preamble
+  // only stores the text it marks)
+  const head = marks ? MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + (preamble === null ? '' : PREAMBLE_LINES) : '', probe = marks ? `${bblProvides(fsys, project.main)}${markProbeTex(probeSamples(project.units, project.complete), inkSamples(project.units), leadSamples(project.units))}` : ''
+  return new Map([[project.main, latin1Bytes(`${head}${END_TEX}${marks && preamble !== null ? preamble : text.slice(0, at)}${FONT_PROBE}\\begin{document}${width ? WIDTH_PROBE : ''}${probe}\\end{document}\n`)]])
+}
+/** \axtlines in the mark probe over the marked preamble: a protected macro, as LINES_TEX's is, that sets nothing. One line */
+const PREAMBLE_LINES = '\\protected\\def\\axtlines#1{}'
+/**
+ * The paper's preamble as the marked original writes it, for the mark probe (probeFiles `preamble`): the main file's text up to its
+ * \begin{document} with the layout marks and their line probes (originalFiles `layout`, `lines`), every class marked as no probe's
+ * answer takes one off, `complete` as the marked original's, no babel name wrapped, a unit whose writing changes its file's brace
+ * balance written as the paper's own (layout/guard.mjs unbalancedUnits) — so that TeX reads the units the preamble holds, marked,
+ * where the marked compile will, before it: a class's command that reads its argument as data raises its errors at our marks
+ * there (2610.37668v1's myarxiv `\author`, a name's initials taken through a `\csname`). With the line of the probe's main file it
+ * begins on (`first`: the probe's head before it) and its last (`last`). Null where no unit of the main file stands in its preamble:
+ * the probe is the paper's own preamble's, byte for byte as before
+ */
+export function markedPreamble(paper, { complete = null } = {}) {
+  const { project, meta } = paper
+  // (no unit of the main file before its \begin{document} as the front end read it: nothing to write)
+  const own = project.files?.get(project.main)
+  if (typeof own === 'string') { const end = beginDocument(own); if (!project.units.some(u => u.file === project.main && u.start < end)) return null }
+  const write = unmarked => { const sp = {}; return { files: originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES, complete, names: false, ...(unmarked?.size ? { unmarked } : {}), spans: sp }), sp } }
+  let { files, sp } = write(null)
+  const balance = unbalancedUnits(paper, files, sp.lines(), sp.skip)
+  if (balance.units.size) ({ files, sp } = write(balance.units))
+  const text = latin1(files.get(project.main)), body = text.slice(sp.skip), at = beginDocument(body)
+  if (!sp.lines().some(x => x.file === project.main && x.from !== undefined && x.from - sp.skip < at)) return null
+  const preamble = body.slice(0, at), dvi = dviEngine(meta?.compiler)
+  const first = (MARK_DEF + (dvi ? DVI_MARK_DEF : '') + LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + PREAMBLE_LINES + END_TEX).split('\n').length
+  return { text: preamble, first, last: first + preamble.replace(/\n$/, '').split('\n').length - 1 }
 }
 
 /** the original with unit marks, as its own engine sets it (images as frames change no place on the page); with
@@ -583,6 +628,16 @@ export { PIPELINE_VERSION } from './versions.mjs'
  * - 29: 30 makes an entry one unit (its names no unit apart), an author block's places units apart from its names, a class's own
  *   macro body no unit, and a paragraph end at \\bibliography: each unit it cuts otherwise has a source a copy of 29 holds none
  *   of (its hash is new, and it is asked again); no unit is read back otherwise: every unit whose source a copy holds is carried
+ * - 39: 40 changes the left side alone (the units anchored in the order TeX sets them, and a range over a page break its own
+ *   lines on each page: anchors.mjs orderOf, rangeOnPages): every unit, its pieces and its wire are 39's, and every one is
+ *   carried, as 23's into 24
+ * - 40: 41 changes the left parts alone (each page's line map, pipeline/moved-lines.mjs, BUNDLE 12): every unit, its pieces and its
+ *   wire are 40's, and every one is carried
+ * - 44: 45 keeps xy-pic's diagram as the paper has it (latex-front.mjs SKIP_ENVS), whose cells a copy of 44 holds as units of
+ *   xy-pic syntax and 45 cuts none of; no other unit's text, pieces or wire changes (a unit after it in its file the same but for
+ *   its pairs' numbers, which seedFrom renumbers): every unit whose source a copy holds is carried
+ * - 45: 46 changes which turned glyphs of a figure its box clips (layout/ink.mjs turnedGlyph), so which figure units are cut; no
+ *   source unit's text, pieces or wire changes: every unit is carried, a figure unit found again by its source (seedFrom)
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
 const NO_RUN = (pieces, unit = null) => (unit ? formulaRuns(unit.pieces).size === 0 : !holdsUnbalanced(pieces))
@@ -596,7 +651,7 @@ const NO_BOUNDARY = (pieces, unit = null) => (unit ? !boundaryChanges(unit) : Ar
 const NO_DISPLAY_STOP = (pieces, unit = null) => (unit ? !displayStopChanges(unit) : Array.isArray(pieces) && !pieces.some(p => p?.t === 'ph' && displayStop(p.src)))
 const andStop = test => (pieces, unit = null) => test(pieces, unit) && NO_DISPLAY_STOP(pieces, unit)
 const BOUNDARY_AND_STOP = andStop(NO_BOUNDARY)
-export const PIPELINE_CARRIES = { 7: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 8: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 9: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 10: andStop(andStyle(NO_RUN)), 11: andStop(andStyle(NO_RUN)), 12: andStop(NO_STYLE), 13: andStop(NO_STYLE), 14: andStop(NO_STYLE), 15: BOUNDARY_AND_STOP, 16: BOUNDARY_AND_STOP, 17: BOUNDARY_AND_STOP, 18: BOUNDARY_AND_STOP, 19: BOUNDARY_AND_STOP, 20: BOUNDARY_AND_STOP, 21: BOUNDARY_AND_STOP, 22: NO_DISPLAY_STOP, 23: EVERY, 24: EVERY, 25: EVERY, 26: EVERY, 27: EVERY, 28: EVERY, 29: EVERY }
+export const PIPELINE_CARRIES = { 7: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 8: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 9: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 10: andStop(andStyle(NO_RUN)), 11: andStop(andStyle(NO_RUN)), 12: andStop(NO_STYLE), 13: andStop(NO_STYLE), 14: andStop(NO_STYLE), 15: BOUNDARY_AND_STOP, 16: BOUNDARY_AND_STOP, 17: BOUNDARY_AND_STOP, 18: BOUNDARY_AND_STOP, 19: BOUNDARY_AND_STOP, 20: BOUNDARY_AND_STOP, 21: BOUNDARY_AND_STOP, 22: NO_DISPLAY_STOP, 23: EVERY, 24: EVERY, 25: EVERY, 26: EVERY, 27: EVERY, 28: EVERY, 29: EVERY, 39: EVERY, 40: EVERY, 41: EVERY, 42: EVERY, 43: EVERY, 44: EVERY, 45: EVERY }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a

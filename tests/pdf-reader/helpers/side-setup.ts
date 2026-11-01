@@ -77,8 +77,8 @@ export interface Setup {
   composed: { tail: Uint8Array | null; options: Record<string, unknown>; task: FakeTask }[]
   destroyed: string[]; warned: () => string[]; opens: number; highlight(on: boolean): void
   /** each door opened: the door, the rows it took, its ends, the copies it was asked (page, the ask, k) and each copy's size
-   *  (page, width, height) */
-  doors: { layer: Layer; taken: Row[]; ended: number; copies: [number, unknown, number][]; sized: [number, number, number][]; classes: unknown; options?: OpenLayerOptions }[]
+   *  (page, width, height), and each hold the side asked of it (its promise, and whether it has settled) */
+  doors: { layer: Layer; taken: Row[]; ended: number; copies: [number, unknown, number][]; sized: [number, number, number][]; holds: { promise: Promise<void>; settled: boolean }[]; classes: unknown; options?: OpenLayerOptions }[]
   /** the door the side holds now (the last opened, while it lives) */
   layer(): Layer | null
   real: boolean
@@ -106,6 +106,8 @@ export interface Options {
   /** pages whose first copy the door fails to draw; or which copies fail: the door's index (0 the first opened), the page, the
    *  page's copies drawn by that door before */
   copyFails?: readonly number[] | ((door: number, page: number, before: number) => boolean)
+  /** a page's copies drawn only once this settles (null: at once), the page given */
+  copyHold?: (page: number) => Promise<void> | null
   /** the composed opens (0 the first) that fail */
   composedFailAt?: readonly number[]
   /** the door refuses to open, as openLayer refuses a document of another page count; or the opens (0 the first) that do */
@@ -186,11 +188,16 @@ export async function setup(o: Options = {}): Promise<Setup> {
       if (o.openFails || o.openFailAt?.includes(opens - 1)) throw new BundleRefusal('the document has 9 pages, not 4', { kind: 'part', path: 'doc' })
       const layer = o.real ? await o.real.openLayer(oo) : await door.openLayer(oo)
       live = layer
-      const seen: Setup['doors'][number] = { layer, taken: [], ended: 0, copies: [], sized: [], classes: (oo as { classes?: unknown }).classes ?? null, options: oo }
+      const seen: Setup['doors'][number] = { layer, taken: [], ended: 0, copies: [], sized: [], holds: [], classes: (oo as { classes?: unknown }).classes ?? null, options: oo }
       doors.push(seen)
-      const take = layer.take.bind(layer), end = layer.end.bind(layer), copyOf = layer.copyOf.bind(layer), dispose = layer.dispose.bind(layer)
+      const take = layer.take.bind(layer), end = layer.end.bind(layer), copyOf = layer.copyOf.bind(layer), dispose = layer.dispose.bind(layer), holdOf = layer.hold.bind(layer)
       layer.take = r => { seen.taken.push(...r); return take(r) }
       layer.end = () => { seen.ended++; end() }
+      layer.hold = p => {
+        const h = { promise: Promise.resolve(p).then(() => { h.settled = true }, () => { h.settled = true }), settled: false }
+        seen.holds.push(h)
+        holdOf(p)
+      }
       const which = doors.length - 1, list = Array.isArray(o.copyFails) ? new Set(o.copyFails) : null
       const fails = typeof o.copyFails === 'function' ? o.copyFails : (d: number, n: number, before: number) => d === 0 && before === 0 && !!list?.has(n)
       layer.copyOf = (n, oo) => {
@@ -198,7 +205,8 @@ export async function setup(o: Options = {}): Promise<Setup> {
         seen.copies.push([n, oo, oo.k])
         seen.sized.push([n, oo.width, oo.height])
         if (fails(which, n, before)) return Promise.reject(new Error(`the copy of page ${n} failed (the test's)`))
-        return copyOf(n, oo)
+        const held = o.copyHold?.(n) ?? null
+        return held ? held.then(() => copyOf(n, oo)) : copyOf(n, oo)
       }
       layer.dispose = () => { if (live === layer) live = null; dispose() }
       // the fake lays no unit: every unit with lines on a page is shown there as the original's, as the real door's words say

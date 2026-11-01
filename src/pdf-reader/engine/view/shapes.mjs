@@ -20,8 +20,9 @@
 import { sentenceStarts, tokens as wordsOfText } from '../pipeline/anchors.mjs'
 import { cellRunsOf, floatHitOf, pageFloats } from './floats.mjs'
 import { blockOf, clickOf, DRAWING, hitOf, layoutPage, layoutParts, layoutSpans, layoutStream, pageGeometry, pageLayout, runsOf, sentenceOf, sentencesFit, tokensIn, withSentences } from './highlight.mjs'
-import { NAME_FLAG } from '../layout/file.mjs'
-import { isNameOccurrence, isTableCell, nameOccurrenceId, tableCellPage } from '../layer-proto/units.mjs'
+import { NAME_FLAG, PH_KINDS } from '../layout/file.mjs'
+import { displayBlockUnit, displayIdsOf, isDisplayBlock, isNameOccurrence, isTableCell, nameOccurrenceId, tableCellPage } from '../layer-proto/units.mjs'
+import { MOVED_STRIDE } from '../layer-proto/format.mjs'
 
 /** how far past a name's box a token's middle may stand and be the name's, PDF units (pipeline/ink-pass.mjs SLACK) */
 const NAME_SLACK = 1
@@ -100,10 +101,152 @@ export function leftPageInput(left) {
     for (let j = 0, k = 0; j < runs.length; j += 3) for (let c = 0; c < runs[j + 2]; c++, k++) { words[k] = runs[j] + c; tokens[k] = first + runs[j + 1] + c }
     return [id, words, tokens]
   })
-  return { page, first, table, spans, pairs }
+  return { page, first, table, spans, pairs, lines: left.lines ?? null }
 }
 
 const warnOnce = (what, e) => console.warn(`[highlight] ${what}:`, e?.message ?? e)
+/** the layout file's placeholder kind of a display (PH_KINDS) */
+const DISPLAY_KIND = PH_KINDS.indexOf('display')
+/** a page is in place where this share of our page's lines (the inventory's) holds a token of its own page at its middle row, and
+ *  every one where it has fewer than IN_PLACE_LINES: our compile set the page as arXiv's, so a box of ours stands on arXiv's ink
+ *  (measured 2026-10-30: 1 433 of 1 453 pages of the release sweep's 54 papers; the others are moved, our lines elsewhere) */
+const IN_PLACE = 0.9, IN_PLACE_LINES = 3
+/** a token's middle in a box of ours, within this (PDF units: a name's, pipeline/ink-pass.mjs SLACK) */
+const BOX_SLACK = NAME_SLACK
+/** a page's tokens by the row of their middles: `boxes` [x0, x1, top, bottom] -> the indices of the tokens whose middle stands in
+ *  one of them, rising, each once */
+function byRow(T) {
+  const n = T.n, ys = new Float64Array(n), order = Array.from({ length: n }, (_, t) => t)
+  for (let t = 0; t < n; t++) ys[t] = (T.top[t] + T.bottom[t]) / 2
+  order.sort((a, b) => ys[a] - ys[b])
+  const sorted = Float64Array.from(order, t => ys[t])
+  const from = y => { let lo = 0, hi = n; while (lo < hi) { const m = (lo + hi) >> 1; if (sorted[m] < y) lo = m + 1; else hi = m } return lo }
+  return boxes => {
+    const out = new Set()
+    for (const [x0, x1, top, bottom] of boxes) for (let i = from(bottom - BOX_SLACK); i < n && sorted[i] <= top + BOX_SLACK; i++) {
+      const t = order[i], x = (T.l[t] + T.r[t]) / 2
+      if (x >= x0 - BOX_SLACK && x <= x1 + BOX_SLACK) out.add(t)
+    }
+    return [...out].sort((a, b) => a - b)
+  }
+}
+/** the entry of line map `E` (MOVED_STRIDE entries: our page, our line's box, the arXiv page it stands on, its offset) of our page
+ *  `r` that box `b` [x0, x1, top, bottom, …] stands on: the line whose band holds its middle and whose extent meets it, the most of
+ *  its height where several do; -2 where a line's band holds its middle and none meets it, -1 where no line's band holds it */
+function lineOf(E, r, [x0, x1, top, bottom]) {
+  const cy = (top + bottom) / 2
+  let at = -1, most = -Infinity
+  for (let j = 0; j + MOVED_STRIDE - 1 < E.length; j += MOVED_STRIDE) {
+    if (E[j] !== r || cy < E[j + 3] - BOX_SLACK || cy > E[j + 4] + BOX_SLACK) continue
+    if (Math.min(x1, E[j + 2]) <= Math.max(x0, E[j + 1])) { if (at < 0) at = -2; continue }
+    const over = Math.min(top, E[j + 4]) - Math.max(bottom, E[j + 3])
+    if (over > most) { most = over; at = j }
+  }
+  return at
+}
+/** box `b` [x0, x1, top, bottom, kind?] of our page `r` carried onto arXiv's page `q` by q's line map `E` (its entries of our page
+ *  r): as the line it stands on moved (lineOf), or, a box on a moved line's row beside its words — a label or a piece drawn as
+ *  paths, which the line's tokens do not reach (a heading's number set before its text) — as the line of its own block on its row
+ *  moved (`own`: its unit's line boxes on page r, the one whose band holds its middle, the most of its height), its other values
+ *  kept; null where that line stands on another page of arXiv's; undefined where no line of the map holds it */
+function carriedBox(E, r, q, b, own) {
+  let at = lineOf(E, r, b)
+  if (at === -2 && own && b[4] !== 'line') {
+    const cy = (b[2] + b[3]) / 2
+    let most = -Infinity
+    at = -1
+    for (const l of own) {
+      if (cy < l[3] - BOX_SLACK || cy > l[2] + BOX_SLACK) continue
+      const j = lineOf(E, r, l), over = Math.min(b[2], l[2]) - Math.max(b[3], l[3])
+      if (j >= 0 && over > most) { most = over; at = j }
+    }
+  }
+  if (at < 0) return undefined
+  if (E[at + 5] !== q) return null
+  const dx = E[at + 6], dy = E[at + 7], out = b.slice()
+  out[0] += dx; out[1] += dx; out[2] += dy; out[3] += dy
+  return out
+}
+/** box `b` [x0, x1, top, bottom, …] of arXiv's page `q` carried back onto our page `q` by q's line map `E`, the way back of
+ *  carriedBox: the offset to add, [dx, dy], as the line it stands on moved — the line whose band, carried onto q, holds its middle
+ *  and whose extent there meets it, the most of its height where several do —; undefined where no line of the map holds it (a
+ *  line in place carries nothing), null where that line is another page's of ours */
+function backOf(E, q, [x0, x1, top, bottom]) {
+  const cy = (top + bottom) / 2
+  let at = -1, most = -Infinity
+  for (let j = 0; j + MOVED_STRIDE - 1 < E.length; j += MOVED_STRIDE) {
+    if (E[j + 5] !== q) continue
+    const dx = E[j + 6], dy = E[j + 7], lo = E[j + 3] + dy, hi = E[j + 4] + dy
+    if (cy < lo - BOX_SLACK || cy > hi + BOX_SLACK || Math.min(x1, E[j + 2] + dx) <= Math.max(x0, E[j + 1] + dx)) continue
+    const over = Math.min(top, hi) - Math.max(bottom, lo)
+    if (over > most) { most = over; at = j }
+  }
+  if (at < 0) return undefined
+  return E[at] === q ? [-E[at + 6], -E[at + 7]] : null
+}
+/** backOf's offset of a box that stays where it stands */
+const NO_MOVE = Object.freeze([0, 0])
+/** run `r` moved by dx, dy: a copy, its rows copies (trap 1) */
+function movedRun(r, dx, dy) {
+  const x = v => (v == null ? v : v + dx), y = v => (v == null ? v : v + dy)
+  return {
+    ...r, x0: r.x0 + dx, x1: r.x1 + dx, sx0: x(r.sx0), sx1: x(r.sx1), top: r.top + dy, bottom: r.bottom + dy, hi: y(r.hi), lo: y(r.lo),
+    rows: r.rows.map(w => ({ ...w, x0: w.x0 + dx, x1: w.x1 + dx, r0: x(w.r0), r1: x(w.r1), y0: w.y0 + dy, y1: w.y1 + dy, lo: y(w.lo), hi: y(w.hi) })),
+    mids: r.mids.map(m => m + dy),
+  }
+}
+/** float `f` of arXiv's page `q` where our page `q` sets it, by q's line map `E` (backOf): moved whole, as TeX sets a float, as most
+ *  of its cells' lines moved (a cell no line of the map holds stays), or, a float of no cell, as its caption's line moved (`caption`,
+ *  the left's run of it on q): a copy, its cells' runs copies (trap 1), its shape made again; `f` itself where it did not move,
+ *  null where those lines are another page's of ours (none of the float on our page) */
+function floatBack(E, q, f, caption) {
+  const offsetOf = r => backOf(E, q, [r.x0, r.x1, r.top, r.bottom])
+  let d
+  if (f.cells?.length) {
+    const votes = new Map()
+    for (const c of f.cells) {
+      const b = offsetOf(c.run), o = b === undefined ? NO_MOVE : b, key = o ? `${o[0]} ${o[1]}` : ''
+      const v = votes.get(key) ?? votes.set(key, { o, n: 0 }).get(key)
+      v.n++
+    }
+    let most = 0
+    for (const v of votes.values()) if (v.n > most) { most = v.n; d = v.o }
+  } else if (caption) d = offsetOf(caption)
+  if (d === null) return null
+  if (d === undefined || (!d[0] && !d[1])) return f
+  const [dx, dy] = d
+  const region = { ...f.region, x0: f.region.x0 + dx, x1: f.region.x1 + dx, y0: f.region.y0 + dy, y1: f.region.y1 + dy }
+  return { ...f, region, cells: (f.cells ?? []).map(c => ({ ...c, run: movedRun(c.run, dx, dy) })), shapes: undefined }
+}
+/** a line map's entries by our page they are of (MOVED_STRIDE each) */
+function byOurPage(E) {
+  const out = new Map()
+  for (let j = 0; j + MOVED_STRIDE - 1 < E.length; j += MOVED_STRIDE) { const r = E[j], to = out.get(r) ?? out.set(r, []).get(r); for (let k = 0; k < MOVED_STRIDE; k++) to.push(E[j + k]) }
+  return out
+}
+/** whether a page's tokens stand where our page's `lines` do (IN_PLACE): `rows` the tokens by row (byRow) */
+function inPlace(rows, lines) {
+  if (!lines.length) return false
+  let found = 0
+  for (const [x0, x1, top, bottom] of lines) { const cy = (top + bottom) / 2, dy = 0.3 * (top - bottom); if (rows([[x0 - 1, x1 + 1, cy + dy, cy - dy]]).length) found++ }
+  return lines.length >= IN_PLACE_LINES ? found >= IN_PLACE * lines.length : found === lines.length
+}
+/** each unit's stream as page `p`'s spans tell it, once they are in: a unit told with no stream of its own (from its boxes: `-1`)
+ *  begins at its first token on its first page, as a cell #515 told did; a located unit whose first token its display took (a
+ *  paragraph that opens with a display) at its next token, on this page or a later one's in, none where it has none (else
+ *  highlight.mjs tokensOf put the stream back among its tokens, the display's first token both blocks') */
+function streamsOn(Lay, p, spans) {
+  const T = Lay.pt?.[p]
+  for (const [id, ks] of spans) {
+    const u = Lay.told?.get(id)
+    if (!u) continue
+    if (u.stream === -1) { if (ks.length && Lay.pagesOf.get(id)?.[0] === p) layoutStream(Lay, id, ks[0]); continue }
+    if (!T || u.stream < T.k0 || u.stream >= T.k0 + T.n || ks.includes(u.stream)) continue
+    let next = ks.length ? ks[0] : -1
+    if (next < 0) for (const [q, ts] of [...(Lay.spans.get(id) ?? [])].sort((a, b) => a[0] - b[0])) if (q > p && ts.length) { next = ts[0]; break }
+    layoutStream(Lay, id, next)
+  }
+}
 /** what each side made by createShapes was told, in order, for a mirror made of it later, and the mirrors that follow it */
 const told = new WeakMap()
 
@@ -115,7 +258,7 @@ const told = new WeakMap()
  */
 export function createShapes({ kindOf: unitKind = () => undefined, warn = warnOnce } = {}) {
   // (a babel name's occurrence lit as a heading: its id no bundle id reaches, units.mjs nameOccurrenceId)
-  const kindOf = id => (isNameOccurrence(id) ? 'heading' : isTableCell(id) ? 'cell' : unitKind(id))
+  const kindOf = id => (isNameOccurrence(id) ? 'heading' : isTableCell(id) ? 'cell' : isDisplayBlock(id) ? 'display' : unitKind(id))
   const L = pageLayout(kindOf), base = pdfShapes(L)
   /** each unit's pairs, page by page ([words, tokens]); their map made once the unit's tokens are all in */
   const pairsOn = new Map(), pairsOf = new Map()
@@ -138,75 +281,205 @@ export function createShapes({ kindOf: unitKind = () => undefined, warn = warnOn
   // the same id (run.mjs paintNames). One that leads a unit (RUN_IN) is that unit's, lit with it. `namesOn` the rows waiting for
   // their page: [id, x0, x1, top, bottom] by page; `namesTold` the ids told
   const namesOn = new Map(), namesTold = new Set()
-  // a table's cell unit the parts' left does not locate (the producer locates few on arXiv's PDF, a cell's text too short for the
-  // anchors: 7 of 2010.11929v2's 165, 2 of 2610.35877v1's 71), whose lines the parts' layouts lay (layout/file.mjs `lines`, arXiv's
-  // page's units): told on the left as a unit of its own by the tokens of its page whose middle stands in one of its lines' boxes
-  // and that no unit told there holds, as a babel name is, so that it lights cell to cell on both panes (the owner, 2026-10-30) —
-  // the right tells what the left tells, and the left's words of it were else a cell of the page's (floats.mjs cellsOf). `cellsOn`
-  // the boxes waiting for their page: [id, x0, x1, top, bottom] by page; `cellRects` each one's lines on every page, its rectangles
-  // as told (a cell whose lines run onto the next page, told on its first page to come with both, its tokens from each); `cellsTold`
-  // the ids told
-  const cellsOn = new Map(), cellRects = new Map(), cellsTold = new Set()
-  const takeCells = parts => {
-    const pages = new Set()
-    for (const part of parts) for (const [id, rows] of part.layout?.lines ?? []) {
-      if (kindOf(id) !== 'cell' || L.told.has(id) || cellsTold.has(id) || cellRects.has(id)) continue
-      const rects = []
-      for (let j = 0; j + 7 < rows.length; j += 8) {
-        ;(cellsOn.get(rows[j]) ?? cellsOn.set(rows[j], []).get(rows[j])).push([id, rows[j + 1], rows[j + 2], rows[j + 4], rows[j + 5]])
-        rects.push([rows[j], rows[j + 1], rows[j + 5], rows[j + 2], rows[j + 4]])
-        pages.add(rows[j])
-      }
-      cellRects.set(id, rects)
+  // every block's boxes on our page, the maker's inventory of it (the parts' layouts, layout/file.mjs: each unit's `lines`, its
+  // placeholders' segments `ph`, its `labels`), by page: the one light map both panes read (the owner, 2026-10-30: every block TeX sets
+  // as text or math lit the same on both panes, its label and its kept pieces with it, a display a block of its own; docs/PDF-READER.md
+  // §17.1). What the left part locates keeps its spans; on a page whose lines stand where arXiv's do (inPlace: our compile set it as
+  // arXiv's), a display takes the tokens of its segments, from its unit's span too (a display is never its unit's), and every unit the
+  // free tokens in its boxes — a unit the left does not locate (a cell, a heading, a paragraph: #515's cells, every kind since), a
+  // label, a kept piece, a references' line of numbers alone. Every display, and every unit the left does not locate, is told from its
+  // boxes whatever its page (`quiet`: no part of the columns, edges or leadings, which stay the located units'), so that the right,
+  // which lights it by the words the layer drew or kept of it (layerShapes), holds it too. `inv` page -> { units: id -> boxes, displays:
+  // id -> boxes, lines: every unit's lines (the in-place test) }, a box [x0, x1, top, bottom]; `boxedTold` the ids told so
+  const inv = new Map(), boxedTold = new Set()
+  const invOn = p => inv.get(p) ?? inv.set(p, { units: new Map(), displays: new Map(), lines: [], own: new Map() }).get(p)
+  // a moved page's line map (its left part's `lines`, pipeline/moved-lines.mjs: our lines that stand elsewhere on arXiv's page, each
+  // with the arXiv page it stands on and its offset there): arXiv's page -> its entries. A page our compile set otherwise than arXiv's
+  // (another TeX Live's glue, a line carried over a break: 1810.04805v2's page 16, every line 3 to 27 pt off) has its boxes carried onto
+  // arXiv's page by the line each stands on, and is told by them as a page in place is; a box of no moved line stays where it stands.
+  // A page with a map, an empty one too (the line check found 90 % of its lines and none moved), is told by its boxes whatever its
+  // tokens; one the check did not place has none (pipeline/moved-lines.mjs MAP_FOUND), and its tokens tell. `movedBy` each map by our
+  // page its entries are of
+  const movedOn = new Map(), movedBy = new Map(), carriedOn = new Map()
+  const mapOn = (q, E) => { movedOn.set(q, E); movedBy.set(q, byOurPage(E)); carriedOn.clear() }
+  /** page q's inventory on arXiv's page: our page q's boxes, each carried by q's line map, less those it sends to another page, and
+   *  those of our pages beside it that it brings onto q (a line over a break); our page q's own where q has no map. Kept until the
+   *  inventory or a map changes (`carriedOn`) */
+  const invAt = q => {
+    if (!movedOn.get(q)?.length) return inv.get(q)
+    if (carriedOn.has(q)) return carriedOn.get(q)
+    const out = { units: new Map(), displays: new Map(), lines: [], own: new Map() }
+    for (const r of [q - 1, q, q + 1]) {
+      const at = inv.get(r), E = movedBy.get(q).get(r)
+      if (!at || (!E && r !== q)) continue
+      if (!E) { for (const [from, to] of [[at.units, out.units], [at.displays, out.displays]]) for (const [id, bs] of from) for (const b of bs) push(to, id, b); out.lines.push(...at.lines); continue }
+      // (a box beside its line's words carried as its block's line on its row: a display's, its unit's)
+      const carry = (b, id) => { const c = carriedBox(E, r, q, b, id === undefined ? null : at.own.get(isDisplayBlock(id) ? displayBlockUnit(id) : id)); return c === undefined ? (r === q ? b : null) : c }
+      for (const [from, to] of [[at.units, out.units], [at.displays, out.displays]]) for (const [id, bs] of from) for (const b of bs) { const c = carry(b, id); if (c) push(to, id, c) }
+      for (const b of at.lines) { const c = carry(b); if (c) out.lines.push(c) }
     }
-    // (a page in already: told now, its spans after it as a name's, and into its kept input, which a mirror or a laid page made
-    // later reads)
-    for (const p of pages) { const input = state.pages.get(p); if (input) tellCells(input, cellsFor(input), true) }
+    carriedOn.set(q, out)
+    return out
   }
-  /** page `input`'s cells waiting, as told: { part, spans }, or null; nothing told yet (tellCells) */
-  const cellsFor = input => {
-    const p = input.page, list = cellsOn.get(p)
-    if (!list) return null
-    const T = input.table, held = new Set()
-    for (const [, ks] of input.spans) for (const k of ks) held.add(k)
-    const boxes = new Map()
-    // (not a cell the parts' left locates; one told on another page of its lines takes its tokens here too)
-    for (const [id, x0, x1, top, bottom] of list) if (cellsTold.has(id) || !L.told.has(id)) (boxes.get(id) ?? boxes.set(id, []).get(id)).push([x0, x1, top, bottom])
-    // (quiet: no part of the page's columns, edges or leadings, which stay the located units', highlight.mjs layoutParts)
-    const part = { pages: [p], views: [], left: [], quiet: true }, spans = []
-    for (const [id, bs] of boxes) {
-      const ks = []
-      for (let t = 0; t < T.n; t++) {
-        const k = input.first + t
-        if (held.has(k)) continue
-        const mx = (T.l[t] + T.r[t]) / 2, my = (T.top[t] + T.bottom[t]) / 2
-        if (bs.some(([x0, x1, top, bottom]) => mx >= x0 - NAME_SLACK && mx <= x1 + NAME_SLACK && my >= bottom - NAME_SLACK && my <= top + NAME_SLACK)) { ks.push(k); held.add(k) }
-      }
-      if (!ks.length) continue
-      if (!cellsTold.has(id)) part.left.push([id, ks[0], cellRects.get(id) ?? bs.map(([x0, x1, top, bottom]) => [p, x0, bottom, x1, top])])
-      spans.push([id, Int32Array.from(ks)])
+  /** page q's boxes in the layout's geometry, carried by its line map (invAt), and the rectangles on q of every block told from its
+   *  boxes the carried ones (`carried`: highlight.mjs layoutParts; a click's line is read from them), a block brought from another
+   *  page of ours told there quietly as a located unit's boxes on another page are, one whose boxes all left q no longer on it; a
+   *  located unit's rectangles stay arXiv's own. With `late`, the mirrors' geometry of the page let go */
+  const carryPage = (q, late) => {
+    const at = invAt(q), mine = inv.get(q)
+    for (const pages of L.boxes.values()) pages.delete(q)
+    const part = { pages: [1], views: [], left: [], quiet: true, carried: q }, rects = new Map()
+    for (const m of [mine?.units, mine?.displays]) for (const id of m?.keys() ?? []) rects.set(id, [])
+    for (const m of [at?.units, at?.displays]) for (const [id, bs] of m ?? []) {
+      const own = L.boxes.get(id) ?? L.boxes.set(id, new Map()).get(id), rs = rects.get(id) ?? rects.set(id, []).get(id)
+      for (const b of bs) { push(own, q, b); if (b[4] === 'line' || b[4] === 'display') rs.push([q, b[0], b[3], b[1], b[2]]) }
     }
-    return spans.length ? { part, spans } : null
+    for (const [id, rs] of rects) if (boxedTold.has(id) || L.told.has(id) || rs.length) { part.left.push([id, -1, rs]); if (!L.told.has(id) && rs.length) boxedTold.add(id) }
+    L.cache.delete(q)
+    if (part.left.length && layoutParts(L, [part])) {
+      state.parts.push(part)
+      for (const f of state.followers) f.addParts([part])
+    }
+    if (late) for (const f of state.followers) f.addSpans(q, [])
   }
-  /** page `input`'s cells told (cellsFor's), once the page is in: their part to the layout and the followers, and with `late`
-   *  their spans after the page, to the followers and into the page's kept input (else they were in that input before it was
-   *  laid), so that a mirror or a laid page made later holds them. A page's boxes go with it: its tokens are final, and a box with
-   *  none of them in it has none later */
-  const tellCells = (input, cells, late) => {
-    const p = input.page
-    cellsOn.delete(p)
-    if (!cells) return
-    for (const [id] of cells.part.left) cellsTold.add(id)
-    if (cells.part.left.length) {
-      layoutParts(L, [cells.part])
-      state.parts.push(cells.part)
-      for (const f of state.followers) f.addParts([cells.part])
+  const push = (m, id, box) => { (m.get(id) ?? m.set(id, []).get(id)).push(box) }
+  /** a block's box of our page, by its kind, for the layout's geometry where the page is in place (highlight.mjs pageGeometry: the
+   *  box lights where no token of the page is) */
+  const boxOf = (id, p, [x0, x1, top, bottom], kind) => { const m = L.boxes.get(id) ?? L.boxes.set(id, new Map()).get(id); push(m, p, [x0, x1, top, bottom, kind]); L.cache.delete(p) }
+  const takeInventory = parts => {
+    carriedOn.clear()
+    const pages = new Set(), rectsOf = new Map(), part = { pages: [1], views: [], left: [], quiet: true }
+    const rect = (id, p, [x0, x1, top, bottom]) => { (rectsOf.get(id) ?? rectsOf.set(id, []).get(id)).push([p, x0, bottom, x1, top]); pages.add(p) }
+    for (const { layout: lay } of parts) {
+      if (!lay || lay.refused) continue
+      const displays = new Map(), segsOf = new Map()
+      for (const r of lay.ph ?? []) if (r[2] === DISPLAY_KIND && r.length >= 10) for (let o = 4; o + 5 < r.length; o += 6) (segsOf.get(r[0]) ?? segsOf.set(r[0], []).get(r[0])).push([r[o], r[o + 1], r[o + 3], r[o + 4], r[o + 5]])
+      // (a unit's line on one of its displays' rows is the display's ink, never the unit's box: a display stands on rows of its own)
+      const onDisplay = (id, p, [x0, x1, top, bottom]) => (segsOf.get(id) ?? []).some(([q, a0, a1, b1, b0]) => q === p && Math.min(x1, a1) > Math.max(x0, a0) && Math.min(top, b1) - Math.max(bottom, b0) > 0.5 * (top - bottom))
+      for (const [id, rows] of lay.lines ?? []) {
+        if (DRAWING.has(kindOf(id))) continue
+        for (let j = 0; j + 7 < rows.length; j += 8) {
+          const p = rows[j], box = [rows[j + 1], rows[j + 2], rows[j + 4], rows[j + 5]], at = invOn(p)
+          at.lines.push(box)
+          push(at.own, id, box)
+          rect(id, p, box)
+          if (onDisplay(id, p, box)) continue
+          push(at.units, id, [...box, 'line'])
+          boxOf(id, p, box, 'line')
+        }
+      }
+      for (const r of lay.ph ?? []) {
+        const id = r[0]
+        if (DRAWING.has(kindOf(id)) || r.length < 10) continue
+        const segs = []
+        for (let o = 4; o + 5 < r.length; o += 6) segs.push([r[o], [r[o + 1], r[o + 3], r[o + 4], r[o + 5]]])
+        if (r[2] === DISPLAY_KIND) (displays.get(id) ?? displays.set(id, []).get(id)).push([r[1], segs])
+        else for (const [p, box] of segs) { push(invOn(p).units, id, [...box, 'piece']); boxOf(id, p, box, 'piece'); pages.add(p) }
+      }
+      // (a display past the ids' range stays its unit's, as every display was before)
+      for (const [u, list] of displays) {
+        const ids = displayIdsOf(u, list.map(([k]) => k))
+        for (const [k, segs] of list) {
+          const id = ids.get(k)
+          for (const [p, box] of segs) { if (id === undefined) { push(invOn(p).units, u, [...box, 'piece']); boxOf(u, p, box, 'piece') } else { push(invOn(p).displays, id, [...box, 'display']); rect(id, p, box); boxOf(id, p, box, 'display') } pages.add(p) }
+        }
+      }
+      for (const r of lay.labels ?? []) {
+        const id = r[0], p = r[2], box = [r[3], r[5], r[6], r[7]]
+        if (DRAWING.has(kindOf(id))) continue
+        push(invOn(p).units, id, [...box, 'label'])
+        boxOf(id, p, box, 'label')
+        pages.add(p)
+      }
     }
-    if (late) {
-      layoutSpans(L, p, cells.spans)
-      for (const f of state.followers) f.addSpans(p, cells.spans)
-      input.spans.push(...cells.spans)
+    // (and a unit the left part locates elsewhere than our page holds it — a repeated header matched on another page —: its boxes'
+    // pages its own too, told quietly beside its located ones, highlight.mjs layoutParts)
+    for (const [id, rects] of rectsOf) {
+      const was = L.told.get(id)
+      if (was && !was.quiet) { const have = new Set(was.rects.map(r => r.page)); if (rects.some(r => !have.has(r[0]))) part.left.push([id, -1, rects]); continue }
+      if (!was && !boxedTold.has(id)) { part.left.push([id, -1, rects]); boxedTold.add(id) }
     }
+    if (part.left.length) {
+      layoutParts(L, [part])
+      state.parts.push(part)
+      for (const f of state.followers) f.addParts([part])
+    }
+    // (a moved page these boxes reach, theirs or beside them: carried again, its geometry its carried boxes)
+    const reached = new Set(pages)
+    for (const p of pages) for (const q of [p - 1, p + 1]) if (movedOn.get(q)?.length) reached.add(q)
+    for (const q of reached) if (movedOn.get(q)?.length) carryPage(q, state.pages.has(q))
+    // (a page in already: told now, its spans after it, and into its kept input, which a mirror or a laid page made later reads; its
+    // geometry let go on the mirrors too, which read the boxes and made it before they came)
+    for (const p of reached) { const input = state.pages.get(p); if (!input) continue; tellBoxes(input, true); for (const f of state.followers) f.addSpans(p, []) }
+  }
+  /** page `input`'s blocks told by their boxes where the page is in place: its spans changed in the input (before the page is laid),
+   *  and with `late` in the layout and the followers too, each quiet unit beginning at its first token on its first page. Taken again
+   *  whenever boxes come: a token held is held, so it is the same */
+  function tellBoxes(input, late) {
+    const p = input.page, at = invAt(p)
+    if (!at) return
+    // (a page whose line map the left part gives: its boxes stand where the map says, in place where it carries none, whatever ink
+    // its tokens give — a page of displays gives arXiv's text layer few tokens; else the tokens under our lines tell, IN_PLACE)
+    const inBoxes = byRow(input.table), here = movedOn.has(p) || inPlace(inBoxes, at.lines)
+    // (whether the page's boxes stand on arXiv's ink, for its geometry: a change lets the page's geometry go, the mirrors' too)
+    if (here !== L.inPlace.has(p)) {
+      if (here) L.inPlace.add(p); else L.inPlace.delete(p)
+      L.cache.delete(p)
+      if (late) for (const f of state.followers) f.addSpans(p, [])
+    }
+    if (!here) return
+    const first = input.first, owner = new Map(), spanOf = new Map()
+    for (const [id, ts] of input.spans) { spanOf.set(id, ts); for (const k of ts) if (!owner.has(k)) owner.set(k, id) }
+    const changed = new Map()
+    const setOf = id => changed.get(id) ?? changed.set(id, new Set(spanOf.get(id) ?? [])).get(id)
+    // a display's tokens are its own: the free ones in its segments and those its unit's span held (never another unit's: a table's
+    // cells set in a display keep theirs); a unit's boxes take the free ones (no span holds them)
+    for (const [id, boxes] of at.displays) for (const t of inBoxes(boxes)) {
+      const k = first + t, o = owner.get(k)
+      if (o === id || (o !== undefined && o !== displayBlockUnit(id))) continue
+      if (o !== undefined) setOf(o).delete(k)
+      setOf(id).add(k)
+      owner.set(k, id)
+    }
+    // (and a glyph of a display whose text-layer box stands off its ink — drawn from its font's ascent and descent: a math
+    // extension font's, cmex10's or txexs's, hang under the baseline, while a wide accent's ink stands over it and a big
+    // delimiter's box reaches far past its own —, its middle out of the display's boxes: one of its unit's span between two of the
+    // display's own in the page's stream, as TeX sets a display's glyphs together, whose box meets one of its boxes (not the room
+    // between them: a paragraph's words between two rows, an align's \intertext, stay the paragraph's).
+    // 2610.35877v1 p5's hat on the w of display (4)'s denominator, 1.9 pt under it, had lit with the sentence before the display)
+    const T = input.table
+    for (const [id, boxes] of at.displays) {
+      const own = setOf(id), u = displayBlockUnit(id)
+      if (!own.size) continue
+      let lo = Infinity, hi = -Infinity
+      for (const k of own) { if (k < lo) lo = k; if (k > hi) hi = k }
+      for (const k of [...setOf(u)]) {
+        if (k <= lo || k >= hi || owner.get(k) !== u) continue
+        const t = k - first
+        if (!boxes.some(([x0, x1, top, bottom]) => T.l[t] < x1 && T.r[t] > x0 && T.bottom[t] < top && T.top[t] > bottom)) continue
+        setOf(u).delete(k)
+        setOf(id).add(k)
+        owner.set(k, id)
+      }
+    }
+    for (const [id, boxes] of at.units) for (const t of inBoxes(boxes)) {
+      const k = first + t
+      if (owner.has(k)) continue
+      setOf(id).add(k)
+      owner.set(k, id)
+    }
+    const spans = []
+    for (const [id, set] of changed) {
+      const was = spanOf.get(id)
+      if (was && was.length === set.size && was.every(k => set.has(k))) continue
+      spans.push([id, Int32Array.from([...set]).sort()])
+    }
+    if (!spans.length) return
+    for (const sp of spans) { const i = input.spans.findIndex(s => s[0] === sp[0]); if (i < 0) input.spans.push(sp); else input.spans[i] = sp }
+    if (!late) return
+    layoutSpans(L, p, spans)
+    streamsOn(L, p, spans)
+    for (const f of state.followers) f.addSpans(p, spans)
   }
   const tellNames = p => {
     const list = namesOn.get(p), input = state.pages.get(p)
@@ -267,21 +540,22 @@ export function createShapes({ kindOf: unitKind = () => undefined, warn = warnOn
         for (const f of state.followers) f.addParts(parts)
       }
       takeNames(parts)
-      takeCells(parts)
+      takeInventory(parts)
     },
     /** a page's left part (format.mjs ReadLeftPart): its part of the layout, and the mirrors'; false where it was in
      *  already or is refused — malformed, or its ids reach into another page's (one warning a page) */
     addPage(left) {
-      let input, cells = null
+      let input
       try {
         if (L.pt[left.page]) return false
         input = leftPageInput(left)
-        // (its cells waiting, in the page's own input before it is laid; told once it is in: a page refused tells none)
-        cells = cellsFor(input)
-        if (cells) input.spans.push(...cells.spans)
+        // (its line map: its boxes carried onto arXiv's page, and their geometry there)
+        if (input.lines) { mapOn(input.page, input.lines); if (input.lines.length) carryPage(input.page, false) }
+        // (its blocks told by their boxes, in the page's own input before it is laid: a page refused tells none)
+        tellBoxes(input, false)
         if (!layoutPage(L, input.page, input)) return false
       } catch (e) { refuse(left?.page, e); return false }
-      tellCells(input, cells, false)
+      streamsOn(L, input.page, input.spans)
       state.pages.set(input.page, input)
       // (a drawing's text no layout holds, nor its pairs: highlight.mjs DRAWING)
       for (const [id, words, tokens] of input.pairs) if (!DRAWING.has(kindOf(id))) (pairsOn.get(id) ?? pairsOn.set(id, new Map()).get(id)).set(input.page, [words, tokens])
@@ -337,7 +611,7 @@ const copyPage = input => ({
   table: { n: input.table.n, l: input.table.l.slice(), r: input.table.r.slice(), y: input.table.y.slice(), h: input.table.h.slice(), top: input.table.top.slice(), bottom: input.table.bottom.slice() },
   spans: input.spans.map(([id, tokens]) => [id, tokens.slice()]),
 })
-const copyPart = part => ({ pages: [...part.pages], views: [...part.views], left: part.left.map(([id, stream, rects]) => [id, stream, rects.map(r => [...r])]), ...(part.quiet ? { quiet: true } : {}) })
+const copyPart = part => ({ pages: [...part.pages], views: [...part.views], left: part.left.map(([id, stream, rects]) => [id, stream, rects.map(r => [...r])]), ...(part.quiet ? { quiet: true } : {}), ...(part.carried !== undefined ? { carried: part.carried } : {}) })
 
 /**
  * The right's shapes, the left's mirrored (trap 1): { layout, shapes, forget, dispose }. A layout of its own over its own copies
@@ -350,10 +624,13 @@ export function mirror(source) {
   const state = told.get(source.shapes)
   if (!state) throw new TypeError('not a side\'s shapes (createShapes)')
   const R = pageLayout(state.kindOf), own = pdfShapes(R)
+  // (the blocks' boxes of our page and the pages in place, the left's: read alone, as its floats are; the mirror shows arXiv's page)
+  R.boxes = source.layout.boxes
+  R.inPlace = source.layout.inPlace
   const follower = {
     addParts: parts => layoutParts(R, parts.map(copyPart)),
-    addPage: input => layoutPage(R, input.page, copyPage(input)),
-    addSpans: (p, spans) => layoutSpans(R, p, spans.map(([id, ts]) => [id, ts.slice()])),
+    addPage: input => { const c = copyPage(input), ok = layoutPage(R, input.page, c); if (ok) streamsOn(R, input.page, c.spans); return ok },
+    addSpans: (p, spans) => { const c = spans.map(([id, ts]) => [id, ts.slice()]); layoutSpans(R, p, c); streamsOn(R, p, c) },
   }
   if (state.parts.length) follower.addParts(state.parts)
   for (const input of state.pages.values()) follower.addPage(input)
@@ -404,15 +681,19 @@ const FIELDS = ['l', 'r', 'y', 'h', 'top', 'bottom']
  * back to the mirror (a door opened again); `mute(page, on)` a page that shows another target's layer, whose drawing neither the
  * laid layout nor the mirror describes: nothing of it lit or hit until it is unmuted (its new target's page laid, or the original's
  * shown), whatever reset() does;
- * `forget(page)` its geometry let go; `dispose()` stops following the source
+ * `forget(page)` its geometry let go, and its floats as our page sets them (made again from the left's on the next use);
+ * `dispose()` stops following the source
  */
 export function layerShapes(source) {
   const state = told.get(source.shapes)
   if (!state) throw new TypeError('not a side\'s shapes (createShapes)')
   const M = mirror(source)
-  let L, words, made, wordAt, placeAt, noPlaces, hidden, namesKept, ours
+  let L, words, made, wordAt, placeAt, noPlaces, hidden, namesKept, ours, backs
   /** the pages that show another target's layer (mute): none of their geometry is the drawing's */
   const muted = new Set()
+  /** page p's line map, its left part's, where it carries a line: our page's lines where arXiv's page sets them (none: our page
+   *  stands where arXiv's does, its boxes on arXiv's ink) */
+  const mapOf = p => { const E = state.pages.get(p)?.lines; return E?.length ? E : null }
   /** the laid layout, told the parts as copies, each unit's stream just before its first page's tokens until that page lays */
   const tellParts = parts => layoutParts(L, parts.map(part => ({
     pages: [...part.pages], views: [...part.views],
@@ -420,9 +701,13 @@ export function layerShapes(source) {
     ...(part.quiet ? { quiet: true } : {}),
   })))
   function reset() {
+    // (no box of our page widens a laid row: the door's table holds every token the page shows of a unit, its kept label and
+    // pieces among them, and a piece or a label it drew elsewhere left that box empty; and none of its tokens is clamped at the
+    // column's edge: each is the door's own ink, drawn or kept, never a stray token)
     L = pageLayout(state.kindOf)
+    L.unclamped = true
     words = new Map(); made = new Set(); wordAt = new Map(); placeAt = new Map(); noPlaces = new Set(); hidden = new Set(); namesKept = new Map()
-    ours = new Map()
+    ours = new Map(); backs = new Map()
     if (state.parts.length) tellParts(state.parts)
   }
   /** page p's part of the laid layout, where its words and its left part are in */
@@ -438,19 +723,28 @@ export function layerShapes(source) {
     // (and what a table's cell no unit holds is copied by, cellRuns: the words themselves are let go once the page is made)
     ours.set(p, { drift: !!w.drift, rows: all })
     const inRow = (rs, x, y) => { for (let j = 0; j + 3 < rs.length; j += 4) if (x >= rs[j] && x <= rs[j + 2] && y >= rs[j + 1] && y <= rs[j + 3]) return true; return false }
-    const T0 = left.table
-    const standsFor = (id, k) => {
-      const x = (T0.l[k] + T0.r[k]) / 2, y = (T0.top[k] + T0.bottom[k]) / 2
+    const T0 = left.table, E = mapOf(p)
+    // (and on a page whose lines moved within it, the line map's — another TeX Live's glue: 1810.04805v2's page 16 —, each copy
+    // stands where our page sets its line, carried back by it (backOf); none where that line is another page's of ours)
+    const backAt = k => { const d = E ? backOf(E, p, [T0.l[k], T0.r[k], T0.top[k], T0.bottom[k]]) : undefined; return d === undefined ? NO_MOVE : d }
+    const standsFor = (id, k, [dx, dy]) => {
+      const x = (T0.l[k] + T0.r[k]) / 2 + dx, y = (T0.top[k] + T0.bottom[k]) / 2 + dy
       const own = rowsOf.get(id)
       if (own) return inRow(own, x, y)
       if (w.drift) return false
       for (const [, rs] of all) if (inRow(rs, x, y)) return false
       return true
     }
-    const copied = left.spans.filter(([id]) => original.has(id)).map(([id, ts]) => [id, ts.filter(t => standsFor(id, t - left.first))])
+    // (a unit shown as the original the door gave its own boxes, words.mjs addBoxWords, lights by them: copies for one it gave none)
+    const spanned = new Set(w.spans.map(([id]) => id))
+    const copied = left.spans.filter(([id]) => original.has(id) && !spanned.has(id)).map(([id, ts]) => {
+      const kept = []
+      for (const t of ts) { const k = t - left.first, d = backAt(k); if (d && standsFor(id, k, d)) kept.push([k, d]) }
+      return [id, kept]
+    })
     const n0 = w.tokens.n
     let n = n0
-    for (const [, ts] of copied) n += ts.length
+    for (const [, kept] of copied) n += kept.length
     const T = { n }
     for (const f of FIELDS) { T[f] = new Float32Array(n); T[f].set(w.tokens[f].subarray(0, n0)) }
     const word = new Int32Array(n).fill(-1), place = new Int32Array(n).fill(-1)
@@ -464,11 +758,12 @@ export function layerShapes(source) {
       spans.push([id, Int32Array.from(ks).sort()])
     }
     let at = n0
-    for (const [id, ts] of copied) {
-      const ks = new Int32Array(ts.length)
-      for (let i = 0; i < ts.length; i++, at++) {
-        const k = ts[i] - left.first
+    for (const [id, kept] of copied) {
+      const ks = new Int32Array(kept.length)
+      for (let i = 0; i < kept.length; i++, at++) {
+        const [k, [dx, dy]] = kept[i]
         for (const f of FIELDS) T[f][at] = left.table[f][k]
+        T.l[at] += dx; T.r[at] += dx; T.y[at] += dy; T.top[at] += dy; T.bottom[at] += dy
         ks[i] = base + at
       }
       spans.push([id, ks])
@@ -503,17 +798,45 @@ export function layerShapes(source) {
   const laidFor = (p, id) => laid(p) && !keptName(p, id)
   const pagesOf = id => L.pagesOf.get(id) ?? M.layout.pagesOf.get(id) ?? []
   const mode = id => { const ps = pagesOf(id), n = ps.filter(p => laidFor(p, id)).length; return !n ? 'mirror' : n === ps.length ? 'laid' : 'mixed' }
-  // a laid page's floats are the left's, as the mirror's are (made then)
-  const floatsOf = p => { state.floatsOn(p); L.floats = source.layout.floats }
+  // a laid page's floats are the left's, as the mirror's are (made then); on a page whose lines moved within it (its line map),
+  // each where our page sets it (floatBack, by the left's run of its caption there), the same copies while the left's are the same
+  const floatsAt = p => {
+    const src = source.layout.floats?.get(p), E = src && laid(p) ? mapOf(p) : null
+    if (!E) return src
+    let b = backs.get(p)
+    if (b?.src !== src) {
+      const g = pageGeometry(source.layout, p)
+      b = { src, list: src.flatMap(f => floatBack(E, p, f, g.byId.get(f.id)?.[0]) ?? []) }
+      backs.set(p, b)
+    }
+    return b.list
+  }
+  const floatsOf = p => {
+    state.floatsOn(p)
+    const fs = floatsAt(p)
+    // (the laid layout's own map of them, page by page as each is asked: never the left's map, which the parts told to the laid
+    // layout would let go of, highlight.mjs layoutParts)
+    L.floats ??= new Map()
+    if (fs) L.floats.set(p, fs); else L.floats.delete(p)
+  }
   // a table's cell no unit holds: the mirror's copy of the left's run, which stands where the left has it — on a laid page, as
-  // a unit shown as the original's copy does (make), none where the page's lines moved (`drift`) or another unit's row of ours
-  // stands at its middle; its numbers are the original's ink there
+  // a unit shown as the original's copy does (make), where our page sets it on a page whose lines moved within it (its float's,
+  // floatsAt; none where the float is another page's of ours), none where they moved across its break (`drift`) or another
+  // unit's row of ours stands at its middle; its numbers are our page's ink there (arXiv's place of them where our page stands
+  // as arXiv's)
   const cellRuns = id => {
     const p = tableCellPage(id)
     if (muted.has(p)) return []
-    const rs = M.shapes.runs(id), w = laid(p) ? ours.get(p) : null
+    let rs = M.shapes.runs(id)
+    const w = laid(p) ? ours.get(p) : null
     if (!w || !rs.length) return rs
     if (w.drift) return []
+    if (mapOf(p)) {
+      let c = null
+      for (const f of floatsAt(p) ?? []) for (const x of f.cells ?? []) if (x.id === id) c = x
+      if (!c) return []
+      if (c.run !== cellRunsOf(source.layout, id)[0]) rs = [c.run]
+    }
     const r = rs[0], x = (r.x0 + r.x1) / 2, y = (r.top + r.bottom) / 2
     for (const [, b] of w.rows ?? []) for (let j = 0; j + 3 < b.length; j += 4) if (x >= b[j] && x <= b[j + 2] && y >= b[j + 1] && y <= b[j + 3]) return []
     return rs
@@ -527,7 +850,7 @@ export function layerShapes(source) {
       if (muted.has(page)) return null
       if (!laid(page)) return M.shapes.hit(page, x, y, padX, startsOf)
       floatsOf(page)
-      const h = ownCell(floatHitOf(source.layout, page, x, y, padX, hitOf(L, page, x, y, padX, startsOf)), cellRuns)
+      const h = ownCell(floatHitOf(L, page, x, y, padX, hitOf(L, page, x, y, padX, startsOf)), cellRuns)
       if (h || !namesKept.has(page)) return h
       // (nothing of the laid drawing there: a name kept the original's, by the mirror's)
       const m = M.shapes.hit(page, x, y, padX, startsOf)
@@ -581,7 +904,7 @@ export function layerShapes(source) {
       })
     },
     reset,
-    forget: p => { L.cache.delete(p); M.forget(p) },
+    forget: p => { L.cache.delete(p); L.floats?.delete(p); backs.delete(p); M.forget(p) },
     dispose: () => { state.followers.delete(follower); M.dispose() },
   }
 }

@@ -100,8 +100,9 @@ describe('W3: the page\'s spans and the units left the original\'s', () => {
     const { layer, got, run } = await open([1, 2, 3], 'whole')
     for (const [p, page] of got) {
       const w = page.words
-      // each unit painted on the page (its group in the markup) has one span, in the order they were painted
-      expect(w.spans.map(s => s[0]), `page ${p}`).toEqual(unitsOnPage(page.svg))
+      // each unit painted on the page (its group in the markup) has one span, in the order they were painted; then each unit shown as
+      // the original's there, by its own boxes on our page (words.mjs addBoxWords: it lights where it stands, located on the left or not)
+      expect(w.spans.map(s => s[0]), `page ${p}`).toEqual([...unitsOnPage(page.svg), ...w.original])
       // (and its tokens are the characters it draws there)
       for (const [id, n] of drawnOn(page.svg)) expect(w.spans.find(s => s[0] === id)![1].reduce((a, v, k) => (k % 2 ? a + v : a), 0), `page ${p} unit ${id}`).toBe(n)
       // its span is a run of the table: [first, count] pairs rising, inside it, and the runs of two spans do not meet
@@ -115,15 +116,17 @@ describe('W3: the page\'s spans and the units left the original\'s', () => {
       for (const f of ['l', 'r', 'y', 'h', 'top', 'bottom'] as const) expect(w.tokens[f].length).toBe(w.tokens.n)
       expect(w.word.length).toBe(w.tokens.n)
       for (let i = 0; i < w.tokens.n; i++) { expect(w.tokens.r[i]!).toBeGreaterThan(w.tokens.l[i]!); expect(w.tokens.top[i]!).toBeGreaterThan(w.tokens.bottom[i]!) }
-      // the units left the original's on the page: every unit with a line on it that has no span, rising (by the spec's lines, not the run's records)
-      const painted = new Set(w.spans.map(s => s[0]))
+      // the units left the original's on the page: every unit with a line on it that is not painted, rising (by the spec's lines, not the
+      // run's records), each a token a line of it on the page
+      const painted = new Set(unitsOnPage(page.svg))
       expect(w.original, `page ${p}`).toEqual(onPage(p).filter(id => !painted.has(id)))
+      for (const id of w.original) expect(w.spans.find(s => s[0] === id)?.[1][1], `page ${p} unit ${id}`).toBe(SPEC.units[id]!.lines.filter(l => l[0] === p).length)
     }
     // the unit that threw, the table group withheld (cells on pages 1 and 2), the lost row and the row that never came
     expect(got.get(1)!.words.original).toEqual([5, 6])
     expect(got.get(2)!.words.original).toEqual([BOOM, 7])
     expect(got.get(3)!.words.original).toEqual([LOST, ABSENT])
-    expect(got.get(2)!.words.spans.map(s => s[0])).not.toContain(BOOM)
+    expect(unitsOnPage(got.get(2)!.svg)).not.toContain(BOOM)
     void run
     // a unit running on to the next page has a span on each, tokens of its own on each
     expect(got.get(1)!.words.spans.map(s => s[0])).toContain(1)

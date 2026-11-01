@@ -156,7 +156,7 @@ for (const arg of process.argv.slice(2).filter(a => !a.startsWith('--'))) {
     // (our base page, the marked original's final pass, has arXiv's pages: the guard refuses a marked original of another count)
     row.pages = [pages, bd.doc.numPages]
     try {
-      const lm = await makeLayout({ units: paper.units, marks: made.marks, arxiv: bd.doc, OPS, paper: { id: id.replace(/v\d+$/, ''), version: Number(/v(\d+)$/.exec(id)?.[1] ?? 1) }, left: '', pdfjs: PDFJS })
+      const lm = await makeLayout({ units: paper.units, texOrder: paper.texOrder, marks: made.marks, arxiv: bd.doc, OPS, paper: { id: id.replace(/v\d+$/, ''), version: Number(/v(\d+)$/.exec(id)?.[1] ?? 1) }, left: '', pdfjs: PDFJS })
       if ('file' in lm) {
         const lines = new Map(lm.file.lines.map(([u, rows]) => [u, rows]))
         const located = {}, entryPages = new Set()

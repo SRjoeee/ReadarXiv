@@ -5,6 +5,8 @@ import { readMarked } from '@/pdf-reader/engine/layout/marks.mjs'
 import { orphanRowsOfHead } from '@/pdf-reader/engine/layout/ledger.mjs'
 import { inkAnchors, inkOfHost, inkWithinChunks, layoutWithInk } from '@/pdf-reader/engine/pipeline/ink-pass.mjs'
 import { inkBundleUnitsOf } from '@/pdf-reader/engine/layer-proto/units.mjs'
+import { layerIds, toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
+import { UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { layerOfPaper } from '@/pdf-reader/engine/pipeline/page-pass.mjs'
 import { arxivOf, endOf, markedOf, type Page, type Run, text, unit, words, type World } from './helpers/make-world'
 
@@ -101,6 +103,26 @@ describe('the ink units in the page pass', () => {
     const w = worldOf()
     const got = await passOf(w, { ours: oursOf(w, { ink: INK, wrap: null }) }, names)
     expect(got.chunks.map(c => [c.from, c.to])).toEqual([[0, 4]])
+  })
+
+  it('carries a kept block as an ink unit of the KEPT flag and no pieces, laid by its lines alone, anchored, never awaited (rule 10)', async () => {
+    const w = worldOf(), base = headUnit(4, 3)
+    const kept = { ...base, kind: 'inkorphan', cls: 'code', kept: true, pieces: [], rows: { ...base.rows, unit: [4, 'inkorphan', 9, 0, 0], erase: [] } }
+    const ink = { base: 3, units: [headUnit(3, 2), kept] }
+    const got = await passOf(w, { ours: oursOf(w, { ink, wrap: null }) })
+    expect(got.chunks[1]?.units).toEqual([['inkheads', 0, null, null, null, [[0, HEAD_RUN.s]], null], ['inkorphan', 8, null, null, null, [], null]])
+    // (in its page's part, its row of no piece, its lines the wrap's, nothing to erase)
+    const layout = got.parts.map(p => p.layout).find(l => l && 'units' in l && l.units.some(u => u[0] === 4))
+    expect(layout && 'units' in layout ? layout.units.find(u => u[0] === 4) : null).toEqual([4, UNIT_KINDS.indexOf('inkorphan'), 9, 0, 0])
+    expect(layout && 'erase' in layout ? layout.erase.map(e => e[0]) : null).not.toContain(4)
+    expect(layout && 'lines' in layout ? layout.lines.find(e => e[0] === 4)?.[1].slice(0, 7) : null).toEqual([3, 72, endOf(HEAD_RUN), 760, 767.5, 757.5, 10])
+    // (on the left by the tokens on its line, as any ink unit)
+    const doc = [{ page: 3, x: 72, w: 30, y: 760, top: 767.5, bottom: 757.5, h: 10, t: 'Journal' }]
+    expect(inkAnchors(doc as never, inkOfHost(ink, { units: [0, 1, 2] }) as never).get(4)?.tokens).toEqual([0])
+    // (no language translates it, and the layer awaits no row of it)
+    const bundle = { units: got.chunks.flatMap(c => c.units) }
+    expect(toTranslate(bundle as never, 'zh')).toEqual([0, 1, 2, 3])
+    expect(layerIds(bundle as never, 'zh')).toEqual([0, 1, 2, 3])
   })
 
   it('writes the wrap\'s ledger into the head\'s base, and invariant (o) reads it', async () => {

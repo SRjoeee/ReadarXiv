@@ -173,7 +173,8 @@ describe('the real door: (d) a fresh LaidPage each call, and L1 text as text', (
     // the markup drawn as its text; the row with a bidirectional control is no unit's (rows.mjs inBound): its unit the original's
     expect(svg.textContent).toContain('<img src=x onerror=alert(1)>')
     const words = (await s.layer()?.pageOf(1, { lang: 'zh' }))?.words
-    expect(words?.spans.map(x => x[0])).toEqual([0])
+    // (unit 0 painted; unit 2 shown as the original, by its own boxes: words.mjs addBoxWords)
+    expect(words?.spans.map(x => x[0])).toEqual([0, 2])
     expect(words?.original).toEqual([2])
     const html = svg.outerHTML
     await nearOn(s, [1], false)
