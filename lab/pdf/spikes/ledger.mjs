@@ -45,9 +45,9 @@ let failed = false
 for (const id of IDS) {
   const base = PAIRS.get(id) ?? join(PACK, `${id}-zh/base.pdf`)
   const src = join(SOURCES, id, 'source.gz')
-  const units = !PAIRS.has(id) && existsSync(src) ? openPaper((await unpackSource(new Uint8Array(readFileSync(src)))).files).units : null
+  const opened = !PAIRS.has(id) && existsSync(src) ? openPaper((await unpackSource(new Uint8Array(readFileSync(src)))).files) : null, units = opened?.units ?? null
   const t0 = performance.now()
-  const r = await wrapFinal(new Uint8Array(readFileSync(base)), { PL, getDocument, documentOptions: OPTIONS, OPS, units, ...(units ? {} : { follows: null }), texts: PAIRS.has(id) ? null : textsOf(base), inkless: PAIRS.has(id) ? null : inklessOf(base), deflate, inflate, keepOwned: true })
+  const r = await wrapFinal(new Uint8Array(readFileSync(base)), { PL, getDocument, documentOptions: OPTIONS, OPS, units, ...(units ? {} : { follows: null }), texts: PAIRS.has(id) ? null : textsOf(base), inkless: PAIRS.has(id) ? null : inklessOf(base), names: opened?.theoremNames ?? null, deflate, inflate, keepOwned: true })
   const ms = Math.round(performance.now() - t0)
   if (r.refused) { console.log(JSON.stringify({ id, refused: r.refused, why: r.why })); failed = true; continue }
   const { ledger } = r, letters = ledger.letters

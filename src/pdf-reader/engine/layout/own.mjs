@@ -88,14 +88,26 @@ const LABEL_NUMBER = '[([]?(?:\\d{1,4}|[a-z]|[ivxlcdm]{1,6})(?:[.\\-–](?:\\d{1
 // (after a name, a number may take a letter before it: a supplement's or an appendix's, "Table S3:", "Figure A1", the letter
 // before a digit alone, so that two letters are no number, "Figure AB"; alone, a letter and a number are a model's or a
 // product's name, "A100", no label)
-const LABEL_FORM = new RegExp(`^(?:(?:${LABEL_NAME}(?:(?:[a-z](?=\\d))?${LABEL_NUMBER})?|${LABEL_NUMBER})[)\\].:–—|]{0,2}|[•◦▪▫‣⁃∙·∗*–—\\-+○●■□►▸▹➢✓✔])$`, 'u')
+const formOf = name => new RegExp(`^(?:(?:${name}(?:(?:[a-z](?=\\d))?${LABEL_NUMBER})?|${LABEL_NUMBER})[)\\].:–—|]{0,2}|[•◦▪▫‣⁃∙·∗*–—\\-+○●■□►▸▹➢✓✔])$`, 'u')
+const LABEL_FORM = formOf(LABEL_NAME)
 const labelText = s => s.normalize('NFKC').toLowerCase().replace(/\s/gu, '')
+/**
+ * The label's form with the paper's own theorem names beside LABEL_NAME (`names`: source/paper-names.mjs theoremNames, the
+ * printed names of the theorem-like environments its files define — thmtools' "Recall", "Notation", a \newtheorem's
+ * "Conjecture"), each as a label holds it (NFKC, lower case, no white space); LABEL_FORM where it gives none. A head TeX sets of
+ * such a name ("Recall 7 (") is then its unit's label, in its label group, which the layer draws in the paper's name unit's
+ * word for it (rules/tex-names.mjs: one word a name, every head of it), where it was left the original's ink (`labelKept`)
+ */
+export function labelFormOf(names) {
+  const own = [...new Set((names ?? []).map(n => labelText(String(n))).filter(n => /\p{L}/u.test(n)))].map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+  return own.length ? formOf(`(?:${LABEL_NAME}|${own.join('|')})`) : LABEL_FORM
+}
 /** a head's joint between a babel name and its unit's text, as a label holds it: its punctuation alone */
 const JOINT = /^[.:;,\u2013\u2014-]{1,2}$/u
 /** (`note`: the label of a theorem's note, a unit the front end read in a head's brackets (latex-front.mjs `bracketed`): the head
  *  macro sets the bracket that opens the note after its name and number, amsthm's "Definition 5.1 (", which is the head's own,
  *  and so the label's) */
-export const isLabelForm = (s, note = false) => { const t = labelText(s); const u = note ? t.replace(/[([]$/u, '') : t; return u === '' || LABEL_FORM.test(u) }
+export const isLabelForm = (s, note = false, form = LABEL_FORM) => { const t = labelText(s); const u = note ? t.replace(/[([]$/u, '') : t; return u === '' || form.test(u) }
 
 /**
  * Each unit's own ink of a document, by its marks. `pages` (page p at index p - 1): what pageInk read of each page with
@@ -106,12 +118,14 @@ export const isLabelForm = (s, note = false) => { const t = labelText(s); const 
  * units and the points' names) where the marking is known, else null; `texts` (a Map, a macro's source -> the text the
  * marking's probe showed it sets: the marks file's `marking.texts`) where known, else null; `inkless` (a Set, the macros TeX
  * said set no ink: the marks file's `marking.inkless`) where known, else null: such a macro is no placeholder of ink, as the
- * maker reads it (make.mjs), so a unit that opens with one (a title's `\\boldmath`) opens with its text.
+ * maker reads it (make.mjs), so a unit that opens with one (a title's `\\boldmath`) opens with its text; `names` the paper's
+ * theorem-like environments' printed names (openPaper's `theoremNames`), each a label's name (labelFormOf), else null.
  * Returns { glyphs, boxes, units, stats }: `glyphs[p - 1][g]`, `boxes[p - 1][b]` the group a page's glyph or painted rule is
  * hidden with, or null; `units` Map id -> { groups: Set, pages: Set, unhidden: a code of UNHIDDEN or null, labelKept }; `stats`
  * { units, unhidden: { marks, across, spell, page: 0, bounds: 0 }, spell: [ids, at most SPELL_LIST_MAX], labelKept }
  */
-export function ownOf(pages, { units = null, follows = null, texts = null, inkless = null } = {}) {
+export function ownOf(pages, { units = null, follows = null, texts = null, inkless = null, names = null } = {}) {
+  const form = labelFormOf(names)
   const P = pages.length
   // (the glyphs and boxes visited: real ranges never overlap and cost the paper's ink once; past OWN_WORK a unit is not owned)
   let work = 0
@@ -321,7 +335,7 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       // (the label ends at a word's end: the next glyph a gap of a fifth of an em or more after it, or none)
       const G = j => pg.glyphs[lead.glyphs[j][1]]
       const wordEnd = j => j === lead.glyphs.length || G(j).x0 - G(j - 1).x1 >= 0.2 * Math.max(G(j).size, G(j - 1).size) || !/\S/.test(G(j).u ?? '')
-      for (let j = lead.glyphs.length; j > 0; j--) if (wordEnd(j) && isLabelForm(lead.glyphs.slice(0, j).map(([, i]) => pg.glyphs[i].u ?? '').join(''), units[id]?.bracketed === true)) { k = j; break }
+      for (let j = lead.glyphs.length; j > 0; j--) if (wordEnd(j) && isLabelForm(lead.glyphs.slice(0, j).map(([, i]) => pg.glyphs[i].u ?? '').join(''), units[id]?.bracketed === true, form)) { k = j; break }
       if (k) claim({ glyphs: lead.glyphs.slice(0, k) }, `u${id}.l`, 'l')
       if (k < lead.glyphs.length) claim({ glyphs: lead.glyphs.slice(k) }, `u${id}.p`, 'p')
       continue
@@ -558,7 +572,7 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       // the label is no label: its ink left the original's where it stands apart from the text's, else the unit the original
       // (a head's joint after the babel name that leads the unit, its punctuation alone, is a label: the name's lead draws it,
       // run.mjs jointOf; IEEEtran's "—" after "Abstract", amsthm's "." after "Proof")
-      if (!isLabelForm(chars, units?.[id]?.bracketed === true) && !(afterName.has(id) && JOINT.test(labelText(chars)))) {
+      if (!isLabelForm(chars, units?.[id]?.bracketed === true, form) && !(afterName.has(id) && JOINT.test(labelText(chars)))) {
         if (!apart(lead, id)) { u.unhidden = 'spell'; spell.push(id); continue }
         for (const [p, i] of lead) gOwn[p - 1][i] = null
         u.groups.delete(`u${id}.l`)

@@ -204,7 +204,7 @@ for (const arg of process.argv.slice(2).filter(a => !a.startsWith('--'))) {
           })
           row.vsBase = { lost, gainedBody, moved, authorsMoved, ...(process.argv.includes('--which') ? { which } : {}) }
         }
-        const w = await wrapFinal(ours, { PL, getDocument, documentOptions: { ...DOC, maxImageSize: NO_IMAGE_PIXELS }, OPS, units: paper.units, texts: made.marks.marking?.texts ?? null, inkless: made.marks.marking?.inkless ?? null, deflate: x => deflateSync(x, { level: 6 }), inflate: (x, l) => inflateSync(x, { maxOutputLength: l + 1 }) })
+        const w = await wrapFinal(ours, { PL, getDocument, documentOptions: { ...DOC, maxImageSize: NO_IMAGE_PIXELS }, OPS, units: paper.units, texts: made.marks.marking?.texts ?? null, inkless: made.marks.marking?.inkless ?? null, names: paper.theoremNames ?? null, deflate: x => deflateSync(x, { level: 6 }), inflate: (x, l) => inflateSync(x, { maxOutputLength: l + 1 }) })
         if (w.refused) row.wrap = w.refused
         else {
           const by = {}

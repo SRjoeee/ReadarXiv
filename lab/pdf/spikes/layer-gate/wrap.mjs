@@ -78,7 +78,7 @@ async function made(key, { engine, out, base, bytes, layoutFile, source }) {
     const texts = textsOf(base)
     // (the ink units' ids after the bundle's units before them, the source units' and the paper's structural names', as the
     // page pass reads them: an engine of before ignores it)
-    const r = await wrapFinal(new Uint8Array(bytes), { PL, getDocument: pdfjs.getDocument, documentOptions, OPS: pdfjs.OPS, units, texts, inkless: inklessOf(base), deflate, inflate, inkFrom: bundleUnitsOf(opened).length })
+    const r = await wrapFinal(new Uint8Array(bytes), { PL, getDocument: pdfjs.getDocument, documentOptions, OPS: pdfjs.OPS, units, texts, inkless: inklessOf(base), names: opened.theoremNames ?? null, deflate, inflate, inkFrom: bundleUnitsOf(opened).length })
     if (r.refused) head = { wrapped: false, why: `${r.refused}: ${String(r.why ?? '').slice(0, 200)}` }
     else {
       // (and the ink units the wrap made, where its engine makes them: docs/route/orphan-text.md, the gate's --ink)

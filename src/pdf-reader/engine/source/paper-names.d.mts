@@ -5,3 +5,6 @@ export declare const NAMES_MAX: number
  *  its theorem-like environments' printed names, the reference names it gives cleveref, thmtools and \autoref, and, where it
  *  calls cleveref or \autoref, the words no package names in some target */
 export declare function paperNames(texts: readonly string[]): string[]
+/** the printed names of the paper's theorem-like environments alone, each once, in the order first written: the names a head's
+ *  label may hold (layout/own.mjs) */
+export declare function theoremNames(texts: readonly string[]): string[]
