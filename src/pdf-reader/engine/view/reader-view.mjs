@@ -662,6 +662,8 @@ export function createReaderView(host) {
       p.plan = planOf(p, preview.k)
       showPreview(p, preview.k)
     }
+    // (what is under a pointer at rest looked at again, through the preview, as each step's scroll had it looked at)
+    pointer.again()
     zoomChosen = null
     tellScale(preview.next)
     clock.clear(preview.timer)
@@ -684,8 +686,15 @@ export function createReaderView(host) {
       t, pages, gaps, stack, mode: null, hold: null, moved: new Set(), plan: null, kept: null, q: null,
       box: { left: cb.left + c.clientLeft, top: cb.top + c.clientTop, w: c.clientWidth, h: c.clientHeight },
       scroll: { x: c.scrollLeft, y: c.scrollTop, w: c.scrollWidth, h: c.scrollHeight },
-      foot: last ? c.scrollHeight - last.top - last.h : 0,
+      foot: last ? footOf(c, t.stack, sb.bottom - oy) - last.top - last.h : 0,
     }
+  }
+  /** where a pane's paper ends (scroll coordinates): its range's end while the paper overflows the view; while it fits, the
+   *  range is the view's and its empty foot no margin of the paper's, so the stack's end, its margin and the pane's padding */
+  function footOf(c, stack, stackEnd) {
+    if (c.scrollHeight > c.clientHeight + 0.5) return c.scrollHeight
+    const px = v => Number.parseFloat(v) || 0
+    return stackEnd + px(getComputedStyle(stack).marginBottom) + px(getComputedStyle(c).paddingBottom)
   }
   /** the layout a pane takes at factor k over the gesture's start: each page box (scroll coordinates), the scroll, and the
    *  range */
@@ -709,6 +718,8 @@ export function createReaderView(host) {
     let n = boxes.findIndex(r => r.top + r.h > Y)
     if (n < 0) n = boxes.length - 1
     const r = boxes[n]
+    // (a box of no size, as PDF.js's rounding down can make one at the least scale, holds no share: no point is kept)
+    if (!r.w || !r.h) return null
     const v = Y < r.top ? { edge: 0, px: Y - r.top } : Y > r.top + r.h ? { edge: 1, px: Y - r.top - r.h } : { share: (Y - r.top) / r.h }
     return { n, v, across: (X - r.left) / r.w }
   }
@@ -867,6 +878,8 @@ export function createReaderView(host) {
   const placeNow = () => (due ? null : placesNow())
   function setDisplay(d) {
     if (disposed || !DISPLAYS.includes(d) || d === mode) return
+    // (a pinch under way committed first: the place read is the one it left)
+    settle()
     const place = placeNow()
     mode = d
     showMode()
@@ -876,6 +889,7 @@ export function createReaderView(host) {
     if (disposed) return
     const next = o.display && DISPLAYS.includes(o.display) ? o.display : mode
     if (narrow === onNow && next === mode) return
+    settle()
     const place = placeNow()
     narrow = onNow
     html.toggleAttribute('data-axt-narrow', onNow)

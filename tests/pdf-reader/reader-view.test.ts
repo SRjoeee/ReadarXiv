@@ -637,6 +637,90 @@ describe('V6: overlays', () => {
     expect(FakePDFPageView.made.length).toBe(made + 2)
   })
 
+  it('a page box of no size under the gesture keeps no point: the preview and the commit write nothing that is not a number', async () => {
+    const s = setup()
+    await opened(s, 4)
+    // (pages PDF.js has sized to nothing, as its rounding down can at the least scale)
+    for (const page of document.querySelectorAll<HTMLElement>('.pdfViewer > .page')) { page.style.width = '0px'; page.style.height = '0px' }
+    s.view.pinch('left', 1.3, [300, 300])
+    // (a value that is not a number is no CSS: the style would refuse it and show no preview at all)
+    for (const pane of [s.panes.left, s.panes.right]) expect(pane.style.transform).toMatch(/^translate\(-?[\d.]+px, -?[\d.]+px\) scale\([\d.]+\)$/)
+    await s.clock.advance(PINCH_COMMIT_MS)
+    for (const pane of [s.panes.left, s.panes.right]) { expect(Number.isFinite(pane.scrollTop)).toBe(true); expect(Number.isFinite(pane.scrollLeft)).toBe(true) }
+  })
+
+  it('a paper that fits its pane is shown growing as the commit lays it: no scroll the committed layout cannot have (the pane\'s empty foot is no margin of the paper\'s)', async () => {
+    const s = setup()
+    await opened(s, 1)
+    s.view.zoomTo(0.25)
+    await flush()
+    await s.clock.advance(1000)
+    const page = s.panes.right.querySelector<HTMLElement>(':scope > .pdfViewer > .page') as HTMLElement
+    const top0 = page.getBoundingClientRect().top - 40
+    expect(s.panes.right.scrollHeight).toBe(800)
+    s.view.pinch('right', 1.5, [608 + 300, 40 + 200])
+    // the page grows about the scroller's top left by k and is put where the committed layout puts it: its top where it was
+    const m = /translate\((-?[\d.]+)px, (-?[\d.]+)px\) scale\(([\d.]+)\)/.exec(s.panes.right.style.transform) as RegExpExecArray
+    const by = Number(m[2]), k = Number(m[3])
+    expect(by + k * top0).toBeCloseTo(top0, 6)
+  })
+
+  it('a zoom\'s pending level is called off by the pinch that starts before it: nothing moves a pane under the preview', async () => {
+    const s = setup()
+    await opened(s, 8)
+    s.view.zoomTo(0.6)
+    for (const pane of [s.panes.left, s.panes.right]) pane.scrollTop = 900
+    await flush()
+    await s.clock.advance(1000)
+    // a step of the keys' zoom, which levels the pair 150 ms on; the right put off level meanwhile; then a pinch
+    s.view.zoomBy(1.1)
+    s.panes.right.scrollTop += 300
+    await flush()
+    await s.clock.advance(50)
+    s.view.pinch('left', 1.05, [300, 400])
+    const right0 = s.panes.right.scrollTop
+    for (let i = 0; i < 6; i++) { await s.clock.advance(30); s.view.pinch('left', 1.02, [300, 400]); await flush() }
+    expect(s.view.probe().motion).toBeNull()
+    expect(s.panes.right.scrollTop).toBe(right0)
+  })
+
+  it('a display changed while a pinch is shown keeps the place the pinch left: the pinch committed before the place is read', async () => {
+    // the same pinch, committed by its wait or by the display's change, then the same display: the same place
+    const placeAfter = async (early: boolean) => {
+      const s = setup()
+      await opened(s, 8)
+      s.view.zoomTo(0.6)
+      for (const pane of [s.panes.left, s.panes.right]) pane.scrollTop = 900
+      await flush()
+      await s.clock.advance(1000)
+      for (let i = 0; i < 6; i++) s.view.pinch('left', 1.1, [300, 700])
+      if (!early) await s.clock.advance(PINCH_COMMIT_MS)
+      s.view.setDisplay('original')
+      await s.clock.advance(100)
+      await flush(10)
+      const top = s.panes.left.scrollTop
+      s.view.dispose()
+      return top
+    }
+    expect(await placeAfter(true)).toBe(await placeAfter(false))
+  })
+
+  it('a pointer at rest is looked at again at each step of a pinch shown by transform, as each step\'s scroll had it looked at', async () => {
+    const s = setup()
+    await opened(s, 3)
+    const left = stub()
+    internalsOf(s.view).setShapes('left', left)
+    internalsOf(s.view).setShapes('right', stub())
+    FakeRO.fire()
+    await flush()
+    const page = s.panes.left.querySelector('.page') as HTMLElement
+    page.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, ...clientOf(s.panes.left, 1, 150, 650) }))
+    await s.clock.tick()
+    left.calls.length = 0
+    for (let i = 0; i < 3; i++) { s.view.pinch('left', 1.1, [300, 100]); await s.clock.tick() }
+    expect(left.calls.filter(c => c.startsWith('hit')).length).toBeGreaterThanOrEqual(3)
+  })
+
   it('an input during a pinch\'s preview commits it first: a wheel without Ctrl scrolls on from the zoom, not from under its transform', async () => {
     const s = setup()
     await opened(s, 6)

@@ -443,6 +443,9 @@ export function createFollower(o) {
     zooming(side) {
       if (side) take(side)
       zoomHeld = true
+      // (a zoom before this one, still to be levelled, is levelled by this one's end instead)
+      zoomGen++
+      clock.clear(zoomRest); zoomRest = 0
       bake(); stopSpring(); clearRest(); clearFallback()
       follow.moving = false
       follow.lastD = null

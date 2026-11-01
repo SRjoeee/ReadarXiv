@@ -417,12 +417,15 @@ is taken only over the pages. The overlays follow the pinch exactly (§10.1).
   page, in the gap between two, beside one: a share of the page box it is level with, or px from its edge where it is
   outside (the gaps and margins do not scale). The pair stays level through the gesture, and its rest finds nothing to level.
 - **The follower stands aside.** A wheel with Ctrl or ⌘ is no scroll input; the pinch's first step ends whatever the
-  follower moves, calls its rest off and holds it from binding until the commit; the commit's scrolls are the view's own
-  puts, and the pair is levelled only once the zoom settles.
+  follower moves, calls its rest off (and a zoom's before it still to be levelled: this one's end levels the pair) and holds
+  it from binding until the commit; the commit's scrolls are the view's own puts, and the pair is levelled only once the
+  zoom settles.
 - **Anything else commits first.** Another input on a pane (a wheel without Ctrl, a key, a press, a touch), a scroll the view
   did not make, and every command that reads or moves the panes (a zoom from the menu or the keys, a jump, a page, a
   heading, a display, a click's level, the original let go) commit the pinch before they run. The pointer's highlight finds
-  the page under it through the preview's transform.
+  the page under it through the preview's transform, looked at again at each step as a scroll had it.
+- **The scroll's ends are the paper's.** The range the preview keeps the point within is the one the commit lays: the paper
+  at the step's scale and its margin below the last page, never the empty foot of a pane the paper does not fill.
 - **Small steps add up.** PDF.js rounds each scale to a hundredth; the fingers' factor is carried whole through the gesture,
   and what the commit's rounding leaves is carried to the next pinch while it keeps its direction, as PDF.js's own viewer
   carries it.
