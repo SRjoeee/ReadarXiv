@@ -144,19 +144,19 @@ for (const id of IDS) {
   const record = existsSync(join(dir, 'base.json')) ? JSON.parse(readFileSync(join(dir, 'base.json'), 'utf8')) : null
   const texts = record?.texts ?? null, inkless = record?.inkless ?? null
   const src = SOURCES ? join(SOURCES, id, 'source.gz') : null
-  const units = src && existsSync(src) ? openPaper((await unpackSource(new Uint8Array(readFileSync(src)))).files).units : null
+  const opened = src && existsSync(src) ? openPaper((await unpackSource(new Uint8Array(readFileSync(src)))).files) : null, units = opened?.units ?? null
   const final = new Uint8Array(readFileSync(base))
   const t0 = performance.now()
   const wrapOptions = { PL, getDocument, documentOptions: { ...OPTIONS }, OPS, units, ...(units ? {} : { follows: null }), deflate, inflate }
   const marked = units ? texts : null, none = units ? inkless : null
-  const r = await wrapFinal(final, { ...wrapOptions, texts: marked, inkless: none })
+  const r = await wrapFinal(final, { ...wrapOptions, texts: marked, inkless: none, names: opened?.theoremNames ?? null })
   const ms = Math.round(performance.now() - t0)
   if (r.refused) { console.log(JSON.stringify({ id, refused: r.refused, why: r.why })); failed = true; continue }
   const drawn = r.figures.units
   const byPage = new Map()
   for (const u of drawn) (byPage.get(u.page) ?? byPage.set(u.page, []).get(u.page)).push(u)
   const fails = { G1: [], G3f: [], D: [], O: [], R: [] }
-  const bare = await wrapFinal(final, { ...wrapOptions, texts: marked, inkless: none, figures: false })
+  const bare = await wrapFinal(final, { ...wrapOptions, texts: marked, inkless: none, names: opened?.theoremNames ?? null, figures: false })
   if (bare.refused) { console.log(JSON.stringify({ id, refused: `without figures: ${bare.refused}`, why: bare.why })); failed = true; continue }
   let G1u = 0, splitPx = 0
   const A = await renderer(r.bytes), U = await renderer(bare.bytes), F = await renderer(final)

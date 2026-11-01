@@ -62,8 +62,26 @@ const CALLS = new RegExp(`\\\\(?:${GENERATED_COMMANDS.join('|')})\\*?\\s*\\{`)
  * written, the gaps last. Language-independent: the same files give the same names
  */
 export function paperNames(texts) {
-  const out = [], seen = new Set()
-  const add = s => { const t = String(s ?? '').replace(/\s+/g, ' ').trim(); if (t && PLAIN.test(t) && !seen.has(t) && out.length < NAMES_MAX) { seen.add(t); out.push(t) } }
+  return namesOf(texts).all
+}
+/**
+ * The printed names of the paper's theorem-like environments alone (`texts` as paperNames'): \newtheorem's and its kin's
+ * `Name`, thmtools' `name=` or its environment's name with a capital — each once, in the order first written, the names
+ * paperNames gives for them. A head TeX sets of one of them ("Recall 7 (", "Notation 9.") is a label's form, as "Theorem 7"
+ * is (layout/own.mjs `names`: the wrap gives it its unit's label group, and the layer draws it in that name unit's word, the
+ * same word on every head of the name)
+ */
+export function theoremNames(texts) {
+  return namesOf(texts).theorems
+}
+function namesOf(texts) {
+  const out = [], seen = new Set(), theorems = []
+  const add = (s, theorem = false) => {
+    const t = String(s ?? '').replace(/\s+/g, ' ').trim()
+    if (!t || !PLAIN.test(t)) return
+    if (!seen.has(t) && out.length < NAMES_MAX) { seen.add(t); out.push(t) }
+    if (theorem && seen.has(t) && !theorems.includes(t)) theorems.push(t)
+  }
   let calls = false
   for (const raw of texts) {
     const s = uncommented(raw)
@@ -75,15 +93,15 @@ export function paperNames(texts) {
       if (cmd === 'declaretheorem') {
         const a = argsAt(s, at, 1), opts = a.filter(x => !x.brace).map(x => x.text).join(','), env = a.find(x => x.brace)?.text?.trim()
         const name = optionOf(opts, 'name') ?? (env && /^[A-Za-z]+$/.test(env) ? env[0].toUpperCase() + env.slice(1) : null)
-        add(name)
+        add(name, true)
         for (const key of ['refname', 'Refname']) { const v = optionOf(opts, key); if (v) for (const w of v.split(',')) add(w) }
         continue
       }
       // \newtheorem{env}[shared]{Name}[within], \spnewtheorem{env}[shared]{Name}{fonts}, \newproof{env}{Name}, \newmdtheoremenv{env}{Name}
       const a = argsAt(s, at, 2).filter(x => x.brace)
-      if (a.length === 2) add(a[1].text)
+      if (a.length === 2) add(a[1].text, true)
     }
   }
   if (calls) for (const w of [...NAME_GAPS, ...CONJUNCTION_GAPS]) add(w)
-  return out
+  return { all: out, theorems }
 }

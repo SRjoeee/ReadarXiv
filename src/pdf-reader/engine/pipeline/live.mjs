@@ -19,7 +19,7 @@
 // first preview is set as today, and never waits for the original: nothing is known to plan it from yet. Where a plan
 // cannot be made, the translation is set as today, and the reason noted
 import { analyze } from '../source/paper-meta.mjs'
-import { paperNames } from '../source/paper-names.mjs'
+import { paperNames, theoremNames } from '../source/paper-names.mjs'
 import { DVI_LAYOUT_TEX, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, NAME_ENGLISH, probeSamples } from '../layout/marks.mjs'
 import { BALANCE_DEF, documentBounds, DVI_MARK_DEF, dviEngine, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inAuthorBlock, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1, texFilesOf, texText } from '../source/latex-front.mjs'
 import { strategiesFor, typesetBy } from './scripts.mjs'
@@ -249,8 +249,10 @@ export function openPaper(files) {
   const project = loadProject(fsys, meta.main, { tables: true })
   // (the structural names its TeX prints that no package names in every target: units of their own in the bundle, after its
   // source's, sent to the translator once: source/paper-names.mjs, bundleUnitsOf)
-  const names = paperNames(texFilesOf(fsys, meta.main))
-  return { fsys, meta, project, units: project.units, inFloat: project.inFloat, texOrder: project.texOrder ?? null, kept: nameCells(project.units), names }
+  const texts = texFilesOf(fsys, meta.main), names = paperNames(texts)
+  // (the printed names of its theorem-like environments among them, the label forms of its heads: the wrap's `names`,
+  // layout/own.mjs)
+  return { fsys, meta, project, units: project.units, inFloat: project.inFloat, texOrder: project.texOrder ?? null, kept: nameCells(project.units), names, theoremNames: theoremNames(texts) }
 }
 
 /**
@@ -648,6 +650,9 @@ export { PIPELINE_VERSION } from './versions.mjs'
  *   unit the closing punctuation glued past its end mark (layout/own.mjs MR 4c), which no figure unit then takes: the parts'
  *   layout moves, and a figure unit's cut where such punctuation stood in its run; no source unit's text, pieces or wire: every
  *   unit is carried, a figure unit found again by its source (seedFrom)
+ * - 49: 50 gives a head of a theorem-like name the paper defines its unit's label group (layout/own.mjs labelFormOf), where it
+ *   was in no group and a figure unit or an ink unit took it: those units go; no source unit's text, pieces or wire: every unit
+ *   is carried, a figure unit or an ink unit found again by its source (seedFrom)
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
 const NO_RUN = (pieces, unit = null) => (unit ? formulaRuns(unit.pieces).size === 0 : !holdsUnbalanced(pieces))
@@ -661,7 +666,7 @@ const NO_BOUNDARY = (pieces, unit = null) => (unit ? !boundaryChanges(unit) : Ar
 const NO_DISPLAY_STOP = (pieces, unit = null) => (unit ? !displayStopChanges(unit) : Array.isArray(pieces) && !pieces.some(p => p?.t === 'ph' && displayStop(p.src)))
 const andStop = test => (pieces, unit = null) => test(pieces, unit) && NO_DISPLAY_STOP(pieces, unit)
 const BOUNDARY_AND_STOP = andStop(NO_BOUNDARY)
-export const PIPELINE_CARRIES = { 7: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 8: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 9: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 10: andStop(andStyle(NO_RUN)), 11: andStop(andStyle(NO_RUN)), 12: andStop(NO_STYLE), 13: andStop(NO_STYLE), 14: andStop(NO_STYLE), 15: BOUNDARY_AND_STOP, 16: BOUNDARY_AND_STOP, 17: BOUNDARY_AND_STOP, 18: BOUNDARY_AND_STOP, 19: BOUNDARY_AND_STOP, 20: BOUNDARY_AND_STOP, 21: BOUNDARY_AND_STOP, 22: NO_DISPLAY_STOP, 23: EVERY, 24: EVERY, 25: EVERY, 26: EVERY, 27: EVERY, 28: EVERY, 29: EVERY, 39: EVERY, 40: EVERY, 41: EVERY, 42: EVERY, 43: EVERY, 44: EVERY, 45: EVERY, 46: EVERY, 47: EVERY, 48: EVERY }
+export const PIPELINE_CARRIES = { 7: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 8: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 9: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 10: andStop(andStyle(NO_RUN)), 11: andStop(andStyle(NO_RUN)), 12: andStop(NO_STYLE), 13: andStop(NO_STYLE), 14: andStop(NO_STYLE), 15: BOUNDARY_AND_STOP, 16: BOUNDARY_AND_STOP, 17: BOUNDARY_AND_STOP, 18: BOUNDARY_AND_STOP, 19: BOUNDARY_AND_STOP, 20: BOUNDARY_AND_STOP, 21: BOUNDARY_AND_STOP, 22: NO_DISPLAY_STOP, 23: EVERY, 24: EVERY, 25: EVERY, 26: EVERY, 27: EVERY, 28: EVERY, 29: EVERY, 39: EVERY, 40: EVERY, 41: EVERY, 42: EVERY, 43: EVERY, 44: EVERY, 45: EVERY, 46: EVERY, 47: EVERY, 48: EVERY, 49: EVERY }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a

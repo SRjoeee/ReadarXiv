@@ -3,7 +3,7 @@ import { sourceUnitsOf } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { bundleUnitsOf, NAME_KIND } from '@/pdf-reader/engine/layer-proto/units.mjs'
 import { openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { CONJUNCTION_GAPS, GENERATED_COMMANDS, NAME_GAPS } from '@/pdf-reader/engine/rules/tex-names.mjs'
-import { NAMES_MAX, paperNames } from '@/pdf-reader/engine/source/paper-names.mjs'
+import { NAMES_MAX, paperNames, theoremNames } from '@/pdf-reader/engine/source/paper-names.mjs'
 import { plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The structural names a paper's TeX prints that no package names in every target (PDF-READER §19.14): read from the paper's
@@ -46,6 +46,20 @@ describe('paperNames: the names the paper defines', () => {
   it(`at most ${NAMES_MAX} a paper`, () => {
     const many = Array.from({ length: NAMES_MAX + 20 }, (_, i) => `\\newtheorem{t${i}}{Name ${String.fromCharCode(65 + (i % 26))}${String.fromCharCode(65 + Math.floor(i / 26))}}`).join('\n')
     expect(paperNames([many])).toHaveLength(NAMES_MAX)
+  })
+})
+
+describe('theoremNames: the printed names of the theorem-like environments alone, a head\'s label names (layout/own.mjs)', () => {
+  it('each a name paperNames gives, none of a reference\'s, an \\autoref\'s or the gaps\' (2501.14787v1\'s "Recall", "Notation")', () => {
+    const texts = [
+      '\\declaretheorem[style = notebox, name = Recall, sibling = theorem]{recall}\n\\declaretheorem[style = notebox, name = Recall, numbered = no]{recall*}\n\\declaretheorem[name=Notation]{notation}\n',
+      '\\newtheorem{conj}{Conjecture}\n\\declaretheorem[name=Hypothesis, refname={hypothesis,hypotheses}]{hyp}\n\\crefname{conj}{conj.}{conjs.}\n\\def\\algorithmautorefname{Algorithm}\nAs \\cref{a}.',
+    ]
+    expect(theoremNames(texts)).toEqual(['Recall', 'Notation', 'Conjecture', 'Hypothesis'])
+    for (const n of theoremNames(texts)) expect(paperNames(texts)).toContain(n)
+    expect(theoremNames(['As \\cref{a}.'])).toEqual([])
+    // (openPaper's `theoremNames`, the wrap's `names`)
+    expect(paperOf(doc('\\usepackage{amsthm}\n\\newtheorem{fact}{Fact}')).theoremNames).toEqual(['Fact'])
   })
 })
 

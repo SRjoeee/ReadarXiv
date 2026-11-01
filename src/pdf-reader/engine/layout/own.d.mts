@@ -11,12 +11,14 @@ export declare const TAIL_PUNCT: RegExp
 export declare function spellOf(s: string): string
 /** whether a label's characters are a label's form (or none); `note`, a theorem's note's label, may end in the bracket its
  *  head macro opens the note with ("Definition 5.1 (") */
-export declare function isLabelForm(s: string, note?: boolean): boolean
+export declare function isLabelForm(s: string, note?: boolean, form?: RegExp): boolean
+/** the label's form with the paper's own theorem names beside the standard ones (source/paper-names.mjs theoremNames) */
+export declare function labelFormOf(names: readonly string[] | null | undefined): RegExp
 export interface OwnGlyph { n: number; k: number; u: string; x0: number; x1: number; ix0?: number; ix1?: number; y: number; size: number; top: number; bottom: number }
 export interface OwnPage { glyphs: OwnGlyph[]; boxes: ArrayLike<number>; paths: ArrayLike<number>; points: { name: string; glyph: number; box: number }[]; boxAt: ArrayLike<number>; view?: number[] }
 export interface OwnUnit { groups: Set<string>; pages: Set<number>; unhidden: Unhidden | null; labelKept: boolean }
 export interface OwnStats { units: number; unhidden: Record<Unhidden, number>; spell: number[]; labelKept: number; leaks: { count: number; units: number[] } }
-export declare function ownOf(pages: OwnPage[], o?: { units?: unknown[] | null; follows?: ((name: string) => unknown) | null; texts?: ReadonlyMap<string, string> | null; inkless?: ReadonlySet<string> | null }): { glyphs: (string | null)[][]; boxes: (string | null)[][]; units: Map<number, OwnUnit>; stats: OwnStats }
+export declare function ownOf(pages: OwnPage[], o?: { units?: unknown[] | null; follows?: ((name: string) => unknown) | null; texts?: ReadonlyMap<string, string> | null; inkless?: ReadonlySet<string> | null; names?: readonly string[] | null }): { glyphs: (string | null)[][]; boxes: (string | null)[][]; units: Map<number, OwnUnit>; stats: OwnStats }
 /** a rule on a line of a unit's text (MR 2b) is no thicker than this share of the line's size */
 export declare const RULE_EM: number
 /** the painted rules of `boxes` that stand on a line of `glyphs` (MR 2b, an ink unit's too): [page, index] each */

@@ -87,10 +87,10 @@ const textsOf = base => { const f = join(dirname(base), 'base.json'); const t = 
 async function paper(id) {
   const pair = PAIRS.get(id) ?? { orig: join(PACK, `${id}-zh/arxiv.pdf`), base: join(PACK, `${id}-zh/base.pdf`) }
   const src = join(SOURCES, id, 'source.gz')
-  const units = !PAIRS.has(id) && existsSync(src) ? openPaper((await unpackSource(new Uint8Array(readFileSync(src)))).files).units : null
+  const opened = !PAIRS.has(id) && existsSync(src) ? openPaper((await unpackSource(new Uint8Array(readFileSync(src)))).files) : null, units = opened?.units ?? null
   const bytes = new Uint8Array(readFileSync(pair.base)), orig = new Uint8Array(readFileSync(pair.orig))
   const t0 = performance.now()
-  const r = await wrapFinal(bytes, { PL, getDocument, documentOptions: OPTIONS, OPS, units, ...(units ? {} : { follows: null }), texts: textsOf(pair.base), inkless: inklessOf(pair.base), deflate, inflate, keepOwned: true })
+  const r = await wrapFinal(bytes, { PL, getDocument, documentOptions: OPTIONS, OPS, units, ...(units ? {} : { follows: null }), texts: textsOf(pair.base), inkless: inklessOf(pair.base), names: opened?.theoremNames ?? null, deflate, inflate, keepOwned: true })
   const wrapMs = Math.round(performance.now() - t0)
   if (r.refused) return { id, refused: r.refused, why: r.why }
   const d = await deltaOf(orig, r.bytes, { PL }), d0 = await deltaOf(orig, bytes, { PL })
