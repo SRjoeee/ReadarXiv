@@ -13,7 +13,8 @@ export declare function bundleWithInk(bundle: BundleUnit[], ink: InkOfHost | nul
 export declare function inkAnchors(doc: readonly { page: number; x: number; w: number; top: number; bottom: number }[], ink: InkOfHost | null): Map<number, { rects: { page: number; x0: number; y0: number; x1: number; y1: number }[]; coverage: number; tokens: number[]; bounded: boolean; pairs: Map<number, number> }>
 /** each figure unit's anchor on the left: arXiv's tokens on its page whose middle stands in its run's band */
 export declare function figureAnchors(doc: readonly { page: number; x: number; w: number; top: number; bottom: number }[], figures: ReadonlyMap<number, readonly (readonly unknown[])[]> | null | undefined): Map<number, { rects: { page: number; x0: number; y0: number; x1: number; y1: number }[]; coverage: number; tokens: number[]; bounded: boolean; pairs: Map<number, number> }>
-/** a layout with the ink units `ids` after its own */
-export declare function layoutWithInk<L extends { fonts: string[] } | null>(layout: L, ink: InkOfHost | null, ids: readonly number[]): L
-/** the maker's stream with the ink units in it */
-export declare function streamWithInk<S>(st: S, ink: InkOfHost | null): S
+/** a layout with the ink units `ids` after its own, and none of its label rows that meets an ink unit's text or a figure unit's run
+ *  (`figures`: page-pass.mjs figureUnits' rows by page) */
+export declare function layoutWithInk<L extends { fonts: string[] } | null>(layout: L, ink: InkOfHost | null, ids: readonly number[], figures?: ReadonlyMap<number, readonly (readonly unknown[])[]> | null): L
+/** the maker's stream with the ink units in it, and none of its label rows that meets an ink unit's text or a figure unit's run */
+export declare function streamWithInk<S>(st: S, ink: InkOfHost | null, figures?: ReadonlyMap<number, readonly (readonly unknown[])[]> | null): S

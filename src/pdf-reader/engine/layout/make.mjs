@@ -37,7 +37,7 @@ import { drawDataOf } from '../pipeline/draw-data.mjs'
 import { DRAW_HELD_MAX } from '../layer-proto/draw.mjs'
 import { backrefPiece, classOf, colourPieceOf, followsOf, headEnd, INK_ANY, layoutMarking, leadStep, markAt, symbolText, vetoTwice } from './marks.mjs'
 import { OWNED, OWNED_HOW } from './stream.mjs'
-import { HEAD_ABUT, HEAD_PUNCT } from './own.mjs'
+import { HEAD_ABUT, HEAD_PUNCT, TAIL_PUNCT } from './own.mjs'
 import { readAnnots } from '../layer-proto/links.mjs'
 
 /** the how of a later display of a display group (stream.mjs): its ink is the group's first display's */
@@ -313,9 +313,10 @@ function lineOf(P, r, from, to, unit) {
   const right = near.filter(i => !taken.has(i) && mid(P, i) > R).sort((a, b) => P.x0[a] - P.x0[b] || a - b)
   for (const i of right) { if (P.x0[i] - x1 > glue && to === null) break; taken.add(i); x1 = Math.max(x1, P.x1[i]) }
   // its closing punctuation glued past its end mark: a mark carried past its line's last word stands where the formula
-  // before it ends in our compile, which the page may set wider (1706's "… by 1/√dk." left its full stop standing)
+  // before it ends in our compile, which the page may set wider (1706's "… by 1/√dk." left its full stop standing); the wrap
+  // gives it to the unit's text alike (own.mjs MR 4c)
   if (to !== null) {
-    const after = window.filter(i => !taken.has(i) && mid(P, i) > to + 0.05 && /^[.,;:!?)\]]$/.test(P.u[i])).sort((a, b) => P.x0[a] - P.x0[b] || a - b)
+    const after = window.filter(i => !taken.has(i) && mid(P, i) > to + 0.05 && TAIL_PUNCT.test(P.u[i])).sort((a, b) => P.x0[a] - P.x0[b] || a - b)
     for (const i of after) { if (P.x0[i] - x1 > glue) break; taken.add(i); x1 = Math.max(x1, P.x1[i]) }
   }
   const left = near.filter(i => !taken.has(i) && mid(P, i) < L).sort((a, b) => P.x1[b] - P.x1[a] || a - b)
