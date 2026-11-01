@@ -548,6 +548,41 @@ describe('the pages ahead: laid the way the reader moves, while it scrolls as at
     expect(content(s, 2)).toBe('layer')
   })
 
+  it('a page ahead whose drawing the keep budget cannot hold is laid once, not again and again while the window stays', async () => {
+    // (a budget of one pixel: every copy is let go as it is kept)
+    const s = await setup({ door: { rows: 'gate' }, keepPixels: 1 })
+    await rows(s, [1])
+    await settle(s, 60)
+    const copies = () => (s.doors[0]?.copies ?? []).filter(c => c[0] !== 1).length
+    expect(s.side.probe()).toMatchObject({ ahead: AHEAD_PAGES, aheadKept: 0, drawings: 0 })
+    expect(copies()).toBe(AHEAD_PAGES)
+    await settle(s, 120)
+    expect(s.side.probe().ahead).toBe(AHEAD_PAGES)
+    expect(copies()).toBe(AHEAD_PAGES)
+    // (coming near it is asked and drawn as a page of the view)
+    await nearOn(s, [2])
+    await settle(s)
+    expect(content(s, 2)).toBe('layer')
+  })
+
+  it('a page ahead come near as the door answers it is left to the view\'s own ask, put in place under the door\'s hold', async () => {
+    const s = await setup({ door: { rows: 'gate' }, ahead: 1 })
+    await rows(s, [1], false)
+    s.side.end()
+    // (the window asked of the door, page 2 not laid yet: the door lays by hand, settle's lay off)
+    await settle(s, 10, false)
+    expect(s.side.probe().ahead).toBe(1)
+    const holds = () => s.doors[0]?.holds.length ?? 0, held = holds()
+    // page 2 comes near and, in the same turn, the door lays it
+    FakeIO.tell([places(s)[1] as HTMLElement], true)
+    await s.door.advance()
+    await settle(s)
+    expect(content(s, 2)).toBe('layer')
+    // (committed once, by the view's ask, the door held for it)
+    expect(holds()).toBe(held + 1)
+    expect(s.side.probe().commits).toBe(2)
+  })
+
   it('ahead: 0 lays none', async () => {
     const s = await setup({ door: { rows: 'gate' }, ahead: 0 })
     await rows(s, [1])

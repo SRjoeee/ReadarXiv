@@ -1113,8 +1113,9 @@ export function createLayerSide(view, o) {
   }
 
   // ---------------------------------------------------------------- the pages ahead (the prefetch, on the layer; §11.8)
-  /** the pages ahead's run (its stop), the pages it is laying, and the pages it laid this door that draw nothing of the layer or
-   *  failed (not laid ahead again each time the window moves: one that failed is asked again as it comes near) */
+  /** the pages ahead's run (its stop), the pages it is laying, and the pages it laid this door that draw nothing of the layer,
+   *  failed, or whose drawing the keep budget could not hold (not laid ahead again each time the window moves: each is asked as it
+   *  comes near) */
   let aheadAc = null, aheadOn = []
   const aheadNothing = new Set()
   /** the way the reader moves through the paper: 1 down, -1 up; and the near places' first and last when it was last read */
@@ -1235,8 +1236,9 @@ export function createLayerSide(view, o) {
           let laid
           try { laid = await asks.get(m) } catch (e) { if (isAbort(e) || !live()) return; aheadNothing.add(m); continue }
           if (!live()) return
-          // (come near while it was laid: committed as any near page is)
-          if (V.places.near(m)) { await commit(m, laid, my); continue }
+          // (come near as the door answered it: the view's own ask puts it in place, under the door's hold as any near page, and
+          // gives this run up; the window's other asks stay queued no more)
+          if (V.places.near(m)) { askSoon(m); return }
           if (originalPageOf(m) || laid.hides === 0) { aheadNothing.add(m); continue }
           await backgroundTurn(ac.signal)
           if (!live() || viewBusy()) return
@@ -1248,7 +1250,10 @@ export function createLayerSide(view, o) {
           if (!live()) { release(got.canvas); return }
           if (V.places.near(m)) { if (!(P.content?.gen === my && P.content.wrap)) putInPlace(m, drawingOf(m, laid, got, my), laid); else release(got.canvas); continue }
           keepFar(m, drawingOf(m, laid, got, my), laid)
+          // (a drawing the keep budget let go, the page past it or the window wider than it: not laid ahead again while the
+          // window stays, which would draw it again and again; it is asked as it comes near)
           if (drawings.has(m)) counts.aheadKept++
+          else aheadNothing.add(m)
         }
       }
     } catch {

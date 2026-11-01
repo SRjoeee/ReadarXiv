@@ -993,8 +993,10 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   not begun, its asks, its copy under way), and the run begins again once the view's pages are in place or drawn. A page the
   door had begun to lay for the run is laid all the same, once (a page told `laying` never goes back; the view's ask overtakes
   it, the door's `OVERTAKEN`), and a wave stopped before its end asks its page's faces again next time. A scroll gives nothing
-  up. A page come near while it is laid ahead is committed as any near page; one whose lay or copy fails, or that draws nothing
-  of the layer, is not laid ahead again by the same door. A host may lay none (`ahead: 0`).
+  up. A page come near as the door answers it is left to the view's own ask, which puts it in place under the door's hold as
+  any near page; one whose lay or copy fails, that draws nothing of the layer, or whose drawing the keep budget cannot hold (a
+  page past it, or a window wider than it), is not laid ahead again by the same door, so a window that stays is not drawn
+  again and again. A host may lay none (`ahead: 0`).
   Until 2026-11-01 the pages ahead were laid only once the view had rested 600 ms (`AHEAD_IDLE_MS`: no scroll, nothing asked,
   the last near page committed), and a scroll gave the window up: a reader who kept scrolling never had them. On staging
   (2026-11-01, the comparison with hjfy.top's reader on 1706.03762v7 and 2501.14787v1), 2 of the 10 right pages of a steady
