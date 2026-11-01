@@ -1171,26 +1171,29 @@ export function createLayerSide(view, o) {
     aheadAc = null
     aheadOn = []
   }
-  /** resolves in the main thread's next idle period (requestIdleCallback; a task where the browser tells none, the tests'), or
-   *  rejects with an AbortError once `signal` aborts */
-  function idleTurn(signal) {
+  /** resolves in a turn of the main thread at background priority (scheduler.postTask's `background`: run once nothing of a higher
+   *  priority waits; a task where the browser has no scheduler, the tests'), or rejects with an AbortError once `signal` aborts.
+   *  Not an idle callback: Chromium gives a page no idle period while the reader scrolls (requestIdleCallback did not fire in
+   *  the 6 s of a steady scroll, 2026-11-01, 1706.03762v7), the very time the pages ahead are for */
+  function backgroundTurn(signal) {
     return new Promise((ok, no) => {
       const gone = () => no(Object.assign(new Error('the pages ahead were given up'), { name: 'AbortError' }))
       if (signal.aborted) { gone(); return }
-      let id = null, timer = 0
-      const stop = () => { if (id !== null) cancelIdleCallback(id); else clock.clear(timer); gone() }
+      let timer = 0
+      const S = globalThis.scheduler
+      const stop = () => { clock.clear(timer); gone() }
       const done = () => { signal.removeEventListener('abort', stop); ok() }
-      if (typeof requestIdleCallback === 'function') id = requestIdleCallback(done)
-      else timer = clock.later(done, 0)
       signal.addEventListener('abort', stop, { once: true })
+      if (typeof S?.postTask === 'function') S.postTask(done, { priority: 'background', signal }).catch(() => {})
+      else timer = clock.later(done, 0)
     })
   }
   /**
    * The AHEAD_PAGES pages past the near ones, the way the reader moves (nearMoved), while the reader scrolls as at rest: each laid
    * by the door and drawn at its place's k, kept as a drawing off the view (keepPixels) and put back as it comes near (bringBack),
-   * so that a page comes into view translated. Background work: the window begun in an idle period of the main thread, and only
-   * while no page of the view is asked of the door or being put in place; its pages' faces asked in one wave and the pages asked
-   * of the door at once (the nearest laid first), each copy drawn in an idle period; a page of the view asked gives the run up at
+   * so that a page comes into view translated. Background work: the window begun in a turn of the main thread at background
+   * priority (backgroundTurn), and only while no page of the view is asked of the door or being put in place; its pages' faces
+   * asked in one wave and the pages asked of the door at once (the nearest laid first), each copy drawn in a background turn; a page of the view asked gives the run up at
    * once (ask: stopAhead), its wave, its asks and its copy with it, and it begins again once the view's pages are in place. The
    * window read again once its pages are laid, so a reader who moves on moves it. Only with the right pane shown (V.centre) and the
    * document visible. A page near by the time it is laid is committed as any near page
@@ -1201,7 +1204,7 @@ export function createLayerSide(view, o) {
     const live = () => !ac.signal.aborted && !disposed && my === gen && aheadOk()
     try {
       for (;;) {
-        await idleTurn(ac.signal)
+        await backgroundTurn(ac.signal)
         if (!live() || viewBusy() || !V.centre()) return
         const ms = aheadWindow().filter(q => {
           const P = rec(q)
@@ -1224,7 +1227,7 @@ export function createLayerSide(view, o) {
           // (come near while it was laid: committed as any near page is)
           if (V.places.near(m)) { await commit(m, laid, my); continue }
           if (originalPageOf(m) || laid.hides === 0) { aheadNothing.add(m); continue }
-          await idleTurn(ac.signal)
+          await backgroundTurn(ac.signal)
           if (!live()) return
           const k = kOf(m)
           if (k === null) { aheadNothing.add(m); continue }
@@ -1238,7 +1241,7 @@ export function createLayerSide(view, o) {
         }
       }
     } catch {
-      // (given up: its wait for an idle period aborted)
+      // (given up: its wait for a turn aborted)
     } finally {
       // (whatever ended it, nothing of the run is left asked: an ask it did not await, ended by a hidden document or another
       // door, is let go, and so is what its wave has not begun)
