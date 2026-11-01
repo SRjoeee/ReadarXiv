@@ -430,7 +430,7 @@ describe('a link over the number alone of a reference drawn with its name (cleve
 
 describe('LK15: a link round a unit\'s whole text (a contents entry, 2610.40645v1 p1)', () => {
   // (the entry "1 Introduction", hyperref's one link over its number and its title; the unit the title alone, an ink unit of no
-  // placeholder: drawn "はじめに" on page 2's line from x 100, its number kept where TeX set it, 80 to 90)
+  // placeholder: drawn in Japanese on page 2's line from x 100, its number kept where TeX set it, 80 to 90)
   const own = (n: number, page = 2, from = 100) => Array.from({ length: n }, (_, i) => ({ key: `${page}|3|${i}`, page, x0: from + 10 * i, x1: from + 10 * i + 9, yb: 500 }))
   const whole = (chars: ReturnType<typeof own>): LinkTarget => ({ ord: null, kind: null, gap: null, segs: null, draw: 'whole', own: chars })
   /** an annotation of page 2 over the number at 85 and the title's characters `keys` (`item|k` of item 3) */
@@ -438,7 +438,7 @@ describe('LK15: a link round a unit\'s whole text (a contents entry, 2610.40645v
     const keys = ['2|0', ...Array.from({ length: n }, (_, k) => `3|${k}`)], x = [85, ...Array.from({ length: n }, (_, k) => 104.5 + 10 * k)]
     return { ...ann(i, { dest }, `1Intro`.slice(0, n + 1), keys, rect, `1 ${'Intro'.slice(0, n)}`), g2: { x, y: x.map(() => 500), ch: [...'1Intro'.slice(0, n + 1)], key: keys } }
   }
-  const L = () => lay([text('はじめに')], {}, [block(1)])
+  const L = () => lay([text('\u306f\u3058\u3081\u306b')], {}, [block(1)])
 
   it('moves to the unit\'s drawing, one record a box a drawn line, with the number it holds where it stands, named by both', () => {
     const m = matchUnit({ cands: [cand(entry(0, 'section.1', 5), 2)], targets: [whole(own(5))] })
@@ -446,12 +446,12 @@ describe('LK15: a link round a unit\'s whole text (a contents entry, 2610.40645v
     const l = L()
     const { records, tried } = placeUnit({ groups: m.groups, ...placing(l) })
     expect(tried).toEqual([])
-    expect(records.map(r => [r.rec.dest, r.rec.moved, r.page, r.rec.name, r.sources])).toEqual([['section.1', true, 2, '1 はじめに', { annots: [[2, 0]], tier: 'whole' }]])
+    expect(records.map(r => [r.rec.dest, r.rec.moved, r.page, r.rec.name, r.sources])).toEqual([['section.1', true, 2, '1 \u306f\u3058\u3081\u306b', { annots: [[2, 0]], tier: 'whole' }]])
     const b = records[0]!.rec.boxes
     // (the number's part of the annotation, to the title's first character, then the drawn line)
     expect(b.slice(0, 4)).toEqual([80, 497, 100, 509])
     expect(b.length).toBe(8)
-    expect(drawnBetween(l, 2, b.slice(4))).toBe('はじめに')
+    expect(drawnBetween(l, 2, b.slice(4))).toBe('\u306f\u3058\u3081\u306b')
   })
   it('takes none that holds a part of the unit\'s text alone, nor two targets that both hold it all, nor a unit of two pages one holds a page of', () => {
     const part = matchUnit({ cands: [cand(entry(0, 'section.1', 3), 2)], targets: [whole(own(5))] })
@@ -462,7 +462,7 @@ describe('LK15: a link round a unit\'s whole text (a contents entry, 2610.40645v
     expect(pages.groups).toEqual([])
   })
   it('leaves to the tiers before it what they take: a citation the unit draws keeps its annotation', () => {
-    const L1 = lay([text('见'), ph('\\cite{a}'), text('。')], { 1: { mode: 'orig-text', text: '[21]' } })
+    const L1 = lay([text('\u89c1'), ph('\\cite{a}'), text('\u3002')], { 1: { mode: 'orig-text', text: '[21]' } })
     const a = ann(0, { dest: 'cite.a' }, '21', ['5|1', '5|2'])
     const m = matchUnit({ cands: [cand(a)], targets: [target(1, { kind: 'cite', keys: ['a'], gap: gapOf(1, 5, 4) }), whole([{ key: '1|5|1', page: 1, x0: 0, x1: 1, yb: 0 }, { key: '1|5|2', page: 1, x0: 1, x1: 2, yb: 0 }])] })
     expect(m.groups.map(g => [g.to.draw, g.annots.map(c => c.tier)])).toEqual([['text', ['geometry']]])
