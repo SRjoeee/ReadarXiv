@@ -3421,8 +3421,9 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   drawing, 2610.21491v1 p7; its group now hides it where the note is drawn, as the line's erase did before the wrap). Where no
   unit begins on that line — a head that breaks its line after the note, thmtools' `headpunct = {\\}`, the body below it —
   no label walk reaches that punctuation: the glyphs right after a unit's end mark on its line, in its region, still in no group
-  once the labels and the placeholders are owned, each of `TAIL_PUNCT` (a stop, a comma, a colon, a closing bracket) within a
-  fifth of an em of the glyph before it, the first after the unit's own text or placeholder, are that unit's text (REMOVAL 18,
+  once the labels and the placeholders are owned, each of `TAIL_PUNCT` (a stop, a comma, a colon, a closing bracket) right of
+  the glyph before it and within a fifth of its own em of it (the maker's glue is the line's size: a placeholder set large
+  before it widens nothing), the first after the unit's own text or placeholder, are that unit's text (REMOVAL 18,
   `own.mjs` MR 4c), as the maker's line takes them past the end mark (`make.mjs` `lineOf`, the one table for both), so that its
   group hides what the reader draws again after the translation (`tailOf`): 2501.14787v1 p10's ")" after "Recall 7 (Vector
   Space" was no one's, and stood where the English note had ended, after the note's Chinese and its own ")". Over 66 local
@@ -3852,8 +3853,9 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   drawn translated over its hidden ink; but the note's label row stayed in the layout, and the reader shows a label row its
   unit does not draw again from render C, every group shown (`hide.mjs`): the original's "Recall 7" came back under the
   translation, both legible at once, on every such box of the paper (pp10-11's "Recall 7", "Recall 8", "Notation 9"). As for
-  the ink units (§19.10), a label row that meets a figure unit's run — its box from its origin along its direction for its
-  length, across from its descent to its ascent, the box the reader hides when it draws it — goes from the parts' layout
+  the ink units (§19.10), a label row that meets a figure unit's run — its band from its origin along its direction for its
+  length, across from its descent to its ascent, the box the reader hides when it draws it, met along and across the run as
+  well as on the page's axes, so that a slanted run's empty corners meet nothing — goes from the parts' layout
   (`pipeline/ink-pass.mjs` `layoutWithInk`, given the page pass's figure rows by page, in the whole and the streamed cut
   alike): the figure unit's translation stands alone over its hidden ink, and where the reader leaves the unit the
   original's, its group stays shown, and its ink with it. Over 66 local papers the three label rows of that paper's boxes go,
