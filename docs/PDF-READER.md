@@ -3576,7 +3576,12 @@ label off the glyphs left of a unit's start mark, and the wrap leaves one with n
 an ink unit then claims it; the reader shows a label row its unit does not draw again from render C, every group shown, so that
 row put the original back under the ink unit's translation (the release sweep of 2026-10-25, (c): SIAM's "AMS subject
 classifications." before its codes, 2610.20266v1 p1; a theorem's head whose note is a citation, "Definition 1 ([TT])", whose
-body's label it was; 2610.11256v1's bold heads before a table's cells). The reader's toggles
+body's label it was; 2610.11256v1's bold heads before a table's cells). Such a head and its body's first row share one of TeX's
+lines, and the body is laid from where the head's translation ends there, the original's separation after it (a shared line,
+`need.mjs` `rowLeadOf`, which takes its lead by K's order alone wherever the order is given: an ink unit is numbered after every
+source unit, and by the ids the head came after its body, which was laid where the English head had ended, a blank of its
+width less the translation's after the translated head: 2610.40645v1 pp14-15's "Theorem 3.3 ([Ang, Theorem 1.1])." and
+"Proposition 3.2 ([Ang, Proposition A.1])." in Japanese, the owner's report of 2026-11-01). The reader's toggles
 are an option of the layer's open (`classes`, `TOGGLE_DEFAULTS`); a change of them is an open again over the same documents, parts
 and rows (`layer-side.mjs` `setClasses`), each laid page kept until the new door's commits: 81 to 384 ms to the two pages in view
 over 14 page pairs (the layer gate's jump, `--perf`). The web's half is `docs/route/orphan-text.md` §8.
