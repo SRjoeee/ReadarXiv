@@ -41,45 +41,44 @@ export const ScrollIndicator = forwardRef<HTMLDivElement, { controller: ReaderCo
   }, [])
   // Hidden through a zoom (the owner's decision of 2026-11-01, §6.5): from the zoom's first Ctrl or ⌘ wheel over the pages,
   // or its first change of scale, whatever asked it (a pinch, a key, the menu, a fit), at once and with no fade, until the
-  // reader next scrolls. The zoom's own scrolls — each step's anchoring, told in the frame after its scale, and a commit's —
-  // are no scroll of the reader's: a scroll within two frames of a change of scale leaves it hidden, unless the reader's own
-  // input came after that change (a wheel without Ctrl or ⌘, a key without them, a touch: a scroll begun at once after a
-  // zoom is shown from its first frame). Any other scroll shows it again (at its length and place: both are kept through the
-  // zoom), and so does a press on it: its drag always works
+  // reader next scrolls. A scroll is the reader's when the reader's own input has come since the zoom's last change of scale:
+  // a wheel without Ctrl or ⌘, a key other than the zoom's, a touch, a press anywhere (a link, the contents, the page pill).
+  // The zoom's own scrolls come with none — each step's anchoring, a commit's, and the panes' level once it settles (sync.mjs
+  // zoomed: 150 ms on, at a glide's end) — and leave it hidden. The reader's shows it again, from its first
+  // frame, at its length and place (both are kept through the zoom); a press on it shows it too: its drag always works
   useEffect(() => {
     const t = track.current, pane = t?.parentElement
     if (!t || !pane) return
-    let scale = controller.getState().scale, quiet = 0
-    const hide = () => t.toggleAttribute('data-zoomed', true)
+    let scale = controller.getState().scale, own = false
+    const hide = () => { t.toggleAttribute('data-zoomed', true); own = false }
     const unsubscribe = controller.subscribe(() => {
       const now = controller.getState().scale
       if (now === scale) return
       scale = now
       hide()
-      cancelAnimationFrame(quiet)
-      quiet = requestAnimationFrame(() => { quiet = requestAnimationFrame(() => { quiet = 0 }) })
     })
-    /** the reader's own input after the zoom's last change of scale: the scroll it makes is the reader's */
-    const ownInput = () => { cancelAnimationFrame(quiet); quiet = 0 }
+    const input = () => { own = true }
     const onWheel = (e: WheelEvent) => {
       if (!(e.target as Element | null)?.closest?.('.pane')) return
       if (e.ctrlKey || e.metaKey) hide()
-      else ownInput()
+      else input()
     }
-    const onKey = (e: KeyboardEvent) => { if (!(e.ctrlKey || e.metaKey)) ownInput() }
-    const onScroll = () => { if (!quiet) t.removeAttribute('data-zoomed') }
+    // (the zoom's keys, Ctrl or ⌘ with =, +, − or 0, are the zoom's; Ctrl or ⌘ with F, the browser's find, is the reader's)
+    const onKey = (e: KeyboardEvent) => { if (!((e.ctrlKey || e.metaKey) && ['=', '+', '-', '0'].includes(e.key))) input() }
+    const onScroll = () => { if (own) t.removeAttribute('data-zoomed') }
     const onPress = () => t.removeAttribute('data-zoomed')
     window.addEventListener('wheel', onWheel, { capture: true, passive: true })
     window.addEventListener('keydown', onKey, { capture: true, passive: true })
-    pane.addEventListener('touchstart', ownInput, { capture: true, passive: true })
+    window.addEventListener('pointerdown', input, { capture: true, passive: true })
+    window.addEventListener('touchstart', input, { capture: true, passive: true })
     pane.addEventListener('scroll', onScroll, { capture: true, passive: true })
     t.addEventListener('pointerdown', onPress)
     return () => {
       unsubscribe()
-      cancelAnimationFrame(quiet)
       window.removeEventListener('wheel', onWheel, { capture: true })
       window.removeEventListener('keydown', onKey, { capture: true })
-      pane.removeEventListener('touchstart', ownInput, { capture: true })
+      window.removeEventListener('pointerdown', input, { capture: true })
+      window.removeEventListener('touchstart', input, { capture: true })
       pane.removeEventListener('scroll', onScroll, { capture: true })
       t.removeEventListener('pointerdown', onPress)
     }

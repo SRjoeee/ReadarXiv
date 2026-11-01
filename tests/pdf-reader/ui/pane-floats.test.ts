@@ -88,48 +88,53 @@ describe('a scroll indicator\'s thumb (§6.5)', () => {
   })
 
   it('is hidden through a zoom, the zoom\'s own scrolls included, and shown again by the reader\'s next scroll or a press on it (the owner\'s decision of 2026-11-01)', async () => {
-    const frames: FrameRequestCallback[] = []
-    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => frames.push(cb))
-    vi.stubGlobal('cancelAnimationFrame', () => {})
     vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
     try {
       const fake = fakeController({ scale: 1 })
       const Pane = () => createElement('section', { className: 'pane', 'data-side': 'right' }, createElement('div', { className: 'viewerContainer' }, createElement('div', { className: 'pdfViewer' })), createElement(ScrollIndicator, { controller: fake.controller, side: 'right' }))
       const { container } = await mountElement(createElement(Pane))
       const scroller = container.querySelector<HTMLElement>('.viewerContainer')!, track = container.querySelector<HTMLElement>('.indicator')!
-      const frame = () => { for (const cb of frames.splice(0)) cb(0) }
       const scroll = () => scroller.dispatchEvent(new Event('scroll'))
+      const step = (scale: number) => act(async () => { fake.set({ scale }) })
+      // (a wheel with Ctrl; happy-dom's WheelEvent leaves `ctrlKey` out of its init)
+      const wheel = (ctrl: boolean) => scroller.dispatchEvent(Object.defineProperty(new WheelEvent('wheel', { deltaY: ctrl ? -2 : 40, bubbles: true }), 'ctrlKey', { value: ctrl }))
+      const key = (k: string, meta = false) => scroller.dispatchEvent(new KeyboardEvent('keydown', { key: k, metaKey: meta, bubbles: true }))
       const hidden = () => track.hasAttribute('data-zoomed')
       const states: [string, boolean][] = []
       states.push(['at rest', hidden()])
       // a step of a zoom, whatever asked it: the scale changes, and the handle goes at once
-      await act(async () => { fake.set({ scale: 1.1 }) })
+      await step(1.1)
       states.push(['the scale changed', hidden()])
-      // the step's anchoring scrolls the pane: told in the frame after the scale, or the one after that
+      // the step's anchoring scrolls the pane, and so does the panes' level once the zoom settles, however much later: no
+      // input of the reader's came after the change
       scroll()
-      frame()
+      await new Promise(resolve => setTimeout(resolve, 250))
       scroll()
-      states.push(['the zoom\'s own scrolls', hidden()])
-      frame()
-      // the reader scrolls
+      states.push(['the zoom\'s own scrolls, its level\'s included', hidden()])
+      // the reader scrolls: a wheel, then its scroll
+      wheel(false)
       scroll()
       states.push(['the reader scrolls', hidden()])
-      // a pinch's first wheel over the pages, before any scale has changed (a wheel with Ctrl; happy-dom's WheelEvent
-      // leaves `ctrlKey` out of its init)
-      scroller.dispatchEvent(Object.defineProperty(new WheelEvent('wheel', { deltaY: -2, bubbles: true }), 'ctrlKey', { value: true }))
+      // a pinch's first wheel over the pages, before any scale has changed
+      wheel(true)
       states.push(['a pinch\'s first wheel', hidden()])
-      scroller.dispatchEvent(new WheelEvent('wheel', { deltaY: 40, bubbles: true }))
-      states.push(['a plain wheel, before its scroll', hidden()])
       // a press on it (its drag, its track) shows it at once
       track.dispatchEvent(new Event('pointerdown', { bubbles: true }))
       states.push(['a press on it', hidden()])
-      // the reader scrolls at once after a step, within the two frames: the plain wheel came after the scale, so its scroll
-      // is the reader's (CodeRabbit on #545)
-      await act(async () => { fake.set({ scale: 1.2 }) })
-      scroller.dispatchEvent(new WheelEvent('wheel', { deltaY: 40, bubbles: true }))
+      // the reader scrolls at once after a step: the wheel came after the change, so its scroll is the reader's
+      await step(1.2)
+      wheel(false)
       scroll()
-      states.push(['the reader scrolls at once after a step', hidden()])
-      expect(states).toEqual([['at rest', false], ['the scale changed', true], ['the zoom\'s own scrolls', true], ['the reader scrolls', false], ['a pinch\'s first wheel', true], ['a plain wheel, before its scroll', true], ['a press on it', false], ['the reader scrolls at once after a step', false]])
+      states.push(['a wheel at once after a step', hidden()])
+      // a zoom by the keys: their own key is the zoom's; a key of the reader's after it is not
+      key('=', true)
+      await step(1.3)
+      scroll()
+      states.push(['a zoom by the keys', hidden()])
+      key('PageDown')
+      scroll()
+      states.push(['a key of the reader\'s', hidden()])
+      expect(states).toEqual([['at rest', false], ['the scale changed', true], ['the zoom\'s own scrolls, its level\'s included', true], ['the reader scrolls', false], ['a pinch\'s first wheel', true], ['a press on it', false], ['a wheel at once after a step', false], ['a zoom by the keys', true], ['a key of the reader\'s', false]])
     } finally { vi.unstubAllGlobals() }
   })
 })
