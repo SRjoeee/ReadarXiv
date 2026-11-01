@@ -1516,36 +1516,83 @@ function finishUnit(out, unit, rects, charsByPage) {
   // as a command) is drawn, not shown twice
   const trLetters = norm(unit.pieces.filter(p => p.t === 'text').map(p => p.s).join(' ') + ' ' + [...out.values()].map(r => r?.text ?? '').join(' '))
   out.cat = categoriesOf(out, uc, unit.src, keepSet, drawnTextOf(out, charsByPage), trLetters, out.inkKnown)
-  out.tail = tailOf(out, unit, keepSet)
+  // (and the marks its source writes there itself, which its translation writes: the class's are drawn after them, tokensOf2)
+  const ends = sourceEndMarks(unit)
+  out.tail = tailOf(out, unit, keepSet, ends)
+  out.tailOwn = out.tail ? ends : null
 }
 
-/** the most marks a class sets after a unit's text (amsthm's note: ")."; a run-in head's "." or ":") */
+/** the most marks a class sets after a unit's text (amsthm's note: ")."; a run-in head's "." or ":"; a style's stop after a
+ *  reference) */
 const TAIL_MAX = 3
+/** a TeX source's tokens, as its end is read back: a command, an escaped character, a ligature of quotes or dashes, a character */
+const TEX_TOKEN = /\\[A-Za-z@]+\*?|\\[\s\S]|---|--|''|``|[\s\S]/gu
+/** what TeX sets no ink for at a text's end: an end-of-sentence mark, a thin or a word's space, a discretionary, a group's brace */
+const NO_INK = new Set(['\\@', '\\,', '\\;', '\\:', '\\!', '\\/', '\\ ', '\\-', '~', '{', '}'])
+/** the marks TeX's text fonts set for a ligature of the source's characters */
+const TEX_LIGATURE = Object.freeze({ '---': '\u2014', '--': '\u2013', "''": '\u201d', '``': '\u201c', '`': '\u2018', "'": '\u2019' })
+/** the marks a source text ends with, after its last letter, digit or a command that sets a word, as TeX prints them, in order,
+ *  and whether that content was reached (`stopped`) */
+function textEndMarks(s) {
+  const toks = String(s).match(TEX_TOKEN) ?? [], marks = []
+  for (let i = toks.length - 1; i >= 0; i--) {
+    const t = toks[i]
+    if (/^\s$/u.test(t) || NO_INK.has(t)) continue
+    const ch = t.length > 1 && t[0] === '\\' ? (/^\\[A-Za-z]/.test(t) ? symbolText(t) : t.slice(1)) : TEX_LIGATURE[t] ?? t
+    if (ch == null || /[\p{L}\p{N}]/u.test(ch)) return { marks, stopped: true }
+    marks.unshift(...ch)
+  }
+  return { marks, stopped: false }
+}
+/**
+ * The marks a unit's source writes at its end, after its last letter, digit or placeholder (its source pieces `unit.source`,
+ * rows.mjs unitOf's: a style group's braces are no ink, a placeholder or a nested unit is content; else its source text), as
+ * TeX prints them: an entry's ")" after its year, a sentence's ".", a quotation's "\u201d.". The translation writes these in the
+ * target's; whatever the page sets after them on the unit's last line is the class's own (tailOf)
+ */
+export function sourceEndMarks(unit) {
+  const pieces = unit?.source
+  if (!Array.isArray(pieces)) return textEndMarks(unit?.src ?? '').marks
+  const out = []
+  for (let k = pieces.length - 1; k >= 0; k--) {
+    const p = pieces[k]
+    if (p?.t === 'open' || p?.t === 'close') continue
+    if (p?.t !== 'text') break
+    const r = textEndMarks(utf8(p.s ?? ''))
+    out.unshift(...r.marks)
+    if (r.stopped) break
+  }
+  return out
+}
 /**
  * The class's own marks after a unit's text, which its source does not write: a theorem's note (amsthm sets
- * "Definition 4.5 (" before the note, its label, and ")." after it, 2610.21084 page 6), a run-in head's full stop. The
- * characters of its last line after the last one its source's words, its renderings or its label take, each a punctuation
- * mark in a text font, TAIL_MAX at most, all on that line and none kept, where the unit's source ends with a letter or a digit
- * (it writes no end mark of its own). Their ink is the unit's text, erased with its line; tokensOf2 draws them after the
- * translation, each in its own style: [{ ch, st }], or null
+ * "Definition 4.5 (" before the note, its label, and ")." after it, 2610.21084 page 6), a run-in head's full stop, a
+ * bibliography style's stop after an entry ("… (2025)."). The characters of its last line after its last content — the last
+ * letter or digit its source's words or its label take, or its renderings' last — less the marks its source writes there
+ * itself (sourceEndMarks, as many: its translation writes those), each a punctuation mark in a text font, TAIL_MAX at most,
+ * all on that line and none kept. Their ink is the unit's text, hidden with it (layout/own.mjs MR 4c, as the maker's line takes
+ * them); tokensOf2 draws them after the translation, each in its own style, in place of its own marks of their kinds:
+ * [{ ch, st }], or null. A source that ends in ")" kept its style's stop hidden and drawn nowhere while the rule asked for a
+ * source ending in a letter or a digit (193 of 196 reference entries that end in their year's bracket, 2026-11-01)
  */
-function tailOf(out, unit, keepSet) {
-  if (!/[\p{L}\p{N}]\s*$/u.test(unit.src ?? '')) return null
+function tailOf(out, unit, keepSet, ownEnds = sourceEndMarks(unit)) {
   const uc = out.uc
   const real = c => !c.sep && !c.space && /\S/.test(c.ch)
   const lineOf = c => `${c.page}|${c.rect.join()}`
-  const own = new Set(out.matchedKeys)
-  for (const r of out.values()) for (const c of r?.gap?.chars ?? []) own.add(charKey(c))
+  const own = new Set(out.matchedKeys), rendered = new Set()
+  for (const r of out.values()) for (const c of r?.gap?.chars ?? []) rendered.add(charKey(c))
   for (const c of out.label?.chars ?? []) own.add(charKey(c))
   let last = -1
-  uc.forEach((c, i) => { if (real(c) && own.has(charKey(c))) last = i })
+  uc.forEach((c, i) => { if (real(c) && (rendered.has(charKey(c)) || (own.has(charKey(c)) && /[\p{L}\p{N}]/u.test(c.ch)))) last = i })
   if (last < 0) return null
   const line = lineOf(uc[last])
-  const rest = uc.slice(last + 1).filter(real)
+  const after = uc.slice(last + 1).filter(real), ends = ownEnds.length
+  if (after.length <= ends) return null
+  const rest = after.slice(ends)
   // (a punctuation mark in a text font, as a class sets its own: a formula's delimiter in a math font is its formula's ink,
   // 1512.03385's Table 1 brackets beside its cells, never the unit's)
   const mark = c => /^\p{P}$/u.test(c.ch) && !c.nu && c.st?.fam !== 'math'
-  if (!rest.length || rest.length > TAIL_MAX || keepSet.has(line) || rest.some(c => lineOf(c) !== line || !mark(c) || out.cat.get(charKey(c)) !== 'acc')) return null
+  if (rest.length > TAIL_MAX || keepSet.has(line) || after.some(c => lineOf(c) !== line || !mark(c)) || rest.some(c => out.cat.get(charKey(c)) !== 'acc')) return null
   return rest.map(c => ({ ch: c.ch, st: c.st ?? null }))
 }
 
@@ -2685,9 +2732,21 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
   // the class's own marks after the unit's text (finishUnit's `tail`), each in its own style, in place of the translation's
   // own marks of their kinds at its end (markKind: its "\uFF09\u3002" for the original's ")."), never shown twice
   if (resolved.tail?.length) {
-    // (as many of a kind as the tail holds: "\u201d\uFF09\u3002" before a tail of ")." keeps its closing quote, of the kind of ")")
+    // (as many of a kind as the tail holds: "\u201d\uFF09\u3002" before a tail of ")." keeps its closing quote, of the kind of ")";
+    // and none of the marks the source writes at its end itself (`tailOwn`), which are the translation's: "\u3002" of "error."
+    // before amsthm's ")." stays, a reference's "\uFF09" before its style's "." stays, an added "\u3002" after it goes)
     const left = new Map()
     for (const c of resolved.tail) left.set(markKind(c.ch), (left.get(markKind(c.ch)) ?? 0) + 1)
+    const trailing = new Map(), own = new Map()
+    for (const ch of resolved.tailOwn ?? []) own.set(markKind(ch), (own.get(markKind(ch)) ?? 0) + 1)
+    scan: for (let q = tokens.length - 1; q >= 0; q--) {
+      const t = tokens[q]
+      if (t.space) continue
+      if (typeof t.s !== 'string' || t.ph || t.sup || t.label) break
+      const cps = [...t.s]
+      for (let i = cps.length - 1; i >= 0; i--) { if (!/^\p{P}$/u.test(cps[i])) break scan; trailing.set(markKind(cps[i]), (trailing.get(markKind(cps[i])) ?? 0) + 1) }
+    }
+    for (const [kind, n] of left) left.set(kind, Math.min(n, Math.max(0, (trailing.get(kind) ?? 0) - (own.get(kind) ?? 0))))
     const take = ch => { const n = left.get(markKind(ch)) ?? 0; if (n > 0) left.set(markKind(ch), n - 1); return n > 0 }
     for (;;) {
       while (tokens.at(-1)?.space) tokens.pop()

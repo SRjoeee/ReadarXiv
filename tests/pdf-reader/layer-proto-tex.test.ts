@@ -936,7 +936,56 @@ describe("the class's own marks after a unit's text: a theorem's note (2610.2108
     const prep = L2.prepareUnit(unit('\u6f5c\u5728'), t.rects as never, [pg as never], new Map() as never, null, T.texParts(lu, [-1], { lines: t }) as never)
     expect(prep.tail).toBeNull()
   })
-  it('none where the source writes its own end mark: the line\'s marks are its translation\'s', () => {
-    expect(drawn(unit('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\u3002', 'Latent transition error.')).map(x => x.s).join('')).toBe('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\u3002')
+  it("none where the line's marks are the source's own end marks: they are its translation's", () => {
+    const own = [...item('Def (', 10, 500, 10, 0, bold), ...item('Latent transition error.', 50, 500, 4, 1)]
+    const t = T.texRects(lu)
+    const u = unit('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\u3002', 'Latent transition error.')
+    const prep = L2.prepareUnit(u, t.rects as never, [own as never], new Map() as never, null, T.texParts(lu, [-1], { lines: t }) as never)
+    expect(prep.tail).toBeNull()
+  })
+  it("after the source's own end marks, which stay the translation's: amsthm's \").\" after a note that ends in its own stop", () => {
+    // "Definition 4.5 (Latent transition error.).": the note writes its ".", amsthm sets ")." after it; the translation's
+    // "\u3002" is the note's own and stays, the class's ")." follow it
+    const lu3 = unitOf([[1, 50, 111, 500, 507, 498, 10, 0]], [], [0, 1, 10, 500, 48, 507, 498])
+    const pg = [...item('Def (', 10, 500, 10, 0, bold), ...item('Latent transition error.', 50, 500, 4, 1), ...item(')', 98, 500, 4, 2), ...item('.', 100, 500, 4, 3, bold)]
+    const t = T.texRects(lu3)
+    const u = unit('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\u3002', 'Latent transition error.')
+    const prep = L2.prepareUnit(u, t.rects as never, [pg as never], new Map() as never, null, T.texParts(lu3, [-1], { lines: t }) as never)
+    expect((prep.tail as { ch: string }[] | null)?.map(c => c.ch)).toEqual([')', '.'])
+    const text = L2.tokensOf2(u, prep as never, 'zh', BASE as never, { serif: 'times', sans: 'helvetica', mono: 'courier' } as never, P as never, null, () => 0).filter(x => typeof x.s === 'string').map(x => x.s).join('')
+    expect(text).toBe('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\u3002).')
+  })
+  it("after the source's own end marks: a reference's stop its style sets after the entry's \"(2025)\" (Devin on #541)", () => {
+    // the entry's source ends in ")", which its translation writes; the style's "." after the end mark is the class's own,
+    // the unit's ink since REMOVAL 18 (own.mjs MR 4c): drawn after the translation, where it was hidden and drawn nowhere
+    const L2line = [1, 50, 111, 500, 507, 498, 10, 0]
+    const lu2 = unitOf([L2line])
+    const draw = (u: never, pg: unknown[]) => {
+      const t = T.texRects(lu2)
+      const prep = L2.prepareUnit(u, t.rects as never, [pg as never], new Map() as never, null, T.texParts(lu2, [-1], { lines: t }) as never)
+      return L2.tokensOf2(u, prep as never, 'zh', BASE as never, { serif: 'times', sans: 'helvetica', mono: 'courier' } as never, P as never, null, () => 0).filter(x => typeof x.s === 'string').map(x => x.s).join('')
+    }
+    const entry = (tr: string) => unit(tr, 'Latent transition error (LTE)')
+    const stop = [...item('Latent transition error (LTE)', 50, 500, 4, 1), ...item('.', 108, 500, 4, 2)]
+    expect(draw(entry('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\uff08LTE\uff09'), stop)).toBe('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\uff08LTE\uff09.')
+    // (the translation's own stop at its end is replaced, never twice)
+    expect(draw(entry('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\uff08LTE\uff09\u3002'), stop)).toBe('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\uff08LTE\uff09.')
+    // (no mark past the source's own: none drawn, the translation's bracket its own)
+    const none = item('Latent transition error (LTE)', 50, 500, 4, 1)
+    expect(draw(entry('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\uff08LTE\uff09'), none)).toBe('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\uff08LTE\uff09')
+  })
+  it("reads the source's end marks as TeX prints them, after its last letter, digit or placeholder", () => {
+    const text = (s: string) => ({ t: 'text', s }), ph = { t: 'ph', src: '$x$' }
+    const of = (pieces: unknown[], src = '') => { const u = { src }; Object.defineProperty(u, 'source', { value: pieces }); return L2.sourceEndMarks(u as never) }
+    expect(of([text('Phys. Rev. Lett. , ('), ph, text(')')])).toEqual([')'])
+    expect(of([text("the ``greedy rule''.")])).toEqual(['\u201d', '.'])
+    expect(of([text('as in \\cite x\\@.')])).toEqual(['.'])
+    expect(of([text('a value~\\%).')])).toEqual(['%', ')', '.'])
+    expect(of([text('see '), { t: 'open', id: 1, src: '\\emph{' }, text('this'), { t: 'close', id: 1, src: '}' }, text(' ')])).toEqual([])
+    expect(of([text('Theorem.'), ph])).toEqual([])
+    expect(of([text('a'), { t: 'open', id: 1, src: '\\textbf{' }, text('b).'), { t: 'close', id: 1, src: '}' }])).toEqual([')', '.'])
+    // (a unit read without its source pieces: its source text)
+    expect(L2.sourceEndMarks({ src: 'Latent transition error.' } as never)).toEqual(['.'])
+    expect(L2.sourceEndMarks({ src: 'Latent transition error' } as never)).toEqual([])
   })
 })

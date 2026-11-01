@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest'
 import { followsOf, INK_ANY } from '@/pdf-reader/engine/layout/marks.mjs'
-import { isLabelForm, lineRulesOf, ownOf, spellOf } from '@/pdf-reader/engine/layout/own.mjs'
+import { isLabelForm, labelFormOf, lineRulesOf, ownOf, spellOf } from '@/pdf-reader/engine/layout/own.mjs'
 
 // Each unit's own ink by its marks in stream order (layout/own.mjs; design docs/route/ocg-erasure.md §1): the rules MR 1–6 on
 // pages written as a stream of points and glyphs, the spell check and the label kept
@@ -470,6 +470,26 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     Object.assign(X, { size: 30, top: X.y + 21, bottom: X.y - 6 })
     const units2 = [{ kind: 'heading', pieces: [{ t: 'text', s: 'Bound ' }, { t: 'ph', src: '$X$' }] }, { kind: 'theorem', src: 'Every x' }]
     expect(groupsOf(ownOf([big], { units: units2 }), [big])).toEqual({ u0: 'Bound ', 'u0.p': 'X', u1: 'Every x' })
+  })
+  it('takes a head of a name the paper defines as its unit\'s label, as a standard name\'s (2501.14787v1 p10u78: thmtools\' "Recall")', () => {
+    // "Recall 7 (" before the note's start mark was no label's form, left the original's ink in no group (labelKept): inside
+    // mdframed's TikZ frame the figure text cut it as a unit of its own, translated alone ("Recall" one way on p10's first box,
+    // another on its second), where the paper's name unit gives "Recall" one word for every head
+    const pages = [page(['Recall 7 (', { pt: 'h0s' }, 'Vector Space', { pt: 'h0e' }, ')', '\n', { pt: '1s' }, 'Loosely', { pt: '1e' }])]
+    const us = [{ kind: 'heading', bracketed: true, src: 'Vector Space' }, { kind: 'theorem', src: 'Loosely' }]
+    const named = ownOf(pages, { units: us, names: ['Recall', 'Notation'] })
+    expect(groupsOf(named, pages)).toEqual({ 'u0.l': 'Recall 7 (', u0: 'Vector Space)', u1: 'Loosely' })
+    expect([named.units.get(0)?.labelKept, named.stats.labelKept]).toEqual([false, 0])
+    // (no names given, or none of this one: the original's ink, as before)
+    for (const names of [null, ['Notation']]) expect(ownOf(pages, { units: us, names }).units.get(0)?.labelKept).toBe(true)
+    // (unnumbered, with a stop, a body's own on its line: "Recall." before the body)
+    const plain = [page([{ pt: '3e' }, 'Recall.', { dx: 3 }, { pt: '0s' }, 'Loosely', { pt: '0e' }])]
+    expect(groupsOf(ownOf(plain, { units: [{ kind: 'theorem', src: 'Loosely' }], names: ['Recall'] }), plain)).toEqual({ 'u0.l': 'Recall.', u0: 'Loosely' })
+    // (a name as a label holds it: case, spaces and a stop in it read as the standard names are)
+    const f = labelFormOf(['Open Problem', 'Thm.'])
+    for (const t of ['Open Problem 3.', 'OPEN PROBLEM 3', 'Thm. 2:', 'Theorem 7.']) expect(isLabelForm(t, false, f), t).toBe(true)
+    for (const t of ['Opening 3', 'Recall 7', 'JOUR']) expect(isLabelForm(t, false, f), t).toBe(false)
+    expect(labelFormOf(null)).toBe(labelFormOf([]))
   })
   it('takes a theorem\'s head before its note, the bracket the head opens the note with, as the note\'s label (2610.18513v1 p18u150)', () => {
     // amsthm: "Definition 5.1 (s-conductance). For …": the head's name, number and "(" before the note's start mark were no

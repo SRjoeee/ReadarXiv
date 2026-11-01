@@ -294,6 +294,9 @@ export declare function gapsOf2(unitChars: readonly Char[], src: string, deny?: 
 /** the unit against its page, in the layout file's parts (the per-unit reading's contract above) */
 /** a fill (0xRRGGBB) as the drawing writes it, `#rrggbb` */
 export declare const hexOf: (rgb: number) => string
+/** the marks a unit's source writes at its end, after its last letter, digit or placeholder, as TeX prints them (its source
+ *  pieces `source`, else its source text): those its translation writes, before the class's own (tailOf) */
+export declare function sourceEndMarks(unit: { src?: string; source?: readonly unknown[] }): string[]
 export declare function prepareUnit(unit: Unit, rects: readonly Rect[], charsByPage: readonly (readonly Char[] | undefined)[], citeMap: CiteMap | null, deny: ReadonlySet<string> | null, parts: UnitParts): Prepared
 /** the unit's placeholders by piece index, classed by phClassProven */
 export declare function placeholdersOf(unit: Unit): Placeholder[]

@@ -382,7 +382,7 @@
 //     ink units lose a leading mark (", PSR J1744–1134" and ". 2027. ABNAT: …" of 2610.20848v1 and 2610.22065v1). No source
 //     unit's text, pieces or wire changes (216 of 216 local sources hash for hash): a copy of 48 carries every unit (live.mjs
 //     PIPELINE_CARRIES), an ink unit found again by its source where it is the same
-export const PIPELINE_VERSION = '49'
+export const PIPELINE_VERSION = '50'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
@@ -453,4 +453,4 @@ export const PDFJS = '6.3.289'
  * the units the mark stands inside their erase boxes of the layout file, on the other 4 (references) beside a last line the
  * maker did not locate, whose glyphs the wrap already gave the unit: the base's bytes change where a paper has such a mark
  */
-export const REMOVAL = '18'
+export const REMOVAL = '19'
