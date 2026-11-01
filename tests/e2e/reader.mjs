@@ -142,6 +142,16 @@ copyWithGrants(BUILD, EXT, { hostPermissions: ['http://127.0.0.1/*', ...LAYER_HO
 const { context, worker, id, readerUrl } = await launchWithReader({
   profile: 'reader-checks', extension: EXT, headless: !process.env.AXT_HEADED, viewport: { width: 1440, height: 900 }, args: [RESOLVER_WALL],
 })
+/** each object of the layer asked of the stand-in, as its route is entered (the stand-in records a request only once it has read
+ *  its headers, up to a second later), with the page whose reader asked it (a reader framed over arXiv's PDF page is that page's;
+ *  null for a request of no page) */
+const objectAsks = []
+function noteObject(route, url) {
+  if (!/\/o\/[0-9a-f]{64}$/.test(url.pathname)) return
+  let page = null
+  try { page = route.request().frame().page() } catch { /* a request of no page (the worker's) */ }
+  objectAsks.push({ page, sha: url.pathname.slice(-64) })
+}
 const guard = await routeTable(context, [
   ['https://arxiv.org', arxiv],
   ['https://example.invalid', outside],
@@ -149,7 +159,7 @@ const guard = await routeTable(context, [
   [echo.origin, route => route.continue()],
   // (the stand-in's routes only — the layer API, the faces' table and its file, the hyphenation —: any other path of these hosts
   // is not handled, and so is a violation of the guard)
-  ...LAYER_HOSTS.map(host => [host, (route, url) => (serves(url.pathname) ? api.route(route) : false)]),
+  ...LAYER_HOSTS.map(host => [host, (route, url) => { noteObject(route, url); return serves(url.pathname) ? api.route(route) : false }]),
 ])
 console.log(`route table: ${guard.hosts.join(', ')}`)
 console.log(`echo endpoint at ${echo.baseURL}; the layer API's bundle key ${VTAG}`)
@@ -176,7 +186,13 @@ const LAYER_DB = 'axt-layer'
 /** that store emptied, from a page of the extension's origin, with no reader open; what the deletion answered */
 const clearLayerStore = async () => {
   const p = await extensionPage()
-  const got = await p.evaluate(name => new Promise(ok => { const q = indexedDB.deleteDatabase(name); q.onsuccess = () => ok('deleted'); q.onerror = () => ok(`error ${q.error?.name}`); q.onblocked = () => ok('blocked') }), LAYER_DB)
+  // (`blocked` is no end: the deletion goes on once the connections still open close, so it is waited for, 10 s at most)
+  const got = await p.evaluate(name => new Promise(ok => {
+    const q = indexedDB.deleteDatabase(name)
+    const t = setTimeout(() => ok('timed out'), 10_000)
+    q.onsuccess = () => { clearTimeout(t); ok('deleted') }
+    q.onerror = () => { clearTimeout(t); ok(`error ${q.error?.name}`) }
+  }), LAYER_DB)
   await p.close()
   return got
 }
@@ -805,7 +821,7 @@ try {
     // store, and what this reader downloads is counted from its own start. Counted over the whole run, as it was, a left part a
     // reader before had begun to download and lost was counted twice: the entries' reader asks its pages ahead as its rows end,
     // and its way back, a moment later, takes its frame away, the request in flight with it (net::ERR_ABORTED), so that a reader
-    // of a later section asked it again, from no store)
+    // of a later section asked it again, from no store; and they are this reader's by its page)
     const storeCleared = await clearLayerStore()
     const asked0 = api.requests.length
     const page = await openReader({ mode: 'bilingual' })
@@ -817,8 +833,9 @@ try {
     const opened = await page.waitForFunction(() => window.__reader?.view?.probe().original === 'open', null, { timeout: 30_000 }).then(() => true, () => false)
     check('the reader opens the sample in the view', opened, JSON.stringify(opened ? await probe() : {}))
     await page.evaluate(() => { window.__long = []; new PerformanceObserver(l => { for (const e of l.getEntries()) window.__long.push(Math.round(e.duration)) }).observe({ type: 'longtask' }) })
-    /** the layer's objects this section's reader asked of the server, by digest */
-    const objectsAsked = () => api.requests.slice(asked0).filter(r => /\/o\/[0-9a-f]{64}$/.test(r.path)).map(r => r.path.slice(-64))
+    /** the layer's objects this section's reader asked of the server, by digest (by its page: a reader before, closed, whose request
+     *  the stand-in records late is not this one) */
+    const objectsAsked = () => objectAsks.filter(a => a.page === page).map(a => a.sha)
     const lefts = new Set(Object.values(sampleCut.leftRefs))
     /** what each place shows: the layer (its copy drawn, its SVG's text), the original's page view, nothing */
     const shown = () => page.evaluate(() => [...document.querySelectorAll('#right .axt-place')].map(p => {
