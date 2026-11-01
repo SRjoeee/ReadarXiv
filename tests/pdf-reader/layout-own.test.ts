@@ -459,6 +459,17 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     expect(groupsOf(ownOf(apart, { units: [{ kind: 'heading', src: 'Bound' }, { kind: 'theorem', src: 'Every x' }] }), apart)).toEqual({ u0: 'Bound', u1: 'Every x' })
     const word = [page([{ pt: 'h0s' }, 'Bound', { pt: 'h0e' }, '(', '\n', { pt: '1s' }, 'Every x', { pt: '1e' }])]
     expect(groupsOf(ownOf(word, { units: [{ kind: 'heading', src: 'Bound' }, { kind: 'theorem', src: 'Every x' }] }), word)).toEqual({ u0: 'Bound', u1: 'Every x' })
+    // (a mark TeX shows next in the stream but left of the glyph before it, on that baseline, is no mark after the unit: the
+    // maker's line takes none left of the end mark — CodeRabbit on #541)
+    const back = [page([{ pt: 'h0s' }, 'Bound', { pt: 'h0e' }, { dx: -40 }, ')', '\n', { pt: '1s' }, 'Every x', { pt: '1e' }])]
+    expect(groupsOf(ownOf(back, { units: [{ kind: 'heading', src: 'Bound' }, { kind: 'theorem', src: 'Every x' }] }), back)).toEqual({ u0: 'Bound', u1: 'Every x' })
+    // (the gap measured at the mark's own size, as the maker's glue is the line's: a placeholder set large before it widens
+    // nothing — CodeRabbit on #541)
+    const big = page([{ pt: 'h0s' }, 'Bound ', { pt: 'p0.1a' }, 'X', { pt: 'p0.1b' }, { pt: 'h0e' }, { dx: 3 }, ')', '\n', { pt: '1s' }, 'Every x', { pt: '1e' }])
+    const X = big.glyphs.find(g => g.u === 'X')!
+    Object.assign(X, { size: 30, top: X.y + 21, bottom: X.y - 6 })
+    const units2 = [{ kind: 'heading', pieces: [{ t: 'text', s: 'Bound ' }, { t: 'ph', src: '$X$' }] }, { kind: 'theorem', src: 'Every x' }]
+    expect(groupsOf(ownOf([big], { units: units2 }), [big])).toEqual({ u0: 'Bound ', 'u0.p': 'X', u1: 'Every x' })
   })
   it('takes a theorem\'s head before its note, the bracket the head opens the note with, as the note\'s label (2610.18513v1 p18u150)', () => {
     // amsthm: "Definition 5.1 (s-conductance). For …": the head's name, number and "(" before the note's start mark were no

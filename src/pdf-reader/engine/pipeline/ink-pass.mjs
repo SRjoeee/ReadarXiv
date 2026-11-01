@@ -138,8 +138,9 @@ const MEET = 0.1
 
 /**
  * The label rows (the file's [unit, kind, page, x0, baseline, x1, top, bottom]) that meet an ink unit's text: its erase boxes,
- * every one its text glyphs' (layout/ink-units.mjs rowsOf), or a figure unit's run: its box from its origin along its direction for
- * its length, across from its descent to its ascent, the box the reader hides when it draws the unit (run.mjs paintFigures). The
+ * every one its text glyphs' (layout/ink-units.mjs rowsOf), or a figure unit's run: its band from its origin along its direction for
+ * its length, across from its descent to its ascent, the box the reader hides when it draws the unit (run.mjs paintFigures),
+ * met along and across the run as well as on the page's axes, so that a slanted run's empty corners meet nothing. The
  * maker reads a unit's label off the glyphs left of its start mark (make.mjs labelOf), and the wrap leaves those of a label that has
  * no label's form in no group (own.mjs `labelKept`: "AMS subject classifications.", a theorem's head whose note is a citation,
  * "Definition 1 ([TT])", a head of a name of the paper's own, "Recall 7 ("), where an ink unit claims them, or a figure unit where
@@ -166,14 +167,24 @@ function labelsOverInk(labels, ink, figures) {
     for (const [, , , x, y, ux, uy, length, size, ascent, descent] of rows) {
       const xs = [], ys = []
       for (const s of [0, length]) for (const t of [descent * size, ascent * size]) { xs.push(x + ux * s - uy * t); ys.push(y + uy * s + ux * t) }
-      add(page, [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)])
+      const box = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]
+      box.run = { x, y, ux, uy, length, t0: descent * size, t1: ascent * size }
+      add(page, box)
     }
   }
-  let out = null
-  for (const r of labels) {
-    const boxes = byPage.get(r[2])
-    if (boxes?.some(([x0, y0, x1, y1]) => Math.min(r[5], x1) - Math.max(r[3], x0) > MEET && Math.min(r[6], y1) - Math.max(r[7], y0) > MEET)) (out ??= new Set()).add(r)
+  /** a label row [unit, kind, page, x0, baseline, x1, top, bottom] and a box meet by more than MEET across and up, and a figure
+   *  run's band (`box.run`) also along and across its direction */
+  const meets = (r, box) => {
+    const [x0, y0, x1, y1] = box
+    if (!(Math.min(r[5], x1) - Math.max(r[3], x0) > MEET && Math.min(r[6], y1) - Math.max(r[7], y0) > MEET)) return false
+    const q = box.run
+    if (!q) return true
+    const along = [], across = []
+    for (const cx of [r[3], r[5]]) for (const cy of [r[7], r[6]]) { along.push((cx - q.x) * q.ux + (cy - q.y) * q.uy); across.push((cy - q.y) * q.ux - (cx - q.x) * q.uy) }
+    return Math.min(q.length, Math.max(...along)) - Math.max(0, Math.min(...along)) > MEET && Math.min(q.t1, Math.max(...across)) - Math.max(q.t0, Math.min(...across)) > MEET
   }
+  let out = null
+  for (const r of labels) if (byPage.get(r[2])?.some(box => meets(r, box))) (out ??= new Set()).add(r)
   return out
 }
 

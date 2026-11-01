@@ -478,12 +478,13 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
   }
 
   // ---- the closing punctuation TeX sets after a unit's end mark (MR 4c): the glyphs right after the mark, on its line, in its
-  // region, in no group, each of TAIL_PUNCT within HEAD_ABUT of an em of the glyph before it, the first after the unit's own (its
-  // text's or a placeholder's): the unit's text, as the maker's line takes them past its end mark (make.mjs lineOf), so that its
-  // group hides what the layer draws again after the translation (layer2.mjs tailOf). MR 5 gives them to it where the next unit
-  // begins on that line; where the head breaks its line after the note (thmtools' headpunct `\\`), none reached them, and
-  // 2501.14787v1 p10's ")" after "Vector Space" stood beside the note's translation drawn with its own. After the labels and
-  // the placeholders, so that a mark MR 5 gave a unit or a label stays theirs, and the glyph before it may be a placeholder's
+  // region, in no group, each of TAIL_PUNCT right of the glyph before it and within HEAD_ABUT of its own em of it, the first
+  // after the unit's own (its text's or a placeholder's): the unit's text, as the maker's line takes them past its end mark
+  // (make.mjs lineOf), so that its group hides what the layer draws again after the translation (layer2.mjs tailOf). MR 5 gives
+  // them to it where the next unit begins on that line; where the head breaks its line after the note (thmtools' headpunct
+  // `\\`), none reached them, and 2501.14787v1 p10's ")" after "Vector Space" stood beside the note's translation drawn with
+  // its own. After the labels and the placeholders, so that a mark MR 5 gave a unit or a label stays theirs, and the glyph
+  // before it may be a placeholder's
   for (const [id, { e }] of textOf) {
     if (!e || work > OWN_WORK) continue
     const [p] = e, pg = pages[p - 1], E = pt(e), r = at(e), R = regions[p - 1], G = gOwn[p - 1], mine = `u${id}`
@@ -493,7 +494,9 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
     for (let g = E.glyph; g < pg.glyphs.length; g++) {
       const A = pg.glyphs[g], L = pg.glyphs[left]
       work++
-      if (R.glyph[g] !== r || G[g] !== null || !TAIL_PUNCT.test(A.u ?? '') || A.x0 - L.x1 >= HEAD_ABUT * Math.max(A.size, L.size) || Math.abs(A.y - L.y) >= 0.5 * Math.max(A.size, L.size)) break
+      // (right of the glyph before it, as the maker's line takes none left of the end mark, and within the gap at its own size,
+      // as the maker's glue is the line's: a placeholder set large before it widens nothing)
+      if (R.glyph[g] !== r || G[g] !== null || !TAIL_PUNCT.test(A.u ?? '') || (A.x0 + A.x1) / 2 <= L.x1 || A.x0 - L.x1 >= HEAD_ABUT * A.size || Math.abs(A.y - L.y) >= 0.5 * Math.max(A.size, L.size)) break
       run.push([p, g])
       left = g
     }

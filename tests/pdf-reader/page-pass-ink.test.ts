@@ -195,6 +195,11 @@ describe('the ink units in the page pass', () => {
     const none = { ...layout, labels: [below, other] }
     expect(layoutWithInk(none, null, [], figures)).toBe(none)
     expect(layoutWithInk(none, null, [], new Map())).toBe(none)
+    // (a slanted run is met by its own band, not by the box around it: a row in that box's empty corner stays, one across the
+    // run goes — Devin and CodeRabbit on #541)
+    const r = Math.SQRT1_2, slanted = [1030, 12, 10, 100, 100, r, r, 50, 10, 0.88, -0.15, 0, -1, 'ABCDEF+CMR10', 12, 0, 0]
+    const corner = [91, 0, 10, 125, 101, 135, 108, 100], crossing = [92, 0, 10, 110, 113, 120, 120, 112]
+    expect(layoutWithInk({ ...layout, labels: [corner, crossing] }, null, [], new Map([[10, [slanted]]])).labels).toEqual([corner])
   })
 
   it('keeps an echo of an ink unit as the wrap made it, whether or not that unit is laid', () => {
