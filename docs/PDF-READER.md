@@ -422,8 +422,10 @@ is taken only over the pages. The overlays follow the pinch exactly (§10.1).
   zoom settles.
 - **Anything else commits first.** Another input on a pane (a wheel without Ctrl, a key, a press, a touch), a scroll the view
   did not make, and every command that reads or moves the panes (a zoom from the menu or the keys, a jump, a page, a
-  heading, a display, a click's level, the original let go) commit the pinch before they run. The pointer's highlight finds
-  the page under it through the preview's transform, looked at again at each step as a scroll had it.
+  heading, a display, a click's level, the original let go) commit the pinch before they run; a pane another has scrolled
+  (the find bar, a script) keeps the place that scroll took it to, the pinch committed about the point it shows there at
+  the gesture's place. The pointer's highlight finds the page under it through the preview's transform, looked at again
+  at each step as a scroll had it.
 - **The scroll's ends are the paper's.** The range the preview keeps the point within is the one the commit lays: the paper
   at the step's scale and its margin below the last page, never the empty foot of a pane the paper does not fill.
 - **Small steps add up.** PDF.js rounds each scale to a hundredth; the fingers' factor is carried whole through the gesture,

@@ -778,6 +778,22 @@ describe('V6: overlays', () => {
     expect(band.isConnected || band.parentElement !== null).toBe(false)
   })
 
+  it('a pane scrolled by another under a pinch\'s preview (the find bar, a script) keeps the place that scroll took it to: the pinch committed about the point it shows there', async () => {
+    const s = setup()
+    await opened(s, 8)
+    for (const pane of [s.panes.left, s.panes.right]) pane.scrollTop = 1000
+    await flush()
+    await s.clock.advance(1000)
+    const y = 40 + 300
+    s.view.pinch('right', 1.5, [608 + 300, y])
+    // the find bar takes the right pane on, under the preview: the point it shows at the gesture's height, at the scale shown
+    s.panes.right.scrollTop = 5000
+    const keep = pointAt(s.panes.right, y)
+    await flush()
+    expect(s.view.probe().pinching).toBeNull()
+    expect(Math.abs(heightOf(s.panes.right, keep) - y)).toBeLessThanOrEqual(3)
+  })
+
   it('the zoom menu\'s check follows the fit applied, and is none after a step', async () => {
     const s = setup()
     await opened(s, 3)

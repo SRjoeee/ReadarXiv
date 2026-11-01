@@ -295,8 +295,9 @@ export function createReaderView(host) {
     const c = s.container, o = { passive: true, signal }
     // the scroll as the pointer's frame reads it, first; what is under a pointer at rest looked at again
     c.addEventListener('scroll', () => {
-      // (a pane scrolled under a pinch's preview, by the find bar or a script: the pinch committed at the scroll it meets)
-      if (preview) settle()
+      // (a pane scrolled under a pinch's preview, by the find bar or a script: the pinch committed at the scroll it meets,
+      // about the point that scroll shows at the gesture's place)
+      if (preview) { rescrolled(); settle() }
       s.scrollX = c.scrollLeft; s.scrollY = c.scrollTop
       follower.scrolled(s)
       pointer.again()
@@ -825,6 +826,18 @@ export function createReaderView(host) {
     for (const a of kept) keepAnchor(a)
     tellScale(L.viewer.currentScale)
     follower.zoomed()
+  }
+  /** each pane the preview holds that another has scrolled since (the find bar, a script; the preview scrolls none): the
+   *  point it keeps read again where that scroll shows it, in the layout the preview started from, so that the commit keeps
+   *  the place the scroll took it to */
+  function rescrolled() {
+    for (const p of preview.panes) {
+      const c = p.t.container, x = c.scrollLeft, y = c.scrollTop
+      if (!p.q || (Math.abs(x - p.scroll.x) < 0.5 && Math.abs(y - p.scroll.y) < 0.5)) continue
+      p.scroll = { ...p.scroll, x, y }
+      p.plan = null
+      p.kept = keptAt(p, p.q)
+    }
   }
   /** a pinch under way committed before anything that reads or changes the panes' layout */
   const settle = () => { if (preview) commitPinch() }
