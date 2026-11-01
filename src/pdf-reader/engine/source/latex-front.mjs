@@ -2380,12 +2380,16 @@ const theoremsOf = texts => {
 const OWN_ENVS = /\\(?:(?:re)?newenvironment|provideenvironment|(?:New|Renew|Provide|Declare)DocumentEnvironment|(?:re)?newtcolorbox|(?:New|Renew|Declare|Provide)TColorBox|newtcbtheorem|newmdenv|newlist|DeclareFloatingEnvironment|newfloat|lstnewenvironment|(?:exclude|include|special|general|process)comment|newtheorem|declaretheorem|spnewtheorem|newmdtheoremenv|DefineVerbatimEnvironment|newminted|NewTblrEnviron)\s*\*?\s*(?:\[[^\]]*\]\s*)?\{([^}]+)\}/g
 const ownEnvsOf = texts => new Set([...texts.map(uncommented).join('\n').matchAll(OWN_ENVS)].flatMap(m => m[1].split(',').map(x => x.trim())))
 /** the paper's own environments' parameters, as its files define them: \\newenvironment{name}[n][default] takes n
- *  arguments, the first optional where it has a default; one defined twice, the last */
+ *  arguments, the first optional where it has a default; one defined twice, the last (a \\provideenvironment only where it
+ *  is not defined yet) */
 const envDefs = texts => {
   const out = new Map(), begins = new Map()
   for (const t of texts) for (const m of t.matchAll(/\\(?:(?:re)?newenvironment|provideenvironment)\s*\*?\s*\{([^}]+)\}\s*(?:\[\s*(\d)\s*\])?\s*(\[)?/g)) {
     if (inComment(t, m.index)) continue
     const n = Number(m[2] ?? 0), opt = !!m[3] && n > 0, name = m[1].trim()
+    // (a \\provideenvironment of one defined already, by the paper's files or a package the role table knows, is one TeX does
+    // not act on)
+    if (m[0].startsWith('\\provide') && (out.has(name) || environmentParams(name, paper?.bindings ?? null))) continue
     out.set(name, paramsOf((opt ? '[a' : '') + '{a'.repeat(n - (opt ? 1 : 0))))
     begins.delete(name)
     // (one of no parameter whose begin code ends by beginning another environment: that one reads its arguments from what

@@ -201,6 +201,12 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     expect(marked).toContain('\\begin{bio}{Yue Ju}')
     expect(marked).toContain('\\begin{bios}{H\\r{a}kan}')
   })
+  it('…but not by a \\provideenvironment TeX does not act on, its environment defined already (CodeRabbit on #546)', () => {
+    const cls = '\\LoadClass{article}\n\\newenvironment{shortbio}[1]{\\par\\textbf{#1} }{\\par}\n\\newenvironment{note}{\\par}{\\par}\n\\provideenvironment{note}{\\begin{shortbio}}{\\end{shortbio}}\n'
+    const tex = '\\documentclass{bioclass}\n\\begin{document}\n\\begin{note}{A group of words first} and the words after it.\n\\end{note}\n\\end{document}\n'
+    const paper = openPaper(new Map([['main.tex', enc(tex)], ['bioclass.cls', enc(cls)]]))
+    expect((paper.units as unknown as Unit[]).map(textOf)).toEqual(['A group of words first and the words after it.'])
+  })
   it('colortbl\'s \\rowcolor takes its overhangs, [left][right], after its colour: no unit of them, no mark before them (2610.40394v1\'s table)', () => {
     // (read as text, `[0pt][0pt]` began the row's unit, whose start mark went between the colour and its overhangs: the
     // overhangs set as text, and the mark before the row's \multicolumn, "Misplaced \omit" three times)
