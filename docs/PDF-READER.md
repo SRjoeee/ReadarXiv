@@ -891,21 +891,37 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   92 % on two, and 55 % on the seventh, whose abstract is set in bold. It asked 0 to 1.07 MB (median 0.39) of slices page 1
   does not draw. Nothing is asked early once a part is read, or where a catalog tells the parts' end with its parts (a cached
   translation's first page has its own wave at once).
-- **Translating** (the owner's "Field", 2026-10-25). While a near page is not laid, its place shows the original's page,
-  and each paragraph the parts read so far locate on it carries a mark: a card over its box, showing its own share of one
-  diagonal light that crosses the whole page. The page's overlay is a size container and carries the pass (one registered
-  property, `--axt-tr-p`, for the page); a mark's background is three pages wide, set back by the mark's place in the page, so
-  the light is one surface whatever the paragraphs. On paper the light clears a faint ground rather than covering the glyphs.
-  A mark shows after 300 ms (a fast page shows none) and fades in over 0.4 s; a pass takes 3.4 s, its last 20 % a pause. The
-  card stands out from its paragraph by 14 CSS pixels inline and 4 block, with 8-pixel corners, at the reader's 100 % (the
-  owner's, 2026-10-25), scaled with the page so a zoom keeps it in proportion; each side's padding is at most half the gap to
-  the nearest card beside it, so no two cards meet.
+- **Translating** (the owner's "Field", 2026-10-25, in his "Glint", 2026-11-01). While a near page is not laid, its place
+  shows the original's page, and each paragraph the parts read so far locate on it carries a mark over its box, showing its
+  own share of one diagonal light that crosses the whole page. The page's overlay is a size container and carries the pass
+  (one registered property, `--axt-tr-p`, for the page); a mark's background is three pages wide, set back by the mark's
+  place in the page, so the light is one surface whatever the paragraphs. The light passes through the glyphs and leaves the
+  paper untouched: a band at 100° of the paper's own colour, 78 % at its middle (80 % on a dimmed page), fading to nothing
+  over a tenth of the three-page background on either side, over no ground, so that the letters it crosses fade toward the paper and nothing
+  else changes. A mark shows after 300 ms (a fast page shows none) and fades in over 0.4 s; a pass takes 3.4 s, its last 20 %
+  a pause. A mark stands out from its paragraph by 4 CSS pixels inline and 2 block, with 4-pixel corners, at the reader's
+  100 %, scaled with the page so a zoom keeps it in proportion; each side's padding is at most half the gap to the nearest
+  mark beside it, so no two marks meet. The Field's first look was Graphite (2026-10-25: a faint graphite card, 14 by 4
+  pixels out from its paragraph, which the light cleared); the owner chose Glint on 2026-11-01, having seen both on the
+  reader's own pages, a Glint with no margin and its still state lighter: 「不带边距的 glint」，「用 Glint，减少动态那一态调淡一些」.
+  The band is laid as it is, with no blend mode. The overlay is a stacking context (its z-index), an isolated group, so a
+  mark's own blend mode mixes with nothing but the overlay's empty ground: in the reader on 2026-11-01 a white mark with
+  `difference` drew the same pixels as a plain white one, and the same blend on the overlay inverted the page. A band of the
+  paper's colour laid normally gives the pixels that Glint's first sketch blended for, `screen` with white on a white page and
+  `darken` with the paper's colour on a dimmed one, within one level of luminance, with no blend to composite. Its cost is
+  Graphite's (the reader on the sample's waiting page, Chromium 153 on an Apple M4 Pro at 2x, three 5-second traces each):
+  1.36 ms of the main thread a frame against Graphite's 1.39 with 10 marks, 7.4 against 7.7 ms with 16 marks under a CPU
+  four times slower, no frame dropped in any run; a blend on the overlay would have doubled the frame's draw (0.13 ms against
+  0.07), the only difference it made.
   Every value of the look is a custom property of `engine.css` (`--axt-tr-*`: the ground, the light and its shoulders and
-  where they stand, the angle, the blend, a filter, the card's padding and corner, the pass and its easing, the drift, the
-  delay and the fade; a look of another shape sets `--axt-tr-image`, `-size` and `-position` on the mark), so that the owner's
-  final look (Graphite now; Pearl, Aurora or Ember) is a change of values, no code. With reduced motion asked, and where the
-  browser cannot animate a registered property or size a container (Firefox before 128 among the reader's browsers), the mark
-  is the still ground. The marks sit at the paragraph's box in shares of the page, so no zoom moves them, above the page and
+  where they stand, the angle, the blend, a filter, the mark's padding and corner, the still mark, the pass and its easing,
+  the drift, the delay and the fade; a look of another shape sets `--axt-tr-image`, `-size` and `-position` on the mark), so
+  that a look is a change of values, no code. With reduced motion asked, and where the browser cannot animate a registered
+  property or size a container (Firefox before 128 among the reader's browsers), the mark is still: a veil of the paper over
+  the paragraph, 10 % (14 % on a dimmed page), `--axt-tr-still`, which a look with no ground needs (the ground alone would show
+  no mark at all). It lightens the letters by 26 levels of luminance at most (28 dimmed), where Graphite's still ground moved
+  them by 10 (11): a page that waits, calmly; the 30 % of Glint's sketch moved them by 76 (59), and the owner asked for less.
+  The marks sit at the paragraph's box in shares of the page, so no zoom moves them, above the page and
   under the pointer (no pointer events, hidden from assistive technology). A page is laid whole, through its page pass, the
   moment its rows and slices are in (the coordinator's ruling of 2026-10-24: pages, never a unit drawn on a provisional fit
   that later moves), and all its marks go in the same task its drawing is put in place. An author's unit has none (it is

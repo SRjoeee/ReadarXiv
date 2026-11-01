@@ -94,6 +94,9 @@ export declare function onIos(nav?: { userAgent?: string; maxTouchPoints?: numbe
 export declare const AHEAD_PAGES: number
 /** how long the view rests before the pages ahead are laid, ms */
 export declare const AHEAD_IDLE_MS: number
+/** the translating card's padding where the sheet gives none (engine.css --axt-tr-pad-x and -pad-y), CSS pixels at the reader's 100 % */
+export declare const PAD_X: number
+export declare const PAD_Y: number
 export declare const COPY_PIXELS: number
 export declare const RECOPY_MS: number
 /** the longest a laid page's copy waits for the left's page to be drawn before it is put in place, ms */

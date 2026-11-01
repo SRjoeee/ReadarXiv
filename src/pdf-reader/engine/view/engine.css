@@ -56,34 +56,41 @@ html[data-axt-dim] { --axt-sk: oklch(0.275 0.004 255); --axt-sk-paper: rgb(29 29
 .axt-sk-authors i:nth-child(3n) { inline-size: 70%; justify-self: center; }
 .axt-sk-abstract { margin-inline: 9%; }
 /* ----- translating (layer-side.mjs markPage): over a near page whose place shows the original's page, one mark a paragraph not
-   laid yet, above the page and under nothing the reader acts on (no pointer). The look is the owner's "Field" (2026-10-25): one
-   diagonal light crossing the whole page, each mark showing its own share of it. The page's overlay is a size container and
-   carries the pass (--axt-tr-p, one value for the page); a mark's background is three pages wide (300cqw), set back by the mark's
-   own place in the page (--axt-tr-x, -y, written by the code in the page's shares, less the card's padding --axt-tr-px, -py). On paper the light
-   clears a faint ground rather than covering the glyphs. Every value of the look is a custom property below: the ground and the
-   light (its two shoulders and its peak), where they stand in the band, the band's angle, the blend, a filter, the card's
-   padding and corner, the pass's length and easing, the drift of a look that moves on its own (--axt-tr-t, Aurora's), the
-   delay before a mark shows and its fade. A look of another shape (Aurora's fields) sets --axt-tr-image, -size and -position
-   on .axt-translating-mark. Still, a ground alone, where the reader asks for less motion, and where the browser cannot animate
-   a registered property or size a container (markPage: axt-translating-still) */
+   laid yet, above the page and under nothing the reader acts on (no pointer). The shape is the owner's "Field" (2026-10-25): one
+   diagonal light crossing the whole page, each mark showing its own share of it; the look is his "Glint" (2026-11-01): the
+   light passes through the glyphs, the paper untouched, no ground and almost no margin. The page's overlay is a size container
+   and carries the pass (--axt-tr-p, one value for the page); a mark's background is three pages wide (300cqw), set back by the
+   mark's own place in the page (--axt-tr-x, -y, written by the code in the page's shares, less the card's padding --axt-tr-px,
+   -py). Every value of the look is a custom property below: the ground and the light (its two shoulders and its peak), where
+   they stand in the band, the band's angle, the blend, a filter, the card's padding and corner, the still mark, the pass's
+   length and easing, the drift of a look that moves on its own (--axt-tr-t, Aurora's), the delay before a mark shows and its
+   fade. A look of another shape (Aurora's fields) sets --axt-tr-image, -size and -position on .axt-translating-mark. Still, the
+   still mark alone (--axt-tr-still: a look with no ground has its own), where the reader asks for less motion, and where the
+   browser cannot animate a registered property or size a container (markPage: axt-translating-still) */
 @property --axt-tr-p { syntax: '<number>'; inherits: true; initial-value: 0; }
 @property --axt-tr-t { syntax: '<number>'; inherits: true; initial-value: 0; }
 :root {
-  /* Graphite, the neutral reference (the owner's default until he chooses among Graphite, Pearl, Aurora and Ember) */
-  --axt-tr-ground: color-mix(in oklab, #1b1d21 4.5%, transparent);
-  --axt-tr-light: transparent;
+  /* Glint: the light is the paper's own colour (the page's, --axt-sk-paper, in both looks) at 78 %, over no ground. Laid as it
+     is, with no blend: the overlay is a stacking context (its z-index), so a mark's own blend mode mixes with nothing but the
+     overlay's empty ground; and the paper's colour laid normally gives the pixels that `screen` (white, light) and `darken`
+     (the dimmed paper, dark) would give over the page, within one level (measured in the reader, 2026-11-01) */
+  --axt-tr-ground: transparent;
+  --axt-tr-light: color-mix(in oklab, var(--axt-sk-paper) 78%, transparent);
   --axt-tr-light-a: color-mix(in oklab, var(--axt-tr-light) 35%, var(--axt-tr-ground));
   --axt-tr-light-b: var(--axt-tr-light-a);
-  --axt-tr-edge: 36%;
-  --axt-tr-shoulder: 44%;
-  --axt-tr-angle: 115deg;
+  --axt-tr-edge: 40%;
+  --axt-tr-shoulder: 43.5%;
+  --axt-tr-angle: 100deg;
   --axt-tr-blend: normal;
   --axt-tr-filter: none;
   /* the card: CSS pixels at the reader's 100 %, scaled with the page (layer-side.mjs markPage: --axt-tr-u, a pixel at 100 % in
      the page's container units; the padding is clamped so that no two cards meet) */
-  --axt-tr-pad-x: 14;
-  --axt-tr-pad-y: 4;
-  --axt-tr-radius: 8;
+  --axt-tr-pad-x: 4;
+  --axt-tr-pad-y: 2;
+  --axt-tr-radius: 4;
+  /* the still mark: the paper over the letters, faint (the owner asked it lighter than 30 %, 2026-11-01): it moves the letters'
+     luminance by 26 levels at most, where Graphite's still ground moved them by 10; 14 % on the dimmed page, 28 against 11 */
+  --axt-tr-still: color-mix(in oklab, var(--axt-sk-paper) 10%, transparent);
   --axt-tr-run: 3.4s;
   --axt-tr-easing: cubic-bezier(0.65, 0, 0.35, 1);
   --axt-tr-drift: 11s;
@@ -91,8 +98,8 @@ html[data-axt-dim] { --axt-sk: oklch(0.275 0.004 255); --axt-sk-paper: rgb(29 29
   --axt-tr-fade: 0.4s;
 }
 html[data-axt-dim] {
-  --axt-tr-ground: color-mix(in oklab, #d9dce1 6%, transparent);
-  --axt-tr-light: color-mix(in oklab, #d9dce1 11%, transparent);
+  --axt-tr-light: color-mix(in oklab, var(--axt-sk-paper) 80%, transparent);
+  --axt-tr-still: color-mix(in oklab, var(--axt-sk-paper) 14%, transparent);
 }
 .axt-translating { position: absolute; inset: 0; pointer-events: none; z-index: 1; container-type: size;
   animation: axt-tr-pass var(--axt-tr-run) var(--axt-tr-easing) infinite, axt-tr-drift var(--axt-tr-drift) linear infinite; }
@@ -109,11 +116,11 @@ html[data-axt-dim] {
   animation: axt-tr-in var(--axt-tr-fade) ease var(--axt-tr-delay) both; }
 @keyframes axt-tr-in { from { opacity: 0; } to { opacity: 1; } }
 .axt-translating-still, .axt-translating-still .axt-translating-mark { animation: none; }
-.axt-translating-still .axt-translating-mark { background: var(--axt-tr-ground); }
+.axt-translating-still .axt-translating-mark { background: var(--axt-tr-still, var(--axt-tr-ground)); }
 @media (prefers-reduced-motion: reduce) {
   .axt-translating { animation: none; }
   /* (still shown only after the delay, at once: a fast page shows no mark at all) */
-  .axt-translating .axt-translating-mark { animation: axt-tr-in 0s linear var(--axt-tr-delay) both; background: var(--axt-tr-ground); }
+  .axt-translating .axt-translating-mark { animation: axt-tr-in 0s linear var(--axt-tr-delay) both; background: var(--axt-tr-still, var(--axt-tr-ground)); }
 }
 /* ----- the layer drawn in a place (layer-side.mjs; the web's placeholders.css as it drew it): the page's copy fills the
    place, and the engine's SVG and the page's links are laid over it in the copy's frame. The copy is the composed page drawn as
