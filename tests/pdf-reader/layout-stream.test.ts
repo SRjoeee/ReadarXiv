@@ -454,6 +454,11 @@ describe('ownedOf for the erasure (erasure: true)', () => {
     const f = { 'p0.3a': open('', ['0e']), 'p1.0a': closed }
     expect(ink([page], f, false)['p0.3a']).toBe("open, the next mark not its unit's")
     expect(ink([page], f, true)['p0.3a']).toEqual(['E=mc(G9)', 0])
+    // (a display, past its unit's end mark: the maker's reading finds it too, as the erasure's, so that it is a block of its own in the
+    // light map where it was LOST and OUTSIDE, hidden with its unit's placeholders and never shown again)
+    const display = { ...f, 'p0.3a': { ...open('', ['0e']), display: true } }
+    expect(ink([page], display, false)['p0.3a']).toEqual(['E=mc(G9)', 0])
+    expect(ink([page], display, true)['p0.3a']).toEqual(['E=mc(G9)', 0])
     // (a later unit with no start mark, a title of two lines whose placeholder opens on its second: its first line is the
     // title's, not the display's; none — the review of b479095e)
     const title = pageOf(['states follow', { at: '0e' }, { at: 'p0.3a' }, '\nE=mc', '\nTitle line one', '\nfor ', { at: 'p1.1a' }, 'X', { at: 'p1.1b' }, ' rest', { at: '1e' }])

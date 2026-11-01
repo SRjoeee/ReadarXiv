@@ -425,8 +425,11 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
       if (!glyphs.length && !boxes.length) return { how: HOW[f.want ? 'open, to the text after it' : "open, to its unit's next mark"], glyphs, boxes }
       if (!f.want) {
         // (the erasure's: a later unit's opening as its start mark only where that unit's start mark follows it on the page — the
-        // opening is its lead placeholder's, on its first line; an end-only unit's opening may stand lines into it)
-        const opening = erasure ? OPENING.exec(N.name) : null
+        // opening is its lead placeholder's, on its first line; an end-only unit's opening may stand lines into it. And the maker's
+        // for a display past its unit's end mark, which ends the unit: its ink found where the erasure's is, so that its light is a
+        // block of its own, never LOST outside its unit's lines while the wrap hides it with its unit's placeholders, 2610.20595v1
+        // p19u153)
+        const opening = erasure || (f.display && past) ? OPENING.exec(N.name) : null
         const startsAfter = id => [`${id}s`, `h${id}s`, `t${id}s`].some(n => (where.get(n) ?? []).some(([p, q]) => p === pa && q > next[1]))
         const later = START.exec(N.name) ?? (opening && startsAfter(opening[2]) ? [N.name, opening[2]] : null)
         const S = f.blocked ? f.split : null
