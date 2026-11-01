@@ -1608,7 +1608,11 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   row to its end with its punctuation; two sentences on one row meet halfway through the space between them. Over a
   column or a page break the rows reach the unit's text edge there — the column's edge less the unit's least indent, so a
   list's item keeps to its own — but not over another unit's words on that row, nor under a float's painted shape; an
-  overfull line sticks out alone, by up to 6 units. Where a unit's shapes cannot hold its words (two lines of text made
+  overfull line sticks out alone, by up to 6 units. Across the unit's own display they do not: TeX ends the line before a
+  display where its text ends and begins the one after it at the column's start, so the rows either side reach no further
+  than their ink (`highlight.mjs` `interrupted`'s DISPLAY; before, a sentence that went on past its display lit the row before
+  it to the margin, over the blank TeX left there: 2610.40645v1 p14's "partition functions²" in Japanese, its verb after display (3.5),
+  the owner's report of 2026-11-01; the same on either pane, wherever a sentence goes on past a display). Where a unit's shapes cannot hold its words (two lines of text made
   one row by a tall formula, a glyph hanging into another sentence's row) it lights whole: 12 of the 977 units whose
   starts both sides found, on the ten papers.
 - **A token's sentence is the text's** (`highlight.mjs withSentences`, `segsOf`): on the left a token paired with a word

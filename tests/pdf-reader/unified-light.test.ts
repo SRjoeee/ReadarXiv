@@ -294,3 +294,41 @@ describe('the right: what the door drew and what it kept of our page (layer-prot
     expect(r.shapes.runs(1).length).toBe(2)
   })
 })
+
+describe('a sentence across its unit\'s display: the rows either side of it reach no further than their ink (2610.40645v1 p14)', () => {
+  // (unit 1: two full lines, a short one TeX ended at its display, the display, two full lines after it; sentence 0 the 18 words
+  // above the display and the first 4 below it. The short row reached the column's edge, 450 units of blank lit after its words)
+  const its: Item[] = [prose(740), prose(728), item('text text', 50, 716, 50, true), item('x', 250, 700, 10), item('=', 265, 700, 10), item('y', 280, 700, 10), item('(1)', 535, 700, 15, true), prose(684), prose(672)]
+  const d1: DocToken[] = tokenizeDocument([{ page: 1, items: its, styles: {} }])
+  const on = (y: number) => d1.flatMap((t, k) => (Math.abs(t.y - y) < 1 ? [k] : []))
+  const disp = on(700), ts = [...on(740), ...on(728), ...on(716), ...disp, ...on(684), ...on(672)]
+  const words = ts.filter(k => !disp.includes(k))
+  const a = new Map<number, Anchor | null>([[1, { tokens: ts, rects: lineRects(d1, ts), coverage: 1, bounded: true, pairs: new Map(words.map((k, w) => [w, k])) }]])
+  const lay1 = {
+    names: [],
+    lines: [[1, [...row(50, 550, 740), ...row(50, 550, 728), ...row(50, 100, 716), ...row(250, 550, 700), ...row(50, 550, 684), ...row(50, 550, 672)]]],
+    ph: [[1, 3, DK, PH_FLAG.NUMBERED, 1, 250, 700, 550, 707.5, 697.8]],
+    labels: [],
+  }
+  const text1 = words.map(() => 'text').join(' ')
+
+  it('the row before the display ends at its words, the rows above it reach the edge, and every word stays in its sentence', () => {
+    const { parts, lefts } = cutSide(layoutOf(d1, views, a, kindOf), a, views)
+    const l = createShapes({ kindOf })
+    l.addParts(parts.map(p => ({ ...p, layout: lay1 })) as never)
+    l.addPage(lefts[1]!)
+    const starts = l.starts(1, text1, [5 * 22])
+    expect(starts).not.toBeNull()
+    expect(l.shapes.fits(1, starts!, true)).toBe(true)
+    const above = l.shapes.runs(1).find(r => blockOf(r, PAD).y0 > 707.5)!
+    const rects = l.shapes.sentence(above, starts!, 0, PAD)
+    // (the two full rows one rectangle to the edge, the short one to its words' end)
+    expect(rects.map(r => [Math.round(r.x0), Math.round(r.x1)])).toEqual([[48, 552], [48, 102]])
+    // (and its blank past the words lights nothing; its words light their sentence, the display its own block)
+    expect(l.shapes.hit(1, 300, mid(716), PAD, () => starts)).toBeNull()
+    expect(l.shapes.hit(1, 70, mid(716), PAD, () => starts)).toMatchObject({ id: 1, s: 0 })
+    expect(l.shapes.hit(1, 300, mid(700), PAD, () => starts)?.id).toBe(DID)
+    // (the row after the display, the sentence's last there, from the edge to its end as before)
+    expect(l.shapes.hit(1, 60, mid(684), PAD, () => starts)).toMatchObject({ id: 1, s: 0 })
+  })
+})
