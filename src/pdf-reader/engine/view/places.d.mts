@@ -30,6 +30,8 @@ export interface Places {
   letAheadGo(): void
   /** whether they still wait */
   aheadHeld(): boolean
+  /** a pinch shown by transform (true) and its end (false): the near window's word on each place held meanwhile, told at the end */
+  holdNear(on: boolean): void
   views(): { get(n: number): PlaceView | null; all(): PlaceView[]; count(): number }
   rename(): void
   probe(): { places: number; pageViews: number; skeletons: number; laidPlaces: number; nearPlaces: number; pageViewsMade: number; aheadHeld: boolean }
