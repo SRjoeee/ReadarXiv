@@ -216,6 +216,17 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     const marked = new TextDecoder().decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
     expect(marked).toContain('\\rowcolor{gray!15}[0pt][0pt]\n\\multicolumn{2}{l}{')
   })
+  it('a comment\'s line end the walk passes over: the next line\'s indent TeX skips is not written back either, the units as they were (2608.30640v1, 2610.39617v1)', () => {
+    // (TeX ends the line at the comment and skips the next line's leading spaces; written back from the pieces, the indent
+    // stood where the line end was, a space TeX set where the paper has none: `hyphen-  ated`, `performance.    }`)
+    const body = 'Some words here, a hyphen-%\n  ated word and \\emph{more}%\n   text after a group, written by \\LaTeX%\n written, then a figure {%\n    \\fbox{x} of words}.\n'
+    const paper = openPaper(new Map([['main.tex', enc(doc(body))]])), all = paper.units as unknown as Unit[]
+    const marked = new TextDecoder().decode(originalFiles(paper, { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(marked).toContain('a hyphen-ated word and \\emph{more}text after a group, written by \\axtpma')
+    expect(marked).toMatch(/\\LaTeX(?:\\axtpm\{[^}]*\})? written, then a figure \{\\fbox\{x\} of words\}/)
+    // (the units' pieces, and so their hashes and the translator's text, are the walk's as before: the indent is in them)
+    expect(all.map(u => u.pieces.filter(p => p.t === 'text').map(p => p.s).join(''))[0]).toContain('hyphen-  ated')
+  })
   it('a control word the source ends with a comment before a word is ended by a space where a unit is written back (2610.40394v1\'s author block)', () => {
     // (the walk passes over the comment, and the two were written as one name, \bfseriesYouqing: four TeX errors, the names
     // gone from the base page, and the guard's two compiles found no unit to blame)
