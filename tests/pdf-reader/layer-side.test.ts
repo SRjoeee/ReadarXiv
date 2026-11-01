@@ -1947,7 +1947,9 @@ describe('translating: the indicator over a near page\'s paragraphs not laid yet
     // (the browser's animations as the overlay reads them: each mark's fade and its pass, which starts as the mark is styled)
     type Anim = { animationName: string; startTime: number | null }
     const kept = new WeakMap<Element, Anim[]>()
-    const spy = vi.spyOn(HTMLElement.prototype, 'getAnimations').mockImplementation(function (this: HTMLElement) {
+    // (an element's own animations alone unless the subtree is asked for, as a browser gives them: the overlay has none of its own)
+    const spy = vi.spyOn(HTMLElement.prototype, 'getAnimations').mockImplementation(function (this: HTMLElement, options?: { subtree?: boolean }) {
+      if (options?.subtree !== true) return []
       return [...this.querySelectorAll('.axt-translating-mark')].flatMap(e => {
         let a = kept.get(e)
         if (!a) { a = [{ animationName: 'axt-tr-in', startTime: null }, { animationName: 'axt-tr-pass', startTime: timeline.currentTime + 16 }]; kept.set(e, a) }
