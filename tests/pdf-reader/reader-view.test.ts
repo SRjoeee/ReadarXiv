@@ -462,27 +462,69 @@ describe('V6: overlays', () => {
     expect(s.panes.left.querySelector('.page .axt-hl-layer > .axt-hl')).toBe(band)
   })
 
-  it('a pinch reads every rectangle before the left\'s viewer is scaled, over either pane', async () => {
+  /** where a pane shows the point at height `y` of its view (client px): the page box it is level with, and its share of
+   *  the box's height, or px above the box (the gap before it) */
+  const pointAt = (pane: HTMLElement, y: number) => {
+    const pages = [...pane.querySelectorAll<HTMLElement>(':scope > .pdfViewer > .page')]
+    const n = pages.findIndex(p => p.getBoundingClientRect().bottom > y)
+    const r = (pages[n] as HTMLElement).getBoundingClientRect()
+    return y < r.top ? { n, gap: y - r.top } : { n, share: (y - r.top) / r.height }
+  }
+  /** the height of the view (client px) a pane shows that point at now */
+  const heightOf = (pane: HTMLElement, at: ReturnType<typeof pointAt>) => {
+    const r = (pane.querySelectorAll<HTMLElement>(':scope > .pdfViewer > .page')[at.n] as HTMLElement).getBoundingClientRect()
+    return at.share === undefined ? r.top + (at.gap as number) : r.top + at.share * r.height
+  }
+
+  it('a pinch keeps the point under the gesture where it is on both panes, wherever it lies — on a page, in the gap between two, beside one — and the pair stays level', async () => {
     const s = setup()
-    await opened(s, 4)
-    for (const side of ['left', 'right'] as const) {
-      const viewer = leftViewer()
-      reads.log = []
-      reads.counting = true
-      const real = viewer.updateScale.bind(viewer)
-      let at = -1
-      viewer.updateScale = o => { at = reads.log.length; reads.counting = false; real(o); reads.counting = true; reads.log.push('-- after') }
-      const before = s.panes.right.scrollTop
-      s.view.pinch(side, 1.1, [side === 'left' ? 200 : 800, 300])
-      reads.counting = false
-      viewer.updateScale = real
-      // the right's point under the pointer, or at its top quarter, kept: the pane scrolled with its growing pages
-      expect(s.panes.right.scrollTop).toBeGreaterThan(before)
-      expect(at).toBeGreaterThan(0)
-      // after the scale, writes alone: no read between the scale and the end of the pinch's own task
-      expect(reads.log.slice(at)).toEqual(['-- after'])
+    await opened(s, 6)
+    // a quarter's scale: a page 204 px wide in a pane of 600, so that a point beside it is held by no page
+    s.view.zoomTo(0.25)
+    for (const pane of [s.panes.left, s.panes.right]) pane.scrollTop = 700
+    await flush()
+    const pages = [...s.panes.right.querySelectorAll<HTMLElement>(':scope > .pdfViewer > .page')]
+    const gapY = (pages[3] as HTMLElement).getBoundingClientRect().top - 7
+    for (const [what, side, x, y] of [['on a page', 'right', 608 + 100, 300], ['between two pages', 'right', 608 + 100, gapY], ['beside a page', 'right', 608 + 450, 520], ['over the left', 'left', 450, 400]] as const) {
+      // (each pane's point read at the same height of its view: the panes stand at the same height on the screen)
+      const keep = [s.panes.left, s.panes.right].map(pane => pointAt(pane, y))
+      for (let i = 0; i < 6; i++) s.view.pinch(side, 1.06, [x, y])
+      await flush()
+      // (to the pixels the steps' scrolls round to)
+      for (const [k, pane] of [s.panes.left, s.panes.right].entries()) expect(Math.abs(heightOf(pane, keep[k] as ReturnType<typeof pointAt>) - y), `${what}, the ${k ? 'right' : 'left'} pane`).toBeLessThanOrEqual(3)
+      expect(s.panes.left.scrollTop, what).toBe(s.panes.right.scrollTop)
     }
     expect(last(s.events, 'scale')?.zoom).toBeNull()
+  })
+
+  it('a slow pinch\'s small steps add up: at a quarter\'s scale, where PDF.js rounds any step under 1.9 % to no change', async () => {
+    const s = setup()
+    await opened(s, 4)
+    s.view.zoomTo(0.26)
+    for (let i = 0; i < 20; i++) s.view.pinch('right', 1.01, [700, 300])
+    // 0.26 × 1.01^20 = 0.317, to PDF.js's hundredth
+    expect(leftViewer().currentScale).toBe(0.32)
+    // the way back, carried afresh: a turn of the fingers is not held up by what was carried the other way
+    s.view.pinch('right', 1 / 1.03, [700, 300])
+    expect(leftViewer().currentScale).toBe(0.31)
+  })
+
+  it('a pinch\'s steps move neither pane by the follower: no rest and no glide between two steps, however long the fingers pause', async () => {
+    const s = setup()
+    await opened(s, 6)
+    s.view.zoomTo(0.5)
+    for (const pane of [s.panes.left, s.panes.right]) pane.scrollTop = 600
+    await flush()
+    const tops: number[][] = []
+    for (let i = 0; i < 8; i++) {
+      s.view.pinch('right', 1.05, [608 + 300, 600])
+      await flush()
+      // a pause longer than the rest's wait between two steps
+      await s.clock.advance(200)
+      tops.push([s.panes.left.scrollTop, s.panes.right.scrollTop])
+      expect(s.view.probe().motion, `step ${i}`).toBeNull()
+    }
+    expect(tops.every(([l, r]) => l === r)).toBe(true)
   })
 
   it('an original let go lets go of what was lit on its pages: nothing painted holds them', async () => {

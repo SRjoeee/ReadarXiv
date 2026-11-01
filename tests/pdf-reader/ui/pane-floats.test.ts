@@ -1,7 +1,7 @@
 import { act, createElement } from 'react'
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PagePill } from '@/pdf-reader/ui/PagePill'
-import { thumbSize } from '@/pdf-reader/ui/ScrollIndicator'
+import { ScrollIndicator, thumbSize } from '@/pdf-reader/ui/ScrollIndicator'
 import { R, setLocale } from '@/ui/strings'
 import { mountElement } from '../../ui/render-hook'
 import { fakeController } from './fake-controller'
@@ -56,5 +56,34 @@ describe('a scroll indicator\'s thumb (§6.5)', () => {
     expect(thumbSize(800, 800, 8000)).toBe(80)
     expect(thumbSize(800, 800, 80000)).toBe(32)
     expect(thumbSize(800, 800, 800)).toBe(800)
+  })
+
+  it('takes its length in the frame the pages\' height changes: told by a ResizeObserver over the pages\' stack, set in its callback, with no frame awaited', async () => {
+    const observers: { cb: ResizeObserverCallback; targets: Element[] }[] = []
+    vi.stubGlobal('ResizeObserver', class {
+      o: { cb: ResizeObserverCallback; targets: Element[] }
+      constructor(cb: ResizeObserverCallback) { this.o = { cb, targets: [] }; observers.push(this.o) }
+      observe(el: Element) { this.o.targets.push(el) }
+      unobserve() {}
+      disconnect() { this.o.targets = [] }
+    })
+    const frames: FrameRequestCallback[] = []
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => frames.push(cb))
+    try {
+      const fake = fakeController()
+      const Pane = () => createElement('section', { className: 'pane' }, createElement('div', { className: 'viewerContainer' }, createElement('div', { className: 'pdfViewer' })), createElement(ScrollIndicator, { controller: fake.controller, side: 'right' }))
+      const { container } = await mountElement(createElement(Pane))
+      const scroller = container.querySelector<HTMLElement>('.viewerContainer')!, stack = scroller.firstElementChild!, track = container.querySelector<HTMLElement>('.indicator')!
+      let height = 8000
+      Object.defineProperty(scroller, 'clientHeight', { get: () => 800 })
+      Object.defineProperty(scroller, 'scrollHeight', { get: () => height })
+      Object.defineProperty(track, 'clientHeight', { get: () => 800 })
+      const watching = observers.find(o => o.targets.includes(stack))
+      expect(watching, 'the pages\' stack observed').toBeDefined()
+      // a zoom's step: the pages' height halved, the observer told after the frame's layout
+      height = 4000
+      watching!.cb([], {} as ResizeObserver)
+      expect([track.style.getPropertyValue('--thumb'), frames.length]).toEqual(['160px', 0])
+    } finally { vi.unstubAllGlobals() }
   })
 })

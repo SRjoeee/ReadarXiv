@@ -304,7 +304,11 @@ scroll area keeps it (the maintainer turned down mirroring the left one to the o
   screen towards it. A press on an indicator makes its pane the leading side, as a press in the pane does.
 - The thumb's position is a CSS scroll-driven animation on the pane's scroll timeline (`scroll-timeline` on the
   scroller, `timeline-scope` on the pane): it moves on the compositor, and no script runs while scrolling. Script sets
-  only its length, on resize and zoom.
+  only its length, in the frame the pane's size or its pages' height changes: a ResizeObserver over the pane and over the
+  pages' stack, whose callback runs after that frame's layout and before its paint. The place is the scroll's share of the
+  track the length leaves, so the two must change in one frame: set a frame later (a React effect on the zoom's state, then
+  a frame), every step of a pinch drew the thumb at the new share of the old length and moved it again the next frame, up
+  and down through the whole gesture (measured 2026-11-01, `tests/e2e/probes/pinch-jitter.mjs`).
 
 ### 6.6 The status capsule and the card
 
@@ -380,8 +384,25 @@ The states are §8's.
 A trackpad pinch (or Ctrl/⌘ with the wheel) over the pages zooms both panes together around the pointer, as EmbedPDF
 does (「直接双指捏合滑动就可以放大缩小」): a trackpad's small deltas zoom continuously, a mouse notch steps a tenth. PDF.js
 scales the pages by CSS while the pinch lasts and draws them once, 400 ms after it ends
-(`updateScale({ scaleFactor, origin, drawingDelay: 400 })`). The browser's own zoom is taken only over the pages. The
+(`updateScale({ scaleFactor, drawingDelay: 400 })`). The browser's own zoom is taken only over the pages. The
 overlays follow the pinch exactly (§10.1).
+
+- **One frame a step, both panes about the gesture's point.** Each step writes the scale and both panes' scrolls in one
+  task: each pane shown keeps the point at the pointer's place in its view (on the other pane, the same place in its
+  view: the same point of the same page while the pair is level), wherever it lies — on a page, in the gap between two,
+  beside one. The point is read on the page box it is level with (a share of the box, or px from its edge where it is
+  outside: the gaps and margins do not scale), and the box read again at the new scale. The pair stays level through the
+  gesture, and its rest finds nothing to level.
+- **The follower stands aside.** A wheel with Ctrl or ⌘ is no scroll input; a step's scrolls are the view's own puts; each
+  step ends whatever the follower moves and calls its rest off, and the pair is levelled only once the zoom settles.
+- **Small steps add up.** PDF.js rounds each scale to a hundredth; the part of the fingers' factor it has not applied is
+  carried to the next step while the gesture keeps its direction, as PDF.js's own viewer carries it.
+- **Why** (the owner's recording on 1706.03762v7, 2026-11-01, the handles jittering through a pinch; the probe's frames): the right pane was kept
+  only where a page lay under the pointer, and a pointer beside a page at a small zoom kept nothing, so that the pane stood
+  still while its pages grew about its top — its thumb jumping 10–14 px a step, the pair drifting two pages apart, levelled
+  by a glide of more than a page after the gesture; the left was kept about its top quarter whatever the pointer's height,
+  so that the pair drifted even where both were kept; the thumb's length came a frame after its place (§6.5); and at 26 %
+  a step under 1.9 % rounded to no change and was lost, a slow pinch not zooming at all.
 
 ## 7. Interaction details
 
@@ -737,7 +758,7 @@ PDF.js is the host's kit, so every PDF.js type the view names is structural.
 - **The right zoomed through the left.** A zoom, a fit or a pinch over either pane scales the left's viewer, which the
   places follow; the right shown alone is fitted to its own pane. A step and a pinch are drawn 400 ms after the last one
   (one redraw a burst), the places' page views with them. A zoom and a display's change keep the reading place (the page and
-  the point at the reading line); a pinch reads every rectangle before it writes.
+  the point at the reading line); a pinch keeps the point under the gesture on both panes (§6.8).
 - **The highlight** (`lighting.mjs`) reads a pane through its shapes alone (`Shapes`, the seam the shapes' PR builds); a
   pointer over a page of either pane is a want of that page. The highlight's layer follows a pinch by transform and is kept
   through PDF.js's redraws (§10.1–§10.2).

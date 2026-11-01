@@ -432,6 +432,17 @@ export function createFollower(o) {
         else springTo(right.container, top)
       }, REST_MS)
     },
+    /** a zoom's step is about to change both panes' layouts and put each where it keeps the zoom's point: what moves ends
+     *  where it stands (the panes are read as they show), the scroll's end and its rest are called off, the driver's
+     *  position is read afresh, and the pane the zoom is over, where there is one, is the driver. Nothing is bound or
+     *  levelled until the zoom settles (zoomed): the step's puts are the view's own, and a rest's glide between two steps
+     *  had moved the other pane one way while the next step moved it back */
+    zooming(side) {
+      if (side) take(side)
+      bake(); stopSpring(); clearRest(); clearFallback()
+      follow.moving = false
+      follow.lastD = null
+    },
     take(side) { take(side); arm() },
     put,
     bake,

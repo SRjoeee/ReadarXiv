@@ -36,25 +36,26 @@ describe('usePinch: one call a frame', () => {
     return { pinch, wheel, frame, hook }
   }
 
-  it('carries a slow pinch\'s small steps from frame to frame until they count, rather than drop them (#299, Part 3\'s M4)', async () => {
+  it('sends a frame\'s steps however small: the view carries what PDF.js\'s rounding to a hundredth leaves of them (reader-view.mjs pinch)', async () => {
     const { pinch, wheel, frame, hook } = await pinching()
-    // 0.2 % a frame, under the 0.5 % a call needs: three frames make 0.6 %
+    // 0.2 % a frame: each frame sends its own, none held back (a hold of 0.5 % here still lost a slow pinch at a quarter's
+    // scale, where PDF.js rounds any step under 1.9 % to no change)
     for (let i = 0; i < 3; i++) {
       wheel(-0.2)
       frame()
     }
-    expect(pinch).toHaveBeenCalledTimes(1)
-    expect(pinch.mock.calls[0]![1]).toBeCloseTo(Math.exp(0.006), 6)
+    expect(pinch.mock.calls.map(c => c[1])).toEqual([0, 1, 2].map(() => expect.closeTo(Math.exp(0.002), 6)))
     await hook.unmount()
   })
 
-  it('a pinch that counts is sent in its frame, and starts the next one afresh', async () => {
+  it('a frame\'s wheels are sent as one step in its frame, and the next frame starts afresh', async () => {
     const { pinch, wheel, frame, hook } = await pinching()
     wheel(-1)
+    wheel(-1)
     frame()
     wheel(-1)
     frame()
-    expect(pinch.mock.calls.map(c => c[1])).toEqual([expect.closeTo(Math.exp(0.01), 6), expect.closeTo(Math.exp(0.01), 6)])
+    expect(pinch.mock.calls.map(c => c[1])).toEqual([expect.closeTo(Math.exp(0.02), 6), expect.closeTo(Math.exp(0.01), 6)])
     await hook.unmount()
   })
 })

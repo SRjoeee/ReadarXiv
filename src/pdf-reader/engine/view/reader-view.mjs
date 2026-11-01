@@ -298,7 +298,8 @@ export function createReaderView(host) {
       if (s === R) tellRightPage()
       tell(listeners.scrolled, s.name)
     }, o)
-    for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) c.addEventListener(type, () => follower.input(s, type), o)
+    // (a wheel with Ctrl or ⌘ is a zoom, never a scroll: the pinch's step makes its pane the driver, and binds nothing)
+    for (const type of ['wheel', 'touchstart', 'keydown', 'pointerdown']) c.addEventListener(type, e => { if (type !== 'wheel' || !(e.ctrlKey || e.metaKey)) follower.input(s, type) }, o)
     c.addEventListener('pointermove', () => follower.hover(s), o)
     c.addEventListener('scrollend', () => follower.ended(s), o)
     c.addEventListener('mousemove', e => pointer.moved(s, e.clientX, e.clientY), { signal })
@@ -599,45 +600,74 @@ export function createReaderView(host) {
     tellScale(L.viewer.currentScale)
     follower.zoomed()
   }
+  /** the part of a pinch's factor PDF.js has not applied yet, and the scale its last step left: PDF.js rounds each scale to
+   *  a hundredth, and a step under half of one was lost (at 26 %, any step under 1.9 %: a slow pinch there zoomed not at
+   *  all, a quick one by lumps). Carried to the next step while the scale is the one the last step left and the gesture
+   *  keeps its direction, as PDF.js's own viewer carries it (its app's _accumulateFactor) */
+  let pinchRest = 1, pinchScale = 0, pinchWay = 0
   /**
-   * A pinch over a pane: the left's viewer scaled — about the pointer where the pinch is over the left, else about the
-   * left's top quarter — and the places with it; the right scrolled so that the point under the pointer (a pinch over it),
-   * or its top quarter, stays where it is, as PDF.js keeps a pane of its own; the pair levelled once it settles. Every
-   * rectangle and offset is read first, then the scale and the scroll written: the point, its page's place and size, the
-   * pane's, and the scale PDF.js will set (its rounding and range); each place's box its page's floor at the new scale
+   * A pinch over a pane: the left's viewer scaled, the places with it, and each pane shown scrolled in the same task so that
+   * the point under the gesture stays under it — on the other pane, the point at the same place in its view, which the
+   * identity map makes the same point of the same page while the pair is level: the pair stays level through the gesture,
+   * and its rest finds nothing to level. Each point is kept wherever it lies, on a page, between two or beside one (a
+   * point the pages did not hold had kept nothing: the pane stood still while its pages grew or shrank about its top, and
+   * the pair drifted pages apart). Each pane's point is read on the page box it is level with, then the scale written, then
+   * that box read again and the scroll written; the follower is told first, so that nothing it moves or binds is under way
    */
   function pinch(which, factor, origin) {
     if (disposed || !laid) return
     const s = which === 'left' ? L : R
-    if (!shown(s)) return
-    follower.bake()
-    const lb = shown(L) ? L.container.getBoundingClientRect() : null
-    const keep = shown(R) ? pointOf(R, s === R ? origin : null) : null
-    const cur = L.viewer.currentScale, k = Math.min(25, Math.max(0.1, Math.round(cur * factor * 100) / 100)) / cur
+    if (!shown(s) || !(factor > 0)) return
+    const cur = L.viewer.currentScale
+    const way = Math.sign(factor - 1)
+    if (cur !== pinchScale || way !== pinchWay) pinchRest = 1
+    pinchWay = way
+    // the scale PDF.js sets (its rounding, its range: pdf_viewer.mjs updateScale)
+    const want = factor * pinchRest, next = Math.min(25, Math.max(0.1, Math.round(cur * want * 100) / 100))
+    pinchRest = (want * cur) / next
+    pinchScale = cur
+    // (a step PDF.js would round to no change waits in the rest; the zoom is a pinch's all the same, as the menu shows it)
+    if (next === cur) { zoomChosen = null; tellScale(cur); return }
+    follower.zooming(s)
+    const b = s.container.getBoundingClientRect(), x = origin[0] - b.left - s.container.clientLeft, y = origin[1] - b.top - s.container.clientTop
+    const kept = []
+    for (const t of sides) {
+      const a = shown(t) && anchorOf(t, Math.min(t.container.clientWidth, Math.max(0, x)), Math.min(t.container.clientHeight, Math.max(0, y)))
+      if (a) kept.push(a)
+    }
     zoomChosen = null
     stepDelay = STEP_DELAY
-    try { L.viewer.updateScale({ scaleFactor: factor, ...(lb ? { origin: s === L ? origin : [lb.left + lb.width / 2, lb.top + lb.height / 4] } : {}), drawingDelay: STEP_DELAY }) } finally { stepDelay = -1 }
-    if (keep) {
-      const c = R.container
-      const grown = keep.above.reduce((d, h) => d + Math.floor(h * k) - Math.floor(h), 0)
-      const outer = Math.floor(keep.width * k) + keep.outer - Math.floor(keep.width), centre = w => Math.max(0, (keep.room - w) / 2)
-      c.scrollTop = keep.top + grown + keep.point[1] * k - keep.dy
-      c.scrollLeft = keep.left - centre(keep.outer) + centre(outer) + keep.point[0] * k - keep.dx
-    }
+    try { L.viewer.updateScale({ scaleFactor: next / cur, drawingDelay: STEP_DELAY }) } finally { stepDelay = -1 }
+    pinchScale = L.viewer.currentScale
+    for (const a of kept) keepAnchor(a)
     tellScale(L.viewer.currentScale)
     follower.zoomed()
   }
-  /** what a pinch keeps of the right: the point of its page under `origin` (the pane's top quarter when null), its page's
-   *  top, box and viewport point, the heights of the pages above it; read only */
-  function pointOf(s, origin) {
-    const b = s.container.getBoundingClientRect(), at = origin ?? [b.left + b.width / 2, b.top + b.height / 4]
-    const under = pointOn(s.at, pagesOf(s), s.scrollX, s.scrollY + follower.shift(s), at[0], at[1])
-    const pv = under && pageView(s, under.page), div = under && pageDiv(s, under.page)
-    if (!pv?.viewport || !div) return null
-    const left = div.offsetLeft + div.clientLeft + (div.offsetParent === s.stack ? s.stack.offsetLeft + s.stack.clientLeft : 0)
-    const above = []
-    for (let n = 1; n < under.page; n++) above.push(pageView(s, n)?.viewport?.height ?? 0)
-    return { top: pageTop(s, under.page), left, outer: div.offsetWidth, room: s.container.clientWidth, width: pv.viewport.width, point: pv.viewport.convertToViewportPoint(under.x, under.y), above, dy: at[1] - b.top, dx: at[0] - b.left }
+  /** a page box of a pane in its scroll's coordinates, to the fraction of a pixel (offsetTop rounds to one); read where no
+   *  transform moves the stack */
+  function boxIn(t, n) {
+    const div = pageDiv(t, n)
+    if (!div) return null
+    const c = t.container, r = div.getBoundingClientRect(), p = c.getBoundingClientRect()
+    return { top: r.top - p.top - c.clientTop + c.scrollTop, left: r.left - p.left - c.clientLeft + c.scrollLeft, width: r.width, height: r.height }
+  }
+  /** what a zoom keeps of a pane: the point at (x, y) of its view (px from its top left), on the page box it is level with
+   *  (the one holding it, or the first below it; the last past the end) — as a share of the box's height inside it, as px
+   *  from the box's edge above or below it (the gap between two pages, the margin past the last: neither scales), and as
+   *  a share of its width across. Null with no page laid out */
+  function anchorOf(t, x, y) {
+    const c = t.container, Y = c.scrollTop + y, n = pageAt(t, Y), box = n ? boxIn(t, n) : null
+    if (!box?.height || !box.width) return null
+    const v = Y < box.top ? { edge: 0, px: Y - box.top } : Y > box.top + box.height ? { edge: 1, px: Y - box.top - box.height } : { share: (Y - box.top) / box.height }
+    return { t, n, x, y, v, across: (c.scrollLeft + x - box.left) / box.width }
+  }
+  /** a pane put so that the point an anchor read stands at the same place of its view: its page box read at the new scale */
+  function keepAnchor(a) {
+    const box = boxIn(a.t, a.n)
+    if (!box?.height) return
+    const Y = a.v.share === undefined ? box.top + a.v.edge * box.height + a.v.px : box.top + a.v.share * box.height
+    a.t.container.scrollLeft = box.left + a.across * box.width - a.x
+    follower.put(a.t.container, Y - a.y)
   }
 
   // ---------------------------------------------------------------- displays

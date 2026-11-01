@@ -1,10 +1,9 @@
 // A pane's scroll indicator (the reader's design, §6.5): the native scrollbar is off; on the pane's right edge a 14 px
 // track and a 4 px thumb whose place follows the scroll on the compositor (a scroll-driven animation, reader.css) and
-// whose length is set here, when the pane's size or its pages change — never on a scroll. Hidden at rest; the thumb
-// drags, a press on the track turns a screen towards it, and a press makes its pane the leading side
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react'
+// whose length is set here, in the frame the pane's size or its pages' height changes — never on a scroll. Hidden at
+// rest; the thumb drags, a press on the track turns a screen towards it, and a press makes its pane the leading side
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
 import type { ReaderController, Side } from '../controller'
-import { useReader } from './use-reader'
 
 /** the pane's scroller the engine shows now (it replaces the right one as translations come) */
 const scrollerOf = (track: HTMLElement | null) => track?.parentElement?.querySelector<HTMLElement>('.viewerContainer:not(.axt-incoming)') ?? null
@@ -15,26 +14,30 @@ const DRAG_ENDS = ['pointerup', 'pointercancel', 'lostpointercapture'] as const
 export const thumbSize = (track: number, client: number, scroll: number) => Math.min(track, Math.max(32, Math.round((track * client) / Math.max(scroll, 1))))
 
 export const ScrollIndicator = forwardRef<HTMLDivElement, { controller: ReaderController; side: Side }>(function ScrollIndicator({ controller, side }, ref) {
-  const state = useReader(controller, s => ({ scale: s.scale, pages: s.sides[side].pages, display: s.display, narrow: s.narrow }))
   const track = useRef<HTMLDivElement>(null)
   useImperativeHandle(ref, () => track.current as HTMLDivElement)
-  const size = useCallback(() => {
-    const t = track.current, c = scrollerOf(t)
-    if (!t || !c) return
-    t.hidden = c.scrollHeight <= c.clientHeight + 1
-    t.style.setProperty('--track', `${t.clientHeight}px`)
-    t.style.setProperty('--thumb', `${thumbSize(t.clientHeight, c.clientHeight, c.scrollHeight)}px`)
-  }, [])
-  // the length follows the pane's size, the scale and the page count; a frame after, once PDF.js has laid the pages
-  // biome-ignore lint/correctness/useExhaustiveDependencies: these are the triggers, what changes the pages' height; size reads the elements
-  useEffect(() => { const id = requestAnimationFrame(size); return () => cancelAnimationFrame(id) }, [state.scale, state.pages, state.display, state.narrow])
+  // The length in the frame the scroll's length changes, before that frame is painted: a ResizeObserver over the pane and
+  // over the pages' stack in its scroller is told after the frame's layout, and what its callback sets is laid out again
+  // before the paint. The thumb's place is the scroll timeline's share of the length left to it (reader.css @keyframes
+  // thumb), in the same frame: set a frame later — as it was, from a React effect on the zoom's state and a frame after
+  // that — every step of a pinch drew the thumb at the new share of the old length, then moved it once the length came,
+  // so that it shook up and down through the gesture
   useEffect(() => {
-    const pane = track.current?.parentElement
-    if (!pane) return
-    const observer = new ResizeObserver(() => size())
+    const t = track.current, c = scrollerOf(t), pane = t?.parentElement
+    if (!t || !c || !pane) return
+    const size = () => {
+      const s = scrollerOf(t)
+      if (!s) return
+      t.hidden = s.scrollHeight <= s.clientHeight + 1
+      t.style.setProperty('--track', `${t.clientHeight}px`)
+      t.style.setProperty('--thumb', `${thumbSize(t.clientHeight, s.clientHeight, s.scrollHeight)}px`)
+    }
+    const observer = new ResizeObserver(size)
     observer.observe(pane)
+    const stack = c.querySelector(':scope > .pdfViewer')
+    if (stack) observer.observe(stack)
     return () => observer.disconnect()
-  }, [size])
+  }, [])
   const onDown = (e: React.PointerEvent<HTMLDivElement>) => {
     const t = track.current, c = scrollerOf(t)
     if (!t || !c) return

@@ -1,7 +1,8 @@
 // Pinch zoom (the reader's design, §6.8): a trackpad pinch arrives as a wheel event with Ctrl held; over the pages it
 // zooms both sides together about the pointer — PDF.js scales them by CSS while the fingers move and draws them once,
-// 400 ms after they stop. A trackpad's small deltas zoom continuously, a mouse notch a tenth. One call per frame. ⌘ and
-// Ctrl with − and + zoom by a tenth; the browser's own zoom is taken only over the pages
+// 400 ms after they stop. A trackpad's small deltas zoom continuously, a mouse notch a tenth. One call per frame, with the
+// frame's steps however small: the view carries what PDF.js's rounding to a hundredth leaves of each (reader-view.mjs
+// pinch). ⌘ and Ctrl with − and + zoom by a tenth; the browser's own zoom is taken only over the pages
 import { type RefObject, useEffect } from 'react'
 import type { ReaderController, Side } from '../controller'
 
@@ -22,9 +23,7 @@ export function usePinch(controller: ReaderController, doc: RefObject<HTMLElemen
       side = pane.dataset.side as Side
       frame ||= requestAnimationFrame(() => {
         frame = 0
-        // under half a percent the frame sends nothing and keeps it: a slow pinch's steps add up until they count
-        // rather than being dropped, which left a slow pinch zooming not at all (#299, Part 3's M4)
-        if (Math.abs(factor - 1) < 0.005) return
+        if (factor === 1) return
         const f = factor
         factor = 1
         controller.pinch(side, f, origin)
