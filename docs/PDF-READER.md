@@ -1016,6 +1016,16 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
     `LEFT_WAIT_MS`) and is put in place in the task the left's page is told drawn in. Chromium, 2602.23285v2 p8 at k 2, asked to
     both painted, three runs: 3,275 to 3,324 ms before (the right 2,031 to 2,083 ms after the left), 1,260 to 1,272 ms now (0 to
     38 ms apart), against 1,211 to 1,238 ms for the left alone.
+  - **A page in place before the next is laid.** From a near page's answer until its commit ends (its copy drawn, the wait for
+    the left's page, the swap) the side holds the door (`hold`, the commit's promise): the door's drive finishes the closure in
+    hand and takes and lays no other page meanwhile, whichever is asked, 2 s at most (`reader.mjs` `HOLD_MS`), then the newest
+    ask first as before. A copy is drawn over several frames (PDF.js continues a render in animation frames), and the drive had
+    gone on to the next page asked between them (the run's `scheduler.yield` continuations), so that page 1 was in place only
+    after page 2's ink was read and its first units laid: 0.08 to 0.13 s later at 1x CPU, 0.26 to 0.40 s at 4x, on three of four
+    papers (replays of staging 6e0a8d1c, 2026-11-01). The page the reader waits on is now shown first, the pages after it laid
+    once it is. Replayed on the same recorded visits (six papers, a returning reader on a 40 ms link, two repetitions, staging's
+    engine with and without the hold): page 1 in place a median 68 ms sooner at 1x CPU (19 to 170 ms by paper) and 163 ms at 4x
+    (48 to 511); page 2, which had been laid in the frames page 1's copy left free, a median 15 ms later at 1x and 224 ms at 4x.
   - **Failures.** A group the document does not hold: the unit is the original's. A render that throws: the page shows the
     original (`shownOriginal`) and is asked again on the next scroll or zoom.
 - **The highlight's data** (§17.8): the left's shapes from the parts' rectangles as they come and, on the first want of a

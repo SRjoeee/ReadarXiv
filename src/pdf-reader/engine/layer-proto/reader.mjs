@@ -107,6 +107,8 @@ function addShapes(by, units) {
  *                        page drawn at k with the groups of its drawn units hidden, its crops and pastes (run.drawCopy)
  *   textOf(page)         a ready page's text layer, plain data (textlayer.mjs): the page's text the drawing keeps, the text it
  *                        moves with a crop, and each drawn line of the translation, in reading order; made anew on every call
+ *   hold(promise)        the drive turns to no other page while `promise` is pending, HOLD_MS at most: a host's commit of a page
+ *                        it was answered, asked in the answer's reaction, so that the next page is laid once that one is in place
  *   unitAt(page, x, y)   the unit of the left whose shape holds the point (PDF units), the smallest; null where none
  *   stats(), dispose()   what it has done; the run let go, every ask rejected, its documents told to onRetired once read by
  *                        nothing. After dispose pageOf, leftPageOf, copyOf and pageState throw; stats and unitAt answer; textOf throws as copyOf does
@@ -116,6 +118,10 @@ export const DROPPED_ROWS = 1000
 /** the draws of left parts the door holds for the run at most (their left parts' bytes): past it the oldest go, and the run reads
  *  those pages itself (drawOf null) */
 export const DRAWS_HELD = 16 * 2 ** 20
+/** the longest a host's hold keeps the drive from the next page, ms (hold): a commit's copy is drawn in tenths of a second, and its
+ *  wait for the left's page is 1.5 s at most (the side's LEFT_WAIT_MS); past it the hold is a promise gone astray, and the pages after
+ *  it are laid as with none */
+const HOLD_MS = 2000
 
 export async function openLayer(o = {}) {
   const { bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules = BUILTIN_RULES, drawsHeld = DRAWS_HELD, OPS = null, classes = null } = o ?? {}
@@ -263,6 +269,19 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   }
   const off = a => { if (a.signal && a.onAbort) a.signal.removeEventListener('abort', a.onAbort) }
 
+  // ---- the holds (hold): a host's commit of a page answered, under way; while one is, the drive turns to no other page
+  const holds = new Set()
+  const unheldWaiters = []
+  /** a hold ended (its promise settled, HOLD_MS passed, or dispose): the drive waiting on the last one goes on */
+  const endHold = h => {
+    if (!holds.delete(h)) return
+    clearTimeout(h.timer)
+    if (!holds.size) for (const ok of unheldWaiters.splice(0)) ok()
+  }
+  const endHolds = () => { for (const h of [...holds]) endHold(h) }
+  /** resolves once no hold is left */
+  const unheld = () => (holds.size ? new Promise(ok => { unheldWaiters.push(ok) }) : Promise.resolve())
+
   // ---- readiness: one pass over the pages, after each event (the door design §3), and the drive: one target at a time, laid
   // by its closure alone (run.layFor; the 1b-D design §2.2)
   /** each live ask's turn (the newest last), and the pages told laying in the order they were (the oldest first), each with
@@ -336,6 +355,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
     if (dead || disposed) return
     dead = e
     dropDraws()
+    endHolds()
     for (const [, list] of asks) for (const a of list) { off(a); a.reject(e) }
     asks.clear()
     askedAt.clear()
@@ -355,9 +375,10 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       do {
         again = false
         step()
-        // (the drive's page taken where it is the drive's already, or the drive is idle and turns to it now)
+        // (the drive's page taken where it is the drive's already, or the drive is idle and turns to it now: not while a host
+        // holds it, when it turns to the page then asked newest)
         const t = pick()
-        if (t?.take && (current === null || current === t.page)) take(t.page)
+        if (t?.take && (current === t.page || (current === null && !holds.size))) take(t.page)
       } while (again && !disposed)
     } finally { evaluating = false }
     // (a drive waiting in another page's closure looks again at what it lays)
@@ -372,12 +393,17 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
     void (async () => {
       try {
         for (let t = pick(); t && !disposed; t = pick()) {
+          // (a host's commit of a page answered, under way: no other page laid until it is in place, or HOLD_MS)
+          if (holds.size) { await unheld(); continue }
           if (t.take) take(t.page)
           current = t.page
           await run.layFor(t.page, () => !disposed && pick()?.page === t.page)
           current = null
           if (disposed) return
           evaluate()
+          // (the pages it answered reach their askers first, in a microtask: a host that holds the drive for a page's commit, in
+          // that reaction, holds it before the next page is taken)
+          await Promise.resolve()
         }
       } catch (e) { die(e) } finally { driving = false; current = null }
     })()
@@ -484,6 +510,13 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       return out
     },
     end() { if (!disposed) { run.end(); evaluate() } },
+    hold(promise) {
+      if (disposed || dead) return
+      const h = { timer: 0 }
+      holds.add(h)
+      h.timer = setTimeout(() => endHold(h), HOLD_MS)
+      Promise.resolve(promise).then(() => endHold(h), () => endHold(h))
+    },
     addPart(part) {
       if (disposed || dead) return
       if (part !== null && typeof part === 'object' && toldParts.has(part.sha256)) return
@@ -609,6 +642,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
       for (const [, list] of leftWaiters) for (const w of list) w.no(e)
       leftWaiters.clear()
       dropDraws()
+      endHolds()
       goneNow(e)
       listeners.clear()
       run.dispose()

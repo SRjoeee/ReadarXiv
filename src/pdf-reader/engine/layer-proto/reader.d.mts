@@ -157,6 +157,12 @@ export interface Layer {
    *  until dispose: the composed page's text items its drawing keeps where they stand, those it moves with a crop, and each drawn
    *  line of the translation, in reading order, in the page's PDF units. A page not ready rejects; throws after dispose (as copyOf) */
   textOf(page: number): Promise<TextLayerData>
+  /** the drive held from the next page while `promise` is pending, 2 s at most: a host's commit of a page it was answered (its
+   *  copy drawn and put in place), asked in that answer's own reaction (pageOf's `then`), so that the pages after it are laid once
+   *  it is in place, not between the frames its copy is drawn over. The drive finishes the closure it is laying, and takes and
+   *  lays no other page meanwhile, whichever is asked; then the newest ask first, as with none. A rejection ends it as a
+   *  fulfilment does (the host's to report). A no-op after dispose, which ends every hold */
+  hold(promise: PromiseLike<unknown>): void
   /** the unit at a point of a page (the parts' left rectangles, PDF units), the smallest where several hold it; null where none
    *  is located or the page is uncovered (D-6). Answers after dispose */
   unitAt(page: number, x: number, y: number): number | null
