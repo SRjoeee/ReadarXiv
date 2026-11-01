@@ -1065,6 +1065,13 @@ the highlight's layer, outside the dark filter (the left's links keep their colo
   with no glyph under it (an image, a symbol) is named by the host's `ViewWords.linkName`, else by the view's placeholder:
   the extension's are the owner's words, by where it goes (UI.md S-R-25, `pdf-reader/ui/link-names.ts`). A record the view
   cannot carry (no box of area, neither or both targets, an address off the allow-list) is left out.
+- **Moved with the text they are over** (`layer-proto/links.mjs` `matchUnit`, `placeUnit`): an annotation over ink the layer
+  redraws is matched to what the unit draws of it (a citation, a reference, a url, an `\href` pair, a footnote's mark) and laid
+  over that, `moved: true`; one round the unit's whole text, which no piece takes (a contents entry's title, hyperref's link over
+  its number and title: an ink unit of no placeholder), over the unit's drawing, a box a drawn line, with what it holds besides
+  where TeX set it (the entry's number, kept as the original's ink). Before, it was dropped with the ink it erased: the
+  translated contents linked nowhere on the right while the left's entries jumped (2610.40645v1 p1, the owner's report of
+  2026-11-01). An annotation no unit took stays over the original's ink where none of it is erased, and is dropped where some is.
 - **Placed by shares.** The anchor spans the union of its boxes and each box is a span of it, every size a share of the
   page's frame (or the link's) made once from the place's viewport (its rotation, its box's origin): the links' element is
   laid at the page's size at its scale, the copy's frame (§11.8), never the place's box that PDF.js floors to whole CSS

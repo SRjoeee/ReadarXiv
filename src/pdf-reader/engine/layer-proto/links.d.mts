@@ -52,7 +52,7 @@ export declare function ownersOf(list: readonly (Annot | Unsupported)[] | null |
 /** the record of an annotation left over the original's ink (`order` set when the list is ranked). Its `name` is text from the
  *  PDF, which may hold control and bidirectional characters: a view sets it as text, never as markup */
 export declare function inPlaceOf(a: Annot): LinkRecord
-/** the attribution of a record: its source annotations [page, i] and the tier that made it ('geometry', 'key', 'url', 'order'
+/** the attribution of a record: its source annotations [page, i] and the tier that made it ('geometry', 'key', 'url', 'order', 'whole'
  *  for a moved record, 'place' for one in place) */
 export interface LinkSource { annots: [number, number][]; tier: string }
 /** the annotations of page q unit `u` owns: of the units with lines on q in their growth rank there, the first whose rectangles
@@ -84,8 +84,11 @@ export interface LinkTarget {
   gap: ReadonlySet<string> | null
   /** its segments in TeX's file: [page, x0, baseline, x1, top, bottom] */
   segs: readonly (readonly number[])[] | null
-  /** how it is drawn: as text in the page's face, as a crop, as a pair's tokens, or not (kept, nothing, not drawn) */
-  draw: 'text' | 'crop' | 'pair' | null
+  /** how it is drawn: as text in the page's face, as a crop, as a pair's tokens, as the unit's whole drawing, or not (kept,
+   *  nothing, not drawn) */
+  draw: 'text' | 'crop' | 'pair' | 'whole' | null
+  /** the whole drawing's: the unit's own characters the drawing replaces, by key `page|item|k`, and where each stands */
+  own?: readonly { key: string; page: number; x0: number; x1: number; yb: number }[]
 }
 /** an annotation a unit owns, on its page */
 export interface LinkCandidate { q: number; a: Annot }
