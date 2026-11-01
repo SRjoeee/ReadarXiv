@@ -973,12 +973,22 @@ describe("the class's own marks after a unit's text: a theorem's note (2610.2108
     // (no mark past the source's own: none drawn, the translation's bracket its own)
     const none = item('Latent transition error (LTE)', 50, 500, 4, 1)
     expect(draw(entry('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\uff08LTE\uff09'), none)).toBe('\u6f5c\u5728\u8f6c\u79fb\u8bef\u5dee\uff08LTE\uff09')
+    // (the source's own end may be a symbol, no punctuation: only the class's marks are held to be punctuation \u2014 CodeRabbit on #543)
+    const deg = [...item('Angle of 90\u00b0', 50, 500, 4, 1), ...item('.', 74, 500, 4, 2)]
+    expect(draw(unit('\u89d2\u5ea6\u4e3a90\u00b0', 'Angle of 90\u00b0'), deg)).toBe('\u89d2\u5ea6\u4e3a90\u00b0.')
+    // (a straight double quote TeX prints as a closing one: the source's own, its translation's closing quote kept before the
+    // class's ")" \u2014 CodeRabbit on #543)
+    const quoted = [...item('so-called \u201dgreedy\u201d', 50, 500, 4, 1), ...item(')', 86, 500, 4, 2)]
+    expect(draw(unit('\u6240\u8c13\u7684\u201c\u8d2a\u5fc3\u201d', 'so-called "greedy"'), quoted)).toBe('\u6240\u8c13\u7684\u201c\u8d2a\u5fc3\u201d)')
   })
   it("reads the source's end marks as TeX prints them, after its last letter, digit or placeholder", () => {
     const text = (s: string) => ({ t: 'text', s }), ph = { t: 'ph', src: '$x$' }
     const of = (pieces: unknown[], src = '') => { const u = { src }; Object.defineProperty(u, 'source', { value: pieces }); return L2.sourceEndMarks(u as never) }
     expect(of([text('Phys. Rev. Lett. , ('), ph, text(')')])).toEqual([')'])
     expect(of([text("the ``greedy rule''.")])).toEqual(['\u201d', '.'])
+    expect(of([text('the "greedy" rule"')])).toEqual(['\u201d'])
+    // (a source text piece holds its UTF-8 bytes read latin1, as the engine's text does: "\u00b0" is "\u00c2\u00b0" there)
+    expect(of([text('at 90\u00c2\u00b0')])).toEqual(['\u00b0'])
     expect(of([text('as in \\cite x\\@.')])).toEqual(['.'])
     expect(of([text('a value~\\%).')])).toEqual(['%', ')', '.'])
     expect(of([text('see '), { t: 'open', id: 1, src: '\\emph{' }, text('this'), { t: 'close', id: 1, src: '}' }, text(' ')])).toEqual([])

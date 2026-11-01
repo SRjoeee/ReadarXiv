@@ -1529,8 +1529,9 @@ const TAIL_MAX = 3
 const TEX_TOKEN = /\\[A-Za-z@]+\*?|\\[\s\S]|---|--|''|``|[\s\S]/gu
 /** what TeX sets no ink for at a text's end: an end-of-sentence mark, a thin or a word's space, a discretionary, a group's brace */
 const NO_INK = new Set(['\\@', '\\,', '\\;', '\\:', '\\!', '\\/', '\\ ', '\\-', '~', '{', '}'])
-/** the marks TeX's text fonts set for a ligature of the source's characters */
-const TEX_LIGATURE = Object.freeze({ '---': '\u2014', '--': '\u2013', "''": '\u201d', '``': '\u201c', '`': '\u2018', "'": '\u2019' })
+/** the marks TeX's text fonts set for a ligature of the source's characters, and for a straight double quote (OT1's and T1's
+ *  closing one, as a translation writes it) */
+const TEX_LIGATURE = Object.freeze({ '---': '\u2014', '--': '\u2013', "''": '\u201d', '``': '\u201c', '`': '\u2018', "'": '\u2019', '"': '\u201d' })
 /** the marks a source text ends with, after its last letter, digit or a command that sets a word, as TeX prints them, in order,
  *  and whether that content was reached (`stopped`) */
 function textEndMarks(s) {
@@ -1592,7 +1593,8 @@ function tailOf(out, unit, keepSet, ownEnds = sourceEndMarks(unit)) {
   // (a punctuation mark in a text font, as a class sets its own: a formula's delimiter in a math font is its formula's ink,
   // 1512.03385's Table 1 brackets beside its cells, never the unit's)
   const mark = c => /^\p{P}$/u.test(c.ch) && !c.nu && c.st?.fam !== 'math'
-  if (rest.length > TAIL_MAX || keepSet.has(line) || after.some(c => lineOf(c) !== line || !mark(c)) || rest.some(c => out.cat.get(charKey(c)) !== 'acc')) return null
+  // (the source's own end marks may be a symbol, "90\u00b0": the class's alone are held to be marks)
+  if (rest.length > TAIL_MAX || keepSet.has(line) || after.some(c => lineOf(c) !== line) || rest.some(c => !mark(c) || out.cat.get(charKey(c)) !== 'acc')) return null
   return rest.map(c => ({ ch: c.ch, st: c.st ?? null }))
 }
 
