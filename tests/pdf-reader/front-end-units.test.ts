@@ -211,7 +211,7 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     expect(marked).toContain('\\rowcolor{gray!15}[0pt][0pt]\n\\multicolumn{2}{l}{')
   })
   it('a control word the source ends with a comment before a word is ended by a space where a unit is written back (2610.40394v1\'s author block)', () => {
-    // (the walk passes over the comment, and the two were written as one name, \bfseriesYouqing: seven TeX errors, the names
+    // (the walk passes over the comment, and the two were written as one name, \bfseriesYouqing: four TeX errors, the names
     // gone from the base page, and the guard's two compiles found no unit to blame)
     const body = '\\author{%\n\\normalfont\\bfseries%\nYouqing Fang$^{1}$, \\authorcr\n\\bfseries%\nBin Liu$^{2}$}\n\\maketitle\nThe body of words.'
     const paper = openPaper(new Map([['main.tex', enc(doc(body, '\\providecommand\\authorcr{\\\\}'))]]))

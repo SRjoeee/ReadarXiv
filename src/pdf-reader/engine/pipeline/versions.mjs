@@ -402,7 +402,7 @@
 //     2610.30034v1's three biographies set digits before their names). colortbl's \rowcolor takes its overhangs
 //     (arg-roles.mjs CURATED: 2610.40394v1's `[0pt][0pt]` began its rows' units, three "Misplaced \omit"). And a control word the
 //     source ends with a comment before a word is written back with a space after it (patch: 2610.40394v1's
-//     `\bfseries%⏎Youqing`, written \bfseriesYouqing, seven TeX errors and its authors' names gone from the base page; the
+//     `\bfseries%⏎Youqing`, written \bfseriesYouqing, four TeX errors and its authors' names gone from the base page; the
 //     guard's two compiles found no unit to blame either). Of 231 local sources these four change; the other 227's units,
 //     marked originals and probe files are 50's byte for byte. 2610.37818v1's marked original now stands at once, page for page
 //     its own source's text, its final pass's page ends arXiv's on all 26 pages, in three compiles. Raised so: 13 units change,

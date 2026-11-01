@@ -2531,7 +2531,7 @@ own), each part carrying its pages' cell rules (`rules`).
     beginning another now takes that one's parameters: `envDefs`); and in 2610.40394v1, a new paper of 2026-11-01, colortbl's
     `\rowcolor{…}[0pt][0pt]`, whose overhangs began its rows' units ("Misplaced \omit" three times; the role table now reads
     them: `arg-roles.mjs` CURATED). Its author block was the fourth case: `\bfseries%⏎Youqing`, whose comment the walk passes
-    over, was written back `\bfseriesYouqing`, one undefined name, seven errors and its authors' names gone from the base page;
+    over, was written back `\bfseriesYouqing`, one undefined name, four errors and its authors' names gone from the base page;
     a control word the source's own word follows directly in a unit's pieces is now written with a space after it (`patch`),
     which TeX skips as it skipped the comment. 2610.37818v1's marked original now stands at once, its text page for page its
     own source's, its final pass's page ends arXiv's on every page, in three compiles (the probe, the marked original, the

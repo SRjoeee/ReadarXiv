@@ -2762,7 +2762,7 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
       if (guardControlWords && /\\[A-Za-z@]+\*?$/.test(p.src) && next?.t === 'text' && next.tr && /^[^\s{[]/.test(next.s)) parts.push(utf8Bytes('{}'))
       // (the source's own word right after a control word: in the source a comment stood between them, which ends the name and
       // which the walk passes over — `\\bfseries%⏎Youqing`, written \\bfseriesYouqing, one undefined name: 2610.40394v1's author
-      // block, seven TeX errors and its names gone from the base page. A space ends it as the comment did; TeX skips it)
+      // block, four TeX errors and its names gone from the base page. A space ends it as the comment did; TeX skips it)
       else if (/\\[A-Za-z@]+$/.test(p.src) && next?.t === 'text' && !next.tr && /^[A-Za-z@]/.test(next.s)) parts.push(utf8Bytes(' '))
     }
     if (m?.before && beforeAt === pieces.length && beforeCut === -1) parts.push(utf8Bytes(m.before))
