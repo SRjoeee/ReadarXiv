@@ -24,6 +24,7 @@ on:
       - 'src/pdf-reader/engine/layout/fills.mjs'
       - 'src/pdf-reader/engine/layout/ink-units.mjs'
       - 'src/pdf-reader/engine/layout/ink.mjs'
+      - 'src/pdf-reader/engine/layout/label-form.mjs'
       - 'src/pdf-reader/engine/layout/json.mjs'
       - 'src/pdf-reader/engine/layout/ledger.mjs'
       - 'src/pdf-reader/engine/layout/marks.mjs'

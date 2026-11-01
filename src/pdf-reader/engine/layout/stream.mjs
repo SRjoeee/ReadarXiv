@@ -193,7 +193,8 @@ const NAMED_LABEL = new RegExp(`^${LABEL_NAME}`, 'u')
  * unit's start mark at its head, marks.mjs headEnd, so the display has no point of its own): TeX ships it right before the unit's
  * start mark, in the paragraph it begins (\\[ or $$ in vertical mode begins one), so what the start mark's region holds on its page
  * from that paragraph's point (`paras`, marks.mjs POINTS_TEX q<n>) — or, with none after it, from the last mark before the start
- * mark — to the start mark is the display's: a listing or any text no mark bounds before it stays out. A babel
+ * mark — to the start mark is the display's: a listing or any text no mark bounds before it stays out; none where neither stands
+ * on the start mark's page before it (the display may have begun on the page before, TeX breaking it over the page). A babel
  * name's points are passed over, a name TeX sets inside a display being the display's (`\text{\figurename}`). Out
  * of it: what stands on the line of the region's glyph before that point (the closing punctuation the unit before set after its
  * end mark, own.mjs MR 4c; a rule under that line) and on the start mark's own line (the unit's label, MR 5); and the paragraph's
@@ -212,7 +213,10 @@ function headInk(P, R, q) {
   let Q = null
   for (const x of P.paras ?? []) if (x.glyph <= S.glyph && x.box <= S.box && (!A || x.glyph >= A.glyph) && (!Q || x.glyph >= Q.glyph)) Q = x
   const from = Q ?? A
-  const g0 = from ? from.glyph : 0, b0 = from ? from.box : 0
+  // (none on its page before the start mark: the display may have begun on the page before, a display TeX broke over the page,
+  // and what this page holds of it is no whole display)
+  if (!from) return null
+  const g0 = from.glyph, b0 = from.box
   let glyphs = [], boxes = []
   for (let g = g0; g < S.glyph; g++) if (R.glyph[g] === r) glyphs.push(g)
   for (let b = b0; b < S.box; b++) if (R.box[b] === r) boxes.push(b)
@@ -231,7 +235,7 @@ function headInk(P, R, q) {
   }
   // (the paragraph's first line, where it stands above all the rest — a display's run of glyphs on one baseline goes on above or
   // beside it, a fraction's, a script's — and is a label of a name: none of the display's)
-  if (Q && glyphs.length) {
+  if (glyphs.length) {
     const g = glyphs[0]
     let n = 0
     while (n < glyphs.length && onLine(G, glyphs[n], G.y[g], G.size[g])) n++

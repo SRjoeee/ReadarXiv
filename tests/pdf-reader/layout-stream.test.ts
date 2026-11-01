@@ -278,9 +278,14 @@ describe('ownedOf: a display its unit opens with, which the marking passes over 
   it('reads its own region alone: a float shipped between, a footnote below, a running head before the body', () => {
     const page = pageOf(['Head', { at: 'bs1' }, 'words', { at: '0e' }, { at: 'fs1' }, '\nFigure 1', { at: 'fe1' }, '\nx=y', { at: '1s' }, '\ntext', { at: 'be1' }, '\nnote'])
     expect(owned([page], {}, [], { '1s': head })).toEqual({ 'p1.0a': ['x=y', 0] })
-    // the display the body's first line, no point before the start mark but the body's own: from the body's start
+    // the display the body's first line, no point before the start mark but the body's own: it may have begun on the page before
+    // (a display TeX broke over the page, Codex on #550), so none; the display's paragraph point on the page bounds it
     const top = pageOf(['Head', { at: 'bs1' }, 'x=y', { at: '1s' }, '\ntext'])
-    expect(owned([top], {}, [], { '1s': head })).toEqual({ 'p1.0a': ['x=y', 0] })
+    expect(owned([top], {}, [], { '1s': head })).toEqual({})
+    const begun = pageOf(['Head', { at: 'bs1' }, { para: 'q1' }, 'x=y', { at: '1s' }, '\ntext'])
+    expect(owned([begun], {}, [], { '1s': head })).toEqual({ 'p1.0a': ['x=y', 0] })
+    const broken = [pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, '\nx=1', { at: 'be1' }]), pageOf([{ at: 'bs2' }, 'y=2', { at: '1s' }, '\ntext'])]
+    expect(owned(broken, {}, [], { '1s': head })).toEqual({})
   })
 
   it('owns nothing where it cannot be told: an opening point alone before it, nothing between, a start mark set twice', () => {
@@ -329,6 +334,9 @@ describe('ownedOf: a display its unit opens with, which the marking passes over 
       const page = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { para: 'q3' }, `\n${row}`, '\nx=2', { at: '1s' }, '\ntext'])
       expect(owned([page], {}, [], { '1s': head }), row).toEqual({ 'p1.0a': [want, 0] })
     }
+    // (and with no paragraph point, an unindented one's — an item's, \\noindent's —, from the mark before: Codex on #550)
+    const unindented = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, '\nTheorem 5.', '\nx=y', { at: '1s' }, '\ntext'])
+    expect(owned([unindented], {}, [], { '1s': head })).toEqual({ 'p1.0a': ['x=y', 0] })
     const frac = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { para: 'q3' }, '\nTheorem=', { u: '1', x: 140, y: 694 }, { u: 'N', x: 140, y: 681 }, { u: 'z', x: 150, y: 688 }, { at: '1s' }, '\ntext'])
     expect(owned([frac], {}, [], { '1s': head })).toEqual({ 'p1.0a': ['Theorem=1Nz', 0] })
   })
