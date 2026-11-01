@@ -142,6 +142,16 @@ copyWithGrants(BUILD, EXT, { hostPermissions: ['http://127.0.0.1/*', ...LAYER_HO
 const { context, worker, id, readerUrl } = await launchWithReader({
   profile: 'reader-checks', extension: EXT, headless: !process.env.AXT_HEADED, viewport: { width: 1440, height: 900 }, args: [RESOLVER_WALL],
 })
+/** each object of the layer asked of the stand-in, as its route is entered (the stand-in records a request only once it has read
+ *  its headers, up to a second later), with the page whose reader asked it (a reader framed over arXiv's PDF page is that page's;
+ *  null for a request of no page) */
+const objectAsks = []
+function noteObject(route, url) {
+  if (!/\/o\/[0-9a-f]{64}$/.test(url.pathname)) return
+  let page = null
+  try { page = route.request().frame().page() } catch { /* a request of no page (the worker's) */ }
+  objectAsks.push({ page, sha: url.pathname.slice(-64) })
+}
 const guard = await routeTable(context, [
   ['https://arxiv.org', arxiv],
   ['https://example.invalid', outside],
@@ -149,7 +159,7 @@ const guard = await routeTable(context, [
   [echo.origin, route => route.continue()],
   // (the stand-in's routes only — the layer API, the faces' table and its file, the hyphenation —: any other path of these hosts
   // is not handled, and so is a violation of the guard)
-  ...LAYER_HOSTS.map(host => [host, (route, url) => (serves(url.pathname) ? api.route(route) : false)]),
+  ...LAYER_HOSTS.map(host => [host, (route, url) => { noteObject(route, url); return serves(url.pathname) ? api.route(route) : false }]),
 ])
 console.log(`route table: ${guard.hosts.join(', ')}`)
 console.log(`echo endpoint at ${echo.baseURL}; the layer API's bundle key ${VTAG}`)
@@ -170,6 +180,21 @@ async function openReader(query = {}) {
   const page = track(await context.newPage())
   await page.goto(readerUrl({ live: '1', paper: PAPER, ...query }))
   return page
+}
+/** the database of the extension's store of layers on this machine (src/cache/layer-store.ts LAYER_DB) */
+const LAYER_DB = 'axt-layer'
+/** that store emptied, from a page of the extension's origin, with no reader open; what the deletion answered */
+const clearLayerStore = async () => {
+  const p = await extensionPage()
+  // (`blocked` is no end: the deletion goes on once the connections still open close, so it is waited for, 10 s at most)
+  const got = await p.evaluate(name => new Promise(ok => {
+    const q = indexedDB.deleteDatabase(name)
+    const t = setTimeout(() => ok('timed out'), 10_000)
+    q.onsuccess = () => { clearTimeout(t); ok('deleted') }
+    q.onerror = () => { clearTimeout(t); ok(`error ${q.error?.name}`) }
+  }), LAYER_DB)
+  await p.close()
+  return got
 }
 /** the paper's pages counted on the left, and the extension's settings read: the reader has opened the paper */
 const paperOpened = (page, timeout = 30_000) => page.waitForFunction(() => { const s = window.__reader?.controller?.getState(); return !!s?.settings && s.sides.left.pages > 0 }, null, { timeout }).then(() => true, () => false)
@@ -792,6 +817,12 @@ try {
   {
     // a paper not prepared yet: the run's GET says so, it asks the prepare, the 202s carry the objects made so far, then the catalog
     api.set({ layer: mode.preparing(2500, { begun: false }) })
+    // (on a machine that holds none of the sample's layer: the readers of the sections before kept its objects in the extension's
+    // store, and what this reader downloads is counted from its own start. Counted over the whole run, as it was, a left part a
+    // reader before had begun to download and lost was counted twice: the entries' reader asks its pages ahead as its rows end,
+    // and its way back, a moment later, takes its frame away, the request in flight with it (net::ERR_ABORTED), so that a reader
+    // of a later section asked it again, from no store; and they are this reader's by its page)
+    const storeCleared = await clearLayerStore()
     const asked0 = api.requests.length
     const page = await openReader({ mode: 'bilingual' })
     const probe = () => page.evaluate(() => window.__reader.view.probe())
@@ -802,7 +833,9 @@ try {
     const opened = await page.waitForFunction(() => window.__reader?.view?.probe().original === 'open', null, { timeout: 30_000 }).then(() => true, () => false)
     check('the reader opens the sample in the view', opened, JSON.stringify(opened ? await probe() : {}))
     await page.evaluate(() => { window.__long = []; new PerformanceObserver(l => { for (const e of l.getEntries()) window.__long.push(Math.round(e.duration)) }).observe({ type: 'longtask' }) })
-    const objectsAsked = () => api.requests.filter(r => /\/o\/[0-9a-f]{64}$/.test(r.path)).map(r => r.path.slice(-64))
+    /** the layer's objects this section's reader asked of the server, by digest (by its page: a reader before, closed, whose request
+     *  the stand-in records late is not this one) */
+    const objectsAsked = () => objectAsks.filter(a => a.page === page).map(a => a.sha)
     const lefts = new Set(Object.values(sampleCut.leftRefs))
     /** what each place shows: the layer (its copy drawn, its SVG's text), the original's page view, nothing */
     const shown = () => page.evaluate(() => [...document.querySelectorAll('#right .axt-place')].map(p => {
@@ -835,10 +868,12 @@ try {
     /** each left part's downloads, by its digest */
     const leftFetches = (asked = objectsAsked()) => { const n = new Map(); for (const x of asked) if (lefts.has(x)) n.set(x, (n.get(x) ?? 0) + 1); return n }
     const onceEach = (asked = objectsAsked()) => [...leftFetches(asked).values()].every(k => k === 1)
+    /** the left parts of the pages near the view (1 and 2) downloaded by this reader: its store was empty, and its count is its own */
+    const nearOnce = () => [1, 2].every(p => leftFetches().get(sampleCut.leftRefs[p]) === 1)
     const leftLine = () => { const n = leftFetches(); return `left parts downloaded: ${[...n].map(([sha, k]) => `p${pageOfLeft.get(sha)}${k > 1 ? ` x${k}` : ''}`).join(' ') || 'none'}, ${[...n.keys()].reduce((a, sha) => a + sampleCut.objects.get(sha).length, 0)} bytes` }
     const viewLeft = async () => { const p = await side(); return { asked: p?.leftAsked, read: p?.leftParts } }
     const v0 = await viewLeft()
-    check('nothing of the left is read by the view before the pointer wants a page; the layer\'s draws downloaded each left part once at most', v0.asked === 0 && v0.read === 0 && onceEach(), `the view asked ${v0.asked} and read ${v0.read}; ${leftLine()}`)
+    check('nothing of the left is read by the view before the pointer wants a page; the layer\'s draws downloaded each left part once at most', storeCleared === 'deleted' && nearOnce() && v0.asked === 0 && v0.read === 0 && onceEach(), `the store ${storeCleared}; the view asked ${v0.asked} and read ${v0.read}; ${leftLine()}`)
     const twice = objectsAsked().find(x => lefts.has(x)) ?? Object.values(sampleCut.leftRefs)[0]
     control('a left part downloaded twice (the draw\'s fetch and the view\'s not shared) fails the check of once', { ok: onceEach([...objectsAsked(), twice, twice]), detail: `p${pageOfLeft.get(twice)} counted three more times` })
     /** where a unit's first rectangle's middle is on the screen, on a pane's page */
