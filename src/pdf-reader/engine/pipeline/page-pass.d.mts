@@ -112,4 +112,4 @@ export declare function layerOfPaper(o: LayerOptions): Promise<
   | { refused: 'anchors'; why: string }
 >
 /** the figure units the wrap drew, appended to `bundle` as ink units of kind inkfigures, and their rows by page */
-export declare function figureUnits(given: { units: readonly object[] } | null | undefined, o: { bundle: unknown[]; undrawable?: readonly number[] | null; M: number; prose?: string }): Map<number, import('../layer-proto/figure-rows.mjs').FigureRowWire[]>
+export declare function figureUnits(given: { units: readonly object[] } | null | undefined, o: { bundle: unknown[]; undrawable?: readonly number[] | null; M: number; views: readonly (readonly number[] | null | undefined)[]; prose?: string }): Map<number, import('../layer-proto/figure-rows.mjs').FigureRowWire[]>

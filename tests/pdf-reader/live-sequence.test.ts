@@ -572,13 +572,14 @@ describe('a copy made under pipeline 21, reopened under 22 (and on)', () => {
 // after the ink units (layout/ink-units.mjs rule 10), which no language translates, 43 changes which marked original stands
 // (layout/guard.mjs copiesOutOfPlace, preambleUnits), no unit, 44 the figure units of a figure whose text runs past its box
 // (the final pass's driver group, live.mjs NO_DRIVER_GROUP), which no source paper's units are, 45 keeps xy-pic's diagram as
-// the paper has it (latex-front.mjs SKIP_ENVS), which this paper has none of, and 46 the figure units of a turned title its box
-// clips (layout/ink.mjs turnedGlyph), no source unit: every unit is the copy's by its hash, carried as it has it, and nothing is
-// sent
-describe('a copy made under pipeline 23 to 29 or 39 to 45, reopened under 46', () => {
+// the paper has it (latex-front.mjs SKIP_ENVS), which this paper has none of, 46 the figure units of a turned title its box
+// clips (layout/ink.mjs turnedGlyph), and 47 those of glyphs not set at their size or of a row no part's reader takes
+// (layout/figure-text.mjs, page-pass.mjs figureUnits), no source unit: every unit is the copy's by its hash, carried as it has
+// it, and nothing is sent
+describe('a copy made under pipeline 23 to 29 or 39 to 46, reopened under 47', () => {
   const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
-  it.each(['23', '24', '25', '26', '27', '28', '29', '39', '40', '41', '42', '43', '44', '45'])('takes every unit as the copy of %s has it: nothing is sent again', async pipeline => {
-    expect(PIPELINE_VERSION).toBe('46')
+  it.each(['23', '24', '25', '26', '27', '28', '29', '39', '40', '41', '42', '43', '44', '45', '46'])('takes every unit as the copy of %s has it: nothing is sent again', async pipeline => {
+    expect(PIPELINE_VERSION).toBe('47')
     const p = paper(), n = p.units.length
     const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
     const record = JSON.parse(JSON.stringify({ pipeline, format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))

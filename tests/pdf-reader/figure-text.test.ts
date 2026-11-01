@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { ANCHOR_REACH, DRAW_BAND, figureUnitsOf, FIGURE_WHYS, ROOM_CLEAR, ROOM_MAX } from '@/pdf-reader/engine/layout/figure-text.mjs'
+import { BAND_MAX, checkFigures } from '@/pdf-reader/engine/layer-proto/figure-rows.mjs'
 import { pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
 import { POINTS_TEX } from '@/pdf-reader/engine/layout/marks.mjs'
 import { CLASSES, FIGURE_KIND, TOGGLE_DEFAULTS, unitClass } from '@/pdf-reader/engine/rules/content-classes.mjs'
@@ -209,6 +210,36 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
       expect(r.units).toEqual([])
       expect(r.stats.clipped).toBe(1)
     }
+  })
+
+  it('a run whose glyphs stand past BAND_MAX of its size from its baseline is no unit: its size is not its glyphs\' (2608.08481v1)', () => {
+    // (OriginLab's Type 3 faces: glyphs of 2048 units an em under a font matrix of 10/2048, shown at a size of about 1, so that a
+    // capital stands 7.16 of the size it is shown at; drawn at that size its translation would be a tenth of the original, and its
+    // row's band no part's reader takes, figure-rows.mjs checkFigures: the part was laid with no layout at all)
+    const at = (up: number, down = -0.2) => {
+      const pg = { ...word('Angle'), view: [0, 0, 300, 300] }
+      for (const g of pg.glyphs) Object.assign(g, { top: g.y + up * g.size, bottom: g.y + down * g.size })
+      return figureUnitsOf([pg] as never, null)
+    }
+    expect(at(0.7).units.map(u => u.text)).toEqual(['Angle'])
+    expect(at(BAND_MAX).units.map(u => u.text)).toEqual(['Angle'])
+    for (const r of [at(7.158), at(0.7, -2.104 * 2)]) {
+      expect(r.units).toEqual([])
+      expect(r.stats.outsized).toBe(1)
+    }
+    // (a turned one alike, by its glyphs' own ink: its band is its font's, which a Type 3 font gives none of)
+    const turned = (up: number) => {
+      const glyphs: unknown[] = [], boxes: number[] = []
+      ;[...'Angle'].forEach((u, k) => {
+        glyphs.push({ u, n: 0, k, ox: 100, oy: 100 + 5 * k, ex: 100, ey: 105 + 5 * k, ux: 0, uy: 1, size: 10, ascent: 0.75, descent: -0.22, up, down: -0.15, font: 'Type3', fill: 0, box: boxes.length / 4, at: 0, pt: 1 })
+        boxes.push(100 - 10 * up, 100 + 5 * k, 101.5, 105 + 5 * k)
+      })
+      const pg = { glyphs: [], turned: glyphs, boxes, shapes: new Map(), paths: boxes.filter((_, i) => i % 4 === 0).map(() => -4), figures: new Map([['0:0', [0, 0, 300, 300]]]), pictures: [{ name: 'zs', glyph: 0, box: 0 }, { name: 'ze', glyph: 0, box: boxes.length / 4 }], points: [], view: [0, 0, 300, 300] }
+      return figureUnitsOf([pg] as never, null)
+    }
+    expect(turned(0.7).units.map(u => [u.text, u.angle])).toEqual([['Angle', 90]])
+    expect(turned(7.158).units).toEqual([])
+    expect(turned(7.158).stats.outsized).toBe(1)
   })
 
   it('a glyph a unit owns, or one outside every figure, is no figure\'s', () => {
@@ -419,12 +450,27 @@ describe('a figure\'s labels in their columns and sets, each with its room (synt
 
 describe('the figure units on the wire (page-pass.mjs figureUnits)', () => {
   const unit = (text: string, page = 1) => ({ page, group: 'f0', text, font: 'ArialMT', size: 8, fill: 0, angle: 0, x: 10, y: 10, ux: 1, uy: 0, length: 40, ascent: 0.88, descent: -0.2, anchor: 'centre', form: true })
+  /** arXiv's page views, each [x0, y0, x1, y1] */
+  const VIEWS = [[0, 0, 612, 792], [0, 0, 612, 792], [0, 0, 612, 792]]
   it('appends each drawn unit after the paper\'s own as an ink unit of kind inkfigures, its row on its page; a label of names keeps its source', () => {
     const bundle: unknown[][] = [['para', 0, null, null, null, [[0, 'We evaluate on HellaSwag and report the loss.']]]]
-    const rows = figureUnits({ units: [unit('Validation loss'), unit('HellaSwag', 2), unit('Hidden page', 3)] }, { bundle, undrawable: [3], M: 3, prose: 'We evaluate on HellaSwag and report the loss.' })
+    const rows = figureUnits({ units: [unit('Validation loss'), unit('HellaSwag', 2), unit('Hidden page', 3)] }, { bundle, undrawable: [3], M: 3, views: VIEWS, prose: 'We evaluate on HellaSwag and report the loss.' })
     expect(bundle.slice(1).map(u => [u[0], u[1], u[5]])).toEqual([[FIGURE_KIND, 0, [[0, 'Validation loss']]], [FIGURE_KIND, UNIT_FLAG_BITS.KEPT, [[0, 'HellaSwag']]]])
     expect([...rows.keys()]).toEqual([1, 2])
     expect(rows.get(1)?.[0]?.slice(0, 3)).toEqual([1, 0, 1])
+  })
+
+  it('a unit whose row a part\'s reader would refuse is none, its label the original\'s: one row never costs its part\'s layout (2608.08481v1)', () => {
+    // (a band of 7.19 em, OriginLab's "100 keV H"; an origin off its page's view; a font's name holding a control character: each a
+    // row checkFigures refuses, for which the part's writer laid the part's five pages with no layout at all)
+    const bundle: unknown[][] = [['para', 0, null, null, null, [[0, 'Text.']]]]
+    const given = [unit('Before'), { ...unit('100 keV H'), ascent: 7.187 }, { ...unit('Off page'), x: 900 }, { ...unit('Bad font'), font: 'Arial\u0001' }, unit('After')]
+    const rows = figureUnits({ units: given }, { bundle, undrawable: [], M: 3, views: VIEWS, prose: '' })
+    expect(bundle.slice(1).map(u => u[5])).toEqual([[[0, 'Before']], [[0, 'After']]])
+    const got = rows.get(1) ?? []
+    expect(got.map(r => r[0])).toEqual([1, 2])
+    // (every row given is one the part's own check takes, on the views a part carries)
+    expect(() => checkFigures(got, { a: 1, b: 1, views: VIEWS[0]!, unitCount: bundle.length })).not.toThrow()
   })
 })
 
