@@ -4007,7 +4007,23 @@ lines, and the body is laid from where the head's translation ends there, the or
 `need.mjs` `rowLeadOf`, which takes its lead by K's order alone wherever the order is given: an ink unit is numbered after every
 source unit, and by the ids the head came after its body, which was laid where the English head had ended, a blank of its
 width less the translation's after the translated head: 2610.40645v1 pp14-15's "Theorem 3.3 ([Ang, Theorem 1.1])." and
-"Proposition 3.2 ([Ang, Proposition A.1])." in Japanese, the owner's report of 2026-11-01). The reader's toggles
+"Proposition 3.2 ([Ang, Proposition A.1])." in Japanese, the owner's report of 2026-11-01). A run-in head its own row cannot hold uses the
+rest of its line (the owner's ruling of 2026-11-03; a drawing rule, so no version, §18.3). Laid in its row alone, beside the
+paragraph's first words, which are ink the fit may not widen over (`widenOverPaper`), a head whose translation is much longer
+than the English fitted only below its floor, or not at all: 2610.19159v1 p7's "Node-level grading still separates agents."
+needs 34 em of Japanese on a row of 170.6 pt, past what `floorMin` 0.6 reaches, and stayed English beside its Japanese paragraph
+(`unfit`). Where a head's fit in its row is clipped at its floor, its last block now runs on to the end of the paragraph's first
+line (`run.mjs` `overFollower`), taken where it fits there at the floor or above; the paragraph is laid from where the head's
+translation ends, its first line shorter, or given way to its next row. A head its row holds at the floor or above keeps its
+row: taken wherever a head fitted smaller, its paragraph paid for a head already within its floor (1810.04805v2's Russian p4, a
+head from 0.85 to 1 and its paragraph, below its floor, from 0.73 to 0.70). The two are decided together: where the paragraph
+is left the original's, or not laid from the head's end (`ledBy`), the head is laid again in its row alone, as before
+(`relayInRow`, as the paragraph's lay ends, before their page passes). A head of several lines, and one with something kept
+between it and its text (`keptAfter`), are laid as before. On 2610.19159v1 in Japanese (staging's rows) ten run-in heads move:
+nine from 0.62 to 0.79 of the body's size to 0.96 to 1, and "Node-level grading…" from English to 0.97; three paragraphs lose up
+to 8 % of their size to a shorter first line, seven only reflow. In Chinese, over the corpus's 462 pages with a shared line (57
+papers, the sweep's rows), two heads move: 2610.21026v1's "Part I." and 1810.04805v2's "QNLI", English before. In Korean on
+19159, none. Every other unit is drawn as before. The reader's toggles
 are an option of the layer's open (`classes`, `TOGGLE_DEFAULTS`); a change of them is an open again over the same documents, parts
 and rows (`layer-side.mjs` `setClasses`), each laid page kept until the new door's commits: 81 to 384 ms to the two pages in view
 over 14 page pairs (the layer gate's jump, `--perf`). The web's half is `docs/route/orphan-text.md` §8.
