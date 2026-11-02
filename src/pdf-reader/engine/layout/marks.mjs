@@ -1014,6 +1014,33 @@ const BACKREF_TEX = [
   '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\ifdefined\\BR@backref\\ifdefined\\backrefalt\\ifx\\backrefalt\\BR@BackrefAltUnused\\else\\let\\axt@brAlt\\backrefalt\\let\\backrefalt\\axt@brAltW\\fi\\fi\\ifdefined\\backref\\let\\axt@brOne\\backref\\let\\backref\\axt@brOneW\\fi\\fi}\\fi',
 ].join('')
 
+/**
+ * The regions' points (the layout compile's, after LAYOUT_TEX, for a paper that uses a code environment alone: every other paper's
+ * files are byte for byte as before): each line TeX sets in the body of an environment the source sets as code
+ * (latex-front.mjs codeEnvsOf, the listing packages' own: `codeEnvs`) between two points, `cds<n>` and `cde<n>`
+ * (layout/ink.mjs REGION_POINT), so that every reader knows that text as code by what TeX was told, never by its face, and keeps
+ * it as the paper has it wherever it stands (an mdframed box TikZ draws, 2610.19159v1's transcripts: a picture's text, cut into
+ * figure units word by word and translated). Each environment's begin hook sets a flag its group ends; inside it LaTeX's
+ * para/begin hook sets the start point at a line's paragraph's start and para/end the end point at its end, in horizontal mode,
+ * the glue, kerns and penalties last taken off and put back after it (\axt@take, as a closing mark's), so that no place to break
+ * is made or lost; fancyvrb's lines (minted's too), each an \hbox set in vertical mode, get them inside the box, around
+ * \FancyVerbFormatLine. Never a point in vertical mode, which would make a glue a place to break and hide \lastskip from
+ * \addvspace. A test document of every kind (verbatim, alltt, fancyvrb, listings, an environment of the paper's own with
+ * \obeylines in an mdframed box): each of its 354 glyphs where it was, every code line between its two points
+ */
+export function regionsTex(codeEnvs) {
+  if (!codeEnvs?.length) return ''
+  return [
+    '\\makeatletter\\newif\\ifaxt@code\\gdef\\axt@cdn{0}',
+    '\\def\\axt@cdopen{\\ifaxt@off\\else\\xdef\\axt@cdn{\\the\\numexpr\\axt@cdn+1\\relax}\\axt@point{cds\\axt@cdn}\\fi}',
+    '\\def\\axt@cdclose{\\ifaxt@off\\else\\relax\\let\\axt@back\\@empty\\axt@take\\axt@point{cde\\axt@cdn}\\axt@back\\fi}',
+    '\\def\\axt@fvwrap{\\ifdefined\\FancyVerbFormatLine\\let\\axt@fvfl\\FancyVerbFormatLine\\def\\FancyVerbFormatLine##1{\\ifaxt@code\\axt@cdopen\\axt@fvfl{##1}\\axt@cdclose\\else\\axt@fvfl{##1}\\fi}\\fi}',
+    '\\ifdefined\\AddToHook\\AddToHook{para/begin}{\\ifaxt@code\\axt@cdopen\\fi}\\AddToHook{para/end}{\\ifaxt@code\\axt@cdclose\\fi}\\AddToHook{begindocument/end}{\\axt@fvwrap}',
+    ...codeEnvs.map(n => `\\AddToHook{env/${n}/begin}{\\axt@codetrue}`),
+    '\\fi\\makeatother',
+  ].join('')
+}
+
 export const LAYOUT_TEX = [
   '\\makeatletter\\newif\\ifaxt@off\\newif\\ifaxt@hold\\global\\let\\axt@pend\\@empty\\let\\axt@icr\\/\\def\\axt@icv{0pt}\\newif\\ifaxt@sig',
   '\\ifdefined\\XeTeXrevision\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{\\pdfextension dest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax}\\else\\ifdefined\\pdfdest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax\\fi}\\fi\\fi\\fi',

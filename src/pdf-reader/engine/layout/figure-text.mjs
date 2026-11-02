@@ -54,7 +54,7 @@
 // Pure arithmetic over the pages; an original module (no port statement).
 import { BAND_MAX } from '../layer-proto/figure-rows.mjs'
 import { classifyFont } from '../layer-proto/fonts.mjs'
-import { PICTURE_END, PICTURE_START } from './ink.mjs'
+import { PICTURE_END, PICTURE_START, regionMask } from './ink.mjs'
 
 /** two glyphs on one run: their baselines within this share of their size across the run's direction */
 export const RUN_DY = 0.05
@@ -111,12 +111,15 @@ function streamOf(pg, owners) {
   // (the picture depth before each level glyph and each point: points stand before the glyph they name)
   const depthAtPoint = new Int32Array(P.length + 1)
   for (let i = 0, d = 0; i < P.length; i++) { depthAtPoint[i] = d; const nm = P[i].name; if (nm === PICTURE_START) d++; else if (nm === PICTURE_END) d = Math.max(0, d - 1); depthAtPoint[i + 1] = d }
+  // (a glyph TeX set in a code region, by its points (pageInk's `regions`): code, kept as the paper has it, never a figure's text,
+  // wherever it stands — 2610.19159v1's transcripts, in mdframed boxes TikZ draws, were cut into figure units word by word)
+  const code = regionMask(pg.regions, G.length, 'code')
   const out = []
   let q = 0, d = 0
   for (let g = 0; g < G.length; g++) {
     for (; q < P.length && P[q].glyph <= g; q++) { const nm = P[q].name; if (nm === PICTURE_START) d++; else if (nm === PICTURE_END) d = Math.max(0, d - 1) }
     const x = G[g]
-    if (!(x.n >= 0)) continue
+    if (!(x.n >= 0) || code[g]) continue
     const ascent = (x.top - x.y) / Math.max(x.size, 1e-6), descent = (x.bottom - x.y) / Math.max(x.size, 1e-6)
     out.push({ i: g, turned: false, n: x.n, k: x.k, u: x.u ?? '', blank: !!x.blank || !/\S/u.test(x.u ?? ''), ox: x.x0, oy: x.y, ex: x.x1, ey: x.y, ux: 1, uy: 0, size: x.size, ascent, descent, up: ascent, down: descent, font: x.font, fill: x.fill ?? 0, form: !!x.form, picture: d, owner: owners?.[g] ?? null, ink: [x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top], clipped: !!x.clipped, unseen: !!x.unseen, fid: x.fid ?? 0, pid: x.pid ?? 0 })
   }

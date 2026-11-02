@@ -2719,7 +2719,11 @@ function readProject(fsys, main, tables, sourceText, own) {
   const inFloat = units.flatMap((u, i) => (ctx.floats.has(u) ? [i] : []))
   // (the paper's macros that read nothing past their arguments: the layout marking's, layout/marks.mjs layoutMarking `complete`)
   // (the bibliographies \\bibliography reads, by the names it gives, where the walk met it: what BibTeX writes the job's .bbl of)
-  return { main: mainFile.rel, files, units, inFloat, texOrder, skipped, fits: ctx.fits, lineEnvs, inputenc: enc ?? null, transcode, complete: completeMacros(own), bibliography: ctx.bibliography }
+  // (the code environments the paper uses, a listing package's or its own (codeEnvsOf), by name: the layout compile marks each line
+  // of their bodies as a code region (layout/marks.mjs regionsTex), so that every reader keeps its text as the paper has it)
+  const begun = new Set(ownTexts.flatMap(t => [...uncommented(t).matchAll(/\\begin\s*\{\s*([^{}\s]+)\s*\}/g)].map(m => m[1])))
+  const codeEnvNames = [...new Set([...LISTINGS, ...codeEnvs.code])].filter(n => begun.has(n)).sort()
+  return { main: mainFile.rel, files, units, inFloat, texOrder, skipped, fits: ctx.fits, lineEnvs, codeEnvs: codeEnvNames, inputenc: enc ?? null, transcode, complete: completeMacros(own), bibliography: ctx.bibliography }
 }
 
 /** whether bytes of TeX hold a ] outside every group and not escaped: one that would close an optional argument */

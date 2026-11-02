@@ -63,13 +63,19 @@ import { CLASS_IDS } from '../rules/content-classes.mjs'
  *  each our page, our line's box, the arXiv page it stands on and its offset there), the key there only where the page has one, so
  *  that the reader tells a moved page's blocks by their boxes carried onto arXiv's, as a page in place; a reader of 11 refuses the
  *  key, and a bundle of 11 is not found under 12's CTAG and is prepared again. Every other shape is 11's, and this reader reads
- *  11's objects too: a left part of 11 has no line map */
-export const BUNDLE5 = '12'
+ *  11's objects too: a left part of 11 has no line map. 13 (the layout file's schema 6, the owner's decision of 2026-11-03): a
+ *  part's layout may carry the regions TeX set on its pages (`regions`, layout/file.mjs REGION_KINDS: each line of a code
+ *  environment's body, by the points the layout compile sets around it), the key there only where a page of the part holds
+ *  one; a reader of 12 refuses the key, and a bundle of 12 is not found under 13's CTAG and is prepared again. Every other
+ *  shape is 12's, and this reader reads 12's objects too: a part of 12 has no regions */
+export const BUNDLE5 = '13'
 /** the formats this reader takes: its own, and 7's (a bundle drawn over arXiv's PDF, whose objects 9 reads unchanged: its
  *  head is read as `base.source` 'arxiv', with no `orig`), 9's and 10's. Every object of a bundle is of its head's format */
-export const BUNDLES_READ = Object.freeze(['7', '9', '10', '11', BUNDLE5])
+export const BUNDLES_READ = Object.freeze(['7', '9', '10', '11', '12', BUNDLE5])
 /** the formats whose parts may carry figure units (`figures`, figure-rows.mjs: 10's rows without a set or a room) */
-const FIGURES_READ = Object.freeze(['10', '11', BUNDLE5])
+const FIGURES_READ = Object.freeze(['10', '11', '12', BUNDLE5])
+/** the formats whose left parts may carry a line map (`lines`, 12's) */
+const LINES_READ = Object.freeze(['12', BUNDLE5])
 /** a units chunk's own format (amendment M12): raised only by a change to the chunk's shape, so that a change to a part's
  *  shape renames no unit identity and redoes no translation */
 export const UNITS_FORMAT = '1'
@@ -1401,7 +1407,7 @@ function linesOf(K, lines) {
 export async function readLeftPart(bytes, { ref, streamOf, caps }) {
   const K = 'left'
   const { value: v, sha256 } = await opened(K, bytes, ref, LEFT_DEF, caps)
-  envelope(K, v, LEFT_KEYS, isObject(v) && v.bundle === BUNDLE5 ? LEFT_OPTIONAL : [])
+  envelope(K, v, LEFT_KEYS, isObject(v) && LINES_READ.includes(v.bundle) ? LEFT_OPTIONAL : [])
   const s = leftShape(v)
   if (s.page !== ref.page) throw refuse(K, 'page', `not page ${ref.page}, the part's`)
   for (let i = 0; i < s.spans.length; i++) {

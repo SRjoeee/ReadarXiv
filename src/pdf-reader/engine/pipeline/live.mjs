@@ -20,7 +20,7 @@
 // cannot be made, the translation is set as today, and the reason noted
 import { analyze } from '../source/paper-meta.mjs'
 import { paperNames, theoremNames } from '../source/paper-names.mjs'
-import { DVI_LAYOUT_TEX, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, NAME_ENGLISH, probeSamples } from '../layout/marks.mjs'
+import { DVI_LAYOUT_TEX, inkSamples, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, leadSamples, literalNames, markProbeTex, NAME_ENGLISH, probeSamples, regionsTex } from '../layout/marks.mjs'
 import { BALANCE_DEF, documentBounds, DVI_MARK_DEF, dviEngine, EVEN_SPACES, FIT_DEF, FONT_PROBE, FORBIDDEN_TO_WARNING, inAuthorBlock, inMemory, inputencOf, jobName, lastTexLog, latin1, latin1Bytes, loadProject, localizeNames, MARK_DEF, markUnits, NO_OVERFLOW, patch, readFontProbe, stripPdftexOption, unitLeadTex, lineBreaks, XETEX_SHIM, XETEX_SHIM_R1, texFilesOf, texText } from '../source/latex-front.mjs'
 import { strategiesFor, typesetBy } from './scripts.mjs'
 import { authorsTranslated } from '../translate/kept.mjs'
@@ -442,7 +442,7 @@ export function originalFiles({ fsys, project: read, meta }, { lines = false, sp
     patched = spans ? new Map(out) : null
   }
   const dvi = dviEngine(meta?.compiler)
-  const head = DRAFT + MARK_DEF + (dvi ? DVI_MARK_DEF : '') + (layout ? LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + (names ? '' : NAMES_OFF) : '') + END_TEX + (lines ? LINES_TEX : '')
+  const head = DRAFT + MARK_DEF + (dvi ? DVI_MARK_DEF : '') + (layout ? LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + (names ? '' : NAMES_OFF) + regionsTex(project.codeEnvs) : '') + END_TEX + (lines ? LINES_TEX : '')
   out.set(project.main, latin1Bytes(head + latin1(out.get(project.main))))
   // (`skip`: the main file's head of ours, before the paper's first byte)
   if (spans) { let found = null; spans.skip = head.length; spans.lines = () => (found ??= unitLines(raw, patched, out, project.main, head.length)) }
@@ -687,7 +687,7 @@ const NO_BOUNDARY = (pieces, unit = null) => (unit ? !boundaryChanges(unit) : Ar
 const NO_DISPLAY_STOP = (pieces, unit = null) => (unit ? !displayStopChanges(unit) : Array.isArray(pieces) && !pieces.some(p => p?.t === 'ph' && displayStop(p.src)))
 const andStop = test => (pieces, unit = null) => test(pieces, unit) && NO_DISPLAY_STOP(pieces, unit)
 const BOUNDARY_AND_STOP = andStop(NO_BOUNDARY)
-export const PIPELINE_CARRIES = { 7: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 8: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 9: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 10: andStop(andStyle(NO_RUN)), 11: andStop(andStyle(NO_RUN)), 12: andStop(NO_STYLE), 13: andStop(NO_STYLE), 14: andStop(NO_STYLE), 15: BOUNDARY_AND_STOP, 16: BOUNDARY_AND_STOP, 17: BOUNDARY_AND_STOP, 18: BOUNDARY_AND_STOP, 19: BOUNDARY_AND_STOP, 20: BOUNDARY_AND_STOP, 21: BOUNDARY_AND_STOP, 22: NO_DISPLAY_STOP, 23: EVERY, 24: EVERY, 25: EVERY, 26: EVERY, 27: EVERY, 28: EVERY, 29: EVERY, 39: EVERY, 40: EVERY, 41: EVERY, 42: EVERY, 43: EVERY, 44: EVERY, 45: EVERY, 46: EVERY, 47: EVERY, 48: EVERY, 49: EVERY, 50: EVERY, 51: EVERY, 52: EVERY, 53: EVERY, 54: EVERY, 55: EVERY, 56: EVERY, 57: EVERY, 58: EVERY, 59: EVERY, 60: EVERY, 61: EVERY }
+export const PIPELINE_CARRIES = { 7: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 8: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 9: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 10: andStop(andStyle(NO_RUN)), 11: andStop(andStyle(NO_RUN)), 12: andStop(NO_STYLE), 13: andStop(NO_STYLE), 14: andStop(NO_STYLE), 15: BOUNDARY_AND_STOP, 16: BOUNDARY_AND_STOP, 17: BOUNDARY_AND_STOP, 18: BOUNDARY_AND_STOP, 19: BOUNDARY_AND_STOP, 20: BOUNDARY_AND_STOP, 21: BOUNDARY_AND_STOP, 22: NO_DISPLAY_STOP, 23: EVERY, 24: EVERY, 25: EVERY, 26: EVERY, 27: EVERY, 28: EVERY, 29: EVERY, 39: EVERY, 40: EVERY, 41: EVERY, 42: EVERY, 43: EVERY, 44: EVERY, 45: EVERY, 46: EVERY, 47: EVERY, 48: EVERY, 49: EVERY, 50: EVERY, 51: EVERY, 52: EVERY, 53: EVERY, 54: EVERY, 55: EVERY, 56: EVERY, 57: EVERY, 58: EVERY, 59: EVERY, 60: EVERY, 61: EVERY, 62: EVERY }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a

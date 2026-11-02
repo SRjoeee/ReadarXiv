@@ -359,6 +359,15 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
     expect(figureUnitsOf([hidden, shown] as never, null).units.map(u => u.text)).toEqual(['label'])
   })
 
+  it('a picture\'s text TeX set in a code region is no figure\'s: kept as the paper has it (#63)', () => {
+    // (2610.19159v1's transcripts: an mdframed box TikZ draws holds the code, whose words were figure units, translated one by one)
+    const pg = { ...word('echo'), view: [0, 0, 300, 300] }
+    expect(figureUnitsOf([pg] as never, null).units.map(u => u.text)).toEqual(['echo'])
+    expect(figureUnitsOf([{ ...pg, regions: [{ kind: 'code', from: 0, to: 4 }] }] as never, null).units).toEqual([])
+    // (a region of another kind, or one past the word, takes nothing)
+    expect(figureUnitsOf([{ ...pg, regions: [{ kind: 'other', from: 0, to: 4 }, { kind: 'code', from: 4, to: 9 }] }] as never, null).units.map(u => u.text)).toEqual(['echo'])
+  })
+
   it('a glyph a unit owns, or one outside every figure, is no figure\'s', () => {
     const pg = word('label')
     expect(figureUnitsOf([{ ...pg, pictures: [] }] as never, null).units).toEqual([])

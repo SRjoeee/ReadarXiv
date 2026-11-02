@@ -1,6 +1,6 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it, vi } from 'vitest'
-import { BOXES_PAGE, GLYPHS_PAGE, type Glyph, MERGED, OPS_CAP, outlineBox, pageInk, STACK_MAX, STEPS_MAX } from '@/pdf-reader/engine/layout/ink.mjs'
+import { BOXES_PAGE, GLYPHS_PAGE, type Glyph, MERGED, OPS_CAP, outlineBox, pageInk, regionMask, regionsOfPoints, STACK_MAX, STEPS_MAX } from '@/pdf-reader/engine/layout/ink.mjs'
 
 // arXiv's ink from a page's operator list, as PDF.js's canvas places it: the lists are written here with pdfjs-dist's own
 // operator codes, in the shapes PDF.js 6.3.289 gives them (a text matrix as one argument, a path as [op, data, minMax])
@@ -279,7 +279,7 @@ describe('pageInk', () => {
 
   it('a rotated page has no glyphs', () => {
     const page = text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A')))
-    for (const rotate of [90, 180, 270, -90, 450]) expect(ink(page, rotate)).toEqual({ glyphs: [], boxes: [], points: [], boxAt: [], capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true })
+    for (const rotate of [90, 180, 270, -90, 450]) expect(ink(page, rotate)).toEqual({ glyphs: [], boxes: [], points: [], boxAt: [], regions: [], capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true })
     expect(ink(page, 360).rotated).toBe(false)
     expect(ink(page, Number.NaN).rotated).toBe(true)
   })
@@ -363,6 +363,21 @@ describe('pageInk', () => {
     ])
     expect(points).toEqual([{ name: '0s', glyph: 1, box: 0 }, { name: 'q3a', glyph: 3, box: 0 }])
     expect(paras).toEqual([{ name: 'q1', glyph: 0, box: 0 }, { name: 'q2', glyph: 2, box: 0 }])
+  })
+
+  it('keeps a region\'s points apart (`regions`): each line between its two points of one number, a code line by what TeX was told (#63)', () => {
+    const pt = (name: string): Op => [OPS.setRenderingIntent, [{ name: `axt-${name}` }]]
+    const { points, regions } = ink([
+      ...text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A')), pt('cds1'), show(g('B'), g('C')), pt('cde1'), pt('0s'), show(g('D'))),
+      ...text('f1', 10, [1, 0, 0, 1, 72, 680], pt('cds2'), show(g('E')), pt('cde2')),
+      // (a start with no end on its page, an end with no start, and an empty line: no region, never a glyph taken by a guess)
+      ...text('f1', 10, [1, 0, 0, 1, 72, 660], pt('cds3'), show(g('F')), pt('cde4'), pt('cds5'), pt('cde5')),
+    ])
+    expect(regions).toEqual([{ kind: 'code', from: 1, to: 3 }, { kind: 'code', from: 4, to: 5 }])
+    // (none of them among the marks' points)
+    expect(points).toEqual([{ name: '0s', glyph: 3, box: 0 }])
+    expect(regionsOfPoints([{ name: 'cde1', glyph: 2 }, { name: 'cds1', glyph: 0 }], 5)).toEqual([])
+    expect([...regionMask([{ kind: 'code', from: 1, to: 3 }, { kind: 'other', from: 0, to: 5 }], 5, 'code')]).toEqual([0, 1, 1, 0, 0])
   })
 
   it('a hostile list gives no number that is not finite, and never throws', () => {

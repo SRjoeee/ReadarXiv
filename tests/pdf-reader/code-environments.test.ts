@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { documentBounds, inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { regionsTex } from '@/pdf-reader/engine/layout/marks.mjs'
 
 // Code stays as the paper has it: the body of an environment a paper defines as code is never a unit, so never sent to
 // a translator (2610.19159: 832 of its 2,645 units were the lines of its appendix's agent transcripts, set in an
@@ -156,5 +157,34 @@ describe('an environment of the paper\'s own that opens a verbatim is read by li
   it('not one set as alltt sets its body, whose lines TeX reads as it reads any', () => {
     const p = project({ 'main.tex': doc('Words.', '\\newenvironment{tx}{\\ttfamily\\obeylines}{}') }) as unknown as { lineEnvs: Set<string> }
     expect(p.lineEnvs.has('tx')).toBe(false)
+  })
+})
+
+// The code environments a paper uses reach every reader by what TeX was told (#63, the owner's decision of 2026-11-03): the
+// layout compile marks each line of their bodies as a code region (layout/marks.mjs regionsTex), a paper that uses none
+// compiled byte for byte as before
+describe('the code environments a paper uses, marked as code regions in the layout compile', () => {
+  const projectOf = (files: Record<string, string>) => project(files) as unknown as { codeEnvs: string[] }
+  it('names each code environment the paper begins: a listing package\'s and its own, never one it defines and does not use', () => {
+    expect(projectOf({ 'main.tex': doc('\\section{Transcripts}\n\\input{sec/appendix}', '\\usepackage{xcolor}'), 'sec/appendix.tex': TRANSCRIPT }).codeEnvs).toEqual(['transcript'])
+    const both = doc('A.\n\n\\begin{verbatim}\nx = 1\n\\end{verbatim}\n\n\\begin{tx}\ny\n\\end{tx}\n\n\\begin{lstlisting}\nz\n\\end{lstlisting}', '\\usepackage{listings}\\newenvironment{tx}{\\ttfamily\\obeylines}{}\\newenvironment{unused}{\\ttfamily\\obeylines}{}')
+    expect(projectOf({ 'main.tex': both }).codeEnvs).toEqual(['lstlisting', 'tx', 'verbatim'])
+    // (one in a comment is none)
+    expect(projectOf({ 'main.tex': doc('A.\n% \\begin{verbatim}\n% x\n% \\end{verbatim}') }).codeEnvs).toEqual([])
+  })
+  it('the layout compile\'s head hooks each of them; a paper that uses none is written byte for byte as before', () => {
+    const files = (body: string, pre = '') => {
+      const p = openPaper(new Map([['main.tex', enc(doc(body, pre))]]))
+      return new TextDecoder('latin1').decode(originalFiles(p, { layout: ['cite'] }).get('main.tex'))
+    }
+    const plain = files('Words and \\texttt{code} in prose.')
+    expect(plain).not.toContain('axt@code')
+    const coded = files('A.\n\n\\begin{verbatim}\nx = 1\n\\end{verbatim}')
+    expect(coded).toContain('\\AddToHook{env/verbatim/begin}{\\axt@codetrue}')
+    expect(coded).toContain('\\axt@point{cds\\axt@cdn}')
+    // (on the head's one line: no line of the paper moves)
+    expect(regionsTex(['verbatim', 'tx'])).not.toContain('\n')
+    expect(regionsTex([])).toBe('')
+    expect(coded.indexOf('\\documentclass')).toBeGreaterThan(coded.indexOf('axt@codetrue'))
   })
 })
