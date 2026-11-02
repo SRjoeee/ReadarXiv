@@ -139,6 +139,68 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
     expect(one(word('label', [], [80, 90, 150, 115])).why).toBeNull()
   })
 
+  it('ink the page does not show (pageInk\'s `unseen`) neither crowds a label nor ends its free line (1706.03762v7 pp13-15)', () => {
+    // (another show's glyphs inside the word's band, as a cropped plot's title the form's box hides under a row of labels)
+    const hidden = (unseen: boolean) => {
+      const pg = { ...word('label'), view: [0, 0, 300, 300] }
+      pg.glyphs.push(...[...'Title'].map((u, k) => ({ u, n: 1, k, x0: 102 + 5 * k, x1: 107 + 5 * k, ix0: 102 + 5 * k, ix1: 107 + 5 * k, y: 101, top: 108, bottom: 99, size: 10, font: 'ArialMT', fill: 0, clipped: true, ...(unseen ? { unseen: true } : {}) })))
+      return figureUnitsOf([pg] as never, null).units
+    }
+    expect(hidden(false).map(u => [u.text, u.why])).toEqual([['label', 'crowded']])
+    expect(hidden(true).map(u => [u.text, u.why])).toEqual([['label', null]])
+    // (a stroke through the band painted at an alpha of 0, a token's box per head in a group painted at ca 0: no ink)
+    const through = (unseen: boolean) => {
+      const pg = { ...word('label', [[110, 90, 110, 115]]), view: [0, 0, 300, 300], ...(unseen ? { unseen: new Set([0]) } : {}) }
+      return figureUnitsOf([pg] as never, null).units[0]!
+    }
+    expect(through(false).why).toBe('crowded')
+    expect(through(true).why).toBeNull()
+    // (nor does it end the free line: a stroke 10 after the word, unseen, leaves it its whole room)
+    const beside = (unseen: boolean) => figureUnitsOf([{ ...word('label', [[135, 95, 135, 110]]), view: [0, 0, 300, 300], figures: new Map([['0:0', [0, 0, 300, 300]]]), ...(unseen ? { unseen: new Set([0]) } : {}) }] as never, null).units[0]!
+    expect(beside(false).after).toBeCloseTo(135 - 0.25 - 125 - ROOM_CLEAR * 10, 6)
+    expect(beside(true).after).toBe(ROOM_MAX * 10)
+  })
+
+  it('ink painted after a label over its band is over it, never its ground: it crowds the label (1810.04805v2\'s "BERT")', () => {
+    // (pageInk's `boxAt`: the boxes shown before each glyph. A fill that holds the whole band, painted before the word, is its
+    // ground; painted after it, a card stacked over the word or a picture laid on it, it covers the word)
+    const framed = (before: boolean) => {
+      const pg = { ...word('label', [], [80, 90, 150, 115]), view: [0, 0, 300, 300] }
+      return figureUnitsOf([{ ...pg, boxAt: pg.glyphs.map(() => (before ? pg.boxes.length / 4 : 0)) }] as never, null).units[0]!
+    }
+    expect(framed(true).why).toBeNull()
+    expect(framed(false).why).toBe('crowded')
+    // (an image over the band alike: before the word its ground, after it ink over it)
+    const pictured = (before: boolean) => {
+      const pg = { ...word('label'), view: [0, 0, 300, 300] }
+      const boxes = [80, 90, 150, 115]
+      return figureUnitsOf([{ ...pg, boxes, paths: [-3], shapes: new Map(), boxAt: pg.glyphs.map(() => (before ? 1 : 0)) }] as never, null).units[0]!
+    }
+    expect(pictured(true).why).toBeNull()
+    expect(pictured(false).why).toBe('crowded')
+    // (a fill after it that its clip cuts back to beside the word covers none of it: its uncut lines hold the word, its box does not, #555)
+    const beside = { ...word('label', [], [80, 90, 150, 115]), view: [0, 0, 300, 300] }
+    beside.boxes = [80, 90, 95, 115]
+    expect(figureUnitsOf([{ ...beside, boxAt: beside.glyphs.map(() => 0) }] as never, null).units[0]!.why).toBeNull()
+    // (a fill after it in a transparency group whose box ends before the word, pageInk's `cut`, covers none of it either)
+    const grouped = { ...word('label', [], [80, 90, 150, 115]), view: [0, 0, 300, 300] }
+    expect(figureUnitsOf([{ ...grouped, boxAt: grouped.glyphs.map(() => 0), cut: new Map([[0, [80, 90, 95, 115]]]) }] as never, null).units[0]!.why).toBeNull()
+    // (cut back to the word's first half, it covers that half)
+    beside.boxes = [80, 90, 110, 115]
+    expect(figureUnitsOf([{ ...beside, boxAt: beside.glyphs.map(() => 0) }] as never, null).units[0]!.why).toBe('crowded')
+    // (painted at an alpha of 0 after it, nothing: no ink over it)
+    const pg = { ...word('label', [], [80, 90, 150, 115]), view: [0, 0, 300, 300] }
+    expect(figureUnitsOf([{ ...pg, boxAt: pg.glyphs.map(() => 0), unseen: new Set([0]) }] as never, null).units[0]!.why).toBeNull()
+  })
+
+  it('a run of glyphs the page does not show is no unit, counted with the clipped', () => {
+    const pg = { ...word('label'), view: [0, 0, 300, 300] }
+    for (const g of pg.glyphs) Object.assign(g, { unseen: true })
+    const r = figureUnitsOf([pg] as never, null)
+    expect(r.units).toEqual([])
+    expect(r.stats.clipped).toBe(1)
+  })
+
   it('anchors at its start where a line ends right before it, at its end where one begins right after it, else its middle', () => {
     expect(one(word('label', [[90, 102, 98, 102]])).anchor).toBe('start')
     expect(one(word('label', [[127, 95, 127, 110]])).anchor).toBe('end')
