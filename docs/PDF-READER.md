@@ -4132,7 +4132,9 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   any run (`FIGURE_UNITS_DOC`), so that where the cap falls does not move: past it, as before, the transcripts' heads are the ink
   units' lines.
 - **Cut** into runs, one a label or a line: in stream order, one font, size, colour, direction and figure (one form painted, one
-  picture: pageInk's `fid` and `pid`, so that two figures side by side never make one label), one baseline (`RUN_DY`
+  picture: pageInk's `fid` and `pid`, so that two figures side by side never make one label), in a code region or out of every
+  one (a run kept whole for a code glyph would leave the prose beside it English: none of the 14 code papers has such a run, a
+  rule of the cut, not a case), one baseline (`RUN_DY`
   0.05 of the size across), at most `RUN_GAP` 0.6 of the size past the run's end; a run spelling a word (two letters together)
   in no math face is a unit, its text the glyphs' Unicode (NFKC), a space at a gap of `SPACE_GAP` 0.15 em. A number, a tick's
   label, a letter alone or a formula stays the original's; so does a run a glyph of which is not wholly inside the clip in force

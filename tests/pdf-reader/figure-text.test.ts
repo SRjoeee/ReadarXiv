@@ -372,6 +372,14 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
     expect(figureUnitsOf([code, shown] as never, null).units.map(u => u.text)).toEqual(['label'])
   })
 
+  it('a run ends where a code region begins or ends: the prose beside the code is read, the code alone kept (#63)', () => {
+    // (one face, one size, one baseline: the glyphs would join as one run, which a code glyph would then keep whole, its prose too)
+    const pg = { ...word('Command: echo'), view: [0, 0, 300, 300] }
+    expect(figureUnitsOf([{ ...pg, regions: [{ kind: 'code', from: 9, to: 13 }] }] as never, null).units.map(u => u.text)).toEqual(['Command:'])
+    const after = { ...word('echo then'), view: [0, 0, 300, 300] }
+    expect(figureUnitsOf([{ ...after, regions: [{ kind: 'code', from: 0, to: 4 }] }] as never, null).units.map(u => u.text)).toEqual(['then'])
+  })
+
   it('a glyph a unit owns, or one outside every figure, is no figure\'s', () => {
     const pg = word('label')
     expect(figureUnitsOf([{ ...pg, pictures: [] }] as never, null).units).toEqual([])

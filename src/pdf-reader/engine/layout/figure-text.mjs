@@ -125,7 +125,7 @@ function streamOf(pg, owners) {
   T.forEach((t, j) => {
     if (!(t.n >= 0)) return
     const picture = depthAtPoint[Math.min(Math.max(t.pt ?? 0, 0), P.length)]
-    out.push({ i: j, turned: true, n: t.n, k: t.k, u: t.u ?? '', blank: !!t.blank || !/\S/u.test(t.u ?? ''), ox: t.ox, oy: t.oy, ex: t.ex, ey: t.ey, ux: t.ux, uy: t.uy, size: t.size, ascent: t.ascent, descent: t.descent, up: Number.isFinite(t.up) ? t.up : t.ascent, down: Number.isFinite(t.down) ? t.down : t.descent, font: t.font, fill: t.fill ?? 0, form: !!t.form, picture, owner: null, box: t.box, clipped: !!t.clipped, unseen: !!t.unseen, fid: t.fid ?? 0, pid: t.pid ?? 0 })
+    out.push({ i: j, turned: true, n: t.n, k: t.k, u: t.u ?? '', blank: !!t.blank || !/\S/u.test(t.u ?? ''), ox: t.ox, oy: t.oy, ex: t.ex, ey: t.ey, ux: t.ux, uy: t.uy, size: t.size, ascent: t.ascent, descent: t.descent, up: Number.isFinite(t.up) ? t.up : t.ascent, down: Number.isFinite(t.down) ? t.down : t.descent, font: t.font, fill: t.fill ?? 0, form: !!t.form, picture, owner: null, box: t.box, clipped: !!t.clipped, unseen: !!t.unseen, code: false, fid: t.fid ?? 0, pid: t.pid ?? 0 })
   })
   out.sort((a, b) => a.n - b.n || a.k - b.k)
   return out
@@ -181,11 +181,13 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
         const joins = x.font === run.font && Math.abs(x.size - run.size) <= 0.01 * run.size && x.fill === run.fill && x.form === run.form && x.fid === run.fid && x.pid === run.pid
           && Math.abs(x.ux - f.ux) < 1e-3 && Math.abs(x.uy - f.uy) < 1e-3 && Math.abs(t) <= RUN_DY * run.size
           && s >= run.s1 - RUN_BACK * run.size && s - run.s1 <= RUN_GAP * run.size
+          // (a code region's edge ends a run: the prose beside the code, in its face on its baseline, is read, and the code alone kept)
+          && x.code === run.inCode
         if (!joins) close()
       }
       if (!run) {
         if (x.blank) continue
-        run = { gs: [], font: x.font, size: x.size, fill: x.fill, form: x.form, fid: x.fid, pid: x.pid, s1: 0, frame: { ox: x.ox, oy: x.oy, ux: x.ux, uy: x.uy } }
+        run = { gs: [], font: x.font, size: x.size, fill: x.fill, form: x.form, fid: x.fid, pid: x.pid, inCode: x.code, s1: 0, frame: { ox: x.ox, oy: x.oy, ux: x.ux, uy: x.uy } }
       }
       run.gs.push(x)
       if ((x.clipped || x.unseen) && !x.blank) run.clipped = true
