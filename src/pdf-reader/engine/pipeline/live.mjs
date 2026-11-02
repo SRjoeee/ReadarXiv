@@ -241,7 +241,10 @@ export function compilerKeeper(open) {
 /** a paper's files (Map path → bytes) → what the pipeline works on: its units, and beside them which of them are written inside a
  *  float (`inFloat`, their indices, latex-front.mjs loadProject's) and the order TeX sets them in where it is not theirs
  *  (`texOrder`, their indices in that order, or null: an author block's later units and the bibliography's entries are numbered
- *  after the rest, latex-front.mjs entriesLast) */
+ *  after the rest, latex-front.mjs entriesLast). Plain data but for `fsys` (its files' reader): no function, accessor or object of a
+ *  class of its own anywhere else in it, so that a host hands it from one process to another as a structured clone, `fsys` made
+ *  again of the same files (readarxiv-web's paper-wire.ts: the prepare child's paper read by the maker child in place of opening the
+ *  paper again; tests/pdf-reader/paper-clone.test.ts) */
 export function openPaper(files) {
   const fsys = inMemory(files)
   const meta = analyze(fsys)
