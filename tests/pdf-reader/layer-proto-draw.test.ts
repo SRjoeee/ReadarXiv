@@ -663,6 +663,32 @@ describe('fontReaders: a page\'s fonts read live or from its draw, the same answ
     } finally { vi.useRealTimers() }
   })
 
+  it('the live fills\' walk stops at the reader\'s budget on a slow clock, and walks whole with none (the gates\'): the same fills, counted whole', async () => {
+    const { OPS } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const { arxivOf } = await import('./helpers/make-world')
+    const { liveFillsOf, LIVE_FILLS_MS } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    // (more glyphs than the walk reads between two looks at the clock, 1,024: 50 lines of 52)
+    const runs = Array.from({ length: 50 }, (_, k) => ({ s: 'abcdefghijklmnopqrstuvwxyz'.repeat(2), x: 72, y: 760 - 12 * k, ...(k % 3 ? {} : { fill: '#0000ff' }) }))
+    const raw = (await arxivOf([{ runs }]).getPage(1)) as Record<string, any>
+    const page: Record<string, any> = { ...raw, commonObjs: { has: raw.commonObjs.has, get: (id: string) => { const f = raw.commonObjs.get(id); return f && typeof f === 'object' && 'name' in f ? { ...f, toUnicode: { _map: [...'abcdefghijklmnopqrstuvwxyz0123456789[]S'] } } : f } }, getAnnotations: async () => [] }
+    const tc = (await page.getTextContent()) as unknown as TextContentLike
+    const list = await page.getOperatorList()
+    const quiet = { fills: 0 }
+    const fills = await liveFillsOf(OPS, page, tc.items, quiet, list)
+    expect(fills).toHaveLength(50)
+    expect(fills?.filter(f => f === 0x0000ff)).toHaveLength(17)
+    // (a machine so loaded that every look at the clock finds the budget spent twice over)
+    let t = 0
+    const now = vi.spyOn(performance, 'now').mockImplementation(() => (t += 2 * LIVE_FILLS_MS))
+    try {
+      const cut = { fills: 0 }, whole = { fills: 0 }
+      expect(await liveFillsOf(OPS, page, tc.items, cut, list)).toBeNull()
+      expect(cut.fills).toBeLessThan(quiet.fills)
+      expect(await liveFillsOf(OPS, page, tc.items, whole, list, Number.POSITIVE_INFINITY)).toEqual(fills)
+      expect(whole.fills).toBe(quiet.fills)
+    } finally { now.mockRestore() }
+  })
+
   it('a page with a non-embedded CIDFontType2 ships no draw (E1): the browser reads it', async () => {
     const r = await bothOf(pageOf({ items: [item('ab', 'cid')], styles: { cid: { fontFamily: 'sans-serif' } }, fonts: { cid: font({ name: 'ArialUnicodeMS', missingFile: true }) } }))
     expect(r.data).toBeNull()

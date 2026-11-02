@@ -164,8 +164,8 @@ window.doorDraw = {
       const annP = LK.readAnnots(page)
       const tc = await textP
       const L = live.live(page, tc.styles)
-      // (an engine with no fills reads none)
-      const fills = liveFillsOf ? await liveFillsOf(pdfjs.OPS, page, tc.items) : null
+      // (an engine with no fills reads none; the walk with no clock, as the layer gate's run asks it: a loaded run tells the same)
+      const fills = liveFillsOf ? await liveFillsOf(pdfjs.OPS, page, tc.items, null, null, Infinity) : null
       const a = pageReadOf(tc, L.fontOf, L.mapOf, await annP, fills)
       out.overlaid.push(overlaidOf(p, a.read))
       page.cleanup()

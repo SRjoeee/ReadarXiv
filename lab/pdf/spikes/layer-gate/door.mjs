@@ -137,7 +137,7 @@ window.door = {
       // (the cell rules the bundle carries, as the door reads them; a BUNDLE 3 bundle names no unit the wrap could not hide)
       hiding: { rules: q => bundle.rules?.[q] },
       labels: { captions: { figure: 'target', table: 'target' } },
-      ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS,
+      ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS, fillsMs: Infinity,
     })
     const out = [], finals = []
     for (let p = 1; p <= Math.min(pages, run.N); p++) {

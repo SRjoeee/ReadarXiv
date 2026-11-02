@@ -4,11 +4,17 @@
 // standing rule asks for. A clock is noisy, so the check has two kinds of evidence:
 //   - time and memory, each held to the run-to-run spread: a metric (first page's draw time, per-page lay time, pages over
 //     50 ms and over 100 ms, the heap's growth per laid page) FAILS when head's median over the repetitions is worse than
-//     base's by more than the largest spread (max - min over the repetitions) of either side;
+//     base's by more than the two sides' spreads (max - min over the repetitions) added: the difference of two medians moves
+//     by both sides' noise, not by the larger alone. With the larger alone, 3 + 3 runs of one engine failed a check on noise
+//     about 1 time in 10, the heap's growth 3 to 4 times in 100 (+255 bytes of 2.23 MB a laid page against a spread of 228,
+//     2026-11-01); added, 2 to 5 in 100, the heap's 1 in 100 (every split of 15 runs of one engine, twice, 2026-11-02);
 //   - the deterministic work counters (layer-proto/work.mjs: fit states tried, width measures, breaking passes, link-matching
-//     work units, ink-map cells, drawing operations), which do not depend on the machine: ANY counter whose total grows by
-//     more than 0.5 % FAILS, whatever the clock said. A base that has no counters (it predates them) leaves the counters
-//     unmeasured, which is not a pass: the verdict is then INCOMPARABLE for them.
+//     work units, ink-map cells, drawing operations, the characters a unit's edges read, what a page read live reads for its
+//     fills), which do not depend on the machine: ANY counter whose total grows by more than 0.5 % FAILS, whatever the clock
+//     said. They count the work the input asks for because the gate's run lets no clock decide it: the reader's live fills stop
+//     at a frame budget, and a loaded repetition then counted fewer fills and drew its page otherwise (fewer measures and link
+//     tests too), so the gate walks them with no budget (layer-gate/proto.mjs `fillsMs`). A base that has no counters (it
+//     predates them) leaves the counters unmeasured, which is not a pass: the verdict is then INCOMPARABLE for them.
 //   node lab/pdf/spikes/layer-gate/speed.mjs <logs dir> [--reps=3]
 // reads <logs dir>/model-{head,base}-r<k>.log (each the log of one `layer-gate.mjs --tier=model --perf --workers=1` run, which
 // names its run file: "the run in <file>.json"), prints the table and the verdict, and exits 1 on FAIL, 2 on INCOMPARABLE
@@ -16,9 +22,10 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { WORK_KEYS } from '../../../../src/pdf-reader/engine/layer-proto/work.mjs'
 
-/** the work counters' keys, as layer-proto/work.mjs names them */
-export const WORK_KEYS = ['fit', 'measures', 'breaks', 'linkTests', 'inkSteps', 'ops', 'fills']
+/** the work counters' keys: every counter the run keeps (layer-proto/work.mjs), none left unread */
+export { WORK_KEYS }
 /** the growth of a work counter's total beyond which the check fails */
 export const WORK_TOLERANCE = 0.005
 /** the page step beyond which a page counts as slow (ms) */
@@ -84,7 +91,7 @@ export function summarizeRun(run) {
 
 /**
  * The verdict. `head`, `base`: the summaries of each repetition (summarizeRun's), in the same order. A time metric FAILS when
- * head's median over the repetitions exceeds base's by more than the larger of the two sides' spreads; a work counter FAILS
+ * head's median over the repetitions exceeds base's by more than the two sides' spreads added; a work counter FAILS
  * when its total (the repetitions agree: it is deterministic, the first is taken, and a side whose repetitions differ is
  * reported as `unstable`, a FAIL) grows by more than WORK_TOLERANCE. Returns { verdict: 'PASS' | 'FAIL' | 'INCOMPARABLE', time, work }.
  */
@@ -92,7 +99,7 @@ export function verdictOf(head, base) {
   const time = {}
   for (const name of Object.keys(head[0]?.time ?? {})) {
     const h = head.map(r => r.time[name]), b = base.map(r => r.time[name])
-    const hm = median(h), bm = median(b), sp = Math.max(spread(h), spread(b))
+    const hm = median(h), bm = median(b), sp = spread(h) + spread(b)
     const worse = Number.isFinite(hm) && Number.isFinite(bm) && hm - bm > sp
     time[name] = { head: hm, base: bm, spread: sp, fail: worse }
   }
@@ -117,7 +124,7 @@ const f1 = x => (Number.isFinite(x) ? (Math.abs(x) >= 1e6 ? x.toExponential(2) :
 /** the report as lines of text */
 export function report(v, head, base) {
   const out = []
-  out.push(`speed check, head vs base, ${head.length} interleaved repetitions (median of the repetitions; spread = largest max - min of either side)`)
+  out.push(`speed check, head vs base, ${head.length} interleaved repetitions (median of the repetitions; spread = head's max - min plus base's)`)
   out.push('', 'time and memory (lower is better; FAIL when head - base exceeds the spread)')
   for (const [name, m] of Object.entries(v.time)) out.push(`${m.fail ? 'FAIL' : 'ok  '} ${name.padEnd(36)} head ${f1(m.head).padStart(10)} | base ${f1(m.base).padStart(10)} | diff ${f1(m.head - m.base).padStart(9)} | spread ${f1(m.spread).padStart(8)}`)
   out.push('', `work counters (deterministic; FAIL when a total grows by more than ${WORK_TOLERANCE * 100} %)`)

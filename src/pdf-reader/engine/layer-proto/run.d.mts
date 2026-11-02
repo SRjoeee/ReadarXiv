@@ -83,7 +83,7 @@ export declare function skipCode(code: unknown): SkipCode
 export declare const DRAW_WAIT_MS: number
 /** the pages a run keeps warm for its next renders (their operator lists and decoded images), the one drawn last kept longest */
 export declare const WARM_PAGES: number
-/** the longest the live fills' glyph walk runs, ms: past it a page tells no fill */
+/** the longest the live fills' glyph walk runs in the reader, ms: past it a page tells no fill */
 export declare const LIVE_FILLS_MS: number
 /** what an ink read of a page read from its draw throws while its pixels are not read: the page, and the step that reads them */
 export declare class NeedPixels extends Error {
@@ -105,7 +105,7 @@ export declare function fontReaders(): {
 /** the fills a page read live tells, as its draw would (layout/fills.mjs itemFills over its ink, off the list PDF.js drew it by:
  *  `list`, held from its early pixel read, or its render's; else its own operator list within DRAW_WAIT_MS): null for no OPS, a
  *  page whose ink is not whole or a list that cannot be read in time */
-export declare function liveFillsOf(OPS: Record<string, number> | null, page: unknown, items: TextContentLike['items'], counted?: { fills: number } | null, list?: { fnArray: unknown[]; argsArray: unknown[] } | null): Promise<(number | number[])[] | null>
+export declare function liveFillsOf(OPS: Record<string, number> | null, page: unknown, items: TextContentLike['items'], counted?: { fills: number } | null, list?: { fnArray: unknown[]; argsArray: unknown[] } | null, ms?: number): Promise<(number | number[])[] | null>
 /** a page's characters and Link annotations (null where they could not be read), the two calls the run makes of a page's reading */
 export declare function pageReadOf(tc: TextContentLike, fontOf: FontReading['fontOf'], mapOf: FontReading['mapOf'], raw: readonly unknown[] | null, fills?: readonly (number | readonly number[])[] | null): {
   chars: Char[]
@@ -365,4 +365,7 @@ export declare function openProto(o: {
   /** PDF.js's operator codes (the host's): a page read live reads its characters' fills off the list PDF.js drew it by, as its
    *  draw tells them (liveFillsOf); none, such a page tells no fill */
   OPS?: Record<string, number> | null
+  /** the longest that walk runs, ms (default LIVE_FILLS_MS, the reader's); Infinity, the lab's gates: no clock, so that a run's
+   *  drawing and work counters are the same at any load */
+  fillsMs?: number
 }): Promise<ProtoRun>

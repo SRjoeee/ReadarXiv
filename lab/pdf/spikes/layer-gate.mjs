@@ -31,7 +31,7 @@
 //       [--against=<record key>] [--rules=<file>] [--ruling=<file>] [--parts[=<n>]] [--slices[=blocks|alphabet]] [--door[=<n>]]
 //       [--door-memory[=<pages>]] [--door-parts[=doubling|splits:<n>|seed:<s>]] [--sources=<dir>]
 //       [--door-order=reverse|seed:<s>|burst:<s>] [--door-jump[=all|<fixture>:<page>,…]]
-//       [--door-draw[=inputs|pages|jump:all|jump:<fixture>:<page>,…]] [--link=<rtt ms>:<bytes/s>]
+//       [--door-draw[=inputs|pages|jump:all|jump:<fixture>:<page>,…]] [--link=<rtt ms>:<bytes/s>] [--cpu-slowdown=<n>]
 //   --sources    the papers' sources (<dir>/<paper>/source.gz; default data/layout, then data/corpus): each fixture's base page is
 //                wrapped by optional content in Node with them (layer-gate/wrap.mjs: the engine's wrapFinal over the paper's source
 //                units, cached in out/layer-gate/wrap/), and the layer is drawn over the wrapped page with the head fields a
@@ -207,6 +207,11 @@ const arg = name => { const a = process.argv.find(x => x === `--${name}` || x.st
  *  its steps, the drawing again at twice the resolution, the canvases held and the JS heap; per paper, the layout
  *  maker's time (and its operator lists'), the wrap's, and the bytes the reader is sent (the layout file). One pass a run: spikes/layer-perf.mjs takes the medians of several runs and the budget */
 const PERF = !!arg('perf')
+/** --cpu-slowdown=<n> (n > 1; a proof's aid, never recorded): every page of the browser run with its CPU slowed n times (CDP
+ *  Emulation.setCPUThrottlingRate), a loaded machine that loads no other job on it: the work counters of --perf must not move
+ *  (speed.mjs), whatever the clock says. Named in the run's inputs */
+const SLOWDOWN = (() => { const v = arg('cpu-slowdown'); if (v === null) return null; const n = Number(v); if (!(n > 1)) throw new Error(`--cpu-slowdown=<n>: a factor over 1, not ${v}`); return n })()
+if (SLOWDOWN !== null && arg('record')) throw new Error('--cpu-slowdown: a proof\'s aid, never recorded')
 /** --ink (with --door and its proofs, never recorded): the wrap's ink units drawn too (docs/route/orphan-text.md): text no source unit
  *  owns, an echo with its source unit's row */
 const INK = !!arg('ink')
@@ -487,11 +492,12 @@ const DOOR_MADE = new Map(), DOOR_REFS = new Map(), DOOR_LEFT = new Map(), JUMP_
 const JUMP_CHUNK = 6
 /** --door-parts, --door-order, --door-jump and --door-draw: run.mjs's stand-in, the instrument of door-parts.mjs, door-order.mjs,
  *  door-jump.mjs and door-draw.mjs (each run kept in __gateRuns, each wait told to __gateWait), each run keeping its units' records
- *  (`records`, which the reader's does not) for the comparison of the pages' records, and given no drawOf where __gateNoDraw is set
- *  (--door-draw's reference: every page read live) */
+ *  (`records`, which the reader's does not) for the comparison of the pages' records, given no drawOf where __gateNoDraw is set
+ *  (--door-draw's reference: every page read live), and its live fills walked with no clock (`fillsMs`, as the layer gate's own
+ *  run: a loaded run reads and counts as a quiet one) */
 const RUN_STAND_IN = `export * from '/engine/layer-proto/run.mjs?real'
 import { openProto as real } from '/engine/layer-proto/run.mjs?real'
-export async function openProto(o) { const run = await real({ ...o, records: true, onWait: what => globalThis.__gateWait?.(what), ...(globalThis.__gateNoDraw ? { drawOf: null } : {}) }); (globalThis.__gateRuns ??= []).push(run); return run }
+export async function openProto(o) { const run = await real({ ...o, records: true, fillsMs: Infinity, onWait: what => globalThis.__gateWait?.(what), ...(globalThis.__gateNoDraw ? { drawOf: null } : {}) }); (globalThis.__gateRuns ??= []).push(run); return run }
 `
 const server = createServer((req, res) => {
   let path
@@ -548,7 +554,7 @@ const MEMORY_MARK = `--axt-gate-memory=${process.pid}-${Date.now()}`
 const browser = await chromium.launch(MEMORY !== null ? { args: ['--js-flags=--expose-gc', '--enable-precise-memory-info', MEMORY_MARK] } : undefined)
 const inputs = {
   tier: TIER, pages: PAGES ? `the first ${PAGES}` : `the first ${PAGES_OF} of each output, every page of ${[...ALL_PAGES].join(', ')}`, scale: 2.5, inkScale: 2, inkMin: 4, composite: COMPOSITE,
-  layouts: LAYOUTS, ...(LAYOUTS === 'made' ? { switch: SWITCH } : {}), fixtures: FIXTURES === REFS ? 'data/layer-fixtures' : shownPath(FIXTURES, ROOT), ...(RECORDS ? { records: shownPath(RECORDS, ROOT) } : {}), ...(process.env.LAYER_REFS ? { refs: shownPath(REFS, ROOT) } : {}), ...(process.env.LAYER_GEOMETRY ? { geometry: shownPath(resolve(PROTO_GEOMETRY), ROOT) } : {}), chromium: browser.version(),
+  layouts: LAYOUTS, ...(LAYOUTS === 'made' ? { switch: SWITCH } : {}), fixtures: FIXTURES === REFS ? 'data/layer-fixtures' : shownPath(FIXTURES, ROOT), ...(RECORDS ? { records: shownPath(RECORDS, ROOT) } : {}), ...(process.env.LAYER_REFS ? { refs: shownPath(REFS, ROOT) } : {}), ...(process.env.LAYER_GEOMETRY ? { geometry: shownPath(resolve(PROTO_GEOMETRY), ROOT) } : {}), ...(SLOWDOWN !== null ? { cpuSlowdown: SLOWDOWN } : {}), chromium: browser.version(),
   pdfjs: readJson(join(PDFJS, 'package.json')).version, fonts: fontsDigest.slice(0, 16), checker: fileSha(CHECKER).slice(0, 16),
   // the instrument: the measures, their arithmetic (links.mjs: the link measures, 3a-0), and the page that draws and accounts (lost ink's own glyphs)
   measures: sha256([...['measure.mjs', 'score.mjs', 'links.mjs', PROTO ? 'proto.mjs' : 'page.mjs'].map(f => join(GATE, f)), NO_START_FILE, BREAK_ROOM_FILE].map(f => readFileSync(f)).join('\n')).slice(0, 16),
@@ -577,9 +583,10 @@ async function worker() {
   await ctx.route('**/*', route => (route.request().url().startsWith(`${ORIGIN}/`) ? route.continue() : (leaks.push(route.request().url()), route.abort())))
   const page = await ctx.newPage()
   page.setDefaultTimeout(600_000)
-  // (the JS heap, as Chromium counts it, for --perf)
-  const cdp = PERF ? await ctx.newCDPSession(page) : null
-  if (cdp) await cdp.send('Performance.enable')
+  // (the JS heap, as Chromium counts it, for --perf; the CPU slowed, --cpu-slowdown)
+  const cdp = PERF || SLOWDOWN !== null ? await ctx.newCDPSession(page) : null
+  if (PERF) await cdp.send('Performance.enable')
+  if (SLOWDOWN !== null) await cdp.send('Emulation.setCPUThrottlingRate', { rate: SLOWDOWN })
   page.cdp = cdp
   const errors = []
   page.on('pageerror', e => errors.push(String(e?.message ?? e)))

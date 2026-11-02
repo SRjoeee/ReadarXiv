@@ -191,22 +191,24 @@ const renderedList = page => {
 /** what a bounded operator list read of the live fills warns as, once a run */
 const LIVE_LIST = { who: 'the reader\'s live fills' }
 /** the longest the live fills' glyph walk runs on the main thread, ms: past it the page tells none (its fallback colours), never a
- *  part of them. The heavy-tier speed run on 31f36701 measured the whole walk at 5.0 ms a page p50, 13.8 ms at most */
+ *  part of them. The heavy-tier speed run on 31f36701 measured the whole walk at 5.0 ms a page p50, 13.8 ms at most. The reader's
+ *  budget: a clock, so that on a loaded or slow machine a page may tell none where it tells them on another. The lab's gates ask
+ *  the walk with none (openProto `fillsMs`), so that their runs draw and count alike at any load */
 export const LIVE_FILLS_MS = 16
 /**
  * The fills of a page read live, as its draw tells them (layout/fills.mjs itemFills over pipeline/draw-data.mjs's glyphs): its ink
  * read off the list PDF.js drew it by (`list`, held from the page's early pixel read, or renderedList), else off its own operator
  * list waited for DRAW_WAIT_MS at most (a page whose drawing kept none: no second parse in the reader's flows), with PDF.js's
- * `OPS`; null (none told) for no OPS, a page whose ink is not whole (past a cap, past the walk's backstop, turned) or a list that
- * cannot be read in time. Asked only of a page with no usable draw, once its pixels are drawn
+ * `OPS`; null (none told) for no OPS, a page whose ink is not whole (past a cap, past the walk's budget `ms`, LIVE_FILLS_MS by
+ * default, turned) or a list that cannot be read in time. Asked only of a page with no usable draw, once its pixels are drawn
  */
-export async function liveFillsOf(OPS, page, items, counted = null, list = null) {
+export async function liveFillsOf(OPS, page, items, counted = null, list = null, ms = LIVE_FILLS_MS) {
   if (!Number.isInteger(OPS?.showText)) return null
   try {
     const ops = list ?? renderedList(page) ?? (await listWithin(page, LIVE_LIST, DRAW_WAIT_MS))
     if (!ops) return null
     // (the glyphs alone: no box, path, image or outline of the page's, which the fills do not read)
-    const ink = pageInk(OPS, ops, page.commonObjs, { rotate: page.rotate ?? 0, glyphsMax: GLYPHS_PAGE, glyphsOnly: true, msMax: LIVE_FILLS_MS })
+    const ink = pageInk(OPS, ops, page.commonObjs, { rotate: page.rotate ?? 0, glyphsMax: GLYPHS_PAGE, glyphsOnly: true, msMax: ms })
     // (its work: the list's operations walked, the glyphs read, the items told)
     if (counted) counted.fills += (ops.fnArray?.length ?? 0) + ink.glyphs.length + items.length
     return ink.capped || ink.timedOut || ink.rotated ? null : itemFills(items, ink.glyphs)
@@ -747,20 +749,23 @@ export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
  * draws): the page asked is read for its pixels at its ask, once a part covers it, before its draw (or page 1's) is in, whether it
  * is then read from its draw or live; without it, once its draw is in, a page with none read in the closure's order, page 1 first.
  * `OPS` (PDF.js's operator codes, the host's): a page read live reads its characters' fills off the list PDF.js drew it by
- * (liveFillsOf), as its draw tells them; without it such a page tells none.
+ * (liveFillsOf), as its draw tells them; without it such a page tells none. `fillsMs` (default LIVE_FILLS_MS, the reader's): the
+ * longest that walk runs, ms; Infinity (the lab's gates): no clock, the walk bounded by its caps alone, so that a run's drawing and
+ * work counters (work.mjs) are the same however loaded the machine is.
  */
 /** whether a table cell's box is other cells' too (cells.mjs cellSpans), of the unit openProto holds: the source
  *  unit's, which rows.mjs unitOf carries (`spans`, a translated row keeping no piece of its \\multirow), else the unit's own */
 export const unitSpans = u => (typeof u?.spans === 'boolean' ? u.spans : cellSpans(u))
 export { cellSpans }
 
-export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, batch = 8, phMode = 'auto', order: orderIn = null, faces = 'roles', faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex, copy = true, hiding = null, labels = null, rules = BUILTIN_RULES, parts: partsMode = false, onRetired = null, onStep = null, onWait = null, free = false, records = true, drawOf = null, drawsComing = false, OPS = null, classes = null }) {
+export async function openProto({ doc, geometry, units: given, expect = null, groups: tableGroups = null, target: to, pages = 999, scale = 1.25, dpr = 1, batch = 8, phMode = 'auto', order: orderIn = null, faces = 'roles', faceSources = null, faceUrl = file => `/fonts/${encodeURIComponent(file)}`, fontUrl, hyphUrl = lang => `/hyph/${lang}.json`, tex, copy = true, hiding = null, labels = null, rules = BUILTIN_RULES, parts: partsMode = false, onRetired = null, onStep = null, onWait = null, free = false, records = true, drawOf = null, drawsComing = false, OPS = null, classes = null, fillsMs = LIVE_FILLS_MS }) {
   if (classes !== null && typeof classes !== 'object') throw new TypeError(`classes: the reader's toggles or null, not ${kindOf(classes)}`)
   // (the reader's toggles, the door's option, which the door gives resolved: a unit whose class they do not show is the original's.
   // A direct open given none takes the reader's defaults, the author block (its names and its places) and a bibliography's
   // entries left the original's: TOGGLE_DEFAULTS)
   const on = classesOn(classes), classShown = u => unitShown(u, on)
   if (expect !== null && (!Array.isArray(expect) || !expect.every(id => Number.isSafeInteger(id) && id >= 0))) throw new TypeError(`expect: ids of units or null, not ${kindOf(expect)}`)
+  if (typeof fillsMs !== 'number' || !(fillsMs > 0)) throw new TypeError(`fillsMs: a positive number of ms or Infinity, not ${typeof fillsMs === 'number' ? fillsMs : kindOf(fillsMs)}`)
   if (drawOf !== null && typeof drawOf !== 'function') throw new TypeError(`drawOf: a function or null, not ${kindOf(drawOf)}`)
   if (tableGroups !== null && !(tableGroups instanceof Map)) throw new TypeError(`groups: a Map of ids to groups or null, not ${kindOf(tableGroups)}`)
   if (faceSources !== null && typeof faceSources !== 'function') throw new TypeError(`faceSources: a function or null, not ${kindOf(faceSources)}`)
@@ -2699,7 +2704,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         // (its characters' fills as its draw would tell them: its ink off the list PDF.js drew it by, here or in its early pixel read)
         const tFills = performance.now(), held = heldLists.get(i)
         heldLists.delete(i)
-        fills = await liveFillsOf(OPS, page, tc.items, workOf(i), held?.doc === d ? held.list : null)
+        fills = await liveFillsOf(OPS, page, tc.items, workOf(i), held?.doc === d ? held.list : null, fillsMs)
         timesOf(i).fills += performance.now() - tFills
       } finally { unpin() }
     }
