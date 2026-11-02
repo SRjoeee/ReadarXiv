@@ -2522,12 +2522,19 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (the faces it waited for apart from its laying: no task of v0's)
     timesOf(p.pages[0]).lay += performance.now() - t0 - fontWait
     timesOf(p.pages[0]).fonts += fontWait
-    // (the unit before it on a shared line, laid over its first row (overFollower): this one left the original's, or not laid
-    // from its end, that one is laid again in its row alone, before this one's lay is counted and their page passes)
-    const lead = byId.get(candOf.get(p.id)?.follows)
-    if (lead?.over && !lead.refused && (p.refused || p.ledBy !== lead.id)) { await relayInRow(lead); if (disposed) return }
+    await settleLeadOf(p)
+    if (disposed) return
     afterLay(p)
     ms.set(p.id, performance.now() - t0 - fontWait)
+  }
+  /**
+   * The unit before p on a shared line, laid over p's first row (overFollower), where p is left the original's or not laid from
+   * its end (`ledBy`): laid again in its row alone (relayInRow). As p's lay ends (arrive), and as p is left the original's unlaid
+   * (refuseUnit: a page of it failed, which its head's lay could not know), before p is counted and their page passes
+   */
+  const settleLeadOf = async p => {
+    const lead = byId.get(candOf.get(p.id)?.follows)
+    if (lead?.over && !lead.refused && (p.refused || p.ledBy !== lead.id)) await relayInRow(lead)
   }
   /**
    * A run-in head laid over the next unit's first row (overFollower) whose next unit is left the original's, or set where TeX
@@ -2570,10 +2577,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (P.even) a.fit = { fillLead: a.fillLead, fitLines: a.fitLines }
     }
   }
-  /** a unit left the original's without being laid (`why`: `page`, on a page that failed), counted as one laid and left */
-  const refuseUnit = (p, why) => {
+  /** a unit left the original's without being laid (`why`: `page`, on a page that failed), counted as one laid and left; the
+   *  head laid over its first row laid again in its row first (settleLeadOf) */
+  const refuseUnit = async (p, why) => {
     p.refused = true
     p.why = why
+    await settleLeadOf(p)
+    if (disposed) return
     afterLay(p)
   }
   /** a unit laid (or left the original's) counted, recorded and painted: its page passes, its table group, its paint */
@@ -3212,7 +3222,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
           if (!(await drawOne(q, still, wait))) return
         }
         if (disposed) return
-        if (u.pages.some(q => failedPages.has(q))) { u.taken = true; refuseUnit(u, 'page'); report(ms); continue }
+        if (u.pages.some(q => failedPages.has(q))) { u.taken = true; await refuseUnit(u, 'page'); if (disposed) return; report(ms); continue }
         // (the slice's work done: a yield; let go during it, as a host's dispose usually is, or overtaken by a newer target, that
         // unit is not laid: it stays for its page's closure to lay)
         if (slices.due()) { await slices.give(); if (disposed || !still()) return }

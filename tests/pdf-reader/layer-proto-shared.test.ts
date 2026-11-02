@@ -168,6 +168,18 @@ describe('a shared line: the next unit\'s first line starts where the translatio
     expect([head.f, linesOf(run, 0)![0]![7]]).toEqual([7.25, 83.29])
   })
 
+  it('a heading before a unit one of whose pages fails (left the original\'s unlaid) is laid again in its row alone, as before', async () => {
+    // (the next unit runs on to page 2, which cannot be read: it is refused as its page fails, after its heading was laid over
+    // its first row, so never laid; the heading goes back to its own row, never over that unit's English first row)
+    const base = inkedRunIn(9)
+    const paper: Paper = { ...base, pages: 2, fail: 2, specs: base.specs.map(x => (x.id === 1 ? { ...x, lines: [...x.lines, line(2, 250, 'connection around each of the two', 20, 280)] } : x)) }
+    const run = await laid(paper)
+    const head = (run.stats as unknown as { id: number; f: number }[]).find(r => r.id === 0)!
+    expect(linesOf(run, 1)).toBeUndefined()
+    expect([head.f, linesOf(run, 0)![0]![7]]).toEqual([7.25, 83.29])
+    expect((run.skipped as unknown as { id: number; code: string }[]).map(x => [x.id, x.code])).toEqual([[1, 'page']])
+  })
+
   it('a heading left the original\'s (not translated): its text starts where TeX set it', async () => {
     const run = await laid(runIn(3), P => { P.rows.get(0)!.state = 'failed' })
     expect(linesOf(run, 0)).toBeUndefined()
