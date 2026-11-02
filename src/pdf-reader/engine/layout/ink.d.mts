@@ -30,8 +30,6 @@ export declare const BOXES_CAP: number
 export declare const STEPS_MAX: number
 /** the boxes a page's ink keeps one by one at most where its reader asks (`boxesMax`): past it the page is degraded */
 export declare const BOXES_PAGE: number
-/** the walk's backstop, in milliseconds (`msMax`'s default): past it the page is timed out */
-export declare const INK_MS: number
 /** the graphics state's levels that hold a copy at most: past it a level holds none, and ink placed in a state a restore
  *  past it could not give back caps the page */
 export declare const STACK_MAX: number
@@ -42,7 +40,7 @@ export interface InkPoint { name: string; glyph: number; box: number }
 /** a page's glyphs and graphics boxes (images, paths: x0, y0, x1, y1) from its operator list, in stream order, every
  *  painted glyph whatever its Unicode; the marked compile's points among them, and each glyph's boxes before it; `capped`
  *  when the walk stopped at OPS_CAP, `stepsMax`, a state lost past STACK_MAX, `glyphsMax` or BOXES_CAP, `timedOut` when it stopped past `msMax`
- *  (INK_MS); `degraded` when the boxes past `boxesMax` were merged by the grid's cells (after the others, from `mergedAt`,
+ *  (a wait a reader asks: none by default, no clock read); `degraded` when the boxes past `boxesMax` were merged by the grid's cells (after the others, from `mergedAt`,
  *  each MERGED in `paths`); `rotated` when the page's /Rotate is not 0 (then nothing is returned) */
 /** a paragraph's point (`q<n>`), kept apart from the marks' points */
 export declare const PARA_POINT: RegExp
@@ -55,7 +53,7 @@ export declare function pageInk(OPS: Record<string, number>, ops: { fnArray: Arr
 export interface TurnedGlyph { u: string; n: number; k: number; ox: number; oy: number; ex: number; ey: number; ux: number; uy: number; size: number; ascent: number; descent: number; up: number; down: number; font: string; fill: number; box: number; at: number; pt: number; blank?: true; form?: true; clipped?: true; unseen?: true; fid?: number; pid?: number }
 /** a figure's painted path as its lines (pageInk's `turned`): its segments on the page (x0, y0, x1, y1 stride 4), whether it strokes
  *  and fills, its half line width on the page */
-export interface Shape { segs: Float32Array; stroke: boolean; fill: boolean; hw: number }
+export interface Shape { segs: Float32Array; stroke: boolean; fill: boolean; hw: number; pattern?: true }
 /** a TikZ picture's points (marks.mjs POINTS_TEX) */
 export declare const PICTURE_START: 'zs'
 export declare const PICTURE_END: 'ze'

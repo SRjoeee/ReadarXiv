@@ -9,7 +9,6 @@ import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 import { classOf, colourPieceOf, DISPLAY, encodeLayoutMarks, readColours, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_SCHEMA, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, AHEAD_PROBE_MAX, FOLLOWERS, GLYPHS_PIECE, INK_ANY, INK_BUDGET, inkSamples, inkSection, leadSamples, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, markedPages, readMarked, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
 import { GLYPHS_PAGE } from '@/pdf-reader/engine/layout/ink.mjs'
-import { OPS_MS } from '@/pdf-reader/engine/layout/oplist.mjs'
 import { markWords, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { OWNED, OWNED_HOW } from '@/pdf-reader/engine/layout/stream.mjs'
@@ -202,6 +201,13 @@ describe('layoutMarking', () => {
     // part the word, its hyphenation and its kerns; a citation, a formula, a reference begin with no letter of the word
     const { units: marked } = layoutMarking([unit('para', [text('In Giessenbachstra'), ph('\\ss'), text(' e, the '), ph('\\foo{x}'), text('ing and'), ph('\\cite{a}'), text(' then '), ph('\\foo{y}'), text(' end')])], MARK_CLASSES, { lines: false })
     expect(srcs(marked[0])).toEqual(['text', 'ph \\ss', 'text', 'ph \\axtpma{p0.3a}', 'ph \\foo{x}', 'text', 'ph \\axtpma{p0.5a}', 'ph \\cite{a}', 'ph \\axtpm{p0.5b}', 'text', 'ph \\axtpma{p0.7a}', 'ph \\foo{y}', 'text'])
+  })
+  it('marks a superscript or a box glued to a word, whose opening mark sets itself in a box (BOXY), but not past a prefix', () => {
+    // (an author's affiliations, 2610.21924v1 u1: `Ruiya Zhou\\textsuperscript{1} \\quad`; TeX hyphenates no word a box or a
+    // formula follows, and LAYOUT_TEX's \\axt@boxy boxes the mark before \\textsuperscript and \\mbox as before a formula. Behind
+    // \\protect, \\axt@boxy would see the prefix: no mark, as for any macro glued to a word)
+    const { units: marked } = layoutMarking([unit('para', [text('Ruiya Zhou'), ph('\\textsuperscript{1}'), text(' and Li Wei'), ph('\\mbox{$^2$}'), text(', Ann'), ph('\\protect'), ph('\\textsuperscript{3}'), text(' end')])], MARK_CLASSES, { lines: false })
+    expect(srcs(marked[0])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\textsuperscript{1}', 'text', 'ph \\axtpma{p0.3a}', 'ph \\mbox{$^2$}', 'text', 'ph \\protect', 'ph \\textsuperscript{3}', 'text'])
   })
   it('a paper\'s macro and a footnote\'s call get the opening mark only, and the piece right after them none', () => {
     // a macro looks past its argument (\\xspace, \\@ifnextchar[, \\@esphack's \\ignorespaces after \\todo, \\nocite,
@@ -1024,7 +1030,7 @@ describe('reading the marked original', () => {
     await layoutMarksOf(watched, '', { engine: 'pdflatex' })
     expect(events).toEqual(['cleanup 1', 'cleanup 2', 'cleanup 3'])
   })
-  it('the marked read is bounded a page: a list that never comes is given up past OPS_MS, one past GLYPHS_PAGE capped; the next page read', async () => {
+  it('the marked read is bounded a page: a list that fails is unread, one past GLYPHS_PAGE capped, one however late read; the next page read', async () => {
     const units = [unit('para', [text('see '), ph('$x^2$'), text(' and more')]), unit('para', [text('then '), ph('$y$'), text(' end')])]
     const first = { view: [0, 0, 612, 792], items: [item('see', 72, 700)], shown: [['see', 72, 700], { at: '0s' }, { at: 'p0.1a' }, ['x', 92, 700], ['2', 97, 703.5, 7], { at: 'p0.1b' }, ['and', 106, 700]] as Shown[] }
     const second = { view: [0, 0, 612, 792], items: [item('then', 72, 700)], shown: [['then', 72, 700], { at: '1s' }, { at: 'p1.1a' }, ['y', 100, 700], { at: 'p1.1b' }, ['end', 110, 700]] as Shown[] }
@@ -1032,41 +1038,44 @@ describe('reading the marked original', () => {
     const base = streamDocument([first, second], dests)
     const want = await readMarked(base, '', { engine: 'pdflatex', units, OPS } as never)
     expect(want.marks.owned.map(e => e[0])).toEqual(['p0.1a', 'p1.1a'])
-    // page 1's operator list never comes: given up past OPS_MS, page 1 has no ink, page 2's piece still owned
+    // page 1's operator list fails: page 1 has no ink, page 2's piece still owned
+    const broken = { ...base, getPage: async (n: number) => { const p = await base.getPage(n); return n === 1 ? { ...p, getOperatorList: () => Promise.reject(new Error('broken page')) } : p } }
+    const unread = await readMarked(broken, '', { engine: 'pdflatex', units, OPS } as never)
+    // and page 1's operator list an hour late: waited for, read as it is (no clock decides what is read)
     vi.useFakeTimers()
-    const stuck = { ...base, getPage: async (n: number) => { const p = await base.getPage(n); return n === 1 ? { ...p, getOperatorList: () => new Promise(() => {}) } : p } }
-    const late = await settleWithClock(readMarked(stuck, '', { engine: 'pdflatex', units, OPS } as never), OPS_MS)
+    const slow = { ...base, getPage: async (n: number) => { const p = await base.getPage(n); return n === 1 ? { ...p, getOperatorList: () => new Promise(r => setTimeout(() => r(p.getOperatorList()), 3_600_000)) } : p } }
+    const late = await settleWithClock(readMarked(slow, '', { engine: 'pdflatex', units, OPS } as never), 3_600_000)
     vi.useRealTimers()
+    expect(late.dark).toEqual({ unread: [], capped: [], degraded: [] })
+    expect(late.marks.owned.map(e => e[0])).toEqual(['p0.1a', 'p1.1a'])
     // (a memory-class failure of a page's list is no dark page: the read ends on it, C8.4)
     const oom = Object.assign(new Error(ALLOCATION_FAILED), { name: 'UnknownErrorException', details: `RangeError: ${ALLOCATION_FAILED}` })
     const failing = { ...base, getPage: async (n: number) => { const p = await base.getPage(n); return n === 1 ? { ...p, getOperatorList: () => Promise.reject(oom) } : p } }
     await expect(readMarked(failing, '', { engine: 'pdflatex', units, OPS } as never)).rejects.toBe(oom)
     // (a row's character by its index into its marks' `chars`, which the rows before it fill)
     const rowOf = (m: typeof want, name: string) => { const e = m.marks.owned.find(r => r[0] === name); return e && [...e.slice(0, 7), m.marks.chars[e[7] as number], ...e.slice(8)] }
-    expect(late.dark).toEqual({ timedOut: [1], capped: [], degraded: [] })
-    expect(rowOf(late, 'p1.1a')).toEqual(rowOf(want, 'p1.1a'))
-    expect(late.marks.owned.find(e => e[0] === 'p0.1a')).toBeUndefined()
+    expect(unread.dark).toEqual({ unread: [1], capped: [], degraded: [] })
+    expect(rowOf(unread, 'p1.1a')).toEqual(rowOf(want, 'p1.1a'))
+    expect(unread.marks.owned.find(e => e[0] === 'p0.1a')).toBeUndefined()
     // page 1 showing past GLYPHS_PAGE glyphs: capped, its ink none
     const many = { ...first, shown: [...first.shown, { glyphs: Array.from({ length: GLYPHS_PAGE + 1 }, () => 'z'), x: 72, y: 600, step: 1 }] as Shown[] }
     const capped = await readMarked(streamDocument([many, second], dests), '', { engine: 'pdflatex', units, OPS } as never)
-    expect(capped.dark).toEqual({ timedOut: [], capped: [1], degraded: [] })
+    expect(capped.dark).toEqual({ unread: [], capped: [1], degraded: [] })
     expect(capped.marks.owned.find(e => e[0] === 'p0.1a')).toBeUndefined()
     expect(rowOf(capped, 'p1.1a')).toEqual(rowOf(want, 'p1.1a'))
     // and nothing of the kind on the pages as they are
-    expect(want.dark).toEqual({ timedOut: [], capped: [], degraded: [] })
+    expect(want.dark).toEqual({ unread: [], capped: [], degraded: [] })
   }, 60_000)
 
-  it('each page of the marked read given up on is that page alone: every page asked, each dark past OPS_MS, no count of them', async () => {
+  it('each page of the marked read whose list fails is that page alone: every page asked, each unread, no count of them', async () => {
     const n = 11
     const pg = { view: [0, 0, 612, 792], items: [item('see', 72, 700)], shown: [['see', 72, 700]] as Shown[] }
     const base = streamDocument(Array.from({ length: n }, () => pg), [])
     const asked: number[] = []
-    const stuck = { ...base, getPage: async (k: number) => { const p = await base.getPage(k); return { ...p, getOperatorList: () => { asked.push(k); return new Promise(() => {}) } } } }
-    vi.useFakeTimers()
-    const got = await settleWithClock(readMarked(stuck, '', { engine: 'pdflatex', units: [unit('para', [text('see')])], OPS } as never), OPS_MS)
-    vi.useRealTimers()
+    const broken = { ...base, getPage: async (k: number) => { const p = await base.getPage(k); return { ...p, getOperatorList: () => { asked.push(k); return Promise.reject(new Error('broken page')) } } } }
+    const got = await readMarked(broken, '', { engine: 'pdflatex', units: [unit('para', [text('see')])], OPS } as never)
     expect(asked).toEqual(Array.from({ length: n }, (_, i) => i + 1))
-    expect(got.dark.timedOut).toEqual(Array.from({ length: n }, (_, i) => i + 1))
+    expect(got.dark.unread).toEqual(Array.from({ length: n }, (_, i) => i + 1))
   }, 60_000)
 
   it('layoutMarksOf owns no ink off its page: the piece is written as not owned, and the file parses', async () => {

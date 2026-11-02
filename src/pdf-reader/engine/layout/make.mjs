@@ -21,10 +21,11 @@
 // page's words arXiv's page's, none of its lines on another page), the rest left the original's, and the file is refused
 // ('carry') where no unit is; and where the
 // page count is out of bounds, and where its own parser refuses it: a file the parser refuses is never returned.
-// Arithmetic alone once the PDF is read: the same marks file and PDF give the same bytes, but for a page that passes a
-// clock, its operator list not given within OPS_MS (`stats.timedOut`) or its ink's walk past its backstop (ink.mjs INK_MS,
-// `stats.inkTimedOut`). No real page comes near either (the walk's own bound is counted, STEPS_MAX), and a page past one is
-// dark, its units the original's: a slower machine may show a hostile page untranslated where a faster one reads it.
+// Arithmetic alone once the PDF is read: the same marks file and PDF give the same bytes on every machine. No clock decides
+// what is read: a page's operator list and its annotations are waited for however long they take (oplist.mjs listOf, orNull),
+// and what a page holds is bounded by counts (ink.mjs OPS_CAP, STEPS_MAX, GLYPHS_PAGE, BOXES_CAP: a page past one is dark, its
+// units the original's, on every machine alike); a page whose list fails is dark too (`stats.unread`). A parse that never ends
+// is the run's deadline's.
 import { anchorUnits, boundsFromMarks, frameOfTokens, markWords, orderOf, pageFrame, pageIndex, placesIn, tokenAtMark, tokens, uprightToken } from '../pipeline/anchors.mjs'
 import { rangedAnchors } from '../pipeline/left-part.mjs'
 import { readArxivText } from './arxiv.mjs'
@@ -32,7 +33,7 @@ import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
 import { tokensOfMarks } from './carry.mjs'
 import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, LayoutRefusal, MIXED_FILL, NAME_FLAG, NAME_KEYS, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, NO_FILL, packGlyphs, pageInk } from './ink.mjs'
-import { listWithin, OPS_MS, within } from './oplist.mjs'
+import { listOf, orNull } from './oplist.mjs'
 import { checkBoxes, pageRules } from './cell-rules.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { drawDataOf } from '../pipeline/draw-data.mjs'
@@ -49,8 +50,6 @@ const CLOSED = OWNED_HOW.indexOf('closed')
 /** a text the probe showed a paper's macro sets that is one mark of punctuation: drawn as that character, as a text symbol is */
 const PUNCT_TEXT = /^[.,;:!?]$/
 
-/** a page's operator list waited for at most (oplist.mjs OPS_MS: past it the page has no ink, that page alone) */
-export { OPS_MS }
 const PAGES_MAX = 10_000, COORD_MAX = 14_400
 /** units TeX sets away from where the source has them (anchors.mjs `floating`) */
 const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure', 'affiliation'])
@@ -396,7 +395,7 @@ function blank(units) {
     names: { marked: 0, located: 0, runIn: 0, why: {} },
     // (the colour pieces of the units the file holds, and those whose run's fill TeX wrote: marks.mjs readColours)
     colours: { pieces: 0, evaluated: 0 },
-    capped: [], timedOut: [], inkTimedOut: [], degraded: [], bytes: { raw: 0, gzip: 0 }, ms: { text: 0, ops: 0, carry: 0, anchor: 0, rows: 0 },
+    capped: [], unread: [], degraded: [], bytes: { raw: 0, gzip: 0 }, ms: { text: 0, ops: 0, carry: 0, anchor: 0, rows: 0 },
     // (the page stream's, the marked original read a page at a time: rows found after their unit's own ink was taken, and points
     // read twice after their unit's placeholders were matched; none on a paper read whole)
     late: { rows: 0, vetoes: 0 },
@@ -504,7 +503,6 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     },
   }) : pagesInk
   const fontIds = raw => { const n = fontName(raw); if (!nameId.has(n)) { nameId.set(n, names.length); names.push(n) } return nameId.get(n) }
-  const seen = { warned: false }
   /** page p's ink, read once, its time spent on the paper's `ms.ops` */
   async function readPage(p) {
     const t0 = now()
@@ -513,20 +511,20 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   }
   // A page's annotations are read once, with its draw (gatherDraw: PDF.js reads them anew at each ask, at a cost of their own)
   const annotsAsked = new Map()
-  const annotsOnce = (p, page) => { let a = annotsAsked.get(p); if (!a) { a = within(readAnnots(page), OPS_MS); annotsAsked.set(p, a) } return a }
+  const annotsOnce = (p, page) => { let a = annotsAsked.get(p); if (!a) { a = orNull(() => readAnnots(page)); annotsAsked.set(p, a) } return a }
   /** page p's draw geometry (pipeline/draw-data.mjs), held as its encoded text for the left part that will carry it (`drawOf`); none for
    *  a page past the held budget, one that cannot be read, or one whose font a host would read differently: the browser reads it */
   const draws = new Map(), drawStats = { pages: 0, none: 0, why: {}, bytes: 0, ms: 0, fills: { items: 0, glyphs: 0, told: 0, runs: 0 } }
   let drawHeld = 0
   async function gatherDraw(p, page, tx, glyphs) {
     const t0 = now()
-    let r = null, timer
+    let r = null
     try {
-      r = await Promise.race([drawDataOf(page, () => annotsOnce(p, page), tx, glyphs), new Promise(resolve => { timer = setTimeout(() => resolve({ draw: null, why: 'time' }), OPS_MS) })])
+      r = await drawDataOf(page, () => annotsOnce(p, page), tx, glyphs)
     } catch (e) {
       if (isMemoryError(e)) throw e
       r = { draw: null, why: 'read' }
-    } finally { clearTimeout(timer) }
+    }
     drawStats.ms += now() - t0
     let why = r.why
     if (r.draw !== null) {
@@ -560,9 +558,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     let page = null
     try { page = await arxiv.getPage(p) } catch (e) { if (isMemoryError(e)) throw e }
     if (!page) { dark.add(p); return }
-    // (within OPS_MS, else given up on and let go: that page alone, oplist.mjs)
-    const ops = await listWithin(page, seen)
-    if (!ops) { stats.timedOut.push(p); dark.add(p); return }
+    // (however long it takes; one that fails is that page alone, dark, the page let go: oplist.mjs)
+    const ops = await listOf(page)
+    if (!ops) { stats.unread.push(p); dark.add(p); return }
     const got = pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, indices: wantRules, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
     // the page's draw geometry (E-C), read once its fonts are loaded, within the same limit, before the page is let go; its items'
     // fills from the ink's glyphs where the page's ink is whole (layout/fills.mjs), none told else
@@ -578,7 +576,6 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     // (each page once, by what befell it: past a cap, past the walk's backstop (apart from a list that never came), or
     // read with its boxes past BOXES_PAGE merged by cell, its ink kept: its text is whole, ink.mjs pageInk)
     if (got.capped) stats.capped.push(p)
-    else if (got.timedOut) stats.inkTimedOut.push(p)
     else if (got.degraded) stats.degraded.push(p)
     // a page whose ink is not whole has no ink: its units stay the original's, never erased in part
     if (got.capped || got.timedOut || got.rotated) { dark.add(p); return }

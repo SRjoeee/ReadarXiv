@@ -2,12 +2,11 @@ import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { encodeLayout, indexLayout, type LayoutFile, mergeLayout, MIXED_FILL, NAME_FLAG, NAME_KEYS, PART_KEYS, PH_FLAG, PH_KINDS, parseLayout, UNIT_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
-import { fontName, type LayoutStats, makeLayout, makerOf, OPS_MS, runInOrder } from '@/pdf-reader/engine/layout/make.mjs'
+import { fontName, type LayoutStats, makeLayout, makerOf, runInOrder } from '@/pdf-reader/engine/layout/make.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
 import { floatMatches, pageFrame } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { displayEdges, unitText } from '@/pdf-reader/engine/translate/mt.mjs'
-import { type Annot, arxivOf, baseOf, CH, endOf, FONTS, lineCheckOf, type Mark, markedOf, marksOf, type Page, PATHS, ph, type Run, text, unit, words, type World, xAt } from './helpers/make-world'
-import { INK_MS } from '@/pdf-reader/engine/layout/ink.mjs'
+import { type Annot, arxivOf, baseOf, CH, endOf, FONTS, LATE_MS, lineCheckOf, type Mark, markedOf, marksOf, type Page, PATHS, ph, type Run, text, unit, words, type World, xAt } from './helpers/make-world'
 import { INK_ANY, LINKS_MAX, markedPages, marksOfHead, readMarked } from '@/pdf-reader/engine/layout/marks.mjs'
 import { MAX_LINKS } from '@/pdf-reader/engine/layer-proto/links.mjs'
 import { ALLOCATION_FAILED } from '@/pdf-reader/engine/pipeline/memory.mjs'
@@ -598,22 +597,23 @@ describe('makeLayout', () => {
     expect(chunk(rowsOf(file, 1, 'erase'), 5)).toEqual([[0, 300, 597.5, 300.01, 607.5]])
   })
 
-  it('a page whose ink is not whole locates none of its units: an operator list too slow, failing or capped', async () => {
+  it('a page whose ink is not whole locates none of its units: an operator list failing or capped; one however late is read', async () => {
     const page = (y: number, s: string): Page => ({ runs: [{ s, x: 72, y }] })
     const pages = [page(700, 'alpha beta gamma'), page(700, 'delta epsilon zeta'), page(700, 'eta theta iota'), page(700, 'kappa lambda mu')]
     const marks: Mark[] = [['0s', 1, 72, 700], ['0e', 1, 152, 700], ['1s', 2, 72, 700], ['1e', 2, 162, 700], ['2s', 3, 72, 700], ['2e', 3, 142, 700], ['3s', 4, 72, 700], ['3e', 4, 147, 700]]
     const units = ['alpha beta gamma', 'delta epsilon zeta', 'eta theta iota', 'kappa lambda mu'].map(s => unit('para', [text(s)]))
     vi.useFakeTimers()
-    const given: Page[] = [pages[0] as Page, { ...pages[1] as Page, ops: 'never' }, { ...pages[2] as Page, ops: 'fails' }, { ...pages[3] as Page, ops: 'capped' }]
+    const given: Page[] = [pages[0] as Page, { ...pages[1] as Page, ops: 'late' }, { ...pages[2] as Page, ops: 'fails' }, { ...pages[3] as Page, ops: 'capped' }]
     const w: World = { pages: given, marked: pages, base: given, marks, units }
     const out = make(w)
-    await vi.advanceTimersByTimeAsync(OPS_MS + 1000)
+    await vi.advanceTimersByTimeAsync(LATE_MS + 1000)
     const done = await out
     if (!('file' in done)) throw new Error('refused')
-    expect(done.file.units.map(u => u[0])).toEqual([0])
+    // (page 2's list, an hour late, is read: no clock decides what is read, oplist.mjs listOf)
+    expect(done.file.units.map(u => u[0])).toEqual([0, 1])
     // (each the original's for its marks, which stand on no page with ink)
-    expect(done.file.unlaid).toEqual([[1, 'unplacedMarks'], [2, 'unplacedMarks'], [3, 'unplacedMarks']])
-    expect(done.stats.timedOut).toEqual([2, 3])
+    expect(done.file.unlaid).toEqual([[2, 'unplacedMarks'], [3, 'unplacedMarks']])
+    expect(done.stats.unread).toEqual([3])
     expect(done.stats.capped).toEqual([4])
   })
 
@@ -629,7 +629,7 @@ describe('makeLayout', () => {
     const dense = await of({ pages: deep, marked: pages, base: deep, marks, units }).finally(() => clock.mockRestore())
     const plain = await of({ pages: shallow, marked: pages, base: shallow, marks, units })
     expect(dense.stats.capped).toEqual([2])
-    expect(dense.stats.timedOut).toEqual([])
+    expect(dense.stats.unread).toEqual([])
     expect(dense.stats.degraded).toEqual([3])
     expect(plain.stats.degraded).toEqual([])
     // page 2's unit stays the original's; page 3's is located as on the page without the paths, byte for byte
@@ -666,35 +666,32 @@ describe('makeLayout', () => {
     expect(phOf(deep.file, 0, 1)).toEqual([0, 1, 0, PH_FLAG.LOST])
   })
 
-  it('a page whose walk passes INK_MS has no ink (timedOut), the others theirs', async () => {
+  it('a page however slow its walk keeps its ink: no clock in the prepare\'s walk (ink.mjs msMax: none by default)', async () => {
     const page = (s: string): Page => ({ runs: [{ s, x: 72, y: 700 }] })
     const pages = [page('alpha beta gamma'), page('delta epsilon zeta')]
     const marks: Mark[] = [['0s', 1, 72, 700], ['0e', 1, 152, 700], ['1s', 2, 72, 700], ['1e', 2, 162, 700]]
     const units = ['alpha beta gamma', 'delta epsilon zeta'].map(s => unit('para', [text(s)]))
     const marksFile = await marksOf({ pages, marks, units })
-    // (a clock that moves INK_MS on at each reading: a page read in fewer steps than come between two readings never sees it)
+    // (a clock that moves two seconds on at each reading, the walk's backstop that was: a page that read it would time out)
     const real = performance.now.bind(performance)
     let skew = 0
-    const clock = vi.spyOn(performance, 'now').mockImplementation(() => { skew += INK_MS; return real() + skew })
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => { skew += 2_000; return real() + skew })
     try {
       const done = await makeLayout({ units, marks: marksFile, arxiv: arxivOf([pages[0] as Page, { ...pages[1] as Page, ops: 'slow' }]), OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
       if (!('file' in done)) throw new Error('refused')
-      // (the walk's backstop, apart from a list that never came)
-      expect(done.stats.inkTimedOut).toEqual([2])
-      expect(done.stats.timedOut).toEqual([])
+      expect(done.stats.unread).toEqual([])
       expect(done.stats.capped).toEqual([])
-      expect(done.file.units.map(u => u[0])).toEqual([0])
+      expect(done.file.units.map(u => u[0])).toEqual([0, 1])
     } finally { clock.mockRestore() }
   })
 
-  it('each page let go once read, one cleanup a page after its list, or once given up on; the file the same', async () => {
+  it('each page let go once read, one cleanup a page after its list, or once its list failed; the file the same', async () => {
     const page = (s: string): Page => ({ runs: [{ s, x: 72, y: 700 }] })
     const pages = [page('alpha beta gamma'), page('delta epsilon zeta'), page('eta theta iota'), page('kappa lambda mu')]
     const marks: Mark[] = [['0s', 1, 72, 700], ['0e', 1, 152, 700], ['1s', 2, 72, 700], ['1e', 2, 162, 700], ['2s', 3, 72, 700], ['2e', 3, 142, 700], ['3s', 4, 72, 700], ['3e', 4, 147, 700]]
     const units = ['alpha beta gamma', 'delta epsilon zeta', 'eta theta iota', 'kappa lambda mu'].map(s => unit('para', [text(s)]))
-    // page 2's list never comes and page 3's fails (both given up: giveUp, and a failed list's cancellation cleans up
-    // nothing in PDF.js); page 4's is read, capped
-    const given: Page[] = [pages[0] as Page, { ...pages[1] as Page, ops: 'never' }, { ...pages[2] as Page, ops: 'fails' }, { ...pages[3] as Page, ops: 'capped' }]
+    // page 2's list comes an hour late (read), page 3's fails (let go); page 4's is read, capped
+    const given: Page[] = [pages[0] as Page, { ...pages[1] as Page, ops: 'late' }, { ...pages[2] as Page, ops: 'fails' }, { ...pages[3] as Page, ops: 'capped' }]
     const w: World = { pages: given, marked: pages, base: given, marks, units }
     const events: string[] = []
     const base = baseOf(w)
@@ -710,12 +707,12 @@ describe('makeLayout', () => {
     const marksFile = await marksOf(w)
     const run = (doc: typeof base) => makeLayout({ units, marks: marksFile, arxiv: doc, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289' })
     const watched = run(arxiv), plain = run(base)
-    await vi.advanceTimersByTimeAsync(2 * OPS_MS + 1000)
+    await vi.advanceTimersByTimeAsync(LATE_MS + 1000)
     const [a, b] = [await watched, await plain]
     warn.mockRestore()
-    expect(events).toEqual(['ops 1', 'cleanup 1', 'cleanup 2', 'cleanup 3', 'ops 4', 'cleanup 4'])
+    expect(events).toEqual(['ops 1', 'cleanup 1', 'ops 2', 'cleanup 2', 'cleanup 3', 'ops 4', 'cleanup 4'])
     if (!('file' in a) || !('file' in b)) throw new Error('refused')
-    expect(a.stats.timedOut).toEqual([2, 3])
+    expect(a.stats.unread).toEqual([3])
     expect(encodeLayout(a.file)).toBe(encodeLayout(b.file))
   })
 
@@ -960,41 +957,41 @@ describe('makeLayout, the review of 2026-10-06', () => {
     expect(file.units.map(u => u[3])).toEqual([UNIT_FLAG.TITLE | UNIT_FLAG.FRONT, UNIT_FLAG.FRONT, 0])
   })
 
-  it("each page's operator list is waited for OPS_MS alone: no count of pages given up on makes a later page dark", async () => {
-    // twelve pages whose lists never come: each asked, waited for OPS_MS and given up, that page alone (what a page given up
-    // on leaves is that page's: oplist.mjs)
-    const pages = Array.from({ length: 12 }, (_, j): Page => ({ runs: [{ s: `alpha beta gamma ${j}`, x: 72, y: 700 }], ops: 'never' }))
+  it("each page's operator list is waited for however long it takes, each page alone: no count of pages makes a later page dark", async () => {
+    // twelve pages whose lists come an hour late each: each asked and read, none given up (no clock decides what is read)
+    const pages = Array.from({ length: 12 }, (_, j): Page => ({ runs: [{ s: `alpha beta gamma ${j}`, x: 72, y: 700 }], ops: 'late' }))
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
     const asked: number[] = []
     const out = make({ pages, marked: pages.map(p => ({ runs: p.runs })), base: pages, marks: [], units: [unit('para', [text('alpha beta gamma 0')])] }, '', asked)
-    await vi.advanceTimersByTimeAsync(13 * OPS_MS)
+    await vi.advanceTimersByTimeAsync(13 * LATE_MS)
     const done = await out
     expect(asked).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
-    expect(done.stats.timedOut).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+    expect(done.stats.unread).toEqual([])
+    expect(done.stats.capped).toEqual([])
     // eleven pages past OPS_CAP, then one whose list comes: it is read, its ink whole
     const mixed = pages.map((p, j): Page => ({ ...p, ops: j < 11 ? 'capped' : undefined }))
     const asked2: number[] = []
     const done2 = await make({ pages: mixed, marked: mixed.map(p => ({ runs: p.runs })), base: mixed, marks: [], units: [unit('para', [text('alpha beta gamma 0')])] }, '', asked2)
     expect(asked2).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
     expect(done2.stats.capped).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11])
-    expect(done2.stats.timedOut).toEqual([])
+    expect(done2.stats.unread).toEqual([])
   })
 
-  it('the pinned PDF.js has the cancel the maker gives a page up with; without it the maker warns once and goes on', async () => {
+  it('the pinned PDF.js has the cancel the reader\'s live read gives a page up with (oplist.mjs listWithin): the maker gives none up', async () => {
     const pdf = '%PDF-1.4\n1 0 obj <</Type/Catalog/Pages 2 0 R>> endobj\n2 0 obj <</Type/Pages/Kids[3 0 R]/Count 1>> endobj\n3 0 obj <</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R/Resources<<>>>> endobj\n4 0 obj <</Length 16>> stream\n0 0 m 10 10 l S\nendstream endobj\ntrailer <</Root 1 0 R>>\n%%EOF\n'
     const task = getDocument({ data: new TextEncoder().encode(pdf), verbosity: 0 })
     const page = (await (await task.promise).getPage(1)) as unknown as { _abortOperatorList?: unknown; _intentStates?: unknown }
     expect(typeof page._abortOperatorList).toBe('function')
     expect(page._intentStates).toBeInstanceOf(Map)
     await task.destroy()
-    // the fake pages have no cancel: two pages given up, one warning
+    // the fake pages have no cancel, and none is asked: two late pages read, no warning
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.useFakeTimers()
-    const p = (s: string): Page => ({ runs: [{ s, x: 72, y: 700 }], ops: 'never' })
+    const p = (s: string): Page => ({ runs: [{ s, x: 72, y: 700 }], ops: 'late' })
     const out = make({ pages: [p('alpha beta gamma'), p('delta epsilon zeta')], marked: [{ runs: p('alpha beta gamma').runs }, { runs: p('delta epsilon zeta').runs }], base: [p('alpha beta gamma'), p('delta epsilon zeta')], marks: [], units: [] })
-    await vi.advanceTimersByTimeAsync(3 * OPS_MS)
+    await vi.advanceTimersByTimeAsync(3 * LATE_MS)
     await out
-    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn).not.toHaveBeenCalled()
     warn.mockRestore()
   })
 })
@@ -1834,26 +1831,26 @@ describe('makeLayout with the add-on\'s plans (`plans`): each page\'s operator l
     expect('cellRules' in want).toBe(false)
   })
 
-  it("a page the walk does not read whole, capped or timed out, keeps its units the original's end to end: none located, no cell rules", async () => {
+  it("a page the walk does not read whole (capped) keeps its units the original's end to end: none located, no cell rules; one walked however slowly is read whole", async () => {
     const marks = await marksOf(w)
     const base = { units: w.units, marks, OPS, paper: { id: '2608.04322', version: 1 }, left: '', pdfjs: '6.3.289', cellRules: true }
     const slow: Page[] = w.pages.map((pg, i) => (i === 3 ? { ...pg, ops: 'slow' } : pg))
-    // (page 4 past OPS_CAP, the world's; or walked past the backstop on a clock that moves INK_MS at each reading, which a
-    // page of fewer steps than come between two readings never sees)
+    // (page 4 past OPS_CAP, the world's; or walked on a clock that moves two seconds at each reading, the backstop that was: no
+    // clock decides what the prepare reads, so the page is read as on any machine)
     const capped = await makeLayout({ ...base, arxiv: baseOf(w) })
     const real = performance.now.bind(performance)
     let skew = 0
-    const clock = vi.spyOn(performance, 'now').mockImplementation(() => { skew += INK_MS; return real() + skew })
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => { skew += 2_000; return real() + skew })
     const late = await makeLayout({ ...base, arxiv: arxivOf(slow) }).finally(() => clock.mockRestore())
     if (!('file' in capped) || !('file' in late)) throw new Error('refused')
     expect(capped.stats.capped).toEqual([4])
-    expect(late.stats.inkTimedOut).toEqual([4])
-    for (const got of [capped, late]) {
-      // unit 2, the page's only one, located nowhere: the original's; no rules of the page
-      expect(got.file.units.map(u => u[0])).not.toContain(2)
-      expect(indexLayout(got.file).onPage(4)).toEqual([])
-      expect(got.cellRules?.has(4)).toBe(false)
-    }
+    // unit 2, the page's only one, located nowhere: the original's; no rules of the page
+    expect(capped.file.units.map(u => u[0])).not.toContain(2)
+    expect(indexLayout(capped.file).onPage(4)).toEqual([])
+    expect(capped.cellRules?.has(4)).toBe(false)
+    // the slow walk's page read whole: its unit located
+    expect(late.stats.capped).toEqual([])
+    expect(late.file.units.map(u => u[0])).toContain(2)
   })
 })
 

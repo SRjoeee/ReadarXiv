@@ -22,7 +22,7 @@ import { DISPLAY, plainTranslated } from '../translate/mt.mjs'
 import { readLines } from '../pipeline/typeset/tex.mjs'
 import { annotsOf, linkKindOf, MAX_GLYPHS, MAX_LINKS, readAnnots } from '../layer-proto/links.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, packGlyphs, pageInk } from './ink.mjs'
-import { listWithin, OPS_MS, within } from './oplist.mjs'
+import { listOf, orNull } from './oplist.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
 import { NAME_ENGLISH, NAME_KEYS } from './names.mjs'
 import { fillOfColour } from './colour.mjs'
@@ -1393,9 +1393,13 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       // part the word's hyphenation and kerns — but not one whose box TeX began with a node apart from it (`apart`: a kern, glue,
       // a colour), which no kern or ligature of the letters before it reaches and their hyphenation ends at (`0.58\\pp`, \\pp
       // `\\,pp`)
+      // — nor one LAYOUT_TEX's opening mark sets in a box of its own glued to a letter (BOXY, \\axt@boxy: \\textsuperscript, \\mbox),
+      // as it does before a formula: TeX hyphenates no word a box or a formula follows and kerns no letter with either, so the
+      // word ends where it ended (an author's `Zhou\\textsuperscript{1}`, 2610.21924v1 u1: its affiliations had no mark, the
+      // author line English). Not past a prefix, which \\axt@boxy would see in the command's place
       // (the piece before a prefix's, past it: the pair is one command, glued to the word before it as the command alone would be)
       const before = u.pieces[prefixed ? k - 2 : k - 1], next = u.pieces[k + 1]
-      if (cls === 'macro' && before?.t === 'text' && WORD_END.test(before.s) && !parted.has(p.src)) return [piece]
+      if (cls === 'macro' && before?.t === 'text' && WORD_END.test(before.s) && !parted.has(p.src) && !(BOXY.test(p.src) && !prefixed)) return [piece]
       // (a complete call keeps its opening mark whatever TeX answered for what follows, as any macro of the paper's has it: the
       // answer is the closing mark's and the next piece's alone. A call that ends in a control word is answered '2' before a word,
       // TeX's tokenizer skipping the space after it where `{}` keeps it, which says nothing of a mark before the call)
@@ -1839,8 +1843,8 @@ const UNIT_MARK = /^\d+[se]$/
  *   order), owned (the pieces found once p was read: [name, row], each row [name, how] or [name, how, n, glyphs (page, x0,
  *   y, size, its character itself), rules (page, x0, y0, x1, y1)]), links (with `units` and `OPS`, its Link annotations that
  *   name a destination, linksOfPage's rows, where a placeholder that names a link has a point on it; [] without or elsewhere;
- *   null where they could not be read), dark (null, or why the page's ink was not read: 'timedOut', its operator list not
- *   given within OPS_MS and given up, or its ink's walk past its backstop; 'capped', past OPS_CAP, GLYPHS_PAGE or a guard of
+ *   null where they could not be read), dark (null, or why the page's ink was not read: 'unread', its operator list failed (it is
+ *   waited for however long it takes: oplist.mjs listOf); 'capped', past OPS_CAP, GLYPHS_PAGE or a guard of
  *   pageInk's own; 'degraded', its boxes past BOXES_PAGE merged. It has no ink then: no piece on it is owned), found (every
  *   piece whose opening point stands on a page before it has been given: stream.mjs ownedPages `found()`), repeats (the point
  *   names read a second time on p: `twice` a page at a time) }. Each page's view, text and, with `units` and `OPS`,
@@ -1911,7 +1915,7 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
     const a = destPage.get(`p${i}.${k}a`) ?? destPage.get(`p${i}.${k}b`), b = destPage.get(`p${i}.${k}b`) ?? a
     if (a !== undefined) for (let q = Math.min(a, b); q <= Math.max(a, b); q++) linkPages.add(q)
   }))
-  // their annotations read first, each page's within OPS_MS (a page not answered within it could not be read), and kept until
+  // their annotations read first, each page's however long it takes (a page whose read fails could not be read), and kept until
   // its page is read: what the paper's links are is a function of them alone, so it is told with the head (`links`: their count
   // and their destinations' names, or null where the paper has none: a page's could not be read, held more than MAX_LINKS, or
   // all were past LINKS_MAX), for a reader that takes the pages as they come (the page stream's maker) to know it before any page
@@ -1921,7 +1925,7 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
   for (const q of [...linkPages].sort((a, b) => a - b)) {
     let page = null
     try { page = await pdf.getPage(q) } catch (e) { if (isMemoryError(e)) throw e }
-    const raw = page ? await within(readAnnots(page), OPS_MS) : null
+    const raw = page ? await orNull(() => readAnnots(page)) : null
     annotsAt.set(q, raw)
     const ls = Array.isArray(raw) ? raw.filter(a => a?.subtype === 'Link') : null
     if (ls === null || ls.length > MAX_LINKS) { noLinks = true; break }
@@ -1940,7 +1944,6 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
   const follows = units ? followsOf(units, set, marking.texts) : null
   const stream = units && OPS ? ownedPages({ follows, dropped, heads: headsOf(units, set), closing: name => destPage.get(`${name.slice(0, -1)}b`) ?? null }) : null
   let all = 0, found = []
-  const seen = { warned: false, who: 'marked read' }
   const take = (name, e, W) => {
     if (e.how >= OWNED) { found.push([name, [name, e.how]]); return }
     const not = how => { const k = OWNED_HOW.indexOf(how); if (k < OWNED) throw new Error(`no how ${how} of a piece not owned`); found.push([name, [name, k]]) }
@@ -1980,18 +1983,17 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
       // the columns of its glyphs ownedOf reads (ink.mjs packGlyphs, in stream order), not a Glyph object each, and each
       // glyph's boxes before it as 32-bit integers: held until every piece that may read the page is found. Bounded as the
       // layout maker's read of arXiv's PDF is (the compile is the paper's source, as untrusted): its operator list waited for
-      // OPS_MS at most and given up past it (oplist.mjs: that page alone); a page past a bound of pageInk's own (`capped`,
-      // `timedOut`), or read with its boxes past BOXES_PAGE merged (`degraded`: a piece's rule there would be left out of its
+      // however long it takes, one that fails that page alone (oplist.mjs listOf); a page past a bound of pageInk's own (`capped`),
+      // or read with its boxes past BOXES_PAGE merged (`degraded`: a piece's rule there would be left out of its
       // own ink, unseen), is unread: no ink, so that no piece on it is owned (each LOST to the maker, `dark` says why), and no
       // glyph under its links
       // (its annotations as the head read them, let go here)
       const raw = linkPages.has(p) ? annotsAt.get(p) ?? null : []
       annotsAt.delete(p)
-      const ops = await listWithin(page, seen)
+      const ops = await listOf(page)
       const got = ops ? pageInk(OPS, ops, page.commonObjs ?? { get: () => null }, { rotate: page.rotate ?? 0, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE }) : null
-      if (!ops) dark = 'timedOut'
+      if (!ops) dark = 'unread'
       else if (got.capped) dark = 'capped'
-      else if (got.timedOut) dark = 'timedOut'
       else if (got.degraded) dark = 'degraded'
       const { glyphs, boxes, points, boxAt, paras = [] } = dark ? { glyphs: [], boxes: [], points: [], boxAt: [] } : got
       // (and its paragraphs' points, where a display a unit opens with begins: stream.mjs headInk)
@@ -2041,14 +2043,14 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
  *   opening points' order, WORDS_MAX). A point read twice on pages apart makes its piece 'a mark set twice' (ownedOf over the
  *   whole says so), and owns nothing, nor the displays of its group. The characters' table in the rows' order, as before.
  * - `unitMarks`: markedPages' (null where a unit mark's page could not be looked up).
- * - `dark`: the pages whose ink was not read (markedPages' `dark`): `timedOut`, their operator list given up past OPS_MS;
+ * - `dark`: the pages whose ink was not read (markedPages' `dark`): `unread`, their operator list failed;
  *   `capped`, past OPS_CAP's operations or GLYPHS_PAGE's glyphs. No piece on them is owned; the marks file says nothing of
  *   them (its keys are exact), the run's stats do.
  * `marked` a PDF.js document of the marked original, `log` its last pass's log; the options are layoutMarksOf's
  */
 export async function readMarked(marked, log, o) {
   let head = null, end = null
-  const views = [], words = [], tokens = [], rows = new Map(), dark = { timedOut: [], capped: [], degraded: [] }
+  const views = [], words = [], tokens = [], rows = new Map(), dark = { unread: [], capped: [], degraded: [] }
   // (the links, the pages' in order; none at all where a page's could not be read or past LINKS_MAX)
   let links = []
   for await (const x of markedPages(marked, log, o)) {
