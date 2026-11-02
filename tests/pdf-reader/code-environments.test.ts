@@ -185,7 +185,7 @@ describe('the code environments a paper uses, marked as code regions in the layo
     expect(plain).not.toContain('axt@code')
     const coded = files('A.\n\n\\begin{verbatim}\nx = 1\n\\end{verbatim}')
     expect(coded).toContain('\\AddToHook{env/verbatim/begin}{\\axt@codetrue}')
-    expect(coded).toContain('\\axt@point{cds\\axt@cdn}')
+    expect(coded).toContain('\\axt@point{cds\\axt@cdmine}')
     // (on the head's one line: no line of the paper moves)
     expect(regionsTex(['verbatim', 'tx'])).not.toContain('\n')
     // (a listing's caption or title is prose: listings' \lst@MakeCaption set with the flag off)
