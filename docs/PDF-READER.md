@@ -1581,7 +1581,15 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
     `\text{any two adjacent vertices …}` inside its equation, drawn translated over the formula), none made. On the left, as the
     reader makes it, a point at the middle of each of the 22 displays' 44 segments lit its unit 36 times, a kept block 7 and an
     orphan once, and now the display's own block 44 times; on ours the door shows each found display under its hover id, as any
-    display. Left as they were: two edge displays whose ink the stream cannot tell (2610.19274v1 u110's on the page before its
+    display. The text after one that opens its unit still opens the unit's first line, as after one drawn as nothing: a mark the
+    reply sets after the display's marker that no line may start with is drawn without it, unless the original's line there opens
+    with one (`layer2.mjs` `finishUnit`, `inPlace`: a display whose segments hold none of its unit's lines' characters; the
+    drawing's rule for the text after a display, the maintainer's fix 4 of 2026-10-15). The source sets no mark there
+    (`\end{equation}` and "which will now be …", "where …", "with …"); Microsoft's Chinese writes a full-width comma (U+FF0C) after the marker, as its
+    clause after a formula. Between #550 and this rule the release sweep of 5e519d69 found four texts drawn opening with it
+    (2610.20595v1 u24, u25, u47; 2307.16209v1 u459): of the 23 paragraph-head displays of the 66 papers (21 found, 2 still
+    OUTSIDE), those four are every one whose zh reply sets a mark after the display's marker, each now drawn without it, and
+    every other unit on their papers' pages drawn as before. Left as they were: two edge displays whose ink the stream cannot tell (2610.19274v1 u110's on the page before its
     unit's start mark; 2610.20595v1 u31's after the display before it, whose opening point alone runs to that start mark), and 7
     displays inside their units the maker finds no ink of (LOST), each unit the original's, lit with it on both panes.
   - **A block's label lights with its first sentence**, on both panes, and hovering the label lights that sentence: a heading's

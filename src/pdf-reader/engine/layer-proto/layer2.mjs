@@ -1484,11 +1484,17 @@ function finishUnit(out, unit, rects, charsByPage) {
   }
   // the original's first character after each displayed formula the drawing breaks at (its region), or before which a
   // display outside the unit's lines stands (`inPlace`: the unit's first): tokensOf2 drops a translation's mark that may
-  // not start a line at that segment's head where the original's line there opens with none
+  // not start a line at that segment's head where the original's line there opens with none. Outside them is one the file
+  // draws as nothing (OUTSIDE, tex.mjs) and one found whose segments hold none of the lines' characters, kept: shown by its
+  // own ink where it stands, as a display that opens a paragraph is since the marking finds it (layout/stream.mjs
+  // headInk, PIPELINE 54), which no region holds. Its text opens the unit's first line as before, and the full-width comma
+  // Microsoft's Chinese sets after its marker was drawn there (2610.20595v1 p3 u24: "…\end{equation}" and "which will now
+  // be…", the reply's text after the marker opening with U+FF0C)
   const real = c => !c.sep && !c.space && /\S/.test(c.ch)
   for (const r of out.values()) {
     if (r?.cls !== 'display') continue
-    if (r.mode === 'none' && r.inPlace) { r.origAfter = uc.find(real)?.ch ?? null; continue }
+    if (r.mode === 'kept' && r.region === undefined && r.gap && !r.gap.chars.some(real) && !r.gap.held?.length) r.inPlace = true
+    if (r.inPlace) { r.origAfter = uc.find(real)?.ch ?? null; continue }
     if (r.mode !== 'kept' || r.region === undefined) continue
     let last = -1
     uc.forEach((c, i) => { if (out.regionOf.get(`${c.page}|${c.rect.join()}`) === r.region) last = i })
@@ -2689,7 +2695,8 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       else if (noStart(r.heldAfter)) after = { origAfter: null, held: r.heldMarks?.length ? r.heldMarks : [r.heldAfter] }
       return
     }
-    // (a display before the unit's lines, drawn as nothing: the text after it opens the unit's first line)
+    // (a display before the unit's lines, drawn as nothing or by its own ink where it stands: the text after it opens the
+    // unit's first line)
     if (r.cls === 'display' && r.inPlace && !tokens.some(t => !t.space)) { after = r; return }
     // (anything else drawn ends the segment's head: a crop, a rendering's text; nothing drawn and a space do not)
     if (r.mode !== 'none' && r.text !== ' ' && !(r.mode === 'kept' && r.cls === 'display')) after = null
