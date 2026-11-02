@@ -447,7 +447,27 @@
 //     \text{any two adjacent vertices …} inside its equation, 2610.30854v1 p4's glyphs), none made, the ink and figure units
 //     after them numbered on. No source unit's text, pieces or wire changes: a copy of 53 carries every unit (live.mjs
 //     PIPELINE_CARRIES), an ink unit or a figure unit found again by its source (cache.mjs seedFrom)
-// 55 (the lost class of the release sweep of 2026-11-02: a display left LOST, its unit English): an opening point alone whose next
+// 55 (the lost class of the release sweep of 2026-11-02: units left English for a formula the layout file did not place): two
+//     rules of the layout maker (layout/make.mjs), whose change rides this version, as 48's and 54's did.
+//     - An inline placeholder both of whose marks stand on one line of its unit is that line's, one segment, whatever its glyphs'
+//       baselines (phOf `oneLine`): TeX broke no line between its two points, and our base page is the final pass of the compile
+//       the marks were read from. The glyphs were parted where they ran back left and down as at a line's end, a fraction's
+//       denominator under a numerator wider than 20 pt among them, each part on the line its largest glyphs' baselines stand
+//       on, and a part whose largest glyph is a big delimiter (its origin 14 pt over the baseline) stood on none: the piece LOST,
+//       its unit the original's. The line is the unit's row on both marks' baseline that holds them across (where a unit runs
+//       through two columns, a line of the other one on the same baseline is none), where no other row there meets it (the
+//       anchor's two rectangles of one line keep the reading they had).
+//     - A line of the anchor's that holds none of its unit's words, neither of its own marks, and no glyph of a line of text (none
+//       another unit took) is a formula's row the text layer read as a line of its own (a vector's arrow, a script): no line of
+//       the unit's, which is laid on its other lines (place). One such row left a whole unit the original's (`noLine`).
+//     Over 65 local papers (the gate pack's 7 among them, the production pass on both engines over the same compiles, every page
+//     read within its clocks): 13 units of 7 papers laid whole that were the original's, none the other way, no other class
+//     changed — by the first rule 2610.21026v1's u61, u70, u93, u149, u239, 2610.21106v1's u46, 2610.22299v1's u15; by the second
+//     2610.22197v1's u75 and u95, 2610.21085v1's u441, 2610.37668v1's u157 and u158, 2307.16209v1's u85 —, and every other unit's
+//     rows in the file as they were but one, 2610.17024v1's u148, whose `$\sum_{r\le2p-m_e}\binom{m_i+2p}{r}$` stood on the line
+//     above its own and is on its own now. No source unit's text, pieces or wire changes: a copy of 54 carries every unit
+//     (live.mjs PIPELINE_CARRIES)
+// 56 (the lost class of the release sweep of 2026-11-02: a display left LOST, its unit English): an opening point alone whose next
 //     mark is another region's — a float TeX shipped into the stream after a display, before the text after it — owns what its
 //     own region holds from it to the next mark there on its page, up to the text after it (layout/stream.mjs `pastOther`, asked
 //     where the text after it was not found before that float's mark). The layout file's rows of each such piece (the maker's
@@ -455,8 +475,8 @@
 //     7 among them, the production pass on both engines over the same compiles, every page read within its clocks): 2 units of 2
 //     papers laid whole that were the original's (2610.20507v1's u21, its display (16) before Figure 3; 2610.21288v1's u30, its
 //     display (12) before Figure 2), none the other way, every other unit's rows as they were. No source unit's text, pieces or
-//     wire changes: a copy of 54 carries every unit (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '55'
+//     wire changes: a copy of 55 carries every unit (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '56'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
