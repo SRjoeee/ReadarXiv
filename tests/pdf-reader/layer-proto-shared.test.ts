@@ -194,6 +194,32 @@ describe('a shared line: the next unit\'s first line starts where the translatio
     expect(linesOf(run, 1)![0]!.slice(0, 2).concat(linesOf(run, 1)![0]![6])).toEqual([2, 250, 88.2])
   })
 
+  it('a heading whose text would fall under its floor for it keeps its row, and its text the row\'s room, as before', async () => {
+    // (a text of one row, 110 pt of it for 11 characters: from 10 pt after the heading's row it fits at its size; laid from the
+    // end of the heading run on over the row, only below its floor. No unit is taken under its floor to lift another)
+    const run = await laid({ name: 'run-in, a one-row text', pages: 1, ink: true, specs: [
+      { id: 0, kind: 'heading', lines: [line(1, 250, 'Model', 20, 80)], chars: 9, at: 0x4e00 },
+      { id: 1, kind: 'para', lines: [line(1, 250, 'The model is a stack', 90, 200)], chars: 11, at: 0x5100 },
+    ] })
+    const f = (id: number) => (run.stats as unknown as { id: number; f: number }[]).find(r => r.id === id)!.f
+    expect([f(0), linesOf(run, 0)![0]![7]]).toEqual([7.25, 83.29])
+    expect([f(1), linesOf(run, 1)![0]![6]]).toEqual([10, 93.29])
+  })
+
+  it('three units on one row, the last left the original\'s: the two before it laid back in their rows, as before', async () => {
+    // (the first laid over the second's row, the second over the third's; the third unfit, the second laid again in its row
+    // from the first's end, unfit there, so the first laid back in its own row and the second again from its end)
+    const run = await laid({ name: 'three on a row', pages: 1, ink: true, specs: [
+      { id: 0, kind: 'heading', lines: [line(1, 250, 'Model', 20, 80)], chars: 9, at: 0x4e00 },
+      { id: 1, kind: 'heading', lines: [line(1, 250, 'Architecture', 90, 160)], chars: 10, at: 0x4f00 },
+      { id: 2, kind: 'para', lines: [line(1, 250, 'The model is', 170, 280), line(1, 238, 'of identical layers, each with', 20, 280), line(1, 226, 'two sub-layers and a residual', 20, 280)], chars: 400, at: 0x5100 },
+    ] })
+    const at = (id: number) => linesOf(run, id)![0]!
+    expect([at(0)[6], at(0)[7], at(1)[6], at(1)[7]]).toEqual([20, 83.29, 93.29, 163.62])
+    expect(linesOf(run, 2)).toBeUndefined()
+    expect((run.skipped as unknown as { id: number; code: string }[]).map(x => [x.id, x.code])).toEqual([[2, 'unfit']])
+  })
+
   it('a heading left the original\'s (not translated): its text starts where TeX set it', async () => {
     const run = await laid(runIn(3), P => { P.rows.get(0)!.state = 'failed' })
     expect(linesOf(run, 0)).toBeUndefined()

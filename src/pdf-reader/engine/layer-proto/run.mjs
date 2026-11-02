@@ -2040,9 +2040,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (none of its lines left: every one another unit's once theirs grew, though not as placed (growOn); the unit is the
     // original's, where the whole unit's rule kept them all)
     if (!p.rects.length) { p.refused = true; p.why = 'unfit'; unlead(p); return }
-    // (a run-in head's rectangles as its lay begins: where it is laid over the next unit's first row and laid again in its row,
-    // relayInRow. Copied and cleared on a unit before a shared line alone, the only one that may be laid so)
-    const rects0 = followers.has(p.id) ? p.rects.slice() : null
+    // (the rectangles of a unit on either end of a shared line as its lay begins: where it is laid again (relay) should a run-in
+    // head have been laid over the row between them and be laid back in its own row)
+    if (followers.has(p.id) || candOf.get(p.id)?.follows !== undefined) p.rects0 = p.rects.slice()
     if (p.over) p.over = undefined
     const local = p.local
     // the unit read with the file's parts: its lines, label and placeholders (and each placeholder's fill and each colour
@@ -2251,9 +2251,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (a run-in head, the unit before a shared line, laid in its row alone where its translation fits there only below its floor
     // or not at all: laid on over the next unit's first row to that row's end, the next unit laid from where it ends there
     // (`start`), where it fits so (overFollower). Decided with the next unit: that unit left the original's, or not laid from its end, it is
-    // laid again in its row alone, as before (relayInRow))
+    // laid again in its row alone, as before (settleLeadOf))
     const over = p.noOver ? null : overFollower(p, tokens, s, kept)
-    if (over) { p.blocks = over.blocks; p.layout = over.layout; p.tokens = over.tokens; p.over = { id: over.id, rects: rects0 } }
+    if (over) { p.blocks = over.blocks; p.layout = over.layout; p.tokens = over.tokens; p.over = { id: over.id } }
     // (step 3: never drawn in part: given more room where the page has it, else left the original's, whole)
     if (p.layout.clipped) {
       const further = fitFurther(p, tokens, s)
@@ -2526,39 +2526,50 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (the faces it waited for apart from its laying: no task of v0's)
     timesOf(p.pages[0]).lay += performance.now() - t0 - fontWait
     timesOf(p.pages[0]).fonts += fontWait
-    await settleLeadOf(p)
+    await settleLeadOf(p, true)
     if (disposed) return
     afterLay(p)
     ms.set(p.id, performance.now() - t0 - fontWait)
   }
   /**
-   * The unit before p on a shared line, laid over p's first row (overFollower), where p is left the original's or not laid from
-   * its end (`ledBy`): laid again in its row alone (relayInRow). As p's lay ends (arrive), and as p is left the original's unlaid
-   * (refuseUnit: a page of it failed, which its head's lay could not know), before p is counted and their page passes
+   * The unit before p on a shared line, laid over p's first row (overFollower), where p is left the original's, not laid from
+   * its end (`ledBy`), or laid from its end only below its own floor (`below-floor`: the head's room taken from a text that
+   * then fell under the floor the head was lifted to): laid again in its row alone (relay), as before the ruling, so that
+   * neither stands over the other and no unit goes under its floor for another; and p, where it was laid while that unit held
+   * part of its first row, laid again from where that unit now ends, as before the ruling. Each relay settles in turn the unit
+   * before the one it lays, so a row three units share comes back whole. Run as p's lay ends (arrive, relay; `laid`) and as p
+   * is left the original's unlaid (refuseUnit: a page of it failed, which its head's lay could not know), before p is counted
+   * and their page passes: none has been painted
    */
-  const settleLeadOf = async p => {
+  const settleLeadOf = async (p, laid, after = false) => {
     const lead = byId.get(candOf.get(p.id)?.follows)
-    if (lead?.over && !lead.refused && (p.refused || p.ledBy !== lead.id)) await relayInRow(lead)
+    if (!lead?.over || lead.refused) return
+    const led = !p.refused && p.ledBy === lead.id
+    if (led && p.layout?.knob !== 'below-floor') return
+    await relay(lead, true)
+    if (disposed) return
+    if (laid && (p.refused || led)) await relay(p, after)
   }
   /**
-   * A run-in head laid over the next unit's first row (overFollower) whose next unit is left the original's, or set where TeX
-   * set it (not laid from its end: `ledBy`): laid again in its row alone, as before the ruling, so that neither stands over the
-   * other. Its record and count of the first lay withdrawn, its rectangles as that lay began; laid there, or left the original's
-   * as its row alone leaves it (`unfit`). Run as the next unit's lay ends (arrive), before that one is counted, so before their
-   * page's pass: neither has been painted
+   * Unit a laid again as before the ruling (settleLeadOf): from its rectangles as its lay began (`rects0`), never over the
+   * row after it (`noOver`). Its record and count withdrawn, and with `after` (its lay already ended: afterLay) its skip; laid,
+   * or left the original's as its row leaves it, recorded, and with `after` its skip and fill leading as afterLay sets them
    */
-  const relayInRow = async a => {
+  const relay = async (a, after) => {
     const r = stats.indexOf(a.rec)
     if (r >= 0) stats.splice(r, 1)
     if (a.counted) { a.counted = false; drawnUnits-- }
-    a.rects = a.over.rects.slice()
+    if (after && a.refused) { const k = skipped.findLastIndex(x => x.id === a.id); if (k >= 0) skipped.splice(k, 1) }
+    a.rects = a.rects0.slice()
     a.over = undefined
     a.noOver = true
     a.runs = undefined
     a.whole = undefined
     a.share = null
+    a.ledBy = undefined
     a.refused = false
     a.why = undefined
+    a.missing = undefined
     const fw = fontWait
     fontWait = 0
     const t0 = performance.now()
@@ -2574,19 +2585,22 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     timesOf(a.pages[0]).lay += performance.now() - t0 - fontWait
     timesOf(a.pages[0]).fonts += fontWait
     fontWait = fw
-    if (a.refused) { skipped.push({ id: a.id, kind: a.unit.kind, why: a.why ?? 'unfit', code: skipCode(a.why ?? 'unfit'), ...(a.missing ? { missing: a.missing } : {}), chars: trCharsOf(a.unit), pages: a.pages }); return }
-    if (PASSES && P.adaptiveFill && a.fillable) {
-      for (const q of a.runs ?? [a]) fillLeadsOf(q, P)
-      if (a.runs) { const joined = a.layout; a.layout = a.whole; fillLeadsOf(a, P); a.layout = joined }
-      if (P.even) a.fit = { fillLead: a.fillLead, fitLines: a.fitLines }
+    if (after) {
+      if (a.refused) skipped.push({ id: a.id, kind: a.unit.kind, why: a.why ?? 'unfit', code: skipCode(a.why ?? 'unfit'), ...(a.missing ? { missing: a.missing } : {}), chars: trCharsOf(a.unit), pages: a.pages })
+      else if (PASSES && P.adaptiveFill && a.fillable) {
+        for (const q of a.runs ?? [a]) fillLeadsOf(q, P)
+        if (a.runs) { const joined = a.layout; a.layout = a.whole; fillLeadsOf(a, P); a.layout = joined }
+        if (P.even) a.fit = { fillLead: a.fillLead, fitLines: a.fitLines }
+      }
     }
+    await settleLeadOf(a, true, after)
   }
   /** a unit left the original's without being laid (`why`: `page`, on a page that failed), counted as one laid and left; the
    *  head laid over its first row laid again in its row first (settleLeadOf) */
   const refuseUnit = async (p, why) => {
     p.refused = true
     p.why = why
-    await settleLeadOf(p)
+    await settleLeadOf(p, false)
     if (disposed) return
     afterLay(p)
   }
