@@ -137,7 +137,7 @@ window.door = {
       // (the cell rules the bundle carries, as the door reads them; a BUNDLE 3 bundle names no unit the wrap could not hide)
       hiding: { rules: q => bundle.rules?.[q] },
       labels: { captions: { figure: 'target', table: 'target' } },
-      ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS,
+      ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS, fillsMs: Infinity,
     })
     const out = [], finals = []
     for (let p = 1; p <= Math.min(pages, run.N); p++) {
@@ -171,7 +171,7 @@ window.door = {
     const doc = await pdfjs.getDocument({ data: await composedOf(name, bundle), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise
     const sheets = ownSheets().length
     const ruleSet = await ruleSetOf(rules)
-    const layer = await R.openLayer({ bundle, doc, target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS })
+    const layer = await R.openLayer({ bundle, doc, target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS, fillsMs: Infinity })
     const complete = []
     const fed = (async () => {
       for (let i = 0; i < rows.length; i += part) { await macrotask(); complete.push(...layer.take(rows.slice(i, i + part)).complete) }
@@ -245,7 +245,7 @@ window.door.memory = async function memory({ name, target, rules, scenario, page
     const getPage = doc.getPage.bind(doc)
     doc.getPage = async n => { if (n - 1 >= every && (n - 1) % every === 0 && n - 1 <= pages) await sample(n - 1); return getPage(n) }
   }
-  const layer = await R.openLayer({ bundle, doc, target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS })
+  const layer = await R.openLayer({ bundle, doc, target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS, fillsMs: Infinity })
   layer.take(rows)
   layer.end()
   // (the jump is to the page after the last one sampled, whose drawing the engine stops before: `pages` laid, none let go)

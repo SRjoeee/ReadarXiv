@@ -8,7 +8,10 @@
 #                    passes them (without them every base page is drawn unwrapped, every unit the original's: a run that lays
 #                    nothing);
 #              AXT_DATA, TEXMF_DIST as the gate reads them (default the pack's own data and texmf);
-#              SPEED_LOGS  the logs folder (default <head>/lab/pdf/out/speed).
+#              SPEED_LOGS  the logs folder (default <head>/lab/pdf/out/speed);
+#              SPEED_GATE_ARGS  more of the gate's flags for every run, split at spaces: `--cpu-slowdown=3` runs the check under a
+#                    load of its own (the browser's CPU slowed 3 times, no other job slowed), where the work counters must still
+#                    agree (speed.mjs).
 # Then: node lab/pdf/spikes/layer-gate/speed.mjs <logs folder>
 set -u
 head=${1:?usage: run-speed.sh <head worktree> <base worktree> [repetitions]}
@@ -25,7 +28,7 @@ for r in $(seq 1 $reps); do
     echo "$(date '+%H:%M:%S') model-$s-r$r"
     LAYER_REFS=$PACK/refs LAYER_GEOMETRY=$PACK/geometry AXT_DATA=${AXT_DATA:-$PACK/data} TEXMF_DIST=${TEXMF_DIST:-$PACK/texmf} \
       node_modules/.bin/tsx lab/pdf/spikes/layer-gate.mjs --tier=model --engine-kind=proto --proto-tex=lines --layouts=fixed \
-      --fixtures=$PACK/fixtures --sources=$PACK/sources --engine=$eng --perf --workers=1 --no-progress > $LOGS/model-$s-r$r.log 2>&1
+      --fixtures=$PACK/fixtures --sources=$PACK/sources --engine=$eng --perf --workers=1 --no-progress ${=SPEED_GATE_ARGS:-} > $LOGS/model-$s-r$r.log 2>&1
     echo "exit $?" >> $LOGS/model-$s-r$r.log
   done
 done

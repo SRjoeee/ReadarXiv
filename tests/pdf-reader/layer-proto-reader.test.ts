@@ -166,6 +166,17 @@ describe('the reader\'s door: two readers\' hosts are the same calls', () => {
     }
   })
 
+  it('opens v0 with the reader\'s budget for the live fills\' walk, and with the one a gate asks (none, Infinity)', async () => {
+    const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
+    const { LIVE_FILLS_MS } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
+    const bundle = bundleOf(), doc = docOf()
+    for (const [given, want] of [[undefined, LIVE_FILLS_MS], [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY]] as const) {
+      const layer = await openLayer({ bundle, doc, target: 'zh', faceSources, hyphUrl, ...(given === undefined ? {} : { fillsMs: given }) })
+      expect((seen.opens.at(-1) as unknown as { fillsMs: number }).fillsMs).toBe(want)
+      layer.dispose()
+    }
+  })
+
   it('refuses a light index (M24): the layer needs the units\' bodies', async () => {
     const { openLayer } = await import('@/pdf-reader/engine/layer-proto/reader.mjs')
     const light = { kind: 'index', light: true, sha256: 'a'.repeat(64), head: { paper: { pages: 1 } }, units: [], kinds: [], pieces: new Uint32Array(0), dropped: [], records: {} }

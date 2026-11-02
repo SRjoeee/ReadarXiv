@@ -195,6 +195,9 @@ export interface OpenLayerOptions {
   /** PDF.js's operator codes (the host's PDF.js): a page read live reads its characters' fills as its draw tells them (run.mjs
    *  openProto `OPS`); none, such a page tells no fill */
   OPS?: Record<string, number> | null
+  /** the longest that page's walk of its glyphs runs, ms (openProto `fillsMs`: LIVE_FILLS_MS, the reader's, by default); Infinity,
+   *  the lab's gates: no clock */
+  fillsMs?: number
   /** the reader's toggles (rules/content-classes.mjs TOGGLE_DEFAULTS where not given): a unit whose class they do not show is the
    *  original's; a change of them is a new open, as a change of language is */
   classes?: Partial<Record<'heads' | 'tables' | 'figures' | 'references' | 'names', boolean>> | null
@@ -213,6 +216,8 @@ export interface OpenBundleLayerOptions {
   onRetired?: (doc: LayerDocument) => void
   /** PDF.js's operator codes, as OpenLayerOptions' */
   OPS?: Record<string, number> | null
+  /** the live fills' budget, as OpenLayerOptions' */
+  fillsMs?: number
   /** the reader's toggles, as OpenLayerOptions' */
   classes?: Partial<Record<'heads' | 'tables' | 'figures' | 'references' | 'names', boolean>> | null
 }

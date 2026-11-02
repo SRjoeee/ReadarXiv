@@ -119,7 +119,7 @@ async function openB({ name, target, rules, at, draw, link = null }) {
     counts.span(`leftPart ${page}`, t, performance.now())
     return b
   }
-  const layer = await R.openLayer({ index, doc, parts: at === 'open' ? parts : [], target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS, leftPart, onRetired: d => { retired.push(d) } })
+  const layer = await R.openLayer({ index, doc, parts: at === 'open' ? parts : [], target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS, fillsMs: Infinity, leftPart, onRetired: d => { retired.push(d) } })
   const tell = i => layer.addPart(parts[i])
   if (at === 'wait') window.__gateWait = what => { if (what === 'part' && next < parts.length) tell(next++) }
   layer.take(rows)
@@ -164,8 +164,8 @@ window.doorDraw = {
       const annP = LK.readAnnots(page)
       const tc = await textP
       const L = live.live(page, tc.styles)
-      // (an engine with no fills reads none)
-      const fills = liveFillsOf ? await liveFillsOf(pdfjs.OPS, page, tc.items) : null
+      // (an engine with no fills reads none; the walk with no clock, as the layer gate's run asks it: a loaded run tells the same)
+      const fills = liveFillsOf ? await liveFillsOf(pdfjs.OPS, page, tc.items, null, null, Infinity) : null
       const a = pageReadOf(tc, L.fontOf, L.mapOf, await annP, fills)
       out.overlaid.push(overlaidOf(p, a.read))
       page.cleanup()
