@@ -90,6 +90,24 @@ const control = (name, result) => check(`control: ${name}`, !result.ok, result.d
 const note = text => { notes.push(text); console.log(`NOTE ${text}`) }
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
+/** the most screenshots stillShot takes of one element */
+const STILL_SHOTS = 10
+/**
+ * An element's pixels once they are still: screenshots until two in a row are the same bytes (as Playwright's own
+ * toHaveScreenshot waits), `{ png, shots }`, and `unsettled` where STILL_SHOTS never gave two alike. A check that compares
+ * pixels takes them so: the steps before it leave work that paints after them (a selection's change event, the light's next
+ * frame), which a quiet machine had done before the first shot and a loaded one had not (2026-11-01, load near 20: the first
+ * of the text layer's pair 115,166 bytes against the 115,172 of every other shot, then and since)
+ */
+async function stillShot(locator) {
+  let last = await locator.screenshot()
+  for (let shots = 2; shots <= STILL_SHOTS; shots++) {
+    const next = await locator.screenshot()
+    if (next.equals(last)) return { png: next, shots }
+    last = next
+  }
+  return { png: last, shots: STILL_SHOTS, unsettled: true }
+}
 
 // ---- the network: one table, which is also the guard
 /** which stand-in PDF answer arXiv's PDF address gives: ok, or one of the faults a section sets */
@@ -969,18 +987,20 @@ try {
       return { w, ok, in: el?.closest('.textLayer') ? 'text' : el?.closest('svg') ? 'svg' : 'other' }
     }))
     check('find: the translated text and the page\'s own text found in the text layer', finds.every(f => f.ok && f.in === 'text'), JSON.stringify(finds))
-    // invisible: the place's pixels the same with the text layer and without it
+    // invisible: the place's pixels the same with the text layer and without it, each taken once the place is still (stillShot:
+    // the drag, the copy and the finds above leave the selection's change and the light's frame to paint after them)
     await page.evaluate(() => getSelection().removeAllRanges())
     const place = page.locator(P1)
-    const withText = await place.screenshot()
+    const withText = await stillShot(place)
     await page.evaluate(sel => { document.querySelector(`${sel} .axt-layer > .textLayer`).style.visibility = 'hidden' }, P1)
-    const withoutText = await place.screenshot()
+    const withoutText = await stillShot(place)
     await page.evaluate(sel => { document.querySelector(`${sel} .axt-layer > .textLayer`).style.visibility = '' }, P1)
-    check('invisible: the place\'s pixels the same with the text layer and without it', withText.equals(withoutText), `${withText.length} and ${withoutText.length} bytes`)
+    const shotsOf = (...xs) => xs.map(x => `${x.png.length} bytes${x.unsettled ? ', never still' : ''} after ${x.shots} shots`).join(' and ')
+    check('invisible: the place\'s pixels the same with the text layer and without it, each once the place is still', !withText.unsettled && !withoutText.unsettled && withText.png.equals(withoutText.png), shotsOf(withText, withoutText))
     await page.evaluate(sel => { for (const x of document.querySelectorAll(`${sel} .axt-layer > .textLayer > span`)) x.style.color = 'black' }, P1)
-    const inked = await place.screenshot()
+    const inked = await stillShot(place)
     await page.evaluate(sel => { for (const x of document.querySelectorAll(`${sel} .axt-layer > .textLayer > span`)) x.style.color = '' }, P1)
-    control('a text layer drawn in ink is seen: the place\'s pixels differ', { ok: inked.equals(withoutText), detail: `${inked.length} and ${withoutText.length} bytes` })
+    control('a text layer drawn in ink is seen: the place\'s pixels differ', { ok: !inked.unsettled && inked.png.equals(withoutText.png), detail: shotsOf(inked, withoutText) })
     // one copy of each text in the accessibility tree: the text layer's, the SVG's hidden
     const tree = await place.ariaSnapshot()
     const once = ['[echo] Introduction', 'The Read arXiv Contributors'].map(w => ({ w, n: tree.split(w).length - 1 }))

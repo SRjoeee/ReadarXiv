@@ -1430,8 +1430,8 @@ The rows: `tests/pdf-reader/textlayer.test.ts` (TL1-TL21, the pure core), `layer
 layers through three opens) and the conformance suite (`helpers/door-conformance.ts`), `text-layer-view.test.ts` (TV1-TV3 the
 builder, TS1-TS10 the side: TS7-TS9 a kept drawing's and a page laid ahead's, TS10 another target's); in a real browser `pnpm e2e:reader` (built after the commit between the drawing and the links; one
 drag from a heading's number through its translated heading into the paragraph after it, the selection and its copy; a
-formula's text where its crop is drawn; find of a translated and of a kept phrase in the text layer; invisible, with its
-control; one copy of each text in the accessibility tree; the hover over it; let go far from the view) and the web's
+formula's text where its crop is drawn; find of a translated and of a kept phrase in the text layer; invisible, each shot
+taken once the place is still (two alike in a row: the steps before it leave paints after them), with its control; one copy of each text in the accessibility tree; the hover over it; let go far from the view) and the web's
 `web/e2e/layer.mjs`.
 
 ## 12. Performance gates
