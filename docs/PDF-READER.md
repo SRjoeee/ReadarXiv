@@ -3678,7 +3678,12 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   them, a style group's braces and a placeholder of no ink none, a straight double quote the closing one; none read where a
   placeholder of no letter or digit stands among them, "14.4\%.", whose ink is among the page's marks there, nor for a unit
   without its source pieces, the gate's proto run's, but after a source text that ends in a letter or a digit; `tailOf`, the
-  class's alone held to be punctuation), in place of the translation's own marks of their kinds beyond the source's
+  class's alone held to be punctuation, counted from the unit's last content on the page: its renderings' last character or
+  the last letter or digit on its lines, its words' or not — a letter its words left unmatched, 2610.20595v1 p11's "6d" of
+  "(see Fig.~\ref{fig:6}d);", was counted as one of the source's own two marks, and its ";" drawn again after the
+  translation's, the release sweep of 5e519d69; and no stop, comma, colon, semicolon, exclamation or question mark of the kind
+  the source's own last mark is right after it, siamart's run-in "proof.." whose class stop does not see the source's, though a
+  bracket may close twice), in place of the translation's own marks of their kinds beyond the source's
   (`tokensOf2`: a note's own "." stays the translation's ideographic full stop before amsthm's ")."), where it drew them only after a source
   that ends in a letter or a digit: 193 of 196 reference entries checked end in their year's ")", and their style's stop was
   hidden and drawn nowhere (the follow-up of #541). Laid by the door with the sweep's zh rows and the references shown, 376 of
