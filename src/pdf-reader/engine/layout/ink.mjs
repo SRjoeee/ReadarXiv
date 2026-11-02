@@ -930,7 +930,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
  * a folio, shipped outside the body, is no line of the region)
  */
 export function regionsOfPoints(points, glyphCount) {
-  const open = new Map(), out = []
+  const open = new Map(), closed = new Set(), out = []
   let bodyStart = null
   const push = (kind, from, to) => { if (to > from) out.push({ kind, from, to }) }
   for (const p of points) {
@@ -943,9 +943,13 @@ export function regionsOfPoints(points, glyphCount) {
     if (!m) continue
     const key = `${m[1]}${m[3]}`
     if (m[2] === 's') { open.set(key, p.glyph); continue }
+    // (an end its region's start closed already, a second one TeX set where the paragraph's group gave its state back, closes
+    // nothing)
+    if (!open.has(key) && closed.has(key)) continue
     const from = open.get(key) ?? bodyStart
     if (from === null || from === undefined) continue
     open.delete(key)
+    closed.add(key)
     push(REGION_POINT_KINDS[m[1]], from, Math.min(p.glyph, glyphCount))
   }
   return out.sort((a, b) => a.from - b.from)
