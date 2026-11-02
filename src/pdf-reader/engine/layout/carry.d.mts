@@ -59,6 +59,8 @@ export interface LineCheck {
    *  with no partner on our page */
   moved: Map<number, Uint32Array>
 }
+/** the longest common run of two word lists, in order; null where their two counts' product passes the page's cells */
+export declare function commonCount(a: readonly string[], b: readonly string[]): number | null
 export declare function lineCheckOf(ours: readonly DocToken[], arxiv: readonly DocToken[]): LineCheck
 /** carrierOf a page at a time: arXiv's tokens whole, the marked ones added (`add`) as their pages are read */
 export declare function carrier(marked: readonly DocToken[], arxiv: readonly DocToken[]): Carrier
