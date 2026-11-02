@@ -554,7 +554,7 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
     const t = pageInk(OPS, list(form(...text('cmsy', 10, [0, 1, -1, 0, 50, 97], show(g('R', 600))))), o, { rotate: 0, turned: true }).turned![0]!
     expect(t).toMatchObject({ clipped: true, unseen: true })
   })
-  it('a Type 3 glyph whose procedure begins with d0 is drawn at alpha 1 whatever the text\'s, as PDF.js draws it; a group painted at 0 still hides it (#555)', () => {
+  it('a Type 3 glyph is seen as PDF.js draws it: a d0 one at alpha 1 whatever the text\'s, a d1 one by what its procedure paints; a group painted at 0 still hides it (#555)', () => {
     const path = [OPS.fill, [Float32Array.from([0])], Float32Array.from([10, 0, 30, 20])]
     const procs = new Map<string, { fnArray: number[]; argsArray: unknown[] }>([
       ['own', { fnArray: [OPS.setCharWidth, OPS.setFillRGBColor, OPS.constructPath], argsArray: [[40, 0], ['#ff0000'], path] }],
@@ -568,6 +568,10 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
       expect([only(r.glyphs, 'd').unseen, only(r.glyphs, 's').unseen]).toEqual([undefined, true])
       const hidden = shown(alpha(0), [OPS.beginGroup, [{}]])
       expect(only(hidden.glyphs, 'd').unseen).toBe(true)
+      // (a d1 glyph is what its procedure paints, whatever the text's rendering mode, which PDF.js does not apply to a Type 3
+      // glyph: its fill under ca, so stroked text (mode 1) under CA 0 still shows it, and under ca 0 nothing does)
+      const moded = (ca: number, CA: number) => only(figureInk(text('t3a', 10, [1, 0, 0, 1, 50, 50], [OPS.setTextRenderingMode, [1]], [OPS.setGState, [[['ca', ca], ['CA', CA]]]], show(t('s', 'stencil')))).glyphs, 's').unseen
+      expect([moded(1, 0), moded(0, 1)]).toEqual([undefined, true])
     } finally { delete FONTS.t3a }
   })
 })

@@ -439,12 +439,31 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   const addBox = (m, x0, y0, x1, y1, path = -1, alpha = 1) => { if (!known()) return; const b = boxOf(m, x0, y0, x1, y1, s.clip); if (b) put(b[0], b[1], b[2], b[3], path, alpha); else step(1) }
   /** the alpha a fill (or an image, a shading, a group) is painted with now, and a stroke: the alpha constant times the groups' */
   const fillAlpha = () => s.ga * s.ca, strokeAlpha = () => s.ga * s.CA
-  /** a glyph's: its rendering mode's, the fill's where it fills (0, 2), the stroke's where it strokes (1, 2); a Type 3 glyph whose
-   *  procedure begins with d0 the groups' alone, as PDF.js draws it (showType3Text sets both alpha constants to 1 for it) */
+  /** what a Type 3 glyph's procedure paints, once a font and glyph: `d0` where it begins with d0, else whether it fills (a path
+   *  filled, an image or a mask) and whether it strokes */
+  const type3Paint = new WeakMap()
+  const paintOf = (font, id) => {
+    let m = type3Paint.get(font)
+    if (!m) type3Paint.set(font, (m = new Map()))
+    if (!m.has(id)) {
+      const procs = font.charProcOperatorList, proc = procs instanceof Map ? procs.get(id) : procs?.[id]
+      const fns = proc?.fnArray ?? [], args = proc?.argsArray ?? []
+      let fills = false, strokes = false
+      for (let i = 0; i < fns.length; i++) {
+        if (fns[i] === PATH) { const op = args[i]?.[0]; if (FILLS.has(op)) fills = true; if (STROKES.has(op)) strokes = true }
+        else if (fns[i] === IMAGE || fns[i] === INLINE_IMAGE || fns[i] === MASK || fns[i] === SOLID_MASK || fns[i] === IMAGE_REPEAT || fns[i] === MASK_REPEAT || fns[i] === MASK_GROUP || fns[i] === INLINE_GROUP) fills = true
+      }
+      m.set(id, { d0: fns[0] === D0, fills, strokes })
+    }
+    return m.get(id)
+  }
+  /** a glyph's: its rendering mode's, the fill's where it fills (0, 2), the stroke's where it strokes (1, 2). A Type 3 glyph's as
+   *  PDF.js draws it, which runs its procedure whatever the mode: one that begins with d0 at the groups' alone (showType3Text sets
+   *  both alpha constants to 1 for it), else the fill's where its procedure fills and the stroke's where it strokes */
   const textAlpha = g => {
     if (s.font?.isType3Font === true && g?.operatorListId !== undefined) {
-      const procs = s.font.charProcOperatorList, proc = procs instanceof Map ? procs.get(g.operatorListId) : procs?.[g.operatorListId]
-      if (proc?.fnArray?.[0] === D0) return s.ga
+      const p = paintOf(s.font, g.operatorListId)
+      return p.d0 ? s.ga : Math.max(p.fills ? fillAlpha() : 0, p.strokes ? strokeAlpha() : 0)
     }
     const m = s.tr & 3
     return Math.max(m === 0 || m === 2 ? fillAlpha() : 0, m === 1 || m === 2 ? strokeAlpha() : 0)
