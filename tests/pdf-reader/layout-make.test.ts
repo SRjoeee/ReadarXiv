@@ -1164,6 +1164,52 @@ describe('makeLayout, the LOST survey (2026-10-15): a display group, a piece out
     expect(row[6]).toBe(700)
     expect(stats.ph.lost).toBe(0)
   })
+  it("a piece both of whose marks stand on one line is that line's, one segment whatever its glyphs' baselines: a denominator under a numerator wider than a line's step back, a big delimiter's origin 14 pt over the baseline (2610.21026v1's $\\O\\left(\\frac{…}{…}\\right)$)", async () => {
+    // in the stream: O on the baseline, the opening delimiter (its origin far over the line), the numerator 28 pt wide, then the
+    // denominator back left by more than BREAK_X and down (as a line's end), then the closing delimiter: the part after the
+    // numerator is no line's by its baselines, its largest glyph the closing delimiter 14 pt over the line
+    const runs: Run[] = [
+      { s: 'the rate', x: 72, y: 700 }, { s: 'O', x: 110, y: 700 }, { s: '(', x: 118, y: 714 }, { s: 'sigmaDln', x: 124, y: 705.5, size: 7 },
+      { s: 'T', x: 125, y: 692, size: 7 }, { s: ')', x: 160, y: 714 }, { s: 'holds', x: 170, y: 700 },
+    ]
+    const below = Array.from({ length: 6 }, (_, j): Run => ({ s: words(10 * j, 10), x: 72, y: 680 - 12 * j }))
+    const { file, stats } = await made({
+      pages: [{ runs: [...runs, ...below], points: { 'p0.1a': [1, 0], 'p0.1b': [6, 0] } }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[6] as Run), 700], ['p0.1a', 1, 108, 700], ['p0.1b', 1, 166, 700], ['1s', 1, 72, 680], ['1e', 1, endOf(below[5] as Run), 620]],
+      units: [unit('para', [text('the rate '), ph('$\\O\\left(\\frac{\\sigma D\\ln}{T}\\right)$'), text(' holds')]), unit('para', [text(words(0, 60))])],
+    })
+    const row = phOf(file, 0, 1)
+    expect((row[3] ?? 0) & PH_FLAG.LOST).toBe(0)
+    // one segment, on the line both marks stand on, from O's left to the closing delimiter's right, its top the delimiters'
+    const segs = chunk(row.slice(4), 6)
+    expect(segs).toHaveLength(1)
+    expect(segs[0]?.[0]).toBe(1)
+    expect(segs[0]?.[2]).toBe(700)
+    expect(segs[0]?.[1]).toBe(110)
+    expect(stats.ph.lost).toBe(0)
+  })
+  it("the one line both marks stand on is the one under them across: a unit through two columns, a citation on the right column's line whose baseline a left one shares, is that right line's", async () => {
+    const left = Array.from({ length: 5 }, (_, j): Run => ({ s: words(6 * j, 6), x: 72, y: 148 - 12 * j }))
+    const right: Run[] = [
+      ...Array.from({ length: 4 }, (_, j): Run => ({ s: words(30 + 6 * j, 6), x: 320, y: 148 - 12 * j })),
+      { s: 'as shown in', x: 320, y: 100 }, { s: '[3]', x: 380, y: 100 }, { s: 'and so on', x: 400, y: 100 },
+    ]
+    const { file } = await made({
+      pages: [{ runs: [...left, ...right], points: { 'p0.1a': [10, 0], 'p0.1b': [11, 0] } }],
+      marks: [COLS2(1), ['0s', 1, 72, 148], ['0e', 1, endOf(right[6] as Run), 100], ['p0.1a', 1, 378, 100], ['p0.1b', 1, 397, 100]],
+      units: [unit('para', [text(`${words(0, 54)} as shown in `), ph('\\cite{a}'), text(' and so on')])],
+    })
+    const row = phOf(file, 0, 1)
+    expect((row[3] ?? 0) & PH_FLAG.LOST).toBe(0)
+    const segs = chunk(row.slice(4), 6)
+    expect(segs).toHaveLength(1)
+    expect(segs[0]?.[1]).toBe(380)
+    // the right column's line takes the citation's ink in: the left column's line on the same baseline keeps its own extent,
+    // and no line of the unit runs over the gutter
+    const lines = chunk(rowsOf(file, 0, 'lines'), 8)
+    expect(lines).toHaveLength(10)
+    for (const [, x0, x1] of lines) expect((x0 ?? 0) >= 300 || (x1 ?? 0) <= 300).toBe(true)
+  })
 })
 
 describe('makeLayout, the content stream (Task 6b)', () => {
@@ -2241,6 +2287,31 @@ describe('makeLayout, the marking the marks file records: the complete macros, t
     expect(file.lines.map(([u]) => u)).toEqual([1])
     // (the cell the original's, and the file says why: its own marks bound nothing)
     expect(file.unlaid).toEqual([[0, 'unplacedMarks']])
+  })
+  it("a line of the anchor's that holds none of its unit's words and no glyph of a line of text is a formula's row, no line of the unit's: the unit is laid on its other lines (2610.22197v1's u75, a paragraph over two pages, for one vector's arrow)", async () => {
+    // the text layer reads a formula's raised script as a line of its own between two of the unit's words; on the base page no
+    // glyph of a line of text stands in its rectangle (here none: its run is in the text layer alone, `order`)
+    const runs: Run[] = [
+      { s: words(0, 6), x: 72, y: 700 }, { s: 'where', x: 72, y: 688 }, { s: 'qX', x: 110, y: 688 }, { s: 'q', x: 111, y: 696, size: 7 },
+      { s: 'holds here', x: 125, y: 688 }, { s: words(6, 6), x: 72, y: 676 }, { s: words(20, 8), x: 72, y: 600 },
+    ]
+    const { file } = await made({
+      pages: [{ runs, order: [0, 1, 2, 4, 5, 6], points: { 'p0.1a': [2, 0], 'p0.1b': [4, 0] } }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[5] as Run), 676], ['p0.1a', 1, 108, 688], ['p0.1b', 1, 122, 688], ['1s', 1, 72, 600], ['1e', 1, endOf(runs[6] as Run), 600]],
+      units: [unit('para', [text(`${words(0, 6)} where `), ph('$\\vec{q}X$'), text(` holds here ${words(6, 6)}`)]), unit('para', [text(words(20, 8))])],
+    })
+    expect(file.unlaid ?? []).toEqual([])
+    expect(chunk(rowsOf(file, 0, 'lines'), 8).map(r => r[3])).toEqual([700, 688, 676])
+    expect((phOf(file, 0, 1)[3] ?? 0) & PH_FLAG.LOST).toBe(0)
+  })
+  it("a line of the anchor's that holds its unit's own words and no glyph of them leaves the unit the original's (`noLine`): only a formula's row is passed over", async () => {
+    const runs: Run[] = [{ s: words(0, 6), x: 72, y: 700 }, { s: words(6, 6), x: 72, y: 688 }, { s: words(12, 6), x: 72, y: 676 }, { s: words(20, 8), x: 72, y: 600 }]
+    const { file } = await made({
+      pages: [{ runs, order: [0, 2, 3] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[2] as Run), 676], ['1s', 1, 72, 600], ['1e', 1, endOf(runs[3] as Run), 600]],
+      units: [unit('para', [text(words(0, 18))]), unit('para', [text(words(20, 8))])],
+    })
+    expect(file.unlaid).toEqual([[0, 'noLine']])
   })
   it('a unit whose line\'s glyphs a unit laid before it took is not laid, and the file says why (`lineTaken`)', async () => {
     // (two units' words on one line, the first's two either side of the second's: the first's line runs from its first word
