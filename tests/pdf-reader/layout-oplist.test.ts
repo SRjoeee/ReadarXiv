@@ -32,12 +32,19 @@ describe('listOf, orNull: the prepare\'s reads wait however long a list or the a
     const failed = { getOperatorList: async () => { throw new Error('broken page') }, cleanup: vi.fn() }
     expect(await listOf(failed as never)).toBeNull()
     expect(failed.cleanup).toHaveBeenCalledTimes(1)
-    expect(await orNull(Promise.resolve(7))).toBe(7)
-    expect(await orNull(Promise.reject(new Error('broken annotations')))).toBeNull()
+    // (a page proxy that throws before it returns a promise is that page alone too: Devin on #567)
+    const thrown = { getOperatorList: () => { throw new Error('broken page') }, cleanup: vi.fn() }
+    expect(await listOf(thrown as never)).toBeNull()
+    expect(thrown.cleanup).toHaveBeenCalledTimes(1)
+    expect(await orNull(() => Promise.resolve(7))).toBe(7)
+    expect(await orNull(() => 7)).toBe(7)
+    expect(await orNull(() => Promise.reject(new Error('broken annotations')))).toBeNull()
+    expect(await orNull(() => { throw new Error('broken annotations') })).toBeNull()
   })
   it('a memory-class failure is thrown to the caller (C8.4), as within\'s and listWithin\'s are', async () => {
     const oom = Object.assign(new Error(ALLOCATION_FAILED), { name: 'UnknownErrorException', details: `RangeError: ${ALLOCATION_FAILED}` })
-    await expect(orNull(Promise.reject(oom))).rejects.toBe(oom)
+    await expect(orNull(() => Promise.reject(oom))).rejects.toBe(oom)
+    expect(() => orNull(() => { throw oom })).toThrow(oom)
     await expect(listOf({ getOperatorList: () => Promise.reject(oom), cleanup: vi.fn() } as never)).rejects.toBe(oom)
     await expect(listOf({ getOperatorList: () => { throw oom }, cleanup: vi.fn() } as never)).rejects.toBe(oom)
   })

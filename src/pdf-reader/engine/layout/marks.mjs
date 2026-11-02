@@ -1917,7 +1917,7 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
   for (const q of [...linkPages].sort((a, b) => a - b)) {
     let page = null
     try { page = await pdf.getPage(q) } catch (e) { if (isMemoryError(e)) throw e }
-    const raw = page ? await orNull(readAnnots(page)) : null
+    const raw = page ? await orNull(() => readAnnots(page)) : null
     annotsAt.set(q, raw)
     const ls = Array.isArray(raw) ? raw.filter(a => a?.subtype === 'Link') : null
     if (ls === null || ls.length > MAX_LINKS) { noLinks = true; break }

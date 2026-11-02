@@ -22,12 +22,17 @@
 // An original module (no port statement). Imports the engine's memory predicate alone: PDF.js is the caller's.
 import { isMemoryError } from '../pipeline/memory.mjs'
 
-/** a promise's value, or null where it fails; a memory-class failure is thrown */
-export const orNull = promise => Promise.resolve(promise).then(v => v, e => { if (isMemoryError(e)) throw e; return null })
+/** `read()`'s value, or null where it fails, whether it throws at once or its promise rejects (PDF.js's page proxy can throw
+ *  before it returns a promise); a memory-class failure is thrown */
+export function orNull(read) {
+  let got
+  try { got = read() } catch (e) { if (isMemoryError(e)) throw e; return Promise.resolve(null) }
+  return Promise.resolve(got).then(v => v, e => { if (isMemoryError(e)) throw e; return null })
+}
 
 /** page `page`'s operator list however long it takes, or null where it fails (the page then let go): the prepare's readers' */
 export async function listOf(page) {
-  const list = await orNull(page.getOperatorList())
+  const list = await orNull(() => page.getOperatorList())
   if (list) return list
   page.cleanup?.()
   return null

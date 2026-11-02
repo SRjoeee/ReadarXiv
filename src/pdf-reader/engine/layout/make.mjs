@@ -511,7 +511,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   }
   // A page's annotations are read once, with its draw (gatherDraw: PDF.js reads them anew at each ask, at a cost of their own)
   const annotsAsked = new Map()
-  const annotsOnce = (p, page) => { let a = annotsAsked.get(p); if (!a) { a = orNull(readAnnots(page)); annotsAsked.set(p, a) } return a }
+  const annotsOnce = (p, page) => { let a = annotsAsked.get(p); if (!a) { a = orNull(() => readAnnots(page)); annotsAsked.set(p, a) } return a }
   /** page p's draw geometry (pipeline/draw-data.mjs), held as its encoded text for the left part that will carry it (`drawOf`); none for
    *  a page past the held budget, one that cannot be read, or one whose font a host would read differently: the browser reads it */
   const draws = new Map(), drawStats = { pages: 0, none: 0, why: {}, bytes: 0, ms: 0, fills: { items: 0, glyphs: 0, told: 0, runs: 0 } }

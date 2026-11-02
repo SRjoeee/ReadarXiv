@@ -1,7 +1,7 @@
 // oplist.mjs's types: a page's operator list as the prepare's readers ask it (however long it takes) and the reader's live reads (within a time)
 
 /** a promise's value, or null where it fails */
-export declare function orNull<T>(promise: Promise<T> | T): Promise<T | null>
+export declare function orNull<T>(read: () => Promise<T> | T): Promise<T | null>
 /** a promise's value, or null where it does not come within `ms` or fails */
 export declare function within<T>(promise: Promise<T> | T, ms: number): Promise<T | null>
 /** a page proxy as these read it: its operator list, and PDF.js's own cancellation and cleanup where it has them */
