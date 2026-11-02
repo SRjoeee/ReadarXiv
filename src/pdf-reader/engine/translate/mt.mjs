@@ -998,6 +998,8 @@ const MARKUP_TOKEN = /^<\/?[^\s<>]+\/?>$/u
  *  and \code's with TeX's escapes of the specials */
 const CODE_COMMAND = /^\\(texttt|code|verb|Verb|lstinline|path|mintinline)(?![A-Za-z])\*?/
 const LITERAL_CODE = new Set(['verb', 'Verb', 'lstinline', 'path', 'mintinline'])
+/** TeX's text commands for the characters a code argument cannot hold as they are */
+const TEXT_SYMBOL = { less: '<', greater: '>', backslash: '\\', asciitilde: '~', asciicircum: '^', underscore: '_' }
 /** a code command's text, from a placeholder's source (the front end's bytes, UTF-8 read): its argument, an optional argument
  *  and \mintinline's language before it off, braced (an escaped brace inside it is the brace's text) or between a verbatim
  *  command's delimiters; TeX's escapes of the specials read where the command reads them; null for no code command */
@@ -1018,7 +1020,7 @@ function codeTextOf(src) {
     if (i < rest.length) body = rest.slice(1, i)
   } else if (rest.length && LITERAL_CODE.has(m[1])) { const end = rest.indexOf(rest[0], 1); body = end > 0 ? rest.slice(1, end) : null }
   if (body === null) return null
-  const read = LITERAL_CODE.has(m[1]) ? body : body.replace(/\\([_&%$#{}])/g, '$1').replace(/\\textless\b\{?\}?/g, '<').replace(/\\textgreater\b\{?\}?/g, '>')
+  const read = LITERAL_CODE.has(m[1]) ? body : body.replace(/\\([_&%$#{}])/g, '$1').replace(/\\text(less|greater|backslash|asciitilde|asciicircum|underscore)\b\s*(?:\{\})?/g, (_, n) => TEXT_SYMBOL[n])
   const text = utf8(read).replace(/\s+/g, ' ').trim()
   return text || null
 }

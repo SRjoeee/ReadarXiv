@@ -35,8 +35,10 @@ describe('code-like tokens keep their source (mt.mjs isCode, codeTextsOf)', () =
       { t: 'ph', src: '\\verb|a\\_b|' },
       { t: 'ph', src: '\\path{c\\_d}' },
       { t: 'ph', src: latin1('\\texttt{café}') },
+      { t: 'ph', src: '\\texttt{\\textasciitilde{}/bin}' },
+      { t: 'ph', src: '\\texttt{a\\textbackslash{}b\\textasciicircum c\\textunderscore d}' },
     ] }]
-    expect([...codeTextsOf(more)].sort()).toEqual(['a\\_b', 'c\\_d', 'café', 'zip(a, b)', '}x'])
+    expect([...codeTextsOf(more)].sort()).toEqual(['a\\_b', 'a\\b^c_d', 'c\\_d', 'café', 'zip(a, b)', '}x', '~/bin'])
     expect(isCode('after', codeTextsOf(units))).toBe(true)
     expect(isCode('before', codeTextsOf(units))).toBe(false)
   })
