@@ -1024,7 +1024,8 @@ const BACKREF_TEX = [
  * para/begin hook sets the start point at a line's paragraph's start and para/end the end point at its end, in horizontal mode,
  * the glue, kerns and penalties last taken off and put back after it (\axt@take, as a closing mark's), so that no place to break
  * is made or lost; fancyvrb's lines (minted's too), each an \hbox set in vertical mode, get them inside the box, around
- * \FancyVerbFormatLine. Never a point in vertical mode, which would make a glue a place to break and hide \lastskip from
+ * \FancyVerbFormatLine; a listing's caption or title (listings' \lst@MakeCaption, inside the environment's body) is prose, set with
+ * the flag off. Never a point in vertical mode, which would make a glue a place to break and hide \lastskip from
  * \addvspace. A test document of every kind (verbatim, alltt, fancyvrb, listings, an environment of the paper's own with
  * \obeylines in an mdframed box): each of its 354 glyphs where it was, every code line between its two points
  */
@@ -1035,7 +1036,8 @@ export function regionsTex(codeEnvs) {
     '\\def\\axt@cdopen{\\ifaxt@off\\else\\xdef\\axt@cdn{\\the\\numexpr\\axt@cdn+1\\relax}\\axt@point{cds\\axt@cdn}\\fi}',
     '\\def\\axt@cdclose{\\ifaxt@off\\else\\relax\\let\\axt@back\\@empty\\axt@take\\axt@point{cde\\axt@cdn}\\axt@back\\fi}',
     '\\def\\axt@fvwrap{\\ifdefined\\FancyVerbFormatLine\\let\\axt@fvfl\\FancyVerbFormatLine\\def\\FancyVerbFormatLine##1{\\ifaxt@code\\axt@cdopen\\axt@fvfl{##1}\\axt@cdclose\\else\\axt@fvfl{##1}\\fi}\\fi}',
-    '\\ifdefined\\AddToHook\\AddToHook{para/begin}{\\ifaxt@code\\axt@cdopen\\fi}\\AddToHook{para/end}{\\ifaxt@code\\axt@cdclose\\fi}\\AddToHook{begindocument/end}{\\axt@fvwrap}',
+    '\\def\\axt@lstwrap{\\ifdefined\\lst@MakeCaption\\let\\axt@lstmc\\lst@MakeCaption\\def\\lst@MakeCaption##1{\\edef\\axt@cdwas{\\ifaxt@code1\\else0\\fi}\\axt@codefalse\\axt@lstmc{##1}\\ifnum\\axt@cdwas=1 \\axt@codetrue\\fi}\\fi}',
+    '\\ifdefined\\AddToHook\\AddToHook{para/begin}{\\ifaxt@code\\axt@cdopen\\fi}\\AddToHook{para/end}{\\ifaxt@code\\axt@cdclose\\fi}\\AddToHook{begindocument/end}{\\axt@fvwrap\\axt@lstwrap}',
     ...codeEnvs.map(n => `\\AddToHook{env/${n}/begin}{\\axt@codetrue}`),
     '\\fi\\makeatother',
   ].join('')

@@ -184,6 +184,8 @@ describe('the code environments a paper uses, marked as code regions in the layo
     expect(coded).toContain('\\axt@point{cds\\axt@cdn}')
     // (on the head's one line: no line of the paper moves)
     expect(regionsTex(['verbatim', 'tx'])).not.toContain('\n')
+    // (a listing's caption or title is prose: listings' \lst@MakeCaption set with the flag off)
+    expect(regionsTex(['lstlisting'])).toContain('\\def\\lst@MakeCaption##1{\\edef\\axt@cdwas')
     expect(regionsTex([])).toBe('')
     expect(coded.indexOf('\\documentclass')).toBeGreaterThan(coded.indexOf('axt@codetrue'))
   })
