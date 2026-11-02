@@ -4051,19 +4051,19 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   ink, the paint order was needed: a stacked card's "BERT" behind the front card, and the front ones under a picture laid over
   them, had been crowded only by those boxes. Measured with the figure gate on the pack (`c9a45bd9`) and on 24 of the
   25-paper set's bases: G1, G3f, D, O and R 0 on both engines; drawn 171 to 239 on 1706.03762v7 and 119 to 125 on
-  1810.04805v2, every other paper of the pack as it was; on the set 1,218 to 1,217 (2602.23285v2 one more; 2610.22214v1 two
-  fewer, a formula's subscript "mn" under a picture laid over it). Over arXiv's PDFs of the 222 papers on disk (no
-  ownership): 137 labels on 9 papers drawn that were crowded (68 of them 1706.03762v7's; by cause, the hidden glyphs 64 on 5
-  papers, the invisible paint 73 on 5); of the units drawn before, 10 are now read as covered: 7 a hidden copy of a figure
-  another copy is drawn over (2608.05519v1's table drawn twice, its first copy under a white fill; 2608.16745v1's frame under a
-  picture), whose translations had stood beside the copy the page shows, and 3 the page does show, 2610.22214v1's two
-  subscripts and 2608.05881v1's "Resin-rich layer", read as under another panel's white background painted after it, which
-  the page does not show there: pageInk reads no transparency group's box as a clip, where PDF.js clips the group to it. 149
-  runs are no units now, every one crowded before: 147 an invisible text layer's Type 3 glyphs whose procedures paint nothing
-  (2610.19159v1 94, 2608.20144v1 38, 2608.25210v2 15) and 2608.11605v1's two of text shown at ca 0. No unit drawn before is
-  gone; 224 rooms change, all but one larger (2608.12606v1's "Bint (nT)" shares its line with a label drawn now). Nine anchors
-  move with the ink that tells them (1810's "B-PER" and 2212.06817v2's "TokenLearner" and "Transformer" are centred over their
-  boxes now, as the page sets them).
+  1810.04805v2, every other paper of the pack as it was; on the set 1,218 to 1,219 (2602.23285v2 one more and 2610.22195v1
+  two, 2610.22214v1 two fewer: a formula's subscript "mn" under a picture laid over it). A transparency group bounds what it
+  paints to its box, as PDF.js's beginGroup does, and the figures' reading cuts to it too (pageInk's `cut`, a box wholly past
+  it `unseen`; every other reader's boxes the clip's alone). Over arXiv's PDFs of the 222 papers on disk (no ownership): 141
+  labels on 10 papers drawn that were crowded (68 of them 1706.03762v7's); of the units drawn before, 9 are now read as
+  covered, 7 a hidden copy of a figure another copy is drawn over (2608.05519v1's table drawn twice, its first copy under a
+  white fill; 2608.16745v1's frame under a picture), whose translations had stood beside the copy the page shows, and
+  2610.22214v1's two subscripts; 188 runs are no units, 23 of them drawn before where the page shows nothing (2503.06072v3's
+  21 and 2610.19274v1's 2, past their groups' boxes), the others crowded: 147 an invisible text layer's Type 3 glyphs whose
+  procedures paint nothing (2610.19159v1 94, 2608.20144v1 38, 2608.25210v2 15), 2608.11605v1's two of text shown at ca 0, 16
+  past their groups' boxes. 276 rooms grow and 85 shrink, each to a group's box (2503.06072v3 73, 2608.05881v1 11) or a label
+  drawn now (2608.12606v1's "Bint (nT)"); ten anchors move with the ink that tells them (1810's "B-PER" and 2212.06817v2's
+  "TokenLearner" and "Transformer" are centred over their boxes now, as the page sets them).
 - **Its set and its room** (the owner's rule of 2026-10-29, after 2010.11929v2's legends in Chinese: "All" drawn smaller
   than the other entries, "Patch size" starting further right than its column, "Head 3" smaller than "Head 1", each label
   fitted to its own box and anchored by what it read alone; `figure-text.mjs` `setsOf`, `roomsOf`): the labels of one group are set at one size, the original's by default; each keeps the original's alignment
