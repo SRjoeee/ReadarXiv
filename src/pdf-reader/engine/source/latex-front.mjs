@@ -805,6 +805,26 @@ const STRUCTURAL = /\\(?:begin|end|par|item|cr|crcr|noalign|hline|tabularnewline
 /** \\NewDocumentCommand and its kin, all their arguments mandatory (`m`, `+m`): name, spec, at the body's brace */
 const DOCUMENT_COMMAND = /\\(?:New|Renew|Provide|Declare)DocumentCommand\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*\{([^{}]*)\}\s*/g
 /**
+ * Which of a file's definitions stand inside another's body: `defs` each { at, k, e }, its match's start, its body's first
+ * character (past its match: k > at) and the index after its body's closing brace (-1 where it has none). Definition d stands
+ * inside o's where o.k < d.at < o.e: a body begun before d's match and ending past it. So it is enough to know, of the bodies
+ * begun before d's match, the furthest end: d is inside one where that end lies past d.at. The bodies are taken in the order
+ * they begin and the definitions in the order they stand, the furthest end kept as both go: n log n of the definitions, where
+ * comparing every pair was n² (2610.39068v1 defines 10,613 numbers in one file: 56 million pairs, a second of each opening)
+ */
+export function definitionsNested(defs) {
+  const n = defs.length, out = new Array(n).fill(false)
+  const byStart = Array.from({ length: n }, (_, i) => i).sort((a, b) => defs[a].k - defs[b].k)
+  const byAt = Array.from({ length: n }, (_, i) => i).sort((a, b) => defs[a].at - defs[b].at)
+  let j = 0, furthest = -1
+  for (const i of byAt) {
+    const at = defs[i].at
+    for (; j < n && defs[byStart[j]].k < at; j++) if (defs[byStart[j]].e > furthest) furthest = defs[byStart[j]].e
+    out[i] = furthest > at
+  }
+  return out
+}
+/**
  * The paper's macros that read nothing past their own arguments, as [name, arity] by name: each definition of the name in the
  * package's files one completeMacros reads — \\newcommand, \\renewcommand, \\providecommand, \\DeclareRobustCommand (starred
  * or not, with `[n]` and no optional first argument), \\def\\x#1#2 (\\edef, \\gdef, \\xdef), \\NewDocumentCommand with a spec of
@@ -833,8 +853,9 @@ export function completeMacros(files) {
       const k = skipSpaces(t, m.index + m[0].length)
       here.push({ name, params, at: m.index, k, e: t[k] === '{' ? matchGroup(t, k) : -1, bracket: t[k] === '[' })
     }
-    for (const d of here) {
-      const nested = here.some(o => o !== d && o.e > 0 && d.at > o.k && d.at < o.e)
+    const inside = definitionsNested(here)
+    for (const [i, d] of here.entries()) {
+      const nested = inside[i]
       // (an optional first argument: the call looks ahead for its bracket, so it may read what follows)
       if (nested || d.bracket || d.e < 0) { add(d.name, -1); continue }
       const body = t.slice(d.k + 1, d.e - 1)
