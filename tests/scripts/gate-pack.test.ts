@@ -180,6 +180,14 @@ describe('our base pages the layout files were made over', () => {
     // (texts not pairs of strings: refused)
     withBase(i, 'our base page', { texts: ['\\bert'] })
     expect(() => baseRecordOf(join(i.fixtures, n))).toThrow(/texts/)
+    // (a source past 4,096 code units, as the ink section now asks, kept; sources past INK_BUDGET in all, a source twice or a text
+    // of 65, refused — Devin on #568)
+    withBase(i, 'our base page', { texts: [`\\mylabel{${'x'.repeat(5000)}}`, 'OK'] })
+    expect(baseRecordOf(join(i.fixtures, n))).toMatchObject({ texts: [`\\mylabel{${'x'.repeat(5000)}}`, 'OK'] })
+    for (const bad of [[`\\a{${'x'.repeat(32768)}}`, 'A', `\\b{${'x'.repeat(32768)}}`, 'B'], ['\\bert', 'BERT', '\\bert', 'B'], ['\\bert', 'B'.repeat(65)]]) {
+      withBase(i, 'our base page', { texts: bad })
+      expect(() => baseRecordOf(join(i.fixtures, n))).toThrow(/texts/)
+    }
   })
   it('keeps the marking\'s inkless macros in base.json beside its texts, as the wrap is given them, and refuses a list the marks would not hold', async () => {
     const made = { source: 'ours' as const, head: { source: 'ours', bytes: 3, sha256: sha256('our'), xref: 1, pages: 1, tree: '2025', check: {} } }
