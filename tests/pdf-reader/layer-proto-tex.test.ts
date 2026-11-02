@@ -335,6 +335,38 @@ describe("a piece past the pages shown, and fix 4 (the LOST round's review, 2026
     // the original's own line after the display opens with a comma: kept
     expect(drawn(u, prep(', where d') as never)).toBe('\u7532\uFF0C\u4E59')
   })
+  it("fix 4 for a display before the unit's lines, drawn as nothing (OUTSIDE) or found by the marking (PIPELINE 54): the mark opening the text is dropped, unless the original's line opens with one", () => {
+    // a paragraph that opens with a display (2610.20595v1 p3 u24: `\end{equation}` and "which will now be\u2026" on the next
+    // line, the reply "\uFF0C\u7531\u4E8E\u2026" after the display's marker): the unit's one line holds its text; the display stands above it
+    const u = { kind: 'para', src: 'which d', pieces: [ph(D), text('\uFF0C\u4E59')] } as never
+    const page = (after: string) => [...item('x=1', 60, 530, 10, 9, math), ...item(after, 10, 500, 10, 0)]
+    const lu = (flags: number, segs: number[]) => {
+      const f = unitOf([L(500)], [[0, flags, segs]]) as { ph: Map<number, { kind: string }> }
+      const row = f.ph.get(0)
+      if (row) row.kind = 'display'
+      return f as never
+    }
+    const prep = (file: never, after: string) => {
+      const t = T.texRects(file)
+      return L2.prepareUnit(u, t.rects as never, [page(after) as never], new Map() as never, null, T.texParts(file, [0, -1], { lines: t }) as never)
+    }
+    const outside = lu(PH_FLAG.LOST | PH_FLAG.OUTSIDE, []), found = lu(0, [1, 50, 530, 80, 537, 526])
+    expect(prep(outside, 'which d').get(0)).toMatchObject({ mode: 'none', inPlace: true })
+    // (found: its ink kept where it stands, none of the unit's lines its region)
+    expect(prep(found, 'which d').get(0)).toMatchObject({ mode: 'kept', inPlace: true })
+    expect(prep(found, 'which d').get(0)?.region).toBeUndefined()
+    for (const file of [outside, found]) {
+      expect(drawn(u, prep(file, 'which d') as never)).toBe('\u4E59')
+      // the original's own line after the display opens with a comma: kept
+      expect(drawn(u, prep(file, ', which d') as never)).toBe('\uFF0C\u4E59')
+    }
+    // a display the unit's text stands before is no head: its comma after it is fix 4's for a display it breaks at
+    const mid = { kind: 'para', src: 'a which d', pieces: [text('\u7532 '), ph(D), text('\uFF0C\u4E59')] } as never
+    const t = T.texRects(found)
+    const midPrep = L2.prepareUnit(mid, t.rects as never, [page('a which d') as never], new Map() as never, null, T.texParts(found, [-1, 0, -1], { lines: t }) as never)
+    expect(midPrep.get(1)).toMatchObject({ mode: 'kept', inPlace: true })
+    expect(drawn(mid, midPrep as never)).toBe('\u7532\uFF0C\u4E59')
+  })
 })
 
 describe("page text no Unicode stands for, and a held line's own mark (the LOST round's images, 2026-10-15)", () => {

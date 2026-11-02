@@ -482,13 +482,22 @@
 //     25-paper set's 0 failures (PDF-READER §19.12). The figure units' cut moves, so the rows' identities: raised so. Every
 //     source unit, its pieces and its wire are 55's: a copy of 55 carries every unit (live.mjs PIPELINE_CARRIES), a figure unit
 //     found again by its source (cache.mjs seedFrom)
+// 57 (the lost class of the release sweep of 2026-11-02: a display left LOST, its unit English): an opening point alone whose next
+//     mark is another region's — a float TeX shipped into the stream after a display, before the text after it — owns what its
+//     own region holds from it to the next mark there on its page, up to the text after it (layout/stream.mjs `pastOther`, asked
+//     where the text after it was not found before that float's mark). The layout file's rows of each such piece (the maker's
+//     change rides this version, as 48's did), and the wrap's groups with it (REMOVAL 21). Over 65 local papers (the gate pack's
+//     7 among them, the production pass on both engines over the same compiles, every page read within its clocks): 2 units of 2
+//     papers laid whole that were the original's (2610.20507v1's u21, its display (16) before Figure 3; 2610.21288v1's u30, its
+//     display (12) before Figure 2), none the other way, every other unit's rows as they were. No source unit's text, pieces or
+//     wire changes: a copy of 56 carries every unit (live.mjs PIPELINE_CARRIES)
 // 59 (the owner's option A of 2026-11-02: every figure label translated, a token of code kept): a figure unit is KEPT where it is
 //     code (translate/mt.mjs isCode): every word a markup token in angle brackets (1706.03762v7's "<pad>", which Microsoft gave
 //     back as a word, and "<EOS>"; 2503.06072v3's "<think>"), or a text the paper sets as code (codeTextsOf: \texttt, \verb,
 //     \lstinline, \code, \path, \mintinline, \Verb); a table's cell keeps a markup token too (nameCells), never a word the paper
 //     sets as code elsewhere. Over 243 local sources every cell kept as before; over the corpus's figure labels of those papers
-//     101 newly kept on 12 papers, none other moved. 57 is #558's and 58 #560's. The figure units' flags move, so the rows'
-//     identities: raised so. Every source unit, its pieces and its wire are 56's: a copy of 56 carries every unit (live.mjs
+//     101 newly kept on 12 papers, none other moved. 58 is #560's. The figure units' flags move, so the rows'
+//     identities: raised so. Every source unit, its pieces and its wire are 57's: a copy of 57 carries every unit (live.mjs
 //     PIPELINE_CARRIES)
 export const PIPELINE_VERSION = '59'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
@@ -565,6 +574,9 @@ export const PDFJS = '6.3.289'
  * base's bytes and the head's `labelKept` change where a paper's head names one (4 of 66 local papers, 9 labels); 20
  * (the owner's report of 2026-11-02 on 2501.14787v1 p24): the ink of a display its unit opens with, which the marking passes over
  * (stream.mjs headInk), is its unit's for the ledger (own.mjs `leads`, wrap.mjs), in no group: no ink unit nor kept block is made
- * of it, where three kept blocks of 2501.14787v1 p24's display each lit alone; the base's bytes do not change
+ * of it, where three kept blocks of 2501.14787v1 p24's display each lit alone; the base's bytes do not change; 21 (the lost
+ * class of the release sweep of 2026-11-02): an opening point alone whose next mark is a float's shipped into the stream before
+ * the text after it owns what its own region holds to that text (stream.mjs `pastOther`), its ink its unit's groups where it was
+ * in none: the base's bytes change where a display is so followed by a float (2 of 65 local papers)
  */
-export const REMOVAL = '20'
+export const REMOVAL = '21'

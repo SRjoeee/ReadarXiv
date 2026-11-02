@@ -184,6 +184,22 @@ describe('ownedOf', () => {
     expect(owned([p1, p2], { 'p0.1a': open('nowhere') })).toEqual({ 'p0.1a': 'open, the text after it not found' })
   })
 
+  it("a display whose next mark is a float's, shipped into the stream before the text after it, owns what its own region holds to that text (2610.20507v1's (16), 2610.21288v1's (12))", () => {
+    const page = pageOf([
+      { at: 'bs1' }, 'words ', { at: 'p0.1a' }, '\na=b(1)', { at: 'fs1' }, { at: 'g1a' }, '\nFigure', { at: 'g1b' }, { at: '9s' }, ' caption', { at: '9e' }, { at: 'fe1' },
+      '\nwhich reduces to ', { at: 'p0.3a' }, 'x', { at: 'p0.3b' }, { at: 'be1' },
+    ])
+    expect(owned([page], { 'p0.1a': open('whichred', ['p0.3a']), 'p0.3a': closed })['p0.1a']).toEqual(['a=b(1)', 0])
+    // (the erasure's reading the same: the wrap hides the display with its unit)
+    const erased = ownedOf([page], { follows: n => ({ 'p0.1a': open('whichred', ['p0.3a']), 'p0.3a': closed })[n] ?? null, erasure: true }).get('p0.1a')
+    expect(erased && shown([page], erased)).toEqual(['a=b(1)', 0])
+    // (the float's glyphs are its own region's: none of them the display's, wherever the text after it is)
+    expect(owned([page], { 'p0.1a': open('nowhere', ['p0.3a']), 'p0.3a': closed })['p0.1a']).toEqual('open, the text after it not found')
+    // (the next mark its own region's: as before, the text after it before that mark)
+    const plain = pageOf([{ at: 'bs1' }, 'words ', { at: 'p0.1a' }, '\na=b(1)', '\nwhich reduces to ', { at: 'p0.3a' }, 'x', { at: 'p0.3b' }, { at: 'be1' }])
+    expect(owned([plain], { 'p0.1a': open('whichred', ['p0.3a']), 'p0.3a': closed })['p0.1a']).toEqual(['a=b(1)', 0])
+  })
+
   it("a display that ends its unit at its column's foot, the next mark on the next page, ends with the body", () => {
     const p1 = pageOf([{ at: 'bs1' }, 'words', { at: '0e' }, { at: 'p0.1a' }, '\na=b(3)', { at: 'be1' }, '\n7'])
     const p2 = pageOf([{ at: 'c1-2' }, { at: 'bs2' }, 'Next', { at: '1s' }, ' unit'])

@@ -4,7 +4,7 @@ import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it } from 'vitest'
 import { type DocToken, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
-import { carrier, carrierOf, DRIFT_LINES, LINE_PLACE, lineCheckOf, linesOf, PAGE_SAME, tokensOfMarks } from '@/pdf-reader/engine/layout/carry.mjs'
+import { carrier, carrierOf, commonCount, DRIFT_LINES, LINE_PLACE, lineCheckOf, linesOf, PAGE_SAME, tokensOfMarks } from '@/pdf-reader/engine/layout/carry.mjs'
 import { encodeLayoutMarks, layoutMarksOf, parseLayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 
 // The line check (carry.mjs): our compile's lines found on arXiv's PDF. Our compile is not arXiv's file (another TeX Live,
@@ -23,6 +23,46 @@ const at = (ts: DocToken[], i: number) => { const t = ts[i]; if (!t) throw new E
 /** the lines found, of all kinds */
 const found = (c: { lines: { same: number; moved: number; respaced: number; fuzzy: number } }) => c.lines.same + c.lines.moved + c.lines.respaced + c.lines.fuzzy
 const TEN = ['the', 'model', 'of', 'vaswani', 'and', 'its', 'variants', 'we', 'use', 'here']
+
+describe('commonCount: a page\'s longest common run of words, the words both lists begin and end with taken as they are', () => {
+  /** the longest common run as every cell of the two lists reads it */
+  const cells = (a: string[], b: string[]) => {
+    let prev = new Uint32Array(b.length + 1), cur = new Uint32Array(b.length + 1)
+    for (let i = 1; i <= a.length; i++) {
+      for (let j = 1; j <= b.length; j++) cur[j] = a[i - 1] === b[j - 1] ? (prev[j - 1] ?? 0) + 1 : Math.max(prev[j] ?? 0, cur[j - 1] ?? 0)
+      ;[prev, cur] = [cur, prev]
+    }
+    return prev[b.length]
+  }
+  /** a seeded generator (mulberry32), so that a failure is the same run again */
+  const rng = (seed: number) => () => {
+    seed = (seed + 0x6d2b79f5) | 0
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+  it('as every cell says, on random pages: one page the other with words changed, cut or added anywhere, or of a few words alike', () => {
+    const r = rng(20261102), word = () => ['a', 'b', 'c', 'the', 'of', 'x'][Math.floor(r() * (r() < 0.5 ? 2 : 6))] as string
+    for (let trial = 0; trial < 4000; trial++) {
+      const a = Array.from({ length: Math.floor(r() * 30) }, word)
+      const b = r() < 0.3 ? Array.from({ length: Math.floor(r() * 30) }, word) : a.flatMap(w => (r() < 0.1 ? [] : r() < 0.1 ? [word(), w] : r() < 0.1 ? [word()] : [w]))
+      expect(commonCount(a, b)).toBe(cells(a, b))
+    }
+  })
+  it('two pages alike are every word; the edges: empty, one word, every word but the first or the last', () => {
+    expect(commonCount(TEN, [...TEN])).toBe(10)
+    expect(commonCount([], TEN)).toBe(0)
+    expect(commonCount(['the'], ['the'])).toBe(1)
+    expect(commonCount(TEN, ['and', ...TEN.slice(1)])).toBe(cells(TEN, ['and', ...TEN.slice(1)]))
+    expect(commonCount(TEN, [...TEN.slice(0, -1), 'and'])).toBe(cells(TEN, [...TEN.slice(0, -1), 'and']))
+    expect(commonCount(['a', 'a', 'a'], ['a', 'a'])).toBe(2)
+  })
+  it('none past the page\'s cells, as before, however alike the two pages: the counts\' product is the bound', () => {
+    const many = Array.from({ length: 5001 }, (_, i) => `w${i}`)
+    expect(commonCount(many, many)).toBeNull()
+    expect(commonCount(many.slice(0, 5000), many.slice(0, 5000))).toBe(5000)
+  })
+})
 
 describe('linesOf', () => {
   it('a line is the tokens on one baseline; its signature its words on that baseline', () => {

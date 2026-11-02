@@ -289,6 +289,9 @@ function headEntries(head, P, R, p, q, has, put) {
  *   start: that text is no unit's of the source, and none of it the piece's. Nothing at all before the
  *   next point is a piece of nothing; nothing before the text after it, with glyphs there, is none (REVTeX sets the
  *   punctuation after a citation before its number).
+ * - Past another region's mark (pastOther): an opening point alone whose next mark is another region's (a float TeX shipped into
+ *   the stream after a display, before the text after it), the text after it not found before that mark, owns what its own region
+ *   holds from it to the next mark there on its page, up to the text after it (2610.20507v1's display (16) before its Figure 3)
  * - Past its column's end (pastColumn): an opening point alone in a column's body whose next mark lies past that body's
  *   end — on another page, or a later unit's or a footnote's on its own — owns what its region holds from it on, through
  *   the bodies' breaks, up to the text after it (`want`), or with none to its body's end (or through to its unit's next
@@ -566,7 +569,23 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
       }
       return { how: HOW["open, to its column's end"], glyphs, boxes }
     }
+    /** an opening point alone whose next mark is another region's (a float or a note TeX shipped into the stream after it, before
+     *  the text after it): its ink is what its own region holds from it to the next mark there, on its page, up to the text after
+     *  it (`want`), as `take` reads a region alone; or null where it is not so */
+    const pastOther = () => {
+      if (!f.want) return null
+      const next = seq[(rank.get(`${pa}|${qa}`) ?? -2) + 1]
+      if (!next || next[0] !== pa || regions[pa - 1].at[next[1]] === rA) return null
+      let stop = null
+      for (let r = (rank.get(`${pa}|${qa}`) ?? -2) + 1; r >= 1 && r < seq.length && !stop; r++) if (regions[seq[r][0] - 1].at[seq[r][1]] === rA) stop = seq[r]
+      if (!stop || stop[0] !== pa) return null
+      const { glyphs, boxes } = takeTo(stop)
+      if (jumps(glyphs)) return null
+      const end = textEnd(glyphs, pages[pa - 1].points[stop[1]].name)
+      return end > 0 ? cut(HOW['open, to the text after it'], glyphs, boxes, end) : null
+    }
     let e = alone()
+    if (e.how === HOW['open, the text after it not found']) e = pastOther() ?? e
     if (e.how === HOW['open, the next mark on another page'] || e.how === HOW['open, the text after it not found']) e = pastColumn() ?? e
     if (e.how === HOW['open, the next mark on another page']) e = footEnd() ?? e
     if (f.group?.length && e.how < OWNED) {
