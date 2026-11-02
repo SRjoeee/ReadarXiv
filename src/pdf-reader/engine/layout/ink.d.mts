@@ -11,6 +11,9 @@ export interface Glyph {
   /** with `indices`: its text-showing operation's place among the page's own (-1 in an annotation's appearance), its
    *  place among that operation's glyphs, whether its Unicode is blank, and whether it is shown inside a form XObject */
   n?: number; k?: number; blank?: boolean; form?: boolean
+  /** with `turned` (the figures' reading): not wholly inside the clip in force (`clipped`); nothing of it shown (`unseen`: wholly
+   *  outside the clip, or painted at an alpha of 0) */
+  clipped?: true; unseen?: true
 }
 /** a glyph's fill of no colour (a pattern's, PDF.js's transparent) */
 export declare const NO_FILL: -1
@@ -43,12 +46,13 @@ export interface InkPoint { name: string; glyph: number; box: number }
  *  each MERGED in `paths`); `rotated` when the page's /Rotate is not 0 (then nothing is returned) */
 /** a paragraph's point (`q<n>`), kept apart from the marks' points */
 export declare const PARA_POINT: RegExp
-export declare function pageInk(OPS: Record<string, number>, ops: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }, commonObjs: { get(id: string): unknown }, o: { rotate: number; indices?: boolean; outlines?: ReadonlyMap<string, number[]> | null; collect?: Map<string, number[]> | null; glyphsMax?: number; boxesMax?: number; stepsMax?: number; msMax?: number; glyphsOnly?: boolean; turned?: boolean }): { glyphs: Glyph[]; boxes: number[]; points: InkPoint[]; boxAt: number[]; paras: InkPoint[]; paths?: number[]; shows?: number; turned?: TurnedGlyph[]; shapes?: Map<number, Shape>; pictures?: InkPoint[]; figures?: Map<string, [number, number, number, number]>; capped: boolean; timedOut: boolean; degraded: boolean; mergedAt: number | null; rotated: boolean }
+export declare function pageInk(OPS: Record<string, number>, ops: { fnArray: ArrayLike<number>; argsArray: ArrayLike<unknown> }, commonObjs: { get(id: string): unknown }, o: { rotate: number; indices?: boolean; outlines?: ReadonlyMap<string, number[]> | null; collect?: Map<string, number[]> | null; glyphsMax?: number; boxesMax?: number; stepsMax?: number; msMax?: number; glyphsOnly?: boolean; turned?: boolean }): { glyphs: Glyph[]; boxes: number[]; points: InkPoint[]; boxAt: number[]; paras: InkPoint[]; paths?: number[]; shows?: number; turned?: TurnedGlyph[]; shapes?: Map<number, Shape>; pictures?: InkPoint[]; figures?: Map<string, [number, number, number, number]>; unseen?: Set<number>; cut?: Map<number, [number, number, number, number]>; capped: boolean; timedOut: boolean; degraded: boolean; mergedAt: number | null; rotated: boolean }
 /** a glyph set turned (pageInk's `turned`): its baseline from its origin to its advance's end, its direction, its size, its
  *  font's band in em, its own ink up and down from its baseline in em (`up`, `down`: its outline's, else its font's band), its
  *  box's index (-1 for none), the level glyphs and the pictures' points before it; `clipped` where its own ink (its outline,
- *  else its font's band, across its advance) is not wholly inside the clip in force */
-export interface TurnedGlyph { u: string; n: number; k: number; ox: number; oy: number; ex: number; ey: number; ux: number; uy: number; size: number; ascent: number; descent: number; up: number; down: number; font: string; fill: number; box: number; at: number; pt: number; blank?: true; form?: true; clipped?: true; fid?: number; pid?: number }
+ *  else its font's band, across its advance) is not wholly inside the clip in force; `unseen` where nothing of it is shown (that ink
+ *  wholly outside the clip, or painted at an alpha of 0) */
+export interface TurnedGlyph { u: string; n: number; k: number; ox: number; oy: number; ex: number; ey: number; ux: number; uy: number; size: number; ascent: number; descent: number; up: number; down: number; font: string; fill: number; box: number; at: number; pt: number; blank?: true; form?: true; clipped?: true; unseen?: true; fid?: number; pid?: number }
 /** a figure's painted path as its lines (pageInk's `turned`): its segments on the page (x0, y0, x1, y1 stride 4), whether it strokes
  *  and fills, its half line width on the page */
 export interface Shape { segs: Float32Array; stroke: boolean; fill: boolean; hw: number }
