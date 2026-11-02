@@ -1810,6 +1810,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (!f || f.refused || f.taken) return null
     const row = candOf.get(fid)?.lead, fu = tex.index.unit(fid)
     if (!row || !fu?.lines.length || fu.lines[0] !== row.page) return null
+    // (a head on the row's page alone: one that begins on an earlier page is set by that page's pass and painted on the row's
+    // page then (paintOn), before the next unit is laid there, so it could not be laid again in its row should that unit be
+    // left the original's)
+    if (p.pages.some(q => q !== row.page)) return null
     const bi = p.blocks.length - 1, b = p.blocks[bi]
     if (!b || b.page !== row.page || b.rects.length !== 1 || b.centred || Math.abs(b.B[0] - row.baseline) >= 0.05) return null
     const x1 = fu.lines[2]

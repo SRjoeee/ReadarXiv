@@ -180,6 +180,20 @@ describe('a shared line: the next unit\'s first line starts where the translatio
     expect((run.skipped as unknown as { id: number; code: string }[]).map(x => [x.id, x.code])).toEqual([[1, 'page']])
   })
 
+  it('a heading that begins on the page before keeps its rows: that page\'s pass paints it before the unit after it is laid', async () => {
+    // (its first row at the foot of page 1, its last on page 2 before its text: below its floor in its rows, and not run on over
+    // page 2's row, which could not be undone once painted should the text after it be left the original's)
+    const across: Paper = { ...inkedRunIn(16), name: 'run-in over two pages', pages: 2, specs: [
+      { id: 0, kind: 'heading', lines: [line(1, 30, 'Model', 20, 80), line(2, 250, 'Architecture', 20, 80)], chars: 16, at: 0x4e00 },
+      { ...inkedRunIn(16).specs[1]!, lines: inkedRunIn(16).specs[1]!.lines.map(l => ({ ...l, page: 2 })) },
+    ] }
+    const run = await laid(across)
+    const head = (run.stats as unknown as { id: number; f: number }[]).find(r => r.id === 0)!
+    const a = linesOf(run, 0)!
+    expect([head.f, a.map(l => [l[0], l[7]])]).toEqual([7.5, [[1, 80], [2, 78.2]]])
+    expect(linesOf(run, 1)![0]!.slice(0, 2).concat(linesOf(run, 1)![0]![6])).toEqual([2, 250, 88.2])
+  })
+
   it('a heading left the original\'s (not translated): its text starts where TeX set it', async () => {
     const run = await laid(runIn(3), P => { P.rows.get(0)!.state = 'failed' })
     expect(linesOf(run, 0)).toBeUndefined()
