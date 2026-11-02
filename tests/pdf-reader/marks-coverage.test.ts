@@ -162,15 +162,16 @@ describe('layoutMarking with the complete macros: a call TeX answered for gets t
   })
 })
 
-describe('the glue rule: a macro glued to the word before is part of it, unless TeX\'s box for it begins with a node apart from it', () => {
-  // (2610.21547: "0.58\pp", \pp = \,pp; 2610.21924: "Zhou\textsuperscript{1}", whose box begins with a formula)
+describe('the glue rule: a macro glued to the word before is part of it, unless TeX\'s box for it begins with a node apart from it, or its opening mark sets itself in a box (BOXY)', () => {
+  // (2610.21547: "0.58\pp", \pp = \,pp; 2610.21924: "Zhou\textsuperscript{1}", whose box begins with a formula, before which
+  // LAYOUT_TEX's opening mark boxes itself as before a formula: \axt@boxy)
   const u = unit([text('a gap of 0.58'), ph('\\pp'), text(' then '), ph('$x$'), text(' by Zhou'), ph('\\textsuperscript{1}'), text(' and Giessenbachstra'), ph('\\foo'), text('e.')])
-  it('without TeX\'s answer, as before: no mark on either', () => {
-    expect(marksOf(u, { lines: false })).toMatchObject({ '\\pp': '', '\\textsuperscript{1}': '', '\\foo': '' })
+  it('without TeX\'s answer: no mark on \\pp nor \\foo; the superscript its opening mark, boxed as before a formula', () => {
+    expect(marksOf(u, { lines: false })).toMatchObject({ '\\pp': '', '\\textsuperscript{1}': 'a', '\\foo': '' })
   })
-  it('with it: the one whose box begins with a kern is marked; one that begins with a character, a box or a formula stays the word\'s', () => {
+  it('with it: the one whose box begins with a kern is marked; one that begins with a character stays the word\'s', () => {
     // (its opening mark: no macro of the paper's that reads nothing past its arguments, so no closing one)
-    expect(marksOf(u, { lines: false, apart: ['\\pp'] })).toMatchObject({ '\\pp': 'a', '\\textsuperscript{1}': '', '\\foo': '' })
+    expect(marksOf(u, { lines: false, apart: ['\\pp'] })).toMatchObject({ '\\pp': 'a', '\\textsuperscript{1}': 'a', '\\foo': '' })
   })
   it('readInkApart: the samples whose box TeX listed in full and began with glue, a kern, a penalty or a whatsit', () => {
     const row = (tag: string, i: number) => `LAYOUT-PROBE 1 ${tag} ${i}`
