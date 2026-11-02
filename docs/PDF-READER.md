@@ -3776,7 +3776,9 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   glyphs is no ink of its (2610.21477v1 u42's `\}`, an opening point alone, read on into the next box's title), where the
   reading does not begin with them the placeholder's, as before. Over 65
   local papers the 2 such units' symbols are hidden with their text now, no unit's class changes, and on the 35 papers whose
-  wrapped base page moved every glyph that changed group is a text symbol's character gone from `u<id>.p` to `u<id>`); where that
+  wrapped base page moved every glyph that changed group is a text symbol's character gone from `u<id>.p` to `u<id>`; the
+  over-read left `.p` on 2 papers, into no group, the next box's header in both: 2610.21477v1 p4's 19 glyphs "(3) Extraction
+  Prompt" and 2610.19159v1 p55's 2 rules, a step's header band, no unit's class changing); where that
   text is not known or not there, the cell is
   `marks`. Marks set twice are the unit's first occurrence where that is an end mark alone and every later one a pair (a
   title TeX set in vertical mode, its class setting it again in a line: acmart's ACM Reference Format, 2610.22065v1 p1; TeX
