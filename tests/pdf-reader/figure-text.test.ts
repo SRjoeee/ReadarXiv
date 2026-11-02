@@ -161,6 +161,23 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
     expect(beside(true).after).toBe(ROOM_MAX * 10)
   })
 
+  it('a fill painted before a label is its ground whatever its edges: tone edges under the text crowd nothing (1706.03762v7\'s highlighted tokens)', () => {
+    // (two fills stacked under the word, their seam at 112 across it: a token's highlight box and the next; before the word they
+    // are its ground, after it they cover it; a stroke across it crowds it whenever it is painted)
+    const tiles = (before: boolean, stroke = false) => {
+      const pg = { ...word('label'), view: [0, 0, 300, 300] }
+      const rect = (b: number[]) => [b[0]!, b[1]!, b[2]!, b[1]!, b[2]!, b[1]!, b[2]!, b[3]!, b[2]!, b[3]!, b[0]!, b[3]!, b[0]!, b[3]!, b[0]!, b[1]!]
+      const boxes: number[] = [], shapes = new Map()
+      for (const b of [[80, 90, 112, 115], [112, 90, 150, 115]]) { shapes.set(boxes.length / 4, { segs: Float32Array.from(rect(b)), stroke, fill: true, hw: 0.25 }); boxes.push(...b) }
+      return figureUnitsOf([{ ...pg, boxes, shapes, paths: [0, 1], figures: new Map([['0:0', [0, 0, 300, 300]]]), boxAt: pg.glyphs.map(() => (before ? 2 : 0)) }] as never, null).units[0]!
+    }
+    expect(tiles(true).why).toBeNull()
+    expect(tiles(false).why).toBe('crowded')
+    expect(tiles(true, true).why).toBe('crowded')
+    // (its edges beside the word still end the word's free line: the translation stays on its tone, ROOM_CLEAR short of the edge)
+    expect(tiles(true).after).toBeCloseTo(150 - 125 - ROOM_CLEAR * 10, 6)
+  })
+
   it('ink painted after a label over its band is over it, never its ground: it crowds the label (1810.04805v2\'s "BERT")', () => {
     // (pageInk's `boxAt`: the boxes shown before each glyph. A fill that holds the whole band, painted before the word, is its
     // ground; painted after it, a card stacked over the word or a picture laid on it, it covers the word)

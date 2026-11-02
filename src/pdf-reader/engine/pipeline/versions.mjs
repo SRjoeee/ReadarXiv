@@ -482,7 +482,15 @@
 //     25-paper set's 0 failures (PDF-READER §19.12). The figure units' cut moves, so the rows' identities: raised so. Every
 //     source unit, its pieces and its wire are 55's: a copy of 55 carries every unit (live.mjs PIPELINE_CARRIES), a figure unit
 //     found again by its source (cache.mjs seedFrom)
-export const PIPELINE_VERSION = '56'
+// 58 (the owner's option A of 2026-11-02, 1706.03762v7's last 5 labels): a fill of known lines and no stroke painted before a
+//     figure's text is the ground it was set on, whatever its edges: one inside the label's band is a change of tone under the
+//     text and crowds nothing (layout/figure-text.mjs shapeRoom `tone`); beside the box it tells the anchor and ends the free
+//     line as before. Measured: the pack's 1706.03762v7 every label drawn (239 -> 244), 1512.03385v1 +5, 2608.04322v1 +9; 24 of
+//     the 25-paper set +37 on 9 papers; the figure gate's G1, G3f, D, O (its tone edges a ground's, PDF-READER §19.12) and R 0;
+//     over arXiv's PDFs of 222 papers 331 labels on 51 papers drawn, none lost, no anchor, set or room moved. 57 is #558's. The
+//     figure units' cut moves, so the rows' identities: raised so. Every source unit, its pieces and its wire are 56's: a copy
+//     of 56 carries every unit (live.mjs PIPELINE_CARRIES), a figure unit found again by its source (cache.mjs seedFrom)
+export const PIPELINE_VERSION = '58'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
