@@ -43,7 +43,7 @@ window.doorJump = {
       const t3 = performance.now()
       d.layer.dispose()
       // (the open's own rule set, openDoor's: the toggle measured on the set the run measures)
-      const again = await R.openLayer({ bundle, doc: d.doc, target, ...(d.ruleSet ? { rules: d.ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS, classes: { tables: false } })
+      const again = await R.openLayer({ bundle, doc: d.doc, target, ...(d.ruleSet ? { rules: d.ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS, fillsMs: Infinity, classes: { tables: false } })
       again.take(rows)
       again.end()
       await Promise.all(inView.map(q => again.pageOf(q, { lang: target })))

@@ -119,7 +119,7 @@ async function openB({ name, target, rules, at, draw, link = null }) {
     counts.span(`leftPart ${page}`, t, performance.now())
     return b
   }
-  const layer = await R.openLayer({ index, doc, parts: at === 'open' ? parts : [], target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS, leftPart, onRetired: d => { retired.push(d) } })
+  const layer = await R.openLayer({ index, doc, parts: at === 'open' ? parts : [], target, ...(ruleSet ? { rules: ruleSet } : {}), faceSources: await faceSourcesOf(), hyphUrl, OPS: pdfjs.OPS, fillsMs: Infinity, leftPart, onRetired: d => { retired.push(d) } })
   const tell = i => layer.addPart(parts[i])
   if (at === 'wait') window.__gateWait = what => { if (what === 'part' && next < parts.length) tell(next++) }
   layer.take(rows)

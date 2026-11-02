@@ -16,7 +16,7 @@ import { OPEN_FAMILY } from './fonts.mjs'
 import { layerDraws, readLeftPart } from './format.mjs'
 import { echoRows, layerIds, sourceUnitsOf, unitOf } from './rows.mjs'
 import { classesOn, shownTranslated, TOGGLE_DEFAULTS, unitClass } from '../rules/content-classes.mjs'
-import { openProto } from './run.mjs'
+import { LIVE_FILLS_MS, openProto } from './run.mjs'
 import { NAME_KIND } from './units.mjs'
 import { BUILTIN_RULES, resolveRules } from '../rules/layout.mjs'
 
@@ -124,7 +124,7 @@ export const DRAWS_HELD = 16 * 2 ** 20
 const HOLD_MS = 2000
 
 export async function openLayer(o = {}) {
-  const { bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules = BUILTIN_RULES, drawsHeld = DRAWS_HELD, OPS = null, classes = null } = o ?? {}
+  const { bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules = BUILTIN_RULES, drawsHeld = DRAWS_HELD, OPS = null, classes = null, fillsMs = LIVE_FILLS_MS } = o ?? {}
   const four = bundle === undefined
   if (four) {
     if (index === null || typeof index !== 'object' || index.kind !== 'index' || !Array.isArray(index.units) || !index.head) throw new TypeError(`index: a layer index (indexOf's), not ${kindOf(index)}`)
@@ -161,7 +161,7 @@ export async function openLayer(o = {}) {
   // (taken before the open's first await: two opens at once are refused alike)
   const token = {}
   opened = token
-  try { return await openOne({ four, bundle, index, doc, parts: parts ?? [], target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS, classes }, token) } catch (e) { if (opened === token) opened = null; throw e }
+  try { return await openOne({ four, bundle, index, doc, parts: parts ?? [], target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS, classes, fillsMs }, token) } catch (e) { if (opened === token) opened = null; throw e }
 }
 
 /** a part told to the door, against the index and the chain so far (`ch`: through, last): a ReadPart of the index's head that
@@ -173,7 +173,7 @@ function checkPart(part, index, ch) {
   if (part.prev !== ch.last) throw new BundleRefusal('not following the digest of the last part', { kind: 'part', path: 'prev' })
 }
 
-async function openOne({ four, bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS, classes }, token) {
+async function openOne({ four, bundle, index, doc, parts, target, faceSources, hyphUrl, leftPart, onRetired, rules, drawsHeld, OPS, classes, fillsMs }, token) {
   const source = four ? index : bundle
   // the reader's toggles (rules/content-classes.mjs, docs/route/orphan-text.md §8): a unit whose class they do not show is the
   // original's, its row never taken, and awaited by no page; every class is translated on the server whatever they are, and a
@@ -234,7 +234,7 @@ async function openOne({ four, bundle, index, doc, parts, target, faceSources, h
   if (!four) hear(bundle)
   // (a bundle of 3 names no lists: its base is arXiv's PDF, which holds none of our groups, so no unit is hidden over it)
   const hiding = { unhidden: id => unhidden.get(id) ?? null, labelKept: id => labelKept.has(id), rules: pg => rulesByPage.get(pg), figures: pg => figuresByPage.get(pg) ?? [], figuresShown: shownTranslated('figures', on) }
-  const common = { units: [], expect, classes: { ...TOGGLE_DEFAULTS, ...(classes ?? {}) }, groups, target, scale: SCALE, dpr: 1, copy: false, free: true, records: false, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, OPS, onStep: () => evaluate() }
+  const common = { units: [], expect, classes: { ...TOGGLE_DEFAULTS, ...(classes ?? {}) }, groups, target, scale: SCALE, dpr: 1, copy: false, free: true, records: false, labels: { captions: CAPTIONS }, rules, faceSources, hyphUrl, OPS, fillsMs, onStep: () => evaluate() }
   run = await openProto(four
     ? {
         ...common, parts: true, doc, pages: index.head.paper.pages, onRetired, drawOf: page => drawOfPage(page), drawsComing: index.head.draw === 1,

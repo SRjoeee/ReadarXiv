@@ -1000,7 +1000,8 @@ try {
     await page.evaluate(sel => { for (const x of document.querySelectorAll(`${sel} .axt-layer > .textLayer > span`)) x.style.color = 'black' }, P1)
     const inked = await stillShot(place)
     await page.evaluate(sel => { for (const x of document.querySelectorAll(`${sel} .axt-layer > .textLayer > span`)) x.style.color = '' }, P1)
-    control('a text layer drawn in ink is seen: the place\'s pixels differ', { ok: !inked.unsettled && inked.png.equals(withoutText.png), detail: shotsOf(inked, withoutText) })
+    // (the control's evidence is two still shots that differ: one that never settles proves nothing, and fails it)
+    control('a text layer drawn in ink is seen: the place\'s pixels differ, each once the place is still', { ok: !!(inked.unsettled || withoutText.unsettled) || inked.png.equals(withoutText.png), detail: shotsOf(inked, withoutText) })
     // one copy of each text in the accessibility tree: the text layer's, the SVG's hidden
     const tree = await place.ariaSnapshot()
     const once = ['[echo] Introduction', 'The Read arXiv Contributors'].map(w => ({ w, n: tree.split(w).length - 1 }))

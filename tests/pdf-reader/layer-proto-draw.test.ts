@@ -673,11 +673,12 @@ describe('fontReaders: a page\'s fonts read live or from its draw, the same answ
     const page: Record<string, any> = { ...raw, commonObjs: { has: raw.commonObjs.has, get: (id: string) => { const f = raw.commonObjs.get(id); return f && typeof f === 'object' && 'name' in f ? { ...f, toUnicode: { _map: [...'abcdefghijklmnopqrstuvwxyz0123456789[]S'] } } : f } }, getAnnotations: async () => [] }
     const tc = (await page.getTextContent()) as unknown as TextContentLike
     const list = await page.getOperatorList()
+    // (the reference walked with no clock: under the reader's budget a loaded test runner could cut this page too)
     const quiet = { fills: 0 }
-    const fills = await liveFillsOf(OPS, page, tc.items, quiet, list)
+    const fills = await liveFillsOf(OPS, page, tc.items, quiet, list, Number.POSITIVE_INFINITY)
     expect(fills).toHaveLength(50)
     expect(fills?.filter(f => f === 0x0000ff)).toHaveLength(17)
-    // (a machine so loaded that every look at the clock finds the budget spent twice over)
+    // (a machine so loaded that every look at the clock finds the budget spent twice over: the reader's budget, the default)
     let t = 0
     const now = vi.spyOn(performance, 'now').mockImplementation(() => (t += 2 * LIVE_FILLS_MS))
     try {

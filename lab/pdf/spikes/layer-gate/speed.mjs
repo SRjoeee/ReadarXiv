@@ -13,7 +13,7 @@
 //     fills), which do not depend on the machine: ANY counter whose total grows by more than 0.5 % FAILS, whatever the clock
 //     said. They count the work the input asks for because the gate's run lets no clock decide it: the reader's live fills stop
 //     at a frame budget, and a loaded repetition then counted fewer fills and drew its page otherwise (fewer measures and link
-//     tests too), so the gate walks them with no budget (layer-gate/proto.mjs `fillsMs`). A base that has no counters (it
+//     tests too), so the gate walks them with no budget (layer-gate/proto.mjs `fillsMs`; the door gates through openLayer's). A base that has no counters (it
 //     predates them) leaves the counters unmeasured, which is not a pass: the verdict is then INCOMPARABLE for them.
 //   node lab/pdf/spikes/layer-gate/speed.mjs <logs dir> [--reps=3]
 // reads <logs dir>/model-{head,base}-r<k>.log (each the log of one `layer-gate.mjs --tier=model --perf --workers=1` run, which
