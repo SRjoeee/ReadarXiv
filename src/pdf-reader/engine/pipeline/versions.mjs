@@ -594,6 +594,11 @@ export const PDFJS = '6.3.289'
  * of it, where three kept blocks of 2501.14787v1 p24's display each lit alone; the base's bytes do not change; 21 (the lost
  * class of the release sweep of 2026-11-02): an opening point alone whose next mark is a float's shipped into the stream before
  * the text after it owns what its own region holds to that text (stream.mjs `pastOther`), its ink its unit's groups where it was
- * in none: the base's bytes change where a display is so followed by a float (2 of 65 local papers)
+ * in none: the base's bytes change where a display is so followed by a float (2 of 65 local papers); 22 (the lost class of the release
+ * sweep of 2026-11-02): a text symbol's own glyph — the glyphs from the first of its piece's ink that set its character — is its
+ * unit's text (own.mjs MR 4), marks or not, as a cell's lead symbol's was: the layer draws a text symbol as its character, never
+ * from a crop, and in the placeholders' group it stood under the drawing wherever no other piece of its unit moved on its page
+ * (layer-proto/hide.mjs `moved`: 2610.19159v1 p153u1701's `<`, 1512.03385v1 u321's `{`), and the spell check reads its character;
+ * what a reading took past those glyphs is no ink of its, where the reading begins with them: the base's bytes change where a paper marks a text symbol
  */
-export const REMOVAL = '21'
+export const REMOVAL = '22'

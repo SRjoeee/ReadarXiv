@@ -351,11 +351,34 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     const unit = { pieces: [{ t: 'text', s: 'a F' }, { t: 'ph', src: '\\o' }, { t: 'text', s: ' lner sequence' }] }
     const r = ownOf(pages, { units: [unit] })
     expect(r.units.get(0)?.unhidden).toBe(null)
-    // (one with marks of its own is its placeholder's ink, never the text's)
+    // (one with marks of its own too: the layer draws a text symbol as its character, never from a crop, so its glyph is the text's,
+    // hidden with it wherever the unit is drawn, and the spell check reads its character)
     const marked = [page([{ pt: '0s' }, 'a F', { pt: 'p0.1a' }, 'ø', { pt: 'p0.1b' }, 'lner sequence', { pt: '0e' }])]
     const m = ownOf(marked, { units: [unit] })
-    expect(groupsOf(m, marked)).toEqual({ u0: 'a Flner sequence', 'u0.p': 'ø' })
+    expect(groupsOf(m, marked)).toEqual({ u0: 'a Følner sequence' })
     expect(m.units.get(0)?.unhidden).toBe(null)
+  })
+  it("gives a text symbol's own glyph to its unit's text, marks or not: the layer draws it as its character, so in the placeholders' group it stood under the drawing wherever no other piece of the unit moved (2610.19159v1 p153u1701's \\textless{})", () => {
+    const unit = { pieces: [{ t: 'text', s: 'seed STD ' }, { t: 'ph', src: '\\textless{}' }, { t: 'text', s: ' 0.05 floor' }] }
+    const pages = [page([{ pt: '0s' }, 'seed STD ', { pt: 'p0.1a' }, '<', { pt: 'p0.1b' }, ' 0.05 floor', { pt: '0e' }])]
+    const r = ownOf(pages, { units: [unit] })
+    expect(groupsOf(r, pages)).toEqual({ u0: 'seed STD < 0.05 floor' })
+    expect(r.units.get(0)?.unhidden).toBe(null)
+    // (its own glyph alone: a text symbol sets its character and nothing else, so what a reading took past it is no one's —
+    // 2610.21477v1 u42's closing `\\}`, an opening alone at its unit's end, whose reading ran on to the next box's title)
+    const alone = { pieces: [{ t: 'text', s: 'code ' }, { t: 'ph', src: '\\}' }] }
+    const run = [page([{ pt: '0s' }, 'code ', { pt: '0e' }, { pt: 'p0.1a' }, '}', ' (3) Title', { pt: '1s' }, 'next', { pt: '1e' }])]
+    const g = groupsOf(ownOf(run, { units: [alone, { pieces: [{ t: 'text', s: 'next' }] }] }), run)
+    expect(g.u0).toBe('code }')
+    expect(g['u0.p']).toBeUndefined()
+    expect(g.u1).toBe('next')
+  })
+  it("gives the text symbols a unit opens with, set before its start mark, to its text: an affiliation's `\\{kahe, …\\}` (1512.03385v1 u321, whose \"{\" stood under its drawing in its placeholders' group)", () => {
+    const aff = { kind: 'affiliation', pieces: [{ t: 'ph', src: '\\normalsize' }, { t: 'text', s: '\n' }, { t: 'ph', src: '\\{' }, { t: 'text', s: 'kahe, jian' }, { t: 'ph', src: '\\}' }, { t: 'text', s: '@ms.com' }] }
+    const pages = [page([{ pt: 'bs1' }, '{', { pt: '0s' }, 'kahe, jian}@ms.com', { pt: '0e' }, { pt: 'be1' }])]
+    const r = ownOf(pages, { units: [aff] })
+    expect(groupsOf(r, pages)).toEqual({ u0: '{kahe, jian}@ms.com' })
+    expect(r.units.get(0)?.unhidden).toBe(null)
   })
   it('lets a wrapper set words of its own before its argument (2610.20266v1 p1u0: siamart\'s \\funding)', () => {
     const unit = { kind: 'footnote', pieces: [{ t: 'text', s: 'Submitted 10/2026.\n' }, { t: 'open', id: 1, src: '\\funding{' }, { t: 'text', s: 'Funded by the DFG.' }, { t: 'close', id: 1, src: '}' }] }
