@@ -991,15 +991,56 @@ export function isName(text, prose) {
   const nameWord = w => { const bare = w.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, ''); return !bare || /[0-9]/.test(bare) || /^[A-Z][^a-z]*$/.test(bare) || /^[A-Za-z][a-z]*[A-Z]/.test(bare) || (/^[A-Z][a-z]+$/.test(bare) && proper(bare) && !common(bare)) }
   return words.every(nameWord)
 }
+// ---------------------------------------------------------------- code
+/** a markup token: a word in angle brackets, as a model's special tokens are written (<pad>, </s>, <|endoftext|>) */
+const MARKUP_TOKEN = /^<\/?[^\s<>]+\/?>$/u
+/** the commands a paper sets code in, inline: their argument is the code's text */
+const CODE_COMMAND = /^\\(texttt|verb|Verb|lstinline|code|path|mintinline)(?![A-Za-z])\*?/
+/** a code command's text, from a placeholder's source: its argument (\mintinline's language and an optional argument off),
+ *  braced or between \verb's delimiters, TeX's escapes of the specials read; null for no code command */
+function codeTextOf(src) {
+  const m = CODE_COMMAND.exec(src)
+  if (!m) return null
+  let rest = src.slice(m[0].length)
+  if (m[1] === 'mintinline') rest = rest.replace(/^\s*\{[^}]*\}/, '')
+  rest = rest.replace(/^\s*\[[^\]]*\]/, '').replace(/^\s+(?=\{)/, '')
+  let body = null
+  if (rest.startsWith('{')) {
+    let depth = 0, i = 0
+    for (; i < rest.length; i++) { if (rest[i] === '{') depth++; else if (rest[i] === '}' && --depth === 0) break }
+    body = rest.slice(1, i)
+  } else if (rest.length) { const end = rest.indexOf(rest[0], 1); body = end > 0 ? rest.slice(1, end) : null }
+  if (body === null) return null
+  const text = body.replace(/\\([_&%$#{}])/g, '$1').replace(/\\textless\b\{?\}?/g, '<').replace(/\\textgreater\b\{?\}?/g, '>').replace(/\s+/g, ' ').trim()
+  return text || null
+}
+/** the texts a paper sets as code inline (codeTextOf over every placeholder of every unit, a nested unit's too) */
+export function codeTextsOf(units) {
+  const out = new Set()
+  const walk = pieces => { for (const p of pieces ?? []) { if (p?.t === 'ph' && typeof p.src === 'string') { const c = codeTextOf(p.src); if (c) out.add(c) } else if (p?.t === 'nested') walk(p.unit?.pieces) } }
+  for (const u of units ?? []) walk(u?.pieces)
+  return out
+}
+/**
+ * Whether a short text is code, which keeps its source as a name does: every word a markup token (1706.03762v7's "<pad>", which
+ * Microsoft gave back as a Chinese word for a cushion in angle brackets), or, given `code` (codeTextsOf: a figure's label against the paper's own), a text the paper sets as
+ * code (2610.38366v1's ordering cue `after`, 2608.08350v2's `tanh`). A table's cell is held to the markup tokens alone: a cell's
+ * words that the paper sets as code elsewhere are words there (2608.28697v1's "easy", "middle", "hard")
+ */
+export function isCode(text, code = null) {
+  const t = String(text ?? '').replace(/\s+/g, ' ').trim()
+  if (!t) return false
+  return t.split(' ').every(w => MARKUP_TOKEN.test(w)) || !!code?.has(t)
+}
 const shortUnit = u => u.kind === 'cell' || u.kind === 'figure'
 const textOfUnit = u => u.pieces.filter(p => p.t === 'text').map(p => p.s).join(' ')
 /** the running text isName reads a short text against: every unit's text but a table cell's and a figure's, and a
  *  bibliography's entries none of it (their titles are in title case, their names all proper nouns) */
 export const proseOf = units => units.filter(u => u && !shortUnit(u) && u.kind !== 'reference' && u.kind !== 'refnames').map(textOfUnit).join('\n')
-/** the table cells and figure texts that are only names (isName): they keep their source */
+/** the table cells and figure texts that are only names (isName) or markup tokens (isCode): they keep their source */
 export function nameCells(units) {
   const prose = proseOf(units)
-  return new Set(units.filter(u => shortUnit(u) && isName(textOfUnit(u), prose)))
+  return new Set(units.filter(u => shortUnit(u) && (isName(textOfUnit(u), prose) || isCode(textOfUnit(u)))))
 }
 
 /** what the sentence splitter reads a placeholder as (core/sentences SplitContext; the HTML page reads the node, here
