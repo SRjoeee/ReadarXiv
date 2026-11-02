@@ -191,11 +191,14 @@ describe('our base pages the layout files were made over', () => {
     expect(baseRecordOf(join(i.fixtures, n))).toMatchObject({ inkless: ['\\boldmath'] })
     const { inklessOf } = await import('../../lab/pdf/spikes/layer-gate/wrap.mjs')
     expect(inklessOf(join(i.fixtures, n, 'base.pdf'))).toEqual(['\\boldmath'])
-    // (not distinct sources of 1 to 200 code units, at most 64: refused — Devin on #482)
-    for (const bad of [['\\boldmath', '\\boldmath'], [''], [3], Array.from({ length: 65 }, (_, k) => `\\m${k}`)]) {
+    // (not distinct sources of 1 code unit or more, 65,536 in all at most — INK_BUDGET, MARKS_SCHEMA 15: refused — Devin on #482)
+    for (const bad of [['\\boldmath', '\\boldmath'], [''], [3], [`\\a{${'x'.repeat(32768)}}`, `\\b{${'x'.repeat(32768)}}`]]) {
       withBase(i, 'our base page', { inkless: bad })
       expect(() => baseRecordOf(join(i.fixtures, n))).toThrow(/inkless/)
     }
+    // (more than 64 sources, and one past 200 code units, as the ink section now asks: kept)
+    withBase(i, 'our base page', { inkless: [...Array.from({ length: 65 }, (_, k) => `\\m${k}`), `\\delete{${'x'.repeat(633)}}`] })
+    expect(baseRecordOf(join(i.fixtures, n)).inkless).toHaveLength(66)
   })
   it('packs base.pdf and base.json beside arxiv.pdf where the fixture has them, and none where it has not', () => {
     const i = inputs()
