@@ -10,9 +10,12 @@
 //        apart): no other ink hidden;
 //   D    every drawn figure's band loses ink once its group is hidden: none of its original's ink left under a translation
 //        (no double ink);
-//   O    every drawn figure's band is then one colour (in 16 levels a channel, an edge's pixel in from each side): no stroke, fill
-//        edge or other glyph inside the box its translation is drawn in, which no translation could then cover (no overlap with
-//        the figure's lines);
+//   O    every drawn figure's band is then one colour (in 16 levels a channel, an edge's pixel in from each side) but where a fill
+//        painted before its text changes tone (its ground, figure-text.mjs shapeRoom: PIPELINE 57's rule): each pair of
+//        neighbouring pixels of the band agrees, the pixels within EDGE_PX of such a fill's edges aside. No stroke, glyph, image or
+//        paint over the text inside the box its translation is drawn in, which no translation could then cover (no overlap with
+//        the figure's lines); what lies under the text, a highlight's tones, is the ground the original was set on. `Oflat`, the
+//        count of bands of more than one colour whatever their ground (the check before 57), is reported beside it;
 //   R    every drawn figure's room (its band before its box's start and after its end, figure-text.mjs roomsOf: the free line a
 //        longer translation may take) is then one colour too, so measured: a translation in its room touches no other ink.
 // Each is counted and its failures listed by paper, page and unit; `--check` exits 1 on any. Beside them, each paper's sets
@@ -35,6 +38,7 @@ import { deflateSync, inflateSync } from 'node:zlib'
 import * as PL from '@cantoo/pdf-lib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { fitFigureSet, sameAsSource } from '../../../src/pdf-reader/engine/layer-proto/figure-fit.mjs'
+import { pageInk } from '../../../src/pdf-reader/engine/layout/ink.mjs'
 import { wrapFinal } from '../../../src/pdf-reader/engine/layout/wrap.mjs'
 import { openPaper } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
 import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
@@ -48,6 +52,8 @@ const PDFJS = dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package
 const OPTIONS = { cMapUrl: join(PDFJS, 'cmaps/'), cMapPacked: true, standardFontDataUrl: join(PDFJS, 'standard_fonts/'), verbosity: 0, useSystemFonts: false, isEvalSupported: false, isImageDecoderSupported: false }
 const deflate = b => new Uint8Array(deflateSync(b, { level: 6 })), inflate = (b, l) => new Uint8Array(inflateSync(b, { maxOutputLength: l + 1 }))
 const SCALE = 2, PAD = 2
+/** a ground's tone edge: the pixels within this many device pixels of the edge of a fill painted before a label's text */
+const EDGE_PX = 1.5
 /** the fit rule's last floor, zh's (the layout rules' Hans floorMin, the layer's P.floorMin) */
 const FLOOR = JSON.parse(readFileSync(new URL('../../../src/pdf-reader/engine/rules/layout-rules.json', import.meta.url), 'utf8')).scripts.Hans.floorMin
 /** the model's zh translation of a label: a CJK character for every MODEL_LETTERS of its letters (two at least), its digits kept */
@@ -129,6 +135,37 @@ async function renderer(bytes) {
     close: () => task.destroy(),
   }
 }
+/** the edges of the fills painted before each drawn unit's text, as its ground (figure-text.mjs shapeRoom's `tone`): pageInk's
+ *  figures' reading of the page, the unit found by its first glyph's origin (a level glyph's `boxAt`, a turned glyph's own box,
+ *  the boxes painted before it); its fills of known lines with no stroke, of a colour (no pattern) and painted at an alpha above
+ *  0, their segments (x0, y0, x1, y1 on the page) that meet its band, each with the box the page shows of its fill (its clip's,
+ *  its groups' bounds: pageInk's `cut`), outside which its edge is no edge the page shows. None where its glyph is not found:
+ *  the band is held to one colour */
+function groundEdges(ink, u) {
+  if (!ink) return []
+  const near = (a, b) => Math.abs(a - b) < 0.02
+  let at = -1
+  if (Math.abs(u.uy) < 1e-6 && u.ux > 0) { const g = ink.glyphs.findIndex(x => !x.unseen && near(x.x0, u.x) && near(x.y, u.y)); if (g >= 0) at = ink.boxAt[g] }
+  else { const t = ink.turned.find(x => !x.unseen && x.box >= 0 && near(x.ox, u.x) && near(x.oy, u.y)); if (t) at = t.box }
+  if (at < 0) return []
+  const b = bandOf(u, 0), out = []
+  // (the band on the page, y up: bandOf's box with h 0 is its mirror)
+  const x0 = b[0] / SCALE - 2, x1 = b[2] / SCALE + 2, y0 = -b[3] / SCALE - 2, y1 = -b[1] / SCALE + 2
+  for (let i = 0; i < at; i++) {
+    const sh = ink.shapes.get(i)
+    if (!sh || !sh.fill || sh.stroke || sh.pattern || ink.unseen?.has(i)) continue
+    const B = ink.boxes, shown = ink.cut?.get(i) ?? [B[4 * i], B[4 * i + 1], B[4 * i + 2], B[4 * i + 3]]
+    if (shown[2] < x0 || shown[0] > x1 || shown[3] < y0 || shown[1] > y1) continue
+    for (let k = 0; k + 3 < sh.segs.length; k += 4) out.push({ seg: [sh.segs[k], sh.segs[k + 1], sh.segs[k + 2], sh.segs[k + 3]], shown })
+  }
+  return out
+}
+/** a point's distance to a segment, page units */
+function segDist(px, py, [ax, ay, bx, by]) {
+  const dx = bx - ax, dy = by - ay, l = dx * dx + dy * dy
+  const t = l > 0 ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / l)) : 0
+  return Math.hypot(px - ax - t * dx, py - ay - t * dy)
+}
 /** a unit's band box at SCALE, device pixels, y down */
 function bandOf(u, h) {
   const nx = -u.uy, ny = u.ux, lo = u.descent * u.size, hi = u.ascent * u.size
@@ -160,6 +197,11 @@ for (const id of IDS) {
   if (bare.refused) { console.log(JSON.stringify({ id, refused: `without figures: ${bare.refused}`, why: bare.why })); failed = true; continue }
   let G1u = 0, splitPx = 0
   const A = await renderer(r.bytes), U = await renderer(bare.bytes), F = await renderer(final)
+  // (the final pass's pages as the figures' reading takes them, for the grounds' edges)
+  const inkTask = getDocument({ ...OPTIONS, data: final.slice() })
+  const inkDoc = await inkTask.promise
+  const inkOf = async p => { const page = await inkDoc.getPage(p); const k = pageInk(OPS, await page.getOperatorList(), page.commonObjs, { rotate: page.rotate ?? 0, indices: true, turned: true }); page.cleanup(); return k.rotated || k.capped || k.timedOut ? null : k }
+  let Oflat = 0
   try {
     for (const [p, list] of [...byPage].sort((a, b) => a[0] - b[0])) {
       const on = await A.render(p), plain = await U.render(p), raw = await F.render(p)
@@ -176,6 +218,7 @@ for (const id of IDS) {
       if (apart) splitPx += apart
       if (apart && (most > 16 || apart > 1e-4 * on.width * on.height)) fails.G1.push(`p${p}: ${apart} px, Δ ${most}`)
       const off = await A.render(p, new Set(list.map(u => u.group)))
+      const ink = await inkOf(p)
       const w = on.width, bands = list.map(u => bandOf(u, on.height))
       const lost = new Uint32Array(list.length)
       let outside = 0
@@ -191,15 +234,31 @@ for (const id of IDS) {
         if (!lost[k]) fails.D.push(`p${p} ${u.group} ${JSON.stringify(u.text)}`)
         // (the band itself, in the unit's own frame, a pixel in from each edge: a turned label's box is no page box)
         const b = bands[k], colours = new Set(), h = on.height, inset = 1 / SCALE
+        // (each pixel of the band: its colour, or -1 off the band or on a ground's tone edge)
+        const edges = groundEdges(ink, u), bx = Math.floor(b[0]), by = Math.floor(b[1]), bw = Math.ceil(b[2]) - bx + 1, bh = Math.ceil(b[3]) - by + 1
+        const cell = new Int32Array(bw * bh).fill(-1)
         for (let y = Math.floor(b[1]); y <= Math.ceil(b[3]); y++) for (let x = Math.floor(b[0]); x <= Math.ceil(b[2]); x++) {
           if (x < 0 || y < 0 || x >= w || y >= h) continue
           const px = (x + 0.5) / SCALE - u.x, py = (h - y - 0.5) / SCALE - u.y
           const sAlong = px * u.ux + py * u.uy, tAcross = -px * u.uy + py * u.ux
           if (sAlong < inset || sAlong > u.length - inset || tAcross < u.descent * u.size + inset || tAcross > u.ascent * u.size - inset) continue
-          const o = 4 * (y * w + x)
-          colours.add(`${off.data[o] >> 4},${off.data[o + 1] >> 4},${off.data[o + 2] >> 4}`)
+          const o = 4 * (y * w + x), c = ((off.data[o] >> 4) << 8) | ((off.data[o + 1] >> 4) << 4) | (off.data[o + 2] >> 4)
+          colours.add(c)
+          const X = (x + 0.5) / SCALE, Y = (h - y - 0.5) / SCALE
+          const r = EDGE_PX / SCALE
+          if (edges.some(e => X >= e.shown[0] - r && X <= e.shown[2] + r && Y >= e.shown[1] - r && Y <= e.shown[3] + r && segDist(X, Y, e.seg) <= r)) continue
+          cell[(y - by) * bw + (x - bx)] = c
         }
-        if (colours.size > 1) fails.O.push(`p${p} ${u.group} ${JSON.stringify(u.text)} ${colours.size} colours`)
+        if (colours.size > 1) Oflat++
+        // (two neighbouring pixels of the band, neither on a ground's edge, of two colours: ink inside the band)
+        let split = 0
+        for (let j = 0; j < bh; j++) for (let i = 0; i < bw; i++) {
+          const c = cell[j * bw + i]
+          if (c < 0) continue
+          if (i + 1 < bw && cell[j * bw + i + 1] >= 0 && cell[j * bw + i + 1] !== c) split++
+          if (j + 1 < bh && cell[(j + 1) * bw + i] >= 0 && cell[(j + 1) * bw + i] !== c) split++
+        }
+        if (split) fails.O.push(`p${p} ${u.group} ${JSON.stringify(u.text)} ${split} pixel pairs apart (${colours.size} colours, ${edges.length} ground edges)`)
         // (its room, the band before its start and after its end, the same way: one colour once the figures are hidden)
         const room = new Set()
         const lo = -(u.before ?? 0), hi = u.length + (u.after ?? 0), rb = bandOf({ ...u, x: u.x + u.ux * lo, y: u.y + u.uy * lo, length: hi - lo }, h)
@@ -214,14 +273,14 @@ for (const id of IDS) {
         if (room.size > 1) fails.R.push(`p${p} ${u.group} ${JSON.stringify(u.text)} ${room.size} colours in its room`)
       })
     }
-  } finally { await A.close(); await U.close(); await F.close() }
+  } finally { await A.close(); await U.close(); await F.close(); await inkTask.destroy() }
   const s = r.figures.stats
   // (the fit rule's counts: the model's translations, and Microsoft's where asked)
   const model = fitCounts(drawn, u => modelWidth(u.text), u => /\p{N}/u.test(u.text))
   if (MT && MT_FETCH) await fetchMt(drawn.map(u => u.text))
   const mt = MT ? fitCounts(drawn, u => { const t = mtCache[u.text]; return typeof t === 'string' && t && !sameAsSource(t, u.text) ? textWidth(t) : null }, u => WIDE.test(mtCache[u.text] ?? '') && /[A-Za-z0-9]/.test(mtCache[u.text] ?? '')) : null
   const roomed = drawn.filter(u => (u.before ?? 0) + (u.after ?? 0) > 0).length
-  console.log(JSON.stringify({ id, ms, pages: byPage.size, units: s.units, drawn: s.drawn, crowded: s.crowded, unicode: s.unicode, shared: s.shared, page: s.page, bounds: s.bounds, forms: s.forms, letters: s.letters, sets: s.sets, grouped: s.grouped, aligned: s.aligned, roomed, ledgerFigures: r.ledger.classes.figures ?? null, groups: r.stats.groups, G1u, G1split: splitPx, G1: fails.G1.length, G3f: fails.G3f.length, D: fails.D.length, O: fails.O.length, R: fails.R.length, model, ...(mt ? { mt } : {}) }))
+  console.log(JSON.stringify({ id, ms, pages: byPage.size, units: s.units, drawn: s.drawn, crowded: s.crowded, unicode: s.unicode, shared: s.shared, page: s.page, bounds: s.bounds, forms: s.forms, letters: s.letters, sets: s.sets, grouped: s.grouped, aligned: s.aligned, roomed, ledgerFigures: r.ledger.classes.figures ?? null, groups: r.stats.groups, G1u, G1split: splitPx, G1: fails.G1.length, G3f: fails.G3f.length, D: fails.D.length, O: fails.O.length, Oflat, R: fails.R.length, model, ...(mt ? { mt } : {}) }))
   for (const [k, list] of Object.entries(fails)) for (const f of list.slice(0, 10)) console.log(`  ${k} ${f}`)
   if (CHECK && Object.values(fails).some(l => l.length)) failed = true
 }
