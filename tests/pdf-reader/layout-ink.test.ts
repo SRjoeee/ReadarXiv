@@ -377,6 +377,10 @@ describe('pageInk', () => {
     // (none of them among the marks' points)
     expect(points).toEqual([{ name: '0s', glyph: 3, box: 0 }])
     expect(regionsOfPoints([{ name: 'cde1', glyph: 2 }, { name: 'cds1', glyph: 0 }], 5)).toEqual([])
+    // (a code paragraph TeX broke over a page or a column: its start runs to its column body's end, its end from the next body's
+    // start; a running head before the body and a folio after it are no line of it)
+    expect(regionsOfPoints([{ name: 'bs1', glyph: 2 }, { name: 'cds7', glyph: 5 }, { name: 'be1', glyph: 9 }], 11)).toEqual([{ kind: 'code', from: 5, to: 9 }])
+    expect(regionsOfPoints([{ name: 'bs2', glyph: 2 }, { name: 'cde7', glyph: 6 }, { name: 'cds8', glyph: 6 }, { name: 'cde8', glyph: 8 }, { name: 'be2', glyph: 9 }], 11)).toEqual([{ kind: 'code', from: 2, to: 6 }, { kind: 'code', from: 6, to: 8 }])
     expect([...regionMask([{ kind: 'code', from: 1, to: 3 }, { kind: 'other', from: 0, to: 5 }], 5, 'code')]).toEqual([0, 1, 1, 0, 0])
   })
 
