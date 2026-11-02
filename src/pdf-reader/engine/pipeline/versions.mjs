@@ -454,9 +454,10 @@
 //     holding the band's middle, an image or a shading over the band, painted after the text, covers it). Each of that paper's
 //     attention figures is a crop of a larger plot whose title, "Input-Input Layer5", the form's box hides under its bottom row of
 //     labels, and each token's box per head is a group painted at ca 0: 73 of its 244 labels were crowded, 239 are drawn now. A
-//     run of such glyphs is no unit, as a run the clip cuts is not. Over arXiv's PDFs of 222 papers: 137 labels on 9 papers drawn,
-//     10 covered (7 a hidden copy of a figure, 3 under another panel's background or a picture laid over them); the pack's figure
-//     gate and the 25-paper set's 0 failures (PDF-READER §19.12). The figure units' cut moves, so the rows' identities: raised so.
+//     run of such glyphs is no unit, as a run the clip cuts is not (a glyph by its own ink; a Type 3 glyph as PDF.js draws it, d0
+//     at alpha 1, d1 by what its procedure paints). Over arXiv's PDFs of 222 papers: 137 labels on 9 papers drawn, 10 covered (7
+//     a hidden copy of a figure, 3 under another panel's background or a picture laid over them), 149 runs of invisible text no
+//     units (all crowded before); the pack's figure gate and the 25-paper set's 0 failures (PDF-READER §19.12). The figure units' cut moves, so the rows' identities: raised so.
 //     Every source unit, its pieces and its wire are 54's: a copy of 54 carries every unit (live.mjs PIPELINE_CARRIES), a figure
 //     unit found again by its source (cache.mjs seedFrom)
 export const PIPELINE_VERSION = '55'

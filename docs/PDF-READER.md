@@ -4038,7 +4038,11 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   whole stretches of its attention figures' labels English): a glyph wholly outside the clip in force and any paint at an alpha
   of 0, a constant's or a transparency group's painted at 0 (PDF 11.6.6), are no ink (pageInk's `unseen`, the figures' reading
   alone; its boxes kept, at their index, for every other reader), neither crowding a label nor ending its free line, and a run
-  of such glyphs is no unit, as a run the clip cuts is not; a fill of known lines that holds the band's middle, an image or a
+  of such glyphs is no unit, as a run the clip cuts is not. A glyph is wholly outside by its own ink (its outline across, else
+  its advance); a Type 3 glyph is seen as PDF.js draws it, which runs its procedure whatever the rendering mode: one that begins
+  with d0 at alpha 1 (showType3Text sets both constants so), another by what its procedure paints, the fill's alpha where it
+  fills and the stroke's where it strokes, none where it paints nothing (an invisible text layer); a path's fill and stroke each
+  as far as it shows; a fill of known lines that holds the band's middle, an image or a
   shading over the band, painted after the text (pageInk's `boxAt`), covers it and crowds it. Each of that paper's attention
   figures is a crop of a larger plot whose title, "Input-Input Layer5", the form's box hides under its bottom row of labels,
   and each token's box per head is a group painted at ca 0: 73 of its 244 labels were crowded, 19 by the hidden title (and two
@@ -4054,8 +4058,12 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   another copy is drawn over (2608.05519v1's table drawn twice, its first copy under a white fill; 2608.16745v1's frame under a
   picture), whose translations had stood beside the copy the page shows, and 3 the page does show, 2610.22214v1's two
   subscripts and 2608.05881v1's "Resin-rich layer", read as under another panel's white background painted after it, which
-  the page does not show there: pageInk reads no transparency group's box as a clip, where PDF.js clips the group to it. Nine anchors move with the ink that tells them (1810's
-  "B-PER" and 2212.06817v2's "TokenLearner" and "Transformer" are centred over their boxes now, as the page sets them).
+  the page does not show there: pageInk reads no transparency group's box as a clip, where PDF.js clips the group to it. 149
+  runs are no units now, every one crowded before: 147 an invisible text layer's Type 3 glyphs whose procedures paint nothing
+  (2610.19159v1 94, 2608.20144v1 38, 2608.25210v2 15) and 2608.11605v1's two of text shown at ca 0. No unit drawn before is
+  gone; 224 rooms change, all but one larger (2608.12606v1's "Bint (nT)" shares its line with a label drawn now). Nine anchors
+  move with the ink that tells them (1810's "B-PER" and 2212.06817v2's "TokenLearner" and "Transformer" are centred over their
+  boxes now, as the page sets them).
 - **Its set and its room** (the owner's rule of 2026-10-29, after 2010.11929v2's legends in Chinese: "All" drawn smaller
   than the other entries, "Patch size" starting further right than its column, "Head 3" smaller than "Head 1", each label
   fitted to its own box and anchored by what it read alone; `figure-text.mjs` `setsOf`, `roomsOf`): the labels of one group are set at one size, the original's by default; each keeps the original's alignment
