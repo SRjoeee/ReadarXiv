@@ -178,6 +178,13 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
     }
     expect(pictured(true).why).toBeNull()
     expect(pictured(false).why).toBe('crowded')
+    // (a fill after it that its clip cuts back to beside the word covers none of it: its uncut lines hold the word, its box does not, #555)
+    const beside = { ...word('label', [], [80, 90, 150, 115]), view: [0, 0, 300, 300] }
+    beside.boxes = [80, 90, 95, 115]
+    expect(figureUnitsOf([{ ...beside, boxAt: beside.glyphs.map(() => 0) }] as never, null).units[0]!.why).toBeNull()
+    // (cut back to the word's first half, it covers that half)
+    beside.boxes = [80, 90, 110, 115]
+    expect(figureUnitsOf([{ ...beside, boxAt: beside.glyphs.map(() => 0) }] as never, null).units[0]!.why).toBe('crowded')
     // (painted at an alpha of 0 after it, nothing: no ink over it)
     const pg = { ...word('label', [], [80, 90, 150, 115]), view: [0, 0, 300, 300] }
     expect(figureUnitsOf([{ ...pg, boxAt: pg.glyphs.map(() => 0), unseen: new Set([0]) }] as never, null).units[0]!.why).toBeNull()

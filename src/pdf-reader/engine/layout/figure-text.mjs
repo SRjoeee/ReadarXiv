@@ -595,7 +595,9 @@ function shapeRoom(shape, f, band, along1, free1, e, after = false) {
   const shown = (a, b) => { const p = Math.max(a, e[0] - SHOWN_SLACK), q = Math.min(b, e[2] + SHOWN_SLACK); if (p <= q) free1(p, q) }
   // (a ground: its lines where its box shows them, and its box's own edges, where a clip cuts it short of them)
   const holds = shape.fill && !inside && holdsPoint(shape, f, (band[0] + band[2]) / 2, (band[1] + band[3]) / 2)
-  if (holds && after) along1?.(band[0], band[2])
+  // (painted after the text it covers it as far as its box, its clip's, shows it: its lines uncut may hold the band where its
+  // clip leaves none of it)
+  if (holds && after) { const a = Math.max(band[0], e[0]), b = Math.min(band[2], e[2]); if (a < b) along1?.(a, b) }
   else if (holds && !shape.stroke) { for (const [a, b] of parts) shown(a, b); free1(Math.min(e[0], band[0]), Math.min(e[0], band[0])); free1(Math.max(e[2], band[2]), Math.max(e[2], band[2])); return }
   for (const [a, b] of parts) { along1?.(a, b); shown(a, b) }
 }

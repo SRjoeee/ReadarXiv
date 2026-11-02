@@ -391,7 +391,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     shadingFill: SHADING, paintImageXObject: IMAGE, paintInlineImageXObject: INLINE_IMAGE, paintImageMaskXObject: MASK,
     paintSolidColorImageMask: SOLID_MASK, paintImageXObjectRepeat: IMAGE_REPEAT, paintImageMaskXObjectRepeat: MASK_REPEAT,
     paintImageMaskXObjectGroup: MASK_GROUP, paintInlineImageXObjectGroup: INLINE_GROUP, setRenderingIntent: INTENT,
-    setFillRGBColor: FILL_RGB, setFillTransparent: FILL_NONE, setFillColorN: FILL_N, setCharWidthAndBounds: D1,
+    setFillRGBColor: FILL_RGB, setFillTransparent: FILL_NONE, setFillColorN: FILL_N, setCharWidthAndBounds: D1, setCharWidth: D0,
   } = OPS
   const STROKES = new Set([OPS.stroke, OPS.closeStroke, OPS.fillStroke, OPS.eoFillStroke, OPS.closeFillStroke, OPS.closeEOFillStroke])
   const PAINTS = new Set([...STROKES, OPS.fill, OPS.eoFill])
@@ -439,8 +439,16 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   const addBox = (m, x0, y0, x1, y1, path = -1, alpha = 1) => { if (!known()) return; const b = boxOf(m, x0, y0, x1, y1, s.clip); if (b) put(b[0], b[1], b[2], b[3], path, alpha); else step(1) }
   /** the alpha a fill (or an image, a shading, a group) is painted with now, and a stroke: the alpha constant times the groups' */
   const fillAlpha = () => s.ga * s.ca, strokeAlpha = () => s.ga * s.CA
-  /** a glyph's: its rendering mode's, the fill's where it fills (0, 2), the stroke's where it strokes (1, 2) */
-  const textAlpha = () => { const m = s.tr & 3; return Math.max(m === 0 || m === 2 ? fillAlpha() : 0, m === 1 || m === 2 ? strokeAlpha() : 0) }
+  /** a glyph's: its rendering mode's, the fill's where it fills (0, 2), the stroke's where it strokes (1, 2); a Type 3 glyph whose
+   *  procedure begins with d0 the groups' alone, as PDF.js draws it (showType3Text sets both alpha constants to 1 for it) */
+  const textAlpha = g => {
+    if (s.font?.isType3Font === true && g?.operatorListId !== undefined) {
+      const procs = s.font.charProcOperatorList, proc = procs instanceof Map ? procs.get(g.operatorListId) : procs?.[g.operatorListId]
+      if (proc?.fnArray?.[0] === D0) return s.ga
+    }
+    const m = s.tr & 3
+    return Math.max(m === 0 || m === 2 ? fillAlpha() : 0, m === 1 || m === 2 ? strokeAlpha() : 0)
+  }
   /** whether a box on the page shows nothing of itself inside the clip in force (none of it inside, a hair's slack: an edge on
    *  the clip's is inside) */
   const hiddenByClip = (x0, y0, x1, y1) => !!s.clip && (s.clip[0] > s.clip[2] || s.clip[1] > s.clip[3] || x1 < s.clip[0] - 0.05 || y1 < s.clip[1] - 0.05 || x0 > s.clip[2] + 0.05 || y0 > s.clip[3] + 0.05)
@@ -499,7 +507,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     const level = M[0] * hs > 0 && M[3] > 0 && Math.abs(M[1]) <= LEVEL * Math.abs(M[0])
     if (!level) {
       const had = boxes.length
-      if (!glyphsOnly) addBox(M, Math.min(xa, xb), ty + descent * size, Math.max(xa, xb), ty + ascent * size, -4, turned ? textAlpha() : 1)
+      if (!glyphsOnly) addBox(M, Math.min(xa, xb), ty + descent * size, Math.max(xa, xb), ty + ascent * size, -4, turned ? textAlpha(g) : 1)
       if (turned) turnedGlyph(g, M, hs, xa, xb, ty, ascent, descent, boxes.length > had ? had / 4 : -1)
       return
     }
@@ -520,9 +528,10 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     // (`turned`, the figures' reading: a glyph not wholly inside the clip in force is not shown whole, an included figure's text its
     // viewport cuts off)
     if (turned && outsideClip(Math.min(glyph.x0, glyph.ix0), glyph.bottom, Math.max(glyph.x1, glyph.ix1), glyph.top)) glyph.clipped = true
-    // (and one nothing of which is shown, `unseen`: wholly outside the clip, a cropped plot's title its form's box hides, or
-    // painted at an alpha of 0: no ink a figure's label may be crowded by, nor a label's own)
-    if (turned && (!(textAlpha() > 0) || (glyph.clipped && hiddenByClip(Math.min(glyph.x0, glyph.ix0), glyph.bottom, Math.max(glyph.x1, glyph.ix1), glyph.top)))) glyph.unseen = true
+    // (and one nothing of which is shown, `unseen`: its own ink (its outline, else its advance and its font's band) wholly outside
+    // the clip, a cropped plot's title its form's box hides, or painted at an alpha of 0: no ink a figure's label may be crowded
+    // by, nor a label's own)
+    if (turned && (!(textAlpha(g) > 0) || (glyph.clipped && hiddenByClip(glyph.ix0, glyph.bottom, glyph.ix1, glyph.top)))) glyph.unseen = true
     if (turned) { if (s.formId) glyph.fid = s.formId; if (pictureIds.length) glyph.pid = pictureIds.at(-1) }
     if (finite(glyph.x0, glyph.x1, glyph.y, glyph.top, glyph.bottom, glyph.size, glyph.ix0, glyph.ix1)) {
       if (glyphs.length >= glyphsMax) { over = true; stop = true; return }
@@ -561,20 +570,24 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     // box PDF.js gives no form))
     if (s.clip) {
       const ia = has ? xa + o[0] * s.size * hs : xa, ib = has ? xa + o[2] * s.size * hs : xa
-      const a0 = Math.min(xa, xb, ia, ib), a1 = Math.max(xa, xb, ia, ib)
       const b0 = ty + down * s.size, b1 = ty + up * s.size
-      let X0 = Infinity, Y0 = Infinity, X1 = -Infinity, Y1 = -Infinity
-      for (const [x, y] of [[a0, b0], [a1, b0], [a0, b1], [a1, b1]]) {
-        const X = M[0] * x + M[2] * y + M[4], Y = M[1] * x + M[3] * y + M[5]
-        if (X < X0) X0 = X
-        if (X > X1) X1 = X
-        if (Y < Y0) Y0 = Y
-        if (Y > Y1) Y1 = Y
+      /** a box of text space [a0, a1] across, [b0, b1] up, on the page: its four corners turned with the glyph */
+      const onPage = (a0, a1) => {
+        let X0 = Infinity, Y0 = Infinity, X1 = -Infinity, Y1 = -Infinity
+        for (const [x, y] of [[a0, b0], [a1, b0], [a0, b1], [a1, b1]]) {
+          const X = M[0] * x + M[2] * y + M[4], Y = M[1] * x + M[3] * y + M[5]
+          if (X < X0) X0 = X
+          if (X > X1) X1 = X
+          if (Y < Y0) Y0 = Y
+          if (Y > Y1) Y1 = Y
+        }
+        return [X0, Y0, X1, Y1]
       }
-      if (outsideClip(X0, Y0, X1, Y1)) t.clipped = true
-      if (hiddenByClip(X0, Y0, X1, Y1)) t.unseen = true
+      if (outsideClip(...onPage(Math.min(xa, xb, ia, ib), Math.max(xa, xb, ia, ib)))) t.clipped = true
+      // (nothing of it shown where its own ink, its outline across (else its advance), is wholly outside the clip)
+      if (t.clipped && hiddenByClip(...(has ? onPage(Math.min(ia, ib), Math.max(ia, ib)) : onPage(Math.min(xa, xb), Math.max(xa, xb))))) t.unseen = true
     }
-    if (!(textAlpha() > 0)) t.unseen = true
+    if (!(textAlpha(g) > 0)) t.unseen = true
     if (finite(ox, oy, ex, ey, sz) && turnedOut.length < glyphsMax) turnedOut.push(t)
   }
   /** a figure's painted path as its lines (`turned`): inside a form or a TikZ picture (between the points `zs` and `ze`), its
@@ -603,7 +616,9 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   }
   const shapeOf = (box, op, data) => {
     if (!data || typeof data.length !== 'number' || shapeNumbers + data.length * 2 > SHAPE_NUMBERS_PAGE) return
-    const m = s.ctm, fill = FILLS.has(op), segs = []
+    // (a fill and a stroke each as far as it shows: one painted at an alpha of 0 none of the shape's, `fillStroke` under ca 0 a
+    // stroke alone)
+    const m = s.ctm, fill = FILLS.has(op) && fillAlpha() > 0, stroke = STROKES.has(op) && strokeAlpha() > 0, segs = []
     let x = 0, y = 0, sx = 0, sy = 0, open = false
     const X = (px, py) => m[0] * px + m[2] * py + m[4], Y = (px, py) => m[1] * px + m[3] * py + m[5]
     const close = () => { if (fill && open && (x !== sx || y !== sy)) segs.push(x, y, sx, sy) }
@@ -631,7 +646,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     close()
     if (!segs.every(Number.isFinite)) return
     shapeNumbers += segs.length
-    shapes.set(box, { segs: Float32Array.from(segs), stroke: STROKES.has(op), fill, hw: Math.max(0.25, (s.lw / 2) * Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]))) })
+    shapes.set(box, { segs: Float32Array.from(segs), stroke, fill, hw: Math.max(0.25, (s.lw / 2) * Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]))) })
   }
   /** showText as the canvas runs it (showText, showType3Text): each glyph's origin, its advance, the line moved on */
   const show = arr => {

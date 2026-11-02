@@ -534,6 +534,42 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
     expect(only(plain.glyphs, 'A').unseen).toBeUndefined()
     expect(plain.boxes).toEqual([10, 10, 20, 20])
   })
+  it('a path filled and stroked keeps what shows of each: an invisible fill under a seen stroke is a stroke, and the reverse (#555)', () => {
+    const both = (ca: number, CA: number) => {
+      const r = figureInk(form(alpha(ca, CA), [OPS.constructPath, [OPS.fillStroke, [Float32Array.from([0, 10, 10, 1, 40, 10, 1, 40, 40, 1, 10, 40, 4])], Float32Array.from([10, 10, 40, 40])]]))
+      const shape = r.shapes!.get(0)!
+      return [shape.fill, shape.stroke, r.unseen!.has(0)]
+    }
+    expect(both(1, 1)).toEqual([true, true, false])
+    expect(both(0, 1)).toEqual([false, true, false])
+    expect(both(1, 0)).toEqual([true, false, false])
+    expect(both(0, 0)).toEqual([false, false, true])
+  })
+  it('a glyph is unseen by its own ink against the clip, not its advance: an outline wholly past the clip shows nothing (#555)', () => {
+    // (an outline from 0.5 to 0.7 em across: at x 97 its advance, 97 to 103, crosses the box's edge at 100; its ink, 102 to 104, does not)
+    const o = objs({ ...sy, R: [M, 0.5, 0, L, 0.7, 0, L, 0.7, 0.5, Z] })
+    const r = pageInk(OPS, list(form(...text('cmsy', 10, [1, 0, 0, 1, 97, 40], show(g('R', 600))))), o, { rotate: 0, turned: true })
+    expect(only(r.glyphs, 'R')).toMatchObject({ clipped: true, unseen: true })
+    // (a turned one alike: its outline past the box's top, its advance across it)
+    const t = pageInk(OPS, list(form(...text('cmsy', 10, [0, 1, -1, 0, 50, 97], show(g('R', 600))))), o, { rotate: 0, turned: true }).turned![0]!
+    expect(t).toMatchObject({ clipped: true, unseen: true })
+  })
+  it('a Type 3 glyph whose procedure begins with d0 is drawn at alpha 1 whatever the text\'s, as PDF.js draws it; a group painted at 0 still hides it (#555)', () => {
+    const path = [OPS.fill, [Float32Array.from([0])], Float32Array.from([10, 0, 30, 20])]
+    const procs = new Map<string, { fnArray: number[]; argsArray: unknown[] }>([
+      ['own', { fnArray: [OPS.setCharWidth, OPS.setFillRGBColor, OPS.constructPath], argsArray: [[40, 0], ['#ff0000'], path] }],
+      ['stencil', { fnArray: [OPS.setCharWidthAndBounds, OPS.constructPath], argsArray: [[40, 0, 10, 0, 30, 20], path] }],
+    ])
+    FONTS.t3a = { name: 'T3Alpha', fontMatrix: [0.01, 0, 0, 0.01, 0, 0], isType3Font: true, vertical: false, charProcOperatorList: procs }
+    try {
+      const t = (u: string, id: string) => ({ ...g(u, 40), fontChar: '', operatorListId: id })
+      const shown = (...pre: Op[]) => figureInk([...pre, ...text('t3a', 10, [1, 0, 0, 1, 50, 50], [OPS.setGState, [[['ca', 0]]]], show(t('d', 'own'), t('s', 'stencil')))])
+      const r = shown()
+      expect([only(r.glyphs, 'd').unseen, only(r.glyphs, 's').unseen]).toEqual([undefined, true])
+      const hidden = shown(alpha(0), [OPS.beginGroup, [{}]])
+      expect(only(hidden.glyphs, 'd').unseen).toBe(true)
+    } finally { delete FONTS.t3a }
+  })
 })
 
 // The walk's guards (the census of 2026-10-16: the 2,793 pages of the 124 papers of data/corpus): each an abuse guard twenty
