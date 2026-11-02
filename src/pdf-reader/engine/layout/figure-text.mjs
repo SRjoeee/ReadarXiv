@@ -85,7 +85,8 @@ export const COLUMN_REACH = 3
 export const ROOM_MAX = 6, ROOM_CLEAR = 0.15
 /** a path's segment is told as far as its box shows it, within this many PDF units (its segments are single floats) */
 const SHOWN_SLACK = 0.05
-/** the units a page may hold, at most, and a paper (past them the rest stay the original's, counted) */
+/** the runs that spell a word a page may read as figures' text, at most, and a paper, shown whole or not (past them the rest are
+ *  no figure unit, counted) */
 export const FIGURE_UNITS_PAGE = 400, FIGURE_UNITS_DOC = 4000
 /** a unit's text at most, in code units (a long run is a paragraph some figure holds: cut there, its rest the original's) */
 export const FIGURE_TEXT_MAX = 400
@@ -158,6 +159,8 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
   const fam = new Map()
   const famOf = name => { let f = fam.get(name); if (f === undefined) { f = classifyFont(name ?? '').fam; fam.set(name, f) } return f }
   const units = [], glyphMaps = [], turnedMaps = []
+  // (the runs that spell a word the caps have counted, units or not)
+  let taken = 0
   const stats = { units: 0, crowded: 0, letters: 0, runs: 0, past: 0, clipped: 0, outsized: 0, sets: 0, grouped: 0, aligned: 0 }
   pages.forEach((pg, pi) => {
     // (the page's text lines a unit's column is read from, made once a page and call, of this call's owners)
@@ -202,6 +205,13 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       const text = textOf(r.gs, r.frame)
       if (!WORD.test(text.normalize('NFKC'))) continue
       if (gs.some(x => UNREAD.test(x.u)) || text.length > FIGURE_TEXT_MAX) continue
+      // (the caps count the figures' text the reading takes, every run that spells a word, shown whole or not: what shows of it
+      // never moves where they fall. Where the units alone counted, #555's runs no page shows (2610.19159v1's invisible Type 3
+      // text over its pp. 2-17's pictures) let the cap fall later, in p67's box, and the lines past it that the ink units had
+      // translated became figure units, one of them crowded by its own underscore: English (the sweep of 1e01ce14))
+      if (onPage >= unitsPage || taken >= unitsDoc) { stats.past++; continue }
+      onPage++
+      taken++
       // (a run its clip cuts, or its page's edge, whole or in part, or one painted at an alpha of 0, is not shown whole: no text a
       // translation could stand for, and a row whose origin is off its page no part's reader takes, figure-rows.mjs checkFigures)
       if (r.clipped || gs.some(x => offPage(x.ox, x.oy) || offPage(x.ex, x.ey))) { stats.clipped++; continue }
@@ -209,7 +219,6 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       // scale its size does not tell (2608.08481v1's OriginLab faces, 7 of it tall), a translation drawn at its size would be a
       // tenth of the original, and its row's band no part's reader takes, figure-rows.mjs checkFigures)
       if (gs.some(x => !(x.up <= BAND_MAX && x.down >= -BAND_MAX))) { stats.outsized++; continue }
-      if (onPage >= unitsPage || units.length >= unitsDoc) { stats.past++; continue }
       const f = r.frame, first = gs[0]
       const s0 = 0, s1 = Math.max(...gs.map(x => along(f, x.ex, x.ey)))
       // (its band: its glyphs', at least the line a translation is drawn in, DRAW_BAND: a CJK face's full em)
@@ -225,7 +234,6 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       units.push(u)
       mine.push({ u, r, free: room })
       evidence.at(-1).unit = u
-      onPage++
       stats.units++
       stats.letters += (text.match(/\p{L}/gu) ?? []).length
       for (const x of r.gs) (x.turned ? turnedMap : glyphMap).set(x.i, k)
