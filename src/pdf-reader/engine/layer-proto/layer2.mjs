@@ -1522,6 +1522,9 @@ function finishUnit(out, unit, rects, charsByPage) {
   out.tailOwn = out.tail ? ends : null
 }
 
+/** the kinds of sentence punctuation (markKind's), which TeX never sets twice on purpose: a class's mark of the kind the source's
+ *  own last mark is, right after it, is the source's again (tailOf) */
+const SENTENCE_KINDS = new Set(['stop', 'comma', 'semi', 'colon', 'excl', 'quest'])
 /** the most marks a class sets after a unit's text (amsthm's note: ")."; a run-in head's "." or ":"; a style's stop after a
  *  reference) */
 const TAIL_MAX = 3
@@ -1578,7 +1581,7 @@ export function sourceEndMarks(unit) {
  * The class's own marks after a unit's text, which its source does not write: a theorem's note (amsthm sets
  * "Definition 4.5 (" before the note, its label, and ")." after it, 2610.21084 page 6), a run-in head's full stop, a
  * bibliography style's stop after an entry ("… (2025)."). The characters of its last line after its last content — the last
- * letter or digit its source's words or its label take, or its renderings' last — less the marks its source writes there
+ * letter or digit on its lines, its words' or not, or its renderings' last — less the marks its source writes there
  * itself (sourceEndMarks, as many: its translation writes those), each a punctuation mark in a text font, TAIL_MAX at most,
  * all on that line and none kept. Their ink is the unit's text, hidden with it (layout/own.mjs MR 4c, as the maker's line takes
  * them); tokensOf2 draws them after the translation, each in its own style, in place of its own marks of their kinds:
@@ -1589,17 +1592,28 @@ function tailOf(out, unit, keepSet, ownEnds = sourceEndMarks(unit)) {
   const uc = out.uc
   const real = c => !c.sep && !c.space && /\S/.test(c.ch)
   const lineOf = c => `${c.page}|${c.rect.join()}`
-  const own = new Set(out.matchedKeys), rendered = new Set()
+  const rendered = new Set()
   for (const r of out.values()) for (const c of r?.gap?.chars ?? []) rendered.add(charKey(c))
-  for (const c of out.label?.chars ?? []) own.add(charKey(c))
+  // (its last content: its renderings' last character, or the last letter or digit on its lines, its words' or not — a letter the
+  // alignment leaves unmatched is content all the same: "(see Fig.~\ref{fig:6}d);" sets "6d" as one word, which no word of the
+  // source's matches, and its "d", left out, counted as the first of the source's two end marks, so that the source's own ";"
+  // was read as the class's and drawn again after the translation's, 2610.20595v1 p11's ";;")
   let last = -1
-  uc.forEach((c, i) => { if (real(c) && (rendered.has(charKey(c)) || (own.has(charKey(c)) && /[\p{L}\p{N}]/u.test(c.ch)))) last = i })
+  uc.forEach((c, i) => { if (real(c) && (rendered.has(charKey(c)) || /[\p{L}\p{N}]/u.test(c.ch))) last = i })
   if (last < 0) return null
   const line = lineOf(uc[last])
   if (ownEnds === null) return null
   const after = uc.slice(last + 1).filter(real), ends = ownEnds.length
   if (after.length <= ends) return null
-  const rest = after.slice(ends)
+  // (and no stop, comma, colon, semicolon, exclamation or question mark of the kind the source's own last mark is right after it:
+  // the translation writes that mark, and a second of its kind is no class's to draw — siamart's run-in
+  // \\paragraph{Outline of the proof.} sets "proof..", its \\@addpunct blind to the source's stop, 2610.20266v1. A bracket may close
+  // twice: a note "(Bound (Smith))." ends in its own ")" and the head's)
+  const sentenceKind = ch => SENTENCE_KINDS.has(markKind(ch))
+  let from = ends
+  while (ends > 0 && from < after.length && sentenceKind(ownEnds[ends - 1]) && markKind(after[from].ch) === markKind(ownEnds[ends - 1])) from++
+  const rest = after.slice(from)
+  if (!rest.length) return null
   // (a punctuation mark in a text font, as a class sets its own: a formula's delimiter in a math font is its formula's ink,
   // 1512.03385's Table 1 brackets beside its cells, never the unit's)
   const mark = c => /^\p{P}$/u.test(c.ch) && !c.nu && c.st?.fam !== 'math'
