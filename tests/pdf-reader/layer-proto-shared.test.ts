@@ -28,6 +28,9 @@ const runIn = (chars: number, x1 = 80): Paper => ({
     { id: 1, kind: 'para', lines: [line(1, 250, 'The model is a stack', x1 + 10, 280), line(1, 238, 'of identical layers, each with', 20, 280), line(1, 226, 'two sub-layers and a residual', 20, 280)], chars: 30, at: 0x5100 },
   ],
 })
+/** the same, its page's lines ink on the page as drawn (the paper beside the heading's row ends where the next unit's English
+ *  begins, as on a paper's page: on a white page a slot widens to the text area's edge) */
+const inkedRunIn = (chars: number): Paper => ({ ...runIn(chars), ink: true })
 /** a paragraph (unit 0: two full rows from baseline 250, its last [20, 150] at 226) and its part after a float (unit 1: its
  *  first row [160, 280] on that last row, then two full rows), the paragraph's translation `chars` CJK characters */
 const split = (chars: number): Paper => ({
@@ -116,6 +119,105 @@ describe('a shared line: the next unit\'s first line starts where the translatio
     expect(a![7]).toBeGreaterThan(80)
     expect(b![1]).toBe(250)
     expect(b![6]).toBeCloseTo(a![7] + 10, 1)
+  })
+
+  it('a heading its row holds only below its floor runs on over the row at its size, its text after it (the owner\'s ruling of 2026-11-03: 2610.19159v1 p7)', async () => {
+    // (nine characters for a row of 60 pt, the next unit's English 10 pt after it as ink: in its row alone at 0.725 of its
+    // size, below the floor; now over the next unit's first row at its size, 90 pt, and its text from 10 pt after it)
+    const run = await laid(inkedRunIn(9))
+    const head = (run.stats as unknown as { id: number; f: number }[]).find(r => r.id === 0)!
+    const [a] = linesOf(run, 0)!, [b] = linesOf(run, 1)!
+    expect([head.f, a![6], a![7]]).toEqual([10, 20, 110])
+    expect([b![1], b![6]]).toEqual([250, 120])
+  })
+
+  it('a heading its row cannot hold at all is drawn over the row, not left the original\'s', async () => {
+    // (thirteen characters: past the floor's least, 0.6, in its row alone, so skipped `unfit` and its English left beside its
+    // translated text; 2610.19159v1 p7's "Node-level grading still separates agents." in Japanese, 34 em for 17)
+    const run = await laid(inkedRunIn(13))
+    const head = (run.stats as unknown as { id: number; f: number }[]).find(r => r.id === 0)!
+    expect([head.f, linesOf(run, 0)![0]![7], linesOf(run, 1)![0]![6]]).toEqual([10, 150, 160])
+    expect(run.skipped).toEqual([])
+  })
+
+  it('a heading its row holds shrunk within its floor stays in its row: its text keeps its first line\'s room', async () => {
+    // (eight characters, at 0.825 of its size in its row. Taken over the row wherever a heading fit smaller, its text paid for
+    // it: 1810.04805v2's Russian p4, a heading from 0.85 to 1 and its paragraph, already below its floor, from 0.73 to 0.70)
+    const run = await laid(inkedRunIn(8))
+    const head = (run.stats as unknown as { id: number; f: number }[]).find(r => r.id === 0)!
+    expect([head.f, linesOf(run, 0)![0]![7], linesOf(run, 1)![0]![6]]).toEqual([8.25, 84.02, 94.02])
+  })
+
+  it('a heading laid over the next unit\'s first row, that unit left the original\'s: laid again in its row alone, as before', async () => {
+    // (the next unit's 400 characters fit none of its three rows: unfit, its English standing; the heading is then laid where it
+    // was before the ruling, below its floor in its own row, never over that unit's English first row)
+    const heavy: Paper = { ...inkedRunIn(9), specs: inkedRunIn(9).specs.map(x => (x.id === 1 ? { ...x, chars: 400 } : x)) }
+    const run = await laid(heavy)
+    const head = (run.stats as unknown as { id: number; f: number }[]).find(r => r.id === 0)!
+    expect(linesOf(run, 1)).toBeUndefined()
+    expect([head.f, linesOf(run, 0)![0]![7]]).toEqual([7.25, 83.29])
+    expect((run.skipped as unknown as { id: number; code: string }[]).map(x => [x.id, x.code])).toEqual([[1, 'unfit']])
+  })
+
+  it('a heading before a unit left the original\'s as it is decided (its row not translated) stays in its row, as before', async () => {
+    // (that unit is never laid: its English first row stays where TeX set it, and nothing may run over it. 2610.22065v1 p1's
+    // "and" between two author names kept ran on 2 pt over the second before the next unit's placing was asked)
+    const run = await laid(inkedRunIn(9), P => { P.rows.get(1)!.state = 'failed' })
+    const head = (run.stats as unknown as { id: number; f: number }[]).find(r => r.id === 0)!
+    expect(linesOf(run, 1)).toBeUndefined()
+    expect([head.f, linesOf(run, 0)![0]![7]]).toEqual([7.25, 83.29])
+  })
+
+  it('a heading before a unit one of whose pages fails (left the original\'s unlaid) is laid again in its row alone, as before', async () => {
+    // (the next unit runs on to page 2, which cannot be read: it is refused as its page fails, after its heading was laid over
+    // its first row, so never laid; the heading goes back to its own row, never over that unit's English first row)
+    const base = inkedRunIn(9)
+    const paper: Paper = { ...base, pages: 2, fail: 2, specs: base.specs.map(x => (x.id === 1 ? { ...x, lines: [...x.lines, line(2, 250, 'connection around each of the two', 20, 280)] } : x)) }
+    const run = await laid(paper)
+    const head = (run.stats as unknown as { id: number; f: number }[]).find(r => r.id === 0)!
+    expect(linesOf(run, 1)).toBeUndefined()
+    expect([head.f, linesOf(run, 0)![0]![7]]).toEqual([7.25, 83.29])
+    expect((run.skipped as unknown as { id: number; code: string }[]).map(x => [x.id, x.code])).toEqual([[1, 'page']])
+  })
+
+  it('a heading that begins on the page before keeps its rows: that page\'s pass paints it before the unit after it is laid', async () => {
+    // (its first row at the foot of page 1, its last on page 2 before its text: below its floor in its rows, and not run on over
+    // page 2's row, which could not be undone once painted should the text after it be left the original's)
+    const across: Paper = { ...inkedRunIn(16), name: 'run-in over two pages', pages: 2, specs: [
+      { id: 0, kind: 'heading', lines: [line(1, 30, 'Model', 20, 80), line(2, 250, 'Architecture', 20, 80)], chars: 16, at: 0x4e00 },
+      { ...inkedRunIn(16).specs[1]!, lines: inkedRunIn(16).specs[1]!.lines.map(l => ({ ...l, page: 2 })) },
+    ] }
+    const run = await laid(across)
+    const head = (run.stats as unknown as { id: number; f: number }[]).find(r => r.id === 0)!
+    const a = linesOf(run, 0)!
+    expect([head.f, a.map(l => [l[0], l[7]])]).toEqual([7.5, [[1, 80], [2, 78.2]]])
+    expect(linesOf(run, 1)![0]!.slice(0, 2).concat(linesOf(run, 1)![0]![6])).toEqual([2, 250, 88.2])
+  })
+
+  it('a heading whose text would fall under its floor for it keeps its row, and its text the row\'s room, as before', async () => {
+    // (a text of one row, 110 pt of it for 11 characters: from 10 pt after the heading's row it fits at its size; laid from the
+    // end of the heading run on over the row, only below its floor. No unit is taken under its floor to lift another)
+    const run = await laid({ name: 'run-in, a one-row text', pages: 1, ink: true, specs: [
+      { id: 0, kind: 'heading', lines: [line(1, 250, 'Model', 20, 80)], chars: 9, at: 0x4e00 },
+      { id: 1, kind: 'para', lines: [line(1, 250, 'The model is a stack', 90, 200)], chars: 11, at: 0x5100 },
+    ] })
+    const f = (id: number) => (run.stats as unknown as { id: number; f: number }[]).find(r => r.id === id)!.f
+    expect([f(0), linesOf(run, 0)![0]![7]]).toEqual([7.25, 83.29])
+    expect([f(1), linesOf(run, 1)![0]![6]]).toEqual([10, 93.29])
+  })
+
+  it('three units on one row, the last left the original\'s: the two before it laid back in their rows, as before', async () => {
+    // (the first laid over the second's row, the second over the third's; the third unfit, the second laid again in its row
+    // from the first's end, unfit there, so the first laid back in its own row and the second again from its end)
+    const run = await laid({ name: 'three on a row', pages: 1, ink: true, specs: [
+      { id: 0, kind: 'heading', lines: [line(1, 250, 'Model', 20, 80)], chars: 9, at: 0x4e00 },
+      { id: 1, kind: 'heading', lines: [line(1, 250, 'Architecture', 90, 160)], chars: 10, at: 0x4f00 },
+      { id: 2, kind: 'para', lines: [line(1, 250, 'The model is', 170, 280), line(1, 238, 'of identical layers, each with', 20, 280), line(1, 226, 'two sub-layers and a residual', 20, 280)], chars: 400, at: 0x5100 },
+    ] })
+    const at = (id: number) => linesOf(run, id)![0]!
+    expect([at(0)[6], at(0)[7], at(1)[6], at(1)[7]]).toEqual([20, 83.29, 93.29, 163.62])
+    expect(linesOf(run, 2)).toBeUndefined()
+    expect((run.skipped as unknown as { id: number; code: string }[]).map(x => [x.id, x.code])).toEqual([[2, 'unfit']])
   })
 
   it('a heading left the original\'s (not translated): its text starts where TeX set it', async () => {
