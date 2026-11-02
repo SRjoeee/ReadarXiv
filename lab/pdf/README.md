@@ -417,6 +417,13 @@ to the cross-reference stream; the three TeX Live 2023 ones are the ones before.
 §19.7). 9 new objects. `make` refuses the frozen translations' stamps (PIPELINE 10, 12 and 13: `pipelineOf`), so the pack was
 made by its own steps (`entriesOf`, `makePack`) with the committed manifest's `pipeline` and faces carried; made so from
 `608b7e87`'s own fixtures, they give `608b7e87` again, digest for digest.
+The pack of the code regions (`19d1b559`, layout file schema 6, LAYOUT 32: a page's typed `regions`) is `c9a45bd9`'s with each
+output's `layout.json` and `base.json` made again the same way, and by the same steps. Every base page is byte for byte the one
+before (the region points are set only in a paper that begins a code environment, and none of the pack's does), so no layout
+file holds `regions`. Every layout file and base record is the one `next` 74d7f6a2's engine makes from the same fixtures but
+for its version. They are `c9a45bd9`'s but for 2307.16209v1's: its unit 85, a bibliography entry `noLine` there, is laid. That
+is `next`'s drift since `c9a45bd9` was made, from #550 (PIPELINE 54, a display found by its unit's marks), which kept the
+layout version and so made no pack. 14 new objects.
 Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
 The wrap reads each base's units from its paper's source, so the pack holds that too: `sources/<paper>/source.gz`, one a paper
 (`gate-pack.mjs make --sources=<dir of <paper>/source.gz>`, `data/corpus` by default; a make with a base of ours and no source
