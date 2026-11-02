@@ -664,6 +664,9 @@ export { PIPELINE_VERSION } from './versions.mjs'
  * - 53: 54 finds a display a unit opens with, or one past its end mark that runs to a later unit's opening (layout/stream.mjs
  *   headInk), its ink its unit's for the ledger: the kept blocks and the orphans cut of it go, no source unit's text, pieces or
  *   wire: every unit is carried, an ink unit or a figure unit found again by its source (seedFrom)
+ * - 54: 55 finds an inline placeholder both of whose marks stand on one line on that line whole, and lays a unit on its other
+ *   lines where one line of its anchor's is a formula's row of none of its words (layout/make.mjs phOf `oneLine`, place): the
+ *   layout file's rows move, no source unit's text, pieces or wire: every unit is carried
  */
 const NO_MARKER_HASH = pieces => !pieces.some(p => p.t === 'text' && p.tr && p.s.includes('\\#'))
 const NO_RUN = (pieces, unit = null) => (unit ? formulaRuns(unit.pieces).size === 0 : !holdsUnbalanced(pieces))
@@ -677,7 +680,7 @@ const NO_BOUNDARY = (pieces, unit = null) => (unit ? !boundaryChanges(unit) : Ar
 const NO_DISPLAY_STOP = (pieces, unit = null) => (unit ? !displayStopChanges(unit) : Array.isArray(pieces) && !pieces.some(p => p?.t === 'ph' && displayStop(p.src)))
 const andStop = test => (pieces, unit = null) => test(pieces, unit) && NO_DISPLAY_STOP(pieces, unit)
 const BOUNDARY_AND_STOP = andStop(NO_BOUNDARY)
-export const PIPELINE_CARRIES = { 7: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 8: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 9: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 10: andStop(andStyle(NO_RUN)), 11: andStop(andStyle(NO_RUN)), 12: andStop(NO_STYLE), 13: andStop(NO_STYLE), 14: andStop(NO_STYLE), 15: BOUNDARY_AND_STOP, 16: BOUNDARY_AND_STOP, 17: BOUNDARY_AND_STOP, 18: BOUNDARY_AND_STOP, 19: BOUNDARY_AND_STOP, 20: BOUNDARY_AND_STOP, 21: BOUNDARY_AND_STOP, 22: NO_DISPLAY_STOP, 23: EVERY, 24: EVERY, 25: EVERY, 26: EVERY, 27: EVERY, 28: EVERY, 29: EVERY, 39: EVERY, 40: EVERY, 41: EVERY, 42: EVERY, 43: EVERY, 44: EVERY, 45: EVERY, 46: EVERY, 47: EVERY, 48: EVERY, 49: EVERY, 50: EVERY, 51: EVERY, 52: EVERY, 53: EVERY }
+export const PIPELINE_CARRIES = { 7: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 8: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 9: andStop(andStyle(NO_MARKER_HASH_OR_RUN)), 10: andStop(andStyle(NO_RUN)), 11: andStop(andStyle(NO_RUN)), 12: andStop(NO_STYLE), 13: andStop(NO_STYLE), 14: andStop(NO_STYLE), 15: BOUNDARY_AND_STOP, 16: BOUNDARY_AND_STOP, 17: BOUNDARY_AND_STOP, 18: BOUNDARY_AND_STOP, 19: BOUNDARY_AND_STOP, 20: BOUNDARY_AND_STOP, 21: BOUNDARY_AND_STOP, 22: NO_DISPLAY_STOP, 23: EVERY, 24: EVERY, 25: EVERY, 26: EVERY, 27: EVERY, 28: EVERY, 29: EVERY, 39: EVERY, 40: EVERY, 41: EVERY, 42: EVERY, 43: EVERY, 44: EVERY, 45: EVERY, 46: EVERY, 47: EVERY, 48: EVERY, 49: EVERY, 50: EVERY, 51: EVERY, 52: EVERY, 53: EVERY, 54: EVERY }
 // 1: the typesetting rule wired (typeset/plan.mjs, F2 of 2026-10-02); the versions apart; under xeCJK a paper's own CJK
 //    packages kept from loading and xeCJK's microtype slot set right (scripts.mjs)
 // 2: the original's readings carry its labels and its bibliography, which a draft with none of its own is given — a
