@@ -156,6 +156,20 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
 
   /** a placeholder's class, none for a macro TeX said sets no ink (`inkless`, as the maker reads the marking: make.mjs) */
   const inkClassOf = piece => { const c = classOf(piece); return c === 'macro' && inkless?.has(piece.src) ? null : c }
+  /** the text symbols among a unit's pieces before its first text (white space aside), in order, up to the first piece of ink that is
+   *  none: [{ k, sym }] */
+  const headSymbolsOf = u => {
+    const out = []
+    for (let k = 0; k < (u?.pieces?.length ?? 0); k++) {
+      const piece = u.pieces[k]
+      if (piece?.t === 'text') { if (/\S/.test(typeof piece.s === 'string' ? piece.s : '')) break; continue }
+      if (piece?.t !== 'ph' || !inkClassOf(piece)) continue
+      const sym = symbolText(piece.src)
+      if (sym === null) break
+      out.push({ k, sym })
+    }
+    return out
+  }
   /** whether a unit's pieces open (before any text but white space) with a placeholder of ink that has no mark of its own */
   function opensUnmarked(u, id) {
     if (!Array.isArray(u?.pieces)) return false
@@ -250,6 +264,24 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
     return { glyphs, boxes }
   }
 
+  // ---- a text symbol's own glyph is its unit's text: the layer draws a text symbol as its character, never from a crop, so its ink
+  // is hidden with the text wherever the unit is drawn (a cell's lead symbol's below, a placeholder's in MR 4, a unit's lead's here)
+  /** the text symbols whose own glyph went to their unit's text, by `${id}.${k}`: the spell check reads their characters */
+  const symbolsInText = new Set()
+  /** how many of `glyphs` (a reading's, in stream order) from the first set `text` exactly, character for character (NFKC, white
+   *  space out; a blank glyph passed over); 0 where they do not begin so */
+  const settingOf = (glyphs, text) => {
+    const want = text.normalize('NFKC').replace(/\s/g, '')
+    let n = 0
+    for (let j = 0; j < glyphs.length && n < want.length; j++) {
+      const [p, i] = glyphs[j], t = (pages[p - 1].glyphs[i]?.u ?? '').normalize('NFKC').replace(/\s/g, '')
+      if (!t) continue
+      if (!want.startsWith(t, n)) return 0
+      n += t.length
+      if (n === want.length) return j + 1
+    }
+    return 0
+  }
   // ---- the labels (MR 5): before the placeholders, so that a placeholder's ink is never a label's
   for (const [id, { s }] of textOf) {
     // (a table cell, its start mark `t<id>s`, carries no label: what stands before it on its line is another cell's, a number an
@@ -315,6 +347,15 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       const wordEnd = j => j === lead.glyphs.length || G(j).x0 - G(j - 1).x1 >= 0.2 * Math.max(G(j).size, G(j - 1).size) || !/\S/.test(G(j).u ?? '')
       for (let j = lead.glyphs.length; j > 0; j--) if (wordEnd(j) && isLabelForm(lead.glyphs.slice(0, j).map(([, i]) => pg.glyphs[i].u ?? '').join(''), units[id]?.bracketed === true, form)) { k = j; break }
       if (k) claim({ glyphs: lead.glyphs.slice(0, k) }, `u${id}.l`, 'l')
+      // (past the label, the glyphs that set the unit's leading text symbols, in their order from the first, are its text's: an
+      // affiliation's `\\{kahe, …\\}`, 1512.03385v1 u321, whose "{" stood under its drawing in its placeholders' group)
+      for (const x of headSymbolsOf(units[id])) {
+        const n = settingOf(lead.glyphs.slice(k), x.sym)
+        if (!n) break
+        claim({ glyphs: lead.glyphs.slice(k, k + n) }, `u${id}`, 'p')
+        symbolsInText.add(`${id}.${x.k}`)
+        k += n
+      }
       if (k < lead.glyphs.length) claim({ glyphs: lead.glyphs.slice(k) }, `u${id}.p`, 'p')
       continue
     }
@@ -441,6 +482,20 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
         e = { glyphs: e.glyphs.filter(([p, i]) => !host(gOwn[p - 1][i])), boxes: e.boxes.filter(([p, b]) => !host(bOwn[p - 1][b])) }
       }
     }
+    // (a text symbol's own glyph, those of its ink from the first that set its character, is its unit's text: the layer draws a text
+    // symbol as its character, never from a crop, so its ink is hidden with the text wherever the unit is drawn, as a cell's lead
+    // symbol's is above. In the placeholders' group it stood under the drawing wherever no other piece of the unit moved on its page
+    // (layer-proto/hide.mjs): 2610.19159v1 p153u1701's `<`. A text symbol sets its character and nothing else, so what a reading
+    // took past those glyphs is no ink of its: an opening point alone (`\\}` ends in a control symbol, and has no closing mark) reads
+    // to its unit's next mark, past the box it ends (2610.21477v1 u42's `\\}` took the next box's title, "(3) Extraction Prompt",
+    // into its placeholders' group, hidden wherever another piece of u42 moved on the page). Where the reading does not begin with
+    // the character (a rule's `\\_` under OT1), it is the placeholder's, as before
+    const k = Number(m[3]), piece = units?.[id]?.pieces?.[k], sym = piece?.t === 'ph' ? symbolText(piece.src) : null
+    if (e && sym !== null) {
+      const n = settingOf(e.glyphs, sym)
+      // (the glyphs the placeholder would have taken, as it takes them, given to the text's group instead of its placeholders')
+      if (n > 0) { claim({ glyphs: e.glyphs.slice(0, n) }, `u${id}`, 'p'); symbolsInText.add(`${id}.${k}`); e = null }
+    }
     if (e) claim(e, `u${id}.p`, 'p')
     // a placeholder whose ink cannot be told apart is in the text's range: hidden with it, it could not be kept in place, and the
     // spell check reads no symbol (=, ×, †): its unit is the original's
@@ -545,7 +600,7 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
     if (u.unhidden) continue
     // (a unit the marks name and the units do not: no source to spell it against, so the original's)
     if (units && !units[id]) { u.unhidden = 'marks'; continue }
-    const src = units ? sourceOf(units[id], k => where.has(`p${id}.${k}a`) || where.has(`p${id}.${k}b`), cellLead.has(id)) : null
+    const src = units ? sourceOf(units[id], k => where.has(`p${id}.${k}a`) || where.has(`p${id}.${k}b`), cellLead.has(id), k => symbolsInText.has(`${id}.${k}`)) : null
     if (src !== null && !spells(id, src)) { u.unhidden = 'spell'; spell.push(id); continue }
     const lead = label.get(id)
     if (lead) {
@@ -778,13 +833,14 @@ function slotted(parts, ink) {
 }
 
 /** a unit's source text for the spell check, as spellOf reads it, in parts: its `src` where it has one, else its pieces' — a
- *  placeholder dropped, but a text symbol of no mark of its own (\\o, \\ss: `marked(k)` false), whose ink TeX set among the
- *  text's, its character (in the unit's lead, before any text, only where `lead`: a cell's lead ink taken with its text; any
- *  other unit's lead ink is its label's or its placeholder's, MR 5); and a slot before each wrapper's argument (an `open`
- *  piece: siamart's \\funding{…}), where the macro may set words of its own. Returns { text, bare, parts: [text before the
- *  first slot, …] } (`bare` the text without the symbols: one whose ink an opening alone before it took, `$x$\\o`, is no
- *  text's), or null where there is none */
-function sourceOf(u, marked, lead) {
+ *  placeholder dropped, but a text symbol whose glyph is the text's, its character: one of no mark of its own (\\o, \\ss:
+ *  `marked(k)` false), whose ink TeX set among the text's (in the unit's lead, before any text, only where `lead`: a cell's lead
+ *  ink taken with its text; any other unit's lead ink is its label's or its placeholder's, MR 5), and one whose own glyph MR 4
+ *  or a unit's lead gave the text (`inText(k)`); and a slot before each wrapper's argument (an `open` piece: siamart's
+ *  \\funding{…}), where the macro may set words of its own. Returns { text, bare, parts: [text before the first slot, …] }
+ *  (`bare` the text without the symbols: one whose ink an opening alone before it took, `$x$\\o`, is no text's), or null where
+ *  there is none */
+function sourceOf(u, marked, lead, inText = () => false) {
   if (!u) return null
   if (typeof u.src === 'string') { const t = spellOf(u.src); return { text: t, bare: t, parts: [t] } }
   if (!Array.isArray(u.pieces)) return null
@@ -793,7 +849,7 @@ function sourceOf(u, marked, lead) {
   u.pieces.forEach((p, k) => {
     if (p?.t === 'text') { const s = typeof p.s === 'string' ? p.s : '', t = spellOf(utf8(s)); parts[parts.length - 1] += t; bare += t; if (/\S/.test(s)) opened = true }
     else if (p?.t === 'open') parts.push('')
-    else if (p?.t === 'ph' && !marked(k) && (opened || lead)) { const sym = symbolText(p.src); if (sym !== null) parts[parts.length - 1] += spellOf(sym) }
+    else if (p?.t === 'ph' && ((!marked(k) && (opened || lead)) || inText(k))) { const sym = symbolText(p.src); if (sym !== null) parts[parts.length - 1] += spellOf(sym) }
   })
   return { text: parts.join(''), bare, parts }
 }
