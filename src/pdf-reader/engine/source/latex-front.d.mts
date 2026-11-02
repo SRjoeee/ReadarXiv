@@ -14,6 +14,9 @@ export declare function inMemory(map: Map<string, Uint8Array>): { list(): string
 export declare function loadProject(fsys: ReturnType<typeof inMemory>, main: string, options?: { tables?: boolean }): { units: SourceUnit[]; inFloat: number[]; texOrder: number[] | null; inputenc: string | null; complete: [string, number][]; bibliography: string[] }
 /** the paper's macros that read nothing past their own arguments, as [name, arity], from their definitions in the package's files */
 export declare function completeMacros(files: readonly { file?: string; text: string }[]): [string, number][]
+/** which definitions stand inside another's body (o.k < d.at < o.e), each { at, k, e }: its match's start, its body's first
+ *  character (k > at), the index after its body (-1: none) */
+export declare function definitionsNested(defs: readonly { at: number; k: number; e: number }[]): boolean[]
 /** a main file's \begin{document} and \end{document} as TeX finds them: -1 for `begin` and `body` where it has none */
 export declare function documentBounds(text: string, options?: { lineEnvs?: Set<string> | null; ifs?: Set<string>; ifValues?: Map<string, boolean> | null }): { begin: number; body: number; end: number }
 /** the \usepackage[…]{inputenc} TeX acts on: where it stands and its options, or null */

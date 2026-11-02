@@ -462,15 +462,23 @@ function sameBag(a, b) {
   for (const w of b) { const k = m.get(w); if (!k) return false; m.set(w, k - 1) }
   return true
 }
-/** the longest common run of two word lists, in order; null past PAGE_CELLS */
-function commonCount(a, b) {
+/** the longest common run of two word lists, in order; null past PAGE_CELLS (the two whole lists' counts, as before). The words
+ *  both lists begin with, and those they end with, are in a longest run: it is they and the longest run of what lies between,
+ *  which alone is compared word against word. Our page is arXiv's word for word where the paper compiles alike (every page of six
+ *  papers measured on 2026-11-02): no word is left between, where each page cost its two counts' product (2610.38516v1: 48
+ *  million cells) */
+export function commonCount(a, b) {
   if (a.length * b.length > PAGE_CELLS) return null
-  let prev = new Uint32Array(b.length + 1), cur = new Uint32Array(b.length + 1)
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) cur[j] = a[i - 1] === b[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1])
+  let lo = 0, endA = a.length, endB = b.length
+  while (lo < endA && lo < endB && a[lo] === b[lo]) lo++
+  while (endA > lo && endB > lo && a[endA - 1] === b[endB - 1]) { endA--; endB-- }
+  const m = endA - lo, n = endB - lo
+  let prev = new Uint32Array(n + 1), cur = new Uint32Array(n + 1)
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) cur[j] = a[lo + i - 1] === b[lo + j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1])
     ;[prev, cur] = [cur, prev]
   }
-  return prev[b.length]
+  return lo + (a.length - endA) + prev[n]
 }
 
 /**
