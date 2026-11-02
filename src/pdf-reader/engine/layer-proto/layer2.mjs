@@ -1589,11 +1589,14 @@ function tailOf(out, unit, keepSet, ownEnds = sourceEndMarks(unit)) {
   const uc = out.uc
   const real = c => !c.sep && !c.space && /\S/.test(c.ch)
   const lineOf = c => `${c.page}|${c.rect.join()}`
-  const own = new Set(out.matchedKeys), rendered = new Set()
+  const rendered = new Set()
   for (const r of out.values()) for (const c of r?.gap?.chars ?? []) rendered.add(charKey(c))
-  for (const c of out.label?.chars ?? []) own.add(charKey(c))
+  // (its last content: its renderings' last character, or the last letter or digit on its lines, its words' or not — a letter the
+  // alignment leaves unmatched is content all the same: "(see Fig.~\ref{fig:6}d);" sets "6d" as one word, which no word of the
+  // source's matches, and its "d", left out, counted as the first of the source's two end marks, so that the source's own ";"
+  // was read as the class's and drawn again after the translation's, 2610.20595v1 p11's ";;")
   let last = -1
-  uc.forEach((c, i) => { if (real(c) && (rendered.has(charKey(c)) || (own.has(charKey(c)) && /[\p{L}\p{N}]/u.test(c.ch)))) last = i })
+  uc.forEach((c, i) => { if (real(c) && (rendered.has(charKey(c)) || /[\p{L}\p{N}]/u.test(c.ch))) last = i })
   if (last < 0) return null
   const line = lineOf(uc[last])
   if (ownEnds === null) return null
