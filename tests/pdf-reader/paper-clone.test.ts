@@ -25,7 +25,15 @@ const SOURCES: Record<string, () => Map<string, Uint8Array>> = {
     '\\begin{table}\\centering\\begin{tabular}{ll}Name & Value\\\\ First & 1\\end{tabular}\\caption{A table.}\\end{table}',
     '\\begin{recall}A theorem of a name the paper defines.\\end{recall}', '\\end{document}', '',
   ].join('\n'))]]),
+  // (a table of models' names: cells the kept Set holds, the units themselves)
+  'a table of names, its cells kept': () => new Map([['main.tex', enc([
+    '\\documentclass{article}', '\\begin{document}', '\\section{Results}', 'We compare the models below on the benchmark.',
+    '\\begin{table}\\centering\\begin{tabular}{lc}Model & Accuracy\\\\ BERT & 84.1\\\\ RoBERTa & 87.3\\\\ XLNet & 86.0\\end{tabular}\\caption{Accuracy of each model.}\\end{table}',
+    '\\end{document}', '',
+  ].join('\n'))]]),
 }
+/** the kept cells each source holds at least: the clone's identity check of them is no empty loop */
+const KEPT: Record<string, number> = { 'a table of names, its cells kept': 3 }
 
 /** where a graph holds what a structured clone would not give back as itself, or null */
 function notPlain(root: unknown): string | null {
@@ -78,8 +86,9 @@ describe('openPaper\'s paper is plain data but for its fsys: a structured clone 
       expect(graphDiff(clone, rest)).toBeNull()
       // (the kept cells are the units themselves, and the units the project's: the clone keeps both)
       expect(clone.units).toBe(clone.project.units)
+      expect(clone.kept.size).toBe(rest.kept.size)
+      expect(rest.kept.size).toBeGreaterThanOrEqual(KEPT[name] ?? 0)
       for (const u of clone.kept) expect(clone.units.includes(u)).toBe(true)
-      expect(rest.kept.size).toBeGreaterThanOrEqual(0)
     })
   }
   it('the check sees what a clone would not give back: a function, an object of a class, an accessor', () => {
