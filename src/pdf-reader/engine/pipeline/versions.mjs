@@ -542,6 +542,11 @@ export const PDFJS = '6.3.289'
  * base's bytes and the head's `labelKept` change where a paper's head names one (4 of 66 local papers, 9 labels); 20
  * (the owner's report of 2026-11-02 on 2501.14787v1 p24): the ink of a display its unit opens with, which the marking passes over
  * (stream.mjs headInk), is its unit's for the ledger (own.mjs `leads`, wrap.mjs), in no group: no ink unit nor kept block is made
- * of it, where three kept blocks of 2501.14787v1 p24's display each lit alone; the base's bytes do not change
+ * of it, where three kept blocks of 2501.14787v1 p24's display each lit alone; the base's bytes do not change; 22 (21 is #558's, the
+ * display past a float): a text symbol's own glyph — the glyphs from the first of its piece's ink that set its character — is its
+ * unit's text (own.mjs MR 4), marks or not, as a cell's lead symbol's was: the layer draws a text symbol as its character, never
+ * from a crop, and in the placeholders' group it stood under the drawing wherever no other piece of its unit moved on its page
+ * (layer-proto/hide.mjs `moved`: 2610.19159v1 p153u1701's `<`, 1512.03385v1 u321's `{`), and the spell check reads its character;
+ * what a reading took past those glyphs stays the placeholder's: the base's bytes change where a paper marks a text symbol
  */
-export const REMOVAL = '20'
+export const REMOVAL = '22'
