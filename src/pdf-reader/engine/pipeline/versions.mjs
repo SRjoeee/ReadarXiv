@@ -491,13 +491,21 @@
 //     papers laid whole that were the original's (2610.20507v1's u21, its display (16) before Figure 3; 2610.21288v1's u30, its
 //     display (12) before Figure 2), none the other way, every other unit's rows as they were. No source unit's text, pieces or
 //     wire changes: a copy of 56 carries every unit (live.mjs PIPELINE_CARRIES)
+// 58 (the owner's option A of 2026-11-02, 1706.03762v7's last 5 labels): a fill of known lines and no stroke painted before a
+//     figure's text is the ground it was set on, whatever its edges: one inside the label's band is a change of tone under the
+//     text and crowds nothing (layout/figure-text.mjs shapeRoom `tone`); beside the box it tells the anchor and ends the free
+//     line as before. Measured: the pack's 1706.03762v7 every label drawn (239 -> 244), 1512.03385v1 +5, 2608.04322v1 +9; 24 of
+//     the 25-paper set +37 on 9 papers; the figure gate's G1, G3f, D, O (its tone edges a ground's, PDF-READER §19.12) and R 0;
+//     over arXiv's PDFs of 222 papers 331 labels on 51 papers drawn, none lost, no anchor, set or room moved. The
+//     figure units' cut moves, so the rows' identities: raised so. Every source unit, its pieces and its wire are 57's: a copy
+//     of 57 carries every unit (live.mjs PIPELINE_CARRIES), a figure unit found again by its source (cache.mjs seedFrom)
 // 59 (the owner's option A of 2026-11-02: every figure label translated, a token of code kept): a figure unit is KEPT where it is
 //     code (translate/mt.mjs isCode): every word a markup token in angle brackets (1706.03762v7's "<pad>", which Microsoft gave
 //     back as a word, and "<EOS>"; 2503.06072v3's "<think>"), or a text the paper sets as code (codeTextsOf: \texttt, \verb,
 //     \lstinline, \code, \path, \mintinline, \Verb); a table's cell keeps a markup token too (nameCells), never a word the paper
 //     sets as code elsewhere. Over 243 local sources every cell kept as before; over the corpus's figure labels of those papers
-//     101 newly kept on 12 papers, none other moved. 58 is #560's. The figure units' flags move, so the rows'
-//     identities: raised so. Every source unit, its pieces and its wire are 57's: a copy of 57 carries every unit (live.mjs
+//     101 newly kept on 12 papers, none other moved. The figure units' flags move, so the rows'
+//     identities: raised so. Every source unit, its pieces and its wire are 58's: a copy of 58 carries every unit (live.mjs
 //     PIPELINE_CARRIES)
 export const PIPELINE_VERSION = '59'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
