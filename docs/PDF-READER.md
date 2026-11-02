@@ -4100,12 +4100,16 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   "TokenLearner" and "Transformer" are centred over their boxes now, as the page sets them).
 - **A fill under the text is its ground, whatever its edges** (PIPELINE 58, the owner's option A of 2026-11-02: with the figures'
   text on, every label is translated; the 5 labels 56 left English on 1706.03762v7 were crossed by the edges of highlighted
-  tokens' boxes): a fill of known lines and no stroke, painted before the text, is the ground the original was set on, its
-  edges inside the band a change of tone under the text that crowds nothing (`figure-text.mjs` shapeRoom's `tone`); beside the
-  box its edges still tell the anchor and end the free line, so that a translation stays on its tone. A stroke, a glyph, an
-  image, a shading, and anything painted after the text crowd as before. The figure gate's O check judges the band so: each
+  tokens' boxes): a fill of known lines and no stroke, of a colour or a shading pattern, painted before the text, is the ground
+  the original was set on, its edges inside the band a change of tone under the text that crowds nothing (`figure-text.mjs`
+  shapeRoom's `tone`); beside the box its edges still tell the anchor and end the free line, so that a translation stays on its
+  tone, a slanted edge split at the box's ends. A stroke, a glyph, an image, a shading, anything painted after the text, and the
+  edge of a tiling pattern's fill (pageInk's `pattern`, PDF.js's ["TilingPattern", …]: its cells paint what is not read, a
+  hatching's lines) crowd as before; a tiling pattern's fill that holds the band stays its ground, as before (2608.27728v1's
+  white backgrounds are tiled: taking them for no ground lost labels drawn before). The figure gate's O check judges the band so: each
   pair of neighbouring pixels agrees once the figures are hidden, but within 1.5 device pixels of the edge of such a fill
-  (its segments from pageInk's figures' reading, the label found by its first glyph's origin), where the tone may change; the
+  where the page shows the fill (its segments from pageInk's figures' reading, inside its clip's and groups' box, `cut`; the
+  label found by its first glyph's origin), where the tone may change; the
   old check's count, any band of two colours, is reported as `Oflat`. Run with every label drawn whatever its crowding (a lab
   control), the new O still flags every band a stroke, a picture or a card crosses (1512.03385v1's "110-layer", 1810.04805v2's
   seven "BERT"s, 2608.04322v1's "HEx-PHI"), and excuses only bands whose sole change of colour is such an edge. Measured: on
