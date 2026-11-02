@@ -485,12 +485,16 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
     // (a text symbol's own glyph, those of its ink from the first that set its character, is its unit's text: the layer draws a text
     // symbol as its character, never from a crop, so its ink is hidden with the text wherever the unit is drawn, as a cell's lead
     // symbol's is above. In the placeholders' group it stood under the drawing wherever no other piece of the unit moved on its page
-    // (layer-proto/hide.mjs): 2610.19159v1 p153u1701's `<`. What a reading took past those glyphs stays the placeholder's, as before)
+    // (layer-proto/hide.mjs): 2610.19159v1 p153u1701's `<`. A text symbol sets its character and nothing else, so what a reading
+    // took past those glyphs is no ink of its: an opening point alone (`\\}` ends in a control symbol, and has no closing mark) reads
+    // to its unit's next mark, past the box it ends (2610.21477v1 u42's `\\}` took the next box's title, "(3) Extraction Prompt",
+    // into its placeholders' group, hidden wherever another piece of u42 moved on the page). Where the reading does not begin with
+    // the character (a rule's `\\_` under OT1), it is the placeholder's, as before
     const k = Number(m[3]), piece = units?.[id]?.pieces?.[k], sym = piece?.t === 'ph' ? symbolText(piece.src) : null
     if (e && sym !== null) {
       const n = settingOf(e.glyphs, sym)
       // (the glyphs the placeholder would have taken, as it takes them, given to the text's group instead of its placeholders')
-      if (n > 0) { claim({ glyphs: e.glyphs.slice(0, n) }, `u${id}`, 'p'); symbolsInText.add(`${id}.${k}`); e = { glyphs: e.glyphs.slice(n), boxes: e.boxes } }
+      if (n > 0) { claim({ glyphs: e.glyphs.slice(0, n) }, `u${id}`, 'p'); symbolsInText.add(`${id}.${k}`); e = null }
     }
     if (e) claim(e, `u${id}.p`, 'p')
     // a placeholder whose ink cannot be told apart is in the text's range: hidden with it, it could not be kept in place, and the

@@ -364,13 +364,14 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     const r = ownOf(pages, { units: [unit] })
     expect(groupsOf(r, pages)).toEqual({ u0: 'seed STD < 0.05 floor' })
     expect(r.units.get(0)?.unhidden).toBe(null)
-    // (its own glyph alone: what a reading took past the glyphs that set its character stays the placeholder's, as before —
+    // (its own glyph alone: a text symbol sets its character and nothing else, so what a reading took past it is no one's —
     // 2610.21477v1 u42's closing `\\}`, an opening alone at its unit's end, whose reading ran on to the next box's title)
     const alone = { pieces: [{ t: 'text', s: 'code ' }, { t: 'ph', src: '\\}' }] }
     const run = [page([{ pt: '0s' }, 'code ', { pt: '0e' }, { pt: 'p0.1a' }, '}', ' (3) Title', { pt: '1s' }, 'next', { pt: '1e' }])]
     const g = groupsOf(ownOf(run, { units: [alone, { pieces: [{ t: 'text', s: 'next' }] }] }), run)
     expect(g.u0).toBe('code }')
-    expect(g['u0.p'] ?? '').not.toContain('}')
+    expect(g['u0.p']).toBeUndefined()
+    expect(g.u1).toBe('next')
   })
   it("gives the text symbols a unit opens with, set before its start mark, to its text: an affiliation's `\\{kahe, …\\}` (1512.03385v1 u321, whose \"{\" stood under its drawing in its placeholders' group)", () => {
     const aff = { kind: 'affiliation', pieces: [{ t: 'ph', src: '\\normalsize' }, { t: 'text', s: '\n' }, { t: 'ph', src: '\\{' }, { t: 'text', s: 'kahe, jian' }, { t: 'ph', src: '\\}' }, { t: 'text', s: '@ms.com' }] }
