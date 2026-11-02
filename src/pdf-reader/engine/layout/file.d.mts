@@ -50,7 +50,7 @@ export declare const REGION_KINDS: readonly ['code']
 export declare const REGIONS_ALL: number
 /** prep/<mid>/layout-<sha256>.json (spec §4.2). arXiv's PDF units, each page unrotated, y up, pages 1-based */
 export interface LayoutFile {
-  schema: 5
+  schema: 6
   layout: string
   pdfjs: string
   paper: { id: string; version: number; pages: number }

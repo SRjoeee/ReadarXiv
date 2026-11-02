@@ -183,8 +183,8 @@ const envDefinitionsOf = texts => {
   const define = (name, def, provide) => { if (!(provide && out.has(name))) out.set(name, def) }
   for (const t of texts.map(uncommented)) {
     const at = []
-    for (const m of t.matchAll(LISTING_DEFINERS)) at.push([m.index, () => define(m[1].trim(), { listing: true }, /^\\Provide/.test(m[0]))])
-    for (const m of t.matchAll(NEWMINTED)) { const name = m[1]?.trim() || `${m[2].trim()}code`; at.push([m.index, () => { define(name, { listing: true }); define(`${name}*`, { listing: true }) }]) }
+    for (const m of t.matchAll(LISTING_DEFINERS)) at.push([m.index, () => define(m[1].trim(), { listing: true, typeset: true }, /^\\Provide/.test(m[0]))])
+    for (const m of t.matchAll(NEWMINTED)) { const name = m[1]?.trim() || `${m[2].trim()}code`; at.push([m.index, () => { define(name, { listing: true, typeset: true }); define(`${name}*`, { listing: true, typeset: true }) }]) }
     for (const m of t.matchAll(LET_VERBATIM)) at.push([m.index, () => define(m[1], { listing: true })])
     for (const m of t.matchAll(ENV_DEFINERS)) {
       const doc = m[0].includes('DocumentEnvironment'), name = m[1].trim()
@@ -201,6 +201,10 @@ const envDefinitionsOf = texts => {
 }
 /** the code environments a package defines, whose body the paper's own may open (codeEnvsOf) */
 const LISTINGS = new Set(['verbatim', 'Verbatim', 'BVerbatim', 'LVerbatim', 'lstlisting', 'minted', 'alltt', 'tcblisting'])
+/** those whose lines a listing package sets itself, line by line (listings', fancyvrb's and minted's, tcolorbox's over listings):
+ *  the layout compile marks their lines by the package's own line hooks, never by the environment's (a box's title or a listing's
+ *  caption, set inside the environment, is prose; layout/marks.mjs regionsTex) */
+const PACKAGE_LINES = new Set(['Verbatim', 'BVerbatim', 'LVerbatim', 'lstlisting', 'minted', 'tcblisting'])
 /**
  * The environments a paper defines as code (envDefinitionsOf, by their last definition), whose body stays as the paper
  * has it and is never a unit, as a listing package's own are not (SKIP_ENVS): `code`, one a listing package's definer
@@ -216,6 +220,8 @@ const LISTINGS = new Set(['verbatim', 'Verbatim', 'BVerbatim', 'LVerbatim', 'lst
  */
 const codeEnvsOf = defs => {
   const code = new Set([...defs].filter(([, d]) => d.listing).map(([name]) => name)), lines = new Set(code)
+  // (`typeset`: those whose lines a listing package sets, one its definer made or one that opens one: PACKAGE_LINES)
+  const typeset = new Set([...defs].filter(([, d]) => d.typeset).map(([name]) => name))
   const opened = new Map()
   for (const [name, d] of defs) {
     if (d.begin === undefined) continue
@@ -229,9 +235,10 @@ const codeEnvsOf = defs => {
     for (const [name, names] of opened) {
       if (!code.has(name) && names.some(n => LISTINGS.has(n) || code.has(n))) { code.add(name); found = true }
       if (!lines.has(name) && names.some(n => (LISTINGS.has(n) && LINE_ENVS.test(n)) || lines.has(n))) { lines.add(name); found = true }
+      if (!typeset.has(name) && names.some(n => PACKAGE_LINES.has(n) || typeset.has(n))) { typeset.add(name); found = true }
     }
   }
-  return { code, lines }
+  return { code, lines, typeset }
 }
 /** whether `env` is read by lines (LINE_ENVS, or the paper's own `lineEnvs`: by its name, a star in it as defined
  *  (`\\DefineVerbatimEnvironment{Code*}`), or by the name its star is added to) */
@@ -2723,7 +2730,9 @@ function readProject(fsys, main, tables, sourceText, own) {
   // of their bodies as a code region (layout/marks.mjs regionsTex), so that every reader keeps its text as the paper has it)
   const begun = new Set(ownTexts.flatMap(t => [...uncommented(t).matchAll(/\\begin\s*\{\s*([^{}\s]+)\s*\}/g)].map(m => m[1])))
   const codeEnvNames = [...new Set([...LISTINGS, ...codeEnvs.code])].filter(n => begun.has(n)).sort()
-  return { main: mainFile.rel, files, units, inFloat, texOrder, skipped, fits: ctx.fits, lineEnvs, codeEnvs: codeEnvNames, inputenc: enc ?? null, transcode, complete: completeMacros(own), bibliography: ctx.bibliography }
+  // (and those whose own body the compile marks, the environment's hook: the others' lines a listing package sets, by its hooks)
+  const codeBodies = codeEnvNames.filter(n => !PACKAGE_LINES.has(n) && !codeEnvs.typeset.has(n))
+  return { main: mainFile.rel, files, units, inFloat, texOrder, skipped, fits: ctx.fits, lineEnvs, codeEnvs: codeEnvNames, codeBodies, inputenc: enc ?? null, transcode, complete: completeMacros(own), bibliography: ctx.bibliography }
 }
 
 /** whether bytes of TeX hold a ] outside every group and not escaped: one that would close an optional argument */

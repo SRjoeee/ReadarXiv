@@ -1020,7 +1020,10 @@ const BACKREF_TEX = [
  * (latex-front.mjs codeEnvsOf, the listing packages' own: `codeEnvs`) between two points, `cds<n>` and `cde<n>`
  * (layout/ink.mjs REGION_POINT), so that every reader knows that text as code by what TeX was told, never by its face, and keeps
  * it as the paper has it wherever it stands (an mdframed box TikZ draws, 2610.19159v1's transcripts: a picture's text, cut into
- * figure units word by word and translated). Each environment's begin hook sets a flag its group ends; inside it LaTeX's
+ * figure units word by word and translated). Each environment whose own body is the code (`bodies`: verbatim, alltt, one of the
+ * paper's own that sets typewriter type with its lines obeyed) has its begin hook set a flag its group ends; listings sets it at its
+ * own start (its Init hook: a listing, tcolorbox's over listings, never its box's title), and fancyvrb's lines (minted's) are marked
+ * one by one inside their boxes, around \FancyVerbFormatLine; with the flag on, LaTeX's
  * para/begin hook sets the start point at a line's paragraph's start and para/end the end point at its end, in horizontal mode,
  * the glue, kerns and penalties last taken off and put back after it (\axt@take, as a closing mark's), so that no place to break
  * is made or lost; fancyvrb's lines (minted's too), each an \hbox set in vertical mode, get them inside the box, around
@@ -1030,16 +1033,16 @@ const BACKREF_TEX = [
  * \addvspace. A test document of every kind (verbatim, alltt, fancyvrb, listings, an environment of the paper's own with
  * \obeylines in an mdframed box): each of its 354 glyphs where it was, every code line between its two points
  */
-export function regionsTex(codeEnvs) {
+export function regionsTex(codeEnvs, bodies = codeEnvs) {
   if (!codeEnvs?.length) return ''
   return [
     '\\makeatletter\\newif\\ifaxt@code\\newif\\ifaxt@cdin\\gdef\\axt@cdn{0}',
     '\\def\\axt@cdopen{\\ifaxt@off\\else\\xdef\\axt@cdn{\\the\\numexpr\\axt@cdn+1\\relax}\\axt@point{cds\\axt@cdn}\\global\\axt@cdintrue\\fi}',
     '\\def\\axt@cdclose{\\ifaxt@cdin\\global\\axt@cdinfalse\\relax\\let\\axt@back\\@empty\\axt@take\\axt@point{cde\\axt@cdn}\\axt@back\\fi}',
-    '\\def\\axt@fvwrap{\\ifdefined\\FancyVerbFormatLine\\let\\axt@fvfl\\FancyVerbFormatLine\\def\\FancyVerbFormatLine##1{\\ifaxt@code\\axt@cdopen\\axt@fvfl{##1}\\axt@cdclose\\else\\axt@fvfl{##1}\\fi}\\fi}',
-    '\\def\\axt@lstwrap{\\ifdefined\\lst@MakeCaption\\let\\axt@lstmc\\lst@MakeCaption\\def\\lst@MakeCaption##1{\\edef\\axt@cdwas{\\ifaxt@code1\\else0\\fi}\\axt@codefalse\\axt@lstmc{##1}\\ifnum\\axt@cdwas=1 \\axt@codetrue\\fi}\\fi}',
+    '\\def\\axt@fvwrap{\\ifdefined\\FancyVerbFormatLine\\let\\axt@fvfl\\FancyVerbFormatLine\\def\\FancyVerbFormatLine##1{\\axt@cdopen\\axt@fvfl{##1}\\axt@cdclose}\\fi}',
+    '\\def\\axt@lstwrap{\\ifdefined\\lst@AddToHook\\lst@AddToHook{Init}{\\axt@codetrue}\\fi\\ifdefined\\lst@MakeCaption\\let\\axt@lstmc\\lst@MakeCaption\\def\\lst@MakeCaption##1{\\edef\\axt@cdwas{\\ifaxt@code1\\else0\\fi}\\axt@codefalse\\axt@lstmc{##1}\\ifnum\\axt@cdwas=1 \\axt@codetrue\\fi}\\fi}',
     '\\ifdefined\\AddToHook\\AddToHook{para/begin}{\\ifaxt@code\\axt@cdopen\\fi}\\AddToHook{para/end}{\\axt@cdclose}\\AddToHook{begindocument/end}{\\axt@fvwrap\\axt@lstwrap}',
-    ...codeEnvs.map(n => `\\AddToHook{env/${n}/begin}{\\axt@codetrue}`),
+    ...bodies.map(n => `\\AddToHook{env/${n}/begin}{\\axt@codetrue}`),
     '\\fi\\makeatother',
   ].join('')
 }

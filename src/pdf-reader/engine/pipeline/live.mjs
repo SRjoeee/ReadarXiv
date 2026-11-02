@@ -442,7 +442,7 @@ export function originalFiles({ fsys, project: read, meta }, { lines = false, sp
     patched = spans ? new Map(out) : null
   }
   const dvi = dviEngine(meta?.compiler)
-  const head = DRAFT + MARK_DEF + (dvi ? DVI_MARK_DEF : '') + (layout ? LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + (names ? '' : NAMES_OFF) + regionsTex(project.codeEnvs) : '') + END_TEX + (lines ? LINES_TEX : '')
+  const head = DRAFT + MARK_DEF + (dvi ? DVI_MARK_DEF : '') + (layout ? LAYOUT_TEX + (dvi ? DVI_LAYOUT_TEX : '') + (names ? '' : NAMES_OFF) + regionsTex(project.codeEnvs, project.codeBodies) : '') + END_TEX + (lines ? LINES_TEX : '')
   out.set(project.main, latin1Bytes(head + latin1(out.get(project.main))))
   // (`skip`: the main file's head of ours, before the paper's first byte)
   if (spans) { let found = null; spans.skip = head.length; spans.lines = () => (found ??= unitLines(raw, patched, out, project.main, head.length)) }
