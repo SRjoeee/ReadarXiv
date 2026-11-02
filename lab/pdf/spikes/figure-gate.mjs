@@ -137,8 +137,10 @@ async function renderer(bytes) {
 }
 /** the edges of the fills painted before each drawn unit's text, as its ground (figure-text.mjs shapeRoom's `tone`): pageInk's
  *  figures' reading of the page, the unit found by its first glyph's origin (a level glyph's `boxAt`, a turned glyph's own box,
- *  the boxes painted before it); its fills of known lines with no stroke and painted at an alpha above 0, their segments
- *  (x0, y0, x1, y1 on the page) that meet its band. None where its glyph is not found: the band is held to one colour */
+ *  the boxes painted before it); its fills of known lines with no stroke, of a colour (no pattern) and painted at an alpha above
+ *  0, their segments (x0, y0, x1, y1 on the page) that meet its band, each with the box the page shows of its fill (its clip's,
+ *  its groups' bounds: pageInk's `cut`), outside which its edge is no edge the page shows. None where its glyph is not found:
+ *  the band is held to one colour */
 function groundEdges(ink, u) {
   if (!ink) return []
   const near = (a, b) => Math.abs(a - b) < 0.02
@@ -151,10 +153,10 @@ function groundEdges(ink, u) {
   const x0 = b[0] / SCALE - 2, x1 = b[2] / SCALE + 2, y0 = -b[3] / SCALE - 2, y1 = -b[1] / SCALE + 2
   for (let i = 0; i < at; i++) {
     const sh = ink.shapes.get(i)
-    if (!sh || !sh.fill || sh.stroke || ink.unseen?.has(i)) continue
-    const B = ink.boxes
-    if (B[4 * i + 2] < x0 || B[4 * i] > x1 || B[4 * i + 3] < y0 || B[4 * i + 1] > y1) continue
-    for (let k = 0; k + 3 < sh.segs.length; k += 4) out.push([sh.segs[k], sh.segs[k + 1], sh.segs[k + 2], sh.segs[k + 3]])
+    if (!sh || !sh.fill || sh.stroke || sh.pattern || ink.unseen?.has(i)) continue
+    const B = ink.boxes, shown = ink.cut?.get(i) ?? [B[4 * i], B[4 * i + 1], B[4 * i + 2], B[4 * i + 3]]
+    if (shown[2] < x0 || shown[0] > x1 || shown[3] < y0 || shown[1] > y1) continue
+    for (let k = 0; k + 3 < sh.segs.length; k += 4) out.push({ seg: [sh.segs[k], sh.segs[k + 1], sh.segs[k + 2], sh.segs[k + 3]], shown })
   }
   return out
 }
@@ -243,7 +245,8 @@ for (const id of IDS) {
           const o = 4 * (y * w + x), c = ((off.data[o] >> 4) << 8) | ((off.data[o + 1] >> 4) << 4) | (off.data[o + 2] >> 4)
           colours.add(c)
           const X = (x + 0.5) / SCALE, Y = (h - y - 0.5) / SCALE
-          if (edges.some(e => segDist(X, Y, e) <= EDGE_PX / SCALE)) continue
+          const r = EDGE_PX / SCALE
+          if (edges.some(e => X >= e.shown[0] - r && X <= e.shown[2] + r && Y >= e.shown[1] - r && Y <= e.shown[3] + r && segDist(X, Y, e.seg) <= r)) continue
           cell[(y - by) * bw + (x - bx)] = c
         }
         if (colours.size > 1) Oflat++

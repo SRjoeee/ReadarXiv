@@ -545,6 +545,12 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
     expect(r.cut!.has(2) || r.unseen!.has(2)).toBe(false)
     expect(only(r.glyphs, 'A')).toMatchObject({ clipped: true, unseen: true })
   })
+  it('a fill of a tiling pattern is marked as one, a shading pattern\'s and a colour\'s are not (#560)', () => {
+    // (a rectangle's path as PDF.js gives it: moveTo, lineTo three times, closePath)
+    const rect = (x0: number, y0: number, x1: number, y1: number): Op => [OPS.constructPath, [OPS.fill, [Float32Array.from([0, x0, y0, 1, x1, y0, 1, x1, y1, 1, x0, y1, 4])], Float32Array.from([x0, y0, x1, y1])]]
+    const r = figureInk(form([OPS.setFillColorN, ['TilingPattern', null, {}, [1, 0, 0, 1, 0, 0], [0, 0, 4, 4], 4, 4, 1, 1, false]], rect(10, 10, 20, 20), [OPS.setFillColorN, ['Shading', 'sh0', null]], rect(30, 10, 40, 20), [OPS.setFillRGBColor, ['#ff0000']], rect(50, 10, 60, 20)))
+    expect([0, 1, 2].map(i => r.shapes!.get(i)!.pattern)).toEqual([true, undefined, undefined])
+  })
   it('a path filled and stroked keeps what shows of each: an invisible fill under a seen stroke is a stroke, and the reverse (#555)', () => {
     const both = (ca: number, CA: number) => {
       const r = figureInk(form(alpha(ca, CA), [OPS.constructPath, [OPS.fillStroke, [Float32Array.from([0, 10, 10, 1, 40, 10, 1, 40, 40, 1, 10, 40, 4])], Float32Array.from([10, 10, 40, 40])]]))

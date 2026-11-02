@@ -176,6 +176,23 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
     expect(tiles(true, true).why).toBe('crowded')
     // (its edges beside the word still end the word's free line: the translation stays on its tone, ROOM_CLEAR short of the edge)
     expect(tiles(true).after).toBeCloseTo(150 - 125 - ROOM_CLEAR * 10, 6)
+    // (a fill of a tiling pattern, a hatching pageInk does not read inside: its edges crowd as a line's, as before; one that holds
+    // the whole band is its ground as before (2608.27728v1's white tiled backgrounds), #560)
+    const patterned = (holdsAll: boolean) => {
+      const pg = { ...word('label'), view: [0, 0, 300, 300] }
+      const rect = (b: number[]) => [b[0]!, b[1]!, b[2]!, b[1]!, b[2]!, b[1]!, b[2]!, b[3]!, b[2]!, b[3]!, b[0]!, b[3]!, b[0]!, b[3]!, b[0]!, b[1]!]
+      const b = holdsAll ? [80, 90, 150, 115] : [80, 90, 112, 115]
+      return figureUnitsOf([{ ...pg, boxes: b, shapes: new Map([[0, { segs: Float32Array.from(rect(b)), stroke: false, fill: true, pattern: true, hw: 0.25 }]]), paths: [0], figures: new Map([['0:0', [0, 0, 300, 300]]]), boxAt: pg.glyphs.map(() => 1) }] as never, null).units[0]!
+    }
+    expect(patterned(false).why).toBe('crowded')
+    expect(patterned(true).why).toBeNull()
+    // (a slanted edge that crosses the band inside the word and runs on past its end ends the free line where it leaves the word:
+    // the part beside the box is a line beside it, #560)
+    const slanted = { ...word('label'), view: [0, 0, 300, 300] }
+    const tri = [120, 95, 140, 112, 140, 112, 160, 95, 160, 95, 120, 95]
+    const one = figureUnitsOf([{ ...slanted, boxes: [120, 95, 160, 112], shapes: new Map([[0, { segs: Float32Array.from(tri), stroke: false, fill: true, hw: 0.25 }]]), paths: [0], figures: new Map([['0:0', [0, 0, 300, 300]]]), boxAt: slanted.glyphs.map(() => 1) }] as never, null).units[0]!
+    expect(one.why).toBeNull()
+    expect(one.after).toBeLessThan(5)
   })
 
   it('ink painted after a label over its band is over it, never its ground: it crowds the label (1810.04805v2\'s "BERT")', () => {

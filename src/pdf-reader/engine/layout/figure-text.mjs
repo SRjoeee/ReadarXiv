@@ -575,7 +575,9 @@ function roomOf(pg, f, u, own) {
  *  as the free line's end (free1); a fill none of whose edges reach into the band's box and that holds the band's middle is
  *  behind the text, its edges told as the free line's ends alone (a translation stays on its ground), where it was painted
  *  before the text: painted `after` it, it covers the text, ink over the whole band. A fill painted before the text is its
- *  ground whatever its edges: one inside the band is a change of tone under the text and crowds nothing */
+ *  ground whatever its edges: one inside the band is a change of tone under the text and crowds nothing, its parts beside the
+ *  box lines beside it; but a fill of a tiling pattern (pageInk's `pattern`), whose hatching is not read, a ground only where it
+ *  holds the band, as before */
 function shapeRoom(shape, f, band, along1, free1, e, after = false) {
   const { segs, hw } = shape, w = shape.stroke ? hw : 0
   const t0 = band[1] - w, t1 = band[3] + w
@@ -604,8 +606,14 @@ function shapeRoom(shape, f, band, along1, free1, e, after = false) {
   // (a fill painted before the text, no stroke, is its ground whatever its edges, as the original was set on it: an edge inside
   // the band is a change of tone under the text, no ink over it, and crowds nothing; beside the box it tells the anchor and ends
   // the free line as any line does, so that a translation stays on its tone)
-  const tone = shape.fill && !shape.stroke && !after
-  for (const [a, b] of parts) { if (!(tone && b > band[0] && a < band[2])) along1?.(a, b); shown(a, b) }
+  // (a tiling pattern's edge crowds as before: what its cells paint inside is not read, a hatching's lines among it)
+  const tone = shape.fill && !shape.stroke && !after && !shape.pattern
+  for (const [a, b] of parts) {
+    if (!tone || b <= band[0] || a >= band[2]) { along1?.(a, b); shown(a, b); continue }
+    // (a tone's edge inside the box crowds nothing; its parts before and after the box, a slanted edge's, are lines beside it)
+    if (a < band[0]) { along1?.(a, band[0]); shown(a, band[0]) }
+    if (b > band[2]) { along1?.(band[2], b); shown(band[2], b) }
+  }
 }
 
 /** whether a fill's closed edges hold a point of a frame (even-odd, as a ray along the frame's direction crosses them) */
