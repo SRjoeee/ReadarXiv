@@ -1,6 +1,6 @@
 import { OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { describe, expect, it } from 'vitest'
-import { BOXES_PAGE, GLYPHS_PAGE, type Glyph, INK_MS, MERGED, OPS_CAP, outlineBox, pageInk, STACK_MAX, STEPS_MAX } from '@/pdf-reader/engine/layout/ink.mjs'
+import { describe, expect, it, vi } from 'vitest'
+import { BOXES_PAGE, GLYPHS_PAGE, type Glyph, MERGED, OPS_CAP, outlineBox, pageInk, STACK_MAX, STEPS_MAX } from '@/pdf-reader/engine/layout/ink.mjs'
 
 // arXiv's ink from a page's operator list, as PDF.js's canvas places it: the lists are written here with pdfjs-dist's own
 // operator codes, in the shapes PDF.js 6.3.289 gives them (a text matrix as one argument, a path as [op, data, minMax])
@@ -611,7 +611,7 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
 
 // The walk's guards (the census of 2026-10-16: the 2,793 pages of the 124 papers of data/corpus): each an abuse guard twenty
 // times or more above the corpus's heaviest page, so that no real page meets one; a page past the box budget degrades, its
-// text whole, and a page past the cap, the stack or the clock has no ink
+// text whole, and a page past the cap or the stack has no ink; no clock decides it but where a reader asks one (the reader's live fills)
 describe('pageInk\'s guards', () => {
   const fill = (x0: number, y0: number, x1: number, y1: number): Op => [OPS.constructPath, [OPS.fill, [Float32Array.from([0])], Float32Array.from([x0, y0, x1, y1])]]
   /** the boxes of a reading as [x0, y0, x1, y1] each, with their kinds */
@@ -619,14 +619,13 @@ describe('pageInk\'s guards', () => {
 
   it('are set from the census: twenty times its busiest page, its steps, its most boxes and glyphs, its deepest stack', () => {
     // (2608.12606 page 5: 146,115 operations and 173,861 steps; 2608.27728 page 15: 22,101 boxes; 9,332 glyphs; 2608.04183
-    // page 15: 27 levels; and the backstop a hundred times the slowest walk, 18 ms)
+    // page 15: 27 levels)
     expect(OPS_CAP).toBeGreaterThanOrEqual(20 * 146_115)
     expect(STEPS_MAX).toBeGreaterThanOrEqual(20 * 173_861)
     expect(STEPS_MAX).toBeGreaterThanOrEqual(OPS_CAP)
     expect(BOXES_PAGE).toBeGreaterThanOrEqual(20 * 22_101)
     expect(GLYPHS_PAGE).toBeGreaterThanOrEqual(10 * 9_332)
     expect(STACK_MAX).toBeGreaterThanOrEqual(20 * 27)
-    expect(INK_MS).toBeGreaterThanOrEqual(100 * 18)
   })
 
   it('a page past the box budget keeps its glyphs and its first boxes as they are, every box after merged by cell, covering them', () => {
@@ -745,9 +744,9 @@ describe('pageInk\'s guards', () => {
     expect(pageInk(OPS, page, commonObjs, { rotate: 0, glyphsMax: 50 }).capped).toBe(false)
   })
 
-  it('a walk past msMax stops and the page is timed out', () => {
-    // (the backstop, the one bound that depends on the machine: more steps than come between two readings of the clock,
-    // three thousand operations)
+  it('a walk past msMax, where a reader asks one, stops and the page is timed out; with none asked no clock is read at all', () => {
+    // (the reader's live fills' wait, the one bound that depends on the machine, never the prepare's: more steps than come between
+    // two readings of the clock, three thousand operations)
     const many: Op[] = [...Array.from({ length: 3000 }, (_, i): Op => (i % 2 ? [OPS.restore, []] : [OPS.save, []])), ...text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A')))]
     const late = pageInk(OPS, list(many), commonObjs, { rotate: 0, msMax: -1 })
     expect(late.timedOut).toBe(true)
@@ -758,5 +757,13 @@ describe('pageInk\'s guards', () => {
     expect(inTime.glyphs.map(q => q.u)).toEqual(['A'])
     // a short page never reads the clock past its start
     expect(pageInk(OPS, list(text('f1', 10, [1, 0, 0, 1, 72, 700], show(g('A')))), commonObjs, { rotate: 0, msMax: -1 }).timedOut).toBe(false)
+    // and with no msMax (the prepare's readers) the walk reads no clock: the same page, however slow the machine, is read whole
+    const now = vi.spyOn(performance, 'now')
+    try {
+      const prepared = pageInk(OPS, list(many), commonObjs, { rotate: 0 })
+      expect(prepared.timedOut).toBe(false)
+      expect(prepared.glyphs.map(q => q.u)).toEqual(['A'])
+      expect(now).not.toHaveBeenCalled()
+    } finally { now.mockRestore() }
   })
 })

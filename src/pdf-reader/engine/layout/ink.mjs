@@ -12,7 +12,7 @@
 // own space). arXiv's PDF is untrusted: no more than OPS_CAP operations and STEPS_MAX steps are read, the graphics
 // state's stack holds no more than STACK_MAX copies (a level past it holds none, and ink placed in a state it lost caps the
 // page), a reader that asks keeps no more than GLYPHS_PAGE glyphs and BOXES_PAGE boxes
-// one by one (the boxes past it merged, below), INK_MS is the walk's backstop, a matrix or a number that is not one places
+// one by one (the boxes past it merged, below), a matrix or a number that is not one places
 // nothing, and nothing here throws on a malformed list. Each bound is an abuse guard, twenty times or more above the
 // corpus's heaviest page (the census of 2026-10-16: the 2,793 pages of the 124 papers of data/corpus, read by the pinned
 // PDF.js on the lite worker), and every one of those pages is read under them exactly as under none: no real page meets one.
@@ -24,8 +24,8 @@
  *  sees a list PDF.js has built whole, and the list is the dearer. A painted path is some 580 bytes of it (`re f`; a
  *  plot's mix 150 an operation), so a page of paths fills the server's 768 MiB at some 1,300,000 of them, long before
  *  this (still 58 times the corpus's most, 22,381 paths a page), and 25,000 saves left open cost PDF.js's parse 19 s (it grows
- *  with their square: 100,000, 299 s). A true bound a page is the list given up in flight (make.mjs giveUp, past OPS_MS),
- *  which the walk cannot be */
+ *  with their square: 100,000, 299 s). The prepare's readers wait for a page's list however long it
+ *  takes (oplist.mjs listOf): no clock decides what is read, and a parse that never ends is the run's deadline's */
 export const OPS_CAP = 3_000_000
 /** the glyphs a page's ink holds at most, where its reader asks (`glyphsMax`): one text-showing operation may show any
  *  number of glyphs, so OPS_CAP alone does not bound a page's ink. A page past it is capped as one past OPS_CAP is: no ink,
@@ -52,13 +52,6 @@ export const BOXES_PAGE = 500_000
  *  it is capped as one past OPS_CAP is: no ink, that page alone. A reader that asks for BOXES_PAGE never meets it (its boxes
  *  past the budget are merged, 4,096 at most); the corpus's most is 22,101 boxes (2608.27728 page 15) */
 export const BOXES_CAP = 1_000_000
-/** the walk's backstop (`msMax`), in milliseconds: past it reading stops and the page is `timedOut` (its reader gives it no
- *  ink, and says so apart from a list that never came). STEPS_MAX is the walk's bound; this is for a machine far slower
- *  than the one it was measured on, and only there does it act: a page timed out on one machine and read on another, the
- *  one bound that depends on the machine, and safe (dark: its units the original's). The corpus's slowest page walks in
- *  15 to 18 ms on a laptop, the dearest list to STEPS_MAX in 0.6 s; this is 100 times the one and 3 times the other. The
- *  clock is read once every CLOCK_EVERY steps */
-export const INK_MS = 2_000
 /** the graphics state's levels that hold a copy of it at most (a save, a form, a group, an annotation each push one; a copy
  *  some 177 bytes: 3,000,000 saves unrestored held 530 MB). Past it a level holds none: its save changes nothing, and the
  *  walk goes on exactly; its restore cannot give back the state of its save, and ink placed before a restore reaches a level
@@ -297,7 +290,7 @@ export const PARA_POINT = /^q\d+$/
  * showed more glyphs than that, ink was to be placed in a state a restore past STACK_MAX could not give back, or it kept
  * more than BOXES_CAP boxes, and reading stopped there, within the operation (a stack deeper than STACK_MAX alone caps
  * nothing: saves left open are read on exactly). `timedOut`: the walk
- * passed `msMax` (INK_MS, the backstop), and reading stopped there. A reader gives a page capped or timed out no ink.
+ * passed `msMax` (a wait the reader asked: none by default), and reading stopped there. A reader gives a page capped or timed out no ink.
  * `rotated`: the page's /Rotate is not 0, and nothing is read (the layer lays over no rotated page).
  * `boxesMax` (BOXES_PAGE where a reader asks; none by default): the boxes past it, of every kind, are not kept one by one
  * but merged by the grid's cells (TILE), after the others and in the cells' order (from `mergedAt`, the first merged box's
@@ -330,16 +323,18 @@ export const PARA_POINT = /^q\d+$/
  * text, place, size and fill: layout/fills.mjs reads no more), with no box, path, image or outline read: `boxes` empty, a
  * glyph's outline its line's
  */
-export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity, boxesMax = Infinity, stepsMax = STEPS_MAX, msMax = INK_MS, glyphsOnly = false, turned = false }) {
+export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity, boxesMax = Infinity, stepsMax = STEPS_MAX, msMax = Infinity, glyphsOnly = false, turned = false }) {
   const turn = (((Number(rotate) % 360) + 360) % 360)
   if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], ...(indices ? { paths: [], shows: 0 } : {}), ...(turned ? { turned: [], shapes: new Map(), pictures: [], figures: new Map(), unseen: new Set(), cut: new Map() } : {}), capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true }
   const fnArray = ops?.fnArray ?? [], argsArray = ops?.argsArray ?? []
   const n = Math.min(fnArray.length, OPS_CAP)
   const glyphs = [], boxes = [], points = [], boxAt = [], paths = [], paras = [], turnedOut = [], pictures = []
   // (the guards: reading stops once `stop` is set: `over` past glyphsMax, `deep` ink placed in a state past STACK_MAX not
-  // kept, `many` past stepsMax, the three caps; `late` past msMax, the backstop. The clock is read once every CLOCK_EVERY steps)
-  let stop = false, over = false, deep = false, many = false, late = false, steps = 0, check = CLOCK_EVERY
-  const t0 = clock()
+  // kept, `many` past stepsMax, the three caps; `late` past msMax, a wait a reader asks of its own (the reader's live fills,
+  // layer-proto/run.mjs), none by default: no clock decides what the prepare reads. Where one is asked, the clock is read once
+  // every CLOCK_EVERY steps)
+  let stop = false, over = false, deep = false, many = false, late = false, steps = 0, check = Number.isFinite(msMax) ? CLOCK_EVERY : Infinity
+  const t0 = Number.isFinite(msMax) ? clock() : 0
   const step = k => {
     steps += k
     if (steps > stepsMax) { many = true; stop = true; return }
