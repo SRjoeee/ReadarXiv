@@ -206,6 +206,16 @@ describe('the cut of a small paper', () => {
     expect(indexLayout(mergeParts(back.index, back.parts).layout!).unit(6)?.colours).toEqual(new Map([[0, 0x0000ff]]))
   })
 
+  it('carries each region TeX set in the part of its page alone, and the parts merge back to them all (#63)', async () => {
+    const whole = wholeOf(SMALL)
+    whole.layout!.regions = [[1, 0, 72, 600, 200, 610], [3, 0, 72, 500, 300, 510], [8, 0, 100, 100, 200, 110]]
+    const c = await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF })
+    await checkCut('small, with regions', whole, c)
+    const back = await readBack(c)
+    for (const p of back.parts) for (const r of p.layout?.regions ?? []) expect(r[0] >= p.pages[0] && r[0] <= p.pages[1], JSON.stringify(r)).toBe(true)
+    expect(mergeParts(back.index, back.parts).layout!.regions).toEqual(whole.layout!.regions)
+  })
+
   it('without a layout file: left only, no file-only units, no part\'s cell rules', async () => {
     const whole = wholeOf(SMALL, { layout: false })
     const c = await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF })

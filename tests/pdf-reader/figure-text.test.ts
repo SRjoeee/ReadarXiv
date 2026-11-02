@@ -366,6 +366,10 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
     expect(figureUnitsOf([{ ...pg, regions: [{ kind: 'code', from: 0, to: 4 }] }] as never, null).units).toEqual([])
     // (a region of another kind, or one past the word, takes nothing)
     expect(figureUnitsOf([{ ...pg, regions: [{ kind: 'other', from: 0, to: 4 }, { kind: 'code', from: 4, to: 9 }] }] as never, null).units.map(u => u.text)).toEqual(['echo'])
+    // (counted under the caps as any run, so that where they fall does not move: past the paper's cap the rest is the ink units')
+    const code = { ...pg, regions: [{ kind: 'code', from: 0, to: 4 }] }, shown = { ...word('label'), view: [0, 0, 300, 300] }
+    expect(figureUnitsOf([code, shown] as never, null, { unitsDoc: 1 }).units).toEqual([])
+    expect(figureUnitsOf([code, shown] as never, null).units.map(u => u.text)).toEqual(['label'])
   })
 
   it('a glyph a unit owns, or one outside every figure, is no figure\'s', () => {

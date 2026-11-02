@@ -3207,6 +3207,23 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   word, reached the next cell's word (`reachIn`, LAYOUT 14), its end mark's word was the paragraph's, and the cell took the
   paragraph's eighth line (`lineTaken`). A start mark on a turned token's box now reaches none (`turnedAt`): the cell stays
   the original's, as the maker never lays a turned run, and the paragraph is laid as production lays it.
+- **A region TeX set** (LAYOUT 32, the file's schema 6, BUNDLE5 13; the owner's decision of 2026-11-03): the file's
+  `regions`, `[page, kind, x0, bottom, x1, top]` by page rising, a kind of `REGION_KINDS` (`code` alone so far), a key held only
+  where a page holds one, a part those of its own pages. A code region is a line TeX set in the body of an environment the
+  source sets as code: one the front end knows as code (`latex-front.mjs` `codeEnvsOf`: an environment of the paper's own that
+  sets typewriter type with its lines obeyed, or opens a listing; the listing packages' own, `verbatim`, `Verbatim`, `alltt`,
+  `lstlisting`, `minted`, `tcblisting`), by name in the project (`codeEnvs`, those the paper begins). The layout compile hooks
+  each (`marks.mjs` `regionsTex`, after `LAYOUT_TEX` on the head's one line, for a paper that uses one alone): the environment's
+  begin hook sets a flag its group ends, and inside it LaTeX's `para/begin` and `para/end` hooks set two points around each line,
+  `cds<n>` and `cde<n>`, in horizontal mode, the glue, kerns and penalties last taken off and put back after the end point (as a
+  closing mark's), so that no place to break is made or lost and `\addvspace` reads its `\lastskip`; fancyvrb's lines (minted's),
+  each an `\hbox` set in vertical mode, get them inside the box, around `\FancyVerbFormatLine`. Never a point in vertical mode.
+  pageInk reads them apart (`regions`), as it reads a picture's, so that no reader of the marks sees them; the maker writes each
+  region's rectangle (its glyphs' ink), and every reader keeps its text as the paper has it: the figures' reading takes none of it
+  (§19.12) and the ledger classes its line `code` whatever its face (`ledger.mjs` RULES' first), so that the ink units keep it
+  (kept blocks), wherever it stands — a box TikZ draws (mdframed's `framemethod=tikz`), a float, a column. It is a fact TeX
+  decided, written once where every reader reads it: the one command model the layout file grows into (the architecture audit's
+  §2), not a side channel of the prepare's. REGIONS_MEASURED
 - **The pin's sweep, LAYOUT 19** (2026-10-24: 133 units newly English against the staging of LAYOUT 16, the maker's share of
   them bisected over the merges between): three causes, each one rule.
   - *A start mark takes the word it stands before* (`pipeline/anchors.mjs` `tokenAtMark`). A mark carries the word it stands at
@@ -4094,7 +4111,10 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   TikZ or pgfplots picture's (between the points `zs` and `ze` the layout compile now sets inside pgf's `\pgfsys@beginpicture`
   and `\pgfsys@endpicture`, in the picture's own box: `marks.mjs POINTS_TEX`, LAYOUT 21; pageInk keeps them apart, `pictures`,
   so that no reader of the marks or the ownership sees them). A glyph set turned is read too (pageInk's `turned`: its baseline,
-  direction, size and band), so that a y-axis title keeps its turn.
+  direction, size and band), so that a y-axis title keeps its turn. Never a glyph of a code region (§19.7, PIPELINE 63): the
+  code and terminal output of 2610.19159v1's agent transcripts, set in an environment of the paper's own (`trajectoryCode`,
+  typewriter type with its lines obeyed) inside mdframed boxes TikZ draws, were a picture's text, cut into figure units word by
+  word and translated ("echo" a word in Japanese); they are code, kept as the paper has it.
 - **Cut** into runs, one a label or a line: in stream order, one font, size, colour, direction and figure (one form painted, one
   picture: pageInk's `fid` and `pid`, so that two figures side by side never make one label), one baseline (`RUN_DY`
   0.05 of the size across), at most `RUN_GAP` 0.6 of the size past the run's end; a run spelling a word (two letters together)
