@@ -55,7 +55,7 @@ export declare function pageInk(OPS: Record<string, number>, ops: { fnArray: Arr
 export interface TurnedGlyph { u: string; n: number; k: number; ox: number; oy: number; ex: number; ey: number; ux: number; uy: number; size: number; ascent: number; descent: number; up: number; down: number; font: string; fill: number; box: number; at: number; pt: number; blank?: true; form?: true; clipped?: true; unseen?: true; fid?: number; pid?: number }
 /** a figure's painted path as its lines (pageInk's `turned`): its segments on the page (x0, y0, x1, y1 stride 4), whether it strokes
  *  and fills, its half line width on the page */
-export interface Shape { segs: Float32Array; stroke: boolean; fill: boolean; hw: number }
+export interface Shape { segs: Float32Array; stroke: boolean; fill: boolean; hw: number; pattern?: true }
 /** a TikZ picture's points (marks.mjs POINTS_TEX) */
 export declare const PICTURE_START: 'zs'
 export declare const PICTURE_END: 'ze'

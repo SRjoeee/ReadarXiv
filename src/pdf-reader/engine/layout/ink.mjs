@@ -109,7 +109,7 @@ const finite = (...xs) => xs.every(Number.isFinite)
  *  what they paint to, as PDF.js bounds a group (the figures' reading: `unseen`, `cut`) */
 const fresh = () => ({
   ctm: IDENTITY, clip: null, lw: 1, font: null, fontId: '', size: 0, dir: 1, cs: 0, ws: 0, hs: 1, rise: 0, leading: 0, tr: 0,
-  tm: IDENTITY, x: 0, y: 0, lx: 0, ly: 0, pendingClip: false, lost: false, fill: 0, form: 0, formId: 0, ca: 1, CA: 1, ga: 1, gclip: null,
+  tm: IDENTITY, x: 0, y: 0, lx: 0, ly: 0, pendingClip: false, lost: false, fill: 0, form: 0, formId: 0, ca: 1, CA: 1, ga: 1, gclip: null, tile: false,
 })
 /** an alpha constant as an ExtGState gives it, 0 to 1 (a value of no number: 1, PDF's default) */
 const alphaOf = v => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1)
@@ -698,7 +698,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     close()
     if (!segs.every(Number.isFinite)) return
     shapeNumbers += segs.length
-    shapes.set(box, { segs: Float32Array.from(segs), stroke, fill, hw: Math.max(0.25, (s.lw / 2) * Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]))) })
+    // (`pattern`: a fill of a tiling pattern, whose cells (a hatching) paint what is not read)
+    shapes.set(box, { segs: Float32Array.from(segs), stroke, fill, ...(fill && s.tile ? { pattern: true } : {}), hw: Math.max(0.25, (s.lw / 2) * Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]))) })
   }
   /** showText as the canvas runs it (showText, showType3Text): each glyph's origin, its advance, the line moved on */
   const show = arr => {
@@ -775,8 +776,9 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       case TRANSFORM: s.ctm = mul(s.ctm, matrixOf(a)); break
       case LINE_WIDTH: s.lw = num(a[0]); break
       // (the fill colour, every space PDF.js turns to RGB; a pattern's or a transparent one none)
-      case FILL_RGB: s.fill = fillOf(a); break
-      case FILL_NONE: case FILL_N: s.fill = NO_FILL; break
+      case FILL_RGB: s.fill = fillOf(a); s.tile = false; break
+      // (`tile`: a tiling pattern's fill, PDF.js's ["TilingPattern", …], whose cells paint what is not read; a shading's is smooth)
+      case FILL_NONE: case FILL_N: s.fill = NO_FILL; s.tile = fn === FILL_N && a?.[0] === 'TilingPattern'; break
       case GSTATE:
         for (const e of Array.isArray(a[0]) ? a[0] : []) {
           step(1)

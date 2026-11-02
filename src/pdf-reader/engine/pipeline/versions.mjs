@@ -491,7 +491,23 @@
 //     papers laid whole that were the original's (2610.20507v1's u21, its display (16) before Figure 3; 2610.21288v1's u30, its
 //     display (12) before Figure 2), none the other way, every other unit's rows as they were. No source unit's text, pieces or
 //     wire changes: a copy of 56 carries every unit (live.mjs PIPELINE_CARRIES)
-// 58 (the lost class of the release sweep of 2026-11-02: an author line left LOST, its unit English): a paper's macro glued to
+// 58 (the owner's option A of 2026-11-02, 1706.03762v7's last 5 labels): a fill of known lines and no stroke painted before a
+//     figure's text is the ground it was set on, whatever its edges: one inside the label's band is a change of tone under the
+//     text and crowds nothing (layout/figure-text.mjs shapeRoom `tone`); beside the box it tells the anchor and ends the free
+//     line as before. Measured: the pack's 1706.03762v7 every label drawn (239 -> 244), 1512.03385v1 +5, 2608.04322v1 +9; 24 of
+//     the 25-paper set +37 on 9 papers; the figure gate's G1, G3f, D, O (its tone edges a ground's, PDF-READER §19.12) and R 0;
+//     over arXiv's PDFs of 222 papers 331 labels on 51 papers drawn, none lost, no anchor, set or room moved. The
+//     figure units' cut moves, so the rows' identities: raised so. Every source unit, its pieces and its wire are 57's: a copy
+//     of 57 carries every unit (live.mjs PIPELINE_CARRIES), a figure unit found again by its source (cache.mjs seedFrom)
+// 59 (the owner's option A of 2026-11-02: every figure label translated, a token of code kept): a figure unit is KEPT where it is
+//     code (translate/mt.mjs isCode): every word a markup token in angle brackets (1706.03762v7's "<pad>", which Microsoft gave
+//     back as a word, and "<EOS>"; 2503.06072v3's "<think>"), or a text the paper sets as code (codeTextsOf: \texttt, \verb,
+//     \lstinline, \code, \path, \mintinline, \Verb); a table's cell keeps a markup token too (nameCells), never a word the paper
+//     sets as code elsewhere. Over 243 local sources every cell kept as before; over the corpus's figure labels of those papers
+//     101 newly kept on 12 papers, none other moved. The figure units' flags move, so the rows'
+//     identities: raised so. Every source unit, its pieces and its wire are 58's: a copy of 58 carries every unit (live.mjs
+//     PIPELINE_CARRIES)
+// 60 (the lost class of the release sweep of 2026-11-02: an author line left LOST, its unit English): a paper's macro glued to
 //     the word before it gets its marks where LAYOUT_TEX's opening mark sets itself in a box before it, as before a formula
 //     (marks.mjs layoutMarking, BOXY: \textsuperscript, \mbox), not past a prefix: TeX hyphenates no word a box or a formula
 //     follows and kerns no letter with either, so the word ends where it ended. An author's `Zhou\textsuperscript{1}` had no
@@ -499,8 +515,8 @@
 //     was (0 pt over 246,831); its layout file's rows of each such piece, the maker's reading of the new marks riding this version
 //     as 48's did: 7 units of 4 papers laid whole that were the original's (2602.23285v2's u1 and u181, 2610.21376v1's u1,
 //     2610.21477v1's u1, u90 and u94, 2610.21924v1's u1), none the other way, every other unit's rows as they were. No source
-//     unit's text, pieces or wire changes: a copy of 57 carries every unit (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '58'
+//     unit's text, pieces or wire changes: a copy of 59 carries every unit (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '60'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
