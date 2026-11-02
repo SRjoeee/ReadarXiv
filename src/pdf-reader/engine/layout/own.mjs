@@ -829,13 +829,13 @@ function slotted(parts, ink) {
 }
 
 /** a unit's source text for the spell check, as spellOf reads it, in parts: its `src` where it has one, else its pieces' — a
- *  placeholder dropped, but a text symbol whose glyph is the text's — one of no mark of its own (\\o, \\ss: `marked(k)` false), whose ink TeX set among the
- *  text's, its character (in the unit's lead, before any text, only where `lead`: a cell's lead ink taken with its text; any
- *  other unit's lead ink is its label's or its placeholder's, MR 5), or one with marks whose own glyph MR 4 gave the text (`inText(k)`);
- *  and a slot before each wrapper's argument (an `open`
- *  piece: siamart's \\funding{…}), where the macro may set words of its own. Returns { text, bare, parts: [text before the
- *  first slot, …] } (`bare` the text without the symbols: one whose ink an opening alone before it took, `$x$\\o`, is no
- *  text's), or null where there is none */
+ *  placeholder dropped, but a text symbol whose glyph is the text's, its character: one of no mark of its own (\\o, \\ss:
+ *  `marked(k)` false), whose ink TeX set among the text's (in the unit's lead, before any text, only where `lead`: a cell's lead
+ *  ink taken with its text; any other unit's lead ink is its label's or its placeholder's, MR 5), and one whose own glyph MR 4
+ *  or a unit's lead gave the text (`inText(k)`); and a slot before each wrapper's argument (an `open` piece: siamart's
+ *  \\funding{…}), where the macro may set words of its own. Returns { text, bare, parts: [text before the first slot, …] }
+ *  (`bare` the text without the symbols: one whose ink an opening alone before it took, `$x$\\o`, is no text's), or null where
+ *  there is none */
 function sourceOf(u, marked, lead, inText = () => false) {
   if (!u) return null
   if (typeof u.src === 'string') { const t = spellOf(u.src); return { text: t, bare: t, parts: [t] } }
