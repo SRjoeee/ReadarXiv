@@ -1014,6 +1014,62 @@ describe("the class's own marks after a unit's text: a theorem's note (2610.2108
     const quoted = [...item('so-called \u201dgreedy\u201d', 50, 500, 4, 1), ...item(')', 86, 500, 4, 2)]
     expect(draw(unit('\u6240\u8c13\u7684\u201c\u8d2a\u5fc3\u201d', 'so-called "greedy"'), quoted)).toBe('\u6240\u8c13\u7684\u201c\u8d2a\u5fc3\u201d)')
   })
+  it("none past a letter its words leave unmatched: \"(see Fig. 6d);\" ends in the source's own \");\" (2610.20595v1 p11 u83, the release sweep of 5e519d69)", () => {
+    // the source "(see Fig.~\ref{fig:6}d);": TeX sets the reference's "6" and the source's "d" as one word, "6d", which no word of
+    // the source's matches; the reference's rendering is "6", and "d" stood between it and the marks, so the source's two marks
+    // were counted from "d" and its ";" read as the class's: ";;" after the translation's own
+    const L1 = [1, 10, 200, 500, 507, 498, 10, 0]
+    const lu1 = unitOf([L1], [[1, 0, [1, 50, 500, 55, 507, 498]]])
+    const text = (s: string) => ({ t: 'text', s }), ref = { t: 'ph', src: '\\ref{fig:6}' }
+    const u = { kind: 'para', src: 'see Fig. d);', pieces: [text('\u89c1\u56fe '), ref, text(' d);')] }
+    Object.defineProperty(u, 'source', { value: [text('see Fig. '), ref, text('d);')] })
+    const pg = [...item('see Fig.', 10, 500, 10, 0), ...item('6', 50, 500, 10, 1), ...item('d);', 55, 500, 10, 2)]
+    const t = T.texRects(lu1)
+    const prep = L2.prepareUnit(u as never, t.rects as never, [pg as never], new Map() as never, null, T.texParts(lu1, [-1, 1, -1], { lines: t }) as never)
+    expect(prep.tail).toBeNull()
+    const drawnText = L2.tokensOf2(u as never, prep as never, 'zh', BASE as never, { serif: 'times', sans: 'helvetica', mono: 'courier' } as never, P as never, null, () => 0).filter(x => typeof x.s === 'string').map(x => x.s).join('')
+    expect(drawnText).not.toMatch(/;;$/)
+    expect(drawnText.endsWith('d);')).toBe(true)
+    // (and a class's mark after them is still the class's: "(see Fig. 6d))." of a note whose source ends in "d)")
+    const note = { kind: 'heading', src: 'see Fig. d)', pieces: [text('\u89c1\u56fe '), ref, text(' d)')] }
+    Object.defineProperty(note, 'source', { value: [text('see Fig. '), ref, text('d)')] })
+    const pg2 = [...item('see Fig.', 10, 500, 10, 0), ...item('6', 50, 500, 10, 1), ...item('d))', 55, 500, 10, 2)]
+    const prep2 = L2.prepareUnit(note as never, t.rects as never, [pg2 as never], new Map() as never, null, T.texParts(lu1, [-1, 1, -1], { lines: t }) as never)
+    expect((prep2.tail as { ch: string }[] | null)?.map(c => c.ch)).toEqual([')'])
+  })
+  it("no class's mark of the kind the source's own last mark is: a run-in head's \".\" after the source's (2610.20266v1 p11 u78)", () => {
+    // siamart's \\paragraph{Outline of the proof.} sets its stop after the source's own: arXiv's PDF reads "proof.." (TeX's
+    // \\@addpunct does not see the source's); the translation writes the source's, and a second of its kind is not drawn
+    const L4 = [1, 10, 200, 500, 507, 498, 10, 0]
+    const lu4 = unitOf([L4])
+    const t = T.texRects(lu4)
+    const u = unit('\u8bc1\u636e\u5927\u7eb2\u3002', 'Outline of the proof.')
+    const prep = L2.prepareUnit(u, t.rects as never, [item('Outline of the proof..', 10, 500, 10, 1) as never], new Map() as never, null, T.texParts(lu4, [-1], { lines: t }) as never)
+    expect(prep.tail).toBeNull()
+    // (one of another kind after it is the class's, drawn: a note's "(Note.)." keeps amsthm's ")." after the translation's stop)
+    const v = unit('\u8bc1\u636e\u5927\u7eb2\u3002', 'Outline of the proof.')
+    const prep2 = L2.prepareUnit(v, t.rects as never, [item('Outline of the proof.).', 10, 500, 10, 1) as never], new Map() as never, null, T.texParts(lu4, [-1], { lines: t }) as never)
+    expect((prep2.tail as { ch: string }[] | null)?.map(c => c.ch)).toEqual([')', '.'])
+  })
+  it("counts the source's own end mark by its kind across scripts: the translation's, ASCII or full-width, is never doubled", () => {
+    const L3 = [1, 10, 200, 500, 507, 498, 10, 0]
+    const lu3 = unitOf([L3])
+    const draw = (u: never, pg: unknown[]) => {
+      const t = T.texRects(lu3)
+      const prep = L2.prepareUnit(u, t.rects as never, [pg as never], new Map() as never, null, T.texParts(lu3, [-1], { lines: t }) as never)
+      return { tail: (prep.tail as { ch: string }[] | null)?.map(c => c.ch) ?? null, text: L2.tokensOf2(u, prep as never, 'zh', BASE as never, { serif: 'times', sans: 'helvetica', mono: 'courier' } as never, P as never, null, () => 0).filter(x => typeof x.s === 'string').map(x => x.s).join('') }
+    }
+    for (const [ascii, wide] of [[';', '\uff1b'], [':', '\uff1a'], ['.', '\u3002'], ['!', '\uff01'], ['?', '\uff1f'], [',', '\uff0c']]) {
+      for (const own of [ascii, wide]) {
+        // (the source's own mark alone on the page: no tail, the translation's own mark, of either script, drawn once)
+        const alone = draw(unit(`\u8bcd\u8bed${own}`, `the word${ascii}`), item(`the word${ascii}`, 10, 500, 10, 1))
+        expect([ascii, alone.tail, alone.text]).toEqual([ascii, null, `\u8bcd\u8bed${own}`])
+        // (a class's ")" after it: drawn after the translation's own mark, which stays)
+        const closed = draw(unit(`\u8bcd\u8bed${own}`, `the word${ascii}`), [...item(`the word${ascii}`, 10, 500, 10, 1), ...item(')', 55, 500, 10, 2)])
+        expect([ascii, closed.tail, closed.text]).toEqual([ascii, [')'], `\u8bcd\u8bed${own})`])
+      }
+    }
+  })
   it("reads the source's end marks as TeX prints them, after its last letter, digit or placeholder", () => {
     const text = (s: string) => ({ t: 'text', s }), ph = { t: 'ph', src: '$x$' }
     const of = (pieces: unknown[], src = '') => { const u = { src }; Object.defineProperty(u, 'source', { value: pieces }); return L2.sourceEndMarks(u as never) }
