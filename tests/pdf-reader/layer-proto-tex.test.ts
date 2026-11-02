@@ -1005,6 +1005,20 @@ describe("the class's own marks after a unit's text: a theorem's note (2610.2108
     const prep2 = L2.prepareUnit(note as never, t.rects as never, [pg2 as never], new Map() as never, null, T.texParts(lu1, [-1, 1, -1], { lines: t }) as never)
     expect((prep2.tail as { ch: string }[] | null)?.map(c => c.ch)).toEqual([')'])
   })
+  it("no class's mark of the kind the source's own last mark is: a run-in head's \".\" after the source's (2610.20266v1 p11 u78)", () => {
+    // siamart's \\paragraph{Outline of the proof.} sets its stop after the source's own: arXiv's PDF reads "proof.." (TeX's
+    // \\@addpunct does not see the source's); the translation writes the source's, and a second of its kind is not drawn
+    const L4 = [1, 10, 200, 500, 507, 498, 10, 0]
+    const lu4 = unitOf([L4])
+    const t = T.texRects(lu4)
+    const u = unit('\u8bc1\u636e\u5927\u7eb2\u3002', 'Outline of the proof.')
+    const prep = L2.prepareUnit(u, t.rects as never, [item('Outline of the proof..', 10, 500, 10, 1) as never], new Map() as never, null, T.texParts(lu4, [-1], { lines: t }) as never)
+    expect(prep.tail).toBeNull()
+    // (one of another kind after it is the class's, drawn: a note's "(Note.)." keeps amsthm's ")." after the translation's stop)
+    const v = unit('\u8bc1\u636e\u5927\u7eb2\u3002', 'Outline of the proof.')
+    const prep2 = L2.prepareUnit(v, t.rects as never, [item('Outline of the proof.).', 10, 500, 10, 1) as never], new Map() as never, null, T.texParts(lu4, [-1], { lines: t }) as never)
+    expect((prep2.tail as { ch: string }[] | null)?.map(c => c.ch)).toEqual([')', '.'])
+  })
   it("counts the source's own end mark by its kind across scripts: the translation's, ASCII or full-width, is never doubled", () => {
     const L3 = [1, 10, 200, 500, 507, 498, 10, 0]
     const lu3 = unitOf([L3])

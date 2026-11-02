@@ -1522,6 +1522,9 @@ function finishUnit(out, unit, rects, charsByPage) {
   out.tailOwn = out.tail ? ends : null
 }
 
+/** the kinds of sentence punctuation (markKind's), which TeX never sets twice on purpose: a class's mark of the kind the source's
+ *  own last mark is, right after it, is the source's again (tailOf) */
+const SENTENCE_KINDS = new Set(['stop', 'comma', 'semi', 'colon', 'excl', 'quest'])
 /** the most marks a class sets after a unit's text (amsthm's note: ")."; a run-in head's "." or ":"; a style's stop after a
  *  reference) */
 const TAIL_MAX = 3
@@ -1602,7 +1605,15 @@ function tailOf(out, unit, keepSet, ownEnds = sourceEndMarks(unit)) {
   if (ownEnds === null) return null
   const after = uc.slice(last + 1).filter(real), ends = ownEnds.length
   if (after.length <= ends) return null
-  const rest = after.slice(ends)
+  // (and no stop, comma, colon, semicolon, exclamation or question mark of the kind the source's own last mark is right after it:
+  // the translation writes that mark, and a second of its kind is no class's to draw — siamart's run-in
+  // \\paragraph{Outline of the proof.} sets "proof..", its \\@addpunct blind to the source's stop, 2610.20266v1. A bracket may close
+  // twice: a note "(Bound (Smith))." ends in its own ")" and the head's)
+  const sentenceKind = ch => SENTENCE_KINDS.has(markKind(ch))
+  let from = ends
+  while (ends > 0 && from < after.length && sentenceKind(ownEnds[ends - 1]) && markKind(after[from].ch) === markKind(ownEnds[ends - 1])) from++
+  const rest = after.slice(from)
+  if (!rest.length) return null
   // (a punctuation mark in a text font, as a class sets its own: a formula's delimiter in a math font is its formula's ink,
   // 1512.03385's Table 1 brackets beside its cells, never the unit's)
   const mark = c => /^\p{P}$/u.test(c.ch) && !c.nu && c.st?.fam !== 'math'
