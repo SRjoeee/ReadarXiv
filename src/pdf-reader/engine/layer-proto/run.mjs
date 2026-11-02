@@ -2037,8 +2037,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // original's, where the whole unit's rule kept them all)
     if (!p.rects.length) { p.refused = true; p.why = 'unfit'; unlead(p); return }
     // (a run-in head's rectangles as its lay begins: where it is laid over the next unit's first row and laid again in its row,
-    // relayInRow. Kept and cleared on a unit before a shared line alone: a field on every unit grew the heap 1.8 kB a laid page,
-    // past the speed check's spread)
+    // relayInRow. Copied and cleared on a unit before a shared line alone, the only one that may be laid so)
     const rects0 = followers.has(p.id) ? p.rects.slice() : null
     if (p.over) p.over = undefined
     const local = p.local
