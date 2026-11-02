@@ -208,7 +208,7 @@ async function layoutOf(paper, marks, arxivPdf, id) {
   const task = pdfOf(arxivPdf)
   try {
     const out = await makeLayout({ units: paper.units, texOrder: paper.texOrder, marks: parseLayoutMarks(marks), arxiv: await task.promise, OPS, paper: { id: m?.[1] ?? '0000.00000', version: Number(m?.[2] ?? 1) }, left: '', pdfjs: version })
-    return 'file' in out ? { text: encodeLayout(out.file), timedOut: out.stats.timedOut.length } : { refused: out.refused }
+    return 'file' in out ? { text: encodeLayout(out.file), unread: out.stats.unread.length } : { refused: out.refused }
   } finally { await task.destroy() }
 }
 /** a PDF's text items per page (every one, and those with ink), as the layout-marks gate reads them */
@@ -301,7 +301,7 @@ for (const arg of ids) {
       const arxiv = join(dir, 'arxiv.pdf')
       if (existsSync(arxiv) && (LAYOUT_ALL || !row.pdf.equal || paper.meta.compiler === 'xelatex')) {
         const bytes = readFileSync(arxiv), lay = [await layoutOf(paper, L.made.marks, bytes, id), await layoutOf(paper, CM.made.marks, bytes, id)]
-        row.layout = lay.every(l => l.text) ? { equal: lay[0].text === lay[1].text, bytes: lay.map(l => l.text.length), timedOut: lay.map(l => l.timedOut) } : { refused: lay.map(l => l.refused ?? null) }
+        row.layout = lay.every(l => l.text) ? { equal: lay[0].text === lay[1].text, bytes: lay.map(l => l.text.length), unread: lay.map(l => l.unread) } : { refused: lay.map(l => l.refused ?? null) }
         if (row.layout.equal === false) { mkdirSync(OUT, { recursive: true }); writeFileSync(join(OUT, `${id}.L.layout.json`), lay[0].text); writeFileSync(join(OUT, `${id}.CM.layout.json`), lay[1].text); row.layout.differences = differences(lay[0].text, lay[1].text) }
       }
       if (!row.pdf.equal) row.lost = await lost(L.pdf, CM.pdf)
