@@ -228,9 +228,9 @@ describe('ledgerOf', () => {
       { point: 'q9' }, { glyphs: run('grep the log for errors', 100, 660) },
       { point: 'be1' },
     )
-    const regions = [{ kind: 'code', from: 0, to: run('echo stray processes done', 0, 0).length }, { kind: 'code', from: pg.page.points.find(x => x.name === 'q9')!.glyph, to: pg.page.glyphs.length }]
+    const regions = [{ kind: 'code', from: 0, to: run('echo stray processes done', 0, 0).length }, { kind: 'code', from: pg.page.points!.find(x => x.name === 'q9')!.glyph, to: pg.page.glyphs.length }]
     const l = ledgerOf([{ ...pg.page, regions }], { glyphs: [pg.own] }, { units: null })
-    const grep = pg.page.points.find(x => x.name === 'q9')!.glyph
+    const grep = pg.page.points!.find(x => x.name === 'q9')!.glyph
     expect([at(pg, 'e'), at(pg, 'A'), grep].map(g => classAt(l, 1, g))).toEqual(['code', 'orphan', 'code'])
     // (the same lines without the regions: orphans, translated)
     expect([at(pg, 'e'), grep].map(g => classAt(ledger([pg]), 1, g))).toEqual(['orphan', 'orphan'])

@@ -25,6 +25,8 @@ export interface LedgerPage {
   points?: { name: string; glyph: number; box: number }[]
   /** the paragraphs' points (ink.mjs `paras`) */
   paras?: { name: string; glyph: number; box: number }[]
+  /** the regions TeX set (ink.mjs `regions`): a code region's line is code */
+  regions?: { kind: string; from: number; to: number }[]
 }
 export interface OrphanLine { page: number; text: string; letters: number; x0: number; x1: number; y: number }
 export interface Ledger {
