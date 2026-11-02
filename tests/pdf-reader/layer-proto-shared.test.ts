@@ -146,6 +146,15 @@ describe('a shared line: the next unit\'s first line starts where the translatio
     expect((run.skipped as unknown as { id: number; code: string }[]).map(x => [x.id, x.code])).toEqual([[1, 'unfit']])
   })
 
+  it('a heading before a unit left the original\'s as it is decided (its row not translated) stays in its row, as before', async () => {
+    // (that unit is never laid: its English first row stays where TeX set it, and nothing may run over it. 2610.22065v1 p1's
+    // "and" between two author names kept ran on 2 pt over the second before the next unit's placing was asked)
+    const run = await laid(runIn(7), P => { P.rows.get(1)!.state = 'failed' })
+    const head = (run.stats as unknown as { id: number; f: number }[]).find(r => r.id === 0)!
+    expect(linesOf(run, 1)).toBeUndefined()
+    expect([head.f, linesOf(run, 0)![0]![7]]).toEqual([9.5, 84.51])
+  })
+
   it('a heading left the original\'s (not translated): its text starts where TeX set it', async () => {
     const run = await laid(runIn(3), P => { P.rows.get(0)!.state = 'failed' })
     expect(linesOf(run, 0)).toBeUndefined()

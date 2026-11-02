@@ -1808,6 +1808,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const fid = followers.get(p.id)
     if (fid === undefined || kept || p.unit.kind === 'cell') return null
     if (!p.layout.clipped && p.layout.scale >= 1 - 1e-9) return null
+    // (a next unit that will be laid: placed, its row decided before this one is laid (consume), and not laid yet. One left the
+    // original's as it is decided — a row kept, a unit skipped — is never laid, and its English first row stays where TeX set it:
+    // 2610.22065v1 p1's "and" between two author names kept, which ran on 2 pt over the second)
+    const f = byId.get(fid)
+    if (!f || f.refused || f.taken) return null
     const row = candOf.get(fid)?.lead, fu = tex.index.unit(fid)
     if (!row || !fu?.lines.length || fu.lines[0] !== row.page) return null
     const bi = p.blocks.length - 1, b = p.blocks[bi]
