@@ -467,7 +467,22 @@
 //     rows in the file as they were but one, 2610.17024v1's u148, whose `$\sum_{r\le2p-m_e}\binom{m_i+2p}{r}$` stood on the line
 //     above its own and is on its own now. No source unit's text, pieces or wire changes: a copy of 54 carries every unit
 //     (live.mjs PIPELINE_CARRIES)
-// 56 (the lost class of the release sweep of 2026-11-02: a display left LOST, its unit English): an opening point alone whose next
+// 56 (the owner's report of 2026-11-02 on 1706.03762v7 pp13-15, staging at PIPELINE 54: whole stretches of the attention figures'
+//     labels left English): what the page does not show is no ink to a figure's label, and a ground lies under the text
+//     (layout/ink.mjs `unseen` and `cut`, the figures' reading alone: a glyph whose own ink is wholly outside the clip in force,
+//     any paint at an alpha of 0, a constant's or a transparency group's painted at 0 (PDF 11.6.6), and what a group paints past
+//     its box, which PDF.js bounds it to; a Type 3 glyph as PDF.js draws it, d0 at alpha 1, d1 by what its procedure paints at
+//     its own alpha; layout/figure-text.mjs roomOf: a fill of known lines holding the band's middle, an image or a shading over
+//     the band, painted after the text, covers it as far as its box shows). Each of that paper's attention figures is a crop of
+//     a larger plot whose title, "Input-Input Layer5", the form's box hides under its bottom row of labels, and each token's box
+//     per head is a group painted at ca 0: 73 of its 244 labels were crowded, 239 are drawn now. A run of glyphs the page does
+//     not show is no unit, as a run the clip cuts is not. Over arXiv's PDFs of 222 papers: 141 labels on 10 papers drawn, 9
+//     covered (7 a hidden copy of a figure, 2 under a picture laid over them), 188 runs no units (23 drawn before where the page
+//     shows nothing, past their groups' boxes; the others crowded, 149 of them invisible text); the pack's figure gate and the
+//     25-paper set's 0 failures (PDF-READER §19.12). The figure units' cut moves, so the rows' identities: raised so. Every
+//     source unit, its pieces and its wire are 55's: a copy of 55 carries every unit (live.mjs PIPELINE_CARRIES), a figure unit
+//     found again by its source (cache.mjs seedFrom)
+// 57 (the lost class of the release sweep of 2026-11-02: a display left LOST, its unit English): an opening point alone whose next
 //     mark is another region's — a float TeX shipped into the stream after a display, before the text after it — owns what its
 //     own region holds from it to the next mark there on its page, up to the text after it (layout/stream.mjs `pastOther`, asked
 //     where the text after it was not found before that float's mark). The layout file's rows of each such piece (the maker's
@@ -475,8 +490,8 @@
 //     7 among them, the production pass on both engines over the same compiles, every page read within its clocks): 2 units of 2
 //     papers laid whole that were the original's (2610.20507v1's u21, its display (16) before Figure 3; 2610.21288v1's u30, its
 //     display (12) before Figure 2), none the other way, every other unit's rows as they were. No source unit's text, pieces or
-//     wire changes: a copy of 55 carries every unit (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '56'
+//     wire changes: a copy of 56 carries every unit (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '57'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

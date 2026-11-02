@@ -36,7 +36,8 @@
 // after it is (a word against its axis), else `centre` (a node's text, an axis title: TeX and the plotting programs centre
 // them). A unit whose band meets other ink inside its box — another glyph's, a stroke's segment widened by its half line width,
 // a fill's edge, an image's or a shading's box —, but a fill that holds the whole band (a node's fill, the plot's background), is
-// `crowded`: a translation there could cover that ink, so it stays the original's.
+// `crowded`: a translation there could cover that ink, so it stays the original's. Ink is what the page shows: a glyph wholly
+// outside the clip in force and any paint at an alpha of 0 (pageInk's `unseen`) are none, neither a label's nor its crowding.
 //
 // Its set and its room (the owner's rule of 2026-10-29: the labels of one group set at one size, the original's, each keeping the
 // original's alignment; a translation may take free space, never touching other ink nor leaving its figure; a group that cannot
@@ -116,12 +117,12 @@ function streamOf(pg, owners) {
     const x = G[g]
     if (!(x.n >= 0)) continue
     const ascent = (x.top - x.y) / Math.max(x.size, 1e-6), descent = (x.bottom - x.y) / Math.max(x.size, 1e-6)
-    out.push({ i: g, turned: false, n: x.n, k: x.k, u: x.u ?? '', blank: !!x.blank || !/\S/u.test(x.u ?? ''), ox: x.x0, oy: x.y, ex: x.x1, ey: x.y, ux: 1, uy: 0, size: x.size, ascent, descent, up: ascent, down: descent, font: x.font, fill: x.fill ?? 0, form: !!x.form, picture: d, owner: owners?.[g] ?? null, ink: [x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top], clipped: !!x.clipped, fid: x.fid ?? 0, pid: x.pid ?? 0 })
+    out.push({ i: g, turned: false, n: x.n, k: x.k, u: x.u ?? '', blank: !!x.blank || !/\S/u.test(x.u ?? ''), ox: x.x0, oy: x.y, ex: x.x1, ey: x.y, ux: 1, uy: 0, size: x.size, ascent, descent, up: ascent, down: descent, font: x.font, fill: x.fill ?? 0, form: !!x.form, picture: d, owner: owners?.[g] ?? null, ink: [x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top], clipped: !!x.clipped, unseen: !!x.unseen, fid: x.fid ?? 0, pid: x.pid ?? 0 })
   }
   T.forEach((t, j) => {
     if (!(t.n >= 0)) return
     const picture = depthAtPoint[Math.min(Math.max(t.pt ?? 0, 0), P.length)]
-    out.push({ i: j, turned: true, n: t.n, k: t.k, u: t.u ?? '', blank: !!t.blank || !/\S/u.test(t.u ?? ''), ox: t.ox, oy: t.oy, ex: t.ex, ey: t.ey, ux: t.ux, uy: t.uy, size: t.size, ascent: t.ascent, descent: t.descent, up: Number.isFinite(t.up) ? t.up : t.ascent, down: Number.isFinite(t.down) ? t.down : t.descent, font: t.font, fill: t.fill ?? 0, form: !!t.form, picture, owner: null, box: t.box, clipped: !!t.clipped, fid: t.fid ?? 0, pid: t.pid ?? 0 })
+    out.push({ i: j, turned: true, n: t.n, k: t.k, u: t.u ?? '', blank: !!t.blank || !/\S/u.test(t.u ?? ''), ox: t.ox, oy: t.oy, ex: t.ex, ey: t.ey, ux: t.ux, uy: t.uy, size: t.size, ascent: t.ascent, descent: t.descent, up: Number.isFinite(t.up) ? t.up : t.ascent, down: Number.isFinite(t.down) ? t.down : t.descent, font: t.font, fill: t.fill ?? 0, form: !!t.form, picture, owner: null, box: t.box, clipped: !!t.clipped, unseen: !!t.unseen, fid: t.fid ?? 0, pid: t.pid ?? 0 })
   })
   out.sort((a, b) => a.n - b.n || a.k - b.k)
   return out
@@ -182,7 +183,7 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
         run = { gs: [], font: x.font, size: x.size, fill: x.fill, form: x.form, fid: x.fid, pid: x.pid, s1: 0, frame: { ox: x.ox, oy: x.oy, ux: x.ux, uy: x.uy } }
       }
       run.gs.push(x)
-      if (x.clipped && !x.blank) run.clipped = true
+      if ((x.clipped || x.unseen) && !x.blank) run.clipped = true
       run.s1 = Math.max(run.s1, along(run.frame, x.ex, x.ey))
     }
     close()
@@ -201,8 +202,8 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       const text = textOf(r.gs, r.frame)
       if (!WORD.test(text.normalize('NFKC'))) continue
       if (gs.some(x => UNREAD.test(x.u)) || text.length > FIGURE_TEXT_MAX) continue
-      // (a run its clip cuts, or its page's edge, whole or in part, is not shown whole: no text a translation could stand for,
-      // and a row whose origin is off its page no part's reader takes, figure-rows.mjs checkFigures)
+      // (a run its clip cuts, or its page's edge, whole or in part, or one painted at an alpha of 0, is not shown whole: no text a
+      // translation could stand for, and a row whose origin is off its page no part's reader takes, figure-rows.mjs checkFigures)
       if (r.clipped || gs.some(x => offPage(x.ox, x.oy) || offPage(x.ex, x.ey))) { stats.clipped++; continue }
       // (a run a glyph of which stands past BAND_MAX of its size from its baseline is not set at its size: its glyphs are drawn at a
       // scale its size does not tell (2608.08481v1's OriginLab faces, 7 of it tall), a translation drawn at its size would be a
@@ -490,15 +491,24 @@ const angleOf = f => { const a = Math.round((Math.atan2(f.uy, f.ux) * 18000) / M
 
 /**
  * A unit's room on its page: whether other ink lies inside its box's band (`crowded`), and its anchor (`start`, `centre`, `end`)
- * by the figure's lines right before and after it along its baseline. Other ink: every level glyph not the run's (its outline's
+ * by the figure's lines right before and after it along its baseline. Other ink, what the page shows (pageInk's `unseen` none of
+ * it: a glyph wholly outside the clip in force, any paint at an alpha of 0): every level glyph not the run's (its outline's
  * box), every turned glyph's box but the run's own, an image's or a shading's box that does not hold the whole band, and a
  * figure's path by its lines where pageInk kept them (`shapes`: a stroke's segments widened by half its line width, a fill's
  * edges; a fill that holds the band, edges clear of it, is its background), else by its box, which a frame or a fill behind the
- * text holds the band within
+ * text holds the band within. A ground is painted before the text: a fill of known lines that holds the band's middle, an image
+ * or a shading over the band painted after it (pageInk's `boxAt`), a card stacked on it, a picture laid over it, covers it, and
+ * crowds it
  */
 function roomOf(pg, f, u, own) {
-  const G = pg.glyphs ?? [], B = pg.boxes ?? [], S = pg.shapes ?? null
+  const G = pg.glyphs ?? [], B = pg.boxes ?? [], S = pg.shapes ?? null, U = pg.unseen ?? null, C = pg.cut ?? null
   const mineG = new Set(own.filter(x => !x.turned).map(x => x.i)), mineB = new Set(own.filter(x => x.turned && x.box >= 0).map(x => x.box))
+  // (the boxes painted before the run's first glyph, pageInk's `boxAt` (a turned glyph's own box, painted where it is shown): a
+  // fill of known lines, an image or a shading from it on that holds the band is painted over the run, never its ground; a box
+  // of lines not known, a frame drawn as a ring among them, and an annotation's appearance stay what they were)
+  const A = pg.boxAt ?? null
+  let over = Infinity
+  for (const x of own) if (!x.blank) over = Math.min(over, x.turned ? (x.box >= 0 ? x.box : Infinity) : (A?.[x.i] ?? Infinity))
   const pad = CROWD_PAD * u.size
   const band = [pad, u.descent * u.size + pad, u.length - pad, u.ascent * u.size - pad]
   const reach = ANCHOR_REACH * u.size, far = Math.max(reach, (ROOM_MAX + ROOM_CLEAR) * u.size)
@@ -528,21 +538,23 @@ function roomOf(pg, f, u, own) {
   for (let g = 0; g < G.length && !crowded; g++) {
     if (mineG.has(g)) continue
     const x = G[g], box = [x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top]
-    if (x.blank || !/\S/u.test(x.u ?? '') || apartFar(...box)) continue
+    if (x.blank || x.unseen || !/\S/u.test(x.u ?? '') || apartFar(...box)) continue
     const e = inFrame(f, box)
     if (e[3] > band[1] && e[1] < band[3]) { if (e[2] > band[0] && e[0] < band[2]) { if (!apart(...box)) crowded = true } else free1(e[0], e[2]) }
   }
   for (let b = 0; b + 3 < B.length && !crowded; b += 4) {
-    const box = [B[b], B[b + 1], B[b + 2], B[b + 3]]
-    if (apartFar(...box) || mineB.has(b / 4)) continue
+    // (a box as far as it shows: the bounds of its transparency groups cut it, pageInk's `cut`)
+    const box = C?.get(b / 4) ?? [B[b], B[b + 1], B[b + 2], B[b + 3]]
+    if (apartFar(...box) || mineB.has(b / 4) || U?.has(b / 4)) continue
     const e = inFrame(f, box)
     if (e[3] <= band[1] || e[1] >= band[3] || e[2] <= -far || e[0] >= u.length + far) continue
     // (the crowding and the anchor by the ink within the reach, as before; the free line by every ink, a path's lines as far as
     // its box shows them: a line its clip cuts off is no ink there)
     const near = !apart(...box) && !(e[2] <= -reach || e[0] >= u.length + reach)
-    const shape = S?.get(b / 4)
-    if (shape) { shapeRoom(shape, f, band, near ? along1 : null, free1, e); continue }
-    const holds = e[0] <= 0 && e[2] >= u.length && e[1] <= u.descent * u.size && e[3] >= u.ascent * u.size
+    const shape = S?.get(b / 4), after = b / 4 >= over
+    if (shape) { shapeRoom(shape, f, band, near ? along1 : null, free1, e, after); continue }
+    const kind = pg.paths?.[b / 4]
+    const holds = !(after && (kind === -2 || kind === -3)) && e[0] <= 0 && e[2] >= u.length && e[1] <= u.descent * u.size && e[3] >= u.ascent * u.size
     // (a box behind the whole band is its ground, no ink of its box: a path's, its free line ending a band's height inside its
     // edges, as its lines are not known (a rounded corner, a frame's stroke, past the page's shapes: 2610.21924v1's "ARCHIVE"
     // node); an image's, a shading's or boxes merged, none: their pixels beside the original's box are no ground a translation
@@ -561,8 +573,9 @@ function roomOf(pg, f, u, own) {
 /** a path's lines against a unit's band (in its frame): each segment's part across the band (a stroke's widened by its half
  *  width) told by its extent along it (along1, where given), and that part as far as the path's box `e` shows it, its clip's,
  *  as the free line's end (free1); a fill none of whose edges reach into the band's box and that holds the band's middle is
- *  behind the text, its edges told as the free line's ends alone (a translation stays on its ground) */
-function shapeRoom(shape, f, band, along1, free1, e) {
+ *  behind the text, its edges told as the free line's ends alone (a translation stays on its ground), where it was painted
+ *  before the text: painted `after` it, it covers the text, ink over the whole band */
+function shapeRoom(shape, f, band, along1, free1, e, after = false) {
   const { segs, hw } = shape, w = shape.stroke ? hw : 0
   const t0 = band[1] - w, t1 = band[3] + w
   const parts = []
@@ -582,7 +595,11 @@ function shapeRoom(shape, f, band, along1, free1, e) {
   // (to its box within SHOWN_SLACK: its segments are single floats, a rectangle's edge a hair past the box it bounds)
   const shown = (a, b) => { const p = Math.max(a, e[0] - SHOWN_SLACK), q = Math.min(b, e[2] + SHOWN_SLACK); if (p <= q) free1(p, q) }
   // (a ground: its lines where its box shows them, and its box's own edges, where a clip cuts it short of them)
-  if (shape.fill && !shape.stroke && !inside && holdsPoint(shape, f, (band[0] + band[2]) / 2, (band[1] + band[3]) / 2)) { for (const [a, b] of parts) shown(a, b); free1(Math.min(e[0], band[0]), Math.min(e[0], band[0])); free1(Math.max(e[2], band[2]), Math.max(e[2], band[2])); return }
+  const holds = shape.fill && !inside && holdsPoint(shape, f, (band[0] + band[2]) / 2, (band[1] + band[3]) / 2)
+  // (painted after the text it covers it as far as its box, its clip's, shows it: its lines uncut may hold the band where its
+  // clip leaves none of it)
+  if (holds && after) { const a = Math.max(band[0], e[0]), b = Math.min(band[2], e[2]); if (a < b) along1?.(a, b) }
+  else if (holds && !shape.stroke) { for (const [a, b] of parts) shown(a, b); free1(Math.min(e[0], band[0]), Math.min(e[0], band[0])); free1(Math.max(e[2], band[2]), Math.max(e[2], band[2])); return }
   for (const [a, b] of parts) { along1?.(a, b); shown(a, b) }
 }
 
