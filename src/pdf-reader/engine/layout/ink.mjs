@@ -565,9 +565,12 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       glyph.ix0 = Math.min(a, b); glyph.ix1 = Math.max(a, b); glyph.top = oy + box[3] * sz; glyph.bottom = oy + box[1] * sz
     } else if (box) { glyph.top = glyph.bottom = oy; glyph.ix0 = glyph.ix1 = ox }
     if (indices) { glyph.n = curShow; glyph.k = glyphAt; if (!/\S/.test(u)) glyph.blank = true; if (s.form > 0) glyph.form = true }
-    // (`turned`, the figures' reading: a glyph not wholly inside the clip in force is not shown whole, an included figure's text its
-    // viewport cuts off)
-    if (turned && outsideClip(Math.min(glyph.x0, glyph.ix0), glyph.bottom, Math.max(glyph.x1, glyph.ix1), glyph.top)) glyph.clipped = true
+    // (`turned`, the figures' reading: a glyph whose own ink (its outline, else its advance and its font's band) is not wholly
+    // inside the clip in force is not shown whole, an included figure's text its viewport cuts off. Its own ink alone, never its
+    // advance: a plotting program bounds its figure's box by the ink, so that the side bearing of a label at its edge stands past
+    // it, and the label is shown whole (2610.19274v1 p9 "frames" and p56's title, the sweep of 1e01ce14: no unit since #555
+    // bounded the clip by the groups' boxes))
+    if (turned && outsideClip(glyph.ix0, glyph.bottom, glyph.ix1, glyph.top)) glyph.clipped = true
     // (and one nothing of which is shown, `unseen`: its own ink (its outline, else its advance and its font's band) wholly outside
     // the clip, a cropped plot's title its form's box hides, or painted at an alpha of 0: no ink a figure's label may be crowded
     // by, nor a label's own)
@@ -608,8 +611,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     if (s.form > 0) t.form = true
     if (s.formId) t.fid = s.formId
     if (pictureIds.length) t.pid = pictureIds.at(-1)
-    // (not shown whole where its own ink is not wholly inside the clip in force, as a level glyph (emit): its advance and its
-    // outline across it, its outline's bottom to its top, else its font's descent to its ascent (an outline of nothing drawn:
+    // (not shown whole where its own ink is not wholly inside the clip in force, as a level glyph (emit): its outline across it,
+    // else its advance, its outline's bottom to its top, else its font's descent to its ascent (an outline of nothing drawn:
     // its baseline alone); the four corners of that box turned with it. Never a box of its whole size on both sides of its
     // baseline: a y-axis title or a colour bar's title set at its figure's edge, inside the form's box, read as cut and was no
     // unit (2610.35877v1 p8, 2610.22065v1 p3: the sweep of 6e0a8d1c, once the final pass drew its figures with no group, whose
@@ -629,9 +632,11 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
         }
         return [X0, Y0, X1, Y1]
       }
-      if (outsideClip(...onPage(Math.min(xa, xb, ia, ib), Math.max(xa, xb, ia, ib)))) t.clipped = true
-      // (nothing of it shown where its own ink, its outline across (else its advance), is wholly outside the clip)
-      if (t.clipped && hiddenByClip(...(has ? onPage(Math.min(ia, ib), Math.max(ia, ib)) : onPage(Math.min(xa, xb), Math.max(xa, xb))))) t.unseen = true
+      // (its own ink, its outline across (else its advance): not shown whole where it is not wholly inside the clip, as a level
+      // glyph's; nothing of it shown where it is wholly outside)
+      const own = has ? onPage(Math.min(ia, ib), Math.max(ia, ib)) : onPage(Math.min(xa, xb), Math.max(xa, xb))
+      if (outsideClip(...own)) t.clipped = true
+      if (t.clipped && hiddenByClip(...own)) t.unseen = true
     }
     if (!(textAlpha(g) > 0)) t.unseen = true
     if (finite(ox, oy, ex, ey, sz) && turnedOut.length < glyphsMax) turnedOut.push(t)

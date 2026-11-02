@@ -338,6 +338,27 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
     expect(turned(7.158).stats.outsized).toBe(1)
   })
 
+  it('the caps count every run that spells a word, shown whole or not: what shows of the text never moves where they fall (the sweep of 1e01ce14)', () => {
+    // (2610.19159v1: its pp. 2-17's text no page shows, which #555 made no units, let the paper's cap fall later, inside p67's
+    // box, so that a line the ink units had translated became a figure unit crowded by its own underscore. A run no page shows
+    // takes its place under the cap as a unit does)
+    const hidden = { ...word('hidden'), view: [0, 0, 300, 300] }
+    for (const g of hidden.glyphs) Object.assign(g, { unseen: true })
+    const shown = { ...word('label'), view: [0, 0, 300, 300] }
+    const doc = figureUnitsOf([hidden, shown] as never, null, { unitsDoc: 1 })
+    expect(doc.units).toEqual([])
+    expect(doc.stats).toMatchObject({ clipped: 1, past: 1 })
+    // (a page's cap alike: the run past it is no unit, whatever its page's runs before it showed)
+    const page = { ...word('label'), view: [0, 0, 300, 300] }
+    page.glyphs.push(...hidden.glyphs.map(g => ({ ...g, n: 9, y: 40, top: 47, bottom: 38 })))
+    page.pictures[1]!.glyph = page.glyphs.length
+    const one = figureUnitsOf([page] as never, null, { unitsPage: 1 })
+    expect(one.units.map(u => u.text)).toEqual(['label'])
+    expect(one.stats).toMatchObject({ past: 1, clipped: 0 })
+    // (no cap reached: the run shown is a unit, the one not shown counted with the clipped, as before)
+    expect(figureUnitsOf([hidden, shown] as never, null).units.map(u => u.text)).toEqual(['label'])
+  })
+
   it('a glyph a unit owns, or one outside every figure, is no figure\'s', () => {
     const pg = word('label')
     expect(figureUnitsOf([{ ...pg, pictures: [] }] as never, null).units).toEqual([])

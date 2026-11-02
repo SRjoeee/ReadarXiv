@@ -571,6 +571,20 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
     const t = pageInk(OPS, list(form(...text('cmsy', 10, [0, 1, -1, 0, 50, 97], show(g('R', 600))))), o, { rotate: 0, turned: true }).turned![0]!
     expect(t).toMatchObject({ clipped: true, unseen: true })
   })
+  it('a glyph is shown whole by its own ink inside the clip, its advance past it or not: a label at the edge of a box its ink bounds (the sweep of 1e01ce14)', () => {
+    // (an outline from 0.5 to 0.7 em across: at x -4 its advance, -4 to 2, crosses the box's edge at 0; its ink, 1 to 3, does not)
+    const o = objs({ ...sy, R: [M, 0.5, 0, L, 0.7, 0, L, 0.7, 0.5, Z] })
+    const level = (...ops: Op[]) => only(pageInk(OPS, list(form(...ops)), o, { rotate: 0, turned: true }).glyphs, 'R')
+    expect(level(...text('cmsy', 10, [1, 0, 0, 1, -4, 40], show(g('R', 600)))).clipped).toBeUndefined()
+    // (a group's box alike, as PDF.js bounds a group: a plotting program ends its figure's box at its labels' ink, so that the side
+    // bearing of the first letter stands past it: 2610.19274v1 p9 "frames", p56's title)
+    expect(level([OPS.beginGroup, [{ bbox: [20, 0, 100, 100] }]], ...text('cmsy', 10, [1, 0, 0, 1, 16, 40], show(g('R', 600))), [OPS.endGroup, [{}]]).clipped).toBeUndefined()
+    // (its ink across the edge: cut, as before)
+    expect(level(...text('cmsy', 10, [1, 0, 0, 1, -6, 40], show(g('R', 600)))).clipped).toBe(true)
+    // (a turned one alike: its advance from -4 up the page, past the box's bottom; its ink from 1 to 3)
+    const t = pageInk(OPS, list(form(...text('cmsy', 10, [0, 1, -1, 0, 50, -4], show(g('R', 600))))), o, { rotate: 0, turned: true }).turned![0]!
+    expect(t.clipped).toBeUndefined()
+  })
   it('a Type 3 glyph is seen as PDF.js draws it: a d0 one at alpha 1 whatever the text\'s, a d1 one by what its procedure paints; a group painted at 0 still hides it (#555)', () => {
     const path = [OPS.fill, [Float32Array.from([0])], Float32Array.from([10, 0, 30, 20])]
     const procs = new Map<string, { fnArray: number[]; argsArray: unknown[] }>([

@@ -526,7 +526,19 @@
 //     that were the original's, none the other way, every other unit's rows as they were. The layout file's rows of each such piece, the
 //     maker's reading of the new answers riding this version as 48's did. No source unit's text, pieces or wire changes: a copy
 //     of 60 carries every unit (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '61'
+// 62 (the release sweep of 1e01ce14: three units translated in production, English since 56): a glyph is shown whole where its
+//     own ink, its outline across (else its advance), is inside the clip in force, never cut by its advance alone (layout/ink.mjs,
+//     level and turned): a plotting program bounds its figure's box by the ink, so that the side bearing of a label at its edge
+//     stood past the group's box 56 bounded the clip by (2610.19274v1 p9's "frames", p56's title). And the figures' caps count
+//     every run that spells a word, shown whole or not (figure-text.mjs FIGURE_UNITS_PAGE, FIGURE_UNITS_DOC): 2610.19159v1's
+//     invisible Type 3 text on pp. 2-17, no units since 56, let its paper's cap fall 94 runs later, inside p67's box, whose lines
+//     the ink units had translated, one of them then a figure unit crowded by its own underscore. Measured against next
+//     522503f3: over 65 local papers (the production pass offline) the three back, 2610.19159v1's ink units 55's one by one, 3
+//     labels drawn the side bearing had cut, every other unit's class as it was; over arXiv's PDFs of 222 papers 11 runs units
+//     again, none lost; the figure gate's G1, G3f, D, O and R 0 on the pack (1706.03762v7's 244 drawn), 24 of the 25-paper
+//     set and our final passes of the five papers that move. The figure units move, so the rows' identities: raised so. Every
+//     source unit, its pieces and its wire are 61's: a copy of 61 carries every unit (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '62'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
