@@ -31,7 +31,7 @@ import { rangedAnchors } from '../pipeline/left-part.mjs'
 import { readArxivText } from './arxiv.mjs'
 import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
 import { tokensOfMarks } from './carry.mjs'
-import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, LayoutRefusal, MIXED_FILL, NAME_FLAG, NAME_KEYS, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
+import { encodeLayout, indexLayout, isPageText, LAYOUT, LAYOUT_SCHEMA, layoutPartRows, LayoutRefusal, MIXED_FILL, NAME_FLAG, NAME_KEYS, PAGE_TEXT_KINDS, parseLayout, PH_FLAG, PH_KINDS, REGION_KINDS, UNIT_FLAG, UNIT_KINDS } from './file.mjs'
 import { BOXES_PAGE, GLYPHS_PAGE, NO_FILL, packGlyphs, pageInk } from './ink.mjs'
 import { listOf, orNull } from './oplist.mjs'
 import { checkBoxes, pageRules } from './cell-rules.mjs'
@@ -550,6 +550,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   }
   /** page p's draw, once: null for none */
   const drawOf = p => { const text = drawJsonOf(p); return text === null ? null : JSON.parse(text) }
+  /** each page's regions (regionRowsOf), the file's `regions`, as its pages are read; a part's taken by page */
+  const regionRows = new Map()
+  const regionsHeld = () => [...regionRows.keys()].sort((x, y) => x - y).flatMap(q => regionRows.get(q))
   async function inkOf(p) {
     const tx = drawTexts ? drawTexts[p - 1] ?? null : null
     if (drawTexts) drawTexts[p - 1] = null
@@ -581,6 +584,26 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     if (got.capped || got.timedOut || got.rotated) { dark.add(p); return }
     ink[p] = glyphsOf(got, fontIds)
     inked[p] = 1
+    // (the page's regions, each a rectangle of the ink of the glyphs TeX set in it, the file's `regions`)
+    const rows = regionRowsOf(p, got)
+    if (rows.length) regionRows.set(p, rows)
+  }
+  /** page p's regions as the file holds them (schema 6): [p, kind, x0, bottom, x1, top] for each region of pageInk's (a line TeX
+   *  set between a region's points) that holds a glyph shown, its rectangle that ink's, within the page's view */
+  function regionRowsOf(p, got) {
+    const out = [], view = viewAt(p)
+    for (const r of got.regions ?? []) {
+      const kind = REGION_KINDS.indexOf(r.kind)
+      if (kind < 0) continue
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+      for (let g = r.from; g < r.to; g++) {
+        const x = got.glyphs[g]
+        if (!x || !/\S/u.test(x.u ?? '')) continue
+        x0 = Math.min(x0, x.ix0 ?? x.x0); x1 = Math.max(x1, x.ix1 ?? x.x1); y0 = Math.min(y0, x.bottom); y1 = Math.max(y1, x.top)
+      }
+      if (x0 < x1 && y0 < y1) out.push([p, kind, ...solid(view, x0, y0, x1, y1)])
+    }
+    return out
   }
 
   const texts = units.map((u, i) => ({ id: i, ...unitText(u.pieces), ...displayEdges(u) }))
@@ -2025,6 +2048,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     // why each unit it does not hold is the original's: a key only where one is not laid
     const outUnlaid = unlaidOf(units.map((_, i) => i), i => kept1.has(i))
     if (outUnlaid.length) file.unlaid = outUnlaid
+    // each region TeX set (schema 6): a key only where a page holds one
+    const outRegions = regionsHeld()
+    if (outRegions.length) file.regions = outRegions
     for (const r of outUnits) countColours(r[0])
     stats.ph.texts = file.pageText.length
     // the placeholders and labels counted as the file holds them
@@ -2510,6 +2536,9 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       const colours = ids.flatMap(i => unitRows.get(i).colours ?? [])
       if (colours.length) out.colours = colours
       if (unlaid.length) out.unlaid = unlaid
+      // (the regions of the pages read and not yet told: a part takes its pages' (layer-proto/cut.mjs))
+      const regions = regionsHeld()
+      if (regions.length) out.regions = regions
       return out
     }
     // ---- the babel names, each a task on the pages its marks are carried to and those of the unit it would lead (nameAt
@@ -2724,6 +2753,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       tell: (ids, through) => {
         for (const i of ids) { const r = unitRows.get(i); if (r && !r.stub) unitRows.set(i, { ...stubOf(i, r), stub: true }) }
         for (const [k, row] of nameRows) if (row[2] <= through) nameRows.delete(k)
+        for (const q of [...regionRows.keys()]) if (q <= through) regionRows.delete(q)
         if (cellRules) for (const p of cellRules.keys()) if (p <= through) cellRules.delete(p)
       },
       /** where the stream stands: the page read last (and the marked original's), the pages anchored, decided and let go */

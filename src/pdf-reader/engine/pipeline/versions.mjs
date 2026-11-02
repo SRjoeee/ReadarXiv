@@ -538,7 +538,19 @@
 //     again, none lost; the figure gate's G1, G3f, D, O and R 0 on the pack (1706.03762v7's 244 drawn), 24 of the 25-paper
 //     set and our final passes of the five papers that move. The figure units move, so the rows' identities: raised so. Every
 //     source unit, its pieces and its wire are 61's: a copy of 61 carries every unit (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '62'
+// 63 (the owner's decision of 2026-11-03, after 2610.19159v1's transcripts: their code and terminal output cut into figure units
+//     word by word and translated, "echo" a word in Japanese): the code environments the front end knows (latex-front.mjs
+//     codeEnvsOf, the listing packages' own) are told to every reader by what TeX was told. The layout compile sets two points
+//     around each line of their bodies (marks.mjs regionsTex, a paper that uses one alone: every other paper's files byte for
+//     byte as before; a test document of every kind, each of its glyphs where it was), pageInk reads them apart
+//     (`regions`), the layout file holds each such line as a region of kind 'code' (its schema 6, LAYOUT 32, BUNDLE5 13), and the
+//     figures' reading takes none of its text (figure-text.mjs) while the ledger classes it code (ledger.mjs), kept as the paper
+//     has it by the ink units' kept blocks, whatever box or picture holds it, whatever its face. Measured against next 74d7f6a2:
+//     of 244 local sources 14 use one, the other 229's files byte for byte as before; their final passes' 1,627,743 glyphs each
+//     where it was; over 77 papers only code moves, to kept (3,663 figure units of code, no other unit's class). The figure and
+//     ink units move, so the rows' identities: raised so. Every source unit, its pieces and its wire are 62's: a copy of 62 carries
+//     every unit (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '63'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

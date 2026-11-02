@@ -97,15 +97,17 @@ describe('a left part\'s line map on the wire', () => {
     }
     for (const bad of [E.slice(0, 7), [0, ...E.slice(1)], [1, 550, 50, ...E.slice(3)], Array.from({ length: (LINES_MAX + 1) * MOVED_STRIDE }, (_, k) => E[k % MOVED_STRIDE])]) await expect(edit(bad)).rejects.toThrow()
   })
-  it('a left part of 11 is read, with no line map; one of 11 with a line map is refused', async () => {
+  it('a left part of 11 is read, with no line map; one of 11 with a line map is refused; one of 12 is read with its line map', async () => {
     const { createHash } = await import('node:crypto')
-    const as11 = async (lines: boolean) => {
+    const as = (format: string) => async (lines: boolean) => {
       const w = await left(lines ? { lines: E } : {})
-      const bytes = new TextEncoder().encode(new TextDecoder().decode(w.bytes).replace('"bundle":"12"', '"bundle":"11"'))
+      const bytes = new TextEncoder().encode(new TextDecoder().decode(w.bytes).replace('"bundle":"13"', `"bundle":"${format}"`))
       return readLeftPart(bytes, { ref: { ...(w.ref as object), sha256: createHash('sha256').update(bytes).digest('hex'), bytes: bytes.length } as never, streamOf: () => undefined })
     }
-    expect((await as11(false)).lines).toBeNull()
-    await expect(as11(true)).rejects.toThrow()
+    expect((await as('11')(false)).lines).toBeNull()
+    await expect(as('11')(true)).rejects.toThrow()
+    // (13's left part is 12's: a reader of 13 reads a bundle of 12 whole)
+    expect((await as('12')(true)).lines).not.toBeNull()
   })
 })
 

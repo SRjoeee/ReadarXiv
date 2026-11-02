@@ -2,10 +2,10 @@
 export { LayoutRefusal } from './json.mjs'
 /** the maker's version: raised with any change to what the maker writes under the schema; it enters a bundle's key, and a file
  *  names it as `layout`, which a reader reads for its shape alone: a file is refused by its `schema` (§9.3 of the plan) */
-export declare const LAYOUT: '31'
+export declare const LAYOUT: '32'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1) */
-export declare const LAYOUT_SCHEMA: 5
+export declare const LAYOUT_SCHEMA: 6
 /** a placeholder's fill where no one colour holds more than half its glyphs (the row's last number, schema 5) */
 export declare const MIXED_FILL: -1
 /** a new-style arXiv identifier, or an old one (archive, subject class, a slash and 7 digits); never a version suffix */
@@ -44,9 +44,13 @@ export declare const UNLAID: readonly ['noAnchor', 'unplacedMarks', 'kind', 'rec
 export type UnlaidCode = (typeof UNLAID)[number]
 /** a file's or a part's units not laid at most (`unlaid`) */
 export declare const UNLAID_ALL: number
+/** a region's kinds, by index (the file's `regions`, schema 6) */
+export declare const REGION_KINDS: readonly ['code']
+/** a file's or a part's regions at most */
+export declare const REGIONS_ALL: number
 /** prep/<mid>/layout-<sha256>.json (spec §4.2). arXiv's PDF units, each page unrotated, y up, pages 1-based */
 export interface LayoutFile {
-  schema: 5
+  schema: 6
   layout: string
   pdfjs: string
   paper: { id: string; version: number; pages: number }
@@ -75,6 +79,8 @@ export interface LayoutFile {
   /** why each unit the maker did not lay is the original's (UNLAID), by unit rising, none of `units`; the key only where a unit
    *  is not laid (a part's: of the units it tells) */
   unlaid?: [id: number, code: UnlaidCode][]
+  /** each region of a kind TeX set, by page rising (schema 6): [page, kind (REGION_KINDS index), x0, bottom, x1, top] */
+  regions?: [page: number, kind: number, x0: number, bottom: number, x1: number, top: number][]
 }
 /** bytes, then UTF-8, then values and nesting counted, then JSON.parse, then every bound; a file of another `schema` is
  *  refused, one of another maker's `layout` is read; throws LayoutRefusal. `sized` false: none of the bounds a part holds
@@ -92,7 +98,7 @@ export declare function checkLineskip(lineskip: unknown, path: string): [lineski
 export declare const PART_KEYS: readonly ['fonts', 'units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held', 'names']
 /** a layout part: the file's rows and tables of PART_KEYS for the units of one part (a bundle 4 part holds one); its
  *  `fonts` is its own table, which its lines' font indices and its names' name an index of */
-export type LayoutPart = Pick<LayoutFile, (typeof PART_KEYS)[number] | 'colours' | 'unlaid'>
+export type LayoutPart = Pick<LayoutFile, (typeof PART_KEYS)[number] | 'colours' | 'unlaid' | 'regions'>
 /** a layout part already parsed: every row bound checkLayout checks, per part, with each row's page one of `lo` to `hi` and
  *  its box within that page's view; `views` are the views of pages lo to hi (stride 4), `pages` the paper's. Returns the
  *  value itself, its -0s written 0; throws LayoutRefusal (a RangeError for a call that is no pages of the paper) */

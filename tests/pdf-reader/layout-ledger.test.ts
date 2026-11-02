@@ -218,6 +218,24 @@ describe('ledgerOf', () => {
     expect(l.orphanLetters).toBe(0)
   })
 
+  it('reads a line TeX set in a code region as code, by its points, whatever its face and wherever it stands (#63)', () => {
+    // (a listing in roman type, as listings sets one by default, and terminal output: lines no face tells, which the region's
+    // points do; prose beside them stays an orphan)
+    const pg = page(
+      { point: 'bs1' },
+      { glyphs: run('echo stray processes done', 100, 700) },
+      { glyphs: run('Agent Message here', 100, 680) },
+      { point: 'q9' }, { glyphs: run('grep the log for errors', 100, 660) },
+      { point: 'be1' },
+    )
+    const regions = [{ kind: 'code', from: 0, to: run('echo stray processes done', 0, 0).length }, { kind: 'code', from: pg.page.points!.find(x => x.name === 'q9')!.glyph, to: pg.page.glyphs.length }]
+    const l = ledgerOf([{ ...pg.page, regions }], { glyphs: [pg.own] }, { units: null })
+    const grep = pg.page.points!.find(x => x.name === 'q9')!.glyph
+    expect([at(pg, 'e'), at(pg, 'A'), grep].map(g => classAt(l, 1, g))).toEqual(['code', 'orphan', 'code'])
+    // (the same lines without the regions: orphans, translated)
+    expect([at(pg, 'e'), grep].map(g => classAt(ledger([pg]), 1, g))).toEqual(['orphan', 'orphan'])
+  })
+
   it('keeps prose with inline math an orphan, not a formula', () => {
     const pg = page({ point: 'bs1' }, { glyphs: [...run('Assume that there exist', 100, 700), ...run('x', 220, 700, { font: 'CMMI10' }), ...run('in the closed set', 230, 700)] }, { point: 'be1' })
     const l = ledger([pg])

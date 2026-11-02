@@ -293,10 +293,13 @@ export function partCutter({ paper, N, head, views, leftPages, rules = null, fig
         // (each colour piece's run's fill of the part's units: a key only where one of them has a row, as the file's; and why each
         // unit the part tells that the file does not lay is the original's, a key only where one is not laid)
         const colours = rows(layout.colours ?? []), unlaid = (layout.unlaid ?? []).filter(r => have.has(r[0]))
+        // (the regions TeX set on the part's own pages, a..b: a key only where one of them holds one)
+        const regions = (layout.regions ?? []).filter(r => r[0] >= a && r[0] <= b)
         part = {
           fonts: table, units: rows(layout.units), lines, frames: rows(layout.frames), erase: rows(layout.erase), ph: rows(layout.ph), labels: rows(layout.labels),
           headings: rows(layout.headings), pageText: rows(layout.pageText), held: rows(layout.held), names: named, ...(colours.length ? { colours } : {}),
           ...(unlaid.length ? { unlaid } : {}),
+          ...(regions.length ? { regions } : {}),
         }
       }
       return {

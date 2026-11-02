@@ -19,6 +19,7 @@
 // Pure arithmetic over the pages; an original module (no port statement).
 import { CLASS_CODE, CLASS_IDS, unitClass } from '../rules/content-classes.mjs'
 import { classifyFont } from '../layer-proto/fonts.mjs'
+import { regionMask } from './ink.mjs'
 import { regionsOf } from './stream.mjs'
 
 /** two glyphs on one line: their baselines within this share of the larger size (a superscript, a subscript) */
@@ -63,9 +64,14 @@ const BRACKET = /^b[se]\d+$/
 const LETTERS = /\p{L}/gu
 const lettersOf = u => (u ? (u.normalize('NFKC').match(LETTERS) ?? []).length : 0)
 const WORD = /\p{L}{3,}/gu, PAIR = /\p{L}{2,}/gu
+/** a line of a code region: at least this share of its glyphs that are no blank TeX set between a code region's points */
+const CODE_SHARE = 0.5
 
 /** the line rules, in order: the first whose test holds gives the line its class */
 export const RULES = Object.freeze([
+  // (a line TeX set in the body of an environment the source sets as code, by its points (pageInk's `regions`, marks.mjs
+  // regionsTex), wherever it stands — in a picture, a box, a float —: code, kept as the paper has it, never by its face alone)
+  ['code', l => l.code > 0 && l.code >= CODE_SHARE * l.n],
   // (a biblatex entry's line in a column's body, whatever it holds: TeX set it in that entry — its URL alone, its numbers alone)
   ['references', l => l.entry !== null && l.entry !== undefined && !l.outside],
   ['symbols', l => l.pairs === 0],
@@ -115,7 +121,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
     const G = pg.glyphs ?? [], n = G.length, P = pg.points ?? [], O = own?.glyphs?.[pi] ?? []
     const out = new Uint8Array(n).fill(CLASS_CODE.symbols)
     classes.push(out)
-    const R = regionsOf({ glyphs: { n }, boxes: pg.boxes ?? [], points: P })
+    const R = regionsOf({ glyphs: { n }, boxes: pg.boxes ?? [], points: P }), code = regionMask(pg.regions, n, 'code')
     // (the page's first and last mark of its own text, the column's mark aside: the head is shipped before the first, the foot
     // after the last)
     let first = n, last = 0
@@ -170,7 +176,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
       if (line && !(line.region === region && line.zone === zones[g] && line.entry === entries[g] && Math.abs(x.y - line.y) <= LINE_DY * Math.max(size, line.size) && x.x0 >= line.x0 - size && x.x0 - line.x1 <= LINE_GAP * size)) close()
       if (!line) {
         const depth = region >> 1, body = (region & 1) === 1
-        line = { gs: [], region, zone: zones[g], para: paraAt[g], opens: false, entry: entries[g], entryFrom: null, y: x.y, size, x0: x.x0, x1: x.x1, n: 0, letters: 0, words: 0, pairs: 0, math: 0, mono: 0, form: 0, relation: false, depth, outside: bracketed && !body && depth === 0, head: g < first, foot: g >= footFrom }
+        line = { gs: [], region, zone: zones[g], para: paraAt[g], opens: false, entry: entries[g], entryFrom: null, y: x.y, size, x0: x.x0, x1: x.x1, n: 0, letters: 0, words: 0, pairs: 0, math: 0, mono: 0, code: 0, form: 0, relation: false, depth, outside: bracketed && !body && depth === 0, head: g < first, foot: g >= footFrom }
       }
       line.gs.push(g); line.x1 = Math.max(line.x1, x.x1); line.size = Math.max(line.size, size)
       if (opensAt[g]) line.opens = true
@@ -181,6 +187,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
       line.letters += lettersOf(x.u)
       if (f === 'math') line.math++
       if (f === 'mono') line.mono++
+      if (code[g]) line.code++
       if (x.form) line.form++
       if (RELATION.test(x.u)) line.relation = true
     }

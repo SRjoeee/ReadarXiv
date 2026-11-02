@@ -1014,6 +1014,42 @@ const BACKREF_TEX = [
   '\\ifdefined\\AddToHook\\AddToHook{begindocument/end}{\\ifdefined\\BR@backref\\ifdefined\\backrefalt\\ifx\\backrefalt\\BR@BackrefAltUnused\\else\\let\\axt@brAlt\\backrefalt\\let\\backrefalt\\axt@brAltW\\fi\\fi\\ifdefined\\backref\\let\\axt@brOne\\backref\\let\\backref\\axt@brOneW\\fi\\fi}\\fi',
 ].join('')
 
+/**
+ * The regions' points (the layout compile's, after LAYOUT_TEX, for a paper that uses a code environment alone: every other paper's
+ * files are byte for byte as before): each line TeX sets as code between two points, `cds<n>` and `cde<n>` (layout/ink.mjs
+ * REGION_POINT), so that every reader knows that text as code by what TeX was told, never by its face, and keeps it as the paper
+ * has it wherever it stands (2610.19159v1's transcripts, in mdframed boxes TikZ draws: a picture's text, cut into figure units
+ * word by word and translated). `codeEnvs`, the code environments the paper uses (latex-front.mjs codeEnvsOf, the listing
+ * packages' own); `bodies`, those of them whose own body is the code (verbatim, alltt, one of the paper's own that sets
+ * typewriter type with its lines obeyed), whose begin hook sets a flag its group ends. The others' lines a listing package sets
+ * itself: listings sets the flag at its own start (its Init hook: a listing, tcolorbox's over listings, never the box's title, set
+ * before it), and fancyvrb's lines (minted's), each an \hbox in vertical mode, are marked one by one inside their boxes, around
+ * \FancyVerbFormatLine. With the flag on, LaTeX's para/begin hook sets the start point at a paragraph's start, and para/end the end
+ * point at the end of every paragraph a start opened, whatever the flag then (or, where a package ended it past LaTeX's hooks, at
+ * the start of the next paragraph, before its first glyph), in horizontal mode,
+ * the glue, kerns and penalties last taken off and put back after it (\\axt@take, as a closing mark's), so that no place to
+ * break is made or lost. The paragraph's state and number are its own group's (local): a paragraph listings sets in a box to
+ * measure a broken line and throws away (2608.30730v1's Listing 5) moves no point of the paragraph it was measured for. A listing's
+ * caption or title (listings' \lst@MakeCaption, set inside its body) is prose: set with the flag off. Never a point in vertical
+ * mode, which would make a glue a place to break and hide \lastskip from \addvspace. Test documents of every kind (verbatim,
+ * alltt, fancyvrb, listings with captions above and below and a title, \lstinline, a titled tcblisting, an environment of the
+ * paper's own with \obeylines in an mdframed box): each glyph where it was, every code line between its two points and nothing
+ * else
+ */
+export function regionsTex(codeEnvs, bodies = codeEnvs) {
+  if (!codeEnvs?.length) return ''
+  return [
+    '\\makeatletter\\newif\\ifaxt@code\\newif\\ifaxt@cdin\\gdef\\axt@cdn{0}',
+    '\\def\\axt@cdopen{\\ifaxt@off\\else\\xdef\\axt@cdn{\\the\\numexpr\\axt@cdn+1\\relax}\\let\\axt@cdmine\\axt@cdn\\axt@point{cds\\axt@cdmine}\\axt@cdintrue\\fi}',
+    '\\def\\axt@cdclose{\\ifaxt@cdin\\axt@cdinfalse\\relax\\let\\axt@back\\@empty\\axt@take\\axt@point{cde\\axt@cdmine}\\axt@back\\fi}',
+    '\\def\\axt@fvwrap{\\ifdefined\\FancyVerbFormatLine\\let\\axt@fvfl\\FancyVerbFormatLine\\def\\FancyVerbFormatLine##1{\\axt@cdopen\\axt@fvfl{##1}\\axt@cdclose}\\fi}',
+    '\\def\\axt@lstwrap{\\ifdefined\\lst@AddToHook\\lst@AddToHook{Init}{\\axt@codetrue}\\fi\\ifdefined\\lst@MakeCaption\\let\\axt@lstmc\\lst@MakeCaption\\def\\lst@MakeCaption##1{\\edef\\axt@cdwas{\\ifaxt@code1\\else0\\fi}\\axt@codefalse\\axt@lstmc{##1}\\ifnum\\axt@cdwas=1 \\axt@codetrue\\fi}\\fi}',
+    '\\ifdefined\\AddToHook\\AddToHook{para/begin}{\\axt@cdclose\\ifaxt@code\\axt@cdopen\\fi}\\AddToHook{para/end}{\\axt@cdclose}\\AddToHook{begindocument/end}{\\axt@fvwrap\\axt@lstwrap}',
+    ...bodies.map(n => `\\AddToHook{env/${n}/begin}{\\axt@codetrue}`),
+    '\\fi\\makeatother',
+  ].join('')
+}
+
 export const LAYOUT_TEX = [
   '\\makeatletter\\newif\\ifaxt@off\\newif\\ifaxt@hold\\global\\let\\axt@pend\\@empty\\let\\axt@icr\\/\\def\\axt@icv{0pt}\\newif\\ifaxt@sig',
   '\\ifdefined\\XeTeXrevision\\else\\ifdefined\\pdfextension\\def\\axt@dest#1{\\pdfextension dest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax}\\else\\ifdefined\\pdfdest\\def\\axt@dest#1{\\ifnum\\pdfoutput>0 \\pdfdest name{axt-#1} fitr width 0pt height 0pt depth 0pt\\relax\\fi}\\fi\\fi\\fi',

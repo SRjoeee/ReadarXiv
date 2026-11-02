@@ -183,13 +183,18 @@ export { LayoutRefusal } from './json.mjs'
  *  the new kind `inkreferences` (UNIT_KINDS): a reader of 29 refuses that kind's index; 31 (the owner's ruling of 2026-10-30,
  *  2610.30854v1): a page whose lines moved across its breaks through compile drift is drawable (carry.mjs DRIFT_LINES: at most 4
  *  at each end, to or from the page beside it, the rest arXiv's page's words), its units laid where a file of 30 left them
- *  `undrawn` */
-export const LAYOUT = '31'
+ *  `undrawn`; 32 (the owner's decision of 2026-11-03): each line of a code environment's body a region the file holds
+ *  (`regions`, the file's schema 6), read from the points the layout compile sets around it (marks.mjs regionsTex) */
+export const LAYOUT = '32'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,
- *  why each unit it does not lay is the original's [unit, code], a key held only where a unit is not laid */
-export const LAYOUT_SCHEMA = 5
+ *  why each unit it does not lay is the original's [unit, code], a key held only where a unit is not laid; 6 `regions`, each
+ *  region of a kind TeX set on our base page [page, kind, x0, bottom, x1, top] (REGION_KINDS: a code line, by the points the
+ *  layout compile sets around each line of a code environment's body, layout/marks.mjs regionsTex), by page rising, a key held
+ *  only where the file has one: a fact TeX decided, written once where every reader reads it (the one command model the layout
+ *  file grows into, docs/route/architecture-audit.md §2) */
+export const LAYOUT_SCHEMA = 6
 /** a placeholder's fill where no one colour holds more than half its glyphs (the row's last number, schema 5) */
 export const MIXED_FILL = -1
 /** a fill's largest value, 0xFFFFFF */
@@ -202,6 +207,10 @@ export const LAYOUT_DEPTH = 4
 /** a unit's kinds, by index: the source units', then the ink units' (layout/ink-units.mjs INK_KIND: a new kind takes the next index,
  *  so that a file of before reads as it was) */
 export const UNIT_KINDS = Object.freeze(['para', 'heading', 'caption', 'footnote', 'cell', 'abstract', 'theorem', 'figure', 'author', 'inkheads', 'inkcontents', 'inknotes', 'inkorphan', 'inknames', 'reference', 'refnames', 'affiliation', 'inkreferences'])
+/** a region's kinds, by index (the file's `regions`, schema 6): 'code', a line TeX set in the body of an environment the source
+ *  sets as code (latex-front.mjs codeEnvsOf, the listing packages' own), its text kept as the paper has it by every reader. A new
+ *  kind takes the next index and raises the schema */
+export const REGION_KINDS = Object.freeze(['code'])
 export const PH_KINDS = Object.freeze(['math', 'display', 'cite', 'ref', 'eqref', 'footnote', 'macro', 'url', 'code', 'other', 'number'])
 export const LABEL_KINDS = Object.freeze(['number', 'item', 'caption', 'footnote'])
 /** a unit's flags. TITLE: the paper's title; FRONT: its front matter; CENTRED: its lines set centred, as TeX set its
@@ -233,8 +242,8 @@ const KEYS = ['schema', 'layout', 'pdfjs', 'paper', 'left', 'views', 'fonts', 'u
 /** the keys a file or a part holds only where it has a row: each colour piece's fill (`colours`), and why each unit the maker
  *  did not lay stays the original's (`unlaid`: not `refused`, which a part's `layout` holds where it has none, format.mjs
  *  isLayoutRefusal) */
-const COLOURS = 'colours', UNLAID_KEY = 'unlaid'
-const OPTIONAL = [COLOURS, UNLAID_KEY]
+const COLOURS = 'colours', UNLAID_KEY = 'unlaid', REGIONS = 'regions'
+const OPTIONAL = [COLOURS, UNLAID_KEY, REGIONS]
 /** the keys `v` must hold: `keys`, and each optional key it holds */
 const withOptional = (v, keys) => (isObject(v) ? [...keys, ...OPTIONAL.filter(k => Object.hasOwn(v, k))] : keys)
 /** why the maker laid a unit not (layout/make.mjs: the file's `unlaid`, [id, code] by id rising; a unit laid has none, every
@@ -275,12 +284,16 @@ const PIECES_MAX = 10000, DEPTH_MIN = -1, DEPTH_MAX = 5, DEPTH_NONE = 9
 const LINES_UNIT = 2000, LINES_ALL = 200000, SIZE_MAX = 200
 /** a file's or a part's units not laid at most (`unlaid`), as its lines in all */
 export const UNLAID_ALL = LINES_ALL
+/** the regions a file or a part holds, at most (each line of a code environment's body, every page's) */
+export const REGIONS_ALL = 100_000
 const SHARE_MAX = 1000, ERASE_LINE = 16, SEGS_INLINE = 4, SEGS_DISPLAY = 64, LABELS_UNIT = 4, SRC_MAX = 4000
 /** a file's names at most: a heading a babel name sets is a few a paper, a thesis's some tens */
 export const NAMES_MAX = 10_000
 const NAME_BITS = NAME_FLAG.CENTRED | NAME_FLAG.CAPITALS | NAME_FLAG.RUN_IN
 /** a name's row: its values */
 const NAME_ROW = 15
+/** a region's row: page, kind, x0, bottom, x1, top */
+const REGION_ROW = 6
 /** a skip at most: TeX's \maxdimen in PDF units, which \offinterlineskip sets \lineskiplimit to, as the file writes it
  *  (to a hundredth: 16322.79, over the exact 16322.7895 by the rounding), so that a value the marks file holds is read */
 const SKIP_MAX = Math.round(((16384 * 72) / 72.27) * 100) / 100
@@ -700,6 +713,28 @@ function checkRows(f, { views, lo, hi, sized = true }) {
       last = r[0]
     }
   }
+
+  // regions: page, kind (REGION_KINDS), x0, bottom, x1, top; by page rising, each a rectangle within its page's view, a key held
+  // only with a row
+  if (Object.hasOwn(f, REGIONS)) {
+    const regions = array(f.regions, REGIONS)
+    if (regions.length === 0) throw refuse(REGIONS, 'empty: a file holds the key only where it has a row')
+    if (sized && regions.length > REGIONS_ALL) throw new LayoutRefusal(REGIONS, `more than ${REGIONS_ALL} regions`, 'rows')
+    last = span.lo
+    for (let i = 0; i < regions.length; i++) {
+      const r = regions[i]
+      if (!Array.isArray(r) || r.length !== REGION_ROW) throw refuse(`regions[${i}]`, `not [page, kind, x0, bottom, x1, top] (${kindOf(r)})`)
+      if (!isInteger(r[0], last, span.hi)) throw refuse(`regions[${i}][0]`, `not a page ${last} to ${span.hi}: by page rising`)
+      if (!isInteger(r[1], 0, REGION_KINDS.length - 1)) throw refuse(`regions[${i}][1]`, 'not a kind of REGION_KINDS')
+      const v = 4 * (r[0] - span.lo)
+      const xlo = views[v] - SLACK, ylo = views[v + 1] - SLACK, xhi = views[v + 2] + SLACK, yhi = views[v + 3] + SLACK
+      for (let j = 2; j < REGION_ROW; j++) if (!isNumber(r[j]) || r[j] < (j % 2 ? ylo : xlo) || r[j] > (j % 2 ? yhi : xhi)) throw refuse(`regions[${i}][${j}]`, `not a number within its page's view (${kindOf(r[j])})`)
+      if (r[4] <= r[2]) throw refuse(`regions[${i}][4]`, 'not right of x0')
+      if (r[5] <= r[3]) throw refuse(`regions[${i}][5]`, 'not above bottom')
+      zeroes(r)
+      last = r[0]
+    }
+  }
   return f
 }
 
@@ -707,6 +742,7 @@ function checkRows(f, { views, lo, hi, sized = true }) {
 const r2 = v => Math.round(v * 100) / 100
 /** rows of `stride` with the coordinates (offsets `exact` excepted) to a hundredth */
 const rounded = (rows, stride, exact) => rows.map((v, j) => (exact.includes(j % stride) ? v : r2(v)))
+const REGION_EXACT = [0, 1]
 const LINE_EXACT = [0, 7], FRAME_EXACT = [0, 1, 2, 3, 4], ERASE_EXACT = [0], LABEL_EXACT = [0, 1, 2], NAME_EXACT = [0, 1, 2, 9, 10, 11]
 
 /** the rows and tables of a file or a part as written, from `fonts` to `names`: numbers to a hundredth */
@@ -729,6 +765,8 @@ function rowsOf(file) {
     ...(file.colours?.length ? { colours: file.colours } : {}),
     // (only where a unit is not laid)
     ...(file.unlaid?.length ? { unlaid: file.unlaid } : {}),
+    // (only where the page holds a region: a file of no code is the bytes it was, its schema aside)
+    ...(file.regions?.length ? { regions: file.regions.map(r => rounded(r, REGION_ROW, REGION_EXACT)) } : {}),
   }
 }
 
@@ -764,7 +802,7 @@ export function encodeLayoutPart(part) {
  * font in no row is left out. The parts are not changed
  */
 export function mergeLayout(parts) {
-  const out = { units: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], colours: [], unlaid: [] }
+  const out = { units: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], colours: [], unlaid: [], regions: [] }
   const lineList = [], nameList = []
   for (const p of parts) {
     for (const key of Object.keys(out)) for (const row of p[key] ?? []) out[key].push(row)
@@ -776,6 +814,8 @@ export function mergeLayout(parts) {
   out.ph.sort((a, b) => a[0] - b[0] || a[1] - b[1])
   out.pageText.sort((a, b) => a[0] - b[0] || a[1] - b[1])
   out.colours.sort((a, b) => a[0] - b[0] || a[1] - b[1])
+  // (a part's regions are its pages': by page, in each part's order)
+  out.regions.sort((a, b) => a[0] - b[0])
   const fonts = [], index = new Map()
   const fontAt = (table, i) => {
     const name = table[i]
@@ -795,7 +835,7 @@ export function mergeLayout(parts) {
     out[9] = fontAt(table, r[9])
     return out
   })
-  return { fonts, units: out.units, lines, frames: out.frames, erase: out.erase, ph: out.ph, labels: out.labels, headings: out.headings, pageText: out.pageText, held: out.held, names, ...(out.colours.length ? { colours: out.colours } : {}), ...(out.unlaid.length ? { unlaid: out.unlaid } : {}) }
+  return { fonts, units: out.units, lines, frames: out.frames, erase: out.erase, ph: out.ph, labels: out.labels, headings: out.headings, pageText: out.pageText, held: out.held, names, ...(out.colours.length ? { colours: out.colours } : {}), ...(out.unlaid.length ? { unlaid: out.unlaid } : {}), ...(out.regions.length ? { regions: out.regions } : {}) }
 }
 
 // ---------------------------------------------------------------- the index

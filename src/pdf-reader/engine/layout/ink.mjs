@@ -79,6 +79,14 @@ const LEVEL = 1e-3
 const TURN_SKEW = 0.02
 /** a TikZ picture's points (layout/marks.mjs POINTS_TEX, around pgf's picture): a figure's text and lines lie between them */
 export const PICTURE_START = 'zs', PICTURE_END = 'ze'
+/** a region's points (layout/marks.mjs regionsTex): `<kind>s<n>` before a line TeX set in a region of that kind, `<kind>e<n>`
+ *  after it, the kind's name one of REGION_POINT_KINDS. A code region's: each line of the body of an environment the source
+ *  sets as code (latex-front.mjs codeEnvsOf, the listing packages' own), whatever box or picture holds it */
+export const REGION_POINT = /^(cd)([se])(\d+)$/
+/** the region kinds by their points' names (the layout file's REGION_KINDS, layout/file.mjs: 'code') */
+export const REGION_POINT_KINDS = Object.freeze({ cd: 'code' })
+/** a column body's bracket (marks.mjs POINTS_TEX: `bs<n>` before it, `be<n>` after it) */
+const BODY_BRACKET = /^b[se]\d+$/
 /** a figure's curve as this many chords (`turned`'s shapes), and the numbers a page's shapes hold at most */
 const CURVE_STEPS = 8, SHAPE_NUMBERS_PAGE = 1_000_000
 const FONT_MATRIX = [0.001, 0, 0, 0.001, 0, 0]
@@ -325,10 +333,10 @@ export const PARA_POINT = /^q\d+$/
  */
 export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity, boxesMax = Infinity, stepsMax = STEPS_MAX, msMax = Infinity, glyphsOnly = false, turned = false }) {
   const turn = (((Number(rotate) % 360) + 360) % 360)
-  if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], ...(indices ? { paths: [], shows: 0 } : {}), ...(turned ? { turned: [], shapes: new Map(), pictures: [], figures: new Map(), unseen: new Set(), cut: new Map() } : {}), capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true }
+  if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], regions: [], ...(indices ? { paths: [], shows: 0 } : {}), ...(turned ? { turned: [], shapes: new Map(), pictures: [], figures: new Map(), unseen: new Set(), cut: new Map() } : {}), capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true }
   const fnArray = ops?.fnArray ?? [], argsArray = ops?.argsArray ?? []
   const n = Math.min(fnArray.length, OPS_CAP)
-  const glyphs = [], boxes = [], points = [], boxAt = [], paths = [], paras = [], turnedOut = [], pictures = []
+  const glyphs = [], boxes = [], points = [], boxAt = [], paths = [], paras = [], turnedOut = [], pictures = [], regionPoints = []
   // (the guards: reading stops once `stop` is set: `over` past glyphsMax, `deep` ink placed in a state past STACK_MAX not
   // kept, `many` past stepsMax, the three caps; `late` past msMax, a wait a reader asks of its own (the reader's live fills,
   // layer-proto/run.mjs), none by default: no clock decides what the prepare reads. Where one is asked, the clock is read once
@@ -889,7 +897,13 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
         // (a picture's points apart, `pictures`, and a paragraph's, `paras`: no mark of any unit's, never among the points the
         // marks and the ownership read)
         if (m && (m[1] === PICTURE_START || m[1] === PICTURE_END)) { pictures.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 }); picture = m[1] === PICTURE_START ? picture + 1 : Math.max(0, picture - 1); if (m[1] === PICTURE_START) pictureIds.push(++pictureSeq); else pictureIds.pop() }
-        else if (m) (PARA_POINT.test(m[1]) ? paras : points).push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 })
+        // (a region's points apart too, `regions`: a line's kind, never a mark's; a column body's bracket (bs, be) is read by them as
+        // well, where a code paragraph TeX broke over a page or a column ends and goes on)
+        else if (m && REGION_POINT.test(m[1])) regionPoints.push({ name: m[1], glyph: glyphs.length })
+        else if (m) {
+          (PARA_POINT.test(m[1]) ? paras : points).push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 })
+          if (BODY_BRACKET.test(m[1])) regionPoints.push({ name: m[1], glyph: glyphs.length })
+        }
         break
       }
       default:
@@ -904,9 +918,48 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       if (indices) paths.push(MERGED)
     }
   }
-  return { glyphs, boxes, points, boxAt, paras, ...(indices ? { paths, shows: showAt + 1 } : {}), ...(turned ? { turned: turnedOut, shapes, pictures, figures: figureBoxes, unseen, cut } : {}), capped: fnArray.length > OPS_CAP || over || deep || many, timedOut: late, degraded: tiles !== null, mergedAt, rotated: false }
+  return { glyphs, boxes, points, boxAt, paras, regions: regionsOfPoints(regionPoints, glyphs.length), ...(indices ? { paths, shows: showAt + 1 } : {}), ...(turned ? { turned: turnedOut, shapes, pictures, figures: figureBoxes, unseen, cut } : {}), capped: fnArray.length > OPS_CAP || over || deep || many, timedOut: late, degraded: tiles !== null, mergedAt, rotated: false }
 }
 
+/**
+ * A page's regions from their points (pageInk's `regions`): each { kind, from, to }, the glyphs from `from` up to `to` (stream
+ * order) a paragraph TeX set in a region of that kind (a code line, or the lines of one it broke), its start point and its end
+ * point of one number paired, in stream order. Where TeX broke such a paragraph over a page or a column, its points stand apart:
+ * a start with no end after it runs to the end of its column's body (the `be` after it), an end with no start before it from the
+ * start of its column's body (the `bs` before it); with no bracket there, none: never a glyph taken by a guess (a running head or
+ * a folio, shipped outside the body, is no line of the region)
+ */
+export function regionsOfPoints(points, glyphCount) {
+  const open = new Map(), closed = new Set(), out = []
+  let bodyStart = null
+  const push = (kind, from, to) => { if (to > from) out.push({ kind, from, to }) }
+  for (const p of points) {
+    if (BODY_BRACKET.test(p.name)) {
+      if (p.name[1] === 's') bodyStart = p.glyph
+      else { for (const [key, from] of open) push(REGION_POINT_KINDS[key.replace(/\d+$/, '')], from, Math.min(p.glyph, glyphCount)); open.clear(); bodyStart = null }
+      continue
+    }
+    const m = REGION_POINT.exec(p.name)
+    if (!m) continue
+    const key = `${m[1]}${m[3]}`
+    if (m[2] === 's') { open.set(key, p.glyph); continue }
+    // (an end its region's start closed already, a second one TeX set where the paragraph's group gave its state back, closes
+    // nothing)
+    if (!open.has(key) && closed.has(key)) continue
+    const from = open.get(key) ?? bodyStart
+    if (from === null || from === undefined) continue
+    open.delete(key)
+    closed.add(key)
+    push(REGION_POINT_KINDS[m[1]], from, Math.min(p.glyph, glyphCount))
+  }
+  return out.sort((a, b) => a.from - b.from)
+}
+/** a page's glyphs (`n` of them) each 1 where it stands in a region of `kind` (pageInk's `regions`), else 0 */
+export function regionMask(regions, n, kind) {
+  const out = new Uint8Array(n)
+  for (const r of regions ?? []) if (r.kind === kind) out.fill(1, Math.max(0, r.from), Math.min(n, r.to))
+  return out
+}
 /** why a page's ink (pageInk's) is not read whole, or null where it is: 'rotated' (nothing read), 'capped' (past a cap) or
  *  'timedOut' (past the walk's backstop). What such a reading holds is a prefix of the page, or nothing: every reader keeps
  *  the page the original's (no unit located, owned or removed there) and never reads the prefix as the page */

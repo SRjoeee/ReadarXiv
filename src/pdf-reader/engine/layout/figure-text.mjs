@@ -54,7 +54,7 @@
 // Pure arithmetic over the pages; an original module (no port statement).
 import { BAND_MAX } from '../layer-proto/figure-rows.mjs'
 import { classifyFont } from '../layer-proto/fonts.mjs'
-import { PICTURE_END, PICTURE_START } from './ink.mjs'
+import { PICTURE_END, PICTURE_START, regionMask } from './ink.mjs'
 
 /** two glyphs on one run: their baselines within this share of their size across the run's direction */
 export const RUN_DY = 0.05
@@ -111,6 +111,8 @@ function streamOf(pg, owners) {
   // (the picture depth before each level glyph and each point: points stand before the glyph they name)
   const depthAtPoint = new Int32Array(P.length + 1)
   for (let i = 0, d = 0; i < P.length; i++) { depthAtPoint[i] = d; const nm = P[i].name; if (nm === PICTURE_START) d++; else if (nm === PICTURE_END) d = Math.max(0, d - 1); depthAtPoint[i + 1] = d }
+  // (each glyph TeX set in a code region, by its points (pageInk's `regions`): its run is no unit, below)
+  const code = regionMask(pg.regions, G.length, 'code')
   const out = []
   let q = 0, d = 0
   for (let g = 0; g < G.length; g++) {
@@ -118,12 +120,12 @@ function streamOf(pg, owners) {
     const x = G[g]
     if (!(x.n >= 0)) continue
     const ascent = (x.top - x.y) / Math.max(x.size, 1e-6), descent = (x.bottom - x.y) / Math.max(x.size, 1e-6)
-    out.push({ i: g, turned: false, n: x.n, k: x.k, u: x.u ?? '', blank: !!x.blank || !/\S/u.test(x.u ?? ''), ox: x.x0, oy: x.y, ex: x.x1, ey: x.y, ux: 1, uy: 0, size: x.size, ascent, descent, up: ascent, down: descent, font: x.font, fill: x.fill ?? 0, form: !!x.form, picture: d, owner: owners?.[g] ?? null, ink: [x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top], clipped: !!x.clipped, unseen: !!x.unseen, fid: x.fid ?? 0, pid: x.pid ?? 0 })
+    out.push({ i: g, turned: false, n: x.n, k: x.k, u: x.u ?? '', blank: !!x.blank || !/\S/u.test(x.u ?? ''), ox: x.x0, oy: x.y, ex: x.x1, ey: x.y, ux: 1, uy: 0, size: x.size, ascent, descent, up: ascent, down: descent, font: x.font, fill: x.fill ?? 0, form: !!x.form, picture: d, owner: owners?.[g] ?? null, ink: [x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top], clipped: !!x.clipped, unseen: !!x.unseen, code: code[g] === 1, fid: x.fid ?? 0, pid: x.pid ?? 0 })
   }
   T.forEach((t, j) => {
     if (!(t.n >= 0)) return
     const picture = depthAtPoint[Math.min(Math.max(t.pt ?? 0, 0), P.length)]
-    out.push({ i: j, turned: true, n: t.n, k: t.k, u: t.u ?? '', blank: !!t.blank || !/\S/u.test(t.u ?? ''), ox: t.ox, oy: t.oy, ex: t.ex, ey: t.ey, ux: t.ux, uy: t.uy, size: t.size, ascent: t.ascent, descent: t.descent, up: Number.isFinite(t.up) ? t.up : t.ascent, down: Number.isFinite(t.down) ? t.down : t.descent, font: t.font, fill: t.fill ?? 0, form: !!t.form, picture, owner: null, box: t.box, clipped: !!t.clipped, unseen: !!t.unseen, fid: t.fid ?? 0, pid: t.pid ?? 0 })
+    out.push({ i: j, turned: true, n: t.n, k: t.k, u: t.u ?? '', blank: !!t.blank || !/\S/u.test(t.u ?? ''), ox: t.ox, oy: t.oy, ex: t.ex, ey: t.ey, ux: t.ux, uy: t.uy, size: t.size, ascent: t.ascent, descent: t.descent, up: Number.isFinite(t.up) ? t.up : t.ascent, down: Number.isFinite(t.down) ? t.down : t.descent, font: t.font, fill: t.fill ?? 0, form: !!t.form, picture, owner: null, box: t.box, clipped: !!t.clipped, unseen: !!t.unseen, code: false, fid: t.fid ?? 0, pid: t.pid ?? 0 })
   })
   out.sort((a, b) => a.n - b.n || a.k - b.k)
   return out
@@ -179,14 +181,17 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
         const joins = x.font === run.font && Math.abs(x.size - run.size) <= 0.01 * run.size && x.fill === run.fill && x.form === run.form && x.fid === run.fid && x.pid === run.pid
           && Math.abs(x.ux - f.ux) < 1e-3 && Math.abs(x.uy - f.uy) < 1e-3 && Math.abs(t) <= RUN_DY * run.size
           && s >= run.s1 - RUN_BACK * run.size && s - run.s1 <= RUN_GAP * run.size
+          // (a code region's edge ends a run: the prose beside the code, in its face on its baseline, is read, and the code alone kept)
+          && x.code === run.inCode
         if (!joins) close()
       }
       if (!run) {
         if (x.blank) continue
-        run = { gs: [], font: x.font, size: x.size, fill: x.fill, form: x.form, fid: x.fid, pid: x.pid, s1: 0, frame: { ox: x.ox, oy: x.oy, ux: x.ux, uy: x.uy } }
+        run = { gs: [], font: x.font, size: x.size, fill: x.fill, form: x.form, fid: x.fid, pid: x.pid, inCode: x.code, s1: 0, frame: { ox: x.ox, oy: x.oy, ux: x.ux, uy: x.uy } }
       }
       run.gs.push(x)
       if ((x.clipped || x.unseen) && !x.blank) run.clipped = true
+      if (x.code && !x.blank) run.code = true
       run.s1 = Math.max(run.s1, along(run.frame, x.ex, x.ey))
     }
     close()
@@ -212,6 +217,11 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       if (onPage >= unitsPage || taken >= unitsDoc) { stats.past++; continue }
       onPage++
       taken++
+      // (a run TeX set in a code region (pageInk's `regions`, marks.mjs regionsTex) is code, kept as the paper has it, never a figure's
+      // text, wherever it stands: 2610.19159v1's transcripts, in mdframed boxes TikZ draws, were cut into figure units word by word
+      // and translated. Counted under the caps as any run, so that where they fall moves with no judgment of a run's, and a column's
+      // edge it tells others as before)
+      if (r.code) continue
       // (a run its clip cuts, or its page's edge, whole or in part, or one painted at an alpha of 0, is not shown whole: no text a
       // translation could stand for, and a row whose origin is off its page no part's reader takes, figure-rows.mjs checkFigures)
       if (r.clipped || gs.some(x => offPage(x.ox, x.oy) || offPage(x.ex, x.ey))) { stats.clipped++; continue }

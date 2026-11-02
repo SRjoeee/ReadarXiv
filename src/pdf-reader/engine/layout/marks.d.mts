@@ -271,3 +271,5 @@ export declare function encodeLayoutMarks(m: LayoutMarks): string
 export declare function parseLayoutMarks(bytes: Uint8Array): LayoutMarks
 /** \\rule's call: what TeX's ink section measures, not the role table (a strut, \\rule{0pt}{2ex}, none; a bar, ink) */
 export declare const RULE: RegExp
+/** the regions' points' TeX for the code environments a paper uses (latex-front.mjs project `codeEnvs`), '' for none */
+export declare function regionsTex(codeEnvs: readonly string[] | null | undefined, bodies?: readonly string[] | null): string
