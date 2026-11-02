@@ -198,7 +198,7 @@ describe('our base pages the layout files were made over', () => {
     }
     // (more than 64 sources, and one past 200 code units, as the ink section now asks: kept)
     withBase(i, 'our base page', { inkless: [...Array.from({ length: 65 }, (_, k) => `\\m${k}`), `\\delete{${'x'.repeat(633)}}`] })
-    expect(baseRecordOf(join(i.fixtures, n)).inkless).toHaveLength(66)
+    expect((baseRecordOf(join(i.fixtures, n)) as { inkless?: string[] } | null)?.inkless).toHaveLength(66)
   })
   it('packs base.pdf and base.json beside arxiv.pdf where the fixture has them, and none where it has not', () => {
     const i = inputs()
