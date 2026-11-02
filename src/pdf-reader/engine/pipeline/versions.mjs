@@ -482,7 +482,17 @@
 //     25-paper set's 0 failures (PDF-READER §19.12). The figure units' cut moves, so the rows' identities: raised so. Every
 //     source unit, its pieces and its wire are 55's: a copy of 55 carries every unit (live.mjs PIPELINE_CARRIES), a figure unit
 //     found again by its source (cache.mjs seedFrom)
-export const PIPELINE_VERSION = '56'
+// 57 (the lost class of the release sweep of 2026-11-02: paragraphs left LOST by a macro the ink section never asked about):
+//     every distinct call of the paper's macros asked of the ink section, the body's and the entries' alike, while their code units
+//     fit INK_BUDGET (marks.mjs inkSamples, leadSamples; MARKS_SCHEMA 15), where 64 of the body, 64 of the entries and 64 leads of
+//     200 code units at most were before; and a source whose `%` or `#` a backslash escapes asked as any (`\%`). A call TeX says
+//     sets no ink gets no mark, as before: 2608.25210v2's `\delete{…}` of 642 code units and its `\papertext{…}` past the 64 had
+//     marks of their own and no ink between them, their paragraphs LOST. Over 65 local papers (the gate pack's 7 among them): the
+//     probe moves on 6, the marks on 2608.25210v2 alone, every glyph of its final pass where it was; 8 of its units laid whole
+//     that were the original's, none the other way, every other unit's rows as they were. The layout file's rows of each such piece, the
+//     maker's reading of the new answers riding this version as 48's did. No source unit's text, pieces or wire changes: a copy
+//     of 56 carries every unit (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '57'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
