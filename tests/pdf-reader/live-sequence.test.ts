@@ -585,13 +585,13 @@ describe('a copy made under pipeline 21, reopened under 22 (and on)', () => {
 // marks stand on one line found on it whole (layout/make.mjs phOf), 56 the figure units of ink the page does not show or
 // paints over a label (layout/ink.mjs `unseen`, figure-text.mjs roomOf), 57 a display whose next mark is
 // a float's found to the text after it (layout/stream.mjs pastOther), 58 the figure units of a label on a fill painted
-// before it (figure-text.mjs shapeRoom `tone`), and 59 the figure units' flags of code kept (mt.mjs isCode), no source
-// unit:
+// before it (figure-text.mjs shapeRoom `tone`), 59 the figure units' flags of code kept (mt.mjs isCode), and 60 a paper's macro glued to a
+// word marked where its opening mark boxes itself (layout/marks.mjs layoutMarking, BOXY), no source unit:
 // every unit is the copy's by its hash, carried as it has it, and nothing is sent
-describe('a copy made under pipeline 23 to 29 or 39 to 58, reopened under 59', () => {
+describe('a copy made under pipeline 23 to 29 or 39 to 59, reopened under 60', () => {
   const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
-  it.each(['23', '24', '25', '26', '27', '28', '29', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48', '49', '50', '51', '52', '53', '54', '55', '56', '57', '58'])('takes every unit as the copy of %s has it: nothing is sent again', async pipeline => {
-    expect(PIPELINE_VERSION).toBe('59')
+  it.each(['23', '24', '25', '26', '27', '28', '29', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48', '49', '50', '51', '52', '53', '54', '55', '56', '57', '58', '59'])('takes every unit as the copy of %s has it: nothing is sent again', async pipeline => {
+    expect(PIPELINE_VERSION).toBe('60')
     const p = paper(), n = p.units.length
     const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
     const record = JSON.parse(JSON.stringify({ pipeline, format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))
