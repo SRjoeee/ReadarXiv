@@ -2970,15 +2970,16 @@ own), each part carrying its pages' cell rules (`rules`).
   at 1,498 ms, as its list came); and the walk's backstop `INK_MS` (2 s) acted only where a machine was slow. Each could darken a
   page under load that another box read: 2610.21377v1's left parts and parts changed on one run of a host at a load of 68 and
   were the same on four others, and with `OPS_MS` at 100 ms, as a slower wait for its data, its pages 45, 46, 47 and 50 timed out
-  and its parts changed (2026-11-02; at 30 ms the walk's backstop timed out none of its pages). A parse is bounded by the page's content alone, and only the run's deadline, or a
-  reader in a thread or a process of its own, stops it. The marked original's ink (its owned glyphs, `markedPages`) is read
+  and its parts changed (2026-11-02; at 30 ms the walk's backstop timed out none of its pages). A parse is bounded by the
+  page's content alone, and only the run's deadline, or a reader in a thread or a process of its own, stops it. The marked original's ink (its owned glyphs, `markedPages`) is read
   under the same page's bounds as arXiv's (the walk's counts: a page past one, or degraded, has no ink, so no piece on it is
   owned), for the marked original is as hostile as its author's source. What is held is the pages' sum: the whole paper's made
   whole, up to the whole of it made a page at a time while a float's match keeps the early pages undecided.
 - **No bound of the paper's.** A real paper's costs grow with its pages, so a fixed paper-wide bound binds on a long book first:
   the carrier's work was 8.6 million steps on 2310.20360 (737 pages) and 7.1 million on 2106.10165 (471), 43 % and 36 % of the
   20 million the carrier once bounded a paper by, against 9.1 % and 5.8 % of `PAGE_WORK` on their heaviest pages. Nor does a
-  page given up on leave anything that grows with the pages given up before it (`layout/oplist.mjs`): PDF.js's cancel drops
+  page given up on (by the reader's own wait for its live reads, `listWithin`, or a list that fails) leave anything that grows
+  with the pages given up before it (`layout/oplist.mjs`): PDF.js's cancel drops
   the page's list and its parse ends on its own (pages of 1.6 million operations given up mid-parse: 2 MiB held after for one,
   3 for four, 5 for twelve, the document's fonts), so no count of them is kept. What is left is time, which the host's deadline bounds (the prepare run's 1,200 s):
   a paper may take each page's parse its own time (no engine bound), and its matching its pages times `MATCH_PAGE_WORK`.
