@@ -25,6 +25,18 @@ describe('code-like tokens keep their source (mt.mjs isCode, codeTextsOf)', () =
       { kind: 'para', pieces: [{ t: 'ph', src: '\\textbf{after}' }, { t: 'ph', src: '\\mintinline{python}{len(x)}' }] },
     ]
     expect([...codeTextsOf(units)].sort()).toEqual(['after', 'import torch', 'len(x)', 'max_new_tokens', 'max_tokens'])
+    // (#561's review: minted's options before its language; an escaped brace inside the argument; a verbatim command's body
+    // literal, its backslashes kept, where \texttt's escapes are read; a UTF-8 paper's text, which the front end holds byte for
+    // byte, decoded)
+    const latin1 = (t: string) => { let o = ''; for (const b of new TextEncoder().encode(t)) o += String.fromCharCode(b); return o }
+    const more = [{ kind: 'para', pieces: [
+      { t: 'ph', src: '\\mintinline[breaklines]{python}{zip(a, b)}' },
+      { t: 'ph', src: '\\texttt{\\}x}' },
+      { t: 'ph', src: '\\verb|a\\_b|' },
+      { t: 'ph', src: '\\path{c\\_d}' },
+      { t: 'ph', src: latin1('\\texttt{café}') },
+    ] }]
+    expect([...codeTextsOf(more)].sort()).toEqual(['a\\_b', 'c\\_d', 'café', 'zip(a, b)', '}x'])
     expect(isCode('after', codeTextsOf(units))).toBe(true)
     expect(isCode('before', codeTextsOf(units))).toBe(false)
   })

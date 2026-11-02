@@ -994,24 +994,32 @@ export function isName(text, prose) {
 // ---------------------------------------------------------------- code
 /** a markup token: a word in angle brackets, as a model's special tokens are written (<pad>, </s>, <|endoftext|>) */
 const MARKUP_TOKEN = /^<\/?[^\s<>]+\/?>$/u
-/** the commands a paper sets code in, inline: their argument is the code's text */
-const CODE_COMMAND = /^\\(texttt|verb|Verb|lstinline|code|path|mintinline)(?![A-Za-z])\*?/
-/** a code command's text, from a placeholder's source: its argument (\mintinline's language and an optional argument off),
- *  braced or between \verb's delimiters, TeX's escapes of the specials read; null for no code command */
+/** the commands a paper sets code in, inline: their argument is the code's text; the verbatim ones' read literally, \texttt's
+ *  and \code's with TeX's escapes of the specials */
+const CODE_COMMAND = /^\\(texttt|code|verb|Verb|lstinline|path|mintinline)(?![A-Za-z])\*?/
+const LITERAL_CODE = new Set(['verb', 'Verb', 'lstinline', 'path', 'mintinline'])
+/** a code command's text, from a placeholder's source (the front end's bytes, UTF-8 read): its argument, an optional argument
+ *  and \mintinline's language before it off, braced (an escaped brace inside it is the brace's text) or between a verbatim
+ *  command's delimiters; TeX's escapes of the specials read where the command reads them; null for no code command */
 function codeTextOf(src) {
   const m = CODE_COMMAND.exec(src)
   if (!m) return null
-  let rest = src.slice(m[0].length)
+  let rest = src.slice(m[0].length).replace(/^\s*\[[^\]]*\]/, '')
   if (m[1] === 'mintinline') rest = rest.replace(/^\s*\{[^}]*\}/, '')
-  rest = rest.replace(/^\s*\[[^\]]*\]/, '').replace(/^\s+(?=\{)/, '')
+  rest = rest.replace(/^\s+(?=\{)/, '')
   let body = null
   if (rest.startsWith('{')) {
     let depth = 0, i = 0
-    for (; i < rest.length; i++) { if (rest[i] === '{') depth++; else if (rest[i] === '}' && --depth === 0) break }
-    body = rest.slice(1, i)
-  } else if (rest.length) { const end = rest.indexOf(rest[0], 1); body = end > 0 ? rest.slice(1, end) : null }
+    for (; i < rest.length; i++) {
+      if (rest[i] === '\\') { i++; continue }
+      if (rest[i] === '{') depth++
+      else if (rest[i] === '}' && --depth === 0) break
+    }
+    if (i < rest.length) body = rest.slice(1, i)
+  } else if (rest.length && LITERAL_CODE.has(m[1])) { const end = rest.indexOf(rest[0], 1); body = end > 0 ? rest.slice(1, end) : null }
   if (body === null) return null
-  const text = body.replace(/\\([_&%$#{}])/g, '$1').replace(/\\textless\b\{?\}?/g, '<').replace(/\\textgreater\b\{?\}?/g, '>').replace(/\s+/g, ' ').trim()
+  const read = LITERAL_CODE.has(m[1]) ? body : body.replace(/\\([_&%$#{}])/g, '$1').replace(/\\textless\b\{?\}?/g, '<').replace(/\\textgreater\b\{?\}?/g, '>')
+  const text = utf8(read).replace(/\s+/g, ' ').trim()
   return text || null
 }
 /** the texts a paper sets as code inline (codeTextOf over every placeholder of every unit, a nested unit's too) */
