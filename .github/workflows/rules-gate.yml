@@ -16,6 +16,7 @@ on:
       - 'src/pdf-reader/engine/layer-proto/**'
       - 'src/pdf-reader/engine/layer/check.mjs'
       - 'src/pdf-reader/engine/layer/pieces.mjs'
+      - 'src/pdf-reader/engine/layout/bytes.mjs'
       - 'src/pdf-reader/engine/layout/cell-rules.mjs'
       - 'src/pdf-reader/engine/layout/colour.mjs'
       - 'src/pdf-reader/engine/layout/delta-wire.mjs'
