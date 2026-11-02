@@ -24,7 +24,9 @@ export const CH = 0.5
 export type Run = { s: string; x: number; y: number; size?: number; font?: string; w?: number; blank?: boolean; one?: boolean; eol?: boolean; fill?: string; tr?: number; turn?: boolean }
 /** a Link annotation as PDF.js reports it (getAnnotations): its rectangle and the destination it names */
 export type Annot = { rect: number[]; dest: string | unknown[]; quadPoints?: number[]; url?: string }
-export type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'never' | 'fails' | 'capped' | 'deep' | 'dense' | 'slow'; markedOps?: 'deep'; points?: Record<string, [run: number, char: number]>; order?: number[]; annots?: Annot[] }
+/** how long a page's `late` operator list takes to come: an hour of the (fake) clock, which no reader of the prepare gives up on */
+export const LATE_MS = 3_600_000
+export type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'late' | 'fails' | 'capped' | 'deep' | 'dense' | 'slow'; markedOps?: 'deep'; points?: Record<string, [run: number, char: number]>; order?: number[]; annots?: Annot[] }
 export type Mark = [name: string, page: number, x: number, y: number]
 export type World = { pages: Page[]; marked?: Page[]; base?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches; inkless?: string[]; texts?: [string, string][]; names?: Record<string, 0 | 1>; complete?: Record<string, number>; apart?: string[] }
 
@@ -121,7 +123,7 @@ export function arxivOf(pages: Page[], asked: number[] = []) {
         ...annotsOf(p),
         getOperatorList: () => {
           asked.push(n)
-          return p.ops === 'never' ? new Promise(() => {}) : p.ops === 'fails' ? Promise.reject(new Error('broken page')) : Promise.resolve(opsOf(p))
+          return p.ops === 'late' ? new Promise(r => setTimeout(() => r(opsOf(p)), LATE_MS)) : p.ops === 'fails' ? Promise.reject(new Error('broken page')) : Promise.resolve(opsOf(p))
         },
       }
     },

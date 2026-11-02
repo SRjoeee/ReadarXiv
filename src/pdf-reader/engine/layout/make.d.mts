@@ -82,10 +82,8 @@ export interface LayoutStats {
   baselines: { first: number[]; last: number[] }
   /** pages past OPS_CAP, STEPS_MAX, GLYPHS_PAGE or BOXES_CAP, or drawing in a state lost past STACK_MAX (ink.mjs): no ink */
   capped: number[]
-  /** pages whose operator list did not come within OPS_MS, or failed: no ink, each page alone */
-  timedOut: number[]
-  /** pages whose ink's walk passed its backstop, INK_MS (ink.mjs): no ink; the one count that depends on the machine */
-  inkTimedOut: number[]
+  /** pages whose operator list failed (waited for however long it takes: oplist.mjs listOf): no ink, each page alone */
+  unread: number[]
   /** pages past BOXES_PAGE boxes (ink.mjs), and in no list above: their ink kept, the boxes past it merged by cell */
   degraded: number[]
   bytes: { raw: number; gzip: number }
@@ -173,7 +171,5 @@ export declare const DEFAULT_RULES: Readonly<PageStreamRules>
 export declare const WHOLE_RULES: Readonly<PageStreamRules>
 /** a rule set checked, each rule DEFAULT_RULES' where it is not given; a TypeError for a rule or a value that is none */
 export declare function rulesOf(rules?: Partial<PageStreamRules> | null): PageStreamRules
-/** a page's operator list waited for at most, ms */
-export declare const OPS_MS: number
 /** a font's PostScript name as the file holds it: 1 to 128 printable ASCII characters */
 export declare function fontName(name: unknown): string

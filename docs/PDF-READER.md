@@ -2535,7 +2535,7 @@ own), each part carrying its pages' cell rules (`rules`).
   part's (`LINES_ALL`, `PAGE_TEXT_ALL`, `NAMES_MAX`, `FONTS_MAX`, the part's caps): an over-bound part is shortened, a first page
   alone past them has no layout, nothing is truncated. A page whose operator list passes `OPS_CAP` operations, whose walk
   passes `STEPS_MAX` steps, `STACK_MAX` levels or `GLYPHS_PAGE` glyphs (one operation's glyphs and placements counted within
-  it), or whose list does not come within `OPS_MS` or walk within its backstop `INK_MS`, is dark (its units stay the
+  it), or whose list fails, is dark (its units stay the
   original's), that page alone, whatever the pages before it: no count of pages given up on darkens a later page, and a marked
   page whose carry passes `PAGE_WORK` carries none of its lines, that page alone. A page past `BOXES_PAGE` boxes is not dark:
   its boxes past the budget are merged by cell (`degraded`, its text whole). Each bound is an abuse guard twenty times or more
@@ -2969,23 +2969,28 @@ own), each part carrying its pages' cell rules (`rules`).
   told. Besides, per paper: both PDFs' tokens and the carrier, the PDF bytes, PDF.js's state of the document (its fonts and
   images).
 - **What these do not bound.** The caps apply to what the pass keeps of a page, after PDF.js has parsed it: PDF.js's own
-  operator list for the page being read is bounded by `OPS_MS` alone (a page of `q 1 0 0 1 72 72 cm /Im1 Do Q` 200,000 times
-  parses to 800,804 operations in 0.44 s: in 10 s some 18 million, gigabytes, before the page is capped). And `OPS_MS` bounds
-  only a parse's waits (for a font's data, a CMap): in Node PDF.js's worker runs on the main thread and slices a parse in
+  operator list for the page being read is bounded by nothing of the engine's (a page of `q 1 0 0 1 72 72 cm /Im1 Do Q` 200,000
+  times parses to 800,804 operations in 0.44 s). No clock decides what is read: a page's list and its annotations are waited for
+  however long they take (`layout/oplist.mjs` listOf), and the walk is bounded by its counts alone, so that what is read is the
+  same on every machine and at every load. The timed give-ups this replaced bounded little: `OPS_MS` (10 s) bounded only a
+  parse's waits (for a font's data, a CMap), since in Node PDF.js's worker runs on the main thread and slices a parse in
   microtasks, so no timer fires while a parse runs that waits for nothing (a page of 15,000 unclosed saves: its 1 s timer fired
-  at 1,498 ms, as its list came); such a parse is bounded by the page's content alone, and only the run's deadline, or a reader
-  in a thread or a process of its own, stops it. The marked original's ink (its owned glyphs, `markedPages`) is read under the
-  same page's bounds as arXiv's (`OPS_MS` and the walk's: a page past one, or degraded, has no ink, so no piece on it is
+  at 1,498 ms, as its list came); and the walk's backstop `INK_MS` (2 s) acted only where a machine was slow. Each could darken a
+  page under load that another box read: 2610.21377v1's left parts and parts changed on one run of a host at a load of 68 and
+  were the same on four others, and with `OPS_MS` at 100 ms, as a slower wait for its data, its pages 45, 46, 47 and 50 timed out
+  and its parts changed (2026-11-02; at 30 ms the walk's backstop timed out none of its pages). A parse is bounded by the
+  page's content alone, and only the run's deadline, or a reader in a thread or a process of its own, stops it. The marked original's ink (its owned glyphs, `markedPages`) is read
+  under the same page's bounds as arXiv's (the walk's counts: a page past one, or degraded, has no ink, so no piece on it is
   owned), for the marked original is as hostile as its author's source. What is held is the pages' sum: the whole paper's made
   whole, up to the whole of it made a page at a time while a float's match keeps the early pages undecided.
 - **No bound of the paper's.** A real paper's costs grow with its pages, so a fixed paper-wide bound binds on a long book first:
   the carrier's work was 8.6 million steps on 2310.20360 (737 pages) and 7.1 million on 2106.10165 (471), 43 % and 36 % of the
   20 million the carrier once bounded a paper by, against 9.1 % and 5.8 % of `PAGE_WORK` on their heaviest pages. Nor does a
-  page given up on leave anything that grows with the pages given up before it (`layout/oplist.mjs`): PDF.js's cancel drops
+  page given up on (by the reader's own wait for its live reads, `listWithin`, or a list that fails) leave anything that grows
+  with the pages given up before it (`layout/oplist.mjs`): PDF.js's cancel drops
   the page's list and its parse ends on its own (pages of 1.6 million operations given up mid-parse: 2 MiB held after for one,
   3 for four, 5 for twelve, the document's fonts), so no count of them is kept. What is left is time, which the host's deadline bounds (the prepare run's 1,200 s):
-  a paper may take its pages times `OPS_MS` where every page waits and stalls, a parse's own time where it does not (no engine
-  bound), and its matching its pages times `MATCH_PAGE_WORK`.
+  a paper may take each page's parse its own time (no engine bound), and its matching its pages times `MATCH_PAGE_WORK`.
 
 ### 19.7 Our compile as the base page (BUNDLE 8)
 

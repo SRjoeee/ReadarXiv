@@ -4,7 +4,7 @@ import { checkDraw, type Draw } from '@/pdf-reader/engine/layer-proto/draw.mjs'
 import type { Written } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { readArxivText } from '@/pdf-reader/engine/layout/arxiv.mjs'
 import { encodeLayout } from '@/pdf-reader/engine/layout/file.mjs'
-import { makerOf, OPS_MS } from '@/pdf-reader/engine/layout/make.mjs'
+import { makerOf } from '@/pdf-reader/engine/layout/make.mjs'
 import { readMarked } from '@/pdf-reader/engine/layout/marks.mjs'
 import { layerOfPaper } from '@/pdf-reader/engine/pipeline/page-pass.mjs'
 import { settleWithClock } from './helpers/clock'
@@ -48,7 +48,9 @@ function worldOf(): World {
 const source = (w: World) => ({ units: w.units, kept: new Set(), inFloat: [] }) as never
 const readOf = (w: World) => readMarked(markedOf(w.marked ?? w.pages, w.marks), '', { engine: 'pdflatex', switches: null, inkless: null, texts: null, names: null, units: w.units, OPS } as never)
 
-type Mode = 'ok' | 'text' | 'annots' | 'never' | 'font'
+type Mode = 'ok' | 'text' | 'annots' | 'late' | 'font'
+/** how late a `late` page's text comes: an hour of the (fake) clock */
+const LATE_MS = 3_600_000
 /** the base page's fake document with what draw needs of a page proxy: annotations (one Link), fonts with a map, and a page's mode */
 function drawable(doc: ReturnType<typeof arxivOf>, modes: Record<number, Mode> = {}) {
   return {
@@ -59,7 +61,7 @@ function drawable(doc: ReturnType<typeof arxivOf>, modes: Record<number, Mode> =
       return {
         ...page,
         commonObjs: { has: page.commonObjs.has, get: (id: string) => { const f = page.commonObjs.get(id); return f && typeof f === 'object' && 'name' in f ? { ...f, toUnicode: { _map: ['a', 'b'] }, missingFile: mode === 'font' } : f } },
-        getTextContent: mode === 'text' ? async () => { throw new Error('no text') } : mode === 'never' ? () => new Promise(() => {}) : page.getTextContent,
+        getTextContent: mode === 'text' ? async () => { throw new Error('no text') } : mode === 'late' ? () => new Promise(r => setTimeout(() => r(page.getTextContent()), LATE_MS)) : page.getTextContent,
         getAnnotations: mode === 'annots' ? async () => { throw new Error('no annotations') } : async () => [{ subtype: 'Link', rect: [1, 2, 3, 4], dest: `sec.${n}`, url: null }],
       }
     },
@@ -115,14 +117,14 @@ describe('layerOfPaper: the draw geometry of the pages', () => {
     expect(got.r).toMatchObject({ stats: { draw: { pages: 2, none: 1, why: { font: 1 } } } })
   })
 
-  it('a read that never comes is given up at OPS_MS, that page alone', async () => {
+  it('a read however late is waited for, its page drawn as the others: no clock decides what is read', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
     // (the clock moved on only while the pass waits on page 2's read alone: its parts' digests are real work)
-    const got = await settleWithClock(passOf(worldOf(), { 2: 'never' }), OPS_MS)
-    expect(got.lefts.get(2)).toBeNull()
-    expect(got.lefts.get(1)).not.toBeNull()
-    expect(got.lefts.get(3)).not.toBeNull()
-    expect(got.r).toMatchObject({ stats: { draw: { pages: 2, none: 1, why: { time: 1 } } } })
+    const got = await settleWithClock(passOf(worldOf(), { 2: 'late' }), LATE_MS)
+    const plain = await passOf(worldOf())
+    for (const p of [1, 2, 3]) expect(got.lefts.get(p)).toEqual(plain.lefts.get(p))
+    expect(got.lefts.get(2)).not.toBeNull()
+    expect(got.r).toMatchObject({ stats: { draw: { pages: 3, none: 0 } } })
   })
 
   it('the head says draw 1 where the draws are read, and says nothing where they are not', async () => {

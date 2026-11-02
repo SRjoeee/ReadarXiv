@@ -3,13 +3,52 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { describe, expect, it, vi } from 'vitest'
-import { giveUp, listWithin, OPS_MS, within } from '@/pdf-reader/engine/layout/oplist.mjs'
+import { giveUp, listOf, listWithin, orNull, within } from '@/pdf-reader/engine/layout/oplist.mjs'
 import { readAnnots } from '@/pdf-reader/engine/layer-proto/links.mjs'
 import { ALLOCATION_FAILED, isMemoryError } from '@/pdf-reader/engine/pipeline/memory.mjs'
 import { installLiteWorker, LITE } from './helpers/lite-pdfjs'
 
-// A page's operator list asked within OPS_MS (layout/oplist.mjs), and what a page given up on leaves: nothing of the list on the
-// page proxy, on the pinned PDF.js and the lite worker as the server runs them, so that no count of pages given up is needed
+// A page's operator list as the prepare's readers ask it (layout/oplist.mjs listOf: however long it takes, no clock deciding what is
+// read), and as the reader's live reads ask it within a while (listWithin), with what a page given up on leaves: nothing of the list
+// on the page proxy, on the pinned PDF.js and the lite worker as the server runs them, so that no count of pages given up is needed
+/** the reader's wait in these tests (layer-proto/run.mjs gives its own) */
+const WAIT_MS = 10_000
+
+describe('listOf, orNull: the prepare\'s reads wait however long a list or the annotations take, and set no timer', () => {
+  it('a list that comes late is the list, read with no timer set while it waits; one that fails, null and the page cleaned up', async () => {
+    const list = { fnArray: [1], argsArray: [[]] }
+    vi.useFakeTimers()
+    try {
+      let answer: (v: unknown) => void = () => {}
+      const late = { getOperatorList: () => new Promise(r => { answer = r }), cleanup: vi.fn() }
+      const waited = listOf(late as never)
+      // (no timer: an hour of the clock moves nothing, and the list that comes then is read)
+      expect(vi.getTimerCount()).toBe(0)
+      await vi.advanceTimersByTimeAsync(3_600_000)
+      answer(list)
+      expect(await waited).toBe(list)
+      expect(late.cleanup).not.toHaveBeenCalled()
+    } finally { vi.useRealTimers() }
+    const failed = { getOperatorList: async () => { throw new Error('broken page') }, cleanup: vi.fn() }
+    expect(await listOf(failed as never)).toBeNull()
+    expect(failed.cleanup).toHaveBeenCalledTimes(1)
+    // (a page proxy that throws before it returns a promise is that page alone too: Devin on #567)
+    const thrown = { getOperatorList: () => { throw new Error('broken page') }, cleanup: vi.fn() }
+    expect(await listOf(thrown as never)).toBeNull()
+    expect(thrown.cleanup).toHaveBeenCalledTimes(1)
+    expect(await orNull(() => Promise.resolve(7))).toBe(7)
+    expect(await orNull(() => 7)).toBe(7)
+    expect(await orNull(() => Promise.reject(new Error('broken annotations')))).toBeNull()
+    expect(await orNull(() => { throw new Error('broken annotations') })).toBeNull()
+  })
+  it('a memory-class failure is thrown to the caller (C8.4), as within\'s and listWithin\'s are', async () => {
+    const oom = Object.assign(new Error(ALLOCATION_FAILED), { name: 'UnknownErrorException', details: `RangeError: ${ALLOCATION_FAILED}` })
+    await expect(orNull(() => Promise.reject(oom))).rejects.toBe(oom)
+    expect(() => orNull(() => { throw oom })).toThrow(oom)
+    await expect(listOf({ getOperatorList: () => Promise.reject(oom), cleanup: vi.fn() } as never)).rejects.toBe(oom)
+    await expect(listOf({ getOperatorList: () => { throw oom }, cleanup: vi.fn() } as never)).rejects.toBe(oom)
+  })
+})
 
 const STANDARD_FONTS = join(dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json')), 'standard_fonts/')
 const latin1 = (s: string) => Uint8Array.from(s, c => c.charCodeAt(0))
@@ -44,20 +83,19 @@ function pdfOf(contents: string[]): Uint8Array {
 }
 type PageProxy = Parameters<typeof listWithin>[0] & { _intentStates: Map<unknown, unknown> }
 
-describe('listWithin, giveUp: a page\'s operator list within OPS_MS, a page given up on that page alone', () => {
+describe('listWithin, giveUp: the reader\'s live read of a page\'s operator list within a while, a page given up on that page alone', () => {
   it('a list that comes is the list; one that never comes is null past the time, the page given up on and cleaned up; one that fails, null', async () => {
-    expect(OPS_MS).toBe(10_000)
     const list = { fnArray: [1], argsArray: [[]] }
     const page = (ops: () => Promise<unknown>) => ({ getOperatorList: ops, cleanup: vi.fn(), _abortOperatorList: vi.fn(), _intentStates: new Map([['oplist', { renderTasks: new Set() }]]) })
     const seen = { warned: false, who: 'a test' }
     const ok = page(async () => list)
-    expect(await listWithin(ok as never, seen)).toBe(list)
+    expect(await listWithin(ok as never, seen, WAIT_MS)).toBe(list)
     expect(ok.cleanup).not.toHaveBeenCalled()
     vi.useFakeTimers()
     try {
       const stalled = page(() => new Promise(() => {}))
-      const waited = listWithin(stalled as never, seen)
-      await vi.advanceTimersByTimeAsync(OPS_MS - 1)
+      const waited = listWithin(stalled as never, seen, WAIT_MS)
+      await vi.advanceTimersByTimeAsync(WAIT_MS - 1)
       expect(stalled.cleanup).not.toHaveBeenCalled()
       await vi.advanceTimersByTimeAsync(2)
       expect(await waited).toBeNull()
@@ -65,7 +103,7 @@ describe('listWithin, giveUp: a page\'s operator list within OPS_MS, a page give
       expect(stalled.cleanup).toHaveBeenCalledTimes(1)
     } finally { vi.useRealTimers() }
     const failed = page(async () => { throw new Error('broken page') })
-    expect(await listWithin(failed as never, seen)).toBeNull()
+    expect(await listWithin(failed as never, seen, WAIT_MS)).toBeNull()
     expect(failed.cleanup).toHaveBeenCalledTimes(1)
   })
 
@@ -74,14 +112,14 @@ describe('listWithin, giveUp: a page\'s operator list within OPS_MS, a page give
     const oom = () => Object.assign(new Error(ALLOCATION_FAILED), { name: 'UnknownErrorException', details: `RangeError: ${ALLOCATION_FAILED}` })
     for (const e of [oom(), new RangeError(ALLOCATION_FAILED)]) {
       expect(isMemoryError(e)).toBe(true)
-      await expect(within(Promise.reject(e), OPS_MS)).rejects.toBe(e)
+      await expect(within(Promise.reject(e), WAIT_MS)).rejects.toBe(e)
       const page = { getOperatorList: () => Promise.reject(e), cleanup: vi.fn(), commonObjs: {}, rotate: 0 }
-      await expect(listWithin(page as never, { warned: true })).rejects.toBe(e)
+      await expect(listWithin(page as never, { warned: true }, WAIT_MS)).rejects.toBe(e)
       // (thrown before any promise, as a synchronous allocation fails)
-      await expect(listWithin({ getOperatorList: () => { throw e }, cleanup: vi.fn() } as never, { warned: true })).rejects.toBe(e)
+      await expect(listWithin({ getOperatorList: () => { throw e }, cleanup: vi.fn() } as never, { warned: true }, WAIT_MS)).rejects.toBe(e)
     }
     // (another failure is still a page given up on: null)
-    await expect(within(Promise.reject(new RangeError('Invalid array buffer length')), OPS_MS)).resolves.toBeNull()
+    await expect(within(Promise.reject(new RangeError('Invalid array buffer length')), WAIT_MS)).resolves.toBeNull()
   })
 
   it('nor is it a page without links: readAnnots lets it through, other failures as before', async () => {
