@@ -48,20 +48,14 @@ export declare function punctuationSection(samples: readonly { src: string; call
 /** the layout marks' probe document, after \\begin{document} of the font probe: the punctuation section, then the ink
  *  section where `ink` holds samples, and last an ink section of `leads` (leadSamples), numbered on from `ink` */
 export declare function markProbeTex(samples: readonly ({ src: string; call: boolean; own?: true; glued?: string } | AheadSample)[], ink?: readonly string[], leads?: readonly string[]): string
-/** the distinct sources of the paper's macros the ink section asks about, at most */
-export declare const INK_MAX: number
-/** the ink section's samples: each macro's source once, in the paper's order, that TeX can set in a box of its own */
+/** the code units of the sources the ink section asks about, in all, at most: the probe compile's own bound */
+export declare const INK_BUDGET: number
+/** the ink section's samples: each macro's source once, the body's in the paper's order, then the entries', while they fit INK_BUDGET */
 export declare function inkSamples(units: readonly SourceUnit[]): string[]
-/** the distinct samples the ink section asks about a bibliography's entries, past the body's INK_MAX */
-export declare const ENTRY_INK_MAX: number
-/** the sources the ink section's answers name, at most: INK_MAX + ENTRY_INK_MAX */
-export declare const INK_ANSWERS_MAX: number
 /** the ink section's answers from the probe's log, each the asked source's own: the one reader */
 export declare function readInkAnswers(log: string, units: readonly SourceUnit[]): { inkless: string[]; texts: [string, string][]; apart: string[] }
-/** the leads the ink section asks about past the paper's macros inkSamples takes, at most */
-export declare const LEAD_MAX: number
 /** the leads' samples: the placeholders at a unit's head (headEnd) of inline code or a paper's macro that `asked` does not
- *  hold, once, in the paper's order, that TeX can set in a box of its own, at most LEAD_MAX */
+ *  hold, once, in the paper's order, that TeX can set in a box of its own, while they fit what INK_BUDGET leaves `asked` */
 export declare function leadSamples(units: readonly SourceUnit[], asked?: readonly string[]): string[]
 /** the ink section (`ink`): each sample in a box, the box shown in the log, its rows numbered from `from` */
 export declare function inkSection(samples: readonly string[], from?: number): string
@@ -151,7 +145,7 @@ export declare function layoutMarking(units: readonly SourceUnit[], classes: rea
 
 /** the marks file (internal, prep/<mid>/marks-<sha>.json): what the layout maker reads from the marked original */
 export interface LayoutMarks {
-  schema: 14
+  schema: 15
   /** the engine that compiled it (meta.compiler) */
   engine: string
   /** what the marked original was marked with: layoutMarking's classes and the paper's own switch (TeX's answers to the
@@ -206,7 +200,7 @@ export declare function destRect(a: unknown): [x0: number, y0: number, x1: numbe
 export declare const MARKS_CAP: number
 export declare const MARKS_VALUES: number
 export declare const MARKS_DEPTH: number
-export declare const MARKS_SCHEMA: 14
+export declare const MARKS_SCHEMA: 15
 /** a unit's alignment code (readAlign) */
 export type AlignCode = 'c' | 'l' | 'r' | 'j'
 export declare const ALIGN_CODES: readonly AlignCode[]

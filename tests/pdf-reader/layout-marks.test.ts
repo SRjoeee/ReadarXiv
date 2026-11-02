@@ -6,7 +6,7 @@ import type { UnitLines } from '@/pdf-reader/engine/pipeline/tex-errors.mjs'
 import { patch } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { LayoutRefusal } from '@/pdf-reader/engine/layout/json.mjs'
 import type { LayoutMarks } from '@/pdf-reader/engine/layout/marks.mjs'
-import { classOf, colourPieceOf, DISPLAY, encodeLayoutMarks, readColours, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_SCHEMA, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, AHEAD_PROBE_MAX, FOLLOWERS, GLYPHS_PIECE, INK_ANSWERS_MAX, INK_ANY, INK_MAX, inkSamples, inkSection, LEAD_MAX, leadSamples, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, markedPages, readMarked, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks } from '@/pdf-reader/engine/layout/marks.mjs'
+import { classOf, colourPieceOf, DISPLAY, encodeLayoutMarks, readColours, INVISIBLE, LAYOUT_CLASSES, LAYOUT_TEX, layoutMarking, layoutMarksOf, literalNames, MARK_CLASSES, MARK_NAME, MARKS_CAP, MARKS_SCHEMA, MARKS_VALUES, NAME_ENGLISH, NAME_MACROS, nameSection, NAMES_TEX, OWNED_ALL, parseLayoutMarks, POINTS_TEX, UNMARK_CS, askedCommands, AHEAD_PROBE_MAX, FOLLOWERS, GLYPHS_PIECE, INK_ANY, INK_BUDGET, inkSamples, inkSection, leadSamples, markProbeTex, PROBE_SCHEMA, readInkProbe, readInkTexts, readNameProbe, readSkipProbe, skipSection, headEnd, symbolText, TEXT_SYMBOLS, probeRow, probeSamples, probeTex, markedPages, readMarked, readMarkProbe, readProbe, switchedOf, NAME_MARK_FILE, withoutNameMarks } from '@/pdf-reader/engine/layout/marks.mjs'
 import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
 import { GLYPHS_PAGE } from '@/pdf-reader/engine/layout/ink.mjs'
 import { markWords, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
@@ -514,16 +514,17 @@ describe('what a paper\'s macro sets: TeX asked (the ink section), and LaTeX\'s 
     const samples = ['\\CompletionTokenCap{}', '\\texttt{max\\_tokens}', '\\dprime{}', '\\cap{}', '\\texttt{m\\_t}', '\\dot', '\\checkmark', '\\figref{a}', '\\cmark', '\\open']
     expect(readInkTexts(log, samples)).toEqual([['\\CompletionTokenCap{}', '1,024'], ['\\texttt{max\\_tokens}', 'max_tokens'], ['\\dprime{}', `d${INK_ANY}`], ['\\cap{}', `1${INK_ANY}024`]])
   })
-  it('leadSamples: the placeholders at a unit\'s head the ink section does not ask about — inline code, a macro past INK_MAX —, asked last', () => {
+  it('leadSamples: the placeholders at a unit\'s head the ink section does not ask about — inline code, a macro past INK_BUDGET —, asked last', () => {
     const paper = paperIn('\\begin{tabular}{ll}\nCap parameter & \\texttt{max\\_tokens} on Chat routes \\\\\nBudget & \\EpisodeTokenBudget{} tokens \\\\\n\\end{tabular}\n\nWe set \\texttt{inline} in prose.', '\\newcommand{\\EpisodeTokenBudget}{128{,}000}')
     const ink = inkSamples(paper.units), leads = leadSamples(paper.units, ink)
     // (the macro is among the paper's macros already; the code that leads a cell is a lead, the code inside prose none)
     expect(ink).toEqual(['\\EpisodeTokenBudget{}'])
     expect(leads).toEqual(['\\texttt{max\\_tokens}'])
-    // past INK_MAX, a macro that leads a unit is a lead too
-    const many = paperIn(`${Array.from({ length: INK_MAX }, (_, i) => `Text \\m${'i'.repeat(i + 1)}{} here.`).join('\n\n')}\n\n\\lead{} opens this paragraph.`, `${Array.from({ length: INK_MAX }, (_, i) => `\\newcommand{\\m${'i'.repeat(i + 1)}}{A}`).join('\n')}\n\\newcommand{\\lead}{B}`)
-    expect(inkSamples(many.units)).toHaveLength(INK_MAX)
-    expect(leadSamples(many.units)).toEqual(['\\lead{}'])
+    // past the 64 macros of before, a macro that leads a unit is asked as any other, no lead
+    const many = paperIn(`${Array.from({ length: 64 }, (_, i) => `Text \\m${'i'.repeat(i + 1)}{} here.`).join('\n\n')}\n\n\\lead{} opens this paragraph.`, `${Array.from({ length: 64 }, (_, i) => `\\newcommand{\\m${'i'.repeat(i + 1)}}{A}`).join('\n')}\n\\newcommand{\\lead}{B}`)
+    expect(inkSamples(many.units)).toHaveLength(65)
+    expect(inkSamples(many.units)).toContain('\\lead{}')
+    expect(leadSamples(many.units)).toEqual([])
     // asked after every other section, numbered on from the macros; with no lead, the document the probe had
     const samples = [{ src: '\\cite{a}', call: false }]
     const doc = markProbeTex(samples, ink, leads)
@@ -1145,6 +1146,13 @@ describe('the marks file', () => {
     expect(parseLayoutMarks(bytes(encodeLayoutMarks(m)))).toEqual(m)
     expect(Object.keys(JSON.parse(encodeLayoutMarks(m)))).toEqual(['schema', 'engine', 'marking', 'pages', 'views', 'columns', 'marks', 'dropped', 'lines', 'align', 'colours', 'words', 'tokens', 'chars', 'owned', 'links'])
   })
+  it('parseLayoutMarks takes every call the ink section asked: more than 128 answers, a source past 200 code units (MARKS_SCHEMA 15)', () => {
+    const m = valid()
+    m.marking.inkless = [...Array.from({ length: 300 }, (_, i) => `\\m${i}`), `\\delete{${'x'.repeat(633)}}`]
+    m.marking.apart = Array.from({ length: 300 }, (_, i) => `\\m${i}`)
+    m.marking.texts = Array.from({ length: 300 }, (_, i) => [`\\m${i}`, 'A']).flat()
+    expect(refusal(bytes(m))).toBe(null)
+  })
   it('parseLayoutMarks refuses past its bounds', () => {
     const big = new Uint8Array(MARKS_CAP + 1).fill(0x20)
     expect(refusal(big)).toBe('')
@@ -1154,19 +1162,20 @@ describe('the marks file', () => {
     parse.mockRestore()
     expect(refusal(new Uint8Array([0x7b, 0xc3, 0x28, 0x7d]))).toBe('')
     const rows: [string, (m: LayoutMarks & Record<string, unknown>) => void, string][] = [
-      ['schema 1, a file before the stream', m => { m.schema = 1 as 14 }, 'schema'],
-      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 14 }, 'schema'],
-      ['schema 3, a file before the babel names', m => { m.schema = 3 as 14 }, 'schema'],
-      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 14 }, 'schema'],
-      ['schema 5, a file before the empty-list marks, the column ends and the display groups', m => { m.schema = 5 as 14 }, 'schema'],
-      ['schema 6, a file before the link annotations', m => { m.schema = 6 as 14 }, 'schema'],
-      ['schema 7, a file before the alignment', m => { m.schema = 7 as 14 }, 'schema'],
-      ['schema 8, a file before the complete macros and the boxes apart (its maker would replay a marking it was not made with)', m => { m.schema = 8 as 14 }, 'schema'],
-      ['schema 9, a file before the texts as TeX sets them (its maker would find no lead of punctuation, code or a formula)', m => { m.schema = 9 as 14 }, 'schema'],
-      ['schema 10, a file before the numbers a bibliography entry keeps (its maker would read no class `number`)', m => { m.schema = 10 as 14 }, 'schema'],
-      ['schema 11, a file before the look-ahead pairs (its maker would replay a marking with no mark after a paper\'s macro)', m => { m.schema = 11 as 14 }, 'schema'],
-      ['schema 12, a file before the entries\' own share (its reader refuses more than INK_MAX answers)', m => { m.schema = 12 as 14 }, 'schema'],
-      ['schema 13, a file before a switch\'s 3 (its maker would replay no closing mark after a punctuation mark a command moves)', m => { m.schema = 13 as 14 }, 'schema'],
+      ['schema 1, a file before the stream', m => { m.schema = 1 as 15 }, 'schema'],
+      ['schema 2, a file before the inkless macros', m => { m.schema = 2 as 15 }, 'schema'],
+      ['schema 3, a file before the babel names', m => { m.schema = 3 as 15 }, 'schema'],
+      ['schema 4, a file before the interline glue', m => { m.schema = 4 as 15 }, 'schema'],
+      ['schema 5, a file before the empty-list marks, the column ends and the display groups', m => { m.schema = 5 as 15 }, 'schema'],
+      ['schema 6, a file before the link annotations', m => { m.schema = 6 as 15 }, 'schema'],
+      ['schema 7, a file before the alignment', m => { m.schema = 7 as 15 }, 'schema'],
+      ['schema 8, a file before the complete macros and the boxes apart (its maker would replay a marking it was not made with)', m => { m.schema = 8 as 15 }, 'schema'],
+      ['schema 9, a file before the texts as TeX sets them (its maker would find no lead of punctuation, code or a formula)', m => { m.schema = 9 as 15 }, 'schema'],
+      ['schema 10, a file before the numbers a bibliography entry keeps (its maker would read no class `number`)', m => { m.schema = 10 as 15 }, 'schema'],
+      ['schema 11, a file before the look-ahead pairs (its maker would replay a marking with no mark after a paper\'s macro)', m => { m.schema = 11 as 15 }, 'schema'],
+      ['schema 12, a file before the entries\' own share (its reader refuses more than INK_MAX answers)', m => { m.schema = 12 as 15 }, 'schema'],
+      ['schema 13, a file before a switch\'s 3 (its maker would replay no closing mark after a punctuation mark a command moves)', m => { m.schema = 13 as 15 }, 'schema'],
+      ['schema 14, a file before every call asked (its reader refuses more than 128 answers or a source past 200 code units)', m => { m.schema = 14 as 15 }, 'schema'],
       ['complete macros of no object', m => { (m.marking as Record<string, unknown>).complete = ['bert', 0] }, 'marking.complete'],
       ['a complete macro\'s name with its backslash', m => { (m.marking as Record<string, unknown>).complete = { '\\bert': 0 } }, 'marking.complete.\\\\bert'],
       ['a complete macro of arity 10', m => { (m.marking as Record<string, unknown>).complete = { bert: 10 } }, 'marking.complete.bert'],
@@ -1199,9 +1208,8 @@ describe('the marks file', () => {
       ['the inkless an object', m => { (m.marking as Record<string, unknown>).inkless = {} }, 'marking.inkless'],
       ['an inkless source twice', m => { (m.marking.inkless as string[])[1] = '\\rule{0pt}{2ex}' }, 'marking.inkless[1]'],
       ['an inkless source empty', m => { (m.marking.inkless as string[])[0] = '' }, 'marking.inkless[0]'],
-      ['an inkless source of 201 code units', m => { (m.marking.inkless as string[])[0] = `\\x${'y'.repeat(199)}` }, 'marking.inkless[0]'],
-      // (the body's samples and the entries': INK_ANSWERS_MAX, one past them; MARKS_SCHEMA 13)
-      [`${INK_ANSWERS_MAX + 1} inkless sources`, m => { m.marking.inkless = Array.from({ length: INK_ANSWERS_MAX + 1 }, (_, i) => `\\m${i}`) }, 'marking.inkless'],
+      // (the ink section's samples fit INK_BUDGET's code units in all; MARKS_SCHEMA 15)
+      ['inkless sources past INK_BUDGET code units in all', m => { m.marking.inkless = [`\\a{${'y'.repeat(INK_BUDGET / 2)}}`, `\\b{${'y'.repeat(INK_BUDGET / 2)}}`] }, 'marking.inkless[1]'],
       ['no texts key', m => { delete (m.marking as Partial<LayoutMarks['marking']>).texts }, 'marking.texts'],
       ['texts of an odd length', m => { (m.marking.texts as string[]).push('\\x') }, 'marking.texts'],
       ['texts in pairs, a level deeper than the file has', m => { (m.marking as Record<string, unknown>).texts = [['\\bert', 'BERT']] }, ''],
@@ -1210,8 +1218,8 @@ describe('the marks file', () => {
       ['a text of 65 letters', m => { m.marking.texts = ['\\bert', 'B'.repeat(65)] }, 'marking.texts[1]'],
       ['a text of a formula\'s glyphs alone', m => { m.marking.texts = ['\\checkmark', `${INK_ANY}${INK_ANY}`] }, 'marking.texts[1]'],
       ['a text of OT1\'s quote', m => { m.marking.texts = ['\\q', '\'A\''] }, 'marking.texts[1]'],
-      // (the answers' and the leads': INK_ANSWERS_MAX + LEAD_MAX, one past them)
-      [`${INK_ANSWERS_MAX + LEAD_MAX + 1} texts`, m => { m.marking.texts = Array.from({ length: INK_ANSWERS_MAX + LEAD_MAX + 1 }, (_, i) => [`\\m${i}`, 'A']).flat() }, 'marking.texts'],
+      // (the samples' and the leads': INK_BUDGET's code units in all)
+      ['text sources past INK_BUDGET code units in all', m => { m.marking.texts = [`\\a{${'y'.repeat(INK_BUDGET / 2)}}`, 'A', `\\b{${'y'.repeat(INK_BUDGET / 2)}}`, 'B'] }, 'marking.texts[2]'],
       ['chars not an array', m => { (m as Record<string, unknown>).chars = 'x2' }, 'chars'],
       ['a char of 33 code units', m => { m.chars[0] = 'x'.repeat(33) }, 'chars[0]'],
       ['a char that is a number', m => { (m.chars as unknown[])[1] = 2 }, 'chars[1]'],

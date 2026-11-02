@@ -225,9 +225,13 @@ export function baseRecordOf(dir) {
       const pin = (() => { try { return compileImagesOf().images[b.tree]?.texlive ?? null } catch { return null } })()
       if (typeof r.image !== 'string' || !IMAGE_REF.test(r.image) || r.image !== pin) throw new Error(`base.json's image is not the pinned image of TeX Live ${b.tree} (compile-images.json)`)
     }
-    if (r.texts !== undefined && !(Array.isArray(r.texts) && r.texts.length % 2 === 0 && r.texts.length <= 20000 && r.texts.every(t => typeof t === 'string' && t.length <= 4096))) throw new Error('base.json\'s texts are not [macro source, text, …] pairs of strings')
-    // (`inkless` as the marks file holds it: at most INK_MAX distinct macro sources of 1 to 200 code units — marks.mjs checkInkless)
-    if (r.inkless !== undefined && !(Array.isArray(r.inkless) && r.inkless.length <= 64 && new Set(r.inkless).size === r.inkless.length && r.inkless.every(t => typeof t === 'string' && t.length >= 1 && t.length <= 200))) throw new Error('base.json\'s inkless is not a list of distinct macro sources')
+    // (`texts` as the marks file holds them: [macro source, text, …], the sources distinct, of 1 code unit or more, INK_BUDGET's
+    // 65,536 at most in all, each text of 1 to INK_TEXT_MAX's 64 — marks.mjs checkTexts, MARKS_SCHEMA 15)
+    const sources = Array.isArray(r.texts) ? r.texts.filter((_, k) => k % 2 === 0) : []
+    if (r.texts !== undefined && !(Array.isArray(r.texts) && r.texts.length % 2 === 0 && r.texts.every(t => typeof t === 'string' && t.length >= 1) && new Set(sources).size === sources.length && sources.reduce((n, t) => n + t.length, 0) <= 65536 && r.texts.every((t, k) => k % 2 === 0 || t.length <= 64))) throw new Error('base.json\'s texts are not [macro source, text, …] pairs of strings')
+    // (`inkless` as the marks file holds it: distinct macro sources of 1 code unit or more, INK_BUDGET's 65,536 at most in all —
+    // marks.mjs checkInkless, MARKS_SCHEMA 15)
+    if (r.inkless !== undefined && !(Array.isArray(r.inkless) && new Set(r.inkless).size === r.inkless.length && r.inkless.every(t => typeof t === 'string' && t.length >= 1) && r.inkless.reduce((n, t) => n + t.length, 0) <= 65536)) throw new Error('base.json\'s inkless is not a list of distinct macro sources')
     if (!existsSync(pdf)) throw new Error('base.json names our base page, and there is no base.pdf')
     if (!isFile(pdf, b)) throw new Error('base.pdf is not the page base.json names (sha256, bytes)')
     if (r.layout !== null && !(existsSync(layout) && isFile(layout, file('layout', r.layout)))) throw new Error('layout.json is not the layout base.json names, made over base.pdf')

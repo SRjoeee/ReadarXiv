@@ -180,6 +180,14 @@ describe('our base pages the layout files were made over', () => {
     // (texts not pairs of strings: refused)
     withBase(i, 'our base page', { texts: ['\\bert'] })
     expect(() => baseRecordOf(join(i.fixtures, n))).toThrow(/texts/)
+    // (a source past 4,096 code units, as the ink section now asks, kept; sources past INK_BUDGET in all, a source twice or a text
+    // of 65, refused — Devin on #568)
+    withBase(i, 'our base page', { texts: [`\\mylabel{${'x'.repeat(5000)}}`, 'OK'] })
+    expect(baseRecordOf(join(i.fixtures, n))).toMatchObject({ texts: [`\\mylabel{${'x'.repeat(5000)}}`, 'OK'] })
+    for (const bad of [[`\\a{${'x'.repeat(32768)}}`, 'A', `\\b{${'x'.repeat(32768)}}`, 'B'], ['\\bert', 'BERT', '\\bert', 'B'], ['\\bert', 'B'.repeat(65)]]) {
+      withBase(i, 'our base page', { texts: bad })
+      expect(() => baseRecordOf(join(i.fixtures, n))).toThrow(/texts/)
+    }
   })
   it('keeps the marking\'s inkless macros in base.json beside its texts, as the wrap is given them, and refuses a list the marks would not hold', async () => {
     const made = { source: 'ours' as const, head: { source: 'ours', bytes: 3, sha256: sha256('our'), xref: 1, pages: 1, tree: '2025', check: {} } }
@@ -191,11 +199,14 @@ describe('our base pages the layout files were made over', () => {
     expect(baseRecordOf(join(i.fixtures, n))).toMatchObject({ inkless: ['\\boldmath'] })
     const { inklessOf } = await import('../../lab/pdf/spikes/layer-gate/wrap.mjs')
     expect(inklessOf(join(i.fixtures, n, 'base.pdf'))).toEqual(['\\boldmath'])
-    // (not distinct sources of 1 to 200 code units, at most 64: refused — Devin on #482)
-    for (const bad of [['\\boldmath', '\\boldmath'], [''], [3], Array.from({ length: 65 }, (_, k) => `\\m${k}`)]) {
+    // (not distinct sources of 1 code unit or more, 65,536 in all at most — INK_BUDGET, MARKS_SCHEMA 15: refused — Devin on #482)
+    for (const bad of [['\\boldmath', '\\boldmath'], [''], [3], [`\\a{${'x'.repeat(32768)}}`, `\\b{${'x'.repeat(32768)}}`]]) {
       withBase(i, 'our base page', { inkless: bad })
       expect(() => baseRecordOf(join(i.fixtures, n))).toThrow(/inkless/)
     }
+    // (more than 64 sources, and one past 200 code units, as the ink section now asks: kept)
+    withBase(i, 'our base page', { inkless: [...Array.from({ length: 65 }, (_, k) => `\\m${k}`), `\\delete{${'x'.repeat(633)}}`] })
+    expect((baseRecordOf(join(i.fixtures, n)) as { inkless?: string[] } | null)?.inkless).toHaveLength(66)
   })
   it('packs base.pdf and base.json beside arxiv.pdf where the fixture has them, and none where it has not', () => {
     const i = inputs()

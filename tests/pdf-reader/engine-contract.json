@@ -62,7 +62,7 @@
     "HEAD_CAP",
     "HEAD_VALUES",
     "HELD_MAX",
-    "INK_MAX",
+    "INK_BUDGET",
     "INK_TEXT_MAX",
     "INVISIBLE",
     "KIND_NONE",
