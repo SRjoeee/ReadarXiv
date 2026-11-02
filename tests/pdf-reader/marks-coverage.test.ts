@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SourceUnit } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { completeMacros, frontMarks, inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { completeMacros, definitionsNested, frontMarks, inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { bblProvides, openPaper, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { AHEAD_PROBE_MAX, aheadKey, aheadSamples, completeCall, completeCalled, followsOf, headsOf, INK_BUDGET, inkSamples, layoutMarking, leadSamples, MARK_CLASSES, markProbeTex, probeSamples, readInkAnswers, readInkApart, readInkProbe, readInkTexts, readMarkProbe, symbolText } from '@/pdf-reader/engine/layout/marks.mjs'
 import { boundsFromMarks, tokenizeDocument, uprightToken } from '@/pdf-reader/engine/pipeline/anchors.mjs'
@@ -76,6 +76,47 @@ describe('completeMacros: the paper\'s macros that read nothing past their own a
       ['data.sty', new TextEncoder().encode('\\newcommand{\\HarnessLimitShare}{91.5}\n')],
     ])
     expect(loadProject(inMemory(files), 'main.tex').complete).toEqual([['HarnessLimitShare', 0]])
+  })
+})
+
+describe('definitionsNested: a definition inside another\'s body, the furthest body end kept, not every pair compared', () => {
+  type Def = { at: number; k: number; e: number }
+  /** the rule as every pair reads it: d stands inside o's where o.k < d.at < o.e */
+  const pairwise = (defs: Def[]) => defs.map((d, i) => defs.some((o, j) => j !== i && o.e > 0 && d.at > o.k && d.at < o.e))
+  /** a seeded generator (mulberry32), so that a failure is the same run again */
+  const rng = (seed: number) => () => {
+    seed = (seed + 0x6d2b79f5) | 0
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+  it('as the pairs say, on random files: bodies with none, of one character, nested, overlapping, in any order given', () => {
+    const r = rng(20261102)
+    for (let trial = 0; trial < 3000; trial++) {
+      const n = 1 + Math.floor(r() * 40), span = 2 + Math.floor(r() * 300), defs: Def[] = []
+      for (let i = 0; i < n; i++) {
+        const at = Math.floor(r() * span), k = at + 1 + Math.floor(r() * 4)
+        defs.push({ at, k, e: r() < 0.2 ? -1 : k + Math.floor(r() * (r() < 0.5 ? 4 : span)) })
+      }
+      if (r() < 0.5) defs.sort((a, b) => a.at - b.at)
+      expect(definitionsNested(defs)).toEqual(pairwise(defs))
+    }
+  })
+  it('at the edges: a match at a body\'s first character or at its end is outside it, one inside it is in', () => {
+    const defs = [{ at: 0, k: 10, e: 20 }, { at: 10, k: 11, e: 12 }, { at: 20, k: 21, e: -1 }, { at: 11, k: 12, e: 13 }, { at: 19, k: 25, e: 30 }]
+    expect(definitionsNested(defs)).toEqual(pairwise(defs))
+    expect(definitionsNested(defs)).toEqual([false, false, false, true, true])
+  })
+  it('completeMacros over a file of thousands of definitions (2610.39068v1\'s numbers): each its arity, one inside another\'s body none', () => {
+    // (names of letters alone, three of them a name: 26³ of them)
+    const name = (i: number) => [676, 26, 1].map(w => String.fromCharCode(97 + (Math.floor(i / w) % 26))).join('')
+    const lines = Array.from({ length: 12000 }, (_, i) => `\\newcommand{\\num${name(i)}}{0.${i}}`)
+    lines.splice(9000, 0, '\\newcommand\\outer{\\newcommand\\inner{x}}')
+    const got = defs(lines.join('\n'))
+    expect(got.length).toBe(12000)
+    expect(got.find(([name]) => name === 'inner')).toBeUndefined()
+    expect(got.find(([name]) => name === 'outer')).toBeUndefined()
+    expect(got.every(([, arity]) => arity === 0)).toBe(true)
   })
 })
 
