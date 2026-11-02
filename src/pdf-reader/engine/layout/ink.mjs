@@ -104,11 +104,14 @@ const num = v => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
 const finite = (...xs) => xs.every(Number.isFinite)
 
 /** a fresh graphics state: the page's own, or an annotation's. `fill`: the fill colour, 0xRRGGBB (PDF's default black, 0), or
- *  NO_FILL for one of no colour (a pattern, PDF.js's transparent) */
+ *  NO_FILL for one of no colour (a pattern, PDF.js's transparent); `ca`, `CA` the alpha constants (a fill's and an image's, a
+ *  stroke's) and `ga` the alpha the groups open now are painted with, multiplied (the figures' reading, `unseen`) */
 const fresh = () => ({
   ctm: IDENTITY, clip: null, lw: 1, font: null, fontId: '', size: 0, dir: 1, cs: 0, ws: 0, hs: 1, rise: 0, leading: 0, tr: 0,
-  tm: IDENTITY, x: 0, y: 0, lx: 0, ly: 0, pendingClip: false, lost: false, fill: 0, form: 0, formId: 0,
+  tm: IDENTITY, x: 0, y: 0, lx: 0, ly: 0, pendingClip: false, lost: false, fill: 0, form: 0, formId: 0, ca: 1, CA: 1, ga: 1,
 })
+/** an alpha constant as an ExtGState gives it, 0 to 1 (a value of no number: 1, PDF's default) */
+const alphaOf = v => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1)
 /** a glyph's fill of no colour (a pattern's, PDF.js's transparent) */
 export const NO_FILL = -1
 /** a fill colour as PDF.js's operator list gives it, every colour space turned to RGB (setFillRGBColor: '#rrggbb'), as
@@ -315,13 +318,20 @@ export const PARA_POINT = /^q\d+$/
  * (outlineTable's, made where PDF.js gives the outlines: in Node), for a glyph whose outline this reading has not (the
  * browser draws a font as a font face, and gives no outline): its box is then the server's, exactly. `collect`: a Map
  * this reading's outline boxes are added to, by outlineKey
+ * `turned` (the figures' reading, layout/figure-text.mjs; the wrap's alone): the glyphs set turned (`turned`), the figures' paths
+ * as their lines (`shapes`), the pictures' points, each figure's extent (`figures`), and what the page does not show, which is no
+ * ink a figure's label may be crowded by or stand on: a glyph's `clipped` where it is not wholly inside the clip in force and
+ * `unseen` where nothing of it is shown (wholly outside the clip, or painted at an alpha of 0), and `unseen`, the boxes painted at
+ * an alpha of 0 (a fill's, an image's or a shading's by the fill's alpha constant, a stroke's by the stroke's, a glyph's by its
+ * rendering mode's, each times the alpha every transparency group open is painted with: PDF 11.6.6). Every box is kept, at its
+ * index, as every other reading has it
  * `glyphsOnly` (the reader's live fills, layer-proto/run.mjs liveFillsOf): the glyphs alone, as a whole walk places them (their
  * text, place, size and fill: layout/fills.mjs reads no more), with no box, path, image or outline read: `boxes` empty, a
  * glyph's outline its line's
  */
 export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity, boxesMax = Infinity, stepsMax = STEPS_MAX, msMax = INK_MS, glyphsOnly = false, turned = false }) {
   const turn = (((Number(rotate) % 360) + 360) % 360)
-  if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], ...(indices ? { paths: [], shows: 0 } : {}), ...(turned ? { turned: [], shapes: new Map(), pictures: [], figures: new Map() } : {}), capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true }
+  if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], ...(indices ? { paths: [], shows: 0 } : {}), ...(turned ? { turned: [], shapes: new Map(), pictures: [], figures: new Map(), unseen: new Set() } : {}), capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true }
   const fnArray = ops?.fnArray ?? [], argsArray = ops?.argsArray ?? []
   const n = Math.min(fnArray.length, OPS_CAP)
   const glyphs = [], boxes = [], points = [], boxAt = [], paths = [], paras = [], turnedOut = [], pictures = []
@@ -414,16 +424,26 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   }
   /** a box painted, a step: kept one by one within the budget, else merged by cell (whatever its kind); past BOXES_CAP
    *  boxes kept (a reader that asks for no budget), reading stops, the page capped */
-  const put = (x0, y0, x1, y1, path) => {
+  const put = (x0, y0, x1, y1, path, alpha = 1) => {
     step(1)
     if (stop || !known()) return
     if (turned && (s.form > 0 || picture > 0) && !inAnnotation && !inMask) extend(`${s.formId}:${pictureIds.at(-1) ?? 0}`, x0, y0, x1, y1)
     if (boxes.length >= 4 * keep) { merge(x0, y0, x1, y1); return }
     if (boxes.length >= 4 * BOXES_CAP) { over = true; stop = true; return }
+    // (the figures' reading: a box painted at an alpha of 0 shows nothing, `unseen`; it is still of its figure's extent, the area
+    // the figure takes, as a plot's background a transparent figure paints at 0 is)
+    if (turned && !(alpha > 0)) unseen.add(boxes.length / 4)
     boxes.push(x0, y0, x1, y1)
     if (indices) paths.push(path)
   }
-  const addBox = (m, x0, y0, x1, y1, path = -1) => { if (!known()) return; const b = boxOf(m, x0, y0, x1, y1, s.clip); if (b) put(b[0], b[1], b[2], b[3], path); else step(1) }
+  const addBox = (m, x0, y0, x1, y1, path = -1, alpha = 1) => { if (!known()) return; const b = boxOf(m, x0, y0, x1, y1, s.clip); if (b) put(b[0], b[1], b[2], b[3], path, alpha); else step(1) }
+  /** the alpha a fill (or an image, a shading, a group) is painted with now, and a stroke: the alpha constant times the groups' */
+  const fillAlpha = () => s.ga * s.ca, strokeAlpha = () => s.ga * s.CA
+  /** a glyph's: its rendering mode's, the fill's where it fills (0, 2), the stroke's where it strokes (1, 2) */
+  const textAlpha = () => { const m = s.tr & 3; return Math.max(m === 0 || m === 2 ? fillAlpha() : 0, m === 1 || m === 2 ? strokeAlpha() : 0) }
+  /** whether a box on the page shows nothing of itself inside the clip in force (none of it inside, a hair's slack: an edge on
+   *  the clip's is inside) */
+  const hiddenByClip = (x0, y0, x1, y1) => !!s.clip && (s.clip[0] > s.clip[2] || s.clip[1] > s.clip[3] || x1 < s.clip[0] - 0.05 || y1 < s.clip[1] - 0.05 || x0 > s.clip[2] + 0.05 || y0 > s.clip[3] + 0.05)
   /** the clip in force cut to a rectangle of space `m`; nothing left of it is a clip of no area */
   const clipTo = (m, x0, y0, x1, y1) => {
     const b = boxOf(m, x0, y0, x1, y1, s.clip)
@@ -479,7 +499,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     const level = M[0] * hs > 0 && M[3] > 0 && Math.abs(M[1]) <= LEVEL * Math.abs(M[0])
     if (!level) {
       const had = boxes.length
-      if (!glyphsOnly) addBox(M, Math.min(xa, xb), ty + descent * size, Math.max(xa, xb), ty + ascent * size, -4)
+      if (!glyphsOnly) addBox(M, Math.min(xa, xb), ty + descent * size, Math.max(xa, xb), ty + ascent * size, -4, turned ? textAlpha() : 1)
       if (turned) turnedGlyph(g, M, hs, xa, xb, ty, ascent, descent, boxes.length > had ? had / 4 : -1)
       return
     }
@@ -500,6 +520,9 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     // (`turned`, the figures' reading: a glyph not wholly inside the clip in force is not shown whole, an included figure's text its
     // viewport cuts off)
     if (turned && outsideClip(Math.min(glyph.x0, glyph.ix0), glyph.bottom, Math.max(glyph.x1, glyph.ix1), glyph.top)) glyph.clipped = true
+    // (and one nothing of which is shown, `unseen`: wholly outside the clip, a cropped plot's title its form's box hides, or
+    // painted at an alpha of 0: no ink a figure's label may be crowded by, nor a label's own)
+    if (turned && (!(textAlpha() > 0) || (glyph.clipped && hiddenByClip(Math.min(glyph.x0, glyph.ix0), glyph.bottom, Math.max(glyph.x1, glyph.ix1), glyph.top)))) glyph.unseen = true
     if (turned) { if (s.formId) glyph.fid = s.formId; if (pictureIds.length) glyph.pid = pictureIds.at(-1) }
     if (finite(glyph.x0, glyph.x1, glyph.y, glyph.top, glyph.bottom, glyph.size, glyph.ix0, glyph.ix1)) {
       if (glyphs.length >= glyphsMax) { over = true; stop = true; return }
@@ -549,13 +572,17 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
         if (Y > Y1) Y1 = Y
       }
       if (outsideClip(X0, Y0, X1, Y1)) t.clipped = true
+      if (hiddenByClip(X0, Y0, X1, Y1)) t.unseen = true
     }
+    if (!(textAlpha() > 0)) t.unseen = true
     if (finite(ox, oy, ex, ey, sz) && turnedOut.length < glyphsMax) turnedOut.push(t)
   }
   /** a figure's painted path as its lines (`turned`): inside a form or a TikZ picture (between the points `zs` and `ze`), its
    *  segments on the page (a curve's CURVE_STEPS chords, a fill's subpaths closed), whether it strokes and fills, and its half line
    *  width on the page, by its box's index; at most SHAPE_NUMBERS_PAGE numbers a page, the paths past them their boxes alone */
   const shapes = new Map()
+  /** the boxes painted at an alpha of 0 (`turned`), by index: nothing of them shows */
+  const unseen = new Set()
   let picture = 0, shapeNumbers = 0
   /** each form painted and each TikZ picture its own number (`turned`: a figure's glyphs are of one figure, `fid` and `pid`, so
    *  that two figures side by side never make one label); the pictures open now */
@@ -690,6 +717,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
           if (!Array.isArray(e)) continue
           if (e[0] === 'LW') s.lw = num(e[1])
           else if (e[0] === 'Font' && Array.isArray(e[1])) setFont(e[1][0], e[1][1])
+          else if (e[0] === 'ca') s.ca = alphaOf(e[1])
+          else if (e[0] === 'CA') s.CA = alphaOf(e[1])
         }
         break
       case BEGIN_TEXT: s.tm = IDENTITY; s.x = s.y = s.lx = s.ly = 0; break
@@ -718,7 +747,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
         break
       }
       case FORM_END: pop(); break
-      case GROUP: { const m = !!a?.[0]?.smask; maskGroups.push(m); if (m) inMask++; push(); break }
+      // (a transparency group is painted with the alpha constant in force, and its content begins at alpha 1: PDF 11.6.6)
+      case GROUP: { const m = !!a?.[0]?.smask; maskGroups.push(m); if (m) inMask++; push(); s.ga *= s.ca; s.ca = s.CA = 1; break }
       case GROUP_END: if (maskGroups.pop()) inMask--; pop(); break
       case ANNOTATION: {
         // [id, rect, transform, matrix, …]: an annotation's appearance in its own space, clipped to its rectangle
@@ -741,7 +771,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
         if (ok && PAINTS.has(op)) {
           const e = STROKES.has(op) ? s.lw / 2 : 0
           const had = boxes.length
-          addBox(s.ctm, mm[0] - e, mm[1] - e, mm[2] + e, mm[3] + e, inAnnotation || inMask ? -1 : pathAt)
+          addBox(s.ctm, mm[0] - e, mm[1] - e, mm[2] + e, mm[3] + e, inAnnotation || inMask ? -1 : pathAt, turned ? Math.max(FILLS.has(op) ? fillAlpha() : 0, STROKES.has(op) ? strokeAlpha() : 0) : 1)
           // (a figure's path, its segments kept: whether it crosses a figure's label is its lines', not its box's)
           if (turned && boxes.length > had && (s.form > 0 || picture > 0) && !inAnnotation && !inMask) shapeOf(had / 4, op, a[1]?.[0])
         }
@@ -752,9 +782,9 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       case SHADING:
         if (glyphsOnly) break
         // painted over the clip in force; with none, the page's background, left out (a clip not known: the page capped)
-        if (known() && s.clip && s.clip[0] <= s.clip[2] && s.clip[1] <= s.clip[3]) put(s.clip[0], s.clip[1], s.clip[2], s.clip[3], -2)
+        if (known() && s.clip && s.clip[0] <= s.clip[2] && s.clip[1] <= s.clip[3]) put(s.clip[0], s.clip[1], s.clip[2], s.clip[3], -2, fillAlpha())
         break
-      case IMAGE: case INLINE_IMAGE: case MASK: case SOLID_MASK: if (!glyphsOnly) addBox(s.ctm, 0, 0, 1, 1, -3); break
+      case IMAGE: case INLINE_IMAGE: case MASK: case SOLID_MASK: if (!glyphsOnly) addBox(s.ctm, 0, 0, 1, 1, -3, fillAlpha()); break
       case IMAGE_REPEAT: case MASK_REPEAT: {
         if (glyphsOnly) break
         // [id, scaleX, scaleY, positions]; a mask's [mask, scaleX, skewX, skewY, scaleY, positions]
@@ -762,13 +792,13 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
         const [sa, sb, sc, sd] = mask ? [a[1], a[2], a[3], a[4]] : [a[1], 0, 0, a[2]]
         const at = a[mask ? 5 : 3]
         if (!at || !(at.length >= 0)) break
-        for (let i = 0; i + 1 < at.length && !stop; i += 2) addBox(mul(s.ctm, matrixOf([sa, sb, sc, sd, at[i], at[i + 1]])), 0, 0, 1, 1, -3)
+        for (let i = 0; i + 1 < at.length && !stop; i += 2) addBox(mul(s.ctm, matrixOf([sa, sb, sc, sd, at[i], at[i + 1]])), 0, 0, 1, 1, -3, fillAlpha())
         break
       }
       case MASK_GROUP: case INLINE_GROUP: {
         if (glyphsOnly) break
         const group = fn === MASK_GROUP ? a[0] : a[1]
-        for (const img of Array.isArray(group) ? group : []) { if (stop) break; addBox(mul(s.ctm, matrixOf(img?.transform)), 0, 0, 1, 1, -3) }
+        for (const img of Array.isArray(group) ? group : []) { if (stop) break; addBox(mul(s.ctm, matrixOf(img?.transform)), 0, 0, 1, 1, -3, fillAlpha()) }
         break
       }
       case INTENT: {
@@ -792,7 +822,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       if (indices) paths.push(MERGED)
     }
   }
-  return { glyphs, boxes, points, boxAt, paras, ...(indices ? { paths, shows: showAt + 1 } : {}), ...(turned ? { turned: turnedOut, shapes, pictures, figures: figureBoxes } : {}), capped: fnArray.length > OPS_CAP || over || deep || many, timedOut: late, degraded: tiles !== null, mergedAt, rotated: false }
+  return { glyphs, boxes, points, boxAt, paras, ...(indices ? { paths, shows: showAt + 1 } : {}), ...(turned ? { turned: turnedOut, shapes, pictures, figures: figureBoxes, unseen } : {}), capped: fnArray.length > OPS_CAP || over || deep || many, timedOut: late, degraded: tiles !== null, mergedAt, rotated: false }
 }
 
 /** why a page's ink (pageInk's) is not read whole, or null where it is: 'rotated' (nothing read), 'capped' (past a cap) or

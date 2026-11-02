@@ -734,7 +734,7 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
       const ops = await page.getOperatorList()
       const ink = pageInk(OPS, ops, page.commonObjs, { rotate: page.rotate ?? 0, indices: true, turned: true, glyphsMax: GLYPHS_PAGE, boxesMax: BOXES_PAGE })
       const unread = ink.rotated || ink.capped || ink.timedOut || ink.degraded
-      pages.push(unread ? { glyphs: [], turned: [], shapes: new Map(), pictures: [], figures: new Map(), boxes: [], paths: [], points: [], boxAt: [], view: [...page.view] } : { glyphs: ink.glyphs.map(g => ({ n: g.n, k: g.k, u: g.u, x0: g.x0, x1: g.x1, ix0: g.ix0, ix1: g.ix1, y: g.y, size: g.size, top: g.top, bottom: g.bottom, font: g.font, fill: g.fill, ...(g.blank ? { blank: true } : {}), ...(g.form ? { form: true } : {}), ...(g.clipped ? { clipped: true } : {}), ...(g.fid ? { fid: g.fid } : {}), ...(g.pid ? { pid: g.pid } : {}) })), turned: ink.turned, shapes: ink.shapes, pictures: ink.pictures, figures: ink.figures, boxes: ink.boxes, paths: ink.paths, points: ink.points.map(lowerPoint), paras: ink.paras ?? [], boxAt: ink.boxAt, view: [...page.view] })
+      pages.push(unread ? { glyphs: [], turned: [], shapes: new Map(), pictures: [], figures: new Map(), boxes: [], paths: [], points: [], boxAt: [], view: [...page.view] } : { glyphs: ink.glyphs.map(g => ({ n: g.n, k: g.k, u: g.u, x0: g.x0, x1: g.x1, ix0: g.ix0, ix1: g.ix1, y: g.y, size: g.size, top: g.top, bottom: g.bottom, font: g.font, fill: g.fill, ...(g.blank ? { blank: true } : {}), ...(g.form ? { form: true } : {}), ...(g.clipped ? { clipped: true } : {}), ...(g.unseen ? { unseen: true } : {}), ...(g.fid ? { fid: g.fid } : {}), ...(g.pid ? { pid: g.pid } : {}) })), turned: ink.turned, shapes: ink.shapes, pictures: ink.pictures, figures: ink.figures, unseen: ink.unseen, boxes: ink.boxes, paths: ink.paths, points: ink.points.map(lowerPoint), paras: ink.paras ?? [], boxAt: ink.boxAt, view: [...page.view] })
       facts.push(unread ? null : alignOf(OPS, ops))
       page.cleanup()
     }
@@ -753,7 +753,7 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   // layout/figure-text.mjs), cut before the ink units so that a figure's text is the figures' class, never an ink unit's
   const fig = withFigureText ? figureUnitsOf(pages, own) : { units: [], glyphs: pages.map(() => new Map()), turned: pages.map(() => new Map()), stats: { letters: 0 } }
   // (the figures' paths as their lines are read by then: let go before the wrap reads the pages again)
-  for (const pg of pages) { pg.shapes = null; pg.figures = null }
+  for (const pg of pages) { pg.shapes = null; pg.figures = null; pg.unseen = null }
   /** each page's owners with the figure units' groups: every one's (`all`: the ledger's, crowded or not) or the drawn ones' */
   const withFigures = all => own.glyphs.map((row, i) => {
     const m = fig.glyphs[i]

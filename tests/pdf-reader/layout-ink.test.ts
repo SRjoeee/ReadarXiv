@@ -486,6 +486,54 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
     expect(low(-0.2)).toBeLessThan(-0.05)
     expect(turnedIn(at(-0.2), o).clipped).toBe(true)
   })
+
+  // What the page does not show is no ink to the figures' reading (`turned`): a glyph wholly outside the clip in force, and any
+  // paint at an alpha of 0, a constant's or a transparency group's painted at 0. 1706.03762v7's attention figures: each is a
+  // crop of a larger plot whose title, "Input-Input Layer5", the form's box hides under the bottom row of labels, and each
+  // token's box per head is a group painted at ca 0; both read as ink, they crowded 71 of the paper's 244 labels
+  const fill = (x0: number, y0: number, x1: number, y1: number): Op => [OPS.constructPath, [OPS.fill, [Float32Array.from([0])], Float32Array.from([x0, y0, x1, y1])]]
+  const stroke = (x0: number, y0: number, x1: number, y1: number): Op => [OPS.constructPath, [OPS.stroke, [Float32Array.from([0])], Float32Array.from([x0, y0, x1, y1])]]
+  const alpha = (ca: number, CA = ca): Op => [OPS.setGState, [[['ca', ca], ['CA', CA]]]]
+  const figureInk = (ops: Op[]) => pageInk(OPS, list(ops), commonObjs, { rotate: 0, turned: true })
+  it('a level glyph wholly outside the clip in force is unseen; one the clip cuts in part is clipped, not unseen', () => {
+    const at = (x: number) => only(figureInk(form(...text('f1', 10, [1, 0, 0, 1, x, 40], show(g('A', 600))))).glyphs, 'A')
+    expect(at(50).clipped).toBeUndefined()
+    expect(at(50).unseen).toBeUndefined()
+    expect(at(97)).toMatchObject({ clipped: true })
+    expect(at(97).unseen).toBeUndefined()
+    expect(at(150)).toMatchObject({ clipped: true, unseen: true })
+    // (a turned glyph alike, by its own ink: its box is left out, as every box wholly outside the clip is)
+    const t = turnedIn(form(...text('f1', 10, [0, 1, -1, 0, 150, 40], show(g('F', 600)))), commonObjs)
+    expect(t).toMatchObject({ clipped: true, unseen: true, box: -1 })
+  })
+  it('paint at an alpha of 0 is unseen: a fill by ca, a stroke by CA, a glyph by its rendering mode\'s, a group by the ca it is painted with', () => {
+    const r = figureInk(form(
+      alpha(0), fill(10, 10, 20, 20), stroke(10, 30, 20, 30), alpha(1, 0), fill(10, 40, 20, 50), stroke(10, 60, 20, 60), alpha(1),
+      // (a group painted at ca 0, its content at ca 1 inside: nothing of it shows; one painted at 1 with its content at 0 alike)
+      alpha(0), [OPS.beginGroup, [{ isolated: false, knockout: false }]], alpha(1), fill(30, 10, 40, 20), [OPS.endGroup, [{}]],
+      [OPS.save, []], alpha(1), [OPS.beginGroup, [{}]], alpha(0), fill(30, 30, 40, 40), [OPS.endGroup, [{}]], [OPS.restore, []],
+      // (the alpha inside a group starts at 1, as PDF says: its content shows though the page's ca was 0.5 before it)
+      alpha(0.5), [OPS.beginGroup, [{}]], fill(30, 50, 40, 60), [OPS.endGroup, [{}]], alpha(1),
+      fill(50, 10, 60, 20),
+      ...text('f1', 10, [1, 0, 0, 1, 50, 40], [OPS.setGState, [[['ca', 0]]]], show(g('A', 600)), [OPS.setGState, [[['ca', 1]]]], show(g('B', 600))),
+      // (a glyph stroked alone, rendering mode 1: its CA)
+      ...text('f1', 10, [1, 0, 0, 1, 50, 60], [OPS.setTextRenderingMode, [1]], [OPS.setGState, [[['CA', 0]]]], show(g('C', 600))),
+    ))
+    // (a path's box by its corner, a stroke's widened by half its line width)
+    const boxAt = (x0: number, y0: number) => { for (let i = 0; i < r.boxes.length; i += 4) if (Math.abs(r.boxes[i]! - x0) <= 0.5 && Math.abs(r.boxes[i + 1]! - y0) <= 0.5) return i / 4; throw new Error(`no box at ${x0}, ${y0}`) }
+    const unseen = (x0: number, y0: number) => r.unseen!.has(boxAt(x0, y0))
+    expect([unseen(10, 10), unseen(10, 30), unseen(10, 40), unseen(10, 60)]).toEqual([true, true, false, true])
+    expect([unseen(30, 10), unseen(30, 30), unseen(30, 50), unseen(50, 10)]).toEqual([true, true, false, false])
+    expect([only(r.glyphs, 'A').unseen, only(r.glyphs, 'B').unseen, only(r.glyphs, 'C').unseen]).toEqual([true, undefined, true])
+    // (every box is kept as before, unseen or not, its index and its path's the same: no other reading changes)
+    expect(r.boxes.length / 4).toBe(8)
+    expect(r.paths).toBeUndefined()
+    // (and no reading but the figures' is given any of it)
+    const plain = pageInk(OPS, list(form(alpha(0), fill(10, 10, 20, 20), ...text('f1', 10, [1, 0, 0, 1, 150, 40], show(g('A', 600))))), commonObjs, { rotate: 0 })
+    expect(plain.unseen).toBeUndefined()
+    expect(only(plain.glyphs, 'A').unseen).toBeUndefined()
+    expect(plain.boxes).toEqual([10, 10, 20, 20])
+  })
 })
 
 // The walk's guards (the census of 2026-10-16: the 2,793 pages of the 124 papers of data/corpus): each an abuse guard twenty
