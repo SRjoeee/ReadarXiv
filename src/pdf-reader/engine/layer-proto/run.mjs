@@ -2040,9 +2040,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (none of its lines left: every one another unit's once theirs grew, though not as placed (growOn); the unit is the
     // original's, where the whole unit's rule kept them all)
     if (!p.rects.length) { p.refused = true; p.why = 'unfit'; unlead(p); return }
-    // (the rectangles of a unit on either end of a shared line as its lay begins: where it is laid again (relay) should a run-in
-    // head have been laid over the row between them and be laid back in its own row)
-    if (followers.has(p.id) || candOf.get(p.id)?.follows !== undefined) p.rects0 = p.rects.slice()
+    // (the rectangles as its lay begins of a run-in head laid over the next unit's first row, and of that next unit: where each
+    // is laid again (relay) should the head go back to its own row. Kept on those two alone, where the rule is taken, and on no
+    // other unit of a shared line)
+    const lead0 = byId.get(candOf.get(p.id)?.follows)
+    const rects0 = followers.has(p.id) || lead0?.over ? p.rects.slice() : null
+    if (p.rects0) p.rects0 = undefined
+    if (lead0?.over) p.rects0 = rects0
     if (p.over) p.over = undefined
     const local = p.local
     // the unit read with the file's parts: its lines, label and placeholders (and each placeholder's fill and each colour
@@ -2253,7 +2257,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (`start`), where it fits so (overFollower). Decided with the next unit: that unit left the original's, or not laid from its end, it is
     // laid again in its row alone, as before (settleLeadOf))
     const over = p.noOver ? null : overFollower(p, tokens, s, kept)
-    if (over) { p.blocks = over.blocks; p.layout = over.layout; p.tokens = over.tokens; p.over = { id: over.id } }
+    if (over) { p.blocks = over.blocks; p.layout = over.layout; p.tokens = over.tokens; p.over = { id: over.id }; p.rects0 = rects0 }
     // (step 3: never drawn in part: given more room where the page has it, else left the original's, whole)
     if (p.layout.clipped) {
       const further = fitFurther(p, tokens, s)
