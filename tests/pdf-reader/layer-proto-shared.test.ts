@@ -118,6 +118,34 @@ describe('a shared line: the next unit\'s first line starts where the translatio
     expect(b![6]).toBeCloseTo(a![7] + 10, 1)
   })
 
+  it('a heading its row holds only shrunk runs on over the row at its size, its text after it (the owner\'s ruling of 2026-11-03: 2610.19159v1 p7)', async () => {
+    // (seven characters for a row of 60 pt: in its row alone at 0.95 of its size, ending at 84.5, as before the ruling; now
+    // over the next unit's first row at its size, 70 pt, and its text from 10 pt after it)
+    const run = await laid(runIn(7))
+    const head = (run.stats as unknown as { id: number; f: number }[]).find(r => r.id === 0)!
+    const [a] = linesOf(run, 0)!, [b] = linesOf(run, 1)!
+    expect([head.f, a![6], a![7]]).toEqual([10, 20, 90])
+    expect([b![1], b![6]]).toEqual([250, 100])
+  })
+
+  it('a heading its row holds at its size stays in its row: its text where the original\'s was', async () => {
+    const run = await laid(runIn(6))
+    const head = (run.stats as unknown as { id: number; f: number }[]).find(r => r.id === 0)!
+    expect([head.f, linesOf(run, 0)![0]![7], linesOf(run, 1)![0]![6]]).toEqual([10, 80, 90])
+  })
+
+  it('a heading laid over the next unit\'s first row, that unit left the original\'s: laid again in its row alone, as before', async () => {
+    // (the next unit's 400 characters fit none of its three rows: unfit, its English standing; the heading is then laid where it
+    // was before the ruling, at 0.95 of its size in its own row, never over that unit's English first row)
+    const heavy: Paper = { ...runIn(7), specs: runIn(7).specs.map(x => (x.id === 1 ? { ...x, chars: 400 } : x)) }
+    const run = await laid(heavy)
+    const head = (run.stats as unknown as { id: number; f: number }[]).find(r => r.id === 0)!
+    const [a] = linesOf(run, 0)!
+    expect(linesOf(run, 1)).toBeUndefined()
+    expect([head.f, a![7]]).toEqual([9.5, 84.51])
+    expect((run.skipped as unknown as { id: number; code: string }[]).map(x => [x.id, x.code])).toEqual([[1, 'unfit']])
+  })
+
   it('a heading left the original\'s (not translated): its text starts where TeX set it', async () => {
     const run = await laid(runIn(3), P => { P.rows.get(0)!.state = 'failed' })
     expect(linesOf(run, 0)).toBeUndefined()

@@ -1795,6 +1795,30 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    * P.floorMin. Returns the first layout that sets every token, with the blocks it was laid in (widened: with their
    * bands between the rules, `clear`, and the parameters they hold it to, `P`), or null.
    */
+  /**
+   * A run-in head's room on its row (the owner's ruling of 2026-11-03): a unit whose last row another unit's first
+   * continues on a shared line (`followers`, need.mjs rowLeadOf), that row the only line of its last block (a run-in heading:
+   * 2610.19159v1 p7's "Node-level grading still separates agents.", 170.6 pt of row for 34 em of Japanese), and nothing kept
+   * between the two (`kept`, keptAfter). Laid in its row alone it fits only below its size (`p.layout`'s scale) or not at all;
+   * here its last block runs on to the end of the next unit's first line, as one line of the row, and is laid again. Taken
+   * where it fits so at a larger size than in its row: that next unit is then laid from where it ends (layout2's `start`), its
+   * first line shorter, or given way to its next row. Returns { id, blocks, layout, tokens }, or null
+   */
+  const overFollower = (p, tokens, s, kept) => {
+    const fid = followers.get(p.id)
+    if (fid === undefined || kept || p.unit.kind === 'cell') return null
+    if (!p.layout.clipped && p.layout.scale >= 1 - 1e-9) return null
+    const row = candOf.get(fid)?.lead, fu = tex.index.unit(fid)
+    if (!row || !fu?.lines.length || fu.lines[0] !== row.page) return null
+    const bi = p.blocks.length - 1, b = p.blocks[bi]
+    if (!b || b.page !== row.page || b.rects.length !== 1 || b.centred || Math.abs(b.B[0] - row.baseline) >= 0.05) return null
+    const x1 = fu.lines[2]
+    if (!(x1 > b.x1 + 0.1)) return null
+    const blocks = p.blocks.map((q, i) => (i === bi ? { ...q, x1 } : q))
+    const laid = L2.layoutCut(tokens, blocks, s, p.P)
+    if (laid.layout.clipped || (!p.layout.clipped && laid.layout.scale <= p.layout.scale + 1e-9)) return null
+    return { id: fid, blocks, layout: laid.layout, tokens: laid.tokens }
+  }
   const fitFurther = (p, tokens, s) => {
     for (const step of P.further ?? []) {
       if (step === 'widen') {
@@ -2004,6 +2028,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (none of its lines left: every one another unit's once theirs grew, though not as placed (growOn); the unit is the
     // original's, where the whole unit's rule kept them all)
     if (!p.rects.length) { p.refused = true; p.why = 'unfit'; unlead(p); return }
+    // (its rectangles as its lay begins: where it is laid over the next unit's first row and laid again in its row, relayInRow)
+    const rects0 = p.rects.slice()
+    p.over = undefined
     const local = p.local
     // the unit read with the file's parts: its lines, label and placeholders (and each placeholder's fill and each colour
     // piece's run's: what they are drawn in)
@@ -2208,6 +2235,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         for (const c of cs) prep.cat?.set(L2.charKey(c), 'acc')
       }
     }
+    // (a run-in head, the unit before a shared line, laid in its row alone where its translation fits only shrunk or not at all:
+    // laid on over the next unit's first row to that row's end, the next unit laid from where it ends there (`start`), where it
+    // fits larger so (overFollower). Decided with the next unit: that unit left the original's, or not laid from its end, it is
+    // laid again in its row alone, as before (relayInRow))
+    const over = p.noOver ? null : overFollower(p, tokens, s, kept)
+    if (over) { p.blocks = over.blocks; p.layout = over.layout; p.tokens = over.tokens; p.over = { id: over.id, rects: rects0 } }
     // (step 3: never drawn in part: given more room where the page has it, else left the original's, whole)
     if (p.layout.clipped) {
       const further = fitFurther(p, tokens, s)
@@ -2480,8 +2513,53 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (the faces it waited for apart from its laying: no task of v0's)
     timesOf(p.pages[0]).lay += performance.now() - t0 - fontWait
     timesOf(p.pages[0]).fonts += fontWait
+    // (the unit before it on a shared line, laid over its first row (overFollower): this one left the original's, or not laid
+    // from its end, that one is laid again in its row alone, before this one's lay is counted and their page passes)
+    const lead = byId.get(candOf.get(p.id)?.follows)
+    if (lead?.over && !lead.refused && (p.refused || p.ledBy !== lead.id)) { await relayInRow(lead); if (disposed) return }
     afterLay(p)
     ms.set(p.id, performance.now() - t0 - fontWait)
+  }
+  /**
+   * A run-in head laid over the next unit's first row (overFollower) whose next unit is left the original's, or set where TeX
+   * set it (not laid from its end: `ledBy`): laid again in its row alone, as before the ruling, so that neither stands over the
+   * other. Its record and count of the first lay withdrawn, its rectangles as that lay began; laid there, or left the original's
+   * as its row alone leaves it (`unfit`). Run as the next unit's lay ends (arrive), before that one is counted, so before their
+   * page's pass: neither has been painted
+   */
+  const relayInRow = async a => {
+    const r = stats.indexOf(a.rec)
+    if (r >= 0) stats.splice(r, 1)
+    if (a.counted) { a.counted = false; drawnUnits-- }
+    a.rects = a.over.rects.slice()
+    a.over = undefined
+    a.noOver = true
+    a.runs = undefined
+    a.whole = undefined
+    a.share = null
+    a.refused = false
+    a.why = undefined
+    const fw = fontWait
+    fontWait = 0
+    const t0 = performance.now()
+    try { await layout2(a) } catch (e) {
+      if (isMemoryError(e)) throw e
+      a.refused = true
+      a.why = 'error'
+      unlead(a)
+    }
+    const mark = workMarks.get(a)
+    if (mark) { workMarks.delete(a); if (!disposed) chargeWork(a.pages[0], mark) }
+    if (disposed) return
+    timesOf(a.pages[0]).lay += performance.now() - t0 - fontWait
+    timesOf(a.pages[0]).fonts += fontWait
+    fontWait = fw
+    if (a.refused) { skipped.push({ id: a.id, kind: a.unit.kind, why: a.why ?? 'unfit', code: skipCode(a.why ?? 'unfit'), ...(a.missing ? { missing: a.missing } : {}), chars: trCharsOf(a.unit), pages: a.pages }); return }
+    if (PASSES && P.adaptiveFill && a.fillable) {
+      for (const q of a.runs ?? [a]) fillLeadsOf(q, P)
+      if (a.runs) { const joined = a.layout; a.layout = a.whole; fillLeadsOf(a, P); a.layout = joined }
+      if (P.even) a.fit = { fillLead: a.fillLead, fitLines: a.fitLines }
+    }
   }
   /** a unit left the original's without being laid (`why`: `page`, on a page that failed), counted as one laid and left */
   const refuseUnit = (p, why) => {
