@@ -460,6 +460,9 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       const procs = font.charProcOperatorList, proc = procs instanceof Map ? procs.get(id) : procs?.[id]
       const fns = proc?.fnArray ?? [], args = proc?.argsArray ?? []
       const out = { d0: fns[0] === D0, fill: false, stroke: false, lit: false }
+      // (a procedure past the bound type3Box reads is not scanned, a step a read operation: taken as painting, never unseen)
+      if (fns.length > TYPE3_OPS) { out.lit = true; m.set(id, out); return out }
+      step(fns.length)
       let st = { ca: null, CA: null }
       const saved = []
       const paint = (fills, strokes) => {
@@ -468,7 +471,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       }
       for (let i = 0; i < fns.length; i++) {
         const fn = fns[i], a = args[i] ?? []
-        if (fn === SAVE) saved.push({ ...st })
+        if (fn === SAVE) { if (saved.length >= STACK_MAX) { out.lit = true; break } saved.push({ ...st }) }
         else if (fn === RESTORE) st = saved.pop() ?? st
         else if (fn === GSTATE) { for (const e of Array.isArray(a[0]) ? a[0] : []) if (Array.isArray(e)) { if (e[0] === 'ca') st.ca = alphaOf(e[1]); else if (e[0] === 'CA') st.CA = alphaOf(e[1]) } }
         else if (QUIET.has(fn) || STATE.has(fn)) continue
@@ -479,7 +482,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     }
     return m.get(id)
   }
-  /** a glyph's: its rendering mode's, the fill's where it fills (0, 2), the stroke's where it strokes (1, 2). A Type 3 glyph's as
+  /** a glyph's: the fill's where its rendering mode fills (0, 2), and where it strokes (1, 2) the stroke's or the fill's, the
+   *  larger (PDF strokes text at the stroke's alpha, PDF.js's paintChar at the fill's: unseen only where neither shows it). A Type 3 glyph's as
    *  PDF.js draws it, which runs its procedure whatever the mode: the groups' where its procedure paints at an alpha of its own
    *  above 0, or under the text's above 0 (both 1 for one that begins with d0: showType3Text sets them so), else 0 */
   const textAlpha = g => {
@@ -488,7 +492,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       return p.lit || (p.fill && ca > 0) || (p.stroke && CA > 0) ? s.ga : 0
     }
     const m = s.tr & 3
-    return Math.max(m === 0 || m === 2 ? fillAlpha() : 0, m === 1 || m === 2 ? strokeAlpha() : 0)
+    return Math.max(fillAlpha(), m === 1 || m === 2 ? strokeAlpha() : 0)
   }
   /** whether a box on the page shows nothing of itself inside the clip in force (none of it inside, a hair's slack: an edge on
    *  the clip's is inside) */

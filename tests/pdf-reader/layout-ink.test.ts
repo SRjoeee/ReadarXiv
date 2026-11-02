@@ -516,15 +516,16 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
       alpha(0.5), [OPS.beginGroup, [{}]], fill(30, 50, 40, 60), [OPS.endGroup, [{}]], alpha(1),
       fill(50, 10, 60, 20),
       ...text('f1', 10, [1, 0, 0, 1, 50, 40], [OPS.setGState, [[['ca', 0]]]], show(g('A', 600)), [OPS.setGState, [[['ca', 1]]]], show(g('B', 600))),
-      // (a glyph stroked alone, rendering mode 1: its CA)
-      ...text('f1', 10, [1, 0, 0, 1, 50, 60], [OPS.setTextRenderingMode, [1]], [OPS.setGState, [[['CA', 0]]]], show(g('C', 600))),
+      // (a glyph stroked alone, rendering mode 1: PDF.js strokes text at the fill's alpha, PDF at the stroke's; unseen only where
+      // both are 0, #555)
+      ...text('f1', 10, [1, 0, 0, 1, 50, 60], [OPS.setTextRenderingMode, [1]], [OPS.setGState, [[['CA', 0]]]], show(g('D', 600)), [OPS.setGState, [[['ca', 0]]]], show(g('C', 600))),
     ))
     // (a path's box by its corner, a stroke's widened by half its line width)
     const boxAt = (x0: number, y0: number) => { for (let i = 0; i < r.boxes.length; i += 4) if (Math.abs(r.boxes[i]! - x0) <= 0.5 && Math.abs(r.boxes[i + 1]! - y0) <= 0.5) return i / 4; throw new Error(`no box at ${x0}, ${y0}`) }
     const unseen = (x0: number, y0: number) => r.unseen!.has(boxAt(x0, y0))
     expect([unseen(10, 10), unseen(10, 30), unseen(10, 40), unseen(10, 60)]).toEqual([true, true, false, true])
     expect([unseen(30, 10), unseen(30, 30), unseen(30, 50), unseen(50, 10)]).toEqual([true, true, false, false])
-    expect([only(r.glyphs, 'A').unseen, only(r.glyphs, 'B').unseen, only(r.glyphs, 'C').unseen]).toEqual([true, undefined, true])
+    expect([only(r.glyphs, 'A').unseen, only(r.glyphs, 'B').unseen, only(r.glyphs, 'C').unseen, only(r.glyphs, 'D').unseen]).toEqual([true, undefined, true, undefined])
     // (every box is kept as before, unseen or not, its index and its path's the same: no other reading changes)
     expect(r.boxes.length / 4).toBe(8)
     expect(r.paths).toBeUndefined()
@@ -599,6 +600,11 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
       const under = (ca: number) => figureInk(text('t3a', 10, [1, 0, 0, 1, 50, 50], [OPS.setGState, [[['ca', ca]]]], show(t('l', 'lit'), t('k', 'dark'), t('r', 'back')))).glyphs
       expect(['l', 'k', 'r'].map(u => only(under(0), u).unseen)).toEqual([undefined, true, true])
       expect(['l', 'k', 'r'].map(u => only(under(1), u).unseen)).toEqual([undefined, true, undefined])
+      // (a procedure past the bound type3Box reads, or saves past STACK_MAX, is taken as painting: no scan past the page walk's
+      // guards, and no glyph unseen for want of reading it)
+      const long = { fnArray: [OPS.setCharWidthAndBounds, ...Array.from({ length: 600 }, () => OPS.save), OPS.setGState], argsArray: [[40, 0, 10, 0, 30, 20], ...Array.from({ length: 600 }, () => []), [[['ca', 0]]]] }
+      procs.set('long', long)
+      expect(only(figureInk(text('t3a', 10, [1, 0, 0, 1, 50, 50], show(t('o', 'long')))).glyphs, 'o').unseen).toBeUndefined()
     } finally { delete FONTS.t3a }
   })
 })
