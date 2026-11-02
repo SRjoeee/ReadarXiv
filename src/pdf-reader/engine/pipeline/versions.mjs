@@ -499,7 +499,15 @@
 //     over arXiv's PDFs of 222 papers 331 labels on 51 papers drawn, none lost, no anchor, set or room moved. The
 //     figure units' cut moves, so the rows' identities: raised so. Every source unit, its pieces and its wire are 57's: a copy
 //     of 57 carries every unit (live.mjs PIPELINE_CARRIES), a figure unit found again by its source (cache.mjs seedFrom)
-export const PIPELINE_VERSION = '58'
+// 59 (the owner's option A of 2026-11-02: every figure label translated, a token of code kept): a figure unit is KEPT where it is
+//     code (translate/mt.mjs isCode): every word a markup token in angle brackets (1706.03762v7's "<pad>", which Microsoft gave
+//     back as a word, and "<EOS>"; 2503.06072v3's "<think>"), or a text the paper sets as code (codeTextsOf: \texttt, \verb,
+//     \lstinline, \code, \path, \mintinline, \Verb); a table's cell keeps a markup token too (nameCells), never a word the paper
+//     sets as code elsewhere. Over 243 local sources every cell kept as before; over the corpus's figure labels of those papers
+//     101 newly kept on 12 papers, none other moved. The figure units' flags move, so the rows'
+//     identities: raised so. Every source unit, its pieces and its wire are 58's: a copy of 58 carries every unit (live.mjs
+//     PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '59'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
