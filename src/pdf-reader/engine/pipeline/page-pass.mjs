@@ -27,7 +27,7 @@ import { LayoutRefusal } from '../layout/json.mjs'
 import { makerOf, rulesOf } from '../layout/make.mjs'
 import { markedPages, marksOfHead, readMarked } from '../layout/marks.mjs'
 import { FIGURE_KIND } from '../rules/content-classes.mjs'
-import { displayEdges, isName, proseOf, unitText } from '../translate/mt.mjs'
+import { codeTextsOf, displayEdges, isCode, isName, proseOf, unitText } from '../translate/mt.mjs'
 import { columnsOfTokens, pageColumns } from '../view/highlight.mjs'
 import { anchorUnits, boundsFromMarks, floatMatches, frameOfTokens, orderOf, pageFrame, pageIndex, placesIn } from './anchors.mjs'
 import { rangedAnchors } from './left-part.mjs'
@@ -76,7 +76,8 @@ export function layoutRecordOf(r) {
  * each an ink unit of kind inkfigures (format.mjs INK_UNITS_FORMAT: no echo) appended to `bundle` after the paper's own units and
  * the other ink units, its one text piece our glyphs' text as the front
  * end holds a source's (its UTF-8 bytes), KEPT where it is only names (mt.mjs isName against `prose`, the paper's running text: a
- * dataset's or a model's name keeps its source, as a table's cell of names does), and its row (layer-proto/figure-rows.mjs
+ * dataset's or a model's name keeps its source, as a table's cell of names does) or code (mt.mjs isCode: a markup token, "<pad>",
+ * or a text the paper sets as code, `code`, codeTextsOf), and its row (layer-proto/figure-rows.mjs
  * figureRow) in a Map by page; none on a page
  * past our `M` pages or that the line check says is not drawn (`undrawable`: its units the original's, so are its figures), and
  * none whose row a part's reader would refuse (checkFigures, on its page's view of `views`, arXiv's views as a part carries them:
@@ -84,7 +85,7 @@ export function layoutRecordOf(r) {
  * otherwise lay every page of its part with no layout for that one row (2608.08481v1's band of 7 em: 142 translations drawn on
  * none of its 10 pages)
  */
-export function figureUnits(given, { bundle, undrawable, M, views, prose = '' }) {
+export function figureUnits(given, { bundle, undrawable, M, views, prose = '', code = null }) {
   const byPage = new Map()
   if (!given || !Array.isArray(given.units)) return byPage
   const skip = new Set(undrawable ?? [])
@@ -96,8 +97,9 @@ export function figureUnits(given, { bundle, undrawable, M, views, prose = '' })
       if (e instanceof LayoutRefusal) continue
       throw e
     }
-    // (a label that is only names, a dataset's, a model's, keeps its source, as a table's cell of names does: mt.mjs isName)
-    bundle.push([FIGURE_KIND, isName(u.text, prose) ? UNIT_FLAG_BITS.KEPT : 0, null, null, null, [[0, latin1Of(u.text)]], null])
+    // (a label that is only names, a dataset's, a model's, keeps its source, as a table's cell of names does: mt.mjs isName; so
+    // does one of code, a markup token or a text the paper sets as code: mt.mjs isCode)
+    bundle.push([FIGURE_KIND, isName(u.text, prose) || isCode(u.text, code) ? UNIT_FLAG_BITS.KEPT : 0, null, null, null, [[0, latin1Of(u.text)]], null])
     const list = byPage.get(u.page) ?? byPage.set(u.page, []).get(u.page)
     list.push(row)
   }
@@ -419,7 +421,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   // other ink units', their rows by page; none over arXiv's base, on a page our base does not draw, or where their chunks would not
   // fit beside the others' within a head's bounds: none of the paper's then, its figures the original's)
   const withoutFigures = bundle.length
-  let figures = oursHead ? figureUnits(wrap?.figures, { bundle, undrawable: lineCheck?.undrawable, M: oursDoc?.numPages ?? 0, views: text.views, prose: proseOf(source.units) }) : new Map()
+  let figures = oursHead ? figureUnits(wrap?.figures, { bundle, undrawable: lineCheck?.undrawable, M: oursDoc?.numPages ?? 0, views: text.views, prose: proseOf(source.units), code: codeTextsOf(source.units) }) : new Map()
   if (figures.size && !(await afterFit(paper, bundle, sourceCount))) { bundle.length = withoutFigures; figures = new Map() }
   // (each figure unit anchored on the left by arXiv's tokens in its run's band, as an ink unit by its lines: its translation lights
   // its original, PIPELINE 31; ink-pass.mjs figureAnchors)

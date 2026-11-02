@@ -85,6 +85,10 @@ export declare const WIRE: {
 }
 /** whether a short text (a table cell, a figure label) is only a name, judged against the paper's prose */
 export declare function isName(text: string, prose: string): boolean
+/** whether a short text is code: every word a markup token (<pad>, </s>), or, given `code`, a text the paper sets as code */
+export declare function isCode(text: string, code?: ReadonlySet<string> | null): boolean
+/** the texts a paper sets as code inline (\texttt, \verb, \lstinline, \code, \path, \mintinline, \Verb), escapes read */
+export declare function codeTextsOf(units: readonly { pieces?: readonly unknown[] }[]): Set<string>
 /** the running text isName reads a short text against: every unit's text but a table cell's and a figure's */
 export declare function proseOf(units: readonly ({ kind: string; pieces: Piece[] } | null | undefined)[]): string
 /** the table cells and figure texts that are only names: they keep their source */
