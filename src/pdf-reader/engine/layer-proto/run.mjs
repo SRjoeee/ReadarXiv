@@ -1788,14 +1788,6 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     return grew ? out : null
   }
   /**
-   * The fit's further steps for a unit its states leave clipped (P.further, in order): 'widen', its single lines widened
-   * over the paper beside them (widenOverPaper), the fit run again in them; 'flow', the text run past a display where the
-   * slots after it are too few (layoutUnit2's P.flowPast: out of the translation's order, but all of it shown, as v0's
-   * own last pass already ran text on past a display); 'shrink', the size's steps on below the fit's floor, to
-   * P.floorMin. Returns the first layout that sets every token, with the blocks it was laid in (widened: with their
-   * bands between the rules, `clear`, and the parameters they hold it to, `P`), or null.
-   */
-  /**
    * A run-in head's room on its row (the owner's ruling of 2026-11-03): a unit whose last row another unit's first
    * continues on a shared line (`followers`, need.mjs rowLeadOf), that row the only line of its last block (a run-in heading:
    * 2610.19159v1 p7's "Node-level grading still separates agents.", 170.6 pt of row for 34 em of Japanese), and nothing kept
@@ -1827,6 +1819,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (laid.layout.clipped) return null
     return { id: fid, blocks, layout: laid.layout, tokens: laid.tokens }
   }
+  /**
+   * The fit's further steps for a unit its states leave clipped (P.further, in order): 'widen', its single lines widened
+   * over the paper beside them (widenOverPaper), the fit run again in them; 'flow', the text run past a display where the
+   * slots after it are too few (layoutUnit2's P.flowPast: out of the translation's order, but all of it shown, as v0's
+   * own last pass already ran text on past a display); 'shrink', the size's steps on below the fit's floor, to
+   * P.floorMin. Returns the first layout that sets every token, with the blocks it was laid in (widened: with their
+   * bands between the rules, `clear`, and the parameters they hold it to, `P`), or null.
+   */
   const fitFurther = (p, tokens, s) => {
     for (const step of P.further ?? []) {
       if (step === 'widen') {
@@ -2036,9 +2036,11 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (none of its lines left: every one another unit's once theirs grew, though not as placed (growOn); the unit is the
     // original's, where the whole unit's rule kept them all)
     if (!p.rects.length) { p.refused = true; p.why = 'unfit'; unlead(p); return }
-    // (its rectangles as its lay begins: where it is laid over the next unit's first row and laid again in its row, relayInRow)
-    const rects0 = p.rects.slice()
-    p.over = undefined
+    // (a run-in head's rectangles as its lay begins: where it is laid over the next unit's first row and laid again in its row,
+    // relayInRow. Kept and cleared on a unit before a shared line alone: a field on every unit grew the heap 1.8 kB a laid page,
+    // past the speed check's spread)
+    const rects0 = followers.has(p.id) ? p.rects.slice() : null
+    if (p.over) p.over = undefined
     const local = p.local
     // the unit read with the file's parts: its lines, label and placeholders (and each placeholder's fill and each colour
     // piece's run's: what they are drawn in)
