@@ -572,6 +572,13 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
       // glyph: its fill under ca, so stroked text (mode 1) under CA 0 still shows it, and under ca 0 nothing does)
       const moded = (ca: number, CA: number) => only(figureInk(text('t3a', 10, [1, 0, 0, 1, 50, 50], [OPS.setTextRenderingMode, [1]], [OPS.setGState, [[['ca', ca], ['CA', CA]]]], show(t('s', 'stencil')))).glyphs, 's').unseen
       expect([moded(1, 0), moded(0, 1)]).toEqual([undefined, true])
+      // (a bitmap glyph's mask, which PDF.js compiles into rawFillPath, is a fill; an operation the scan does not know paints, by
+      // the fill's alpha; a procedure of nothing but d1 paints nothing, an invisible text layer)
+      procs.set('bitmap', { fnArray: [OPS.setCharWidthAndBounds, OPS.constructPath], argsArray: [[40, 0, 10, 0, 30, 20], [OPS.rawFillPath, [Float32Array.from([0, 0.25, 0, 1, 1, 0, 1, 1, 0.75, 4])], Float32Array.from([0, 0, 38, 61])]] })
+      procs.set('shaded', { fnArray: [OPS.setCharWidthAndBounds, OPS.shadingFill], argsArray: [[40, 0, 10, 0, 30, 20], ['sh0']] })
+      procs.set('empty', { fnArray: [OPS.setCharWidthAndBounds], argsArray: [[40, 0, 0, 0, 0, 0]] })
+      const each = figureInk(text('t3a', 10, [1, 0, 0, 1, 50, 50], show(t('b', 'bitmap'), t('h', 'shaded'), t('e', 'empty')))).glyphs
+      expect([only(each, 'b').unseen, only(each, 'h').unseen, only(each, 'e').unseen]).toEqual([undefined, undefined, true])
     } finally { delete FONTS.t3a }
   })
 })

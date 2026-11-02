@@ -439,9 +439,11 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   const addBox = (m, x0, y0, x1, y1, path = -1, alpha = 1) => { if (!known()) return; const b = boxOf(m, x0, y0, x1, y1, s.clip); if (b) put(b[0], b[1], b[2], b[3], path, alpha); else step(1) }
   /** the alpha a fill (or an image, a shading, a group) is painted with now, and a stroke: the alpha constant times the groups' */
   const fillAlpha = () => s.ga * s.ca, strokeAlpha = () => s.ga * s.CA
-  /** what a Type 3 glyph's procedure paints, once a font and glyph: `d0` where it begins with d0, else whether it fills (a path
-   *  filled, an image or a mask) and whether it strokes */
-  const type3Paint = new WeakMap()
+  /** what a Type 3 glyph's procedure paints, once a font and glyph: `d0` where it begins with d0, else whether it strokes (a path
+   *  stroked) and whether it paints otherwise, by the fill's alpha (a path filled, a bitmap's mask PDF.js compiles into
+   *  rawFillPath, an image, and any operation that is not one of those that paint nothing: QUIET, the state's) */
+  const type3Paint = new WeakMap(), QUIET = quietOps(OPS), STATE = new Set([SAVE, RESTORE, TRANSFORM, LINE_WIDTH, GSTATE])
+  const STROKE_ONLY = new Set([OPS.stroke, OPS.closeStroke])
   const paintOf = (font, id) => {
     let m = type3Paint.get(font)
     if (!m) type3Paint.set(font, (m = new Map()))
@@ -450,8 +452,10 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       const fns = proc?.fnArray ?? [], args = proc?.argsArray ?? []
       let fills = false, strokes = false
       for (let i = 0; i < fns.length; i++) {
-        if (fns[i] === PATH) { const op = args[i]?.[0]; if (FILLS.has(op)) fills = true; if (STROKES.has(op)) strokes = true }
-        else if (fns[i] === IMAGE || fns[i] === INLINE_IMAGE || fns[i] === MASK || fns[i] === SOLID_MASK || fns[i] === IMAGE_REPEAT || fns[i] === MASK_REPEAT || fns[i] === MASK_GROUP || fns[i] === INLINE_GROUP) fills = true
+        const fn = fns[i]
+        if (QUIET.has(fn) || STATE.has(fn)) continue
+        if (fn === PATH) { const op = args[i]?.[0]; if (op === OPS.endPath) continue; if (STROKES.has(op)) strokes = true; if (!STROKE_ONLY.has(op)) fills = true }
+        else fills = true
       }
       m.set(id, { d0: fns[0] === D0, fills, strokes })
     }
