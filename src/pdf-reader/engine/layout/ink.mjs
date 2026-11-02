@@ -105,10 +105,11 @@ const finite = (...xs) => xs.every(Number.isFinite)
 
 /** a fresh graphics state: the page's own, or an annotation's. `fill`: the fill colour, 0xRRGGBB (PDF's default black, 0), or
  *  NO_FILL for one of no colour (a pattern, PDF.js's transparent); `ca`, `CA` the alpha constants (a fill's and an image's, a
- *  stroke's) and `ga` the alpha the groups open now are painted with, multiplied (the figures' reading, `unseen`) */
+ *  stroke's) and `ga` the alpha the groups open now are painted with, multiplied, and `gclip` the box the groups open now bound
+ *  what they paint to, as PDF.js bounds a group (the figures' reading: `unseen`, `cut`) */
 const fresh = () => ({
   ctm: IDENTITY, clip: null, lw: 1, font: null, fontId: '', size: 0, dir: 1, cs: 0, ws: 0, hs: 1, rise: 0, leading: 0, tr: 0,
-  tm: IDENTITY, x: 0, y: 0, lx: 0, ly: 0, pendingClip: false, lost: false, fill: 0, form: 0, formId: 0, ca: 1, CA: 1, ga: 1,
+  tm: IDENTITY, x: 0, y: 0, lx: 0, ly: 0, pendingClip: false, lost: false, fill: 0, form: 0, formId: 0, ca: 1, CA: 1, ga: 1, gclip: null,
 })
 /** an alpha constant as an ExtGState gives it, 0 to 1 (a value of no number: 1, PDF's default) */
 const alphaOf = v => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1)
@@ -331,7 +332,7 @@ export const PARA_POINT = /^q\d+$/
  */
 export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outlines: given = null, collect = null, glyphsMax = Infinity, boxesMax = Infinity, stepsMax = STEPS_MAX, msMax = INK_MS, glyphsOnly = false, turned = false }) {
   const turn = (((Number(rotate) % 360) + 360) % 360)
-  if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], ...(indices ? { paths: [], shows: 0 } : {}), ...(turned ? { turned: [], shapes: new Map(), pictures: [], figures: new Map(), unseen: new Set() } : {}), capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true }
+  if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], ...(indices ? { paths: [], shows: 0 } : {}), ...(turned ? { turned: [], shapes: new Map(), pictures: [], figures: new Map(), unseen: new Set(), cut: new Map() } : {}), capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true }
   const fnArray = ops?.fnArray ?? [], argsArray = ops?.argsArray ?? []
   const n = Math.min(fnArray.length, OPS_CAP)
   const glyphs = [], boxes = [], points = [], boxAt = [], paths = [], paras = [], turnedOut = [], pictures = []
@@ -431,17 +432,25 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     if (boxes.length >= 4 * keep) { merge(x0, y0, x1, y1); return }
     if (boxes.length >= 4 * BOXES_CAP) { over = true; stop = true; return }
     // (the figures' reading: a box painted at an alpha of 0 shows nothing, `unseen`; it is still of its figure's extent, the area
-    // the figure takes, as a plot's background a transparent figure paints at 0 is)
+    // the figure takes, as a plot's background a transparent figure paints at 0 is. A box past the groups' bounds shows nothing
+    // either, and one they cut shows as far as they let it, `cut`: every other reader's box stays the clip's)
     if (turned && !(alpha > 0)) unseen.add(boxes.length / 4)
+    else if (turned && s.gclip) {
+      const g = s.gclip, c = [Math.max(x0, g[0]), Math.max(y0, g[1]), Math.min(x1, g[2]), Math.min(y1, g[3])]
+      if (c[0] > c[2] || c[1] > c[3]) unseen.add(boxes.length / 4)
+      else if (c[0] !== x0 || c[1] !== y0 || c[2] !== x1 || c[3] !== y1) cut.set(boxes.length / 4, c)
+    }
     boxes.push(x0, y0, x1, y1)
     if (indices) paths.push(path)
   }
   const addBox = (m, x0, y0, x1, y1, path = -1, alpha = 1) => { if (!known()) return; const b = boxOf(m, x0, y0, x1, y1, s.clip); if (b) put(b[0], b[1], b[2], b[3], path, alpha); else step(1) }
   /** the alpha a fill (or an image, a shading, a group) is painted with now, and a stroke: the alpha constant times the groups' */
   const fillAlpha = () => s.ga * s.ca, strokeAlpha = () => s.ga * s.CA
-  /** what a Type 3 glyph's procedure paints, once a font and glyph: `d0` where it begins with d0, else whether it strokes (a path
-   *  stroked) and whether it paints otherwise, by the fill's alpha (a path filled, a bitmap's mask PDF.js compiles into
-   *  rawFillPath, an image, and any operation that is not one of those that paint nothing: QUIET, the state's) */
+  /** what a Type 3 glyph's procedure paints, once a font and glyph: `d0` where it begins with d0, and where it paints, by the
+   *  alpha the text gives it (`fill`, `stroke`: a fill's paint, or a stroke's, under no alpha of its own) or at an alpha its own
+   *  ExtGState set above 0 (`lit`), as PDF.js keeps a procedure's alpha entries; a fill's paint is a path filled, a bitmap's mask
+   *  PDF.js compiles into rawFillPath, an image, and any operation that is not one of those that paint nothing (QUIET, the
+   *  state's), a stroke's a path stroked */
   const type3Paint = new WeakMap(), QUIET = quietOps(OPS), STATE = new Set([SAVE, RESTORE, TRANSFORM, LINE_WIDTH, GSTATE])
   const STROKE_ONLY = new Set([OPS.stroke, OPS.closeStroke])
   const paintOf = (font, id) => {
@@ -450,31 +459,40 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     if (!m.has(id)) {
       const procs = font.charProcOperatorList, proc = procs instanceof Map ? procs.get(id) : procs?.[id]
       const fns = proc?.fnArray ?? [], args = proc?.argsArray ?? []
-      let fills = false, strokes = false
-      for (let i = 0; i < fns.length; i++) {
-        const fn = fns[i]
-        if (QUIET.has(fn) || STATE.has(fn)) continue
-        if (fn === PATH) { const op = args[i]?.[0]; if (op === OPS.endPath) continue; if (STROKES.has(op)) strokes = true; if (!STROKE_ONLY.has(op)) fills = true }
-        else fills = true
+      const out = { d0: fns[0] === D0, fill: false, stroke: false, lit: false }
+      let st = { ca: null, CA: null }
+      const saved = []
+      const paint = (fills, strokes) => {
+        if (fills) { if (st.ca === null) out.fill = true; else if (st.ca > 0) out.lit = true }
+        if (strokes) { if (st.CA === null) out.stroke = true; else if (st.CA > 0) out.lit = true }
       }
-      m.set(id, { d0: fns[0] === D0, fills, strokes })
+      for (let i = 0; i < fns.length; i++) {
+        const fn = fns[i], a = args[i] ?? []
+        if (fn === SAVE) saved.push({ ...st })
+        else if (fn === RESTORE) st = saved.pop() ?? st
+        else if (fn === GSTATE) { for (const e of Array.isArray(a[0]) ? a[0] : []) if (Array.isArray(e)) { if (e[0] === 'ca') st.ca = alphaOf(e[1]); else if (e[0] === 'CA') st.CA = alphaOf(e[1]) } }
+        else if (QUIET.has(fn) || STATE.has(fn)) continue
+        else if (fn === PATH) { const op = a[0]; if (op !== OPS.endPath) paint(!STROKE_ONLY.has(op), STROKES.has(op)) }
+        else paint(true, false)
+      }
+      m.set(id, out)
     }
     return m.get(id)
   }
   /** a glyph's: its rendering mode's, the fill's where it fills (0, 2), the stroke's where it strokes (1, 2). A Type 3 glyph's as
-   *  PDF.js draws it, which runs its procedure whatever the mode: one that begins with d0 at the groups' alone (showType3Text sets
-   *  both alpha constants to 1 for it), else the fill's where its procedure fills and the stroke's where it strokes */
+   *  PDF.js draws it, which runs its procedure whatever the mode: the groups' where its procedure paints at an alpha of its own
+   *  above 0, or under the text's above 0 (both 1 for one that begins with d0: showType3Text sets them so), else 0 */
   const textAlpha = g => {
     if (s.font?.isType3Font === true && g?.operatorListId !== undefined) {
-      const p = paintOf(s.font, g.operatorListId)
-      return p.d0 ? s.ga : Math.max(p.fills ? fillAlpha() : 0, p.strokes ? strokeAlpha() : 0)
+      const p = paintOf(s.font, g.operatorListId), ca = p.d0 ? 1 : s.ca, CA = p.d0 ? 1 : s.CA
+      return p.lit || (p.fill && ca > 0) || (p.stroke && CA > 0) ? s.ga : 0
     }
     const m = s.tr & 3
     return Math.max(m === 0 || m === 2 ? fillAlpha() : 0, m === 1 || m === 2 ? strokeAlpha() : 0)
   }
   /** whether a box on the page shows nothing of itself inside the clip in force (none of it inside, a hair's slack: an edge on
    *  the clip's is inside) */
-  const hiddenByClip = (x0, y0, x1, y1) => !!s.clip && (s.clip[0] > s.clip[2] || s.clip[1] > s.clip[3] || x1 < s.clip[0] - 0.05 || y1 < s.clip[1] - 0.05 || x0 > s.clip[2] + 0.05 || y0 > s.clip[3] + 0.05)
+  const hiddenByClip = (x0, y0, x1, y1) => { const c = figureClip(); return !!c && (c[0] > c[2] || c[1] > c[3] || x1 < c[0] - 0.05 || y1 < c[1] - 0.05 || x0 > c[2] + 0.05 || y0 > c[3] + 0.05) }
   /** the clip in force cut to a rectangle of space `m`; nothing left of it is a clip of no area */
   const clipTo = (m, x0, y0, x1, y1) => {
     const b = boxOf(m, x0, y0, x1, y1, s.clip)
@@ -562,8 +580,14 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     }
   }
 
+  /** the clip the figures' reading tests a glyph against: the clip in force cut to the bounds of the groups open (PDF.js's) */
+  const figureClip = () => {
+    const c = s.clip, g = s.gclip
+    if (!g) return c
+    return c ? [Math.max(c[0], g[0]), Math.max(c[1], g[1]), Math.min(c[2], g[2]), Math.min(c[3], g[3])] : g
+  }
   /** whether a box on the page is not wholly inside the clip in force (a hair's slack: an edge on the clip's) */
-  const outsideClip = (x0, y0, x1, y1) => !!s.clip && (x0 < s.clip[0] - 0.05 || y0 < s.clip[1] - 0.05 || x1 > s.clip[2] + 0.05 || y1 > s.clip[3] + 0.05)
+  const outsideClip = (x0, y0, x1, y1) => { const c = figureClip(); return !!c && (x0 < c[0] - 0.05 || y0 < c[1] - 0.05 || x1 > c[2] + 0.05 || y1 > c[3] + 0.05) }
   /** a glyph set turned (`turned`, layout/figure-text.mjs: a figure's y-axis title), as a TurnedGlyph: its baseline from its
    *  origin (ox, oy) to its advance's end (ex, ey), its direction (ux, uy), its size and its font's ascent and descent in em, a
    *  rotation of the page's axes alone (no mirror, no shear past TURN_SKEW); its own ink up and down from its baseline in em
@@ -591,7 +615,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     // baseline: a y-axis title or a colour bar's title set at its figure's edge, inside the form's box, read as cut and was no
     // unit (2610.35877v1 p8, 2610.22065v1 p3: the sweep of 6e0a8d1c, once the final pass drew its figures with no group, whose
     // box PDF.js gives no form))
-    if (s.clip) {
+    if (figureClip()) {
       const ia = has ? xa + o[0] * s.size * hs : xa, ib = has ? xa + o[2] * s.size * hs : xa
       const b0 = ty + down * s.size, b1 = ty + up * s.size
       /** a box of text space [a0, a1] across, [b0, b1] up, on the page: its four corners turned with the glyph */
@@ -617,8 +641,9 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
    *  segments on the page (a curve's CURVE_STEPS chords, a fill's subpaths closed), whether it strokes and fills, and its half line
    *  width on the page, by its box's index; at most SHAPE_NUMBERS_PAGE numbers a page, the paths past them their boxes alone */
   const shapes = new Map()
-  /** the boxes painted at an alpha of 0 (`turned`), by index: nothing of them shows */
-  const unseen = new Set()
+  /** the boxes painted at an alpha of 0 or past the bounds of their groups (`turned`), by index: nothing of them shows; and the
+   *  boxes those bounds cut, by index, as far as they show */
+  const unseen = new Set(), cut = new Map()
   let picture = 0, shapeNumbers = 0
   /** each form painted and each TikZ picture its own number (`turned`: a figure's glyphs are of one figure, `fid` and `pid`, so
    *  that two figures side by side never make one label); the pictures open now */
@@ -786,7 +811,20 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       }
       case FORM_END: pop(); break
       // (a transparency group is painted with the alpha constant in force, and its content begins at alpha 1: PDF 11.6.6)
-      case GROUP: { const m = !!a?.[0]?.smask; maskGroups.push(m); if (m) inMask++; push(); s.ga *= s.ca; s.ca = s.CA = 1; break }
+      case GROUP: {
+        const m = !!a?.[0]?.smask
+        maskGroups.push(m)
+        if (m) inMask++
+        push()
+        s.ga *= s.ca; s.ca = s.CA = 1
+        // (the figures' reading: what the group paints is bounded by its box, its matrix applied, as PDF.js's beginGroup bounds it)
+        const bb = a?.[0]?.bbox
+        if (turned && bb && bb.length >= 4) {
+          const b = boxOf(a[0].matrix ? mul(s.ctm, matrixOf(a[0].matrix)) : s.ctm, num(bb[0]), num(bb[1]), num(bb[2]), num(bb[3]), s.gclip) ?? [0, 0, -1, -1]
+          s.gclip = b
+        }
+        break
+      }
       case GROUP_END: if (maskGroups.pop()) inMask--; pop(); break
       case ANNOTATION: {
         // [id, rect, transform, matrix, …]: an annotation's appearance in its own space, clipped to its rectangle
@@ -860,7 +898,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       if (indices) paths.push(MERGED)
     }
   }
-  return { glyphs, boxes, points, boxAt, paras, ...(indices ? { paths, shows: showAt + 1 } : {}), ...(turned ? { turned: turnedOut, shapes, pictures, figures: figureBoxes, unseen } : {}), capped: fnArray.length > OPS_CAP || over || deep || many, timedOut: late, degraded: tiles !== null, mergedAt, rotated: false }
+  return { glyphs, boxes, points, boxAt, paras, ...(indices ? { paths, shows: showAt + 1 } : {}), ...(turned ? { turned: turnedOut, shapes, pictures, figures: figureBoxes, unseen, cut } : {}), capped: fnArray.length > OPS_CAP || over || deep || many, timedOut: late, degraded: tiles !== null, mergedAt, rotated: false }
 }
 
 /** why a page's ink (pageInk's) is not read whole, or null where it is: 'rotated' (nothing read), 'capped' (past a cap) or

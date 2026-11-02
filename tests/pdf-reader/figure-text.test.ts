@@ -182,6 +182,9 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
     const beside = { ...word('label', [], [80, 90, 150, 115]), view: [0, 0, 300, 300] }
     beside.boxes = [80, 90, 95, 115]
     expect(figureUnitsOf([{ ...beside, boxAt: beside.glyphs.map(() => 0) }] as never, null).units[0]!.why).toBeNull()
+    // (a fill after it in a transparency group whose box ends before the word, pageInk's `cut`, covers none of it either)
+    const grouped = { ...word('label', [], [80, 90, 150, 115]), view: [0, 0, 300, 300] }
+    expect(figureUnitsOf([{ ...grouped, boxAt: grouped.glyphs.map(() => 0), cut: new Map([[0, [80, 90, 95, 115]]]) }] as never, null).units[0]!.why).toBeNull()
     // (cut back to the word's first half, it covers that half)
     beside.boxes = [80, 90, 110, 115]
     expect(figureUnitsOf([{ ...beside, boxAt: beside.glyphs.map(() => 0) }] as never, null).units[0]!.why).toBe('crowded')

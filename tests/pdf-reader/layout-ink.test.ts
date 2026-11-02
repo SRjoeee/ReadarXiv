@@ -534,6 +534,16 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
     expect(only(plain.glyphs, 'A').unseen).toBeUndefined()
     expect(plain.boxes).toEqual([10, 10, 20, 20])
   })
+  it('a transparency group shows nothing past its box, as PDF.js bounds it: the figures\' reading cuts what it paints to it (#555)', () => {
+    // (a group whose box, its matrix applied, is 0 to 50: a fill from 10 to 90 shows to 50, one from 60 to 90 shows nothing, a
+    // glyph at 70 neither; the boxes every other reader takes stay as they were)
+    const r = figureInk(form([OPS.beginGroup, [{ bbox: [0, 0, 25, 25], matrix: [2, 0, 0, 2, 0, 0] }]], fill(10, 10, 90, 90), fill(60, 60, 90, 90), ...text('f1', 10, [1, 0, 0, 1, 70, 20], show(g('A', 600))), [OPS.endGroup, [{}]], fill(5, 5, 95, 95)))
+    expect(r.boxes).toEqual([10, 10, 90, 90, 60, 60, 90, 90, 5, 5, 95, 95])
+    expect(r.cut!.get(0)).toEqual([10, 10, 50, 50])
+    expect(r.unseen!.has(1)).toBe(true)
+    expect(r.cut!.has(2) || r.unseen!.has(2)).toBe(false)
+    expect(only(r.glyphs, 'A')).toMatchObject({ clipped: true, unseen: true })
+  })
   it('a path filled and stroked keeps what shows of each: an invisible fill under a seen stroke is a stroke, and the reverse (#555)', () => {
     const both = (ca: number, CA: number) => {
       const r = figureInk(form(alpha(ca, CA), [OPS.constructPath, [OPS.fillStroke, [Float32Array.from([0, 10, 10, 1, 40, 10, 1, 40, 40, 1, 10, 40, 4])], Float32Array.from([10, 10, 40, 40])]]))
@@ -579,6 +589,16 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
       procs.set('empty', { fnArray: [OPS.setCharWidthAndBounds], argsArray: [[40, 0, 0, 0, 0, 0]] })
       const each = figureInk(text('t3a', 10, [1, 0, 0, 1, 50, 50], show(t('b', 'bitmap'), t('h', 'shaded'), t('e', 'empty')))).glyphs
       expect([only(each, 'b').unseen, only(each, 'h').unseen, only(each, 'e').unseen]).toEqual([undefined, undefined, true])
+      // (its procedure's own alpha, as PDF.js keeps a procedure's alpha entries: set to 1 inside it under a text at ca 0 it shows;
+      // set to 0 it hides what follows; a restore gives the text's back)
+      const fill = [OPS.constructPath, [OPS.fill, [Float32Array.from([0])], Float32Array.from([10, 0, 30, 20])]] as const
+      const proc = (...ops: (readonly [number, unknown])[]) => ({ fnArray: [OPS.setCharWidthAndBounds, ...ops.map(o => o[0])], argsArray: [[40, 0, 10, 0, 30, 20], ...ops.map(o => o[1])] })
+      procs.set('lit', proc([OPS.setGState, [[['ca', 1]]]], fill))
+      procs.set('dark', proc([OPS.setGState, [[['ca', 0]]]], fill))
+      procs.set('back', proc([OPS.save, []], [OPS.setGState, [[['ca', 0]]]], [OPS.restore, []], fill))
+      const under = (ca: number) => figureInk(text('t3a', 10, [1, 0, 0, 1, 50, 50], [OPS.setGState, [[['ca', ca]]]], show(t('l', 'lit'), t('k', 'dark'), t('r', 'back')))).glyphs
+      expect(['l', 'k', 'r'].map(u => only(under(0), u).unseen)).toEqual([undefined, true, true])
+      expect(['l', 'k', 'r'].map(u => only(under(1), u).unseen)).toEqual([undefined, true, undefined])
     } finally { delete FONTS.t3a }
   })
 })

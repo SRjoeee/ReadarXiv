@@ -501,7 +501,7 @@ const angleOf = f => { const a = Math.round((Math.atan2(f.uy, f.ux) * 18000) / M
  * crowds it
  */
 function roomOf(pg, f, u, own) {
-  const G = pg.glyphs ?? [], B = pg.boxes ?? [], S = pg.shapes ?? null, U = pg.unseen ?? null
+  const G = pg.glyphs ?? [], B = pg.boxes ?? [], S = pg.shapes ?? null, U = pg.unseen ?? null, C = pg.cut ?? null
   const mineG = new Set(own.filter(x => !x.turned).map(x => x.i)), mineB = new Set(own.filter(x => x.turned && x.box >= 0).map(x => x.box))
   // (the boxes painted before the run's first glyph, pageInk's `boxAt` (a turned glyph's own box, painted where it is shown): a
   // fill of known lines, an image or a shading from it on that holds the band is painted over the run, never its ground; a box
@@ -543,7 +543,8 @@ function roomOf(pg, f, u, own) {
     if (e[3] > band[1] && e[1] < band[3]) { if (e[2] > band[0] && e[0] < band[2]) { if (!apart(...box)) crowded = true } else free1(e[0], e[2]) }
   }
   for (let b = 0; b + 3 < B.length && !crowded; b += 4) {
-    const box = [B[b], B[b + 1], B[b + 2], B[b + 3]]
+    // (a box as far as it shows: the bounds of its transparency groups cut it, pageInk's `cut`)
+    const box = C?.get(b / 4) ?? [B[b], B[b + 1], B[b + 2], B[b + 3]]
     if (apartFar(...box) || mineB.has(b / 4) || U?.has(b / 4)) continue
     const e = inFrame(f, box)
     if (e[3] <= band[1] || e[1] >= band[3] || e[2] <= -far || e[0] >= u.length + far) continue
