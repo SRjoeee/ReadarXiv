@@ -1578,7 +1578,7 @@ export function sourceEndMarks(unit) {
  * The class's own marks after a unit's text, which its source does not write: a theorem's note (amsthm sets
  * "Definition 4.5 (" before the note, its label, and ")." after it, 2610.21084 page 6), a run-in head's full stop, a
  * bibliography style's stop after an entry ("… (2025)."). The characters of its last line after its last content — the last
- * letter or digit its source's words or its label take, or its renderings' last — less the marks its source writes there
+ * letter or digit on its lines, its words' or not, or its renderings' last — less the marks its source writes there
  * itself (sourceEndMarks, as many: its translation writes those), each a punctuation mark in a text font, TAIL_MAX at most,
  * all on that line and none kept. Their ink is the unit's text, hidden with it (layout/own.mjs MR 4c, as the maker's line takes
  * them); tokensOf2 draws them after the translation, each in its own style, in place of its own marks of their kinds:
