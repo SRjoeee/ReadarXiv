@@ -4016,11 +4016,14 @@ needs 34 em of Japanese on a row of 170.6 pt, past what `floorMin` 0.6 reaches, 
 line (`run.mjs` `overFollower`), taken where it fits there at the floor or above; the paragraph is laid from where the head's
 translation ends, its first line shorter, or given way to its next row. A head its row holds at the floor or above keeps its
 row: taken wherever a head fitted smaller, its paragraph paid for a head already within its floor (1810.04805v2's Russian p4, a
-head from 0.85 to 1 and its paragraph, below its floor, from 0.73 to 0.70). The two are decided together: where the paragraph
-is left the original's, or not laid from the head's end (`ledBy`), the head is laid again in its row alone, as before
-(`relayInRow`, `settleLeadOf`: as the paragraph's lay ends, or as it is refused unlaid for a page that failed, before their page
-passes). A head of several lines, one with something kept between it and its text (`keptAfter`), and one that begins on an
-earlier page (that page's pass paints it on the row's page before the paragraph is laid, past taking back) are laid as before. On 2610.19159v1 in Japanese (staging's rows) ten run-in heads move:
+head from 0.85 to 1 and its paragraph, below its floor, from 0.73 to 0.70).
+The two are decided together (`settleLeadOf`, `relay`): where the paragraph is left the original's, is not laid from the head's
+end (`ledBy`), or fits from there only below its own floor, the head is laid again in its row alone, as before, and the
+paragraph again from where the head then ends; no unit goes under its floor to lift another. This runs as the paragraph's lay
+ends, or as it is refused unlaid for a page that failed, before their page passes; on a row three units share it settles from
+the last back. A head of several lines, one with something kept between it and its text (`keptAfter`), and one that begins on an
+earlier page (that page's pass paints it on the row's page before the paragraph is laid, past taking back) are laid as before.
+On 2610.19159v1 in Japanese (staging's rows) ten run-in heads move:
 nine from 0.62 to 0.80 of the body's size to 0.96 to 1, and "Node-level grading…" from English to 0.97; three paragraphs lose up
 to 8 % of their size to a shorter first line, seven only reflow. In Chinese, over the corpus's 462 pages with a shared line (57
 papers, the sweep's rows), two heads move: 2610.21026v1's "Part I." and 1810.04805v2's "QNLI", English before. In Korean on

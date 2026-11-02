@@ -2548,7 +2548,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (led && p.layout?.knob !== 'below-floor') return
     await relay(lead, true)
     if (disposed) return
-    if (laid && (p.refused || led)) await relay(p, after)
+    // (one refused before its rectangles were kept (none left it, its growth threw) is refused so again: not laid again)
+    if (laid && (p.refused || led) && p.rects0) await relay(p, after)
   }
   /**
    * Unit a laid again as before the ruling (settleLeadOf): from its rectangles as its lay began (`rects0`), never over the
