@@ -203,6 +203,13 @@ describe('layoutMarking', () => {
     const { units: marked } = layoutMarking([unit('para', [text('In Giessenbachstra'), ph('\\ss'), text(' e, the '), ph('\\foo{x}'), text('ing and'), ph('\\cite{a}'), text(' then '), ph('\\foo{y}'), text(' end')])], MARK_CLASSES, { lines: false })
     expect(srcs(marked[0])).toEqual(['text', 'ph \\ss', 'text', 'ph \\axtpma{p0.3a}', 'ph \\foo{x}', 'text', 'ph \\axtpma{p0.5a}', 'ph \\cite{a}', 'ph \\axtpm{p0.5b}', 'text', 'ph \\axtpma{p0.7a}', 'ph \\foo{y}', 'text'])
   })
+  it('marks a superscript or a box glued to a word, whose opening mark sets itself in a box (BOXY), but not past a prefix', () => {
+    // (an author's affiliations, 2610.21924v1 u1: `Ruiya Zhou\\textsuperscript{1} \\quad`; TeX hyphenates no word a box or a
+    // formula follows, and LAYOUT_TEX's \\axt@boxy boxes the mark before \\textsuperscript and \\mbox as before a formula. Behind
+    // \\protect, \\axt@boxy would see the prefix: no mark, as for any macro glued to a word)
+    const { units: marked } = layoutMarking([unit('para', [text('Ruiya Zhou'), ph('\\textsuperscript{1}'), text(' and Li Wei'), ph('\\mbox{$^2$}'), text(', Ann'), ph('\\protect'), ph('\\textsuperscript{3}'), text(' end')])], MARK_CLASSES, { lines: false })
+    expect(srcs(marked[0])).toEqual(['text', 'ph \\axtpma{p0.1a}', 'ph \\textsuperscript{1}', 'text', 'ph \\axtpma{p0.3a}', 'ph \\mbox{$^2$}', 'text', 'ph \\protect', 'ph \\textsuperscript{3}', 'text'])
+  })
   it('a paper\'s macro and a footnote\'s call get the opening mark only, and the piece right after them none', () => {
     // a macro looks past its argument (\\xspace, \\@ifnextchar[, \\@esphack's \\ignorespaces after \\todo, \\nocite,
     // \\marginpar), and fnpct's \\footnote for the punctuation after it: a mark there, or the next piece's opening mark, is

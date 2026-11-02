@@ -22,6 +22,7 @@
 //                                                                  the names' alone; ONLY=unmark: \axt@unmark's alone;
 //                                                                  ONLY=wrappers: the wrappers' alone; ONLY=lost: the LOST
 //                                                                  survey's, an inline formula first after a display, a
+//                                                                  superscript or a box glued to a word, a
 //                                                                  display group and a display at a page's foot; ONLY=runin:
 //                                                                  the run-in leads' stream case, F; ONLY=dvi: the DVI
 //                                                                  cases alone, every document under latex)
@@ -91,6 +92,10 @@ const STAY = {
   // then a formula, the display without one
   // (XeLaTeX too: its \special is the same kind of node as pdfTeX's, so the mark on the empty list is as harmless there)
   'an inline formula first after a display': { engines: ['pdflatex', 'xelatex'], src: doc('\\usepackage{amsmath}', `${prose(6, () => '')} define\n\\[ a = b \\]\n$\\hat r^\\alpha$ is ${prose(6, () => '')}\n\\begin{equation} c = d \\end{equation}\n\\( z_0 \\) holds ${prose(6, () => '')}\n\\begin{align} e &= f \\end{align}\n\\begin{equation*} g = h \\end{equation*}\n\\ensuremath{\\theta} and ${prose(6, () => '')}\n\n${prose(4, () => '')} \\[ p = q \\] $x$, and \\[ u = v \\]\n$$ w = 1 $$\n$y$ ${prose(4, () => '')}`) },
+  // a superscript or a box glued to a word, whose opening mark LAYOUT_TEX sets in a box of its own (\\axt@boxy): TeX hyphenates
+  // no word a box or a formula follows, and kerns no letter with either (an author's affiliations, 2610.21924v1 u1); two
+  // columns, so that the glued words stand at many lines' ends
+  'a superscript or a box glued to a word': { engines: ['pdflatex', 'xelatex'], src: doc('', `${prose(40, i => ['\\textsuperscript{1}', '\\textsuperscript{2,*} and', '\\mbox{$^3$}', '\\textsuperscript{$\\dagger$},'][i % 4])}\n\n\\begin{center}Ann Author\\textsuperscript{1} \\quad Bo Writer\\textsuperscript{1,2,*}\\end{center}`, '\\documentclass[twocolumn]{article}') },
   // amsmath's \\] ends in \\ignorespaces, which skips a macro that sets nothing and the line end after it; a mark set
   // there would end the skip, and the next line begin with a space (2608.29782's \\delete{…} after a display)
   'a macro that sets nothing after a display': doc('\\usepackage{amsmath}\\newcommand\\delete[1]{}', `${prose(6, () => '')} by\n\\[ a = b \\]\n\\delete{A passage $x$ set aside.}\n${prose(6, () => '')} and\n\\begin{align*} c = d \\end{align*}\n\\delete{More.}\n${prose(6, () => '')}`),
@@ -192,7 +197,7 @@ function queue(name, src, { engine = 'pdflatex', passes = 2, variants = ['v0', '
   if (engine === 'latex') files = { ...files, '00README.json': JSON.stringify({ sources: [{ usage: 'toplevel', filename: 'main.tex' }], process: { compiler: 'latex' } }) }
   const all = new Map([['main.tex', new TextEncoder().encode(src)], ...Object.entries(files).map(([f, t]) => [f, new TextEncoder().encode(t)])])
   const paper = openPaper(all)
-  if ((STREAM_ONLY && !name.startsWith('stream-')) || (RUNIN_ONLY && !name.startsWith('stream-F-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-')) || (WRAPPERS_ONLY && !name.startsWith('wrappers-')) || (LOST_ONLY && !name.startsWith('stay-an-inline-formula-first-after-a-display') && !name.startsWith('stream-E-')) || (DVI_ONLY && !/-latex(?:-hyperref)?$/.test(name))) return paper
+  if ((STREAM_ONLY && !name.startsWith('stream-')) || (RUNIN_ONLY && !name.startsWith('stream-F-')) || (NAMES_ONLY && !name.startsWith('names-')) || (UNMARK_ONLY && !name.startsWith('unmark-')) || (WRAPPERS_ONLY && !name.startsWith('wrappers-')) || (LOST_ONLY && !name.startsWith('stay-an-inline-formula-first-after-a-display') && !name.startsWith('stay-a-superscript-or-a-box-glued-to-a-word') && !name.startsWith('stream-E-')) || (DVI_ONLY && !/-latex(?:-hyperref)?$/.test(name))) return paper
   queued.push({ name, paper, engine, passes, variants, own, trace, files: all })
   return paper
 }
@@ -288,8 +293,11 @@ function dviMoved(a, b) {
   return out
 }
 const READ_LINE = /^(?:AXT-|Missing character: |! LaTeX Error: Unicode character )/
-/** the log lines the run reads (live.mjs readingsOf), and LaTeX's warnings and errors */
-const readLog = name => lastTexLog(read(name, 'log', 'latin1') ?? '').split('\n').filter(l => READ_LINE.test(l) || /^(?:LaTeX|Package \S+|Class \S+) Warning|^! /.test(l))
+/** what the layout marks themselves write to the log (LAYOUT_TEX: a unit's alignment, a run's colour), which v0, with none of
+ *  them, cannot write: their readings, not something they change */
+const MARKS_OWN_LINE = /^AXT-(?:ALIGN|COLOUR) /
+/** the log lines the run reads (live.mjs readingsOf) but the layout marks' own, and LaTeX's warnings and errors */
+const readLog = name => lastTexLog(read(name, 'log', 'latin1') ?? '').split('\n').filter(l => (READ_LINE.test(l) && !MARKS_OWN_LINE.test(l)) || /^(?:LaTeX|Package \S+|Class \S+) Warning|^! /.test(l))
 const errorsOf = name => (read(name, 'log', 'latin1') ?? '').match(/^! .*/gm) ?? []
 const near = (m, page, x, y, d) => !!m && m.page === page && Math.hypot(m.x - x, m.y - y) <= d
 

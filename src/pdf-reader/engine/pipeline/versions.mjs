@@ -482,7 +482,16 @@
 //     25-paper set's 0 failures (PDF-READER §19.12). The figure units' cut moves, so the rows' identities: raised so. Every
 //     source unit, its pieces and its wire are 55's: a copy of 55 carries every unit (live.mjs PIPELINE_CARRIES), a figure unit
 //     found again by its source (cache.mjs seedFrom)
-export const PIPELINE_VERSION = '56'
+// 57 (the lost class of the release sweep of 2026-11-02: an author line left LOST, its unit English): a paper's macro glued to
+//     the word before it gets its marks where LAYOUT_TEX's opening mark sets itself in a box before it, as before a formula
+//     (marks.mjs layoutMarking, BOXY: \textsuperscript, \mbox), not past a prefix: TeX hyphenates no word a box or a formula
+//     follows and kerns no letter with either, so the word ends where it ended. An author's `Zhou\textsuperscript{1}` had no
+//     mark, its affiliations LOST. The marked original moves on 4 of 65 local papers, every glyph of their final passes where it
+//     was (0 pt over 246,831); its layout file's rows of each such piece, the maker's reading of the new marks riding this version
+//     as 48's did: 7 units of 4 papers laid whole that were the original's (2602.23285v2's u1 and u181, 2610.21376v1's u1,
+//     2610.21477v1's u1, u90 and u94, 2610.21924v1's u1), none the other way, every other unit's rows as they were. No source
+//     unit's text, pieces or wire changes: a copy of 56 carries every unit (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '57'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

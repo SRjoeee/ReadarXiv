@@ -1392,9 +1392,13 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       // part the word's hyphenation and kerns — but not one whose box TeX began with a node apart from it (`apart`: a kern, glue,
       // a colour), which no kern or ligature of the letters before it reaches and their hyphenation ends at (`0.58\\pp`, \\pp
       // `\\,pp`)
+      // — nor one LAYOUT_TEX's opening mark sets in a box of its own glued to a letter (BOXY, \\axt@boxy: \\textsuperscript, \\mbox),
+      // as it does before a formula: TeX hyphenates no word a box or a formula follows and kerns no letter with either, so the
+      // word ends where it ended (an author's `Zhou\\textsuperscript{1}`, 2610.21924v1 u1: its affiliations had no mark, the
+      // author line English). Not past a prefix, which \\axt@boxy would see in the command's place
       // (the piece before a prefix's, past it: the pair is one command, glued to the word before it as the command alone would be)
       const before = u.pieces[prefixed ? k - 2 : k - 1], next = u.pieces[k + 1]
-      if (cls === 'macro' && before?.t === 'text' && WORD_END.test(before.s) && !parted.has(p.src)) return [piece]
+      if (cls === 'macro' && before?.t === 'text' && WORD_END.test(before.s) && !parted.has(p.src) && !(BOXY.test(p.src) && !prefixed)) return [piece]
       // (a complete call keeps its opening mark whatever TeX answered for what follows, as any macro of the paper's has it: the
       // answer is the closing mark's and the next piece's alone. A call that ends in a control word is answered '2' before a word,
       // TeX's tokenizer skipping the space after it where `{}` keeps it, which says nothing of a mark before the call)
