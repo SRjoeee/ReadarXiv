@@ -138,6 +138,18 @@ describe('deltaOf: the pages ours replaces, written over arXiv\'s PDF', () => {
     expect('refused' in r ? r.refused : 'built').toBe('delta-bound')
     expect(await deltaOf(ORIG_TABLE, OURS, { PL, heldMax: 100 })).toMatchObject({ refused: 'delta-bound' })
   })
+
+  it('the held forms\' bound is the same on every run: a stream\'s form is its place among the streams, no digit of the random hash', async () => {
+    // (the smallest bound the delta is built within, found once; then at it every run builds, and below it every run refuses)
+    const builds = async (heldMax: number) => !('refused' in (await deltaOf(ORIG_STREAM, OURS, { PL, heldMax })))
+    let lo = 0, hi = 1 << 20
+    while (lo < hi) { const mid = (lo + hi) >>> 1; if (await builds(mid)) hi = mid; else lo = mid + 1 }
+    expect(lo).toBeGreaterThan(100)
+    for (let run = 0; run < 12; run++) {
+      expect(await builds(lo)).toBe(true)
+      expect(await builds(lo - 1)).toBe(false)
+    }
+  })
 })
 
 describe('proveDelta: the structural proof, and every mutation it must catch', () => {
