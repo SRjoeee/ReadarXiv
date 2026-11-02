@@ -1799,15 +1799,18 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    * A run-in head's room on its row (the owner's ruling of 2026-11-03): a unit whose last row another unit's first
    * continues on a shared line (`followers`, need.mjs rowLeadOf), that row the only line of its last block (a run-in heading:
    * 2610.19159v1 p7's "Node-level grading still separates agents.", 170.6 pt of row for 34 em of Japanese), and nothing kept
-   * between the two (`kept`, keptAfter). Laid in its row alone it fits only below its size (`p.layout`'s scale) or not at all;
-   * here its last block runs on to the end of the next unit's first line, as one line of the row, and is laid again. Taken
-   * where it fits so at a larger size than in its row: that next unit is then laid from where it ends (layout2's `start`), its
-   * first line shorter, or given way to its next row. Returns { id, blocks, layout, tokens }, or null
+   * between the two (`kept`, keptAfter). Laid in its row alone, its fit clipped at the floor (it would shrink below it, or be
+   * left the original's: `fitFurther`), its last block runs on to the end of the next unit's first line, as one line of the row,
+   * and is laid again; taken where it fits so. That next unit is then laid from where it ends (layout2's `start`), its first line
+   * shorter, or given way to its next row. Returns { id, blocks, layout, tokens }, or null
    */
   const overFollower = (p, tokens, s, kept) => {
     const fid = followers.get(p.id)
     if (fid === undefined || kept || p.unit.kind === 'cell') return null
-    if (!p.layout.clipped && p.layout.scale >= 1 - 1e-9) return null
+    // (only a head its row cannot hold at its floor: one it holds shrunk within the floor keeps its row, and the paragraph's first
+    // line its room. Taken wherever it fit smaller, the paragraph after it paid: 1810.04805v2's Russian p4, a head from 0.85 to
+    // 1 and its paragraph, already below its floor, from 0.73 to 0.70)
+    if (!p.layout.clipped) return null
     // (a next unit that will be laid: placed, its row decided before this one is laid (consume), and not laid yet. One left the
     // original's as it is decided — a row kept, a unit skipped — is never laid, and its English first row stays where TeX set it:
     // 2610.22065v1 p1's "and" between two author names kept, which ran on 2 pt over the second)
@@ -1821,7 +1824,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (!(x1 > b.x1 + 0.1)) return null
     const blocks = p.blocks.map((q, i) => (i === bi ? { ...q, x1 } : q))
     const laid = L2.layoutCut(tokens, blocks, s, p.P)
-    if (laid.layout.clipped || (!p.layout.clipped && laid.layout.scale <= p.layout.scale + 1e-9)) return null
+    if (laid.layout.clipped) return null
     return { id: fid, blocks, layout: laid.layout, tokens: laid.tokens }
   }
   const fitFurther = (p, tokens, s) => {
@@ -2240,9 +2243,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         for (const c of cs) prep.cat?.set(L2.charKey(c), 'acc')
       }
     }
-    // (a run-in head, the unit before a shared line, laid in its row alone where its translation fits only shrunk or not at all:
-    // laid on over the next unit's first row to that row's end, the next unit laid from where it ends there (`start`), where it
-    // fits larger so (overFollower). Decided with the next unit: that unit left the original's, or not laid from its end, it is
+    // (a run-in head, the unit before a shared line, laid in its row alone where its translation fits there only below its floor
+    // or not at all: laid on over the next unit's first row to that row's end, the next unit laid from where it ends there
+    // (`start`), where it fits so (overFollower). Decided with the next unit: that unit left the original's, or not laid from its end, it is
     // laid again in its row alone, as before (relayInRow))
     const over = p.noOver ? null : overFollower(p, tokens, s, kept)
     if (over) { p.blocks = over.blocks; p.layout = over.layout; p.tokens = over.tokens; p.over = { id: over.id, rects: rects0 } }

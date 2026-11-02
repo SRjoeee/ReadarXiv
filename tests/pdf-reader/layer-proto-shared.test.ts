@@ -28,6 +28,9 @@ const runIn = (chars: number, x1 = 80): Paper => ({
     { id: 1, kind: 'para', lines: [line(1, 250, 'The model is a stack', x1 + 10, 280), line(1, 238, 'of identical layers, each with', 20, 280), line(1, 226, 'two sub-layers and a residual', 20, 280)], chars: 30, at: 0x5100 },
   ],
 })
+/** the same, its page's lines ink on the page as drawn (the paper beside the heading's row ends where the next unit's English
+ *  begins, as on a paper's page: on a white page a slot widens to the text area's edge) */
+const inkedRunIn = (chars: number): Paper => ({ ...runIn(chars), ink: true })
 /** a paragraph (unit 0: two full rows from baseline 250, its last [20, 150] at 226) and its part after a float (unit 1: its
  *  first row [160, 280] on that last row, then two full rows), the paragraph's translation `chars` CJK characters */
 const split = (chars: number): Paper => ({
@@ -118,41 +121,51 @@ describe('a shared line: the next unit\'s first line starts where the translatio
     expect(b![6]).toBeCloseTo(a![7] + 10, 1)
   })
 
-  it('a heading its row holds only shrunk runs on over the row at its size, its text after it (the owner\'s ruling of 2026-11-03: 2610.19159v1 p7)', async () => {
-    // (seven characters for a row of 60 pt: in its row alone at 0.95 of its size, ending at 84.5, as before the ruling; now
-    // over the next unit's first row at its size, 70 pt, and its text from 10 pt after it)
-    const run = await laid(runIn(7))
+  it('a heading its row holds only below its floor runs on over the row at its size, its text after it (the owner\'s ruling of 2026-11-03: 2610.19159v1 p7)', async () => {
+    // (nine characters for a row of 60 pt, the next unit's English 10 pt after it as ink: in its row alone at 0.725 of its
+    // size, below the floor; now over the next unit's first row at its size, 90 pt, and its text from 10 pt after it)
+    const run = await laid(inkedRunIn(9))
     const head = (run.stats as unknown as { id: number; f: number }[]).find(r => r.id === 0)!
     const [a] = linesOf(run, 0)!, [b] = linesOf(run, 1)!
-    expect([head.f, a![6], a![7]]).toEqual([10, 20, 90])
-    expect([b![1], b![6]]).toEqual([250, 100])
+    expect([head.f, a![6], a![7]]).toEqual([10, 20, 110])
+    expect([b![1], b![6]]).toEqual([250, 120])
   })
 
-  it('a heading its row holds at its size stays in its row: its text where the original\'s was', async () => {
-    const run = await laid(runIn(6))
+  it('a heading its row cannot hold at all is drawn over the row, not left the original\'s', async () => {
+    // (thirteen characters: past the floor's least, 0.6, in its row alone, so skipped `unfit` and its English left beside its
+    // translated text; 2610.19159v1 p7's "Node-level grading still separates agents." in Japanese, 34 em for 17)
+    const run = await laid(inkedRunIn(13))
     const head = (run.stats as unknown as { id: number; f: number }[]).find(r => r.id === 0)!
-    expect([head.f, linesOf(run, 0)![0]![7], linesOf(run, 1)![0]![6]]).toEqual([10, 80, 90])
+    expect([head.f, linesOf(run, 0)![0]![7], linesOf(run, 1)![0]![6]]).toEqual([10, 150, 160])
+    expect(run.skipped).toEqual([])
+  })
+
+  it('a heading its row holds shrunk within its floor stays in its row: its text keeps its first line\'s room', async () => {
+    // (eight characters, at 0.825 of its size in its row. Taken over the row wherever a heading fit smaller, its text paid for
+    // it: 1810.04805v2's Russian p4, a heading from 0.85 to 1 and its paragraph, already below its floor, from 0.73 to 0.70)
+    const run = await laid(inkedRunIn(8))
+    const head = (run.stats as unknown as { id: number; f: number }[]).find(r => r.id === 0)!
+    expect([head.f, linesOf(run, 0)![0]![7], linesOf(run, 1)![0]![6]]).toEqual([8.25, 84.02, 94.02])
   })
 
   it('a heading laid over the next unit\'s first row, that unit left the original\'s: laid again in its row alone, as before', async () => {
     // (the next unit's 400 characters fit none of its three rows: unfit, its English standing; the heading is then laid where it
-    // was before the ruling, at 0.95 of its size in its own row, never over that unit's English first row)
-    const heavy: Paper = { ...runIn(7), specs: runIn(7).specs.map(x => (x.id === 1 ? { ...x, chars: 400 } : x)) }
+    // was before the ruling, below its floor in its own row, never over that unit's English first row)
+    const heavy: Paper = { ...inkedRunIn(9), specs: inkedRunIn(9).specs.map(x => (x.id === 1 ? { ...x, chars: 400 } : x)) }
     const run = await laid(heavy)
     const head = (run.stats as unknown as { id: number; f: number }[]).find(r => r.id === 0)!
-    const [a] = linesOf(run, 0)!
     expect(linesOf(run, 1)).toBeUndefined()
-    expect([head.f, a![7]]).toEqual([9.5, 84.51])
+    expect([head.f, linesOf(run, 0)![0]![7]]).toEqual([7.25, 83.29])
     expect((run.skipped as unknown as { id: number; code: string }[]).map(x => [x.id, x.code])).toEqual([[1, 'unfit']])
   })
 
   it('a heading before a unit left the original\'s as it is decided (its row not translated) stays in its row, as before', async () => {
     // (that unit is never laid: its English first row stays where TeX set it, and nothing may run over it. 2610.22065v1 p1's
     // "and" between two author names kept ran on 2 pt over the second before the next unit's placing was asked)
-    const run = await laid(runIn(7), P => { P.rows.get(1)!.state = 'failed' })
+    const run = await laid(inkedRunIn(9), P => { P.rows.get(1)!.state = 'failed' })
     const head = (run.stats as unknown as { id: number; f: number }[]).find(r => r.id === 0)!
     expect(linesOf(run, 1)).toBeUndefined()
-    expect([head.f, linesOf(run, 0)![0]![7]]).toEqual([9.5, 84.51])
+    expect([head.f, linesOf(run, 0)![0]![7]]).toEqual([7.25, 83.29])
   })
 
   it('a heading left the original\'s (not translated): its text starts where TeX set it', async () => {

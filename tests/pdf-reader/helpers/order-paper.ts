@@ -15,13 +15,26 @@ import { withGroups } from './groups'
 // Each paper has what its name says and the pages are 300 × 300 pt; a line is 10 pt type, 12 pt apart.
 // The engine lays a page asked by its closure alone (1b-D1): these hold every page so laid to the page laid in order
 
-/** a canvas context that draws nothing and reads a white page */
+/** the lines a page's drawing put on a canvas, by the canvas (a paper's `ink`: its page's render records them) */
+const inked = new WeakMap<object, Line[]>()
+/** a context's readback where it was drawn a whole inked canvas scaled to w × h at its origin (layer2.mjs inkMapOf): each
+ *  line's box, from 2 pt below its baseline to 7 pt above, black; the rest white */
+const inkOf = (lines: Line[], w: number, h: number) => {
+  const data = new Uint8ClampedArray(w * h * 4).fill(255)
+  for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+    const x = ((i + 0.5) * 300) / w, y = H - ((j + 0.5) * H) / h
+    if (lines.some(l => x >= l.x0 && x <= l.x1 && y >= l.b - 2 && y <= l.b + 7)) data.fill(0, 4 * (j * w + i), 4 * (j * w + i) + 3)
+  }
+  return data
+}
+/** a canvas context that draws nothing and reads a white page, or an inked page's lines where one was drawn into it whole */
 const ctxStub = (canvas?: { width: number; height: number }) => new Proxy({} as Record<string | symbol, unknown>, {
   get(t, k) {
     if (k in t) return t[k]
+    if (k === 'drawImage') return (src: object, ...a: number[]) => { if (a.length === 4 && !a[0] && !a[1] && inked.has(src)) t.inkFrom = inked.get(src) }
     // (an em a CJK character, half one any other, at the context's font size)
     if (k === 'measureText') return (s: string) => { const px = Number(/(\d+(?:\.\d+)?)px/.exec(String(t.font ?? ''))?.[1] ?? 10); return { width: [...s].reduce((w, ch) => w + (/[\u3000-\u9fff]/.test(ch) ? px : px / 2), 0), actualBoundingBoxAscent: 0.7 * px, actualBoundingBoxDescent: 0.2 * px } }
-    if (k === 'getImageData') return (_x: number, _y: number, w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(1, w * h) * 4).fill(255) })
+    if (k === 'getImageData') return (x: number, y: number, w: number, h: number) => ({ width: w, height: h, data: t.inkFrom && !x && !y ? inkOf(t.inkFrom as Line[], w, h) : new Uint8ClampedArray(Math.max(1, w * h) * 4).fill(255) })
     if (k === 'createImageData') return (w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(1, w * h) * 4) })
     if (k === 'canvas') return canvas
     return () => {}
@@ -59,7 +72,7 @@ export function cell(id: number, page: number, b: number, c: Cell, group: string
 }
 const at = (table: number, row: number, col = 0, head = false): Cell => ({ table, row, col, span: 1, head })
 
-export interface Paper { name: string; specs: Spec[]; pages: number; /** a page whose reading throws */ fail?: number; /** what the pages' annotations do: `throw` (a read that rejects), `absent` (a page object with no such call); the default reads */ annots?: 'throw' | 'absent'; /** the page's text no unit holds (a label kept as the original's: an inline list's "(2)") */ extra?: Line[] }
+export interface Paper { name: string; specs: Spec[]; pages: number; /** a page whose reading throws */ fail?: number; /** what the pages' annotations do: `throw` (a read that rejects), `absent` (a page object with no such call); the default reads */ annots?: 'throw' | 'absent'; /** the page's text no unit holds (a label kept as the original's: an inline list's "(2)") */ extra?: Line[]; /** the pages' lines drawn as ink, read so by the page's ink map (the default: a white page, whose paper a slot may widen over to the text area's edge) */ ink?: boolean }
 /** S-A, the chain: a unit across every break, and one over 2 to 3 to 4 */
 const chain: Paper = {
   name: 'S-A chain', pages: 5,
@@ -173,7 +186,7 @@ export function build(paper: Paper): Built {
   const all = Array.from({ length: pages }, (_, i) => i + 1)
   const items = all.map(p => [...specs.flatMap(s => s.lines), ...(paper.extra ?? [])].filter(l => l.page === p).map(l => ({ str: l.text, transform: [10, 0, 0, 10, l.x0, l.b], width: l.x1 - l.x0, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false })))
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
-  const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items[n - 1], styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {}, ...(paper.annots === 'absent' ? {} : { getAnnotations: async () => { if (paper.annots === 'throw') throw new Error('the annotations cannot be read'); return annotationsOf(specs, n) } }) })
+  const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items[n - 1], styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: ({ canvas }: { canvas?: object }) => { if (paper.ink && canvas) inked.set(canvas, [...specs.flatMap(s => s.lines), ...(paper.extra ?? [])].filter(l => l.page === n)); return { promise: Promise.resolve() } }, commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {}, ...(paper.annots === 'absent' ? {} : { getAnnotations: async () => { if (paper.annots === 'throw') throw new Error('the annotations cannot be read'); return annotationsOf(specs, n) } }) })
   const asked: number[] = []
   const doc = withGroups({ numPages: pages, asked, getPage: async (n: number) => { asked.push(n); if (n === paper.fail) throw new Error(`page ${n} cannot be read`); return pageOf(n) } })
   const layout = {
