@@ -1,4 +1,4 @@
-// A page's operator list as the engine's readers ask it of PDF.js. The prepare's readers (the layout maker's read of our base page, the
+// A page's operator list as the engine's readers ask it of PDF.js. The prepare's readers (the layout maker's read of the base page, the
 // marked original's pages) wait for it however long it takes (listOf): what a page holds is bounded by counts once it has come
 // (ink.mjs OPS_CAP, STEPS_MAX, GLYPHS_PAGE, BOXES_CAP: a page past one is dark, that page alone, on every machine alike), and no
 // clock decides what is read, so that no output depends on the box's speed or its load. A list that fails is that page's darkness
