@@ -37,6 +37,7 @@ import { DELTA_MAX_BYTES, DELTA_MAX_SHARE, DELTA_OBJECTS_MAX, deltaSection, page
 import { appendSection } from './section.mjs'
 import { OBJECT_MAX, startxrefOf } from './tail.mjs'
 import { openObjects, XrefRefusal } from './xref.mjs'
+import { equalBytes, wordHash } from './bytes.mjs'
 
 /** the canonical forms' text the builder holds at most (each distinct form once), and the bytes its object and cross-reference
  *  streams decode to at most, per document (as the remover's HELD_MAX and BYTES_MAX bound its walk) */
@@ -75,17 +76,13 @@ const HEX = Array.from({ length: 256 }, (_, v) => v.toString(16).padStart(2, '0'
 const hexOf = b => { let s = ''; for (let i = 0; i < b.length; i++) s += HEX[b[i]]; return s }
 const enc = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 255; return b }
 const concat = parts => { let n = 0; for (const p of parts) n += p.length; const out = new Uint8Array(n); let o = 0; for (const p of parts) { out.set(p, o); o += p.length } return out }
-const equalBytes = (a, b) => { if (a.length !== b.length) return false; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true }
-/** two lanes of a multiplicative hash of the bytes from secret random seeds (a bucket's key alone: equality is the bytes'): an
- *  input cannot be made of streams that share one key, as it could against a fixed FNV (4,096 colliding streams, 47 s) */
+/** two lanes of a multiplicative hash of the bytes, a word at a time (layout/bytes.mjs wordHash), from secret random seeds (a bucket's
+ *  key alone: equality is the bytes'): an input cannot be made of streams that share one key, as it could against a fixed FNV
+ *  (4,096 colliding streams, 47 s) */
 function keyedHash() {
   const seed = new Uint32Array(2)
   globalThis.crypto.getRandomValues(seed)
-  return b => {
-    let h1 = seed[0] ^ 0x811c9dc5, h2 = seed[1] ^ 0x9e3779b9
-    for (let i = 0; i < b.length; i++) { h1 = Math.imul(h1 ^ b[i], 0x01000193); h2 = Math.imul(h2 ^ b[i], 0x5bd1e995) ^ (h2 >>> 15) }
-    return `${h1 >>> 0}.${h2 >>> 0}`
-  }
+  return wordHash(seed)
 }
 
 async function sha256Of(bytes) {
@@ -100,7 +97,7 @@ function canonical(PL, heldMax, work) {
   const isOC = v => v instanceof PL.PDFDict && ['/OCG', '/OCMD'].includes(v.get(PL.PDFName.of('Type'))?.asString?.())
   const { PDFRef, PDFDict, PDFArray, PDFRawStream, PDFName, PDFNumber, PDFString, PDFHexString, PDFBool, PDFNull } = PL
   const texts = new Map(), buckets = new Map(), hash = keyedHash()
-  let held = 0
+  let held = 0, streams = 0
   const intern = s => {
     let id = texts.get(s)
     if (id === undefined) {
@@ -117,7 +114,9 @@ function canonical(PL, heldMax, work) {
     let list = buckets.get(key)
     if (!list) buckets.set(key, (list = []))
     for (const [d, id] of list) { work.spend(data.length); if (equalBytes(d, data)) return id }
-    const id = intern(`D${key}#${list.length}`)
+    // (its form the stream's place among the distinct streams read so far: unique, and of the bytes alone, so that what the forms
+    // hold (heldMax) is the same on every run, where the random hash's digits in it made a refusal at the bound a matter of the run)
+    const id = intern(`D${streams++}`)
     list.push([data, id])
     return id
   }

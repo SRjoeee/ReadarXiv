@@ -44,6 +44,7 @@ import { alignOf, DecodeLimit, lex, LexLimit, openRemover } from './remove.mjs'
 import { appendSection } from './section.mjs'
 import { startxrefOf } from './tail.mjs'
 import { openObjects } from './xref.mjs'
+import { equalBytes } from './bytes.mjs'
 
 /** the groups and the marked-content sequences of ours a page may hold, and the groups a document may (E1, E3) */
 export const GROUPS_PAGE = 512, SEQUENCES_PAGE = 2000, GROUPS_DOC = 8000
@@ -62,7 +63,6 @@ export const ocgName = g => `axt:${g}`
 export const propName = g => `axt${g}`
 
 const enc = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 255; return b }
-const equalBytes = (a, b) => { if (a.length !== b.length) return false; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false; return true }
 const concat = parts => { let n = 0; for (const p of parts) n += p.length; const out = new Uint8Array(n); let o = 0; for (const p of parts) { out.set(p, o); o += p.length } return out }
 const HEX = Array.from({ length: 256 }, (_, v) => v.toString(16).padStart(2, '0'))
 const hex = b => { let s = '<'; for (let i = 0; i < b.length; i++) s += HEX[b[i]]; return `${s}>` }
