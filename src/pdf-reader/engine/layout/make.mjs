@@ -759,15 +759,26 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     if (rects.some(r => dark.has(r.page) || !inked[r.page])) return notLaid(i, 'dark')
     const S = carriedUnit.get(`${i}s`), E = carriedUnit.get(`${i}e`)
     const onRect = (m, r) => m && m.page === r.page && Math.abs(m.y - r.base) < 0.5 * r.h
+    /** the tokens of the unit's own words (its text's, as the match paired them) */
+    const own = new Set(a.pairs?.values() ?? [])
     const rows = []
     for (let j = 0; j < rects.length; j++) {
       const r = rects[j]
       const from = j === 0 && onRect(S, r) ? S.x : null, to = j === rects.length - 1 && onRect(E, r) ? E.x : null
       const row = lineOf(ink[r.page], r, from, to, i)
-      // (a line with no glyph of its own: none there, or another's, which a unit laid before it took)
-      if (!row || !(r2(row.size) > 0 && row.size <= SIZE_MAX)) return notLaid(i, !row && takenAt(ink[r.page], r, i) ? 'lineTaken' : 'noLine')
+      if (!row || !(r2(row.size) > 0 && row.size <= SIZE_MAX)) {
+        // (where the match paired the unit's words, a line of the anchor's that holds none of them, neither of its own marks, and
+        // no glyph of a line of text (none another unit took) is a formula's row the text layer read as a line of its own between
+        // two of its words — a vector's arrow, a script —, no line of the unit's: the unit is laid on its other lines, the
+        // formula's ink found by its own marks as any placeholder's. One such row left the whole unit the original's:
+        // 2610.22197v1's u75 and u95, two paragraphs over two pages each, 2610.21085v1's u441)
+        if (!row && own.size && from === null && to === null && !r.ks.some(k => own.has(k)) && !takenAt(ink[r.page], r, i)) continue
+        // (a line with no glyph of its own: none there, or another's, which a unit laid before it took)
+        return notLaid(i, !row && takenAt(ink[r.page], r, i) ? 'lineTaken' : 'noLine')
+      }
       rows.push(row)
     }
+    if (!rows.length) return notLaid(i, 'noLine')
     // the anchor's rectangles of one line (its tokens out of order: a script before its base, the line's two parts
     // either side of a formula, 1706.03762's note): one line, wherever the second begins
     // again over the merged rows until none is left to merge: a row may match one only once another merge has made it
@@ -1220,27 +1231,45 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         if (!segs) { lost('more segments than a display may have'); continue }
         if (segs.numbered) flags |= PH_FLAG.NUMBERED
       } else {
-        // one segment a line of the unit: the glyphs in stream order in parts (a line's end parts them), each part on the
+        const closeName = `${prefix}${i}.${k}b`, openAt = markOf(name), closeAt = markOf(closeName)
+        const on = (M, j) => !!M && M.page === rows[j].page && Math.abs(M.y - rows[j].base) < 0.5 * rows[j].size
+        // both its marks on one line of the unit: TeX broke no line between them, so the whole piece is in that line's box, one
+        // segment of it whatever its glyphs' baselines (a fraction's numerator and denominator, a limit, a binomial's or a big
+        // delimiter's origin far off the baseline, the rows of an inline `cases`). The base page is the final pass of the compile
+        // the marks were read from, every mark where it was (OWN_TOL), so no other line holds any of it. That line is the unit's
+        // row on both marks' baseline that holds them across (a line of the other column on the same baseline, where a unit runs
+        // through both, is none), where it is the only row there that it meets across. Two rows on one baseline that meet are one
+        // line of TeX's the anchor gave as two rectangles (a formula's scripts out of the text layer's order: 2610.10492v1's
+        // captions), the maker taking one as the line and holding the other; there the piece keeps the reading below, so that no
+        // such pair is laid otherwise. Before, the glyphs were always parted where they ran back left and down as at a line's
+        // end (BREAK_X, BREAK_Y), a fraction's denominator under a numerator wider than BREAK_X among them, each part on the line
+        // its largest glyphs' baselines stand on (rowOfPart), and a part whose largest glyph is a big delimiter, its origin 14 pt
+        // over the baseline, stood on none (2610.21026v1's `$\O\left(\frac{…}{…}\right)$`: six units of two papers English), or
+        // on the line above (2610.17024v1's `$\sum_{r\le2p-m_e}\binom{m_i+2p}{r}$`, its paragraph's first line drawn short)
+        const holds = (M, r) => M.x >= r.x0 - r.size && M.x <= r.x1 + r.size
+        const meets = (r, s) => r.x0 <= s.x1 + s.size && r.x1 >= s.x0 - s.size
+        const line = openAt && closeAt ? rows.findIndex((r, j) => on(openAt, j) && on(closeAt, j) && holds(openAt, r) && holds(closeAt, r)) : -1
+        const oneLine = line >= 0 && !rows.some((r, j) => j !== line && on(openAt, j) && meets(r, rows[line])) && gs.every(([p]) => p === rows[line].page) && bs.every(([p]) => p === rows[line].page)
+        // (else: a part the part rule puts on no line goes to the line both its marks stand on where its glyphs stand within the
+        // line's size of its baseline)
+        const both = openAt && closeAt ? rows.findIndex((_, j) => on(openAt, j) && on(closeAt, j)) : -1
+        const onLine = part => both >= 0 && part.page === rows[both].page && part.gs.every(g => Math.abs(ink[part.page].y[g] - rows[both].base) <= rows[both].size)
+        // else one segment a line of the unit: the glyphs in stream order in parts (a line's end parts them), each part on the
         // line its baseline stands on, each rule with the part of the glyph nearest it
         const parts = []
-        for (const [p, g] of gs) {
-          const cur = parts.at(-1), P = ink[p], last = cur?.gs.at(-1)
-          const dx = cur ? P.x0[g] - P.x0[last] : 0, dy = cur ? P.y[g] - P.y[last] : 0
-          if (!cur || cur.page !== p || (dx < -BREAK_X && dy < -BREAK_Y) || dy > BREAK_UP * Math.max(P.size[g], P.size[last]) || Math.abs(dx) > BREAK_FAR) parts.push({ page: p, gs: [g] })
-          else cur.gs.push(g)
+        if (oneLine) { if (gs.length) parts.push({ page: rows[line].page, gs: gs.map(([, g]) => g) }) }
+        else {
+          for (const [p, g] of gs) {
+            const cur = parts.at(-1), P = ink[p], last = cur?.gs.at(-1)
+            const dx = cur ? P.x0[g] - P.x0[last] : 0, dy = cur ? P.y[g] - P.y[last] : 0
+            if (!cur || cur.page !== p || (dx < -BREAK_X && dy < -BREAK_Y) || dy > BREAK_UP * Math.max(P.size[g], P.size[last]) || Math.abs(dx) > BREAK_FAR) parts.push({ page: p, gs: [g] })
+            else cur.gs.push(g)
+          }
         }
         // (each part's line by the line itself, not its index: a line the piece's run wraps onto enters the unit's lines
         // once the piece is found, after the line before it)
         const byRow = new Map(), partRow = [], wrapped = []
         let off = false
-        const closeName = `${prefix}${i}.${k}b`, openAt = markOf(name), closeAt = markOf(closeName)
-        // both its marks on one line of the unit: TeX broke no line between them, so the whole piece is in that line's box
-        // (a fraction's numerator and denominator, a limit, whatever their baselines). A part the part rule puts on no
-        // line goes there where its glyphs stand within the line's size of its baseline on the page; where the page
-        // broke the line elsewhere (another TeX's compile), the part rule's own line stands
-        const on = (M, j) => !!M && M.page === rows[j].page && Math.abs(M.y - rows[j].base) < 0.5 * rows[j].size
-        const both = openAt && closeAt ? rows.findIndex((_, j) => on(openAt, j) && on(closeAt, j)) : -1
-        const onLine = part => both >= 0 && part.page === rows[both].page && part.gs.every(g => Math.abs(ink[part.page].y[g] - rows[both].base) <= rows[both].size)
         // its two points on two lines of the marked compile: TeX broke the piece over lines (wrapOf)
         const pa = dropped.has(name) ? null : at.get(name), pb = dropped.has(closeName) ? null : at.get(closeName)
         // (a piece alone at its unit's end with its opening point alone, its ink to its unit's next mark and its lines up to TeX's
@@ -1253,7 +1282,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         // (the line its opening point stands on, where TeX broke the line right after it: its first part's line before)
         const openRow = broken && openAt ? (rows.find((_, j) => on(openAt, j)) ?? null) : null
         for (const [q, part] of parts.entries()) {
-          let j = rowOfPart(part, q === 0 ? openAt : q === parts.length - 1 ? closeAt : null)
+          let j = oneLine ? line : rowOfPart(part, q === 0 ? openAt : q === parts.length - 1 ? closeAt : null)
           if (j < 0 && onLine(part)) j = both
           const prev = q > 0 ? partRow[q - 1] : openRow
           const r = j >= 0 ? rows[j] : broken && prev ? wrapOf(part, prev, wrapped) : null
@@ -1264,8 +1293,8 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
         }
         for (const [p, b] of off ? [] : bs) {
           const B = ink[p].boxes[b], cx = (B[0] + B[2]) / 2, cy = (B[1] + B[3]) / 2
-          let r = null, d = Infinity
-          parts.forEach((part, q) => { if (part.page !== p) return; const P = ink[p]; for (const g of part.gs) { const dd = Math.hypot(mid(P, g) - cx, P.y[g] - cy); if (dd < d) { d = dd; r = partRow[q] } } })
+          let r = oneLine ? rows[line] : null, d = Infinity
+          if (!oneLine) parts.forEach((part, q) => { if (part.page !== p) return; const P = ink[p]; for (const g of part.gs) { const dd = Math.hypot(mid(P, g) - cx, P.y[g] - cy); if (dd < d) { d = dd; r = partRow[q] } } })
           if (!r) { const j = rowFor(p, B[0], B[2], cy); if (j >= 0) r = rows[j] }
           if (!r) { off = true; break }
           ;(byRow.get(r) ?? byRow.set(r, { gs: [], boxes: [] }).get(r)).boxes.push(B)
