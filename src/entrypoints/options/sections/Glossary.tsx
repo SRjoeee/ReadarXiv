@@ -138,7 +138,8 @@ export function GlossaryTable({ data }: { data: OptionsData }) {
   /** the current whole rows, written again down the same path as any other change (fix round 1, item 1) */
   const retry = () => change(ls => ls)
   const enter = (e: KeyboardEvent) => {
-    if (e.key !== 'Enter') return
+    // Enter that commits an input method's word (a term typed in Japanese or Korean) is the composition's, not a move
+    if (e.key !== 'Enter' || e.nativeEvent.isComposing || e.keyCode === 229) return
     e.preventDefault()
     cells.current.get(`${EMPTY}:term`)?.focus()
   }
