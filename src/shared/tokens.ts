@@ -154,10 +154,12 @@ export function tokenSheet(scope: 'page' | 'host'): string {
   const s = SELECTORS[scope]
   const prefix = scope === 'page' ? '--' : '--axt-'
   const constants = Object.entries(CONSTANTS).map(([name, value]) => `  ${prefix}${name}: ${value};`).join('\n')
-  // the font by language: on the root (or the host) the Simplified stack, then every element in one of the languages
-  // its own. Inside a shadow root `:lang()` reaches the shadow tree alone, the element that carries `lang` there
+  // the font by language: on the root (or the host) the Simplified stack, then the root in one of the languages, and
+  // an element of the interface in one (`.ui`, `.chrome`: the paper's layers carry `lang` too, thousands of elements, and
+  // set their own faces). Inside a shadow root `:lang()` reaches the shadow tree alone, the element that carries `lang` there
+  const at = (lang: string) => (scope === 'page' ? [`:root:lang(${lang})`, `:is(.ui, .chrome) :lang(${lang})`] : [`:lang(${lang})`])
   const fonts = FONT_STACKS.map(({ langs, cjk }, i) => {
-    const selector = [...(i === 0 ? [s.constants] : []), ...langs.map(lang => `:lang(${lang})`)].join(', ')
+    const selector = [...(i === 0 ? [s.constants] : []), ...langs.flatMap(at)].join(', ')
     return `${selector} {\n  ${prefix}font: ${fontStack(cjk)};\n}\n`
   }).join('')
   return [
