@@ -235,13 +235,15 @@ describe('ledgerOf', () => {
     // (a contents list no name heads: a section's line, its page number at the column's edge; a sub-entry's, leaders between; a
     // prose line no unit holds that ends in a number in its own words; a line whose number is no page number)
     const pg = page(
-      { glyphs: run('Hexel Parameterization', 100, 700) }, { glyphs: run('15', 400, 700) },
+      { glyphs: run('Hexel Parameterization', 100, 700) }, { glyphs: run('15', 300, 700) }, { glyphs: run('right column text', 360, 700), owner: 'u0' },
       { glyphs: run('Appearance . . . . . . 15', 120, 688) },
       { glyphs: run('we trained it for 20', 100, 660) },
       { glyphs: run('Spatial Color?', 100, 640) }, { glyphs: run('22b', 400, 640) },
+      // (an author line: an affiliation's mark raised before "and", the next author's mark far right on the line: no page number)
+      { glyphs: run('1', 100, 623, { size: 7 }) }, { glyphs: run('Hank', 110, 620) }, { glyphs: run('2', 300, 623, { size: 7 }) },
     )
-    const l = ledger([pg])
-    expect(['H', 'A', 'w', 'S'].map(ch => classAt(l, 1, at(pg, ch)))).toEqual(['contents', 'contents', 'orphan', 'orphan'])
+    const l = ledger([pg], [{ kind: 'para' }])
+    expect(['H', 'A', 'w', 'S', 'k'].map(ch => classAt(l, 1, at(pg, ch)))).toEqual(['contents', 'contents', 'orphan', 'orphan', 'orphan'])
   })
 
   it('keeps a double-spaced bibliography\'s last entry\'s lines past its mark in its zone, by the bibliography\'s own pitch (2610.11256v1 p42)', () => {

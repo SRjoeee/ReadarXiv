@@ -290,25 +290,40 @@ function wordsOf(gs, famOf) {
 
 /** a list's page number set apart from the text before it: at least this many of its size, where no leaders stand between */
 const LIST_APART = 2
-/** whether a line ends as a list's entry does: the last word of its baseline on its page (`G`, the page's glyphs: the number a
- *  ledger line apart from its text stands on a line of its own) a page number at or past the line's end, after leaders (a dot a
- *  word, \@dottedtocline's) or LIST_APART of its size or more clear of the word before it (\hfill's \contentspage); words cut a
- *  fifth of their size apart */
+/** whether a line ends as a list's entry does: its page number the line's last word, after leaders (a dot a word,
+ *  \@dottedtocline's) or LIST_APART of its size or more clear of the word before it (\hfill's \contentspage); or, the ledger
+ *  having cut a number set that far from the text a line of its own, the next word on its baseline (`G`, the page's glyphs) a
+ *  page number LIST_APART clear of the line's end, and nothing after it on the baseline but the other column's text, LIST_APART
+ *  clear again. Words cut a fifth of their size apart */
 function listedOf(gs, G) {
   if (!gs.length) return false
-  const y = gs[0].y, size = Math.max(...gs.map(g => g.size || 0), 1), x1 = Math.max(...gs.map(g => g.x1))
-  const words = []
-  let w = null
-  for (const g of G.filter(g => /\S/.test(g.u ?? '') && Math.abs(g.y - y) < 0.3 * Math.max(size, g.size || 0)).sort((a, b) => a.x0 - b.x0)) {
-    if (!w || g.x0 - w.x1 > 0.2 * Math.max(g.size, w.size)) { w = { s: '', x0: g.x0, x1: g.x1, size: g.size }; words.push(w) }
-    w.s += g.u ?? ''
-    w.x1 = Math.max(w.x1, g.x1)
-    w.size = Math.max(w.size, g.size)
+  // (its baseline its largest glyph's, never a superscript's: an author line's affiliation marks stand above it)
+  const main = gs.reduce((a, g) => ((g.size || 0) > (a.size || 0) ? g : a), gs[0]), y = main.y, size = Math.max(main.size || 0, 1)
+  const wordsOf = list => {
+    const out = []
+    let w = null
+    for (const g of list.filter(g => /\S/.test(g.u ?? '')).sort((a, b) => a.x0 - b.x0)) {
+      if (!w || g.x0 - w.x1 > 0.2 * Math.max(g.size, w.size)) { w = { s: '', x0: g.x0, x1: g.x1, size: g.size }; out.push(w) }
+      w.s += g.u ?? ''
+      w.x1 = Math.max(w.x1, g.x1)
+      w.size = Math.max(w.size, g.size)
+    }
+    return out
   }
-  if (words.length < 2) return false
-  const last = words.at(-1), prev = words.at(-2)
-  if (last.x1 < x1 - 0.5 || !/^(?:\d{1,4}|[ivxlcdm]{1,8})$/u.test(last.s.normalize('NFKC'))) return false
-  return /^[.·•…]+$/u.test(prev.s) || last.x0 - prev.x1 >= LIST_APART * Math.max(last.size, prev.size)
+  const PAGE = /^(?:\d{1,4}|[ivxlcdm]{1,8})$/u, LEADERS = /^[.·•…]+$/u
+  const apart = (a, b) => b.x0 - a.x1 >= LIST_APART * Math.max(a.size, b.size)
+  // (a page number is set at the text's size: a superscript or a figure's tick label is none)
+  const PAGE_AT = w => PAGE.test(w.s.normalize('NFKC')) && w.size >= 0.8 * size
+  const own = wordsOf(gs)
+  if (!own.length) return false
+  const last = own.at(-1), prev = own.at(-2)
+  if (prev && PAGE_AT(last) && (LEADERS.test(prev.s) || apart(prev, last))) return true
+  // (its page number past its end on a line of its own: the next word on the baseline, the column's edge after it)
+  const line = wordsOf(G.filter(g => Math.abs(g.y - y) < 0.2 * size))
+  const j = line.findIndex(w => w.x0 >= last.x1 - 0.1)
+  if (j < 0) return false
+  const num = line[j], after = line[j + 1]
+  return PAGE_AT(num) && (LEADERS.test(last.s) || apart(last, num)) && (!after || apart(num, after))
 }
 
 /** a line's text from its glyphs: a space where two stand a fifth of their size apart or more */
