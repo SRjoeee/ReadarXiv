@@ -279,6 +279,14 @@ describe('the right: what the door drew and what it kept of our page (layer-prot
       // (each kept line keeps the band as its token's box where it is the unit's, and carries the file's box beside it)
       expect(kept.map(l => [l.bottom, l.top, l.fileBottom, l.fileTop])).toEqual(c.lines.map(l => [l[1], l[3], l[4], l[5]]))
     }
+    // (and a kept line of the unit's own beside the display, its file box off the display's rows: still the unit's token, its box
+    // the band; a filter that dropped every line with a file box would drop it)
+    const own = [34, 100, 300, 300, 309], c = cases[0]!, id = displayBlockId(c.id, 0)!
+    const prep = Object.assign(new Map(), { keep: [key(own)], lineInfo: new Map([[key(own), { baseline: 302, size: 10, top: 310, bottom: 298, exact: true, file: true }]]), regionOf: new Map(), referenced: new Set() })
+    const W = newWords()
+    addUnitWords(W, { lines: [] } as never, 34, c.id, null, keptLines([own], prep as never, 34), () => true, null, c.segs.map(([x0, y0, x1, y1]) => ({ kind: 'display' as const, k: c.k, id, box: [x0!, y0!, x1!, y1!], base: y0! })))
+    expect(W.spans).toEqual([[c.id, [0, 1]], [id, [1, c.segs.length]]])
+    expect([W.bottom[0], W.top[0]]).toEqual([300, 309])
   })
 
   it('a unit shown as the original: its boxes on our page its tokens, its displays under their ids, nothing where it has none', () => {
