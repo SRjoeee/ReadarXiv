@@ -212,7 +212,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
     let line = null
     const close = () => {
       if (!line) return
-      Object.assign(line, wordsOf(line.gs.map(g => G[g]), famOf), { listed: listedOf(line.gs.map(g => G[g])) })
+      Object.assign(line, wordsOf(line.gs.map(g => G[g]), famOf), { listed: listedOf(line.gs.map(g => G[g]), G) })
       const rule = RULES.find(r => r.test(line))
       for (const g of line.gs) out[g] = rule.code
       lines.push({ page: pi + 1, cls: rule.cls, gs: line.gs, region: line.region, zone: line.zone, para: line.para, opens: line.opens, entry: line.entry, entryFrom: line.entryFrom, y: line.y, size: line.size, x0: line.x0, x1: line.x1, letters: line.letters })
@@ -290,12 +290,16 @@ function wordsOf(gs, famOf) {
 
 /** a list's page number set apart from the text before it: at least this many of its size, where no leaders stand between */
 const LIST_APART = 2
-/** whether a line ends as a list's entry does: its last word a page number, after leaders (a dot a word, \@dottedtocline's) or
- *  LIST_APART of its size or more clear of the word before it (\hfill's \contentspage); words cut a fifth of their size apart */
-function listedOf(gs) {
+/** whether a line ends as a list's entry does: the last word of its baseline on its page (`G`, the page's glyphs: the number a
+ *  ledger line apart from its text stands on a line of its own) a page number at or past the line's end, after leaders (a dot a
+ *  word, \@dottedtocline's) or LIST_APART of its size or more clear of the word before it (\hfill's \contentspage); words cut a
+ *  fifth of their size apart */
+function listedOf(gs, G) {
+  if (!gs.length) return false
+  const y = gs[0].y, size = Math.max(...gs.map(g => g.size || 0), 1), x1 = Math.max(...gs.map(g => g.x1))
   const words = []
   let w = null
-  for (const g of [...gs].filter(g => /\S/.test(g.u ?? '')).sort((a, b) => a.x0 - b.x0)) {
+  for (const g of G.filter(g => /\S/.test(g.u ?? '') && Math.abs(g.y - y) < 0.3 * Math.max(size, g.size || 0)).sort((a, b) => a.x0 - b.x0)) {
     if (!w || g.x0 - w.x1 > 0.2 * Math.max(g.size, w.size)) { w = { s: '', x0: g.x0, x1: g.x1, size: g.size }; words.push(w) }
     w.s += g.u ?? ''
     w.x1 = Math.max(w.x1, g.x1)
@@ -303,7 +307,7 @@ function listedOf(gs) {
   }
   if (words.length < 2) return false
   const last = words.at(-1), prev = words.at(-2)
-  if (!/^(?:\d{1,4}|[ivxlcdm]{1,8})$/u.test(last.s.normalize('NFKC'))) return false
+  if (last.x1 < x1 - 0.5 || !/^(?:\d{1,4}|[ivxlcdm]{1,8})$/u.test(last.s.normalize('NFKC'))) return false
   return /^[.·•…]+$/u.test(prev.s) || last.x0 - prev.x1 >= LIST_APART * Math.max(last.size, prev.size)
 }
 

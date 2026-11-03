@@ -4080,7 +4080,12 @@ once the units have let go of what is not theirs): in its group in the wrap (`ow
 (`run.mjs` `counterOf`) instead of leaving it at its own place past a gap of the English word's width less the target's. A unit
 whose first line follows such a name on its line (the entry's title, an ink unit) is laid from where the name's word and counter
 end, the original's separation after them. A name that leads its unit (RUN_IN: 2608.16117v1's "Appendix A." before its heading's
-title) was drawn so already, its number the unit's label after the name's word. MEASURED.
+title) was drawn so already, its number the unit's label after the name's word. Over 63 local papers prepared on both sides, 4 move, each as meant: 2610.20484v1's "APPENDIX" and 2610.21106v1's authors'
+addresses after the bibliography translated where they were kept; 2610.21201v1's etoc list (5 entries, orphans before) and
+2610.37668v1's appendix contents after the bibliography (14 entries and 12 lines, kept before) cut an entry a unit and drawn with
+their headings' translations; no source unit's class and no name's row moves. On 2610.42112v1 p16 the title, the 8 lines and the
+19 sub-entries are units (25 drawn with their headings' translations, 3 translated), their numbering, leaders and page numbers the
+original's ink, and the headings "APPENDIX A" to "H" centred whole.
 
 ### 19.11 Structural names: a head's, a reference's, in the target's words
 

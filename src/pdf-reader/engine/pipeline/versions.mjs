@@ -557,7 +557,9 @@
 //     an appendix's own list (titletoc's \printcontents) is cut an entry a unit, its numbering, leaders and page number kept and
 //     each entry that repeats a heading drawn with that heading's translation (ink-units.mjs echo); and the counter TeX sets
 //     after a babel name on its line where the name leads no unit (IEEEtran's "Appendix A:", "APPENDIX A") is the name's
-//     (names.mjs counterAfter: the wrap's group, own.mjs; the maker's row, make.mjs, LAYOUT 33; REMOVAL 23). MEASURED. The ink
+//     (names.mjs counterAfter: the wrap's group, own.mjs; the maker's row, make.mjs, LAYOUT 33; REMOVAL 23). Over 63 local papers
+//     4 move, each as meant (text after a bibliography translated where it was kept; two appendix contents lists cut an entry a
+//     unit); no source unit's class and no name's row moves. The ink
 //     units move, so the rows' identities: raised so. Every source unit, its pieces and its wire are 63's: a copy of 63 carries
 //     every unit (live.mjs PIPELINE_CARRIES)
 export const PIPELINE_VERSION = '64'
