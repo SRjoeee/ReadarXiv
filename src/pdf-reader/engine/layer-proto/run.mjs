@@ -371,7 +371,7 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [], voter
   // settled (settleLayout: a cell's lines in their bands) before anything is read of it, as the fit's share was: the row is
   // kept as it is drawn)
   const free = (p, st) => { const l = L2.layoutAt(p.tokens, p.blocks, p.s, p.P, st); if (l.clipped || (p.parent && !L2.keepsPages(p.layout.lines, l.lines, p.tokens))) return null; settleLayout(p, l); return l }
-  const at = (p, st) => { const l = free(p, st); return l && L2.keepsShare(p.share, l.lines) ? l : null }
+  const at = (p, st) => { const l = free(p, st); return l && L2.keepsShare(p.share, l) ? l : null }
   // (a unit's fill leading is its fit's (fillLeadsOf), set as it is laid: computed here only for a unit given without it)
   for (const p of units) if (p.fillLead === undefined) fillLeadsOf(p, P)
   // (`voters`: the units the page's target reads, where they are not the units filled: a unit laid in runs is filled a run at
@@ -467,7 +467,7 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [], voter
     const all = k => { const ls = []; for (const f of grown) { if (!steps(f)) { ls.push(null); continue } const l = free(f.p, { ...f.st, scale: scaleOf(k), knob: 'grow' }); if (!l) return null; ls.push(l) } return ls }
     let ok = 0, no = Math.round((size - 1) / P.step) + 1, best = null
     while (no - ok > 1) { const k = (ok + no) >> 1, ls = all(k); if (ls) { ok = k; best = ls } else no = k }
-    if (ok) grown.forEach((f, i) => { if (!best[i] || !L2.keepsShare(f.p.share, best[i].lines)) return; f.st = { ...f.st, scale: scaleOf(ok), knob: 'grow' }; f.l = best[i] })
+    if (ok) grown.forEach((f, i) => { if (!best[i] || !L2.keepsShare(f.p.share, best[i])) return; f.st = { ...f.st, scale: scaleOf(ok), knob: 'grow' }; f.l = best[i] })
   }
   for (const { p, st, l } of filled) {
     const keep = p.layout.extents
@@ -2172,10 +2172,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const heading = p.unit.kind === 'heading' && !p.unit.title && !p.unit.front
     const numbered = heading && !carried && !prep.lead && relabels(p.id) && p.blocks.length === 1 && L2.originalLines(p.blocks[0]) > 1 && !!prep.label?.chars?.length && !prep.label.drawn && prep.label.chars.every(c => c.page === p.blocks[0].page)
     // a first row TeX set on the line another unit's last row ends (a shared line, need.mjs rowLeadOf: a run-in heading's text,
-    // a paragraph's part after the float that split it) starts where that unit's translation ends on the row, the original's
+    // a paragraph's part after the float that split it) starts where that unit's translation's ink ends on the row, the original's
     // separation after it (`start`, slotsAt), or at the row's own start where that unit set no text there (shareOf): not where
     // the original's did, after the English words' end (1810.04805's "Model Architecture" in Chinese ended 60 pt before its text
-    // began, 10.9 pt in the original). The first line shortens where that unit's translation ends further on, and gives way to
+    // began, 10.9 pt in the original), nor at its last advance's end, which after a full-width mark is that mark's blank half
+    // (2010.11929v2 p4's "Inductive bias." in Chinese, which ends in an ideographic full stop: 1.71 em to its text against the
+    // original's 1.05, the separation kept and the stop's 0.66 em on it; shareOf's `ink`). The original's separation stays the file's, advance to advance (its rows' x1 and x0: the layout
+    // file holds no ink of the original's glyphs). The first line shortens where that unit's translation ends further on, and gives way to
     // the next row where none of it is left (slotsAt's sliver). That unit is laid before it (layIn), and its page's fill keeps
     // where it ended (fillPage). The first line stays where TeX set it where that unit is the original's (not placed, refused, or
     // its row kept), or anything of the page stands between the two on the row (a label or a name kept as the original's).
@@ -2186,7 +2189,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (row && p.blocks[0] && !p.blocks[0].centred && p.blocks[0].page === row.page && Math.abs(p.blocks[0].B[0] - row.baseline) < 0.05) {
       const b = p.blocks[0], a = byId.get(row.id), share = a && !a.refused ? a.share ?? null : null, x = b.x0 + b.indent
       if (share && !share.kept && !keptBetween(row, x)) {
-        b.start = share.end !== null ? share.end + Math.max(0, x - row.x1) : row.x0
+        b.start = share.end !== null ? share.ink + Math.max(0, x - row.x1) : row.x0
         if (share.end !== null && Math.abs(share.at - b.B[0]) >= 0.05) b.startY = share.at
         // (painted on the row's page after that unit, whose erasing of the row covers where it starts: paintLed)
         p.ledBy = row.id
