@@ -1,5 +1,5 @@
 // Probe: the settings page's alignment and looks (the redesign's design, §6.2, §12), ported from settings-2's
-// tools/align-probe.mjs and tools/shoot.mjs. On the build, in a real browser, in both themes and both languages, each
+// tools/align-probe.mjs and tools/shoot.mjs. On the build, in a real browser, in both themes and every interface language, each
 // state of each section — at rest, a row hovered, a form open, a list open, an editor open, a confirm armed, a search, a
 // deep link — is measured: every item's centre within 0.5 px of its row's; the words' leading edge at 14, 42 or 70 px
 // from the card, a leading control at 14 or 42; the trailing edge at 14 (an icon button's glyph box); a group heading at
@@ -88,7 +88,7 @@ const SERVICES = [
 const PROMPTS = { promptId: 'default', patterns: [{ id: 'p-probe', name: 'Mine', systemPrompt: 'Translate into {{targetLanguage}}, briefly.', prompt: '{{input}}' }] }
 const GLOSSARY = [{ term: 'token', translation: '词元' }, { term: 'embedding', translation: '嵌入' }, { term: 'attention', translation: '注意力' }]
 // the words only O.search.keywords['translate/glossary'] holds, in each language: a search by them finds the glossary's row
-const KEYWORD = { 'zh-CN': '词汇', en: 'vocabulary' }
+const KEYWORD = { 'zh-CN': '词汇', 'zh-TW': '術語', ja: '語彙', ko: '어휘', en: 'vocabulary' }
 // the small segmented controls' agreed widths (settings-2): the set each state that draws them must show, no more, no
 // fewer; a state not named here may show only widths among these
 const AGREED = {
@@ -290,7 +290,7 @@ const titleRow = page => page.evaluate(() => {
 })
 
 const off = []
-for (const lang of ['zh-CN', 'en']) {
+for (const lang of ['zh-CN', 'zh-TW', 'ja', 'ko', 'en']) {
   for (const theme of ['light', 'dark']) {
     const tag = `${lang}-${theme}`
     await seed({ theme, uiLanguage: lang, services: SERVICES, provider: 'microsoft', prompts: PROMPTS, glossary: GLOSSARY, pdfReader: { enabled: true, original: false, sync: true, swapped: false, dimPages: true, classes: { figures: true, tables: true, heads: true, references: false, names: false } } })
@@ -480,6 +480,6 @@ for (const lang of ['zh-CN', 'en']) {
 }
 await context.close()
 server.close()
-console.log(off.length ? off.join('\n') : 'every row on its lines, in both themes and both languages')
+console.log(off.length ? off.join('\n') : 'every row on its lines, in both themes and every interface language')
 console.log(`screenshots in ${OUT}`)
 process.exit(off.length ? 1 : 0)

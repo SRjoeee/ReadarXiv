@@ -1,6 +1,6 @@
 // The popup's alignment, and its pictures (the redesign's design, §12; the prototypes' align-probe.mjs and shoot.mjs,
 // through Part 3's tests/e2e/probes/align.mjs): every state of the gallery — the popup's fixtures, light and dark side by
-// side — in both languages. Each row's items on the row's centre line within 0.5 px; the popup's blocks at 12 px from
+// side — in every interface language. Each row's items on the row's centre line within 0.5 px; the popup's blocks at 12 px from
 // both edges, the group's words at 24 and its values ending 24 from the trailing edge, the gear's glyph ending at 12;
 // then the rows hovered and measured again, and each menu opened and measured against its row and its popup, its rows
 // against the trailing check (align.mjs menuRows). Every fixture is shot at 2x (200 %) into lab/pdf/out/popup/, the
@@ -141,7 +141,8 @@ async function measureAll(what) {
   await edgesAt(`${what}: the group's values`, '.popup .group-row > .v', 24, 'end')
 }
 
-for (const lang of ['zh-CN', 'en']) {
+// every interface language: Japanese and Korean run longest, and the primary pair holds 144 px a half (S-P-52)
+for (const lang of ['zh-CN', 'zh-TW', 'ja', 'ko', 'en']) {
   await worker.evaluate(async lang => {
     for (let i = 0; i < 50 && !(await chrome.storage.local.get('config')).config; i++) await new Promise(r => setTimeout(r, 100))
     const { config } = await chrome.storage.local.get('config')

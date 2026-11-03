@@ -1,6 +1,6 @@
 // Axe on the extension's own pages after the redesign (its design, §9): the popup in every state the gallery draws —
 // light and dark side by side — and the settings page's four sections, a search, the service form and the style editor
-// open, in both themes and both languages. `e2e:a11y` audits arXiv's pages, A against B; nothing else audits these. The
+// open, in both themes and every interface language. `e2e:a11y` audits arXiv's pages, A against B; nothing else audits these. The
 // gate is no serious or critical violation inside the popup or on the settings page; the rest are printed for the record.
 // The gallery is a development page:
 //   pnpm exec wxt build --mode development && node tests/e2e/probes/pages-a11y.mjs
@@ -78,7 +78,7 @@ const open = async hash => {
   await sleep(500)
 }
 
-for (const lang of ['zh-CN', 'en']) {
+for (const lang of ['zh-CN', 'zh-TW', 'ja', 'ko', 'en']) {
   await patch({ uiLanguage: lang })
   await goto(`chrome-extension://${extensionId}/gallery.html`)
   await page.waitForSelector('main.popup')

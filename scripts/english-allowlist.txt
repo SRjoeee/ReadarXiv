@@ -81,7 +81,7 @@ tests/e2e/options-page.mjs 15  # +2, 2026-09-27: the switches the suites set, ea
 tests/e2e/placeholders.mjs 7
 tests/e2e/probes/chrome-floor.mjs 1  # 2026-09-17: the settings page's download button, located by its reader-visible label
 tests/e2e/probes/highlight-lag.mjs 8  # 2026-09-17: the settings switches and the popup's mode buttons, located by their reader-visible labels
-tests/e2e/probes/page-names.mjs 2  # 2026-10-04: the pages' names in Chinese, typed in the probe as the expectation (UI.md S-R-11a), and the comment quoting them
+tests/e2e/probes/page-names.mjs 5  # 2026-11-04: +3, a page's name in Traditional Chinese, Japanese and Korean, the expectations; 2026-10-04: the pages' names in Chinese, typed in the probe as the expectation (UI.md S-R-11a), and the comment quoting them
 tests/e2e/probes/reading-position.mjs 5  # 2026-09-20: the settings page's engine card and image switch and the popup's three mode buttons, located by their reader-visible labels
 tests/e2e/probes/ref-highlight.mjs 2  # 2026-09-17: the highlight switch and the two engine cards, located by their reader-visible labels
 tests/e2e/probes/settings-align.mjs 2  # 2026-09-27: the glossary pairs the probe seeds, in the reader's language, and the Chinese keyword a search finds the glossary by (Part 5, Task 64)
@@ -161,3 +161,4 @@ tests/entry/abstract.test.ts 1  # 2026-11-04: the abstract page's link in Korean
 src/pdf-reader/engine/pipeline/typeset/density.mjs 1  # 2026-11-04: the gate counts kana and hangul now: a Korean measurement quoted as evidence
 tests/pdf-reader/layer-links-moved.test.ts 1  # 2026-11-04: the gate counts kana and hangul now: a Japanese heading, the expectation
 tests/pdf-reader/layer-proto-step3.test.ts 1  # 2026-11-04: the gate counts kana and hangul now: a hangul input
+tests/e2e/probes/ui-shots.mjs 1  # 2026-11-04: the interface languages' own names heading the index's sections (product data, UI.md §6)
