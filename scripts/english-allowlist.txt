@@ -21,7 +21,7 @@ parked/lab/spikes/cache-revisit.mjs 1  # 2026-09-24: the settings page's label t
 parked/lab/spikes/service-faults.mjs 2  # 2026-09-25: the settings page's label the probe turns the fallback chain off by (the e2e locate controls by their Chinese names); +1, 2026-09-26: the capsule that says a paper cannot be had, as the reader shows it
 parked/lab/spikes/viewer-faults.mjs 1  # 2026-09-24: the settings page's label the probe turns the fallback chain off by (the e2e locate controls by their Chinese labels)
 README.md 1  # 2026-09-17: the link to the Chinese README
-src/config/languages.ts 190  # 2026-11-04: +1, the gate counts kana and hangul now: Korean's own name; 2026-10-29: +1, Standard Malay's Chinese name (zsm); localisation data: the Chinese name table and the native names; four evidence quotes in comments
+src/config/languages.ts 189  # 2026-11-04: −1, the label's full-width marks written as escapes; +1, the gate counts kana and hangul now: Korean's own name; 2026-10-29: +1, Standard Malay's Chinese name (zsm); localisation data: the Chinese name table and the native names; four evidence quotes in comments
 src/config/language-names.ts 526  # 2026-11-04: +175, the gate counts kana and hangul now: the Korean names, and the Japanese ones in katakana alone; 2026-11-04: localisation data, generated from CLDR: the target languages named in Traditional Chinese, Japanese and Korean (UI.md §6)
 src/cache/key.ts 1
 src/config/appearance.ts 10
@@ -146,7 +146,7 @@ tests/rules/selector-boundary.test.ts 6
 tests/scheduler/title.test.ts 6
 tests/shared/digest.test.ts 1
 tests/shared/transport.test.ts 1
-tests/ui/language-names.test.ts 15  # 2026-11-04: +1, the gate counts kana and hangul now: the Korean names, the expectation; 2026-11-04: +5, the target languages named in Traditional Chinese, Japanese and Korean, and the names a menu finds German by, the expectations
+tests/ui/language-names.test.ts 23  # 2026-11-04: +8, a name's own parenthetical taking the own name in each interface language, the expectations; 2026-11-04: +1, the gate counts kana and hangul now: the Korean names, the expectation; 2026-11-04: +5, the target languages named in Traditional Chinese, Japanese and Korean, and the names a menu finds German by, the expectations
 tests/ui/locales.test.ts 14  # 2026-11-04: +4, the gate counts kana and hangul now: the Korean and Japanese copy names and pack checks, the expectations; 2026-11-04: +8, the interface languages zh-TW, ja and ko: their copy names, the Simplified-only characters and the mainland words a Taiwan pack must not hold, the terms Japanese shares with Chinese, the expectations
 tests/ui/strings.test.ts 16  # 2026-10-29: +5, the key reasons by engine, expected in the Chinese pack's words, keyed and keyless (#88 E5); raised 2026-09-13: expectations for the locale-pack sentences (fallback text, drawer issue, popup action error); −2, 2026-09-27: the drawer's issue sentence left with its key (Part 5, Task 60)
 tests/pdf-reader/link-names.test.ts 6  # 2026-10-17: the expected Chinese names of links with no text under them (UI.md S-R-25, the owner's words), a multilingual test's expectations

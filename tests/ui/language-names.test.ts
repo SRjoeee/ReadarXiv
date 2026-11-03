@@ -6,13 +6,14 @@ import { LANG_CODE_TO_JA_NAME, LANG_CODE_TO_KO_NAME, LANG_CODE_TO_ZH_TW_NAME } f
 import { LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_EN_UI_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME, englishName, label } from '@/config/languages'
 import { languageItems } from '@/pdf-reader/ui/languages'
 import { languageKeywords } from '@/ui/language-keywords'
+import type { LocaleCode } from '@/locales'
 import { languageLabel, languageName, setLocale } from '@/ui/strings'
 
 describe('language names in the interface', () => {
   it('the row writes one name only; the native name is left to the menu', () => {
     setLocale('en')
     expect(languageName('cmn')).toBe('Chinese (Simplified)')
-    expect(languageLabel('cmn')).toBe('Chinese (Simplified) (简体中文)')
+    expect(languageLabel('cmn')).toBe('Chinese (Simplified, 简体中文)')
     expect(languageName('jpn')).toBe('Japanese')
     expect(languageLabel('jpn')).toBe('Japanese (日本語)')
     setLocale('zh-CN')
@@ -44,7 +45,7 @@ describe('language names in the interface', () => {
   // and with different fallbacks in the row and the menu one language would read Chinese (Simplified) in the row and its scholarly name in the menu
   it('with a partial name table the row and the menu fall back to the same name', () => {
     // An interface-language name table holding Japanese only: Chinese has to take the fallback
-    expect(label('cmn', { jpn: '日本語' })).toBe('Chinese (Simplified) (简体中文)')
+    expect(label('cmn', { jpn: '日本語' })).toBe('Chinese (Simplified, 简体中文)')
     expect(label('jpn', { jpn: '日本語' })).toBe('日本語')
   })
 
@@ -63,6 +64,27 @@ describe('language names in the interface', () => {
       expect(LANG_CODE_TO_KO_NAME.skr).toBeUndefined()
       expect([languageName('skr'), languageLabel('skr')]).toEqual([LANG_CODE_TO_EN_UI_NAME.skr, label('skr', {})])
     } finally { setLocale('zh-CN') }
+  })
+
+  it('a name with a parenthetical of its own takes the own name inside it, after its kind\'s enumeration comma, in every interface language: never two pairs in a row', () => {
+    const want: Record<string, [string, string][]> = {
+      'zh-CN': [['ckb', '库尔德语（索拉尼、کوردیی ناوەندی）'], ['zlm', '马来语（爪夷文、بهاس ملايو）']],
+      'zh-TW': [['bos', '波士尼亞文（西里爾文字、Босански）'], ['prs', '波斯文（阿富汗、دری）']],
+      ja: [['nob', 'ノルウェー語（ブークモール、Norsk bokmål）'], ['zlm', 'マレー語（アラビア文字、بهاس ملايو）']],
+      ko: [['cmn', '중국어(간체, 简体中文)'], ['cmn-Hant', '중국어(번체, 繁體中文)'], ['nob', '노르웨이어(보크말, Norsk bokmål)']],
+      en: [['cmn', 'Chinese (Simplified, 简体中文)'], ['ckb', 'Kurdish (Sorani, کوردیی ناوەندی)'], ['uzn', 'Uzbek (Cyrillic, Ўзбекча)']],
+    }
+    try {
+      for (const [locale, rows] of Object.entries(want)) {
+        setLocale(locale as LocaleCode)
+        for (const [code, text] of rows) expect([locale, languageLabel(code as never)]).toEqual([locale, text])
+        // and no label of the whole table closes one pair to open another
+        for (const code of LANG_CODES) expect([locale, languageLabel(code)]).not.toEqual([locale, expect.stringMatching(/[)）]\s*[(（]/)])
+      }
+    } finally { setLocale('zh-CN') }
+    // a name with no parenthetical, or one equal to its own name, is as before
+    expect(label('jpn', LANG_CODE_TO_ZH_NAME)).toBe('日语（日本語）')
+    expect(label('cmn', LANG_CODE_TO_ZH_NAME)).toBe('简体中文')
   })
 
   it('a language menu finds a target by its name in any interface language, whatever the interface is set to', () => {
