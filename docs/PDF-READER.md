@@ -263,6 +263,10 @@ It is a single choice, so it is a radio group to assistive technology: `role="ra
 `role="radio"` with `aria-checked` and the words as their names, arrow keys moving the choice. No single key chooses a
 display anywhere on the page: 1, 2 and 3 did, which a stray keystroke or a spoken word could set off (WCAG 2.1.4; the
 maintainer removed them, 2026-09-26). A display that cannot be had (§8) is `aria-disabled` and skipped by the arrows.
+A host can grey a display its window cannot show the same way: `DisplaySwitch`'s `off` (`readonly Display[]`, none by
+default), which the website gives side by side on a phone, where its translation alone is shown (the interface review
+of 2026-11-03, v-phone-mode b). Greyed by either, a segment stays a focusable radio, named, its press doing nothing;
+the extension's reader passes none (its narrow window keeps §5's rule).
 
 ### 6.3 The contents sidebar
 
