@@ -112,6 +112,8 @@ export function relabelFailed(doc: Document): number {
     const root = (host as HTMLElement & { shadowRoot: ShadowRoot | null }).shadowRoot
     const button = root?.querySelector('button')
     if (button) button.textContent = coreStrings().retry
+    // its words are read in the language they are now written in, as the widget built them (failureWidget)
+    host.lang = coreStrings().lang
     // The sentence shown on hover must follow too: it is derived from kind, and the raw diagnostic stays in the attribute (Codex on #161)
     const reason = host.getAttribute(REASON_ATTR)
     if (reason === null) continue
