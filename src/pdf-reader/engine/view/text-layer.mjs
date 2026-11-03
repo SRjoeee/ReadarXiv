@@ -5,7 +5,8 @@
 // behave as on the left's pages: one transparent span an item, scaled across to its box, in reading order, with PDF.js's handling of a
 // drag (its end-of-content and selecting classes) and of a copy (its normalisation). Each item is given to PDF.js as an upright
 // run at its baseline in one generic face, its width the item's: PDF.js measures the face and scales each span to it. Translated
-// spans carry the target's language. Nothing is drawn: the layer is the page's selectable copy of its text, the SVG's text being
+// spans carry the target's language, and the layer the paper's (SOURCE_LANG), which the page's own text kept beside them is in.
+// Nothing is drawn: the layer is the page's selectable copy of its text, the SVG's text being
 // hidden from selection and from assistive technology (engine.css, layer-side.mjs).
 //
 // What an item holds is text from the PDF or from a translation, which may hold control and bidirectional characters: it is set
@@ -16,6 +17,14 @@
 export const ITEMS_MAX = 2000
 /** the characters of an item at most */
 export const STR_MAX = 4096
+/**
+ * The paper's language, on every text layer of the original's words (PDF-READER §13, WCAG 3.1.2): the left's pages and a place
+ * that shows the original's page (PDF.js's page views, reader-view.mjs) and a laid page's own text kept beside its translation
+ * (here). A screen reader reads them in that voice; the page's name, its links' names and the chrome around it, set outside the
+ * text layer, keep the interface's. English: the reader knows no other source language, and asks every translation from it
+ * (session/translate.mjs)
+ */
+export const SOURCE_LANG = 'en'
 /** the face PDF.js measures and draws the layer's spans in (transparent): a generic one, which every system has */
 const FAMILY = 'sans-serif'
 const FONT = 'axt-text'
@@ -64,6 +73,7 @@ export async function textLayer(data, o) {
   try { await builder.render({ viewport: vp }) } catch (e) { builder.cancel(); throw e }
   const div = builder.div
   div.classList.add('axt-text')
+  div.lang = SOURCE_LANG
   // (no Tab stop of its own, as PDF.js gives a page's layer: the right pane's Tab order stays the links', and a click in the text
   // takes no focus into a page the side would then keep for it)
   div.removeAttribute('tabindex')

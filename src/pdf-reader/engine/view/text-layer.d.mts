@@ -3,6 +3,8 @@ import type { TextLayerData } from '../layer-proto/reader.mjs'
 
 export declare const ITEMS_MAX: number
 export declare const STR_MAX: number
+/** the paper's language on every text layer of the original's words: the left's pages, a place's original page, a laid page's kept text */
+export declare const SOURCE_LANG: string
 /** an item as the view places it: checked and copied */
 export interface PlacedItem { str: string; x: number; base: number; w: number; fontSize: number; dir: 'ltr' | 'rtl'; from: 'kept' | 'moved' | 'translated'; eol: boolean }
 /** the items of a page's text layer data the view can place, in their order, at most ITEMS_MAX */

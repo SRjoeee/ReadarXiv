@@ -19,7 +19,7 @@ import { createFollower } from './sync.mjs'
 import { createPlaces } from './places.mjs'
 import { createLighting } from './lighting.mjs'
 import { linkLayer } from './links.mjs'
-import { textLayer } from './text-layer.mjs'
+import { SOURCE_LANG, textLayer } from './text-layer.mjs'
 
 const DISPLAYS = ['original', 'bilingual', 'translation']
 /** arXiv's margin stamp, which its dvips and Ghostscript PDFs carry as their Info Title: `arXiv:1007.0072v1  [quant-ph]  1 Jul 2010` */
@@ -387,6 +387,11 @@ export function createReaderView(host) {
     tell(listeners.drawn, 'left', pageNumber, error ?? null)
   })
   on(L.bus, 'pagechanging', () => tellLeftPage())
+  // a page view's text layer holds the original's words, on the left and in a place that shows the original's page: marked as
+  // the paper's language, the layer alone, so that the page's name, its links' names and the chrome keep the interface's
+  const sourceText = ({ source }) => source?.textLayer?.div?.setAttribute('lang', SOURCE_LANG)
+  on(L.bus, 'textlayerrendered', sourceText)
+  on(R.bus, 'textlayerrendered', sourceText)
   on(R.bus, 'pagerendered', ({ pageNumber, error }) => {
     lighting.paint(R)
     tell(listeners.drawn, 'right', pageNumber, error ?? null)

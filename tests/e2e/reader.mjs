@@ -670,6 +670,15 @@ try {
     const shows = await page.evaluate(() => [...document.querySelectorAll('#right .axt-place')].map(p => ({ view: !!p.querySelector('.axt-place-view > .page canvas'), label: p.getAttribute('aria-label') })))
     check('a place near the view shows the original\'s page through PDF.js\'s page view: canvas, text, its name as a page of the right', near && shows[0]?.view && /\d/.test(shows[0]?.label ?? ''), JSON.stringify(shows))
     control('a place far from the view shows nothing: the sample\'s last page, three viewports down, holds no page view at first', { ok: shows.at(-1)?.view === true, detail: JSON.stringify(shows.at(-1)) })
+    // the original's words in the paper's language on the text layer alone (PDF-READER §13): the page's region and name, the viewer
+    // and the pane keep the interface's
+    await page.waitForFunction(() => !!document.querySelector('#left .pdfViewer > .page .textLayer span'), null, { timeout: 10_000 }).catch(() => undefined)
+    const langs = await page.evaluate(() => {
+      const l = document.querySelector('#left .pdfViewer > .page'), p = document.querySelector('#right .axt-place .axt-place-view > .page')
+      return { leftText: l?.querySelector('.textLayer')?.getAttribute('lang') ?? null, placeText: p?.querySelector('.textLayer')?.getAttribute('lang') ?? null, leftName: l?.getAttribute('aria-label') ?? null,
+        marked: [l, p, document.querySelector('#left .pdfViewer'), document.getElementById('left'), document.getElementById('right')].filter(el => el?.hasAttribute('lang')).length, doc: document.documentElement.lang }
+    })
+    check('the original\'s text layers are marked English, on the left and in a place that shows the original\'s page; the page, its name, the viewer and the panes carry no lang of their own', langs.leftText === 'en' && langs.placeText === 'en' && langs.marked === 0 && !!langs.leftName, JSON.stringify(langs))
 
     // the follower: a wheel on the left moves the right by the same steps, and the pair is levelled at rest
     const restAfter = async () => {

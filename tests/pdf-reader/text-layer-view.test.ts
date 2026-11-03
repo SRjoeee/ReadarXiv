@@ -5,7 +5,7 @@
 // placement, selection, copy and search are the browsers' (pnpm e2e:reader; the web's layer.mjs)
 import { describe, expect, it } from 'vitest'
 import type { TextLayerData } from '@/pdf-reader/engine/layer-proto/reader.mjs'
-import { ITEMS_MAX, STR_MAX, textContentOf, textItems, textLayer } from '@/pdf-reader/engine/view/text-layer.mjs'
+import { ITEMS_MAX, SOURCE_LANG, STR_MAX, textContentOf, textItems, textLayer } from '@/pdf-reader/engine/view/text-layer.mjs'
 import { AHEAD_PAGES, TEXT_IDLE_MS } from '@/pdf-reader/engine/view/layer-side.mjs'
 import { FakeIO, FakeTextLayerBuilder, flush } from './helpers/reader-fakes'
 import { ALL, content, installSideFakes, layerOf, M, nearOn, places, rowOf, settle, setup } from './helpers/side-setup'
@@ -45,6 +45,9 @@ describe('TV3: built by PDF.js\'s builder', () => {
     expect(spans.map(s => s.textContent)).toEqual(['3', hostile, 'f(x)'])
     expect(t?.div.querySelector('img')).toBeNull()
     expect(spans.map(s => s.lang)).toEqual(['', 'zh', ''])
+    // the page's own text kept beside the translation, in the paper's language: the layer's (PDF-READER §13)
+    expect(t?.div.lang).toBe(SOURCE_LANG)
+    expect(SOURCE_LANG).toBe('en')
     expect(t?.div.classList.contains('axt-text')).toBe(true)
     expect(t?.div.hasAttribute('data-axt-frame')).toBe(true)
     // (no Tab stop of its own)

@@ -1477,6 +1477,13 @@ Each before the stage's pull request, on the heaviest demo paper, in a real wind
   control that shows. A popover closes when the focus leaves it for another control, a press on its own button left to
   that button's click. The capsule's 选择语言 opens the language menu itself, the one the reading options hold in a
   narrow window.
+- The original's words are marked as the paper's language, English (`SOURCE_LANG`, `lang="en"`), on the text layer alone:
+  each page view's `div.textLayer` on the left and in a place that shows the original's page (set as PDF.js says it has
+  rendered it, `textlayerrendered`), and a laid page's text layer (§11.11), whose translated spans carry the target's
+  language over it. A screen reader reads the paper in its voice, while the page's region and its name (原文 · 第 1 页,
+  UI.md S-R-11a), its links' names (S-R-25), the pills and the chrome stay in the interface's language: never on a pane,
+  a viewer or a page, which carry those names (the interface review of 2026-11-03, WCAG 3.1.2). The reader knows no other
+  source language: it asks every translation from English. The bar's title is marked the same way (§6.1).
 - Forced colours keep every state: the chosen, pressed and switched-on controls take `Highlight`.
 - The status capsule is a live region present from the start; failures never move focus.
 - Contrast as §4.1; meaning never rides on colour alone (the danger colour always has its icon and words).
