@@ -110,12 +110,13 @@ export const RULES = Object.freeze([
   ['references', l => l.zone === 'references'],
   ['index', l => l.zone === 'index'],
   ['contents', l => l.zone === 'contents'],
-  // (a list's line wherever it stands, no list's name over it: its page number its last word, after leaders or set apart at the
-  // line's end — titletoc's \printcontents after an appendix's own title, 2610.42112v1 p16, which no \contentsname heads)
-  ['contents', l => !l.outside && l.listed],
   ['math', l => l.math > 0 && ((l.words < MATH_WORDS && (l.math >= MATH_SHARE * l.n || l.relation)) || (l.relation && l.words <= DISPLAY_WORDS && l.math >= DISPLAY_SHARE * l.n))],
   ['code', l => l.mono >= MONO_SHARE * l.n],
   ['figures', l => l.depth > 0],
+  // (a list's line wherever it stands, no list's name over it, where it would be an orphan: its page number its last word, after
+  // leaders or set apart at the line's end — titletoc's \printcontents after an appendix's own title, 2610.42112v1 p16, which no
+  // \contentsname heads; never a formula's line, a code line or a figure's text, which end in a number as well)
+  ['contents', l => !l.outside && l.listed],
   ['orphan', () => true],
 ].map(([cls, test]) => Object.freeze({ cls, code: CLASS_CODE[cls], test })))
 
