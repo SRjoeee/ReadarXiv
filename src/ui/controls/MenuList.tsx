@@ -12,7 +12,7 @@
 // field takes the focus as its menu opens, but not under a finger, where it would raise the on-screen keyboard over the
 // list (`touchFirst`)
 import { Check, Loader } from 'lucide'
-import { type CSSProperties, Fragment, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { type CSSProperties, Fragment, type KeyboardEvent, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useMenuNav } from '@/ui/menu-nav'
 import { Icon } from './Icon'
 
@@ -146,16 +146,32 @@ export function MenuList({ items, kind, label, layout = 'inline', search, noMatc
   // focus as the menu opens under a finger. Only those elements handle them, neither inside the other, or a key would
   // be handled twice as it bubbles (the final review: the arrows skipped every other language)
   const keys = { 'aria-activedescendant': nav.activeId, onKeyDown: nav.onKeyDown }
+  // the list holding the focus over a search field (under a finger, with a keyboard attached): a letter typed there is
+  // the search's, so it moves into the field and starts the query, as the field would have taken it had it had the focus
+  const field = useRef<HTMLInputElement>(null)
+  const listKeys = !search ? keys : {
+    ...keys,
+    onKeyDown: (e: KeyboardEvent) => {
+      if (e.key.length === 1 && e.key !== ' ' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault()
+        setQuery(e.key)
+        nav.setActive(0)
+        field.current?.focus()
+        return
+      }
+      nav.onKeyDown(e)
+    },
+  }
   return (
     <div ref={root} className="outline-none">
       {search && (
         // the search takes the focus when the menu opens (Popover's data-autofocus), unless the list does
-        <input data-autofocus={listFocus ? undefined : ''} role="combobox" aria-expanded="true" aria-controls={listId} aria-autocomplete="list" {...keys} value={query} placeholder={search} aria-label={search} onChange={e => { setQuery(e.target.value); nav.setActive(0) }} onInput={e => { setQuery((e.target as HTMLInputElement).value); nav.setActive(0) }} className="search" />
+        <input ref={field} data-autofocus={listFocus ? undefined : ''} role="combobox" aria-expanded="true" aria-controls={listId} aria-autocomplete="list" {...keys} value={query} placeholder={search} aria-label={search} onChange={e => { setQuery(e.target.value); nav.setActive(0) }} onInput={e => { setQuery((e.target as HTMLInputElement).value); nav.setActive(0) }} className="search" />
       )}
       {shown.length === 0 && noMatch && <p className="px-2.5 py-2 text-[12px] text-ink-2">{noMatch}</p>}
       {/* a listbox of options or a menu of items, named, holding its items alone: a separator is drawn, not an item */}
       {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: a listbox or a menu, named by its label */}
-      <div id={listId} role={kind === 'listbox' ? 'listbox' : 'menu'} aria-label={label} tabIndex={listFocus ? 0 : undefined} {...(listFocus ? keys : {})} className="outline-none" data-autofocus={listFocus ? '' : undefined}>
+      <div id={listId} role={kind === 'listbox' ? 'listbox' : 'menu'} aria-label={label} tabIndex={listFocus ? 0 : undefined} {...(listFocus ? listKeys : {})} className="outline-none" data-autofocus={listFocus ? '' : undefined}>
         {shown.map((item, index) => {
           const checked = !!item.checked && !item.manage
           const two = layout === 'two-line' && !!item.hint && !item.preview

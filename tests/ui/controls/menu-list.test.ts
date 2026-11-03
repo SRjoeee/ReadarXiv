@@ -170,6 +170,21 @@ describe('MenuList: what takes the focus as a searchable menu opens (the owner, 
     expect(field.getAttribute('aria-activedescendant')).toBe(container.querySelector('[role="option"]')!.id)
   })
 
+  it('under a finger with a keyboard attached, a letter typed on the list goes into the search and filters (Devin on #575)', async () => {
+    pointer(true)
+    const { container, list } = await mount(LANGS, { search: 'Search' })
+    const field = container.querySelector<HTMLInputElement>('input')!
+    await act(async () => { list.focus() })
+    await key(list, 'd')
+    expect(document.activeElement).toBe(field)
+    expect(field.value).toBe('d')
+    expect([...container.querySelectorAll('[role="option"]')].map(o => o.textContent)).toEqual(['Deutsch'])
+    // the list's own keys stay its own: an arrow moves the active row and keeps the focus
+    await act(async () => { list.focus() })
+    await key(list, 'ArrowDown')
+    expect(document.activeElement).toBe(list)
+  })
+
   it('follows the pointer as it changes while the menu is drawn, one element holding the browser\'s autofocus at a time', async () => {
     const media = pointer(false)
     const restore = stubPopovers()
