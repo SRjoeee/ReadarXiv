@@ -106,6 +106,17 @@ describe('a shared line: the next unit\'s first line starts where the translatio
     expect([b![1], b![6]]).toEqual([250, 60])
   })
 
+  it('a heading ending in a full-width stop: its text starts the original\'s separation after the stop\'s ink, not its blank half (2010.11929v2 p4)', async () => {
+    // (four characters of 10 pt from 20, the last an ideographic full stop whose ink ends 3.4 pt into its em: the heading's advance
+    // ends at 60, its ink at 53.4, and its text 10 pt on, where it began at 70, 16.6 pt after the ink, against the original's 10)
+    const paper = runIn(4)
+    paper.specs[0] = { ...paper.specs[0]!, tr: '\u4e00\u4e01\u4e03\u3002' }
+    const run = await laid(paper)
+    const [a] = linesOf(run, 0)!, [b] = linesOf(run, 1)!
+    expect(a![7]).toBe(60)
+    expect([b![1], b![6]]).toEqual([250, 63.4])
+  })
+
   it('a heading as long as its English: its text starts where the original\'s did', async () => {
     const run = await laid(runIn(6))
     const [a] = linesOf(run, 0)!, [b] = linesOf(run, 1)!
@@ -300,15 +311,51 @@ describe('a shared row as the unit before it leaves it (layer2.mjs shareOf, keep
 
   it('a fill keeps the row only where its line there stays on the fit\'s baseline, ends no further right, and adds none', () => {
     const share = L2.shareOf({ lines: [L(250, 20, 260), L(232, 20, 40)] } as never, blocks, row)!
-    expect(L2.keepsShare(share, [L(250, 20, 260), L(232, 20, 40)] as never)).toBe(true)
+    expect(L2.keepsShare(share, { lines: [L(250, 20, 260), L(232, 20, 40)] } as never)).toBe(true)
     // (shorter there, or gone from the row: the next unit, laid from the fit's end, is still clear of it)
-    expect(L2.keepsShare(share, [L(250, 20, 260), L(232, 20, 30)] as never)).toBe(true)
-    expect(L2.keepsShare(share, [L(250, 20, 260)] as never)).toBe(true)
+    expect(L2.keepsShare(share, { lines: [L(250, 20, 260), L(232, 20, 30)] } as never)).toBe(true)
+    expect(L2.keepsShare(share, { lines: [L(250, 20, 260)] } as never)).toBe(true)
     // (moved within the em: the next unit's first line, on the fit's baseline, would stand a step from it)
-    expect(L2.keepsShare(share, [L(250, 20, 260), L(231.5, 20, 40)] as never)).toBe(false)
-    expect(L2.keepsShare(share, [L(250, 20, 260), L(232, 20, 41)] as never)).toBe(false)
+    expect(L2.keepsShare(share, { lines: [L(250, 20, 260), L(231.5, 20, 40)] } as never)).toBe(false)
+    expect(L2.keepsShare(share, { lines: [L(250, 20, 260), L(232, 20, 41)] } as never)).toBe(false)
     const free = L2.shareOf({ lines: [L(250, 20, 260)] } as never, blocks, row)!
-    expect(L2.keepsShare(free, [L(250, 20, 200), L(230, 20, 10)] as never)).toBe(false)
+    expect(L2.keepsShare(free, { lines: [L(250, 20, 200), L(230, 20, 10)] } as never)).toBe(false)
+  })
+
+  // (a laid line with its items: a CJK character an em at 10 pt, the last item's place `x` and width, and its face)
+  const face = { family: 'serif', weight: 400, style: 'normal' }
+  const T = (s: string, extra = {}) => ({ s, face, cls: 'cjk', ...extra })
+  const laidLine = (baseline: number, items: { t: object; x: number; w: number }[]) => {
+    const x0 = items[0]!.x, end = items.at(-1)!.x + items.at(-1)!.w
+    return { page: 1, baseline, x0, used: end - x0, items }
+  }
+  const layoutOf = (lines: object[], state = { track: 0, trackLatin: 0 }) => ({ lines, f: 10, state }) as never
+
+  it('its ink: a full-width stop at its end ends its ink 0.34 em into its em, its blank half no text (2010.11929v2 p4)', () => {
+    const l = laidLine(226, [{ t: T('\u4e00'), x: 20, w: 10 }, { t: T('\u4e01'), x: 30, w: 10 }, { t: T('\u3002', { punct: 'close' }), x: 40, w: 10 }])
+    const share = L2.shareOf(layoutOf([L(250, 20, 260), l]), blocks, row)!
+    expect([share.end, share.at, share.ink]).toEqual([50, 226, 43.4])
+  })
+
+  it('its ink: the advance\'s end where the last glyph\'s ink reaches it, a crop\'s box, and none past the line\'s end', () => {
+    const word = laidLine(226, [{ t: { s: 'ab', face, cls: 'latin' }, x: 20, w: 10 }])
+    expect(L2.shareOf(layoutOf([word]), blocks, row)!.ink).toBe(30)
+    const crop = laidLine(226, [{ t: T('\u4e00'), x: 20, w: 10 }, { t: { crop: [0, 0, 1, 1], cw: 14 }, x: 31, w: 14 }])
+    expect(L2.shareOf(layoutOf([crop]), blocks, row)!.ink).toBe(45)
+    // (a line with no items, as these cases' lines: its end)
+    expect(L2.shareOf(layoutOf([L(226, 20, 40)]), blocks, row)!.ink).toBe(60)
+    // (a word's tracking stands before its last character's ink, and after it: the line's end holds it, the ink does not)
+    const tracked = laidLine(226, [{ t: { s: 'ab', face, cls: 'latin' }, x: 20, w: 12 }])
+    expect(L2.shareOf(layoutOf([tracked], { track: 0, trackLatin: 0.1 }), blocks, row)!.ink).toBe(31)
+  })
+
+  it('a fill keeps the row only where the ink there ends no further right than the fit\'s', () => {
+    const stop = (x: number, w = 10) => laidLine(226, [{ t: T('\u4e00'), x: x - 10, w: 10 }, { t: T('\u3002', { punct: 'close' }), x, w }])
+    const share = L2.shareOf(layoutOf([stop(40)]), blocks, row)!
+    expect([share.end, share.ink]).toEqual([50, 43.4])
+    expect(L2.keepsShare(share, layoutOf([stop(40)]))).toBe(true)
+    // (the stop moved 3 pt on and its blank half cut: its end 3 pt short of the fit's, its ink 3 pt past it)
+    expect(L2.keepsShare(share, layoutOf([stop(43, 5)]))).toBe(false)
   })
 })
 

@@ -2230,7 +2230,7 @@ function nonSpace(s) {
   return n
 }
 
-const mcache = new Map(), icache = new Map()
+const mcache = new Map(), icache = new Map(), rcache = new Map()
 /** a measure's ink over and under its baseline (TextMetrics' actual bounding box), 0 where the canvas gives none */
 const inkOfMetrics = m => ({ a: Number.isFinite(m.actualBoundingBoxAscent) ? m.actualBoundingBoxAscent : 0, d: Number.isFinite(m.actualBoundingBoxDescent) ? m.actualBoundingBoxDescent : 0 })
 /** a run's width at 100 px in its face (canvas measureText, cached; its ink beside it, ink100) */
@@ -2259,6 +2259,20 @@ export function ink100(s, face) {
     icache.set(key, v)
   }
   return v
+}
+/** how far right of its start a run's ink ends at 100 px in its face (TextMetrics' actualBoundingBoxRight), null where the canvas
+ *  gives none. Read only of a shared row's last item (inkEndOf), so measured then and cached apart: one more number on every entry
+ *  of the width's cache grew the heap 2.8 KB a laid page (the speed check of 2026-11-04, 0.27 KB the runs' spread) */
+function inkRight100(s, face) {
+  const font = fontString(face, 100), key = `${font}|${s}`
+  let r = rcache.get(key)
+  if (r === undefined) {
+    mctx.font = font
+    const m = mctx.measureText(s)
+    r = Number.isFinite(m.actualBoundingBoxRight) ? m.actualBoundingBoxRight : null
+    rcache.set(key, r)
+  }
+  return r
 }
 
 /**
@@ -4217,20 +4231,51 @@ export const originalLines = b => new Set(b.B.map(v => Math.round(v * 100))).siz
 /** whether a laid line stands on a shared row (shareOf): on its page, within an em of its baseline, across the block it is in */
 const onShare = (share, l) => l.page === share.page && Math.abs(l.baseline - share.y) < share.band && Math.min(l.x0 + l.used, share.x1) > Math.max(l.x0, share.x0)
 /**
+ * Where a laid line's text's ink ends (PDF units): its last drawn item's own right edge, measured as its width is, its text in its
+ * face at 100 px (inkRight100, TextMetrics' actualBoundingBoxRight: what the face draws, not its advances) at the size it is drawn, its
+ * tracking between its characters and an oblique face's slant over its ink's height; a crop's box. Never past the line's end,
+ * which it is where the canvas gives no ink. A full-width closing mark's blank half is in its advance and so in the line's end,
+ * and no text: 2010.11929v2 p4's "Inductive bias." in Chinese ends in an ideographic full stop (U+3002) whose ink ends 0.34 em
+ * into its em in Source Han Serif. `L` the layout, whose size and state a line of a run laid apart holds itself (`seg`)
+ */
+function inkEndOf(line, L) {
+  const end = line.x0 + line.used
+  const it = line.items?.findLast(q => q.t.crop || (q.t.s && !q.t.space && q.t.face))
+  if (!it) return end
+  const t = it.t
+  if (t.crop) return Math.min(end, it.x + it.w)
+  const r = inkRight100(t.s, t.face)
+  if (r === null) return end
+  const S = line.seg ?? L, f = S.f, k = (t.sup ? 0.62 : 1) * (t.sc ?? 1)
+  // (a word's tracking, drawn as letter spacing after each of its characters, stands before its last one's ink; a CJK character
+  // laid alone carries its own after it, in its advance)
+  const track = t.sup ? 0 : (t.cls === 'cjk' ? S.state?.track : S.state?.trackLatin) ?? 0
+  let x = it.x + (r * k * f) / 100 + track * f * Math.max(0, [...t.s].length - 1)
+  // (an oblique face skews its glyphs about the baseline: its ink's top-right corner stands its height times the slant further on)
+  if (t.face.oblique) x += Math.max(0, (ink100(t.s, t.face).a * k * f) / 100 + (t.sup ? 0.36 * f : 0)) * Math.tan((t.face.oblique * Math.PI) / 180)
+  return Math.min(end, x)
+}
+/**
  * The shared row as a unit's layout leaves it: `row` (the unit's last row in the layout file: page, baseline, size) in the
  * unit's block that holds it (its x0 and x1, so that a line of another column on that baseline is no line of the row),
  * `end`, the furthest end of the unit's text laid within an em of the row (its lines there, which the next unit's first line
  * would meet), and `at`, the baseline of the line that ends there: the row's own where the unit's line stands on TeX's, else
  * where its leading set it (a paragraph's two lines spread over its three rows, 2608.16117's unit 115 on page 39, 7.2 pt
- * over the row), which the next unit's first line stands on, so that the row reads as one line. Both null where it set
- * none there (its translation ended higher: the row is free). Null where no block of the unit holds the row (a row kept as
- * the original's, or dropped as another unit's): the row stays the original's.
+ * over the row), which the next unit's first line stands on, so that the row reads as one line; `ink`, the furthest its text's
+ * ink reaches there (inkEndOf: short of `end` by a full-width mark's blank half), which the next unit is laid from. All null
+ * where it set none there (its translation ended higher: the row is free). Null where no block of the unit holds the row (a
+ * row kept as the original's, or dropped as another unit's): the row stays the original's.
  */
 export function shareOf(layout, blocks, row) {
   const b = blocks.find(q => q.page === row.page && q.B.some(y => Math.abs(y - row.baseline) < 0.05))
   if (!b) return null
-  const share = { page: row.page, y: row.baseline, band: row.size, x0: b.x0, x1: b.x1, end: null, at: null }
-  for (const l of layout.lines) if (onShare(share, l) && (share.end === null || l.x0 + l.used > share.end)) { share.end = l.x0 + l.used; share.at = l.baseline }
+  const share = { page: row.page, y: row.baseline, band: row.size, x0: b.x0, x1: b.x1, end: null, at: null, ink: null }
+  for (const l of layout.lines) {
+    if (!onShare(share, l)) continue
+    if (share.end === null || l.x0 + l.used > share.end) { share.end = l.x0 + l.used; share.at = l.baseline }
+    const ink = inkEndOf(l, layout)
+    if (share.ink === null || ink > share.ink) share.ink = ink
+  }
   return share
 }
 /**
@@ -4256,16 +4301,18 @@ export function keepsPages(fit, lines, tokens = null) {
   return true
 }
 /** whether a layout of a unit keeps its shared row as the unit's fit left it (shareOf): its text there ending no further
- *  right, none there where the fit set none, and the line that ends furthest there on the baseline the fit set it at (`at`),
- *  so that the next unit on the row, laid from the fit's end and on its baseline, stays clear of it and on its line
- *  (run.mjs fillPage). True with no share, and with one no next unit is laid from (`kept`: something stays between the two
- *  on the row, run.mjs keptAfter, and the unit's own line there ends where TeX's did, its slot's `stop`) */
-export function keepsShare(share, lines) {
+ *  right, nor its ink (`ink`, which the next unit is laid from), none there where the fit set none, and the line that ends
+ *  furthest there on the baseline the fit set it at (`at`), so that the next unit on the row, laid from the fit's ink and on its
+ *  baseline, stays clear of it and on its line (run.mjs fillPage). True with no share, and with one no next unit is laid from
+ *  (`kept`: something stays between the two on the row, run.mjs keptAfter, and the unit's own line there ends where TeX's did,
+ *  its slot's `stop`) */
+export function keepsShare(share, layout) {
   if (!share || share.kept) return true
   let far = null
-  for (const l of lines) {
+  for (const l of layout.lines) {
     if (!onShare(share, l)) continue
     if (share.end === null || l.x0 + l.used > share.end + 0.01) return false
+    if (share.ink !== null && inkEndOf(l, layout) > share.ink + 0.01) return false
     if (!far || l.x0 + l.used > far.x0 + far.used) far = l
   }
   return far === null || share.at === null || Math.abs(far.baseline - share.at) < 0.01

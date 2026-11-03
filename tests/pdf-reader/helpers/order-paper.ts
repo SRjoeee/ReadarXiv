@@ -32,8 +32,9 @@ const ctxStub = (canvas?: { width: number; height: number }) => new Proxy({} as 
   get(t, k) {
     if (k in t) return t[k]
     if (k === 'drawImage') return (src: object, ...a: number[]) => { if (a.length === 4 && !a[0] && !a[1] && inked.has(src)) t.inkFrom = inked.get(src) }
-    // (an em a CJK character, half one any other, at the context's font size)
-    if (k === 'measureText') return (s: string) => { const px = Number(/(\d+(?:\.\d+)?)px/.exec(String(t.font ?? ''))?.[1] ?? 10); return { width: [...s].reduce((w, ch) => w + (/[\u3000-\u9fff]/.test(ch) ? px : px / 2), 0), actualBoundingBoxAscent: 0.7 * px, actualBoundingBoxDescent: 0.2 * px } }
+    // (an em a CJK character, half one any other, at the context's font size; the ink to the advance's end, but an ideographic full
+    // stop's, which ends 0.34 em into its em, as Source Han Serif draws it)
+    if (k === 'measureText') return (s: string) => { const px = Number(/(\d+(?:\.\d+)?)px/.exec(String(t.font ?? ''))?.[1] ?? 10), width = [...s].reduce((w, ch) => w + (/[\u3000-\u9fff]/.test(ch) ? px : px / 2), 0); return { width, actualBoundingBoxAscent: 0.7 * px, actualBoundingBoxDescent: 0.2 * px, actualBoundingBoxRight: s.endsWith('\u3002') ? width - 0.66 * px : width } }
     if (k === 'getImageData') return (x: number, y: number, w: number, h: number) => ({ width: w, height: h, data: t.inkFrom && !x && !y ? inkOf(t.inkFrom as Line[], w, h) : new Uint8ClampedArray(Math.max(1, w * h) * 4).fill(255) })
     if (k === 'createImageData') return (w: number, h: number) => ({ width: w, height: h, data: new Uint8ClampedArray(Math.max(1, w * h) * 4) })
     if (k === 'canvas') return canvas
@@ -58,8 +59,8 @@ const CJK = (n: number, from = 0x4e00) => Array.from({ length: n }, (_, i) => St
 export interface Line { page: number; b: number; text: string; x0: number; x1: number }
 export const line = (page: number, b: number, text: string, x0 = 20, x1 = 280): Line => ({ page, b, text, x0, x1 })
 export interface Cell { table: number; row: number; col: number; span: number; head: boolean }
-/** a unit: its lines, its translation (`chars` characters from `at`) and, for a table's cell, its table group (the run's `groups`) and its cell */
-export interface Spec { id: number; kind: string; lines: Line[]; chars: number; at: number; group?: string; cell?: Cell }
+/** a unit: its lines, its translation (`chars` characters from `at`, or `tr` as it is) and, for a table's cell, its table group (the run's `groups`) and its cell */
+export interface Spec { id: number; kind: string; lines: Line[]; chars: number; at: number; tr?: string; group?: string; cell?: Cell }
 /** a paragraph over `pages` ([page, top baseline, lines]), each line 12 pt below the one before */
 export function para(id: number, pages: [number, number, number][], chars = 12, extra: Partial<Spec> = {}): Spec {
   const lines = pages.flatMap(([page, top, n]) => Array.from({ length: n }, (_, i) => { const text = `Alpha beta ${page}${i}`; return line(page, top - 12 * i, text, 20, 20 + 5 * text.length) }))
@@ -179,7 +180,7 @@ export interface Built {
   layout: LayoutFile
 }
 const srcOf = (s: Spec) => s.lines.map(l => l.text).join(' ')
-const trOf = (s: Spec) => CJK(s.chars, s.at)
+const trOf = (s: Spec) => s.tr ?? CJK(s.chars, s.at)
 /** a paper built: its PDF.js document, its layout file and v0's geometry, the run's rows */
 export function build(paper: Paper): Built {
   const { specs, pages } = paper

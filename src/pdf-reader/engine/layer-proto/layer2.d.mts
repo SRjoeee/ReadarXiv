@@ -434,13 +434,13 @@ export declare function evenGridOf(G: readonly number[], opened: readonly boolea
 /** the floor a page fill's state asks of a unit's last line (footFloorAt), or null where it asks none */
 export declare function footFloorOf(blocks: readonly Block2[], st: Layout['state'], P: Params, s: number): number | null
 /** a unit's shared row as its layout leaves it (need.mjs rowLeadOf's row): its page, baseline and band (an em), the block's span,
- *  where its text there ends and the baseline of the line that ends there (both null: none there); null where no block of the unit
- *  holds the row */
-export interface Share { page: number; y: number; band: number; x0: number; x1: number; end: number | null; at: number | null }
+ *  where its text there ends, the baseline of the line that ends there and where its text's ink ends there, which the next unit is
+ *  laid from (all null: none there); null where no block of the unit holds the row */
+export interface Share { page: number; y: number; band: number; x0: number; x1: number; end: number | null; at: number | null; ink: number | null }
 export declare function shareOf(layout: Pick<Layout, 'lines'>, blocks: readonly Block2[], row: { page: number; baseline: number; size: number }): Share | null
-/** whether a layout's lines keep a shared row as the fit left it (no text there further right; none where the fit set none; its
- *  line there on the fit's baseline) */
-export declare function keepsShare(share: Share | null | undefined, lines: readonly Line[]): boolean
+/** whether a layout keeps a shared row as the fit left it (no text there further right, nor its ink; none where the fit set none;
+ *  its line there on the fit's baseline) */
+export declare function keepsShare(share: Share | null | undefined, layout: Pick<Layout, 'lines' | 'f' | 'state'>): boolean
 /** whether `lines` set no token on a later page than the fit's lines (`fit`) set it (the page fill's guard); a line after a page-break token of `tokens` may stand on its page */
 export declare function keepsPages(fit: readonly Pick<Line, 'from' | 'page'>[], lines: readonly Pick<Line, 'from' | 'page'>[], tokens?: readonly Token[] | null): boolean
 /** a box in v0's device pixels on the page: [x, y, w, h] */

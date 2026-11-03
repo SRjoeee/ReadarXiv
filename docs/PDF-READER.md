@@ -4070,11 +4070,38 @@ an ink unit then claims it; the reader shows a label row its unit does not draw 
 row put the original back under the ink unit's translation (the release sweep of 2026-10-25, (c): SIAM's "AMS subject
 classifications." before its codes, 2610.20266v1 p1; a theorem's head whose note is a citation, "Definition 1 ([TT])", whose
 body's label it was; 2610.11256v1's bold heads before a table's cells). Such a head and its body's first row share one of TeX's
-lines, and the body is laid from where the head's translation ends there, the original's separation after it (a shared line,
+lines, and the body is laid from where the head's translation's ink ends there, the original's separation after it (a shared line,
 `need.mjs` `rowLeadOf`, which takes its lead by K's order alone wherever the order is given: an ink unit is numbered after every
 source unit, and by the ids the head came after its body, which was laid where the English head had ended, a blank of its
 width less the translation's after the translated head: 2610.40645v1 pp14-15's "Theorem 3.3 ([Ang, Theorem 1.1])." and
-"Proposition 3.2 ([Ang, Proposition A.1])." in Japanese, the owner's report of 2026-11-01). A run-in head its own row cannot hold uses the
+"Proposition 3.2 ([Ang, Proposition A.1])." in Japanese, the owner's report of 2026-11-01). Two rows are one of TeX's lines where the
+file's baselines are at most one hundredth apart: the file writes each row's baseline to a hundredth on its own (its glyphs' y
+rounded, `layout/make.mjs` `baselineOf`), so that float noise on either side of a half splits one line in two (a drawing rule, no
+version, §18.3). 2610.40645v1 p34's "Proof of Proposition 4.4." is placed by `Td` at 539.605 and its text by `Tm`, which PDF.js
+reads as a float32, 539.60498: written 539.61 and 539.60, the two were no shared line, and the text was laid where the English head
+had ended, 5.14 em after the translated head in Chinese against 0.55 em in the original (the owner's report of 2026-11-04). Over
+the release sweep's corpus (b6586f7c, 1,308 shared lines) the rule finds three more: two heads, 2610.40645v1 p34's (zh, ja) and
+2610.20266v1 p26's (zh, 3.39 em), which go to the original's gap, and 2609.20976v1 p1's line of names (ja), drawn as before; the
+gate pack's layout files hold no such pair, and its cut is byte for byte the same. The body starts where the head's ink ends,
+not its last advance (`layer2.mjs` `shareOf`'s `ink`: the last drawn item's own right edge, TextMetrics' `actualBoundingBoxRight`
+of its text in its face, measured as its width is and cached apart (one more number on every width's entry grew the heap 2.8 KB a
+laid page, the speed check), with its tracking and an oblique face's slant): a full-width closing mark keeps a blank half
+in its advance, an ideographic full stop's ink ending 0.34 em into its em in Source Han Serif, and that blank stood on the
+original's separation (2010.11929v2 p4's "Inductive bias." in Chinese, 1.71 em to its text against the original's 1.05: the
+owner's report of 2026-11-04; a drawing rule, no version). One rule for every face and language, from what the face draws, with no
+list of marks: it takes the full-width colon too, whose ink a Chinese face sets in its left half. The page fill keeps a head's row
+only where its ink there ends no further right than its fit's (`keepsShare`). Over the corpus's 1,022 run-in heads (the sweep's
+rows, both panes measured ink to ink, each in its own em; the diagnosis's census), the 598 Chinese heads in 37 of 55 papers and the
+27 Japanese whose last advance held a blank of over a quarter em went from +0.64 em wider than the original (Chinese, the median;
++0.44 to +0.81) and +0.69 (Japanese) to −0.03 (−0.16 to +0.13) and 0.00 (−0.07 to +0.29); the three heads above to −0.08 and
+−0.04; the 361 Chinese
+heads that were as the original from +0.02 to −0.05 (−0.25 to +0.19), the 15 Japanese and 5 Polish to −0.03 and −0.05; no head
+changed state. The original's separation stays the layout file's, advance to advance (its rows' x1 and x0): neither the file nor
+the parts hold the ink of the original's glyphs, and the door's own read of a page's glyphs is bounded by a clock and absent on a
+page drawn from data, so a gap comes out the English last glyph's right bearing and its text's first glyph's left bearing tighter
+than the original's ink to ink, 0.05 em at the median and 0.25 at most (2610.16663v1 p45, a head ending ")." at 12 pt). The five
+Chinese heads (four papers) whose text the door finds no lead for, the head after its text in K, are another change's: K is the
+cutter's. A run-in head its own row cannot hold uses the
 rest of its line (the owner's ruling of 2026-11-03; a drawing rule, so no version, §18.3). Laid in its row alone, beside the
 paragraph's first words, which are ink the fit may not widen over (`widenOverPaper`), a head whose translation is much longer
 than the English fitted only below its floor, or not at all: 2610.19159v1 p7's "Node-level grading still separates agents."

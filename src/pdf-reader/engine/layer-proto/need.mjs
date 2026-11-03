@@ -44,8 +44,11 @@ export function rowLeadOf(index, id, before = null) {
     const a = index.unit(aid)
     if (!a?.lines.length || OWN_PLACE.has(a.kind)) continue
     const j = a.lines.length / 8 - 1, o = 8 * j, A = a.lines
-    // (one of TeX's lines: one baseline, as the file writes it to a hundredth)
-    if (A[o] !== page || Math.abs(A[o + 3] - base) > 0.005 || a.held.includes(j) || columnOf(a, j) !== col) continue
+    // (one of TeX's lines: one baseline as the file writes it, each row's to a hundredth on its own (file.mjs r2, of its
+    // glyphs' y), so that one baseline is written one hundredth apart where float noise falls on either side of a half:
+    // 2610.40645v1 p34's head by Td at 539.605, its text by Tm, which PDF.js reads as a float32, at 539.60498, written
+    // 539.61 and 539.60. Two hundredths at most one apart are one line; two of TeX's lines in a column are points apart)
+    if (A[o] !== page || Math.abs(Math.round(A[o + 3] * 100) - Math.round(base * 100)) > 1 || a.held.includes(j) || columnOf(a, j) !== col) continue
     const x1 = A[o + 2]
     if (x1 > x0 + 0.5 || x0 - x1 > SHARED_SEP * size) continue
     if (!best || x1 > best.x1) best = { id: aid, page, baseline: A[o + 3], x0: A[o + 1], x1, size: A[o + 6] }
