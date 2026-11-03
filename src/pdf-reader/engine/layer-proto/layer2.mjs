@@ -4583,6 +4583,9 @@ export function keptLines(rects, prep, page, blocks = null) {
     if (r[0] !== page || !keep.has(rectKey(r))) return
     const info = prep.lineInfo?.get(rectKey(r))
     const line = { x0: r[1], x1: r[3], baseline: info?.baseline ?? r[2], size: info?.size ?? r[4] - r[2], top: r[4], bottom: r[2] }
+    // (and the file's own box of the line, its fonts' declared one: what tells a display's row, where the band from its baseline
+    // stands off a math extension glyph's ink — cmex10's sum hangs under its baseline, its band 12 pt over it, 2610.42112v1 p34)
+    if (info?.file && Number.isFinite(info.top) && Number.isFinite(info.bottom)) Object.assign(line, { fileTop: info.top, fileBottom: info.bottom })
     const g = prep.regionOf?.get(rectKey(r))
     if (g !== undefined && firstK.has(g)) Object.assign(line, { region: g, k: firstK.get(g) })
     else if (starts) { const b = starts.findIndex(s => s > i); line.block = b < 0 ? blocks.length : b }

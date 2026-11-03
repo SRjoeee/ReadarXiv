@@ -27,6 +27,15 @@ import { MOVED_STRIDE } from '../layer-proto/format.mjs'
 /** how far past a name's box a token's middle may stand and be the name's, PDF units (pipeline/ink-pass.mjs SLACK) */
 const NAME_SLACK = 1
 
+/** an opening mark: a bracket, an initial quote (Unicode's Ps, Pi) */
+const OPENING_MARK = /[\p{Ps}\p{Pi}]/u
+/** where a sentence that begins at its first word at offset `o` of `text` begins: before the opening marks set right against that
+ *  word, none of white space between (a mark opens what follows it: a sentence ends in none) */
+export function openedAt(text, o) {
+  while (o > 0 && OPENING_MARK.test(text[o - 1])) o--
+  return o
+}
+
 /** how many of a rising list are at most v: the sentence of a word or a place by its sentences' starts there */
 function atMost(xs, v) {
   let lo = 0, hi = xs.length
@@ -676,7 +685,8 @@ const FIELDS = ['l', 'r', 'y', 'h', 'top', 'bottom']
  * `lay(page, words)` a page laid (once a door: a ready page is final); `laid(page)` whether its part is in; `starts(id, text,
  * offsets, left)` a unit's starts on the right: of a unit all on laid pages, its words' (the token carrying each start's word,
  * `text` its plainTranslated and `offsets` its row's `sentences.tr`), each token's sentence read from the text — a word's by
- * its word, any other's by its place in the translation (`words.at`: a formula's, a display's kept line's) —; of a unit on no
+ * its word, any other's by its place in the translation (`words.at`: a formula's, a display's kept line's; an opening mark set
+ * against a sentence's first word that sentence's, openedAt) —; of a unit on no
  * laid page, the left's (`left`: the same tokens, mirrored); of one on both, none (it lights whole); `reset()` every page
  * back to the mirror (a door opened again); `mute(page, on)` a page that shows another target's layer, whose drawing neither the
  * laid layout nor the mirror describes: nothing of it lit or hit until it is unmuted (its new target's page laid, or the original's
@@ -894,8 +904,12 @@ export function layerShapes(source) {
         ws.push(w)
       }
       // (each token's sentence by the text: a word's by its word, any other token's by its place in the translation — a
-      // formula's, a display's kept line's —; a copy of the left's, none: the order)
-      const offs = offsets.slice()
+      // formula's, a display's kept line's, a mark drawn alone —; a copy of the left's, none: the order. A sentence's place begins
+      // at the opening marks set right before its first word (openedAt): the row names the word, and a bracket or a quote that
+      // opens the sentence is drawn as a token of its own, which by the word's place was the sentence before's: a full-width bracket
+      // before "(a)" lit with the sentence it closes, where the left's token of the word holds its bracket (anchors.mjs inkEdges),
+      // 2610.42112v1's Figure 7 caption)
+      const offs = offsets.map(o => openedAt(text, o))
       return withSentences(out, t => {
         const p = Math.floor(t / BASE), i = t - BASE * p, w = wordAt.get(p)?.[i]
         if (w !== undefined && w >= 0) return atMost(ws, w)

@@ -1557,7 +1557,13 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
     font's (cmex10's, txexs's) hang under the baseline: a wide accent's box stands under its ink, a big delimiter's reaches far past
     it, its middle out of the segments. 2610.35877v1 p5's hat on the w of display (4)'s denominator, 1.9 pt under the display,
     had lit with the sentence before it, a band in the formula, the owner's report of 2026-10-31. On the 70 papers of #524's
-    measure, 3 648 displays: 10 such glyphs in 7 displays of 5 papers, now 0).
+    measure, 3 648 displays: 10 such glyphs in 7 displays of 5 papers, now 0). Our page's drawing meets the same glyph as a kept
+    line: the layer reads a unit's lines as bands about their baselines (`tex.mjs` texRects), and the file sets a math extension
+    glyph's baseline at the top of its ink, so a line of a display's ∑ had its band 12 to 24 pt over the display and stayed its
+    paragraph's, lit with the sentence before it (2610.42112v1 p34's display (54)-(55), p4's LSE, the owner's report of
+    2026-11-03). The word table tells a kept line on a display's rows by the file's own box of the line (`layer2.mjs` keptLines'
+    `fileTop`, `fileBottom`), the boxes the left's inventory reads (`shapes.mjs` takeInventory): over the release sweep's 53
+    papers, 210 such lines in 194 of 3 016 displays (26 papers), now 0.
     Its unit lights around it, and a sentence across it lights whole, every piece of it, as across a column or a page break (the
     owner: 「第 1 条就用这个，推进吧」). Inline math stays in its sentence.
   - **A display at its unit's edge is a block of its own too** (the owner's report of 2026-11-02 on 2501.14787v1 p24: the display
@@ -1817,7 +1823,13 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   starts both sides found, on the ten papers.
 - **A token's sentence is the text's** (`highlight.mjs withSentences`, `segsOf`): on the left a token paired with a word
   of the unit's source is in that word's sentence; on a laid page a word is in its word's, and any other token — a formula's
-  crop, a display's kept line, a lead — in the sentence its place in the translation falls in (the word table's `at`).
+  crop, a display's kept line, a lead — in the sentence its place in the translation falls in (the word table's `at`). A
+  sentence's place begins at the opening marks (Unicode's Ps, Pi) set right against its first word (`shapes.mjs` openedAt): the
+  row names the word, and the door draws a full-width bracket as a token of its own, which by its place was the sentence
+  before's, where the left's token of the word holds its bracket (`anchors.mjs` inkEdges: 2610.42112v1's Figure 7 caption,
+  "(a)–(e):" and "(f):", the owner's report of 2026-11-03). The stored offsets are read so, and none is made again. A placeholder
+  that opens a sentence ("Figure 6(c) isolates …") is still the sentence before's on both panes: the row's offset names the
+  word after it, and the left has no glyph of its own to place it by.
   Token order still makes the rows and the runs, and decides only a left glyph no word is paired with (a formula's, a
   script the text layer gives late), with the floor: no such glyph on a row below one where a later sentence began is an
   earlier one's. Until 2026-10-19 every token went by order, and the page's word table wrote a unit's displays after all
