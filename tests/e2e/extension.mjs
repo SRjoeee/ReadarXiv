@@ -289,7 +289,7 @@ await setPreload(options, { range: '按需翻译' })
   await popup.goto(`chrome-extension://${extId}/popup.html`)
   await paperTab.bringToFront()
   await popup.waitForTimeout(800)
-  const languageRow = popup.getByRole('button', { name: '目标语言', exact: false })
+  const languageRow = popup.getByRole('button', { name: '译为', exact: false })
   const before = (await languageRow.textContent()) ?? ''
   await chooseLanguage(options, '日语', '日语')
   await popup.waitForTimeout(1_200)

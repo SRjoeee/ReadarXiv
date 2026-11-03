@@ -184,7 +184,7 @@ await sleep(1500)
 }
 {
   const popup = await popupOver(paper, 2500)
-  await popup.getByRole('button', { name: /目标语言/ }).click()
+  await popup.getByRole('button', { name: /译为/ }).click()
   await sleep(500)
   await popup.keyboard.press('Escape')
   await sleep(400)

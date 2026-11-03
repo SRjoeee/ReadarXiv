@@ -2,7 +2,9 @@
 // language, the chosen one on a lifted thumb that slides; icons, the words in tooltips and to screen readers. A single
 // choice, so a radio group: arrows move the choice (a display that cannot be had skipped). No single key chooses one
 // anywhere on the page: 1, 2 and 3 did, which a stray keystroke or a spoken word could set off (WCAG 2.1.4; the
-// maintainer, 2026-09-26)
+// maintainer, 2026-09-26). A display that cannot be had is greyed, `aria-disabled` and still focusable, the arrows passing
+// it: the translated ones with no translation, and those the host says this window cannot show (`off`: the website's
+// side by side on a phone, §6.2)
 import { useRef } from 'react'
 import { R } from '@/ui/strings'
 import type { Display } from '../controller'
@@ -12,8 +14,14 @@ import { useTip } from '@/ui/controls/tip'
 
 const ORDER: readonly Display[] = ['original', 'bilingual', 'translation']
 
-export function DisplaySwitch({ value, translatable, onChange }: { value: Display; translatable: boolean; onChange: (display: Display) => void }) {
-  const can = (d: Display) => d === 'original' || translatable
+export function DisplaySwitch({ value, translatable, off, onChange }: {
+  value: Display
+  translatable: boolean
+  /** displays this window cannot show, greyed as the untranslatable are (a phone's side by side); none by default */
+  off?: readonly Display[]
+  onChange: (display: Display) => void
+}) {
+  const can = (d: Display) => !off?.includes(d) && (d === 'original' || translatable)
   const buttons = useRef<(HTMLButtonElement | null)[]>([])
   const choose = (d: Display) => {
     if (!can(d) || d === value) return

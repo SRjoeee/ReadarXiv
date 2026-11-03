@@ -129,6 +129,100 @@ describe('MenuList', () => {
   })
 })
 
+/** `matchMedia` answering `(pointer: coarse)` as a phone does (`coarse`) or a computer with a mouse does, every other query
+ *  false; `set` changes the pointer and tells the queries' listeners, as a tablet given a trackpad does */
+function pointer(coarse: boolean) {
+  const listeners = new Set<() => void>()
+  const matchMedia = vi.fn((query: string) => ({
+    get matches() { return coarse && query === '(pointer: coarse)' }, media: query,
+    addEventListener: (_: string, f: () => void) => { listeners.add(f) }, removeEventListener: (_: string, f: () => void) => { listeners.delete(f) },
+  }))
+  vi.stubGlobal('matchMedia', matchMedia)
+  return Object.assign(matchMedia, { set: (now: boolean) => act(async () => { coarse = now; for (const f of listeners) f() }) })
+}
+
+describe('MenuList: what takes the focus as a searchable menu opens (the owner, 2026-11-03)', () => {
+  afterEach(() => { vi.unstubAllGlobals() })
+  const LANGS: MenuListItem[] = [{ id: 'deu', name: 'Deutsch' }, { id: 'fra', name: 'Fran\u00e7ais', checked: true }, { id: 'ita', name: 'Italiano' }]
+
+  it('with a mouse, the search field: it holds the autofocus and the keys, the list neither', async () => {
+    pointer(false)
+    const { container, list } = await mount(LANGS, { search: 'Search' })
+    const field = container.querySelector<HTMLInputElement>('input')!
+    expect([field.hasAttribute('data-autofocus'), list.hasAttribute('data-autofocus'), list.getAttribute('tabindex'), list.hasAttribute('aria-activedescendant')]).toEqual([true, false, null, false])
+  })
+
+  it('under a finger, the list: no keyboard rises over it; the field is still there, and filters when tapped', async () => {
+    const matchMedia = pointer(true)
+    const { container, list, rows, onPick } = await mount(LANGS, { search: 'Search' })
+    expect(matchMedia).toHaveBeenCalledWith('(pointer: coarse)')
+    const field = container.querySelector<HTMLInputElement>('input')!
+    expect([field.hasAttribute('data-autofocus'), list.hasAttribute('data-autofocus'), list.getAttribute('tabindex')]).toEqual([false, true, '0'])
+    // the list names its active row, the chosen one, and takes the arrows and Enter as a list with no search does
+    expect(list.getAttribute('aria-activedescendant')).toBe(rows[1]!.id)
+    await key(list, 'ArrowDown')
+    expect(list.getAttribute('aria-activedescendant')).toBe(rows[2]!.id)
+    await key(list, 'Enter')
+    expect(onPick).toHaveBeenCalledWith('ita')
+    // tapped, the field works as it always has: a combobox over the list, its arrows its own
+    await act(async () => { field.value = 'deu'; field.dispatchEvent(new Event('input', { bubbles: true })) })
+    expect([...container.querySelectorAll('[role="option"]')].map(o => o.textContent)).toEqual(['Deutsch'])
+    expect(field.getAttribute('aria-activedescendant')).toBe(container.querySelector('[role="option"]')!.id)
+  })
+
+  it('under a finger with a keyboard attached, a letter typed on the list goes into the search and filters (Devin on #575)', async () => {
+    pointer(true)
+    const { container, list } = await mount(LANGS, { search: 'Search' })
+    const field = container.querySelector<HTMLInputElement>('input')!
+    await act(async () => { list.focus() })
+    await key(list, 'd')
+    expect(document.activeElement).toBe(field)
+    expect(field.value).toBe('d')
+    expect([...container.querySelectorAll('[role="option"]')].map(o => o.textContent)).toEqual(['Deutsch'])
+    // the list's own keys stay its own: an arrow moves the active row and keeps the focus
+    await act(async () => { list.focus() })
+    await key(list, 'ArrowDown')
+    expect(document.activeElement).toBe(list)
+  })
+
+  it('follows the pointer as it changes while the menu is drawn, one element holding the browser\'s autofocus at a time', async () => {
+    const media = pointer(false)
+    const restore = stubPopovers()
+    try {
+      const { Popover } = await import('@/ui/controls/Popover')
+      const { container } = await mountElement(createElement(Popover, { id: 'pop-test', anchor: '--pop-test', onOpenChange: () => {}, role: 'listbox', label: 'Language' },
+        createElement(MenuList, { items: LANGS, kind: 'listbox', label: 'Language', search: 'Search', onPick: vi.fn(), onClose: vi.fn() })))
+      const holders = () => [...container.querySelectorAll('[autofocus]')].map(e => e.getAttribute('role'))
+      expect(holders()).toEqual(['combobox'])
+      await media.set(true)
+      expect(holders()).toEqual(['listbox'])
+      await media.set(false)
+      expect(holders()).toEqual(['combobox'])
+    } finally { restore() }
+  })
+
+  it('a menu with no search: the list, whatever the pointer', async () => {
+    for (const coarse of [false, true]) {
+      pointer(coarse)
+      const { list } = await mount(LANGS)
+      expect([coarse, list.hasAttribute('data-autofocus'), list.getAttribute('tabindex')]).toEqual([coarse, true, '0'])
+      document.body.innerHTML = ''
+    }
+  })
+
+  it('opened in its popover under a finger, puts the focus on the list and not in the field', async () => {
+    pointer(true)
+    const restore = stubPopovers()
+    try {
+      const { Popover } = await import('@/ui/controls/Popover')
+      const { container } = await mountElement(createElement(Popover, { id: 'pop-test', anchor: '--pop-test', onOpenChange: () => {}, role: 'listbox', label: 'Language' },
+        createElement(MenuList, { items: LANGS, kind: 'listbox', label: 'Language', search: 'Search', onPick: vi.fn(), onClose: vi.fn() })))
+      await act(async () => { container.querySelector<HTMLElement>('[popover]')!.showPopover() })
+      expect(document.activeElement?.getAttribute('role')).toBe('listbox')
+    } finally { restore() }
+  })
+})
+
 /**
  * The layout happy-dom does not do, for the scroll of the active row: the rows 30 px apart from the top of `box`, a scroll
  * box `height` px tall that `scrollTop` moves (clamped as a browser clamps it); nothing laid out while `shown()` is false,

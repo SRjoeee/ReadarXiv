@@ -181,7 +181,7 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
 **Lead**
 
 - 目录 (Lucide `panel-left`, pressed while open).
-- The title: 600 13 px, one line, truncating first; the whole title in the tooltip. It is the page's heading (`h1`) at every width: below the lead's 320 px it is hidden to the eye, not removed, so that it stays in the accessibility tree; until it is known the heading is the product's name, said and not drawn (UI.md S-R-03).
+- The title: 600 13 px, one line, truncating first; the whole title in the tooltip. It is the page's heading (`h1`) at every width: below the lead's 320 px it is hidden to the eye, not removed, so that it stays in the accessibility tree; until it is known the heading is the product's name, said and not drawn (UI.md S-R-03). The title carries the paper's language, `lang="en"`, as a contents heading not yet translated does (S-R-02a): a screen reader reads it in that voice, not the interface's (WCAG 3.1.2; the interface review of 2026-11-03).
 - The arXiv id: `arXiv:2608.02163` in ink-2 12 px tabular figures, a link to the abstract page in a new tab (the
   maintainer: 「改成可以点，点击打开abs页」); on hover or focus it takes the fill and a small `arrow-up-right` slides in
   beside it. Tooltip 在 arXiv 打开摘要页, which the link's name carries too, after what is on it (UI.md S-R-03).
@@ -190,7 +190,7 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
 
 **Trail**, in this order, a hairline divider between the groups:
 
-1. 交换左右 (`arrow-left-right`, pressed when swapped) and 同步滚动 (`link-2`, pressed when on). Both act in 对照 only;
+1. 左右互换 (`arrow-left-right`, pressed when swapped) and 同步滚动 (`link-2`, pressed when on). Both act in 对照 only;
    in the single displays they stay in place, greyed, so the bar never reflows.
 2. Zoom: − · the value with a chevron · +. The value keeps the width of its widest, 000 %, in tabular figures, its
    figures at the trailing edge, so that nothing on the bar moves as it changes (at 99 % → 100 % the button grew 3 px and
@@ -199,7 +199,7 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
 3. The target language (its name and a chevron, **no icon**: the translation mark belongs to the display switch alone,
    and the name says what the menu is) and the service (its name and a chevron). Their menus are §6.7's.
 4. 阅读选项 (`sliders-horizontal`), a popover: 对照高亮 (switch), 高亮颜色 (a swatch for each highlight profile: the
-   three built-in, 柔和绿, 淡黄, 淡蓝, and any added in the settings), a separator, what to translate (UI.md S-R-27, §9.1:
+   three built-in, 浅绿, 浅黄, 浅蓝, and any added in the settings), a separator, what to translate (UI.md S-R-27, §9.1:
    a heading row in the second ink naming the five switches under it, the website's group in its words and order, the
    owner's of 2026-10-25; until v21 the HTML page's image switch, S-P-85, the maintainer's ruling of 2026-09-25), a
    separator, 外观 (a small segmented control of three icons, equal whatever
@@ -224,7 +224,7 @@ bar; the maintainer kept the design without it (「这个不要 我们保留之�
 after 500 ms of hover, at once on keyboard focus; one line always (a tooltip wrapped when it was measured at its last
 place near the window's edge); the shortcut, or the value the button shows, in a lighter `kbd` after the words. The
 zoom's value, the language and the service are labelled by what is on them — the value first, then their words, hidden
-(83% 缩放比例, 简体中文 目标语言: WCAG 2.5.3, by `aria-labelledby`). 设置 is a link, opened in a new tab. The bar is the page's banner: each control a Tab stop of its own (an
+(83% 缩放比例, 简体中文 译为: WCAG 2.5.3, by `aria-labelledby`). 设置 is a link, opened in a new tab. The bar is the page's banner: each control a Tab stop of its own (an
 ARIA toolbar would have promised arrow keys between them). In forced colours the chosen display, a pressed button and
 a switch that is on take the system's Highlight (the interface review, 2026-09-26).
 
@@ -263,6 +263,10 @@ It is a single choice, so it is a radio group to assistive technology: `role="ra
 `role="radio"` with `aria-checked` and the words as their names, arrow keys moving the choice. No single key chooses a
 display anywhere on the page: 1, 2 and 3 did, which a stray keystroke or a spoken word could set off (WCAG 2.1.4; the
 maintainer removed them, 2026-09-26). A display that cannot be had (§8) is `aria-disabled` and skipped by the arrows.
+A host can grey a display its window cannot show the same way: `DisplaySwitch`'s `off` (`readonly Display[]`, none by
+default), which the website gives side by side on a phone, where its translation alone is shown (the interface review
+of 2026-11-03, v-phone-mode b). Greyed by either, a segment stays a focusable radio, named, its press doing nothing;
+the extension's reader passes none (its narrow window keeps §5's rule).
 
 ### 6.3 The contents sidebar
 
@@ -381,12 +385,22 @@ The states are §8's.
 - Items are 30 px rows with an 8 px radius, their words 10 px in, on the search field's words; the chosen one's check
   at the row's end, 10 px in, in a 14 px slot every row of the menu keeps, after anything else the row holds (UI.md §4).
   Until 2026-10-25 it led the row (the maintainer: 「对勾都在前方…我们应该把它放在字的后边」).
-- 目标语言: a search field, then the languages the reader supports (the engine's rules TARGETS), each in its own language,
+- 译为 (the target language): a search field, then the languages the reader supports (the engine's rules TARGETS), each in its own language,
   by script: CJK in the design's order, 日本語, 简体中文, 繁體中文, 한국어; then the Latin ones and the Cyrillic ones, each in
   the order of their own names: Bahasa Indonesia, Bahasa Melayu, Čeština, Deutsch, Español, Français, Italiano, Nederlands,
   Polski, Português, Svenska, Türkçe; Български, Русский, Українська. The ten after the first nine are the languages of a
   script the engine already set (the owner's ruling of 2026-10-29): each has babel's names, TeX's hyphenation patterns and
   minimums (rules/layout.mjs, tests/fixtures/hyph/README.md) and the letters every served face draws a translation in.
+  The list shows eight rows and a half, the half saying there is more, and scrolls in a box of its own under the field,
+  which stays in view; it opens with the chosen language in view and keeps the active one there as the arrows walk it
+  (`MenuList`'s reveal). Uncapped while the languages were nine, the nineteen ran to the window's foot, on a phone past
+  it (the owner, 2026-11-03: a shorter list, the search kept). The field takes the focus as the menu opens, so that
+  typing filters at once, but not where the primary pointer is a finger (`(pointer: coarse)`): there the list takes it,
+  as the service menu's does, and no on-screen keyboard covers the list until the field is tapped; a letter typed on the
+  list (a tablet with a keyboard attached) moves into the field and starts the search. The primary pointer
+  and not `any-hover`/`any-pointer`, which answer for every input a device has: a phone with a stylus that hovers would
+  read as able to hover and get the keyboard, and a laptop with a touch screen would lose the focus its keyboard types
+  into. The extension's popup and settings page draw the same menu (UI.md S-P-22, S-O-23), at five rows and a half.
 - 翻译服务: the same list and labels as the popup's service menu.
 - They are built on the shared `Menu` once it has the fixes in §9.4.
 
@@ -469,7 +483,7 @@ No state that tells the reader nothing is shown (no "done").
 |---|---|---|
 | Reading | 原文; a translation ready; a stored translation shown, offline included | nothing |
 | Loading | a large PDF is loading | the progress line by the share downloaded, its first stretch; 正在加载 said to screen readers |
-| Preparing | the paper's bilingual files are being made (our server's prepare, a paper no reader opened before) | the original; the progress line's first half after the download, by the prepare's progress; 正在准备 PDF 对照 said to screen readers (S-R-23) |
+| Preparing | the paper's bilingual files are being made (our server's prepare, a paper no reader opened before) | the original; the progress line's first half after the download, by the prepare's progress; 正在准备 said to screen readers (S-R-23) |
 | Translating | the paper's paragraphs being translated by the service chosen | the same line on, by the share of paragraphs done; 正在翻译 said to screen readers; each page laid on the right as its paragraphs come, the original's page until then |
 | Not to be had now | Read arXiv's website out of reach, or at its limit | the original readable, the displays as they are; capsule: PDF 对照暂时无法加载 · 重试 · 改用 HTML 翻译 where arXiv has an HTML version (S-R-24); passing, not remembered; a paper whose files this machine keeps opens without it |
 | Some paragraphs failed | a translation with gaps | capsule: {n} 处翻译失败 · 重试 · close |
@@ -517,7 +531,7 @@ its own toggle, below; until then the switch showed or hid it too.
 | `pdfReader.enabled` | boolean | true | 在 arXiv 的 PDF 上使用对照阅读器 |
 | `pdfReader.original` | boolean | false | the reader was last left in 原文 (the HTML page's "translation on" is the tab's session, not a setting) |
 | `pdfReader.sync` | boolean | true | 同步滚动: the engine's `same` mode on, `off` off |
-| `pdfReader.swapped` | boolean | false | 交换左右 |
+| `pdfReader.swapped` | boolean | false | 左右互换 |
 | `pdfReader.appearance` | `'light' \| 'dark' \| 'system'` | `'system'` | 外观 (the extension has no appearance setting; its pages follow the system) — moved to the extension's theme at configuration v20 (the redesign's §3): one appearance for every surface, set here or on the settings page |
 | `pdfReader.dimPages` | boolean | true | 深色时调暗页面 |
 
@@ -559,7 +573,7 @@ is open. With the reader open, the popup acts on it, by the settings (the mainta
 reader cannot do is greyed or hidden):
 
 - 翻译服务: all, as elsewhere.
-- 目标语言: the reader's languages only (§6.7).
+- 译为: the reader's languages only (§6.7).
 - The prompt row: as elsewhere.
 - The mode bar: 左右 and 仅译文 usable; 上下 disabled, its title PDF 对照不支持上下排列 (a layout the reader can see, not
   a technical reason). A `mode` of `'stack'` shows as 左右 chosen, since that is what the reader shows.
@@ -1464,6 +1478,13 @@ Each before the stage's pull request, on the heaviest demo paper, in a real wind
   control that shows. A popover closes when the focus leaves it for another control, a press on its own button left to
   that button's click. The capsule's 选择语言 opens the language menu itself, the one the reading options hold in a
   narrow window.
+- The original's words are marked as the paper's language, English (`SOURCE_LANG`, `lang="en"`), on the text layer alone:
+  each page view's `div.textLayer` on the left and in a place that shows the original's page (set as PDF.js says it has
+  rendered it, `textlayerrendered`), and a laid page's text layer (§11.11), whose translated spans carry the target's
+  language over it. A screen reader reads the paper in its voice, while the page's region and its name (UI.md
+  S-R-11a), its links' names (S-R-25), the pills and the chrome stay in the interface's language: never on a pane,
+  a viewer or a page, which carry those names (the interface review of 2026-11-03, WCAG 3.1.2). The reader knows no other
+  source language: it asks every translation from English. The bar's title is marked the same way (§6.1).
 - Forced colours keep every state: the chosen, pressed and switched-on controls take `Highlight`.
 - The status capsule is a live region present from the start; failures never move focus.
 - Contrast as §4.1; meaning never rides on colour alone (the danger colour always has its icon and words).
@@ -1496,9 +1517,9 @@ the same thing, its string is reused (marked).
 | Toolbar | 目录 | Contents |
 | | 在 arXiv 打开摘要页 | Open the abstract on arXiv |
 | | 显示 (the switch's name) · 原文 · 对照 · 译文 | Display · Original · Side by side · Translation |
-| | 交换左右 · 同步滚动 | Swap sides · Sync scrolling |
+| | 左右互换 · 同步滚动 | Swap sides · Sync scrolling |
 | | 缩小 · 放大 · 缩放比例 · 适合宽度 · 适合页面 · 实际大小 | Zoom out · Zoom in · Zoom · Fit width · Fit page · Actual size |
-| | 目标语言 · 搜索语言 · 翻译服务 | Target language · Search languages · Translation service |
+| | 译为 · 搜索语言 · 翻译服务 (the owner's 译为 of 2026-11-03, the home page's word; 目标语言 before) | Translate into · Search languages · Service |
 | | 阅读选项 | Reading options |
 | | 对照高亮 (S-P-80, reused) · 高亮颜色 | Hover highlight · Highlight colour |
 | | 翻译范围 · 图中文字 · 表中文字 · 页眉页脚 · 参考文献 · 作者信息 (the owner's, 2026-10-25, the last row's 2026-10-30; the website's words; the settings' group's aside 只对 PDF 对照生效) | What to translate · Text in figures · Text in tables · Headers and footers · References · Authors and affiliations (Applies to bilingual PDFs only) |
@@ -1506,7 +1527,7 @@ the same thing, its string is reused (marked).
 | | 下载 · 译文 PDF · 原文 PDF | Download · Translation PDF · Original PDF |
 | | 设置 (S-P-02, reused) · 在默认查看器中打开 | Settings · Open in the default viewer |
 | Page pills | 原文页码 · 译文页码 · 上一页 · 下一页 | Original's page · Translation's page · Previous page · Next page |
-| Status | 正在加载 · 正在翻译 · 正在按当前设置重新翻译 | Loading · Translating · Translating again with the current settings |
+| Status | 正在加载 · 正在准备 (2026-11-03) · 正在翻译 · 正在按当前设置重新翻译 | Loading · Preparing · Translating · Translating again with the current settings |
 | | {n} 处翻译失败 (reused) · 重试 (reused) · 关闭 | {n} passages failed · Retry · Close |
 | | PDF 对照暂不支持{语言} · 选择语言 | A bilingual PDF isn't available in {language} yet · Choose language |
 | | 窗口较窄，暂只显示译文 (after S-P-74) | The window is narrow, so this shows the translation alone for now |

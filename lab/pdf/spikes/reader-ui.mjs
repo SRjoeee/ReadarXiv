@@ -178,7 +178,7 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.getByRole('radio', { name: '译文' }).click()
   await page.waitForTimeout(500)
   check('the display switch changes the display', (await state(page)).display === 'translation')
-  check('sync and swap grey out in a single display', await page.evaluate(() => ['同步滚动', '交换左右'].every(n => document.querySelector(`button[aria-label="${n}"]`)?.getAttribute('aria-disabled') === 'true')))
+  check('sync and swap grey out in a single display', await page.evaluate(() => ['同步滚动', '左右互换'].every(n => document.querySelector(`button[aria-label="${n}"]`)?.getAttribute('aria-disabled') === 'true')))
   // no single key chooses a display (WCAG 2.1.4; the maintainer, 2026-09-26); the switch's arrows do, as a radio group's
   for (const k of ['1', '2', '3']) await page.keyboard.press(k)
   await page.waitForTimeout(400)
@@ -214,11 +214,11 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.getByRole('menuitemradio', { name: '适合页面' }).click()
   await page.waitForTimeout(500)
   check('the zoom menu fits the page, and closes', (await state(page)).zoom === 'page-fit' && !(await page.evaluate(() => !!document.querySelector('.pop:popover-open'))))
-  await page.getByRole('button', { name: '目标语言' }).click()
+  await page.getByRole('button', { name: '译为' }).click()
   await page.keyboard.type('fra')
   check('the language menu searches as it is typed', (await page.getByRole('option').count()) === 1)
   await page.keyboard.press('Escape')
-  check('Escape closes it, the focus back on its button', await page.evaluate(() => !!(a => a && (a.getAttribute('aria-labelledby')?.split(' ').map(i => document.getElementById(i)?.textContent).join(' ') ?? a.getAttribute('aria-label')))(document.activeElement)?.includes('目标语言')))
+  check('Escape closes it, the focus back on its button', await page.evaluate(() => !!(a => a && (a.getAttribute('aria-labelledby')?.split(' ').map(i => document.getElementById(i)?.textContent).join(' ') ?? a.getAttribute('aria-label')))(document.activeElement)?.includes('译为')))
   // the original is arXiv's own PDF, opened by the browser in a tab of its own (its viewer saves it): nothing read here
   const [tab] = await Promise.all([context.waitForEvent('page', { timeout: 10_000 }).catch(() => null), (async () => { await page.getByRole('button', { name: '下载' }).click(); await page.getByRole('menuitem', { name: '原文 PDF' }).click() })()])
   await tab?.waitForLoadState('load').catch(() => undefined)
@@ -247,10 +247,10 @@ const box = (page, selector) => page.evaluate(s => { const r = document.querySel
   await page.keyboard.press('Escape')
   await page.setViewportSize({ width: 880, height: 900 })
   await page.waitForTimeout(400)
-  const inBar = await page.evaluate(() => getComputedStyle([...document.querySelectorAll('[data-zone="trail"] > button')].find(b => b.textContent.includes('目标语言'))).display)
+  const inBar = await page.evaluate(() => getComputedStyle([...document.querySelectorAll('[data-zone="trail"] > button')].find(b => b.textContent.includes('译为'))).display)
   await page.getByRole('button', { name: '阅读选项' }).click()
   await page.waitForTimeout(300)
-  const inOptions = await page.evaluate(() => { const b = [...document.querySelectorAll('.pop:popover-open .narrow-only button')].find(x => x.textContent.includes('目标语言')); return !!b && b.getBoundingClientRect().width > 0 })
+  const inOptions = await page.evaluate(() => { const b = [...document.querySelectorAll('.pop:popover-open .narrow-only button')].find(x => x.textContent.includes('译为')); return !!b && b.getBoundingClientRect().width > 0 })
   check('under 900 px the language menu leaves the bar for the options', inBar === 'none' && inOptions, JSON.stringify({ inBar, inOptions }))
   await shot(page, '20-options-narrow')
   await page.close()
@@ -448,7 +448,7 @@ for (const embedded of ['1', '0']) {
     await patch(page, { theme: dark ? 'dark' : 'light' })
     await page.waitForTimeout(500)
     const seen = {}
-    for (const name of ['缩放比例', '目标语言']) {
+    for (const name of ['缩放比例', '译为']) {
       // the bar's own: named by its words and what it shows (WCAG 2.5.3)
       await page.locator('header').getByRole('button', { name }).focus()
       await page.keyboard.press('Enter')
@@ -592,7 +592,7 @@ for (const embedded of ['1', '0']) {
   await page.setViewportSize({ width: 800, height: 800 }); await page.waitForTimeout(300)
   const optionsButton = page.locator('header button[aria-label="阅读选项"]')
   await optionsButton.click(); await page.waitForTimeout(400)
-  const inner = page.locator('#pop-options').getByRole('button', { name: '目标语言' })
+  const inner = page.locator('#pop-options').getByRole('button', { name: '译为' })
   await inner.click(); await page.waitForTimeout(400)
   const innerOpened = await shown('pop-options-language')
   await inner.click(); await page.waitForTimeout(400)
@@ -622,7 +622,7 @@ for (const embedded of ['1', '0']) {
   await page.keyboard.press('Shift+Tab'); await page.keyboard.press('Tab'); await page.waitForTimeout(150)
   const pillKeyed = await look('.pane[data-side="left"] .pill input')
   await page.keyboard.press('Escape'); await page.mouse.click(640, 400)
-  await page.locator('header').getByRole('button', { name: '目标语言' }).click(); await page.waitForTimeout(400)
+  await page.locator('header').getByRole('button', { name: '译为' }).click(); await page.waitForTimeout(400)
   const menuClicked = { search: await look('.pop:popover-open .search'), item: await look('.pop:popover-open .item[data-active]') }
   await page.keyboard.press('ArrowDown'); await page.waitForTimeout(150)
   const menuKeyed = { search: await look('.pop:popover-open .search'), item: await look('.pop:popover-open .item[data-active]') }
@@ -690,7 +690,7 @@ for (const embedded of ['1', '0']) {
   const cdp = await page.context().newCDPSession(page)
   // touch emulation, which makes (hover: none) true; emulating the media feature alone did not reach the page
   await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 })
-  const swap = page.locator('header button[aria-label="交换左右"]')
+  const swap = page.locator('header button[aria-label="左右互换"]')
   await swap.hover(); await page.waitForTimeout(250)
   const touched = await swap.evaluate(b => ({ pressed: b.getAttribute('aria-pressed'), bg: getComputedStyle(b).backgroundColor }))
   await cdp.send('Emulation.setTouchEmulationEnabled', { enabled: false })
@@ -707,7 +707,7 @@ for (const embedded of ['1', '0']) {
     const chosen = radios.find(r => r.getAttribute('aria-checked') === 'true'), other = radios.find(r => r.getAttribute('aria-checked') === 'false')
     return {
       segment: s(chosen) + ' / thumb ' + getComputedStyle(document.querySelector('.seg.display .thumb')).backgroundColor, otherSegment: s(other) + ' / well ' + getComputedStyle(document.querySelector('.seg.display')).backgroundColor,
-      pressed: s(document.querySelector('header button[aria-label="同步滚动"]')), unpressed: s(document.querySelector('header button[aria-label="交换左右"]')),
+      pressed: s(document.querySelector('header button[aria-label="同步滚动"]')), unpressed: s(document.querySelector('header button[aria-label="左右互换"]')),
     }
   })
   await page.click('header [aria-label="阅读选项"]')

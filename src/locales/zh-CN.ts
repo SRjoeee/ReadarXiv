@@ -37,7 +37,7 @@ const S = {
   loading: '页面加载中', // S-P-03d
   rows: {
     service: '翻译服务', // S-P-10
-    language: '目标语言', // S-P-20
+    language: '译为', // S-P-20 (the owner, 2026-11-03: the home page's word; 目标语言 until then)
     prompt: '提示词', // S-P-47
     highlight: '对照高亮', // S-P-80
     highlightTitle: '悬停时高亮对应句子；仅译文模式下停留可查看原文', // S-P-81
@@ -55,7 +55,7 @@ const S = {
     chrome_ready: '浏览器内置，无需联网', // S-P-43
     llm_noKey: '尚未配置 API Key', // S-P-45: the LLM item's hint until a key is set
     llm_rejected: 'API Key 已失效', // S-P-45: the hint of a service whose key the endpoint refused
-    microsoft_unsupported: '不支持当前目标语言',
+    microsoft_unsupported: '不支持所选语言',
     chrome_download: '下载', // S-P-40
     chrome_downloading: '语言包下载中', // S-P-41
     chrome_unavailable: '当前不可用', // S-P-42
@@ -76,7 +76,7 @@ const S = {
     llmRejected: 'API Key 已失效', // S-P-32e: a key the endpoint refused (the redesign's §5.2)
     chromeNoPack: 'Chrome 翻译的语言包尚未下载',
     chromeDownloading: 'Chrome 翻译的语言包下载中，约需 1 分钟',
-    microsoftUnsupported: 'Microsoft 翻译不支持当前目标语言',
+    microsoftUnsupported: 'Microsoft 翻译不支持所选语言',
     serviceGone: '选中的翻译服务已被删除，请重新选择', // S-P-32d
     paused: (reason: string) => `${reason}。请检查设置后重新翻译`, // S-P-33
     imagesPaused: (reason: string) => `图片翻译已暂停：${reason}`, // S-P-35
@@ -148,7 +148,7 @@ const O = {
     keywords: {
       'translate/services': '翻译服务 模型 LLM 接口 API Key',
       'translate/fallback': '失效 额度 断网 备用',
-      'translate/language': '语言 翻译成 language',
+      'translate/language': '语言 翻译成 目标语言 language',
       'translate/prompts': 'LLM prompt 指令 消息',
       'translate/glossary': 'LLM 术语 词汇 glossary',
       'appearance/theme': '主题 深色 浅色 夜间 theme dark',
@@ -321,9 +321,10 @@ const O = {
     /** S-O-56: the PDF reader's "What to translate", its heading's aside (the group's name and rows are the reader's, R.classes) */
     classesAside: '只对 PDF 对照生效',
     /** The names of the profiles shipped with the extension (`BUILT_IN_STYLES` / `BUILT_IN_HIGHLIGHTS`): they are ours,
-     *  not the reader's writing, so they follow the interface language; once the reader renames one, the reader's name shows */
+     *  not the reader's writing, so they follow the interface language; once the reader renames one, the reader's name shows.
+     *  A band's name here is not its stored one since 2026-11-03 (the stored names stay, `BUILT_IN_HIGHLIGHTS`) */
     builtInStyles: { follow: '与原文相同', green: '绿色', blue: '蓝色', amber: '琥珀', muted: '淡一档', blur: '模糊' },
-    builtInHighlights: { 'soft-green': '柔和绿', sand: '淡黄', sky: '淡蓝' },
+    builtInHighlights: { 'soft-green': '浅绿', sand: '浅黄', sky: '浅蓝' },
     previewSource: PREVIEW_SOURCE,
     previewTarget: PREVIEW_TARGET,
   },
@@ -386,7 +387,7 @@ const R = {
   contents: '目录', // S-R-02
   abstract: '在 arXiv 打开摘要页', // S-R-03
   display: { name: '显示', original: '原文', bilingual: '对照', translation: '译文' }, // S-R-04
-  swap: '交换左右', // S-R-05
+  swap: '左右互换', // S-R-05
   sync: '同步滚动', // S-R-06
   zoom: { out: '缩小', in: '放大', value: '缩放比例', width: '适合宽度', page: '适合页面', actual: '实际大小' }, // S-R-07
   options: { name: '阅读选项', color: '高亮颜色', appearance: '外观', light: '浅色', dark: '深色', system: '跟随系统', dim: '深色时调暗页面' }, // S-R-08
@@ -404,7 +405,7 @@ const R = {
   status: {
     loading: '正在加载', // S-R-12
     translating: '正在翻译',
-    preparing: '正在准备 PDF 对照', // S-R-23 (the owner's words, 2026-10-17): said to screen readers while the paper's layer is prepared; the progress line shows it
+    preparing: '正在准备', // S-R-23 (the owner's words, 2026-11-03; 正在准备 PDF 对照 from 2026-10-17): said to screen readers while the paper's layer is prepared; the progress line shows it
     close: '关闭', // S-R-15: a notice's close button
     unsupported: (language: string) => `PDF 对照暂不支持${spacedAfterChinese(language)}`, // S-R-13: the language's own name, spaced from the Chinese unless it is Han, kana or hangul (§1 rule 9)
     chooseLanguage: '选择语言',

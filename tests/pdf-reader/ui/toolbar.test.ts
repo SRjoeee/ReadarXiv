@@ -37,6 +37,8 @@ describe('the toolbar (the reader\'s design, §6.1)', () => {
     const { container, set } = await mount({ paper: { id: '2608.02163', title: 'From Simple QA to Deep Research' } })
     const heads = [...container.querySelectorAll('h1')]
     expect([heads.length, heads[0]?.textContent, heads[0]?.hasAttribute('data-title'), heads[0]?.closest('header') !== null]).toEqual([1, 'From Simple QA to Deep Research', true, true])
+    // the paper's title in the paper's language, read in that voice whatever the interface's (WCAG 3.1.2)
+    expect(heads[0]?.getAttribute('lang')).toBe('en')
     // the link\'s name starts with what is seen (WCAG 2.5.3) and ends with its purpose, which the tooltip alone told
     const link = container.querySelector<HTMLElement>('a[data-arxiv]')!
     expect(nameOf(link)).toBe(`arXiv:2608.02163 ${R.abstract}`)
@@ -44,7 +46,7 @@ describe('the toolbar (the reader\'s design, §6.1)', () => {
     // no title known yet: the heading is the product\'s name, said and not drawn, as the tab says it
     await act(async () => set({ paper: { id: '2608.02163', title: '' } }))
     const bare = [...container.querySelectorAll('h1')]
-    expect([bare.length, bare[0]?.textContent, bare[0]?.hasAttribute('data-title'), bare[0]?.classList.contains('sr-only')]).toEqual([1, 'Read arXiv', false, true])
+    expect([bare.length, bare[0]?.textContent, bare[0]?.hasAttribute('data-title'), bare[0]?.classList.contains('sr-only'), bare[0]?.hasAttribute('lang')]).toEqual([1, 'Read arXiv', false, true, false])
   })
 
   it('shows the id alone when no title is known (none in the PDF, the abstract page out of reach)', async () => {
@@ -59,10 +61,10 @@ describe('the toolbar (the reader\'s design, §6.1)', () => {
     expect(controller.setDisplay).toHaveBeenCalledWith('translation')
     button(container, '同步滚动').click()
     expect(controller.setSync).toHaveBeenCalledWith(false)
-    button(container, '交换左右').click()
+    button(container, '左右互换').click()
     expect(controller.patchSettings).toHaveBeenCalledOnce()
     await act(async () => set({ display: 'translation' }))
-    expect([button(container, '同步滚动').getAttribute('aria-disabled'), button(container, '交换左右').getAttribute('aria-disabled')]).toEqual(['true', 'true'])
+    expect([button(container, '同步滚动').getAttribute('aria-disabled'), button(container, '左右互换').getAttribute('aria-disabled')]).toEqual(['true', 'true'])
   })
 
   it('zooms by a tenth each way, and shows the scale', async () => {
@@ -97,8 +99,8 @@ describe('the toolbar (the reader\'s design, §6.1)', () => {
 
   it('names the zoom, language and service buttons by what they show, first, and their words, from what is on the page (WCAG 2.5.3; the interface review)', async () => {
     const { container } = await mount({ scale: 1.25 })
-    const names = ['缩放比例', '目标语言', '翻译服务'].map(w => named(container, w))
-    expect(names.map(nameOf)).toEqual(['125% 缩放比例', '简体中文 目标语言', 'Microsoft 翻译 翻译服务'])
+    const names = ['缩放比例', '译为', '翻译服务'].map(w => named(container, w))
+    expect(names.map(nameOf)).toEqual(['125% 缩放比例', '简体中文 译为', 'Microsoft 翻译 翻译服务'])
     // labelled by the text the button shows, not an aria-label drawn apart from it (better-accessibility)
     expect(names.map(b => b.hasAttribute('aria-label'))).toEqual([false, false, false])
     // the whole value in the tooltip too, where a long name is cut short on the bar

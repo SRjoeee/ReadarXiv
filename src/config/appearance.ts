@@ -71,6 +71,10 @@ export const BUILT_IN_STYLES: readonly StyleProfile[] = [
   style('muted', '淡一档', { opacity: 0.7 }),
   style('blur', '模糊', { blur: true }),
 ]
+/** A built-in band's `name` is the one every saved configuration holds for it, and the website's copy of these three
+ *  (readarxiv-web `web/src/reader/highlights.ts`): it tells the band not renamed (`profileName`), and is shown nowhere,
+ *  since a band is never renamed nor copied. What a reader sees is the pack's name (`O.reading.builtInHighlights`), which
+ *  changed on 2026-11-03 while these stayed, so that no stored band reads as one renamed (UI.md S-O-49) */
 export const BUILT_IN_HIGHLIGHTS: readonly HighlightProfile[] = [
   { id: 'soft-green', name: '柔和绿', color: GREEN, opacity: 0.22 },
   { id: 'sand', name: '淡黄', color: 'oklch(0.85 0.12 85)', opacity: 0.3 },

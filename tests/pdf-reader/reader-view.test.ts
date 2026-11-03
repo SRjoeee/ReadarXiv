@@ -1307,6 +1307,23 @@ describe('V12: the web\'s fixes as plain behaviour', () => {
     expect((places(s)[0] as HTMLElement).getAttribute('aria-label')).toBe('right page 1, again')
   })
 
+  it('marks the original\'s words as the paper\'s language on each page view\'s text layer alone, on the left and in a place that shows the original\'s page: the page\'s region, its name and its links keep the interface\'s (PDF-READER §13)', async () => {
+    const s = setup()
+    await opened(s, 2)
+    leftViewer().renderText(1)
+    await nearOn(s, [1])
+    await flush(20)
+    const left = s.panes.left.querySelector<HTMLElement>('.page')!
+    const place = places(s)[0] as HTMLElement
+    expect([left.querySelector('.textLayer')?.getAttribute('lang'), place.querySelector('.textLayer')?.getAttribute('lang')]).toEqual(['en', 'en'])
+    // the page's name is said in the interface's language: no lang on the page, the place, the panes or the viewer
+    expect(left.getAttribute('aria-label')).toBe('left 1')
+    expect([left, place, s.panes.left, s.panes.right, ...s.panes.left.querySelectorAll('.pdfViewer')].map(el => el.hasAttribute('lang'))).toEqual([false, false, false, false, false])
+    expect(place.querySelector('.annotationLayer')?.hasAttribute('lang')).toBe(false)
+    // the control: before PDF.js says the left's page 2 has its text layer, it carries none
+    expect(s.panes.left.querySelectorAll('.page')[1]?.querySelector('.textLayer')).toBeNull()
+  })
+
   it('setNarrow(true, { display: original }) from bilingual lays out once', async () => {
     const s = setup()
     await opened(s, 3)
