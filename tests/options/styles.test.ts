@@ -168,7 +168,7 @@ describe('the translation styles (§6.4)', () => {
     expect(editor(m.container)).not.toBeNull()
     button(editor(m.container)!, O.reading.duplicate).click()
     await m.flush()
-    expect(names(m.container).at(-1)).toBe(`${O.appearance.newStyle} ${O.reading.copySuffix}`)
+    expect(names(m.container).at(-1)).toBe(O.reading.copyName(O.appearance.newStyle))
     await m.unmount()
   })
 

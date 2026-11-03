@@ -26,6 +26,9 @@ export { PREVIEW_LANG, PREVIEW_SOURCE, PREVIEW_TARGET } from '@/locales/preview'
  */
 const LOCALE_LANGUAGE_NAMES: Record<LocaleCode, Partial<Record<LangCode, string>>> = {
   'zh-CN': LANG_CODE_TO_ZH_NAME,
+  'zh-TW': {},
+  ja: {},
+  ko: {},
   en: LANG_CODE_TO_EN_UI_NAME,
 }
 
@@ -103,14 +106,17 @@ export function fallbackText(reason: FallbackReason): string {
 }
 
 /**
- * What a duplicate is called: the name as displayed, plus the pack's suffix. **The base gives way,
- * not the suffix** — clipping the finished string would eat the suffix off a name already at the
- * limit and hand back a copy indistinguishable from its source (Codex on #161)
+ * What a duplicate is called: the name as displayed, set into the pack's words for a copy (a suffix in Chinese and
+ * English, joined after the name in Japanese). **The name gives way, not those words** — clipping the finished string would eat them off a name already
+ * at the limit and hand back a copy indistinguishable from its source (Codex on #161). The name is shortened until the
+ * whole fits, since a pack may space the name from its words or not, depending on how the name ends
  */
 export function copyName(profile: { id: string; name: string }, kind: 'styles' | 'highlights' = 'styles'): string {
-  const suffix = O.reading.copySuffix
-  const room = NAME_MAX - suffix.length - 1
-  return `${profileName(profile, kind).slice(0, Math.max(1, room))} ${suffix}`
+  const name = profileName(profile, kind)
+  const named = (room: number) => O.reading.copyName(name.slice(0, room).trimEnd())
+  let room = name.length
+  while (room > 1 && named(room).length > NAME_MAX) room--
+  return named(room)
 }
 
 export function profileName(profile: { id: string; name: string }, kind: 'styles' | 'highlights' = 'styles'): string {

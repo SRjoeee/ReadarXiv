@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { LANG_CODE_TO_LOCALE_NAME as OWN } from '@/config/languages'
 import { LOCALES } from '@/locales'
-import { spacedAfterChinese } from '@/locales/spacing'
+import { spacedAfterCjk, spacedBeforeCjk, spacedWithinCjk } from '@/locales/spacing'
 
 /** every string a pack's R holds, by its path; a function is called with a sample */
 function strings(value: unknown, path = 'R'): [string, string][] {
@@ -32,7 +32,18 @@ describe("the reader's words", () => {
     // the English sentence has no Chinese before the name: unchanged, whatever the name's script
     for (const code of ['deu', 'jpn', 'arb'] as const) expect(LOCALES.en.R.status.unsupported(OWN[code]), code).toBe(`A bilingual PDF isn't available in ${OWN[code]} yet`)
     // nothing to space: no stray space
-    expect(spacedAfterChinese('')).toBe('')
+    expect(spacedAfterCjk('')).toBe('')
+  })
+
+  it('S-R-13 in the other CJK languages: Taiwan spaces as the Simplified pack does; Japanese sets the name mid-sentence, spaced on whichever side meets Latin; Korean puts it after a colon, where no particle meets it', () => {
+    const tw = LOCALES['zh-TW'].R, ja = LOCALES.ja.R, ko = LOCALES.ko.R
+    expect([tw.status.unsupported(OWN.deu), tw.status.unsupported(OWN.jpn)]).toEqual([`PDF 對照暫不支援 ${OWN.deu}`, `PDF 對照暫不支援${OWN.jpn}`])
+    expect([ja.status.unsupported(OWN.deu), ja.status.unsupported(OWN.kor), ja.status.unsupported('Uzbek (Cyrillic)')])
+      .toEqual([`PDF 対訳は ${OWN.deu} にまだ対応していません`, `PDF 対訳は${OWN.kor}にまだ対応していません`, 'PDF 対訳は Uzbek (Cyrillic) にまだ対応していません'])
+    for (const code of ['deu', 'jpn', 'kor', 'arb'] as const) expect(ko.status.unsupported(OWN[code]), code).toBe(`PDF 대조 미지원 언어: ${OWN[code]}`)
+    // a name that ends on full-width punctuation sits against the Japanese after it
+    expect(spacedWithinCjk('中国語（簡体）')).toBe('中国語（簡体）')
+    expect([spacedBeforeCjk(''), spacedWithinCjk('')]).toEqual(['', ''])
   })
 
   it("S-R-11a names a page by its side and takes the number as a parameter, in each language's own words (UI.md S-R-11a)", () => {
@@ -41,6 +52,10 @@ describe("the reader's words", () => {
     expect([en.pageName('original', 1), en.pageName('translation', 12)]).toEqual(['Original · Page 1', 'Translation · Page 12'])
     // the side's word is the display switch's own (S-R-04), so the page's name and the switch's choice never drift apart
     for (const R of [zh, en]) for (const side of ['original', 'translation'] as const) expect(R.pageName(side, 7)).toContain(R.display[side])
+    // Japanese and Korean set no space between a digit and the word after it (UI.md §1, the Japanese and Korean lines)
+    expect([LOCALES['zh-TW'].R.pageName('original', 3), LOCALES.ja.R.pageName('original', 3), LOCALES.ko.R.pageName('translation', 3)])
+      .toEqual(['原文 · 第 3 頁', '原文 · 3ページ', '번역문 · 3페이지'])
+    for (const R of Object.values(LOCALES).map(p => p.R)) for (const side of ['original', 'translation'] as const) expect(R.pageName(side, 7)).toContain(R.display[side])
   })
 
   for (const [code, pack] of Object.entries(LOCALES)) {

@@ -273,7 +273,7 @@ const O: Locale['O'] = {
       angle: 'No < allowed',
     },
     duplicate: 'Duplicate',
-    copySuffix: 'copy',
+    copyName: name => `${name} copy`,
     translateWay: 'Translate',
     translateWays: ['As you read', 'Whole paper'],
     translateWayHints: ['Only what you are reading and what comes next; uses the least', 'The whole paper is requested as it opens, so every part is ready; uses more'],

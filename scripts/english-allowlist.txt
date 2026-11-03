@@ -44,7 +44,7 @@ tests/pdf-reader/mt-wire.test.ts 9  # 2026-10-02: Chinese replies with a percent
 tests/pdf-reader/unified-light.test.ts 4  # 2026-11-03: a Chinese caption's text drawn as tokens and a translated sentence with a placeholder's space, the inputs and expectations of where an opening bracket's sentence is (2610.42112v1's Figure 7)
 tests/pdf-reader/display-stop.test.ts 26  # 2026-10-19: +5, the review of #421: Chinese replies with a mark before a display's marker (the reply's own, kept) and one after a later marker; Chinese replies around a display's marker, its own stop full-width, doubled, moved before it or dropped, and a comma, the inputs and expectations of the wire's reading back and of the sentences' first words
 tests/pdf-reader/typeset-measure.test.ts 7  # 2026-10-01: Chinese, Korean and Cyrillic text as the inputs of the width model (density.mjs), each with the width xeCJK and the T2A faces set it at
-tests/pdf-reader/ui/copy.test.ts 5  # 2026-10-04: +1, the page's name in Chinese, the expectation; 2026-09-25: the reader's words, zh-CN expectations and the technical terms checked in Chinese
+tests/pdf-reader/ui/copy.test.ts 9  # 2026-11-04: +4, S-R-13 and S-R-11a in Traditional Chinese, Japanese and Korean, the expectations; 2026-10-04: +1, the page's name in Chinese, the expectation; 2026-09-25: the reader's words, zh-CN expectations and the technical terms checked in Chinese
 tests/pdf-reader/ui/display-switch.test.ts 3  # 2026-09-25: the display switch's choices found by their Chinese names
 tests/pdf-reader/ui/languages.test.ts 1  # 2026-09-25: the nine languages each named in its own language, the expectation
 tests/pdf-reader/ui/menus.test.ts 2  # 2026-09-25: the menus' items found by their Chinese names
@@ -146,7 +146,7 @@ tests/scheduler/title.test.ts 6
 tests/shared/digest.test.ts 1
 tests/shared/transport.test.ts 1
 tests/ui/language-names.test.ts 9
-tests/ui/locales.test.ts 2
+tests/ui/locales.test.ts 10  # 2026-11-04: +8, the interface languages zh-TW, ja and ko: their copy names, the Simplified-only characters and the mainland words a Taiwan pack must not hold, the terms Japanese shares with Chinese, the expectations
 tests/ui/strings.test.ts 16  # 2026-10-29: +5, the key reasons by engine, expected in the Chinese pack's words, keyed and keyless (#88 E5); raised 2026-09-13: expectations for the locale-pack sentences (fallback text, drawer issue, popup action error); −2, 2026-09-27: the drawer's issue sentence left with its key (Part 5, Task 60)
 tests/pdf-reader/link-names.test.ts 6  # 2026-10-17: the expected Chinese names of links with no text under them (UI.md S-R-25, the owner's words), a multilingual test's expectations
 docs/route/design.md 5  # 2026-10-23: the owner's three route rulings quoted verbatim (left pane, stamp, failed checks) and the names he used for them

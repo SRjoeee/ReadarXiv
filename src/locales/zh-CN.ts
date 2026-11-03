@@ -5,7 +5,7 @@
 // English like the rest of the code; only the strings are Chinese.
 import type { ProviderErrorKind } from '@/providers/types'
 import { PREVIEW_SOURCE, PREVIEW_TARGET } from './preview'
-import { spacedAfterChinese } from './spacing'
+import { spacedAfterCjk } from './spacing'
 
 /** What the settings page says about a field the schema refused (config/schema.ts, config/appearance.ts, config/services.ts) */
 const FIELD: Record<string, string> = {
@@ -302,8 +302,9 @@ const O = {
       angle: '不能包含 <',
     },
     duplicate: '复制一份',
-    /** What a copy is called: the shown name + this suffix (duplicateStyle in config/appearance.ts) */
-    copySuffix: '副本',
+    /** What a copy is called, from the shown name (duplicateStyle in config/appearance.ts): a sentence, not a suffix, since
+     *  Japanese writes the name first and joins the words to it. `copyName` (ui/strings.ts) shortens the name to fit */
+    copyName: (name: string) => `${name} 副本`,
     translateWay: '翻译方式',
     translateWays: ['按需翻译', '整篇翻译'],
     translateWayHints: ['只翻译正在阅读和即将读到的段落，用量最少', '打开论文时就请求整篇译文，滚到哪里都已翻好，用量较多'],
@@ -407,7 +408,7 @@ const R = {
     translating: '正在翻译',
     preparing: '正在准备', // S-R-23 (the owner's words, 2026-11-03; 正在准备 PDF 对照 from 2026-10-17): said to screen readers while the paper's layer is prepared; the progress line shows it
     close: '关闭', // S-R-15: a notice's close button
-    unsupported: (language: string) => `PDF 对照暂不支持${spacedAfterChinese(language)}`, // S-R-13: the language's own name, spaced from the Chinese unless it is Han, kana or hangul (§1 rule 9)
+    unsupported: (language: string) => `PDF 对照暂不支持${spacedAfterCjk(language)}`, // S-R-13: the language's own name, spaced from the Chinese unless it is Han, kana or hangul (§1 rule 9)
     chooseLanguage: '选择语言',
     narrow: '窗口较窄，暂只显示译文', // S-R-14, after S-P-74
     rateLimited: '请求过于频繁', // S-R-16: a stopped run does not retry by itself, so the card promises no retry

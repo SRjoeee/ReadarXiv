@@ -5,7 +5,7 @@ import { createElement as h } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import type { OptionsData } from '@/entrypoints/options/data'
-import { LOCALE_NAMES } from '@/locales'
+import { LOCALE_CODES, LOCALE_NAMES } from '@/locales'
 import { stubPopovers } from '../pdf-reader/ui/popover-stub'
 import { mountElement } from '../ui/render-hook'
 
@@ -36,9 +36,11 @@ describe('the interface language (§6.1)', () => {
     const m = await mountElement(h(LanguageFoot, { data: data({ ...DEFAULT_CONFIG, uiLanguage: 'auto' }, []) }))
     const button = m.container.querySelector<HTMLButtonElement>('button.o-lang')!
     expect(button.getAttribute('aria-label')).toBe(`${O.uiLanguageName}: ${O.uiLanguageAuto}`)
-    expect(options(m.container).map(o => o.textContent)).toEqual([O.uiLanguageAuto, LOCALE_NAMES['zh-CN'], LOCALE_NAMES.en])
-    expect(m.container.querySelector('[lang="zh-CN"]')?.textContent).toBe(LOCALE_NAMES['zh-CN'])
-    expect(m.container.querySelector('[lang="en"]')).not.toBeNull()
+    // the table's order is the menu's
+    expect(options(m.container).map(o => o.textContent)).toEqual([O.uiLanguageAuto, ...LOCALE_CODES.map(code => LOCALE_NAMES[code])])
+    // each language's row in its own language (the browser's row is in the interface's, which is English here)
+    const named = [...m.container.querySelectorAll('[role="option"] [lang], [role="option"][lang]')].map(e => [e.getAttribute('lang'), e.textContent])
+    for (const code of LOCALE_CODES) expect(named, code).toContainEqual([code, LOCALE_NAMES[code]])
     await m.unmount()
   })
 
@@ -77,10 +79,11 @@ describe('the interface language (§6.1)', () => {
   it('a pick writes the interface language; the current one writes nothing', async () => {
     const patches: Config[] = []
     const m = await mountElement(h(LanguageFoot, { data: data({ ...DEFAULT_CONFIG, uiLanguage: 'en' }, patches) }))
-    options(m.container)[2]!.click()
-    options(m.container)[1]!.click()
+    const at = (code: string) => options(m.container)[1 + LOCALE_CODES.indexOf(code as never)]!
+    at('en').click()
+    at('ja').click()
     await m.flush()
-    expect(patches.map(p => p.uiLanguage)).toEqual(['zh-CN'])
+    expect(patches.map(p => p.uiLanguage)).toEqual(['ja'])
     await m.unmount()
   })
 
