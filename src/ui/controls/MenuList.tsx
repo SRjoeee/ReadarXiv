@@ -153,7 +153,8 @@ export function MenuList({ items, kind, label, layout = 'inline', search, noMatc
   const listKeys = !search ? keys : {
     ...keys,
     onKeyDown: (e: KeyboardEvent) => {
-      if (e.key.length === 1 && e.key !== ' ' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      // a key an input method is composing with is the composition's (menu-nav's own guard, before the redirect)
+      if (!e.nativeEvent.isComposing && e.keyCode !== 229 && e.key.length === 1 && e.key !== ' ' && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault()
         const typed = e.key
         setQuery(q => q + typed)

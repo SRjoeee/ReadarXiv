@@ -183,6 +183,10 @@ describe('MenuList: what takes the focus as a searchable menu opens (the owner, 
     await act(async () => { list.focus() })
     await key(list, 'ArrowDown')
     expect(document.activeElement).toBe(list)
+    // a key an input method is composing with is not moved into the search
+    await act(async () => { list.focus() })
+    await act(async () => { list.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', isComposing: true, bubbles: true, cancelable: true })) })
+    expect([document.activeElement === list, field.value]).toEqual([true, 'd'])
     // a letter typed once the list has the focus back goes on the end of the query, never in its place
     await key(list, 'e')
     expect([document.activeElement === field, field.value]).toEqual([true, 'de'])
