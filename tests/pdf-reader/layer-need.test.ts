@@ -290,6 +290,16 @@ describe('rowLeadOf: the unit a unit\'s first row continues on one of TeX\'s lin
     expect(rowLeadOf(indexOf([[1, 'heading', [[1, 20, 80, 250.02]]], [2, 'para', [[1, 90, 280, 250]]]]), 2)).toBe(null)
     expect(rowLeadOf(indexOf([[1, 'heading', [[1, 20, 95, 250]]], [2, 'para', [[1, 90, 280, 250]]]]), 2)).toBe(null)
   })
+  it('takes one baseline the file writes a hundredth apart, each row rounded on its own: 2610.40645v1 p34', () => {
+    // (u290, "Proof of Proposition 4.4.", its glyphs placed by Td at 539.605, and u291, the proof's text, by Tm at PDF.js's float32
+    // 539.60498: one of TeX's lines, written 539.61 and 539.60; its text was laid from TeX's x0, 5.14 em after the translated head)
+    const I = indexOf([[290, 'heading', [[34, 72, 189.95, 539.61]]], [291, 'para', [[34, 195.4, 540.2, 539.6], [34, 72, 540.2, 526.05]]]])
+    expect(rowLeadOf(I, 291)).toEqual({ id: 290, page: 34, baseline: 539.61, x0: 72, x1: 189.95, size: 10 })
+    // (and the other way, float64 noise of two moves: 2609.20976v1 p1's names, 489.78 and 489.79)
+    expect(rowLeadOf(indexOf([[1, 'author', [[1, 82.81, 160.2, 489.78]]], [2, 'author', [[1, 168, 240, 489.79]]]]), 2)?.id).toBe(1)
+    // (two hundredths apart are two baselines, as before)
+    expect(rowLeadOf(indexOf([[1, 'heading', [[1, 20, 80, 250.02]]], [2, 'para', [[1, 90, 280, 250]]]]), 2)).toBe(null)
+  })
   it('chosen among the units before it in the lay order (`before`): the door\'s facade answers as the whole layout, however the parts come', () => {
     // (a head (2) and, nearer the text's (3) start on its row, a unit of a smaller id (1) that comes after the text in K, which a
     // later part tells: the door's facade over the parts told so far holds the head and the text alone)

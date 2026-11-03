@@ -4074,7 +4074,15 @@ lines, and the body is laid from where the head's translation ends there, the or
 `need.mjs` `rowLeadOf`, which takes its lead by K's order alone wherever the order is given: an ink unit is numbered after every
 source unit, and by the ids the head came after its body, which was laid where the English head had ended, a blank of its
 width less the translation's after the translated head: 2610.40645v1 pp14-15's "Theorem 3.3 ([Ang, Theorem 1.1])." and
-"Proposition 3.2 ([Ang, Proposition A.1])." in Japanese, the owner's report of 2026-11-01). A run-in head its own row cannot hold uses the
+"Proposition 3.2 ([Ang, Proposition A.1])." in Japanese, the owner's report of 2026-11-01). Two rows are one of TeX's lines where the
+file's baselines are at most one hundredth apart: the file writes each row's baseline to a hundredth on its own (its glyphs' y
+rounded, `layout/make.mjs` `baselineOf`), so that float noise on either side of a half splits one line in two (a drawing rule, no
+version, §18.3). 2610.40645v1 p34's "Proof of Proposition 4.4." is placed by `Td` at 539.605 and its text by `Tm`, which PDF.js
+reads as a float32, 539.60498: written 539.61 and 539.60, the two were no shared line, and the text was laid where the English head
+had ended, 5.14 em after the translated head in Chinese against 0.55 em in the original (the owner's report of 2026-11-04). Over
+the release sweep's corpus (b6586f7c, 1,308 shared lines) the rule finds three more: two heads, 2610.40645v1 p34's (zh, ja) and
+2610.20266v1 p26's (zh, 3.39 em), which go to the original's gap, and 2609.20976v1 p1's line of names (ja), drawn as before; the
+gate pack's layout files hold no such pair, and its cut is byte for byte the same. A run-in head its own row cannot hold uses the
 rest of its line (the owner's ruling of 2026-11-03; a drawing rule, so no version, §18.3). Laid in its row alone, beside the
 paragraph's first words, which are ink the fit may not widen over (`widenOverPaper`), a head whose translation is much longer
 than the English fitted only below its floor, or not at all: 2610.19159v1 p7's "Node-level grading still separates agents."
