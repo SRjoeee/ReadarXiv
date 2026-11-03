@@ -22,6 +22,7 @@ parked/lab/spikes/service-faults.mjs 2  # 2026-09-25: the settings page's label 
 parked/lab/spikes/viewer-faults.mjs 1  # 2026-09-24: the settings page's label the probe turns the fallback chain off by (the e2e locate controls by their Chinese labels)
 README.md 1  # 2026-09-17: the link to the Chinese README
 src/config/languages.ts 189  # 2026-10-29: +1, Standard Malay's Chinese name (zsm); localisation data: the Chinese name table and the native names; four evidence quotes in comments
+src/config/language-names.ts 351  # 2026-11-04: localisation data, generated from CLDR: the target languages named in Traditional Chinese, Japanese and Korean (UI.md §6)
 src/cache/key.ts 1
 src/config/appearance.ts 10
 src/config/storage.ts 3
@@ -145,7 +146,7 @@ tests/rules/selector-boundary.test.ts 6
 tests/scheduler/title.test.ts 6
 tests/shared/digest.test.ts 1
 tests/shared/transport.test.ts 1
-tests/ui/language-names.test.ts 9
+tests/ui/language-names.test.ts 14  # 2026-11-04: +5, the target languages named in Traditional Chinese, Japanese and Korean, and the names a menu finds German by, the expectations
 tests/ui/locales.test.ts 10  # 2026-11-04: +8, the interface languages zh-TW, ja and ko: their copy names, the Simplified-only characters and the mainland words a Taiwan pack must not hold, the terms Japanese shares with Chinese, the expectations
 tests/ui/strings.test.ts 16  # 2026-10-29: +5, the key reasons by engine, expected in the Chinese pack's words, keyed and keyless (#88 E5); raised 2026-09-13: expectations for the locale-pack sentences (fallback text, drawer issue, popup action error); −2, 2026-09-27: the drawer's issue sentence left with its key (Part 5, Task 60)
 tests/pdf-reader/link-names.test.ts 6  # 2026-10-17: the expected Chinese names of links with no text under them (UI.md S-R-25, the owner's words), a multilingual test's expectations

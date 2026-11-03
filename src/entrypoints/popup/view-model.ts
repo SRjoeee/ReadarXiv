@@ -10,7 +10,7 @@
 // (data.ts), and only a choice that cannot run leaves the page behind the settings.
 import { languageItems, READER_LANGUAGES } from '@/pdf-reader/ui/languages'
 import { activeStyle } from '@/config/appearance'
-import { LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME, toBcp47 } from '@/config/languages'
+import { LANG_CODES, toBcp47 } from '@/config/languages'
 import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { CONFIG_UNREADABLE } from '@/config/storage'
 import { chosenService, isBuiltInService, isLlmChosen, serviceRuns } from '@/config/services'
@@ -27,6 +27,7 @@ import { MANAGE_SERVICES, serviceItems } from '@/ui/service-items'
 import { styleSample } from '@/ui/style-sample'
 import { NoActiveTabError } from '@/shared/messages'
 import type { MenuListItem } from '@/ui/controls/MenuList'
+import { languageKeywords } from '@/ui/language-keywords'
 import { PREVIEW_TARGET, S, languageLabel, languageName, parseFatal, profileName, reasonText, serviceName } from '@/ui/strings'
 import { isPaperAddress, offeredQuery, readQuery } from './find'
 
@@ -253,7 +254,7 @@ function menusOf(config: Config, { pack, rejected }: PopupInput, { reader = fals
         : LANG_CODES.map(code => ({
             id: code,
             name: languageLabel(code),
-            keywords: `${LANG_CODE_TO_EN_NAME[code]} ${LANG_CODE_TO_LOCALE_NAME[code]} ${LANG_CODE_TO_ZH_NAME[code]} ${code}`,
+            keywords: languageKeywords(code),
             checked: code === config.targetLanguage,
           })),
     },

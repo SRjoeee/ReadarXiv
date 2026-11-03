@@ -6,7 +6,7 @@
 // every session off the service: it has to stop serving everywhere (Codex on #157)
 import { Ellipsis, Plus } from 'lucide'
 import { type CSSProperties, Fragment, useEffect, useRef, useState } from 'react'
-import { LANG_CODES, LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME, type LangCode } from '@/config/languages'
+import { LANG_CODES, type LangCode } from '@/config/languages'
 import { type Config, SERVICES_MAX } from '@/config/schema'
 import { type Service, isLlmChosen, serviceRuns } from '@/config/services'
 import { supportsTarget } from '@/providers/microsoft'
@@ -19,6 +19,7 @@ import { Popover, usePopover } from '@/ui/controls/Popover'
 import { radioKeys } from '@/ui/controls/radio'
 import { Reveal } from '@/ui/controls/Reveal'
 import { Switch } from '@/ui/controls/Switch'
+import { languageKeywords } from '@/ui/language-keywords'
 import { O, S, languageLabel, languageName } from '@/ui/strings'
 import { useRejected } from '@/ui/use-rejected'
 import type { OptionsData } from '../data'
@@ -325,7 +326,7 @@ function TargetLanguage({ data }: { data: OptionsData }) {
   const items = LANG_CODES.map(code => ({
     id: code,
     name: languageLabel(code),
-    keywords: `${LANG_CODE_TO_EN_NAME[code]} ${LANG_CODE_TO_LOCALE_NAME[code]} ${LANG_CODE_TO_ZH_NAME[code]} ${code}`,
+    keywords: languageKeywords(code),
     checked: code === config.targetLanguage,
   }))
   return (

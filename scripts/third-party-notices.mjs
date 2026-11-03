@@ -103,6 +103,13 @@ export const BUNDLED_DATA = [{
   licence: 'OFL-1.1',
   source: 'https://github.com/notofonts/noto-cjk',
   text: read(join(KEPT_TEXTS, 'noto-sans-cjk-OFL-1.1.txt')),
+}, {
+  // the target languages' names in Traditional Chinese, Japanese and Korean (src/config/language-names.ts), read out of
+  // CLDR by scripts/language-names.ts; the licence asks for its notice with every copy of the data
+  name: 'Unicode CLDR — the names of languages in Traditional Chinese, Japanese and Korean',
+  licence: 'Unicode-3.0',
+  source: 'https://cldr.unicode.org',
+  text: read(join(KEPT_TEXTS, 'unicode-3.0.txt')),
 }]
 
 /** The file's text from the packages noted so far. Sorted, and with nothing of the machine it was built on, so two builds of one tree give one file */

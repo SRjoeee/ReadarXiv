@@ -10,6 +10,7 @@
 // The pack is chosen once, before anything renders (`applyLocale`), so nothing on screen is ever
 // half translated.
 import { BUILT_IN_HIGHLIGHTS, BUILT_IN_STYLES, NAME_MAX } from '@/config/appearance'
+import { LANG_CODE_TO_JA_NAME, LANG_CODE_TO_KO_NAME, LANG_CODE_TO_ZH_TW_NAME } from '@/config/language-names'
 import { LANG_CODE_TO_EN_UI_NAME, LANG_CODE_TO_ZH_NAME, type LangCode, label } from '@/config/languages'
 import { isBuiltInService } from '@/config/services'
 import type { FallbackReason } from '@/config/storage'
@@ -21,14 +22,16 @@ export { PREVIEW_LANG, PREVIEW_SOURCE, PREVIEW_TARGET } from '@/locales/preview'
 
 /**
  * Which set of language names each interface language uses for the target-language menu. A pack
- * does not carry its own copy of 179 language names — adding a language must stay one small file —
- * so it points at a table instead, and a language without one reads them in English
+ * does not carry its own copy of 180 language names — adding a language must stay one small file —
+ * so it points at a table instead, and a language without one reads them in English. The Chinese
+ * table is Read Frog's, the English one its overlay; Traditional Chinese, Japanese and Korean are
+ * CLDR's (config/language-names.ts, generated)
  */
 const LOCALE_LANGUAGE_NAMES: Record<LocaleCode, Partial<Record<LangCode, string>>> = {
   'zh-CN': LANG_CODE_TO_ZH_NAME,
-  'zh-TW': {},
-  ja: {},
-  ko: {},
+  'zh-TW': LANG_CODE_TO_ZH_TW_NAME,
+  ja: LANG_CODE_TO_JA_NAME,
+  ko: LANG_CODE_TO_KO_NAME,
   en: LANG_CODE_TO_EN_UI_NAME,
 }
 

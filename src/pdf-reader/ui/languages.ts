@@ -2,7 +2,8 @@
 // tests/pdf-reader/ui/languages.test.ts holds the two equal), each named in its own language: by script (CJK in the design's
 // order, then Latin, then Cyrillic), each alphabet's languages in the order of their own names
 import type { MenuItem } from '@/ui/menu-item'
-import { LANG_CODE_TO_EN_NAME, LANG_CODE_TO_LOCALE_NAME, LANG_CODE_TO_ZH_NAME, type LangCode } from '@/config/languages'
+import { LANG_CODE_TO_LOCALE_NAME, type LangCode } from '@/config/languages'
+import { languageKeywords } from '@/ui/language-keywords'
 
 /**
  * A target language as the reader names it, wherever it shows one: by its own name, as the menu lists it, whatever the
@@ -23,7 +24,7 @@ export function languageItems(current: string): MenuItem[] {
   return READER_LANGUAGES.map(code => ({
     id: code,
     name: LANG_CODE_TO_LOCALE_NAME[code],
-    keywords: `${LANG_CODE_TO_EN_NAME[code]} ${LANG_CODE_TO_ZH_NAME[code]} ${code}`,
+    keywords: languageKeywords(code),
     selected: code === current,
   }))
 }

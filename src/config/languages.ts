@@ -951,8 +951,10 @@ export function label(code: LangCode, inLocale: Partial<Record<LangCode, string>
   const named = inLocale[code] ?? LANG_CODE_TO_EN_UI_NAME[code]
   const local = LANG_CODE_TO_LOCALE_NAME[code]
   if (named === local) return named
-  // The parentheses follow the half outside them: full-width for Chinese, ASCII otherwise. “Japanese（日本語）” with the two kinds mixed in one line is the ugliest
-  return /\p{Script=Han}/u.test(named) ? `${named}（${local}）` : `${named} (${local})`
+  // The parentheses follow the half outside them: full-width for Chinese and Japanese, ASCII otherwise. “Japanese（日本語）” with
+  // the two kinds mixed in one line is the ugliest. Korean sets its ASCII parentheses with no space before them
+  if (/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(named)) return `${named}（${local}）`
+  return /\p{Script=Hangul}/u.test(named) ? `${named}(${local})` : `${named} (${local})`
 }
 
 /** For the engines that take the target as BCP-47 (google-web); a language without a two-letter code is passed as its ISO 639-3 code */
