@@ -214,7 +214,8 @@ export function addUnitWords(W, L, page, id, wordOf, kept = [], drawnCrop = () =
   const lines = L.lines.filter(line => line.page === page)
   const placeOf = k => (pieceAt && Number.isInteger(k) && k >= 0 && k < pieceAt.length ? pieceAt[k] : -1)
   const displays = shown.filter(s => s.kind === 'display' && s.id !== null && s.id !== undefined)
-  if (displays.length) kept = kept.filter(k => !onDisplay(displays, k.x0, k.bottom, k.x1, k.top))
+  // (by the file's box of the line where it has one, as the left's inventory tells a display's row: view/shapes.mjs takeInventory)
+  if (displays.length) kept = kept.filter(k => !onDisplay(displays, k.x0, k.fileBottom ?? k.bottom, k.x1, k.fileTop ?? k.top))
   for (const s of shown) if (s.kind === 'label') pushBox(W, s, 0)
   // (each kept line by the laid line it is written before: lines.length after them all)
   const before = kept.map(k => {

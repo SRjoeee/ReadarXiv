@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { CLIP_PAD, unitHiding } from '@/pdf-reader/engine/layer-proto/hide.mjs'
 import { CELL_ID_FROM, DISPLAY_ID_FROM, DISPLAYS_UNIT, displayBlockId, displayBlockUnit, displayIdsOf, isDisplayBlock, isNameOccurrence, NAME_ID_FROM } from '@/pdf-reader/engine/layer-proto/units.mjs'
 import { addBoxWords, addUnitWords, newWords } from '@/pdf-reader/engine/layer-proto/words.mjs'
+import { keptLines } from '@/pdf-reader/engine/layer-proto/layer2.mjs'
 import { UNIT_ID_MAX } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { LABEL_KINDS, PH_FLAG, PH_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
-import { type Anchor, type DocToken, lineRects, tokenizeDocument } from '@/pdf-reader/engine/pipeline/anchors.mjs'
+import { type Anchor, type DocToken, lineRects, tokenizeDocument, tokens as wordsOfText } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { blockOf, layoutOf } from '@/pdf-reader/engine/view/highlight.mjs'
-import { createShapes, layerShapes, mirror } from '@/pdf-reader/engine/view/shapes.mjs'
+import { createShapes, layerShapes, mirror, openedAt } from '@/pdf-reader/engine/view/shapes.mjs'
 import { cutSide } from '../../lab/pdf/spikes/highlight-pages.mjs'
 
 // One light map for both panes (the owner's rule of 2026-10-30, docs/PDF-READER.md §17.1): every block TeX sets as text or math lit
@@ -255,6 +256,31 @@ describe('the right: what the door drew and what it kept of our page (layer-prot
     expect(W.spans).toEqual([[5, []], [displayBlockId(5, 0), [0, 2]]])
   })
 
+  it('a kept line on a display\'s rows is the display\'s by the file\'s box of it, where the band from its baseline stands off its ink (2610.42112v1 p34 S4, p4 S1)', () => {
+    // (a math extension glyph hangs under its baseline, which the file sets at the top of its ink: the band the layer reads a line by
+    // from its baseline, tex.mjs texRects, stands 11.8 pt over the display's ∑, and the line lit with the sentence before the display.
+    // Each case as the paper has it: the kept lines' bands and the file's boxes [x0, bottom, x1, top, file bottom, file top], the
+    // display's segments [x0, y0, x1, y1]; p34 unit 443's display (54)-(55), piece 11; p4 unit 36's display, piece 9)
+    const cases = [
+      { page: 34, id: 443, k: 11, lines: [[228.02, 205.4, 242.41, 214.34, 193.6, 207.5], [233.47, 178.97, 288.67, 187.91, 167.2, 190.9]], segs: [[181.7, 193.6, 563.7, 207.5], [233.5, 186, 237, 190.9], [164.8, 167.2, 447.2, 181.1], [279.7, 159.6, 283.2, 164.5], [547.1, 169.9, 563.7, 178.5]] },
+      { page: 4, id: 36, k: 9, lines: [[476.74, 708.69, 491.13, 717.63, 696.9, 710.8]], segs: [[314.4, 694.9, 560.6, 712.8], [474, 687.3, 493.8, 694.2]] },
+    ]
+    const key = (r: number[]) => `${r[0]}|${r.slice(1).join()}`
+    for (const c of cases) {
+      const rects = c.lines.map(([x0, b, x1, t]) => [c.page, x0!, b!, x1!, t!])
+      const info = new Map(c.lines.map(([, b, , t, fb, ft], i) => [key(rects[i]!), { baseline: b! + 0.215 * ((t! - b!) / 0.898), size: (t! - b!) / 0.898, top: ft!, bottom: fb!, exact: true, file: true }]))
+      const prep = Object.assign(new Map([[c.k, { mode: 'kept', region: 0 }]]), { keep: rects.map(key), lineInfo: info, regionOf: new Map(rects.map(r => [key(r), 0])), referenced: new Set([0]) })
+      const kept = keptLines(rects, prep as never, c.page)
+      const id = displayBlockId(c.id, 0)!, shown = c.segs.map(([x0, y0, x1, y1]) => ({ kind: 'display' as const, k: c.k, id, box: [x0!, y0!, x1!, y1!], base: y0! }))
+      const W = newWords()
+      addUnitWords(W, { lines: [] } as never, c.page, c.id, null, kept, () => true, Int32Array.from({ length: c.k + 1 }, (_, i) => 10 * i), shown)
+      // (no token of the unit's: the ∑ is the display's ink, lit with it alone)
+      expect(W.spans, `p${c.page}`).toEqual([[c.id, []], [id, [0, c.segs.length]]])
+      // (each kept line keeps the band as its token's box where it is the unit's, and carries the file's box beside it)
+      expect(kept.map(l => [l.bottom, l.top, l.fileBottom, l.fileTop])).toEqual(c.lines.map(l => [l[1], l[3], l[4], l[5]]))
+    }
+  })
+
   it('a unit shown as the original: its boxes on our page its tokens, its displays under their ids, nothing where it has none', () => {
     const W = newWords()
     const ph = new Map([[0, { kind: 'cite', segs: [1, 120, 700, 130, 708, 698] }], [3, { kind: 'display', segs: [1, 100, 680, 300, 688, 678] }]])
@@ -280,6 +306,25 @@ describe('the right: what the door drew and what it kept of our page (layer-prot
     expect([b.x0 > 75, b.x1 < 125]).toEqual([true, true])
     // (the mirror, arXiv's page, keeps them: the left's geometry)
     expect(mirror(l).shapes.hit(1, 54, mid(760), PAD, () => null)?.id).toBe(0)
+  })
+
+  it('an opening mark drawn against a sentence\'s first word is that sentence\'s: "。（a）" lit "。" | "（a）" (2610.42112v1\'s Figure 7 caption)', () => {
+    // (the row's sentences name each sentence's first word, "a" and "f"; Microsoft cut before the brackets, and the door draws each
+    // full-width bracket as a token of its own, with no word, placed by its place in the translation)
+    const text = '扩展。（a）–（e）：对于归一化。（f）：通过', offsets = [text.indexOf('a'), text.indexOf('f')]
+    const entries = wordsOfText(text), wordOf = new Map(entries.map((e, w) => [e.at, w]))
+    const n = text.length, x = (i: number) => 50 + 10 * i
+    const T = { n, l: Float32Array.from({ length: n }, (_, i) => x(i)), r: Float32Array.from({ length: n }, (_, i) => x(i) + 10), y: new Float32Array(n).fill(650), h: new Float32Array(n).fill(10), top: new Float32Array(n).fill(657.5), bottom: new Float32Array(n).fill(647.8) }
+    const r = layerShapes(side())
+    r.lay(1, { tokens: T, word: Int32Array.from({ length: n }, (_, i) => wordOf.get(i) ?? -1), at: Int32Array.from({ length: n }, (_, i) => i), spans: [[2, [0, n]]], original: [] } as never)
+    const starts = r.starts(2, text, offsets, null)!
+    expect(r.shapes.fits(2, starts, true)).toBe(true)
+    const sentenceAt = (i: number) => r.shapes.hit(1, x(i) + 5, 652.6, PAD, () => starts)?.s
+    expect([text.indexOf('（'), text.indexOf('a'), text.lastIndexOf('。'), text.lastIndexOf('（'), text.indexOf('f'), text.indexOf('。')].map(sentenceAt)).toEqual([1, 1, 1, 2, 2, 0])
+  })
+
+  it('a sentence begins at the opening marks set right against its first word, none across white space: a placeholder\'s space stays where it is', () => {
+    expect([openedAt('影响。 （c）', '影响。 （c）'.indexOf('c')), openedAt('a “(b', 'a “(b'.indexOf('b')), openedAt('a b', 2), openedAt('x. (y', 4)]).toEqual([4, 2, 2, 3])
   })
 
   it('a laid page lights the display, the label and a unit shown as the original from its own table, as the left does', () => {

@@ -87,6 +87,9 @@ export declare function layerShapes(source: SideShapes): LayerShapes
 export declare function pdfShapes(layout: Layout): Shapes<Run>
 /** a unit's starts from its pairs (anchors.mjs sentenceStarts), each paired token's sentence by its word: the left's on the layer
  *  and a layout made whole alike */
+/** where a sentence that begins at its first word at offset `o` of `text` begins: before the opening marks (Unicode's Ps, Pi) set right
+ *  against that word */
+export declare function openedAt(text: string, o: number): number
 export declare function startsOfPairs(anchor: { tokens: readonly number[]; pairs?: ReadonlyMap<number, number>; bounded?: boolean; coverage?: number } | null | undefined, text: string, offsets: readonly number[] | undefined): Int32Array | null
 export declare function leftPageInput(left: Pick<ReadLeftPart, 'page' | 'first' | 'table' | 'spans' | 'pairs'>): LeftPageInput
 export declare function createShapes(o?: { kindOf?: (id: number) => string | undefined; warn?: (what: string, error: unknown) => void }): SideShapes
