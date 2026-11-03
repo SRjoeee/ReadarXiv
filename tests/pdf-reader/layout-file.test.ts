@@ -189,8 +189,12 @@ describe('a valid file', () => {
     expect(index.font(2)).toBe('CMMI10')
     expect(index.file).toEqual(f)
     // babel's names by page, in the file's order, with their flags read
-    expect(index.names(1)).toEqual([{ occurrence: 1, key: 'abstract', page: 1, x0: 280, baseline: 680, x1: 332.5, top: 687, bottom: 677.5, size: 9, font: 1, centred: true, capitals: false, unit: -1, glue: 0, cx0: 72, cx1: 540 }])
-    expect(index.names(3).map(n => [n.key, n.capitals, n.centred, n.unit, n.glue, n.cx1])).toEqual([['ref', true, false, -1, 0, 300], ['proof', false, false, 7, 2.5, 540]])
+    expect(index.names(1)).toEqual([{ occurrence: 1, key: 'abstract', page: 1, x0: 280, baseline: 680, x1: 332.5, top: 687, bottom: 677.5, size: 9, font: 1, centred: true, capitals: false, unit: -1, glue: 0, counter: 0, cx0: 72, cx1: 540 }])
+    expect(index.names(3).map(n => [n.key, n.capitals, n.centred, n.unit, n.glue, n.counter, n.cx1])).toEqual([['ref', true, false, -1, 0, 0, 300], ['proof', false, false, 7, 2.5, 0, 540]])
+    // (slot 12 of a name leading no unit: the counter's width at its row's end, which the layer splits off; never a glue)
+    const counted = structuredClone(f)
+    counted.names[0]![12] = 6
+    expect(indexLayout(parseLayout(utf8(encodeLayout(counted)))).names(1).map(n => [n.glue, n.counter])).toEqual([[0, 6]])
     expect(index.names(2)).toEqual([])
     expect(index.names(9)).toEqual([])
   })
@@ -560,7 +564,7 @@ const ROWS: [string, Edit, string][] = [
   ['a run-in name leading no unit of the file', f => { f.names[2][11] = 4 }, 'names[2][11]'],
   ['a name not run in that leads a unit', f => { f.names[0][11] = 7 }, 'names[0][11]'],
   ['a run-in name of no unit', f => { f.names[2][11] = -1 }, 'names[2][11]'],
-  ['a glue on a name not run in', f => { f.names[0][12] = 1 }, 'names[0][12]'],
+  ["a name's counter as wide as its row", f => { f.names[0][12] = f.names[0][5] - f.names[0][3] }, 'names[0][12]'],
   ['a negative glue', f => { f.names[2][12] = -1 }, 'names[2][12]'],
   ["a glue past the page's width", f => { f.names[2][12] = 700 }, 'names[2][12]'],
   ["a name's column with x0 = x1", f => { f.names[0][14] = f.names[0][13] }, 'names[0][13]'],

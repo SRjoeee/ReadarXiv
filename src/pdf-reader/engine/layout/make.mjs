@@ -150,6 +150,9 @@ export function rulesOf(rules = null) {
 const r2 = v => Math.round(v * 100) / 100
 /** a number to a hundredth as the marks file writes it (marks.mjs: -0 written 0) */
 const r2z = v => Math.round(v * 100) / 100 + 0
+/** a name's row's slot 12 (file.mjs): RUN_IN, its glue to its unit; leading no unit, its counter's width at the row's end, none
+ *  where the row as the file holds it ([x0, x1], within its page's view) leaves the name's word no room before it */
+const slot12 = (nm, x0, x1) => (nm.lead >= 0 ? r2(nm.glue) : r2(nm.glue) < x1 - x0 ? r2(nm.glue) : 0)
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now())
 const median = xs => { const s = [...xs].sort((a, b) => a - b); return s[s.length >> 1] }
 
@@ -959,8 +962,10 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       for (const g of band(P, S.y - SCRIPT(P.most), S.y + SCRIPT(P.most))) if (Math.abs(P.y[g] - S.y) < 0.25 * Math.max(P.size[g], 5) && mid(P, g) > E.x && mid(P, g) < L.x) end = Math.max(end, P.x1[g])
       glue = L.x - end > 0.05 ? L.x - end : 0
     }
-    // the counter TeX set after it on its line where it leads no unit, no unit's (names.mjs counterAfter, the wrap's rule too,
-    // own.mjs): its row's, so that the layer sets it after the name's word, and the line, centred, is centred whole
+    const word = gs.slice()
+    // the counter TeX set after it on its line where it leads no unit, no unit's, in its column (names.mjs counterAfter, the wrap's
+    // rule too, own.mjs): its row's, so that the layer sets it after the name's word, and the line, centred, is centred whole; its
+    // width at the row's end in the row's glue (file.mjs: a name leading no unit has no glue), where the layer splits it off
     if (lead < 0) {
       const last = gs.reduce((a, g) => (P.x1[g] > P.x1[a] ? g : a), gs[0])
       const next = band(P, S.y - SCRIPT(P.most), S.y + SCRIPT(P.most)).filter(g => !gs.includes(g) && /\S/.test(P.u[g] ?? '') && Math.abs(P.y[g] - S.y) < 0.25 * Math.max(P.size[g], 5) && mid(P, g) > P.x1[last]).sort((g, h) => P.x0[g] - P.x0[h] || g - h)
@@ -968,13 +973,14 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (k && next.slice(0, k).every(g => P.owner[g] === -1 && !P.taken[g] && columnOf(S.page, P.x0[g], P.x1[g]) === columnOf(S.page, row.x0, row.x1))) {
         gs.push(...next.slice(0, k))
         row = rowOf(P, gs, S.page, [], S.y)
+        glue = row.x1 - P.x0[next[0]]
         stats.names.counters++
       }
     }
     // centred as a unit is (its one line's centre its column's, the line short of it)
     const col = columnOf(S.page, row.x0, row.x1), edge = edgesOf(S.page, col)
     const centred = !!edge && Math.abs((row.x0 + row.x1) / 2 - (edge[0] + edge[1]) / 2) <= CENTRE && row.x1 - row.x0 < SHORT * (edge[1] - edge[0])
-    const cased = [...gs.map(g => P.u[g]).join('').normalize('NFKC')].filter(c => c.toUpperCase() !== c.toLowerCase())
+    const cased = [...word.map(g => P.u[g]).join('').normalize('NFKC')].filter(c => c.toUpperCase() !== c.toLowerCase())
     const capitals = cased.length >= 2 && cased.every(c => c === c.toUpperCase()) && marks.marking.names?.[x[2]] === 1
     for (const g of gs) P.owner[g] = NAME_OWNER
     named.push({ occurrence: Number(x[1]), key, row, flags: (centred ? NAME_FLAG.CENTRED : 0) | (capitals ? NAME_FLAG.CAPITALS : 0) | (lead >= 0 ? NAME_FLAG.RUN_IN : 0), lead, glue, column: edge ?? [row.x0, row.x1] })
@@ -2041,7 +2047,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (!fontIndex.has(r.font) && fonts.length >= FONTS_MAX) { nameWhy('past the fonts a file may name'); continue }
       const view = viewAt(r.page), [x0, bottom, x1, top] = solid(view, r.x0, r.bottom, r.x1, r.top)
       const cx0 = Math.max(view[0] - 1, r2(nm.column[0])), cx1 = Math.min(view[2] + 1, r2(nm.column[1]))
-      outNames.push([nm.occurrence, nm.key, r.page, x0, Math.min(top, Math.max(bottom, r2(r.base))), x1, top, bottom, r2(Math.min(SIZE_MAX, r.size)), fontOf(r.font), nm.flags, nm.lead, r2(nm.glue), cx0, cx1])
+      outNames.push([nm.occurrence, nm.key, r.page, x0, Math.min(top, Math.max(bottom, r2(r.base))), x1, top, bottom, r2(Math.min(SIZE_MAX, r.size)), fontOf(r.font), nm.flags, nm.lead, slot12(nm, x0, x1), cx0, cx1])
       stats.names.located++
       if (nm.lead >= 0) stats.names.runIn++
     }
@@ -2531,7 +2537,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (!fontIndex.has(r.font) && fonts.length >= FONTS_MAX) { nameWhy('past the fonts a file may name'); return }
       const view = viewAt(r.page), [x0, bottom, x1, top] = solid(view, r.x0, r.bottom, r.x1, r.top)
       const cx0 = Math.max(view[0] - 1, r2(nm.column[0])), cx1 = Math.min(view[2] + 1, r2(nm.column[1]))
-      const row = [nm.occurrence, nm.key, r.page, x0, Math.min(top, Math.max(bottom, r2(r.base))), x1, top, bottom, r2(Math.min(SIZE_MAX, r.size)), fontOf(r.font), nm.flags, nm.lead, r2(nm.glue), cx0, cx1]
+      const row = [nm.occurrence, nm.key, r.page, x0, Math.min(top, Math.max(bottom, r2(r.base))), x1, top, bottom, r2(Math.min(SIZE_MAX, r.size)), fontOf(r.font), nm.flags, nm.lead, slot12(nm, x0, x1), cx0, cx1]
       nameRows.set(nm.occurrence, JSON.parse(JSON.stringify(layoutPartRows({ fonts: [], units: [], lines: [], frames: [], erase: [], ph: [], labels: [], headings: [], pageText: [], held: [], names: [row] }).names[0])))
       stats.names.located++
       if (nm.lead >= 0) stats.names.runIn++

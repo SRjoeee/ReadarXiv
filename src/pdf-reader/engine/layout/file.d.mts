@@ -70,7 +70,8 @@ export interface LayoutFile {
   held: [id: number, lines: number[]][]
   /** each occurrence of a babel name TeX set (marks.mjs's name marks), by occurrence rising: occurrence, key (NAME_KEYS),
    *  page, x0, baseline, x1, top, bottom, size, font, flags (NAME_FLAG), unit (the unit a RUN_IN name leads, else -1),
-   *  glue (the original's space between its joint and that unit's text, 0 where not RUN_IN), its TeX column's x0 and x1 */
+   *  glue or counter (RUN_IN: the original's space between its joint and that unit's text; else the width at the row's end of the
+   *  counter TeX set after it, names.mjs counterAfter, 0 for none), its TeX column's x0 and x1 */
   names: number[][]
   /** the paper's \lineskip and \lineskiplimit, PDF units, as TeX gave them (marks.mjs readSkipProbe); null: none given */
   lineskip: [lineskip: number, lineskiplimit: number] | null
@@ -135,6 +136,9 @@ export interface LayoutName {
   unit: number
   /** RUN_IN: the original's space after its joint, before the unit's text (PDF units, 0 for none) */
   glue: number
+  /** leading no unit: the width at its row's end of the counter TeX set after it on its line (names.mjs counterAfter: from the
+   *  counter's first glyph to the row's x1, PDF units), 0 for none */
+  counter: number
   /** its TeX column's text edges: the room it has on its line */
   cx0: number; cx1: number
 }

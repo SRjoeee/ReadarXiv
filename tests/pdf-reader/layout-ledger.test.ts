@@ -246,6 +246,41 @@ describe('ledgerOf', () => {
     expect(['H', 'A', 'w', 'S', 'k'].map(ch => classAt(l, 1, at(pg, ch)))).toEqual(['contents', 'contents', 'orphan', 'orphan', 'orphan'])
   })
 
+  it("reads no line's number in the margin as a list's page number: a paper numbered by lineno, its numbers past the units' lines too", () => {
+    // (each line numbered at one place in the right margin, a unit's paragraph's and an orphan's alike: the orphan's lines no list's)
+    const pg = page(
+      { glyphs: run('Owned prose line one', 100, 700), owner: 'u0' }, { glyphs: run('12', 480, 700) },
+      { glyphs: run('Owned prose line two', 100, 688), owner: 'u0' }, { glyphs: run('13', 480, 688) },
+      { glyphs: run('Owned prose', 100, 676), owner: 'u0' }, { glyphs: run('14', 480, 676) },
+      { glyphs: run('orphan words here', 100, 664) }, { glyphs: run('15', 480, 664) },
+      { glyphs: run('more of it', 100, 652) }, { glyphs: run('16', 480, 652) },
+    )
+    const l = ledger([pg], [{ kind: 'para' }])
+    expect(['h', 'f'].map(ch => classAt(l, 1, at(pg, ch)))).toEqual(['orphan', 'orphan'])
+    // (the same lines, no unit's line numbered: a list's, its page numbers at the column's edge)
+    const list = page({ glyphs: run('orphan words here', 100, 664) }, { glyphs: run('15', 480, 664) }, { glyphs: run('more of it', 100, 652) }, { glyphs: run('16', 480, 652) })
+    expect(['h', 'f'].map(ch => classAt(ledger([list], [{ kind: 'para' }]), 1, at(list, ch)))).toEqual(['contents', 'contents'])
+  })
+
+  it("reads a list's page number in the line's own column: the other column's number past the gutter is none (stream.mjs columnsAt)", () => {
+    const two = page({ point: 'c2-1' }, { glyphs: run('left column words', 60, 700) }, { glyphs: run('12', 330, 700), owner: 'u1' })
+    two.page.view = [0, 0, 612, 792]
+    expect(classAt(ledger([two], [{ kind: 'para' }, { kind: 'cell' }]), 1, at(two, 'w'))).toBe('orphan')
+    // (on a page of one column, the same number the line's)
+    const one = page({ glyphs: run('left column words', 60, 700) }, { glyphs: run('12', 330, 700), owner: 'u1' })
+    expect(classAt(ledger([one], [{ kind: 'para' }, { kind: 'cell' }]), 1, at(one, 'w'))).toBe('contents')
+  })
+
+  it("ends the bibliography's last entry at a list set right under it at its own leading: a line that ends as a list's entry is none of it", () => {
+    const units = [{ kind: 'reference' }, { kind: 'reference' }]
+    const pg = page(
+      { point: '0s' }, { glyphs: run('Bee', 100, 760), owner: 'u0' }, { point: '0e' }, { point: '1s' }, { glyphs: run('Dee', 100, 748), owner: 'u1' }, { point: '1e' },
+      { glyphs: run('Scaling by Layer . . . . 16', 100, 736) }, { glyphs: run('Dense Sets . . . . 17', 100, 724) },
+    )
+    const l = ledger([pg], units)
+    expect([at(pg, 'L'), at(pg, 'n')].map(g => classAt(l, 1, g))).toEqual(['contents', 'contents'])
+  })
+
   it('keeps a double-spaced bibliography\'s last entry\'s lines past its mark in its zone, by the bibliography\'s own pitch (2610.11256v1 p42)', () => {
     const units = [{ kind: 'reference' }, { kind: 'reference' }]
     const pg = page(

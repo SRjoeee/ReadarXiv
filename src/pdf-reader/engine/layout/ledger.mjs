@@ -20,7 +20,7 @@
 import { CLASS_CODE, CLASS_IDS, unitClass } from '../rules/content-classes.mjs'
 import { classifyFont } from '../layer-proto/fonts.mjs'
 import { regionMask } from './ink.mjs'
-import { regionsOf } from './stream.mjs'
+import { columnsAt, regionsOf } from './stream.mjs'
 
 /** two glyphs on one line: their baselines within this share of the larger size (a superscript, a subscript) */
 export const LINE_DY = 0.6
@@ -157,6 +157,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
   pages.forEach((pg, pi) => {
     lastY = null
     const G = pg.glyphs ?? [], n = G.length, P = pg.points ?? [], O = own?.glyphs?.[pi] ?? []
+    const lp = listPage(G, O, columnsAt(pg))
     const out = new Uint8Array(n).fill(CLASS_CODE.symbols)
     classes.push(out)
     const R = regionsOf({ glyphs: { n }, boxes: pg.boxes ?? [], points: P }), code = regionMask(pg.regions, n, 'code')
@@ -182,8 +183,9 @@ export function ledgerOf(pages, own, { units = null } = {}) {
         if (lasts.has(`${pi}:${q}`) && zone === 'references') { const e = G[Math.min(P[q].glyph, n) - 1] ?? G[P[q].glyph]; ending = e ? { page: pi, y: e.y, size: e.size } : null; if (!ending) zone = null }
       }
       // (its lines: the line its end mark stands on, and each line right below the last at an entry's leading (ENTRY_DY of its
-      // size, or the bibliography's own pitch), a part of it TeX set past the mark — a style's \newblock, a DOI —, on its page;
-      // the first glyph past them ends the zone)
+      // size, or the bibliography's own pitch), a part of it TeX set past the mark — a style's \newblock, a DOI —, on its page,
+      // never a line that ends as a list's entry does (listedOf: a list set right under it); the first glyph past them ends the
+      // zone)
       if (g < n && zone === 'references' && !ending) {
         const x = G[g]
         if (lastY !== null && lastY - x.y > 0.5 * Math.max(x.size, 5) && lastY - x.y < 3 * Math.max(x.size, 5)) pitch = lastY - x.y
@@ -192,7 +194,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
       if (ending && g < n) {
         const x = G[g], sz = Math.max(ending.size, x.size, 5), dy = ending.y - x.y
         if (ending.page === pi && Math.abs(dy) < 0.5 * sz) { /* (on the line) */ }
-        else if (ending.page === pi && dy > 0 && dy <= Math.max(ENTRY_DY * sz, 1.25 * pitch)) ending.y = x.y
+        else if (ending.page === pi && dy > 0 && dy <= Math.max(ENTRY_DY * sz, 1.25 * pitch) && !listedOf(lineFrom(G, g, sz), lp)) ending.y = x.y
         else { if (zone === 'references') { zone = null; entry = null } ending = null }
       }
       if (g < n) { zones[g] = zone; entries[g] = entry }
@@ -212,7 +214,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
     let line = null
     const close = () => {
       if (!line) return
-      Object.assign(line, wordsOf(line.gs.map(g => G[g]), famOf), { listed: listedOf(line.gs.map(g => G[g]), G) })
+      Object.assign(line, wordsOf(line.gs.map(g => G[g]), famOf), { listed: listedOf(line.gs, lp) })
       const rule = RULES.find(r => r.test(line))
       for (const g of line.gs) out[g] = rule.code
       lines.push({ page: pi + 1, cls: rule.cls, gs: line.gs, region: line.region, zone: line.zone, para: line.para, opens: line.opens, entry: line.entry, entryFrom: line.entryFrom, listed: line.listed, y: line.y, size: line.size, x0: line.x0, x1: line.x1, letters: line.letters })
@@ -288,22 +290,64 @@ function wordsOf(gs, famOf) {
   return { words: (s.match(WORD) ?? []).length, pairs: (s.match(PAIR) ?? []).length }
 }
 
+/** a page as listedOf reads it: its glyphs, their owners (`O`, a unit's group or none), its columns (stream.mjs columnsAt) and,
+ *  once asked, the numbers it sets past the units' lines (marginNumbers) */
+function listPage(G, O, colOf) {
+  let margins = null
+  return { G, O, colOf, margins: () => (margins ??= marginNumbers(G, O)) }
+}
+
+/** the glyphs of the line glyph `g` begins, in stream order: those right after it on its baseline (half of `size`) */
+function lineFrom(G, g, size) {
+  const out = []
+  for (let k = g; k < G.length && Math.abs(G[k].y - G[g].y) < 0.5 * size; k++) out.push(k)
+  return out
+}
+
 /** a list's page number set apart from the text before it: at least this many of its size, where no leaders stand between */
 const LIST_APART = 2
+/** a page's numbers set past the units' lines: each the next word after a unit's text on its baseline, a fifth of its size
+ *  clear or more, digits no unit's (lineno's line numbers in the right margin, a number at one place on line after line) —
+ *  never a list's page number, whose line is no unit's ([x0, x1, y] each) */
+function marginNumbers(G, O) {
+  const at = new Map()
+  for (let g = 0; g < G.length; g++) {
+    if (!/\S/.test(G[g].u ?? '')) continue
+    const k = Math.round(2 * G[g].y)
+    let l = at.get(k)
+    if (!l) at.set(k, (l = []))
+    l.push(g)
+  }
+  const out = [], DIGIT = /^\d$/u
+  for (const [k, list] of at) {
+    const row = [...list, ...(at.get(k - 1) ?? []), ...(at.get(k + 1) ?? [])].sort((a, b) => G[a].x0 - G[b].x0)
+    for (let i = 1; i < row.length; i++) {
+      const g = row[i], x = G[g], p = row[i - 1]
+      if (O[g] || !O[p] || Math.round(2 * x.y) !== k || !DIGIT.test(x.u ?? '') || x.x0 - G[p].x1 < 0.2 * x.size) continue
+      let j = i
+      while (j + 1 < row.length && !O[row[j + 1]] && DIGIT.test(G[row[j + 1]].u ?? '') && G[row[j + 1]].x0 - G[row[j]].x1 < 0.2 * x.size) j++
+      out.push([x.x0, G[row[j]].x1, x.y])
+    }
+  }
+  return out
+}
 /** whether a line ends as a list's entry does: its page number the line's last word, after leaders (a dot a word,
  *  \@dottedtocline's) or LIST_APART of its size or more clear of the word before it (\hfill's \contentspage); or, the ledger
- *  having cut a number set that far from the text a line of its own, the next word on its baseline (`G`, the page's glyphs) a
- *  page number LIST_APART clear of the line's end, and nothing after it on the baseline but the other column's text, LIST_APART
- *  clear again. Words cut a fifth of their size apart */
-function listedOf(gs, G) {
+ *  having cut a number set that far from the text a line of its own, the next word on its baseline in its column (the other
+ *  column's text no word of it) a page number LIST_APART clear of the line's end, and nothing after it on the baseline but
+ *  what stands LIST_APART clear again. A page number is set at the text's size within the text, never at the place a page
+ *  sets numbers past its units' lines (two of marginNumbers there, a half of its size apart: line numbers). Words cut a fifth
+ *  of their size apart. `gs` the line's glyphs, `pg` its page (listPage) */
+function listedOf(gs, pg) {
   if (!gs.length) return false
+  const { G } = pg
   // (its baseline its largest glyph's, never a superscript's: an author line's affiliation marks stand above it)
-  const main = gs.reduce((a, g) => ((g.size || 0) > (a.size || 0) ? g : a), gs[0]), y = main.y, size = Math.max(main.size || 0, 1)
+  const main = gs.reduce((a, g) => ((G[g].size || 0) > (G[a].size || 0) ? g : a), gs[0]), y = G[main].y, size = Math.max(G[main].size || 0, 1)
   const wordsOf = list => {
     const out = []
     let w = null
     for (const g of list.filter(g => /\S/.test(g.u ?? '')).sort((a, b) => a.x0 - b.x0)) {
-      if (!w || g.x0 - w.x1 > 0.2 * Math.max(g.size, w.size)) { w = { s: '', x0: g.x0, x1: g.x1, size: g.size }; out.push(w) }
+      if (!w || g.x0 - w.x1 > 0.2 * Math.max(g.size, w.size)) { w = { s: '', x0: g.x0, x1: g.x1, y: g.y, size: g.size }; out.push(w) }
       w.s += g.u ?? ''
       w.x1 = Math.max(w.x1, g.x1)
       w.size = Math.max(w.size, g.size)
@@ -312,18 +356,22 @@ function listedOf(gs, G) {
   }
   const PAGE = /^(?:\d{1,4}|[ivxlcdm]{1,8})$/u, LEADERS = /^[.·•…]+$/u
   const apart = (a, b) => b.x0 - a.x1 >= LIST_APART * Math.max(a.size, b.size)
-  // (a page number is set at the text's size: a superscript or a figure's tick label is none)
-  const PAGE_AT = w => PAGE.test(w.s.normalize('NFKC')) && w.size >= 0.8 * size
-  const own = wordsOf(gs)
+  // (a page number is set at the text's size: a superscript or a figure's tick label is none; nor a line's number in the margin)
+  const lined = w => pg.margins().filter(m => Math.abs(m[2] - w.y) >= 0.5 * size && (Math.abs(m[0] - w.x0) < 0.5 * size || Math.abs(m[1] - w.x1) < 0.5 * size)).length >= 2
+  const PAGE_AT = w => PAGE.test(w.s.normalize('NFKC')) && w.size >= 0.8 * size && !lined(w)
+  const own = wordsOf(gs.map(g => G[g]))
   if (!own.length) return false
   const last = own.at(-1), prev = own.at(-2)
-  if (prev && PAGE_AT(last) && (LEADERS.test(prev.s) || apart(prev, last))) return true
-  // (its page number past its end on a line of its own: the next word on the baseline, the column's edge after it)
-  const line = wordsOf(G.filter(g => Math.abs(g.y - y) < 0.2 * size))
+  if (prev && (LEADERS.test(prev.s) || apart(prev, last)) && PAGE_AT(last)) return true
+  // (its page number past its end on a line of its own: the next word on the baseline in its column, the column's edge after it)
+  let x0 = Infinity, x1 = -Infinity
+  for (const g of gs) { x0 = Math.min(x0, G[g].x0); x1 = Math.max(x1, G[g].x1) }
+  const col = pg.colOf(x0, x1)
+  const line = wordsOf(G.filter(g => Math.abs(g.y - y) < 0.2 * size && (col === 2 || pg.colOf(g.x0, g.x1) === col)))
   const j = line.findIndex(w => w.x0 >= last.x1 - 0.1)
   if (j < 0) return false
   const num = line[j], after = line[j + 1]
-  return PAGE_AT(num) && (LEADERS.test(last.s) || apart(last, num)) && (!after || apart(num, after))
+  return (LEADERS.test(last.s) || apart(last, num)) && (!after || apart(num, after)) && PAGE_AT(num)
 }
 
 /** a line's text from its glyphs: a space where two stand a fifth of their size apart or more */

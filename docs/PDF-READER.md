@@ -4066,22 +4066,28 @@ over 14 page pairs (the layer gate's jump, `--perf`). The web's half is `docs/ro
 **What TeX sets after a bibliography, and an appendix's own contents (PIPELINE 64, LAYOUT 33, REMOVAL 23; the owner's report of
 2026-11-03 on 2610.42112v1 p16).** The references' zone that a bibliography's entries open ends with its last entry: on the line
 its end mark stands on and the lines right below it at an entry's leading (`ledger.mjs` `lastEntriesOf`, `ENTRY_DY`: what a style
-sets past the mark, a DOI), not at the next unit's start. Where no unit started before the next text — an appendix's own title
+sets past the mark, a DOI), never a line that ends as a list's entry does (a list set right under it), not at the next unit's
+start; the page's end ends it too, where a thebibliography, which sets no mark at its end (biblatex's `bz<n>` is one), leaves no
+fact to tell a tail TeX broke onto the next page from that page's own first lines. Where no unit started before the next text — an appendix's own title
 and contents list after the bibliography, titletoc's `\printcontents` under the paper's centred "Appendix" — every line between
 was a bibliography line with no entry and kept as the original's, the list English. A line that ends as a list's entry does —
-its page number its last word, after leaders or two of its size clear of the text, or the next word past it on its baseline at
-the text's size with only the other column's text after it (the ledger cuts a number set that far as a line of its own) — is a
-contents line wherever it stands where it would be an orphan, no `\contentsname` heading it (`listedOf`), and ends its entry:
+its page number its last word, after leaders or two of its size clear of the text, or the next word past it on its baseline in
+its column (`stream.mjs` `columnsAt`, the maker's columns), two of its size clear of what follows (the ledger cuts a number set
+that far as a line of its own); a page number at the text's size, never where the page sets numbers past its units' lines too
+(`marginNumbers`: lineno's line numbers in the margin) — is a contents line wherever it stands where it would be an orphan, no `\contentsname` heading it (`listedOf`), and ends its entry:
 the ink units cut it an entry a unit, its numbering, leaders and page number the
 original's ink, and an entry that repeats a heading is drawn with that heading's translation (the echo). And the counter TeX sets
 after a babel name on its line where the name leads no unit — IEEEtran's `\appendixname\nobreakspace\thesection`, "APPENDIX A"
-centred over its title and "Appendix A:" in that list — is the name's (`names.mjs` `counterAfter`: within a word's space after
-it, a letter, a number or a numeral, its parts after stops or dashes, a stop or a colon, then a space or the line's end; no unit's
-once the units have let go of what is not theirs): in its group in the wrap (`own.mjs` MR 6b) and in its row in the layout file
-(`make.mjs` `nameAt`), so that the line is centred whole where it is, and the layer sets the counter after the name's word
-(`run.mjs` `counterOf`) instead of leaving it at its own place past a gap of the English word's width less the target's. A unit
-whose first line follows such a name on its line (the entry's title, an ink unit) is laid from where the name's word and counter
-end, the original's separation after them. A name that leads its unit (RUN_IN: 2608.16117v1's "Appendix A." before its heading's
+centred over its title and "Appendix A:" in that list — is the name's (`names.mjs` `counterAfter`: its first glyph within 1.1 of
+the name's size after it, each later one within a word's space of the last, a letter, a number or a numeral, its parts after stops
+or dashes, a stop or a colon, then a space or the line's end; in the name's column; no unit's once the units have let go of what
+is not theirs): in its group in the wrap (`own.mjs` MR 6b) and in its row in the layout file (`make.mjs` `nameAt`), its width at
+the row's end in the row's slot 12, which a name leading no unit left 0 (a RUN_IN name's glue there), so that the line is centred
+whole where it is, and the layer splits the counter off where the maker did, never reading the gaps again (`run.mjs`
+`counterOf`: a thin space before it, a name letter-spaced, a stop after a space), and sets it after the name's word instead of
+leaving it at its own place past a gap of the English word's width less the target's. A unit whose first line follows such a
+name on its line in the name's column (the entry's title, an ink unit) is laid from where the name's word and counter end, the
+original's separation after them. A name that leads its unit (RUN_IN: 2608.16117v1's "Appendix A." before its heading's
 title) was drawn so already, its number the unit's label after the name's word. Over 63 local papers prepared on both sides, 4 move, each as meant: 2610.20484v1's "APPENDIX" and 2610.21106v1's authors'
 addresses after the bibliography translated where they were kept; 2610.21201v1's etoc list (5 entries, orphans before) and
 2610.37668v1's appendix contents after the bibliography (14 entries and 12 lines, kept before) cut an entry a unit and drawn with

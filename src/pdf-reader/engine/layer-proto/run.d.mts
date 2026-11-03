@@ -149,6 +149,8 @@ export interface NameDrawn {
   occurrence: number; key: string; page: number; drawn: boolean; why: string | null; chars: (Char & { page: number })[]
   /** the original's line box (the layout file's) */
   box: { x0: number; x1: number; baseline: number; top: number; bottom: number; size: number }
+  /** its TeX column's text edges (the file's cx0, cx1) */
+  column: [number, number]
   /** where drawn: its word, size, left edge and width (unfit: its word, its width at the original's size and the room) */
   text?: string; size?: number; x?: number; w?: number; room?: number
   /** the unit it leads (the file's RUN_IN): set as the start of that unit's first line, drawn with it (`inline: <why>`

@@ -202,14 +202,20 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
   it('sets the counter TeX set after a name in its row after the target\'s word, the line\'s alignment kept (IEEEtran\'s appendices)', async () => {
     // (a contents line, "Appendix A:" from 20 to 71, left-set: "\u9644\u5f55 A:" from 20; its title after it on its line, led by
     // nothing, laid from where the word and counter end, the original's 4 between them)
-    const entry = await open({}, paper({ key: 'appendix', x: 20, width: 51, runs: [['Appendix', 20, 40, 10], ['A:', 63, 8, 10]], after: 75 }))
+    // (the row's slot 12, a name leading no unit: the counter's width at its end, where the maker split it off; 8 here)
+    const entry = await open({}, paper({ key: 'appendix', x: 20, width: 51, glue: 8, runs: [['Appendix', 20, 40, 10], ['A:', 63, 8, 10]], after: 75 }))
     await entry.until(1)
     expect(entry.names[0]).toMatchObject({ drawn: true, text: '\u9644\u5f55 A:', x: 20 })
     const w = entry.names[0]!.w as number
     const first = (entry.stats.find(r => r.id === 0) as unknown as { lines: number[][] }).lines[0]!
     expect(first[6]).toBeCloseTo(20 + w + 4, 1)
+    // (a unit past the name's column, across the gutter, is the other column's: where TeX set it)
+    const across = await open({}, paper({ key: 'appendix', x: 20, width: 51, glue: 8, column: [20, 72], runs: [['Appendix', 20, 40, 10], ['A:', 63, 8, 10]], after: 75 }))
+    await across.until(1)
+    expect(across.names[0]).toMatchObject({ drawn: true })
+    expect((across.stats.find(r => r.id === 0) as unknown as { lines: number[][] }).lines[0]![6]).toBeCloseTo(75, 1)
     // (a heading "APPENDIX A" centred over its title: "\u9644\u5f55 A" about the line's middle, 124)
-    const head = await open({}, paper({ key: 'appendix', x: 100, width: 48, flags: NAME_FLAG.CENTRED, runs: [['APPENDIX', 100, 40, 10], ['A', 143, 5, 10]] }))
+    const head = await open({}, paper({ key: 'appendix', x: 100, width: 48, glue: 5, flags: NAME_FLAG.CENTRED, runs: [['APPENDIX', 100, 40, 10], ['A', 143, 5, 10]] }))
     await head.until(1)
     expect(head.names[0]).toMatchObject({ drawn: true, text: '\u9644\u5f55 A' })
     expect((head.names[0]!.x as number) + (head.names[0]!.w as number) / 2).toBeCloseTo(124, 1)
@@ -217,6 +223,14 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
     const plain = await open({}, paper({ key: 'appendix', x: 20, width: 40, name: 'Appendix' }))
     await plain.until(1)
     expect(plain.names[0]).toMatchObject({ drawn: true, text: '\u9644\u5f55' })
+    // (the split the maker's, never read again from the gaps: a counter a thin space after the name, \appendixname\,A, kept; a
+    // name letter-spaced past a word's space, 2.5 of 10, its last letter no counter where the maker found none)
+    const thin = await open({}, paper({ key: 'appendix', x: 20, width: 46.67, glue: 5, runs: [['Appendix', 20, 40, 10], ['A', 61.67, 5, 10]] }))
+    await thin.until(1)
+    expect(thin.names[0]).toMatchObject({ drawn: true, text: '\u9644\u5f55 A' })
+    const tracked = await open({}, paper({ key: 'appendix', x: 100, width: 57.5, runs: [...'APPENDIX'].map((c, i) => [c, 100 + 7.5 * i, 5, 10] as [string, number, number, number]) }))
+    await tracked.until(1)
+    expect(tracked.names[0]).toMatchObject({ drawn: true, text: '\u9644\u5f55' })
   })
 
   it("takes its room from its TeX column (the file's), on a page no unit holds as on any other", async () => {

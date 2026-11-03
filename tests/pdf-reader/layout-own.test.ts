@@ -103,6 +103,9 @@ describe('placeholders, labels and names (MR 4–6)', () => {
       { pt: '1s' }, { pt: 'n6.proof.s' }, 'Proof', { pt: 'n6.proof.e' }, { dx: 3 }, 'A', { dx: 3 }, 'b', { pt: '1e' },
     ])]
     expect(groupsOf(ownOf(pages, { units: units('Scaling', 'A b') }), pages)).toEqual({ n3: 'AppendixA:', n4: 'APPENDIXA', n5: 'Appendix', n6: 'Proof', u0: 'Scaling', u1: 'Ab' })
+    // (on a page of two columns, a letter past the middle is the other column's, however near: the name's word alone)
+    const two = [page([{ pt: 'c2-1' }, { dx: 245 }, { pt: 'n7.appendix.s' }, 'Appendix', { pt: 'n7.appendix.e' }, { dx: 9 }, 'A'])]
+    expect(groupsOf(ownOf(two, { units: [] }), two)).toEqual({ n7: 'Appendix' })
   })
   it('gives a footnote\'s call after the last word that TeX gave no mark its raised mark right after the end mark (2610.35877v1\'s abstract)', () => {
     const pages = [page([{ pt: '0s' }, 'Hello.', { pt: '0e' }, '1', '\n', { pt: '1s' }, 'Next', { pt: '1e' }])]

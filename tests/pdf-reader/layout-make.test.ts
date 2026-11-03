@@ -1730,14 +1730,15 @@ describe("makeLayout, babel's names (D1a)", () => {
     const name = heading('APPENDIX', 115.5), letter: Run = { s: 'A', x: endOf(name) + 3, y: 700 }
     const title: Run = { s: 'Scaling by Layer', x: 105, y: 688 }
     const heads = await made({ pages: [{ runs: [name, letter, title, ...body.map(r => ({ ...r, y: r.y - 20 }))] }], marks: [['0s', 1, title.x, 688], ['0e', 1, endOf(title), 688], ['1s', 1, 72, 660], ['1e', 1, endOf(body[2] as Run), 636], ...nameMarks(name, 'appendix')], units: [unit('heading', [text('Scaling by Layer')]), para] })
-    expect(heads.file.names.map(r => [r[3], r[5], (r[10] as number) & NAME_FLAG.CENTRED, r[11]])).toEqual([[115.5, endOf(letter), NAME_FLAG.CENTRED, -1]])
+    // (slot 12: the counter's width at the row's end, from its first glyph, where the layer splits it off the name's word)
+    expect(heads.file.names.map(r => [r[3], r[5], (r[10] as number) & NAME_FLAG.CENTRED, r[11], r[12]])).toEqual([[115.5, endOf(letter), NAME_FLAG.CENTRED, -1, endOf(letter) - letter.x]])
     expect(heads.stats.names.counters).toBe(1)
     const entry = heading('Appendix', 72), colon: Run = { s: 'A:', x: endOf(entry) + 3, y: 700 }, rest: Run = { s: 'Scaling by Layer', x: endOf(colon) + 3, y: 700 }
     const contents = await made({ pages: [{ runs: [entry, colon, rest, ...body] }], marks: [...bodyMarks, ...nameMarks(entry, 'appendix')], units: [para] })
-    expect(contents.file.names.map(r => [r[3], r[5], r[10]])).toEqual([[72, endOf(colon), 0]])
+    expect(contents.file.names.map(r => [r[3], r[5], r[10], r[12]])).toEqual([[72, endOf(colon), 0, endOf(colon) - colon.x]])
     const word: Run = { s: 'Additional', x: endOf(entry) + 3, y: 700 }
     const plain = await made({ pages: [{ runs: [entry, word, ...body] }], marks: [...bodyMarks, ...nameMarks(entry, 'appendix')], units: [para] })
-    expect(plain.file.names.map(r => [r[3], r[5]])).toEqual([[72, endOf(entry)]])
+    expect(plain.file.names.map(r => [r[3], r[5], r[12]])).toEqual([[72, endOf(entry), 0]])
   })
 
   it("is a caption's label where a figure's or a table's name leads a caption (longtable's, no \\@captype): no row", async () => {
