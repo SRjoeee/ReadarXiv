@@ -418,9 +418,8 @@ export declare function runParams(P: Params, run: Run, last: boolean): Params
 export declare function layoutRuns(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params, fit?: readonly Pick<Line, 'from' | 'page'>[] | null): { layout: Layout & { runs: number }; runs: (Run & { P: Params; layout: Layout })[] } | null
 /** the runs' layouts as one: each line's block its place in the unit's blocks, and its run's size, scale and state (`seg`) */
 export declare function joinRuns(runs: readonly { bi0: number; layout: Layout }[]): Layout & { runs: number }
-/** a run's ink over (a) and under (d) its baseline at 100 px in its face, and its right edge from its start (r; null where the
- *  canvas gives none): the measure that gives its width */
-export declare function ink100(s: string, face: Face): { a: number; d: number; r: number | null }
+/** a run's ink over (a) and under (d) its baseline at 100 px in its face (the measure that gives its width) */
+export declare function ink100(s: string, face: Face): { a: number; d: number }
 /** a laid line's extent over (a) and under (d) its baseline, PDF units: its text's ink and its crops' over their TeX
  *  baselines; `text`, its text's alone */
 export declare function lineExtent(line: Pick<Line, 'items'>, f: number, scale: number): { a: number; d: number; text: { a: number; d: number } }

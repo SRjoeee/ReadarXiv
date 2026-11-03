@@ -2230,10 +2230,9 @@ function nonSpace(s) {
   return n
 }
 
-const mcache = new Map(), icache = new Map()
-/** a measure's ink over and under its baseline (TextMetrics' actual bounding box), 0 where the canvas gives none, and how far
- *  right of the run's start it ends (`r`), null where the canvas gives none */
-const inkOfMetrics = m => ({ a: Number.isFinite(m.actualBoundingBoxAscent) ? m.actualBoundingBoxAscent : 0, d: Number.isFinite(m.actualBoundingBoxDescent) ? m.actualBoundingBoxDescent : 0, r: Number.isFinite(m.actualBoundingBoxRight) ? m.actualBoundingBoxRight : null })
+const mcache = new Map(), icache = new Map(), rcache = new Map()
+/** a measure's ink over and under its baseline (TextMetrics' actual bounding box), 0 where the canvas gives none */
+const inkOfMetrics = m => ({ a: Number.isFinite(m.actualBoundingBoxAscent) ? m.actualBoundingBoxAscent : 0, d: Number.isFinite(m.actualBoundingBoxDescent) ? m.actualBoundingBoxDescent : 0 })
 /** a run's width at 100 px in its face (canvas measureText, cached; its ink beside it, ink100) */
 function w100(s, face) {
   work.measures++
@@ -2249,9 +2248,8 @@ function w100(s, face) {
   }
   return w
 }
-/** a run's ink over (a) and under (d) its baseline at 100 px in its face, and its right edge from its start (r, null where the
- *  canvas gives none): the drawn glyphs' own extent, from the measure that gives its width (cached with it), as TeX's box of a
- *  line is its characters' */
+/** a run's ink over (a) and under (d) its baseline at 100 px in its face: the drawn glyphs' own extent, from the measure
+ *  that gives its width (cached with it), as TeX's box of a line is its characters' */
 export function ink100(s, face) {
   const font = fontString(face, 100), key = `${font}|${s}`
   let v = icache.get(key)
@@ -2261,6 +2259,20 @@ export function ink100(s, face) {
     icache.set(key, v)
   }
   return v
+}
+/** how far right of its start a run's ink ends at 100 px in its face (TextMetrics' actualBoundingBoxRight), null where the canvas
+ *  gives none. Read only of a shared row's last item (inkEndOf), so measured then and cached apart: one more number on every entry
+ *  of the width's cache grew the heap 2.8 KB a laid page (the speed check of 2026-11-04, 0.27 KB the runs' spread) */
+function inkRight100(s, face) {
+  const font = fontString(face, 100), key = `${font}|${s}`
+  let r = rcache.get(key)
+  if (r === undefined) {
+    mctx.font = font
+    const m = mctx.measureText(s)
+    r = Number.isFinite(m.actualBoundingBoxRight) ? m.actualBoundingBoxRight : null
+    rcache.set(key, r)
+  }
+  return r
 }
 
 /**
@@ -4219,8 +4231,8 @@ export const originalLines = b => new Set(b.B.map(v => Math.round(v * 100))).siz
 /** whether a laid line stands on a shared row (shareOf): on its page, within an em of its baseline, across the block it is in */
 const onShare = (share, l) => l.page === share.page && Math.abs(l.baseline - share.y) < share.band && Math.min(l.x0 + l.used, share.x1) > Math.max(l.x0, share.x0)
 /**
- * Where a laid line's text's ink ends (PDF units): its last drawn item's own right edge, from the measure its width came from
- * (ink100's `r`, TextMetrics' actualBoundingBoxRight: what the face draws, not its advances) at the size it is drawn, its
+ * Where a laid line's text's ink ends (PDF units): its last drawn item's own right edge, measured as its width is, its text in its
+ * face at 100 px (inkRight100, TextMetrics' actualBoundingBoxRight: what the face draws, not its advances) at the size it is drawn, its
  * tracking between its characters and an oblique face's slant over its ink's height; a crop's box. Never past the line's end,
  * which it is where the canvas gives no ink. A full-width closing mark's blank half is in its advance and so in the line's end,
  * and no text: 2010.11929v2 p4's "Inductive bias." in Chinese ends in an ideographic full stop (U+3002) whose ink ends 0.34 em
@@ -4232,15 +4244,15 @@ function inkEndOf(line, L) {
   if (!it) return end
   const t = it.t
   if (t.crop) return Math.min(end, it.x + it.w)
-  const m = ink100(t.s, t.face)
-  if (m.r === null) return end
+  const r = inkRight100(t.s, t.face)
+  if (r === null) return end
   const S = line.seg ?? L, f = S.f, k = (t.sup ? 0.62 : 1) * (t.sc ?? 1)
   // (a word's tracking, drawn as letter spacing after each of its characters, stands before its last one's ink; a CJK character
   // laid alone carries its own after it, in its advance)
   const track = t.sup ? 0 : (t.cls === 'cjk' ? S.state?.track : S.state?.trackLatin) ?? 0
-  let x = it.x + (m.r * k * f) / 100 + track * f * Math.max(0, [...t.s].length - 1)
+  let x = it.x + (r * k * f) / 100 + track * f * Math.max(0, [...t.s].length - 1)
   // (an oblique face skews its glyphs about the baseline: its ink's top-right corner stands its height times the slant further on)
-  if (t.face.oblique) x += Math.max(0, (m.a * k * f) / 100 + (t.sup ? 0.36 * f : 0)) * Math.tan((t.face.oblique * Math.PI) / 180)
+  if (t.face.oblique) x += Math.max(0, (ink100(t.s, t.face).a * k * f) / 100 + (t.sup ? 0.36 * f : 0)) * Math.tan((t.face.oblique * Math.PI) / 180)
   return Math.min(end, x)
 }
 /**
