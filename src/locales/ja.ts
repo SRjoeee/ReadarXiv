@@ -176,7 +176,9 @@ const O: Locale['O'] = {
   saveFailed: '保存できませんでした。もう一度お試しください',
   appearance: {
     theme: '外観',
-    themes: { system: 'システム設定を使用', light: 'ライト', dark: 'ダーク' },
+    // the theme switch's three equal segments hold 274 px at a 320 px window (ui-shots.mjs): the platform's longer
+    // "use the system's setting" ran past the card, so the word is the system's alone, as the Chinese and English are
+    themes: { system: 'システム', light: 'ライト', dark: 'ダーク' },
     dim: 'ダークモードで PDF ページを暗くする',
     dimHint: 'ダークモードで PDF ページを暗くします。ハイライトと図中の訳文は元の色のまま',
     highlightHint: 'ポインタを合わせると対応する文をハイライト。訳文のみの表示では、しばらく合わせると原文を表示',
@@ -339,7 +341,7 @@ const R: Locale['R'] = {
   swap: '左右を入れ替え',
   sync: 'スクロールを同期',
   zoom: { out: '縮小', in: '拡大', value: 'ズーム', width: '幅に合わせる', page: 'ページに合わせる', actual: '実際のサイズ' },
-  options: { name: '閲覧オプション', color: 'ハイライトの色', appearance: '外観', light: 'ライト', dark: 'ダーク', system: 'システム設定を使用', dim: 'ダークモードでページを暗くする' },
+  options: { name: '閲覧オプション', color: 'ハイライトの色', appearance: '外観', light: 'ライト', dark: 'ダーク', system: 'システム', dim: 'ダークモードでページを暗くする' },
   classes: { name: '翻訳する範囲', figures: '図中のテキスト', tables: '表中のテキスト', heads: 'ヘッダーとフッター', references: '参考文献', names: '著者情報' },
   download: { name: 'ダウンロード', translation: '訳文 PDF', original: '原文 PDF' },
   leave: '既定のビューアで開く',

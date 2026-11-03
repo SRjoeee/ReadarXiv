@@ -178,7 +178,9 @@ const O: Locale['O'] = {
   saveFailed: '저장하지 못했습니다. 다시 시도하세요.',
   appearance: {
     theme: '모양',
-    themes: { system: '시스템 설정 사용', light: '라이트', dark: '다크' },
+    // the theme switch's three equal segments hold 274 px at a 320 px window (ui-shots.mjs): the platform's longer
+    // "use the system's setting" ran past the card, so the word is the system's alone, as the Chinese and English are
+    themes: { system: '시스템', light: '라이트', dark: '다크' },
     dim: '다크 모드에서 PDF 페이지 어둡게',
     dimHint: '다크 모드에서 PDF 페이지를 어둡게 합니다. 하이라이트와 그림 속 번역문은 원래 색상을 유지합니다.',
     highlightHint: '마우스를 올리면 해당 문장을 하이라이트합니다. 번역문만 보기에서는 잠시 올려 두면 원문이 표시됩니다.',
@@ -340,7 +342,7 @@ const R: Locale['R'] = {
   swap: '좌우 바꾸기',
   sync: '스크롤 동기화',
   zoom: { out: '축소', in: '확대', value: '확대/축소', width: '너비에 맞추기', page: '페이지에 맞추기', actual: '실제 크기' },
-  options: { name: '읽기 옵션', color: '하이라이트 색상', appearance: '모양', light: '라이트', dark: '다크', system: '시스템 설정 사용', dim: '다크 모드에서 페이지 어둡게' },
+  options: { name: '읽기 옵션', color: '하이라이트 색상', appearance: '모양', light: '라이트', dark: '다크', system: '시스템', dim: '다크 모드에서 페이지 어둡게' },
   classes: { name: '번역 범위', figures: '그림 속 텍스트', tables: '표 속 텍스트', heads: '머리글 및 바닥글', references: '참고문헌', names: '저자 정보' },
   download: { name: '다운로드', translation: '번역문 PDF', original: '원문 PDF' },
   leave: '기본 뷰어에서 열기',

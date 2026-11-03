@@ -174,7 +174,9 @@ const O: Locale['O'] = {
   saveFailed: '儲存失敗，請再試一次',
   appearance: {
     theme: '外觀',
-    themes: { system: '使用系統設定', light: '淺色', dark: '深色' },
+    // the theme switch's three equal segments hold 274 px at a 320 px window (ui-shots.mjs): the platform's longer
+    // "use the system's setting" ran past the card, so the word is the system's alone, as the Chinese and English are
+    themes: { system: '跟隨系統', light: '淺色', dark: '深色' },
     dim: '深色模式下調暗 PDF 頁面',
     dimHint: '深色外觀下調暗 PDF 頁面；標示與圖中譯文保持原色',
     highlightHint: '游標停留時標示對應的句子；僅譯文時停留可查看原文',
@@ -337,7 +339,7 @@ const R: Locale['R'] = {
   swap: '左右互換',
   sync: '同步捲動',
   zoom: { out: '縮小', in: '放大', value: '縮放比例', width: '符合寬度', page: '符合頁面', actual: '實際大小' },
-  options: { name: '閱讀選項', color: '標示顏色', appearance: '外觀', light: '淺色', dark: '深色', system: '使用系統設定', dim: '深色模式下調暗頁面' },
+  options: { name: '閱讀選項', color: '標示顏色', appearance: '外觀', light: '淺色', dark: '深色', system: '跟隨系統', dim: '深色模式下調暗頁面' },
   classes: { name: '翻譯範圍', figures: '圖中文字', tables: '表格中文字', heads: '頁首和頁尾', references: '參考文獻', names: '作者資訊' },
   download: { name: '下載', translation: '譯文 PDF', original: '原文 PDF' },
   leave: '在預設檢視器中開啟',
