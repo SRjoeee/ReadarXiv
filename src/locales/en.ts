@@ -32,7 +32,7 @@ const S: Locale['S'] = {
   loading: 'Loading the page',
   rows: {
     service: 'Service',
-    language: 'Language',
+    language: 'Translate into',
     prompt: 'Prompt',
     highlight: 'Hover highlight',
     highlightTitle: 'Highlights the matching sentence on hover; in translation-only mode, rest on a sentence to see the original',
@@ -138,7 +138,7 @@ const O: Locale['O'] = {
     keywords: {
       'translate/services': 'translation service model LLM API key endpoint',
       'translate/fallback': 'expired quota offline backup',
-      'translate/language': 'language into',
+      'translate/language': 'language into target',
       'translate/prompts': 'LLM prompt instructions message',
       'translate/glossary': 'LLM terms glossary vocabulary',
       'appearance/theme': 'theme dark light night',
@@ -353,7 +353,7 @@ const R: Locale['R'] = {
   status: {
     loading: 'Loading',
     translating: 'Translating',
-    preparing: 'Getting the bilingual PDF ready',
+    preparing: 'Preparing',
     close: 'Close',
     unsupported: (language: string) => `A bilingual PDF isn't available in ${language} yet`,
     chooseLanguage: 'Choose language',

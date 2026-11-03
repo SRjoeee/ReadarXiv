@@ -59,10 +59,10 @@ describe('the toolbar (the reader\'s design, §6.1)', () => {
     expect(controller.setDisplay).toHaveBeenCalledWith('translation')
     button(container, '同步滚动').click()
     expect(controller.setSync).toHaveBeenCalledWith(false)
-    button(container, '交换左右').click()
+    button(container, '左右互换').click()
     expect(controller.patchSettings).toHaveBeenCalledOnce()
     await act(async () => set({ display: 'translation' }))
-    expect([button(container, '同步滚动').getAttribute('aria-disabled'), button(container, '交换左右').getAttribute('aria-disabled')]).toEqual(['true', 'true'])
+    expect([button(container, '同步滚动').getAttribute('aria-disabled'), button(container, '左右互换').getAttribute('aria-disabled')]).toEqual(['true', 'true'])
   })
 
   it('zooms by a tenth each way, and shows the scale', async () => {
@@ -97,8 +97,8 @@ describe('the toolbar (the reader\'s design, §6.1)', () => {
 
   it('names the zoom, language and service buttons by what they show, first, and their words, from what is on the page (WCAG 2.5.3; the interface review)', async () => {
     const { container } = await mount({ scale: 1.25 })
-    const names = ['缩放比例', '目标语言', '翻译服务'].map(w => named(container, w))
-    expect(names.map(nameOf)).toEqual(['125% 缩放比例', '简体中文 目标语言', 'Microsoft 翻译 翻译服务'])
+    const names = ['缩放比例', '译为', '翻译服务'].map(w => named(container, w))
+    expect(names.map(nameOf)).toEqual(['125% 缩放比例', '简体中文 译为', 'Microsoft 翻译 翻译服务'])
     // labelled by the text the button shows, not an aria-label drawn apart from it (better-accessibility)
     expect(names.map(b => b.hasAttribute('aria-label'))).toEqual([false, false, false])
     // the whole value in the tooltip too, where a long name is cut short on the bar

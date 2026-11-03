@@ -49,7 +49,7 @@ describe('the reading options (the reader\'s design, §6.1)', () => {
     const { container } = await open()
     const rows = [...container.querySelectorAll('[popover="auto"] > .narrow-only.row')]
     const nameOf = (b: Element | null) => b?.getAttribute('aria-labelledby')?.split(' ').map(id => document.getElementById(id)?.textContent).join(' ')
-    expect(rows.map(r => nameOf(r.querySelector('button')))).toEqual(['简体中文 目标语言', 'Microsoft 翻译 翻译服务'])
+    expect(rows.map(r => nameOf(r.querySelector('button')))).toEqual(['简体中文 译为', 'Microsoft 翻译 翻译服务'])
   })
 
   it('holds the download, the settings and the way back before them, for a window under 500 px (§5; the maintainer, 2026-09-26)', async () => {

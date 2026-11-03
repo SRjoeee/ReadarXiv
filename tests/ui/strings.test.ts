@@ -101,11 +101,11 @@ describe('BUILD_REF', () => {
 })
 
 describe('the built-in appearance profiles and the packs', () => {
-  it('every pack names every built-in profile, and the Chinese pack\'s names are the ones the configuration ships', async () => {
+  it('every pack names every built-in profile, and the Chinese pack\'s style names are the ones the configuration ships', async () => {
     // A built-in is stored with its shipped (Chinese) name and shown by id in the interface language as long as the
     // reader has not renamed it (`profileName` compares the stored name with the shipped one). An id without a name in
-    // a pack would show Chinese in that language; a shipped name that drifted from the Chinese pack's would show two
-    // names for one profile — in the settings' list and in a copy made from it
+    // a pack would show Chinese in that language; a shipped style name that drifted from the Chinese pack's would show
+    // two names for one profile — in the settings' list and in a copy made from it, the name an editor opens on
     const { BUILT_IN_HIGHLIGHTS, BUILT_IN_STYLES } = await import('@/config/appearance')
     const { LOCALES } = await import('@/locales')
     for (const [code, pack] of Object.entries(LOCALES)) {
@@ -114,7 +114,20 @@ describe('the built-in appearance profiles and the packs', () => {
     }
     const zh = LOCALES['zh-CN'].O.reading
     for (const p of BUILT_IN_STYLES) expect([p.id, (zh.builtInStyles as Record<string, string>)[p.id]]).toEqual([p.id, p.name])
-    for (const p of BUILT_IN_HIGHLIGHTS) expect([p.id, (zh.builtInHighlights as Record<string, string>)[p.id]]).toEqual([p.id, p.name])
+  })
+
+  it('names a built-in band by the pack in every language, its stored name kept: a band is never renamed nor copied, so the stored one is shown nowhere (UI.md S-O-49, 2026-11-03)', async () => {
+    const { BUILT_IN_HIGHLIGHTS } = await import('@/config/appearance')
+    const { profileName, setLocale } = await import('@/ui/strings')
+    try {
+      // what a saved configuration and the website's copy hold for the three, which must keep reading as not renamed
+      expect(BUILT_IN_HIGHLIGHTS.map(p => [p.id, p.name])).toEqual([['soft-green', '\u67d4\u548c\u7eff'], ['sand', '\u6de1\u9ec4'], ['sky', '\u6de1\u84dd']])
+      setLocale('zh-CN')
+      // light green, light yellow, light blue
+      expect(BUILT_IN_HIGHLIGHTS.map(p => profileName(p, 'highlights'))).toEqual(['\u6d45\u7eff', '\u6d45\u9ec4', '\u6d45\u84dd'])
+      setLocale('en')
+      expect(BUILT_IN_HIGHLIGHTS.map(p => profileName(p, 'highlights'))).toEqual(['Soft green', 'Sand', 'Sky'])
+    } finally { setLocale('zh-CN') }
   })
 })
 
