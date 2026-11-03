@@ -4084,7 +4084,8 @@ the release sweep's corpus (b6586f7c, 1,308 shared lines) the rule finds three m
 2610.20266v1 p26's (zh, 3.39 em), which go to the original's gap, and 2609.20976v1 p1's line of names (ja), drawn as before; the
 gate pack's layout files hold no such pair, and its cut is byte for byte the same. The body starts where the head's ink ends,
 not its last advance (`layer2.mjs` `shareOf`'s `ink`: the last drawn item's own right edge, TextMetrics' `actualBoundingBoxRight`
-from the measure its width came from, with its tracking and an oblique face's slant): a full-width closing mark keeps a blank half
+of its text in its face, measured as its width is and cached apart (one more number on every width's entry grew the heap 2.8 KB a
+laid page, the speed check), with its tracking and an oblique face's slant): a full-width closing mark keeps a blank half
 in its advance, an ideographic full stop's ink ending 0.34 em into its em in Source Han Serif, and that blank stood on the
 original's separation (2010.11929v2 p4's "Inductive bias." in Chinese, 1.71 em to its text against the original's 1.05: the
 owner's report of 2026-11-04; a drawing rule, no version). One rule for every face and language, from what the face draws, with no
