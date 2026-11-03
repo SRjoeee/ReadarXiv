@@ -4069,8 +4069,10 @@ its end mark stands on and the lines right below it at an entry's leading (`ledg
 sets past the mark, a DOI), not at the next unit's start. Where no unit started before the next text — an appendix's own title
 and contents list after the bibliography, titletoc's `\printcontents` under the paper's centred "Appendix" — every line between
 was a bibliography line with no entry and kept as the original's, the list English. A line that ends as a list's entry does —
-its page number its last word, after leaders or two of its size clear of the text — is a contents line wherever it stands, no
-`\contentsname` heading it (`listedOf`): the ink units cut it an entry a unit, its numbering, leaders and page number the
+its page number its last word, after leaders or two of its size clear of the text, or the next word past it on its baseline at
+the text's size with only the other column's text after it (the ledger cuts a number set that far as a line of its own) — is a
+contents line wherever it stands where it would be an orphan, no `\contentsname` heading it (`listedOf`), and ends its entry:
+the ink units cut it an entry a unit, its numbering, leaders and page number the
 original's ink, and an entry that repeats a heading is drawn with that heading's translation (the echo). And the counter TeX sets
 after a babel name on its line where the name leads no unit — IEEEtran's `\appendixname\nobreakspace\thesection`, "APPENDIX A"
 centred over its title and "Appendix A:" in that list — is the name's (`names.mjs` `counterAfter`: within a word's space after
