@@ -46,9 +46,9 @@ WXT + React + TypeScript with pnpm · Vercel AI SDK for LLM providers (structure
 
 ## Language
 
-Everything written for developers is English: identifiers, comments, docs, test names, scripts, commit messages (`type(scope): summary`), pull requests, issues. `pnpm check:english` (`scripts/check-english.mjs`, part of `pnpm lint`) is the gate: a file may hold no more lines with CJK characters than `scripts/english-allowlist.txt` grants it — lower an entry freely, raise one only with a reason.
+Everything written for developers is English: identifiers, comments, docs, test names, scripts, commit messages (`type(scope): summary`), pull requests, issues. `pnpm check:english` (`scripts/check-english.mjs`, part of `pnpm lint`) is the gate: a file may hold no more lines with CJK characters (Han, kana or Hangul) than `scripts/english-allowlist.txt` grants it — lower an entry freely, raise one only with a reason.
 
-Chinese that is product data stays: the locale packs (`src/locales/*`, `public/_locales`) and the few reader-facing strings marked as such outside them; the language table (`config/languages.ts`); multilingual test inputs and expectations, and the Chinese labels the e2e scripts locate controls by; an observed machine-translation output quoted as evidence.
+Chinese, Japanese and Korean that is product data stays: the locale packs (`src/locales/*`, `public/_locales`) and the few reader-facing strings marked as such outside them; the language table (`config/languages.ts`); multilingual test inputs and expectations, and the Chinese labels the e2e scripts locate controls by; an observed machine-translation output quoted as evidence.
 
 ## Commands
 
