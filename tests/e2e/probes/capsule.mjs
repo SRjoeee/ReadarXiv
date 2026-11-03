@@ -182,6 +182,10 @@ const SETTINGS = [
   { width: 390, scheme: 'dark', lang: 'zh-CN', chip: true },
   { width: 320, scheme: 'light', lang: 'en', chip: false },
   { width: 320, scheme: 'dark', lang: 'en', chip: true },
+  // the interface languages of 2026-11-04 at the widths the website's short count is decided at (the glossary's ruling 11):
+  // the full line where it fits, with the chip that narrows it most
+  ...['ja', 'ko'].flatMap(lang => [400, 390, 320].map(width => ({ width, scheme: 'light', lang, chip: true }))),
+  { width: 320, scheme: 'light', lang: 'zh-TW', chip: true },
 ]
 const nameOf = s => `${s.width} ${s.scheme} ${s.lang}${s.chip ? ' with its chip' : ''}`
 

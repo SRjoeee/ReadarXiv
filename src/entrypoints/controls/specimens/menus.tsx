@@ -10,7 +10,7 @@ import { styleSample } from '@/ui/style-sample'
 import { Button } from '@/ui/controls/Button'
 import { MenuList, type MenuListItem } from '@/ui/controls/MenuList'
 import { Popover, usePopover } from '@/ui/controls/Popover'
-import { PREVIEW_TARGET, S, profileName } from '@/ui/strings'
+import { PREVIEW_LANG, PREVIEW_TARGET, S, profileName } from '@/ui/strings'
 
 function Menu({ name, label, items, layout, search, noMatch, onEvent }: { name: string; label: string; items: MenuListItem[]; layout?: 'inline' | 'two-line'; search?: string; noMatch?: string; onEvent: (event: string) => void }) {
   const pop = usePopover('listbox')
@@ -37,7 +37,7 @@ export function Menus() {
   ]
   const styles: MenuListItem[] = [
     // the sample is the Chinese preview sentence whatever the interface (locales/preview.ts): marked as such
-    ...BUILT_IN_STYLES.map((style, i) => ({ id: style.id, name: profileName(style), hint: PREVIEW_TARGET, preview: styleSample(style), lang: 'zh-CN', checked: i === 0 })),
+    ...BUILT_IN_STYLES.map((style, i) => ({ id: style.id, name: profileName(style), hint: PREVIEW_TARGET, preview: styleSample(style), lang: PREVIEW_LANG, checked: i === 0 })),
     { id: 'manage', name: S.rows.manageStyles, manage: true },
   ]
   // each language written in its own name, and marked as that language

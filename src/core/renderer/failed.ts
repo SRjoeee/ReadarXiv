@@ -45,6 +45,8 @@ export function failureWidget(doc: Document, reason: string, retry: () => void):
   const strings = coreStrings()
   const kind = parseFatal(reason)
   host.title = strings.failureTitle(kind.kind) || strings.retry
+  // the interface's words in the interface's language, not the target's the translation node around it carries
+  host.lang = strings.lang
   host.setAttribute(REASON_ATTR, reason)
   const root = host.attachShadow({ mode: 'open' })
   const style = doc.createElement('style')

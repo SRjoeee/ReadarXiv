@@ -58,7 +58,7 @@ export function setLocale(code: LocaleCode): void {
 /** The core renders the failure widget itself and knows no pack (DESIGN §4.2): hand it this locale's sentences, at load and on every switch */
 function installCoreStrings(): void {
   // (the widget knows the kind alone, not the engine: its key reasons are the keyless words)
-  setCoreStrings({ retry: S.page.retry, failureTitle: kind => reasonText(kind) })
+  setCoreStrings({ lang: currentCode, retry: S.page.retry, failureTitle: kind => reasonText(kind) })
 }
 
 /** Which pack is in use; the settings page marks it in its menu */

@@ -25,6 +25,8 @@ import { AXT_ATTR_PREFIX, stripAttributes, VIEWED_ATTR, VIEWED_FRAME_ATTR } from
 import { tokenSheet } from '@/shared/tokens'
 
 export interface FigureViewerStrings {
+  /** The interface language's tag, on the controls and the dialog: the page around them is the paper's */
+  lang: string
   open: string
   zoomIn: string
   zoomOut: string
@@ -281,6 +283,7 @@ export function installFigureViewer(doc: Document, options: FigureViewerOptions)
   /** The words as the interface has them now */
   const label = (): void => {
     const words = options.strings()
+    for (const el of [open, dialog]) el.lang = words.lang
     name(open, words.open)
     name(zoomIn, words.zoomIn)
     name(zoomOut, words.zoomOut)

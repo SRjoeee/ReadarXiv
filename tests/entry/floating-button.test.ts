@@ -10,6 +10,7 @@ import { ruleOf, rules, sheet } from '../styles/css-rules'
 // here, the state each interaction leaves behind
 
 const STRINGS: FloatingButtonStrings = {
+  lang: 'en',
   main: 'Bilingual version (Read arXiv)',
   panel: 'Control panel',
   options: 'Floating button options',
@@ -88,6 +89,13 @@ describe('the floating button: what it is made of', () => {
     expect([mark.getAttribute('aria-hidden'), mark.getAttribute('viewBox'), mark.querySelector('circle')?.getAttribute('fill')]).toEqual(['true', '0 0 47 47', '#fff'])
     expect(root.querySelector('img')).toBeNull()
     expect(q('.axt-fb-main .axt-fb-disc .axt-fb-tick')).not.toBeNull()
+  })
+
+  it('the dock carries the interface\'s language inside its shadow root, and follows a change of it: arXiv\'s page around it is English (UI.md §1, fonts)', () => {
+    const { q, entry } = mount()
+    expect(q('.axt-fb-dock').lang).toBe('en')
+    entry.relabel({ ...STRINGS, lang: 'ko' })
+    expect(q('.axt-fb-dock').lang).toBe('ko')
   })
 
   it('on an abstract or PDF page the logo opens the control panel, and the column is two: the logo and the settings (the reader\'s design, §2)', () => {

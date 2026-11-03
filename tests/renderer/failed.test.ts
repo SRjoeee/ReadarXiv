@@ -43,6 +43,17 @@ describe('renderFailed', () => {
     expect(host.getAttribute('title')).toBe(reasonText('auth'))
   })
 
+  it('carries the interface\'s language, not the target\'s of the translation node around it: its words are the interface\'s (UI.md §1, fonts)', () => {
+    try {
+      setLocale('ja')
+      const doc = docOf('<p class="ltx_p" id="p1">x</p>')
+      const block = extract(doc)[0] as TextBlock
+      renderFailed(block, 'network: down', () => undefined)
+      const host = doc.querySelector<HTMLElement>(`.${ERROR_CLASS}`)!
+      expect([host.lang, host.shadowRoot?.querySelector('button')?.textContent]).toEqual(['ja', S.page.retry])
+    } finally { setLocale('zh-CN') }
+  })
+
   it('removes pending, marks failed, inserts the widget with a shadow root: button + reason', () => {
     const doc = docOf(page)
     const p = extract(doc)[0] as TextBlock

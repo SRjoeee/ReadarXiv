@@ -13,7 +13,7 @@ const OPTIONS = {
   around: '.ltx_figure',
   ours: '.axt-t',
 }
-const WORDS = { open: 'View larger', zoomIn: 'Zoom in', zoomOut: 'Zoom out', close: 'Close' }
+const WORDS = { lang: 'en', open: 'View larger', zoomIn: 'Zoom in', zoomOut: 'Zoom out', close: 'Close' }
 
 const rect = (x: number, y: number, width: number, height: number): DOMRect =>
   ({ x, y, left: x, top: y, right: x + width, bottom: y + height, width, height, toJSON: () => ({}) }) as DOMRect
@@ -66,6 +66,8 @@ describe('the control over a figure', () => {
     over(svg)
     expect(control.hasAttribute('data-axt-shown')).toBe(true)
     expect(control.getAttribute('aria-label')).toBe('View larger')
+    // the interface's language on the control, whatever the paper's (UI.md §1, fonts)
+    expect(control.lang).toBe('en')
     over(document.querySelector('article')!)
     await new Promise(resolve => setTimeout(resolve, 200))
     expect(control.hasAttribute('data-axt-shown')).toBe(false)

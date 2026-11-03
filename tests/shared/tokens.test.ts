@@ -75,4 +75,17 @@ describe('the token source', () => {
     expect(defined.filter(n => !n.startsWith('--axt-'))).toEqual([])
     expect(css).not.toMatch(/var\(--(?!axt-)/)
   })
+
+  it('gives each CJK language its own face after the platform\'s Latin one: Simplified on the root and for zh, the later blocks winning where they match too (UI.md §1, fonts)', () => {
+    for (const [scope, root, name] of [['page', ':root', '--font'], ['host', ':host', '--axt-font']] as const) {
+      const css = tokenSheet(scope)
+      const block = (selector: string) => new RegExp(`(?:^|\\n)${selector.replace(/[()]/g, '\\$&')} \\{\\n  ${name}: ([^;]+);`).exec(css)?.[1]
+      const sc = block(`${root}, :lang(zh)`), tc = block(':lang(zh-TW), :lang(zh-Hant)'), jp = block(':lang(ja)'), kr = block(':lang(ko)')
+      for (const stack of [sc, tc, jp, kr]) expect(stack, scope).toMatch(/^-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, ".+", sans-serif$/)
+      expect([sc, tc, jp, kr].map(stack => stack?.split(', ')[4])).toEqual(['"PingFang SC"', '"PingFang TC"', '"Hiragino Sans"', '"Apple SD Gothic Neo"'])
+      // Simplified first: a Traditional tag is also `zh`, and the Traditional block has to come after to win
+      expect(css.indexOf(`${root}, :lang(zh) {`)).toBeLessThan(css.indexOf(':lang(zh-TW)'))
+      expect(css).toContain(':lang(zh-HK), :lang(zh-MO), :lang(yue) {')
+    }
+  })
 })

@@ -91,9 +91,32 @@ export const ROLES = {
 
 /** What does not change with the theme */
 export const CONSTANTS = {
-  font: '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "PingFang SC", "Noto Sans SC", sans-serif',
   ease: 'cubic-bezier(0.2, 0, 0, 1)',
 } as const
+
+/** The platform's interface face, first in every stack: it carries the Latin, and none of it carries Han */
+const LATIN = '-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui'
+
+/**
+ * The interface's typeface by the language an element is in (UI.md §1, fonts): the platform's Latin face, then the CJK
+ * face drawn for that language — macOS and iOS, Windows, Linux and ChromeOS by name; Android names none and falls back by
+ * `lang`. Without it every Han character fell to PingFang SC, so Japanese and Traditional Chinese drew Simplified shapes
+ * and the mainland's punctuation, and kana and hangul came from whatever the browser chose. Each block sets the whole
+ * stack: a custom property built from another is resolved where it is declared, so overriding a part on a descendant
+ * would change nothing. Simplified first, as the default (`:root`) and for `zh`, the tag a Simplified target carries;
+ * the blocks after it win where they match too (`zh-TW` is also `zh`)
+ */
+export const FONT_STACKS: readonly { langs: readonly string[]; cjk: string }[] = [
+  { langs: ['zh'], cjk: '"PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC"' },
+  { langs: ['zh-TW', 'zh-Hant'], cjk: '"PingFang TC", "Microsoft JhengHei UI", "Microsoft JhengHei", "Noto Sans CJK TC", "Noto Sans TC", "Source Han Sans TC"' },
+  { langs: ['zh-HK', 'zh-MO', 'yue'], cjk: '"PingFang HK", "PingFang TC", "Microsoft JhengHei UI", "Microsoft JhengHei", "Noto Sans CJK HK", "Noto Sans HK", "Noto Sans CJK TC", "Noto Sans TC"' },
+  // Yu Gothic UI, not plain Yu Gothic, whose Regular draws thin in Chrome on Windows
+  { langs: ['ja'], cjk: '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo UI", "Meiryo", "Noto Sans CJK JP", "Noto Sans JP", "Source Han Sans JP"' },
+  { langs: ['ko'], cjk: '"Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", "Noto Sans KR", "Source Han Sans KR"' },
+]
+
+/** The stack a language's elements draw in */
+export const fontStack = (cjk: string): string => `${LATIN}, ${cjk}, sans-serif`
 
 const at = (value: Value, mode: Mode): string => (typeof value === 'string' ? value : value[mode])
 const REF = /\$([a-z0-9-]+)/g
@@ -131,11 +154,18 @@ export function tokenSheet(scope: 'page' | 'host'): string {
   const s = SELECTORS[scope]
   const prefix = scope === 'page' ? '--' : '--axt-'
   const constants = Object.entries(CONSTANTS).map(([name, value]) => `  ${prefix}${name}: ${value};`).join('\n')
+  // the font by language: on the root (or the host) the Simplified stack, then every element in one of the languages
+  // its own. Inside a shadow root `:lang()` reaches the shadow tree alone, the element that carries `lang` there
+  const fonts = FONT_STACKS.map(({ langs, cjk }, i) => {
+    const selector = [...(i === 0 ? [s.constants] : []), ...langs.map(lang => `:lang(${lang})`)].join(', ')
+    return `${selector} {\n  ${prefix}font: ${fontStack(cjk)};\n}\n`
+  }).join('')
   return [
     scope === 'page' ? '/* Generated from src/shared/tokens.ts by `pnpm tokens`: edit the source, not this file */\n' : '',
     `${s.light} {\n${declarations('light', prefix, '  ')}\n}\n`,
     `@media (prefers-color-scheme: dark) {\n  ${s.system} {\n${declarations('dark', prefix, '    ')}\n  }\n}\n`,
     `${s.dark} {\n${declarations('dark', prefix, '  ')}\n}\n`,
     `${s.constants} {\n${constants}\n}\n`,
+    fonts,
   ].join('')
 }

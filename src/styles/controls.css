@@ -2,6 +2,17 @@
    tooltip, switch and swatch, moved here unchanged so that the popup and the settings page draw the same ones. The
    component rules join the page's `components` layer; the tokens they name are tokens.css's */
 @layer components {
+  /* An element of the interface written in another language than the one around it — a language's own name in a
+     menu, a toolbar value, a contents line, a style's sample — draws in its own language's face (UI.md §1, fonts):
+     tokens.css gives it that language's `--font`, but font-family is inherited as a computed value, so without this
+     it kept its parent's stack (Simplified Chinese's own name on a Japanese page drew three of its four characters
+     in the Japanese face and one in a Chinese face). The interface's roots only: the paper's layers set their own faces */
+  :is(.ui, .chrome) [lang] { font-family: var(--font); }
+  /* Korean breaks between words, never inside one: Chrome breaks hangul between any two syllables. Japanese breaks
+     between phrases, as BudouX reads them (Chrome 119+; UI.md §1, the Japanese and Korean lines) */
+  :is(.ui, .chrome):lang(ko) { word-break: keep-all; overflow-wrap: break-word; }
+  :is(.ui, .chrome):lang(ja) { word-break: auto-phrase; }
+
   /* tooltips: below their control, centred on it, kept inside the window; one line always */
   .tip { position: fixed; inset: auto; margin: 8px 0 0; position-area: bottom; position-try-fallbacks: bottom span-right, bottom span-left;
     padding: 5px 8px; border: 0; border-radius: 6px; background: var(--tip-bg); color: var(--tip-ink); font: 12px/1.2 var(--font);
