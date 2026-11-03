@@ -8,9 +8,11 @@
 // Chrome pack's download), a loader turning while it runs; a sample drawn in a style at a row's end (the style menu);
 // the last row, which leads to managing the list, never chosen, a separator before it; and the language of a row's
 // own words, so that a language's own name or a sample in another script is read and drawn as that language. The active
-// row stays in view as it moves and as the list opens (the retired popup menu did; Part 7's final review)
+// row stays in view as it moves and as the list opens (the retired popup menu did; Part 7's final review). A search
+// field takes the focus as its menu opens, but not under a finger, where it would raise the on-screen keyboard over the
+// list (`touchFirst`)
 import { Check, Loader } from 'lucide'
-import { type CSSProperties, Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { type CSSProperties, Fragment, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useMenuNav } from '@/ui/menu-nav'
 import { Icon } from './Icon'
 
@@ -43,6 +45,25 @@ function reveal(row: Element | null | undefined, stop: Element) {
     }
     if (box === stop) return
   }
+}
+
+/**
+ * Whether the primary pointer is a finger (a phone, a tablet), followed as it changes: there a search field that takes the
+ * focus as the menu opens raises the on-screen keyboard over half the list, so the list takes it instead, as a menu
+ * with no search does, and the field waits for a tap (the owner, 2026-11-03: the search stays, no keyboard on opening).
+ * The primary pointer, `(pointer: coarse)`, and not `(any-hover: none)` or `(any-pointer: coarse)`: those answer for
+ * every input the device has, so a phone with a stylus that hovers (an S Pen) or a paired mouse reads as able to hover
+ * and would get the keyboard, and a laptop with a touch screen, whose keyboard is in front of it, would lose the focus
+ * its typing needs. Nor `(hover: none)` with it: it adds nothing to the question of a keyboard, and lets through a phone
+ * that reports a hover it does not have. Followed, not read once: a tablet given a trackpad, or a laptop folded into a
+ * tablet, answers at the next opening
+ */
+const COARSE = '(pointer: coarse)'
+const touchFirst = () => globalThis.matchMedia?.(COARSE).matches ?? false
+const onPointerChange = (changed: () => void) => {
+  const query = globalThis.matchMedia?.(COARSE)
+  query?.addEventListener('change', changed)
+  return () => query?.removeEventListener('change', changed)
 }
 
 export interface MenuListItem {
@@ -78,6 +99,8 @@ export function MenuList({ items, kind, label, layout = 'inline', search, noMatc
   onClose: () => void
 }) {
   const [query, setQuery] = useState('')
+  /** the list holds the focus as the menu opens: always without a search field, and with one under a finger */
+  const listFocus = useSyncExternalStore(onPointerChange, touchFirst, () => false) || !search
   const q = query.trim().toLowerCase()
   const shown = q ? items.filter(i => `${i.name} ${i.keywords ?? ''}`.toLowerCase().includes(q)) : items
   /** a row with an action is picked for its action, disabled or not, unless the action is already running; any other
@@ -101,6 +124,14 @@ export function MenuList({ items, kind, label, layout = 'inline', search, noMatc
     const el = root.current
     if (el) reveal(el.querySelector('[data-active]'), el.closest('[popover]') ?? el)
   }, [nav.active, q])
+  // the browser focuses what carries `autofocus` as the popover shows, which Popover writes once on what carries
+  // data-autofocus: moved here with it when the pointer changes while the menu stays drawn, so that one element holds it
+  useLayoutEffect(() => {
+    const el = root.current
+    if (!el) return
+    for (const target of el.querySelectorAll('[autofocus]:not([data-autofocus])')) target.removeAttribute('autofocus')
+    for (const target of el.querySelectorAll('[data-autofocus]:not([autofocus])')) target.setAttribute('autofocus', '')
+  }, [listFocus])
   useEffect(() => {
     const el = root.current
     const popover = el?.closest('[popover]')
@@ -110,19 +141,20 @@ export function MenuList({ items, kind, label, layout = 'inline', search, noMatc
     return () => popover.removeEventListener('toggle', onToggle)
   }, [])
   // the element with the focus takes the keys and names the active item (aria-activedescendant): the search field, a
-  // combobox that controls the list, when there is one; else the list itself. Only that element handles them, or a
-  // key would be handled twice as it bubbles (the final review: the arrows skipped every other language)
+  // combobox that controls the list, when there is one; the list itself when there is none, or when it takes the
+  // focus as the menu opens under a finger. Only those elements handle them, neither inside the other, or a key would
+  // be handled twice as it bubbles (the final review: the arrows skipped every other language)
   const keys = { 'aria-activedescendant': nav.activeId, onKeyDown: nav.onKeyDown }
   return (
     <div ref={root} className="outline-none">
       {search && (
-        // the search takes the focus when the menu opens (Popover's data-autofocus)
-        <input data-autofocus role="combobox" aria-expanded="true" aria-controls={listId} aria-autocomplete="list" {...keys} value={query} placeholder={search} aria-label={search} onChange={e => { setQuery(e.target.value); nav.setActive(0) }} onInput={e => { setQuery((e.target as HTMLInputElement).value); nav.setActive(0) }} className="search" />
+        // the search takes the focus when the menu opens (Popover's data-autofocus), unless the list does
+        <input data-autofocus={listFocus ? undefined : ''} role="combobox" aria-expanded="true" aria-controls={listId} aria-autocomplete="list" {...keys} value={query} placeholder={search} aria-label={search} onChange={e => { setQuery(e.target.value); nav.setActive(0) }} onInput={e => { setQuery((e.target as HTMLInputElement).value); nav.setActive(0) }} className="search" />
       )}
       {shown.length === 0 && noMatch && <p className="px-2.5 py-2 text-[12px] text-ink-2">{noMatch}</p>}
       {/* a listbox of options or a menu of items, named, holding its items alone: a separator is drawn, not an item */}
       {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: a listbox or a menu, named by its label */}
-      <div id={listId} role={kind === 'listbox' ? 'listbox' : 'menu'} aria-label={label} tabIndex={search ? undefined : 0} {...(search ? {} : keys)} className="outline-none" data-autofocus={search ? undefined : ''}>
+      <div id={listId} role={kind === 'listbox' ? 'listbox' : 'menu'} aria-label={label} tabIndex={listFocus ? 0 : undefined} {...(listFocus ? keys : {})} className="outline-none" data-autofocus={listFocus ? '' : undefined}>
         {shown.map((item, index) => {
           const checked = !!item.checked && !item.manage
           const two = layout === 'two-line' && !!item.hint && !item.preview

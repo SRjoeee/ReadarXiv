@@ -387,6 +387,15 @@ The states are §8's.
   Polski, Português, Svenska, Türkçe; Български, Русский, Українська. The ten after the first nine are the languages of a
   script the engine already set (the owner's ruling of 2026-10-29): each has babel's names, TeX's hyphenation patterns and
   minimums (rules/layout.mjs, tests/fixtures/hyph/README.md) and the letters every served face draws a translation in.
+  The list shows eight rows and a half, the half saying there is more, and scrolls in a box of its own under the field,
+  which stays in view; it opens with the chosen language in view and keeps the active one there as the arrows walk it
+  (`MenuList`'s reveal). Uncapped while the languages were nine, the nineteen ran to the window's foot, on a phone past
+  it (the owner, 2026-11-03: a shorter list, the search kept). The field takes the focus as the menu opens, so that
+  typing filters at once, but not where the primary pointer is a finger (`(pointer: coarse)`): there the list takes it,
+  as the service menu's does, and no on-screen keyboard covers the list until the field is tapped. The primary pointer
+  and not `any-hover`/`any-pointer`, which answer for every input a device has: a phone with a stylus that hovers would
+  read as able to hover and get the keyboard, and a laptop with a touch screen would lose the focus its keyboard types
+  into. The extension's popup and settings page draw the same menu (UI.md S-P-22, S-O-23), at five rows and a half.
 - 翻译服务: the same list and labels as the popup's service menu.
 - They are built on the shared `Menu` once it has the fixes in §9.4.
 

@@ -143,6 +143,11 @@ html[data-axt-dim] .axt-hl-layer { mix-blend-mode: screen; }
   .pop .narrow-only, .pop .narrowest-only { display: none; }
   /* a switch's row is a label (ReadingOptions): a press on its words turns the switch, and the pointer says so */
   .pop label.row { cursor: pointer; }
+  /* the language list under its search field (§6.7): eight rows and a half, the half saying there is more, scrolling in
+     a box of its own, so that the field stays in view and the chosen language is brought into it as the menu opens
+     (MenuList's reveal). Uncapped while the languages were nine, the nineteen ran to the window's foot (the owner,
+     2026-11-03). The extension's pages hold theirs to five rows and a half (ui.css), the popup's window being smaller */
+  .pop .search ~ [role="listbox"] { max-height: 255px; overflow: auto; overscroll-behavior: contain; scrollbar-width: none; }
   /* the contents (§6.3): `toc`, since Tailwind's `contents` is display: contents */
   .toc { position: fixed; z-index: 15; inset: var(--bar) auto 0 0; width: var(--side); display: flex; flex-direction: column; background: var(--chrome); box-shadow: 0.5px 0 0 var(--chrome-line); translate: -100% 0; visibility: hidden; transition: translate 200ms var(--ease), visibility 0s linear 200ms; }
   html[data-axt-contents] .toc { translate: 0 0; visibility: visible; transition: translate 200ms var(--ease), visibility 0s; }

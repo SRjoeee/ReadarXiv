@@ -814,6 +814,34 @@ try {
     await page.waitForTimeout(800)
     const w = await boxes()
     check('wide again: both panes, the places at the left\'s boxes', w.width[0] > 0 && w.width[1] > 0 && sameBoxes(w), JSON.stringify({ widths: w.width }))
+    // the language menu (§6.7, the owner's of 2026-11-03): its list under the search eight rows and a half, scrolling in a box
+    // of its own, opened with the chosen language in view; the focus in the search with a mouse, on the list under a finger,
+    // where a focused field would raise the on-screen keyboard over the list
+    const languageButton = page.locator('[data-zone="trail"] > .menu-btn').filter({ has: page.locator('[data-value][lang]') })
+    const languageMenu = async () => {
+      await languageButton.click()
+      await page.waitForTimeout(300)
+      const got = await page.evaluate(() => {
+        const list = document.querySelector('.pop:popover-open .search ~ [role="listbox"]')
+        if (!list) return null
+        const l = list.getBoundingClientRect(), c = list.querySelector('[aria-selected="true"]')?.getBoundingClientRect()
+        return { height: list.clientHeight, rows: list.querySelectorAll('[role="option"]').length, scrolls: list.scrollHeight > list.clientHeight, chosenInView: !!c && c.top >= l.top - 0.5 && c.bottom <= l.bottom + 0.5,
+          focus: document.activeElement?.getAttribute('role') ?? document.activeElement?.tagName ?? null, coarse: matchMedia('(pointer: coarse)').matches }
+      })
+      await page.keyboard.press('Escape')
+      await page.waitForTimeout(250)
+      return got
+    }
+    const byMouse = await languageMenu()
+    const touchCdp = await context.newCDPSession(page)
+    // touch emulation, which makes the primary pointer coarse (emulating the media feature alone did not reach the page)
+    await touchCdp.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 1 })
+    const byFinger = await languageMenu()
+    await touchCdp.send('Emulation.setTouchEmulationEnabled', { enabled: false })
+    await touchCdp.detach()
+    check('the language menu: its list under the search eight rows and a half (255 px), scrolling, the chosen language in view; the search focused with a mouse, the list under a finger',
+      byMouse?.height === 255 && byMouse.rows > 9 && byMouse.scrolls && byMouse.chosenInView && byMouse.focus === 'combobox' && !byMouse.coarse && byFinger?.coarse === true && byFinger.focus === 'listbox' && byFinger.chosenInView,
+      JSON.stringify({ byMouse, byFinger }))
     // a link out of the paper on the right: drawn by the place's page view, opened by the host (a new tab), the reader kept
     await page.evaluate(() => window.__reader.controller.goToPage('right', 4))
     const out = page.locator('#right .axt-place .annotationLayer a[href^="http"]')
