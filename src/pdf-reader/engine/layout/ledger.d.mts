@@ -27,6 +27,8 @@ export interface LedgerPage {
   paras?: { name: string; glyph: number; box: number }[]
   /** the regions TeX set (ink.mjs `regions`): a code region's line is code */
   regions?: { kind: string; from: number; to: number }[]
+  /** the page's view [x0, y0, x1, y1]: its middle a page of two columns' gutter (stream.mjs columnsAt) */
+  view?: readonly number[]
 }
 export interface OrphanLine { page: number; text: string; letters: number; x0: number; x1: number; y: number }
 export interface Ledger {

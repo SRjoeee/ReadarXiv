@@ -1426,18 +1426,26 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const styleOfChars = cs => L2.styleOfChars(cs, designs.serif)
   /** each unit's lead, by the unit: the name RUN_IN before its first line, its record, its word, style and characters */
   const leadsOf = new Map()
+  /** the characters of a name's row that are the counter TeX set after it: those whose middle stands within the counter's width
+   *  at the row's end, as the maker found it (file.mjs `counter`, names.mjs counterAfter), never read again here, so that a thin
+   *  space before it, a letter-spaced name or a stop after a space is the maker's verdict and no other; none where it found none */
+  const counterOf = (chars, nm) => (nm.counter > 0 ? chars.filter(c => (c.x0 + c.x1) / 2 > nm.x1 - nm.counter) : [])
   const paintNames = async pg => {
     if (!tex || !labels) return
     for (const nm of tex.index.names(pg)) {
-      const rec = { occurrence: nm.occurrence, key: nm.key, page: pg, drawn: false, why: null, chars: [], box: { x0: nm.x0, x1: nm.x1, baseline: nm.baseline, top: nm.top, bottom: nm.bottom, size: nm.size } }
+      const rec = { occurrence: nm.occurrence, key: nm.key, page: pg, drawn: false, why: null, chars: [], box: { x0: nm.x0, x1: nm.x1, baseline: nm.baseline, top: nm.top, bottom: nm.bottom, size: nm.size }, column: [nm.cx0, nm.cx1] }
       names.push(rec)
       const mine = (chars2[pg - 1] ?? []).filter(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 >= nm.x0 - 0.5 && (c.x0 + c.x1) / 2 <= nm.x1 + 0.5 && Math.abs(c.yb - nm.baseline) < 0.3 * nm.size)
       if (!mine.length) { rec.why = 'unread'; continue }
+      // (a name that leads no unit holds the counter TeX set after it in its row, where the maker found one (names.mjs
+      // counterAfter: IEEEtran's "APPENDIX A", "Appendix A:"): its characters in the counter's width, set after the target's word)
+      const counter = nm.unit >= 0 ? [] : counterOf(mine, nm)
+      const own = L2.nameStyleOf(mine.filter(c => !counter.includes(c)), nm)
+      const word = L2.nameInTarget(own.small ? { ...nm, capitals: false } : nm, mine.filter(c => !counter.includes(c)).map(c => c.ch).join(''), R.labels, to)
+      const text = word === null ? null : counter.length ? `${word} ${counter.map(c => c.ch).join('')}` : word
       // its size and its faked small capitals, read off its characters as a unit's are (layer2.mjs nameStyleOf): set in faked small
       // capitals, it is drawn in small capitals as such a unit is, its word in its own case (the layer drawing its small capitals,
-      // a CJK target's at CJK_CAPS_SIZE of the size), never as a case change's capitals
-      const own = L2.nameStyleOf(mine, nm)
-      const text = L2.nameInTarget(own.small ? { ...nm, capitals: false } : nm, mine.map(c => c.ch).join(''), R.labels, to)
+      // a CJK target's at CJK_CAPS_SIZE of the size), never as a case change's capitals (above, with its counter)
       if (text === null) { rec.why = !R.labels?.[nm.key] ? 'no word' : 'same'; continue }
       // its style: its characters' (a class's bold or italic heading, small capitals), its design the paper's
       const st = own.small ? { ...styleOfChars(mine), caps: true } : styleOfChars(mine)
@@ -2183,6 +2191,15 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         // (painted on the row's page after that unit, whose erasing of the row covers where it starts: paintLed)
         p.ledBy = row.id
       }
+    }
+    // (a unit whose first line follows on its line a babel name that leads no unit, the name's counter its row's (an appendix's
+    // contents line, "Appendix A: Top-p Scaling …", its title an ink unit): laid from where the name's drawn word and counter end,
+    // the original's separation after them, as a shared line's next unit is from where the unit before it ends; where the name
+    // was not drawn, where TeX set it. Its line's in the name's column only: a unit across the gutter is the other column's)
+    if (p.ledBy === undefined && p.blocks[0] && !p.blocks[0].centred) {
+      const b = p.blocks[0], x = b.x0 + b.indent, size = b.sizes?.[0] ?? 10
+      const nm = names.find(r => r.drawn && r.unit === undefined && r.page === b.page && Math.abs(r.box.baseline - b.B[0]) < 0.25 * size && r.box.x1 <= x + 0.5 && x - r.box.x1 < 3 * size && x >= r.column[0] && x < r.column[1])
+      if (nm) b.start = nm.x + nm.w + Math.max(0, x - nm.box.x1)
     }
     if (P.borrow && p.unit.kind !== 'cell') for (const b of p.blocks) b.freeOf = () => freeFor(b, s)
     const t2 = lap()

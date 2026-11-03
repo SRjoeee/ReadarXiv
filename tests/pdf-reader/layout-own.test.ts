@@ -93,6 +93,20 @@ describe('placeholders, labels and names (MR 4–6)', () => {
     const pages = [page([{ pt: '0s' }, { pt: 'n2.proof.s' }, 'Proof', { pt: 'n2.proof.e' }, 'Easy', { pt: '0e' }])]
     expect(groupsOf(ownOf(pages, { units: units('Easy') }), pages)).toEqual({ n2: 'Proof', u0: 'Easy' })
   })
+  it('gives a babel name the counter TeX set after it on its line, no unit\'s (IEEEtran\'s "APPENDIX A", "Appendix A:", 2610.42112v1)', () => {
+    // (the appendix's heading: the name, a space, its letter; the title on the line below, a unit; its contents line: the name,
+    // its letter and colon, the title after a space, no unit's; a name before a word, or before a unit's text, keeps its own)
+    const pages = [page([
+      { pt: 'n3.appendix.s' }, 'Appendix', { pt: 'n3.appendix.e' }, { dx: 3 }, 'A:', { dx: 3 }, 'Scaling', { dx: 30 }, '16', '\n',
+      { pt: 'n4.appendix.s' }, 'APPENDIX', { pt: 'n4.appendix.e' }, { dx: 3 }, 'A', '\n', { pt: '0s' }, 'Scaling', { pt: '0e' }, '\n',
+      { pt: 'n5.appendix.s' }, 'Appendix', { pt: 'n5.appendix.e' }, { dx: 3 }, 'Additional', '\n',
+      { pt: '1s' }, { pt: 'n6.proof.s' }, 'Proof', { pt: 'n6.proof.e' }, { dx: 3 }, 'A', { dx: 3 }, 'b', { pt: '1e' },
+    ])]
+    expect(groupsOf(ownOf(pages, { units: units('Scaling', 'A b') }), pages)).toEqual({ n3: 'AppendixA:', n4: 'APPENDIXA', n5: 'Appendix', n6: 'Proof', u0: 'Scaling', u1: 'Ab' })
+    // (on a page of two columns, a letter past the middle is the other column's, however near: the name's word alone)
+    const two = [page([{ pt: 'c2-1' }, { dx: 245 }, { pt: 'n7.appendix.s' }, 'Appendix', { pt: 'n7.appendix.e' }, { dx: 9 }, 'A'])]
+    expect(groupsOf(ownOf(two, { units: [] }), two)).toEqual({ n7: 'Appendix' })
+  })
   it('gives a footnote\'s call after the last word that TeX gave no mark its raised mark right after the end mark (2610.35877v1\'s abstract)', () => {
     const pages = [page([{ pt: '0s' }, 'Hello.', { pt: '0e' }, '1', '\n', { pt: '1s' }, 'Next', { pt: '1e' }])]
     const mark = pages[0]!.glyphs[6]!

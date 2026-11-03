@@ -184,8 +184,12 @@ export { LayoutRefusal } from './json.mjs'
  *  2610.30854v1): a page whose lines moved across its breaks through compile drift is drawable (carry.mjs DRIFT_LINES: at most 4
  *  at each end, to or from the page beside it, the rest arXiv's page's words), its units laid where a file of 30 left them
  *  `undrawn`; 32 (the owner's decision of 2026-11-03): each line of a code environment's body a region the file holds
- *  (`regions`, the file's schema 6), read from the points the layout compile sets around it (marks.mjs regionsTex) */
-export const LAYOUT = '32'
+ *  (`regions`, the file's schema 6), read from the points the layout compile sets around it (marks.mjs regionsTex); 33 (the owner's
+ *  report of 2026-11-03 on 2610.42112v1): a babel name's row holds the counter TeX set after it on its line where it leads no unit
+ *  (names.mjs counterAfter: IEEEtran's "APPENDIX A" centred over its title, centred so whole; "Appendix A:" in its contents list),
+ *  its width at the row's end in slot 12 (a RUN_IN name's glue; 0 before), which the layer splits off and sets after the name's
+ *  word: a reader of 32 would draw the word over the counter's place and drop the counter, and refuse the slot */
+export const LAYOUT = '33'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,
@@ -662,7 +666,7 @@ function checkRows(f, { views, lo, hi, sized = true }) {
   last = -1
   for (let i = 0; i < names.length; i++) {
     const r = names[i]
-    if (!Array.isArray(r) || r.length !== NAME_ROW) throw refuse(`names[${i}]`, `not [occurrence, key, page, x0, baseline, x1, top, bottom, size, font, flags, unit, glue, column x0, column x1] (${kindOf(r)})`)
+    if (!Array.isArray(r) || r.length !== NAME_ROW) throw refuse(`names[${i}]`, `not [occurrence, key, page, x0, baseline, x1, top, bottom, size, font, flags, unit, glue or counter, column x0, column x1] (${kindOf(r)})`)
     if (!isInteger(r[0], last + 1, ID_MAX)) throw refuse(`names[${i}][0]`, 'not an occurrence above the last')
     if (!isInteger(r[1], 0, NAME_KEYS.length - 1)) throw refuse(`names[${i}][1]`, 'not a key of NAME_KEYS')
     checkBox(r, 2, 1, 3, 2, 4, 5, true, views, span, 'names', i, -1)
@@ -672,7 +676,8 @@ function checkRows(f, { views, lo, hi, sized = true }) {
     if (!isInteger(r[10], 0, NAME_BITS)) throw refuse(`names[${i}][10]`, 'not flags of NAME_FLAG')
     const runIn = (r[10] & NAME_FLAG.RUN_IN) !== 0, v = 4 * (r[2] - lo), width = views[v + 2] - views[v]
     if (runIn ? !(isInteger(r[11], 0, ID_MAX) && slot.has(r[11])) : r[11] !== -1) throw refuse(`names[${i}][11]`, runIn ? 'not a unit of the file' : 'not -1, the name leading no unit')
-    if (!isNumber(r[12]) || r[12] < 0 || r[12] > width || (!runIn && r[12] !== 0)) throw refuse(`names[${i}][12]`, runIn ? 'not a glue 0 to the page\'s width' : 'not 0, the name leading no unit')
+    // (slot 12: a RUN_IN name's glue to its unit; a name leading no unit, its counter's width at the row's end, short of the row)
+    if (!isNumber(r[12]) || r[12] < 0 || r[12] > width || (!runIn && r[12] >= r[5] - r[3])) throw refuse(`names[${i}][12]`, runIn ? 'not a glue 0 to the page\'s width' : 'not a counter 0 to short of the row, the name leading no unit')
     if (!isNumber(r[13]) || !isNumber(r[14]) || r[13] < views[v] - 1 || r[14] > views[v + 2] + 1 || r[13] >= r[14]) throw refuse(`names[${i}][13]`, "not a column's edges on the page")
     zeroes(r)
     last = r[0]
@@ -907,11 +912,12 @@ export function indexLayout(file) {
     Object.freeze(unit)
   }
   // each page's names, in the file's order
+  const runInOf = r => (r[10] & NAME_FLAG.RUN_IN) !== 0
   const namesOn = new Array(pages + 1).fill(NO_NAMES)
   for (let i = 0; i < names.length; i++) {
     const r = names[i], p = r[2]
     if (namesOn[p] === NO_NAMES) namesOn[p] = []
-    namesOn[p].push(Object.freeze({ occurrence: r[0], key: NAME_KEYS[r[1]], page: p, x0: r[3], baseline: r[4], x1: r[5], top: r[6], bottom: r[7], size: r[8], font: r[9], centred: (r[10] & NAME_FLAG.CENTRED) !== 0, capitals: (r[10] & NAME_FLAG.CAPITALS) !== 0, unit: r[11], glue: r[12], cx0: r[13], cx1: r[14] }))
+    namesOn[p].push(Object.freeze({ occurrence: r[0], key: NAME_KEYS[r[1]], page: p, x0: r[3], baseline: r[4], x1: r[5], top: r[6], bottom: r[7], size: r[8], font: r[9], centred: (r[10] & NAME_FLAG.CENTRED) !== 0, capitals: (r[10] & NAME_FLAG.CAPITALS) !== 0, unit: r[11], glue: runInOf(r) ? r[12] : 0, counter: runInOf(r) ? 0 : r[12], cx0: r[13], cx1: r[14] }))
   }
   for (let p = 1; p <= pages; p++) Object.freeze(namesOn[p])
   const viewOf = new Array(pages + 1)

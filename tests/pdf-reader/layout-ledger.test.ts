@@ -201,6 +201,99 @@ describe('ledgerOf', () => {
     expect(l.counts.references.letters).toBe(['Ab', 'Bee', 'Title', 'Onlineonly', 'Cd', 'Dee'].join('').length)
   })
 
+  it('ends the references\' zone with the bibliography\'s last entry\'s last line, not at the next unit\'s start (2610.42112v1 p16)', () => {
+    // (a numbered bibliography, two entries, the style's words after the first between them; the last entry's closing stop after
+    // its end mark on its line; then, before any unit starts, what TeX sets after the bibliography: an appendix's own title and
+    // contents list (titletoc's \printcontents), each line no unit's; then the appendix's first heading)
+    const units = [{ kind: 'heading' }, { kind: 'reference' }, { kind: 'reference' }]
+    const p1 = page(
+      { point: 'n1.ref.s' }, { glyphs: run('References', 100, 760), owner: 'n1' }, { point: 'n1.ref.e' },
+      { glyphs: run('[1]', 60, 740) }, { point: '1s' }, { glyphs: run('Bee.', 100, 740), owner: 'u1' }, { point: '1e' }, { glyphs: run('Online only', 100, 730) },
+      { glyphs: run('[2]', 60, 720) }, { point: '2s' }, { glyphs: run('Dee', 100, 720), owner: 'u2' }, { point: '2e' }, { glyphs: run('.', 120, 720) },
+      // (the last entry's part TeX set past its mark on the line below, at the entry's leading: a DOI)
+      { glyphs: run('doi 10.1/x', 100, 708) },
+      // (an author's address after the bibliography, past the skip before it)
+      { glyphs: run('Email address', 100, 680) },
+    )
+    const p2 = page(
+      { glyphs: run('Appendix', 280, 760) },
+      { glyphs: run('Appendix A: Scaling by Layer 16', 50, 740) },
+      { glyphs: run('A-A Dense Sets . . . 16', 50, 728) },
+      { point: '0s' }, { glyphs: run('Scaling', 100, 600), owner: 'u0' }, { point: '0e' },
+    )
+    const l = ledger([p1, p2], units)
+    // (on the bibliography's page every line no unit holds is the zone's: the labels, the style's words, the last entry's stop)
+    expect(l.lines.filter(x => x.page === 1).map(x => x.zone)).toEqual(['references', 'references', 'references', 'references', 'references', null])
+    expect(classAt(l, 1, at(p1, 'E'))).toBe('orphan')
+    expect(classAt(l, 1, at(p1, 'O'))).toBe('references')
+    // (the title and an entry's line of no leaders orphans; a line that ends in leaders and a page number a list's, no list's name over it)
+    expect([at(p2, 'p'), at(p2, 'S'), at(p2, 'D')].map(g => classAt(l, 2, g))).toEqual(['orphan', 'orphan', 'contents'])
+    expect(l.lines.filter(x => x.page === 2).map(x => x.zone)).toEqual([null, null, null])
+  })
+
+  it('reads a list\'s line by the last word of its baseline: a page number set far right on a segment of its own (2610.37668v1 p15)', () => {
+    // (a contents list no name heads: a section's line, its page number at the column's edge; a sub-entry's, leaders between; a
+    // prose line no unit holds that ends in a number in its own words; a line whose number is no page number)
+    const pg = page(
+      { glyphs: run('Hexel Parameterization', 100, 700) }, { glyphs: run('15', 300, 700) }, { glyphs: run('right column text', 360, 700), owner: 'u0' },
+      { glyphs: run('Appearance . . . . . . 15', 120, 688) },
+      { glyphs: run('we trained it for 20', 100, 660) },
+      { glyphs: run('Spatial Color?', 100, 640) }, { glyphs: run('22b', 400, 640) },
+      // (an author line: an affiliation's mark raised before "and", the next author's mark far right on the line: no page number)
+      { glyphs: run('1', 100, 623, { size: 7 }) }, { glyphs: run('Hank', 110, 620) }, { glyphs: run('2', 300, 623, { size: 7 }) },
+    )
+    const l = ledger([pg], [{ kind: 'para' }])
+    expect(['H', 'A', 'w', 'S', 'k'].map(ch => classAt(l, 1, at(pg, ch)))).toEqual(['contents', 'contents', 'orphan', 'orphan', 'orphan'])
+  })
+
+  it("reads no line's number in the margin as a list's page number: a paper numbered by lineno, its numbers past the units' lines too", () => {
+    // (each line numbered at one place in the right margin, a unit's paragraph's and an orphan's alike: the orphan's lines no list's)
+    const pg = page(
+      { glyphs: run('Owned prose line one', 100, 700), owner: 'u0' }, { glyphs: run('12', 480, 700) },
+      { glyphs: run('Owned prose line two', 100, 688), owner: 'u0' }, { glyphs: run('13', 480, 688) },
+      { glyphs: run('Owned prose', 100, 676), owner: 'u0' }, { glyphs: run('14', 480, 676) },
+      { glyphs: run('orphan words here', 100, 664) }, { glyphs: run('15', 480, 664) },
+      { glyphs: run('more of it', 100, 652) }, { glyphs: run('16', 480, 652) },
+    )
+    const l = ledger([pg], [{ kind: 'para' }])
+    expect(['h', 'f'].map(ch => classAt(l, 1, at(pg, ch)))).toEqual(['orphan', 'orphan'])
+    // (the same lines, no unit's line numbered: a list's, its page numbers at the column's edge)
+    const list = page({ glyphs: run('orphan words here', 100, 664) }, { glyphs: run('15', 480, 664) }, { glyphs: run('more of it', 100, 652) }, { glyphs: run('16', 480, 652) })
+    expect(['h', 'f'].map(ch => classAt(ledger([list], [{ kind: 'para' }]), 1, at(list, ch)))).toEqual(['contents', 'contents'])
+  })
+
+  it("reads a list's page number in the line's own column: the other column's number past the gutter is none (stream.mjs columnsAt)", () => {
+    const two = page({ point: 'c2-1' }, { glyphs: run('left column words', 60, 700) }, { glyphs: run('12', 330, 700), owner: 'u1' })
+    two.page.view = [0, 0, 612, 792]
+    expect(classAt(ledger([two], [{ kind: 'para' }, { kind: 'cell' }]), 1, at(two, 'w'))).toBe('orphan')
+    // (on a page of one column, the same number the line's)
+    const one = page({ glyphs: run('left column words', 60, 700) }, { glyphs: run('12', 330, 700), owner: 'u1' })
+    expect(classAt(ledger([one], [{ kind: 'para' }, { kind: 'cell' }]), 1, at(one, 'w'))).toBe('contents')
+  })
+
+  it("ends the bibliography's last entry at a list set right under it at its own leading: a line that ends as a list's entry is none of it", () => {
+    const units = [{ kind: 'reference' }, { kind: 'reference' }]
+    const pg = page(
+      { point: '0s' }, { glyphs: run('Bee', 100, 760), owner: 'u0' }, { point: '0e' }, { point: '1s' }, { glyphs: run('Dee', 100, 748), owner: 'u1' }, { point: '1e' },
+      { glyphs: run('Scaling by Layer . . . . 16', 100, 736) }, { glyphs: run('Dense Sets . . . . 17', 100, 724) },
+    )
+    const l = ledger([pg], units)
+    expect([at(pg, 'L'), at(pg, 'n')].map(g => classAt(l, 1, g))).toEqual(['contents', 'contents'])
+  })
+
+  it('keeps a double-spaced bibliography\'s last entry\'s lines past its mark in its zone, by the bibliography\'s own pitch (2610.11256v1 p42)', () => {
+    const units = [{ kind: 'reference' }, { kind: 'reference' }]
+    const pg = page(
+      { point: '0s' }, { glyphs: run('Bee and Cee', 100, 760), owner: 'u0' }, { glyphs: run('Journal', 120, 736), owner: 'u0' }, { point: '0e' },
+      { point: '1s' }, { glyphs: run('Dee and Eff', 100, 712), owner: 'u1' }, { point: '1e' },
+      // (the last entry's place TeX set past its mark, a line below at the style's double spacing; then an address past a skip)
+      { glyphs: run('Dusseldorf Institute', 100, 688) },
+      { glyphs: run('Mail address', 100, 640) },
+    )
+    const l = ledger([pg], units)
+    expect([at(pg, 'I'), at(pg, 'M')].map(g => classAt(l, 1, g))).toEqual(['references', 'orphan'])
+  })
+
   it('reads a formula\'s line, a code line and a line of no word as never translated', () => {
     const pg = page(
       { point: 'bs1' },

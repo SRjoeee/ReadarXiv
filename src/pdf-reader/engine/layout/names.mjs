@@ -10,3 +10,28 @@ export const NAME_KEYS = Object.freeze(['abstract', 'ref', 'bib', 'contents', 'l
  *  name literally writes (marks.mjs literalNames), and a head the layer never draws as a theorem's (layer2.mjs
  *  headLabelInTarget: a babel name is the names' own, nameInTarget) */
 export const NAME_ENGLISH = Object.freeze({ abstract: 'Abstract', ref: 'References', bib: 'Bibliography', contents: 'Contents', listfigure: 'List of Figures', listtable: 'List of Tables', appendix: 'Appendix', index: 'Index', proof: 'Proof', preface: 'Preface', glossary: 'Glossary', figure: 'Figure', table: 'Table' })
+
+/** a counter's form, of its characters (NFKC, lower case, no white space): a letter, a number of up to four digits or a roman
+ *  numeral, maybe a letter before a number ("A1"), its parts after stops or dashes ("C.1", "A-A"), a stop or a colon after it */
+const COUNTER_FORM = /^(?:[a-z](?=\d))?(?:\d{1,4}|[a-z]|[ivxlcdm]{1,6})(?:[.\-–](?:\d{1,4}|[a-z]))*[.:]?$/u
+/** how far after a name its counter may begin, of the name's size: TeX's \nobreakspace is a third of an em, a \quad one */
+export const COUNTER_GAP = 1.1
+/** a word's space, of the glyphs' size: two glyphs further apart are two words (a fifth of an em, as layer2.mjs spacedText reads) */
+const WORD_SPACE = 0.2
+/**
+ * The counter TeX set after a babel name on its line where it leads no unit (the class's own heading or contents line,
+ * `\appendixname\nobreakspace\thesection`: IEEEtran's "APPENDIX A" over its title, its contents list's "Appendix A: …"): of
+ * `next`, the glyphs that stand after the name on its line in reading order ({ u, x0, x1, size }), the first that begins
+ * within COUNTER_GAP of `size` after the name's end `x1`, and those after it that follow within a word's space, read as a
+ * counter's form and then a word's space or the line's end. The same rule for the wrap, which gives those glyphs the name's
+ * group (own.mjs), and the maker, which gives them its row (make.mjs): the layer then sets the counter after the name's
+ * word, where it was left at its own place, a gap the width of the original's word less the target's after the word.
+ * Returns how many of `next` the counter is: 0 for none
+ */
+export function counterAfter(x1, size, next) {
+  if (!next.length || !(size > 0) || next[0].x0 < x1 - 0.1 || next[0].x0 - x1 > COUNTER_GAP * size) return 0
+  let k = 1
+  while (k < next.length && next[k].x0 - next[k - 1].x1 < WORD_SPACE * Math.max(next[k].size ?? size, next[k - 1].size ?? size)) k++
+  const text = next.slice(0, k).map(g => g.u ?? '').join('').normalize('NFKC').toLowerCase().replace(/\s/gu, '')
+  return text && COUNTER_FORM.test(text) ? k : 0
+}

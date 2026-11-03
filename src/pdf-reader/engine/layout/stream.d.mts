@@ -29,6 +29,8 @@ export interface StreamPage { glyphs: StreamGlyphs; boxes: number[]; points: Ink
 export interface Follow { closing: boolean; want: string; rest?: string; display?: boolean; ends: string[]; blocked: boolean; through?: string | null; group?: string[]; split?: { name: string; text: string; want?: string; rest?: string; ends?: string[] }; moved?: string }
 /** a text's letters and digits, without their accents, lower case: the per-unit erasure's evidence that ink is a text's */
 export declare function spellOf(s: string): string
+/** a page's columns as the maker reads them: an x range's column, 0 or 1 on a page of two, 2 across both, 0 on a page of one */
+export declare function columnsAt(page: { points?: readonly { name: string }[]; view?: readonly number[] }): (x0: number, x1: number) => 0 | 1 | 2
 export interface Owned { how: number; glyphs: [page: number, index: number][]; boxes: [page: number, index: number][] }
 /** a display a unit opens with, which the marking passes over (marks.mjs headsOf), by its unit's start mark: the opening mark's
  *  name it would have had, and its display group's later displays' (none of them a point) */

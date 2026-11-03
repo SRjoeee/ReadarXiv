@@ -424,6 +424,11 @@ file holds `regions`. Every layout file and base record is the one `next` 74d7f6
 for its version. They are `c9a45bd9`'s but for 2307.16209v1's: its unit 85, a bibliography entry `noLine` there, is laid. That
 is `next`'s drift since `c9a45bd9` was made, from #550 (PIPELINE 54, a display found by its unit's marks), which kept the
 layout version and so made no pack. 14 new objects.
+The pack of the names' counters (`3245d753`, LAYOUT 33: a babel name's row holds the counter TeX set after it where it leads no
+unit) is `19d1b559`'s with each output's `layout.json` and `base.json` made again the same way, and by the same steps. Every base
+page is byte for byte the one before, and every layout file the one before but for its version: no pack paper sets a counter
+after a name it does not lead (2608.16117v1's appendix names lead their headings), nor text after its bibliography that the
+references' zone held. 14 new objects.
 Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
 The wrap reads each base's units from its paper's source, so the pack holds that too: `sources/<paper>/source.gz`, one a paper
 (`gate-pack.mjs make --sources=<dir of <paper>/source.gz>`, `data/corpus` by default; a make with a base of ours and no source

@@ -71,8 +71,9 @@ export interface LayoutStats {
    *  the LOST pieces outside the unit's lines (PH_FLAG.OUTSIDE: before its start mark, a display after its end mark) */
   ph: { marked: number; found: number; empty: number; lost: number; joined: number; outside: number; byKind: Record<string, [found: number, marked: number]>; unmarked: number; symbols: number; inferred: number; why: Record<string, number>; textTaken: number; owned: number; matched: number; unmatched: number; twice: number; foreign: number; shared: number; texts: number; heads: [found: number, empty: number] }
   /** babel's names: the occurrences the marked original marks, those the file locates (and of them those leading a unit:
-   *  RUN_IN), and why each other is not */
-  names: { marked: number; located: number; runIn: number; why: Record<string, number> }
+   *  RUN_IN, and of the others those whose row holds the counter TeX set after them: names.mjs counterAfter), and why each
+   *  other is not */
+  names: { marked: number; located: number; runIn: number; counters: number; why: Record<string, number> }
   /** the colour pieces of the units the file holds, and those whose run's fill TeX wrote (the file's `colours` rows) */
   colours: { pieces: number; evaluated: number }
   /** by the unit's kind: the units with a label, of the located units whose start mark was carried to their first line */

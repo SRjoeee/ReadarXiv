@@ -47,8 +47,9 @@ import { utf8 } from '../translate/mt.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { UNHIDDEN } from './delta-wire.mjs'
 import { classOf, headsOf, INK_ANY, leadStep } from './marks.mjs'
-import { OWNED, ownedOf, regionsOf, spellOf } from './stream.mjs'
+import { columnsAt, OWNED, ownedOf, regionsOf, spellOf } from './stream.mjs'
 import { isLabelForm, labelFormOf, labelText } from './label-form.mjs'
+import { counterAfter } from './names.mjs'
 
 export { UNHIDDEN }
 /** a label's form, the paper's theorem names beside the standard ones: layout/label-form.mjs */
@@ -554,12 +555,15 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
   }
 
   // ---- the names (MR 6)
+  /** each name's group and its page, for its counter (below) */
+  const named = []
   for (const [name, list] of where) {
     const m = NAME_START.exec(name)
     if (!m || list.length !== 1 || work > OWN_WORK) continue
     const close = where.get(`n${m[1]}.${m[2]}.e`) ?? []
     if (close.length !== 1 || before(close[0], list[0]) || at(close[0]) !== at(list[0])) continue
     claim(take(list[0], close[0], at(list[0])), `n${m[1]}`, 'n')
+    named.push([`n${m[1]}`, list[0][0]])
   }
 
   // ---- each unit's groups and pages, and the spell check (§1.3)
@@ -736,6 +740,22 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
     const m = OPENING.exec(name)
     if (!m || where.has(name) || e.how >= OWNED) continue
     for (const [p, g] of e.glyphs) if (gOwn[p - 1][g] === null) leads[p - 1].set(g, `u${m[2]}.p`)
+  }
+  // ---- each name's counter (MR 6b): the counter TeX set after it on its line, no unit's once the units have let go of what is
+  // not theirs (a heading's range from its start mark held IEEEtran's "A" on the line before its title, which its spelling let
+  // go), in the name's column: the name's, so that the layer sets it after the name's word instead of leaving it at its own place
+  // past a gap (names.mjs counterAfter, the maker's rule too, make.mjs nameAt)
+  for (const [group, p] of named) {
+    const G = pages[p - 1].glyphs, O = gOwn[p - 1], colOf = columnsAt(pages[p - 1])
+    let last = -1, x0 = Infinity
+    for (let g = 0; g < G.length; g++) if (O[g] === group) { x0 = Math.min(x0, G[g].x0); if (last < 0 || G[g].x1 > G[last].x1) last = g }
+    if (last < 0) continue
+    const col = colOf(x0, G[last].x1)
+    const y = G[last].y, size = G[last].size, next = []
+    for (let g = 0; g < G.length; g++) if (O[g] !== group && /\S/.test(G[g].u ?? '') && Math.abs(G[g].y - y) < 0.25 * Math.max(G[g].size, size, 5) && (G[g].x0 + G[g].x1) / 2 > G[last].x1) next.push(g)
+    next.sort((a, b) => G[a].x0 - G[b].x0 || a - b)
+    const k = counterAfter(G[last].x1, size, next.map(g => G[g]))
+    if (k && next.slice(0, k).every(g => O[g] === null && colOf(G[g].x0, G[g].x1) === col)) for (const g of next.slice(0, k)) O[g] = group
   }
   return { glyphs: gOwn, boxes: bOwn, units: unitOf, leads, stats: { units: unitOf.size, unhidden, spell: spell.slice(0, SPELL_LIST_MAX), labelKept, leaks: { count: leaks.length, units: leaks.slice(0, SPELL_LIST_MAX) } } }
 }

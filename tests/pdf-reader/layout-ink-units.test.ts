@@ -116,6 +116,15 @@ describe('inkUnitsOf', () => {
     expect(stops.map(i => owned.has(i))).toEqual([true, false, false, false, true])
   })
 
+  it("ends an entry at a line whose page number stands far right on a segment of its own, no list's name over it (2610.42112v1 p16)", () => {
+    // (an appendix's own list after its title, in one of TeX's paragraphs: a section's line, its number at the column's edge, which
+    // the ledger cuts as a line of its own; a sub-entry's under it, leaders and number; each its own unit, the heading's echoed)
+    const units = [{ kind: 'heading', pieces: [{ t: 'text', s: 'Scaling by Layer' }] }, { kind: 'heading', pieces: [{ t: 'text', s: 'Dense Sets' }] }]
+    const pg = page({ para: 3 }, { glyphs: run('Scaling by Layer', 100, 700) }, { glyphs: run('16', 520, 700) }, { glyphs: run('A-A  Dense Sets . . . . . 16', 100, 688) })
+    const { ink } = unitsOf([pg], units)
+    expect(ink.map(u => [u.kind, textOf(u), u.echo])).toEqual([['inkcontents', 'Scaling by Layer', 0], ['inkcontents', 'Dense Sets', 1]])
+  })
+
   it("joins a contents entry's lines by TeX's paragraphs where the compile marked them, else where a line ends in no page number", () => {
     const lines = [{ glyphs: run('3  Black hole perturbations and', 100, 700) }, { glyphs: run('quasinormal modes . . . 21', 110, 688) }, { glyphs: run('4  Results . . . 30', 100, 676) }]
     const marked = page({ point: 'bs1' }, { point: 'n1.contents.e' }, { para: 7 }, lines[0]!, lines[1]!, { para: 8 }, lines[2]!, { point: 'be1' })

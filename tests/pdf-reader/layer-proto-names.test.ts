@@ -39,24 +39,27 @@ const H = 300
  *  `glue` after the dash); `bare`: no unit at all, the
  *  paragraph's line text no unit holds (a page of references alone); `column`: the name's TeX column in its row;
  *  `nameSize`: its size there (the unit's lines are 10) */
-function paper({ name = 'Abstract', x = 20, width = 40, beside = null as [string, number, number] | null, key = 'abstract', flags = 0, runIn = false, glue = 0, bare = false, column = [20, 120], nameSize = 10, text = '\u6c49\u5b57\u6c49\u5b57', runs = null as [string, number, number, number][] | null } = {}) {
+function paper({ name = 'Abstract', x = 20, width = 40, beside = null as [string, number, number] | null, key = 'abstract', flags = 0, runIn = false, glue = 0, bare = false, column = [20, 120], nameSize = 10, text = '\u6c49\u5b57\u6c49\u5b57', runs = null as [string, number, number, number][] | null, after = null as number | null } = {}) {
+  // (`after`: the unit's line on the name's line from that x, as runIn's, but led by nothing: an appendix's contents line, its
+  // title an ink unit after the name and its counter)
+  const on = runIn ? 64 + glue : after
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (px: number, py: number) => [px * scale, (H - py) * scale], convertToPdfPoint: (px: number, py: number) => [px / scale, H - py / scale] })
   const item = (str: string, ix: number, w: number, y: number, size = 10) => ({ str, transform: [size, 0, 0, size, ix, y], width: w, height: size, fontName: 'f1', dir: 'ltr', hasEOL: false })
   // (`runs`: the name's items, each [text, x, width, size], in place of one at 10: a faked small capitals' run)
-  const items = [...(runs ? runs.map(([s, rx, w, z]) => item(s, rx, w, 230, z)) : [item(name, x, width, 230)]), ...(beside ? [item(beside[0], beside[1], beside[2], 230)] : []), ...(runIn ? [item('\u2014', 60, 4, 230), item('Alpha beta gamma', 64 + glue, 100, 230)] : [item('Alpha beta gamma', 20, 100, 200)])]
+  const items = [...(runs ? runs.map(([s, rx, w, z]) => item(s, rx, w, 230, z)) : [item(name, x, width, 230)]), ...(beside ? [item(beside[0], beside[1], beside[2], 230)] : []), ...(runIn ? [item('\u2014', 60, 4, 230)] : []), ...(on !== null ? [item('Alpha beta gamma', on, 100, 230)] : [item('Alpha beta gamma', 20, 100, 200)])]
   const page = { view: [0, 0, 300, H], getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items, styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: () => ({ promise: Promise.resolve() }), cleanup() {}, commonObjs: { get: () => ({ name: 'NimbusRomNo9L-Regu' }) } }
   const file = {
     schema: LAYOUT_SCHEMA, lineskip: null, layout: '5', pdfjs: '6.3.289', paper: { id: '2610.00001', version: 1, pages: 1 }, left: '', views: [0, 0, 300, 300], fonts: ['NimbusRomNo9L-Regu'],
-    units: runIn ? [[0, UNIT_KINDS.indexOf('para'), 9, 0, 1]] : [], lines: runIn ? [[0, [1, 64 + glue, 164 + glue, 230, 237, 227.5, 10, 0]]] : [], frames: runIn ? [[0, [1, 0, 0, 1, -1, 0]]] : [],
+    units: on !== null ? [[0, UNIT_KINDS.indexOf('para'), 9, 0, 1]] : [], lines: on !== null ? [[0, [1, on, on + 100, 230, 237, 227.5, 10, 0]]] : [], frames: on !== null ? [[0, [1, 0, 0, 1, -1, 0]]] : [],
     erase: [], ph: [], labels: runIn ? [[0, LABEL_KINDS.indexOf('number'), 1, 60, 230, 64, 237, 228]] : [], headings: [], pageText: [], held: [],
     names: [[1, NAME_KEYS.indexOf(key as never), 1, x, 230, x + width, 237, 228, nameSize, 0, flags | (runIn ? NAME_FLAG.RUN_IN : 0), runIn ? 0 : -1, glue, column[0], column[1]]],
   }
   return {
     doc: withGroups({ numPages: 1, getPage: async () => page }),
-    geometry: { schema: 1, kinds: bare ? [] : ['para'], left: { pages: [[0, 0, 300, 300]], units: bare ? [] : [[0, 0, [runIn ? [1, 64 + glue, 227.85, 164 + glue, 236.83] : [1, 20, 197.85, 120, 206.83]]]] } },
+    geometry: { schema: 1, kinds: bare ? [] : ['para'], left: { pages: [[0, 0, 300, 300]], units: bare ? [] : [[0, 0, [on !== null ? [1, on, 227.85, on + 100, 236.83] : [1, 20, 197.85, 120, 206.83]]]] } },
     units: bare ? [] : [{ kind: 'para', src: 'Alpha beta gamma', state: 'whole', pieces: [{ t: 'text', tr: true, s: text }] }],
     // (the translation's one text piece the source's: the file locates the run-in unit whole)
-    tex: { index: indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(file)))), pieces: new Map(runIn ? [[0, [[0]]]] : []) },
+    tex: { index: indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(file)))), pieces: new Map(on !== null ? [[0, [[0]]]] : []) },
   }
 }
 const open = (o: object = {}, p = paper()) => openProto({ ...p, target: 'zh', pages: 1, scale: 1, dpr: 1, copy: false, labels: { captions: null }, ...o } as never)
@@ -194,6 +197,40 @@ describe("v0 draws babel's names in the target's words (D1a)", () => {
     await left.until(1)
     expect(left.names[0]).toMatchObject({ drawn: false, why: 'inline: served', unit: 0 })
     expect(left.svgOf(1).textContent).not.toContain('Zusammenfassung')
+  })
+
+  it('sets the counter TeX set after a name in its row after the target\'s word, the line\'s alignment kept (IEEEtran\'s appendices)', async () => {
+    // (a contents line, "Appendix A:" from 20 to 71, left-set: "\u9644\u5f55 A:" from 20; its title after it on its line, led by
+    // nothing, laid from where the word and counter end, the original's 4 between them)
+    // (the row's slot 12, a name leading no unit: the counter's width at its end, where the maker split it off; 8 here)
+    const entry = await open({}, paper({ key: 'appendix', x: 20, width: 51, glue: 8, runs: [['Appendix', 20, 40, 10], ['A:', 63, 8, 10]], after: 75 }))
+    await entry.until(1)
+    expect(entry.names[0]).toMatchObject({ drawn: true, text: '\u9644\u5f55 A:', x: 20 })
+    const w = entry.names[0]!.w as number
+    const first = (entry.stats.find(r => r.id === 0) as unknown as { lines: number[][] }).lines[0]!
+    expect(first[6]).toBeCloseTo(20 + w + 4, 1)
+    // (a unit past the name's column, across the gutter, is the other column's: where TeX set it)
+    const across = await open({}, paper({ key: 'appendix', x: 20, width: 51, glue: 8, column: [20, 72], runs: [['Appendix', 20, 40, 10], ['A:', 63, 8, 10]], after: 75 }))
+    await across.until(1)
+    expect(across.names[0]).toMatchObject({ drawn: true })
+    expect((across.stats.find(r => r.id === 0) as unknown as { lines: number[][] }).lines[0]![6]).toBeCloseTo(75, 1)
+    // (a heading "APPENDIX A" centred over its title: "\u9644\u5f55 A" about the line's middle, 124)
+    const head = await open({}, paper({ key: 'appendix', x: 100, width: 48, glue: 5, flags: NAME_FLAG.CENTRED, runs: [['APPENDIX', 100, 40, 10], ['A', 143, 5, 10]] }))
+    await head.until(1)
+    expect(head.names[0]).toMatchObject({ drawn: true, text: '\u9644\u5f55 A' })
+    expect((head.names[0]!.x as number) + (head.names[0]!.w as number) / 2).toBeCloseTo(124, 1)
+    // (a name whose row holds no counter: its word alone, as before)
+    const plain = await open({}, paper({ key: 'appendix', x: 20, width: 40, name: 'Appendix' }))
+    await plain.until(1)
+    expect(plain.names[0]).toMatchObject({ drawn: true, text: '\u9644\u5f55' })
+    // (the split the maker's, never read again from the gaps: a counter a thin space after the name, \appendixname\,A, kept; a
+    // name letter-spaced past a word's space, 2.5 of 10, its last letter no counter where the maker found none)
+    const thin = await open({}, paper({ key: 'appendix', x: 20, width: 46.67, glue: 5, runs: [['Appendix', 20, 40, 10], ['A', 61.67, 5, 10]] }))
+    await thin.until(1)
+    expect(thin.names[0]).toMatchObject({ drawn: true, text: '\u9644\u5f55 A' })
+    const tracked = await open({}, paper({ key: 'appendix', x: 100, width: 57.5, runs: [...'APPENDIX'].map((c, i) => [c, 100 + 7.5 * i, 5, 10] as [string, number, number, number]) }))
+    await tracked.until(1)
+    expect(tracked.names[0]).toMatchObject({ drawn: true, text: '\u9644\u5f55' })
   })
 
   it("takes its room from its TeX column (the file's), on a page no unit holds as on any other", async () => {

@@ -159,6 +159,17 @@ export function folioOf(page, regions) {
 const charOf = u => u.normalize('NFKC').toLowerCase().replace(/\s|\p{Variation_Selector}/gu, '')
 
 /** each page's regions: of each glyph, of each box, at each point; every page begins outside any body */
+/** a page's columns as the maker reads them (make.mjs columnOf, its column count the marks file's, columnsOf): by the page's
+ *  column mark (MARK_DEF's c<n>-<k>, the last of the page's) and its view's middle, an x range's column, 0 or 1 on a page of
+ *  two columns, 2 across both (4 pt past the middle either way), 0 on a page of one */
+export function columnsAt(page) {
+  let two = false
+  for (const pt of page.points ?? []) { const m = /^c([12])-\d+$/.exec(pt.name); if (m) two = m[1] === '2' }
+  if (!two) return () => 0
+  const v = page.view ?? [0, 0, 0, 0], mid = (v[0] + v[2]) / 2
+  return (x0, x1) => (x0 < mid - 4 && x1 > mid + 4 ? 2 : (x0 + x1) / 2 >= mid ? 1 : 0)
+}
+
 export function regionsOf(page) {
   const { glyphs, points } = page, nBoxes = page.boxes.length / 4
   const glyph = new Int32Array(glyphs.n), box = new Int32Array(nBoxes), at = new Int32Array(points.length)

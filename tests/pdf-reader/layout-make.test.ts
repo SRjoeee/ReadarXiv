@@ -1669,7 +1669,7 @@ describe("makeLayout, babel's names (D1a)", () => {
     const { file, stats } = await made({ pages: [{ runs: [h, ...body] }], marks: [...bodyMarks, ...nameMarks(h)], units: [para] })
     // (leading no unit: -1 and no glue; its room its TeX column's text edges, the paragraph's 72 to 207)
     expect(file.names).toEqual([[1, NAME_KEYS.indexOf('abstract'), 1, 119.5, 700, endOf(h), 707.5, 697.5, 10, 0, NAME_FLAG.CENTRED, -1, 0, 72, endOf(body[0] as Run)]])
-    expect(stats.names).toEqual({ marked: 1, located: 1, runIn: 0, why: {} })
+    expect(stats.names).toEqual({ marked: 1, located: 1, runIn: 0, counters: 0, why: {} })
     // (left where it stands: its left edge kept, no flag)
     const l = heading('Abstract', 72)
     expect((await made({ pages: [{ runs: [l, ...body] }], marks: [...bodyMarks, ...nameMarks(l)], units: [para] })).file.names[0]?.[10]).toBe(0)
@@ -1722,6 +1722,23 @@ describe("makeLayout, babel's names (D1a)", () => {
     const left: Run[] = [0, 1, 2].map(j => ({ s: 'one two three four five six', x: 60, y: 680 - 12 * j }))
     const two = await made({ pages: [{ runs: [name, right, ...left] }], marks: [COLS2(1), ['0s', 1, 60, 680], ['0e', 1, endOf(left[2] as Run), 656], ['1s', 1, right.x, 700], ['1e', 1, endOf(right), 700], ...nameMarks(name)], units: [para, unit('para', [text('we show a model of it')])] })
     expect(two.file.names.map(r => [(r[10] as number) & NAME_FLAG.RUN_IN, r[11], r[12]])).toEqual([[0, -1, 0]])
+  })
+
+  it('takes the counter TeX set after it on its line, leading no unit, in its row: the line centred whole (IEEEtran\'s appendices)', async () => {
+    // (the heading "APPENDIX A" centred over its title, the title a unit on the line below; a contents line "Appendix A:", its title
+    // and its page number no unit's; a name before a word keeps its own row)
+    const name = heading('APPENDIX', 115.5), letter: Run = { s: 'A', x: endOf(name) + 3, y: 700 }
+    const title: Run = { s: 'Scaling by Layer', x: 105, y: 688 }
+    const heads = await made({ pages: [{ runs: [name, letter, title, ...body.map(r => ({ ...r, y: r.y - 20 }))] }], marks: [['0s', 1, title.x, 688], ['0e', 1, endOf(title), 688], ['1s', 1, 72, 660], ['1e', 1, endOf(body[2] as Run), 636], ...nameMarks(name, 'appendix')], units: [unit('heading', [text('Scaling by Layer')]), para] })
+    // (slot 12: the counter's width at the row's end, from its first glyph, where the layer splits it off the name's word)
+    expect(heads.file.names.map(r => [r[3], r[5], (r[10] as number) & NAME_FLAG.CENTRED, r[11], r[12]])).toEqual([[115.5, endOf(letter), NAME_FLAG.CENTRED, -1, endOf(letter) - letter.x]])
+    expect(heads.stats.names.counters).toBe(1)
+    const entry = heading('Appendix', 72), colon: Run = { s: 'A:', x: endOf(entry) + 3, y: 700 }, rest: Run = { s: 'Scaling by Layer', x: endOf(colon) + 3, y: 700 }
+    const contents = await made({ pages: [{ runs: [entry, colon, rest, ...body] }], marks: [...bodyMarks, ...nameMarks(entry, 'appendix')], units: [para] })
+    expect(contents.file.names.map(r => [r[3], r[5], r[10], r[12]])).toEqual([[72, endOf(colon), 0, endOf(colon) - colon.x]])
+    const word: Run = { s: 'Additional', x: endOf(entry) + 3, y: 700 }
+    const plain = await made({ pages: [{ runs: [entry, word, ...body] }], marks: [...bodyMarks, ...nameMarks(entry, 'appendix')], units: [para] })
+    expect(plain.file.names.map(r => [r[3], r[5], r[12]])).toEqual([[72, endOf(entry), 0]])
   })
 
   it("is a caption's label where a figure's or a table's name leads a caption (longtable's, no \\@captype): no row", async () => {
