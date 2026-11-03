@@ -201,6 +201,36 @@ describe('ledgerOf', () => {
     expect(l.counts.references.letters).toBe(['Ab', 'Bee', 'Title', 'Onlineonly', 'Cd', 'Dee'].join('').length)
   })
 
+  it('ends the references\' zone with the bibliography\'s last entry\'s last line, not at the next unit\'s start (2610.42112v1 p16)', () => {
+    // (a numbered bibliography, two entries, the style's words after the first between them; the last entry's closing stop after
+    // its end mark on its line; then, before any unit starts, what TeX sets after the bibliography: an appendix's own title and
+    // contents list (titletoc's \printcontents), each line no unit's; then the appendix's first heading)
+    const units = [{ kind: 'heading' }, { kind: 'reference' }, { kind: 'reference' }]
+    const p1 = page(
+      { point: 'n1.ref.s' }, { glyphs: run('References', 100, 760), owner: 'n1' }, { point: 'n1.ref.e' },
+      { glyphs: run('[1]', 60, 740) }, { point: '1s' }, { glyphs: run('Bee.', 100, 740), owner: 'u1' }, { point: '1e' }, { glyphs: run('Online only', 100, 730) },
+      { glyphs: run('[2]', 60, 720) }, { point: '2s' }, { glyphs: run('Dee', 100, 720), owner: 'u2' }, { point: '2e' }, { glyphs: run('.', 120, 720) },
+      // (the last entry's part TeX set past its mark on the line below, at the entry's leading: a DOI)
+      { glyphs: run('doi 10.1/x', 100, 708) },
+      // (an author's address after the bibliography, past the skip before it)
+      { glyphs: run('Email address', 100, 680) },
+    )
+    const p2 = page(
+      { glyphs: run('Appendix', 280, 760) },
+      { glyphs: run('Appendix A: Scaling by Layer 16', 50, 740) },
+      { glyphs: run('A-A Dense Sets . . . 16', 50, 728) },
+      { point: '0s' }, { glyphs: run('Scaling', 100, 600), owner: 'u0' }, { point: '0e' },
+    )
+    const l = ledger([p1, p2], units)
+    // (on the bibliography's page every line no unit holds is the zone's: the labels, the style's words, the last entry's stop)
+    expect(l.lines.filter(x => x.page === 1).map(x => x.zone)).toEqual(['references', 'references', 'references', 'references', 'references', null])
+    expect(classAt(l, 1, at(p1, 'E'))).toBe('orphan')
+    expect(classAt(l, 1, at(p1, 'O'))).toBe('references')
+    // (the title and an entry's line of no leaders orphans; a line that ends in leaders and a page number a list's, no list's name over it)
+    expect([at(p2, 'p'), at(p2, 'S'), at(p2, 'D')].map(g => classAt(l, 2, g))).toEqual(['orphan', 'orphan', 'contents'])
+    expect(l.lines.filter(x => x.page === 2).map(x => x.zone)).toEqual([null, null, null])
+  })
+
   it('reads a formula\'s line, a code line and a line of no word as never translated', () => {
     const pg = page(
       { point: 'bs1' },

@@ -591,10 +591,10 @@ describe('a copy made under pipeline 21, reopened under 22 (and on)', () => {
 // whole by its own ink and the caps counted by every run that spells a word (layout/ink.mjs, figure-text.mjs), and 63 the
 // code regions TeX set kept by every reader (layout/marks.mjs regionsTex, ledger.mjs, figure-text.mjs), no source unit:
 // every unit is the copy's by its hash, carried as it has it, and nothing is sent
-describe('a copy made under pipeline 23 to 29 or 39 to 62, reopened under 63', () => {
+describe('a copy made under pipeline 23 to 29 or 39 to 63, reopened under 64', () => {
   const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
-  it.each(['23', '24', '25', '26', '27', '28', '29', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48', '49', '50', '51', '52', '53', '54', '55', '56', '57', '58', '59', '60', '61', '62'])('takes every unit as the copy of %s has it: nothing is sent again', async pipeline => {
-    expect(PIPELINE_VERSION).toBe('63')
+  it.each(['23', '24', '25', '26', '27', '28', '29', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48', '49', '50', '51', '52', '53', '54', '55', '56', '57', '58', '59', '60', '61', '62', '63'])('takes every unit as the copy of %s has it: nothing is sent again', async pipeline => {
+    expect(PIPELINE_VERSION).toBe('64')
     const p = paper(), n = p.units.length
     const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
     const record = JSON.parse(JSON.stringify({ pipeline, format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))

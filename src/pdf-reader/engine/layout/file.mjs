@@ -184,8 +184,11 @@ export { LayoutRefusal } from './json.mjs'
  *  2610.30854v1): a page whose lines moved across its breaks through compile drift is drawable (carry.mjs DRIFT_LINES: at most 4
  *  at each end, to or from the page beside it, the rest arXiv's page's words), its units laid where a file of 30 left them
  *  `undrawn`; 32 (the owner's decision of 2026-11-03): each line of a code environment's body a region the file holds
- *  (`regions`, the file's schema 6), read from the points the layout compile sets around it (marks.mjs regionsTex) */
-export const LAYOUT = '32'
+ *  (`regions`, the file's schema 6), read from the points the layout compile sets around it (marks.mjs regionsTex); 33 (the owner's
+ *  report of 2026-11-03 on 2610.42112v1): a babel name's row holds the counter TeX set after it on its line where it leads no unit
+ *  (names.mjs counterAfter: IEEEtran's "APPENDIX A" centred over its title, centred so whole; "Appendix A:" in its contents list),
+ *  which the layer sets after the name's word: a reader of 32 would draw the word over the counter's place and drop the counter */
+export const LAYOUT = '33'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,

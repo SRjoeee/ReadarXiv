@@ -550,7 +550,17 @@
 //     where it was; over 77 papers only code moves, to kept (3,663 figure units of code, no other unit's class). The figure and
 //     ink units move, so the rows' identities: raised so. Every source unit, its pieces and its wire are 62's: a copy of 62 carries
 //     every unit (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '63'
+// 64 (the owner's report of 2026-11-03 on 2610.42112v1 p16, an appendix's own contents list after the bibliography, English, and
+//     the appendix name in Chinese a gap before each appendix's letter): what TeX sets after a bibliography is no entry's, the references' zone ending
+//     with its last entry's last line (ledger.mjs lastEntriesOf), not at the next unit's start; a line no list's name heads that
+//     ends as a list's entry does, its page number after leaders or set apart, is a contents line (ledger.mjs listedOf), so that
+//     an appendix's own list (titletoc's \printcontents) is cut an entry a unit, its numbering, leaders and page number kept and
+//     each entry that repeats a heading drawn with that heading's translation (ink-units.mjs echo); and the counter TeX sets
+//     after a babel name on its line where the name leads no unit (IEEEtran's "Appendix A:", "APPENDIX A") is the name's
+//     (names.mjs counterAfter: the wrap's group, own.mjs; the maker's row, make.mjs, LAYOUT 33; REMOVAL 23). MEASURED. The ink
+//     units move, so the rows' identities: raised so. Every source unit, its pieces and its wire are 63's: a copy of 63 carries
+//     every unit (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '64'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
@@ -633,6 +643,9 @@ export const PDFJS = '6.3.289'
  * unit's text (own.mjs MR 4), marks or not, as a cell's lead symbol's was: the layer draws a text symbol as its character, never
  * from a crop, and in the placeholders' group it stood under the drawing wherever no other piece of its unit moved on its page
  * (layer-proto/hide.mjs `moved`: 2610.19159v1 p153u1701's `<`, 1512.03385v1 u321's `{`), and the spell check reads its character;
- * what a reading took past those glyphs is no ink of its, where the reading begins with them: the base's bytes change where a paper marks a text symbol
+ * what a reading took past those glyphs is no ink of its, where the reading begins with them: the base's bytes change where a paper marks a text symbol;
+ * 23 (the owner's report of 2026-11-03 on 2610.42112v1): the counter TeX sets after a babel name on its line, no unit's, where the
+ * name leads no unit (IEEEtran's "APPENDIX A", "Appendix A:": names.mjs counterAfter), is in the name's group (own.mjs MR 6b), so
+ * that the layer hides it with the name and sets it after the name's word: the base's bytes change where a paper sets one
  */
-export const REMOVAL = '22'
+export const REMOVAL = '23'

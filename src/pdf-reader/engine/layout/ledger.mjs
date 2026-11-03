@@ -48,6 +48,10 @@ const TEXT_MAX = 160
 const ZONE_OF = Object.freeze({ contents: 'contents', listfigure: 'contents', listtable: 'contents', ref: 'references', bib: 'references', index: 'index', glossary: 'index' })
 const NAME_END = /^n\d+\.([a-z]{1,16})\.e$/
 const UNIT_START = /^[th]?(\d+)s$/
+const UNIT_END = /^[th]?(\d+)e$/
+/** a bibliography's last entry's line after the line before it: within this many of its size below it (an entry's leading;
+ *  the skip before a heading, a list or an author's address after the bibliography is more) */
+const ENTRY_DY = 1.6
 /** a biblatex entry's start (marks.mjs POINTS_TEX: `bi<n>`, biblatex's per-entry hook): it opens the references' zone, its entry
  *  the glyphs from it to the next one's, to its bibliography's end (`bz<n>`) or to the next unit's start, which end the zone */
 const BIB_ITEM = /^bi(\d+)$/
@@ -67,6 +71,31 @@ const WORD = /\p{L}{3,}/gu, PAIR = /\p{L}{2,}/gu
 /** a line of a code region: at least this share of its glyphs that are no blank TeX set between a code region's points */
 const CODE_SHARE = 0.5
 
+/**
+ * The end marks of each bibliography's last entry (a source unit of ENTRY_KINDS: latex-front.mjs bibliography), by `<page index>:<point
+ * index>`: an entry's end mark after which, in stream order, the next unit to start is no entry (another unit's start, a babel
+ * name that opens a zone, a biblatex entry or its bibliography's end) or none does. The references' zone an entry opens ends with
+ * that entry's last line, where TeX ended the bibliography, not at the next unit's start: what TeX sets between the two — an
+ * appendix's own contents list after the bibliography (titletoc's \printcontents), its title in a group of the paper's own —
+ * is no entry's, and was kept as the original's (2610.42112v1 p16)
+ */
+function lastEntriesOf(pages, units) {
+  const out = new Set()
+  if (!units) return out
+  const kindOf = id => { const u = units[id]; return Array.isArray(u) ? u[0] : u?.kind }
+  let pending = null
+  pages.forEach((pg, pi) => {
+    ;(pg.points ?? []).forEach((pt, q) => {
+      const end = UNIT_END.exec(pt.name), start = end ? null : UNIT_START.exec(pt.name), name = end || start ? null : NAME_END.exec(pt.name)
+      if (end) { if (ENTRY_KINDS.has(kindOf(Number(end[1])))) pending = `${pi}:${q}`; return }
+      if (start) { if (!ENTRY_KINDS.has(kindOf(Number(start[1])))) { if (pending) out.add(pending) } pending = null; return }
+      if ((name && Object.hasOwn(ZONE_OF, name[1])) || BIB_ITEM.test(pt.name) || BIB_END.test(pt.name)) { if (pending) out.add(pending); pending = null }
+    })
+  })
+  if (pending) out.add(pending)
+  return out
+}
+
 /** the line rules, in order: the first whose test holds gives the line its class */
 export const RULES = Object.freeze([
   // (a line TeX set in the body of an environment the source sets as code, by its points (pageInk's `regions`, marks.mjs
@@ -81,6 +110,9 @@ export const RULES = Object.freeze([
   ['references', l => l.zone === 'references'],
   ['index', l => l.zone === 'index'],
   ['contents', l => l.zone === 'contents'],
+  // (a list's line wherever it stands, no list's name over it: its page number its last word, after leaders or set apart at the
+  // line's end — titletoc's \printcontents after an appendix's own title, 2610.42112v1 p16, which no \contentsname heads)
+  ['contents', l => !l.outside && l.listed],
   ['math', l => l.math > 0 && ((l.words < MATH_WORDS && (l.math >= MATH_SHARE * l.n || l.relation)) || (l.relation && l.words <= DISPLAY_WORDS && l.math >= DISPLAY_SHARE * l.n))],
   ['code', l => l.mono >= MONO_SHARE * l.n],
   ['figures', l => l.depth > 0],
@@ -113,6 +145,9 @@ const ownerClass = (group, units) => {
  */
 export function ledgerOf(pages, own, { units = null } = {}) {
   const counts = Object.fromEntries(CLASS_IDS.map(id => [id, { glyphs: 0, letters: 0 }]))
+  const lasts = lastEntriesOf(pages, units)
+  /** where a bibliography's last entry ended: its page and the baseline of its last line, the zone's end once a glyph leaves it */
+  let ending = null
   const fam = new Map()
   const famOf = name => { let f = fam.get(name); if (f === undefined) { f = classifyFont(name ?? '').fam; fam.set(name, f) } return f }
   const classes = [], orphans = [], lines = []
@@ -140,9 +175,21 @@ export function ledgerOf(pages, own, { units = null } = {}) {
         else if (start) { const u = units?.[Number(start[1])]; zone = ENTRY_KINDS.has(Array.isArray(u) ? u[0] : u?.kind) ? 'references' : null; entry = null }
         else if (item) { zone = 'references'; entry = Number(item[1]); if (g < n) entryAt[g] = 1 }
         else if (BIB_END.test(P[q].name)) { zone = null; entry = null }
+        // (the bibliography's last entry's end: its zone goes on over that entry's last lines, what TeX set there after the mark)
+        if (lasts.has(`${pi}:${q}`) && zone === 'references') { const e = G[Math.min(P[q].glyph, n) - 1] ?? G[P[q].glyph]; ending = e ? { page: pi, y: e.y, size: e.size } : null; if (!ending) zone = null }
+      }
+      // (its lines: the line its end mark stands on, and each line right below the last at an entry's leading (ENTRY_DY), a
+      // part of it TeX set past the mark — a style's \newblock, a DOI —, on its page; the first glyph past them ends the zone)
+      if (ending && g < n) {
+        const x = G[g], sz = Math.max(ending.size, x.size, 5), dy = ending.y - x.y
+        if (ending.page === pi && Math.abs(dy) < 0.5 * sz) { /* (on the line) */ }
+        else if (ending.page === pi && dy > 0 && dy <= ENTRY_DY * sz) ending.y = x.y
+        else { if (zone === 'references') { zone = null; entry = null } ending = null }
       }
       if (g < n) { zones[g] = zone; entries[g] = entry }
     }
+    // (the page ends on that line: whatever the next page sets is past it)
+    if (ending && ending.page === pi) { if (zone === 'references') { zone = null; entry = null } ending = null }
     // each glyph's paragraph: the number of the last paragraph point at or before it (ink.mjs `paras`, marks.mjs POINTS_TEX q<n>),
     // a paragraph going on across a page from the page before; null where the compile set none (a base of before)
     const paraAt = new Array(n), opensAt = new Uint8Array(n)
@@ -156,7 +203,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
     let line = null
     const close = () => {
       if (!line) return
-      Object.assign(line, wordsOf(line.gs.map(g => G[g]), famOf))
+      Object.assign(line, wordsOf(line.gs.map(g => G[g]), famOf), { listed: listedOf(line.gs.map(g => G[g])) })
       const rule = RULES.find(r => r.test(line))
       for (const g of line.gs) out[g] = rule.code
       lines.push({ page: pi + 1, cls: rule.cls, gs: line.gs, region: line.region, zone: line.zone, para: line.para, opens: line.opens, entry: line.entry, entryFrom: line.entryFrom, y: line.y, size: line.size, x0: line.x0, x1: line.x1, letters: line.letters })
@@ -230,6 +277,25 @@ function wordsOf(gs, famOf) {
     prev = g
   }
   return { words: (s.match(WORD) ?? []).length, pairs: (s.match(PAIR) ?? []).length }
+}
+
+/** a list's page number set apart from the text before it: at least this many of its size, where no leaders stand between */
+const LIST_APART = 2
+/** whether a line ends as a list's entry does: its last word a page number, after leaders (a dot a word, \@dottedtocline's) or
+ *  LIST_APART of its size or more clear of the word before it (\hfill's \contentspage); words cut a fifth of their size apart */
+function listedOf(gs) {
+  const words = []
+  let w = null
+  for (const g of [...gs].filter(g => /\S/.test(g.u ?? '')).sort((a, b) => a.x0 - b.x0)) {
+    if (!w || g.x0 - w.x1 > 0.2 * Math.max(g.size, w.size)) { w = { s: '', x0: g.x0, x1: g.x1, size: g.size }; words.push(w) }
+    w.s += g.u ?? ''
+    w.x1 = Math.max(w.x1, g.x1)
+    w.size = Math.max(w.size, g.size)
+  }
+  if (words.length < 2) return false
+  const last = words.at(-1), prev = words.at(-2)
+  if (!/^(?:\d{1,4}|[ivxlcdm]{1,8})$/u.test(last.s.normalize('NFKC'))) return false
+  return /^[.·•…]+$/u.test(prev.s) || last.x0 - prev.x1 >= LIST_APART * Math.max(last.size, prev.size)
 }
 
 /** a line's text from its glyphs: a space where two stand a fifth of their size apart or more */
