@@ -45,6 +45,8 @@ export function failureWidget(doc: Document, reason: string, retry: () => void):
   const strings = coreStrings()
   const kind = parseFatal(reason)
   host.title = strings.failureTitle(kind.kind) || strings.retry
+  // the interface's words in the interface's language, not the target's the translation node around it carries
+  host.lang = strings.lang
   host.setAttribute(REASON_ATTR, reason)
   const root = host.attachShadow({ mode: 'open' })
   const style = doc.createElement('style')
@@ -110,6 +112,8 @@ export function relabelFailed(doc: Document): number {
     const root = (host as HTMLElement & { shadowRoot: ShadowRoot | null }).shadowRoot
     const button = root?.querySelector('button')
     if (button) button.textContent = coreStrings().retry
+    // its words are read in the language they are now written in, as the widget built them (failureWidget)
+    host.lang = coreStrings().lang
     // The sentence shown on hover must follow too: it is derived from kind, and the raw diagnostic stays in the attribute (Codex on #161)
     const reason = host.getAttribute(REASON_ATTR)
     if (reason === null) continue

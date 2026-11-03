@@ -55,8 +55,9 @@ export async function installFloatingButton(doc: Document, page: FloatingPage): 
   let settings: EntrySettings | null = null
 
   const strings = (from: EntrySettings): FloatingButtonStrings => {
-    const { S } = LOCALES[pickLocale(from.uiLanguage, languages)]
-    return { main: page.label(S, active), settings: S.settings, ...S.page.floating }
+    const lang = pickLocale(from.uiLanguage, languages)
+    const { S } = LOCALES[lang]
+    return { lang, main: page.label(S, active), settings: S.settings, ...S.page.floating }
   }
 
   /** What the settings say, put on the page: the button there or not, its words, its place, its size */

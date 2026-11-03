@@ -1,5 +1,5 @@
 // The shared controls in a real browser (the redesign's Part 3): the controls sheet (src/entrypoints/controls, a dev
-// page) in both interface languages, light and dark side by side. Each specimen is shot at rest per language and theme
+// page) in every interface language, light and dark side by side. Each specimen is shot at rest per language and theme
 // into lab/pdf/out/controls/ (at twice the pixels: the 200 % look), every row's items are held to the
 // row's centre line (align.mjs), and each control is measured against the values the prototypes agreed. The popup's and
 // the settings page's own documents are checked for the pointer's and the keyboard's turns. Exits 1 on a failure or a
@@ -381,7 +381,7 @@ for (const path of ['popup.html', 'options.html']) {
   await page.close()
 }
 
-for (const lang of ['zh-CN', 'en']) {
+for (const lang of ['zh-CN', 'zh-TW', 'ja', 'ko', 'en']) {
   const page = await context.newPage()
   page.on('pageerror', e => check(`${lang}: no page error`, false, e.message))
   await page.goto(`chrome-extension://${id}/controls.html?lang=${lang}`)

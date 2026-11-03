@@ -10,6 +10,7 @@
 // The pack is chosen once, before anything renders (`applyLocale`), so nothing on screen is ever
 // half translated.
 import { BUILT_IN_HIGHLIGHTS, BUILT_IN_STYLES, NAME_MAX } from '@/config/appearance'
+import { LANG_CODE_TO_JA_NAME, LANG_CODE_TO_KO_NAME, LANG_CODE_TO_ZH_TW_NAME } from '@/config/language-names'
 import { LANG_CODE_TO_EN_UI_NAME, LANG_CODE_TO_ZH_NAME, type LangCode, label } from '@/config/languages'
 import { isBuiltInService } from '@/config/services'
 import type { FallbackReason } from '@/config/storage'
@@ -21,11 +22,16 @@ export { PREVIEW_LANG, PREVIEW_SOURCE, PREVIEW_TARGET } from '@/locales/preview'
 
 /**
  * Which set of language names each interface language uses for the target-language menu. A pack
- * does not carry its own copy of 179 language names — adding a language must stay one small file —
- * so it points at a table instead, and a language without one reads them in English
+ * does not carry its own copy of 180 language names — adding a language must stay one small file —
+ * so it points at a table instead, and a language without one reads them in English. The Chinese
+ * table is Read Frog's, the English one its overlay; Traditional Chinese, Japanese and Korean are
+ * CLDR's (config/language-names.ts, generated)
  */
 const LOCALE_LANGUAGE_NAMES: Record<LocaleCode, Partial<Record<LangCode, string>>> = {
   'zh-CN': LANG_CODE_TO_ZH_NAME,
+  'zh-TW': LANG_CODE_TO_ZH_TW_NAME,
+  ja: LANG_CODE_TO_JA_NAME,
+  ko: LANG_CODE_TO_KO_NAME,
   en: LANG_CODE_TO_EN_UI_NAME,
 }
 
@@ -52,7 +58,7 @@ export function setLocale(code: LocaleCode): void {
 /** The core renders the failure widget itself and knows no pack (DESIGN §4.2): hand it this locale's sentences, at load and on every switch */
 function installCoreStrings(): void {
   // (the widget knows the kind alone, not the engine: its key reasons are the keyless words)
-  setCoreStrings({ retry: S.page.retry, failureTitle: kind => reasonText(kind) })
+  setCoreStrings({ lang: currentCode, retry: S.page.retry, failureTitle: kind => reasonText(kind) })
 }
 
 /** Which pack is in use; the settings page marks it in its menu */
@@ -103,14 +109,17 @@ export function fallbackText(reason: FallbackReason): string {
 }
 
 /**
- * What a duplicate is called: the name as displayed, plus the pack's suffix. **The base gives way,
- * not the suffix** — clipping the finished string would eat the suffix off a name already at the
- * limit and hand back a copy indistinguishable from its source (Codex on #161)
+ * What a duplicate is called: the name as displayed, set into the pack's words for a copy (a suffix in Chinese and
+ * English, joined after the name in Japanese). **The name gives way, not those words** — clipping the finished string would eat them off a name already
+ * at the limit and hand back a copy indistinguishable from its source (Codex on #161). The name is shortened until the
+ * whole fits, since a pack may space the name from its words or not, depending on how the name ends
  */
 export function copyName(profile: { id: string; name: string }, kind: 'styles' | 'highlights' = 'styles'): string {
-  const suffix = O.reading.copySuffix
-  const room = NAME_MAX - suffix.length - 1
-  return `${profileName(profile, kind).slice(0, Math.max(1, room))} ${suffix}`
+  const name = profileName(profile, kind)
+  const named = (room: number) => O.reading.copyName(name.slice(0, room).trimEnd())
+  let room = name.length
+  while (room > 1 && named(room).length > NAME_MAX) room--
+  return named(room)
 }
 
 export function profileName(profile: { id: string; name: string }, kind: 'styles' | 'highlights' = 'styles'): string {

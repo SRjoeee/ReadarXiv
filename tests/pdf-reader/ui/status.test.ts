@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { LANG_CODE_TO_LOCALE_NAME, toBcp47 } from '@/config/languages'
 import { DEFAULT_CONFIG } from '@/config/schema'
+import { LOCALE_CODES } from '@/locales'
 import { INITIAL, type ReaderState } from '@/pdf-reader/controller'
 import { plain, textOf, withCount } from '@/pdf-reader/ui/capsule-words'
 import { capsuleOf, cardOf, lineOf, spokenOf } from '@/pdf-reader/ui/status'
@@ -75,7 +76,7 @@ describe('the states (the reader\'s design, §8)', () => {
 
   it('names that language by its own name, as the language button does, in either interface language (the maintainer, 2026-10-04)', () => {
     try {
-      for (const locale of ['zh-CN', 'en'] as const) {
+      for (const locale of LOCALE_CODES) {
         setLocale(locale)
         for (const target of ['arb', 'tur', 'jpn'] as const) {
           const said = capsuleOf(at({ phase: 'ready', languageSupported: false, settings: { ...DEFAULT_CONFIG, targetLanguage: target } }), none)!.words

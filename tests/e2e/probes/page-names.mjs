@@ -22,6 +22,10 @@ const row = (ok, name, detail) => { console.log(`${ok ? 'PASS' : 'FAIL'} ${name}
 
 const LANGUAGES = [
   { code: 'zh-CN', original: n => `原文 · 第 ${n} 页`, translation: n => `译文 · 第 ${n} 页` },
+  { code: 'zh-TW', original: n => `原文 · 第 ${n} 頁`, translation: n => `譯文 · 第 ${n} 頁` },
+  // Japanese and Korean set no space between the number and the word after it
+  { code: 'ja', original: n => `原文 · ${n}ページ`, translation: n => `訳文 · ${n}ページ` },
+  { code: 'ko', original: n => `원문 · ${n}페이지`, translation: n => `번역문 · ${n}페이지` },
   { code: 'en', original: n => `Original · Page ${n}`, translation: n => `Translation · Page ${n}` },
 ]
 

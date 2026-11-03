@@ -951,8 +951,18 @@ export function label(code: LangCode, inLocale: Partial<Record<LangCode, string>
   const named = inLocale[code] ?? LANG_CODE_TO_EN_UI_NAME[code]
   const local = LANG_CODE_TO_LOCALE_NAME[code]
   if (named === local) return named
-  // The parentheses follow the half outside them: full-width for Chinese, ASCII otherwise. “Japanese（日本語）” with the two kinds mixed in one line is the ugliest
-  return /\p{Script=Han}/u.test(named) ? `${named}（${local}）` : `${named} (${local})`
+  // The parentheses follow the half outside them: full-width for Chinese and Japanese, ASCII otherwise. “Japanese（日本語）” with
+  // the two kinds mixed in one line is the ugliest. Korean sets its ASCII parentheses with no space before them
+  const wide = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u.test(named)
+  // (full-width: the parentheses U+FF08 and U+FF09, and the enumeration comma U+3001 that Chinese and Japanese list with)
+  const [open, close, comma] = wide ? ['\uff08', '\uff09', '\u3001'] : ['(', ')', ', ']
+  const before = wide || /\p{Script=Hangul}/u.test(named) ? '' : ' '
+  // A name that ends on a parenthetical of its own (`Chinese (Simplified)`, and Korean's and Chinese's like it) takes the own
+  // name inside it, after the enumeration comma of its kind, rather than a second pair after the first: `Chinese
+  // (Simplified, X)` (UI.md §6; tests/ui/language-names.test.ts has each interface language's)
+  const own = /^(.*?)\s*[(\uff08]([^()\uff08\uff09]+)[)\uff09]$/u.exec(named)
+  if (own) return `${own[1]}${before}${open}${own[2]}${comma}${local}${close}`
+  return `${named}${before}${open}${local}${close}`
 }
 
 /** For the engines that take the target as BCP-47 (google-web); a language without a two-letter code is passed as its ISO 639-3 code */

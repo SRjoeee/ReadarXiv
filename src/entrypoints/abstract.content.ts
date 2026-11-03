@@ -25,12 +25,13 @@ export default defineContentScript({
       const { S } = LOCALES[pickLocale(uiLanguage, languages)]
       return S.page.abstractLink(S.brand)
     }
+    const lang = (uiLanguage: string) => pickLocale(uiLanguage, languages)
     // The first answer inserts the line; every later one — the settings page stays open beside this one — relabels
     // and retargets it (Codex on #161)
     void watchEntrySettings(settings => {
       const newTab = settings.openIn === 'new-tab'
-      if (!injectBilingualLink(document, label(settings.uiLanguage), { newTab })) {
-        relabelBilingualLink(document, label(settings.uiLanguage))
+      if (!injectBilingualLink(document, label(settings.uiLanguage), { newTab, lang: lang(settings.uiLanguage) })) {
+        relabelBilingualLink(document, label(settings.uiLanguage), lang(settings.uiLanguage))
         retargetBilingualLink(document, newTab)
       }
     })

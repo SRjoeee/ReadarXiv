@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- The interface comes in Traditional Chinese, Japanese and Korean too: the popup, the settings page, the PDF reader and the controls on arXiv's pages, in the browser's language or the one chosen in the settings. A browser set to Traditional Chinese (Taiwan, Hong Kong or Macao) now gets Traditional Chinese, where it had Simplified. Each of these languages, Simplified Chinese among them, draws in its own typeface: Japanese and Traditional Chinese no longer show Simplified character shapes. A language menu finds a language by its name in any of them.
 - Fixed: in the PDF reader, a translated sentence or heading no longer ends with its closing punctuation drawn twice (such as ";;" or "。.").
 - In the PDF reader, pages come into view already translated while you keep scrolling. The next pages are prepared as you move, not only once you stop, and the preparing waits whenever the pages in view need the computer. On a slow connection, none of the ten pages of a steady scroll showed the English page first, where two to four had, for up to half a second.
 - Fixed: in the PDF reader, papers whose LaTeX tests for a file, sets an IEEE biography or colours a table row in certain ways are translated again, and their original pages no longer show stray text.

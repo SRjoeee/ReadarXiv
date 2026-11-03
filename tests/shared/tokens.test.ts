@@ -75,4 +75,21 @@ describe('the token source', () => {
     expect(defined.filter(n => !n.startsWith('--axt-'))).toEqual([])
     expect(css).not.toMatch(/var\(--(?!axt-)/)
   })
+
+  it('gives each CJK language its own face after the platform\'s Latin one: Simplified on the root and for zh, the later blocks winning where they match too (UI.md §1, fonts)', () => {
+    for (const [scope, root, name] of [['page', ':root', '--font'], ['host', ':host', '--axt-font']] as const) {
+      const css = tokenSheet(scope)
+      // on a page the root in the language and an element of the interface in it; in a shadow root its own tree's
+      const at = (lang: string) => (scope === 'page' ? `:root:lang(${lang}), :is(.ui, .chrome) :lang(${lang})` : `:lang(${lang})`)
+      const block = (selector: string) => new RegExp(`(?:^|\\n)${selector.replace(/[().]/g, '\\$&')} \\{\\n  ${name}: ([^;]+);`).exec(css)?.[1]
+      const sc = block(`${root}, ${at('zh')}`), tc = block(`${at('zh-TW')}, ${at('zh-Hant')}`), jp = block(at('ja')), kr = block(at('ko'))
+      for (const stack of [sc, tc, jp, kr]) expect(stack, scope).toMatch(/^-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, ".+", sans-serif$/)
+      expect([sc, tc, jp, kr].map(stack => stack?.split(', ')[4])).toEqual(['"PingFang SC"', '"PingFang TC"', '"Hiragino Sans"', '"Apple SD Gothic Neo"'])
+      // Simplified first: a Traditional tag is also `zh`, and the Traditional block has to come after to win
+      expect(css.indexOf(`${root}, ${at('zh')} {`)).toBeLessThan(css.indexOf(':lang(zh-TW)'))
+      expect(css).toContain(`${at('zh-HK')}, ${at('zh-MO')}, ${at('yue')} {`)
+      // never an element of the paper's: a bare :lang() on a page would set the stack on every one of a layer's
+      if (scope === 'page') expect(css).not.toMatch(/(^|, |\n):lang\(/)
+    }
+  })
 })

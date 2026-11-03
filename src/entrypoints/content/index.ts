@@ -13,7 +13,7 @@ import { onMessages, sendMessage } from '@/shared/messages'
 import { watchRejected } from '@/shared/service-health'
 import { createMessageTransport } from '@/shared/transport'
 import { applyLocaleFrom } from '@/ui/apply-locale'
-import { S } from '@/ui/strings'
+import { S, localeInUse } from '@/ui/strings'
 import { enableDebug } from './debug'
 import { askAgainOnRestore, createToggleWords } from './toggle-words'
 
@@ -114,7 +114,7 @@ export default defineContentScript({
       // A figure's block, or any copy side mode makes: the copy of a graphic that stands in no figure is one too (§7.2)
       around: `${FIGURE_SELECTORS.figure}, .${SPLIT_CLASS}`,
       ours: `.${T_CLASS}`,
-      strings: () => S.page.viewer,
+      strings: () => ({ ...S.page.viewer, lang: localeInUse() }),
     })
 
     if (location.hash === '#axt-debug') enableDebug(blocks)

@@ -91,6 +91,9 @@ export type MainAction =
 
 /** Every word the button shows or announces, in the reader's interface language */
 export interface FloatingButtonStrings {
+  /** That language's tag: the dock carries it, inside the shadow root, so that a screen reader reads the words in it and
+   *  the host token sheet's `:lang()` gives the dock that language's face (arXiv's page around it is `en`) */
+  lang: string
   /** The main button's name and tooltip: what a click does now, or why it can do nothing */
   main: string
   panel: string
@@ -551,6 +554,7 @@ export function mountFloatingButton(doc: Document, host: HTMLElement, options: F
   }
 
   const label = () => {
+    dock.lang = strings.lang
     main.setAttribute('aria-label', strings.main)
     mainTip.textContent = strings.main
     panel.setAttribute('aria-label', strings.panel)

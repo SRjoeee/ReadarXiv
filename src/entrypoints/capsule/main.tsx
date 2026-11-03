@@ -1,8 +1,8 @@
 // The capsule's dev page (a dev page, like the gallery: wxt.config.ts DEV_PAGES keeps it out of a release): the shared
 // Capsule on the reader's sheet, playing a run as the website shows one (the web's round 4: queued → preparing →
 // translating, its count arriving in bursts → a digit gained → making the pages → the capsule leaving), for
-// tests/e2e/probes/capsule.mjs to record frame by frame, and to watch in a real browser. `?lang=zh-CN|en` the interface's
-// language; `?chip=1` brings the chip that shows the translation with the first preview, as a narrow window does while
+// tests/e2e/probes/capsule.mjs to record frame by frame, and to watch in a real browser. `?lang=` the interface's
+// language (zh-CN, zh-TW, ja, ko, en); `?chip=1` brings the chip that shows the translation with the first preview, as a narrow window does while
 // the translation is not on screen. `window.__capsule` plays the run, or sets one state at a time. The words are round 4's (its `T`): the website's
 // copy, which the extension's packs do not hold
 import '../pdf-reader/reader.css'
@@ -16,16 +16,23 @@ type Stage = 'queued' | 'preparing' | 'translating' | 'typesetting'
 /** a moment of the run: its stage, the passages translated of all, the preview's pages; or a sentence of its own */
 interface Step { stage: Stage | null; n: number; total: number; pages: number; text?: string }
 
+// round 4's words (index.html `T`); the short count below 400 px in English (approved 2026-10-04). zh-TW, ja and ko are the
+// glossary's of 2026-11-04 (§E), for the website's lane to measure its short count by; a short form only where the
+// full line does not fit at 400, 390 and 320 px (the glossary's ruling 11)
+const TABLE = {
+  'zh-CN': { queued: '排队中', preparing: '正在准备', translating: '正在翻译 · {n} / {N} 段', short: '', typesetting: '正在生成页面', show: '查看译文', join: '，', count: '{n} / {N} 段' },
+  'zh-TW': { queued: '排隊中', preparing: '正在準備', translating: '正在翻譯 · {n} / {N} 段', short: '', typesetting: '正在產生頁面', show: '查看譯文', join: '，', count: '{n} / {N} 段' },
+  ja: { queued: '順番待ち', preparing: '準備中', translating: '翻訳中 · {n} / {N}段落', short: '', typesetting: 'ページを生成中', show: '訳文を表示', join: '、', count: '{N}段落中{n}段落' },
+  ko: { queued: '대기 중', preparing: '준비 중', translating: '번역 중 · {n}/{N} 문단', short: '', typesetting: '페이지 만드는 중', show: '번역문 보기', join: ', ', count: '{N}개 문단 중 {n}개' },
+  en: { queued: 'Waiting in line', preparing: 'Preparing', translating: 'Translating · {n} of {N} passages', short: 'Translating {n} of {N}', typesetting: 'Making the pages', show: 'Show translation', join: ', ', count: '{n} of {N} passages' },
+}
+type Lang = keyof typeof TABLE
 const query = new URLSearchParams(location.search)
-const lang = query.get('lang') === 'en' ? 'en' : 'zh-CN'
+const asked = query.get('lang') ?? ''
+const lang: Lang = Object.hasOwn(TABLE, asked) ? (asked as Lang) : 'zh-CN'
 const chipWanted = query.get('chip') === '1'
 document.documentElement.lang = lang
-
-// round 4's words (index.html `T`); the short count below 400 px in English (approved 2026-10-04)
-const WORDS = {
-  'zh-CN': { queued: '排队中', preparing: '正在准备', translating: '正在翻译 · {n} / {N} 段', short: '', typesetting: '正在生成页面', show: '查看译文', join: '，', count: '{n} / {N} 段' },
-  en: { queued: 'Waiting in line', preparing: 'Preparing', translating: 'Translating · {n} of {N} passages', short: 'Translating {n} of {N}', typesetting: 'Making the pages', show: 'Show translation', join: ', ', count: '{n} of {N} passages' },
-}[lang]
+const WORDS = TABLE[lang]
 const fill = (t: string, s: Step) => t.replace('{n}', String(s.n)).replace('{N}', String(s.total))
 
 // ------------------------------------------------------------------ the run's state, outside React

@@ -1,0 +1,10 @@
+{
+  "description": {
+    "message": "arXiv の論文を対訳で読む：HTML はその場で翻訳、PDF は原文と訳文を並べて表示。いつでも原文に戻せます",
+    "description": "The extensions page and the store listing"
+  },
+  "toggle": {
+    "message": "このページを翻訳 / 原文を表示",
+    "description": "The keyboard shortcut's description in chrome://extensions/shortcuts"
+  }
+}

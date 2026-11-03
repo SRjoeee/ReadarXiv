@@ -1,0 +1,10 @@
+{
+  "description": {
+    "message": "arXiv 論文雙語閱讀：HTML 就地翻譯，PDF 原文與譯文並排，隨時可還原原文",
+    "description": "The extensions page and the store listing"
+  },
+  "toggle": {
+    "message": "翻譯本頁 / 顯示原文",
+    "description": "The keyboard shortcut's description in chrome://extensions/shortcuts"
+  }
+}

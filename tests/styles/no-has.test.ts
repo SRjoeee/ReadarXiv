@@ -71,7 +71,7 @@ describe('the style sheets built in TypeScript', () => {
   })
 
   it('the figure viewer\'s sheet, inside its two shadow roots', () => {
-    const viewer = installFigureViewer(document, { figures: 'img', overlay: '.axt-img', around: 'figure', ours: '.axt-t', strings: () => ({ open: 'Open', zoomIn: 'In', zoomOut: 'Out', close: 'Close' }) })
+    const viewer = installFigureViewer(document, { figures: 'img', overlay: '.axt-img', around: 'figure', ours: '.axt-t', strings: () => ({ lang: 'en', open: 'Open', zoomIn: 'In', zoomOut: 'Out', close: 'Close' }) })
     for (const name of [VIEWER_CLASS, SPOT_CLASS]) {
       const sheet = document.querySelector(`.${name}`)?.shadowRoot?.querySelector('style')?.textContent ?? ''
       expect(sheet.length).toBeGreaterThan(1000)

@@ -147,6 +147,20 @@
   --tip-shadow: 0 4px 12px oklch(0 0 0 / 0.2);
 }
 :root {
-  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "PingFang SC", "Noto Sans SC", sans-serif;
   --ease: cubic-bezier(0.2, 0, 0, 1);
+}
+:root, :root:lang(zh), :is(.ui, .chrome) :lang(zh) {
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", sans-serif;
+}
+:root:lang(zh-TW), :is(.ui, .chrome) :lang(zh-TW), :root:lang(zh-Hant), :is(.ui, .chrome) :lang(zh-Hant) {
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "PingFang TC", "Microsoft JhengHei UI", "Microsoft JhengHei", "Noto Sans CJK TC", "Noto Sans TC", "Source Han Sans TC", sans-serif;
+}
+:root:lang(zh-HK), :is(.ui, .chrome) :lang(zh-HK), :root:lang(zh-MO), :is(.ui, .chrome) :lang(zh-MO), :root:lang(yue), :is(.ui, .chrome) :lang(yue) {
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "PingFang HK", "PingFang TC", "Microsoft JhengHei UI", "Microsoft JhengHei", "Noto Sans CJK HK", "Noto Sans HK", "Noto Sans CJK TC", "Noto Sans TC", sans-serif;
+}
+:root:lang(ja), :is(.ui, .chrome) :lang(ja) {
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Meiryo UI", "Meiryo", "Noto Sans CJK JP", "Noto Sans JP", "Source Han Sans JP", sans-serif;
+}
+:root:lang(ko), :is(.ui, .chrome) :lang(ko) {
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", "Noto Sans KR", "Source Han Sans KR", sans-serif;
 }

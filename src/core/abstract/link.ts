@@ -41,7 +41,7 @@ export function htmlHrefOn(doc: Document): string | null {
  * Nothing happens in three cases: this is not an abstract page, the paper has no HTML version (`HTML_LINK` absent), or it was inserted already.
  * Idempotent because it is cheap: arXiv's abstract page does not re-render, but an assumption that only holds under one DOM shape is not worth relying on.
  */
-export function injectBilingualLink(doc: Document, label: string, options: { newTab?: boolean } = {}): boolean {
+export function injectBilingualLink(doc: Document, label: string, options: { newTab?: boolean; lang?: string } = {}): boolean {
   const html = doc.querySelector<HTMLAnchorElement>(HTML_LINK)
   if (!html) return false
   const item = html.closest('li')
@@ -53,6 +53,8 @@ export function injectBilingualLink(doc: Document, label: string, options: { new
   link.className = `abs-button ${ABS_LINK_CLASS}`
   link.href = `${html.href}${AUTO_TRANSLATE_HASH}`
   link.textContent = label
+  // the interface's language, on our own node: arXiv's page around it is `en`, and a screen reader would read the line so
+  if (options.lang) link.lang = options.lang
   setTarget(link, options.newTab !== false)
   const li = doc.createElement('li')
   li.append(link)
@@ -86,9 +88,10 @@ export function retargetBilingualLink(doc: Document, newTab: boolean): boolean {
  * Rewrite the label of a link already on the page. The interface's language can change while an
  * abstract page sits open, and this entry point reads the setting once (Codex on #161)
  */
-export function relabelBilingualLink(doc: Document, label: string): boolean {
+export function relabelBilingualLink(doc: Document, label: string, lang?: string): boolean {
   const link = doc.querySelector<HTMLAnchorElement>(`.${ABS_LINK_CLASS}`)
   if (!link) return false
   link.textContent = label
+  if (lang) link.lang = lang
   return true
 }
