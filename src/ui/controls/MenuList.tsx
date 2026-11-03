@@ -126,6 +126,7 @@ export function MenuList({ items, kind, label, layout = 'inline', search, noMatc
   }, [nav.active, q])
   // the browser focuses what carries `autofocus` as the popover shows, which Popover writes once on what carries
   // data-autofocus: moved here with it when the pointer changes while the menu stays drawn, so that one element holds it
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new holder of the focus, which the markup says, is what asks for the move
   useLayoutEffect(() => {
     const el = root.current
     if (!el) return
