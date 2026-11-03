@@ -37,6 +37,8 @@ describe('the toolbar (the reader\'s design, §6.1)', () => {
     const { container, set } = await mount({ paper: { id: '2608.02163', title: 'From Simple QA to Deep Research' } })
     const heads = [...container.querySelectorAll('h1')]
     expect([heads.length, heads[0]?.textContent, heads[0]?.hasAttribute('data-title'), heads[0]?.closest('header') !== null]).toEqual([1, 'From Simple QA to Deep Research', true, true])
+    // the paper's title in the paper's language, read in that voice whatever the interface's (WCAG 3.1.2)
+    expect(heads[0]?.getAttribute('lang')).toBe('en')
     // the link\'s name starts with what is seen (WCAG 2.5.3) and ends with its purpose, which the tooltip alone told
     const link = container.querySelector<HTMLElement>('a[data-arxiv]')!
     expect(nameOf(link)).toBe(`arXiv:2608.02163 ${R.abstract}`)
@@ -44,7 +46,7 @@ describe('the toolbar (the reader\'s design, §6.1)', () => {
     // no title known yet: the heading is the product\'s name, said and not drawn, as the tab says it
     await act(async () => set({ paper: { id: '2608.02163', title: '' } }))
     const bare = [...container.querySelectorAll('h1')]
-    expect([bare.length, bare[0]?.textContent, bare[0]?.hasAttribute('data-title'), bare[0]?.classList.contains('sr-only')]).toEqual([1, 'Read arXiv', false, true])
+    expect([bare.length, bare[0]?.textContent, bare[0]?.hasAttribute('data-title'), bare[0]?.classList.contains('sr-only'), bare[0]?.hasAttribute('lang')]).toEqual([1, 'Read arXiv', false, true, false])
   })
 
   it('shows the id alone when no title is known (none in the PDF, the abstract page out of reach)', async () => {

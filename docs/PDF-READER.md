@@ -181,7 +181,7 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
 **Lead**
 
 - 目录 (Lucide `panel-left`, pressed while open).
-- The title: 600 13 px, one line, truncating first; the whole title in the tooltip. It is the page's heading (`h1`) at every width: below the lead's 320 px it is hidden to the eye, not removed, so that it stays in the accessibility tree; until it is known the heading is the product's name, said and not drawn (UI.md S-R-03).
+- The title: 600 13 px, one line, truncating first; the whole title in the tooltip. It is the page's heading (`h1`) at every width: below the lead's 320 px it is hidden to the eye, not removed, so that it stays in the accessibility tree; until it is known the heading is the product's name, said and not drawn (UI.md S-R-03). The title carries the paper's language, `lang="en"`, as a contents heading not yet translated does (S-R-02a): a screen reader reads it in that voice, not the interface's (WCAG 3.1.2; the interface review of 2026-11-03).
 - The arXiv id: `arXiv:2608.02163` in ink-2 12 px tabular figures, a link to the abstract page in a new tab (the
   maintainer: 「改成可以点，点击打开abs页」); on hover or focus it takes the fill and a small `arrow-up-right` slides in
   beside it. Tooltip 在 arXiv 打开摘要页, which the link's name carries too, after what is on it (UI.md S-R-03).

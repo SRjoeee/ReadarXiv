@@ -2,7 +2,9 @@
 // arXiv id in ink-2 tabular figures, a link to the abstract page in a new tab, an arrow sliding in on hover or focus.
 // The title is the page's heading (`h1`) at every width: it leaves the eye when the lead is too narrow for it (reader.css,
 // a container query) and stays in the page for assistive technology, which a hidden title did not (P3-M12, P6); until it
-// is known the heading is the product's name, said and not drawn, as the tab says it. The id's link is named by what is
+// is known the heading is the product's name, said and not drawn, as the tab says it. The title is the paper's own, in its
+// language (`lang="en"`, as a contents heading not yet translated is, UI.md S-R-02a), so that a screen reader reads it in
+// that voice and not the interface's (WCAG 3.1.2; PDF-READER §6.1). The id's link is named by what is
 // on it and what it does (WCAG 2.5.3), the tooltip being hidden from assistive technology. The id leaves when the lead cannot
 // hold it beside the contents' button: its own width, measured as it is drawn, against the lead's, which the grid gives
 // and a long language's menus or a long service name narrow (the interface review: the id was drawn under the switch).
@@ -37,7 +39,7 @@ export function PaperTitle({ id, title }: { id: string; title: string }) {
     <div ref={box} className="paper-title flex min-w-0 items-baseline gap-2 ps-1.5" data-cramped={cramped || undefined}>
       {title ? (
         <>
-          <h1 data-title className="m-0 min-w-0 truncate text-[13px] font-semibold" {...whole.props}>
+          <h1 data-title lang="en" className="m-0 min-w-0 truncate text-[13px] font-semibold" {...whole.props}>
             {title}
           </h1>
           {whole.tip}
