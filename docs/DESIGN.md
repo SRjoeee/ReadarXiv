@@ -19,7 +19,7 @@ Where this document and the code disagree, one of them is wrong; the same pull r
 - The reader's own translation appearance, prompts and glossary (§7.5, §8.2).
 - Sentence highlight on hover, and in translation-only mode the original sentence floating beside the translation (§7.7).
 - Figure translation: the labels inside bitmaps (recognised in the browser, by a model the extension ships; §15.3) and inside externally referenced SVG figures (read from the glyphs, no recognition needed), overlaid in place; and the labels of inline TikZ pictures, which are HTML in the page and are translated as text, each in its node, in the figure's own face and colour (§15).
-- The bilingual entry on the abstract page, a keyboard shortcut and a context menu item (§4.0b); an interface in English and Chinese; a diagnostics log a reader can attach to an issue (§4.6).
+- The bilingual entry on the abstract page, a keyboard shortcut and a context menu item (§4.0b); an interface in Simplified and Traditional Chinese, Japanese, Korean and English (UI.md §6); a diagnostics log a reader can attach to an issue (§4.6).
 
 **Not in scope for this release**, on purpose: a reader outside the extension (a web page or an app translating the same papers — the platform boundary of §4.2 keeps the core free of the extension's APIs so that one can be built on it, and that is all this release does about it), other paper sites, PDF, other free engines (DeepLX, Edge), a configurable order of the free engines (issue #103, no benefit found), a published `@readarxiv/core` package, Firefox or Safari.
 

@@ -133,8 +133,9 @@ off-state track, n-5 in the harness (1.5:1 against chrome), uses ink-3 here.
 
 ### 4.2 Type, icons, motion
 
-- Type: the system stack (`-apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "PingFang SC", "Noto Sans SC",
-  sans-serif`), 13 px base; 12.5 px for controls, 12 px for secondary text, 11 px only for page numbers; 500 for control
+- Type: the system stack, the platform's Latin face and then the CJK face of the element's language (`FONT_STACKS` in
+  `src/shared/tokens.ts`: PingFang SC / TC / HK, Hiragino Sans, Apple SD Gothic Neo on macOS, and their Windows and Linux
+  counterparts; UI.md §1, fonts; 2026-11-04, the one Simplified stack before), 13 px base; 12.5 px for controls, 12 px for secondary text, 11 px only for page numbers; 500 for control
   labels, 600 for the title and the current section; tabular figures wherever numbers change.
 - Icons: Lucide, 16 px, stroke 1.5 on the 24 grid (1 CSS px), `currentColor`; the display switch's own three (§6.2).
 - Motion: one easing, `cubic-bezier(0.2, 0, 0, 1)`; 120–260 ms; enter heavier than exit; press scales to 0.96. Under
@@ -777,7 +778,7 @@ the viewers (pdfslick's lesson; the highlight offset of 2026-09-22 was ours for 
 
 ### 11.6 Words
 
-The reader's words go into the locale packs (`zh-CN`, `en`) under a new surface in `docs/UI.md`, **R** (`S-R-01` …),
+The reader's words go into the locale packs (`zh-CN`, `en`; `zh-TW`, `ja` and `ko` since 2026-11-04) under a new surface in `docs/UI.md`, **R** (`S-R-01` …),
 with the popup's where they are the same (§15). Nothing in the reader is hard-coded any more; its status text, English
 today, goes.
 
@@ -1495,7 +1496,7 @@ Each before the stage's pull request, on the heaviest demo paper, in a real wind
 - **Unit** (Vitest): the display ↔ `mode` mapping both ways; the 18 → 19 migration; the popup view-model's reader
   rules (§9.2); the engine's failure classes to `ProviderErrorKind`; `DisplaySwitch` as a radio group (arrows, a
   disabled choice skipped, no single key on the page); the `Menu` fixes; the overlay transform and the redraw observer against a fake page.
-- **Copy**: every reader string comes from the locale packs in both languages; a test fails on a reader-facing string
+- **Copy**: every reader string comes from the locale packs in every interface language; a test fails on a reader-facing string
   naming LaTeX, TeX, compiling, typesetting, an engine or a provider (§1's rule).
 - **The engine moved intact**: the existing browser checks pass on the new page unchanged — the cache revisit, the
   viewer faults, the lost cases, the sync frame measurement, `e2e:pdf`.
@@ -1510,7 +1511,9 @@ Each before the stage's pull request, on the heaviest demo paper, in a real wind
 ## 15. Copy
 
 The words as agreed, zh-CN with the English they stand for; `docs/UI.md` gives them `S-R` ids. Where the popup already says
-the same thing, its string is reused (marked).
+the same thing, its string is reused (marked). Traditional Chinese, Japanese and Korean (2026-11-04) say the same in their
+packs (`src/locales/zh-TW.ts`, `ja.ts`, `ko.ts`), in their own register (UI.md §1): a page's name in Japanese and Korean
+sets no space before its counter, and Korean names an unsupported language after a colon, where no particle meets it.
 
 | Where | zh-CN | English |
 |---|---|---|

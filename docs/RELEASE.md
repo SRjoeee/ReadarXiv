@@ -30,7 +30,7 @@ The release commit is made **on the branch, before the merge**, so that the tree
 
 ## The store listing
 
-Category: Productivity. Language: English, with the Chinese description below. The short description is the manifest's `description` (`public/_locales/*/messages.json`) and must stay under 132 characters.
+Category: Productivity. Language: English, with the Chinese description below; the short descriptions in the other interface languages are their `messages.json`'s. The short description is the manifest's `description` (`public/_locales/*/messages.json`) and must stay under 132 characters.
 
 **Name**: Read arXiv
 
@@ -38,13 +38,19 @@ Category: Productivity. Language: English, with the Chinese description below. T
 
 **Short description (ZH)**: arXiv 论文双语阅读：HTML 原地翻译，PDF 原文与译文并排，随时可恢复原文
 
+**Short description (zh-TW)**: arXiv 論文雙語閱讀：HTML 就地翻譯，PDF 原文與譯文並排，隨時可還原原文
+
+**Short description (ja)**: arXiv の論文を対訳で読む：HTML はその場で翻訳、PDF は原文と訳文を並べて表示。いつでも原文に戻せます
+
+**Short description (ko)**: arXiv 논문을 두 언어로 읽기: HTML은 제자리에서 번역하고 PDF는 원문과 번역문을 나란히 보여 주며, 언제든 원문으로 되돌릴 수 있습니다.
+
 **Description (EN)**:
 
 > Read arXiv translates arXiv's papers and keeps them working. HTML papers are translated in place — beside, under, or instead of the original — and formulas stay formulas, citations stay clickable, tables and footnotes stay where the author put them, and the original comes back node for node when you ask. PDF papers open in a reader that shows arXiv's PDF beside its translation, page for page: the figures and formulas as the author drew them, the text in fonts close to the original's, links that still work, and the two sides scrolling together.
 >
 > Rest on a sentence and its counterpart lights up on the other side; in translation-only mode the original sentence floats beside the line. The words inside figures are translated and overlaid in place — vector figures read exactly, bitmaps recognised in your browser by a model that comes with the extension: nothing to install, and an image never leaves your machine.
 >
-> Microsoft's translator works out of the box with no account. Add Google's, Chrome's built-in offline translator, or any OpenAI-compatible endpoint with your own key (OpenRouter, DeepSeek, a local Ollama). When a service fails mid-paper, the rest of the page falls back to a free one and the popup says so. Prompts and a glossary keep terminology consistent on the LLM services. 180 target languages; interface in English and Chinese.
+> Microsoft's translator works out of the box with no account. Add Google's, Chrome's built-in offline translator, or any OpenAI-compatible endpoint with your own key (OpenRouter, DeepSeek, a local Ollama). When a service fails mid-paper, the rest of the page falls back to a free one and the popup says so. Prompts and a glossary keep terminology consistent on the LLM services. 180 target languages; interface in Simplified and Traditional Chinese, Japanese, Korean and English.
 >
 > Paragraphs are sent to the service you choose; Chrome's built-in translation and a local endpoint keep them on your machine. Your API keys stay in the browser's extension storage. Translations are cached locally so a paper reopens at once.
 >
@@ -56,7 +62,7 @@ Category: Productivity. Language: English, with the Chinese description below. T
 >
 > 鼠标停在一句话上，另一侧对应的句子同时高亮；只译文模式下，原文句子会浮在这一行旁边。图里的文字也会翻译并覆盖在原位——矢量图直接读取，位图由扩展自带的识别模型在浏览器里识别：无需安装任何东西，图片不会离开你的电脑。
 >
-> 默认使用微软翻译，无需账号。也可以用 Google 翻译、Chrome 内置的离线翻译，或者任何兼容 OpenAI 接口的服务（OpenRouter、DeepSeek、本机的 Ollama 等），填自己的密钥。翻译到一半服务失效时，剩下的页面会退到免费服务继续，弹窗会说明。提示词和术语表让 LLM 服务的术语前后一致。180 种目标语言；界面有中英文。
+> 默认使用微软翻译，无需账号。也可以用 Google 翻译、Chrome 内置的离线翻译，或者任何兼容 OpenAI 接口的服务（OpenRouter、DeepSeek、本机的 Ollama 等），填自己的密钥。翻译到一半服务失效时，剩下的页面会退到免费服务继续，弹窗会说明。提示词和术语表让 LLM 服务的术语前后一致。180 种目标语言；界面有简体中文、繁體中文、日本語、한국어和英文。
 >
 > 段落会发给你选定的服务；Chrome 内置翻译和本机端点让文字不出本机。API 密钥只保存在浏览器的扩展存储里。译文在本地缓存，再次打开同一篇论文即时显示。
 >
