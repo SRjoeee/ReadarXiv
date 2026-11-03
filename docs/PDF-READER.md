@@ -397,7 +397,7 @@ The states are §8's.
   it (the owner, 2026-11-03: a shorter list, the search kept). The field takes the focus as the menu opens, so that
   typing filters at once, but not where the primary pointer is a finger (`(pointer: coarse)`): there the list takes it,
   as the service menu's does, and no on-screen keyboard covers the list until the field is tapped; a letter typed on the
-  list (a tablet with a keyboard attached) moves into the field and starts the search. The primary pointer
+  list (a tablet with a keyboard attached) moves into the field and goes on the end of the search. The primary pointer
   and not `any-hover`/`any-pointer`, which answer for every input a device has: a phone with a stylus that hovers would
   read as able to hover and get the keyboard, and a laptop with a touch screen would lose the focus its keyboard types
   into. The extension's popup and settings page draw the same menu (UI.md S-P-22, S-O-23), at five rows and a half.

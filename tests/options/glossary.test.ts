@@ -77,6 +77,16 @@ describe('the glossary\'s table (§6.3)', () => {
     await m.unmount()
   })
 
+  it('Enter that commits an input method\'s word stays in its cell (a term typed in Japanese or Korean)', async () => {
+    const m = await mountElement(h(GlossaryTable, { data: data(WITH([])) }))
+    const cell = cells(m.container)[0]!
+    cell.focus()
+    cell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true }))
+    await m.flush()
+    expect(document.activeElement).toBe(cell)
+    await m.unmount()
+  })
+
   it('a row missing a side says so once the focus has left it, and Enter goes on to the empty row', async () => {
     const m = await mountElement(h(GlossaryTable, { data: data(WITH([])) }))
     type(cells(m.container)[0]!, 'token')

@@ -36,6 +36,9 @@ export function useMenuNav({ count, initial, isDisabled, labelOf, onPick, onClos
     return from
   }
   const onKeyDown = (e: KeyboardEvent) => {
+    // an input method that is composing (Japanese, Korean, pinyin) owns the keys: Enter commits the word, the arrows choose a
+    // candidate, Escape drops it; none of them is the menu's (229: the key a composition reports where isComposing lags)
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return
     if (e.key === 'Escape') { e.preventDefault(); onClose(); return }
     if (!count) return
     if (e.key === 'ArrowDown') { e.preventDefault(); setActive(a => step(a, 1)); return }

@@ -183,6 +183,26 @@ describe('MenuList: what takes the focus as a searchable menu opens (the owner, 
     await act(async () => { list.focus() })
     await key(list, 'ArrowDown')
     expect(document.activeElement).toBe(list)
+    // a key an input method is composing with is not moved into the search
+    await act(async () => { list.focus() })
+    await act(async () => { list.dispatchEvent(new KeyboardEvent('keydown', { key: 'x', isComposing: true, bubbles: true, cancelable: true })) })
+    expect([document.activeElement === list, field.value]).toEqual([true, 'd'])
+    // a letter typed once the list has the focus back goes on the end of the query, never in its place
+    await key(list, 'e')
+    expect([document.activeElement === field, field.value]).toEqual([true, 'de'])
+    expect([...container.querySelectorAll('[role="option"]')].map(o => o.textContent)).toEqual(['Deutsch'])
+  })
+
+  it('an input method composing in the search owns Enter, the arrows and Escape: no row is picked, none moves, the menu stays', async () => {
+    pointer(false)
+    const { container, onPick } = await mount(LANGS, { search: 'Search' })
+    const field = container.querySelector<HTMLInputElement>('input')!
+    const before = field.getAttribute('aria-activedescendant')
+    for (const k of ['ArrowDown', 'Enter', 'Escape']) await act(async () => { field.dispatchEvent(new KeyboardEvent('keydown', { key: k, isComposing: true, bubbles: true, cancelable: true })) })
+    expect([onPick.mock.calls.length, field.getAttribute('aria-activedescendant')]).toEqual([0, before])
+    // the composition committed, the keys are the menu's again
+    await key(field, 'Enter')
+    expect(onPick).toHaveBeenCalledWith('fra')
   })
 
   it('follows the pointer as it changes while the menu is drawn, one element holding the browser\'s autofocus at a time', async () => {

@@ -147,14 +147,17 @@ export function MenuList({ items, kind, label, layout = 'inline', search, noMatc
   // be handled twice as it bubbles (the final review: the arrows skipped every other language)
   const keys = { 'aria-activedescendant': nav.activeId, onKeyDown: nav.onKeyDown }
   // the list holding the focus over a search field (under a finger, with a keyboard attached): a letter typed there is
-  // the search's, so it moves into the field and starts the query, as the field would have taken it had it had the focus
+  // the search's, so it moves into the field and goes on the end of the query, as the field would have taken it had it
+  // had the focus (a query typed before the list took the focus back is kept, never replaced)
   const field = useRef<HTMLInputElement>(null)
   const listKeys = !search ? keys : {
     ...keys,
     onKeyDown: (e: KeyboardEvent) => {
-      if (e.key.length === 1 && e.key !== ' ' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      // a key an input method is composing with is the composition's (menu-nav's own guard, before the redirect)
+      if (!e.nativeEvent.isComposing && e.keyCode !== 229 && e.key.length === 1 && e.key !== ' ' && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault()
-        setQuery(e.key)
+        const typed = e.key
+        setQuery(q => q + typed)
         nav.setActive(0)
         field.current?.focus()
         return
