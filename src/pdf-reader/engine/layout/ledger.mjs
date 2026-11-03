@@ -146,13 +146,15 @@ const ownerClass = (group, units) => {
 export function ledgerOf(pages, own, { units = null } = {}) {
   const counts = Object.fromEntries(CLASS_IDS.map(id => [id, { glyphs: 0, letters: 0 }]))
   const lasts = lastEntriesOf(pages, units)
-  /** where a bibliography's last entry ended: its page and the baseline of its last line, the zone's end once a glyph leaves it */
-  let ending = null
+  /** where a bibliography's last entry ended: its page and the baseline of its last line, the zone's end once a glyph leaves it;
+   *  and the bibliography's own line pitch, the last step down from one of its lines to the next (a style set double, 24 pt) */
+  let ending = null, pitch = 0, lastY = null
   const fam = new Map()
   const famOf = name => { let f = fam.get(name); if (f === undefined) { f = classifyFont(name ?? '').fam; fam.set(name, f) } return f }
   const classes = [], orphans = [], lines = []
   let zone = null, letters = 0, orphanLetters = 0, para = null, entry = null
   pages.forEach((pg, pi) => {
+    lastY = null
     const G = pg.glyphs ?? [], n = G.length, P = pg.points ?? [], O = own?.glyphs?.[pi] ?? []
     const out = new Uint8Array(n).fill(CLASS_CODE.symbols)
     classes.push(out)
@@ -178,12 +180,18 @@ export function ledgerOf(pages, own, { units = null } = {}) {
         // (the bibliography's last entry's end: its zone goes on over that entry's last lines, what TeX set there after the mark)
         if (lasts.has(`${pi}:${q}`) && zone === 'references') { const e = G[Math.min(P[q].glyph, n) - 1] ?? G[P[q].glyph]; ending = e ? { page: pi, y: e.y, size: e.size } : null; if (!ending) zone = null }
       }
-      // (its lines: the line its end mark stands on, and each line right below the last at an entry's leading (ENTRY_DY), a
-      // part of it TeX set past the mark — a style's \newblock, a DOI —, on its page; the first glyph past them ends the zone)
+      // (its lines: the line its end mark stands on, and each line right below the last at an entry's leading (ENTRY_DY of its
+      // size, or the bibliography's own pitch), a part of it TeX set past the mark — a style's \newblock, a DOI —, on its page;
+      // the first glyph past them ends the zone)
+      if (g < n && zone === 'references' && !ending) {
+        const x = G[g]
+        if (lastY !== null && lastY - x.y > 0.5 * Math.max(x.size, 5) && lastY - x.y < 3 * Math.max(x.size, 5)) pitch = lastY - x.y
+        lastY = x.y
+      }
       if (ending && g < n) {
         const x = G[g], sz = Math.max(ending.size, x.size, 5), dy = ending.y - x.y
         if (ending.page === pi && Math.abs(dy) < 0.5 * sz) { /* (on the line) */ }
-        else if (ending.page === pi && dy > 0 && dy <= ENTRY_DY * sz) ending.y = x.y
+        else if (ending.page === pi && dy > 0 && dy <= Math.max(ENTRY_DY * sz, 1.25 * pitch)) ending.y = x.y
         else { if (zone === 'references') { zone = null; entry = null } ending = null }
       }
       if (g < n) { zones[g] = zone; entries[g] = entry }

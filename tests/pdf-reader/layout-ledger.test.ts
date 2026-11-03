@@ -231,6 +231,19 @@ describe('ledgerOf', () => {
     expect(l.lines.filter(x => x.page === 2).map(x => x.zone)).toEqual([null, null, null])
   })
 
+  it('keeps a double-spaced bibliography\'s last entry\'s lines past its mark in its zone, by the bibliography\'s own pitch (2610.11256v1 p42)', () => {
+    const units = [{ kind: 'reference' }, { kind: 'reference' }]
+    const pg = page(
+      { point: '0s' }, { glyphs: run('Bee and Cee', 100, 760), owner: 'u0' }, { glyphs: run('Journal', 120, 736), owner: 'u0' }, { point: '0e' },
+      { point: '1s' }, { glyphs: run('Dee and Eff', 100, 712), owner: 'u1' }, { point: '1e' },
+      // (the last entry's place TeX set past its mark, a line below at the style's double spacing; then an address past a skip)
+      { glyphs: run('Dusseldorf Institute', 100, 688) },
+      { glyphs: run('Mail address', 100, 640) },
+    )
+    const l = ledger([pg], units)
+    expect([at(pg, 'I'), at(pg, 'M')].map(g => classAt(l, 1, g))).toEqual(['references', 'orphan'])
+  })
+
   it('reads a formula\'s line, a code line and a line of no word as never translated', () => {
     const pg = page(
       { point: 'bs1' },
