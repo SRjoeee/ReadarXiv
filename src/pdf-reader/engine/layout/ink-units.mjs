@@ -286,7 +286,8 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     // (an entry's line its unit's whatever it holds: a URL alone in a typewriter face, as \url breaks it, or numbers alone — TeX
     // set it in that entry, and left out of the unit it stood the original's where the drawn entry ran over it, 2610.35877v1)
     if (L.cls === 'references' ? !words.length : !words.some(textual)) continue
-    segs.push({ ...L, words, ended })
+    // (a list's line whose page number the ledger cut as a line of its own ends its entry as well: ledger.mjs listedOf)
+    segs.push({ ...L, words, ended: ended || (L.cls === 'contents' && L.listed === true) })
   }
   // units of lines (rule 3)
   const groups = [], entryGroups = new Map()

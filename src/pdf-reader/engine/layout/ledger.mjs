@@ -215,7 +215,7 @@ export function ledgerOf(pages, own, { units = null } = {}) {
       Object.assign(line, wordsOf(line.gs.map(g => G[g]), famOf), { listed: listedOf(line.gs.map(g => G[g]), G) })
       const rule = RULES.find(r => r.test(line))
       for (const g of line.gs) out[g] = rule.code
-      lines.push({ page: pi + 1, cls: rule.cls, gs: line.gs, region: line.region, zone: line.zone, para: line.para, opens: line.opens, entry: line.entry, entryFrom: line.entryFrom, y: line.y, size: line.size, x0: line.x0, x1: line.x1, letters: line.letters })
+      lines.push({ page: pi + 1, cls: rule.cls, gs: line.gs, region: line.region, zone: line.zone, para: line.para, opens: line.opens, entry: line.entry, entryFrom: line.entryFrom, listed: line.listed, y: line.y, size: line.size, x0: line.x0, x1: line.x1, letters: line.letters })
       if (rule.cls === 'orphan') {
         orphanLetters += line.letters
         if (orphans.length < ORPHAN_LINES_MAX) orphans.push({ page: pi + 1, text: textOf(line.gs.map(g => G[g])).slice(0, TEXT_MAX), letters: line.letters, x0: line.x0, x1: line.x1, y: line.y })
