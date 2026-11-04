@@ -1143,7 +1143,7 @@ describe('V15: a place waiting for its layer shows the left\'s drawing of its pa
   const viewsIn = (s: Setup) => FakePDFPageView.made.filter(v => s.panes.right.contains(v.div))
   const leftPage = (n: number) => leftViewer().getPageView(n - 1) as unknown as { div: HTMLElement; canvas: HTMLCanvasElement | null }
 
-  it('the left\'s canvas copied at its size once the left has drawn the page: no page view, no text layer, no links of its own; the left\'s loading mark shown meanwhile', async () => {
+  it('the left\'s canvas copied at its size in the frame after the left has drawn the page: no page view, no text layer, no links of its own; the left\'s loading mark shown meanwhile', async () => {
     const s = setup({ own: false })
     await opened(s, 6)
     await nearOn(s, [1, 2])
@@ -1155,6 +1155,9 @@ describe('V15: a place waiting for its layer shows the left\'s drawing of its pa
     expect((places(s)[0] as HTMLElement).classList.contains('loading')).toBe(true)
     expect((places(s)[0] as HTMLElement).getAttribute('aria-label')).toBe('right 1')
     leftViewer().render(1, null, { width: 612, height: 792, sx: 1, sy: 1 })
+    // (nothing of the right's in the task the left's page is drawn in: the copy in the next frame, the mark kept until then)
+    expect([copyOf(s, 1), (places(s)[0] as HTMLElement).classList.contains('loading')]).toEqual([null, true])
+    await s.clock.tick()
     const c = copyOf(s, 1)
     expect([c?.width, c?.height]).toEqual([612, 792])
     expect((places(s)[0] as HTMLElement).classList.contains('loading')).toBe(false)
@@ -1165,6 +1168,7 @@ describe('V15: a place waiting for its layer shows the left\'s drawing of its pa
     expect((s.view.probe() as Record<string, unknown>)).toMatchObject({ copies: 1, copyPixels: 612 * 792, copyWaits: 1, pageViews: 0 })
     // a place come near once the left has drawn its page takes it at once
     leftViewer().render(3, null, { width: 612, height: 792, sx: 1, sy: 1 })
+    await s.clock.tick()
     await nearOn(s, [3])
     expect(copyOf(s, 3)?.width).toBe(612)
   })
@@ -1174,11 +1178,13 @@ describe('V15: a place waiting for its layer shows the left\'s drawing of its pa
     await opened(s, 6)
     await nearOn(s, [1])
     leftViewer().render(1, null, { width: 612, height: 792, sx: 1, sy: 1 })
+    await s.clock.tick()
     const before = copyOf(s, 1) as HTMLCanvasElement
     s.view.zoomBy(1.5)
     await s.clock.advance(100)
     expect(copyOf(s, 1)).toBe(before)
     leftViewer().render(1, null, { width: 918, height: 1188, sx: 1, sy: 1 })
+    await s.clock.tick()
     const after = copyOf(s, 1) as HTMLCanvasElement
     expect([after === before, after.width, before.width]).toEqual([false, 918, 0])
     expect(viewsIn(s)).toHaveLength(0)
@@ -1189,6 +1195,7 @@ describe('V15: a place waiting for its layer shows the left\'s drawing of its pa
     await opened(s, 6)
     await nearOn(s, [1])
     leftViewer().render(1, null, { width: 612, height: 792, sx: 1, sy: 1 })
+    await s.clock.tick()
     const copy = copyOf(s, 1) as HTMLCanvasElement
     let drawn = () => {}
     const held = new Promise<void>(ok => { drawn = ok })
@@ -1235,6 +1242,7 @@ describe('V15: a place waiting for its layer shows the left\'s drawing of its pa
     await opened(s, 6)
     await nearOn(s, [1])
     leftViewer().render(1, null, { width: 612, height: 792, sx: 1, sy: 1 })
+    await s.clock.tick()
     document.documentElement.setAttribute('data-axt-dim', '')
     try {
       expect(copyOf(s, 1)?.matches('html[data-axt-dim] .pdfViewer .page canvas')).toBe(true)
@@ -1246,6 +1254,7 @@ describe('V15: a place waiting for its layer shows the left\'s drawing of its pa
     await opened(s, 6)
     await nearOn(s, [1, 2])
     leftViewer().render(1, null, { width: 612, height: 792, sx: 1, sy: 1 })
+    await s.clock.tick()
     leftPage(2).div.classList.add('loadingIcon')
     await flush()
     const copy = copyOf(s, 1) as HTMLCanvasElement

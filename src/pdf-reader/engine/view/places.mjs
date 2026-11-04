@@ -7,7 +7,8 @@
 //
 // The original's page, while it waits for its layer, is the left's own drawing of it: where the two panes show the same pages
 // (the sync on, both shown: `o.borrow()`), the left draws every page the right shows, at the same viewport, so the place takes
-// a copy of the left's canvas as the left's page view finishes it (one drawImage; leftDrawn), and shows PDF.js's loading mark
+// a copy of the left's canvas once the left's page view has finished it (one drawImage, in the next frame: the left's page is
+// painted in the frame it was drawn for, nothing of the right's in its task; leftDrawn), and shows PDF.js's loading mark
 // meanwhile, as the left's page shows it. The same pixels, with no second render of the page, no second text layer, no second
 // annotation layer: the reader view's audit of 2026-11-04 measured page 1 59 ms sooner at 1x and 138 ms at 4x on a returning
 // reader without the second page views (V1). A page that stays the original's (its layer failed or stalled there, the rule
@@ -243,10 +244,27 @@ export function createPlaces(o) {
     sync()
   }
   function stopMirror(p) {
-    if (!p.mirror) return
-    p.mirror.disconnect()
+    p.mirror?.disconnect()
     p.mirror = null
     for (const c of LOADING) p.div.classList.remove(c)
+  }
+  /** the places whose copy is taken in the next frame (leftDrawn): the left's page is painted in the frame it was drawn for, with
+   *  nothing of the right's in its task, and the place keeps the loading mark until its copy is made */
+  const copyDue = new Set()
+  let copyFrame = 0
+  function copySoon(p) {
+    copyDue.add(p)
+    if (copyFrame || disposed) return
+    copyFrame = clock.frame(() => {
+      copyFrame = 0
+      for (const q of copyDue) {
+        if (!q.near || q.side || q.view || !(q.copy || q.wantsCopy)) continue
+        if (borrows(q) && leftFresh(q.n)) copyLeft(q)
+        // (the left drawing the page again meanwhile, a zoom's: its mark followed again until it is drawn)
+        else if (q.wantsCopy) mirrorLoading(q)
+      }
+      copyDue.clear()
+    })
   }
   /** place p drawn by its own page view now (the page settled as the original's, the left no longer showing it): its copy kept
    *  over the page view until that is drawn, so nothing blank shows meanwhile */
@@ -485,7 +503,10 @@ export function createPlaces(o) {
       else leftAt.delete(n)
       if (!p || p.side || p.view || !(p.copy || p.wantsCopy) || !p.near) return
       if (!ok || !borrows(p)) { ownView(p); return }
-      if (leftFresh(n)) copyLeft(p)
+      // (its mark kept as it stands until the copy is made: the left's going as its page is drawn is not followed)
+      p.mirror?.disconnect()
+      p.mirror = null
+      copySoon(p)
     },
     /** the layer side's word on the pages (`fn(n)`: whether page n stays the original's; null: none does), and the places near
      *  told it again: one that no longer waits for its layer, or whose left no longer shows its page, drawn by its own page view */
@@ -537,6 +558,8 @@ export function createPlaces(o) {
       clock.clear(redrawTimer)
       clock.clear(textTimer)
       clock.clear(aheadTimer)
+      clock.cancel(copyFrame)
+      copyDue.clear()
       near.disconnect()
       inView.disconnect()
       remove()
