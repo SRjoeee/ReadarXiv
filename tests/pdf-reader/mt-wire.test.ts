@@ -405,9 +405,9 @@ describe('fewer markers, each read from TeX', () => {
     expect(serialize(unit(text('One.'), ph('\\smallskip'), text(' Two.'))).wire).toBe('One. @a# Two.')
   })
   it('every display breaks the text for the boundary rule, `subequations` as `equation`', () => {
-    const before = (env: string) => serialize(unit(...pairs(1, '\\textbf{', 'Pretrained backbone'), ph(`\\begin{${env}} x = y \\end{${env}}`), text('We use a model here.'))).wire
-    expect(before('subequations')).toBe(before('equation'))
-    expect(before('subequations')).toBe('@a# Pretrained backbone @b#@c# We use a model here.')
+    const wireWith = (env: string) => serialize(unit(...pairs(1, '\\textbf{', 'Pretrained backbone'), ph(`\\begin{${env}} x = y \\end{${env}}`), text('We use a model here.'))).wire
+    expect(wireWith('subequations')).toBe(wireWith('equation'))
+    expect(wireWith('subequations')).toBe('@a# Pretrained backbone @b#@c# We use a model here.')
   })
   it('a pair\'s end whose other end the unit does not hold goes on no wire, where it stands, and the reading takes it (2610.19159\'s transcripts: every reply refused before)', () => {
     const u = unit({ t: 'open', id: 1, src: '\\role{' }, text('Step 2149'), { t: 'close', id: 1, src: '}' }, text(' Tool Output'), text('\n'), { t: 'open', id: 2, src: '{' }, ph('\\color{blue}'), text('\n'))
