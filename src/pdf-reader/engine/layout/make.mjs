@@ -54,6 +54,20 @@ const PUNCT_TEXT = /^[.,;:!?]$/
 const PAGES_MAX = 10_000, COORD_MAX = 14_400
 /** units TeX sets away from where the source has them (anchors.mjs `floating`) */
 const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure', 'affiliation'])
+/** the pages each unit's own marks stand on, Map id → [low, high], from the names of the marked original and their pages
+ *  ([name, page]): every name of a unit's own marks ([th]?<id>[se]) of the `n` units, a mark staying on the base page of its
+ *  page's number (carryOver). Where the anchoring searches a unit its marks do not bound (pipeline/anchors.mjs searchHead),
+ *  known from the head's names before any page is read */
+function ownOfNames(named, n) {
+  const out = new Map()
+  for (const [nm, page] of named) {
+    const r = /^[th]?(\d+)[se]$/.exec(nm)
+    if (!r || Number(r[1]) >= n || !Number.isInteger(page) || page < 1) continue
+    const id = String(Number(r[1])), o = out.get(id)
+    out.set(id, o ? [Math.min(o[0], page), Math.max(o[1], page)] : [page, page])
+  }
+  return out
+}
 /** a line's body glyphs: within this share of its median size */
 const BODY = 0.15
 /** a glyph on a line, scripts included: its baseline within this of the line's (and a placeholder's of its mark's) */
@@ -777,7 +791,7 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
       if (own.length && (own.some(k => !carriedUnit.has(k)) || (own.length === 2 && !bounds.has(String(i))))) unplaced.add(i)
     }
     linesTeX = new Map(marks.lines); alignTeX = new Map(marks.align ?? []); coloursBy = coloursOf(marks.colours)
-    anchors = anchorUnits(doc, anchorTexts, { bounds, floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch, frame: frame ?? pageFrame, forward })
+    anchors = anchorUnits(doc, anchorTexts, { bounds, own: ownOfNames([...at].map(([nm, m]) => [nm, m.page]), units.length), floating: id => FLOATING.has(units[id]?.kind ?? ''), floatMatch, frame: frame ?? pageFrame, forward })
     stats.ms.anchor = now() - t
   }
 
@@ -2337,7 +2351,8 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
       if (NAME_START.test(nm)) nameList.push(nm)
     })
     // ---- each unit: its keys (final once every name of them is read), its pieces' own ink and marks (known once found)
-    const R = rangedAnchors(doc, anchorTexts, { floating, floatMatch, frame, forward })
+    // (where each unit is searched, known from the head: the pages of its own marks' names, anchors.mjs searchHead's rule)
+    const R = rangedAnchors(doc, anchorTexts, { own: ownOfNames(listed.map(([nm, page]) => [nm, page]), n), floating, floatMatch, frame, forward })
     const keyLeft = new Map([...keyNames].map(([k, list]) => [k, mh ? list.length : 0]))
     const keysLeft = new Int32Array(n), rowsLeft = new Int32Array(n), known = new Uint8Array(n), wantDecide = new Uint8Array(n), phRan = new Uint8Array(n)
     for (const k of keyNames.keys()) keysLeft[Number(k.slice(0, -1))]++
@@ -2392,16 +2407,15 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
       if (own.length && (own.some(k => !carriedUnit.has(k)) || (own.length === 2 && !b))) unplaced.add(i)
       R.mark(i, b ?? null)
     }
-    /** unit i's own marks known: the pages they are carried to (where its bounds would begin and end), carried once read */
+    /** unit i's own marks known: the last page they are carried to, carried once it is read */
     const marksKnown = i => {
-      let w = 0, lo = 0
+      let w = 0
       for (const end of ['s', 'e']) {
         const k = `${i}${end}`
         if (!withWords.has(k)) continue
         const name = nameOf.get(k), m = dropped.has(name) ? null : at.get(name), c = m ? carriedPage(m.page) : null
-        if (c !== null) { w = Math.max(w, c); lo = lo ? Math.min(lo, c) : c }
+        if (c !== null) w = Math.max(w, c)
       }
-      R.own(i, lo, w)
       if (w <= wokeTo) markUnit(i)
       else waits[w].push(i)
       if (!rowsLeft[i]) becomeKnown(i)
@@ -2649,8 +2663,6 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
         if (!keysLeft[i] && !rowsLeft[i]) continue
         let least = Infinity, most = -Infinity
         for (const k of [`${i}s`, `${i}e`]) for (const [, pg] of keyNames.get(k) ?? []) { least = Math.min(least, pg); most = Math.max(most, pg) }
-        // (where its bounds may be, before its own marks are known: their pages and one beside)
-        if (keysLeft[i] && R.lastPage) R.own(i, Math.min(Math.max(1, least - 1), R.lastPage), Math.min(most + 1, R.lastPage))
         least = Math.min(least, rowLeast[i])
         countLow(i, least === Infinity ? pages + 1 : least - 1)
       }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { anchorUnits, type DocToken, frameOfTokens, orderOf, placesIn, type TextPage, tokenizeDocument, type UnitText } from '@/pdf-reader/engine/pipeline/anchors.mjs'
+import { anchorUnits, type DocToken, frameOfTokens, orderOf, ownOfBounds, placesIn, type TextPage, tokenizeDocument, type UnitText } from '@/pdf-reader/engine/pipeline/anchors.mjs'
 import { rangedAnchors } from '@/pdf-reader/engine/pipeline/left-part.mjs'
 import { inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
 
@@ -79,7 +79,7 @@ describe('a unit without marks is searched between its marked neighbours in the 
     const whole = anchorUnits(doc, ordered, { bounds: bounds(doc, BIB_BOUNDS), frame: () => F })
     const b = bounds(doc, BIB_BOUNDS)
     for (const marking of [[0, 1, 2, 3, 4, 5], [5, 4, 3, 2, 1, 0], [3, 0, 5, 1, 4, 2]]) {
-      const R = rangedAnchors(doc, ordered, { frame: () => F })
+      const R = rangedAnchors(doc, ordered, { own: ownOfBounds(doc, b), frame: () => F })
       const got = new Map<number, unknown>()
       for (const id of marking) {
         R.mark(id, b.get(String(id)) ?? null)
