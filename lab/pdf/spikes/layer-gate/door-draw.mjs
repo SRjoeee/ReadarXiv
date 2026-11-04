@@ -145,8 +145,8 @@ async function openB({ name, target, rules, at, draw, link = null }) {
 const drawStatsOf = () => lastRun().drawStats ?? null
 
 window.doorDraw = {
-  /** a paper's pages, live against its draws (served at /door/<paper>/draws.json): see the head */
-  async inputs({ name, paper }) {
+  /** a fixture's pages, live against its draws (served at `drawsUrl`, the fixture's own: /door/<fixture>/draws.json): see the head */
+  async inputs({ name, drawsUrl }) {
     const R = await import('/engine/layer-proto/reader.mjs')
     const { fontReaders, pageReadOf, liveFillsOf } = await import('/engine/layer-proto/run.mjs')
     const { checkDraw, DRAW_ROUND } = await import('/engine/layer-proto/draw.mjs')
@@ -154,7 +154,7 @@ window.doorDraw = {
     const unit = DRAW_ROUND ?? 0
     TOL = { x0: unit, x1: unit, yb: unit / 2, ix: unit / 2, ybEff: unit / 2, link: unit }
     const LK = await import('/engine/layer-proto/links.mjs')
-    const D = await json(`/door/${paper}/draws.json`)
+    const D = await json(drawsUrl)
     const doc = await pdfjs.getDocument({ data: await bytes(`/fixtures/${name}/base.pdf`), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise
     // (one reader each, as a run keeps its caches: pages in order)
     const live = fontReaders(), data = fontReaders()

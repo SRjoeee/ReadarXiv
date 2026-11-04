@@ -987,10 +987,12 @@ async function doorDrawInputs(page, name, errors) {
   // (the page read live the one its draws are of: the wrapped page, served as its base.pdf once wrapped, as a reader reads ours)
   await wrappedOf(name)
   const D = await drawsOf(name)
-  DOOR_FILES.set(`/door/${paper}/draws.json`, readFileSync(D.file))
+  // (served by fixture, never by paper: two fixtures of one paper drawn over two wraps run at once on the workers, each its own)
+  const drawsUrl = `/door/${name}/draws.json`
+  DOOR_FILES.set(drawsUrl, readFileSync(D.file))
   try {
     await openDoorPage(page, 'doordraw')
-    const r = await page.evaluate(x => window.doorDraw.inputs(x), { name, paper })
+    const r = await page.evaluate(x => window.doorDraw.inputs(x), { name, drawsUrl })
     const ok = r.compared + r.none.length === r.pages && r.equal === r.compared && !r.differ.length && !errors.length
     if (!ok) failures.push(name)
     // (PDF.js's overlaid text of each link against the text of the layer's own glyph points inside it: a measure, never gated)
@@ -998,7 +1000,7 @@ async function doorDrawInputs(page, name, errors) {
     r.overlaidTotals = ov
     const line = `${r.overlaidLost ? `the draws' links carry no overlaid text where the live read has it (${r.overlaidLost} links: the draw read on pdf-lite's worker with TEXT_GUARD on); ` : ''}${paper}: ${r.pages} pages, ${r.compared} read from their draws and live: equal on ${r.equal} (${r.chars} characters, ${r.nu} of them no reading of their glyph, ${r.links} Link annotations; their overlaid text the layer's glyphs' on ${ov.same}, but for white space on ${ov.space}, other on ${ov.other}, none on ${ov.empty})${r.zeroSign ? ` (${r.zeroSign} numbers equal but the sign of zero)` : ''}${r.drift && Object.keys(r.drift).length ? ` (within the draw's rounding: largest ${Object.entries(r.drift).map(([k, v]) => `${k} ${v.toPrecision(2)}`).join(', ')}, allowed ${Object.entries(r.tolerance ?? {}).map(([k, v]) => `${k} ${v}`).join(', ')}${r.edge ? `; ${r.edge} link glyph points inside on one side only, each within that reach of its link's edge` : ''})` : ''}; ${r.none.length ? `no draw on ${r.none.length} (${r.none.slice(0, 8).join(' ')})` : 'a draw on every page'}${r.differ.length ? `; differ: ${r.differ.slice(0, 3).join(' | ')}` : ''}${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
     return { name, door: true, ok, ready: true, line, inputs: r }
-  } finally { DOOR_FILES.delete(`/door/${paper}/draws.json`) }
+  } finally { DOOR_FILES.delete(drawsUrl) }
 }
 /** --door-draw=pages: a fixture's pages asked in order, drawn from their draws, against the same door reading every page live */
 async function doorDrawPages(page, name, errors) {
