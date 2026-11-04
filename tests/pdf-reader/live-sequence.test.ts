@@ -590,8 +590,9 @@ describe('a copy made under pipeline 21, reopened under 22 (and on)', () => {
 // macros asked of the ink section within INK_BUDGET (layout/marks.mjs inkSamples), 62 the figure units of a glyph shown
 // whole by its own ink and the caps counted by every run that spells a word (layout/ink.mjs, figure-text.mjs), 63 the
 // code regions TeX set kept by every reader (layout/marks.mjs regionsTex, ledger.mjs, figure-text.mjs), 64 what TeX sets after
-// a bibliography no entry's and a contents line's entries (ledger.mjs lastEntriesOf, listedOf), 65 (the run-in lane's, #579) and
-// 66 a unit's start mark before the marks that open its head piece (source/latex-front.mjs patch), no source unit:
+// a bibliography no entry's and a contents line's entries (ledger.mjs lastEntriesOf, listedOf), 65 a unit only the layout
+// file holds placed in K beside the left unit it shares one of TeX's lines with (need.mjs lineAfterOf), and 66 a unit's start mark
+// before the marks that open its head piece (source/latex-front.mjs patch), no source unit:
 // every unit is the copy's by its hash, carried as it has it, and nothing is sent
 describe('a copy made under pipeline 23 to 29 or 39 to 65, reopened under 66', () => {
   const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }

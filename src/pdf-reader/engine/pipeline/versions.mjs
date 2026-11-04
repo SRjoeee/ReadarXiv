@@ -562,6 +562,17 @@
 //     unit); no source unit's class and no name's row moves. The ink
 //     units move, so the rows' identities: raised so. Every source unit, its pieces and its wire are 63's: a copy of 63 carries
 //     every unit (live.mjs PIPELINE_CARRIES)
+// 65 (the release sweep's census of run-in heads, 2026-11-04: four Chinese heads laid where the English head had ended, 0.84 to
+//     16.04 em after the translated head): a unit only the layout file holds (no left unit, so no stream of its own) stands in K
+//     beside the left unit it shares one of TeX's lines with, right after the unit whose last row its first row continues or right
+//     before the one whose first row continues its last, through the units the file alone holds between them on the line in its
+//     order (need.mjs lineAfterOf, the cutter's K and the door's own), else after the
+//     largest stream of a left unit with a smaller id as before. A float or a note numbered before a run-in head and streamed after
+//     its text had put the head after its text in K, where the text finds no lead (2610.21547v1 p16's "Label flipping.", after a
+//     caption of page 17). Over the sweep's 87 papers 7 of 5,241 such units move: the four heads, now before their text, and
+//     three keywords lines, now after "Key words and phrases." by their line (by the ids they stood there only where an
+//     affiliation of the last page came before them); every other paper's K is the same, slot for slot. The units,
+//     their pieces and their wire are 64's: a copy of 64 carries every unit (live.mjs PIPELINE_CARRIES)
 // 66 (the owner's report of 2026-11-04 on 2610.21085v1 p5, staging d4774576: the paragraph after a run-in heading that holds a
 //     formula English): a unit's start mark goes before the marks that open the piece it stands in front of (latex-front.mjs patch,
 //     the layout marking's `opens`, marks.mjs layoutMarking). Written after them, the head piece's opening mark waited in vertical
@@ -572,8 +583,8 @@
 //     was (0 pt over 2,683,775 and 2,706,389 glyphs) and every point but 146 head openings, each now at its unit's start mark; 6
 //     units laid whole that were the original's (2610.21085v1 u44, 2608.26008v1 u36 and u42 after their run-in headings;
 //     2010.11929v2's cells u42-u44, whose `\oursabbrv` opening point stood before the cell's leading glue and owned nothing to the
-//     cell's start mark), none the other way, every other unit's rows as they were. The units, their pieces and their wire are 64's
-//     (and 65's, the run-in lane's, #579): a copy of either carries every unit (live.mjs PIPELINE_CARRIES)
+//     cell's start mark), none the other way, every other unit's rows as they were. The units, their pieces and their wire are 65's
+//     (and 64's): a copy of 64 or 65 carries every unit (live.mjs PIPELINE_CARRIES)
 export const PIPELINE_VERSION = '66'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
