@@ -2228,11 +2228,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (the label's own style: a class's bold or italic label)
     const lead = prep.lead ?? (prep.label?.parts ? { parts: prep.label.parts, ...(prep.label.open ? { gap: 0 } : {}) } : prep.label?.drawn ? { parts: [{ text: prep.label.drawn, st: (st => (st && st.fam !== 'math' ? { bold: !!st.bold, italic: !!st.italic, ...L2.colourOfStyle(st) } : {}))(prep.label.chars[0]?.st) }] } : null)
     // the faces the unit's runs are set in, served and loaded before a width is taken in any of them (one taken before its
-    // slice is there would stay in the cache): the tokens read once with no measure, their faces and texts checked; a
-    // unit with a character no served slice holds, or a slice that does not load, stays the original's
+    // slice is there would stay in the cache): the tokens read with no measure, their faces and texts checked, then measured;
+    // a unit with a character no served slice holds, or a slice that does not load, stays the original's
+    let tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P, lead, null, true)
     if (FS) {
       const tFonts = performance.now()
-      const no = await FS.check(runsOfTokens(L2.tokensOf2(p.unit, prep, to, base, designs, P, lead, () => 0)))
+      const no = await FS.check(runsOfTokens(tokens))
       fontWait += performance.now() - tFonts
       // (let go while its faces loaded: nothing more of it, not even its measures, in roles a newer layer may have set)
       if (disposed) return
@@ -2240,7 +2241,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
     // (from here to the unit's end nothing is awaited: its work is charged to its first page in `arrive`)
     workMarks.set(p, markWork())
-    let tokens = L2.tokensOf2(p.unit, prep, to, base, designs, P, lead, undefined, true)
+    L2.measureTokens(tokens)
     if (carried && p.blocks[0]?.centred) {
       const cs = prep.label.chars, b0 = p.blocks[0], start = prep.firstX0 !== undefined && prep.firstX0 > prep.label.x1 ? prep.firstX0 : prep.label.x1 + 0.25 * s
       const x0 = Math.min(...cs.map(c => c.x0)) - 0.4, x1 = Math.max(Math.max(...cs.map(c => c.x1)) + 0.4, start - 0.4)

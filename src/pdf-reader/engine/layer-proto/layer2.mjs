@@ -2455,9 +2455,9 @@ export function smallCapsAt(chars, text, size) {
  * the unit's first line starts with before its own text, each part in its own style ({ parts: [{ text, st }], gap }: a
  * float's label in the target's name, labelInTarget; a run-in heading and the joint TeX set after it, run.mjs), then
  * `gap`: a space where it is undefined, else that many em of the unit's size after the lead's last character, no place
- * to break (the original's: TeX's \labelsep after amsthm's "Proof.", none after IEEEtran's dash). `measure(s, face)`: a run's width at 100 px (the canvas's, cached); a host passes its own to read the
- * tokens (their faces and texts) before any face is loaded, without a width entering the cache that a face not yet there
- * would give.
+ * to break (the original's: TeX's \labelsep after amsthm's "Proof.", none after IEEEtran's dash). `measure(s, face)`: a run's width at 100 px (the canvas's, cached); null measures nothing, for a host that reads
+ * the tokens (their faces and texts) before any face is loaded, without a width entering the cache that a face not yet there
+ * would give, and then measures them (measureTokens).
  * White space in a script that sets none between its words (the rules' keepAll false: Chinese, Japanese) is not drawn where
  * its nearest drawn tokens either side are both Han, kana or full-width marks (SPACELESS), whatever set it there: the
  * translator's reply, a space placeholder (a tie, a control space, a forced break no source locates); but the space after a
@@ -2535,7 +2535,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
         // TeX's to skip)
         if (tokens.length && !lastIsSpace() && !tokens.at(-1).leadEnd && !tokens.at(-1).kernEnd) {
           const face = plainOf(faceOf(st, 'latin', to))
-          tokens.push({ space: true, st, face, w100: measure(' ', face), ...(afterHead ? { keep: true } : {}) })
+          tokens.push({ space: true, st, face, w100: 0, ...(afterHead ? { keep: true } : {}) })
         }
         afterHead = false
         continue
@@ -2568,7 +2568,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
           // (no object a word where it is one token: the reading of nearly every word)
           for (let r = 0, count = runs ? runs.length : 1; r < count; r++) {
             const run = runs?.[r], rs = run ? run.s : all ? upper(s) : s, k = run ? run.k : 1, at = run ? run.at : 0, len = run ? run.n : s.length
-            const t = { s: rs, st, face, cls: p.cls, w100: measure(rs, face) * k, ...extra, ...(q > 0 && at === 0 ? { brk: true } : {}) }
+            const t = { s: rs, st, face, cls: p.cls, w100: 0, ...extra, ...(q > 0 && at === 0 ? { brk: true } : {}) }
             if (k !== 1) t.sc = k
             if (track && len) {
               const i = from + at, last = i + len - 1
@@ -2605,7 +2605,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     else if (tokens.length) {
       const t = tokens[tokens.length - 1]
       t.leadEnd = true
-      if (lead.gap > 0) { t.w100 += 100 * lead.gap; t.kern = true; if (plain) t.kernEm = lead.gap }
+      if (lead.gap > 0) { t.leadGap = 100 * lead.gap; t.kern = true; if (plain) t.kernEm = lead.gap }
     }
   }
   // a displayed formula the text after it starts below (or one before the unit's lines): the translation's text that
@@ -2776,7 +2776,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       // a mark, drawn as it is, in no small capitals)
       for (const run of runs ?? [{ text: r.text, st }]) {
         const face = plainOf(faceOf(run.st, 'latin', to))
-        tokens.push({ s: run.text, st: run.st, face, cls: 'latin', w100: measure(run.text, face) * 0.62, sup: true, glue: true, ph: r.mode, k })
+        tokens.push({ s: run.text, st: run.st, face, cls: 'latin', w100: 0, sup: true, glue: true, ph: r.mode, k })
       }
     } else if (runs) {
       let at = 0
@@ -2816,7 +2816,6 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       if (n === cps.length) break
       if (n === 0) { tokens.pop(); continue }
       t.s = cps.slice(0, n).join('')
-      t.w100 = measure(t.s, t.face) * (t.sc ?? 1)
       break
     }
     for (const c of resolved.tail) {
@@ -2834,6 +2833,21 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     if (kept.length < tokens.length) { tokens.length = 0; for (const t of kept) tokens.push(t) }
   }
   tokens.base = base
+  return measure ? measureTokens(tokens, measure) : tokens
+}
+
+/**
+ * A unit's tokens (tokensOf2's) measured: each text token's width at 100 px in its face, a superscript's at 0.62 of it and
+ * small capitals' at their share (`sc`), a space's in its face, a lead's last token with the glue its class sets after it
+ * (`leadGap`). tokensOf2 measures its tokens so unless it is given no measure (null): run.mjs reads the faces a unit's tokens
+ * are set in, and loads them, before any width is taken in them (a width taken before its face is there would stay in the
+ * cache), then measures the same tokens: one tokenization a unit. Returns the tokens
+ */
+export function measureTokens(tokens, measure = w100) {
+  for (const t of tokens) {
+    if (t.space) t.w100 = measure(' ', t.face) + (t.leadGap ?? 0)
+    else if (typeof t.s === 'string' && t.face) t.w100 = measure(t.s, t.face) * (t.sup ? 0.62 : t.sc ?? 1) + (t.leadGap ?? 0)
+  }
   return tokens
 }
 

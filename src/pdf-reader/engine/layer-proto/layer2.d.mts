@@ -321,7 +321,8 @@ export declare const charKey: (c: { page?: number; item: number; k: number }) =>
 /** wordChars: the page's characters the first line may grow over the words its source begins with (step 3) */
 export declare function extendRects(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, wordChars?: readonly (readonly Char[] | undefined)[], first?: Rect): number
 /** a unit's translation as tokens; `.base` is its base style. `measure(s, face)`: a run's width at 100 px (the canvas's, cached,
- *  by default); a host reading the tokens' faces and texts before the faces are loaded passes a measure that takes none.
+ *  by default); null measures nothing, for a host that reads the tokens' faces and texts before the faces are loaded and then
+ *  measures the same tokens (measureTokens).
  *  `tagWords`: each token of a text piece also carries `at` and `end`, its range in the unit's plainTranslated(pieces) (words.mjs),
  *  and no other field changes */
 /** what a unit's first line starts with before its own text: each part in its own style, then a space (`gap`
@@ -329,7 +330,10 @@ export declare function extendRects(rects: Rect[], charsByPage: readonly (readon
 export interface Lead { parts: { text: string; st: Partial<Style> }[]; gap?: number }
 /** `text` with the ranges `cuts` ([from, to), rising) left out, and its transformMap less the same characters; null where there is nothing to cut */
 export declare function cutOut(text: string, cuts: readonly (readonly [number, number])[], map: { from: number[]; span: number[] } | null): { text: string; map: { from: number[]; span: number[] } | null } | null
-export declare function tokensOf2(unit: Unit, resolved: Prepared, to: string, baseIn: Style, designs: { serif: string; sans: string; mono: string }, P: Params, lead?: Lead | null, measure?: (s: string, face: Face) => number, tagWords?: boolean): Token[] & { base: Style }
+export declare function tokensOf2(unit: Unit, resolved: Prepared, to: string, baseIn: Style, designs: { serif: string; sans: string; mono: string }, P: Params, lead?: Lead | null, measure?: ((s: string, face: Face) => number) | null, tagWords?: boolean): Token[] & { base: Style }
+/** a unit's tokens (tokensOf2's, given no measure) measured in place: each text token's width at 100 px in its face (a
+ *  superscript's at 0.62 of it, small capitals' at their share), a space's in its face, a lead's glue after its last token */
+export declare function measureTokens<T extends Token[]>(tokens: T, measure?: (s: string, face: Face) => number): T
 /** a float's label as the final sets it in the target: the target's name (capitals where the original's are), a space,
  *  the original's number and punctuation; null where the final keeps the paper's name or the name is the original's */
 export declare function labelInTarget(label: { text?: string; chars?: { ch: string }[] } | null | undefined, names: { figure: string; table: string } | null | undefined, captions: { figure?: string; table?: string } | null | undefined, to: string): string | null
