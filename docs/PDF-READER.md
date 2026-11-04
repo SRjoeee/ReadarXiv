@@ -837,7 +837,7 @@ PDF.js is the host's kit, so every PDF.js type the view names is structural.
   and the timer's end, the pair levelled once a zoom settles.
 - **The right zoomed through the left.** A zoom, a fit or a pinch over either pane scales the left's viewer, which the
   places follow; the right shown alone is fitted to its own pane. A step is drawn 400 ms after the last one (one redraw a
-  burst), the places' page views with them; a pinch is shown by transform and drawn once it is committed (§6.8). A zoom
+  burst), the places' page views with them (a place showing the left's drawing takes it again once the left has drawn it); a pinch is shown by transform and drawn once it is committed (§6.8). A zoom
   and a display's change keep the reading place (the page and
   the point at the reading line); a pinch keeps the point under the gesture on both panes (§6.8).
 - **The highlight** (`lighting.mjs`) reads a pane through its shapes alone (`Shapes`, the seam the shapes' PR builds); a
