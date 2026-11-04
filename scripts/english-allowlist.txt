@@ -44,7 +44,6 @@ tests/pdf-reader/latex-front.test.ts 12  # 2026-11-04: +1, the gate counts kana 
 tests/pdf-reader/mt-wire.test.ts 9  # 2026-10-02: Chinese replies with a percent and a times after a number, the inputs and expectations of the wire's spaces taken back; 2026-10-05: +7, Microsoft's Chinese and Japanese replies for 2610.02069 with a marker's # doubled or displaced, quoted as they came, the inputs and expectations of their read-back
 tests/pdf-reader/unified-light.test.ts 4  # 2026-11-03: a Chinese caption's text drawn as tokens and a translated sentence with a placeholder's space, the inputs and expectations of where an opening bracket's sentence is (2610.42112v1's Figure 7)
 tests/pdf-reader/display-stop.test.ts 26  # 2026-10-19: +5, the review of #421: Chinese replies with a mark before a display's marker (the reply's own, kept) and one after a later marker; Chinese replies around a display's marker, its own stop full-width, doubled, moved before it or dropped, and a comma, the inputs and expectations of the wire's reading back and of the sentences' first words
-tests/pdf-reader/typeset-measure.test.ts 9  # 2026-11-04: +2, the gate counts kana and hangul now: two Korean inputs; 2026-10-01: Chinese, Korean and Cyrillic text as the inputs of the width model (density.mjs), each with the width xeCJK and the T2A faces set it at
 tests/pdf-reader/ui/copy.test.ts 10  # 2026-11-04: +1, the gate counts kana and hangul now: the Korean expectation; 2026-11-04: +4, S-R-13 and S-R-11a in Traditional Chinese, Japanese and Korean, the expectations; 2026-10-04: +1, the page's name in Chinese, the expectation; 2026-09-25: the reader's words, zh-CN expectations and the technical terms checked in Chinese
 tests/pdf-reader/ui/display-switch.test.ts 3  # 2026-09-25: the display switch's choices found by their Chinese names
 tests/pdf-reader/ui/languages.test.ts 2  # 2026-11-04: +1, the gate counts kana and hangul now: Korean's own name, the expectation; 2026-09-25: the nine languages each named in its own language, the expectation
@@ -158,7 +157,6 @@ lab/pdf/rulings/2026-10-30-page-cut-line.json 1  # 2026-10-30: the owner's repor
 lab/pdf/rulings/2026-10-30-page-split-height.json 1  # 2026-10-30: the owner's rule and his request for a staging trial quoted verbatim in the ruling, as the rulings README asks (its English beside it)
 CHANGELOG.md 1  # 2026-11-02: +1, the reader-facing line for #554 quotes the doubled marks it removes, a Chinese full stop among them, as the owner approved it
 tests/entry/abstract.test.ts 1  # 2026-11-04: the abstract page's link in Korean, the expectation
-src/pdf-reader/engine/pipeline/typeset/density.mjs 1  # 2026-11-04: the gate counts kana and hangul now: a Korean measurement quoted as evidence
 tests/pdf-reader/layer-links-moved.test.ts 1  # 2026-11-04: the gate counts kana and hangul now: a Japanese heading, the expectation
 tests/pdf-reader/layer-proto-step3.test.ts 1  # 2026-11-04: the gate counts kana and hangul now: a hangul input
 tests/e2e/probes/ui-shots.mjs 1  # 2026-11-04: the interface languages' own names heading the index's sections (product data, UI.md §6)

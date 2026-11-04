@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PIPELINE_CARRIES } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { PIPELINE_CARRIES } from '../../lab/pdf/spikes/carries.mjs'
 import { inMemory, loadProject } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { cutsOf, displayStopChanges, plainSource, plainTranslated, rehydrate, rehydrateTags, sentencesOf, serialize, serializeTags, translateUnits } from '@/pdf-reader/engine/translate/mt.mjs'
 

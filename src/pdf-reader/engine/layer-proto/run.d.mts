@@ -16,7 +16,7 @@ import type { CompactItems, DrawnText, TextLayerData } from './textlayer.mjs'
  *  none, each non-text one with its k (the layout file's index of its source piece: E6's row); its title, its table's
  *  consistency group */
 export interface Unit { kind: string; src: string; pieces?: { t: string; s?: string; src?: string; k?: number }[]; state: string; title?: boolean; group?: string }
-/** which floats the final names in the target's language (live.mjs captionsOf) */
+/** which floats the final names in the target's language (layout/names.mjs) */
 export type { Captions } from '../layout/names.mjs'
 import type { Captions } from '../layout/names.mjs'
 /** the made output's geometry (schema 1): the pages' views, each unit's [id, stream, rects] on the original, its kind */
@@ -338,7 +338,7 @@ export declare function openProto(o: {
   tex: LayoutOptions
   /** what the file could not hide: a unit it names, or one whose text group the document does not hold, is the original's */
   hiding?: HidingOptions | null
-  /** which floats the final names in the target's language (live.mjs captionsOf): a float's label is drawn in the target's
+  /** which floats the final names in the target's language (the reader's CAPTIONS, layer-proto/reader.mjs): a float's label is drawn in the target's
    *  name for it, which the rule set gives, where the final's is, and every babel name in the target's word whatever the
    *  captions say; null, every label and name kept as the original's */
   labels?: { captions: Captions | null } | null

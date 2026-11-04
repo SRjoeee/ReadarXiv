@@ -371,15 +371,15 @@ describe('the paper\'s own switch: TeX asked what a mark does before what follow
     expect(readMarkProbe(errs, samples)).toEqual({ '\\cite': '0020x110' })
     expect(switchedOf({ '\\cite': '00000000', '\\autocite': '22222200', '\\footnote': '00000002' })).toEqual(['\\autocite'])
   })
-  it('probeFiles with `marks`: the marks\' TeX first and the probe after the width probe; without it the bytes as before', () => {
+  it('probeFiles with `marks`: the marks\' TeX first and the probe after \\begin{document}; without it the bytes as before', () => {
     const p = paperIn('A claim \\cite{a}. Note\\footnote{The note.}.', '\\usepackage{cite}')
     const text = (m: Map<string, Uint8Array>) => new TextDecoder().decode(m.get('main.tex'))
     expect(text(probeFiles(p, { marks: false }))).toBe(text(probeFiles(p)))
     expect(text(probeFiles(p))).not.toContain('LAYOUT-PROBE')
-    const on = text(probeFiles(p, { width: true, marks: true }))
+    const on = text(probeFiles(p, { marks: true }))
     expect(on.indexOf(LAYOUT_TEX)).toBeGreaterThan(0)
     expect(on.indexOf(LAYOUT_TEX)).toBeLessThan(on.indexOf('\\documentclass'))
-    expect(on.indexOf('LAYOUT-PROBE 1 punct 0')).toBeGreaterThan(on.indexOf('AXT-WIDTH'))
+    expect(on.indexOf('LAYOUT-PROBE 1 punct 0')).toBeGreaterThan(on.lastIndexOf('\\begin{document}'))
     expect(on.indexOf('LAYOUT-PROBE 1 punct 1')).toBeLessThan(on.indexOf('\\end{document}'))
   })
   it('layoutMarking with `switches`: no mark (2), the opening mark alone (1) or both (0), by the command and what follows it', () => {

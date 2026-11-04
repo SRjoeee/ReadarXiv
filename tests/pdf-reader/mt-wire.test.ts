@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PIPELINE_CARRIES } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { PIPELINE_CARRIES } from '../../lab/pdf/spikes/carries.mjs'
 import { boundaryChanges, plainTranslated, rehydrate, rehydrateTags, serialize, serializeTags, translateUnits } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The markers wire the PDF reader sends a machine translator (mt.mjs): what an engine reads as part of a word

@@ -1145,7 +1145,7 @@ export function labelOf(out, unit, rects, charsByPage, gapsIn) {
  * A float's label as the final sets it in the target (the table-groups brief, Problem 2): `label` the label v0 or the
  * layout file found on the unit's first line (labelOf: "Table 2:", the file's "Table2:"), `names` the target's names of a
  * figure and a table (the layout rules' labels: babel's, which the final prints), `captions` which of the two the final names so
- * (live.mjs captionsOf: `target` or `source`), `to` the target. The name the final's babel gives the float, in capitals
+ * (`target` or `source`: the reader's own, layer-proto/reader.mjs CAPTIONS; a fixture's record's), `to` the target. The name the final's babel gives the float, in capitals
  * where the original's is (a class's \MakeUppercase: TABLE I), a space, then the original's own number and punctuation;
  * null where the label is no figure's or table's, where the final keeps the paper's own name for it, or where the name is
  * the original's already (French's Figure and Table): the label is then kept as the original's ink
@@ -1167,7 +1167,7 @@ export function labelInTarget(label, names, captions, to) {
  * target: the target's word for its key (the layout rules' labels: babel's [captions]), in capitals where the original's
  * glyphs are and its macro's own text is not (`capitals`: a class's case change, which the target's word takes too).
  * Wherever TeX identified the heading (its macro, a style's literal by the definition it sits in, a name after the
- * paper's own \selectlanguage): what a compile of the translation sets there (live.mjs captionsOf) does not decide, as
+ * paper's own \selectlanguage): the captions (what a compile of the translation once set there) do not decide, as
  * it does a float's label (the coordinator's ruling on D1a's I4; PDF-READER §18.1). Null where the target has no word for
  * it (an empty one keeps the original's) or the word is the original's already (`own`, its characters)
  */

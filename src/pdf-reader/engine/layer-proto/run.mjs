@@ -709,7 +709,7 @@ export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
  * `rules(page)`, the table rules near the page's cells (x0, y0, x1, y1 stride 4: layer2.mjs cellBands); a unit it says is unhidden,
  * or whose text group the document does not hold, is the original's. Absent: every unit the document holds a group for is drawn.
  * `labels`: { captions }, which of the two floats, figures and tables, the final names in the target's language (the
- * record's `captions`, live.mjs captionsOf): a float's label is drawn in the target's name for it, which the layout rules
+ * reader's CAPTIONS, layer-proto/reader.mjs; a fixture's record's `captions`): a float's label is drawn in the target's name for it, which the layout rules
  * give (`rules`), where the final's is (layer2.mjs labelInTarget), else kept as the original's ink; and each babel name
  * the layout file locates (a generated heading: Abstract, References, Contents, …) in the target's word for it, unless the
  * target has none: the captions do not decide for a name TeX identified (layer2.mjs nameInTarget; paintNames). A table's group
