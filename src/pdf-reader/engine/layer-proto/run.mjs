@@ -935,17 +935,20 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** a unit left the original's for want of the file's place (`code` of SKIP_CODES): `unlocated` with the maker's reason */
   const unanchoredOf = (id, u, code) => ({ id, kind: u.kind, why: 'unanchored', code: skipCode(code), ...(code === 'unlocated' ? { unlaid: makerWhy(id) } : {}), chars: trCharsOf(u) })
   // every unit the layer may place, in the order layGroups takes them (the text's stream): the geometry's, and the units the
-  // file locates whole that the geometry does not hold, at their place in the stream after the unit before them, or beside
-  // the geometry's unit they share one of TeX's lines with (need.mjs lineAfterOf, as the cutter's K, cut.mjs entriesOf), table
-  // cells among them (a cell's lines are TeX's, and the text removal takes its glyphs alone, never its table's rules). The
+  // file locates whole that the geometry does not hold, at their place in the stream after the units before them placed up to
+  // their own page (need.mjs pagedBefore), or beside the geometry's unit they share one of TeX's lines with (need.mjs lineAfterOf;
+  // both as the cutter's K, cut.mjs entriesOf), table cells among them (a cell's lines are TeX's, and the text removal takes its
+  // glyphs alone, never its table's rules). The
   // geometry's rectangles are the left's: a unit's place on the original, and the page's text area and columns the fitting
   // reads; the unit is drawn by the file's lines. `cands` in the order the layer reports its sources in, K in the stream's
   const cands = GU.map(([id, stream, rects]) => ({ id, stream, rects }))
   const streamOf = new Map(GU.map(([id, stream]) => [id, stream])), streams = leftStreams(streamOf), lines = lineReader(tex.index)
+  const firstPageOf = new Map(GU.map(([id, , rects]) => [id, Math.min(...rects.map(r => r[0]))]))
   for (const id of tex.index.file.units.map(r => r[0])) {
     if (inGeometry.has(id)) continue
     let before = -1
-    for (const [gid, s] of streamOf) if (gid < id && s > before) before = s
+    const lu = tex.index.unit(id), page = lu?.lines.length ? lu.lines[0] : undefined
+    for (const [gid, s] of streamOf) if (gid < id && s > before && (page === undefined || firstPageOf.get(gid) <= page)) before = s
     cands.push({ id, stream: (lineAfterOf(tex.index, id, streams, lines) ?? before) + 0.5, rects: null })
   }
   const K = [], candOf = new Map()

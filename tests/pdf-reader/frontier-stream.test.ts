@@ -226,7 +226,7 @@ describe('the page stream\'s K, F and need bounds as its pages come', () => {
       const H = Math.min(t, ...[...Array(n).keys()].filter(i => !inK(i)).map(i => Math.min(...(units[i]!.lines ?? [pages + 1])) - 1))
       for (;;) {
         const { K, F, NB } = fs.of(ids)
-        const target = a > pages ? 0 : partClosable({ K, F, NB, a, H, N: pages, n, now: leftBoundsOf({ units: left.units(), done: left.done, next: TOKENS_PER_PAGE * pages }, n), inK, made: t, members })
+        const target = a > pages ? 0 : partClosable({ K, F, NB, a, H, N: pages, n, now: leftBoundsOf({ units: left.units(), done: left.done, next: TOKENS_PER_PAGE * pages, made: t, N: pages }, n), inK, made: t, members })
         if (!target) break
         const told = K.slice(0, F[target]! + 1).map(e => e.id)
         streamed.push(...told.filter(id => !streamed.includes(id)))

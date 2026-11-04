@@ -664,12 +664,15 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
   const kIds = () => { const out = []; for (let i = 0; i < n; i++) if (inK(i) && !isName(i)) out.push(i); return out }
   // (K, F and NB over those, made again only from what changed since the last try: pipeline/frontier.mjs)
   const frontiers = frontierStream({ paper, N, bundle, grouped, left, st })
-  /** where the left stands (frontier.mjs leftBoundsOf), made again once the left has changed */
-  let nowAt = -1, nowLeft = null
-  const leftNow = () => {
-    if (left.version() === nowAt) return nowLeft
+  /** where the left stands (frontier.mjs leftBoundsOf), made again once the left or the pages the maker let go have changed:
+   *  a unit the left holds no unit of stands after the left units before it by id placed up to its own first row's page, and
+   *  its pages are past the ones let go */
+  let nowAt = -1, nowMade = -1, nowLeft = null
+  const leftNow = made => {
+    if (left.version() === nowAt && made === nowMade) return nowLeft
     nowAt = left.version()
-    return (nowLeft = leftBoundsOf({ units: left.units(), done: left.done, next: left.firstTok(left.frontier()) }, n))
+    nowMade = made
+    return (nowLeft = leftBoundsOf({ units: left.units(), done: left.done, next: left.firstTok(left.frontier()), made, N }, n))
   }
   /** the least page unit i's rows name (its lines', its placeholders' segments', its labels'): its rows', made once (a unit's
    *  rows are final once settled; the stub a told unit's rows become keeps their pages) */
@@ -701,7 +704,7 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
       if (!(await tellHead(final))) return
       const H = final ? N : frontier()
       if (!final && Math.min(partTarget(a, N), a + PART_PAGES_MAX - 1) > H) return
-      const now = leftNow()
+      const now = leftNow(st ? st.released() : N)
       const ids = kIds()
       const { K, F, NB } = frontiers.of(ids)
       if (!final && !closable(K, F, NB, a, H, now)) return
