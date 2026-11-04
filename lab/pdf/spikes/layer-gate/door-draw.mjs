@@ -8,7 +8,7 @@
 //           its fonts from commonObjs, its characters' fills off the list PDF.js drew it by: run.mjs liveFillsOf), against its
 //           draws: the characters (layer2.mjs pageChars2) field by field, numbers by Object.is (the sign of zero aside: the wire
 //           writes -0 as 0, counted) where the engine writes its draws as PDF.js reads them, and within what its rounding moves
-//           them where it writes them at a unit (BUNDLE5 14, draw.mjs DRAW_ROUND, a thousandth of a point: an item's own number by
+//           them where it writes them at a unit (BUNDLE5 15, draw.mjs DRAW_ROUND, a thousandth of a point: an item's own number by
 //           half of it at most, so a character's baseline and origin by DRAW_ROUND / 2 and its edges, its origin and its share of the
 //           width, by DRAW_ROUND; a link's numbers, its rectangle and the glyph points inside it, by DRAW_ROUND), the largest
 //           difference of each field reported; a character's size, its font class, its fill and its `nu` exactly, and the Link

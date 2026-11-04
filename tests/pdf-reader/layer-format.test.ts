@@ -411,7 +411,7 @@ describe('a reader\'s envelope', () => {
     // (6: a part with no layout says why, `layout: { refused, why }`; 7: a draw's items carry their characters' fills; 8: the
     // head's base says whose PDF the layer is drawn over; 11: a figure row carries its set and its room; 12: a left part its line map;
     // 13: a part's layout its regions; 14: a draw's items their unmapped characters, no font its map, its numbers at 1/1000 pt)
-    expect(BUNDLE5).toBe('14')
+    expect(BUNDLE5).toBe('15')
   })
 
   it('refuses what is not an object, and a chunk given as a part and a part given as a chunk', async () => {
@@ -1837,7 +1837,7 @@ describe('keys', () => {
   const sha = 'a'.repeat(64)
 
   it('keyOf names an object by its whole digest under the CTAG; catalogKey by the VTAG; keyParts takes them apart', () => {
-    expect(CTAG5).toBe(`b14-j${PDFJS}`)
+    expect(CTAG5).toBe(`b15-j${PDFJS}`)
     expect(VTAG5).toBe(`${CTAG5}-p${PIPELINE_VERSION}-l${LAYOUT}-r${REMOVAL}`)
     const key = keyOf('2608.04322', 3, CTAG5, sha)
     expect(key).toBe(`layer/2608.04322v3/${CTAG5}/${sha}.json`)

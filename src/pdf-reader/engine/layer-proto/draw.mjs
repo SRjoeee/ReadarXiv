@@ -1,7 +1,7 @@
 // A page's draw geometry (the E-C design note, ec-geometry-format.md): what the layer's drawing of a page reads of the base page
 // (our wrapped final pass since BUNDLE 8, which the composed document shows) besides its operator list, shipped as data in the page's left part (`draw`) so that the browser reads and draws only the pages whose
 // ink it needs: the text items (string, transform, width, height, font, its characters' fills: layout/fills.mjs, and the characters
-// its font's own map gives none of its glyphs: unmapped), the page's font table and the Link annotations. Since BUNDLE5 14 an item
+// its font's own map gives none of its glyphs: unmapped), the page's font table and the Link annotations. Since BUNDLE5 15 an item
 // carries its unmapped characters itself and a font row no map (the rules audit's F3), and an item's place, extent and a link's
 // numbers are at a thousandth of a point (F8): the reader of 13's draws reads their maps, every number as written. The shape is checked by the reader of a left part (checkDraw: bounds and types, plain loops, nothing evaluated) and built from PDF.js's own
 // shapes by the writer (wireOf), which SHEDS (null: the browser reads that page itself) for every reason the reader would refuse.
@@ -13,7 +13,7 @@ import { isInteger, isNumber, isObject } from '../layout/json.mjs'
 export const DRAW_ITEMS = 6_000, DRAW_STRING = 4_096, DRAW_STRINGS = 262_144
 /** fonts a page, a font's name, fallback, and, in a draw of 13, `mapped` (elements, each of at most DRAW_MAPPED_CHAR code units) */
 export const DRAW_FONTS = 256, DRAW_NAME = 128, DRAW_FALLBACK = 64, DRAW_MAPPED = 8_192, DRAW_MAPPED_CHAR = 16
-/** the unit a draw's places and extents are written at (BUNDLE5 14): a thousandth of a point, so that a number written moves by
+/** the unit a draw's places and extents are written at (BUNDLE5 15): a thousandth of a point, so that a number written moves by
  *  half of it at most (DRAW_ROUND / 2, the E-C parity tier's tolerance for what is written; a character's place, its item's origin
  *  and its share of the width, by twice that) */
 export const DRAW_ROUND = 0.001
@@ -28,7 +28,7 @@ const NO_UNICODE = /[\p{Co}\p{Cc}\uFFFD]/u
 export const unmapped = (ch, mapped) => /\S/.test(ch) && (NO_UNICODE.test(ch) || (mapped != null && !mapped.has(ch)))
 /** an item's unmapped characters as runs of code points (`str`'s [...str] indices), [start, end, …] rising, each run from an
  *  unmapped character to one past the last, with nothing between them but unmapped characters and white space (which is never
- *  unmapped: the reader reads it so), or null for none: what a draw of 14 carries, two values a run however many characters it
+ *  unmapped: the reader reads it so), or null for none: what a draw of 15 carries, two values a run however many characters it
  *  holds, so that a font whose map gives few of its glyphs costs no more than one that gives them all */
 export function unmappedRuns(str, mapped) {
   // (`open`: nothing but white space since the last run's last character, which the run may take on to the next)
@@ -85,7 +85,7 @@ export function checkDraw(v, path = 'draw') {
   if (own.length !== KEYS.length) for (const k of own) if (!KEYS.includes(k)) throw refuse(`${path}.${k.slice(0, 20)}`, 'not a key of the schema')
   let values = 4
   const fonts = arr(v.fonts, `${path}.fonts`, DRAW_FONTS)
-  // (a draw of 14: each font row [name, fallback, type3], each item its unmapped characters; one of 13: each row with its map, and
+  // (a draw of 15: each font row [name, fallback, type3], each item its unmapped characters; one of 13: each row with its map, and
   // no item its own, as the row's length says, one for the whole table)
   const maps = fonts.length > 0 && Array.isArray(fonts[0]) && fonts[0].length === 4
   for (let i = 0; i < fonts.length; i++) {
@@ -97,7 +97,7 @@ export function checkDraw(v, path = 'draw') {
       for (let j = 0; j < m.length; j++) str(m[j], `${at}[3][${j}]`, DRAW_MAPPED_CHAR)
       values += m.length + 1
     } else if (maps) values++
-    // (13's row as it was counted; 14's an array of three)
+    // (13's row as it was counted; 15's an array of three)
     values += maps ? 5 : 4
   }
   const items = arr(v.items, `${path}.items`, DRAW_ITEMS)
@@ -113,7 +113,7 @@ export function checkDraw(v, path = 'draw') {
     const n = [...it[0]].length
     if (!isItemFills(it[9], n)) throw refuse(`${at}[9]`, 'not the fills of its characters (a fill -1 to 0xFFFFFF, or runs by code point)')
     values += Array.isArray(it[9]) ? 11 + it[9].length : 11
-    // (a draw of 14: its unmapped characters, where it has any: runs of code points, [start, end, …], rising, within the string)
+    // (a draw of 15: its unmapped characters, where it has any: runs of code points, [start, end, …], rising, within the string)
     if (it.length === 11) {
       const nu = arr(it[10], `${at}[10]`, n + 1)
       if (nu.length === 0 || nu.length % 2 !== 0) throw refuse(`${at}[10]`, 'not runs (an even, non-empty list: an item with no unmapped character has none)')
@@ -230,7 +230,7 @@ export function drawFontKey(row) {
 /**
  * The inputs the layer reads, back from a checked draw: `items` (str, transform [a, b, 0, d, e, f] — c is never read —, width, height,
  * fontName the font's content key or null), `fills` each item's characters' fills (layout/fills.mjs), `nus` each item's unmapped
- * characters (unmappedRuns', or null for none: a draw of 14's own, one of 13's read of its fonts' maps as the live reading
+ * characters (unmappedRuns', or null for none: a draw of 15's own, one of 13's read of its fonts' maps as the live reading
  * reads them), `styles` by that key (fontFamily the fallback), `fonts` a Map from the key to { name, fallback, type3 (0, 1, 2) },
  * and `annots`: the Link annotations as getAnnotations gives them (dest as [{num,gen}|index, {name}, ...args] or a name)
  */
@@ -241,7 +241,7 @@ export function drawInputsOf(draw) {
   const items = draw.items.map(it => ({ str: it[0], transform: [it[1], it[2], 0, it[3], it[4], it[5]], width: it[6], height: it[7], fontName: it[8] < 0 ? null : keys[it[8]] }))
   const fills = draw.items.map(it => it[9])
   // (13's maps, a Set once a font. A draw of no font row may be either: its items read of no map, which is 13's reading and gives
-  // 14's too, since 14 writes the runs of what no Unicode stands for whatever the font, and an item of 14 with none holds none)
+  // 15's too, since 15 writes the runs of what no Unicode stands for whatever the font, and an item of 15 with none holds none)
   const maps = draw.fonts.length > 0 && draw.fonts[0].length === 4 ? draw.fonts.map(f => (f[3] === null ? null : new Set(f[3]))) : null
   const nus = draw.items.map(it => (it.length > 10 ? it[10] : maps ? unmappedRuns(it[0], it[8] < 0 ? null : maps[it[8]]) : draw.fonts.length === 0 ? unmappedRuns(it[0], null) : null))
   const annots = draw.links.map(l => ({

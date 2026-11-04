@@ -120,7 +120,7 @@ export class NeedPixels extends Error {
  * as PDF.js's commonObjs holds them, by loaded name, with its text content's styles; a font the document exported with no map
  * refuses the document (fontMappedOf's throw, `refusesDocument`). `draw(draw)`: a draw's (draw.mjs, checked), its text content
  * and Link annotations in PDF.js's shapes (drawInputsOf: `tc`, `raw`), its fonts by their content keys, a namespace of their own
- * (never a loaded name), and each item's unmapped characters (`nus`: the prepare's, read of the same fonts, BUNDLE5 14); a key read
+ * (never a loaded name), and each item's unmapped characters (`nus`: the prepare's, read of the same fonts, BUNDLE5 15); a key read
  * before with another row refuses the draw (a RangeError, nothing of it kept: the caller reads the page live). Each gives
  * `fontOf(name)` and `mapOf(name)` (none for a draw, whose `nus` say it), pageChars2's readers
  */

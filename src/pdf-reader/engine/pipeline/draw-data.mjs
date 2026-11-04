@@ -7,7 +7,7 @@
 // that cannot be told the same by every host, or a page past a cap. Each item carries its characters' fills, from the glyphs of the
 // page's ink the maker reads (layout/fills.mjs itemFills: the reader's page read live tells the same), and the characters its
 // font's own map gives none of its glyphs (draw.mjs unmapped: the live reading's `nu`, read of the same font object), so that no
-// font's map is shipped (BUNDLE5 14, the rules audit's F3); its place, its extent and a link's numbers at a thousandth of a point
+// font's map is shipped (BUNDLE5 15, the rules audit's F3); its place, its extent and a link's numbers at a thousandth of a point
 // (draw.mjs drawRounded, F8), once its fills are read of them as they are. Imports the engine's pure modules alone.
 import { drawRounded, unmappedRuns, wireText } from '../layer-proto/draw.mjs'
 import { itemFills } from '../layout/fills.mjs'

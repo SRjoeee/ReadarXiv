@@ -46,7 +46,7 @@ describe.skipIf(!LAB)('each item\'s unmapped characters the draw ships are the o
         for (const it of tc.items) {
           if (!('str' in it)) continue
           k++
-          // (each item's unmapped characters as shipped, BUNDLE5 14, against the live reading's of its font's map)
+          // (each item's unmapped characters as shipped, BUNDLE5 15, against the live reading's of its font's map)
           let live: Set<string> | null = null
           try { live = fontMappedOf(page.commonObjs.get(it.fontName)) } catch { live = null }
           const runs = x.nus[k] ?? null

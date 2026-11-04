@@ -157,7 +157,7 @@ export function fontMappedOf(font) {
   return mappedOf(font.toUnicode)
 }
 /** whether a page character's text is no reading of its glyph (pageChars2's `nu`): draw.mjs's, which the prepare tells each
- *  item of a draw by (BUNDLE5 14) */
+ *  item of a draw by (BUNDLE5 15) */
 export { unmapped }
 /** a font class with a character's fill (layout/fills.mjs): one object a class and fill, so that characters of one font and
  *  colour share their style as those of one font did; its font class itself, `font` (not enumerable), for what asks whether two

@@ -57,7 +57,7 @@ describe('draw in a left part', () => {
     // empty map every character, a map its own; what no Unicode stands for under any)
     const of13 = drawInputsOf({ ...d, items: [['ab\ue000', 1, 0, 1, 0, 0, 1, 1, 0, -1], ['ab', 1, 0, 1, 0, 0, 1, 1, 1, -1], ['x\ud800', 1, 0, 1, 0, 0, 1, 1, 2, -1], ['a b', 1, 0, 1, 0, 0, 1, 1, -1, -1]] })
     expect(of13.nus).toEqual([[2, 3], [0, 2], [0, 1], null])
-    // (a draw of no font row, 13's or 14's alike: what no Unicode stands for is its items' unmapped characters, as 13 read them)
+    // (a draw of no font row, 13's or 15's alike: what no Unicode stands for is its items' unmapped characters, as 13 read them)
     const noFonts = drawInputsOf({ fonts: [], items: [['a\ue000 \ue001b', 1, 0, 1, 0, 0, 1, 1, -1, -1], ['ab', 1, 0, 1, 0, 0, 1, 1, -1, -1]], links: [] })
     expect(noFonts.nus).toEqual([[1, 4], null])
     // a font's key is its content's, in a namespace of its own
@@ -66,7 +66,7 @@ describe('draw in a left part', () => {
     expect(keys[0]).toMatch(/^axt-draw-/)
   })
 
-  it('a draw of 14: each font row its name, fallback and type3, each item its own unmapped characters, runs of code points', () => {
+  it('a draw of 15: each font row its name, fallback and type3, each item its own unmapped characters, runs of code points', () => {
     const d: Draw = { fonts: [['F', 'serif', 0], [null, null, 2]], items: [['a\u{1F600}b', 1, 0, 1, 2, 3, 4, 5, 0, -1, [1, 2]], ['plain', 1, 0, 1, 2, 3, 4, 5, 1, -1]], links: [] }
     expect(checkDraw(d)).toBe(d)
     expect(drawInputsOf(d).nus).toEqual([[1, 2], null])

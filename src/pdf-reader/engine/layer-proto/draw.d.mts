@@ -3,7 +3,7 @@ export declare const DRAW_ITEMS: number, DRAW_STRING: number, DRAW_STRINGS: numb
 export declare const DRAW_FONTS: number, DRAW_NAME: number, DRAW_FALLBACK: number, DRAW_MAPPED: number, DRAW_MAPPED_CHAR: number
 export declare const DRAW_LINKS: number, DRAW_QUADS: number, DRAW_URL: number, DRAW_DEST: number, DRAW_ZOOM: number, DRAW_ARGS: number, DRAW_OVERLAID: number
 export declare const DRAW_VALUES: number, DRAW_BYTES: number, DRAW_COORD: number, DRAW_HELD_MAX: number
-/** the unit a draw's places and extents are written at (BUNDLE5 14): a thousandth of a point */
+/** the unit a draw's places and extents are written at (BUNDLE5 15): a thousandth of a point */
 export declare const DRAW_ROUND: number
 /** a number at DRAW_ROUND, -0 written 0 */
 export declare function drawRounded(v: number): number
@@ -18,7 +18,7 @@ export declare function inRuns(runs: readonly number[] | null, k: number): boole
 export type DrawFont = [name: string | null, fallback: string | null, type3: 0 | 1 | 2] | [name: string | null, fallback: string | null, type3: 0 | 1 | 2, mapped: string[] | null]
 /** [str, a, b, d, e, f (the transform's 0, 1, 3, 4, 5), width, height, font: an index into the page's fonts, or -1, fills: its
  *  characters' (layout/fills.mjs ItemFills: one fill for all, -1 none told, or runs by code point), and, where it has any, its
- *  unmapped characters' runs [start, end, …] by code point (a draw of 14: unmappedRuns)]; e, f, width and height at a thousandth of a point (14) */
+ *  unmapped characters' runs [start, end, …] by code point (a draw of 15: unmappedRuns)]; e, f, width and height at a thousandth of a point (15) */
 export type DrawItem = [str: string, a: number, b: number, d: number, e: number, f: number, width: number, height: number, font: number, fills: number | number[]] | [str: string, a: number, b: number, d: number, e: number, f: number, width: number, height: number, font: number, fills: number | number[], unmapped: number[]]
 /** a dest: null, a name, [0, num, gen, zoom, ...args] (page by reference) or [1, index, 0, zoom, ...args] (page by index) */
 export type DrawDest = null | string | (string | number | null)[]
@@ -45,7 +45,7 @@ export declare function drawInputsOf(draw: Draw): {
   items: { str: string; transform: number[]; width: number; height: number; fontName: string | null }[]
   /** each item's characters' fills (layout/fills.mjs ItemFills) */
   fills: (number | number[])[]
-  /** each item's unmapped characters by code point, or null for none (14's own; 13's read of its fonts' maps) */
+  /** each item's unmapped characters by code point, or null for none (15's own; 13's read of its fonts' maps) */
   nus: (number[] | null)[]
   styles: Record<string, { fontFamily: string | null }>
   fonts: Map<string, { name: string | null; fallback: string | null; type3: 0 | 1 | 2 }>

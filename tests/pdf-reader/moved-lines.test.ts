@@ -101,7 +101,7 @@ describe('a left part\'s line map on the wire', () => {
     const { createHash } = await import('node:crypto')
     const as = (format: string) => async (lines: boolean) => {
       const w = await left(lines ? { lines: E } : {})
-      const bytes = new TextEncoder().encode(new TextDecoder().decode(w.bytes).replace('"bundle":"14"', `"bundle":"${format}"`))
+      const bytes = new TextEncoder().encode(new TextDecoder().decode(w.bytes).replace('"bundle":"15"', `"bundle":"${format}"`))
       return readLeftPart(bytes, { ref: { ...(w.ref as object), sha256: createHash('sha256').update(bytes).digest('hex'), bytes: bytes.length } as never, streamOf: () => undefined })
     }
     expect((await as('11')(false)).lines).toBeNull()

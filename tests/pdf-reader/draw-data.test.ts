@@ -48,7 +48,7 @@ describe('drawDataOf', () => {
     const { draw, why } = await drawDataOf(page)
     expect(page.calls).toEqual(['text', 'ann'])
     expect(why).toBeNull()
-    // (no font's map in its row: each item its own unmapped characters instead, BUNDLE5 14; CMR10 maps a, b and ﬁ, so "hello"'s
+    // (no font's map in its row: each item its own unmapped characters instead, BUNDLE5 15; CMR10 maps a, b and ﬁ, so "hello"'s
     // h, e, l, l and o are unmapped; Type3Font has no map to read, so "x" is not)
     expect(draw!.fonts).toEqual([['CMR10', 'serif', 0], ['Type3Font', 'sans-serif', 1], [null, null, 2]])
     expect(draw!.items.map(i => [i[0], i[8], i[10] ?? null])).toEqual([['hello', 0, [0, 5]], ['', 0, null], ['x', 1, null], ['y', -1, null], ['z', 2, null]])
