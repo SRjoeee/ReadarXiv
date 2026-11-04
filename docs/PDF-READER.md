@@ -2033,8 +2033,11 @@ within noise.
   that order, on the next want: the shapes made late are the shapes made as things came (`layer-side-door.test.ts` H3: every
   unit's runs and starts on both panes, made at the start and told as things came, made at the end, and told nothing while the
   switch was off between, are equal). Before, both panes' shapes were made at the index, for each part and at each commit, the
-  switch on or off: 7 to 10 ms of the main thread before page 1 at 1x, 31 to 42 at 4x (the rules audit of 2026-11-04). A page
-  shown or hidden makes again the starts of its own units alone (`layerShapes` `unitsOn`), not every unit's.
+  switch on or off: 7 to 10 ms of the main thread before page 1 at 1x, 31 to 42 at 4x (the rules audit of 2026-11-04); page 1
+  in place 12 ms sooner at 1x and 22 ms at 4x on a returning reader with it (the audit's replays, seven papers, paired medians).
+  The first light waits for the making: on the same replays the first hover's light came 0 to 18 ms later at 1x and 17 to 49 ms
+  at 4x, the making a task of up to 56 ms at 4x on a new reader, once a visit. A page shown or hidden makes again the starts of
+  its own units alone (`layerShapes` `unitsOn`), not every unit's.
 - **One layout, made page by page** (`highlight.mjs` `pageLayout`, `layoutParts`, `layoutPage`; `shapes.mjs`
   `createShapes`). On the layer path the left's tokens come a page at a time (the door's `leftPageOf`, on the first want
   of the page) and its units' rectangles a part at a time. The document part — each page's columns, the columns' text
