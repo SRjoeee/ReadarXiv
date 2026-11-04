@@ -26,7 +26,7 @@
 //
 // Also the names behind both renderers' reading of a paper's fonts: each design's NFSS family names (the TeX path's
 // font probe, familyOfProbe) and its PostScript names (a PDF's fonts, classifyFont and familyOfFonts), in one table.
-import { COVERAGE, METRICS } from './font-coverage.mjs'
+import { HOLDS, SMCP } from './font-letters.mjs'
 import { scriptOf } from './script.mjs'
 
 /**
@@ -377,36 +377,35 @@ const LETTERS = {
   tr: `${LATIN}ÇĞİÖŞÜçğıöşüÂâÎîÛû`, cs: `${LATIN}ÁČĎÉĚÍŇÓŘŠŤÚŮÝŽáčďéěíňóřšťúůýž`, sv: `${LATIN}ÅÄÖåäöÉé`,
   uk: `${CYRILLIC}ҐґЄєІіЇї`,
 }
+/** each alphabet a face's letters are read by (font-letters.mjs HOLDS, made from the coverage table): a language's own
+ *  (LETTERS), and a script's bare letters, `Latn` and `Cyrl` */
+export const LETTER_SETS = Object.freeze({ Latn: LATIN, Cyrl: CYRILLIC, ...LETTERS })
 // (worked out once a target: faceFor asks it for every run of every unit laid)
-const LETTERS_OF = new Map()
-const lettersOf = target => {
-  let letters = LETTERS_OF.get(target)
-  if (letters === undefined) {
+const ALPHABET_OF = new Map()
+/** the alphabet a target's letters are (LETTER_SETS' key): its language's own, else its script's */
+const alphabetOf = target => {
+  let a = ALPHABET_OF.get(target)
+  if (a === undefined) {
     const language = new Intl.Locale(target).language
-    letters = Object.hasOwn(LETTERS, language) ? LETTERS[language] : scriptOf(target) === 'Cyrl' ? CYRILLIC : LATIN
-    if (LETTERS_OF.size >= 256) LETTERS_OF.clear()
-    LETTERS_OF.set(target, letters)
+    a = Object.hasOwn(LETTERS, language) ? language : scriptOf(target) === 'Cyrl' ? 'Cyrl' : 'Latn'
+    if (ALPHABET_OF.size >= 256) ALPHABET_OF.clear()
+    ALPHABET_OF.set(target, a)
   }
-  return letters
+  return a
 }
-const holdsAll = new Map()
-// whether a face holds every letter (cached: a table's faces by a handful of targets)
-const setsAll = (id, letters) => {
-  const key = `${id}|${letters}`
-  if (!holdsAll.has(key)) holdsAll.set(key, Object.hasOwn(COVERAGE, id) && [...letters].every(ch => holds(COVERAGE[id], ch.codePointAt(0))))
-  return holdsAll.get(key)
-}
+// whether a face holds every letter of an alphabet (font-letters.mjs, the coverage table's answer for each face and alphabet)
+const setsAll = (id, alphabet) => !!HOLDS[id]?.includes(alphabet)
 // The face of a group at a weight and slant. Where the group has no such file, or its file lacks the target's letters,
 // the nearest style of the same group that has both — bold italic, then bold, italic, regular — as TeX's substitution
 // sets a shape the family lacks: so Linux Libertine O's bold italic, which has no Cyrillic, sets Russian in its bold,
 // and a unit never stays the original's for a style alone. Where no style of the group has the letters, the nearest
 // that exists, and canDraw then keeps the unit the original's
-const styled = (group, bold, italic, letters) => {
+const styled = (group, bold, italic, alphabet) => {
   let first = null
   for (const [b, i] of [[bold, italic], [bold, false], [false, italic], [false, false]]) {
     const id = BY_STYLE.get(`${familyOf(group)}|${b ? 700 : 400}|${i ? 'italic' : 'normal'}`)
     if (!id) continue
-    if (setsAll(id, letters)) return id
+    if (setsAll(id, alphabet)) return id
     first ??= id
   }
   return first
@@ -417,10 +416,11 @@ const CAPS_FACES = new Set(['lm-roman-caps', 'lm-roman-caps-italic'])
 /** whether a face's lowercase letters are its small capitals (Latin Modern's caps face): a run in it is measured and drawn in its
  *  own letters, no small capitals asked of it (layer-proto/fonts.mjs, the face's `caps`) */
 export const capsLetters = id => CAPS_FACES.has(id)
-/** whether a face draws small capitals of its own: by its smcp feature (METRICS), or by its letters (Latin Modern's caps face).
+/** whether a face draws small capitals of its own: by its smcp feature (font-letters.mjs SMCP, the coverage table's METRICS),
+ *  or by its letters (Latin Modern's caps face).
  *  A run set in small capitals in a face with neither has them drawn by the layer from the face's capitals, at the share of the
  *  size the original's small capitals are set at (layer-proto/layer2.mjs selfCaps), never synthesized by the browser */
-export const ownSmallCaps = id => CAPS_FACES.has(id) || !!METRICS[id]?.smcp
+export const ownSmallCaps = id => CAPS_FACES.has(id) || SMCP.includes(id)
 
 /** the face a run is drawn in. A CJK run takes its target's CJK family by weight, whatever its class (no sans, no
  *  fangsong: §4.4): its slant is that face sheared where it is drawn (layer-proto/fonts.mjs CJK_SLANT_DEG), an italic run
@@ -439,7 +439,7 @@ export function faceFor(roles, run) {
   const group = typeof column === 'string' ? column : column[styleOf(run.bold, run.italic)]
   // Latin Modern's caps face, upright and oblique, for CM's small capitals and an unknown family's; it has no bold
   if (run.caps && !run.bold && !cyrillic && (group === 'lm-roman' || column === CM_TEXT)) return run.italic ? 'lm-roman-caps-italic' : 'lm-roman-caps'
-  return styled(group, run.bold, run.italic, lettersOf(roles.target))
+  return styled(group, run.bold, run.italic, alphabetOf(roles.target))
 }
 
 // whether a face's coverage holds a code point: ranges start, end (inclusive), sorted and disjoint
@@ -469,16 +469,3 @@ export function canDrawIn(text, ranges) {
   return true
 }
 
-/** whether every character of `text` (but white space and the default ignorable) is in one of `faces`' coverage or
- *  their fallbacks' */
-export function canDraw(text, faces, roles) {
-  const seen = new Set(), queue = [...faces]
-  while (queue.length) {
-    const id = queue.shift()
-    if (seen.has(id)) continue
-    seen.add(id)
-    const next = roles?.fallbacks && Object.hasOwn(roles.fallbacks, id) ? roles.fallbacks[id] : []
-    queue.push(...next)
-  }
-  return canDrawIn(text, [...seen].filter(id => Object.hasOwn(COVERAGE, id)).map(id => COVERAGE[id]))
-}

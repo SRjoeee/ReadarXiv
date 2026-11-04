@@ -43,9 +43,8 @@ export declare const capsLetters: (id: string) => boolean
 export declare const ownSmallCaps: (id: string) => boolean
 /** the face a run is drawn in */
 export declare function faceFor(roles: RoleSet, run: { script: 'cjk' | 'latin'; cls: FontClass['cls']; design: Design; bold: boolean; italic: boolean; caps: boolean }): FaceId
-/** whether every character of `text` (but white space and the default ignorable) is in one of `faces`' coverage or
- *  their fallbacks' */
-export declare function canDraw(text: string, faces: readonly FaceId[], roles: RoleSet): boolean
+/** each alphabet a face's letters are read by: a language's own, and a script's bare letters (`Latn`, `Cyrl`) */
+export declare const LETTER_SETS: Readonly<Record<string, string>>
 /** whether every character of `text` (but white space and the default ignorable) is in one of `ranges`: a list of range
  *  lists, each [start, end, …] (inclusive), sorted and disjoint as COVERAGE's are. canDraw over what a host serves of the
  *  faces, a slice's code points a list each */

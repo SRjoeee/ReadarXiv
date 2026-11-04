@@ -1,5 +1,5 @@
 // run.mjs's types: the layer v0's driver, the prototype's page (main.js, ported at 9e56fca)
-import type { Audit, CheckResult } from './check.mjs'
+import type { Audit, checkAll } from './check.mjs'
 import type { Rect } from './layer1.mjs'
 import type { Block2, Char, DrawOp, DrawSource, Layout, Params, Prepared, Token, Unit as LaidUnit } from './layer2.mjs'
 import type { LayoutIndex, LayoutUnit, UnlaidCode } from '../layout/file.mjs'
@@ -271,8 +271,9 @@ export interface ProtoRun {
   release(page: number): void
   /** a done page's copy at v0's own resolution (with `copy`), drawn as a view draws it, once a check reads it; null before it is done */
   copyCanvas(page: number): Promise<HTMLCanvasElement | null>
-  checkPage(page: number): Promise<CheckResult>
-  check(): Promise<CheckResult>
+  /** what the completeness checker (check.mjs checkAll, the gates' own: no reader carries it) reads of one done page, or of
+   *  every page still held where none is given */
+  checkInputs(page?: number | null): Promise<Parameters<typeof checkAll>[0]>
   /** what the run hid and showed again: units drawn, boxes pasted from render B and C (`pastedKeep`), crops */
   hidingStats(): HidingStats
   /** where pages are read from their draws (`drawOf`), a copy; null where none is (no drawOf, a copy kept, no page pass) */

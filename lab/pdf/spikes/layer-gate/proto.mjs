@@ -642,7 +642,8 @@ window.gate = {
     Object.assign(model, links.values)
     // the prototype's own checker on the page: what it finds there, by the unit it is in (none for --perf: v0 is opened
     // with no copy of its own, as a reader opens it, and the checker reads that copy)
-    const ck = S.perf ? { a: { regions: 0 }, b: { list: { missing: [], duplicated: [], brackets: [] } }, c: { list: [] }, d: { found: 0, ok: 0 } } : await run.checkPage(p)
+    // (the checker is the gate's: an engine that hands its inputs over (checkInputs) carries none, an older one checks itself)
+    const ck = S.perf ? { a: { regions: 0 }, b: { list: { missing: [], duplicated: [], brackets: [] } }, c: { list: [] }, d: { found: 0, ok: 0 } } : run.checkInputs ? (await import('/engine/layer-proto/check.mjs')).checkAll(await run.checkInputs(p)) : await run.checkPage(p)
     const on = e => e.page === p
     // the wire's syntax left in the text drawn from the translation (markerResidueOf: each drawn unit's text tokens on the
     // page, not a placeholder's rendering nor a label), and TeX's in what a placeholder drawn from its source shows

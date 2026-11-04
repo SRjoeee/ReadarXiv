@@ -50,7 +50,6 @@
 //   familyOfFonts). faces: 'prototype' draws in the prototype's own system faces and Latin Modern, as the approved
 //   prototype did (its floor's numbers).
 import { cellSpans } from './cells.mjs'
-import { checkAll } from './check.mjs'
 import { familyOfFonts } from '../rules/font-roles.mjs'
 import { bodyFaceId, classifyFont, faceOf, fontString, loadWebFaces, OPEN_FAMILY, roleFaceSet, runsOfTokens, styleKey, setRoleFaces } from './fonts.mjs'
 import { loadHyphenation } from './hyph.mjs'
@@ -3532,20 +3531,19 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (!r.copied) { r.right.width = r.left?.width ?? r.right.width; r.right.height = r.left?.height ?? r.right.height; await this.drawCopy(pg, r.right.getContext('2d'), scale * dpr); r.copied = true }
       return r.right
     },
-    /** the prototype's completeness checker on one done page (main.js check=1's, its pixels of that page alone, its
-     *  placeholders of the units with lines on it) */
-    async checkPage(pg) {
+    /** what the prototype's completeness checker reads (check.mjs checkAll, the gates', which import it themselves: no reader
+     *  carries it) of one done page, `pg` (main.js check=1's, its pixels of that page alone, its placeholders of the units with
+     *  lines on it), or of every page still held, with none (main.js check=1's window.__result.check) */
+    async checkInputs(pg = null) {
       needsCopy()
-      await this.copyCanvas(pg)
-      const here = placed.filter(p => p.pages.includes(pg) && !p.refused).map(p => shelf?.units.get(p.id) ?? p)
-      const only = rows.map((r, i) => (i === pg - 1 ? r : { ...r, base: false }))
-      return checkAll({ N, placed: here, rows: only, pxOf, toPdf, chars2: shelf ? shelf.chars : chars2, audit, cols: colsOf, cellRects, named: names.filter(n => n.drawn && n.page === pg) })
-    },
-    /** the prototype's completeness checker over every page still held (main.js check=1's window.__result.check) */
-    async check() {
-      needsCopy()
-      for (let pg = 1; pg <= N; pg++) if (readyOf(pg) && rows[pg - 1]?.base) await this.copyCanvas(pg)
-      return checkAll({ N, placed: placed.filter(p => !p.refused).map(p => shelf?.units.get(p.id) ?? p), rows, pxOf, toPdf, chars2: shelf ? shelf.chars : chars2, audit, cols: colsOf, cellRects, named: names.filter(n => n.drawn) })
+      if (pg !== null) {
+        await this.copyCanvas(pg)
+        const here = placed.filter(p => p.pages.includes(pg) && !p.refused).map(p => shelf?.units.get(p.id) ?? p)
+        const only = rows.map((r, i) => (i === pg - 1 ? r : { ...r, base: false }))
+        return { N, placed: here, rows: only, pxOf, toPdf, chars2: shelf ? shelf.chars : chars2, audit, cols: colsOf, cellRects, named: names.filter(n => n.drawn && n.page === pg) }
+      }
+      for (let q = 1; q <= N; q++) if (readyOf(q) && rows[q - 1]?.base) await this.copyCanvas(q)
+      return { N, placed: placed.filter(p => !p.refused).map(p => shelf?.units.get(p.id) ?? p), rows, pxOf, toPdf, chars2: shelf ? shelf.chars : chars2, audit, cols: colsOf, cellRects, named: names.filter(n => n.drawn) }
     },
   }
 }
