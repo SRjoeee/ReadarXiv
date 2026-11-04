@@ -71,6 +71,7 @@ import { breakPoints } from './hyph.mjs'
 import { drawnText, shown } from '../layer/pieces.mjs'
 import { plainTracker, transformMap } from './words.mjs'
 import { ownSmallCaps } from '../rules/font-roles.mjs'
+import { cjkClassWith, CJK, SPACELESS } from '../rules/script.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { textPieceOf } from '../rules/text-piece.mjs'
 import { GENERATED_COMMANDS, headInTarget, refInTarget } from '../rules/tex-names.mjs'
@@ -2054,20 +2055,11 @@ export function extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, 
 
 const PUNCT_CLOSE = /^[\u3001\u3002\uFF0C\uFF0E\uFF1A\uFF1B\uFF01\uFF1F\uFF09\u300D\u300F\u3011\u3015\u3009\u300B\u3019\u3017”’]$/
 const PUNCT_OPEN = /^[\uFF08\u300C\u300E\u3010\u3014\u3008\u300A\u3018\u3016“‘]$/
-/** the characters a CJK run takes: CJK, full-width forms, Hangul, and where the rules say so (Chinese and Japanese) the curly
- *  quotes and dashes, which xeCJK sets full width there (Korean sets them as its Western punctuation). As code points, tested
- *  a code point at a time (`u`): the compatibility ideographs' first, U+F900, typed as itself was normalized into the unified
- *  ideograph U+8C48 it stands for, and its range ran on over U+A000 to U+F8FF (Yi, Lisu, Vai, Cyrillic Extended-B, Latin
- *  Extended-D, the surrogates and the private-use area, a font's icons: laid in the CJK face), as in pipeline/anchors.mjs.
- *  A character outside the BMP is CJK only in the two ideographic planes, U+20000 to U+3FFFF (the CJK extensions B to J
- *  and the compatibility supplement), where a non-`u` class took every astral character for CJK through its surrogates and
- *  sent Mathematical Alphanumeric Symbols, which the body face lacks, to it. Hangul is its syllables and every block of its
- *  jamo (the compatibility jamo and the two extended blocks among them) */
-const CJK_SPANS = [[0x1100, 0x11ff], [0x2e80, 0x9fff], [0xa960, 0xa97f], [0xac00, 0xd7ff], [0xf900, 0xfaff], [0xff00, 0xffef], [0x20000, 0x3ffff]]
-/** the curly quotes, the em dash, the ellipsis and the middle dot: CJK's where the rules' cjkQuotes say so */
-const CJK_QUOTES = [0x201c, 0x201d, 0x2018, 0x2019, 0x2014, 0x2026, 0xb7].map(c => [c, c])
-const spansClass = spans => new RegExp(`[${spans.map(([a, b]) => (a === b ? `\\u{${a.toString(16)}}` : `\\u{${a.toString(16)}}-\\u{${b.toString(16)}}`)).join('')}]`, 'u')
-const CJK_CLASS = [spansClass(CJK_SPANS), spansClass([...CJK_SPANS, ...CJK_QUOTES])]
+/** the characters a CJK run takes: the CJK characters (rules/script.mjs CJK: Unicode's CJK blocks, Hangul's among them, and its
+ *  full-width forms, their code points assigned), and where the rules say so (Chinese and Japanese) the curly quotes and
+ *  dashes, which xeCJK sets full width there (Korean sets them as its Western punctuation). Tested a code point at a time */
+const CJK_QUOTES = [0x201c, 0x201d, 0x2018, 0x2019, 0x2014, 0x2026, 0xb7]
+const CJK_CLASS = [CJK, cjkClassWith(CJK_QUOTES)]
 /** `quotes` (the rules' cjkQuotes): whether the curly quotes, dashes, ellipsis and middle dot are CJK's too */
 export const cjkClassRe = quotes => CJK_CLASS[quotes ? 1 : 0]
 /** the attributes a piece may set over what it holds, a bit each: weight, slant, small capitals, family, colour */
@@ -2361,10 +2353,9 @@ export function glueOf(src) {
   const brk = m[1] !== 'kern'
   return d[2] === 'em' ? { em: Number(d[1]), brk } : { bp: Number(d[1]) * BP[d[2]], brk }
 }
-/** the characters a script that sets no spaces between its words sets none beside either: Han, kana and the full-width
- *  marks (CJK Symbols and Punctuation, the Halfwidth and Fullwidth Forms' punctuation), and where the rules set them as
- *  CJK's (cjkQuotes) the curly quotes, dashes, ellipsis and middle dot */
-const SPACELESS = /[\p{sc=Han}\p{scx=Hira}\p{scx=Kana}\u3000-\u303F\uFF01-\uFF0F\uFF1A-\uFF20\uFF3B-\uFF40\uFF5B-\uFF65]/u
+/** the characters a script that sets no spaces between its words sets none beside either (rules/script.mjs SPACELESS: Han,
+ *  kana, Bopomofo and the CJK blocks' marks but Hangul's), and where the rules set them as CJK's (cjkQuotes) the curly quotes,
+ *  dashes, ellipsis and middle dot */
 const SPACELESS_QUOTES = /[“”‘’—…·]/u
 /** two SPACELESS characters with white space between, in a unit's source: a paper that writes CJK so, its own */
 const CJK_SPACED = new RegExp(`${SPACELESS.source}\\s+${SPACELESS.source}`, 'u')
