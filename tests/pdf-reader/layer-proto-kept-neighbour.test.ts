@@ -36,7 +36,7 @@ const CJK = (n: number, from = 0x4e00) => Array.from({ length: n }, (_, i) => St
 const text = (s: string) => ({ t: 'text', tr: true, s })
 /** a unit of the page: its kind, its one line (x0 to x1 on baseline b, 10 pt, its own text item), whether the left locates it
  *  (`left`), and its row: a translation, or none (`kept`) */
-interface Spec { id: number; kind: (typeof UNIT_KINDS)[number]; src: string; x0: number; x1: number; b: number; left: boolean; tr: object[] | null }
+interface Spec { id: number; kind: (typeof UNIT_KINDS)[number]; src: string; x0: number; x1: number; b: number; left: boolean; tr: object[] | null; leftDy?: number }
 const PARA: Spec = { id: 0, kind: 'para', src: 'Alpha beta gamma delta epsilon', x0: 20, x1: 280, b: 270, left: true, tr: [text(CJK(8))] }
 // (two cells of one row, the same words, 6 pt apart: within 1.2 em of each other)
 const cell = (id: number, x0: number, kept: boolean): Spec => ({ id, kind: 'cell', src: 'Fine-tune', x0, x1: x0 + 36, b: 200, left: false, tr: kept ? null : [text(CJK(2, 0x5fae))] })
@@ -55,7 +55,7 @@ function paper(specs: Spec[]) {
   }
   const index = indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(layout))))
   // (the left's geometry holds the paragraph alone: the cells are the file's, as most of a table's are)
-  const geometry = { schema: 1, kinds: specs.map(s => s.kind), left: { pages: [VIEW], units: specs.filter(s => s.left).map(s => [s.id, s.id, [[1, s.x0, s.b - 2.15, s.x1, s.b + 6.83]]]) } }
+  const geometry = { schema: 1, kinds: specs.map(s => s.kind), left: { pages: [VIEW], units: specs.filter(s => s.left).map(s => [s.id, s.id, [[1, s.x0, s.b - 2.15 + (s.leftDy ?? 0), s.x1, s.b + 6.83 + (s.leftDy ?? 0)]]]) } }
   const rows = specs.map(s => (s.tr ? { kind: s.kind, src: s.src, state: 'whole', pieces: s.tr } : { kind: s.kind, src: s.src, state: 'kept' }))
   return { doc: withGroups({ numPages: 1, getPage: async () => page }), index, geometry, rows }
 }
@@ -87,5 +87,21 @@ describe('a unit left the original\'s keeps its place from its neighbours\' grow
     expect(r.placed.map(p => p.id)).toEqual([0, 1, 2])
     expect(startOf(r, 1)).toBeCloseTo(100, 1)
     expect(startOf(r, 2)).toBeCloseTo(142, 1)
+  })
+})
+
+describe('a located unit keeps its place from its neighbours\' growth where arXiv\'s page stands apart from ours', () => {
+  // (2610.37668v1 p21: "Initialization." and its text on one of TeX's lines, the text's source holding the head's word; arXiv's
+  // page sets the line 9 pt over ours, the pages through drift. The head's left rectangle stood above its own row on our page,
+  // no barrier there, and the text's first line grew over the head's word to the head's start: laid from the head's ink with
+  // no separation)
+  const head = (leftDy: number): Spec => ({ id: 0, kind: 'heading', src: 'Initialization.', x0: 42, x1: 90, b: 200, left: true, tr: [text(CJK(3))], leftDy })
+  const body = (leftDy: number): Spec => ({ id: 1, kind: 'para', src: 'For the fixed set, initialization sets the structure', x0: 96, x1: 280, b: 200, left: true, tr: [text(CJK(12))], leftDy })
+
+  it('the text is laid from its own line, its left rectangles where ours are or 9 pt above', async () => {
+    for (const dy of [0, 9]) {
+      const r = await run([head(dy), body(dy)])
+      expect(startOf(r, 1), `left ${dy} pt above`).toBeCloseTo(96, 1)
+    }
   })
 })

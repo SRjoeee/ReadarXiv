@@ -4155,7 +4155,12 @@ gap (no mark of the 29 units around it is carried on arXiv's PDF), and "Initiali
 before its text. A neighbour found by the same rule at one of several places is no bound: 2610.16663v1's two headings of one
 title both took the gap's last place, and one bounded by the other was put on the other's page. Over the left lane's 65
 papers 5 units move on 2 papers, each to its own place (2307.16209v1's four, which a running head of the same words had put
-four pages on, out of TeX's order), none lost.
+four pages on, out of TeX's order), none lost. Located, "Initialization." showed a rule of the layer's: a unit's line grows over
+what no other unit holds, and a located unit's rectangles are its left ones, arXiv's page's, which stand where ours do but on a
+page drawn through drift. 2610.37668v1's page 21 is set 9 pt lower on ours, the head's left rectangle stood over its own line,
+and its text's first line grew over the head's word, which its source holds, to the head's start (0.05 em to the head where
+the original has 0.71). A neighbour's line now grows over no unit's own lines of the file either (`run.mjs` `growOn`), a
+drawing rule, so no version (§18.3).
 
 A run-in head its own row cannot hold uses the
 rest of its line (the owner's ruling of 2026-11-03; a drawing rule, so no version, §18.3). Laid in its row alone, beside the

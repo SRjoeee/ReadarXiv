@@ -994,6 +994,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       for (const r of c.rects) pageBottom[r[0]] = Math.min(pageBottom[r[0]] ?? Infinity, r[2] + 0.24 * (r[4] - r[2]))
       if (geometry.kinds[c.id] === 'para') for (const r of c.rects) (cols[r[0]] ??= []).push([r[1], r[3]])
       addRects(c.id, c.rects)
+      if (c.ownRows) addOwn(c.id, c.ownRows)
     }
   }
 
@@ -1624,6 +1625,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
   }
   const textArea = pg => { const rs = (rectsByPage.get(pg) ?? []).map(([, r]) => r); return [Math.min(...rs.map(r => r[1])), Math.max(...rs.map(r => r[3]))] }
+  // (and the file's own lines of the units the geometry holds, on our page: a neighbour's line grows over none of them either.
+  // Their left rectangles are arXiv's page's, which stand where ours do but where the two pages differ, a page drawn through
+  // drift (layout/carry.mjs DRIFT_LINES): 2610.37668v1 p21, set 9 pt lower on our page than on arXiv's, where the left
+  // rectangle of "Initialization." stood over its own line, no barrier on it, and its text's first line grew over the head's
+  // word, which its source holds, to the head's start: laid from the head's ink with no separation (0.05 em, the original's
+  // 0.71). Only the growth reads them: the page's text area and its columns stay the left's)
+  const ownByPage = new Map()
+  const addOwn = (id, rects) => { for (const r of rects) (ownByPage.get(r[0]) ?? ownByPage.set(r[0], []).get(r[0])).push([id, r]) }
   /** the text area of page pg as unit p reads it: as the page's growth step left it once p's own lines there grew (growOn),
    *  the units ranked before it on the page grown and those after it not yet, whenever p is laid */
   const areaOf = (p, pg) => p.area?.get(pg) ?? textArea(pg)
@@ -1940,7 +1949,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** unit p's lines on page g dropped and grown, reading that page alone; the page's text area as they leave it kept for p */
   const growOn = (p, g) => {
     const others = []
-    others[g] = (rectsByPage.get(g) ?? []).filter(([id]) => id !== p.id).map(([, r]) => r)
+    others[g] = [...(rectsByPage.get(g) ?? []), ...(ownByPage.get(g) ?? [])].filter(([id]) => id !== p.id).map(([, r]) => r)
     // (the file's lines are the unit's own, whole, and its first line starts at the unit's own mark: none of the
     // anchors' repairs of which lines are the unit's or where it starts; but a line's extent across is its words', as the
     // anchors' is (the maker's rows are the text layer's word tokens'), and is grown as v0 grows them, over a formula's
