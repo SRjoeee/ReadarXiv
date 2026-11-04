@@ -13,8 +13,8 @@
 //   fallback guess, and gives "sans-serif" for Nimbus Roman (Times) on every paper measured. The name is what TeX and
 //   the class chose: NimbusRomNo9L-Medi (Times bold), CMTI10 (Computer Modern text italic), SFBX1200, LMRoman10-Bold…
 // - facesFor: per target, the faces a translated run takes by its class, weight and slant. The prototype's CJK faces
-//   (`faces: 'prototype'`, the floor's measurement, below) follow the public repo's TeX path (src/pdf-reader/engine/
-//   pipeline/scripts.mjs CJK): a Song/Ming serif, its bold, Kai for italic in Chinese (FandolKai, bkai00mp: ctex's own
+//   (`faces: 'prototype'`, the floor's measurement, below) follow the public repo's TeX path as it was (its CJK strategies,
+//   parked then taken out on 2026-11-04): a Song/Ming serif, its bold, Kai for italic in Chinese (FandolKai, bkai00mp: ctex's own
 //   \itshape); Japanese and Korean have no italic face there, and take an oblique of their serif here (see the report).
 //   Latin and Cyrillic runs keep the original's family where the browser has one (Times, Latin Modern from TinyTeX's
 //   OpenType files served by serve.mjs, Palatino, Charter, Helvetica).

@@ -180,7 +180,7 @@ for (const id of papers) {
           const rule1 = frame ? () => F : pageFrame
           // (every rule named: the defaults are the page stream's, rules 1, 3 and 4; the frame is given)
           const rules = { edges: edges ? 'earlier' : 'all', floatSearch: float ? 'forward' : 'whole' }
-          const out = made ? await makeLayout({ units: paper.units, texOrder: paper.texOrder, marks: made.marks, arxiv, OPS, paper: { id: m[1], version: Number(m[2]) }, left: '', pdfjs: PDFJS, text, floatMatch, frame: rule1, rules, inFloat: paper.inFloat }) : null
+          const out = made ? await makeLayout({ units: paper.units, texOrder: paper.texOrder, marks: made.marks, base: arxiv, arxiv, OPS, paper: { id: m[1], version: Number(m[2]) }, left: '', pdfjs: PDFJS, text, floatMatch, frame: rule1, rules, inFloat: paper.inFloat }) : null
           // (the left as the page pass anchors it: the units in the order TeX sets them, anchors.mjs orderOf, where the engine has it)
           const order = orderOf ? orderOf(paper.texOrder, texts.length) : null
           const left = anchorUnits(doc, order ? order.map(i => texts[i]) : texts, { bounds, floating, floatMatch, frame: rule1, ...(float ? { forward: order ? placesIn(paper.inFloat, order) : new Set(paper.inFloat) } : {}) })

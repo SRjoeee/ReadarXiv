@@ -19,6 +19,10 @@ export declare const SHARED_SEP: number
  *  `onPage`, or the door's facade), or null; with `before`, chosen among the units it holds true of alone (those before `id`
  *  in K: the same however a door's parts come) */
 export declare function rowLeadOf(index: { unit(id: number): { kind: string; lines: ArrayLike<number>; frames: ArrayLike<number>; held: readonly number[] } | null; onPage(page: number): readonly number[] } | null | undefined, id: number, before?: ((id: number) => boolean) | null): RowLead | null
+/** the largest stream of the left units added so far whose first page is at most a page (-1 for none): the slot by the ids of
+ *  a unit only the layout file holds that shares no line, over the units placed up to its own page */
+export interface PagedBefore { add(page: number, stream: number): void; upTo(page: number): number }
+export declare function pagedBefore(N: number): PagedBefore
 /** the left's streams as lineAfterOf reads them: a unit's (undefined for one the left does not hold), the least over a value
  *  (Infinity for none), the greatest under it (-1 for none) */
 export interface LeftStreams { of(id: number): number | undefined; above(v: number): number; below(v: number): number }

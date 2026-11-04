@@ -13,8 +13,8 @@
 //      the cell closes) among them;
 //   3. toTranslate(bundle, lang) is the complement of keptFor(paper, lang), for every language, less a TikZ picture's texts
 //      (kind `figure`), which the layer leaves to the figure ink units that draw their glyphs (rows.mjs TIKZ_KIND);
-//   4. batchesOf(bundle, lang) is runLive's batches in source order (on a paper with no TikZ texts, which runLive still sends): its batches as the real runLive cuts them (a failing
-//      compiler and a translator that gives the wire back), and as the rule stood inline there before it was shared;
+//   4. batchesOf(bundle, lang) is the batches in source order as the rule stood inline in the compiled translation's run
+//      before it was shared (that run went with the compiled translation, 2026-11-04);
 //   5. layerRows over the record's results gives each unit its row, and keeps whole and holds the table cells groups.mjs
 //      decideGroups does over the paper's own units and the same results (the records carry no group decision: they
 //      predate it, every translated cell whole; the groups decided now otherwise are listed);
@@ -27,7 +27,7 @@
 //      space a row writes as the bound asks (a carriage return a line feed, any other control a space).
 // The bundle is the units alone (the rows read nothing else of it), as a reader holds them: bundleUnitsOf's, through JSON.
 // Prints each paper's line and the rows' size against the record's. Exits 1 where a check fails.
-//   pnpm exec tsx lab/pdf/spikes/rows-check.mjs [--no-runlive] [--no-corpus]
+//   pnpm exec tsx lab/pdf/spikes/rows-check.mjs [--no-corpus]
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
@@ -37,7 +37,7 @@ const ENGINE = join(REPO, 'src/pdf-reader/engine')
 const { bundleUnitsOf } = await import(join(ENGINE, 'layer-proto/bundle.mjs'))
 const { batchesOf, layerRows, rowOf, runRows, sourceUnitsOf, toTranslate, unitOf } = await import(join(ENGINE, 'layer-proto/rows.mjs'))
 const { kOfSource, trPiecesOf } = await import(join(ENGINE, 'layer/pieces.mjs'))
-const { keptFor, openPaper, runLive } = await import(join(ENGINE, 'pipeline/live.mjs'))
+const { keptFor, openPaper } = await import(join(ENGINE, 'pipeline/live.mjs'))
 const { FIRST_BATCH, NEXT_BATCH, plainSource, serialize, serializeTags, translateUnits } = await import(join(ENGINE, 'translate/mt.mjs'))
 const { decideGroups, groupOf } = await import(join(ENGINE, 'translate/groups.mjs'))
 const { unpackSource } = await import(join(ENGINE, 'source/tar.mjs'))
@@ -45,7 +45,7 @@ const { unpackSource } = await import(join(ENGINE, 'source/tar.mjs'))
 const FIXTURES = join(ROOT, 'out/layer-gate/fixtures/41795914c3c84238')
 const CASES = [['1512.03385v1', 'zh'], ['1706.03762v7', 'zh'], ['1810.04805v2', 'zh'], ['2307.16209v1', 'zh'], ['2608.04322v1', 'zh'], ['1706.03762v7', 'de'], ['1706.03762v7', 'ja']]
 const LANGS = ['zh', 'zh-TW', 'ja', 'ko', 'de', 'fr', 'es', 'ru']
-const RUNLIVE = !process.argv.includes('--no-runlive'), CORPUS = !process.argv.includes('--no-corpus')
+const CORPUS = !process.argv.includes('--no-corpus')
 const J = JSON.stringify
 
 let failed = 0
@@ -77,7 +77,7 @@ function resultOf(rec, src) {
   return { pieces, state: rec.state, by: rec.by, ...(rec.sentences ? { sentences: rec.sentences } : {}) }
 }
 
-/** runLive's rule for a batch as it stood inline there (the unit nearest the reader first, here the source's order) */
+/** the compiled translation's rule for a batch as it stood inline there (the unit nearest the reader first, here the source's order) */
 function inlineBatches(paper, lang) {
   // (less a TikZ picture's texts, which the layer route sends no more: rows.mjs TIKZ_KIND)
   const kept = keptFor(paper, lang), todo = new Set(paper.units.map((u, i) => i).filter(i => !kept.has(paper.units[i]) && paper.units[i].kind !== 'figure'))
@@ -91,14 +91,6 @@ function inlineBatches(paper, lang) {
   }
   return out
 }
-/** the batches the real runLive cuts, over a compiler that fails and a translator that gives the wire back */
-async function runLiveBatches(paper, lang) {
-  const batches = []
-  const compile = async () => ({ ok: false, pdf: null, log: '! LaTeX Error: a failure.', ms: 1 })
-  await runLive(paper, { lang, compile, previews: false, format: 'markers', translate: async texts => texts.map(text => ({ text, by: 'B' })), onBatch: r => { if (!r.seeded) batches.push(r.units.map(u => u.id)) } })
-  return batches
-}
-
 const papers = new Map()
 async function paperOf(name) {
   if (papers.has(name)) return papers.get(name)
@@ -134,17 +126,11 @@ for (const name of [...new Set(CASES.map(c => c[0]))]) {
   for (const lang of new Set([...langs, 'zh', 'de'])) {
     const got = batchesOf(bundle, lang), inline = inlineBatches(paper, lang)
     if (!isDeepStrictEqual(got, inline)) mine.push(`batchesOf(${lang}) is not the inline rule's`)
-    // (runLive, the TeX path, still sends a TikZ picture's texts, which its pages set: its batches are the layer's where a paper
-    // has none)
-    if (RUNLIVE && !paper.units.some(u => u.kind === 'figure')) {
-      const live = await runLiveBatches(paper, lang)
-      if (!isDeepStrictEqual(got, live)) mine.push(`batchesOf(${lang}) is not runLive's (${got.length} batches, runLive ${live.length})`)
-    }
     if (got.flat().length && got[0] && got[0].reduce((a, i) => a + plainSource(paper.units[i]).length, 0) > FIRST_BATCH && got[0].length > 1) mine.push(`${lang}: the first batch is past ${FIRST_BATCH}`)
     for (const b of got.slice(1)) if (b.length > 1 && b.reduce((a, i) => a + plainSource(paper.units[i]).length, 0) > NEXT_BATCH) mine.push(`${lang}: a batch is past ${NEXT_BATCH}`)
   }
   if (mine.length) { failed++; for (const m of mine) note(name, m) }
-  console.log(`${mine.length ? 'FAIL' : 'ok  '} ${name}: ${units.length} source units the paper's (${wires} wires equal), toTranslate the complement of keptFor in ${LANGS.length} languages, batchesOf the inline rule's${RUNLIVE ? ' and runLive\'s' : ''} (zh ${batchesOf(bundle, 'zh').length} batches, de ${batchesOf(bundle, 'de').length}); opens no piece of their unit closes: ${opens.length ? opens.join(' ') : 'none'}`)
+  console.log(`${mine.length ? 'FAIL' : 'ok  '} ${name}: ${units.length} source units the paper's (${wires} wires equal), toTranslate the complement of keptFor in ${LANGS.length} languages, batchesOf the inline rule's (zh ${batchesOf(bundle, 'zh').length} batches, de ${batchesOf(bundle, 'de').length}); opens no piece of their unit closes: ${opens.length ? opens.join(' ') : 'none'}`)
   if (name === '2608.04322v1' && !(opens.includes(111) && opens.includes(164))) { failed++; note(name, `cells 111 and 164 are not units with an open of their own: ${opens.join(' ')}`) }
 }
 
@@ -208,7 +194,7 @@ for (const [name, lang] of CASES) {
   const byId = new Map(rows.map(r => [r[0], r]))
   if (held.length) mine.push(`${held.length} cells held with every result in`)
   if (rows.length !== results.size) mine.push(`${rows.length} rows for ${results.size} results`)
-  // the groups decided as runLive decides them: groups.mjs over the paper's own units and these results
+  // the groups decided as the compiled translation's run decided them: groups.mjs over the paper's own units and these results
   const idOf = new Map(paper.units.map((u, i) => [u, i]))
   const oracle = decideGroups(paper.units, u => { const r = results.get(idOf.get(u)); return r && { state: r.state, pieces: r.pieces } }, keptFor(paper, lang))
   const keepIds = [...oracle.keep].map(u => idOf.get(u)).filter(id => results.has(id)).sort((a, b) => a - b)

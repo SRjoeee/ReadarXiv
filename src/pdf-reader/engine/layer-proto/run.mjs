@@ -119,8 +119,9 @@ export class NeedPixels extends Error {
  * as PDF.js's commonObjs holds them, by loaded name, with its text content's styles; a font the document exported with no map
  * refuses the document (fontMappedOf's throw, `refusesDocument`). `draw(draw)`: a draw's (draw.mjs, checked), its text content
  * and Link annotations in PDF.js's shapes (drawInputsOf: `tc`, `raw`), its fonts by their content keys, a namespace of their own
- * (never a loaded name); a key read before with another row refuses the draw (a RangeError, nothing of it kept: the caller reads
- * the page live). Each gives `fontOf(name)` and `mapOf(name)`, pageChars2's readers
+ * (never a loaded name), and each item's unmapped characters (`nus`: the prepare's, read of the same fonts, BUNDLE5 15); a key read
+ * before with another row refuses the draw (a RangeError, nothing of it kept: the caller reads the page live). Each gives
+ * `fontOf(name)` and `mapOf(name)` (none for a draw, whose `nus` say it), pageChars2's readers
  */
 export function fontReaders() {
   const fontClass = new Map(), fontMapped = new Map(), rowOfKey = new Map()
@@ -164,10 +165,8 @@ export function fontReaders() {
           }
           return c
         },
-        mapOf: key => {
-          if (!fontMapped.has(key)) fontMapped.set(key, x.fonts.get(key)?.mapped ?? null)
-          return fontMapped.get(key)
-        },
+        mapOf: () => null,
+        nus: x.nus,
       }
     },
   }
@@ -177,8 +176,8 @@ export function fontReaders() {
  *  null where they could not be read), from its text content, its fonts' readers (fontReaders'), its annotations and its items'
  *  fills (the draw's, or liveFillsOf's): the calls the run makes of a page's reading, live or from its draw (drawPageOn), for a
  *  gate that compares the two */
-export function pageReadOf(tc, fontOf, mapOf, raw, fills = null) {
-  const chars = L2.pageChars2(tc, fontOf, mapOf, fills)
+export function pageReadOf(tc, fontOf, mapOf, raw, fills = null, nus = null) {
+  const chars = L2.pageChars2(tc, fontOf, mapOf, fills, nus)
   return { chars, read: raw === null ? null : LK.annotsOf(raw, LK.pointsOf(tc.items), LK.charPoints(chars)) }
 }
 /** the operator list PDF.js drew a page by, where its drawing is whole (the view's drawnList, view/layer-side.mjs): the page read
@@ -627,7 +626,7 @@ function guessCloser(p, K, L, floorAt) {
  * `rules(page)`, the table rules near the page's cells (x0, y0, x1, y1 stride 4: layer2.mjs cellBands); a unit it says is unhidden,
  * or whose text group the document does not hold, is the original's. Absent: every unit the document holds a group for is drawn.
  * `labels`: { captions }, which of the two floats, figures and tables, the final names in the target's language (the
- * record's `captions`, live.mjs captionsOf): a float's label is drawn in the target's name for it, which the layout rules
+ * reader's CAPTIONS, layer-proto/reader.mjs; a fixture's record's `captions`): a float's label is drawn in the target's name for it, which the layout rules
  * give (`rules`), where the final's is (layer2.mjs labelInTarget), else kept as the original's ink; and each babel name
  * the layout file locates (a generated heading: Abstract, References, Contents, …) in the target's word for it, unless the
  * target has none: the captions do not decide for a name TeX identified (layer2.mjs nameInTarget; paintNames). A table's group
@@ -655,7 +654,7 @@ function guessCloser(p, K, L, floorAt) {
  * With both, what the run lets go is kept on the gate's shelf (`full`, `chars`, the checker): the run draws as one that
  * frees, and the gate measures it whole.
  * `drawOf(page)` (E-C, the door's for BUNDLE 5's parts): a promise of the page's draw geometry (layer-proto/draw.mjs, checked:
- * its text items, fonts and Link annotations, as the server read them of arXiv's PDF), or null; asked once a page, for every page of
+ * its text items, fonts and Link annotations, as the server read them of the base page), or null; asked once a page, for every page of
  * a closure as it is taken. A page with a draw is read from it: its viewport alone of PDF.js's (getPage), no text content,
  * annotation or pixel read; one with none (null, an ask that threw, a draw whose font key names another font than before) is read
  * live, as without drawOf. Its pixels (its ink map) are read where a step reads them, and only there: the page asked, at once; a
@@ -850,17 +849,20 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** a unit left the original's for want of the file's place (`code` of SKIP_CODES): `unlocated` with the maker's reason */
   const unanchoredOf = (id, u, code) => ({ id, kind: u.kind, why: 'unanchored', code: skipCode(code), ...(code === 'unlocated' ? { unlaid: makerWhy(id) } : {}), chars: trCharsOf(u) })
   // every unit the layer may place, in the order layGroups takes them (the text's stream): the geometry's, and the units the
-  // file locates whole that the geometry does not hold, at their place in the stream after the unit before them, or beside
-  // the geometry's unit they share one of TeX's lines with (need.mjs lineAfterOf, as the cutter's K, cut.mjs entriesOf), table
-  // cells among them (a cell's lines are TeX's, and the text removal takes its glyphs alone, never its table's rules). The
+  // file locates whole that the geometry does not hold, at their place in the stream after the units before them placed up to
+  // their own page (need.mjs pagedBefore), or beside the geometry's unit they share one of TeX's lines with (need.mjs lineAfterOf;
+  // both as the cutter's K, cut.mjs entriesOf), table cells among them (a cell's lines are TeX's, and the text removal takes its
+  // glyphs alone, never its table's rules). The
   // geometry's rectangles are the left's: a unit's place on the original, and the page's text area and columns the fitting
   // reads; the unit is drawn by the file's lines. `cands` in the order the layer reports its sources in, K in the stream's
   const cands = GU.map(([id, stream, rects]) => ({ id, stream, rects }))
   const streamOf = new Map(GU.map(([id, stream]) => [id, stream])), streams = leftStreams(streamOf), lines = lineReader(tex.index)
+  const firstPageOf = new Map(GU.map(([id, , rects]) => [id, Math.min(...rects.map(r => r[0]))]))
   for (const id of tex.index.file.units.map(r => r[0])) {
     if (inGeometry.has(id)) continue
     let before = -1
-    for (const [gid, s] of streamOf) if (gid < id && s > before) before = s
+    const lu = tex.index.unit(id), page = lu?.lines.length ? lu.lines[0] : undefined
+    for (const [gid, s] of streamOf) if (gid < id && s > before && (page === undefined || firstPageOf.get(gid) <= page)) before = s
     cands.push({ id, stream: (lineAfterOf(tex.index, id, streams, lines) ?? before) + 0.5, rects: null })
   }
   const K = [], candOf = new Map()
@@ -905,6 +907,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       for (const r of c.rects) pageBottom[r[0]] = Math.min(pageBottom[r[0]] ?? Infinity, r[2] + 0.24 * (r[4] - r[2]))
       if (geometry.kinds[c.id] === 'para') for (const r of c.rects) (cols[r[0]] ??= []).push([r[1], r[3]])
       addRects(c.id, c.rects)
+      if (c.ownRows) addOwn(c.id, c.ownRows)
     }
   }
 
@@ -1535,6 +1538,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
   }
   const textArea = pg => { const rs = (rectsByPage.get(pg) ?? []).map(([, r]) => r); return [Math.min(...rs.map(r => r[1])), Math.max(...rs.map(r => r[3]))] }
+  // (and the file's own lines of the units the geometry holds, on our page: a neighbour's line grows over none of them either.
+  // Their left rectangles are arXiv's page's, which stand where ours do but where the two pages differ, a page drawn through
+  // drift (layout/carry.mjs DRIFT_LINES): 2610.37668v1 p21, set 9 pt lower on our page than on arXiv's, where the left
+  // rectangle of "Initialization." stood over its own line, no barrier on it, and its text's first line grew over the head's
+  // word, which its source holds, to the head's start: laid from the head's ink with no separation (0.05 em, the original's
+  // 0.71). Only the growth reads them: the page's text area and its columns stay the left's)
+  const ownByPage = new Map()
+  const addOwn = (id, rects) => { for (const r of rects) (ownByPage.get(r[0]) ?? ownByPage.set(r[0], []).get(r[0])).push([id, r]) }
   /** the text area of page pg as unit p reads it: as the page's growth step left it once p's own lines there grew (growOn),
    *  the units ranked before it on the page grown and those after it not yet, whenever p is laid */
   const areaOf = (p, pg) => p.area?.get(pg) ?? textArea(pg)
@@ -1851,7 +1862,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** unit p's lines on page g dropped and grown, reading that page alone; the page's text area as they leave it kept for p */
   const growOn = (p, g) => {
     const others = []
-    others[g] = (rectsByPage.get(g) ?? []).filter(([id]) => id !== p.id).map(([, r]) => r)
+    others[g] = [...(rectsByPage.get(g) ?? []), ...(ownByPage.get(g) ?? [])].filter(([id]) => id !== p.id).map(([, r]) => r)
     // (the file's lines are the unit's own, whole, and its first line starts at the unit's own mark: none of the
     // anchors' repairs of which lines are the unit's or where it starts; but a line's extent across is its words', as the
     // anchors' is (the maker's rows are the text layer's word tokens'), and is grown as v0 grows them, over a formula's
@@ -2747,7 +2758,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       }
       await Promise.all([...byFace.values()].map(e => FS.ready(e.face, e.text)))
     }
-    chars2[i - 1] = L2.pageChars2(tc, fontOf, fonts.mapOf, fills)
+    chars2[i - 1] = L2.pageChars2(tc, fontOf, fonts.mapOf, fills, fonts.nus ?? null)
     // (its text items kept compact with its record, for its text layer: textOf)
     r.items = TL.itemsOf(tc)
     // (and its characters by baseline, which every unit's edges read, made once the page is: edgesOf)

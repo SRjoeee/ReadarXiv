@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PIPELINE_CARRIES } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { PIPELINE_CARRIES } from '../../lab/pdf/spikes/carries.mjs'
 import { inMemory, loadProject, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { cutsOf, formulaRuns, holdsUnbalanced, plainSource, plainTranslated, rehydrate, rehydrateTags, sentencesOf, serialize, serializeTags } from '@/pdf-reader/engine/translate/mt.mjs'
 
@@ -104,7 +104,7 @@ describe('the sentences of a unit with a run (sentencesOf): the run\'s commas co
   })
 })
 
-describe('holdsUnbalanced: a translation that may have set a run\'s parts apart (live.mjs PIPELINE_CARRIES)', () => {
+describe('holdsUnbalanced: a translation that may have set a run\'s parts apart (lab/pdf/spikes/carries.mjs, once live.mjs PIPELINE_CARRIES)', () => {
   it('an inline formula whose delimiters do not balance on its own; not a balanced one, a display or text', () => {
     expect(holdsUnbalanced([{ t: 'text', s: 'x' }, { t: 'ph', src: '$\\{\\Phi_0$' }])).toBe(true)
     expect(holdsUnbalanced([{ t: 'ph', src: '$\\Phi_2\\}$' }])).toBe(true)
@@ -112,7 +112,7 @@ describe('holdsUnbalanced: a translation that may have set a run\'s parts apart 
   })
 })
 
-describe('a copy of 10 or 11 (live.mjs PIPELINE_CARRIES): the units whose wire 12 changes are sent again, and no other', () => {
+describe('a copy of 10 or 11 (lab/pdf/spikes/carries.mjs, once live.mjs PIPELINE_CARRIES): the units whose wire 12 changes are sent again, and no other', () => {
   const run = unitOf(SET), apart = unitOf('For $($intrinsic$)$ maps and $\\{a\\}$ alike.')
   it('given the unit: one that holds a run is sent again; one with an unbalanced formula and no run is carried', () => {
     for (const v of ['10', '11']) {

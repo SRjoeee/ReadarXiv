@@ -44,8 +44,11 @@ async function oracleK(whole: Whole): Promise<OracleEntry[]> {
     const inGeometry = new Set(cands.map(c => c.id)), streamOf = new Map(whole.left.units.map(([id, stream]) => [id, stream])), streams = leftStreams(streamOf), lines = lineReader(index)
     for (const id of index.file.units.map(r => r[0] as number)) {
       if (inGeometry.has(id)) continue
+      // (after the left units before it by id placed on its own first row's page or before; with no row, over the whole paper)
+      const lu = index.unit(id), page = lu?.lines.length ? (lu.lines[0] as number) : undefined
+      const firstPage = (gid: number) => Math.min(...whole.left.units.find(w => w[0] === gid)![2].map(r => r[0] as number))
       let before = -1
-      for (const [gid, s] of streamOf) if (gid < id && s > before) before = s
+      for (const [gid, s] of streamOf) if (gid < id && s > before && (page === undefined || firstPage(gid) <= page)) before = s
       cands.push({ id, stream: (lineAfterOf(index, id, streams, lines) ?? before) + 0.5, rects: null, lists: [], reach: new Set() })
     }
   }
@@ -151,13 +154,17 @@ async function checkCut(name: string, whole: Whole, c: Cut, o: { anySplit?: bool
     expect(p.reach).toBeGreaterThanOrEqual(b)
   })
 
-  // fileOnly: today's `before` over the whole paper
+  // fileOnly: beside the left unit it shares one of TeX's lines with (lineAfterOf), else after the left units before it by id
+  // placed on its own first row's page or before (with no row, over the whole paper)
   const streams = new Map(whole.left.units.map(([id, s]) => [id, s]))
+  const firstPage = new Map(whole.left.units.map(([id, , rects]) => [id, Math.min(...rects.map(r => r[0] as number))]))
+  const file = whole.layout ? indexLayout(whole.layout) : null, lines = file ? lineReader(file) : null
   for (const p of parts) {
     for (const [id, after] of p.fileOnly) {
+      const lu = file?.unit(id), page = lu?.lines.length ? (lu.lines[0] as number) : undefined
       let before = -1
-      for (const [gid, s] of streams) if (gid < id && s > before) before = s
-      expect(after, `${name}: unit ${id}`).toBe(before)
+      for (const [gid, s] of streams) if (gid < id && s > before && (page === undefined || firstPage.get(gid)! <= page)) before = s
+      expect(after, `${name}: unit ${id}`).toBe((file ? lineAfterOf(file, id, leftStreams(streams), lines!) : null) ?? before)
     }
   }
   // the left parts: the tokens the producer gave, page by page
@@ -238,13 +245,14 @@ describe('the cut of a small paper', () => {
     expect(back.parts[1]!.views.length).toBe(4 * (6 - 2 + 1))
   })
 
-  it('gives a layout-only unit the stream of the left unit before it by id as its slot', async () => {
+  it('gives a layout-only unit the largest stream of the left units before it by id placed up to its own page as its slot', async () => {
     const whole = wholeOf(SMALL)
     const c = await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF })
     const back = await readBack(c)
     const fileOnly = back.parts.flatMap(p => p.fileOnly)
-    // unit 2: the largest stream of a left unit with a smaller id (units 0 and 1: 0, 5); unit 8: units 0 to 7 (150)
-    expect(fileOnly).toEqual([[2, 5], [8, 150]])
+    // unit 2 (page 2): units 0 and 1 (0, 5); unit 8 (page 7): units 0 to 7 but unit 7, first placed on page 8 (61, unit 6's).
+    // By the ids over the whole paper unit 8 stood after unit 7 (150), in K among page 8's entries
+    expect(fileOnly).toEqual([[2, 5], [8, 61]])
   })
 
   it('puts a layout-only unit beside the left unit it shares one of TeX\'s lines with, before its text in K (2610.21547v1 p16)', async () => {

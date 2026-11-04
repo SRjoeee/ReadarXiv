@@ -539,7 +539,7 @@ describe('fontReaders: a page\'s fonts read live or from its draw, the same answ
     const { draw, why } = await drawDataOf(page)
     if (draw === null) return { live, data: null, why }
     const x = fontReaders().draw(checkDraw(JSON.parse(JSON.stringify(draw))))
-    return { live, data: pageReadOf(x.tc, x.fontOf, x.mapOf, x.raw), why }
+    return { live, data: pageReadOf(x.tc, x.fontOf, x.mapOf, x.raw, null, x.nus), why }
   }
 
   it('explicit dests by reference and by index, quads of 8 numbers and not, a url, a named dest', async () => {
@@ -590,7 +590,7 @@ describe('fontReaders: a page\'s fonts read live or from its draw, the same answ
     const ink = pageInk(OPS, await page.getOperatorList(), page.commonObjs, { rotate: 0 })
     const { draw } = await drawDataOf(page, null, null, ink.glyphs)
     const x = fontReaders().draw(checkDraw(JSON.parse(JSON.stringify(draw))))
-    const data = pageReadOf(x.tc, x.fontOf, x.mapOf, null, x.fills)
+    const data = pageReadOf(x.tc, x.fontOf, x.mapOf, null, x.fills, x.nus)
     expect(data.chars.map(c => [c.ch, c.st?.fill])).toEqual(live.chars.map(c => [c.ch, c.st?.fill]))
     expect(live.chars.find(c => c.ch === '1')?.st?.fill).toBe(0x0000ff)
     expect(live.chars.find(c => c.ch === 'p')?.st?.fill).toBeUndefined()

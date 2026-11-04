@@ -10,11 +10,8 @@ import { batchesOf, layerRows, runRows, sourceUnitsOf, toTranslate, unitOf } fro
 import { loadProject, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { encodeLayout, indexLayout, type LayoutFile, type LayoutIndex, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
 import { inkSamples, LAYOUT_CLASSES, probeSamples, readInkProbe, readMarkProbe } from '@/pdf-reader/engine/layout/marks.mjs'
-import { keptFor, openPaper, originalFiles, probeFiles, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { keptFor, openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { rehydrate, serialize, serializeTags, translateUnits } from '@/pdf-reader/engine/translate/mt.mjs'
-import { strategiesFor } from '@/pdf-reader/engine/pipeline/scripts.mjs'
-import { typesetting } from '@/pdf-reader/engine/pipeline/typeset/tex.mjs'
-import { DESIGN } from '@/pdf-reader/engine/pipeline/typeset/type.mjs'
 import { column, layoutOf } from './helpers/layout-of'
 
 // The reader's engine, locked by what it makes before its files move (Stage 5, Task 4): every output below is SHA-256
@@ -188,7 +185,8 @@ describe('the files of a compile', () => {
     lock('compile-files', `${name}: the original with the layout compile's marks, lines, switches and inkless`, () => texts(originalFiles(paper(), { lines: true, layout: LAYOUT_CLASSES, switches: SWITCHES, inkless: INKLESS })))
     lock('compile-files', `${name}: the original with lines`, () => texts(originalFiles(paper(), { lines: true })))
     lock('compile-files', `${name}: the original as at 3cb5a733`, () => texts(originalFiles(paper())))
-    lock('compile-files', `${name}: the probes`, () => { const p = paper(); return [texts(probeFiles(p)), texts(probeFiles(p, { width: true })), texts(probeFiles(p, { marks: true }))] })
+    // (the width probe's case went with the typesetting rule, 2026-11-04: the two left are the bytes they were)
+    lock('compile-files', `${name}: the probes`, () => { const p = paper(); return [texts(probeFiles(p)), texts(probeFiles(p, { marks: true }))] })
     lock('compile-files', `${name}: what the probes read from a log`, () => {
       const p = paper()
       return { samples: probeSamples(p.units), ink: inkSamples(p.units), switches: readMarkProbe(PROBE_LOG, probeSamples(p.units)), inkless: readInkProbe(PROBE_LOG, inkSamples(p.units)) }
@@ -197,25 +195,6 @@ describe('the files of a compile', () => {
       const p = paper(), project = loadProject(p.fsys, p.project.main)
       const done = new Map(project.units.map((u, i) => [u, u.pieces.map(x => ((x as { t: string }).t === 'text' ? { ...(x as object), tr: true, s: `<T${i}>` } : x))]))
       return texts(patch(project, done as never))
-    })
-    lock('compile-files', `${name}: the translation, zh: draft, final, today and by runs`, () => {
-      const p = paper(), [xe] = strategiesFor({ compiler: 'pdflatex' }, 'zh')
-      if (!xe) throw new Error('no strategy')
-      const all = new Map(p.units.map((_, i) => [i, 1.1]))
-      const typeset = typesetting(p.units, { design: DESIGN.Hans, strategy: xe.name, type: { lead: 1.35, track: 0, scale: 1 }, leads: all, sizes: new Map(all), floatsAt: new Map(), tableMin: 0.85 })
-      type Piece = { t: string; s?: string; tr?: boolean }
-      const translate = (runs: boolean) => new Map(p.units.map((u, i) => [u, (u.pieces as Piece[]).flatMap((x, k): Piece[] => {
-        if (x.t !== 'text' || !/\S/.test(x.s ?? '')) return [x]
-        const lead = k === 0 ? (x.s ?? '').match(/^\s*/)?.[0] ?? '' : '', trail = k === u.pieces.length - 1 ? (x.s ?? '').match(/\s*$/)?.[0] ?? '' : ''
-        return runs ? [{ ...x, tr: true, s: `${lead}<T${i}>${trail}` }] : [...(lead ? [{ t: 'text', s: lead }] : []), { ...x, tr: true, s: `<T${i}>` }, ...(trail ? [{ t: 'text', s: trail }] : [])]
-      })])) as Map<(typeof p.units)[number], unknown[]>
-      const given = { strategy: xe, fonts: null, aux: null, bbl: null }
-      return [
-        texts(translationFiles(p, translate(false), { ...given, draft: true, typeset })),
-        texts(translationFiles(p, translate(false), { ...given, draft: false, typeset: typeset.final })),
-        texts(translationFiles(p, translate(false), { ...given, draft: false })),
-        texts(translationFiles(p, translate(true), { ...given, draft: false })),
-      ]
     })
   }
 })

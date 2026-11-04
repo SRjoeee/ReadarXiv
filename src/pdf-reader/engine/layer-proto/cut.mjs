@@ -6,7 +6,7 @@
 import { indexLayout, NAME_FLAG } from '../layout/file.mjs'
 import { BundleRefusal } from './bundle.mjs'
 import { chunkTotals, groupsOfUnits, partTarget, writeHead, writeLeftPart, writePart, writeUnitChunks } from './format.mjs'
-import { leftStreams, lineAfterOf, lineReader, needBound, needsOf, rowLeadOf } from './need.mjs'
+import { leftStreams, lineAfterOf, lineReader, needBound, needsOf, pagedBefore, rowLeadOf } from './need.mjs'
 
 const refuse = (kind, path, why, data) => new BundleRefusal(why, { kind, path, ...(data ? { data } : {}) })
 const SIZE_BOUNDS = ['bytes', 'values', 'content', 'rows']
@@ -21,8 +21,9 @@ function pagesAt(rows, at, stride, into) {
 /**
  * K over the whole paper (C3b): one entry for each unit v0 may place, a left unit at its stream and a layout-only unit at
  * `after + 0.5`, ordered by (slot, id). `after` is where TeX's own line puts it in the stream, beside the left unit it shares
- * one of TeX's lines with (need.mjs lineAfterOf), else the largest stream of a left unit with a smaller id over the whole
- * paper (run.mjs's `before`), -1 for none. An entry is what needsOf reads (`lists`, `reach`, `rects`) and what the part is cut from.
+ * one of TeX's lines with (need.mjs lineAfterOf), else the largest stream of a left unit with a smaller id first framed on a
+ * page up to the unit's own first row's (need.mjs pagedBefore; a unit with no row: over the whole paper), -1 for none. An entry
+ * is what needsOf reads (`lists`, `reach`, `rects`) and what the part is cut from.
  * `cache` (the page stream's, pipeline/frontier.mjs): what an entry holds of its unit alone (its pages, by its left rectangles and
  * its rows) kept from one call to the next, `entries` by id, under the left rectangles it was read from and `rows(id)`, the
  * caller's object of the unit's rows (a new one whenever they change); `built` counts those read
@@ -46,6 +47,7 @@ function entriesOf(whole, N, grouped, cache = null) {
   const shown = pages => [...new Set(pages.filter(p => p <= N))]
   const entries = []
   let before = -1
+  const placed = pagedBefore(N)
   /** what the entry of unit `id` holds of the unit alone: its left rectangles' pages and its rows' */
   const ownOf = (id, w, lu) => {
     const rectPages = w ? w[2].map(r => r[0]) : []
@@ -65,7 +67,8 @@ function entriesOf(whole, N, grouped, cache = null) {
       if (was && was.rects === rects && was.rows === rows) own = was.own
       else { own = ownOf(id, w, lu); cache.entries.set(id, { rects, rows, own }); cache.built++ }
     } else own = ownOf(id, w, lu)
-    const after = w ? null : (lu ? lineAfterOf(index, id, streams, lines) : null) ?? before
+    const page = lu ? linePages.get(id)?.[0] : undefined
+    const after = w ? null : (lu ? lineAfterOf(index, id, streams, lines) : null) ?? (page === undefined ? before : placed.upTo(page))
     const e = {
       id, slot: w ? w[1] : after + 0.5, after, rects: w ? w[2] : null, left: w, lu,
       lists: own.lists, reach: own.reach,
@@ -80,6 +83,7 @@ function entriesOf(whole, N, grouped, cache = null) {
     }
     entries.push(e)
     if (w && w[1] > before) before = w[1]
+    if (w) placed.add(Math.min(...w[2].map(r => r[0])), w[1])
   }
   entries.sort((a, b) => a.slot - b.slot || a.id - b.id)
   // (a unit follows one before it in K alone, chosen among those, as the door's K holds it: run.mjs addUnits)
