@@ -3730,6 +3730,10 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
         line.items.push({ t: headOfCut(t0, { s: chars.slice(0, k).join('') }), w: per.slice(0, k).reduce((a, b) => a + b, 0), shift: 0, asp: 0 })
         const tail = chars.slice(k).join('')
         setToken(i, { ...t0, s: tail, w100: w100(tail, t0.face) * (t0.sc ?? 1), glue: false, asp: false })
+      } else if (t0.ownLabel && lines.length === 1 && li + 1 < slots.length) {
+        // (a unit's own label carried to its first line's start (run.mjs ownLabelOnRow), on a shared line that holds it and not
+        // its first word: never alone at the line's end (2610.21098v1 p2's "(2)", the end of the line before its item's text).
+        // The line is left as a sliver is (slotsAt), and the unit opens on its next)
       } else {
         // the group's first token alone (the rest goes on): a glued group never runs past the line
         line.items.push(items[0])

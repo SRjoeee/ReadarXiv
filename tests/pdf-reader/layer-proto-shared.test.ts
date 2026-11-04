@@ -119,6 +119,19 @@ describe('a shared line whose next unit\'s own label stands between the two (an 
     expect(b![6]).toBeCloseTo(onRow[0]![7] + 4, 1)
   })
 
+  it('a label its shared line holds without its first word is never left alone at that line\'s end: its item opens on a line of its own, the label at its start', async () => {
+    // (2610.21098v1 p2's "(2)", alone at the end of item (1)'s last line, its text a line under it. 50 characters: the
+    // paragraph's translation one full line and 24 characters of the next, more than an em over the row (its last line the
+    // shared one), ending at 257.8: room after it for the label and its space (16 pt) and not for a character more. A pitch
+    // under that line the item would end lower than laid from TeX's row, so it is laid there, from the row's start (the corner))
+    const run = await laid(labelled(50))
+    const last = linesOf(run, 0)!.at(-1)!, [b] = linesOf(run, 1)!
+    expect(last[1]).toBeGreaterThan(226 + 10)
+    expect(last[7]).toBeGreaterThan(280 - 26)
+    expect(b![1]).toBeLessThan(last[1] - 0.05)
+    expect([b![1], b![6]]).toEqual([226, 20])
+  })
+
   it('a label the wrap could not give a group of its own stays the original\'s, and its item where TeX set it', async () => {
     const run = await laid(labelled(56), P => { Object.defineProperty(P.doc, 'getOptionalContentConfig', { configurable: true, value: async () => fakeConfig({ missing: ['u1.l'] }) }) })
     const [b] = linesOf(run, 1)!
@@ -285,6 +298,21 @@ describe('a shared line: the next unit\'s first line starts where the translatio
     expect(Math.abs(last[1] - 226)).toBeLessThan(10)
     // (on the paragraph's baseline, from its end; the row it continues still TeX's, 226)
     expect([b![0], b![1], b![2], b![6]]).toEqual([1, last[1], 226, last[7] + 10])
+  })
+
+  it('a paragraph whose leading set its last line over the shared row, within an em: the part after it flows on from that line', async () => {
+    // (2610.21098v1 p2's item (3): its first line on item (2)'s last, 9.5 pt over the row, and its second laid from TeX's row
+    // under it, 26.4 pt down at a pitch of 16.9. Here 56 characters after the paragraph's 30, whose last line stands 8.4 pt over
+    // the row: three lines, each a pitch under the one before, the first the paragraph's)
+    const paper: Paper = { ...split(30), specs: split(30).specs.map(s => (s.id === 1 ? { ...s, chars: 56 } : s)) }
+    const run = await laid(paper)
+    const last = linesOf(run, 0)!.at(-1)!, b = linesOf(run, 1)!
+    expect(last[1] - 226).toBeGreaterThan(0.05)
+    expect(last[1] - 226).toBeLessThan(10)
+    expect(b[0]![1]).toBe(last[1])
+    const steps = b.slice(1).map((l, i) => Math.round((b[i]![1] - l[1]) * 100) / 100)
+    expect(steps.length).toBe(2)
+    expect(Math.abs(steps[0]! - steps[1]!), `its lines' steps ${steps}`).toBeLessThanOrEqual(0.02)
   })
 
   it('a paragraph whose last line stands on the shared row: the part after it stays on TeX\'s baseline', async () => {

@@ -2144,7 +2144,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         // (where that unit's translation ended above the row, its last line the shared one (shareOf's `above`): this unit's lines
         // flow on from it, layer2.mjs slotsAt; where none of its text fits after that line's end, its first line stands a pitch
         // under it, unless its last then stands lower than laid on TeX's row: as before, below)
-        if (share.above) { b.onLead = true; onLeadOf = { x0: row.x0 } }
+        // (and where that unit's text on the row stands above TeX's baseline, within an em of it (shareOf's `at`): its lines flow on
+        // from that line too, not from TeX's row under it, a pitch and the lines' distance after their first. 2610.21098v1 p2's
+        // item (3): its first line on item (2)'s last, 9.5 pt over the row, its second 26.4 pt under it at a pitch of 16.9.
+        // `onLeadOf`: where it is laid as before, below)
+        if (share.above) { b.onLead = true; onLeadOf = { start: row.x0, startY: undefined } }
+        else if (b.startY !== undefined && b.startY > b.B[0] + 0.05) { b.onLead = true; onLeadOf = { start: b.start, startY: b.startY } }
         // (painted on the row's page after that unit, whose erasing of the row covers where it starts: paintLed)
         p.ledBy = row.id
       }
@@ -2186,7 +2191,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const crop = { mode: 'crop', page: p.blocks[0].page, crop: [x0, Math.min(...cs.map(c => c.yb - 0.26 * c.size)), x1, Math.max(...cs.map(c => c.yb + 0.8 * c.size))], baseline: rowLabel.baseline, text: prep.label.text }
       // (and its first word with it: no line ends after the label alone, 2610.21098v1 p2's "(2)" at the end of the line before)
       if (tokens[0] && !tokens[0].space) tokens[0].glue = true
-      tokens = Object.assign([{ crop, cw: x1 - x0, glue: false, w100: 0 }, ...tokens], { base: tokens.base })
+      tokens = Object.assign([{ crop, cw: x1 - x0, glue: false, w100: 0, ownLabel: true }, ...tokens], { base: tokens.base })
       prep.label = { ...prep.label, drawn: prep.label.text }
       for (const c of cs) prep.cat?.set(L2.charKey(c), 'acc')
     }
@@ -2219,7 +2224,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (laid on from the line before, none of it there (its first line a pitch under that line): kept so only where its last line
     // stands no lower than laid from TeX's shared row as before (`onLead`'s corner); else laid there, as before)
     if (onLeadOf && p.layout.lines[0] && p.layout.lines[0].baseline < p.blocks[0].startY - 0.05) {
-      const b0 = p.blocks[0], before = [{ ...b0, start: onLeadOf.x0, startY: undefined, onLead: undefined }, ...p.blocks.slice(1)]
+      const b0 = p.blocks[0], before = [{ ...b0, start: onLeadOf.start, startY: onLeadOf.startY, onLead: undefined }, ...p.blocks.slice(1)]
       const was = L2.layoutCut(tokens, before, s, p.P), lastOf = l => l.layout.lines.at(-1)?.baseline ?? Infinity
       if (lastOf(was) > lastOf({ layout: p.layout }) + 0.05) { p.blocks = before; ({ layout: p.layout, tokens: p.tokens } = was); p.onLeadKept = true } else p.onLeadBelow = true
     }
