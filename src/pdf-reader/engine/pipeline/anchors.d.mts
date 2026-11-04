@@ -63,7 +63,7 @@ export declare function ownOfBounds(doc: readonly DocToken[], bounds: Map<string
 /** a unit's own pages as tokens, DRIFT either side */
 export declare function ownWindow(head: SearchHead, own: readonly [number, number]): [number, number]
 /** the gap a unit without marks is searched in: [the last token before it, the first after it] */
-export declare function edgesOf(head: SearchHead, hard: readonly ([number, number] | null | undefined)[], u: number, place: (v: number) => readonly number[] | null): [number, number]
+export declare function edgesOf(head: SearchHead, hard: readonly ([number, number] | null | undefined)[], u: number, place: (v: number) => readonly number[] | null, marked?: ((v: number) => boolean) | null): [number, number] | null
 /** where each unit with marks stands by its text alone on its own pages (3-grams, or a short text's words in a row once), or null */
 export declare function ownPlaces(doc: readonly DocToken[], units: readonly UnitText[], head: SearchHead, minCoverage?: number): (v: number) => number[] | null
 /** rule 5's start of a float's search of the whole document: the first token of its last body neighbour's last page */

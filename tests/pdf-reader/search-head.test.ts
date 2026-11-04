@@ -178,11 +178,11 @@ describe('the search known from the head (searchHead): a page waits only for the
     // (a neighbour whose text is nowhere on its own pages: the next one with marks within the stretch, bounded, its bounds; past
     // the stretch, its edge, the page after the neighbour's first)
     const blind = ownPlaces(doc, UNITS.map(u => (u.id === 3 ? { ...u, text: 'nowhere to be found at all' } : u)), head)
-    expect(edgesOf(head, loose, 2, blind)[1]).toBe(span(P[1] as string[])[0])
+    expect(edgesOf(head, loose, 2, blind)?.[1]).toBe(span(P[1] as string[])[0])
     const blinder = ownPlaces(doc, UNITS.map(u => (u.id === 3 || u.id === 4 ? { ...u, text: 'nowhere to be found at all' } : u)), head)
-    expect(edgesOf(head, loose.map((h, u) => (u === 4 ? null : h)), 2, blinder)[1]).toBe(head.rhi[2] + 1)
+    expect(edgesOf(head, loose.map((h, u) => (u === 4 ? null : h)), 2, blinder)?.[1]).toBe((head.rhi[2] as number) + 1)
     // (a float takes no neighbour's text place, and the page stream's walk stops at a neighbour not marked yet)
-    expect(edgesOf(head, loose, 2, place, v => v !== 3)).toBeNull()
+    expect(edgesOf(head, loose, 2, place, (v: number) => v !== 3)).toBeNull()
   })
 })
 
