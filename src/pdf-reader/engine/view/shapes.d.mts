@@ -76,6 +76,9 @@ export interface LayerShapes {
   mute(page: number, on: boolean): boolean
   /** the pages muted, rising */
   muted(): number[]
+  /** the units on page `page` (each unit whose pages hold it, on the laid layout or the mirror): those whose starts a change of
+   *  the page's shapes can change */
+  unitsOn(page: number): number[]
   /** a unit's starts on the right: its words' where it is all on laid pages, `left` where it is on none, null else */
   starts(id: number, text: string, offsets: readonly number[] | undefined, left: Int32Array | null): Int32Array | null
   /** every page back to the mirror (a door opened again) */

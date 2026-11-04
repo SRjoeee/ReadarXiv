@@ -92,7 +92,7 @@ export function createReaderView(host) {
   const counts = { events: 0, tasks: 0, opens: 0, failures: 0, layouts: 0 }
   let lastEvent = null, lastAlign = null
   const released = new WeakSet()
-  const listeners = { drawn: new Set(), want: new Set(), near: new Set(), original: new Set(), scale: new Set(), scrolled: new Set() }
+  const listeners = { drawn: new Set(), want: new Set(), near: new Set(), original: new Set(), scale: new Set(), scrolled: new Set(), highlight: new Set() }
   const tell = (set, ...args) => { for (const l of [...set]) l(...args) }
   function emit(event) {
     if (disposed) return
@@ -258,6 +258,8 @@ export function createReaderView(host) {
     highlightOn = on
     // off lights nothing; on again, what a resting pointer is over is looked at again
     if (!on) lighting.light(null); else pointer.again()
+    // (the layer side makes the highlight's data while it is on alone)
+    tell(listeners.highlight, on)
   })
   /** where a pane and its pages are on the screen, for the pointer: read where the layout is known clean */
   function measure(s) {
@@ -1102,6 +1104,8 @@ export function createReaderView(host) {
       pdfPage: n => (laid ? L.viewer.getPageView(n - 1)?.pdfPage ?? null : null),
       // (whether page n of the left is being drawn: PDF.js's page view running or paused, RenderingStates 1 and 2)
       drawing: n => (laid ? [1, 2].includes(L.viewer.getPageView(n - 1)?.renderingState) : false),
+      // (whether page n of the left is drawn: its page view finished, RenderingStates 3)
+      drawn: n => (laid ? L.viewer.getPageView(n - 1)?.renderingState === 3 : false),
     },
     lib: kit.lib,
     assets: kit.assets,
@@ -1131,6 +1135,9 @@ export function createReaderView(host) {
     onOriginal: l => { listeners.original.add(l); return () => listeners.original.delete(l) },
     onScale: l => { listeners.scale.add(l); return () => listeners.scale.delete(l) },
     onScrolled: l => { listeners.scrolled.add(l); return () => listeners.scrolled.delete(l) },
+    /** whether the highlight is on (the look's switch, S-P-80), and each change of it: a pointer wants a page only while it is */
+    highlight: () => highlightOn,
+    onHighlight: l => { listeners.highlight.add(l); return () => listeners.highlight.delete(l) },
     attach(s) {
       if (disposed) throw new Error('the reading view is disposed')
       if (side) throw new Error('the reading view has a layer side already')
