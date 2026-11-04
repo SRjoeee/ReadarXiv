@@ -6,7 +6,7 @@
 import { indexLayout, NAME_FLAG } from '../layout/file.mjs'
 import { BundleRefusal } from './bundle.mjs'
 import { chunkTotals, groupsOfUnits, partTarget, writeHead, writeLeftPart, writePart, writeUnitChunks } from './format.mjs'
-import { lineAfterOf, needBound, needsOf, rowLeadOf } from './need.mjs'
+import { leftStreams, lineAfterOf, lineReader, needBound, needsOf, rowLeadOf } from './need.mjs'
 
 const refuse = (kind, path, why, data) => new BundleRefusal(why, { kind, path, ...(data ? { data } : {}) })
 const SIZE_BOUNDS = ['bytes', 'values', 'content', 'rows']
@@ -42,7 +42,7 @@ function entriesOf(whole, N, grouped, cache = null) {
     for (const r of layout.labels) pagesOf(allPages, r[0]).push(r[2])
   }
   const ids = [...new Set([...left.keys(), ...luOf.keys()])].sort((a, b) => a - b)
-  const streamOf = id => left.get(id)?.[1]
+  const streams = leftStreams(new Map([...left].map(([id, w]) => [id, w[1]]))), lines = index ? lineReader(index) : null
   const shown = pages => [...new Set(pages.filter(p => p <= N))]
   const entries = []
   let before = -1
@@ -65,7 +65,7 @@ function entriesOf(whole, N, grouped, cache = null) {
       if (was && was.rects === rects && was.rows === rows) own = was.own
       else { own = ownOf(id, w, lu); cache.entries.set(id, { rects, rows, own }); cache.built++ }
     } else own = ownOf(id, w, lu)
-    const after = w ? null : (lu ? lineAfterOf(index, id, streamOf) : null) ?? before
+    const after = w ? null : (lu ? lineAfterOf(index, id, streams, lines) : null) ?? before
     const e = {
       id, slot: w ? w[1] : after + 0.5, after, rects: w ? w[2] : null, left: w, lu,
       lists: own.lists, reach: own.reach,

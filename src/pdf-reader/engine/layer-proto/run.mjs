@@ -67,7 +67,7 @@ import { levelRun } from './figure-rows.mjs'
 import { FIGURE_KIND } from '../rules/content-classes.mjs'
 import { displayIdsOf, NAME_KIND, nameOccurrenceId } from './units.mjs'
 import { addBoxWords, addSegWords, addUnitWords, copyWords, freezeWords, newWords, pieceOffsets, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
-import { closureOf, lineAfterOf, rowLeadOf } from './need.mjs'
+import { closureOf, leftStreams, lineAfterOf, lineReader, rowLeadOf } from './need.mjs'
 import { markWork, newWork, work, WORK_KEYS } from './work.mjs'
 import { drawInputsOf } from './draw.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
@@ -941,12 +941,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // geometry's rectangles are the left's: a unit's place on the original, and the page's text area and columns the fitting
   // reads; the unit is drawn by the file's lines. `cands` in the order the layer reports its sources in, K in the stream's
   const cands = GU.map(([id, stream, rects]) => ({ id, stream, rects }))
-  const streamOf = new Map(GU.map(([id, stream]) => [id, stream]))
+  const streamOf = new Map(GU.map(([id, stream]) => [id, stream])), streams = leftStreams(streamOf), lines = lineReader(tex.index)
   for (const id of tex.index.file.units.map(r => r[0])) {
     if (inGeometry.has(id)) continue
     let before = -1
     for (const [gid, s] of streamOf) if (gid < id && s > before) before = s
-    cands.push({ id, stream: (lineAfterOf(tex.index, id, gid => streamOf.get(gid)) ?? before) + 0.5, rects: null })
+    cands.push({ id, stream: (lineAfterOf(tex.index, id, streams, lines) ?? before) + 0.5, rects: null })
   }
   const K = [], candOf = new Map()
   /** each unit whose last row another unit's first row continues on a shared line (K's `follows`), that unit's id */

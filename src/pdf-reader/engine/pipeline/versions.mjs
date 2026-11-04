@@ -565,7 +565,8 @@
 // 65 (the release sweep's census of run-in heads, 2026-11-04: four Chinese heads laid where the English head had ended, 0.84 to
 //     16.04 em after the translated head): a unit only the layout file holds (no left unit, so no stream of its own) stands in K
 //     beside the left unit it shares one of TeX's lines with, right after the unit whose last row its first row continues or right
-//     before the one whose first row continues its last (need.mjs lineAfterOf, the cutter's K and the door's own), else after the
+//     before the one whose first row continues its last, through the units the file alone holds between them on the line in its
+//     order (need.mjs lineAfterOf, the cutter's K and the door's own), else after the
 //     largest stream of a left unit with a smaller id as before. A float or a note numbered before a run-in head and streamed after
 //     its text had put the head after its text in K, where the text finds no lead (2610.21547v1 p16's "Label flipping.", after a
 //     caption of page 17). Over the sweep's 87 papers 7 of 5,241 such units move: the four heads, now before their text, and

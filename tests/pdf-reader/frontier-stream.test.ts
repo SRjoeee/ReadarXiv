@@ -110,7 +110,7 @@ function differ(a: unknown, b: unknown, at = ''): string | null {
  * (a unit settled once its last line's page is), K asked twice (the page pass asks again after a part), and every `cutEvery`
  * pages the prefix of K to F(t) told. `check`: each try's K, F and NB against them made from scratch
  */
-function drive(spec: PaperSpec, o: { leftTo: (t: number) => number; settledTo: (t: number) => number; cutEvery: number; check: boolean }) {
+function drive(spec: PaperSpec, o: { leftTo: (t: number) => number; settledTo: (t: number) => number; cutEvery: number; check: boolean; shape?: (lines: Map<number, number[]>) => void }) {
   const whole = wholeOf(spec), N = spec.pages, grouped = groupsOfUnits(whole.units)
   // (every third unit's last line ends where the next unit's first begins, on its baseline: a shared line, the next one's lead,
   // rowLeadOf, which K's `follows` reads, and where one of the two is only the file's, its slot, need.mjs lineAfterOf; a stub
@@ -120,6 +120,7 @@ function drive(spec: PaperSpec, o: { leftTo: (t: number) => number; settledTo: (
     const b = lines.get(id + 1)
     if (b && id % 3 === 0 && rows[rows.length - 8] === b[0]) { rows[rows.length - 6] = 300; b[1] = 305 }
   }
+  o.shape?.(lines)
   const st = makerOf(whole), left = leftOf(whole)
   const fs = frontierStream({ paper: whole.paper, N, bundle: whole.units, grouped, left, st })
   const lastLine = spec.units.map(u => Math.max(0, ...(u.lines ?? [])))
@@ -160,6 +161,37 @@ describe('the page stream\'s K, F and need bounds as its pages come', () => {
       drive(spec, { leftTo: t => Math.min(spec.pages, t + 1), settledTo: t => (t > 6 && t < 14 ? 4 : t - 2), cutEvery: 3, check: true })
       drive(spec, { leftTo: t => t, settledTo: t => t, cutEvery: 1, check: true })
       drive(spec, { leftTo: t => (t < spec.pages ? 1 : t), settledTo: t => (t < spec.pages ? 0 : t), cutEvery: 5, check: true })
+    }
+  })
+
+  it('keeps a chain of units only the file holds, told in an earlier part, where the whole file places it (a left unit, two of the file\'s, one line)', () => {
+    // (each page: a paragraph of two lines, then A (the left's), B and C (the file's alone) on one line, then D on the next;
+    // a caption numbered first and set at the paper's end, so that by the ids B and C would stand after it)
+    const pages = 8, units: UnitSpec[] = [{ stream: TOKENS_PER_PAGE * pages - 1, rects: [pages], lines: [pages], kind: 'caption' }]
+    const chain: [number, number, number][] = []
+    for (let p = 1; p <= pages; p++) {
+      const at = TOKENS_PER_PAGE * (p - 1)
+      units.push({ stream: at, rects: [p], lines: [p], perPage: 2 })
+      chain.push([units.length, units.length + 1, units.length + 2])
+      units.push({ stream: at + 8, rects: [p], lines: [p] }, { stream: null, lines: [p], heading: 'B' }, { stream: null, lines: [p] }, { stream: at + 12, rects: [p], lines: [p] })
+    }
+    const shape = (lines: Map<number, number[]>) => {
+      for (const [a, b, c] of chain) {
+        const put = (id: number, x0: number, x1: number, y: number) => lines.get(id)!.splice(0, 8, lines.get(id)![0]!, x0, x1, y, y + 8, y - 2, 10, 0)
+        put(a, 72, 130, 600); put(b, 140, 200, 600); put(c, 210, 260, 600); put(c + 1, 72, 540, 588)
+      }
+    }
+    // (every page told as it comes, and every third; the maker a page behind)
+    drive({ pages, units }, { leftTo: t => t, settledTo: t => t, cutEvery: 1, check: true, shape })
+    drive({ pages, units }, { leftTo: t => Math.min(pages, t + 1), settledTo: t => t - 1, cutEvery: 3, check: true, shape })
+    // (and K over the whole file is the line's order: A, B, C, each right after the one before it on the line)
+    const whole = wholeOf({ pages, units })
+    const lines = new Map((whole.layout as LayoutFile).lines.map(e => [e[0], e[1] as number[]]))
+    shape(lines)
+    const K = wholeFrontier(whole, undefined, groupsOfUnits(whole.units)).K
+    for (const [a, b, c] of chain) {
+      const k = (id: number) => K.findIndex(e => e.id === id)
+      expect([k(b) - k(a), k(c) - k(b), K[k(b)]!.follows, K[k(c)]!.follows]).toEqual([1, 1, a, b])
     }
   })
 

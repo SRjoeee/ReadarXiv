@@ -4108,7 +4108,9 @@ streamed after its text put the head after its text, which then found no lead an
 2610.21547v1 p16's "Label flipping." after a caption of page 17 (1.66 em more than the original), 2610.21924v1 p21 (16.04),
 2610.21884v1 p13 (6.94), 2610.37668v1 p21's "Initialization." (1.61). Such a unit now stands beside the left unit it shares one
 of TeX's lines with (`need.mjs` `lineAfterOf`, in the cutter's K and the door's own): right after the unit whose last row its
-first row continues, else right before the units whose first row continues its last; any other as before. TeX's line is the
+first row continues, else right before the units whose first row continues its last; through the units the file alone holds
+between them on the line, each one past the one before it within the room before the next left unit's stream, so that a chain
+A (the left's), B, C (the file's alone) stands A, B, C whatever its ids (a review's finding on #579); any other as before. TeX's line is the
 one fact that says where in the stream such a unit stands, whatever its id: ids are the source's order, which floats, notes and
 ink units (numbered after every source unit) do not keep. Over the sweep's 87 papers it moves 7 of 5,241 such units (rules by
 the ids over the left units up to its own page, or by the next unit's stream, moved 998 or 2,347 and lost two shared lines

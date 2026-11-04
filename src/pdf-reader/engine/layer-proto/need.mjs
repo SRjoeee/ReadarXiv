@@ -57,31 +57,91 @@ export function rowLeadOf(index, id, before = null) {
 }
 
 /**
+ * The left's streams as lineAfterOf reads them, from `streamOf` (a Map: a left unit's id to its stream): `of(id)`, a unit's stream
+ * (undefined for one the left does not hold); `above(v)`, the least stream over v (Infinity for none); `below(v)`, the greatest
+ * under v (-1 for none)
+ */
+export function leftStreams(streamOf) {
+  const sorted = Float64Array.from(streamOf.values()).sort()
+  /** the first index whose stream is over v (`strict`) or at or over it */
+  const firstOver = (v, strict) => { let lo = 0, hi = sorted.length; while (lo < hi) { const m = (lo + hi) >> 1; if (strict ? sorted[m] <= v : sorted[m] < v) lo = m + 1; else hi = m } return lo }
+  return {
+    of: id => streamOf.get(id),
+    above: v => { const i = firstOver(v, true); return i < sorted.length ? sorted[i] : Infinity },
+    below: v => { const i = firstOver(v, false); return i > 0 ? sorted[i - 1] : -1 },
+  }
+}
+
+/**
  * Where in the stream a unit the layout file alone holds stands (no left unit: no stream of its own), where TeX's own line says
- * so: the stream of the left unit (`streamOf(id)`: its stream, undefined for a unit the left does not hold) whose last row its
- * first row continues on one of TeX's lines, so that it stands right after that unit; else, less one, the least stream of the
- * left units whose first row continues its last, so that it stands right before them. Each of TeX's lines by rowLeadOf over the
- * layout file in any order: a shared line is a fact of the page, not of the ids. Null where it shares no line with a left unit
- * (the cutter's and the door's K then place it after the largest stream of a left unit with a smaller id, cut.mjs entriesOf).
+ * so: the stream it stands right after (its K slot that plus a half), or null where it shares no line with a left unit. Each of
+ * TeX's lines by rowLeadOf over the layout file in any order: a shared line is a fact of the page, not of the ids. Its place is
+ * taken from the unit its first row continues on the line: that unit's stream, where the left holds it; where that unit is the
+ * file's alone too, its own place here, and one past it, so that the line's units keep their order in K whatever their ids,
+ * within the room before the next left unit's stream (where none is left, beside it, by the ids). Where nothing before it on the
+ * line leads to a left unit, its place is taken the other way: right before the units whose first row continues its last, a left
+ * unit's stream less one, or one before the place of a unit the file alone holds, within the room after the left unit before it.
+ * `streams` leftStreams', `lines` lineReader's over the same index (one a K). A chain of such units on one line, A (the left's) then B and C (the file's alone), stands A, B, C; the
+ * line's units are read once each (a line's leads cannot come round, but a unit already met is no lead again). The cutter's and
+ * the door's K then place a unit with none after the largest stream of a left unit with a smaller id (cut.mjs entriesOf).
  * The ids are the source's order, which a float, a note or an ink unit (numbered after every source unit) does not keep in the
  * stream: 2610.21547v1 p16's run-in "Label flipping." stood in K after a caption of page 17 numbered before it, and so after its
  * own text, which found no lead and was laid where the English head had ended (the release sweep's census of 2026-11-04, four
  * heads; amsart's keywords after "Key words and phrases.", an ink unit, shared their line only where an affiliation of the last
  * page stood before them by id)
  */
-export function lineAfterOf(index, id, streamOf) {
+export function lineAfterOf(index, id, streams, lines) {
   const b = index?.unit(id)
   if (!b?.lines.length || OWN_PLACE.has(b.kind)) return null
-  const any = self => aid => aid !== self
-  const lead = rowLeadOf(index, id, any(id))
-  if (lead && streamOf(lead.id) !== undefined) return streamOf(lead.id)
-  let least = null
-  for (const fid of index.onPage(b.lines[b.lines.length - 8])) {
-    const s = streamOf(fid)
-    if (s === undefined || fid === id || (least !== null && s >= least)) continue
-    if (rowLeadOf(index, fid, any(fid))?.id === id) least = s
+  return fromLeft(lines, id, streams, new Set()) ?? fromRight(index, lines, id, streams, new Set())
+}
+/**
+ * A layout file's shared lines as lineAfterOf reads them, each read once (`index`'s state: one reader a K): `lead(id)`, the unit
+ * a unit's first row continues on one of TeX's lines (rowLeadOf in any order), null for none; `followers(page, id)`, the units of
+ * page `page` whose first row continues unit `id`'s last there. A page's units' leads read once each, not once a unit asked
+ * (a page of 800 headings read every unit's lead for each of its units)
+ */
+export function lineReader(index) {
+  const leadOf = new Map(), byPage = new Map()
+  const lead = id => {
+    let l = leadOf.get(id)
+    if (l === undefined) { l = rowLeadOf(index, id, aid => aid !== id)?.id ?? null; leadOf.set(id, l) }
+    return l
   }
-  return least === null ? null : least - 1
+  const followers = (page, id) => {
+    let m = byPage.get(page)
+    if (!m) {
+      m = new Map()
+      for (const f of index.onPage(page)) { const l = lead(f); if (l !== null) (m.get(l) ?? m.set(l, []).get(l)).push(f) }
+      byPage.set(page, m)
+    }
+    return m.get(id) ?? []
+  }
+  return { lead, followers }
+}
+/** lineAfterOf's place from the unit before it on its line, null where none of them leads to a left unit */
+function fromLeft(lines, id, streams, seen) {
+  seen.add(id)
+  const lead = lines.lead(id)
+  if (lead === null || seen.has(lead)) return null
+  const s = streams.of(lead)
+  if (s !== undefined) return s
+  const a = fromLeft(lines, lead, streams, seen)
+  return a === null ? null : Math.min(a + 1, streams.above(a) - 1)
+}
+/** lineAfterOf's place from the units after it on its line, null where none of them leads to a left unit */
+function fromRight(index, lines, id, streams, seen) {
+  seen.add(id)
+  const L = index.unit(id).lines
+  let least = null
+  for (const fid of lines.followers(L[L.length - 8], id)) {
+    if (seen.has(fid)) continue
+    const s = streams.of(fid)
+    let t = s !== undefined ? s - 1 : null
+    if (s === undefined) { const r = fromRight(index, lines, fid, streams, seen); if (r !== null) t = Math.max(r - 1, streams.below(r + 1)) }
+    if (t !== null && (least === null || t < least)) least = t
+  }
+  return least
 }
 
 /**
