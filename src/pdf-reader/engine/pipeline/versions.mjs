@@ -572,8 +572,8 @@
 //     was (0 pt over 2,683,775 and 2,706,389 glyphs) and every point but 146 head openings, each now at its unit's start mark; 6
 //     units laid whole that were the original's (2610.21085v1 u44, 2608.26008v1 u36 and u42 after their run-in headings;
 //     2010.11929v2's cells u42-u44, whose `\oursabbrv` opening point stood before the cell's leading glue and owned nothing to the
-//     cell's start mark), none the other way, every other unit's rows as they were. The units, their pieces and their wire are 65's:
-//     a copy of 64 or 65 carries every unit (live.mjs PIPELINE_CARRIES)
+//     cell's start mark), none the other way, every other unit's rows as they were. The units, their pieces and their wire are 64's
+//     (and 65's, the run-in lane's, #579): a copy of either carries every unit (live.mjs PIPELINE_CARRIES)
 export const PIPELINE_VERSION = '66'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
