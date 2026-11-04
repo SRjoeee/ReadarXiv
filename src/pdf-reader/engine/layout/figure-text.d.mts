@@ -39,6 +39,9 @@ export declare const RUN_GAP: number
 export declare const SPACE_GAP: number
 export declare const ANCHOR_REACH: number
 export declare const DRAW_BAND: readonly [number, number]
+/** the foot of the band a translation is drawn in, across a unit's frame from its baseline, at `size` (DRAW_BAND's, CROWD_PAD in):
+ *  a stroke painted before the text and wholly below it is under the text */
+export declare function drawnFoot(size: number): number
 export declare const ALIGN_TOL: number
 /** a level unit's column: the text lines within this many of its sizes above and below its baseline (columnAnchorOf) */
 export declare const COLUMN_REACH: number

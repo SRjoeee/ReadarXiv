@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { ANCHOR_REACH, DRAW_BAND, figureUnitsOf, FIGURE_WHYS, ROOM_CLEAR, ROOM_MAX } from '@/pdf-reader/engine/layout/figure-text.mjs'
+import { ANCHOR_REACH, DRAW_BAND, drawnFoot, figureUnitsOf, FIGURE_WHYS, ROOM_CLEAR, ROOM_MAX } from '@/pdf-reader/engine/layout/figure-text.mjs'
 import { BAND_MAX, checkFigures } from '@/pdf-reader/engine/layer-proto/figure-rows.mjs'
 import { pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
 import { POINTS_TEX } from '@/pdf-reader/engine/layout/marks.mjs'
@@ -133,6 +133,22 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
     expect(one(word('label', [[110, 90, 110, 115]])).why).toBe('crowded')
     // (one above its band, or past its end, does not)
     expect(one(word('label', [[90, 112, 140, 112]])).why).toBeNull()
+  })
+
+  it('a stroke painted before a label, wholly below the band a translation is drawn in, is under it: it crowds nothing and ends no free line (2610.21085v1\'s gridline under "jury, α = 8")', () => {
+    // (the word's descenders reach 0.2 em below its baseline, its glyphs' bottom at 98; a gridline across the figure, half width
+    // 0.025 em, at 0.17 em below the baseline: inside the original's band, below the drawn band's foot, drawnFoot)
+    const grid = (y: number, after = false) => {
+      const pg = word('jury', [[60, y, 240, y]])
+      return figureUnitsOf([{ ...pg, view: [0, 0, 300, 300], figures: new Map([['0:0', [0, 0, 300, 300]]]), ...(after ? { boxAt: pg.glyphs.map(() => 0) } : {}) }] as never, null).units[0]!
+    }
+    expect(drawnFoot(10)).toBeCloseTo((DRAW_BAND[0] + 0.04) * 10, 9)
+    expect(grid(98.3).why).toBeNull()
+    expect([grid(98.3).before, grid(98.3).after]).toEqual([ROOM_MAX * 10, ROOM_MAX * 10])
+    // (painted after the word it is over the original's descenders: it crowds, as any ink painted after the text)
+    expect(grid(98.3, true).why).toBe('crowded')
+    // (one whose ink reaches into the drawn band crowds as before)
+    expect(grid(99.2).why).toBe('crowded')
   })
 
   it('a fill that holds the whole band is its background, not other ink', () => {
@@ -285,6 +301,21 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
     for (const g of math.glyphs) g.font = 'CMMI10'
     expect(figureUnitsOf([math] as never, null).units).toEqual([])
     expect(one(word('two words')).text).toBe('two words')
+  })
+
+  it('one face in two subsets is one font: a label a plotting program writes over two subsets of its face is one unit (2610.21085v1)', () => {
+    // (matplotlib 3.11 sets the minus sign and the ligatures it shapes in a second subset of the face, under another tag)
+    const split = word('difference (points)')
+    for (const [i, g] of split.glyphs.entries()) g.font = i === 2 || i === 3 ? 'EKJTPF+DejaVuSans' : 'DKEMGR+DejaVuSans'
+    expect(figureUnitsOf([split] as never, null).units.map(u => u.text)).toEqual(['difference (points)'])
+    // (a ligature is one glyph whose Unicode NFKC reads as its letters)
+    const lig = word('diXerence')
+    Object.assign(lig.glyphs[2]!, { u: '\uFB00', font: 'EKJTPF+DejaVuSans' })
+    for (const [i, g] of lig.glyphs.entries()) if (i !== 2) g.font = 'DKEMGR+DejaVuSans'
+    expect(figureUnitsOf([lig] as never, null).units.map(u => u.text)).toEqual(['difference'])
+    // (two faces stay apart, a subset of each: the face is the name past its tag)
+    for (const [i, g] of split.glyphs.entries()) g.font = i < 2 ? 'DKEMGR+DejaVuSans' : 'BYLRGV+DejaVuSans-Oblique'
+    expect(figureUnitsOf([split] as never, null).units.map(u => u.text)).toEqual(['di', 'fference (points)'])
   })
 
   it('two figures side by side never make one label: a run is one form\'s or one picture\'s', () => {

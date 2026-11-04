@@ -14,12 +14,13 @@
 //     `pictures`).
 // Level and turned alike (a y-axis title set at 90 degrees keeps its turn).
 //
-// How they are cut (RUN_*): in stream order, a glyph joins the run before it where both are such glyphs, of one font, size,
-// colour, direction and figure (one form painted, one picture: pageInk's `fid` and `pid`, so that two figures side by side never
-// make one label), on one baseline (within RUN_DY of their size across it), at most RUN_GAP of its size past the run's end along
-// it and not back over it by more than RUN_BACK; any other glyph between ends the run. A
-// run is a unit when it spells a word (two letters together) in a face that is no math face, every glyph of it a character a
-// reader can trust (UNREAD); its text the glyphs' Unicode (NFKC) with a space where two stand apart by SPACE_GAP of their size.
+// How they are cut (RUN_*): in stream order, a glyph joins the run before it where both are such glyphs, of one face (its font's
+// name, a subset's tag aside: a plotting program writes one face in several subsets), size, colour, direction and figure (one
+// form painted, one picture: pageInk's `fid` and `pid`, so that two figures side by side never make one label), on one baseline
+// (within RUN_DY of their size across it), at most RUN_GAP of its size past the run's end along it and not back over it by more
+// than RUN_BACK; any other glyph between ends the run. A run is a unit when it spells a word (two letters together) in a face
+// that is no math face, every glyph of it a character a reader can trust (UNREAD); its text the glyphs' Unicode (NFKC, so that
+// a ligature's glyph reads as its letters) with a space where two stand apart by SPACE_GAP of their size.
 // What it is not, a number, a tick's label, a letter alone, a formula's, stays the original's ink; so does a run a glyph of which
 // is not wholly inside the clip in force (an included figure's viewport cuts off what it does not show: pageInk's `clipped`) or
 // inside its page's box, and one a glyph of which stands past BAND_MAX of its size from its baseline (its own ink, level or
@@ -37,7 +38,9 @@
 // them). A unit whose band meets other ink inside its box — another glyph's, a stroke's segment widened by its half line width,
 // a fill's edge, an image's or a shading's box —, but a fill that holds the whole band (a node's fill, the plot's background), is
 // `crowded`: a translation there could cover that ink, so it stays the original's. Ink is what the page shows: a glyph wholly
-// outside the clip in force and any paint at an alpha of 0 (pageInk's `unseen`) are none, neither a label's nor its crowding.
+// outside the clip in force and any paint at an alpha of 0 (pageInk's `unseen`) are none, neither a label's nor its crowding. A
+// stroke painted before the text that crosses the band only below the band a translation is drawn in (drawnFoot: a gridline
+// under a legend entry's descenders) is under the text, as a ground is: it crowds nothing and ends no free line.
 //
 // Its set and its room (the owner's rule of 2026-10-29: the labels of one group set at one size, the original's, each keeping the
 // original's alignment; a translation may take free space, never touching other ink nor leaving its figure; a group that cannot
@@ -75,6 +78,12 @@ export const DRAW_BAND = Object.freeze([-0.15, 0.88])
 /** a unit's band inside its box, shrunk by this share of its size at each edge before other ink is looked for in it (an
  *  antialiased edge, a glyph's side bearing) */
 const CROWD_PAD = 0.04
+/** across a unit's frame, from its baseline, the foot of the band a translation is drawn in (DRAW_BAND's, CROWD_PAD in, as the
+ *  crowding's band is), at `size`: a stroke painted before the text whose part across the band lies wholly below it is under the
+ *  text (shapeRoom), and the figure gate's O and R excuse its pixels so */
+export const drawnFoot = size => (DRAW_BAND[0] + CROWD_PAD) * size
+/** a font subset's name: a tag of six capital letters and a plus sign before the face's PostScript name (PDF 32000-1 9.6.4) */
+const SUBSET_TAG = /^[A-Z]{6}\+/
 /** two runs of one figure, one size and one direction share an edge (a column's start, end or middle) where theirs lie on one
  *  line within this share of their size (a legend's entries, an axis's labels set against it) */
 export const ALIGN_TOL = 0.08
@@ -158,8 +167,13 @@ function inFrame(f, b) {
  * aligned }
  */
 export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, unitsDoc = FIGURE_UNITS_DOC } = {}) {
-  const fam = new Map()
+  const fam = new Map(), face = new Map()
   const famOf = name => { let f = fam.get(name); if (f === undefined) { f = classifyFont(name ?? '').fam; fam.set(name, f) } return f }
+  // (a glyph's face: its font's name, a subset's tag aside. Matplotlib (3.11) writes the characters past its first subset of a
+  // face, the minus sign and the ligatures its text shaping sets (ff, fi, fl, ffi), into a second subset of the same face, so that
+  // one label switched fonts inside a word: "di" | "ff" | "erence (points)", "Jury" | "−" | "equal-weight pool" were units of their
+  // own, the fragments translated as words (2610.21085v1's Figures 3 and 4; 66 labels on 12 of the sweep's 87 papers))
+  const faceOf = name => { let f = face.get(name); if (f === undefined) { f = String(name ?? '').replace(SUBSET_TAG, ''); face.set(name, f) } return f }
   const units = [], glyphMaps = [], turnedMaps = []
   // (the runs that spell a word the caps have counted, units or not)
   let taken = 0
@@ -178,7 +192,7 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       if (!figure) { close(); continue }
       if (run) {
         const f = run.frame, s = along(f, x.ox, x.oy), t = across(f, x.ox, x.oy)
-        const joins = x.font === run.font && Math.abs(x.size - run.size) <= 0.01 * run.size && x.fill === run.fill && x.form === run.form && x.fid === run.fid && x.pid === run.pid
+        const joins = faceOf(x.font) === faceOf(run.font) && Math.abs(x.size - run.size) <= 0.01 * run.size && x.fill === run.fill && x.form === run.form && x.fid === run.fid && x.pid === run.pid
           && Math.abs(x.ux - f.ux) < 1e-3 && Math.abs(x.uy - f.uy) < 1e-3 && Math.abs(t) <= RUN_DY * run.size
           && s >= run.s1 - RUN_BACK * run.size && s - run.s1 <= RUN_GAP * run.size
           // (a code region's edge ends a run: the prose beside the code, in its face on its baseline, is read, and the code alone kept)
@@ -570,7 +584,7 @@ function roomOf(pg, f, u, own) {
     // its box shows them: a line its clip cuts off is no ink there)
     const near = !apart(...box) && !(e[2] <= -reach || e[0] >= u.length + reach)
     const shape = S?.get(b / 4), after = b / 4 >= over
-    if (shape) { shapeRoom(shape, f, band, near ? along1 : null, free1, e, after); continue }
+    if (shape) { shapeRoom(shape, f, band, near ? along1 : null, free1, e, after, drawnFoot(u.size)); continue }
     const kind = pg.paths?.[b / 4]
     const holds = !(after && (kind === -2 || kind === -3)) && e[0] <= 0 && e[2] >= u.length && e[1] <= u.descent * u.size && e[3] >= u.ascent * u.size
     // (a box behind the whole band is its ground, no ink of its box: a path's, its free line ending a band's height inside its
@@ -595,10 +609,14 @@ function roomOf(pg, f, u, own) {
  *  before the text: painted `after` it, it covers the text, ink over the whole band. A fill painted before the text is its
  *  ground whatever its edges: one inside the band is a change of tone under the text and crowds nothing, its parts beside the
  *  box lines beside it; but a fill of a tiling pattern (pageInk's `pattern`), whose hatching is not read, a ground only where it
- *  holds the band, as before */
-function shapeRoom(shape, f, band, along1, free1, e, after = false) {
+ *  holds the band, as before. A stroke (no fill) painted before the text whose part across the band lies wholly below `foot` (the
+ *  band a translation is drawn in, drawnFoot) is under the text: the original's own descenders were set over it, and a
+ *  translation drawn above that foot meets it nowhere, so it neither crowds the text nor ends its free line nor tells its anchor
+ *  (2610.21085v1's gridline under "jury, α = 8", the legend's other entry translated) */
+function shapeRoom(shape, f, band, along1, free1, e, after = false, foot = -Infinity) {
   const { segs, hw } = shape, w = shape.stroke ? hw : 0
   const t0 = band[1] - w, t1 = band[3] + w
+  const under = shape.stroke && !shape.fill && !after
   const parts = []
   for (let i = 0; i + 3 < segs.length; i += 4) {
     const as = along(f, segs[i], segs[i + 1]), ts = across(f, segs[i], segs[i + 1]), ae = along(f, segs[i + 2], segs[i + 3]), te = across(f, segs[i + 2], segs[i + 3])
@@ -609,6 +627,8 @@ function shapeRoom(shape, f, band, along1, free1, e, after = false) {
       lo = Math.max(lo, Math.min(a, b)); hi = Math.min(hi, Math.max(a, b))
       if (lo > hi) continue
     }
+    // (a stroke under the text: its part across the band, widened by its half width, below the drawn band's foot)
+    if (under && Math.max(ts + (te - ts) * lo, ts + (te - ts) * hi) + w <= foot) continue
     const p = as + (ae - as) * lo, q = as + (ae - as) * hi
     parts.push([Math.min(p, q) - w, Math.max(p, q) + w])
   }
