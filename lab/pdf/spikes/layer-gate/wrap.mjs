@@ -50,9 +50,14 @@ function layoutDigest(engine) {
  */
 export function wrapOf({ engine, out, base, layoutFile, source, runs = new Map() }) {
   const bytes = readFileSync(base)
-  const key = sha256([sha256(bytes), sha256(readFileSync(layoutFile)), source ? sha256(readFileSync(source)) : 'none', JSON.stringify(textsOf(base)), JSON.stringify(inklessOf(base)), layoutDigest(engine)].join('\n')).slice(0, 24)
+  const key = wrapKeyOf({ engine, base, layoutFile, source }, bytes)
   if (!runs.has(key)) runs.set(key, made(key, { engine, out, base, bytes, layoutFile, source }))
   return runs.get(key)
+}
+/** a wrap's key: what it is made of (the base page's bytes, the layout file, the source, the marking's texts and inkless macros,
+ *  the engine's layout modules), so that two fixtures of one key are drawn over the same wrapped page */
+export function wrapKeyOf({ engine, base, layoutFile, source }, bytes = readFileSync(base)) {
+  return sha256([sha256(bytes), sha256(readFileSync(layoutFile)), source ? sha256(readFileSync(source)) : 'none', JSON.stringify(textsOf(base)), JSON.stringify(inklessOf(base)), layoutDigest(engine)].join('\n')).slice(0, 24)
 }
 
 async function made(key, { engine, out, base, bytes, layoutFile, source }) {

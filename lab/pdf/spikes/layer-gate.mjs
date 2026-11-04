@@ -413,8 +413,19 @@ if (FREEZE) {
 const JUMP_LIST = JUMP_SPEC !== null && JUMP_SPEC !== 'all' ? jumpListOf(JUMP_SPEC, fixtures) : null
 if (JUMP_LIST && ONLY && ONLY.some(n => !JUMP_LIST.has(n))) throw new Error(`--only: ${ONLY.filter(n => !JUMP_LIST.has(n)).join(', ')} not among --door-jump's fixtures`)
 const asked0 = JUMP_LIST ? fixtures.filter(n => JUMP_LIST.has(n) && (!ONLY || ONLY.includes(n))) : ONLY ? fixtures.filter(n => ONLY.includes(n)) : fixtures
-/** --door-draw=inputs reads a paper's pages, not an output's: one fixture a paper */
-const asked = DRAW_MODE === 'inputs' ? asked0.filter((n, i) => asked0.findIndex(m => nameOf(m).paper === nameOf(n).paper) === i) : asked0
+/** --door-draw=inputs reads the pages of the page the door draws over, not an output's: one fixture a wrap (layer-gate/wrap.mjs
+ *  wrapKeyOf: its base page, layout file, source and marking, which the fixtures of one paper share on the pack), so that a
+ *  fixture drawn over another wrap of its paper is read too; a fixture with no layout file one of its own */
+const WRAP_KEY = DRAW_MODE === 'inputs' ? (await import('./layer-gate/wrap.mjs')).wrapKeyOf : null
+const wrapKeys = new Map()
+const wrapKeyOfFixture = n => {
+  if (!wrapKeys.has(n)) {
+    const layoutFile = join(FIXTURES, n, 'layout.json')
+    wrapKeys.set(n, existsSync(layoutFile) ? WRAP_KEY({ engine: ENGINE, base: basePdf(n), layoutFile, source: sourceOf(nameOf(n).paper) }) : `fixture ${n}`)
+  }
+  return wrapKeys.get(n)
+}
+const asked = DRAW_MODE === 'inputs' ? asked0.filter((n, i) => asked0.findIndex(m => wrapKeyOfFixture(m) === wrapKeyOfFixture(n)) === i) : asked0
 if (ONLY && !JUMP_LIST && asked0.length !== ONLY.length) throw new Error(`--only: no fixture ${ONLY.filter(n => !fixtures.includes(n)).join(', ')} in ${FIXTURES}`)
 for (const name of asked) if (!existsSync(join(REFS, name, 'ref.json'))) throw new Error(`${name}: no frozen reference (${join(REFS, name, 'ref.json')}): run --freeze once`)
 
