@@ -4356,6 +4356,43 @@ and its text's first line grew over the head's word, which its source holds, to 
 the original has 0.71). A neighbour's line now grows over no unit's own lines of the file either (`run.mjs` `growOn`), a
 drawing rule, so no version (§18.3).
 
+**Where a unit is searched, known from the head (PIPELINE 69, LAYOUT 35).** The owner's first problem is how soon a new paper's
+first page shows. The page stream tells a part once everything it reads is final, and the first page's left read every unit whose
+search could reach it. A unit whose marks did not bound it was searched between its nearest *bounded* neighbours by number: known
+only once their marks were read, and until then a window from the last bounded unit to wherever the next one stood, to the paper's
+end where no later one was marked yet. The stream held every page such a window could meet, on both sides (the left, arXiv's
+page; the maker, ours). On 2610.21884v1 the affiliation u2, a float numbered among page 1's units, has its marks on page 31, where
+TeX set the affiliations: its window was page 1, so page 1 waited for page 31. The units' number says only the source's order,
+which a float, a note or a unit numbered after the text (an affiliation, a title, a figure's text, a table's cells set pages on)
+does not keep; the head says, before any page is read, the pages each unit's own marks stand on. One rule for the matcher
+(`anchors.mjs` `matchUnits`) and the stream (`left-part.mjs` `rangedAnchors`, `leftReach`), both anchorings under it
+(`searchHead`). A unit with marks is searched within its bounds; where they do not bound it, first in the part of its gap between
+its neighbours on its own pages and a page beside (`DRIFT`: a mark TeX writes before a page break stands a page from its words,
+and our compile and arXiv's drift), by the gap's rules, then on those pages alone; where its stretch meets them nowhere, on them
+alone, never waiting for its neighbours. A unit without marks is searched in its gap between its nearest neighbours with marks in
+the text, within their stretch (the page before the last of the earlier one's own pages to the page after the first of the later
+one's; a float's on to the pages of the float with marks before it, its table's caption, TeX setting a float with its own units
+and never before its source): its edges the first neighbour that bounds it within the stretch, or, for a unit in the text, where
+an unbounded one's own text stands on its own pages (`ownPlaces`); a float of K words or more then by its match over the whole
+document, as before. So a unit's match is final once it and the units its gap's walk meets are marked, its reach is fixed from the
+head until then, and once final a unit without bounds is matched at once and reaches where its match stands. Each step was
+measured against #584 over the sweep's 78 papers on disk and kept where it lost nothing: a float without marks by its
+whole-document match alone lost 22 figure texts of 2610.37818v1 and took 2610.19159v1's cells from a table 42 pages on; in its
+whole stretch a table's cells took a neighbouring table's; a unit whose marks do not bound it on its own pages alone lost short
+texts whose words come twice there (2608.06007v1's "Stepfun", 2307.16209v1's "Expansion for :"); a gap bounded at an unbounded
+neighbour's pages put two paragraphs a page on; a float's gap edged where its text neighbours' words stand lost two figure texts
+of 1810.04805v2's page 16; and without its caption's pages a table set two pages on lost 8 cells (2610.30854v1). Measured over the 78
+papers (the production pass offline, an instrumented copy of the engine that records each page's read time and each part's
+close): the first part is told sooner on 38 of 77 (2610.20030v1 refuses its layout), on the same page on 35, a page later on 4
+(a unit not yet marked may still reach the page beside its own pages); sooner by a median 2 pages (1 to 111) and 0.16 s
+of the page pass on the base run's own timeline (0.04 to 4.34 s; 13.2 s over the 38); told only at the paper's last page on 13
+against 19. 2610.19159v1 (163 pages) tells pages 1 to 4 at page 48, at 159 before, 4.34 s sooner. The left over the 78: 32,499
+units located before, 32,515 now: 16 gained (12 footnotes of 2307.16209v1 found on their own pages, 2610.30854v1's two cells and
+two references), none lost, none moved; the maker lays 2610.17024v1's title, keyword list and 29 references, and 2610.30769v1's
+title, units numbered after the text that it did not lay. Streamed equals whole on all 78 papers. What still holds a first part
+is no search: the cut's slot of a unit the left may not locate (2610.21884v1's affiliation, after units 0 and 1 by its id) and a
+table's cells whose whole-document match stands pages on (2610.19159v1's, page 46: their left anchor is final only there).
+
 A run-in head its own row cannot hold uses the
 rest of its line (the owner's ruling of 2026-11-03; a drawing rule, so no version, §18.3). Laid in its row alone, beside the
 paragraph's first words, which are ink the fit may not widen over (`widenOverPaper`), a head whose translation is much longer
