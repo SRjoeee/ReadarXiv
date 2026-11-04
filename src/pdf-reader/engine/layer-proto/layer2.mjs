@@ -3295,19 +3295,22 @@ function stretchesOf(items, slack, f, P) {
   // (a Western token of punctuation alone, a period, a comma or a parenthesis glued to a CJK word, is no Western text: no gap
   // around punctuation opens, KLREQ 7.2.2, JLREQ 3.8.4's boundary being Western text's)
   const text = it => western(it) && !(typeof it.t.s === 'string' && PUNCT_ONLY.test(it.t.s))
-  const spaces = items.filter(it => it.t.space)
+  // (counted in one walk: placeItems runs on every breaking pass's lines)
+  let spaces = 0, spaceW = 0
+  for (const it of items) if (it.t.space) { spaces++; spaceW += it.w }
   let left = slack, perSpace = 0
-  if (spaces.length) {
-    const mean = spaces.reduce((a, it) => a + it.w, 0) / spaces.length
-    const per = left / spaces.length, cap = P.cjk ? Math.max(0, Math.min(P.spaceMax * mean, BOUNDARY_MAX * f - mean)) : P.spaceMax * mean
+  if (spaces) {
+    const mean = spaceW / spaces
+    const per = left / spaces, cap = P.cjk ? Math.max(0, Math.min(P.spaceMax * mean, BOUNDARY_MAX * f - mean)) : P.spaceMax * mean
     if (per <= cap) return { perSpace: per, gap: null, letter: 0 }
     perSpace = cap
-    left -= cap * spaces.length
+    left -= cap * spaces
   }
   const gap = new Float64Array(Math.max(0, n - 1)), bounds = [], inner = []
-  // (the gaps inside the line's CJK words: a word's characters but one)
+  // (the gaps inside the line's CJK words, a word's characters but one: a script that keeps its words whole (Korean's) alone
+  // has CJK tokens of more than one character, Hangul's syllables each one UTF-16 unit)
   let within = 0
-  for (const it of items) if (cjk(it) && typeof it.t.s === 'string') within += Math.max(0, [...it.t.s].length - 1)
+  if (P.keepAll) for (const it of items) if (cjk(it) && typeof it.t.s === 'string' && it.t.s.length > 1) within += it.t.s.length - 1
   for (let i = 0; i < n - 1; i++) {
     const a = items[i], b = items[i + 1]
     if (a.t.space || b.t.space) continue
@@ -4011,8 +4014,9 @@ function placeItems(lines, f, P) {
       if (glue) {
         ({ perSpace, gap } = glue)
         // (a CJK word's own gaps: the word drawn that much wider, letter-spaced (`ls`, svgOfUnit and inkEndOf read it))
-        if (glue.letter > 0) for (const it of line.items) {
-          const k = it.t.cls === 'cjk' && typeof it.t.s === 'string' ? [...it.t.s].length : 0
+        // (a script that keeps its words whole alone has CJK words of more than one character: stretchesOf `within`)
+        if (glue.letter > 0 && P.keepAll) for (const it of line.items) {
+          const k = it.t.cls === 'cjk' && typeof it.t.s === 'string' ? it.t.s.length : 0
           if (k > 1) { it.w += (k - 1) * glue.letter; it.ls = glue.letter }
         }
       } else line.mode = 'ragged'
