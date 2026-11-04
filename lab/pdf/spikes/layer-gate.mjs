@@ -161,8 +161,9 @@
 //                page (a fresh open, then the ask) and the longest task of 50 ms or more, on one worker. The run is written to
 //                out/layer-gate/door-jump-<commit>-<time>.json
 //   --door-draw  a page drawn from its draw geometry (E-C: run.mjs openProto `drawOf`, the door's hand-off of the draw each left
-//                part of BUNDLE 5 carries; never recorded; the door's choices as --door has them). Each paper's draws read in Node
-//                as the prepare's container reads them (layer-gate/draws.mjs: the engine's lite worker, NO_IMAGE_PIXELS,
+//                part of BUNDLE 5 carries; never recorded; the door's choices as --door has them). Each fixture's draws read in Node
+//                of the page the door draws over, its wrapped base page (drawsOf), as the prepare's container reads them of ours
+//                (layer-gate/draws.mjs: the engine's lite worker, NO_IMAGE_PIXELS,
 //                useSystemFonts false, fontExtraProperties, cMaps, each page after its operator list; cached in out/layer-gate/
 //                draws/), each fixture's bundle as --door makes it cut as --door-parts cuts it (doubling), every
 //                left part carrying its page's draw (layer-gate/door-draw.mjs). inputs: every page of each paper read in Chromium as
@@ -881,15 +882,22 @@ async function doorJumpTask(page, key, errors) {
   } finally { doneWith(name) }
 }
 
-/** --door-draw: a paper's draws as the prepare's container reads them (layer-gate/draws.mjs, a Node child of its own: PDF.js takes a
- *  process's worker at its first document, and this one keeps the stock worker), cached in out/layer-gate/draws/ by arXiv's bytes,
- *  the engine's reading and PDF.js; once a run a paper. { file, pdfjs, pages: [{ draw, why }] } */
+/** --door-draw: a fixture's draws as the prepare's container reads them (layer-gate/draws.mjs, a Node child of its own: PDF.js takes a
+ *  process's worker at its first document, and this one keeps the stock worker), of the page the door draws over and reads live:
+ *  its base page wrapped by optional content (wrappedOf), as the prepare reads its draws of our wrapped page, the page a reader
+ *  reads. The wrap's marks end PDF.js's text items where its groups do ("A." | " " | "Problem Formulation" on 2608.04322v1 p4,
+ *  one item unwrapped), so that draws of the unwrapped page laid a heading 1.5 pt off its live reading (drawlive-04322,
+ *  2026-11-05). Cached in out/layer-gate/draws/ by that page's bytes, the engine's reading and PDF.js; once a run a page file.
+ *  { file, pdfjs, pages: [{ draw, why }] } */
 const DRAWS = new Map()
-function drawsOf(name) {
-  const { paper } = nameOf(name)
-  if (!DRAWS.has(paper)) {
-    DRAWS.set(paper, (async () => {
-      const pdf = basePdf(name), script = join(GATE, 'draws.mjs')
+/** the page the door draws over and reads live: the fixture's base page wrapped, else the page itself (as /fixtures/<name>/base.pdf
+ *  serves it once wrappedOf has run) */
+const doorPageOf = async name => (await wrappedOf(name))?.file ?? basePdf(name)
+async function drawsOf(name) {
+  const pdf = await doorPageOf(name)
+  if (!DRAWS.has(pdf)) {
+    DRAWS.set(pdf, (async () => {
+      const script = join(GATE, 'draws.mjs')
       const reading = ['pipeline/draw-data.mjs', 'pipeline/memory.mjs', 'layer-proto/draw.mjs', 'layout/json.mjs', 'layout/pdf-lite.mjs', 'layout/fills.mjs', 'layout/ink.mjs'].map(f => join(ENGINE, 'src/pdf-reader/engine', f)).filter(f => existsSync(f))
       const key = sha256([fileSha(pdf), ...reading.map(fileSha), fileSha(script), readJson(join(PDFJS, 'package.json')).version].join('|')).slice(0, 24)
       const dir = join(ROOT, 'out/layer-gate/draws'), file = join(dir, `${key}.json`)
@@ -900,7 +908,7 @@ function drawsOf(name) {
       return { file, ...readJson(file) }
     })())
   }
-  return DRAWS.get(paper)
+  return DRAWS.get(pdf)
 }
 /** --door-draw=pages and jump: a fixture's bundle as --door makes it, cut as --door-parts cuts it (the doubling),
  *  its head saying the parts carry draws, every left part with no tokens and its page's draw (drawsOf), served for door-draw.mjs to read as a host does: the units' chunks,
@@ -965,6 +973,8 @@ function readsOf(stats, counts) {
 /** --door-draw=inputs: a paper's pages, read live in Chromium against their draws (layer-gate/door-draw.mjs inputs) */
 async function doorDrawInputs(page, name, errors) {
   const { paper } = nameOf(name)
+  // (the page read live the one its draws are of: the wrapped page, served as its base.pdf once wrapped, as a reader reads ours)
+  await wrappedOf(name)
   const D = await drawsOf(name)
   DOOR_FILES.set(`/door/${paper}/draws.json`, readFileSync(D.file))
   try {

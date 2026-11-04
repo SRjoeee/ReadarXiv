@@ -3138,11 +3138,18 @@ own), each part carrying its pages' cell rules (`rules`).
   only one side holds inside the link is taken only within the rounding's reach of one of its boxes' edges: a character's
   move plus the box's, two thousandths. On the gate's 7 papers that is 1 point in 3,585 links (2307.16209v1 p101: the `(` of
   `(5.1)`, 0.0002 pt inside its link's edge). The pages tier (`--door-draw`) compares the pages drawn from the draws against
-  the same pages read live, exactly. Against 14 it differs on more pages, at the last digit the page's own rounding writes:
-  SVG markup on 3 more of 399 pages, word tables on 22 more, the copy plane's pixels on 37 more. Links and records are equal on
-  every page, as on 14. Measured on those pages (2026-11-04), drawn and live, each in a load of its own:
+  the same pages read live, exactly. Both are of the page the door draws over, the base page wrapped by optional content: the
+  page the prepare reads its draws of (ours) and a reader reads. Until 2026-11-05 the tier read its draws of the unwrapped page
+  instead. The wrap's marks end PDF.js's text items where its groups do: on 2608.04322v1 p4, "A. Problem Formulation" is one
+  item unwrapped and three wrapped ("A.", " ", "Problem Formulation"), 446 items to 424. A character inside a merged item
+  stands where its item's widths put it, so the drawn heading grew over the estimated start of its first word and was laid
+  1.5 pt off its live reading. The tier counted 121 of 399 pages unequal that way, none of them a reader's (drawlive-04322).
+  Like with like, without the draw's rounding (715a3133, before BUNDLE5 15), drawn and live are equal on every page but two
+  copy planes of 2307.16209v1 (p88, p97). With it, they differ on 3 pages' SVG markup, 47 word tables and 38 copy planes, by
+  what the rounding moves. Measured on 2026-11-04, drawn and live each in a load of its own:
   - **The copy:** 1 of 255 on any channel at most, both at the tier's 2.5 device px a point (14 pixels a page at most) and at
-    the reader's largest copy, `COPY_PIXELS` (5.88 device px a point: 109 pixels of 16.8 million at most).
+    the reader's largest copy, `COPY_PIXELS` (5.88 device px a point: 109 pixels of 16.8 million at most). It is a crop or a
+    paste drawn up to a thousandth of a device pixel over (2608.04322v1-de p2: one crop's corners 0.0011 px).
   - **The SVG:** one `tspan`'s x moves by its 0.01 (0.004 pt). Drawn at the reader's largest zoom on a ratio of 2 (10.67 device
     px a point), that word sits a quarter of a device pixel over, as the browser places text: 227 and 467 pixels, up to 72 and
     74 of 255 on its glyphs' edges, and none on the third page.

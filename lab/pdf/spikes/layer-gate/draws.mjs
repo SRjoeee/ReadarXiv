@@ -1,5 +1,6 @@
 // lab/pdf/spikes/layer-gate/draws.mjs
-// The draw geometry of each page of arXiv's PDF (E-C: src/pdf-reader/engine/pipeline/draw-data.mjs), read as the prepare's
+// The draw geometry of each page of a PDF (E-C: src/pdf-reader/engine/pipeline/draw-data.mjs; the gate gives it the page its door
+// draws over, the fixture's base page wrapped by optional content, as the prepare reads its draws of ours), read as the prepare's
 // container reads it, for the layer gate's --door-draw: the measured engine's lite worker made this process's PDF.js worker
 // (layout/pdf-lite.mjs: no image's pixels decoded), the document opened as the draw's document is, maxImageSize LINK_TEXT_PIXELS (its
 // links keep their overlaid text; NO_IMAGE_PIXELS for an engine with no such opt-in), useSystemFonts false, fontExtraProperties
@@ -7,7 +8,7 @@
 // operator list is (its fonts are in commonObjs only then), its items' fills from the glyphs of that list's ink as the maker reads
 // them (layout/ink.mjs pageInk; an engine with no fills ignores them). A process of its own: PDF.js takes a process's worker at its
 // first document, and the gate's own reads keep the stock one.
-//   node lab/pdf/spikes/layer-gate/draws.mjs <engine worktree> <arxiv.pdf> <out.json>
+//   node lab/pdf/spikes/layer-gate/draws.mjs <engine worktree> <page.pdf> <out.json>
 // Writes { pdfjs, pages: [{ draw, why }] }, page 1 first: `draw` the draw as a left part carries it (draw.mjs, the writer's
 // wireOf), or null with drawDataOf's why.
 import { readFileSync, writeFileSync } from 'node:fs'
