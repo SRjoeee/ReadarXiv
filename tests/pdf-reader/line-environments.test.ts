@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { inMemory, loadProject, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { openPaper, originalFiles, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
-import { strategiesFor } from '@/pdf-reader/engine/pipeline/scripts.mjs'
-import { typesetting } from '@/pdf-reader/engine/pipeline/typeset/tex.mjs'
-import { DESIGN } from '@/pdf-reader/engine/pipeline/typeset/type.mjs'
+import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 
 // Environments TeX reads line by line until a line holding their \end — verbatim's kind and comment.sty's — and what
 // the reader writes into a paper's lines around them. comment.sty ends its environment only at a line that is
@@ -87,14 +84,6 @@ const translate = (units: Unit[], runs = false) => new Map(units.map((u, i) => [
 /** the lines that hold a line-read environment's \begin or \end with anything after it */
 const crowded = (tex: string) => tex.split('\n').filter(line => LINE_ENVS.some(e => new RegExp(`\\\\(?:begin|end)\\{${e}\\}\\s*\\S`).test(line)))
 const indexOf = (p: ReturnType<typeof paper>, words: string) => (p.units as Unit[]).findIndex(u => u.pieces.some(x => x.t === 'text' && x.s?.includes(words)))
-/** a typesetting plan for the first strategy of Chinese: every unit's leading and size, as the rule writes them */
-const planned = (p: ReturnType<typeof paper>) => {
-  const [xe] = strategiesFor({ compiler: 'pdflatex' }, 'zh')
-  if (!xe) throw new Error('no strategy')
-  const all = new Map(p.units.map((_, i) => [i, 1.1]))
-  return { xe, typeset: typesetting(p.units, { design: DESIGN.Hans, strategy: xe.name, type: { lead: 1.35, track: 0, scale: 1 }, leads: all, sizes: new Map(all), floatsAt: new Map(), tableMin: 0.85 }) }
-}
-
 describe('nothing of the reader\'s on a line an environment read by lines must have to itself', () => {
   it('the marked original with its line probes: each probe past the line end after the environment, before the unit\'s first word (2608.16117)', () => {
     const p = paper(), tex = text(originalFiles(p, { lines: true }))
@@ -122,23 +111,6 @@ describe('nothing of the reader\'s on a line an environment read by lines must h
   it('an environment whose end TeX reads as a command keeps the probe where its unit begins, as before', () => {
     const p = paper(), tex = text(originalFiles(p, { lines: true }))
     expect(tex).toContain(`\\end{figure}\\axtlines{${indexOf(p, 'after a figure')}}\n`)
-  })
-
-  it('the translation as the rule sets it — its previews and measures, and the final — and as a strategy\'s leading sets it', () => {
-    const p = paper(), translated = translate(p.units as Unit[]), { xe, typeset } = planned(p)
-    const after = indexOf(p, 'after the comment')
-    const draft = text(translationFiles(p, translated as never, { strategy: xe, fonts: null, draft: true, aux: null, bbl: null, typeset }))
-    expect(crowded(draft)).toEqual([])
-    expect(draft).toContain(`\\end{comment}\n\\axtlines{${after}}\\axtsize{${after}}\\axtlead{${after}}\\leavevmode\\axtmark{${after}s}<T${after}>`)
-    const final = text(translationFiles(p, translated as never, { strategy: xe, fonts: null, draft: false, aux: null, bbl: null, typeset: typeset.final }))
-    expect(crowded(final)).toEqual([])
-    expect(final).toContain(`\\end{comment}\n\\axtsize{${after}}\\axtlead{${after}}`)
-    const today = text(translationFiles(p, translated as never, { strategy: xe, fonts: null, draft: false, aux: null, bbl: null }))
-    expect(crowded(today)).toEqual([])
-    expect(today).toContain(`\\end{comment}\n\\axtlead{${after}}\\leavevmode\\axtmark{${after}s}<T${after}>`)
-    const byRuns = text(translationFiles(p, translate(p.units as Unit[], true) as never, { strategy: xe, fonts: null, draft: false, aux: null, bbl: null }))
-    expect(crowded(byRuns)).toEqual([])
-    expect(byRuns).toContain(`\\end{comment}\n\\axtlead{${after}}\\leavevmode\\axtmark{${after}s}<T${after}>`)
   })
 
   it('a unit in another file, after an environment of the paper\'s own defined in a class it ships', () => {

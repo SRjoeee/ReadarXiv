@@ -71,6 +71,7 @@ import { promisify } from 'node:util'
 import { getDocument, OPS, version as PDFJS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { LITE } from './lite-pdfjs.mjs'
 import { checkCompileImage, COMPILE_IDENTITY, COMPILE_IMAGE, latexmkEngine, PLATFORM } from './compile-image.mjs'
+import { carriesOf } from './carries.mjs'
 import { baseRecordOfMade, keptLayoutOf } from './gate-pack.mjs'
 
 // (the image of the pin or COMPILE_IMAGE, here as the compile cache keys name it)
@@ -93,7 +94,10 @@ const { makeLayout } = await engine('layout/make.mjs')
 const MARKS = await engine('layout/marks.mjs')
 const { encodeLayoutMarks, LAYOUT_CLASSES, layoutMarksOf, parseLayoutMarks } = MARKS
 const LIVE = await engine('pipeline/live.mjs')
-const { keptFor, openPaper, originalFiles, PIPELINE_CARRIES, PIPELINE_VERSION, TYPESETTING_VERSION } = LIVE
+const { keptFor, openPaper, originalFiles, PIPELINE_VERSION } = LIVE
+// (the carries are the lab's since the engine's compiled translation went, 2026-11-04: carries.mjs; an older engine's own where
+// --engine gives one that has them)
+const carriesFor = pipeline => (LIVE.PIPELINE_CARRIES ? LIVE.PIPELINE_CARRIES[pipeline] ?? null : carriesOf(pipeline))
 const { unpackSource } = await engine('source/tar.mjs')
 // (a unit the gates' run leaves the original's by its class, the toggles of an open given none: rules/content-classes.mjs
 // TOGGLE_DEFAULTS, the author block (its names, and its places since 2026-10-30) and a bibliography's entries, is sent
@@ -118,10 +122,11 @@ const cutOf = hashes => createHash('sha256').update(hashes.join('\n')).digest('h
 if (ENGINE !== REPO && OUT === REFS) throw new Error(`--engine: give LAYER_FIXTURES another folder than ${REFS} (the gate's fixed inputs)`)
 const UA = 'ReadarXiv/0.1 (+https://readarxiv.org; research)'
 const STAGING = 'https://app-staging.readarxiv.org'
-/** staging's versions (2026-10-06): the pipeline's and the typesetting's are this engine's (a move here makes another cut
- *  and another output, which staging does not hold), the rules' this repository's; the image, the geometry schema and the
- *  chain the web's (container/image.json, src/shared/versions.ts GEOMETRY_SCHEMA, wrangler.jsonc MT_CHAIN) */
-const STAGING_VERSIONS = { pipeline: PIPELINE_VERSION, typesetting: TYPESETTING_VERSION, rules: RULES_VERSION, image: '1', geometry: 2, chain: 'mt:microsoft>google-web' }
+/** staging's versions (2026-10-06): the pipeline's is this engine's (a move here makes another cut and another output, which
+ *  staging does not hold), the rules' this repository's; the typesetting's (6 since the engine has none: an older engine's own),
+ *  the image, the geometry schema and the chain the web's (src/shared/versions.ts TYPESETTING and GEOMETRY_SCHEMA,
+ *  container/image.json, wrangler.jsonc MT_CHAIN) */
+const STAGING_VERSIONS = { pipeline: PIPELINE_VERSION, typesetting: LIVE.TYPESETTING_VERSION ?? '6', rules: RULES_VERSION, image: '1', geometry: 2, chain: 'mt:microsoft>google-web' }
 const FREE_MIN = 10 * 2 ** 30
 const ARXIV_GAP_MS = 3200
 const NM = new URL('../../../node_modules/pdfjs-dist/', import.meta.url).pathname
@@ -471,7 +476,7 @@ async function layoutOf(id, paper, dir) {
   /** the maker over `doc` (its text and line check where the base page's check gave them), with its times */
   const made = async (doc, more = {}) => {
     const tm = performance.now()
-    const out = await makeLayout({ units: paper.units, texOrder: paper.texOrder, marks, arxiv: doc, OPS, paper: ofPaper, left: '', pdfjs: PDFJS, ...more })
+    const out = await makeLayout({ units: paper.units, texOrder: paper.texOrder, marks, base: doc, arxiv: doc, OPS, paper: ofPaper, left: '', pdfjs: PDFJS, ...more })
     // (the maker's own time, and its operator lists' within it)
     out.stats.makerMs = Math.round(performance.now() - tm)
     // GATE_DBG=<dir>: the maker's own diagnostics, where it gives them
@@ -537,7 +542,7 @@ async function microsoftRecord(paper, target, hashes) {
  * A record of this cut of the paper's units, its translations carried over from records of another cut (`from`: the
  * gate's fixed fixture's, made by an earlier front end, with its pipeline): each unit whose source is one of theirs, by
  * its hash or but for its pairs' numbers (cache.mjs seedFrom, as a copy's seed), and whose translation that pipeline's
- * carries over into this one (live.mjs PIPELINE_CARRIES, given the unit: not one holding a marker's `#`, nor, from 10 or
+ * carries over into this one (carries.mjs, given the unit: not one holding a marker's `#`, nor, from 10 or
  * 11, a unit that holds a run, which 12 sends as one marker); every other unit the target
  * does not keep sent through
  * Microsoft's endpoint on the markers wire, as microsoftRecord sends a paper's, at its rate. A front end that cuts the
@@ -547,8 +552,8 @@ async function seededRecord(paper, target, hashes, from) {
   const kept = keptFor(paper, target)
   const results = new Map()
   for (const { record: rec, pipeline } of from) {
-    // (as a copy carries over: the units its pipeline's translations this one reads alike, PIPELINE_CARRIES)
-    const carries = pipeline === PIPELINE_VERSION ? () => true : (PIPELINE_CARRIES[pipeline] ?? (() => false))
+    // (as a copy carries over: the units its pipeline's translations this one reads alike, carries.mjs)
+    const carries = pipeline === PIPELINE_VERSION ? () => true : (carriesFor(pipeline) ?? (() => false))
     const { seed } = await seedFrom(rec, paper.units)
     for (const [i, x] of seed) if (!results.has(i) && !kept.has(paper.units[i]) && carries(x.pieces, paper.units[i])) results.set(i, x)
   }
