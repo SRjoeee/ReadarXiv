@@ -1884,7 +1884,8 @@ PDF on the left, our Chinese typesetting on the right), investigator B's four pa
   of its text: each display joined the page's last sentence, the floor gave it every row below, and nothing fell back —
   on 54 papers of the sweep 527 of 3 796 units lit by sentence (40 papers) lit a sentence short, empty or over others.
 - **Never another sentence's words**: a unit lights whole on both panes where a later sentence begins above an earlier
-  one's last row (the drawing does not keep the text's order: the text a layout runs on above a display, 'flow'), or
+  one's last row (the drawing did not keep the text's order where the fit ran the text on above a display, its `flow` step,
+  which RULES_SCHEMA 10 took out, §18.2), or
   where a sentence of one of its runs paints over a word of another sentence in another run on the page (a display wider
   than its column beside the column's text, a label read apart from its line; `runsApart`). On the 54 papers
   (2026-10-19), against the layer pinned for each paper: by sentence 3 779 units (3 796 before), of them 3 on the right

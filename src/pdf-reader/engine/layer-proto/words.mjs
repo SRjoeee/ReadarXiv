@@ -187,8 +187,8 @@ function push(W, l, r, y, h, top, bottom, word, at) {
  * each line's items in theirs (the walk svgOfUnit makes), and each of the original's lines it keeps in place (`kept`,
  * layer2.mjs keptLines) where its text passes that line — a displayed formula between the text before it and the text after it,
  * which the view reads as the unit's reading order (view/highlight.mjs). A kept line of a region the text breaks at (`region`)
- * goes before the first line laid after the text passed the region (a line's `past`: breakLines', where the walk consumed it,
- * also where the text ran on above the display, 'flow'; a slot's `after` for a line laid with none); any other (`block`) before
+ * goes before the first line laid after the text passed the region (a line's `past`: breakLines', where the walk consumed it; a
+ * slot's `after` for a line laid with none); any other (`block`) before
  * the first line of the first block that follows it in the unit's rectangles; a region the page has no later line for, after
  * the lines.
  * A text token is the item's slot, [x, x + the layout's width] (an opening mark a compressed line shifts left of its slot is
