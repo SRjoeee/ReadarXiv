@@ -2056,6 +2056,17 @@ describe('the side: one a view, and its dispose', () => {
     again.dispose()
   })
 
+  it('a side made while places near the view wait for the left\'s drawing (a host that makes its side after the original\'s first page) is made, and tells them its word on the pages', async () => {
+    const s = await setup()
+    s.side.dispose()
+    await nearOn(s, [1, 2])
+    expect(internalsOf(s.view).places.contentOf(1)).toBe('original')
+    const o = { paper: { id: 'x', version: 1 }, target: 'zh', faceSources: async () => null, hyphUrl: () => '', fetchObject: async () => new Uint8Array(), bind: async () => true, composed: () => fakeTask() as unknown as DocumentTask }
+    const late = createLayerSide(s.view, o as never)
+    expect(FakePDFPageView.made.filter(v => s.panes.right.contains(v.div))).toHaveLength(0)
+    late.dispose()
+  })
+
   it('emits no layer event after dispose, and the view\'s dispose disposes it first', async () => {
     const s = await setup()
     s.side.tell(await ALL())

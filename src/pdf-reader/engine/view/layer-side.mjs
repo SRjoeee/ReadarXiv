@@ -177,10 +177,6 @@ export function createLayerSide(view, o) {
   /** whether this document's layer text rendering is decided (text-rendering.mjs applyLayerText, at a commit) */
   let textDecided = false
   const detach = V.attach({ dispose: () => side.dispose() })
-  // (the places' word on each page: one that stays the original's is drawn by its own page view, with its text layer and links;
-  // any other waits for its layer, showing the left's drawing of it, places.mjs. Told again as pages settle: shownOriginal, refuse,
-  // dropOthers)
-  V.places.settle?.(n => settledOriginal(n))
   const warned = new Set()
   const warn = (what, e) => { if (warned.has(what)) return; warned.add(what); console.warn(`[reader] the layer's ${what}:`, e?.message ?? e) }
 
@@ -1839,5 +1835,9 @@ export function createLayerSide(view, o) {
       for (const entry of [...entries]) destroy(entry)
     },
   }
+  // (the places' word on each page: one that stays the original's is drawn by its own page view, with its text layer and links;
+  // any other waits for its layer, showing the left's drawing of it, places.mjs. Given once everything it reads is made: the places
+  // near ask it at once. Told again as pages settle: shownOriginal, refuse, dropOthers)
+  V.places.settle?.(n => settledOriginal(n))
   return side
 }
