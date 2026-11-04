@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- Fixed: in the PDF reader, a list written inside a paragraph, such as "(1) … (2) … (3)", reads as one paragraph again: each item follows the one before it on its line, with its own number. The items had been left where the English ones began, with wide gaps, a number alone at the end of a line, and lines crowding the line above.
 - In the PDF reader, the data each translated page is laid out from is about a quarter smaller, so less is downloaded for every page you read.
 - The PDF reader shows the first translated page a little sooner. A page still being translated shows the English page exactly as the left side drew it, instead of drawing it a second time, and the highlight prepares its sentences only once you point at a page with it turned on (nothing at all while it is off). While a page waits for its translation, its English text is selected, searched and its links followed on the left side.
 - Fixed: in the PDF reader, a paragraph that opens with a formula right after a run-in heading that holds one ("What 𝒱 is, …" then "𝒱(q) is …") is translated. It had stayed in English.
