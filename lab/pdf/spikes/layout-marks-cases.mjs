@@ -680,7 +680,10 @@ ${Array.from({ length: 10 }, (_, i) => `\\newpage\\vspace*{${548 + 4 * i}pt}\\no
 // F (PR-C's run-in leads, 2026-10-19): a heading and a proof's name the class runs into the paragraph, each followed by a
 // placeholder first in it, whose opening mark waits in vertical mode for the unit's start mark (\\axtpmm, \\axtpma): TeX sets
 // the heading and the name first, as the paragraph starts, and their marks must leave it waiting (\\axt@hold), or the
-// placeholder owns the run-in text (2610.19159's "Task specification." owned by its $\\mathcal{T}$)
+// placeholder owns the run-in text (2610.19159's "Task specification." owned by its $\\mathcal{T}$); and a heading that holds a
+// formula or a reference before a paragraph that opens with one, whose opening point the heading's own placeholder mark set
+// while the unit's start mark came after the opening mark (2610.21085v1 u44's $\\cand(q)$ owned "𝒱 is, and what the model is
+// defined on."): the start mark now comes first, and the point is set at it
 STREAM.F = String.raw`\documentclass{article}
 \usepackage{amsmath,amsthm}
 \begin{document}
@@ -692,6 +695,10 @@ STREAM.F = String.raw`\documentclass{article}
 \begin{proof}
 $\psi$ opens the proof right after its name, and more words after it.
 \end{proof}
+
+\paragraph{What $\omega$ is, and what it is defined on.} $\chi_1$ opens the paragraph after a heading that holds a formula, and more words after it.
+
+\paragraph{As in \ref{sec:first}.} \ref{sec:first} opens the paragraph after a heading that holds a reference, and more words after it.
 \end{document}
 `
 const streamKey = (name, engine) => `stream-${name}-${engine}`
@@ -980,7 +987,7 @@ const OWN = {
   C: [['$\\phi$', '\u03d5'], ['$', glyphsOf], ['\\cite{one}', '[1]'], ['call:Note ', null], ['\\begin{align}', (src, nth) => rowsOf(src.trim(), [1, 9, 21, 37][nth])]],
   D: [['$b_', glyphsOf], ['$', null]],
   // each its own glyphs, none of the run-in heading's or name's before it
-  F: [['$\\phi$', '\u03d5'], ['\\ref{sec:first}', '1'], ['$\\psi$', '\u03c8']],
+  F: [['$\\phi$', '\u03d5'], ['\\ref{sec:first}', '1'], ['$\\psi$', '\u03c8'], ['$\\omega$', '\u03c9'], ['$\\chi_1$', '\u03c71']],
   // the group's first display owns the group (an align's row, an equation's, an equation*'s); each foot display its own
   E: [['\\begin{equation} a = b', 'a=b(1)'], ['$x_1$', 'x1'], ['\\begin{align} c', 'c=d(2)e=f(3)g=h'], ['\\begin{equation} e = f', 'LOST:in the display before it'], ['\\begin{equation*} g', 'LOST:in the display before it'], ['$u$', 'u'],
     ['\\begin{equation} p_', (src, n) => ({ s: `${glyphsOf(src.replace(/\\(?:begin|end)\{equation\}/g, '')).s}(${4 + n})`, rules: 0 })], ['$w_', glyphsOf]],
