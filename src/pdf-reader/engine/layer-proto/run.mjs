@@ -2133,7 +2133,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const row = candOf.get(p.id)?.lead
     // (its own label on the row goes with it, drawn at the start (ownLabelOnRow): its glyphs are the door's reading of the file's
     // label row, on the row)
-    let rowLabel = null
+    let rowLabel = null, onLeadOf = null
     if (row && p.blocks[0] && !p.blocks[0].centred && p.blocks[0].page === row.page && Math.abs(p.blocks[0].B[0] - row.baseline) < 0.05) {
       const b = p.blocks[0], a = byId.get(row.id), share = a && !a.refused ? a.share ?? null : null, x = b.x0 + b.indent
       const lb = prep.label?.chars?.length && !prep.label.drawn && prep.label.chars.every(c => c.page === row.page && Math.abs(c.yb - row.baseline) < 0.4 * row.size) ? ownLabelOnRow(p.id, row) : null
@@ -2141,6 +2141,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         if (lb) { rowLabel = { lb, baseline: row.baseline }; b.indent = 0 }
         b.start = share.end !== null ? share.ink + Math.max(0, (lb ? lb[2] : x) - row.x1) : row.x0
         if (share.end !== null && Math.abs(share.at - b.B[0]) >= 0.05) b.startY = share.at
+        // (where that unit's translation ended above the row, its last line the shared one (shareOf's `above`): this unit's lines
+        // flow on from it, layer2.mjs slotsAt; where none of its text fits after that line's end, its first line stands a pitch
+        // under it, unless its last then stands lower than laid on TeX's row: as before, below)
+        if (share.above) { b.onLead = true; onLeadOf = { x0: row.x0 } }
         // (painted on the row's page after that unit, whose erasing of the row covers where it starts: paintLed)
         p.ledBy = row.id
       }
@@ -2180,6 +2184,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       const cs = prep.label.chars, start = prep.firstX0 !== undefined && prep.firstX0 > prep.label.x1 ? prep.firstX0 : prep.label.x1 + 0.25 * s
       const x0 = Math.min(...cs.map(c => c.x0)) - 0.4, x1 = Math.max(Math.max(...cs.map(c => c.x1)) + 0.4, start - 0.4)
       const crop = { mode: 'crop', page: p.blocks[0].page, crop: [x0, Math.min(...cs.map(c => c.yb - 0.26 * c.size)), x1, Math.max(...cs.map(c => c.yb + 0.8 * c.size))], baseline: rowLabel.baseline, text: prep.label.text }
+      // (and its first word with it: no line ends after the label alone, 2610.21098v1 p2's "(2)" at the end of the line before)
+      if (tokens[0] && !tokens[0].space) tokens[0].glue = true
       tokens = Object.assign([{ crop, cw: x1 - x0, glue: false, w100: 0 }, ...tokens], { base: tokens.base })
       prep.label = { ...prep.label, drawn: prep.label.text }
       for (const c of cs) prep.cat?.set(L2.charKey(c), 'acc')
@@ -2210,6 +2216,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // break before each later page at its share of the paragraph's height, at a line end (E3c by height, layoutCut), kept
     // where it fits: its further steps and passes then lay the tokens it holds)
     ;({ layout: p.layout, tokens: p.tokens } = L2.layoutCut(tokens, p.blocks, s, p.P))
+    // (laid on from the line before, none of it there (its first line a pitch under that line): kept so only where its last line
+    // stands no lower than laid from TeX's shared row as before (`onLead`'s corner); else laid there, as before)
+    if (onLeadOf && p.layout.lines[0] && p.layout.lines[0].baseline < p.blocks[0].startY - 0.05) {
+      const b0 = p.blocks[0], before = [{ ...b0, start: onLeadOf.x0, startY: undefined, onLead: undefined }, ...p.blocks.slice(1)]
+      const was = L2.layoutCut(tokens, before, s, p.P), lastOf = l => l.layout.lines.at(-1)?.baseline ?? Infinity
+      if (lastOf(was) > lastOf({ layout: p.layout }) + 0.05) { p.blocks = before; ({ layout: p.layout, tokens: p.tokens } = was); p.onLeadKept = true } else p.onLeadBelow = true
+    }
     // (clipped, the fit's walk at p.P over the unit's tokens and blocks: layoutCut's first, which fitFurther goes on from)
     const walked = { layout: p.layout, blocks: p.blocks, P: p.P }
     // a numbered heading set in fewer lines than the original's: laid again on the original's last lines with its number as

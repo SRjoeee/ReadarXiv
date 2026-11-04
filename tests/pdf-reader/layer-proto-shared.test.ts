@@ -296,11 +296,18 @@ describe('a shared line: the next unit\'s first line starts where the translatio
     expect(b![6]).toBeCloseTo(last[7] + 10, 1)
   })
 
-  it('a paragraph whose translation ends higher: the row is free, and the part after it starts at the row\'s own start', async () => {
+  it('a paragraph whose translation ends higher: the part after it goes on on its last line, after its ink, and flows on from there', async () => {
+    // (20 characters on rows of 260: one row, ending at 220 on 250; the part after it from there, the original's 10 pt after
+    // the paragraph's end, its lines on at its own pitch: one paragraph read on, as the original's. Laid on TeX's row under it,
+    // it stood a line's height under a translation spread at its own leading: 2610.21085v1 p2's items, 12 pt at 11.95 pt type)
     const run = await laid(split(20))
-    const a = linesOf(run, 0)!, [b] = linesOf(run, 1)!
-    expect(a.at(-1)![1]).toBeGreaterThanOrEqual(226 + 10)
-    expect([b![1], b![6]]).toEqual([226, 20])
+    const a = linesOf(run, 0)!, b = linesOf(run, 1)!
+    expect(a.length).toBe(1)
+    expect(b[0]![1]).toBe(a[0]![1])
+    expect(b[0]![6]).toBeCloseTo(a[0]![7] + 10, 1)
+    const steps = b.slice(1).map((l, i) => Math.round((b[i]![1] - l[1]) * 100) / 100)
+    expect(steps.every(d => Math.abs(d - steps[0]!) <= 0.02), `its lines' steps ${steps}`).toBe(true)
+    expect(b.at(-1)![1]).toBeGreaterThan(202)
   })
 
   it('a paragraph whose translation fills the shared row: the part after it starts on its next row', async () => {
@@ -328,9 +335,24 @@ describe('a shared row as the unit before it leaves it (layer2.mjs shareOf, keep
     expect([share.end, share.at]).toEqual([60, 235.99])
   })
 
-  it('a line an em away is not: the row is free, no end and no baseline', () => {
+  it('a line an em away is not on the row: the unit\'s last line, it is the shared line above it, its end and its baseline', () => {
     const share = L2.shareOf({ lines: [L(250, 20, 260), L(236, 20, 40)] } as never, blocks, row)!
-    expect([share.end, share.at]).toEqual([null, null])
+    expect([share.end, share.at, share.above]).toEqual([60, 236, true])
+    // (its last line on another page, or another column's: the row is free)
+    const away = L2.shareOf({ lines: [L(250, 20, 260), { ...L(236, 20, 40), page: 2 }] } as never, blocks, row)!
+    expect([away.end, away.at, away.above]).toEqual([null, null, undefined])
+    const beside = L2.shareOf({ lines: [L(250, 20, 260), L(236, 300, 40)] } as never, blocks, row)!
+    expect([beside.end, beside.at]).toEqual([null, null])
+  })
+
+  it('a fill keeps a shared line above the row only where it stays the unit\'s last line, on its baseline, ending no further right', () => {
+    const share = L2.shareOf({ lines: [L(250, 20, 260), L(236, 20, 40)] } as never, blocks, row)!
+    expect(L2.keepsShare(share, { lines: [L(250, 20, 260), L(236, 20, 40)] } as never)).toBe(true)
+    expect(L2.keepsShare(share, { lines: [L(250, 20, 260), L(236, 20, 30)] } as never)).toBe(true)
+    expect(L2.keepsShare(share, { lines: [L(250, 20, 260), L(235, 20, 40)] } as never)).toBe(false)
+    expect(L2.keepsShare(share, { lines: [L(250, 20, 260), L(236, 20, 41)] } as never)).toBe(false)
+    expect(L2.keepsShare(share, { lines: [L(250, 20, 260), L(236, 20, 260), L(226, 20, 10)] } as never)).toBe(false)
+    expect(L2.keepsShare(share, { lines: [L(250, 20, 260)] } as never)).toBe(false)
   })
 
   it('a line on TeX\'s row gives that row\'s baseline', () => {

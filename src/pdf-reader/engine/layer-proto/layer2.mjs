@@ -3148,14 +3148,18 @@ function slotsAt(blocks, st, P, s) {
       // (the first line on a shared row stands on the baseline the line before it there was laid at, `startY`, where that is
       // not TeX's (run.mjs layout2, shareOf's `at`): the row's line, its measure the row's, whatever the block's foot)
       const shared = firstBlock && k === 0 && b.startY !== undefined
-      let y = shared ? b.startY : onGrid ? (k < G.length ? G[k] : G.at(-1) - (k - G.length + 1) * pitch) : b.B[0] - k * pitch
+      // (where that line is the last of the unit before, its translation ended above TeX's shared row (`onLead`, shareOf's
+      // `above`): the unit's lines flow on from it at its own pitch, as one paragraph read on; one that leaves no room there
+      // has its first line a pitch under it)
+      const flows = firstBlock && b.onLead && k > 0
+      let y = shared ? b.startY : flows ? b.startY - k * pitch : onGrid ? (k < G.length ? G[k] : G.at(-1) - (k - G.length + 1) * pitch) : b.B[0] - k * pitch
       // never two lines closer than 0.7 of the pitch (a baseline the text layer could not tell)
       if (out.length && out.at(-1).block === bi && y > out.at(-1).baseline - 0.7 * pitch) y = out.at(-1).baseline - pitch
       if (y < low - 0.05 && !shared) break
-      const target = k === 0 || (onGrid && k < b.B.length) ? k : null
+      const target = k === 0 || (onGrid && !flows && k < b.B.length) ? k : null
       // (each slot the measure of the line it is laid at, where the paragraph's changed: measuresOf; the block's grid, its
       // pitch and its flow its own across the change, one paragraph's)
-      const [mx0, mx1] = b.measures && !b.centred ? measureAt(b, y, (onGrid || shared) && k < G.length ? k : -1) : [b.x0, b.x1]
+      const [mx0, mx1] = b.measures && !b.centred ? measureAt(b, y, (onGrid || shared) && !flows && k < G.length ? k : -1) : [b.x0, b.x1]
       // (the first line's start: the block's indent, or where a shared line leaves it, `start`, run.mjs layout2)
       const x0 = firstBlock && k === 0 && b.start !== undefined ? b.start : firstBlock && k === 0 && !b.centred ? b.x0 + b.indent : mx0
       // (a line laid over a display TeX set with its short skip, `shortSkips` (tex.mjs shortSkipsOf: under a line of the unit
@@ -4258,9 +4262,13 @@ function inkEndOf(line, L) {
  * would meet), and `at`, the baseline of the line that ends there: the row's own where the unit's line stands on TeX's, else
  * where its leading set it (a paragraph's two lines spread over its three rows, 2608.16117's unit 115 on page 39, 7.2 pt
  * over the row), which the next unit's first line stands on, so that the row reads as one line; `ink`, the furthest its text's
- * ink reaches there (inkEndOf: short of `end` by a full-width mark's blank half), which the next unit is laid from. All null
- * where it set none there (its translation ended higher: the row is free). Null where no block of the unit holds the row (a
- * row kept as the original's, or dropped as another unit's): the row stays the original's.
+ * ink reaches there (inkEndOf: short of `end` by a full-width mark's blank half), which the next unit is laid from. Where it
+ * set none there, its translation ended higher: its last line, where it stands on the row's page within the row's block, is
+ * the shared line (`above`), the original's one paragraph read on, the next unit's first line on it after its ink (laid on
+ * TeX's row under it, a line's height under a translation spread at its own leading, the two stood less than an em apart:
+ * 2610.21085v1 p2's items, 12 pt at 11.95 pt type); all null where that line is another page's or column's (the row is free).
+ * Null where no block of the unit holds the row (a row kept as the original's, or dropped as another unit's): the row stays
+ * the original's.
  */
 export function shareOf(layout, blocks, row) {
   const b = blocks.find(q => q.page === row.page && q.B.some(y => Math.abs(y - row.baseline) < 0.05))
@@ -4271,6 +4279,10 @@ export function shareOf(layout, blocks, row) {
     if (share.end === null || l.x0 + l.used > share.end) { share.end = l.x0 + l.used; share.at = l.baseline }
     const ink = inkEndOf(l, layout)
     if (share.ink === null || ink > share.ink) share.ink = ink
+  }
+  const last = layout.lines.at(-1)
+  if (share.end === null && last && last.page === row.page && last.baseline > row.baseline + 0.05 && Math.min(last.x0 + last.used, b.x1) > Math.max(last.x0, b.x0)) {
+    share.end = last.x0 + last.used; share.at = last.baseline; share.ink = inkEndOf(last, layout); share.above = true
   }
   return share
 }
@@ -4304,6 +4316,13 @@ export function keepsPages(fit, lines, tokens = null) {
  *  its slot's `stop`) */
 export function keepsShare(share, layout) {
   if (!share || share.kept) return true
+  // (the shared line its last line above the row, `above`: still its last line, on that baseline, ending no further right; and
+  // nothing of it on the row)
+  if (share.above) {
+    const last = layout.lines.at(-1)
+    if (!last || layout.lines.some(l => onShare(share, l))) return false
+    return last.page === share.page && Math.abs(last.baseline - share.at) < 0.01 && last.x0 + last.used <= share.end + 0.01 && inkEndOf(last, layout) <= share.ink + 0.01
+  }
   let far = null
   for (const l of layout.lines) {
     if (!onShare(share, l)) continue
