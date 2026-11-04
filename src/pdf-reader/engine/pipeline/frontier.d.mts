@@ -24,7 +24,7 @@ export declare function frontierStream(o: {
 /** where the left stands for the page stream's parts: the least slot in K and the least stream each unit may get, the smallest
  *  unit whose left anchor is not final, the final left units' streams */
 export interface LeftBounds { slotLow: Float64Array; streamLow: Float64Array; uMin: number; streams: LeftStreams }
-export declare function leftBoundsOf(left: { units: readonly (readonly [number, number, readonly (readonly number[])[], ...unknown[]])[]; done(i: number): boolean; next: number; made: number; N: number }, n: number): LeftBounds
+export declare function leftBoundsOf(left: { units: readonly (readonly [number, number, readonly (readonly number[])[], ...unknown[]])[]; done(i: number): boolean; next: number; H: number; N: number }, n: number): LeftBounds
 /** the last page the part from page `a` takes where it may be cut now, everything it reads final; else 0 */
 export declare function partClosable(o: {
   K: CutKnown['K']; F: readonly number[]; NB: Int32Array | readonly number[]; a: number; H: number; N: number; n: number; now: LeftBounds
