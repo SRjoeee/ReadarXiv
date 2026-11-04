@@ -67,7 +67,7 @@ import { levelRun } from './figure-rows.mjs'
 import { FIGURE_KIND } from '../rules/content-classes.mjs'
 import { displayIdsOf, NAME_KIND, nameOccurrenceId } from './units.mjs'
 import { addBoxWords, addSegWords, addUnitWords, copyWords, freezeWords, newWords, pieceOffsets, plainOfPieces, tokenBand, wordIndexer } from './words.mjs'
-import { closureOf, rowLeadOf } from './need.mjs'
+import { closureOf, lineAfterOf, rowLeadOf } from './need.mjs'
 import { markWork, newWork, work, WORK_KEYS } from './work.mjs'
 import { drawInputsOf } from './draw.mjs'
 import { isMemoryError } from '../pipeline/memory.mjs'
@@ -935,8 +935,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   /** a unit left the original's for want of the file's place (`code` of SKIP_CODES): `unlocated` with the maker's reason */
   const unanchoredOf = (id, u, code) => ({ id, kind: u.kind, why: 'unanchored', code: skipCode(code), ...(code === 'unlocated' ? { unlaid: makerWhy(id) } : {}), chars: trCharsOf(u) })
   // every unit the layer may place, in the order layGroups takes them (the text's stream): the geometry's, and the units the
-  // file locates whole that the geometry does not hold, at their place in the stream after the unit before them, table cells
-  // among them (a cell's lines are TeX's, and the text removal takes its glyphs alone, never its table's rules). The
+  // file locates whole that the geometry does not hold, at their place in the stream after the unit before them, or beside
+  // the geometry's unit they share one of TeX's lines with (need.mjs lineAfterOf, as the cutter's K, cut.mjs entriesOf), table
+  // cells among them (a cell's lines are TeX's, and the text removal takes its glyphs alone, never its table's rules). The
   // geometry's rectangles are the left's: a unit's place on the original, and the page's text area and columns the fitting
   // reads; the unit is drawn by the file's lines. `cands` in the order the layer reports its sources in, K in the stream's
   const cands = GU.map(([id, stream, rects]) => ({ id, stream, rects }))
@@ -945,7 +946,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (inGeometry.has(id)) continue
     let before = -1
     for (const [gid, s] of streamOf) if (gid < id && s > before) before = s
-    cands.push({ id, stream: before + 0.5, rects: null })
+    cands.push({ id, stream: (lineAfterOf(tex.index, id, gid => streamOf.get(gid)) ?? before) + 0.5, rects: null })
   }
   const K = [], candOf = new Map()
   /** each unit whose last row another unit's first row continues on a shared line (K's `follows`), that unit's id */
@@ -3478,7 +3479,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
      * Parts (`parts`: the open given no view and no left unit): the next part, read by readPart against the chain, its layout
      * merged into the layout file's index by the host before (facade.mjs). The views of the pages it tells first and their rows;
      * its manifest's entries; its units added to the stream after the last told, in (slot, id) order (a left unit at its
-     * stream, its rectangles copied; a file-only one at `after` + 0.5, never worked out again); those of a part with no layout,
+     * stream, its rectangles copied; a file-only one at `after` + 0.5, the cutter's, never worked out again); those of a part with no layout,
      * or a refusal's record, are in no file and so the original's. The pages it covers can be drawn; with the rows ended its
      * units are placed at once. Sync, and nothing checked again: the host's readPart and the door have
      */

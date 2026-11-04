@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { type Closure, closureOf, type NeedEntry, needBound, needsOf, rowLeadOf, SHARED_SEP } from '@/pdf-reader/engine/layer-proto/need.mjs'
+import { type Closure, closureOf, lineAfterOf, type NeedEntry, needBound, needsOf, rowLeadOf, SHARED_SEP } from '@/pdf-reader/engine/layer-proto/need.mjs'
 
 // needsOf (what laying a paper's pages reads of its units' rows, in order) and closureOf (Need(p), what laying page p alone
 // reads: the 1b-D design §1.2) live in a leaf the door and the cutter both import. These tests hold them to restatements written
@@ -323,5 +323,24 @@ describe('rowLeadOf: the unit a unit\'s first row continues on one of TeX\'s lin
     expect(rowLeadOf(I, 110)).toBe(null)
     // (and never one after it in K, whatever its id)
     expect(rowLeadOf(I, 110, () => false)).toBe(null)
+  })
+  it('lineAfterOf: a unit the left does not hold stands beside the left unit it shares one of TeX\'s lines with, whatever the ids', () => {
+    // (2610.21547v1 p16: the run-in "Label flipping." (u236, the layout file's alone) and its text on the row (u237, stream 9899);
+    // a caption of page 17 (u234, stream 10272) numbered before the head set K's slot after it by id, after the head's own text)
+    const I = indexOf([[234, 'caption', [[17, 115.86, 540, 221.52]]], [235, 'heading', [[16, 94.42, 125.41, 102.88]]], [236, 'heading', [[16, 72, 132.73, 82.91]]], [237, 'para', [[16, 142.69, 539.99, 82.91], [16, 72, 539.99, 69.36]]]])
+    const streams = new Map([[234, 10272], [235, 9896], [237, 9899]])
+    expect(lineAfterOf(I, 236, id => streams.get(id))).toBe(9898)
+    // (amsart's keywords after "Key words and phrases.", an ink unit numbered after every source unit: 2610.21037v1 p1, u177 and u8)
+    const J = indexOf([[7, 'para', [[1, 108.87, 180.31, 104.87]]], [8, 'heading', [[1, 186.12, 540, 82.96], [1, 72, 170.99, 72]]], [177, 'para', [[1, 83.96, 181.51, 82.96]]]])
+    expect(lineAfterOf(J, 8, id => new Map([[7, 497], [177, 507]]).get(id))).toBe(507)
+    // (none where its line's other unit is the layout file's alone too, or it shares no line; a cell sets its rows by its table)
+    expect(lineAfterOf(I, 236, id => (id === 237 ? undefined : streams.get(id)))).toBe(null)
+    expect(lineAfterOf(I, 235, id => streams.get(id))).toBe(null)
+    expect(lineAfterOf(indexOf([[1, 'cell', [[1, 20, 80, 250]]], [2, 'cell', [[1, 90, 140, 250]]]]), 1, id => (id === 2 ? 5 : undefined))).toBe(null)
+    // (of two units on its line that its last row leads, the least stream; a first row's lead before both)
+    const L = indexOf([[1, 'heading', [[1, 20, 80, 250]]], [2, 'para', [[1, 90, 140, 250]], 0], [3, 'para', [[1, 90, 280, 250]], 0]])
+    expect(lineAfterOf(L, 1, id => new Map([[2, 40], [3, 30]]).get(id))).toBe(29)
+    const M = indexOf([[1, 'para', [[1, 20, 100, 238]]], [2, 'heading', [[1, 110, 150, 238]]], [3, 'para', [[1, 160, 280, 238]]]])
+    expect(lineAfterOf(M, 2, id => new Map([[1, 12], [3, 30]]).get(id))).toBe(12)
   })
 })

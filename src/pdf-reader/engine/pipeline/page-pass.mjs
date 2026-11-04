@@ -620,8 +620,9 @@ const wholeLeft = side => {
  * whose left anchor is final but whose rows are still to be made may have a left rectangle up to R, and none whose rows are
  * made but whose left anchor is not yet final has a row up to R; (2) no unit not yet in K for good (its rows or its left anchor
  * still to come) may get a slot up to the last entry the part takes or any entry on its pages (a left anchor not final: its
- * stream at least the left's first token still to be anchored, or the last stream of a smaller id's and a half), and no
- * layout-only entry there takes its slot after a unit whose left anchor is not final (it may still change); (3) every member
+ * stream at least the left's first token still to be anchored, or the last stream of a smaller id's and a half), no
+ * layout-only entry there takes its slot after a unit whose left anchor is not final (it may still change), and no left unit
+ * whose rows' line a layout-only unit may still share stands within half a step of those slots (need.mjs lineAfterOf); (3) every member
  * of the table groups of those entries is in K for good; and (4) a unit is laid (the head waits for it: a paper none of whose
  * units is laid falls back to arXiv's, told whole at the end, as a paper with no layout is). K, F and the need bounds are then those of the whole paper on what the part
  * reads (cutBundle's). The head is told once a unit is located on the left (else the paper is refused, telling nothing, as
@@ -672,13 +673,16 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
     const stream = new Map()
     for (const w of left.units()) stream.set(w[0], w[1])
     const slotLow = new Float64Array(n), low = left.firstTok(left.frontier())
+    // (and the least stream each may get as a left unit: its own, the left's next token for one not final, none for one the left
+    // holds no unit of)
+    const streamLow = new Float64Array(n)
     let uMin = n
     for (let i = 0, before = -1; i < n; i++) {
       const s = stream.get(i)
-      if (!left.done(i)) { if (uMin === n) uMin = i; slotLow[i] = Math.min(low, before + 0.5) } else slotLow[i] = s === undefined ? before + 0.5 : s
+      if (!left.done(i)) { if (uMin === n) uMin = i; slotLow[i] = Math.min(low, before + 0.5); streamLow[i] = low } else { slotLow[i] = s === undefined ? before + 0.5 : s; streamLow[i] = s === undefined ? Infinity : s }
       if (s !== undefined && s > before) before = s
     }
-    return (nowLeft = { slotLow, uMin })
+    return (nowLeft = { slotLow, streamLow, uMin })
   }
   /** the least page unit i's rows name (its lines', its placeholders' segments', its labels'): its rows', made once (a unit's
    *  rows are final once settled; the stub a told unit's rows become keeps their pages) */
@@ -758,6 +762,17 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
     })
     for (let i = 0; i < n; i++) if (!inK(i) && now.slotLow[i] <= sigma) return false
     if (now.uMin < n) for (const e of K) if (e.slot <= sigma && !e.left && e.id > now.uMin) return false
+    // (a layout-only unit that shares one of TeX's lines with a left unit stands half a step from it, before or after it
+    // (need.mjs lineAfterOf), whatever its id: one whose line is not all made yet may still take such a place, beside a unit not
+    // in K for good or one whose rows' pages are not all let go. So no such left unit stands within half a step of the part's
+    // slots: at worst it waits for its line's rows, which every entry the part takes has already)
+    if (st) {
+      const made = st.released()
+      let low = Infinity
+      for (let i = 0; i < n; i++) if (!inK(i) && now.streamLow[i] < low) low = now.streamLow[i]
+      for (const e of K) if (e.left && e.last > made && e.slot < low) low = e.slot
+      if (low - 0.5 <= sigma) return false
+    }
     for (const g of groups) for (const i of members.get(g) ?? []) if (!inK(i)) return false
     return true
   }

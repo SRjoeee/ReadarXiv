@@ -57,6 +57,34 @@ export function rowLeadOf(index, id, before = null) {
 }
 
 /**
+ * Where in the stream a unit the layout file alone holds stands (no left unit: no stream of its own), where TeX's own line says
+ * so: the stream of the left unit (`streamOf(id)`: its stream, undefined for a unit the left does not hold) whose last row its
+ * first row continues on one of TeX's lines, so that it stands right after that unit; else, less one, the least stream of the
+ * left units whose first row continues its last, so that it stands right before them. Each of TeX's lines by rowLeadOf over the
+ * layout file in any order: a shared line is a fact of the page, not of the ids. Null where it shares no line with a left unit
+ * (the cutter's and the door's K then place it after the largest stream of a left unit with a smaller id, cut.mjs entriesOf).
+ * The ids are the source's order, which a float, a note or an ink unit (numbered after every source unit) does not keep in the
+ * stream: 2610.21547v1 p16's run-in "Label flipping." stood in K after a caption of page 17 numbered before it, and so after its
+ * own text, which found no lead and was laid where the English head had ended (the release sweep's census of 2026-11-04, four
+ * heads; amsart's keywords after "Key words and phrases.", an ink unit, shared their line only where an affiliation of the last
+ * page stood before them by id)
+ */
+export function lineAfterOf(index, id, streamOf) {
+  const b = index?.unit(id)
+  if (!b?.lines.length || OWN_PLACE.has(b.kind)) return null
+  const any = self => aid => aid !== self
+  const lead = rowLeadOf(index, id, any(id))
+  if (lead && streamOf(lead.id) !== undefined) return streamOf(lead.id)
+  let least = null
+  for (const fid of index.onPage(b.lines[b.lines.length - 8])) {
+    const s = streamOf(fid)
+    if (s === undefined || fid === id || (least !== null && s >= least)) continue
+    if (rowLeadOf(index, fid, any(fid))?.id === id) least = s
+  }
+  return least === null ? null : least - 1
+}
+
+/**
  * What laying a paper's pages reads of its units' rows, by page: the index into the units v0 may place, in the stream's
  * order (`K`: each with `lists`, the pages each of its sources would draw it on, and `reach`, every page their lines are
  * on), up to which every unit must be in and decided. `lay[g]`, to lay the units page g's drawing lays: layGroups'

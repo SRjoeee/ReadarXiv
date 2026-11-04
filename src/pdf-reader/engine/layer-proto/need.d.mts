@@ -19,6 +19,11 @@ export declare const SHARED_SEP: number
  *  `onPage`, or the door's facade), or null; with `before`, chosen among the units it holds true of alone (those before `id`
  *  in K: the same however a door's parts come) */
 export declare function rowLeadOf(index: { unit(id: number): { kind: string; lines: ArrayLike<number>; frames: ArrayLike<number>; held: readonly number[] } | null; onPage(page: number): readonly number[] } | null | undefined, id: number, before?: ((id: number) => boolean) | null): RowLead | null
+/** the stream a unit only the layout file holds stands right after (its K slot that plus a half) where it shares one of TeX's
+ *  lines with a left unit (`streamOf`: a left unit's stream, undefined for one the left does not hold): that unit's stream where
+ *  its first row continues that unit's last, else the least stream less one of the left units whose first row continues its
+ *  last; null where it shares no line with one */
+export declare function lineAfterOf(index: Parameters<typeof rowLeadOf>[0], id: number, streamOf: (id: number) => number | undefined): number | null
 /** Need(p): the pages and K entries laying page p reads (`lay`, `rows`: K indices ascending; pages ascending, `draw` from page 1),
  *  the pages laid with it (`ready`, p among them) and the last page whose part it reads (`bound`) */
 export interface Closure { pass: number[]; lay: number[]; draw: number[]; rows: number[]; ready: number[]; bound: number }

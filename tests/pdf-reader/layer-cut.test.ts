@@ -8,7 +8,7 @@ import {
   CONTENT_MAX, indexOf, type LayerIndex, mergeParts, PART_CAP, PART_VALUES, type PartChain, partTarget, type ReadPart, type ReadUnitsChunk, type ReadUnitsChunkLight, readHead, readLeftPart, readPart, readUnitsChunk, writePart,
   type Ref,
 } from '@/pdf-reader/engine/layer-proto/format.mjs'
-import { needBound, needsOf, rowLeadOf } from '@/pdf-reader/engine/layer-proto/need.mjs'
+import { lineAfterOf, needBound, needsOf, rowLeadOf } from '@/pdf-reader/engine/layer-proto/need.mjs'
 import { NAME_FLAG } from '@/pdf-reader/engine/layout/file.mjs'
 import { groupOf } from '@/pdf-reader/engine/translate/groups.mjs'
 import { encodeLayout, indexLayout } from '@/pdf-reader/engine/layout/file.mjs'
@@ -46,7 +46,7 @@ async function oracleK(whole: Whole): Promise<OracleEntry[]> {
       if (inGeometry.has(id)) continue
       let before = -1
       for (const [gid, s] of streamOf) if (gid < id && s > before) before = s
-      cands.push({ id, stream: before + 0.5, rects: null, lists: [], reach: new Set() })
+      cands.push({ id, stream: (lineAfterOf(index, id, gid => streamOf.get(gid)) ?? before) + 0.5, rects: null, lists: [], reach: new Set() })
     }
   }
   const K = cands.slice().sort((a, b) => a.stream - b.stream)
@@ -245,6 +245,25 @@ describe('the cut of a small paper', () => {
     const fileOnly = back.parts.flatMap(p => p.fileOnly)
     // unit 2: the largest stream of a left unit with a smaller id (units 0 and 1: 0, 5); unit 8: units 0 to 7 (150)
     expect(fileOnly).toEqual([[2, 5], [8, 150]])
+  })
+
+  it('puts a layout-only unit beside the left unit it shares one of TeX\'s lines with, before its text in K (2610.21547v1 p16)', async () => {
+    // (a paragraph on page 1, a caption numbered after it and set on page 2 (stream 30), a run-in head the layout file alone holds
+    // (unit 2) and its text on its row (unit 3, stream 5): by the ids the head stood after the caption, and so after its text)
+    const whole = wholeOf({ pages: 2, units: [{ stream: 0, rects: [1], lines: [1] }, { stream: 30, rects: [2], lines: [2], kind: 'caption' }, { stream: null, lines: [1], heading: 'Label flipping.' }, { stream: 5, rects: [1], lines: [1], perPage: 2 }] })
+    const L = whole.layout!
+    const rowsOf = (id: number) => L.lines.find(l => l[0] === id)![1]
+    const y = 700
+    rowsOf(2).splice(0, 8, 1, 72, 132.73, y, y + 8, y - 2, 10, 0)
+    rowsOf(3).splice(0, 16, 1, 142.69, 540, y, y + 8, y - 2, 10, 0, 1, 72, 540, y - 13.55, y - 5.55, y - 15.55, 10, 0)
+    const { K } = wholeFrontier(whole)
+    expect(K.map(e => [e.id, e.slot])).toEqual([[0, 0], [2, 4.5], [3, 5], [1, 30]])
+    expect(K.find(e => e.id === 3)!.follows).toBe(2)
+    // (the cut tells it so: its part's file-only entry stands before its text's stream, and its text follows it)
+    const back = await readBack(await cutPlain(whole, { leftPages: leftPagesOf(whole), base: BASE_OF }))
+    expect(back.parts.flatMap(p => p.fileOnly)).toEqual([[2, 4]])
+    // (the door's own K over the whole bundle is the same)
+    expect((await oracleK(whole)).map(e => [e.id, e.stream, e.follows])).toEqual([[0, 0, null], [2, 4.5, null], [3, 5, 2], [1, 30, null]])
   })
 
   it('is deterministic: the same input, the same bytes and keys', async () => {
