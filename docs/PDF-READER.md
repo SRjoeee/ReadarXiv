@@ -3093,8 +3093,14 @@ own), each part carrying its pages' cell rules (`rules`).
   `drawRounded`), its fills read of the numbers as PDF.js gives them first; its transform's scale is written as it is, so that
   no size a character is read at moves. A number written moves by half a thousandth at most, a character's baseline and origin
   so, its edges (its origin and its share of the width) by a thousandth: the E-C parity tier (`--door-draw=inputs`) compares
-  within those, a character's size, class, fill and `nu` exactly. A reader of 14 reads 13's draws too, their unmapped
-  characters read of their maps.
+  within those, a character's size, class, fill and `nu` exactly. A link's glyph points are compared the same way. A point
+  only one side holds inside the link is taken only within the rounding's reach of one of its boxes' edges: a character's
+  move plus the box's, two thousandths. On the gate's 7 papers that is 1 point in 3,585 links (2307.16209v1 p101: the `(` of
+  `(5.1)`, 0.0002 pt inside its link's edge). The pages tier (`--door-draw`) compares the pages drawn from the draws against
+  the same pages read live, exactly. Against 13 it differs on more pages, at the last digit the page's own rounding writes: SVG
+  markup on 4 more of 399 pages (one `tspan`'s x at 0.01), word tables on 23 more, the copy plane's pixels on 37 more. Links
+  and records are equal on every page, as on 13. A reader of 14 reads 13's draws too, their unmapped characters read of
+  their maps.
 - **The whole run's rules** (`WHOLE_RULES`, next's, or `whole: true` under any rules). The maker's frame, the columns' edges and
   the far-push columns read the whole document, so every part is cut once the whole is made, and the parts are `cutBundle`'s of
   the same whole, byte for byte. With the oracle (`oracle { frame, columnEdges }`, a whole run's, for tests and the lab) the
