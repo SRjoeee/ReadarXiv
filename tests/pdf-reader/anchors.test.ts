@@ -971,6 +971,22 @@ describe('matchUnits: a heading with no marks between neighbours found by their 
     }
   })
 
+  it('takes no neighbour of the same words, found so at one of several places, as its bound (2610.16663v1, two headings of one title)', () => {
+    // (a paragraph, the first heading, a float, the second heading of the same title, and a figure's panel of the title past
+    // them: each heading took the panel, the gap's last place; the first bounded by the second's place there was put on the
+    // second's own)
+    const two = [page([['the', 'first', 'paragraph', 'of', 'words'], ['a', 'long', 'paragraph', 'that', 'runs', 'before', 'it'], ['results']], 1), page([['results'], ['a', 'float', 'set', 'here']], 2), page([['results'], ['the', 'last', 'paragraph', 'of', 'all']], 3)]
+    const d = tokenizeDocument(two)
+    const us: UnitText[] = [
+      { id: 0, text: 'the first paragraph of words' }, { id: 1, text: 'a long paragraph that runs before it' }, { id: 2, text: 'Results' },
+      { id: 3, text: 'a float set here' }, { id: 4, text: 'Results' }, { id: 5, text: 'the last paragraph of all' },
+    ]
+    const b = new Map<string, [number, number]>([['0', [0, 4]], ['5', [d.findIndex(t => t.t === 'last') - 1, d.findIndex(t => t.t === 'all')]]])
+    const panel = d.findLastIndex(t => t.t === 'results')
+    const found = matchUnits(d, us, { bounds: b, floating: id => id === 3 })
+    expect([found[2]?.m, found[4]?.m]).toEqual([[panel], [panel]])
+  })
+
   it('stays the gap\'s last place where its neighbours leave no run of its words between them', () => {
     // (the heading's own line gone: its words come only past its text, where the gap's rule took them)
     const moved = [page([['the', 'first', 'paragraph', 'of', 'words'], ['a', 'long', 'paragraph', 'that', 'runs', 'before', 'it'], ['table', 'a', 'reports', 'the', 'depth', 'alone']], 1), pages[1] as TextPage]
