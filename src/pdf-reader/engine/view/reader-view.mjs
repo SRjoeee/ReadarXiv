@@ -155,6 +155,9 @@ export function createReaderView(host) {
     l10n: () => L.viewer.l10n,
     name: n => host.words.pageName('right', n),
     near: (n, on) => tell(listeners.near, n, on),
+    // (the left shows every page the right does, at the same viewport, while the two scroll together: a place waiting for its
+    // layer shows the left's drawing of its page, places.mjs)
+    borrow: () => active(),
     warn,
   })
 
@@ -381,10 +384,12 @@ export function createReaderView(host) {
     tellScale(scale)
     if (laid) tell(listeners.scale, scale, stepDelay)
   })
-  on(L.bus, 'pagerendered', ({ pageNumber, error }) => {
+  on(L.bus, 'pagerendered', ({ pageNumber, error, isDetailView }) => {
     if (!laid) return
     // the page's rounding is set as it is drawn: the place takes it
     places.size(pageNumber)
+    // (and its drawing, where the place shows the left's: a detail view's drawing is a part of the page's, over its canvas)
+    if (!isDetailView) places.leftDrawn(pageNumber, !error)
     lighting.paint(L)
     tell(listeners.drawn, 'left', pageNumber, error ?? null)
   })
@@ -904,6 +909,7 @@ export function createReaderView(host) {
     mode = d
     showMode()
     relayout(place)
+    places.settle()
   }
   function setNarrow(onNow, o = {}) {
     if (disposed) return
@@ -915,11 +921,14 @@ export function createReaderView(host) {
     html.toggleAttribute('data-axt-narrow', onNow)
     if (next !== mode) { mode = next; showMode() }
     relayout(place)
+    places.settle()
   }
   function setSync(onNow) {
     if (disposed) return
     syncOn = !!onNow
     reportSync()
+    // (a place waiting for the left's drawing of a page the left may no longer show draws its own)
+    places.settle()
   }
 
   // ---------------------------------------------------------------- going places
@@ -1098,6 +1107,7 @@ export function createReaderView(host) {
       restore(n) { places.restore(n); tellRightPage() },
       letAheadGo: () => places.letAheadGo(),
       aheadHeld: () => places.aheadHeld(),
+      settle: fn => places.settle(fn),
     },
     left: {
       doc: () => current?.doc ?? null, scale: () => L.viewer.currentScale,

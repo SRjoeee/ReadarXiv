@@ -177,6 +177,9 @@ export function createLayerSide(view, o) {
   /** whether this document's layer text rendering is decided (text-rendering.mjs applyLayerText, at a commit) */
   let textDecided = false
   const detach = V.attach({ dispose: () => side.dispose() })
+  // (the places' word on each page: one that stays the original's is drawn by its own page view, with its text layer and links;
+  // any other waits for its layer, showing the left's drawing of it, places.mjs. Told again as a page settles, settleSoon)
+  V.places.settle?.(n => settledOriginal(n))
   const warned = new Set()
   const warn = (what, e) => { if (warned.has(what)) return; warned.add(what); console.warn(`[reader] the layer's ${what}:`, e?.message ?? e) }
 
@@ -255,6 +258,8 @@ export function createLayerSide(view, o) {
     if (disposed || state === 'refused') return
     state = 'refused'
     why = w
+    // (no page is laid now: every place the original's own, its text layer and links)
+    V.places.settle?.()
     // (no layer for the visit: nothing for the places ahead to wait for)
     V.places.letAheadGo?.()
     unmarkAll()
@@ -527,6 +532,14 @@ export function createLayerSide(view, o) {
     ruled.add(n)
     emitLayer(true)
   }
+  /** whether page n stays the original's for now (places.mjs settle): the layer refused or let go, this attempt's rows not coming
+   *  (dropOthers), the page failed, stalled or shown as arXiv's by the rule, or laid with nothing of its own; the same pages that
+   *  carry no translating mark (markPage). Every other page may still be laid, and its place waits for it */
+  function settledOriginal(n) {
+    if (disposed || state === 'refused' || marksOff) return true
+    const P = pages.get(n)
+    return !!(P?.failed || P?.originalShown) || originalPageOf(n)
+  }
   /** a page whose layer is not coming now: its place back to its pre-layer content where it holds the layer's */
   function shownOriginal(n) {
     // (a near page settled as the original's: by the rule, a failure, a stall, nothing of its own to draw: the places ahead wait
@@ -538,6 +551,8 @@ export function createLayerSide(view, o) {
     const P = rec(n)
     P.originalShown = true
     if (P.content && (P.content.gen !== gen || !P.content.wrap)) unlay(n)
+    // (its place drawn by its own page view now, where it showed the left's drawing while it waited)
+    V.places.settle?.()
     // the right's shapes there the original's again, as its place is (the starts of its units alone)
     if (rHide(n)) startsFor(right.unitsOn(n))
   }
@@ -1731,6 +1746,7 @@ export function createLayerSide(view, o) {
       // (this attempt's rows will not come: no page says it is being translated until another attempt begins, again)
       marksOff = true
       unmarkAll()
+      V.places.settle?.()
       dropDrawings(c => c.target !== target || c.gen !== gen)
       const hid = []
       for (const [n, P] of pages) {
@@ -1790,8 +1806,9 @@ export function createLayerSide(view, o) {
     dispose() {
       if (disposed) return
       disposed = true
-      // (the side let go: no first page of it for the places ahead to wait for)
+      // (the side let go: no first page of it for the places ahead to wait for; the places told no page's word of it)
       V.places.letAheadGo?.()
+      V.places.settle?.(null)
       detach()
       feed.dispose()
       ac.abort()

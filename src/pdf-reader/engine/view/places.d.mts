@@ -5,7 +5,7 @@ export declare const NEAR: string
 /** the most a place near the view but not in it waits to draw the original's page (ms), from the places' making */
 export declare const AHEAD_HOLD_MS: number
 /** the left's page view as a place reads it: its page box (its style is the place's), its viewport and page */
-export interface OriginalPage { div: HTMLElement; viewport: PlaceView['viewport']; pdfPage: { view: number[] } | null }
+export interface OriginalPage { div: HTMLElement; viewport: PlaceView['viewport']; pdfPage: { view: number[] } | null; canvas?: HTMLCanvasElement | null; renderingState?: number; scale?: number }
 export interface Places {
   lay(count: number): void
   size(n?: number): void
@@ -30,11 +30,17 @@ export interface Places {
   letAheadGo(): void
   /** whether they still wait */
   aheadHeld(): boolean
+  /** the left's page n drawn at its page view's scale (`ok` false: its drawing failed): the places showing or waiting for the left's
+   *  drawing take it, one whose left drawing failed draws its own */
+  leftDrawn(n: number, ok?: boolean): void
+  /** the layer side's word on the pages (`fn(n)`: whether page n stays the original's; null: none does; omitted: the word kept),
+   *  and the places near told it again: one that no longer waits, or whose left no longer shows its page, draws its own */
+  settle(fn?: ((n: number) => boolean) | null): void
   /** a pinch shown by transform (true) and its end (false): the near window's word on each place held meanwhile, told at the end */
   holdNear(on: boolean): void
   views(): { get(n: number): PlaceView | null; all(): PlaceView[]; count(): number }
   rename(): void
-  probe(): { places: number; pageViews: number; skeletons: number; laidPlaces: number; nearPlaces: number; pageViewsMade: number; aheadHeld: boolean }
+  probe(): { places: number; pageViews: number; skeletons: number; laidPlaces: number; nearPlaces: number; pageViewsMade: number; aheadHeld: boolean; copies: number; copyPixels: number; copiesMade: number; copyWaits: number }
   dispose(): void
 }
 /** how long after a keyboard's jump the place jumped to may still take the focus when it comes to show its page */
@@ -54,5 +60,8 @@ export declare function createPlaces(o: {
   l10n(): unknown
   name(n: number): string
   near(n: number, on: boolean): void
+  /** whether the left shows every page the right does, at the same viewport (the two scrolling together, both shown): a place
+   *  waiting for its layer then shows the left's drawing of its page */
+  borrow?(): boolean
   warn(what: string, e: unknown): void
 }): Places

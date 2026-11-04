@@ -52,7 +52,10 @@ afterEach(() => {
 
 const views: ReaderView[] = []
 interface Setup { view: ReaderView; host: ReaderHost; events: ViewEvent[]; clock: ManualClock; panes: { left: HTMLElement; right: HTMLElement }; prefs: { set(p: Partial<ViewPrefs>): void }; words: { pageName: ReturnType<typeof vi.fn>; sideName: ReturnType<typeof vi.fn> } }
-function setup(o: { scrollEnd?: 'native' | 'timer'; titleFallback?: () => Promise<string> } = {}): Setup {
+/** the view over its stand-ins; `own` (by default): every page stays the original's, as a layer side says of a page it will not
+ *  lay, so that each place near the view draws its own page view (the rows below that are those page views'); false: the pages
+ *  wait for a layer, and a place shows the left's drawing of its page while the panes scroll together (V15) */
+function setup(o: { scrollEnd?: 'native' | 'timer'; titleFallback?: () => Promise<string>; own?: boolean } = {}): Setup {
   const panes = drawPanes()
   const events: ViewEvent[] = []
   const clock = manualClock()
@@ -68,6 +71,7 @@ function setup(o: { scrollEnd?: 'native' | 'timer'; titleFallback?: () => Promis
   }
   const view = createReaderView(host)
   views.push(view)
+  if (o.own !== false) internalsOf(view).places.settle?.(() => true)
   return { view, host, events, clock, panes, words, prefs: { set: p => { look = { ...look, ...p }; for (const l of listeners) l(look) } } }
 }
 const leftViewer = () => FakePDFViewer.made[0] as FakePDFViewer
@@ -1131,6 +1135,128 @@ describe('V11: the places before a layer', () => {
     await flush(30)
     expect(FakePDFPageView.made.map(v => v.draws)).toEqual([1, 1, 1])
     expect(FakePDFPageView.made.every(v => v.canvas)).toBe(true)
+  })
+})
+
+describe('V15: a place waiting for its layer shows the left\'s drawing of its page (places.mjs, the rules audit\'s V1)', () => {
+  const copyOf = (s: Setup, n: number) => (places(s)[n - 1] as HTMLElement).querySelector<HTMLCanvasElement>(':scope > .axt-place-view > canvas.axt-place-copy')
+  const viewsIn = (s: Setup) => FakePDFPageView.made.filter(v => s.panes.right.contains(v.div))
+  const leftPage = (n: number) => leftViewer().getPageView(n - 1) as unknown as { div: HTMLElement; canvas: HTMLCanvasElement | null }
+
+  it('the left\'s canvas copied at its size once the left has drawn the page: no page view, no text layer, no links of its own; the left\'s loading mark shown meanwhile', async () => {
+    const s = setup({ own: false })
+    await opened(s, 6)
+    await nearOn(s, [1, 2])
+    const P = internalsOf(s.view).places
+    // (waiting: the original's page there, still to come from the left; PDF.js's loading mark as the left's page shows it)
+    expect([P.contentOf(1), copyOf(s, 1), viewsIn(s).length]).toEqual(['original', null, 0])
+    leftPage(1).div.classList.add('loadingIcon', 'loading')
+    await flush()
+    expect((places(s)[0] as HTMLElement).classList.contains('loading')).toBe(true)
+    expect((places(s)[0] as HTMLElement).getAttribute('aria-label')).toBe('right 1')
+    leftViewer().render(1, null, { width: 612, height: 792, sx: 1, sy: 1 })
+    const c = copyOf(s, 1)
+    expect([c?.width, c?.height]).toEqual([612, 792])
+    expect((places(s)[0] as HTMLElement).classList.contains('loading')).toBe(false)
+    expect((places(s)[0] as HTMLElement).querySelector('.textLayer, .annotationLayer, .page')).toBeNull()
+    expect(viewsIn(s)).toHaveLength(0)
+    // (one bitmap a place: its copy; page 2 still waits for the left)
+    expect(P.contentOf(2)).toBe('original')
+    expect((s.view.probe() as Record<string, unknown>)).toMatchObject({ copies: 1, copyPixels: 612 * 792, copyWaits: 1, pageViews: 0 })
+    // a place come near once the left has drawn its page takes it at once
+    leftViewer().render(3, null, { width: 612, height: 792, sx: 1, sy: 1 })
+    await nearOn(s, [3])
+    expect(copyOf(s, 3)?.width).toBe(612)
+  })
+
+  it('a zoom: the copy kept and stretched with its place until the left draws the page at the new scale, then taken again, the one before let go', async () => {
+    const s = setup({ own: false })
+    await opened(s, 6)
+    await nearOn(s, [1])
+    leftViewer().render(1, null, { width: 612, height: 792, sx: 1, sy: 1 })
+    const before = copyOf(s, 1) as HTMLCanvasElement
+    s.view.zoomBy(1.5)
+    await s.clock.advance(100)
+    expect(copyOf(s, 1)).toBe(before)
+    leftViewer().render(1, null, { width: 918, height: 1188, sx: 1, sy: 1 })
+    const after = copyOf(s, 1) as HTMLCanvasElement
+    expect([after === before, after.width, before.width]).toEqual([false, 918, 0])
+    expect(viewsIn(s)).toHaveLength(0)
+  })
+
+  it('a page that stays the original\'s is drawn by its own page view (its text layer and links), the copy kept over it until it is drawn, then let go', async () => {
+    const s = setup({ own: false })
+    await opened(s, 6)
+    await nearOn(s, [1])
+    leftViewer().render(1, null, { width: 612, height: 792, sx: 1, sy: 1 })
+    const copy = copyOf(s, 1) as HTMLCanvasElement
+    let drawn = () => {}
+    const held = new Promise<void>(ok => { drawn = ok })
+    const draw = FakePDFPageView.prototype.draw
+    vi.spyOn(FakePDFPageView.prototype, 'draw').mockImplementation(async function (this: FakePDFPageView) { await held; return draw.call(this) })
+    internalsOf(s.view).places.settle?.(n => n === 1)
+    await flush(5)
+    const view = viewsIn(s)[0] as FakePDFPageView
+    // (over the page view, as it is drawn: the copy its holder's last child)
+    expect([view.id, copyOf(s, 1), (places(s)[0] as HTMLElement).querySelector('.axt-place-view')?.lastElementChild]).toEqual([1, copy, copy])
+    drawn()
+    await flush(10)
+    expect([copyOf(s, 1), copy.width]).toEqual([null, 0])
+    expect((places(s)[0] as HTMLElement).querySelector('.textLayer')?.textContent).toBe('page 1')
+    expect((places(s)[0] as HTMLElement).querySelectorAll('canvas')).toHaveLength(1)
+  })
+
+  it('where the left does not show the right\'s pages (the sync off, the right alone), a place draws its own page view; one waiting for the left then draws its own too', async () => {
+    const s = setup({ own: false })
+    await opened(s, 6)
+    s.view.setSync(false)
+    await nearOn(s, [1])
+    expect(viewsIn(s).map(v => v.id)).toEqual([1])
+    const t = setup({ own: false })
+    await opened(t, 6)
+    await nearOn(t, [2])
+    expect(viewsIn(t)).toHaveLength(0)
+    t.view.setDisplay('translation')
+    await flush(5)
+    expect(viewsIn(t).map(v => v.id)).toEqual([2])
+  })
+
+  it('a left page whose drawing failed: the place draws its own', async () => {
+    const s = setup({ own: false })
+    await opened(s, 6)
+    await nearOn(s, [1])
+    leftViewer().render(1, new Error('a broken page'))
+    await flush(5)
+    expect([viewsIn(s).map(v => v.id), copyOf(s, 1)]).toEqual([[1], null])
+  })
+
+  it('dark pages: the copy is a page\'s canvas to the host sheet, which dims it as it dims the left\'s', async () => {
+    const s = setup({ own: false })
+    await opened(s, 6)
+    await nearOn(s, [1])
+    leftViewer().render(1, null, { width: 612, height: 792, sx: 1, sy: 1 })
+    document.documentElement.setAttribute('data-axt-dim', '')
+    try {
+      expect(copyOf(s, 1)?.matches('html[data-axt-dim] .pdfViewer .page canvas')).toBe(true)
+    } finally { document.documentElement.removeAttribute('data-axt-dim') }
+  })
+
+  it('a far place lets its copy go, pixels and all, and its wait for the left; dispose leaves neither', async () => {
+    const s = setup({ own: false })
+    await opened(s, 6)
+    await nearOn(s, [1, 2])
+    leftViewer().render(1, null, { width: 612, height: 792, sx: 1, sy: 1 })
+    leftPage(2).div.classList.add('loadingIcon')
+    await flush()
+    const copy = copyOf(s, 1) as HTMLCanvasElement
+    await nearOn(s, [1, 2], false)
+    expect([copy.width, copy.isConnected, (places(s)[1] as HTMLElement).classList.contains('loadingIcon')]).toEqual([0, false, false])
+    expect(s.view.probe()).toMatchObject({ copies: 0, copyWaits: 0 })
+    await nearOn(s, [1])
+    expect(copyOf(s, 1)?.width).toBe(612)
+    const again = copyOf(s, 1) as HTMLCanvasElement
+    s.view.dispose()
+    expect([again.width, again.isConnected]).toEqual([0, false])
   })
 })
 

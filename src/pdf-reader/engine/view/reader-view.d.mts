@@ -167,6 +167,9 @@ export interface Internals {
     letAheadGo(): void
     /** whether they still wait */
     aheadHeld(): boolean
+    /** the layer side's word on the pages (`fn(n)`: whether page n stays the original's; null: none does; omitted: told again):
+     *  a place that waits for its layer shows the left's drawing of its page, one that stays the original's its own page view */
+    settle?(fn?: ((n: number) => boolean) | null): void
   }
   left: {
     doc(): ViewDocument | null

@@ -36,6 +36,10 @@
 .pdfViewer .page.axt-place { container-type: inline-size; }
 .axt-place-view { position: absolute; inset: 0; }
 .pdfViewer .page.axt-place .axt-place-view > .page { position: absolute !important; inset: 0; margin: 0 !important; border: 0 !important; box-shadow: none !important; }
+/* the left's drawing of the page, while the place waits for its layer (places.mjs copyLeft): placed as PDF.js places its own canvas
+   in its page box (pdf_viewer.css `.canvasWrapper canvas`), the place's box being the left page box's; dimmed by the host sheet's
+   rule for a page's canvas, as the left's is */
+.axt-place-view > .axt-place-copy { position: absolute; top: 0; left: 0; margin: 0; display: block; width: 100%; height: 100%; }
 /* a page of text in grey, while there is no original to draw (round 4's skeleton): sized in the page's own width (cqw), so
    that a page drawn at any zoom keeps its proportions; light, and dimmed in the dark */
 :root { --axt-sk: oklch(0.945 0.004 255); --axt-sk-paper: #fff; }
