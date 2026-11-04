@@ -3276,6 +3276,9 @@ const BOUNDARY_MAX = 0.5
 /** a token of punctuation alone (stretchesOf: no boundary) */
 const PUNCT_ONLY = /^\p{P}+$/u
 
+/** (stretchesOf's gaps, one buffer the run reuses: placeItems reads a line's before it asks for the next line's. A gap's kind:
+ *  0 none, 1 a CJK|Western boundary, 2 a CJK gap) */
+let GAP = new Float64Array(128), KIND = new Int8Array(128)
 /**
  * A justified line's stretch (placeItems), in the order TeX's glue and the layout requirements take it (JLREQ 3.8.4, CLREQ 6.3.4,
  * KLREQ 7.1.1 and 7.2.1): first its word spaces, each up to spaceMax × its natural width (the rules'), and in a CJK script's line
@@ -3284,20 +3287,16 @@ const PUNCT_ONLY = /^\p{P}+$/u
  * to cjkJust em (the rules'), but inside a pair UAX 14 keeps together (two em dashes, two ellipses: JLREQ's bunrikinshi, CLREQ's
  * unbreakable marks). A word of CJK characters a script keeps whole (Korean's, keepAll: one token) has those gaps between its
  * characters too (KLREQ 7.2.1, the inter-character spacing even space alignment adjusts). No gap inside Western text opens (a
- * word, a number, a formula and the word it is glued to): TeX's glue there is none. `slack` > 0. Returns { perSpace, gap, letter }:
+ * word, a number, a formula and the word it is glued to): TeX's glue there is none. `slack` > 0. Returns { perSpace, gap, letter }
+ * (`gap` the shared buffer GAP, good until the next call):
  * the stretch of each space, of the gap after each item but the last, and of each gap inside a CJK word; null where the line
  * cannot take its slack within those amounts (set ragged)
  */
 function stretchesOf(items, slack, f, P) {
-  // (a CJK item is a CJK script's (P.cjk): the alphabets' rules set curly quotes, dashes and the ellipsis as CJK tokens, cjkQuotes,
-  // which justify as the punctuation of their words there)
-  const n = items.length, cjk = it => !!P.cjk && it.t.cls === 'cjk', western = it => !it.t.space && !cjk(it)
-  // (a Western token of punctuation alone, a period, a comma or a parenthesis glued to a CJK word, is no Western text: no gap
-  // around punctuation opens, KLREQ 7.2.2, JLREQ 3.8.4's boundary being Western text's)
-  const text = it => western(it) && !(typeof it.t.s === 'string' && PUNCT_ONLY.test(it.t.s))
-  // (counted in one walk: placeItems runs on every breaking pass's lines)
+  const n = items.length, cjkOn = !!P.cjk
+  // (counted in one walk, and nothing made a line but its answer: placeItems runs on every breaking pass's lines)
   let spaces = 0, spaceW = 0
-  for (const it of items) if (it.t.space) { spaces++; spaceW += it.w }
+  for (let i = 0; i < n; i++) { const it = items[i]; if (it.t.space) { spaces++; spaceW += it.w } }
   let left = slack, perSpace = 0
   if (spaces) {
     const mean = spaceW / spaces
@@ -3306,35 +3305,46 @@ function stretchesOf(items, slack, f, P) {
     perSpace = cap
     left -= cap * spaces
   }
-  const gap = new Float64Array(Math.max(0, n - 1)), bounds = [], inner = []
+  if (GAP.length < n) { GAP = new Float64Array(2 * n); KIND = new Int8Array(2 * n) }
+  GAP.fill(0, 0, n)
+  // (a CJK item is a CJK script's (P.cjk): the alphabets' rules set curly quotes, dashes and the ellipsis as CJK tokens, cjkQuotes,
+  // which justify as the punctuation of their words there)
+  let bounds = 0, inner = 0, room = Infinity
+  for (let i = 0; i < n - 1; i++) {
+    const a = items[i], b = items[i + 1]
+    let k = 0
+    if (!a.t.space && !b.t.space) {
+      const ca = cjkOn && a.t.cls === 'cjk', cb = cjkOn && b.t.cls === 'cjk'
+      if (ca !== cb) {
+        // (a boundary is Western text's: not a token of punctuation alone, a period, a comma or a parenthesis glued to a CJK
+        // word, around which no gap opens, KLREQ 7.2.2; nor after a CJK closing mark or before an opening one, the mark's
+        // blank half being the space there, JLREQ adding no space between such a mark and Western text. In a script that
+        // keeps its words whole, Korean's (keepAll), a change of script inside a word, a digit or a Latin name glued to its
+        // syllables, is a gap of the word as theirs are, KLREQ 7.2.1: no boundary opens a space inside a word)
+        const w = ca ? b : a
+        if (!(typeof w.t.s === 'string' && PUNCT_ONLY.test(w.t.s)) && !(ca && a.t.punct === 'close') && !(cb && b.t.punct === 'open')) k = P.keepAll && b.t.glue ? 2 : 1
+      } else if (ca && !keptPair(a.t.s, b.t.s)) k = 2
+    }
+    KIND[i] = k
+    if (k === 1) { bounds++; room = Math.min(room, Math.max(0, BOUNDARY_MAX * f - (b.asp ?? 0))) }
+    else if (k === 2) inner++
+  }
+  if (bounds) {
+    if (Math.min(left / bounds, room) * bounds >= left - 1e-9) {
+      for (let i = 0; i < n - 1; i++) if (KIND[i] === 1) GAP[i] = left / bounds
+      return { perSpace, gap: GAP, letter: 0 }
+    }
+    // (each boundary to its own room, the rest of the slack to the CJK gaps)
+    for (let i = 0; i < n - 1; i++) if (KIND[i] === 1) { const r = Math.max(0, BOUNDARY_MAX * f - (items[i + 1].asp ?? 0)); GAP[i] = r; left -= r }
+  }
   // (the gaps inside the line's CJK words, a word's characters but one: a script that keeps its words whole (Korean's) alone
   // has CJK tokens of more than one character, Hangul's syllables each one UTF-16 unit)
   let within = 0
-  if (P.keepAll) for (const it of items) if (cjk(it) && typeof it.t.s === 'string' && it.t.s.length > 1) within += it.t.s.length - 1
-  for (let i = 0; i < n - 1; i++) {
-    const a = items[i], b = items[i + 1]
-    if (a.t.space || b.t.space) continue
-    // (nor after a CJK closing mark or before an opening one: the mark's blank half is the space there, JLREQ adding no
-    // space between such a mark and Western text)
-    // (in a script that keeps its words whole, Korean's (keepAll), a change of script inside a word, a digit or a Latin name
-    // glued to its syllables, is a gap of the word as theirs are, KLREQ 7.2.1: no boundary opens a space inside a word)
-    if ((cjk(a) && a.t.punct !== 'close' && text(b)) || (text(a) && cjk(b) && b.t.punct !== 'open')) (P.keepAll && b.t.glue ? inner : bounds).push(i)
-    else if (cjk(a) && cjk(b) && !keptPair(a.t.s, b.t.s)) inner.push(i)
-  }
-  if (bounds.length) {
-    const room = bounds.map(i => Math.max(0, BOUNDARY_MAX * f - (items[i + 1].asp ?? 0)))
-    const most = Math.min(left / bounds.length, Math.min(...room))
-    if (most * bounds.length >= left - 1e-9) {
-      for (const i of bounds) gap[i] = left / bounds.length
-      return { perSpace, gap, letter: 0 }
-    }
-    // (each boundary to its own room, the rest of the slack to the CJK gaps)
-    for (let k = 0; k < bounds.length; k++) { gap[bounds[k]] = room[k]; left -= room[k] }
-  }
-  const gaps = inner.length + within
+  if (P.keepAll) for (let i = 0; i < n; i++) { const t = items[i].t; if (cjkOn && t.cls === 'cjk' && typeof t.s === 'string' && t.s.length > 1) within += t.s.length - 1 }
+  const gaps = inner + within
   if (!gaps || left / gaps > P.cjkJust * f) return null
-  for (const i of inner) gap[i] = left / gaps
-  return { perSpace, gap, letter: left / gaps }
+  for (let i = 0; i < n - 1; i++) if (KIND[i] === 2) GAP[i] = left / gaps
+  return { perSpace, gap: GAP, letter: left / gaps }
 }
 
 /**
