@@ -1639,7 +1639,7 @@ describe("a unit's start mark before the marks that open its head piece (2610.21
   it("the layout marking flags its opening marks, and nothing else, as opening the piece after them", () => {
     const u = { kind: 'para', pieces: [{ t: 'ph', src: '$x$' }, { t: 'text', s: ' and ' }, { t: 'ph', src: '\\cite{k}' }, { t: 'text', s: '.' }] } as unknown as SourceUnit
     const { units: [c] } = layoutMarking([u], LAYOUT_CLASSES, { lines: false })
-    const opens = (c.pieces as { t: string; src?: string; opens?: boolean }[]).filter(p => p.opens).map(p => p.src)
+    const opens = ((c?.pieces ?? []) as { t: string; src?: string; opens?: boolean }[]).filter(p => p.opens).map(p => p.src)
     expect(opens).toEqual(['\\axtpmm{p0.0a}', '\\axtpma{p0.2a}'])
   })
 })
