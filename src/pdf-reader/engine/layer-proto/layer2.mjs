@@ -4028,15 +4028,33 @@ function* statesOf(P, blocks, s) {
   }
 }
 
+/** two of the fit's states alike: every knob's value, and the knob that set it */
+const sameState = (x, y) => x.lead === y.lead && x.track === y.track && x.trackLatin === y.trackLatin && x.compress === y.compress && x.borrow === y.borrow && x.scale === y.scale && x.knob === y.knob
+/** how many first states the fits of P and of `failed` share (statesOf), on the same blocks and size */
+function sharedStates(P, failed, blocks, s) {
+  const a = statesOf(P, blocks, s), b = statesOf(failed, blocks, s)
+  for (let n = 0; ; n++) {
+    const x = a.next(), y = b.next()
+    if (x.done || y.done || !sameState(x.value, y.value)) return n
+  }
+}
+
 /**
  * A unit laid out: the first state of the fit at which every token is placed; at the last, what fits, clipped (which the
  * host never draws: run.mjs fitFurther). P.flowPast (step 3): where a kept region still stops it, every state again with
  * the text run past the region (breakLines 'flow').
  * `s`: the original's size (PDF units). Returns { lines, f, s, scale, state, knob, clipped, lostChars, chars, tried }.
+ * `failed`: the parameters of a fit of the same tokens on the same blocks that set them at none of its states, strictly or
+ * run past a kept region (a clipped layoutUnit2), which differ from P only in what statesOf reads (run.mjs fitFurther's step
+ * below the floor: `floor`): the states the two fits share have been laid already, so this fit goes on from the first state of
+ * its own. Null where it has no state of its own
  */
-export function layoutUnit2(tokens, blocks, s, P) {
+export function layoutUnit2(tokens, blocks, s, P, failed = null) {
   let last = null, tried = 0
+  const skip = failed ? sharedStates(P, failed, blocks, s) : 0
+  let n = 0
   for (const st of statesOf(P, blocks, s)) {
+    if (n++ < skip) continue
     tried++
     work.fit++
     const f = s * st.scale
@@ -4044,14 +4062,16 @@ export function layoutUnit2(tokens, blocks, s, P) {
     last = { r, st, f }
     if (r.rest >= r.total) break
   }
+  if (!last) return null
   // nothing fits in order at the last state: the text may run on past a kept region (all of it shown, out of order), at the
   // most natural state at which it then fits. The walk down to the last state bought nothing the run past keeps: laid at the
   // last, a paragraph that runs on past a display was drawn at the floor's size though it fit far larger (the M1 survey of
   // 2608.16117, German page 10: units 28 and 35 at 0.8 and 0.85 of the original's size). Where it fits at none, the last
   // state's, as far as it goes
   if (last.r.rest < last.r.total && tokens.some(t => t.blockTo !== undefined)) {
-    let past = null
+    let past = null, n = 0
     for (const st of statesOf(P, blocks, s)) {
+      if (n++ < skip) continue
       tried++
       const f = s * st.scale
       past = { r: breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, false, blocks), st, f }
@@ -4073,7 +4093,7 @@ export function layoutUnit2(tokens, blocks, s, P) {
   // (fillBySize, P.growTo: where the most natural state sets the whole unit with lines to spare, the largest size up to
   // growTo × the original's at which it still does, its lines on the original's pitch: a loose original's paragraph
   // filled by its text's size, not by lines looser than the original's own)
-  if (P.growTo > 1 && tried === 1 && last.r.rest >= last.r.total) {
+  if (P.growTo > 1 && !skip && tried === 1 && last.r.rest >= last.r.total) {
     for (let k = Math.round((Math.min(P.growTo, P.capScale ?? Infinity) - 1) / P.step); k >= 1; k--) {
       work.fit++
       const st = { ...last.st, scale: Math.round((1 + k * P.step) * 1000) / 1000, knob: 'grow' }

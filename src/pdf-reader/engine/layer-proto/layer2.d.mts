@@ -406,7 +406,11 @@ export declare function cropBaselineOf(real: readonly Char[], lineInfo: Prepared
 export declare const SOLID: number
 /** the unit's leading relative to the original's own pitch: leadBase of a solid line, never closer than the original's */
 export declare function leadOf(blocks: readonly Pick<Block2, 'pitch0'>[], s: number, P: Pick<Params, 'leadBase'>): number
-export declare function layoutUnit2(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params): Layout
+/** `failed`: the parameters of a fit of the same tokens and blocks that set them at none of its states (differing from P only
+ *  in what the states read, `floor`): the states the two share are laid already, and this fit goes on from its own first; null
+ *  where it has none */
+export declare function layoutUnit2(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params, failed: Params): Layout | null
+export declare function layoutUnit2(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params, failed?: null): Layout
 /** a unit's run between its kept regions (a display each): its blocks (those of one `after`, from the unit's block `bi0`) and
  *  its tokens; with layoutRuns, its parameters and its own layout */
 export interface Run { after: number; idx: number[]; bi0: number; blocks: Block2[]; tokens: Token[]; P?: Params; layout?: Layout }

@@ -1854,7 +1854,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
    * P.floorMin. Returns the first layout that sets every token, with the blocks it was laid in (widened: with their
    * bands between the rules, `clear`, and the parameters they hold it to, `P`), or null.
    */
-  const fitFurther = (p, tokens, s) => {
+  const fitFurther = (p, tokens, s, walked) => {
     for (const step of P.further ?? []) {
       if (step === 'widen') {
         const wide = widenOverPaper(p)
@@ -1866,8 +1866,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         const l = L2.layoutUnit2(tokens, wide, s, PW)
         if (!l.clipped) return { layout: { ...l, knob: 'widen' }, blocks: wide, P: PW, clear }
       } else if (step === 'shrink' && P.floorMin < P.floor - 1e-9) {
-        const l = L2.layoutUnit2(tokens, p.blocks, s, { ...p.P, floor: P.floorMin })
-        if (!l.clipped) return { layout: { ...l, knob: 'below-floor' }, blocks: p.blocks }
+        // (the fit's own walk, which set none of its states (`walked`), goes on below the floor: the states above it were laid)
+        const l = L2.layoutUnit2(tokens, p.blocks, s, { ...p.P, floor: P.floorMin }, walked ? p.P : null)
+        if (l && !l.clipped) return { layout: { ...l, knob: 'below-floor' }, blocks: p.blocks }
       } else if (step === 'flow') {
         const l = L2.layoutUnit2(tokens, p.blocks, s, { ...p.P, flowPast: true })
         if (!l.clipped) return { layout: { ...l, knob: 'flow' }, blocks: p.blocks }
@@ -2277,6 +2278,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // break before each later page at its share of the paragraph's height, at a line end (E3c by height, layoutCut), kept
     // where it fits: its further steps and passes then lay the tokens it holds)
     ;({ layout: p.layout, tokens: p.tokens } = L2.layoutCut(tokens, p.blocks, s, p.P))
+    // (clipped, the fit's walk at p.P over the unit's tokens and blocks: layoutCut's first, which fitFurther goes on from)
+    const walked = { layout: p.layout, blocks: p.blocks, P: p.P }
     // a numbered heading set in fewer lines than the original's: laid again on the original's last lines with its number as
     // its first line's start, the number's own ink copied there (a crop: its face, its colour, the space its class set after
     // it, as the original's) and erased where it was. Where that does not fit, or moves it nowhere, as it was
@@ -2300,7 +2303,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (over) { p.blocks = over.blocks; p.layout = over.layout; p.tokens = over.tokens; p.over = { id: over.id }; p.rects0 = rects0 }
     // (step 3: never drawn in part: given more room where the page has it, else left the original's, whole)
     if (p.layout.clipped) {
-      const further = fitFurther(p, tokens, s)
+      const further = fitFurther(p, tokens, s, p.layout === walked.layout && p.blocks === walked.blocks && p.P === walked.P)
       if (further) { p.layout = further.layout; p.blocks = further.blocks; if (further.P) { p.P = further.P; p.clear = further.clear } }
       else { p.refused = true; unlead(p); return }
     } else if (p.unit.kind !== 'cell') {
