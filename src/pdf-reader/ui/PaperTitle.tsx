@@ -30,12 +30,18 @@ export function PaperTitle({ id, title }: { id: string; title: string }) {
   useLayoutEffect(() => {
     const own = box.current, lead = own?.parentElement, arxiv = own?.querySelector('[data-arxiv]')
     if (!own || !lead || !arxiv) return
-    // what the lead needs beside the paper: its contents' button and the gaps, all but this box; read in the observer's first
-    // callback, where the layout is the browser's own, made for the frame about to be painted
+    // what the lead needs beside the paper: its contents' button and the gaps, all but this box; read in the observer's callback,
+    // where the layout is the browser's own, made for the frame about to be painted, once the id is laid out (a host's sheet may
+    // leave the whole title out at first, as the web's does where its own mark says the lead is short: the id has no width then,
+    // and is read when it has)
     let need = -1
     const observer = new ResizeObserver(([entry]) => {
       if (!entry) return
-      if (need < 0) need = arxiv.getBoundingClientRect().width + (own.getBoundingClientRect().left - lead.getBoundingClientRect().left) + Number.parseFloat(getComputedStyle(own).paddingInlineStart)
+      if (need < 0) {
+        const id = arxiv.getBoundingClientRect().width
+        if (!(id > 0)) return
+        need = id + (own.getBoundingClientRect().left - lead.getBoundingClientRect().left) + Number.parseFloat(getComputedStyle(own).paddingInlineStart)
+      }
       // (rendered at once, in the callback: the frame it runs in paints the answer; a state set here alone would be rendered in a
       // task after that paint. The lead has no padding, so its box is its content's)
       const next = entry.contentRect.width < need
