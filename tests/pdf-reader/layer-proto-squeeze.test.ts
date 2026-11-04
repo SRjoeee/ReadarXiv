@@ -90,12 +90,13 @@ describe('a CJK line squeezes to take the group it misses by a little, where tha
   })
   it("gives a mark's blank half first, as CJK punctuation compression does, and spreads what it gave too much", () => {
     // 102 pt: three characters, a comma, four characters (80) and the formula (25): 3 pt over. The comma gives its 5 pt, and
-    // the 2 pt left over are spread over the eight gaps; no gap closes
+    // the 2 pt left over are the line's slack, taken in the glue's order: the boundary between the CJK text and the formula
+    // first (JLREQ 3.8.4 b, up to half an em), 0.2 em; no gap closes, and the CJK gaps stay solid
     const { shown, lines, gaps } = lay([text(`${han(3)}${COMMA}${han(4)}`), ph(), text(han(6))], 'zh', 102, { 1: 25 })
     expect(shown[0]).toBe(`${han(3)}${COMMA}${han(4)}[F]`)
     expect(lines[0]!.squeezed).toBe(true)
     expect(lines[0]!.items[3]!.w).toBeCloseTo(5, 6)
-    for (const g of gaps(0)) expect(g).toBeCloseTo(0.025, 3)
+    expect(gaps(0)).toEqual([0, 0, 0, 0, 0, 0, 0, 0.2])
     expect(lines[0]!.used).toBeCloseTo(102, 6)
   })
   it('leaves a line alone whose stretch does not read as letter-spaced (at most 0.05 em a gap)', () => {

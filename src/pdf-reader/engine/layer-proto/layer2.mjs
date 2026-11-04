@@ -3264,6 +3264,63 @@ const latinishOf = (items, P) => items.some(it => it.t.space) && (P.keepAll || i
  *  (compress 2: every mark has lost its half) or the rules compress none (compressMax 0) */
 const squeezable = (items, hangs, compress, P) => (compress < P.compressMax ? items.filter((it, n) => it.t.punct && !it.cut && SQUEEZE_MARKS.test(it.t.s) && !(hangs && n === items.length - 1)) : [])
 
+/** the most a boundary between CJK text and Western text (a Latin word, a digit, a formula's crop) opens to justify a line, in
+ *  em with its own spacing (the autospace, `asp`): the layout requirements' half em (JLREQ 3.8.4 b, CLREQ 6.3.4's expansion step 2:
+ *  "up to a maximum of half the width of a Han character") */
+const BOUNDARY_MAX = 0.5
+/** a token of punctuation alone (stretchesOf: no boundary) */
+const PUNCT_ONLY = /^\p{P}+$/u
+
+/**
+ * A justified line's stretch (placeItems), in the order TeX's glue and the layout requirements take it (JLREQ 3.8.4, CLREQ 6.3.4,
+ * KLREQ 7.1.1 and 7.2.1): first its word spaces, each up to spaceMax × its natural width (the rules'), and in a CJK script's line
+ * to half an em at most with its natural width (JLREQ 3.8.4 a, CLREQ 6.3.4: a Western word space there); then each boundary between
+ * CJK text and Western text (not a mark of punctuation alone), up to BOUNDARY_MAX em with its autospace; then every other gap between two CJK characters equally, up
+ * to cjkJust em (the rules'), but inside a pair UAX 14 keeps together (two em dashes, two ellipses: JLREQ's bunrikinshi, CLREQ's
+ * unbreakable marks). No gap inside Western text opens (a word, a number, a formula and the word it is glued to): TeX's glue there
+ * is none. `slack` > 0. Returns { perSpace, gap }: the stretch of each space and of the gap after each item but the last; null
+ * where the line cannot take its slack within those amounts (set ragged)
+ */
+function stretchesOf(items, slack, f, P) {
+  // (a CJK item is a CJK script's (P.cjk): the alphabets' rules set curly quotes, dashes and the ellipsis as CJK tokens, cjkQuotes,
+  // which justify as the punctuation of their words there)
+  const n = items.length, cjk = it => !!P.cjk && it.t.cls === 'cjk', western = it => !it.t.space && !cjk(it)
+  // (a Western token of punctuation alone, a period, a comma or a parenthesis glued to a CJK word, is no Western text: no gap
+  // around punctuation opens, KLREQ 7.2.2, JLREQ 3.8.4's boundary being Western text's)
+  const text = it => western(it) && !(typeof it.t.s === 'string' && PUNCT_ONLY.test(it.t.s))
+  const spaces = items.filter(it => it.t.space)
+  let left = slack, perSpace = 0
+  if (spaces.length) {
+    const mean = spaces.reduce((a, it) => a + it.w, 0) / spaces.length
+    const per = left / spaces.length, cap = P.cjk ? Math.max(0, Math.min(P.spaceMax * mean, BOUNDARY_MAX * f - mean)) : P.spaceMax * mean
+    if (per <= cap) return { perSpace: per, gap: null }
+    perSpace = cap
+    left -= cap * spaces.length
+  }
+  const gap = new Float64Array(Math.max(0, n - 1)), bounds = [], inner = []
+  for (let i = 0; i < n - 1; i++) {
+    const a = items[i], b = items[i + 1]
+    if (a.t.space || b.t.space) continue
+    // (nor after a CJK closing mark or before an opening one: the mark's blank half is the space there, JLREQ adding no
+    // space between such a mark and Western text)
+    if ((cjk(a) && a.t.punct !== 'close' && text(b)) || (text(a) && cjk(b) && b.t.punct !== 'open')) bounds.push(i)
+    else if (cjk(a) && cjk(b) && !keptPair(a.t.s, b.t.s)) inner.push(i)
+  }
+  if (bounds.length) {
+    const room = bounds.map(i => Math.max(0, BOUNDARY_MAX * f - (items[i + 1].asp ?? 0)))
+    const most = Math.min(left / bounds.length, Math.min(...room))
+    if (most * bounds.length >= left - 1e-9) {
+      for (const i of bounds) gap[i] = left / bounds.length
+      return { perSpace, gap }
+    }
+    // (each boundary to its own room, the rest of the slack to the CJK gaps)
+    for (let k = 0; k < bounds.length; k++) { gap[bounds[k]] = room[k]; left -= room[k] }
+  }
+  if (!inner.length || left / inner.length > P.cjkJust * f) return null
+  for (const i of inner) gap[i] = left / inner.length
+  return { perSpace, gap }
+}
+
 /**
  * Tokens into slots, greedily, at font size f: each line { ...slot, items: [{ t, w, shift }] } with the items' natural
  * widths (punctuation compressed as the state allows), the space a line may shrink, and `rest`, the first token left.
@@ -3919,24 +3976,21 @@ function placeItems(lines, f, P) {
         slack = 0
       }
     }
+    // (justified, its stretch in the glue's order: stretchesOf; a line it cannot justify within its amounts is set ragged, at its
+    // natural spacing)
+    let gap = null
     if (slack < 0 && spaces.length) perSpace = slack / spaces.length // shrunk spaces (never past spaceMin by the breaking)
-    else if (line.mode === 'just' && slack > 0) {
-      if (latinish) {
-        const per = slack / spaces.length
-        if (per <= P.spaceMax * (spW / spaces.length)) perSpace = per
-        else line.mode = 'ragged'
-      } else {
-        const gaps = line.items.length - 1
-        if (gaps > 0 && slack / gaps <= P.cjkJust * f) perGap = slack / gaps
-        else if (gaps > 0) line.mode = 'ragged'
-      }
+    else if (line.mode === 'just' && slack > 0 && line.items.length > 1) {
+      const glue = stretchesOf(line.items, slack, f, P)
+      if (glue) ({ perSpace, gap } = glue)
+      else line.mode = 'ragged'
     }
     if (line.mode === 'last' && slack < 0 && !spaces.length) slack = 0
     let x = line.x0 + (line.centred ? Math.max(0, slack) / 2 : line.mode === 'right' ? Math.max(0, slack) : 0)
     line.items.forEach((it, n) => {
       x += it.asp ?? 0
       it.x = x + (it.shift ?? 0)
-      x += it.w + (it.kern ?? 0) + (it.t.space ? perSpace : 0) + (n < line.items.length - 1 ? perGap : 0)
+      x += it.w + (it.kern ?? 0) + (it.t.space ? perSpace : 0) + (n < line.items.length - 1 ? (gap ? gap[n] : perGap) : 0)
     })
     line.used = x - line.x0
     line.cap = cap
