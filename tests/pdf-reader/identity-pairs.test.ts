@@ -29,7 +29,9 @@ const verdicts = (u: Unit) => u.pieces.filter(p => p.t === 'open').map(p => `${(
 describe('the kernel: a definition that sets one of its arguments alone', () => {
   it('a body that is one argument, or the kernel\'s selectors of none declared; nothing else', () => {
     expect(selectsArgument(2, '#2')).toEqual({ of: 2, arg: 2 })
-    expect(selectsArgument(1, ' #1 ')).toEqual({ of: 1, arg: 1 })
+    expect(selectsArgument(0, '\\@secondoftwo ')).toEqual({ of: 2, arg: 2 })
+    // (white space is TeX's: before or after a parameter a space token the call sets; after a control word skipped)
+    for (const body of [' #1 ', '#1 ', ' #1', '\n#1', '#1\n', ' \\@secondoftwo']) expect(selectsArgument(body.includes('@') ? 0 : 1, body), JSON.stringify(body)).toBeNull()
     expect(selectsArgument(0, '\\@secondoftwo')).toEqual({ of: 2, arg: 2 })
     expect(selectsArgument(0, '\\@firstofone')).toEqual({ of: 1, arg: 1 })
     for (const [n, body] of [[1, '\\textsc{#1}'], [1, '``#1\'\''], [1, '{#1}'], [2, '#1#2'], [1, '#2'], [0, '\\@gobble'], [1, '\\@secondoftwo']] as const) expect(selectsArgument(n, body), body).toBeNull()
@@ -59,6 +61,12 @@ describe('the front end: a pair\'s verdict from its command\'s definition', () =
   it('a paper\'s macro whose body is its argument alone is no pair on the wire; one that sets a style is', () => {
     const p = open({ 'main.tex': `\\documentclass{article}\n\\newcommand{\\plain}[1]{#1}\\newcommand{\\loud}[1]{\\textbf{#1}}\n\\begin{document}\nWe study \\plain{deep flows} and \\loud{shallow ones} in turn.\n\\end{document}\n` })
     expect(verdicts((p.units as unknown as Unit[])[0]!)).toEqual(['\\plain:nothing', '\\loud'])
+  })
+  it('one whose body sets a space beside its argument is no identity, its space kept; one whose lines end in comments is (review of #581)', () => {
+    const p = open({ 'main.tex': `\\documentclass{article}\n\\newcommand{\\word}[1]{#1 }\n\\newcommand{\\same}[1]{%\n  #1%\n}\n\\begin{document}\nWe study \\word{deep}flows and \\same{shallow ones} in turn.\n\\end{document}\n` })
+    const u = (p.units as unknown as Unit[])[0]!
+    expect(verdicts(u)).toEqual(['\\word', '\\same:nothing'])
+    expect(serialize(u).wire).not.toContain('deepflows')
   })
   it('the verdict is no field of the unit: its hash, its JSON and its marks are its pieces\' as before', async () => {
     const a = entryOf(open({ 'main.tex': doc('Text \\cite{s20}.'), 'main.bbl': bbl(APS_HEAD) })), b = entryOf(open({ 'main.tex': doc('Text \\cite{s20}.'), 'main.bbl': bbl('') }))

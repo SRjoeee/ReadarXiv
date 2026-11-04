@@ -80,14 +80,17 @@ export const ROW_RULES = Object.freeze(['hline', 'cline', 'toprule', 'midrule', 
  *  (latex.ltx: \@firstofone and \@iden take one, \@firstoftwo and \@secondoftwo two). A .bbl defines its field commands by them
  *  (apsrev4-2's `\providecommand \bibinfo [0]{\@secondoftwo}`) */
 export const ARGUMENT_SELECTORS = Object.freeze({ '@firstofone': [1, 1], '@iden': [1, 1], '@firstoftwo': [2, 1], '@secondoftwo': [2, 2] })
-/** the argument a definition expands to alone (`params`, the arguments it declares; `body`, its replacement text, comments out),
- *  as { of, arg }: how many arguments a call takes and which one, from 1, it sets — `#2` of `[2]`, \@secondoftwo of `[0]`; null
- *  for a body that sets anything else (a style, a word, a box) or nothing at all */
+/** the argument a definition expands to alone (`params`, the arguments it declares; `body`, its replacement text, its comments
+ *  out as TeX takes them, each with its line's end), as { of, arg }: how many arguments a call takes and which one, from 1, it
+ *  sets — `#2` of `[2]`, \@secondoftwo of `[0]`; null for a body that sets anything else (a style, a word, a box, a space) or
+ *  nothing at all. White space is TeX's: a space or a line's end before or after a parameter is a space token the call sets
+ *  (`{#1 }` sets its argument and a space, `{` and a line's end then `#1}` a space and its argument), and is no identity;
+ *  after a control word TeX skips it (`{\@secondoftwo }`) */
 export function selectsArgument(params, body) {
   if (!Number.isInteger(params) || typeof body !== 'string') return null
-  const b = body.trim(), own = /^#([1-9])$/.exec(b)
+  const own = /^#([1-9])$/.exec(body)
   if (own) return Number(own[1]) <= params ? { of: params, arg: Number(own[1]) } : null
-  const k = /^\\(@[A-Za-z]+)$/.exec(b), sel = k && params === 0 && Object.hasOwn(ARGUMENT_SELECTORS, k[1]) ? ARGUMENT_SELECTORS[k[1]] : null
+  const k = /^\\(@[A-Za-z]+)\s*$/.exec(body), sel = k && params === 0 && Object.hasOwn(ARGUMENT_SELECTORS, k[1]) ? ARGUMENT_SELECTORS[k[1]] : null
   return sel ? { of: sel[0], arg: sel[1] } : null
 }
 

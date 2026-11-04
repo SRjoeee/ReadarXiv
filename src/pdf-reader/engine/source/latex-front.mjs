@@ -456,6 +456,9 @@ function placeCells(units, file, grid, table) {
 }
 const TBLR_MATH = /\bmode\s*=\s*[id]?math\b/
 const uncommented = text => text.replace(/(^|[^\\])%.*$/gm, '$1')
+/** a text with its comments out as TeX takes them: a comment with its line's end, and the next line's leading spaces, which TeX
+ *  skips there, so that a definition's replacement text is the tokens TeX reads (rules/tex-kernel.mjs selectsArgument) */
+const texUncommented = text => text.replace(/(^|[^\\])%[^\n]*(?:\n[ \t]*)?/g, '$1')
 
 // ---------------------------------------------------------------- scanning primitives
 const isLetter = c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c === '@'
@@ -2371,7 +2374,7 @@ function bibliography(s, from, to, b, ctx) {
  * `\providecommand\bibinfo[2]{#2}`)
  */
 function bibDefinitions(head) {
-  const out = new Map(), t = uncommented(head)
+  const out = new Map(), t = texUncommented(head)
   const re = /\\(?:(?:provide|new)command\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[(\d)\])?|[egx]?def\s*\\([A-Za-z@]+)\s*((?:#\d\s*)*))(?=\s*\{)/g
   for (const m of t.matchAll(re)) {
     const name = m[1] ?? m[2] ?? m[4], k = skipSpaces(t, m.index + m[0].length), e = t[k] === '{' ? matchGroup(t, k) : -1
@@ -2385,7 +2388,7 @@ function bibDefinitions(head) {
  *  goes on no wire (translate/mt.mjs classOf). No name is listed: a style that sets the field in small capitals, a paper's
  *  `\newcommand\bibnamefont[1]{\textsc{#1}}`, is no identity and stays a pair */
 function identityPair(macro, arg) {
-  const sel = macro && selectsArgument(macro.params, typeof macro.def === 'string' ? uncommented(macro.def) : null)
+  const sel = macro && selectsArgument(macro.params, typeof macro.def === 'string' ? texUncommented(macro.def) : null)
   return !!sel && sel.arg === arg && sel.of === arg
 }
 /**
