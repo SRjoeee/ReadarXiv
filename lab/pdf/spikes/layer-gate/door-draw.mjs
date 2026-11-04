@@ -305,13 +305,36 @@ const near = (u, v, tol, key, out) => {
   if (d > 0) out.drift[key] = Math.max(out.drift[key] ?? 0, d)
   return d <= tol + EPS
 }
-/** two links' readings alike: their shapes and every string exactly, their numbers within TOL.link */
-const sameRead = (u, v, out) => {
+/** two links' readings alike: their shapes and every string exactly, their numbers within TOL.link, and a link's glyph points
+ *  (`g`, `g2`) by samePoints */
+const sameRead = (u, v, out, boxes = null) => {
   if (typeof u === 'number' && typeof v === 'number') return Object.is(u, v) || near(u, v, TOL.link ?? 0, 'link', out)
   if (u === null || v === null || typeof u !== 'object' || typeof v !== 'object') return Object.is(u, v)
   if (Array.isArray(u) !== Array.isArray(v)) return false
   const ku = Object.keys(u), kv = Object.keys(v)
-  return ku.length === kv.length && ku.every(k => Object.hasOwn(v, k) && sameRead(u[k], v[k], out))
+  const own = Array.isArray(u.boxes) ? u.boxes : boxes
+  return ku.length === kv.length && ku.every(k => Object.hasOwn(v, k) && ((k === 'g' || k === 'g2') && own ? samePoints(u[k], v[k], own, out) : sameRead(u[k], v[k], out, own)))
+}
+/** a link's glyph points alike (links.mjs annotsOf's `g` or `g2`: { x, y, ch, key? } columns in the page's order): each point
+ *  both hold within TOL.x0 and its character exactly; a point only one holds only where it lies within the rounding's reach of
+ *  an edge of one of the link's boxes (TOL.x0, a character's move, and TOL.link, the box's: the draw's rounding can carry a
+ *  point across the edge and nothing else can), each such point counted in `out.edge` */
+function samePoints(u, v, boxes, out) {
+  if (!TOL.link) return sameRead(u, v, out)
+  const reach = (TOL.x0 ?? 0) + TOL.link + EPS
+  const atEdge = (x, y) => boxes.some(b => x >= b[0] - reach && x <= b[2] + reach && y >= b[1] - reach && y <= b[3] + reach
+    && (Math.abs(x - b[0]) <= reach || Math.abs(x - b[2]) <= reach || Math.abs(y - b[1]) <= reach || Math.abs(y - b[3]) <= reach))
+  const key = (g, k) => (g.key ? g.key[k] : null)
+  const same = (i, j) => u.ch[i] === v.ch[j] && Object.is(key(u, i), key(v, j)) && near(u.x[i], v.x[j], TOL.x0 ?? 0, 'x0', out) && near(u.y[i], v.y[j], TOL.x0 ?? 0, 'x0', out)
+  let i = 0, j = 0, edge = 0
+  while (i < u.x.length || j < v.x.length) {
+    if (i < u.x.length && j < v.x.length && same(i, j)) { i++; j++; continue }
+    if (i < u.x.length && atEdge(u.x[i], u.y[i]) && (j >= v.x.length || i + 1 >= u.x.length || same(i + 1, j))) { i++; edge++; continue }
+    if (j < v.x.length && atEdge(v.x[j], v.y[j])) { j++; edge++; continue }
+    return false
+  }
+  out.edge = (out.edge ?? 0) + edge
+  return true
 }
 function differs(a, b, out) {
   if (a.chars.length !== b.chars.length) return `chars ${a.chars.length} against ${b.chars.length}`
