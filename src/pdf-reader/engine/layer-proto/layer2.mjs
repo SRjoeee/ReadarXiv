@@ -3295,6 +3295,12 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
   // the slots below it are too few for it and those above it too many; the last resort before the unit is not drawn)
   const flow = strict === 'flow'
   let tokens = tokensIn
+  // (a token laid in part, or loosed from the glue before it, is replaced where it stands, in the pass's own copy of the
+  // tokens, made at the first such change: the caller's are read by every pass of the unit)
+  const setToken = (q, t) => {
+    if (tokens === tokensIn) tokens = tokensIn.slice()
+    tokens[q] = t
+  }
   const slots = slotsIn.slice()
   const lines = []
   let li = 0, i = 0
@@ -3720,7 +3726,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
         }
         if (q === m) {
           // (the word whole on the line: what is glued after it goes on, as the group's first token alone does below)
-          if (tokens[m]) tokens = [...tokens.slice(0, m), { ...tokens[m], glue: false }, ...tokens.slice(m + 1)]
+          if (tokens[m]) setToken(m, { ...tokens[m], glue: false })
         } else {
           const t = tokens[q], chars = graphemesOf(t.s)
           const per = chars.map(c => (w100(c, t.face) * (t.sc ?? 1) * f) / 100)
@@ -3732,8 +3738,8 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
             line.items.push({ t: headOfCut(t, { s: chars.slice(0, k).join('') }), w: head, shift: 0, asp: 0 })
             used += head
             const tail = chars.slice(k).join('')
-            tokens = [...tokens.slice(0, q), { ...t, s: tail, w100: w100(tail, t.face) * (t.sc ?? 1), glue: false, cont: false, asp: false }, ...tokens.slice(q + 1)]
-          } else tokens = [...tokens.slice(0, q), { ...t, glue: false, cont: false }, ...tokens.slice(q + 1)]
+            setToken(q, { ...t, s: tail, w100: w100(tail, t.face) * (t.sc ?? 1), glue: false, cont: false, asp: false })
+          } else setToken(q, { ...t, glue: false, cont: false })
         }
         line.x += used
         i = q
@@ -3747,12 +3753,12 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
         while (k > 1 && k < chars.length && cutBarred(chars, k)) k--
         line.items.push({ t: headOfCut(t0, { s: chars.slice(0, k).join('') }), w: per.slice(0, k).reduce((a, b) => a + b, 0), shift: 0, asp: 0 })
         const tail = chars.slice(k).join('')
-        tokens = [...tokens.slice(0, i), { ...t0, s: tail, w100: w100(tail, t0.face) * (t0.sc ?? 1), glue: false, asp: false }, ...tokens.slice(i + 1)]
+        setToken(i, { ...t0, s: tail, w100: w100(tail, t0.face) * (t0.sc ?? 1), glue: false, asp: false })
       } else {
         // the group's first token alone (the rest goes on): a glued group never runs past the line
         line.items.push(items[0])
         line.x += items[0].w + (items[0].asp ?? 0)
-        if (tokens[i + 1]) tokens = [...tokens.slice(0, i + 1), { ...tokens[i + 1], glue: false }, ...tokens.slice(i + 2)]
+        if (tokens[i + 1]) setToken(i + 1, { ...tokens[i + 1], glue: false })
         i++
       }
       advance()
@@ -3782,7 +3788,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
         line.items.push({ t: headOfCut(t0, { s: cut.head, hyphenated: true }), w: cut.hw, shift: 0, asp })
         line.x += cut.hw + asp
         const tail = word.slice(cut.at)
-        tokens = [...tokens.slice(0, i), { ...t0, s: tail, w100: w100(tail, t0.face) * (t0.sc ?? 1), glue: false, asp: false }, ...tokens.slice(i + 1)]
+        setToken(i, { ...t0, s: tail, w100: w100(tail, t0.face) * (t0.sc ?? 1), glue: false, asp: false })
       }
     }
     // the line is closed: its trailing spaces dropped
