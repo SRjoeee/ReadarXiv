@@ -416,6 +416,14 @@ describe('fewer markers, each read from TeX', () => {
     // (the space before the close's marker the wire's: it set one beside the digit)
     expect(flat(rehydrate('@a# 第 2149 步 @b# 工具输出', ser))).toBe('<1| 第 2149 步|1>| 工具输出|<2|[\\color{blue}]|\n')
   })
+  it('one inside the unit\'s words keeps its place: the unit goes as one whose pairs do not nest, its style where it began (Codex on #581)', () => {
+    // a group the cut ends inside a paragraph: `Normal words {\bfseries bold words.`, its close the next unit's
+    const u = unit(text('Normal words '), { t: 'open', id: 1, src: '{' }, ph('\\bfseries'), text('bold words.'))
+    const ser = serialize(u)
+    expect(ser.wire).toBe('Normal words @a# bold words.')
+    expect(flat(rehydrate('Des mots normaux @a# des mots gras.', ser))).toBe('Des mots normaux |<1|[\\bfseries]| des mots gras.')
+    expect(readsBack('Des mots normaux @a# des mots gras.', ser)).toBe(true)
+  })
 })
 
 // The one reading of a reply (readsBack), handed to the send with each text (`accepts`), so that a chain falls through to its

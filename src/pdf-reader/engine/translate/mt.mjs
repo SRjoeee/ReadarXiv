@@ -154,7 +154,7 @@ export function holdsStyle(pieces) {
 /** a pair's ends whose other end the unit does not hold, by index: an open the next unit closes (a group a unit ends inside,
  *  2610.19159's transcripts' `{\color{…}`; `\multirow{`, whose close the next cell holds), a close of one the unit before opened.
  *  No reading pairs them: 382 of the 53 sweep papers' units held one, and every reply of theirs, an echo of the wire too, was
- *  refused for its pairs and the unit sent again as runs. Each stands at its unit's front or back (all 386 there) */
+ *  refused for its pairs and the unit sent again as runs. All 386 stand at their unit's front or back (edgeEnds) */
 function loneEnds(pieces) {
   const opens = new Set(), closes = new Set(), lone = new Set()
   for (const p of pieces) if (p?.t === 'open') opens.add(p.id); else if (p?.t === 'close') closes.add(p.id)
@@ -162,8 +162,18 @@ function loneEnds(pieces) {
   pieces.forEach((p, k) => { if ((p?.t === 'open' && !closes.has(p.id)) || (p?.t === 'close' && !opens.has(p.id))) lone.add(k) })
   return lone
 }
-/** a unit's pieces as a tree: each pair a node of what it holds (`seq`), each other piece a leaf, a lone end (`lone`, loneEnds)
- *  among them; null where the pairs do not nest (a piece list of no unit the front end makes) */
+/** the lone ends (loneEnds) that stand at the unit's front or back, no word of it before or after them: off the wire, they go
+ *  back where they stood. One inside the unit's words (a group a cut ends inside a paragraph, `Normal words {\bfseries bold`:
+ *  none of the sweep's) is no leaf of the tree, whose pairs then do not nest: the unit goes as such a unit goes,
+ *  every piece but its text a marker in its place, so that the style it opens or closes stays where it was */
+function edgeEnds(pieces, lone) {
+  const word = p => p?.t === 'text' && typeof p.s === 'string' && /\S/.test(p.s)
+  const first = pieces.findIndex(word), last = pieces.findLastIndex(word)
+  return new Set([...lone].filter(k => first < 0 || k < first || k > last))
+}
+/** a unit's pieces as a tree: each pair a node of what it holds (`seq`), each other piece a leaf, a lone end at the unit's edge
+ *  (`lone`, edgeEnds) among them; null where the pairs do not nest (a piece list of no unit the front end makes, or one with a
+ *  lone end inside its words) */
 function treeOf(pieces, lone) {
   const root = { seq: [] }, stack = [root]
   for (let k = 0; k < pieces.length; k++) {
@@ -201,8 +211,9 @@ function treeOf(pieces, lone) {
  */
 function planOf(u, format, boundary = true) {
   const pieces = u.pieces
-  // (a lone end goes on no wire, as a placeholder that sets no ink does: back where it stands, the unit's front or back)
-  const ink = new Array(pieces.length), lone = loneEnds(pieces)
+  // (a lone end at the unit's edge goes on no wire, as a placeholder that sets no ink does: back where it stands, the unit's front
+  // or back; one inside its words leaves the pairs unnested, edgeEnds)
+  const ink = new Array(pieces.length), lone = edgeEnds(pieces, loneEnds(pieces))
   let hasInk = false, styled = false
   for (let k = 0; k < pieces.length; k++) {
     const p = pieces[k]

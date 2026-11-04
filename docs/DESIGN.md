@@ -953,9 +953,10 @@ only how it meets the rest of the extension.
   goes as one marker, read back as its pieces in their order (a display the last of its stretch), and a space (a tie, a control
   space) right before a kept pair's open or after its close rides in that edge; a placeholder that sets no ink is one of the
   kernel's or LaTeX's own (`rules/tex-kernel.mjs`: `\@`, `\-`, `\label`, `\penalty`, a table's row rules, a font's
-  declaration), and every display breaks the text; a pair's end whose other end its unit does not hold goes on no wire
-  (382 of the sweep's units had every reply refused for one, and went as runs). Over the 53 papers' zh units the markers wire
-  is 3.9 % shorter (3,772,215 to 3,626,049 characters) and holds 36.8 % fewer markers (97,053 to 61,329). An echo of every
+  declaration), and every display breaks the text; a pair's end whose other end its unit does not hold goes on no wire at
+  its unit's front or back, and stays a marker in its place inside its words (382 of the sweep's units had every reply
+  refused for one, and went as runs). Over the 53 papers' zh units the markers wire is 3.9 % shorter (3,772,215 to 3,626,267
+  characters) and holds 36.8 % fewer markers (97,053 to 61,329). An echo of every
   changed wire reads back to the old echo's pieces but for white space and where a piece on no wire comes back.
 - **The highlight** (`reading.sentenceHighlight`, §7.7's switch): the pointer alone lights — no pin — the sentence under
   it and its translation on both sides, where both sides know the unit's sentences, else the whole unit, decided for

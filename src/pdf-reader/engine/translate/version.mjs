@@ -94,12 +94,15 @@
 //    - a forced break, an item and every display DISPLAY reads break the text for the boundary rule (`subequations`,
 //      `dmath`, `IEEEeqnarray` did not); the spaces between a run's formulas, before which no space of the wire's goes and at
 //      a display's end, are one table's (rules/tex-kernel.mjs spaceLead, spaceSource; layer/pieces.mjs reads it too);
-//    - a pair's end whose other end the unit does not hold (a group the unit ends inside) goes on no wire, back where it
-//      stands, and is no pair to the reading's check: 382 units of the sweep's, every reply of theirs refused, are read;
-//    - a structural name the target's packages answer wherever it would be read is not sent (rows.mjs toTranslate).
+//    - a pair's end whose other end the unit does not hold (a group the unit ends inside) is no pair to the reading's check;
+//      at the unit's front or back it goes on no wire, back where it stands, and inside its words it is a marker in its place
+//      (the unit's pairs then do not nest: mt.mjs edgeEnds): 382 units of the sweep's, every reply of theirs
+//      refused, are read;
+//    - a structural name the target's heads hold, which every lookup of it reads first, is not sent (rows.mjs toTranslate;
+//      tex-names.mjs nameAnswered: one a reference alone answers may be a paper's own head).
 //    Over the 53 sweep papers' zh units (the bundles as staging serves them, made again by this front end where their
-//    sources and .bbl files are on hand, 47 of 53): 3,772,215 wire characters -> 3,626,049 (-3.9 %), 97,053 markers ->
-//    61,329 (-36.8 %), 5,011 of 20,062 units' wires change and 218 name units are no longer sent. An echo of each changed
+//    sources and .bbl files are on hand, 47 of 53): 3,772,215 wire characters -> 3,626,267 (-3.9 %), 97,053 markers ->
+//    61,329 (-36.8 %), 5,011 of 20,062 units' wires change and 191 name units are no longer sent. An echo of each changed
 //    wire reads back, against the echo of the old: the same pieces, or the same but for white space, or the same but where
 //    a piece on no wire or a pair's empty ends come back; no word and no placeholder otherwise moved
 export const TRANSLATE_VERSION = '10'

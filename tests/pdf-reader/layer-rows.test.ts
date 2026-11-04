@@ -339,15 +339,16 @@ describe('toTranslate', () => {
     expect(toTranslate(b, 'de')).toEqual([0, 2])
   })
   // (a structural name the target's packages answer wherever it would be read is never read there, so never sent:
-  // rules/tex-names.mjs nameAnswered, TRANSLATE_VERSION 10; zh's "Theorem" is ctex's, "Claim" no package's)
+  // rules/tex-names.mjs nameAnswered, TRANSLATE_VERSION 10; zh's "Theorem" is ctex's, "Claim" no package's; zh's "Algorithm" is
+  // cleveref's reference alone, and a paper's own \newtheorem{algorithm}{Algorithm} reads its head from the unit: Codex on #581)
   it('leaves out a name unit the target\'s packages answer, for that target alone', () => {
-    const b = bundleOf([BASE[0] as BundleUnit, ['name', 0, null, null, null, [[0, 'Theorem']]], ['name', 0, null, null, null, [[0, 'Claim']]], ['name', 0, null, null, null, [[0, 'and']]]])
-    expect(toTranslate(b, 'zh')).toEqual([0, 2, 3])
-    expect(toTranslate(b, 'de')).toEqual([0, 2])
-    expect(toTranslate(b, 'ja')).toEqual([0, 1, 2, 3])
+    const b = bundleOf([BASE[0] as BundleUnit, ['name', 0, null, null, null, [[0, 'Theorem']]], ['name', 0, null, null, null, [[0, 'Claim']]], ['name', 0, null, null, null, [[0, 'and']]], ['name', 0, null, null, null, [[0, 'Algorithm']]]])
+    expect(toTranslate(b, 'zh')).toEqual([0, 2, 3, 4])
+    expect(toTranslate(b, 'de')).toEqual([0, 2, 4])
+    expect(toTranslate(b, 'ja')).toEqual([0, 1, 2, 3, 4])
     // (the rows and the batches read the same: the name the packages answer has no row and no batch)
-    expect(layerIds(b, 'zh')).toEqual([0, 2, 3])
-    expect(batchesOf(b, 'zh').flat().sort()).toEqual([0, 2, 3])
+    expect(layerIds(b, 'zh')).toEqual([0, 2, 3, 4])
+    expect(batchesOf(b, 'zh').flat().sort()).toEqual([0, 2, 3, 4])
   })
   // (a TikZ picture's texts, which the front end cuts into units of kind `figure`, latex-front.mjs tikzText: the layout compile
   // marks none of them and the layer draws none, the picture's glyphs being the figure ink units' (kind `inkfigures`,
