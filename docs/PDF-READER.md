@@ -4116,8 +4116,12 @@ each): the four heads, and three lines of amsart's keywords after "Key words and
 before only where an affiliation of the last page stood before them by id; every other paper's K is the same, slot for slot. Over
 the census's 1,022 heads (the sweep's rows, the six papers whose K moved cut again) exactly the four move, to the original's
 gap: from +1.66, +16.04, +6.94 and +1.61 em more than the original to 0.00, -0.07, -0.09 and -0.08; no other head moves by
-more than 0.05 em, and none changes state. The page stream closes a part only where no left unit whose line such a unit may still share stands within half a step
-of its slots (`page-pass.mjs` closable). One head of the census is still after its text: 2610.37668v1's "Surface losses.",
+more than 0.05 em, and none changes state. The page stream closes a part only where no left unit whose line such a unit may still
+share stands within half a step of its slots (`page-pass.mjs` closable), and a unit told keeps in the stream, beside the pages K
+reads of it, its first and last lines whole (`make.mjs` `stubOf`), what a shared line reads: with its pages alone, a unit only
+the file holds, told beside its line's other unit, took its slot by the ids in the parts after its own, and 2610.21884v1's parts
+from page 4 on were not the whole's. Its streamed and whole prepares now give the same head, parts and left parts, as
+2610.37668v1's do (the lane's offline prepare). One head of the census is still after its text: 2610.37668v1's "Surface losses.",
 which the left puts on a figure's panel title of page 22 with the same words (the heading rule of `anchors.mjs` `matchUnits`
 takes the last place between its marked neighbours, and on arXiv's PDF the 29 units around it, over pages 21 and 22, carry no
 marks), the left's to fix. A run-in head its own row cannot hold uses the

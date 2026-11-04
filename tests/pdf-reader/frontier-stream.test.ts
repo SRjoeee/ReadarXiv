@@ -3,6 +3,7 @@ import { wholeFrontier } from '@/pdf-reader/engine/layer-proto/cut.mjs'
 import { groupsOfUnits } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { needBound } from '@/pdf-reader/engine/layer-proto/need.mjs'
 import type { LayoutFile } from '@/pdf-reader/engine/layout/file.mjs'
+import { stubOf } from '@/pdf-reader/engine/layout/make.mjs'
 import { frontierStream } from '@/pdf-reader/engine/pipeline/frontier.mjs'
 import { type PaperSpec, TOKENS_PER_PAGE, type UnitSpec, type Whole, wholeOf } from './helpers/cut-paper'
 
@@ -37,7 +38,7 @@ function paperOf(pages: number, per: number, seed: number): PaperSpec {
 }
 
 /** the maker's stream as the page pass asks it (make.mjs `layout`, `tell`): each unit's rows the file's, the same rows every
- *  time, until it is told: then its stub, the pages K reads (make.mjs stubOf) */
+ *  time, until it is told: then its stub, what K reads (make.mjs stubOf). `whole(ids)`: the file's own rows of `ids`, no stub */
 function makerOf(whole: Whole) {
   const L = whole.layout as LayoutFile
   const own = new Map<number, Rows>()
@@ -57,16 +58,16 @@ function makerOf(whole: Whole) {
       for (const t of TABLES) (out as Record<Table, unknown[][]>)[t] = ids.flatMap(i => rowsOf(i)?.[t] ?? [])
       return out as LayoutFile
     },
+    whole(ids: readonly number[]) {
+      const out: LayoutFile = { ...L, fonts: L.fonts.slice() }
+      for (const t of TABLES) (out as Record<Table, unknown[][]>)[t] = ids.flatMap(i => own.get(i)?.[t] ?? [])
+      return out as LayoutFile
+    },
     tell(ids: readonly number[]) {
       for (const i of ids) {
         const r = own.get(i)
         if (!r || stubs.has(i)) continue
-        const pagesIn = (rows: unknown[][], at: number, stride: number) => { const set = new Set<number>(); for (const v of rows) for (let j = at; j + stride <= v.length; j += stride) set.add(v[j] as number); return [...set] }
-        const lines = pagesIn(r.lines.map(e => e[1] as number[]), 0, 8), segs = pagesIn(r.ph, 4, 6), labels = [...new Set(r.labels.map(l => l[2] as number))]
-        stubs.set(i, {
-          units: r.units, lines: lines.length ? [[i, lines.flatMap(p => [p, 0, 0, 0, 0, 0, 0, 0])]] : [], ph: segs.length ? [[i, 0, 0, 0, ...segs.flatMap(p => [p, 0, 0, 0, 0, 0])]] : [],
-          labels: labels.map(p => [i, 0, p, 0, 0, 0, 0, 0]), frames: [], erase: [], headings: [], pageText: [], held: [],
-        })
+        stubs.set(i, stubOf(i, r as never) as unknown as Rows)
       }
     },
   }
@@ -112,7 +113,8 @@ function differ(a: unknown, b: unknown, at = ''): string | null {
 function drive(spec: PaperSpec, o: { leftTo: (t: number) => number; settledTo: (t: number) => number; cutEvery: number; check: boolean }) {
   const whole = wholeOf(spec), N = spec.pages, grouped = groupsOfUnits(whole.units)
   // (every third unit's last line ends where the next unit's first begins, on its baseline: a shared line, the next one's lead,
-  // rowLeadOf, which K's `follows` reads and a stub's rows no longer give)
+  // rowLeadOf, which K's `follows` reads, and where one of the two is only the file's, its slot, need.mjs lineAfterOf; a stub
+  // keeps the two lines it reads)
   const lines = new Map((whole.layout as LayoutFile).lines.map(e => [e[0], e[1] as number[]]))
   for (const [id, rows] of lines) {
     const b = lines.get(id + 1)
@@ -133,6 +135,12 @@ function drive(spec: PaperSpec, o: { leftTo: (t: number) => number; settledTo: (
         const want = wholeFrontier({ paper: whole.paper, base: whole.base, units: whole.units, left: { pages: left.pages, units: left.units() }, layout: st.layout(ids) }, undefined, grouped)
         const d = differ(got.K, want.K, 'K') ?? differ(got.F, want.F, 'F') ?? differ(got.NB, needBound(want.K, N), 'NB')
         expect(d, `page ${t}, try ${again}`).toBeNull()
+        // (and K as the whole file gives it, its told units' stubs aside: each entry's slot and its lead on a shared line, which
+        // a stub of its pages alone lost, so that a unit only the file holds, told beside its line's other unit, took its slot by
+        // the ids in the parts after its own, and the stream's K there was not the whole's: 2610.21884v1)
+        const full = wholeFrontier({ paper: whole.paper, base: whole.base, units: whole.units, left: { pages: left.pages, units: left.units() }, layout: st.whole(ids) }, undefined, grouped)
+        const key = (K: typeof got.K) => K.map(e => [e.id, e.slot, e.follows])
+        expect(differ(key(got.K), key(full.K), 'K'), `page ${t}, try ${again}, against the whole file`).toBeNull()
       }
       if (again === 0 && t % o.cutEvery === 0) {
         const told = got.K.slice(0, (got.F[t] ?? -1) + 1).map(e => e.id)

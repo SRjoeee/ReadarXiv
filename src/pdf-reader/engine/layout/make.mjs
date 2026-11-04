@@ -175,6 +175,35 @@ function viewOf(v) {
   return [x0, y0, x1, y1].every(n => Number.isFinite(n) && Math.abs(n) <= COORD_MAX) && x0 < x1 && y0 < y1 ? [x0, y0, x1, y1] : null
 }
 
+/**
+ * The rows K reads of a unit told (layer-proto/cut.mjs entriesOf: its unit row, its lines' pages, its placeholders' segments'
+ * pages and its labels' pages, one row a page; and its first and last lines whole, each framed in its column, its last held
+ * where the file holds it: what one of TeX's lines it shares reads of it, need.mjs rowLeadOf and lineAfterOf, so that a unit
+ * beside it on that line is placed in K as the whole file places it): what the cut of the parts after its own reads of it.
+ * `i` its id, `r` its rows as the stream holds them (layoutPartRows'). With its pages alone, a unit the layout file alone
+ * holds, told beside its line's other unit, fell back to its slot by the ids once a part after its own was cut, and K's order
+ * there was not the whole's (2610.21884v1's keywords after the ink unit "Key words and phrases.": the parts from page 4 on
+ * differed between the stream and the whole)
+ */
+export function stubOf(i, r) {
+  // (whole strides alone, as cut.mjs pagesAt reads them: a placeholder row's fill, last, is no segment's page)
+  const pagesIn = (rows, at, stride) => { const set = new Set(); for (const v of rows) for (let j = at; j + stride <= v.length; j += stride) set.add(v[j]); return [...set] }
+  const lines = pagesIn(r.lines.map(e => e[1]), 0, 8), segs = pagesIn(r.ph, 4, 6), labels = [...new Set(r.labels.map(l => l[2]))]
+  const L = r.lines[0]?.[1] ?? [], F = r.frames[0]?.[1] ?? [], held = r.held[0]?.[1] ?? [], n = L.length / 8
+  const columnOf = j => { for (let f = 0; f + 5 < F.length; f += 6) if (j >= F[f + 2] && j < F[f + 2] + F[f + 3]) return F[f + 1]; return 0 }
+  // (its first line, a row for each page between, its last line; a frame each)
+  const rows = [], frames = []
+  const add = (row, column) => { frames.push(row[0], column, rows.length / 8, 1, rows.length ? 0 : -1, 0); rows.push(...row) }
+  if (n) add(L.slice(0, 8), columnOf(0))
+  for (const p of lines) if (p !== L[0] && p !== L[8 * (n - 1)]) add([p, 0, 0, 0, 0, 0, 0, 0], 0)
+  if (n > 1) add(L.slice(8 * (n - 1)), columnOf(n - 1))
+  return {
+    units: r.units, lines: rows.length ? [[i, rows]] : [], ph: segs.length ? [[i, 0, 0, 0, ...segs.flatMap(p => [p, 0, 0, 0, 0, 0])]] : [],
+    labels: labels.map(p => [i, 0, p, 0, 0, 0, 0, 0]), frames: frames.length ? [[i, frames]] : [], erase: [], headings: [], pageText: [],
+    held: n > 1 && held.includes(n - 1) ? [[i, [rows.length / 8 - 1]]] : [],
+  }
+}
+
 /** a page's glyphs by baseline, rising, packed (ink.mjs packGlyphs: x0, x1, y, top, bottom, size, font, u; ix0 and ix1
  *  their ink across with their advance; top and bottom their own ink up and down), each glyph's owner and whether it is
  *  taken, and its boxes, each whether it is taken: a degraded page's merged boxes (from ink.mjs pageInk's `mergedAt`) are
@@ -2415,17 +2444,6 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       for (let x = one.entries?.[0] ?? 0; x < (one.entries?.[1] ?? 0); x++) matchedBy.delete(`${ph[x].row[0]}.${ph[x].row[1]}`)
       anchors.delete(one.id)
       one.rows = null; one.a = null; one.boxes = null; one.out = null; one.heads = null; one.tails = null; one.symbols = null; one.headSymbols = null
-    }
-    /** the rows K reads of a unit told (layer-proto/cut.mjs entriesOf: its unit row, its lines' pages, its placeholders'
-     *  segments' pages and its labels' pages), one row a page: what the cut of the parts after its own reads of it */
-    const stubOf = (i, r) => {
-      // (whole strides alone, as cut.mjs pagesAt reads them: a placeholder row's fill, last, is no segment's page)
-      const pagesIn = (rows, at, stride) => { const set = new Set(); for (const v of rows) for (let j = at; j + stride <= v.length; j += stride) set.add(v[j]); return [...set] }
-      const lines = pagesIn(r.lines.map(e => e[1]), 0, 8), segs = pagesIn(r.ph, 4, 6), labels = [...new Set(r.labels.map(l => l[2]))]
-      return {
-        units: r.units, lines: lines.length ? [[i, lines.flatMap(p => [p, 0, 0, 0, 0, 0, 0, 0])]] : [], ph: segs.length ? [[i, 0, 0, 0, ...segs.flatMap(p => [p, 0, 0, 0, 0, 0])]] : [],
-        labels: labels.map(p => [i, 0, p, 0, 0, 0, 0, 0]), frames: [], erase: [], headings: [], pageText: [], held: [],
-      }
     }
     /** unit i's anchor final: its passes as tasks on its pages (unitPages'), once its pieces' own ink is known; till then its
      *  anchor's first page kept from deciding */
