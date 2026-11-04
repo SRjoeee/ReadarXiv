@@ -188,8 +188,11 @@ export { LayoutRefusal } from './json.mjs'
  *  report of 2026-11-03 on 2610.42112v1): a babel name's row holds the counter TeX set after it on its line where it leads no unit
  *  (names.mjs counterAfter: IEEEtran's "APPENDIX A" centred over its title, centred so whole; "Appendix A:" in its contents list),
  *  its width at the row's end in slot 12 (a RUN_IN name's glue; 0 before), which the layer splits off and sets after the name's
- *  word: a reader of 32 would draw the word over the counter's place and drop the counter, and refuse the slot */
-export const LAYOUT = '33'
+ *  word: a reader of 32 would draw the word over the counter's place and drop the counter, and refuse the slot; 34 (2610.21377v1's
+ *  subject classes, p1): no label where a unit's own text begins (make.mjs headLabel: the head's glyphs, read on into
+ *  the line by one character, spell the start of the unit's text), where jnsao's `49\\textsc{k}20 (primary)` kept "49" as an item's
+ *  number before a line that began at the "k": a file of 33 holds that label and a line's start past it */
+export const LAYOUT = '34'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,
