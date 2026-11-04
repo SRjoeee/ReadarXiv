@@ -977,10 +977,11 @@ describe('B6, R2-R4: the translation into rows', () => {
     expect(a.engine.translate).toHaveBeenCalled()
   })
 
-  it('a service that fails midway: the run stops with its kind; with no row of the target held, no end is told (nothing to lay: the pages stay the original\'s)', async () => {
+  it('a service that fails before any row of the target comes: the run stops with its kind, and no end is told (nothing to lay: the pages stay the original\'s)', async () => {
+    // (it failed at its second ask: the first was the paper's structural names, which the target's packages answer for zh since
+    // TRANSLATE_VERSION 10, rows.mjs toTranslate, so that the first ask is the sample's one batch)
     const engine = echo()
-    let calls = 0
-    engine.translate.mockImplementation(async (texts: string[]) => { if (calls++) throw Object.assign(new Error('down'), { kind: 'network' }); return texts.map(t => ({ text: t, by: 'test' })) })
+    engine.translate.mockImplementation(async () => { throw Object.assign(new Error('down'), { kind: 'network' }) })
     const a = run({ looks: [() => new Response(catalog)], engine })
     await settle(60)
     const last = a.events.find(e => e.type === 'translated') as Extract<RunEvent, { type: 'translated' }>

@@ -67,23 +67,27 @@ import { CLASS_IDS } from '../rules/content-classes.mjs'
  *  part's layout may carry the regions TeX set on its pages (`regions`, layout/file.mjs REGION_KINDS: each line of a code
  *  environment's body, by the points the layout compile sets around it), the key there only where a page of the part holds
  *  one; a reader of 12 refuses the key, and a bundle of 12 is not found under 13's CTAG and is prepared again. Every other
- *  shape is 12's, and this reader reads 12's objects too: a part of 12 has no regions */
-export const BUNDLE5 = '13'
+ *  shape is 12's, and this reader reads 12's objects too: a part of 12 has no regions. 14 (the rules audit's T1, 2026-11-04):
+ *  the source units' chunks are UNITS_FORMAT 3's, an open whose command sets its argument alone saying so (units.mjs
+ *  SETS_NOTHING), which a reader of 13 refuses; a bundle of 13 is not found under 14's CTAG and is prepared again. Every other
+ *  shape is 13's, and this reader reads 13's objects too */
+export const BUNDLE5 = '14'
 /** the formats this reader takes: its own, and 7's (a bundle drawn over arXiv's PDF, whose objects 9 reads unchanged: its
  *  head is read as `base.source` 'arxiv', with no `orig`), 9's and 10's. Every object of a bundle is of its head's format */
-export const BUNDLES_READ = Object.freeze(['7', '9', '10', '11', '12', BUNDLE5])
+export const BUNDLES_READ = Object.freeze(['7', '9', '10', '11', '12', '13', BUNDLE5])
 /** the formats whose parts may carry figure units (`figures`, figure-rows.mjs: 10's rows without a set or a room) */
-const FIGURES_READ = Object.freeze(['10', '11', '12', BUNDLE5])
+const FIGURES_READ = Object.freeze(['10', '11', '12', '13', BUNDLE5])
 /** the formats whose left parts may carry a line map (`lines`, 12's) */
-const LINES_READ = Object.freeze(['12', BUNDLE5])
+const LINES_READ = Object.freeze(['12', '13', BUNDLE5])
 /** a units chunk's own format (amendment M12): raised only by a change to the chunk's shape, so that a change to a part's
- *  shape renames no unit identity and redoes no translation */
-export const UNITS_FORMAT = '1'
-/** the ink units' chunk's format (docs/route/orphan-text.md §8): UNITS_FORMAT's, an ink unit's tuple with its echo besides
- *  (units.mjs inkBundleUnitsOf); the source units' chunks stay UNITS_FORMAT's, byte for byte */
+ *  shape renames no unit identity and redoes no translation. 3 (BUNDLE5 14): an open may carry a fourth value, what its pair
+ *  sets (units.mjs SETS_NOTHING); 1's chunks are 3's of no such open, and this reader reads them */
+export const UNITS_FORMAT = '3'
+/** the ink units' chunk's format (docs/route/orphan-text.md §8): 1's units, an ink unit's tuple with its echo besides
+ *  (units.mjs inkBundleUnitsOf), none of whose opens says what it sets */
 export const INK_UNITS_FORMAT = '2'
 /** the units chunks' formats this reader takes */
-export const UNITS_FORMATS_READ = Object.freeze([UNITS_FORMAT, INK_UNITS_FORMAT])
+export const UNITS_FORMATS_READ = Object.freeze(['1', INK_UNITS_FORMAT, UNITS_FORMAT])
 /** the reader's contract, `b<BUNDLE5>-j<PDFJS>`: what a reader asks by. Named with the 5 beside bundle.mjs's CTAG (BUNDLE
  *  3's) whatever BUNDLE5's value: the web's service and readers import BUNDLE5, CTAG5 and VTAG5 by these names */
 export const CTAG5 = `b${BUNDLE5}-j${PDFJS}`

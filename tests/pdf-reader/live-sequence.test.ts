@@ -295,7 +295,7 @@ describe('a copy made under pipeline 7, reopened under 8', () => {
     expect(sent).toEqual([
       'Years of the quasi-biennial oscillation and El Niño southern oscillations, which act on many timescales.',
       'The code to reproduce the work is archived in a public repository @a#.',
-      'The principal axes, shown in Fig. @a#@b#, are defined for each model.',
+      'The principal axes, shown in Fig. @a#, are defined for each model.',
     ].map(t => expect.stringContaining(t)))
     expect(sent).toHaveLength(3)
     expect(r.settled).toBe(true)
@@ -592,12 +592,13 @@ describe('a copy made under pipeline 21, reopened under 22 (and on)', () => {
 // code regions TeX set kept by every reader (layout/marks.mjs regionsTex, ledger.mjs, figure-text.mjs), 64 what TeX sets after
 // a bibliography no entry's and a contents line's entries (ledger.mjs lastEntriesOf, listedOf), 65 a unit only the layout
 // file holds placed in K beside the left unit it shares one of TeX's lines with (need.mjs lineAfterOf), and 66 a unit's start mark
-// before the marks that open its head piece (source/latex-front.mjs patch), no source unit:
-// every unit is the copy's by its hash, carried as it has it, and nothing is sent
-describe('a copy made under pipeline 23 to 29 or 39 to 65, reopened under 66', () => {
+// before the marks that open its head piece (source/latex-front.mjs patch), no source unit; 67's is the wire's
+// (TRANSLATE_VERSION 10: fewer markers, every reply read back to the same pieces) and an open's word of what its pair sets, no
+// unit's cut, text or hash: every unit is the copy's by its hash, carried as it has it, and nothing is sent
+describe('a copy made under pipeline 23 to 29 or 39 to 66, reopened under 67', () => {
   const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
-  it.each(['23', '24', '25', '26', '27', '28', '29', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48', '49', '50', '51', '52', '53', '54', '55', '56', '57', '58', '59', '60', '61', '62', '63', '64', '65'])('takes every unit as the copy of %s has it: nothing is sent again', async pipeline => {
-    expect(PIPELINE_VERSION).toBe('66')
+  it.each(['23', '24', '25', '26', '27', '28', '29', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48', '49', '50', '51', '52', '53', '54', '55', '56', '57', '58', '59', '60', '61', '62', '63', '64', '65', '66'])('takes every unit as the copy of %s has it: nothing is sent again', async pipeline => {
+    expect(PIPELINE_VERSION).toBe('67')
     const p = paper(), n = p.units.length
     const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
     const record = JSON.parse(JSON.stringify({ pipeline, format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))

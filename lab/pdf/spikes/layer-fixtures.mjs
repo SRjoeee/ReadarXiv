@@ -28,7 +28,7 @@
 //                staging's bytes, or made here. A final compiled from it (layer-lab/finals.mjs) sets the same translation.
 // The translation: staging's units record where staging holds the output (a GET of the public manifest at the output's
 // oid under staging's versions, below; then of the record at the manifest's key, checked by its SHA-256 and length);
-// else Microsoft's free endpoint as spikes/live-node.mjs calls it (mt.mjs translateTexts and translateUnits, the markers
+// else Microsoft's free endpoint as the lab's client calls it (microsoft.mjs translateTexts, mt.mjs translateUnits, the markers
 // wire, every unit the target does not keep), with the sentence lengths the endpoint answers (sentLen) kept as the
 // extension's service keeps them, so that its units have sentences as staging's do. A record already made for the same
 // cut of the paper's units is taken again, never sent twice (--fresh: made anew): the output's own folder's, then the
@@ -104,7 +104,9 @@ const CLASSES = await engine('rules/content-classes.mjs').catch(() => null)
 const hiddenOf = CLASSES?.TOGGLE_DEFAULTS ? (on => u => !CLASSES.unitShown(u, on))(CLASSES.classesOn(CLASSES.RUN_DEFAULTS ?? null)) : () => false
 // the translation's modules only where a request may be made (mt.mjs and the rules reach the extension's code by alias)
 const { RULES_VERSION } = OFFLINE ? { RULES_VERSION: null } : await import(pathToFileURL(join(ENGINE, 'src/core/rules/latexml.ts')).href)
-const { MICROSOFT_LANG, translateTexts, translateUnits } = OFFLINE ? { MICROSOFT_LANG: {} } : await engine('translate/mt.mjs')
+const { translateUnits } = OFFLINE ? {} : await engine('translate/mt.mjs')
+// (the lab's own client of the endpoint: the engine holds none)
+const { MICROSOFT_LANG, translateTexts } = await import('./microsoft.mjs')
 const DATA = process.env.AXT_DATA ?? join(root, 'data')
 const OUT = resolve(process.env.LAYER_FIXTURES ?? join(DATA, 'layer-fixtures'))
 /** the fixtures the gate holds fixed, whose records an --offline run may take again */
@@ -137,8 +139,8 @@ const OUTPUTS = [
   ['2307.16209v1', ['de', 'zh']],
 ]
 const PICKS = [['table-heavy', 'zh'], ['footnote-heavy', 'zh'], ['xelatex', 'zh']]
-/** Microsoft's codes beyond mt.mjs's (live-node's three) */
-const MS_LANG = { ...MICROSOFT_LANG, 'zh-TW': 'zh-Hant' }
+/** Microsoft's codes (microsoft.mjs) */
+const MS_LANG = MICROSOFT_LANG
 
 const arg = name => process.argv.find(a => a.startsWith(`--${name}=`))?.slice(name.length + 3) ?? null
 const flag = name => process.argv.includes(`--${name}`)
@@ -191,7 +193,7 @@ async function stagingGet(path) {
     }
   }
 }
-/** one request to Microsoft's endpoint as mt.mjs translateMicrosoft makes it, with each answer's sentence lengths kept as
+/** one request to Microsoft's endpoint as microsoft.mjs translateMicrosoft makes it, with each answer's sentence lengths kept as
  *  the extension's service keeps them (the segment's `alignment`), which mt.mjs sentencesOf reads */
 async function microsoft(texts, to) {
   if (OFFLINE) throw new Error('--offline: Microsoft\'s endpoint would be asked')

@@ -585,7 +585,16 @@
 //     2010.11929v2's cells u42-u44, whose `\oursabbrv` opening point stood before the cell's leading glue and owned nothing to the
 //     cell's start mark), none the other way, every other unit's rows as they were. The units, their pieces and their wire are 65's
 //     (and 64's): a copy of 64 or 65 carries every unit (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '66'
+// 67 (raised with TRANSLATE_VERSION 10, the rules audit's translation lane, and BUNDLE5 14): a pair whose command sets its argument
+//     and nothing else says so on its open (latex-front.mjs identityPair, from the definition the paper or its bibliography
+//     gives: `\providecommand \bibinfo [0]{\@secondoftwo}`; the piece's `sets` 0, not enumerable), which the bundle's units
+//     carry (an open's fourth value, units.mjs SETS_NOTHING, UNITS_FORMAT 3) and the wire reads. Every unit's cut, kind, text,
+//     pieces and hash are 66's: over the 53 sweep papers' sources 47 give their bundle's units back unit for unit, 13,346 opens
+//     of 11 papers' references saying they set nothing (natbib's `\natexlab` among them); the marks, the layout file and the
+//     wrap read nothing of it. A copy of
+//     64, 65 or 66 carries every unit (live.mjs PIPELINE_CARRIES): a translation made over the old wire is the unit's still,
+//     and only what is sent from now on is the new wire
+export const PIPELINE_VERSION = '67'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

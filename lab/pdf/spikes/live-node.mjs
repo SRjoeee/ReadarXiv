@@ -14,7 +14,7 @@ import { unpackSource } from '../../../src/pdf-reader/engine/source/tar.mjs'
 import { marksOf } from '../../../src/pdf-reader/engine/pipeline/typeset/places.mjs'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { openPaper, runLive } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
-import { translateTexts } from '../../../src/pdf-reader/engine/translate/mt.mjs'
+import { translateTexts } from './microsoft.mjs'
 import { faithfulDockerArgs } from './faithful.mjs'
 import { checkCompileImage, COMPILE_IMAGE, latexmkEngine, PLATFORM } from './compile-image.mjs'
 

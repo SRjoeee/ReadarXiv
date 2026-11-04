@@ -942,6 +942,22 @@ only how it meets the rest of the extension.
   mark. In Microsoft's recorded Chinese answers no display that ends its sentence had the sentence cut after it (0 of
   444 before a capital), a marker before `. ` and a capital is cut every time (1,357 of 1,357), and no mark the wire
   set after a marker came back moved before it (0 of 4,825).
+- **Fewer markers, each read from TeX** (TRANSLATE_VERSION 10, the rules audit of 2026-11-04). Each marker is a hard
+  boundary to Microsoft and a chance of a fallback: over the 53 sweep papers' units, those with more than 20 markers went to
+  Google 22 to 42 % of the time, those with none never. What the wire tells is read from TeX's own tables and definitions,
+  never from a list of the wire's own: a pair whose command sets its argument and nothing else — the definition the paper or
+  its bibliography gives, revtex's `\providecommand \bibinfo [0]{\@secondoftwo}` and ACM's `\providecommand\bibinfo[2]{#2}`,
+  a paper's `\newcommand\x[1]{#1}`; the front end's verdict on the open piece (`latex-front.mjs` `identityPair`, the bundle's
+  open's fourth value) — is no pair on either wire, its edges still a field's to the boundary rule, so that a style inside a
+  field (`\bibinfo{booktitle}{\emph{…}}`) keeps its markers and its italic as before; a stretch of placeholders side by side
+  goes as one marker, read back as its pieces in their order (a display the last of its stretch), and a space (a tie, a control
+  space) right before a kept pair's open or after its close rides in that edge; a placeholder that sets no ink is one of the
+  kernel's or LaTeX's own (`rules/tex-kernel.mjs`: `\@`, `\-`, `\label`, `\penalty`, a table's row rules, a font's
+  declaration), and every display breaks the text; a pair's end whose other end its unit does not hold goes on no wire at
+  its unit's front or back, and stays a marker in its place inside its words (382 of the sweep's units had every reply
+  refused for one, and went as runs). Over the 53 papers' zh units the markers wire is 3.9 % shorter (3,772,215 to 3,626,267
+  characters) and holds 36.8 % fewer markers (97,053 to 61,329). An echo of every
+  changed wire reads back to the old echo's pieces but for white space and where a piece on no wire comes back.
 - **The highlight** (`reading.sentenceHighlight`, §7.7's switch): the pointer alone lights — no pin — the sentence under
   it and its translation on both sides, where both sides know the unit's sentences, else the whole unit, decided for
   both sides together; captions as body units, by sentence; headings and table cells whole; a table cell by cell, its
