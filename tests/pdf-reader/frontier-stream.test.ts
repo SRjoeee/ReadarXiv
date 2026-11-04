@@ -153,6 +153,48 @@ function drive(spec: PaperSpec, o: { leftTo: (t: number) => number; settledTo: (
   return { work: fs.work, tries, units: spec.units.length, asked: st.asked }
 }
 
+/**
+ * The page pass's closing over a paper whose left is anchored whole from the start, its units' left say final at `doneAt` (a page,
+ * 0 by default) and their rows made at `settledAt`, the maker letting a page go as it comes: after every page frontier.mjs's
+ * partClosable over leftBoundsOf, each part's K prefix told (its rows stubs). Returns the units in the order the parts told them
+ * (the rest by the K at the end), the whole file's K, and how many parts were cut before the end
+ */
+function closeAsTheStream({ pages, units, shape, settledAt, doneAt = [] }: { pages: number; units: UnitSpec[]; shape?: (lines: Map<number, number[]>) => void; settledAt: number[]; doneAt?: number[] }) {
+  const whole = wholeOf({ pages, units }), n = units.length, grouped = groupsOfUnits(whole.units)
+  shape?.(new Map((whole.layout as LayoutFile).lines.map(e => [e[0], e[1] as number[]])))
+  const st = makerOf(whole), left = leftOf(whole)
+  left.anchor(pages)
+  const fs = frontierStream({ paper: whole.paper, N: pages, bundle: whole.units, grouped, left, st })
+  const members = new Map<number, number[]>()
+  for (let i = 0; i < n; i++) { const g = grouped.of[i]!; if (g >= 0) (members.get(g) ?? members.set(g, []).get(g)!).push(i) }
+  const streamed: number[] = []
+  let a = 1, cut = 0
+  for (let t = 1; t <= pages && a <= pages; t++) {
+    const done = (i: number) => (doneAt[i] ?? 0) <= t && left.done(i), settled = (i: number) => settledAt[i]! <= t
+    const inK = (i: number) => done(i) && settled(i)
+    const ids = [...Array(n).keys()].filter(inK)
+    // (the pages done, page-pass.mjs frontier: let go by the maker, before the first page of every unit whose rows are still to
+    // be made, and before the rows of every unit whose left say is not final)
+    const H = Math.min(t, ...[...Array(n).keys()].filter(i => !inK(i)).map(i => Math.min(...(units[i]!.lines ?? [pages + 1])) - 1))
+    for (;;) {
+      const { K, F, NB } = fs.of(ids)
+      const now = leftBoundsOf({ units: left.units(), done, next: TOKENS_PER_PAGE * pages, H, N: pages }, n)
+      const target = a > pages ? 0 : partClosable({ K, F, NB, a, H, N: pages, n, now, inK, made: t, members })
+      if (!target) break
+      const told = K.slice(0, F[target]! + 1).map(e => e.id)
+      streamed.push(...told.filter(id => !streamed.includes(id)))
+      st.tell(told)
+      fs.told(told)
+      a = target + 1
+      cut++
+    }
+  }
+  const all = [...Array(n).keys()]
+  streamed.push(...fs.of(all).K.map(e => e.id).filter(id => !streamed.includes(id)))
+  const full = wholeFrontier({ paper: whole.paper, base: whole.base, units: whole.units, left: { pages: left.pages, units: left.units() }, layout: st.whole(all) }, undefined, grouped).K
+  return { streamed, full, cut }
+}
+
 describe('the page stream\'s K, F and need bounds as its pages come', () => {
   it('are on every try those made from scratch, units coming in, settled, told and made stubs, on papers of several shapes', () => {
     for (const seed of [1, 2, 3, 4, 5]) {
@@ -207,42 +249,30 @@ describe('the page stream\'s K, F and need bounds as its pages come', () => {
       { stream: 20, rects: [2], lines: [2] }, { stream: 40, rects: [3], lines: [3] },
     ]
     const [A, X1, X2, E, L] = [0, 2, 3, 4, 5]
-    const settledAt = [1, 3, 2, 2, 1, 1, 3]
-    const pages = 3, spec = { pages, units }, whole = wholeOf(spec), n = units.length, grouped = groupsOfUnits(whole.units)
-    const lines = new Map((whole.layout as LayoutFile).lines.map(e => [e[0], e[1] as number[]]))
-    const put = (id: number, x0: number, x1: number) => lines.get(id)!.splice(0, 8, lines.get(id)![0]!, x0, x1, 600, 608, 598, 10, 0)
-    put(A, 72, 130); put(E, 140, 200); put(X1, 72, 100); put(X2, 110, 150); put(L, 160, 260)
-    const st = makerOf(whole), left = leftOf(whole)
-    left.anchor(pages)
-    const fs = frontierStream({ paper: whole.paper, N: pages, bundle: whole.units, grouped, left, st })
-    const members = new Map<number, number[]>()
-    for (let i = 0; i < n; i++) { const g = grouped.of[i]!; if (g >= 0) (members.get(g) ?? members.set(g, []).get(g)!).push(i) }
-    const streamed: number[] = []
-    let a = 1
-    for (let t = 1; t <= pages && a <= pages; t++) {
-      const inK = (i: number) => left.done(i) && settledAt[i]! <= t
-      const ids = [...Array(n).keys()].filter(inK)
-      // (the pages done: let go by the maker, before every unit's first page whose rows are still to be made)
-      const H = Math.min(t, ...[...Array(n).keys()].filter(i => !inK(i)).map(i => Math.min(...(units[i]!.lines ?? [pages + 1])) - 1))
-      for (;;) {
-        const { K, F, NB } = fs.of(ids)
-        const target = a > pages ? 0 : partClosable({ K, F, NB, a, H, N: pages, n, now: leftBoundsOf({ units: left.units(), done: left.done, next: TOKENS_PER_PAGE * pages }, n), inK, made: t, members })
-        if (!target) break
-        const told = K.slice(0, F[target]! + 1).map(e => e.id)
-        streamed.push(...told.filter(id => !streamed.includes(id)))
-        st.tell(told)
-        fs.told(told)
-        a = target + 1
-      }
+    const shape = (lines: Map<number, number[]>) => {
+      const put = (id: number, x0: number, x1: number) => lines.get(id)!.splice(0, 8, lines.get(id)![0]!, x0, x1, 600, 608, 598, 10, 0)
+      put(A, 72, 130); put(E, 140, 200); put(X1, 72, 100); put(X2, 110, 150); put(L, 160, 260)
     }
-    const all = [...Array(n).keys()]
-    const K = fs.of(all).K
-    streamed.push(...K.map(e => e.id).filter(id => !streamed.includes(id)))
-    const full = wholeFrontier({ paper: whole.paper, base: whole.base, units: whole.units, left: { pages: left.pages, units: left.units() }, layout: st.whole(all) }, undefined, grouped).K
+    const { streamed, full, cut } = closeAsTheStream({ pages: 3, units, shape, settledAt: [1, 3, 2, 2, 1, 1, 3] })
     expect(full.filter(e => [A, X1, E, X2, L].includes(e.id)).map(e => [e.id, e.slot])).toEqual([[A, 18], [X1, 18.5], [E, 18.5], [X2, 19.5], [L, 20]])
     expect(streamed).toEqual(full.map(e => e.id))
     // (and a part was cut before the end: page 1's, once X1 and X2 are made)
-    expect(a).toBeGreaterThan(1)
+    expect(cut).toBeGreaterThan(0)
+  })
+
+  it('cuts no part a unit made but not yet final on the left may still come into: its slot reads its own page, past the pages done', () => {
+    // (X, the file's alone in the end, its rows on page 3, made at page 3, the left's say on it final at page 5; B, numbered before
+    // it, a left unit of page 4. By the units placed up to its own page X stands before A and C of page 1, which have larger ids:
+    // first in K. Bounded by the units placed up to the page after the ones the maker let go (4), B's 65 among them, X stood past
+    // the part of page 1, which closed with A and C, and X sorted before them)
+    const units: UnitSpec[] = [
+      { stream: 65, rects: [4], lines: [4] }, { stream: null, lines: [3] }, { stream: 2, rects: [1], lines: [1] }, { stream: 10, rects: [1], lines: [1] },
+      { stream: 25, rects: [2], lines: [2] }, { stream: 45, rects: [3], lines: [3] }, { stream: 85, rects: [5], lines: [5] },
+    ]
+    const X = 1
+    const { streamed, full } = closeAsTheStream({ pages: 5, units, settledAt: [4, 3, 1, 1, 2, 3, 5], doneAt: [0, 5, 0, 0, 0, 0, 0] })
+    expect(full[0]?.id).toBe(X)
+    expect(streamed).toEqual(full.map(e => e.id))
   })
 
   it('makes K again only when what it is made of changed: tries that change nothing cost nothing (2610.19159v1\'s shape)', () => {
