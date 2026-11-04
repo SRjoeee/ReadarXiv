@@ -12,10 +12,10 @@ import type { UnitWire } from './bundle.mjs'
  *  7, a left part's draw items carry their fills; 8, the head's base says whose PDF the layer is drawn over (ours or arXiv's)
  *  and `orig` names arXiv's beside ours, the catalog names the base; 9, our base wrapped by optional content; 10, the ink units
  *  and a part's figure units; 11, a figure row's set and room; 12, a left part's line map (`lines`) */
-export declare const BUNDLE5: '13'
+export declare const BUNDLE5: '14'
 /** the formats a reader takes: its own, 7's (a bundle drawn over arXiv's PDF; its head read as `base.source` 'arxiv'), 9's,
  *  10's (a figure row of 10's each unit its own set, with no room) and 11's (a left part with no line map) */
-export declare const BUNDLES_READ: readonly ['7', '9', '10', '11', '12', '13']
+export declare const BUNDLES_READ: readonly ['7', '9', '10', '11', '12', '13', '14']
 /** whose PDF a layer is drawn over: our compile's final pass, or arXiv's */
 export declare const BASE_SOURCES: readonly ['ours', 'arxiv']
 export type BaseSource = (typeof BASE_SOURCES)[number]
@@ -31,7 +31,7 @@ export declare const RETRY_LIMITS: readonly ['wall', 'budget']
  *  where it names the wall clock or the compile budget (`limit` 'wall' or 'budget') */
 export declare const baseRefusalRetryable: (refusal: unknown) => boolean
 /** a units chunk's own format (envelope `"format":"1"`): raised only by a change to the chunk's shape */
-export declare const UNITS_FORMAT: '1'
+export declare const UNITS_FORMAT: '3'
 export declare const INK_UNITS_FORMAT: '2'
 export declare const UNITS_FORMATS_READ: readonly string[]
 /** the reader's contract, `b<BUNDLE5>-j<PDFJS>`, named with the 5 beside bundle.mjs's CTAG whatever BUNDLE5's value */

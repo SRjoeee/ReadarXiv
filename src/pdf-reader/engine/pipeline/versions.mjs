@@ -562,7 +562,15 @@
 //     unit); no source unit's class and no name's row moves. The ink
 //     units move, so the rows' identities: raised so. Every source unit, its pieces and its wire are 63's: a copy of 63 carries
 //     every unit (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '64'
+// 66 (raised with TRANSLATE_VERSION 10, the rules audit's translation lane, and BUNDLE5 14): a pair whose command sets its argument
+//     and nothing else says so on its open (latex-front.mjs identityPair, from the definition the paper or its bibliography
+//     gives: `\providecommand \bibinfo [0]{\@secondoftwo}`; the piece's `sets` 0, not enumerable), which the bundle's units
+//     carry (an open's fourth value, units.mjs SETS_NOTHING, UNITS_FORMAT 3) and the wire reads. Every unit's cut, kind, text,
+//     pieces and hash are 64's: over the 53 sweep papers' sources 47 give their bundle's units back unit for unit, 13,346 opens
+//     of 11 papers' references saying they set nothing (natbib's `\natexlab` among them); the marks, the layout file and the
+//     wrap read nothing of it. A copy of
+//     64 carries no unit whose wire TRANSLATE_VERSION 10 changed, which is most of them: rows again
+export const PIPELINE_VERSION = '66'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

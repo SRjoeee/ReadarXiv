@@ -8,6 +8,7 @@ import { MIXED } from './mixed.mjs'
 import { fromAlpha, MARKER_CLOSER, markerReader, TAG_RE, toAlpha } from '../../../core/protector/tokens.ts'
 import { balancedRuns, delimiterResidue, RUN_SEPARATOR } from '../../../core/protector/math-runs.ts'
 import { ABBR, sentenceCuts } from '../../../core/sentences/index.ts'
+import { AUX_WORDS, BREAK_HINTS, DECLARATION_WORDS, INK_FREE_SYMBOLS, INK_FREE_WORDS, PENALTY_WORDS, PREFIX_WORDS, ROW_RULES, SPACE_SYMBOLS, spaceLead, spaceSource } from '../rules/tex-kernel.mjs'
 
 // This file is the translation's: the wire a unit goes out as, and the reading back of a reply. A change here that alters
 // what is sent for a unit or what its reply is read as raises TRANSLATE_VERSION, the identity of the translation rules
@@ -42,8 +43,9 @@ export const texEscape = s => s.replace(INVISIBLE, '').replace(/[\\#$%&_{}~^]/g,
 // ---------------------------------------------------------------- a formula split across inline formulas
 /** an inline formula's TeX, its math shifts off: `$…$` or `\(…\)`, never a display; else null */
 const inlineTex = src => (typeof src !== 'string' ? null : /^\$(?!\$)[\s\S]*\$$/.test(src) && src.length > 1 ? src.slice(1, -1) : /^\\\([\s\S]*\\\)$/.test(src) ? src.slice(2, -2) : null)
-/** a placeholder that is space or an ellipsis, as what stands between a run's formulas may be: a tie, TeX's spaces, \ldots */
-const RUN_SPACE = /^(?:~|\\[ ,;:!\n]|\\(?:q?quad|enspace|thinspace|nobreakspace|l?dots|textellipsis)(?![A-Za-z@])(?:\{\})?)\s*$/
+/** a placeholder that is space or an ellipsis, as what stands between a run's formulas may be: one of TeX's spaces (rules/tex-kernel.mjs
+ *  spaceSource: a tie, a control space, `\,`, \quad, \hspace{…}), \ldots */
+const RUN_SPACE = new RegExp(String.raw`^(?:${spaceSource()}|\\(?:l?dots|textellipsis)(?![A-Za-z@])(?:\{\})?)\s*$`)
 /**
  * A formula the author split across inline formulas — `$\{\Phi_0$, $\Phi_1$, $\Phi_2\}$`, a set whose brace the first
  * opens and the last closes — goes out as one placeholder: the formulas of a run whose delimiters balance across them
@@ -77,24 +79,41 @@ const runShown = slot => slot.pieces.filter(p => p.t === 'text').map(p => utf8(p
 /** a slot as the pieces it stands for: a run's, an edge's (a kept pair's open or close with what rides beside it), or
  *  the one piece */
 const piecesOf = slot => (slot.t === 'run' || slot.t === 'edge' ? slot.pieces : [slot])
-/** the source a slot is read by where a space is taken off before it (SPACING): an edge's first piece that sets
- *  something, its open or a close (a group's end) */
-const srcOf = slot => (slot.t === 'edge' ? (slot.pieces.find(p => !isInkless(p)) ?? slot.pieces[0]).src : slot.src)
+/** the source a slot is read by where a space is taken off before it (SPACING): a run's or an edge's first piece that sets
+ *  something (a tie before a reference, `Fig.~\ref{x}`; an edge's open or a close, a group's end), or the piece */
+const srcOf = slot => (slot.t === 'edge' || slot.t === 'run' ? (slot.pieces.find(p => !isInkless(p) && !(p.t === 'text' && blank(utf8(p.s)))) ?? slot.pieces[0]).src : slot.src)
+
+// ---------------------------------------------------------------- what breaks the text, and a display
+/** a displayed formula's source: the layer draws it as one crop (layout/marks.mjs classOf, which reads it here), and the wire's one
+ *  reading of a display (its own stop, the text it breaks) */
+export const DISPLAY = /^(?:\\\[|\$\$|\\begin\s*\{(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath|IEEEeqnarray|subequations)\*?\})/
+/** a forced line break, a list's item: `\\` (starred, with its room), \newline, \linebreak (its priority after it), \item */
+const FORCED_BREAK = /^(?:\\\\\*?(?:\[[^\]]*\])?|\\(?:newline|linebreak|item)(?![A-Za-z@])(?:\[[^\]]*\])?)\s*$/
+/** the placeholders that break the text where they stand: a forced line break, an item, a display (DISPLAY). An inline formula
+ *  does not: the translator moves it with the words as one of them (`We fix the $\theta$ \textcolor{red}{matrix …}` kept would
+ *  cut its noun phrase in two; the review of #415, 100 of the 109 units its clause changed over the sweep's papers) */
+const breaks = src => typeof src === 'string' && (FORCED_BREAK.test(src) || DISPLAY.test(src))
 
 // ---------------------------------------------------------------- a unit's styling on the wire
 /**
- * A placeholder that sets no ink and that no translator needs: a style or size switch (`\bfseries`, `\small`,
- * `\color{red}`), a strut, a paragraph's shape (`\noindent`, `\centering`), a break's permission (`\allowbreak`),
- * `\relax` and its kind. Sent as a marker, each one cut the sentence it stood in: Microsoft reads a
- * marker as a hard boundary, and 2610.19159's 6,681 `\allowbreak{}` and 3,516 `\bfseries` (one before every word of
- * its coloured runs) went out as 13,000 markers. It goes on no wire: it is put back after the open of its innermost
- * group that went out (the unit's front, a kept pair's open) where it stood before that group's first word, else before
- * its close, in the source's order; next to a placeholder that goes as a marker, it rides in that marker, in its place
- * (planOf). A space (a tie, `\quad`, mt.mjs SPACING's), a forced break, a fill or a skip is not one of them: each sets
- * where the words around it fall (a fill taken to the end set 2608.10322's flush-right end of proof after its words),
- * and goes as a marker where it stands
+ * A placeholder that sets no ink and that no translator needs, read from TeX's own tables (rules/tex-kernel.mjs): one of the
+ * kernel's that set no ink and read nothing, but a space and a break (`\@`, `\/`, `\-`, \relax, \nobreak, \allowbreak,
+ * \noindent, \protect, \nolinebreak…); LaTeX's declarations of a font, a size or a paragraph's shape (`\bfseries`, `\small`,
+ * `\centering`, a strut) and `\color{red}`; a key written to an auxiliary file (`\label{…}`, `\index{…}`); a penalty; the
+ * rules a table sets between its rows (`\midrule`, `\cmidrule(lr){2-3}`). Sent as a marker, each one cut the sentence it stood
+ * in: Microsoft reads a marker as a hard boundary, and 2610.19159's 6,681 `\allowbreak{}` and 3,516 `\bfseries` (one before
+ * every word of its coloured runs) went out as 13,000 markers. It goes on no wire: it is put back after the open of its
+ * innermost group that went out (the unit's front, a kept pair's open) where it stood before that group's first word, else
+ * before its close, in the source's order; next to a placeholder that goes as a marker, it rides in that marker, in its place
+ * (planOf). A space (a tie, `\quad`, SPACING's), a forced break, a fill or a skip is not one of them: each sets where the words
+ * around it fall (a fill taken to the end set 2608.10322's flush-right end of proof after its words), and goes as a marker where
+ * it stands
  */
-const INKLESS = /^(?:\\(?:centering|raggedright|raggedleft|noindent|indent|normalfont|rmfamily|sffamily|ttfamily|bfseries|mdseries|itshape|upshape|slshape|scshape|em|bf|it|rm|sf|tt|sc|sl|normalsize|small|footnotesize|scriptsize|tiny|large|Large|LARGE|huge|Huge|selectfont|protect|relax|leavevmode|strut|null|nobreak|allowbreak|sloppy|fussy|ignorespaces|unskip)(?![A-Za-z@])(?:\s*\{\})?|\\color\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\})\s*$/
+const escapeRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+const KERNEL_SYMBOLS = INK_FREE_SYMBOLS.filter(s => !SPACE_SYMBOLS.includes(s)).map(escapeRe)
+const KERNEL_WORDS = [...INK_FREE_WORDS, ...PREFIX_WORDS, ...DECLARATION_WORDS].filter(w => !breaks(`\\${w}`))
+const HINTS = BREAK_HINTS.filter(w => !breaks(`\\${w}`))
+const INKLESS = new RegExp(String.raw`^(?:(?:${KERNEL_SYMBOLS.join('|')})|\\(?:${KERNEL_WORDS.join('|')})(?![A-Za-z@])(?:\s*\{\})?|\\(?:${HINTS.join('|')})(?![A-Za-z@])(?:\s*\[[^\]]*\])?|\\color\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\}|\\(?:${AUX_WORDS.join('|')})\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\}|\\(?:${PENALTY_WORDS.join('|')})\s*(?:[-+]?\d+|\\[A-Za-z@]+)|\\(?:${ROW_RULES.join('|')})(?![A-Za-z@])(?:\s*\[[^\]]*\]|\s*\((?:[^()]|\{[^{}]*\})*\)|\s*\{[^{}]*\})*)\s*$`)
 /** whether a piece is a placeholder that sets no ink (INKLESS) */
 export const isInkless = p => p?.t === 'ph' && typeof p.src === 'string' && p.src[0] === '\\' && INKLESS.test(p.src)
 /** a link's open: its text is what a reader clicks, kept a pair on every wire (the layer draws the link by it) */
@@ -132,13 +151,25 @@ export function holdsStyle(pieces) {
   return pieces.some((p, k) => k > first && k < last && isInkless(p))
 }
 
-/** a unit's pieces as a tree: each pair a node of what it holds (`seq`), each other piece a leaf; null where the pairs
- *  do not nest (a piece list of no unit the front end makes) */
-function treeOf(pieces) {
+/** a pair's ends whose other end the unit does not hold, by index: an open the next unit closes (a group a unit ends inside,
+ *  2610.19159's transcripts' `{\color{…}`; `\multirow{`, whose close the next cell holds), a close of one the unit before opened.
+ *  No reading pairs them: 382 of the 53 sweep papers' units held one, and every reply of theirs, an echo of the wire too, was
+ *  refused for its pairs and the unit sent again as runs. Each stands at its unit's front or back (all 386 there) */
+function loneEnds(pieces) {
+  const opens = new Set(), closes = new Set(), lone = new Set()
+  for (const p of pieces) if (p?.t === 'open') opens.add(p.id); else if (p?.t === 'close') closes.add(p.id)
+  // (by what the pieces hold, never by their order: a reading that set a pair's close before its open holds both, and is refused)
+  pieces.forEach((p, k) => { if ((p?.t === 'open' && !closes.has(p.id)) || (p?.t === 'close' && !opens.has(p.id))) lone.add(k) })
+  return lone
+}
+/** a unit's pieces as a tree: each pair a node of what it holds (`seq`), each other piece a leaf, a lone end (`lone`, loneEnds)
+ *  among them; null where the pairs do not nest (a piece list of no unit the front end makes) */
+function treeOf(pieces, lone) {
   const root = { seq: [] }, stack = [root]
   for (let k = 0; k < pieces.length; k++) {
     const p = pieces[k]
-    if (p?.t === 'open') { const n = { open: k, close: -1, seq: [] }; stack.at(-1).seq.push(n); stack.push(n) } else if (p?.t === 'close') {
+    if (lone.has(k)) stack.at(-1).seq.push({ k })
+    else if (p?.t === 'open') { const n = { open: k, close: -1, seq: [] }; stack.at(-1).seq.push(n); stack.push(n) } else if (p?.t === 'close') {
       const top = stack.at(-1)
       if (top === root || pieces[top.open].id !== p.id) return null
       top.close = k
@@ -170,13 +201,14 @@ function treeOf(pieces) {
  */
 function planOf(u, format, boundary = true) {
   const pieces = u.pieces
-  const ink = new Array(pieces.length)
+  // (a lone end goes on no wire, as a placeholder that sets no ink does: back where it stands, the unit's front or back)
+  const ink = new Array(pieces.length), lone = loneEnds(pieces)
   let hasInk = false, styled = false
   for (let k = 0; k < pieces.length; k++) {
     const p = pieces[k]
-    if (p.t === 'ph') { ink[k] = isInkless(p); if (ink[k]) hasInk = styled = true } else if (p.t === 'open' || p.t === 'close') styled = true
+    if (p.t === 'ph') { ink[k] = isInkless(p); if (ink[k]) hasInk = styled = true } else if (p.t === 'open' || p.t === 'close') { styled = true; if (lone.has(k)) ink[k] = hasInk = true }
   }
-  const root = styled ? treeOf(pieces) : null
+  const root = styled ? treeOf(pieces, lone) : null
   const runs = formulaRuns(pieces)
   if (!root) {
     const items = []
@@ -186,7 +218,7 @@ function planOf(u, format, boundary = true) {
       items.push({ t: 'void', slot: last > k ? runSlot(pieces.slice(k, last + 1)) : pieces[k], hide: last > k })
       k = last
     }
-    return { items, front: [], back: [], styled: false }
+    return { items: format === 'tags' ? items : joinVoids(items, pieces), front: [], back: [], styled: false }
   }
   // (one state for the unit, read by the functions below: none of them is made anew for each unit; `keptEdges` the boundary
   // rule's, null while it is read)
@@ -198,7 +230,52 @@ function planOf(u, format, boundary = true) {
   const unit = { lead: [], end: [], seen: false }
   const W = { P, items: [], stack: [unit], group: unit, sink: null, joint: false }
   walk(W, root.seq)
-  return { items: W.items, front: unit.lead, back: unit.end, styled: true, texts: P.texts }
+  return { items: format === 'tags' ? W.items : rideEdges(joinVoids(W.items, pieces)), front: unit.lead, back: unit.end, styled: true, texts: P.texts }
+}
+/**
+ * The markers wire's items with each stretch of placeholders — the voids side by side on the wire, white space alone between
+ * them, whatever level of the unit each stands at (a pair of placeholders alone, a formula run, a placeholder) — one marker,
+ * read back as all its pieces in their order (a run's slot): side by side, an engine moves them as one, and each marker more
+ * is a hard boundary to Microsoft and a fallback more (the rules audit's T5: 28,203 of the 53 sweep papers' 97,053 markers
+ * touched the one before; the units with more than 20 markers went to Google 22 to 42 % of the time). A display ends its
+ * stretch: its marker carries its own stop after it (ownStopOf reads a run's last piece). The tags wire keeps each its own
+ */
+function joinVoids(items, pieces) {
+  const out = []
+  const display = it => piecesOf(it.slot).some(p => p.t === 'ph' && DISPLAY.test(p.src ?? ''))
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i]
+    let last = i
+    if (it.t === 'void' && !display(it)) {
+      for (let x = i + 1; x < items.length; x++) {
+        const y = items[x]
+        if (y.t === 'void') { last = x; if (display(y)) break; continue }
+        if (y.t !== 'text' || y.ks.some(k => !blank(utf8(pieces[k].s)))) break
+      }
+    }
+    if (last === i) { out.push(it); continue }
+    const ps = []
+    for (let x = i; x <= last; x++) ps.push(...(items[x].t === 'void' ? piecesOf(items[x].slot) : items[x].ks.map(k => pieces[k])))
+    out.push({ t: 'void', slot: runSlot(ps), hide: true })
+    i = last
+  }
+  return out
+}
+/** a placeholder that is one of TeX's spaces, whole (rules/tex-kernel.mjs spaceSource) */
+const SPACE_PIECE = new RegExp(String.raw`^\s*${spaceSource()}\s*$`)
+/** the markers wire's items with each space (a tie, a control space…) that stands right before a kept pair's open, or right after
+ *  its close, in that edge's marker, in its place (edgeOf): beside the edge's marker, a marker of its own cut nothing more and cost
+ *  a marker (6,693 of the 53 sweep papers' 97,053) */
+function rideEdges(items) {
+  const out = []
+  const space = it => it?.t === 'void' && !it.hide && it.slot?.t === 'ph' && SPACE_PIECE.test(it.slot.src ?? '')
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i], next = items[i + 1]
+    if (it.t === 'close' && space(next)) { it.post = [next.slot]; out.push(it); i++; continue }
+    if (space(it) && next?.t === 'open') { next.pre = [it.slot]; continue }
+    out.push(it)
+  }
+  return out
 }
 /** whether the boundary rule (classOf; TRANSLATE_VERSION 4) changes what a unit sends: its markers plan, which the wire and the
  *  runs are written from, with the rule and without it. A unit with no pair has none to keep: the units a copy made before the
@@ -334,24 +411,23 @@ const nextSolid = (flat, b) => { SOLID.lastIndex = b; return SOLID.exec(flat)?.[
 /** where the next character from `b` that is no white space stands, and the last before `a` (-1 for none) */
 const nextSolidAt = (flat, b) => { SOLID.lastIndex = b; return SOLID.exec(flat)?.index ?? -1 }
 const solidBeforeAt = (flat, a) => { let i = a - 1; while (i >= 0 && /\s/.test(flat[i])) i--; return i }
-/** the placeholders that break the text where they stand: a forced line break, a display, an item. An inline formula does
- *  not: the translator moves it with the words as one of them (`We fix the $\theta$ \textcolor{red}{matrix …}` kept would
- *  cut its noun phrase in two; the review of #415, 100 of the 109 units its clause changed over the sweep's papers) */
-/** whether pieces `a` to `b` hold a placeholder that breaks the text (BREAKS) */
-const breaksIn = (pieces, a, b) => { for (let k = a; k <= b; k++) if (pieces[k]?.t === 'ph' && BREAKS.test(pieces[k].src ?? '')) return true; return false }
-const BREAKS = /^(?:\\\\\*?(?:\[[^\]]*\])?|\\(?:newline|linebreak|item)(?![A-Za-z@])(?:\[[^\]]*\])?|\$\$[\s\S]*|\\\[[\s\S]*|\\begin\s*\{(?:equation|align|gather|multline|eqnarray|displaymath|flalign|alignat)\*?\}[\s\S]*)\s*$/
-/** whether the text breaks at flat offset `i` (BREAKS) */
+/** whether pieces `a` to `b` hold a placeholder that breaks the text (breaks) */
+const breaksIn = (pieces, a, b) => { for (let k = a; k <= b; k++) if (pieces[k]?.t === 'ph' && breaks(pieces[k].src)) return true; return false }
+/** whether the text breaks at flat offset `i` (breaks) */
 const breaksAt = (P, i) => i >= 0 && P.breaks.has(i)
 /** the places the wire has a marker at anyway, by the sentence rule alone: each kept or enclosing pair's two edges, read before
  *  the boundary rule (classOf) and never after it, so that one pair's keeping makes no other's; inside a pair that goes flat
- *  too, whose children the wire walks still (a link kept in it keeps its markers) */
+ *  too, whose children the wire walks still (a link kept in it keeps its markers). And a pair's that sets nothing (the open's
+ *  `sets` 0), which takes no marker of its own: its two edges are a field's (revtex's `\bibinfo{journal}{…}`), where every other
+ *  pair is decided as it was while the field kept its markers — `\bibinfo{booktitle}{\emph{Proceedings …}}` keeps its italic,
+ *  two markers where it had four (55 such pairs in 7 of the 53 sweep papers would else go flat, their attribute lost) */
 function keptEdgesOf(P, root) {
   const edges = []
   const visit = seq => {
     for (const e of seq) {
       if (!e.seq) continue
       const c = classOf(P, e)
-      if (c === 'kept' || c === 'enclose') edges.push(...P.ranges.get(e))
+      if (c === 'kept' || c === 'enclose' || (P.pieces[e.open].sets === 0 && e.info.text)) edges.push(...P.ranges.get(e))
       if (c === 'kept' || c === 'enclose' || c === 'flat') visit(e.seq)
     }
   }
@@ -364,11 +440,16 @@ const atEdge = (P, x) => P.keptEdges.some(y => /^\s*$/.test(P.flat.text.slice(Ma
 const WINDOW = 200
 /** a pair's class on the wire (planOf) */
 function classOf(P, e) {
+  // (a pair whose command sets its argument and nothing else, the front end's verdict from its definition — revtex's and ACM's
+  // `\bibinfo`, `\bibnamefont`, a paper's `\newcommand\x[1]{#1}`: the open's `sets` 0 —, is no pair on either wire: its words
+  // the sentence's, its two ends back empty after them, which sets what it set, nothing)
+  const nothing = P.pieces[e.open].sets === 0
   // (an empty pair that sets more than a style, `\inv{}`, may print: one marker, where it stands)
-  if (!e.info.text) return e.info.voids || !setsStyle(P, e) ? 'group' : 'skeleton'
-  if (P.format === 'tags') return 'kept'
+  if (!e.info.text) return e.info.voids || !(nothing || setsStyle(P, e)) ? 'group' : 'skeleton'
+  if (P.format === 'tags') return nothing ? 'flat' : 'kept'
   const [a, b] = P.ranges.get(e), { text: flat, first, word, last, lastWord } = P.flat
   if (a <= first && b >= last) return 'enclose'
+  if (nothing) return 'flat'
   if (!setsStyle(P, e) || LINK.test(P.pieces[e.open].src ?? '')) return 'kept'
   // (placeholders before its first word or after its last are the unit's edge: a cell's rule, a citation at the end)
   const head = a <= word, tail = b >= lastWord, inside = flat.slice(Math.max(a, b - WINDOW), b), next = nextSolid(flat, b)
@@ -385,7 +466,7 @@ function classOf(P, e) {
   const ends = tail || endsSentence(inside) || SENTENCE_LEAD.test(next) || label || (head && (CLAUSE_END.test(inside.trimEnd()) || CLAUSE_LEAD.test(next) || /^\p{Lu}/u.test(next)))
   if (starts && ends) return 'kept'
   // the boundary rule (E1 of the residuals' batch R2): a pair whose two ends both stand where the wire is cut anyway — a placeholder
-  // that breaks the text beside it (BREAKS: a forced break, a display, an item; never an inline formula, which the translator
+  // that breaks the text beside it (breaks: a forced break, a display, an item; never an inline formula, which the translator
   // moves as a word), a kept or enclosing pair's edge with white space alone between, or the unit's own end — is kept too: its
   // two markers cut nothing Microsoft does not cut already (2610.19159's "\textit{Floor (must clear):} \textcolor{red}{… to the
   // end}", whose colour went flat at a colon that starts no sentence)
@@ -437,15 +518,13 @@ function walk(W, seq) {
   }
 }
 // ---------------------------------------------------------------- a display's own stop
-/** a displayed formula's source: the layer draws it as one crop (layout/marks.mjs classOf, which reads it here) */
-export const DISPLAY = /^(?:\\\[|\$\$|\\begin\s*\{(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath|IEEEeqnarray|subequations)\*?\})/
 /** the math environments a display holds, which end inside it before its own end: a display's, an alignment's, a case
  *  split's, an array's or a matrix's. No other (a picture, `\end{tikzpicture}`, whose `;` is its own syntax) */
 const MATH_INNER = String.raw`(?:equation|align|alignat|gather|multline|flalign|eqnarray|displaymath|dmath|IEEEeqnarray|subequations|split|aligned|alignedat|gathered|multlined|cases|dcases|rcases|array|subarray|[pbBvV]?matrix|smallmatrix)\*?`
 /** one thing at a display's end that sets none of its sentence's punctuation, read from the end: white space, a comment,
  *  the display's close and an inner math environment's, a label, a tag, a number's switch, `\qedhere`, a line break, a
  *  space or a fill of TeX's, an empty group, plain TeX's \eqno and what it numbers */
-const DISPLAY_TAIL = new RegExp(String.raw`(?:[ \t\n\f\r]+|(?<!\\)%[^\n]*|\\\]|\$\$|\\end\s*\{${MATH_INNER}\}|\\(?:label|tag\*?)\s*\{[^{}]*\}|\\(?:nonumber|notag|qedhere|displaybreak|allowbreak|hfill|q?quad|enspace|thinspace)(?![A-Za-z@])(?:\[[^\]]*\])?|\\\\\*?(?:\[[^\]]*\])?|\\[,;:!> ]|~|\{\}|\\l?eqno(?![A-Za-z@])[\s\S]*)$`)
+const DISPLAY_TAIL = new RegExp(String.raw`(?:[ \t\n\f\r]+|(?<!\\)%[^\n]*|\\\]|\$\$|\\end\s*\{${MATH_INNER}\}|\\(?:label|tag\*?)\s*\{[^{}]*\}|\\(?:nonumber|notag|qedhere|displaybreak|allowbreak|hfill)(?![A-Za-z@])(?:\[[^\]]*\])?|\\\\\*?(?:\[[^\]]*\])?|${spaceSource({ math: true })}|\{\}|\\l?eqno(?![A-Za-z@])[\s\S]*)$`)
 /** the punctuation at that end: a stop, a comma, a semicolon or a colon, bare or alone in a group that sets it (`\text{.}`,
  *  never a phantom's); never an empty delimiter (`\right.`) or an escaped character (`\;` is a space) */
 const DISPLAY_STOP = /\\(?:text|mbox|textrm|textnormal|mathrm|hbox)\s*\{\s*([.,;:])\s*\}$|(?<!\\(?:right|middle|left|[bB]igg?[lrm]?)\s*)(?<!\\)([.,;:])$/
@@ -509,8 +588,8 @@ const placed = (pieces, list, out = []) => { for (const x of list) if (Array.isA
  *  before its first word; its close's: what came after, merged pairs' ends among them) */
 function edgeOf(pieces, it) {
   const { g } = it
-  if (it.t === 'open') return g.lead.length ? { t: 'edge', pieces: placed(pieces, g.lead, [pieces[g.open]]) } : pieces[g.open]
-  return g.end.length ? { t: 'edge', pieces: [...placed(pieces, g.end), pieces[g.close]] } : pieces[g.close]
+  if (it.t === 'open') return g.lead.length || it.pre ? { t: 'edge', pieces: placed(pieces, g.lead, [...(it.pre ?? []), pieces[g.open]]) } : pieces[g.open]
+  return g.end.length || it.post ? { t: 'edge', pieces: [...placed(pieces, g.end), pieces[g.close], ...(it.post ?? [])] } : pieces[g.close]
 }
 /** the kept pairs whose source holds letters, innermost first, as rehydrate refills one that comes back empty: its
  *  open, the last piece of its open's slot (`a`), the first of its close's (`b`), its close */
@@ -659,10 +738,13 @@ const STOP = /[.!?\u3002\uff01\uff1f]/, STOPS = new RegExp(STOP.source, 'g')
 const lostText = (wire, atoms, pieces) => !pieces.some(p => p.t === 'text' && SAYS.test(p.s)) && /\p{L}/u.test(wire.replace(atoms, ''))
 /** what a translation of words holds: a letter, or a digit (two is 2) */
 const SAYS = /[\p{L}\p{N}]/u
-/** the pairs of read pieces in order and nested */
+/** the pairs of read pieces in order and nested; an end whose other end the unit does not hold (loneEnds) is no pair: it
+ *  came back where the plan put it */
 const pairsInOrder = pieces => {
-  const stack = []
-  for (const p of pieces) {
+  const lone = loneEnds(pieces), stack = []
+  for (let k = 0; k < pieces.length; k++) {
+    const p = pieces[k]
+    if (lone.has(k)) continue
     if (p.t === 'open') stack.push(p.id)
     else if (p.t === 'close' && stack.pop() !== p.id) return false
   }
@@ -684,9 +766,10 @@ const STOP_SPACE = /(?<=[.\u3002\uff0e\u0964\u0965\u06d4\u0589\u1362\u104b\u0f0d
  *  after a number (the evaluation of the typesetting rule, 2026-10-01). A word's space (#254) stays the engine's — a
  *  letter, or a combining mark ending a word, before a marker: the common case, whose space was always kept */
 const NUMBER_SPACE = /(?<=\p{N})[ \t\n\f\r]+$/u, NUMBER_LEAD = /^[ \t\n\f\r]+(?=\p{N})/u
-/** a piece a space never goes before: one that is a space itself (a tie, a control space, a kern), a group's end.
- *  layer/pieces.mjs writes it again (the reader's layer may not import this module); a test holds the two equal */
-export const SPACING = /^(?:~|\\[ ,;:]|\\(?:q?quad|enspace|thinspace|nobreakspace)(?![A-Za-z])|\\hspace\*?\{|\}$)/
+/** a piece a space never goes before: one that is a space itself of positive width (rules/tex-kernel.mjs spaceLead: a tie, a
+ *  control space, `\,`, \quad, \hspace{…}; `\!` takes room away), a group's end. layer/pieces.mjs reads the same table the same
+ *  way (the reader's layer may not import this module); a test holds the two equal */
+export const SPACING = new RegExp(`^(?:${spaceLead({ negative: false })}|\\}$)`)
 /** a run of `#` the reply holds outside its markers, not an entity's (`&#39;`): the source's text holds none — TeX's
  *  `\#` and a bare `#` are placeholders (latex-front.mjs walk) —, so on the wire a `#` is a marker's, and is dropped
  *  wherever the reply set it; with it a pair of brackets that held nothing else (Microsoft's Japanese wrote 1706.03762's
@@ -937,36 +1020,15 @@ export const WIRE = {
   tags: { serialize: serializeTags, rehydrate: rehydrateTags, run: escapeTags, unrun: decode },
   runs: { run: escapeTags, unrun: decode },
 }
-
-// ---------------------------------------------------------------- Microsoft's free endpoint, as the extension calls it
-export const MICROSOFT_LANG = { zh: 'zh-Hans', ja: 'ja', de: 'de' }
-/** one request: texts → translations (null where the engine returned nothing) */
-export async function translateMicrosoft(texts, to) {
-  for (let attempt = 0; attempt < 4; attempt++) {
-    try {
-      const res = await fetch(`https://edge.microsoft.com/translate/translatetext?${new URLSearchParams({ from: '', to: MICROSOFT_LANG[to] ?? to, isEnterpriseClient: 'false' })}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(texts) })
-      if (res.status === 429 || res.status >= 500) throw new Error(`HTTP ${res.status}`)
-      const json = await res.json()
-      return json.map(item => item?.translations?.[0]?.text ?? null)
-    } catch (e) { if (attempt === 3) throw e; await new Promise(r => setTimeout(r, 1500 * (attempt + 1))) }
-  }
-}
-/** texts in requests of at most 2000 characters or 100 texts, `parallel` requests at a time */
-export async function translateTexts(texts, to, { parallel = 4, send = translateMicrosoft } = {}) {
-  const batches = []
-  let cur = [], chars = 0
-  for (const [i, w] of texts.entries()) { if (cur.length && (chars + w.length > 2000 || cur.length >= 100)) { batches.push(cur); cur = []; chars = 0 } cur.push(i); chars += w.length }
-  if (cur.length) batches.push(cur)
-  const out = new Array(texts.length).fill(null)
-  let next = 0
-  await Promise.all(Array.from({ length: parallel }, async () => {
-    while (next < batches.length) {
-      const b = batches[next++]
-      const got = await send(b.map(i => texts[i]), to).catch(() => b.map(() => null))
-      b.forEach((i, k) => { out[i] = got[k] ?? null })
-    }
-  }))
-  return out
+/** Whether a reply to a unit's wire (`ser`, its format's serialisation) reads back whole: strictly, else tolerantly where the
+ *  format has a tolerant reading — what translateUnits takes as the unit's translation, every check of the reading's own (its
+ *  markers each once, its pairs in order, its text kept). The one reading of a reply: a chain that falls through to its next
+ *  engine where an answer would not be taken asks this (translateUnits' `accepts`), so that it pays for no answer the reading
+ *  then refuses, and passes over none it takes */
+export function readsBack(text, ser, format = 'markers') {
+  const w = WIRE[format]
+  if (typeof text !== 'string' || !w?.rehydrate) return false
+  return !w.rehydrate(text, ser).error || (!!w.tolerant && !w.tolerant(text, ser).error)
 }
 
 // ---------------------------------------------------------------- names
@@ -1107,10 +1169,12 @@ export function batchOf(order, sizeOf, max) {
 }
 
 /**
- * Units → Map unit → translated pieces. `send(texts, cuts)` returns the translations of a list of wire texts in `format`
- * (WIRE), `{ text, by, alignment? }` (engine.mjs); on the tags path the sentence cuts of each whole unit that may light
- * by sentence go with it (cutsOf: the service marks them and reads the translation's sentences back, DESIGN §8.6), on
- * the others none. What the placeholders cannot bring back, even tolerantly where the format has a tolerant reading, goes again
+ * Units → Map unit → translated pieces. `send(texts, cuts, accepts)` returns the translations of a list of wire texts in
+ * `format` (WIRE), `{ text, by, alignment? }` (engine.mjs); on the tags path the sentence cuts of each whole unit that may
+ * light by sentence go with it (cutsOf: the service marks them and reads the translation's sentences back, DESIGN §8.6), on
+ * the others none. `accepts[i]`, a function of a reply, says whether this reading takes it for texts[i] (readsBack; a run's:
+ * a letter or a digit in it), for a send that asks another engine where one would not be (the web's chain); a send may
+ * ignore it. What the placeholders cannot bring back, even tolerantly where the format has a tolerant reading, goes again
  * as runs; a unit none of whose runs came back is left out (it stays in the source language). `how` counts each way.
  */
 export async function translateUnits(units, send, format = 'markers') {
@@ -1122,8 +1186,8 @@ export async function translateUnits(units, send, format = 'markers') {
   // what came back, when some texts did not for a reason not theirs (engine.mjs, EngineError's `lost`): those stay in
   // the source language, counted, and the failure is kept — sent again piece by piece they would only fail again, as
   // many times over as they have pieces (PDF-READER §10.3)
-  const ask = async (texts, cuts) => {
-    try { return { texts: await (cuts ? send(texts, cuts) : send(texts)), lost: null } } catch (e) {
+  const ask = async (texts, cuts, accepts) => {
+    try { return { texts: await send(texts, cuts, accepts), lost: null } } catch (e) {
       if (!e?.partial) throw e
       how.error ??= e.kind
       return { texts: e.partial, lost: e.lost }
@@ -1135,7 +1199,7 @@ export async function translateUnits(units, send, format = 'markers') {
     // wording changed in 79 of 85 units), so a unit lit whole (a heading, a cell) goes as it would unmarked; a caption is
     // cut as a paragraph is (the owner, 2026-10-30: captions correspond by sentence as body units do, on every engine)
     const cuts = format === 'tags' ? units.map((u, i) => (bySentence(u.kind) ? cutsOf(u, sers[i]) : undefined)) : undefined
-    const { texts, lost } = await ask(sers.map(s => s.wire), cuts)
+    const { texts, lost } = await ask(sers.map(s => s.wire), cuts, sers.map(s => reply => readsBack(reply, s, format)))
     units.forEach((u, i) => {
       if (lost?.has(i)) { how.lost++; results.set(u, { state: 'lost' }); return }
       const got = texts[i]
@@ -1161,7 +1225,7 @@ export async function translateUnits(units, send, format = 'markers') {
     plans.set(u, plan)
     plan.parts.forEach((part, k) => { if (part.text !== undefined && (part.text.match(/\p{L}/gu) ?? []).length >= 2) runs.push({ u, k, wire: wire.run(part.text) }) })
   }
-  const { texts: runTexts, lost: runsLost } = runs.length ? await ask(runs.map(r => r.wire)) : { texts: [], lost: null }
+  const { texts: runTexts, lost: runsLost } = runs.length ? await ask(runs.map(r => r.wire), undefined, runs.map(() => reply => typeof reply === 'string' && SAYS.test(wire.unrun(reply)))) : { texts: [], lost: null }
   const byUnit = new Map(), total = new Map()
   runs.forEach((r, j) => {
     total.set(r.u, (total.get(r.u) ?? 0) + 1)

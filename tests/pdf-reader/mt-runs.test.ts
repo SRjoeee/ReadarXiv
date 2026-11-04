@@ -21,16 +21,17 @@ describe('the unit keeps its parts; the wire sends one marker for them', () => {
   it('the thesis\'s sentence as it stands: three placeholders in the unit, one marker on the wire', () => {
     const u = unitOf(SET)
     expect(phs(u.pieces)).toEqual(['$\\{\\Phi_0$', '$\\Phi_1$', '$\\Phi_2\\}$', '\\cite{Teukolsky:1973ha}'])
-    expect(serialize(u).wire).toBe('give rise to a first-order system of partial differential equations for the three components @a# @b#:')
+    // (the run and the citation beside it one marker on the markers wire, the rules audit's T5; the tags wire keeps each its own)
+    expect(serialize(u).wire).toBe('give rise to a first-order system of partial differential equations for the three components @a#:')
     expect(serializeTags(u).wire).toBe('give rise to a first-order system of partial differential equations for the three components <x id="1"/> <x id="2"/>:')
   })
 
   it('read back where the reply moved it, the run\'s own pieces in their order, the commas between them the source\'s', () => {
     const u = unitOf(SET), ser = serialize(u)
-    const r = rehydrate('These are the equations of @a#, the three components @b#:', ser)
+    const r = rehydrate('These are the equations of @a#, the three components:', ser)
     expect('pieces' in r).toBe(true)
     const pieces = (r as { pieces: Piece[] }).pieces
-    expect(joined(pieces).trim()).toBe('These are the equations of $\\{\\Phi_0$, $\\Phi_1$, $\\Phi_2\\}$, the three components \\cite{Teukolsky:1973ha}:')
+    expect(joined(pieces).trim()).toBe('These are the equations of $\\{\\Phi_0$, $\\Phi_1$, $\\Phi_2\\}$ \\cite{Teukolsky:1973ha}, the three components:')
     // the unit's own objects, so that each is found by its k (layer/pieces.mjs kOfSource), and the separators untranslated
     const at = pieces.indexOf(u.pieces[1] as Piece), run = pieces.slice(at, at + 5)
     expect(run).toEqual(u.pieces.slice(1, 6))
@@ -38,15 +39,15 @@ describe('the unit keeps its parts; the wire sends one marker for them', () => {
     expect(run.filter(p => p.t === 'text').every(p => !p.tr)).toBe(true)
     // the tags wire alike, and tolerantly
     const t = rehydrateTags('These are the equations of <x id="1"/>, the three components <x id="2"/>:', serializeTags(u))
-    expect('pieces' in t && joined(t.pieces)).toBe(joined(pieces))
-    const loose = rehydrate('These are the equations of @a, the three components @b#:', ser, true)
+    expect('pieces' in t && joined(t.pieces).trim()).toBe('These are the equations of $\\{\\Phi_0$, $\\Phi_1$, $\\Phi_2\\}$, the three components \\cite{Teukolsky:1973ha}:')
+    const loose = rehydrate('These are the equations of @a, the three components:', ser, true)
     expect('pieces' in loose && joined(loose.pieces)).toBe(joined(pieces))
   })
 
   it('written back, the run byte for byte between the translation\'s words', () => {
     const p = project(SET)
     const u = (p.units as { pieces: Piece[] }[])[0] as { pieces: Piece[] }
-    const r = rehydrate('These are the equations of @a# @b#:', serialize(u)) as { pieces: Piece[] }
+    const r = rehydrate('These are the equations of @a#:', serialize(u)) as { pieces: Piece[] }
     const out = new TextDecoder('latin1').decode(patch(p, new Map([[u, r.pieces]]) as never).get('main.tex'))
     expect(out).toContain('These are the equations of $\\{\\Phi_0$, $\\Phi_1$, $\\Phi_2\\}$ \\cite{Teukolsky:1973ha}:')
   })
@@ -55,9 +56,9 @@ describe('the unit keeps its parts; the wire sends one marker for them', () => {
 describe('a reply that does not hold the run\'s marker once is refused whole, never read in part', () => {
   const u = unitOf(SET), ser = serialize(u)
   it('a marker lost, doubled or unknown', () => {
-    expect(rehydrate('These are the equations @b#:', ser)).toEqual({ error: 'lost marker' })
-    expect(rehydrate('These are @a# the equations of @a# @b#:', ser)).toEqual({ error: 'duplicated marker' })
-    expect(rehydrate('These are the equations of @a# @b# @c#:', ser)).toEqual({ error: 'unknown marker' })
+    expect(rehydrate('These are the equations:', ser)).toEqual({ error: 'lost marker' })
+    expect(rehydrate('These are @a# the equations of @a#:', ser)).toEqual({ error: 'duplicated marker' })
+    expect(rehydrate('These are the equations of @a# @b#:', ser)).toEqual({ error: 'unknown marker' })
   })
   it('a reply to the old wire, which sent each part apart: refused, strictly and tolerantly, on both wires', () => {
     // the old wire: `… components @a#, @b#, @c# @d#:`, the citation its fourth
@@ -73,9 +74,11 @@ describe('what may stand between the parts', () => {
   it('a comma, a thin space, a quad, a control space, an ellipsis, a tie, a comment', () => {
     for (const between of [', ', '\\,', '\\quad ', '\\ ', ', \\ldots, ', '~', ',%\n']) expect(runOf(`The set $\\{a$${between}$b\\}$ is given here.`), between).toEqual({ parts: 2 + (/\\(?:,|quad|ldots| )|~/.test(between) ? 1 : 0), markers: 1 })
   })
-  it('not a display, a citation or a word: each part its own marker', () => {
-    expect(runOf('The set $\\{a$ $$x$$ $b\\}$ is given here.').markers).toBe(3)
-    expect(runOf('The set $\\{a$ \\cite{k} $b\\}$ is given here.').markers).toBe(3)
+  it('not a display, a citation or a word: no run crosses one (formulaRuns), but placeholders side by side are one marker all the same, a display the last of its stretch (its own stop after it)', () => {
+    expect([...formulaRuns(unitOf('The set $\\{a$ $$x$$ $b\\}$ is given here.').pieces)]).toEqual([])
+    expect(runOf('The set $\\{a$ $$x$$ $b\\}$ is given here.').markers).toBe(2)
+    expect([...formulaRuns(unitOf('The set $\\{a$ \\cite{k} $b\\}$ is given here.').pieces)]).toEqual([])
+    expect(runOf('The set $\\{a$ \\cite{k} $b\\}$ is given here.').markers).toBe(1)
     expect(runOf('For $a \\in \\{$L, L-O, N$\\}$ alike.').markers).toBe(2)
   })
   it('formulaRuns over a unit\'s pieces: the run\'s first piece to its last', () => {

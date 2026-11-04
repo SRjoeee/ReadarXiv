@@ -54,3 +54,75 @@ const SOURCE = new RegExp(String.raw`^\s*\\(?:${SYMBOL}|${WORD})(?:\{\})?\s*$`)
 
 /** whether a placeholder's whole source is one of INK_FREE_SYMBOLS or INK_FREE_WORDS (a source with an argument is not) */
 export const inkFree = src => SOURCE.test(src ?? '')
+
+// ---------------------------------------------------------------- what sets nothing among a unit's words
+// Beside the tables above, which the maker and the layer read (a placeholder with no mark, one that draws nothing), what else
+// LaTeX defines to set nothing where a unit's words stand: declarations that set no ink and change the font, the size or the
+// paragraph's shape for the rest of their group, and commands whose arguments are no text and whose nodes are no character
+// among the words. The wire (translate/mt.mjs INKLESS) sends none of them: each would be a marker that cuts its sentence.
+
+/** LaTeX's declarations with no argument that set no ink: the font's (\rmfamily … \scshape, \normalfont, the two-letter
+ *  forms \bf … \sl, \em), its size's (\tiny … \Huge, \normalsize, \selectfont), the paragraph's shape (\centering,
+ *  \raggedright, \raggedleft), its line breaking's (\sloppy, \fussy), and an empty box: \strut (a rule of no width), \null
+ *  (\hbox{}) */
+export const DECLARATION_WORDS = Object.freeze(['centering', 'raggedright', 'raggedleft', 'normalfont', 'rmfamily', 'sffamily', 'ttfamily', 'bfseries', 'mdseries', 'itshape', 'upshape', 'slshape', 'scshape', 'em', 'bf', 'it', 'rm', 'sf', 'tt', 'sc', 'sl', 'normalsize', 'small', 'footnotesize', 'scriptsize', 'tiny', 'large', 'Large', 'LARGE', 'huge', 'Huge', 'selectfont', 'strut', 'null', 'sloppy', 'fussy'])
+/** control words whose argument is a key, written to an auxiliary file (a whatsit, no ink): LaTeX's \label{…} (cleveref's
+ *  optional type before it) and \index{…} */
+export const AUX_WORDS = Object.freeze(['label', 'index'])
+/** TeX's \penalty and its number: a break's cost (\nobreak is \penalty\@M, \allowbreak \penalty\z@) */
+export const PENALTY_WORDS = Object.freeze(['penalty'])
+/** what LaTeX and booktabs set between a table's rows, with their arguments (`\cline{2-3}`, `\cmidrule(lr){2-3}`,
+ *  `\addlinespace[3pt]`): \noalign material, or \cline's row of its own, nothing in a cell's line */
+export const ROW_RULES = Object.freeze(['hline', 'cline', 'toprule', 'midrule', 'bottomrule', 'cmidrule', 'specialrule', 'addlinespace', 'morecmidrules'])
+
+// ---------------------------------------------------------------- a definition that sets one of its arguments alone
+/** the kernel's macros that expand to one of their arguments and nothing else, by name: how many they take, and which they give
+ *  (latex.ltx: \@firstofone and \@iden take one, \@firstoftwo and \@secondoftwo two). A .bbl defines its field commands by them
+ *  (apsrev4-2's `\providecommand \bibinfo [0]{\@secondoftwo}`) */
+export const ARGUMENT_SELECTORS = Object.freeze({ '@firstofone': [1, 1], '@iden': [1, 1], '@firstoftwo': [2, 1], '@secondoftwo': [2, 2] })
+/** the argument a definition expands to alone (`params`, the arguments it declares; `body`, its replacement text, comments out),
+ *  as { of, arg }: how many arguments a call takes and which one, from 1, it sets — `#2` of `[2]`, \@secondoftwo of `[0]`; null
+ *  for a body that sets anything else (a style, a word, a box) or nothing at all */
+export function selectsArgument(params, body) {
+  if (!Number.isInteger(params) || typeof body !== 'string') return null
+  const b = body.trim(), own = /^#([1-9])$/.exec(b)
+  if (own) return Number(own[1]) <= params ? { of: params, arg: Number(own[1]) } : null
+  const k = /^\\(@[A-Za-z]+)$/.exec(b), sel = k && params === 0 && Object.hasOwn(ARGUMENT_SELECTORS, k[1]) ? ARGUMENT_SELECTORS[k[1]] : null
+  return sel ? { of: sel[0], arg: sel[1] } : null
+}
+
+// ---------------------------------------------------------------- spaces
+// TeX's and LaTeX's spaces in text, as data: what the kernel defines to set glue or a kern there and nothing else, so that it
+// sets where the words around it fall and no ink. One table for every reader of a placeholder that is a space: the wire
+// (translate/mt.mjs: what stands between the formulas of a run, what no space of the wire's goes before, what ends a display)
+// and the layer's pieces (layer/pieces.mjs, a space drawn as one). Three readers kept three lists of it, and they disagreed: a
+// control space before a line's end was a space between formulas and none before a marker; `\!` was one at a display's end and
+// none elsewhere.
+
+/** control symbols that are spaces: the tie `~` (an active character, \nobreakspace: a space no line breaks at), the control
+ *  space `\ ` (a backslash and any white space: a space, a tab or a line's end), the math spaces `\,` (\thinspace), `\:`
+ *  (\medspace), `\;` (\thickspace) and `\!` (\negthinspace, the one of negative width), each a kern or glue in text too */
+export const SPACE_SYMBOLS = Object.freeze(['~', '\\ ', '\\,', '\\:', '\\;', '\\!'])
+/** control words with no argument that are spaces: LaTeX's \enspace, \quad, \qquad, \thinspace and \nobreakspace */
+export const SPACE_WORDS = Object.freeze(['enspace', 'quad', 'qquad', 'thinspace', 'nobreakspace'])
+/** control words whose argument is the space's length: LaTeX's \hspace{…}, starred or not */
+export const SPACE_LENGTHS = Object.freeze(['hspace'])
+/** the spaces of negative width among SPACE_SYMBOLS: what takes room away is no gap a space of the wire's or the layer's fills */
+export const NEGATIVE_SPACES = Object.freeze(['\\!'])
+/** a control symbol that is a space in math alone: amsmath's `\>` (\medspace); in text it is the tabbing environment's tab */
+export const MATH_SPACE_SYMBOLS = Object.freeze(['\\>'])
+
+/** the symbols as alternatives of a pattern: a control space is a backslash and any white space; a symbol's backslash is no
+ *  forced break's second (`\\` and a line's end is a break, read from a source's end as from its start) */
+const spaceSymbol = symbols => symbols.map(s => (s === '~' ? '~' : s === '\\ ' ? '(?<!\\\\)\\\\\\s' : `(?<!\\\\)\\\\${s[1]}`)).join('|')
+const SPACE_WORD = `\\\\(?:${SPACE_WORDS.join('|')})(?![A-Za-z@])`
+const SPACE_LENGTH = `\\\\(?:${SPACE_LENGTHS.join('|')})\\*?\\s*\\{`
+/** the leading space of a source, as the pattern source of a regular expression (the source may go on after it): a space of
+ *  the table, a length's command up to its brace; `negative` the spaces of negative width too, `math` the math alone's too */
+export const spaceLead = ({ negative = true, math = false } = {}) => {
+  const symbols = SPACE_SYMBOLS.filter(s => negative || !NEGATIVE_SPACES.includes(s))
+  return `(?:${spaceSymbol([...symbols, ...(math ? MATH_SPACE_SYMBOLS : [])])}|${SPACE_WORD}|${SPACE_LENGTH})`
+}
+/** a source that is one space of the table whole, as the pattern source of a regular expression: a symbol or a word, alone or
+ *  before an empty group, a length's command and its length; `math` the math alone's too */
+export const spaceSource = ({ math = false } = {}) => String.raw`(?:(?:${spaceSymbol([...SPACE_SYMBOLS, ...(math ? MATH_SPACE_SYMBOLS : [])])}|${SPACE_WORD})(?:\{\})?|\\(?:${SPACE_LENGTHS.join('|')})\*?\s*\{[^{}]*\})`

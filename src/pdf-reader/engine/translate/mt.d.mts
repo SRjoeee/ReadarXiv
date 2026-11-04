@@ -64,7 +64,11 @@ export declare function sentencesKept(s: unknown, src: string, tr: string): Sent
 export declare function textsShown<U extends { pieces: Piece[] }>(units: U[], done: Map<U, Piece[]>, sentencesOf: (pieces: Piece[]) => Sentences | undefined): ({ id: number; text: string; gaps?: number[]; lead?: string; trail?: string; inner?: string; sentences?: Sentences })[]
 type Sent = { text: string; by: string | null; alignment?: { source: number[]; target: number[] } } | null
 /** units → their translations, by unit: pieces, how they came back, the identity that answered, and a whole unit's sentences */
-export declare function translateUnits<U extends { pieces: Piece[] }>(units: U[], send: (texts: string[], cuts?: number[][]) => Promise<Sent[]>, format?: 'markers' | 'tags' | 'runs'): Promise<{ results: Map<U, { pieces?: Piece[]; state: string; by?: string; sentences?: Sentences }>; how: Record<string, number> }>
+/** whether a reply to a unit's serialisation reads back whole, strictly or tolerantly: what translateUnits takes */
+export declare function readsBack(text: unknown, ser: ReturnType<typeof serialize> | ReturnType<typeof serializeTags>, format?: 'markers' | 'tags'): boolean
+/** `send`'s `accepts[i]`: whether translateUnits' reading takes a reply for texts[i] (readsBack, or a run's letter), for a send
+ *  that asks another engine where one would not be; a send may ignore it */
+export declare function translateUnits<U extends { pieces: Piece[] }>(units: U[], send: (texts: string[], cuts?: number[][], accepts?: ((reply: string) => boolean)[]) => Promise<Sent[]>, format?: 'markers' | 'tags' | 'runs'): Promise<{ results: Map<U, { pieces?: Piece[]; state: string; by?: string; sentences?: Sentences }>; how: Record<string, number> }>
 /** the characters of plain source a batch of units holds at most: the first, then the rest */
 export declare const FIRST_BATCH: 2500
 export declare const NEXT_BATCH: 12000

@@ -1,10 +1,12 @@
 // A translated unit's pieces as the layer takes them (the instant layer's spec, §4.3): each placeholder, and each group's
 // open and close, named by `k`, the index of its source piece among the unit's pieces — the layer joins a placeholder to
 // its rendering by (unit, k) alone, since a unit may hold the same placeholder twice ($x$ and $x$) —; text as the compiled
-// PDF shows it; a group's style as flags. The reader loads this module: it imports nothing, so that neither mt.mjs nor
-// latex-front.mjs comes into its bundle. The few rules it shares with mt.mjs — a text piece as the PDF shows it (`shown`),
-// the placeholders a space never goes before (`SPACING`), the plain text sentence offsets count in (plainTranslated) —
-// are written again here, and tests/pdf-reader/layer-pieces.test.ts holds them equal to mt.mjs's
+// PDF shows it; a group's style as flags. The reader loads this module: it imports nothing but TeX's spaces (rules/tex-kernel.mjs,
+// which imports nothing), so that neither mt.mjs nor latex-front.mjs comes into its bundle. The few rules it shares with mt.mjs —
+// a text piece as the PDF shows it (`shown`), the placeholders a space never goes before (`SPACING`, read from that table as
+// mt.mjs reads it), the plain text sentence offsets count in (plainTranslated) — are written again here, and
+// tests/pdf-reader/layer-pieces.test.ts holds them equal to mt.mjs's
+import { spaceLead } from '../rules/tex-kernel.mjs'
 
 /** the style flags of a group's open, and of a switch with SWITCH: it holds to the end of the group around it */
 export const STYLE = Object.freeze({ BOLD: 1, ITALIC: 2, EMPH: 4, UPRIGHT: 8, MONO: 16, SANS: 32, SERIF: 64, CAPS: 128, MEDIUM: 256, NORMAL: 512, SWITCH: 1024 })
@@ -48,8 +50,8 @@ export function styleOf(src) {
 const SWITCH = /^(?:\\(?:bf|bfseries|mdseries|em|it|itshape|sl|slshape|upshape|sc|scshape|tt|ttfamily|sf|sffamily|rm|rmfamily|normalfont)(?![A-Za-z])|\\color\s*(?:\[[^\]]*\]\s*)?\{[^{}]*\})\s*$/
 /** a forced break: \\ (starred, with its space), \newline, \linebreak */
 const BREAK = /^(?:\\\\\*?(?:\s*\[[^\]]*\])?|\\(?:newline|linebreak)(?![A-Za-z])(?:\s*\[[^\]]*\])?)\s*$/
-/** mt.mjs SPACING: a piece a space never goes before — a space itself (a tie, a control space, a kern), a group's end */
-const SPACING = /^(?:~|\\[ ,;:]|\\(?:q?quad|enspace|thinspace|nobreakspace)(?![A-Za-z])|\\hspace\*?\{|\}$)/
+/** mt.mjs SPACING: a piece a space never goes before — a space of positive width itself (rules/tex-kernel.mjs), a group's end */
+const SPACING = new RegExp(`^(?:${spaceLead({ negative: false })}|\\}$)`)
 /** mt.mjs utf8: a source's text is read byte for byte (latin1), its characters UTF-8 */
 const utf8 = s => { const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i) & 0xff; return new TextDecoder().decode(b) }
 /** mt.mjs shown: a text piece as the compiled PDF shows it, a translation's TeX escapes undone, a source's bytes as UTF-8 */

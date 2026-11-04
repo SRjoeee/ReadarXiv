@@ -295,7 +295,7 @@ describe('a copy made under pipeline 7, reopened under 8', () => {
     expect(sent).toEqual([
       'Years of the quasi-biennial oscillation and El Niño southern oscillations, which act on many timescales.',
       'The code to reproduce the work is archived in a public repository @a#.',
-      'The principal axes, shown in Fig. @a#@b#, are defined for each model.',
+      'The principal axes, shown in Fig. @a#, are defined for each model.',
     ].map(t => expect.stringContaining(t)))
     expect(sent).toHaveLength(3)
     expect(r.settled).toBe(true)
