@@ -57,6 +57,25 @@ export function rowLeadOf(index, id, before = null) {
 }
 
 /**
+ * A unit only the layout file holds that shares no line with a left unit stands after the left units before it by id that the
+ * left places on its own page or an earlier one: a float or a note numbered before it and set on a later page is no unit before
+ * it in the stream. By the ids over the whole paper, 2610.21884v1's affiliation of page 31 (u5) put every such unit after it at the
+ * paper's end, among them units of pages 1 to 3, and page 3's frontier reached there: the first part (pages 1 to 3) told entries
+ * up to page 31 and held 255 KB, which the page stream could not cut before page 31 was made (the release sweep, 2026-11-04: 1,257
+ * of 5,241 such units stood among another page's streams). This reads it: `add(page, stream)` a left unit's stream at its first
+ * page, `upTo(page)` the largest stream added at a page up to `page`, -1 for none; pages 1 to N, a page past N read as N + 1
+ * (a Fenwick tree of maxima: each add and each read a logarithm of the pages)
+ */
+export function pagedBefore(N) {
+  const n = N + 1, t = new Float64Array(n + 1).fill(-1)
+  const at = page => Math.max(1, Math.min(n, page))
+  return {
+    add(page, s) { for (let p = at(page); p <= n; p += p & -p) if (t[p] < s) t[p] = s },
+    upTo(page) { let m = -1; for (let p = page < 1 ? 0 : at(page); p > 0; p -= p & -p) if (t[p] > m) m = t[p]; return m },
+  }
+}
+
+/**
  * The left's streams as lineAfterOf reads them, from `streamOf` (a Map: a left unit's id to its stream): `of(id)`, a unit's stream
  * (undefined for one the left does not hold); `above(v)`, the least stream over v (Infinity for none); `below(v)`, the greatest
  * under v (-1 for none)

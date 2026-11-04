@@ -299,7 +299,7 @@ export function layerRows(bundle, results, lang) {
  * `onRows(rows, held)` gets the rows not given before or changed since, with the cells held now. The abort signal stops
  * the run before the next batch: it is not asked again once `translateUnits` has returned, so a batch under way when the
  * signal aborts still ends in an `onRows` call, the last. A refusal for good — an error of the service with a `kind` (engine.mjs EngineError) —
- * stops it with what it has, as runLive's does, and so does a batch part of which the service lost (translateUnits'
+ * stops it with what it has, and so does a batch part of which the service lost (translateUnits'
  * `error`); any other error is a bug and is thrown. Resolves with the final rows by id, `lost` (the units the service
  * lost, and, after a refusal, those never asked) and `stopped` (the refusal's kind, 'aborted', or null)
  */

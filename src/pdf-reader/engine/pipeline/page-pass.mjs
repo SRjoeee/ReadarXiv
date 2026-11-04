@@ -472,7 +472,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   if (marks && 'marks' in marks) {
     const makerFrame = streams ? given.makerFrame : capture ? (d, ms) => { capture.frame = frame(d, ms); return capture.frame } : frame
     try {
-      maker = await makerOf({ units, marks: marks.marks, arxiv: baseDoc, OPS, paper, left: '', pdfjs, text: baseText, lineCheck, floatMatch, frame: makerFrame, cellRules: true, parts: true, draw, rules, inFloat, texOrder, ...(streams && given.columnEdges ? { columnEdges: given.columnEdges } : {}) })
+      maker = await makerOf({ units, marks: marks.marks, base: baseDoc, OPS, paper, pdfjs, text: baseText, lineCheck, floatMatch, frame: makerFrame, cellRules: true, parts: true, draw, rules, inFloat, texOrder, ...(streams && given.columnEdges ? { columnEdges: given.columnEdges } : {}) })
       if (maker.refused) { made = { refused: maker.refused, stats: maker.stats }; maker = null }
     } catch (e) {
       if (isMemoryError(e)) throw e
@@ -664,12 +664,15 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
   const kIds = () => { const out = []; for (let i = 0; i < n; i++) if (inK(i) && !isName(i)) out.push(i); return out }
   // (K, F and NB over those, made again only from what changed since the last try: pipeline/frontier.mjs)
   const frontiers = frontierStream({ paper, N, bundle, grouped, left, st })
-  /** where the left stands (frontier.mjs leftBoundsOf), made again once the left has changed */
-  let nowAt = -1, nowLeft = null
-  const leftNow = () => {
-    if (left.version() === nowAt) return nowLeft
+  /** where the left stands (frontier.mjs leftBoundsOf), made again once the left or the pages done (`frontier`) have changed:
+   *  a unit the left holds no unit of stands after the left units before it by id placed up to its own first row's page, and
+   *  every unit not in K for good has its rows past the pages done */
+  let nowAt = -1, nowH = -1, nowLeft = null
+  const leftNow = H => {
+    if (left.version() === nowAt && H === nowH) return nowLeft
     nowAt = left.version()
-    return (nowLeft = leftBoundsOf({ units: left.units(), done: left.done, next: left.firstTok(left.frontier()) }, n))
+    nowH = H
+    return (nowLeft = leftBoundsOf({ units: left.units(), done: left.done, next: left.firstTok(left.frontier()), H, N }, n))
   }
   /** the least page unit i's rows name (its lines', its placeholders' segments', its labels'): its rows', made once (a unit's
    *  rows are final once settled; the stub a told unit's rows become keeps their pages) */
@@ -701,7 +704,7 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
       if (!(await tellHead(final))) return
       const H = final ? N : frontier()
       if (!final && Math.min(partTarget(a, N), a + PART_PAGES_MAX - 1) > H) return
-      const now = leftNow()
+      const now = leftNow(H)
       const ids = kIds()
       const { K, F, NB } = frontiers.of(ids)
       if (!final && !closable(K, F, NB, a, H, now)) return
@@ -867,7 +870,7 @@ async function markedStream(o) {
   const L = streamingLeft({ doc: left.tokens, views: text.views, edges: left.edges, texts, names, floating, floatMatch: leftFloats, frame: given.leftFrame, columns: given.columns, unitMarks: head.unitMarks, forward, ink, inkLeft, figureLeft, figureIds })
   let maker = null, st = null, made = null
   try {
-    maker = await makerOf({ units, marks: marksOfHead(head, markedOptions.engine), arxiv: doc, OPS, paper, left: '', pdfjs, text: baseText ?? text, lineCheck, floatMatch, frame: given.makerFrame, cellRules: true, parts: true, draw: o.draw, rules, inFloat, texOrder, ...(given.columnEdges ? { columnEdges: given.columnEdges } : {}) })
+    maker = await makerOf({ units, marks: marksOfHead(head, markedOptions.engine), base: doc, OPS, paper, pdfjs, text: baseText ?? text, lineCheck, floatMatch, frame: given.makerFrame, cellRules: true, parts: true, draw: o.draw, rules, inFloat, texOrder, ...(given.columnEdges ? { columnEdges: given.columnEdges } : {}) })
     if (maker.refused) { made = { refused: maker.refused, stats: maker.stats }; maker = null } else st = streamWithInk(maker.stream({ marked: head }), ink, figures)
   } catch (e) {
     if (isMemoryError(e)) throw e

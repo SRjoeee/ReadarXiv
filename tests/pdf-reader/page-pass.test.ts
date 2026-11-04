@@ -66,7 +66,7 @@ async function cutOf(w: World) {
   const anchors = anchorUnits(text.tokens, texts, { bounds: boundsFromMarks(text.tokens, read.unitMarks!), floating, floatMatch: floatMatches(text.tokens, texts, floating) })
   const side = leftSideOf({ doc: text.tokens, views: text.views as number[][], anchors, edges: text.edges })
   const lineCheck = lineCheckOf(baseText.tokens, text.tokens), L = lineCheck.lines
-  const made = await makeLayout({ units: w.units, marks: read.marks, arxiv: doc, OPS, paper: PAPER, left: '', pdfjs: '6.3.289', text: baseText, lineCheck, floatMatch: floatMatches(baseText.tokens, texts, floating) })
+  const made = await makeLayout({ units: w.units, marks: read.marks, base: doc, OPS, paper: PAPER, pdfjs: '6.3.289', text: baseText, lineCheck, floatMatch: floatMatches(baseText.tokens, texts, floating) })
   if (!('file' in made)) throw new Error('refused')
   const N = w.pages.length, base = { source: 'ours' as const, ...OURS, pages: N, tree: '2025', check: { pages: [N, N] as [number, number], boxes: 'equal' as const, carried: L.placed / L.total } }
   // (each left part with its page's line map, as the page pass writes it: pipeline/moved-lines.mjs, an empty list on a page in place)

@@ -224,7 +224,7 @@ export declare function mappedOf(toUnicode: unknown): Set<string> | null
 export declare function fontMappedOf(font: unknown): Set<string> | null
 /** whether a page character's text is no reading of its glyph (pageChars2's `nu`) */
 export declare function unmapped(ch: string, mapped: Set<string> | null | undefined): boolean
-export declare function pageChars2(textContent: { items: unknown[] }, fontOf: (fontName: string) => FontClass, mapOf?: ((fontName: string) => Set<string> | null) | null, fills?: readonly (number | readonly number[] | null | undefined)[] | null): Char[]
+export declare function pageChars2(textContent: { items: unknown[] }, fontOf: (fontName: string) => FontClass, mapOf?: ((fontName: string) => Set<string> | null) | null, fills?: readonly (number | readonly number[] | null | undefined)[] | null, nus?: readonly (readonly number[] | null)[] | null): Char[]
 /** the source's text by what sets its style: for each code point of the unit's plain source text, the attributes the pieces
  *  around it set (bits: weight 1, slant 2, small capitals 4, family 8, colour 16), the pieces that set its colour, outermost
  *  first, and the parity of the slant toggles around it (`flip`); null where the unit carries no source pieces or their text is

@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { documentBounds, inMemory, inputencOf, loadProject, markUnits, patch, urlPercents } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { openPaper, originalFiles, probeFiles, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { openPaper, originalFiles, probeFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
-import { strategiesFor } from '@/pdf-reader/engine/pipeline/scripts.mjs'
 import { seedFrom, sourceHash } from '@/pdf-reader/engine/pipeline/cache.mjs'
 import { plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
 
@@ -99,12 +98,12 @@ describe('the document as TeX finds it (documentBounds): a match of the raw text
     expect(texts(project(doc('Use \\verb|\\end{document}| to end.\n\nMore words.')))).toEqual(['Use to end.', 'More words.'])
   })
   it('a front matter command in the middle of a paragraph keeps its call in the translation (re-review N1: \\note{…} was deleted)', () => {
-    const fonts = { rm: 'cmr', sf: 'cmss', tt: 'cmtt', body: 'cmr' }
+    // (the units written back translated, as patch writes them)
     const written = (pre: string, body: string) => {
       const paper = openPaper(new Map([['main.tex', enc(doc(body, pre))]]))
       const tr = new Map((paper.units as unknown as Unit[]).map((u, i) => [u, u.pieces.map(x => (x.t === 'text' && /\S/.test(x.s ?? '') ? { ...x, tr: true, s: `<T${i}>` } : x))]))
-      const tex = new TextDecoder().decode(translationFiles(paper, tr as never, { strategy: strategiesFor(paper.meta, 'zh')[0] as never, fonts }).get('main.tex'))
-      return tex.slice(tex.indexOf('\\begin{document}', tex.indexOf('emergencystretch')))
+      const tex = new TextDecoder().decode(patch(paper.project as never, tr as never).get('main.tex'))
+      return tex.slice(tex.indexOf('\\begin{document}'))
     }
     // the paper's own macro, its argument handed to a command the table does not know
     const own = written('\\usepackage{todonotes}\n\\newcommand{\\note}[1]{\\todo{#1}}', 'Some body words here.\\note{fix this wording please} More words here to finish.')
@@ -121,9 +120,6 @@ describe('the document as TeX finds it (documentBounds): a match of the raw text
     const probe = new TextDecoder().decode(probeFiles(paper).get('main.tex'))
     expect(probe).toContain('% a comment: \\begin{document}\n')
     expect(probe.indexOf('AXT-FONTS')).toBeGreaterThan(probe.indexOf('% a comment'))
-    const fonts = { rm: 'cmr', sf: 'cmss', tt: 'cmtt', body: 'cmr' }
-    const tex = new TextDecoder().decode(translationFiles(paper, new Map(), { strategy: strategiesFor(paper.meta, 'zh')[0] as never, fonts }).get('main.tex'))
-    expect(tex.indexOf('\\begin{document}', tex.indexOf('% a comment: \\begin{document}') + 20)).toBeGreaterThan(tex.indexOf('emergencystretch'))
   })
 })
 

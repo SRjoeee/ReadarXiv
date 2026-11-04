@@ -5,7 +5,8 @@ export type NameKey = (typeof NAME_KEYS)[number]
 /** each name's English value, babel's en [captions] */
 export declare const NAME_ENGLISH: Readonly<Record<NameKey, string>>
 /** what names a compile's floats and its generated headings, by key: the target's names babel gives (the layout rules'
- *  labels), or the paper's own (live.mjs captionsOf); a key no compile answered for is left out */
+ *  labels), or the paper's own (as a compile of the translation once read them; the reader's are layer-proto/reader.mjs
+ *  CAPTIONS); a key no compile answered for is left out */
 export type Captions = Partial<Record<NameKey, 'target' | 'source'>>
 /** how far after a name its counter may begin, of the name's size */
 export declare const COUNTER_GAP: number

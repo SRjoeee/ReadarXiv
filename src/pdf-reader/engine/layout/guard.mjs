@@ -331,7 +331,7 @@ const errorKey = e => `${e.message}|${skeleton(e.before).slice(-CONTEXT)}|${skel
 export const ownErrors = log => new Set(texErrors(log ?? '').map(errorKey))
 
 /**
- * The units the marked compile's errors stand in (tex-errors.mjs unitsAtErrors, as runLive's remedy places a translation's),
+ * The units the marked compile's errors stand in (tex-errors.mjs unitsAtErrors),
  * each of its errors with a line of input but a letter lost (the paper's own letters), and less those the unmarked
  * original has too where it was compiled (`own`, ownErrors); and the units holding the line TeX names where it ignored all
  * text after it ("Incomplete \iffalse; all text was ignored after line N": a conditional that never ended, which names no

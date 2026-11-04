@@ -12,7 +12,7 @@
 // An original module (no port statement). It reads the left and asks the maker, and keeps what it read between calls.
 import { PART_PAGES_MAX, wholeFrontier } from '../layer-proto/cut.mjs'
 import { partTarget } from '../layer-proto/format.mjs'
-import { leftStreams, needBound } from '../layer-proto/need.mjs'
+import { leftStreams, needBound, pagedBefore } from '../layer-proto/need.mjs'
 
 /** the tables of a layout file whose rows are each one unit's (its id first): every one but the names */
 const UNIT_TABLES = ['units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held', 'colours']
@@ -85,25 +85,32 @@ export function frontierStream({ paper, N, bundle, grouped, left, st }) {
 }
 
 /**
- * Where the left stands, for the page stream's parts (page-pass.mjs streamed), over its `n` units: `units` the left's units as
- * they stand ([id, stream, ...]), `done(i)` whether unit i's left anchor is final, `next` the left's next token (the first of the
- * page it has not anchored). Returns { slotLow, streamLow, uMin, streams }: the least slot in K each unit may get; the least
- * stream each may get as a left unit (its own, `next` for one not final, none for one the left holds no unit of); the smallest
- * unit whose left anchor is not final; and the final left units' streams (need.mjs leftStreams)
+ * Where the left stands, for the page stream's parts (page-pass.mjs streamed), over its `n` units of a paper of `N` pages:
+ * `units` the left's units as they stand ([id, stream, rects]), `done(i)` whether unit i's left anchor is final, `next` the
+ * left's next token (the first of the page it has not anchored), `H` the pages done (page-pass.mjs frontier: let go by the
+ * maker, anchored by the left, and before every row of a unit whose left anchor is not final). Returns { slotLow, streamLow,
+ * uMin, streams }: the least slot in K each unit may get; the least stream each may get as a left unit (its own, `next` for one
+ * not final, none for one the left holds no unit of); the smallest unit whose left anchor is not final; and the final left
+ * units' streams (need.mjs leftStreams). A unit the left holds no unit of stands after the left units before it by id placed
+ * up to its own first row's page (cut.mjs entriesOf, need.mjs pagedBefore). A unit not in K for good has its rows past the
+ * pages done: not made, on pages the maker has not let go; made but its left anchor not final, past the pages done by their
+ * definition. So its slot is at least the one over the units placed up to the page after them. Past the pages let go instead,
+ * a unit made whose left anchor is not final, on a page let go, was bounded by units placed after its own page, and a part
+ * closed before it that it sorts into
  */
-export function leftBoundsOf({ units, done, next }, n) {
-  const stream = new Map(), final = new Map()
-  for (const w of units) stream.set(w[0], w[1])
-  const slotLow = new Float64Array(n), streamLow = new Float64Array(n)
+export function leftBoundsOf({ units, done, next, H, N }, n) {
+  const stream = new Map(), firstPage = new Map(), final = new Map()
+  for (const w of units) { stream.set(w[0], w[1]); firstPage.set(w[0], Math.min(...w[2].map(r => r[0]))) }
+  const slotLow = new Float64Array(n), streamLow = new Float64Array(n), placed = pagedBefore(N)
   let uMin = n
-  for (let i = 0, before = -1; i < n; i++) {
-    const s = stream.get(i)
+  for (let i = 0; i < n; i++) {
+    const s = stream.get(i), before = placed.upTo(H + 1)
     if (!done(i)) { if (uMin === n) uMin = i; slotLow[i] = Math.min(next, before + 0.5); streamLow[i] = next } else {
       slotLow[i] = s === undefined ? before + 0.5 : s
       streamLow[i] = s === undefined ? Infinity : s
       if (s !== undefined) final.set(i, s)
     }
-    if (s !== undefined && s > before) before = s
+    if (s !== undefined) placed.add(firstPage.get(i), s)
   }
   return { slotLow, streamLow, uMin, streams: leftStreams(final) }
 }

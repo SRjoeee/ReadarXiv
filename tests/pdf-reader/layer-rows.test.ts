@@ -5,7 +5,7 @@ import {
 } from '@/pdf-reader/engine/layer-proto/rows.mjs'
 import { kOfSource, trPiecesOf } from '@/pdf-reader/engine/layer/pieces.mjs'
 import { PIECES_MAX } from '@/pdf-reader/engine/layout/json.mjs'
-import { type BatchReport, type Compiled, keptFor, openPaper, runLive } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { keptFor, openPaper } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource, translateUnits } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The rows (the layer-only plan §4.1, A2's E6): one unit of one language as the engine's translateUnits gave it, with each
@@ -429,21 +429,10 @@ describe('batchesOf', () => {
     expect(batchesOf(b, 'de')).toEqual([[0, 3, 4]])
     expect(batchesOf(b, 'zh')).toEqual([[0, 3, 4]])
   })
-  it('is the one rule: batchOf takes the units in the order given, runLive\'s batches are batchesOf\'s', async () => {
+  it('is the one rule: batchOf takes the units in the order given', () => {
     expect(batchOf([5, 2, 9], i => [600, 1000, 900][[5, 2, 9].indexOf(i)] ?? 0, 2500)).toEqual([5, 2, 9])
     expect(batchOf([5, 2, 9], () => 1300, 2500)).toEqual([5])
     expect(batchOf([], () => 1, 2500)).toEqual([])
-    const body = Array.from({ length: 12 }, (_, k) => `Paragraph ${k} of the paper, ${'with words that run on for a line or two of prose '.repeat(4)}and an end.\n`).join('\n')
-    const paper = openPaper(new Map([['main.tex', enc(`\\documentclass{article}\\begin{document}\n${body}\\end{document}\n`)]]))
-    const b = bundleOf(bundleUnitsOf(paper)), batches: number[][] = []
-    const compile = async (): Promise<Compiled> => ({ ok: false, pdf: null, log: '! LaTeX Error: a failure.', ms: 1 })
-    await runLive(paper, {
-      lang: 'zh', compile, previews: false, format: 'markers',
-      translate: async (texts: string[]) => texts.map(text => ({ text, by: 'B' })),
-      onBatch: (report: BatchReport) => { if (!report.seeded) batches.push(report.units.map(u => u.id)) },
-    } as never)
-    expect(batches.length).toBeGreaterThan(1)
-    expect(batches).toEqual(batchesOf(b, 'zh'))
   })
 })
 

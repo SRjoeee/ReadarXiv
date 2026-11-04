@@ -1,6 +1,6 @@
 // Whether a pipeline change keeps a paper's units: each paper's units opened by two engines (two checkouts of the
 // repository, `--old` and `--new`), their sourceHash lists compared. A unit whose hash the new engine keeps is carried
-// from a stored translation (live.mjs PIPELINE_CARRIES, matched by sourceHash); one it changes is asked again. Offline:
+// from a stored translation (lab/pdf/spikes/carries.mjs, matched by sourceHash); one it changes is asked again. Offline:
 // it reads the sources it is given and nothing else.
 //
 //   node lab/pdf/spikes/unit-hash-diff.mjs --old <engine root> --new <engine root> <paper>/source.gz…
