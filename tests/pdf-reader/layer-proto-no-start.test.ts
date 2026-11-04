@@ -190,9 +190,10 @@ describe('a layout no barred start touches is the one it was', () => {
     }
     const digests = Object.fromEntries(Object.entries(out).map(([to, v]) => [to, createHash('sha256').update(v.join('\n')).digest('hex').slice(0, 16)]))
     // (the Chinese, Japanese and Korean texts' since a justified line takes its slack in the glue's order, its word spaces,
-    // then its CJK|Western boundaries, then its CJK gaps, 2026-11-04, layer2.mjs stretchesOf; the German and Russian texts' are
-    // the ones they were before a letter-spaced CJK line squeezed to take a group it misses by a little, 2026-10-23)
-    expect(digests).toEqual({ de: '458033d154ed2821', ru: 'fe6bba85f07f8b69', zh: '326d8f122e81b558', ja: 'fa1a1a2efc2aee82', ko: 'da614fb6403f4f19' })
+    // then its CJK|Western boundaries, then its CJK gaps, 2026-11-04, layer2.mjs stretchesOf, and the Korean texts' since its
+    // words' syllables are among those gaps (KLREQ 7.2.1); the German and Russian texts' are the ones they were before a
+    // letter-spaced CJK line squeezed to take a group it misses by a little, 2026-10-23)
+    expect(digests).toEqual({ de: '458033d154ed2821', ru: 'fe6bba85f07f8b69', zh: '326d8f122e81b558', ja: 'fa1a1a2efc2aee82', ko: '3465b23bee2582ad' })
   })
 })
 

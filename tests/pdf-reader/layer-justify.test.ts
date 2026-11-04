@@ -1,12 +1,12 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
-// One justification rule for every script (layer2.mjs placeItems, stretchesOf: T-M8 of the rules audit of 2026-11-04),
+// One justification rule for every script (layer2.mjs placeItems, stretchesOf: T-M8 and T-M9 of the rules audit of 2026-11-04),
 // in the order TeX's glue and the layout requirements give: the word spaces first (each up to spaceMax × its natural width, and to
 // half an em at most in a CJK line, JLREQ 3.8.4 a), then
 // each boundary between CJK and Western text (up to half an em, JLREQ 3.8.4 b, CLREQ 6.3.4), then the gaps between CJK characters
-// equally (up to cjkJust); never a gap inside Western text, nor inside a pair UAX 14 keeps together. Past those amounts the line is
-// set ragged, as before.
+// equally (up to cjkJust), a Korean word's own among them (KLREQ 7.2.1); never a gap inside Western text, nor inside a pair UAX 14
+// keeps together. Past those amounts the line is set ragged, as before.
 
 type L2 = typeof import('@/pdf-reader/engine/layer-proto/layer2.mjs')
 let L2: L2
@@ -93,6 +93,29 @@ describe('a justified line: its slack in the glue\'s order', () => {
     const { gaps } = first([...han(3), dash, dash, ...han(3)], 81, 'zh')
     expect(gaps[3]).toBe(0)
     expect(gaps.filter((_, q) => q !== 3).every(g => Math.abs(g - 1 / 6) < 1e-3)).toBe(true)
+  })
+  it('justifies a Korean line in its word spaces first, then between the syllables of its words (KLREQ 7.2.1)', () => {
+    // two words of four syllables and a space: 82.5 pt; in 85 the space takes its 2.5, the words keep their letters solid
+    const solid = first([hangul(4), space, hangul(4)], 85, 'ko')
+    expect(solid.line.mode).toBe('just')
+    expect(solid.line.items[0]!.ls).toBeUndefined()
+    // in 91: the space takes 2.5 (spaceMax 1 × its own), and the 6 left go to the six gaps inside the words, 1 pt each
+    const spaced = first([hangul(4), space, hangul(4)], 91, 'ko')
+    expect(spaced.line.mode).toBe('just')
+    expect(spaced.line.items[0]!.ls).toBeCloseTo(1, 6)
+    expect(spaced.line.items[0]!.w).toBeCloseTo(43, 6)
+    expect(spaced.line.used).toBeCloseTo(91, 6)
+    // (a digit inside a word, glued to its syllables on both sides: its two gaps are the word's, as wide as its syllables', no
+    // boundary's half an em. Two syllables, the digit, two syllables, a space, four syllables: 87.5 pt; in 101 the space takes
+    // 2.5, and the seven gaps of the words the 11 left, 1.571 each)
+    const digit = first([hangul(2), word(1, { glue: true }), { ...hangul(2), glue: true }, space, hangul(4)], 101, 'ko')
+    expect(digit.line.mode).toBe('just')
+    expect(digit.line.items[0]!.ls).toBeCloseTo(11 / 7, 6)
+    expect(digit.gaps[0]).toBeCloseTo(11 / 7, 2)
+    expect(digit.gaps[1]).toBeCloseTo(11 / 7, 2)
+    // (at cjkJust, 0.25 em a gap, still justified; past it ragged)
+    expect(first([hangul(4), space, hangul(4)], 100, 'ko').line.mode).toBe('just')
+    expect(first([hangul(4), space, hangul(4)], 101, 'ko').line.mode).toBe('ragged')
   })
 })
 
