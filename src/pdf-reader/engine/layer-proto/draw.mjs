@@ -240,9 +240,10 @@ export function drawInputsOf(draw) {
   const styles = Object.fromEntries(draw.fonts.map((f, i) => [keys[i], { fontFamily: f[1] }]))
   const items = draw.items.map(it => ({ str: it[0], transform: [it[1], it[2], 0, it[3], it[4], it[5]], width: it[6], height: it[7], fontName: it[8] < 0 ? null : keys[it[8]] }))
   const fills = draw.items.map(it => it[9])
-  // (13's maps, a Set once a font)
+  // (13's maps, a Set once a font. A draw of no font row may be either: its items read of no map, which is 13's reading and gives
+  // 14's too, since 14 writes the runs of what no Unicode stands for whatever the font, and an item of 14 with none holds none)
   const maps = draw.fonts.length > 0 && draw.fonts[0].length === 4 ? draw.fonts.map(f => (f[3] === null ? null : new Set(f[3]))) : null
-  const nus = draw.items.map(it => (maps ? unmappedRuns(it[0], it[8] < 0 ? null : maps[it[8]]) : it.length > 10 ? it[10] : null))
+  const nus = draw.items.map(it => (it.length > 10 ? it[10] : maps ? unmappedRuns(it[0], it[8] < 0 ? null : maps[it[8]]) : draw.fonts.length === 0 ? unmappedRuns(it[0], null) : null))
   const annots = draw.links.map(l => ({
     subtype: 'Link', rect: l[0], quadPoints: l[1], url: l[2], dest: destBack(l[3]), overlaidText: l[4],
     ...(l[5] === null && l[6] === null ? {} : { borderStyle: { width: l[5], style: l[6] } }), color: l[7],

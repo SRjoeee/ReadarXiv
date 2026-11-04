@@ -57,6 +57,9 @@ describe('draw in a left part', () => {
     // empty map every character, a map its own; what no Unicode stands for under any)
     const of13 = drawInputsOf({ ...d, items: [['ab\ue000', 1, 0, 1, 0, 0, 1, 1, 0, -1], ['ab', 1, 0, 1, 0, 0, 1, 1, 1, -1], ['x\ud800', 1, 0, 1, 0, 0, 1, 1, 2, -1], ['a b', 1, 0, 1, 0, 0, 1, 1, -1, -1]] })
     expect(of13.nus).toEqual([[2, 3], [0, 2], [0, 1], null])
+    // (a draw of no font row, 13's or 14's alike: what no Unicode stands for is its items' unmapped characters, as 13 read them)
+    const noFonts = drawInputsOf({ fonts: [], items: [['a\ue000 \ue001b', 1, 0, 1, 0, 0, 1, 1, -1, -1], ['ab', 1, 0, 1, 0, 0, 1, 1, -1, -1]], links: [] })
+    expect(noFonts.nus).toEqual([[1, 4], null])
     // a font's key is its content's, in a namespace of its own
     expect(drawFontKey(d.fonts[0]!)).toBe(drawFontKey(['A', null, 0, null]))
     expect(drawFontKey(d.fonts[0]!)).not.toBe(drawFontKey(['A', null, 0, []]))
