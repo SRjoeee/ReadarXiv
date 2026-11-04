@@ -435,8 +435,10 @@ export declare function evenGridOf(G: readonly number[], opened: readonly boolea
 export declare function footFloorOf(blocks: readonly Block2[], st: Layout['state'], P: Params, s: number): number | null
 /** a unit's shared row as its layout leaves it (need.mjs rowLeadOf's row): its page, baseline and band (an em), the block's span,
  *  where its text there ends, the baseline of the line that ends there and where its text's ink ends there, which the next unit is
- *  laid from (all null: none there); null where no block of the unit holds the row */
-export interface Share { page: number; y: number; band: number; x0: number; x1: number; end: number | null; at: number | null; ink: number | null }
+ *  laid from; where none there, of its last line above the row on its page and in its block (`above`: its translation ended
+ *  higher; all null where that line is elsewhere); null where no block of the unit holds the row. `kept`: something stays between
+ *  the two on the row, the next unit laid where TeX set it */
+export interface Share { page: number; y: number; band: number; x0: number; x1: number; end: number | null; at: number | null; ink: number | null; above?: boolean; kept?: boolean }
 export declare function shareOf(layout: Pick<Layout, 'lines'>, blocks: readonly Block2[], row: { page: number; baseline: number; size: number }): Share | null
 /** whether a layout keeps a shared row as the fit left it (no text there further right, nor its ink; none where the fit set none;
  *  its line there on the fit's baseline) */
