@@ -590,13 +590,15 @@ describe('a copy made under pipeline 21, reopened under 22 (and on)', () => {
 // macros asked of the ink section within INK_BUDGET (layout/marks.mjs inkSamples), 62 the figure units of a glyph shown
 // whole by its own ink and the caps counted by every run that spells a word (layout/ink.mjs, figure-text.mjs), 63 the
 // code regions TeX set kept by every reader (layout/marks.mjs regionsTex, ledger.mjs, figure-text.mjs), 64 what TeX sets after
-// a bibliography no entry's and a contents line's entries (ledger.mjs lastEntriesOf, listedOf), and 65 a unit only the layout
-// file holds placed in K beside the left unit it shares one of TeX's lines with (need.mjs lineAfterOf), no source unit:
+// a bibliography no entry's and a contents line's entries (ledger.mjs lastEntriesOf, listedOf), 65 a unit only the layout
+// file holds placed in K beside the left unit it shares one of TeX's lines with (need.mjs lineAfterOf), and 68 one no line places
+// after the left units before it placed up to its own page (need.mjs pagedBefore) and a heading searched again between its
+// certain neighbours (anchors.mjs matchUnits), no source unit:
 // every unit is the copy's by its hash, carried as it has it, and nothing is sent
-describe('a copy made under pipeline 23 to 29 or 39 to 64, reopened under 65', () => {
+describe('a copy made under pipeline 23 to 29 or 39 to 65, reopened under 68', () => {
   const translate = (sent: string[]) => async (texts: string[]) => { sent.push(...texts); return texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' })) }
-  it.each(['23', '24', '25', '26', '27', '28', '29', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48', '49', '50', '51', '52', '53', '54', '55', '56', '57', '58', '59', '60', '61', '62', '63', '64'])('takes every unit as the copy of %s has it: nothing is sent again', async pipeline => {
-    expect(PIPELINE_VERSION).toBe('65')
+  it.each(['23', '24', '25', '26', '27', '28', '29', '39', '40', '41', '42', '43', '44', '45', '46', '47', '48', '49', '50', '51', '52', '53', '54', '55', '56', '57', '58', '59', '60', '61', '62', '63', '64', '65'])('takes every unit as the copy of %s has it: nothing is sent again', async pipeline => {
+    expect(PIPELINE_VERSION).toBe('68')
     const p = paper(), n = p.units.length
     const r0 = await runLive(p, { lang: 'zh', compile: compiler(n).compile, translate: translate([]), format: 'markers', marks: new Map(), identity: 'B', readMarks: async () => MARKS(n) })
     const record = JSON.parse(JSON.stringify({ pipeline, format: 'markers', context: {}, marks: [['0s', {}]], units: unitsOf(p.units, keptFor(p, 'zh'), await Promise.all(p.units.map(u => sourceHash(u))), r0.results) }))

@@ -573,7 +573,18 @@
 //     three keywords lines, now after "Key words and phrases." by their line (by the ids they stood there only where an
 //     affiliation of the last page came before them); every other paper's K is the same, slot for slot. The units,
 //     their pieces and their wire are 64's: a copy of 64 carries every unit (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '65'
+// 68 (the census of run-in heads, the cases #579 left, 2026-11-04): a unit only the layout file holds and no line of TeX's
+//     places stands after the largest stream of a left unit with a smaller id among those first framed on pages up to its own
+//     first row's page
+//     (need.mjs pagedBefore; cut.mjs entriesOf, the door's own K, the page stream's bound by the pages done, frontier.mjs
+//     leftBoundsOf), where by the ids over the whole paper a float numbered before it and set pages later put its page's
+//     frontier at that float's (2610.21884v1's first part reached page 31); over the sweep's 87 papers 991 slots move, no lead
+//     on a shared line. And the left's heading rule (anchors.mjs matchUnits): a unit found by its words in a row at the last of
+//     several places in the gap between its marked neighbours is searched again between its nearest neighbours whose place is
+//     certain (2610.37668v1's "Surface losses." had taken a figure's panel title; 2307.16209v1's four units a running head four
+//     pages on); over the left lane's 65 papers 5 units move on 2 papers, none lost. The units, their pieces and their wire are
+//     65's: a copy of 65 carries every unit (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '68'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
