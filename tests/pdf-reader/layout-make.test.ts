@@ -1608,6 +1608,20 @@ describe('makeLayout, a note\'s mark the first line begins with (the maker round
     expect(n.file.labels).toEqual([])
     expect(rowsOf(n.file, 0, 'lines')[1]).toBe(72)
   })
+  it('is no label where its glyphs are where the unit\'s own text begins, whatever its words read (2610.21377v1 p1)', async () => {
+    // (jnsao's `49\textsc{k}20 (primary)`: the source's words parted at the small capital, 49, k and 20, where the text layer
+    // reads one token, 49k20; the text's start fell to its first letter and "49" was read as an item's number)
+    const runs: Run[] = [{ s: '49k20 (primary); 49j52, 49j53', x: 72, y: 700 }]
+    const src = [text('49'), { t: 'open', id: 1, src: '\\textsc{' }, text('k'), { t: 'close', id: 1, src: '}' }, text('20 (primary); 49j52, 49j53')] as SourceUnit['pieces']
+    const { file } = await made({ pages: [{ runs }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(runs[0] as Run), 700]], units: [unit('abstract', src)] })
+    expect(file.labels).toEqual([])
+    expect(rowsOf(file, 0, 'lines')[1]).toBe(72)
+    // (a label before a text that opens with its own number stays one: "1" before "10 apples" reads 11, not 10)
+    const item: Run[] = [{ s: '1', x: 72, y: 700 }, { s: '10 apples and pears', x: 80, y: 700 }]
+    const n = await made({ pages: [{ runs: item }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(item[1] as Run), 700]], units: [unit('para', [text('10'), { t: 'open', id: 1, src: '\\textsc{' }, text('a'), { t: 'close', id: 1, src: '}' }, text('pples and pears')] as SourceUnit['pieces'])] })
+    expect(n.file.labels.map(l => l.slice(0, 3))).toEqual([[0, 1, 1]])
+    expect(rowsOf(n.file, 0, 'lines')[1]).toBe(80)
+  })
 
   it("gives the closing punctuation a head sets after a note to the note's line, never the next unit's label (2610.18513v1 p35)", async () => {
     // amsthm's "Lemma A.1 (" before a note that ends in a citation, its ")." after it, the theorem's text on: the ")." was the

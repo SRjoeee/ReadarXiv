@@ -1840,6 +1840,16 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const head = r0.gl.filter(g => P.x1[g] <= first + 0.05).sort((x, y) => P.x0[x] - P.x0[y] || x - y)
     if (!head.length || head.length > 4 || head.some(g => theirs.has(g) || one.headSymbols?.has(g))) return null
     if (!LABEL.test(head.map(g => P.u[g]).join('').normalize('NFKC').replace(/\s+/g, ''))) return null
+    // (no label where the unit's own text begins there: its head's glyphs, read on into the line by one character, spell the
+    // start of the unit's text, its case and its compatibility forms aside. A label is what the class sets before the text: a
+    // text that opens with what reads as one is the text. 2610.21377v1's "49\textsc{k}20 (primary)": the source's words parted
+    // at the small capital (49, k, 20), its first token no word of them, the text's start fell to its first letter, the "k", and
+    // "49" was read as an item's number, kept as the original's before the line, which then began at the "k" and was laid after
+    // it, "49 49k20". "1" before "10 apples" reads "11", not "10": a label)
+    const fold = t => t.normalize('NFKC').replace(/\s+/g, '').toLowerCase()
+    const said = fold(head.map(g => P.u[g]).join('')), line = fold([...r0.gl].sort((x, y) => P.x0[x] - P.x0[y] || x - y).map(g => P.u[g]).join('')), own = fold(texts[i].text)
+    const n = Math.min(said.length + 1, line.length, own.length)
+    if (n >= said.length && line.slice(0, n) === own.slice(0, n)) return null
     const out = new Set(head)
     r0.gl = r0.gl.filter(g => !out.has(g))
     if (!r0.gl.length) { r0.gl = [...out]; return null }
