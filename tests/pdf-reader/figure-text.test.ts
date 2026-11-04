@@ -313,9 +313,21 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
     Object.assign(lig.glyphs[2]!, { u: '\uFB00', font: 'EKJTPF+DejaVuSans' })
     for (const [i, g] of lig.glyphs.entries()) if (i !== 2) g.font = 'DKEMGR+DejaVuSans'
     expect(figureUnitsOf([lig] as never, null).units.map(u => u.text)).toEqual(['difference'])
-    // (two faces stay apart, a subset of each: the face is the name past its tag)
-    for (const [i, g] of split.glyphs.entries()) g.font = i < 2 ? 'DKEMGR+DejaVuSans' : 'BYLRGV+DejaVuSans-Oblique'
-    expect(figureUnitsOf([split] as never, null).units.map(u => u.text)).toEqual(['di', 'fference (points)'])
+  })
+
+  it('one label line over the faces of one family: a formula\'s letter in the family\'s italic joins its label, a math face does not', () => {
+    // (matplotlib's mathtext sets "α" of "jury, α = 1" in DejaVuSans-Oblique inside a label of DejaVuSans)
+    const line = word('jury, a = 1')
+    for (const [i, g] of line.glyphs.entries()) g.font = i === 6 ? 'BYLRGV+DejaVuSans-Oblique' : 'DKEMGR+DejaVuSans'
+    expect(figureUnitsOf([line] as never, null).units.map(u => u.text)).toEqual(['jury, a = 1'])
+    // (a bold lead and its text, one family: one line)
+    const lead = word('Proof. As')
+    for (const [i, g] of lead.glyphs.entries()) g.font = i < 6 ? 'XCharter-Bold' : 'XCharter-Roman'
+    expect(figureUnitsOf([lead] as never, null).units.map(u => u.text)).toEqual(['Proof. As'])
+    // (TeX's math italic is a family of its own: the label's words apart from it)
+    const tex = word('rate pp')
+    for (const [i, g] of tex.glyphs.entries()) g.font = i > 4 ? 'CMMI10' : 'CMR10'
+    expect(figureUnitsOf([tex] as never, null).units.map(u => u.text)).toEqual(['rate'])
   })
 
   it('two figures side by side never make one label: a run is one form\'s or one picture\'s', () => {
