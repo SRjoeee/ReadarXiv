@@ -418,6 +418,8 @@ export declare function layoutRuns(tokens: readonly Token[], blocks: readonly Bl
 export declare function joinRuns(runs: readonly { bi0: number; layout: Layout }[]): Layout & { runs: number }
 /** a run's ink over (a) and under (d) its baseline at 100 px in its face (the measure that gives its width) */
 export declare function ink100(s: string, face: Face): { a: number; d: number }
+/** the tokens' ink read so far let go (run.mjs, as each page's pass ends) */
+export declare function forgetInk(): void
 /** a laid line's extent over (a) and under (d) its baseline, PDF units: its text's ink and its crops' over their TeX
  *  baselines; `text`, its text's alone */
 export declare function lineExtent(line: Pick<Line, 'items'>, f: number, scale: number): { a: number; d: number; text: { a: number; d: number } }

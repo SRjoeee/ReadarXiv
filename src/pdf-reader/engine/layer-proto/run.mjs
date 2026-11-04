@@ -503,6 +503,9 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [], voter
 /** each unit's layout at its fill leading as fillLeadsOf found it: { state, the fitted state it was laid from; lead; l, the
  *  layout, not yet settled }, taken once by fillPage where it lays the unit at that state, its fitted state unchanged */
 const fillLaid = new WeakMap()
+/** unit p's layouts at its fill leadings let go, its runs' with it: where no page fill will lay it at that state (its page's
+ *  pass done, or the unit as one, which the fill lays by its runs), a layout a unit the unit would hold as long as it lives */
+const dropFillLaid = p => { fillLaid.delete(p); for (const q of p.runs ?? []) fillLaid.delete(q) }
 function fillLeadsOf(p, P) {
   const r3 = x => Math.round(x * 1000) / 1000
   const at = (q, st) => { const l = L2.layoutAt(q.tokens, q.blocks, q.s, q.P, st); return l.clipped || (q.parent && !L2.keepsPages(q.layout.lines, l.lines, q.tokens)) ? null : l }
@@ -2284,6 +2287,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     }
     // (the page's fill numbers, kept with its record)
     rows[pg - 1].fill = r && { own: r.own, anchor: r.anchor, target: r.target, body: r.body }
+    for (const p of laid[pg]) dropFillLaid(p)
   }
   const ms = new Map()
   // A table group's cells laid, then painted all together or not at all (the table-groups brief): a cell is painted
@@ -2396,6 +2400,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       timesOf(pg).lay += performance.now() - t - (recMs - rec0)
       timesOf(pg).rec += recMs - rec0
     }
+    L2.forgetInk()
     passOrder[pg] = laid[pg].filter(u => !u.refused && u.pages[0] === pg && (!u.unit.group || !groupCells.has(u.unit.group)))
     settledAt[pg] = [...new Set(laid[pg].map(u => u.unit.group).filter(x => x && groupCells.has(x)))].filter(settleGroup)
     passed[pg] = 1
@@ -2487,7 +2492,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     fontWait = fw
     if (after) {
       if (a.refused) skipped.push({ id: a.id, kind: a.unit.kind, why: a.why ?? 'unfit', code: skipCode(a.why ?? 'unfit'), ...(a.missing ? { missing: a.missing } : {}), chars: trCharsOf(a.unit), pages: a.pages })
-      else if (PASSES && P.adaptiveFill && a.fillable) unitFillLeads(a)
+      // (laid again after its page's pass: no fill lays it at its fill leading's state again)
+      else if (PASSES && P.adaptiveFill && a.fillable) { unitFillLeads(a); dropFillLaid(a) }
     }
     await settleLeadOf(a, true, after)
   }

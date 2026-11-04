@@ -2256,7 +2256,11 @@ export function ink100(s, face) {
  *  read made the font's string and the cache's key again (5.3 M reads on the speed check's pack, a third of all breaking
  *  time). By the token object, so that a token cut from another (a hyphen's head, a word's tail: a copy with its own text)
  *  is read for its own text */
-const inkByToken = new WeakMap()
+let inkByToken = new WeakMap()
+/** the tokens' ink read so far let go (run.mjs, as each page's pass ends: its fits and its fill have read theirs). Held by the
+ *  token, the cache lived as long as every laid unit's tokens do, and grew the heap 11 KB a laid page (the speed check of
+ *  2026-11-04, 1.5 KB the runs' spread); a token laid again after its page's pass reads its ink once more */
+export function forgetInk() { inkByToken = new WeakMap() }
 function tokenInk(t) {
   let m = inkByToken.get(t)
   if (m === undefined) inkByToken.set(t, (m = ink100(t.s, t.face)))
