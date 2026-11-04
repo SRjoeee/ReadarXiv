@@ -119,3 +119,22 @@ describe('a justified line: its slack in the glue\'s order', () => {
   })
 })
 
+describe('a word hyphenated where its line cannot be set within its word spaces\' own stretch (T-M7)', () => {
+  // (the line's words of four letters, 20 pt each, and spaces of 2.5 pt (half an em, the canvas's); then "typesetting", whose
+  // patterns cut it as type-set-ting)
+  const words = (n: number) => Array.from({ length: n }, (_, q) => [...(q ? [space] : []), word(4)]).flat()
+  const typesetting = { s: 'typesetting', cls: 'latin', w100: 550, st: {}, face, hyph: 'de' }
+  const lay = (w: number) => {
+    L2.setHyphenData('de', { pats: new Map(), exceptions: new Map([['typesetting', 'type-set-ting']]), maxLen: 2 } as never)
+    const l = L2.layoutUnit2([...words(31), space, typesetting, space, word(4)] as never, [block(w)] as never, 10, P('de', { hyphen: 1 }) as never)
+    return l.lines[0]!.items.at(-1)!.t.s
+  }
+  it('closes the line before the word where its 30 spaces stretch within half their width (TeX\'s \\pretolerance pass)', () => {
+    // 695 pt of words and spaces in 715: 20 pt of stretch, under the spaces' 37.5; "type-" (25 pt) would have fit
+    expect(lay(715)).toBe('xxxx')
+  })
+  it('hyphenates it where they would stretch past it', () => {
+    // in 735: 40 pt, past the 37.5 (the whole word, 55 pt, does not fit even with the spaces shrunk: 52.5)
+    expect(lay(735)).toBe('typeset-')
+  })
+})

@@ -3264,6 +3264,11 @@ const latinishOf = (items, P) => items.some(it => it.t.space) && (P.keepAll || i
  *  (compress 2: every mark has lost its half) or the rules compress none (compressMax 0) */
 const squeezable = (items, hangs, compress, P) => (compress < P.compressMax ? items.filter((it, n) => it.t.punct && !it.cut && SQUEEZE_MARKS.test(it.t.s) && !(hangs && n === items.length - 1)) : [])
 
+/** a word space's stretch, × its natural width: TeX's \fontdimen3 over \fontdimen2, half in Computer Modern and in an OpenType
+ *  face XeTeX and LuaTeX set (fontspec's interword glue: stretch a half of the space, shrink a third), the glue a paragraph's lines
+ *  are set within at TeX's \pretolerance pass (breakLines fullWithout) */
+const FONT_STRETCH = 0.5
+
 /** the most a boundary between CJK text and Western text (a Latin word, a digit, a formula's crop) opens to justify a line, in
  *  em with its own spacing (the autospace, `asp`): the layout requirements' half em (JLREQ 3.8.4 b, CLREQ 6.3.4's expansion step 2:
  *  "up to a maximum of half the width of a Han character") */
@@ -3584,6 +3589,18 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     const hang = items.at(-1).t.punct === 'close' && st.compress < 2 ? half : 0
     return { items, w, sp, hang }
   }
+  /** whether the line in hand, closed here (its trailing spaces dropped, its last kern and its closing mark's blank half as trim
+   *  and placeItems leave them), is justified within its word spaces' own stretch, FONT_STRETCH of their natural widths: TeX's first
+   *  pass over a paragraph (\pretolerance, a badness of 100: every line within its glue's stretch) sets it so with no word
+   *  hyphenated. A line with no word space is not */
+  const fullWithout = () => {
+    let n = line.items.length, x = line.x, sp = line.spaces
+    while (n > 0 && line.items[n - 1].t.space) { const it = line.items[--n]; x -= it.w; sp -= it.w }
+    if (n < 1 || !(sp > 0)) return false
+    const end = line.items[n - 1]
+    const hang = end.t.punct === 'close' && !end.cut && st.compress < 2 ? half : 0
+    return line.x1 - line.x0 - (x - (end.kern ?? 0)) + hang <= FONT_STRETCH * sp + 1e-9
+  }
   /** whether a group fits the line in hand: its spaces and the line's shrunk to spaceMin, a closing mark at its end hung */
   const fits = (g, cap) => line.x - line.spaces * (1 - P.spaceMin) - g.sp * (1 - P.spaceMin) + g.w - g.hang <= cap + 0.01
   // (a line's trailing spaces dropped, and the kern of its last token: glue TeX drops at a break, a kern the line no longer
@@ -3809,8 +3826,9 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
       i = j
       continue
     }
-    // a word hyphenated: the most of it that fits, with its hyphen
-    if (P.hyphen && t0.hyph && t0.s) {
+    // a word hyphenated: the most of it that fits, with its hyphen; where the line without it needs more stretch than its word
+    // spaces have (fullWithout), as TeX hyphenates a paragraph it cannot set within its fonts' own glue
+    if (P.hyphen && t0.hyph && t0.s && !fullWithout()) {
       const word = t0.s
       const pts = breakPoints(word.replace(/[^A-Za-zÀ-ɏЀ-ӿ]+$/, ''), t0.hyph, hyphenData.get(t0.hyph), P.hyphenation[t0.hyph])
       const asp = items[0].asp
