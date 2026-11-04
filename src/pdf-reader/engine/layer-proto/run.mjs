@@ -1882,6 +1882,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // (the time the font waits of the unit in hand took, so that its timings are its own work's: lap())
   let fontWait = 0
   const lap = () => performance.now() - fontWait
+  // (the time the records took, the gate's and the lab's (`records`): a running total that each timed stretch of laying takes
+  // its share out of, booked as `rec`, so that `lay` is what a reader, which opens with no records, pays: recTimed)
+  let recMs = 0
+  const recTimed = f => { const t = performance.now(); try { return f() } finally { recMs += performance.now() - t } }
   /** a unit whose first line a name leads, left the original's after all: the name with it */
   const unlead = p => {
     if (!p.lead) return
@@ -2322,11 +2326,15 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     drawnUnits++
     p.counted = true
     if (!records) return
+    recTimed(() => recordLaid(p, tokens, orig, [r1(t1 - t0), r1(t2 - t1), r1(t3 - t2), r1(t4 - t3)]))
+  }
+  /** a laid unit's record (layOnce, with `records`): what it reads of the unit as laid, `ms` its lay's segments */
+  const recordLaid = (p, tokens, orig, ms) => {
     try {
       const lines = recLinesOf(p)
       const drawnTok = new Set(p.layout.lines.flatMap(l => l.items.map(it => it.t)))
       const tr = tokens.filter(t => t.s && !t.ph && !t.sup)
-      record(p, { grown: p.grown, s, f: p.layout.f, fitScale: p.layout.scale, knob: p.layout.knob, clipped: p.layout.clipped, opened: p.layout.opened, unopened: p.layout.unopened, lostChars: p.layout.lostChars, chars: p.layout.chars, lead: p.layout.state.lead, track: p.layout.state.track || p.layout.state.trackLatin, compress: p.layout.state.compress, borrow: p.layout.state.borrow, free: r1(Math.max(0, ...p.blocks.map(b => b.free))), tried: p.layout.tried, lines, orig, drawnRuns: L2.drawnRuns(tokens), drawnBase: styleKey(tokens.base), trChars: tr.reduce((a, t) => a + [...t.s].length, 0), trDrawn: p.layout.lines.reduce((a, l) => a + l.items.reduce((b, it) => b + (it.t.s && !it.t.ph && !it.t.sup ? [...it.t.s].length - (it.t.hyphenated ? 1 : 0) : 0), 0), 0), modes: modesOf(prep), unused: drawnTok.size, ms: [r1(t1 - t0), r1(t2 - t1), r1(t3 - t2), r1(t4 - t3)], tokens: tokens.length })
+      record(p, { grown: p.grown, s: p.s, f: p.layout.f, fitScale: p.layout.scale, knob: p.layout.knob, clipped: p.layout.clipped, opened: p.layout.opened, unopened: p.layout.unopened, lostChars: p.layout.lostChars, chars: p.layout.chars, lead: p.layout.state.lead, track: p.layout.state.track || p.layout.state.trackLatin, compress: p.layout.state.compress, borrow: p.layout.state.borrow, free: r1(Math.max(0, ...p.blocks.map(b => b.free))), tried: p.layout.tried, lines, orig, drawnRuns: L2.drawnRuns(tokens), drawnBase: styleKey(tokens.base), trChars: tr.reduce((a, t) => a + [...t.s].length, 0), trDrawn: p.layout.lines.reduce((a, l) => a + l.items.reduce((b, it) => b + (it.t.s && !it.t.ph && !it.t.sup ? [...it.t.s].length - (it.t.hyphenated ? 1 : 0) : 0), 0), 0), modes: modesOf(p.prep), unused: drawnTok.size, ms, tokens: tokens.length })
     } catch (e) {
       if (isMemoryError(e)) throw e
       // (no record of it, nor one on the unit for a pass to update, which would read what failed again: the error alone)
@@ -2372,7 +2380,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (P.even) for (const p of begun) fillLeadsOf(p, P)
     const recorded = (p, target, fillLead) => {
       const l = p.layout
-      if (p.rec) Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, opened: l.opened, unopened: l.unopened, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: fillLead } })
+      if (p.rec) recTimed(() => Object.assign(p.rec, { f: r1(l.f), sizeRatio: r1(l.f / p.s), fitScale: l.scale, knob: l.knob === 'none' ? 'fill' : l.knob, opened: l.opened, unopened: l.unopened, lead: l.state.lead, track: l.state.track, lines: recLinesOf(p), fill: { target, lead: fillLead } }))
     }
     // (a unit laid in runs is filled a run at a time, each run a unit of the page's fill, read by its target once, as one: a block
     // between two displays is a text block of its own), then laid as one again
@@ -2519,7 +2527,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const passPage = pg => withWork(pg, () => passPageOf(pg))
   const passPageOf = pg => {
     if (P.even) evenPass(pg)
-    if (P.adaptiveFill) fillPass(pg)
+    if (P.adaptiveFill) {
+      // (the page's fill is its lay's, less its records': the speed check reads it)
+      const t = performance.now(), rec0 = recMs
+      fillPass(pg)
+      timesOf(pg).lay += performance.now() - t - (recMs - rec0)
+      timesOf(pg).rec += recMs - rec0
+    }
     // (the leftover packed: the units moved are painted after the others, from the top, so that no erasing of the
     // unit above takes what they draw over its foot)
     const moved = P.leftover === 'pack' ? packPass(pg) : null
@@ -2535,7 +2549,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   }
   const arrive = async p => {
     fontWait = 0
-    const t0 = performance.now()
+    const t0 = performance.now(), rec0 = recMs
     // (a unit that throws while it is laid is the original's, why `error`: its page completes, never blank for one unit; a
     // memory error is no unit's, and goes on)
     try { await layout2(p) } catch (e) {
@@ -2548,9 +2562,10 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const mark = workMarks.get(p)
     if (mark) { workMarks.delete(p); if (!disposed) chargeWork(p.pages[0], mark) }
     if (disposed) return
-    // (the faces it waited for apart from its laying: no task of v0's)
-    timesOf(p.pages[0]).lay += performance.now() - t0 - fontWait
+    // (the faces it waited for apart from its laying: no task of v0's; and its record, which no reader makes)
+    timesOf(p.pages[0]).lay += performance.now() - t0 - fontWait - (recMs - rec0)
     timesOf(p.pages[0]).fonts += fontWait
+    timesOf(p.pages[0]).rec += recMs - rec0
     await settleLeadOf(p, true)
     if (disposed) return
     afterLay(p)
@@ -2598,7 +2613,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     a.missing = undefined
     const fw = fontWait
     fontWait = 0
-    const t0 = performance.now()
+    const t0 = performance.now(), rec0 = recMs
     try { await layout2(a) } catch (e) {
       if (isMemoryError(e)) throw e
       a.refused = true
@@ -2608,16 +2623,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const mark = workMarks.get(a)
     if (mark) { workMarks.delete(a); if (!disposed) chargeWork(a.pages[0], mark) }
     if (disposed) return
-    timesOf(a.pages[0]).lay += performance.now() - t0 - fontWait
+    timesOf(a.pages[0]).lay += performance.now() - t0 - fontWait - (recMs - rec0)
     timesOf(a.pages[0]).fonts += fontWait
+    timesOf(a.pages[0]).rec += recMs - rec0
     fontWait = fw
     if (after) {
       if (a.refused) skipped.push({ id: a.id, kind: a.unit.kind, why: a.why ?? 'unfit', code: skipCode(a.why ?? 'unfit'), ...(a.missing ? { missing: a.missing } : {}), chars: trCharsOf(a.unit), pages: a.pages })
-      else if (PASSES && P.adaptiveFill && a.fillable) {
-        for (const q of a.runs ?? [a]) fillLeadsOf(q, P)
-        if (a.runs) { const joined = a.layout; a.layout = a.whole; fillLeadsOf(a, P); a.layout = joined }
-        if (P.even) a.fit = { fillLead: a.fillLead, fitLines: a.fitLines }
-      }
+      else if (PASSES && P.adaptiveFill && a.fillable) unitFillLeads(a)
     }
     await settleLeadOf(a, true, after)
   }
@@ -2629,6 +2641,20 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     await settleLeadOf(p, false)
     if (disposed) return
     afterLay(p)
+  }
+  /**
+   * Unit p's fill leadings, fixed as its lay ends (fillLeadsOf): a unit laid in runs each run's own, the page fill's units, and
+   * the unit's own read from its fit as one (its one vote in its pages' targets, and its line count, which the page's size step
+   * reads for each of its runs). Their work and time are its first page's lay's, as its fit's are: the speed check reads them
+   */
+  const unitFillLeads = p => {
+    const t = performance.now()
+    withWork(p.pages[0], () => {
+      for (const q of p.runs ?? [p]) fillLeadsOf(q, P)
+      if (p.runs) { const joined = p.layout; p.layout = p.whole; fillLeadsOf(p, P); p.layout = joined }
+      if (P.even) p.fit = { fillLead: p.fillLead, fitLines: p.fitLines }
+    })
+    timesOf(p.pages[0]).lay += performance.now() - t
   }
   /** a unit laid (or left the original's) counted, recorded and painted: its page passes, its table group, its paint */
   const afterLay = p => {
@@ -2645,14 +2671,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       // (its fill leading is its fit's, fixed now (fillLeadsOf). With the even pass, which lays the units of a page anew before
       // the fill, the fill leading of a unit on its own first page is the pass's, as it was (fillPass), and `fit` keeps the
       // fit's, which is all a page it runs on to reads of it: no page's target then reads another page's even pass)
-      if (P.adaptiveFill && p.fillable && !p.refused) {
-        // (a unit laid in runs: each run's own, the page fill's units)
-        for (const q of p.runs ?? [p]) fillLeadsOf(q, P)
-        // (and the unit's own, read from its fit as one: its one vote in its pages' targets, and its line count, which the page's
-        // size step reads for each of its runs)
-        if (p.runs) { const joined = p.layout; p.layout = p.whole; fillLeadsOf(p, P); p.layout = joined }
-        if (P.even) p.fit = { fillLead: p.fillLead, fitLines: p.fitLines }
-      }
+      if (P.adaptiveFill && p.fillable && !p.refused) unitFillLeads(p)
       // (a page's pass sets the units that begin on it, which are then painted on each of their pages, each page in its
       // own order (paintOn): a unit is never painted from two layouts; a table's cells with their group, once it is laid
       // whole)
@@ -2677,12 +2696,14 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   }
 
   // a page drawn: its characters read, its copy made and its ink mapped; the paper's designs from the first
-  // each page's costs, ms (the gate's --perf): its original drawn (render), its text read (text), the removal's reading of
-  // its ink and its plan (ink), its removed page drawn for v0's copy (rp); its units laid (lay: a unit's on its first
-  // page, less the faces it waited for, fonts) and painted, their operations made (ops: the erase and its put-back, or
-  // the swap's rectangles), drawn on the copy (compose) and set as SVG (svg)
+  // each page's costs, ms (the gate's --perf): its original drawn (render), its text read (text, less its fills read live:
+  // fills), the removal's reading of its ink and its plan (ink), its removed page drawn for v0's copy (rp); its units laid (lay:
+  // a unit's fit and fill leadings on its first page, the page's fill on it, less the faces they waited for, fonts, and the
+  // records the gate keeps of them, rec, which a reader opened with no records never makes) and painted, their operations made
+  // (ops: the erase and its put-back, or the swap's rectangles), drawn on the copy (compose) and set as SVG (svg); its links
+  // (the wait for its annotations past the text read, and their parse)
   const pageTimes = []
-  const timesOf = pg => (pageTimes[pg] ??= { render: 0, text: 0, ink: 0, rp: 0, lay: 0, fonts: 0, ops: 0, compose: 0, svg: 0, words: 0, links: 0, fills: 0 })
+  const timesOf = pg => (pageTimes[pg] ??= { render: 0, text: 0, ink: 0, rp: 0, lay: 0, fonts: 0, ops: 0, compose: 0, svg: 0, words: 0, links: 0, fills: 0, rec: 0 })
   // the deterministic work a page cost (work.mjs: integer counts, no clock), by page, as pageTimes is. Charged over stretches of
   // synchronous code, so that a page's counts are the same whatever the order pages were asked in and however the tasks
   // interleaved; `inWork` keeps a stretch inside another from being charged twice. Nothing the drawing reads
@@ -2810,7 +2831,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       if (r.right) { r.right.width = r.left.width; r.right.height = r.left.height }
     }
     r.view = page.view
-    let tc, annP, fonts, tRendered, fills = null
+    let tc, annP, fonts, tRendered, fills = null, fillsMs0 = 0
     if (x) {
       // (from its draw: no text content, annotation or pixel read of PDF.js's; its pixels are read where a step reads its ink)
       fromData[i] = 1
@@ -2846,7 +2867,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         const tFills = performance.now(), held = heldLists.get(i)
         heldLists.delete(i)
         fills = await liveFillsOf(OPS, page, tc.items, workOf(i), held?.doc === d ? held.list : null, fillsMs)
-        timesOf(i).fills += performance.now() - tFills
+        fillsMs0 = performance.now() - tFills
+        timesOf(i).fills += fillsMs0
       } finally { unpin() }
     }
     if (i === 1 && lmP) await lmP
@@ -2870,7 +2892,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (and its characters by baseline, which every unit's edges read, made once the page is: edgesOf)
     rowsByPage[i] = rowsOf(chars2[i - 1])
     workOf(i).edges += chars2[i - 1].length
-    timesOf(i).text += performance.now() - tRendered
+    // (its fills apart: `fills`)
+    const tText = performance.now()
+    timesOf(i).text += tText - tRendered - fillsMs0
     // (the Link annotations with the glyph points inside each: the engine's own reading of what PDF.js calls overlaid text)
     const raw = await annP
     if (raw === null) { annots[i - 1] = null; linkStats.unread++ } else {
@@ -2879,8 +2903,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       linkStats.total += read.total
       linkStats.unsupported += read.unsupported
     }
-    // (the request's latency from its dispatch to its answer, and the parse)
-    timesOf(i).links += performance.now() - tRendered
+    // (the wait for the request, dispatched before the text read, past that read's end, and the parse: the text read is `text`)
+    timesOf(i).links += performance.now() - tText
     // (its pixels and characters read: its rendering state is the document's, kept warm for the page's copy or let go among the
     // oldest, visibility.mjs)
     if (shelf) shelf.chars[i - 1] = chars2[i - 1]

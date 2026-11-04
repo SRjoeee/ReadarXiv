@@ -181,10 +181,11 @@ export interface ProtoRun {
   order: number[]
   ms: Map<number, number>
   pageMs: number[]
-  /** each page's costs, ms: its original drawn, its text read, the removal's ink reading and plan, its removed and
-   *  placeholders' pages drawn, its units laid (less the faces they waited for, `fonts`), their operations made, drawn on the
-   *  copy and set as SVG */
-  pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; fonts: number; ops: number; compose: number; svg: number; words: number; links: number }[]
+  /** each page's costs, ms: its original drawn, its text read (less its fills read live, `fills`), the removal's ink reading
+   *  and plan, its removed and placeholders' pages drawn, its units laid (their fits, fill leadings and its page's fill, less the
+   *  faces they waited for, `fonts`, and the records made of them, `rec`, which a reader opened with no records never makes),
+   *  their operations made, drawn on the copy and set as SVG, its word table, its links (the wait past the text read, the parse) */
+  pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; fonts: number; ops: number; compose: number; svg: number; words: number; links: number; fills: number; rec: number }[]
   /** the deterministic work counters of each page (work.mjs): integer counts, the same for the same input */
   pageWork: (import('./work.mjs').Work | undefined)[]
   workTotal(): import('./work.mjs').Work
