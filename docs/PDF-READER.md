@@ -2161,6 +2161,8 @@ The edge cases, decided:
   `PIPELINE_VERSION` they were recorded under (`golden/unit-cut.json`). The cut moving under the same version fails, and so does
   the version moving with the cut not recorded again; `WRITE_UNIT_CUT=1` records it, and refuses while the cut moved and the
   version did not.
+- **A bump of `PIPELINE_VERSION` or `REMOVAL` writes its line in §18.10** and its identity's row in §18.2; `pipeline/versions.mjs`
+  holds the constant alone.
 - **The classification test of §18.1 decides which kind a change is.** When it is unclear, the change takes the more expensive kind and the pull request says why.
 
 ### 18.4 Bundles: the reader names its contract, the server names the content
@@ -2425,6 +2427,100 @@ rectangles its growth moves as before. Measured on the pack's 32 outputs, every 
 v0's records): of 5,962 unit records one moves, that cell in each language; in Spanish, French, Korean and Chinese it is laid
 on its own line, and in German, Japanese and Russian its translation does not fit its own cell, so it is the original's (it
 fitted only by taking MNLI's room).
+
+### 18.10 The versions' history
+
+One line a version: what it moved. The full notes, each version's measurements and the copies' carry rule beside them, are in
+the history of `pipeline/versions.mjs`, where they were kept until 2026-11-04 (the rules audit's F5):
+`git show d47745761:src/pdf-reader/engine/pipeline/versions.mjs`. A bump writes its line here and in its identity's row of
+§18.2, and the constant alone in `versions.mjs`.
+
+**`PIPELINE_VERSION`** (what the units are):
+
+- 1: the typesetting rule wired; the versions apart
+- 2: the front matter's notes are units (latex-front.mjs FRONT_MATTER)
+- 3, 4: two branches each raised them, and their 3s and 4s are other pipelines: the highlight's (a translation's invisible characters dropped before TeX; a file \input under another spelling translated) and the typesetting rule's (CJK leading inside translated units, the paper's own macros and the author block cut into units)
+- 5: on each branch again: the highlight's, a file named through import.sty (\import, \subimport) or subfiles is walked, found as TeX finds it (latex-front.mjs loadProject), and a package's names are TeX's (tar.mjs untar)
+- 6: the two 5s together
+- 7: a tabularray table whose cells are math is math, no unit (latex-front.mjs TBLR_MATH)
+- 8: a citation is one placeholder with every argument it takes, apacite's prenote in angle brackets and biblatex's multicite notes among them (latex-front.mjs citationArgs)
+- 9: a table's cells are decided by their group after translation, translated whole or kept whole (groups.mjs, the table-groups brief of 2026-10-07): a column of names kept in the source whole, its cells `kept` in the record …
+- 10: every piece of typeset body text a unit, as TeX reads the source (the front end's round of 2026-10-06/07): the document's bounds as TeX finds them (latex-front.mjs documentBounds)
+- 11: nothing is inserted inside a macro's call or between a subscript and its operand (latex-front.mjs: a lead or a mark goes before a whole call, after a complete argument or inside a group)
+- 12: raised with TRANSLATE_VERSION 2 (a formula split across inline formulas sent as one marker, mt.mjs formulaRuns), so that copies are judged again
+- 13: \texorpdfstring's first argument is the heading's text (latex-front.mjs): a heading wholly in \texorpdfstring is a unit
+- 14: the left side of a paper with text set at an angle (anchors.mjs tokenizeDocument): a turned item's tokens lie along its baseline, no longer read along x, and the left parts that hold them change
+- 15: raised with TRANSLATE_VERSION 3 (a sentence whose words change style goes out whole, mt.mjs planOf), so that copies are judged again
+- 16: an environment the paper defines as code is no unit (latex-front.mjs codeEnvsOf): one a listing package's definer makes, one whose begin code opens a code environment, one set as alltt sets its body (typewriter type, …)
+- 17: a command and its arguments are one piece (arg-roles.mjs readArgs, latex-front.mjs commandArgs): TeX's number, dimension or glue (`_d`) is never a group, a box's specification `to` or `spread` and a dimension, and a …
+- 18: a marked original that stopped at its error limit, never reached the document's end, or has fewer pages than arXiv's PDF is a failed compile, no layout (live.mjs ranThrough, layout/paper.mjs, page-pass.mjs): 2610.20713 …
+- 19: the marked original must be the paper (the layout guard: layout/guard.mjs, layout/paper.mjs markedOfPaper)
+- 20: no unit, and no mark, inside an argument TeX reads as syntax (E2 of 2026-10-19): a TeX value never takes a command that reads arguments of its own (arg-roles.mjs readArgs: 2610.21765's \hrule then \vspace{0.5mm}, its …)
+- 21: a source's line ends read as TeX reads them (latex-front.mjs texText: web2c's input_line ends a line at a CR or an LF, the LF of a CRLF with its CR), wherever the front end turns a file into TeX text, the guard's brace …
+- 22: raised with TRANSLATE_VERSION 4 (the boundary rule: a styled pair whose two ends stand where the wire is cut anyway keeps its markers, mt.mjs classOf), so that copies made before it are not taken whole: a copy of 21, …
+- 23: raised with TRANSLATE_VERSION 5 (a display's own stop on the wire right after its marker, mt.mjs serialize's and serializeTags' `own`), so that copies made before it are not taken whole: a copy of 22, and of every …
+- 24: a unit's lines at a page break read by its own words (anchors.mjs placeWith: a paragraph and its footnote whose marked ranges cross each keep the lines their matched words are on) (23 is the display stop's, #421)
+- 25: a package with no 00README has its toplevel sources guessed (source/paper-meta.mjs): every \documentclass file no other file includes, that begins a document and whose class is not standalone or subfiles, is one (a file …)
+- 26: a package with no 00README, whose compiler is guessed from its files (source/paper-meta.mjs: a source with no figure is taken for pdflatex), is compiled by the compiler arXiv's PDF says made it where the host reads one …
+- 27: the source reader's text is what TeX sets (S1-S4 of 2026-10-24, latex-front.mjs): a paper macro whose body sets words of its own is its expansion, one text piece whose source is the call …
+- 28: a command whose argument is a unit of its own takes what its definition takes, and a group after it is the text's (latex-front.mjs argsOfForm, unitForm): a heading a star, a short title and one title, a caption, a …
+- 29: a bibliography's entries are units (latex-front.mjs bibliography)
+- 30: a bibliography's entry is one unit of kind `reference`, whole, its names its own (no `refnames` unit: latex-front.mjs bibliography)
+- 31: LAYOUT 23 changed the ink units' pieces (their style groups) and LAYOUT 25 their cut (a list's entry one unit at its leading, 2610.19274v1's 68 to 32)
+- 32: a .bib the bibliography's pass wrote itself is no .bib the paper lacks (layout/paper.mjs bibMissing: REVTeX 4.x's <job>Notes.bib, named in \\bibdata before the paper's own), so a REVTeX paper that ships its .bib and no … (the release sweep of staging 4b3c4ae9, engine a30a53ba, 31 counted released)
+- 33: a web address's `%` in a .bbl's entries is a character, as TeX reads it (latex-front.mjs urlPercents: \url, \path, \nolinkurl, \burl and \href's first argument at an entry's top level) (the coverage lane of batch 2, the release sweep of staging 4b3c4ae9)
+- 34: a stop that abuts the formula before it at a contents line's end is the entry's, no leader dot (layout/ink-units.mjs trimmed: a leader is a word a word's gap from the one before it, 2610.19274v1's list of figures, "… …) (batch 2's ink lane)
+- 35: under backref's lists (hyperref's pagebackref), the unit that ends each entry's first paragraph ends in the list's placeholder (latex-front.mjs BACKREF_LIST), so that the list TeX sets after the entry is that unit's … (the owner's case 2610.37668v1)
+- 36: with TRANSLATE_VERSION 8 (a run-in label past a unit's head keeps its markers on the wire), so that no stored copy of 7's is taken for one of 8's
+- 37: a biblatex bibliography's entries are units, kind `inkreferences`, one an entry, cut by the compile's points before each (marks.mjs POINTS_TEX `bi<n>`, layout/ledger.mjs `entry`), the references' class, where they were … (the owner's case 2610.35877v1)
+- 38: with TRANSLATE_VERSION 9 (a caption cut into sentences on the tags wire), so that no stored copy of 8's is taken for one of 9's
+- 39: a unit cut inside an author block is the block's, its names or its places as frontBlock cuts them, whatever environment TeX sets it in (latex-front.mjs blockKind): a tabular's cells there (2610.35877v1's two names, …)
+- 40: the left changes, no unit. A unit without marks is searched between its marked neighbours in the order TeX sets the text (latex-front.mjs entriesLast's `texOrder`, anchors.mjs orderOf), never the units' numbers' (the …)
+- 41: with BUNDLE 12 (the moved pages' line map, the owner's ruling of 2026-10-30): the left part of every page the line check read and drew carries our lines that stand elsewhere on arXiv's page (pipeline/moved-lines.mjs, …)
+- 42: the text no unit owns once the ink units have claimed theirs (the owner's ruling of 2026-10-30, the text no block owns lights as one block on both panes)
+- 43: a mark of ours a file TeX wrote holds is judged by what TeX did with it (layout/guard.mjs copiesOutOfPlace: where the compile is otherwise the paper's and TeX wrote the PDF itself, whose log names every destination set …)
+- 44: the final pass begins with hooks that switch off the transparency group graphics-def's pdftex.def 1.2d and luatex.def 1.2f (8d691483be, 2025-09-20) write on every included PDF, which arXiv's TeX Live 2025, the state of … (the driver's group, 2026-10-31)
+- 45: the front end keeps a `\begin{xy}…\end{xy}` as the paper has it, a drawing whose body xy-pic reads with its own parser, as it keeps a TikZ or PSTricks picture (latex-front.mjs SKIP_ENVS) (xy-pic's diagram, 2026-11-01)
+- 46: a glyph set turned is cut by the clip in force where its own ink passes it, as a level glyph is (layout/ink.mjs turnedGlyph: its outline across its advance, its outline's bottom to its top, else its font's band), not … (the release sweep of 6e0a8d1c, 2026-11-01)
+- 47: a figure unit is cut of glyphs set at its size alone (layout/figure-text.mjs: a run a glyph of which stands past BAND_MAX of its size from its baseline, its own ink, level or turned, is the original's), and a unit whose … (the release sweep of 5514953c, 2026-11-01)
+- 48: a unit's own lines, a marked range's over a page break and the words it keeps, count a placeholder's tokens between two of its words that are next to each other in its text as its own (pipeline/anchors.mjs ownOnLines, …) (the owner's report of 2026-11-01 on 2610.40645v1, staging at PIPELINE 46)
+- 49: a unit's label row that meets a figure unit's run goes from the parts' layout (pipeline/ink-pass.mjs layoutWithInk, as one that meets an ink unit's text since LAYOUT 23) (the owner's report of 2026-11-01 on 2501.14787v1, staging at PIPELINE 48)
+- 50: a head of a theorem-like name the paper defines (thmtools' \declaretheorem, a \newtheorem's printed name: "Recall", "Notation", "Question", "Setting", "Result") is a label's form, its unit's label group (REMOVAL 19, …) (the follow-up of #541, 2026-11-01)
+- 51: nothing of ours is written where TeX reads it as an argument of the paper's
+- 52: a paper's environment whose begin code begins a table it does not end, and whose end code ends it, is that table (latex-front.mjs tableWrapsOf: the tabular family in either spelling, \begin{tabularx}{…} or …) (the follow-ups of #546, 2026-11-02)
+- 53: a comment's line end the walk passes over is written back as TeX reads it (the last of #546's notes, 2026-11-02)
+- 54: a display its unit opens with, which the marking passes over (no point at a unit's head, marks.mjs headEnd), is found by its unit's start mark
+- 55: two rules of the layout maker (layout/make.mjs), whose change rides this version, as 48's and 54's did
+- 56: what the page does not show is no ink to a figure's label, and a ground lies under the text (layout/ink.mjs `unseen` and `cut`, the figures' reading alone: a glyph whose own ink is wholly outside the clip in force, any …)
+- 57: an opening point alone whose next mark is another region's (the lost class of the release sweep of 2026-11-02: a display left LOST, its unit English)
+- 58: a fill of known lines and no stroke painted before a figure's text is the ground it was set on, whatever its edges: one inside the label's band is a change of tone under the text and crowds nothing … (the owner's option A of 2026-11-02, 1706.03762v7's last 5 labels)
+- 59: a figure unit is KEPT where it is code (translate/mt.mjs isCode): every word a markup token in angle brackets (1706.03762v7's "<pad>", which Microsoft gave back as a word, and "<EOS>") (the owner's option A of 2026-11-02: every figure label translated, a token of code kept)
+- 60: a paper's macro glued to the word before it gets its marks where LAYOUT_TEX's opening mark sets itself in a box before it, as before a formula (marks.mjs layoutMarking, BOXY: \textsuperscript, \mbox), not past a prefix: …
+- 61: every distinct call of the paper's macros asked of the ink section, the body's and the entries' alike, while their code units fit INK_BUDGET (marks.mjs inkSamples, leadSamples)
+- 62: a glyph is shown whole where its own ink, its outline across (else its advance), is inside the clip in force, never cut by its advance alone (layout/ink.mjs, level and turned): a plotting program bounds its figure's box … (the release sweep of 1e01ce14: three units translated in production, English since 56)
+- 63: the code environments the front end knows (latex-front.mjs codeEnvsOf, the listing packages' own) are told to every reader by what TeX was told
+- 64: what TeX sets after a bibliography is no entry's, the references' zone ending with its last entry's last line (ledger.mjs lastEntriesOf), not at the next unit's start
+- 65: a unit only the layout file holds stands in K beside the left unit it shares one of TeX's lines with (need.mjs lineAfterOf), so a run-in head comes before its text
+
+**`REMOVAL`** (how a drawn unit's ink is taken away):
+
+- 1 to 7: the text-removed PDF, an add-on of removed pages appended to the base and swapped in where a unit is drawn (6 chained over the parts, 7 over our base page)
+- 8: our page's own streams wrapped by optional content, each unit's ink in its own groups, which the reader hides where it draws the unit (layout/wrap.mjs, docs/route/ocg-erasure.md): no add-on, no tail
+- 9: a soft mask's content no ink of the page's (remove.mjs alignOf, ink.mjs indices), a title read back past its own placeholders' points, a mark's name read in lower case, a cell's lead macro owned where it abuts the cell, … (the sweep of 2026-10-24, its units left English though their ink could be owned)
+- 10: a label's name followed by a letter and a number is a label (own.mjs LABEL_FORM: "Table S3:", "Figure A1", which were left the original's ink, `labelKept`), and the delta's proof reads a direct value of the catalog by … (the release sweep of 2026-10-24)
+- 11: a theorem's head before its note, the bracket it opens the note with ("Definition 5.1 (", a unit the front end read in a head's brackets), and the joint a head sets after the babel name that leads its unit (amsthm's "." …)) (the structural names, PDF-READER §19.11)
+- 12: a macro TeX said sets no ink (the marks file's `marking.inkless`, wrapFinal's `inkless`, as the maker reads it) is no placeholder of ink in own.mjs, so that a unit that opens with one (a title in `\boldmath`) opens with … (2609.20976v1, shared with the other owners of this release)
+- 13: a closed piece's first glyph is its text's where it is the punctuation mark the piece's command set before its own ink (stream.mjs ownedOf, marks.mjs followsOf `moved`: cite.sty's superscripts set `\cite{x}.` as ".¹", …) (the coverage lane of batch 2)
+- 14: a unit's text owns the rules TeX painted on its own lines, as it owns its glyphs (own.mjs MR 2b, lineRulesOf: thin across, on a baseline of its glyphs, within their extent, no part of a frame), and an ink unit's lines … (batch 2's ink lane, #117)
+- 15: a level figure unit on its column's edge, or centred in it, is anchored there by the column's text lines (figure-text.mjs columnAnchorOf), no longer by the ink beside it alone, which read a heading a class sets flush in … (2610.37668v1's "Abstract", the owner's report on staging)
+- 16: backref's list after an entry is its list piece's own ink (`u<id>.p`), between the marks LAYOUT_TEX's hook sets around it (marks.mjs BACKREF_TEX), where it was no one's: the base's bytes change where a paper turns … (the owner's case 2610.37668v1)
+- 17: a biblatex entry's ink its unit's groups (an ink unit of kind `inkreferences`, ink-units.mjs claimInk), the point before each a rendering intent in our page (marks.mjs POINTS_TEX `bi<n>`): the base's bytes change where … (the owner's case 2610.35877v1)
+- 18: the closing punctuation glued past a unit's end mark on its line, in no group, is the unit's text (own.mjs MR 4c), as the maker's line takes it (make.mjs lineOf: one table, TAIL_PUNCT) and the layer draws it again after … (the owner's report of 2026-11-01 on 2501.14787v1)
+- 19: a head of a theorem-like name the paper defines is its unit's label (own.mjs labelFormOf over the wrap's `names`, required as `texts` is: openPaper's theoremNames), where it was left the original's ink in no group: the … (the follow-up of #541)
+- 20: the ink of a display its unit opens with, which the marking passes over (stream.mjs headInk), is its unit's for the ledger (own.mjs `leads`, wrap.mjs), in no group: no ink unit nor kept block is made of it, where three … (the owner's report of 2026-11-02 on 2501.14787v1 p24)
+- 21: an opening point alone whose next mark is a float's shipped into the stream before the text after it owns what its own region holds to that text (stream.mjs `pastOther`), its ink its unit's groups where it was in none: … (the lost class of the release sweep of 2026-11-02)
+- 22: a text symbol's own glyph — the glyphs from the first of its piece's ink that set its character (the lost class of the release sweep of 2026-11-02)
+- 23: the counter TeX sets after a babel name on its line, no unit's, where the name leads no unit (IEEEtran's "APPENDIX A", "Appendix A:": names.mjs counterAfter), is in the name's group (own.mjs MR 6b), so that the layer … (the owner's report of 2026-11-03 on 2610.42112v1)
 
 ## 19. The engine's contract
 
@@ -2983,7 +3079,8 @@ own), each part carrying its pages' cell rules (`rules`).
 - **The draw geometry (E-C), on by default (`draw`).** Each left part carries its page's draw (`layer-proto/draw.mjs`: the text
   items, the fonts, the Link annotations), read with the page's operator list (`pipeline/draw-data.mjs`): its text step T's
   own read (`readArxivText(doc, { draw: true })`, taken once a page), its annotations the page's one read, shared with the
-  link-anchor locator. Its precondition is the host's: arXiv's PDF opened with `fontExtraProperties` (the fonts' maps) and
+  link-anchor locator. It is read of the base page (our wrapped final pass, the maker's document, since BUNDLE 8), not of arXiv's
+  PDF. Its precondition is the host's: the base page opened with `fontExtraProperties` (the fonts' maps) and
   pdf-lite's `LINK_TEXT_PIXELS` (no image's pixels, and the links' overlaid text PDF.js makes, the live reading's own); the
   marked original keeps `NO_IMAGE_PIXELS`. Most of its cost is PDF.js's own second extraction of a linked page's text for
   that overlaid text (1.5 s of 2310.20360's 2.4 s).

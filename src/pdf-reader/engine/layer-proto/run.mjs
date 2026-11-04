@@ -737,7 +737,7 @@ export function packPage(pg, units, rects, chars, stays = null, gap = 0) {
  * With both, what the run lets go is kept on the gate's shelf (`full`, `chars`, the checker): the run draws as one that
  * frees, and the gate measures it whole.
  * `drawOf(page)` (E-C, the door's for BUNDLE 5's parts): a promise of the page's draw geometry (layer-proto/draw.mjs, checked:
- * its text items, fonts and Link annotations, as the server read them of arXiv's PDF), or null; asked once a page, for every page of
+ * its text items, fonts and Link annotations, as the server read them of the base page), or null; asked once a page, for every page of
  * a closure as it is taken. A page with a draw is read from it: its viewport alone of PDF.js's (getPage), no text content,
  * annotation or pixel read; one with none (null, an ask that threw, a draw whose font key names another font than before) is read
  * live, as without drawOf. Its pixels (its ink map) are read where a step reads them, and only there: the page asked, at once; a

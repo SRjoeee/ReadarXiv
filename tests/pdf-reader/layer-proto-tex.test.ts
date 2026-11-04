@@ -764,7 +764,7 @@ describe("a cell whose citation wrapped onto the cell's next line, made by the m
       marks: [['t0s', 1, 72, 700], ['t0e', 1, 177, 700], ['p0.1a', 1, 177, 700], ['p0.1b', 1, 132, 688]],
       units: [unitPiece('cell', [textPiece(' decaying exploration '), phPiece('\\citep{sutton}'), textPiece(' ')])],
     }
-    const out = await makeLayout({ units: w.units, marks: await marksOf(w), arxiv: arxivOf(w.pages), OPS, paper: { id: '2609.26457', version: 1 }, left: '', pdfjs: '6.3.289' })
+    const out = await makeLayout({ units: w.units, marks: await marksOf(w), base: arxivOf(w.pages), OPS, paper: { id: '2609.26457', version: 1 }, pdfjs: '6.3.289' })
     if (!('file' in out)) throw new Error('refused')
     const lu = indexLayout(out.file).unit(0)
     const cell = { kind: 'cell', pieces: w.units[0]?.pieces } as never

@@ -1,5 +1,5 @@
-// A page's draw geometry (the E-C design note, ec-geometry-format.md): what the layer's drawing of a page reads of arXiv's PDF
-// besides its operator list, shipped as data in the page's left part (`draw`) so that the browser reads and draws only the pages whose
+// A page's draw geometry (the E-C design note, ec-geometry-format.md): what the layer's drawing of a page reads of the base page
+// (our wrapped final pass since BUNDLE 8, which the composed document shows) besides its operator list, shipped as data in the page's left part (`draw`) so that the browser reads and draws only the pages whose
 // ink it needs: the text items (string, transform, width, height, font, its characters' fills: layout/fills.mjs), the page's font
 // table and the Link annotations. The shape is checked by the reader of a left part (checkDraw: bounds and types, plain loops, nothing evaluated) and built from PDF.js's own
 // shapes by the writer (wireOf), which SHEDS (null: the browser reads that page itself) for every reason the reader would refuse.

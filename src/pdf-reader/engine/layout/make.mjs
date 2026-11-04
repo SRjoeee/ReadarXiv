@@ -444,9 +444,13 @@ async function gzipSize(bytes) {
   return (await new Response(stream).arrayBuffer()).byteLength
 }
 
+/** the layout file's `left`: the empty string, which every maker has written since the file's left side became the left parts'
+ *  (BUNDLE 4); the key goes with the file's next schema (the rules audit's F11, 2026-11-04) */
+const LEFT = ''
+
 /**
  * A paper's layout file, or why none is made: { file, stats } or { refused, stats }. `units` the paper's (ids their
- * indices); `marks` the marks file of its layout compile; `arxiv` a PDF.js document of the base page (the final pass of that
+ * indices); `marks` the marks file of its layout compile; `base` a PDF.js document of the base page (the final pass of that
  * compile: layout/paper.mjs markedOfPaper `base`, its coordinates the file's), which the caller opens and destroys, each of its pages cleaned up once read (page.cleanup: its operator list and images let go), so
  * that a caller that reads its operator lists again pays a parse again; `OPS` PDF.js's operator codes. `text`: the base page's text as layout/arxiv.mjs
  * readArxivText read it from this document (the prepare's step T), else read here. `lineCheck`: the line check (carry.mjs
@@ -485,7 +489,7 @@ export async function makeLayout(o) {
  * at most `drawHeldMax` at a time; none for a page the read fails on, a font a host would read
  * differently, or past the budget. It reads no ink and writes none: the layout file is the same bytes with it on or off
  */
-export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, text = null, lineCheck = null, floatMatch = null, frame: frameGiven = null, cellRules: wantRules = false, parts = false, columnEdges = null, check = false, rules: rulesGiven = null, inFloat = null, texOrder = null, draw: wantDraw = false, drawHeldMax = DRAW_HELD_MAX }) {
+export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = null, lineCheck = null, floatMatch = null, frame: frameGiven = null, cellRules: wantRules = false, parts = false, columnEdges = null, check = false, rules: rulesGiven = null, inFloat = null, texOrder = null, draw: wantDraw = false, drawHeldMax = DRAW_HELD_MAX }) {
   const rules = rulesOf(rulesGiven)
   // (rule 5: the units written inside a float, the source parse's, no body neighbour of a float's)
   if (rules.floatSearch === 'forward' && !Array.isArray(inFloat)) throw new TypeError('inFloat: the indices of the units written inside a float, for rules.floatSearch \'forward\'')
@@ -495,11 +499,11 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
   const forward = rules.floatSearch === 'forward' ? placesIn(inFloat, order) : null
   const stats = blank(units)
   for (const u of units) { const k = u.kind; stats.units.byKind[k] ??= [0, 0]; stats.units.byKind[k][1]++ }
-  const pages = arxiv?.numPages
+  const pages = base?.numPages
   if (!Number.isInteger(pages) || pages < 1 || pages > PAGES_MAX) return { refused: 'pages', stats }
   // ---------------------------------------------------------------- the base page's text, page by page
   const t = now()
-  const read = text ?? await readArxivText(arxiv, { draw: wantDraw })
+  const read = text ?? await readArxivText(base, { draw: wantDraw })
   // (each page's text as its draw reads it, step T's: taken as the page's draw is read, and let go; none where the text was read
   // without it, the draw then reading the page's text itself)
   const drawTexts = wantDraw ? read.draw ?? null : null
@@ -592,7 +596,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     if (unread.has(p)) return
     // (the page its text was read from: PDF.js keeps each page's proxy; a memory-class failure is no dark page, C8.4)
     let page = null
-    try { page = await arxiv.getPage(p) } catch (e) { if (isMemoryError(e)) throw e }
+    try { page = await base.getPage(p) } catch (e) { if (isMemoryError(e)) throw e }
     if (!page) { dark.add(p); return }
     // (however long it takes; one that fails is that page alone, dark, the page let go: oplist.mjs)
     const ops = await listOf(page)
@@ -2081,7 +2085,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
       if (nm.lead >= 0) stats.names.runIn++
     }
     const file = {
-      schema: LAYOUT_SCHEMA, layout: LAYOUT, pdfjs, paper: { id: paper.id, version: paper.version, pages }, left, views, fonts,
+      schema: LAYOUT_SCHEMA, layout: LAYOUT, pdfjs, paper: { id: paper.id, version: paper.version, pages }, left: LEFT, views, fonts,
       units: outUnits, lines: outLines, frames: outFrames, erase: outErase,
       ph: phs.filter(p => kept1.has(p.row[0])).map(p => p.row), labels: labeled.filter(r => kept1.has(r[0])), headings: outHeadings,
       pageText: phs.filter(p => kept1.has(p.row[0]) && p.text).map(p => [p.row[0], p.row[1], p.text]),
@@ -2565,7 +2569,7 @@ export async function makerOf({ units, marks, arxiv, OPS, paper, left, pdfjs, te
     const partOf = (ids, rows) => {
       const unlaid = unlaidOf(ids.filter(i => settledU[i]), i => unitRows.has(i))
       ids = ids.filter(i => unitRows.has(i))
-      const out = { schema: LAYOUT_SCHEMA, layout: LAYOUT, pdfjs, paper: { id: paper.id, version: paper.version, pages }, left, views, fonts: fonts.slice(), lineskip: marks.marking.lineskip ?? null }
+      const out = { schema: LAYOUT_SCHEMA, layout: LAYOUT, pdfjs, paper: { id: paper.id, version: paper.version, pages }, left: LEFT, views, fonts: fonts.slice(), lineskip: marks.marking.lineskip ?? null }
       for (const key of ['units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held']) out[key] = []
       for (const i of ids) { const r = unitRows.get(i); for (const key of ['units', 'lines', 'frames', 'erase', 'ph', 'labels', 'headings', 'pageText', 'held']) out[key].push(...r[key]) }
       out.names = rows

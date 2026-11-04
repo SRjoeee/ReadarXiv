@@ -1,5 +1,5 @@
-// A page's draw geometry read from PDF.js (the E-C design note, §3): what the layer's drawing of the page reads of arXiv's PDF besides
-// its operator list, gathered by the server once the page's operator list has been read (a font's map is in `commonObjs` only after
+// A page's draw geometry read from PDF.js (the E-C design note, §3): what the layer's drawing of the page reads of the base page (our
+// wrapped final pass since BUNDLE 8, the maker's document) besides its operator list, gathered by the server once the page's operator list has been read (a font's map is in `commonObjs` only after
 // it): the text items, the fonts the items use, the Link annotations. The PDF.js calls are pinned: `page.getTextContent()` with its
 // defaults (no marked content, no options), `page.getAnnotations()` with its default (display) intent, a font by the loaded name of
 // each style from `page.commonObjs`; the document is opened with fontExtraProperties (its fonts' `toUnicode`) and the engine's cMaps.
