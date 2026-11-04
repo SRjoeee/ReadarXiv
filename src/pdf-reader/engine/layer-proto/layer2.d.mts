@@ -320,8 +320,6 @@ export declare function extendRects(rects: Rect[], charsByPage: readonly (readon
 /** what a unit's first line starts with before its own text: each part in its own style, then a space (`gap`
  *  undefined) or that many em of the unit's size after its last character, no place to break (0: none) */
 export interface Lead { parts: { text: string; st: Partial<Style> }[]; gap?: number }
-/** `text` with the ranges `cuts` ([from, to), rising) left out, and its transformMap less the same characters; null where there is nothing to cut */
-export declare function cutOut(text: string, cuts: readonly (readonly [number, number])[], map: { from: number[]; span: number[] } | null): { text: string; map: { from: number[]; span: number[] } | null } | null
 export declare function tokensOf2(unit: Unit, resolved: Prepared, to: string, baseIn: Style, designs: { serif: string; sans: string; mono: string }, P: Params, lead?: Lead | null, measure?: ((s: string, face: Face) => number) | null, tagWords?: boolean): Token[] & { base: Style }
 /** a unit's tokens (tokensOf2's, given no measure) measured in place: each text token's width at 100 px in its face (a
  *  superscript's at 0.62 of it, small capitals' at their share), a space's in its face, a lead's glue after its last token */

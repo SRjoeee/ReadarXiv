@@ -64,7 +64,6 @@
 // history of how the readings the file now gives were first made.
 import { keptPair, noStart } from './no-start.mjs'
 import { work } from './work.mjs'
-import { sourceRepeats, stutterCuts } from './stutter.mjs'
 import { blocksOf, CITE, kinsokuOf, lcsPairs, median, norm, phClass, texToText, wordsOf } from './layer1.mjs'
 import { faceOf, fontString, roleFaces, styleKey } from './fonts.mjs'
 import { breakPoints } from './hyph.mjs'
@@ -2312,23 +2311,6 @@ export function droppedHeld(s, held) {
   return kept + t
 }
 
-/**
- * `text` with the ranges `cuts` ([from, to), rising: stutter.mjs stutterCuts) left out, and its transformMap (`map`, or null)
- * less the same characters, so that each character left keeps the place in the piece it had; null where there is nothing to cut
- */
-export function cutOut(text, cuts, map) {
-  if (!cuts.length) return null
-  let out = '', at = 0
-  const from = map ? [] : null, span = map ? [] : null
-  const keep = (a, z) => {
-    out += text.slice(a, z)
-    if (map) for (let i = a; i < z; i++) { from.push(map.from[i]); span.push(map.span[i]) }
-  }
-  for (const [a, z] of cuts) { if (a > at) keep(at, a); at = Math.max(at, z) }
-  keep(at, text.length)
-  return { text: out, map: map && { from, span } }
-}
-
 /** a length TeX reads as a dimension, in PDF units (big points): its number and its unit, the em by itself */
 const DIMEN = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(pt|bp|mm|cm|in|pc|dd|cc|sp|em)$/
 const BP = { pt: 72 / 72.27, bp: 1, mm: 72 / 25.4, cm: 72 / 2.54, in: 72, pc: (12 * 72) / 72.27, dd: ((1238 / 1157) * 72) / 72.27, cc: ((12 * 1238) / 1157 * 72) / 72.27, sp: 72 / 72.27 / 65536 }
@@ -2454,7 +2436,7 @@ export function smallCapsAt(chars, text, size) {
  * translator's reply, a space placeholder (a tie, a control space, a forced break no source locates); but the space after a
  * styled pair that opens the unit, a run-in head (`\noindent\textbf{Title}` and the text after it), which TeX set there
  * itself; a space inside a code run (the typewriter face's: its spaces are its content); and every space of a unit whose source
- * sets two such characters with white space between (a paper that writes CJK so, its own: sourceRepeats' rule for a stutter).
+ * sets two such characters with white space between (a paper that writes CJK so, its own).
  * A formula crop is no such token: the space beside it stays (its autospace). Explicit glue in the source (glueOf:
  * \enspace, \quad, \hspace{6pt}, …) is a kern at TeX's width after the token before it (`kernW`, at 100 px), in every target:
  * never a space, so the reply's white space around its marker goes with it, and the word after a \kern stands with the one
@@ -2616,9 +2598,6 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       t = t.slice(lead.length + ch.length)
     }
   }
-  // (a translator's stutter, a word written twice in a row the source has once, drawn once: stutter.mjs, the M1 survey; not
-  // where the unit's source repeats a word itself)
-  const tidy = !sourceRepeats(unit.src)
   // (a run-in head: the styled pair the unit opens with, only pieces that draw nothing before it, its id)
   let headId = null
   for (const p of unit.pieces) {
@@ -2655,10 +2634,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       // reads so that a token of it has no place; a source piece must be drawn as it is shown)
       const sm = at ? (sh === raw ? true : p.tr && sh.length === raw.length ? Int32Array.from({ length: raw.length }, (_, i) => i) : null) : null
       const map = sm ? transformMap(s, text) : null
-      // (a stutter's second word left out of a translated piece, each character left keeping its place: the word table's offsets
-      // stay the translation's own)
-      const cut = tidy && p.tr ? cutOut(text, stutterCuts(text), map) : null
-      pushText(cut?.text ?? text, style(), {}, (cut ? cut.map : map) && { at, sh, base: raw.length - s.length, map: cut ? cut.map : map, sm: sm === true ? null : sm })
+      pushText(text, style(), {}, map && { at, sh, base: raw.length - s.length, map, sm: sm === true ? null : sm })
       return
     }
     plain?.gap()
