@@ -18,6 +18,6 @@ describe('the browser entries', () => {
   })
   it('view imports, and holds what the reading view needs', async () => {
     const view = await import('@/pdf-reader/engine/view.mjs')
-    for (const name of ['layoutOf', 'hitOf', 'blockOf', 'flowChain', 'keepOverlays', 'pointerPath', 'outlineOf']) expect(typeof (view as Record<string, unknown>)[name], name).toBe('function')
+    for (const name of ['layoutOf', 'hitOf', 'blockOf', 'keepOverlays', 'pointerPath', 'outlineOf']) expect(typeof (view as Record<string, unknown>)[name], name).toBe('function')
   })
 })

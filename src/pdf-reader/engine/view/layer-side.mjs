@@ -255,6 +255,8 @@ export function createLayerSide(view, o) {
     if (disposed || state === 'refused') return
     state = 'refused'
     why = w
+    // (no page is laid now: every place the original's own, its text layer and links)
+    V.places.settle?.()
     // (no layer for the visit: nothing for the places ahead to wait for)
     V.places.letAheadGo?.()
     unmarkAll()
@@ -271,7 +273,9 @@ export function createLayerSide(view, o) {
     feed.dispose()
     leftAc.abort()
     letGo(latest, 'side')
-    if (right) { right.reset(); startsFor([...rows.keys()]) }
+    // (every page's: every unit's starts)
+    rReset()
+    startsFor([...rows.keys()])
     emitLayer()
   }
 
@@ -359,10 +363,10 @@ export function createLayerSide(view, o) {
     ready = 0
     failed = 0
     ruled.clear()
-    right?.reset()
+    rReset()
     // (a page kept drawn by the door before shows what the shapes no longer hold: nothing of it lit or hit until this door's page
     // commits there, or the original's is shown)
-    for (const [n, P] of pages) if (P.content?.wrap) right?.mute(n, true)
+    for (const [n, P] of pages) if (P.content?.wrap) rMute(n, true)
     shapesChanged()
     state = 'opening'
     emitLayer()
@@ -473,10 +477,11 @@ export function createLayerSide(view, o) {
     counts.restored++
     ring.push(`${n}@${Math.round(clock.now())}`)
     if (ring.length > RING) ring.shift()
-    // (the right's shapes there the layer's again: its words were made when it was laid, and are kept with the page's shapes)
-    const unmuted = right?.mute(n, false), shown = right?.show(n)
+    // (the right's shapes there the layer's again: its words were made when it was laid, and are kept with the page's shapes; the
+    // starts made again of the units on the page alone, the others' read no page of it)
+    const unmuted = rMute(n, false), shown = rShow(n)
     if (unmuted && !shown) shapesChanged()
-    if (shown) startsFor([...rows.keys()])
+    if (shown) startsFor(right.unitsOn(n))
     if (c.k !== kOf(n)) void recopy(n)
     return true
   }
@@ -524,6 +529,14 @@ export function createLayerSide(view, o) {
     ruled.add(n)
     emitLayer(true)
   }
+  /** whether page n stays the original's for now (places.mjs settle): the layer refused or let go, this attempt's rows not coming
+   *  (dropOthers), the page failed, stalled or shown as arXiv's by the rule, or laid with nothing of its own; the same pages that
+   *  carry no translating mark (markPage). Every other page may still be laid, and its place waits for it */
+  function settledOriginal(n) {
+    if (disposed || state === 'refused' || marksOff) return true
+    const P = pages.get(n)
+    return !!(P?.failed || P?.originalShown) || originalPageOf(n)
+  }
   /** a page whose layer is not coming now: its place back to its pre-layer content where it holds the layer's */
   function shownOriginal(n) {
     // (a near page settled as the original's: by the rule, a failure, a stall, nothing of its own to draw: the places ahead wait
@@ -535,13 +548,15 @@ export function createLayerSide(view, o) {
     const P = rec(n)
     P.originalShown = true
     if (P.content && (P.content.gen !== gen || !P.content.wrap)) unlay(n)
-    // the right's shapes there the original's again, as its place is
-    if (right?.hide(n)) startsFor([...rows.keys()])
+    // (its place drawn by its own page view now, where it showed the left's drawing while it waited)
+    V.places.settle?.()
+    // the right's shapes there the original's again, as its place is (the starts of its units alone)
+    if (rHide(n)) startsFor(right.unitsOn(n))
   }
   /** a page of an earlier door let go (dropOthers): its place and the right's shapes there the original's; whether the shapes changed */
   function dropPage(n) {
     unlay(n)
-    return !!right?.hide(n)
+    return rHide(n)
   }
   /** what the place shows of the layer let go, the place back to its pre-layer content */
   function unlay(n) {
@@ -551,7 +566,7 @@ export function createLayerSide(view, o) {
     P.content = null
     V.places.restore(n)
     // (the original's page there: the mirror's geometry is its own)
-    if (right?.mute(n, false)) shapesChanged()
+    if (rMute(n, false)) shapesChanged()
   }
   /** the laid pages far from the view kept for the focus inside them (a link, or the place a jump gave it to): retiring one
    *  would take the focused element out of the document, and the focus with it to the document's body. Each is retired once
@@ -580,7 +595,7 @@ export function createLayerSide(view, o) {
         keptForFocus.delete(n)
         if (!V.places.near(n)) farGone(n)
         // (kept for the focus by dropOthers: another target's layer, the original's page once the focus has left it)
-        else if (dropped && pages.get(n)?.content && (pages.get(n).content.target !== target || pages.get(n).content.gen !== gen) && dropPage(n)) startsFor([...rows.keys()])
+        else if (dropped && pages.get(n)?.content && (pages.get(n).content.target !== target || pages.get(n).content.gen !== gen) && dropPage(n)) startsFor(right.unitsOn(n))
       }
     }, 0)
   }
@@ -739,16 +754,17 @@ export function createLayerSide(view, o) {
    *  unchanged (places.mjs swap); what the place held of the layer before let go */
   function putInPlace(n, content, laid) {
     const P = rec(n), was = P.content
+    // (the layer's text rendering, decided once a document from the first laid page whose words tell, before the page goes in:
+    // `auto` where the browser lays them out alike under geometricPrecision and under it, text-rendering.mjs; until then, and
+    // where they differ, engine.css's geometricPrecision. Decided after the swap, the attribute it writes on <html> restyled the
+    // page just put in, which the commit's own reads had laid out, and the page was laid out twice in the task that paints it)
+    if (!textDecided) textDecided = applyLayerText(content.svg) !== null
     if (!V.places.swap(n, content.wrap)) { dropContent(content); return }
     unmark(n)
     if (was !== content) dropContent(was)
     dropDrawing(n)
     P.content = content
     P.failed = false
-    // (the layer's text rendering, decided once a document from the first laid page whose words tell, before it is painted:
-    // `auto` where the browser lays them out alike under geometricPrecision and under it, text-rendering.mjs; until then, and
-    // where they differ, engine.css's geometricPrecision)
-    if (!textDecided) textDecided = applyLayerText(content.svg) !== null
     // its text layer, once the main thread is idle: never on the commit's path
     textSoon(n, content, door)
     counts.commits++
@@ -790,8 +806,8 @@ export function createLayerSide(view, o) {
   /** the right's shapes of a laid page: its words (the units the layer shows as the original's from the left's tokens); both the
    *  words given, and the page shown again where an earlier fallback hid it */
   function shapesOf(n, laid) {
-    const unmuted = right?.mute(n, false)
-    const given = right?.lay(n, laid.words), shown = right?.show(n)
+    const unmuted = rMute(n, false)
+    const given = rLay(n, laid.words), shown = rShow(n)
     if (unmuted && !given && !shown) shapesChanged()
     if (given || shown) startsFor([...laid.words.spans.map(s => s[0]), ...laid.words.original])
   }
@@ -1035,7 +1051,35 @@ export function createLayerSide(view, o) {
       for (const a of el.getAnimations({ subtree: true })) if (a.animationName === 'axt-tr-pass' && a.startTime !== t0) a.startTime = t0
     } catch { /* the browser's own: the passes left as they started */ }
   }
-  function unmark(n) { const el = marks.get(n); if (el) { el.remove(); marks.delete(n); passStarts.delete(n) } }
+  /** the pages whose new marks' passes are aligned in the next frame, before it paints (alignPasses): reading a page's animations
+   *  brings its style up to date, and the marks stand in the page's overlay, a size container, whose style is its layout's; read in
+   *  the frame, that is the style and layout the frame makes anyway, once for every page, where markPage's own read had made it in
+   *  the task of each batch of rows. A pass is set before its mark is first painted either way */
+  const toAlign = new Set()
+  let alignFrame = 0
+  function alignSoon(n) {
+    toAlign.add(n)
+    if (alignFrame || disposed) return
+    alignFrame = clock.frame(() => {
+      alignFrame = 0
+      for (const p of toAlign) { const el = marks.get(p); if (el) alignPasses(p, el) }
+      toAlign.clear()
+    })
+  }
+  /** the card's padding in points, as the sheet gives it (--axt-tr-pad-x and -pad-y, CSS pixels at the reader's 100 %, engine.css
+   *  :root), read once a document on <html>, which no size container holds; PAD_X and PAD_Y until the sheet gives them. Read on a
+   *  mark's indicator, inside the page's overlay (a size container, whose style waits on its layout), each markPage laid the page
+   *  out in the task of each batch of rows */
+  let pads = null
+  function padsOf() {
+    if (pads) return pads
+    const css = typeof getComputedStyle === 'function' ? getComputedStyle(document.documentElement) : null
+    const px = v => { const x = Number.parseFloat(css?.getPropertyValue(v) ?? ''); return Number.isFinite(x) && x >= 0 ? x : null }
+    const x = px('--axt-tr-pad-x'), y = px('--axt-tr-pad-y'), out = { x: (x ?? PAD_X) * 0.75, y: (y ?? PAD_Y) * 0.75 }
+    if (x !== null && y !== null) pads = out
+    return out
+  }
+  function unmark(n) { const el = marks.get(n); if (el) { el.remove(); marks.delete(n); passStarts.delete(n); toAlign.delete(n) } }
   function unmarkAll() { for (const n of [...marks.keys()]) unmark(n) }
   /**
    * Page n's indicator: over each paragraph the parts read so far locate on it (its rectangles there, the union of them),
@@ -1076,14 +1120,14 @@ export function createLayerSide(view, o) {
       const t0 = globalThis.document?.timeline?.currentTime
       if (typeof t0 === 'number') passStarts.set(n, t0)
     }
-    if (el.parentNode !== place) place.append(el)
+    // (an indicator put in, or in again, restarts its marks' passes: set to the page's again, alignSoon)
+    let added = el.parentNode !== place
+    if (added) place.append(el)
     // (the card's padding and corner are CSS pixels at the reader's 100 %, the sheet's --axt-tr-pad-x, -pad-y and -radius, scaled
     // with the page: a CSS pixel at 100 % is 3/4 of a point, PDF.js's own, so a page w points wide is 4w/3 of them, and one of
     // them is 100/(4w/3) cqw of the page's overlay, --axt-tr-u)
     el.style.setProperty('--axt-tr-u', `${(100 / ((4 * w) / 3)).toFixed(5)}cqw`)
-    const css = typeof getComputedStyle === 'function' ? getComputedStyle(el) : null
-    const px = v => { const x = Number.parseFloat(css?.getPropertyValue(v) ?? ''); return Number.isFinite(x) && x >= 0 ? x : null }
-    const padX = (px('--axt-tr-pad-x') ?? PAD_X) * 0.75, padY = (px('--axt-tr-pad-y') ?? PAD_Y) * 0.75
+    const { x: padX, y: padY } = padsOf()
     const boxes = units.map(({ id, on }) => ({ id, ax: Math.min(...on.map(r => r[1])), ay: Math.min(...on.map(r => r[2])), bx: Math.max(...on.map(r => r[3])), by: Math.max(...on.map(r => r[4])) }))
     // (each paragraph's card kept from one call to the next where it stays, its style changed in place: a card put in again would
     // begin its delay and its fade again, and rows come in batches)
@@ -1109,11 +1153,13 @@ export function createLayerSide(view, o) {
         m.className = 'axt-translating-mark'
         m.dataset.axtU = key
         el.append(m)
+        added = true
       }
       if (m.getAttribute('style') !== style) m.setAttribute('style', style)
     })
     for (const [key, c] of had) if (!want.has(key)) c.remove()
-    alignPasses(n, el)
+    // (a mark put in: its pass set to the page's in the next frame, before the mark is painted)
+    if (added) alignSoon(n)
   }
 
   // ---------------------------------------------------------------- the pages ahead (the prefetch, on the layer; §11.8)
@@ -1342,10 +1388,71 @@ export function createLayerSide(view, o) {
       void pump()
     }),
     V.onWant((_s, p) => want(p)),
+    // (the highlight off: its data told nothing more until a pointer wants a page with it on again, catchUp)
+    V.onHighlight(on => { if (!on) pauseShapes() }),
   ]
 
   // ---------------------------------------------------------------- the highlight's data (§2.7)
+  // Made for the pointer alone (§17.1: the pointer lights, nothing else does), so made on its first want of a page, which comes only
+  // while the highlight is on (lighting.mjs find), and told nothing while it is off: with the switch off from the start, nothing of
+  // it is made. Until then, and while it is off, what the shapes would have been told is kept (the parts read by the batches they
+  // came in, the right's laid pages' words and their states), and told them, in order, on the next want (catchUp), so that they are
+  // the shapes made as things came. The contents are made as the parts come, whatever the switch says
   let left = null, right = null, shapedParts = []
+  /** whether the shapes are told what comes as it comes: made, and the switch on since (pauseShapes) */
+  let shapesLive = false
+  /** what the shapes are still to be told: the parts past `toldParts` by the batches they came in (each batch's end in
+   *  shapedParts), the right's laid pages' words (the first a page since its last reset, as its lay keeps them), each page shown
+   *  or hidden and muted or not as it was last told, and whether the right was reset meanwhile (its words and hidden pages with it) */
+  let toldParts = 0, batches = [], outReset = false
+  const outWords = new Map(), outHidden = new Map(), outMuted = new Map()
+  /** the right's shapes told a page laid, hidden, shown, muted, reset: at once where they are told as things come, else kept for
+   *  catchUp. Whether the shapes changed, as the right's own (false while kept: nothing is drawn of them) */
+  const rLay = (n, w) => { if (shapesLive) return right.lay(n, w); if (!outWords.has(n) && w?.tokens) outWords.set(n, w); return false }
+  const rHide = n => { if (shapesLive) return right.hide(n); outHidden.set(n, true); return false }
+  const rShow = n => { if (shapesLive) return right.show(n); outHidden.set(n, false); return false }
+  const rMute = (n, on) => { if (shapesLive) return right.mute(n, on); outMuted.set(n, on); return false }
+  function rReset() {
+    if (shapesLive) { right.reset(); return }
+    if (right) outReset = true
+    outWords.clear()
+    outHidden.clear()
+  }
+  /** the pages the right's shapes mute, as told so far (the shapes' own, with what they are still to be told), rising */
+  function mutedNow() {
+    const out = new Set(right?.muted() ?? [])
+    if (!shapesLive) for (const [n, on] of outMuted) { if (on) out.add(n); else out.delete(n) }
+    return [...out].sort((a, b) => a - b)
+  }
+  /** the shapes told what they have not been told, in the order it came (made first where none are), then the floats of the pages
+   *  PDF.js has drawn on the left meanwhile and every unit's starts: the shapes made as things came. Only while the highlight is on */
+  function catchUp() {
+    if (shapesLive || disposed || !index || !V.highlight()) return
+    if (!left) {
+      left = createShapes({ kindOf: id => index.kinds[id] ?? undefined, warn })
+      right = layerShapes(left)
+      toldParts = 0
+    } else if (outReset) right.reset()
+    outReset = false
+    for (const to of batches) { left.addParts(shapedParts.slice(toldParts, to)); toldParts = to }
+    batches = []
+    for (const [n, w] of outWords) right.lay(n, w)
+    for (const [n, on] of outHidden) { if (on) right.hide(n); else right.show(n) }
+    for (const [n, on] of outMuted) right.mute(n, on)
+    outWords.clear(); outHidden.clear(); outMuted.clear()
+    shapesLive = true
+    windowed()
+    for (const n of kept) if (V.left.drawn?.(n)) floatsFor(n, null)
+    startsFor([...rows.keys()])
+  }
+  /** the highlight off: the shapes told nothing more (what comes kept for catchUp), and the panes given none, so that nothing they
+   *  no longer describe is lit or hit once it is on again before the next want has told them */
+  function pauseShapes() {
+    if (!shapesLive) return
+    shapesLive = false
+    V.setShapes('left', null)
+    V.setShapes('right', null)
+  }
   let leftAc = new AbortController()
   const leftAsked = new Set(), wantsBefore = new Set(), floatsAsked = new Set()
   /** the pages wanted, and those whose running units' other pages' left parts are all in (spreadFrom) */
@@ -1357,19 +1464,22 @@ export function createLayerSide(view, o) {
   const wanted = []
   let kept = new Set(), lastWant = 0
   function shapesChanged() {
-    if (!left) return
+    if (!shapesLive) return
     V.setShapes('left', left.shapes, leftStarts)
     V.setShapes('right', right.shapes, rightStarts)
   }
-  /** the parts read, told to the shapes and the contents (a fork: both made again from the new chain) */
+  /** the parts read, told to the contents and the shapes (a fork: both made again from the new chain) */
   function shapeParts(parts) {
-    if (!left) return
+    if (!contents) return
     if (!isPrefix(shapedParts, parts)) {
-      right.dispose()
-      left = createShapes({ kindOf: id => index.kinds[id] ?? undefined, warn })
-      right = layerShapes(left)
+      const live = shapesLive
+      right?.dispose()
+      left = right = null
+      shapesLive = false
+      toldParts = 0; batches = []; outReset = false
+      outWords.clear(); outHidden.clear(); outMuted.clear()
       // (the pages kept drawn by a door before keep their shapes muted: the new shapes describe none of them either)
-      for (const [n, P] of pages) if (P.content?.wrap && P.content.gen !== gen) right.mute(n, true)
+      for (const [n, P] of pages) if (P.content?.wrap && P.content.gen !== gen) outMuted.set(n, true)
       contents = createContents(index)
       contents.take([...rows.values()])
       // the original's outline gives the new contents the pages of the headings no part locates
@@ -1380,19 +1490,36 @@ export function createLayerSide(view, o) {
       // (the chain's left parts may be others now: a page's failure is no longer a reason to wait)
       leftAsked.clear(); floatsAsked.clear(); leftFailed.clear(); spread.clear()
       outlineSoon()
+      // (shapes that were told as things came are made again now, of the new chain)
+      if (live) { batches.push(parts.length); shapedParts = parts; if (contents.addParts(parts)) outlineSoon(); catchUp(); warmSoon(); return }
     }
     const more = parts.slice(shapedParts.length)
     if (!more.length) return
-    left.addParts(more)
     shapedParts = parts
     if (contents.addParts(more)) outlineSoon()
-    shapesChanged()
+    if (shapesLive) { left.addParts(more); toldParts = parts.length; shapesChanged() } else batches.push(parts.length)
     warmSoon()
   }
+  /** the pages wanted while no shapes are told (none made yet, or the switch off since), wanted again once they are, in a task of
+   *  their own: the want comes in the pointer's frame (lighting.mjs find), which the making would lengthen */
+  const wantsWaiting = new Set()
+  let wantTask = 0
+  function wantSoon(p) {
+    wantsWaiting.add(p)
+    if (wantTask || disposed) return
+    wantTask = clock.later(() => {
+      wantTask = 0
+      const ps = [...wantsWaiting]
+      wantsWaiting.clear()
+      catchUp()
+      if (shapesLive) for (const q of ps) want(q)
+    }, 0)
+  }
   /** a want of page p (the pointer over it, either pane): its left part fetched once, on the first, and once it is in the
-   *  other pages' of its running units (spreadFrom) */
+   *  other pages' of its running units (spreadFrom); the shapes told what came first, where they are not told as things come */
   function want(p) {
-    if (disposed || !left || !Number.isInteger(p)) return
+    if (disposed || !index || !Number.isInteger(p)) return
+    if (!shapesLive) { wantSoon(p); return }
     if (p !== lastWant) {
       lastWant = p
       const i = wanted.indexOf(p)
@@ -1437,6 +1564,8 @@ export function createLayerSide(view, o) {
       // in a task of its own: the page's part of the layout, its sentences and the panes' shapes
       clock.later(() => {
         if (disposed || left !== L0) return
+        // (the highlight off meanwhile: nothing made of it; asked again on the next want, which the door answers from what it read)
+        if (!shapesLive) { leftAsked.delete(p); return }
         counts.leftParts++
         if (left.addPage(lp)) {
           startsFor(lp.spans.map(s => s[0]))
@@ -1462,7 +1591,7 @@ export function createLayerSide(view, o) {
   }
   /** a page's floats from what PDF.js drew the left's page by, once a layout, where a caption is on it */
   function floatsFor(n, error) {
-    if (!left || floatsAsked.has(n) || !wantsFloats(left.layout, n)) return
+    if (!shapesLive || floatsAsked.has(n) || !wantsFloats(left.layout, n)) return
     const pg = V.left.pdfPage(n), OPS = V.lib?.OPS
     if (!pg || !OPS) return
     floatsAsked.add(n)
@@ -1471,6 +1600,8 @@ export function createLayerSide(view, o) {
     Promise.resolve(list ?? pg.getOperatorList?.({ annotationMode: V.lib.AnnotationMode?.ENABLE_FORMS }))
       .then(ops => {
         if (disposed || left !== L0 || !ops) return
+        // (the highlight off meanwhile: made again of the page's drawing on the next want, catchUp)
+        if (!shapesLive) { floatsAsked.delete(n); return }
         left.floats(n, figureRegions(ops, OPS), pathsOf(ops, OPS))
         shapesChanged()
       })
@@ -1478,7 +1609,7 @@ export function createLayerSide(view, o) {
   }
   /** the units' starts on both panes, made again for those ids: where both have them, a unit lights by sentence */
   function startsFor(ids) {
-    if (!left) return
+    if (!shapesLive) return
     for (const id of new Set(ids)) {
       const row = rows.get(id), u = row?.[4] ? unitOf(index, row) : null
       const ls = u?.pieces ? left.starts(id, u.src, row[4].src) : null
@@ -1493,11 +1624,9 @@ export function createLayerSide(view, o) {
   let contents = null, outlineFrame = 0, headingFrame = 0, headingTold, layerFrame = 0
   function indexed(i) {
     index = i
-    left = createShapes({ kindOf: id => index.kinds[id] ?? undefined, warn })
-    right = layerShapes(left)
+    // (the highlight's data on the pointer's first want alone: want, catchUp)
     contents = createContents(index)
     contents.take([...rows.values()])
-    startsFor([...rows.keys()])
     V.setUnits({ unitAt: (p, x, y) => door?.unitAt(p, x, y) ?? null, firstRect: id => contents?.firstRect(id) ?? null, pageOf: id => contents?.pageOf(id) ?? null })
     outlineSoon()
     const doc = V.left.doc()
@@ -1548,7 +1677,7 @@ export function createLayerSide(view, o) {
       if (state !== 'refused' && beforeParts() && keepEarly(given)) warmEarlySoon()
       if (door) { try { door.take(given) } catch (e) { warn('rows', e) } }
       if (contents?.take(given)) outlineSoon()
-      if (left) startsFor(given.filter(r => r?.[4]).map(r => r[0]))
+      startsFor(given.filter(r => r?.[4]).map(r => r[0]))
       warmSoon()
     },
     end() {
@@ -1614,15 +1743,17 @@ export function createLayerSide(view, o) {
       // (this attempt's rows will not come: no page says it is being translated until another attempt begins, again)
       marksOff = true
       unmarkAll()
+      V.places.settle?.()
       dropDrawings(c => c.target !== target || c.gen !== gen)
-      let hid = false
+      const hid = []
       for (const [n, P] of pages) {
         if (!P.content || (P.content.target === target && P.content.gen === gen)) continue
         // (a page holding the focus is kept until the focus leaves it, as a far page is: unlaid, it would take the focus with it)
         if (holdsFocus(n)) { keptForFocus.add(n); continue }
-        if (dropPage(n)) hid = true
+        if (dropPage(n)) hid.push(n)
       }
-      if (hid) startsFor([...rows.keys()])
+      // (the starts of the units on the pages let go alone)
+      if (hid.length) startsFor(hid.flatMap(n => right.unitsOn(n)))
     },
     /** rows the host read before any part, for the first page's early wave of faces alone (warmEarlySoon): not taken, nothing
      *  laid of them; nothing once a part is read. Rows of another target are dropped with it (retarget, again) */
@@ -1664,15 +1795,17 @@ export function createLayerSide(view, o) {
         composed: counts.composed, docs: entries.size, opens: counts.opens, forks: counts.forks, asked: counts.asked, commits: counts.commits, copies: counts.copies, retirements: counts.retired,
         leftParts: counts.leftParts, leftAsked: leftAsked.size, kept: kept.size, commitsRing: ring.join(' '), texts: counts.texts, textsRing: textRing.join(' '),
         drawings: drawings.size, drawnPixels, restored: counts.restored, dropped: counts.dropped, ahead: counts.ahead, aheadKept: counts.aheadKept,
-        shapesLaid: right ? Array.from({ length: V.places.count() }, (_, i) => right.laid(i + 1)).filter(Boolean).length : 0,
-        muted: right ? right.muted().join(' ') : '',
+        shapesLaid: shapesLive ? Array.from({ length: V.places.count() }, (_, i) => right.laid(i + 1)).filter(Boolean).length : 0,
+        shapes: shapesLive ? 'live' : right ? 'paused' : 'none',
+        muted: mutedNow().join(' '),
       }
     },
     dispose() {
       if (disposed) return
       disposed = true
-      // (the side let go: no first page of it for the places ahead to wait for)
+      // (the side let go: no first page of it for the places ahead to wait for; the places told no page's word of it)
       V.places.letAheadGo?.()
+      V.places.settle?.(null)
       detach()
       feed.dispose()
       ac.abort()
@@ -1685,7 +1818,8 @@ export function createLayerSide(view, o) {
       door = null
       try { was?.dispose() } catch { /* the door's own */ }
       clock.clear(recopyTimer)
-      clock.cancel(outlineFrame); clock.cancel(headingFrame); clock.cancel(layerFrame)
+      clock.clear(wantTask)
+      clock.cancel(outlineFrame); clock.cancel(headingFrame); clock.cancel(layerFrame); clock.cancel(alignFrame)
       for (const id of idles) cancelIdleCallback(id)
       idles.clear()
       stopAhead()
@@ -1701,5 +1835,9 @@ export function createLayerSide(view, o) {
       for (const entry of [...entries]) destroy(entry)
     },
   }
+  // (the places' word on each page: one that stays the original's is drawn by its own page view, with its text layer and links;
+  // any other waits for its layer, showing the left's drawing of it, places.mjs. Given once everything it reads is made: the places
+  // near ask it at once. Told again as pages settle: shownOriginal, refuse, dropOthers)
+  V.places.settle?.(n => settledOriginal(n))
   return side
 }

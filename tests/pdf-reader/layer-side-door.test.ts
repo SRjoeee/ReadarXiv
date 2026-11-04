@@ -8,8 +8,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { LayerDocument } from '@/pdf-reader/engine/layer-proto/reader.mjs'
 import type { Row } from '@/pdf-reader/engine/layer-proto/rows.mjs'
+import { internalsOf } from '@/pdf-reader/engine/view/reader-view.mjs'
 import { type Made, N } from './helpers/format-paper'
 import { cutSpec, docsOf, type PaperSpec, rowsOfIndex } from './helpers/parts-paper'
+import { FakePDFViewer } from './helpers/reader-fakes'
 import { ALL, content, installSideFakes, jobRef, layerOf, M, macrotask, nearOn, type Options, places, type Setup, settle, setup } from './helpers/side-setup'
 
 // a canvas context that draws nothing and reads a white page, made before layer2.mjs loads (it measures with a canvas of its own
@@ -443,5 +445,101 @@ describe('the real door: a page the layer draws nothing of its own on is arXiv\'
     s.side.take(rowsOfIndex(m.index))
     await still(s)
     expect(content(s, 1)).toBe('layer')
+  })
+})
+
+describe('the real door: H3, the highlight\'s data made on the pointer\'s first want alone, and told what came meanwhile', () => {
+  type Given = { shapes: { runs(id: number): { page: number }[]; block(run: unknown, pad: number): unknown }; starts: ReadonlyMap<number, Int32Array> | null } | null
+  /** the shapes each pane was last given (the view's seam, setShapes) */
+  function watch(s: Setup) {
+    const h = internalsOf(s.view), given: Record<'left' | 'right', Given> = { left: null, right: null }, set = h.setShapes
+    h.setShapes = (side, shapes, starts = null) => { given[side] = shapes ? ({ shapes, starts } as unknown as Given) : null; set(side, shapes, starts) }
+    return given
+  }
+  /** every unit's runs on both panes (each run's page and block) and its starts, as the panes were last given them */
+  const shapesOf = (m: Made, given: Record<'left' | 'right', Given>) => Object.fromEntries((['left', 'right'] as const).map(side => [side, m.index.units.map((_, id) => {
+    const g = given[side]
+    return { runs: g ? g.shapes.runs(id).map(r => ({ page: r.page, block: g.shapes.block(r, 0) })) : null, starts: g?.starts?.get(id) ? [...(g.starts.get(id) as Int32Array)] : null }
+  })]))
+  /** the pointer over unit 0's first line on the right's page 1 */
+  async function hover(s: Setup, m: Made) {
+    const r = m.readParts.flatMap(p => p.left.filter(w => w[0] === 0).flatMap(w => w[2])).find(x => x[0] === 1)!
+    // (the view's own left viewer: the fakes' first is an earlier visit's)
+    const vp = (FakePDFViewer.made.at(-1) as FakePDFViewer).getPageView(0)!.viewport
+    const [vx, vy] = vp.convertToViewportPoint((r[1] + r[3]) / 2, (r[2] + r[4]) / 2) as [number, number]
+    const b = (places(s)[0] as HTMLElement).getBoundingClientRect()
+    const c = { clientX: b.left + vx, clientY: b.top + vy }
+    s.panes.right.dispatchEvent(new MouseEvent('mousemove', { clientX: c.clientX, clientY: c.clientY, bubbles: true }))
+    await s.clock.advance(20)
+    await still(s)
+  }
+  /** the paper told in batches, its pages laid, one let go far and brought back; the pointer's first want `at` the start, the end,
+   *  or at the start with the highlight then off until the end */
+  async function visit(at: 'start' | 'end' | 'paused') {
+    const m = await M()
+    const rows = rowsOfIndex(m.index)
+    const s = await real()
+    const given = watch(s)
+    await nearOn(s, [1, 2])
+    s.side.tell({ head: m.head.ref, units: m.chunks.map(c => c.ref) })
+    await still(s)
+    if (at !== 'end') await hover(s, m)
+    if (at === 'paused') s.highlight(false)
+    s.side.tell({ parts: [jobRef(m, 0)] })
+    s.side.take(rows.slice(0, 2))
+    await still(s)
+    s.side.tell({ parts: [jobRef(m, 1), jobRef(m, 2)], end: { through: N } })
+    s.side.take(rows.slice(2))
+    s.side.end()
+    await still(s)
+    await nearOn(s, [3])
+    await nearOn(s, [1], false)
+    await still(s)
+    await nearOn(s, [1])
+    await still(s)
+    expect([content(s, 1), content(s, 2)]).toEqual(['layer', 'layer'])
+    // (nothing of the highlight's made, nor any left part asked for it (the door reads those it lays by itself), before the pointer
+    // wants a page with the highlight on)
+    if (at === 'end') expect([s.side.probe().shapes, s.side.probe().leftAsked, s.side.probe().leftParts]).toEqual(['none', 0, 0])
+    if (at === 'paused') expect(s.side.probe().shapes).toBe('paused')
+    if (at === 'paused') s.highlight(true)
+    await hover(s, m)
+    expect(s.side.probe().shapes).toBe('live')
+    return { m, s, given }
+  }
+
+  it('the shapes made on the first want at the end equal those made at the start and told as things came; those told nothing while the highlight was off, told on its next want, too', async () => {
+    const early = await visit('start')
+    const want = shapesOf(early.m, early.given)
+    expect(want.right?.filter(u => u.runs?.length).length).toBeGreaterThan(0)
+    expect(want.left?.filter(u => u.runs?.length).length).toBeGreaterThan(0)
+    expect(early.s.side.probe().shapesLaid).toBeGreaterThan(0)
+    const laidEarly = early.s.side.probe().shapesLaid
+    early.s.view.dispose()
+    const late = await visit('end')
+    expect(shapesOf(late.m, late.given)).toEqual(want)
+    expect(late.s.side.probe().shapesLaid).toBe(laidEarly)
+    late.s.view.dispose()
+    const paused = await visit('paused')
+    expect(shapesOf(paused.m, paused.given)).toEqual(want)
+    expect(paused.s.side.probe().shapesLaid).toBe(laidEarly)
+  })
+
+  it('with the highlight off nothing of its data is made: a pointer over the pages wants nothing, and no left part is asked for it', async () => {
+    const m = await M()
+    const s = await real()
+    s.highlight(false)
+    await nearOn(s, [1, 2])
+    s.side.tell(await ALL())
+    s.side.take(rowsOfIndex(m.index))
+    s.side.end()
+    await still(s)
+    await hover(s, m)
+    expect([s.side.probe().shapes, s.side.probe().leftAsked, s.side.probe().leftParts, s.view.probe().lit]).toEqual(['none', 0, 0, null])
+    // (on, the pointer's next move makes them, and asks the page's left part for them)
+    s.highlight(true)
+    await hover(s, m)
+    expect(s.side.probe().shapes).toBe('live')
+    expect(s.side.probe().leftParts).toBeGreaterThan(0)
   })
 })

@@ -802,11 +802,27 @@ PDF.js is the host's kit, so every PDF.js type the view names is structural.
 - **The right pane opens no document.** It holds the places (`places.mjs`): a page box for each of the original's pages,
   sized by the left page box's own style under the left viewer's `--scale-factor`, so that both panes hold the same pages at
   the same places at every zoom with nothing measured. A place near the view (one pane's height above and below) shows the
-  best version of its page there is: the layer's content once the layer side has laid it, else the original's page drawn
-  from the left's document by PDF.js's own page view (canvas, text layer, links through the view's jump), else, with no
-  original, the skeleton. A far place is an empty box: its page view goes, canvas and all. The places borrow the left's
+  best version of its page there is: the layer's content once the layer side has laid it, else the original's page, else,
+  with no original, the skeleton. A far place is an empty box: its page goes, canvas and all. The places borrow the left's
   document and never clean its pages up.
-  A place near the view but not in it waits to draw the original's page until the layer lets the pages ahead go, or until
+  The original's page, while it waits for its layer, is **the left's own drawing of it**: where the two panes scroll together
+  (the sync on, both shown), the left draws every page the right shows at the same viewport, so the place takes a copy of the
+  left's canvas as the left's page view finishes it (one `drawImage` at its size: the same pixels, shown as PDF.js shows its own
+  canvas in a page box of the same size; the host sheet dims it as it dims the left's), and shows PDF.js's loading mark meanwhile,
+  as the left's page shows it (its classes mirrored). No second render of the page is made, nor a second text layer or annotation
+  layer. A zoom keeps the copy by CSS, as PDF.js keeps its own canvas through a zoom's steps, until the left has drawn the page at
+  the new scale, then takes it again; a far place lets it go; one bitmap a place, as its page view held. A page that stays the
+  original's (the layer side's word, `places.settle`: it failed, stalled or is arXiv's by the rule, it was laid with nothing of its
+  own, the layer was refused, the attempt's rows will not come) and a pane whose pages the left does not show (the sync off, the
+  right alone) are drawn by PDF.js's own page view in the place (canvas, text layer, links through the view's jump): there the
+  right's page is selected, found and followed as the left's is. Its copy, where it showed one, stays over the page view until
+  that is drawn. While a page waits, its text is the left's alone: selection, find, links and a screen reader meet one copy of it.
+  On the audit's replays (the rules audit of 2026-11-04, seven prepared papers), the places showing the skeleton instead of a page
+  view of their own put page 1 in place 59 ms sooner at 1x and 138 ms at 4x on a returning reader (the second render 48 of those
+  59 ms at 1x); the copy is that, with the original's page shown. A paper's form fields, which the right's page view drew into its
+  canvas (its annotation mode `ENABLE`) and the left's draws in its annotation layer (`ENABLE_FORMS`), are not on the right while
+  it waits.
+  A place near the view but not in it that draws its own page view waits to draw it until the layer lets the pages ahead go, or until
   `AHEAD_HOLD_MS` (15 s) after the places are made. The layer lets them go once it puts its first page in place, shows a
   near page as the original's (by the rule, a failure, a stall), is refused or is let go (`letAheadGo`). Its page view is made
   all the same, and a place that comes into view is drawn at once: only when a page is drawn changes, never what. On
@@ -821,7 +837,7 @@ PDF.js is the host's kit, so every PDF.js type the view names is structural.
   and the timer's end, the pair levelled once a zoom settles.
 - **The right zoomed through the left.** A zoom, a fit or a pinch over either pane scales the left's viewer, which the
   places follow; the right shown alone is fitted to its own pane. A step is drawn 400 ms after the last one (one redraw a
-  burst), the places' page views with them; a pinch is shown by transform and drawn once it is committed (§6.8). A zoom
+  burst), the places' page views with them (a place showing the left's drawing takes it again once the left has drawn it); a pinch is shown by transform and drawn once it is committed (§6.8). A zoom
   and a display's change keep the reading place (the page and
   the point at the reading line); a pinch keeps the point under the gesture on both panes (§6.8).
 - **The highlight** (`lighting.mjs`) reads a pane through its shapes alone (`Shapes`, the seam the shapes' PR builds); a
@@ -925,7 +941,11 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   agrees within 0.05 CSS px (macOS's differ by a 64th of a pixel at two sizes; a whole-pixel advance by up to half a pixel)
   over at least 16 fractional ones, once a document, written on `<html>` as `data-axt-layer-text="auto"`, which `engine.css`
   reads; anything else keeps geometricPrecision, and a page that tells too little (no such words, or a monospaced face whose
-  advances are whole) leaves it to the next. Measured (`lab/pdf/spikes/layer-text-check.mjs`, every character of a page
+  advances are whole) leaves it to the next. It is decided before the page is put in place (its words' faces read with its drawing
+  held where nothing is laid out, `display: none`): decided after, the attribute restyled the page the commit's own reads had just
+  laid out, and the task that paints page 1 laid it out twice: with the marks' paddings read once (below), page 1's commit task
+  and the frame that shows it are 8 to 10 ms shorter at 1x CPU and 36 to 43 ms at 4x (traced replays of seven prepared papers,
+  2026-11-04; the task's layout 25-28 to 17-20 ms at 1x, 117 to 75-86 at 4x). Measured (`lab/pdf/spikes/layer-text-check.mjs`, every character of a page
   against geometricPrecision): Chromium on Linux (Docker, device pixel ratio 1 and 2) keeps geometricPrecision, its places
   unchanged; Chromium on macOS takes `auto`, every character of four papers' twelve pages (16,528) within 0.17 CSS px of where
   geometricPrecision put it (mean 0.007; the ends of long words), at zooms of 0.75 to 3 and device pixel ratios of 1 and 2;
@@ -984,7 +1004,9 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   where the band lies on any page up to about twice as tall as it is wide, and as high as the mark, set in the page's frame by
   the mark's place, so the light is one surface whatever the paragraphs. A transform moves each slice across the page, so the
   compositor runs the pass: nothing is restyled, laid out or painted on the page's thread while it runs. Each mark's pass
-  starts when its page's indicator did (`markPage` sets its `startTime`, Web Animations, as marks come), so a mark a later
+  starts when its page's indicator did (its `startTime` set, Web Animations, in the frame after its marks came, before it paints:
+  the marks stand in a size container, whose style waits on its layout, so `markPage` reads none of it, and reads the card's
+  padding once a document on `<html>`), so a mark a later
   batch of rows brings shows its share of the same light, not a pass of its own. The light passes through the glyphs and
   leaves the paper untouched: a band at 100° of the paper's own colour, 78 % at its middle (80 % on a dimmed page), fading to
   nothing over a tenth of the three-page picture on either side, over no ground, so that the letters it crosses fade toward
@@ -1207,7 +1229,9 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
     (48 to 511); page 2, which had been laid in the frames page 1's copy left free, a median 15 ms later at 1x and 224 ms at 4x.
   - **Failures.** A group the document does not hold: the unit is the original's. A render that throws: the page shows the
     original (`shownOriginal`) and is asked again on the next scroll or zoom.
-- **The highlight's data** (§17.8): the left's shapes from the parts' rectangles as they come and, on the first want of a
+- **The highlight's data** (§17.8), made for the pointer alone: on its first want of a page (which comes only with the highlight
+  on) and told nothing while the highlight is off; what came meanwhile is told it on the next want, in the order it came. Then:
+  the left's shapes from the parts' rectangles as they come and, on the first want of a
   page from either pane, its left part (`leftPageOf`, once a page; nothing fetched before), added in a task of its own, then
   the left parts of the other pages its running units are on (a page so fetched brings no more); the
   right's from the laid page's words where its place shows the layer, the left's mirrored elsewhere (`layerShapes`); a
@@ -2002,6 +2026,19 @@ within noise.
 
 ### 17.8 On the layer path: the shapes made page by page
 
+- **Made for the pointer, and only while the highlight is on** (`layer-side.mjs` `catchUp`, `pauseShapes`). The highlight lights on
+  the pointer alone (§17.1), so its shapes are made on the pointer's first want of a page, which comes only while the switch
+  (S-P-80) is on, in a task of their own after the pointer's frame, and are told nothing while the switch is off. Until then, and
+  while it is off, the side keeps what they would have been told (the parts read, by the batches they came in; each laid page's
+  words, the first its door gave; the pages shown, hidden and muted as last told; whether the right was reset), and tells them, in
+  that order, on the next want: the shapes made late are the shapes made as things came (`layer-side-door.test.ts` H3: every
+  unit's runs and starts on both panes, made at the start and told as things came, made at the end, and told nothing while the
+  switch was off between, are equal). Before, both panes' shapes were made at the index, for each part and at each commit, the
+  switch on or off: 7 to 10 ms of the main thread before page 1 at 1x, 31 to 42 at 4x (the rules audit of 2026-11-04); page 1
+  in place 12 ms sooner at 1x and 22 ms at 4x on a returning reader with it (the audit's replays, seven papers, paired medians).
+  The first light waits for the making: on the same replays the first hover's light came 0 to 18 ms later at 1x and 17 to 49 ms
+  at 4x, the making a task of up to 56 ms at 4x on a new reader, once a visit. A page shown or hidden makes again the starts of
+  its own units alone (`layerShapes` `unitsOn`), not every unit's.
 - **One layout, made page by page** (`highlight.mjs` `pageLayout`, `layoutParts`, `layoutPage`; `shapes.mjs`
   `createShapes`). On the layer path the left's tokens come a page at a time (the door's `leftPageOf`, on the first want
   of the page) and its units' rectangles a part at a time. The document part — each page's columns, the columns' text
