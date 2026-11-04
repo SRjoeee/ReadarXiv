@@ -22,7 +22,7 @@ beforeAll(async () => {
 const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 'times', known: true }
 const DESIGNS = { serif: 'times', sans: 'helvetica', mono: 'courier' }
 /** a target's built-in parameters, one state of the fit (no knob), no hyphenation, no autospace, no TeX rule between lines */
-const params = (to: string) => ({ ...resolveRules(BUILTIN_RULES, to).params, borrow: 0, hyphen: 0, lineskip: null, order: [], growTo: 1, autospace: 0 })
+const params = (to: string) => ({ ...resolveRules(BUILTIN_RULES, to).params, borrow: 0, hyphen: 0, lineskip: null, order: [], autospace: 0 })
 /** one block of n lines 12 pt apart from 500, `w` pt wide */
 const block = (n: number, w: number) => { const B = Array.from({ length: n }, (_, k) => 500 - 12 * k); return { page: 1, rects: B.map(b => [1, 0, b - 2, w, b + 8]), x0: 0, x1: w, B, exact: B.map(() => true), sizes: B.map(() => 10), pitch0: 12, free: 0, indent: 0, after: 0, centred: false } }
 type Piece = { t: string; s?: string; src?: string }

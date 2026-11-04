@@ -7,11 +7,11 @@ import type { CyrillicPatterns, LatinPatterns, PatternLanguage } from '../rules/
 import type { Block, Rect } from './layer1.mjs'
 
 /** the fit's parameters and the breaking's: the layout rules' for a target (rules/layout.mjs resolveRules), the field names
- *  v0's own. `maxScale`, `capScale`, `growTo`, `flowPast`, `refuse`, `lineskip` and `_compress` are the run's own, set unit by unit */
+ *  v0's own. `capScale`, `flowPast`, `refuse`, `lineskip`, `trackStart` and `_compress` are the run's own, set unit by unit */
 export interface Params {
   cjk: boolean; leadBase: number; leadFloor: number; trackMin: number; compressMax: 0 | 1 | 2; borrow: 0 | 1; borrowGap: number
   floor: number; step: number; order: ('track' | 'borrow' | 'lead' | 'shrink')[]; cjkJust: number; spaceMax: number; autospace: number; spaceMin: number
-  hyphen: 0 | 1; even: 0 | 1 | 2; maxScale?: number; _compress?: number
+  hyphen: 0 | 1; _compress?: number
   /** the most the unit may be set at: its lines' room between the rules over and under them (cellBands) */
   capScale?: number
   /** step 3: the further steps for a unit the states leave clipped (run.mjs fitFurther), and the size the last goes down to */
@@ -21,24 +21,16 @@ export interface Params {
   lineskip?: readonly [number, number] | null
   /** a section heading (run.mjs): set in fewer lines than the original's, its lines stand on the original's last ones (laidOut) */
   lastLines?: boolean
-  /** step 3: the CJK runs' tracking the fit's first state takes, in em; null: a face's size correction given back (run.mjs) */
-  trackStart: number | null
+  /** step 3: the CJK runs' tracking the fit's first state takes, in em: a face's size correction given back (run.mjs cjkAdvance);
+   *  none, 0 */
+  trackStart?: number
   /** a run of a unit split by its displays (layoutRuns): the fit's first state takes its unit's tracking, the tightest its
    *  runs need (and its CJK punctuation's compression) */
   runTrack?: { track: number; trackLatin: number; compress: number }
-  /** the leading relative to the original's pitch (leadOf; false: leadBase on any pitch); fillBySize's cap (run.mjs
-   *  fillSize, off at 0) and the size a unit may grow to (growTo) */
-  leadRel: boolean; fillSize: number; growTo?: number
   /** run.mjs's adaptiveFill (the page fill, D6's since 2026-10-08; null: B): every unit spread over its frame, the page's
    *  body units held to one leading and one size; and the loosest pitch it spreads to, in em of the size drawn (null: the
    *  original's own) */
   adaptiveFill: { band: number; track: number; size: number } | null; fillLead: number | null; fillLeadRel: number | null
-  /** what the fill leaves over: at each unit's foot, or packed to the end of its run of paragraphs (run.mjs packPage) */
-  leftover: 'foot' | 'pack'
-  /** at the original's leading, a block's lines one pitch apart, its gaps TeX's \lineskip rule opened closed (slotsAt on the blocks' `E`) */
-  evenPitch: boolean
-  /** a unit TeX set flush left or flush right keeps that alignment (run.mjs sets its blocks' `flush`, placeItems reads it) */
-  keepAlign: boolean
   /** breaking: lines break only at spaces, which quotes are CJK's, centred punctuation, the characters no line starts or
    *  ends with, and the hyphenation of a Latin word and of a Cyrillic one */
   keepAll: boolean; cjkQuotes: boolean; centredPunct: boolean; noStart: string; noEnd: string; latinPatterns: LatinPatterns; cyrillicPatterns: CyrillicPatterns
@@ -211,7 +203,7 @@ export interface Layout { lines: Line[]; f: number; s: number; scale: number; st
 /** the original page's ink at a fraction of its canvas's resolution */
 export interface InkMap { w: number; h: number; ink: Uint8Array; factor: number }
 /** a unit's block with its lines' measured baselines */
-export interface Block2 extends Block { measures?: Map<string, [number, number]> | null; B: number[]; exact: boolean[]; E?: number[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; through?: boolean; freeOf?: () => number; G?: number[]; start?: number; startY?: number; shortSkips?: readonly { x0: number; x1: number; top: number; bottom: number }[] }   // G: the grid, B with the gaps of its forced breaks closed (blocks2); start: the first line's start where a shared line sets it, startY its baseline where the line before it there stands off TeX's (run.mjs layout2); shortSkips: the unit's displays on the block's page that TeX set with its short skip (tex.mjs shortSkipsOf, slotsAt); E: the grid with each gap TeX's \lineskip rule opened closed to the pitch (blocks2, evenGridOf), where it has one, slotsAt's under P.evenPitch
+export interface Block2 extends Block { measures?: Map<string, [number, number]> | null; B: number[]; exact: boolean[]; E?: number[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; through?: boolean; freeOf?: () => number; G?: number[]; start?: number; startY?: number; shortSkips?: readonly { x0: number; x1: number; top: number; bottom: number }[] }   // G: the grid, B with the gaps of its forced breaks closed (blocks2); start: the first line's start where a shared line sets it, startY its baseline where the line before it there stands off TeX's (run.mjs layout2); shortSkips: the unit's displays on the block's page that TeX set with its short skip (tex.mjs shortSkipsOf, slotsAt); E: the grid with each gap TeX's \lineskip rule opened closed to the pitch (blocks2, evenGridOf), where it has one, slotsAt's at the original's leading
 type ToDev = (x: number, y: number) => [number, number]
 /** of a line's size: a display whose top stands under its baseline nearer than this is in reach of its descent */
 export declare const SHORT_SKIP: number

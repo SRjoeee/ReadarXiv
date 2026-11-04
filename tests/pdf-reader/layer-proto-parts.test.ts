@@ -600,14 +600,14 @@ describe('the kept record and what the run holds (the 1b design §1, §3)', () =
 })
 
 describe('the run that lets go, with no page pass, and a record that throws', () => {
-  it('lets go as it paints, where the rules set no page pass (no fill, no even pass, the leftover at the foot)', async () => {
+  it('lets go as it paints, where the rules set no page pass (no fill)', async () => {
     // (the built-in set with no page fill for Chinese: every unit painted as it is laid, a table's cells with their group)
-    const rules = structuredClone(BUILTIN_RULES) as unknown as { scripts: Record<string, { adaptiveFill: unknown; even: number; leftover: string }> }
+    const rules = structuredClone(BUILTIN_RULES) as unknown as { scripts: Record<string, { adaptiveFill: unknown }> }
     rules.scripts.Hans!.adaptiveFill = null
     for (const spec of [TAKE, FLOAT]) for (const ends of everySplit(spec.pages)) {
       const P = await takePaper(spec, ends)
       const whole = await wholeRun(P, { rules })
-      expect([whole.P.adaptiveFill, whole.P.even, whole.P.leftover]).toEqual([null, 0, 'foot'])
+      expect(whole.P.adaptiveFill).toBe(null)
       const want = drawing(whole)
       expect(want.order.length).toBeGreaterThan(5)
       const { run } = await partsRun(P, { before: 0, ended: 'open', feed: 'starved', rules })

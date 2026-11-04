@@ -29,12 +29,13 @@ const bytesOf = (s: string) => new TextEncoder().encode(s)
 // biome-ignore lint/suspicious/noExplicitAny: a set under edit has no fixed shape
 type Edit = any
 /** the fields each schema since the first removed and added (schema 2, D6: `grid` gone, every script's lines on the
- *  original's pitch while the size shrinks; `fillLead`, the page fill's top; `leftover`, where what it leaves goes; schema
- *  5's `fillLeadRel`; schema 7's `evenPitch` and `keepAlign`, lane B's B1 and B2, the ruling of 2026-10-29; schema 9's
- *  `cyrillicPatterns`, a Cyrillic word's hyphenation); the labels
+ *  original's pitch while the size shrinks; `fillLead`, the page fill's top; schema 5's `fillLeadRel`; schema 9's
+ *  `cyrillicPatterns`, a Cyrillic word's hyphenation; schema 10's switches no set turned the other way gone, `leadRel`,
+ *  `trackStart`, `even` and `fillSize`, with schema 2's `leftover` and schema 7's `evenPitch` and `keepAlign`, which were
+ *  added and went); the labels
  *  schema 3 added (D1a: every babel name, at the built-in set's words); and the members of `cjkFaces` schema 6 took out (its
  *  `light` designs and its `kai`: Regular and Bold beside every English family, the ruling of 2026-10-29) */
-const REMOVED = ['grid'], ADDED = ['fillLead', 'leftover', 'fillLeadRel', 'evenPitch', 'keepAlign', 'cyrillicPatterns'], FACES_REMOVED = ['light', 'kai']
+const REMOVED = ['grid', 'leadRel', 'trackStart', 'even', 'fillSize'], ADDED = ['fillLead', 'fillLeadRel', 'cyrillicPatterns'], FACES_REMOVED = ['light', 'kai']
 /** the languages whose hyphenation minimums schema 8 added (#121-4: French, Spanish and Portuguese their own patterns) and schema 9
  *  (the languages of the owner's ruling of 2026-10-29) */
 const HYPHENATION_ADDED = ['fr', 'es', 'pt', 'it', 'nl', 'pl', 'tr', 'id', 'cs', 'sv', 'uk', 'bg'] as const
@@ -82,8 +83,8 @@ afterEach(() => { vi.restoreAllMocks() })
 
 describe('the built-in set', () => {
   it('parses, is canonical (writeRules gives the file\'s bytes) and has a version of at least 1', () => {
-    expect(RULES_SCHEMA).toBe(9)
-    expect(BUILTIN_RULES.schema).toBe(9)
+    expect(RULES_SCHEMA).toBe(10)
+    expect(BUILTIN_RULES.schema).toBe(10)
     expect(BUILTIN_RULES.version).toBeGreaterThanOrEqual(1)
     expect(BUILTIN_RULES.note.length).toBeGreaterThan(0)
     expect(writeRules(BUILTIN_RULES)).toBe(text(BUILTIN_FILE))
@@ -161,8 +162,7 @@ describe('resolving a target (resolveRules)', () => {
 
   it('adds, beside them, the fields the migration moved into Params, each the value of the condition it replaced', () => {
     // (the engine's own conditions, as written before: layer2.mjs tokensOf2 keepAll `to === 'ko' || !cjk`, centred `to === 'zh-TW'`,
-    // cjkClassRe(to) the Korean class for 'ko', latinLang `to === 'de' ? 'de' : 'en'`; run.mjs's leadRel and fill defaults; the
-    // 0.5 and 0.6 of cellBands; the even pass and the fill off, trackStart the face's own)
+    // cjkClassRe(to) the Korean class for 'ko', latinLang `to === 'de' ? 'de' : 'en'`; the 0.5 and 0.6 of cellBands)
     for (const t of FROZEN) {
       const { params, patterns } = resolveRules(V1, t)
       const cjk = ['zh', 'zh-TW', 'ja', 'ko'].includes(t)
@@ -172,7 +172,7 @@ describe('resolving a target (resolveRules)', () => {
       expect(params.cjkQuotes, t).toBe(t !== 'ko')
       expect(params.latinPatterns, t).toBe(t === 'de' ? 'de' : 'en')
       expect(patterns, t).toEqual(t === 'de' ? ['en', 'de'] : t === 'ru' ? ['en', 'ru'] : ['en'])
-      expect([params.cellClear, params.cellCapMin, params.even, params.fillSize, params.trackStart], t).toEqual([0.5, 0.6, 0, 0, null])
+      expect([params.cellClear, params.cellCapMin], t).toEqual([0.5, 0.6])
       expect(params.cyrillicPatterns, t).toBe('ru')
       expect(params.hyphenation, t).toEqual({ minWord: 5, en: { left: 2, right: 3 }, de: { left: 2, right: 2 }, fr: { left: 2, right: 3 }, es: { left: 2, right: 2 }, pt: { left: 2, right: 3 }, it: { left: 2, right: 2 }, nl: { left: 2, right: 3 }, pl: { left: 2, right: 3 }, tr: { left: 2, right: 3 }, id: { left: 2, right: 2 }, cs: { left: 2, right: 3 }, sv: { left: 2, right: 2 }, uk: { left: 2, right: 2 }, bg: { left: 2, right: 3 } })
     }
@@ -460,7 +460,9 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     ['schema 6 (a set before evenPitch and keepAlign)', s => { s.schema = 6 }, 'schema'],
     ['schema 7 (a set before French, Spanish and Portuguese patterns)', s => { s.schema = 7 }, 'schema'],
     ['schema 8 (a set before the languages of 2026-10-29 and cyrillicPatterns)', s => { s.schema = 8 }, 'schema'],
-    ['schema not 9', s => { s.schema = 10 }, 'schema'],
+    ['schema 9 (a set with the switches schema 10 took out)', s => { s.schema = 9 }, 'schema'],
+    ['a switch schema 10 took out', s => { s.scripts.Hans.leadRel = false }, 'scripts.Hans.leadRel'],
+    ['schema not 10', s => { s.schema = 11 }, 'schema'],
     ['schema a string', s => { s.schema = '9' }, 'schema'],
     ['labels without a heading\'s name (a schema-2 set\'s labels)', s => { s.languages.de.labels = { figure: 'Abbildung', table: 'Tabelle' } }, 'languages.de.labels.abstract'],
     ['version 0', s => { s.version = 0 }, 'version'],
@@ -476,11 +478,10 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     ['floor under its range', s => { s.scripts.Jpan.floor = 0.39 }, 'scripts.Jpan.floor'],
     ['borrowGap over its range', s => { s.scripts.Kore.borrowGap = 2.5 }, 'scripts.Kore.borrowGap'],
     ['trackMin above zero', s => { s.scripts.Latn.trackMin = 0.1 }, 'scripts.Latn.trackMin'],
-    ['trackStart out of range', s => { s.scripts.Latn.trackStart = 1 }, 'scripts.Latn.trackStart'],
     ['a number that is not finite (Infinity)', s => { s.scripts.Hans.spaceMax = Number.POSITIVE_INFINITY }, 'scripts.Hans.spaceMax'],
     ['a number that is not a number (NaN)', s => { s.scripts.Hans.spaceMax = Number.NaN }, 'scripts.Hans.spaceMax'],
     ['a number given as a string', s => { s.scripts.Hans.step = '0.025' }, 'scripts.Hans.step'],
-    ['a boolean given as a number', s => { s.scripts.Hans.leadRel = 0 }, 'scripts.Hans.leadRel'],
+    ['a boolean given as a number', s => { s.scripts.Hans.keepAll = 0 }, 'scripts.Hans.keepAll'],
     ['grid out of its values', s => { s.scripts.Hans.grid = 2 }, 'scripts.Hans.grid'],
     ['compressMax out of its values', s => { s.scripts.Hans.compressMax = 3 }, 'scripts.Hans.compressMax'],
     ['latinPatterns out of its values', s => { s.languages.de.latinPatterns = 'xx' }, 'languages.de.latinPatterns'],
@@ -599,7 +600,7 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     expect(refusal(v1(s => { s.scripts.Hans.leadBase = '1.3' })).why).toBe('number, not string')
     expect(refusal(v1(s => { s.scripts.Hans.leadBase = null })).why).toBe('number, not null')
     expect(refusal(v1(s => { s.scripts.Hans.leadBase = [1.3] })).why).toBe('number, not array')
-    expect(refusal(v1(s => { s.scripts.Hans.leadRel = 0 })).why).toBe('boolean, not number')
+    expect(refusal(v1(s => { s.scripts.Hans.keepAll = 0 })).why).toBe('boolean, not number')
     expect(refusal(v1(s => { s.scripts.Hans.spaceMax = Number.NaN })).why).toBe('number, not NaN')
     expect(refusal(v1(s => { s.scripts.Hans.noStart = 7 })).why).toBe('string, not number')
     expect(refusal(v1(s => { delete s.scripts.Hans.leadBase })).why).toBe('number missing')
@@ -682,7 +683,7 @@ describe('the fields the lab shows (RULES_FIELDS)', () => {
     const by = Object.fromEntries(RULES_FIELDS.map(f => [f.path, f]))
     expect(by.order!.values).toEqual(['track', 'borrow', 'lead', 'shrink'])
     expect(by.further!.values).toEqual(['widen', 'flow', 'shrink'])
-    for (const [path, ok] of [['leftover', ['foot', 'pack']], ['compressMax', [0, 1, 2]], ['even', [0, 1, 2]], ['hyphen', [0, 1]], ['borrow', [0, 1]], ['latinPatterns', ['en', 'de', 'fr', 'es', 'pt', 'it', 'nl', 'pl', 'tr', 'id', 'cs', 'sv']], ['cyrillicPatterns', ['ru', 'uk', 'bg']]] as const) {
+    for (const [path, ok] of [['compressMax', [0, 1, 2]], ['hyphen', [0, 1]], ['borrow', [0, 1]], ['latinPatterns', ['en', 'de', 'fr', 'es', 'pt', 'it', 'nl', 'pl', 'tr', 'id', 'cs', 'sv']], ['cyrillicPatterns', ['ru', 'uk', 'bg']]] as const) {
       expect(by[path]!.values, path).toEqual(ok)
       for (const v of ok) expect(() => parseRules(v1(s => { s.scripts.Hans[path] = v })), `${path} = ${v}`).not.toThrow()
     }

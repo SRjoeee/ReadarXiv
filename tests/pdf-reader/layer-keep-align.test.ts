@@ -1,11 +1,10 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { BUILTIN_RULES, resolveRules, SCRIPTS } from '@/pdf-reader/engine/rules/layout.mjs'
+import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
 // A unit TeX set flush left (\raggedright, flushleft, ragged2e's \RaggedRight, a class's ragged heading) or flush right
-// (\raggedleft, flushright) keeps that alignment (lane B's B2, the maintainer's ruling of 2026-10-29, `keepAlign` on in every
-// script). The layout file says so only where the marked original's log tells it (UNIT_FLAG.FLUSH_LEFT, FLUSH_RIGHT:
-// layout-make.test.ts); run.mjs gives the unit's blocks `flush` where the rules keep it (P.keepAlign), and placeItems sets its
-// lines by it.
+// (\raggedleft, flushright) keeps that alignment (lane B's B2, the maintainer's ruling of 2026-10-29, every script's since the
+// rule set's schema 10). The layout file says so only where the marked original's log tells it (UNIT_FLAG.FLUSH_LEFT,
+// FLUSH_RIGHT: layout-make.test.ts); run.mjs gives the unit's blocks `flush`, and placeItems sets its lines by it.
 
 type L2 = typeof import('@/pdf-reader/engine/layer-proto/layer2.mjs')
 let L2: L2
@@ -52,12 +51,5 @@ describe('a unit TeX set flush left or flush right', () => {
     const at = (flush?: 'left' | 'right') => L2.layoutUnit2(words(20) as never, [block(3, flush)] as never, 10, P() as never).lines.map(x => x.items.length)
     expect(at('left')).toEqual(at())
     expect(at('right')).toEqual(at())
-  })
-})
-
-describe('the rule in the rule set', () => {
-  it('is on in every script of the built-in set (the ruling of 2026-10-29)', () => {
-    for (const s of SCRIPTS) expect(BUILTIN_RULES.scripts[s].keepAlign, s).toBe(true)
-    for (const t of ['zh', 'ja', 'ko', 'de', 'ru']) expect(resolveRules(BUILTIN_RULES, t).params.keepAlign, t).toBe(true)
   })
 })

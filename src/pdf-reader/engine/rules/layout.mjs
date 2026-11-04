@@ -49,8 +49,12 @@ import BUILTIN_JSON from './layout-rules.json' with { type: 'json' }
  *  9 (the owner's ruling of 2026-10-29 on the languages of a script the engine sets): `latinPatterns` takes Italian's, Dutch's,
  *  Polish's, Turkish's, Indonesian's (Malay's too, as babel's malay.ldf takes them), Czech's and Swedish's, and
  *  `cyrillicPatterns` is added, a Cyrillic word's patterns: Russian's rules (Khmelev's, hyph.mjs), or Ukrainian's or
- *  Bulgarian's own, which those rules cannot read (і, ї, є and ґ are no letters of theirs, and Bulgarian's ъ is a vowel) */
-export const RULES_SCHEMA = 9
+ *  Bulgarian's own, which those rules cannot read (і, ї, є and ґ are no letters of theirs, and Bulgarian's ъ is a vowel).
+ *  10 (the rules audit of 2026-11-04, T-D1): the switches no set ever turned the other way gone, their shipped value the
+ *  engine's own: `leadRel` (the leading is relative to the original's pitch: the page fill set it so for every unit), `trackStart`
+ *  (the face's size correction given back, run.mjs cjkAdvance), `even` and `fillSize` (no page-even pass, no growth by size),
+ *  `leftover` (what the fill leaves stays at each paragraph's foot), `evenPitch` and `keepAlign` (lane B's B1 and B2, on) */
+export const RULES_SCHEMA = 10
 /** a set's bytes at most, as received (the migrated set is about 8 KB) */
 export const RULES_CAP = 65_536
 /** a set's JSON values at most, counted before JSON.parse (layout/json.mjs countValues) */
@@ -68,7 +72,6 @@ export const SCRIPTS = Object.freeze(['Hans', 'Hant', 'Jpan', 'Kore', 'Latn', 'C
 const CJK_SCRIPTS = new Set(['Hans', 'Hant', 'Jpan', 'Kore'])
 const ORDER = Object.freeze(['track', 'borrow', 'lead', 'shrink'])
 const FURTHER = Object.freeze(['widen', 'flow', 'shrink'])
-const LEFTOVER = Object.freeze(['foot', 'pack'])
 /** the hyphenation patterns of TeX's (layer-proto/hyph.mjs TEX_PATTERN_FILES), each with its minimums in the set's `hyphenation`:
  *  a Latin word's (`latinPatterns`: English's for every target's, the language's own where it names one), and a Cyrillic word's
  *  (`cyrillicPatterns`), which may also be Russian's rules, Khmelev's, which take no patterns and hold their own minimums */
@@ -132,11 +135,7 @@ const SCRIPT_FIELDS = [
   { key: 'order', group: 'fit', kind: 'order', values: ORDER, words: 'The order in which the fit turns its knobs when a translation does not fit: tracking, borrowing free space below, the leading, the size.', schema: () => z.array(z.enum(ORDER)).check(z.refine(isPermutation, 'not an ordering of the four knobs')) },
   { key: 'leadBase', group: 'fit', kind: 'number', min: 0.8, max: 2, step: 0.05, words: "The translation's line pitch, × the original's line pitch.", schema: () => range(0.8, 2) },
   { key: 'leadFloor', group: 'fit', kind: 'number', min: 0.8, max: 2, step: 0.05, words: 'The tightest line pitch the fit falls back to, × the original\'s.', schema: () => range(0.8, 2) },
-  // (leadRel false: the maintainer's ruling of 2026-10-07 on S3-11, the script's leading on the original's own pitch, which
-  // reads more naturally on a loose original than the relative leading that stays a switch)
-  { key: 'leadRel', group: 'fit', kind: 'boolean', words: "Whether the leading is taken relative to the original's own pitch (never stacked on a loose original's) or applied as it is.", schema: () => z.boolean() },
   { key: 'trackMin', group: 'fit', kind: 'number', min: -0.3, max: 0, step: 0.005, words: 'The tightest letter spacing the fit uses, in em (zero or less).', schema: () => range(-0.3, 0) },
-  { key: 'trackStart', group: 'fit', kind: 'number', nullable: true, min: -0.3, max: 0.3, step: 0.005, words: "The letter spacing the fit starts from, in em; empty gives back the face's size correction.", schema: () => z.nullable(range(-0.3, 0.3)) },
   { key: 'compressMax', group: 'fit', kind: 'enum', values: [0, 1, 2], words: "How far full-width punctuation is compressed: 0 not at all, 1 at a line's start and between two marks, 2 every mark.", schema: () => z.literal([0, 1, 2]) },
   { key: 'centredPunct', group: 'fit', kind: 'boolean', words: 'Whether punctuation is centred in its em box (Traditional Chinese): no mark is then compressed or hung.', schema: () => z.boolean() },
   { key: 'borrow', group: 'fit', kind: 'enum', values: [0, 1], words: 'Whether a unit may borrow the free space below its last line (1) or not (0).', schema: () => z.literal([0, 1]) },
@@ -149,8 +148,6 @@ const SCRIPT_FIELDS = [
   { key: 'spaceMin', group: 'fit', kind: 'number', min: 0.3, max: 1, step: 0.05, words: 'The least a word space shrinks to, × its natural width.', schema: () => range(0.3, 1) },
   { key: 'spaceMax', group: 'fit', kind: 'number', min: 0, max: 3, step: 0.05, words: 'The most a word space opens to justify a line, × its natural width.', schema: () => range(0, 3) },
   { key: 'autospace', group: 'fit', kind: 'number', min: 0, max: 1, step: 0.05, words: 'The space set between CJK text and Latin letters or digits, in em.', schema: () => range(0, 1) },
-  { key: 'even', group: 'fit', kind: 'enum', values: [0, 1, 2], words: "How a page's body units are set alike: 0 each at its own, 1 at one size, 2 at one size and one leading.", schema: () => z.literal([0, 1, 2]) },
-  { key: 'fillSize', group: 'fit', kind: 'number', min: 0, max: 1.5, step: 0.05, words: "How far a unit's size may grow to fill a loose original's paragraph, × the original's size; 0 is off.", schema: () => range(0, 1.5) },
   // (adaptiveFill on: the maintainer's choice of 2026-10-07 on S3-12, D, as measured there; null is B, the script's leading
   // on the original's pitch alone)
   {
@@ -172,13 +169,6 @@ const SCRIPT_FIELDS = [
   // original's own in proportion. Read only with fillLead; empty: the em top alone, as before. Per script, so that Japanese and
   // Korean stay off until measured)
   { key: 'fillLeadRel', group: 'fit', kind: 'number', nullable: true, min: 1, max: 3, step: 0.05, words: "The loosest line pitch the fill spreads a unit's lines to, as a multiple of the original's own pitch, where that is looser than the pitch above; empty: the pitch above alone.", schema: () => z.nullable(range(1, 3)) },
-  // (D6's F6c, 2026-10-08: built switchable, for the maintainer to decide by looking; 'foot' is what the fill left before)
-  { key: 'leftover', group: 'fit', kind: 'enum', values: LEFTOVER, words: "Where what the fill leaves over goes: at each paragraph's foot, or packed to the end of its run of paragraphs, each keeping the original's gap to the one above it.", schema: () => z.literal([...LEFTOVER]) },
-  // (lane B's B1, the maintainer's ruling of 2026-10-29: at the original's leading a block's lines stood on the original's
-  // baselines, which carry the gaps TeX opened under the original's tall lines to whatever line of the translation stands
-  // there; on, they stand one pitch apart from the first, the block's own pitch, and the translation's own tall lines are
-  // opened by TeX's rule, layer2.mjs evenGridOf. Schema 7)
-  { key: 'evenPitch', group: 'fit', kind: 'boolean', words: "Whether a block's lines at the original's leading stand one pitch apart from its first line, the block's own pitch, rather than on the original's baselines, where TeX opened gaps under its tall lines.", schema: () => z.boolean() },
   // breaking (layer2.mjs tokensOf2, placeItems; layer1.mjs kinsokuOf)
   { key: 'keepAll', group: 'breaking', kind: 'boolean', words: 'Whether lines break only at spaces (Korean and the alphabets) rather than between any two CJK characters.', schema: () => z.boolean() },
   { key: 'cjkQuotes', group: 'breaking', kind: 'boolean', words: 'Whether curly quotes, dashes, the ellipsis and the middle dot are set as CJK characters.', schema: () => z.boolean() },
@@ -188,10 +178,6 @@ const SCRIPT_FIELDS = [
   { key: 'latinPatterns', group: 'breaking', kind: 'enum', values: LATIN_PATTERNS, words: 'The hyphenation patterns a Latin word uses.', schema: () => z.literal([...LATIN_PATTERNS]) },
   // (schema 9: Russian's rules, which were every Cyrillic word's, or a language's own patterns)
   { key: 'cyrillicPatterns', group: 'breaking', kind: 'enum', values: CYRILLIC_PATTERNS, words: "The hyphenation a Cyrillic word uses: Russian's rules (ru), or a language's own patterns.", schema: () => z.literal([...CYRILLIC_PATTERNS]) },
-  // (lane B's B2, the maintainer's ruling of 2026-10-29: a unit TeX set flush left or flush right, as the layout file's
-  // UNIT_FLAG.FLUSH_LEFT and FLUSH_RIGHT say, keeps that alignment, where it was justified or set flush left; centred units
-  // follow TeX's CENTRED as before. Schema 7)
-  { key: 'keepAlign', group: 'breaking', kind: 'boolean', words: 'Whether a unit TeX set flush left (ragged right) or flush right keeps that alignment: its lines left ragged, never justified, or set to the right edge.', schema: () => z.boolean() },
   // table cells (layer2.mjs cellBands)
   { key: 'cellClear', group: 'cells', kind: 'number', min: 0, max: 5, step: 0.1, words: "The room kept between a table cell's text and a rule over or under it, in PDF units.", schema: () => range(0, 5) },
   { key: 'cellCapMin', group: 'cells', kind: 'number', min: 0.3, max: 1, step: 0.05, words: "The smallest share of the size a cell's text may be capped to between its rules.", schema: () => range(0.3, 1) },

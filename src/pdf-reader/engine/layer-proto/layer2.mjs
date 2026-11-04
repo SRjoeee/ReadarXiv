@@ -2932,7 +2932,7 @@ export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, refer
     // the rounding does not move, where their median may be off by a few thousandths and its lines' slots so a line off
     // the last baseline at 1.3 times it: 1512.03385's unit 59)
     if (d.length > 1 && b.rects.every(r => info(r)?.file) && d.every(v => Math.abs(v - b.pitch0) <= 0.02)) b.pitch0 = d.reduce((a, v) => a + v, 0) / d.length
-    // (the block's grid with one pitch inside it, `E`, which slotsAt lays on at the original's leading where P.evenPitch: each gap
+    // (the block's grid with one pitch inside it, `E`, which slotsAt lays on at the original's leading: each gap
     // wider than the pitch that TeX's \lineskip rule set closed to it, evenGridOf. The rule's gap is no wider than the two lines'
     // boxes and \lineskip, the test `through` below makes between two blocks; a wider one holds something else (a line of the
     // unit's another block stands in it, a \vadjust, a float) and keeps its room. Made here, once a block; a block with no such
@@ -3015,12 +3015,10 @@ export const SOLID = 1.25
  * original's own pitch. Where the original is set solid that is leadBase, as before; where it is looser already, the
  * leading is not stacked on it (2307.16209, set one and a half: Chinese at 1.3 × its 1.5-spaced lines stood 1.95 em
  * apart and between them, a quarter of its text area blank that its own lines would have covered). The original's
- * pitch: its blocks' own (pitch0), the median of those that have one; none, leadBase. 1 where leadBase is. `leadRel`
- * false (a parameter): leadBase stacked on the original's pitch, as before step 3.
+ * pitch: its blocks' own (pitch0), the median of those that have one; none, leadBase. 1 where leadBase is.
  */
 export function leadOf(blocks, s, P) {
-  // (P.leadRel false, run.mjs's default since the maintainer's ruling of 2026-10-07: leadBase on whatever pitch)
-  if (P.leadRel === false || !(P.leadBase > 1) || !(s > 0)) return P.leadBase
+  if (!(P.leadBase > 1) || !(s > 0)) return P.leadBase
   const pitches = blocks.map(b => b.pitch0).filter(v => v > 0).sort((a, b) => a - b)
   if (!pitches.length) return P.leadBase
   const p0 = pitches[pitches.length >> 1]
@@ -3107,7 +3105,7 @@ export const SHORT_SKIP = 0.3
 export const PREDISPLAY = 2
 
 /**
- * A block's grid at the original's leading with one pitch inside it (P.evenPitch, lane B's B1, the maintainer's ruling of
+ * A block's grid at the original's leading with one pitch inside it (lane B's B1, the maintainer's ruling of
  * 2026-10-29): each gap of the grid `G` TeX's \lineskip rule opened under a tall line of the original (`opened`, blocks2's)
  * closed to the block's own pitch `p0` (pitch0: \baselineskip, the median of its gaps), where the grid on the original's baselines carries
  * it to whatever line of the translation stands there (the block-level audit's finding 1: 32 of 520 multi-line body units at
@@ -3172,9 +3170,9 @@ function slotsAt(blocks, st, P, s) {
     const onGrid = Math.abs(st.lead - 1) < 1e-6
     const low = lows[bi]
     const firstBlock = bi + base === 0
-    // (on the original's pitch, its grid: its forced breaks' gaps closed, blocks2, the foot B's own; with evenPitch, its
-    // gaps TeX's \lineskip rule opened closed to the pitch, blocks2's `E`)
-    const G = onGrid && P.evenPitch && b.E ? b.E : b.G ?? b.B
+    // (on the original's pitch, its grid: its forced breaks' gaps closed, blocks2, the foot B's own; and its gaps TeX's
+    // \lineskip rule opened closed to the pitch, blocks2's `E`)
+    const G = onGrid && b.E ? b.E : b.G ?? b.B
     for (let k = 0; k < 400; k++) {
       // (the first line on a shared row stands on the baseline the line before it there was laid at, `startY`, where that is
       // not TeX's (run.mjs layout2, shareOf's `at`): the row's line, its measure the row's, whatever the block's foot)
@@ -3940,7 +3938,7 @@ function placeItems(lines, f, P) {
     let perSpace = 0, perGap = 0
     line.mode = line.centred ? 'centred' : line === last || line.ends ? 'last' : 'just'
     // (a line of a unit TeX set flush left is ragged at its natural spacing, every line of one set flush right stands at the
-    // right edge, its last too: \raggedleft sets no \parfillskip past it; P.keepAlign, run.mjs)
+    // right edge, its last too: \raggedleft sets no \parfillskip past it; lane B's B2, run.mjs)
     if (line.flush === 'left' && line.mode === 'just') line.mode = 'ragged'
     else if (line.flush === 'right') line.mode = 'right'
     // a line squeezed to take its last group (breakLines' squeezeTakes): its marks' blank halves first, as many as it needs,
@@ -3987,14 +3985,13 @@ function placeItems(lines, f, P) {
 
 /** the fit's states, from the most natural, each knob in the order given taken to its bound before the next */
 function* statesOf(P, blocks, s) {
-  // maxScale: a size set from outside (the page's even pass), from which the fit starts
   // (step 3: the CJK runs' tracking from P.trackStart, a face's size correction given back, run.mjs; down from it)
   const t0 = P.cjk ? P.trackStart ?? 0 : 0
   // (capScale: the most its lines' room between the rules over and under them leaves it, cellBands: never above)
-  const top = Math.min(P.maxScale ?? 1, P.capScale ?? 1)
+  const top = Math.min(1, P.capScale ?? 1)
   // (P.runTrack: a run of a unit split by its displays starts from its unit's tracking, the tightest its runs need, layoutRuns)
   const R = P.runTrack
-  const st = { lead: P.leadBase, track: R ? R.track : t0, trackLatin: R ? R.trackLatin : 0, compress: R ? R.compress : P.compressMax > 0 ? 1 : 0, borrow: 0, scale: top, knob: P.maxScale ? 'even' : P.capScale < 1 ? 'clear' : 'none' }
+  const st = { lead: P.leadBase, track: R ? R.track : t0, trackLatin: R ? R.trackLatin : 0, compress: R ? R.compress : P.compressMax > 0 ? 1 : 0, borrow: 0, scale: top, knob: P.capScale < 1 ? 'clear' : 'none' }
   yield { ...st }
   for (const knob of P.order) {
     if (knob === 'track') {
@@ -4018,7 +4015,7 @@ function* statesOf(P, blocks, s) {
       // (on the steps from the size it would start at uncapped, those under the cap: a cap of 0.956 stepping from itself
       // ended at 0.806 short of the floor's 0.8, where 1512.03385's cells fit, and left them the original's)
       for (let k = 1; ; k++) {
-        const sc = Math.round(((P.maxScale ?? 1) - k * P.step) * 1000) / 1000
+        const sc = Math.round((1 - k * P.step) * 1000) / 1000
         if (sc < P.floor - 1e-9) break
         if (sc > top + 1e-9) continue
         st.scale = sc
@@ -4087,18 +4084,6 @@ export function layoutUnit2(tokens, blocks, s, P, failed = null) {
       work.fit++
       const f = s * st.scale
       const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, 'flow', blocks)
-      if (r.rest >= r.total) { last = { r, st, f }; break }
-    }
-  }
-  // (fillBySize, P.growTo: where the most natural state sets the whole unit with lines to spare, the largest size up to
-  // growTo × the original's at which it still does, its lines on the original's pitch: a loose original's paragraph
-  // filled by its text's size, not by lines looser than the original's own)
-  if (P.growTo > 1 && !skip && tried === 1 && last.r.rest >= last.r.total) {
-    for (let k = Math.round((Math.min(P.growTo, P.capScale ?? Infinity) - 1) / P.step); k >= 1; k--) {
-      work.fit++
-      const st = { ...last.st, scale: Math.round((1 + k * P.step) * 1000) / 1000, knob: 'grow' }
-      const f = s * st.scale
-      const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, true, blocks)
       if (r.rest >= r.total) { last = { r, st, f }; break }
     }
   }
