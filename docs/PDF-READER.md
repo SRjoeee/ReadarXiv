@@ -3554,6 +3554,34 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
     two columns): no line moves under pdfLaTeX, XeLaTeX and latex, with hyperref and without. A glued macro whose box begins
     with a character (`\add{, i.e. …}`, 2610.21376v1) stays unmarked: whether a mark there changes a kern or the word's
     hyphenation is a question the probe does not ask.
+  - *A unit's start mark before the marks that open its head piece* (PIPELINE 66; the owner's report of 2026-11-04 on
+    2610.21085v1 p5, staging d4774576). Patch wrote a unit's start mark before its first piece, and the layout marking had put
+    that piece's opening mark before the piece: `\axtpmm{p44.0a}\leavevmode\axtmark{44s}$\cand(q)$`. In vertical mode the
+    opening mark only waits for the next mark TeX sets (`\axt@pend`); `\leavevmode` then starts the paragraph, and
+    `\everypar` sets a run-in heading first (LaTeX's `\paragraph`: `\@xsect` puts `\@svsechd` there), whose own placeholder
+    marks are not held (`\axt@hold` holds a heading's and a babel name's own marks alone): `\paragraph{What $\cand$ is, and
+    what the model is defined on.}` set u44's point at its `$\cand$`, x 91.83, where u44 begins at 328.37. The piece owned the
+    heading's text, its first glyph already u43's, and the maker left it LOST ("a glyph of its own not on the base page"):
+    the paragraph stayed the original's. Now the layout marking flags its opening marks (`opens`) and patch's start-mark scan
+    steps back over those right before the piece it stands in front of (`latex-front.mjs` `patch`): the start mark comes
+    first, and the head piece's point is set in horizontal mode, at the start mark's place, whatever `\everypar` set before
+    it. Measured over 66 local papers (the 65 of the lost class's corpus and 2608.26008v1, which the scan of 247 local sources
+    found with the same shape twice; `next` d47745761 against the rule, the production pass offline on both): the marked
+    original moves on 45, every change two of our marks on one line in the other order (192 units' start marks, 185 cells',
+    15 headings'), no other byte. The 31 whose marked compile differs keep every glyph of the marked and the final passes
+    where it was (0 pt over 2,683,775 and 2,706,389 glyphs) and every point but 146 head openings, each now at its unit's
+    start mark. 6 units are laid whole that were the original's: 2610.21085v1 u44 and 2608.26008v1 u36 and u42, each after
+    a run-in heading that holds a formula; and 2010.11929v2's cells u42, u43 and u44, whose `\oursabbrv` (`ViT\xspace`) opening
+    point stood before the cell's leading glue (an opening mark in horizontal mode takes the glue before it off and sets
+    itself against what precedes it), so that it owned nothing up to the cell's start mark. None goes the other way, and no
+    other unit's rows moved. The native case F (`layout-marks-cases.mjs`, `ONLY=runin`) holds two more run-in headings, one
+    with a formula and one with a reference, each before a paragraph that opens with one: on `next` the formula owned
+    "ωis,andwhatitisdefinedon.χ1" and the reference "1.1", under pdfLaTeX, XeLaTeX and latex; with the rule each owns its own,
+    and every glyph and box stays where the compile with no point has it. With the start mark first, own.mjs MR 4's filter
+    of an opening point inside another unit's range (§19.9) took nothing out of any piece's ink over the 66 papers (it had
+    taken 30 glyphs from u44's piece and 2 from each of 2608.26008v1's): it is gone (REMOVAL 24), every wrapped base page
+    byte for byte the same without it. Left: a placeholder that waits in vertical mode inside its unit (2610.19159v1 u1823's
+    pieces 15 and 31, set with the next figure's `\includegraphics` point; the unit is drawn).
   - MARKS_SCHEMA 14: the switch's code 3 before a punctuation mark, which a reader of 13 refuses. A paper's macro TeX answers 3
     for (`\mnras`, an `\xspace` before a full stop) keeps its opening mark alone, as for 2: no marking moves.
   - Measured (2026-10-29, the web prepare's engine calls run offline over 80 papers: the sweep's 53, 2010.11929v2, the named
@@ -3778,10 +3806,11 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   the text after it, where that text was not found before the float's mark (`stream.mjs` `pastOther`, PIPELINE 57, REMOVAL 21:
   2610.20507v1's display (16) before its Figure 3, 2610.21288v1's (12) before its Figure 2, each LOST and its paragraph the
   original's; the float's glyphs are its own region's, none of them the display's). Over 65 local papers those 2 units laid,
-  none the other way, every other unit's rows as they were; the wrapped base pages of those 2 papers alone change. A
-  placeholder whose opening point TeX set inside another unit's range, between its start and end marks on one page, owns
-  nothing of that unit's (a run-in `\paragraph` is set at the next paragraph's start, after that paragraph's lead
-  placeholder's opening mark: 2610.21085v1 p5). An opening point alone at its unit's end, no display, its next mark a later
+  none the other way, every other unit's rows as they were; the wrapped base pages of those 2 papers alone change. (A
+  placeholder whose opening point TeX set inside another unit's range owned nothing of that unit's from REMOVAL 10 to 23: a
+  run-in `\paragraph` was set at the next paragraph's start, after that paragraph's lead placeholder's waiting opening mark,
+  2610.21085v1 p5. The start mark is written before that mark now, PIPELINE 66, and the rule is gone, REMOVAL 24: §19.7.) An
+  opening point alone at its unit's end, no display, its next mark a later
   unit's start, owns its lines up to TeX's skip before another block, a gap of 1.5 of the page's line pitches or more, no
   further, in both readings (REMOVAL 12, LAYOUT 23, `stream.mjs` `lineEnd`: the last author's `\orcidlink` of 2609.20976v1
   owned the affiliations and the e-mail below the names, to the abstract's label, which no ink unit then made a unit of; at a
