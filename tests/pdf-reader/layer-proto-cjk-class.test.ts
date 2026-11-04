@@ -80,13 +80,13 @@ describe('one CJK class, by Unicode\'s properties (rules/script.mjs): every modu
   it('sets no space beside a CJK character but a Hangul one, a full-width Latin letter or a full-width digit', async () => {
     const { SPACELESS } = await import('@/pdf-reader/engine/rules/script.mjs')
     // (Han, kana, a full-width comma, the ideographic space and zero, a closing mark, the prolonged sound mark, Bopomofo)
-    for (const ch of ['中', 'あ', 'カ', '，', '　', '〇', '〆', '」', 'ー', 'ㄅ']) expect(SPACELESS.test(ch), ch).toBe(true)
+    for (const ch of ['\u4e2d', '\u3042', '\u30ab', '\uff0c', '\u3000', '\u3007', '\u3006', '\u300d', '\u30fc', '\u3105']) expect(SPACELESS.test(ch), ch).toBe(true)
     // (Hangul syllables and jamo, a full-width A and 1, a Latin letter, a combining dot below)
-    for (const ch of ['한', 'ᄀ', 'ㄱ', 'Ａ', '１', 'a', '̣']) expect(SPACELESS.test(ch), ch).toBe(false)
+    for (const ch of ['\ud55c', '\u1100', '\u3131', '\uff21', '\uff11', 'a', '\u0323']) expect(SPACELESS.test(ch), ch).toBe(false)
   })
   it('counts the letters of the CJK scripts alone where a first page\'s characters are counted', async () => {
     const { CJK_LETTER } = await import('@/pdf-reader/engine/rules/script.mjs')
-    for (const ch of ['中', 'あ', 'カ', '한']) expect(CJK_LETTER.test(ch), ch).toBe(true)
-    for (const ch of ['，', '。', 'a', 'Ａ']) expect(CJK_LETTER.test(ch), ch).toBe(false)
+    for (const ch of ['\u4e2d', '\u3042', '\u30ab', '\ud55c']) expect(CJK_LETTER.test(ch), ch).toBe(true)
+    for (const ch of ['\uff0c', '\u3002', 'a', '\uff21']) expect(CJK_LETTER.test(ch), ch).toBe(false)
   })
 })

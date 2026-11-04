@@ -160,5 +160,4 @@ CHANGELOG.md 1  # 2026-11-02: +1, the reader-facing line for #554 quotes the dou
 tests/entry/abstract.test.ts 1  # 2026-11-04: the abstract page's link in Korean, the expectation
 src/pdf-reader/engine/pipeline/typeset/density.mjs 1  # 2026-11-04: the gate counts kana and hangul now: a Korean measurement quoted as evidence
 tests/pdf-reader/layer-links-moved.test.ts 1  # 2026-11-04: the gate counts kana and hangul now: a Japanese heading, the expectation
-tests/pdf-reader/layer-proto-step3.test.ts 1  # 2026-11-04: the gate counts kana and hangul now: a hangul input
 tests/e2e/probes/ui-shots.mjs 1  # 2026-11-04: the interface languages' own names heading the index's sections (product data, UI.md §6)
