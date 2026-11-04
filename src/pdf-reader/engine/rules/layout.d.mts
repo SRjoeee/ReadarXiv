@@ -36,7 +36,7 @@ export interface ScriptRules {
   centredPunct: boolean
   borrow: 0 | 1; borrowGap: number
   floor: number; step: number
-  further: ('widen' | 'flow' | 'shrink')[]; floorMin: number
+  further: ('widen' | 'shrink')[]; floorMin: number
   cjkJust: number; spaceMin: number; spaceMax: number; autospace: number
   /** the page fill (D6); null: B */
   adaptiveFill: { band: number; track: number; size: number } | null

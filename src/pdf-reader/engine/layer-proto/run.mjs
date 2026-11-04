@@ -1745,9 +1745,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   }
   /**
    * The fit's further steps for a unit its states leave clipped (P.further, in order): 'widen', its single lines widened
-   * over the paper beside them (widenOverPaper), the fit run again in them; 'flow', the text run past a display where the
-   * slots after it are too few (layoutUnit2's P.flowPast: out of the translation's order, but all of it shown, as v0's
-   * own last pass already ran text on past a display); 'shrink', the size's steps on below the fit's floor, to
+   * over the paper beside them (widenOverPaper), the fit run again in them; 'shrink', the size's steps on below the fit's floor, to
    * P.floorMin. Returns the first layout that sets every token, with the blocks it was laid in (widened: with their
    * bands between the rules, `clear`, and the parameters they hold it to, `P`), or null.
    */
@@ -1766,9 +1764,6 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         // (the fit's own walk, which set none of its states (`walked`), goes on below the floor: the states above it were laid)
         const l = L2.layoutUnit2(tokens, p.blocks, s, { ...p.P, floor: P.floorMin }, walked ? p.P : null)
         if (l && !l.clipped) return { layout: { ...l, knob: 'below-floor' }, blocks: p.blocks }
-      } else if (step === 'flow') {
-        const l = L2.layoutUnit2(tokens, p.blocks, s, { ...p.P, flowPast: true })
-        if (!l.clipped) return { layout: { ...l, knob: 'flow' }, blocks: p.blocks }
       }
     }
     return null

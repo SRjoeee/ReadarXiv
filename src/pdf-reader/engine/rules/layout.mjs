@@ -53,7 +53,9 @@ import BUILTIN_JSON from './layout-rules.json' with { type: 'json' }
  *  10 (the rules audit of 2026-11-04, T-D1): the switches no set ever turned the other way gone, their shipped value the
  *  engine's own: `leadRel` (the leading is relative to the original's pitch: the page fill set it so for every unit), `trackStart`
  *  (the face's size correction given back, run.mjs cjkAdvance), `even` and `fillSize` (no page-even pass, no growth by size),
- *  `leftover` (what the fill leaves stays at each paragraph's foot), `evenPitch` and `keepAlign` (lane B's B1 and B2, on) */
+ *  `leftover` (what the fill leaves stays at each paragraph's foot), `evenPitch` and `keepAlign` (lane B's B1 and B2, on);
+ *  and `further`'s 'flow' (the text run past a display, the release sweep's and the gate pack's units: it set none the steps
+ *  around it had not) */
 export const RULES_SCHEMA = 10
 /** a set's bytes at most, as received (the migrated set is about 8 KB) */
 export const RULES_CAP = 65_536
@@ -71,7 +73,7 @@ export const SCRIPTS = Object.freeze(['Hans', 'Hant', 'Jpan', 'Kore', 'Latn', 'C
 /** the scripts whose text is set by CJK rules (cjk in the fit's parameters); each must name its CJK faces */
 const CJK_SCRIPTS = new Set(['Hans', 'Hant', 'Jpan', 'Kore'])
 const ORDER = Object.freeze(['track', 'borrow', 'lead', 'shrink'])
-const FURTHER = Object.freeze(['widen', 'flow', 'shrink'])
+const FURTHER = Object.freeze(['widen', 'shrink'])
 /** the hyphenation patterns of TeX's (layer-proto/hyph.mjs TEX_PATTERN_FILES), each with its minimums in the set's `hyphenation`:
  *  a Latin word's (`latinPatterns`: English's for every target's, the language's own where it names one), and a Cyrillic word's
  *  (`cyrillicPatterns`), which may also be Russian's rules, Khmelev's, which take no patterns and hold their own minimums */
@@ -142,7 +144,7 @@ const SCRIPT_FIELDS = [
   { key: 'borrowGap', group: 'fit', kind: 'number', min: 0, max: 2, step: 0.05, words: "The gap kept clear under borrowed space, × the original's line pitch.", schema: () => range(0, 2) },
   { key: 'floor', group: 'fit', kind: 'number', min: 0.4, max: 1, step: 0.05, words: "The smallest size the fit sets a unit at, × the original's size.", schema: () => range(0.4, 1) },
   { key: 'step', group: 'fit', kind: 'number', min: 0.01, max: 0.1, step: 0.005, words: "The size step between the fit's tries, × the original's size.", schema: () => range(0.01, 0.1) },
-  { key: 'further', group: 'fit', kind: 'subset', values: FURTHER, words: 'The steps tried, in order, for a unit the fit leaves clipped: widen its lines, flow past a kept region, shrink below the floor.', schema: () => z.array(z.enum(FURTHER)).check(z.refine(isSubsetInOrder, 'not a subset of widen, flow, shrink in that order')) },
+  { key: 'further', group: 'fit', kind: 'subset', values: FURTHER, words: 'The steps tried, in order, for a unit the fit leaves clipped: widen its lines, shrink below the floor.', schema: () => z.array(z.enum(FURTHER)).check(z.refine(isSubsetInOrder, 'not a subset of widen, shrink in that order')) },
   { key: 'floorMin', group: 'fit', kind: 'number', min: 0.3, max: 1, step: 0.05, words: "The smallest size the last of those steps reaches, × the original's size.", schema: () => range(0.3, 1) },
   { key: 'cjkJust', group: 'fit', kind: 'number', min: 0, max: 1, step: 0.01, words: 'The most a line may open between CJK characters to justify, in em a gap.', schema: () => range(0, 1) },
   { key: 'spaceMin', group: 'fit', kind: 'number', min: 0.3, max: 1, step: 0.05, words: 'The least a word space shrinks to, × its natural width.', schema: () => range(0.3, 1) },

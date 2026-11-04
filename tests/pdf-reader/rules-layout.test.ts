@@ -35,6 +35,9 @@ type Edit = any
  *  added and went); the labels
  *  schema 3 added (D1a: every babel name, at the built-in set's words); and the members of `cjkFaces` schema 6 took out (its
  *  `light` designs and its `kai`: Regular and Bold beside every English family, the ruling of 2026-10-29) */
+/** the values schema 10 changed: `further` took no 'flow' step (the text run past a display: it set no unit of the release
+ *  sweep's or of the gate pack's that the steps around it had not) */
+const CHANGED: Record<string, (v: never) => unknown> = { further: (v: string[]) => v.filter(k => k !== 'flow') }
 const REMOVED = ['grid', 'leadRel', 'trackStart', 'even', 'fillSize'], ADDED = ['fillLead', 'fillLeadRel', 'cyrillicPatterns'], FACES_REMOVED = ['light', 'kai']
 /** the languages whose hyphenation minimums schema 8 added (#121-4: French, Spanish and Portuguese their own patterns) and schema 9
  *  (the languages of the owner's ruling of 2026-10-29) */
@@ -50,6 +53,7 @@ const lift = (s: Edit): Edit => {
   for (const k of HYPHENATION_ADDED) s.hyphenation[k] = structuredClone(BUILTIN_RULES.hyphenation[k])
   for (const k of LANGUAGES_ADDED) s.languages[k] = structuredClone(BUILTIN_RULES.languages[k])
   for (const r of [...Object.values(s.scripts), ...Object.values(s.languages)] as Record<string, unknown>[]) for (const k of REMOVED) delete r[k]
+  for (const r of [...Object.values(s.scripts), ...Object.values(s.languages)] as Record<string, unknown>[]) for (const [k, f] of Object.entries(CHANGED)) if (k in r) r[k] = f(r[k] as never)
   for (const [script, r] of Object.entries(s.scripts) as [keyof typeof BUILTIN_RULES.scripts, Record<string, unknown>][]) for (const k of ADDED) r[k] = structuredClone((BUILTIN_RULES.scripts[script] as Record<string, unknown>)[k])
   for (const r of [...Object.values(s.scripts), ...Object.values(s.languages)] as { cjkFaces?: Record<string, unknown> | null }[]) {
     if (r.cjkFaces) for (const k of FACES_REMOVED) delete r.cjkFaces[k]
@@ -91,14 +95,14 @@ describe('the built-in set', () => {
     expect(parseRules(JSON.parse(text(BUILTIN_FILE)))).toEqual(BUILTIN_RULES)
     // (the frozen first version is schema 1's, refused by its schema; lifted to this one it is canonical, and its version 1)
     expect(refusal(JSON.parse(text(V1_FILE))).field).toBe('schema')
-    const kept = text(V1_FILE).split('\n').filter(l => !l.startsWith('  "schema"') && !REMOVED.some(k => l.trim().startsWith(`"${k}":`)))
+    const kept = text(V1_FILE).split('\n').filter(l => !l.startsWith('  "schema"') && ![...REMOVED, ...Object.keys(CHANGED)].some(k => l.trim().startsWith(`"${k}":`)))
     const lifted = writeRules(V1).split('\n')
     const labelled = Object.values(V1.languages).filter(l => l.labels).length
     const faced = Object.values(V1.scripts).filter(r => r.cjkFaces).length
     // (and schema 8's and 9's hyphenation minimums after German's, whose line takes a comma, and the languages schema 9's set added:
     // each its key's line and its fields' but the labels, counted above)
     const added = LANGUAGES_ADDED.flatMap(k => [k, ...Object.keys(BUILTIN_RULES.languages[k]!).filter(f => f !== 'labels')].map(f => `"${f}"`))
-    expect(lifted.filter(l => !kept.includes(l)).map(l => l.trim().split(':')[0]).sort()).toEqual(['"schema"', ...ADDED.flatMap(k => Object.keys(V1.scripts).map(() => `"${k}"`)), ...Array.from({ length: labelled }, () => '"labels"'), ...Array.from({ length: faced }, () => '"cjkFaces"'), '"de"', ...HYPHENATION_ADDED.map(k => `"${k}"`), ...added].sort())
+    expect(lifted.filter(l => !kept.includes(l)).map(l => l.trim().split(':')[0]).sort()).toEqual(['"schema"', ...[...ADDED, ...Object.keys(CHANGED)].flatMap(k => Object.keys(V1.scripts).map(() => `"${k}"`)), ...Array.from({ length: labelled }, () => '"labels"'), ...Array.from({ length: faced }, () => '"cjkFaces"'), '"de"', ...HYPHENATION_ADDED.map(k => `"${k}"`), ...added].sort())
     // (every line of the frozen file kept but its labels, which schema 3 lengthened, its CJK faces, which schema 6 cut to
     // their group, and German's minimums, which schema 8's follow)
     expect(kept.filter(l => !l.trim().startsWith('"labels":') && !l.trim().startsWith('"cjkFaces":') && !l.trim().startsWith('"de": { "left"')).every(l => lifted.includes(l))).toBe(true)
@@ -153,7 +157,7 @@ describe('resolving a target (resolveRules)', () => {
     for (const t of MIGRATED) {
       const params = resolveRules(V1, t).params as unknown as Record<string, unknown>
       // (but the fields the schema has removed since, which no Params holds now)
-      const old = Object.fromEntries(Object.entries(PARAMS_V1[t]!).filter(([k]) => !REMOVED.includes(k)))
+      const old = Object.fromEntries(Object.entries(PARAMS_V1[t]!).filter(([k]) => !REMOVED.includes(k)).map(([k, v]) => [k, k in CHANGED ? CHANGED[k]!(v as never) : v]))
       expect(Object.keys(old).length, t).toBeGreaterThan(15)
       expect(Object.fromEntries(Object.keys(old).map(k => [k, params[k]])), t).toEqual(old)
       for (const k of REMOVED) expect(params, `${t} ${k}`).not.toHaveProperty(k)
@@ -496,7 +500,8 @@ describe('the refusals of a set (parseRules), each naming its field', () => {
     ['order that repeats a knob', s => { s.scripts.Hans.order = ['track', 'track', 'lead', 'shrink'] }, 'scripts.Hans.order'],
     ['order missing a knob', s => { s.scripts.Hans.order = ['track', 'borrow', 'lead'] }, 'scripts.Hans.order'],
     ['order with a knob that is none', s => { s.scripts.Hans.order = ['track', 'borrow', 'lead', 'grow'] }, 'scripts.Hans.order.3'],
-    ['further out of order', s => { s.scripts.Hans.further = ['flow', 'widen'] }, 'scripts.Hans.further'],
+    ['further out of order', s => { s.scripts.Hans.further = ['shrink', 'widen'] }, 'scripts.Hans.further'],
+    ['further with a step schema 10 took out', s => { s.scripts.Hans.further = ['widen', 'flow', 'shrink'] }, 'scripts.Hans.further.1'],
     ['further repeating a step', s => { s.scripts.Hans.further = ['widen', 'widen'] }, 'scripts.Hans.further'],
     ['further naming a step that is none', s => { s.scripts.Hans.further = ['widen', 'hang'] }, 'scripts.Hans.further.1'],
     // the strings: no control, no bidirectional control, bounded
@@ -682,7 +687,7 @@ describe('the fields the lab shows (RULES_FIELDS)', () => {
   it('the enumerations name the values the schema reads', () => {
     const by = Object.fromEntries(RULES_FIELDS.map(f => [f.path, f]))
     expect(by.order!.values).toEqual(['track', 'borrow', 'lead', 'shrink'])
-    expect(by.further!.values).toEqual(['widen', 'flow', 'shrink'])
+    expect(by.further!.values).toEqual(['widen', 'shrink'])
     for (const [path, ok] of [['compressMax', [0, 1, 2]], ['hyphen', [0, 1]], ['borrow', [0, 1]], ['latinPatterns', ['en', 'de', 'fr', 'es', 'pt', 'it', 'nl', 'pl', 'tr', 'id', 'cs', 'sv']], ['cyrillicPatterns', ['ru', 'uk', 'bg']]] as const) {
       expect(by[path]!.values, path).toEqual(ok)
       for (const v of ok) expect(() => parseRules(v1(s => { s.scripts.Hans[path] = v })), `${path} = ${v}`).not.toThrow()

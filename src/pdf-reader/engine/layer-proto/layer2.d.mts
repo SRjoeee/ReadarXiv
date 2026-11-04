@@ -7,7 +7,7 @@ import type { CyrillicPatterns, LatinPatterns, PatternLanguage } from '../rules/
 import type { Block, Rect } from './layer1.mjs'
 
 /** the fit's parameters and the breaking's: the layout rules' for a target (rules/layout.mjs resolveRules), the field names
- *  v0's own. `capScale`, `flowPast`, `refuse`, `lineskip`, `trackStart` and `_compress` are the run's own, set unit by unit */
+ *  v0's own. `capScale`, `refuse`, `lineskip`, `trackStart` and `_compress` are the run's own, set unit by unit */
 export interface Params {
   cjk: boolean; leadBase: number; leadFloor: number; trackMin: number; compressMax: 0 | 1 | 2; borrow: 0 | 1; borrowGap: number
   floor: number; step: number; order: ('track' | 'borrow' | 'lead' | 'shrink')[]; cjkJust: number; spaceMax: number; autospace: number; spaceMin: number
@@ -15,7 +15,7 @@ export interface Params {
   /** the most the unit may be set at: its lines' room between the rules over and under them (cellBands) */
   capScale?: number
   /** step 3: the further steps for a unit the states leave clipped (run.mjs fitFurther), and the size the last goes down to */
-  further: readonly ('widen' | 'flow' | 'shrink')[]; floorMin: number; refuse?: number; flowPast?: boolean
+  further: readonly ('widen' | 'shrink')[]; floorMin: number; refuse?: number
   /** the paper's \lineskip and \lineskiplimit, PDF units (the layout file's, TeX's): a line nearer the one before it than
    *  the limit is set the two's depth and height plus lineskip apart (breakLines); null: no line opens (the run's own) */
   lineskip?: readonly [number, number] | null

@@ -10,8 +10,8 @@
 // And the size correction of a role table face (fonts.mjs setRoleFaces) on each run's SVG size, 1 for the prototype's.
 // And step 3 (2026-10-07): a unit's leading relative to the original's own pitch (leadOf); the display environments the
 // engine knows (layer1.mjs DISPLAY); and no unit drawn in part: past the fit's last state the host's further steps
-// (run.mjs fitFurther: a single line widened over the paper beside it, the text run past a display, the size on below
-// its floor, P.further and P.floorMin), the flow past a display being this module's (breakLines 'flow', P.flowPast).
+// (run.mjs fitFurther: a single line widened over the paper beside it, the size on below its floor, P.further and
+// P.floorMin).
 // And prepareUnit in parts (step 2 of the layer's new direction, 2026-10-06), so that the four which read the page's
 // geometry (lines, erase extents, labels, placeholder renderings) can come from another source: its statements moved
 // into the parts as they were, in the same order; a set of claimed characters, which nothing read, left out. Every
@@ -3270,9 +3270,6 @@ const squeezable = (items, hangs, compress, P) => (compress < P.compressMax ? it
  */
 function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = null) {
   work.breaks++
-  // (step 3, 'flow': a kept region breaks the line and skips no slot: the text after a display may stand above it, where
-  // the slots below it are too few for it and those above it too many; the last resort before the unit is not drawn)
-  const flow = strict === 'flow'
   let tokens = tokensIn
   // (a token laid in part, or loosed from the glue before it, is replaced where it stands, in the pass's own copy of the
   // tokens, made at the first such change: the caller's are read by every pass of the unit)
@@ -3618,16 +3615,8 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
       continue
     }
     if (tokens[i].blockTo !== undefined) {
-      const fresh = tokens[i].blockTo + 1 > consumed
       consumed = Math.max(consumed, tokens[i].blockTo + 1)
       if (!line.items.length) line.past = consumed
-      if (flow) {
-        // (a region passed once breaks the line once: its kept placeholders after it are no breaks)
-        if (fresh && line.items.length) { trim(line); line.ends = true; advance() }
-        if ((slots[li]?.after ?? 0) < consumed) spilled = true
-        i++
-        continue
-      }
       if ((slots[li].after ?? 0) < consumed) {
         let q = li + 1
         while (q < slots.length && (slots[q].after ?? 0) < consumed) q++
@@ -4005,8 +3994,7 @@ function sharedStates(P, failed, blocks, s) {
 
 /**
  * A unit laid out: the first state of the fit at which every token is placed; at the last, what fits, clipped (which the
- * host never draws: run.mjs fitFurther). P.flowPast (step 3): where a kept region still stops it, every state again with
- * the text run past the region (breakLines 'flow').
+ * host never draws: run.mjs fitFurther).
  * `s`: the original's size (PDF units). Returns { lines, f, s, scale, state, knob, clipped, lostChars, chars, tried }.
  * `failed`: the parameters of a fit of the same tokens on the same blocks that set them at none of its states, strictly or
  * run past a kept region (a clipped layoutUnit2), which differ from P only in what statesOf reads (run.mjs fitFurther's step
@@ -4043,16 +4031,6 @@ export function layoutUnit2(tokens, blocks, s, P, failed = null) {
     }
     if (past.r.rest >= past.r.total) last = past
     else if (past.r.rest > last.r.rest) last = { ...last, r: past.r }
-  }
-  // (step 3, P.flowPast: and else through every slot, a kept region only breaking the line, from the most natural state)
-  if (P.flowPast && last.r.rest < last.r.total && tokens.some(t => t.blockTo !== undefined)) {
-    for (const st of statesOf(P, blocks, s)) {
-      tried++
-      work.fit++
-      const f = s * st.scale
-      const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, 'flow', blocks)
-      if (r.rest >= r.total) { last = { r, st, f }; break }
-    }
   }
   return laidOut(last, s, P, tried, blocks)
 }
