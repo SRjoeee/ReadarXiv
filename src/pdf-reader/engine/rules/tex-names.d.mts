@@ -1,4 +1,6 @@
 // tex-names.mjs's types: the names TeX's packages give a theorem-like head and a generated reference in a target
+/** whether the target's packages answer every lookup that would read the paper's own name `english` there: never sent for it */
+export declare function nameAnswered(english: string, to: string): boolean
 /** a theorem-like head's name in the target (translator's dictionary; ctex's for Chinese), or null */
 export declare function headName(english: string, to: string, names?: ReadonlyMap<string, string> | null): string | null
 /** a generated reference's English name in the target: its head's, else cleveref's or hyperref's (ctex's for Chinese), else

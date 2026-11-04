@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { copyTexts, decideWrite, reusable, seedFrom, sourceHash, unitsOf } from '@/pdf-reader/engine/pipeline/cache.mjs'
 import { decideGroups, groupOf, NAMES_SHARE, unchanged } from '@/pdf-reader/engine/translate/groups.mjs'
 import { inMemory, loadProject, type SourceUnit, tableGrid } from '@/pdf-reader/engine/source/latex-front.mjs'
-import { NAME_KEYS } from '@/pdf-reader/engine/layout/names.mjs'
-import { CAPTIONS_PROBE, captionsOf, type Compiled, keptFor, openPaper, originalFiles, runLive, translationFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
+import { openPaper, originalFiles } from '@/pdf-reader/engine/pipeline/live.mjs'
 import { LAYOUT_CLASSES } from '@/pdf-reader/engine/layout/marks.mjs'
 import { plainSource as plainOf } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // A table's consistency groups (the table-groups brief, 2026-10-07): the grid the TeX front end reads, each cell's
-// group, the decision over what came back, and the run that sets the final and keeps the record by it
+// group and the decision over what came back (the layer's rows read it: layer-proto/rows.mjs layerRows)
 
 const enc = (s: string) => new TextEncoder().encode(s)
 /** a unit's source as plain text (mt.mjs plainSource, over the front end's units) */
@@ -186,163 +184,5 @@ describe('decideGroups: a group translated whole or kept whole', () => {
     expect(decide({ Model: { state: 'lost' } }).of('1:h')).toBe('waiting')
     // whole, but not in the snapshot a compile sets: waiting for that compile
     expect(decide({ Speed: { state: 'whole' } }).of('1:h')).toBe('waiting')
-  })
-})
-
-describe('runLive: the final and the record read the same decision', () => {
-  // a column of names (two the reader keeps before asking, a third the translator turns into words) and a column of
-  // descriptions with an acronym in it; the translator gives back what holds "Net" and translates the rest
-  const tex = doc('\\begin{tabular}{ll}\n\\toprule\nModel & Training cost \\\\\n\\midrule\nAlphaNet & fast training \\\\\nBetaNet & slow training \\\\\nGamma model & XYZ \\\\\n\\bottomrule\n\\end{tabular}', 'The prose names AlphaNet and BetaNet in running text, and XYZ.')
-  const translate = async (texts: string[]) => texts.map(text => ({ text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' }))
-  type Req = { main: string; rerun: boolean; overrides: Map<string, Uint8Array> }
-  const compileAll = () => {
-    const mains: { rerun: boolean; text: string }[] = []
-    const compile = async (q: Req): Promise<Compiled> => {
-      const text = new TextDecoder().decode(q.overrides.get(q.main))
-      mains.push({ rerun: q.rerun, text })
-      return { ok: true, pdf: new Uint8Array([mains.length]), aux: '', bbl: null, log: text.includes('AXT-FONTS') ? 'AXT-FONTS rm=cmr;sf=cmss;tt=cmtt;body=10;\n' : 'AXT-END\n', ms: 1 }
-    }
-    return { mains, compile }
-  }
-  it('sets a column of names in the source and keeps it so in the record, with its translation; the rest as translated', async () => {
-    const paper = openPaper(new Map([['main.tex', enc(tex)]]))
-    const kept = keptFor(paper, 'zh')
-    expect([...kept].map(plainSource).sort()).toEqual(['AlphaNet', 'BetaNet', 'XYZ'])
-    const c = compileAll()
-    const r = await runLive(paper, { lang: 'zh', compile: c.compile, translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: null })
-    expect(r.settled).toBe(true)
-    // the translated table, as \axtfit takes it before the original it is fitted to
-    const final = /\\axtfit\{([\s\S]*?\\end\{tabular\})\}\{/.exec(c.mains.filter(m => m.rerun).at(-1)?.text ?? '')?.[1] ?? ''
-    // the names column whole in the source, "Gamma model" though the translator gave words for it; the descriptions
-    // translated beside their acronym, which reads as its translation would
-    expect(final).toContain('Gamma model')
-    expect(final).not.toContain('fast training')
-    expect(final).toContain('\u8bba\u6587 \u8bba\u6587 \\\\')
-    expect(final).toContain('XYZ')
-    const gamma = paper.units.findIndex(u => plainSource(u) === 'Gamma model')
-    expect(r.results.get(gamma)).toMatchObject({ state: 'kept', by: 'B' })
-    expect(r.shownPartial).toBe(false)
-    const hashes = await Promise.all(paper.units.map(sourceHash))
-    const record = unitsOf(paper.units, kept, hashes, r.results)
-    expect(record[gamma]).toMatchObject({ state: 'kept', group: '1:c0' })
-    expect(record[gamma]?.pieces).toBeTruthy()
-    expect(record[gamma]?.tr).toBeUndefined()
-    expect(record.filter(u => u.group).map(u => u.group)).toEqual(['1:h', '1:h', '1:c0', '1:c1', '1:c0', '1:c1', '1:c0', '1:c1'])
-    // the right side anchored by what the final set: the source for a cell kept
-    expect(copyTexts(record)[gamma]?.text).toBe('Gamma model')
-    // a run again takes the kept cell's translation as it is: nothing asked again for it
-    const { seed } = await seedFrom({ units: record }, paper.units)
-    expect(reusable(seed, { identity: 'B', copyWire: true }).get(gamma)?.current).toBe(true)
-  })
-})
-
-describe('runLive again: a group kept whole for a cell the translator gave in part asks for that cell again', () => {
-  // Codex's review of PR A, finding 3: the cell "fast $x$ training" comes back with its marker lost, and of its two runs
-  // only "fast": partial, so its column is kept whole in the source. Recorded as kept, the next run took it as current,
-  // made it whole and set the column translated, the cell half in the source; the missing run was never asked again
-  const tex = doc('\\begin{tabular}{ll}\n\\toprule\nModel & Speed \\\\\n\\midrule\nOmega & fast $x$ training \\\\\nSigma & slow training \\\\\nTau & quick \\\\\n\\bottomrule\n\\end{tabular}', 'Prose.')
-  const calls: string[][] = []
-  const translate = async (texts: string[]) => {
-    calls.push(texts)
-    return texts.map(text => (/^fast @/.test(text) ? { text: 'fast training', by: 'B' } : text === 'training' ? null : { text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' }))
-  }
-  type Req = { main: string; rerun: boolean; overrides: Map<string, Uint8Array> }
-  const compileAll = () => {
-    const mains: { rerun: boolean; text: string }[] = []
-    const compile = async (q: Req): Promise<Compiled> => {
-      const text = new TextDecoder().decode(q.overrides.get(q.main))
-      mains.push({ rerun: q.rerun, text })
-      return { ok: true, pdf: new Uint8Array([mains.length]), aux: '', bbl: null, log: text.includes('AXT-FONTS') ? 'AXT-FONTS rm=cmr;sf=cmss;tt=cmtt;body=10;\n' : 'AXT-END\n', ms: 1 }
-    }
-    return { mains, compile }
-  }
-  const finalOf = (c: ReturnType<typeof compileAll>) => /\\axtfit\{([\s\S]*?\\end\{tabular\})\}\{/.exec(c.mains.filter(m => m.rerun).at(-1)?.text ?? '')?.[1] ?? ''
-  it('keeps the column in the source, records the cell as given in part, and asks for it again on the next run', async () => {
-    const paper = openPaper(new Map([['main.tex', enc(tex)]]))
-    const kept = keptFor(paper, 'zh')
-    const cell = paper.units.findIndex(u => plainSource(u) === 'fast training')
-    expect(cell).toBeGreaterThanOrEqual(0)
-    const c1 = compileAll()
-    const r1 = await runLive(paper, { lang: 'zh', compile: c1.compile, translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: null })
-    expect(finalOf(c1)).toContain('slow training')
-    const hashes = await Promise.all(paper.units.map(sourceHash))
-    const record = unitsOf(paper.units, kept, hashes, r1.results)
-    expect(record[cell]).toMatchObject({ state: 'kept', translation: 'partial' })
-    // a run again (another typesetting): the cell is not taken as it is, and is asked for again
-    const { seed } = await seedFrom({ units: record }, paper.units)
-    const seeds = reusable(seed, { identity: 'B', copyWire: true })
-    expect(seeds.get(cell)?.current).toBe(false)
-    calls.length = 0
-    const c2 = compileAll()
-    const r2 = await runLive(paper, { lang: 'zh', compile: c2.compile, translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: null, seed: seeds })
-    expect(calls.flat().some(t => /^fast @/.test(t))).toBe(true)
-    // given in part again, its column stays whole in the source: never a cell half translated beside translated ones
-    expect(finalOf(c2)).toContain('slow training')
-    expect(finalOf(c2)).not.toContain('\u8bba\u6587 \u8bba\u6587')
-    expect(r2.results.get(cell)).toMatchObject({ state: 'kept', translation: 'partial' })
-  })
-})
-
-describe("a kept cell's record: what the translator gave it and its sentences, kept with it (Codex on #323)", () => {
-  it('writes the record again where a kept cell is given whole on a retry, its pieces the same as before (4208105825)', () => {
-    // a run that changed nothing typeset, its kept cell given whole where the copy holds it given in part: the copy's
-    // provenance is written, so that the next run takes it as it is rather than asking for it again
-    const cell = { kind: 'cell', src: 'fast training', hash: 'h', group: '1:c1', pieces: [{ t: 'text', tr: true, s: 'x' }], by: 'B', tried: 'B', state: 'kept' }
-    const cached = { units: [{ ...cell, translation: 'partial' }], marks: [['1s', {}]] }
-    const how = decideWrite({ result: { changed: false, settled: true }, cached, units: [{ ...cell, translation: 'whole' }], marks: cached.marks, shown: false })
-    expect(how).toBe('provenance')
-    // and nothing to write where it is the same
-    expect(decideWrite({ result: { changed: false, settled: true }, cached, units: [{ ...cell, translation: 'partial' }], marks: cached.marks, shown: false })).toBeNull()
-  })
-  it("keeps a whole sibling's sentences while its group is kept for another cell given in part (4208105840)", async () => {
-    // "slow training" is taken as it is from a copy, whole and with its sentence cuts; "fast $x$ training" comes back in
-    // part, so the column is kept. Its sentences go with it into the record, for the run that translates the column
-    const tex = doc('\\begin{tabular}{ll}\n\\toprule\nModel & Speed \\\\\n\\midrule\nOmega & fast $x$ training \\\\\nSigma & slow training \\\\\nTau & quick \\\\\n\\bottomrule\n\\end{tabular}', 'Prose.')
-    const translate = async (texts: string[]) => texts.map(text => (/^fast @/.test(text) ? { text: 'fast training', by: 'B' } : text === 'training' ? null : { text: text.replace(/(?<![@a-z])[A-Za-z]{2,}/g, '\u8bba\u6587'), by: 'B' }))
-    const compile = async (q: { main: string; overrides: Map<string, Uint8Array> }): Promise<Compiled> => {
-      const text = new TextDecoder().decode(q.overrides.get(q.main))
-      return { ok: true, pdf: new Uint8Array([1]), aux: '', bbl: null, log: text.includes('AXT-FONTS') ? 'AXT-FONTS rm=cmr;sf=cmss;tt=cmtt;body=10;\n' : 'AXT-END\n', ms: 1 }
-    }
-    const paper = openPaper(new Map([['main.tex', enc(tex)]]))
-    const slow = paper.units.findIndex(u => plainSource(u) === 'slow training')
-    const sentences = { src: [5], tr: [3] }
-    const seed = new Map([[slow, { pieces: [{ t: 'text', tr: true, s: ' \u8bba\u6587 \u8bba\u6587 ' }], by: 'B', tried: 'B', state: 'whole', sentences, current: true }]])
-    const r = await runLive(paper, { lang: 'zh', compile, translate, format: 'markers', marks: new Map(), identity: 'B', readMarks: null, seed })
-    expect(r.results.get(slow)).toMatchObject({ state: 'kept', translation: 'whole', sentences })
-    const hashes = await Promise.all(paper.units.map(sourceHash))
-    const record = unitsOf(paper.units, keptFor(paper, 'zh'), hashes, r.results)
-    expect(record[slow]).toMatchObject({ state: 'kept', translation: 'whole', sentences })
-    // and the next run's seed has them, as it takes the cell as it is
-    const again = await seedFrom({ units: record }, paper.units)
-    expect(again.seed.get(slow)).toMatchObject({ sentences })
-  })
-})
-
-describe('what names the floats and the headings: the target\'s names babel gives, where the final uses them', () => {
-  it('every compile of the translation writes what names its floats and its headings; captionsOf reads it, wrapped as TeX wraps its log', () => {
-    const paper = openPaper(new Map([['main.tex', enc(doc('Some prose.'))]]))
-    const files = translationFiles(paper, new Map(), { strategy: { name: 'x', engine: 'pdflatex', xe: false, pre: () => '' }, fonts: {} })
-    expect(new TextDecoder().decode(files.get('main.tex'))).toContain(CAPTIONS_PROBE.trim())
-    for (const k of NAME_KEYS) expect(CAPTIONS_PROBE).toContain(`AXT-CAPTION ${k} made`)
-    const wrap = (line: string) => line.match(/.{1,79}/g)?.join('\n') ?? ''
-    const row = (key: string, made: string, name: string) => `${wrap(`AXT-CAPTION ${key} made ${made} AXT-CAPTION-END`)}\n${wrap(`AXT-CAPTION ${key} name ${name} AXT-CAPTION-END`)}\n`
-    const babel = (k: string) => `macro:->\\bbl@ensure@axttarget {\\axttarget${k} }`
-    const log = (fig: string, figName: string, more = '') => `${row('figure', fig, figName)}${row('table', '\\tablename \\nobreakspace \\thetable ', babel('tablename'))}${more}AXT-END\n`
-    // the kernel's label of babel's name
-    expect(captionsOf(log('\\figurename \\nobreakspace \\thefigure ', babel('figurename')))).toEqual({ figure: 'target', table: 'target' })
-    // a class that writes its own word into the label (naaclhlt2019.sty)
-    expect(captionsOf(log('\\figcapfont Figure \\thefigure ', babel('figurename')))?.figure).toBe('source')
-    // a wrapper around the class's own definition, and a name another language set (2307.16209's \selectlanguage{english})
-    expect(captionsOf(log('{\\ifFBfrench \\FBfigtabshape \\fi \\fnum@figureORI }', babel('figurename')))?.figure).toBe('target')
-    expect(captionsOf(log('{\\ifFBfrench \\FBfigtabshape \\fi \\fnum@figureORI }', 'macro:->Figure'))?.figure).toBe('source')
-    // the headings: article's bibliography names \refname (its meaning's parameter text no word of its own), nips_2017's
-    // abstract writes its word, a construct the class does not define names nothing
-    const headings = row('ref', '\\long macro:#1->\\section *{\\refname \\@mkboth {\\MakeUppercase \\refname }{\\MakeUppercase \\refname }}\\list {\\@biblabel {\\@arabic \\c@enumiv }}{\\usecounter {enumiv}}', babel('refname'))
-      + row('abstract', 'macro:->\\vskip .075in\\centerline {\\large \\bf Abstract}\\vspace {0.5ex}\\begin {quote}', babel('abstractname'))
-      + row('contents', 'macro:->\\@ifstar {\\@nameuse {mem@tableofcontents}{01}}{\\@nameuse {mem@tableofcontents}{00}}', babel('contentsname'))
-      + row('bib', '', '')
-    expect(captionsOf(log('\\figurename \\nobreakspace \\thefigure ', babel('figurename'), headings))).toEqual({ figure: 'target', table: 'target', ref: 'target', abstract: 'source', contents: 'target', bib: 'source' })
-    // a final that never reached the probe: no answer at all; an END_TEX line is no row's
-    expect(captionsOf('AXT-END\n')).toBeNull()
   })
 })

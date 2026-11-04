@@ -8,10 +8,14 @@
 // on it and what it does (WCAG 2.5.3), the tooltip being hidden from assistive technology. The id leaves when the lead cannot
 // hold it beside the contents' button: its own width, measured as it is drawn, against the lead's, which the grid gives
 // and a long language's menus or a long service name narrow (the interface review: the id was drawn under the switch).
-// The first answer is given before the first paint, in a layout effect: measured in an effect, which runs after the
-// paint, a lead too narrow for the id drew it for two frames before it went (the pin's wave-1 review)
+// The first answer is given before the first paint, in the lead's observer's first callback, which the browser calls once the
+// page is laid out and before it paints, rendered there at once: measured in an effect, which runs after the paint, a lead too
+// narrow for the id drew it for two frames before it went (the pin's wave-1 review); measured in a layout effect, inside React's
+// commit, the reads laid the document out for them before the browser would (a new reader's first layout, 22 ms of the main
+// thread at 1x, 93 ms at 4x: the rules audit of 2026-11-04)
 import { ArrowUpRight } from 'lucide'
 import { useId, useLayoutEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { R, S } from '@/ui/strings'
 import { Icon } from '@/ui/controls/Icon'
 import { useTip } from '@/ui/controls/tip'
@@ -26,12 +30,23 @@ export function PaperTitle({ id, title }: { id: string; title: string }) {
   useLayoutEffect(() => {
     const own = box.current, lead = own?.parentElement, arxiv = own?.querySelector('[data-arxiv]')
     if (!own || !lead || !arxiv) return
-    // what the lead needs beside the paper: its contents' button and the gaps, all but this box
-    const need = arxiv.getBoundingClientRect().width + (own.getBoundingClientRect().left - lead.getBoundingClientRect().left) + Number.parseFloat(getComputedStyle(own).paddingInlineStart)
-    // the state for the frame about to be painted: a state set in a layout effect is rendered before the paint, where the
-    // observer's first answer comes in a task after it (the lead has no padding, so its box is its content's)
-    setCramped(lead.getBoundingClientRect().width < need)
-    const observer = new ResizeObserver(([entry]) => { if (entry) setCramped(entry.contentRect.width < need) })
+    // what the lead needs beside the paper: its contents' button and the gaps, all but this box; read in the observer's callback,
+    // where the layout is the browser's own, made for the frame about to be painted, once the id is laid out (a host's sheet may
+    // leave the whole title out at first, as the web's does where its own mark says the lead is short: the id has no width then,
+    // and is read when it has)
+    let need = -1
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return
+      if (need < 0) {
+        const id = arxiv.getBoundingClientRect().width
+        if (!(id > 0)) return
+        need = id + (own.getBoundingClientRect().left - lead.getBoundingClientRect().left) + Number.parseFloat(getComputedStyle(own).paddingInlineStart)
+      }
+      // (rendered at once, in the callback: the frame it runs in paints the answer; a state set here alone would be rendered in a
+      // task after that paint. The lead has no padding, so its box is its content's)
+      const next = entry.contentRect.width < need
+      flushSync(() => setCramped(next))
+    })
     observer.observe(lead)
     return () => observer.disconnect()
   }, [id])

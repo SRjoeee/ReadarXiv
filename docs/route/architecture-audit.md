@@ -130,7 +130,6 @@ names by several independent tables.
 - **Wire**: `translate/mt.mjs:93` INKLESS, `:425` DISPLAY, `:970-972` CITE, CITET, REF.
 - **Links**: `layer-proto/links.mjs:295-296` CITE_SRC and REF_SRC.
 - **Front end**: `source/latex-front.mjs:69` NO_ARGS, `:73` MATH_ENVS, `:101` DISPLAY_NAMES.
-- **Parked**: `pipeline/typeset/density.mjs:119-122`.
 - **Style**: `layer/pieces.mjs:17` FLAGS and `layer2.mjs:1678` STYLE_CMDS.
 - **In flight**: `rules/tex-kernel.mjs`.
 
@@ -439,7 +438,11 @@ artefact, plus its schema. Then a behaviour change can never go unkeyed or colli
 
 **Fundamental alternative.** Move the six live helpers to `layout/` and delete the parked path; git keeps it.
 
-**Cost.** S–M. **Status.** Deferred to the debt pass (#299).
+**Cost.** S–M. **Status.** Done in the engine (2026-11-04, the rules audit's F4): `runLive`, `translationFiles`, the
+strategies (`scripts.mjs`), the typesetting rule (`typeset/` but `tex.mjs` and `places.mjs`' `marksOf`), the copies' cache
+(`cache.mjs` but the units record), `PIPELINE_CARRIES` (the lab's `carries.mjs` now) and `TYPESETTING_VERSION` taken out; the
+live helpers stay in `live.mjs`, whose path the web imports. latex-front.mjs's compiled-path TeX and the web's parked modules
+are their own lanes'.
 
 ## 16. HTML extension: one site's selectors are the model
 

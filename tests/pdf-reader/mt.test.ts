@@ -34,7 +34,7 @@ describe('unitText: the plain text, and where its placeholders stood', () => {
 })
 
 describe('serialize: a marker that touches a word is set apart from it on the wire', () => {
-  const wire = (pieces: { t: string; s?: string; src?: string }[]) => serialize({ pieces }).wire
+  const wire = (pieces: { t: string; s?: string; src?: string; id?: number }[]) => serialize({ pieces }).wire
 
   it('after a word, and after a full stop: `models.@a#` is one token to the engine, which left the word in English (09c25622, the HTML page\'s same fix)', () => {
     expect(wire([{ t: 'text', s: 'useful tools for calibrating theoretical models.' }, { t: 'ph', src: '\\cite{x}' }, { t: 'text', s: ' However, this' }])).toBe('useful tools for calibrating theoretical models. @a# However, this')
@@ -42,7 +42,20 @@ describe('serialize: a marker that touches a word is set apart from it on the wi
   })
 
   it('not after other punctuation, nor between two markers', () => {
-    expect(wire([{ t: 'text', s: 'follows (' }, { t: 'ph', src: '\\ref{a}' }, { t: 'ph', src: '\\ref{b}' }, { t: 'text', s: '), so' }])).toBe('follows (@a#@b#), so')
+    // (two placeholders side by side are one marker: the rules audit's T5)
+    expect(wire([{ t: 'text', s: 'follows (' }, { t: 'ph', src: '\\ref{a}' }, { t: 'ph', src: '\\ref{b}' }, { t: 'text', s: '), so' }])).toBe('follows (@a#), so')
+    // (a kept link's close and a citation after it are two markers, side by side)
+    expect(wire([{ t: 'text', s: 'see ' }, { t: 'open', id: 1, src: '\\href{u}{' }, { t: 'text', s: 'the site' }, { t: 'close', id: 1, src: '}' }, { t: 'ph', src: '\\cite{b}' }, { t: 'text', s: ' for it' }])).toBe('see @a# the site @b#@c# for it')
+  })
+
+  it('a stretch of placeholders with white space alone between them is one marker, read back as its pieces in their order (the rules audit\'s T5: 28,203 of the 53 sweep papers\' 97,053 markers touched the one before)', () => {
+    const u = { pieces: [{ t: 'text', s: 'as in prior work' }, { t: 'ph', src: '\\cite{a}' }, { t: 'text', s: ' ' }, { t: 'ph', src: '\\cite{b}' }, { t: 'text', s: '. Then' }] }
+    const ser = serialize(u)
+    expect(ser.wire).toBe('as in prior work @a#. Then')
+    const back = rehydrate('wie in früheren Arbeiten @a#. Dann', ser)
+    expect('pieces' in back && back.pieces.map(p => (p.t === 'text' ? p.s : p.src)).join('')).toBe('wie in früheren Arbeiten \\cite{a} \\cite{b}. Dann')
+    // (the tags wire keeps each its own: what an LLM reads there, and the sentence cuts it is marked by, are as they were)
+    expect(serializeTags(u).wire).toBe('as in prior work<x id="1"/> <x id="2"/>. Then')
   })
 })
 
@@ -50,8 +63,9 @@ describe('rehydrate: the space the wire set after a full stop is taken off again
   it('Fig.~\\ref and et al.~\\cite come back tied as the source has them, not with a space before the tie (the review of A1, M3)', () => {
     const u = { pieces: [{ t: 'text', s: 'as shown in Fig.' }, { t: 'ph', src: '~' }, { t: 'ph', src: '\\ref{f}' }, { t: 'text', s: ' and by Smith et al.' }, { t: 'ph', src: '~' }, { t: 'ph', src: '\\cite{s}' }, { t: 'text', s: ', the loss' }] }
     const ser = serialize(u)
-    expect(ser.wire).toBe('as shown in Fig. @a#@b# and by Smith et al. @c#@d#, the loss')
-    const back = rehydrate('wie in Abb. @a#@b# und von Smith et al. @c#@d#, der Verlust', ser)
+    // (the tie and its reference one marker, read by the tie: the space before it the wire's)
+    expect(ser.wire).toBe('as shown in Fig. @a# and by Smith et al. @b#, the loss')
+    const back = rehydrate('wie in Abb. @a# und von Smith et al. @b#, der Verlust', ser)
     expect('pieces' in back && back.pieces.map(p => (p.t === 'text' ? p.s : p.src)).join('')).toBe('wie in Abb.~\\ref{f} und von Smith et al.~\\cite{s}, der Verlust')
   })
 
@@ -72,8 +86,8 @@ describe('rehydrate: the space the wire set after a full stop is taken off again
 
   it('before a piece a space never goes before, whatever stands before it: a tie or a control space after an abbreviation the engine wrote out, a group\'s end', () => {
     const ser = serialize({ pieces: [{ t: 'text', s: 'as shown in Fig.' }, { t: 'ph', src: '~' }, { t: 'ph', src: '\\ref{f}' }, { t: 'text', s: ', the U.S.' }, { t: 'ph', src: '\\ ' }, { t: 'text', s: 'voting age' }] })
-    expect(ser.wire).toBe('as shown in Fig. @a#@b#, the U.S. @c# voting age')
-    const back = rehydrate('wie in Abbildung @a#@b# gezeigt, das US-Wahlalter @c# von', ser)
+    expect(ser.wire).toBe('as shown in Fig. @a#, the U.S. @b# voting age')
+    const back = rehydrate('wie in Abbildung @a# gezeigt, das US-Wahlalter @b# von', ser)
     // the space after the control space is TeX's to skip
     expect('pieces' in back && back.pieces.map(p => (p.t === 'text' ? p.s : p.src)).join('')).toBe('wie in Abbildung~\\ref{f} gezeigt, das US-Wahlalter\\  von')
     const cell = serialize({ pieces: [{ t: 'ph', src: '\\textbf{' }, { t: 'text', s: 'Avg.' }, { t: 'ph', src: '}' }] })

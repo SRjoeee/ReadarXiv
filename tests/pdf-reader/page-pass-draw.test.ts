@@ -94,7 +94,9 @@ describe('layerOfPaper: the draw geometry of the pages', () => {
       expect(() => checkDraw(d)).not.toThrow()
       expect(d.items).toHaveLength(10)
       expect(d.items[0]?.[0]).toBe(words(100 * p, 10))
-      expect(d.fonts).toEqual([['ABCDEF+CMR10', 'serif', 0, ['a', 'b']]])
+      // (no map in the font's row: each item's unmapped characters its own, BUNDLE5 15; the font maps a and b alone)
+      expect(d.fonts).toEqual([['ABCDEF+CMR10', 'serif', 0]])
+      expect(d.items.every(it => it.length === 11 && it[10]!.length > 0)).toBe(true)
       expect(d.links).toEqual([[[1, 2, 3, 4], null, null, `sec.${p}`, null, null, null, null]])
     }
   })
@@ -186,12 +188,12 @@ describe('layerOfPaper: the draw geometry of the pages', () => {
 })
 
 describe('makerOf: the draw option', () => {
-  const input = async (w: World, o: Record<string, unknown> = {}) => ({ units: w.units, marks: await marksOf(w, ''), OPS, paper: PAPER, left: '', pdfjs: '6.3.289', ...o })
+  const input = async (w: World, o: Record<string, unknown> = {}) => ({ units: w.units, marks: await marksOf(w, ''), OPS, paper: PAPER, pdfjs: '6.3.289', ...o })
 
   it('hands a page\'s draw once (the held text is let go with it) and keeps the layout file the same bytes with it on or off', async () => {
     const w = worldOf()
-    const off = await makerOf({ ...(await input(w)), arxiv: arxivOf(w.pages) })
-    const on = await makerOf({ ...(await input(w, { draw: true })), arxiv: drawable(arxivOf(w.pages)) as never })
+    const off = await makerOf({ ...(await input(w)), base: arxivOf(w.pages) })
+    const on = await makerOf({ ...(await input(w, { draw: true })), base: drawable(arxivOf(w.pages)) as never })
     if ('refused' in off || 'refused' in on) throw new Error('refused')
     for (let p = 1; p <= on.pages; p++) { await off.readPage(p); await on.readPage(p) }
     const a = await off.whole(), b = await on.whole()
@@ -208,7 +210,7 @@ describe('makerOf: the draw option', () => {
     const runs = w.pages[0]!.runs
     runs[0] = { ...runs[0]!, fill: '#0000ff' }
     runs[1] = { ...runs[1]!, fill: 'pattern' }
-    const m = await makerOf({ ...(await input(w, { draw: true })), arxiv: drawable(arxivOf(w.pages)) as never })
+    const m = await makerOf({ ...(await input(w, { draw: true })), base: drawable(arxivOf(w.pages)) as never })
     if ('refused' in m) throw new Error('refused')
     await m.readPage(1)
     const d = m.drawOf(1) as Draw
@@ -217,7 +219,7 @@ describe('makerOf: the draw option', () => {
     // (an ink past its cap, its walk's backstop or turned is not the page's whole: its glyphs tell no item's fills)
     inkCap.on = true
     try {
-      const capped = await makerOf({ ...(await input(w, { draw: true })), arxiv: drawable(arxivOf(w.pages)) as never })
+      const capped = await makerOf({ ...(await input(w, { draw: true })), base: drawable(arxivOf(w.pages)) as never })
       if ('refused' in capped) throw new Error('refused')
       await capped.readPage(1)
       expect((capped.drawOf(1) as Draw).items.every(i => i[9] === -1)).toBe(true)
@@ -232,7 +234,7 @@ describe('makerOf: the draw option', () => {
       return { calls, doc: { ...doc, getPage: async (n: number) => { const p = (await doc.getPage(n)) as Record<string, any>; return { ...p, getTextContent: async () => { calls.push(n); return p.getTextContent() } } } } }
     }
     const json = async (doc: unknown, text: unknown) => {
-      const m = await makerOf({ ...(await input(w, { draw: true, ...(text ? { text } : {}) })), arxiv: doc as never })
+      const m = await makerOf({ ...(await input(w, { draw: true, ...(text ? { text } : {}) })), base: doc as never })
       if ('refused' in m) throw new Error('refused')
       for (let p = 1; p <= m.pages; p++) await m.readPage(p)
       return [1, 2, 3].map(p => m.drawJsonOf(p))
@@ -249,7 +251,7 @@ describe('makerOf: the draw option', () => {
     expect(again).toEqual(mine)
     // (and the rows are let go as each page's draw is read)
     const text = await readArxivText(counted().doc as never, { draw: true })
-    const m = await makerOf({ ...(await input(w, { draw: true, text })), arxiv: counted().doc as never })
+    const m = await makerOf({ ...(await input(w, { draw: true, text })), base: counted().doc as never })
     if ('refused' in m) throw new Error('refused')
     await m.readPage(1)
     expect(text.draw?.map(x => x !== null)).toEqual([false, true, true])
@@ -259,14 +261,14 @@ describe('makerOf: the draw option', () => {
     const w = worldOf()
     w.pages[0] = { runs: Array.from({ length: 10 }, (_, j): Run => ({ s: '\u6f22\u5b57\u306e\u6587\u3002'.repeat(8), x: 72, y: 700 - 12 * j })) }
     w.marked = w.pages
-    const m = await makerOf({ ...(await input(w, { draw: true })), arxiv: drawable(arxivOf(w.pages)) as never })
+    const m = await makerOf({ ...(await input(w, { draw: true })), base: drawable(arxivOf(w.pages)) as never })
     if ('refused' in m) throw new Error('refused')
     await m.readPage(1)
     const bytes = m.drawStats.bytes, text = m.drawJsonOf(1) as string
     expect(bytes).toBe(new TextEncoder().encode(text).length)
     expect(bytes).toBeGreaterThan(text.length + 500)
     // (a budget past the text's code units and short of its bytes holds none)
-    const tight = await makerOf({ ...(await input(w, { draw: true, drawHeldMax: text.length + 100 })), arxiv: drawable(arxivOf(w.pages)) as never })
+    const tight = await makerOf({ ...(await input(w, { draw: true, drawHeldMax: text.length + 100 })), base: drawable(arxivOf(w.pages)) as never })
     if ('refused' in tight) throw new Error('refused')
     await tight.readPage(1)
     expect(tight.drawOf(1)).toBeNull()
@@ -275,11 +277,11 @@ describe('makerOf: the draw option', () => {
 
   it('past the held budget a page has none, and a page taken frees room for the next', async () => {
     const w = worldOf()
-    const probe = await makerOf({ ...(await input(w, { draw: true })), arxiv: drawable(arxivOf(w.pages)) as never })
+    const probe = await makerOf({ ...(await input(w, { draw: true })), base: drawable(arxivOf(w.pages)) as never })
     if ('refused' in probe) throw new Error('refused')
     await probe.readPage(1)
     const one = probe.drawStats.bytes
-    const m = await makerOf({ ...(await input(w, { draw: true, drawHeldMax: Math.floor(one * 1.5) })), arxiv: drawable(arxivOf(w.pages)) as never })
+    const m = await makerOf({ ...(await input(w, { draw: true, drawHeldMax: Math.floor(one * 1.5) })), base: drawable(arxivOf(w.pages)) as never })
     if ('refused' in m) throw new Error('refused')
     await m.readPage(1)
     await m.readPage(2)

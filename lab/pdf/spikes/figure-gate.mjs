@@ -25,7 +25,7 @@
 // more drawn whose sizes differ, the sets whose size changed; on BUNDLE 10's side a translation mixing CJK with a Latin letter or
 // a digit is not drawn (its one CJK face, served with no Latin, refused it). Its translations a MODEL (zh: a CJK em for every
 // MODEL_LETTERS of a label's letters, two at least, its digits kept, 0.55 em each), or with `--mt=<file>` Microsoft's (a JSON of label → translation;
-// `--mt-fetch` asks for the labels it lacks, as the fixture maker does: mt.mjs translateUnits over translateTexts, two requests at
+// `--mt-fetch` asks for the labels it lacks, as the fixture maker does: mt.mjs translateUnits over microsoft.mjs translateTexts, two requests at
 // a time, and writes the file), their widths by kind of character (a CJK character or a full-width sign an em, a space 0.3, any
 // other 0.55). Reads the gate pack's fixtures
 // (`--pack`, <dir>/<id>-zh/base.pdf and base.json, the marking's texts) or bases given (`--bases`, <dir>/<id>/base.pdf and
@@ -62,7 +62,7 @@ const modelWidth = text => Math.max(2, Math.round((text.match(/\p{L}/gu) ?? []).
 const WIDE = /[\u2e80-\u9fff\uac00-\ud7af\u3000-\u30ff\uf900-\ufaff\uff00-\uffef]/u
 const textWidth = t => [...t].reduce((w, ch) => w + (WIDE.test(ch) ? 1 : /\s/u.test(ch) ? 0.3 : 0.55), 0)
 const mtCache = MT && existsSync(MT) ? JSON.parse(readFileSync(MT, 'utf8')) : {}
-/** one request to Microsoft's endpoint as the fixture maker makes it (layer-fixtures.mjs `microsoft`: mt.mjs translateMicrosoft's
+/** one request to Microsoft's endpoint as the fixture maker makes it (layer-fixtures.mjs `microsoft`: microsoft.mjs translateMicrosoft's
  *  request, its User-Agent, each answer `{ text, by }`) */
 async function microsoft(texts, to) {
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -73,12 +73,13 @@ async function microsoft(texts, to) {
     } catch (e) { if (attempt === 3) throw e; await new Promise(r => setTimeout(r, 1500 * (attempt + 1))) }
   }
 }
-/** the labels' translations Microsoft gives, as the fixture maker asks for them (mt.mjs translateUnits over translateTexts, two
+/** the labels' translations Microsoft gives, as the fixture maker asks for them (mt.mjs translateUnits over microsoft.mjs translateTexts, two
  *  requests at a time, markers), into the cache */
 async function fetchMt(texts) {
   const want = [...new Set(texts)].filter(t => !Object.hasOwn(mtCache, t))
   if (!want.length) return
-  const { translateTexts, translateUnits, shown } = await import('../../../src/pdf-reader/engine/translate/mt.mjs')
+  const { translateUnits, shown } = await import('../../../src/pdf-reader/engine/translate/mt.mjs')
+  const { translateTexts } = await import('./microsoft.mjs')
   const latin1 = t => { let o = ''; for (const b of new TextEncoder().encode(t)) o += String.fromCharCode(b); return o }
   const units = want.map(t => ({ kind: 'inkfigures', pieces: [{ t: 'text', s: latin1(t) }] }))
   const { results } = await translateUnits(units, ts => translateTexts(ts, 'zh', { parallel: 2, send: microsoft }), 'markers')

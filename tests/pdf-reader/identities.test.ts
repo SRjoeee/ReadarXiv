@@ -7,7 +7,6 @@ import type { TranslateCall } from '@/providers/translate-service'
 import { bundleKey, CTAG, VTAG } from '@/pdf-reader/engine/layer-proto/bundle.mjs'
 import { LAYOUT, LayoutRefusal, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
 import { type RuleField, RULES_FIELDS } from '@/pdf-reader/engine/rules/layout.mjs'
-import { CJK } from '@/pdf-reader/engine/pipeline/scripts.mjs'
 import { scriptOf } from '@/pdf-reader/engine/rules/script.mjs'
 
 // The three kinds of rule and their identities (the rules-as-data plan, §1 and §9): extraction, layout and translation
@@ -43,7 +42,7 @@ describe('the declared literal constants', () => {
 describe('TRANSLATE_VERSION', () => {
   it('is exported by translate/, and mt.mjs re-exports that one constant', async () => {
     const { TRANSLATE_VERSION } = await import('@/pdf-reader/engine/translate/version.mjs')
-    expect(TRANSLATE_VERSION).toBe('9')
+    expect(TRANSLATE_VERSION).toBe('10')
     // (a token of the form the web's identity and a bundle's versions take)
     expect(TRANSLATE_VERSION).toMatch(/^[0-9a-z.]{1,16}$/)
     const mt = await import('@/pdf-reader/engine/translate/mt.mjs')
@@ -61,14 +60,13 @@ describe('TRANSLATE_VERSION', () => {
 })
 
 describe('the kept rule lives in translate/', () => {
-  it('authorsTranslated answers for the scripts the TeX path sets with xeCJK, and scripts.mjs no longer exports it', async () => {
+  it('authorsTranslated answers for the CJK scripts', async () => {
     const { authorsTranslated } = await import('@/pdf-reader/engine/translate/kept.mjs')
     expect(['zh', 'zh-CN', 'zh-TW', 'ja', 'ko'].map(authorsTranslated)).toEqual([true, true, true, true, true])
     expect(['en', 'ru', 'de', 'fr', 'es', 'vi', 'uk'].map(authorsTranslated)).toEqual([false, false, false, false, false, false, false])
-    // the rule is the translation's and no longer reads the TeX path's table; a script added to that table is a decision
-    // about whether its authors are translated, taken here (and a change of TRANSLATE_VERSION)
-    expect(['zh', 'zh-TW', 'ja', 'ko'].map(scriptOf).sort()).toEqual(Object.keys(CJK).sort())
-    expect(await import('@/pdf-reader/engine/pipeline/scripts.mjs')).not.toHaveProperty('authorsTranslated')
+    // the rule is the translation's: the TeX path's table of CJK strategies (Hans, Hant, Jpan, Kore) went with the compiled
+    // translation (2026-11-04); a script whose authors are translated is a decision taken here (and a change of TRANSLATE_VERSION)
+    expect(['zh', 'zh-TW', 'ja', 'ko'].map(scriptOf).sort()).toEqual(['Hans', 'Hant', 'Jpan', 'Kore'])
   })
 })
 
@@ -213,7 +211,7 @@ describe("docs/PDF-READER.md: the table of identities (rules as data, §9.4)", (
   it('has a row for every identity the engine exports', () => {
     const exported = identitiesExported()
     // (the ones the plan names, so that a pattern that stopped matching would fail here and not pass for want of names)
-    for (const name of ['PIPELINE_VERSION', 'TRANSLATE_VERSION', 'TYPESETTING_VERSION', 'LAYOUT', 'REMOVAL', 'BUNDLE', 'BUNDLE5', 'PDFJS', 'RULES_SCHEMA']) expect(exported, name).toContain(name)
+    for (const name of ['PIPELINE_VERSION', 'TRANSLATE_VERSION', 'LAYOUT', 'REMOVAL', 'BUNDLE', 'BUNDLE5', 'PDFJS', 'RULES_SCHEMA']) expect(exported, name).toContain(name)
     for (const name of exported) expect(rows, `${name} is not a row of the table`).toContain(name)
   })
 

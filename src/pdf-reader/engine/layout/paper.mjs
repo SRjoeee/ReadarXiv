@@ -6,8 +6,8 @@
 //   1. the mark probe (live.mjs probeFiles `marks`), compiled in one pass: its log holds the paper's own switch (TeX's
 //      answers to the mark probe, readMarkProbe), the macros that set no ink (readInkProbe), the text the others and the
 //      units' leads set (readInkTexts), whether each babel name's own text holds a lowercase letter (readNameProbe) and the paper's
-//      \lineskip and \lineskiplimit (readSkipProbe). Read as runLive
-//      reads the font probe, from its log alone: the probe has no body and so no pages,
+//      \lineskip and \lineskiplimit (readSkipProbe). Read from its log alone: the probe has no
+//      body and so no pages,
 //      and a compiler need not call that a success
 //   2. the marked original (live.mjs originalFiles with `lines` and the layout marks of every class), marked with those
 //      answers, compiled in full: its marks are where each marked piece stands, so it must be marked as the maker will
@@ -213,7 +213,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
   let preamble = null
   try { preamble = markedPreamble(paper, { complete }) } catch (e) { if (isMemoryError(e)) throw e; preamble = null }
   const probe = await stage('probe', async () => {
-    // (runLive's request for its font probe)
+    // (the font probe's request: one pass, no bibliography)
     const ask = pre => asked({ main, engine, rerun: false, bibtex: false, overrides: probeFiles(paper, { marks: true, ...(pre ? { preamble: pre.text } : {}) }) })
     let c = await ask(preamble), blamed = new Set()
     if (preamble) {
@@ -272,7 +272,7 @@ export async function markedOfPaper(paper, { compile, converge = false, compileB
   const marked = await stage('compile', async () => {
     files ??= filesOf(g.unmarked, g.names, spans)
     if (cm) return convergeThenMark(paper, asked, files, cm, { wall, budget: compileBudgetMs, bound: filesBound, keep: wantFinal })
-    // (runLive's request for the marked original, taken as runLive takes it: one that did not run through is no marked
+    // (every pass, the bibliography's step as the paper needs it; one that did not run through (ranThrough) is no marked
     // original, whatever PDF it left — 2610.20713's, TL2025's 7 pages of 15 before its hundredth error; with the files it wrote,
     // which the final pass is made over)
     return asked({ main, engine, rerun: true, bibtex, overrides: files, ...(wantFinal ? { files: true } : {}) })

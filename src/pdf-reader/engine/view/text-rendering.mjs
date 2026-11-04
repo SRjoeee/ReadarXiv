@@ -125,6 +125,26 @@ export function probeWords(doc, words) {
   }
 }
 
+/**
+ * `read()` run with `svg`'s styles to be read: at once where it is in the document; a drawing not put in place yet (its tree
+ * detached, an element at its root) held for it in a holder that lays nothing out (display: none, whose styles are computed and
+ * whose boxes are none), then detached again as it was. So a laid page's words are read before the page goes in, and the page is
+ * laid out once, under the rendering it keeps
+ */
+function styled(svg, doc, read) {
+  if (svg?.isConnected !== false) return read()
+  let root = svg
+  while (root.parentNode) root = root.parentNode
+  const host = doc.body ?? doc.documentElement
+  if (root.nodeType !== 1 || !host || typeof doc.createElement !== 'function') return read()
+  const holder = doc.createElement('div')
+  holder.style.display = 'none'
+  holder.setAttribute('aria-hidden', 'true')
+  host.append(holder)
+  holder.append(root)
+  try { return read() } finally { root.remove(); holder.remove() }
+}
+
 /** each document's decisions, by the source of the faces its layer is drawn in */
 const decided = new WeakMap()
 /** a decision written on <html>: the attribute for `auto`, none for anything else (engine.css's geometricPrecision) */
@@ -133,10 +153,11 @@ function write(doc, answer) {
   else doc.documentElement?.removeAttribute?.(ATTRIBUTE)
 }
 /**
- * The layer's text rendering for a document, decided from a laid page's SVG (`svg`, in the document) the first time a page
- * tells, and written on its <html>: `data-axt-layer-text="auto"` where the layer takes `auto`, no attribute (engine.css's
- * geometricPrecision) elsewhere. Returns the decision, or null while no page has told. It never throws: a commit calls it,
- * and a page whose words cannot be read leaves the decision to the next.
+ * The layer's text rendering for a document, decided from a laid page's SVG (`svg`: in the document, or in a drawing not put in
+ * place yet, whose styles are read in a holder that lays nothing out) the first time a page tells, and written on its <html>:
+ * `data-axt-layer-text="auto"` where the layer takes `auto`, no attribute (engine.css's geometricPrecision) elsewhere. Returns the
+ * decision, or null while no page has told. It never throws: a commit calls it, and a page whose words cannot be read leaves
+ * the decision to the next.
  * `faces` names the source of the faces the layer is drawn in, each a decision of its own: a system can lay its own faces out
  * otherwise than the web fonts a reader serves (Linux: fractional advances under both renderings for the one, whole pixels
  * under `auto` for the other). The readers draw in the faces they serve alone (the default); the layer lab also in the system's
@@ -153,7 +174,8 @@ export function applyLayerText(svg, doc = svg?.ownerDocument, faces = 'served') 
     return answer
   }
   let answer = null
-  try { answer = probeWords(doc, wordsOf(svg)) } catch { answer = null }
+  // (the words read with the drawing held where it is styled, and laid out again once it is let go: no box of the page is made)
+  try { answer = probeWords(doc, styled(svg, doc, () => wordsOf(svg))) } catch { answer = null }
   if (answer === null) {
     if (bySource.size) write(doc, null)
     return null

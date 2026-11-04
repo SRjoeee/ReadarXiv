@@ -167,6 +167,9 @@ export interface Internals {
     letAheadGo(): void
     /** whether they still wait */
     aheadHeld(): boolean
+    /** the layer side's word on the pages (`fn(n)`: whether page n stays the original's; null: none does; omitted: told again):
+     *  a place that waits for its layer shows the left's drawing of its page, one that stays the original's its own page view */
+    settle?(fn?: ((n: number) => boolean) | null): void
   }
   left: {
     doc(): ViewDocument | null
@@ -175,6 +178,8 @@ export interface Internals {
     pdfPage(n: number): unknown
     /** whether page n of the left is being drawn (its page view running or paused) */
     drawing?(n: number): boolean
+    /** whether page n of the left is drawn (its page view finished) */
+    drawn?(n: number): boolean
   }
   /** the host's PDF.js library (OPS, AnnotationMode) and its getDocument options (assets) */
   readonly lib: unknown
@@ -201,6 +206,10 @@ export interface Internals {
   onScale(listener: (scale: number, drawingDelay: number) => void): () => void
   /** a pane scrolled (each scroll event), for the layer side's re-asks and the heading read */
   onScrolled(listener: (side: Side) => void): () => void
+  /** whether the highlight is on (the look's switch): a pointer wants a page only while it is */
+  highlight(): boolean
+  /** each change of the highlight's switch */
+  onHighlight(listener: (on: boolean) => void): () => void
   /** the view's one layer side, disposed first by the view's own dispose; a second while one lives throws */
   attach(side: { dispose(): void }): () => void
   emit(event: ViewEvent): void

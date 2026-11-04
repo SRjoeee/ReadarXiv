@@ -85,7 +85,7 @@ const relabelledOf = recs => new Set(recs.filter(r => S.byId.get(r.id)?.prep?.la
  * group drawn partly where some of its cells are drawn and some are not (a cell left the original's alone as its ink cannot
  * be hidden aside), at the first page one is drawn on; and whether
  * a drawn unit's float label stands in the source language where the final names it in the target's — the record's
- * `captions` (live.mjs captionsOf: `target` for figures or tables) and the target's names (`names`, the layout rules' labels,
+ * `captions` (`target` for figures or tables, as a compile of the translation once read them) and the target's names (`names`, the layout rules' labels,
  * the gate's own) differing from the label's own word, and the unit drawing no label of its own (`prep.label.drawn`)
  */
 function consistencyOf(record, S, names) {

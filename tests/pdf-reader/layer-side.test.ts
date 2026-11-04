@@ -557,6 +557,9 @@ describe('the pages ahead: laid the way the reader moves, while it scrolls as at
     const draw = FakePDFPageView.prototype.draw
     vi.spyOn(FakePDFPageView.prototype, 'draw').mockImplementation(async function (this: FakePDFPageView) { if (this.id === 2) await held; return draw.call(this) })
     const a = await setup()
+    // (a place drawing its own page view: one where the left does not show the right's pages; with the sync on it shows the left's
+    // drawing, and draws nothing, places.mjs)
+    a.view.setSync(false)
     await nearOn(a, [2])
     await flush(10)
     const I = internalsOf(a.view)
@@ -771,6 +774,54 @@ describe('a copy that fails, and the original dropped', () => {
     s.side.again()
     await settle(s)
     expect(s.opens).toBe(2)
+  })
+})
+
+describe('a place waiting for its layer shows the left\'s drawing; one that stays the original\'s its own page view (places.mjs settle, V1)', () => {
+  const rightViews = (s: Setup) => FakePDFPageView.made.filter(v => s.panes.right.contains(v.div))
+  const copyIn = (s: Setup, n: number) => places(s)[n - 1]?.querySelector<HTMLCanvasElement>(':scope > .axt-place-view > canvas.axt-place-copy') ?? null
+
+  it('waiting, the place holds the left\'s canvas copied, no page view; its page failing (a copy that fails) makes it the original\'s own, its text layer and links', async () => {
+    const s = await setup({ copyFails: [1], door: { rows: 'gate' } })
+    await nearOn(s, [1])
+    leftViewer().render(1)
+    await s.clock.advance(20)
+    expect([content(s, 1), copyIn(s, 1)?.width, rightViews(s).length]).toEqual(['original', 100, 0])
+    s.side.tell(await ALL())
+    s.side.take((await M()).index.units.map((_, id) => rowOf(id)))
+    s.side.end()
+    await settle(s)
+    // (its copy failed: shown as the original's, drawn by its own page view, which is what selection, find and links read there)
+    expect(content(s, 1)).toBe('original')
+    expect(rightViews(s).map(v => v.id)).toEqual([1])
+    await flush(10)
+    expect(places(s)[0]?.querySelector('.textLayer')?.textContent).toBe('page 1')
+    expect(copyIn(s, 1)).toBeNull()
+  })
+
+  it('the layer refused: every near place waiting for it draws its own page view', async () => {
+    const s = await setup({ openFails: true })
+    await nearOn(s, [1, 2])
+    leftViewer().render(1)
+    await s.clock.advance(20)
+    expect(rightViews(s)).toHaveLength(0)
+    s.side.tell(await ALL())
+    await settle(s)
+    expect(s.side.probe().state).toBe('refused')
+    expect(rightViews(s).map(v => v.id).sort()).toEqual([1, 2])
+  })
+
+  it('a page laid takes the copy\'s place, the copy let go: one bitmap a place', async () => {
+    const s = await setup()
+    await nearOn(s, [1])
+    leftViewer().render(1)
+    await s.clock.advance(20)
+    const copy = copyIn(s, 1) as HTMLCanvasElement
+    s.side.tell(await ALL())
+    await settle(s)
+    expect(content(s, 1)).toBe('layer')
+    expect([copy.width, copy.isConnected, rightViews(s).length]).toEqual([0, false, 0])
+    expect(places(s)[0]?.querySelectorAll('canvas')).toHaveLength(1)
   })
 })
 
@@ -2003,6 +2054,17 @@ describe('the side: one a view, and its dispose', () => {
     s.side.dispose()
     const again = createLayerSide(s.view, o as never)
     again.dispose()
+  })
+
+  it('a side made while places near the view wait for the left\'s drawing (a host that makes its side after the original\'s first page) is made, and tells them its word on the pages', async () => {
+    const s = await setup()
+    s.side.dispose()
+    await nearOn(s, [1, 2])
+    expect(internalsOf(s.view).places.contentOf(1)).toBe('original')
+    const o = { paper: { id: 'x', version: 1 }, target: 'zh', faceSources: async () => null, hyphUrl: () => '', fetchObject: async () => new Uint8Array(), bind: async () => true, composed: () => fakeTask() as unknown as DocumentTask }
+    const late = createLayerSide(s.view, o as never)
+    expect(FakePDFPageView.made.filter(v => s.panes.right.contains(v.div))).toHaveLength(0)
+    late.dispose()
   })
 
   it('emits no layer event after dispose, and the view\'s dispose disposes it first', async () => {

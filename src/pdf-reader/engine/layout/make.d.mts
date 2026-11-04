@@ -12,12 +12,11 @@ export interface MakeInput {
   marks: LayoutMarks
   /** a PDF.js document of the base page: our compile's final pass (layout/paper.mjs markedOfPaper `base`), whose coordinates the
    *  file holds; the caller opens and destroys it */
-  arxiv: unknown
+  base: unknown
   OPS: Record<string, number>
   paper: { id: string; version: number }
-  left: string
   pdfjs: string
-  /** the base page's text as layout/arxiv.mjs readArxivText read it from `arxiv` (step T), else read by the maker */
+  /** the base page's text as layout/arxiv.mjs readArxivText read it from `base` (step T), else read by the maker */
   text?: ArxivText | null
   /** the line check (carry.mjs lineCheckOf of the base page's own tokens, `text`'s, over arXiv's). A unit is laid only where
    *  every page it is on is drawable (`undrawable`; `stats.units.undrawn` the others), the file refused ('carry') where none is;
