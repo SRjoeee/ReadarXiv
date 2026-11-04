@@ -5,9 +5,11 @@
 // each style from `page.commonObjs`; the document is opened with fontExtraProperties (its fonts' `toUnicode`) and the engine's cMaps.
 // The result is the draw of layer-proto/draw.mjs, or null (the browser reads the page itself): a page that is not read, a font
 // that cannot be told the same by every host, or a page past a cap. Each item carries its characters' fills, from the glyphs of the
-// page's ink the maker reads (layout/fills.mjs itemFills: the reader's page read live tells the same). Imports the engine's pure
-// modules alone.
-import { wireText } from '../layer-proto/draw.mjs'
+// page's ink the maker reads (layout/fills.mjs itemFills: the reader's page read live tells the same), and the characters its
+// font's own map gives none of its glyphs (draw.mjs unmapped: the live reading's `nu`, read of the same font object), so that no
+// font's map is shipped (BUNDLE5 14, the rules audit's F3); its place, its extent and a link's numbers at a thousandth of a point
+// (draw.mjs drawRounded, F8), once its fills are read of them as they are. Imports the engine's pure modules alone.
+import { drawRounded, unmappedRuns, wireText } from '../layer-proto/draw.mjs'
 import { itemFills } from '../layout/fills.mjs'
 import { isMemoryError } from './memory.mjs'
 
@@ -24,12 +26,12 @@ export function mappedChars(toUnicode) {
   return out
 }
 
-/** a font object's mapped characters as a draw ships them (mappedChars, as a list), once a document: a font is one object of the
- *  document's `commonObjs` whatever page uses it, its map exported with it once */
+/** a font object's mapped characters (mappedChars), once a document: a font is one object of the document's `commonObjs` whatever
+ *  page uses it, its map read once */
 const mappedFonts = new WeakMap()
 function mappedOfFont(f) {
   if (mappedFonts.has(f)) return mappedFonts.get(f)
-  const set = mappedChars(f.toUnicode), mapped = set === null ? null : [...set]
+  const mapped = mappedChars(f.toUnicode)
   mappedFonts.set(f, mapped)
   return mapped
 }
@@ -85,7 +87,7 @@ export async function drawDataOf(page, annots = null, text = null, glyphs = null
   }
   if (annots && !Array.isArray(ann)) return { draw: null, why: 'read' }
   try {
-    const table = [], at = new Map(), rows = []
+    const table = [], at = new Map(), rows = [], maps = []
     for (const r of tx.rows) {
       let font = -1
       const name = r[8]
@@ -105,7 +107,8 @@ export async function drawDataOf(page, annots = null, text = null, glyphs = null
             mapped = mappedOfFont(f)
           }
           at.set(name, table.length)
-          table.push([typeof f?.name === 'string' ? f.name : null, fallback, type3, mapped])
+          table.push([typeof f?.name === 'string' ? f.name : null, fallback, type3])
+          maps.push(mapped)
         }
         font = at.get(name)
       }
@@ -113,13 +116,21 @@ export async function drawDataOf(page, annots = null, text = null, glyphs = null
       rows.push(r)
     }
     if (tx.bad) return { draw: null, why: 'read' }
-    // (each item's characters' fills, from the ink's glyphs: none told, -1, where the page's ink was not read whole)
+    // (each item's characters' fills, from the ink's glyphs: none told, -1, where the page's ink was not read whole; read of its
+    // numbers as PDF.js gives them, as the live reading reads them, before they are rounded)
     const fills = itemFills(rows.map(r => ({ str: r[0], transform: [r[1], r[2], 0, r[3], r[4], r[5]], width: r[6], height: r[7] })), glyphs)
-    rows.forEach((r, i) => { r[9] = fills[i] })
-    const links = []
+    rows.forEach((r, i) => {
+      r[9] = fills[i]
+      // (its unmapped characters, where it has any; a row of no font reads none of a map: what no Unicode stands for alone)
+      const nu = unmappedRuns(r[0], r[8] < 0 ? null : maps[r[8]])
+      if (nu) r[10] = nu
+      // (its origin, its width and its height at a thousandth of a point; its transform's scale as it is)
+      r[4] = drawRounded(r[4]); r[5] = drawRounded(r[5]); r[6] = drawRounded(r[6]); r[7] = drawRounded(r[7])
+    })
+    const links = [], round = v => (v == null ? null : Array.from(v, drawRounded))
     for (const a of ann ?? []) {
       if (a?.subtype !== 'Link') continue
-      links.push([a.rect, a.quadPoints ?? null, a.url ?? null, a.dest ?? null, a.overlaidText ?? null, a.borderStyle?.width ?? null, a.borderStyle?.style ?? null, a.color ?? null])
+      links.push([round(a.rect), round(a.quadPoints), a.url ?? null, a.dest ?? null, a.overlaidText ?? null, a.borderStyle?.width == null ? null : drawRounded(a.borderStyle.width), a.borderStyle?.style ?? null, a.color ?? null])
     }
     const w = wireText({ fonts: table, items: rows, links }, { plainItems: true })
     return w === null ? { draw: null, why: 'shed' } : { draw: w.draw, text: w.text, bytes: w.bytes, why: null }

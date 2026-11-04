@@ -67,15 +67,20 @@ import { CLASS_IDS } from '../rules/content-classes.mjs'
  *  part's layout may carry the regions TeX set on its pages (`regions`, layout/file.mjs REGION_KINDS: each line of a code
  *  environment's body, by the points the layout compile sets around it), the key there only where a page of the part holds
  *  one; a reader of 12 refuses the key, and a bundle of 12 is not found under 13's CTAG and is prepared again. Every other
- *  shape is 12's, and this reader reads 12's objects too: a part of 12 has no regions */
-export const BUNDLE5 = '13'
+ *  shape is 12's, and this reader reads 12's objects too: a part of 12 has no regions. 14 (the rules audit of 2026-11-04, F3 and F8):
+ *  a left part's draw ships no font's map, each text item its own unmapped characters instead (draw.mjs: a font row
+ *  [name, fallback, type3], an item's eleventh value its code point offsets, where it has any), and its items' places and extents
+ *  and its links' numbers at a thousandth of a point (draw.mjs DRAW_ROUND); a reader of 13 refuses the rows, and a bundle of 13 is
+ *  not found under 14's CTAG and is prepared again. Every other shape is 13's, and this reader reads 13's objects too: a draw of
+ *  13 is read of its fonts' maps, its numbers as written */
+export const BUNDLE5 = '14'
 /** the formats this reader takes: its own, and 7's (a bundle drawn over arXiv's PDF, whose objects 9 reads unchanged: its
  *  head is read as `base.source` 'arxiv', with no `orig`), 9's and 10's. Every object of a bundle is of its head's format */
-export const BUNDLES_READ = Object.freeze(['7', '9', '10', '11', '12', BUNDLE5])
+export const BUNDLES_READ = Object.freeze(['7', '9', '10', '11', '12', '13', BUNDLE5])
 /** the formats whose parts may carry figure units (`figures`, figure-rows.mjs: 10's rows without a set or a room) */
-const FIGURES_READ = Object.freeze(['10', '11', '12', BUNDLE5])
+const FIGURES_READ = Object.freeze(['10', '11', '12', '13', BUNDLE5])
 /** the formats whose left parts may carry a line map (`lines`, 12's) */
-const LINES_READ = Object.freeze(['12', BUNDLE5])
+const LINES_READ = Object.freeze(['12', '13', BUNDLE5])
 /** a units chunk's own format (amendment M12): raised only by a change to the chunk's shape, so that a change to a part's
  *  shape renames no unit identity and redoes no translation */
 export const UNITS_FORMAT = '1'

@@ -77,6 +77,7 @@ import { GENERATED_COMMANDS, headInTarget, refInTarget } from '../rules/tex-name
 import { NAME_KIND } from './units.mjs'
 import { NAME_ENGLISH } from '../layout/names.mjs'
 import { fillsByChar, UNKNOWN } from '../layout/fills.mjs'
+import { inRuns, unmapped } from './draw.mjs'
 
 /** a source text piece's characters (mt.mjs utf8: its bytes, read latin1, as UTF-8), here so that the drawing loads no wire module:
  *  sourceScopes holds what it reads to plainSource's text, and reads none where the two differ */
@@ -155,11 +156,9 @@ export function fontMappedOf(font) {
   if (!font.isType3Font && !('toUnicode' in font)) throw new Error("a font with no ToUnicode map to read: open the document with the engine's PDF_OPTIONS (fontExtraProperties)")
   return mappedOf(font.toUnicode)
 }
-/** a character no Unicode stands for: private use, a replacement character, a control */
-const NO_UNICODE = /[\p{Co}\p{Cc}\uFFFD]/u
-/** whether a page character's text is no reading of its glyph (pageChars2's `nu`): one no Unicode stands for, or one
- *  its font's own map (`mapped`, mappedOf's; null: none to read) gives none of its glyphs */
-export const unmapped = (ch, mapped) => /\S/.test(ch) && (NO_UNICODE.test(ch) || (mapped != null && !mapped.has(ch)))
+/** whether a page character's text is no reading of its glyph (pageChars2's `nu`): draw.mjs's, which the prepare tells each
+ *  item of a draw by (BUNDLE5 14) */
+export { unmapped }
 /** a font class with a character's fill (layout/fills.mjs): one object a class and fill, so that characters of one font and
  *  colour share their style as those of one font did; its font class itself, `font` (not enumerable), for what asks whether two
  *  characters are of one font whatever their colours (fontOfStyle) */
@@ -179,11 +178,12 @@ export const fontOfStyle = st => st?.font ?? st
  * line's stretch, by its spaces where it has any), and the item's font class (`st`, from fontOf(fontName)) on every
  * character, with its fill where `fills` (each item's, layout/fills.mjs: the draw's, or the page's ink read live) tells it
  * (`st.fill`, 0xRRGGBB; none where it is not told). `mapOf(fontName)` (mappedOf's set, or null): a character the item's font
- * maps none of its glyphs to is marked `nu`, no Unicode of the file's. PDF.js reads such a glyph by its code (2307.16209's
+ * maps none of its glyphs to is marked `nu`, no Unicode of the file's; `nus` (a draw's, draw.mjs drawInputsOf: each item's
+ * unmapped characters' runs, or null), where given, says it in its place, the prepare having read the same of the font. PDF.js reads such a glyph by its code (2307.16209's
  * newtx summation sign in txexs, read "Í"), so its text is not what the page shows; so is a private-use, replacement or
  * control character.
  */
-export function pageChars2(textContent, fontOf, mapOf = null, fills = null) {
+export function pageChars2(textContent, fontOf, mapOf = null, fills = null, nus = null) {
   const out = []
   for (const [item, it] of textContent.items.entries()) {
     if (!it.str || !it.transform) continue
@@ -191,7 +191,7 @@ export function pageChars2(textContent, fontOf, mapOf = null, fills = null) {
     if (Math.abs(b) > 0.01 || d < 0) continue
     const size = Math.hypot(a, b) || it.height
     const st = fontOf(it.fontName)
-    const mapped = mapOf?.(it.fontName) ?? null
+    const mapped = nus ? null : mapOf?.(it.fontName) ?? null, told = nus ? nus[item] ?? null : null
     const chars = [...it.str]
     const fill = fills ? fillsByChar(fills[item], chars.length) : null
     const nat = chars.map(ch => (ACCENT.test(ch) && chars.length > 1 ? 0 : wDesign(ch, st) || 50))
@@ -205,7 +205,7 @@ export function pageChars2(textContent, fontOf, mapOf = null, fills = null) {
       const w = ws[k]
       // a radical hangs from its baseline (CMSY10's √: 0.04 em high, 0.96 em deep): its line is the one below
       const hang = ch === '√' && st?.fam === 'math' ? { ybEff: y - 0.75 * size } : null
-      const nu = unmapped(ch, mapped) ? { nu: true } : null
+      const nu = (nus ? /\S/.test(ch) && inRuns(told, k) : unmapped(ch, mapped)) ? { nu: true } : null
       out.push({ ch, x0: cx, x1: cx + w, yb: y, size, item, ix: x, k, st: fill ? withFill(st, fill[k]) : st, ...hang, ...nu })
       cx += w
     })

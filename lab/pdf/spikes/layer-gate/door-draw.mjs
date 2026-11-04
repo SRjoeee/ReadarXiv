@@ -7,7 +7,11 @@
 //   inputs  a paper's pages read in this browser as the run reads a page live (getTextContent, the page drawn, getAnnotations,
 //           its fonts from commonObjs, its characters' fills off the list PDF.js drew it by: run.mjs liveFillsOf), against its
 //           draws: the characters (layer2.mjs pageChars2) field by field, numbers by Object.is (the sign of zero aside: the wire
-//           writes -0 as 0, counted), a character's font class and fill by value, and the Link
+//           writes -0 as 0, counted) where the engine writes its draws as PDF.js reads them, and within what its rounding moves
+//           them where it writes them at a unit (BUNDLE5 14, draw.mjs DRAW_ROUND, a thousandth of a point: an item's own number by
+//           half of it at most, so a character's baseline and origin by DRAW_ROUND / 2 and its edges, its origin and its share of the
+//           width, by DRAW_ROUND; a link's numbers, its rectangle and the glyph points inside it, by DRAW_ROUND), the largest
+//           difference of each field reported; a character's size, its font class, its fill and its `nu` exactly, and the Link
 //           annotations as the run keeps them (links.mjs annotsOf). The run's own readers (run.mjs fontReaders, pageReadOf)
 //   ref     the door with no drawOf, its parts told as the run waits for one, its pages asked in order; each page's PDF.js drawing
 //           kept as PNG (every copy is drawn over it)
@@ -145,13 +149,16 @@ window.doorDraw = {
   async inputs({ name, paper }) {
     const R = await import('/engine/layer-proto/reader.mjs')
     const { fontReaders, pageReadOf, liveFillsOf } = await import('/engine/layer-proto/run.mjs')
-    const { checkDraw } = await import('/engine/layer-proto/draw.mjs')
+    const { checkDraw, DRAW_ROUND } = await import('/engine/layer-proto/draw.mjs')
+    // (what the draw's rounding may move each number of a character by, and a link's: none where the engine writes none)
+    const unit = DRAW_ROUND ?? 0
+    TOL = { x0: unit, x1: unit, yb: unit / 2, ix: unit / 2, ybEff: unit / 2, link: unit }
     const LK = await import('/engine/layer-proto/links.mjs')
     const D = await json(`/door/${paper}/draws.json`)
     const doc = await pdfjs.getDocument({ data: await bytes(`/fixtures/${name}/base.pdf`), ...PDF_ASSETS, ...R.PDF_OPTIONS }).promise
     // (one reader each, as a run keeps its caches: pages in order)
     const live = fontReaders(), data = fontReaders()
-    const out = { pages: doc.numPages, compared: 0, equal: 0, none: [], zeroSign: 0, differ: [], chars: 0, links: 0, nu: 0, overlaid: [], overlaidLost: 0 }
+    const out = { pages: doc.numPages, compared: 0, equal: 0, none: [], zeroSign: 0, differ: [], chars: 0, links: 0, nu: 0, overlaid: [], overlaidLost: 0, tolerance: TOL, drift: {} }
     for (let p = 1; p <= doc.numPages; p++) {
       const page = await doc.getPage(p)
       // (as drawPageOn reads a page live: its text asked, the page drawn, its annotations asked, the text in, its fonts from commonObjs)
@@ -174,7 +181,7 @@ window.doorDraw = {
       const d = D.pages[p - 1]
       if (!d?.draw) { out.none.push(`${p}:${d?.why ?? 'missing'}`); continue }
       const x = data.draw(checkDraw(d.draw))
-      const b = pageReadOf(x.tc, x.fontOf, x.mapOf, x.raw, x.fills ?? null)
+      const b = pageReadOf(x.tc, x.fontOf, x.mapOf, x.raw, x.fills ?? null, x.nus ?? null)
       out.compared++
       out.chars += a.chars.length
       out.links += a.read?.list.length ?? 0
@@ -288,6 +295,24 @@ function overlaidOf(p, read) {
 
 /** where two readings of a page differ (null: equal): the characters field by field, numbers by Object.is but the sign of zero
  *  (counted in `out.zeroSign`), a font class by value; the annotations by value */
+/** what each number of a character may differ by between the live reading and the draw's (`link`: a link's), set by the inputs
+ *  check from the engine's DRAW_ROUND; a float's own noise (1e-9) beside it */
+let TOL = {}
+const EPS = 1e-9
+/** whether two numbers are within `tol`, the difference noted as the field's largest */
+const near = (u, v, tol, key, out) => {
+  const d = Math.abs(u - v)
+  if (d > 0) out.drift[key] = Math.max(out.drift[key] ?? 0, d)
+  return d <= tol + EPS
+}
+/** two links' readings alike: their shapes and every string exactly, their numbers within TOL.link */
+const sameRead = (u, v, out) => {
+  if (typeof u === 'number' && typeof v === 'number') return Object.is(u, v) || near(u, v, TOL.link ?? 0, 'link', out)
+  if (u === null || v === null || typeof u !== 'object' || typeof v !== 'object') return Object.is(u, v)
+  if (Array.isArray(u) !== Array.isArray(v)) return false
+  const ku = Object.keys(u), kv = Object.keys(v)
+  return ku.length === kv.length && ku.every(k => Object.hasOwn(v, k) && sameRead(u[k], v[k], out))
+}
 function differs(a, b, out) {
   if (a.chars.length !== b.chars.length) return `chars ${a.chars.length} against ${b.chars.length}`
   for (let i = 0; i < a.chars.length; i++) {
@@ -299,12 +324,13 @@ function differs(a, b, out) {
       if (typeof u === 'number' && typeof v === 'number') {
         if (Object.is(u, v)) continue
         if (u === 0 && v === 0) { out.zeroSign++; continue }
+        if (k in TOL && near(u, v, TOL[k], k, out)) continue
       }
       if (!Object.is(u, v)) return `char ${i} ${k} ${String(u)} against ${String(v)}`
     }
   }
   const ann = r => JSON.stringify(r.read)
-  if (ann(a) === ann(b)) return null
+  if (ann(a) === ann(b) || sameRead(a.read, b.read, out)) return null
   // (the links alike but their overlaid text, which the draw lacks where PDF.js's live read has it: the server read the draw on
   // the lite worker with its links' text guard on (layout/pdf-lite.mjs TEXT_GUARD), the case the draw's read must opt out of)
   const blank = r => JSON.stringify({ ...r.read, list: r.read.list.map(x => ({ ...x, ov: '' })) })

@@ -3,11 +3,23 @@ export declare const DRAW_ITEMS: number, DRAW_STRING: number, DRAW_STRINGS: numb
 export declare const DRAW_FONTS: number, DRAW_NAME: number, DRAW_FALLBACK: number, DRAW_MAPPED: number, DRAW_MAPPED_CHAR: number
 export declare const DRAW_LINKS: number, DRAW_QUADS: number, DRAW_URL: number, DRAW_DEST: number, DRAW_ZOOM: number, DRAW_ARGS: number, DRAW_OVERLAID: number
 export declare const DRAW_VALUES: number, DRAW_BYTES: number, DRAW_COORD: number, DRAW_HELD_MAX: number
-/** [name, fallback, type3 (0 a font, 1 Type3, 2 no font object or an error font), mapped: null (no map), or the map's characters; [] = every char unmapped] */
-export type DrawFont = [name: string | null, fallback: string | null, type3: 0 | 1 | 2, mapped: string[] | null]
+/** the unit a draw's places and extents are written at (BUNDLE5 14): a thousandth of a point */
+export declare const DRAW_ROUND: number
+/** a number at DRAW_ROUND, -0 written 0 */
+export declare function drawRounded(v: number): number
+/** whether a page character's text is no reading of its glyph: one no Unicode stands for, or one its font's own map gives none of */
+export declare function unmapped(ch: string, mapped: Set<string> | null | undefined): boolean
+/** an item's unmapped characters as runs of code points, [start, end, …] rising, white space between them in the run, or null for none */
+export declare function unmappedRuns(str: string, mapped: Set<string> | null | undefined): number[] | null
+/** whether code point k of an item lies in its unmapped runs */
+export declare function inRuns(runs: readonly number[] | null, k: number): boolean
+/** [name, fallback, type3 (0 a font, 1 Type3, 2 no font object or an error font)]; a draw of 13's rows hold `mapped` too: null (no map),
+ *  or the map's characters ([] = every char unmapped) */
+export type DrawFont = [name: string | null, fallback: string | null, type3: 0 | 1 | 2] | [name: string | null, fallback: string | null, type3: 0 | 1 | 2, mapped: string[] | null]
 /** [str, a, b, d, e, f (the transform's 0, 1, 3, 4, 5), width, height, font: an index into the page's fonts, or -1, fills: its
- *  characters' (layout/fills.mjs ItemFills: one fill for all, -1 none told, or runs by code point)] */
-export type DrawItem = [str: string, a: number, b: number, d: number, e: number, f: number, width: number, height: number, font: number, fills: number | number[]]
+ *  characters' (layout/fills.mjs ItemFills: one fill for all, -1 none told, or runs by code point), and, where it has any, its
+ *  unmapped characters' runs [start, end, …] by code point (a draw of 14: unmappedRuns)]; e, f, width and height at a thousandth of a point (14) */
+export type DrawItem = [str: string, a: number, b: number, d: number, e: number, f: number, width: number, height: number, font: number, fills: number | number[]] | [str: string, a: number, b: number, d: number, e: number, f: number, width: number, height: number, font: number, fills: number | number[], unmapped: number[]]
 /** a dest: null, a name, [0, num, gen, zoom, ...args] (page by reference) or [1, index, 0, zoom, ...args] (page by index) */
 export type DrawDest = null | string | (string | number | null)[]
 /** [rect, quads (8k numbers) | null, url, dest, overlaid text, border width, border style, colour] */
@@ -15,8 +27,8 @@ export type DrawLink = [rect: number[], quads: number[] | null, url: string | nu
 export interface Draw { fonts: DrawFont[]; items: DrawItem[]; links: DrawLink[] }
 /** a draw as the writer is given it, in PDF.js's own shapes: typed arrays for rects, quads and colours, an iterable `mapped`, a dest explicit as [{num,gen}|index, {name}, ...args] */
 export interface DrawSource {
-  fonts: readonly (readonly [string | null | undefined, string | null | undefined, 0 | 1 | 2, Iterable<string> | null | undefined])[]
-  items: readonly (readonly [string, number, number, number, number, number, number, number, number, (number | readonly number[])?])[]
+  fonts: readonly (readonly [string | null | undefined, string | null | undefined, 0 | 1 | 2, (Iterable<string> | null | undefined)?])[]
+  items: readonly (readonly [string, number, number, number, number, number, number, number, number, (number | readonly number[])?, (readonly number[])?])[]
   links: readonly (readonly [ArrayLike<number>, ArrayLike<number> | null | undefined, string | null | undefined, unknown, string | null | undefined, number | null | undefined, number | null | undefined, ArrayLike<number> | null | undefined])[]
 }
 export declare class DrawRefusal extends Error { constructor(path: string, why: string); readonly path: string; readonly why: string }
@@ -33,7 +45,9 @@ export declare function drawInputsOf(draw: Draw): {
   items: { str: string; transform: number[]; width: number; height: number; fontName: string | null }[]
   /** each item's characters' fills (layout/fills.mjs ItemFills) */
   fills: (number | number[])[]
+  /** each item's unmapped characters by code point, or null for none (14's own; 13's read of its fonts' maps) */
+  nus: (number[] | null)[]
   styles: Record<string, { fontFamily: string | null }>
-  fonts: Map<string, { name: string | null; fallback: string | null; type3: 0 | 1 | 2; mapped: Set<string> | null }>
+  fonts: Map<string, { name: string | null; fallback: string | null; type3: 0 | 1 | 2 }>
   annots: { subtype: 'Link'; rect: number[]; quadPoints: number[] | null; url: string | null; dest: unknown; overlaidText: string | null; borderStyle?: { width: number | null; style: number | null }; color: number[] | null }[]
 }

@@ -120,8 +120,9 @@ export class NeedPixels extends Error {
  * as PDF.js's commonObjs holds them, by loaded name, with its text content's styles; a font the document exported with no map
  * refuses the document (fontMappedOf's throw, `refusesDocument`). `draw(draw)`: a draw's (draw.mjs, checked), its text content
  * and Link annotations in PDF.js's shapes (drawInputsOf: `tc`, `raw`), its fonts by their content keys, a namespace of their own
- * (never a loaded name); a key read before with another row refuses the draw (a RangeError, nothing of it kept: the caller reads
- * the page live). Each gives `fontOf(name)` and `mapOf(name)`, pageChars2's readers
+ * (never a loaded name), and each item's unmapped characters (`nus`: the prepare's, read of the same fonts, BUNDLE5 14); a key read
+ * before with another row refuses the draw (a RangeError, nothing of it kept: the caller reads the page live). Each gives
+ * `fontOf(name)` and `mapOf(name)` (none for a draw, whose `nus` say it), pageChars2's readers
  */
 export function fontReaders() {
   const fontClass = new Map(), fontMapped = new Map(), rowOfKey = new Map()
@@ -165,10 +166,8 @@ export function fontReaders() {
           }
           return c
         },
-        mapOf: key => {
-          if (!fontMapped.has(key)) fontMapped.set(key, x.fonts.get(key)?.mapped ?? null)
-          return fontMapped.get(key)
-        },
+        mapOf: () => null,
+        nus: x.nus,
       }
     },
   }
@@ -178,8 +177,8 @@ export function fontReaders() {
  *  null where they could not be read), from its text content, its fonts' readers (fontReaders'), its annotations and its items'
  *  fills (the draw's, or liveFillsOf's): the calls the run makes of a page's reading, live or from its draw (drawPageOn), for a
  *  gate that compares the two */
-export function pageReadOf(tc, fontOf, mapOf, raw, fills = null) {
-  const chars = L2.pageChars2(tc, fontOf, mapOf, fills)
+export function pageReadOf(tc, fontOf, mapOf, raw, fills = null, nus = null) {
+  const chars = L2.pageChars2(tc, fontOf, mapOf, fills, nus)
   return { chars, read: raw === null ? null : LK.annotsOf(raw, LK.pointsOf(tc.items), LK.charPoints(chars)) }
 }
 /** the operator list PDF.js drew a page by, where its drawing is whole (the view's drawnList, view/layer-side.mjs): the page read
@@ -2864,7 +2863,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       }
       await Promise.all([...byFace.values()].map(e => FS.ready(e.face, e.text)))
     }
-    chars2[i - 1] = L2.pageChars2(tc, fontOf, fonts.mapOf, fills)
+    chars2[i - 1] = L2.pageChars2(tc, fontOf, fonts.mapOf, fills, fonts.nus ?? null)
     // (its text items kept compact with its record, for its text layer: textOf)
     r.items = TL.itemsOf(tc)
     // (and its characters by baseline, which every unit's edges read, made once the page is: edgesOf)

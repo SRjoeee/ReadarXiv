@@ -94,7 +94,9 @@ describe('layerOfPaper: the draw geometry of the pages', () => {
       expect(() => checkDraw(d)).not.toThrow()
       expect(d.items).toHaveLength(10)
       expect(d.items[0]?.[0]).toBe(words(100 * p, 10))
-      expect(d.fonts).toEqual([['ABCDEF+CMR10', 'serif', 0, ['a', 'b']]])
+      // (no map in the font's row: each item's unmapped characters its own, BUNDLE5 14; the font maps a and b alone)
+      expect(d.fonts).toEqual([['ABCDEF+CMR10', 'serif', 0]])
+      expect(d.items.every(it => it.length === 11 && it[10]!.length > 0)).toBe(true)
       expect(d.links).toEqual([[[1, 2, 3, 4], null, null, `sec.${p}`, null, null, null, null]])
     }
   })
