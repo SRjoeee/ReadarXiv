@@ -372,6 +372,8 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [], voter
   // kept as it is drawn)
   const free = (p, st) => { const l = L2.layoutAt(p.tokens, p.blocks, p.s, p.P, st); if (l.clipped || (p.parent && !L2.keepsPages(p.layout.lines, l.lines, p.tokens))) return null; settleLayout(p, l); return l }
   const at = (p, st) => { const l = free(p, st); return l && L2.keepsShare(p.share, l) ? l : null }
+  // (a layout laid already at a state, by fillLeadsOf's `at`, which held it whole and to its pages: settled and held to its row)
+  const settledAt = (p, l) => { settleLayout(p, l); return L2.keepsShare(p.share, l) ? l : null }
   // (a unit's fill leading is its fit's (fillLeadsOf), set as it is laid: computed here only for a unit given without it)
   for (const p of units) if (p.fillLead === undefined) fillLeadsOf(p, P)
   // (`voters`: the units the page's target reads, where they are not the units filled: a unit laid in runs is filled a run at
@@ -408,7 +410,11 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [], voter
     // leading gave)
     const lead = leadOf(p), next = nextOf(p)
     let st = { ...p.layout.state, box: true, lead, ...(next > lead + 1e-9 ? { next } : {}) }
-    let l = at(p, st), closer = false
+    // (at its fill leading, its state the one fillLeadsOf laid it at: that layout, settled and held to its row as any try is)
+    const kept = fillLaid.get(p)
+    fillLaid.delete(p)
+    const same = kept && !st.next && kept.state === p.layout.state && kept.lead === lead
+    let l = same ? settledAt(p, kept.l) : at(p, st), closer = false
     if (!l && st.next) {
       // (its leading leaves the gap under it tighter than the next paragraph's lines: the loosest closer one that sets it,
       // down to the original's pitch; the floor is the next one's leading's, the same at every closer leading)
@@ -495,6 +501,9 @@ export function fillPage(units, P, onFilled = () => {}, { continuing = [], voter
  * yet the rest of the pass's reads: its line count, read live (after its first page's fill), and the targets the page is
  * held to (`held`, through every page passed before) are S3's, 1b-C's
  */
+/** each unit's layout at its fill leading as fillLeadsOf found it: { state, the fitted state it was laid from; lead; l, the
+ *  layout, not yet settled }, taken once by fillPage where it lays the unit at that state, its fitted state unchanged */
+const fillLaid = new WeakMap()
 function fillLeadsOf(p, P) {
   const r3 = x => Math.round(x * 1000) / 1000
   const at = (q, st) => { const l = L2.layoutAt(q.tokens, q.blocks, q.s, q.P, st); return l.clipped || (q.parent && !L2.keepsPages(q.layout.lines, l.lines, q.tokens)) ? null : l }
@@ -518,15 +527,20 @@ function fillLeadsOf(p, P) {
   // A state that sets it so sets it without the floor too, which only takes slots off its last frame's foot: the fitted state
   // is laid again only where that one does not set it)
   const lo = st.lead, bx = { ...st, box: true }
-  if (at(p, bx)) {
+  fillLaid.delete(p)
+  let laid = at(p, bx)
+  if (laid) {
     const hi = p.fillTop, L = k => Math.min(hi, r3(lo + k * 0.01))
     // (the grid's last step is the top itself, which `short` (fillPage) reads. Rounding the step count down left it untried
     // where the fraction was under a half, and the unit then took neither tracking nor the page's size; fillLeadRel's scripts
     // count it up, the others' fill as it was until it is measured on theirs)
     const steps = (hi - lo) / 0.01
     let ok = 0, no = (P.fillLeadRel ? Math.ceil(steps - 1e-9) : Math.round(steps)) + 1
-    while (no - ok > 1) { const k = (ok + no) >> 1; if (at(p, { ...bx, lead: L(k) })) ok = k; else no = k }
+    while (no - ok > 1) { const k = (ok + no) >> 1, l = at(p, { ...bx, lead: L(k) }); if (l) { ok = k; laid = l } else no = k }
     p.fillLead = ok ? L(ok) : lo
+    // (the layout found there kept for the page's fill, which lays the unit at that very state wherever the band leaves it its
+    // fill leading: fillPage `at`)
+    fillLaid.set(p, { state: st, lead: p.fillLead, l: laid })
     return
   }
   if (!at(p, st)) { p.fillLead = null; return }
