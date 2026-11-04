@@ -4118,8 +4118,10 @@ each): the four heads, and three lines of amsart's keywords after "Key words and
 before only where an affiliation of the last page stood before them by id; every other paper's K is the same, slot for slot. Over
 the census's 1,022 heads (the sweep's rows, the six papers whose K moved cut again) exactly the four move, to the original's
 gap: from +1.66, +16.04, +6.94 and +1.61 em more than the original to 0.00, -0.07, -0.09 and -0.08; no other head moves by
-more than 0.05 em, and none changes state. The page stream closes a part only where no left unit whose line such a unit may still
-share stands within half a step of its slots (`page-pass.mjs` closable), and a unit told keeps in the stream, beside the pages K
+more than 0.05 em, and none changes state. The page stream closes a part only where no slot of it is past the stream right below the least
+left unit whose line such a unit may still share (`frontier.mjs` `partClosable`): a chain of them before that unit stands down to
+there (with streams 10 and 12, two before 12 stand 10.5 and 11.5; half a step below 12 alone let a part close at 10.5 that the
+first of them sorts before by its id: a review's finding on #579), and a unit told keeps in the stream, beside the pages K
 reads of it, its first and last lines whole (`make.mjs` `stubOf`), what a shared line reads: with its pages alone, a unit only
 the file holds, told beside its line's other unit, took its slot by the ids in the parts after its own, and 2610.21884v1's parts
 from page 4 on were not the whole's. Its streamed and whole prepares now give the same head, parts and left parts, as

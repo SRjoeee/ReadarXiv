@@ -35,7 +35,7 @@ import { leftSideOf, leftSideStream } from './left-side.mjs'
 import { movedLinesOf } from './moved-lines.mjs'
 import { bundleWithInk, figureAnchors, inkAnchors, inkOfHost, inkWithinChunks, layoutWithInk, streamWithInk } from './ink-pass.mjs'
 import { isMemoryError } from './memory.mjs'
-import { frontierStream } from './frontier.mjs'
+import { frontierStream, leftBoundsOf, partClosable } from './frontier.mjs'
 
 /** units TeX sets away from where the source has them (anchors.mjs `floating`), as the maker and the web's left take them */
 const FLOATING = new Set(['caption', 'footnote', 'cell', 'figure', 'affiliation'])
@@ -664,25 +664,12 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
   const kIds = () => { const out = []; for (let i = 0; i < n; i++) if (inK(i) && !isName(i)) out.push(i); return out }
   // (K, F and NB over those, made again only from what changed since the last try: pipeline/frontier.mjs)
   const frontiers = frontierStream({ paper, N, bundle, grouped, left, st })
-  /** where the left stands: the least slot in K each unit may get, and the smallest unit whose left anchor is not final */
+  /** where the left stands (frontier.mjs leftBoundsOf), made again once the left has changed */
   let nowAt = -1, nowLeft = null
   const leftNow = () => {
-    // (a function of the left alone: made again once the left has changed)
     if (left.version() === nowAt) return nowLeft
     nowAt = left.version()
-    const stream = new Map()
-    for (const w of left.units()) stream.set(w[0], w[1])
-    const slotLow = new Float64Array(n), low = left.firstTok(left.frontier())
-    // (and the least stream each may get as a left unit: its own, the left's next token for one not final, none for one the left
-    // holds no unit of)
-    const streamLow = new Float64Array(n)
-    let uMin = n
-    for (let i = 0, before = -1; i < n; i++) {
-      const s = stream.get(i)
-      if (!left.done(i)) { if (uMin === n) uMin = i; slotLow[i] = Math.min(low, before + 0.5); streamLow[i] = low } else { slotLow[i] = s === undefined ? before + 0.5 : s; streamLow[i] = s === undefined ? Infinity : s }
-      if (s !== undefined && s > before) before = s
-    }
-    return (nowLeft = { slotLow, streamLow, uMin })
+    return (nowLeft = leftBoundsOf({ units: left.units(), done: left.done, next: left.firstTok(left.frontier()) }, n))
   }
   /** the least page unit i's rows name (its lines', its placeholders' segments', its labels'): its rows', made once (a unit's
    *  rows are final once settled; the stub a told unit's rows become keeps their pages) */
@@ -735,47 +722,8 @@ async function streamed(ctx, { maker, st, lineskip, left, drive }) {
       }
     }
   }
-  /** what part from `a` reads is final (the conditions above), its target as the cutter makes it */
-  const closable = (K, F, NB, a, H, now) => {
-    let target = Math.min(partTarget(a, N), a + PART_PAGES_MAX - 1)
-    const limit = Math.min(N, a + PART_PAGES_MAX - 1)
-    for (let q = a, m = 0, turns = 0; turns <= N; turns++) {
-      for (; q <= target; q++) m = Math.max(m, NB[q])
-      const next = Math.min(m, limit)
-      if (next <= target) break
-      target = next
-    }
-    // (the paper's last page: the part takes every entry left, the whole)
-    if (target >= N) return false
-    const upTo = F[target]
-    let R = target
-    for (let q = a; q <= target; q++) R = Math.max(R, NB[q])
-    for (let k = 0; k <= upTo; k++) R = Math.max(R, K[k].last)
-    for (let grew = true; grew;) { grew = false; for (const e of K) if (e.first <= R && e.last > R) { R = e.last; grew = true } }
-    if (R > H) return false
-    let sigma = upTo >= 0 ? K[upTo].slot : -Infinity
-    const groups = new Set()
-    K.forEach((e, k) => {
-      if (k > upTo && !(e.first <= R)) return
-      if (e.slot > sigma) sigma = e.slot
-      if (e.group !== null) groups.add(e.group)
-    })
-    for (let i = 0; i < n; i++) if (!inK(i) && now.slotLow[i] <= sigma) return false
-    if (now.uMin < n) for (const e of K) if (e.slot <= sigma && !e.left && e.id > now.uMin) return false
-    // (a layout-only unit that shares one of TeX's lines with a left unit stands half a step from it, before or after it
-    // (need.mjs lineAfterOf), whatever its id: one whose line is not all made yet may still take such a place, beside a unit not
-    // in K for good or one whose rows' pages are not all let go. So no such left unit stands within half a step of the part's
-    // slots: at worst it waits for its line's rows, which every entry the part takes has already)
-    if (st) {
-      const made = st.released()
-      let low = Infinity
-      for (let i = 0; i < n; i++) if (!inK(i) && now.streamLow[i] < low) low = now.streamLow[i]
-      for (const e of K) if (e.left && e.last > made && e.slot < low) low = e.slot
-      if (low - 0.5 <= sigma) return false
-    }
-    for (const g of groups) for (const i of members.get(g) ?? []) if (!inK(i)) return false
-    return true
-  }
+  /** what part from `a` reads is final (frontier.mjs partClosable) */
+  const closable = (K, F, NB, a, H, now) => partClosable({ K, F, NB, a, H, N, n, now, inK, made: st ? st.released() : null, members })
   // the maker's calls alone caught: a throw of its own is the layout's, from then on (design §3): the parts not yet told cut
   // with none, the parts told standing; nothing is told twice
   let failed = null
