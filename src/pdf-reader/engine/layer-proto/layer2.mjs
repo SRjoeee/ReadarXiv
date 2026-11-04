@@ -2260,6 +2260,17 @@ export function ink100(s, face) {
   }
   return v
 }
+/** each token's ink (ink100 of its text in its face), read once a token: TeX's \\lineskip rule reads the ink of the line it
+ *  closes and of the line before it on every breaking pass (breakLines settle), the same tokens pass after pass, where each
+ *  read made the font's string and the cache's key again (5.3 M reads on the speed check's pack, a third of all breaking
+ *  time). By the token object, so that a token cut from another (a hyphen's head, a word's tail: a copy with its own text)
+ *  is read for its own text */
+const inkByToken = new WeakMap()
+function tokenInk(t) {
+  let m = inkByToken.get(t)
+  if (m === undefined) inkByToken.set(t, (m = ink100(t.s, t.face)))
+  return m
+}
 /** how far right of its start a run's ink ends at 100 px in its face (TextMetrics' actualBoundingBoxRight), null where the canvas
  *  gives none. Read only of a shared row's last item (inkEndOf), so measured then and cached apart: one more number on every entry
  *  of the width's cache grew the heap 2.8 KB a laid page (the speed check of 2026-11-04, 0.27 KB the runs' spread) */
@@ -3219,7 +3230,7 @@ export function lineExtent(line, f, scale) {
     const t = it.t
     if (t.crop) { const e = cropExtent(t.crop); a = Math.max(a, e.up * scale); d = Math.max(d, e.down * scale); continue }
     if (!t.s || t.space || !t.face) continue
-    const m = ink100(t.s, t.face), k = (t.sup ? 0.62 : 1) * (t.sc ?? 1), up = t.sup ? 0.36 * f : 0
+    const m = tokenInk(t), k = (t.sup ? 0.62 : 1) * (t.sc ?? 1), up = t.sup ? 0.36 * f : 0
     ta = Math.max(ta, up + (m.a * k * f) / 100)
     td = Math.max(td, (m.d * k * f) / 100 - up)
   }
@@ -3341,6 +3352,17 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
       above = sl.baseline
     }
   }
+  // (a line's extent kept as settle reads it, by the items it held then: the line closed is the one before at the next close,
+  // and it is read again only where it took or lost an item since. Items are only pushed onto a line and its spaces popped
+  // off its end, so its count and its last item tell them)
+  const extents = new Map()
+  const extentOf = l => {
+    const was = extents.get(l), n = l.items.length, last = l.items[n - 1]
+    if (was && was.n === n && was.last === last) return was.e
+    const e = lineExtent(l, f, scale)
+    extents.set(l, { n, last, e })
+    return e
+  }
   const settle = () => {
     if (!P.lineskip || !line?.items.length || over !== null) return
     let k = lines.length - 2
@@ -3348,7 +3370,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     const prev = lines[k]
     if (!prev || !inFlow(prev, line) || !(prev.baseline > line.baseline)) return
     const [skip, limit] = P.lineskip
-    const e0 = lineExtent(prev, f, scale), e1 = lineExtent(line, f, scale)
+    const e0 = extentOf(prev), e1 = extentOf(line)
     if (prev.baseline - e0.d - (line.baseline + e1.a) >= limit) return
     // (the ink stands in for TeX's boxes, which the translation's lines have none of; but where the pair holds a formula TeX set
     // in the original, TeX measured that formula's room itself: the distance TeX left between its line and the next (a crop on
