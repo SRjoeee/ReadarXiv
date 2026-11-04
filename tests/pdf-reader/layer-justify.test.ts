@@ -138,3 +138,89 @@ describe('a word hyphenated where its line cannot be set within its word spaces\
     expect(lay(735)).toBe('typeset-')
   })
 })
+
+describe('the slack shared within each glue\'s own amount (the review of #586)', () => {
+  // (a Latin word with autospace (0.2 em, 2 pt) on both its sides: its two boundaries can take 3 pt more each; a formula's crop
+  // has none: its two can take 5)
+  const latin = (n: number) => word(n, { asp: true })
+  const hanAsp = { s: '\u6c49', cls: 'cjk', w100: 100, st: {}, face, asp: true }
+  it('shares a slack the boundaries can take among them alone, each up to its own room (Codex: 13 pt over 3, 3, 5, 5)', () => {
+    // two characters, a Latin word, a character after it with its autospace, a character, a formula, two characters: 104 pt in
+    // 117. The two Latin boundaries take their 3 each, the formula's the 7 left, 3.5 each; no CJK gap opens, none closes
+    const { line, gaps } = first([...han(2), latin(4), hanAsp, ...han(1), crop(20), ...han(2)], 117, 'zh', { autospace: 0.2 })
+    expect(line.mode).toBe('just')
+    expect(gaps).toEqual([0, 5, 5, 0, 3.5, 3.5, 0])
+  })
+  it('gives a boundary no more than the slack when one of them is capped (Devin: 7 pt over 5 and 3)', () => {
+    // two characters, a formula, a character with its autospace, a character: 62 pt in 69. The capped boundary takes its 3, the
+    // other the 4 left
+    const { line, gaps } = first([...han(2), crop(20), hanAsp, ...han(1)], 69, 'zh', { autospace: 0.2 })
+    expect(line.mode).toBe('just')
+    expect(gaps).toEqual([0, 4, 5, 0])
+  })
+  it('caps each word space by its own width in a CJK line: a wide one stops at half an em (Devin)', () => {
+    // spaces of 2 and 4 pt (two faces) between characters: 3 pt of slack. Half an em (5 pt) caps the wide one at 1 pt more, the
+    // narrow one takes its spaceMax 1 × 2 = 2; the mean (3 pt) gave each 1.5, the wide one 5.5 pt
+    const narrow = { space: true, w100: 20, st: {}, face }, wide = { space: true, w100: 40, st: {}, face }
+    const { line } = first([...han(2), narrow, ...han(2), wide, ...han(2)], 69, 'zh')
+    expect(line.mode).toBe('just')
+    const sp = line.items.map((it, q) => [it, q] as const).filter(([it]) => (it.t as { space?: boolean }).space).map(([it, q]) => Math.round((line.items[q + 1]!.x - it.x) * 1000) / 1000)
+    expect(sp).toEqual([4, 5])
+  })
+  it('stretches each word space of a Latin line in proportion to its width, never past its own spaceMax', () => {
+    // spaces of 2 and 4 pt in a German line, 6 pt of slack: each doubles (TeX's glue: the stretch in proportion to each space's
+    // own); the equal share (3 each) took the narrow one past 1.2 × 2
+    const narrow = { space: true, w100: 20, st: {}, face }, wide = { space: true, w100: 40, st: {}, face }
+    const { line } = first([word(6), narrow, word(6), wide, word(6)], 102, 'de')
+    expect(line.mode).toBe('just')
+    const sp = line.items.map((it, q) => [it, q] as const).filter(([it]) => (it.t as { space?: boolean }).space).map(([it, q]) => Math.round((line.items[q + 1]!.x - it.x) * 1000) / 1000)
+    expect(sp).toEqual([4, 8])
+  })
+  it('never closes a gap nor takes a space past its cap or its shrink, whatever the line (property, 400 random lines)', () => {
+    let seed = 20261105
+    const r = () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296 }
+    const pick = <T,>(xs: T[]) => xs[Math.floor(r() * xs.length)]!
+    const checked = { lines: 0, spaces: 0, open: 0 }
+    for (let n = 0; n < 400; n++) {
+      const to = pick(['zh', 'ja', 'ko', 'de'])
+      const tokens: unknown[] = []
+      for (let k = 3 + Math.floor(r() * 10); k > 0; k--) {
+        const y = r()
+        if (y < 0.35 && to !== 'de') tokens.push(to === 'ko' ? { ...hangul(1 + Math.floor(r() * 3)), ...(r() < 0.3 ? { glue: true } : {}) } : { s: '\u6c49', cls: 'cjk', w100: 100, st: {}, face, ...(r() < 0.3 ? { asp: true } : {}) })
+        else if (y < 0.55) tokens.push(word(1 + Math.floor(r() * 6), r() < 0.4 ? { asp: true } : {}))
+        else if (y < 0.65 && to !== 'de') tokens.push(crop(5 + Math.floor(r() * 25)))
+        else if (y < 0.72) tokens.push({ s: '.', cls: 'latin', w100: 30, st: {}, face, glue: true })
+        else tokens.push({ space: true, w100: pick([0, 15, 25, 33, 40]), st: {}, face })
+      }
+      if (!tokens.length) continue
+      const natural = 10 * tokens.length * 0.8
+      const w = Math.round(natural * (0.9 + r() * 0.5))
+      const p = P(to, { autospace: pick([0, 0.15, 0.25]) }) as { spaceMax: number; spaceMin: number; cjk: boolean }
+      const l = L2.layoutUnit2([...tokens, space, word(Math.floor(w / 5) + 1)] as never, [block(w)] as never, 10, p as never)
+      const line = l.lines[0]
+      // (a squeezed line closes its gaps by SQUEEZE on purpose, breakLines' squeezeTakes: not this rule's)
+      if (!line || line.mode !== 'just' || (line as { squeezed?: boolean }).squeezed) continue
+      const f = 10
+      checked.lines++
+      line.items.forEach((it, q) => {
+        const nx = line.items[q + 1]
+        if (!nx) return
+        const g = nx.x - (it.x + it.w + ((it as { kern?: number }).kern ?? 0)) - ((nx as { asp?: number }).asp ?? 0) - ((nx as { shift?: number }).shift ?? 0) + ((it as { shift?: number }).shift ?? 0)
+        if ((it.t as { space?: boolean }).space) {
+          const stretch = g, nat = it.w
+          checked.spaces++
+          expect(stretch, `${n} ${to}: a space shrunk past spaceMin`).toBeGreaterThanOrEqual(-(1 - p.spaceMin) * nat - 1e-6)
+          expect(stretch, `${n} ${to}: past spaceMax`).toBeLessThanOrEqual(p.spaceMax * nat + 1e-6)
+          if (p.cjk) expect(nat + stretch, `${n} ${to}: past half an em`).toBeLessThanOrEqual(0.5 * f + 1e-6)
+        } else {
+          if (g > 1e-6) checked.open++
+          expect(g, `${n} ${to}: gap ${q} closed`).toBeGreaterThanOrEqual(-1e-6)
+        }
+      })
+    }
+    // (the random lines reach the rule: justified lines, their spaces and their gaps opened)
+    expect(checked.lines).toBeGreaterThan(100)
+    expect(checked.spaces).toBeGreaterThan(100)
+    expect(checked.open).toBeGreaterThan(100)
+  })
+})

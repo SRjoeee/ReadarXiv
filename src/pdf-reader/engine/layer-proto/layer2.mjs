@@ -3276,9 +3276,33 @@ const BOUNDARY_MAX = 0.5
 /** a token of punctuation alone (stretchesOf: no boundary) */
 const PUNCT_ONLY = /^\p{P}+$/u
 
-/** (stretchesOf's gaps, one buffer the run reuses: placeItems reads a line's before it asks for the next line's. A gap's kind:
- *  0 none, 1 a CJK|Western boundary, 2 a CJK gap) */
-let GAP = new Float64Array(128), KIND = new Int8Array(128)
+/** (stretchesOf's answer, buffers the run reuses, placeItems reading a line's before it asks for the next line's: SP each space's
+ *  stretch and GAP each gap's, by the item before it; KIND a gap's kind, 0 none, 1 a CJK|Western boundary, 2 a CJK gap) */
+let SP = new Float64Array(128), GAP = new Float64Array(128), KIND = new Int8Array(128)
+/**
+ * `total` shared over slots in proportion to their weights, each up to its own cap: water-filling, as TeX sets a line's glue in
+ * proportion to each one's stretch, a glue that reaches its amount dropping out and the others sharing what is left. `at`: the
+ * slots' indices into `out`, `weight` and `cap` lists in their order. Writes each slot's share into `out[at[k]]`; returns what the
+ * caps leave of `total`, never below 0. A slot of weight 0 takes none
+ */
+function shareOut(at, weight, cap, total, out) {
+  let W = 0, C = 0
+  for (let k = 0; k < at.length; k++) { out[at[k]] = 0; if (weight[k] > 0) { W += weight[k]; C += cap[k] } }
+  if (!(W > 0)) return total
+  if (C <= total) { for (let k = 0; k < at.length; k++) if (weight[k] > 0) out[at[k]] = cap[k]; return total - C }
+  // (the level ρ where the shares, min(cap, ρ × weight), make `total`: the slots by cap over weight, the lowest capped first)
+  const order = []
+  for (let k = 0; k < at.length; k++) if (weight[k] > 0) order.push(k)
+  order.sort((x, y) => cap[x] / weight[x] - cap[y] / weight[y])
+  let T = total, rest = W
+  for (let q = 0; q < order.length; q++) {
+    const k = order[q], rho = T / rest
+    if (cap[k] <= rho * weight[k]) { out[at[k]] = cap[k]; T -= cap[k]; rest -= weight[k]; continue }
+    for (let r = q; r < order.length; r++) out[at[order[r]]] = rho * weight[order[r]]
+    return 0
+  }
+  return Math.max(0, T)
+}
 /**
  * A justified line's stretch (placeItems), in the order TeX's glue and the layout requirements take it (JLREQ 3.8.4, CLREQ 6.3.4,
  * KLREQ 7.1.1 and 7.2.1): first its word spaces, each up to spaceMax × its natural width (the rules'), and in a CJK script's line
@@ -3287,29 +3311,42 @@ let GAP = new Float64Array(128), KIND = new Int8Array(128)
  * to cjkJust em (the rules'), but inside a pair UAX 14 keeps together (two em dashes, two ellipses: JLREQ's bunrikinshi, CLREQ's
  * unbreakable marks). A word of CJK characters a script keeps whole (Korean's, keepAll: one token) has those gaps between its
  * characters too (KLREQ 7.2.1, the inter-character spacing even space alignment adjusts). No gap inside Western text opens (a
- * word, a number, a formula and the word it is glued to): TeX's glue there is none. `slack` > 0. Returns { perSpace, gap, letter }
- * (`gap` the shared buffer GAP, good until the next call):
- * the stretch of each space, of the gap after each item but the last, and of each gap inside a CJK word; null where the line
- * cannot take its slack within those amounts (set ragged)
+ * word, a number, a formula and the word it is glued to): TeX's glue there is none. Each step shares only the slack the steps
+ * before it left, each glue up to its own amount (shareOut): the spaces in proportion to their widths, each capped by its own
+ * width (two faces' spaces on a line have two), the boundaries alike, each to its own room, and a later step takes what is left,
+ * never less than none. `slack` > 0. Returns { sp, gap, letter } (`sp` and `gap` the shared buffers SP and GAP, good until the
+ * next call, or null where no space or no gap opens): the stretch of each space and of the gap after each item but the last, by
+ * the item's index, and of each gap inside a CJK word; null where the line cannot take its slack within those amounts (set
+ * ragged)
  */
 function stretchesOf(items, slack, f, P) {
   const n = items.length, cjkOn = !!P.cjk
-  // (counted in one walk, and nothing made a line but its answer: placeItems runs on every breaking pass's lines)
-  let spaces = 0, spaceW = 0
-  for (let i = 0; i < n; i++) { const it = items[i]; if (it.t.space) { spaces++; spaceW += it.w } }
-  let left = slack, perSpace = 0
-  if (spaces) {
-    const mean = spaceW / spaces
-    const per = left / spaces, cap = P.cjk ? Math.max(0, Math.min(P.spaceMax * mean, BOUNDARY_MAX * f - mean)) : P.spaceMax * mean
-    if (per <= cap) return { perSpace: per, gap: null, letter: 0 }
-    perSpace = cap
-    left -= cap * spaces
+  if (SP.length < n) { SP = new Float64Array(2 * n); GAP = new Float64Array(2 * n); KIND = new Int8Array(2 * n) }
+  // (the spaces: each its own width's spaceMax, and in a CJK script's line half an em at most with its width, JLREQ 3.8.4 a; in
+  // proportion to their widths, as TeX's glue stretches)
+  let left = slack, spaced = null, spaceW = 0, spaces = 0
+  for (let i = 0; i < n; i++) if (items[i].t.space) { spaces++; spaceW += items[i].w }
+  if (spaceW > 0) {
+    if (!cjkOn) {
+      // (an alphabet's caps are spaceMax × each width: one ratio for every space, up to spaceMax)
+      const rho = Math.min(left / spaceW, P.spaceMax)
+      for (let i = 0; i < n; i++) if (items[i].t.space) SP[i] = rho * items[i].w
+      left = Math.max(0, left - rho * spaceW)
+    } else {
+      const at = [], weight = [], cap = []
+      for (let i = 0; i < n; i++) if (items[i].t.space) { const w = items[i].w; at.push(i); weight.push(w); cap.push(Math.max(0, Math.min(P.spaceMax * w, BOUNDARY_MAX * f - w))) }
+      left = shareOut(at, weight, cap, left, SP)
+    }
+    spaced = SP
+    if (left <= 1e-9) return { sp: SP, gap: null, letter: 0 }
+  } else if (spaces) {
+    for (let i = 0; i < n; i++) if (items[i].t.space) SP[i] = 0
   }
-  if (GAP.length < n) { GAP = new Float64Array(2 * n); KIND = new Int8Array(2 * n) }
   GAP.fill(0, 0, n)
   // (a CJK item is a CJK script's (P.cjk): the alphabets' rules set curly quotes, dashes and the ellipsis as CJK tokens, cjkQuotes,
   // which justify as the punctuation of their words there)
-  let bounds = 0, inner = 0, room = Infinity
+  const boundAt = []
+  let inner = 0
   for (let i = 0; i < n - 1; i++) {
     const a = items[i], b = items[i + 1]
     let k = 0
@@ -3326,16 +3363,15 @@ function stretchesOf(items, slack, f, P) {
       } else if (ca && !keptPair(a.t.s, b.t.s)) k = 2
     }
     KIND[i] = k
-    if (k === 1) { bounds++; room = Math.min(room, Math.max(0, BOUNDARY_MAX * f - (b.asp ?? 0))) }
+    if (k === 1) boundAt.push(i)
     else if (k === 2) inner++
   }
-  if (bounds) {
-    if (Math.min(left / bounds, room) * bounds >= left - 1e-9) {
-      for (let i = 0; i < n - 1; i++) if (KIND[i] === 1) GAP[i] = left / bounds
-      return { perSpace, gap: GAP, letter: 0 }
-    }
-    // (each boundary to its own room, the rest of the slack to the CJK gaps)
-    for (let i = 0; i < n - 1; i++) if (KIND[i] === 1) { const r = Math.max(0, BOUNDARY_MAX * f - (items[i + 1].asp ?? 0)); GAP[i] = r; left -= r }
+  // (the boundaries: equal shares, each up to its room, half an em with its autospace; what they leave to the CJK gaps)
+  if (boundAt.length) {
+    const one = [], room = []
+    for (const i of boundAt) { one.push(1); room.push(Math.max(0, BOUNDARY_MAX * f - (items[i + 1].asp ?? 0))) }
+    left = shareOut(boundAt, one, room, left, GAP)
+    if (left <= 1e-9) return { sp: spaced, gap: GAP, letter: 0 }
   }
   // (the gaps inside the line's CJK words, a word's characters but one: a script that keeps its words whole (Korean's) alone
   // has CJK tokens of more than one character, Hangul's syllables each one UTF-16 unit)
@@ -3344,7 +3380,7 @@ function stretchesOf(items, slack, f, P) {
   const gaps = inner + within
   if (!gaps || left / gaps > P.cjkJust * f) return null
   for (let i = 0; i < n - 1; i++) if (KIND[i] === 2) GAP[i] = left / gaps
-  return { perSpace, gap: GAP, letter: left / gaps }
+  return { sp: spaced, gap: GAP, letter: left / gaps }
 }
 
 /**
@@ -3979,6 +4015,13 @@ export function withPageBreaks(tokens, cuts) {
  *  aligned; the unit's last line left aligned, and so a line TeX's own break ends (breakLines' `ends`: the part of a
  *  paragraph before a display, which TeX ends with \parfillskip, and a forced break, \\'s \hfil\break), its spacing the
  *  fit's state (its tracking), never spread to the edge; a centred block centred */
+/** a line's spaces shrunk by `by` (< 0) together, each in proportion to its width (TeX's glue: two faces' spaces shrink each by
+ *  its own), into the shared buffer SP by the item's index; spaces of no width, none */
+function shrunk(items, by, spW) {
+  if (SP.length < items.length) { SP = new Float64Array(2 * items.length); GAP = new Float64Array(2 * items.length); KIND = new Int8Array(2 * items.length) }
+  for (let i = 0; i < items.length; i++) SP[i] = items[i].t.space && spW > 0 ? (by * items[i].w) / spW : 0
+  return SP
+}
 function placeItems(lines, f, P) {
   const last = lines.at(-1)
   for (const line of lines) {
@@ -3991,7 +4034,7 @@ function placeItems(lines, f, P) {
     const spaces = line.items.filter(it => it.t.space)
     const spW = spaces.reduce((s, it) => s + it.w, 0)
     const latinish = latinishOf(line.items, P)
-    let perSpace = 0, perGap = 0
+    let perGap = 0, gap = null, spaceInc = null
     line.mode = line.centred ? 'centred' : line === last || line.ends ? 'last' : 'just'
     // (a line of a unit TeX set flush left is ragged at its natural spacing, every line of one set flush right stands at the
     // right edge, its last too: \raggedleft sets no \parfillskip past it; lane B's B2, run.mjs)
@@ -4010,19 +4053,19 @@ function placeItems(lines, f, P) {
       }
       if (slack < 0) {
         const by = Math.max(slack, -spW * (1 - P.spaceMin))
-        if (spaces.length) perSpace = by / spaces.length
+        if (spaces.length) spaceInc = shrunk(line.items, by, spW)
         perGap = (slack - (spaces.length ? by : 0)) / (line.items.length - 1)
         slack = 0
       }
     }
     // (justified, its stretch in the glue's order: stretchesOf; a line it cannot justify within its amounts is set ragged, at its
     // natural spacing)
-    let gap = null
-    if (slack < 0 && spaces.length) perSpace = slack / spaces.length // shrunk spaces (never past spaceMin by the breaking)
+    if (slack < 0 && spaces.length) spaceInc = shrunk(line.items, slack, spW) // shrunk spaces (never past spaceMin by the breaking)
     else if (line.mode === 'just' && slack > 0 && line.items.length > 1) {
       const glue = stretchesOf(line.items, slack, f, P)
       if (glue) {
-        ({ perSpace, gap } = glue)
+        ({ gap } = glue)
+        spaceInc = glue.sp
         // (a CJK word's own gaps: the word drawn that much wider, letter-spaced (`ls`, svgOfUnit and inkEndOf read it))
         // (a script that keeps its words whole alone has CJK words of more than one character: stretchesOf `within`)
         if (glue.letter > 0 && P.keepAll) for (const it of line.items) {
@@ -4036,7 +4079,7 @@ function placeItems(lines, f, P) {
     line.items.forEach((it, n) => {
       x += it.asp ?? 0
       it.x = x + (it.shift ?? 0)
-      x += it.w + (it.kern ?? 0) + (it.t.space ? perSpace : 0) + (n < line.items.length - 1 ? (gap ? gap[n] : perGap) : 0)
+      x += it.w + (it.kern ?? 0) + (it.t.space && spaceInc ? spaceInc[n] : 0) + (n < line.items.length - 1 ? (gap ? gap[n] : perGap) : 0)
     })
     line.used = x - line.x0
     line.cap = cap
