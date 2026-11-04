@@ -523,7 +523,7 @@ export function createPlaces(o) {
     /** the places as page views are read: place n's element with the left's viewport and page box for page n */
     views: () => views,
     /** the names of the places that show a page, again (the interface's language changed) */
-    rename() { for (const p of list) if ((p.side && !p.blank) || p.view) name(p) },
+    rename() { for (const p of list) if ((p.side && !p.blank) || p.view || p.copy || p.wantsCopy) name(p) },
     probe() {
       let views = 0, skeletons = 0, laid = 0, near = 0, copies = 0, copyPixels = 0, waiting = 0
       for (const p of list) { if (p.view) views++; if (p.skeleton) skeletons++; if (p.side && !p.blank) laid++; if (p.near) near++; if (p.copy) { copies++; copyPixels += p.copy.width * p.copy.height } if (p.wantsCopy) waiting++ }

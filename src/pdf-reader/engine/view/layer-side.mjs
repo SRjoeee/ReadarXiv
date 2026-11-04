@@ -178,7 +178,8 @@ export function createLayerSide(view, o) {
   let textDecided = false
   const detach = V.attach({ dispose: () => side.dispose() })
   // (the places' word on each page: one that stays the original's is drawn by its own page view, with its text layer and links;
-  // any other waits for its layer, showing the left's drawing of it, places.mjs. Told again as a page settles, settleSoon)
+  // any other waits for its layer, showing the left's drawing of it, places.mjs. Told again as pages settle: shownOriginal, refuse,
+  // dropOthers)
   V.places.settle?.(n => settledOriginal(n))
   const warned = new Set()
   const warn = (what, e) => { if (warned.has(what)) return; warned.add(what); console.warn(`[reader] the layer's ${what}:`, e?.message ?? e) }

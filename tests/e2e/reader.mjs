@@ -662,23 +662,31 @@ try {
     await page.waitForTimeout(800)
     const b0 = await boxes()
     check('the places are the left\'s page boxes, at the same sizes and the same heights on the screen (the identity map)', sameBoxes(b0), JSON.stringify({ left: b0.left[1], right: b0.right[1], scroll: b0.scroll }))
-    // the places near the view show the original's page: PDF.js's page view drawn into each, its text selectable and its links there
-    const near = await page.waitForFunction(() => {
-      const first = document.querySelector('#right .axt-place .axt-place-view > .page')
-      return first?.querySelector('canvas')?.width > 0 && first.querySelectorAll('.textLayer span').length > 0
-    }, null, { timeout: 10_000 }).then(() => true, () => false)
-    const shows = await page.evaluate(() => [...document.querySelectorAll('#right .axt-place')].map(p => ({ view: !!p.querySelector('.axt-place-view > .page canvas'), label: p.getAttribute('aria-label') })))
-    check('a place near the view shows the original\'s page through PDF.js\'s page view: canvas, text, its name as a page of the right', near && shows[0]?.view && /\d/.test(shows[0]?.label ?? ''), JSON.stringify(shows))
-    control('a place far from the view shows nothing: the sample\'s last page, three viewports down, holds no page view at first', { ok: shows.at(-1)?.view === true, detail: JSON.stringify(shows.at(-1)) })
+    // the places near the view, waiting for their layer, show the original's page as the left drew it (places.mjs): a copy of the
+    // left's canvas, pixel for pixel, with no page view, text layer or links of their own (the left's are the page's there)
+    const near = await page.waitForFunction(() => document.querySelector('#right .axt-place .axt-place-view > canvas.axt-place-copy')?.width > 0, null, { timeout: 10_000 }).then(() => true, () => false)
+    const copied = await page.evaluate(() => {
+      const copy = document.querySelector('#right .axt-place .axt-place-view > canvas.axt-place-copy'), place = copy?.closest('.axt-place')
+      const n = place?.dataset.pageNumber, left = document.querySelector(`#left .pdfViewer > .page[data-page-number="${n}"] canvas`)
+      let same = !!left && !!copy && left.width === copy.width && left.height === copy.height
+      if (same) {
+        const a = left.getContext('2d').getImageData(0, 0, left.width, left.height).data, b = copy.getContext('2d').getImageData(0, 0, copy.width, copy.height).data
+        for (let i = 0; i < a.length && same; i++) if (a[i] !== b[i]) same = false
+      }
+      return { n, same, size: [copy?.width, copy?.height], views: document.querySelectorAll('#right .axt-place-view > .page').length, layers: place?.querySelectorAll('.textLayer, .annotationLayer').length ?? -1, label: place?.getAttribute('aria-label') }
+    })
+    const shows = await page.evaluate(() => [...document.querySelectorAll('#right .axt-place')].map(p => ({ view: !!p.querySelector('.axt-place-view > .page canvas, .axt-place-view > canvas.axt-place-copy'), label: p.getAttribute('aria-label') })))
+    check('a place near the view waiting for its layer shows the original\'s page as the left drew it: the left\'s canvas pixel for pixel, no page view, text layer or links of its own; its name a page of the right', near && copied.same && copied.views === 0 && copied.layers === 0 && /\d/.test(copied.label ?? ''), JSON.stringify(copied))
+    control('a place far from the view shows nothing: the sample\'s last page, three viewports down, holds no page at first', { ok: shows.at(-1)?.view === true, detail: JSON.stringify(shows.at(-1)) })
     // the original's words in the paper's language on the text layer alone (PDF-READER §13): the page's region and name, the viewer
-    // and the pane keep the interface's
+    // and the pane keep the interface's (a place's own page view's, where it draws one: below, the sync off)
     await page.waitForFunction(() => !!document.querySelector('#left .pdfViewer > .page .textLayer span'), null, { timeout: 10_000 }).catch(() => undefined)
     const langs = await page.evaluate(() => {
-      const l = document.querySelector('#left .pdfViewer > .page'), p = document.querySelector('#right .axt-place .axt-place-view > .page')
-      return { leftText: l?.querySelector('.textLayer')?.getAttribute('lang') ?? null, placeText: p?.querySelector('.textLayer')?.getAttribute('lang') ?? null, leftName: l?.getAttribute('aria-label') ?? null,
+      const l = document.querySelector('#left .pdfViewer > .page'), p = document.querySelector('#right .axt-place')
+      return { leftText: l?.querySelector('.textLayer')?.getAttribute('lang') ?? null, leftName: l?.getAttribute('aria-label') ?? null,
         marked: [l, p, document.querySelector('#left .pdfViewer'), document.getElementById('left'), document.getElementById('right')].filter(el => el?.hasAttribute('lang')).length, doc: document.documentElement.lang }
     })
-    check('the original\'s text layers are marked English, on the left and in a place that shows the original\'s page; the page, its name, the viewer and the panes carry no lang of their own', langs.leftText === 'en' && langs.placeText === 'en' && langs.marked === 0 && !!langs.leftName, JSON.stringify(langs))
+    check('the original\'s text layer is marked English on the left; the page, its name, the viewer, the places and the panes carry no lang of their own', langs.leftText === 'en' && langs.marked === 0 && !!langs.leftName, JSON.stringify(langs))
 
     // the follower: a wheel on the left moves the right by the same steps, and the pair is levelled at rest
     const restAfter = async () => {
@@ -851,16 +859,25 @@ try {
     check('the language menu: its list under the search eight rows and a half (255 px), scrolling, the chosen language in view; the search focused with a mouse, the list under a finger',
       byMouse?.height === 255 && byMouse.rows > 9 && byMouse.scrolls && byMouse.chosenInView && byMouse.focus === 'combobox' && !byMouse.coarse && byFinger?.coarse === true && byFinger.focus === 'listbox' && byFinger.chosenInView,
       JSON.stringify({ byMouse, byFinger }))
-    // a link out of the paper on the right: drawn by the place's page view, opened by the host (a new tab), the reader kept
+    // a link out of the paper on the right: drawn by the place's own page view, which a place draws where the left does not show the
+    // right's pages (the sync off here; a page that stays the original's alike), opened by the host (a new tab), the reader kept
+    // (the pair levelled at page 4 first, as the left's drawing of it in its place tells: then the sync off, so the place draws its own)
     await page.evaluate(() => window.__reader.controller.goToPage('right', 4))
+    await page.waitForFunction(() => document.querySelector('#right .axt-place[data-page-number="4"] .axt-place-view > canvas.axt-place-copy')?.width > 0, null, { timeout: 10_000 }).catch(() => undefined)
+    await page.waitForFunction(() => window.__reader.view.probe().motion === null, null, { timeout: 5000 }).catch(() => undefined)
+    await page.evaluate(() => window.__reader.controller.setSyncMode('off'))
     const out = page.locator('#right .axt-place .annotationLayer a[href^="http"]')
     const drawn = await out.first().waitFor({ timeout: 10_000 }).then(() => true, () => false)
+    const ownLang = await page.evaluate(() => document.querySelector('#right .axt-place .axt-place-view > .page .textLayer')?.getAttribute('lang') ?? null)
+    check('a place drawing its own page view (the sync off): PDF.js\'s page view, its text layer marked English', drawn && ownLang === 'en', `${drawn}, ${ownLang}`)
     const tabbed = drawn ? context.waitForEvent('page', { timeout: 10_000 }).catch(() => null) : null
     if (drawn) await out.first().click()
     const tab = await tabbed
     await tab?.waitForLoadState('load').catch(() => undefined)
     check('a link out of the paper on the right opens in a new tab through the host, the reader staying where it is', drawn && tab?.url() === LINK && page.url().includes('pdf-reader.html'), `drawn ${drawn}, opened ${tab?.url() ?? 'nothing'}`)
     await tab?.close()
+    // (the setting back as it was: the sync on, saved, for the readers after)
+    await page.evaluate(() => window.__reader.controller.setSyncMode('same'))
     await page.screenshot({ path: `${SHOTS}/reader-view.png` })
     await page.close()
     api.set({ layer: mode.ready() })
@@ -895,12 +912,12 @@ try {
     /** what each place shows: the layer (its copy drawn, its SVG's text), the original's page view, nothing */
     const shown = () => page.evaluate(() => [...document.querySelectorAll('#right .axt-place')].map(p => {
       const l = p.querySelector('.axt-place-view > .axt-layer')
-      return { layer: p.hasAttribute('data-axt-layer'), copy: l?.querySelector('canvas.axt-layer-copy')?.width ?? 0, text: l?.querySelector('svg')?.textContent ?? '', original: !!p.querySelector('.axt-place-view > .page canvas') }
+      return { layer: p.hasAttribute('data-axt-layer'), copy: l?.querySelector('canvas.axt-layer-copy')?.width ?? 0, text: l?.querySelector('svg')?.textContent ?? '', original: !!p.querySelector('.axt-place-view > .page canvas, .axt-place-view > canvas.axt-place-copy') }
     }))
-    await page.waitForFunction(() => !!document.querySelector('#right .axt-place .axt-place-view > .page canvas'), null, { timeout: 15_000 }).catch(() => undefined)
+    await page.waitForFunction(() => !!document.querySelector('#right .axt-place .axt-place-view > .page canvas, #right .axt-place .axt-place-view > canvas.axt-place-copy'), null, { timeout: 15_000 }).catch(() => undefined)
     const s0 = await shown()
     const before = await page.evaluate(() => { const p = document.querySelector('#right .axt-place'), r = p.getBoundingClientRect(); return { scroll: document.getElementById('right').scrollTop, box: [r.top, r.width, r.height] } })
-    check('while the paper is prepared, the places near the view show the original\'s page view, none the layer', s0[0]?.original && s0.every(p => !p.layer), JSON.stringify(s0.map(p => p.original)))
+    check('while the paper is prepared, the places near the view show the original\'s page (the left\'s drawing of it), none the layer', s0[0]?.original && s0.every(p => !p.layer), JSON.stringify(s0.map(p => p.original)))
     const laid = await page.waitForFunction(() => { const l = document.querySelector('#right .axt-place[data-page-number="1"] .axt-layer'); return l?.querySelector('canvas.axt-layer-copy')?.width > 0 && /\[echo\]/.test(l.querySelector('svg')?.textContent ?? '') }, null, { timeout: 60_000 }).then(() => true, () => false)
     // (the first page may be laid before the catalog: its part came with a 202)
     await page.waitForFunction(() => window.__reader.side()?.probe().ended === true, null, { timeout: 30_000 }).catch(() => undefined)
