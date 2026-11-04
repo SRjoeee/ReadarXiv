@@ -1,8 +1,8 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { BUILTIN_RULES, resolveRules, SCRIPTS } from '@/pdf-reader/engine/rules/layout.mjs'
+import { BUILTIN_RULES, resolveRules } from '@/pdf-reader/engine/rules/layout.mjs'
 
-// One pitch inside a block at the leading of 1 (lane B's B1, the maintainer's ruling of 2026-10-29, `evenPitch` on in every
-// script): a block's lines one pitch apart from its first, where they stood on the original's baselines and so inherited the
+// One pitch inside a block at the leading of 1 (lane B's B1, the maintainer's ruling of 2026-10-29, every script's since the
+// rule set's schema 10): a block's lines one pitch apart from its first, where they stood on the original's baselines and so inherited the
 // gaps TeX opened under the original's tall lines (the block-level audit's finding 1). The translation's own tall lines open
 // by TeX's rule; where TeX set the same formula in the original, by TeX's own distance for it (texRoomOf).
 
@@ -66,13 +66,8 @@ describe("the gaps TeX's \\lineskip rule set, closed in blocks2's `E`", () => {
 })
 
 describe('a unit laid at the leading of 1', () => {
-  it("stands on the original's baselines, gaps and all, where the rule is off (before the ruling)", () => {
-    const l = L2.layoutUnit2(lines(6) as never, [block(OPENED)] as never, 10, P({ order: [], evenPitch: false }) as never)
-    expect(l.clipped).toBe(false)
-    expect(l.lines.map(x => x.baseline)).toEqual(OPENED)
-  })
-  it('stands one pitch apart where it is on: the room the closed gap frees stays at its foot', () => {
-    const l = L2.layoutUnit2(lines(6) as never, [block(OPENED)] as never, 10, P({ order: [], evenPitch: true }) as never)
+  it('stands one pitch apart: the room the closed gap frees stays at its foot', () => {
+    const l = L2.layoutUnit2(lines(6) as never, [block(OPENED)] as never, 10, P({ order: [] }) as never)
     expect(l.clipped).toBe(false)
     expect(l.lines.map(x => x.baseline)).toEqual([500, 488, 476, 464, 452, 440])
   })
@@ -80,16 +75,9 @@ describe('a unit laid at the leading of 1', () => {
     // the formula 6 deep on line 2, the third line's text 7 high: 13 against a pitch of 12, so the third line opens by 2
     // (6 + 7 + 1 - 12) and every line under it with it; the room the original opened under its third line is not taken
     const unit = [word(9), space, word(9), space, crop(7.5, 6), space, word(14), space, word(18), space, word(18), space, word(18)]
-    const on = L2.layoutUnit2(unit as never, [block(OPENED)] as never, 10, P({ order: [], evenPitch: true }) as never)
+    const on = L2.layoutUnit2(unit as never, [block(OPENED)] as never, 10, P({ order: [] }) as never)
     expect(on.lines.map(x => x.baseline)).toEqual([500, 488, 474, 462, 450])
     expect(on.opened).toBe(1)
-    const off = L2.layoutUnit2(unit as never, [block(OPENED)] as never, 10, P({ order: [], evenPitch: false }) as never)
-    // (off: the third line opens too, and the gap the original opened under its own third line follows on the fourth)
-    expect(off.lines.map(x => x.baseline)).toEqual([500, 488, 474, 457.5, 445.5])
-  })
-  it('changes nothing off the leading of 1: a leading of 1.3 is one pitch apart from the first line in either case', () => {
-    const at = (o: object) => L2.layoutUnit2(lines(4) as never, [block(OPENED)] as never, 10, P({ order: [], leadBase: 1.3, ...o }) as never).lines.map(x => x.baseline)
-    expect(at({ evenPitch: true })).toEqual(at({ evenPitch: false }))
   })
 })
 
@@ -129,26 +117,19 @@ describe("TeX's own room for a formula (texRoomOf)", () => {
     expect(L2.texRoomOf([split] as never, crop, true)).toBe(12)
   })
   it("sets the formula's pair at TeX's distance where that keeps their ink clear: the unit keeps its foot at the size of 1", () => {
-    const l = L2.layoutUnit2(withFormula(2) as never, [block(OPENED)] as never, 10, P({ order: [], evenPitch: true }) as never)
+    const l = L2.layoutUnit2(withFormula(2) as never, [block(OPENED)] as never, 10, P({ order: [] }) as never)
     expect(l.clipped).toBe(false)
     expect(l.lines.map(x => x.baseline)).toEqual(OPENED)
     expect(l.opened).toBe(1)
   })
   it('moves the room with its formula: set a line higher, TeX\'s room opens under that line, and the foot is where it was', () => {
-    const l = L2.layoutUnit2(withFormula(1) as never, [block(OPENED)] as never, 10, P({ order: [], evenPitch: true }) as never)
+    const l = L2.layoutUnit2(withFormula(1) as never, [block(OPENED)] as never, 10, P({ order: [] }) as never)
     expect(l.clipped).toBe(false)
     expect(l.lines.map(x => x.baseline)).toEqual([500, 488, 469.5, 457.5, 445.5, 433.5])
   })
   it("opens by the rule on the ink where TeX's distance would leave the ink nearer than \\lineskiplimit: a deeper formula", () => {
     // (12 deep: 12 + 7 = 19 over TeX's 18.5, so the ink rule's 20; the unit then runs past its foot at the size of 1)
-    const l = L2.layoutUnit2(withFormula(2, 12) as never, [block([...OPENED, 421.5])] as never, 10, P({ order: [], evenPitch: true }) as never)
+    const l = L2.layoutUnit2(withFormula(2, 12) as never, [block([...OPENED, 421.5])] as never, 10, P({ order: [] }) as never)
     expect(l.lines.slice(0, 4).map(x => x.baseline)).toEqual([500, 488, 476, 456])
-  })
-})
-
-describe('the rule in the rule set', () => {
-  it('is on in every script of the built-in set (the ruling of 2026-10-29)', () => {
-    for (const s of SCRIPTS) expect(BUILTIN_RULES.scripts[s].evenPitch, s).toBe(true)
-    for (const t of ['zh', 'ja', 'ko', 'de', 'ru']) expect(resolveRules(BUILTIN_RULES, t).params.evenPitch, t).toBe(true)
   })
 })

@@ -748,7 +748,9 @@ describe('the door reaches no server-only module', () => {
     expect([...others.keys()]).toEqual(['zod/mini'])
     expect(others.get('zod/mini')!.map(f => f.slice(resolve('src/pdf-reader/engine').length + 1))).toEqual(['rules/layout.mjs'])
     // (the walk reaches what it should: the run, the rows, the bundle, the translation)
-    for (const f of ['layer-proto/run.mjs', 'layer-proto/rows.mjs', 'layer-proto/bundle.mjs', 'translate/mt.mjs', 'layer-proto/check.mjs']) expect(seenFiles.has(resolve('src/pdf-reader/engine', f)), f).toBe(true)
+    for (const f of ['layer-proto/run.mjs', 'layer-proto/rows.mjs', 'layer-proto/bundle.mjs', 'translate/mt.mjs']) expect(seenFiles.has(resolve('src/pdf-reader/engine', f)), f).toBe(true)
+    // (and not v0's completeness checker, the gates' own: run.mjs checkInputs hands them what it reads)
+    expect(seenFiles.has(resolve('src/pdf-reader/engine/layer-proto/check.mjs'))).toBe(false)
   })
 
   it('exports what the hosts take, and not the role table\'s or v0\'s own calls', async () => {

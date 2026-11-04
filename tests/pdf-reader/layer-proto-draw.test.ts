@@ -49,18 +49,6 @@ vi.mock('@/pdf-reader/engine/layer-proto/draw.mjs', async importOriginal => {
   return { ...actual, drawInputsOf }
 })
 
-/** a test's switch: the even pass's fit (layoutUnit2 asked with a maxScale) reaches the borrow knob, which measures the room
- *  below each block (its freeOf: the page's ink), as a fit at a smaller size may where the breaking is not monotone */
-const evenBorrows = vi.hoisted(() => ({ on: false, reads: 0 }))
-vi.mock('@/pdf-reader/engine/layer-proto/layer2.mjs', async importOriginal => {
-  const actual = await importOriginal<typeof import('@/pdf-reader/engine/layer-proto/layer2.mjs')>()
-  const layoutUnit2 = (tokens: never, blocks: { freeOf?: (() => number) | null; free?: number }[], s: number, P: { maxScale?: number }) => {
-    if (evenBorrows.on && P.maxScale !== undefined) for (const b of blocks) if (b.freeOf) { evenBorrows.reads++; b.free = b.freeOf(); b.freeOf = null }
-    return actual.layoutUnit2(tokens, blocks as never, s, P as never)
-  }
-  return { ...actual, layoutUnit2 }
-})
-
 // ---------------------------------------------------------------- the paper, its PDF.js pages counted, its draws
 const para = (text: string, page: number, b: number, o: Partial<PaperSpec['units'][number]> = {}) => ({ kind: 'para', text, lines: [[page, 20, 280, b]] as [number, number, number, number][], file: true, stream: null, ...o })
 /** three pages: a paragraph running from page 1 on to page 2 (translated long, so that it borrows the room below its lines and
@@ -404,41 +392,6 @@ describe('a page whose pixels cannot be read', () => {
       expect(run.drawStats!.pixels[2]).toBe('asked')
       expect(unobserved).toEqual([])
     } finally { process.off('unhandledRejection', onRejection) }
-  })
-})
-
-describe('the even pass: pages read live, its fits reading any page\'s ink at once', () => {
-  /** page 2: a paragraph translated long on its lowest line (no room below to borrow: it shrinks, the page's target under 1) and
-   *  one above it running on to page 3, which the pass lays anew at the target */
-  const EVEN: PaperSpec = {
-    pages: 3,
-    units: [
-      para('First page body text', 1, 200, { stream: 0 }),
-      para('A long paragraph of page two', 2, 40, { stream: 30 }),
-      { ...para('Running from two on to three', 2, 200, { stream: 20 }), lines: [[2, 20, 280, 200], [3, 20, 280, 270]] },
-      para('Third page body text', 3, 200, { stream: 45 }),
-    ],
-  }
-  const rules = (() => { const r = structuredClone(BUILTIN_RULES) as unknown as { scripts: Record<string, Record<string, unknown>> }; r.scripts.Hans!.even = 1; return r })()
-  it('with drawOf, reads every page live where the rules have an even pass, and draws as without it (no NeedPixels past a lay)', async () => {
-    const c = await cutSpec(EVEN)
-    const P = { index: c.index, parts: c.parts }
-    const was = LONG.get(1)
-    LONG.set(1, 32)
-    evenBorrows.on = true
-    try {
-      const live = docsOf(EVEN)
-      const want = drawing((await runOf(P, live.doc, [2], undefined, { rules, spec: EVEN })).run)
-      const data = docsOf(EVEN)
-      const D = await docsOf(EVEN).draws()
-      // (the pass laid a unit anew and its fit measured the room below its blocks: an ink read)
-      expect(evenBorrows.reads).toBeGreaterThan(0)
-      evenBorrows.reads = 0
-      const { run } = await runOf(P, data.doc, [2], async p => D[p - 1]!, { rules, spec: EVEN })
-      expect(run.drawStats).toBeNull()
-      expect(drawing(run)).toEqual(want)
-      expect(data.counts.text.slice(1)).toEqual(live.counts.text.slice(1))
-    } finally { evenBorrows.on = false; LONG.set(1, was!) }
   })
 })
 

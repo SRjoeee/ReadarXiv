@@ -194,7 +194,6 @@ export function lcsMatched(S, O) {
 
 // ---- the line-break marks
 
-export const CJK = /[\u2E80-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF\u3000-\u303F\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F]/
 const kinsoku = new Map()
 /** the code point a string ends with, -1 for none */
 const lastOf = s => {

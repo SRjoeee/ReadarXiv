@@ -23,7 +23,7 @@ const BASE = { fam: 'serif', bold: false, italic: false, caps: false, design: 't
 const DESIGNS = { serif: 'times', sans: 'helvetica', mono: 'courier' }
 /** a target's built-in parameters at one state of the fit (no knob: the most natural, marks compressed at a line's start and
  *  between two), no hyphenation, no autospace, no TeX rule between lines */
-const params = (to: string) => ({ ...resolveRules(BUILTIN_RULES, to).params, borrow: 0, hyphen: 0, lineskip: null, order: [], growTo: 1, autospace: 0 })
+const params = (to: string) => ({ ...resolveRules(BUILTIN_RULES, to).params, borrow: 0, hyphen: 0, lineskip: null, order: [], autospace: 0 })
 /** one block of n lines 12 pt apart from 500, `w` pt wide, at size 10 */
 const block = (n: number, w: number) => { const B = Array.from({ length: n }, (_, k) => 500 - 12 * k); return { page: 1, rects: B.map(b => [1, 0, b - 2, w, b + 8]), x0: 0, x1: w, B, exact: B.map(() => true), sizes: B.map(() => 10), pitch0: 12, free: 0, indent: 0, after: 0, centred: false } }
 /** a CJK character or mark a full em wide (10 pt at size 10), as a CJK face sets it; anything else half an em */

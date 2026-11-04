@@ -13,7 +13,7 @@ export type LatinPatterns = Exclude<PatternLanguage, 'uk' | 'bg'>
 export type CyrillicPatterns = 'ru' | 'uk' | 'bg'
 
 /** the schema's number: the shape and how the engine reads it */
-export declare const RULES_SCHEMA: 9
+export declare const RULES_SCHEMA: 10
 /** a set's bytes at most, as received */
 export declare const RULES_CAP: 65536
 /** a set's JSON values at most, counted before JSON.parse */
@@ -29,33 +29,22 @@ export type Script = (typeof SCRIPTS)[number]
 export interface ScriptRules {
   // the fit (layer2.mjs layoutUnit2; run.mjs fitFurther, fillPage)
   order: ('track' | 'borrow' | 'lead' | 'shrink')[]
-  leadBase: number; leadFloor: number; leadRel: boolean
+  leadBase: number; leadFloor: number
   trackMin: number
-  /** em; null: the face's size correction given back (run.mjs cjkAdvance) */
-  trackStart: number | null
   compressMax: 0 | 1 | 2
   /** centred: no mark is compressed or hung (Traditional Chinese) */
   centredPunct: boolean
   borrow: 0 | 1; borrowGap: number
   floor: number; step: number
-  further: ('widen' | 'flow' | 'shrink')[]; floorMin: number
+  further: ('widen' | 'shrink')[]; floorMin: number
   cjkJust: number; spaceMin: number; spaceMax: number; autospace: number
-  even: 0 | 1 | 2
-  /** 0: off */
-  fillSize: number
   /** the page fill (D6); null: B */
   adaptiveFill: { band: number; track: number; size: number } | null
   /** em of the size drawn: the loosest pitch the fill spreads a unit to; null: the original's own pitch */
   fillLead: number | null
   /** × the original's own pitch (scaled by the fit's size): the loosest pitch the fill spreads a unit to where that is looser than fillLead's; null: fillLead's alone */
   fillLeadRel: number | null
-  /** what the fill leaves over: at each unit's foot, or packed to its run's end */
-  leftover: 'foot' | 'pack'
-  /** at the original's leading, a block's lines one pitch apart from its first, not on the original's baselines (layer2.mjs evenGridOf) */
-  evenPitch: boolean
   // breaking (layer2.mjs tokensOf2, layer1.mjs kinsokuOf)
-  /** a unit TeX set flush left or flush right (the layout file's FLUSH_LEFT, FLUSH_RIGHT) keeps that alignment */
-  keepAlign: boolean
   /** break only at spaces (Korean, the alphabets) */
   keepAll: boolean
   /** curly quotes, dashes, the ellipsis and the middle dot take the CJK class */

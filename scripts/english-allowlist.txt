@@ -158,5 +158,4 @@ lab/pdf/rulings/2026-10-30-page-split-height.json 1  # 2026-10-30: the owner's r
 CHANGELOG.md 1  # 2026-11-02: +1, the reader-facing line for #554 quotes the doubled marks it removes, a Chinese full stop among them, as the owner approved it
 tests/entry/abstract.test.ts 1  # 2026-11-04: the abstract page's link in Korean, the expectation
 tests/pdf-reader/layer-links-moved.test.ts 1  # 2026-11-04: the gate counts kana and hangul now: a Japanese heading, the expectation
-tests/pdf-reader/layer-proto-step3.test.ts 1  # 2026-11-04: the gate counts kana and hangul now: a hangul input
 tests/e2e/probes/ui-shots.mjs 1  # 2026-11-04: the interface languages' own names heading the index's sections (product data, UI.md §6)

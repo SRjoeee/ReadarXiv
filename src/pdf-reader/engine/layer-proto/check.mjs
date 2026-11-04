@@ -31,10 +31,10 @@
 //     from the text before it) shown exactly once: in place (not erased), or in a crop, or as a placeholder's text.
 import { charKey, cropPartsOf, displayTouched, nearIn } from './layer2.mjs'
 import { norm, texToText } from './layer1.mjs'
+import { CJK } from '../rules/script.mjs'
 
 const VISIBLE = new Set(['cite', 'num', 'other', 'macro', 'display', 'symbol'])
 const normU = s => String(s ?? '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
-const CJK_RE = /[\u2E80-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF\uFF00-\uFFEF\u3000-\u303F]/
 
 /** a PDF box [x0, y0, x1, y1] (y up) on a page's canvas, in device pixels [x0, y0, x1, y1] (y down) */
 const devBox = (px, b) => {
@@ -203,8 +203,8 @@ export function checkAll({ N, placed, rows, pxOf, toPdf, chars2, audit, cols, ce
     let cur = null
     seq.forEach((x, i) => {
       for (const ch of x.s) {
-        const sep = /\s/.test(ch) || CJK_RE.test(ch)
-        if (sep) { if (cur) { runs.push(cur); cur = null } ; if (CJK_RE.test(ch) && !/[\uFF0C\u3001\u3002\uFF1B\uFF1A\uFF08\uFF09,;:]/.test(ch)) runs.push({ cjk: true }) ; continue }
+        const sep = /\s/.test(ch) || CJK.test(ch)
+        if (sep) { if (cur) { runs.push(cur); cur = null } ; if (CJK.test(ch) && !/[\uFF0C\u3001\u3002\uFF1B\uFF1A\uFF08\uFF09,;:]/.test(ch)) runs.push({ cjk: true }) ; continue }
         if (!cur) cur = { s: '', ph: false, at: i }
         cur.s += ch
         cur.ph ||= x.ph

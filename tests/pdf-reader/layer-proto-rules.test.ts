@@ -112,14 +112,12 @@ describe("v0's open takes every choice for its target from the rule set it is gi
     expectTypeOf<Options>().toHaveProperty('rules')
   })
 
-  it("runs on the set's leading rule and fill: leadRel true and no adaptive fill (B) are the set's, not the run's defaults", async () => {
+  it("runs on the set's fill: no adaptive fill (B) is the set's, not the run's default", async () => {
     const set = editable()
-    set.languages.zh = { ...set.languages.zh!, leadRel: true, adaptiveFill: null }
+    set.languages.zh = { ...set.languages.zh!, adaptiveFill: null }
     const run = await open({ rules: set })
-    expect(run.P.leadRel).toBe(true)
     expect(run.P.adaptiveFill).toBeNull()
     const built = await open()
-    expect(built.P.leadRel).toBe(false)
     expect(built.P.adaptiveFill).toEqual({ band: 0.05, track: 0.05, size: 1.1 })
   })
 
@@ -167,7 +165,7 @@ describe("v0's open takes every choice for its target from the rule set it is gi
 })
 
 /** a column of units on a 300 x 300 page, each { kind, rows (its lines, 12 pt apart from y 200), tr }: every line 200 pt
- *  wide in words of Times at 10 pt, the unit's source their text (the leftover switch's page, below) */
+ *  wide in words of Times at 10 pt, the unit's source their text (the page below, drawn as before the leftover switch) */
 function column(units: { kind: string; rows: number[]; tr: string }[]) {
   const H = 300
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
@@ -211,44 +209,18 @@ const drawingOf = async (run: Awaited<ReturnType<typeof open>>) => {
  *  fills (docs/route/ocg-erasure.md §4.2): the same open, 'foot' and the built-in set still drawing one and the same */
 const BEFORE_THE_SWITCH = '633ea126e64f205a311b0cbbdd301c4e3682f60b08ac81912bfd9af1f86c83de'
 
-describe("the leftover switch over a whole run (openProto, D6's F6c): 'pack' moves the paragraphs up under a short one and paints them last, from the top; 'foot' draws as before the switch", () => {
-  const packed = () => { const set = editable(); set.scripts.Hans!.leftover = 'pack'; return set }
+describe("a column of paragraphs over a whole run (openProto): what the page fill leaves stays at each paragraph's foot", () => {
   type Laid = { id: number; layout: { lines: { baseline: number }[] } }
   const linesOf = (run: Awaited<ReturnType<typeof open>>, id: number) => (run.placed.find((p: { id: number }) => p.id === id) as unknown as Laid).layout.lines.map(l => l.baseline)
   /** the units in the order their drawing was made on the page (the audit's first entry of each) */
   const painted = (run: Awaited<ReturnType<typeof open>>) => [...new Set(run.audit.map((a: { unit: number }) => a.unit))]
-  const packOf = (run: Awaited<ReturnType<typeof open>>, id: number) => (run.stats.find(r => r.id === id) as unknown as { pack?: number }).pack
 
-  it("with 'pack', B rises what A leaves and C what B then leaves, each recorded, painted after the others, top first", async () => {
-    const run = await open({ rules: packed() }, SWITCH_PAGE())
-    await run.until(1)
-    const [a0, a1] = linesOf(run, 0)
-    expect([a0, a1!]).toEqual([200, expect.closeTo(180, 2)])
-    // (B keeps the original's distance under A's last drawn line: it rises what A's last line stands over A's original last)
-    const [b0] = linesOf(run, 1), [c0] = linesOf(run, 2)
-    expect(b0! - 128).toBeCloseTo(a1! - 140, 6)
-    // (and C, under B's one line, what B's line then stands over B's original last, 116)
-    expect(c0! - 104).toBeCloseTo(b0! - 116, 6)
-    expect(packOf(run, 1)).toBeCloseTo(40, 1)
-    expect(packOf(run, 2)).toBeCloseTo(52, 1)
-    expect(packOf(run, 0)).toBeUndefined()
-    // (the caption is no paragraph: it stays; the two that moved are painted last, the upper first)
-    expect(linesOf(run, 3)).toEqual([68])
-    expect(painted(run)).toEqual([0, 3, 1, 2])
-    run.dispose()
-  })
-
-  it("with 'foot', nothing moves, the units are painted in their laying order, and the drawing is the one before the switch", async () => {
-    const set = editable()
-    expect(set.scripts.Hans!.leftover).toBe('foot')
-    const foot = await open({ rules: set }, SWITCH_PAGE()), built = await open({}, SWITCH_PAGE()), pack = await open({ rules: packed() }, SWITCH_PAGE())
-    await Promise.all([foot.until(1), built.until(1), pack.until(1)])
-    expect([linesOf(foot, 1), linesOf(foot, 2)]).toEqual([[128], [104]])
-    expect(foot.stats.some(r => 'pack' in r)).toBe(false)
-    expect(painted(foot)).toEqual([0, 1, 2, 3])
-    expect(await drawingOf(foot)).toBe(BEFORE_THE_SWITCH)
+  it('moves nothing, paints the units in their laying order, and draws the page as before the leftover switch', async () => {
+    const built = await open({}, SWITCH_PAGE())
+    await built.until(1)
+    expect([linesOf(built, 1), linesOf(built, 2)]).toEqual([[128], [104]])
+    expect(painted(built)).toEqual([0, 1, 2, 3])
     expect(await drawingOf(built)).toBe(BEFORE_THE_SWITCH)
-    expect(await drawingOf(pack)).not.toBe(BEFORE_THE_SWITCH)
-    for (const r of [foot, built, pack]) r.dispose()
+    built.dispose()
   })
 })

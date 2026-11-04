@@ -435,9 +435,8 @@ describe('the page fill keeps a shared row as it is drawn: each try settled befo
 })
 
 describe('a shared line under rules that lay a page in order: none, the next unit where TeX set it, however the paper is opened', () => {
-  // (the even pass and the leftover's packing lay a unit anew or move it once the unit after it has been laid from where it
-  // ended on the row; with no page pass a closure may leave the unit before it to a later one: either would set the row from a
-  // layout it is not drawn in, or from none, by the order of the asks)
+  // (with no page pass a closure may leave the unit before it to a later one: it would set the row from none, by the order of
+  // the asks)
   /** the built-in rules with Chinese's own fields changed */
   const rulesWith = async (o: Record<string, unknown>) => {
     const { BUILTIN_RULES } = await import('@/pdf-reader/engine/rules/layout.mjs')
@@ -445,7 +444,7 @@ describe('a shared line under rules that lay a page in order: none, the next uni
     Object.assign(set.languages.zh as Record<string, unknown>, o)
     return set
   }
-  const modes: [string, Record<string, unknown>][] = [['the even pass', { even: 1 }], ['the leftover packed', { leftover: 'pack' }], ['no page pass', { adaptiveFill: null }]]
+  const modes: [string, Record<string, unknown>][] = [['no page pass', { adaptiveFill: null }]]
   for (const [mode, o] of modes) {
     it(`${mode}: a heading shorter than its English, its text where TeX set it; S-E's pages the same in every order`, async () => {
       const rules = await rulesWith(o)
