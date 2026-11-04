@@ -3137,10 +3137,18 @@ own), each part carrying its pages' cell rules (`rules`).
   only one side holds inside the link is taken only within the rounding's reach of one of its boxes' edges: a character's
   move plus the box's, two thousandths. On the gate's 7 papers that is 1 point in 3,585 links (2307.16209v1 p101: the `(` of
   `(5.1)`, 0.0002 pt inside its link's edge). The pages tier (`--door-draw`) compares the pages drawn from the draws against
-  the same pages read live, exactly. Against 13 it differs on more pages, at the last digit the page's own rounding writes: SVG
-  markup on 4 more of 399 pages (one `tspan`'s x at 0.01), word tables on 23 more, the copy plane's pixels on 37 more. Links
-  and records are equal on every page, as on 13. A reader of 14 reads 13's draws too, their unmapped characters read of
-  their maps.
+  the same pages read live, exactly. Against 14 it differs on more pages, at the last digit the page's own rounding writes:
+  SVG markup on 3 more of 399 pages, word tables on 22 more, the copy plane's pixels on 37 more. Links and records are equal on
+  every page, as on 14. Measured on those pages (2026-11-04), drawn and live, each in a load of its own:
+  - **The copy:** 1 of 255 on any channel at most, both at the tier's 2.5 device px a point (14 pixels a page at most) and at
+    the reader's largest copy, `COPY_PIXELS` (5.88 device px a point: 109 pixels of 16.8 million at most).
+  - **The SVG:** one `tspan`'s x moves by its 0.01 (0.004 pt). Drawn at the reader's largest zoom on a ratio of 2 (10.67 device
+    px a point), that word sits a quarter of a device pixel over, as the browser places text: 227 and 467 pixels, up to 72 and
+    74 of 255 on its glyphs' edges, and none on the third page.
+  - **The word table** (the sentence highlight's geometry, no pixel of its own): 0.00037 pt at most, no token, span or word
+    otherwise.
+
+  A reader of 15 reads 13's and 14's draws too, their unmapped characters read of their maps.
 - **The whole run's rules** (`WHOLE_RULES`, next's, or `whole: true` under any rules). The maker's frame, the columns' edges and
   the far-push columns read the whole document, so every part is cut once the whole is made, and the parts are `cutBundle`'s of
   the same whole, byte for byte. With the oracle (`oracle { frame, columnEdges }`, a whole run's, for tests and the lab) the
