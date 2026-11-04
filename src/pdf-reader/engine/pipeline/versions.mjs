@@ -562,7 +562,18 @@
 //     unit); no source unit's class and no name's row moves. The ink
 //     units move, so the rows' identities: raised so. Every source unit, its pieces and its wire are 63's: a copy of 63 carries
 //     every unit (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '64'
+// 65 (the release sweep's census of run-in heads, 2026-11-04: four Chinese heads laid where the English head had ended, 0.84 to
+//     16.04 em after the translated head): a unit only the layout file holds (no left unit, so no stream of its own) stands in K
+//     beside the left unit it shares one of TeX's lines with, right after the unit whose last row its first row continues or right
+//     before the one whose first row continues its last, through the units the file alone holds between them on the line in its
+//     order (need.mjs lineAfterOf, the cutter's K and the door's own), else after the
+//     largest stream of a left unit with a smaller id as before. A float or a note numbered before a run-in head and streamed after
+//     its text had put the head after its text in K, where the text finds no lead (2610.21547v1 p16's "Label flipping.", after a
+//     caption of page 17). Over the sweep's 87 papers 7 of 5,241 such units move: the four heads, now before their text, and
+//     three keywords lines, now after "Key words and phrases." by their line (by the ids they stood there only where an
+//     affiliation of the last page came before them); every other paper's K is the same, slot for slot. The units,
+//     their pieces and their wire are 64's: a copy of 64 carries every unit (live.mjs PIPELINE_CARRIES)
+export const PIPELINE_VERSION = '65'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'

@@ -3,7 +3,8 @@ import { wholeFrontier } from '@/pdf-reader/engine/layer-proto/cut.mjs'
 import { groupsOfUnits } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { needBound } from '@/pdf-reader/engine/layer-proto/need.mjs'
 import type { LayoutFile } from '@/pdf-reader/engine/layout/file.mjs'
-import { frontierStream } from '@/pdf-reader/engine/pipeline/frontier.mjs'
+import { stubOf } from '@/pdf-reader/engine/layout/make.mjs'
+import { frontierStream, leftBoundsOf, partClosable } from '@/pdf-reader/engine/pipeline/frontier.mjs'
 import { type PaperSpec, TOKENS_PER_PAGE, type UnitSpec, type Whole, wholeOf } from './helpers/cut-paper'
 
 // The page stream's K, F and need bounds (pipeline/frontier.mjs) as the pages come: each try's the same as K, F and NB made from
@@ -37,7 +38,7 @@ function paperOf(pages: number, per: number, seed: number): PaperSpec {
 }
 
 /** the maker's stream as the page pass asks it (make.mjs `layout`, `tell`): each unit's rows the file's, the same rows every
- *  time, until it is told: then its stub, the pages K reads (make.mjs stubOf) */
+ *  time, until it is told: then its stub, what K reads (make.mjs stubOf). `whole(ids)`: the file's own rows of `ids`, no stub */
 function makerOf(whole: Whole) {
   const L = whole.layout as LayoutFile
   const own = new Map<number, Rows>()
@@ -57,16 +58,16 @@ function makerOf(whole: Whole) {
       for (const t of TABLES) (out as Record<Table, unknown[][]>)[t] = ids.flatMap(i => rowsOf(i)?.[t] ?? [])
       return out as LayoutFile
     },
+    whole(ids: readonly number[]) {
+      const out: LayoutFile = { ...L, fonts: L.fonts.slice() }
+      for (const t of TABLES) (out as Record<Table, unknown[][]>)[t] = ids.flatMap(i => own.get(i)?.[t] ?? [])
+      return out as LayoutFile
+    },
     tell(ids: readonly number[]) {
       for (const i of ids) {
         const r = own.get(i)
         if (!r || stubs.has(i)) continue
-        const pagesIn = (rows: unknown[][], at: number, stride: number) => { const set = new Set<number>(); for (const v of rows) for (let j = at; j + stride <= v.length; j += stride) set.add(v[j] as number); return [...set] }
-        const lines = pagesIn(r.lines.map(e => e[1] as number[]), 0, 8), segs = pagesIn(r.ph, 4, 6), labels = [...new Set(r.labels.map(l => l[2] as number))]
-        stubs.set(i, {
-          units: r.units, lines: lines.length ? [[i, lines.flatMap(p => [p, 0, 0, 0, 0, 0, 0, 0])]] : [], ph: segs.length ? [[i, 0, 0, 0, ...segs.flatMap(p => [p, 0, 0, 0, 0, 0])]] : [],
-          labels: labels.map(p => [i, 0, p, 0, 0, 0, 0, 0]), frames: [], erase: [], headings: [], pageText: [], held: [],
-        })
+        stubs.set(i, stubOf(i, r as never) as unknown as Rows)
       }
     },
   }
@@ -109,15 +110,17 @@ function differ(a: unknown, b: unknown, at = ''): string | null {
  * (a unit settled once its last line's page is), K asked twice (the page pass asks again after a part), and every `cutEvery`
  * pages the prefix of K to F(t) told. `check`: each try's K, F and NB against them made from scratch
  */
-function drive(spec: PaperSpec, o: { leftTo: (t: number) => number; settledTo: (t: number) => number; cutEvery: number; check: boolean }) {
+function drive(spec: PaperSpec, o: { leftTo: (t: number) => number; settledTo: (t: number) => number; cutEvery: number; check: boolean; shape?: (lines: Map<number, number[]>) => void }) {
   const whole = wholeOf(spec), N = spec.pages, grouped = groupsOfUnits(whole.units)
   // (every third unit's last line ends where the next unit's first begins, on its baseline: a shared line, the next one's lead,
-  // rowLeadOf, which K's `follows` reads and a stub's rows no longer give)
+  // rowLeadOf, which K's `follows` reads, and where one of the two is only the file's, its slot, need.mjs lineAfterOf; a stub
+  // keeps the two lines it reads)
   const lines = new Map((whole.layout as LayoutFile).lines.map(e => [e[0], e[1] as number[]]))
   for (const [id, rows] of lines) {
     const b = lines.get(id + 1)
     if (b && id % 3 === 0 && rows[rows.length - 8] === b[0]) { rows[rows.length - 6] = 300; b[1] = 305 }
   }
+  o.shape?.(lines)
   const st = makerOf(whole), left = leftOf(whole)
   const fs = frontierStream({ paper: whole.paper, N, bundle: whole.units, grouped, left, st })
   const lastLine = spec.units.map(u => Math.max(0, ...(u.lines ?? [])))
@@ -133,6 +136,12 @@ function drive(spec: PaperSpec, o: { leftTo: (t: number) => number; settledTo: (
         const want = wholeFrontier({ paper: whole.paper, base: whole.base, units: whole.units, left: { pages: left.pages, units: left.units() }, layout: st.layout(ids) }, undefined, grouped)
         const d = differ(got.K, want.K, 'K') ?? differ(got.F, want.F, 'F') ?? differ(got.NB, needBound(want.K, N), 'NB')
         expect(d, `page ${t}, try ${again}`).toBeNull()
+        // (and K as the whole file gives it, its told units' stubs aside: each entry's slot and its lead on a shared line, which
+        // a stub of its pages alone lost, so that a unit only the file holds, told beside its line's other unit, took its slot by
+        // the ids in the parts after its own, and the stream's K there was not the whole's: 2610.21884v1)
+        const full = wholeFrontier({ paper: whole.paper, base: whole.base, units: whole.units, left: { pages: left.pages, units: left.units() }, layout: st.whole(ids) }, undefined, grouped)
+        const key = (K: typeof got.K) => K.map(e => [e.id, e.slot, e.follows])
+        expect(differ(key(got.K), key(full.K), 'K'), `page ${t}, try ${again}, against the whole file`).toBeNull()
       }
       if (again === 0 && t % o.cutEvery === 0) {
         const told = got.K.slice(0, (got.F[t] ?? -1) + 1).map(e => e.id)
@@ -153,6 +162,87 @@ describe('the page stream\'s K, F and need bounds as its pages come', () => {
       drive(spec, { leftTo: t => t, settledTo: t => t, cutEvery: 1, check: true })
       drive(spec, { leftTo: t => (t < spec.pages ? 1 : t), settledTo: t => (t < spec.pages ? 0 : t), cutEvery: 5, check: true })
     }
+  })
+
+  it('keeps a chain of units only the file holds, told in an earlier part, where the whole file places it (a left unit, two of the file\'s, one line)', () => {
+    // (each page: a paragraph of two lines, then A (the left's), B and C (the file's alone) on one line, then D on the next;
+    // a caption numbered first and set at the paper's end, so that by the ids B and C would stand after it)
+    const pages = 8, units: UnitSpec[] = [{ stream: TOKENS_PER_PAGE * pages - 1, rects: [pages], lines: [pages], kind: 'caption' }]
+    const chain: [number, number, number][] = []
+    for (let p = 1; p <= pages; p++) {
+      const at = TOKENS_PER_PAGE * (p - 1)
+      units.push({ stream: at, rects: [p], lines: [p], perPage: 2 })
+      chain.push([units.length, units.length + 1, units.length + 2])
+      units.push({ stream: at + 8, rects: [p], lines: [p] }, { stream: null, lines: [p], heading: 'B' }, { stream: null, lines: [p] }, { stream: at + 12, rects: [p], lines: [p] })
+    }
+    const shape = (lines: Map<number, number[]>) => {
+      for (const [a, b, c] of chain) {
+        const put = (id: number, x0: number, x1: number, y: number) => lines.get(id)!.splice(0, 8, lines.get(id)![0]!, x0, x1, y, y + 8, y - 2, 10, 0)
+        put(a, 72, 130, 600); put(b, 140, 200, 600); put(c, 210, 260, 600); put(c + 1, 72, 540, 588)
+      }
+    }
+    // (every page told as it comes, and every third; the maker a page behind)
+    drive({ pages, units }, { leftTo: t => t, settledTo: t => t, cutEvery: 1, check: true, shape })
+    drive({ pages, units }, { leftTo: t => Math.min(pages, t + 1), settledTo: t => t - 1, cutEvery: 3, check: true, shape })
+    // (and K over the whole file is the line's order: A, B, C, each right after the one before it on the line)
+    const whole = wholeOf({ pages, units })
+    const lines = new Map((whole.layout as LayoutFile).lines.map(e => [e[0], e[1] as number[]]))
+    shape(lines)
+    const K = wholeFrontier(whole, undefined, groupsOfUnits(whole.units)).K
+    for (const [a, b, c] of chain) {
+      const k = (id: number) => K.findIndex(e => e.id === id)
+      expect([k(b) - k(a), k(c) - k(b), K[k(b)]!.follows, K[k(c)]!.follows]).toEqual([1, 1, a, b])
+    }
+  })
+
+  it('cuts no part a chain of the file\'s units before a left unit may still come into: the parts told in order are the whole\'s K', () => {
+    // (left units A on page 1, streaming 18, and L on page 2, 20; E, the file's alone, after A on A's line; X1 and X2, the file's
+    // alone, before L on L's line, X1 then X2 then L; and F, a caption numbered before X1 and X2 and set on page 3, which puts
+    // their places by the ids past it. In the whole K, X1 stands at 18.5 beside E, before it by its id, X2 at 19.5: need.mjs
+    // lineAfterOf, fromRight. The maker makes L's rows and not yet X1's and X2's: a part of page 1 holding A and E, closed while
+    // half a step below 20 alone was kept free, let X1 sort before E, told already: the reader refuses the part after it)
+    const units: UnitSpec[] = [
+      { stream: 18, rects: [1], lines: [1] }, { stream: 45, rects: [3], lines: [3], kind: 'caption' },
+      { stream: null, lines: [2] }, { stream: null, lines: [2] }, { stream: null, lines: [1] },
+      { stream: 20, rects: [2], lines: [2] }, { stream: 40, rects: [3], lines: [3] },
+    ]
+    const [A, X1, X2, E, L] = [0, 2, 3, 4, 5]
+    const settledAt = [1, 3, 2, 2, 1, 1, 3]
+    const pages = 3, spec = { pages, units }, whole = wholeOf(spec), n = units.length, grouped = groupsOfUnits(whole.units)
+    const lines = new Map((whole.layout as LayoutFile).lines.map(e => [e[0], e[1] as number[]]))
+    const put = (id: number, x0: number, x1: number) => lines.get(id)!.splice(0, 8, lines.get(id)![0]!, x0, x1, 600, 608, 598, 10, 0)
+    put(A, 72, 130); put(E, 140, 200); put(X1, 72, 100); put(X2, 110, 150); put(L, 160, 260)
+    const st = makerOf(whole), left = leftOf(whole)
+    left.anchor(pages)
+    const fs = frontierStream({ paper: whole.paper, N: pages, bundle: whole.units, grouped, left, st })
+    const members = new Map<number, number[]>()
+    for (let i = 0; i < n; i++) { const g = grouped.of[i]!; if (g >= 0) (members.get(g) ?? members.set(g, []).get(g)!).push(i) }
+    const streamed: number[] = []
+    let a = 1
+    for (let t = 1; t <= pages && a <= pages; t++) {
+      const inK = (i: number) => left.done(i) && settledAt[i]! <= t
+      const ids = [...Array(n).keys()].filter(inK)
+      // (the pages done: let go by the maker, before every unit's first page whose rows are still to be made)
+      const H = Math.min(t, ...[...Array(n).keys()].filter(i => !inK(i)).map(i => Math.min(...(units[i]!.lines ?? [pages + 1])) - 1))
+      for (;;) {
+        const { K, F, NB } = fs.of(ids)
+        const target = a > pages ? 0 : partClosable({ K, F, NB, a, H, N: pages, n, now: leftBoundsOf({ units: left.units(), done: left.done, next: TOKENS_PER_PAGE * pages }, n), inK, made: t, members })
+        if (!target) break
+        const told = K.slice(0, F[target]! + 1).map(e => e.id)
+        streamed.push(...told.filter(id => !streamed.includes(id)))
+        st.tell(told)
+        fs.told(told)
+        a = target + 1
+      }
+    }
+    const all = [...Array(n).keys()]
+    const K = fs.of(all).K
+    streamed.push(...K.map(e => e.id).filter(id => !streamed.includes(id)))
+    const full = wholeFrontier({ paper: whole.paper, base: whole.base, units: whole.units, left: { pages: left.pages, units: left.units() }, layout: st.whole(all) }, undefined, grouped).K
+    expect(full.filter(e => [A, X1, E, X2, L].includes(e.id)).map(e => [e.id, e.slot])).toEqual([[A, 18], [X1, 18.5], [E, 18.5], [X2, 19.5], [L, 20]])
+    expect(streamed).toEqual(full.map(e => e.id))
+    // (and a part was cut before the end: page 1's, once X1 and X2 are made)
+    expect(a).toBeGreaterThan(1)
   })
 
   it('makes K again only when what it is made of changed: tries that change nothing cost nothing (2610.19159v1\'s shape)', () => {
