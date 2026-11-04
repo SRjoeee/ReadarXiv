@@ -44,16 +44,6 @@ describe('a line that TeX ends with a display or a forced break is set ragged', 
     expect(l.lines[1]!.used).toBeCloseTo(97.5, 6)
   })
 
-  it('sets it so where the text runs on past the display (flowPast): the line the display breaks', () => {
-    // one line's room before the display, three after it, the original's one line below it: the text after the display runs
-    // on into the slots above it, the display breaking the line once (layer-proto-step3's case)
-    const tokens = [...words(8), { blockTo: 0, w100: 0 }, ...words(24)]
-    const l = L2.layoutUnit2(tokens as never, [block(500, 4, 0), block(300, 1, 1)] as never, 10, { ...P('de'), flowPast: true } as never)
-    expect(l.clipped).toBe(false)
-    expect(l.lines.map(x => x.mode)).toEqual(['last', 'just', 'just', 'last'])
-    expect(l.lines[0]!.used).toBeCloseTo(97.5, 6)
-  })
-
   it('sets the line a forced break ends at its natural width', () => {
     const tokens = [...words(16), { newline: 0, room: 0, w100: 0 }, ...words(2)]
     const l = L2.layoutUnit2(tokens as never, [block(500, 3, 0)] as never, 10, P('de') as never)

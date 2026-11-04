@@ -132,7 +132,7 @@ describe("a paragraph's measure where TeX changed it: each slot its line's (F5)"
     expect(blocks).toHaveLength(2)
     expect(blocks.map(b => b.measures ?? null)).toEqual([null, null])
   })
-  const P = { ...resolveRules(BUILTIN_RULES, 'de').params, borrow: 0, hyphen: 0, lineskip: null, order: [], growTo: 1 }
+  const P = { ...resolveRules(BUILTIN_RULES, 'de').params, borrow: 0, hyphen: 0, lineskip: null, order: [] }
   const face = { id: 'serif', family: 'F', weight: 400, style: 'normal', size: 1 }
   const words = (n: number) => Array.from({ length: n }, (_, i) => [...(i ? [{ space: true, w100: 25 }] : []), { s: 'xxxxxxx', cls: 'latin', w100: 350, st: {}, face }]).flat()
   it('lays each line in its own measure, on one grid across the change', () => {

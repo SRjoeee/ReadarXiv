@@ -10,8 +10,8 @@
 // And the size correction of a role table face (fonts.mjs setRoleFaces) on each run's SVG size, 1 for the prototype's.
 // And step 3 (2026-10-07): a unit's leading relative to the original's own pitch (leadOf); the display environments the
 // engine knows (layer1.mjs DISPLAY); and no unit drawn in part: past the fit's last state the host's further steps
-// (run.mjs fitFurther: a single line widened over the paper beside it, the text run past a display, the size on below
-// its floor, P.further and P.floorMin), the flow past a display being this module's (breakLines 'flow', P.flowPast).
+// (run.mjs fitFurther: a single line widened over the paper beside it, the size on below its floor, P.further and
+// P.floorMin).
 // And prepareUnit in parts (step 2 of the layer's new direction, 2026-10-06), so that the four which read the page's
 // geometry (lines, erase extents, labels, placeholder renderings) can come from another source: its statements moved
 // into the parts as they were, in the same order; a set of claimed characters, which nothing read, left out. Every
@@ -64,13 +64,13 @@
 // history of how the readings the file now gives were first made.
 import { keptPair, noStart } from './no-start.mjs'
 import { work } from './work.mjs'
-import { sourceRepeats, stutterCuts } from './stutter.mjs'
 import { blocksOf, CITE, kinsokuOf, lcsPairs, median, norm, phClass, texToText, wordsOf } from './layer1.mjs'
 import { faceOf, fontString, roleFaces, styleKey } from './fonts.mjs'
 import { breakPoints } from './hyph.mjs'
 import { drawnText, shown } from '../layer/pieces.mjs'
 import { plainTracker, transformMap } from './words.mjs'
 import { ownSmallCaps } from '../rules/font-roles.mjs'
+import { cjkClassWith, CJK, SPACELESS } from '../rules/script.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { textPieceOf } from '../rules/text-piece.mjs'
 import { GENERATED_COMMANDS, headInTarget, refInTarget } from '../rules/tex-names.mjs'
@@ -2054,20 +2054,11 @@ export function extendRects(rects, charsByPage, others, src, wordsOfFn, normFn, 
 
 const PUNCT_CLOSE = /^[\u3001\u3002\uFF0C\uFF0E\uFF1A\uFF1B\uFF01\uFF1F\uFF09\u300D\u300F\u3011\u3015\u3009\u300B\u3019\u3017”’]$/
 const PUNCT_OPEN = /^[\uFF08\u300C\u300E\u3010\u3014\u3008\u300A\u3018\u3016“‘]$/
-/** the characters a CJK run takes: CJK, full-width forms, Hangul, and where the rules say so (Chinese and Japanese) the curly
- *  quotes and dashes, which xeCJK sets full width there (Korean sets them as its Western punctuation). As code points, tested
- *  a code point at a time (`u`): the compatibility ideographs' first, U+F900, typed as itself was normalized into the unified
- *  ideograph U+8C48 it stands for, and its range ran on over U+A000 to U+F8FF (Yi, Lisu, Vai, Cyrillic Extended-B, Latin
- *  Extended-D, the surrogates and the private-use area, a font's icons: laid in the CJK face), as in pipeline/anchors.mjs.
- *  A character outside the BMP is CJK only in the two ideographic planes, U+20000 to U+3FFFF (the CJK extensions B to J
- *  and the compatibility supplement), where a non-`u` class took every astral character for CJK through its surrogates and
- *  sent Mathematical Alphanumeric Symbols, which the body face lacks, to it. Hangul is its syllables and every block of its
- *  jamo (the compatibility jamo and the two extended blocks among them) */
-const CJK_SPANS = [[0x1100, 0x11ff], [0x2e80, 0x9fff], [0xa960, 0xa97f], [0xac00, 0xd7ff], [0xf900, 0xfaff], [0xff00, 0xffef], [0x20000, 0x3ffff]]
-/** the curly quotes, the em dash, the ellipsis and the middle dot: CJK's where the rules' cjkQuotes say so */
-const CJK_QUOTES = [0x201c, 0x201d, 0x2018, 0x2019, 0x2014, 0x2026, 0xb7].map(c => [c, c])
-const spansClass = spans => new RegExp(`[${spans.map(([a, b]) => (a === b ? `\\u{${a.toString(16)}}` : `\\u{${a.toString(16)}}-\\u{${b.toString(16)}}`)).join('')}]`, 'u')
-const CJK_CLASS = [spansClass(CJK_SPANS), spansClass([...CJK_SPANS, ...CJK_QUOTES])]
+/** the characters a CJK run takes: the CJK characters (rules/script.mjs CJK: Unicode's CJK blocks, Hangul's among them, and its
+ *  full-width forms, their code points assigned), and where the rules say so (Chinese and Japanese) the curly quotes and
+ *  dashes, which xeCJK sets full width there (Korean sets them as its Western punctuation). Tested a code point at a time */
+const CJK_QUOTES = [0x201c, 0x201d, 0x2018, 0x2019, 0x2014, 0x2026, 0xb7]
+const CJK_CLASS = [CJK, cjkClassWith(CJK_QUOTES)]
 /** `quotes` (the rules' cjkQuotes): whether the curly quotes, dashes, ellipsis and middle dot are CJK's too */
 export const cjkClassRe = quotes => CJK_CLASS[quotes ? 1 : 0]
 /** the attributes a piece may set over what it holds, a bit each: weight, slant, small capitals, family, colour */
@@ -2260,6 +2251,21 @@ export function ink100(s, face) {
   }
   return v
 }
+/** each token's ink (ink100 of its text in its face), read once a token: TeX's \\lineskip rule reads the ink of the line it
+ *  closes and of the line before it on every breaking pass (breakLines settle), the same tokens pass after pass, where each
+ *  read made the font's string and the cache's key again (5.3 M reads on the speed check's pack, a third of all breaking
+ *  time). By the token object, so that a token cut from another (a hyphen's head, a word's tail: a copy with its own text)
+ *  is read for its own text */
+let inkByToken = new WeakMap()
+/** the tokens' ink read so far let go (run.mjs, as each page's pass ends: its fits and its fill have read theirs). Held by the
+ *  token, the cache lived as long as every laid unit's tokens do, and grew the heap 11 KB a laid page (the speed check of
+ *  2026-11-04, 1.5 KB the runs' spread); a token laid again after its page's pass reads its ink once more */
+export function forgetInk() { inkByToken = new WeakMap() }
+function tokenInk(t) {
+  let m = inkByToken.get(t)
+  if (m === undefined) inkByToken.set(t, (m = ink100(t.s, t.face)))
+  return m
+}
 /** how far right of its start a run's ink ends at 100 px in its face (TextMetrics' actualBoundingBoxRight), null where the canvas
  *  gives none. Read only of a shared row's last item (inkEndOf), so measured then and cached apart: one more number on every entry
  *  of the width's cache grew the heap 2.8 KB a laid page (the speed check of 2026-11-04, 0.27 KB the runs' spread) */
@@ -2309,23 +2315,6 @@ export function droppedHeld(s, held) {
   return kept + t
 }
 
-/**
- * `text` with the ranges `cuts` ([from, to), rising: stutter.mjs stutterCuts) left out, and its transformMap (`map`, or null)
- * less the same characters, so that each character left keeps the place in the piece it had; null where there is nothing to cut
- */
-export function cutOut(text, cuts, map) {
-  if (!cuts.length) return null
-  let out = '', at = 0
-  const from = map ? [] : null, span = map ? [] : null
-  const keep = (a, z) => {
-    out += text.slice(a, z)
-    if (map) for (let i = a; i < z; i++) { from.push(map.from[i]); span.push(map.span[i]) }
-  }
-  for (const [a, z] of cuts) { if (a > at) keep(at, a); at = Math.max(at, z) }
-  keep(at, text.length)
-  return { text: out, map: map && { from, span } }
-}
-
 /** a length TeX reads as a dimension, in PDF units (big points): its number and its unit, the em by itself */
 const DIMEN = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(pt|bp|mm|cm|in|pc|dd|cc|sp|em)$/
 const BP = { pt: 72 / 72.27, bp: 1, mm: 72 / 25.4, cm: 72 / 2.54, in: 72, pc: (12 * 72) / 72.27, dd: ((1238 / 1157) * 72) / 72.27, cc: ((12 * 1238) / 1157 * 72) / 72.27, sp: 72 / 72.27 / 65536 }
@@ -2350,10 +2339,9 @@ export function glueOf(src) {
   const brk = m[1] !== 'kern'
   return d[2] === 'em' ? { em: Number(d[1]), brk } : { bp: Number(d[1]) * BP[d[2]], brk }
 }
-/** the characters a script that sets no spaces between its words sets none beside either: Han, kana and the full-width
- *  marks (CJK Symbols and Punctuation, the Halfwidth and Fullwidth Forms' punctuation), and where the rules set them as
- *  CJK's (cjkQuotes) the curly quotes, dashes, ellipsis and middle dot */
-const SPACELESS = /[\p{sc=Han}\p{scx=Hira}\p{scx=Kana}\u3000-\u303F\uFF01-\uFF0F\uFF1A-\uFF20\uFF3B-\uFF40\uFF5B-\uFF65]/u
+/** the characters a script that sets no spaces between its words sets none beside either (rules/script.mjs SPACELESS: Han,
+ *  kana, Bopomofo and the CJK blocks' marks but Hangul's), and where the rules set them as CJK's (cjkQuotes) the curly quotes,
+ *  dashes, ellipsis and middle dot */
 const SPACELESS_QUOTES = /[“”‘’—…·]/u
 /** two SPACELESS characters with white space between, in a unit's source: a paper that writes CJK so, its own */
 const CJK_SPACED = new RegExp(`${SPACELESS.source}\\s+${SPACELESS.source}`, 'u')
@@ -2444,15 +2432,15 @@ export function smallCapsAt(chars, text, size) {
  * the unit's first line starts with before its own text, each part in its own style ({ parts: [{ text, st }], gap }: a
  * float's label in the target's name, labelInTarget; a run-in heading and the joint TeX set after it, run.mjs), then
  * `gap`: a space where it is undefined, else that many em of the unit's size after the lead's last character, no place
- * to break (the original's: TeX's \labelsep after amsthm's "Proof.", none after IEEEtran's dash). `measure(s, face)`: a run's width at 100 px (the canvas's, cached); a host passes its own to read the
- * tokens (their faces and texts) before any face is loaded, without a width entering the cache that a face not yet there
- * would give.
+ * to break (the original's: TeX's \labelsep after amsthm's "Proof.", none after IEEEtran's dash). `measure(s, face)`: a run's width at 100 px (the canvas's, cached); null measures nothing, for a host that reads
+ * the tokens (their faces and texts) before any face is loaded, without a width entering the cache that a face not yet there
+ * would give, and then measures them (measureTokens).
  * White space in a script that sets none between its words (the rules' keepAll false: Chinese, Japanese) is not drawn where
  * its nearest drawn tokens either side are both Han, kana or full-width marks (SPACELESS), whatever set it there: the
  * translator's reply, a space placeholder (a tie, a control space, a forced break no source locates); but the space after a
  * styled pair that opens the unit, a run-in head (`\noindent\textbf{Title}` and the text after it), which TeX set there
  * itself; a space inside a code run (the typewriter face's: its spaces are its content); and every space of a unit whose source
- * sets two such characters with white space between (a paper that writes CJK so, its own: sourceRepeats' rule for a stutter).
+ * sets two such characters with white space between (a paper that writes CJK so, its own).
  * A formula crop is no such token: the space beside it stays (its autospace). Explicit glue in the source (glueOf:
  * \enspace, \quad, \hspace{6pt}, …) is a kern at TeX's width after the token before it (`kernW`, at 100 px), in every target:
  * never a space, so the reply's white space around its marker goes with it, and the word after a \kern stands with the one
@@ -2524,7 +2512,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
         // TeX's to skip)
         if (tokens.length && !lastIsSpace() && !tokens.at(-1).leadEnd && !tokens.at(-1).kernEnd) {
           const face = plainOf(faceOf(st, 'latin', to))
-          tokens.push({ space: true, st, face, w100: measure(' ', face), ...(afterHead ? { keep: true } : {}) })
+          tokens.push({ space: true, st, face, w100: 0, ...(afterHead ? { keep: true } : {}) })
         }
         afterHead = false
         continue
@@ -2557,7 +2545,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
           // (no object a word where it is one token: the reading of nearly every word)
           for (let r = 0, count = runs ? runs.length : 1; r < count; r++) {
             const run = runs?.[r], rs = run ? run.s : all ? upper(s) : s, k = run ? run.k : 1, at = run ? run.at : 0, len = run ? run.n : s.length
-            const t = { s: rs, st, face, cls: p.cls, w100: measure(rs, face) * k, ...extra, ...(q > 0 && at === 0 ? { brk: true } : {}) }
+            const t = { s: rs, st, face, cls: p.cls, w100: 0, ...extra, ...(q > 0 && at === 0 ? { brk: true } : {}) }
             if (k !== 1) t.sc = k
             if (track && len) {
               const i = from + at, last = i + len - 1
@@ -2594,7 +2582,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     else if (tokens.length) {
       const t = tokens[tokens.length - 1]
       t.leadEnd = true
-      if (lead.gap > 0) { t.w100 += 100 * lead.gap; t.kern = true; if (plain) t.kernEm = lead.gap }
+      if (lead.gap > 0) { t.leadGap = 100 * lead.gap; t.kern = true; if (plain) t.kernEm = lead.gap }
     }
   }
   // a displayed formula the text after it starts below (or one before the unit's lines): the translation's text that
@@ -2614,9 +2602,6 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       t = t.slice(lead.length + ch.length)
     }
   }
-  // (a translator's stutter, a word written twice in a row the source has once, drawn once: stutter.mjs, the M1 survey; not
-  // where the unit's source repeats a word itself)
-  const tidy = !sourceRepeats(unit.src)
   // (a run-in head: the styled pair the unit opens with, only pieces that draw nothing before it, its id)
   let headId = null
   for (const p of unit.pieces) {
@@ -2653,10 +2638,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       // reads so that a token of it has no place; a source piece must be drawn as it is shown)
       const sm = at ? (sh === raw ? true : p.tr && sh.length === raw.length ? Int32Array.from({ length: raw.length }, (_, i) => i) : null) : null
       const map = sm ? transformMap(s, text) : null
-      // (a stutter's second word left out of a translated piece, each character left keeping its place: the word table's offsets
-      // stay the translation's own)
-      const cut = tidy && p.tr ? cutOut(text, stutterCuts(text), map) : null
-      pushText(cut?.text ?? text, style(), {}, (cut ? cut.map : map) && { at, sh, base: raw.length - s.length, map: cut ? cut.map : map, sm: sm === true ? null : sm })
+      pushText(text, style(), {}, map && { at, sh, base: raw.length - s.length, map, sm: sm === true ? null : sm })
       return
     }
     plain?.gap()
@@ -2765,7 +2747,7 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       // a mark, drawn as it is, in no small capitals)
       for (const run of runs ?? [{ text: r.text, st }]) {
         const face = plainOf(faceOf(run.st, 'latin', to))
-        tokens.push({ s: run.text, st: run.st, face, cls: 'latin', w100: measure(run.text, face) * 0.62, sup: true, glue: true, ph: r.mode, k })
+        tokens.push({ s: run.text, st: run.st, face, cls: 'latin', w100: 0, sup: true, glue: true, ph: r.mode, k })
       }
     } else if (runs) {
       let at = 0
@@ -2805,7 +2787,6 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
       if (n === cps.length) break
       if (n === 0) { tokens.pop(); continue }
       t.s = cps.slice(0, n).join('')
-      t.w100 = measure(t.s, t.face) * (t.sc ?? 1)
       break
     }
     for (const c of resolved.tail) {
@@ -2823,6 +2804,21 @@ export function tokensOf2(unit, resolved, to, baseIn, designs, P, lead = null, m
     if (kept.length < tokens.length) { tokens.length = 0; for (const t of kept) tokens.push(t) }
   }
   tokens.base = base
+  return measure ? measureTokens(tokens, measure) : tokens
+}
+
+/**
+ * A unit's tokens (tokensOf2's) measured: each text token's width at 100 px in its face, a superscript's at 0.62 of it and
+ * small capitals' at their share (`sc`), a space's in its face, a lead's last token with the glue its class sets after it
+ * (`leadGap`). tokensOf2 measures its tokens so unless it is given no measure (null): run.mjs reads the faces a unit's tokens
+ * are set in, and loads them, before any width is taken in them (a width taken before its face is there would stay in the
+ * cache), then measures the same tokens: one tokenization a unit. Returns the tokens
+ */
+export function measureTokens(tokens, measure = w100) {
+  for (const t of tokens) {
+    if (t.space) t.w100 = measure(' ', t.face) + (t.leadGap ?? 0)
+    else if (typeof t.s === 'string' && t.face) t.w100 = measure(t.s, t.face) * (t.sup ? 0.62 : t.sc ?? 1) + (t.leadGap ?? 0)
+  }
   return tokens
 }
 
@@ -2907,7 +2903,7 @@ export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, refer
     // the rounding does not move, where their median may be off by a few thousandths and its lines' slots so a line off
     // the last baseline at 1.3 times it: 1512.03385's unit 59)
     if (d.length > 1 && b.rects.every(r => info(r)?.file) && d.every(v => Math.abs(v - b.pitch0) <= 0.02)) b.pitch0 = d.reduce((a, v) => a + v, 0) / d.length
-    // (the block's grid with one pitch inside it, `E`, which slotsAt lays on at the original's leading where P.evenPitch: each gap
+    // (the block's grid with one pitch inside it, `E`, which slotsAt lays on at the original's leading: each gap
     // wider than the pitch that TeX's \lineskip rule set closed to it, evenGridOf. The rule's gap is no wider than the two lines'
     // boxes and \lineskip, the test `through` below makes between two blocks; a wider one holds something else (a line of the
     // unit's another block stands in it, a \vadjust, a float) and keeps its room. Made here, once a block; a block with no such
@@ -2990,12 +2986,10 @@ export const SOLID = 1.25
  * original's own pitch. Where the original is set solid that is leadBase, as before; where it is looser already, the
  * leading is not stacked on it (2307.16209, set one and a half: Chinese at 1.3 × its 1.5-spaced lines stood 1.95 em
  * apart and between them, a quarter of its text area blank that its own lines would have covered). The original's
- * pitch: its blocks' own (pitch0), the median of those that have one; none, leadBase. 1 where leadBase is. `leadRel`
- * false (a parameter): leadBase stacked on the original's pitch, as before step 3.
+ * pitch: its blocks' own (pitch0), the median of those that have one; none, leadBase. 1 where leadBase is.
  */
 export function leadOf(blocks, s, P) {
-  // (P.leadRel false, run.mjs's default since the maintainer's ruling of 2026-10-07: leadBase on whatever pitch)
-  if (P.leadRel === false || !(P.leadBase > 1) || !(s > 0)) return P.leadBase
+  if (!(P.leadBase > 1) || !(s > 0)) return P.leadBase
   const pitches = blocks.map(b => b.pitch0).filter(v => v > 0).sort((a, b) => a - b)
   if (!pitches.length) return P.leadBase
   const p0 = pitches[pitches.length >> 1]
@@ -3082,7 +3076,7 @@ export const SHORT_SKIP = 0.3
 export const PREDISPLAY = 2
 
 /**
- * A block's grid at the original's leading with one pitch inside it (P.evenPitch, lane B's B1, the maintainer's ruling of
+ * A block's grid at the original's leading with one pitch inside it (lane B's B1, the maintainer's ruling of
  * 2026-10-29): each gap of the grid `G` TeX's \lineskip rule opened under a tall line of the original (`opened`, blocks2's)
  * closed to the block's own pitch `p0` (pitch0: \baselineskip, the median of its gaps), where the grid on the original's baselines carries
  * it to whatever line of the translation stands there (the block-level audit's finding 1: 32 of 520 multi-line body units at
@@ -3147,9 +3141,9 @@ function slotsAt(blocks, st, P, s) {
     const onGrid = Math.abs(st.lead - 1) < 1e-6
     const low = lows[bi]
     const firstBlock = bi + base === 0
-    // (on the original's pitch, its grid: its forced breaks' gaps closed, blocks2, the foot B's own; with evenPitch, its
-    // gaps TeX's \lineskip rule opened closed to the pitch, blocks2's `E`)
-    const G = onGrid && P.evenPitch && b.E ? b.E : b.G ?? b.B
+    // (on the original's pitch, its grid: its forced breaks' gaps closed, blocks2, the foot B's own; and its gaps TeX's
+    // \lineskip rule opened closed to the pitch, blocks2's `E`)
+    const G = onGrid && b.E ? b.E : b.G ?? b.B
     for (let k = 0; k < 400; k++) {
       // (the first line on a shared row stands on the baseline the line before it there was laid at, `startY`, where that is
       // not TeX's (run.mjs layout2, shareOf's `at`): the row's line, its measure the row's, whatever the block's foot)
@@ -3219,7 +3213,7 @@ export function lineExtent(line, f, scale) {
     const t = it.t
     if (t.crop) { const e = cropExtent(t.crop); a = Math.max(a, e.up * scale); d = Math.max(d, e.down * scale); continue }
     if (!t.s || t.space || !t.face) continue
-    const m = ink100(t.s, t.face), k = (t.sup ? 0.62 : 1) * (t.sc ?? 1), up = t.sup ? 0.36 * f : 0
+    const m = tokenInk(t), k = (t.sup ? 0.62 : 1) * (t.sc ?? 1), up = t.sup ? 0.36 * f : 0
     ta = Math.max(ta, up + (m.a * k * f) / 100)
     td = Math.max(td, (m.d * k * f) / 100 - up)
   }
@@ -3280,10 +3274,13 @@ const squeezable = (items, hangs, compress, P) => (compress < P.compressMax ? it
  */
 function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = null) {
   work.breaks++
-  // (step 3, 'flow': a kept region breaks the line and skips no slot: the text after a display may stand above it, where
-  // the slots below it are too few for it and those above it too many; the last resort before the unit is not drawn)
-  const flow = strict === 'flow'
   let tokens = tokensIn
+  // (a token laid in part, or loosed from the glue before it, is replaced where it stands, in the pass's own copy of the
+  // tokens, made at the first such change: the caller's are read by every pass of the unit)
+  const setToken = (q, t) => {
+    if (tokens === tokensIn) tokens = tokensIn.slice()
+    tokens[q] = t
+  }
   const slots = slotsIn.slice()
   const lines = []
   let li = 0, i = 0
@@ -3341,6 +3338,17 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
       above = sl.baseline
     }
   }
+  // (a line's extent kept as settle reads it, by the items it held then: the line closed is the one before at the next close,
+  // and it is read again only where it took or lost an item since. Items are only pushed onto a line and its spaces popped
+  // off its end, so its count and its last item tell them)
+  const extents = new Map()
+  const extentOf = l => {
+    const was = extents.get(l), n = l.items.length, last = l.items[n - 1]
+    if (was && was.n === n && was.last === last) return was.e
+    const e = lineExtent(l, f, scale)
+    extents.set(l, { n, last, e })
+    return e
+  }
   const settle = () => {
     if (!P.lineskip || !line?.items.length || over !== null) return
     let k = lines.length - 2
@@ -3348,7 +3356,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
     const prev = lines[k]
     if (!prev || !inFlow(prev, line) || !(prev.baseline > line.baseline)) return
     const [skip, limit] = P.lineskip
-    const e0 = lineExtent(prev, f, scale), e1 = lineExtent(line, f, scale)
+    const e0 = extentOf(prev), e1 = extentOf(line)
     if (prev.baseline - e0.d - (line.baseline + e1.a) >= limit) return
     // (the ink stands in for TeX's boxes, which the translation's lines have none of; but where the pair holds a formula TeX set
     // in the original, TeX measured that formula's room itself: the distance TeX left between its line and the next (a crop on
@@ -3611,16 +3619,8 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
       continue
     }
     if (tokens[i].blockTo !== undefined) {
-      const fresh = tokens[i].blockTo + 1 > consumed
       consumed = Math.max(consumed, tokens[i].blockTo + 1)
       if (!line.items.length) line.past = consumed
-      if (flow) {
-        // (a region passed once breaks the line once: its kept placeholders after it are no breaks)
-        if (fresh && line.items.length) { trim(line); line.ends = true; advance() }
-        if ((slots[li]?.after ?? 0) < consumed) spilled = true
-        i++
-        continue
-      }
       if ((slots[li].after ?? 0) < consumed) {
         let q = li + 1
         while (q < slots.length && (slots[q].after ?? 0) < consumed) q++
@@ -3698,7 +3698,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
         }
         if (q === m) {
           // (the word whole on the line: what is glued after it goes on, as the group's first token alone does below)
-          if (tokens[m]) tokens = [...tokens.slice(0, m), { ...tokens[m], glue: false }, ...tokens.slice(m + 1)]
+          if (tokens[m]) setToken(m, { ...tokens[m], glue: false })
         } else {
           const t = tokens[q], chars = graphemesOf(t.s)
           const per = chars.map(c => (w100(c, t.face) * (t.sc ?? 1) * f) / 100)
@@ -3710,8 +3710,8 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
             line.items.push({ t: headOfCut(t, { s: chars.slice(0, k).join('') }), w: head, shift: 0, asp: 0 })
             used += head
             const tail = chars.slice(k).join('')
-            tokens = [...tokens.slice(0, q), { ...t, s: tail, w100: w100(tail, t.face) * (t.sc ?? 1), glue: false, cont: false, asp: false }, ...tokens.slice(q + 1)]
-          } else tokens = [...tokens.slice(0, q), { ...t, glue: false, cont: false }, ...tokens.slice(q + 1)]
+            setToken(q, { ...t, s: tail, w100: w100(tail, t.face) * (t.sc ?? 1), glue: false, cont: false, asp: false })
+          } else setToken(q, { ...t, glue: false, cont: false })
         }
         line.x += used
         i = q
@@ -3725,12 +3725,12 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
         while (k > 1 && k < chars.length && cutBarred(chars, k)) k--
         line.items.push({ t: headOfCut(t0, { s: chars.slice(0, k).join('') }), w: per.slice(0, k).reduce((a, b) => a + b, 0), shift: 0, asp: 0 })
         const tail = chars.slice(k).join('')
-        tokens = [...tokens.slice(0, i), { ...t0, s: tail, w100: w100(tail, t0.face) * (t0.sc ?? 1), glue: false, asp: false }, ...tokens.slice(i + 1)]
+        setToken(i, { ...t0, s: tail, w100: w100(tail, t0.face) * (t0.sc ?? 1), glue: false, asp: false })
       } else {
         // the group's first token alone (the rest goes on): a glued group never runs past the line
         line.items.push(items[0])
         line.x += items[0].w + (items[0].asp ?? 0)
-        if (tokens[i + 1]) tokens = [...tokens.slice(0, i + 1), { ...tokens[i + 1], glue: false }, ...tokens.slice(i + 2)]
+        if (tokens[i + 1]) setToken(i + 1, { ...tokens[i + 1], glue: false })
         i++
       }
       advance()
@@ -3760,7 +3760,7 @@ function breakLines(tokensIn, slotsIn, f, st, P, scale, strict = true, blocks = 
         line.items.push({ t: headOfCut(t0, { s: cut.head, hyphenated: true }), w: cut.hw, shift: 0, asp })
         line.x += cut.hw + asp
         const tail = word.slice(cut.at)
-        tokens = [...tokens.slice(0, i), { ...t0, s: tail, w100: w100(tail, t0.face) * (t0.sc ?? 1), glue: false, asp: false }, ...tokens.slice(i + 1)]
+        setToken(i, { ...t0, s: tail, w100: w100(tail, t0.face) * (t0.sc ?? 1), glue: false, asp: false })
       }
     }
     // the line is closed: its trailing spaces dropped
@@ -3898,7 +3898,7 @@ function placeItems(lines, f, P) {
     let perSpace = 0, perGap = 0
     line.mode = line.centred ? 'centred' : line === last || line.ends ? 'last' : 'just'
     // (a line of a unit TeX set flush left is ragged at its natural spacing, every line of one set flush right stands at the
-    // right edge, its last too: \raggedleft sets no \parfillskip past it; P.keepAlign, run.mjs)
+    // right edge, its last too: \raggedleft sets no \parfillskip past it; lane B's B2, run.mjs)
     if (line.flush === 'left' && line.mode === 'just') line.mode = 'ragged'
     else if (line.flush === 'right') line.mode = 'right'
     // a line squeezed to take its last group (breakLines' squeezeTakes): its marks' blank halves first, as many as it needs,
@@ -3945,14 +3945,13 @@ function placeItems(lines, f, P) {
 
 /** the fit's states, from the most natural, each knob in the order given taken to its bound before the next */
 function* statesOf(P, blocks, s) {
-  // maxScale: a size set from outside (the page's even pass), from which the fit starts
   // (step 3: the CJK runs' tracking from P.trackStart, a face's size correction given back, run.mjs; down from it)
   const t0 = P.cjk ? P.trackStart ?? 0 : 0
   // (capScale: the most its lines' room between the rules over and under them leaves it, cellBands: never above)
-  const top = Math.min(P.maxScale ?? 1, P.capScale ?? 1)
+  const top = Math.min(1, P.capScale ?? 1)
   // (P.runTrack: a run of a unit split by its displays starts from its unit's tracking, the tightest its runs need, layoutRuns)
   const R = P.runTrack
-  const st = { lead: P.leadBase, track: R ? R.track : t0, trackLatin: R ? R.trackLatin : 0, compress: R ? R.compress : P.compressMax > 0 ? 1 : 0, borrow: 0, scale: top, knob: P.maxScale ? 'even' : P.capScale < 1 ? 'clear' : 'none' }
+  const st = { lead: P.leadBase, track: R ? R.track : t0, trackLatin: R ? R.trackLatin : 0, compress: R ? R.compress : P.compressMax > 0 ? 1 : 0, borrow: 0, scale: top, knob: P.capScale < 1 ? 'clear' : 'none' }
   yield { ...st }
   for (const knob of P.order) {
     if (knob === 'track') {
@@ -3976,7 +3975,7 @@ function* statesOf(P, blocks, s) {
       // (on the steps from the size it would start at uncapped, those under the cap: a cap of 0.956 stepping from itself
       // ended at 0.806 short of the floor's 0.8, where 1512.03385's cells fit, and left them the original's)
       for (let k = 1; ; k++) {
-        const sc = Math.round(((P.maxScale ?? 1) - k * P.step) * 1000) / 1000
+        const sc = Math.round((1 - k * P.step) * 1000) / 1000
         if (sc < P.floor - 1e-9) break
         if (sc > top + 1e-9) continue
         st.scale = sc
@@ -3986,15 +3985,32 @@ function* statesOf(P, blocks, s) {
   }
 }
 
+/** two of the fit's states alike: every knob's value, and the knob that set it */
+const sameState = (x, y) => x.lead === y.lead && x.track === y.track && x.trackLatin === y.trackLatin && x.compress === y.compress && x.borrow === y.borrow && x.scale === y.scale && x.knob === y.knob
+/** how many first states the fits of P and of `failed` share (statesOf), on the same blocks and size */
+function sharedStates(P, failed, blocks, s) {
+  const a = statesOf(P, blocks, s), b = statesOf(failed, blocks, s)
+  for (let n = 0; ; n++) {
+    const x = a.next(), y = b.next()
+    if (x.done || y.done || !sameState(x.value, y.value)) return n
+  }
+}
+
 /**
  * A unit laid out: the first state of the fit at which every token is placed; at the last, what fits, clipped (which the
- * host never draws: run.mjs fitFurther). P.flowPast (step 3): where a kept region still stops it, every state again with
- * the text run past the region (breakLines 'flow').
+ * host never draws: run.mjs fitFurther).
  * `s`: the original's size (PDF units). Returns { lines, f, s, scale, state, knob, clipped, lostChars, chars, tried }.
+ * `failed`: the parameters of a fit of the same tokens on the same blocks that set them at none of its states, strictly or
+ * run past a kept region (a clipped layoutUnit2), which differ from P only in what statesOf reads (run.mjs fitFurther's step
+ * below the floor: `floor`): the states the two fits share have been laid already, so this fit goes on from the first state of
+ * its own. Null where it has no state of its own
  */
-export function layoutUnit2(tokens, blocks, s, P) {
+export function layoutUnit2(tokens, blocks, s, P, failed = null) {
   let last = null, tried = 0
+  const skip = failed ? sharedStates(P, failed, blocks, s) : 0
+  let n = 0
   for (const st of statesOf(P, blocks, s)) {
+    if (n++ < skip) continue
     tried++
     work.fit++
     const f = s * st.scale
@@ -4002,14 +4018,16 @@ export function layoutUnit2(tokens, blocks, s, P) {
     last = { r, st, f }
     if (r.rest >= r.total) break
   }
+  if (!last) return null
   // nothing fits in order at the last state: the text may run on past a kept region (all of it shown, out of order), at the
   // most natural state at which it then fits. The walk down to the last state bought nothing the run past keeps: laid at the
   // last, a paragraph that runs on past a display was drawn at the floor's size though it fit far larger (the M1 survey of
   // 2608.16117, German page 10: units 28 and 35 at 0.8 and 0.85 of the original's size). Where it fits at none, the last
   // state's, as far as it goes
   if (last.r.rest < last.r.total && tokens.some(t => t.blockTo !== undefined)) {
-    let past = null
+    let past = null, n = 0
     for (const st of statesOf(P, blocks, s)) {
+      if (n++ < skip) continue
       tried++
       const f = s * st.scale
       past = { r: breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, false, blocks), st, f }
@@ -4017,28 +4035,6 @@ export function layoutUnit2(tokens, blocks, s, P) {
     }
     if (past.r.rest >= past.r.total) last = past
     else if (past.r.rest > last.r.rest) last = { ...last, r: past.r }
-  }
-  // (step 3, P.flowPast: and else through every slot, a kept region only breaking the line, from the most natural state)
-  if (P.flowPast && last.r.rest < last.r.total && tokens.some(t => t.blockTo !== undefined)) {
-    for (const st of statesOf(P, blocks, s)) {
-      tried++
-      work.fit++
-      const f = s * st.scale
-      const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, 'flow', blocks)
-      if (r.rest >= r.total) { last = { r, st, f }; break }
-    }
-  }
-  // (fillBySize, P.growTo: where the most natural state sets the whole unit with lines to spare, the largest size up to
-  // growTo × the original's at which it still does, its lines on the original's pitch: a loose original's paragraph
-  // filled by its text's size, not by lines looser than the original's own)
-  if (P.growTo > 1 && tried === 1 && last.r.rest >= last.r.total) {
-    for (let k = Math.round((Math.min(P.growTo, P.capScale ?? Infinity) - 1) / P.step); k >= 1; k--) {
-      work.fit++
-      const st = { ...last.st, scale: Math.round((1 + k * P.step) * 1000) / 1000, knob: 'grow' }
-      const f = s * st.scale
-      const r = breakLines(tokens, slotsAt(blocks, st, P, s), f, st, P, st.scale, true, blocks)
-      if (r.rest >= r.total) { last = { r, st, f }; break }
-    }
   }
   return laidOut(last, s, P, tried, blocks)
 }

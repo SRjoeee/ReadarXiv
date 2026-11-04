@@ -16,8 +16,9 @@ const ENTRIES = ['pipeline', 'translate', 'rules', 'layer', 'view'] as const
 const entryFile = (name: string) => `${ENGINE}/${name}.mjs`
 const CONTRACT_FILE = new URL('./engine-contract.json', import.meta.url)
 
-/** the layer gate's instrument loads this checker by its address (lab/pdf/spikes/layer-gate/proto.mjs, hashed into every record) */
-const GATE_NAMED = [`${ENGINE}/layer/check.mjs`]
+/** the layer gate's instrument loads these checkers by their address (lab/pdf/spikes/layer-gate/proto.mjs, hashed into every
+ *  record): the engine's layer's, and v0's, which no reader carries (run.mjs checkInputs hands it what it reads) */
+const GATE_NAMED = [`${ENGINE}/layer/check.mjs`, `${ENGINE}/layer-proto/check.mjs`]
 
 // (the layer opens a canvas at import, as a browser's modules may; node has none)
 class StubCanvas { width = 8; height = 8; getContext() { return null } }

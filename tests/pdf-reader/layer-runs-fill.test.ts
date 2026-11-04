@@ -23,7 +23,7 @@ const chars = (n: number) => Array.from({ length: n }, () => ({ s: '\u6c49', cls
 const P = (o: Record<string, unknown> = {}) => ({ ...params('zh'), borrow: 0, fillLead: 1.8, adaptiveFill: { band: 0.05, track: 0, size: 1.1 }, ...o })
 type Unit = { id: number; unit: { kind: string }; pages: number[]; tokens: unknown[]; blocks: ReturnType<typeof block>[]; s: number; P: Record<string, unknown>; layout: { lines: { baseline: number; page: number; from: number }[]; scale: number; state: { lead: number; scale: number; track: number } }; parent?: unknown; fillLead?: number | null; fitLines?: number; runs?: Unit[] }
 const laid = (id: number, n: number, PP = P(), blocks = [block()]): Unit => {
-  const p = { id, unit: { kind: 'para' }, pages: [...new Set(blocks.map(b => b.page))], tokens: chars(n), blocks, s: 10, P: { ...PP, growTo: 0 } } as unknown as Unit
+  const p = { id, unit: { kind: 'para' }, pages: [...new Set(blocks.map(b => b.page))], tokens: chars(n), blocks, s: 10, P: { ...PP } } as unknown as Unit
   p.layout = L2.layoutUnit2(p.tokens as never, p.blocks as never, 10, p.P as never) as never
   return p
 }

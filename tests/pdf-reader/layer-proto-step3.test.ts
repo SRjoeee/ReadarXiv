@@ -86,30 +86,6 @@ describe("v0's displayed formulas: the engine's environments", () => {
   })
 })
 
-describe('no unit drawn in part: the text run past a display where the slots after it are too few', () => {
-  // a line is 100 pt wide at size 10, each 'x' 5 pt (the test's canvas: 50 px a character at 100 px)
-  const word = (n: number) => ({ s: 'x'.repeat(n), cls: 'latin', w100: 50 * n, st: {} })
-  const space = { space: true, w100: 25 }
-  const block = (B: number[], after: number) => ({ page: 1, rects: B.map(b => [1, 0, b - 2, 100, b + 8]), x0: 0, x1: 100, B, exact: B.map(() => true), sizes: B.map(() => 10), pitch0: 12, free: 0, indent: 0, after, centred: false })
-  const P = () => ({ ...params('de'), borrow: 0 })
-  // one line of text before a display, three after it, which leaves the original one line below it and three above it
-  const blocks = [block([500, 488, 476, 464], 0), block([300], 1)]
-  const after = [word(18), space, word(18), space, word(18)]
-  it("is clipped in the translation's order, and set whole once the text may run on into the lines above the display", () => {
-    const tokens = [word(18), { blockTo: 0, w100: 0 }, ...after]
-    expect(L2.layoutUnit2(tokens as never, blocks as never, 10, P() as never).clipped).toBe(true)
-    const flow = L2.layoutUnit2(tokens as never, blocks as never, 10, { ...P(), flowPast: true } as never)
-    expect(flow.clipped).toBe(false)
-    expect(flow.scale).toBe(1)
-    // the display breaks the line once: its text after it starts on the next line, above the display
-    expect(flow.lines.map(l => l.baseline)).toEqual([500, 488, 476, 464])
-  })
-  it("breaks the line once a region: a placeholder kept in the display's lines after it is no second break", () => {
-    const tokens = [word(18), { blockTo: 0, w100: 0 }, word(4), { blockTo: 0, w100: 0 }, word(4)]
-    const flow = L2.layoutUnit2(tokens as never, blocks as never, 10, { ...P(), flowPast: true } as never)
-    expect(flow.lines.map(l => l.items.filter(it => it.t.s).length)).toEqual([1, 2])
-  })
-})
 
 describe("a crop's baseline, without a source that knows its ink: its line's", () => {
   const ch = (ch: string, yb: number, size: number) => ({ ch, x0: 0, x1: 1, yb, size, item: 0, ix: 0, k: 0, st: {}, page: 3, rect: [10, 440, 200, 452] })
@@ -167,26 +143,6 @@ describe("Hangul's advance given back: the fit's tracking starts where its face'
   })
 })
 
-describe('the thesis pitch, switchable: the leading rule off, and fillBySize', () => {
-  it("leaves the script's leading on any pitch where the rule is off (leadRel: false)", () => {
-    expect(L2.leadOf([{ pitch0: 17.93 }] as never, 11.96, { leadBase: 1.3, leadRel: false } as never)).toBe(1.3)
-  })
-  it('grows a unit whose natural state leaves lines to spare to the largest size up to growTo that sets it whole, on the same pitch', () => {
-    // two lines of 100 pt at pitch 15; two words of 13 syllables, 65 pt at size 10, a line each with room to spare: they
-    // still fit a line each at 1.1 (71.5 pt), the lines on the original's baselines
-    const block = { page: 1, rects: [[1, 0, 98, 100, 108], [1, 0, 83, 100, 93]], x0: 0, x1: 100, B: [100, 85], exact: [true, true], sizes: [10, 10], pitch0: 15, free: 0, indent: 0, after: 0, centred: false }
-    const words = (n: number, of: number) => Array.from({ length: n }, (_, q) => [...(q ? [{ space: true, w100: 25 }] : []), { s: '한'.repeat(of), cls: 'cjk', w100: 50 * of, st: {} }]).flat()
-    const P = { ...params('zh'), leadBase: 1, borrow: 0 }
-    const natural = L2.layoutUnit2(words(2, 13) as never, [block] as never, 10, P as never)
-    expect(natural.scale).toBe(1)
-    const grown = L2.layoutUnit2(words(2, 13) as never, [block] as never, 10, { ...P, growTo: 1.1 } as never)
-    expect(grown.scale).toBeGreaterThan(1)
-    expect(grown.scale).toBeLessThanOrEqual(1.1)
-    expect(grown.lines.map(l => l.baseline)).toEqual([100, 85])
-    expect(grown.clipped).toBe(false)
-  })
-})
-
 describe("TeX's control symbols in a source's rendering (texToText2): the character, never their syntax", () => {
   it('an escaped special is its character, an alignment tab and a control space are spaces, an escaped brace is kept', () => {
     // "Vinyals \& Kaiser" drew as "Vinyals \ Kaiser" (1706.03762's Table 4), "\$" as "\", "\{a\}" as "a"
@@ -205,7 +161,6 @@ describe("the room before a rule (capScale, layer2.mjs cellBands): the fit's sta
   it('starts at the cap, and grows no further than it', () => {
     const P = { ...params('zh'), leadBase: 1, borrow: 0 }
     expect(L2.layoutUnit2(words(2, 13) as never, [block] as never, 10, { ...P, capScale: 0.92 } as never).scale).toBeLessThanOrEqual(0.92)
-    expect(L2.layoutUnit2(words(2, 13) as never, [block] as never, 10, { ...P, growTo: 1.1, capScale: 1 } as never).scale).toBe(1)
   })
   it("shrinks on the uncapped steps under the cap, down to the floor: a cap of 0.956 still reaches 0.8", () => {
     // one line of 100 pt and two words of 124.5 pt at size 10, their space not shrinking: they fit at 0.8, not at 0.806
@@ -282,9 +237,9 @@ describe("adaptiveFill (D, the default) keeps a CJK cell clear of its rule (Code
     // as openProto: its parameters with adaptiveFill's defaults, the cell held to its band (capScale), fillable
     const P = { ...params('zh'), adaptiveFill: { band: 0.05, track: 0.05, size: 1.1 } }
     const clear = L2.cellBands([block] as never, () => rules, 10, params('zh'))!
-    const rel = L2.leadOf([block] as never, 10, { ...P, leadRel: true } as never)
+    const rel = L2.leadOf([block] as never, 10, P as never)
     expect(rel).toBeLessThanOrEqual(P.leadBase - 0.05)
-    const p = { id: 1, unit: { kind: 'cell' }, pages: [1], tokens: words(2, 10), blocks: [block], s: 10, clear, P: { ...P, leadBase: rel, growTo: 0, capScale: clear.cap } as Record<string, unknown>, layout: null as never as { lines: { block: number; baseline: number }[]; scale: number } }
+    const p = { id: 1, unit: { kind: 'cell' }, pages: [1], tokens: words(2, 10), blocks: [block], s: 10, clear, P: { ...P, leadBase: rel, capScale: clear.cap } as Record<string, unknown>, layout: null as never as { lines: { block: number; baseline: number }[]; scale: number } }
     p.layout = L2.layoutUnit2(p.tokens as never, p.blocks as never, 10, p.P as never) as never
     settleLayout(p)
     const clearOf = () => p.layout.lines[0]!.baseline + 0.88 * 10 * p.layout.scale
@@ -306,7 +261,7 @@ describe("the page fill (adaptiveFill, D6's F6b, page-local since 1b-C): every o
   const P = (o: Record<string, unknown> = {}) => ({ ...params('zh'), borrow: 0, fillLead: 1.8, adaptiveFill: { band: 0.05, track: 0, size: 1.1 }, ...o })
   /** a unit laid as openProto lays it before its page's pass: at the script's leading on a solid-set original */
   const laid = (id: number, n: number, PP = P(), kind = 'para'): Unit => {
-    const p = { id, unit: { kind }, pages: [1], tokens: chars(n), blocks: [block()], s: 10, P: { ...PP, growTo: 0 } } as unknown as Unit
+    const p = { id, unit: { kind }, pages: [1], tokens: chars(n), blocks: [block()], s: 10, P: { ...PP } } as unknown as Unit
     p.layout = L2.layoutUnit2(p.tokens as never, p.blocks as never, 10, p.P as never) as never
     return p
   }
@@ -340,7 +295,7 @@ describe("the page fill (adaptiveFill, D6's F6b, page-local since 1b-C): every o
    *  leading a loose original gets: its pitch is more than 1.3 × 1.25 em, so the fit's leading is the floor, 1 */
   const frameOf = (slots: number, pitch: number) => ({ ...block(slots), B: Array.from({ length: slots }, (_, k) => 500 - pitch * k), rects: Array.from({ length: slots }, (_, k) => [1, 0, 500 - pitch * k - 2, 100, 500 - pitch * k + 8]), exact: Array.from({ length: slots }, () => true), sizes: Array.from({ length: slots }, () => 10), pitch0: pitch })
   const laidIn = (chars_: number, slots: number, pitch: number, PP: Record<string, unknown>): Unit => {
-    const p = { id: 1, unit: { kind: 'para' }, pages: [1], tokens: chars(chars_), blocks: [frameOf(slots, pitch)], s: 10, P: { ...PP, growTo: 0 } } as unknown as Unit
+    const p = { id: 1, unit: { kind: 'para' }, pages: [1], tokens: chars(chars_), blocks: [frameOf(slots, pitch)], s: 10, P: { ...PP } } as unknown as Unit
     p.layout = L2.layoutUnit2(p.tokens as never, p.blocks as never, 10, p.P as never) as never
     return p
   }
@@ -457,14 +412,6 @@ describe("the page fill (adaptiveFill, D6's F6b, page-local since 1b-C): every o
     const one = told(1.4, { lines: 1 })
     ;(one as unknown as { layout: unknown }).layout = { lines: [{}, {}, {}] }
     expect(await target([], [one])).toBeNull()
-  })
-
-  it("reads a continuation at its fit where the even pass kept one, never at the leading its first page's pass left it", async () => {
-    const u = told(1.0, { lines: 6 })
-    ;(u as unknown as { fit: unknown }).fit = { fillLead: 1.5, fitLines: 6 }
-    // (it stands at 1.0 now, laid anew by the even pass; it entered at 1.5: with one of the page's own at 1.4 the anchor is 1.5)
-    expect(await target([told(1.4)], [u])).toMatchObject({ anchor: 1.5, own: 1.4, target: 1.45 })
-    expect(await target([told(1.4)], [told(1.0)])).toMatchObject({ anchor: 1.4, target: 1.4 })
   })
 
   it("holds each unit within the band over the page's target", async () => {
@@ -592,7 +539,7 @@ describe("a paragraph gap never tighter than its lines and its skip, its first l
   const baselines = (l: { lines: { baseline: number }[] }) => l.lines.map(x => Math.round(x.baseline * 1000) / 1000)
   type Unit = { id: number; unit: { kind: string }; pages: number[]; tokens: unknown[]; blocks: unknown[]; s: number; P: Record<string, unknown>; layout: { lines: { baseline: number; block?: number }[]; scale: number; state: { lead: number } }; fillLead?: number | null }
   const laid = (id: number, n: number, blocks: unknown[], PP = P()): Unit => {
-    const p = { id, unit: { kind: 'para' }, pages: [1], tokens: chars(n), blocks, s: 10, P: { ...PP, growTo: 0 } } as unknown as Unit
+    const p = { id, unit: { kind: 'para' }, pages: [1], tokens: chars(n), blocks, s: 10, P: { ...PP } } as unknown as Unit
     p.layout = L2.layoutUnit2(p.tokens as never, p.blocks as never, 10, p.P as never) as never
     return p
   }
@@ -738,95 +685,3 @@ describe("a paragraph gap never tighter than its lines and its skip, its first l
   })
 })
 
-describe("the leftover packed (P.leftover 'pack', D6's F6c): each paragraph keeps the original's gap to the one above", () => {
-  // three paragraphs of a column, 12 pt apart at size 10: A's four lines from 500, B's three from 440, C's two from 400
-  const unitOf = (id: number, B: number[], drawn: number[], o: { kind?: string; pages?: number[]; blocks?: number } = {}) => {
-    const block = { page: 1, x0: 0, x1: 200, B, sizes: B.map(() => 10), pitch0: 12 }
-    return { id, unit: { kind: o.kind ?? 'para' }, pages: o.pages ?? [1], s: 10, blocks: Array.from({ length: o.blocks ?? 1 }, () => block), layout: { f: 10, lines: drawn.map(baseline => ({ page: 1, block: 0, baseline })) } }
-  }
-  const run = () => [unitOf(1, [500, 488, 476, 464], [500, 485]), unitOf(2, [440, 428, 416], [440, 428]), unitOf(3, [400, 388], [400, 388])]
-  const pack = async (units: ReturnType<typeof unitOf>[], rects: [number, number[]][] = [], chars: { ch: string; x0: number; x1: number; yb: number; size: number }[] = []) =>
-    (await import('@/pdf-reader/engine/layer-proto/run.mjs')).packPage(1, units as never, rects, chars)
-  const gap = (a: ReturnType<typeof unitOf>, b: ReturnType<typeof unitOf>) => Math.min(...a.layout.lines.map(l => l.baseline)) - 2.2 - (Math.max(...b.layout.lines.map(l => l.baseline)) + 7.5)
-
-  it("moves each paragraph up to the original's gap under the one above, the moves adding up to the run's end", async () => {
-    const [a, b, c] = run()
-    const moves = await pack([a!, b!, c!])
-    // (A ends two lines and three points short: B rises 21, and C, under B a line short, 33)
-    expect([...moves]).toEqual([[2, 21], [3, 33]])
-    expect(b!.layout.lines.map(l => l.baseline)).toEqual([461, 449])
-    expect(gap(a!, b!)).toBeCloseTo(461.8 - 447.5, 6)
-    expect(gap(b!, c!)).toBeCloseTo(413.8 - 407.5, 6)
-  })
-
-  it('moves nothing past a fixed thing: another unit\'s line, a character of the page between them, or a figure\'s room', async () => {
-    const [a, b, c] = run()
-    // (a heading's line between A and B: B stays, and C rises under B alone, a line)
-    const moves = await pack([a!, b!, c!], [[9, [1, 0, 450, 100, 458]]])
-    expect([...moves]).toEqual([[3, 12]])
-    const [a2, b2, c2] = run()
-    expect([...(await pack([a2!, b2!, c2!], [], [{ ch: 'x', x0: 50, x1: 55, yb: 452, size: 10 }]))]).toEqual([[3, 12]])
-    const far = [unitOf(1, [500, 488, 476, 464], [500, 485]), unitOf(2, [400, 388], [400, 388])]
-    expect((await pack(far)).size).toBe(0)
-    // (and none whose first line holds what stays: a run-in heading's line beside it, or a label's characters before it)
-    const [a3, b3, c3] = run()
-    expect([...(await pack([a3!, b3!, c3!], [[9, [1, 0, 437.85, 40, 446.83]]]))]).toEqual([[3, 12]])
-    const [a4, b4, c4] = run()
-    b4!.blocks[0] = { ...b4!.blocks[0]!, indent: 40 } as never
-    expect([...(await pack([a4!, b4!, c4!], [], [{ ch: 'B', x0: 2, x1: 30, yb: 440, size: 10 }]))]).toEqual([[3, 12]])
-  })
-
-  it('moves over no ink that stays: it stops the clearance short of a rule or a kept box it would rise into, and stays for one in its own band', async () => {
-    // (ink that stays, as boxes [x0, y0, x1, y1]: the lowest foot among those a box meets; the clearance 0.35 of the pitch, 4.2)
-    const inkOf = (boxes: [number, number, number, number][]) => (x0: number, x1: number, y0: number, y1: number) => {
-      const met = boxes.filter(([bx0, by0, bx1, by1]) => bx0 < x1 && bx1 > x0 && by0 < y1 && by1 > y0)
-      return met.length ? Math.min(...met.map(([, by0]) => by0)) : null
-    }
-    const packWith = async (boxes: [number, number, number, number][]) => {
-      const units = run()
-      const moves = await (await import('@/pdf-reader/engine/layer-proto/run.mjs')).packPage(1, units as never, [], [], inkOf(boxes), 0.35)
-      return { moves, units }
-    }
-    // (none: B rises its 21, C its 33)
-    expect([...(await packWith([])).moves]).toEqual([[2, 21], [3, 33]])
-    // a rule between A and B, at 454.5 to 455.5: B's top (440 + 8.8) rises to 4.2 under it, 1.5
-    const rule = await packWith([[0, 454.5, 200, 455.5]])
-    expect(rule.moves.get(2)).toBeCloseTo(1.5, 6)
-    expect(Math.max(...rule.units[1]!.layout.lines.map(l => l.baseline)) + 8.8).toBeLessThanOrEqual(454.5 - 4.2 + 1e-9)
-    // a kept box in A's frame's blank, at 469 to 471: B rises 16
-    expect((await packWith([[50, 469, 60, 471]])).moves.get(2)).toBeCloseTo(16, 6)
-    // ink that stays in B's own band (a kept glyph among its lines): B does not move
-    expect((await packWith([[50, 430, 55, 436]])).moves.has(2)).toBe(false)
-  })
-
-  it("moves no unit of two blocks, on two pages or not of the body, and none drawn to its frame's foot", async () => {
-    for (const o of [{ blocks: 2 }, { pages: [1, 2] }, { kind: 'caption' }]) {
-      const [a, , c] = run()
-      expect((await pack([a!, unitOf(2, [440, 428, 416], [440, 428], o), c!])).has(2), JSON.stringify(o)).toBe(false)
-    }
-    const full = [unitOf(1, [500, 488, 476, 464], [500, 488, 476, 464]), unitOf(2, [440, 428, 416], [440, 428, 416])]
-    expect((await pack(full)).size).toBe(0)
-  })
-})
-
-describe('the ink that stays (stayingInk): the page\'s ink but the glyphs the drawing takes away', () => {
-  // a map of 100 x 100 cells at one device pixel a cell and a PDF unit, PDF y up: a rule at row 40 (PDF y 59 to 60) across x
-  // 10-90, a glyph at rows 70-72 and x 20-24 (PDF y 27 to 30)
-  const map = () => {
-    const ink = new Uint8Array(100 * 100)
-    for (let c = 10; c <= 90; c++) ink[40 * 100 + c] = 1
-    for (let r = 70; r <= 72; r++) for (let c = 20; c <= 24; c++) ink[r * 100 + c] = 1
-    return { w: 100, h: 100, ink, factor: 1 }
-  }
-  const io = { toDev: (x: number, y: number) => [x, 100 - y], toPdf: (x: number, y: number) => [x, 100 - y] }
-  it('finds a rule as text does, the lowest ink first, and none past a glyph the drawing takes away', async () => {
-    const { stayingInk } = await import('@/pdf-reader/engine/layer-proto/run.mjs')
-    const all = stayingInk({ map: map(), ...io })
-    expect(all(0, 100, 50, 70)).toBe(59)
-    expect(all(0, 100, 20, 70)).toBe(27)
-    expect(all(30, 100, 20, 50)).toBeNull()
-    const taken = stayingInk({ map: map(), ...io, accounted: [[20, 27.5, 25, 30]] })
-    expect(taken(0, 100, 20, 50)).toBeNull()
-    expect(taken(0, 100, 20, 70)).toBe(59)
-  })
-})

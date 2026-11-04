@@ -346,38 +346,17 @@ describe("S3: a page's fill target is a function of its page", () => {
   })
 })
 
-describe('S3 with the even pass: a continuation enters its page\'s anchor at its fit', () => {
-  // page 1's pass waits for unit 2 (pages 1 and 4, laid as page 4 is drawn); unit 1 runs from page 1 to page 2, so page 2's
-  // pass (its units all laid at page 2) runs before page 1's, and so before the even pass has laid unit 1 anew. The even pass
-  // itself reads the units of a page as the pass before left them, so the opens that set it lay in order (C1 unchanged); what
-  // S3 reads of a continuation is its fit's, whether or not its first page has passed
-  const evenRules = () => { const r = structuredClone(BUILTIN_RULES) as unknown as { scripts: Record<string, Record<string, unknown>> }; r.scripts.Hans!.even = 1; return r }
-  const specsOf = (late: boolean): Spec[] => [
-    para(0, [[1, 250, 4]], 44),
-    para(1, [[1, 100, 3], [2, 270, 3]], 30, 0x4e40),
-    para(2, late ? [[1, 40, 2], [4, 270, 2]] : [[1, 40, 2]], 12, 0x4e80),
-    para(3, [[2, 200, 6]], 24, 0x4ec0),
-    para(4, [[4, 120, 4]], 16, 0x4f00),
-  ]
-  PAPERS.push(['S3, even', specsOf(true), 4, [null]])
-  type Fit = { fillLead: number; fit?: { fillLead: number; fitLines: number } }
-  const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[xs.length >> 1]!
-  it("reads the continuation's fit leading for page 2's anchor, with page 1's pass before it or after it", async () => {
-    const rules = evenRules()
-    const late = await open(paper(specsOf(true), 4), { rules }), early = await open(paper(specsOf(false), 4), { rules })
-    await late.until(4)
-    await early.until(4)
-    for (const run of [late, early]) {
-      const u = placedOf(run, 1) as unknown as Fit, own = placedOf(run, 3) as unknown as Fit
-      expect(u.fit?.fitLines).toBeGreaterThanOrEqual(2)
-      expect(run.rows[1]!.fill!.anchor).toBe(median([own.fillLead, u.fit!.fillLead]))
-    }
-    // (in `early` the even pass laid the continuation anew on page 1 before page 2 passed: its leading is no longer its fit's)
-    expect((placedOf(early, 1) as unknown as Fit).fillLead).not.toBe((placedOf(early, 1) as unknown as Fit).fit!.fillLead)
-  })
-})
+// (S3's continuation: page 1's pass waits for unit 2 (pages 1 and 4, laid as page 4 is drawn); unit 1 runs from page 1 to page 2,
+// so page 2's pass runs before page 1's. What S3 reads of a continuation is its fit's, whether or not its first page has passed)
+PAPERS.push(['S3, a continuation', [
+  para(0, [[1, 250, 4]], 44),
+  para(1, [[1, 100, 3], [2, 270, 3]], 30, 0x4e40),
+  para(2, [[1, 40, 2], [4, 270, 2]], 12, 0x4e80),
+  para(3, [[2, 200, 6]], 24, 0x4ec0),
+  para(4, [[4, 120, 4]], 16, 0x4f00),
+], 4, [null]])
 
-describe('the rules that lay in order (the even pass; no page pass): a page asked lays the prefix, in the stream\'s order', () => {
+describe('the rules that lay in order (no page pass): a page asked lays the prefix, in the stream\'s order', () => {
   const specs: Spec[] = [
     para(0, [[1, 250, 4]], 44),
     para(1, [[1, 100, 3], [2, 270, 3]], 30, 0x4e40),
@@ -386,24 +365,23 @@ describe('the rules that lay in order (the even pass; no page pass): a page aske
     para(4, [[3, 120, 4]], 16, 0x4f00),
     para(5, [[4, 120, 4]], 16, 0x4f40),
   ]
-  const rulesOf = (how: 'even' | 'no pass') => {
+  const rulesOf = (_how: 'no pass') => {
     const r = structuredClone(BUILTIN_RULES) as unknown as { scripts: Record<string, Record<string, unknown>> }
-    if (how === 'even') r.scripts.Hans!.even = 1
-    else r.scripts.Hans!.adaptiveFill = null
+    r.scripts.Hans!.adaptiveFill = null
     return r
   }
   it('bounds a closure by every page its units read, a placeholder\'s past the prefix\'s last page among them', async () => {
     // (the L2 paper: page 1's paragraph reads page 2 for its formula; laid in order, page 1's closure is page 1 alone, and
     // draws page 2 too and is bound by it, so that the part covering page 2 is in before page 1 is told laying)
     const L2specs = PAPERS.find(([name]) => name === 'L2')![1]
-    for (const how of ['even', 'no pass'] as const) {
+    for (const how of ['no pass'] as const) {
       const run = await open(paper(L2specs, 2), { rules: rulesOf(how) })
       expect(run.closure(1).pass, how).toEqual([1])
       expect(run.closure(1).draw, how).toEqual([1, 2])
       expect(run.closure(1).bound, how).toBe(2)
     }
   })
-  for (const how of ['even', 'no pass'] as const) it(`${how}: page 3 asked first lays the prefix up to it, as laid in order`, async () => {
+  for (const how of ['no pass'] as const) it(`${how}: page 3 asked first lays the prefix up to it, as laid in order`, async () => {
     const rules = rulesOf(how)
     const want = await open(paper(specs, 4), { rules })
     await want.until(4)

@@ -316,18 +316,6 @@ describe('the table in the text\'s order, each token with its place in the trans
     expect(rows).toEqual([['Aaa', 0, 0], ['kept 470', -1, 3], ['bbb.', 1, 4], ['Ccc', 2, 9], ['kept 426', -1, 12], ['ddd.', 3, 13]])
   })
 
-  it('writes a display the text runs on above (\'flow\') where the walk passed it, not by the slots\' order', () => {
-    // three lines above the display, one below it: the text after it does not fit below, and runs on above it
-    const pieces: Piece[] = [text('Aaa '), { t: 'ph', src: '$$x$$' }, text(' bbb ccc ddd eee fff ggg hhh iii jjj kkk lll mmm nnn')]
-    const { layout, rows } = layDisplays(pieces, [blockAt(500, 3, 0), blockAt(440, 1, 1)], [{ k: 1, y: 464, region: 0 }], { flowPast: true })
-    expect(layout.clipped).toBe(false)
-    expect(layout.spilled).toBe(true)
-    // the lines after the display stand on the slots above it (block 0) and on the one below it (block 1)
-    expect(layout.lines.map(l => [l.block, l.past])).toEqual([[0, 0], [0, 1], [0, 1], [1, 1]])
-    expect(rows.map(r => r[0]).slice(0, 3)).toEqual(['Aaa', 'kept 464', 'bbb'])
-    expect(rows.map(r => r[2])).toEqual([...rows.map(r => r[2])].sort((a, b) => a! - b!))
-  })
-
   it('writes a kept line no placeholder holds before the first line of the block that follows it in the unit\'s lines', () => {
     const blocks = [blockAt(500, 1, 0), blockAt(476, 1, 0)]
     const l = L2.layoutUnit2(L2.tokensOf2({ kind: 'para', pieces: [text('Aaa bbb ccc ddd eee fff ggg hhh iii jjj kkk lll mmm')] } as never, new Map() as never, 'de', BASE as never, DESIGNS, { ...resolveRules(BUILTIN_RULES, 'de').params, hyphen: 0 } as never, null, undefined, true), blocks as never, 10, { ...resolveRules(BUILTIN_RULES, 'de').params, hyphen: 0 } as never)

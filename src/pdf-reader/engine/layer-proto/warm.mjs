@@ -37,6 +37,7 @@ import { NAME_FLAG } from '../layout/file.mjs'
 import { NAME_KEYS } from '../layout/names.mjs'
 import { familyOfFonts, rolesFor } from '../rules/font-roles.mjs'
 import { BUILTIN_RULES, resolveRules } from '../rules/layout.mjs'
+import { CJK_LETTER } from '../rules/script.mjs'
 import { classifyFont, faceOfRoles, fontString, roleFaceSet } from './fonts.mjs'
 import { cjkClassRe } from './layer2.mjs'
 
@@ -52,8 +53,7 @@ export const WAVE_SLOTS = 4
  *  abstract set in bold, asked in the regular), and asked 0 to 1.07 MB (median 0.39) of slices page 1 does not draw; at 600 three
  *  of the seven fell to 84-87 %, at 1600 the slices not drawn rose to 0.12-1.38 MB */
 export const FIRST_PAGE_CHARS = 800
-/** a character a first page's budget counts (FIRST_PAGE_CHARS): a Han, kana or Hangul one */
-const CJK_COUNT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u
+/** a character a first page's budget counts (FIRST_PAGE_CHARS): a Han, kana or Hangul letter (rules/script.mjs CJK_LETTER) */
 /** the characters v0 warms each face with on page 1 (layer2.mjs warmFaces): a CJK one and a Latin one */
 const LIKELY_CJK = '\u6c38', LIKELY_LATIN = 'a'
 
@@ -78,7 +78,7 @@ export function firstPageUnits(kinds, texts, { chars = FIRST_PAGE_CHARS, shown =
     if (kind === null || kind === 'author' || typeof text !== 'string' || !text || (shown && !shown(kind))) continue
     if (count >= chars && kind !== 'affiliation') continue
     out.push({ kind, text, st: null })
-    if (kind !== 'affiliation') for (const ch of text) if (CJK_COUNT.test(ch)) count++
+    if (kind !== 'affiliation') for (const ch of text) if (CJK_LETTER.test(ch)) count++
   }
   return out
 }

@@ -161,8 +161,9 @@
 //                page (a fresh open, then the ask) and the longest task of 50 ms or more, on one worker. The run is written to
 //                out/layer-gate/door-jump-<commit>-<time>.json
 //   --door-draw  a page drawn from its draw geometry (E-C: run.mjs openProto `drawOf`, the door's hand-off of the draw each left
-//                part of BUNDLE 5 carries; never recorded; the door's choices as --door has them). Each paper's draws read in Node
-//                as the prepare's container reads them (layer-gate/draws.mjs: the engine's lite worker, NO_IMAGE_PIXELS,
+//                part of BUNDLE 5 carries; never recorded; the door's choices as --door has them). Each fixture's draws read in Node
+//                of the page the door draws over, its wrapped base page (drawsOf), as the prepare's container reads them of ours
+//                (layer-gate/draws.mjs: the engine's lite worker, NO_IMAGE_PIXELS,
 //                useSystemFonts false, fontExtraProperties, cMaps, each page after its operator list; cached in out/layer-gate/
 //                draws/), each fixture's bundle as --door makes it cut as --door-parts cuts it (doubling), every
 //                left part carrying its page's draw (layer-gate/door-draw.mjs). inputs: every page of each paper read in Chromium as
@@ -412,8 +413,19 @@ if (FREEZE) {
 const JUMP_LIST = JUMP_SPEC !== null && JUMP_SPEC !== 'all' ? jumpListOf(JUMP_SPEC, fixtures) : null
 if (JUMP_LIST && ONLY && ONLY.some(n => !JUMP_LIST.has(n))) throw new Error(`--only: ${ONLY.filter(n => !JUMP_LIST.has(n)).join(', ')} not among --door-jump's fixtures`)
 const asked0 = JUMP_LIST ? fixtures.filter(n => JUMP_LIST.has(n) && (!ONLY || ONLY.includes(n))) : ONLY ? fixtures.filter(n => ONLY.includes(n)) : fixtures
-/** --door-draw=inputs reads a paper's pages, not an output's: one fixture a paper */
-const asked = DRAW_MODE === 'inputs' ? asked0.filter((n, i) => asked0.findIndex(m => nameOf(m).paper === nameOf(n).paper) === i) : asked0
+/** --door-draw=inputs reads the pages of the page the door draws over, not an output's: one fixture a wrap (layer-gate/wrap.mjs
+ *  wrapKeyOf: its base page, layout file, source and marking, which the fixtures of one paper share on the pack), so that a
+ *  fixture drawn over another wrap of its paper is read too; a fixture with no layout file one of its own */
+const WRAP_KEY = DRAW_MODE === 'inputs' ? (await import('./layer-gate/wrap.mjs')).wrapKeyOf : null
+const wrapKeys = new Map()
+const wrapKeyOfFixture = n => {
+  if (!wrapKeys.has(n)) {
+    const layoutFile = join(FIXTURES, n, 'layout.json')
+    wrapKeys.set(n, existsSync(layoutFile) ? WRAP_KEY({ engine: ENGINE, base: basePdf(n), layoutFile, source: sourceOf(nameOf(n).paper) }) : `fixture ${n}`)
+  }
+  return wrapKeys.get(n)
+}
+const asked = DRAW_MODE === 'inputs' ? asked0.filter((n, i) => asked0.findIndex(m => wrapKeyOfFixture(m) === wrapKeyOfFixture(n)) === i) : asked0
 if (ONLY && !JUMP_LIST && asked0.length !== ONLY.length) throw new Error(`--only: no fixture ${ONLY.filter(n => !fixtures.includes(n)).join(', ')} in ${FIXTURES}`)
 for (const name of asked) if (!existsSync(join(REFS, name, 'ref.json'))) throw new Error(`${name}: no frozen reference (${join(REFS, name, 'ref.json')}): run --freeze once`)
 
@@ -881,15 +893,22 @@ async function doorJumpTask(page, key, errors) {
   } finally { doneWith(name) }
 }
 
-/** --door-draw: a paper's draws as the prepare's container reads them (layer-gate/draws.mjs, a Node child of its own: PDF.js takes a
- *  process's worker at its first document, and this one keeps the stock worker), cached in out/layer-gate/draws/ by arXiv's bytes,
- *  the engine's reading and PDF.js; once a run a paper. { file, pdfjs, pages: [{ draw, why }] } */
+/** --door-draw: a fixture's draws as the prepare's container reads them (layer-gate/draws.mjs, a Node child of its own: PDF.js takes a
+ *  process's worker at its first document, and this one keeps the stock worker), of the page the door draws over and reads live:
+ *  its base page wrapped by optional content (wrappedOf), as the prepare reads its draws of our wrapped page, the page a reader
+ *  reads. The wrap's marks end PDF.js's text items where its groups do ("A." | " " | "Problem Formulation" on 2608.04322v1 p4,
+ *  one item unwrapped), so that draws of the unwrapped page laid a heading 1.5 pt off its live reading (drawlive-04322,
+ *  2026-11-05). Cached in out/layer-gate/draws/ by that page's bytes, the engine's reading and PDF.js; once a run a page file.
+ *  { file, pdfjs, pages: [{ draw, why }] } */
 const DRAWS = new Map()
-function drawsOf(name) {
-  const { paper } = nameOf(name)
-  if (!DRAWS.has(paper)) {
-    DRAWS.set(paper, (async () => {
-      const pdf = basePdf(name), script = join(GATE, 'draws.mjs')
+/** the page the door draws over and reads live: the fixture's base page wrapped, else the page itself (as /fixtures/<name>/base.pdf
+ *  serves it once wrappedOf has run) */
+const doorPageOf = async name => (await wrappedOf(name))?.file ?? basePdf(name)
+async function drawsOf(name) {
+  const pdf = await doorPageOf(name)
+  if (!DRAWS.has(pdf)) {
+    DRAWS.set(pdf, (async () => {
+      const script = join(GATE, 'draws.mjs')
       const reading = ['pipeline/draw-data.mjs', 'pipeline/memory.mjs', 'layer-proto/draw.mjs', 'layout/json.mjs', 'layout/pdf-lite.mjs', 'layout/fills.mjs', 'layout/ink.mjs'].map(f => join(ENGINE, 'src/pdf-reader/engine', f)).filter(f => existsSync(f))
       const key = sha256([fileSha(pdf), ...reading.map(fileSha), fileSha(script), readJson(join(PDFJS, 'package.json')).version].join('|')).slice(0, 24)
       const dir = join(ROOT, 'out/layer-gate/draws'), file = join(dir, `${key}.json`)
@@ -900,7 +919,7 @@ function drawsOf(name) {
       return { file, ...readJson(file) }
     })())
   }
-  return DRAWS.get(paper)
+  return DRAWS.get(pdf)
 }
 /** --door-draw=pages and jump: a fixture's bundle as --door makes it, cut as --door-parts cuts it (the doubling),
  *  its head saying the parts carry draws, every left part with no tokens and its page's draw (drawsOf), served for door-draw.mjs to read as a host does: the units' chunks,
@@ -965,11 +984,15 @@ function readsOf(stats, counts) {
 /** --door-draw=inputs: a paper's pages, read live in Chromium against their draws (layer-gate/door-draw.mjs inputs) */
 async function doorDrawInputs(page, name, errors) {
   const { paper } = nameOf(name)
+  // (the page read live the one its draws are of: the wrapped page, served as its base.pdf once wrapped, as a reader reads ours)
+  await wrappedOf(name)
   const D = await drawsOf(name)
-  DOOR_FILES.set(`/door/${paper}/draws.json`, readFileSync(D.file))
+  // (served by fixture, never by paper: two fixtures of one paper drawn over two wraps run at once on the workers, each its own)
+  const drawsUrl = `/door/${name}/draws.json`
+  DOOR_FILES.set(drawsUrl, readFileSync(D.file))
   try {
     await openDoorPage(page, 'doordraw')
-    const r = await page.evaluate(x => window.doorDraw.inputs(x), { name, paper })
+    const r = await page.evaluate(x => window.doorDraw.inputs(x), { name, drawsUrl })
     const ok = r.compared + r.none.length === r.pages && r.equal === r.compared && !r.differ.length && !errors.length
     if (!ok) failures.push(name)
     // (PDF.js's overlaid text of each link against the text of the layer's own glyph points inside it: a measure, never gated)
@@ -977,7 +1000,7 @@ async function doorDrawInputs(page, name, errors) {
     r.overlaidTotals = ov
     const line = `${r.overlaidLost ? `the draws' links carry no overlaid text where the live read has it (${r.overlaidLost} links: the draw read on pdf-lite's worker with TEXT_GUARD on); ` : ''}${paper}: ${r.pages} pages, ${r.compared} read from their draws and live: equal on ${r.equal} (${r.chars} characters, ${r.nu} of them no reading of their glyph, ${r.links} Link annotations; their overlaid text the layer's glyphs' on ${ov.same}, but for white space on ${ov.space}, other on ${ov.other}, none on ${ov.empty})${r.zeroSign ? ` (${r.zeroSign} numbers equal but the sign of zero)` : ''}${r.drift && Object.keys(r.drift).length ? ` (within the draw's rounding: largest ${Object.entries(r.drift).map(([k, v]) => `${k} ${v.toPrecision(2)}`).join(', ')}, allowed ${Object.entries(r.tolerance ?? {}).map(([k, v]) => `${k} ${v}`).join(', ')}${r.edge ? `; ${r.edge} link glyph points inside on one side only, each within that reach of its link's edge` : ''})` : ''}; ${r.none.length ? `no draw on ${r.none.length} (${r.none.slice(0, 8).join(' ')})` : 'a draw on every page'}${r.differ.length ? `; differ: ${r.differ.slice(0, 3).join(' | ')}` : ''}${errors.length ? `; page errors ${errors.splice(0).slice(0, 3).join(' | ')}` : ''}`
     return { name, door: true, ok, ready: true, line, inputs: r }
-  } finally { DOOR_FILES.delete(`/door/${paper}/draws.json`) }
+  } finally { DOOR_FILES.delete(drawsUrl) }
 }
 /** --door-draw=pages: a fixture's pages asked in order, drawn from their draws, against the same door reading every page live */
 async function doorDrawPages(page, name, errors) {

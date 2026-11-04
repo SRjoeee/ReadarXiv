@@ -32,6 +32,7 @@
 // TEXT_ITEMS_MAX items: the page's items that abut on one baseline at one size are one item (a run PDF.js reads in pieces), and
 // past the bound neighbouring items of one line are merged.
 import { tokenBand } from './words.mjs'
+import { CJK } from '../rules/script.mjs'
 
 /** the items a page's layer holds at most (one span each in the host's layer) */
 export const TEXT_ITEMS_MAX = 2000
@@ -53,7 +54,6 @@ const CELL = 64
 
 const finite = v => typeof v === 'number' && Number.isFinite(v)
 const BLANK_END = /\s$/u, BLANK_START = /^\s/u
-const CJK = /[\u2e80-\u9fff\uac00-\ud7af\u3040-\u30ff\uf900-\ufaff]/u
 
 /**
  * A page's text content (PDF.js's, or a draw's: drawInputsOf) kept compact for its text layer: each item that is upright text

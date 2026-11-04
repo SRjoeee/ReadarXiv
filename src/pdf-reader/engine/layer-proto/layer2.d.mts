@@ -7,38 +7,30 @@ import type { CyrillicPatterns, LatinPatterns, PatternLanguage } from '../rules/
 import type { Block, Rect } from './layer1.mjs'
 
 /** the fit's parameters and the breaking's: the layout rules' for a target (rules/layout.mjs resolveRules), the field names
- *  v0's own. `maxScale`, `capScale`, `growTo`, `flowPast`, `refuse`, `lineskip` and `_compress` are the run's own, set unit by unit */
+ *  v0's own. `capScale`, `refuse`, `lineskip`, `trackStart` and `_compress` are the run's own, set unit by unit */
 export interface Params {
   cjk: boolean; leadBase: number; leadFloor: number; trackMin: number; compressMax: 0 | 1 | 2; borrow: 0 | 1; borrowGap: number
   floor: number; step: number; order: ('track' | 'borrow' | 'lead' | 'shrink')[]; cjkJust: number; spaceMax: number; autospace: number; spaceMin: number
-  hyphen: 0 | 1; even: 0 | 1 | 2; maxScale?: number; _compress?: number
+  hyphen: 0 | 1; _compress?: number
   /** the most the unit may be set at: its lines' room between the rules over and under them (cellBands) */
   capScale?: number
   /** step 3: the further steps for a unit the states leave clipped (run.mjs fitFurther), and the size the last goes down to */
-  further: readonly ('widen' | 'flow' | 'shrink')[]; floorMin: number; refuse?: number; flowPast?: boolean
+  further: readonly ('widen' | 'shrink')[]; floorMin: number; refuse?: number
   /** the paper's \lineskip and \lineskiplimit, PDF units (the layout file's, TeX's): a line nearer the one before it than
    *  the limit is set the two's depth and height plus lineskip apart (breakLines); null: no line opens (the run's own) */
   lineskip?: readonly [number, number] | null
   /** a section heading (run.mjs): set in fewer lines than the original's, its lines stand on the original's last ones (laidOut) */
   lastLines?: boolean
-  /** step 3: the CJK runs' tracking the fit's first state takes, in em; null: a face's size correction given back (run.mjs) */
-  trackStart: number | null
+  /** step 3: the CJK runs' tracking the fit's first state takes, in em: a face's size correction given back (run.mjs cjkAdvance);
+   *  none, 0 */
+  trackStart?: number
   /** a run of a unit split by its displays (layoutRuns): the fit's first state takes its unit's tracking, the tightest its
    *  runs need (and its CJK punctuation's compression) */
   runTrack?: { track: number; trackLatin: number; compress: number }
-  /** the leading relative to the original's pitch (leadOf; false: leadBase on any pitch); fillBySize's cap (run.mjs
-   *  fillSize, off at 0) and the size a unit may grow to (growTo) */
-  leadRel: boolean; fillSize: number; growTo?: number
   /** run.mjs's adaptiveFill (the page fill, D6's since 2026-10-08; null: B): every unit spread over its frame, the page's
    *  body units held to one leading and one size; and the loosest pitch it spreads to, in em of the size drawn (null: the
    *  original's own) */
   adaptiveFill: { band: number; track: number; size: number } | null; fillLead: number | null; fillLeadRel: number | null
-  /** what the fill leaves over: at each unit's foot, or packed to the end of its run of paragraphs (run.mjs packPage) */
-  leftover: 'foot' | 'pack'
-  /** at the original's leading, a block's lines one pitch apart, its gaps TeX's \lineskip rule opened closed (slotsAt on the blocks' `E`) */
-  evenPitch: boolean
-  /** a unit TeX set flush left or flush right keeps that alignment (run.mjs sets its blocks' `flush`, placeItems reads it) */
-  keepAlign: boolean
   /** breaking: lines break only at spaces, which quotes are CJK's, centred punctuation, the characters no line starts or
    *  ends with, and the hyphenation of a Latin word and of a Cyrillic one */
   keepAll: boolean; cjkQuotes: boolean; centredPunct: boolean; noStart: string; noEnd: string; latinPatterns: LatinPatterns; cyrillicPatterns: CyrillicPatterns
@@ -211,7 +203,7 @@ export interface Layout { lines: Line[]; f: number; s: number; scale: number; st
 /** the original page's ink at a fraction of its canvas's resolution */
 export interface InkMap { w: number; h: number; ink: Uint8Array; factor: number }
 /** a unit's block with its lines' measured baselines */
-export interface Block2 extends Block { measures?: Map<string, [number, number]> | null; B: number[]; exact: boolean[]; E?: number[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; through?: boolean; freeOf?: () => number; G?: number[]; start?: number; startY?: number; shortSkips?: readonly { x0: number; x1: number; top: number; bottom: number }[] }   // G: the grid, B with the gaps of its forced breaks closed (blocks2); start: the first line's start where a shared line sets it, startY its baseline where the line before it there stands off TeX's (run.mjs layout2); shortSkips: the unit's displays on the block's page that TeX set with its short skip (tex.mjs shortSkipsOf, slotsAt); E: the grid with each gap TeX's \lineskip rule opened closed to the pitch (blocks2, evenGridOf), where it has one, slotsAt's under P.evenPitch
+export interface Block2 extends Block { measures?: Map<string, [number, number]> | null; B: number[]; exact: boolean[]; E?: number[]; sizes: number[]; pitch0: number | null; free: number; after?: number; flow?: number; through?: boolean; freeOf?: () => number; G?: number[]; start?: number; startY?: number; shortSkips?: readonly { x0: number; x1: number; top: number; bottom: number }[] }   // G: the grid, B with the gaps of its forced breaks closed (blocks2); start: the first line's start where a shared line sets it, startY its baseline where the line before it there stands off TeX's (run.mjs layout2); shortSkips: the unit's displays on the block's page that TeX set with its short skip (tex.mjs shortSkipsOf, slotsAt); E: the grid with each gap TeX's \lineskip rule opened closed to the pitch (blocks2, evenGridOf), where it has one, slotsAt's at the original's leading
 type ToDev = (x: number, y: number) => [number, number]
 /** of a line's size: a display whose top stands under its baseline nearer than this is in reach of its descent */
 export declare const SHORT_SKIP: number
@@ -321,15 +313,17 @@ export declare const charKey: (c: { page?: number; item: number; k: number }) =>
 /** wordChars: the page's characters the first line may grow over the words its source begins with (step 3) */
 export declare function extendRects(rects: Rect[], charsByPage: readonly (readonly Char[] | undefined)[], others: readonly (readonly Rect[] | undefined)[], src: string, wordsOfFn: unknown, normFn: unknown, wordChars?: readonly (readonly Char[] | undefined)[], first?: Rect): number
 /** a unit's translation as tokens; `.base` is its base style. `measure(s, face)`: a run's width at 100 px (the canvas's, cached,
- *  by default); a host reading the tokens' faces and texts before the faces are loaded passes a measure that takes none.
+ *  by default); null measures nothing, for a host that reads the tokens' faces and texts before the faces are loaded and then
+ *  measures the same tokens (measureTokens).
  *  `tagWords`: each token of a text piece also carries `at` and `end`, its range in the unit's plainTranslated(pieces) (words.mjs),
  *  and no other field changes */
 /** what a unit's first line starts with before its own text: each part in its own style, then a space (`gap`
  *  undefined) or that many em of the unit's size after its last character, no place to break (0: none) */
 export interface Lead { parts: { text: string; st: Partial<Style> }[]; gap?: number }
-/** `text` with the ranges `cuts` ([from, to), rising) left out, and its transformMap less the same characters; null where there is nothing to cut */
-export declare function cutOut(text: string, cuts: readonly (readonly [number, number])[], map: { from: number[]; span: number[] } | null): { text: string; map: { from: number[]; span: number[] } | null } | null
-export declare function tokensOf2(unit: Unit, resolved: Prepared, to: string, baseIn: Style, designs: { serif: string; sans: string; mono: string }, P: Params, lead?: Lead | null, measure?: (s: string, face: Face) => number, tagWords?: boolean): Token[] & { base: Style }
+export declare function tokensOf2(unit: Unit, resolved: Prepared, to: string, baseIn: Style, designs: { serif: string; sans: string; mono: string }, P: Params, lead?: Lead | null, measure?: ((s: string, face: Face) => number) | null, tagWords?: boolean): Token[] & { base: Style }
+/** a unit's tokens (tokensOf2's, given no measure) measured in place: each text token's width at 100 px in its face (a
+ *  superscript's at 0.62 of it, small capitals' at their share), a space's in its face, a lead's glue after its last token */
+export declare function measureTokens<T extends Token[]>(tokens: T, measure?: (s: string, face: Face) => number): T
 /** a float's label as the final sets it in the target: the target's name (capitals where the original's are), a space,
  *  the original's number and punctuation; null where the final keeps the paper's name or the name is the original's */
 export declare function labelInTarget(label: { text?: string; chars?: { ch: string }[] } | null | undefined, names: { figure: string; table: string } | null | undefined, captions: { figure?: string; table?: string } | null | undefined, to: string): string | null
@@ -402,7 +396,11 @@ export declare function cropBaselineOf(real: readonly Char[], lineInfo: Prepared
 export declare const SOLID: number
 /** the unit's leading relative to the original's own pitch: leadBase of a solid line, never closer than the original's */
 export declare function leadOf(blocks: readonly Pick<Block2, 'pitch0'>[], s: number, P: Pick<Params, 'leadBase'>): number
-export declare function layoutUnit2(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params): Layout
+/** `failed`: the parameters of a fit of the same tokens and blocks that set them at none of its states (differing from P only
+ *  in what the states read, `floor`): the states the two share are laid already, and this fit goes on from its own first; null
+ *  where it has none */
+export declare function layoutUnit2(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params, failed: Params): Layout | null
+export declare function layoutUnit2(tokens: readonly Token[], blocks: readonly Block2[], s: number, P: Params, failed?: null): Layout
 /** a unit's run between its kept regions (a display each): its blocks (those of one `after`, from the unit's block `bi0`) and
  *  its tokens; with layoutRuns, its parameters and its own layout */
 export interface Run { after: number; idx: number[]; bi0: number; blocks: Block2[]; tokens: Token[]; P?: Params; layout?: Layout }
@@ -420,6 +418,8 @@ export declare function layoutRuns(tokens: readonly Token[], blocks: readonly Bl
 export declare function joinRuns(runs: readonly { bi0: number; layout: Layout }[]): Layout & { runs: number }
 /** a run's ink over (a) and under (d) its baseline at 100 px in its face (the measure that gives its width) */
 export declare function ink100(s: string, face: Face): { a: number; d: number }
+/** the tokens' ink read so far let go (run.mjs, as each page's pass ends) */
+export declare function forgetInk(): void
 /** a laid line's extent over (a) and under (d) its baseline, PDF units: its text's ink and its crops' over their TeX
  *  baselines; `text`, its text's alone */
 export declare function lineExtent(line: Pick<Line, 'items'>, f: number, scale: number): { a: number; d: number; text: { a: number; d: number } }

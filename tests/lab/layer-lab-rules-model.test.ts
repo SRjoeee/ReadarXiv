@@ -131,10 +131,10 @@ describe('how two sets differ', () => {
   })
 
   it('names each field that differs with its two values, a field absent from one side left out of it', () => {
-    const next = edit(edit(edit(BASE, field('leadBase'), 'Hans', 'zh', 1.35), field('trackStart'), 'Latn', 'fr', 0.01, 'script'), field('hyphenation.en.left'), 'Latn', 'fr', 3)
+    const next = edit(edit(edit(BASE, field('leadBase'), 'Hans', 'zh', 1.35), field('trackMin'), 'Latn', 'fr', -0.01, 'script'), field('hyphenation.en.left'), 'Latn', 'fr', 3)
     expect(diffRules(BASE, next)).toEqual([
       { path: 'hyphenation.en.left', from: 2, to: 3 },
-      { path: 'scripts.Latn.trackStart', from: BASE.scripts.Latn.trackStart, to: 0.01 },
+      { path: 'scripts.Latn.trackMin', from: BASE.scripts.Latn.trackMin, to: -0.01 },
       { path: 'languages.zh.leadBase', to: 1.35 },
     ])
     expect(diffRules(next, BASE).at(-1)).toEqual({ path: 'languages.zh.leadBase', from: 1.35 })

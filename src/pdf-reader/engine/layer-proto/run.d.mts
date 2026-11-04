@@ -1,5 +1,5 @@
 // run.mjs's types: the layer v0's driver, the prototype's page (main.js, ported at 9e56fca)
-import type { Audit, CheckResult } from './check.mjs'
+import type { Audit, checkAll } from './check.mjs'
 import type { Rect } from './layer1.mjs'
 import type { Block2, Char, DrawOp, DrawSource, Layout, Params, Prepared, Token, Unit as LaidUnit } from './layer2.mjs'
 import type { LayoutIndex, LayoutUnit, UnlaidCode } from '../layout/file.mjs'
@@ -140,10 +140,6 @@ export declare function pageTarget(units: readonly unknown[], continuing: readon
 /** what a page's fill pass hands fillPage: a unit laid in runs filled as its runs (`units`), read once, as one (`voters`) */
 export declare function fillUnitsOf<U extends { runs?: unknown[] | null }>(begun: U[], continuing: unknown[]): { units: unknown[]; voters: U[]; continuing: unknown[] }
 export declare function fillPage(units: unknown[], P: Params & { adaptiveFill: { band: number; track: number; size: number } }, onFilled?: (p: Placed, target: number) => void, o?: { continuing?: unknown[]; voters?: unknown[] | null }): Filled | null
-/** the leftover packed (P.leftover 'pack'): a page's body units of one block moved up to keep the original's gap to the one above, the moves by id (PDF units up). `rects`: every unit's rectangles on the page, [id, [page, x0, y0, x1, y1]]; `chars`: the page's characters */
-export declare function packPage(page: number, units: unknown[], rects: readonly [number, readonly number[]][], chars: readonly { ch: string; x0: number; x1: number; yb: number; size: number }[], stays?: ((x0: number, x1: number, y0: number, y1: number) => number | null) | null, gap?: number): Map<number, number>
-/** the ink of a page that stays visible: its ink map less the glyphs the drawing takes away; foot(x0, x1, y0, y1) gives the PDF y of the lowest such ink's foot in a box, or null */
-export declare function stayingInk(o: { map: { w: number; h: number; ink: Uint8Array; factor: number }; toDev: (x: number, y: number) => number[]; toPdf: (x: number, y: number) => number[]; accounted?: readonly number[][] }): (x0: number, x1: number, y0: number, y1: number) => number | null
 /** a babel name of a page laid (D1a) */
 export interface NameDrawn {
   occurrence: number; key: string; page: number; drawn: boolean; why: string | null; chars: (Char & { page: number })[]
@@ -181,10 +177,11 @@ export interface ProtoRun {
   order: number[]
   ms: Map<number, number>
   pageMs: number[]
-  /** each page's costs, ms: its original drawn, its text read, the removal's ink reading and plan, its removed and
-   *  placeholders' pages drawn, its units laid (less the faces they waited for, `fonts`), their operations made, drawn on the
-   *  copy and set as SVG */
-  pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; fonts: number; ops: number; compose: number; svg: number; words: number; links: number }[]
+  /** each page's costs, ms: its original drawn, its text read (less its fills read live, `fills`), the removal's ink reading
+   *  and plan, its removed and placeholders' pages drawn, its units laid (their fits, fill leadings and its page's fill, less the
+   *  faces they waited for, `fonts`, and the records made of them, `rec`, which a reader opened with no records never makes),
+   *  their operations made, drawn on the copy and set as SVG, its word table, its links (the wait past the text read, the parse) */
+  pageTimes: { render: number; text: number; ink: number; rp: number; lay: number; fonts: number; ops: number; compose: number; svg: number; words: number; links: number; fills: number; rec: number }[]
   /** the deterministic work counters of each page (work.mjs): integer counts, the same for the same input */
   pageWork: (import('./work.mjs').Work | undefined)[]
   workTotal(): import('./work.mjs').Work
@@ -274,12 +271,12 @@ export interface ProtoRun {
   release(page: number): void
   /** a done page's copy at v0's own resolution (with `copy`), drawn as a view draws it, once a check reads it; null before it is done */
   copyCanvas(page: number): Promise<HTMLCanvasElement | null>
-  checkPage(page: number): Promise<CheckResult>
-  check(): Promise<CheckResult>
+  /** what the completeness checker (check.mjs checkAll, the gates' own: no reader carries it) reads of one done page, or of
+   *  every page still held where none is given */
+  checkInputs(page?: number | null): Promise<Parameters<typeof checkAll>[0]>
   /** what the run hid and showed again: units drawn, boxes pasted from render B and C (`pastedKeep`), crops */
   hidingStats(): HidingStats
-  /** where pages are read from their draws (`drawOf`), a copy; null where none is (no drawOf, a copy kept, no page pass, an even
-   *  pass, the leftover packed) */
+  /** where pages are read from their draws (`drawOf`), a copy; null where none is (no drawOf, a copy kept, no page pass) */
   readonly drawStats: DrawStats | null
   /** the run let go: its sheet removed, every page's canvases released (a page under way, once it ends), nothing drawn
    *  or laid after; an until under way resolves */
@@ -359,7 +356,7 @@ export declare function openProto(o: {
   records?: boolean
   /** E-C (the door's, BUNDLE 5): each page's draw geometry, asked once a page; a page with one is read from it (its viewport alone
    *  of PDF.js's, its pixels where a step reads its ink), one with none (null, a throw, a draw refused or later than DRAW_WAIT_MS)
-   *  live. Every page is drawn as without it. Used with `copy` false, a page pass, no even pass and no leftover packed; else ignored */
+   *  live. Every page is drawn as without it. Used with `copy` false and a page pass; else ignored */
   drawOf?: ((page: number) => Promise<Draw | null>) | null
   /** the paper's parts may carry draws (the door's Layer.drawsComing, the head's `draw: 1`): the page asked is read for its pixels at
    *  its ask (once a part covers it), before its draw or page 1's is in; default false, once its draw is in */
