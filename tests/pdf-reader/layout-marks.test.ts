@@ -1617,3 +1617,29 @@ describe('an opening point that waits in vertical mode is set with its unit, not
     expect((LAYOUT_TEX.match(/\\axt@holdtrue/g) ?? []).length).toBe(3)
   })
 })
+
+describe("a unit's start mark before the marks that open its head piece (2610.21085v1 u44)", () => {
+  const enc = (s: string) => new TextEncoder().encode(s), dec = (b: Uint8Array | undefined) => new TextDecoder('latin1').decode(b)
+  const marked = (body: string) => dec(originalFiles(openPaper(new Map([['main.tex', enc(`\\documentclass{article}\n\\begin{document}\n${body}\n\\end{document}\n`)]])), { lines: true, layout: LAYOUT_CLASSES }).get('main.tex'))
+  it("after a run-in heading that holds a formula: the head formula's point is set in horizontal mode, at the unit's start", () => {
+    const tex = marked('\\paragraph{What $V$ is, and what it is defined on.}\n$V(q)$ is not a fixed label space, and $p_e$ is a frequency.\n')
+    // (before: \axtpmm{p1.0a}\leavevmode\axtmark{1s}, the opening mark waiting in vertical mode until the heading's
+    // \axtpmm{p0.1a}, which \everypar sets first, set it there)
+    expect(tex).toContain('\\paragraph{\\axthmark{h0s}What \\axtpmm{p0.1a}$V$\\axtpm{p0.1b} is, and what it is defined on.\\axthmark{h0e}}')
+    expect(tex).toContain('\\axtlines{1}\\leavevmode\\axtmark{1s}\\axtpmm{p1.0a}$V(q)$\\axtpm{p1.0b} is not')
+    expect(tex).not.toMatch(/\\axtpm[am]\{p1\.0a\}\\leavevmode/)
+  })
+  it('a citation first, a macro glued to the word after it, a heading formula first: the same order; a mark inside the unit as before', () => {
+    const tex = marked('\\newcommand{\\bert}{BERT}\n\\section{$\\kappa$-concave sets}\n\\cite{k} shows it.\n\n\\bert\'s gain, and \\cite{k} again.\n')
+    expect(tex).toContain('\\section{\\axthmark{h0s}\\axtpmm{p0.0a}$\\kappa$\\axtpm{p0.0b}-concave sets\\axthmark{h0e}}')
+    expect(tex).toMatch(/\\leavevmode\\axtmark\{1s\}\\axtpma\{p1\.0a\}\\cite\{k\}/)
+    expect(tex).toMatch(/\\leavevmode\\axtmark\{2s\}\\axtpma\{p2\.0a\}\\bert's/)
+    expect(tex).toContain('and \\axtpma{p2.2a}\\cite{k}\\axtpm{p2.2b} again.')
+  })
+  it("the layout marking flags its opening marks, and nothing else, as opening the piece after them", () => {
+    const u = { kind: 'para', pieces: [{ t: 'ph', src: '$x$' }, { t: 'text', s: ' and ' }, { t: 'ph', src: '\\cite{k}' }, { t: 'text', s: '.' }] } as unknown as SourceUnit
+    const { units: [c] } = layoutMarking([u], LAYOUT_CLASSES, { lines: false })
+    const opens = ((c?.pieces ?? []) as { t: string; src?: string; opens?: boolean }[]).filter(p => p.opens).map(p => p.src)
+    expect(opens).toEqual(['\\axtpmm{p0.0a}', '\\axtpma{p0.2a}'])
+  })
+})

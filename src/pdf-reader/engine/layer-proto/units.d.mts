@@ -7,9 +7,12 @@ export declare const UNIT_FLAG_BITS: { readonly TITLE: 1; readonly FRONT: 2; rea
 export declare const EDGES: readonly ['lead', 'trail', 'inner']
 /** a table cell's keys, in their order */
 export declare const CELL: readonly ['table', 'row', 'col', 'span', 'head']
+/** an open's fourth value: its pair sets nothing over what it holds (its command sets its argument alone) */
+export declare const SETS_NOTHING: 0
 /** a piece as openPaper reads it, positions dropped: a text (with the source as written where it differs, an accent's
- *  letter), a placeholder, a group's open and close paired by `id`, a nested unit by its id */
-export type BundlePiece = [0, s: string] | [0, s: string, src: string] | [1, src: string] | [2, id: number, src: string] | [3, id: number, src: string] | [4, pre: string, unit: number, post: string]
+ *  letter), a placeholder, a group's open and close paired by `id` (an open whose pair sets nothing with SETS_NOTHING after
+ *  its source), a nested unit by its id */
+export type BundlePiece = [0, s: string] | [0, s: string, src: string] | [1, src: string] | [2, id: number, src: string] | [2, id: number, src: string, sets: 0] | [3, id: number, src: string] | [4, pre: string, unit: number, post: string]
 /** a unit: its kind, flags, depth, table cell, display edges and pieces; its id is its index */
 export type BundleUnit = [kind: string, flags: number, depth: number | null, cell: CellPlace | null, edges: { lead?: string; trail?: string; inner?: string } | null, pieces: BundlePiece[]]
 /** an ink unit (an ink kind, of a chunk of INK_UNITS_FORMAT alone): a unit with the source unit whose row it is drawn with, or null */

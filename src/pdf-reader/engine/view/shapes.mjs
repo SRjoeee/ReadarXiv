@@ -888,6 +888,10 @@ export function layerShapes(source) {
     mute: (p, on) => (on ? (muted.has(p) ? false : (muted.add(p), true)) : muted.delete(p)),
     /** the pages muted, rising */
     muted: () => [...muted].sort((a, b) => a - b),
+    /** the units on page p: each whose pages (pagesOf: the laid layout's, else the mirror's) hold it, as either layout tells its
+     *  units' pages (highlight.mjs documentOf: a unit is on a page's list where the page is one of its pages); a unit's starts
+     *  read no page but its own, so a change of page p's shapes changes no other unit's */
+    unitsOn: p => [...new Set([...(L.unitsOn[p] ?? []), ...(M.layout.unitsOn[p] ?? [])])].filter(id => pagesOf(id).includes(p)),
     starts(id, text, offsets, left) {
       const m = mode(id)
       if (m === 'mirror') return left ?? null

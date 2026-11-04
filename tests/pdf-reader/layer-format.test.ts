@@ -12,6 +12,7 @@ import {
 } from '@/pdf-reader/engine/layer-proto/format.mjs'
 import { batchOf, FIRST_BATCH, NEXT_BATCH, plainSource } from '@/pdf-reader/engine/translate/mt.mjs'
 import { batchesOf, sourceUnitsOf, toTranslate } from '@/pdf-reader/engine/layer-proto/rows.mjs'
+import { nameAnswered } from '@/pdf-reader/engine/rules/tex-names.mjs'
 import { groupOf } from '@/pdf-reader/engine/translate/groups.mjs'
 import { encodeLayout, LAYOUT, LAYOUT_SCHEMA, type LayoutFile, UNIT_KINDS } from '@/pdf-reader/engine/layout/file.mjs'
 import { PDFJS, PIPELINE_VERSION, REMOVAL } from '@/pdf-reader/engine/pipeline/versions.mjs'
@@ -393,7 +394,7 @@ describe('a reader\'s envelope', () => {
     describe(kind, () => {
       const tag = kind === 'units' ? 'format' : 'bundle'
       it('refuses another format, another kind, and a key of the schema missing or extra', async () => {
-        expect(await refusal(read(kind, o => { o[tag] = '3' }))).toMatchObject({ kind, path: tag })
+        expect(await refusal(read(kind, o => { o[tag] = '5' }))).toMatchObject({ kind, path: tag })
         expect(await refusal(read(kind, o => { o[tag] = 4 }))).toMatchObject({ path: tag })
         expect(await refusal(read(kind, o => { o.kind = kind === 'part' ? 'head' : 'part' }))).toMatchObject({ path: 'kind' })
         expect(await refusal(read(kind, o => { delete o.kind }))).toMatchObject({ path: 'kind' })
@@ -407,10 +408,12 @@ describe('a reader\'s envelope', () => {
 
   it('refuses a unit chunk\'s old envelope (`bundle` in place of `format`): the chunk\'s format is its own', async () => {
     expect(await refusal(read('units', o => { o.bundle = '5'; delete o.format }))).toMatchObject({ kind: 'units', path: 'format' })
-    expect(UNITS_FORMAT).toBe('1')
+    // (3: an open may say what its pair sets, units.mjs SETS_NOTHING)
+    expect(UNITS_FORMAT).toBe('3')
     // (6: a part with no layout says why, `layout: { refused, why }`; 7: a draw's items carry their characters' fills; 8: the
-    // head's base says whose PDF the layer is drawn over; 11: a figure row carries its set and its room; 12: a left part its line map;
-    // 13: a part's layout its regions; 14: a draw's items their unmapped characters, no font its map, its numbers at 1/1000 pt)
+    // head's base says whose PDF the layer is drawn over; 11: a figure row carries its set and its room; 12: a left part its line
+    // map; 13: a part's layout its regions; 14: the units chunks UNITS_FORMAT 3's; 15: a draw's items their unmapped characters, no
+    // font its map, its numbers at 1/1000 pt)
     expect(BUNDLE5).toBe('15')
   })
 
@@ -1756,7 +1759,9 @@ describe('records (amendment M15): derived once, the engine\'s own predicates', 
         // (the names a table holds alone: the author block is translated for every target, TRANSLATE_VERSION 6; and a TikZ
         // picture's texts, kind `figure`, whose glyphs the figure ink units translate: rows.mjs TIKZ_KIND)
         const kept = (i: number) => (r.flags[i]! & RECORD_FLAG.KEPT) !== 0 || kinds[i] === 'figure'
-        const derived = [...units.keys()].filter(i => units[i] !== null && !kept(i))
+        // (and a structural name the target's packages answer, by its text: rules/tex-names.mjs nameAnswered)
+        const answered = (i: number) => kinds[i] === 'name' && nameAnswered(plainSource(sourceUnitsOf(bundle)[i] as never), lang)
+        const derived = [...units.keys()].filter(i => units[i] !== null && !kept(i) && !answered(i))
         expect(derived, lang).toEqual(toTranslate(bundle, lang))
         // the batches: the same cuts from the records' lengths as batchesOf makes from the plain source, the paper's structural
         // names first (their kind the chunks': PDF-READER §19.14)

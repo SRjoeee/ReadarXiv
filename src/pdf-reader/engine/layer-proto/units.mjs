@@ -10,6 +10,10 @@ export const UNIT_FLAG_BITS = Object.freeze({ TITLE: 1, FRONT: 2, BRACKETED: 4, 
 const FLAG_BITS = 15
 /** a piece's tag: a text, a placeholder, a group's open and close, a nested unit */
 const TEXT = 0, PH = 1, OPEN = 2, CLOSE = 3, NESTED = 4
+/** an open's fourth value, what its pair sets over what it holds where the front end read it from the command's definition
+ *  (latex-front.mjs identityPair, the piece's `sets`): 0, nothing — the command sets its argument alone (revtex's `\bibinfo`).
+ *  An open of three values says nothing of it */
+export const SETS_NOTHING = 0
 /** a string as the engine's text holds it: its UTF-8 bytes read latin1 (mt.mjs plainSource decodes it), as a source unit's
  *  text piece is */
 const engineText = s => (/^[\t\n\r -~]*$/.test(s) ? s : String.fromCharCode(...new TextEncoder().encode(s)))
@@ -126,7 +130,7 @@ function pieceOf(p, idOf) {
   switch (p.t) {
     case 'text': return p.src === undefined ? [TEXT, p.s] : [TEXT, p.s, p.src]
     case 'ph': return [PH, p.src]
-    case 'open': return [OPEN, p.id, p.src]
+    case 'open': return p.sets === SETS_NOTHING ? [OPEN, p.id, p.src, SETS_NOTHING] : [OPEN, p.id, p.src]
     case 'close': return [CLOSE, p.id, p.src]
     case 'nested': {
       const id = idOf.get(p.unit)
@@ -224,7 +228,7 @@ export function unitStands(u, i, stands, { ink = false } = {}) {
         break
       case OPEN:
       case CLOSE:
-        if (!(p.length === 3 && isInteger(p[1], 0, Number.MAX_SAFE_INTEGER) && isText(p[2]))) return false
+        if (!((p.length === 3 || (p[0] === OPEN && p.length === 4 && p[3] === SETS_NOTHING)) && isInteger(p[1], 0, Number.MAX_SAFE_INTEGER) && isText(p[2]))) return false
         break
       case NESTED:
         if (!(p.length === 4 && isText(p[1]) && isInteger(p[2], 0, i - 1) && stands[p[2]] && isText(p[3]))) return false

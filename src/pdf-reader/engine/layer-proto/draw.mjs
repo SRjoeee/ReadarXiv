@@ -3,7 +3,7 @@
 // ink it needs: the text items (string, transform, width, height, font, its characters' fills: layout/fills.mjs, and the characters
 // its font's own map gives none of its glyphs: unmapped), the page's font table and the Link annotations. Since BUNDLE5 15 an item
 // carries its unmapped characters itself and a font row no map (the rules audit's F3), and an item's place, extent and a link's
-// numbers are at a thousandth of a point (F8): the reader of 13's draws reads their maps, every number as written. The shape is checked by the reader of a left part (checkDraw: bounds and types, plain loops, nothing evaluated) and built from PDF.js's own
+// numbers are at a thousandth of a point (F8): the reader of 13's draws (and 14's, of the same shape) reads their maps, every number as written. The shape is checked by the reader of a left part (checkDraw: bounds and types, plain loops, nothing evaluated) and built from PDF.js's own
 // shapes by the writer (wireOf), which SHEDS (null: the browser reads that page itself) for every reason the reader would refuse.
 // `drawInputsOf` gives the rows back in the layer's own input shapes. Imports the layout's number checks and item fills alone.
 import { isItemFills } from '../layout/fills.mjs'

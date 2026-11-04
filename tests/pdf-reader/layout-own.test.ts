@@ -466,10 +466,11 @@ describe('coverage: what the release sweep of 2026-10-24 left English', () => {
     expect(f.units.get(0)?.unhidden).toBe(null)
     expect(groupsOf(f, foot)).toEqual({ u0: 'Neither estimatorenforces it.' })
   })
-  it('owns nothing of another unit\'s range for a placeholder whose opening point TeX set there (2610.21085v1 p5u43: a run-in heading)', () => {
-    // \paragraph{What $\cand$ is.} $\cand(q)$ rest: the heading is set at the paragraph's start, after its lead placeholder's
-    // opening mark
-    const pages = [page([{ pt: 'h0s' }, 'What ', { pt: 'p0.1a' }, { pt: 'p1.0a' }, 'V', { pt: 'p0.1b' }, ' is.', { pt: 'h0e' }, { pt: '1s' }, 'V(q)', { pt: 'p1.0b' }, ' rest', { pt: '1e' }])]
+  it('a run-in heading and the paragraph it leads, each piece its own (2610.21085v1 p5u43, u44)', () => {
+    // \paragraph{What $\cand$ is.} $\cand(q)$ rest: the heading is set at the paragraph's start, before the unit's start mark,
+    // and the lead placeholder's opening point after that mark (patch writes the start mark before the marks that open the
+    // piece; written after them, the opening mark waited in vertical mode and the heading's own \axtpmm set it at its $\cand$)
+    const pages = [page([{ pt: 'h0s' }, 'What ', { pt: 'p0.1a' }, 'V', { pt: 'p0.1b' }, ' is.', { pt: 'h0e' }, { pt: '1s' }, { pt: 'p1.0a' }, 'V(q)', { pt: 'p1.0b' }, ' rest', { pt: '1e' }])]
     const us = [{ kind: 'heading', pieces: [{ t: 'text', s: 'What ' }, { t: 'ph', src: '$V$' }, { t: 'text', s: ' is.' }] }, { pieces: [{ t: 'ph', src: '$V(q)$' }, { t: 'text', s: ' rest' }] }]
     const r = ownOf(pages, { units: us })
     expect(groupsOf(r, pages)).toEqual({ u0: 'What  is.', 'u0.p': 'V', 'u1.p': 'V(q)', u1: ' rest' })

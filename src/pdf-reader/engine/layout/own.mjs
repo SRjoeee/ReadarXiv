@@ -17,8 +17,8 @@
 //      glyphs alone (a rule above a title is no title's); marks set twice are its first occurrence where that is an end mark
 //      alone and every later one a pair (a title its class sets again: acmart);
 //   4. a placeholder (`p<id>.<j>a`/`b`, a footnote call `n<id>.<j>a`/`b`): stream.mjs ownedOf's entry where the marking is
-//      given (`follows`), else the pair, or an opening alone to the next point in its region; nothing of another unit's range
-//      its opening point stands in (a run-in heading);
+//      given (`follows`), else the pair, or an opening alone to the next point in its region (a unit's head piece's opening
+//      point at the unit's start mark: patch writes the start mark first, so that no run-in heading sets it);
 //   4b. a footnote's call after the unit's last word that TeX gave no mark: the raised glyphs right after its end mark, on that
 //      line, in no group;
 //   4c. the closing punctuation TeX sets after the unit's end mark (amsthm's ")" after a theorem's note where the body begins on
@@ -445,9 +445,6 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
   const heads = units ? headsOf(units, new Set(where.keys())) : null
   const streamed = follows || heads ? pages.map((pg, i) => streamPage(pg, i)) : null
   const owned = follows ? ownedOf(streamed, { follows, erasure: true, heads }) : null
-  // (each page's units whose start and end marks both stand on it: [id, start, end])
-  const spansOn = new Map()
-  for (const [id, { s, e }] of textOf) if (s && s[0] === e[0]) (spansOn.get(s[0]) ?? spansOn.set(s[0], []).get(s[0])).push([id, s, e])
   for (const [name, list] of where) {
     const m = OPENING.exec(name)
     if (!m) continue
@@ -471,17 +468,6 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
         if (B) e = take(A, B, r)
       }
       if (!e) lost = true
-    }
-    // (an opening point inside another unit's range, between its start and end marks on one page: TeX set it there out of its
-    // unit's order — a run-in \\paragraph's heading is set at the start of the next paragraph, after that paragraph's lead
-    // placeholder's opening mark, 2610.21085v1 p5u43 — and what that unit's range holds is that unit's, never this piece's)
-    if (e && list.length === 1) {
-      const A = list[0], hosts = new Set()
-      for (const [other, s, t] of spansOn.get(A[0]) ?? []) if (other !== id && before(s, A) && before(A, t)) hosts.add(other)
-      if (hosts.size) {
-        const host = g => { if (g === null || g[0] !== 'u') return false; const dot = g.indexOf('.'); return hosts.has(Number(dot < 0 ? g.slice(1) : g.slice(1, dot))) }
-        e = { glyphs: e.glyphs.filter(([p, i]) => !host(gOwn[p - 1][i])), boxes: e.boxes.filter(([p, b]) => !host(bOwn[p - 1][b])) }
-      }
     }
     // (a text symbol's own glyph, those of its ink from the first that set its character, is its unit's text: the layer draws a text
     // symbol as its character, never from a crop, so its ink is hidden with the text wherever the unit is drawn, as a cell's lead

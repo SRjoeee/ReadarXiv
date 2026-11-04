@@ -106,7 +106,7 @@ describe('a left part\'s line map on the wire', () => {
     }
     expect((await as('11')(false)).lines).toBeNull()
     await expect(as('11')(true)).rejects.toThrow()
-    // (13's left part is 12's: a reader of 13 and on reads a bundle of 12 whole)
+    // (13's, 14's and 15's left parts are 12's but for the draw: a reader of 15 reads a bundle of 12 whole)
     expect((await as('12')(true)).lines).not.toBeNull()
   })
 })

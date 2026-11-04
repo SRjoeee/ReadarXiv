@@ -9,16 +9,19 @@
  * - the wire (mt.mjs `serialize`, `serializeTags`, `escape`, `texEscape`, the batch sizes and `batchOf`), and the
  *   reading back of a reply (`rehydrate`, strict and tolerant, `rehydrateTags`, `sentencesOf`) with the fallbacks of
  *   `translateUnits` (a unit that fails is sent again as runs);
- * - which units a language sends (keptFor, `authorsTranslated` in kept.mjs) and how a table's cells are decided after the
- *   answer (groups.mjs `decideGroups`, `NAMES_SHARE`), which batches are made (rows.mjs `batchesOf`), and the paper's
+ * - which units a language sends (rows.mjs `toTranslate`: the KEPT flag, and the structural names the target's packages
+ *   answer, rules/tex-names.mjs `nameAnswered`) and how a table's cells are decided after the answer (groups.mjs
+ *   `decideGroups`, `NAMES_SHARE`), which batches are made (rows.mjs `batchesOf`), and the paper's
  *   context sent with every batch, which each reader builds (the extension's `paperContext`, session/translate.mjs; the web's
  *   own: it cuts the abstract as the HTML page does, which the engine does not hold).
  *
  * It enters the web's translation identity and the extension's rows cache, so that rows made under another are
  * translated again on open; it enters no bundle's key (bundle.mjs VTAG): a bundle holds the units, which none of this
- * reaches. The per-text cache holds the translator's raw answer to a text, which none of this changes either, so only
- * the texts that changed are asked of the translator again. A change that also changes a unit's cutting, kind or text
- * raises PIPELINE_VERSION too (a change that touches two kinds bumps both, §9.2).
+ * reaches. The extension's per-text cache (src/cache/key.ts) holds the translator's raw answer to a text, which none of
+ * this changes either, so there only the texts that changed are asked of the translator again; the web's journal of
+ * answers is its output's and goes with it (worker/src/mt/journal.ts), so a raise there asks every text of a paper reopened
+ * again. A change that also changes a unit's cutting, kind or text raises PIPELINE_VERSION too (a change that touches two
+ * kinds bumps both, §9.2).
  *
  * Until the rows cache replaces session.mjs's copies (Stage 5, Task 10) a copy is judged by PIPELINE_VERSION alone, so a
  * change here that must void copies raises PIPELINE_VERSION with it.
@@ -75,4 +78,31 @@
 //    where it went whole: captions correspond sentence by sentence on every engine, as body units do (the owner's ruling of
 //    2026-10-30, docs/PDF-READER.md §17.1). Over 3 358 units of twelve papers the cuts change for their 135 captions alone, and
 //    the markers wire is 8's byte for byte, every unit's (2026-10-30)
-export const TRANSLATE_VERSION = '9'
+// 10 (the rules audit of 2026-11-04, its translation lane; PIPELINE_VERSION 67 and BUNDLE5 14 with it): fewer markers, each a
+//    hard boundary to Microsoft and a fallback more (units of more than 20 went to Google 22 to 42 % of the time), and what the
+//    wire tells read from TeX's own tables and definitions, no list of the wire's own:
+//    - a pair whose command sets its argument and nothing else (the front end's verdict from the definition the paper or its
+//      .bbl gives: revtex's and ACM's `\bibinfo`, `\bibfield`, `\bibnamefont`, `\showarticletitle`; a paper's
+//      `\newcommand\x[1]{#1}`: the open's `sets` 0, latex-front.mjs identityPair) is no pair on either wire, its words the
+//      sentence's and its ends back empty after them; its edges stay a field's for the boundary rule, so that every other
+//      pair is decided as it was (mt.mjs classOf, keptEdgesOf);
+//    - a stretch of placeholders side by side on the markers wire, white space alone between, is one marker (a display the
+//      last of its stretch, its own stop after it), and a space (rules/tex-kernel.mjs: a tie, a control space, `\,`) right
+//      before a kept pair's open or after its close rides in that edge's marker (mt.mjs joinVoids, rideEdges);
+//    - a placeholder that sets no ink is read from TeX's tables, the kernel's (no space, no break), LaTeX's declarations,
+//      `\label` and `\index`, `\penalty`, a table's row rules (mt.mjs INKLESS);
+//    - a forced break, an item and every display DISPLAY reads break the text for the boundary rule (`subequations`,
+//      `dmath`, `IEEEeqnarray` did not); the spaces between a run's formulas, before which no space of the wire's goes and at
+//      a display's end, are one table's (rules/tex-kernel.mjs spaceLead, spaceSource; layer/pieces.mjs reads it too);
+//    - a pair's end whose other end the unit does not hold (a group the unit ends inside) is no pair to the reading's check;
+//      at the unit's front or back it goes on no wire, back where it stands, and inside its words it is a marker in its place
+//      (the unit's pairs then do not nest: mt.mjs edgeEnds): 382 units of the sweep's, every reply of theirs
+//      refused, are read;
+//    - a structural name the target's heads hold, which every lookup of it reads first, is not sent (rows.mjs toTranslate;
+//      tex-names.mjs nameAnswered: one a reference alone answers may be a paper's own head).
+//    Over the 53 sweep papers' zh units (the bundles as staging serves them, made again by this front end where their
+//    sources and .bbl files are on hand, 47 of 53): 3,772,215 wire characters -> 3,626,267 (-3.9 %), 97,053 markers ->
+//    61,329 (-36.8 %), 5,011 of 20,062 units' wires change and 191 name units are no longer sent. An echo of each changed
+//    wire reads back, against the echo of the old: the same pieces, or the same but for white space, or the same but where
+//    a piece on no wire or a pair's empty ends come back; no word and no placeholder otherwise moved
+export const TRANSLATE_VERSION = '10'

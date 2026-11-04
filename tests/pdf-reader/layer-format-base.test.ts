@@ -29,7 +29,7 @@ async function headOf(base: unknown, orig: unknown = null) {
 describe('the head of BUNDLE 8', () => {
   it('names the format and its sources and whys', () => {
     expect(BUNDLE5).toBe('15')
-    expect(BUNDLES_READ).toEqual(['7', '9', '10', '11', '12', '13', '15'])
+    expect(BUNDLES_READ).toEqual(['7', '9', '10', '11', '12', '13', '14', '15'])
     expect(BASE_SOURCES).toEqual(['ours', 'arxiv'])
     expect(BASE_WHYS).toEqual(LAYOUT_REFUSED)
     expect(BASE_WHYS).toEqual(['compile', 'carry', 'engine', 'texlive', 'marks', 'final', 'boxes', 'wrap'])

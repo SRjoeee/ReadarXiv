@@ -808,12 +808,15 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /^
  *   goes in an \hbox: TeX never hyphenates a word a formula or a box follows, and does one a whatsit follows (2608.01890).
  *   On an empty list — the paragraph TeX resumes after a display — it sets nothing, and expands to nothing: a mark there
  *   would keep the empty paragraph between two displays a line, and would end the \ignorespaces amsmath's \] began
- *   (2608.20051, 2608.29782). In vertical mode it waits for the next mark that is set, the unit's start mark at the same
- *   place (layoutMarking marks only a placeholder at or after it), but a heading's or a babel name's (\axt@hold): a class
- *   that runs its heading or name into the paragraph sets it first, as the paragraph starts (\everypar, para/begin), and a
- *   point set there took the run-in text for the placeholder's (2610.19159's "Task specification." owned by the
- *   $\mathcal{T}$ that opens the paragraph after it: its row covered the heading, and the paragraph's first line began at
- *   the heading's start, so that no shared line was found).
+ *   (2608.20051, 2608.29782). At a unit's head it is never in vertical mode: patch writes the unit's start mark before
+ *   the marks that open the piece it stands in front of (layoutMarking's `opens`), and \leavevmode starts the paragraph,
+ *   whatever \everypar or para/begin sets first — a class's run-in heading or name and every mark inside it —, so the
+ *   point is set at the start mark's place. Written after its opening mark, the start mark let the opening mark wait in
+ *   vertical mode for the next mark set, which a run-in heading sets first: its own marks (2610.19159's "Task
+ *   specification." owned by the $\mathcal{T}$ that opens the paragraph after it, until \axt@hold held a heading's and a
+ *   babel name's marks) and its placeholders' (2610.21085v1's \paragraph{What $\cand$ is, …} set u44's point at its
+ *   $\cand$: the piece $\cand(q)$ owned the heading's text, LOST, and the paragraph was the original's). Elsewhere, in
+ *   vertical mode, it still waits for the next mark that is set, but a heading's or a babel name's (\axt@hold).
  * - **\axtpmm{name}, before an inline formula** (its source begins $, \( or \ensuremath): \axtpma, but set on the empty
  *   list too. The formula's math-on node follows the mark at once, so the paragraph TeX resumes after a display is no
  *   empty one either way (no line is made), and no \ignorespaces is cut short of a space it would have skipped: the
@@ -1261,7 +1264,8 @@ const READS_NOTHING = p => p?.t === 'ph' && symbolText(p.src) !== null
  *  definition and its argument as a group, and hyperref's \url, in force, set \axtpma{p176.4a} on page 16 */
 const VERBATIM_ARG = /\\(?:url|nolinkurl|path|burl|href\s*(?:\[[^\]]*\])?)\s*\{$/
 /**
- * Where a unit's start mark goes, as patch places it: the first piece at or after it, from `from`. The commands at the
+ * Where a unit's start mark goes, as patch places it: the first piece at or after it, from `from`, the start mark before
+ * that piece's opening mark (`opens`). The commands at the
  * unit's head that patch passes over — \noindent, a run-in heading's macro, a table row's \cline or \multicolumn — get
  * no mark: in vertical mode the opening mark would wait for the start mark set after them, at another place; at a table
  * row's start it would begin the cell before \cline's \noalign or \multicolumn's \omit, which TeX refuses. A unit that
@@ -1449,8 +1453,9 @@ export function layoutMarking(units, classes, { lines = false, switches = null, 
       const said = (raw === '2' || raw === '3') && cls === 'macro' ? '1' : raw === '3' && !(next?.t === 'text' && PUNCT.includes(next.s[0]) && (next.src === undefined || next.src[0] === next.s[0])) ? '2' : raw
       if (said === '2') return [piece]
       const name = `${cls === 'footnote' ? 'n' : 'p'}${i}.${k}`
-      // (an inline formula's opening mark is set on the empty list too: \axtpmm, LAYOUT_TEX)
-      const open = { t: 'ph', src: `${lead}\\${cls === 'math' ? 'axtpmm' : 'axtpma'}{${name}a}` }
+      // (an inline formula's opening mark is set on the empty list too: \axtpmm, LAYOUT_TEX. `opens`: the mark that opens the
+      // piece after it, which patch writes after the unit's start mark where that mark goes before this piece)
+      const open = { t: 'ph', src: `${lead}\\${cls === 'math' ? 'axtpmm' : 'axtpma'}{${name}a}`, opens: true }
       if (said === '3') { movedAt.set(k, { t: 'ph', src: `${lead}\\axtpm{${name}b}` }); return [open, piece] }
       if (cls === 'macro') opened.add(p)
       // a complete call's closing mark, where TeX answered for what follows (`said`), only before white space or punctuation, or at

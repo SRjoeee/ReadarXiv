@@ -37,6 +37,24 @@ const ownName = (names, english) => { const w = names?.get?.(english); return ty
 /** a babel name as a reference's word: its letter-spacing between CJK characters dropped (zh-Hant's appendix name, its two characters a space apart, a heading's) */
 const unspaced = s => s.replace(/(?<=[\p{Script=Han}\p{Script=Hangul}\p{Script=Hiragana}\p{Script=Katakana}])\s+(?=[\p{Script=Han}\p{Script=Hangul}\p{Script=Hiragana}\p{Script=Katakana}])/gu, '')
 
+/** whether the target's packages answer every lookup that would read the paper's own name `english` (a name unit's text) there:
+ *  headName reads a head's word of the target's before the paper's, refName a head's, then a reference's, and conjunctionOf a
+ *  conjunction's own; and in a target whose names do not inflect, a type's other form with no word of the target's falls back to
+ *  its singular's name unit (refName). So a name is answered where the target's heads hold it: one its references alone hold may
+ *  still be a head's (a paper's own `\newtheorem{algorithm}{Algorithm}`, whose head zh's cleveref does not name and ctex has no
+ *  word for: PDF-READER §19.14), and is sent. A name answered so is never read in that target, so it is never sent
+ *  (layer-proto/rows.mjs toTranslate). A babel name the layout rules give (`labels`) is not counted either */
+export function nameAnswered(english, to) {
+  const t = NAMES.targets[to]
+  if (!t || typeof english !== 'string') return false
+  const word = (table, w) => Object.hasOwn(table, w) && !!table[w]
+  const conj = CONJUNCTIONS.filter(c => conjunctionWord(c) === english)
+  if (conj.some(c => !Object.hasOwn(t.conj, c))) return false
+  if (!conj.length && !word(t.heads, english)) return false
+  if (UNINFLECTED.has(to)) for (const [form, type] of Object.entries(NAMES.types)) if (form !== english && SINGULAR[type] === english && !word(t.heads, form) && !word(t.refs, form)) return false
+  return true
+}
+
 /** a theorem-like head's name (\newtheorem's printed name, "Definition") in the target: translator's dictionary's, else the
  *  paper's own name unit's translation (`names`), or null */
 export function headName(english, to, names = null) {

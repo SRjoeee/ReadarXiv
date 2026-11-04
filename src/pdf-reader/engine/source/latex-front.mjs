@@ -9,6 +9,7 @@
 // ---------------------------------------------------------------- files and bytes
 import { commandParams, environmentParams, FRONT_ROLES, inOwnCall, overriddenFallback, paperOf, paperParams, paramsOf, readArgs } from '../rules/arg-roles.mjs'
 import { TEXT_SYMBOLS } from '../rules/text-symbols.mjs'
+import { selectsArgument } from '../rules/tex-kernel.mjs'
 /** unpacked files (a Map of relative path → bytes) as a project's file system */
 export function inMemory(map) { return { list: () => [...map.keys()], read: p => map.get(p) ?? null } }
 /** a/./b/../c → a/c: a file as the package holds it (tar.mjs untar names each so) and as TeX's file system has it,
@@ -455,6 +456,9 @@ function placeCells(units, file, grid, table) {
 }
 const TBLR_MATH = /\bmode\s*=\s*[id]?math\b/
 const uncommented = text => text.replace(/(^|[^\\])%.*$/gm, '$1')
+/** a text with its comments out as TeX takes them: a comment with its line's end, and the next line's leading spaces, which TeX
+ *  skips there, so that a definition's replacement text is the tokens TeX reads (rules/tex-kernel.mjs selectsArgument) */
+const texUncommented = text => text.replace(/(^|[^\\])%[^\n]*(?:\n[ \t]*)?/g, '$1')
 
 // ---------------------------------------------------------------- scanning primitives
 const isLetter = c => (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c === '@'
@@ -1074,7 +1078,10 @@ class Builder {
   ph(src, start, end, display = false) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end, pieces: [] }; const p = { t: 'ph', src }; if (display) this.displays.add(p); this.cur.pieces.push(p); this.cur.end = end; return true }
   /** (the unit's range holds the opening: a unit that ends with it, its close in the next unit, is written over it, which
    *  else stayed in the source after the unit's range and was set twice — a pgffor loop's `{{`, 2610.21377) */
-  open(src, start) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end: start, pieces: [] }; const id = ++this.pairId; this.cur.pieces.push({ t: 'open', id, src }); this.cur.end = Math.max(this.cur.end, start + src.length); return id }
+  /** `identity`: the pair's command sets its argument and nothing else (identityPair), told to the wire on the piece (`sets`, 0:
+   *  what it sets over what it holds; not enumerable, so that the unit's hash, its marks and its JSON are as before), which the
+   *  bundle writes (layer-proto/units.mjs) */
+  open(src, start, identity = false) { if (!this.cur) this.cur = { file: this.file, kind: this.kind ?? 'para', start, end: start, pieces: [] }; const id = ++this.pairId, p = { t: 'open', id, src }; if (identity) Object.defineProperty(p, 'sets', { value: 0 }); this.cur.pieces.push(p); this.cur.end = Math.max(this.cur.end, start + src.length); return id }
   close(id, src, end) { if (this.cur) { this.cur.pieces.push({ t: 'close', id, src }); this.cur.end = end } }
   /** a letter an accent made (accentLetter): text, its UTF-8 bytes read as the source's are, and `src` the accent as
    *  the source writes it — what is set wherever the unit is set untranslated (patch). Joined with its word at flush */
@@ -1833,7 +1840,7 @@ function walk(s, from, to, b, ctx) {
         const text = reqs[before], field = before ? s.slice(reqs[0].start + 1, reqs[0].end - 1).trim() : ''
         endText()
         if (name === 'bibinfo' && BIB_KEPT_FIELD.test(field)) { b.ph(s.slice(i, e), i, e); i = e; continue }
-        const id = b.open(s.slice(i, text.start + 1), i); walk(s, text.start + 1, text.end - 1, b, ctx); b.close(id, '}', e); i = e; continue
+        const id = b.open(s.slice(i, text.start + 1), i, identityPair(ctx.macros.get(name) ?? ctx.bibDefs?.get(name), before + 1)); walk(s, text.start + 1, text.end - 1, b, ctx); b.close(id, '}', e); i = e; continue
       }
     }
     if (name === 'item') { endText(); b.flush(); const { args, end: e } = argsAfter(s, end, 1); i = args.length && args[0].kind === 'opt' ? e : end; continue }
@@ -1979,7 +1986,7 @@ function walk(s, from, to, b, ctx) {
         // an argument that holds paragraphs, a figure or a proof (\\techreport{…}, \\revised{…} around whole passages)
         // is walked as an environment's body is; one within a paragraph is part of it, the call around it a pair
         if (holdsBlock(s.slice(arg.start + 1, arg.end - 1))) { endText(); b.flush(); walk(s, arg.start + 1, arg.end - 1, b, ctx); b.flush(); i = call.end; goOn(macro, call, i); continue }
-        endText(); const id = b.open(s.slice(i, arg.start + 1), i); walk(s, arg.start + 1, arg.end - 1, b, ctx); b.close(id, s.slice(arg.end - 1, call.end), call.end); i = call.end; goOn(macro, call, i); continue
+        endText(); const id = b.open(s.slice(i, arg.start + 1), i, identityPair(macro, macro.prose)); walk(s, arg.start + 1, arg.end - 1, b, ctx); b.close(id, s.slice(arg.end - 1, call.end), call.end); i = call.end; goOn(macro, call, i); continue
       }
     }
     if (call) {
@@ -2330,7 +2337,9 @@ function bibliography(s, from, to, b, ctx) {
   const { end: start } = argsOfForm(s, from, '{')
   const scan = c => texCommands(s, { from: c[0], to: c[1], lineEnvs: ctx.lineEnvs, ifs: ctx.ifs, ifValues: ctx.ifValues }).filter(x => x.depth === 0 && !x.inDef)
   const items = scan([start, to]).filter(c => c.name === 'bibitem')
-  const saved = b.kind
+  const saved = b.kind, savedDefs = ctx.bibDefs
+  // (what the lines before its first entry define, the style's \providecommand's: an entry's field commands read by them)
+  ctx.bibDefs = bibDefinitions(s.slice(start, items[0]?.at ?? to))
   b.flush()
   items.forEach((c, n) => {
     let a = argsOfForm(s, c.end, '[{').end, z = n + 1 < items.length ? items[n + 1].at : to
@@ -2353,6 +2362,34 @@ function bibliography(s, from, to, b, ctx) {
     }
   })
   b.kind = saved
+  ctx.bibDefs = savedDefs
+}
+/**
+ * What a bibliography's head (the lines before its first entry, as a style writes them) defines, by name: each command's
+ * declared arguments and its body, the first definition of a name the one TeX keeps — apsrev4-2's `\providecommand \bibinfo
+ * [0]{\@secondoftwo}%` and `\providecommand \bibnamefont [1]{#1}%`, ACM's `\providecommand\bibinfo[2]{#2}` and `\ifx
+ * \showarticletitle \undefined \def \showarticletitle #1{#1} \fi`. A paper's own definition comes before the .bbl and wins
+ * (paperMacros; a \providecommand defines nothing then); what a class or a package defines is not seen, and a style's
+ * \providecommand is taken for it: TeX Live's classes that define these commands define them so (revtex4-2's
+ * `\providecommand\bibinfo[2]{#2}`)
+ */
+function bibDefinitions(head) {
+  const out = new Map(), t = texUncommented(head)
+  const re = /\\(?:(?:provide|new)command\*?\s*(?:\{\s*\\([A-Za-z@]+)\s*\}|\\([A-Za-z@]+))\s*(?:\[(\d)\])?|[egx]?def\s*\\([A-Za-z@]+)\s*((?:#\d\s*)*))(?=\s*\{)/g
+  for (const m of t.matchAll(re)) {
+    const name = m[1] ?? m[2] ?? m[4], k = skipSpaces(t, m.index + m[0].length), e = t[k] === '{' ? matchGroup(t, k) : -1
+    if (e < 0 || out.has(name)) continue
+    out.set(name, { params: m[4] !== undefined ? (m[5].match(/#\d/g) ?? []).length : Number(m[3] ?? 0), def: t.slice(k + 1, e - 1) })
+  }
+  return out
+}
+/** whether a pair's command, by its definition (`def`: paperMacros' or bibDefinitions'), sets its argument `arg` (the one the
+ *  walk makes the pair's content, from 1, the last it takes) and nothing else: such a pair sets nothing over what it holds, and
+ *  goes on no wire (translate/mt.mjs classOf). No name is listed: a style that sets the field in small capitals, a paper's
+ *  `\newcommand\bibnamefont[1]{\textsc{#1}}`, is no identity and stays a pair */
+function identityPair(macro, arg) {
+  const sel = macro && selectsArgument(macro.params, typeof macro.def === 'string' ? texUncommented(macro.def) : null)
+  return !!sel && sel.arg === arg && sel.of === arg
 }
 /**
  * The placeholder of the list backref.sty sets at a bibliography entry's end (hyperref's `backref` and `pagebackref`): the pages
@@ -2868,6 +2905,12 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
       if (p.t === 'ph' && INLINE.test(p.src)) { startAt = k; startCut = -1; break }
       if (p.t !== 'ph') break
     }
+    // the marks that open the piece the start mark goes before (a layout opening mark, layout/marks.mjs layoutMarking's
+    // `opens`) come after the start mark, which sets its point where the unit begins, in horizontal mode, after everything
+    // \leavevmode lets \everypar set first. Before it, in vertical mode, an opening mark waits for the next mark TeX sets,
+    // and that may be one a run-in heading's own formula sets as the paragraph starts: 2610.21085v1 u44's point stood at
+    // u43's \paragraph formula, its piece owned the heading's text and was LOST, the paragraph English
+    if (startCut === -1) while (startAt > 0 && pieces[startAt - 1].opens === true) startAt--
     let endAt = -1
     if (m) for (let k = pieces.length - 1; k >= 0; k--) if (pieces[k].t === 'text' && /[^ \t\r\n]/.test(pieces[k].s)) { endAt = k; break }
     // a mark around the whole of a unit (AUTHOR_WIDE): from its first piece to its last, inside the groups that open
