@@ -984,8 +984,9 @@ export function forwardSpans(doc, units, floating = () => false, index = buildIn
 /**
  * Each unit's match (anchorUnits' first half): an array by the units' order, each { m, coverage, bounded, ws?, pairs?,
  * textPairs? } or null. `only`: a Set of indices into `units`, the units matched (the others null), their neighbours still
- * read from every unit's bounds: a unit's match is a function of its own bounds, its neighbours', its text and the document's
- * tokens in its window. The 3-gram index is made over the windows searched alone and let go (a window's hits are those
+ * read from every unit's bounds: a unit's match is a function of its own bounds, its neighbours', its text (and, for a heading
+ * found by the gap's rule, the texts of the units between the same marked neighbours: below) and the document's tokens in its
+ * window. The 3-gram index is made over the windows searched alone and let go (a window's hits are those
  * inside it: locate). `forward`: anchorUnits' (rule 5); `wholeIndex` (a holder, { index }): the whole document's index
  * its forward searches read, made there once and kept (the page stream's, a range at a time), in place of one made a call.
  * `known` { hard, before, after, body }: each unit's bounds (`bounds`' of its id, or null) and its neighbours (neighbours'),
@@ -1014,9 +1015,13 @@ export function matchUnits(doc, units, { minCoverage = 0.6, bounds, floating = (
   }
   const index = from <= to ? buildIndex(doc, from, to) : new Map()
   const found = new Array(units.length).fill(null)
-  for (const u of list) {
+  /** each unit's match found by its words in a row in the gap between its marked neighbours (the rule below), by index */
+  const byRow = new Set()
+  /** unit u's match (the loop's body), or null, its 3-grams searched in `idx` (one made over its window at least); `byRow` told
+   *  where the gap's rule found it */
+  const matchOne = (u, idx = index) => {
     const { id } = units[u]
-    if (!words[u]) continue
+    if (!words[u]) return null
     const b = hard[u]
     // where its placeholders stood matters to a unit found as a run of words, which a unit with marks never is
     const { ws, gap } = words[u]
@@ -1027,8 +1032,9 @@ export function matchUnits(doc, units, { minCoverage = 0.6, bounds, floating = (
     // paragraph beside it that has the same words (2608.02163 in Chinese: a heading of four characters the text
     // around it keeps using)
     let m = !b && bounds?.size && ws.length && !floating(id) ? inRow(doc, ws, before[u] + 1, after[u] - 1, true, gap) : null
+    if (m) byRow.add(u)
     let pairs = null
-    if (!m && ws.length >= K && lo <= hi) { const r = locate(doc, index, ws, lo, hi, !!b); if (r) { m = r.tokens; pairs = r.pairs } }
+    if (!m && ws.length >= K && lo <= hi) { const r = locate(doc, idx, ws, lo, hi, !!b); if (r) { m = r.tokens; pairs = r.pairs } }
     // a float's text too short for 3-grams (a table's cell of one or two words): the words in a row, once, in the gap
     // between its located neighbours alone
     if (!m && !b && ws.length && ws.length < K && bounds?.size) m = inRow(doc, ws, before[u] + 1, after[u] - 1, false, gap)
@@ -1041,10 +1047,51 @@ export function matchUnits(doc, units, { minCoverage = 0.6, bounds, floating = (
     }
     // a run takes a placeholder's words besides the unit's own, which are all there
     const coverage = m ? Math.min(1, m.length / ws.length) : 0
-    if (!b && (!m || coverage < minCoverage)) continue
+    if (!b && (!m || coverage < minCoverage)) { byRow.delete(u); return null }
     // a unit with marks keeps its words and which of them were matched where, for a break (wordsBetween); one found by
     // its text alone keeps the match's map too, for its sentences' starts before any marks come (sentenceStarts, B3c)
-    found[u] = b ? { m: m ?? [], coverage, bounded: b, ws, pairs } : { m: m ?? [], coverage, bounded: b, textPairs: pairs }
+    return b ? { m: m ?? [], coverage, bounded: b, ws, pairs } : { m: m ?? [], coverage, bounded: b, textPairs: pairs }
+  }
+  for (const u of list) found[u] = matchOne(u)
+  // a unit found by its words in a row in the gap between its marked neighbours, the last place they come there, is searched
+  // again between its nearest neighbours found so too or by their text, before and after it in the units' order (no float,
+  // whose place is its own): the last place in the gap between marked neighbours is no unit's where that gap holds a float
+  // or a note with the same words after it. On arXiv's PDF the marks of 2610.37668v1's units 234 to 262 were not carried
+  // (pages 21 and 22), and the heading "Surface losses." (u242) took a panel title of the figure at the top of page 22, the
+  // last of eight places of its words in the gap, where its own, the fourth, stands right before its text (u243, found by its
+  // words at the next token): its text, laid after it in K, found no lead and was laid where the English head had ended. A
+  // neighbour outside `only` is matched here as the loop matches it (a function of its window, which is the unit's), so that a
+  // call of some units alone finds what the call of every unit finds: the neighbours' matches are those of the loop alone, never
+  // one this search moved. Where the narrower gap holds no such run, the match stays
+  const first = found.slice(), near = new Map(), windows = new Map()
+  const matchedOf = v => {
+    if (!only || only.has(v)) return first[v]
+    if (!near.has(v)) {
+      // (its words, and its window, the gap's of every unit between the same marked neighbours: an index of it where the call's
+      // does not hold it)
+      words[v] ??= unitWords(units[v].text, hard[v] ? null : units[v].gaps)
+      const [lo, hi] = windowOf(doc, v, hard, bounds, before, after), key = `${lo} ${hi}`
+      if (lo >= from && hi <= to) near.set(v, matchOne(v))
+      else { if (!windows.has(key)) windows.set(key, lo <= hi ? buildIndex(doc, lo, hi) : new Map()); near.set(v, matchOne(v, windows.get(key))) }
+    }
+    return near.get(v)
+  }
+  for (const u of [...byRow]) {
+    if (!first[u]) continue
+    const neighbour = step => {
+      for (let v = u + step; v >= 0 && v < units.length; v += step) {
+        if (hard[v] && !floating(units[v].id)) return null
+        if (floating(units[v].id)) continue
+        const f = matchedOf(v)
+        if (f?.m?.length) return f.m
+      }
+      return null
+    }
+    const left = neighbour(-1), right = neighbour(1)
+    const lo = Math.max(before[u], left ? Math.max(...left) : -1) + 1, hi = Math.min(after[u], right ? Math.min(...right) : doc.length) - 1
+    if (lo <= before[u] + 1 && hi >= after[u] - 1) continue
+    const m = lo <= hi ? inRow(doc, words[u].ws, lo, hi, true, words[u].gap) : null
+    if (m) found[u] = { ...found[u], m, coverage: Math.min(1, m.length / words[u].ws.length) }
   }
   return found
 }

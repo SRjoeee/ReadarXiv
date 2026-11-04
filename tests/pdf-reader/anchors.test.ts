@@ -937,6 +937,49 @@ describe('startRuns and startsAnchor: sentenceStarts read from a left part\'s ru
   })
 })
 
+describe('matchUnits: a heading with no marks between neighbours found by their text', () => {
+  // (2610.37668v1 on arXiv's PDF, pages 21 and 22: no mark of units 234 to 262 carried, the heading "Surface losses." between two
+  // paragraphs found by their text, and a figure's panel title of the same words at the top of the next page, still in the gap
+  // between the marked neighbours: the last place of the heading's words there)
+  const pages = [
+    page([['the', 'first', 'paragraph', 'of', 'words'], ['a', 'long', 'paragraph', 'that', 'runs', 'before', 'it'], ['surface', 'losses'], ['table', 'a', 'reports', 'the', 'depth', 'alone']], 1),
+    page([['surface', 'losses'], ['the', 'last', 'paragraph', 'of', 'all']], 2),
+  ]
+  const doc = tokenizeDocument(pages)
+  const units: UnitText[] = [
+    { id: 0, text: 'the first paragraph of words' }, { id: 1, text: 'a long paragraph that runs before it' }, { id: 2, text: 'Surface losses.' },
+    { id: 3, text: 'Table a reports the depth alone' }, { id: 4, text: 'the last paragraph of all' },
+  ]
+  const at = (t: string, from = 0) => doc.findIndex((d, k) => k >= from && d.t === t)
+  const bounds = new Map<string, [number, number]>([['0', [0, 4]], ['4', [at('last') - 1, at('all')]]])
+  const own = at('surface'), panel = at('surface', own + 1)
+
+  it('is searched again between them: its own place, right before its text, not the panel title past it', () => {
+    const found = matchUnits(doc, units, { bounds })
+    expect([found[1]?.m.length, found[3]?.m.length]).toEqual([7, 6])
+    expect(found[2]?.m).toEqual([own, own + 1])
+    expect(anchorUnits(doc, units, { bounds }).get(2)?.tokens).toEqual([own, own + 1])
+    expect(panel).toBeGreaterThan(own + 1)
+  })
+
+  it('a call of the heading alone finds the same, its neighbours matched as the call of every unit matches them', () => {
+    const found = matchUnits(doc, units, { bounds })
+    for (let u = 0; u < units.length; u++) {
+      const alone = matchUnits(doc, units, { bounds, only: new Set([u]) })
+      expect(JSON.stringify(alone[u]), String(u)).toBe(JSON.stringify(found[u]))
+      expect(alone.filter((f, v) => v !== u && f !== null)).toEqual([])
+    }
+  })
+
+  it('stays the gap\'s last place where its neighbours leave no run of its words between them', () => {
+    // (the heading's own line gone: its words come only past its text, where the gap's rule took them)
+    const moved = [page([['the', 'first', 'paragraph', 'of', 'words'], ['a', 'long', 'paragraph', 'that', 'runs', 'before', 'it'], ['table', 'a', 'reports', 'the', 'depth', 'alone']], 1), pages[1] as TextPage]
+    const d = tokenizeDocument(moved)
+    const b = new Map<string, [number, number]>([['0', [0, 4]], ['4', [d.findIndex(t => t.t === 'last') - 1, d.findIndex(t => t.t === 'all')]]])
+    expect(matchUnits(d, units, { bounds: b })[2]?.m).toEqual([d.findIndex(t => t.t === 'surface'), d.findIndex(t => t.t === 'surface') + 1])
+  })
+})
+
 describe('anchorUnits in two halves: matchUnits, then placeUnits (the page stream, E2a)', () => {
   // three pages: two paragraphs with marks on page 1, a caption set two pages on (its search between its neighbours finds
   // nothing, the whole document's does), a heading with no marks between the paragraphs, a paragraph on page 3
