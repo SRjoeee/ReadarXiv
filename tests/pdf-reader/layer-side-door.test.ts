@@ -512,6 +512,7 @@ describe('the real door: H3, the highlight\'s data made on the pointer\'s first 
     const early = await visit('start')
     const want = shapesOf(early.m, early.given)
     expect(want.right?.filter(u => u.runs?.length).length).toBeGreaterThan(0)
+    expect(want.left?.filter(u => u.runs?.length).length).toBeGreaterThan(0)
     expect(early.s.side.probe().shapesLaid).toBeGreaterThan(0)
     const laidEarly = early.s.side.probe().shapesLaid
     early.s.view.dispose()
