@@ -4553,7 +4553,10 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   full size by the figure gate's zh model; crowded 1,099 to 1,087 (12 pieces each crowded by its neighbour's glyph). Of the
   units that do not merge, one anchor moves (2610.19274v1 p56's "NLTV-TVL1", start to centre: a tick's "−" joined to its
   number no longer tells its column) and no room. On the gate pack the 11 pieces of 2609.26457v1 ("robustness | fi |
-  x attempt", "gemini 3 | fl | ash") become 4 labels, no other unit moves.
+  x attempt", "gemini 3 | fl | ash") become 4 labels, no other unit moves. The figure gate (both rules): G1, G3f, D, O and R
+  0 on both engines, on the pack (1,036 units to 1,029, drawn 943 to 938) and on 24 of the 25-paper set's bases (1,463 to
+  1,381, drawn 1,256 to 1,178: 2610.21098v1 334 to 268, 2610.21085v1 63 to 52, 2610.22195v1 one, pieces become labels; at
+  full size by the gate's zh model, 2610.21098v1 245 to all 268).
 - **Its place**, our glyphs' and nothing estimated: its first glyph's origin, its direction, its box's length along it, its band
   (its glyphs', at least `DRAW_BAND` [-0.15, 0.88] em: the line a CJK translation is drawn in). A Type 3 glyph's ink is what its
   char procedure paints (LAYOUT 28, #122-1: `ink.mjs` `type3Box`, PDF.js's `charProcOperatorList`, each painted path's box, a
@@ -4635,8 +4638,9 @@ the toggle with no prepare again; bitmap figures (OCR) are another lane.
   papers: 4 units drawn that were crowded (2610.21085v1 p31's "jury,", 1512.03385v1 p8's "110-layer" and "56-layer", a curve
   under their descenders, 2610.40394v1 p4's "Quality"); with both rules, of the units that do not merge 22 rooms move (19
   longer, where such a stroke had ended them; 3 shorter, beside a unit now drawn) and 3 anchors (the one above, and
-  2610.21504v1 p6's two panel titles, the gridline beside them no longer read). On the pack, 1512.03385v1's two, no other unit
-  moving.
+  2610.21504v1 p6's two panel titles, the gridline beside them no longer read). On the pack, 1512.03385v1's two (a dashed
+  curve under "110-layer" and "56-layer"), no other unit moving. With the excuse, the figure gate's O and R stay 0: 5 drawn
+  units over such a stroke on the pack (1512.03385v1), 10 on the 25-paper set's bases (2610.21085v1's "jury," among them).
 - **Its set and its room** (the owner's rule of 2026-10-29, after 2010.11929v2's legends in Chinese: "All" drawn smaller
   than the other entries, "Patch size" starting further right than its column, "Head 3" smaller than "Head 1", each label
   fitted to its own box and anchored by what it read alone; `figure-text.mjs` `setsOf`, `roomsOf`): the labels of one group are set at one size, the original's by default; each keeps the original's alignment
