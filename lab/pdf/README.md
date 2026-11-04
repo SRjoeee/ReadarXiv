@@ -429,6 +429,15 @@ unit) is `19d1b559`'s with each output's `layout.json` and `base.json` made agai
 page is byte for byte the one before, and every layout file the one before but for its version: no pack paper sets a counter
 after a name it does not lead (2608.16117v1's appendix names lead their headings), nor text after its bibliography that the
 references' zone held. 14 new objects.
+The pack of the label rule (`55c7105f`, LAYOUT 34: no label where a unit's own text begins) is `3245d753`'s with each output's
+`layout.json` and `base.json` made again the same way: every base page byte for byte the one before, every layout file the one
+before but for its version. 14 new objects. It was made before #580 merged into the run-in follow-up, and #580 moves three of
+its base pages, TeX Live 2023's (2307.16209v1's and 2608.16117v1's, the latter's `de` and `zh` outputs one base page): its start
+mark before the marks that open a head piece (d5eda1e09, PIPELINE 66) changes what our final pass marks there, so that `next`'s
+engine has made other bytes for them since, and the pack was not made again (its base before d5eda1e09, d47745761, makes the
+pack's; d5eda1e09 alone makes `next`'s). The pack of that mark order (`1dbec0a7`, LAYOUT 34 still) is `55c7105f`'s with those
+three outputs' `base.pdf` and `base.json` made again by `next` bbb8f3c72's engine, the same way; every other file, every layout
+file among them, is `55c7105f`'s byte for byte. 4 new objects (two base pages and their records).
 Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
 The wrap reads each base's units from its paper's source, so the pack holds that too: `sources/<paper>/source.gz`, one a paper
 (`gate-pack.mjs make --sources=<dir of <paper>/source.gz>`, `data/corpus` by default; a make with a base of ours and no source
