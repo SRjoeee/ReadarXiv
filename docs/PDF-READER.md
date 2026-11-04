@@ -4113,11 +4113,14 @@ one fact that says where in the stream such a unit stands, whatever its id: ids 
 ink units (numbered after every source unit) do not keep. Over the sweep's 87 papers it moves 7 of 5,241 such units (rules by
 the ids over the left units up to its own page, or by the next unit's stream, moved 998 or 2,347 and lost two shared lines
 each): the four heads, and three lines of amsart's keywords after "Key words and phrases.", an ink unit, which shared their line
-before only where an affiliation of the last page stood before them by id; every other paper's parts are cut byte for byte as
-before. The page stream closes a part only where no left unit whose line such a unit may still share stands within half a step
+before only where an affiliation of the last page stood before them by id; every other paper's K is the same, slot for slot. Over
+the census's 1,022 heads (the sweep's rows, the six papers whose K moved cut again) exactly the four move, to the original's
+gap: from +1.66, +16.04, +6.94 and +1.61 em more than the original to 0.00, -0.07, -0.09 and -0.08; no other head moves by
+more than 0.05 em, and none changes state. The page stream closes a part only where no left unit whose line such a unit may still share stands within half a step
 of its slots (`page-pass.mjs` closable). One head of the census is still after its text: 2610.37668v1's "Surface losses.",
 which the left puts on a figure's panel title of page 22 with the same words (the heading rule of `anchors.mjs` `matchUnits`
-takes the last place between its marked neighbours, and arXiv's pages 21 and 22 carry no marks), the left's to fix. A run-in head its own row cannot hold uses the
+takes the last place between its marked neighbours, and on arXiv's PDF the 29 units around it, over pages 21 and 22, carry no
+marks), the left's to fix. A run-in head its own row cannot hold uses the
 rest of its line (the owner's ruling of 2026-11-03; a drawing rule, so no version, §18.3). Laid in its row alone, beside the
 paragraph's first words, which are ink the fit may not widen over (`widenOverPaper`), a head whose translation is much longer
 than the English fitted only below its floor, or not at all: 2610.19159v1 p7's "Node-level grading still separates agents."

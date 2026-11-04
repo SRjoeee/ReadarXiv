@@ -570,7 +570,7 @@
 //     its text had put the head after its text in K, where the text finds no lead (2610.21547v1 p16's "Label flipping.", after a
 //     caption of page 17). Over the sweep's 87 papers 7 of 5,241 such units move: the four heads, now before their text, and
 //     three keywords lines, now after "Key words and phrases." by their line (by the ids they stood there only where an
-//     affiliation of the last page came before them); the parts of every other paper are cut as before, byte for byte. The units,
+//     affiliation of the last page came before them); every other paper's K is the same, slot for slot. The units,
 //     their pieces and their wire are 64's: a copy of 64 carries every unit (live.mjs PIPELINE_CARRIES)
 export const PIPELINE_VERSION = '65'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
