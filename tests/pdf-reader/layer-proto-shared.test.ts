@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
+import { fakeConfig } from './helpers/groups'
 import { build, installStubs, line, openRun, PAPERS, type Paper, type Run, runSnap } from './helpers/order-paper'
 
 // A shared line (need.mjs rowLeadOf): a unit whose first row TeX set on the line another unit's last row ends — a run-in
@@ -94,6 +95,34 @@ describe('a shared line with something kept between the two units (2610.21098 p2
     const others = a.filter(l => l !== nearest && l !== a.at(-1))
     expect(others.length).toBeGreaterThan(0)
     expect(others.every(l => l[7] > 150 + 0.01), `the lines above it end at ${others.map(l => `${l[1]}:${l[7]}`)}`).toBe(true)
+  })
+})
+
+/** the same list, the next item's "(2)" its own label (the file's label row of unit 1, make.mjs labelOf: what TeX set before its
+ *  start mark), as enumitem's `enumerate*` and paralist's `inparaenum` set an item (2610.21085v1 p2, 2610.21098v1 p2) */
+const labelled = (chars: number): Paper => ({
+  ...split(chars), name: `inline list, its own label, ${chars}`,
+  specs: split(chars).specs.map(s => (s.id === 1 ? { ...s, lines: [line(1, 226, 'Under the routed', 170, 280), ...s.lines.slice(1)], label: line(1, 226, '(2)', 154, 166) } : s)),
+})
+
+describe('a shared line whose next unit\'s own label stands between the two (an inline list\'s item: 2610.21085 p2)', () => {
+  it('the label goes with its item: the item\'s first line starts after the unit before\'s text on the row, the original\'s separation before the label', async () => {
+    // (56 characters of 10 pt on rows of 260: two full rows and 4 on the shared one, the unit's text ending there near 60 (63.8,
+    // with the fill's tracking); its English ended at 150 and the label began at 154: the item laid from 4 pt after that end, its
+    // label first, its text after. Kept as the original's, the label held the item at TeX's place, 170, after a blank of 100 pt)
+    const run = await laid(labelled(56))
+    const a = linesOf(run, 0)!, [b] = linesOf(run, 1)!
+    const onRow = a.filter(l => Math.abs(l[1] - 226) < 0.05)
+    expect(onRow.length).toBe(1)
+    expect(onRow[0]![7]).toBeLessThan(70)
+    expect(b![1]).toBe(226)
+    expect(b![6]).toBeCloseTo(onRow[0]![7] + 4, 1)
+  })
+
+  it('a label the wrap could not give a group of its own stays the original\'s, and its item where TeX set it', async () => {
+    const run = await laid(labelled(56), P => { Object.defineProperty(P.doc, 'getOptionalContentConfig', { configurable: true, value: async () => fakeConfig({ missing: ['u1.l'] }) }) })
+    const [b] = linesOf(run, 1)!
+    expect([b![1], b![6]]).toEqual([226, 170])
   })
 })
 
