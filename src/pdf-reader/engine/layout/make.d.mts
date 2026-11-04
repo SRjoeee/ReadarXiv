@@ -174,3 +174,6 @@ export declare const WHOLE_RULES: Readonly<PageStreamRules>
 export declare function rulesOf(rules?: Partial<PageStreamRules> | null): PageStreamRules
 /** a font's PostScript name as the file holds it: 1 to 128 printable ASCII characters */
 export declare function fontName(name: unknown): string
+/** a unit's rows told (the stream's `tell`): what K reads of it, its pages, and its first and last lines whole with their
+ *  frames' columns and its last held where the file holds it (a shared line's, need.mjs rowLeadOf and lineAfterOf) */
+export declare function stubOf(i: number, r: { units: unknown[][]; lines: [number, number[]][]; frames: [number, number[]][]; held: [number, number[]][]; ph: number[][]; labels: number[][] }): { units: unknown[][]; lines: [number, number[]][]; ph: number[][]; labels: number[][]; frames: [number, number[]][]; erase: never[]; headings: never[]; pageText: never[]; held: [number, number[]][] }

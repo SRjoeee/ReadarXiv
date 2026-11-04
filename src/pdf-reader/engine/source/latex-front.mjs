@@ -2902,6 +2902,12 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
       if (p.t === 'ph' && INLINE.test(p.src)) { startAt = k; startCut = -1; break }
       if (p.t !== 'ph') break
     }
+    // the marks that open the piece the start mark goes before (a layout opening mark, layout/marks.mjs layoutMarking's
+    // `opens`) come after the start mark, which sets its point where the unit begins, in horizontal mode, after everything
+    // \leavevmode lets \everypar set first. Before it, in vertical mode, an opening mark waits for the next mark TeX sets,
+    // and that may be one a run-in heading's own formula sets as the paragraph starts: 2610.21085v1 u44's point stood at
+    // u43's \paragraph formula, its piece owned the heading's text and was LOST, the paragraph English
+    if (startCut === -1) while (startAt > 0 && pieces[startAt - 1].opens === true) startAt--
     let endAt = -1
     if (m) for (let k = pieces.length - 1; k >= 0; k--) if (pieces[k].t === 'text' && /[^ \t\r\n]/.test(pieces[k].s)) { endAt = k; break }
     // a mark around the whole of a unit (AUTHOR_WIDE): from its first piece to its last, inside the groups that open

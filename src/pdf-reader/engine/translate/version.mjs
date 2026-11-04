@@ -78,7 +78,7 @@
 //    where it went whole: captions correspond sentence by sentence on every engine, as body units do (the owner's ruling of
 //    2026-10-30, docs/PDF-READER.md §17.1). Over 3 358 units of twelve papers the cuts change for their 135 captions alone, and
 //    the markers wire is 8's byte for byte, every unit's (2026-10-30)
-// 10 (the rules audit of 2026-11-04, its translation lane; PIPELINE_VERSION 66 and BUNDLE5 14 with it): fewer markers, each a
+// 10 (the rules audit of 2026-11-04, its translation lane; PIPELINE_VERSION 67 and BUNDLE5 14 with it): fewer markers, each a
 //    hard boundary to Microsoft and a fallback more (units of more than 20 went to Google 22 to 42 % of the time), and what the
 //    wire tells read from TeX's own tables and definitions, no list of the wire's own:
 //    - a pair whose command sets its argument and nothing else (the front end's verdict from the definition the paper or its

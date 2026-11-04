@@ -562,15 +562,39 @@
 //     unit); no source unit's class and no name's row moves. The ink
 //     units move, so the rows' identities: raised so. Every source unit, its pieces and its wire are 63's: a copy of 63 carries
 //     every unit (live.mjs PIPELINE_CARRIES)
-// 66 (raised with TRANSLATE_VERSION 10, the rules audit's translation lane, and BUNDLE5 14): a pair whose command sets its argument
+// 65 (the release sweep's census of run-in heads, 2026-11-04: four Chinese heads laid where the English head had ended, 0.84 to
+//     16.04 em after the translated head): a unit only the layout file holds (no left unit, so no stream of its own) stands in K
+//     beside the left unit it shares one of TeX's lines with, right after the unit whose last row its first row continues or right
+//     before the one whose first row continues its last, through the units the file alone holds between them on the line in its
+//     order (need.mjs lineAfterOf, the cutter's K and the door's own), else after the
+//     largest stream of a left unit with a smaller id as before. A float or a note numbered before a run-in head and streamed after
+//     its text had put the head after its text in K, where the text finds no lead (2610.21547v1 p16's "Label flipping.", after a
+//     caption of page 17). Over the sweep's 87 papers 7 of 5,241 such units move: the four heads, now before their text, and
+//     three keywords lines, now after "Key words and phrases." by their line (by the ids they stood there only where an
+//     affiliation of the last page came before them); every other paper's K is the same, slot for slot. The units,
+//     their pieces and their wire are 64's: a copy of 64 carries every unit (live.mjs PIPELINE_CARRIES)
+// 66 (the owner's report of 2026-11-04 on 2610.21085v1 p5, staging d4774576: the paragraph after a run-in heading that holds a
+//     formula English): a unit's start mark goes before the marks that open the piece it stands in front of (latex-front.mjs patch,
+//     the layout marking's `opens`, marks.mjs layoutMarking). Written after them, the head piece's opening mark waited in vertical
+//     mode for the next mark TeX set, and \leavevmode let \everypar set a run-in \paragraph first, whose own formula's mark set it
+//     there: u44's $\cand(q)$ owned "𝒱 is, and what the model is defined on.", its first glyph u43's, LOST. Over 66 local papers the
+//     marked original moves on 45, every change two of our marks on one line in the other order (192 units' start marks, 185 cells',
+//     15 headings'), no other byte; the 31 whose marked compile differs keep every glyph of the marked and the final passes where it
+//     was (0 pt over 2,683,775 and 2,706,389 glyphs) and every point but 146 head openings, each now at its unit's start mark; 6
+//     units laid whole that were the original's (2610.21085v1 u44, 2608.26008v1 u36 and u42 after their run-in headings;
+//     2010.11929v2's cells u42-u44, whose `\oursabbrv` opening point stood before the cell's leading glue and owned nothing to the
+//     cell's start mark), none the other way, every other unit's rows as they were. The units, their pieces and their wire are 65's
+//     (and 64's): a copy of 64 or 65 carries every unit (live.mjs PIPELINE_CARRIES)
+// 67 (raised with TRANSLATE_VERSION 10, the rules audit's translation lane, and BUNDLE5 14): a pair whose command sets its argument
 //     and nothing else says so on its open (latex-front.mjs identityPair, from the definition the paper or its bibliography
 //     gives: `\providecommand \bibinfo [0]{\@secondoftwo}`; the piece's `sets` 0, not enumerable), which the bundle's units
 //     carry (an open's fourth value, units.mjs SETS_NOTHING, UNITS_FORMAT 3) and the wire reads. Every unit's cut, kind, text,
-//     pieces and hash are 64's: over the 53 sweep papers' sources 47 give their bundle's units back unit for unit, 13,346 opens
+//     pieces and hash are 66's: over the 53 sweep papers' sources 47 give their bundle's units back unit for unit, 13,346 opens
 //     of 11 papers' references saying they set nothing (natbib's `\natexlab` among them); the marks, the layout file and the
 //     wrap read nothing of it. A copy of
-//     64 carries no unit whose wire TRANSLATE_VERSION 10 changed, which is most of them: rows again
-export const PIPELINE_VERSION = '66'
+//     64, 65 or 66 carries every unit (live.mjs PIPELINE_CARRIES): a translation made over the old wire is the unit's still,
+//     and only what is sent from now on is the new wire
+export const PIPELINE_VERSION = '67'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
@@ -656,6 +680,12 @@ export const PDFJS = '6.3.289'
  * what a reading took past those glyphs is no ink of its, where the reading begins with them: the base's bytes change where a paper marks a text symbol;
  * 23 (the owner's report of 2026-11-03 on 2610.42112v1): the counter TeX sets after a babel name on its line, no unit's, where the
  * name leads no unit (IEEEtran's "APPENDIX A", "Appendix A:": names.mjs counterAfter), is in the name's group (own.mjs MR 6b), so
- * that the layer hides it with the name and sets it after the name's word: the base's bytes change where a paper sets one
+ * that the layer hides it with the name and sets it after the name's word: the base's bytes change where a paper sets one;
+ * 24 (with PIPELINE 66): own.mjs MR 4's filter of an opening point inside another unit's range is gone. It took out of a
+ * placeholder's ink what that unit owned where a run-in heading's own mark set the waiting opening point of the paragraph's
+ * lead piece (2610.21085v1 p5u43); with the start mark written first no point is set so, and over 66 local papers the filter,
+ * which still met 310 opening points inside another unit's range (305 of a caption's, a table cell's or a footnote's pieces,
+ * shipped inside a paragraph's range in another region; 5 of a paragraph TeX set inside another's), took nothing out of any:
+ * every wrapped base page byte for byte the same without it
  */
-export const REMOVAL = '23'
+export const REMOVAL = '24'
