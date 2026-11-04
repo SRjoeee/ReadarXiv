@@ -14,8 +14,11 @@
 //     in place of NAMES_SHARE to see another;
 //   - with --show=<fixture>:<table>,…, a table's cells before and after, in their grid's order.
 // --write=<dir> writes each fixture again as the pipeline now records it — record.json from the decided results through
-// cache.mjs unitsOf, with every cell's group, and the captions an earlier --captions run kept (out/table-groups/captions.json:
-// the probe of a compile of the translation that read them went with the compiled translation, 2026-11-04) —, beside links to the
+// cache.mjs unitsOf, with every cell's group, and its captions (lab/pdf/fixture-captions.json, committed fixture data: which
+// floats each of the 29 fixtures' finals named in the target, read on 2026-10-07 by --captions, a compile of each fixture's
+// translation, live.mjs captionsOf, which went with the compiled translation on 2026-11-04; the records and units of the gate
+// pack hold the same, field for field. The reader reads no paper's own: it names figures and tables in the target alike,
+// layer-proto/reader.mjs CAPTIONS, so a fixture made since carries none) —, beside links to the
 // fixture's other files; and units.json, the translation as the layer takes it, where the engine has the layer's
 // pieces (layer/pieces.mjs): the layer gate's --fixtures folder. Every file it writes is outside the repository's
 // tracked files (out/ is git-ignored).
@@ -172,8 +175,9 @@ for (const want of SHOW) {
   }
 }
 
-// ---- what names the floats: the probe of a compile of the translation (live.mjs CAPTIONS_PROBE, captionsOf) went with the
-// compiled translation (2026-11-04); a fixture's captions are what an earlier --captions run kept (out/table-groups/captions.json)
+// ---- what names the floats: a fixture's captions as its final printed them, kept since the compile that read them went with the
+// compiled translation (2026-11-04): lab/pdf/fixture-captions.json
+const CAPTIONS = JSON.parse(readFileSync(join(root, 'fixture-captions.json'), 'utf8'))
 mkdirSync(OUT, { recursive: true })
 writeFileSync(join(OUT, 'measure.json'), JSON.stringify({ threshold: THRESHOLD, fixtures: fixtureShares, sample: sampleShares, changes, samplePapers: sample.map(s => ({ name: s.name, answered: s.answered, cells: s.cells })) }, null, 1))
 
@@ -193,7 +197,7 @@ if (WRITE) {
       if (f.d.keep.has(units[i])) { const { sentences: _, inSource: __, ...rest } = res; results.set(i, { ...rest, state: 'kept' }) }
       else results.set(i, f.d.wait.has(units[i]) ? { ...res, inSource: true } : res)
     })
-    const said = existsSync(join(OUT, 'captions.json')) ? JSON.parse(readFileSync(join(OUT, 'captions.json'), 'utf8'))[f.name] : null
+    const said = CAPTIONS[f.name] ?? null
     const record = { ...(said ? { captions: said } : {}), units: unitsOf(units, f.kept, f.hashes, results) }
     writeFileSync(join(dir, 'record.json'), JSON.stringify(record))
     if (pieces) {
