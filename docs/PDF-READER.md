@@ -943,8 +943,9 @@ for a head, and `composed(null, options)` is the one call). No host calls the do
   reads; anything else keeps geometricPrecision, and a page that tells too little (no such words, or a monospaced face whose
   advances are whole) leaves it to the next. It is decided before the page is put in place (its words' faces read with its drawing
   held where nothing is laid out, `display: none`): decided after, the attribute restyled the page the commit's own reads had just
-  laid out, and the task that paints page 1 laid it out twice, 5 to 11 ms more at 1x CPU, 63 to 74 ms at 4x (the rules audit of
-  2026-11-04, traced, seven papers). Measured (`lab/pdf/spikes/layer-text-check.mjs`, every character of a page
+  laid out, and the task that paints page 1 laid it out twice: with the marks' paddings read once (below), page 1's commit task
+  and the frame that shows it are 8 to 10 ms shorter at 1x CPU and 36 to 43 ms at 4x (traced replays of seven prepared papers,
+  2026-11-04; the task's layout 25-28 to 17-20 ms at 1x, 117 to 75-86 at 4x). Measured (`lab/pdf/spikes/layer-text-check.mjs`, every character of a page
   against geometricPrecision): Chromium on Linux (Docker, device pixel ratio 1 and 2) keeps geometricPrecision, its places
   unchanged; Chromium on macOS takes `auto`, every character of four papers' twelve pages (16,528) within 0.17 CSS px of where
   geometricPrecision put it (mean 0.007; the ends of long words), at zooms of 0.75 to 3 and device pixel ratios of 1 and 2;
