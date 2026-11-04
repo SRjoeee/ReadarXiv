@@ -1621,6 +1621,12 @@ describe('makeLayout, a note\'s mark the first line begins with (the maker round
     const n = await made({ pages: [{ runs: item }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(item[1] as Run), 700]], units: [unit('para', [text('10'), { t: 'open', id: 1, src: '\\textsc{' }, text('a'), { t: 'close', id: 1, src: '}' }, text('pples and pears')] as SourceUnit['pieces'])] })
     expect(n.file.labels.map(l => l.slice(0, 3))).toEqual([[0, 1, 1]])
     expect(rowsOf(n.file, 0, 'lines')[1]).toBe(80)
+    // (and before a text that opens with the label's own digit, "1" before "11 apples": read one character past the label,
+    // "11" was the text's; the line from after the label spells the whole text, a label)
+    const same: Run[] = [{ s: '1', x: 72, y: 700 }, { s: '11 apples and pears', x: 80, y: 700 }]
+    const m = await made({ pages: [{ runs: same }], marks: [['0s', 1, 72, 700], ['0e', 1, endOf(same[1] as Run), 700]], units: [unit('para', [text('11'), { t: 'open', id: 1, src: '\\textsc{' }, text('a'), { t: 'close', id: 1, src: '}' }, text('pples and pears')] as SourceUnit['pieces'])] })
+    expect(m.file.labels.map(l => l.slice(0, 3))).toEqual([[0, 1, 1]])
+    expect(rowsOf(m.file, 0, 'lines')[1]).toBe(80)
   })
 
   it("gives the closing punctuation a head sets after a note to the note's line, never the next unit's label (2610.18513v1 p35)", async () => {
