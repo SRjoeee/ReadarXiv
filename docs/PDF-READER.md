@@ -4170,8 +4170,9 @@ papers' parts differ, 443 pages read fewer bytes before them and none waits on a
 byte in their paper's last part (the font names the units moved there bring into its own table, less the views the part before
 no longer carries). On 2610.21884v1 the stream still cuts every part at the end: its ranged anchoring of page 1 waits for a
 float with no marks, searched over the whole document (rule 5 is off), a bound of its own. The layout maker takes no label
-where a unit's own text begins (`make.mjs` `headLabel`): a head whose glyphs, read on into the line by one character, spell
-the start of the unit's text, its case and compatibility forms aside, is that text. 2610.21377v1 sets `49\textsc{k}20
+where a unit's own text begins (`make.mjs` `headLabel`): where the line read from the head's first glyph spells more of the
+unit's text, past the head, than the line read from after it, its case and compatibility forms aside, the head is that text
+(a label "1" before "11 apples" spells two characters of it from the label, all of it from after: a label). 2610.21377v1 sets `49\textsc{k}20
 (primary)` in its subject classes: the source's words parted at the small capital, its text's start fell to the "k", and "49"
 was read as an item's number, kept as the original's before a line laid from the "k": "49 49k20". Over the left lane's 65
 papers 9 units are laid again, each a text that opens with what reads as a label (that line; 2610.19159v1's paragraphs that
