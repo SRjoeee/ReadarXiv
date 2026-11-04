@@ -574,7 +574,7 @@
 //     2010.11929v2's cells u42-u44, whose `\oursabbrv` opening point stood before the cell's leading glue and owned nothing to the
 //     cell's start mark), none the other way, every other unit's rows as they were. The units, their pieces and their wire are 65's:
 //     a copy of 64 or 65 carries every unit (live.mjs PIPELINE_CARRIES)
-export const PIPELINE_VERSION = '64'
+export const PIPELINE_VERSION = '66'
 /** the PDF.js the engine reads arXiv's PDF with, and the readers draw it with: the repository's pinned pdfjs-dist (a
  *  test holds the two equal). A layer bundle's geometry is measured with it, so its key names it */
 export const PDFJS = '6.3.289'
@@ -668,4 +668,4 @@ export const PDFJS = '6.3.289'
  * shipped inside a paragraph's range in another region; 5 of a paragraph TeX set inside another's), took nothing out of any:
  * every wrapped base page byte for byte the same without it
  */
-export const REMOVAL = '23'
+export const REMOVAL = '24'
