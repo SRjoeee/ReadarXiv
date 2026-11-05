@@ -14,11 +14,12 @@
 //     `pictures`).
 // Level and turned alike (a y-axis title set at 90 degrees keeps its turn).
 //
-// How they are cut (RUN_*): in stream order, a glyph joins the run before it where both are such glyphs, of one face (its font's
-// name, a subset's tag aside: a plotting program writes one face in several subsets), size, colour, direction and figure (one
-// form painted, one picture: pageInk's `fid` and `pid`, so that two figures side by side never make one label), on one baseline
-// (within RUN_DY of their size across it), at most RUN_GAP of its size past the run's end along it and not back over it by more
-// than RUN_BACK; any other glyph between ends the run. A run is a unit when it spells a word (two letters together) in a face
+// How they are cut (RUN_*): in stream order, a glyph joins the run before it where both are such glyphs, of one family (its
+// font's name, a subset's tag and its style aside: a plotting program writes one face in several subsets, and a formula's letter
+// in the family's italic; no math face), size, colour, direction and figure (one form painted, one picture: pageInk's `fid` and
+// `pid`, so that two figures side by side never make one label), on one baseline (within RUN_DY of their size across it), at
+// most RUN_GAP of its size past the run's end along it and not back over it by more than RUN_BACK; any other glyph between ends
+// the run. A run is a unit when it spells a word (two letters together) in a face
 // that is no math face, every glyph of it a character a reader can trust (UNREAD); its text the glyphs' Unicode (NFKC, so that
 // a ligature's glyph reads as its letters) with a space where two stand apart by SPACE_GAP of their size.
 // What it is not, a number, a tick's label, a letter alone, a formula's, stays the original's ink; so does a run a glyph of which
@@ -172,6 +173,13 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
   // one label switched fonts inside a word: "di" | "ff" | "erence (points)", "Jury" | "−" | "equal-weight pool" were units of their
   // own, the fragments translated as words (2610.21085v1's Figures 3 and 4; 66 labels on 12 of the sweep's 87 papers))
   const faceOf = name => { let f = face.get(name); if (f === undefined) { f = String(name ?? '').replace(SUBSET_TAG, ''); face.set(name, f) } return f }
+  // (one label line over the faces of one family: the face's name before its style, the PostScript name's part before its first
+  // hyphen (DejaVuSans and DejaVuSans-Oblique, XCharter-Roman and XCharter-Bold), neither a math face. A plotting program sets a
+  // formula's letter in the family's italic inside a label ("jury, α = 1": matplotlib's mathtext α in DejaVuSans-Oblique), and a
+  // label cut there was a fragment ("jury,") whose room ended at the letter: drawn at 0.66. TeX's math faces are families of
+  // their own (CMMI10 against CMR10) and stay apart)
+  const familyOf = name => faceOf(name).replace(/-.*$/u, '')
+  const oneLine = (a, b) => faceOf(a) === faceOf(b) || (familyOf(a) === familyOf(b) && famOf(a) !== 'math' && famOf(b) !== 'math')
   const units = [], glyphMaps = [], turnedMaps = []
   // (the runs that spell a word the caps have counted, units or not)
   let taken = 0
@@ -190,7 +198,7 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       if (!figure) { close(); continue }
       if (run) {
         const f = run.frame, s = along(f, x.ox, x.oy), t = across(f, x.ox, x.oy)
-        const joins = faceOf(x.font) === faceOf(run.font) && Math.abs(x.size - run.size) <= 0.01 * run.size && x.fill === run.fill && x.form === run.form && x.fid === run.fid && x.pid === run.pid
+        const joins = oneLine(x.font, run.font) && Math.abs(x.size - run.size) <= 0.01 * run.size && x.fill === run.fill && x.form === run.form && x.fid === run.fid && x.pid === run.pid
           && Math.abs(x.ux - f.ux) < 1e-3 && Math.abs(x.uy - f.uy) < 1e-3 && Math.abs(t) <= RUN_DY * run.size
           && s >= run.s1 - RUN_BACK * run.size && s - run.s1 <= RUN_GAP * run.size
           // (a code region's edge ends a run: the prose beside the code, in its face on its baseline, is read, and the code alone kept)
