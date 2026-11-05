@@ -3285,12 +3285,15 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   `\else` TeX never reads for one. One such conditional whose branches hold no words, inline, is one placeholder as well
   (PIPELINE 72): what TeX set for it, either branch's or nothing, is its ink, read from our compile by its points and the text
   after it as any placeholder's is, and none of its parts is a piece of its own. A branch's words, and whether it is inline,
-  are the walk's own reading of it, in a dry run that keeps nothing (`probeConditional`): a word of two letters it would set
-  there, by whatever reads it (`\href`'s label, a paper macro's expansion of prose), and anything it would read otherwise than
-  inline (a block, a display, one the paper writes by a shorthand too, a file it includes). A reading beside the walk's was
-  tried and dropped: the review of #594 found it differ from the walk in each round (a link's label, a shorthand's display, an
-  inclusion; a macro's prose, a box inside math, a cost exponential in nested arguments). Each conditional's dry runs are
-  read once, a conditional inside one read by its own, so that the branches cost the walk their length. As
+  are the walk's own reading of it, in a dry run by the walk's own builder that keeps nothing (`probeBranch`), read off what
+  it would emit: a word of two letters it would set there, by whatever reads it (`\href`'s label, a paper macro's expansion of
+  prose, an accent's letters joined into their word), and anything it would read otherwise than inline (a block, a display,
+  one the paper writes by a shorthand too, a file it includes). The calls of the paper's macros it reads are counted all the
+  same where it is read whole (a stored macro's prose stays a unit of its own: TeX sets either branch). A reading beside the
+  walk's was tried and dropped: the review of #594 found it differ from the walk in each round (a link's label, a shorthand's
+  display, an inclusion; a macro's prose, a box inside math, a cost exponential in nested arguments; a stored macro's call,
+  a word of accents). Each conditional's dry runs are read once, a conditional inside one read by its own, so that the
+  branches cost the walk their length. As
   pieces, its test, its branches, its `\else` and its `\fi`, each part after one of the paper's commands had no mark (a macro
   may look ahead), so neither branch's ink was known, and the unit stayed English: 2610.21098v1's abstract,
   `\ifdefined\BottleneckPreprint\url{…}\else\url{…}\fi`. TeX's own evidence that a piece set nothing — its mark written and no

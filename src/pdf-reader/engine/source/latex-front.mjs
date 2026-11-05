@@ -1303,47 +1303,46 @@ const commandBefore = (s, at) => /\\([A-Za-z]+)$/.exec(s.slice(Math.max(0, at - 
  *  a font command's or a box's, whose argument is text (\\end{document}, \\url{…} hold no words; \\textbf{Final words} does) */
 const wordsIn = (s, from, to) => from < to && /\p{L}{2}/u.test(s.slice(from, to).replace(/(^|[^\\])%.*$/gm, '$1').replace(/\$[^$]*\$/g, ' ')
   .replace(/\\([A-Za-z@]+)\*?((?:\s*\[[^\]]*\])*(?:\s*\{[^{}]*\})*)/g, (m, name, args) => (INLINE_TEXT.has(name) || CONTENT_BOX.has(name) || name === 'footnote' ? ` ${args} ` : ' ')))
-/** a dry run's end at the first word it reads (Probe): the rest of its branch can tell nothing more */
-const A_WORD = new Error('a word')
+/** a branch of nothing: no word, nothing out of line, no call */
+const NO_BRANCH = { words: false, struct: false, calls: [] }
 /**
- * The walk's builder in a dry run of a conditional's branch (probeBranch): it keeps nothing, and tells whether the walk,
- * reading the branch as it reads any text, sets a word there — a text piece of two letters together, as wordsIn reads a
- * word, whatever made it (the text itself, a text argument the role table knows, a paper macro's expansion), which ends the
- * run (A_WORD) —, or reads it otherwise than inline (`struct`): it ends the unit the conditional stands in (a paragraph's
- * end, a block, an environment, a heading, an inclusion), sets a display, or reads a file. Read inside that unit, after the
- * conditional's name, as the branch is when the conditional is read as its parts: the walk's state there (its kind, a
- * table's cell)
+ * s[from, to), a conditional's branch, read by the walk in a dry run: by the walk's own builder (its placeholders, its flush,
+ * which joins an accent's letter with its word), in a shadow of the walk's context that keeps nothing it counts, numbers or
+ * reads, inside the unit the conditional stands in, after its name — as the branch is read where the conditional is read as
+ * its parts, in the walk's state there (its kind, a table's cell). What the walk would emit there, read off its output:
+ * `words`, a text of two letters together (whatever made it: the text, a text argument the role table knows, a paper
+ * macro's expansion, `\\'{e}t\\'{e}`'s letters joined into "été"); `struct`, whether it reads anything there otherwise than
+ * inline (it ends that unit — a paragraph's end, a block, an environment, a heading, an inclusion —, sets a display, or
+ * reads a file); `calls`, each call of the paper's macros it counts (ctx.called), which a conditional read whole counts all
+ * the same (storedBodies: TeX sets either branch, and the macro's body stays a unit of its own)
  */
-class Probe extends Builder {
-  constructor(b) {
-    super(b.file, [], b.src, b.macros, new Set())
-    this.kind = b.kind; this.cellMode = b.cellMode
-    this.cur = this.outer = { file: b.file, kind: b.kind ?? 'para', start: 0, end: 0, pieces: [{ t: 'ph', src: '' }] }
-    this.struct = false
-  }
-  text(s, start, end) { super.text(s, start, end); if (/\p{L}{2}/u.test(s)) throw A_WORD }
-  letter(letter, src, start, end) { super.letter(letter, src, start, end); if (/\p{L}{2}/u.test(letter)) throw A_WORD }
-  ph(src, start, end, display = false) { if (display) this.struct = true; return super.ph(src, start, end, display) }
-  flush() { if (this.cur === this.outer) this.struct = true; super.flush() }
-  /** a conditional inside the branch read as its parts: what its own branches' dry runs found (probeConditional) */
-  merge(branches) { if (branches.some(r => r.struct)) this.struct = true; if (branches.some(r => r.words)) throw A_WORD }
-}
-/** s[from, to), a conditional's branch, read by the walk in a dry run (Probe) in a shadow of the walk's context, which keeps
- *  nothing it counts, numbers or reads (a call of the paper's macro, a table's number, a file): { words, struct } */
 function probeBranch(s, from, to, b, ctx) {
-  if (to <= from) return { words: false, struct: false }
-  const pb = new Probe(b)
-  const shadow = { ...ctx, called: null, fits: [], bibliography: [], floats: pb.floats, visit: () => { pb.struct = true }, visitFront: () => {}, ends: new Map(ctx.ends), skipped: { ...ctx.skipped }, dirs: [...ctx.dirs] }
-  try { walk(s, from, to, pb, shadow) } catch (e) { if (e !== A_WORD) throw e; return { words: true, struct: pb.struct } }
-  return { words: false, struct: pb.struct }
+  if (to <= from) return NO_BRANCH
+  const sb = new Builder(b.file, [], b.src, b.macros, new Set())
+  const outer = { file: b.file, kind: b.kind ?? 'para', start: from, end: from, pieces: [{ t: 'ph', src: '' }] }
+  sb.kind = b.kind; sb.cellMode = b.cellMode; sb.cur = outer
+  // (each display it sets, whatever unit it ends in: the builder's own record of them)
+  let display = false
+  const displays = sb.displays
+  sb.displays = { add: p => { display = true; return displays.add(p) }, has: p => displays.has(p) }
+  // (`dry`: what the conditionals inside it read as their parts add, by their own dry runs: probeConditional)
+  const dry = { b: sb, words: false, struct: false }, calls = []
+  const shadow = { ...ctx, dry, called: (name, kind) => calls.push([name, kind]), fits: [], bibliography: [], floats: sb.floats, visit: () => { dry.struct = true }, visitFront: () => {}, ends: new Map(ctx.ends), skipped: { ...ctx.skipped }, dirs: [...ctx.dirs] }
+  walk(s, from, to, sb, shadow)
+  const ended = sb.cur !== outer
+  sb.flush()
+  const words = dry.words || sb.units.some(u => u.pieces.some(p => p.t === 'text' && /\p{L}{2}/u.test(UTF8_LAX.decode(latin1Bytes(p.s)))))
+  return { words, struct: dry.struct || ended || display, calls }
 }
+/** a conditional's branches' calls of the paper's macros (probeBranch), counted where the walk reads none of them itself */
+const countCalls = (branches, ctx) => { for (const r of branches) for (const [name, kind] of r.calls) ctx.called?.(name, kind) }
 /** each conditional's dry runs, by the project (its \\newif names, which every shadow of its context shares), its source, its
  *  place and what the walk's reading there depends on (probeConditional) */
 const PROBED = new WeakMap()
 /**
  * The dry runs of a conditional's branches (its name at s[i], its branches `c`), each read once however many walks pass it —
- * the dry run of a conditional around it, which reads it by them (Probe.merge), the walk after that, pairsOf's shadow —, so
- * that conditionals inside conditionals cost the walk their length and no more
+ * the dry run of a conditional around it, which reads it by them (`dry`), the walk after that, pairsOf's shadow —, so that
+ * conditionals inside conditionals cost the walk their length and no more
  */
 function probeConditional(s, i, c, b, ctx) {
   let project = PROBED.get(ctx.ifs)
@@ -1352,7 +1351,7 @@ function probeConditional(s, i, c, b, ctx) {
   if (!bySource) project.set(s, (bySource = new Map()))
   const key = `${i} ${ctx.letters !== false} ${!!ctx.boxesUnread} ${ctx.expanding?.size ?? 0} ${b.kind} ${!!b.cellMode}`
   let r = bySource.get(key)
-  if (!r) bySource.set(key, (r = [probeBranch(s, c.thenFrom, c.thenTo, b, ctx), c.elseFrom >= 0 ? probeBranch(s, c.elseFrom, c.elseTo, b, ctx) : { words: false, struct: false }]))
+  if (!r) bySource.set(key, (r = [probeBranch(s, c.thenFrom, c.thenTo, b, ctx), c.elseFrom >= 0 ? probeBranch(s, c.elseFrom, c.elseTo, b, ctx) : NO_BRANCH]))
   return r
 }
 /**
@@ -1576,8 +1575,8 @@ const topUnits = list => { const nested = new Set(list.flatMap(u => u.pieces.fil
  *  spends of the pairs' ids, as a group around an accent spends its own, so that every pair after it keeps its id (a copy's
  *  translations are found again by the units' pieces: cache.mjs sourceHash) */
 function pairsOf(s, from, to, b, ctx) {
-  // (a dry run keeps no pair: Probe)
-  if (to <= from || b instanceof Probe) return 0
+  // (a dry run keeps no pair: probeBranch)
+  if (to <= from || ctx.dry?.b === b) return 0
   const shadow = { ...ctx, letters: false, called: null, fits: [], bibliography: [], floats: new Set(), visit: () => {}, visitFront: () => {}, ends: new Map(ctx.ends), skipped: { ...ctx.skipped }, dirs: [...ctx.dirs] }
   const sb = new Builder(b.file, [], s, ctx.bodies, shadow.floats)
   if (b.inFloat) sb.inFloat = true
@@ -1814,7 +1813,8 @@ function walk(s, from, to, b, ctx) {
           endText()
           // (one of no words spends the ids of the pairs inside it as the walk did when it read its parts, so that every pair
           // after it keeps its id: pairsOf; inline as the walk reads it, whatever a block's form in its source says)
-          if (value === null) { ctx.skipped.ifUnknown = (ctx.skipped.ifUnknown ?? 0) + 1; if (whole) { const e = fiEnd(s, c.end, to); b.pairId += pairsOf(s, i, e, b, ctx); b.ph(s.slice(i, e), i, e); i = e; continue } if (block) b.flush(); else b.ph(s.slice(i, c.end), i, c.end); i = c.end; continue }
+          // (read whole, its branches' calls of the paper's macros counted all the same: countCalls)
+          if (value === null) { ctx.skipped.ifUnknown = (ctx.skipped.ifUnknown ?? 0) + 1; countCalls(probe, ctx); if (whole) { const e = fiEnd(s, c.end, to); b.pairId += pairsOf(s, i, e, b, ctx); b.ph(s.slice(i, e), i, e); i = e; continue } if (block) b.flush(); else b.ph(s.slice(i, c.end), i, c.end); i = c.end; continue }
           // (\\ifmmode's pairs as the walk counted them before it read its \\else alone, so that every pair after it keeps its id)
           const ids = mathFirst ? [b.pairId, pairsOf(s, i, c.end, b, ctx)] : null
           if (block) { b.flush(); walk(s, from, upto, b, ctx); b.flush(); if (ids) b.pairId = Math.max(b.pairId, ids[0] + ids[1]); i = c.end; continue }
@@ -1823,9 +1823,9 @@ function walk(s, from, to, b, ctx) {
           i = c.end; continue
         }
       }
-      // (read as its parts inside a dry run of a branch around it: what its own branches' dry runs found, its \\fi's
-      // placeholder's end where the walk goes on — its branches are read once, however deep it stands)
-      if (probe && b instanceof Probe) { endText(); b.merge(probe); i = fiEnd(s, c.end, to); continue }
+      // (read as its parts inside a dry run of a branch around it: what its own branches' dry runs found, their calls counted,
+      // its \\fi's placeholder's end where the walk goes on — its branches are read once, however deep it stands)
+      if (probe && ctx.dry?.b === b) { endText(); for (const r of probe) { if (r.words) ctx.dry.words = true; if (r.struct) ctx.dry.struct = true } countCalls(probe, ctx); i = fiEnd(s, c.end, to); continue }
     }
     if (name === '(' || name === '[') { const e = mathEnd(s, i); if (e > 0 && e <= to) { endText(); b.ph(s.slice(i, e), i, e, name === '['); i = e; continue } }
     const shorthand = ctx.envMacros.get(name)

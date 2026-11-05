@@ -237,6 +237,20 @@ describe('S4: a conditional\'s branches as the walk reads them, in a dry run (re
     }
   })
 
+  it('a word the walk joins from an accent\'s letters and the text between them (\\\'{e}t\\\'{e}, "été") is a word: its parts kept', () => {
+    expect(read(project(doc("Some words \\ifdefined\\X \\'{e}t\\'{e} \\fi more words.")))).toEqual([
+      { file: 'main.tex', inner: undefined, pieces: ['\nSome words ', '\\ifdefined', '\\X', ' Ã©tÃ© ', '\\fi', ' more words.\n'] },
+    ])
+  })
+
+  it('a call of the paper\'s macro of no argument in one read whole is counted all the same: the macro\'s prose stays a unit of its own (storedBodies)', () => {
+    const p = project(doc('Words before \\ifdefined\\X\\notice\\fi more words.', '\\newcommand{\\notice}{This notice has several important words.}'))
+    expect(units(p).map(u => [u.pieces.map(x => x.s ?? x.src), (u as { stored?: boolean }).stored])).toEqual([
+      [['\nWords before ', '\\ifdefined\\X\\notice\\fi', ' more words.\n'], undefined],
+      [['This notice has several important words.'], true],
+    ])
+  })
+
   it('a conditional inside a conditional is read once, however deep it stands: the walk\'s steps grow by the same count per level', () => {
     const steps = (tex: string) => { const n = walkStepCount(); project(tex); return walkStepCount() - n }
     for (const core of ['\\url{b}', '$$x$$']) {
