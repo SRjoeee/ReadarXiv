@@ -57,8 +57,9 @@ describe("an ink unit's alignment, as TeX set the paragraph it is in (LAYOUT 36)
   it('passes the column\'s end to the next body for a paragraph TeX broke across them, a float between passed over', () => {
     const one = page({ point: 'bs1' }, { para: 1 }, line('the last line of the page here', 100), { point: 'be1' })
     const two = page({ point: 'fs2' }, line('Figure words', 760, 260), { end: 'qe1c' }, { point: 'fe2' }, { point: 'bs3' }, { glyphs: run('Body words of the paper', 100, 700), owner: 'u1' }, { end: 'qe2r' }, { point: 'be3' })
-    // (a float's words no ink unit: its end passed over with it)
-    expect(flagsOf(one, two)).toEqual([['the last line of the page here', 16]])
+    // (a float's words no ink unit: its end passed over with it; an end after the unit's own last line says not centred, never
+    // flush: its paragraph may be the one after the unit)
+    expect(flagsOf(one, two)).toEqual([['the last line of the page here', 32]])
   })
   it("tells a running head by its own paragraph's end alone, else centres it on its page's middle as before", () => {
     const head = (x: number) => page({ point: 'c1-2' }, { glyphs: run('SHORT TITLE', x, 760) }, { point: 'bs1' }, { glyphs: run('Body', 100, 600), owner: 'u1' }, { end: 'qe1j' }, { point: 'be1' })

@@ -907,10 +907,13 @@ export const POINTS_TEX = [
   '\\gdef\\axt@pq{0}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{para/begin}{\\ifvoid\\IndentBox\\else\\xdef\\axt@pq{\\the\\numexpr\\axt@pq+1\\relax}\\global\\setbox\\IndentBox\\hbox{\\axt@point{q\\axt@pq}\\box\\IndentBox}\\fi}\\fi\\fi',
   // (each paragraph's end, `qe<n><code>` at LaTeX's para/end: in horizontal mode, before TeX breaks the paragraph, so with the
   // \leftskip, \rightskip and \parfillskip it breaks it by (`code` readAlign's: c centred, l flush left, r flush right, j
-  // justified, of their stretch's order and amount, \axt@pecode). Placed right after the paragraph's last character, box, rule,
-  // mark, insertion or formula, before its one last glue where it ends in one (taken off and put back after it, which TeX's
-  // line breaking takes away as before): where nothing TeX may break at, take or strip stands after it, so that no line breaks
-  // otherwise (\axt@peat). None where that last item is a whatsit or an adjustment (a unit's own end mark, which AXT-ALIGN reads:
+  // justified, of their stretch's order and amount, \axt@pecode). Placed right after the paragraph's last character, rule, mark,
+  // insertion or formula, before its one last glue where it ends in one (taken off and put back after it, which TeX's line
+  // breaking takes away as before): where nothing TeX may break at, take or strip stands after it, so that no line breaks
+  // otherwise (\axt@peat). None where that last item is a box: a paragraph that ends in a box (a minipage, a \parbox, a framed
+  // box in a center environment) would have its end read as the end of the box's own last paragraph where that one has none
+  // (2608.06701v1's prompts, 90 source units of the 87: justified, under a centred paragraph's end). None where it is a whatsit
+  // or an adjustment (a unit's own end mark, which AXT-ALIGN reads:
   // one more whatsit after it moved 2610.21098v1's last line by 0.04 pt in microtype's final pass), nor where it is a glue, a
   // kern, a penalty or a discretionary (a paragraph ending
   // in \\, `\hfil\break` and the line's space, whose last line the point would make a line of its own; amsart's caption, ending
@@ -919,7 +922,7 @@ export const POINTS_TEX = [
   // an ink unit's alignment where no unit's end mark tells it (ink-units.mjs alignOf))
   '\\def\\axt@pos#1{\\ifnum\\gluestretchorder#1>\\z@ 1\\else\\ifdim\\gluestretch#1>\\z@ 1\\else0\\fi\\fi}',
   '\\def\\axt@pecode{\\edef\\axt@pel{\\axt@pos\\leftskip}\\edef\\axt@per{\\axt@pos\\rightskip}\\edef\\axt@pef{\\axt@pos\\parfillskip}\\edef\\axt@pec{\\ifnum\\axt@pel\\axt@per=11 \\ifnum\\axt@pef=0 c\\else\\ifnum\\gluestretchorder\\parfillskip<\\gluestretchorder\\leftskip\\ifnum\\gluestretchorder\\parfillskip<\\gluestretchorder\\rightskip c\\else j\\fi\\else j\\fi\\fi\\else\\ifnum\\axt@pel=1 r\\else\\ifnum\\axt@per=1 l\\else j\\fi\\fi\\fi}}',
-  '\\def\\axt@peat{\\ifcase\\numexpr\\lastnodetype+1\\relax 0\\or1\\or1\\or1\\or1\\or1\\or1\\or0\\or1\\or0\\or0\\or1\\else0\\fi}',
+  '\\def\\axt@peat{\\ifcase\\numexpr\\lastnodetype+1\\relax 0\\or1\\or0\\or0\\or1\\or1\\or1\\or0\\or1\\or0\\or0\\or1\\else0\\fi}',
   '\\gdef\\axt@pe{0}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{para/end}{\\ifaxt@off\\else\\ifnum\\lastnodetype=-1 \\else\\xdef\\axt@pe{\\the\\numexpr\\axt@pe+1\\relax}\\axt@pecode\\edef\\axt@pen{qe\\axt@pe\\axt@pec}\\let\\axt@peg\\@empty\\ifnum\\lastnodetype=11 \\edef\\axt@peg{\\hskip\\the\\lastskip\\relax}\\unskip\\fi\\edef\\axt@pet{\\axt@peat}\\if1\\axt@pet\\axt@point{\\axt@pen}\\fi\\axt@peg\\fi\\fi}\\fi\\fi',
 ].join('')
 

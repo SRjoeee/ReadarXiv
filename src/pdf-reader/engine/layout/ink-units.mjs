@@ -544,8 +544,8 @@ const endCode = name => name.at(-1)
  * further on, the first after its last glyph in its body or its float — past the column's or the page's end to the next body,
  * a float in between passed over: a paragraph TeX broke across them —, is the end of the paragraph the unit's last line is
  * inside, or of the paragraph after it where the unit is a line TeX set between paragraphs (a \centerline, a box): where it
- * tells it not centred (l, r, j) the unit is not either way, and takes its code; where it tells c the unit may be neither,
- * and nothing is told. No end before its float's end or a body's start (a running head, a foot), none told. `directOnly`: only
+ * tells it not centred (l, r, j) the unit is not either way, and is j (never flush: that paragraph may not be the unit's);
+ * where it tells c the unit may be neither, and nothing is told. No end before its float's end or a body's start (a running head, a foot), none told. `directOnly`: only
  * the end right after its last glyph tells it (a running head: the body's paragraph after it is no paragraph of its)
  */
 function alignOf(lines, pages, directOnly = false) {
@@ -589,7 +589,7 @@ function alignOf(lines, pages, directOnly = false) {
   if (!codes.size) return null
   const notC = [...codes].filter(c => c !== 'c')
   if (direct || !told) return notC.length === 0 ? (told ? 'c' : null) : notC.length === 1 && codes.size === 1 ? notC[0] : 'j'
-  return notC.length === 0 ? null : notC.length === 1 && codes.size === 1 ? notC[0] : 'j'
+  return notC.length === 0 ? null : 'j'
 }
 
 /** an ink unit's rows (rule 6) */
