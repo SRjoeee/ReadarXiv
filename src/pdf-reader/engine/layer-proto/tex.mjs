@@ -373,6 +373,14 @@ export function cropsOf(lu, kOf, shown = Infinity) {
   }
 }
 
+/** the glyphs of a label's box in the file (`lb`: kind, page, x0, baseline, x1, top, bottom; its first) among its page's
+ *  characters (`pageChars`): those whose middle stands inside it, left to right, each with its page. What texParts takes as the
+ *  unit's label, and what run.mjs ownLabelOnRow reads as the glyphs that go with their item before the item is read */
+export function labelBoxChars(lb, pageChars) {
+  const [, page, x0, , x1, top, bottom] = lb
+  return (pageChars ?? []).filter(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 >= x0 - 0.5 && (c.x0 + c.x1) / 2 <= x1 + 0.5 && c.yb >= bottom - 0.5 && c.yb <= top + 0.5).sort((a, b) => a.x0 - b.x0).map(c => ({ ...c, page }))
+}
+
 /**
  * The unit's parts from the file (layer2.d.mts UnitParts), for a unit locatedWhole passes: part 1, the unit's lines
  * (`lines`, texRects' answer); part 3, its label by the file's box (the alignment's where the file has none, and a mark its
@@ -473,9 +481,8 @@ export function texParts(lu, kOf, { lines, extents = 'v0', shown = Infinity, lin
       return rest
     }
     // the label's box (kind, page, x0, baseline, x1, top, bottom): the page's characters inside it
-    const [, page, x0, , x1, top, bottom] = lb
-    const chars = (charsByPage[page - 1] ?? []).filter(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 >= x0 - 0.5 && (c.x0 + c.x1) / 2 <= x1 + 0.5 && c.yb >= bottom - 0.5 && c.yb <= top + 0.5).sort((a, b) => a.x0 - b.x0).map(c => ({ ...c, page }))
-    out.label = { x1: Math.max(x1, ...chars.map(c => c.x1)), text: chars.map(c => c.ch).join(''), chars }
+    const chars = labelBoxChars(lb, charsByPage[lb[1] - 1])
+    out.label = { x1: Math.max(lb[4], ...chars.map(c => c.x1)), text: chars.map(c => c.ch).join(''), chars }
     // what the unit's lines hold of it is the label's, no rendering's
     const keys = new Set(chars.map(charKey))
     const real = c => !c.sep && !c.space && /\S/.test(c.ch)

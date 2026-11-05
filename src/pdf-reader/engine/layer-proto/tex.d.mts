@@ -46,4 +46,7 @@ export declare function renderingOf(segs: Float64Array, uc: readonly Char[], dis
 export declare function cropsOf(lu: LayoutUnit, kOf: readonly number[], shown?: number): (out: Prepared) => number
 /** the unit's parts from the file: its lines and label, its placeholders' renderings and its crops; extents 'tex' the file's
  *  erase rectangles */
+/** the glyphs of a label's box in the file (its first: kind, page, x0, baseline, x1, top, bottom) among its page's characters,
+ *  those whose middle stands inside it, left to right, each with its page */
+export declare function labelBoxChars<C extends { ch: string; x0: number; x1: number; yb: number }>(lb: ArrayLike<number>, pageChars: readonly C[] | null | undefined): (C & { page: number })[]
 export declare function texParts(lu: LayoutUnit, kOf: readonly number[], o: { lines: TexLines; extents?: 'v0' | 'tex'; shown?: number; lineskip?: readonly [skip: number, limit: number] | null }): UnitParts

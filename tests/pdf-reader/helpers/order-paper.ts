@@ -59,8 +59,10 @@ const CJK = (n: number, from = 0x4e00) => Array.from({ length: n }, (_, i) => St
 export interface Line { page: number; b: number; text: string; x0: number; x1: number }
 export const line = (page: number, b: number, text: string, x0 = 20, x1 = 280): Line => ({ page, b, text, x0, x1 })
 export interface Cell { table: number; row: number; col: number; span: number; head: boolean }
-/** a unit: its lines, its translation (`chars` characters from `at`, or `tr` as it is) and, for a table's cell, its table group (the run's `groups`) and its cell */
-export interface Spec { id: number; kind: string; lines: Line[]; chars: number; at: number; tr?: string; group?: string; cell?: Cell }
+/** a unit: its lines, its translation (`chars` characters from `at`, or `tr` as it is), for a table's cell its table group (the run's
+ *  `groups`) and its cell, and the label the file holds for it (`label`: the glyphs before its first line's start, make.mjs labelOf,
+ *  on the page and in the layout file's labels) */
+export interface Spec { id: number; kind: string; lines: Line[]; chars: number; at: number; tr?: string; group?: string; cell?: Cell; label?: Line }
 /** a paragraph over `pages` ([page, top baseline, lines]), each line 12 pt below the one before */
 export function para(id: number, pages: [number, number, number][], chars = 12, extra: Partial<Spec> = {}): Spec {
   const lines = pages.flatMap(([page, top, n]) => Array.from({ length: n }, (_, i) => { const text = `Alpha beta ${page}${i}`; return line(page, top - 12 * i, text, 20, 20 + 5 * text.length) }))
@@ -185,7 +187,7 @@ const trOf = (s: Spec) => s.tr ?? CJK(s.chars, s.at)
 export function build(paper: Paper): Built {
   const { specs, pages } = paper
   const all = Array.from({ length: pages }, (_, i) => i + 1)
-  const items = all.map(p => [...specs.flatMap(s => s.lines), ...(paper.extra ?? [])].filter(l => l.page === p).map(l => ({ str: l.text, transform: [10, 0, 0, 10, l.x0, l.b], width: l.x1 - l.x0, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false })))
+  const items = all.map(p => [...specs.flatMap(s => s.lines), ...specs.flatMap(s => (s.label ? [s.label] : [])), ...(paper.extra ?? [])].filter(l => l.page === p).map(l => ({ str: l.text, transform: [10, 0, 0, 10, l.x0, l.b], width: l.x1 - l.x0, height: 10, fontName: 'f1', dir: 'ltr', hasEOL: false })))
   const viewportOf = (scale: number) => ({ width: 300 * scale, height: H * scale, scale, transform: [scale, 0, 0, -scale, 0, H * scale], convertToViewportPoint: (x: number, y: number) => [x * scale, (H - y) * scale], convertToPdfPoint: (x: number, y: number) => [x / scale, H - y / scale] })
   const pageOf = (n: number) => ({ view: VIEW, getViewport: ({ scale }: { scale: number }) => viewportOf(scale), getTextContent: async () => ({ items: items[n - 1], styles: { f1: { fontFamily: 'serif', ascent: 0.7, descent: -0.2 } } }), render: ({ canvas }: { canvas?: object }) => { if (paper.ink && canvas) inked.set(canvas, [...specs.flatMap(s => s.lines), ...(paper.extra ?? [])].filter(l => l.page === n)); return { promise: Promise.resolve() } }, commonObjs: { get: () => ({ name: 'Times-Roman' }) }, cleanup() {}, ...(paper.annots === 'absent' ? {} : { getAnnotations: async () => { if (paper.annots === 'throw') throw new Error('the annotations cannot be read'); return annotationsOf(specs, n) } }) })
   const asked: number[] = []
@@ -196,7 +198,7 @@ export function build(paper: Paper): Built {
     lines: specs.map(s => [s.id, s.lines.flatMap(l => [l.page, l.x0, l.x1, l.b, l.b + 7, l.b - 2, 10, 0])]),
     frames: specs.map(s => [s.id, s.lines.flatMap((l, j) => [l.page, 0, j, 1, j ? 0 : -1, 0])]),
     erase: specs.map(s => [s.id, s.lines.flatMap((l, j) => [j, l.x0, l.b - 2, l.x1, l.b + 7])]),
-    ph: [], labels: [], headings: [], pageText: [], held: [], names: [],
+    ph: [], labels: specs.filter(s => s.label).map(s => { const l = s.label!; return [s.id, 1, l.page, l.x0, l.b, l.x1, l.b + 7, l.b - 2] }), headings: [], pageText: [], held: [], names: [],
   } as unknown as LayoutFile
   const index = indexLayout(parseLayout(new TextEncoder().encode(JSON.stringify(layout))))
   const geometry = {
