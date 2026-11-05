@@ -140,6 +140,17 @@ describe('a valid file', () => {
     expect(indexLayout(parseLayout(utf8(encodeLayout(made())))).unit(id(2))?.flush).toBeNull()
     expect(index.unit(7)).toMatchObject({ centred: true, flush: null })
   })
+  it('a unit\'s alignment is one of four flags or none (LAYOUT 36): centred true, false where a flag says not, unknown where none does', () => {
+    const f = made()
+    f.units[2]![3] = UNIT_FLAG.JUSTIFIED
+    f.units[3]![3] = UNIT_FLAG.FLUSH_LEFT
+    const index = indexLayout(parseLayout(utf8(encodeLayout(f))))
+    const id = (i: number) => f.units[i]![0] as number
+    expect([index.unit(id(2))?.centred, index.unit(id(2))?.flush]).toEqual([false, null])
+    expect([index.unit(id(3))?.centred, index.unit(id(3))?.flush]).toEqual([false, 'left'])
+    expect([index.unit(id(0))?.centred, index.unit(id(0))?.title]).toEqual([undefined, true])
+    expect(index.unit(7)?.centred).toBe(true)
+  })
   it('a valid file parses, round-trips and indexes', () => {
     const f = made()
     const text = encodeLayout(f)
@@ -153,7 +164,7 @@ describe('a valid file', () => {
     expect(index.onPage(4)).toEqual([])
     expect(index.onPage(0)).toEqual([])
     const u = index.unit(5)!
-    expect(u).toMatchObject({ id: 5, kind: 'para', depth: 9, title: false, front: false, centred: false, pieces: 6, heading: null })
+    expect(u).toMatchObject({ id: 5, kind: 'para', depth: 9, title: false, front: false, centred: undefined, pieces: 6, heading: null })
     expect(u.lines).toBeInstanceOf(Float64Array)
     expect(u.lines.length).toBe(40)
     expect([...u.frames]).toEqual(f.frames[3]![1])
@@ -179,7 +190,7 @@ describe('a valid file', () => {
     expect([...index.unit(3)!.labels]).toEqual([0, 2, 50, 720, 66, 728.5, 717])
     expect([...index.unit(8)!.labels]).toEqual([3, 2, 66, 100, 70, 106, 98])
     expect(index.unit(8)!.ph.get(1)).toEqual({ kind: 'macro', flags: PH_FLAG.LOST, segs: new Float64Array(0), text: null, fill: null })
-    expect(LAYOUT).toBe('35')
+    expect(LAYOUT).toBe('36')
     expect(index.unit(5)!.held).toEqual([1])
     expect(index.unit(2)!.held).toEqual([])
     expect(PAGE_TEXT_KINDS).toEqual(['cite', 'ref', 'eqref'])
@@ -446,7 +457,8 @@ const ROWS: [string, Edit, string][] = [
   ['depth 6', f => { f.units[1][2] = 6 }, 'units[1][2]'],
   ['depth -2', f => { f.units[1][2] = -2 }, 'units[1][2]'],
   ['depth 8', f => { f.units[1][2] = 8 }, 'units[1][2]'],
-  ['flags 32 (8 and 16 are FLUSH_LEFT and FLUSH_RIGHT, LAYOUT 26)', f => { f.units[1][3] = 32 }, 'units[1][3]'],
+  ['flags 64 (8 and 16 are FLUSH_LEFT and FLUSH_RIGHT, LAYOUT 26; 32 JUSTIFIED, LAYOUT 36)', f => { f.units[1][3] = 64 }, 'units[1][3]'],
+  ['flags JUSTIFIED and CENTRED both', f => { f.units[1][3] = UNIT_FLAG.CENTRED | UNIT_FLAG.JUSTIFIED }, 'units[1][3]'],
   ['flags CENTRED and FLUSH_LEFT both', f => { f.units[1][3] = UNIT_FLAG.CENTRED | UNIT_FLAG.FLUSH_LEFT }, 'units[1][3]'],
   ['flags FLUSH_LEFT and FLUSH_RIGHT both', f => { f.units[1][3] = UNIT_FLAG.TITLE | UNIT_FLAG.FLUSH_LEFT | UNIT_FLAG.FLUSH_RIGHT }, 'units[1][3]'],
   ['pieces 10,001', f => { f.units[1][4] = 10001 }, 'units[1][4]'],

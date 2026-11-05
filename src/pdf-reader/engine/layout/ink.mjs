@@ -280,6 +280,10 @@ const POINT = /^axt-([A-Za-z0-9.-]{1,64})$/
 /** a paragraph's point (marks.mjs POINTS_TEX: `q<n>` at LaTeX's para/begin): kept apart (`paras`), so that no reader of the marks
  *  meets it among their points; the ledger reads it (layout/ledger.mjs) */
 export const PARA_POINT = /^q\d+$/
+/** a paragraph's end (marks.mjs POINTS_TEX: `qe<n><code>` at LaTeX's para/end, the code TeX's alignment of the paragraph, c, l, r
+ *  or j as readAlign's): kept apart (`paraEnds`, each with `point`, the count of the page's points before it, its place among
+ *  them where both stand at one glyph), read by the ink units' alignment alone (layout/ink-units.mjs alignOf) */
+export const PARA_END = /^qe\d+[cjlr]$/
 
 /**
  * A page's ink: { glyphs, boxes, points, boxAt, capped, timedOut, degraded, mergedAt, rotated }. `glyphs`: each glyph
@@ -336,7 +340,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
   if (turn !== 0) return { glyphs: [], boxes: [], points: [], boxAt: [], regions: [], ...(indices ? { paths: [], shows: 0 } : {}), ...(turned ? { turned: [], shapes: new Map(), pictures: [], figures: new Map(), unseen: new Set(), cut: new Map() } : {}), capped: false, timedOut: false, degraded: false, mergedAt: null, rotated: true }
   const fnArray = ops?.fnArray ?? [], argsArray = ops?.argsArray ?? []
   const n = Math.min(fnArray.length, OPS_CAP)
-  const glyphs = [], boxes = [], points = [], boxAt = [], paths = [], paras = [], turnedOut = [], pictures = [], regionPoints = []
+  const glyphs = [], boxes = [], points = [], boxAt = [], paths = [], paras = [], paraEnds = [], turnedOut = [], pictures = [], regionPoints = []
   // (the guards: reading stops once `stop` is set: `over` past glyphsMax, `deep` ink placed in a state past STACK_MAX not
   // kept, `many` past stepsMax, the three caps; `late` past msMax, a wait a reader asks of its own (the reader's live fills,
   // layer-proto/run.mjs), none by default: no clock decides what the prepare reads. Where one is asked, the clock is read once
@@ -894,12 +898,13 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       case INTENT: {
         const name = typeof a[0] === 'string' ? a[0] : a[0] && typeof a[0] === 'object' ? a[0].name : null
         const m = typeof name === 'string' ? POINT.exec(name) : null
-        // (a picture's points apart, `pictures`, and a paragraph's, `paras`: no mark of any unit's, never among the points the
-        // marks and the ownership read)
+        // (a picture's points apart, `pictures`, a paragraph's, `paras`, and a paragraph's end, `paraEnds`: no mark of any unit's,
+        // never among the points the marks and the ownership read)
         if (m && (m[1] === PICTURE_START || m[1] === PICTURE_END)) { pictures.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 }); picture = m[1] === PICTURE_START ? picture + 1 : Math.max(0, picture - 1); if (m[1] === PICTURE_START) pictureIds.push(++pictureSeq); else pictureIds.pop() }
         // (a region's points apart too, `regions`: a line's kind, never a mark's; a column body's bracket (bs, be) is read by them as
         // well, where a code paragraph TeX broke over a page or a column ends and goes on)
         else if (m && REGION_POINT.test(m[1])) regionPoints.push({ name: m[1], glyph: glyphs.length })
+        else if (m && PARA_END.test(m[1])) paraEnds.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4, point: points.length })
         else if (m) {
           (PARA_POINT.test(m[1]) ? paras : points).push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 })
           if (BODY_BRACKET.test(m[1])) regionPoints.push({ name: m[1], glyph: glyphs.length })
@@ -918,7 +923,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
       if (indices) paths.push(MERGED)
     }
   }
-  return { glyphs, boxes, points, boxAt, paras, regions: regionsOfPoints(regionPoints, glyphs.length), ...(indices ? { paths, shows: showAt + 1 } : {}), ...(turned ? { turned: turnedOut, shapes, pictures, figures: figureBoxes, unseen, cut } : {}), capped: fnArray.length > OPS_CAP || over || deep || many, timedOut: late, degraded: tiles !== null, mergedAt, rotated: false }
+  return { glyphs, boxes, points, boxAt, paras, paraEnds, regions: regionsOfPoints(regionPoints, glyphs.length), ...(indices ? { paths, shows: showAt + 1 } : {}), ...(turned ? { turned: turnedOut, shapes, pictures, figures: figureBoxes, unseen, cut } : {}), capped: fnArray.length > OPS_CAP || over || deep || many, timedOut: late, degraded: tiles !== null, mergedAt, rotated: false }
 }
 
 /**

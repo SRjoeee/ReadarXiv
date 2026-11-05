@@ -150,7 +150,7 @@ describe('makeLayout', () => {
     expect(lines[0]).toEqual([1, 60, endOf(left[0] as Run), 700, 707.5, 697.5, 10, 0])
     expect(lines[4]).toEqual([1, 320, endOf(right[0] as Run), 700, 707.5, 697.5, 10, 0])
     expect(file.fonts).toEqual(['ABCDEF+CMR10'])
-    expect(file.units).toEqual([[0, 0, 9, 0, 1]])
+    expect(file.units).toEqual([[0, 0, 9, UNIT_FLAG.JUSTIFIED, 1]])
   })
 
   it("below is the gap to the next glyph or graphic in the frame's width, else to the foot", async () => {
@@ -393,7 +393,7 @@ describe('makeLayout', () => {
     })
     expect(file.labels).toEqual([[0, 0, 1, 72, 700, 78, 709, 697], [2, 1, 1, 72, 668, 87, 675.5, 665.5]])
     expect(file.headings).toEqual([[0, 'Introduction']])
-    expect(file.units[0]).toEqual([0, 1, 1, 0, 1])
+    expect(file.units[0]).toEqual([0, 1, 1, UNIT_FLAG.JUSTIFIED, 1])
     // the heading's line starts at its words; its erase leaves the number
     expect(rowsOf(file, 0, 'lines').slice(0, 3)).toEqual([1, 90, 162])
     for (const e of chunk(rowsOf(file, 0, 'erase'), 5)) expect(e[1]).toBeGreaterThanOrEqual(90)
@@ -954,7 +954,8 @@ describe('makeLayout, the review of 2026-10-06', () => {
       units: [unit('heading', [text('A Title of Front Matter')], { title: true, front: true }), unit('author', [text('Some Author and Another')], { front: true }), unit('para', [text('alpha beta '), ph('$_{xy}$'), text(' gamma delta')])],
     })
     expect(phOf(file, 2, 1)[3]).toBe(PH_FLAG.LOWERED)
-    expect(file.units.map(u => u[3])).toEqual([UNIT_FLAG.TITLE | UNIT_FLAG.FRONT, UNIT_FLAG.FRONT, 0])
+    // (not centred: JUSTIFIED, TeX's word or the maker's reading of a unit TeX does not tell, LAYOUT 36)
+    expect(file.units.map(u => u[3])).toEqual([UNIT_FLAG.TITLE | UNIT_FLAG.FRONT | UNIT_FLAG.JUSTIFIED, UNIT_FLAG.FRONT | UNIT_FLAG.JUSTIFIED, UNIT_FLAG.JUSTIFIED])
   })
 
   it("each page's operator list is waited for however long it takes, each page alone: no count of pages makes a later page dark", async () => {

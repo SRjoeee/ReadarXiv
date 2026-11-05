@@ -877,9 +877,10 @@ export const switchedOf = switches => Object.keys(switches ?? {}).filter(c => /^
  * draw a virtual font's glyph after a whatsit off where TeX set it; no corpus paper shows it (Task 2's TeX boxes)
  */
 /** the points (LAYOUT_TEX's last part): `\\axt@point{name}` in each engine, beside each destination; around each column's
- *  body and each float's box; and inside each pgf picture's own box (a TikZ or pgfplots picture: `zs` after pgf's
+ *  body and each float's box; inside each pgf picture's own box (a TikZ or pgfplots picture: `zs` after pgf's
  *  \\pgfsys@beginpicture, `ze` before its \\pgfsys@endpicture, so that nothing outside the box moves), the figure's text between
- *  them (layout/figure-text.mjs) */
+ *  them (layout/figure-text.mjs); at each paragraph's start (`q<n>`, inside its indentation box) and at its end with TeX's
+ *  alignment of it (`qe<n><code>`, layout/ink.mjs PARA_END) */
 export const POINTS_TEX = [
   '\\ifdefined\\XeTeXrevision\\def\\axt@point#1{\\special{pdf:code /axt-#1 ri}}\\else\\ifdefined\\pdfextension\\def\\axt@point#1{\\pdfextension literal direct{/axt-#1 ri}}\\else\\ifdefined\\pdfliteral\\def\\axt@point#1{\\ifnum\\pdfoutput>0 \\pdfliteral direct{/axt-#1 ri}\\fi}\\else\\def\\axt@point#1{}\\fi\\fi\\fi',
   '\\let\\axt@destonly\\axt@dest\\def\\axt@dest#1{\\axt@destonly{#1}\\axt@point{#1}}',
@@ -904,6 +905,17 @@ export const POINTS_TEX = [
   // of its own: 2609.26457 p8 on TeX Live 2023, 2026-10-25. A paragraph with no indent (\\noindent, an \\item's, the first
   // after a heading whose class takes it) carries none and reads as the one before; the ledger's blocks, orphan-text.md §4)
   '\\gdef\\axt@pq{0}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{para/begin}{\\ifvoid\\IndentBox\\else\\xdef\\axt@pq{\\the\\numexpr\\axt@pq+1\\relax}\\global\\setbox\\IndentBox\\hbox{\\axt@point{q\\axt@pq}\\box\\IndentBox}\\fi}\\fi\\fi',
+  // (each paragraph's end, `qe<n><code>` at LaTeX's para/end: in horizontal mode, before TeX breaks the paragraph, so with the
+  // \leftskip, \rightskip and \parfillskip it breaks it by (`code` readAlign's: c centred, l flush left, r flush right, j
+  // justified, of their stretch's order and amount, \axt@pecode). Placed before the paragraph's last glue where it ends in one,
+  // which is taken off and put back after it, so that TeX's line breaking takes that glue away as before and a later hook that
+  // takes it finds it (the one glue TeX takes: a glue before it, leaders among them, stays where it is); none on an empty list
+  // (the one after a display), which a point would make a line.
+  // Every paragraph TeX ends, a unit's or none's, the contents lists' too (a point names no mark, so the gate that keeps marks out
+  // of them keeps none of these): an ink unit's alignment where no unit's end mark tells it (ink-units.mjs alignOf))
+  '\\def\\axt@pos#1{\\ifnum\\gluestretchorder#1>\\z@ 1\\else\\ifdim\\gluestretch#1>\\z@ 1\\else0\\fi\\fi}',
+  '\\def\\axt@pecode{\\edef\\axt@pel{\\axt@pos\\leftskip}\\edef\\axt@per{\\axt@pos\\rightskip}\\edef\\axt@pef{\\axt@pos\\parfillskip}\\edef\\axt@pec{\\ifnum\\axt@pel\\axt@per=11 \\ifnum\\axt@pef=0 c\\else\\ifnum\\gluestretchorder\\parfillskip<\\gluestretchorder\\leftskip\\ifnum\\gluestretchorder\\parfillskip<\\gluestretchorder\\rightskip c\\else j\\fi\\else j\\fi\\fi\\else\\ifnum\\axt@pel=1 r\\else\\ifnum\\axt@per=1 l\\else j\\fi\\fi\\fi}}',
+  '\\gdef\\axt@pe{0}\\ifdefined\\AddToHook\\ifdefined\\IndentBox\\AddToHook{para/end}{\\ifnum\\lastnodetype=-1 \\else\\xdef\\axt@pe{\\the\\numexpr\\axt@pe+1\\relax}\\axt@pecode\\edef\\axt@pen{qe\\axt@pe\\axt@pec}\\ifnum\\lastnodetype=11 \\edef\\axt@peg{\\hskip\\the\\lastskip\\relax}\\unskip\\else\\let\\axt@peg\\@empty\\fi\\ifnum\\lastnodetype=-1 \\else\\axt@point{\\axt@pen}\\fi\\axt@peg\\fi}\\fi\\fi',
 ].join('')
 
 /**

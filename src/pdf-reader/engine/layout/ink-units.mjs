@@ -53,6 +53,7 @@
 // Pure arithmetic; an original module (no port statement).
 import { classifyFont } from '../layer-proto/fonts.mjs'
 import { utf8 } from '../translate/mt.mjs'
+import { UNIT_FLAG } from './file.mjs'
 import { classOf } from './marks.mjs'
 import { lineRulesOf, OWN_WORK, RULE_EM } from './own.mjs'
 import { spellOf } from './stream.mjs'
@@ -530,6 +531,67 @@ function modeOf(values) {
 /** a page's columns, by its column mark (MARK_DEF's c<n>-<k>): 1 or 2 */
 const columnsOf = P => { for (const pt of P.points ?? []) { const m = /^c([12])-\d+$/.exec(pt.name); if (m) return Number(m[1]) } return 1 }
 
+/** a column body's bracket or a float's (marks.mjs POINTS_TEX: bs, be, fs, fe and a number) */
+const BRACKET = /^([bf])([se])(\d+)$/
+/** a paragraph end's code (ink.mjs PARA_END: `qe<n><code>`) */
+const endCode = name => name.at(-1)
+
+/**
+ * An ink unit's alignment as TeX set its paragraph (rule 6), from the paragraphs' ends of our compile (ink.mjs `paraEnds`,
+ * marks.mjs POINTS_TEX `qe<n><code>`): c, l, r or j, or null where no paragraph tells it. The end right after the unit's last
+ * glyph is its paragraph's end: the unit's last line is its paragraph's last, and its lines are set as TeX set that paragraph
+ * (with every end inside the unit the same code; ends of two codes, a unit of paragraphs set two ways: j, not centred). An end
+ * further on, the first after its last glyph in its body or its float — past the column's or the page's end to the next body,
+ * a float in between passed over: a paragraph TeX broke across them —, is the end of the paragraph the unit's last line is
+ * inside, or of the paragraph after it where the unit is a line TeX set between paragraphs (a \centerline, a box): where it
+ * tells it not centred (l, r, j) the unit is not either way, and takes its code; where it tells c the unit may be neither,
+ * and nothing is told. No end before its float's end or a body's start (a running head, a foot), none told. `directOnly`: only
+ * the end right after its last glyph tells it (a running head: the body's paragraph after it is no paragraph of its)
+ */
+function alignOf(lines, pages, directOnly = false) {
+  let first = null, last = null
+  for (const l of lines) for (const g of l.words ? l.words.flatMap(w => w.gs) : (l.gs ?? [])) {
+    if (!first || l.page < first[0] || (l.page === first[0] && g < first[1])) first = [l.page, g]
+    if (!last || l.page > last[0] || (l.page === last[0] && g > last[1])) last = [l.page, g]
+  }
+  if (!last) return null
+  // (a page's ends and brackets in its stream's order: an end stands before the point it counts as its `point`, and a point at
+  // glyph n before glyph n)
+  const marksOn = p => {
+    const P = pages[p - 1]
+    if (!P) return []
+    const out = [], ends = P.paraEnds ?? [], points = P.points ?? []
+    let e = 0
+    for (let q = 0; q <= points.length; q++) {
+      for (; e < ends.length && (ends[e].point ?? points.length) <= q; e++) out.push({ glyph: ends[e].glyph, end: endCode(ends[e].name) })
+      const m = q < points.length ? BRACKET.exec(points[q].name) : null
+      if (m) out.push({ glyph: points[q].glyph, bracket: m[1] + m[2], n: m[3] })
+    }
+    return out
+  }
+  const inside = new Set()
+  for (let p = first[0]; p <= last[0]; p++) for (const x of marksOn(p)) if (x.end && (p > first[0] || x.glyph > first[1]) && (p < last[0] || x.glyph <= last[1])) inside.add(x.end)
+  let told = null, direct = false, float = null, between = false
+  walk: for (let p = last[0]; p <= pages.length; p++) {
+    for (const x of marksOn(p)) {
+      if (p === last[0] && x.glyph <= last[1]) continue
+      if (between) { if (x.bracket === 'bs') between = false; continue }
+      if (float !== null) { if (x.bracket === 'fe' && x.n === float) float = null; continue }
+      if (x.end) { told = x.end; direct = p === last[0] && x.glyph === last[1] + 1; break walk }
+      if (x.bracket === 'be') between = true
+      else if (x.bracket === 'fs') float = x.n
+      else break walk
+    }
+  }
+  if (directOnly && !direct) return null
+  const codes = new Set(inside)
+  if (told) codes.add(told)
+  if (!codes.size) return null
+  const notC = [...codes].filter(c => c !== 'c')
+  if (direct || !told) return notC.length === 0 ? (told ? 'c' : null) : notC.length === 1 && codes.size === 1 ? notC[0] : 'j'
+  return notC.length === 0 ? null : notC.length === 1 && codes.size === 1 ? notC[0] : 'j'
+}
+
 /** an ink unit's rows (rule 6) */
 function rowsOf(id, kind, cls, lines, phs, nPieces, pages) {
   const lineRows = [], erase = [], frames = []
@@ -581,11 +643,15 @@ function rowsOf(id, kind, cls, lines, phs, nPieces, pages) {
     const below = Math.min(H, Math.max(0, r2(bottomOf - (Number.isFinite(next) ? next : view[1] + FOOT))))
     frames.push(f.page, f.col, f.first, f.n, q === 0 ? -1 : share, below)
   })
-  // a head's line centred where it stands on its page's middle and short of its width (rule 6)
-  let flags = 0
-  if (cls === 'heads' && lines.length === 1) {
+  // its alignment as TeX set its paragraph (alignOf: CENTRED, FLUSH_LEFT, FLUSH_RIGHT or JUSTIFIED, layout/file.mjs UNIT_FLAG), a
+  // running head's by its paragraph's own end alone; where none tells it, a head's line centred where it stands on its page's
+  // middle and short of its width, and any other unit's alignment nothing (the reader's reading of its lines: layer2.mjs blocksOf2).
+  // A kept block (no pieces: nothing drawn over it) none
+  const told = nPieces > 0 ? alignOf(lines, pages, cls === 'heads') : null
+  let flags = told === 'c' ? UNIT_FLAG.CENTRED : told === 'l' ? UNIT_FLAG.FLUSH_LEFT : told === 'r' ? UNIT_FLAG.FLUSH_RIGHT : told === 'j' ? UNIT_FLAG.JUSTIFIED : 0
+  if (cls === 'heads' && lines.length === 1 && flags !== UNIT_FLAG.CENTRED) {
     const view = pages[lines[0].page - 1].view, mid = (view[0] + view[2]) / 2, a = lineRows[1], b = lineRows[2]
-    if (Math.abs((a + b) / 2 - mid) <= CENTRE && b - a < 0.8 * (view[2] - view[0])) flags = 4
+    if (Math.abs((a + b) / 2 - mid) <= CENTRE && b - a < 0.8 * (view[2] - view[0])) flags = UNIT_FLAG.CENTRED
   }
   const ph = phs.map(p => {
     const segs = []

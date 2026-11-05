@@ -19,15 +19,17 @@ function run(text: string, x: number, y: number, { font = 'CMR10', size = 10, fi
   }
   return out
 }
-type Part = { glyphs: G[]; owner?: string | null } | { point: string } | { para: number }
+type Part = { glyphs: G[]; owner?: string | null } | { point: string } | { para: number } | { end: string }
 function page(...parts: Part[]) {
   const glyphs: G[] = [], own: (string | null)[] = [], points: { name: string; glyph: number; box: number }[] = [], paras: { name: string; glyph: number; box: number }[] = []
+  const paraEnds: { name: string; glyph: number; box: number; point: number }[] = []
   for (const p of parts) {
     if ('point' in p) points.push({ name: p.point, glyph: glyphs.length, box: 0 })
     else if ('para' in p) paras.push({ name: `q${p.para}`, glyph: glyphs.length, box: 0 })
+    else if ('end' in p) paraEnds.push({ name: p.end, glyph: glyphs.length, box: 0, point: points.length })
     else for (const g of p.glyphs) { glyphs.push(g); own.push(p.owner ?? null) }
   }
-  return { page: { glyphs, boxes: [], points, paras, view: [0, 0, 612, 792] }, own }
+  return { page: { glyphs, boxes: [], points, paras, paraEnds, view: [0, 0, 612, 792] }, own }
 }
 const unitsOf = (pages: ReturnType<typeof page>[], units: { kind: string; pieces: unknown[] }[] = []) => {
   const ledger = ledgerOf(pages.map(p => p.page), { glyphs: pages.map(p => p.own) }, { units })
@@ -35,6 +37,41 @@ const unitsOf = (pages: ReturnType<typeof page>[], units: { kind: string; pieces
 }
 const textOf = (u: { pieces: { t: string; s?: string }[] }) => u.pieces.map(p => (p.t === 'text' ? p.s : p.t === 'ph' ? '⟦·⟧' : '')).join('')
 const SOURCE = [{ kind: 'heading', pieces: [{ t: 'text', s: 'Introduction' }] }, { kind: 'para', pieces: [{ t: 'text', s: 'Body words of the paper here' }] }]
+
+describe("an ink unit's alignment, as TeX set the paragraph it is in (LAYOUT 36)", () => {
+  // (the flags of each ink unit made of the pages: CENTRED 4, FLUSH_LEFT 8, FLUSH_RIGHT 16, JUSTIFIED 32, none 0)
+  const flagsOf = (...pages: ReturnType<typeof page>[]) => unitsOf(pages).ink.map(u => [textOf(u), u.rows.unit[3]])
+  const line = (s: string, y: number, x = 100) => ({ glyphs: run(s, x, y) })
+  it("takes the code of its paragraph's end right after its last glyph: its last line is that paragraph's last", () => {
+    const pg = page({ point: 'bs1' }, { para: 1 }, line('A centred title', 700, 230), { end: 'qe1c' }, { para: 2 }, line('Approved on the day', 676), { end: 'qe2l' }, { para: 3 }, line('A justified line', 652), { end: 'qe3j' }, { point: 'be1' })
+    expect(flagsOf(pg)).toEqual([['A centred title', 4], ['Approved on the day', 8], ['A justified line', 32]])
+  })
+  it('takes a later end that tells it not centred: a paragraph whose lines are several units, or the paragraph after a line set between', () => {
+    // (2610.11256v1's hypotheses: a paragraph's first line a unit of its own, its end after the next unit's line)
+    const split = page({ point: 'bs1' }, { para: 1 }, line('H1 (heterogeneity). Holding the market fixed,', 700, 120), { para: 2 }, line('the degree of collusion depends on it.', 688), { end: 'qe1j' }, { point: 'be1' })
+    expect(flagsOf(split)).toEqual([['H1 (heterogeneity). Holding the market fixed,', 32], ['the degree of collusion depends on it.', 32]])
+    // (an end that says centred tells nothing of a unit before it that is not its last line: the reader reads its lines)
+    const before = page({ point: 'bs1' }, { para: 1 }, line('A line set apart', 700, 230), { para: 2 }, line('Centred words', 676, 240), { end: 'qe1c' }, { point: 'be1' })
+    expect(flagsOf(before)).toEqual([['A line set apart', 0], ['Centred words', 4]])
+  })
+  it('passes the column\'s end to the next body for a paragraph TeX broke across them, a float between passed over', () => {
+    const one = page({ point: 'bs1' }, { para: 1 }, line('the last line of the page here', 100), { point: 'be1' })
+    const two = page({ point: 'fs2' }, line('Figure words', 760, 260), { end: 'qe1c' }, { point: 'fe2' }, { point: 'bs3' }, { glyphs: run('Body words of the paper', 100, 700), owner: 'u1' }, { end: 'qe2r' }, { point: 'be3' })
+    // (a float's words no ink unit: its end passed over with it)
+    expect(flagsOf(one, two)).toEqual([['the last line of the page here', 16]])
+  })
+  it("tells a running head by its own paragraph's end alone, else centres it on its page's middle as before", () => {
+    const head = (x: number) => page({ point: 'c1-2' }, { glyphs: run('SHORT TITLE', x, 760) }, { point: 'bs1' }, { glyphs: run('Body', 100, 600), owner: 'u1' }, { end: 'qe1j' }, { point: 'be1' })
+    expect(flagsOf(head(279))).toEqual([['SHORT TITLE', 4]])
+    expect(flagsOf(head(100))).toEqual([['SHORT TITLE', 0]])
+  })
+  it('a unit of two paragraphs set two ways is not centred; none where no end follows in its body', () => {
+    const two = page({ point: 'bs1' }, { para: 1 }, line('A centred line', 700, 150), { end: 'qe1c' }, line('then flush left words', 688), { end: 'qe2l' }, { point: 'be1' })
+    expect(flagsOf(two)).toEqual([['A centred line then flush left words', 32]])
+    const none = page({ point: 'bs1' }, { para: 1 }, line('No end in this body', 700), { point: 'be1' })
+    expect(flagsOf(none)).toEqual([['No end in this body', 0]])
+  })
+})
 
 describe('inkUnitsOf', () => {
   it("makes a head's line a unit of its own, its section number and its page number the original's ink", () => {
