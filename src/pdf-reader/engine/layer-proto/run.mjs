@@ -955,7 +955,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     const original = [], ownRows = []
     for (const c of K) if (!painted.has(c.id) && c.lists.some(l => l.includes(q))) original.push(c.id)
     // (a unit shown as the original lights on the right by copies of its left tokens, the left's geometry, which our page may set
-    // elsewhere — a line our compile moved across the page break, the drift the line check draws (carry.mjs DRIFT_LINES) —: each
+    // elsewhere — a line our compile moved across the page break, the drift the line check draws (carry.mjs, a drift run) —: each
     // unit the layout lays its rows on the page (none where they are all on other pages), and whether the page's lines moved,
     // a unit's pages on the left not its rows' pages here; view/shapes.mjs layerShapes copies by them)
     // (a unit shown as the original lights by its own boxes on our page, the layout file's — its lines, its label, its pieces, its
@@ -1541,7 +1541,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   const textArea = pg => { const rs = (rectsByPage.get(pg) ?? []).map(([, r]) => r); return [Math.min(...rs.map(r => r[1])), Math.max(...rs.map(r => r[3]))] }
   // (and the file's own lines of the units the geometry holds, on our page: a neighbour's line grows over none of them either.
   // Their left rectangles are arXiv's page's, which stand where ours do but where the two pages differ, a page drawn through
-  // drift (layout/carry.mjs DRIFT_LINES): 2610.37668v1 p21, set 9 pt lower on our page than on arXiv's, where the left
+  // drift (layout/carry.mjs, a drift run): 2610.37668v1 p21, set 9 pt lower on our page than on arXiv's, where the left
   // rectangle of "Initialization." stood over its own line, no barrier on it, and its text's first line grew over the head's
   // word, which its source holds, to the head's start: laid from the head's ink with no separation (0.05 em, the original's
   // 0.71). Only the growth reads them: the page's text area and its columns stay the left's)

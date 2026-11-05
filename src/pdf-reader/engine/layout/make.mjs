@@ -26,7 +26,7 @@
 // and what a page holds is bounded by counts (ink.mjs OPS_CAP, STEPS_MAX, GLYPHS_PAGE, BOXES_CAP: a page past one is dark, its
 // units the original's, on every machine alike); a page whose list fails is dark too (`stats.unread`). A parse that never ends
 // is the run's deadline's.
-import { anchorUnits, boundsFromMarks, frameOfTokens, markWords, orderOf, pageFrame, pageIndex, placesIn, tokenAtMark, tokens, uprightToken } from '../pipeline/anchors.mjs'
+import { anchorUnits, boundsFromMarks, frameOfTokens, markWords, orderOf, pageFrame, pageIndex, placesIn, tokenAtMark, tokens, uprightToken, withPoints } from '../pipeline/anchors.mjs'
 import { rangedAnchors } from '../pipeline/left-part.mjs'
 import { readArxivText } from './arxiv.mjs'
 import { displayEdges, plainSource, unitText } from '../translate/mt.mjs'
@@ -330,9 +330,10 @@ function rectsOf(doc, idx) {
  * A line of a unit from the base page's glyphs: its rectangle (rectsOf) gives its page and words; its baseline is the one most of
  * its body glyphs share, its glyphs every one on that baseline's window (scripts too) inside its words' extent and glued
  * to its ends, not left of `from` (the unit's start mark on its first line) nor right of `to` (its end mark on its last),
- * none another unit's. Null where it has no glyph
+ * none another unit's; on such a line, where its words' glyphs stand on the baseline TeX set that mark on (`at`, its height),
+ * that baseline (rowOf's). Null where it has no glyph
  */
-function lineOf(P, r, from, to, unit) {
+function lineOf(P, r, from, to, unit, at = null) {
   // by its middle: a glyph is the unit's from its start mark on, to its end mark (set after the last glyph)
   const ok = i => (P.owner[i] === -1 || P.owner[i] === unit) && (from === null || mid(P, i) >= from - 0.05) && (to === null || mid(P, i) <= to + 0.05)
   const L = r.x0 - 0.5, R = r.x1 + 0.5
@@ -369,7 +370,8 @@ function lineOf(P, r, from, to, unit) {
   }
   const left = near.filter(i => !taken.has(i) && mid(P, i) < L).sort((a, b) => P.x1[b] - P.x1[a] || a - b)
   for (const i of left) { if (x0 - P.x1[i] > glue && from === null) break; taken.add(i); x0 = Math.min(x0, P.x0[i]) }
-  return rowOf(P, [...taken], r.page, r.ks, base)
+  // (where the unit's own mark stands on the line, the baseline its words' glyphs give is TeX's where the mark is on it too: rowOf)
+  return rowOf(P, [...taken], r.page, r.ks, base, at !== null && Math.abs(base - at) <= OWN_TOL ? base : null)
 }
 
 /**
@@ -386,9 +388,13 @@ function mainsOf(P, gs) {
   return inBig >= MAINS_SHARE * all ? mains : gs
 }
 const MAINS_SHARE = 0.25
-/** a line from its glyphs: its extent, the baseline most of its body glyphs share (glyphs within BODY of their median
- *  size; `near` breaks a tie), the extremes of its glyphs, their median size and the font most of its characters have */
-function rowOf(P, glyphs, page, ks, near) {
+/** a line from its glyphs: its extent, its baseline, the extremes of its glyphs, their median size and the font most of its
+ *  characters have. Its baseline is the one most of its body glyphs share (glyphs within BODY of their median size; `near`
+ *  breaks a tie), or `at` (lineOf's: the baseline the unit's own mark stands on and its words' glyphs give) where that one is
+ *  another by more than OWN_TOL: TeX set the mark on the line's baseline, which glyphs set off it may outnumber (an inline
+ *  `cases` after a line's last word, its two rows of \\text either side of the axis, outvoted the line's words by 17 glyphs to
+ *  7: 2610.21026v1's u160's last line stood 6.4 pt above the baseline its end mark and its words are on, its formula LOST) */
+function rowOf(P, glyphs, page, ks, near, at = null) {
   const gl = [...glyphs].sort((a, b) => P.x0[a] - P.x0[b] || P.y[a] - P.y[b] || a - b)
   let x0 = Infinity, x1 = -Infinity, top = -Infinity, bottom = Infinity
   for (const i of gl) { x0 = Math.min(x0, P.x0[i]); x1 = Math.max(x1, P.x1[i]); top = Math.max(top, P.top[i]); bottom = Math.min(bottom, P.bottom[i]) }
@@ -397,7 +403,8 @@ function rowOf(P, glyphs, page, ks, near) {
   for (const i of body) fonts.set(P.font[i], (fonts.get(P.font[i]) ?? 0) + Math.max(1, P.u[i].length))
   let font = -1, most = -1
   for (const [f, c] of fonts) if (c > most || (c === most && f < font)) { font = f; most = c }
-  return { page, x0, x1, base: baselineOf(P, body, near), top, bottom, size, font, gl, ks }
+  const vote = baselineOf(P, body, near)
+  return { page, x0, x1, base: at !== null && Math.abs(vote - at) > OWN_TOL ? at : vote, top, bottom, size, font, gl, ks }
 }
 
 /** a rectangle that the file holds: to a hundredth, within its view, at least a hundredth across and high */
@@ -763,6 +770,18 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
     }
     return best
   }
+  /** each unit's pieces' points where they stand on the base page (markOf), [opening, closing] a piece, by its id: the lines its
+   *  anchor owns whatever words its text's match finds there (anchors.mjs withPoints); `only` the unit's index, else every
+   *  unit's */
+  const pointsOfUnits = (only = null) => {
+    const out = new Map()
+    for (let i = only ?? 0; i < (only === null ? units.length : only + 1); i++) {
+      const pairs = []
+      for (const [, a, b] of designedOf(i)) { const pa = markOf(a), pb = markOf(b); if (pa || pb) pairs.push([pa, pb]) }
+      if (pairs.length) out.set(String(i), pairs)
+    }
+    return out
+  }
   /** the word an end mark that stands at no word on its line reaches back to (boundsFromMarks `reachBack`; its carried word null
    *  in the marks' own compile: a unit that ends with a `\\}` set alone on its line, or with a display, its end mark on the empty
    *  line TeX resumes after it): the last upright word before it in its column on its page, above its line, in the document's
@@ -798,7 +817,7 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
       const c = raw.get(k)
       if (c) carriedUnit.set(k, { page: c.page, x: c.x, y: c.y, t: sameWord(doc, byPage, c, k.endsWith('s'), m.t) })
     }
-    const bounds = boundsFromMarks(doc, carriedUnit, byPage, reachIn(byPage), reachBackIn(byPage), true)
+    const bounds = withPoints(doc, boundsFromMarks(doc, carriedUnit, byPage, reachIn(byPage), reachBackIn(byPage), true), pointsOfUnits(), byPage)
     // a unit whose own marks were set but stand on no page with ink, or not on the same words there, stays the original's:
     // the text alone would place it, maybe wrongly
     unplaced = new Set()
@@ -852,7 +871,7 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
     for (let j = 0; j < rects.length; j++) {
       const r = rects[j]
       const from = j === 0 && onRect(S, r) ? S.x : null, to = j === rects.length - 1 && onRect(E, r) ? E.x : null
-      const row = lineOf(ink[r.page], r, from, to, i)
+      const row = lineOf(ink[r.page], r, from, to, i, from !== null ? S.y : to !== null ? E.y : null)
       if (!row || !(r2(row.size) > 0 && row.size <= SIZE_MAX)) {
         // (where the match paired the unit's words, a line of the anchor's that holds none of them, neither of its own marks, and
         // no glyph of a line of text (none another unit took) is a formula's row the text layer read as a line of its own between
@@ -1122,7 +1141,10 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
    * edges within OWN_TOL, none taken (another piece's own), the nearest of such; taken, { glyphs, boxes } ([page, index], in the
    * items' order), or { why } with none taken: a page with no ink (dark), or ink of the draft's that the final pass sets
    * otherwise (a draft figure frame's file name inside the piece). No search, no carrying: the base page is the final pass of
-   * the compile the marks were read from, every mark where it was (base.mjs finalCheck)
+   * the compile the marks were read from, every mark where it was (base.mjs finalCheck). A draft image frame's outline among its
+   * rules (each inside the frame's box, framesOn: graphicx's draft, which the marks were read from) is that frame's image on the
+   * base page: the page's box of the frame's edges within OWN_TOL, once a frame (an inline \includegraphics, 2610.21924v1's
+   * `\COMPASSicon` in seven captions, LOST with no glyph or rule of the base page's own)
    */
   function ownedOn(items, rules) {
     const glyphs = [], boxes = []
@@ -1145,9 +1167,8 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
       P.taken[best] = 1
       glyphs.push([it.page, best])
     }
-    for (const r of rules) {
-      const P = ink[r.page]
-      if (!P) return fail('its page has no ink')
+    /** the page's box of `r`'s edges within OWN_TOL, none taken, the nearest; -1 for none */
+    const boxAt = (P, r) => {
       let best = -1, d = Infinity
       for (let b = 0; b < P.boxes.length; b++) {
         const B = P.boxes[b]
@@ -1155,11 +1176,43 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
         const dd = Math.max(Math.abs(B[0] - r.x0), Math.abs(B[1] - r.y0), Math.abs(B[2] - r.x1), Math.abs(B[3] - r.y1))
         if (dd <= OWN_TOL && dd < d) { d = dd; best = b }
       }
+      return best
+    }
+    const frames = []
+    for (const r of rules) {
+      const P = ink[r.page]
+      if (!P) return fail('its page has no ink')
+      // (a rule of the outline stands inside the frame's box but for half its own thickness at its ends)
+      const t = Math.min(r.x1 - r.x0, r.y1 - r.y0) / 2 + OWN_TOL
+      const F = framesOn(r.page).find(f => r.x0 >= f.x0 - t && r.x1 <= f.x1 + t && r.y0 >= f.y0 - t && r.y1 <= f.y1 + t)
+      if (F) { if (!frames.includes(F)) frames.push(F); continue }
+      const best = boxAt(P, r)
       if (best < 0) return fail('a rule of its own not on the base page')
       P.boxTaken[best] = 1
       boxes.push([r.page, best])
     }
+    for (const F of frames) {
+      const P = ink[F.page], best = boxAt(P, F)
+      if (best < 0) return fail('a picture of its own not on the base page')
+      P.boxTaken[best] = 1
+      boxes.push([F.page, best])
+    }
     return { glyphs, boxes }
+  }
+  /** the draft image frames of page p ({ page, x0, y0, x1, y1 }: g<n>a and g<n>b on its baseline, g<n>t at its top right,
+   *  pipeline/live.mjs DRAFT), as the marks stand once the page is read; made once a page */
+  const framesOf = new Map()
+  const framesOn = p => {
+    let out = framesOf.get(p)
+    if (out) return out
+    out = []
+    for (const [n, a] of at) {
+      const g = a.page === p ? /^g(\d+)a$/.exec(n) : null
+      const b = g && at.get(`g${g[1]}b`), t = g && at.get(`g${g[1]}t`)
+      if (b && t && b.page === p && t.page === p) out.push({ page: p, x0: Math.min(a.x, b.x), y0: Math.min(a.y, b.y), x1: Math.max(a.x, b.x, t.x), y1: Math.max(a.y, b.y, t.y) })
+    }
+    framesOf.set(p, out)
+    return out
   }
   /** unit i's placeholders, each found on the base page (its own ink there), LOST, EMPTY or JOINED, its rows' ink taken in */
   function phOf(one) {
@@ -1383,9 +1436,27 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
         const broken = (!!pa && !!pb && (pa.page !== pb.page || Math.abs(pa.y - pb.y) > 0.5)) || (!!pa && tail)
         // (the line its opening point stands on, where TeX broke the line right after it: its first part's line before)
         const openRow = broken && openAt ? (rows.find((_, j) => on(openAt, j)) ?? null) : null
+        // (else, TeX broke the piece over lines: its first part is set after its opening point, on that point's line, and its
+        // last before its closing point, on that one's. A part the part rule puts on no line goes to the line its own point
+        // stands on, where its ink is centred in that line's band (lineOf's) on the point's side: a part whose largest glyphs
+        // are big delimiters, their origins over a line's height above its baseline. 2610.21376v1's u117, `$\binom{m+n}{m}$`
+        // set whole at page 14's head after its opening point at page 13's last line's end, was LOST)
+        const atPoint = (part, q) => {
+          const P = ink[part.page]
+          for (const M of [q === 0 ? openAt : null, q === parts.length - 1 ? closeAt : null]) {
+            if (!M || M.page !== part.page) continue
+            const j = rows.findIndex((_, n) => on(M, n))
+            if (j < 0) continue
+            const r = rows[j], after = M === openAt
+            const inBand = g => { const c = (P.top[g] + P.bottom[g]) / 2; return c >= r.base - BAND_DOWN * r.size && c <= r.base + BAND_UP * r.size }
+            if (part.gs.every(g => inBand(g) && (after ? mid(P, g) >= M.x - 0.05 : mid(P, g) <= M.x + 0.05))) return j
+          }
+          return -1
+        }
         for (const [q, part] of parts.entries()) {
           let j = oneLine ? line : rowOfPart(part, q === 0 ? openAt : q === parts.length - 1 ? closeAt : null)
           if (j < 0 && onLine(part)) j = both
+          if (j < 0 && broken) j = atPoint(part, q)
           const prev = q > 0 ? partRow[q - 1] : openRow
           const r = j >= 0 ? rows[j] : broken && prev ? wrapOf(part, prev, wrapped) : null
           if (!r) { off = true; break }
@@ -2419,7 +2490,7 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
       const ks = [`${i}s`, `${i}e`].filter(k => withWords.has(k)), raw = new Map()
       for (const k of ks) raw.set(k, anchorMarkOf(nameOf.get(k)))
       for (const k of ks) { const c = raw.get(k); if (c) carriedUnit.set(k, { page: c.page, x: c.x, y: c.y, t: sameWord(doc, byPage, c, k.endsWith('s'), withWords.get(k).t) }) }
-      const b = boundsFromMarks(doc, new Map(ks.filter(k => carriedUnit.has(k)).map(k => [k, carriedUnit.get(k)])), byPage, reach, reachBack, true).get(String(i))
+      const b = withPoints(doc, boundsFromMarks(doc, new Map(ks.filter(k => carriedUnit.has(k)).map(k => [k, carriedUnit.get(k)])), byPage, reach, reachBack, true), pointsOfUnits(i), byPage).get(String(i))
       const own = [`${i}s`, `${i}e`].filter(k => unitMarks.has(k))
       if (own.length && (own.some(k => !carriedUnit.has(k)) || (own.length === 2 && !b))) unplaced.add(i)
       R.mark(i, b ?? null)

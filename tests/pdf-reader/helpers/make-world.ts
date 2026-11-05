@@ -26,15 +26,17 @@ export type Run = { s: string; x: number; y: number; size?: number; font?: strin
 export type Annot = { rect: number[]; dest: string | unknown[]; quadPoints?: number[]; url?: string }
 /** how long a page's `late` operator list takes to come: an hour of the (fake) clock, which no reader of the prepare gives up on */
 export const LATE_MS = 3_600_000
-export type Page = { runs: Run[]; boxes?: number[][]; view?: number[]; ops?: 'late' | 'fails' | 'capped' | 'deep' | 'dense' | 'slow'; markedOps?: 'deep'; points?: Record<string, [run: number, char: number]>; order?: number[]; annots?: Annot[] }
+export type Page = { runs: Run[]; boxes?: number[][]; images?: number[][]; view?: number[]; ops?: 'late' | 'fails' | 'capped' | 'deep' | 'dense' | 'slow'; markedOps?: 'deep'; points?: Record<string, [run: number, char: number]>; order?: number[]; annots?: Annot[] }
 export type Mark = [name: string, page: number, x: number, y: number]
 export type World = { pages: Page[]; marked?: Page[]; base?: Page[]; marks: Mark[]; units: SourceUnit[]; switches?: Switches; inkless?: string[]; texts?: [string, string][]; names?: Record<string, 0 | 1>; complete?: Record<string, number>; apart?: string[] }
 
 export const FONTS: Record<string, unknown> = {
   F1: { name: 'ABCDEF+CMR10', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.75, descent: -0.25, isType3Font: false, vertical: false },
   F2: { name: `ABCDEF+Ä${'x'.repeat(300)}`, fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.75, descent: -0.25, isType3Font: false, vertical: false },
+  // (a delimiters' face as cmex10 is: its glyphs hang from their origin, which stands over the line)
+  F3: { name: 'ABCDEF+CMEX10', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.04, descent: -1.16, isType3Font: false, vertical: false },
 }
-export const STYLES = { F1: { ascent: 0.75, descent: -0.25, fontFamily: 'serif' }, F2: { ascent: 0.75, descent: -0.25, fontFamily: 'serif' } }
+export const STYLES = { F1: { ascent: 0.75, descent: -0.25, fontFamily: 'serif' }, F2: { ascent: 0.75, descent: -0.25, fontFamily: 'serif' }, F3: { ascent: 0.04, descent: -1.16, fontFamily: 'serif' } }
 export const size = (r: Run) => r.size ?? 10
 export const adv = (r: Run) => (r.w ?? CH) * size(r)
 /** where a run's character j begins, and where the run ends */
@@ -65,9 +67,13 @@ export function opsOf(p: Page, points: [string, number, number][] = []) {
   const ops: [number, unknown[]][] = []
   const at = (ri: number, c: number) => { for (const [name, r, ch] of points) if (r === ri && ch === c) ops.push([OPS.setRenderingIntent, [{ name: `axt-${name}` }]]) }
   const box = (b: number[]) => ops.push([OPS.constructPath, [OPS.fill, [Float32Array.from([0])], Float32Array.from(b.slice(0, 4))]])
+  // (an image, `images`: x0, y0, x1, y1 and the run it is painted before, an image XObject painted on its box, as pdfTeX includes
+  // a PNG: its matrix the box's)
+  const image = (b: number[]) => ops.push([OPS.save, []], [OPS.transform, [(b[2] ?? 0) - (b[0] ?? 0), 0, 0, (b[3] ?? 0) - (b[1] ?? 0), b[0], b[1]]], [OPS.paintImageXObject, ['img1', 1, 1]], [OPS.restore, []])
   for (const ri of p.order ?? p.runs.map((_, i) => i)) {
     const r = p.runs[ri] as Run
     for (const b of p.boxes ?? []) if (b[4] === ri) box(b)
+    for (const b of p.images ?? []) if (b[4] === ri) image(b)
     if (r.fill) ops.push(r.fill === 'pattern' ? [OPS.setFillColorN, ['P0']] : [OPS.setFillRGBColor, [r.fill]])
     ops.push([OPS.beginText, []], [OPS.setFont, [r.font ?? 'F1', size(r)]], [OPS.setTextMatrix, [r.turn ? [0, 1, -1, 0, r.x, r.y] : [1, 0, 0, 1, r.x, r.y]]])
     if (r.tr !== undefined) ops.push([OPS.setTextRenderingMode, [r.tr]])
@@ -88,6 +94,7 @@ export function opsOf(p: Page, points: [string, number, number][] = []) {
   }
   at(p.runs.length, 0)
   for (const b of p.boxes ?? []) if (b[4] === undefined) box(b)
+  for (const b of p.images ?? []) if (b[4] === undefined) image(b)
   // (past OPS_CAP: operations the walk reads and does nothing with, after the page's own, as one typed array)
   if (p.ops === 'capped') { const fn = new Uint16Array(OPS_CAP + 1).fill(OPS.setFillRGBColor); fn.set(ops.map(o => o[0])); return { fnArray: fn, argsArray: ops.map(o => o[1]) } }
   // (after the page's own: saves past STACK_MAX, one of them restored and a path painted then, in a state the walk lost (so

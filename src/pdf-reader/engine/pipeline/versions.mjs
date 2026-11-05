@@ -12,4 +12,4 @@ export const PIPELINE_VERSION = '74'
 export const PDFJS = '6.3.289'
 /** REMOVAL, how our page's ink a drawn unit replaces is taken away (the head's `versions.removal`, in the key: VTAG): since 8 our
  *  page's own streams wrapped by optional content, each unit's ink in groups of its own (layout/wrap.mjs, own.mjs) */
-export const REMOVAL = '25'
+export const REMOVAL = '26'

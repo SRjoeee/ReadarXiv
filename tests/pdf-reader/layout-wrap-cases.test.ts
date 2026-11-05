@@ -74,6 +74,32 @@ describe('S5: a form XObject', () => {
   })
 })
 
+describe('an image TeX painted inside a placeholder (2610.21924v1\'s `\\COMPASSicon`)', () => {
+  // (an image XObject /Im1, one gray sample, on page 2's resources)
+  const withImage = (doc: PL.PDFDocument) => {
+    const ctx = doc.context, res = doc.getPages()[1]!.node.Resources()!
+    const im = ctx.register(ctx.stream(new Uint8Array([0]), { Type: 'XObject', Subtype: 'Image', Width: 1, Height: 1, ColorSpace: 'DeviceGray', BitsPerComponent: 8 }))
+    res.set(PL.PDFName.of('XObject'), ctx.obj({ Im1: im }))
+  }
+  const content = (icon: string) => `/axt-0s ri ${run(72, 700, '(See)')}/axt-p0.1a ri ${icon}/axt-p0.1b ri ${run(115, 700, '(here)')}/axt-0e ri\n`
+  const units = [{ src: 'See here', pieces: [{ t: 'text', s: 'See ' }, { t: 'ph', src: '\\icon' }, { t: 'text', s: ' here' }] }]
+  it("is the placeholder's ink, wrapped in its group: OFF, the image alone is gone; all ON, our page", async () => {
+    const { bytes } = await markedSample({ pages: [2], edit: only(content('q 10 0 0 10 100 698 cm /Im1 Do Q ')), tweak: withImage })
+    const r = ok(await wrapped(bytes, { units }))
+    expect(r.unhidden).toEqual([])
+    expect(pixelsApart(await renderPage(bytes, 2), await renderPage(r.bytes, 2))).toBe(0)
+    const { bytes: none } = await markedSample({ pages: [2], edit: only(content('')), tweak: withImage })
+    expect(pixelsApart(await renderPage(r.bytes, 2, { off: is('axt:u0.p') }), await renderPage(none, 2))).toBe(0)
+  })
+  it('an image outside any placeholder stays the page\'s, in no group', async () => {
+    const { bytes } = await markedSample({ pages: [2], edit: only(`q 10 0 0 10 300 600 cm /Im1 Do Q ${content('')}`), tweak: withImage })
+    const r = ok(await wrapped(bytes, { units }))
+    const all = await renderPage(r.bytes, 2, { off: n => /^axt:/.test(n) })
+    const { bytes: textless } = await markedSample({ pages: [2], edit: only('q 10 0 0 10 300 600 cm /Im1 Do Q '), tweak: withImage })
+    expect(pixelsApart(all, await renderPage(textless, 2))).toBe(0)
+  })
+})
+
 describe('S8: Type 3 text, and the splits refused', () => {
   it('hides a Type 3 unit exactly (whole shows) and splits one where a placeholder ends mid-show', async () => {
     const text = (hide: boolean) => unit(0, 72, 700, '(abcde)', { font: 'T3', hide }) + unit(1, 72, 600, '(ab)', { font: 'T3' })
