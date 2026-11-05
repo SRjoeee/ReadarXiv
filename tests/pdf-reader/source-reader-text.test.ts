@@ -172,6 +172,27 @@ describe('S4: one branch of a conditional is the translator\'s, never both', () 
     expect(units(p)[0]!.pieces.filter(x => x.t !== 'text').map(x => [x.t, x.src, x.id])).toEqual([['ph', '\\ifdefined\\X\\textbf{a}\\else\\textit{b}\\fi{}', undefined], ['open', '\\textbf{', 3], ['close', '}', 3]])
   })
 
+  it('…but not one holding a link\'s label, which is a word TeX sets (\\href{url}{label}, as the walk reads its text argument): its pieces as they were (review of #594)', () => {
+    const whole = '\\ifdefined\\X\\href{https://a.example/x}{the public repository}\\else\\url{b}\\fi'
+    const p = project(doc(`We release it at ${whole} today.`))
+    expect(units(p)[0]!.pieces.filter(x => x.t === 'ph').map(x => x.src)).not.toContain(whole)
+    expect(units(p)[0]!.pieces.filter(x => x.t === 'ph').map(x => x.src)).toContain('\\else')
+  })
+
+  it('…nor one holding a display the paper writes by a shorthand (\\be … \\ee for equation): its pieces, the display\'s metadata with them (review of #594)', () => {
+    const pre = '\\newcommand{\\be}{\\begin{equation}}\n\\newcommand{\\ee}{\\end{equation}}'
+    const phs = units(project(doc('Words here \\ifdefined\\X\\be x=1\\ee\\else\\be x=2\\ee\\fi more words.', pre))).flatMap(u => u.pieces.filter(x => x.t === 'ph').map(x => x.src))
+    expect(phs).not.toContain('\\ifdefined\\X\\be x=1\\ee\\else\\be x=2\\ee\\fi')
+    expect(phs.some(x => x?.startsWith('\\be'))).toBe(true)
+  })
+
+  it('…nor one holding a file (\\input, \\include, \\subfile, \\import): the inclusion\'s handler visits the file, its prose its units (review of #594)', () => {
+    for (const call of ['\\input{content}', '\\include{content}', '\\subfile{content}', '\\import{./}{content}']) {
+      const p = projectOf({ 'main.tex': enc(doc(`\\ifdefined\\X${call}\\fi`)), 'content.tex': enc('The file holds a paragraph of prose words.\n') })
+      expect(texts(p), call).toEqual(['The file holds a paragraph of prose words.'])
+    }
+  })
+
   it('…but one branch of words, or one that is not inline (a block, an environment\'s end, a display), has its pieces as it had', () => {
     const phs = (body: string) => units(project(doc(body))).flatMap(u => u.pieces.filter(x => x.t === 'ph').map(x => x.src))
     expect(phs('We release it at \\ifdefined\\X the public link\\else\\url{b}\\fi today.')).toEqual(['\\ifdefined', '\\X', '\\else', '\\url{b}', '\\fi'])

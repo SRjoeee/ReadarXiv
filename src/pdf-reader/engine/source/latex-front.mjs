@@ -1306,6 +1306,24 @@ const commandBefore = (s, at) => /\\([A-Za-z]+)$/.exec(s.slice(Math.max(0, at - 
 const wordsIn = (s, from, to) => from < to && /\p{L}{2}/u.test(s.slice(from, to).replace(/(^|[^\\])%.*$/gm, '$1').replace(/\$[^$]*\$/g, ' ')
   .replace(/\\([A-Za-z@]+)\*?((?:\s*\[[^\]]*\])*(?:\s*\{[^{}]*\})*)/g, (m, name, args) => (INLINE_TEXT.has(name) || CONTENT_BOX.has(name) || name === 'footnote' ? ` ${args} ` : ' ')))
 /**
+ * whether s[from, to) holds words the walk would set, as the walk reads them: wordsIn's, or those of a text argument of a
+ * command the role table knows (commandArgs: \\href's label, not its address; \\url's none), as deep as they go. For a
+ * conditional, whose branches the walk reads as it reads any text
+ */
+function holdsWords(s, from, to) {
+  if (wordsIn(s, from, to)) return true
+  for (const m of s.slice(from, to).matchAll(/\\([A-Za-z@]+)/g)) {
+    const at = from + m.index
+    if (inComment(s, at)) continue
+    const call = commandArgs(s, at + m[0].length, m[1], to)
+    if (call.known && call.args.some(a => (a.role === 't' || a.role === 'c') && (s[a.start] === '{' || a.shape === '[') && a.end <= to && holdsWords(s, a.start + 1, a.end - 1))) return true
+  }
+  return false
+}
+/** whether a span holds what the walk reads otherwise than as inline text: a display the paper writes by a shorthand
+ *  (ctx.envMacros: \\be … \\ee), or a file it includes (\\input and the rest, which the walk visits) */
+const holdsEnvOrFile = (text, ctx) => [...text.matchAll(/\\([A-Za-z@]+)/g)].some(m => ctx.envMacros.has(m[1]) || m[1] === 'input' || m[1] === 'include' || m[1] === 'subfile' || IMPORTS.has(m[1]))
+/**
  * A conditional's value where its own text decides it: \\iftrue, \\if of two characters (an author's \\if 0 … \\fi around a
  * passage) and \\ifx of two characters; null for every other, which the paper's definitions or TeX's state decide (\\ifdefined,
  * \\ifcsname, a \\newif, \\ifx of commands, \\ifnum). Not asked of TeX, and not worked out from the paper's definitions:
@@ -1736,12 +1754,13 @@ function walk(s, from, to, b, ctx) {
       // (\\ifmmode in the walk's text, never math, is false: TeX in text mode takes its \\else)
       const value = c && !consumes(s, end, c.end) && !/\\unless\s*$/.test(s.slice(Math.max(0, i - 12), i)) ? (name === 'ifmmode' && ctx.letters !== false ? false : conditionalValue(name, s, end)) : null
       if (c) c.thenFrom = Math.min(testEnd(name, s, end), c.thenTo)
-      const words = c ? [wordsIn(s, c.thenFrom, c.thenTo), c.elseFrom >= 0 && wordsIn(s, c.elseFrom, c.elseTo)] : null
+      const words = c ? [holdsWords(s, c.thenFrom, c.thenTo), c.elseFrom >= 0 && holdsWords(s, c.elseFrom, c.elseTo)] : null
       // (undecided, of no words and inline: one placeholder, an inline one. Not one that holds a block, an environment's
       // either end or a display, which the walk reads as they stand; nor one whose span holds what TeX reads otherwise than as
-      // tokens, whose \\fi the scan may take for another's; nor in pairsOf's shadow, which counts the pairs as PIPELINE 30's
+      // tokens, whose \\fi the scan may take for another's; nor one holding a display by a shorthand of the paper's or a file
+      // it includes (holdsEnvOrFile), which the walk reads as they stand; nor in pairsOf's shadow, which counts the pairs as PIPELINE 30's
       // reading did)
-      const whole = !!c && ctx.letters !== false && value === null && !words[0] && !words[1] && !consumes(s, end, c.end) && !holdsBlock(s.slice(c.thenFrom, c.end)) && !NOT_INLINE.test(s.slice(c.thenFrom, c.end))
+      const whole = !!c && ctx.letters !== false && value === null && !words[0] && !words[1] && !consumes(s, end, c.end) && !holdsBlock(s.slice(c.thenFrom, c.end)) && !NOT_INLINE.test(s.slice(c.thenFrom, c.end)) && !holdsEnvOrFile(s.slice(c.thenFrom, c.end), ctx)
       if (c && (value !== null || whole || (words[0] && words[1]))) {
         const [from, upto] = value === true ? [c.thenFrom, c.thenTo] : value === false ? (c.elseFrom >= 0 ? [c.elseFrom, c.elseTo] : [c.thenTo, c.thenTo]) : [-1, -1]
         // (\\ifmmode's first branch is math, never text, whatever it holds: only its \\else is walked)
