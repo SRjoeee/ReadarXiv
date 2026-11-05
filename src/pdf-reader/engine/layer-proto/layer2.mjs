@@ -77,6 +77,7 @@ import { GENERATED_COMMANDS, headInTarget, refInTarget } from '../rules/tex-name
 import { NAME_KIND } from './units.mjs'
 import { NAME_ENGLISH } from '../layout/names.mjs'
 import { fillsByChar, UNKNOWN } from '../layout/fills.mjs'
+import { COMBINING, composed } from '../layout/accents.mjs'
 import { inRuns, unmapped } from './draw.mjs'
 import { CJK_FOOT } from './figure-fit.mjs'
 
@@ -214,11 +215,6 @@ export function pageChars2(textContent, fontOf, mapOf = null, fills = null, nus 
   return joinAccents(out, textContent.items)
 }
 
-/** each spacing accent's combining mark: grave, acute, circumflex, tilde, diaeresis, macron, breve, dot, ring, caron,
- *  cedilla, ogonek, double acute (Hungarian), as the fonts' ToUnicode maps write them (ASCII's three among them) */
-const COMBINING = new Map([['`', '̀'], ['ˋ', '̀'], ['´', '́'], ['ˊ', '́'], ['^', '̂'], ['ˆ', '̂'], ['~', '̃'], ['˜', '̃'], ['¯', '̄'], ['ˉ', '̄'], ['˘', '̆'], ['˙', '̇'], ['¨', '̈'], ['˚', '̊'], ['˝', '̋'], ['ˇ', '̌'], ['¸', '̧'], ['˛', '̨']])
-/** the marks set under a letter, which keep a dotless i dotless */
-const BELOW = new Set(['̧', '̨'])
 /**
  * A spacing accent TeX set as a glyph of its own joined to its letter (the M1 survey of 2608.16117: "Munster et al.,¨ 2013"
  * for Münster, seven citations; before, every such accent went to its line's end, charsOfUnit2). TeX's \accent sets the
@@ -238,10 +234,10 @@ function joinAccents(chars, items) {
   const runs = []
   chars.forEach((c, i) => { const r = runs.at(-1); if (r?.item === c.item) r.last = i; else runs.push({ item: c.item, first: i, last: i }) })
   const gone = new Set()
+  // (each spacing accent's mark and the letter it composes to, layout/accents.mjs: the prepare reads our page's glyphs by them)
   const join = (letter, mark) => {
-    const base = BELOW.has(mark) ? letter.ch : letter.ch === 'ı' ? 'i' : letter.ch === 'ȷ' ? 'j' : letter.ch
-    const ch = (base + mark).normalize('NFC')
-    if ([...ch].length !== 1 || ch === base + mark) return false
+    const ch = composed(letter.ch, mark)
+    if (ch === null) return false
     letter.ch = ch
     return true
   }

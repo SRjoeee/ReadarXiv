@@ -14,7 +14,10 @@
 //      dots and a number: no unit's, never erased), so that a contents entry's title is drawn up to its leaders, where the
 //      number stands apart from the line's text (APART: a folio, a section number's \quad, after leaders) or is a running
 //      head's folio (its head's words recur on another page with another number there); a number in the text's own words is
-//      the unit's ("… at ICLR 2021", the same on every page);
+//      the unit's ("… at ICLR 2021", the same on every page); a glyph's text its character, a spacing accent TeX set over its
+//      letter joined to it (layout/accents.mjs: OT1's \accent read "F´ısica" for Física, "PE´REZ" for PÉREZ, 2610.20716v1,
+//      2610.20285v1); a unit's label, the glyphs of no letter its first line begins with set smaller and raised (a footnote's
+//      mark, an affiliation's number: labelLength), no text of its own, its glyphs the unit's, kept by the reader where they stand;
 //   3. a unit: a head's line alone; the others' lines while they follow on one page and in one region, each within BLOCK_DY of
 //      its size below the one before (PARA_DY within one of TeX's paragraphs: a list set double, an indent from the paragraph's
 //      first line where the block begins on it) and meeting it across, and in
@@ -34,7 +37,8 @@
 //   7. what it owns: its text glyphs `u<id>`, its placeholders' `u<id>.p` (own.mjs's groups), claimed in the wrap
 //      (claimInk), every one a glyph no unit owned;
 //   8. a block of notes or orphans whose letters are mostly an author unit's words (NAMES_SHARE) is its names (`inknames`): of
-//      the names toggle, as the author block is, not always translated (REVTeX's names its marks do not own);
+//      the names toggle, as the author block is, not always translated (REVTeX's names its marks do not own); so is one that
+//      echoes a unit of the author block (rule 5: an affiliation REVTeX prints from its own lists, its source unit laid nowhere);
 //   9. its style: the weight, slant and fill most of its text glyphs hold is the unit's, which the reader measures on them; a
 //      run of words in another is a group of the commands that set it (`\textbf{`, `\textmd{`, `\textit{`, `\textup{`,
 //      `\textcolor[HTML]{…}{`), as a source unit's are, so that its translation keeps each run's (a theorem's bold head before
@@ -52,6 +56,8 @@
 //      drawn over it), no pieces (nothing is sent), its glyphs in no group (the wrap and its ledger as before).
 // Pure arithmetic; an original module (no port statement).
 import { classifyFont } from '../layer-proto/fonts.mjs'
+import { unitClass } from '../rules/content-classes.mjs'
+import { accentTexts } from './accents.mjs'
 import { utf8 } from '../translate/mt.mjs'
 import { classOf } from './marks.mjs'
 import { lineRulesOf, OWN_WORK, RULE_EM } from './own.mjs'
@@ -77,6 +83,13 @@ export const INDENT = 6
 const WORD_GAP = 0.12
 /** a script: a glyph set at this share of its line's text size or less */
 const SCRIPT = 0.85
+/** a unit's label as the reader keeps one: up to three digits or marks of a label (layer-proto/layer2.mjs LABEL, labelOf), or
+ *  up to three marks of no letter or digit (layer-proto/tex.mjs, the marks a first line holds before its first word). "⁷,⁸" is
+ *  neither: the reader would erase it as the unit's text, and the text no longer saying it, it would be drawn by nobody */
+const LABEL_MARKS = /^(?:[\d*†‡§¶•◦▪–·]{1,3}|[^\p{L}\p{N}]{1,3})$/u
+/** a glyph raised over its line's baseline by more than this share of the line's text size stands on a baseline of its own: where
+ *  the reader's page breaks a word (layer-proto/layer2.mjs charsOfUnit2) */
+const RAISE = 0.2
 /** a word that numbers a heading or an entry: 1, 1.2, A.3, IV, (a) */
 const NUMBERING = /^\(?(?:\d{1,4}|[ivxlcdm]{1,6}|[IVXLCDM]{1,6}|[A-Z])(?:[.\-–](?:\d{1,4}|[A-Za-z]))*[.:)]?$/u
 /** a page number at a line's end: arabic or roman */
@@ -156,9 +169,12 @@ function groupsOf(st, base) {
 
 /** a kept run's placeholder source: a formula of its characters, or an address */
 const phSource = (fam, text) => sourceView(fam === 'math' ? `$${text.replace(/[$\\{}]/g, '')}$` : `\\url{${text.replace(/[\\{}]/g, '')}}`)
-/** a line's words, left to right: { gs (glyph indices), text, fam (math, mono, or text) } */
+/** a line's words, left to right: { gs (glyph indices), ts (each glyph's text), text, fam (math, mono, or text) }. A glyph's text
+ *  is its character, a spacing accent TeX set over its letter joined to it (layout/accents.mjs: "F´ısica" read Física, "Cande`s"
+ *  Candès, a capital's raised accent's "PE´REZ" PÉREZ) */
 function wordsOf(G, gs, fams) {
   const order = [...gs].filter(g => G[g] && !G[g].blank && /\S/u.test(G[g].u ?? '')).sort((a, b) => G[a].x0 - G[b].x0)
+  const joined = accentTexts(G, gs)
   const out = []
   // (the line's text size, the one most of its glyphs have: a script set smaller than it, raised or lowered, is no text of the
   // line's but its formula's — C_n²'s "2", a text face's digit, drawn on the baseline as a word of the translation, 2610.19274v1)
@@ -171,13 +187,37 @@ function wordsOf(G, gs, fams) {
     const x = G[g], f = famOf(fams, x.font)
     let fam = f === 'math' ? 'math' : f === 'mono' ? 'mono' : 'text'
     if (fam === 'text' && cur?.fam === 'math' && prev !== null && x.size < SCRIPT * body && Math.abs(x.y - G[prev].y) < body && x.x0 - G[prev].x1 <= WORD_GAP * body && !/\p{L}{2}/u.test(x.u ?? '')) fam = 'math'
-    if (!cur || (prev !== null && x.x0 - G[prev].x1 > WORD_GAP * Math.max(x.size, G[prev].size)) || cur.fam !== fam) { cur = { gs: [], text: '', fam }; out.push(cur) }
-    cur.gs.push(g); cur.text += x.u
+    if (!cur || (prev !== null && x.x0 - G[prev].x1 > WORD_GAP * Math.max(x.size, G[prev].size)) || cur.fam !== fam) { cur = { gs: [], ts: [], text: '', fam }; out.push(cur) }
+    const t = joined.get(g) ?? x.u
+    cur.gs.push(g); cur.ts.push(t); cur.text += t
     prev = g
   }
   // (an address set in the text's face, \urlstyle{same}: a typewriter run as any, kept, rule 4)
   for (const w of out) if (w.fam === 'text' && URL_WORD.test(w.text)) w.fam = 'mono'
   return out
+}
+
+/**
+ * How many glyphs a unit's label is, of its first line's words (wordsOf's, left to right): the glyphs the line begins with, each
+ * of no letter, in a text word, set smaller than SCRIPT of the line's text size and raised over its baseline by more than RAISE of
+ * it (a footnote's mark, an affiliation's number: "¹Instituto de Física", what the class sets before the text, as make.mjs
+ * headLabel reads a source unit's), read as the reader keeps a label (LABEL_MARKS), a glyph of the line's own after them; 0 for
+ * none. The reader keeps such a label as the original's, its words breaking at the baseline (layer-proto/layer2.mjs charsOfUnit2,
+ * labelOf), so the unit's text does not say it: said there, it was drawn twice, the original's beside the translation's
+ * (2610.20716v1 p1)
+ */
+function labelLength(G, words) {
+  const text = words.filter(w => w.fam === 'text').flatMap(w => w.gs)
+  if (!text.length) return 0
+  const base = modeOf(text.map(g => r2(G[g].y))), size = modeOf(text.map(g => r2(G[g].size)))
+  let n = 0, marks = ''
+  for (const w of words) for (const g of w.gs) {
+    const x = G[g]
+    if (w.fam !== 'text' || /\p{L}/u.test(x.u ?? '') || !(x.size < SCRIPT * size) || !(x.y - base > RAISE * size)) return LABEL_MARKS.test(marks) ? n : 0
+    n++
+    marks += x.u ?? ''
+  }
+  return 0
 }
 
 /** whether two words of a line, `w` left of `v`, stand APART */
@@ -338,7 +378,8 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
   for (const lines of groups) {
     // (an entry of no text word, a URL alone: nothing to translate, the original's)
     if (lines[0].cls === 'references' && !lines.some(l => l.words.some(textual))) continue
-    const id = base + out.length, cls = (lines[0].cls === 'orphan' || lines[0].cls === 'notes') && namesOf(lines) ? 'names' : lines[0].cls
+    const id = base + out.length
+    let cls = (lines[0].cls === 'orphan' || lines[0].cls === 'notes') && namesOf(lines) ? 'names' : lines[0].cls
     // pieces: text words joined, a run of math or typewriter words a placeholder (rule 4), a run of words in another weight, slant
     // or colour than the unit's a group that sets it (rule 9)
     const pieces = [], phs = []
@@ -348,10 +389,20 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
     let runKey = styleKey(style0, style0), pairs = 0
     const closeRun = () => { while (open.length) pieces.push({ t: 'close', id: open.pop(), src: '}' }) }
     lines.forEach((l, li) => {
+      // (its label, the glyphs its first line begins with that the class set before its text: kept as the original's, no text of
+      // the unit's, its glyphs the unit's still, claimed and erased with its line, so that the reader keeps them where they stand)
+      let label = li === 0 ? labelLength(pages[l.page - 1].glyphs, l.words) : 0, first = 0
       l.words.forEach((w, wi) => {
+        let own = w.text
+        if (label > 0) {
+          const k = Math.min(label, w.gs.length)
+          label -= k
+          if (k === w.gs.length) { first = wi + 1; return }
+          own = w.ts.slice(k).join('')
+        }
         // (a space between two words of a line where a word's gap stands between them: none where the face alone cuts them, a
         // formula's stop or its "-axis" set against it)
-        const space = wi > 0 ? gapBefore(pages[l.page - 1].glyphs, l.words[wi - 1], w) : li > 0
+        const space = wi > first ? gapBefore(pages[l.page - 1].glyphs, l.words[wi - 1], w) : li > 0
         if (w.fam === 'text') {
           // (a hyphen ending a line before a lowercase letter: the word goes on)
           let sep = ''
@@ -372,7 +423,7 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
             for (const src of groups) { open.push(++pairs); pieces.push({ t: 'open', id: pairs, src }) }
             runKey = k
           }
-          text += w.text
+          text += own
         } else {
           const lastPh = phs.at(-1)
           // (a run of one face over a gap or a line: one placeholder, its source the run's characters whole — the piece's too, which
@@ -402,6 +453,9 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
       const visible = own.flatMap((p, k) => (p.t === 'ph' && classOf(p) !== null ? [k] : []))
       kept = phs.map((p, j) => ({ ...p, k: visible[j] }))
     }
+    // (and one that echoes a unit of the author block, an affiliation REVTeX prints from its own lists, is of the names toggle as
+    // that unit is, rule 8: the whole block one toggle, the owner's ruling of 2026-10-30)
+    if (e !== undefined && (cls === 'orphan' || cls === 'notes') && unitClass(units[e]) === 'names') cls = 'names'
     const textGlyphs = lines.flatMap(l => l.words.filter(w => w.fam === 'text').flatMap(w => w.gs.map(g => [l.page, g])))
     if (echo === null && spell.length >= 4 && !inkEchoOf.has(key)) inkEchoOf.set(key, out.length)
     out.push({ id, kind: INK_KIND[cls], cls, echo, pieces: own, glyphs: { text: textGlyphs, ph: kept.flatMap(p => p.gs) }, rows: rowsOf(id, INK_KIND[cls], cls, lines, kept, own.length, pages) })
