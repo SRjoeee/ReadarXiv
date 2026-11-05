@@ -2823,9 +2823,13 @@ const tableWrapsOf = texts => {
  * Never a package's or a class's own definition (a .sty or a .cls file's: jcappub's \\maketitle and \\@fpheader, whose
  * bodies are its own code, set where the class sets them: 2609.20976v1's "! ! ! ! Abstract. ! ! Keywords:", read as prose
  * and translated for nothing), whose text is the class's to set and no unit's.
- * An author block's unit of a macro called once (`once`: 2609.20976v1's \\affiliation[a]{\\CU}, \\CU a \\newcommand of the
- * affiliation's text) is set once, where TeX expands that call, with the call's own surroundings: marked where it is defined
- * (frontMarks), it is the unit TeX sets, its marks once on the page, as the same text written in the block is
+ * A unit of a macro called once (`once`) is set once, where TeX expands that call, with the call's own surroundings: marked
+ * where it is defined, it is the unit TeX sets, its marks once on the page, as the same text written there is. An author
+ * block's by frontMarks (2609.20976v1's \\affiliation[a]{\\CU}, \\CU a \\newcommand of the affiliation's text), any other
+ * kind's by markUnits (2610.17024v1's `\\textbf{Keywords:} \\CILKEYWORDS` and the bibliography its \\CILBIBLIOGRAPHY sets: the
+ * maker lays them where their text stands, PIPELINE 70, and unmarked the wrap gave their ink no group of theirs, the list left
+ * in its call's placeholder, which the maker left EMPTY: English, its translation never drawn). One called more than once has
+ * no mark
  */
 function storedBodies(calls, { ctx, files, units, own }) {
   ctx.ended = false
@@ -2847,7 +2851,7 @@ function storedBodies(calls, { ctx, files, units, own }) {
     // "Contents", set in a heading)
     const words = units.slice(before).flatMap(u => u.pieces.filter(p => p.t === 'text').map(p => p.s)).join(' ').match(/\p{L}{2,}/gu)?.length ?? 0
     if (!AUTHOR_KINDS.has(kind) && words < 4) { units.length = before; continue }
-    for (const u of units.slice(before)) { u.stored = true; if (call.n === 1 && AUTHOR_KINDS.has(u.kind)) u.once = true }
+    for (const u of units.slice(before)) { u.stored = true; if (call.n === 1) u.once = true }
     if (units.length > before && !had) files.set(file, text)
   }
 }
@@ -3490,11 +3494,12 @@ const INLINE = /^(?:\$|\\\(|\\ensuremath|\\(?:cite[a-z]*|ref|eqref|autoref|[cC]r
 /** marks for the units whose place a reader shows: not headings (their text is also typeset in running heads and
  *  tables of contents), not the author block's names, places and notes (typeset again in running heads and the
  *  PDF's metadata, compared by the class, kept as they are for some languages), not table cells, not the texts of a TikZ picture (set through the picture's own transformation,
- *  which a destination's position does not follow), not a macro's body (storedBodies: set where it is called, perhaps
- *  more than once), not one TeX reads in math mode (inMath) */
+ *  which a destination's position does not follow), not a macro's body called more than once (storedBodies: set where it is
+ *  called, each time; one called once, `once`, is set once there and marked in its definition), not one TeX reads in math
+ *  mode (inMath) */
 export const markUnits = (units, translated = null) => {
   const id = new Map(units.map((u, i) => [u, i]))
-  return u => (inAuthorBlock(u) ? (translated?.has(u) && fitsWide(u) ? AUTHOR_WIDE : null) : u.kind === 'heading' || u.kind === 'cell' || u.kind === 'figure' || u.front || u.stored || inMath(u) ? null : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` })
+  return u => (inAuthorBlock(u) ? (translated?.has(u) && fitsWide(u) ? AUTHOR_WIDE : null) : u.kind === 'heading' || u.kind === 'cell' || u.kind === 'figure' || u.front || (u.stored && !u.once) || inMath(u) ? null : { start: `\\leavevmode\\axtmark{${id.get(u)}s}`, end: `\\axtend{${id.get(u)}e}` })
 }
 /**
  * Whether a unit holds a subscript or a superscript of its own (a piece `_` or `^`, outside every formula the walker

@@ -618,6 +618,21 @@ describe('the prose a paper keeps in a macro of no argument (storedBodies: 2608.
     // (one called twice is set twice: its unit no mark, as before)
     expect(tex).toContain('\\newcommand{\\Twice}{Institute of Elsewhere, A City}')
   })
+  it('marks every unit of a macro called once where it is defined, whatever its kind: a keyword list after its label (2610.17024v1\'s \\CILKEYWORDS)', () => {
+    // (the maker lays such a unit where its text stands (PIPELINE 70); unmarked, the wrap gave it no group, its ink stayed the
+    // call's placeholder's, which the maker then left EMPTY: the list stayed English, its translation never drawn)
+    const pre = '\\newcommand{\\KW}{Constrained lasso; solution path; active-set method; formal verification}\n\\newcommand{\\Note}{A remark the paper repeats in two places of its text.}'
+    const body = '\\begin{abstract}\nWe present a method.\n\n\\noindent\\textbf{Keywords:} \\KW\n\\end{abstract}\nThe body says \\Note{} and again \\Note{} here.'
+    const p = openPaper(new Map([['main.tex', enc(doc(body, pre))]])), all = p.units as unknown as Unit[]
+    const stored = all.filter(u => u.stored)
+    expect(stored.map(u => [u.kind, textOf(u), !!u.once])).toEqual([['abstract', 'Constrained lasso; solution path; active-set method; formal verification', true], ['para', 'A remark the paper repeats in two places of its text.', false]])
+    const id = all.indexOf(stored[0]!)
+    const tex = new TextDecoder().decode(originalFiles(p, { layout: LAYOUT_CLASSES }).get('main.tex'))
+    expect(tex).toContain(`\\newcommand{\\KW}{\\leavevmode\\axtmark{${id}s}Constrained lasso; solution path; active-set method; formal verification\\axtend{${id}e}}`)
+    // (the call stays its unit's placeholder; one called twice is set twice: no mark)
+    expect(tex).toMatch(/Keywords:\\axtend\{\d+e\}\} \\axtpma\{p\d+\.\d+a\}\\KW\n/)
+    expect(tex).toContain('\\newcommand{\\Note}{A remark the paper repeats in two places of its text.}')
+  })
 })
 
 describe('xy-pic\'s diagram is a drawing, as a TikZ or PSTricks picture is (SKIP_ENVS): its body is no unit', () => {
