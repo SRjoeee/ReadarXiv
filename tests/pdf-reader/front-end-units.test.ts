@@ -345,6 +345,19 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     // (a fallback a package the paper loads overrides is no definition of the paper's: llncs.cls' \\@ifundefined{url}{\\def\\url#1{#1}}{}
     // under hyperref, whose \\url reads its address as characters)
     expect(texts(project(doc('See \\url{https://x.org/a%20b} and the rest.', '\\usepackage{hyperref}\n\\makeatletter\\@ifundefined{url}{\\def\\url#1{#1}}{}\\makeatother')))).toContain('See and the rest.')
+    // (code the walk passes over is none of TeX's commands: a `\\url{` inside \\verb, an inline listing or minted's inline code, or the
+    // body of an environment read by lines or skipped, a code environment's, opens no address — its `%` after the code is a comment as
+    // before, and the words it hides stay hidden: the second review of #596)
+    for (const code of ['\\mintinline{tex}|\\url{|', '\\lstinline[language=TeX]|\\url{|', '\\lstinline{\\url{}', '\\verb|\\url{|', '\\verb*!\\url{!']) {
+      const t = `See ${code}.% hidden words }\nNext words here.`
+      expect(urlPercents(t, 'main.tex'), code).toBe(t)
+      expect(texts(project(doc(t, '\\usepackage{listings}\\usepackage{minted}'))).join(' '), code).not.toContain('hidden words')
+    }
+    for (const env of ['lstlisting', 'verbatim', 'tikzpicture']) {
+      const t = `\\begin{${env}}\n\\url{a%b} {\n\\end{${env}}\nSee \\url{c%d} now.`
+      expect(urlPercents(t, 'main.tex').split('%').length, env).toBe(2)
+    }
+    expect(urlPercents('\\begin{mycode}\n{ \\url{a%b}\n\\end{mycode}\n\\url{c%d}', 'main.tex', { skipEnvs: new Set(['mycode']) }).split('%').length).toBe(2)
     // (in an argument the walk reads it as before: a comment, which a paper avoids there by writing `\\%`)
     expect(texts(project(doc('See \\footnote{\\url{a\\%b}} the rest.')))).toContain('See the rest.')
   })

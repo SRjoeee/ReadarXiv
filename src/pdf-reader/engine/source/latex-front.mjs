@@ -485,7 +485,8 @@ function skipComment(s, i) { while (i < s.length && s[i] !== '\n') i++; return i
  * Each such `%` is written as LITERAL_PERCENT, the same length, so that every reading of the walk (groups, comments, a
  * bibliography's \\bibitem, the document's bounds) sees what TeX sees and every place stays where it is; the units take their
  * `%` back (restorePercents). A text that holds LITERAL_PERCENT already, or no `%`, is returned as it is. `scan`: the paper's
- * conditionals (`ifs`), its environments read by lines (`lineEnvs`) and the commands it defines in any form (`defined`: arg-roles.mjs
+ * conditionals (`ifs`), its environments read by lines (`lineEnvs`) and its code environments the walk skips (`skipEnvs`), and the
+ * commands it defines in any form (`defined`: arg-roles.mjs
  * paperOf's `own`, \\let and the xparse forms among them; a fallback a package the paper loads overrides is none)
  */
 export function urlPercents(text, file, scan = {}) {
@@ -521,7 +522,7 @@ export function urlPercents(text, file, scan = {}) {
  * as TeX sees it. A file whose \\fi closes no conditional the file opens (a command of the paper that opens one, \\def\\iffa
  * {\\iffalse}) cannot be read so: it is returned as it is
  */
-function bodyPercents(text, { ifs = new Set(), lineEnvs = null, defined = null } = {}) {
+function bodyPercents(text, { ifs = new Set(), lineEnvs = null, defined = null, skipEnvs = null } = {}) {
   const n = text.length, out = text.split('')
   let changed = false, depth = 0, bracket = 0, conds = 0
   const envs = []
@@ -536,7 +537,14 @@ function bodyPercents(text, { ifs = new Set(), lineEnvs = null, defined = null }
     const { name, end } = commandAt(text, i)
     i = end - 1
     if (!/^[A-Za-z@]+$/.test(name)) continue
-    if (name === 'verb' || name === 'lstinline') { const d = text[end]; const e = d && !/[\s{[*]/.test(d) ? text.indexOf(d, end + 1) : -1; if (e > 0) i = e; continue }
+    // (what the walk reads as code, passed over as it passes it: \\verb's text, an inline listing's or minted's, and the body of an
+    // environment read by lines or skipped, a code environment's among them — none of it TeX's commands)
+    if (name === 'verb') { const e = verbEnd(text, end); if (e > 0) i = e - 1; continue }
+    if (name === 'lstinline' || name === 'mintinline') { const e = inlineCodeEnd(text, end, name); if (e > 0) i = e - 1; continue }
+    if (name === 'begin') {
+      const m = /^\s*\{([^{}]*)\}/.exec(text.slice(end, end + 200)), env = m?.[1].trim()
+      if (m && (isLineEnv(env, lineEnvs) || SKIP_ENVS.test(env) || skipEnvs?.has(env))) { i = endOfEnv(text, end + m[0].length, env)[1] - 1; continue }
+    }
     if (depth > 0) continue
     // (a conditional's name where one is defined, not opened: \\newif\\ifdraft, \\let\\ifdraft\\iftrue, \\def\\ifdraft{…})
     if (name === 'newif' || name === 'let' || DEF_PRIMITIVES.has(name)) {
@@ -552,7 +560,6 @@ function bodyPercents(text, { ifs = new Set(), lineEnvs = null, defined = null }
       if (!m) continue
       const env = m[1].trim(), after = end + m[0].length
       i = after - 1
-      if (name === 'begin' && isLineEnv(env, lineEnvs)) { i = endOfEnv(text, after, env)[1] - 1; continue }
       if (env === 'document') continue
       if (name === 'begin') envs.push(env)
       else { const at = envs.lastIndexOf(env); if (at >= 0) envs.length = at }
@@ -2159,7 +2166,7 @@ function walk(s, from, to, b, ctx) {
       if (goOn(macro, call, i)) continue
       b.ph(s.slice(i, e), i, e); i = e; continue
     }
-    if (name === 'verb') { const d = s[end]; const e = s.indexOf(d, end + 1); const stop = e < 0 ? end : e + 1; endText(); b.ph(s.slice(i, stop), i, stop); i = stop; continue }
+    if (name === 'verb') { const v = verbEnd(s, end), stop = v < 0 ? end : v; endText(); b.ph(s.slice(i, stop), i, stop); i = stop; continue }
     // listings' and minted's inline code, read as \verb is: its keys, minted's language, then a brace group or a
     // delimiter (\lstinline|x = y|, \lstinline{x = y}, \mintinline{py}|x|) — code, never the translator's
     if (name === 'lstinline' || name === 'mintinline') { const stop = inlineCodeEnd(s, end, name); if (stop > 0 && stop <= to) { endText(); b.ph(s.slice(i, stop), i, stop); i = stop; continue } }
@@ -2291,6 +2298,12 @@ function tikzCallEnd(s, at, to) {
     else if (c === ';' && depth === 0) return j + 1
   }
   return -1
+}
+/** where \\verb's text that starts at s[at], after its name (and its star), ends: past the next of its delimiter, as TeX reads it;
+ *  -1 where none follows */
+function verbEnd(s, at) {
+  const d = s[at], e = d ? s.indexOf(d, at + 1) : -1
+  return e < 0 ? -1 : e + 1
 }
 /** where an inline listing that starts at s[at], after its command's name, ends: past its optional keys, minted's
  *  language, and its code in a brace group or between two of a delimiter; -1 where it does not */
@@ -2870,7 +2883,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   const bblName = `${jobName(mainFile.rel)}.bbl`, bblBytes = fsys.read(bblName)
   const bbl = bblBytes && /\\begin\s*\{thebibliography\}/.test(texText(bblBytes)) ? bblName : null
   const ctx = { rowEnds: rowEndsOf(sources.map(sourceText)), rowEndsAfter: rowEndsAfterOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), tableWraps: tableWrapsOf(ownTexts), activeSpaces: activeSpacesIn([...sources.map(sourceText), ...ownTexts]), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], backref: backrefOf(ownTexts), ...tblrOf(sources.map(sourceText)) }
-  const scan = { lineEnvs, ifs, ifValues }, percents = { lineEnvs, ifs, defined: paper.own }
+  const scan = { lineEnvs, ifs, ifValues }, percents = { lineEnvs, ifs, defined: paper.own, skipEnvs }
   let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;
    *  `inFloat`: whether the file is read inside a float (the walk's builder there) */
