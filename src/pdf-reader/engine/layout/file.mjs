@@ -181,7 +181,7 @@ export { LayoutRefusal } from './json.mjs'
  *  2610.35877v1): a footnote's call after its unit's last word, which TeX gave no mark, its raised run right after the end mark
  *  (make.mjs besideMarks), where it was LOST and its unit the original's whole (the abstract); and a biblatex entry's unit, of
  *  the new kind `inkreferences` (UNIT_KINDS): a reader of 29 refuses that kind's index; 31 (the owner's ruling of 2026-10-30,
- *  2610.30854v1): a page whose lines moved across its breaks through compile drift is drawable (carry.mjs DRIFT_LINES: at most 4
+ *  2610.30854v1): a page whose lines moved across its breaks through compile drift is drawable (carry.mjs then: at most 4
  *  at each end, to or from the page beside it, the rest arXiv's page's words), its units laid where a file of 30 left them
  *  `undrawn`; 32 (the owner's decision of 2026-11-03): each line of a code environment's body a region the file holds
  *  (`regions`, the file's schema 6), read from the points the layout compile sets around it (marks.mjs regionsTex); 33 (the owner's
@@ -203,8 +203,16 @@ export { LayoutRefusal } from './json.mjs'
  *  (the reader reads its lines); an ink unit's as TeX set the paragraph it is in, read from the marked original's paragraph ends
  *  (marks.mjs POINTS_TEX `qe<n><code>`, ink-units.mjs alignOf), where a file of 36 held every ink unit but a running head on its
  *  page's middle not centred: 2307.16209's title, author and examining board drawn from each English line's start. A reader
- *  of 36 refuses the new flag, so a file of 37 is another maker's (the file's schema is 6 still) */
-export const LAYOUT = '37'
+ *  of 36 refuses the new flag, so a file of 37 is another maker's (the file's schema is 6 still); 38: a unit's lines over a
+ *  page break are those its pieces' points stand on too, its points its tokens on a page none of its words was kept on
+ *  (pipeline/anchors.mjs withPoints); a line's baseline the one its unit's own mark and its words' glyphs agree on (make.mjs
+ *  rowOf); a part of a broken piece no line's baseline holds on its own point's line (make.mjs atPoint); a picture a piece
+ *  sets, a draft image frame in the marked original, the base page's image on the frame's box (make.mjs ownedOn, stream.mjs
+ *  FRAME); an opening point with a float TeX set right after it read past the float (stream.mjs pastOther): a file of 37 holds
+ *  those pieces LOST and their units the original's; and pages whose lines moved across their breaks drawn as a run, whole or
+ *  not at all (carry.mjs lineCheckOf, the owner's approval of 2026-11-05: 2307.16209v1's pages 68 to 76, a file of 37 leaving
+ *  71 to 76 the original's) */
+export const LAYOUT = '38'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,

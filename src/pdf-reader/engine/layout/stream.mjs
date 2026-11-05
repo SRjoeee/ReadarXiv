@@ -52,6 +52,28 @@ const NAME_POINT = /^n\d+\.[^.]+\.[se]$/
 const BEGINS = /^(?:n\d+\.(?:abstract|ref|bib|contents|listfigure|listtable|appendix|index|proof|preface|glossary)\.s|bi\d+)$/i
 /** a biblatex entry's point, and its bibliography's end: no piece's next mark either, its entry no unit of the source */
 const BIB_ITEM = /^b[iz]\d+$/
+/** a draft image frame's corner (pipeline/live.mjs DRAFT: g<n>a, g<n>b on its baseline, g<n>t at its top): no piece's next mark
+ *  either. What the frame holds between g<n>a and g<n>b is graphicx's draft — its outline's rules, its file's name — where the
+ *  final pass sets the image: a piece's reading takes the outline, which the maker reads as the image's box (make.mjs
+ *  ownedOn), and never the name, no glyph of the paper's */
+const FRAME = /^g(\d+)[abt]$/
+/** each page's glyphs and boxes inside a draft frame (FRAME: from its g<n>a point to its g<n>b point on the page), 1 each:
+ *  { glyph, box }; null for a page with none */
+function framedOf(page) {
+  let out = null
+  const open = new Map(), nBoxes = (page.boxes?.length ?? 0) / 4
+  for (const pt of page.points) {
+    const m = /^g(\d+)([ab])$/.exec(pt.name)
+    if (!m) continue
+    if (m[2] === 'a') { open.set(m[1], pt); continue }
+    const from = open.get(m[1])
+    if (!from) continue
+    out ??= { glyph: new Uint8Array(page.glyphs.n), box: new Uint8Array(nBoxes) }
+    out.glyph.fill(1, from.glyph, Math.min(pt.glyph, page.glyphs.n))
+    out.box.fill(1, from.box, Math.min(pt.box, nBoxes))
+  }
+  return out
+}
 /** a piece's opening point: a placeholder's (p) or a footnote call's (n), by its unit and source piece index */
 const OPENING = /^([pn])(\d+)\.(\d+)a$/
 /** a unit's start mark: MARK_DEF's, a cell's, a heading's */
@@ -339,6 +361,8 @@ function headEntries(head, P, R, p, q, has, put) {
 export function ownedOf(pages, { follows, dropped = [], erasure = false, heads = null }) {
   const twice = new Set(dropped)
   const regions = pages.map(regionsOf)
+  /** each page's glyphs a draft frame holds (framedOf), no reading's */
+  const framed = pages.map(framedOf)
   /** each page's line pitch (pitchOf), read once where a piece alone at its unit's end asks for it */
   const pitches = new Map()
   // every point by its name, in stream order: [page, index]; the mark points in stream order (brackets and names apart)
@@ -346,7 +370,7 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
   pages.forEach((p, i) => p.points.forEach((pt, q) => {
     const list = where.get(pt.name)
     if (list) list.push([i + 1, q]); else where.set(pt.name, [[i + 1, q]])
-    if (!BRACKET.test(pt.name) && !NAME_POINT.test(pt.name) && !BIB_ITEM.test(pt.name)) seq.push([i + 1, q])
+    if (!BRACKET.test(pt.name) && !NAME_POINT.test(pt.name) && !BIB_ITEM.test(pt.name) && !FRAME.test(pt.name)) seq.push([i + 1, q])
   }))
   const rank = new Map()
   seq.forEach(([p, q], r) => rank.set(`${p}|${q}`, r))
@@ -370,9 +394,9 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
     const [pa, qa] = list[0], A = pages[pa - 1].points[qa], rA = regions[pa - 1].at[qa]
     /** the glyphs and boxes of page p from (g0, b0) to (g1, b1) in A's region, onto `glyphs` and `boxes` */
     const take = (glyphs, boxes, p, g0, g1, b0, b1) => {
-      const R = regions[p - 1]
+      const R = regions[p - 1], F = framed[p - 1]?.glyph
       work += g1 - g0 + b1 - b0
-      for (let g = g0; g < g1; g++) if (R.glyph[g] === rA) glyphs.push([p, g])
+      for (let g = g0; g < g1; g++) if (R.glyph[g] === rA && !F?.[g]) glyphs.push([p, g])
       for (let b = b0; b < b1; b++) if (R.box[b] === rA) boxes.push([p, b])
     }
     /** what A's region holds from A to the point `to` ([page, index], null: the paper's end), page by page */
@@ -474,6 +498,10 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
       }
       let { glyphs, boxes } = takeTo(next)
       if (jumps(glyphs)) return none(HOW['across a column, unbracketed'])
+      // (nothing of its region before its next mark, that mark another region's, text after it in its unit: a float TeX set
+      // right after its point, the text after it past that float, not found yet (pastOther). 2608.06701v1's u221,
+      // `Specifically, \approach significantly …`, a figure set after the line its point ends, owned nothing and was LOST)
+      if (!glyphs.length && !boxes.length && f.want && regions[pa - 1].at[next[1]] !== rA) return none(HOW['open, the text after it not found'])
       if (!glyphs.length && !boxes.length) return { how: HOW[f.want ? 'open, to the text after it' : "open, to its unit's next mark"], glyphs, boxes }
       if (!f.want) {
         // (the erasure's: a later unit's opening as its start mark only where that unit's start mark follows it on the page — the
@@ -516,6 +544,8 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
         const [p0, g0] = glyphs[0], P0 = pages[p0 - 1], ruled = boxes.filter(([q, b]) => q < p0 || (q === p0 && b < P0.boxAt[g0]))
         const under = ([q, b]) => q === p0 && P0.boxes[4 * b + 2] > P0.glyphs.x0[g0] + 0.1 * P0.glyphs.size[g0] && P0.boxes[4 * b + 1] < P0.glyphs.y[g0] + P0.glyphs.size[g0] && P0.boxes[4 * b + 3] > P0.glyphs.y[g0] - 0.5 * P0.glyphs.size[g0]
         if (erasure && ruled.length && !ruled.some(under)) return { how: HOW['open, to the text after it'], glyphs: [], boxes: ruled }
+        // (and the maker's where they are a draft image frame's outline alone: the final pass's image in its place, FRAME)
+        if (ruled.length && ruled.every(([q, b]) => framed[q - 1]?.box[b])) return { how: HOW['open, to the text after it'], glyphs: [], boxes: ruled }
         return none(HOW['open, nothing before the text after it'])
       }
       return cut(HOW['open, to the text after it'], glyphs, boxes, end)
@@ -599,6 +629,10 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
     if (e.how === HOW['open, the text after it not found']) e = pastOther() ?? e
     if (e.how === HOW['open, the next mark on another page'] || e.how === HOW['open, the text after it not found']) e = pastColumn() ?? e
     if (e.how === HOW['open, the next mark on another page']) e = footEnd() ?? e
+    // (a reading past a draft image frame that the text after it does not end — it runs to its unit's next mark, its column's
+    // end —: what TeX set between is not told, a figure after a heading's last piece (2010.11929v2's wrapfigure after
+    // `\subsection{Inspecting \oursfull{}}`), nothing owned, as where the frame's mark stopped it before; FRAME)
+    if (e.how < OWNED && e.how !== HOW['open, to the text after it'] && e.boxes.some(([q, b]) => framed[q - 1]?.box[b])) e = none(HOW["open, the next mark not its unit's"])
     if (f.group?.length && e.how < OWNED) {
       e = { ...e, how: HOW['open, with the displays after it'] }
       for (const g of f.group) if (!where.has(g)) out.set(g, none(HOW['in the display before it']))

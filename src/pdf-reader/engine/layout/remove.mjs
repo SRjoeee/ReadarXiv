@@ -545,7 +545,8 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
             default:
               if (!PAINT.has(o.op) && o.op !== 'BI' && o.op !== 'sh') break
               if (!record(COST.event)) return
-              events.push({ kind: PAINT.has(o.op) ? 'paint' : 'image', cont, pi, oi })
+              // (a shading painted is no image of alignPage's `images`, which an image's group is aligned by)
+              events.push({ kind: PAINT.has(o.op) ? 'paint' : 'image', cont, pi, oi, ...(o.op === 'sh' ? { sh: true } : {}) })
           }
         }
       }
@@ -564,7 +565,8 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
   /**
    * One page against PDF.js's reading of it: `facts` (alignOf's, what the reading shows and paints), or PDF.js's
    * operator list itself (alignPage(i, OPS, opList), read by alignOf here). Returns { ok, why, walk, shows (the walk's
-   * text-showing events by n), paints (its painting operators by m, null where they do not align) }. The n-th show of the
+   * text-showing events by n), paints (its painting operators by m, null where they do not align), images (its images painted,
+   * an XObject's `Do` or an inline image, by j, as many as the reading's: null where they are not, or the facts count none) }. The n-th show of the
    * reading must be the n-th showing operator of the walk with as many glyphs, their character codes the same (a glyph
    * with no code compared with none); an annotation's own appearance is not the page's. Any difference refuses the page
    * (`why`): nothing on it is removed
@@ -584,7 +586,8 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
       if (gl.length !== e.codes.length) { why.push(`show ${n}: ${e.codes.length} codes, ${gl.length} glyphs`); continue }
       for (let k = 0; k < gl.length; k++) if (gl[k] !== null && gl[k] !== e.codes[k].v) { why.push(`show ${n}: codes differ`); break }
     }
-    return { ok: why.length === 0, why, walk, shows, paints: facts.paths === paints.length ? paints : null }
+    const images = walk.events.filter(e => e.kind === 'image' && !e.sh)
+    return { ok: why.length === 0, why, walk, shows, paints: facts.paths === paints.length ? paints : null, images: Number.isInteger(facts.images) && facts.images === images.length ? images : null }
   }
 
   /** what the remover keeps between pages let go: the decoded streams and the fonts read (a remover kept for a paper's
@@ -598,13 +601,16 @@ export async function openRemover(bytes, { PL, inflate = null, walkMax = WALK_MA
  * What alignPage reads of PDF.js's operator list of a page (OPS, opList), its alignment facts: `codes`, for each
  * text-showing operation (showText, showSpacedText) outside an annotation's appearance, in order, its glyph objects'
  * character codes (`originalCharCode`; null for a glyph with none, which is not compared; -1 for one that is not a code,
- * which no code equals); `paths`, the number of constructPath operations outside an annotation and a soft mask's group. The facts are what a
+ * which no code equals); `paths`, the number of constructPath operations outside an annotation and a soft mask's group; `images`,
+ * the number of images painted there, each image of a repeat or a group PDF.js merged one (layout/ink.mjs pageInk's boxes of
+ * kind -3, one an image, as many). The facts are what a
  * remover with no PDF.js aligns a page by: the page is aligned by them exactly as by the list. Pure
  */
 export function alignOf(OPS, opList) {
   const { fnArray, argsArray } = opList
   const codes = []
-  let paths = 0, inAnnot = 0, inMask = 0
+  let paths = 0, images = 0, inAnnot = 0, inMask = 0
+  const ONE = new Set([OPS.paintImageXObject, OPS.paintInlineImageXObject, OPS.paintImageMaskXObject, OPS.paintSolidColorImageMask])
   // (a soft mask's group: PDF.js lists the content of an ExtGState's /SMask in a group of its own, which no content stream
   // the walk reads paints: not the page's, as an annotation's appearance is not; 2610.19159v1 p3)
   const groups = []
@@ -625,8 +631,13 @@ export function alignOf(OPS, opList) {
       }
       codes.push(row)
     } else if (fn === OPS.constructPath) paths++
+    else if (ONE.has(fn)) images++
+    else if (fn === OPS.paintImageXObjectRepeat) images += Math.floor((argsArray[j]?.[3]?.length ?? 0) / 2)
+    else if (fn === OPS.paintImageMaskXObjectRepeat) images += Math.floor((argsArray[j]?.[5]?.length ?? 0) / 2)
+    else if (fn === OPS.paintImageMaskXObjectGroup) images += Array.isArray(argsArray[j]?.[0]) ? argsArray[j][0].length : 0
+    else if (fn === OPS.paintInlineImageXObjectGroup) images += Array.isArray(argsArray[j]?.[1]) ? argsArray[j][1].length : 0
   }
-  return { codes, paths }
+  return { codes, paths, images }
 }
 /** a character code is below this (four bytes at most, as codesOf reads one) */
 const CODE_LIMIT = 2 ** 32

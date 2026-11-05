@@ -184,6 +184,40 @@ describe('ownedOf', () => {
     expect(owned([p1, p2], { 'p0.1a': open('nowhere') })).toEqual({ 'p0.1a': 'open, the text after it not found' })
   })
 
+  it("an opening point alone with nothing of its region before its next mark, that mark a float's TeX set right after it, owns what its own region holds to the text after it (2608.06701v1's u221)", () => {
+    const page = pageOf([
+      { at: 'bs1' }, 'Specifically, ', { at: 'p0.8a' }, { at: 'fs2' }, { at: 'g3a' }, '\nfigures/m.png', { at: 'g3b' }, { at: 'g3t' }, { at: '5s' }, ' Figure 2', { at: '5e' }, { at: 'fe2' },
+      '\nLIVE-PLAN significantly reduces', { at: '0e' }, { at: 'be1' },
+    ])
+    expect(owned([page], { 'p0.8a': open('signific') })['p0.8a']).toEqual(['LIVE-PLAN', 0])
+    // (the erasure's reading the same)
+    const erased = ownedOf([page], { follows: n => (n === 'p0.8a' ? open('signific') : null), erasure: true }).get('p0.8a')
+    expect(erased && shown([page], erased)).toEqual(['LIVE-PLAN', 0])
+    // (no text after it in its unit: what it owns runs to its unit's next mark, as before, nothing here)
+    expect(owned([page], { 'p0.8a': open('', ['0e']) })['p0.8a']).toEqual(['', 0])
+  })
+
+  it("a draft image frame is no piece's next mark, its file's name no glyph of a piece's, its outline the piece's rules (2610.21924v1's `\\COMPASSicon`)", () => {
+    // (graphicx's draft: the frame's outline, four rules, and its file's name between its g<n>a and g<n>b points; the final pass sets
+    // the image there, which the maker reads the outline as: make.mjs ownedOn)
+    const frame = (x: number): Item[] => [{ at: 'g4a' }, { rule: [x, 699.8, x + 0.4, 710.2] }, { rule: [x, 709.8, x + 10, 710.2] }, 'figures/COMPASS.png', { rule: [x, 699.8, x + 10, 700.2] }, { rule: [x + 9.6, 699.8, x + 10, 710.2] }, { at: 'g4b' }, { at: 'g4t' }]
+    const page = pageOf(['between Oracle Search and ', { at: 'p0.1a' }, ...frame(200), ' COMPASS on runs.', { at: '0e' }])
+    expect(owned([page], { 'p0.1a': open('compasso') })['p0.1a']).toEqual(['', 4])
+    // (the erasure's reading too: in the final pass there is no frame, its image a box of the piece's own: own.mjs MR 7)
+    const erased = ownedOf([page], { follows: n => (n === 'p0.1a' ? open('compasso') : null), erasure: true }).get('p0.1a')
+    expect(erased && shown([page], erased)).toEqual(['', 4])
+    // (a piece whose own ink holds a frame and glyphs: the glyphs its own, the frame's name not)
+    const mixed = pageOf(['see ', { at: 'p0.1a' }, 'logo:', ...frame(220), { at: 'p0.1b' }, ' here', { at: '0e' }])
+    expect(owned([mixed], { 'p0.1a': closed })['p0.1a']).toEqual(['logo:', 4])
+    // (a reading the text after it does not end, past a frame: a figure TeX set after a heading's last piece, its next mark a
+    // later unit's start; nothing owned, as where the frame's mark stopped it, 2010.11929v2's wrapfigure)
+    const heading = pageOf(['Inspecting ', { at: 'p0.1a' }, 'Vision Transformer', ...frame(300), '\n', { at: '1s' }, 'Figure 5: caption', { at: '1e' }])
+    expect(owned([heading], { 'p0.1a': open('', ['0e']) })['p0.1a']).toEqual("open, the next mark not its unit's")
+    // (rules alone before the text after it that are no frame's: the maker's reading leaves them, LOST as before)
+    const ruled = pageOf(['as ', { at: 'p0.1a' }, { rule: [200, 699.8, 210, 700.2] }, ' text after', { at: '0e' }])
+    expect(owned([ruled], { 'p0.1a': open('textafte') })['p0.1a']).toEqual('open, nothing before the text after it')
+  })
+
   it("a display whose next mark is a float's, shipped into the stream before the text after it, owns what its own region holds to that text (2610.20507v1's (16), 2610.21288v1's (12))", () => {
     const page = pageOf([
       { at: 'bs1' }, 'words ', { at: 'p0.1a' }, '\na=b(1)', { at: 'fs1' }, { at: 'g1a' }, '\nFigure', { at: 'g1b' }, { at: '9s' }, ' caption', { at: '9e' }, { at: 'fe1' },

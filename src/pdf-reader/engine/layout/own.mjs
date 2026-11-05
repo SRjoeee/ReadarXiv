@@ -28,7 +28,8 @@
 //      placeholders' and names' ranges passed over — but the closing punctuation a head sets abutting the unit before it, that
 //      unit's text (amsthm's "(Note).") —; none for a table cell;
 //   6. a babel name `n<occ>`: between `n<occ>.<key>.s` and `.e`;
-//   7. images and forms are never a unit's here (a form whose ink is all one group's is wrapped whole by wrap.mjs).
+//   7. images and forms are no unit's text here (a form whose ink is all one group's is wrapped whole by wrap.mjs); an image TeX
+//      painted inside a placeholder's ink (an inline \includegraphics, 2610.21924v1's `\COMPASSicon`) is the placeholder's.
 // A glyph is one group's: a placeholder's or a name's over the text's, the text's over a label's, the first text's over a later.
 // A placeholder whose ink cannot be told apart (its range lost) makes its unit the original's (`marks`), as do marks that the
 // units do not name; the work is bounded (OWN_WORK).
@@ -47,13 +48,18 @@ import { utf8 } from '../translate/mt.mjs'
 import { symbolText } from '../rules/text-symbols.mjs'
 import { UNHIDDEN } from './delta-wire.mjs'
 import { classOf, headsOf, INK_ANY, leadStep } from './marks.mjs'
-import { columnsAt, OWNED, ownedOf, regionsOf, spellOf } from './stream.mjs'
+import { columnsAt, OWNED, OWNED_HOW, ownedOf, regionsOf, spellOf } from './stream.mjs'
 import { isLabelForm, labelFormOf, labelText } from './label-form.mjs'
 import { counterAfter } from './names.mjs'
 
 export { UNHIDDEN }
 /** a label's form, the paper's theorem names beside the standard ones: layout/label-form.mjs */
 export { isLabelForm, labelFormOf }
+/** pageInk's kind of an image's box (layout/ink.mjs: -3), a placeholder's ink where TeX painted it between its points (MR 7) */
+const IMAGE_BOX = -3
+/** the readings of a placeholder bounded by TeX's facts on both sides (stream.mjs OWNED_HOW): between its two points, or from
+ *  its opening one to the text after it in its unit */
+const BOUNDED = new Set([OWNED_HOW.indexOf('closed'), OWNED_HOW.indexOf('open, to the text after it')])
 /** the glyphs and boxes the ownership of a paper may visit (real ranges never overlap: they cost its ink once) */
 export const OWN_WORK = 20_000_000
 /** the unit ids a record lists the spell check's refusals of, at most */
@@ -141,14 +147,17 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
     return u
   }
   // (the claims, in their order of precedence: a text's first, a label's where nothing is, a placeholder's and a name's over both)
-  const claim = (list, group, kind) => {
+  // (kind 'q': a placeholder's claim whose reading may run past its own ink, which takes no image: as 'p' else)
+  const claim = (list, group, kind0) => {
+    const kind = kind0 === 'q' ? 'p' : kind0, images = kind0 === 'p'
     for (const [p, i] of list.glyphs) {
       const cur = gOwn[p - 1][i]
       if (kind === 'l' ? cur !== null : kind === 'u' ? cur !== null : kind === 'n' && cur !== null && cur.endsWith('.p')) continue
       gOwn[p - 1][i] = group
     }
     for (const [p, b] of list.boxes ?? []) {
-      if ((pages[p - 1].paths[b] ?? -1) < 0) continue
+      const path = pages[p - 1].paths[b] ?? -1
+      if (path < 0 && !(images && path === IMAGE_BOX)) continue
       const cur = bOwn[p - 1][b]
       if (kind === 'u' && cur !== null) continue
       bOwn[p - 1][b] = group
@@ -452,11 +461,11 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
     if (work > OWN_WORK) { if (unitOf.has(id)) unit(id).unhidden ??= 'marks'; continue }
     let e = null
     let lost = false
-    if (owned) { const x = owned.get(name); if (x && x.how < OWNED) e = { glyphs: x.glyphs, boxes: x.boxes }; else if (x && x.how > OWNED) lost = true }
+    if (owned) { const x = owned.get(name); if (x && x.how < OWNED) e = { glyphs: x.glyphs, boxes: x.boxes, how: x.how }; else if (x && x.how > OWNED) lost = true }
     else if (list.length === 1) {
       const close = where.get(`${m[1]}${m[2]}.${m[3]}b`) ?? []
       const A = list[0], r = at(A)
-      if (close.length === 1 && !before(close[0], A) && at(close[0]) === r && (close[0][0] === A[0] || r % 2 === 1)) e = take(A, close[0], r)
+      if (close.length === 1 && !before(close[0], A) && at(close[0]) === r && (close[0][0] === A[0] || r % 2 === 1)) e = { ...take(A, close[0], r), how: OWNED_HOW.indexOf('closed') }
       else if (close.length === 0) {
         // an opening alone: to the next point in its region (a bracket's and a name's passed over)
         let B = null
@@ -483,7 +492,10 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       // (the glyphs the placeholder would have taken, as it takes them, given to the text's group instead of its placeholders')
       if (n > 0) { claim({ glyphs: e.glyphs.slice(0, n) }, `u${id}`, 'p'); symbolsInText.add(`${id}.${k}`); e = null }
     }
-    if (e) claim(e, `u${id}.p`, 'p')
+    // (an image its own only where its reading is bounded by TeX's facts on both sides: its closing point, or the text after it in
+    // its unit; one that runs on to its unit's next mark may pass over a figure TeX set there, 2010.11929v2's wrapfigure after
+    // `\subsection{Inspecting \oursfull{}}`: MR 7)
+    if (e) claim(e, `u${id}.p`, BOUNDED.has(e.how) ? 'p' : 'q')
     // a placeholder whose ink cannot be told apart is in the text's range: hidden with it, it could not be kept in place, and the
     // spell check reads no symbol (=, ×, †): its unit is the original's
     else if (lost && unitOf.has(id) && !unitOf.get(id).unhidden && textOf.has(id)) unit(id).unhidden = 'marks'

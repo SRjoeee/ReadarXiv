@@ -14,10 +14,11 @@
 // page: a page is drawable where its words are arXiv's page's (PAGE_SAME of the two pages' words in common, in order, each word
 // compared once NFKC and the known text-layer substitutes are applied: arXiv's "\u01eb" for \u03b5) and none of its lines is found
 // on another page of arXiv's; over our own page a drawing is right by construction, so a page of the same words is drawn
-// whatever its lines' offsets, a line re-broken by a word, a line moved or set with other glue. A page whose lines moved across
-// its breaks (compile drift: another kernel, package or font moving a line or a display onto the page beside) is drawn too,
-// those lines' matched words taken out of both sides, where at most DRIFT_LINES moved at each end, at least half of the page
-// stays and the rest is arXiv's page's words (driftSame): content right before pages alike, the owner's ruling of 2026-10-30.
+// whatever its lines' offsets, a line re-broken by a word, a line moved or set with other glue. Pages whose lines moved across
+// their breaks (compile drift: another kernel, package or font moving a line or a display onto the page beside) are judged as a
+// run, the pages those breaks join, drawn whole or not at all: where the run's words are arXiv's same pages' (driftRun)
+// and none of its lines is found outside it (content right before pages alike, the owner's ruling of 2026-10-30; a run, so that
+// no drawn page of ours stands beside arXiv's page across a moved break, 2307.16209's p70|p71).
 // The layout maker draws a unit only where every page it is on is drawable (make.mjs). **Do the panes align**, per line,
 // information alone: each of our lines
 // in place or not, found on its own page with the median of its matched words' offsets within LINE_PLACE, or standing where its
@@ -400,13 +401,6 @@ export function carrier(marked, arxiv) {
 export const PAGE_SAME = 0.98
 /** the letters and digits a line of ours must hold for its finding on another page of arXiv's to make our page another's */
 export const LINE_EVIDENCE = 4
-/** a page whose lines moved across its breaks through compile drift is drawn where at most this many of its lines moved at
- *  each of its two ends, to or from the page beside it, and the rest of its words are arXiv's page's (driftSame): the owner's
- *  ruling of 2026-10-30, content right before pages alike. Measured (2026-10-30): 2610.30854v1, our TeX Live 2025's kernel
- *  dropping a 1 mm skip arXiv's sets, moves 1 to 4 lines at a page's ends (pages 1 to 9, a two-line display's four text-layer
- *  lines at the most), all drawn; 2307.16209's TeX Live 2023 compile running behind arXiv's build moves 1 and 2 at pages 69 and
- *  70's ends, drawn, and 5 to 15 at pages 71 to 76's, not */
-export const DRIFT_LINES = 4
 /** a page's longest common run of words is had for at most this many cells (its two counts' product): a page past it (8,000
  *  words alike, a crafted page's) is not drawable, that page alone. The heaviest real pages hold 2,000 to 3,000 words */
 const PAGE_CELLS = 25_000_000
@@ -433,26 +427,21 @@ function unstamped(ws, mine) {
   }
   return ws
 }
-/** whether page `page`'s words are arXiv's page's but for the lines that moved across its breaks: our words less those our
- *  lines found on another page matched there (`out`, our token indices), arXiv's less the words our other pages' lines matched on
- *  it (`into`, arXiv's token indices) — a word a moved line's partner does not hold stays in, on its side —, as many of each in
- *  common, in any order (the drawing is over our own page: a block a float set elsewhere in the page's reading order is the same
- *  page), at least PAGE_SAME of the two; and what stays at least half of the page's words on each side, so that the page is its
- *  own page still (two short pages that traded their lines are not); arXiv's stamp out of its first page as the page check takes
- *  it (`mine`, our page's words) */
-function driftSame(ours, arxiv, page, out, into, mine) {
-  const a = [], b = []
-  let ourAll = 0, theirAll = 0
-  for (const k of ours.keys()) { const t = ours[k]; if (!t || t.page !== page || typeof t.t !== 'string') continue; const w = pageWord(t.t); if (!w) continue; ourAll++; if (!out?.has(k)) a.push(w) }
-  for (const k of arxiv.keys()) { const t = arxiv[k]; if (!t || t.page !== page || typeof t.t !== 'string') continue; const w = pageWord(t.t); if (!w) continue; theirAll++; if (!into?.has(k)) b.push(w) }
-  const theirs = page === 1 ? unstamped(b, mine ?? []) : b
-  const n = a.length + theirs.length
-  if (2 * a.length < ourAll || 2 * b.length < theirAll || !n) return false
+/** whether a drift run's words (pages `run`, rising) are arXiv's same pages': as a bag, our words of those pages and arXiv's
+ *  (`mine`, `theirs`: each page's words, arXiv's stamp out of its first) as many of each in common, in any order, at least
+ *  PAGE_SAME of the two (the drawing is over our own pages, which hold the run's text set with other breaks, a float set
+ *  elsewhere in the reading order the same text); and most of them on their own pages, the words each page has in common with
+ *  arXiv's same page in order (`kept`, by page) more than half of the run's, so that the right pane shows mostly the left's text
+ *  (pages traded or read in another order are no drift: none of their words on its page). Measured (2026-11-05): 2307.16209's
+ *  pages 68 to 76, our TeX Live 2023 compile behind arXiv's build by up to 15 lines at a page's end, 0.9988 as a bag and 0.838
+ *  on their own pages (its page 76, a chapter's short last page, 0.438 alone); 2610.30854v1's pages 1 to 9, 0.9994 and 0.970 */
+function driftRun(run, mine, theirs, kept) {
   const m = new Map()
-  for (const w of a) m.set(w, (m.get(w) ?? 0) + 1)
-  let common = 0
-  for (const w of theirs) { const k = m.get(w); if (k) { common++; m.set(w, k - 1) } }
-  return (2 * common) / n >= PAGE_SAME
+  let n = 0, common = 0, own = 0
+  for (const q of run) for (const w of mine.get(q) ?? []) { m.set(w, (m.get(w) ?? 0) + 1); n++ }
+  for (const q of run) for (const w of theirs.get(q) ?? []) { n++; const k = m.get(w); if (k) { common++; m.set(w, k - 1) } }
+  for (const q of run) own += kept.get(q) ?? 0
+  return n > 0 && (2 * common) / n >= PAGE_SAME && 2 * own > n / 2
 }
 /** whether two word lists hold the same words, as many of each, in any order */
 function sameBag(a, b) {
@@ -515,51 +504,60 @@ export function lineCheckOf(ours, arxiv) {
     const p = c.lineAt[l]
     if (p && p.page !== ours[k].page) (elsewhere.get(ours[k].page) ?? elsewhere.set(ours[k].page, new Set()).get(ours[k].page)).add(l)
   }
-  // the lines that moved across a page break (compile drift): each of our lines found on another page of arXiv's takes its words
-  // out of our page and its partner's tokens out of arXiv's (`moved`, by arXiv's page: what the hover must not mirror onto our
-  // page); an evidence line counts at the end of the page it left and at the start of the page it came to, on both sides of the
-  // break (`ends`: our page's [start, end]), and one found two pages or more away makes its page no drift's (`far`)
+  // the lines that moved across a page break (compile drift): each of our lines found on another page of arXiv's takes its
+  // partner's tokens out of arXiv's page for the hover (`moved`, by arXiv's page: what it must not mirror onto our page); an
+  // evidence line joins the two pages of the break it crossed (`breaks`, p for p|p+1: how many crossed), and one found two pages
+  // or more away is told by its two pages (`away`)
   const pageOfLine = new Map()
   for (const k of ours.keys()) { const l = tokenLine[k]; if (l >= 0 && ours[k] && !pageOfLine.has(l)) pageOfLine.set(l, ours[k].page) }
-  const outOf = new Map(), moved = new Map(), ends = new Map(), far = new Set()
-  const end = (page, i) => { const e = ends.get(page) ?? ends.set(page, [0, 0]).get(page); e[i]++ }
-  // (one partner a line: arXiv's words a line of ours on their page took, then those a moved line took, none taken twice — a
-  // sentence on two of our pages and once on arXiv's is a sentence too many, its second page no drift's)
+  const moved = new Map(), breaks = new Map(), away = []
+  // (one partner a line, for the hover: arXiv's words a line of ours on their page took, then those a moved line took, none taken
+  // twice — a sentence on two of our pages and once on arXiv's has no second partner to mirror)
   const taken = new Set()
   for (const [l, page] of pageOfLine) if (c.lineAt[l]?.page === page) for (const k of c.partnerTokens[l]?.[1] ?? []) taken.add(k)
   for (const [l, page] of pageOfLine) {
     const p = c.lineAt[l]
     if (!p || p.page === page) continue
-    const [mineK, theirsK] = c.partnerTokens[l] ?? [[], []]
-    if (theirsK.some(k => taken.has(k))) { far.add(page); continue }
+    const theirsK = c.partnerTokens[l]?.[1] ?? []
+    if (theirsK.some(k => taken.has(k))) continue
     for (const k of theirsK) taken.add(k)
-    const out = outOf.get(page) ?? outOf.set(page, new Set()).get(page)
-    for (const k of mineK) out.add(k)
     const into = moved.get(p.page) ?? moved.set(p.page, new Set()).get(p.page)
     for (const k of theirsK) into.add(k)
     if ((letters.get(l) ?? 0) < LINE_EVIDENCE) continue
-    if (Math.abs(p.page - page) !== 1) { far.add(page); continue }
-    // (a line of arXiv's previous page at our page's start: our previous page lacks it at its end; and the other way)
-    if (p.page < page) { end(page, 0); end(p.page, 1) } else { end(page, 1); end(p.page, 0) }
+    if (Math.abs(p.page - page) !== 1) { away.push([page, p.page]); continue }
+    const lo = Math.min(page, p.page)
+    breaks.set(lo, (breaks.get(lo) ?? 0) + 1)
   }
-  const over = new Set(c.over), pages = [], undrawable = []
-  const all = new Set([...mine.keys(), ...theirs.keys(), ...c.pagePlaced.keys()])
-  for (const page of [...all].sort((a, b) => a - b)) {
+  const over = new Set(c.over), pages = [], kept = new Map()
+  const all = [...new Set([...mine.keys(), ...theirs.keys(), ...c.pagePlaced.keys()])].sort((a, b) => a - b)
+  for (const page of all) {
     const a = mine.get(page) ?? [], b = theirs.get(page) ?? []
     const n = a.length + b.length, common = n ? commonCount(a, b) : 0
     const overlap = common === null ? null : n ? (2 * common) / n : 1
-    const away = elsewhere.get(page)?.size ?? 0
+    kept.set(page, common ?? 0)
+    const found = elsewhere.get(page)?.size ?? 0
     // (the same words in another order are the same page: a column broken two lines elsewhere, its text layer's order another)
     const same = overlap !== null && overlap < PAGE_SAME && sameBag(a, b)
-    const kept = !over.has(page) && overlap !== null && (overlap >= PAGE_SAME || same) && away === 0
-    // (else a page of the same words but the lines that moved across its two breaks, at most DRIFT_LINES at each, none found
-    // further away: drawn, those lines alone with no partner on the page beside ours)
-    const e = ends.get(page) ?? [0, 0]
-    const drift = !kept && !over.has(page) && overlap !== null && !far.has(page) && (e[0] > 0 || e[1] > 0) && e[0] <= DRIFT_LINES && e[1] <= DRIFT_LINES && driftSame(ours, arxiv, page, outOf.get(page), moved.get(page), mine.get(page))
-    const drawable = kept || drift
-    pages.push({ page, words: [a.length, b.length], overlap: overlap === null ? null : Math.round(overlap * 10000) / 10000, ...(same ? { sameWords: true } : {}), elsewhere: away, ...(drift ? { drift: e.slice() } : {}), drawable })
-    if (!drawable) undrawable.push(page)
+    const drawable = !over.has(page) && overlap !== null && (overlap >= PAGE_SAME || same) && found === 0
+    pages.push({ page, words: [a.length, b.length], overlap: overlap === null ? null : Math.round(overlap * 10000) / 10000, ...(same ? { sameWords: true } : {}), elsewhere: found, drawable })
   }
+  // the drift runs: a run is as many pages in a row as the breaks an evidence line crossed join; a page in none is judged alone,
+  // as above. A run is drawn whole, or not at all, so that no drawn page of ours stands beside arXiv's own page across a break whose
+  // lines moved (the right pane shows arXiv's page where no unit is laid: a line moved across that break would be shown twice or
+  // not at all, 2307.16209's p70|p71): drawn where none of its pages is past its work or its bound, no evidence line of its pages
+  // is found outside it nor one of another page on it (`away`), and its words are arXiv's same pages', PAGE_SAME of the two as a
+  // bag over the run and most of them on their own pages (driftRun). Each of its pages says how many lines crossed at its
+  // [start, end] (`drift`) and its run (`run`)
+  const byPage = new Map(pages.map(e => [e.page, e]))
+  const runs = []
+  for (const q of all) { const r = runs.at(-1); if (r && r.at(-1) === q - 1 && (breaks.get(q - 1) ?? 0) > 0) r.push(q); else runs.push([q]) }
+  for (const r of runs) {
+    if (r.length < 2) continue
+    const inside = new Set(r)
+    const drawn = !r.some(q => over.has(q) || byPage.get(q).overlap === null) && !away.some(([x, y]) => inside.has(x) !== inside.has(y)) && driftRun(r, mine, theirs, kept)
+    for (const q of r) { const e = byPage.get(q); e.drift = [breaks.get(q - 1) ?? 0, breaks.get(q) ?? 0]; e.run = [r[0], r.at(-1)]; e.drawable = drawn }
+  }
+  const undrawable = pages.filter(e => !e.drawable).map(e => e.page)
   return { lines: { ...c.lines, placed: c.placed }, pageLines: c.pagePlaced, lineAt: c.lineAt, inPlace: Uint8Array.from(c.inPlace), tokenLine, pages, undrawable, over: [...c.over], moved: new Map([...moved].map(([p, ks]) => [p, Uint32Array.from(ks).sort()])) }
 }
 const before = (a, b) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] < b[i]; return false }

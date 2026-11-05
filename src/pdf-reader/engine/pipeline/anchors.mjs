@@ -407,6 +407,38 @@ export function boundsFromMarks(doc, marks, byPage = pageIndex(doc), reach = nul
   return out
 }
 
+/**
+ * The units' bounds with their pieces' points (anchors' bounds, Map id → [first, last]; `points` Map id → each piece's two
+ * points, [opening, closing], each the mark TeX set there ({ page, x, y }) or null, on `doc`'s own pages: the layout maker's,
+ * whose base page is the compile they were read from): Map id → [first, last, tokens], `tokens` the tokens the points stand at
+ * inside the unit's bounds, rising. An opening point stands before its piece's first glyph: the word whose box is nearest it on
+ * its baseline (tokenAtMark's reading of a start mark, never one 8 pt or more away: another column's). A closing point stands
+ * after its piece's last glyph, which a text layer may give no word (a closing parenthesis, a script): the last word that
+ * begins before it on its baseline (an end mark's reading), none before its opening point's word in the stream (so none of
+ * the column before). A unit with no such token keeps its bounds as they are. TeX set each point on the line its piece is set
+ * in, so that line is the unit's whatever words the match found on it (rangeOnPages, placeWith): a line a formula fills, a line
+ * of a piece's at a page's head (2307.16209v1's u128, `with $z_0c_{z_0} = …$` over the whole of page 44's first line; u88's
+ * `${}_sS_{\ell m}(\theta)$` alone on page 34's), one of formulas and citations the 3-grams of the unit's text find no word on
+ * (2610.21026v1's u166)
+ */
+export function withPoints(doc, bounds, points, byPage = pageIndex(doc)) {
+  if (!points?.size) return bounds
+  const out = new Map(bounds)
+  for (const [id, ab] of bounds) {
+    const pairs = points.get(id)
+    if (!pairs?.length) continue
+    const ks = new Set(), inside = k => k !== null && k >= ab[0] && k <= ab[1]
+    for (const [open, close] of pairs) {
+      const a = open ? tokenAtMark(doc, byPage, open, true) : null
+      if (inside(a)) ks.add(a)
+      const b = close ? tokenAtMark(doc, byPage, close, false) : null
+      if (inside(b) && b >= (inside(a) ? a : ab[0])) ks.add(b)
+    }
+    if (ks.size) out.set(id, [ab[0], ab[1], Int32Array.from([...ks].sort((x, y) => x - y))])
+  }
+  return out
+}
+
 // ---------------------------------------------------------------- text matching
 /** the document's 3-grams → the token indices of each occurrence; over the tokens with text, since the second part of a
  *  word joined across two items keeps a box and no text (tokenizeDocument), and would break every 3-gram through it.
@@ -901,8 +933,8 @@ export const placesIn = (ids, order) => { if (!order) return new Set(ids); const
  *  MARGIN tokens either side */
 const MARGIN = 100
 /** a unit whose marks do not bound it is searched on the pages its own marks stand on and DRIFT pages either side: a mark
- *  TeX writes before a page break stands a page from its words, and the marked original's pages and the document's drift a
- *  line or two apart (layout/carry.mjs DRIFT_LINES), never a page more */
+ *  TeX writes before a page break stands a page from its words, and the marked original's pages and the document's drift some
+ *  lines apart (layout/carry.mjs, the drift runs: 15 at the most, 2307.16209's), never a page more */
 export const DRIFT = 1
 
 /** each page's first token and last (the tokens are in page order), a page with none taking the next page's first and the
@@ -1308,11 +1340,13 @@ function ownOnLines(ks, pairs, line) {
   return per
 }
 function rangeOnPages(doc, f, line, lineSize) {
-  const [a, b] = f.bounded
+  const [a, b, points] = f.bounded
   if (doc[a].page === doc[b].page) return { ranges: [[a, b]], own: null }
   const per = ownOnLines(f.m.filter(k => k >= a && k <= b), f.pairs, line)
   const most = l => per.get(l) >= Math.min(3, lineSize.get(l)) * 0.5 && per.get(l) / lineSize.get(l) >= 0.4
-  const own = l => l === line[a] || l === line[b] || (per.has(l) && (most(l) || (per.has(l - 1) && most(l - 1)) || (per.has(l + 1) && most(l + 1))))
+  // (and the lines its pieces' points stand on, TeX's lines of the unit: withPoints)
+  const pointed = new Set(points ? Array.from(points, k => line[k]) : [])
+  const own = l => l === line[a] || l === line[b] || pointed.has(l) || (per.has(l) && (most(l) || (per.has(l - 1) && most(l - 1)) || (per.has(l + 1) && most(l + 1))))
   const out = []
   let lo = -1, hi = -1
   for (let k = a; k <= b; k++) {
@@ -1442,7 +1476,13 @@ function placeWith(doc, units, found, frame, only, line, lineSize, owner, lineOw
       const same = kept.filter(k => Math.abs(doc[k].h - body) <= body * 0.15)
       if (same.length) kept = same
     }
-    const m = f.bounded ? [...new Set([f.bounded[0], ...kept, f.bounded[1]])].sort((x, y) => x - y) : kept
+    // (over a page break, a bounded unit's pieces' points on a page none of its kept words is on, where it owns them: its tokens
+    // whatever their size or share of their line, as its marks are, so that the lines they stand on are among its lines there
+    // (rangeOnPages, withPoints). On a page its words were found on, they place it, as before; on one page its range is its own
+    // throughout, and what of it joins its marks is between's)
+    const keptOn = new Set(kept.map(k => doc[k].page))
+    const points = f.bounded?.[2] && doc[f.bounded[0]].page !== doc[f.bounded[1]].page ? Array.from(f.bounded[2]).filter(k => owner[k] === u && !keptOn.has(doc[k].page)) : []
+    const m = f.bounded ? [...new Set([f.bounded[0], ...kept, ...points, f.bounded[1]])].sort((x, y) => x - y) : kept
     return m.length ? m : null
   })
   // a display a unit sets before its first words or after its last (latex-front's `lead`, `trail`: its letters) stands
