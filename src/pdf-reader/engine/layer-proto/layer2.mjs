@@ -3160,7 +3160,9 @@ function slotsAt(blocks, st, P, s) {
       const target = k === 0 || (onGrid && !flows && k < b.B.length) ? k : null
       // (each slot the measure of the line it is laid at, where the paragraph's changed: measuresOf; the block's grid, its
       // pitch and its flow its own across the change, one paragraph's)
-      const [mx0, mx1] = b.measures && !b.centred ? measureAt(b, y, (onGrid || shared) && !flows && k < G.length ? k : -1) : [b.x0, b.x1]
+      // (a line flowed on from the unit before over the rows its translation left, the shared row included, `flowX` (run.mjs
+      // layout2): the measure of the two blocks around that row; under it, the unit's own rows')
+      const [mx0, mx1] = flows && b.flowX && y >= b.flowX.y - 0.05 ? [b.flowX.x0, b.flowX.x1] : b.measures && !b.centred ? measureAt(b, y, (onGrid || shared) && !flows && k < G.length ? k : -1) : [b.x0, b.x1]
       // (the first line's start: the block's indent, or where a shared line leaves it, `start`, run.mjs layout2)
       const x0 = firstBlock && k === 0 && b.start !== undefined ? b.start : firstBlock && k === 0 && !b.centred ? b.x0 + b.indent : mx0
       // (a line laid over a display TeX set with its short skip, `shortSkips` (tex.mjs shortSkipsOf: under a line of the unit
