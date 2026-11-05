@@ -1,0 +1,17 @@
+{
+  "date": "2026-11-06",
+  "by": "the maintainer",
+  "on": "fix/lost-y-ink-lines (LAYOUT 38, REMOVAL 26): the lost class's pieces placed (2307.16209v1 u88 and u128 among them), and 2307.16209v1's pages 68 to 76 drawn as one drift run",
+  "quote": "\u884c \u5c31\u8fd9\u6837\u5427",
+  "english": "fine, let it be so: approved after the crops of 2307.16209v1-zh pages 33, 34, 43, 44 and 73 (arXiv's page, next's right pane, this branch's right pane), 2026-11-06, relayed by the coordinator",
+  "measures": [
+    "pitch spread",
+    "frames past the right edge",
+    "paragraph gaps tighter than the lines beside them"
+  ],
+  "targets": [
+    "zh"
+  ],
+  "scope": "the rules gate on the pack 3426c25e against next 3dff73af, at ce6e4ea5: zh text units left English 25 to 4; pitch spread 0.483 to 0.611, frames past the right edge 0.070 to 0.073, paragraph gaps tighter than the lines beside them 46 to 49 (0.174 to 0.181); de, es, fr, ja, ko and ru unchanged. Every page that moved is a 2307.16209v1-zh page where a unit left English is drawn now (pages 33, 34, 43 and 44: u88 and u128; pages 70 to 76: the drift run's 17 paragraphs); no frame drawn on the base moved",
+  "why": "21 text units of 2307.16209v1 that were left English are drawn, and the measures move by their frames alone, the frames drawn before unchanged: a page's pitch spread is between its frames, and a measure counts a gap only between two drawn frames (page 34: u88's lines stand at its source's single-spaced pitch around its two displays, the paragraph after it is drawn with a grown pitch). The frame that moves the pitch spread and the right edge is the gate's own reading: it counts a paragraph's lines on both sides of its displays as one frame (page 34: u88's top line, on the formula-only line that is now its row, and its lines after the two displays, pitch 6.85 against u89's 1.33; page 44: u128's frame read 318 pt past a short line's end); the drawings show no line past its column and no uneven pitch inside a block"
+}
