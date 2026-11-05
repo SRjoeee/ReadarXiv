@@ -75,15 +75,19 @@ import { CLASS_IDS } from '../rules/content-classes.mjs'
  *  item's eleventh value its code point offsets, where it has any), and its items' places and extents and its links' numbers at
  *  a thousandth of a point (draw.mjs DRAW_ROUND); a reader of 14 refuses the rows, and a bundle of 14 is not found under 15's
  *  CTAG and is prepared again. Every other shape is 14's, and this reader reads 13's and 14's objects too: a draw of either is
- *  read of its fonts' maps, its numbers as written */
-export const BUNDLE5 = '15'
+ *  read of its fonts' maps, its numbers as written. 16 (the review of #588, 2026-11-05: a stroke under a figure label's text):
+ *  a figure row carries the depth under its baseline of the nearest stroke under its text (figure-rows.mjs FIGURE_ROW, one value
+ *  more, -1 where none is), which the layer holds a translation above at the size it draws it in its faces (figure-fit.mjs); a
+ *  reader of 15 refuses the row, and a bundle of 15 is not found under 16's CTAG and is prepared again. Every other shape is
+ *  15's, and this reader reads 15's objects too: a row of 11's to 15's tells no stroke under its text (FIGURE_ROW_15) */
+export const BUNDLE5 = '16'
 /** the formats this reader takes: its own, and 7's (a bundle drawn over arXiv's PDF, whose objects 9 reads unchanged: its
  *  head is read as `base.source` 'arxiv', with no `orig`), 9's and 10's. Every object of a bundle is of its head's format */
-export const BUNDLES_READ = Object.freeze(['7', '9', '10', '11', '12', '13', '14', BUNDLE5])
+export const BUNDLES_READ = Object.freeze(['7', '9', '10', '11', '12', '13', '14', '15', BUNDLE5])
 /** the formats whose parts may carry figure units (`figures`, figure-rows.mjs: 10's rows without a set or a room) */
-const FIGURES_READ = Object.freeze(['10', '11', '12', '13', '14', BUNDLE5])
+const FIGURES_READ = Object.freeze(['10', '11', '12', '13', '14', '15', BUNDLE5])
 /** the formats whose left parts may carry a line map (`lines`, 12's) */
-const LINES_READ = Object.freeze(['12', '13', '14', BUNDLE5])
+const LINES_READ = Object.freeze(['12', '13', '14', '15', BUNDLE5])
 /** a units chunk's own format (amendment M12): raised only by a change to the chunk's shape, so that a change to a part's
  *  shape renames no unit identity and redoes no translation. 3 (BUNDLE5 14): an open may carry a fourth value, what its pair
  *  sets (units.mjs SETS_NOTHING); 1's chunks are 3's of no such open, and this reader reads them */
