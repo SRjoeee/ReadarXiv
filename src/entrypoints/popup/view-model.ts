@@ -18,6 +18,7 @@ import type { Mode } from '@/core/renderer'
 import { supportsTarget } from '@/providers/microsoft'
 import { BUILT_IN_PROMPTS } from '@/providers/prompt-library'
 import type { ProviderStatus } from '@/providers/transport'
+import { REQUEST_TIMEOUT_ERROR_NAME } from '@/providers/types'
 import type { EntryStatus, PageStatus } from '@/shared/messages'
 import type { StartResult } from '@/core/session'
 import { keyMadeGood, pageDecision } from '@/shared/page-action'
@@ -521,6 +522,8 @@ export function actionErrorText(e: unknown): string {
   if (e instanceof NoActiveTabError) return S.noActiveTab
   // By name: thrown here by a write of the popup's own, or in the page by the mode's save and carried back as a failure reply
   if (e instanceof Error && e.name === CONFIG_UNREADABLE) return S.settingsUnreadable
+  // A timeout of the background's queue is worded like every other timeout; its message (a task id, milliseconds) is for the console
+  if (e instanceof Error && e.name === REQUEST_TIMEOUT_ERROR_NAME) return reasonText('timeout')
   return e instanceof Error ? e.message : String(e)
 }
 
@@ -532,6 +535,7 @@ export function startRefusalText(result: Extract<StartResult, { started: false }
     case 'not-paper': return S.page.notPaper
     case 'nothing-to-translate': return S.page.nothingToTranslate
     case 'backend-silent': return S.page.backendSilentWith(result.detail ?? '')
+    case 'backend-timeout': return reasonText('timeout')
     case 'no-service': return S.page.noService
   }
 }

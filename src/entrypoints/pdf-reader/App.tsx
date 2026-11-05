@@ -61,8 +61,8 @@ export function App({ controller, embedded }: { controller: ReaderController; em
   }, [contents])
   const swapped = state.swapped
   useEffect(() => { document.documentElement.toggleAttribute('data-axt-swapped', swapped) }, [swapped])
-  // the tab says what is being read; the product's name until the title is known
-  useEffect(() => { document.title = state.title || 'Read arXiv' }, [state.title])
+  // the tab says what is being read; the page's own title (the product's name) stands until one is known, and a paper's, once set, is never put back to it
+  useEffect(() => { if (state.title) document.title = state.title }, [state.title])
   return (
     <>
       <Toolbar controller={controller} embedded={embedded} contents={contents} onContents={() => setContents(open => !open)} />

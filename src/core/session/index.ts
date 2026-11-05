@@ -25,7 +25,7 @@ import { newSessionId } from '@/core/scheduler/session'
 import { translateTitle, type TitleTranslator } from '@/core/scheduler/title'
 import type { TranslationTransport } from '@/providers/transport'
 import { isFigureText, visibleText } from '@/core/rules/latexml'
-import { isPermanentErrorKind, type TranslateContext } from '@/providers/types'
+import { REQUEST_TIMEOUT_ERROR_NAME, isPermanentErrorKind, type TranslateContext } from '@/providers/types'
 import type { PageStatus } from '@/shared/messages'
 import type { ImageProgress, OcrCall, OcrMessageResponse } from '@/shared/ocr'
 import { createIdleTrace } from './idle-trace'
@@ -57,7 +57,7 @@ export interface SessionDeps {
 }
 
 /** Why a start was refused; the popup turns the code into the interface's sentence (DESIGN §4.2: the core knows no locale pack) */
-export type StartRefusal = 'already-on' | 'session-over' | 'not-paper' | 'nothing-to-translate' | 'backend-silent' | 'no-service'
+export type StartRefusal = 'already-on' | 'session-over' | 'not-paper' | 'nothing-to-translate' | 'backend-silent' | 'backend-timeout' | 'no-service'
 
 export type StartResult = { started: true; reason?: undefined; detail?: undefined } | { started: false; reason: StartRefusal; detail?: string }
 
@@ -294,6 +294,8 @@ export function createPageSession(deps: SessionDeps): PageSession {
     try {
       status = await backend.status(session, { fresh: true })
     } catch (e) {
+      // A queue timeout's message holds a task id and milliseconds, for the console: the reader gets the code, and the host its sentence
+      if (e instanceof Error && e.name === REQUEST_TIMEOUT_ERROR_NAME) return { started: false, reason: 'backend-timeout' }
       return { started: false, reason: 'backend-silent', detail: e instanceof Error ? e.message : String(e) }
     }
     // The status request bound this session to a chain provisionally (provider-status.ts). A start refused from here

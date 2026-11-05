@@ -11,8 +11,10 @@ import { TranslationCancelledError } from "./cancellation"
 import { BinaryHeapPQ } from "./priority-queue"
 import { defaultRequestRetryPolicy } from "./retry-policy"
 
-/** Timeout errors are recognised by name (the same pattern as cancellation.ts); the service classifies them as timeout by it */
-export const REQUEST_TIMEOUT_ERROR_NAME = "RequestTimeoutError"
+import { REQUEST_TIMEOUT_ERROR_NAME } from "../types"
+
+/** Timeout errors are recognised by name (the same pattern as cancellation.ts); the service classifies them as timeout by it. The name lives in ../types, where the pages that word it can reach it without the queue */
+export { REQUEST_TIMEOUT_ERROR_NAME }
 
 /**
  * Added in this project (issue #43): the wait `nextDispatchEtaMs()` reports when the concurrency is saturated.
