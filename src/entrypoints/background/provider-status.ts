@@ -1,5 +1,6 @@
 import type { Config } from '@/config/schema'
 import type { ProviderStatus, TranslationTransport } from '@/providers/transport'
+import { REQUEST_TIMEOUT_ERROR_NAME } from '@/providers/types'
 import type { ChainHolder } from './chain'
 import type { SessionRouter } from './sessions'
 
@@ -41,7 +42,10 @@ export const STATUS_DEADLINE_MS = 5_000
 export async function statusInForce(chain: Pick<ChainHolder, 'current' | 'replaced'>, deadlineMs = STATUS_DEADLINE_MS): Promise<{ transport: TranslationTransport; status: ProviderStatus }> {
   let expire: ReturnType<typeof setTimeout> | undefined
   const deadline = new Promise<never>((_, reject) => {
-    expire = setTimeout(() => reject(new Error(`the chain's status did not settle within ${deadlineMs} ms`)), deadlineMs)
+    expire = setTimeout(() => {
+      // named a timeout, as the queue's are: the page that gets the failure reply words it from the name, and the milliseconds stay in the message, for the console
+      reject(Object.assign(new Error(`the chain's status did not settle within ${deadlineMs} ms`), { name: REQUEST_TIMEOUT_ERROR_NAME }))
+    }, deadlineMs)
   })
   try {
     for (;;) {
