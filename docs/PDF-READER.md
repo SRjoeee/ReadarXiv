@@ -4407,7 +4407,10 @@ marks of no digit: the reader breaks its words at that baseline and kept the ori
 reader keeps that label as the original's ink, the first line laid after it; where the line is not laid from where TeX set it,
 centred (by the file's flag, LAYOUT 37, or by the door's reading of its lines) or flush right, the label goes with it, its ink
 copied as the line's first item and erased where it stood (`run.mjs` `carried`, as a source unit's label group was carried on a
-centred line before): an ink unit has no label group, and its label's ink is its text's, hidden with it. Left where it stood, the
+centred line before): an ink unit has no label group, and its label's ink is its text's, hidden with it. The copy stands as high
+over the line's baseline as TeX set it (the baseline the line's own characters give), so that a raised mark stays raised: set by
+its own baseline, it had stood on the translation's, 3.8 pt low, and so had every raised label carried before (2610.20848v1's
+seventeen affiliations' letters). Left where it stood, the
 shorter translation centred alone stood up to 118 pt from it (12 lines of 7 of the 87 papers, all the author block's: 2610.20716v1's
 "1" 93 pt left of its translated place, 2610.21765v1, 2610.21770v1, 2610.22065v1 among them). A label the wrap left the
 original's ink (`labelKept`) stays where it stands. One
