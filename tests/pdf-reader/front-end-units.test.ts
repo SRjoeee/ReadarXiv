@@ -329,6 +329,49 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     // (a call TeX would not end before the paragraph does stays as before: the command's placeholder alone)
     expect(texts(project(doc('A \\tikz \\draw (0,0)\n\nWords of the next paragraph.', '\\usepackage{tikz}')))).toContain('Words of the next paragraph.')
   })
+  it('a web address\'s `%` in the body is a character where TeX reads the address from the file, as hyperref reads it (2501.14787v1\'s `\\href{…Newton%27s_method#…}{here}`: the address cut at its `%`, the rest of its line a comment, five paragraphs LOST)', () => {
+    const p = project(doc('One may ask. See \\href{https://en.wikipedia.org/wiki/Newton%27s_method#Failure_analysis}{here} for examples of when it breaks.\n\nThe next paragraph.', '\\usepackage{hyperref}'))
+    expect(texts(p)).toEqual(['One may ask. See here for examples of when it breaks.', 'The next paragraph.'])
+    expect(units(p)[0]?.pieces.find(x => x.t === 'open')?.src).toBe('\\href{https://en.wikipedia.org/wiki/Newton%27s_method#Failure_analysis}{')
+    // (the marked file keeps the address as the paper writes it, and the words after it are marked as the unit's)
+    const tex = patched(p)
+    expect(tex).toContain('\\href{https://en.wikipedia.org/wiki/Newton%27s_method#Failure_analysis}{<T0>}')
+    // (a command of the paper's own, in any form TeX defines one, reads its argument as tokens: `%` a comment there, as before —
+    // \\let and xparse's forms among them, not only \\newcommand's and \\def's: the review of #596)
+    for (const def of ['\\let\\url\\textbf', '\\NewDocumentCommand{\\url}{m}{\\textbf{#1}}', '\\newcommand{\\url}[1]{\\textbf{#1}}']) {
+      const own = project(doc('See \\url{A% } ignored text\nB} and the words after it.', def))
+      expect(texts(own).join(' '), def).not.toContain('ignored text')
+    }
+    // (a fallback a package the paper loads overrides is no definition of the paper's: llncs.cls' \\@ifundefined{url}{\\def\\url#1{#1}}{}
+    // under hyperref, whose \\url reads its address as characters)
+    expect(texts(project(doc('See \\url{https://x.org/a%20b} and the rest.', '\\usepackage{hyperref}\n\\makeatletter\\@ifundefined{url}{\\def\\url#1{#1}}{}\\makeatother')))).toContain('See and the rest.')
+    // (code the walk passes over is none of TeX's commands: a `\\url{` inside \\verb, an inline listing or minted's inline code, or the
+    // body of an environment read by lines or skipped, a code environment's, opens no address — its `%` after the code is a comment as
+    // before, and the words it hides stay hidden: the second review of #596)
+    for (const code of ['\\mintinline{tex}|\\url{|', '\\lstinline[language=TeX]|\\url{|', '\\lstinline{\\url{}', '\\verb|\\url{|', '\\verb*!\\url{!']) {
+      const t = `See ${code}.% hidden words }\nNext words here.`
+      expect(urlPercents(t, 'main.tex'), code).toBe(t)
+      expect(texts(project(doc(t, '\\usepackage{listings}\\usepackage{minted}'))).join(' '), code).not.toContain('hidden words')
+    }
+    for (const env of ['lstlisting', 'verbatim', 'tikzpicture']) {
+      const t = `\\begin{${env}}\n\\url{a%b} {\n\\end{${env}}\nSee \\url{c%d} now.`
+      expect(urlPercents(t, 'main.tex').split('%').length, env).toBe(2)
+    }
+    expect(urlPercents('\\begin{mycode}\n{ \\url{a%b}\n\\end{mycode}\n\\url{c%d}', 'main.tex', { skipEnvs: new Set(['mycode']) }).split('%').length).toBe(2)
+    // (an address command TeX does not run but prints, shows or defines — the operand of \\string, \\meaning, \\noexpand, \\show, a
+    // \\let's or a \\def's parameter text, as tailOf reads a body's last command — reads no address: what follows it is a group, its `%`
+    // a comment, and the words it hides stay hidden: the third review of #596)
+    expect(texts(project(doc('See \\string\\url{A% } hidden words\nB} and the rest.'))).join(' ')).not.toContain('hidden words')
+    for (const t of ['See \\string\\url{A% } hidden words\nB} and the rest.', '\\meaning\\href{a%b}', '\\noexpand\\url{a%b}', '\\show\\url{a%b}', '\\let\\saved=\\url{a%b}', '\\def\\x\\url{a%b}']) expect(urlPercents(t, 'main.tex'), t).toBe(t)
+    // (a comment between the command and its operand passed over as TeX passes it, through its line's end: the fourth review of #596)
+    for (const t of ['See \\string% note\n\\url{A% } hidden words\nB} and the rest.', 'See \\string % a\n  % b\n\\url{A% } hidden words\nB} x.']) {
+      expect(urlPercents(t, 'main.tex'), t).toBe(t)
+      expect(texts(project(doc(t))).join(' '), t).not.toContain('hidden words')
+    }
+    for (const t of ['text \\url{a%b}', '\\textbf x\\url{a%b}', 'See 50\\% more\n\\url{a%b} here.']) expect(urlPercents(t, 'main.tex'), t).not.toBe(t)
+    // (in an argument the walk reads it as before: a comment, which a paper avoids there by writing `\\%`)
+    expect(texts(project(doc('See \\footnote{\\url{a\\%b}} the rest.')))).toContain('See the rest.')
+  })
   it('a web address\'s `%` is a character in a .bbl\'s entries alone: \\url, \\nolinkurl, \\path and \\href\'s first argument at an entry\'s top level (2610.21770v1\'s %3F, 2608.18626v1\'s %26)', () => {
     const bbl = (entries: string, head = '') => `\\begin{thebibliography}{9}\n\\providecommand{\\url}[1]{\\texttt{#1}}\n${head}${entries}\n\\end{thebibliography}\n`
     const tex = '\\documentclass{article}\n\\usepackage{hyperref}\n\\begin{document}\nSee \\cite{a,b,c}.\n\\bibliographystyle{plain}\n\\bibliography{refs}\n\\end{document}\n'
@@ -344,11 +387,11 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     const entry = (t: string) => bbl(`\\bibitem{a}\nSome words ${t}\n`)
     for (const t of ['\\newblock \\url{https://a.org/x%3Fy}.', '\\newblock URL \\url{a%3F}', '\\href{https://b.org/p%20q}{The title}', '\\href [x] {a%b} {c}', '\\path{a%b}', '\\nolinkurl{a%b}', '\\burl{a%b}']) expect(urlPercents(entry(t), 'main.bbl'), t).not.toBe(entry(t))
     expect(urlPercents(entry('\\href{a%3F%3D}{b%c}'), 'main.bbl').split('%').length).toBe(2)
-    // (anywhere else a comment, as the walk read it before: the body, whatever holds the address there — every shape the reviews
-    // of #501 raised among them, an inactive conditional's branch too —, and a .bbl's address in a group, in a field's argument,
-    // before the first \\bibitem or outside the bibliography)
+    // (anywhere else a comment, as the walk read it before: in the body, whatever may have read the address before the command
+    // does — every shape the reviews of #501 raised among them, an inactive conditional's branch too —, and a .bbl's address in a
+    // group, in a field's argument, before the first \\bibitem or outside the bibliography)
     const body = {
-      'the paragraph\'s level': ['\\url{a%b}', '\\href [x] {a%b} {c}', 'See {\\bf \\url{a%b}} now.'],
+      'a group': ['See {\\bf \\url{a%b}} now.'],
       'an argument': ['\\footnote{\\url{a%b}}', '\\newcommand{\\x}{\\url{a%b}}', '\\textbf{x \\url{a%b}}'],
       'an optional argument': ['\\section[See \\url{a% ignored\nb}]{Title}', '\\item[\\url{a%b}] x'],
       'a star': ['\\section*{See \\url{a% } } x\nb} Rest}', '\\caption*{\\url{a%b}}'],
@@ -357,7 +400,24 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
       'an inactive conditional\'s branch': ['\\iffalse\nHidden \\url{a% } \\fi Shown\n\\fi'],
       'a collected or verbatim body, a comment': ['\\begin{tabularx}{l}\\url{a%b}\\end{tabularx}', '\\begin{verbatim}\\url{a%b}\\end{verbatim}', '% \\url{a%b}'],
     }
-    for (const [shape, ts] of Object.entries(body)) for (const t of ts) expect(urlPercents(t, 'main.tex'), `${shape}: ${t}`).toBe(t)
+    for (const [shape, ts] of Object.entries(body)) for (const t of ts) expect(urlPercents(t, 'main.tex', { ifs: new Set(['ifdraft']) }), `${shape}: ${t}`).toBe(t)
+    // (and where a conditional, an environment or a bracket is open, or the paper defines the command itself, or a \\fi closes no
+    // conditional the file opens: a command of the paper's may have opened one, `\\def\\iffa{\\iffalse}`)
+    const opened = {
+      'a conditional': ['\\ifdraft x\n\\url{a%b}\n\\fi', '\\ifx\\a\\b\n\\href{a%b}{c}\n\\fi'],
+      'an environment the file opens': ['\\begin{itemize}\n\\item \\url{a%b}\n\\end{itemize}', '\\begin{frame}\n\\url{a%b}\n\\end{frame}'],
+      'a bracket': ['\\item[see\n\\url{a%b}] x'],
+      'a \\fi of no conditional of the file\'s': ['\\x\n\\url{a%b}\n\\fi'],
+    }
+    for (const [shape, ts] of Object.entries(opened)) for (const t of ts) expect(urlPercents(t, 'main.tex', { ifs: new Set(['ifdraft']) }), `${shape}: ${t}`).toBe(t)
+    expect(urlPercents('\\url{a%b}', 'main.tex', { defined: new Set(['url']) })).toBe('\\url{a%b}')
+    // (the file's top level, where TeX reads the address from the file as the command sets its `%` a character: the paragraph's
+    // level, the document's body, a \\newif's name not a conditional opened, a conditional closed before it, an environment closed
+    // before it, an environment read by lines passed over; `\\%` a command, `\\\\%` a pair and then the character)
+    const top = ['\\url{a%b}', '\\href [x] {a%b} {c}', '\\begin{document}\nSee \\href{https://x.org/Newton%27s_method#a}{here} now.\n\\end{document}', '\\newif\\ifdraft\n\\url{a%b}', '\\ifdraft x\\fi\n\\url{a%b}', '\\begin{itemize}\\item x\\end{itemize}\n\\url{a%b}', '\\begin{verbatim}\n\\end{itemize} {\n\\end{verbatim}\n\\url{a%b}']
+    for (const t of top) expect(urlPercents(t, 'main.tex', { ifs: new Set(['ifdraft']) }), t).not.toBe(t)
+    expect(urlPercents('\\href{a%3F%3D}{b%c}', 'main.tex').split('%').length).toBe(2)
+    expect(urlPercents('\\url{a\\%b} and \\url{c\\\\%d}', 'main.tex').split('%').length).toBe(2)
     for (const t of ['{\\em \\url{a%b}}', '\\bibinfo{note}{\\url{https://a.org/x%3Fy}}', '\\newblock \\emph{\\url{a%b}}']) expect(urlPercents(entry(t), 'main.bbl'), t).toBe(entry(t))
     expect(urlPercents(bbl('\\bibitem{a}\nWords.\n', '\\providecommand{\\x}{\\url{a%b}}\n'), 'main.bbl')).toBe(bbl('\\bibitem{a}\nWords.\n', '\\providecommand{\\x}{\\url{a%b}}\n'))
     expect(urlPercents(`\\url{a%b}\n${entry('x')}`, 'main.bbl')).toBe(`\\url{a%b}\n${entry('x')}`)

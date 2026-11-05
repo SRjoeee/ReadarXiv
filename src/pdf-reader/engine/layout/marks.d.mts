@@ -250,7 +250,7 @@ export declare function markedPages(marked: unknown, log: string, o: MarkedOptio
  *  page could not be looked up), and the pages with no ink, by why */
 export declare function readMarked(marked: unknown, log: string, o: MarkedOptions): Promise<{ marks: LayoutMarks; unitMarks: UnitMarks | null; dark: { unread: number[]; capped: number[]; degraded: number[] } }>
 /** each opening point's piece as the page stream finds it (layout/stream.mjs Follow): of the units and the destinations' names */
-export declare function followsOf(units: readonly SourceUnit[], names: ReadonlySet<string>, texts?: readonly string[] | ReadonlyMap<string, string> | null): (name: string) => import('./stream.mjs').Follow | null
+export declare function followsOf(units: readonly SourceUnit[], names: ReadonlySet<string>, texts?: readonly string[] | ReadonlyMap<string, string> | null, inkless?: Iterable<string> | null): (name: string) => import('./stream.mjs').Follow | null
 /** the display a unit opens with, which the marking passes over, by the unit's start mark's name (`<i>s`): the opening mark's name
  *  it would have had and its group's later displays', none of them a destination set (`names`); null for any other */
 export declare function headsOf(units: readonly SourceUnit[], names: ReadonlySet<string>): (start: string) => import('./stream.mjs').Head | null
