@@ -12,9 +12,10 @@
 //        (no double ink);
 //   O    every drawn figure's band is then one colour (in 16 levels a channel, an edge's pixel in from each side) but where a fill
 //        painted before its text changes tone (its ground, figure-text.mjs shapeRoom: PIPELINE 57's rule) or a stroke painted
-//        before it runs under it, below the band a translation is drawn in (figure-text.mjs drawnFoot: a gridline under a legend
-//        entry's descenders): each pair of neighbouring pixels of the band agrees, the pixels within EDGE_PX of such a fill's
-//        edges, and of such a stroke's ink, aside. No stroke, glyph, image or
+//        before it runs under it, below its baseline (figure-text.mjs roomOf's `under`: a gridline under a legend entry's
+//        descenders, which the layer draws a translation over only where the translation stays above it, figure-fit.mjs): each
+//        pair of neighbouring pixels of the band agrees, the pixels within EDGE_PX of such a fill's edges, and of such a stroke's
+//        ink, aside. No stroke, glyph, image or
 //        paint over the text inside the box its translation is drawn in, which no translation could then cover (no overlap with
 //        the figure's lines); what lies under the text, a highlight's tones, is the ground the original was set on. `Oflat`, the
 //        count of bands of more than one colour whatever their ground (the check before 57), is reported beside it;
@@ -40,8 +41,7 @@ import { dirname, join } from 'node:path'
 import { deflateSync, inflateSync } from 'node:zlib'
 import * as PL from '@cantoo/pdf-lib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { fitFigureSet, sameAsSource } from '../../../src/pdf-reader/engine/layer-proto/figure-fit.mjs'
-import { drawnFoot } from '../../../src/pdf-reader/engine/layout/figure-text.mjs'
+import { CJK_FOOT, fitFigureSet, sameAsSource } from '../../../src/pdf-reader/engine/layer-proto/figure-fit.mjs'
 import { pageInk } from '../../../src/pdf-reader/engine/layout/ink.mjs'
 import { wrapFinal } from '../../../src/pdf-reader/engine/layout/wrap.mjs'
 import { openPaper } from '../../../src/pdf-reader/engine/pipeline/live.mjs'
@@ -93,18 +93,21 @@ async function fetchMt(texts) {
 /**
  * The fit rule over a paper's drawn units (wrapFinal's figures.units), BUNDLE 10's (each label alone in its box) against this
  * one's (set by set, rooms taken), given each label's translation width at size 1 (`widthOf`, null where nothing is drawn: a
- * translation that says its source again): the labels drawn and at full size on each side, the sets of two or more drawn units
- * whose sizes differ, and those whose size changed
+ * translation that says its source again) and its depth under its baseline (`depthOf`, the layer's figureRunsDepth: a CJK one's em
+ * box, CJK_FOOT, the most the layer reads a CJK run at, no ink being measured here; null where the model cannot tell): the labels
+ * drawn and at full size on each
+ * side, the sets of two or more drawn units whose sizes differ, those whose size changed, and those this one leaves the original's
+ * where their translation reaches the stroke under their text (`under`, figure-fit.mjs)
  */
-function fitCounts(units, widthOf, mixedOf) {
-  const items = units.map(u => ({ u, width1: widthOf(u), mixed: mixedOf(u) })).filter(x => x.width1 !== null)
+function fitCounts(units, widthOf, mixedOf, depthOf) {
+  const items = units.map(u => ({ u, width1: widthOf(u), mixed: mixedOf(u), depth1: depthOf(u) ?? undefined })).filter(x => x.width1 !== null)
   // (BUNDLE 10's layer drew a translation in one face, a CJK one where it held a CJK character, whose served slices hold no Latin
   // letter or digit: one that mixed them was refused, `served`)
   const old = new Map(items.map(x => [x, x.mixed ? null : fitFigureSet([{ f: { ...x.u, before: 0, after: 0 }, width1: x.width1 }], FLOOR)[0]]))
   const bySet = new Map()
   for (const x of items) (bySet.get(`${x.u.page}:${x.u.set}`) ?? bySet.set(`${x.u.page}:${x.u.set}`, []).get(`${x.u.page}:${x.u.set}`)).push(x)
   const now = new Map()
-  for (const list of bySet.values()) fitFigureSet(list.map(x => ({ f: x.u, width1: x.width1 })), FLOOR).forEach((fit, i) => now.set(list[i], fit))
+  for (const list of bySet.values()) fitFigureSet(list.map(x => ({ f: x.u, width1: x.width1, depth1: x.depth1 })), FLOOR).forEach((fit, i) => now.set(list[i], fit))
   const drawn = m => [...m.values()].filter(Boolean).length
   const sizeOf = (m, x) => (m.get(x) ? m.get(x).size / x.u.size : null)
   let sets = 0, mixedOld = 0, mixedNew = 0, resized = 0
@@ -117,7 +120,7 @@ function fitCounts(units, widthOf, mixedOf) {
     if (list.some(x => { const a = sizeOf(old, x), b = sizeOf(now, x); return (a === null) !== (b === null) || (a !== null && Math.abs(a - b) > 0.005) })) resized++
   }
   const atFull = m => items.filter(x => { const k = sizeOf(m, x); return k !== null && k > 0.995 }).length
-  return { labels: items.length, drawnOld: drawn(old), drawnNew: drawn(now), fullOld: atFull(old), fullNew: atFull(now), sets, mixedOld, mixedNew, resized }
+  return { labels: items.length, drawnOld: drawn(old), drawnNew: drawn(now), fullOld: atFull(old), fullNew: atFull(now), sets, mixedOld, mixedNew, resized, under: [...now.values()].filter(v => v === false).length }
 }
 
 /** a document's pages rendered at SCALE, the groups `off` names hidden */
@@ -170,15 +173,15 @@ function paintedBefore(ink, u) {
   const t = ink.turned.find(x => !x.unseen && x.box >= 0 && near(x.ox, u.x) && near(x.oy, u.y))
   return t ? t.box : -1
 }
-/** the strokes under a drawn unit's text (figure-text.mjs shapeRoom's `under`): pageInk's figures' reading of the page, each
- *  stroke of no fill painted before its text at an alpha above 0 whose part across the unit's band, its half width out, lies
- *  wholly below the band a translation is drawn in (drawnFoot), its segments (x0, y0, x1, y1 on the page) with their half width
- *  and the box the page shows of it. None where the unit's glyph is not found */
+/** the strokes under a drawn unit's text (figure-text.mjs shapeRoom's `under`, the unit's `under` their depth): pageInk's figures'
+ *  reading of the page, each stroke of no fill painted before its text at an alpha above 0 whose part across the unit's band, its
+ *  half width out, lies wholly below its baseline and under its box, its segments (x0, y0, x1, y1 on the page) with their half
+ *  width and the box the page shows of it. None where the unit has none, or its glyph is not found */
 function underStrokes(ink, u) {
-  if (!ink) return []
+  if (!ink || u.under == null) return []
   const at = paintedBefore(ink, u)
   if (at < 0) return []
-  const out = [], foot = drawnFoot(u.size), lo = u.descent * u.size, hi = u.ascent * u.size
+  const out = [], lo = u.descent * u.size, hi = u.ascent * u.size
   const across = (x, y) => -(x - u.x) * u.uy + (y - u.y) * u.ux, along = (x, y) => (x - u.x) * u.ux + (y - u.y) * u.uy
   for (let i = 0; i < at; i++) {
     const sh = ink.shapes.get(i)
@@ -187,11 +190,11 @@ function underStrokes(ink, u) {
     for (let k = 0; k + 3 < sh.segs.length; k += 4) {
       const [ax, ay, bx, by] = [sh.segs[k], sh.segs[k + 1], sh.segs[k + 2], sh.segs[k + 3]]
       const ta = across(ax, ay), tb = across(bx, by)
-      // (its part across the band, its half width out, along the band's extent and beside it: the room's)
+      // (its part across the band, its half width out, under the unit's box: the room beside it ends short of any other)
       if (Math.max(ta, tb) < lo - w || Math.min(ta, tb) > hi + w) continue
-      if (Math.max(along(ax, ay), along(bx, by)) < -(u.before ?? 0) - w || Math.min(along(ax, ay), along(bx, by)) > u.length + (u.after ?? 0) + w) continue
+      if (Math.max(along(ax, ay), along(bx, by)) + w <= 0 || Math.min(along(ax, ay), along(bx, by)) - w >= u.length) continue
       const t0 = Math.max(Math.min(ta, tb), lo - w), t1 = Math.min(Math.max(ta, tb), hi + w)
-      if (t0 <= t1 && t1 + w <= foot) out.push({ seg: [ax, ay, bx, by], hw: w, shown })
+      if (t0 <= t1 && t1 + w < 0) out.push({ seg: [ax, ay, bx, by], hw: w, shown })
     }
   }
   return out
@@ -318,9 +321,9 @@ for (const id of IDS) {
   } finally { await A.close(); await U.close(); await F.close(); await inkTask.destroy() }
   const s = r.figures.stats
   // (the fit rule's counts: the model's translations, and Microsoft's where asked)
-  const model = fitCounts(drawn, u => modelWidth(u.text), u => /\p{N}/u.test(u.text))
+  const model = fitCounts(drawn, u => modelWidth(u.text), u => /\p{N}/u.test(u.text), () => CJK_FOOT)
   if (MT && MT_FETCH) await fetchMt(drawn.map(u => u.text))
-  const mt = MT ? fitCounts(drawn, u => { const t = mtCache[u.text]; return typeof t === 'string' && t && !sameAsSource(t, u.text) ? textWidth(t) : null }, u => WIDE.test(mtCache[u.text] ?? '') && /[A-Za-z0-9]/.test(mtCache[u.text] ?? '')) : null
+  const mt = MT ? fitCounts(drawn, u => { const t = mtCache[u.text]; return typeof t === 'string' && t && !sameAsSource(t, u.text) ? textWidth(t) : null }, u => WIDE.test(mtCache[u.text] ?? '') && /[A-Za-z0-9]/.test(mtCache[u.text] ?? ''), u => (WIDE.test(mtCache[u.text] ?? '') ? CJK_FOOT : null)) : null
   const roomed = drawn.filter(u => (u.before ?? 0) + (u.after ?? 0) > 0).length
   console.log(JSON.stringify({ id, ms, pages: byPage.size, units: s.units, drawn: s.drawn, crowded: s.crowded, unicode: s.unicode, shared: s.shared, page: s.page, bounds: s.bounds, forms: s.forms, letters: s.letters, sets: s.sets, grouped: s.grouped, aligned: s.aligned, roomed, ledgerFigures: r.ledger.classes.figures ?? null, groups: r.stats.groups, G1u, G1split: splitPx, G1: fails.G1.length, G3f: fails.G3f.length, D: fails.D.length, O: fails.O.length, Oflat, under: underN, R: fails.R.length, model, ...(mt ? { mt } : {}) }))
   for (const [k, list] of Object.entries(fails)) for (const f of list.slice(0, 10)) console.log(`  ${k} ${f}`)

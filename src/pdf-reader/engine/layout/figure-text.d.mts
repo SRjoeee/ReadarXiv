@@ -32,6 +32,9 @@ export interface FigureUnit {
   form: boolean
   /** why it is not drawn, or null */
   why: FigureWhy | null
+  /** the depth under its baseline of the nearest stroke under its text (painted before it, crossing its band only below its
+   *  baseline), PDF units; null where none is. The layer draws a translation over it where the translation stays above it */
+  under?: number | null
 }
 export type FigureWhy = 'crowded' | 'unicode' | 'shared' | 'page' | 'bounds'
 export declare const RUN_DY: number
@@ -39,9 +42,6 @@ export declare const RUN_GAP: number
 export declare const SPACE_GAP: number
 export declare const ANCHOR_REACH: number
 export declare const DRAW_BAND: readonly [number, number]
-/** the foot of the band a translation is drawn in, across a unit's frame from its baseline, at `size` (DRAW_BAND's, CROWD_PAD in):
- *  a stroke painted before the text and wholly below it is under the text */
-export declare function drawnFoot(size: number): number
 export declare const ALIGN_TOL: number
 /** a level unit's column: the text lines within this many of its sizes above and below its baseline (columnAnchorOf) */
 export declare const COLUMN_REACH: number

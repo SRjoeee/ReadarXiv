@@ -352,9 +352,11 @@ export declare const widthOf: (s: string, face: Face) => number
 /** a babel name drawn in the target's word, as SVG markup (a <g data-n="occurrence">) */
 export declare function svgOfName(o: { occurrence: number; text: string; x: number; baseline: number; size: number; face: Face; color?: string | null; runs?: readonly { s: string; k: number }[] | null }, toPx: (x: number, y: number) => number[], scale: number): string
 /** a figure's translation in its runs by script, each in its face: its CJK characters (cjkClassRe of `quotes`) in `faceOf('cjk')`, every other in `faceOf('latin')` */
-export declare function figureRuns(text: string, faceOf: (cls: 'cjk' | 'latin') => Face, quotes: boolean): { s: string; face: Face }[]
+export declare function figureRuns(text: string, faceOf: (cls: 'cjk' | 'latin') => Face, quotes: boolean): { s: string; face: Face; cls: 'cjk' | 'latin' }[]
 /** figureRuns' width at size 1 (PDF units per unit of size) */
 export declare function figureRunsWidth(runs: readonly { s: string; face: Face }[]): number
+/** how far under its baseline figureRuns reach at size 1 (PDF units per unit of size): each run's ink, a CJK run's held to its em box */
+export declare function figureRunsDepth(runs: readonly { s: string; face: Face; cls: 'cjk' | 'latin' }[]): number
 /** a figure's text drawn as SVG: its runs one after the other on its baseline from `x`, `y`, turned by `angle` */
 export declare function svgOfFigure(o: { group: string; runs: readonly { s: string; face: Face }[]; x: number; y: number; angle: number; size: number; color?: string | null }, toPx: (x: number, y: number) => number[], scale: number): string
 /** a character style's colour as a run takes it: its fill where told (black: `color` undefined), nothing where not */

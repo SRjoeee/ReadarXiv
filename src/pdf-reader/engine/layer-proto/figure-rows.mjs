@@ -3,17 +3,25 @@
 // translates as any unit's, its place on its page here: its run's first glyph's origin, its direction, its box's length along it,
 // its size and its band, its anchor, its fill and its font's name; and since BUNDLE 11 its set (the units the layer fits at one
 // size: one column or one baseline of a figure) and its room (the free line before and after its box). A part carries those of
-// its pages; a reader checks each row before it is used, as every part's field is (format.mjs partShape), and refuses the part
-// for a row of no shape. A part of 10's rows (FIGURE_ROW_10) is read as each unit its own set, with no room: as 10 drew it.
+// its pages; and since BUNDLE 16 the depth under its baseline of a stroke under its text (figure-text.mjs roomOf's `under`),
+// which the layer holds its translation above (figure-fit.mjs). A reader checks each row before it is used, as every part's field
+// is (format.mjs partShape), and refuses the part for a row of no shape. A part of 10's rows (FIGURE_ROW_10) is read as each unit
+// its own set, with no room: as 10 drew it; one of 11's to 15's (FIGURE_ROW_15) as telling no stroke under its text, as none was
+// read under one then.
 // An original module (no port statement), importing the JSON bounds alone.
 import { COORD_MAX, isInteger, isNumber, LayoutRefusal } from '../layout/json.mjs'
 
-/** a row's values: [id, group, page, x, y, ux, uy, length, size, ascent, descent, anchor, fill, font, set, before, after], `group`
- *  its optional-content group's number (`axt:f<group>`, layout/wrap.mjs), `set` its set's first group's (at most its own),
- *  `before` and `after` its room, PDF units (BUNDLE 11) */
-export const FIGURE_ROW = 17
+/** a row's values: [id, group, page, x, y, ux, uy, length, size, ascent, descent, anchor, fill, font, set, before, after,
+ *  under], `group` its optional-content group's number (`axt:f<group>`, layout/wrap.mjs), `set` its set's first group's (at most
+ *  its own), `before` and `after` its room, PDF units (BUNDLE 11), `under` the depth under its baseline of the nearest stroke
+ *  under its text, PDF units, -1 where none is (BUNDLE 16) */
+export const FIGURE_ROW = 18
 /** a row of BUNDLE 10's: its first 14 values, no set and no room */
 export const FIGURE_ROW_10 = 14
+/** a row of BUNDLE 11's to 15's: its first 17 values, no stroke under its text told */
+export const FIGURE_ROW_15 = 17
+/** the bundles whose rows are FIGURE_ROW_15's */
+const ROWS_15 = Object.freeze(['11', '12', '13', '14', '15'])
 /** a figure unit's group, as the wrap names it (layout/figure-text.mjs figureGroup) */
 export const figureGroupOf = k => `f${k}`
 /** the groups a paper's figure units may hold at most (layout/figure-text.mjs FIGURE_UNITS_DOC, with room) */
@@ -39,10 +47,12 @@ const kindOf = v => (v === null ? 'null' : Array.isArray(v) ? 'an array' : typeo
 export const levelRun = (ux, uy) => Math.abs(uy) < 1e-6 && ux > 0
 
 /** a figure unit (layout/wrap.mjs wrapFinal's `figures.units`, with its unit's id) as its row; a unit of no set its own, of no
- *  room none (room rounded down, so that a row never holds more than the maker found free) */
+ *  room none (room rounded down, so that a row never holds more than the maker found free), of no stroke under its text -1 (a
+ *  stroke's depth rounded down too: a row never says it lies deeper than it does) */
 export function figureRow(id, u) {
   const group = Number(/^f(\d+)$/.exec(u.group ?? '')?.[1] ?? -1), room = v => (Number.isFinite(v) && v > 0 ? Math.floor(v * 1000) / 1000 : 0)
-  return [id, group, u.page, r3(u.x), r3(u.y), r6(u.ux), r6(u.uy), r3(u.length), r3(u.size), r3(u.ascent), r3(u.descent), Math.max(0, ANCHORS.indexOf(u.anchor)), Number.isInteger(u.fill) ? u.fill : -1, String(u.font ?? '').slice(0, FONT_NAME_MAX), Number.isInteger(u.set) && u.set >= 0 && u.set <= group ? u.set : group, room(u.before), room(u.after)]
+  const under = Number.isFinite(u.under) && u.under >= 0 ? Math.floor(Math.min(u.under, COORD_MAX) * 1000) / 1000 : -1
+  return [id, group, u.page, r3(u.x), r3(u.y), r6(u.ux), r6(u.uy), r3(u.length), r3(u.size), r3(u.ascent), r3(u.descent), Math.max(0, ANCHORS.indexOf(u.anchor)), Number.isInteger(u.fill) ? u.fill : -1, String(u.font ?? '').slice(0, FONT_NAME_MAX), Number.isInteger(u.set) && u.set >= 0 && u.set <= group ? u.set : group, room(u.before), room(u.after), under]
 }
 
 /**
@@ -50,22 +60,23 @@ export function figureRow(id, u) {
  * (below `unitCount`), each on a page of the part's (a to b), its origin within that page's view (`views`, stride 4 from page a),
  * its direction a unit vector, its length and size positive, its band's ascent at least 0 and its descent at most 0, its anchor a
  * code of ANCHORS, its fill 0xRRGGBB or -1, its font a string, its set a group's number at most its own, its room before and
- * after at least 0. `format`: the part's (its head's `bundle`), whose rows of 10 are FIGURE_ROW_10's, read as each its own set
- * with no room. Returns each as { id, page, x, y, ux, uy, length, size, ascent, descent, anchor, fill, font, set, before,
- * after }, frozen. Throws LayoutRefusal at `figures[i]…`
+ * after at least 0, the depth of a stroke under its text at least 0, or -1. `format`: the part's (its head's `bundle`), whose
+ * rows of 10 are FIGURE_ROW_10's, read as each its own set with no room, and of 11 to 15 FIGURE_ROW_15's, read as no stroke
+ * under its text. Returns each as { id, page, x, y, ux, uy, length, size, ascent, descent, anchor, fill, font, set, before,
+ * after, under (null where none) }, frozen. Throws LayoutRefusal at `figures[i]…`
  */
 export function checkFigures(rows, { a, b, views, unitCount, format = null }) {
   const fail = (path, why) => new LayoutRefusal(path, why)
   if (!Array.isArray(rows)) throw fail('figures', `not an array (${kindOf(rows)})`)
-  const old = format === '10', width = old ? FIGURE_ROW_10 : FIGURE_ROW
+  const old = format === '10', width = old ? FIGURE_ROW_10 : ROWS_15.includes(format) ? FIGURE_ROW_15 : FIGURE_ROW
   const out = []
   let last = -1
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i], path = `figures[${i}]`
-    if (!Array.isArray(r) || r.length !== width) throw fail(path, `not [id, group, page, x, y, ux, uy, length, size, ascent, descent, anchor, fill, font${old ? '' : ', set, before, after'}] (${kindOf(r)})`)
+    if (!Array.isArray(r) || r.length !== width) throw fail(path, `not [id, group, page, x, y, ux, uy, length, size, ascent, descent, anchor, fill, font${old ? '' : ', set, before, after'}${width === FIGURE_ROW ? ', under' : ''}] (${kindOf(r)})`)
     // (each value named by its place in the row, as the wire holds it)
     const [id, group, page, x, y, ux, uy, length, size, ascent, descent, anchor, fill, font] = r
-    const [set, before, after] = old ? [group, 0, 0] : r.slice(FIGURE_ROW_10)
+    const [set, before, after, under = -1] = old ? [group, 0, 0] : r.slice(FIGURE_ROW_10)
     if (!isInteger(id, last + 1, unitCount - 1)) throw fail(`${path}[0]`, 'not a unit\'s id above the last')
     last = id
     if (!isInteger(group, 0, GROUP_MAX)) throw fail(`${path}[1]`, 'not a group\'s number')
@@ -85,7 +96,8 @@ export function checkFigures(rows, { a, b, views, unitCount, format = null }) {
     if (!isInteger(set, 0, group)) throw fail(`${path}[14]`, 'not a set\'s number, a group\'s at most its own')
     if (!isNumber(before) || before < 0 || before > COORD_MAX) throw fail(`${path}[15]`, 'not a room of 0 or more')
     if (!isNumber(after) || after < 0 || after > COORD_MAX) throw fail(`${path}[16]`, 'not a room of 0 or more')
-    out.push(Object.freeze({ id, group: figureGroupOf(group), page, x, y, ux, uy, length, size, ascent, descent, anchor: ANCHORS[anchor], fill, font, set: figureGroupOf(set), before, after }))
+    if (!isNumber(under) || (under !== -1 && !(under >= 0 && under <= COORD_MAX))) throw fail(`${path}[17]`, 'not a depth of 0 or more, or -1')
+    out.push(Object.freeze({ id, group: figureGroupOf(group), page, x, y, ux, uy, length, size, ascent, descent, anchor: ANCHORS[anchor], fill, font, set: figureGroupOf(set), before, after, under: under === -1 ? null : under }))
   }
   return Object.freeze(out)
 }

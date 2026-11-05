@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { ANCHOR_REACH, DRAW_BAND, drawnFoot, figureUnitsOf, FIGURE_WHYS, ROOM_CLEAR, ROOM_MAX } from '@/pdf-reader/engine/layout/figure-text.mjs'
+import { ANCHOR_REACH, DRAW_BAND, figureUnitsOf, FIGURE_WHYS, ROOM_CLEAR, ROOM_MAX } from '@/pdf-reader/engine/layout/figure-text.mjs'
 import { BAND_MAX, checkFigures } from '@/pdf-reader/engine/layer-proto/figure-rows.mjs'
 import { pageInk } from '@/pdf-reader/engine/layout/ink.mjs'
 import { POINTS_TEX } from '@/pdf-reader/engine/layout/marks.mjs'
@@ -135,20 +135,30 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
     expect(one(word('label', [[90, 112, 140, 112]])).why).toBeNull()
   })
 
-  it('a stroke painted before a label, wholly below the band a translation is drawn in, is under it: it crowds nothing and ends no free line (2610.21085v1\'s gridline under "jury, α = 8")', () => {
+  it('a stroke painted before a label, wholly below its baseline, is under it: it crowds nothing, ends no free line, and the unit carries its depth (2610.21085v1\'s gridline under "jury, α = 8")', () => {
     // (the word's descenders reach 0.2 em below its baseline, its glyphs' bottom at 98; a gridline across the figure, half width
-    // 0.025 em, at 0.17 em below the baseline: inside the original's band, below the drawn band's foot, drawnFoot)
-    const grid = (y: number, after = false) => {
-      const pg = word('jury', [[60, y, 240, y]])
+    // 0.025 em, at 0.17 em below the baseline: inside the original's band, its top 1.45 under the baseline)
+    const grid = (y: number, after = false, x0 = 60, x1 = 240) => {
+      const pg = word('jury', [[x0, y, x1, y]])
       return figureUnitsOf([{ ...pg, view: [0, 0, 300, 300], figures: new Map([['0:0', [0, 0, 300, 300]]]), ...(after ? { boxAt: pg.glyphs.map(() => 0) } : {}) }] as never, null).units[0]!
     }
-    expect(drawnFoot(10)).toBeCloseTo((DRAW_BAND[0] + 0.04) * 10, 9)
     expect(grid(98.3).why).toBeNull()
+    expect(grid(98.3).under).toBeCloseTo(1.45, 4)
     expect([grid(98.3).before, grid(98.3).after]).toEqual([ROOM_MAX * 10, ROOM_MAX * 10])
+    // (one nearer the baseline is under the text too, its depth less: whether a translation clears it is the layer's to tell, by
+    // the translation's faces and size, figure-fit.mjs)
+    expect(grid(99.2).why).toBeNull()
+    expect(grid(99.2).under).toBeCloseTo(0.55, 4)
+    // (one that reaches the baseline crowds as before: every script's text stands on it)
+    expect(grid(99.8).why).toBe('crowded')
     // (painted after the word it is over the original's descenders: it crowds, as any ink painted after the text)
     expect(grid(98.3, true).why).toBe('crowded')
-    // (one whose ink reaches into the drawn band crowds as before)
-    expect(grid(99.2).why).toBe('crowded')
+    // (no stroke under the text, none told; one only beside its box is a line beside it, as any: none told, its free line ends
+    // short of it, ROOM_CLEAR of the size before it)
+    expect(one(word('jury')).under).toBeNull()
+    const beside = grid(98.3, false, 140, 200)
+    expect([beside.why, beside.under]).toEqual([null, null])
+    expect(beside.after).toBeCloseTo(140 - 0.25 - 120 - ROOM_CLEAR * 10, 4)
   })
 
   it('a fill that holds the whole band is its background, not other ink', () => {
