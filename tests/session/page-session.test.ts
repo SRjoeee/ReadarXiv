@@ -250,6 +250,9 @@ describe('page session', () => {
 
   it('a start refused after its status was asked releases the session the status bound provisionally (Codex on #184)', async () => {
     // No usable service: the chain answered, so the scope is bound over there; the refusal cancels it
+    // a queue timeout names a task and milliseconds for the console; the start carries a code, not that message
+    const slow = harness({ status: () => Promise.reject(Object.assign(new Error('Task t-1 timed out after 5000ms'), { name: 'RequestTimeoutError' })) })
+    expect(await slow.session.start()).toEqual({ started: false, reason: 'backend-timeout' })
     const none = harness({ status: () => providerStatus({ available: false }) })
     live = none.session
     expect(await none.session.start()).toEqual({ started: false, reason: 'no-service' })
