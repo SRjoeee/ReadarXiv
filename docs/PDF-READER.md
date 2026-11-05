@@ -3413,38 +3413,49 @@ the fallback. The layout file's coordinates are therefore our page's (LAYOUT 12)
   under the line, "Lucas-" and "7" on 2610.19274v1 p7, is no word's rest either). A line of ours of fewer than
   `LINE_EVIDENCE` (4) letters and digits is never found on another page of arXiv's: a figure's one-letter axis label is no
   evidence of where its page stands (LAYOUT 25: 2610.21765v1 p7's "q", paired with arXiv's p6, left the page undrawn and ten
-  of its units English). **A page whose lines moved across its breaks is drawn** (LAYOUT 31, the owner's ruling of 2026-10-30:
-  content right before pages alike, a 1 % difference for engineering that is simple, general and lasting): where the rule above
-  refuses it, each of our lines found on another page of arXiv's takes the words it matched there out of both pages' comparison
-  (a word its partner does not hold stays in, on its side: the carrier finds a line by 80 % of its words, Codex on #511), and
-  the page is drawn where no evidence line of it is found two pages away or more nor on an arXiv line another line of ours took
-  already (one partner a line: a sentence on two of our pages and once on arXiv's is a sentence too many, Codex on #511), at
-  most `DRIFT_LINES` (4) lines moved at each
-  of its two ends (counted on both sides of each break), what stays at least half of its words on each side (two short pages
-  that traded their lines are not drawn, Devin on #511), and the rest of its words arXiv's page's as a bag, in any order
-  (`driftSame`, `PAGE_SAME`: the drawing is over our own page, and a float set elsewhere in a page's reading order is the same
-  page). 2610.30854v1, whose 1 mm skip TeX Live 2025's 2025-11-01 kernel drops (a no-argument `\newcommand` short, so
-  the class's `\ifx\PaperLinks\empty` true) and arXiv's TeX Live 2025 of 2025-08-03 sets, moves 1 to 4 lines a page on its pages
-  1 to 9, all drawn now (460 of its units laid, 189 before); 2307.16209's pages 69 and 70 (1 and 2 lines) too, its pages 71 to 76
-  (5 to 15) not; nothing else of the release sweep's 53 papers, the five first-open papers and the pack changes. Still refused:
-  the rest's words not arXiv's, a page past its work, a line two pages away, more lines moved at an end. A line moved has no
-  partner on the page beside ours: the hover lights a unit by its own shapes on each pane, and where the right copies the left's
-  tokens (a unit shown as the original on a laid page, `view/shapes.mjs` `layerShapes`), a unit the layout lays keeps a copy
-  only on its own rows on that page (`words.rows`, `run.mjs` `freezeWordsOf`: none where its rows are all on other pages, so
-  none over the space a moved line leaves), and one it lays nowhere none on a page whose lines moved (`words.drift`: a unit's
-  pages on the left not its rows' pages there) and elsewhere none on another unit's row: never a wrong partner.
+  of its units English). **Pages whose lines moved across their breaks are drawn as a run** (LAYOUT 31, the owner's ruling of
+  2026-10-30: content right before pages alike, a 1 % difference for engineering that is simple, general and lasting; as a run
+  since 2026-11-05). Each evidence line of ours found on the page beside, on arXiv's, joins the two pages of the break it
+  crossed; a run is the pages such breaks join, and a page in none is judged alone by the rule above. A run is drawn whole or
+  not at all: where none of its pages is past its work, no evidence line of it is found outside it nor one of another page on it
+  (two pages away or more), and its words are arXiv's same pages': as a bag, `PAGE_SAME` of the two over the run (`carry.mjs`
+  `driftRun`: the drawing is over our own pages, which hold the run's text set with other breaks, and a float set elsewhere in
+  the reading order is the same text), and most of them on their own pages, the words each page has in common with arXiv's same
+  page in order more than half of the run's (so that the right pane shows mostly the left's text: pages traded or read in
+  another order are no drift, a paper of the same words in another order falls back as before). Whole, because the right pane
+  shows arXiv's page where no unit is laid (`view/layer-side.mjs` `noLayoutPage`): a drawn page beside arXiv's own page across a
+  break whose lines moved shows those lines twice or not at all. Page by page, at most `DRIFT_LINES` (4) lines moved at each end
+  of a page, 2307.16209v1's pages 69 and 70 were drawn and 71 to 76 shown as arXiv's: the two lines our page 71 opens with, at
+  the foot of arXiv's page 70, stood on neither of the right's pages, and their paragraph's lines on page 70 stayed English. As
+  a run, its pages 68 to 76 (each break crossed by 1 to 15 lines, the bag 0.9988, 0.838 on their own pages: its page 76, a
+  chapter's short last page, 0.438 alone) are drawn, 17 paragraphs and 6 running heads more; 2610.30854v1's pages 1 to 9 (the 1
+  mm skip TeX Live 2025's 2025-11-01 kernel drops and arXiv's of 2025-08-03 sets; 1 to 4 lines a break, 0.9994, 0.970) and
+  2610.37668v1's 21 and 22 (1, 0.998, 0.986) as before; nothing else of the sweep's 85 papers with a page check changes, and
+  none of their pages is left undrawn. The page's bounds inside a run went with the count: what stays of a page at least half of
+  its words, now the run's (two short pages that traded their lines refused by it, Devin on #511, 2307's page 76 drawn), not the
+  run read in order (measured, it would refuse both runs drawn: 2307's at 0.970, 30854's at 0.977, under `PAGE_SAME`), and one
+  partner a line as a page's bound (a moved line whose partner another line of ours took already joins no break and refuses
+  nothing: as a bound it refused 2307's run whole, through its pages 73 and 74, and the 12 paragraphs of pages 68 to 70 with
+  it); a moved line's every word counts in the run's bag, a word its partner does not hold against it (the carrier finds a line
+  by 80 % of its words, Codex on #511). Still refused: a run whose words are not arXiv's or mostly not on their own pages, a
+  page past its work, a line found two pages away, out of its run or into it. A line moved has no partner on the page beside
+  ours: the hover lights a unit by its own shapes on each pane, and where the right copies the left's tokens (a unit shown as
+  the original on a laid page, `view/shapes.mjs` `layerShapes`), a unit the layout lays keeps a copy only on its own rows on
+  that page (`words.rows`, `run.mjs` `freezeWordsOf`: none where its rows are all on other pages, so none over the space a moved
+  line leaves), and one it lays nowhere none on a page whose lines moved (`words.drift`: a unit's pages on the left not its
+  rows' pages there) and elsewhere none on another unit's row: never a wrong partner.
   **A unit is laid only where every page it is on is drawable**
   (`layout/make.mjs` `drawable`, LAYOUT 16; `stats.units.undrawn` the others, left the original's). Over our own page a
   drawing is right by construction: a page of the same words is drawn whatever its lines' offsets, a line re-broken by a word,
-  moved a point or set with other glue. On the pack and the release sweep's 50 papers it refuses 2307.16209's pages 69 to 76
-  (our TeX Live 2023 compile running behind arXiv's build by up to half a page) and its title page. **Do the panes align**,
+  moved a point or set with other glue. On the sweep's 85 papers with a page check (2026-11-05) it refuses none: 2307.16209's
+  pages 68 to 76, our TeX Live 2023 compile running behind arXiv's build by up to 15 lines, are a run. **Do the panes align**,
   per line, is information alone: each of our lines in place or not (the median of its matched words' offsets within
   `LINE_PLACE`, 0.5 pt, on its own page, or a twin of the same words but for a known substitute), the paper's share the head's
   `carried`; it never decides what is drawn. One fallback stands: a paper none of whose units is laid (no drawable page with a
   unit on it: `carry`) falls back to arXiv's PDF untranslated; in the page stream the head waits for the first unit laid, so
-  nothing is told before it. A page that is not drawable lays no unit; the reader shows our base page there untranslated
-  (`view/layer-side.mjs` `noLayoutPage` takes a page of a part with a layout as laid), where before the change the part it was
-  in had no layout and showed arXiv's page. A line
+  nothing is told before it. A page that is not drawable lays no unit, and the reader shows arXiv's page there
+  (`view/layer-side.mjs` `noLayoutPage`: a page no part's layout has lines on), not our base page in other line breaks: hence a
+  drift run drawn whole. A line
   found elsewhere is another TeX Live re-breaking the paper, and our page is to be arXiv's: so a paper is compiled on the tree
   of arXiv's build (the year its 00README declares, which the box hands it over to before any compile).
 - **The maker** (`layout/make.mjs`) reads our page as its document: a placeholder's segments are its own glyphs and rules

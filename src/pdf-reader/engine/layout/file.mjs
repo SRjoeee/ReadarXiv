@@ -181,7 +181,7 @@ export { LayoutRefusal } from './json.mjs'
  *  2610.35877v1): a footnote's call after its unit's last word, which TeX gave no mark, its raised run right after the end mark
  *  (make.mjs besideMarks), where it was LOST and its unit the original's whole (the abstract); and a biblatex entry's unit, of
  *  the new kind `inkreferences` (UNIT_KINDS): a reader of 29 refuses that kind's index; 31 (the owner's ruling of 2026-10-30,
- *  2610.30854v1): a page whose lines moved across its breaks through compile drift is drawable (carry.mjs DRIFT_LINES: at most 4
+ *  2610.30854v1): a page whose lines moved across its breaks through compile drift is drawable (carry.mjs then: at most 4
  *  at each end, to or from the page beside it, the rest arXiv's page's words), its units laid where a file of 30 left them
  *  `undrawn`; 32 (the owner's decision of 2026-11-03): each line of a code environment's body a region the file holds
  *  (`regions`, the file's schema 6), read from the points the layout compile sets around it (marks.mjs regionsTex); 33 (the owner's

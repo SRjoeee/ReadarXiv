@@ -922,8 +922,8 @@ export const placesIn = (ids, order) => { if (!order) return new Set(ids); const
  *  MARGIN tokens either side */
 const MARGIN = 100
 /** a unit whose marks do not bound it is searched on the pages its own marks stand on and DRIFT pages either side: a mark
- *  TeX writes before a page break stands a page from its words, and the marked original's pages and the document's drift a
- *  line or two apart (layout/carry.mjs DRIFT_LINES), never a page more */
+ *  TeX writes before a page break stands a page from its words, and the marked original's pages and the document's drift some
+ *  lines apart (layout/carry.mjs, the drift runs: 15 at the most, 2307.16209's), never a page more */
 export const DRIFT = 1
 
 /** each page's first token and last (the tokens are in page order), a page with none taking the next page's first and the

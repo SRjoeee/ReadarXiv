@@ -558,7 +558,7 @@ describe('makeLayout', () => {
     const w: World = { pages: [{ runs: p1 }, { runs: p2 }], marked: [{ runs: p1 }, { runs: p2 }], marks, units }
     expect((await made(w)).file.units.map(u => u[0])).toEqual([0])
     // page 2's last line on arXiv's page 1 (our compile behind arXiv's by a line): both pages drawn, their lines that moved alone
-    // with no partner beside them (carry.mjs DRIFT_LINES), the unit laid
+    // with no partner beside them (carry.mjs, a drift run), the unit laid
     const behind = await made({ ...w, pages: [{ runs: [...p1, { ...(p2[2] as Run), y: 60 }] }, { runs: p2.slice(0, 2) }] })
     expect(behind.file.units.map(u => u[0])).toEqual([0])
     // arXiv's page 2 of other words: page 2 not drawable, the unit not laid
