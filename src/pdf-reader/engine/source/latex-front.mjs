@@ -994,10 +994,16 @@ function tailOf(body) {
  * `=`, one of SECOND_OPERAND_OF (`\\let\\saved\\url`, `\\let\\saved=\\url`)
  */
 function operandAt(s, at) {
-  // (the token ending before `to`: a control word's name, else the character; null at the text's start)
+  // (the token ending before `to`: a control word's name, else the character; null at the text's start. White space and comments
+  // are passed over as TeX passes them, a comment through its line's end: `\\string% note⏎\\url` is \\string's operand)
   const tokenBefore = to => {
     let k = to
-    while (k > 0 && /\s/.test(s[k - 1])) k--
+    for (;;) {
+      while (k > 0 && /\s/.test(s[k - 1])) k--
+      const c = k > 0 ? commentAt(s, k - 1) : -1
+      if (c < 0) break
+      k = c
+    }
     if (k === 0) return null
     let j = k
     while (j > 0 && isLetter(s[j - 1])) j--
@@ -1514,11 +1520,15 @@ function newifValues(texts, ifs) {
 
 /** whether s[at] is inside a comment: an unescaped % before it on its line */
 function inComment(s, at) {
+  return commentAt(s, at) >= 0
+}
+/** where the comment s[at] is inside begins: the unescaped % before it on its line; -1 where it is in none */
+function commentAt(s, at) {
   for (let k = s.lastIndexOf('\n', at - 1) + 1; k < at; k++) {
     if (s[k] === '\\') k++
-    else if (s[k] === '%') return true
+    else if (s[k] === '%') return k
   }
-  return false
+  return -1
 }
 /** each \\thanks or \\footnote in s[from, to), walked alone: a footnote unit of its own, with no paragraph around it */
 function frontNotes(s, from, to, b, ctx) {

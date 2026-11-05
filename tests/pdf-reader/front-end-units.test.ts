@@ -363,7 +363,12 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     // a comment, and the words it hides stay hidden: the third review of #596)
     expect(texts(project(doc('See \\string\\url{A% } hidden words\nB} and the rest.'))).join(' ')).not.toContain('hidden words')
     for (const t of ['See \\string\\url{A% } hidden words\nB} and the rest.', '\\meaning\\href{a%b}', '\\noexpand\\url{a%b}', '\\show\\url{a%b}', '\\let\\saved=\\url{a%b}', '\\def\\x\\url{a%b}']) expect(urlPercents(t, 'main.tex'), t).toBe(t)
-    for (const t of ['text \\url{a%b}', '\\textbf x\\url{a%b}']) expect(urlPercents(t, 'main.tex'), t).not.toBe(t)
+    // (a comment between the command and its operand passed over as TeX passes it, through its line's end: the fourth review of #596)
+    for (const t of ['See \\string% note\n\\url{A% } hidden words\nB} and the rest.', 'See \\string % a\n  % b\n\\url{A% } hidden words\nB} x.']) {
+      expect(urlPercents(t, 'main.tex'), t).toBe(t)
+      expect(texts(project(doc(t))).join(' '), t).not.toContain('hidden words')
+    }
+    for (const t of ['text \\url{a%b}', '\\textbf x\\url{a%b}', 'See 50\\% more\n\\url{a%b} here.']) expect(urlPercents(t, 'main.tex'), t).not.toBe(t)
     // (in an argument the walk reads it as before: a comment, which a paper avoids there by writing `\\%`)
     expect(texts(project(doc('See \\footnote{\\url{a\\%b}} the rest.')))).toContain('See the rest.')
   })
