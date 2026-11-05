@@ -336,6 +336,15 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
     // (the marked file keeps the address as the paper writes it, and the words after it are marked as the unit's)
     const tex = patched(p)
     expect(tex).toContain('\\href{https://en.wikipedia.org/wiki/Newton%27s_method#Failure_analysis}{<T0>}')
+    // (a command of the paper's own, in any form TeX defines one, reads its argument as tokens: `%` a comment there, as before —
+    // \\let and xparse's forms among them, not only \\newcommand's and \\def's: the review of #596)
+    for (const def of ['\\let\\url\\textbf', '\\NewDocumentCommand{\\url}{m}{\\textbf{#1}}', '\\newcommand{\\url}[1]{\\textbf{#1}}']) {
+      const own = project(doc('See \\url{A% } ignored text\nB} and the words after it.', def))
+      expect(texts(own).join(' '), def).not.toContain('ignored text')
+    }
+    // (a fallback a package the paper loads overrides is no definition of the paper's: llncs.cls' \\@ifundefined{url}{\\def\\url#1{#1}}{}
+    // under hyperref, whose \\url reads its address as characters)
+    expect(texts(project(doc('See \\url{https://x.org/a%20b} and the rest.', '\\usepackage{hyperref}\n\\makeatletter\\@ifundefined{url}{\\def\\url#1{#1}}{}\\makeatother')))).toContain('See and the rest.')
     // (in an argument the walk reads it as before: a comment, which a paper avoids there by writing `\\%`)
     expect(texts(project(doc('See \\footnote{\\url{a\\%b}} the rest.')))).toContain('See the rest.')
   })

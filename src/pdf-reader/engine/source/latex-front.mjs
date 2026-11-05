@@ -485,7 +485,8 @@ function skipComment(s, i) { while (i < s.length && s[i] !== '\n') i++; return i
  * Each such `%` is written as LITERAL_PERCENT, the same length, so that every reading of the walk (groups, comments, a
  * bibliography's \\bibitem, the document's bounds) sees what TeX sees and every place stays where it is; the units take their
  * `%` back (restorePercents). A text that holds LITERAL_PERCENT already, or no `%`, is returned as it is. `scan`: the paper's
- * conditionals (`ifs`), its environments read by lines (`lineEnvs`) and the commands it defines (`defined`, paperMacros')
+ * conditionals (`ifs`), its environments read by lines (`lineEnvs`) and the commands it defines in any form (`defined`: arg-roles.mjs
+ * paperOf's `own`, \\let and the xparse forms among them; a fallback a package the paper loads overrides is none)
  */
 export function urlPercents(text, file, scan = {}) {
   if (!text.includes('%') || text.includes(LITERAL_PERCENT)) return text
@@ -2869,7 +2870,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   const bblName = `${jobName(mainFile.rel)}.bbl`, bblBytes = fsys.read(bblName)
   const bbl = bblBytes && /\\begin\s*\{thebibliography\}/.test(texText(bblBytes)) ? bblName : null
   const ctx = { rowEnds: rowEndsOf(sources.map(sourceText)), rowEndsAfter: rowEndsAfterOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), tableWraps: tableWrapsOf(ownTexts), activeSpaces: activeSpacesIn([...sources.map(sourceText), ...ownTexts]), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], backref: backrefOf(ownTexts), ...tblrOf(sources.map(sourceText)) }
-  const scan = { lineEnvs, ifs, ifValues }, percents = { lineEnvs, ifs, defined: ctx.macros }
+  const scan = { lineEnvs, ifs, ifValues }, percents = { lineEnvs, ifs, defined: paper.own }
   let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;
    *  `inFloat`: whether the file is read inside a float (the walk's builder there) */
