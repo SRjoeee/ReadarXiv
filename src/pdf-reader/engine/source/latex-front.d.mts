@@ -67,3 +67,5 @@ export declare const latin1: (bytes: Uint8Array) => string
 /** a display's letters as the page sets them, for telling its lines from a float's: the source's letters, the paper's own
  *  macros (`macros`, name → body) put in and the commands left out */
 export declare function displayLetters(src: string, macros?: Map<string, string>): string
+/** the steps the walk has taken while the module is loaded, dry runs among them: its cost, which a test holds to the source's length */
+export declare const walkStepCount: () => number
