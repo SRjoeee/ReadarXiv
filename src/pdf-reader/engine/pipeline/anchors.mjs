@@ -358,14 +358,21 @@ const cut = (t, start) => (t && t.length > 1 && CJK.test(t) ? ((start ? tokens(t
  *  line, its width shared by its characters) where the page the marks are carried to may have them exact (our base page,
  *  wrapped, read in items cut at its groups), so the marked original's word at a mark may be the one beside the mark (a start
  *  mark's nearer a caption's label; an end mark's the next word, its shared box begun before the mark: 2610.20716's "model|
- *  the", 2610.20581's "Theorem| 2.2", 2610.22195's cells) — never further */
-function wordAt(doc, k, t, start) {
+ *  the", 2610.20581's "Theorem| 2.2", 2610.22195's cells) — never further. With `either` (the maker's: the marks carried to
+ *  the final pass of their own compile, every mark where TeX set it), the word beside k on the other side too: a shared box
+ *  may put a mark in the word either side of it — a start mark set before a paper's macro's text and the word after it in the
+ *  next word's box (2610.40394v1's `\schedforwardgap{} is`: "strongest" where the base page has "is"; 2608.25210v2's "A
+ *  strictly"), an end mark in the box of the word it follows, where the base page's next word begins at the mark (25210's
+ *  "DOI:|10.14778", 0.02 pt past it) */
+function wordAt(doc, k, t, start, either = false) {
   const same = j => t === doc[j].t || cut(t, start) === doc[j].t
   if (same(k)) return true
-  const step = start ? -1 : 1
-  let j = k + step
-  while (j >= 0 && j < doc.length && doc[j].t === '') j += step
-  return j >= 0 && j < doc.length && doc[j].page === doc[k].page && Math.abs(doc[j].y - doc[k].y) <= 0.4 * doc[k].h && same(j)
+  const beside = step => {
+    let j = k + step
+    while (j >= 0 && j < doc.length && doc[j].t === '') j += step
+    return j >= 0 && j < doc.length && doc[j].page === doc[k].page && Math.abs(doc[j].y - doc[k].y) <= 0.4 * doc[k].h && same(j)
+  }
+  return beside(start ? -1 : 1) || (either && beside(start ? 1 : -1))
 }
 
 /**
@@ -374,23 +381,27 @@ function wordAt(doc, k, t, start) {
  * there: the marks of our own compile of the original then serve arXiv's PDF wherever the two are laid out alike,
  * and nowhere else. `byPage`: the tokens of each page (made here where not given: a caller that bounds a unit at a time makes
  * it once). `reach` (the layout maker's): a start mark that stands at no word, here and in the marks' own compile (its carried
- * word null: a unit that opens with a formula, a dash or a comma), is bounded by the word `reach(mark)` gives, or none (an end
- * mark has a word wherever one stands before it on its line); a reader's anchors keep tokenAtMark's word alone
+ * word null: a unit that opens with a formula, a dash or a comma), is bounded by the word `reach(mark)` gives, or none; and
+ * `reachBack` (the maker's too) an end mark that stands at no word so (no word before it on its line: a `\}` alone on its
+ * unit's last line, an end mark on the empty line TeX resumes after a display) by the word `reachBack(mark)` gives, or none; a
+ * reader's anchors keep tokenAtMark's word alone. `either` (the maker's: `doc` the final pass of the marks' own compile) takes a
+ * carried word beside the mark's token on either side as its word (wordAt)
  */
-export function boundsFromMarks(doc, marks, byPage = pageIndex(doc), reach = null) {
+export function boundsFromMarks(doc, marks, byPage = pageIndex(doc), reach = null, reachBack = null, either = false) {
   const out = new Map()
   for (const [name, s] of marks) {
     if (!name.endsWith('s')) continue
     const id = name.slice(0, -1), e = marks.get(`${id}e`)
     if (!e) continue
-    let a = tokenAtMark(doc, byPage, s, true)
-    const b = tokenAtMark(doc, byPage, e, false), reached = a == null && reach !== null && s.t === null
+    let a = tokenAtMark(doc, byPage, s, true), b = tokenAtMark(doc, byPage, e, false)
+    const reached = a == null && reach !== null && s.t === null, reachedEnd = b == null && reachBack !== null && e.t === null
     if (reached) a = reach(s)
+    if (reachedEnd) b = reachBack(e)
     if (a == null || b == null || b < a) continue
     // a carried word as it was, or as the tokenizer cuts it now (cut): the tokenizer still joins a word a hyphen cuts
     // at a line's end with the CJK character after it, as the carried word has it (the review of A1, M2); a reached start
     // has none to compare
-    if ((!reached && s.t !== undefined && !wordAt(doc, a, s.t, true)) || (e.t !== undefined && !wordAt(doc, b, e.t, false))) continue
+    if ((!reached && s.t !== undefined && !wordAt(doc, a, s.t, true, either)) || (!reachedEnd && e.t !== undefined && !wordAt(doc, b, e.t, false, either))) continue
     out.set(id, [a, b])
   }
   return out

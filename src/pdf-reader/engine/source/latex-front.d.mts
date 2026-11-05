@@ -21,8 +21,8 @@ export declare function definitionsNested(defs: readonly { at: number; k: number
 export declare function documentBounds(text: string, options?: { lineEnvs?: Set<string> | null; ifs?: Set<string>; ifValues?: Map<string, boolean> | null }): { begin: number; body: number; end: number }
 /** the \usepackage[…]{inputenc} TeX acts on: where it stands and its options, or null */
 export declare function inputencOf(text: string, options?: { lineEnvs?: Set<string> | null; ifs?: Set<string>; ifValues?: Map<string, boolean> | null }): { start: number; end: number; options: string } | null
-/** a .bbl's text with each `%` TeX reads as a character (a web address's at an entry's top level) written as a code no source holds, the same length; any other file's as it is */
-export declare function urlPercents(text: string, file: string): string
+/** a file's text with each `%` TeX reads as a character (a web address's at a .bbl entry's top level, or at another file's top level: in no group, bracket, conditional or environment but `document`, of a command the paper does not define) written as a code no source holds, the same length */
+export declare function urlPercents(text: string, file: string, scan?: { ifs?: ReadonlySet<string>; lineEnvs?: ReadonlySet<string> | null; defined?: { has(name: string): boolean } | null; skipEnvs?: ReadonlySet<string> | null }): string
 /** the placeholder of the list backref sets after a bibliography entry (the pages citing it): an entry's last piece where the package turns the lists on; patch writes nothing for it */
 export declare const BACKREF_LIST: string
 /** the patched files (path → bytes): each unit's range replaced by its translated pieces, the rest untouched */

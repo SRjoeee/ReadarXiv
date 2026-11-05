@@ -582,14 +582,34 @@ export function measuresOf(rects, keep = null) {
  *  of two measures the narrower of both, so that no slot runs over what stands beside either; [x0, x1] */
 function measureAt(b, y, k) {
   const at = i => b.measures.get(rectKey(b.rects[i])) ?? [b.x0, b.x1]
-  if (k >= 0 && k < b.rects.length) return at(k)
-  const Y = b.G ?? b.B
+  return k >= 0 && k < b.rects.length ? at(k) : measureOn(b.G ?? b.B, at, y)
+}
+/** a block's measure as its own lines are laid: measureAt where TeX changed it within the paragraph, else its edges */
+const measureOf = (b, y, k) => (b.measures && !b.centred ? measureAt(b, y, k) : [b.x0, b.x1])
+/** the measure at baseline `y` of lines at baselines `Y` (top down), line i's `at(i)`: a line's own on its baseline (and over
+ *  the first, under the last), between two the narrower of both (measureAt) */
+function measureOn(Y, at, y) {
   if (y >= Y[0] - 0.05) return at(0)
   for (let i = 0; i + 1 < Y.length; i++) {
     if (Math.abs(y - Y[i + 1]) <= 0.05) return at(i + 1)
     if (y < Y[i] && y > Y[i + 1]) { const a = at(i), c = at(i + 1); return [Math.max(a[0], c[0]), Math.min(a[1], c[1])] }
   }
   return at(Y.length - 1)
+}
+/**
+ * The measure TeX set at baseline `y` for a line a unit flows on from the unit before over the rows that unit's translation
+ * left, down to the shared row (`flowX`, run.mjs layout2: the row's baseline and the unit before's block that holds it): the
+ * unit before's at the rows it had, the shared row both units' (the row's start the one's, its end the other's, each its own
+ * measure there), between two rows the narrower of both (measureOn). Never a block's outer bounds where TeX changed its measure:
+ * those take in rows further down, beside which another measure stood (a wrapfigure beside the rows around the shared row,
+ * wider rows under it: the review of #595). 2608.16117v1 p19's u59, its first block the shared row's remainder alone beside
+ * Figure 9, flows on at the paragraph's full measure, the unit before's rows'
+ */
+function flowMeasureAt(b, y) {
+  const { y: row, lead } = b.flowX
+  const j = lead.B.findIndex(v => Math.abs(v - row) < 0.05)
+  const a = measureOf(lead, row, j), c = measureOf(b, row, 0), shared = [Math.min(a[0], c[0]), Math.max(a[1], c[1])]
+  return measureOn((lead.G ?? lead.B).slice(0, j + 1), i => (i < j ? measureOf(lead, y, i) : shared), y)
 }
 
 /**
@@ -3160,7 +3180,10 @@ function slotsAt(blocks, st, P, s) {
       const target = k === 0 || (onGrid && !flows && k < b.B.length) ? k : null
       // (each slot the measure of the line it is laid at, where the paragraph's changed: measuresOf; the block's grid, its
       // pitch and its flow its own across the change, one paragraph's)
-      const [mx0, mx1] = b.measures && !b.centred ? measureAt(b, y, (onGrid || shared) && !flows && k < G.length ? k : -1) : [b.x0, b.x1]
+      // (a line flowed on from the unit before over the rows its translation left, the shared row included, `flowX` (run.mjs
+      // layout2): the measure TeX set at its height, the two units' rows' around the row (flowMeasureAt); under it, the unit's
+      // own rows')
+      const [mx0, mx1] = flows && b.flowX && y >= b.flowX.y - 0.05 ? flowMeasureAt(b, y) : measureOf(b, y, (onGrid || shared) && !flows && k < G.length ? k : -1)
       // (the first line's start: the block's indent, or where a shared line leaves it, `start`, run.mjs layout2)
       const x0 = firstBlock && k === 0 && b.start !== undefined ? b.start : firstBlock && k === 0 && !b.centred ? b.x0 + b.indent : mx0
       // (a line laid over a display TeX set with its short skip, `shortSkips` (tex.mjs shortSkipsOf: under a line of the unit
