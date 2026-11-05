@@ -4386,9 +4386,10 @@ over 14 page pairs (the layer gate's jump, `--perf`). The web's half is `docs/ro
 each "(n)" as its item's label (`make.mjs` `labelOf`: the glyphs TeX set before the unit's start mark, whatever command set them:
 paralist's `inparaenum`, an `\item[(1)]` by hand), kept as the original's ink where TeX set it; `keptBetween` saw it between the
 two units and refused the shared line, so each item was laid from TeX's English x: a blank of several em after the paragraph's
-first sentence, "(2)" and "(3)" alone at the column's right edge, "(4)" mid-line. Where the only thing between the two is the next
-unit's own label (`run.mjs` `ownLabelOnRow`: its label row on the row, after the unit before's end, its group one the layer
-hides), the label goes with its unit: its ink copied as the first line's start, set by the row's baseline so that a raised mark
+first sentence, "(2)" and "(3)" alone at the column's right edge, "(4)" mid-line. Where the only thing between the two, from the
+unit before's end to the next unit's first word, is that unit's own label (`run.mjs` `ownLabelOnRow`: its label row on the row,
+after the unit before's end, its group one the layer hides; the glyphs it carries aside, nothing of the page there, so that a mark
+between the label and the word, another unit's or no unit's, keeps both where TeX set them), the label goes with its unit: its ink copied as the first line's start, set by the row's baseline so that a raised mark
 stays raised, its first word glued to it, and erased where it stood; the unit before still ends its text on the row where TeX did.
 A shared line that holds the label and not its first word is left as a sliver is (`layer2.mjs`, the breaker's `ownLabel`), never
 the label alone at the line's end (2610.21098v1 p2's "(2)" was, its text a line under it). And where the unit before ends its

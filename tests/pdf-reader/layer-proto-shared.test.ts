@@ -132,6 +132,17 @@ describe('a shared line whose next unit\'s own label stands between the two (an 
     expect([b![1], b![6]]).toEqual([226, 20])
   })
 
+  it('a label with something else kept between it and its item\'s first word stays the original\'s, and its item where TeX set it (Devin\'s review of #589)', async () => {
+    // (a mark of the page at 167-169, outside the label's box [154, 166] and before the item's first word at 170: no glyph the item
+    // carries. Carried, the label and the word moved to the row's start and the mark stayed at TeX's place, cut off from both)
+    const run = await laid({ ...labelled(56), extra: [line(1, 226, '†', 167, 169)] })
+    const a = linesOf(run, 0)!, [b] = linesOf(run, 1)!
+    const onRow = a.filter(l => Math.abs(l[1] - 226) < 10)
+    expect(onRow.length, 'a line of it on the shared row').toBeGreaterThan(0)
+    expect(onRow.every(l => l[7] <= 150 + 0.01), `its lines on the row end at ${onRow.map(l => l[7])}`).toBe(true)
+    expect([b![1], b![6]]).toEqual([226, 170])
+  })
+
   it('a label the wrap could not give a group of its own stays the original\'s, and its item where TeX set it', async () => {
     const run = await laid(labelled(56), P => { Object.defineProperty(P.doc, 'getOptionalContentConfig', { configurable: true, value: async () => fakeConfig({ missing: ['u1.l'] }) }) })
     const [b] = linesOf(run, 1)!

@@ -59,7 +59,7 @@ import { unitHiding } from './hide.mjs'
 import { cropSourceOff, labelGroup, nameGroup, textGroup, visibilityOf } from './visibility.mjs'
 import * as LK from './links.mjs'
 import * as TL from './textlayer.mjs'
-import { locatedWhole, shortSkipsOf, texParts, texRects } from './tex.mjs'
+import { labelBoxChars, locatedWhole, shortSkipsOf, texParts, texRects } from './tex.mjs'
 import { shown as shownPiece, trPiecesOf } from '../layer/pieces.mjs'
 import { fitFigureSet, sameAsSource } from './figure-fit.mjs'
 import { levelRun } from './figure-rows.mjs'
@@ -1582,8 +1582,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   }
   /** whether something of the page stands on a shared row (need.mjs rowLeadOf: `row`, the last row of the unit before) between
    *  that unit's end there and `x`, where the next unit's text begins: a character of the page, which stays where it is (a
-   *  label kept as the original's, a name), so that the next unit is not laid from that unit's end (layout2's `start`) */
-  const keptBetween = (row, x) => (chars2[row.page - 1] ?? []).some(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 > row.x1 + 0.1 && (c.x0 + c.x1) / 2 < x - 0.1 && Math.abs(c.yb - row.baseline) < 0.4 * row.size)
+   *  label kept as the original's, a name), so that the next unit is not laid from that unit's end (layout2's `start`); the glyphs
+   *  `own` keys (L2.charKey) aside, which go with the next unit (its label carried, ownLabelOnRow) */
+  const keptBetween = (row, x, own = null) => (chars2[row.page - 1] ?? []).some(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 > row.x1 + 0.1 && (c.x0 + c.x1) / 2 < x - 0.1 && Math.abs(c.yb - row.baseline) < 0.4 * row.size && !own?.has(L2.charKey({ page: row.page, item: c.item, k: c.k })))
   /** a unit's shared row (`followers`: the next unit's first row continues its last) where something stays between the two
    *  (keptBetween), read before the next unit is laid: up to where the file begins that unit's first line, or ends its label
    *  on the row where the file holds one (the label stays the original's, and its text begins after it); else null */
@@ -1597,23 +1598,28 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (!keptBetween(row, x)) return null
     // (only the next unit's own label there, which goes with it (ownLabelOnRow): this unit's text still ends where TeX's did, and
     // the next unit is laid from that end all the same)
-    return ownLabelOnRow(fid, row) ? { ...row, byLabel: true } : row
+    return ownLabelOnRow(fid, row, x) ? { ...row, byLabel: true } : row
   }
   /**
    * The label TeX set for unit `id` at the start of its first row where that row is a shared line (`row`, need.mjs rowLeadOf: the
    * unit before ends on it), when it is the only thing that stays between the two there: the file's label row of the unit (its
    * glyphs before the unit's start mark, make.mjs labelOf, whatever command set them: an inline list's item, enumitem's
    * `enumerate*` or paralist's `inparaenum`, an `\item[(1)]` by hand), on the row's baseline, after the unit before's end, and
-   * nothing else of the page between that end and the label (keptBetween); its own group the layer hides (`relabels`). It goes
+   * nothing else of the page between that end and the unit's first word (`x`, or the label's end where that is further) but the
+   * label's own glyphs (keptBetween): those the unit carries (`carried`, its prep's label), or, read before the unit is (keptAfter),
+   * those of the file's label box, which are what it will carry (tex.mjs labelBoxChars). A mark between the label and the word
+   * (another unit's, or no unit's) keeps the label and the unit where TeX set them: carried, the two went to the row's start and
+   * left the mark there alone. Its own group the layer hides (`relabels`). It goes
    * with its unit: drawn at the shared line's start, its ink copied, and its text after it. Kept as the original's where TeX set
    * it, it held the unit's text there, after the English words of the unit before, whatever the translation's length
    * (2610.21085v1 p2's "(1)" to "(4)": a blank of several em after the paragraph's first sentence, "(2)" and "(3)" alone at the
    * column's right edge, "(4)" mid-line). The label row [kind, page, x0, baseline, x1, top, bottom], or null
    */
-  const ownLabelOnRow = (id, row) => {
+  const ownLabelOnRow = (id, row, x, carried = null) => {
     const lb = tex.index.unit(id)?.labels
     if (!lb || lb.length < 7 || !relabels(id) || lb[1] !== row.page || Math.abs(lb[3] - row.baseline) >= 0.4 * row.size || lb[2] < row.x1 - 0.5) return null
-    return keptBetween(row, lb[2]) ? null : lb
+    const own = new Set((carried ?? labelBoxChars(lb, chars2[row.page - 1])).map(L2.charKey))
+    return keptBetween(row, Math.max(x, lb[4] + 0.2), own) ? null : lb
   }
   /** the unit's edges (P.halfLead; layer2.mjs footFloorAt): whether its first and last lines share their baseline with ink
    *  that stays where it is, a label kept as the original's or a character of the page beside the line's own in its column (a
@@ -2136,7 +2142,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     let rowLabel = null, onLeadOf = null
     if (row && p.blocks[0] && !p.blocks[0].centred && p.blocks[0].page === row.page && Math.abs(p.blocks[0].B[0] - row.baseline) < 0.05) {
       const b = p.blocks[0], a = byId.get(row.id), share = a && !a.refused ? a.share ?? null : null, x = b.x0 + b.indent
-      const lb = prep.label?.chars?.length && !prep.label.drawn && prep.label.chars.every(c => c.page === row.page && Math.abs(c.yb - row.baseline) < 0.4 * row.size) ? ownLabelOnRow(p.id, row) : null
+      const lb = prep.label?.chars?.length && !prep.label.drawn && prep.label.chars.every(c => c.page === row.page && Math.abs(c.yb - row.baseline) < 0.4 * row.size) ? ownLabelOnRow(p.id, row, x, prep.label.chars) : null
       if (share && !share.kept && (lb || !keptBetween(row, x))) {
         if (lb) { rowLabel = { lb, baseline: row.baseline }; b.indent = 0 }
         b.start = share.end !== null ? share.ink + Math.max(0, (lb ? lb[2] : x) - row.x1) : row.x0
