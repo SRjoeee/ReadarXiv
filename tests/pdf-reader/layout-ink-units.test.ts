@@ -38,7 +38,7 @@ const unitsOf = (pages: ReturnType<typeof page>[], units: { kind: string; pieces
 const textOf = (u: { pieces: { t: string; s?: string }[] }) => u.pieces.map(p => (p.t === 'text' ? p.s : p.t === 'ph' ? '⟦·⟧' : '')).join('')
 const SOURCE = [{ kind: 'heading', pieces: [{ t: 'text', s: 'Introduction' }] }, { kind: 'para', pieces: [{ t: 'text', s: 'Body words of the paper here' }] }]
 
-describe("an ink unit's alignment, as TeX set the paragraph it is in (LAYOUT 36)", () => {
+describe("an ink unit's alignment, as TeX set the paragraph it is in (LAYOUT 37)", () => {
   // (the flags of each ink unit made of the pages: CENTRED 4, FLUSH_LEFT 8, FLUSH_RIGHT 16, JUSTIFIED 32, none 0)
   const flagsOf = (...pages: ReturnType<typeof page>[]) => unitsOf(pages).ink.map(u => [textOf(u), u.rows.unit[3]])
   const line = (s: string, y: number, x = 100) => ({ glyphs: run(s, x, y) })

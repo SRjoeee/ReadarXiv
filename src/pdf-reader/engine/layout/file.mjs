@@ -194,13 +194,17 @@ export { LayoutRefusal } from './json.mjs'
  *  number before a line that began at the "k": a file of 33 holds that label and a line's start past it; 35 (with PIPELINE 70):
  *  the maker anchors each unit where the head's names say its marks stand (pipeline/anchors.mjs searchHead), so that a unit
  *  numbered after the text is searched between its neighbours by their own pages (2610.17024v1's title, keyword list and 29
- *  references, laid now): a file of 34 lays fewer units; 36 (2307.16209v1's title pages, zh, 2026-11-05): a unit's alignment
- *  is told in four flags, UNIT_FLAG.JUSTIFIED beside CENTRED, FLUSH_LEFT and FLUSH_RIGHT, none where nothing tells it (the reader
- *  reads its lines); an ink unit's as TeX set the paragraph it is in, read from the marked original's paragraph ends
- *  (marks.mjs POINTS_TEX `qe<n><code>`, ink-units.mjs alignOf), where a file of 35 held every ink unit but a running head on its
+ *  references, laid now): a file of 34 lays fewer units; 36 (with PIPELINE 73): an end mark at no word reaches back to its unit's
+ *  last word (make.mjs reachBackIn), a carried word on either side of the mark's token on the base page is its word (anchors.mjs
+ *  wordAt `either`), and the text after a piece runs through a macro TeX said sets no ink and a text symbol right after it
+ *  (marks.mjs followsOf), so that 2610.21477v1's `\}` paragraph, 2608.25210v2's "DOI:" entries and 2608.28692v1's `\MainRel\%` are
+ *  laid: a file of 35 lays fewer units; 37 (2307.16209v1's title pages, zh, 2026-11-05): a unit's
+ *  alignment is told in four flags, UNIT_FLAG.JUSTIFIED beside CENTRED, FLUSH_LEFT and FLUSH_RIGHT, none where nothing tells it
+ *  (the reader reads its lines); an ink unit's as TeX set the paragraph it is in, read from the marked original's paragraph ends
+ *  (marks.mjs POINTS_TEX `qe<n><code>`, ink-units.mjs alignOf), where a file of 36 held every ink unit but a running head on its
  *  page's middle not centred: 2307.16209's title, author and examining board drawn from each English line's start. A reader
- *  of 35 refuses the new flag, so a file of 36 is another maker's (the file's schema is 6 still) */
-export const LAYOUT = '36'
+ *  of 36 refuses the new flag, so a file of 37 is another maker's (the file's schema is 6 still) */
+export const LAYOUT = '37'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,
@@ -234,7 +238,7 @@ export const LABEL_KINDS = Object.freeze(['number', 'item', 'caption', 'footnote
  *  environment, ragged2e's \RaggedRight, a class's ragged heading) or flush right (\raggedleft, flushright), only where the
  *  marked original tells it (marks.mjs readAlign), never read off arXiv's lines (LAYOUT 26); JUSTIFIED: its lines set
  *  justified, neither centred nor flush, as TeX set its paragraph, or where TeX does not tell it as the maker reads its
- *  lines (make.mjs: not centred on its column) (LAYOUT 36). An ink unit's as TeX set the paragraph it is in (ink-units.mjs
+ *  lines (make.mjs: not centred on its column) (LAYOUT 37). An ink unit's as TeX set the paragraph it is in (ink-units.mjs
  *  alignOf). A unit of none of the four is one whose alignment nothing tells: the reader reads its lines
  *  (layer-proto/layer2.mjs blocksOf2). What the layer sets the translation's lines by (run.mjs); a unit holds one of the
  *  four at most */

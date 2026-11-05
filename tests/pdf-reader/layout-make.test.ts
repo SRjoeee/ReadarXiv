@@ -954,7 +954,7 @@ describe('makeLayout, the review of 2026-10-06', () => {
       units: [unit('heading', [text('A Title of Front Matter')], { title: true, front: true }), unit('author', [text('Some Author and Another')], { front: true }), unit('para', [text('alpha beta '), ph('$_{xy}$'), text(' gamma delta')])],
     })
     expect(phOf(file, 2, 1)[3]).toBe(PH_FLAG.LOWERED)
-    // (not centred: JUSTIFIED, TeX's word or the maker's reading of a unit TeX does not tell, LAYOUT 36)
+    // (not centred: JUSTIFIED, TeX's word or the maker's reading of a unit TeX does not tell, LAYOUT 37)
     expect(file.units.map(u => u[3])).toEqual([UNIT_FLAG.TITLE | UNIT_FLAG.FRONT | UNIT_FLAG.JUSTIFIED, UNIT_FLAG.FRONT | UNIT_FLAG.JUSTIFIED, UNIT_FLAG.JUSTIFIED])
   })
 
@@ -2298,6 +2298,46 @@ describe('makeLayout, the marking the marks file records: the complete macros, t
     expect(file.lines.find(([u]) => u === 0)).toBeUndefined()
     expect(file.lines.map(([u]) => u)).toEqual([1])
     expect(await make({ ...w, pages: [{ runs }], marks: w.marks.slice(0, 5), units: w.units.slice(0, 1) })).toMatchObject({ refused: 'carry', stats: { units: { unplaced: 1, located: 0 } } })
+  })
+  it("a unit that ends on a line of no word, its end mark at no word, is bounded by the last word before the mark in its column (2610.21477v1's `\\}` alone on its last line)", async () => {
+    const runs: Run[] = [{ s: 'a unit of its words', x: 72, y: 700 }, { s: 'xx', x: 72, y: 688, blank: true }, { s: 'a second paragraph laid', x: 72, y: 600 }]
+    const w: World = {
+      pages: [{ runs }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, 82, 688], ['p0.1a', 1, 72, 688], ['p0.1b', 1, 82, 688], ['1s', 1, 72, 600], ['1e', 1, endOf(runs[2] as Run), 600]],
+      units: [unit('para', [text('a unit of its words '), ph('$x$')]), unit('para', [text('a second paragraph laid')])],
+    }
+    const { file } = await made(w)
+    expect(file.unlaid ?? []).toEqual([])
+    expect(chunk(rowsOf(file, 0, 'lines'), 8).map(r => r[3])).toContain(700)
+  })
+  it('but not from a word of the other column above it, later in the reading: an end mark at no word reaches back within its own column', async () => {
+    // (the unit in the left column, its last line a formula's; the right column's words above that line come after the unit's in
+    // the reading order: reached across the gutter, they would be the unit's)
+    const runs: Run[] = [{ s: 'the unit', x: 60, y: 712 }, { s: 'xxxx', x: 60, y: 700, blank: true }, { s: 'Other text here', x: 320, y: 712 }, { s: 'a second paragraph laid', x: 60, y: 600 }]
+    const w: World = {
+      pages: [{ runs }],
+      marks: [COLS2(1), ['0s', 1, 60, 712], ['0e', 1, 80, 700], ['p0.1a', 1, 60, 700], ['p0.1b', 1, 80, 700], ['1s', 1, 60, 600], ['1e', 1, endOf(runs[3] as Run), 600]],
+      units: [unit('para', [text('the unit '), ph('$x$')]), unit('para', [text('a second paragraph laid')])],
+    }
+    const { file } = await made(w)
+    expect(file.unlaid ?? []).toEqual([])
+    for (const [, , x1] of chunk(rowsOf(file, 0, 'lines'), 8)) expect(x1).toBeLessThanOrEqual(300)
+  })
+  it("a start mark the marked compile's shared box put in the next word is its unit's word on the base page (2610.40394v1's `\\schedforwardgap{} is strongest`: \"strongest\" there, \"is\" here)", async () => {
+    // (the base page's boxes exact: a macro's "Gap", then the unit from "is"; the marked compile one item, its width shared by its
+    // characters, the mark at "is" inside its box of "strongest")
+    const base: Run[] = [{ s: 'Gap', x: 72, y: 700, w: 1 }, { s: 'is strongest in all', x: 109, y: 700 }, { s: 'a second paragraph laid', x: 72, y: 600 }]
+    const marked: Run[] = [{ s: 'Gap is strongest in all', x: 72, y: 700 }, base[2] as Run]
+    const w: World = {
+      pages: [{ runs: base }],
+      marked: [{ runs: marked }],
+      base: [{ runs: base }],
+      marks: [['0s', 1, 109, 700], ['0e', 1, endOf(base[1] as Run), 700], ['1s', 1, 72, 600], ['1e', 1, endOf(base[2] as Run), 600]],
+      units: [unit('para', [text('is strongest in all')]), unit('para', [text('a second paragraph laid')])],
+    }
+    const { file, stats } = await made(w)
+    expect(stats.units.unplaced).toBe(0)
+    expect(file.lines.map(([u]) => u)).toContain(0)
   })
   it('nor a sideways cell\'s: its start mark on a turned word reaches none, and the paragraph beside its table keeps every line (2602.23285v2)', async () => {
     // (a \rotatebox{90} cell of a table set beside a paragraph, on a page of one column: its marks stand one above the other on
