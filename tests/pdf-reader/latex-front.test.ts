@@ -496,6 +496,18 @@ describe('a letter command is the letter itself in its word: TeX\'s skipped spac
     const tex = new TextDecoder('latin1').decode(patch(p, new Map(), { mark: markUnits(p.units) }).get('main.tex'))
     expect(tex).toContain('\\leavevmode\\axtmark{0s}{\\L}ukasz Kaiser wrote it.\\axtend{0e}')
   })
+
+  it('and a unit whose commands close a group right before its first word has its start mark before that word, where marks.mjs headEnd ends its head (2608.25210v2\'s `\\underline{\\code{…}}: …`, 2610.21477v1\'s cell, which had none)', () => {
+    const marked = (body: string, pre = '') => { const p = doc(body, pre); return new TextDecoder('latin1').decode(patch(p, new Map(), { mark: markUnits(p.units) }).get('main.tex')) }
+    const pre = '\\newcommand{\\code}[1]{\\texttt{\\small #1}}\n\\usepackage{xcolor}'
+    expect(marked('\\noindent\\underline{\\code{LLM-provenance-prompt}}: the placeholders are here.', pre)).toContain('\\underline{\\code{LLM-provenance-prompt}}\\leavevmode\\axtmark{0s}: the placeholders are here.\\axtend{0e}')
+    // (two groups closed, the space after them set before the mark, as after a command passed over)
+    expect(marked('\\noindent{\\underline{\\code{Top-k}}} and the rest of it.', pre)).toContain('\\code{Top-k}}} \\leavevmode\\axtmark{0s}and the rest of it.')
+    // (a group followed by anything else before the word: no start mark, as before — REVTeX's `\\bibfield {number} {  }` and the
+    // entry's fields after it)
+    const other = marked('\\noindent\\underline{\\code{x}}\\foo{y} then words follow.', `${pre}\n\\newcommand{\\foo}[1]{#1}`)
+    expect(other).not.toContain('axtmark{0s}')
+  })
 })
 
 describe('a display outside a unit\'s marks (the reader\'s anchors take it from beyond them: 211 of 747 displays were lit with no unit)', () => {

@@ -749,8 +749,9 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
    *  there is another line's. Its start mark stands on its turned run (turnedAt: on a turned token's box), and the nearest
    *  upright word at its height may be any line's: 2602.23285v2's sideways cell "Discrete & Continuous" in a table set beside
    *  a paragraph, whose mark reached the next cell's "ODEBRAIN" and whose end mark's word was the paragraph's, 30 pt left of
-   *  the table, so that the cell took a line of the paragraph's and the paragraph was laid not at all. An end mark needs none:
-   *  tokenAtMark takes the last word before it on its line at any distance. `byPage`, the base page's tokens by page */
+   *  the table, so that the cell took a line of the paragraph's and the paragraph was laid not at all. An end mark that stands
+   *  at a word takes the last word before it on its line at any distance (tokenAtMark); one at none, reachBackIn. `byPage`, the
+   *  base page's tokens by page */
   const reachIn = byPage => mk => {
     let best = null
     const col = colAt(mk)
@@ -759,6 +760,21 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
       if (turnedAt(t, mk)) return null
       if (!t.t || !uprightToken(t) || Math.abs(t.y - mk.y) > t.h * 0.4 || columnOf(t.page, t.x, t.x + t.w) !== col) continue
       if (t.x >= mk.x && (best === null || t.x < doc[best].x)) best = k
+    }
+    return best
+  }
+  /** the word an end mark that stands at no word on its line reaches back to (boundsFromMarks `reachBack`; its carried word null
+   *  in the marks' own compile: a unit that ends with a `\\}` set alone on its line, or with a display, its end mark on the empty
+   *  line TeX resumes after it): the last upright word before it in its column on its page, above its line, in the document's
+   *  order; null for none, and none on a turned line, as reachIn */
+  const reachBackIn = byPage => mk => {
+    let best = null
+    const col = colAt(mk)
+    for (const k of byPage.get(mk.page) ?? []) {
+      const t = doc[k]
+      if (turnedAt(t, mk)) return null
+      if (!t.t || !uprightToken(t) || t.y - mk.y <= t.h * 0.4 || columnOf(t.page, t.x, t.x + t.w) !== col) continue
+      if (best === null || k > best) best = k
     }
     return best
   }
@@ -782,7 +798,7 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
       const c = raw.get(k)
       if (c) carriedUnit.set(k, { page: c.page, x: c.x, y: c.y, t: sameWord(doc, byPage, c, k.endsWith('s'), m.t) })
     }
-    const bounds = boundsFromMarks(doc, carriedUnit, byPage, reachIn(byPage))
+    const bounds = boundsFromMarks(doc, carriedUnit, byPage, reachIn(byPage), reachBackIn(byPage), true)
     // a unit whose own marks were set but stand on no page with ink, or not on the same words there, stays the original's:
     // the text alone would place it, maybe wrongly
     unplaced = new Set()
@@ -2319,7 +2335,7 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
     const M = mh ? mh.pages : 0
     let markedTo = mh ? 0 : Infinity, ended = !mh, finished = false, foundTo = 1
     const mViews = [], mWords = [], twiceSeen = new Set()
-    const follows = mh ? followsOf(units, mh.set, mh.marking?.texts) : null
+    const follows = mh ? followsOf(units, mh.set, mh.marking?.texts, mh.marking?.inkless) : null
     // (the displays units open with, found by their units' start marks: marks.mjs headsOf)
     const heads = mh ? headsOf(units, mh.set) : null
     // (the marks read a page at a time: none yet)
@@ -2332,7 +2348,7 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
     // draft frames'
     unitMarks = new Map(); nameOf = new Map(); startsOn = new Map()
     carriedUnit = new Map(); unplaced = new Set(); linesTeX = new Map(marks.lines); alignTeX = new Map(marks.align ?? []); coloursBy = coloursOf(marks.colours); anchors = new Map()
-    const byPage = pageIndex(doc), withWords = new Map(), oursOn = mh ? new Map() : pageIndex(ours), reach = reachIn(byPage)
+    const byPage = pageIndex(doc), withWords = new Map(), oursOn = mh ? new Map() : pageIndex(ours), reach = reachIn(byPage), reachBack = reachBackIn(byPage)
     const byName = (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)
     const listed = mh ? mh.named.filter(([, page]) => Number.isInteger(page) && page >= 1 && page <= M).sort(byName) : [...at].map(([nm, m]) => [nm, m.page, m.x, m.y])
     const pageOfName = new Map(), namesOn = new Map(), gOn = new Map(), keyNames = new Map(), keysOn = new Map(), nameList = []
@@ -2402,7 +2418,7 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
       const ks = [`${i}s`, `${i}e`].filter(k => withWords.has(k)), raw = new Map()
       for (const k of ks) raw.set(k, anchorMarkOf(nameOf.get(k)))
       for (const k of ks) { const c = raw.get(k); if (c) carriedUnit.set(k, { page: c.page, x: c.x, y: c.y, t: sameWord(doc, byPage, c, k.endsWith('s'), withWords.get(k).t) }) }
-      const b = boundsFromMarks(doc, new Map(ks.filter(k => carriedUnit.has(k)).map(k => [k, carriedUnit.get(k)])), byPage, reach).get(String(i))
+      const b = boundsFromMarks(doc, new Map(ks.filter(k => carriedUnit.has(k)).map(k => [k, carriedUnit.get(k)])), byPage, reach, reachBack, true).get(String(i))
       const own = [`${i}s`, `${i}e`].filter(k => unitMarks.has(k))
       if (own.length && (own.some(k => !carriedUnit.has(k)) || (own.length === 2 && !b))) unplaced.add(i)
       R.mark(i, b ?? null)

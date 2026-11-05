@@ -469,25 +469,33 @@ function commandAt(s, i) { // s[i] === '\\'
 }
 function skipComment(s, i) { while (i < s.length && s[i] !== '\n') i++; return i }
 /**
- * A web address's `%` as TeX reads it in a `.bbl`'s entries. url.sty's \\url and \\path, hyperref's \\nolinkurl, breakurl's \\burl
- * and the first argument of hyperref's \\href (REVTeX's .bbl's too: `\\begingroup \\@sanitize@url \\@href`) read their argument
- * with `%` a character where TeX has not read those characters already, so `\\href {https://doi.org/…?urlappend=%3Fref%3DPDF…}
- * {…}` is one address. Read as a comment, the address's group never closed, and in a .bbl every entry after it read as one
- * (2610.21770v1's 44 to 61; an MNRAS .bbl's `\\href {…2017A%26A…}`, 2608.18626v1). Only there: a BibTeX-written .bbl's entries,
- * whose structure is the style's, from each \\bibitem of its thebibliography on, an address at the entry's top level (in no
- * group: \\href's own first argument, as both papers have it). Anywhere else, the body included, the `%` stays a comment as the
- * walk read it before: body text can hold any of TeX's constructs (an argument, a definition, a conditional, a verbatim), and
- * no local source writes such an address there (none of 183 papers' .tex, .sty and .cls files). Each such `%` is written as
- * LITERAL_PERCENT, the same length, so that every reading of the walk (groups, comments, a bibliography's \\bibitem) sees what
- * TeX sees and every place stays where it is; the units take their `%` back (restorePercents). A file of another name, a text
- * that holds LITERAL_PERCENT already, or no `%`, is returned as it is
+ * A web address's `%` as TeX reads it. url.sty's \\url and \\path, hyperref's \\nolinkurl, breakurl's \\burl and the first
+ * argument of hyperref's \\href (REVTeX's .bbl's too: `\\begingroup \\@sanitize@url \\@href`) read their argument with `%` a
+ * character where TeX has not read those characters already, so `\\href {https://doi.org/…?urlappend=%3Fref%3DPDF…} {…}` is
+ * one address. Read as a comment, the address's group never closed: in a .bbl every entry after it read as one (2610.21770v1's
+ * 44 to 61; an MNRAS .bbl's `\\href {…2017A%26A…}`, 2608.18626v1), and in the body the paragraph around it lost its pieces
+ * (2501.14787v1's `\\href{https://en.wikipedia.org/wiki/Newton%27s_method#…}{here}`: the address cut at its `%`, the rest of its
+ * line a comment, five paragraphs drawn in English). Read so only where TeX surely reads the address from the file:
+ *  - a BibTeX-written .bbl's entries, whose structure is the style's: from each \\bibitem of its thebibliography on, an address
+ *    at the entry's top level (in no group: \\href's own first argument, as both papers have it);
+ *  - any other file (bodyPercents): an address at the file's top level, where no command can have read it as its argument
+ *    first — in no group, no bracket, no conditional and no environment the file opens but `document`, and the command none the
+ *    paper defines itself (an argument, a definition's body, a branch TeX skips, a body tabularx collects, a \\url of the
+ *    paper's own: TeX reads the `%` there as a comment, and so does the walk, as before).
+ * Each such `%` is written as LITERAL_PERCENT, the same length, so that every reading of the walk (groups, comments, a
+ * bibliography's \\bibitem, the document's bounds) sees what TeX sees and every place stays where it is; the units take their
+ * `%` back (restorePercents). A text that holds LITERAL_PERCENT already, or no `%`, is returned as it is. `scan`: the paper's
+ * conditionals (`ifs`), its environments read by lines (`lineEnvs`) and its code environments the walk skips (`skipEnvs`), and the
+ * commands it defines in any form (`defined`: arg-roles.mjs
+ * paperOf's `own`, \\let and the xparse forms among them; a fallback a package the paper loads overrides is none)
  */
-export function urlPercents(text, file) {
-  if (!/\.bbl$/i.test(file ?? '') || !text.includes('%') || text.includes(LITERAL_PERCENT)) return text
+export function urlPercents(text, file, scan = {}) {
+  if (!text.includes('%') || text.includes(LITERAL_PERCENT)) return text
+  if (!/\.bbl$/i.test(file ?? '')) return bodyPercents(text, scan)
   const begin = /\\begin\s*\{thebibliography\}/.exec(text)
   if (!begin) return text
   const end = text.indexOf('\\end{thebibliography}', begin.index), to = end < 0 ? text.length : end
-  const n = text.length, out = text.split('')
+  const out = text.split('')
   let changed = false, depth = 0, entry = false
   for (let i = begin.index + begin[0].length; i < to; i++) {
     const c = text[i]
@@ -500,24 +508,98 @@ export function urlPercents(text, file) {
     i = at - 1
     if (name === 'bibitem') { entry = true; depth = 0; continue }
     if (!entry || depth > 0 || !URL_READERS.has(name)) continue
-    let k = at
-    while (text[k] === ' ' || text[k] === '\t' || text[k] === '\n') k++
-    if (name === 'href' && text[k] === '[') { const e = matchGroup(text, k, '[', ']'); if (e > 0) { k = e; while (text[k] === ' ' || text[k] === '\t' || text[k] === '\n') k++ } }
-    if (text[k] !== '{') continue
-    // (the argument as these commands read it: braces counted, `%` a character, `\\` before any character escaping it)
-    let d = 0, e = -1
-    for (let j = k; j < n; j++) {
-      if (text[j] === '\\') { j++; continue }
-      if (text[j] === '{') d++
-      else if (text[j] === '}' && --d === 0) { e = j + 1; break }
-    }
-    if (e < 0) continue
-    // (read as the boundary is: a `\` and the character after it a pair, so that `\%` is the command \% and `\\%` a backslash
-    // pair and then the character)
-    for (let j = k; j < e; j++) { if (text[j] === '\\') { j++; continue } if (text[j] === '%') { out[j] = LITERAL_PERCENT; changed = true } }
-    i = e - 1
+    const r = literalAddress(text, at, name, out)
+    if (!r) continue
+    changed ||= r.any
+    i = r.end - 1
   }
   return changed ? out.join('') : text
+}
+/**
+ * urlPercents in a file of the body: an address read with `%` a character at the file's top level alone. Read in TeX's order
+ * (comments, groups, an optional argument's brackets, \\verb, an environment read by lines passed over as TeX passes them), with
+ * each address so read taken whole before what follows it is read, so that a group or a comment after it on its line is seen
+ * as TeX sees it. A file whose \\fi closes no conditional the file opens (a command of the paper that opens one, \\def\\iffa
+ * {\\iffalse}) cannot be read so: it is returned as it is
+ */
+function bodyPercents(text, { ifs = new Set(), lineEnvs = null, defined = null, skipEnvs = null } = {}) {
+  const n = text.length, out = text.split('')
+  let changed = false, depth = 0, bracket = 0, conds = 0
+  const envs = []
+  for (let i = 0; i < n; i++) {
+    const c = text[i]
+    if (c === '%') { i = skipComment(text, i); continue }
+    if (c === '{') { depth++; continue }
+    if (c === '}') { depth = Math.max(0, depth - 1); continue }
+    if (c === '[' && depth === 0) { bracket++; continue }
+    if (c === ']' && depth === 0) { bracket = Math.max(0, bracket - 1); continue }
+    if (c !== '\\') continue
+    const at = i, { name, end } = commandAt(text, i)
+    i = end - 1
+    if (!/^[A-Za-z@]+$/.test(name)) continue
+    // (what the walk reads as code, passed over as it passes it: \\verb's text, an inline listing's or minted's, and the body of an
+    // environment read by lines or skipped, a code environment's among them — none of it TeX's commands)
+    if (name === 'verb') { const e = verbEnd(text, end); if (e > 0) i = e - 1; continue }
+    if (name === 'lstinline' || name === 'mintinline') { const e = inlineCodeEnd(text, end, name); if (e > 0) i = e - 1; continue }
+    if (name === 'begin') {
+      const m = /^\s*\{([^{}]*)\}/.exec(text.slice(end, end + 200)), env = m?.[1].trim()
+      if (m && (isLineEnv(env, lineEnvs) || SKIP_ENVS.test(env) || skipEnvs?.has(env))) { i = endOfEnv(text, end + m[0].length, env)[1] - 1; continue }
+    }
+    if (depth > 0) continue
+    // (a conditional's name where one is defined, not opened: \\newif\\ifdraft, \\let\\ifdraft\\iftrue, \\def\\ifdraft{…})
+    // (and a \\def's parameter text, up to its body's brace, as texCommands reads it: `\\def\\x\\url{…}` runs no \\url)
+    if (name === 'newif' || name === 'let' || DEF_PRIMITIVES.has(name)) {
+      let k = skipSpaces(text, end)
+      if (text[k] === '\\') k = commandAt(text, k).end
+      if (name === 'let') { k = skipSpaces(text, k); if (text[k] === '=') k = skipSpaces(text, k + 1); if (text[k] === '\\') k = commandAt(text, k).end }
+      if (DEF_PRIMITIVES.has(name)) while (k < n && text[k] !== '{' && text[k] !== '%') k++
+      i = k - 1; continue
+    }
+    if (isConditional(name, ifs)) { conds++; continue }
+    if (name === 'fi') { if (conds === 0) return text; conds--; continue }
+    if (name === 'begin' || name === 'end') {
+      const m = /^\s*\{([^{}]*)\}/.exec(text.slice(end, end + 200))
+      if (!m) continue
+      const env = m[1].trim(), after = end + m[0].length
+      i = after - 1
+      if (env === 'document') continue
+      if (name === 'begin') envs.push(env)
+      else { const at = envs.lastIndexOf(env); if (at >= 0) envs.length = at }
+      continue
+    }
+    // (a command TeX does not run but prints, shows, compares or defines, the operand of the one before it — `\\string\\url`,
+    // `\\meaning\\href`, `\\noexpand\\url`: tailOf's operands, OPERAND_OF and SECOND_OPERAND_OF —, reads no address: what follows
+    // it is a group, its `%` a comment)
+    if (!URL_READERS.has(name) || bracket > 0 || conds > 0 || envs.length || defined?.has(name) || operandAt(text, at)) continue
+    const r = literalAddress(text, end, name, out)
+    if (!r) continue
+    changed ||= r.any
+    i = r.end - 1
+  }
+  return changed ? out.join('') : text
+}
+/**
+ * The address of a URL_READERS command whose name ends at `at`, read as these commands read it (braces counted, `%` a
+ * character, `\\` before any character escaping it), each `%` in it written LITERAL_PERCENT into `out`: where the address ends
+ * and whether it held any; null where no braced address follows
+ */
+function literalAddress(text, at, name, out) {
+  let k = at
+  while (text[k] === ' ' || text[k] === '\t' || text[k] === '\n') k++
+  if (name === 'href' && text[k] === '[') { const e = matchGroup(text, k, '[', ']'); if (e > 0) { k = e; while (text[k] === ' ' || text[k] === '\t' || text[k] === '\n') k++ } }
+  if (text[k] !== '{') return null
+  let d = 0, e = -1
+  for (let j = k; j < text.length; j++) {
+    if (text[j] === '\\') { j++; continue }
+    if (text[j] === '{') d++
+    else if (text[j] === '}' && --d === 0) { e = j + 1; break }
+  }
+  if (e < 0) return null
+  // (read as the boundary is: a `\` and the character after it a pair, so that `\%` is the command \% and `\\%` a backslash
+  // pair and then the character)
+  let any = false
+  for (let j = k; j < e; j++) { if (text[j] === '\\') { j++; continue } if (text[j] === '%') { out[j] = LITERAL_PERCENT; any = true } }
+  return { end: e, any }
 }
 /** what urlPercents writes a `%` TeX reads as a character as: a code no TeX source holds */
 const LITERAL_PERCENT = '\u0000'
@@ -905,6 +987,36 @@ function tailOf(body) {
   // \\let\\saved=\\section, \\def\\section…
   const before = t[at[n - 1]] === '=' ? n - 2 : n - 1
   return OPERAND_OF.has(word(n - 1)) || SECOND_OPERAND_OF.has(word(before - 1)) ? null : name
+}
+/**
+ * Whether the control word at s[at] (its backslash) is an operand TeX does not run, by the tokens before it, as tailOf reads a
+ * body's last: the token right before it one of OPERAND_OF (`\\string\\url`, `\\noexpand\\url`), or the one before that, past an
+ * `=`, one of SECOND_OPERAND_OF (`\\let\\saved\\url`, `\\let\\saved=\\url`)
+ */
+function operandAt(s, at) {
+  // (the token ending before `to`: a control word's name, else the character; null at the text's start. White space and comments
+  // are passed over as TeX passes them, a comment through its line's end: `\\string% note⏎\\url` is \\string's operand)
+  const tokenBefore = to => {
+    let k = to
+    for (;;) {
+      while (k > 0 && /\s/.test(s[k - 1])) k--
+      const c = k > 0 ? commentAt(s, k - 1) : -1
+      if (c < 0) break
+      k = c
+    }
+    if (k === 0) return null
+    let j = k
+    while (j > 0 && isLetter(s[j - 1])) j--
+    if (j < k && j > 0 && s[j - 1] === '\\') return { name: s.slice(j, k), at: j - 1 }
+    return { name: null, ch: s[k - 1], at: k - 1 }
+  }
+  const one = tokenBefore(at)
+  if (!one) return false
+  if (one.name && OPERAND_OF.has(one.name)) return true
+  // (the name the second operand follows, an `=` between them or none, and the command before that name)
+  const named = one.ch === '=' ? tokenBefore(one.at) : one
+  const op = named && tokenBefore(named.at)
+  return !!op?.name && SECOND_OPERAND_OF.has(op.name)
 }
 /** the commands whose operand is the token after them (tailOf): it is printed, compared or defined, not run */
 const OPERAND_OF = new Set(['string', 'noexpand', 'meaning', 'show', 'let', 'futurelet', 'def', 'gdef', 'edef', 'xdef', 'ifx', 'newcommand', 'renewcommand', 'providecommand', 'DeclareRobustCommand', 'chardef', 'mathchardef', 'countdef', 'dimendef', 'skipdef', 'toksdef'])
@@ -1408,11 +1520,15 @@ function newifValues(texts, ifs) {
 
 /** whether s[at] is inside a comment: an unescaped % before it on its line */
 function inComment(s, at) {
+  return commentAt(s, at) >= 0
+}
+/** where the comment s[at] is inside begins: the unescaped % before it on its line; -1 where it is in none */
+function commentAt(s, at) {
   for (let k = s.lastIndexOf('\n', at - 1) + 1; k < at; k++) {
     if (s[k] === '\\') k++
-    else if (s[k] === '%') return true
+    else if (s[k] === '%') return k
   }
-  return false
+  return -1
 }
 /** each \\thanks or \\footnote in s[from, to), walked alone: a footnote unit of its own, with no paragraph around it */
 function frontNotes(s, from, to, b, ctx) {
@@ -2089,7 +2205,7 @@ function walk(s, from, to, b, ctx) {
       if (goOn(macro, call, i)) continue
       b.ph(s.slice(i, e), i, e); i = e; continue
     }
-    if (name === 'verb') { const d = s[end]; const e = s.indexOf(d, end + 1); const stop = e < 0 ? end : e + 1; endText(); b.ph(s.slice(i, stop), i, stop); i = stop; continue }
+    if (name === 'verb') { const v = verbEnd(s, end), stop = v < 0 ? end : v; endText(); b.ph(s.slice(i, stop), i, stop); i = stop; continue }
     // listings' and minted's inline code, read as \verb is: its keys, minted's language, then a brace group or a
     // delimiter (\lstinline|x = y|, \lstinline{x = y}, \mintinline{py}|x|) — code, never the translator's
     if (name === 'lstinline' || name === 'mintinline') { const stop = inlineCodeEnd(s, end, name); if (stop > 0 && stop <= to) { endText(); b.ph(s.slice(i, stop), i, stop); i = stop; continue } }
@@ -2221,6 +2337,12 @@ function tikzCallEnd(s, at, to) {
     else if (c === ';' && depth === 0) return j + 1
   }
   return -1
+}
+/** where \\verb's text that starts at s[at], after its name (and its star), ends: past the next of its delimiter, as TeX reads it;
+ *  -1 where none follows */
+function verbEnd(s, at) {
+  const d = s[at], e = d ? s.indexOf(d, at + 1) : -1
+  return e < 0 ? -1 : e + 1
 }
 /** where an inline listing that starts at s[at], after its command's name, ends: past its optional keys, minted's
  *  language, and its code in a brace group or between two of a delimiter; -1 where it does not */
@@ -2800,16 +2922,16 @@ function readProject(fsys, main, tables, sourceText, own) {
   const bblName = `${jobName(mainFile.rel)}.bbl`, bblBytes = fsys.read(bblName)
   const bbl = bblBytes && /\\begin\s*\{thebibliography\}/.test(texText(bblBytes)) ? bblName : null
   const ctx = { rowEnds: rowEndsOf(sources.map(sourceText)), rowEndsAfter: rowEndsAfterOf(sources.map(sourceText)), bbl, tables, theorems, envs: envDefs(ownTexts), tableWraps: tableWrapsOf(ownTexts), activeSpaces: activeSpacesIn([...sources.map(sourceText), ...ownTexts]), ownEnvs: ownEnvsOf(ownTexts), displayEnvs: displayEnvsOf(definitions), fits: [], lineEnvs, ownAccents: ownAccents(ownTexts), ownLetters: ownLetters(ownTexts), macros: paperMacros(own), envMacros, ifs, ifValues, ends: new Map(), skipEnvs, skipped, visit: (rel, dirs, inFloat) => visit(rel, dirs, inFloat), dirs: [], bodies: macroBodies(sources.map(sourceText)), floats: new Set(), bibliography: [], backref: backrefOf(ownTexts), ...tblrOf(sources.map(sourceText)) }
-  const scan = { lineEnvs, ifs, ifValues }
+  const scan = { lineEnvs, ifs, ifValues }, percents = { lineEnvs, ifs, defined: paper.own, skipEnvs }
   let mainCmds = null
   /** `dirs`: the directories import.sty puts on the path an \input in the file is looked for on, the last imported first;
    *  `inFloat`: whether the file is read inside a float (the walk's builder there) */
   function visit(rel, dirs = [], inFloat = false) {
     const f = read(rel, dirs); if (!f || seen.has(f.rel)) return
     seen.add(f.rel); files.set(f.rel, f.text)
-    // (the file as the walk reads it: a .bbl entry's web address's `%` a character, as TeX reads it, urlPercents; the file's own
-    // text is what patch writes around the units)
-    const text = urlPercents(f.text, f.rel)
+    // (the file as the walk reads it: a web address's `%` a character where TeX reads it so, urlPercents; the file's own text is
+    // what patch writes around the units)
+    const text = urlPercents(f.text, f.rel, percents)
     const b = new Builder(f.rel, units, text, ctx.bodies, ctx.floats), outer = ctx.dirs
     if (inFloat) b.inFloat = true
     ctx.dirs = dirs
@@ -2834,7 +2956,7 @@ function readProject(fsys, main, tables, sourceText, own) {
   function visitFront(rel, dirs = []) {
     const f = read(rel, dirs); if (!f || seen.has(f.rel)) return
     seen.add(f.rel)
-    const text = urlPercents(f.text, f.rel), before = units.length, b = new Builder(f.rel, units, text, ctx.bodies, ctx.floats)
+    const text = urlPercents(f.text, f.rel, percents), before = units.length, b = new Builder(f.rel, units, text, ctx.bodies, ctx.floats)
     frontMatter(text, 0, text.length, b, ctx); b.flush()
     if (units.length > before) files.set(f.rel, f.text)
   }
@@ -2992,6 +3114,18 @@ export function patch(project, translated /* Map unit -> pieces */, { guardContr
       }
       if (p.t === 'open') { if (opened < 0) opened = k; continue }
       if (p.t === 'close' && opened >= 0 && LETTER_GROUP(pieces.slice(opened + 1, k))) { startAt = opened; startCut = -1; break }
+      // (a group of commands alone closed right before the first word — `\underline{\code{x}}: the…`, a cell's
+      // `\textcolor{red}{\texttt{…}}; …` —: the mark goes before that word, as after a command passed over, where marks.mjs
+      // headEnd has the unit's head end; its ink is set by then, in the paragraph the command began, and the head's pieces are
+      // found beside the mark by their text, make.mjs besideMarks. With none, the unit's head pieces were LOST, the unit English:
+      // 2608.25210v2's seven prompts' paragraphs, 2610.21477v1's cell. A group followed by anything else before the word stays
+      // as before: no start mark)
+      if (p.t === 'close') {
+        let q = k + 1
+        while (q < pieces.length && (pieces[q].t === 'close' || (pieces[q].t === 'text' && !/[^ \t\r\n]/.test(pieces[q].s)))) q++
+        if (pieces[q]?.t === 'text') { k = q - 1; continue }
+        break
+      }
       if (p.t === 'ph' && INLINE.test(p.src)) { startAt = k; startCut = -1; break }
       if (p.t !== 'ph') break
     }
