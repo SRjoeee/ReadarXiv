@@ -533,6 +533,8 @@ const columnsOf = P => { for (const pt of P.points ?? []) { const m = /^c([12])-
 
 /** a column body's bracket or a float's (marks.mjs POINTS_TEX: bs, be, fs, fe and a number) */
 const BRACKET = /^([bf])([se])(\d+)$/
+/** a point that ends what a paragraph holds: a unit's, a heading's or a cell's end mark, a body's or a float's bracket */
+const CLOSES = /^(?:\d+|[th]\d+)e$|^[bf][se]\d+$/
 /** a paragraph end's code (ink.mjs PARA_END: `qe<n><code>`) */
 const endCode = name => name.at(-1)
 
@@ -569,11 +571,17 @@ function alignOf(lines, pages, directOnly = false) {
     }
     return out
   }
-  // (an end right after the unit's last glyph, with no paragraph begun and no other point between them: the end of a paragraph
-  // begun after the unit with no glyph of its own, or one past another unit's end mark, a float's or a body's bracket, is no end
-  // of the unit's paragraph)
+  // (an end right after the unit's last glyph, with no paragraph begun and no unit's end mark or bracket between them: the end of
+  // a paragraph begun after the unit with no glyph of its own, or one past another unit's end, a float's or a body's bracket,
+  // is no end of the unit's paragraph; a name's or a placeholder's mark, inside a paragraph, is no paragraph's end)
   const L = pages[last[0] - 1]
-  const nothingBetween = x => (x.para === undefined || x.para === (L?.paras ?? []).filter(q => q.glyph <= last[1]).length) && (x.point === undefined || x.point === (L?.points ?? []).filter(q => q.glyph <= last[1]).length)
+  const nothingBetween = x => {
+    if (x.para !== undefined && x.para !== (L?.paras ?? []).filter(q => q.glyph <= last[1]).length) return false
+    if (x.point === undefined) return true
+    const pts = L?.points ?? []
+    for (let q = pts.filter(t => t.glyph <= last[1]).length; q < x.point; q++) if (CLOSES.test(pts[q]?.name ?? '')) return false
+    return true
+  }
   const inside = new Set()
   for (let p = first[0]; p <= last[0]; p++) for (const x of marksOn(p)) if (x.end && (p > first[0] || x.glyph > first[1]) && (p < last[0] || x.glyph <= last[1])) inside.add(x.end)
   let told = null, direct = false, float = null, between = false
