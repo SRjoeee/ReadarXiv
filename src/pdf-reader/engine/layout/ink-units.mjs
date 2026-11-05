@@ -535,6 +535,8 @@ const columnsOf = P => { for (const pt of P.points ?? []) { const m = /^c([12])-
 const BRACKET = /^([bf])([se])(\d+)$/
 /** a point that ends what a paragraph holds: a unit's, a heading's or a cell's end mark, a body's or a float's bracket */
 const CLOSES = /^(?:\d+|[th]\d+)e$|^[bf][se]\d+$/
+/** a unit's, a heading's or a cell's start mark */
+const OPENS = /^(?:\d+|[th]\d+)s$/
 /** a paragraph end's code (ink.mjs PARA_END: `qe<n><code>`) */
 const endCode = name => name.at(-1)
 
@@ -544,7 +546,8 @@ const endCode = name => name.at(-1)
  * glyph, no paragraph begun and no other point between them, is its paragraph's end, and so is the end after a unit that its
  * paragraph's start (`q<n>`) stands before with nothing ended between, no other start between it and that end (a line of the
  * paragraph that is not its last): the unit's last line is its paragraph's last, and its lines are set as TeX set that paragraph
- * (with every end inside the unit the same code; ends of two codes, a unit of paragraphs set two ways: j, not centred). An end
+ * (with every end inside the unit the same code; ends of two codes, a unit of paragraphs set two ways: j, not centred); never
+ * an end another unit's start stands right before, with no glyph between them (a paragraph of that unit's, before its text). An end
  * further on, the first after its last glyph in its body or its float — past the column's or the page's end to the next body,
  * a float in between passed over: a paragraph TeX broke across them —, is the end of the paragraph the unit's last line is
  * inside, or of the paragraph after it where the unit is a line TeX set between paragraphs (a \centerline, a box): where it
@@ -584,6 +587,14 @@ function alignOf(lines, pages, directOnly = false) {
     for (let q = pts.filter(t => t.glyph <= last[1]).length; q < x.point; q++) if (CLOSES.test(pts[q]?.name ?? '')) return false
     return true
   }
+  // (an end that another unit's start stands right before, no glyph between them: a paragraph inside that unit before its text,
+  // a table cell's first, 2610.21084v1's, no paragraph of this one's)
+  const opensAt = x => {
+    if (x.point === undefined) return false
+    const pts = L?.points ?? []
+    for (let q = 0; q < x.point && q < pts.length; q++) if (pts[q].glyph === x.glyph && OPENS.test(pts[q].name)) return true
+    return false
+  }
   // (a unit inside a paragraph, not its last line: its paragraph's start (q<n>, ink.mjs `paras`) before its first glyph on its page
   // with no paragraph end and no unit's end mark or bracket between them, and the end after its last glyph with no paragraph start
   // between them: the lines of one paragraph TeX broke with \\, a tabular's cell inside a centred paragraph, 2610.20967v1's names)
@@ -606,7 +617,7 @@ function alignOf(lines, pages, directOnly = false) {
       if (p === last[0] && x.glyph <= last[1]) continue
       if (between) { if (x.bracket === 'bs') between = false; continue }
       if (float !== null) { if (x.bracket === 'fe' && x.n === float) float = null; continue }
-      if (x.end) { told = x.end; direct = p === last[0] && x.glyph === last[1] + 1 && nothingBetween(x); within = !direct && p === last[0] && insideOf(x); break walk }
+      if (x.end) { told = x.end; const opens = p === last[0] && opensAt(x); direct = p === last[0] && x.glyph === last[1] + 1 && !opens && nothingBetween(x); within = !direct && p === last[0] && !opens && insideOf(x); break walk }
       if (x.bracket === 'be') between = true
       else if (x.bracket === 'fs') float = x.n
       else break walk
