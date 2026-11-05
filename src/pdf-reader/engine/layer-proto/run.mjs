@@ -2225,9 +2225,12 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     if (carried) {
       const cs = prep.label.chars, b0 = p.blocks[0], start = prep.firstX0 !== undefined && prep.firstX0 > prep.label.x1 ? prep.firstX0 : prep.label.x1 + 0.25 * s
       const x0 = Math.min(...cs.map(c => c.x0)) - 0.4, x1 = Math.max(Math.max(...cs.map(c => c.x1)) + 0.4, start - 0.4)
-      // (set by its line's baseline, as a shared row's own label is, so that a raised mark stays raised: an affiliation's number
-      // set by its own baseline stood on the translation's, 3.8 pt low, 2610.20716v1 p1)
-      const crop = { mode: 'crop', page: b0.page, crop: [x0, Math.min(...cs.map(c => c.yb - 0.26 * c.size)), x1, Math.max(...cs.map(c => c.yb + 0.8 * c.size))], baseline: b0.B[0], text: prep.label.text }
+      // (set by its line's baseline as the page's characters give it, the unit's own on its first line, so that a raised mark stays
+      // raised and a label TeX set on the line stays on it, as a shared row's own label is set by the row's: set by its own
+      // baseline, an affiliation's raised number stood on the translation's, 3.8 pt low, 2610.20716v1 p1)
+      const k0 = `${r00[0]}|${r00.slice(1).join()}`, labelKeys = new Set(cs.map(L2.charKey))
+      const own = (prep.uc ?? []).filter(c => !c.sep && !c.space && /\S/.test(c.ch) && c.rect && `${c.page}|${c.rect.join()}` === k0 && !labelKeys.has(L2.charKey(c)))
+      const crop = { mode: 'crop', page: b0.page, crop: [x0, Math.min(...cs.map(c => c.yb - 0.26 * c.size)), x1, Math.max(...cs.map(c => c.yb + 0.8 * c.size))], baseline: own.length ? median(own.map(c => c.yb)) : b0.B[0], text: prep.label.text }
       tokens = Object.assign([{ crop, cw: x1 - x0, glue: false, w100: 0 }, ...tokens], { base: tokens.base })
       b0.indent = 0
       prep.label = { ...prep.label, drawn: prep.label.text }
