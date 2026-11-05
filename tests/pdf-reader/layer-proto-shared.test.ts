@@ -349,6 +349,39 @@ describe('a shared line: the next unit\'s first line starts where the translatio
     expect(b.at(-1)![1]).toBeGreaterThan(202)
   })
 
+  it('a part whose first block is the shared row alone (a float right after it): the lines it flows on over that row take the paragraph\'s measure, not the row\'s remainder', async () => {
+    // (2608.16117v1 p19's u59: "The increasing-" at the end of the line before Figure 9, its text going on after the figure. Its
+    // first block was that row's remainder alone, [160, 280] here, and the lines it flowed on from the paragraph's last line,
+    // over the rows the shorter translation left, were laid at that measure: "and", "MacKintosh," each on a narrow line at the
+    // column's right edge. Here the part's later rows stand under a float 100 pt down, a block of their own)
+    const floated: Paper = { ...split(20), name: 'split by a float', specs: split(20).specs.map(s => (s.id === 1 ? { ...s, lines: [line(1, 226, 'increasing trend', 160, 280), line(1, 126, 'of the volumetric stretch can', 20, 280), line(1, 114, 'be tuned by the slenderness', 20, 280)] } : s)) }
+    const run = await laid(floated)
+    const a = linesOf(run, 0)!, b = linesOf(run, 1)!
+    expect(b[0]![1]).toBe(a.at(-1)![1])
+    const over = b.slice(1).filter(l => l[1] >= 226 - 0.05)
+    expect(over.length, 'a line it flows on over the shared row').toBeGreaterThan(0)
+    expect(over.map(l => l[6])).toEqual(over.map(() => 20))
+    expect(over.every(l => l[7] > 200), `their ends ${over.map(l => l[7])}`).toBe(true)
+  })
+
+  it('a part whose measure TeX widened under a wrapfigure beside the shared row: the lines it flows on over the row take the measure beside the figure, not its block\'s widest', async () => {
+    // (the review of #595: the two units' rows around the shared row end at 150 beside a figure, the part's rows under it at 280.
+    // Laid at the bounds of the part's block, its widest rows', the lines it flowed on over the row ran on over the figure)
+    const wrapped: Paper = {
+      name: 'split beside a wrapfigure', pages: 1, specs: [
+        { id: 0, kind: 'para', lines: [line(1, 250, 'Uniaxial tension experiments', 20, 150), line(1, 238, 'usually consider', 20, 150), line(1, 226, 'conditions.', 20, 100)], chars: 10, at: 0x4e00 },
+        { id: 1, kind: 'para', lines: [line(1, 226, 'The', 110, 150), line(1, 214, 'increasing trend', 20, 150), line(1, 202, 'of the volumetric', 20, 150), line(1, 190, 'stretch can be tuned by the', 20, 280), line(1, 178, 'slenderness of the sample', 20, 280)], chars: 60, at: 0x5100 },
+      ],
+    }
+    const run = await laid(wrapped)
+    const a = linesOf(run, 0)!, b = linesOf(run, 1)!
+    expect(a.at(-1)![1] - 226, 'the paragraph ends above the shared row').toBeGreaterThan(0.05)
+    expect(b[0]![1]).toBe(a.at(-1)![1])
+    const over = b.slice(1).filter(l => l[1] >= 226 - 0.05)
+    expect(over.length, 'a line it flows on over the shared row').toBeGreaterThan(0)
+    expect(over.every(l => l[7] <= 150 + 0.01), `their ends ${over.map(l => `${l[1]}:${l[7]}`)}`).toBe(true)
+  })
+
   it('a paragraph whose translation fills the shared row: the part after it starts on its next row', async () => {
     const run = await laid(split(51))
     const a = linesOf(run, 0)!, b = linesOf(run, 1)!
