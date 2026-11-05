@@ -358,6 +358,12 @@ describe('arguments as the role table reads them (arg-roles.mjs): a group no com
       expect(urlPercents(t, 'main.tex').split('%').length, env).toBe(2)
     }
     expect(urlPercents('\\begin{mycode}\n{ \\url{a%b}\n\\end{mycode}\n\\url{c%d}', 'main.tex', { skipEnvs: new Set(['mycode']) }).split('%').length).toBe(2)
+    // (an address command TeX does not run but prints, shows or defines — the operand of \\string, \\meaning, \\noexpand, \\show, a
+    // \\let's or a \\def's parameter text, as tailOf reads a body's last command — reads no address: what follows it is a group, its `%`
+    // a comment, and the words it hides stay hidden: the third review of #596)
+    expect(texts(project(doc('See \\string\\url{A% } hidden words\nB} and the rest.'))).join(' ')).not.toContain('hidden words')
+    for (const t of ['See \\string\\url{A% } hidden words\nB} and the rest.', '\\meaning\\href{a%b}', '\\noexpand\\url{a%b}', '\\show\\url{a%b}', '\\let\\saved=\\url{a%b}', '\\def\\x\\url{a%b}']) expect(urlPercents(t, 'main.tex'), t).toBe(t)
+    for (const t of ['text \\url{a%b}', '\\textbf x\\url{a%b}']) expect(urlPercents(t, 'main.tex'), t).not.toBe(t)
     // (in an argument the walk reads it as before: a comment, which a paper avoids there by writing `\\%`)
     expect(texts(project(doc('See \\footnote{\\url{a\\%b}} the rest.')))).toContain('See the rest.')
   })

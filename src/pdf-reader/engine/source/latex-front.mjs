@@ -534,7 +534,7 @@ function bodyPercents(text, { ifs = new Set(), lineEnvs = null, defined = null, 
     if (c === '[' && depth === 0) { bracket++; continue }
     if (c === ']' && depth === 0) { bracket = Math.max(0, bracket - 1); continue }
     if (c !== '\\') continue
-    const { name, end } = commandAt(text, i)
+    const at = i, { name, end } = commandAt(text, i)
     i = end - 1
     if (!/^[A-Za-z@]+$/.test(name)) continue
     // (what the walk reads as code, passed over as it passes it: \\verb's text, an inline listing's or minted's, and the body of an
@@ -547,10 +547,12 @@ function bodyPercents(text, { ifs = new Set(), lineEnvs = null, defined = null, 
     }
     if (depth > 0) continue
     // (a conditional's name where one is defined, not opened: \\newif\\ifdraft, \\let\\ifdraft\\iftrue, \\def\\ifdraft{…})
+    // (and a \\def's parameter text, up to its body's brace, as texCommands reads it: `\\def\\x\\url{…}` runs no \\url)
     if (name === 'newif' || name === 'let' || DEF_PRIMITIVES.has(name)) {
       let k = skipSpaces(text, end)
       if (text[k] === '\\') k = commandAt(text, k).end
       if (name === 'let') { k = skipSpaces(text, k); if (text[k] === '=') k = skipSpaces(text, k + 1); if (text[k] === '\\') k = commandAt(text, k).end }
+      if (DEF_PRIMITIVES.has(name)) while (k < n && text[k] !== '{' && text[k] !== '%') k++
       i = k - 1; continue
     }
     if (isConditional(name, ifs)) { conds++; continue }
@@ -565,7 +567,10 @@ function bodyPercents(text, { ifs = new Set(), lineEnvs = null, defined = null, 
       else { const at = envs.lastIndexOf(env); if (at >= 0) envs.length = at }
       continue
     }
-    if (!URL_READERS.has(name) || bracket > 0 || conds > 0 || envs.length || defined?.has(name)) continue
+    // (a command TeX does not run but prints, shows, compares or defines, the operand of the one before it — `\\string\\url`,
+    // `\\meaning\\href`, `\\noexpand\\url`: tailOf's operands, OPERAND_OF and SECOND_OPERAND_OF —, reads no address: what follows
+    // it is a group, its `%` a comment)
+    if (!URL_READERS.has(name) || bracket > 0 || conds > 0 || envs.length || defined?.has(name) || operandAt(text, at)) continue
     const r = literalAddress(text, end, name, out)
     if (!r) continue
     changed ||= r.any
@@ -982,6 +987,30 @@ function tailOf(body) {
   // \\let\\saved=\\section, \\def\\section…
   const before = t[at[n - 1]] === '=' ? n - 2 : n - 1
   return OPERAND_OF.has(word(n - 1)) || SECOND_OPERAND_OF.has(word(before - 1)) ? null : name
+}
+/**
+ * Whether the control word at s[at] (its backslash) is an operand TeX does not run, by the tokens before it, as tailOf reads a
+ * body's last: the token right before it one of OPERAND_OF (`\\string\\url`, `\\noexpand\\url`), or the one before that, past an
+ * `=`, one of SECOND_OPERAND_OF (`\\let\\saved\\url`, `\\let\\saved=\\url`)
+ */
+function operandAt(s, at) {
+  // (the token ending before `to`: a control word's name, else the character; null at the text's start)
+  const tokenBefore = to => {
+    let k = to
+    while (k > 0 && /\s/.test(s[k - 1])) k--
+    if (k === 0) return null
+    let j = k
+    while (j > 0 && isLetter(s[j - 1])) j--
+    if (j < k && j > 0 && s[j - 1] === '\\') return { name: s.slice(j, k), at: j - 1 }
+    return { name: null, ch: s[k - 1], at: k - 1 }
+  }
+  const one = tokenBefore(at)
+  if (!one) return false
+  if (one.name && OPERAND_OF.has(one.name)) return true
+  // (the name the second operand follows, an `=` between them or none, and the command before that name)
+  const named = one.ch === '=' ? tokenBefore(one.at) : one
+  const op = named && tokenBefore(named.at)
+  return !!op?.name && SECOND_OPERAND_OF.has(op.name)
 }
 /** the commands whose operand is the token after them (tailOf): it is printed, compared or defined, not run */
 const OPERAND_OF = new Set(['string', 'noexpand', 'meaning', 'show', 'let', 'futurelet', 'def', 'gdef', 'edef', 'xdef', 'ifx', 'newcommand', 'renewcommand', 'providecommand', 'DeclareRobustCommand', 'chardef', 'mathchardef', 'countdef', 'dimendef', 'skipdef', 'toksdef'])
