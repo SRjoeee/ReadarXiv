@@ -5,6 +5,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 ## Unreleased
 
 - Fixed: in the PDF reader, a paragraph whose formula fills a line at the top of a page, a theorem that ends in a `cases` formula, a caption or an affiliation line with a small inline picture (a logo, an icon), and a sentence with a figure set right after one of its words are translated. They had stayed in English.
+- Fixed: in the PDF reader, a paragraph whose LaTeX chooses between two links or citations by a switch (such as one address for the preprint and another for review) is translated, with the link the paper shows. It had stayed in English.
 - Fixed: in the PDF reader, a figure's label that sets a formula's letter or a bold or italic word in its own font's slanted or bold face ("jury, α = 8", "Selection rate p", "Proposition 1.2.1. The number of…") is translated as one label at its own size. It had been cut at each change of face, and the pieces translated on their own and drawn small.
 - The PDF reader shows the first translated pages of many papers sooner: it no longer waits for text that TeX set further on in the paper, such as the authors' affiliations, a table or a note, before laying out the pages that come first.
 - Fixed: in the PDF reader, a list written inside a paragraph, such as "(1) … (2) … (3)", reads as one paragraph again: each item follows the one before it on its line, with its own number. The items had been left where the English ones began, with wide gaps, a number alone at the end of a line, and lines crowding the line above.

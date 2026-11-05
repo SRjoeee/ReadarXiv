@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { inMemory, loadProject, patch } from '@/pdf-reader/engine/source/latex-front.mjs'
+import { inMemory, loadProject, patch, walkStepCount } from '@/pdf-reader/engine/source/latex-front.mjs'
 import { plainSource, serialize } from '@/pdf-reader/engine/translate/mt.mjs'
 
 // The source reader's text of 2026-10-24 (S1-S4 of the pin regression's root-cause pass): what the translator is sent is
@@ -8,7 +8,7 @@ import { plainSource, serialize } from '@/pdf-reader/engine/translate/mt.mjs'
 // regression's "J\u00c3\u00a9r\u00c3\u00b4me" was a report printing the units' raw bytes); one branch of a conditional is
 // the translator's, never both (S4)
 
-type Piece = { t: string; s?: string; src?: string; tr?: boolean }
+type Piece = { t: string; s?: string; src?: string; tr?: boolean; id?: number }
 type Unit = { kind: string; file: string; start: number; end: number; pieces: Piece[] }
 const enc = (s: string) => new TextEncoder().encode(s)
 /** a string of byte values as the bytes themselves (a Latin-1 file's) */
@@ -158,8 +158,107 @@ describe('S4: one branch of a conditional is the translator\'s, never both', () 
     expect(new TextDecoder().decode(untranslated(p))).toBe(tex)
   })
 
-  it('a conditional whose branches set no words is left as it was read: its pieces, and its units\' hashes, as before', () => {
-    const p = project(doc('We release it at \\ifdefined\\X\\url{a}\\else\\url{b}\\fi today.'))
-    expect(units(p)[0]!.pieces.filter(x => x.t === 'ph').map(x => x.src)).toEqual(['\\ifdefined', '\\X', '\\url{a}', '\\else', '\\url{b}', '\\fi'])
+  it('a conditional whose branches set no words is one placeholder, counted: what TeX sets for it is its ink (2610.21098v1\'s abstract)', () => {
+    const tex = doc('We release it at \\ifdefined\\X\\url{a}\\else\\url{b}\\fi today.'), p = project(tex)
+    // (as its parts, every one after the paper's command had no mark, and neither URL's ink was known: the abstract stayed English)
+    expect(units(p)[0]!.pieces.filter(x => x.t === 'ph').map(x => x.src)).toEqual(['\\ifdefined\\X\\url{a}\\else\\url{b}\\fi'])
+    expect((p as unknown as { skipped: Record<string, number> }).skipped).toMatchObject({ ifUnknown: 1 })
+    expect(new TextDecoder().decode(untranslated(p))).toBe(tex)
+  })
+
+  it('…ending where its \\fi\'s placeholder ended, its pairs\' ids spent as when its parts were read: every pair after it keeps its id', () => {
+    // (as its parts: `\\textbf{` 1 and `\\textit{` 2 inside it, `\\fi{}` one placeholder, and the `\\textbf{` after it 3)
+    const p = project(doc('A \\ifdefined\\X\\textbf{a}\\else\\textit{b}\\fi{} and \\textbf{bold} here.'))
+    expect(units(p)[0]!.pieces.filter(x => x.t !== 'text').map(x => [x.t, x.src, x.id])).toEqual([['ph', '\\ifdefined\\X\\textbf{a}\\else\\textit{b}\\fi{}', undefined], ['open', '\\textbf{', 3], ['close', '}', 3]])
+  })
+
+  it('…but one branch of words, or one that is not inline (a block, an environment\'s end, a display), has its pieces as it had', () => {
+    const phs = (body: string) => units(project(doc(body))).flatMap(u => u.pieces.filter(x => x.t === 'ph').map(x => x.src))
+    expect(phs('We release it at \\ifdefined\\X the public link\\else\\url{b}\\fi today.')).toEqual(['\\ifdefined', '\\X', '\\else', '\\url{b}', '\\fi'])
+    expect(phs('We release it at \\ifdefined\\X\\[x\\]\\else\\url{b}\\fi today.')).toContain('\\fi')
+    expect(phs('Words here \\ifdefined\\X\\url{a}\n\n\\url{b}\\fi more words.')).toContain('\\fi')
+  })
+})
+
+// A branch holds words, and is inline, as the walk itself reads it: a dry run of the walk over each branch (latex-front.mjs
+// probeConditional), never a second reading beside it. Each case below is one the review of #594 found where a reading beside
+// the walk differed from it; each is read as next read it before the rule, its parts kept, byte for byte (076269f44's units)
+describe('S4: a conditional\'s branches as the walk reads them, in a dry run (review of #594)', () => {
+  const read = (p: ReturnType<typeof projectOf>) => units(p).map(u => ({ file: u.file, inner: (u as { inner?: string }).inner, pieces: u.pieces.map(x => x.s ?? x.src) }))
+  const nest = (n: number, core: string) => `${'\\mbox{'.repeat(n)}${core}${'}'.repeat(n)}`
+
+  it('a link\'s label is a word the walk sets (\\href{url}{label}, its text argument by the role table)', () => {
+    expect(read(project(doc('We release it at \\ifdefined\\X\\href{https://a.example/x}{the public repository}\\else\\url{b}\\fi today.')))).toEqual([
+      { file: 'main.tex', inner: undefined, pieces: ['\nWe release it at ', '\\ifdefined', '\\X', '\\href{https://a.example/x}{', 'the public repository', '}', '\\else', '\\url{b}', '\\fi', ' today.\n'] },
+    ])
+  })
+
+  it('a display the paper writes by a shorthand (\\be … \\ee, ctx.envMacros) is read as a display: its parts, and the unit\'s display metadata', () => {
+    const pre = '\\newcommand{\\be}{\\begin{equation}}\n\\newcommand{\\ee}{\\end{equation}}'
+    expect(read(project(doc('Words here \\ifdefined\\X\\be x=1\\ee\\else\\be x=2\\ee\\fi more words.', pre)))).toEqual([
+      { file: 'main.tex', inner: 'equationxequation begin end equationxequation begin end', pieces: ['\nWords here ', '\\ifdefined', '\\X', '\\be x=1\\ee', '\\else', '\\be x=2\\ee', '\\fi', ' more words.\n'] },
+    ])
+  })
+
+  it('a file it includes (\\input, \\include, \\subfile, \\import) is visited by the inclusion\'s handler: its prose its units', () => {
+    for (const call of ['\\input{content}', '\\include{content}', '\\subfile{content}', '\\import{./}{content}']) {
+      const p = projectOf({ 'main.tex': enc(doc(`Words before. \\ifdefined\\X${call}\\fi`)), 'content.tex': enc('The file holds a paragraph of prose words.\n') })
+      expect(read(p), call).toEqual([
+        { file: 'main.tex', inner: undefined, pieces: ['\nWords before. ', '\\ifdefined', '\\X'] },
+        { file: 'content.tex', inner: undefined, pieces: ['The file holds a paragraph of prose words.\n'] },
+      ])
+    }
+  })
+
+  it('a paper macro whose expansion is prose (\\newcommand{\\nb}[1]{Notebook~#1}) sets its words: "Notebook 4" stays text', () => {
+    expect(read(project(doc('Some words \\ifdefined\\X\\nb{4}\\fi more words.', '\\newcommand{\\nb}[1]{Notebook~#1}')))).toEqual([
+      { file: 'main.tex', inner: undefined, pieces: ['\nSome words ', '\\ifdefined', '\\X', 'Notebook 4', '\\fi', ' more words.\n'] },
+    ])
+  })
+
+  it('a command inside math is no prose: $$x=\\hbox{first}$$ in both branches is two displays, the conditional\'s parts and the unit\'s display metadata kept', () => {
+    expect(read(project(doc('Some words \\ifdefined\\X $$x=\\hbox{first}$$\\else $$x=\\hbox{second}$$\\fi more words.')))).toEqual([
+      { file: 'main.tex', inner: 'xfirst hbox xsecond hbox', pieces: ['\nSome words ', '\\ifdefined', '\\X', ' ', '$$x=\\hbox{first}$$', '\\else', ' ', '$$x=\\hbox{second}$$', '\\fi', ' more words.\n'] },
+    ])
+  })
+
+  it('18 nested \\mbox{…} around 1 are read once each: the walk\'s steps grow with the nesting by the same count per level, its parts kept', () => {
+    const body = (n: number) => doc(`Some words \\ifdefined\\X ${nest(n, '1')}\\else other words\\fi more words.`)
+    expect(read(project(body(18)))).toEqual([
+      { file: 'main.tex', inner: undefined, pieces: ['\nSome words ', '\\ifdefined', '\\X', ' ', ...Array(18).fill('\\mbox{'), '1', ...Array(18).fill('}'), '\\else', ' other words', '\\fi', ' more words.\n'] },
+    ])
+    // (the branch of no word read to its end, as one of no word is, each level of the nest the same number of steps more: linear,
+    // where the reading beside the walk read each argument again for every command around it)
+    const steps = (tex: string) => { const n = walkStepCount(); project(tex); return walkStepCount() - n }
+    for (const tail of ['\\else other words', '\\else\\url{b}']) {
+      const at = (n: number) => steps(doc(`Some words \\ifdefined\\X ${nest(n, '1')}${tail}\\fi more words.`))
+      const [a, b, c] = [at(9), at(18), at(36)]
+      expect(c - b, tail).toBe(2 * (b - a))
+    }
+  })
+
+  it('a word the walk joins from an accent\'s letters and the text between them (\\\'{e}t\\\'{e}, "été") is a word: its parts kept', () => {
+    expect(read(project(doc("Some words \\ifdefined\\X \\'{e}t\\'{e} \\fi more words.")))).toEqual([
+      { file: 'main.tex', inner: undefined, pieces: ['\nSome words ', '\\ifdefined', '\\X', ' Ã©tÃ© ', '\\fi', ' more words.\n'] },
+    ])
+  })
+
+  it('a call of the paper\'s macro of no argument in one read whole is counted all the same: the macro\'s prose stays a unit of its own (storedBodies)', () => {
+    const p = project(doc('Words before \\ifdefined\\X\\notice\\fi more words.', '\\newcommand{\\notice}{This notice has several important words.}'))
+    expect(units(p).map(u => [u.pieces.map(x => x.s ?? x.src), (u as { stored?: boolean }).stored])).toEqual([
+      [['\nWords before ', '\\ifdefined\\X\\notice\\fi', ' more words.\n'], undefined],
+      [['This notice has several important words.'], true],
+    ])
+  })
+
+  it('a conditional inside a conditional is read once, however deep it stands: the walk\'s steps grow by the same count per level', () => {
+    const steps = (tex: string) => { const n = walkStepCount(); project(tex); return walkStepCount() - n }
+    for (const core of ['\\url{b}', '$$x$$']) {
+      const at = (n: number) => steps(doc(`Some words ${'\\ifdefined\\X '.repeat(n)}${core}${'\\fi '.repeat(n)}more words.`))
+      const [a, b, c] = [at(9), at(18), at(36)]
+      expect(c - b, core).toBe(2 * (b - a))
+    }
+    // (and read as next read it: a display inside keeps every part)
+    expect(read(project(doc('Some words \\ifdefined\\X \\ifdefined\\X $$x$$\\fi \\fi more words.')))[0]!.pieces).toEqual(['\nSome words ', '\\ifdefined', '\\X', ' ', '\\ifdefined', '\\X', ' ', '$$x$$', '\\fi', ' ', '\\fi', ' more words.\n'])
   })
 })
