@@ -16,6 +16,8 @@ import { boundsFromMarks, tokenizeDocument, uprightToken } from '@/pdf-reader/en
 type Piece = { t: string; s?: string; src?: string }
 const text = (s: string): Piece => ({ t: 'text', s })
 const ph = (src: string): Piece => ({ t: 'ph', src })
+const open = (src: string): Piece => ({ t: 'open', src })
+const close = (src: string): Piece => ({ t: 'close', src })
 const unit = (pieces: Piece[]): SourceUnit => ({ kind: 'para', file: 'main.tex', start: 0, end: 0, pieces }) as SourceUnit
 /** the marks layoutMarking writes round each placeholder of a unit, by its source: 'ab' both, 'a' the opening alone, '' none */
 const marksOf = (u: SourceUnit, o: Parameters<typeof layoutMarking>[2]) => {
@@ -254,6 +256,44 @@ describe('boundsFromMarks with the maker\'s reach: a unit start mark that stands
   })
 })
 
+describe('boundsFromMarks with the maker\'s reachBack: a unit end mark that stands at no word', () => {
+  // two lines: the unit's words, then a line of no word (a `\\}` set alone, a formula); the end mark on that second line
+  const tok = (t: string, x: number, y: number, w = 20) => ({ t, page: 1, x, y, w, h: 10 })
+  const doc = [tok('The', 40, 512), tok('unit', 65, 512), tok('ends.', 90, 512), tok('Next', 40, 480)]
+  const reachBack = (_mk: { x: number }) => 2
+  it('an end mark at no word, here and in its own compile (its word null): bounded by the word reached back; else none, as before', () => {
+    const marks = new Map([['3s', { page: 1, x: 40, y: 512, t: 'The' }], ['3e', { page: 1, x: 30, y: 500, t: null }]])
+    expect(boundsFromMarks(doc as never, marks).get('3')).toBeUndefined()
+    expect(boundsFromMarks(doc as never, marks, undefined, null, reachBack).get('3')).toEqual([0, 2])
+  })
+  it('not where its own compile had a word there: unplaced, as before', () => {
+    const marks = new Map([['3s', { page: 1, x: 40, y: 512, t: 'The' }], ['3e', { page: 1, x: 30, y: 500, t: 'brace' }]])
+    expect(boundsFromMarks(doc as never, marks, undefined, null, reachBack).get('3')).toBeUndefined()
+  })
+})
+
+describe('boundsFromMarks `either`, the maker\'s: a carried word on either side of the mark\'s token, read through the marked compile\'s shared boxes', () => {
+  // the base page's exact boxes: `\schedforwardgap{}` sets "gap", the unit begins at "is" (2610.40394v1 u165)
+  const tok = (t: string, x: number, w = 20) => ({ t, page: 1, x, y: 500, w, h: 10 })
+  const doc = [tok('gap', 40), tok('is', 62.2, 10), tok('strongest', 74.2, 40), tok('here.', 118, 20)]
+  // (the marked compile's one item a line put the mark into the next word's box: "strongest")
+  const start = new Map([['5s', { page: 1, x: 62.22, y: 500, t: 'strongest' }], ['5e', { page: 1, x: 139, y: 500, t: 'here.' }]])
+  it('a start mark whose carried word is the word after its token: the same word, with `either` alone', () => {
+    expect(boundsFromMarks(doc as never, start).get('5')).toBeUndefined()
+    expect(boundsFromMarks(doc as never, start, undefined, null, null, true).get('5')).toEqual([1, 3])
+  })
+  it('an end mark whose carried word is the word before its token, that token begun at the mark (2608.25210v2\'s "DOI:|10.14778", 0.02 pt past it)', () => {
+    const line = [tok('see', 40, 15), tok('doi', 58, 10.38), tok('10', 68.4, 8), tok('14778', 77.6, 20)]
+    const end = new Map([['6s', { page: 1, x: 40, y: 500, t: 'see' }], ['6e', { page: 1, x: 68.38, y: 500, t: 'doi' }]])
+    expect(boundsFromMarks(line as never, end).get('6')).toBeUndefined()
+    expect(boundsFromMarks(line as never, end, undefined, null, null, true).get('6')).toEqual([0, 2])
+  })
+  it('never further than the word beside its token', () => {
+    const far = new Map([['5s', { page: 1, x: 62.22, y: 500, t: 'here.' }], ['5e', { page: 1, x: 139, y: 500, t: 'here.' }]])
+    expect(boundsFromMarks(doc as never, far, undefined, null, null, true).get('5')).toBeUndefined()
+  })
+})
+
 describe('uprightToken: the maker reaches only upright words (2610.19282 p15: a sideways caption, whose word at the mark\'s height is another line\'s)', () => {
   const styles = { F1: { ascent: 0.75, descent: -0.25, fontFamily: 'serif' } }
   const tokensOf = (transform: number[]) => tokenizeDocument([{ page: 1, items: [{ str: 'Bifurcations of the map', transform, width: 110, height: 10, fontName: 'F1', dir: 'ltr' }], styles }] as never) as { t: string }[]
@@ -428,6 +468,27 @@ describe('a paper\'s macro that looks ahead, before a placeholder (2609.20976\'s
     // (an author block's unit: its marks robust, `\\protect\\axtpma`, which the probe's box did not set)
     const a = { ...unit([text('Ada, with '), ph('\\snr'), text(' '), ph('$\\geq 50$'), text('.')]), kind: 'author' } as SourceUnit
     expect(layoutMarking([a], MARK_CLASSES, { lines: false, switches: sw }).units[0]?.pieces.map(p => (p as Piece).src ?? (p as Piece).s).join('')).toBe('Ada, with \\protect\\axtpma{p0.1a}\\snr $\\geq 50$.')
+  })
+})
+
+describe('followsOf: the text after a piece is what TeX sets after it', () => {
+  // (2608.28692v1's `\\MainRel\\%`: a paper's number before its per cent sign, no mark on the sign after a macro that may look
+  // ahead; 2608.25210v2's `\\code{…} \\papertext{…}below.`, \\papertext setting nothing)
+  const pct = unit([text('a '), ph('\\MainRel'), ph('\\%'), text(' relative gain, '), ph('$p$'), text('.')])
+  it('a text symbol with no mark of its own is its character: the reading runs to it, no piece blocked', () => {
+    const f = followsOf([pct], new Set(['p0.1a', 'p0.4a', 'p0.4b']))('p0.1a')
+    expect(f).toMatchObject({ blocked: false, want: '%relativ', ends: ['p0.4a', '0e', 't0e', 'h0e'] })
+    // (one with a mark of its own is a piece as before)
+    expect(followsOf([pct], new Set(['p0.1a', 'p0.2a', 'p0.2b', 'p0.4a']))('p0.1a')).toMatchObject({ blocked: false, want: '', ends: ['p0.2a', '0e', 't0e', 'h0e'] })
+    // (past text, a symbol ends the text after a piece as before: its glyph need not be its character, OT1's `\\_` a rule, 2610.19159v1)
+    const under = unit([text('trend of '), ph('\\textbar{}'), text('g'), ph('\\_'), text('reduced')])
+    expect(followsOf([under], new Set(['p0.1a']))('p0.1a')).toMatchObject({ want: 'g', blocked: true })
+  })
+  const code = unit([text('using the '), ph('\\code{Prompt}'), text(' '), ph('\\papertext{in \\cite{b}.}'), open('\\techreport{'), text('below.'), close('}'), text(' Then')])
+  it('a paper\'s macro TeX said sets no ink is nothing: the reading runs past it to the text, as with no piece there', () => {
+    const names = new Set(['p0.1a'])
+    expect(followsOf([code], names)('p0.1a')).toMatchObject({ blocked: true, want: '' })
+    expect(followsOf([code], names, null, ['\\papertext{in \\cite{b}.}'])('p0.1a')).toMatchObject({ blocked: false, want: 'below.th' })
   })
 })
 

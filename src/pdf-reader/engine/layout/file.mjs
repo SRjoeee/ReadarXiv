@@ -194,8 +194,12 @@ export { LayoutRefusal } from './json.mjs'
  *  number before a line that began at the "k": a file of 33 holds that label and a line's start past it; 35 (with PIPELINE 70):
  *  the maker anchors each unit where the head's names say its marks stand (pipeline/anchors.mjs searchHead), so that a unit
  *  numbered after the text is searched between its neighbours by their own pages (2610.17024v1's title, keyword list and 29
- *  references, laid now): a file of 34 lays fewer units */
-export const LAYOUT = '35'
+ *  references, laid now): a file of 34 lays fewer units; 36 (with PIPELINE 73): an end mark at no word reaches back to its unit's
+ *  last word (make.mjs reachBackIn), a carried word on either side of the mark's token on the base page is its word (anchors.mjs
+ *  wordAt `either`), and the text after a piece runs through a macro TeX said sets no ink and a text symbol right after it
+ *  (marks.mjs followsOf), so that 2610.21477v1's `\}` paragraph, 2608.25210v2's "DOI:" entries and 2608.28692v1's `\MainRel\%` are
+ *  laid: a file of 35 lays fewer units */
+export const LAYOUT = '36'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,

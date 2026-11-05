@@ -1692,11 +1692,32 @@ const endsOf = i => [`${i}e`, `t${i}e`, `h${i}e`]
  * sets, the text TeX sets for the macro (a letter or a digit in it), by which the maker's reading parts the two's ink,
  * character for character, and the text after that piece as an opening's (`want`, `rest`, `ends`), where its ink ends
  * (stream.mjs ownedOf): 2609.20976's `\lgnrm \footnote{…}`, before which \xspace sets no space and would before a mark
- * (aheadSamples' answer 2), and an elsarticle .bbl's `\DOIprefix\doi{…}.` at an entry's end
+ * (aheadSamples' answer 2), and an elsarticle .bbl's `\DOIprefix\doi{…}.` at an entry's end.
+ * The text after a piece is what TeX sets after it (`shownAt`): a paper's macro TeX said sets no ink (`inkless`, readInkProbe) is
+ * nothing, which the maker writes EMPTY; and a text symbol with no mark of its own right after the piece, white space alone
+ * between, is its character, which the maker draws it as (make.mjs `symbols`) — past text, a symbol ends the text after it as a
+ * visible piece does, as before, since its glyph need not be its character (OT1's `\_` a rule: 2610.19159v1's
+ * `\textbar{}…g\_…`). Neither blocks a reading: read as visible pieces with no mark, they left the piece before them LOST ('open,
+ * an unmarked piece follows'): 2608.28692v1's `\MainRel\%`, a number before its per cent sign, in five paragraphs; 2608.25210v2's
+ * `\code{…} \papertext{…}below.`, a macro of no ink between the code and its text. The erasure's `through` and `split` read past
+ * the pieces after it as before
  */
-export function followsOf(units, names, texts = null) {
+export function followsOf(units, names, texts = null, inkless = null) {
   const shown = texts instanceof Map ? texts : Array.isArray(texts) ? new Map(Array.from({ length: Math.floor(texts.length / 2) }, (_, j) => [texts[2 * j], texts[2 * j + 1]])) : null
   const nameOf = (i, k) => { const c = classOf(units[i]?.pieces[k]); return c ? `${c === 'footnote' ? 'n' : 'p'}${i}.${k}` : null }
+  const noInk = new Set(inkless ?? [])
+  /** what piece q of unit i sets past a piece's ink, as text, `after` the text after it so far: a text piece's text, an unmarked
+   *  text symbol's character where nothing but white space comes before it and the text's comparison reads it as written (asSet:
+   *  not `\\textasciitilde`'s `~`, which it takes for a tie); '' for nothing (no class, or a paper's macro TeX said sets no ink);
+   *  null for a visible piece */
+  const shownAt = (i, q, after) => {
+    const p = units[i].pieces[q], c = classOf(p)
+    if (!c) return p.t === 'text' ? plainTranslated([p]) : ''
+    if (c !== 'macro') return null
+    if (noInk.has(p.src)) return ''
+    const sym = symbolText(p.src)
+    return sym !== null && asSet(sym) === sym && !names.has(`p${i}.${q}a`) && !/\S/.test(after) ? sym : null
+  }
   return name => {
     const m = /^([pn])(\d+)\.(\d+)a$/.exec(name)
     const i = m ? Number(m[2]) : -1, k = m ? Number(m[3]) : -1, u = units[i]
@@ -1704,7 +1725,7 @@ export function followsOf(units, names, texts = null) {
     const display = classOf(u.pieces[k]) === 'display', group = []
     let after = '', q = k + 1
     for (;;) {
-      for (; q < u.pieces.length && !classOf(u.pieces[q]); q++) if (u.pieces[q].t === 'text') after += plainTranslated([u.pieces[q]])
+      for (let t; q < u.pieces.length && (t = shownAt(i, q, after)) !== null; q++) after += t
       if (!display || q >= u.pieces.length || classOf(u.pieces[q]) !== 'display' || /\S/.test(after) || names.has(`${nameOf(i, q)}a`)) break
       group.push(`${nameOf(i, q)}a`)
       q++
@@ -1982,7 +2003,7 @@ export async function* markedPages(marked, log, { engine, classes = LAYOUT_CLASS
   let words = 0
   // kept: whether the token before was written, so that a rest is written only after the word it is the rest of
   let kept = false
-  const follows = units ? followsOf(units, set, marking.texts) : null
+  const follows = units ? followsOf(units, set, marking.texts, marking.inkless) : null
   const stream = units && OPS ? ownedPages({ follows, dropped, heads: headsOf(units, set), closing: name => destPage.get(`${name.slice(0, -1)}b`) ?? null }) : null
   let all = 0, found = []
   const take = (name, e, W) => {
@@ -2116,7 +2137,7 @@ export async function readMarked(marked, log, o) {
   marks.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
   const chars = [], owned = []
   if (o.units && o.OPS) {
-    const follows = followsOf(o.units, head.set, head.marking?.texts)
+    const follows = followsOf(o.units, head.set, head.marking?.texts, head.marking?.inkless)
     vetoTwice(rows, end.twice, follows, headsOf(o.units, head.set))
     const charOf = new Map()
     for (const name of [...rows.keys()].sort()) {
