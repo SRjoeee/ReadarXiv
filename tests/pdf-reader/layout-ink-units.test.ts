@@ -65,6 +65,11 @@ describe("an ink unit's alignment, as TeX set the paragraph it is in (LAYOUT 36)
     expect(flagsOf(head(279))).toEqual([['SHORT TITLE', 4]])
     expect(flagsOf(head(100))).toEqual([['SHORT TITLE', 0]])
   })
+  it("keeps a contents list's line justified, where no paragraph end is ever set (2610.19274v1's list of figures)", () => {
+    // (a figure's entry on its page's middle by chance: centred by the reader's reading of its lines, were it told nothing)
+    const pg = page({ point: 'bs1' }, { point: 'n1.listfigure.e' }, { glyphs: run('5.2 Performance of the model over the band . . . 67', 155, 700, { space: 3.33 }) }, { point: 'be1' })
+    expect(unitsOf([pg]).ink.map(u => [u.kind, u.rows.unit[3]])).toEqual([['inkcontents', 32]])
+  })
   it('a unit of two paragraphs set two ways is not centred; none where no end follows in its body', () => {
     const two = page({ point: 'bs1' }, { para: 1 }, line('A centred line', 700, 150), { end: 'qe1c' }, line('then flush left words', 688), { end: 'qe2l' }, { point: 'be1' })
     expect(flagsOf(two)).toEqual([['A centred line then flush left words', 32]])

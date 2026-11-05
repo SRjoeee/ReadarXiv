@@ -645,10 +645,13 @@ function rowsOf(id, kind, cls, lines, phs, nPieces, pages) {
   })
   // its alignment as TeX set its paragraph (alignOf: CENTRED, FLUSH_LEFT, FLUSH_RIGHT or JUSTIFIED, layout/file.mjs UNIT_FLAG), a
   // running head's by its paragraph's own end alone; where none tells it, a head's line centred where it stands on its page's
-  // middle and short of its width, and any other unit's alignment nothing (the reader's reading of its lines: layer2.mjs blocksOf2).
-  // A kept block (no pieces: nothing drawn over it) none
+  // middle and short of its width, a contents list's line JUSTIFIED as before (no paragraph end is set in a contents list, whose
+  // gate keeps the marks out: its lines a list's, never the reader's to read, where one centred on its page by chance would be
+  // drawn so, 2610.19274v1's list of figures), and any other unit's alignment nothing (the reader's reading of its lines:
+  // layer2.mjs blocksOf2). A kept block (no pieces: nothing drawn over it) none
   const told = nPieces > 0 ? alignOf(lines, pages, cls === 'heads') : null
   let flags = told === 'c' ? UNIT_FLAG.CENTRED : told === 'l' ? UNIT_FLAG.FLUSH_LEFT : told === 'r' ? UNIT_FLAG.FLUSH_RIGHT : told === 'j' ? UNIT_FLAG.JUSTIFIED : 0
+  if (told === null && nPieces > 0 && cls === 'contents') flags = UNIT_FLAG.JUSTIFIED
   if (cls === 'heads' && lines.length === 1 && flags !== UNIT_FLAG.CENTRED) {
     const view = pages[lines[0].page - 1].view, mid = (view[0] + view[2]) / 2, a = lineRows[1], b = lineRows[2]
     if (Math.abs((a + b) / 2 - mid) <= CENTRE && b - a < 0.8 * (view[2] - view[0])) flags = UNIT_FLAG.CENTRED
