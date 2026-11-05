@@ -37,8 +37,6 @@ export declare function carrierOf(marked: readonly DocToken[], arxiv: readonly D
 export declare const LINE_PLACE: 0.5
 /** a page is drawable where at least this share of its words are arXiv's page's, in order */
 export declare const PAGE_SAME: 0.98
-/** a page whose lines moved across its breaks (compile drift) is drawn where at most this many moved at each of its two ends */
-export declare const DRIFT_LINES: 4
 /** the letters and digits a line of ours must hold for its finding on another page of arXiv's to make our page another's */
 export declare const LINE_EVIDENCE: 4
 /** the page-and-line check: may we draw, per page (`pages`, `undrawable`), and do the panes align, per line, information alone:
@@ -51,8 +49,9 @@ export interface LineCheck {
   inPlace: Uint8Array
   tokenLine: Int32Array
   /** may we draw, per page: its words against arXiv's page's (`overlap`, in order; null past the bound), our lines found on
-   *  another page (`elsewhere`), drawable or not; and the pages that are not */
-  pages: { page: number; words: [ours: number, arxiv: number]; overlap: number | null; sameWords?: true; elsewhere: number; drift?: [start: number, end: number]; drawable: boolean }[]
+   *  another page (`elsewhere`), drawable or not; a page of a drift run (`run`, its first and last pages, the run drawn whole or
+   *  not at all) with the evidence lines that crossed its breaks (`drift`, at its start and its end); and the pages that are not */
+  pages: { page: number; words: [ours: number, arxiv: number]; overlap: number | null; sameWords?: true; elsewhere: number; drift?: [start: number, end: number]; run?: [first: number, last: number]; drawable: boolean }[]
   undrawable: number[]
   over: number[]
   /** by arXiv's page, its tokens (indices into `arxiv`) a line of ours on another page was matched to: lines moved across a break,
