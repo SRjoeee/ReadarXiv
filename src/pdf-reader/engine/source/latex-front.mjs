@@ -987,6 +987,8 @@ function macroArgs(s, i, macro, to) {
 /** what a paragraph cannot hold: a paragraph break, an item, a heading, a caption, or an environment other than math */
 const BLOCK = /\n[ \t]*\n|\\(?:par|item|part|chapter|(?:sub)*section|(?:sub)?paragraph|caption)(?![A-Za-z@])|\\begin\s*\{([^}]+)\}/g
 const holdsBlock = text => [...text.matchAll(BLOCK)].some(m => !m[1] || !MATH_ENVS.test(m[1].trim()))
+/** what an inline placeholder cannot hold: an environment's either end, or a display (\\[, $$) */
+const NOT_INLINE = /\\(?:begin|end)\s*\{|\\\[|\$\$/
 
 // ---------------------------------------------------------------- units
 /** the kinds set in the running text, which a display standing alone after them belongs to */
@@ -1286,6 +1288,16 @@ function ifmmodeLetter(s, end, to, ctx) {
   if (s[e] === '\n') e = c.end
   if (s.startsWith('{}', e)) e += 2
   return e <= to ? { letter: one.letter, end: e } : null
+}
+/** where the walk's placeholder of a conditional's \\fi ends, its name ending at `at`: past what the walk reads with it as with
+ *  any command it knows no roles of (commandArgs: its adjacent groups, `\\fi{}`; TeX's assignment syntax), so that a
+ *  conditional read whole ends where its \\fi's placeholder did */
+function fiEnd(s, at, to) {
+  const args = commandArgs(s, at, 'fi', to)
+  let e = args.end <= to ? args.end : at
+  if (args.known) { const k = skipSpaces(s, e); if (s.startsWith('{}', k) && k + 2 <= to) e = k + 2 }
+  if (e === at && !(args.known && paperParams('fi', paper)?.length === 0)) { const m = s.slice(e, Math.min(to, e + 120)).match(ASSIGNMENT); if (m) e += m[0].length }
+  return e
 }
 /** the control word that ends at `at` (branchEnd's \\fi, \\else, \\or) */
 const commandBefore = (s, at) => /\\([A-Za-z]+)$/.exec(s.slice(Math.max(0, at - 6), at))?.[1]
@@ -1706,7 +1718,12 @@ function walk(s, from, to, b, ctx) {
     // \\ifdefined\\BottleneckPreprint, both its branches' sentences one unit). Where its own text decides it
     // (conditionalValue: \\iftrue, \\if 0) the live branch is walked, the rest stays in the source; where it does not and
     // both branches hold words, neither branch is the translator's (`skipped.ifUnknown`): left English, never the branch
-    // TeX does not set. One whose branches hold no words (wordsIn) has its pieces as they were
+    // TeX does not set. Where neither holds words (wordsIn) and it is inline, the conditional is one placeholder too, counted so:
+    // what TeX set for it, either branch's or nothing, is its ink, read from our compile as any placeholder's is (its points
+    // and the text after it), and none of its parts is a piece of its own — its test, its \\else, its \\fi, the branch TeX
+    // skipped. As pieces, each part after one of the paper's commands had no mark (layoutMarking: a macro may look ahead),
+    // so neither branch's ink was known: 2610.21098v1's abstract, `\\ifdefined\\BottleneckPreprint\\url{…}\\else\\url{…}\\fi`,
+    // stayed English. One branch of words alone, or one that is not inline, has its pieces as they were
     // \\ifmmode whose \\else branch is one letter: that letter in its word, as TeX sets it in text (ifmmodeLetter)
     // (not under \\unless, which inverts it: that one TeX's conservative reading below, neither branch the translator's)
     const mathOr = name === 'ifmmode' && ctx.letters !== false && !/\\unless\s*$/.test(s.slice(Math.max(0, i - 12), i)) ? ifmmodeLetter(s, end, to, ctx) : null
@@ -1719,7 +1736,13 @@ function walk(s, from, to, b, ctx) {
       // (\\ifmmode in the walk's text, never math, is false: TeX in text mode takes its \\else)
       const value = c && !consumes(s, end, c.end) && !/\\unless\s*$/.test(s.slice(Math.max(0, i - 12), i)) ? (name === 'ifmmode' && ctx.letters !== false ? false : conditionalValue(name, s, end)) : null
       if (c) c.thenFrom = Math.min(testEnd(name, s, end), c.thenTo)
-      if (c && (value !== null || (wordsIn(s, c.thenFrom, c.thenTo) && c.elseFrom >= 0 && wordsIn(s, c.elseFrom, c.elseTo)))) {
+      const words = c ? [wordsIn(s, c.thenFrom, c.thenTo), c.elseFrom >= 0 && wordsIn(s, c.elseFrom, c.elseTo)] : null
+      // (undecided, of no words and inline: one placeholder, an inline one. Not one that holds a block, an environment's
+      // either end or a display, which the walk reads as they stand; nor one whose span holds what TeX reads otherwise than as
+      // tokens, whose \\fi the scan may take for another's; nor in pairsOf's shadow, which counts the pairs as PIPELINE 30's
+      // reading did)
+      const whole = !!c && ctx.letters !== false && value === null && !words[0] && !words[1] && !consumes(s, end, c.end) && !holdsBlock(s.slice(c.thenFrom, c.end)) && !NOT_INLINE.test(s.slice(c.thenFrom, c.end))
+      if (c && (value !== null || whole || (words[0] && words[1]))) {
         const [from, upto] = value === true ? [c.thenFrom, c.thenTo] : value === false ? (c.elseFrom >= 0 ? [c.elseFrom, c.elseTo] : [c.thenTo, c.thenTo]) : [-1, -1]
         // (\\ifmmode's first branch is math, never text, whatever it holds: only its \\else is walked)
         const mathFirst = name === 'ifmmode' && ctx.letters !== false
@@ -1727,7 +1750,9 @@ function walk(s, from, to, b, ctx) {
         if (dead) {
           const block = holdsBlock(s.slice(c.thenFrom, c.end))
           endText()
-          if (value === null) { ctx.skipped.ifUnknown = (ctx.skipped.ifUnknown ?? 0) + 1; if (block) b.flush(); else b.ph(s.slice(i, c.end), i, c.end); i = c.end; continue }
+          // (one of no words spends the ids of the pairs inside it as the walk did when it read its parts, so that every pair
+          // after it keeps its id: pairsOf)
+          if (value === null) { ctx.skipped.ifUnknown = (ctx.skipped.ifUnknown ?? 0) + 1; if (block) b.flush(); else if (whole) { const e = fiEnd(s, c.end, to); b.pairId += pairsOf(s, i, e, b, ctx); b.ph(s.slice(i, e), i, e); i = e; continue } else b.ph(s.slice(i, c.end), i, c.end); i = c.end; continue }
           // (\\ifmmode's pairs as the walk counted them before it read its \\else alone, so that every pair after it keeps its id)
           const ids = mathFirst ? [b.pairId, pairsOf(s, i, c.end, b, ctx)] : null
           if (block) { b.flush(); walk(s, from, upto, b, ctx); b.flush(); if (ids) b.pairId = Math.max(b.pairId, ids[0] + ids[1]); i = c.end; continue }

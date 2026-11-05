@@ -8,7 +8,7 @@ import { plainSource, serialize } from '@/pdf-reader/engine/translate/mt.mjs'
 // regression's "J\u00c3\u00a9r\u00c3\u00b4me" was a report printing the units' raw bytes); one branch of a conditional is
 // the translator's, never both (S4)
 
-type Piece = { t: string; s?: string; src?: string; tr?: boolean }
+type Piece = { t: string; s?: string; src?: string; tr?: boolean; id?: number }
 type Unit = { kind: string; file: string; start: number; end: number; pieces: Piece[] }
 const enc = (s: string) => new TextEncoder().encode(s)
 /** a string of byte values as the bytes themselves (a Latin-1 file's) */
@@ -158,8 +158,24 @@ describe('S4: one branch of a conditional is the translator\'s, never both', () 
     expect(new TextDecoder().decode(untranslated(p))).toBe(tex)
   })
 
-  it('a conditional whose branches set no words is left as it was read: its pieces, and its units\' hashes, as before', () => {
-    const p = project(doc('We release it at \\ifdefined\\X\\url{a}\\else\\url{b}\\fi today.'))
-    expect(units(p)[0]!.pieces.filter(x => x.t === 'ph').map(x => x.src)).toEqual(['\\ifdefined', '\\X', '\\url{a}', '\\else', '\\url{b}', '\\fi'])
+  it('a conditional whose branches set no words is one placeholder, counted: what TeX sets for it is its ink (2610.21098v1\'s abstract)', () => {
+    const tex = doc('We release it at \\ifdefined\\X\\url{a}\\else\\url{b}\\fi today.'), p = project(tex)
+    // (as its parts, every one after the paper's command had no mark, and neither URL's ink was known: the abstract stayed English)
+    expect(units(p)[0]!.pieces.filter(x => x.t === 'ph').map(x => x.src)).toEqual(['\\ifdefined\\X\\url{a}\\else\\url{b}\\fi'])
+    expect((p as unknown as { skipped: Record<string, number> }).skipped).toMatchObject({ ifUnknown: 1 })
+    expect(new TextDecoder().decode(untranslated(p))).toBe(tex)
+  })
+
+  it('…ending where its \\fi\'s placeholder ended, its pairs\' ids spent as when its parts were read: every pair after it keeps its id', () => {
+    // (as its parts: `\\textbf{` 1 and `\\textit{` 2 inside it, `\\fi{}` one placeholder, and the `\\textbf{` after it 3)
+    const p = project(doc('A \\ifdefined\\X\\textbf{a}\\else\\textit{b}\\fi{} and \\textbf{bold} here.'))
+    expect(units(p)[0]!.pieces.filter(x => x.t !== 'text').map(x => [x.t, x.src, x.id])).toEqual([['ph', '\\ifdefined\\X\\textbf{a}\\else\\textit{b}\\fi{}', undefined], ['open', '\\textbf{', 3], ['close', '}', 3]])
+  })
+
+  it('…but one branch of words, or one that is not inline (a block, an environment\'s end, a display), has its pieces as it had', () => {
+    const phs = (body: string) => units(project(doc(body))).flatMap(u => u.pieces.filter(x => x.t === 'ph').map(x => x.src))
+    expect(phs('We release it at \\ifdefined\\X the public link\\else\\url{b}\\fi today.')).toEqual(['\\ifdefined', '\\X', '\\else', '\\url{b}', '\\fi'])
+    expect(phs('We release it at \\ifdefined\\X\\[x\\]\\else\\url{b}\\fi today.')).toContain('\\fi')
+    expect(phs('Words here \\ifdefined\\X\\url{a}\n\n\\url{b}\\fi more words.')).toContain('\\fi')
   })
 })
