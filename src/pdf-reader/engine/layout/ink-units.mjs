@@ -541,7 +541,9 @@ const endCode = name => name.at(-1)
 /**
  * An ink unit's alignment as TeX set its paragraph (rule 6), from the paragraphs' ends of our compile (ink.mjs `paraEnds`,
  * marks.mjs POINTS_TEX `qe<n><code>`): c, l, r or j, or null where no paragraph tells it. The end right after the unit's last
- * glyph, no paragraph begun and no other point between them, is its paragraph's end: the unit's last line is its paragraph's last, and its lines are set as TeX set that paragraph
+ * glyph, no paragraph begun and no other point between them, is its paragraph's end, and so is the end after a unit that its
+ * paragraph's start (`q<n>`) stands before with nothing ended between, no other start between it and that end (a line of the
+ * paragraph that is not its last): the unit's last line is its paragraph's last, and its lines are set as TeX set that paragraph
  * (with every end inside the unit the same code; ends of two codes, a unit of paragraphs set two ways: j, not centred). An end
  * further on, the first after its last glyph in its body or its float — past the column's or the page's end to the next body,
  * a float in between passed over: a paragraph TeX broke across them —, is the end of the paragraph the unit's last line is
@@ -582,15 +584,29 @@ function alignOf(lines, pages, directOnly = false) {
     for (let q = pts.filter(t => t.glyph <= last[1]).length; q < x.point; q++) if (CLOSES.test(pts[q]?.name ?? '')) return false
     return true
   }
+  // (a unit inside a paragraph, not its last line: its paragraph's start (q<n>, ink.mjs `paras`) before its first glyph on its page
+  // with no paragraph end and no unit's end mark or bracket between them, and the end after its last glyph with no paragraph start
+  // between them: the lines of one paragraph TeX broke with \\, a tabular's cell inside a centred paragraph, 2610.20967v1's names)
+  const F = pages[first[0] - 1]
+  const insideOf = x => {
+    if (first[0] !== last[0] || !F) return false
+    const paras = F.paras ?? []
+    let qi = -1
+    for (let k = 0; k < paras.length; k++) if (paras[k].glyph <= first[1]) qi = k
+    if (qi < 0) return false
+    if ((F.paraEnds ?? []).some(e => (e.para ?? 0) > qi && e.glyph <= first[1])) return false
+    if ((F.points ?? []).some(t => t.glyph > paras[qi].glyph && t.glyph <= first[1] && CLOSES.test(t.name))) return false
+    return x.para === undefined || x.para === paras.filter(q => q.glyph <= last[1]).length
+  }
   const inside = new Set()
   for (let p = first[0]; p <= last[0]; p++) for (const x of marksOn(p)) if (x.end && (p > first[0] || x.glyph > first[1]) && (p < last[0] || x.glyph <= last[1])) inside.add(x.end)
-  let told = null, direct = false, float = null, between = false
+  let told = null, direct = false, within = false, float = null, between = false
   walk: for (let p = last[0]; p <= pages.length; p++) {
     for (const x of marksOn(p)) {
       if (p === last[0] && x.glyph <= last[1]) continue
       if (between) { if (x.bracket === 'bs') between = false; continue }
       if (float !== null) { if (x.bracket === 'fe' && x.n === float) float = null; continue }
-      if (x.end) { told = x.end; direct = p === last[0] && x.glyph === last[1] + 1 && nothingBetween(x); break walk }
+      if (x.end) { told = x.end; direct = p === last[0] && x.glyph === last[1] + 1 && nothingBetween(x); within = !direct && p === last[0] && insideOf(x); break walk }
       if (x.bracket === 'be') between = true
       else if (x.bracket === 'fs') float = x.n
       else break walk
@@ -601,7 +617,7 @@ function alignOf(lines, pages, directOnly = false) {
   if (told) codes.add(told)
   if (!codes.size) return null
   const notC = [...codes].filter(c => c !== 'c')
-  if (direct || !told) return notC.length === 0 ? (told ? 'c' : null) : notC.length === 1 && codes.size === 1 ? notC[0] : 'j'
+  if (direct || within || !told) return notC.length === 0 ? (told ? 'c' : null) : notC.length === 1 && codes.size === 1 ? notC[0] : 'j'
   return notC.length === 0 ? null : 'j'
 }
 
