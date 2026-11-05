@@ -393,12 +393,12 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
       // the unit's, its glyphs the unit's still, claimed and erased with its line, so that the reader keeps them where they stand)
       let label = li === 0 ? labelLength(pages[l.page - 1].glyphs, l.words) : 0, first = 0
       l.words.forEach((w, wi) => {
-        let own = w.text
+        let said = w.text
         if (label > 0) {
           const k = Math.min(label, w.gs.length)
           label -= k
           if (k === w.gs.length) { first = wi + 1; return }
-          own = w.ts.slice(k).join('')
+          said = w.ts.slice(k).join('')
         }
         // (a space between two words of a line where a word's gap stands between them: none where the face alone cuts them, a
         // formula's stop or its "-axis" set against it)
@@ -423,7 +423,7 @@ export function inkUnitsOf(pages, ledger, { units = null, from = null } = {}) {
             for (const src of groups) { open.push(++pairs); pieces.push({ t: 'open', id: pairs, src }) }
             runKey = k
           }
-          text += own
+          text += said
         } else {
           const lastPh = phs.at(-1)
           // (a run of one face over a gap or a line: one placeholder, its source the run's characters whole — the piece's too, which
