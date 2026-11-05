@@ -3126,9 +3126,9 @@ own), each part carrying its pages' cell rules (`rules`).
     words was kept, those points are its tokens there, whatever their share of the line. An opening point is read as a start
     mark is (the nearest word's box within 8 pt), a closing one as an end mark (the last word beginning before it, none before
     its opening word: u88's closing point stands 8.2 pt past "θ", its ")" no token). On one page the unit's range is its own
-    throughout and the points change nothing; on a page with kept words they do not either (both narrowed by the corpus: points
-    on one-page units changed what `between` fills, 50 rows and one unit lost; points beside kept words pulled a formula of
-    the next line into 2610.21026v1's u170's first row).
+    throughout and the points change nothing; on a page with kept words they add their lines to its range there and no token
+    (both narrowed by the corpus: points as tokens on one-page units changed what `between` fills, 50 rows and one unit lost;
+    beside kept words they pulled a formula of the next line into 2610.21026v1's u170's first row).
   - A row's baseline is the one most of its body glyphs share (`rowOf`), and an inline `cases` after a line's last word, its two
     rows of `\text` either side of the axis, outvoted the line's words 17 glyphs to 7: 2610.21026v1's u160's last line stood at
     652.8, 6.4 pt above the baseline its end mark, both of the formula's points and its words stand on, and the one-line rule
@@ -3142,8 +3142,9 @@ own), each part carrying its pages' cell rules (`rules`).
     piece's first part goes to its opening point's row and its last to its closing point's, where its ink is centred in that
     row's band on the point's side (`atPoint`).
   Over the 87 papers (the production pass on both engines over the same compiles, every page within its clocks): the five units
-  laid, none the other way, every other unit's rows as they were but 2610.21827v1's u49, whose erase now covers its own comma
-  (the wrap's u49 text group) where base left a 6 pt gap; every base page byte for byte.
+  laid, none the other way, every other unit's rows as they were but 2610.21827v1's u49 (a reference over two pages), whose
+  erase now covers its own comma between two of its pieces (the wrap's u49 text group, a line its points stand on now in its
+  range) where base left a 6 pt gap; every base page byte for byte.
 - **The draw geometry (E-C), on by default (`draw`).** Each left part carries its page's draw (`layer-proto/draw.mjs`: the text
   items, the fonts, the Link annotations), read with the page's operator list (`pipeline/draw-data.mjs`): its text step T's
   own read (`readArxivText(doc, { draw: true })`, taken once a page), its annotations the page's one read, shared with the

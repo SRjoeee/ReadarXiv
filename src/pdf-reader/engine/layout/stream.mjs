@@ -55,7 +55,7 @@ const BIB_ITEM = /^b[iz]\d+$/
 /** a draft image frame's corner (pipeline/live.mjs DRAFT: g<n>a, g<n>b on its baseline, g<n>t at its top): no piece's next mark
  *  either. What the frame holds between g<n>a and g<n>b is graphicx's draft — its outline's rules, its file's name — where the
  *  final pass sets the image: a piece's reading takes the outline, which the maker reads as the image's box (make.mjs
- *  framedOn), and never the name, no glyph of the paper's */
+ *  ownedOn), and never the name, no glyph of the paper's */
 const FRAME = /^g(\d+)[abt]$/
 /** each page's glyphs and boxes inside a draft frame (FRAME: from its g<n>a point to its g<n>b point on the page), 1 each:
  *  { glyph, box }; null for a page with none */
