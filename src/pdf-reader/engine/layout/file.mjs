@@ -191,8 +191,11 @@ export { LayoutRefusal } from './json.mjs'
  *  word: a reader of 32 would draw the word over the counter's place and drop the counter, and refuse the slot; 34 (2610.21377v1's
  *  subject classes, p1): no label where a unit's own text begins (make.mjs headLabel: the line read from the head's first glyph
  *  spells more of the unit's text than the line read from after it), where jnsao's `49\\textsc{k}20 (primary)` kept "49" as an item's
- *  number before a line that began at the "k": a file of 33 holds that label and a line's start past it */
-export const LAYOUT = '34'
+ *  number before a line that began at the "k": a file of 33 holds that label and a line's start past it; 35 (with PIPELINE 70):
+ *  the maker anchors each unit where the head's names say its marks stand (pipeline/anchors.mjs searchHead), so that a unit
+ *  numbered after the text is searched between its neighbours by their own pages (2610.17024v1's title, keyword list and 29
+ *  references, laid now): a file of 34 lays fewer units */
+export const LAYOUT = '35'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,

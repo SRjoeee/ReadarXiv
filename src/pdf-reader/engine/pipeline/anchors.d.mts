@@ -36,9 +36,11 @@ export declare function frameOfTokens(doc: readonly DocToken[]): (t: DocToken) =
 export declare function bodyMax(doc: readonly DocToken[]): number
 /** a unit's match (matchUnits): its matched tokens, coverage, bounds where it has marks, and the word → token map */
 export interface UnitMatch { m: number[]; coverage: number; bounded: [number, number] | null; ws?: string[]; pairs?: Map<number, number> | null; textPairs?: Map<number, number> | null }
-/** `forward` (rule 5): the indices of the units written inside a float (the source parse's `inFloat`); a float's search of the
- *  whole document then begins at the page of its last body neighbour (a unit not in it), `floatMatch` unread */
-export interface MatchOptions { minCoverage?: number; bounds?: Map<string, [number, number]>; floating?: (id: number) => boolean; floatMatch?: Map<number, number[] | null> | null; forward?: ReadonlySet<number> | null }
+/** `own`: the pages each unit's own marks stand on in the marked original (id → [low, high]), every bounded unit's among them
+ *  (by default the bounds' pages): where a unit is searched (searchHead). `forward` (rule 5): the indices of the units written
+ *  inside a float (the source parse's `inFloat`); a float's search of the whole document then begins at the page of its last
+ *  body neighbour (a unit not in it), `floatMatch` unread */
+export interface MatchOptions { minCoverage?: number; bounds?: Map<string, [number, number]>; own?: ReadonlyMap<string, readonly [number, number]> | null; floating?: (id: number) => boolean; floatMatch?: Map<number, number[] | null> | null; forward?: ReadonlySet<number> | null }
 export declare function anchorUnits(doc: DocToken[], units: UnitText[], options?: MatchOptions & { frame?: FrameRule }): Map<number, Anchor | null>
 /** the units' order TeX sets them in (openPaper's `texOrder`), or null where it is their own; a TypeError where it is no order of `n` */
 export declare function orderOf(texOrder: readonly number[] | null | undefined, n: number): readonly number[] | null
@@ -47,12 +49,31 @@ export declare function placesIn(ids: readonly number[], order: readonly number[
 /** every floating unit's match over the whole document (id → its tokens, or null), from the document and the words alone */
 export declare function floatMatches(doc: DocToken[], units: UnitText[], floating?: (id: number) => boolean): Map<number, number[] | null>
 /** anchorUnits' first half: each unit's match by the units' order (null: not found, or not in `only`) */
-/** a caller's units' bounds and neighbours (matchUnits' `known`), true at least of the units matched */
-export interface KnownNeighbours { hard: readonly ([number, number] | null | undefined)[]; before: ArrayLike<number>; after: ArrayLike<number>; body: ArrayLike<number> | null }
-export declare function matchUnits(doc: DocToken[], units: UnitText[], options?: MatchOptions & { only?: ReadonlySet<number> | null; wholeIndex?: { index: unknown } | null; known?: KnownNeighbours | null }): (UnitMatch | null)[]
-/** each page's first token: the first token of token k's page (0 for k -1): rule 5's start of a float's search, its last body
- *  neighbour's end's */
-export declare function pageStarts(doc: readonly DocToken[]): (k: number) => number
+/** where each unit is searched, as the head tells it before any mark is read (searchHead): each page's first and last token,
+ *  each unit's own pages (null: no marks), whether any unit has some, each unit's nearest neighbours with marks in the text (-1:
+ *  none) and under rule 5 its last body one, and the stretch between their own pages a unit without marks is searched in */
+export interface SearchHead { N: number; P: number; first: Int32Array; last: Int32Array; own: ([number, number] | null)[]; any: boolean; float: Uint8Array; prev: Int32Array; next: Int32Array; bodyOf: Int32Array | null; rlo: Int32Array; rhi: Int32Array; apart: Uint8Array }
+export declare function searchHead(doc: readonly DocToken[], units: readonly UnitText[], o?: { own?: ReadonlyMap<string, readonly [number, number]> | null; floating?: (id: number) => boolean; inFloat?: ReadonlySet<number> | null }): SearchHead
+/** a unit whose marks do not bound it is searched on its own pages and DRIFT pages either side */
+export declare const DRIFT: number
+/** each page's first token and last, and the last page with a token */
+export declare function pageSpans(doc: readonly DocToken[]): { first: Int32Array; last: Int32Array; P: number }
+/** the pages of each bounded unit's first and last token (id → [low, high]) */
+export declare function ownOfBounds(doc: readonly DocToken[], bounds: Map<string, [number, number]> | null | undefined): Map<string, [number, number]>
+/** a unit's own pages as tokens, DRIFT either side */
+export declare function ownWindow(head: SearchHead, own: readonly [number, number]): [number, number]
+/** the gap a unit without marks is searched in: [the last token before it, the first after it] */
+export declare function edgesOf(head: SearchHead, hard: readonly ([number, number] | null | undefined)[], u: number, place: (v: number) => readonly number[] | null, marked?: ((v: number) => boolean) | null): [number, number] | null
+/** where each unit with marks stands by its text alone on its own pages (3-grams, or a short text's words in a row once), or null */
+export declare function ownPlaces(doc: readonly DocToken[], units: readonly UnitText[], head: SearchHead, minCoverage?: number): (v: number) => number[] | null
+/** rule 5's start of a float's search of the whole document: the first token of its last body neighbour's last page */
+export declare function bodyStart(head: SearchHead, hard: readonly ([number, number] | null | undefined)[], u: number, doc: readonly DocToken[]): number
+/** whether a unit's words make 3-grams (a float without marks of so many is searched over the whole document) */
+export declare function threeGrams(unit: UnitText): boolean
+/** a caller's units' search (matchUnits' `known`): the head's, each unit's bounds, and its gap and rule 5 start, true at least of
+ *  the units matched */
+export interface KnownSearch { head: SearchHead; hard: readonly ([number, number] | null | undefined)[]; before: ArrayLike<number>; after: ArrayLike<number>; body: ArrayLike<number> | null }
+export declare function matchUnits(doc: DocToken[], units: UnitText[], options?: MatchOptions & { only?: ReadonlySet<number> | null; wholeIndex?: { index: unknown } | null; known?: KnownSearch | null }): (UnitMatch | null)[]
 /** the document's 3-grams, for a caller that keeps them (rule 5's searches a range at a time) */
 export declare function buildIndexOf(doc: readonly DocToken[]): unknown
 /** rule 5's reach of a float: the stretch its search of the document from token `from` on takes ([lo, hi], the pages it holds,

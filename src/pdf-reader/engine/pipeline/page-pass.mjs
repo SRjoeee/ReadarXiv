@@ -459,7 +459,7 @@ export async function layerOfPaper({ paper, source, marks = null, marked = null,
   }
   const unitMarks = marks && 'marks' in marks ? marks.unitMarks : null
   const leftFrame = capture ? (d, ms) => { capture.leftFrame = leftFrameRule(d, ms); return capture.leftFrame } : leftFrameRule
-  const anchors = anchorUnits(left.tokens, leftTexts, { ...(unitMarks ? { bounds: boundsFromMarks(left.tokens, unitMarks) } : {}), floating, floatMatch: leftFloats, frame: leftFrame, forward })
+  const anchors = anchorUnits(left.tokens, leftTexts, { ...(unitMarks ? { bounds: boundsFromMarks(left.tokens, unitMarks) } : {}), own: ownOfMarks(unitMarks, leftTexts.length), floating, floatMatch: leftFloats, frame: leftFrame, forward })
   if (inkLeft) for (const [id, a] of inkLeft) anchors.set(id, a)
   if (figureLeft) for (const [id, a] of figureLeft) anchors.set(id, a)
   const leftColumns = capture ? (v, a, k) => { capture.columns = (columns ?? pageColumns)(v, a, k); return capture.columns } : columns
@@ -797,6 +797,23 @@ const arxivDrive = (maker, st, N) => async ({ making, close, read }) => {
   }
 }
 
+/** whether a mark's id is one of the `n` source units' (a pair of marks of another id bounds nothing the left anchors) */
+const isUnitOf = (id, n) => /^(?:0|[1-9]\d*)$/.test(id) && Number(id) < n
+/** the pages each unit's own marks stand on in the marked original (`<id>s`, `<id>e`: either, or both), Map id → [low, high]:
+ *  where the left searches a unit its marks do not bound (anchors.mjs searchHead), known from the head before any page is read;
+ *  null where there are no marks */
+function ownOfMarks(unitMarks, n) {
+  if (!unitMarks) return null
+  const out = new Map()
+  for (const [name, mk] of unitMarks) {
+    const id = name.slice(0, -1)
+    if (!/[se]$/.test(name) || !isUnitOf(id, n) || !Number.isInteger(mk.page)) continue
+    const o = out.get(id)
+    out.set(id, o ? [Math.min(o[0], mk.page), Math.max(o[1], mk.page)] : [mk.page, mk.page])
+  }
+  return out
+}
+
 /**
  * The left anchored by ranges as the marked original's pages are read (left-part.mjs rangedAnchors, under `frame`, the whole
  * document's frame rule of the left), the side a unit at a time (left-side.mjs leftSideStream, under `columns`): each unit's bounds those of its unit
@@ -811,29 +828,23 @@ function streamingLeft({ doc, views, edges, texts, names = 0, floating, floatMat
   const total = (ink ? ink.base + ink.units.length : n + names) + figureIds.length
   const side = leftSideStream({ doc, views, edges, columns })
   const done = new Uint8Array(total)
-  let doneCount = 0, pending = 0
+  let doneCount = 0
   const pairs = new Map()
-  const R = rangedAnchors(doc, texts, { floating, floatMatch, frame, boundsKnown: () => pending === 0, forward })
-  const lastPage = R.lastPage, clamp = p => Math.min(Math.max(1, p), lastPage)
-  const isUnit = id => /^(?:0|[1-9]\d*)$/.test(id) && Number(id) < n
+  // (where each unit is searched, known from the head: its own marks' pages, anchors.mjs searchHead's rule)
+  const R = rangedAnchors(doc, texts, { own: ownOfMarks(unitMarks, n), floating, floatMatch, frame, forward })
+  const lastPage = R.lastPage
   const paired = new Set()
   if (unitMarks) for (const [name, s] of unitMarks) {
     if (!name.endsWith('s')) continue
     const id = name.slice(0, -1), e = unitMarks.get(`${id}e`)
-    if (!e) continue
+    if (!e || !isUnitOf(id, n)) continue
     const at = Math.max(s.page, e.page)
     ;(pairs.get(at) ?? pairs.set(at, []).get(at)).push([id, s, e])
-    pending++
-    if (isUnit(id)) { paired.add(Number(id)); if (lastPage) R.own(Number(id), clamp(s.page), clamp(e.page)) }
+    paired.add(Number(id))
   }
   for (let u = 0; u < n; u++) if (!paired.has(u)) R.mark(u, null)
   const resolve = list => {
-    for (const [id, s, e] of list) {
-      pending--
-      const b = boundsFromMarks(doc, new Map([[`${id}s`, s], [`${id}e`, e]]), byPage).get(id) ?? null
-      if (isUnit(id)) R.mark(Number(id), b)
-      else if (b) R.bound(id, b)
-    }
+    for (const [id, s, e] of list) R.mark(Number(id), boundsFromMarks(doc, new Map([[`${id}s`, s], [`${id}e`, e]]), byPage).get(id) ?? null)
   }
   const settle = u => { if (!done[u]) { done[u] = 1; doneCount++ } }
   const run = () => R.run((id, an) => { side.add(id, an); settle(id) }, u => { side.none(u); settle(u) })

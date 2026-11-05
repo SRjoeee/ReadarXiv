@@ -856,19 +856,21 @@ function walker(doc, ms, owner, line, inFrame, lineOwner, owned, wrote) {
 /**
  * Every unit's place in the document: { rects: [{ page, x0, y0, x1, y1 }], coverage, tokens, bounded } or null when
  * it was not found. `units` is [{ id, text, gaps? }] in document order (`gaps`: mt.mjs unitText). With `bounds` (boundsFromMarks) a unit's first and
- * last token are known and its text is matched inside them only; a unit without marks is searched between its
- * marked neighbours. Without any marks the whole document is searched and a unit needs 60 % of its tokens matched.
+ * last token are known and its text is matched inside them only; where each other unit is searched is searchHead's rule, of
+ * `own` (each unit's own marks' pages; by default its bounds' pages): on its own pages, or between its neighbours with marks.
+ * Without any marks the whole document is searched and a unit needs 60 % of its tokens matched.
  * `floating(id)`: a unit TeX sets away from where the source has it — a caption, with its float; a footnote, at the
  * foot of the page — which is no neighbour to search between: a heading's neighbours in the source were a caption
  * placed a column later, and the heading was searched in a range that ended before it began (2608.02163, Japanese).
- * `floatMatch`: floatMatches' of this `doc` and these units, taken in place of a float's search of the whole document.
+ * `floatMatch`: floatMatches' of this `doc` and these units, taken in place of a float's search of the whole document (a float
+ * without marks not found in its stretch).
  * `forward` (rule 5: a Set of the indices of the units written inside a float, the source parse's `inFloat`): a float's search
  * of the whole document begins at the page of its last body neighbour (pageStarts), `floatMatch` unread.
  * `frame(doc, ms)`: the pages' frame's rule (pageFrame, today's). The matching (matchUnits) and the placing (placeUnits),
  * one after the other
  */
-export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, floating = () => false, floatMatch = null, frame = pageFrame, forward = null } = {}) {
-  return placeUnits(doc, units, matchUnits(doc, units, { minCoverage, bounds, floating, floatMatch, forward }), { frame })
+export function anchorUnits(doc, units, { minCoverage = 0.6, bounds, own = null, floating = () => false, floatMatch = null, frame = pageFrame, forward = null } = {}) {
+  return placeUnits(doc, units, matchUnits(doc, units, { minCoverage, bounds, own, floating, floatMatch, forward }), { frame })
 }
 
 /** the units' order TeX sets them in (openPaper's `texOrder`: their indices, each once), or null where it is their own; one that
@@ -887,37 +889,152 @@ export const placesIn = (ids, order) => { if (!order) return new Set(ids); const
  *  between its marked neighbours in the text only, with room for a float or a footnote that the stream passes through:
  *  MARGIN tokens either side */
 const MARGIN = 100
-/** each unit's nearest marked neighbours in the text (no float: its marks are where TeX set it), by the units' order: the
- *  last token of the one before (-1 for none), the first token of the one after (doc.length for none); with `inFloat` (the
- *  indices of the units written inside a float), also `body`: the last token of the one before that is no unit written inside
- *  a float (rule 5's neighbour: a paragraph in a figure is set where its figure is) */
-function neighbours(doc, units, hard, floating, inFloat = null) {
-  const before = [], after = [], body = inFloat ? [] : null
-  const inText = u => hard[u] && !floating(units[u].id)
-  for (let u = 0, e = -1, b = -1; u < units.length; u++) {
-    before[u] = e
-    if (body) body[u] = b
-    if (inText(u)) { e = hard[u][1]; if (body && !inFloat.has(u)) b = hard[u][1] }
-  }
-  for (let u = units.length - 1, a = doc.length; u >= 0; u--) { after[u] = a; if (inText(u)) a = hard[u][0] }
-  return { before, after, body }
+/** a unit whose marks do not bound it is searched on the pages its own marks stand on and DRIFT pages either side: a mark
+ *  TeX writes before a page break stands a page from its words, and the marked original's pages and the document's drift a
+ *  line or two apart (layout/carry.mjs DRIFT_LINES), never a page more */
+export const DRIFT = 1
+
+/** each page's first token and last (the tokens are in page order), a page with none taking the next page's first and the
+ *  last page's before it, and the last page with a token: a page's tokens as an interval */
+export function pageSpans(doc) {
+  const N = doc.length, P = N ? doc[N - 1].page : 0
+  const first = new Int32Array(P + 2).fill(N), last = new Int32Array(P + 2).fill(-1)
+  doc.forEach((t, k) => { if (k < first[t.page]) first[t.page] = k; last[t.page] = k })
+  for (let p = P; p >= 1; p--) if (first[p] === N) first[p] = first[p + 1]
+  for (let p = 1; p <= P; p++) if (last[p] < 0) last[p] = last[p - 1]
+  return { first, last, P }
 }
+
+/** the pages each bounded unit's first and last token stand on (Map id → [low, high]): the own pages of a caller that has
+ *  marks only where they bound (the marks a bound is made of stand on its tokens' pages) */
+export function ownOfBounds(doc, bounds) {
+  const out = new Map()
+  for (const [id, [a, b]] of bounds ?? []) out.set(String(id), [doc[a].page, doc[b].page])
+  return out
+}
+
 /**
- * Each page's first token (the tokens are in page order): `pageStarts(doc)(k)` the first token of token k's page, 0 for k -1.
- * Rule 5's start of a float's search of the whole document (the page stream's bound on where it may stand: E2b design §1.3) is
- * that of its last body neighbour's end (`body`, neighbours'): a float's source comes after that neighbour's, so TeX sets it on
- * that page or a later one (here, at the top, at the bottom, on a page of floats; a figure* the next page at the earliest; a
- * footnote at its call's page's foot or the next)
+ * Where each unit is searched, as the head of the marked original tells it before any mark is read (the one rule of the
+ * matcher, matchUnits, and of the page stream, left-part.mjs rangedAnchors and leftReach). `own` (Map id → [low, high]): the
+ * pages a unit's own marks stand on in the marked original, for every unit with any (its bounds, once read, stand on them).
+ * Each unit's nearest neighbours with marks in the text (no float: its marks are where TeX set it), by the units' order, give
+ * its stretch: from the page before the last of the one before's own pages to the page after the first of the one after's
+ * (`rlo`, `rhi`, tokens); a float's reaches on to the page after the last own page of the float with marks before it (its
+ * table's caption: TeX sets a float with its own units, never before its source, often pages after the text around it:
+ * 2610.30854v1's two tables of page 6, the text around their source on page 4). In it, a unit's gap (edgesOf): between its
+ * nearest bounded neighbours within the stretch, or, for a unit in the text, an unbounded one's own text where it stands on its
+ * own pages. A unit with marks is searched within its bounds; where they do not bound it, first in the part of its gap on its
+ * own pages, DRIFT either side, by the gap's rules, then on those pages alone, and where its stretch meets them nowhere
+ * (`apart`), on them alone. A unit without marks is searched in its gap (MARGIN past its edges for its 3-grams), a float of K
+ * words or more then by its match over the whole document (floatMatches', made at step T). TeX says where each marked unit
+ * stands; the units' order is only the source's, which a float, a note or a unit numbered after the text (an affiliation set at
+ * the paper's end, a figure's units) does not keep: a window between neighbours by their bounds alone ran to wherever the next
+ * bounded one stood, known only once its marks were read, and the page stream held every page such a window could meet
+ * (2610.21884v1's affiliation u2, its marks on page 31, numbered among page 1's units, held page 1 until page 31 was read).
+ * Each step against #584's (the sweep's 78 papers): a float without marks by its match over the whole document alone lost 22
+ * figure units of 2610.37818v1 and took 2610.19159v1's cells from a table 42 pages on; in its whole stretch, a table's cells
+ * took a neighbouring table's (2608.04322v1, 2610.11256v1); a unit whose marks do not bound it on its own pages alone lost a
+ * short text whose words come twice there (2608.06007v1's "Stepfun", 2307.16209v1's "Expansion for :") and took a neighbour's
+ * words (2608.25210v2); a gap bounded at an unbounded neighbour's pages put two paragraphs a page on (2307.16209v1). `inFloat`
+ * (rule 5, `forward`): the places of the units written inside a float, no body neighbour (`bodyOf`). Where no unit has own
+ * pages (`any` false: no marks at all) the whole document is searched
  */
-export function pageStarts(doc) {
-  const first = new Map()
-  doc.forEach((t, k) => { if (!first.has(t.page)) first.set(t.page, k) })
-  return k => (k < 0 ? 0 : first.get(doc[k].page))
+export function searchHead(doc, units, { own = null, floating = () => false, inFloat = null } = {}) {
+  const n = units.length, N = doc.length, { first, last, P } = pageSpans(doc)
+  const ownOf = new Array(n).fill(null)
+  if (P) for (let u = 0; u < n; u++) {
+    const o = own?.get(String(units[u].id))
+    if (!o) continue
+    const a = Math.min(Math.max(1, o[0]), P), b = Math.min(Math.max(1, o[1]), P)
+    ownOf[u] = [Math.min(a, b), Math.max(a, b)]
+  }
+  const any = ownOf.some(o => o !== null), float = new Uint8Array(n)
+  for (let u = 0; u < n; u++) float[u] = floating(units[u].id) ? 1 : 0
+  const inText = u => ownOf[u] !== null && !float[u]
+  // (each unit's nearest neighbours with marks in the text, -1 for none; under rule 5 also the last such that is written inside
+  // no float)
+  const prev = new Int32Array(n), next = new Int32Array(n), bodyOf = inFloat ? new Int32Array(n) : null
+  for (let u = 0, p = -1, b = -1; u < n; u++) { prev[u] = p; if (bodyOf) bodyOf[u] = b; if (inText(u)) { p = u; if (bodyOf && !inFloat.has(u)) b = u } }
+  for (let u = n - 1, q = -1; u >= 0; u--) { next[u] = q; if (inText(u)) q = u }
+  const rlo = new Int32Array(n), rhi = new Int32Array(n), apart = new Uint8Array(n)
+  for (let u = 0, f = -1; u < n; u++) {
+    rlo[u] = prev[u] < 0 ? 0 : first[Math.max(1, ownOf[prev[u]][1] - DRIFT)]
+    rhi[u] = next[u] < 0 ? N - 1 : last[Math.min(P, ownOf[next[u]][0] + DRIFT)]
+    // (a float's stretch on to the pages of the last float with marks before it, its table's caption: TeX sets a float with its
+    // own units, never before its source, often pages after the text around its source; 2610.30854v1's two tables of page 6,
+    // their cells' text neighbours on page 4)
+    if (float[u] && f >= 0) rhi[u] = Math.max(rhi[u], last[Math.min(P, ownOf[f][1] + DRIFT)])
+    if (float[u] && ownOf[u]) f = u
+    // (a unit with marks whose own pages its stretch meets nowhere: its gap between its neighbours is none of its pages)
+    if (ownOf[u]) { const a = first[Math.max(1, ownOf[u][0] - DRIFT)], b = last[Math.min(P, ownOf[u][1] + DRIFT)]; apart[u] = b < rlo[u] || a > rhi[u] ? 1 : 0 }
+  }
+  return { N, P, first, last, own: ownOf, any, float, prev, next, bodyOf, rlo, rhi, apart }
 }
-/** where unit u's text is searched: its own bounds; with marks elsewhere, between its marked neighbours, MARGIN past them;
- *  with no marks at all, the whole document */
-function windowOf(doc, u, hard, bounds, before, after) {
-  return hard[u] ?? (bounds?.size ? [Math.max(0, before[u] + 1 - MARGIN), Math.min(doc.length - 1, after[u] - 1 + MARGIN)] : [0, doc.length - 1])
+/** unit u's own pages as tokens, DRIFT pages either side (searchHead's `o`, its own pages) */
+export const ownWindow = (head, o) => [head.first[Math.max(1, o[0] - DRIFT)], head.last[Math.min(head.P, o[1] + DRIFT)]]
+/** where each unit with marks stands by its text alone (`ownPlaces(doc, units, head, minCoverage)(v)`): its 3-grams' match on its
+ *  own pages and DRIFT beside, of `minCoverage` of its words at least (matchUnits'), a shorter text's words in a row once there;
+ *  or null. A function of the unit's text and its own pages, made once a unit. A neighbour whose marks do not bound it bounds a
+ *  gap there: its pages' edge took the next page's words into a gap (2307.16209v1's "Expansion for :", between two paragraphs
+ *  over page breaks no mark of which is carried, put a page on, past the paragraph after it) */
+export function ownPlaces(doc, units, head, minCoverage = 0.6) {
+  const memo = new Map()
+  return v => {
+    if (memo.has(v)) return memo.get(v)
+    let r = null
+    const o = head.own[v]
+    if (o) {
+      const w = unitWords(units[v].text, units[v].gaps), [a, z] = ownWindow(head, o)
+      if (w.ws.length >= K && a <= z) { const m = locate(doc, buildIndex(doc, a, z), w.ws, a, z, false)?.tokens; if (m && Math.min(1, m.length / w.ws.length) >= minCoverage) r = m } else if (w.ws.length) r = inRow(doc, w.ws, a, z, false, w.gap)
+    }
+    memo.set(v, r)
+    return r
+  }
+}
+/** the gap a unit without bounds is searched in (searchHead's), `hard` each unit's bounds or null, `place` ownPlaces': [the last
+ *  token before it, the first after it], from its nearest neighbours with marks in the text outwards while their own pages meet
+ *  its stretch: the first bounded one's bounds, or, for a unit in the text, where an unbounded one's own text stands on its own
+ *  pages; else the stretch's edge, never past it. A float takes no neighbour's text place: TeX sets a figure at its page's top,
+ *  not between its text neighbours' words (1810.04805v2's page 16), and a table's cells between its caption and the text after
+ *  it, past an unbounded paragraph's words (2610.21880v1). `marked(v)` (the page stream's): whether unit v's marks are read;
+ *  null where the walk meets one not marked, the gap not known yet. A function of the units it walks over alone */
+export function edgesOf(head, hard, u, place, marked = null) {
+  const text = !head.float[u], lowPage = head.own[head.prev[u]]?.[1] - DRIFT, highPage = head.own[head.next[u]]?.[0] + DRIFT
+  let e = head.rlo[u] - 1, s = head.rhi[u] + 1
+  for (let p = head.prev[u]; p >= 0 && head.own[p][1] >= lowPage; p = head.prev[p]) {
+    if (marked && !marked(p)) return null
+    if (hard[p]) { e = hard[p][1]; break }
+    if (text) { const r = place(p); if (r?.length) { e = Math.max(...r); break } }
+  }
+  for (let q = head.next[u]; q >= 0 && head.own[q][0] <= highPage; q = head.next[q]) {
+    if (marked && !marked(q)) return null
+    if (hard[q]) { s = hard[q][0]; break }
+    if (text) { const r = place(q); if (r?.length) { s = Math.min(...r); break } }
+  }
+  return [Math.max(e, head.rlo[u] - 1), Math.min(s, head.rhi[u] + 1)]
+}
+/** rule 5's start of a float's search of the whole document: the first token of the page its last body neighbour (searchHead's
+ *  `bodyOf`) ends on, its bounds' end, else the page before its last own page; 0 for none. A float's source comes after that
+ *  neighbour's, so TeX sets it on that page or a later one (here, at the top, at the bottom, on a page of floats; a figure* the
+ *  next page at the earliest; a footnote at its call's page's foot or the next) */
+export function bodyStart(head, hard, u, doc) {
+  const v = head.bodyOf[u]
+  if (v < 0) return 0
+  const k = hard[v] ? hard[v][1] : head.first[Math.max(1, head.own[v][1] - DRIFT)]
+  return k >= head.N ? head.N : head.first[doc[k].page]
+}
+/** whether a unit's words make 3-grams (K of them or more): a float without marks of so many is searched over the whole
+ *  document, a shorter one between its neighbours (floatMatches makes a match for the first alone) */
+export const threeGrams = u => unitWords(u.text, u.gaps).ws.length >= K
+/** where unit u's text is searched first (searchHead's rule): its own bounds; with marks that do not bound it, its own pages
+ *  and DRIFT beside; else between its neighbours, MARGIN past their bounds, within its stretch; with no marks at all, the whole
+ *  document */
+function windowOf(head, u, hard, before, after) {
+  if (hard[u]) return hard[u]
+  if (!head.any) return [0, head.N - 1]
+  const o = head.own[u]
+  if (o) return ownWindow(head, o)
+  return [Math.max(head.rlo[u], before[u] + 1 - MARGIN), Math.min(head.rhi[u], after[u] - 1 + MARGIN)]
 }
 
 /**
@@ -989,29 +1106,39 @@ export function forwardSpans(doc, units, floating = () => false, index = buildIn
  * window. The 3-gram index is made over the windows searched alone and let go (a window's hits are those
  * inside it: locate). `forward`: anchorUnits' (rule 5); `wholeIndex` (a holder, { index }): the whole document's index
  * its forward searches read, made there once and kept (the page stream's, a range at a time), in place of one made a call.
- * `known` { hard, before, after, body }: each unit's bounds (`bounds`' of its id, or null) and its neighbours (neighbours'),
- * a caller's that keeps them (the page stream), true at least of the units `only` holds: a call is then of those units alone
+ * `known` { head, hard, before, after, body }: searchHead's head, each unit's bounds (`bounds`' of its id, or null), and its gap
+ * (edgesOf) and rule 5 start (bodyStart), a caller's that keeps them (the page stream), true at least of the units `only` holds:
+ * a call is then of those units alone. `own` as anchorUnits'; every bounded unit has its own pages (a TypeError where one has
+ * none)
  */
-export function matchUnits(doc, units, { minCoverage = 0.6, bounds, floating = () => false, floatMatch = null, only = null, forward = null, wholeIndex = null, known = null } = {}) {
+export function matchUnits(doc, units, { minCoverage = 0.6, bounds, own = null, floating = () => false, floatMatch = null, only = null, forward = null, wholeIndex = null, known = null } = {}) {
   const hard = known ? known.hard : units.map(u => bounds?.get(String(u.id)) ?? null)
-  const { before, after, body } = known ?? neighbours(doc, units, hard, floating, forward)
-  // (rule 5: a float's search of the whole document from the page of its last body neighbour on)
-  const start = forward ? pageStarts(doc) : null
-  const fromOf = u => start(body[u])
+  const head = known ? known.head : searchHead(doc, units, { own: own ?? ownOfBounds(doc, bounds), floating, inFloat: forward })
+  if (!known) for (let u = 0; u < units.length; u++) if (hard[u] && !head.own[u]) throw new TypeError(`matchUnits: unit ${units[u].id} bounded, its own pages not given`)
+  // (each unit's gap between its neighbours, and under rule 5 its search's start: the caller's, or made here of every unit's)
+  let before = known?.before, after = known?.after, body = known?.body
+  if (!known) {
+    before = new Int32Array(units.length); after = new Int32Array(units.length); body = forward ? new Int32Array(units.length) : null
+    const place = ownPlaces(doc, units, head, minCoverage)
+    for (let u = 0; u < units.length; u++) { if (!hard[u] && !head.apart[u]) [before[u], after[u]] = edgesOf(head, hard, u, place); if (body) body[u] = bodyStart(head, hard, u, doc) }
+  }
+  const fromOf = u => body[u]
   // the units matched (`only`'s, rising; else every one), their words, and the span of the document their searches by
   // 3-grams read
   const list = only ? [...only].sort((a, b) => a - b) : units.map((_, u) => u)
   const words = new Array(units.length).fill(null)
   for (const u of list) words[u] = unitWords(units[u].text, hard[u] ? null : units[u].gaps)
+  /** a float without marks of K words or more: searched between its neighbours, then over the whole document (searchHead's rule) */
+  const overWhole = u => !hard[u] && head.any && !head.own[u] && floating(units[u].id) && words[u].ws.length >= K
   let from = Infinity, to = -Infinity
   for (const u of list) {
     const { id } = units[u], w = words[u]
     if (!w || w.ws.length < K) continue
-    const [lo, hi] = windowOf(doc, u, hard, bounds, before, after)
-    // (a float's search of the whole document, where no match of it is given; under rule 5 from its start, on an index of the
-    // whole document's given where it is)
-    const all = !hard[u] && bounds?.size && floating(id) && (forward ? !wholeIndex : !floatMatch?.has(id))
-    from = Math.min(from, all ? (forward ? fromOf(u) : 0) : lo); to = Math.max(to, all ? doc.length - 1 : hi)
+    const whole = overWhole(u), [lo, hi] = windowOf(head, u, hard, before, after)
+    from = Math.min(from, lo); to = Math.max(to, hi)
+    // (its search of the whole document, where no match of it is given; under rule 5 from its start, on an index of the whole
+    // document's given where it is)
+    if (whole && (forward ? !wholeIndex : !floatMatch?.has(id))) { from = Math.min(from, forward ? fromOf(u) : 0); to = doc.length - 1 }
   }
   const index = from <= to ? buildIndex(doc, from, to) : new Map()
   const found = new Array(units.length).fill(null)
@@ -1026,22 +1153,42 @@ export function matchUnits(doc, units, { minCoverage = 0.6, bounds, floating = (
     const b = hard[u]
     // where its placeholders stood matters to a unit found as a run of words, which a unit with marks never is
     const { ws, gap } = words[u]
-    const [lo, hi] = windowOf(doc, u, hard, bounds, before, after)
+    // (where it is searched: within its bounds; without them, in the gap between its neighbours (its words in a row, `gLo` to
+    // `gHi`; its 3-grams MARGIN past, within its stretch, `lo` to `hi`), a unit whose marks do not bound it the part of that gap on
+    // its own pages and DRIFT beside (none where its stretch meets them nowhere), then those pages alone; a float without marks of
+    // K words or more, then over the whole document)
+    const o = !b && head.any ? head.own[u] : null, whole = overWhole(u)
+    let gLo = 0, gHi = -1, lo = 0, hi = -1
+    if (b) [lo, hi] = b
+    else if (!head.any) [lo, hi] = [0, doc.length - 1]
+    else if (!o || !head.apart[u]) {
+      gLo = before[u] + 1; gHi = after[u] - 1
+      lo = Math.max(head.rlo[u], before[u] + 1 - MARGIN); hi = Math.min(head.rhi[u], after[u] - 1 + MARGIN)
+      if (o) { const [x, y] = ownWindow(head, o); gLo = Math.max(gLo, x); gHi = Math.min(gHi, y); lo = Math.max(lo, x); hi = Math.min(hi, y) }
+    }
     // a heading — no marks, in the text between its located neighbours: its words in a row in the gap between them
     // alone, no margin, the last place they come there, since a heading is followed by its own text; a running head
     // with its words comes before it, and the next section's text is past the gap. By 3-grams it was taken from a
     // paragraph beside it that has the same words (2608.02163 in Chinese: a heading of four characters the text
-    // around it keeps using)
-    let m = !b && bounds?.size && ws.length && !floating(id) ? inRow(doc, ws, before[u] + 1, after[u] - 1, true, gap) : null
-    if (m) { byRow.add(u); const f = inRow(doc, ws, before[u] + 1, after[u] - 1, false, gap); if (f && f[0] === m[0]) once.add(u) }
+    // around it keeps using). A unit whose marks do not bound it so too, in the part of the gap on its own pages (2608.25210v2's
+    // prompt paragraph, whose 3-grams on its own pages took its neighbour's words)
+    let m = !b && gLo <= gHi && ws.length && !floating(id) ? inRow(doc, ws, gLo, gHi, true, gap) : null
+    if (m && !o) { byRow.add(u); const f = inRow(doc, ws, gLo, gHi, false, gap); if (f && f[0] === m[0]) once.add(u) }
     let pairs = null
     if (!m && ws.length >= K && lo <= hi) { const r = locate(doc, idx, ws, lo, hi, !!b); if (r) { m = r.tokens; pairs = r.pairs } }
-    // a float's text too short for 3-grams (a table's cell of one or two words): the words in a row, once, in the gap
-    // between its located neighbours alone
-    if (!m && !b && ws.length && ws.length < K && bounds?.size) m = inRow(doc, ws, before[u] + 1, after[u] - 1, false, gap)
-    // a float's text that is not there: its float may stand anywhere, so the whole document, as with no marks at all —
+    // a text too short for 3-grams (a table's cell of one or two words): the words in a row, once, in the gap alone
+    if (!m && !b && ws.length && ws.length < K && gLo <= gHi) m = inRow(doc, ws, gLo, gHi, false, gap)
+    // a unit whose marks do not bound it, not in that gap (or there too little of it to keep): on its own pages and DRIFT beside,
+    // by 3-grams, a short text by its words in a row once (an affiliation TeX set at the paper's end, its neighbours in the
+    // units' order on page 1)
+    if (o && m && Math.min(1, m.length / ws.length) < minCoverage) { m = null; pairs = null }
+    if (!m && o) {
+      const [x, y] = ownWindow(head, o)
+      if (ws.length >= K) { const r = locate(doc, idx, ws, x, y, false); if (r) { m = r.tokens; pairs = r.pairs } } else if (ws.length) m = inRow(doc, ws, x, y, false, gap)
+    }
+    // a float without marks not between its neighbours: its float may stand anywhere, so the whole document, as with no marks at all —
     // the words of a located unit are that unit's (owner, below)
-    if (!m && !b && ws.length >= K && bounds?.size && floating(id)) {
+    if (!m && whole) {
       // (rule 5: from the page of its last body neighbour on, never step T's match of the whole document, which may stand before)
       if (forward) m = locate(doc, wholeIndex ? (wholeIndex.index ??= buildIndex(doc)) : index, ws, fromOf(u), doc.length - 1, false)?.tokens ?? null
       else m = (floatMatch?.has(id) ? floatMatch.get(id) : locate(doc, index, ws, 0, doc.length - 1, false)?.tokens) ?? null
@@ -1074,7 +1221,7 @@ export function matchUnits(doc, units, { minCoverage = 0.6, bounds, floating = (
       // (its words, and its window, the gap's of every unit between the same marked neighbours: an index of it where the call's
       // does not hold it)
       words[v] ??= unitWords(units[v].text, hard[v] ? null : units[v].gaps)
-      const [lo, hi] = windowOf(doc, v, hard, bounds, before, after), key = `${lo} ${hi}`
+      const [lo, hi] = windowOf(head, v, hard, before, after), key = `${lo} ${hi}`
       if (lo >= from && hi <= to) near.set(v, matchOne(v))
       else { if (!windows.has(key)) windows.set(key, lo <= hi ? buildIndex(doc, lo, hi) : new Map()); near.set(v, matchOne(v, windows.get(key))) }
     }
@@ -1084,7 +1231,7 @@ export function matchUnits(doc, units, { minCoverage = 0.6, bounds, floating = (
     if (!first[u] || once.has(u)) continue
     const neighbour = step => {
       for (let v = u + step; v >= 0 && v < units.length; v += step) {
-        if (hard[v] && !floating(units[v].id)) return null
+        if (head.own[v] && !floating(units[v].id)) return null
         if (floating(units[v].id)) continue
         const f = matchedOf(v)
         if (f?.m?.length && (!byRow.has(v) || once.has(v))) return f.m
