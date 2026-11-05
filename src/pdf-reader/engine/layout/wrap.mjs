@@ -75,21 +75,33 @@ const NEUTRAL = new Set(['Tf', 'Td', 'TD', 'Tm', 'T*', 'Tc', 'Tw', 'Tz', 'TL', '
 const PATH = new Set(['m', 'l', 'c', 'v', 'y', 'h', 're', 'W', 'W*'])
 const SHOWS = new Set(['Tj', 'TJ', "'", '"'])
 
+/** pageInk's kind of an image's box (layout/ink.mjs: -3) */
+const IMAGE_BOX = -3
 /**
  * A page's plan as wrapOf takes it: from own.mjs's groups of its glyphs and rules and pageInk's (n, k) and path places.
  * `glyphs` pageInk's glyphs of the page (with `indices`), `groupOfGlyph` own.mjs's `glyphs[p - 1]`, `paths` pageInk's, and
- * `groupOfBox` own.mjs's `boxes[p - 1]`. Returns { shows: Map n -> (group | null | undefined)[] by k, paths: Map m -> group }
+ * `groupOfBox` own.mjs's `boxes[p - 1]`. Returns { shows: Map n -> (group | null | undefined)[] by k, paths: Map m -> group,
+ * images: Map j -> group, lost }: an image's box (IMAGE_BOX) a placeholder owns is the page's j-th image painted, its boxes
+ * of that kind in their order, where they are as many as the reading's (`facts.images`, alignOf's: an image clipped away gives
+ * no box, one in an annotation's appearance or a soft mask's group is not the page's); where they are not, none is wrapped and
+ * the groups that owned one are `lost` (their units the original's: wrapFinal)
  */
-export function planOf(glyphs, groupOfGlyph, paths, groupOfBox) {
-  const shows = new Map(), rules = new Map()
+export function planOf(glyphs, groupOfGlyph, paths, groupOfBox, facts = null) {
+  const shows = new Map(), rules = new Map(), images = new Map(), lost = new Set()
   glyphs.forEach((g, i) => {
     if (!(g.n >= 0)) return
     let row = shows.get(g.n)
     if (!row) shows.set(g.n, (row = []))
     row[g.k] = groupOfGlyph[i]
   })
-  groupOfBox.forEach((g, b) => { const m = paths[b]; if (g !== null && m >= 0) rules.set(m, g) })
-  return { shows, paths: rules }
+  let j = 0
+  groupOfBox.forEach((g, b) => {
+    const m = paths[b]
+    if (m === IMAGE_BOX) { if (g !== null) images.set(j, g); j++ }
+    else if (g !== null && m >= 0) rules.set(m, g)
+  })
+  if (images.size && j !== facts?.images) { for (const g of images.values()) lost.add(g); images.clear() }
+  return { shows, paths: rules, images, lost }
 }
 
 /** a show's codes' groups: each code read (in ink) its own, a code not read (no ink of its own: invisible, or none) its
@@ -308,8 +320,9 @@ function wrapPage(R, p, plan, { merge, figures = true, rewritten = new Map() }) 
   const drop = new Set()
   const fold = g => (g === null || g === undefined ? g : drop.has(g) || (!figures && isFigure(g)) ? null : !merge ? g : g.replace(/\.[pl]$/, ''))
   const walk = al.walk, pc = walk.pc
-  const showN = new Map(al.shows.map((e, n) => [e, n])), paintM = new Map((al.paints ?? []).map((e, m) => [e, m]))
+  const showN = new Map(al.shows.map((e, n) => [e, n])), paintM = new Map((al.paints ?? []).map((e, m) => [e, m])), imageJ = new Map((al.images ?? []).map((e, j) => [e, j]))
   if (!al.paints && plan.paths.size) return { ok: false, why: 'its painted paths do not align' }
+  if (!al.images && plan.images?.size) return { ok: false, why: 'its images do not align' }
   const top = cont => { let c = cont; while (c.parent && c.parent !== pc) c = c.parent; return c }
   const formOf = new Map() // a form container directly under the page -> its Do event
   for (const e of walk.events) if (e.kind === 'form' && e.cont === pc) formOf.set(e.child, e)
@@ -318,7 +331,7 @@ function wrapPage(R, p, plan, { merge, figures = true, rewritten = new Map() }) 
   for (const e of walk.events) {
     if (e.kind === 'show') raw.set(e, codeGroups(plan.shows.get(showN.get(e)), e.codes.length))
     else if (e.kind === 'paint') raw.set(e, [plan.paths.get(paintM.get(e)) ?? null])
-    else if (e.kind === 'image') raw.set(e, [null])
+    else if (e.kind === 'image') raw.set(e, [(e.sh ? null : plan.images?.get(imageJ.get(e))) ?? null])
   }
   // a figure's groups: kept where its show and its form can carry them, else dropped (its unit the original's)
   if (figures) {
@@ -787,7 +800,9 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
   const plans = new Map()
   pages.forEach((pg, i) => {
     if (!facts[i] || !pg.points.length) return
-    const plan = { facts: facts[i], ...planOf(pg.glyphs, owners[i], pg.paths, own.boxes[i]) }
+    const plan = { facts: facts[i], ...planOf(pg.glyphs, owners[i], pg.paths, own.boxes[i], facts[i]) }
+    // (a placeholder's image the page's images cannot be told by: its unit the original's, as a page not wrapped)
+    for (const g of plan.lost) { const u = own.units.get(Number(/^u(\d+)/.exec(g)?.[1])); if (u && !u.unhidden) u.unhidden = 'page' }
     // (a turned glyph's group by its place in its show, as a level one's)
     for (const [j, k] of fig.turned[i] ?? []) {
       const u = fig.units[k], t = pg.turned[j]

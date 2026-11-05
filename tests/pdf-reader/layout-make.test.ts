@@ -2360,3 +2360,29 @@ describe('makeLayout, the marking the marks file records: the complete macros, t
     expect(file.unlaid).toEqual([[1, 'lineTaken']])
   })
 })
+
+describe('makeLayout, the lost class: points, pictures and baselines (2026-11-05)', () => {
+  it("a picture a piece sets, a draft image frame between its points in the marked original, is that piece's ink: the base page's image on the frame's box (2610.21924v1's `\\COMPASSicon`)", async () => {
+    const head: Run = { s: 'between Oracle and', x: 72, y: 700 }, after: Run = { s: 'COMPASS on runs', x: 184, y: 700 }
+    // (graphicx's draft in the marked original: the frame's outline, four rules of 0.4 pt, and its file's name inside it; the final
+    // pass, the base page, paints the image on the frame's box)
+    const name: Run = { s: 'figures/C.png', x: 171, y: 704, size: 1.4 }
+    const rules = [[170, 699.8, 170.4, 710.2, 1], [170, 709.8, 180, 710.2, 1], [170, 699.8, 180, 700.2, 1], [179.6, 699.8, 180, 710.2, 1]]
+    const w: World = {
+      pages: [{ runs: [head, after] }],
+      marked: [{ runs: [head, name, after], boxes: rules, points: { 'p0.1a': [0, head.s.length], 'g1a': [0, head.s.length], 'g1b': [2, 0], 'g1t': [2, 0] } }],
+      base: [{ runs: [head, after], images: [[170, 700, 180, 710, 1]] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(after), 700], ['p0.1a', 1, endOf(head), 700], ['g1a', 1, 170, 700], ['g1b', 1, 180, 700], ['g1t', 1, 180, 710]],
+      units: [unit('para', [text('between Oracle and '), ph('\\COMPASSicon'), text(' COMPASS on runs')])],
+    }
+    const { file, stats } = await made(w)
+    const row = phOf(file, 0, 1)
+    expect((row[3] ?? 0) & PH_FLAG.LOST).toBe(0)
+    // one segment, the image's box on the unit's line
+    expect(chunk(row.slice(4), 6)).toEqual([[1, 170, 700, 180, 710, 700]])
+    expect(stats.ph.lost).toBe(0)
+    // (with no image on the frame's box in the base page, its ink is not known: LOST, as before)
+    const none = await made({ ...w, base: [{ runs: [head, after] }] })
+    expect((phOf(none.file, 0, 1)[3] ?? 0) & PH_FLAG.LOST).toBe(PH_FLAG.LOST)
+  })
+})

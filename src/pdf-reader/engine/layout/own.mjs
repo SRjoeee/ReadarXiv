@@ -28,7 +28,8 @@
 //      placeholders' and names' ranges passed over — but the closing punctuation a head sets abutting the unit before it, that
 //      unit's text (amsthm's "(Note).") —; none for a table cell;
 //   6. a babel name `n<occ>`: between `n<occ>.<key>.s` and `.e`;
-//   7. images and forms are never a unit's here (a form whose ink is all one group's is wrapped whole by wrap.mjs).
+//   7. images and forms are no unit's text here (a form whose ink is all one group's is wrapped whole by wrap.mjs); an image TeX
+//      painted inside a placeholder's ink (an inline \includegraphics, 2610.21924v1's `\COMPASSicon`) is the placeholder's.
 // A glyph is one group's: a placeholder's or a name's over the text's, the text's over a label's, the first text's over a later.
 // A placeholder whose ink cannot be told apart (its range lost) makes its unit the original's (`marks`), as do marks that the
 // units do not name; the work is bounded (OWN_WORK).
@@ -54,6 +55,8 @@ import { counterAfter } from './names.mjs'
 export { UNHIDDEN }
 /** a label's form, the paper's theorem names beside the standard ones: layout/label-form.mjs */
 export { isLabelForm, labelFormOf }
+/** pageInk's kind of an image's box (layout/ink.mjs: -3), a placeholder's ink where TeX painted it between its points (MR 7) */
+const IMAGE_BOX = -3
 /** the glyphs and boxes the ownership of a paper may visit (real ranges never overlap: they cost its ink once) */
 export const OWN_WORK = 20_000_000
 /** the unit ids a record lists the spell check's refusals of, at most */
@@ -148,7 +151,8 @@ export function ownOf(pages, { units = null, follows = null, texts = null, inkle
       gOwn[p - 1][i] = group
     }
     for (const [p, b] of list.boxes ?? []) {
-      if ((pages[p - 1].paths[b] ?? -1) < 0) continue
+      const path = pages[p - 1].paths[b] ?? -1
+      if (path < 0 && !(kind === 'p' && path === IMAGE_BOX)) continue
       const cur = bOwn[p - 1][b]
       if (kind === 'u' && cur !== null) continue
       bOwn[p - 1][b] = group
