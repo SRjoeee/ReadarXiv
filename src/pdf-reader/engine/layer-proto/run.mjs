@@ -1426,7 +1426,8 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   // (figure-fit.mjs fitFigureSet: on its baseline, turned as it was, from its anchor's edge, into the room beside its box, every
   // unit of one set at one size, the original's or one factor less, to the rules' last floor), in the faces of its font's family
   // and weight (its CJK characters in the target's CJK face, the rest in the Latin one), in its fill; else left the original's, why told (`no row`, `untranslated`, `same` as its source, `unhidden` where the
-  // document holds no group of it, a face's refusal, `unfit`). A page whose figures are shown waits for their rows as for its
+  // document holds no group of it, a face's refusal, `unfit`, `crowded` where at its size it reaches the stroke under its
+  // original's text, its row's `under`: figure-fit.mjs). A page whose figures are shown waits for their rows as for its
   // units' (figuresWait). `figures`: each figure unit of the pages laid, drawn or why not
   const figureRecs = []
   /** each page's figures: 1 while painted (an await of their faces under way), 2 once painted; a page is ready at 2 alone */
@@ -1460,7 +1461,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         if (disposed) return
         if (no) { Object.assign(rec, { why: no.why, text }); continue }
       }
-      ready.push({ f, rec, text, runs, width1: L2.figureRunsWidth(runs) })
+      ready.push({ f, rec, text, runs, width1: L2.figureRunsWidth(runs), depth1: L2.figureRunsDepth(runs) })
     }
     const bySet = new Map()
     for (const c of ready) (bySet.get(c.f.set ?? c.f.group) ?? bySet.set(c.f.set ?? c.f.group, []).get(c.f.set ?? c.f.group)).push(c)
@@ -1468,7 +1469,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     for (const list of bySet.values()) fitFigureSet(list, P.floorMin).forEach((fit, i) => fits.set(list[i], fit))
     for (const c of ready) {
       const { f, rec, text, runs } = c, fit = fits.get(c)
-      if (!fit) { Object.assign(rec, { why: 'unfit', text }); continue }
+      if (!fit) { Object.assign(rec, { why: fit === false ? 'crowded' : 'unfit', text }); continue }
       const r = rows[pg - 1], px = pxOf(pg)
       r.off.add(f.group)
       // (the original's box on the page, its band across it: where its ink was hidden, for the links' and the text layer's question)

@@ -101,12 +101,12 @@ describe('a left part\'s line map on the wire', () => {
     const { createHash } = await import('node:crypto')
     const as = (format: string) => async (lines: boolean) => {
       const w = await left(lines ? { lines: E } : {})
-      const bytes = new TextEncoder().encode(new TextDecoder().decode(w.bytes).replace('"bundle":"15"', `"bundle":"${format}"`))
+      const bytes = new TextEncoder().encode(new TextDecoder().decode(w.bytes).replace('"bundle":"16"', `"bundle":"${format}"`))
       return readLeftPart(bytes, { ref: { ...(w.ref as object), sha256: createHash('sha256').update(bytes).digest('hex'), bytes: bytes.length } as never, streamOf: () => undefined })
     }
     expect((await as('11')(false)).lines).toBeNull()
     await expect(as('11')(true)).rejects.toThrow()
-    // (13's, 14's and 15's left parts are 12's but for the draw: a reader of 15 reads a bundle of 12 whole)
+    // (13's to 16's left parts are 12's but for the draw: a reader of 16 reads a bundle of 12 whole)
     expect((await as('12')(true)).lines).not.toBeNull()
   })
 })
