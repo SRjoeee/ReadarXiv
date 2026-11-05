@@ -54,6 +54,9 @@ describe('an ink unit\'s leading label goes with a line not laid from its start 
     // (the crop from the label's ink, 0.4 pt past its left edge; the label, its gap and the four characters about the middle 150)
     expect(crop?.src?.[0]).toBeCloseTo(99.6, 1)
     expect(((crop?.dst?.[0] ?? 0) + l[7]) / 2).toBeCloseTo(150, 0)
+    // (raised as TeX raised it: the crop's top, 6 pt type 3.8 pt up, 8.6 pt over the line's baseline, not 4.8; y down from the
+    // page's top, 300)
+    expect(crop?.dst?.[1]).toBeCloseTo(300 - (l[1] + 3.8 + 0.8 * 6), 1)
   })
   it('centred by the door\'s reading of its line (no alignment flag): the same', async () => {
     const { l, crop } = await laid(built(0, 100, 200))
