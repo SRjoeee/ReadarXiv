@@ -198,10 +198,15 @@ export { LayoutRefusal } from './json.mjs'
  *  last word (make.mjs reachBackIn), a carried word on either side of the mark's token on the base page is its word (anchors.mjs
  *  wordAt `either`), and the text after a piece runs through a macro TeX said sets no ink and a text symbol right after it
  *  (marks.mjs followsOf), so that 2610.21477v1's `\}` paragraph, 2608.25210v2's "DOI:" entries and 2608.28692v1's `\MainRel\%` are
- *  laid: a file of 35 lays fewer units; 37 (with PIPELINE 74): an ink unit's text reads TeX's spacing accent with its letter and
- *  leaves its label out, and one that then echoes the author block's place is `inknames` (layout/ink-units.mjs): a file of 36
- *  holds such a unit's row under its old kind and count of pieces */
-export const LAYOUT = '37'
+ *  laid: a file of 35 lays fewer units; 37 (2307.16209v1's title pages, zh, 2026-11-05): a unit's
+ *  alignment is told in four flags, UNIT_FLAG.JUSTIFIED beside CENTRED, FLUSH_LEFT and FLUSH_RIGHT, none where nothing tells it
+ *  (the reader reads its lines); an ink unit's as TeX set the paragraph it is in, read from the marked original's paragraph ends
+ *  (marks.mjs POINTS_TEX `qe<n><code>`, ink-units.mjs alignOf), where a file of 36 held every ink unit but a running head on its
+ *  page's middle not centred: 2307.16209's title, author and examining board drawn from each English line's start. A reader
+ *  of 36 refuses the new flag, so a file of 37 is another maker's (the file's schema is 6 still); 38 (with PIPELINE 74): an ink
+ *  unit's text reads TeX's spacing accent with its letter and leaves its label out, and one that then echoes the author block's
+ *  place is `inknames` (layout/ink-units.mjs): a file of 37 holds such a unit's row under its old kind and count of pieces */
+export const LAYOUT = '38'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,
@@ -233,9 +238,13 @@ export const LABEL_KINDS = Object.freeze(['number', 'item', 'caption', 'footnote
  *  paragraph where the marked original tells it (\centering, a center environment, a class's centred heading), else as
  *  arXiv's lines show it (make.mjs); FLUSH_LEFT, FLUSH_RIGHT: its lines set flush left (\raggedright, a flushleft
  *  environment, ragged2e's \RaggedRight, a class's ragged heading) or flush right (\raggedleft, flushright), only where the
- *  marked original tells it (marks.mjs readAlign), never read off arXiv's lines (LAYOUT 26). What the layer sets the
- *  translation's lines by (run.mjs); a unit holds one of the three at most */
-export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4, FLUSH_LEFT: 8, FLUSH_RIGHT: 16 })
+ *  marked original tells it (marks.mjs readAlign), never read off arXiv's lines (LAYOUT 26); JUSTIFIED: its lines set
+ *  justified, neither centred nor flush, as TeX set its paragraph, or where TeX does not tell it as the maker reads its
+ *  lines (make.mjs: not centred on its column) (LAYOUT 37). An ink unit's as TeX set the paragraph it is in (ink-units.mjs
+ *  alignOf). A unit of none of the four is one whose alignment nothing tells: the reader reads its lines
+ *  (layer-proto/layer2.mjs blocksOf2). What the layer sets the translation's lines by (run.mjs); a unit holds one of the
+ *  four at most */
+export const UNIT_FLAG = Object.freeze({ TITLE: 1, FRONT: 2, CENTRED: 4, FLUSH_LEFT: 8, FLUSH_RIGHT: 16, JUSTIFIED: 32 })
 /** babel's names (names.mjs), whose occurrences the file locates (`names`) */
 export { NAME_KEYS } from './names.mjs'
 /** a name's flags. CENTRED: centred in its column, as a unit is (UNIT_FLAG.CENTRED); CAPITALS: its glyphs capitals where
@@ -315,10 +324,10 @@ const REGION_ROW = 6
 const SKIP_MAX = Math.round(((16384 * 72) / 72.27) * 100) / 100
 /** a rectangle lies within its page's view by this, PDF units */
 const SLACK = 1
-const UNIT_BITS = UNIT_FLAG.TITLE | UNIT_FLAG.FRONT | UNIT_FLAG.CENTRED | UNIT_FLAG.FLUSH_LEFT | UNIT_FLAG.FLUSH_RIGHT
+const UNIT_BITS = UNIT_FLAG.TITLE | UNIT_FLAG.FRONT | UNIT_FLAG.CENTRED | UNIT_FLAG.FLUSH_LEFT | UNIT_FLAG.FLUSH_RIGHT | UNIT_FLAG.JUSTIFIED
 /** a unit's alignment flags, and how many of them each value of those bits holds */
-const ALIGN_BITS = UNIT_FLAG.CENTRED | UNIT_FLAG.FLUSH_LEFT | UNIT_FLAG.FLUSH_RIGHT
-const ALIGNED = Array.from({ length: ALIGN_BITS + 1 }, (_, v) => [UNIT_FLAG.CENTRED, UNIT_FLAG.FLUSH_LEFT, UNIT_FLAG.FLUSH_RIGHT].filter(b => (v & b) !== 0).length)
+const ALIGN_BITS = UNIT_FLAG.CENTRED | UNIT_FLAG.FLUSH_LEFT | UNIT_FLAG.FLUSH_RIGHT | UNIT_FLAG.JUSTIFIED
+const ALIGNED = Array.from({ length: ALIGN_BITS + 1 }, (_, v) => [UNIT_FLAG.CENTRED, UNIT_FLAG.FLUSH_LEFT, UNIT_FLAG.FLUSH_RIGHT, UNIT_FLAG.JUSTIFIED].filter(b => (v & b) !== 0).length)
 const PH_BITS = 511
 const HEADING = UNIT_KINDS.indexOf('heading'), DISPLAY = PH_KINDS.indexOf('display'), MACRO = PH_KINDS.indexOf('macro')
 const PAGE_TEXT = new Set(PAGE_TEXT_KINDS.map(k => PH_KINDS.indexOf(k)))
@@ -484,7 +493,7 @@ function checkRows(f, { views, lo, hi, sized = true }) {
     if (!isInteger(kind, 0, UNIT_KINDS.length - 1)) throw refuse(`units[${i}][1]`, 'not a kind of UNIT_KINDS')
     if (!isInteger(depth, DEPTH_MIN, DEPTH_MAX) && depth !== DEPTH_NONE) throw refuse(`units[${i}][2]`, `not a depth ${DEPTH_MIN} to ${DEPTH_MAX}, or ${DEPTH_NONE}`)
     if (!isInteger(flags, 0, UNIT_BITS)) throw refuse(`units[${i}][3]`, 'not flags of UNIT_FLAG')
-    if (ALIGNED[flags & ALIGN_BITS] > 1) throw refuse(`units[${i}][3]`, 'more than one of CENTRED, FLUSH_LEFT and FLUSH_RIGHT')
+    if (ALIGNED[flags & ALIGN_BITS] > 1) throw refuse(`units[${i}][3]`, 'more than one of CENTRED, FLUSH_LEFT, FLUSH_RIGHT and JUSTIFIED')
     if (!isInteger(pieces, 0, PIECES_MAX)) throw refuse(`units[${i}][4]`, `not a count 0 to ${PIECES_MAX}`)
     zeroes(u)
     last = u[0]
@@ -871,7 +880,7 @@ export function indexLayout(file) {
     const [id, kind, depth, flags, pieces] = units[i]
     byId.set(id, {
       id, kind: UNIT_KINDS[kind], depth,
-      title: (flags & UNIT_FLAG.TITLE) !== 0, front: (flags & UNIT_FLAG.FRONT) !== 0, centred: (flags & UNIT_FLAG.CENTRED) !== 0,
+      title: (flags & UNIT_FLAG.TITLE) !== 0, front: (flags & UNIT_FLAG.FRONT) !== 0, centred: (flags & UNIT_FLAG.CENTRED) !== 0 ? true : (flags & ALIGN_BITS) !== 0 ? false : undefined,
       flush: (flags & UNIT_FLAG.FLUSH_LEFT) !== 0 ? 'left' : (flags & UNIT_FLAG.FLUSH_RIGHT) !== 0 ? 'right' : null,
       pieces, lines: NONE, frames: NONE, erase: [], ph: new Map(), labels: NONE, heading: null, held: NO_HELD, colours: NO_COLOURS,
     })

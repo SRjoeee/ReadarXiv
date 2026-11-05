@@ -59,6 +59,7 @@ import { classifyFont } from '../layer-proto/fonts.mjs'
 import { unitClass } from '../rules/content-classes.mjs'
 import { accentTexts } from './accents.mjs'
 import { utf8 } from '../translate/mt.mjs'
+import { UNIT_FLAG } from './file.mjs'
 import { classOf } from './marks.mjs'
 import { lineRulesOf, OWN_WORK, RULE_EM } from './own.mjs'
 import { spellOf } from './stream.mjs'
@@ -584,6 +585,101 @@ function modeOf(values) {
 /** a page's columns, by its column mark (MARK_DEF's c<n>-<k>): 1 or 2 */
 const columnsOf = P => { for (const pt of P.points ?? []) { const m = /^c([12])-\d+$/.exec(pt.name); if (m) return Number(m[1]) } return 1 }
 
+/** a column body's bracket or a float's (marks.mjs POINTS_TEX: bs, be, fs, fe and a number) */
+const BRACKET = /^([bf])([se])(\d+)$/
+/** a point that ends what a paragraph holds: a unit's, a heading's or a cell's end mark, a body's or a float's bracket */
+const CLOSES = /^(?:\d+|[th]\d+)e$|^[bf][se]\d+$/
+/** a unit's, a heading's or a cell's start mark */
+const OPENS = /^(?:\d+|[th]\d+)s$/
+/** a paragraph end's code (ink.mjs PARA_END: `qe<n><code>`) */
+const endCode = name => name.at(-1)
+
+/**
+ * An ink unit's alignment as TeX set its paragraph (rule 6), from the paragraphs' ends of our compile (ink.mjs `paraEnds`,
+ * marks.mjs POINTS_TEX `qe<n><code>`): c, l, r or j, or null where no paragraph tells it. The end right after the unit's last
+ * glyph, no paragraph begun and no other point between them, is its paragraph's end, and so is the end after a unit that its
+ * paragraph's start (`q<n>`) stands before with nothing ended between, no other start between it and that end (a line of the
+ * paragraph that is not its last): the unit's last line is its paragraph's last, and its lines are set as TeX set that paragraph
+ * (with every end inside the unit the same code; ends of two codes, a unit of paragraphs set two ways: j, not centred): either
+ * way with nothing between its last glyph and that end, no paragraph begun and no unit's end or start mark or bracket. An end
+ * further on, the first after its last glyph in its body or its float — past the column's or the page's end to the next body,
+ * a float in between passed over: a paragraph TeX broke across them —, is the end of the paragraph the unit's last line is
+ * inside, or of the paragraph after it where the unit is a line TeX set between paragraphs (a \centerline, a box): where it
+ * tells it not centred (l, r, j) the unit is not either way, and is j (never flush: that paragraph may not be the unit's);
+ * where it tells c the unit may be neither, and nothing is told. No end before its float's end or a body's start (a running head, a foot), none told. `directOnly`: only
+ * the end right after its last glyph tells it (a running head: the body's paragraph after it is no paragraph of its)
+ */
+function alignOf(lines, pages, directOnly = false) {
+  let first = null, last = null
+  for (const l of lines) for (const g of l.words ? l.words.flatMap(w => w.gs) : (l.gs ?? [])) {
+    if (!first || l.page < first[0] || (l.page === first[0] && g < first[1])) first = [l.page, g]
+    if (!last || l.page > last[0] || (l.page === last[0] && g > last[1])) last = [l.page, g]
+  }
+  if (!last) return null
+  // (a page's ends and brackets in its stream's order: an end stands before the point it counts as its `point`, and a point at
+  // glyph n before glyph n)
+  const marksOn = p => {
+    const P = pages[p - 1]
+    if (!P) return []
+    const out = [], ends = P.paraEnds ?? [], points = P.points ?? []
+    let e = 0
+    for (let q = 0; q <= points.length; q++) {
+      for (; e < ends.length && (ends[e].point ?? points.length) <= q; e++) out.push({ glyph: ends[e].glyph, end: endCode(ends[e].name), point: ends[e].point, para: ends[e].para })
+      const m = q < points.length ? BRACKET.exec(points[q].name) : null
+      if (m) out.push({ glyph: points[q].glyph, bracket: m[1] + m[2], n: m[3] })
+    }
+    return out
+  }
+  // (nothing between the unit's last glyph and an end, the one rule both readings below keep: no paragraph begun, and no unit's,
+  // heading's or cell's end or start mark nor a float's or a body's bracket. The end of a paragraph begun after the unit with no
+  // glyph of its own, one past another unit's end (a paragraph ended at a source unit's end mark has no end of its own, and the
+  // next may begin no `q`), one past another unit's start (a paragraph of that unit's: a table's first cell before its text,
+  // 2610.21084v1's captions), a float's or a body's bracket, is no end of the unit's paragraph; a name's or a placeholder's mark,
+  // inside a paragraph, is no paragraph's end)
+  const L = pages[last[0] - 1]
+  const nothingBetween = x => {
+    if (x.para !== undefined && x.para !== (L?.paras ?? []).filter(q => q.glyph <= last[1]).length) return false
+    if (x.point === undefined) return true
+    const pts = L?.points ?? []
+    for (let q = pts.filter(t => t.glyph <= last[1]).length; q < x.point; q++) { const n = pts[q]?.name ?? ''; if (CLOSES.test(n) || OPENS.test(n)) return false }
+    return true
+  }
+  // (a unit inside a paragraph, not its last line: its paragraph's start (q<n>, ink.mjs `paras`) before its first glyph on its page
+  // with no paragraph end and no unit's end mark or bracket between them, and nothing between its last glyph and the end
+  // (nothingBetween): the lines of one paragraph TeX broke with \\, a tabular's cell inside a centred paragraph)
+  const F = pages[first[0] - 1]
+  const insideOf = x => {
+    if (first[0] !== last[0] || !F) return false
+    const paras = F.paras ?? []
+    let qi = -1
+    for (let k = 0; k < paras.length; k++) if (paras[k].glyph <= first[1]) qi = k
+    if (qi < 0) return false
+    if ((F.paraEnds ?? []).some(e => (e.para ?? 0) > qi && e.glyph <= first[1])) return false
+    return !(F.points ?? []).some(t => t.glyph > paras[qi].glyph && t.glyph <= first[1] && CLOSES.test(t.name))
+  }
+  const inside = new Set()
+  for (let p = first[0]; p <= last[0]; p++) for (const x of marksOn(p)) if (x.end && (p > first[0] || x.glyph > first[1]) && (p < last[0] || x.glyph <= last[1])) inside.add(x.end)
+  let told = null, direct = false, within = false, float = null, between = false
+  walk: for (let p = last[0]; p <= pages.length; p++) {
+    for (const x of marksOn(p)) {
+      if (p === last[0] && x.glyph <= last[1]) continue
+      if (between) { if (x.bracket === 'bs') between = false; continue }
+      if (float !== null) { if (x.bracket === 'fe' && x.n === float) float = null; continue }
+      if (x.end) { told = x.end; const clear = p === last[0] && nothingBetween(x); direct = clear && x.glyph === last[1] + 1; within = clear && !direct && insideOf(x); break walk }
+      if (x.bracket === 'be') between = true
+      else if (x.bracket === 'fs') float = x.n
+      else break walk
+    }
+  }
+  if (directOnly && !direct) return null
+  const codes = new Set(inside)
+  if (told) codes.add(told)
+  if (!codes.size) return null
+  const notC = [...codes].filter(c => c !== 'c')
+  if (direct || within || !told) return notC.length === 0 ? (told ? 'c' : null) : notC.length === 1 && codes.size === 1 ? notC[0] : 'j'
+  return notC.length === 0 ? null : 'j'
+}
+
 /** an ink unit's rows (rule 6) */
 function rowsOf(id, kind, cls, lines, phs, nPieces, pages) {
   const lineRows = [], erase = [], frames = []
@@ -635,11 +731,18 @@ function rowsOf(id, kind, cls, lines, phs, nPieces, pages) {
     const below = Math.min(H, Math.max(0, r2(bottomOf - (Number.isFinite(next) ? next : view[1] + FOOT))))
     frames.push(f.page, f.col, f.first, f.n, q === 0 ? -1 : share, below)
   })
-  // a head's line centred where it stands on its page's middle and short of its width (rule 6)
-  let flags = 0
-  if (cls === 'heads' && lines.length === 1) {
+  // its alignment as TeX set its paragraph (alignOf: CENTRED, FLUSH_LEFT, FLUSH_RIGHT or JUSTIFIED, layout/file.mjs UNIT_FLAG), a
+  // running head's by its paragraph's own end alone; where none tells it, a head's line centred where it stands on its page's
+  // middle and short of its width, a contents list's line JUSTIFIED as before (no paragraph end is set in a contents list, whose
+  // gate keeps the marks out: its lines a list's, never the reader's to read, where one centred on its page by chance would be
+  // drawn so, 2610.19274v1's list of figures), and any other unit's alignment nothing (the reader's reading of its lines:
+  // layer2.mjs blocksOf2). A kept block (no pieces: nothing drawn over it) none
+  const told = nPieces > 0 ? alignOf(lines, pages, cls === 'heads') : null
+  let flags = told === 'c' ? UNIT_FLAG.CENTRED : told === 'l' ? UNIT_FLAG.FLUSH_LEFT : told === 'r' ? UNIT_FLAG.FLUSH_RIGHT : told === 'j' ? UNIT_FLAG.JUSTIFIED : 0
+  if (told === null && nPieces > 0 && cls === 'contents') flags = UNIT_FLAG.JUSTIFIED
+  if (cls === 'heads' && lines.length === 1 && flags !== UNIT_FLAG.CENTRED) {
     const view = pages[lines[0].page - 1].view, mid = (view[0] + view[2]) / 2, a = lineRows[1], b = lineRows[2]
-    if (Math.abs((a + b) / 2 - mid) <= CENTRE && b - a < 0.8 * (view[2] - view[0])) flags = 4
+    if (Math.abs((a + b) / 2 - mid) <= CENTRE && b - a < 0.8 * (view[2] - view[0])) flags = UNIT_FLAG.CENTRED
   }
   const ph = phs.map(p => {
     const segs = []
