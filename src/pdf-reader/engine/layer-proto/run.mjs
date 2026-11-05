@@ -234,6 +234,10 @@ const NO_ROWS = rowsOf([])
 const firstAtOrOver = (a, y) => { let lo = 0, hi = a.length; while (lo < hi) { const m = (lo + hi) >> 1; if (a[m] < y) lo = m + 1; else hi = m } return lo }
 /** the page's body units: those its fill's target reads first and its one size grows (fillPage) */
 const BODY_KINDS = new Set(['para', 'abstract', 'list', 'item'])
+/** the ink units' kinds (layout/ink-units.mjs INK_KIND, a test holds the two the same): units made of our own glyphs, every glyph
+ *  of their lines their text's, a label they read apart from their text too (PIPELINE 74), so that it is hidden with their text */
+export const INK_UNIT_KINDS = Object.freeze(['inkheads', 'inkcontents', 'inknotes', 'inkorphan', 'inknames', 'inkreferences'])
+const INK_UNITS = new Set(INK_UNIT_KINDS)
 /** the SVG's own rules (the prototype's index.html): its text set as laid, in the layer's ink, in the faces it was
  *  measured in and no style made up of a face that has none (a bold or an oblique the family lacks stays regular) */
 const SVG_RULES = ['.tl{position:absolute;left:0;top:0;overflow:visible;font-synthesis:none}', '.tl text{white-space:pre;fill:#141414}']
@@ -2087,18 +2091,26 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (centred as the layout file has the unit, UNIT_FLAG.CENTRED: TeX's own alignment where the marked original tells it, else
     // the maker's reading of arXiv's lines, make.mjs)
     const lu = p.tex.lu
-    // a centred unit whose first line starts with a label kept as the original's (IEEEtran's "I." before its centred section
-    // heading): centred with the line, label and text one, as TeX centred them, its ink copied as the line's start (a crop, as
-    // a numbered heading's below), the line from the label on (`carried`). Left where it was, the shorter text centred alone
-    // stood an em or more away from it
+    // a unit whose first line starts with a label kept as the original's and is not laid from where TeX set it — centred (IEEEtran's
+    // "I." before its centred section heading; an affiliation's raised number before its centred place) or flush right —: the
+    // label goes with the line, label and text one, as TeX set them, its ink copied as the line's start (a crop, as a numbered
+    // heading's below) and erased where it stood (`carried`). Left where it was, the shorter text centred alone stood an em or more
+    // away from it (2610.20716v1 p1: the "1" 93 pt left of its place). Only a label whose ink is hidden with the unit: its own
+    // group, or, an ink unit's, which has none, its text's (its glyphs its line's, inside the line's first rectangle); a label the
+    // wrap left the original's (`labelKept`) stays
     const byCell = p.unit.kind === 'cell' ? cellCentred(p) : null
     const centredFlag = byCell !== null ? byCell : lu.centred
-    const carried = centredFlag === true && relabels(p.id) && !!prep.label?.chars?.length && !prep.label.drawn && !!p.rects[0] && prep.label.chars.every(c => c.page === p.rects[0][0])
-    if (carried) { const r0 = p.rects[0], lx0 = Math.min(...prep.label.chars.map(c => c.x0)); if (lx0 < r0[1]) p.rects[0] = [r0[0], lx0, r0[2], r0[3], r0[4]] }
+    const r00 = p.rects[0]
+    const labelHides = !!prep.label?.chars?.length && !prep.label.drawn && !!r00 && prep.label.chars.every(c => c.page === r00[0]) && (relabels(p.id) || (INK_UNITS.has(p.unit.kind) && !hiding?.labelKept?.(p.id) && !VIS.has(labelGroup(p.id)) && prep.label.chars.every(c => c.x0 >= r00[1] - 0.5 && c.x1 <= r00[3] + 0.5)))
+    // (centred by the file's flag: the block's first rect from the label on, so that label and text are centred together on the
+    // original's middle; centred by the door's reading of its lines, or flush right: the label is inside the rect already, or the
+    // block is read from the rects as they are)
+    if (labelHides && centredFlag === true) { const lx0 = Math.min(...prep.label.chars.map(c => c.x0)); if (lx0 < r00[1]) p.rects[0] = [r00[0], lx0, r00[2], r00[3], r00[4]] }
     p.blocks = L2.blocks2(p.rects, geometry.left.pages, keep, prep.lineInfo, prep.regionOf, prep.referenced, LINESKIP, prep.breakAt, prep.joinAt, centredFlag)
     // (a unit TeX set flush left or flush right, the layout file's UNIT_FLAG.FLUSH_LEFT or FLUSH_RIGHT, keeps that alignment
     // (lane B's B2): its lines never justified, layer2.mjs placeItems; a cell is set by its own lines)
     if (lu.flush && p.unit.kind !== 'cell') for (const b of p.blocks) if (!b.centred) b.flush = lu.flush
+    const carried = labelHides && !!p.blocks[0] && p.blocks[0].page === r00[0] && (p.blocks[0].centred || p.blocks[0].flush === 'right')
     if (p.unit.kind !== 'cell') for (const b of p.blocks) widen(b, p)
     // (a unit whose last row another unit's first continues on a shared line, where something of the page stands between the
     // two that stays (a label kept as the original's: inparaenum's "(2)" between two items, 2610.21098 page 2): the next unit's
@@ -2141,7 +2153,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (its own label on the row goes with it, drawn at the start (ownLabelOnRow): its glyphs are the door's reading of the file's
     // label row, on the row)
     let rowLabel = null, onLeadOf = null
-    if (row && p.blocks[0] && !p.blocks[0].centred && p.blocks[0].page === row.page && Math.abs(p.blocks[0].B[0] - row.baseline) < 0.05) {
+    if (row && p.blocks[0] && !p.blocks[0].centred && !carried && p.blocks[0].page === row.page && Math.abs(p.blocks[0].B[0] - row.baseline) < 0.05) {
       const b = p.blocks[0], a = byId.get(row.id), share = a && !a.refused ? a.share ?? null : null, x = b.x0 + b.indent
       const lb = prep.label?.chars?.length && !prep.label.drawn && prep.label.chars.every(c => c.page === row.page && Math.abs(c.yb - row.baseline) < 0.4 * row.size) ? ownLabelOnRow(p.id, row, x, prep.label.chars) : null
       if (share && !share.kept && (lb || !keptBetween(row, x))) {
@@ -2210,7 +2222,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
       prep.label = { ...prep.label, drawn: prep.label.text }
       for (const c of cs) prep.cat?.set(L2.charKey(c), 'acc')
     }
-    if (carried && p.blocks[0]?.centred) {
+    if (carried) {
       const cs = prep.label.chars, b0 = p.blocks[0], start = prep.firstX0 !== undefined && prep.firstX0 > prep.label.x1 ? prep.firstX0 : prep.label.x1 + 0.25 * s
       const x0 = Math.min(...cs.map(c => c.x0)) - 0.4, x1 = Math.max(Math.max(...cs.map(c => c.x1)) + 0.4, start - 0.4)
       const crop = { mode: 'crop', page: b0.page, crop: [x0, Math.min(...cs.map(c => c.yb - 0.26 * c.size)), x1, Math.max(...cs.map(c => c.yb + 0.8 * c.size))], baseline: median(cs.map(c => c.yb)), text: prep.label.text }
