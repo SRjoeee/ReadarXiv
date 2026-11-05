@@ -2158,11 +2158,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
         if (share.above) { b.onLead = true; onLeadOf = { start: row.x0, startY: undefined } }
         else if (b.startY !== undefined && b.startY > b.B[0] + 0.05) { b.onLead = true; onLeadOf = { start: b.start, startY: b.startY } }
         // (the lines it so flows on over the rows that unit's shorter translation left, down to the shared row, are that paragraph's
-        // lines: their measure is the two blocks' around the row (`flowX`, slotsAt), not this unit's first block's, which is only
-        // its own rows there: the row's remainder alone where TeX set a float right after it (2608.16117v1 p19's u59, "The
-        // increasing-" at the end of the line before Figure 9: its flowed lines were laid at that 79 pt, "and" and "MacKintosh,"
-        // each a line of its own at the column's right edge))
-        if (b.onLead) b.flowX = { y: row.baseline, x0: Math.min(share.x0, b.x0), x1: Math.max(share.x1, b.x1) }
+        // lines: each takes the measure TeX set at its height, that unit's rows' and on the row both units' (`flowX`, the row and
+        // that unit's block that holds it: layer2.mjs flowMeasureAt), not this unit's first block's, which is only its own rows
+        // there: the row's remainder alone where TeX set a float right after it (2608.16117v1 p19's u59, "The increasing-" at the
+        // end of the line before Figure 9: its flowed lines were laid at that 79 pt, "and" and "MacKintosh," each a line of its
+        // own at the column's right edge))
+        const lead = b.onLead ? a.blocks?.find(q => q.page === row.page && q.B.some(y => Math.abs(y - row.baseline) < 0.05)) : undefined
+        if (lead) b.flowX = { y: row.baseline, lead }
         // (painted on the row's page after that unit, whose erasing of the row covers where it starts: paintLed)
         p.ledBy = row.id
       }
