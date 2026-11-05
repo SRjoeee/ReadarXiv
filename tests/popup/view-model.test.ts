@@ -291,6 +291,24 @@ describe('actionErrorText (S-P-90)', () => {
     expect(actionErrorText('plain')).toBe('plain')
   })
 
+  it('a queue timeout, thrown here or carried back as a failure reply, is the pack\'s timeout sentence, with no task id and no milliseconds', async () => {
+    const { actionErrorText, startRefusalText } = await import('@/entrypoints/popup/view-model')
+    const { decodeReply, failure } = await import('@/shared/messages')
+    const { REQUEST_TIMEOUT_ERROR_NAME } = await import('@/providers/types')
+    const strings = await import('@/ui/strings')
+    const timeout = Object.assign(new Error('Task t-12 timed out after 5000ms'), { name: REQUEST_TIMEOUT_ERROR_NAME })
+    let carried: unknown
+    try { decodeReply(failure(timeout)) } catch (e) { carried = e }
+    for (const code of ['en', 'zh-CN'] as const) {
+      setLocale(code)
+      for (const text of [actionErrorText(timeout), actionErrorText(carried), startRefusalText({ started: false, reason: 'backend-timeout' })]) {
+        expect(text).toBe(strings.reasonText('timeout'))
+        expect(text).not.toMatch(/\d+\s*ms|Task/)
+      }
+    }
+    setLocale('zh-CN')
+  })
+
   it('a save the store refused has a sentence of its own, thrown here or carried back from the page as a failure reply', async () => {
     const { actionErrorText } = await import('@/entrypoints/popup/view-model')
     const { ConfigUnreadableError } = await import('@/config/storage')

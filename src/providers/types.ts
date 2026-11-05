@@ -103,6 +103,9 @@ export interface TranslationProvider {
 export const PROVIDER_ERROR_KINDS = ['no-key', 'network', 'rate-limit', 'auth', 'bad-request', 'invalid-response', 'timeout', 'aborted', 'unknown'] as const
 export type ProviderErrorKind = (typeof PROVIDER_ERROR_KINDS)[number]
 
+/** The name of the queue's timeout error: carried across the message boundary with the failure reply, which is how a page that can only quote an error's message knows it for a timeout and words it itself */
+export const REQUEST_TIMEOUT_ERROR_NAME = 'RequestTimeoutError'
+
 /**
  * The kinds that continuing can only repeat: a missing or rejected key. The one definition (DESIGN §4.3) behind the
  * fallback chain's permanent demotion, the translate service's per-scope stop, both pipelines' halt and the page's

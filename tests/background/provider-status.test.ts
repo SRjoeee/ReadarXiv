@@ -3,6 +3,7 @@ import { type Config, DEFAULT_CONFIG } from '@/config/schema'
 import { createChainHolder } from '@/entrypoints/background/chain'
 import { createConfigOffers, providerStatus, statusInForce } from '@/entrypoints/background/provider-status'
 import type { TranslationTransport } from '@/providers/transport'
+import { REQUEST_TIMEOUT_ERROR_NAME } from '@/providers/types'
 
 // The provider-status action: a session's chain, the chain in force, or — after a save — a chain
 // built from what is stored now, without the popup polling for it
@@ -158,8 +159,11 @@ describe('statusInForce', () => {
       const h = holderOf(never('stalled'))
       const status = statusInForce(h.chain, 1_000)
       const outcome = expect(status).rejects.toThrow(/did not settle/)
+      const named = expect(status).rejects.toMatchObject({ name: REQUEST_TIMEOUT_ERROR_NAME })
       await vi.advanceTimersByTimeAsync(1_000)
       await outcome
+      // a timeout by name: the popup words it from the pack (startRefusalText), not from this message
+      await named
     } finally {
       vi.useRealTimers()
     }

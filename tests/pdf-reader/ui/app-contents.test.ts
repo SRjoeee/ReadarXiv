@@ -94,3 +94,17 @@ describe('the contents\' slide (the reader\'s design, §5)', () => {
     await m.unmount()
   })
 })
+
+describe('the tab\'s title', () => {
+  it('names the paper once its title is known, and never goes back to the bare name when the title is gone for a moment', async () => {
+    document.title = 'Read arXiv'
+    const { controller, set } = fakeController({ paper: { id: '2608.02163', title: '' } })
+    const m = await mountElement(createElement(App, { controller, embedded: true }))
+    expect(document.title).toBe('Read arXiv')
+    await act(async () => { set({ paper: { id: '2608.02163', title: 'From Simple QA to Deep Research' } }) })
+    expect(document.title).toBe('From Simple QA to Deep Research')
+    await act(async () => { set({ paper: { id: '2608.02163', title: '' } }) })
+    expect(document.title).toBe('From Simple QA to Deep Research')
+    await m.unmount()
+  })
+})
