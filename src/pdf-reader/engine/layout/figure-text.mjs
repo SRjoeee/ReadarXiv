@@ -40,8 +40,9 @@
 // a fill's edge, an image's or a shading's box —, but a fill that holds the whole band (a node's fill, the plot's background), is
 // `crowded`: a translation there could cover that ink, so it stays the original's. Ink is what the page shows: a glyph wholly
 // outside the clip in force and any paint at an alpha of 0 (pageInk's `unseen`) are none, neither a label's nor its crowding. A
-// stroke painted before the text that crosses the band only below the band a translation is drawn in (drawnFoot: a gridline
-// under a legend entry's descenders) is under the text, as a ground is: it crowds nothing and ends no free line.
+// stroke painted before the text that crosses the band only below its baseline (a gridline under a legend entry's descenders) is
+// under the text, as a ground is: it crowds nothing and ends no free line, and the unit carries its depth (`under`): whether a
+// translation meets it is told where the translation's faces and size are known, by the layer (figure-fit.mjs).
 //
 // Its set and its room (the owner's rule of 2026-10-29: the labels of one group set at one size, the original's, each keeping the
 // original's alignment; a translation may take free space, never touching other ink nor leaving its figure; a group that cannot
@@ -79,10 +80,6 @@ export const DRAW_BAND = Object.freeze([-0.15, 0.88])
 /** a unit's band inside its box, shrunk by this share of its size at each edge before other ink is looked for in it (an
  *  antialiased edge, a glyph's side bearing) */
 const CROWD_PAD = 0.04
-/** across a unit's frame, from its baseline, the foot of the band a translation is drawn in (DRAW_BAND's, CROWD_PAD in, as the
- *  crowding's band is), at `size`: a stroke painted before the text whose part across the band lies wholly below it is under the
- *  text (shapeRoom), and the figure gate's O and R excuse its pixels so */
-export const drawnFoot = size => (DRAW_BAND[0] + CROWD_PAD) * size
 /** a font subset's name: a tag of six capital letters and a plus sign before the face's PostScript name (PDF 32000-1 9.6.4) */
 const SUBSET_TAG = /^[A-Z]{6}\+/
 /** two runs of one figure, one size and one direction share an edge (a column's start, end or middle) where theirs lie on one
@@ -162,7 +159,8 @@ function inFrame(f, b) {
  * `turned` (pageInk's `turned`), `boxes` (stride 4), `paths`, `points` —; `own`, ownOf's result for them (its `glyphs[p - 1][g]`,
  * a group or null). Returns { units, glyphs, turned, stats }: `units` each { k, page, group, text, font, size, fill, angle (degrees,
  * anticlockwise), x, y (its first glyph's origin), ux, uy, length (its box along its direction), ascent, descent (its band, em),
- * anchor ('start' | 'centre' | 'end'), form, why (null, or 'crowded') }; `glyphs[p - 1]` a Map of a level glyph's index to its
+ * anchor ('start' | 'centre' | 'end'), form, why (null, or 'crowded'), under (the depth under its baseline of the nearest stroke
+ * under its text, PDF units, or null: roomOf) }; `glyphs[p - 1]` a Map of a level glyph's index to its
  * unit's k and `turned[p - 1]` of a turned glyph's, and each unit's set and room (setsOf, roomsOf: `set`, its set's first
  * unit's k; `before`, `after`, PDF units); `stats` { units, crowded, letters, runs, past, clipped, outsized, sets, grouped,
  * aligned }
@@ -263,6 +261,7 @@ export function figureUnitsOf(pages, own, { unitsPage = FIGURE_UNITS_PAGE, units
       // panel); else its middle; the unit's set below may take its column's edge over either)
       u.anchor = room.told ? room.anchor : (columnAnchorOf((lines ??= columnLinesOf(pg, own?.glyphs?.[pi])), u) ?? room.anchor)
       if (room.crowded) { u.why = 'crowded'; stats.crowded++ }
+      u.under = room.crowded ? null : room.under
       units.push(u)
       mine.push({ u, r, free: room })
       evidence.at(-1).unit = u
@@ -555,6 +554,9 @@ function roomOf(pg, f, u, own) {
   // (the nearest ink right before its box along its baseline and right after it, within the reach: their gaps to the box; and
   // within `far` the free line either side, its room (roomsOf): the ink a translation there would meet, as far as it shows)
   let crowded = false, before = Infinity, after = Infinity, freeBefore = Infinity, freeAfter = Infinity
+  // (the top, across its frame, of the strokes under its text: the depth a translation drawn there must stay above, told by the
+  // layer, which knows the translation's faces and size)
+  let underTop = -Infinity
   // (what may meet its band, its reach or its line, on the page: its frame's box there, a box apart from it no ink of them)
   const nearOf = d => {
     const nx = -u.uy, ny = u.ux, lo = u.descent * u.size, hi = u.ascent * u.size
@@ -575,6 +577,8 @@ function roomOf(pg, f, u, own) {
     else if (a1 <= band[0] && a1 >= -reach) before = Math.min(before, -a1)
     else if (a0 >= band[2] && a0 <= u.length + reach) after = Math.min(after, a0 - u.length)
   }
+  /** a stroke's part under the text: its top across the frame */
+  const under1 = top => { underTop = Math.max(underTop, top) }
   for (let g = 0; g < G.length && !crowded; g++) {
     if (mineG.has(g)) continue
     const x = G[g], box = [x.ix0 ?? x.x0, x.bottom, x.ix1 ?? x.x1, x.top]
@@ -592,7 +596,7 @@ function roomOf(pg, f, u, own) {
     // its box shows them: a line its clip cuts off is no ink there)
     const near = !apart(...box) && !(e[2] <= -reach || e[0] >= u.length + reach)
     const shape = S?.get(b / 4), after = b / 4 >= over
-    if (shape) { shapeRoom(shape, f, band, near ? along1 : null, free1, e, after, drawnFoot(u.size)); continue }
+    if (shape) { shapeRoom(shape, f, band, near ? along1 : null, free1, e, after, under1); continue }
     const kind = pg.paths?.[b / 4]
     const holds = !(after && (kind === -2 || kind === -3)) && e[0] <= 0 && e[2] >= u.length && e[1] <= u.descent * u.size && e[3] >= u.ascent * u.size
     // (a box behind the whole band is its ground, no ink of its box: a path's, its free line ending a band's height inside its
@@ -606,8 +610,9 @@ function roomOf(pg, f, u, own) {
   }
   // (set from its start where the ink before it is nearer by half, from its end where the ink after it is: else from its middle)
   const anchor = Math.max(before, 0) * ANCHOR_RATIO < Math.max(after, 0) ? 'start' : Math.max(after, 0) * ANCHOR_RATIO < Math.max(before, 0) ? 'end' : 'centre'
-  // (`told`: whether the ink within the reach told the anchor, on either side; none on both is its middle by default)
-  return { crowded, anchor, told: Number.isFinite(before) || Number.isFinite(after), before: freeBefore, after: freeAfter }
+  // (`told`: whether the ink within the reach told the anchor, on either side; none on both is its middle by default; `under`, the
+  // depth under its baseline of the nearest stroke under its text, PDF units, or null where none is)
+  return { crowded, anchor, told: Number.isFinite(before) || Number.isFinite(after), before: freeBefore, after: freeAfter, under: underTop > -Infinity ? -underTop : null }
 }
 
 /** a path's lines against a unit's band (in its frame): each segment's part across the band (a stroke's widened by its half
@@ -617,14 +622,17 @@ function roomOf(pg, f, u, own) {
  *  before the text: painted `after` it, it covers the text, ink over the whole band. A fill painted before the text is its
  *  ground whatever its edges: one inside the band is a change of tone under the text and crowds nothing, its parts beside the
  *  box lines beside it; but a fill of a tiling pattern (pageInk's `pattern`), whose hatching is not read, a ground only where it
- *  holds the band, as before. A stroke (no fill) painted before the text whose part across the band lies wholly below `foot` (the
- *  band a translation is drawn in, drawnFoot) is under the text: the original's own descenders were set over it, and a
- *  translation drawn above that foot meets it nowhere, so it neither crowds the text nor ends its free line nor tells its anchor
- *  (2610.21085v1's gridline under "jury, α = 8", the legend's other entry translated) */
-function shapeRoom(shape, f, band, along1, free1, e, after = false, foot = -Infinity) {
+ *  holds the band, as before. A stroke (no fill) painted before the text whose part across the band, its half width out, lies
+ *  wholly below the baseline and, as far as its box shows it, under the text's box is under the text: the original's own
+ *  descenders were set over it (2610.21085v1's gridline under "jury, α = 8", the legend's other entry translated). It neither
+ *  crowds the text nor ends its free line nor tells its anchor; it is told with its top (under1), so that the layer draws a
+ *  translation over it only where the translation's own depth, in its faces at the size it is drawn at, stays above it
+ *  (figure-fit.mjs): a CJK translation in its em box clears a gridline a Latin one's descenders cross. Such a part only beside the
+ *  box is a line beside it, as any: where a longer translation would stand over it, its free line ends */
+function shapeRoom(shape, f, band, along1, free1, e, after = false, under1 = null) {
   const { segs, hw } = shape, w = shape.stroke ? hw : 0
   const t0 = band[1] - w, t1 = band[3] + w
-  const under = shape.stroke && !shape.fill && !after
+  const under = under1 && shape.stroke && !shape.fill && !after
   const parts = []
   for (let i = 0; i + 3 < segs.length; i += 4) {
     const as = along(f, segs[i], segs[i + 1]), ts = across(f, segs[i], segs[i + 1]), ae = along(f, segs[i + 2], segs[i + 3]), te = across(f, segs[i + 2], segs[i + 3])
@@ -635,9 +643,14 @@ function shapeRoom(shape, f, band, along1, free1, e, after = false, foot = -Infi
       lo = Math.max(lo, Math.min(a, b)); hi = Math.min(hi, Math.max(a, b))
       if (lo > hi) continue
     }
-    // (a stroke under the text: its part across the band, widened by its half width, below the drawn band's foot)
-    if (under && Math.max(ts + (te - ts) * lo, ts + (te - ts) * hi) + w <= foot) continue
     const p = as + (ae - as) * lo, q = as + (ae - as) * hi
+    // (a stroke under the text: its part across the band, widened by its half width, below the baseline, and as far as its box
+    // shows it under the text's box; told with its top)
+    if (under) {
+      const top = Math.max(ts + (te - ts) * lo, ts + (te - ts) * hi) + w
+      const a = Math.max(Math.min(p, q) - w, e[0] - SHOWN_SLACK), b = Math.min(Math.max(p, q) + w, e[2] + SHOWN_SLACK)
+      if (top < 0 && a <= b && b > band[0] && a < band[2]) { under1(top); continue }
+    }
     parts.push([Math.min(p, q) - w, Math.max(p, q) + w])
   }
   const inside = parts.some(([a, b]) => b > band[0] && a < band[2])

@@ -833,7 +833,8 @@ export async function wrapFinal(finalBytes, { PL, getDocument, documentOptions =
 }
 
 /** the figure units as the page pass takes them: those drawn (their group in the document, `why` null), each { page, group,
- *  text, font, size, fill, angle, x, y, ux, uy, length, ascent, descent, anchor, form, set, before, after }, in the order of
+ *  text, font, size, fill, angle, x, y, ux, uy, length, ascent, descent, anchor, form, set, before, after, and under where a stroke
+ *  is under its text }, in the order of
  *  their groups; and the counts (the record's): units cut, drawn, each why, their letters, the forms written again, the sets of
  *  two units or more and the units in them, the units their column aligned */
 function figureRecordOf(fig, made) {
@@ -842,7 +843,7 @@ function figureRecordOf(fig, made) {
   for (const u of fig.units) {
     if (u.why) { stats[u.why]++; continue }
     stats.drawn++
-    units.push({ page: u.page, group: u.group, text: u.text, font: u.font, size: u.size, fill: u.fill, angle: u.angle, x: u.x, y: u.y, ux: u.ux, uy: u.uy, length: u.length, ascent: u.ascent, descent: u.descent, anchor: u.anchor, form: u.form, set: u.set, before: u.before, after: u.after })
+    units.push({ page: u.page, group: u.group, text: u.text, font: u.font, size: u.size, fill: u.fill, angle: u.angle, x: u.x, y: u.y, ux: u.ux, uy: u.uy, length: u.length, ascent: u.ascent, descent: u.descent, anchor: u.anchor, form: u.form, set: u.set, before: u.before, after: u.after, ...(u.under != null ? { under: u.under } : {}) })
   }
   return { units, stats }
 }
