@@ -4381,6 +4381,46 @@ are an option of the layer's open (`classes`, `TOGGLE_DEFAULTS`); a change of th
 and rows (`layer-side.mjs` `setClasses`), each laid page kept until the new door's commits: 81 to 384 ms to the two pages in view
 over 14 page pairs (the layer gate's jump, `--perf`). The web's half is `docs/route/orphan-text.md` §8.
 
+**An item's label on a shared line, and a shared line where the translation before it ends (the owner's report of 2026-11-05).**
+2610.21085v1 p2 in Chinese, "Our contributions are fourfold. (1) … (2) … (3) … (4) …": an inline list (enumitem's `enumerate*`,
+`label=(\arabic*)`), each item a unit of its own whose first row TeX set on the line where the item before ends. The file holds
+each "(n)" as its item's label (`make.mjs` `labelOf`: the glyphs TeX set before the unit's start mark, whatever command set them:
+paralist's `inparaenum`, an `\item[(1)]` by hand), kept as the original's ink where TeX set it; `keptBetween` saw it between the
+two units and refused the shared line, so each item was laid from TeX's English x: a blank of several em after the paragraph's
+first sentence, "(2)" and "(3)" alone at the column's right edge, "(4)" mid-line. Where the only thing between the two, from the
+unit before's end to the next unit's first word, is that unit's own label (`run.mjs` `ownLabelOnRow`: its label row on the row,
+after the unit before's end, its group one the layer hides; the glyphs it carries aside, nothing of the page there, so that a mark
+between the label and the word, another unit's or no unit's, keeps both where TeX set them), the label goes with its unit: its ink copied as the first line's start, set by the row's baseline so that a raised mark
+stays raised, its first word glued to it, and erased where it stood; the unit before still ends its text on the row where TeX did.
+A shared line that holds the label and not its first word is left as a sliver is (`layer2.mjs`, the breaker's `ownLabel`), never
+the label alone at the line's end (2610.21098v1 p2's "(2)" was, its text a line under it). And where the unit before ends its
+translation above TeX's shared row (a Chinese translation at its own leading, 16.9 pt a line against the original's 14.45), its
+last line is the shared line (`shareOf`'s `above`, or its `at` within an em of the row): the next unit goes on on it after its
+ink, the original's separation kept, and its lines flow on from there at its own pitch (`slotsAt`, `onLead`), one paragraph read
+straight through as the original reads. Laid on TeX's row under it, it stood a line's height under the line before (12 pt at 11.95
+pt type); laid from TeX's row after a first line on the line over it, its second line stood a pitch and that distance under the
+first (2610.21098v1 p2's item (3): 26.4 pt at a pitch of 16.9). The page fill keeps that line (`keepsShare`: still the unit's
+last, on its baseline, no further right), so that a unit before it whose fill would spread its lines over more of its frames keeps
+its fit's pitch where spreading moves the line: 2608.16117v1's u57, the paragraph a float splits from u59, 18.8 pt a line on pages
+18 and 19 where its fill set 23.1, its frame on page 18 ending 17.4 pt higher (the rules gate's three pages that move, pages 17 to
+19 of that paper in Chinese: its blank lines a frame a little worse, its wide paragraph gaps fewer); where none of the next unit's
+text fits after it, its first line stands a pitch under it, unless its last line then ends lower than laid as before, where it is
+laid as before. Over the release sweep's 88 pass-papers (1,308 shared rows): `keptBetween` refused 83 rows and refuses 52, the 31
+that go each a unit's own label between it and the unit before (11 inline items of 2610.21085v1 and 2610.21098v1, a sub-caption's
+"(d)", 3 paragraph footnotes' marks, and 16 author lines' affiliation marks, which are drawn pixel for pixel as before); 28 next
+units are laid anew (their lines in reading order): 15 go on on the line before, the translation before them ending over the row;
+3 move on the row with their label; 6 kept their first line on the line before, within an em over the row, and now flow on from it
+(2610.37668v1 p5's u45, 2610.21377v1 p43's u592 among them); 2 keep their first line and move with their page's fill; and 2 are
+laid from TeX's row where a pitch under the line before would end them lower (2610.21098v1 p1's u9 and p2's u14, 13.6 and 16.3 pt
+under that line, at their pitches of 13.5 and 17.6); no label stands alone on a line. 9 of them end lower than before, by 0.1 to
+17.9 pt, each within its block's foot (`slotsAt` never passes it): under 3 no unit stands, 3 have the next unit going on on their
+last line, and the 3 others come nearer the unit under them, none nearer than a line's pitch (2610.20808v1 p26's u730 by 0.4 pt,
+to 18.6; 2608.25210v2 p11's u212 by 0.1, to 16.1 at a pitch of 14.1; 2608.16117v1 p19's u59, which takes a line more after the
+float that split it, by 17.9, to 22.5). 18 other units on those pages are laid anew by their page's fill, each in as many lines,
+none lost. The run-in census (1,043 heads, every pass of the sweep): every measured head's gap as before; the two that change are
+headings whose translation ends a line over their shared row (2610.20808v1 p26's u729, 2608.23393v1 p13's u159), which the census
+does not measure, their text now on that line after the original's separation. A drawing rule, no version (§18.3).
+
 **What TeX sets after a bibliography, and an appendix's own contents (PIPELINE 64, LAYOUT 33, REMOVAL 23; the owner's report of
 2026-11-03 on 2610.42112v1 p16).** The references' zone that a bibliography's entries open ends with its last entry: on the line
 its end mark stands on and the lines right below it at an entry's leading (`ledger.mjs` `lastEntriesOf`, `ENTRY_DY`: what a style
