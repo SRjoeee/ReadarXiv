@@ -33,8 +33,10 @@ export type World = { pages: Page[]; marked?: Page[]; base?: Page[]; marks: Mark
 export const FONTS: Record<string, unknown> = {
   F1: { name: 'ABCDEF+CMR10', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.75, descent: -0.25, isType3Font: false, vertical: false },
   F2: { name: `ABCDEF+Ä${'x'.repeat(300)}`, fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.75, descent: -0.25, isType3Font: false, vertical: false },
+  // (a delimiters' face as cmex10 is: its glyphs hang from their origin, which stands over the line)
+  F3: { name: 'ABCDEF+CMEX10', fontMatrix: [0.001, 0, 0, 0.001, 0, 0], ascent: 0.04, descent: -1.16, isType3Font: false, vertical: false },
 }
-export const STYLES = { F1: { ascent: 0.75, descent: -0.25, fontFamily: 'serif' }, F2: { ascent: 0.75, descent: -0.25, fontFamily: 'serif' } }
+export const STYLES = { F1: { ascent: 0.75, descent: -0.25, fontFamily: 'serif' }, F2: { ascent: 0.75, descent: -0.25, fontFamily: 'serif' }, F3: { ascent: 0.04, descent: -1.16, fontFamily: 'serif' } }
 export const size = (r: Run) => r.size ?? 10
 export const adv = (r: Run) => (r.w ?? CH) * size(r)
 /** where a run's character j begins, and where the run ends */

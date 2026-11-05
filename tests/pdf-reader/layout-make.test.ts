@@ -2385,4 +2385,58 @@ describe('makeLayout, the lost class: points, pictures and baselines (2026-11-05
     const none = await made({ ...w, base: [{ runs: [head, after] }] })
     expect((phOf(none.file, 0, 1)[3] ?? 0) & PH_FLAG.LOST).toBe(PH_FLAG.LOST)
   })
+
+  it("over a page break, a line its pieces' points stand on is the unit's, though none of its words is on it: a formula filling the next page's first line (2307.16209v1's u128)", async () => {
+    const p1 = Array.from({ length: 3 }, (_, j): Run => ({ s: words(10 * j, 10), x: 72, y: 100 - 12 * j }))
+    const last: Run = { s: 'we have and', x: 72, y: 64 }
+    const f1: Run = { s: 'zc=lam+2s-i(1-2s)qQ', x: 72, y: 744 }, f2: Run = { s: 'and s1l2.', x: 72, y: 726 }
+    const { file, stats } = await made({
+      pages: [{ runs: [...p1, last] }, { runs: [f1, f2] }],
+      marks: [['0s', 1, 72, 100], ['0e', 2, endOf(f2), 726], ['p0.1a', 2, 72, 744], ['p0.1b', 2, endOf(f1), 744], ['p0.3a', 2, 92, 726], ['p0.3b', 2, 112, 726]],
+      units: [unit('para', [text(`${words(0, 30)} we have and `), ph('$z_0c_{z_0}=\\lambda+2s-i(1-2s)qQ$'), text(' and '), ph('$s_1l_2$'), text('.')])],
+    })
+    const row = phOf(file, 0, 1)
+    expect((row[3] ?? 0) & PH_FLAG.LOST).toBe(0)
+    expect(chunk(row.slice(4), 6).map(s => [s[0], s[2]])).toEqual([[2, 744]])
+    // the unit's lines: its three on page 1, the formula's and its last on page 2
+    expect(chunk(rowsOf(file, 0, 'lines'), 8).map(l => [l[0], l[3]])).toEqual([[1, 100], [1, 88], [1, 76], [1, 64], [2, 744], [2, 726]])
+    expect(stats.ph.lost).toBe(0)
+  })
+
+  it("a line's baseline is the one its unit's own mark and its words' glyphs stand on, though the glyphs glued after its words outnumber them: an inline `cases` (2610.21026v1's u160)", async () => {
+    const l1: Run = { s: words(0, 10), x: 72, y: 700 }, l2: Run = { s: 'where w=', x: 72, y: 680 }
+    const r1: Run = { s: '1 under assumption 3', x: 120, y: 686.4 }, r2: Run = { s: '0 under assumption 4', x: 120, y: 673.3 }
+    const { file, stats } = await made({
+      pages: [{ runs: [l1, l2, r1, r2] }],
+      marks: [['0s', 1, 72, 700], ['0e', 1, endOf(r1), 680], ['p0.1a', 1, 107, 680], ['p0.1b', 1, endOf(r1) - 0.5, 680]],
+      units: [unit('theorem', [text(`${words(0, 10)} where `), ph('$w=\\begin{cases}1 & \\text{under assumption 3}\\\\0 & \\text{under assumption 4}\\end{cases}$')])],
+    })
+    const row = phOf(file, 0, 1)
+    expect((row[3] ?? 0) & PH_FLAG.LOST).toBe(0)
+    // one segment, both rows, on the line both its points stand on, at the line's own baseline
+    const segs = chunk(row.slice(4), 6)
+    expect(segs).toHaveLength(1)
+    expect(segs[0]?.[2]).toBe(680)
+    expect(chunk(rowsOf(file, 0, 'lines'), 8).map(l => l[3])).toEqual([700, 680])
+    expect(stats.ph.lost).toBe(0)
+  })
+
+  it("a part of a piece TeX broke over lines that no line's baseline holds goes to the line its own point stands on, its ink in that line's band: a binomial whose parentheses hang from 8 pt over the line, set whole at the next page's head (2610.21376v1's u117)", async () => {
+    const p1 = Array.from({ length: 3 }, (_, j): Run => ({ s: words(10 * j, 10), x: 72, y: 100 - 12 * j }))
+    const last: Run = { s: 'and there are', x: 72, y: 64 }
+    const binom: Run[] = [{ s: '(', x: 72, y: 718.1, font: 'F3' }, { s: 'm+n', x: 76.6, y: 714.5, size: 7 }, { s: 'm', x: 80, y: 706.6, size: 7 }, { s: ')', x: 90, y: 718.1, font: 'F3' }]
+    const p2: Run[] = [...binom, { s: 'partitions applying the theorem', x: 100, y: 710 }, { s: words(30, 8), x: 72, y: 698 }]
+    const { file, stats } = await made({
+      // (the column bodies bracketed, as TeX ships them: a piece broken over a page owns what stands between its points in them)
+      pages: [{ runs: [...p1, last], points: { bs1: [0, 0], be1: [4, 0] } }, { runs: p2, points: { bs2: [0, 0], be2: [p2.length, 0] } }],
+      marks: [['0s', 1, 72, 100], ['0e', 2, endOf(p2[5] as Run), 698], ['p0.1a', 1, endOf(last) + 1, 64], ['p0.1b', 2, 96, 710]],
+      units: [unit('para', [text(`${words(0, 30)} and there are `), ph('$\\binom{m+n}{m}$'), text(` partitions applying the theorem ${words(30, 8)}`)])],
+    })
+    const row = phOf(file, 0, 1)
+    expect((row[3] ?? 0) & PH_FLAG.LOST).toBe(0)
+    // its one part on page 2's first line, from the parenthesis to the parenthesis
+    const segs = chunk(row.slice(4), 6)
+    expect(segs.map(s => [s[0], s[1], s[2]])).toEqual([[2, 72, 710]])
+    expect(stats.ph.lost).toBe(0)
+  })
 })

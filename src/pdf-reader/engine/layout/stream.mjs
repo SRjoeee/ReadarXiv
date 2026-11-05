@@ -629,6 +629,10 @@ export function ownedOf(pages, { follows, dropped = [], erasure = false, heads =
     if (e.how === HOW['open, the text after it not found']) e = pastOther() ?? e
     if (e.how === HOW['open, the next mark on another page'] || e.how === HOW['open, the text after it not found']) e = pastColumn() ?? e
     if (e.how === HOW['open, the next mark on another page']) e = footEnd() ?? e
+    // (a reading past a draft image frame that the text after it does not end — it runs to its unit's next mark, its column's
+    // end —: what TeX set between is not told, a figure after a heading's last piece (2010.11929v2's wrapfigure after
+    // `\subsection{Inspecting \oursfull{}}`), nothing owned, as where the frame's mark stopped it before; FRAME)
+    if (e.how < OWNED && e.how !== HOW['open, to the text after it'] && e.boxes.some(([q, b]) => framed[q - 1]?.box[b])) e = none(HOW["open, the next mark not its unit's"])
     if (f.group?.length && e.how < OWNED) {
       e = { ...e, how: HOW['open, with the displays after it'] }
       for (const g of f.group) if (!where.has(g)) out.set(g, none(HOW['in the display before it']))

@@ -209,6 +209,10 @@ describe('ownedOf', () => {
     // (a piece whose own ink holds a frame and glyphs: the glyphs its own, the frame's name not)
     const mixed = pageOf(['see ', { at: 'p0.1a' }, 'logo:', ...frame(220), { at: 'p0.1b' }, ' here', { at: '0e' }])
     expect(owned([mixed], { 'p0.1a': closed })['p0.1a']).toEqual(['logo:', 4])
+    // (a reading the text after it does not end, past a frame: a figure TeX set after a heading's last piece, its next mark a
+    // later unit's start; nothing owned, as where the frame's mark stopped it, 2010.11929v2's wrapfigure)
+    const heading = pageOf(['Inspecting ', { at: 'p0.1a' }, 'Vision Transformer', ...frame(300), '\n', { at: '1s' }, 'Figure 5: caption', { at: '1e' }])
+    expect(owned([heading], { 'p0.1a': open('', ['0e']) })['p0.1a']).toEqual("open, the next mark not its unit's")
     // (rules alone before the text after it that are no frame's: the maker's reading leaves them, LOST as before)
     const ruled = pageOf(['as ', { at: 'p0.1a' }, { rule: [200, 699.8, 210, 700.2] }, ' text after', { at: '0e' }])
     expect(owned([ruled], { 'p0.1a': open('textafte') })['p0.1a']).toEqual('open, nothing before the text after it')
