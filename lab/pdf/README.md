@@ -441,6 +441,10 @@ file among them, is `55c7105f`'s byte for byte. 4 new objects (two base pages an
 The pack of where a unit is searched (`fa02986a`, LAYOUT 35: the maker anchors a unit where the head's names say its marks
 stand) is `1dbec0a7`'s with each output's `layout.json` and `base.json` made again the same way, by that branch's engine: every
 base page byte for byte the one before, every layout file the one before but for its version. 16 new objects.
+The pack of the lost class's front end and marks (`39af5937`, LAYOUT 36: an end mark at no word reaching back, a carried word on
+either side of a mark's token, the text after a piece through a macro of no ink) is `fa02986a`'s with each output's `layout.json`
+and `base.json` made again the same way: every base page byte for byte the one before, every layout file the one before but for its
+version. 14 new objects.
 Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
 The wrap reads each base's units from its paper's source, so the pack holds that too: `sources/<paper>/source.gz`, one a paper
 (`gate-pack.mjs make --sources=<dir of <paper>/source.gz>`, `data/corpus` by default; a make with a base of ours and no source
