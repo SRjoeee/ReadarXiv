@@ -4,6 +4,7 @@ Reader-facing changes, newest first. The design is `docs/DESIGN.md`.
 
 ## Unreleased
 
+- The PDF reader shows the first translated pages of many papers sooner: it no longer waits for text that TeX set further on in the paper, such as the authors' affiliations, a table or a note, before laying out the pages that come first.
 - In the PDF reader, the data each translated page is laid out from is about a quarter smaller, so less is downloaded for every page you read.
 - The PDF reader shows the first translated page a little sooner. A page still being translated shows the English page exactly as the left side drew it, instead of drawing it a second time, and the highlight prepares its sentences only once you point at a page with it turned on (nothing at all while it is off). While a page waits for its translation, its English text is selected, searched and its links followed on the left side.
 - Fixed: in the PDF reader, a paragraph that opens with a formula right after a run-in heading that holds one ("What 𝒱 is, …" then "𝒱(q) is …") is translated. It had stayed in English.

@@ -438,6 +438,9 @@ engine has made other bytes for them since, and the pack was not made again (its
 pack's; d5eda1e09 alone makes `next`'s). The pack of that mark order (`1dbec0a7`, LAYOUT 34 still) is `55c7105f`'s with those
 three outputs' `base.pdf` and `base.json` made again by `next` bbb8f3c72's engine, the same way; every other file, every layout
 file among them, is `55c7105f`'s byte for byte. 4 new objects (two base pages and their records).
+The pack of where a unit is searched (`fa02986a`, LAYOUT 35: the maker anchors a unit where the head's names say its marks
+stand) is `1dbec0a7`'s with each output's `layout.json` and `base.json` made again the same way, by that branch's engine: every
+base page byte for byte the one before, every layout file the one before but for its version. 16 new objects.
 Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
 The wrap reads each base's units from its paper's source, so the pack holds that too: `sources/<paper>/source.gz`, one a paper
 (`gate-pack.mjs make --sources=<dir of <paper>/source.gz>`, `data/corpus` by default; a make with a base of ours and no source
