@@ -281,8 +281,9 @@ const POINT = /^axt-([A-Za-z0-9.-]{1,64})$/
  *  meets it among their points; the ledger reads it (layout/ledger.mjs) */
 export const PARA_POINT = /^q\d+$/
 /** a paragraph's end (marks.mjs POINTS_TEX: `qe<n><code>` at LaTeX's para/end, the code TeX's alignment of the paragraph, c, l, r
- *  or j as readAlign's): kept apart (`paraEnds`, each with `point`, the count of the page's points before it, its place among
- *  them where both stand at one glyph), read by the ink units' alignment alone (layout/ink-units.mjs alignOf) */
+ *  or j as readAlign's): kept apart (`paraEnds`, each with `point` and `para`, the counts of the page's points and paragraph
+ *  starts before it, its place among them where they stand at one glyph), read by the ink units' alignment alone
+ *  (layout/ink-units.mjs alignOf) */
 export const PARA_END = /^qe\d+[cjlr]$/
 
 /**
@@ -904,7 +905,7 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
         // (a region's points apart too, `regions`: a line's kind, never a mark's; a column body's bracket (bs, be) is read by them as
         // well, where a code paragraph TeX broke over a page or a column ends and goes on)
         else if (m && REGION_POINT.test(m[1])) regionPoints.push({ name: m[1], glyph: glyphs.length })
-        else if (m && PARA_END.test(m[1])) paraEnds.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4, point: points.length })
+        else if (m && PARA_END.test(m[1])) paraEnds.push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4, point: points.length, para: paras.length })
         else if (m) {
           (PARA_POINT.test(m[1]) ? paras : points).push({ name: m[1], glyph: glyphs.length, box: boxes.length / 4 })
           if (BODY_BRACKET.test(m[1])) regionPoints.push({ name: m[1], glyph: glyphs.length })

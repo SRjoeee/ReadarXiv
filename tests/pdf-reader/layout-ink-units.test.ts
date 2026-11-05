@@ -22,11 +22,11 @@ function run(text: string, x: number, y: number, { font = 'CMR10', size = 10, fi
 type Part = { glyphs: G[]; owner?: string | null } | { point: string } | { para: number } | { end: string }
 function page(...parts: Part[]) {
   const glyphs: G[] = [], own: (string | null)[] = [], points: { name: string; glyph: number; box: number }[] = [], paras: { name: string; glyph: number; box: number }[] = []
-  const paraEnds: { name: string; glyph: number; box: number; point: number }[] = []
+  const paraEnds: { name: string; glyph: number; box: number; point: number; para: number }[] = []
   for (const p of parts) {
     if ('point' in p) points.push({ name: p.point, glyph: glyphs.length, box: 0 })
     else if ('para' in p) paras.push({ name: `q${p.para}`, glyph: glyphs.length, box: 0 })
-    else if ('end' in p) paraEnds.push({ name: p.end, glyph: glyphs.length, box: 0, point: points.length })
+    else if ('end' in p) paraEnds.push({ name: p.end, glyph: glyphs.length, box: 0, point: points.length, para: paras.length })
     else for (const g of p.glyphs) { glyphs.push(g); own.push(p.owner ?? null) }
   }
   return { page: { glyphs, boxes: [], points, paras, paraEnds, view: [0, 0, 612, 792] }, own }
@@ -70,6 +70,10 @@ describe("an ink unit's alignment, as TeX set the paragraph it is in (LAYOUT 36)
     // (a figure's entry on its page's middle by chance: centred by the reader's reading of its lines, were it told nothing)
     const pg = page({ point: 'bs1' }, { point: 'n1.listfigure.e' }, { glyphs: run('5.2 Performance of the model over the band . . . 67', 155, 700, { space: 3.33 }) }, { point: 'be1' })
     expect(unitsOf([pg]).ink.map(u => [u.kind, u.rows.unit[3]])).toEqual([['inkcontents', 32]])
+  })
+  it("is no unit's paragraph end where a paragraph begun after the unit ends with no glyph of its own (a picture centred alone)", () => {
+    const pg = page({ point: 'bs1' }, { para: 1 }, line('A justified paragraph that ends here', 700), { para: 2 }, { end: 'qe2c' }, { point: 'be1' })
+    expect(flagsOf(pg)).toEqual([['A justified paragraph that ends here', 0]])
   })
   it('a unit of two paragraphs set two ways is not centred; none where no end follows in its body', () => {
     const two = page({ point: 'bs1' }, { para: 1 }, line('A centred line', 700, 150), { end: 'qe1c' }, line('then flush left words', 688), { end: 'qe2l' }, { point: 'be1' })

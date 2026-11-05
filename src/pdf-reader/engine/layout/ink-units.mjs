@@ -539,7 +539,7 @@ const endCode = name => name.at(-1)
 /**
  * An ink unit's alignment as TeX set its paragraph (rule 6), from the paragraphs' ends of our compile (ink.mjs `paraEnds`,
  * marks.mjs POINTS_TEX `qe<n><code>`): c, l, r or j, or null where no paragraph tells it. The end right after the unit's last
- * glyph is its paragraph's end: the unit's last line is its paragraph's last, and its lines are set as TeX set that paragraph
+ * glyph, no paragraph begun and no other point between them, is its paragraph's end: the unit's last line is its paragraph's last, and its lines are set as TeX set that paragraph
  * (with every end inside the unit the same code; ends of two codes, a unit of paragraphs set two ways: j, not centred). An end
  * further on, the first after its last glyph in its body or its float — past the column's or the page's end to the next body,
  * a float in between passed over: a paragraph TeX broke across them —, is the end of the paragraph the unit's last line is
@@ -563,12 +563,17 @@ function alignOf(lines, pages, directOnly = false) {
     const out = [], ends = P.paraEnds ?? [], points = P.points ?? []
     let e = 0
     for (let q = 0; q <= points.length; q++) {
-      for (; e < ends.length && (ends[e].point ?? points.length) <= q; e++) out.push({ glyph: ends[e].glyph, end: endCode(ends[e].name) })
+      for (; e < ends.length && (ends[e].point ?? points.length) <= q; e++) out.push({ glyph: ends[e].glyph, end: endCode(ends[e].name), point: ends[e].point, para: ends[e].para })
       const m = q < points.length ? BRACKET.exec(points[q].name) : null
       if (m) out.push({ glyph: points[q].glyph, bracket: m[1] + m[2], n: m[3] })
     }
     return out
   }
+  // (an end right after the unit's last glyph, with no paragraph begun and no other point between them: the end of a paragraph
+  // begun after the unit with no glyph of its own, or one past another unit's end mark, a float's or a body's bracket, is no end
+  // of the unit's paragraph)
+  const L = pages[last[0] - 1]
+  const nothingBetween = x => (x.para === undefined || x.para === (L?.paras ?? []).filter(q => q.glyph <= last[1]).length) && (x.point === undefined || x.point === (L?.points ?? []).filter(q => q.glyph <= last[1]).length)
   const inside = new Set()
   for (let p = first[0]; p <= last[0]; p++) for (const x of marksOn(p)) if (x.end && (p > first[0] || x.glyph > first[1]) && (p < last[0] || x.glyph <= last[1])) inside.add(x.end)
   let told = null, direct = false, float = null, between = false
@@ -577,7 +582,7 @@ function alignOf(lines, pages, directOnly = false) {
       if (p === last[0] && x.glyph <= last[1]) continue
       if (between) { if (x.bracket === 'bs') between = false; continue }
       if (float !== null) { if (x.bracket === 'fe' && x.n === float) float = null; continue }
-      if (x.end) { told = x.end; direct = p === last[0] && x.glyph === last[1] + 1; break walk }
+      if (x.end) { told = x.end; direct = p === last[0] && x.glyph === last[1] + 1 && nothingBetween(x); break walk }
       if (x.bracket === 'be') between = true
       else if (x.bracket === 'fs') float = x.n
       else break walk
