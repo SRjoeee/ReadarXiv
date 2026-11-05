@@ -2059,8 +2059,9 @@ export async function makerOf({ units, marks, base, OPS, paper, pdfjs, text = nu
     })
     const isCentred = told === undefined ? centred && short : told === 'c' || (told === 'j' && centred && inset)
     // (flush left or flush right only as TeX told it, never read off arXiv's lines: a ragged paragraph's lines can all reach
-    // near its edge, and a justified one's can stop short of it; a unit TeX does not tell keeps neither)
-    const flags = (u.title ? UNIT_FLAG.TITLE : 0) | (u.front ? UNIT_FLAG.FRONT : 0) | (isCentred ? UNIT_FLAG.CENTRED : 0) | (told === 'l' ? UNIT_FLAG.FLUSH_LEFT : 0) | (told === 'r' ? UNIT_FLAG.FLUSH_RIGHT : 0)
+    // near its edge, and a justified one's can stop short of it; a unit TeX does not tell keeps neither. Every other unit not
+    // centred is JUSTIFIED, TeX's word or this reading's, so that the reader never reads a source unit's lines itself)
+    const flags = (u.title ? UNIT_FLAG.TITLE : 0) | (u.front ? UNIT_FLAG.FRONT : 0) | (isCentred ? UNIT_FLAG.CENTRED : told === 'l' ? UNIT_FLAG.FLUSH_LEFT : told === 'r' ? UNIT_FLAG.FLUSH_RIGHT : UNIT_FLAG.JUSTIFIED)
     const depth = Number.isInteger(u.depth) && u.depth >= -1 && u.depth <= 5 ? u.depth : 9
     one.out = { unit: [i, KIND.get(u.kind), depth, flags, u.pieces.length], lines, frames, erase, splits: fs.length > 1 }
   }
