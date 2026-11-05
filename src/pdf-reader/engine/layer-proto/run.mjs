@@ -59,7 +59,7 @@ import { unitHiding } from './hide.mjs'
 import { cropSourceOff, labelGroup, nameGroup, textGroup, visibilityOf } from './visibility.mjs'
 import * as LK from './links.mjs'
 import * as TL from './textlayer.mjs'
-import { locatedWhole, shortSkipsOf, texParts, texRects } from './tex.mjs'
+import { labelBoxChars, locatedWhole, shortSkipsOf, texParts, texRects } from './tex.mjs'
 import { shown as shownPiece, trPiecesOf } from '../layer/pieces.mjs'
 import { fitFigureSet, sameAsSource } from './figure-fit.mjs'
 import { levelRun } from './figure-rows.mjs'
@@ -1583,8 +1583,9 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
   }
   /** whether something of the page stands on a shared row (need.mjs rowLeadOf: `row`, the last row of the unit before) between
    *  that unit's end there and `x`, where the next unit's text begins: a character of the page, which stays where it is (a
-   *  label kept as the original's, a name), so that the next unit is not laid from that unit's end (layout2's `start`) */
-  const keptBetween = (row, x) => (chars2[row.page - 1] ?? []).some(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 > row.x1 + 0.1 && (c.x0 + c.x1) / 2 < x - 0.1 && Math.abs(c.yb - row.baseline) < 0.4 * row.size)
+   *  label kept as the original's, a name), so that the next unit is not laid from that unit's end (layout2's `start`); the glyphs
+   *  `own` keys (L2.charKey) aside, which go with the next unit (its label carried, ownLabelOnRow) */
+  const keptBetween = (row, x, own = null) => (chars2[row.page - 1] ?? []).some(c => /\S/.test(c.ch) && (c.x0 + c.x1) / 2 > row.x1 + 0.1 && (c.x0 + c.x1) / 2 < x - 0.1 && Math.abs(c.yb - row.baseline) < 0.4 * row.size && !own?.has(L2.charKey({ page: row.page, item: c.item, k: c.k })))
   /** a unit's shared row (`followers`: the next unit's first row continues its last) where something stays between the two
    *  (keptBetween), read before the next unit is laid: up to where the file begins that unit's first line, or ends its label
    *  on the row where the file holds one (the label stays the original's, and its text begins after it); else null */
@@ -1595,7 +1596,31 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     let x = fu.lines[1]
     const lb = fu.labels
     if (lb.length >= 7 && lb[1] === row.page && Math.abs(lb[3] - row.baseline) < 0.4 * row.size) x = Math.max(x, lb[4] + 0.2)
-    return keptBetween(row, x) ? row : null
+    if (!keptBetween(row, x)) return null
+    // (only the next unit's own label there, which goes with it (ownLabelOnRow): this unit's text still ends where TeX's did, and
+    // the next unit is laid from that end all the same)
+    return ownLabelOnRow(fid, row, x) ? { ...row, byLabel: true } : row
+  }
+  /**
+   * The label TeX set for unit `id` at the start of its first row where that row is a shared line (`row`, need.mjs rowLeadOf: the
+   * unit before ends on it), when it is the only thing that stays between the two there: the file's label row of the unit (its
+   * glyphs before the unit's start mark, make.mjs labelOf, whatever command set them: an inline list's item, enumitem's
+   * `enumerate*` or paralist's `inparaenum`, an `\item[(1)]` by hand), on the row's baseline, after the unit before's end, and
+   * nothing else of the page between that end and the unit's first word (`x`, or the label's end where that is further) but the
+   * label's own glyphs (keptBetween): those the unit carries (`carried`, its prep's label), or, read before the unit is (keptAfter),
+   * those of the file's label box, which are what it will carry (tex.mjs labelBoxChars). A mark between the label and the word
+   * (another unit's, or no unit's) keeps the label and the unit where TeX set them: carried, the two went to the row's start and
+   * left the mark there alone. Its own group the layer hides (`relabels`). It goes
+   * with its unit: drawn at the shared line's start, its ink copied, and its text after it. Kept as the original's where TeX set
+   * it, it held the unit's text there, after the English words of the unit before, whatever the translation's length
+   * (2610.21085v1 p2's "(1)" to "(4)": a blank of several em after the paragraph's first sentence, "(2)" and "(3)" alone at the
+   * column's right edge, "(4)" mid-line). The label row [kind, page, x0, baseline, x1, top, bottom], or null
+   */
+  const ownLabelOnRow = (id, row, x, carried = null) => {
+    const lb = tex.index.unit(id)?.labels
+    if (!lb || lb.length < 7 || !relabels(id) || lb[1] !== row.page || Math.abs(lb[3] - row.baseline) >= 0.4 * row.size || lb[2] < row.x1 - 0.5) return null
+    const own = new Set((carried ?? labelBoxChars(lb, chars2[row.page - 1])).map(L2.charKey))
+    return keptBetween(row, Math.max(x, lb[4] + 0.2), own) ? null : lb
   }
   /** the unit's edges (P.halfLead; layer2.mjs footFloorAt): whether its first and last lines share their baseline with ink
    *  that stays where it is, a label kept as the original's or a character of the page beside the line's own in its column (a
@@ -2113,11 +2138,25 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // the first line stands on that unit's baseline (`startY`, slotsAt), so that the row is one line and not two a few points
     // apart (2608.16117 p39: unit 115's last line 7.2 pt over the row, unit 119 set from its end); on TeX's, it stays there
     const row = candOf.get(p.id)?.lead
+    // (its own label on the row goes with it, drawn at the start (ownLabelOnRow): its glyphs are the door's reading of the file's
+    // label row, on the row)
+    let rowLabel = null, onLeadOf = null
     if (row && p.blocks[0] && !p.blocks[0].centred && p.blocks[0].page === row.page && Math.abs(p.blocks[0].B[0] - row.baseline) < 0.05) {
       const b = p.blocks[0], a = byId.get(row.id), share = a && !a.refused ? a.share ?? null : null, x = b.x0 + b.indent
-      if (share && !share.kept && !keptBetween(row, x)) {
-        b.start = share.end !== null ? share.ink + Math.max(0, x - row.x1) : row.x0
+      const lb = prep.label?.chars?.length && !prep.label.drawn && prep.label.chars.every(c => c.page === row.page && Math.abs(c.yb - row.baseline) < 0.4 * row.size) ? ownLabelOnRow(p.id, row, x, prep.label.chars) : null
+      if (share && !share.kept && (lb || !keptBetween(row, x))) {
+        if (lb) { rowLabel = { lb, baseline: row.baseline }; b.indent = 0 }
+        b.start = share.end !== null ? share.ink + Math.max(0, (lb ? lb[2] : x) - row.x1) : row.x0
         if (share.end !== null && Math.abs(share.at - b.B[0]) >= 0.05) b.startY = share.at
+        // (where that unit's translation ended above the row, its last line the shared one (shareOf's `above`): this unit's lines
+        // flow on from it, layer2.mjs slotsAt; where none of its text fits after that line's end, its first line stands a pitch
+        // under it, unless its last then stands lower than laid on TeX's row: as before, below)
+        // (and where that unit's text on the row stands above TeX's baseline, within an em of it (shareOf's `at`): its lines flow on
+        // from that line too, not from TeX's row under it, a pitch and the lines' distance after their first. 2610.21098v1 p2's
+        // item (3): its first line on item (2)'s last, 9.5 pt over the row, its second 26.4 pt under it at a pitch of 16.9.
+        // `onLeadOf`: where it is laid as before, below)
+        if (share.above) { b.onLead = true; onLeadOf = { start: row.x0, startY: undefined } }
+        else if (b.startY !== undefined && b.startY > b.B[0] + 0.05) { b.onLead = true; onLeadOf = { start: b.start, startY: b.startY } }
         // (painted on the row's page after that unit, whose erasing of the row covers where it starts: paintLed)
         p.ledBy = row.id
       }
@@ -2150,6 +2189,19 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // (from here to the unit's end nothing is awaited: its work is charged to its first page in `arrive`)
     workMarks.set(p, markWork())
     L2.measureTokens(tokens)
+    // (its label on a shared row carried with it, ownLabelOnRow: its ink copied as the first line's start, as a numbered heading's
+    // number is, the original's space after it to its text kept, and erased where it stood; set by the row's baseline, so that a
+    // raised mark stays raised: 2608.06701v1 p5's paragraph footnotes, each mark set on the line after the note before)
+    if (rowLabel) {
+      const cs = prep.label.chars, start = prep.firstX0 !== undefined && prep.firstX0 > prep.label.x1 ? prep.firstX0 : prep.label.x1 + 0.25 * s
+      const x0 = Math.min(...cs.map(c => c.x0)) - 0.4, x1 = Math.max(Math.max(...cs.map(c => c.x1)) + 0.4, start - 0.4)
+      const crop = { mode: 'crop', page: p.blocks[0].page, crop: [x0, Math.min(...cs.map(c => c.yb - 0.26 * c.size)), x1, Math.max(...cs.map(c => c.yb + 0.8 * c.size))], baseline: rowLabel.baseline, text: prep.label.text }
+      // (and its first word with it: no line ends after the label alone, 2610.21098v1 p2's "(2)" at the end of the line before)
+      if (tokens[0] && !tokens[0].space) tokens[0].glue = true
+      tokens = Object.assign([{ crop, cw: x1 - x0, glue: false, w100: 0, ownLabel: true }, ...tokens], { base: tokens.base })
+      prep.label = { ...prep.label, drawn: prep.label.text }
+      for (const c of cs) prep.cat?.set(L2.charKey(c), 'acc')
+    }
     if (carried && p.blocks[0]?.centred) {
       const cs = prep.label.chars, b0 = p.blocks[0], start = prep.firstX0 !== undefined && prep.firstX0 > prep.label.x1 ? prep.firstX0 : prep.label.x1 + 0.25 * s
       const x0 = Math.min(...cs.map(c => c.x0)) - 0.4, x1 = Math.max(Math.max(...cs.map(c => c.x1)) + 0.4, start - 0.4)
@@ -2176,6 +2228,13 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // break before each later page at its share of the paragraph's height, at a line end (E3c by height, layoutCut), kept
     // where it fits: its further steps and passes then lay the tokens it holds)
     ;({ layout: p.layout, tokens: p.tokens } = L2.layoutCut(tokens, p.blocks, s, p.P))
+    // (laid on from the line before, none of it there (its first line a pitch under that line): kept so only where its last line
+    // stands no lower than laid from TeX's shared row as before (`onLead`'s corner); else laid there, as before)
+    if (onLeadOf && p.layout.lines[0] && p.layout.lines[0].baseline < p.blocks[0].startY - 0.05) {
+      const b0 = p.blocks[0], before = [{ ...b0, start: onLeadOf.start, startY: onLeadOf.startY, onLead: undefined }, ...p.blocks.slice(1)]
+      const was = L2.layoutCut(tokens, before, s, p.P), lastOf = l => l.layout.lines.at(-1)?.baseline ?? Infinity
+      if (lastOf(was) > lastOf({ layout: p.layout }) + 0.05) { p.blocks = before; ({ layout: p.layout, tokens: p.tokens } = was); p.onLeadKept = true } else p.onLeadBelow = true
+    }
     // (clipped, the fit's walk at p.P over the unit's tokens and blocks: layoutCut's first, which fitFurther goes on from)
     const walked = { layout: p.layout, blocks: p.blocks, P: p.P }
     // a numbered heading set in fewer lines than the original's: laid again on the original's last lines with its number as
@@ -2222,7 +2281,7 @@ export async function openProto({ doc, geometry, units: given, expect = null, gr
     // that unit is laid from, and which its page's fill keeps; its last run's, where it is laid in runs)
     // (`kept`: something stays between the two on the row, keptAfter, and this unit's text there ended where TeX's did: the next
     // unit's first line stays where TeX set it, whatever its own reading of the row)
-    if (followers.has(p.id)) { const r = candOf.get(followers.get(p.id))?.lead; p.share = r ? L2.shareOf(p.layout, p.blocks, r) : null; if (p.share && kept) p.share.kept = true; if (p.runs) p.runs.at(-1).share = p.share }
+    if (followers.has(p.id)) { const r = candOf.get(followers.get(p.id))?.lead; p.share = r ? L2.shareOf(p.layout, p.blocks, r) : null; if (p.share && kept && !kept.byLabel) p.share.kept = true; if (p.runs) p.runs.at(-1).share = p.share }
     const t4 = lap()
     p.layout.extents = new Map([...prep.extents].map(([r, e]) => [r.join(), e]))
     if (p.blocks[0] && (prep.label || prep.firstX0 !== undefined)) {
