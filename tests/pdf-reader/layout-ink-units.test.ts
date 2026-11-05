@@ -324,9 +324,9 @@ describe('inkUnitsOf', () => {
     expect(unitsOf([pg]).ink).toEqual([])
   })
 
-  // (an affiliation no source unit owns stays an orphan's ink unit, always translated: rule 8 reads an author unit's words alone.
-  // The names toggle is the whole author block since 2026-10-30, so such a line is the maker's to class as names, with a
-  // PIPELINE of its own: not yet)
+  // (an affiliation that spells no source unit stays an orphan's ink unit, always translated: rule 8 reads an author unit's words
+  // alone. One that echoes an affiliation unit the maker lays nowhere is of the names toggle, the whole author block since
+  // 2026-10-30, PIPELINE 73: the label test below)
   it("gives a block of an author unit's names the names toggle's kind, and leaves its affiliation the always translated", () => {
     const authors = [{ kind: 'author', pieces: [{ t: 'text', s: 'Jose Agustin Lozano Torres and Axel de la Macorra' }] }]
     const pg = page({ point: 'bs1' }, { para: 1 }, { glyphs: run('Jose Agustin Lozano Torres and Axel de la Macorra', 100, 740) }, { para: 2 }, { glyphs: run('Instituto de Fisica, Universidad Nacional', 100, 720) }, { point: 'be1' })
@@ -360,6 +360,63 @@ describe('inkUnitsOf', () => {
     const bare = { glyphs: pages.map(p => p.own.slice()), boxes: [[null, null] as (string | null)[]] }
     claimInk(bare, ink)
     expect(bare.boxes[0]).toEqual([null, null])
+  })
+
+  // (TeX's \accent sets the accent, moves back over it and sets the letter: our page's glyphs in their stream order, as the
+  // wrap reads them. Before, the text was the glyphs read left to right, accent and all: "F´ısica", "Cande`s", "PE´REZ", sent so
+  // to the translator, 13 ink units of the 87-paper sweep)
+  it('joins a spacing accent to the letter TeX set it over, and leaves an apostrophe, a quote and another font alone', () => {
+    // (a unit's text as the front end holds a source's, its UTF-8 bytes in a Latin-1 view: read back as the translator gets it)
+    const read = (u: Parameters<typeof textOf>[0]) => new TextDecoder().decode(Uint8Array.from(textOf(u), c => c.charCodeAt(0)))
+    const one = (glyphs: G[]) => unitsOf([page({ point: 'bs1' }, { para: 1 }, { glyphs }, { point: 'be1' })]).ink.map(read)
+    // (2610.20716v1 p1: the acute ends one show, its dotless ı moved back under it; read Física, the dotted letter's)
+    const acute = { ...run('´', 169, 700)[0]!, top: 707 }
+    expect(one([...run('Instituto de F', 100, 700), acute, { ...run('ı', 170, 700)[0]!, x1: 172.8, ix1: 172.8 }, ...run('sica', 172.8, 700)])).toEqual(['Instituto de Física'])
+    // (2610.35877v1: the grave stands right of its e's start, so the left-to-right order put it after the letter, "Cande`s")
+    expect(one([...run('Cand', 100, 700), { ...run('`', 121, 700)[0]!, x1: 125 }, { ...run('e', 120, 700)[0]!, x1: 124.4 }, ...run('s', 124.4, 700)])).toEqual(['Candès'])
+    // (2610.20285v1's running head: a capital's accent raised by the letter's height less the x-height)
+    expect(one([...run('J. P', 100, 700), { ...run('´', 121.5, 702)[0]!, x1: 126.5 }, { ...run('E', 120, 700)[0]!, x1: 126.8 }, ...run('REZ', 126.8, 700)])).toEqual(['J. PÉREZ'])
+    // (a quote that advances as any glyph does: on no letter; an accent over a letter of another font, a formula's, read left to
+    // right as before)
+    expect(one(run('`word´ and', 100, 700))).toEqual(['`word´ and'])
+    expect(one([...run('the ', 100, 700), { ...run('ˆ', 120.5, 700)[0]!, x1: 125.5 }, { ...run('a', 120, 700, { font: 'CMTI10' })[0]! }, ...run(' map', 125, 700)])).toEqual(['the aˆ map'])
+    // (the accent's glyph the unit's still: claimed and erased with its letter)
+    const { ink } = unitsOf([page({ point: 'bs1' }, { para: 1 }, { glyphs: [...run('M', 100, 700), { ...run('´', 104.8, 700)[0]!, x1: 109.5 }, { ...run('e', 105, 700)[0]!, x1: 109.3 }, ...run('xico', 109.3, 700)] }, { point: 'be1' })])
+    expect([read(ink[0]!), ink[0]!.glyphs.text.length]).toEqual(['México', 7])
+  })
+
+  // (an affiliation's number, a footnote's mark: what the class sets before the text, smaller and raised. The reader keeps it as
+  // the original's, its words breaking at the baseline (layer2.mjs charsOfUnit2, labelOf), and the text said it too: drawn twice,
+  // "¹ 1Instituto de F´ısica …" on 2610.20716v1 p1, 17 ink units of the sweep)
+  it("leaves its label out of its text, its glyphs its own still, and echoes the author block's place it then spells", () => {
+    const sup = (s: string, x: number, y = 704) => run(s, x, y, { font: 'CMR6', size: 6 })
+    const line = (...glyphs: G[][]) => page({ point: 'bs1' }, { para: 1 }, { glyphs: glyphs.flat() }, { point: 'be1' })
+    const place = line(sup('1', 100), run('Instituto de Fisica', 105.5, 700, { font: 'CMTI10' }))
+    const { ink } = unitsOf([place])
+    expect(ink.map(u => [u.kind, textOf(u), u.echo])).toEqual([['inkorphan', 'Instituto de Fisica', null]])
+    // (its glyphs claimed and erased with the line, its box the line's from the label on: the reader keeps it where it stands)
+    expect(ink[0]!.glyphs.text).toHaveLength(1 + 'InstitutodeFisica'.length)
+    expect(ink[0]!.rows.lines[1]).toBe(100)
+    // (a label set apart by a word's space: no space left before the text)
+    expect(unitsOf([line(sup('1', 100), run('Department', 108, 700))]).ink.map(textOf)).toEqual(['Department'])
+    // (the author block's place it spells, a source unit REVTeX prints from its own lists and the maker lays nowhere: its echo, of
+    // the names toggle as that unit is, the owner's ruling of 2026-10-30)
+    const units = [{ kind: 'author', pieces: [{ t: 'text', s: 'Jose Agustin Lozano Torres' }] }, { kind: 'affiliation', pieces: [{ t: 'text', s: 'Instituto de F\\\'isica' }] }]
+    const echoed = unitsOf([place], units).ink
+    expect(echoed.map(u => [u.kind, u.cls, u.echo, unitClass(u.kind)])).toEqual([['inknames', 'names', 1, 'names']])
+    // (not a label: a first glyph at the text's size ("4TH", small capitals on one baseline), a mark on the baseline, a raised
+    // letter, more than three glyphs, and a later line's)
+    expect(unitsOf([line(run('4', 100, 700), run('TH SCHOOL', 105, 700, { size: 8 }))]).ink.map(textOf)).toEqual(['4TH SCHOOL'])
+    expect(unitsOf([line(run('*Equal contribution', 100, 700))]).ink.map(textOf)).toEqual(['*Equal contribution'])
+    expect(unitsOf([line(sup('a', 100), run('Department', 105.5, 700))]).ink.map(textOf)).toEqual(['aDepartment'])
+    expect(unitsOf([line(sup('1234', 100), run('Department', 120.5, 700))]).ink.map(textOf)).toEqual(['1234Department'])
+    // (marks the reader keeps no label of, a digit and a comma: "⁷,⁸, and" between two authors' names, 2610.22197v1, which the
+    // reader erases as the unit's text and draws as the translation's)
+    expect(unitsOf([line(sup('7,8', 100), run(', and', 115, 700))]).ink.map(textOf)).toEqual(['7,8, and'])
+    // (a mark alone, of no digit: the reader keeps it as the marks a first line holds before its first word)
+    expect(unitsOf([line(sup('†', 100), run('Corresponding author', 105.5, 700))]).ink.map(textOf)).toEqual(['Corresponding author'])
+    const two = page({ point: 'bs1' }, { para: 1 }, { glyphs: run('Department of Physics', 100, 700) }, { glyphs: [...sup('2', 100, 692), ...run('Institute of Science', 105.5, 688)] }, { point: 'be1' })
+    expect(unitsOf([two]).ink.map(textOf)).toEqual(['Department of Physics 2Institute of Science'])
   })
 
   it("gives a rule inside one of its placeholders' extent to that placeholder: an inline fraction's bar, which its crop redraws (review of #502)", () => {

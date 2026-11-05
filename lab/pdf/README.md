@@ -450,6 +450,10 @@ The pack of the paragraphs' alignment (`915e5a0b`, LAYOUT 37: a point at each pa
 base page glyph for glyph and box for box the one before (647 pages, 2,505 paragraph ends set; the points are rendering intents,
 no ink), each layout file the one before but for its version and `UNIT_FLAG.JUSTIFIED` on the 9,699 source units it held of no
 alignment flag. 21 new objects.
+The pack of the ink units' accents and labels (`74c3d51e`, LAYOUT 39: an ink unit's text reads TeX's spacing accent with its
+letter and leaves its label out) is `3426c25e`'s with each output's `layout.json` and `base.json` made again the same way: every
+base page byte for byte the one before, every layout file the one before but for its version (the pack's layout files hold no ink
+unit). 14 new objects.
 Like the layout files, the base pages and their records are no instrument (`instrumentOfPack`).
 The wrap reads each base's units from its paper's source, so the pack holds that too: `sources/<paper>/source.gz`, one a paper
 (`gate-pack.mjs make --sources=<dir of <paper>/source.gz>`, `data/corpus` by default; a make with a base of ours and no source

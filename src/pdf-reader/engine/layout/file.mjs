@@ -211,8 +211,10 @@ export { LayoutRefusal } from './json.mjs'
  *  FRAME); an opening point with a float TeX set right after it read past the float (stream.mjs pastOther): a file of 37 holds
  *  those pieces LOST and their units the original's; and pages whose lines moved across their breaks drawn as a run, whole or
  *  not at all (carry.mjs lineCheckOf, the owner's approval of 2026-11-05: 2307.16209v1's pages 68 to 76, a file of 37 leaving
- *  71 to 76 the original's) */
-export const LAYOUT = '38'
+ *  71 to 76 the original's); 39 (with PIPELINE 74): an ink unit's text reads TeX's spacing accent with its letter and leaves its
+ *  label out, and one that then echoes the author block's place is `inknames` (layout/ink-units.mjs): a file of 38 holds such a
+ *  unit's row under its old kind and count of pieces */
+export const LAYOUT = '39'
 /** the file's schema: 2 holds `names`; 3 `lineskip`; 4 PH_FLAG.JOINED and PH_FLAG.OUTSIDE; 5 a found placeholder's fill, its
  *  row's last number where its glyphs are not black (4 + 6 × n + 1: 0xRRGGBB, or MIXED_FILL), and `colours`, each colour
  *  piece's run's fill [unit, k, 0xRRGGBB], a key the file holds only where it has a row; and, of a maker of 18 on, `unlaid`,
