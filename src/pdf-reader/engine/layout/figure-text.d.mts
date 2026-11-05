@@ -32,6 +32,9 @@ export interface FigureUnit {
   form: boolean
   /** why it is not drawn, or null */
   why: FigureWhy | null
+  /** the depth under its baseline of the nearest stroke under its text (painted before it, crossing its band only below its
+   *  baseline), PDF units; null where none is. The layer draws a translation over it where the translation stays above it */
+  under?: number | null
 }
 export type FigureWhy = 'crowded' | 'unicode' | 'shared' | 'page' | 'bounds'
 export declare const RUN_DY: number

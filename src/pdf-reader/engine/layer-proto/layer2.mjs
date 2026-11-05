@@ -78,6 +78,7 @@ import { NAME_KIND } from './units.mjs'
 import { NAME_ENGLISH } from '../layout/names.mjs'
 import { fillsByChar, UNKNOWN } from '../layout/fills.mjs'
 import { inRuns, unmapped } from './draw.mjs'
+import { CJK_FOOT } from './figure-fit.mjs'
 
 /** a source text piece's characters (mt.mjs utf8: its bytes, read latin1, as UTF-8), here so that the drawing loads no wire module:
  *  sourceScopes holds what it reads to plainSource's text, and reads none where the two differ */
@@ -4733,7 +4734,8 @@ export function svgOfFigure({ group, runs, x, y, angle, size, color = null }, to
 }
 /** a figure's translation in its runs by script, each in its face (`faceOf(cls)`): its CJK characters (the rules' class,
  *  cjkClassRe of `quotes`) in the target's CJK face, every other (a Latin word, a digit, a space) in the Latin face, as a unit's
- *  words are drawn (tokensOf2): the CJK faces served hold no Latin, so that one face for the whole text refused it whole */
+ *  words are drawn (tokensOf2): the CJK faces served hold no Latin, so that one face for the whole text refused it whole. Each
+ *  run { s, face, cls } */
 export function figureRuns(text, faceOf, quotes) {
   const cjkRe = cjkClassRe(quotes), runs = []
   for (const ch of text) {
@@ -4741,10 +4743,15 @@ export function figureRuns(text, faceOf, quotes) {
     if (last?.cls === cls) last.s += ch
     else runs.push({ cls, s: ch })
   }
-  return runs.map(r => ({ s: r.s, face: faceOf(r.cls) }))
+  return runs.map(r => ({ s: r.s, face: faceOf(r.cls), cls: r.cls }))
 }
 /** figureRuns' width at size 1 (PDF units per unit of size): each run's in its face */
 export const figureRunsWidth = runs => runs.reduce((a, r) => a + widthOf(r.s, r.face), 0)
+/** how far under its baseline figureRuns reach at size 1 (PDF units per unit of size), the deepest run's: each run's ink as the
+ *  canvas measures it in its face (ink100, read with its width), a CJK run's held to its face's em box (figure-fit.mjs CJK_FOOT,
+ *  its size correction applied: the frame its characters are designed in, which the layout holds CJK text to, as cellBands does;
+ *  Source Han Serif's full-width comma's tail reaches 0.21 em, past it) */
+export const figureRunsDepth = runs => runs.reduce((d, r) => Math.max(d, r.cls === 'cjk' ? Math.min(ink100(r.s, r.face).d / 100, CJK_FOOT * (r.face.size ?? 1)) : ink100(r.s, r.face).d / 100), 0)
 
 // ---- the scorer's view of a laid-out unit
 

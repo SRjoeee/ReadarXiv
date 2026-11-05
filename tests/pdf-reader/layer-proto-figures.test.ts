@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { indexLayout, LAYOUT_SCHEMA, parseLayout } from '@/pdf-reader/engine/layout/file.mjs'
-import { fitFigure, fitFigureSet, sameAsSource } from '@/pdf-reader/engine/layer-proto/figure-fit.mjs'
-import { checkFigures, FIGURE_ROW, FIGURE_ROW_10, figureRow } from '@/pdf-reader/engine/layer-proto/figure-rows.mjs'
+import { CJK_FOOT, fitFigure, fitFigureSet, sameAsSource } from '@/pdf-reader/engine/layer-proto/figure-fit.mjs'
+import { checkFigures, FIGURE_ROW, FIGURE_ROW_10, FIGURE_ROW_15, figureRow } from '@/pdf-reader/engine/layer-proto/figure-rows.mjs'
 import { openProto } from '@/pdf-reader/engine/layer-proto/run.mjs'
 import { withGroups } from './helpers/groups'
 
@@ -121,6 +121,32 @@ describe('the figures\' text drawn by the layer (run.mjs paintFigures)', () => {
     expect(run.figures[0]).toMatchObject({ drawn: false, why: 'untranslated' })
   })
 
+  it('over a stroke under its text, a translation is drawn where at its size it stays above the stroke: zh in its em box, not es\'s descenders (2610.21085v1\'s "jury," over the gridline at -60)', async () => {
+    // ("jury," at 6.449, 14.4 long, centred, 1.27 free after it; the gridline's top 0.812 under its baseline, 0.126 em. In the
+    // stubbed faces a CJK character is an em and any other half one, and a Latin run's ink reaches 0.2 of its size under the
+    // baseline, as a descender's does: both translations 3.5 em, drawn at 16.94 / 22.57 of the size, 4.84)
+    const jury = row({ length: 14.4, size: 6.449, anchor: 'centre', before: 8.78, after: 1.27, under: 0.812 })
+    const zh = await open({ hiding: hiding(true, [jury]) }, paper({ text: '\u966a\u5ba1\u56e2\uff0c', src: 'jury,' })) as Run
+    await zh.until(1)
+    // (its CJK run held to its em box: 0.12 of 4.84, 0.58 deep, above the stroke)
+    expect(zh.figures[0]).toMatchObject({ drawn: true, why: null, size: 4.84 })
+    expect(offOf(zh)).toContain('f0')
+    const es = await open({ hiding: hiding(true, [jury]) }, paper({ text: 'jurado,', src: 'jury,' })) as Run
+    await es.until(1)
+    // (its j's ink 0.2 of 4.84, 0.97 deep, reaches the stroke: the original's, crowded as the maker leaves a label other ink crosses)
+    expect(es.figures[0]).toMatchObject({ drawn: false, why: 'crowded', text: 'jurado,' })
+    expect(offOf(es)).not.toContain('f0')
+    expect(es.svgOf(1).querySelector('[data-f]')).toBeNull()
+    // (the legend's other entry, no stroke under it: es drawn)
+    const free = await open({ hiding: hiding(true, [row({ ...jury, under: null })]) }, paper({ text: 'jurado,', src: 'jury,' })) as Run
+    await free.until(1)
+    expect(free.figures[0]).toMatchObject({ drawn: true, why: null, size: 4.84 })
+    // (a stroke deeper than es's ink, 1.2 under: es drawn over it)
+    const deep = await open({ hiding: hiding(true, [row({ ...jury, under: 1.2 })]) }, paper({ text: 'jurado,', src: 'jury,' })) as Run
+    await deep.until(1)
+    expect(deep.figures[0]).toMatchObject({ drawn: true, why: null })
+  })
+
   it('a page of figures alone is ready once its figures are painted, not while a face they wait for loads', async () => {
     let release = () => {}
     const held = new Promise<void>(r => { release = r })
@@ -207,10 +233,22 @@ describe('the figure rows on the wire (figure-rows.mjs)', () => {
   const unit = { group: 'f7', page: 1, x: 10, y: 20, ux: 1, uy: 0, length: 30, size: 8, ascent: 0.88, descent: -0.2, anchor: 'start' as const, fill: 0, font: 'ArialMT' }
   const check = (rows: unknown[], format?: string) => checkFigures(rows, { a: 1, b: 1, views: [0, 0, 300, 300], unitCount: 10, ...(format ? { format } : {}) })
   it('a row carries its set and its room (BUNDLE 11), its room rounded down; a unit of no set is its own', () => {
-    expect(FIGURE_ROW).toBe(17)
-    expect(figureRow(3, { ...unit, set: 5, before: 1.23456, after: 7.8889 }).slice(14)).toEqual([5, 1.234, 7.888])
-    expect(figureRow(3, unit).slice(14)).toEqual([7, 0, 0])
+    expect(FIGURE_ROW).toBe(18)
+    expect(figureRow(3, { ...unit, set: 5, before: 1.23456, after: 7.8889 }).slice(14, 17)).toEqual([5, 1.234, 7.888])
+    expect(figureRow(3, unit).slice(14, 17)).toEqual([7, 0, 0])
     expect(check([figureRow(3, { ...unit, set: 5, before: 2, after: 4 })])[0]).toMatchObject({ group: 'f7', set: 'f5', before: 2, after: 4 })
+  })
+  it('a row carries the depth of the stroke under its text (BUNDLE 16), rounded down, -1 where none is; a part of 11\'s to 15\'s rows tells none', () => {
+    expect(figureRow(3, { ...unit, under: 0.81266 }).at(-1)).toBe(0.812)
+    expect(figureRow(3, unit).at(-1)).toBe(-1)
+    expect(figureRow(3, { ...unit, under: null }).at(-1)).toBe(-1)
+    expect(check([figureRow(3, { ...unit, under: 0.81266 })])[0]).toMatchObject({ under: 0.812 })
+    expect(check([figureRow(3, unit)])[0]).toMatchObject({ under: null })
+    const row15 = figureRow(3, { ...unit, set: 5 }).slice(0, FIGURE_ROW_15)
+    for (const format of ['11', '15']) expect(check([row15], format)[0]).toMatchObject({ set: 'f5', under: null })
+    expect(() => check([row15])).toThrow()
+    expect(() => check([figureRow(3, unit)], '15')).toThrow()
+    expect(() => check([[...row15, -0.5]])).toThrow()
   })
   it('a part of 10\'s rows is read each unit its own set with no room, and a row of 11\'s shape is no row of 10\'s', () => {
     expect(FIGURE_ROW_10).toBe(14)
@@ -242,7 +280,24 @@ describe('the fit rule (figure-fit.mjs)', () => {
   })
   it('fits a set at one factor, the least its drawn units need', () => {
     const set = fitFigureSet([{ f: f('start'), width1: 8 }, { f: f('start'), width1: 4 }, { f: f('start'), width1: 20 }], 0.6)
-    expect(set.map(x => x?.size ?? null)).toEqual([7.5, 7.5, null])
+    expect(set.map(x => (x ? x.size : null))).toEqual([7.5, 7.5, null])
+  })
+  it('leaves the original\'s a translation that reaches the stroke under its text at its set\'s size, and fits the rest without it', () => {
+    // (a stroke 1.5 under the baseline: Latin ink 0.22 of 7.5 reaches it, a CJK em box's 0.12 does not)
+    const under = { length: 60, size: 10, anchor: 'start' as const, under: 1.5 }
+    expect(fitFigure(under, 8, 0.6, 0.22)).toBe(false)
+    expect(fitFigure(under, 8, 0.6, CJK_FOOT)).toMatchObject({ size: 7.5 })
+    // (no depth told, or no stroke: as before)
+    expect(fitFigure(under, 8, 0.6)).toMatchObject({ size: 7.5 })
+    expect(fitFigure({ ...under, under: null }, 8, 0.6, 0.22)).toMatchObject({ size: 7.5 })
+    // (in a set: the one that reaches its stroke sets no factor, the other drawn whole; and a third, clear of its stroke at 0.75,
+    // reaches it at the set's whole size once the first is aside: aside too)
+    const set = fitFigureSet([{ f: under, width1: 8, depth1: 0.22 }, { f: { length: 60, size: 10, anchor: 'start' as const }, width1: 4, depth1: 0.22 }], 0.6)
+    expect(set).toEqual([false, { size: 10, offset: 0, width: 40 }])
+    const three = fitFigureSet([{ f: under, width1: 8, depth1: 0.22 }, { f: { length: 60, size: 10, anchor: 'start' as const }, width1: 4 }, { f: { ...under, under: 1.0 }, width1: 2, depth1: CJK_FOOT }], 0.6)
+    expect(three.map(x => (x ? x.size : x))).toEqual([false, 10, false])
+    // (an unfit one stays unfit, null, whatever its stroke)
+    expect(fitFigure(under, 10.5, 0.6, 0.22)).toBeNull()
   })
   it('tells a translation that says its source again', () => {
     expect(sameAsSource('Signal  STRENGTH', 'Signal strength')).toBe(true)
