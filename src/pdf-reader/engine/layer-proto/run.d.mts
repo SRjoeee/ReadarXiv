@@ -80,6 +80,8 @@ export type SkipCode = (typeof SKIP_CODES)[number]
 /** `code` where it is one of SKIP_CODES; throws a TypeError for any other */
 export declare function skipCode(code: unknown): SkipCode
 /** the longest a page's drawing waits for its draw (openProto `drawOf`) once it begins, ms; then the page is read live */
+/** the ink units' kinds (layout/ink-units.mjs INK_KIND): a label they read apart from their text is hidden with their text */
+export declare const INK_UNIT_KINDS: readonly ['inkheads', 'inkcontents', 'inknotes', 'inkorphan', 'inknames', 'inkreferences']
 export declare const DRAW_WAIT_MS: number
 /** the pages a run keeps warm for its next renders (their operator lists and decoded images), the one drawn last kept longest */
 export declare const WARM_PAGES: number

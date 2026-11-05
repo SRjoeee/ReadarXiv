@@ -340,7 +340,10 @@ export function renderingOf(segs, uc, display) {
  * page text where the file has one, else as nothing: never its source's "?" (no character of it is read on a page not
  * shown; a reader shows every page). TeX's own nothing, a space and a text symbol (the controller's rulings of 2026-10-15:
  * layer2.mjs textSymbol) are exempt: a text symbol's source is its rendering's content, and its glyph is its line's,
- * erased with it.
+ * erased with it. But a piece of TeX's nothing whose row the file found, its segments ink TeX set between its points (an inline
+ * `\includegraphics`, its picture the piece's group since REMOVAL 26, own.mjs MR 7), is its segments' crops: that group is
+ * hidden wherever another piece of the unit is drawn, and drawn as nothing the picture was gone (2610.19159v1 p1's links line,
+ * its second and third icons). One the file did not find (LOST), or found with no ink (EMPTY), is nothing, as before.
  */
 export function cropsOf(lu, kOf, shown = Infinity) {
   return res => {
@@ -359,6 +362,8 @@ export function cropsOf(lu, kOf, shown = Infinity) {
       const row = lu.ph.get(kOf[r.k])
       const S = row && !(row.flags & (PH_FLAG.LOST | PH_FLAG.EMPTY | PH_FLAG.JOINED)) ? row.segs : []
       if (r.mode === 'orig-text' && (r.gap?.chars ?? []).some(c => c.nu)) { if (cropped(r, S)) continue; return r.k }
+      // (TeX's nothing with ink of its own between its points: that ink, where every page of it is shown)
+      if (r.cls === 'zero' && r.mode === 'none' && !r.proof && S.length) { cropped(r, S); continue }
       if (r.cls === 'zero' || r.cls === 'space' || r.cls === 'symbol' || r.proof || r.gap?.proof) continue
       let past = S.length > 0, anyPast = false
       for (let s = 0; s + 5 < S.length; s += 6) if (S[s] <= shown) past = false; else anyPast = true

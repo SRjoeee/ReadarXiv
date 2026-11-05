@@ -4110,7 +4110,11 @@ staging). LAYOUT stays 16: the layout file does not change; the base PDF's bytes
   partly owned"). Over the 87 papers: 2610.21924v1's seven captions with `\COMPASSicon` (`\raisebox{…}{\includegraphics…}`),
   2608.06701v1's u221 and 2610.40394v1's u3 (a URL whose next mark was a figure's frame) laid, 2610.19159v1's u1823 (an
   affiliation line's two logos) found whole, none the other way; the wrapped base pages of those four papers alone change, each
-  by those pieces' ink in their groups. (A
+  by those pieces' ink in their groups. The reader draws such a picture back as its segments' crop (`tex.mjs` `cropsOf`): an
+  `\includegraphics` is a piece of TeX's nothing (`layer1.mjs` ZERO), drawn as nothing, while its group is hidden wherever another
+  piece of the unit is drawn, so u1823's hugging-face and chart icons were erased and nothing came back; only a found row with
+  ink is cropped, a LOST or EMPTY one stays nothing. Beside the crop, the `~`s between the links stand next to a picture and are
+  kept, where between two Chinese characters a line drops its spaces (the three links had read as one run). (A
   placeholder whose opening point TeX set inside another unit's range owned nothing of that unit's from REMOVAL 10 to 23: a
   run-in `\paragraph` was set at the next paragraph's start, after that paragraph's lead placeholder's waiting opening mark,
   2610.21085v1 p5. The start mark is written before that mark now, PIPELINE 66, and the rule is gone, REMOVAL 24: §19.7.) An
@@ -4399,7 +4403,17 @@ formula's `\hat` in its own font: "F´ısica" for Física, "Cande`s" for Candès
 is none of it (`labelLength`: the glyphs of no letter its first line begins with, each smaller than `SCRIPT` of the line's size and
 raised over its baseline by more than a fifth of it, as the reader keeps a label, up to three digits or marks, or up to three
 marks of no digit: the reader breaks its words at that baseline and kept the original's, so a text that said it drew it twice,
-"¹ 1Instituto de Física …" on 2610.20716v1 p1; its glyphs stay the unit's, claimed, erased, in its line's box; PIPELINE 74). One
+"¹ 1Instituto de Física …" on 2610.20716v1 p1; its glyphs stay the unit's, claimed, erased, in its line's box; PIPELINE 74). The
+reader keeps that label as the original's ink, the first line laid after it; where the line is not laid from where TeX set it,
+centred (by the file's flag, LAYOUT 37, or by the door's reading of its lines) or flush right, the label goes with it, its ink
+copied as the line's first item and erased where it stood (`run.mjs` `carried`, as a source unit's label group was carried on a
+centred line before): an ink unit has no label group, and its label's ink is its text's, hidden with it. The copy stands as high
+over the line's baseline as TeX set it (the baseline the line's own characters give), so that a raised mark stays raised: set by
+its own baseline, it had stood on the translation's, 3.8 pt low, and so had every raised label carried before (2610.20848v1's
+seventeen affiliations' letters). Left where it stood, the
+shorter translation centred alone stood up to 118 pt from it (12 lines of 7 of the 87 papers, all the author block's: 2610.20716v1's
+"1" 93 pt left of its translated place, 2610.21765v1, 2610.21770v1, 2610.22065v1 among them). A label the wrap left the
+original's ink (`labelKept`) stays where it stands. One
 whose letters and placeholders are a source unit's (a heading first), else an earlier ink unit's (a running head), echoes it: its pieces that unit's, its row that unit's row under its own id, never translated
 itself (`rows.mjs` `echoRows`, `layerIds`). Its glyphs are claimed under its own groups, `u<id>` and `u<id>.p`, so the reader
 hides it as any unit; one the wrap could not hide alone (its page not wrapped, its placeholder's group merged: `ink.off`), or on a
