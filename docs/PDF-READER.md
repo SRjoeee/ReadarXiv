@@ -4436,7 +4436,11 @@ the label alone at the line's end (2610.21098v1 p2's "(2)" was, its text a line 
 translation above TeX's shared row (a Chinese translation at its own leading, 16.9 pt a line against the original's 14.45), its
 last line is the shared line (`shareOf`'s `above`, or its `at` within an em of the row): the next unit goes on on it after its
 ink, the original's separation kept, and its lines flow on from there at its own pitch (`slotsAt`, `onLead`), one paragraph read
-straight through as the original reads. Laid on TeX's row under it, it stood a line's height under the line before (12 pt at 11.95
+straight through as the original reads. Its lines laid over the rows the unit before left, down to the shared row, are that
+paragraph's: their measure is the two units' blocks' around the row (`flowX`), not the next unit's first block's, which holds only
+its own rows there: where TeX set a float right after the shared row, the row's remainder alone, and 2608.16117v1 p19's u59 ("The
+increasing-" at the end of the line before Figure 9) laid "and" and "MacKintosh," each on a 79 pt line at the column's right
+edge, its text going on after the figure. Laid on TeX's row under it, it stood a line's height under the line before (12 pt at 11.95
 pt type); laid from TeX's row after a first line on the line over it, its second line stood a pitch and that distance under the
 first (2610.21098v1 p2's item (3): 26.4 pt at a pitch of 16.9). The page fill keeps that line (`keepsShare`: still the unit's
 last, on its baseline, no further right), so that a unit before it whose fill would spread its lines over more of its frames keeps
