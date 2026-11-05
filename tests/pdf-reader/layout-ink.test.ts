@@ -572,6 +572,28 @@ describe('a glyph\'s own ink (the maker round, Fix 2: the ink band)', () => {
     const r = figureInk(form([OPS.setFillColorN, ['TilingPattern', null, {}, [1, 0, 0, 1, 0, 0], [0, 0, 4, 4], 4, 4, 1, 1, false]], rect(10, 10, 20, 20), [OPS.setFillColorN, ['Shading', 'sh0', null]], rect(30, 10, 40, 20), [OPS.setFillRGBColor, ['#ff0000']], rect(50, 10, 60, 20)))
     expect([0, 1, 2].map(i => r.shapes!.get(i)!.pattern)).toEqual([true, undefined, undefined])
   })
+  it('a fill covers what was painted under it only of a colour at an alpha of 1, under no blend mode but Normal and no soft mask, its groups\' alike: its shape is `opaque` (2609.26457v1)', () => {
+    const rect = (x0: number, y0: number, x1: number, y1: number): Op => [OPS.constructPath, [OPS.fill, [Float32Array.from([0, x0, y0, 1, x1, y0, 1, x1, y1, 1, x0, y1, 4])], Float32Array.from([x0, y0, x1, y1])]]
+    const gs = (...entries: unknown[][]): Op => [OPS.setGState, [entries]]
+    const r = figureInk(form(
+      // (0 black, PDF's default; 1 white: both cover)
+      rect(10, 10, 20, 20), [OPS.setFillRGBColor, ['#ffffff']], rect(30, 10, 40, 20),
+      // (2 at ca 0.8, a legend's frame as matplotlib paints it by default; 3 multiplied; 4 under a soft mask: none covers)
+      alpha(0.8), rect(50, 10, 60, 20), alpha(1),
+      gs(['BM', 'multiply']), rect(70, 10, 80, 20), gs(['BM', 'source-over']),
+      gs(['SMask', true]), rect(10, 30, 20, 40), gs(['SMask', false]),
+      // (5 inside a group the page multiplies: the group is blended as a whole; 6 inside a group painted plainly, its own content
+      // Normal at its start whatever was set before it: both as their group is)
+      [OPS.save, []], gs(['BM', 'multiply']), [OPS.beginGroup, [{}]], rect(30, 30, 40, 40), [OPS.endGroup, [{}]], [OPS.restore, []],
+      [OPS.beginGroup, [{}]], rect(50, 30, 60, 40), [OPS.endGroup, [{}]],
+      // (7 a tiling pattern's, 8 a shading pattern's, 9 PDF.js's transparent: no colour known to cover)
+      [OPS.setFillColorN, ['TilingPattern', null, {}, [1, 0, 0, 1, 0, 0], [0, 0, 4, 4], 4, 4, 1, 1, false]], rect(70, 30, 80, 40),
+      [OPS.setFillColorN, ['Shading', 'sh0', null]], rect(10, 50, 20, 60), [OPS.setFillTransparent, []], rect(30, 50, 40, 60),
+      // (10 a stroke alone, white: no fill)
+      [OPS.setFillRGBColor, ['#ffffff']], stroke(50, 50, 60, 50),
+    ))
+    expect([...Array(11).keys()].map(i => r.shapes!.get(i)!.opaque ?? false)).toEqual([true, true, false, false, false, false, true, false, false, false, false])
+  })
   it('a path filled and stroked keeps what shows of each: an invisible fill under a seen stroke is a stroke, and the reverse (#555)', () => {
     const both = (ca: number, CA: number) => {
       const r = figureInk(form(alpha(ca, CA), [OPS.constructPath, [OPS.fillStroke, [Float32Array.from([0, 10, 10, 1, 40, 10, 1, 40, 40, 1, 10, 40, 4])], Float32Array.from([10, 10, 40, 40])]]))

@@ -221,6 +221,38 @@ describe('a figure unit\'s place against the figure\'s lines (synthetic pages)',
     expect(one.after).toBeLessThan(5)
   })
 
+  it('what an opaque fill painted after it covers is no ink to a label on that fill: a gridline under an annotation\'s box crowds nothing (2609.26457v1\'s Figure 2)', () => {
+    // (matplotlib's annotation: the plot's gridline at x 120 through the word's band, then the label's box over it, a fill that
+    // holds the band, then the text on the box. pageInk's `opaque`: a colour at an alpha of 1, under no blend mode but Normal and
+    // no soft mask, covers what was painted under it)
+    const rect = (b: number[]) => [b[0]!, b[1]!, b[2]!, b[1]!, b[2]!, b[1]!, b[2]!, b[3]!, b[2]!, b[3]!, b[0]!, b[3]!, b[0]!, b[3]!, b[0]!, b[1]!]
+    const boxed = ({ x = 120, box = [80, 90, 150, 115], opaque = true, gridFirst = true, under = false } = {}) => {
+      const pg = { ...word('label'), view: [0, 0, 300, 300] }
+      const grid = { box: under ? [60, 98.05, 240, 98.55] : [x - 0.25, 60, x + 0.25, 240], shape: { segs: Float32Array.from(under ? [60, 98.3, 240, 98.3] : [x, 60, x, 240]), stroke: true, fill: false, hw: 0.25 } }
+      const fill = { box, shape: { segs: Float32Array.from(rect(box)), stroke: false, fill: true, hw: 0.25, ...(opaque ? { opaque: true } : {}) } }
+      const order = gridFirst ? [grid, fill] : [fill, grid]
+      return figureUnitsOf([{ ...pg, boxes: order.flatMap(o => o.box), shapes: new Map(order.map((o, i) => [i, o.shape])), paths: [0, 1], figures: new Map([['0:0', [0, 0, 300, 300]]]), boxAt: pg.glyphs.map(() => 2) }] as never, null).units[0]! as Unit & { before: number; after: number; under: number | null }
+    }
+    expect(boxed().why).toBeNull()
+    // (a fill that does not cover, one painted at an alpha below 1 or under another blend mode: the gridline shows through it and
+    // crowds the word, as before; the gridline painted over the box crowds it too)
+    expect(boxed({ opaque: false }).why).toBe('crowded')
+    expect(boxed({ gridFirst: false }).why).toBe('crowded')
+    // (it covers where it holds the band, not past its edge: a box ending at 112, its edge a tone under the word, hides the
+    // gridline at 105 and not the one at 120)
+    expect(boxed({ x: 105, box: [80, 90, 112, 115] }).why).toBeNull()
+    expect(boxed({ x: 120, box: [80, 90, 112, 115] }).why).toBe('crowded')
+    // (nor where it holds the band in part across: a box whose bottom edge crosses the band hides nothing under it)
+    expect(boxed({ box: [80, 99, 150, 115] }).why).toBe('crowded')
+    // (a gridline it hides beside the word ends no free line and tells no anchor: the room runs to the box's edge, ROOM_CLEAR
+    // short of it; one it does not hide ends it there)
+    expect(boxed({ x: 135 }).after).toBeCloseTo(150 - 125 - ROOM_CLEAR * 10, 6)
+    expect(boxed({ x: 135, opaque: false }).after).toBeCloseTo(135 - 0.25 - 125 - ROOM_CLEAR * 10, 6)
+    // (and a stroke under the text it hides is none the layer holds a translation above)
+    expect(boxed({ under: true, opaque: false }).under).toBeCloseTo(1.45, 4)
+    expect(boxed({ under: true }).under).toBeNull()
+  })
+
   it('ink painted after a label over its band is over it, never its ground: it crowds the label (1810.04805v2\'s "BERT")', () => {
     // (pageInk's `boxAt`: the boxes shown before each glyph. A fill that holds the whole band, painted before the word, is its
     // ground; painted after it, a card stacked over the word or a picture laid on it, it covers the word)

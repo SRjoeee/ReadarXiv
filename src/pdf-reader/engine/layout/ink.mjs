@@ -107,10 +107,13 @@ const finite = (...xs) => xs.every(Number.isFinite)
 /** a fresh graphics state: the page's own, or an annotation's. `fill`: the fill colour, 0xRRGGBB (PDF's default black, 0), or
  *  NO_FILL for one of no colour (a pattern, PDF.js's transparent); `ca`, `CA` the alpha constants (a fill's and an image's, a
  *  stroke's) and `ga` the alpha the groups open now are painted with, multiplied, and `gclip` the box the groups open now bound
- *  what they paint to, as PDF.js bounds a group (the figures' reading: `unseen`, `cut`) */
+ *  what they paint to, as PDF.js bounds a group (the figures' reading: `unseen`, `cut`); `bm`, `sm` whether a blend mode other
+ *  than Normal, or a soft mask, is in force, and `gblend` whether a group open now is painted under either, so that what is
+ *  painted now does not simply cover what lies under it (the figures' reading: a shape's `opaque`) */
 const fresh = () => ({
   ctm: IDENTITY, clip: null, lw: 1, font: null, fontId: '', size: 0, dir: 1, cs: 0, ws: 0, hs: 1, rise: 0, leading: 0, tr: 0,
   tm: IDENTITY, x: 0, y: 0, lx: 0, ly: 0, pendingClip: false, lost: false, fill: 0, form: 0, formId: 0, ca: 1, CA: 1, ga: 1, gclip: null, tile: false,
+  bm: false, sm: false, gblend: false,
 })
 /** an alpha constant as an ExtGState gives it, 0 to 1 (a value of no number: 1, PDF's default) */
 const alphaOf = v => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 1)
@@ -655,8 +658,10 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     if (finite(ox, oy, ex, ey, sz) && turnedOut.length < glyphsMax) turnedOut.push(t)
   }
   /** a figure's painted path as its lines (`turned`): inside a form or a TikZ picture (between the points `zs` and `ze`), its
-   *  segments on the page (a curve's CURVE_STEPS chords, a fill's subpaths closed), whether it strokes and fills, and its half line
-   *  width on the page, by its box's index; at most SHAPE_NUMBERS_PAGE numbers a page, the paths past them their boxes alone */
+   *  segments on the page (a curve's CURVE_STEPS chords, a fill's subpaths closed), whether it strokes and fills, whether its fill
+   *  covers what was painted under it (`opaque`: a colour, no pattern nor PDF.js's transparent, at an alpha of 1 under no blend
+   *  mode but Normal and no soft mask, its groups' alike), and its half line width on the page, by its box's index; at most
+   *  SHAPE_NUMBERS_PAGE numbers a page, the paths past them their boxes alone */
   const shapes = new Map()
   /** the boxes painted at an alpha of 0 or past the bounds of their groups (`turned`), by index: nothing of them shows; and the
    *  boxes those bounds cut, by index, as far as they show */
@@ -712,7 +717,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
     if (!segs.every(Number.isFinite)) return
     shapeNumbers += segs.length
     // (`pattern`: a fill of a tiling pattern, whose cells (a hatching) paint what is not read)
-    shapes.set(box, { segs: Float32Array.from(segs), stroke, fill, ...(fill && s.tile ? { pattern: true } : {}), hw: Math.max(0.25, (s.lw / 2) * Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]))) })
+    const opaque = fill && s.fill !== NO_FILL && fillAlpha() >= 1 && !s.bm && !s.sm && !s.gblend
+    shapes.set(box, { segs: Float32Array.from(segs), stroke, fill, ...(fill && s.tile ? { pattern: true } : {}), ...(opaque ? { opaque: true } : {}), hw: Math.max(0.25, (s.lw / 2) * Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]))) })
   }
   /** showText as the canvas runs it (showText, showType3Text): each glyph's origin, its advance, the line moved on */
   const show = arr => {
@@ -801,6 +807,10 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
           else if (e[0] === 'Font' && Array.isArray(e[1])) setFont(e[1][0], e[1][1])
           else if (e[0] === 'ca') s.ca = alphaOf(e[1])
           else if (e[0] === 'CA') s.CA = alphaOf(e[1])
+          // (PDF.js gives a blend mode as the canvas's operation, Normal and Compatible 'source-over', and a soft mask as whether one
+          // is set)
+          else if (e[0] === 'BM') s.bm = e[1] !== 'source-over'
+          else if (e[0] === 'SMask') s.sm = !!e[1]
         }
         break
       case BEGIN_TEXT: s.tm = IDENTITY; s.x = s.y = s.lx = s.ly = 0; break
@@ -836,6 +846,8 @@ export function pageInk(OPS, ops, commonObjs, { rotate, indices = false, outline
         if (m) inMask++
         push()
         s.ga *= s.ca; s.ca = s.CA = 1
+        // (its blend mode and soft mask are the group's as a whole, its content's own Normal and none at its start, as its alpha)
+        s.gblend = s.gblend || s.bm || s.sm; s.bm = s.sm = false
         // (the figures' reading: what the group paints is bounded by its box, its matrix applied, as PDF.js's beginGroup bounds it)
         const bb = a?.[0]?.bbox
         if (turned && bb && bb.length >= 4) {
