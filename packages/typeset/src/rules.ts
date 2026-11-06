@@ -590,7 +590,7 @@ const SPECS: readonly RuleSpec[] = [
     state: {
       is: 'ported',
       replay:
-        "every babel name of the corpus against the baseline's reader dumps (tests/replay/names.ts, lab/typeset/replay-names.mjs): 503 of 503 (206 drawn on their own, line x0/baseline/text; 297 leading a unit, its word against U.lead's slot); the names' rows, the page's draw and the rule set's labels from today's bundle and code (tests/replay/today-names.ts)",
+        "every babel name of the corpus against the baseline's reader dumps (lab/typeset/tests/replay/names.ts, lab/typeset/replay-names.mjs): 503 of 503 (206 drawn on their own, line x0/baseline/text; 297 leading a unit, its word against U.lead's slot); the names' rows, the page's draw and the rule set's labels from today's bundle and code (lab/typeset/tests/replay/today-names.ts)",
       cases: 503,
     },
   },
@@ -805,7 +805,7 @@ const SPECS: readonly RuleSpec[] = [
     state: {
       is: 'ported',
       replay:
-        "hand-made members held to today's unitHiding (tests/unit/groups.test.ts): off bits, shown ink; a group in Placed.fixed never off",
+        "hand-made members held to today's unitHiding (lab/typeset/tests/unit/groups.test.ts): off bits, shown ink; a group in Placed.fixed never off",
       cases: 9,
     },
   },

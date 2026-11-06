@@ -1,10 +1,10 @@
 // D.sentences replayed against today's own addUnitWords (words.mjs, engine 065c1d973) on every laid unit's every page of three
 // pairs, at its final layout (the chain's and the fill's): the page's table, column by column (float32 as today's), its spans.
 import { describe, expect, it } from 'vitest'
-import { addUnitWords, newWords } from '../../src/emit/sentences.ts'
-import { finalLays, PAIRS, unitPages } from './emit-lays.ts'
-import { firstDifference, hasDerived, hasTap, hasToday, todayFile } from './tap.ts'
-import { hasCache } from './today.ts'
+import { addUnitWords, newWords } from '../../../../packages/typeset/src/emit/sentences.ts'
+import { finalLays, PAIRS, unitPages } from '../../../../packages/typeset/tests/replay/emit-lays.ts'
+import { firstDifference, hasDerived, hasTap, hasToday, todayFile } from '../../../../packages/typeset/tests/replay/tap.ts'
+import { hasCache } from '../../../../packages/typeset/tests/replay/today.ts'
 
 type W = Record<string, unknown> & { n: number }
 type Today = { newWords(): W; addUnitWords(...a: unknown[]): void }

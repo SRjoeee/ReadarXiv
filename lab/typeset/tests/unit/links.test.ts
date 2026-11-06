@@ -12,8 +12,8 @@ import {
   singleTarget,
   type Target,
   urlOf,
-} from '../../src/emit/links.ts'
-import { hasToday, todayFile } from '../replay/tap.ts'
+} from '../../../../packages/typeset/src/emit/links.ts'
+import { hasToday, todayFile } from '../../../../packages/typeset/tests/replay/tap.ts'
 
 type Today = Record<string, (...a: never[]) => unknown>
 const today = hasToday ? ((await import(todayFile('layer-proto/links.mjs'))) as Today) : null

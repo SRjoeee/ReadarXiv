@@ -2,12 +2,12 @@
 // keptLines, engine 065c1d973) on the same case: the kept lines a region or a block places, the label, kept pieces, kept
 // characters and displays the page keeps, the words and the pieces' places.
 import { describe, expect, it } from 'vitest'
-import type { Shown } from '../../src/emit/groups.ts'
-import { addUnitWords, type KeptLine, keptLines, newWords } from '../../src/emit/sentences.ts'
-import type { Rect } from '../../src/util.ts'
-import { finalLays } from '../replay/emit-lays.ts'
-import { firstDifference, hasDerived, hasTap, hasToday, todayFile } from '../replay/tap.ts'
-import { hasCache } from '../replay/today.ts'
+import type { Shown } from '../../../../packages/typeset/src/emit/groups.ts'
+import { addUnitWords, type KeptLine, keptLines, newWords } from '../../../../packages/typeset/src/emit/sentences.ts'
+import type { Rect } from '../../../../packages/typeset/src/util.ts'
+import { finalLays } from '../../../../packages/typeset/tests/replay/emit-lays.ts'
+import { firstDifference, hasDerived, hasTap, hasToday, todayFile } from '../../../../packages/typeset/tests/replay/tap.ts'
+import { hasCache } from '../../../../packages/typeset/tests/replay/today.ts'
 
 type W = Record<string, unknown> & { n: number }
 const words = hasToday

@@ -1,10 +1,10 @@
 // D.text's segments replayed against today's own segsOfUnit (textlayer.mjs, engine 065c1d973) on every laid unit's every page of
 // three pairs, at its final layout: each line's text segments and crops, every field.
 import { describe, expect, it } from 'vitest'
-import { segsOfUnit } from '../../src/emit/text.ts'
-import { finalLays, PAIRS, unitPages } from './emit-lays.ts'
-import { firstDifference, hasDerived, hasTap, hasToday, todayFile } from './tap.ts'
-import { hasCache } from './today.ts'
+import { segsOfUnit } from '../../../../packages/typeset/src/emit/text.ts'
+import { finalLays, PAIRS, unitPages } from '../../../../packages/typeset/tests/replay/emit-lays.ts'
+import { firstDifference, hasDerived, hasTap, hasToday, todayFile } from '../../../../packages/typeset/tests/replay/tap.ts'
+import { hasCache } from '../../../../packages/typeset/tests/replay/today.ts'
 
 type Today = { segsOfUnit(L: unknown, page: number): unknown[] }
 const today = hasToday ? ((await import(todayFile('layer-proto/textlayer.mjs'))) as Today) : null

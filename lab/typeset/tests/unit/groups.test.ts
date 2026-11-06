@@ -1,8 +1,8 @@
 // D.groups on hand-made members, each held to today's unitHiding (hide.mjs, engine 065c1d973, imported where today's tree is
 // at hand) on the same case: its groups off as bits, its shown ink.
 import { describe, expect, it } from 'vitest'
-import { type GroupEl, type GroupsInput, groupsOff } from '../../src/emit/groups.ts'
-import { hasToday, todayFile } from '../replay/tap.ts'
+import { type GroupEl, type GroupsInput, groupsOff } from '../../../../packages/typeset/src/emit/groups.ts'
+import { hasToday, todayFile } from '../../../../packages/typeset/tests/replay/tap.ts'
 
 type Today = { unitHiding(o: Record<string, unknown>): { off: string[]; shown: Record<string, unknown>[] } }
 const today = hasToday ? ((await import(todayFile('layer-proto/hide.mjs'))) as Today) : null

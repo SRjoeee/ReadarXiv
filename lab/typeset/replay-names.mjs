@@ -1,13 +1,13 @@
 // lab/typeset/replay-names.mjs [<pair>…]: S.names and S.nameLed replayed on the tap's 123 pairs (or the pairs named):
 // every babel name of the pair's pages set by the port over the page's characters as today read them (the tap's, else today's
-// reading of the page's draw: packages/typeset/tests/replay/today-names.ts), against the baseline's reader dump; every
+// reading of the page's draw: lab/typeset/tests/replay/today-names.ts), against the baseline's reader dump; every
 // S.nameLed slot of the ledgers, every other laid round checked to take none (names.ts). Prints the counts, the names whose
 // answer needs the design widths the tap does not record, and the classes of difference, up to five cases a class; writes
 // nothing. Run from the worktree's root (heavy: through heavy-slot.sh test):
 //   node lab/typeset/replay-names.mjs
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { namesOf } from '../../packages/typeset/tests/replay/names.ts'
+import { namesOf } from './tests/replay/names.ts'
 import { TAP } from '../../packages/typeset/tests/replay/tap.ts'
 
 const pairs = process.argv.slice(2).length

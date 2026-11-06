@@ -1,14 +1,14 @@
 // D.text's segments, D.sentences' table and D.links' placement replayed on one pair against today's own functions
 // (textlayer.mjs segsOfUnit, words.mjs addUnitWords, links.mjs placeUnit, engine 065c1d973) over every laid unit's every page at
 // its final layout (emit-lays.ts): the corpus's run is lab/typeset/replay-emit.mjs; the tests hold three pairs.
-import { lineRuns } from '../../src/emit/display.ts'
-import { type Annot, placeUnit, type Target } from '../../src/emit/links.ts'
-import { addUnitWords, newWords, tokenBand } from '../../src/emit/sentences.ts'
-import { segsOfUnit } from '../../src/emit/text.ts'
-import type { LaidLine, Layout } from '../../src/fit/types.ts'
-import { pieceCrops } from './display.ts'
-import { finalLays, unitPages } from './emit-lays.ts'
-import { firstDifference, todayFile } from './tap.ts'
+import { lineRuns } from '../../../../packages/typeset/src/emit/display.ts'
+import { type Annot, placeUnit, type Target } from '../../../../packages/typeset/src/emit/links.ts'
+import { addUnitWords, newWords, tokenBand } from '../../../../packages/typeset/src/emit/sentences.ts'
+import { segsOfUnit } from '../../../../packages/typeset/src/emit/text.ts'
+import type { LaidLine, Layout } from '../../../../packages/typeset/src/fit/types.ts'
+import { pieceCrops } from '../../../../packages/typeset/tests/replay/display.ts'
+import { finalLays, unitPages } from '../../../../packages/typeset/tests/replay/emit-lays.ts'
+import { firstDifference, todayFile } from '../../../../packages/typeset/tests/replay/tap.ts'
 
 type W = Record<string, unknown> & { n: number }
 type Today = {

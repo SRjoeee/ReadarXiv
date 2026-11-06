@@ -13,9 +13,9 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { gunzipSync } from 'node:zlib'
-import type { NameRow, PageChar } from '../../src/shared/names.ts'
-import { TAP, TODAY, unser } from './tap.ts'
-import { CACHE } from './today.ts'
+import type { NameRow, PageChar } from '../../../../packages/typeset/src/shared/names.ts'
+import { TAP, TODAY, unser } from '../../../../packages/typeset/tests/replay/tap.ts'
+import { CACHE } from '../../../../packages/typeset/tests/replay/today.ts'
 
 type Part = {
   pages: [number, number]

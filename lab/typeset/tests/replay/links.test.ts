@@ -3,14 +3,14 @@
 // overlaid text, its crop's rectangle), and both place it alike: every record (page, line, boxes, name) and every link left
 // unplaced. The edges and bands are the same functions on both sides (D.display's runs, a run's start and width).
 import { describe, expect, it } from 'vitest'
-import { lineRuns } from '../../src/emit/display.ts'
-import { type Annot, placeUnit, type Target } from '../../src/emit/links.ts'
-import { tokenBand } from '../../src/emit/sentences.ts'
-import type { LaidLine, Layout } from '../../src/fit/types.ts'
-import { pieceCrops } from './display.ts'
-import { finalLays, PAIRS } from './emit-lays.ts'
-import { firstDifference, hasDerived, hasTap, hasToday, todayFile } from './tap.ts'
-import { hasCache } from './today.ts'
+import { lineRuns } from '../../../../packages/typeset/src/emit/display.ts'
+import { type Annot, placeUnit, type Target } from '../../../../packages/typeset/src/emit/links.ts'
+import { tokenBand } from '../../../../packages/typeset/src/emit/sentences.ts'
+import type { LaidLine, Layout } from '../../../../packages/typeset/src/fit/types.ts'
+import { pieceCrops } from '../../../../packages/typeset/tests/replay/display.ts'
+import { finalLays, PAIRS } from '../../../../packages/typeset/tests/replay/emit-lays.ts'
+import { firstDifference, hasDerived, hasTap, hasToday, todayFile } from '../../../../packages/typeset/tests/replay/tap.ts'
+import { hasCache } from '../../../../packages/typeset/tests/replay/today.ts'
 
 type Today = { placeUnit(o: unknown): { records: unknown[]; tried: unknown[] } }
 const today = hasToday ? ((await import(todayFile('layer-proto/links.mjs'))) as Today) : null

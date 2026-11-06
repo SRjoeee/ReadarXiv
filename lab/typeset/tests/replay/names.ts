@@ -10,9 +10,9 @@
 // compared with the unit's U.lead slot, and whether it is drawn with the unit's lay (its lead taken, the unit laid).
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { faceOf, ownSmallCaps } from '../../src/breaker/faces.ts'
-import { type MeasureTable, tableMetrics } from '../../src/metrics/table.ts'
-import { nameLed } from '../../src/shared/name-led.ts'
+import { faceOf, ownSmallCaps } from '../../../../packages/typeset/src/breaker/faces.ts'
+import { type MeasureTable, tableMetrics } from '../../../../packages/typeset/src/metrics/table.ts'
+import { nameLed } from '../../../../packages/typeset/src/shared/name-led.ts'
 import {
   type NameRecord,
   type NameRow,
@@ -21,12 +21,12 @@ import {
   type PageChar,
   type SetName,
   setName,
-} from '../../src/shared/names.ts'
-import { blockOfTap } from './fit-input.ts'
-import { derived, firstDifference, LAB, ledger, readGz, TAP, TODAY } from './tap.ts'
+} from '../../../../packages/typeset/src/shared/names.ts'
+import { blockOfTap } from '../../../../packages/typeset/tests/replay/fit-input.ts'
+import { derived, firstDifference, LAB, ledger, readGz, TAP, TODAY } from '../../../../packages/typeset/tests/replay/tap.ts'
 import { pageChars, tapChars, todayNames } from './today-names.ts'
-import { paperOf } from './today.ts'
-import { rolesOf } from './tokens-input.ts'
+import { paperOf } from '../../../../packages/typeset/tests/replay/today.ts'
+import { rolesOf } from '../../../../packages/typeset/tests/replay/tokens-input.ts'
 
 type Raw = Record<string, unknown>
 type DumpName = { occurrence: number; key: string; page: number; drawn: boolean; why?: string; line?: Raw }

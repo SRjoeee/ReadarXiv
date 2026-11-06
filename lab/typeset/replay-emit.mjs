@@ -1,11 +1,11 @@
 // lab/typeset/replay-emit.mjs [<pair>…]: D.text's segments, D.sentences' table and D.links' placement replayed against today's
 // own functions (engine 065c1d973 textlayer.mjs segsOfUnit, words.mjs addUnitWords, links.mjs placeUnit) on every laid unit's
 // every page of the tap's 123 pairs (or those named), at its final layout (the chain from F2 and each page's fill:
-// packages/typeset/tests/replay/emit.ts). Prints the counts and the first differences; writes nothing. Run from the
+// lab/typeset/tests/replay/emit.ts). Prints the counts and the first differences; writes nothing. Run from the
 // worktree's root (heavy: through heavy-slot.sh test).
 import { readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { emitReplay } from '../../packages/typeset/tests/replay/emit.ts'
+import { emitReplay } from './tests/replay/emit.ts'
 import { TAP } from '../../packages/typeset/tests/replay/tap.ts'
 
 const pairs = process.argv.slice(2).length

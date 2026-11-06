@@ -3,8 +3,8 @@
 // no start taken on any other laid round. The whole corpus: lab/typeset/replay-names.mjs.
 import { describe, expect, it } from 'vitest'
 import { namesOf } from './names.ts'
-import { hasDerived, hasTap, hasToday } from './tap.ts'
-import { hasCache } from './today.ts'
+import { hasDerived, hasTap, hasToday } from '../../../../packages/typeset/tests/replay/tap.ts'
+import { hasCache } from '../../../../packages/typeset/tests/replay/today.ts'
 
 const PAIRS = ['2610.21377v1-zh', '1512.03385v1-ja.pack', '2608.04322v1-de.pack', '2501.14787v1-zh']
 

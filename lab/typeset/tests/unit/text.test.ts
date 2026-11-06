@@ -2,8 +2,8 @@
 // finds the items a drawing replaces by its page's hide operations, the port by the groups their ink stands in; where the two
 // name the same items (each hidden rectangle over one group's items), the layers are equal. And nameSeg as today's.
 import { describe, expect, it } from 'vitest'
-import { type Drawn, nameSeg, type TextSeg, textLayer } from '../../src/emit/text.ts'
-import { hasToday, todayFile } from '../replay/tap.ts'
+import { type Drawn, nameSeg, type TextSeg, textLayer } from '../../../../packages/typeset/src/emit/text.ts'
+import { hasToday, todayFile } from '../../../../packages/typeset/tests/replay/tap.ts'
 
 type Compact = { n: number; str: string[]; num: Float32Array }
 type Today = {
