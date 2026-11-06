@@ -4656,8 +4656,11 @@ paragraph too short for `measuresOf` to read its measures (under four lines) is 
 words it pairs). There must be no forced break of the source nor a display between the two lines, and the group must close after
 those words. The group's open piece, where the row holds it between texts of its own, breaks the translation there
 (`finishUnit`'s `openBreaks`, `tokensOf2`), and the text after it starts on the line TeX set the group's from, in a block of its
-own: its measure and pitch its own lines', its first line at its indent (`blocksOf2`: a line a referenced break's region opens
-starts a block, `opens`; before, a forced break's region split a block later, keeping the whole block's bounds). A centred or flush
+own: its measure and pitch its own lines', its first line at its indent (`blocksOf2`: a line such a paragraph opens starts a
+block, `paraAt`, `opens`). An ordinary forced break's region still splits its block later, keeping the measure the unit's lines
+share: a unit of two lines ended by `\\` after its first lays its first part on to the second line's measure, as before (the review
+of #603; a line a forced break opened had started a block too, its own measure the first line's 20 to 130 where the two shared 20
+to 280, which the door's widening of a one-line block mostly hid). A centred or flush
 unit, and one whose alignment the file does not tell, is laid as before: its short lines may end no paragraph. The unit is still
 laid at one size, the group's where it holds most of the lines (the item's text at 7.97 pt on p3). Over the 83 of the release
 sweep's 87 papers whose layers and rows staging's cache holds (2,267 pages, next's door against this one): 5 pages move. They are

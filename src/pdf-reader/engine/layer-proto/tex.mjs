@@ -214,8 +214,9 @@ export function forcedBreaks(lu, unit, kOf = null, lineskip = null) {
  * forced break of the source nor a display between the two lines (forcedBreaks' own: `forced`, by their next lines). The
  * group's open piece, where the row holds it between texts, breaks the translation there, and the text after it starts on
  * that next line in a block of its own, its measure and pitch its lines', its first line at its indent (`room` null, as a
- * forced break's whose next line opens another frame: finishUnit, blocksOf2's `opens`). Returns a Map like forcedBreaks',
- * the open piece's index in the row to { next, room: null, pitch: null }; empty for a unit set centred, flush or as nothing
+ * forced break's whose next line opens another frame, and `paragraph`: finishUnit's `paraAt`, blocksOf2's `opens`; an
+ * ordinary forced break keeps the unit's measure, the review of #603). Returns a Map like forcedBreaks', the open piece's
+ * index in the row to { next, room: null, pitch: null, paragraph: true }; empty for a unit set centred, flush or as nothing
  * tells.
  */
 export function paragraphBreaks(lu, unit, pieceLines, forced = null, measureOfLine = null) {
@@ -248,7 +249,7 @@ export function paragraphBreaks(lu, unit, pieceLines, forced = null, measureOfLi
     if (open.id === undefined || closes < 0) continue
     // (where the row holds it between texts of its own: a piece the translator did not place stands at the row's end)
     const i = unit.pieces.indexOf(open), said = p => p.t === 'text' && /\S/.test(p.s ?? '')
-    if (i > 0 && !out.has(i) && unit.pieces.slice(0, i).some(said) && unit.pieces.slice(i + 1).some(said)) out.set(i, { next: j + 1, room: null, pitch: null })
+    if (i > 0 && !out.has(i) && unit.pieces.slice(0, i).some(said) && unit.pieces.slice(i + 1).some(said)) out.set(i, { next: j + 1, room: null, pitch: null, paragraph: true })
   }
   return out
 }

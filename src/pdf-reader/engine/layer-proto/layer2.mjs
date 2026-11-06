@@ -623,7 +623,7 @@ function flowMeasureAt(b, y) {
  * by the key of the line TeX set after it (finishUnit): that line goes on the block of the line before it, whatever the
  * gap TeX's room opened between them (blocks2 closes it), and the gap is no pitch the next line is read by.
  */
-export function blocksOf2(rects, pageViews, keep = null, regionOf = null, referenced = null, breakAt = null, joinAt = null, centred = undefined) {
+export function blocksOf2(rects, pageViews, keep = null, regionOf = null, referenced = null, breakAt = null, joinAt = null, centred = undefined, paraAt = null) {
   const kept = r => !!keep?.has(rectKey(r))
   const blocks = []
   let cur = null
@@ -631,10 +631,12 @@ export function blocksOf2(rects, pageViews, keep = null, regionOf = null, refere
     const prev = cur?.rects.at(-1)
     const pitchSoFar = cur && cur.rects.length > 1 && !joinAt?.has(rectKey(prev)) ? cur.rects.at(-2)[4] - prev[4] : prev ? (prev[4] - prev[2]) * 1.4 : 0
     const joined = !!cur && cur.page === page && !!joinAt?.has(rectKey([page, x0, y0, x1, y1]))
-    // (a line a forced break's region opens (`breakAt`, referenced) starts a block of its own, its measure and pitch its own
-    // lines': a paragraph TeX set of a group under the unit's text, its box's narrower measure, follows that text's last line
-    // nearer than a pitch, 2608.25210v2 p3's prompt boxes)
-    const opens = !!breakAt && !!referenced?.has(breakAt.get(rectKey([page, x0, y0, x1, y1])))
+    // (a line a paragraph TeX set of a group opens (`paraAt`, finishUnit's: tex.mjs paragraphBreaks, its region referenced) starts
+    // a block of its own, its measure and pitch its own lines': its box's narrower measure follows the unit's text's last line
+    // nearer than a pitch, 2608.25210v2 p3's prompt boxes. A forced break's next line keeps the unit's measure, its block split
+    // below with the whole block's bounds: a unit of two lines, the first ended by `\\`, lays its first part on to the measure
+    // its second line holds, the review of #603)
+    const key = rectKey([page, x0, y0, x1, y1]), opens = !!paraAt?.has(key) && !!referenced?.has(breakAt?.get(key))
     const follows = !opens && (joined || (cur && cur.page === page && x0 < prev[3] && x1 > prev[1] && y1 < prev[4] && prev[2] - y1 < Math.max(pitchSoFar, (prev[4] - prev[2]) * 1.4) * 0.9))
     if (!follows) {
       cur = { page, rects: [], ...(opens ? { opens: true } : {}) }
@@ -1483,13 +1485,16 @@ function finishUnit(out, unit, rects, charsByPage) {
   out.regionOf = new Map()
   out.breakAt = new Map()
   out.joinAt = new Map()
-  const breakNext = new Set(), joinNext = new Map(), breakOf = new Map(), joined = new Set()
-  for (const { next, room, pitch } of out.breaks?.values() ?? []) { if (room === null) breakNext.add(next); else joinNext.set(next, pitch) }
+  const breakNext = new Set(), joinNext = new Map(), breakOf = new Map(), joined = new Set(), paraNext = new Set()
+  for (const { next, room, pitch, paragraph } of out.breaks?.values() ?? []) { if (room === null) breakNext.add(next); else joinNext.set(next, pitch); if (paragraph) paraNext.add(next) }
+  // (the lines a paragraph TeX set of a group opens (tex.mjs paragraphBreaks), each a block of its own (blocksOf2's `opens`); a
+  // forced break's next line keeps the unit's measure, its block split later, as before)
+  out.paraAt = null
   let region = -1, inRun = false
   for (const r of rects) {
     const k = rectKey(r)
     const j = breakNext.size || joinNext.size ? out.lineInfo.get(k)?.j : undefined
-    if (j !== undefined && breakNext.has(j) && !keepSet.has(k) && !breakOf.has(j)) { region++; inRun = false; out.breakAt.set(k, region); breakOf.set(j, region) }
+    if (j !== undefined && breakNext.has(j) && !keepSet.has(k) && !breakOf.has(j)) { region++; inRun = false; out.breakAt.set(k, region); breakOf.set(j, region); if (paraNext.has(j)) (out.paraAt ??= new Set()).add(k) }
     if (j !== undefined && joinNext.has(j) && !keepSet.has(k) && !joined.has(j)) { out.joinAt.set(k, joinNext.get(j)); joined.add(j) }
     if (keepSet.has(k)) { if (!inRun) region++; inRun = true; out.regionOf.set(k, region) }
     else inRun = false
@@ -2958,8 +2963,8 @@ export async function warmFaces(to, cjk, designs, yieldNow, ready = async () => 
  * TeX did puts the line after it on TeX's own, and the room the translation does not use of the block is at its foot.
  * The block's pitch is its grid's.
  */
-export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, referenced = null, lineskip = null, breakAt = null, joinAt = null, centred = undefined) {
-  const blocks = blocksOf2(rects, pageViews, keep, regionOf, referenced, breakAt, joinAt, centred)
+export function blocks2(rects, pageViews, keep, lineInfo, regionOf = null, referenced = null, lineskip = null, breakAt = null, joinAt = null, centred = undefined, paraAt = null) {
+  const blocks = blocksOf2(rects, pageViews, keep, regionOf, referenced, breakAt, joinAt, centred, paraAt)
   const info = r => lineInfo.get(rectKey(r)) ?? lineInfo.get(`${r[0]}|${r[2]}|${r[3]}|${r[4]}`)
   for (const b of blocks) {
     b.B = b.rects.map(r => info(r)?.baseline ?? r[2] + 0.24 * (r[4] - r[2]))

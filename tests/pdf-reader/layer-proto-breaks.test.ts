@@ -176,3 +176,25 @@ describe('a group on the row after a full row of a narrower measure beside a wra
     expect(lines.every(l => l[8] === 0), `the lines' blocks ${lines.map(l => `${l[1]}:${l[8]}`)}`).toBe(true)
   })
 })
+
+// The review of #603 (its second finding): a unit of two lines whose first ends at an ordinary forced break `\\`, at 20 to 130,
+// its second at 20 to 280. The frame has no pitch of its own besides the break's gap, so forcedBreaks gives it no room and its
+// next line a region (`breakAt`, referenced). A line a region opened started a block of its own, and the first line's block was
+// its own 20 to 130 where the two lines share the measure 20 to 280: a first part longer than the original's first line wrapped or
+// shrank there (unless the door's widening of a one-line block ran it on to its column's edge). Only a paragraph TeX set of a
+// group starts a block (`paraAt`, tex.mjs paragraphBreaks); a forced break's lines keep the unit's measure, as before
+describe('an ordinary forced break in a unit of two lines: both its parts keep the measure the two lines share', () => {
+  const rects = [[1, 20, 248, 130, 257], [1, 20, 236, 280, 245]]
+  const key = (r: number[]) => `${r[0]}|${r.slice(1).join()}`
+  const breakAt = new Map([[key(rects[1]!), 0]]), referenced = new Set([0])
+  let L2: typeof import('@/pdf-reader/engine/layer-proto/layer2.mjs')
+  beforeAll(async () => { L2 = await import('@/pdf-reader/engine/layer-proto/layer2.mjs') })
+  it('splits after the break with the whole block\'s bounds: the first part on to 280, the second after the region', () => {
+    const blocks = L2.blocksOf2(rects as never, [[0, 0, 300, 300]], null, null, referenced, breakAt, null, false)
+    expect(blocks.map(b => [b.x0, b.x1, b.after, b.rects.length, !!(b as { opens?: boolean }).opens])).toEqual([[20, 280, 0, 1, false], [20, 280, 1, 1, false]])
+  })
+  it('control: the same line opened by a paragraph TeX set of a group starts a block of its own, its own measure', () => {
+    const blocks = L2.blocksOf2(rects as never, [[0, 0, 300, 300]], null, null, referenced, breakAt, null, false, new Set([key(rects[1]!)]))
+    expect(blocks.map(b => [b.x0, b.x1, b.after, b.rects.length, !!(b as { opens?: boolean }).opens])).toEqual([[20, 130, 0, 1, false], [20, 280, 1, 1, true]])
+  })
+})
